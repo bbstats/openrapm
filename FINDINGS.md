@@ -1794,3 +1794,31 @@ An exposure-dependent rating scalar (`xsat`: b x poss / (poss + s), s = 300 / 10
 -0.04 (z -0.6 to -1.2) on top of `linear+sat&age2`, and a rating-by-age slope (`xage`) is +0.015 (z +4.6,
 worse).  So the ridge's shrinkage profile by exposure is right once the level is fixed, and the ridge's overall
 strength (x0.5) was the whole story.
+
+### 8. The clock, second pass: 53 s for the 28 fits (true loss 0.40)
+
+Three more cuts, each checked against the dumped ratings to 1e-13: the estimator's layout built straight from
+the design's own parts (`WindowData.parts`: Z, F, the sorted lineups; the exposure columns from the padded
+rates and the lineups in one fancy index instead of BoxExposure.transform's dense -> sparse -> dense round trip
+through `X`), the shots tables read once per process (`xshoot.load_shots`), and the GBDT prior without its
+audition fits (`linear_leaves=False, cross_features=False`, +0.003 per 100, section 21.1).  `mspi1_lam05_fast`:
+110.995 with the age map in 53.2 s, against 134 s for the shipped board at 111.296.  A warm single fit is
+1.2 s: design assembly 0.27 (+0.15 when a season piece is new), exposure fit 0.15, defensive target 0.1, role
+and GBDT offset 0.15, cross-products and two solves 0.2.
+
+### 9. The farther training season at half weight: -0.10 per 100, free
+
+At K = 3 the neighbourhood is {H-2, H-1, H+1} (`Context.neighbourhood` takes H-d before H+d).  `MspiFast.decay`
+weights the ridge rows of training season s by decay^(|s - H| - 1): the two adjacent seasons at 1, H-2 at
+decay.  The exposure padding, the prior and the map's possession counts are unchanged.  Against
+`mspi1_lam05_fast` with the age map (110.995): decay 0.7 110.925 (-0.07, z -3.6, 21 of 28), **0.5 110.899
+(-0.10, z -2.7, 20 of 28)**, 0.3 110.903 (-0.10, z -1.7).  0.5 is carried.  Section 4 found more seasons help
+(K = 4 beat K = 2 by 0.3 on `mspi`); this says the nearer ones should count more, which is the same
+statement from the other side.  It is a prediction-time device: a shipped window has no H, so `decay` is
+inert without `ctx.current_h`.
+
+On the decayed dump the map shapes read as before, now paired against `linear+sat&age2`: `linear+log2&age2&xlog`
+-0.11 (z -2.6, 21 of 28), `poly2+log2&age2` -0.10 (z -2.3, 21), `linear+log2&age2` -0.05 (z -2.2),
+`hinge+sat&age2` -0.04, `poly2+sat&age2` -0.04.  The score map from here is **`linear+log2&age2&xlog`**
+(per side: a rating scalar, a quadratic-in-log exposure level, a quadratic age level, a rating-by-log-exposure
+slope; 6 parameters), fitted leave-one-season-out as ever.
