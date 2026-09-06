@@ -137,7 +137,7 @@ def season_of_units(wd) -> np.ndarray:
 
 def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, target: str = "rapm1",
                  params: dict | None = None, panel: str | None = None, target_d: str | None = None,
-                 features: dict | None = None) -> Callable:
+                 features: dict | None = None, win_decay: float = 1.0) -> Callable:
     """The per-player offset builder for a PluginSystem.  Signature `offset(train, ctx, wd) -> (2 * n_ps,)`,
     raw sign, possession-centred per side.
 
@@ -179,9 +179,9 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
             def col(t):
                 return t if (t == "apm" or t.startswith("blend")) else None
 
-            if params or panel or target_d or features or target.startswith("blend"):
-                prior_o = ctx.prior(mode, col(target), params, panel, features)
-                prior_d = ctx.prior(mode, col(t_d), params, panel, features)
+            if params or panel or target_d or features or target.startswith("blend") or win_decay != 1.0:
+                prior_o = ctx.prior(mode, col(target), params, panel, features, win_decay)
+                prior_d = ctx.prior(mode, col(t_d), params, panel, features, win_decay)
             else:
                 prior_o = ctx.gbdt if mode == "residual" else getattr(ctx, "mspi_apm" if target == "apm" else "mspi", None)
                 prior_d = prior_o
@@ -189,7 +189,8 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
                 raise RuntimeError(f"Context has no GBDT prior for mode {mode!r} (outputs/role_panel.parquet)")
             from .gbdt_prior import gbdt_offset
             ro, rd = centred_rates(exp)
-            common = dict(features=list(wd.spec.features), extra=inputs[list(RAW_INPUTS)])
+            common = dict(features=list(wd.spec.features), extra=inputs[list(RAW_INPUTS)],
+                          raw=(exp.season_rates_, exp.season_rates_d_))
             g = np.zeros(2 * m)
             if "O" in sides:
                 g += gbdt_offset(prior_o, ro, rd, season_of_units(wd), poss_o, poss_d, exclude, sides=("O",), **common)

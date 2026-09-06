@@ -2167,3 +2167,45 @@ have touched (the other half of the season, the team's other games, the training
 candidates this session died on it (21.21 and this one); the ones that lived -- age at H, the bends, the
 training-block role -- are the line.**
 
+### 24. The prior's model and features are not the binding constraint; its target is
+
+Against the line (`best / linear+log2&age2&xlog&prior&tshare|rowcubic` = 109.981 in 23.2 s), every change to
+the GBDT box prior that does not change what it is trained ON:
+
+| change | criterion | vs the line | z | 28 fits |
+|---|---|---|---|---|
+| linear aggregations of the 13 rates (`gbdt_prior.DERIVED`: points, shot volume, usage, bigness, rebounds, stocks, creation, shot mix) | 109.936 | -0.049 | -1.05, 18/28 | 24.6 s |
+| + efficiency ratios (`RATIOS`: TS, eFG, 3PAr, FTr, FG3%, FG2%, FT%, assist rate, turnover rate, offensive-rebound share) | **109.912** | **-0.069** | **-1.28, 19/28** | 25.8 s |
+| the ratios without the linear aggregations | 109.979 | +0.001 | 0.0 | 25.8 s |
+| the aggregations INSTEAD of the rates they are made of | 109.947 | -0.033 | -0.50 | 24.4 s |
+| chimeraboost `quality=4` (5 bagged members) | 109.985 | +0.004 | | 27.0 s |
+| chimeraboost `quality=5` (8 bagged members) | 109.996 | +0.015 | | 33.2 s |
+| `quality=4` WITH the audition fits and cross features | 109.954 | -0.025 | -0.65 | 45.4 s |
+| the target pooled toward the player's nearby windows (`win_decay` 0.3 / 0.5 / 0.7) | 109.956 / 109.957 / 109.975 | -0.025 | | 23.6 s |
+
+**Not one of them is significant, and the biggest is 0.07 per 100.**  Doubling the booster's fit budget
+(`quality=4` with the auditions, 45 s against 23) buys 0.025.  The one prior change that ever mattered
+remains what it is trained on: RAPM_1 -> unshrunk APM was -0.29 at z -3.1 (21.16).
+
+**Why, measured.**  The prior's task is to predict a player's APM pooled over his OTHER windows.  That target
+is itself noisy, so no model can correlate with it beyond the square root of its reliability.  Split each
+player's other windows into two halves, pool each, correlate them possession-weighted and Spearman-Brown back
+to the whole pool (`scratch/prior_ceiling.py`):
+
+| side | target reliability | ceiling on any r | the shipped booster's r | share of the ceiling |
+|---|---|---|---|---|
+| offense | 0.808 | 0.899 | 0.590 | 66% |
+| defense | 0.889 | 0.943 | 0.629 | 67% |
+
+A third of the reachable signal is unexplained -- but the model class is not what is holding it: five and eight
+bagged members, the full model-selection search, twenty-three engineered features and a distance-weighted
+target all move the criterion by less than 0.07 with z around 1.  What is left is in the play-by-play and not
+in the box line, which is the premise the ridge exists to exploit.
+
+**TabFM (`google/tabfm-1.0.0-jax`, the 5.7 GB regression checkpoint) could not be measured on this machine.**
+`pip install "tabfm[jax]"` and the download work (point `HF_HOME` at A:, C: has 8 GB free and the checkpoint
+needs more), but the orbax restore dies in tensorstore on a 1.5 GB region: the box has 32 GB with a 48 GB
+commit limit and 38.5 GB already committed by other processes.  Worth retrying with the machine quiet.  Note
+what it would have to beat on: the booster fits a leave-window-out pair in 0.14 s, and the whole 28-fit budget
+is 23 s.
+

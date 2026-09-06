@@ -35,32 +35,115 @@ ROLE_INPUTS = ["share", "gs_pct", "age"]
 DEFAULT_FEATURES = [*FEATURES, "season"]                 # mode "residual": what the box line adds to the role level
 FULL_FEATURES = [*FEATURES, "season", *ROLE_INPUTS]       # mode "full": the GBDT is the whole prior
 
+# Aggregations of the 13 rates, in the rates' own (centred, per-100) units.  An oblivious tree splits one
+# column at a time, so a quantity that lives on a DIAGONAL of the rate space -- points, shot volume, the
+# big-man axis -- costs it a staircase of splits to approximate and costs us nothing to hand over.  Every
+# one is LINEAR in the rates, so it means the same thing centred as uncentred and no panel column is needed.
+DERIVED = {
+    "pts":      {"fg2m": 2.0, "fg3m": 3.0, "ftm": 1.0},                       # points per 100
+    "fga":      {"fg2m": 1.0, "fg2_miss": 1.0, "fg3m": 1.0, "fg3_miss": 1.0},
+    "fta":      {"ftm": 1.0, "ft_miss": 1.0},
+    "fg3a":     {"fg3m": 1.0, "fg3_miss": 1.0},
+    "usage":    {"fg2m": 1.0, "fg2_miss": 1.0, "fg3m": 1.0, "fg3_miss": 1.0,   # possessions he finishes
+                 "ftm": 0.44, "ft_miss": 0.44, "tov": 1.0},
+    "bigness":  {"orb": 1.0, "blk": 1.0, "drb": 0.3, "ast": -0.5, "fg3m": -0.4},   # 22_vs_consensus's definition
+    "reb":      {"orb": 1.0, "drb": 1.0},
+    "stocks":   {"stl": 1.0, "blk": 1.0},
+    "creation": {"ast": 1.0, "tov": -1.0},
+    "shotmix":  {"fg3m": 1.0, "fg3_miss": 1.0, "fg2m": -1.0, "fg2_miss": -1.0},    # threes minus twos taken
+}
+# Efficiency: a ratio of two rates, which an axis-aligned tree cannot make at all.  These need the rates'
+# LEVEL back (a ratio of centred rates is meaningless), so they are built from the `raw_` columns -- the
+# uncentred padded rates, stored in the panel by scratch/add_raw_rates.py and passed through by
+# `chain_offset` at prediction time.  Each denominator is padded so a 200-possession player is not a ratio
+# of two roundings.  (num, den, pad in attempts per 100.)
+RATIOS = {
+    "efg":   ({"fg2m": 1.0, "fg3m": 1.5}, {"fg2m": 1, "fg2_miss": 1, "fg3m": 1, "fg3_miss": 1}, 3.0, 0.50),
+    "ts":    ({"fg2m": 2.0, "fg3m": 3.0, "ftm": 1.0},
+              {"fg2m": 2, "fg2_miss": 2, "fg3m": 2, "fg3_miss": 2, "ftm": 0.88, "ft_miss": 0.88}, 6.0, 0.54),
+    "p3r":   ({"fg3m": 1, "fg3_miss": 1}, {"fg2m": 1, "fg2_miss": 1, "fg3m": 1, "fg3_miss": 1}, 3.0, 0.25),
+    "ftr":   ({"ftm": 1, "ft_miss": 1}, {"fg2m": 1, "fg2_miss": 1, "fg3m": 1, "fg3_miss": 1}, 3.0, 0.25),
+    "fg3p":  ({"fg3m": 1}, {"fg3m": 1, "fg3_miss": 1}, 3.0, 0.34),
+    "fg2p":  ({"fg2m": 1}, {"fg2m": 1, "fg2_miss": 1}, 3.0, 0.48),
+    "ftp":   ({"ftm": 1}, {"ftm": 1, "ft_miss": 1}, 2.0, 0.75),
+    "astr":  ({"ast": 1}, {"fg2m": 1, "fg2_miss": 1, "fg3m": 1, "fg3_miss": 1, "ftm": 0.44, "ft_miss": 0.44,
+                           "tov": 1}, 3.0, 0.18),
+    "tovr":  ({"tov": 1}, {"fg2m": 1, "fg2_miss": 1, "fg3m": 1, "fg3_miss": 1, "ftm": 0.44, "ft_miss": 0.44,
+                           "tov": 1}, 3.0, 0.13),
+    "orbsh": ({"orb": 1}, {"orb": 1, "drb": 1}, 3.0, 0.22),
+}
+DERIVED_FEATURES = [*FULL_FEATURES, *DERIVED]
+RATIO_FEATURES = [*DERIVED_FEATURES, *RATIOS]
+
+
+def add_derived(df: pd.DataFrame) -> pd.DataFrame:
+    """Add every `DERIVED` and `RATIOS` column the frame's rates can make (in place; the rest are skipped)."""
+    for name, wts in DERIVED.items():
+        if name in df.columns or not all(c in df.columns for c in wts):
+            continue
+        df[name] = sum(k * df[c].to_numpy(dtype=float) for c, k in wts.items())
+    for name, (num, den, pad, target) in RATIOS.items():
+        cols = set(num) | set(den)
+        if name in df.columns or not all(f"raw_{c}" in df.columns for c in cols):
+            continue
+        n = sum(k * df[f"raw_{c}"].to_numpy(dtype=float) for c, k in num.items())
+        d = sum(k * df[f"raw_{c}"].to_numpy(dtype=float) for c, k in den.items())
+        df[name] = (n + pad * target) / (d + pad)
+    return df
+
 
 # ------------------------------------------------------------------------------------ training rows
 def training_rows(panel: pd.DataFrame, side: str, exclude=(), features=None, target_col: str = "rapm1",
-                  poss_col: str = "poss") -> pd.DataFrame:
+                  poss_col: str = "poss", win_decay: float = 1.0) -> pd.DataFrame:
     """Rows of one side with every window in `exclude` removed from BOTH the rows and the pooled targets.
 
     target = possession-weighted mean of `target_col` over the player's other (non-excluded) windows,
     weight = the possessions behind that mean.  Rows without another window are dropped.
+
+    `win_decay` < 1 weights a window by `win_decay ** |i - j|` in the pool, so "what he is worth in the rest
+    of his career" becomes "what he is worth in the windows either side of this one".  1.0 (the default)
+    weights every other window alike and is the original pooling exactly.
     """
     feats = list(DEFAULT_FEATURES if features is None else features)
     ex = set(exclude)
     p = panel[(panel.side == side) & ~panel.window.isin(ex)].copy()
+    if any(f in DERIVED or f in RATIOS for f in feats):
+        add_derived(p)
     w = p[poss_col].to_numpy(dtype=float)
     v = p[target_col].to_numpy(dtype=float)
-    p["_wv"] = w * v
-    p["_w"] = w
-    g = p.groupby("player_id")
-    tot_wv = g["_wv"].transform("sum").to_numpy()
-    tot_w = g["_w"].transform("sum").to_numpy()
-    other_w = tot_w - w
-    other_wv = tot_wv - w * v
+    if float(win_decay) != 1.0:
+        other_w, other_wv = _pooled_by_distance(p, w, v, float(win_decay))
+    else:
+        p["_wv"] = w * v
+        p["_w"] = w
+        g = p.groupby("player_id")
+        tot_wv = g["_wv"].transform("sum").to_numpy()
+        tot_w = g["_w"].transform("sum").to_numpy()
+        other_w = tot_w - w
+        other_wv = tot_wv - w * v
     keep = other_w > 0
     out = p.loc[keep, ["player_id", "window", *feats]].copy()
     out["target"] = other_wv[keep] / other_w[keep]
     out["weight"] = other_w[keep]
     return out.reset_index(drop=True)
+
+
+def _pooled_by_distance(p: pd.DataFrame, w: np.ndarray, v: np.ndarray, decay: float):
+    """The pooled weight and weighted sum over the player's OTHER windows, each discounted by `decay` to the
+    power of how many windows away it is.  One (player, window) row per player per window, so the whole
+    thing is two small matrix products against a 10 x 10 distance kernel."""
+    wins = sorted(p.window.unique())
+    wi = p.window.map({lab: i for i, lab in enumerate(wins)}).to_numpy()
+    pid, pi = np.unique(p.player_id.to_numpy(), return_inverse=True)
+    n_w = len(wins)
+    W = np.zeros((len(pid), n_w))
+    WV = np.zeros((len(pid), n_w))
+    np.add.at(W, (pi, wi), w)
+    np.add.at(WV, (pi, wi), w * v)
+    d = np.arange(n_w)
+    K = float(decay) ** np.abs(d[:, None] - d[None, :])
+    np.fill_diagonal(K, 0.0)                       # his own window never enters his own target
+    return (W @ K)[pi, wi], (WV @ K)[pi, wi]
 
 
 def reference_mean(panel: pd.DataFrame, side: str, **kw) -> float:
@@ -127,7 +210,7 @@ class GBDTPrior:
     """
 
     def __init__(self, panel: pd.DataFrame, cfg: dict, seed: int | None = None, thread_count=None, features=None,
-                 mode: str | None = None, target_col: str | None = None):
+                 mode: str | None = None, target_col: str | None = None, win_decay: float = 1.0):
         g = cfg.get("gbdt", {})
         self.panel = panel
         self.cfg = cfg
@@ -146,14 +229,17 @@ class GBDTPrior:
             f = f or g.get(key.format(side)) or default
             self.features[side] = list(f)
         self.params = dict(g.get("params", {}) or {})
+        self.win_decay = float(win_decay)
         self._models: dict = {}
-        self._ref = {side: reference_mean(panel, side, target_col=self.target_col) for side in SIDES}
+        self._ref = {side: reference_mean(panel, side, target_col=self.target_col, win_decay=self.win_decay)
+                     for side in SIDES}
         self.reports: list = []
 
     def model(self, side: str, exclude=()):
         key = (side, frozenset(exclude))
         if key not in self._models:
-            rows = training_rows(self.panel, side, exclude, self.features[side], target_col=self.target_col)
+            rows = training_rows(self.panel, side, exclude, self.features[side], target_col=self.target_col,
+                                 win_decay=self.win_decay)
             rows, rep = counterbalance(rows, self._ref[side], self.tol)
             m = fit_gbdt(rows, self.features[side], seed=self.seed, thread_count=self.thread_count, **self.params)
             rep.update(mode=self.mode, side=side, exclude=",".join(sorted(exclude)), n_rows=int(len(rows)),
@@ -168,21 +254,26 @@ class GBDTPrior:
 
 
 def gbdt_offset(prior: GBDTPrior, ro, rd, season, poss_o, poss_d, exclude=(), sides=SIDES, features=None,
-                extra: pd.DataFrame | None = None) -> np.ndarray:
+                extra: pd.DataFrame | None = None, raw=None) -> np.ndarray:
     """The (2m,) raw-sign GBDT offset from a window's centred rates and seasons (and, for mode "full", the role
     inputs in `extra`, aligned to ps_idx), possession-centred per side; zeros on a side not in `sides`."""
     feats = list(FEATURES if features is None else features)
     m = len(season)
     out = np.zeros(2 * m)
-    for side, R, poss, off in (("O", ro, poss_o, 0), ("D", rd, poss_d, m)):
+    for j, (side, R, poss, off) in enumerate((("O", ro, poss_o, 0), ("D", rd, poss_d, m))):
         if side not in sides:
             continue
         X = pd.DataFrame(np.asarray(R, dtype=float), columns=feats)
         X["season"] = np.asarray(season, dtype=float)
+        if raw is not None:                              # the uncentred rates, for the efficiency ratios
+            for c, col in zip(feats, np.asarray(raw[j], dtype=float).T):
+                X[f"raw_{c}"] = col
         if extra is not None:
             for c in extra.columns:
                 if c in prior.features[side] and c not in X.columns:
                     X[c] = np.asarray(extra[c], dtype=float)
+        if any(f in DERIVED or f in RATIOS for f in prior.features[side]):
+            add_derived(X)
         g = prior.predict(side, X, exclude)
         w = np.maximum(np.asarray(poss, dtype=float), 0.0)
         if w.sum() > 0:

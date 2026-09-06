@@ -99,6 +99,7 @@ class MspiFast:
     panel: str | None = None             # a role panel other than the configured one for the GBDT prior (path)
     target_d: str | None = None          # the GBDT's training target on DEFENSE when it differs from `target`
     gbdt_features: dict | None = None    # {"O": [...], "D": [...]} for the GBDT instead of the configured lists
+    win_decay: float = 1.0               # the prior's target pooled over the player's windows with this decay
     min_den: float = 0.0                 # drop design rows under this many possessions (designcache)
 
     def counter_columns(self) -> set | None:
@@ -168,7 +169,7 @@ class MspiFast:
         T("exposure")
         off = chain_offset(self.sides, self.mode, scale=self.scale, target=self.target,
                            params=self.gbdt_params, panel=self.panel, target_d=self.target_d,
-                           features=self.gbdt_features)(train, ctx, wd, exp=exp)
+                           features=self.gbdt_features, win_decay=self.win_decay)(train, ctx, wd, exp=exp)
         T("prior")
         nf = len(wd.spec.features)
         beta = np.zeros(2 * nf)

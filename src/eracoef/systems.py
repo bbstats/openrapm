@@ -139,6 +139,33 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                          ("glr2", {"learning_rate": 0.2}), ("gb64", {"max_bins": 64})):
             S[f"best_{tag}"] = MspiFast(f"best_{tag}", gbdt_params={**FAST, **prm}, decay=0.5, decay_exposure=True,
                                         target="apm")
+        # chimeraboost's named operating points: quality 4 = 5 bagged members, 5 = 8 (ensemble_n_jobs=1 so the
+        # bag does not fork inside the holdout's own workers)
+        S["best_q4"] = MspiFast("best_q4", gbdt_params={**FAST, "quality": 4, "ensemble_n_jobs": 1},
+                                decay=0.5, decay_exposure=True, target="apm")
+        S["best_q5"] = MspiFast("best_q5", gbdt_params={**FAST, "quality": 5, "ensemble_n_jobs": 1},
+                                decay=0.5, decay_exposure=True, target="apm")
+        S["best_q4full"] = MspiFast("best_q4full", gbdt_params={"quality": 4, "ensemble_n_jobs": 1},
+                                    decay=0.5, decay_exposure=True, target="apm")
+        # the prior's features: the 13 rates + role, plus linear aggregations of the rates (gbdt_prior.DERIVED)
+        from .gbdt_prior import DERIVED, FULL_FEATURES as _FF, RATIOS
+        from .gbdt_prior import DERIVED_FEATURES as _DF, RATIO_FEATURES as _RF
+        S["best_agg"] = MspiFast("best_agg", gbdt_params=FAST, decay=0.5, decay_exposure=True, target="apm",
+                                 gbdt_features={"O": list(_DF), "D": list(_DF)})
+        # the efficiency ratios (built from the panel's uncentred rates) on top, and on their own
+        S["best_ratio"] = MspiFast("best_ratio", gbdt_params=FAST, decay=0.5, decay_exposure=True, target="apm",
+                                   gbdt_features={"O": list(_RF), "D": list(_RF)})
+        _RO = [*_FF, *RATIOS]
+        S["best_ratio_only"] = MspiFast("best_ratio_only", gbdt_params=FAST, decay=0.5, decay_exposure=True,
+                                        target="apm", gbdt_features={"O": _RO, "D": _RO})
+        # the prior's TARGET pooled over the player's nearby windows instead of all of them
+        for wd_ in (0.3, 0.5, 0.7):
+            n = f"best_wd{wd_:g}".replace(".", "")
+            S[n] = MspiFast(n, gbdt_params=FAST, decay=0.5, decay_exposure=True, target="apm", win_decay=wd_)
+        # the aggregations INSTEAD of the raw rates they are made of: a smaller, better-conditioned set
+        _SM = ["season", "share", "gs_pct", "age", *DERIVED, *RATIOS]
+        S["best_small"] = MspiFast("best_small", gbdt_params=FAST, decay=0.5, decay_exposure=True, target="apm",
+                                   gbdt_features={"O": _SM, "D": _SM})
         # the single-possession stints dropped: a quarter of the rows, 7% of the weight
         for md in (2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 12.0):
             n = f"best_md{md:g}"
