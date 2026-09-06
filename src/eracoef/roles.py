@@ -203,10 +203,8 @@ def career_inputs(inputs: pd.DataFrame, before_season: int, player_ids=None, age
     """
     d = inputs[(inputs.season < int(before_season)) & (inputs.games > 0)]
     if len(d):
-        g = d.groupby("player_id").agg(exp_yrs=("season", "nunique"), exp_poss=("poss_on", "sum"),
-                                       first=("season", "min"))
-        entry = d.sort_values("season").groupby("player_id")["age"].first()
-        g["entry_age"] = entry
+        g = d.groupby("player_id").agg(exp_yrs=("season", "nunique"), exp_poss=("poss_on", "sum"))
+        g["entry_age"] = d.sort_values("season").groupby("player_id")["age"].first()
         g["exp_poss"] = g.exp_poss / 1000.0
         g = g[CAREER_INPUTS]
     else:

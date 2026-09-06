@@ -29,6 +29,7 @@ import numpy as np
 import pandas as pd
 
 from .design import FEATURES
+from .roles import CAREER_INPUTS
 
 SIDES = ("O", "D")
 ROLE_INPUTS = ["share", "gs_pct", "age"]
@@ -102,26 +103,25 @@ SHOT_FEATURES = [*RATIO_FEATURES, *SHOTQ]
 # time): seasons played, career possessions in thousands and the age he entered at, all counted BEFORE the
 # block's first season.  Age is in the prior already and is not the same thing -- a 25-year-old rookie and a
 # 25-year-old in year seven are different players, and the panel had no way to say which was which.
-CAREER = ["exp_yrs", "exp_poss", "entry_age"]
+CAREER = list(CAREER_INPUTS)                          # defined in roles.py, where they are built
 PRIOR_FEATURES = [*SHOT_FEATURES, *CAREER]           # everything: the accuracy-first prior of FINDINGS 22
 
 
 def add_shotq(df: pd.DataFrame) -> pd.DataFrame:
     """Add the `SHOTQ` columns if the frame carries the shot totals and the block's league levels."""
-    if not all(c in df.columns for c in (*SHOT_TOTALS, *SHOT_LEAGUE)):
+    if "q2" in df.columns or not all(c in df.columns for c in (*SHOT_TOTALS, *SHOT_LEAGUE)):
         return df
     col = {c: df[c].to_numpy(dtype=float) for c in (*SHOT_TOTALS, *SHOT_LEAGUE)}
     a2, m2, x2 = col["shot_fg2a"], col["shot_fg2m"], col["shot_xl2"]
     a3, m3, x3 = col["shot_fg3a"], col["shot_fg3m"], col["shot_xl3"]
     lg2, lg3, lgp = col["shot_lg2"], col["shot_lg3"], col["shot_lgpps"]
     k, a = SHOTQ_K, a2 + a3
-    if "q2" not in df.columns:
-        df["q2"] = (x2 + k["q2"] * lg2) / (a2 + k["q2"])
-        df["q3"] = (x3 + k["q3"] * lg3) / (a3 + k["q3"])
-        df["m2"] = (m2 - x2) / (a2 + k["m2"])                       # padded toward 0: the league beats nobody
-        df["m3"] = (m3 - x3) / (a3 + k["m3"])
-        df["xps"] = (2.0 * x2 + 3.0 * x3 + k["xps"] * lgp) / (a + k["xps"])
-        df["mpts"] = (2.0 * (m2 - x2) + 3.0 * (m3 - x3)) / (a + k["mpts"])
+    df["q2"] = (x2 + k["q2"] * lg2) / (a2 + k["q2"])
+    df["q3"] = (x3 + k["q3"] * lg3) / (a3 + k["q3"])
+    df["m2"] = (m2 - x2) / (a2 + k["m2"])                           # padded toward 0: the league beats nobody
+    df["m3"] = (m3 - x3) / (a3 + k["m3"])
+    df["xps"] = (2.0 * x2 + 3.0 * x3 + k["xps"] * lgp) / (a + k["xps"])
+    df["mpts"] = (2.0 * (m2 - x2) + 3.0 * (m3 - x3)) / (a + k["mpts"])
     return df
 
 

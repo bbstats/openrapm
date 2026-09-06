@@ -204,9 +204,6 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         S["best_shot"] = MspiFast("best_shot", gbdt_params=_FULLQ4, win_decay=0.3, decay=0.5,
                                   decay_exposure=True, target="apm",
                                   gbdt_features={"O": list(_SF), "D": list(_SF)})
-        S["best_shot_o"] = MspiFast("best_shot_o", gbdt_params=_FULLQ4, win_decay=0.3, decay=0.5,
-                                    decay_exposure=True, target="apm",
-                                    gbdt_features={"O": list(_SF), "D": list(_RF)})
         # the shipping shape: the accuracy-first prior on OFFENSE, the cheap one on DEFENSE, with and
         # without shot quality on the defensive side (the consensus floors decide that one, not the criterion)
         for w in ("blend0.7", "blend0.6"):
@@ -226,15 +223,6 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         S["best_both"] = MspiFast("best_both", gbdt_params=_FULLQ4, win_decay=0.3, decay=0.5,
                                   decay_exposure=True, target="apm",
                                   gbdt_features={"O": list(_PF), "D": list(_PF)})
-        # the shipping shape of it: the accuracy-first prior on OFFENSE, the cheap one on DEFENSE
-        for w in ("blend0.7", "blend0.6"):
-            n_ = "ship_both" + w.replace("blend0.", "")
-            S[n_] = MspiFast(n_, target=w, target_d="rapm1", gbdt_params=_FULLQ4, win_decay=0.3,
-                             gbdt_params_d=dict(FAST), win_decay_d=1.0,
-                             gbdt_features={"O": list(_PF), "D": list(_FF)})
-            S[n_ + "d"] = MspiFast(n_ + "d", target=w, target_d="rapm1", gbdt_params=_FULLQ4, win_decay=0.3,
-                                   gbdt_params_d=dict(FAST), win_decay_d=1.0,
-                                   gbdt_features={"O": list(_PF), "D": [*_FF, *_SQ, *_CA]})
         # the same without the nearby-window discount (the consensus floors, not the criterion, may want it)
         S["ship_ratio_b07_wd1"] = MspiFast("ship_ratio_b07_wd1", target="blend0.7",
                                            **{**_SK, "win_decay": 1.0})

@@ -196,14 +196,15 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
                 raise RuntimeError(f"Context has no GBDT prior for mode {mode!r} (outputs/role_panel.parquet)")
             from .gbdt_prior import SHOTQ, gbdt_offset
             ro, rd = centred_rates(exp)
+            wants = set(prior_o.features["O"]) | set(prior_d.features["D"])
             shots = None
-            if any(f in SHOTQ for f in (*prior_o.features["O"], *prior_d.features["D"])):
+            if wants & set(SHOTQ):
                 # the shot totals of the TRAINING block only, the way the panel row's came from its window's
                 # three seasons -- the held-out season is not among `train`, so nothing here has seen it
                 from .xshoot import player_shot_frame
                 shots = player_shot_frame(train, cfg, wd.spec.ps_table["player_id"].to_numpy())
             extra = inputs[list(RAW_INPUTS)].reset_index(drop=True)
-            if any(f in CAREER_INPUTS for f in (*prior_o.features["O"], *prior_d.features["D"])):
+            if wants & set(CAREER_INPUTS):
                 # seasons played, career possessions and entry age BEFORE the block's first season, so the
                 # count stops two seasons short of H and cannot have seen it
                 ci = career_inputs(ctx.role_inputs, min(int(s_) for s_ in train),

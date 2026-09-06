@@ -90,8 +90,8 @@ for w in window_seasons(cfg):
         d.insert(4, "season", season)
         # where his shots came from: the block's per-shooter totals with the league's expected makes from
         # his own locations, which gbdt_prior.add_shotq turns into shot difficulty and shot-making
-        for c, col in zip(SHOT_COLS_ALL, sf[SHOT_COLS_ALL].to_numpy(dtype=float).T):
-            d[c] = col
+        for c in SHOT_COLS_ALL:
+            d[c] = sf[c].to_numpy(dtype=float)
         d["poss"] = a["poss_o"] if side == "O" else a["poss_d"]
         for c in RAW_INPUTS:
             d[c] = inp[c].to_numpy()
