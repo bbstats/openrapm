@@ -1890,3 +1890,21 @@ Ratings unchanged to 1e-13, tests pass.
 The exposure padding constants halved / doubled (`pad_scale` 0.5 / 2) and the league padding target instead of
 the possession-conditional one: 110.639 / 110.633 / 110.631 against 110.627, all in the same time.  The
 checkpoint-4 choices hold under the mapped criterion.
+
+### 15. The role panel rebuilt at the halved ridge: -0.04, not significant
+
+The GBDT prior's training target is RAPM_1 from `outputs/role_panel.parquet`, fitted at the shipped ridge.
+Rebuilt with the ridge x0.5 (`scratch/panel_lam.py 0.5`, 58 s, an upstream artefact like the panel itself) and
+used as the prior's panel (`MspiFast.panel`): 110.585 against 110.627, -0.044, z -1.1, 16 of 28.  Not a win by
+the stop rules; x0.7 and x0.35 are read next for the shape.  The exposure's np.add.at accumulators replaced by
+sparse products (`exposure._sum_matrix`): 32.3 s, ratings unchanged to 1e-13.
+
+The panel's ridge, swept (the GBDT prior's target RAPM_1 refit at a fraction of `lam_plugin`; the mapped score,
+paired against the shipped panel at 110.627): x0.7 110.611 (-0.02, z -0.8), x0.5 110.585 (-0.04, z -1.1),
+**x0.35 110.528 (-0.105, z -2.7, 18 of 28)**.  Monotone: the less the panel's targets are shrunk, the more
+spread the prior learns, and the map's prior term then re-weights it.  Section 19 item 4 (the unshrunk APM
+target, `mspi_apm`) read flat on the unmapped criterion; with the map it is worth reading again, and x0.25,
+x0.15 and the APM target itself are queued.
+
+Cheaper GBDT trees at the best: depth 4 110.642 in 32.1 s, 64 bins 110.662 in 32.2 s, both 110.652 in 33.0 s,
+against 110.627 in 32.3 s.  The trees are not where the time is any more; not taken.

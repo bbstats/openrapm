@@ -121,6 +121,15 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         S["mspi1_best_padleague"] = MspiFast("mspi1_best_padleague", pad_target="league", **BEST)
         # the GBDT prior trained on a role panel whose RAPM_1 used the halved ridge (scratch/panel_lam.py 0.5)
         S["mspi1_best_panel05"] = MspiFast("mspi1_best_panel05", panel="outputs/role_panel_lam0.5.parquet", **BEST)
+        S["mspi1_best_panel07"] = MspiFast("mspi1_best_panel07", panel="outputs/role_panel_lam0.7.parquet", **BEST)
+        S["mspi1_best_panel035"] = MspiFast("mspi1_best_panel035", panel="outputs/role_panel_lam0.35.parquet", **BEST)
+        S["mspi1_best_panel025"] = MspiFast("mspi1_best_panel025", panel="outputs/role_panel_lam0.25.parquet", **BEST)
+        S["mspi1_best_panel015"] = MspiFast("mspi1_best_panel015", panel="outputs/role_panel_lam0.15.parquet", **BEST)
+        S["mspi1_best_apm"] = MspiFast("mspi1_best_apm", target="apm", **BEST)      # the prior trained on unshrunk APM
+        # cheaper GBDT trees: depth 4 (flat in loss in section 21.4), 64 bins
+        S["mspi1_best_d4"] = MspiFast("mspi1_best_d4", **{**BEST, "gbdt_params": {**FAST, "depth": 4}})
+        S["mspi1_best_mb64"] = MspiFast("mspi1_best_mb64", **{**BEST, "gbdt_params": {**FAST, "max_bins": 64}})
+        S["mspi1_best_d4mb64"] = MspiFast("mspi1_best_d4mb64", **{**BEST, "gbdt_params": {**FAST, "depth": 4, "max_bins": 64}})
         # the two adjacent seasons weighted apart: the past one or the future one at 0.8
         for tag, sw in (("past08", {-2: 0.5, -1: 0.8, 1: 1.0}), ("fut08", {-2: 0.5, -1: 1.0, 1: 0.8}),
                         ("past07fut1", {-2: 0.4, -1: 0.7, 1: 1.0})):
