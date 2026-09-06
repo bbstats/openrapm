@@ -179,18 +179,28 @@ class BoxExposure(BaseEstimator, TransformerMixin):
 
     # ------------------------------------------------------------------ sklearn API
     def fit(self, X, y=None, sample_weight=None):
-        X = check_array(X, accept_sparse="csr")
+        """`X` may be None when `self.parts` (WindowData.parts: game_idx, lineup_o, lineup_d) is set: the fit then
+        never touches the design matrix."""
+        parts = getattr(self, "parts", None)
         spec = self.spec
+        if X is None:
+            if parts is None:
+                raise ValueError("fit(None) needs `parts`")
+            n_rows = len(parts["game_idx"])
+            self.n_features_in_ = 2 * spec.n_ps + len(spec.f_names) + 1
+        else:
+            X = check_array(X, accept_sparse="csr")
+            n_rows = X.shape[0]
+            self.n_features_in_ = X.shape[1]
         feats = self._feature_list()
         n_feat = len(feats)
-        self.n_features_in_ = X.shape[1]
         self.feature_names_ = feats
         n_ps = spec.n_ps
         n_seasons = spec.n_seasons
         if self.pad_target not in TARGETS:
             raise ValueError(f"unknown pad_target {self.pad_target!r}; use one of {TARGETS}")
 
-        game_idx = self._game_idx(X)
+        game_idx = np.asarray(parts["game_idx"], dtype=np.int64) if X is None else self._game_idx(X)
         train_games = np.unique(game_idx)
         self.train_games_ = train_games
 
@@ -318,8 +328,8 @@ class BoxExposure(BaseEstimator, TransformerMixin):
         self.means_o_ = np.zeros(n_feat)
         self.means_d_ = np.zeros(n_feat)
         if self.center and n_feat:
-            Xo, Xd = self._exposures(X, game_idx)
-            wgt = np.ones(X.shape[0]) if sample_weight is None else np.asarray(sample_weight, dtype=float)
+            Xo, Xd = self._exposures_parts(parts, game_idx) if X is None else self._exposures(X, game_idx)
+            wgt = np.ones(n_rows) if sample_weight is None else np.asarray(sample_weight, dtype=float)
             self.means_o_ = (wgt[:, None] * Xo).sum(0) / wgt.sum()
             self.means_d_ = (wgt[:, None] * Xd).sum(0) / wgt.sum()
         return self
@@ -416,6 +426,19 @@ class BoxExposure(BaseEstimator, TransformerMixin):
         k = (self.pad_k_ps_ if side == "O" else self.pad_k_ps_d_)[ps]
         t = (self.target_ps_ if side == "O" else self.target_ps_d_)[ps]
         return self._pad_ps(C, P, P, k, t)
+
+    def _exposures_parts(self, parts, game_idx):
+        """`_exposures` from the design's own sorted lineups (WindowData.parts), the same sums in the same order."""
+        n_feat = len(self.feature_names_)
+        lo, ld = parts["lineup_o"], parts["lineup_d"]
+        n = lo.shape[0]
+        Xo = np.zeros((n, n_feat)); Xd = np.zeros((n, n_feat))
+        if n_feat == 0:
+            return Xo, Xd
+        for j in range(5):
+            Xo += self._rates_for(lo[:, j], game_idx, "O")
+            Xd += self._rates_for(ld[:, j], game_idx, "D")
+        return Xo, Xd
 
     def _exposures(self, X, game_idx):
         n_feat = len(self.feature_names_)

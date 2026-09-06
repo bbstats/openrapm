@@ -40,9 +40,7 @@ def direct_layout(wd, exp, prior_offset: np.ndarray) -> _Layout:
     dense -> sparse -> dense round trip), Z and F as the design built them."""
     spec, parts = wd.spec, wd.parts
     n_feat = len(exp.feature_names_)
-    ro, rd = exp.rates_, exp.rates_d_
-    Xo = ro[parts["lineup_o"]].sum(axis=1) if n_feat else np.zeros((wd.X.shape[0], 0))
-    Xd = rd[parts["lineup_d"]].sum(axis=1) if n_feat else np.zeros((wd.X.shape[0], 0))
+    Xo, Xd = exp._exposures_parts(parts, parts["game_idx"])
     if exp.center and n_feat:
         Xo = Xo - exp.means_o_
         Xd = Xd - exp.means_d_
@@ -70,6 +68,7 @@ class MspiFast:
     lam_buckets: dict | None = None      # extra ridge multipliers per spec.col_groups name (low_poss, high_poss, ...)
     phases: tuple = ("RS",)              # ("RS", "PO"): train on the playoff stints too (the held-out scoring stays RS)
     decay: float | None = None           # rows of training season s weighted decay^(|s - H| - 1), H = ctx.current_h
+    decay_exposure: bool = False         # the same weights on the games behind the padded rates (BoxExposure.game_mult)
 
     def fit(self, train, ctx: Context) -> Ratings:
         from . import xshoot
@@ -90,7 +89,19 @@ class MspiFast:
             return ys[name]
 
         y_o, y_d = target_y(self.off_target), target_y(self.def_target)
-        exp = make_exposure(wd, mode="full", pad_target=cfg["pad_target"]).fit(wd.X, sample_weight=wd.w)
+        game_mult = None
+        if self.decay is not None and self.decay_exposure and ctx.current_h is not None:
+            g = wd.games
+            gm = np.ones(int(g["game_idx"].max()) + 1)
+            dist = np.abs(g["season"].to_numpy(dtype=float) - float(ctx.current_h))
+            gm[g["game_idx"].to_numpy()] = float(self.decay) ** np.maximum(dist - 1.0, 0.0)
+            game_mult = gm
+        exp = make_exposure(wd, mode="full", pad_target=cfg["pad_target"], game_mult=game_mult)
+        if wd.parts is not None:
+            exp.parts = wd.parts
+            exp.fit(None, sample_weight=wd.w)
+        else:
+            exp.fit(wd.X, sample_weight=wd.w)
         off = chain_offset(self.sides, self.mode, scale=self.scale, target=self.target,
                            params=self.gbdt_params)(train, ctx, wd, exp=exp)
         nf = len(wd.spec.features)
@@ -111,6 +122,7 @@ class MspiFast:
             X, _, _ = mm._validate(exp.transform(wd.X), np.asarray(y_o, dtype=float), wd.w)
             layout = mm._layout(X)
         mom = Moments(layout, np.asarray(y_o, dtype=float), w, mm._season_cols(), mm._scale())
+        mom.want_edf = False
         u = {"o": np.asarray(mom.solve_chol(lam).u, dtype=float)}
         u["d"] = np.asarray(mom.with_y(layout, np.asarray(y_d, dtype=float), w).solve_chol(lam).u, dtype=float)
         df = pd.DataFrame({"player_id": wd.spec.ps_table["player_id"].to_numpy(),

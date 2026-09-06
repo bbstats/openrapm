@@ -109,6 +109,11 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         for d in (0.7, 0.5, 0.3):
             n = f"mspi1_lam05_fast_dec{d:g}".replace(".", "")
             S[n] = MspiFast(n, lam=L05, gbdt_params=FAST, decay=d)
+        for f in (0.35, 0.7):
+            n = f"mspi1_lam{f:g}_fast_dec05".replace(".", "")
+            S[n] = MspiFast(n, lam=float(cfg["lam_plugin"]) * f, gbdt_params=FAST, decay=0.5)
+        S["mspi1_lam05_fast_dec05x"] = MspiFast("mspi1_lam05_fast_dec05x", lam=L05, gbdt_params=FAST, decay=0.5, decay_exposure=True)
+        S["best"] = MspiFast("best", lam=L05, gbdt_params=FAST, decay=0.5)
         # one target for both sides (one solve): the opponent-3PM-replaced target on offense too
         S["mspi1_x3both"] = MspiFast("mspi1_x3both", off_target="x3def")
         # the APM-trained offense with the RAPM_1-trained defense (each side's calibrated version)

@@ -1822,3 +1822,16 @@ On the decayed dump the map shapes read as before, now paired against `linear+sa
 `hinge+sat&age2` -0.04, `poly2+sat&age2` -0.04.  The score map from here is **`linear+log2&age2&xlog`**
 (per side: a rating scalar, a quadratic-in-log exposure level, a quadratic age level, a rating-by-log-exposure
 slope; 6 parameters), fitted leave-one-season-out as ever.
+
+Under the decay and the log map the ridge re-reads the same: x0.35 +0.06 (z +2.8, worse), x0.7 -0.02 (z -1.0);
+x0.5 stays.  The same season weights on the games behind the padded rates (`decay_exposure`, BoxExposure's
+`game_mult`) -0.03 (z -1.7, 15 of 28): not taken.  Skipping the effective-degrees-of-freedom trace in the
+solve (`Moments.want_edf`) takes a warm fit to 1.13 s, ratings unchanged.
+
+### 10. The clock, third pass: 45 s (true loss 0.33)
+
+The design matrix written straight in CSR form (every row has the same pattern: five sorted offensive units,
+five defensive, the fixed columns with explicit zeros, the game index; no hstack, no sort), Z built the same
+way, and BoxExposure fitted from the design's parts without touching X (`fit(None)` with `parts` set: the
+lineups and game index come from the assembly).  Assembly 0.26 s from 0.51 on the old path; every array equal;
+ratings equal to the dump to 1e-13; a warm fit 1.03 s.  `mspi1_lam05_fast_dec05`: 110.786 in 45.1 s.

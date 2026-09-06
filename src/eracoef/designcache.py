@@ -163,14 +163,23 @@ def build_window_cached(seasons, cfg, phases=("RS",), gt_weight=None, target="pt
 
     f_names = ["home"] + [f"int_{s}" for s in ssn] + ["is_po", "po_home", "is_gt", "margin", "margin_frem"]
     f_cols = [home] + [(r_season == k).astype(float) for k in range(len(ssn))] + [r_po, r_po * home, r_gt, r_margin, r_margin * r_frem]
-    F = sp.csr_matrix(np.column_stack(f_cols))
-    rows_ar = np.repeat(np.arange(n), 5)
-    Z_O = sp.csr_matrix((np.ones(n * 5), (rows_ar, off.ravel())), shape=(n, n_ps))
-    Z_D = sp.csr_matrix((np.ones(n * 5), (rows_ar, de.ravel())), shape=(n, n_ps))
-    assert Z_O.nnz == n * 5 and Z_D.nnz == n * 5, "duplicate player ids inside a lineup"
-    G = sp.csr_matrix(r_game.astype(float)[:, None])
-    X = sp.hstack([Z_O, Z_D, F, G], format="csr")
-    X.sort_indices()
+    Fd = np.column_stack(f_cols)
+    n_f = Fd.shape[1]
+    # X = [Z_O | Z_D | F | G] written straight in CSR form: every row has the same pattern -- its five offensive
+    # units (sorted), its five defensive units (sorted, + n_ps), the n_f fixed columns (explicit values, zeros
+    # kept) and the game index -- so the indices are sorted as built and no hstack or sort is needed
+    lo, ld = np.sort(off, axis=1), np.sort(de, axis=1)
+    assert (np.diff(lo, axis=1) > 0).all() and (np.diff(ld, axis=1) > 0).all(), "duplicate player ids inside a lineup"
+    fcols = 2 * n_ps + np.arange(n_f + 1)
+    indices = np.hstack([lo, ld + n_ps, np.broadcast_to(fcols, (n, n_f + 1))]).ravel()
+    data = np.hstack([np.ones((n, 10)), Fd, r_game.astype(float)[:, None]]).ravel()
+    per_row = 10 + n_f + 1
+    indptr = np.arange(0, n * per_row + 1, per_row, dtype=np.int64)
+    X = sp.csr_matrix((data, indices, indptr), shape=(n, 2 * n_ps + n_f + 1))
+    X.has_sorted_indices = True
+    Z = sp.csr_matrix((np.ones(n * 10), np.hstack([lo, ld + n_ps]).ravel(), np.arange(0, n * 10 + 1, 10, dtype=np.int64)),
+                      shape=(n, 2 * n_ps))
+    Z.has_sorted_indices = True
     groups = groups_st[stint_i]
 
     # the side tables, block indices
@@ -219,7 +228,6 @@ def build_window_cached(seasons, cfg, phases=("RS",), gt_weight=None, target="pt
         for k in range(5):
             counters[f"pid_s{k + 1}"] = P[:, k]
         counters["half"] = rows["half"].to_numpy()
-    parts = dict(Z=X[:, :2 * n_ps], F=np.asarray(F.todense()), lineup_o=np.sort(off, axis=1), lineup_d=np.sort(de, axis=1),
-                 game_idx=r_game.astype(np.int64))
+    parts = dict(Z=Z, F=Fd, lineup_o=lo, lineup_d=ld, game_idx=r_game.astype(np.int64))
     return WindowData(X=X, y=y, w=w, groups=groups, spec=spec, game_box=game_box, game_poss=game_poss, rows=rows,
                       games=games, counters=counters, parts=parts)

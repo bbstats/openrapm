@@ -181,6 +181,8 @@ class Moments:
                 self.gs.append(g[cols] * c)
         self._eig = None
         self._facs = {}
+        self.want_edf = True       # the effective degrees of freedom need one n_s x n_s solve per block; a plain
+                                   # ratings fit (fastfit) does not read them
 
     def with_y(self, layout: _Layout, y, w) -> "Moments":
         """The same cross-products with a different response: only b, g and y'Wy change (one pass over
@@ -238,7 +240,8 @@ class Moments:
         for cols, Gs, Bs, gs, (cf, _) in zip(self.season_cols, self.Gs, self.Bs, self.gs, facs):
             us = sla.cho_solve(cf, gs - Bs.T @ theta, check_finite=False)
             u[cols] = us
-            edf += float(np.trace(sla.cho_solve(cf, Gs, check_finite=False)))
+            if self.want_edf:
+                edf += float(np.trace(sla.cho_solve(cf, Gs, check_finite=False)))
             quad += us @ Gs @ us + 2.0 * theta @ Bs @ us - 2.0 * us @ gs
         rss = self.yWy - 2.0 * theta @ self.b + theta @ self.A @ theta + quad
         sigma2 = rss / max(self.n - edf, 1.0)
