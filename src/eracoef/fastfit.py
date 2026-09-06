@@ -52,14 +52,20 @@ class MspiFast:
         from .spm import chain_offset
         cfg = ctx.cfg
         wd = ctx.design(train, "pts")
-        y_o = derived_target(wd, self.off_target) if self.off_target != "pts" else wd.y
-        if self.def_target == "pts":
-            y_d = wd.y
-        elif self.def_target in TARGETS:
-            y_d = derived_target(wd, self.def_target)
-        else:
-            wd_d = xshoot.DEFENSE_TARGETS[self.def_target](train, cfg, wd)
-            y_d = (wd_d[0] if isinstance(wd_d, tuple) else wd_d).y
+        ys = {}
+
+        def target_y(name):
+            if name not in ys:
+                if name == "pts":
+                    ys[name] = wd.y
+                elif name in TARGETS:
+                    ys[name] = derived_target(wd, name)
+                else:
+                    wd_t = xshoot.DEFENSE_TARGETS[name](train, cfg, wd)
+                    ys[name] = (wd_t[0] if isinstance(wd_t, tuple) else wd_t).y
+            return ys[name]
+
+        y_o, y_d = target_y(self.off_target), target_y(self.def_target)
         exp = make_exposure(wd, mode="full", pad_target=cfg["pad_target"]).fit(wd.X, sample_weight=wd.w)
         Xt = exp.transform(wd.X)
         off = chain_offset(self.sides, self.mode, scale=self.scale, target=self.target,
@@ -69,11 +75,13 @@ class MspiFast:
         lam = float(cfg["lam_plugin"] if self.lam is None else self.lam)
         ratio = float(cfg["lam_ratio_plugin"] if self.lam_ratio is None else self.lam_ratio)
         m = wd.spec.n_ps
-        u = {}
-        for side, y in (("o", y_o), ("d", y_d)):
-            mm = MixedModelRAPM(lam=lam, lam_ratio=ratio, beta_fixed=beta, prior_offset=off, spec=wd.spec)
-            mm.fit(Xt, np.asarray(y, dtype=float), sample_weight=wd.w)
-            u[side] = np.asarray(mm.u_, dtype=float)
+        # one layout and one set of cross-products; the second side changes only the response
+        mm = MixedModelRAPM(lam=lam, lam_ratio=ratio, beta_fixed=beta, prior_offset=off, spec=wd.spec)
+        X, y, w = mm._validate(Xt, np.asarray(y_o, dtype=float), wd.w)
+        layout = mm._layout(X)
+        mom = mm._moments(layout, y, w)
+        u = {"o": np.asarray(mom.solve_chol(lam).u, dtype=float)}
+        u["d"] = np.asarray(mom.with_y(layout, np.asarray(y_d, dtype=float), w).solve_chol(lam).u, dtype=float)
         df = pd.DataFrame({"player_id": wd.spec.ps_table["player_id"].to_numpy(),
                            "o": off[:m] + u["o"][:m], "d": off[m:] + u["d"][m:],
                            "poss": np.asarray(exp.season_poss_off_, dtype=float),

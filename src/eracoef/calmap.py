@@ -136,10 +136,16 @@ class SeasonFrame:
     L: np.ndarray
     G: sp.csr_matrix
     wg: np.ndarray
+    extra: pd.DataFrame | None = None     # per player in `ids` order: covariates AT H (age), for the Age term
 
     @classmethod
     def build(cls, ctx: Context, h: int, level: str = "home") -> "SeasonFrame":
         wd = ctx.design([h], "pts")
+        extra = None
+        if ctx.role_inputs is not None:
+            ri = ctx.role_inputs[ctx.role_inputs.season == h][["player_id", "age"]]
+            extra = pd.DataFrame({"player_id": wd.spec.ps_table["player_id"].to_numpy()}).merge(ri, on="player_id", how="left")
+            extra["age"] = extra.age.fillna(float(ri.age.median()) if len(ri) else 27.0)
         m = wd.spec.n_ps
         A = level_columns(wd, level)
         w = np.asarray(wd.w, dtype=float)
@@ -152,7 +158,7 @@ class SeasonFrame:
         G = sp.csr_matrix((poss / wg[key], (key, np.arange(len(key)))), shape=(n_tg, len(key)))
         return cls(h=h, wd=wd, Zo=wd.X[:, :m].tocsr(), Zd=wd.X[:, m:2 * m].tocsr(),
                    ids=wd.spec.ps_table["player_id"].to_numpy(), y=np.asarray(wd.y, dtype=float), w=w, poss=poss,
-                   A=A, L=L, G=G, wg=wg)
+                   A=A, L=L, G=G, wg=wg, extra=extra)
 
     def profiled(self, C: np.ndarray) -> np.ndarray:
         """Columns with the season's level profiled out (what the criterion's refit does to any contribution)."""
@@ -253,7 +259,7 @@ class Exposure:
     name: str = "none"
     n_params: int = 0
 
-    def basis(self, poss: np.ndarray) -> np.ndarray:
+    def basis(self, poss: np.ndarray, extra: pd.DataFrame | None = None) -> np.ndarray:
         return np.zeros((len(poss), 0))
 
 
@@ -264,7 +270,7 @@ class Sat(Exposure):
         self.name = "sat" if s == 1000.0 else f"sat{s:g}"
         self.n_params = 1
 
-    def basis(self, poss):
+    def basis(self, poss, extra=None):
         p = np.asarray(poss, dtype=float)
         return (p / (p + self.s))[:, None]
 
@@ -276,7 +282,7 @@ class LogExp(Exposure):
         self.name = ("log2" if quad else "log") + ("" if s == 1000.0 else f"{s:g}")
         self.n_params = 2 if quad else 1
 
-    def basis(self, poss):
+    def basis(self, poss, extra=None):
         u = np.log1p(np.asarray(poss, dtype=float) / self.s)
         return np.column_stack([u, u * u]) if self.quad else u[:, None]
 
@@ -287,7 +293,7 @@ class Bins(Exposure):
     name, n_params = "bins", 4
     edges = (0.0, 1.0, 500.0, 1500.0, 4000.0, 1e18)
 
-    def basis(self, poss):
+    def basis(self, poss, extra=None):
         b = np.digitize(np.asarray(poss, dtype=float), self.edges) - 1
         return np.column_stack([(b == j).astype(float) for j in range(4)])
 
@@ -296,13 +302,51 @@ class Unseen(Exposure):
     """One level for the players the block never saw: the replacement level, fitted on the criterion."""
     name, n_params = "unseen", 1
 
-    def basis(self, poss):
+    def basis(self, poss, extra=None):
         return (np.asarray(poss, dtype=float) <= 0).astype(float)[:, None]
+
+
+class Age(Exposure):
+    """A level in the player's AGE in the held-out season: c1 (age - 27) / 5 [+ c2 ((age - 27) / 5)^2 with `quad`],
+    times an indicator that the block saw him (so the unseen player keeps 0).  The block's ratings are his level
+    over seasons before and after H; a player who is young in H got better from the earlier seasons to H and a
+    player who is old got worse, and the criterion sees that as a term in his age at H.  Not shippable as a
+    rating of the window (the window has no single 'age at H'); a prediction-time term only.  `extra` is
+    the frame's per-player covariates; with none (the shipped ratings) the term is 0."""
+    def __init__(self, quad: bool = True, centre: float = 27.0, scale: float = 5.0):
+        self.quad, self.centre, self.scale = bool(quad), float(centre), float(scale)
+        self.name = "age2" if quad else "age"
+        self.n_params = 2 if quad else 1
+
+    def basis(self, poss, extra=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "age" not in extra.columns:
+            return np.zeros((len(p), self.n_params))
+        u = (np.asarray(extra["age"], dtype=float) - self.centre) / self.scale * (p > 0)
+        return np.column_stack([u, u * u]) if self.quad else u[:, None]
+
+
+class Combo(Exposure):
+    """Several exposure terms side by side: "sat&age2"."""
+    def __init__(self, parts):
+        self.parts = list(parts)
+        self.name = "&".join(p.name for p in self.parts)
+        self.n_params = sum(p.n_params for p in self.parts)
+
+    def basis(self, poss, extra=None):
+        return np.column_stack([p.basis(poss, extra) for p in self.parts])
 
 
 FAMILIES = {f.name: f for f in (Linear(), Poly2(), Poly3(), Sinh(), Expo(), Hinge())}
 EXPOSURES = {e.name: e for e in (Exposure(), Sat(), Sat(250), Sat(500), Sat(2000), Sat(4000), LogExp(), LogExp(quad=True),
-                                 Bins(), Unseen())}
+                                 Bins(), Unseen(), Age(), Age(quad=False))}
+
+
+def parse_exposure(name: str) -> Exposure:
+    name = name or "none"
+    if "&" in name:
+        return Combo([EXPOSURES[p] for p in name.split("&")])
+    return EXPOSURES[name]
 
 
 @dataclass(frozen=True)
@@ -322,13 +366,13 @@ class SideMap:
     @classmethod
     def parse(cls, name: str) -> "SideMap":
         fam, _, expo = name.partition("+")
-        return cls(FAMILIES[fam], EXPOSURES[expo or "none"])
+        return cls(FAMILIES[fam], parse_exposure(expo))
 
-    def basis(self, x, poss, scale: float) -> np.ndarray:
-        return np.column_stack([self.fam.basis(x, scale), self.expo.basis(poss)])
+    def basis(self, x, poss, scale: float, extra=None) -> np.ndarray:
+        return np.column_stack([self.fam.basis(x, scale), self.expo.basis(poss, extra)])
 
-    def apply(self, x, poss, theta, scale: float) -> np.ndarray:
-        return self.basis(x, poss, scale) @ np.asarray(theta, dtype=float)
+    def apply(self, x, poss, theta, scale: float, extra=None) -> np.ndarray:
+        return self.basis(x, poss, scale, extra) @ np.asarray(theta, dtype=float)
 
     def identity(self) -> np.ndarray:
         return np.concatenate([self.fam.identity(), np.zeros(self.expo.n_params)])
@@ -358,8 +402,8 @@ def build_design(dump: pd.DataFrame, frames: dict, system: str, k: int, map_o: S
     for h, f in frames.items():
         r = ratings_for(dump, system, k, h).aligned(f.ids)
         poss = r.poss.to_numpy(dtype=float)
-        Bo = map_o.basis(r.o.to_numpy(), poss, so)
-        Bd = map_d.basis(r.d.to_numpy(), poss, sd)
+        Bo = map_o.basis(r.o.to_numpy(), poss, so, f.extra)
+        Bd = map_d.basis(r.d.to_numpy(), poss, sd, f.extra)
         C = np.column_stack([np.asarray(f.Zo @ Bo), np.asarray(f.Zd @ Bd)])
         Xs.append(f.game(f.profiled(C)))
         ys.append(f.game(f.profiled(f.y[:, None])).ravel())
@@ -382,12 +426,19 @@ def fit_theta(D: Design, exclude_h=None, ridge: float = 0.0, map_o: SideMap | No
     return np.linalg.solve(G, b)
 
 
-def mapped_ratings(rat: Ratings, theta, map_o: SideMap, map_d: SideMap, scale_o: float, scale_d: float) -> Ratings:
+def mapped_ratings(rat: Ratings, theta, map_o: SideMap, map_d: SideMap, scale_o: float, scale_d: float,
+                   extra: pd.DataFrame | None = None) -> Ratings:
+    """`extra`: per-player covariates at the held-out season keyed by player_id (SeasonFrame.extra); players of
+    the ratings table not in it get NaN -> the Age term treats them through the frame's own alignment."""
     p = map_o.n_params
     d = rat.df.copy()
     poss = d.poss.to_numpy(dtype=float)
-    d["o"] = map_o.apply(d.o.to_numpy(), poss, theta[:p], scale_o)
-    d["d"] = map_d.apply(d.d.to_numpy(), poss, theta[p:], scale_d)
+    ex = None
+    if extra is not None:
+        ex = d[["player_id"]].merge(extra, on="player_id", how="left")
+        ex["age"] = ex.age.fillna(float(extra.age.median()))
+    d["o"] = map_o.apply(d.o.to_numpy(), poss, theta[:p], scale_o, ex)
+    d["d"] = map_d.apply(d.d.to_numpy(), poss, theta[p:], scale_d, ex)
     zero = np.zeros(1)
     fo = float(map_o.apply(np.array([rat.fill_o]), zero, theta[:p], scale_o)[0])
     fd = float(map_d.apply(np.array([rat.fill_d]), zero, theta[p:], scale_d)[0])
@@ -410,7 +461,7 @@ def evaluate(dump: pd.DataFrame, frames: dict, system: str, k: int, map_o: SideM
     rows, params = [], []
     for h, f in frames.items():
         th = fit_theta(D, exclude_h=h, ridge=ridge, map_o=map_o, map_d=map_d)
-        rat = mapped_ratings(ratings_for(dump, system, k, h), th, map_o, map_d, D.scale_o, D.scale_d)
+        rat = mapped_ratings(ratings_for(dump, system, k, h), th, map_o, map_d, D.scale_o, D.scale_d, extra=f.extra)
         p = predict_season(rat, f.wd, level=level)
         rows.append(dict(held_out=h, k=k, train="", system=name, lam=lam, split="all", group="all", **score(p), seconds=0.0))
         params.append(_param_row(name, system, k, h, map_o, map_d, D, th))

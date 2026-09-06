@@ -1681,3 +1681,50 @@ and the map's exposure term is 0 for him, so no special rule was added; but ever
 by his exposure term, so after re-centring an unseen player stands about 5 points per 100 below a
 regular. That is the replacement level of section 19 item 5 arrived at as the poss -> 0 end of one
 smooth function fitted on the criterion, not as a rule. Reported so it is not mistaken for parsimony.
+
+## 21. Iterate-and-improve mode: the score, the clock, and what moved them
+
+The owner's instruction (2026-09-06): keep improving the game-level criterion, but charge every fit for the time
+it takes.  **Score** = the K = 3 out-of-season team-game error of the MAPPED system (calmap `linear+sat`,
+leave-one-season-out on the dumped ratings), 28 held-out seasons.  **Time** = the sum over the 28 held-out
+fits of the fit's wall seconds (design build, prior, ridge; not the scoring, not the fitting of the map).
+**True loss** = (score / baseline score) x (time / baseline time), the baseline being the board as shipped in
+section 20 (`mspi_linear+sat`: 111.2955, 134 s for the 28 fits, 4 workers x 3 threads).  The record is
+`docs/progress.csv`, the chart `docs/progress.png` (`scripts/54_track.py`: dump the system's ratings once per
+held-out season with the fit timed, fit the map leave-one-season-out, score; one system per dump so the GBDT
+prior's per-process cache does not flatter the later ones).
+
+Historical points, measured now at K = 3 rather than estimated: the old board `def3_p0` 112.74 in 117 s;
+the unmapped chain `mspi` 112.21 in 135 s; the shipped `mspi_linear+sat` 111.30 in 134 s.
+
+### 1. The clock: the board fitted in one pass (`src/eracoef/fastfit.py`, `mspi1`)
+
+`mspi` was a SplitSystem of two PluginSystems, and each built its own design, fitted its own BoxExposure, rebuilt
+the role prior and solved both sides.  `MspiFast` builds the design once (the free-throw target is a linear
+combination of the design's own counters, `design.TARGETS`; the defensive target is derived from the same
+design), fits the exposure once, builds the offset once, forms the mixed-model cross-products once and solves
+twice (`Moments.with_y`: only b, g and y'Wy change; the Cholesky factors are cached per lambda).  The ratings
+are identical to `mspi`'s to the last bit (`scratch/cmp_fast.py`: max abs diff 0.0 on o, d, poss, priors), and
+the 28 fits take 79 s instead of 134 (single cold fit 4.9 s -> 2.0 s).  **True loss 0.59 at the same score.**
+
+The GBDT prior's audition fits (chimeraboost validation-selects linear leaves and cross features, each about
+2x the fit) are NOT where the time goes at K = 3: the prior is cached per exclusion set and neighbouring
+held-out seasons share sets, so `linear_leaves=False, cross_features=False` saves 6% (74 s) for +0.003 per 100;
+`linear_leaves=False` alone costs +0.04.  One target for both sides (the opponent-3PM-replaced target on offense
+too, `mspi1_x3both`, one solve) is +0.09 per 100 and saves nothing (the second solve is the cheap part).
+
+### 2. The ridge is too strong for the mapped board
+
+`lam_plugin` (18,352) and `lam_ratio_plugin` were chosen by stint-level CV in section 4 and held fixed in every
+comparison since, because tuning them on the criterion and then reporting the criterion is circular.  In this
+mode the criterion is the objective, and a one-parameter choice on 28 seasons is not a fit; the leave-one-
+season-out map absorbs the amplitude.  The mapped score against the multiplier on `lam_plugin`:
+
+| lambda x | 0.5 | 0.7 | 1 (ships) | 1.4 | 2 |
+|---|---|---|---|---|---|
+| mapped (`linear+sat`) | **111.140** | 111.185 | 111.296 | 111.465 | 111.715 |
+| unmapped | 112.389 | 112.201 | 112.206 | 112.399 | 112.783 |
+
+Unmapped, the shipped lambda is the optimum (the stint CV was right for the raw ratings); mapped, a weaker
+ridge wins, because the map's scalar shrinks every player alike and the ridge shrinks the low-possession
+players more -- the map wants wide ratings it can then scale.  -0.16 per 100 at x0.5, and still falling.

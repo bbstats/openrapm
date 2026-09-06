@@ -72,6 +72,26 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         # the same board in one pass per block (fastfit.py): identical numbers, about half the time
         from .fastfit import MspiFast
         S["mspi1"] = MspiFast("mspi1")
+        # the GBDT prior without its audition fits (linear leaves / cross features are validation-selected by
+        # default, each about 2x the fit time)
+        S["mspi1_ll0"] = MspiFast("mspi1_ll0", gbdt_params={"linear_leaves": False})
+        S["mspi1_cf0"] = MspiFast("mspi1_cf0", gbdt_params={"cross_features": False})
+        S["mspi1_ll0cf0"] = MspiFast("mspi1_ll0cf0", gbdt_params={"linear_leaves": False, "cross_features": False})
+        S["mspi1_ll1cf0"] = MspiFast("mspi1_ll1cf0", gbdt_params={"linear_leaves": True, "cross_features": False})
+        # the ridge moved from the stint-CV choice (lam_plugin, lam_ratio_plugin)
+        for f in (0.5, 0.7, 1.4, 2.0):
+            S[f"mspi1_lam{f:g}".replace(".", "")] = MspiFast(f"mspi1_lam{f:g}".replace(".", ""), lam=float(cfg["lam_plugin"]) * f)
+        for r in (0.2, 0.4, 0.6):
+            S[f"mspi1_ratio{r:g}".replace(".", "")] = MspiFast(f"mspi1_ratio{r:g}".replace(".", ""), lam_ratio=r)
+        for f in (0.15, 0.25, 0.35):
+            S[f"mspi1_lam{f:g}".replace(".", "")] = MspiFast(f"mspi1_lam{f:g}".replace(".", ""), lam=float(cfg["lam_plugin"]) * f)
+        # the defensive ratio at a weaker offensive ridge (lam_ratio = lambda_D / lambda_O)
+        for f in (0.5, 0.35):
+            for r in (0.15, 0.2, 0.4, 0.6, 0.8):
+                n = f"mspi1_lam{f:g}_r{r:g}".replace(".", "")
+                S[n] = MspiFast(n, lam=float(cfg["lam_plugin"]) * f, lam_ratio=r)
+        # one target for both sides (one solve): the opponent-3PM-replaced target on offense too
+        S["mspi1_x3both"] = MspiFast("mspi1_x3both", off_target="x3def")
         # the APM-trained offense with the RAPM_1-trained defense (each side's calibrated version)
         S["mspi_mix"] = SplitSystem("mspi_mix", offense=S["mspi_apm"], defense=S["mspi"])
         # a replacement level for players the block never saw, on the board and on the chains

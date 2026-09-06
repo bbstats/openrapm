@@ -123,17 +123,20 @@ def chart(log: pd.DataFrame):
 
 
 def main():
-    system = _flag("system", "mspi_linear+sat")
+    systems = [x for x in (_flag("systems") or _flag("system", "mspi1")).split(",") if x]
     k = int(_flag("k", 3))
-    label = _flag("label", system)
-    when = pd.Timestamp(_flag("when") or datetime.now()).strftime("%Y-%m-%d %H:%M:%S")
+    label = _flag("label")
     if "--dry" in sys.argv:
         chart(pd.read_csv(LOG, parse_dates=["when"]))
         return
-    m = measure(system, k, workers=int(_flag("workers", 4)), maps=tuple((_flag("maps") or "linear+sat").split(",")))
-    row = dict(when=when, label=label, system=system, k=k, **m)
-    log = append(row)
-    chart(log)
+    for system in systems:
+        when = pd.Timestamp(_flag("when") or datetime.now()).strftime("%Y-%m-%d %H:%M:%S")
+        m = measure(system, k, workers=int(_flag("workers", 4)), maps=tuple((_flag("maps") or "linear+sat").split(",")))
+        row = dict(when=when, label=(label or system) if len(systems) == 1 else f"{label or ''} {system}".strip(),
+                   system=system, k=k, **m)
+        log = append(row)
+        chart(log)
+        print(f"{system}: game {m['game']:.4f} (unmapped {m['game_unmapped']:.4f}) seconds {m['seconds']:.1f}", flush=True)
     show = log[["when", "label", "system", "game", "seconds", "wall", "loss_frac", "time_frac", "true_loss"]].copy()
     print(show.to_string(index=False, float_format=lambda v: f"{v:.4f}"))
     if "--push" in sys.argv:

@@ -180,6 +180,24 @@ class Moments:
                 self.Bs.append(B[:, cols] * c[None, :])
                 self.gs.append(g[cols] * c)
         self._eig = None
+        self._facs = {}
+
+    def with_y(self, layout: _Layout, y, w) -> "Moments":
+        """The same cross-products with a different response: only b, g and y'Wy change (one pass over
+        the rows), the Cholesky factors of solve_chol are shared.  How the board's two per-side targets are
+        fitted on one design (fastfit.MspiFast)."""
+        import copy
+        y = np.asarray(y, dtype=float)
+        if layout.offset is not None:
+            y = y - layout.offset
+        w = np.asarray(w, dtype=float)
+        m = copy.copy(self)
+        m.b = layout.Xf.T @ (w * y)
+        m.yWy = float(y @ (w * y))
+        if layout.Z is not None and layout.Z.shape[1]:
+            g = layout.Z.T @ (w * y)
+            m.gs = [g[cols] * self.scale[cols] for cols in self.season_cols]
+        return m
 
     def _expand(self, theta_a, S_inv_a):
         theta = np.zeros(self.p)
@@ -196,21 +214,28 @@ class Moments:
         S = A.copy() + np.diag(self.pen_diag[act])
         rhs = b.copy()
         facs = []
-        for Gs, Bs, gs in zip(self.Gs, self.Bs, self.gs):
+        cached = self._facs.get(float(lam))
+        for j, (Gs, Bs, gs) in enumerate(zip(self.Gs, self.Bs, self.gs)):
             Bs = Bs[act]
-            C = Gs + lam * np.eye(len(Gs))
-            cf = sla.cho_factor(C, lower=True, check_finite=False)
-            CiB = sla.cho_solve(cf, Bs.T, check_finite=False)       # n_s x p
-            S -= Bs @ CiB
+            if cached is None:
+                C = Gs + lam * np.eye(len(Gs))
+                cf = sla.cho_factor(C, lower=True, check_finite=False)
+                CiB = sla.cho_solve(cf, Bs.T, check_finite=False)       # n_s x p
+                facs.append((cf, Bs @ CiB))
+            else:
+                cf, BCiB = cached[j]
+                facs.append((cf, BCiB))
+            S -= facs[-1][1]
             rhs -= Bs @ sla.cho_solve(cf, gs, check_finite=False)
-            facs.append(cf)
+        if cached is None:
+            self._facs[float(lam)] = facs
         S_inv_a = np.linalg.inv(S) if self.p_act else np.zeros((0, 0))
         theta_a = S_inv_a @ rhs
         theta, S_inv = self._expand(theta_a, S_inv_a)
         u = np.zeros(self.n_z)
         edf = float(self.p_act)
         quad = 0.0
-        for cols, Gs, Bs, gs, cf in zip(self.season_cols, self.Gs, self.Bs, self.gs, facs):
+        for cols, Gs, Bs, gs, (cf, _) in zip(self.season_cols, self.Gs, self.Bs, self.gs, facs):
             us = sla.cho_solve(cf, gs - Bs.T @ theta, check_finite=False)
             u[cols] = us
             edf += float(np.trace(sla.cho_solve(cf, Gs, check_finite=False)))
