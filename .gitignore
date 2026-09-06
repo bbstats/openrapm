@@ -248,3 +248,4 @@ outputs/diagnostic_payload.json
 
 # run logs and render checks
 outputs/logs/
+scratch/
