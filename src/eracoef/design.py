@@ -211,14 +211,17 @@ def _order_games(st: pd.DataFrame) -> pd.DataFrame:
 def build_game_poss(st: pd.DataFrame, psx_index: pd.Index, games: pd.DataFrame) -> pd.DataFrame:
     """Per (game, player-season) offensive and defensive possessions from the stints."""
     st = st.merge(games[["game_id", "game_idx"]], on="game_id", how="left")
-    parts = []
+    gi, season = st["game_idx"].to_numpy(), st["season"].to_numpy()
+    g_all, k_all, po_all, pd_all = [], [], [], []
     for slots, own, opp in ((HOME_SLOTS, "poss_h", "poss_a"), (AWAY_SLOTS, "poss_a", "poss_h")):
+        po, pdd = st[own].to_numpy(), st[opp].to_numpy()
         for c in slots:
-            parts.append(pd.DataFrame({
-                "game_idx": st["game_idx"].to_numpy(),
-                "psx_idx": psx_index.get_indexer(ps_key(st[c].to_numpy(), st["season"].to_numpy())),
-                "poss_off": st[own].to_numpy(), "poss_def": st[opp].to_numpy()}))
-    gp = pd.concat(parts, ignore_index=True)
+            g_all.append(gi)
+            k_all.append(ps_key(st[c].to_numpy(), season))
+            po_all.append(po)
+            pd_all.append(pdd)
+    gp = pd.DataFrame({"game_idx": np.concatenate(g_all), "psx_idx": psx_index.get_indexer(np.concatenate(k_all)),
+                       "poss_off": np.concatenate(po_all), "poss_def": np.concatenate(pd_all)})
     assert (gp["psx_idx"] >= 0).all()
     gp = gp.groupby(["game_idx", "psx_idx"], as_index=False)[["poss_off", "poss_def"]].sum()
     return gp
@@ -359,10 +362,8 @@ def build_design(stints: pd.DataFrame, box: pd.DataFrame, features: list, cfg: d
     # possessions per Z unit, for the lam_buckets column groups and the dominant-season label
     rs_games = games.loc[games["phase"] == "RS", "game_idx"].to_numpy()
     gp_rs = game_poss[np.isin(game_poss["game_idx"], rs_games)]
-    psx_poss = np.zeros(len(psx_table))
-    np.add.at(psx_poss, gp_rs["psx_idx"].to_numpy(), gp_rs["poss_off"].to_numpy())
-    ps_poss = np.zeros(n_ps)
-    np.add.at(ps_poss, ps_of_psx, psx_poss)
+    psx_poss = np.bincount(gp_rs["psx_idx"].to_numpy(), weights=gp_rs["poss_off"].to_numpy(dtype=float), minlength=len(psx_table))
+    ps_poss = np.bincount(ps_of_psx, weights=psx_poss, minlength=n_ps)
     if player_unit == "window":
         # label each Z unit with the season it played most, used only for reporting
         season_of_ps = np.zeros(n_ps, dtype=np.int64)

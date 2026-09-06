@@ -1728,3 +1728,55 @@ season-out map absorbs the amplitude.  The mapped score against the multiplier o
 Unmapped, the shipped lambda is the optimum (the stint CV was right for the raw ratings); mapped, a weaker
 ridge wins, because the map's scalar shrinks every player alike and the ridge shrinks the low-possession
 players more -- the map wants wide ratings it can then scale.  -0.16 per 100 at x0.5, and still falling.
+
+The full curve (mapped score, K = 3): x0.15 111.366, x0.25 111.210, x0.35 111.152, **x0.5 111.140**, x0.7
+111.185, x1 111.296, x1.4 111.465, x2 111.715.  Unmapped the same fits read 114.41, 113.33, 112.79, 112.39,
+112.20, 112.21, 112.40, 112.78: the raw ratings want the shipped ridge, the mapped ones want half of it.  The
+minimum is broad (0.35-0.7 within 0.05) and the choice is a one-parameter selection on 28 seasons; **x0.5 is
+carried forward** (`mspi1_lam05`).  The shared factorization brought the 28 fits to 72 s.
+
+### 3. A term in the player's age at the held-out season is worth 0.15 per 100, 28 of 28 seasons
+
+The block's rating is a player's level over seasons before and after H; the criterion sees his age at H.
+`calmap.Age`: c1 (age - 27) / 5 + c2 ((age - 27) / 5)^2, per side, times "the block saw him", fitted with the
+rest of the map leave-one-season-out on the team-game residuals (age from the roles cache, the season's
+median where missing).  On the x0.5 dump: `linear+sat` -1.249 vs the unmapped fit, `linear+sat&age` (linear
+only) -1.258, **`linear+sat&age2` -1.392 (z -8.7, 28 of 28)**, `linear+log2&age2` -1.430, `poly2+sat&age2`
+-1.439.  The quadratic is the whole term (offense -0.24 per (5 years)^2, defense +0.10 in raw sign: a player
+far from 27 in either direction predicts worse than his block rating on both sides).  It is a PREDICTION-TIME
+term: a window rating has no "age at H", so `08_ratings.py` cannot ship it; the tracker's score carries it from
+here on (`--maps=linear+sat&age2`), reported next to `linear+sat`.
+
+### 4. Flat: the defensive ratio, the low-possession ridge, one target for both sides
+
+At the x0.5 ridge, `lam_ratio` (lambda_D / lambda_O) 0.15 / 0.2 / 0.287 (ships) / 0.4 / 0.6 / 0.8 gives 111.223 /
+111.181 / 111.140 / 111.120 / 111.121 / 111.139: flat from 0.287 up, within 0.02, so the ratio stays.  A separate
+ridge on the low-possession units (`lam_buckets`, under 1,500 possessions) x0.5 / x2 gives 111.169 / 111.138:
+the map's exposure term already does what a looser or tighter bench ridge would.
+
+The GBDT prior's shape at the x0.5 ridge (chimeraboost overrides; mapped score, `linear+sat`): depth 4 111.132,
+depth 8 111.171, l2 5 111.155, l2 20 111.135, three bagged members 111.179 (and 86 s), learning rate 0.05
+111.137, min child weight 20 111.157, against 111.140 at the defaults.  Flat within 0.04 in both directions:
+the prior's shape is not a lever at this sample size either.
+
+Map shapes on the x0.5 dump, paired against `linear+sat&age2` (110.997): `poly2+log2&age2` -0.09 (z -2.2, 20 of
+28), `hinge+sat&age2` -0.05 (z -1.4), `linear+log2&age2` -0.04 (z -1.8), `linear+sat2000&age2` +0.07 (z +3.6).
+The richer rating shapes are 0.04-0.09 better at z 1.4-2.2, as in section 20; the score keeps the 4-parameter
+map and the number is recorded.
+
+### 5. The design from cached per-season pieces (`src/eracoef/designcache.py`)
+
+`build_design` rebuilt the game order, the player-season keys, the slot indices, the per-game possession and
+box tables and the counters from the raw stints on every block.  All of those are properties of one season;
+only the concatenation and the block's player unit are the block's.  `season_pieces` computes the per-season
+part once per process (an LRU of 8: a worker's consecutive held-out seasons share most of their blocks) and
+`build_window_cached` assembles the block: the same WindowData to the last bit (every array and table equal in
+`scratch/cmp_design.py`, X sorted), 0.28 s instead of 0.52 on a 3-season block.  `windows.build_window` uses
+it whenever `margin_bins` is off, so every script does.  (Tried and reverted on the old path: sorting the slot
+columns so the CSR is born sorted, and building the counters as one matrix -- both slower in pandas.)
+
+### 6. Not taken: the playoff stints in the training block
+
+`mspi1_lam05_po` (phases RS + PO in the training design, the held-out scoring unchanged, the design's own
+playoff level columns): 110.938 against 110.997 with the age map, -0.066, z -1.6, 16 of 28 -- not a win by the
+stop rules -- and 11% more fit time (77.6 s against 70.0).  Worse on the true loss either way.

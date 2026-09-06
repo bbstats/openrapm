@@ -100,6 +100,8 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                          ("l2x20", {"l2_leaf_reg": 20.0}), ("bag3", {"n_ensembles": 3}),
                          ("lr05", {"learning_rate": 0.05}), ("mcw20", {"min_child_weight": 20.0})):
             S[f"mspi1_lam05_{tag}"] = MspiFast(f"mspi1_lam05_{tag}", lam=L05, gbdt_params=prm)
+        S["mspi1_lam05_po"] = MspiFast("mspi1_lam05_po", lam=L05, phases=("RS", "PO"))
+        S["mspi1_lam05"] = MspiFast("mspi1_lam05", lam=L05)
         # one target for both sides (one solve): the opponent-3PM-replaced target on offense too
         S["mspi1_x3both"] = MspiFast("mspi1_x3both", off_target="x3def")
         # the APM-trained offense with the RAPM_1-trained defense (each side's calibrated version)

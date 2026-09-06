@@ -77,8 +77,8 @@ class System(Protocol):
 
 
 # ---------------------------------------------------------------------------------------- context
-def default_loader(seasons, cfg, target):
-    return build_window(list(seasons), cfg, target=target)
+def default_loader(seasons, cfg, target, phases=("RS",)):
+    return build_window(list(seasons), cfg, phases=tuple(phases), target=target)
 
 
 @dataclass
@@ -196,17 +196,21 @@ class Context:
         seasons = list(train) + ([self.current_h] if self.current_h is not None else [])
         return {self.win_of[s] for s in seasons}
 
-    def design(self, seasons, target="pts") -> WindowData:
+    def design(self, seasons, target="pts", phases=("RS",)) -> WindowData:
         """A cached design.  `target` is a design.TARGETS key, or a callable
-        (seasons, cfg, wd_pts) -> WindowData | (WindowData, report) for a derived target."""
-        key = (tuple(int(s) for s in seasons), target if isinstance(target, str) else getattr(target, "__name__", repr(target)))
+        (seasons, cfg, wd_pts) -> WindowData | (WindowData, report) for a derived target.  `phases` ("RS",) or
+        ("RS", "PO"): the playoff rows in the training design, with the design's own playoff level columns."""
+        phases = tuple(phases)
+        key = (tuple(int(s) for s in seasons), target if isinstance(target, str) else getattr(target, "__name__", repr(target)),
+               *(() if phases == ("RS",) else (phases,)))
         if key not in self._cache:
             if len(self._cache) >= self.cache_size:
                 self._cache.clear()
             if isinstance(target, str):
-                wd = self.loader(list(seasons), self.cfg, target)
+                wd = self.loader(list(seasons), self.cfg, target) if phases == ("RS",) else \
+                    self.loader(list(seasons), self.cfg, target, phases)
             else:
-                wd = target(list(seasons), self.cfg, self.design(seasons, "pts"))
+                wd = target(list(seasons), self.cfg, self.design(seasons, "pts", phases))
                 if isinstance(wd, tuple):
                     wd, rep = wd
                     self.reports.append(dict(seasons=key[0], target=key[1], report=rep))

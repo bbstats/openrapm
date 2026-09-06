@@ -46,6 +46,9 @@ def window_seasons(cfg, rolling=False):
 
 
 def build_window(seasons, cfg, phases=("RS",), gt_weight=None, margin_bins=False, target="pts"):
+    if not margin_bins:                        # the same design from cached per-season pieces (designcache.py)
+        from .designcache import build_window_cached
+        return build_window_cached(seasons, cfg, phases=phases, gt_weight=gt_weight, target=target)
     stints = pd.concat([load_stints(s, p, cfg) for s in seasons for p in phases], ignore_index=True)
     box = season_box(seasons, list(phases), cfg)
     return build_design(stints, box, cfg["features"], cfg, gt_weight=gt_weight, margin_bins=margin_bins,

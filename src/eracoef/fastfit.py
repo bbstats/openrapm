@@ -47,12 +47,13 @@ class MspiFast:
     off_target: str = "xpts_ft"
     def_target: str = "x3def"
     lam_buckets: dict | None = None      # extra ridge multipliers per spec.col_groups name (low_poss, high_poss, ...)
+    phases: tuple = ("RS",)              # ("RS", "PO"): train on the playoff stints too (the held-out scoring stays RS)
 
     def fit(self, train, ctx: Context) -> Ratings:
         from . import xshoot
         from .spm import chain_offset
         cfg = ctx.cfg
-        wd = ctx.design(train, "pts")
+        wd = ctx.design(train, "pts", tuple(self.phases))
         ys = {}
 
         def target_y(name):
