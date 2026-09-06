@@ -167,9 +167,12 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
         poss_o = np.asarray(exp.season_poss_off_, dtype=float)
         poss_d = np.asarray(exp.season_poss_def_, dtype=float)
         m = wd.spec.n_ps
-        fo = fit_spm(ctx.rpanel, "O", exclude, pen=float(s.get("pen", 1.0)), min_poss=float(s.get("min_poss", 500)))
-        fd = fit_spm(ctx.rpanel, "D", exclude, pen=float(s.get("pen", 1.0)), min_poss=float(s.get("min_poss", 500)))
-        off = spm_offset(fo, fd, inputs, poss_o, poss_d)
+        if mode == "full" and set(sides) >= {"O", "D"}:
+            off = np.zeros(2 * m)              # the GBDT replaces the SPM on both sides: no SPM fit needed
+        else:
+            fo = fit_spm(ctx.rpanel, "O", exclude, pen=float(s.get("pen", 1.0)), min_poss=float(s.get("min_poss", 500)))
+            fd = fit_spm(ctx.rpanel, "D", exclude, pen=float(s.get("pen", 1.0)), min_poss=float(s.get("min_poss", 500)))
+            off = spm_offset(fo, fd, inputs, poss_o, poss_d)
         if sides:
             if params or panel:
                 prior = ctx.prior(mode, "apm" if target == "apm" else None, params, panel)

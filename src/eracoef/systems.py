@@ -113,7 +113,7 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
             n = f"mspi1_lam{f:g}_fast_dec05".replace(".", "")
             S[n] = MspiFast(n, lam=float(cfg["lam_plugin"]) * f, gbdt_params=FAST, decay=0.5)
         S["mspi1_lam05_fast_dec05x"] = MspiFast("mspi1_lam05_fast_dec05x", lam=L05, gbdt_params=FAST, decay=0.5, decay_exposure=True)
-        S["best"] = MspiFast("best", lam=L05, gbdt_params=FAST, decay=0.5, decay_exposure=True)
+        S["best"] = MspiFast("best", lam=L05, gbdt_params=FAST, decay=0.5, decay_exposure=True, target="apm")
         BEST = dict(lam=L05, gbdt_params=FAST, decay=0.5, decay_exposure=True)
         # the padding of the box rates behind the prior: its constants halved / doubled, the league target
         S["mspi1_best_pad05"] = MspiFast("mspi1_best_pad05", pad_scale=0.5, **BEST)
@@ -126,6 +126,12 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         S["mspi1_best_panel025"] = MspiFast("mspi1_best_panel025", panel="outputs/role_panel_lam0.25.parquet", **BEST)
         S["mspi1_best_panel015"] = MspiFast("mspi1_best_panel015", panel="outputs/role_panel_lam0.15.parquet", **BEST)
         S["mspi1_best_apm"] = MspiFast("mspi1_best_apm", target="apm", **BEST)      # the prior trained on unshrunk APM
+        APM = {**BEST, "target": "apm"}
+        for f in (0.35, 0.7, 1.0):
+            n = f"mspi1_apm_lam{f:g}".replace(".", "")
+            S[n] = MspiFast(n, **{**APM, "lam": float(cfg["lam_plugin"]) * f})
+        S["mspi1_apm30"] = MspiFast("mspi1_apm30", panel="outputs/role_panel_apm30.parquet", **APM)   # APM at penalty 30
+        S["mspi1_apm_nodec"] = MspiFast("mspi1_apm_nodec", **{**APM, "decay": None, "decay_exposure": False})
         # cheaper GBDT trees: depth 4 (flat in loss in section 21.4), 64 bins
         S["mspi1_best_d4"] = MspiFast("mspi1_best_d4", **{**BEST, "gbdt_params": {**FAST, "depth": 4}})
         S["mspi1_best_mb64"] = MspiFast("mspi1_best_mb64", **{**BEST, "gbdt_params": {**FAST, "max_bins": 64}})
