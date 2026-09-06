@@ -162,6 +162,20 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         for wd_ in (0.3, 0.5, 0.7):
             n = f"best_wd{wd_:g}".replace(".", "")
             S[n] = MspiFast(n, gbdt_params=FAST, decay=0.5, decay_exposure=True, target="apm", win_decay=wd_)
+        # accuracy first (the owner, 2026-09-06: the clock is not binding at ~25 s): the ratio feature set
+        # with the gains that were only ever rejected on time
+        _RK = dict(gbdt_features={"O": list(_RF), "D": list(_RF)}, decay=0.5, decay_exposure=True, target="apm")
+        S["best_ratio_wd03"] = MspiFast("best_ratio_wd03", gbdt_params=FAST, win_decay=0.3, **_RK)
+        S["best_ratio_q4"] = MspiFast("best_ratio_q4", gbdt_params={**FAST, "quality": 4, "ensemble_n_jobs": 1},
+                                      **_RK)
+        S["best_ratio_wd03_q4"] = MspiFast("best_ratio_wd03_q4", win_decay=0.3,
+                                           gbdt_params={**FAST, "quality": 4, "ensemble_n_jobs": 1}, **_RK)
+        S["best_ratio_full"] = MspiFast("best_ratio_full", gbdt_params={"quality": 4, "ensemble_n_jobs": 1},
+                                        win_decay=0.3, **_RK)
+        S["best_ratio_full1"] = MspiFast("best_ratio_full1", gbdt_params={"quality": 4, "ensemble_n_jobs": 1},
+                                         **_RK)                      # the full recipe, pooling every window
+        S["best_ratio_q5full"] = MspiFast("best_ratio_q5full", gbdt_params={"quality": 5, "ensemble_n_jobs": 1},
+                                          win_decay=0.3, **_RK)
         # the aggregations INSTEAD of the raw rates they are made of: a smaller, better-conditioned set
         _SM = ["season", "share", "gs_pct", "age", *DERIVED, *RATIOS]
         S["best_small"] = MspiFast("best_small", gbdt_params=FAST, decay=0.5, decay_exposure=True, target="apm",

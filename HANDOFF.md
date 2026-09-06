@@ -20,7 +20,8 @@ if the final chain had not finished (`git status`).  Tests: 82 passed, 1 xfailed
 | | criterion (K = 3, mapped) | 28 fits | true loss |
 |---|---|---|---|
 | shipped before this phase (`mspi_linear+sat`, section 20) | 111.30 | 134 s | 1.00 |
-| the criterion's best now (`best`, map `linear+log2&age2&xlog&prior&tshare|rowcubic`) | **109.98** | **23.2 s** | **0.171** |
+| the criterion's best now (`best_ratio_full`, map `linear+log2&age2&xlog&prior&tshare|rowcubic`) | **109.85** | 59 s | 0.44 |
+| the same board with the cheap prior (`best`) | 109.98 | **23.2 s** | **0.171** |
 | what ships (`ship_blend07`, no held-out season, floors green) | 110.80 | 32 s | |
 
 **True loss** = (score / 111.30) x (28-fit seconds / 134).  Every time cut was checked to reproduce the
@@ -40,6 +41,9 @@ ratings bit for bit (`scratch/cmp_design.py`, `cmp_counters.py`, `cmp_expo.py`, 
    mean(c^3) differ by the spread of the lineups inside the team-game; the criterion wants both, opposite signs.
 7. **The training block's role** (`tshare`, his share of his teams' possessions over the block): -0.058, z -1.8.
    Marginal, and it IS a rating -- unlike the held-out season's minutes, which are a leak (21.21).
+8. **The prior's feature set and the booster's budget, TOGETHER** (21.25): efficiency ratios + linear
+   aggregations of the rates + `quality=4` with the audition fits + the nearby-window target, -0.135 at
+   z -3.3.  Separately each is under 0.07 and none is significant; the parts interact.
 
 ### What moved the clock (identical numbers)
 
@@ -49,11 +53,14 @@ this phase: **the design carries only the counters its targets read** (`counter_
 built on demand** (`WindowData.X_src`), **the exposure's lineup sums as one sparse product**, and the shooter
 rates by binary search.  134 s -> 23.2 s for the 28 fits.  `FASTFIT_TIMER=1` prints the split.
 
-### The metric's hole (21.22, decision open)
+### The metric's hole, and the owner's ruling (21.22, 21.25)
 
 Dropping short stints (`MspiFast.min_den`) improves the TRUE loss monotonically down to keeping only 12+
 possession rows, where the board is worse than section 20's and the metric calls it 40% better.  Nothing on
-that curve is taken.  The owner may want a floor on the loss instead of the bare product.
+that curve is taken: the owner ruled that a universal solution is wanted, tested on every game there is, and
+that the clock is not binding at ~25 s.  **The line is therefore chosen on the criterion alone**, and the fit
+time is a number the chart still carries rather than a term to optimise.  `docs/img/loss_vs_true_loss.png`
+shows why: across every measurement the error spans 2.6% and the fit time spans tenfold.
 
 ### What ships, and why not the best
 

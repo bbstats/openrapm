@@ -2209,3 +2209,32 @@ commit limit and 38.5 GB already committed by other processes.  Worth retrying w
 what it would have to beat on: the booster fits a leave-window-out pair in 0.14 s, and the whole 28-fit budget
 is 23 s.
 
+### 25. Accuracy first: the same three prior changes pay when they are stacked
+
+The owner ruled the clock is no longer binding at ~25 s.  Freed of the time penalty, the three prior changes of
+21.24 -- each worth less than 0.07 on its own and none of them significant -- stack into something that is:
+
+| system | criterion | vs the old line | z | 28 fits |
+|---|---|---|---|---|
+| `best` (the line before this) | 109.981 | | | 23 s |
+| `best_ratio` (the ratio feature set) | 109.912 | -0.069 | -1.28 | 26 s |
+| `best_ratio_wd03` (+ the nearby-window target) | 109.923 | -0.053 | -0.97 | 28 s |
+| `best_ratio_q4` (+ 5 bagged members) | 109.884 | -0.096 | -2.06 | 33 s |
+| `best_ratio_wd03_q4` (+ both) | 109.882 | -0.098 | -2.34 | 35 s |
+| **`best_ratio_full`** (+ the audition fits and cross features) | **109.845** | **-0.135** | **-3.33, 20/28** | 59-61 s |
+| `best_ratio_full1` (the same without the nearby-window target) | 109.867 | -0.114 | | 60 s |
+| `best_ratio_q5full` (8 bagged members instead of 5) | 109.833 | -0.148 | | 81 s |
+
+**The line is `best_ratio_full`**: the 13 rates + role + the linear aggregations + the efficiency ratios, the
+booster at `quality=4` with its audition fits and cross features, the target pooled with a 0.3 discount per
+window of distance, on the map `linear+log2&age2&xlog&prior&tshare|rowcubic`.  **109.845 at K = 3.**
+
+Two readings worth keeping.  **The parts interact**: bagging was +0.004 on the plain feature set and -0.027 on
+the ratio one; the model-selection search was -0.025 plain and -0.037 on top of the bag.  A richer feature set
+gives the search something to find, which is why 21.24's "capacity does not matter" holds only at the feature
+set it was measured on.  And **the ladder stops**: 8 bagged members instead of 5 is another -0.011 at z -0.83
+for 20 s, and dropping the nearby-window target costs +0.025 -- the stack is done, not obviously extendable.
+
+The true loss of the line is now 0.44 against 0.17 for the system it replaces.  That is the owner's call and
+the metric's, not a regression: 21.22 already showed the product is 97% clock.
+
