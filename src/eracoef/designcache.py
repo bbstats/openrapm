@@ -219,5 +219,7 @@ def build_window_cached(seasons, cfg, phases=("RS",), gt_weight=None, target="pt
         for k in range(5):
             counters[f"pid_s{k + 1}"] = P[:, k]
         counters["half"] = rows["half"].to_numpy()
+    parts = dict(Z=X[:, :2 * n_ps], F=np.asarray(F.todense()), lineup_o=np.sort(off, axis=1), lineup_d=np.sort(de, axis=1),
+                 game_idx=r_game.astype(np.int64))
     return WindowData(X=X, y=y, w=w, groups=groups, spec=spec, game_box=game_box, game_poss=game_poss, rows=rows,
-                      games=games, counters=counters)
+                      games=games, counters=counters, parts=parts)

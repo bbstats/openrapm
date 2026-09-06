@@ -144,6 +144,10 @@ class WindowData:
     # the offense's per-possession counters (stints.POSS_COUNTERS) summed over the row, when the
     # stints carry them; the luck-adjusted target (xpts.py) is built from these at window-build time
     counters: pd.DataFrame | None = None
+    # the design's own building blocks, kept so a fit need not slice X back apart (designcache sets them):
+    # Z (n x 2 n_ps, csr, sorted), F (n x n_fixed dense), lineup_o / lineup_d (n x 5 Z-unit indices, sorted per
+    # row), game_idx (n,)
+    parts: dict | None = None
 
     @property
     def game_half(self) -> np.ndarray:

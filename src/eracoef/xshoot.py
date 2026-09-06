@@ -42,15 +42,21 @@ SLOTS = ("1", "2", "3", "4", "5")
 
 
 # ---------------------------------------------------------------------------------------- the tables
+_SHOTS_CACHE: dict = {}
+
+
 def load_shots(seasons, cfg) -> pd.DataFrame:
-    """Per game x shooter field-goal totals with the league expectation, regular season, with halves."""
+    """Per game x shooter field-goal totals with the league expectation, regular season, with halves
+    (one parquet per season, read once per process)."""
     d = resolve(cfg, "stints")
     parts = []
     for s in seasons:
         p = d / f"{int(s)}_RS_shots.parquet"
-        if not p.exists():
-            raise FileNotFoundError(f"{p} is missing; rebuild the stints (scripts/02_stints.py {s} {s} RS --force)")
-        parts.append(pd.read_parquet(p))
+        if p not in _SHOTS_CACHE:
+            if not p.exists():
+                raise FileNotFoundError(f"{p} is missing; rebuild the stints (scripts/02_stints.py {s} {s} RS --force)")
+            _SHOTS_CACHE[p] = pd.read_parquet(p)
+        parts.append(_SHOTS_CACHE[p])
     return pd.concat(parts, ignore_index=True)
 
 

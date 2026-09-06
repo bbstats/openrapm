@@ -1780,3 +1780,17 @@ columns so the CSR is born sorted, and building the counters as one matrix -- bo
 `mspi1_lam05_po` (phases RS + PO in the training design, the held-out scoring unchanged, the design's own
 playoff level columns): 110.938 against 110.997 with the age map, -0.066, z -1.6, 16 of 28 -- not a win by the
 stop rules -- and 11% more fit time (77.6 s against 70.0).  Worse on the true loss either way.
+
+### 7. Flat: the mover, the unseen player's age, age by exposure
+
+More prediction-time covariates in the map, on the x0.5 dump, paired against `linear+sat&age2`: a level for a
+player whose main team in H differs from his main team in the nearest training season (`moved`) +0.02
+(z +2.2, worse), the same as a slope on his rating (`movedx`, "a mover's rating carries less") -0.03 (z -1.1),
+the unseen player's age (`uage`, rookie against returning veteran) +0.01, age times exposure saturation
+(`agesat`) -0.06 (z -1.8, 17 of 28), all four together -0.06 (z -1.4).  The map is where it was: rating scalar,
+exposure level, age.
+
+An exposure-dependent rating scalar (`xsat`: b x poss / (poss + s), s = 300 / 1000 / 3000; `xlog`) is -0.02 to
+-0.04 (z -0.6 to -1.2) on top of `linear+sat&age2`, and a rating-by-age slope (`xage`) is +0.015 (z +4.6,
+worse).  So the ridge's shrinkage profile by exposure is right once the level is fixed, and the ridge's overall
+strength (x0.5) was the whole story.

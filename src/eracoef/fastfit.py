@@ -20,7 +20,7 @@ import pandas as pd
 
 from .cv import make_exposure
 from .design import TARGETS
-from .estimator import MixedModelRAPM
+from .estimator import MixedModelRAPM, Moments, _Layout
 from .holdout import Context, Ratings
 
 
@@ -32,6 +32,27 @@ def derived_target(wd, name: str) -> np.ndarray:
     num = sum(k * c[col].to_numpy(dtype=float) for col, k in tg["num"].items())
     den = c[tg["den"]].to_numpy(dtype=float)
     return tg["scale"] * num / den
+
+
+def direct_layout(wd, exp, prior_offset: np.ndarray) -> _Layout:
+    """The estimator's layout for a plug-in fit with beta = 0, built from the design's own parts: the exposure
+    columns straight from the padded rates and the lineups (what BoxExposure.transform computes, without the
+    dense -> sparse -> dense round trip), Z and F as the design built them."""
+    spec, parts = wd.spec, wd.parts
+    n_feat = len(exp.feature_names_)
+    ro, rd = exp.rates_, exp.rates_d_
+    Xo = ro[parts["lineup_o"]].sum(axis=1) if n_feat else np.zeros((wd.X.shape[0], 0))
+    Xd = rd[parts["lineup_d"]].sum(axis=1) if n_feat else np.zeros((wd.X.shape[0], 0))
+    if exp.center and n_feat:
+        Xo = Xo - exp.means_o_
+        Xd = Xd - exp.means_d_
+    box = np.hstack([Xo, Xd])
+    Z, F = parts["Z"], parts["F"]
+    is_po = F[:, spec.f_names.index("is_po")]
+    offset = Z @ np.asarray(prior_offset, dtype=float)
+    p1 = len(spec.f_names)
+    return _Layout(Z, F, list(spec.f_names), np.zeros(p1), n_feat, 0, slice(0, 0), slice(0, p1), slice(p1, p1),
+                   offset, box, is_po, 0)
 
 
 @dataclass
@@ -48,6 +69,7 @@ class MspiFast:
     def_target: str = "x3def"
     lam_buckets: dict | None = None      # extra ridge multipliers per spec.col_groups name (low_poss, high_poss, ...)
     phases: tuple = ("RS",)              # ("RS", "PO"): train on the playoff stints too (the held-out scoring stays RS)
+    decay: float | None = None           # rows of training season s weighted decay^(|s - H| - 1), H = ctx.current_h
 
     def fit(self, train, ctx: Context) -> Ratings:
         from . import xshoot
@@ -69,7 +91,6 @@ class MspiFast:
 
         y_o, y_d = target_y(self.off_target), target_y(self.def_target)
         exp = make_exposure(wd, mode="full", pad_target=cfg["pad_target"]).fit(wd.X, sample_weight=wd.w)
-        Xt = exp.transform(wd.X)
         off = chain_offset(self.sides, self.mode, scale=self.scale, target=self.target,
                            params=self.gbdt_params)(train, ctx, wd, exp=exp)
         nf = len(wd.spec.features)
@@ -80,9 +101,16 @@ class MspiFast:
         # one layout and one set of cross-products; the second side changes only the response
         mm = MixedModelRAPM(lam=lam, lam_ratio=ratio, beta_fixed=beta, prior_offset=off, spec=wd.spec,
                             lam_buckets=self.lam_buckets)
-        X, y, w = mm._validate(Xt, np.asarray(y_o, dtype=float), wd.w)
-        layout = mm._layout(X)
-        mom = mm._moments(layout, y, w)
+        w = np.asarray(wd.w, dtype=float)
+        if self.decay is not None and ctx.current_h is not None:
+            dist = np.abs(wd.rows["season"].to_numpy(dtype=float) - float(ctx.current_h))
+            w = w * float(self.decay) ** np.maximum(dist - 1.0, 0.0)
+        if wd.parts is not None:
+            layout = direct_layout(wd, exp, off)
+        else:
+            X, _, _ = mm._validate(exp.transform(wd.X), np.asarray(y_o, dtype=float), wd.w)
+            layout = mm._layout(X)
+        mom = Moments(layout, np.asarray(y_o, dtype=float), w, mm._season_cols(), mm._scale())
         u = {"o": np.asarray(mom.solve_chol(lam).u, dtype=float)}
         u["d"] = np.asarray(mom.with_y(layout, np.asarray(y_d, dtype=float), w).solve_chol(lam).u, dtype=float)
         df = pd.DataFrame({"player_id": wd.spec.ps_table["player_id"].to_numpy(),

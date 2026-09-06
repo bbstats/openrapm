@@ -137,6 +137,22 @@ class SeasonFrame:
     G: sp.csr_matrix
     wg: np.ndarray
     extra: pd.DataFrame | None = None     # per player in `ids` order: covariates AT H (age), for the Age term
+    ctx: object = None                    # for covariates that depend on the training block (moved, per K)
+
+    def covariates(self, k: int) -> pd.DataFrame | None:
+        """`extra` plus the K-dependent ones: `moved` = main team in H differs from the main team in the nearest
+        training season he appears in (holdout.by_movers)."""
+        if self.extra is None or self.ctx is None:
+            return self.extra
+        ex = self.extra.copy()
+        train = self.ctx.neighbourhood(self.h, k)
+        now = self.ctx.main_team(self.h)
+        before: dict = {}
+        for s in sorted(train, key=lambda s: abs(s - self.h)):
+            for pid, t in self.ctx.main_team(s).items():
+                before.setdefault(pid, t)
+        ex["moved"] = [1.0 if (q in now and q in before and now[q] != before[q]) else 0.0 for q in ex.player_id]
+        return ex
 
     @classmethod
     def build(cls, ctx: Context, h: int, level: str = "home") -> "SeasonFrame":
@@ -158,7 +174,7 @@ class SeasonFrame:
         G = sp.csr_matrix((poss / wg[key], (key, np.arange(len(key)))), shape=(n_tg, len(key)))
         return cls(h=h, wd=wd, Zo=wd.X[:, :m].tocsr(), Zd=wd.X[:, m:2 * m].tocsr(),
                    ids=wd.spec.ps_table["player_id"].to_numpy(), y=np.asarray(wd.y, dtype=float), w=w, poss=poss,
-                   A=A, L=L, G=G, wg=wg, extra=extra)
+                   A=A, L=L, G=G, wg=wg, extra=extra, ctx=ctx)
 
     def profiled(self, C: np.ndarray) -> np.ndarray:
         """Columns with the season's level profiled out (what the criterion's refit does to any contribution)."""
@@ -259,7 +275,7 @@ class Exposure:
     name: str = "none"
     n_params: int = 0
 
-    def basis(self, poss: np.ndarray, extra: pd.DataFrame | None = None) -> np.ndarray:
+    def basis(self, poss: np.ndarray, extra: pd.DataFrame | None = None, x=None) -> np.ndarray:
         return np.zeros((len(poss), 0))
 
 
@@ -270,7 +286,7 @@ class Sat(Exposure):
         self.name = "sat" if s == 1000.0 else f"sat{s:g}"
         self.n_params = 1
 
-    def basis(self, poss, extra=None):
+    def basis(self, poss, extra=None, x=None):
         p = np.asarray(poss, dtype=float)
         return (p / (p + self.s))[:, None]
 
@@ -282,7 +298,7 @@ class LogExp(Exposure):
         self.name = ("log2" if quad else "log") + ("" if s == 1000.0 else f"{s:g}")
         self.n_params = 2 if quad else 1
 
-    def basis(self, poss, extra=None):
+    def basis(self, poss, extra=None, x=None):
         u = np.log1p(np.asarray(poss, dtype=float) / self.s)
         return np.column_stack([u, u * u]) if self.quad else u[:, None]
 
@@ -293,7 +309,7 @@ class Bins(Exposure):
     name, n_params = "bins", 4
     edges = (0.0, 1.0, 500.0, 1500.0, 4000.0, 1e18)
 
-    def basis(self, poss, extra=None):
+    def basis(self, poss, extra=None, x=None):
         b = np.digitize(np.asarray(poss, dtype=float), self.edges) - 1
         return np.column_stack([(b == j).astype(float) for j in range(4)])
 
@@ -302,7 +318,7 @@ class Unseen(Exposure):
     """One level for the players the block never saw: the replacement level, fitted on the criterion."""
     name, n_params = "unseen", 1
 
-    def basis(self, poss, extra=None):
+    def basis(self, poss, extra=None, x=None):
         return (np.asarray(poss, dtype=float) <= 0).astype(float)[:, None]
 
 
@@ -318,12 +334,89 @@ class Age(Exposure):
         self.name = "age2" if quad else "age"
         self.n_params = 2 if quad else 1
 
-    def basis(self, poss, extra=None):
+    def basis(self, poss, extra=None, x=None):
         p = np.asarray(poss, dtype=float)
         if extra is None or "age" not in extra.columns:
             return np.zeros((len(p), self.n_params))
         u = (np.asarray(extra["age"], dtype=float) - self.centre) / self.scale * (p > 0)
         return np.column_stack([u, u * u]) if self.quad else u[:, None]
+
+
+class Moved(Exposure):
+    """The player changed team between the nearest training season he appears in and H (holdout.by_movers'
+    rule; `extra["moved"]`, set per K by build_design).  `slope`: a term in moved x the standardised rating
+    (does a mover's rating carry less?); otherwise a level."""
+    def __init__(self, slope: bool = False):
+        self.slope = bool(slope)
+        self.name = "movedx" if slope else "moved"
+        self.n_params = 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "moved" not in extra.columns:
+            return np.zeros((len(p), 1))
+        m = np.asarray(extra["moved"], dtype=float) * (p > 0)
+        if self.slope:
+            return (m * (np.zeros(len(p)) if x is None else np.asarray(x, dtype=float)))[:, None]
+        return m[:, None]
+
+
+class UnseenAge(Exposure):
+    """The unseen player's age (a rookie against a veteran the block never saw): (age - 27) / 5 on poss = 0."""
+    name, n_params = "uage", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "age" not in extra.columns:
+            return np.zeros((len(p), 1))
+        return ((np.asarray(extra["age"], dtype=float) - 27.0) / 5.0 * (p <= 0))[:, None]
+
+
+class AgeSat(Exposure):
+    """(age - 27) / 5 times the exposure saturation poss / (poss + 1000): does the age term depend on how much
+    the block saw of him?"""
+    name, n_params = "agesat", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "age" not in extra.columns:
+            return np.zeros((len(p), 1))
+        return ((np.asarray(extra["age"], dtype=float) - 27.0) / 5.0 * p / (p + 1000.0))[:, None]
+
+
+class XSat(Exposure):
+    """The rating's scalar varies with exposure: b x sat(poss) (x standardised by the side's scale), added to the
+    family's a x.  What a weaker or stronger ridge does, as a map term."""
+    def __init__(self, s: float = 1000.0):
+        self.s = float(s)
+        self.name = "xsat" if s == 1000.0 else f"xsat{s:g}"
+        self.n_params = 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        xx = np.zeros(len(p)) if x is None else np.asarray(x, dtype=float)
+        return (xx * p / (p + self.s))[:, None]
+
+
+class XLog(Exposure):
+    """b x log(1 + poss / 1000)."""
+    name, n_params = "xlog", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        xx = np.zeros(len(p)) if x is None else np.asarray(x, dtype=float)
+        return (xx * np.log1p(p / 1000.0))[:, None]
+
+
+class XAge(Exposure):
+    """b x (age - 27) / 5: does the rating carry differently by age?"""
+    name, n_params = "xage", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "age" not in extra.columns or x is None:
+            return np.zeros((len(p), 1))
+        return (np.asarray(x, dtype=float) * (np.asarray(extra["age"], dtype=float) - 27.0) / 5.0)[:, None]
 
 
 class Combo(Exposure):
@@ -333,13 +426,14 @@ class Combo(Exposure):
         self.name = "&".join(p.name for p in self.parts)
         self.n_params = sum(p.n_params for p in self.parts)
 
-    def basis(self, poss, extra=None):
-        return np.column_stack([p.basis(poss, extra) for p in self.parts])
+    def basis(self, poss, extra=None, x=None):
+        return np.column_stack([p.basis(poss, extra, x) for p in self.parts])
 
 
 FAMILIES = {f.name: f for f in (Linear(), Poly2(), Poly3(), Sinh(), Expo(), Hinge())}
 EXPOSURES = {e.name: e for e in (Exposure(), Sat(), Sat(250), Sat(500), Sat(2000), Sat(4000), LogExp(), LogExp(quad=True),
-                                 Bins(), Unseen(), Age(), Age(quad=False))}
+                                 Bins(), Unseen(), Age(), Age(quad=False), Moved(), Moved(slope=True), UnseenAge(),
+                                 AgeSat(), XSat(), XSat(300), XSat(3000), XLog(), XAge())}
 
 
 def parse_exposure(name: str) -> Exposure:
@@ -369,7 +463,7 @@ class SideMap:
         return cls(FAMILIES[fam], parse_exposure(expo))
 
     def basis(self, x, poss, scale: float, extra=None) -> np.ndarray:
-        return np.column_stack([self.fam.basis(x, scale), self.expo.basis(poss, extra)])
+        return np.column_stack([self.fam.basis(x, scale), self.expo.basis(poss, extra, np.asarray(x, dtype=float) / scale)])
 
     def apply(self, x, poss, theta, scale: float, extra=None) -> np.ndarray:
         return self.basis(x, poss, scale, extra) @ np.asarray(theta, dtype=float)
@@ -402,8 +496,9 @@ def build_design(dump: pd.DataFrame, frames: dict, system: str, k: int, map_o: S
     for h, f in frames.items():
         r = ratings_for(dump, system, k, h).aligned(f.ids)
         poss = r.poss.to_numpy(dtype=float)
-        Bo = map_o.basis(r.o.to_numpy(), poss, so, f.extra)
-        Bd = map_d.basis(r.d.to_numpy(), poss, sd, f.extra)
+        ex = f.covariates(k)
+        Bo = map_o.basis(r.o.to_numpy(), poss, so, ex)
+        Bd = map_d.basis(r.d.to_numpy(), poss, sd, ex)
         C = np.column_stack([np.asarray(f.Zo @ Bo), np.asarray(f.Zd @ Bd)])
         Xs.append(f.game(f.profiled(C)))
         ys.append(f.game(f.profiled(f.y[:, None])).ravel())
@@ -437,6 +532,8 @@ def mapped_ratings(rat: Ratings, theta, map_o: SideMap, map_d: SideMap, scale_o:
     if extra is not None:
         ex = d[["player_id"]].merge(extra, on="player_id", how="left")
         ex["age"] = ex.age.fillna(float(extra.age.median()))
+        if "moved" in ex.columns:
+            ex["moved"] = ex.moved.fillna(0.0)
     d["o"] = map_o.apply(d.o.to_numpy(), poss, theta[:p], scale_o, ex)
     d["d"] = map_d.apply(d.d.to_numpy(), poss, theta[p:], scale_d, ex)
     zero = np.zeros(1)
@@ -461,7 +558,7 @@ def evaluate(dump: pd.DataFrame, frames: dict, system: str, k: int, map_o: SideM
     rows, params = [], []
     for h, f in frames.items():
         th = fit_theta(D, exclude_h=h, ridge=ridge, map_o=map_o, map_d=map_d)
-        rat = mapped_ratings(ratings_for(dump, system, k, h), th, map_o, map_d, D.scale_o, D.scale_d, extra=f.extra)
+        rat = mapped_ratings(ratings_for(dump, system, k, h), th, map_o, map_d, D.scale_o, D.scale_d, extra=f.covariates(k))
         p = predict_season(rat, f.wd, level=level)
         rows.append(dict(held_out=h, k=k, train="", system=name, lam=lam, split="all", group="all", **score(p), seconds=0.0))
         params.append(_param_row(name, system, k, h, map_o, map_d, D, th))

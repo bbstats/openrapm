@@ -102,6 +102,13 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
             S[f"mspi1_lam05_{tag}"] = MspiFast(f"mspi1_lam05_{tag}", lam=L05, gbdt_params=prm)
         S["mspi1_lam05_po"] = MspiFast("mspi1_lam05_po", lam=L05, phases=("RS", "PO"))
         S["mspi1_lam05"] = MspiFast("mspi1_lam05", lam=L05)
+        # the current best on the true loss: the x0.5 ridge and the GBDT prior without its audition fits
+        FAST = {"linear_leaves": False, "cross_features": False}
+        S["mspi1_lam05_fast"] = MspiFast("mspi1_lam05_fast", lam=L05, gbdt_params=FAST)
+        # the farther training season (H-2 at K=3) down-weighted in the ridge
+        for d in (0.7, 0.5, 0.3):
+            n = f"mspi1_lam05_fast_dec{d:g}".replace(".", "")
+            S[n] = MspiFast(n, lam=L05, gbdt_params=FAST, decay=d)
         # one target for both sides (one solve): the opponent-3PM-replaced target on offense too
         S["mspi1_x3both"] = MspiFast("mspi1_x3both", off_target="x3def")
         # the APM-trained offense with the RAPM_1-trained defense (each side's calibrated version)
