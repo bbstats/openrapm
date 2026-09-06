@@ -1875,3 +1875,12 @@ Explicit season weights (`MspiFast.season_weights`, offsets from H), on the best
 future costs 0.07, down-weighting the past 0.00), nothing worth a parameter.  The prior's re-weighting allowed
 to vary with exposure (`priorsat`): -0.005 (z -0.2) on top of `prior`, +0.01 instead of it.  The map and
 the season weights are where they were.
+
+### 13. The per-season pieces kept on disk: 32.7 s (true loss 0.24)
+
+`designcache.season_pieces` now writes each (season, phase) piece to `data/cache/pieces/` (the counters and
+lineup ids as `.npy`, memory-mapped on load; the rest pickled) stamped with the stints and game-log files'
+sizes and mtimes and the feature list, and reads it back in about 0.03 s instead of rebuilding it in 0.12.
+Like the stints parquet it is derived data with no fitted quantity in it, so it is input, not training.  A
+worker's first pass builds the pieces it needs (37.7 s for the 28 fits); the second pass reads them: 32.7 s.
+Ratings unchanged to 1e-13, tests pass.
