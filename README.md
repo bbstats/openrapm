@@ -18,7 +18,8 @@ team-games so possession noise cancels. Twenty-eight held-out seasons, every sys
     python scripts/48_ladder.py outputs/holdout_x.parquet --ref=def3_p0
 
 A system is anything with a name and `fit(train_seasons, ctx) -> Ratings` (`src/eracoef/holdout.py`);
-`src/eracoef/systems.py` names the ones built so far. `FINDINGS.md` is the record of what the test
+`src/eracoef/systems.py` names the ones built so far. **`PIPELINE.md` draws how the shipped model
+works**, stage by stage, with the file behind each box. `FINDINGS.md` is the record of what the test
 has decided, section by section; `HANDOFF.md` is where things stand.
 
 ## What ships
