@@ -82,7 +82,8 @@ class ShooterRates:
 
     def for_rows(self, kind: str, row_half) -> np.ndarray:
         """The half whose totals price each row: the other regular-season half, or all of it."""
-        return np.asarray(pd.Series(row_half).map(OTHER).fillna("RS"))
+        h = np.asarray(row_half, dtype=object)
+        return np.where(h == "A", "B", np.where(h == "B", "A", "RS"))
 
     def _sorted(self, name: str, h: str) -> tuple[np.ndarray, np.ndarray]:
         """One rate table as (sorted player ids, values), built once per table and kept on the object."""

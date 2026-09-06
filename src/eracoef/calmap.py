@@ -154,6 +154,11 @@ class SeasonFrame:
                 before.setdefault(pid, t)
         ex["moved"] = [1.0 if (q in now and q in before and now[q] != before[q]) else 0.0 for q in ex.player_id]
         ex["blk_team"] = [int(before.get(q, -1)) for q in ex.player_id]
+        ri = self.ctx.role_inputs
+        if ri is not None:                       # the same role measured on the TRAINING block instead of H
+            t = ri[ri.season.isin(list(train)) & (ri.games > 0)].groupby("player_id")[["poss_on", "team_poss"]].sum()
+            sh = (t.poss_on / t.team_poss.replace(0.0, np.nan)).to_dict()
+            ex["tshare"] = [float(sh.get(q, 0.0) or 0.0) for q in ex.player_id]
         return ex
 
     @classmethod
@@ -161,9 +166,21 @@ class SeasonFrame:
         wd = ctx.design([h], "pts")
         extra = None
         if ctx.role_inputs is not None:
-            ri = ctx.role_inputs[ctx.role_inputs.season == h][["player_id", "age"]]
+            ri = ctx.role_inputs[ctx.role_inputs.season == h][["player_id", "age", "share", "gs_pct", "poss_on", "team_poss"]]
             extra = pd.DataFrame({"player_id": wd.spec.ps_table["player_id"].to_numpy()}).merge(ri, on="player_id", how="left")
             extra["age"] = extra.age.fillna(float(ri.age.median()) if len(ri) else 27.0)
+            for c in ("share", "gs_pct", "poss_on"):        # the held-out season's ROLE: known at prediction
+                extra[c] = extra[c].fillna(0.0)             # time, like the lineups themselves and the age
+            extra["team_poss"] = extra.pop("team_poss").fillna(0.0) if "team_poss" in extra.columns else 0.0
+            # the same share measured on HALF of H only: within-season feedback (play badly, sit down) can
+            # reach the whole-season share but not the other half's
+            gp = wd.game_poss.merge(wd.games[["game_idx", "half"]], on="game_idx", how="left")
+            pa = gp[gp.half == "A"].groupby("psx_idx")["poss_off"].sum()
+            per_psx = np.zeros(wd.spec.n_psx)
+            per_psx[pa.index.to_numpy()] = pa.to_numpy(dtype=float)
+            ps_poss_a = np.bincount(wd.spec.ps_of_psx, weights=per_psx, minlength=wd.spec.n_ps)
+            tp = extra["team_poss"].to_numpy(dtype=float)
+            extra["share_a"] = np.where(tp > 0, 2.0 * ps_poss_a / np.where(tp > 0, tp, 1.0), 0.0)
         m = wd.spec.n_ps
         A = level_columns(wd, level)
         w = np.asarray(wd.w, dtype=float)
@@ -421,6 +438,105 @@ class XAge(Exposure):
         return (np.asarray(x, dtype=float) * (np.asarray(extra["age"], dtype=float) - 27.0) / 5.0)[:, None]
 
 
+class HShare(Exposure):
+    """A level in the player's role in the HELD-OUT season: c x share / 0.1 (share of his team's possessions
+    while he is on the floor, `roles.window_inputs`).
+
+    The held-out season's lineups are an input of the criterion, so how much a player plays in H is known at
+    prediction time -- as much as his age is.  A rating fitted on a bench role and carried into a starter's
+    role is the case this asks about.  Not a rating of the window (the window has no role at H): a
+    prediction-time term, like the Age one.
+    """
+    name, n_params = "hshare", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "share" not in extra.columns:
+            return np.zeros((len(p), 1))
+        return (np.nan_to_num(np.asarray(extra["share"], dtype=float)) / 0.1)[:, None]
+
+
+class XHShare(Exposure):
+    """b x (share at H) / 0.1: does a rating carry further for a player who plays a big role in H?"""
+    name, n_params = "xhshare", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "share" not in extra.columns or x is None:
+            return np.zeros((len(p), 1))
+        return (np.asarray(x, dtype=float) * np.nan_to_num(np.asarray(extra["share"], dtype=float)) / 0.1)[:, None]
+
+
+class HShareA(Exposure):
+    """`HShare` from HALF of the held-out season's games (the `A` half), doubled: the control for within-season
+    feedback -- a player benched for playing badly loses whole-season minutes, but the other half's minutes
+    were spent before anyone knew."""
+    name, n_params = "hsharea", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "share_a" not in extra.columns:
+            return np.zeros((len(p), 1))
+        return (np.nan_to_num(np.asarray(extra["share_a"], dtype=float)) / 0.1)[:, None]
+
+
+class TShare(Exposure):
+    """`HShare` measured on the TRAINING block instead of the held-out season: the same role variable with
+    nothing of H in it, the control that says whether the H-season term is a leak or a real signal."""
+    name, n_params = "tshare", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "tshare" not in extra.columns:
+            return np.zeros((len(p), 1))
+        return (np.nan_to_num(np.asarray(extra["tshare"], dtype=float)) / 0.1)[:, None]
+
+
+class XTShare(Exposure):
+    """b x the training-block role: does a rating carry further for a player who was a starter when it was fit?"""
+    name, n_params = "xtshare", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "tshare" not in extra.columns or x is None:
+            return np.zeros((len(p), 1))
+        return (np.asarray(x, dtype=float) * np.nan_to_num(np.asarray(extra["tshare"], dtype=float)) / 0.1)[:, None]
+
+
+class HStarts(Exposure):
+    """A level in the player's games-started share at H."""
+    name, n_params = "hgs", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "gs_pct" not in extra.columns:
+            return np.zeros((len(p), 1))
+        return np.nan_to_num(np.asarray(extra["gs_pct"], dtype=float))[:, None]
+
+
+class HGrow(Exposure):
+    """A level in how much the player's role GREW into the held-out season: log((poss at H + 200) /
+    (his possessions per training season + 200)).  `extra["grow"]` is set by `build_design`."""
+    name, n_params = "hgrow", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "grow" not in extra.columns:
+            return np.zeros((len(p), 1))
+        return np.nan_to_num(np.asarray(extra["grow"], dtype=float))[:, None]
+
+
+class XHGrow(Exposure):
+    """b x the role growth: a rating carried into a bigger role, re-weighted."""
+    name, n_params = "xhgrow", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "grow" not in extra.columns or x is None:
+            return np.zeros((len(p), 1))
+        return (np.asarray(x, dtype=float) * np.nan_to_num(np.asarray(extra["grow"], dtype=float)))[:, None]
+
+
 class TeamMean(Exposure):
     """c x (the mean rating of the player's TRAINING-BLOCK teammates, him left out), standardised.
 
@@ -502,7 +618,7 @@ FAMILIES = {f.name: f for f in (Linear(), Poly2(), Poly3(), Sinh(), Expo(), Hing
 EXPOSURES = {e.name: e for e in (Exposure(), Sat(), Sat(250), Sat(500), Sat(2000), Sat(4000), LogExp(), LogExp(quad=True),
                                  Bins(), Unseen(), Age(), Age(quad=False), Moved(), Moved(slope=True), UnseenAge(),
                                  AgeSat(), XSat(), XSat(300), XSat(3000), XLog(), XAge(), Prior(), PriorSat(), Prior2(),
-                                 PriorAge(), TeamMean())}
+                                 PriorAge(), TeamMean(), HShare(), XHShare(), HStarts(), HGrow(), XHGrow(), TShare(), HShareA(), XTShare())}
 
 
 def parse_exposure(name: str) -> Exposure:
@@ -651,6 +767,10 @@ def build_design(dump: pd.DataFrame, frames: dict, system: str, k: int, map_o: S
         if ex is not None and "prior_o" in r.columns:
             ex_o = ex.assign(prior=r.prior_o.to_numpy(dtype=float) / so)
             ex_d = ex.assign(prior=r.prior_d.to_numpy(dtype=float) / sd)
+        if ex is not None and "poss_on" in ex.columns:
+            hp = np.nan_to_num(np.asarray(ex["poss_on"], dtype=float))
+            ex_o = ex_o.assign(grow=np.log((hp + 200.0) / (poss / max(k, 1) + 200.0)))
+            ex_d = ex_d.assign(grow=ex_o["grow"].to_numpy())
         if ex is not None and "blk_team" in ex.columns:
             tm = ex["blk_team"].to_numpy()
             ex_o = ex_o.assign(team=team_mean(r.o.to_numpy(dtype=float), poss, tm) / so)

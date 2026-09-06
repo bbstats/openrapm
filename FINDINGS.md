@@ -2066,3 +2066,27 @@ It is a PREDICTION-TIME term, like the age term: a rating carries no team, so th
 each season's parameters carries `bend`, `scale_u` and `g0`/`g1`.  `bent_prediction` gives every row of a
 team-game the same g(u) - u, so the team-game total is exactly g(u) and the season's level is refit around it.
 
+### 21. The held-out season's minutes are a leak; the training block's role is a (small) rating term
+
+The criterion is given the held-out season's lineups, so how much a player plays in H looks as available as
+his age.  As a map term (`calmap.HShare`, c x his share of his team's possessions at H, from
+`roles.window_inputs`) it is the largest single map gain ever measured here: **-0.19 per 100 on `best`
+(z -3.7, 23/28) and -0.27 on `ship_blend07` (z -3.8, 21/28)**.
+
+**It is a leak, and the control says so.**  The same share measured on HALF of H's games (`HShareA`, the `A`
+half doubled -- within-season feedback, play badly and sit down, reaches the whole-season share but not the
+minutes already spent in the other half) is worth **-0.006 (z -0.1)** on `best` and -0.036 on `ship_blend07`.
+Half the games is a noisier measure of a real role effect, not a dead one: an exogenous signal would keep most
+of its value, and this keeps 3%.  What the whole-season share adds over the half-season one is the knowledge of
+who was good in that season.  Neither `hshare` nor `hgs` (games started at H, -0.065) belongs in the criterion.
+
+What survives is the same role variable measured on the TRAINING BLOCK (`TShare`: his possessions over the
+block divided by his teams' possessions, games not played counted as zero -- nothing of H in it).  It is worth
+**-0.058 on `best` (z -1.8, 19/28)** and -0.037 on `ship_blend07` (z -1.6), it stacks with the team bend, and
+unlike the H-season version it IS a rating: 08_ratings knows the block's roles.  Marginal, and taken as such.
+The slope version (rating x role) is worse (-0.045 with the level, +0.012 alone), and the raw training-exposure
+term it sits beside is not replaceable by it (dropping `log2` costs +0.74).
+
+Also negative: role GROWTH, log((possessions at H + 200) / (possessions per training season + 200)), +0.38 as
+a level and +0.03 as a slope -- the criterion does not want a rating re-weighted by a changed role.
+
