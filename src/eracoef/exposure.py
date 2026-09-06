@@ -27,6 +27,13 @@ TARGETS = ("league", "poss_conditional")
 N_PAD_BINS = 6
 
 
+def _sum_matrix(idx, n_out: int, weights=None) -> sp.csr_matrix:
+    """The (n_out x len(idx)) matrix that sums (weighted) rows into `idx`: S @ v == np.add.at(zeros, idx, w * v)."""
+    idx = np.asarray(idx, dtype=np.int64)
+    data = np.ones(len(idx)) if weights is None else np.asarray(weights, dtype=float)
+    return sp.csr_matrix((data, (idx, np.arange(len(idx)))), shape=(n_out, len(idx)))
+
+
 def _lineup(X: sp.csr_matrix, cols: slice) -> np.ndarray:
     """(n, 5) player-season indices of the +1 entries in the Z block `cols`."""
     Z = X[:, cols].tocsr()
@@ -169,10 +176,12 @@ class BoxExposure(BaseEstimator, TransformerMixin):
 
     @staticmethod
     def _accumulate(n_ps, n_feat, p_idx, counts, poss, mult):
-        """Weighted totals and the effective (independent-game) count for padding."""
-        C = np.zeros((n_ps, n_feat)); np.add.at(C, p_idx, counts * mult[:, None])
-        P = np.zeros(n_ps); np.add.at(P, p_idx, poss * mult)
-        P2 = np.zeros(n_ps); np.add.at(P2, p_idx, poss * mult ** 2)
+        """Weighted totals and the effective (independent-game) count for padding (one sparse product per
+        quantity instead of np.add.at: the same sums, summed in a different order)."""
+        S = _sum_matrix(p_idx, n_ps, mult)
+        C = np.asarray(S @ counts) if n_feat else np.zeros((n_ps, 0))
+        P = np.asarray(S @ poss).ravel()
+        P2 = np.asarray(_sum_matrix(p_idx, n_ps, mult ** 2) @ poss).ravel()
         with np.errstate(divide="ignore", invalid="ignore"):
             n_eff = np.where(P2 > 0, P ** 2 / np.where(P2 > 0, P2, 1.0), 0.0)
         return C, P, n_eff
@@ -230,10 +239,11 @@ class BoxExposure(BaseEstimator, TransformerMixin):
         self.ps_of_psx_, self.season_of_psx_ = ps_of_psx, season_of_psx
 
         # per Z unit, summing the player-seasons that belong to it
+        S_ps = _sum_matrix(ps_of_psx, n_ps)
+
         def to_ps(v):
-            out = np.zeros((n_ps,) + v.shape[1:])
-            np.add.at(out, ps_of_psx, v)
-            return out
+            out = np.asarray(S_ps @ v)
+            return out.ravel() if v.ndim == 1 else out
 
         C, Po, Pd = to_ps(Cx), to_ps(Pox), to_ps(Pdx)
         Po_eff, Pd_eff = to_ps(Pox_eff), to_ps(Pdx_eff)
@@ -340,14 +350,11 @@ class BoxExposure(BaseEstimator, TransformerMixin):
     @staticmethod
     def _blend(v_psx, w_psx, ps_of_psx, n_ps):
         """Possession-weighted average of a per-player-season quantity, down to the Z unit."""
-        num = np.zeros((n_ps, v_psx.shape[1]))
-        den = np.zeros(n_ps)
-        np.add.at(num, ps_of_psx, v_psx * w_psx[:, None])
-        np.add.at(den, ps_of_psx, w_psx)
-        cnt = np.zeros((n_ps, v_psx.shape[1]))
-        np.add.at(cnt, ps_of_psx, v_psx)
-        n = np.zeros(n_ps)
-        np.add.at(n, ps_of_psx, 1.0)
+        S = _sum_matrix(ps_of_psx, n_ps)
+        num = np.asarray(S @ (v_psx * w_psx[:, None]))
+        den = np.asarray(S @ w_psx).ravel()
+        cnt = np.asarray(S @ v_psx)
+        n = np.asarray(S @ np.ones(len(ps_of_psx))).ravel()
         with np.errstate(divide="ignore", invalid="ignore"):
             out = np.where(den[:, None] > 0, num / np.where(den > 0, den, 1.0)[:, None],
                            cnt / np.maximum(n, 1.0)[:, None])

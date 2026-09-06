@@ -1884,3 +1884,9 @@ sizes and mtimes and the feature list, and reads it back in about 0.03 s instead
 Like the stints parquet it is derived data with no fitted quantity in it, so it is input, not training.  A
 worker's first pass builds the pieces it needs (37.7 s for the 28 fits); the second pass reads them: 32.7 s.
 Ratings unchanged to 1e-13, tests pass.
+
+### 14. Flat: the padding behind the box rates
+
+The exposure padding constants halved / doubled (`pad_scale` 0.5 / 2) and the league padding target instead of
+the possession-conditional one: 110.639 / 110.633 / 110.631 against 110.627, all in the same time.  The
+checkpoint-4 choices hold under the mapped criterion.
