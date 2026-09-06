@@ -2391,10 +2391,19 @@ green, but the defensive agreement falls to 0.762 against its 0.76 floor and the
 defensive spread -- the "1.33x too wide" that owns the only permanently-failing test and blocked three
 candidates in 21.26 -- comes down to **1.30, the narrowest any shipping candidate has measured**.
 
-Neither is shipped here.  Both are a wash on the criterion (z -0.88 and -0.09 against a project bar that has
-been z -3 for every kept item), and which one is right depends on whether the next pass wants the score or the
-headroom.  **`ship_shot7d` is the recommendation** if the defensive four-factor work (HANDOFF 3.6) is coming,
-because it is the first thing found that narrows the defensive spread at no cost.
+**SHIPPED: `ship_shot7d`.**  Both are a wash on the criterion (z -0.88 and -0.09, against a project bar that
+has been z -3 for every kept item), so the criterion does not choose between them and the floors do.  The
+headroom is the thing worth having: the defensive spread is the constraint that owns the only permanently
+failing test, blocked three candidates in 21.26 and separated these two, and this is the first change ever
+measured that narrows it at no cost.  `config.yaml`: `gbdt_target: blend0.7` (from `blend0.6`), the six SHOTQ
+names in BOTH `features_full_O` (43) and `features_full_D` (23), `cal_map ->
+ship_shot7d_linear+log2&xlog&prior&tshare_linear+log2&xlog` with `outputs/calmap_ship.parquet` recopied from
+the tracker's dump.  The rebuilt board reproduces the candidate exactly: **0.793 / 0.789 / 0.768 against the
+consensus, defensive spread 1.30, ten of ten floors, 82 passed and 1 xfailed.**
+
+`ship_shot7` -- shot quality on offense only, 110.694, the better criterion by 0.013 -- is one config line away
+if a later pass decides the score is worth the defensive headroom: drop the six names from `features_full_D`
+and point `cal_map` at `ship_shot7`.
 
 ### 5. What the pass says about the prior
 

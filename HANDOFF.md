@@ -7,9 +7,10 @@ shipped model works, stage by stage.
 **Tree state: clean and committed on `hybrid-and-xpts`.**  Nothing uncommitted but `outputs/*.parquet` scratch
 dumps.  Tests: 82 passed, 1 xfailed; the shipped board rebuilds and passes 10 of 10 consensus floors.
 
-**Nothing that ships changed this pass.**  `config.yaml` is byte-identical to `d0372eb`'s and `ship_side6` is
-still the board.  Two candidates that beat it are on the table and are section 22.4's; **they are the owner's
-call, not a default**, because both are a wash on the criterion.
+**Shipped this pass: `ship_shot7d`** (FINDINGS 22.4) -- shot quality on both sides and the blend-0.7
+offensive target it unlocks.  110.707 on the criterion, consensus 0.793 / 0.789 / 0.768, **defensive spread
+1.30, the narrowest any board has measured**, ten of ten floors.  The site serves it at
+`https://bbstats.github.io/openrapm/` once `main` is fast-forwarded (Part 3.5).
 
 ---
 
@@ -31,35 +32,31 @@ call, not a default**, because both are a wash on the criterion.
 |---|---|---|
 | **the criterion's line** (`best_ratio_full`) | **109.845** | 59 s |
 | the same with shot quality (`best_shot`) | 109.801 (z -1.13) | 70 s |
-| **what ships** (`ship_side6`, ten of ten floors) | **110.710** | 43 s |
-| `ship_shot7` -- blend 0.7 unlocked by shot quality, 10 of 10 | 110.694 (z -0.88) | 47 s |
-| `ship_shot7d` -- the same with shot quality on defense, 10 of 10 | 110.707 (z -0.09) | 50 s |
+| the board this pass started from (`ship_side6`) | 110.710 | 43 s |
+| **what ships** (`ship_shot7d`, ten of ten floors, defensive spread 1.30) | **110.707** | 50 s |
+| `ship_shot7` -- shot quality on offense only, ten of ten | 110.694 (z -0.88) | 47 s |
 | no ratings at all | 125.6 | |
 
-### The decision waiting for the owner (FINDINGS 22.4)
+### Why the board moved (FINDINGS 22.4)
 
 21.26 shipped `blend0.6` on offense **only because `blend0.7` failed the bigness floor** at -0.303 against
-0.30.  The shot-quality features move that gap to -0.270, so blend 0.7 is now shippable, and there are two
-versions of it:
+0.30, at a cost of about 0.02 per 100.  The shot-quality features move that gap to -0.270 -- separating a
+rim-running big from a jump shooter at the same FG% is exactly what the offensive board was mis-ranking by
+size -- so blend 0.7 became shippable again.  Putting the same features on DEFENSE as well is flat on the
+criterion and takes the defensive agreement 0.766 -> 0.768 and the defensive spread 1.33 -> 1.30.
 
-* **`ship_shot7`** -- shot quality on offense.  **110.694 (-0.016)**, ten of ten, but the defensive agreement
-  falls to 0.762 against its 0.76 floor: almost no headroom left.
-* **`ship_shot7d`** -- shot quality on both sides.  **110.707 (flat)**, ten of ten, defensive agreement UP to
-  0.768 and the defensive spread down to **1.30 -- the narrowest any shipping candidate has measured**, against
-  the 1.33 that owns the only permanently-failing test and blocked three candidates in 21.26.
-
-Both are z under 1 on the criterion, against a project bar that has been z -3 for every kept item, which is why
-neither was shipped unilaterally.  **`ship_shot7d` is the recommendation** if Part 3's defensive work is coming,
-because it is the first thing ever found that narrows the defensive spread at no cost.  To ship either:
-`scratch/ship_try2.py SHOT7D blend0.7 rapm1 ship_shot7d --od --dshot` shows the run; making it permanent means
-writing `gbdt_target: blend0.7`, the six `SHOTQ` names into `features_full_O` (and `features_full_D` for the
-`d` variant), and `cal_map -> ship_shot7d_linear+log2&xlog&prior&tshare_linear+log2&xlog` into `config.yaml`.
+The criterion cannot choose between the two versions (z -0.88 and -0.09), so the floors did.  `ship_shot7`
+(offense only) is 0.013 better on the criterion and leaves the defensive agreement at 0.762 against its 0.76
+floor -- almost no headroom.  `ship_shot7d` keeps the headroom, and Part 3.1's defensive work is what the
+headroom is for.  To flip: drop the six `SHOTQ` names from `features_full_D` and point `cal_map` at
+`ship_shot7`.  `scratch/ship_try2.py` runs either through the whole shipping path without touching
+`config.yaml` permanently.
 
 ### What this pass measured (all on the criterion, all in FINDINGS 22)
 
 | | criterion | verdict |
 |---|---|---|
-| shot quality -- where his attempts came from (`gbdt_prior.SHOTQ`) | **-0.045** on the line, flat in shipping shape | **kept**; it is what unlocks blend 0.7 |
+| shot quality -- where his attempts came from (`gbdt_prior.SHOTQ`) | **-0.045** on the line, flat in shipping shape | **SHIPPED**; it is what unlocks blend 0.7 |
 | experience -- seasons, career possessions, entry age (`roles.career_inputs`) | **+0.054** | rejected, and read 22.2 before trying anything like it |
 | Huber loss instead of RMSE | -0.039 at the cheap booster, **+0.061 at `quality=4`** | rejected |
 | inverse-variance target weights (`training_rows(sat_poss=)`) | -0.003 at best | wired and off |
@@ -159,9 +156,14 @@ mechanism of 22.2, which is worth knowing independently.
 * **TabFM** (`google/tabfm-1.0.0-jax`): installs and downloads (5.7 GB; point `HF_HOME` at `A:`), but the
   orbax restore dies in tensorstore on a 1.5 GB region -- 38.5 GB of the box's 48 GB commit limit was taken.
   Retry on a quiet machine.  `scratch/tabfm_try.py` prints the booster's baseline for it to beat.
-* **Fast-forward `main`** (`bbstats/openrapm`) to `hybrid-and-xpts` so the site picks up the new board.
-* **DNS for openrapm.com**: four GitHub `A` records + `www` CNAME at Porkbun, wait for the cert, then
-  `gh api -X PUT repos/bbstats/openrapm/pages -F https_enforced=true`.
+* **Fast-forward `main`** (`bbstats/openrapm`) to `hybrid-and-xpts`.  Pages serves `main` at `/docs`, so
+  until this is done the site shows the board of 2026-09-05, not `ship_shot7d`.  `docs/data/ratings.json` on
+  this branch is already rebuilt from the shipped board.
+* **DNS for openrapm.com**: the custom domain was REMOVED on 2026-09-06 (`docs/CNAME` deleted on both branches,
+  `cname: null` on the Pages API) because it had no DNS behind it and was redirecting `bbstats.github.io`
+  into a dead name.  The site is back at `https://bbstats.github.io/openrapm/`, https enforced.  To turn the
+  domain on: four GitHub `A` records + a `www` CNAME at Porkbun FIRST, then re-add `docs/CNAME` on `main`,
+  wait for the cert, then `gh api -X PUT repos/bbstats/openrapm/pages -F https_enforced=true`.
 * Never re-run, from 21 and 22: lam_ratio, lam_buckets by exposure, playoff rows, one target for both sides,
   x3def_p1, the mover / rookie-age / age-by-exposure / rating-by-age / rating-by-exposure / prior-by-exposure /
   prior^2 map terms, season weights beyond the decay, padding scale and target, panel APM at penalty 30 and

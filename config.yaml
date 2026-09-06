@@ -65,22 +65,28 @@ ratings_prior:
   # -0.8 / -0.9 / -1.0 per 100 at K = 2 / 3 / 4 (z -6 to -7, 24-25 of 28).  K = 3 matches the 3-season block.
   # `08_ratings.py` re-centres each side per window after it.  Set to null to ship the unmapped chain.
   # FINDINGS 21 (iterate mode).  The criterion's best trains the GBDT prior on the panel's unshrunk APM on
-  # both sides (110.32 at K = 3 against 111.30 for section 20's board), but that board fails the consensus
-  # floors (defensive agreement under 0.76; the offensive rank gap against bigness over 0.30 whenever the pure
-  # APM target is on offense).  What ships (section 21.19): the offensive target 0.7 APM + 0.3 RAPM_1
-  # (`gbdt_target: blend0.7`, the column is made in holdout.Context.prior), RAPM_1 on defense
-  # (`gbdt_target_def`), the GBDT without its audition fits (gbdt.params), and the map with a log-exposure
-  # level, a rating-by-exposure slope and -- on offense only -- the prior part of the rating as its own term:
-  # 110.80 on the criterion, 0.796 / 0.804 / 0.767 against the consensus, ten of ten floors.  `gbdt_panel`
+  # both sides, but that board fails the consensus floors (defensive agreement under 0.76; the offensive rank
+  # gap against bigness over 0.30 whenever the pure APM target is on offense).  21.26 therefore shipped the
+  # offensive target at 0.6 APM + 0.4 RAPM_1: `blend0.7` scored 0.02 per 100 better and failed the bigness
+  # floor at -0.303.
+  # FINDINGS 22 (the prior pass).  The shot-quality features (gbdt_prior.SHOTQ, the six built from each
+  # shooter's own locations) move that bigness gap to -0.270, so `blend0.7` is shippable again -- and with
+  # them on DEFENSE too the defensive agreement goes 0.766 -> 0.768 and the defensive spread 1.33 -> 1.30,
+  # the narrowest any candidate has measured, on the floor that has blocked the most boards.  What ships
+  # (`ship_shot7d`, 22.4): the offensive target 0.7 APM + 0.3 RAPM_1 (`gbdt_target: blend0.7`, the column is
+  # made in holdout.Context.prior), RAPM_1 on defense (`gbdt_target_def`), the shot-quality features in both
+  # `features_full_O` and `features_full_D`, the bagged/searched booster on offense and the cheap one on
+  # defense, and the map with a log-exposure level, a rating-by-exposure slope and -- on offense only -- the
+  # prior part of the rating as its own term.  110.707 on the criterion, ten of ten floors.  `gbdt_panel`
   # (another role panel for the prior) is wired and off.
-  gbdt_target: blend0.6
+  gbdt_target: blend0.7
   gbdt_target_def: rapm1
   gbdt_panel: null
   # the prior's training target pooled over the player's OTHER windows with this discount per
   # window of distance (1.0 = every other window alike, the original pooling)
   gbdt_win_decay: 0.3
   gbdt_win_decay_def: 1.0   # defense pools every other window alike, as shipped
-  cal_map: {table: outputs/calmap_ship.parquet, system: ship_side6_linear+log2&xlog&prior&tshare_linear+log2&xlog, base: ship_side6, k: 3}
+  cal_map: {table: outputs/calmap_ship.parquet, system: ship_shot7d_linear+log2&xlog&prior&tshare_linear+log2&xlog, base: ship_shot7d, k: 3}
 # The random effect unit: "window" gives one player effect per 3-season window, "season" one per
 # player-season (the original spec).  Possession thresholds below are in the unit's own scale.
 player_unit: window
@@ -159,8 +165,9 @@ gbdt:
   # scripts/50_boruta.py, 25 trials, 2026-09-05: accepted + tentative + season (rejected dropped; season kept by design)
   features_O: [ast, blk, drb, fg2_miss, fg2m, fg3_miss, fg3m, ft_miss, ftm, orb, pf, stl, tov, season]   # rejected: season; tentative: drb, fg3_miss, pf, tov
   features_D: [ast, blk, drb, fg2_miss, fg2m, fg3_miss, fg3m, ftm, pf, stl, tov, season]   # rejected: ft_miss, orb, season; tentative: fg3m, ftm, pf
-  features_full_O: [fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss, orb, drb, ast, tov, stl, blk, pf, season, share, gs_pct, age, pts, fga, fta, fg3a, usage, bigness, reb, stocks, creation, shotmix, efg, ts, p3r, ftr, fg3p, fg2p, ftp, astr, tovr, orbsh]
-  features_full_D: [age, ast, blk, drb, fg2_miss, fg2m, fg3_miss, fg3m, ftm, gs_pct, orb, pf, season, share, stl]
+  features_full_O: [fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss, orb, drb, ast, tov, stl, blk, pf, season, share, gs_pct, age, pts, fga, fta, fg3a, usage, bigness, reb, stocks, creation, shotmix, efg, ts, p3r, ftr, fg3p, fg2p, ftp, astr, tovr, orbsh, q2, q3, m2, m3, xps, mpts]
+  # the last six on each line are FINDINGS 22.1's shot quality (gbdt_prior.SHOTQ)
+  features_full_D: [fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss, orb, drb, ast, tov, stl, blk, pf, season, share, gs_pct, age, q2, q3, m2, m3, xps, mpts]
   drag_tol: 0.02          # counterbalance a leave-window-out training set whose weighted mean drifts more than this
   boruta_trials: 50
   seed: 0
