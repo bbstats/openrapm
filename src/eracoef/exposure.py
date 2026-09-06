@@ -438,13 +438,24 @@ class BoxExposure(BaseEstimator, TransformerMixin):
         return self._pad_ps(C, P, P, k, t)
 
     def _exposures_parts(self, parts, game_idx):
-        """`_exposures` from the design's own sorted lineups (WindowData.parts), the same sums in the same order."""
+        """`_exposures` from the design's own sorted lineups (WindowData.parts), the same sums in the same order.
+
+        Away from `loo` mode the five slots' rates do not depend on the row, so the sum over the lineup is the
+        lineup matrix times the (small) table of padded rates: one sparse product instead of ten gathers of the
+        whole design's worth of rates.
+        """
         n_feat = len(self.feature_names_)
         lo, ld = parts["lineup_o"], parts["lineup_d"]
         n = lo.shape[0]
-        Xo = np.zeros((n, n_feat)); Xd = np.zeros((n, n_feat))
         if n_feat == 0:
-            return Xo, Xd
+            return np.zeros((n, 0)), np.zeros((n, 0))
+        if self.mode != "loo":
+            indptr = np.arange(0, 5 * n + 1, 5, dtype=np.int64)
+            ones = np.ones(5 * n)
+            Zo = sp.csr_matrix((ones, np.ascontiguousarray(lo).ravel(), indptr), shape=(n, self.spec.n_ps))
+            Zd = sp.csr_matrix((ones, np.ascontiguousarray(ld).ravel(), indptr), shape=(n, self.spec.n_ps))
+            return np.asarray(Zo @ self.rates_), np.asarray(Zd @ self.rates_d_)
+        Xo = np.zeros((n, n_feat)); Xd = np.zeros((n, n_feat))
         for j in range(5):
             Xo += self._rates_for(lo[:, j], game_idx, "O")
             Xd += self._rates_for(ld[:, j], game_idx, "D")

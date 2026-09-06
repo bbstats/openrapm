@@ -153,6 +153,7 @@ class SeasonFrame:
             for pid, t in self.ctx.main_team(s).items():
                 before.setdefault(pid, t)
         ex["moved"] = [1.0 if (q in now and q in before and now[q] != before[q]) else 0.0 for q in ex.player_id]
+        ex["blk_team"] = [int(before.get(q, -1)) for q in ex.player_id]
         return ex
 
     @classmethod
@@ -420,6 +421,24 @@ class XAge(Exposure):
         return (np.asarray(x, dtype=float) * (np.asarray(extra["age"], dtype=float) - 27.0) / 5.0)[:, None]
 
 
+class TeamMean(Exposure):
+    """c x (the mean rating of the player's TRAINING-BLOCK teammates, him left out), standardised.
+
+    The five ratings of a team-game come out of one training block, where a team that outscored its true
+    strength lifts everyone who played for it: those errors are correlated, and the sum of five of them
+    carries the team's share five times.  This is that share as a per-player column, so the map can take
+    some of it back off.  `extra["team"]` is set by `build_design` / `mapped_ratings` from the block's teams
+    (`SeasonFrame.covariates`'s `blk_team`) and the dump's own ratings; without it the term is 0.
+    """
+    name, n_params = "team", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "team" not in extra.columns:
+            return np.zeros((len(p), 1))
+        return np.nan_to_num(np.asarray(extra["team"], dtype=float))[:, None]
+
+
 class Prior(Exposure):
     """c x prior / scale: the prior part of the rating as its own column, so the map can re-weight the prior against
     the residual (f = a x + c prior = a resid + (a + c) prior): the ridge's prior-vs-data blend, re-chosen on the
@@ -483,7 +502,7 @@ FAMILIES = {f.name: f for f in (Linear(), Poly2(), Poly3(), Sinh(), Expo(), Hing
 EXPOSURES = {e.name: e for e in (Exposure(), Sat(), Sat(250), Sat(500), Sat(2000), Sat(4000), LogExp(), LogExp(quad=True),
                                  Bins(), Unseen(), Age(), Age(quad=False), Moved(), Moved(slope=True), UnseenAge(),
                                  AgeSat(), XSat(), XSat(300), XSat(3000), XLog(), XAge(), Prior(), PriorSat(), Prior2(),
-                                 PriorAge())}
+                                 PriorAge(), TeamMean())}
 
 
 def parse_exposure(name: str) -> Exposure:
@@ -593,6 +612,22 @@ def _side_scale(dump: pd.DataFrame, system: str, k: int, side: str, min_poss: fl
     return float(np.sqrt(np.average(d[side].to_numpy() ** 2, weights=d.poss.to_numpy()))) or 1.0
 
 
+def team_mean(x: np.ndarray, poss: np.ndarray, team: np.ndarray) -> np.ndarray:
+    """Per player, the possession-weighted mean rating of the OTHERS on his training-block team (0 with no
+    team, or when he is the only one).  Leaving him out matters: with him in, the column is partly his own
+    rating and the map cannot tell the two apart."""
+    x = np.nan_to_num(np.asarray(x, dtype=float))
+    w = np.nan_to_num(np.asarray(poss, dtype=float))
+    t = np.asarray(team)
+    idx, uniq = pd.factorize(t)
+    ok = idx >= 0
+    sw = np.bincount(idx[ok], weights=w[ok], minlength=len(uniq))
+    sx = np.bincount(idx[ok], weights=(w * x)[ok], minlength=len(uniq))
+    den = sw[idx] - w
+    out = np.where(den > 0, (sx[idx] - w * x) / np.where(den > 0, den, 1.0), 0.0)
+    return np.where(ok & (t != -1), out, 0.0)
+
+
 @dataclass
 class Design:
     """The pooled team-game regression for a (system, K, map) choice: one block per held-out season."""
@@ -616,6 +651,10 @@ def build_design(dump: pd.DataFrame, frames: dict, system: str, k: int, map_o: S
         if ex is not None and "prior_o" in r.columns:
             ex_o = ex.assign(prior=r.prior_o.to_numpy(dtype=float) / so)
             ex_d = ex.assign(prior=r.prior_d.to_numpy(dtype=float) / sd)
+        if ex is not None and "blk_team" in ex.columns:
+            tm = ex["blk_team"].to_numpy()
+            ex_o = ex_o.assign(team=team_mean(r.o.to_numpy(dtype=float), poss, tm) / so)
+            ex_d = ex_d.assign(team=team_mean(r.d.to_numpy(dtype=float), poss, tm) / sd)
         Bo = map_o.basis(r.o.to_numpy(), poss, so, ex_o)
         Bd = map_d.basis(r.d.to_numpy(), poss, sd, ex_d)
         C = np.column_stack([np.asarray(f.Zo @ Bo), np.asarray(f.Zd @ Bd)])
