@@ -39,8 +39,18 @@ def box_from_gamelog(gl: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+_BOX_CACHE: dict = {}
+
+
 def season_box(seasons, phases, cfg) -> pd.DataFrame:
-    parts = [box_from_gamelog(load_gamelog(s, p, cfg)) for s in seasons for p in phases]
+    """Per game x player box rows for the seasons and phases; each (season, phase) is read once per process."""
+    parts = []
+    for s in seasons:
+        for p in phases:
+            key = (int(s), str(p))
+            if key not in _BOX_CACHE:
+                _BOX_CACHE[key] = box_from_gamelog(load_gamelog(s, p, cfg))
+            parts.append(_BOX_CACHE[key])
     return pd.concat(parts, ignore_index=True)
 
 

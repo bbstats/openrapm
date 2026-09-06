@@ -327,8 +327,11 @@ class BoxExposure(BaseEstimator, TransformerMixin):
         # centering means (possession-weighted over the training rows)
         self.means_o_ = np.zeros(n_feat)
         self.means_d_ = np.zeros(n_feat)
+        self._exposures_cache = None
         if self.center and n_feat:
             Xo, Xd = self._exposures_parts(parts, game_idx) if X is None else self._exposures(X, game_idx)
+            if X is None:
+                self._exposures_cache = (Xo, Xd)          # uncentred; fastfit.direct_layout reuses them
             wgt = np.ones(n_rows) if sample_weight is None else np.asarray(sample_weight, dtype=float)
             self.means_o_ = (wgt[:, None] * Xo).sum(0) / wgt.sum()
             self.means_d_ = (wgt[:, None] * Xd).sum(0) / wgt.sum()

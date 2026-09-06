@@ -223,7 +223,7 @@ def build_window_cached(seasons, cfg, phases=("RS",), gt_weight=None, target="pt
     if pieces[0]["have"]:
         ccols = pieces[0]["ccols"]
         M = np.vstack([np.vstack([p["counters"][side] for p in pieces])[s["stint"]] for s, side in zip(sides, ("h", "a"))])
-        counters = pd.DataFrame({c: M[:, j] for j, c in enumerate(ccols)})
+        counters = pd.DataFrame(M, columns=ccols)
         P = np.vstack([np.vstack([p["pids"][side] for p in pieces])[s["stint"]] for s, side in zip(sides, ("h", "a"))])
         for k in range(5):
             counters[f"pid_s{k + 1}"] = P[:, k]

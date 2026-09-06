@@ -40,7 +40,8 @@ def direct_layout(wd, exp, prior_offset: np.ndarray) -> _Layout:
     dense -> sparse -> dense round trip), Z and F as the design built them."""
     spec, parts = wd.spec, wd.parts
     n_feat = len(exp.feature_names_)
-    Xo, Xd = exp._exposures_parts(parts, parts["game_idx"])
+    cached = getattr(exp, "_exposures_cache", None)
+    Xo, Xd = cached if cached is not None else exp._exposures_parts(parts, parts["game_idx"])
     if exp.center and n_feat:
         Xo = Xo - exp.means_o_
         Xd = Xd - exp.means_d_

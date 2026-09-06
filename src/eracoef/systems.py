@@ -114,6 +114,8 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
             S[n] = MspiFast(n, lam=float(cfg["lam_plugin"]) * f, gbdt_params=FAST, decay=0.5)
         S["mspi1_lam05_fast_dec05x"] = MspiFast("mspi1_lam05_fast_dec05x", lam=L05, gbdt_params=FAST, decay=0.5, decay_exposure=True)
         S["best"] = MspiFast("best", lam=L05, gbdt_params=FAST, decay=0.5)
+        # the defensive target with the season before the block in the shooters' rates
+        S["mspi1_lam05_fast_dec05_p1"] = MspiFast("mspi1_lam05_fast_dec05_p1", lam=L05, gbdt_params=FAST, decay=0.5, def_target="x3def_p1")
         # one target for both sides (one solve): the opponent-3PM-replaced target on offense too
         S["mspi1_x3both"] = MspiFast("mspi1_x3both", off_target="x3def")
         # the APM-trained offense with the RAPM_1-trained defense (each side's calibrated version)
