@@ -1969,3 +1969,44 @@ criterion between `ship_mix` and `ship_rapm1`); the defensive loss is also the A
 the consensus total up 0.785 -> 0.789, offense 0.779 -> 0.805, defense 0.768 -> 0.751 (the floor is 0.75),
 spread 1.34 (the floor 1.4).  The criterion's own best (`best`: APM on both sides, the decay, the age term)
 stays the chart's line at 110.32; with the decay and the age term the mix scores 110.58 (`best_mix`).
+
+**The mixed board's maps against the floors** (tests/test_vs_consensus.py: offense agreement >= 0.75, defense
+>= 0.76, offensive rank gap vs bigness |r| < 0.30, defensive spread <= 1.4, total >= 0.75).  On the `ship_mix`
+dump, criterion and the consensus read (total / off / def, defensive spread):
+
+| map (offense : defense) | criterion | consensus | def spread |
+|---|---|---|---|
+| `linear+sat` | 111.155 | 0.795 / 0.766 / 0.767 | 1.23 |
+| `linear+log2&xlog` | 110.991 | 0.782 / 0.765 / 0.766 | 1.32 |
+| `linear+log2&xlog&prior` (both) | 110.742 | 0.789 / 0.805 / 0.751 | 1.34 |
+| `linear+log2&xlog&prior : linear+log2&xlog` | 110.773 | 0.800 / 0.805 / 0.766 | 1.32 |
+| `linear+sat&prior : linear+sat` | 110.882 | 0.815 / 0.811 / 0.767 | 1.23 |
+
+The prior term on DEFENSE is what takes the defensive agreement under 0.76 (0.751); on offense alone it keeps
+0.805 and nearly all of the criterion gain (110.773 against 110.742).  The mixed board's full-map test run
+also tripped the offensive bigness gap at -0.303 (the APM offensive prior rates bigs a little below the
+consensus); the side-specific map is rebuilt through `08_ratings.py` and the tests next, against the RAPM_1
+board with `linear+log2&xlog` (111.146; 0.768 / 0.769 / 0.765) as the fallback.
+
+Rebuilt through `08_ratings.py` and run against the tests: the mixed board with the prior term on offense only
+(A) fails one test by a hair, the offensive rank gap against bigness -0.303 (the floor is 0.30) -- the APM
+offensive prior rates the bigs a little under the consensus; the RAPM_1 board with `linear+log2&xlog` (B)
+passes all ten.  Two more mixed maps are rebuilt (no prior term; `linear+sat&prior : linear+sat`); if neither
+passes, B ships: 111.146 on the criterion (0.15 better than section 20), 0.768 / 0.769 / 0.765.
+
+The two more mixed maps fail the same test: no prior term -0.353, `linear+sat&prior : linear+sat` -0.325.  The
+tilt is the APM offensive prior's, not the map's.  One middle candidate is tried before the fallback: the
+prior trained on the panel refit at the halved ridge (`ship_p05`, `ratings_prior.gbdt_panel`), whose criterion
+sat between the two (section 21.15-16); then B ships if it fails.
+
+The half-ridge panel prior fails the defensive floor instead (0.740 with the prior term, 0.751 without).
+**Shipped: B** -- the RAPM_1-trained prior on both sides, the GBDT without its audition fits, the map
+`linear+log2&xlog` (a rating scalar, a quadratic-in-log exposure level, a rating-by-log-exposure slope, per
+side; the prior term left out because it takes the defensive agreement to 0.751), K = 3, on `ship_rapm1`'s own
+dump: **111.146 on the criterion** (section 20's board 111.296), consensus 0.768 / 0.769 / 0.765, defensive
+spread 1.33, ten of ten floors.  `config.yaml`: `gbdt.params: {linear_leaves: false, cross_features: false}`,
+`cal_map -> outputs/calmap_ship.parquet (ship_rapm1_linear+log2&xlog)`; `gbdt_target` stays `rapm1`,
+`gbdt_target_def` and `gbdt_panel` are wired and off.  The criterion's own line (`best`, 110.32) stays what the
+chart tracks; the gap between it and what the floors allow is now a measured 0.8 per 100, and the reason is
+one thing: the unshrunk prior's ordering of the bigs on offense and of everyone on defense is not the
+public metrics' ordering, while held-out games prefer it.

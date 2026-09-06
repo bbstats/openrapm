@@ -21,7 +21,7 @@ if the final chain had not finished (`git status`).  Tests: 82 passed, 1 xfailed
 |---|---|---|---|
 | shipped before this phase (`mspi_linear+sat`, section 20) | 111.30 | 134 s | 1.00 |
 | the criterion's best now (`best`) | 110.32 | 32 s | 0.24 |
-| what ships now (`ship_mix`, no held-out season) | 110.74 | 32 s | |
+| what ships now (`ship_rapm1`, no held-out season, floors green) | 111.15 | 32 s | |
 
 **True loss** = (score / 111.30) x (28-fit seconds / 134).  Every time cut was checked to reproduce the
 ratings to 1e-13 (`scratch/cmp_design.py` for the design, the ratings-vs-dump check in the scratch scripts).
@@ -47,12 +47,15 @@ shooter-totals caches, the GBDT without its audition fits (`gbdt.params`).  134 
 
 ### What ships, and why not the best
 
-The APM prior on both sides fails the owner's consensus floors on defense (0.68 against 0.75; spread 1.56x).
-`ship_mix` keeps the APM prior on offense and the RAPM_1 prior on defense: 0.789 / 0.805 / 0.751, spread 1.34,
-criterion 110.74.  `config.yaml -> ratings_prior.gbdt_target: apm, gbdt_target_def: rapm1, gbdt.params: {no
-auditions}, cal_map -> outputs/calmap_ship.parquet (system ship_mix_linear+log2&xlog&prior)`; `08_ratings.py`
-hands the map the prior parts (`calmap.apply_params(prior_o=, prior_d=)`).  The decay and the age term need a
-held-out season and do not ship.
+Every board with the APM prior fails one of the owner's consensus floors (`tests/test_vs_consensus.py`): on
+defense the agreement drops under 0.76 (0.68 with it on both sides, 0.751 with the prior term on defense
+only), on offense the rank gap against bigness passes 0.30 (-0.30 to -0.35 for every map tried), and the
+half-ridge panel prior fails defense too (0.74-0.75).  **What ships** (`ship_rapm1`): the RAPM_1 prior on both
+sides, the GBDT without its audition fits, the map `linear+log2&xlog` (no prior term: that one trips the
+defensive floor): criterion 111.15, consensus 0.768 / 0.769 / 0.765, spread 1.33, ten of ten floors.
+`config.yaml -> gbdt.params`, `ratings_prior.cal_map -> outputs/calmap_ship.parquet`; `gbdt_target`,
+`gbdt_target_def`, `gbdt_panel` are wired into `08_ratings.py` and off.  The decay and the age term need a
+held-out season and do not ship.  Section 21.18 has the candidate table.
 
 ### Flat or negative (do not re-run): section 21 items 4, 7, 12, 14 and the reads inside 1, 2, 9, 17
 
@@ -87,7 +90,7 @@ prior^2 map terms, season weights beyond the decay, padding scale and target, pa
 - **`53_calmap.py fit` overwrites `outputs/holdout_calmap_<tag>.parquet`** with only the maps of that run.
 - **`apply_params` needs the prior parts** for any map with a `prior` term; without them the term is silently 0.
 - **The panel's APM target vs the consensus**: anything that widens the defensive prior trips
-  `test_defensive_spread_is_calibrated` (1.4x) and the 0.75 defensive floor.  Read the consensus before shipping.
+  `test_defensive_spread_is_calibrated` (1.4x), the 0.76 defensive-agreement floor, or the 0.30 offensive bigness gap.  Read the consensus before shipping.
 - Long bash heredocs still fail in this shell; the patch scripts were written with the Write tool.
 
 (Earlier handoffs: `HANDOFF_rankmap_archive.md`; the calibration-map handoff is in git history at d1bc3cc.)

@@ -918,7 +918,9 @@ def vs_consensus(rat: Ratings, cfg, min_poss: float | None = None) -> dict:
                 con_off=float(spearmanr(g.o, g.adj_offense).statistic),
                 con_def=float(spearmanr(g.dd, g.adj_defense).statistic),
                 spread_off=float(g.o.std() / g.adj_offense.std()), spread_def=float(g.dd.std() / g.adj_defense.std()),
-                bias_total=float((z(g.t) - z(g.adj_overall)).corr(g.bigness)))
+                bias_total=float((z(g.t) - z(g.adj_overall)).corr(g.bigness)),
+                bias_off=float((z(g.o) - z(g.adj_offense)).corr(g.bigness)),
+                bias_def=float((z(g.dd) - z(g.adj_defense)).corr(g.bigness)))
 
 
 def _team_of_rows(p: Prediction, wd_h: WindowData, main_team: dict) -> tuple[np.ndarray, np.ndarray]:

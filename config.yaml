@@ -64,7 +64,18 @@ ratings_prior:
   # the rating alone is the identity within noise); the exposure term is the replacement gap and is worth
   # -0.8 / -0.9 / -1.0 per 100 at K = 2 / 3 / 4 (z -6 to -7, 24-25 of 28).  K = 3 matches the 3-season block.
   # `08_ratings.py` re-centres each side per window after it.  Set to null to ship the unmapped chain.
-  cal_map: {table: outputs/calmap_chain.parquet, system: mspi_linear+sat, base: mspi, k: 3}
+  # FINDINGS 21 (iterate mode).  The criterion's best trains the GBDT prior on the panel's unshrunk APM
+  # (`gbdt_target: apm`, 110.32 at K = 3 against 111.30 for section 20's board) but every board with that prior
+  # on offense fails a consensus floor (defensive agreement under 0.76 with it on defense, the offensive rank gap
+  # against bigness over 0.30 with it on offense, section 21.18).  What ships keeps the RAPM_1 target on both
+  # sides, drops the GBDT's audition fits (gbdt.params) and takes the map with a log-exposure level and a
+  # rating-by-exposure slope (`linear+log2&xlog`, no prior term: that one also trips the defensive floor):
+  # 111.15 on the criterion, 0.768 / 0.769 / 0.765 against the consensus, all ten floors green.
+  # `gbdt_target_def` (a different target on defense) and `gbdt_panel` (another role panel) are the knobs the
+  # candidates used; both are off.
+  gbdt_target: rapm1
+  gbdt_panel: null
+  cal_map: {table: outputs/calmap_ship.parquet, system: ship_rapm1_linear+log2&xlog, base: ship_rapm1, k: 3}
 # The random effect unit: "window" gives one player effect per 3-season window, "season" one per
 # player-season (the original spec).  Possession thresholds below are in the unit's own scale.
 player_unit: window
@@ -149,7 +160,7 @@ gbdt:
   boruta_trials: 50
   seed: 0
   thread_count: 3
-  params: {}              # chimeraboost overrides; empty = library defaults with early stopping
+  params: {linear_leaves: false, cross_features: false}   # no audition fits (FINDINGS 21.1: +0.003 per 100, 6% of the time)
 
 paths:
   raw: data/raw

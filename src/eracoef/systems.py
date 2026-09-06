@@ -122,6 +122,8 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         # on offense with the RAPM_1 prior on defense, and the RAPM_1 prior on both sides
         S["ship_mix"] = MspiFast("ship_mix", gbdt_params=FAST, target="apm", target_d="rapm1")
         S["ship_rapm1"] = MspiFast("ship_rapm1", gbdt_params=FAST)
+        S["ship_p05"] = MspiFast("ship_p05", gbdt_params=FAST, panel="outputs/role_panel_lam0.5.parquet")
+        S["ship_p035"] = MspiFast("ship_p035", gbdt_params=FAST, panel="outputs/role_panel_lam0.35.parquet")
         S["best_mix"] = MspiFast("best_mix", gbdt_params=FAST, target="apm", target_d="rapm1", decay=0.5, decay_exposure=True)
         BEST = dict(lam=L05, gbdt_params=FAST, decay=0.5, decay_exposure=True)
         # the padding of the box rates behind the prior: its constants halved / doubled, the league target
