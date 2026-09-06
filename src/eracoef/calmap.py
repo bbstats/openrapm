@@ -432,6 +432,17 @@ class Prior(Exposure):
         return np.nan_to_num(np.asarray(extra["prior"], dtype=float))[:, None]
 
 
+class PriorSat(Exposure):
+    """c x prior x sat(poss): the prior's re-weighting allowed to depend on exposure."""
+    name, n_params = "priorsat", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "prior" not in extra.columns:
+            return np.zeros((len(p), 1))
+        return (np.nan_to_num(np.asarray(extra["prior"], dtype=float)) * p / (p + 1000.0))[:, None]
+
+
 class Combo(Exposure):
     """Several exposure terms side by side: "sat&age2"."""
     def __init__(self, parts):
@@ -446,7 +457,7 @@ class Combo(Exposure):
 FAMILIES = {f.name: f for f in (Linear(), Poly2(), Poly3(), Sinh(), Expo(), Hinge())}
 EXPOSURES = {e.name: e for e in (Exposure(), Sat(), Sat(250), Sat(500), Sat(2000), Sat(4000), LogExp(), LogExp(quad=True),
                                  Bins(), Unseen(), Age(), Age(quad=False), Moved(), Moved(slope=True), UnseenAge(),
-                                 AgeSat(), XSat(), XSat(300), XSat(3000), XLog(), XAge(), Prior())}
+                                 AgeSat(), XSat(), XSat(300), XSat(3000), XLog(), XAge(), Prior(), PriorSat())}
 
 
 def parse_exposure(name: str) -> Exposure:

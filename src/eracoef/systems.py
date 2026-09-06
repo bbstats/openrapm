@@ -114,6 +114,18 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
             S[n] = MspiFast(n, lam=float(cfg["lam_plugin"]) * f, gbdt_params=FAST, decay=0.5)
         S["mspi1_lam05_fast_dec05x"] = MspiFast("mspi1_lam05_fast_dec05x", lam=L05, gbdt_params=FAST, decay=0.5, decay_exposure=True)
         S["best"] = MspiFast("best", lam=L05, gbdt_params=FAST, decay=0.5, decay_exposure=True)
+        BEST = dict(lam=L05, gbdt_params=FAST, decay=0.5, decay_exposure=True)
+        # the padding of the box rates behind the prior: its constants halved / doubled, the league target
+        S["mspi1_best_pad05"] = MspiFast("mspi1_best_pad05", pad_scale=0.5, **BEST)
+        S["mspi1_best_pad2"] = MspiFast("mspi1_best_pad2", pad_scale=2.0, **BEST)
+        S["mspi1_best_padleague"] = MspiFast("mspi1_best_padleague", pad_target="league", **BEST)
+        # the GBDT prior trained on a role panel whose RAPM_1 used the halved ridge (scratch/panel_lam.py 0.5)
+        S["mspi1_best_panel05"] = MspiFast("mspi1_best_panel05", panel="outputs/role_panel_lam0.5.parquet", **BEST)
+        # the two adjacent seasons weighted apart: the past one or the future one at 0.8
+        for tag, sw in (("past08", {-2: 0.5, -1: 0.8, 1: 1.0}), ("fut08", {-2: 0.5, -1: 1.0, 1: 0.8}),
+                        ("past07fut1", {-2: 0.4, -1: 0.7, 1: 1.0})):
+            n = f"mspi1_best_{tag}"
+            S[n] = MspiFast(n, lam=L05, gbdt_params=FAST, season_weights=sw, decay_exposure=True)
         # the defensive target with the season before the block in the shooters' rates
         S["mspi1_lam05_fast_dec05_p1"] = MspiFast("mspi1_lam05_fast_dec05_p1", lam=L05, gbdt_params=FAST, decay=0.5, def_target="x3def_p1")
         # one target for both sides (one solve): the opponent-3PM-replaced target on offense too

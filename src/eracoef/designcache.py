@@ -11,25 +11,101 @@ row order (home-offense rows of every season, then away-offense), the same colum
 """
 from __future__ import annotations
 
+import pickle
 from collections import OrderedDict
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 
+from .config import resolve
 from .design import AWAY_SLOTS, HOME_SLOTS, TARGETS, DesignSpec, WindowData, _order_games, ps_key
 from .stints import POSS_COUNTERS, SLOT_COUNTERS
 
 _PIECES: "OrderedDict[tuple, dict]" = OrderedDict()
 MAX_PIECES = 8
+PIECES_VERSION = 1
+ARRAY_KEYS = ("counters_h", "counters_a", "pids_h", "pids_a")     # memory-mapped from .npy on disk
+
+
+def _target_columns() -> list:
+    """The stint columns the assembly reads for any design.TARGETS response, both sides."""
+    cols = set()
+    for tg in TARGETS.values():
+        cols.update(tg["num"])
+        cols.add(tg["den"])
+    return sorted(f"{c}_{side}" for c in cols for side in ("h", "a"))
+
+
+def _stamp(season: int, phase: str, cfg: dict) -> dict:
+    """What the cached piece must have been built from: the stints and the game log files, the features."""
+    st = resolve(cfg, "stints") / f"{season}_{phase}.parquet"
+    gl = resolve(cfg, "raw") / "gamelog" / f"{season}_{phase}.parquet"
+    out = dict(version=PIECES_VERSION, features=tuple(cfg["features"]))
+    for name, path in (("stints", st), ("gamelog", gl)):
+        if path.exists():
+            info = path.stat()
+            out[name] = (int(info.st_mtime_ns), int(info.st_size))
+    return out
+
+
+def _pieces_dir(cfg: dict) -> Path:
+    return Path(cfg["_root"]) / "data" / "cache" / "pieces"
+
+
+def _load_piece(season: int, phase: str, cfg: dict) -> dict | None:
+    d = _pieces_dir(cfg) / f"{season}_{phase}"
+    meta = d / "meta.pkl"
+    if not meta.exists():
+        return None
+    try:
+        with open(meta, "rb") as f:
+            piece = pickle.load(f)
+        if piece.get("stamp") != _stamp(season, phase, cfg):
+            return None
+        for k in ARRAY_KEYS:
+            piece[k] = np.load(d / f"{k}.npy", mmap_mode="r")
+    except Exception:
+        return None
+    piece["counters"] = {"h": piece["counters_h"], "a": piece["counters_a"]}
+    piece["pids"] = {"h": piece["pids_h"], "a": piece["pids_a"]}
+    return piece
+
+
+def _save_piece(piece: dict, season: int, phase: str, cfg: dict) -> None:
+    d = _pieces_dir(cfg) / f"{season}_{phase}"
+    d.mkdir(parents=True, exist_ok=True)
+    small = {k: v for k, v in piece.items() if k not in ARRAY_KEYS and k not in ("counters", "pids")}
+    for k in ARRAY_KEYS:
+        np.save(d / f"{k}.npy", np.ascontiguousarray(piece[k]))
+    tmp = d / "meta.pkl.tmp"
+    with open(tmp, "wb") as f:
+        pickle.dump(small, f, protocol=pickle.HIGHEST_PROTOCOL)
+    tmp.replace(d / "meta.pkl")
 
 
 def season_pieces(season: int, phase: str, cfg: dict) -> dict:
-    """Everything about one season-phase that a block design needs, keyed by the player-season key."""
+    """Everything about one season-phase that a block design needs, keyed by the player-season key.  Built once
+    and kept on disk (data/cache/pieces, stamped with the source files' mtimes), and in a small in-process LRU."""
     key = (int(season), str(phase))
     if key in _PIECES:
         _PIECES.move_to_end(key)
         return _PIECES[key]
+    piece = _load_piece(int(season), str(phase), cfg)
+    if piece is None:
+        piece = _build_piece(int(season), str(phase), cfg)
+        try:
+            _save_piece(piece, int(season), str(phase), cfg)
+        except OSError:
+            pass
+    _PIECES[key] = piece
+    while len(_PIECES) > MAX_PIECES:
+        _PIECES.popitem(last=False)
+    return piece
+
+
+def _build_piece(season: int, phase: str, cfg: dict) -> dict:
     from .boxtable import season_box
     from .windows import load_stints
     st = load_stints(int(season), phase, cfg).reset_index(drop=True).copy()
@@ -75,15 +151,15 @@ def season_pieces(season: int, phase: str, cfg: dict) -> dict:
     series = st["series_id"].astype(str).to_numpy()
     gid = st["game_id"].astype(str).to_numpy()
     groups = np.where(is_po, np.char.add("S:", series.astype(str)), np.char.add("G:", gid.astype(str)))
-    piece = dict(season=int(season), phase=str(phase), st=st, games=games, n_games=len(games), keys_u=keys_u,
-                 slot_loc=slot_loc, n_st=n_st, is_po=is_po,
+    tcols = {c: st[c].to_numpy().astype(float) for c in _target_columns() if c in st.columns}
+    piece = dict(season=int(season), phase=str(phase), stamp=_stamp(int(season), str(phase), cfg), tcols=tcols,
+                 games=games, n_games=len(games), keys_u=keys_u, slot_loc=slot_loc, n_st=n_st, is_po=is_po,
                  neutral=st["neutral"].to_numpy().astype(bool) if "neutral" in st.columns else np.zeros(n_st, bool),
                  is_gt=st["is_gt"].to_numpy().astype(bool), margin_h=st["margin_h"].to_numpy().astype(float),
                  frac_rem=st["frac_rem"].to_numpy().astype(float), game_idx=gi, groups=groups,
-                 game_poss=gp, game_box=game_box, psx_poss=psx_poss, have=have, ccols=ccols, counters=counters, pids=pids)
-    _PIECES[key] = piece
-    while len(_PIECES) > MAX_PIECES:
-        _PIECES.popitem(last=False)
+                 game_poss=gp, game_box=game_box, psx_poss=psx_poss, have=have, ccols=ccols,
+                 counters_h=counters["h"], counters_a=counters["a"], pids_h=pids["h"], pids_a=pids["a"],
+                 counters=counters, pids=pids)
     return piece
 
 
@@ -133,7 +209,7 @@ def build_window_cached(seasons, cfg, phases=("RS",), gt_weight=None, target="pt
     tg = TARGETS[target] if isinstance(target, str) else dict(target)
 
     def col(name):
-        return np.concatenate([p["st"][name].to_numpy().astype(float) for p in pieces])
+        return np.concatenate([p["tcols"][name] for p in pieces])
 
     sides = []
     for off_ps, def_ps, side, sign in ((home_ps, away_ps, "h", 1.0), (away_ps, home_ps, "a", -1.0)):

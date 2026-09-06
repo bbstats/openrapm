@@ -70,6 +70,11 @@ class MspiFast:
     phases: tuple = ("RS",)              # ("RS", "PO"): train on the playoff stints too (the held-out scoring stays RS)
     decay: float | None = None           # rows of training season s weighted decay^(|s - H| - 1), H = ctx.current_h
     decay_exposure: bool = False         # the same weights on the games behind the padded rates (BoxExposure.game_mult)
+    season_weights: dict | None = None   # explicit weight per season offset (s - H), e.g. {-2: 0.5, -1: 0.8, 1: 1.0};
+                                         # overrides `decay`; offsets not listed get 1
+    pad_scale: float = 1.0               # BoxExposure pad_scale: the padding constants of the rates times this
+    pad_target: str | None = None        # BoxExposure pad_target ("league" | "poss_conditional"); None = config
+    panel: str | None = None             # a role panel other than the configured one for the GBDT prior (path)
 
     def fit(self, train, ctx: Context) -> Ratings:
         from . import xshoot
@@ -91,20 +96,34 @@ class MspiFast:
 
         y_o, y_d = target_y(self.off_target), target_y(self.def_target)
         game_mult = None
-        if self.decay is not None and self.decay_exposure and ctx.current_h is not None:
+
+        def season_weight(season):
+            """The weight of each training season's rows for the held-out season H (1 without an H)."""
+            season = np.asarray(season, dtype=float)
+            if ctx.current_h is None:
+                return np.ones(len(season))
+            if self.season_weights:
+                off = np.rint(season - float(ctx.current_h)).astype(int)
+                return np.array([float(self.season_weights.get(int(o), 1.0)) for o in off])
+            if self.decay is None:
+                return np.ones(len(season))
+            dist = np.abs(season - float(ctx.current_h))
+            return float(self.decay) ** np.maximum(dist - 1.0, 0.0)
+
+        if self.decay_exposure and (self.decay is not None or self.season_weights):
             g = wd.games
             gm = np.ones(int(g["game_idx"].max()) + 1)
-            dist = np.abs(g["season"].to_numpy(dtype=float) - float(ctx.current_h))
-            gm[g["game_idx"].to_numpy()] = float(self.decay) ** np.maximum(dist - 1.0, 0.0)
+            gm[g["game_idx"].to_numpy()] = season_weight(g["season"].to_numpy())
             game_mult = gm
-        exp = make_exposure(wd, mode="full", pad_target=cfg["pad_target"], game_mult=game_mult)
+        exp = make_exposure(wd, mode="full", pad_target=self.pad_target or cfg["pad_target"], game_mult=game_mult,
+                            pad_scale=float(self.pad_scale))
         if wd.parts is not None:
             exp.parts = wd.parts
             exp.fit(None, sample_weight=wd.w)
         else:
             exp.fit(wd.X, sample_weight=wd.w)
         off = chain_offset(self.sides, self.mode, scale=self.scale, target=self.target,
-                           params=self.gbdt_params)(train, ctx, wd, exp=exp)
+                           params=self.gbdt_params, panel=self.panel)(train, ctx, wd, exp=exp)
         nf = len(wd.spec.features)
         beta = np.zeros(2 * nf)
         lam = float(cfg["lam_plugin"] if self.lam is None else self.lam)
@@ -114,9 +133,8 @@ class MspiFast:
         mm = MixedModelRAPM(lam=lam, lam_ratio=ratio, beta_fixed=beta, prior_offset=off, spec=wd.spec,
                             lam_buckets=self.lam_buckets)
         w = np.asarray(wd.w, dtype=float)
-        if self.decay is not None and ctx.current_h is not None:
-            dist = np.abs(wd.rows["season"].to_numpy(dtype=float) - float(ctx.current_h))
-            w = w * float(self.decay) ** np.maximum(dist - 1.0, 0.0)
+        if self.decay is not None or self.season_weights:
+            w = w * season_weight(wd.rows["season"].to_numpy())
         if wd.parts is not None:
             layout = direct_layout(wd, exp, off)
         else:

@@ -134,14 +134,18 @@ class Context:
             ctx.mspi_apm = GBDTPrior(ctx.rpanel, cfg, mode="full", target_col="apm")   # trained on unshrunk APM
         return ctx
 
-    def prior(self, mode: str, target_col: str | None, params: dict):
-        """A GBDTPrior with chimeraboost overrides `params`, built once per (mode, target, params) on this Context."""
-        key = (mode, target_col, tuple(sorted((params or {}).items())))
+    def prior(self, mode: str, target_col: str | None, params: dict, panel: str | None = None):
+        """A GBDTPrior with chimeraboost overrides `params`, built once per (mode, target, params, panel) on this
+        Context.  `panel`: a role panel other than the configured one (a path relative to the root)."""
+        key = (mode, target_col, tuple(sorted((params or {}).items())), panel)
         if key not in self._priors:
-            if self.rpanel is None:
+            rp = self.rpanel
+            if panel:
+                rp = pd.read_parquet(Path(self.cfg["_root"]) / panel)
+            if rp is None:
                 raise RuntimeError("outputs/role_panel.parquet is missing; run scripts/49_role_panel.py")
             from .gbdt_prior import GBDTPrior
-            p = GBDTPrior(self.rpanel, self.cfg, mode=mode, target_col=target_col)
+            p = GBDTPrior(rp, self.cfg, mode=mode, target_col=target_col)
             p.params = dict(params or {})
             self._priors[key] = p
         return self._priors[key]

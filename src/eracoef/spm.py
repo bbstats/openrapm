@@ -136,7 +136,7 @@ def season_of_units(wd) -> np.ndarray:
 
 
 def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, target: str = "rapm1",
-                 params: dict | None = None) -> Callable:
+                 params: dict | None = None, panel: str | None = None) -> Callable:
     """The per-player offset builder for a PluginSystem.  Signature `offset(train, ctx, wd) -> (2 * n_ps,)`,
     raw sign, possession-centred per side.
 
@@ -171,8 +171,8 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
         fd = fit_spm(ctx.rpanel, "D", exclude, pen=float(s.get("pen", 1.0)), min_poss=float(s.get("min_poss", 500)))
         off = spm_offset(fo, fd, inputs, poss_o, poss_d)
         if sides:
-            if params:
-                prior = ctx.prior(mode, "apm" if target == "apm" else None, params)
+            if params or panel:
+                prior = ctx.prior(mode, "apm" if target == "apm" else None, params, panel)
             else:
                 prior = ctx.gbdt if mode == "residual" else getattr(ctx, "mspi_apm" if target == "apm" else "mspi", None)
             if prior is None:

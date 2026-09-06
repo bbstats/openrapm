@@ -1864,3 +1864,14 @@ difference is inside run-to-run noise (about 1 s on 28 fits), so it is taken: **
 (= `best`)**.  The shooters' per-half totals behind the defensive target are now cached per season
 (`xshoot.season_totals` / `block_totals`; a block's totals are the sum over its seasons, ratings unchanged to
 1e-13): a warm fit 0.91 s.
+
+`mspi1_lam05_fast_dec05x` with the totals cache: 110.627 in 39.6 s, **true loss 0.29**.
+
+### 12. Flat: the adjacent seasons weighted apart, the prior's weight by exposure
+
+Explicit season weights (`MspiFast.season_weights`, offsets from H), on the best: {-2: 0.5, -1: 0.8, +1: 1}
+110.631, {-2: 0.5, -1: 1, +1: 0.8} 110.698, {-2: 0.4, -1: 0.7, +1: 1} 110.617, against 110.627 for
+{-2: 0.5, -1: 1, +1: 1}.  The season after H carries a little more than the season before (down-weighting the
+future costs 0.07, down-weighting the past 0.00), nothing worth a parameter.  The prior's re-weighting allowed
+to vary with exposure (`priorsat`): -0.005 (z -0.2) on top of `prior`, +0.01 instead of it.  The map and
+the season weights are where they were.
