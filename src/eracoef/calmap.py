@@ -419,6 +419,19 @@ class XAge(Exposure):
         return (np.asarray(x, dtype=float) * (np.asarray(extra["age"], dtype=float) - 27.0) / 5.0)[:, None]
 
 
+class Prior(Exposure):
+    """c x prior / scale: the prior part of the rating as its own column, so the map can re-weight the prior against
+    the residual (f = a x + c prior = a resid + (a + c) prior): the ridge's prior-vs-data blend, re-chosen on the
+    criterion.  `extra["prior"]` is set per side by build_design / mapped_ratings from the dump's prior_o / prior_d."""
+    name, n_params = "prior", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "prior" not in extra.columns:
+            return np.zeros((len(p), 1))
+        return np.nan_to_num(np.asarray(extra["prior"], dtype=float))[:, None]
+
+
 class Combo(Exposure):
     """Several exposure terms side by side: "sat&age2"."""
     def __init__(self, parts):
@@ -433,7 +446,7 @@ class Combo(Exposure):
 FAMILIES = {f.name: f for f in (Linear(), Poly2(), Poly3(), Sinh(), Expo(), Hinge())}
 EXPOSURES = {e.name: e for e in (Exposure(), Sat(), Sat(250), Sat(500), Sat(2000), Sat(4000), LogExp(), LogExp(quad=True),
                                  Bins(), Unseen(), Age(), Age(quad=False), Moved(), Moved(slope=True), UnseenAge(),
-                                 AgeSat(), XSat(), XSat(300), XSat(3000), XLog(), XAge())}
+                                 AgeSat(), XSat(), XSat(300), XSat(3000), XLog(), XAge(), Prior())}
 
 
 def parse_exposure(name: str) -> Exposure:
@@ -497,8 +510,12 @@ def build_design(dump: pd.DataFrame, frames: dict, system: str, k: int, map_o: S
         r = ratings_for(dump, system, k, h).aligned(f.ids)
         poss = r.poss.to_numpy(dtype=float)
         ex = f.covariates(k)
-        Bo = map_o.basis(r.o.to_numpy(), poss, so, ex)
-        Bd = map_d.basis(r.d.to_numpy(), poss, sd, ex)
+        ex_o = ex_d = ex
+        if ex is not None and "prior_o" in r.columns:
+            ex_o = ex.assign(prior=r.prior_o.to_numpy(dtype=float) / so)
+            ex_d = ex.assign(prior=r.prior_d.to_numpy(dtype=float) / sd)
+        Bo = map_o.basis(r.o.to_numpy(), poss, so, ex_o)
+        Bd = map_d.basis(r.d.to_numpy(), poss, sd, ex_d)
         C = np.column_stack([np.asarray(f.Zo @ Bo), np.asarray(f.Zd @ Bd)])
         Xs.append(f.game(f.profiled(C)))
         ys.append(f.game(f.profiled(f.y[:, None])).ravel())
@@ -534,8 +551,12 @@ def mapped_ratings(rat: Ratings, theta, map_o: SideMap, map_d: SideMap, scale_o:
         ex["age"] = ex.age.fillna(float(extra.age.median()))
         if "moved" in ex.columns:
             ex["moved"] = ex.moved.fillna(0.0)
-    d["o"] = map_o.apply(d.o.to_numpy(), poss, theta[:p], scale_o, ex)
-    d["d"] = map_d.apply(d.d.to_numpy(), poss, theta[p:], scale_d, ex)
+    ex_o = ex_d = ex
+    if ex is not None and "prior_o" in d.columns:
+        ex_o = ex.assign(prior=d.prior_o.to_numpy(dtype=float) / scale_o)
+        ex_d = ex.assign(prior=d.prior_d.to_numpy(dtype=float) / scale_d)
+    d["o"] = map_o.apply(d.o.to_numpy(), poss, theta[:p], scale_o, ex_o)
+    d["d"] = map_d.apply(d.d.to_numpy(), poss, theta[p:], scale_d, ex_d)
     zero = np.zeros(1)
     fo = float(map_o.apply(np.array([rat.fill_o]), zero, theta[:p], scale_o)[0])
     fd = float(map_d.apply(np.array([rat.fill_d]), zero, theta[p:], scale_d)[0])

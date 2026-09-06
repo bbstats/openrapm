@@ -216,18 +216,24 @@ def build_window_cached(seasons, cfg, phases=("RS",), gt_weight=None, target="pt
                       season_of_psx=season_of_psx, ps_of_psx=ps_of_psx, player_unit=player_unit)
     game_half = np.empty(len(games), dtype=object)
     game_half[games["game_idx"].to_numpy()] = games["half"].to_numpy()
-    rows = pd.DataFrame({"game_idx": r_game, "season": np.asarray(ssn)[r_season], "phase": np.where(r_po > 0, "PO", "RS"),
+    rows = pd.DataFrame({"game_idx": r_game, "season": np.asarray(ssn)[r_season],
+                         "phase": pd.Series(np.where(r_po > 0, "PO", "RS").astype(object), dtype=object),
                          "poss": poss, "den": den, "is_home_off": is_home_off, "is_gt": r_gt > 0,
-                         "stint": stint_i, "half": game_half[r_game]})
+                         "stint": stint_i, "half": pd.Series(game_half[r_game], dtype=object)})
     counters = None
     if pieces[0]["have"]:
         ccols = pieces[0]["ccols"]
-        M = np.vstack([np.vstack([p["counters"][side] for p in pieces])[s["stint"]] for s, side in zip(sides, ("h", "a"))])
-        counters = pd.DataFrame(M, columns=ccols)
+        n_off = np.cumsum([0] + [p["n_st"] for p in pieces])
+        blocks = []
+        for s, side in zip(sides, ("h", "a")):
+            keep = np.zeros(n_off[-1], dtype=bool)
+            keep[s["stint"]] = True
+            blocks.extend(p["counters"][side][keep[a:b]] for p, a, b in zip(pieces, n_off[:-1], n_off[1:]))
+        counters = pd.DataFrame(np.vstack(blocks), columns=ccols)
         P = np.vstack([np.vstack([p["pids"][side] for p in pieces])[s["stint"]] for s, side in zip(sides, ("h", "a"))])
         for k in range(5):
             counters[f"pid_s{k + 1}"] = P[:, k]
-        counters["half"] = rows["half"].to_numpy()
+        counters["half"] = pd.Series(rows["half"].to_numpy(), dtype=object)
     parts = dict(Z=Z, F=Fd, lineup_o=lo, lineup_d=ld, game_idx=r_game.astype(np.int64))
     return WindowData(X=X, y=y, w=w, groups=groups, spec=spec, game_box=game_box, game_poss=game_poss, rows=rows,
                       games=games, counters=counters, parts=parts)

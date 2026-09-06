@@ -1840,3 +1840,16 @@ Fourth pass: the box tables read once per (season, phase) (`boxtable.season_box`
 columns computed once for the means and reused by the layout, the counters frame built from one matrix:
 41.4 s, ratings unchanged (true loss 0.31).  The defensive target with the season before the block in the
 shooters' 3P% (`x3def_p1`) scores the same to 3 decimals and costs 6% more time: not taken.
+
+### 11. The map re-weights the prior against the residual: -0.11 per 100
+
+The dump carries each rating's prior part (`prior_o`, `prior_d`, the GBDT offset).  `calmap.Prior` adds it as
+its own column, standardised by the side's scale, so the map fits f = a x + c prior = a resid + (a + c) prior:
+the ridge's prior-versus-data blend, re-chosen leave-one-season-out on the criterion.  On the decayed dump,
+against `linear+log2&age2&xlog`: with the prior term -0.115 (z -2.3, 19 of 28); on `linear+sat&age2` it is
+0.00 and on `linear+log2&age2` -0.07, so it needs the exposure-dependent slope beside it.  The all-seasons
+coefficients say offense wants LESS prior than the ridge gave it (c = -0.23 against a = 0.31) and defense
+MORE (+0.77 against 0.90).  The score map from here: `linear+log2&age2&xlog&prior` (7 parameters per side).
+
+The assembly with its string columns kept as object arrays (pandas was converting 60k-row "phase" and "half"
+columns to arrow strings twice) and the counters copied once: 0.21 s from 0.26.
