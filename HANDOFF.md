@@ -1,210 +1,173 @@
-# Handoff: the prior is the work
+# Handoff: the prior pass is done, and it says the box score is nearly spent
 
-Written 2026-09-06 (end of the second day of iterate-and-improve mode).  `FINDINGS.md` section 21 (items 1-26)
-is the record; `docs/progress.png` / `docs/progress.csv` the chart and its log; `PIPELINE.md` draws how the
+Written 2026-09-06 (end of the third day of iterate-and-improve mode).  `FINDINGS.md` sections 21 and **22**
+are the record; `docs/progress.png` / `docs/progress.csv` the chart and its log; `PIPELINE.md` draws how the
 shipped model works, stage by stage.
 
-**Tree state: clean, committed and pushed on `hybrid-and-xpts` at `d9d99b7`.**  Nothing uncommitted but
-`outputs/*.parquet` scratch dumps.  Tests: 82 passed, 1 xfailed.
+**Tree state: clean and committed on `hybrid-and-xpts`.**  Nothing uncommitted but `outputs/*.parquet` scratch
+dumps.  Tests: 82 passed, 1 xfailed; the shipped board rebuilds and passes 10 of 10 consensus floors.
+
+**Nothing that ships changed this pass.**  `config.yaml` is byte-identical to `d0372eb`'s and `ship_side6` is
+still the board.  Two candidates that beat it are on the table and are section 22.4's; **they are the owner's
+call, not a default**, because both are a wash on the criterion.
 
 ---
 
 ## Part 0: the owner's standing rulings (read before choosing anything)
 
-1. **Accuracy beats the clock.**  True loss = (error / 111.2955) x (28-fit seconds / 134) has a hole in it:
-   dropping short stints improves it monotonically down to a board worse than the one previously shipped
-   (21.22).  The owner: *"not an apples to apples comparison anyway... a universal solution is preferred which
-   requires testing on every game that we can"*, and *"best one looks fine speed wise, we don't need to be too
-   brittle"*.  **Choose the line on the criterion alone.  Fit every row.  Score every game.**  The fit time is
-   a number the chart still carries, not a term to optimise.  Do not trade accuracy for time again.
+1. **Accuracy beats the clock.**  Fit every row, score every game.  The fit time is a number the chart
+   carries, not a term to optimise.  Do not trade accuracy for time again.
 2. **The 3-season window is on the way out.**  *"Nobody really looks at chunks, we will ultimately move away
-   from this mode."*  So: do not spend effort tuning K or the window length (a K sweep was proposed and
-   declined for this reason), and prefer work that survives the move to a continuous or per-season rating.
+   from this mode."*  Do not tune K or the window length; prefer work that survives the move to a continuous
+   or per-season rating.
 3. **Schedule context is not worth it** (*"evens out really well"*) -- rest days and back-to-backs, declined.
-4. **The four-factor defensive fit is right but too big for v1** -- keep it on the shelf, not in the next pass.
-5. **The prior is the work.**  That is the owner's call for what comes next, and Part 3 is the list.
+4. **The four-factor defensive fit is right but was too big for v1.**  It is now the most promising thing left
+   (Part 3).
+5. **The prior was the work, and the prior is now mostly spent.**  Part 3 says what replaced it.
 
 ## Part 1: where it stands
 
 | | criterion (K = 3, mapped) | 28 fits |
 |---|---|---|
-| the board this phase started from (`mspi_linear+sat`) | 111.30 | 134 s |
-| **the criterion's line** (`best_ratio_full`, map `linear+log2&age2&xlog&prior&tshare\|rowcubic`) | **109.85** | 59 s |
-| **what ships** (`ship_side6`, no held-out season, ten of ten consensus floors) | **110.71** | 43 s |
+| **the criterion's line** (`best_ratio_full`) | **109.845** | 59 s |
+| the same with shot quality (`best_shot`) | 109.801 (z -1.13) | 70 s |
+| **what ships** (`ship_side6`, ten of ten floors) | **110.710** | 43 s |
+| `ship_shot7` -- blend 0.7 unlocked by shot quality, 10 of 10 | 110.694 (z -0.88) | 47 s |
+| `ship_shot7d` -- the same with shot quality on defense, 10 of 10 | 110.707 (z -0.09) | 50 s |
 | no ratings at all | 125.6 | |
 
-The line carries three things that **cannot ship**: the player's age at H (a window has no single "age at H"),
-and the two bends (a rating carries no team).  The shipped board is the same prior in shipping shape.
+### The decision waiting for the owner (FINDINGS 22.4)
 
-### What ships, exactly (`config.yaml`)
+21.26 shipped `blend0.6` on offense **only because `blend0.7` failed the bigness floor** at -0.303 against
+0.30.  The shot-quality features move that gap to -0.270, so blend 0.7 is now shippable, and there are two
+versions of it:
 
-| | offense | defense |
+* **`ship_shot7`** -- shot quality on offense.  **110.694 (-0.016)**, ten of ten, but the defensive agreement
+  falls to 0.762 against its 0.76 floor: almost no headroom left.
+* **`ship_shot7d`** -- shot quality on both sides.  **110.707 (flat)**, ten of ten, defensive agreement UP to
+  0.768 and the defensive spread down to **1.30 -- the narrowest any shipping candidate has measured**, against
+  the 1.33 that owns the only permanently-failing test and blocked three candidates in 21.26.
+
+Both are z under 1 on the criterion, against a project bar that has been z -3 for every kept item, which is why
+neither was shipped unilaterally.  **`ship_shot7d` is the recommendation** if Part 3's defensive work is coming,
+because it is the first thing ever found that narrows the defensive spread at no cost.  To ship either:
+`scratch/ship_try2.py SHOT7D blend0.7 rapm1 ship_shot7d --od --dshot` shows the run; making it permanent means
+writing `gbdt_target: blend0.7`, the six `SHOTQ` names into `features_full_O` (and `features_full_D` for the
+`d` variant), and `cal_map -> ship_shot7d_linear+log2&xlog&prior&tshare_linear+log2&xlog` into `config.yaml`.
+
+### What this pass measured (all on the criterion, all in FINDINGS 22)
+
+| | criterion | verdict |
 |---|---|---|
-| GBDT features | the 37-name list (13 rates + season + role + 10 linear aggregations + 10 efficiency ratios) | the 15-name list |
-| booster | `quality: 4` (5 bagged members, audition fits, cross features) | `params_def`: no auditions |
-| target | 0.6 APM + 0.4 RAPM_1 over his OTHER windows, 0.3 discount per window of distance | RAPM_1, every window alike |
-| map | `linear+log2&xlog&prior&tshare` | `linear+log2&xlog` |
-
-Consensus 0.792 / 0.792 / 0.766 (floors 0.75 / 0.75 / 0.76), defensive spread 1.33 (floor 1.4), offensive
-bigness gap -0.283 (floor 0.30).
-
-### What moved the score this phase
-
-1. The age term in the map (age at H, quadratic): -0.15.  Prediction-time only.
-2. H-2 at half weight in the ridge rows and behind the padded rates: -0.10 and -0.04.
-3. The map's terms (log-exposure level, rating-by-log-exposure slope, the prior part as its own column): -0.22.
-4. The GBDT prior trained on unshrunk APM instead of RAPM_1: **-0.29, z -3.1**, the largest single gain.
-5. A cubic in the team-game total after the map: -0.07 to -0.08 on every board tried (21.20).
-6. The same cubic at STINT level beside it: **-0.205, z -4.8** (21.22).  The pair separates "this team-game's
-   total is extreme" from "the lineups inside it were extreme"; the coefficients have opposite signs.
-7. The training block's role in the map (`tshare`): -0.058.  **Offense only** -- on defense it takes the
-   consensus agreement 0.766 -> 0.754.
-8. The prior's features and the booster's budget TOGETHER: -0.135 at z -3.3 (21.25).  Each part alone is under
-   0.07 and none is significant; they interact.
-
-### The leak control -- reuse this pattern
-
-Two candidates measured big and died on it.  A map term in the player's minutes AT H is worth -0.19 (z -3.7);
-the same share measured from HALF of H's games is worth -0.006, so the whole of it was within-season feedback.
-`u x the game's mean stint length` is worth -0.15 and dies the same way against the team's other games
-(substitutions follow the score).  **Any covariate measured on the held-out season gets a control that measures
-the same thing from data the outcome could not have touched** -- the other half of the season, the team's other
-games, the training block.  21.21 and 21.23.
-
-### Flat or negative -- do not re-run
-
-lam_ratio, lam_buckets by exposure, GBDT shape at the plain feature set, playoff rows, one target for both
-sides, x3def_p1, mover / rookie-age / age-by-exposure / rating-by-age / rating-by-exposure / prior-by-exposure /
-prior^2 map terms, season weights beyond the decay, padding scale and target, panel APM at penalty 30 and 300,
-the training-block team's mean rating, role growth, the lineup spread and the best/worst man on the floor, the
-two sides of the bend apart, the multiplicative offense-defense term, 8 bagged members instead of 5, re-pricing
-the prior, the recursion, scaling the offset.
+| shot quality -- where his attempts came from (`gbdt_prior.SHOTQ`) | **-0.045** on the line, flat in shipping shape | **kept**; it is what unlocks blend 0.7 |
+| experience -- seasons, career possessions, entry age (`roles.career_inputs`) | **+0.054** | rejected, and read 22.2 before trying anything like it |
+| Huber loss instead of RMSE | -0.039 at the cheap booster, **+0.061 at `quality=4`** | rejected |
+| inverse-variance target weights (`training_rows(sat_poss=)`) | -0.003 at best | wired and off |
+| asymmetric window pooling (`training_rows(win_past=)`) | +0.025 to +0.075, both directions | wired and off |
 
 ## Part 2: machinery
 
 | file | what |
 |---|---|
 | `scripts/54_track.py` | the tracker: dump a system at K = 3 (timed), fit the map leave-one-season-out, score, log a row, redraw the chart.  `--systems=a,b "--maps=..." --label=...`; one dump per system |
-| `scratch/maps.py` | **the loop for map work**: score maps on an EXISTING dump, ~2 s each, no refit.  Use this before ever re-running the tracker |
-| `src/eracoef/fastfit.py` | `MspiFast`: every knob (`lam`, `lam_ratio`, `gbdt_params`, `gbdt_params_d`, `gbdt_features`, `target`, `target_d`, `win_decay`, `win_decay_d`, `panel`, `decay`, `decay_exposure`, `season_weights`, `pad_scale`, `pad_target`, `phases`, `lam_buckets`, `counter_columns`, `min_den`); `FASTFIT_TIMER=1` for the section clock |
-| `src/eracoef/gbdt_prior.py` | the prior: `DERIVED` (linear aggregations), `RATIOS` (efficiency, from the panel's `raw_*` columns), `add_derived`, `training_rows(win_decay=)`, `GBDTPrior` |
-| `src/eracoef/calmap.py` | families x exposure terms (`&`-combinable: `sat`, `log2`, `age2`, `xlog`, `prior`, `tshare`, `hshare`, ...) x a bend after the map (`\|cubic`, `\|rowcubic`), `parse_maps`, `row_columns`, `bent_prediction` |
-| `src/eracoef/designcache.py` | per-season pieces (disk + LRU), `build_window_cached(counter_cols=, min_den=)` |
-| `scratch/` (untracked) | `prior_ceiling.py`, `timing_run.py`, `loss_vs_true.py`, the `cmp_*.py` identical-numbers checks, `teamnl2.py` / `rowbend2.py` / `spread.py` second-stage prototypes, `add_raw_rates.py`, `tabfm_try.py` |
+| `scratch/prior_bench.py` | **the 20-second pre-filter**: the prior's own leave-window-out fit per feature set, with the low-exposure stratum beside the pooled number.  `--q4 --loss= --delta= --sat= --past= --kmul=`.  **Read 22.2 first: it is necessary, not sufficient, and it has been wrong by 0.13** |
+| `scratch/pairsys.py` | the paired test between two TRACKED systems: pooled difference, z over the 28 seasons, wins |
+| `scratch/maps.py` | map work on an EXISTING dump, ~2 s each, no refit |
+| `scratch/ship_try2.py` | a candidate through the REAL shipping path: config (targets, map, **and the prior's feature lists**), `08_ratings.py`, `22_vs_consensus.py`, the floor tests.  Restores `config.yaml` in a `finally` |
+| `scratch/consensus_read.py` | the cheap screening read of mapped candidates off the tracker's own parameter tables (no refits) |
+| `src/eracoef/fastfit.py` | `MspiFast`: every knob (`lam`, `gbdt_params`/`_d`, `gbdt_features`, `target`/`_d`, `win_decay`/`_d`, `decay`, `season_weights`, `pad_scale`, `phases`, `lam_buckets`, `min_den`); `FASTFIT_TIMER=1` for the section clock |
+| `src/eracoef/gbdt_prior.py` | `DERIVED`, `RATIOS`, **`SHOTQ`** (+ `add_shotq`), **`CAREER`**, the feature lists `FULL_/DERIVED_/RATIO_/SHOT_/PRIOR_FEATURES`, `training_rows(win_decay=, win_past=, sat_poss=)`, `GBDTPrior` |
+| `src/eracoef/xshoot.py` | **`player_shot_frame(seasons, cfg, ids)`**: the block's per-shooter shot totals and its own league levels -- the shot-quality features' single source, used by the panel build and by prediction alike |
+| `src/eracoef/roles.py` | **`career_inputs(inputs, before_season, ids, age=)`** (rejected block, kept for the record) |
+| `src/eracoef/calmap.py` | families x exposure terms x a bend; `parse_maps` takes `mapO:mapD` and `\|cubic` / `\|rowcubic` |
+| `scratch/` (untracked) | `cmp_shotq.py` / `cmp_career.py` (the identical-numbers checks: both paths agree to 0.00e+00 on all ten windows), `add_shot_cols.py` / `add_career_cols.py` (the in-place panel patches, backups at `.bak2` / `.bak3`), `prior_ceiling.py`, `smoke_shot.py`, `tabfm_try.py` |
 
 ### Verification
 
 ```
 .venv/Scripts/python -m pytest tests -q                                        # 82 passed, 1 xfailed
-.venv/Scripts/python scratch/maps.py best_ratio_full "<map>" "<map>"           # map work, ~2 s each
-.venv/Scripts/python scripts/54_track.py --systems=X "--maps=linear+log2&age2&xlog&prior&tshare|rowcubic" --label=...
+.venv/Scripts/python scratch/prior_bench.py O ratio,shot --q4                  # a feature set, ~30 s
+.venv/Scripts/python scripts/54_track.py --systems=X "--maps=..." --label=...  # the criterion, ~10 min
+.venv/Scripts/python scratch/pairsys.py <base> <cand>                          # is it real?
+.venv/Scripts/python scratch/ship_try2.py TAG blend0.7 rapm1 <system> [--od --dshot]
 .venv/Scripts/python scripts/08_ratings.py && .venv/Scripts/python -m pytest tests/test_vs_consensus.py -q
-.venv/Scripts/python scripts/52_site.py && .venv/Scripts/python scripts/22_vs_consensus.py
 ```
 
 ### Traps
 
+- **The prior's own fit can be wrong by more than any feature is worth.**  Its target is the player's APM
+  pooled over his OTHER windows, so a player with more windows has a quieter target and is easier to predict.
+  Any feature that names those players (experience did) buys held-out MSE without buying knowledge, and the
+  criterion gets none of it back.  Splitting by exposure does NOT catch it.  FINDINGS 22.2.
+- **A knob measured at the cheap booster does not transfer to `quality=4`.**  Huber was -0.039 at one and
+  +0.061 at the other; 21.25 said the same about bagging and the search.  Measure at the operating point.
+- **`scripts/49_role_panel.py` used to drop the `raw_*` columns it had just built** -- they were only in the
+  panel because `scratch/add_raw_rates.py` put them back by hand.  Fixed; the write-out now lists `raw_*` and
+  the nine `shot_*` columns explicitly.  A rebuild of the panel is no longer destructive.
 - **One system per dump for timing**: the GBDT cache per process flatters a later system in the same run.
-- **The tracker's `seconds` varies +/-6% with machine load.**  Differences smaller than that are not real.
-- **A map term with no covariate column applies as ZERO, silently.**  `apply_params` needs `prior_o=`/`prior_d=`
-  for a `prior` term and `extra=` for `tshare`; `08_ratings.py` builds the `tshare` column per window.
-- **The `tshare` and `prior` map terms belong on OFFENSE only** -- either one on defense breaks the 0.76
-  consensus floor.
-- **The consensus floors are not the criterion.**  Anything that widens or sharpens the DEFENSIVE prior trips
-  them; that is why the two sides now take separate priors.  Read the consensus before shipping, every time.
-- **Adding a `chimeraboost` fit inside the holdout's workers**: pass `ensemble_n_jobs: 1` or the bag forks
-  inside each worker and the wall time explodes (323 s once).
-- **The first chimeraboost fit in a process pays a JIT cost** (0.49 s against 0.14 s warm).  Warm it before
-  timing anything.
+- **The tracker's `seconds` varies +/-6% with machine load.**
+- **A map term with no covariate column applies as ZERO, silently.**
+- **The `tshare` and `prior` map terms belong on OFFENSE only.**
+- **The consensus floors are not the criterion.**  Read them before shipping, every time; the screening read
+  (`consensus_read.py`, 2024-2026, 475 players) is NOT the same object as the floors in
+  `tests/test_vs_consensus.py`, which score the board `08_ratings.py` builds.  Screen with the first, decide
+  with the second.
+- **`ensemble_n_jobs: 1`** on any `chimeraboost` fit inside the holdout's workers, or the bag forks and the
+  wall time explodes.
 - Long bash heredocs still fail in this shell; write patch scripts with the Write tool.
 
-## Part 3: the next pass -- the prior
+## Part 3: the next pass
 
-The owner's call: *"improving priors is the real most important key."*  The through-line from 21.24/21.25 is
-that **capacity is not the constraint, information is** -- bagging and the model-selection search moved nothing
-at the plain feature set and only started paying once the features got richer.  So lead with information.
+The prior pass is Part 1's table and FINDINGS 22.5's conclusion: **capacity did not move it (21.24),
+re-expression was worth 0.05 (21.25), and the two richest new sources on the shelf are worth 0.045 and less
+than nothing.**  Against 3.5's ceiling -- the prior's target has a split-half reliability of 0.808 on offense
+so nothing can correlate past 0.899, and the shipped booster reaches 0.590 -- the missing third is not sitting
+in the box score waiting for a better column.  So the next pass should leave the panel alone.
 
-### 3.1 The prior has never seen shot quality (do this first)
+### 3.1 The defensive four-factor fit (do this first)
 
-The 13 rates know how many shots a player made and nothing about where from.
-`data/stints/{season}_RS_shots.parquet` already carries, **per player per game**:
+Fit opponent eFG allowed, turnovers forced, offensive rebounds allowed and free-throw rate allowed separately,
+each with its own ridge ratio -- the asymmetry came out ESTIMATED, not imposed (forcing turnovers is a real
+defensive skill at ratio 0.75; preventing offensive rebounds barely is, at 3.00) -- then recombine into
+expected points allowed.  It was 0.4's "right but too big for v1" and it is now the best thing on the list:
 
-```
-fg2a, fg2m, xl2, fg3a, fg3m, xl3        # xl2 / xl3 = the league's expected makes from HIS locations
-```
+* defense is the binding constraint on everything.  It is 1.33x too wide against the consensus, it owns the
+  only permanently-failing test in the suite, and its 0.76 agreement floor blocked three candidates in 21.26
+  and is what separates this pass's two shipping candidates.
+* it is the only remaining item that changes the ESTIMATOR rather than the prior's inputs, and the estimator
+  is where FINDINGS 22.5 says the signal must be.
+* `ship_shot7d` already narrows the spread to 1.30 for free, which is the direction this work goes further in.
 
-It is built, cached, and already read on every fit (`xshoot.season_totals`).  Two features fall straight out:
+A day's work; the principled version of what `x3def` did by hand.
 
-* **shot difficulty**: `xl2/fg2a`, `xl3/fg3a` -- the league make probability of his average attempt.  Separates
-  a rim-runner from a mid-range shooter at identical FG%.
-* **shot-making over location**: `(fg2m - xl2)/fg2a` -- how much he beats a league shooter from his own spots.
-  The padded version already exists as `ShooterRates.ratio2` / `ratio3`.
+### 3.2 Per-player shrinkage from the prior's own confidence
 
-Route: add the per-player season totals to the panel the way `scratch/add_raw_rates.py` added the uncentred
-rates (it patches `outputs/role_panel.parquet` in place and checks every existing column identical, backup at
-`.parquet.bak`), then fold the same into `scripts/49_role_panel.py`, then extend `gbdt_prior.RATIOS`.  At
-prediction time the numbers must come from the same place -- see the `raw=` argument `chain_offset` already
-threads through to `gbdt_offset`.
+Every player is pulled toward his prior by the same lambda, but the prior is far more predictive for some than
+others.  `quality=4` already fits 5 bagged members, so the disagreement across members is a per-player
+predictive spread, free.  Feed it into a per-player penalty (`lam_buckets` is the machinery, currently keyed on
+exposure groups).  This is the mechanism that would let the prior carry the bench hard without overriding
+stars -- the failure mode the criterion has complained about since FINDINGS 19.
 
-**This is the only item on the list that adds information rather than re-expressing what is there**, which is
-why it leads.  Everything measured on 2026-09-06 was re-expression, and re-expression was worth 0.05.
+### 3.3 Single-season targets, and getting off chunks
 
-### 3.2 Two nearly-free corrections
+Train the prior on single-season APM instead of three-season: more rows, noisier each, and a step toward the
+continuous rating the product is going to (0.2).  It is also the only change that would break the pooled-target
+mechanism of 22.2, which is worth knowing independently.
 
-* **Out-of-fold affine recalibration of the prior.**  Measured: its slope against held-out truth is **1.10**
-  (`scratch/tabfm_try.py` prints it), so it is ~10% over-dispersed, and the ridge treats the offset as truth.
-* **Huber loss instead of RMSE.**  The target is APM; the tails are heavy.
+### 3.4 Still open, not scheduled
 
-### 3.3 Then, in rough order
-
-* Era-standardise the rates (z within season).  They are centred on the league mean but not scaled, and the sd
-  of three-point volume across 28 seasons is enormous.  The tree gets `season`, but not the scale.
-* Experience: career possessions to date, seasons in the league.  Distinct from age -- a 25-year-old rookie and
-  a 25-year-old in year seven are different players.  `role_inputs` has what is needed.
-* Trajectory: the previous window's rates and the delta (+0.008 for the *linear* prior years ago; never tried
-  on the tree, where an interaction with age is available).
-* Minutes per game and games played (durability); the playoff box line as its own feature block.
-* Inverse-variance weights on the target rows instead of possessions.
-* Asymmetric pooling: past windows weighted differently from future ones.  Aging is directional and the 0.3
-  distance discount is symmetric.
-* **Single-season APM targets instead of three-season** -- more rows, noisier each, and it is a step toward
-  getting off chunks, which is where the product is going (Part 0.2).
-* One model predicting both sides and sharing structure, instead of two.
-* Monotone constraints on the obvious features; a role interaction or per-exposure-band models.
-* Blend the tree with the old linear prior (FINDINGS 19's open item: "the GBDT's middle with the linear top").
-* Free-throw trips and and-1s per player -- needs the slot counters summed in the panel build, a step more work
-  than the rest.
-
-### 3.4 The structural item, for after v1
-
-**Per-player shrinkage from the prior's own confidence.**  Every player is pulled toward his prior by the same
-lambda, but the prior is far more predictive for some than others.  `quality=4` already fits 5 bagged members,
-so the disagreement across members is a per-player predictive spread, free.  Feed it into a per-player penalty
-(`lam_buckets` is the existing machinery, currently keyed on exposure groups).  This is the mechanism that
-would let the prior carry the bench hard without overriding stars -- the failure mode the criterion has
-complained about since FINDINGS 19 ("too timid for starters, half-spread for deep bench").
-
-### 3.5 The ceiling, so nobody chases the last third
-
-`scratch/prior_ceiling.py`: the prior's target (a player's APM pooled over his other windows) has a split-half
-reliability of 0.808 on offense and 0.889 on defense, so **no predictor can correlate with it beyond 0.899 /
-0.943**.  The shipped booster reaches 0.590 / 0.629 -- two thirds of the ceiling.  The missing third is not
-all reachable from a box line; some of it is only in the play-by-play, which is what the ridge is for.
-
-### 3.6 Still open, not scheduled
-
-* **The defensive four-factor fit** (Part 0.4).  Fit opponent eFG allowed, turnovers forced, offensive rebounds
-  allowed and free-throw rate allowed separately, each with its own ridge ratio -- the asymmetry came out
-  estimated, not imposed (forcing turnovers is a real defensive skill at ratio 0.75; preventing offensive
-  rebounds barely is at 3.00) -- then recombine into expected points allowed.  Defence is 1.33x too wide
-  against the consensus, owns the only permanently-failing test in the suite, and is the floor that blocked
-  three shipping candidates today.  A day's work; the principled version of what `x3def` did by hand.
-* **TabFM** (`google/tabfm-1.0.0-jax`): installs and downloads (5.7 GB; point `HF_HOME` at `A:`), but the orbax
-  restore dies in tensorstore on a 1.5 GB region -- 38.5 GB of the box's 48 GB commit limit was already taken.
-  Retry on a quiet machine.  `scratch/tabfm_try.py` prints the booster's baseline on the same task for it to
-  beat (weighted MSE 2.69 against 5.88 for the training mean).  It has to beat 0.14 s per leave-window-out pair.
+* **TabFM** (`google/tabfm-1.0.0-jax`): installs and downloads (5.7 GB; point `HF_HOME` at `A:`), but the
+  orbax restore dies in tensorstore on a 1.5 GB region -- 38.5 GB of the box's 48 GB commit limit was taken.
+  Retry on a quiet machine.  `scratch/tabfm_try.py` prints the booster's baseline for it to beat.
 * **Fast-forward `main`** (`bbstats/openrapm`) to `hybrid-and-xpts` so the site picks up the new board.
 * **DNS for openrapm.com**: four GitHub `A` records + `www` CNAME at Porkbun, wait for the cert, then
   `gh api -X PUT repos/bbstats/openrapm/pages -F https_enforced=true`.
+* Never re-run, from 21 and 22: lam_ratio, lam_buckets by exposure, playoff rows, one target for both sides,
+  x3def_p1, the mover / rookie-age / age-by-exposure / rating-by-age / rating-by-exposure / prior-by-exposure /
+  prior^2 map terms, season weights beyond the decay, padding scale and target, panel APM at penalty 30 and
+  300, the training-block team's mean rating, role growth, the lineup spread, the two sides of the bend apart,
+  the multiplicative offense-defense term, 8 bagged members, re-pricing the prior, the recursion, scaling the
+  offset, Huber, inverse-variance target weights, asymmetric pooling, experience.
 
-(Earlier handoffs: `HANDOFF_rankmap_archive.md`; the calibration-map handoff is in git history at `d1bc3cc`.)
+(Earlier handoffs: `HANDOFF_rankmap_archive.md`; the calibration-map handoff is in git history at `d1bc3cc`;
+the prior-pass handoff this one replaces is at `a392f6c`.)

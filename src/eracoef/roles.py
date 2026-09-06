@@ -183,6 +183,45 @@ def player_season_inputs(roles: pd.DataFrame, cap: float = 0.9) -> pd.DataFrame:
     return g[["player_id", "season", "games", "starts", "minutes", "poss_on", "team_poss", "share", "gs_pct", "age", "age_imputed"]]
 
 
+CAREER_INPUTS = ["exp_yrs", "exp_poss", "entry_age"]
+
+
+def career_inputs(inputs: pd.DataFrame, before_season: int, player_ids=None, age=None) -> pd.DataFrame:
+    """Per player, what he had behind him BEFORE `before_season`: seasons played, possessions (thousands) and
+    the age he entered at.
+
+    `before_season` is the BLOCK's first season, not the row's, so the quantity is a property of the training
+    block alone -- for a held-out season H at K = 3 the block is (H-2, H-1, H+1) and this counts only seasons
+    up to H-3, which no covariate measured on H can reach.  A season with no games played does not count.
+
+    The roles table starts in 1997, so everyone in the first window is left-censored to zero years: `entry_age`
+    (the age in his first season SEEN, which for a censored veteran is his 1997 age, not 19) is what lets the
+    tree tell a real rookie from a censored one, and `season` is a feature beside it.
+
+    `player_ids` returns one row per id in that order; a player the past never saw has zero years, zero
+    possessions and `entry_age` = his age now (`age`, aligned to the same ids), because he is entering now.
+    """
+    d = inputs[(inputs.season < int(before_season)) & (inputs.games > 0)]
+    if len(d):
+        g = d.groupby("player_id").agg(exp_yrs=("season", "nunique"), exp_poss=("poss_on", "sum"),
+                                       first=("season", "min"))
+        entry = d.sort_values("season").groupby("player_id")["age"].first()
+        g["entry_age"] = entry
+        g["exp_poss"] = g.exp_poss / 1000.0
+        g = g[CAREER_INPUTS]
+    else:
+        g = pd.DataFrame(columns=CAREER_INPUTS, dtype=float)
+    if player_ids is None:
+        return g.rename_axis("player_id").reset_index()
+    out = g.reindex(np.asarray(player_ids)).reset_index(drop=True)
+    out["exp_yrs"] = out.exp_yrs.fillna(0.0).astype(float)
+    out["exp_poss"] = out.exp_poss.fillna(0.0).astype(float)
+    fill = (float(inputs.age.median()) if age is None else
+            pd.Series(np.asarray(age, dtype=float), index=out.index))
+    out["entry_age"] = out.entry_age.fillna(fill).astype(float)
+    return out
+
+
 def design7(share, gs_pct, age) -> np.ndarray:
     """The Simple SPM design: share, share^2, gs_pct, gs_pct^2, age, age^2, age^3 (no intercept)."""
     s, g, a = (np.asarray(v, dtype=float) for v in (share, gs_pct, age))

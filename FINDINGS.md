@@ -2279,3 +2279,131 @@ this morning, and the defensive agreement comes back to 0.766 against the floor'
 bigness gap -0.283, ten of ten floors, 82 passed and 1 xfailed.  08_ratings now builds the `tshare` covariate
 per window (a map term with no column would apply as zero, silently) and reads the per-side prior knobs.
 
+## 22. The prior pass: two blocks of new information, and the two ways a feature can look better than it is
+
+The owner's call after 21.26 was *"improving priors is the real most important key"*, and HANDOFF Part 3
+ordered the work by how much NEW information each item adds rather than how much it re-expresses what the 13
+rates already say.  Two blocks of new information were built and measured and three cheap corrections were
+tried.  One block is worth shipping; the other is worth **+0.054** despite being the largest gain the prior's
+own out-of-sample fit has ever shown, and why is the part of this section worth keeping.
+
+Everything is at K = 3.  The accuracy line is `best_ratio_full` (109.845) on the map
+`linear+log2&age2&xlog&prior&tshare|rowcubic`; the shipping shape is `ship_side6` (110.710) on
+`linear+log2&xlog&prior&tshare : linear+log2&xlog`.
+
+### 1. Shot quality: the prior finally learns where the shots came from
+
+`data/stints/{season}_RS_shots.parquet` has carried, per shooter per game, `fg2a fg2m xl2 fg3a fg3m xl3` since
+the xpts work of section 18 -- `xl2` and `xl3` being the league's expected makes from HIS locations, and
+calibrated per season (`sum(xl2) == sum(fg2m)` to four figures in all 30).  It is built, cached and read on
+every fit, and the prior had never seen it.  Summed over a block it splits what `fg2p` gives as one number:
+
+    difficulty    xl / a          the league's make probability on his average attempt
+    shot-making   (m - xl) / a    how far he beats a league shooter FROM HIS OWN SPOTS
+
+Six features (`gbdt_prior.SHOTQ`): that pair on twos and on threes, plus the same pair priced in points across
+both shot types (`xps`, `mpts`), which is where the three-versus-rim trade-off lives.  Each is padded in
+ATTEMPTS toward the BLOCK's own league level (`shot_lg2` / `shot_lg3` / `shot_lgpps`), never a constant -- the
+league make rate on twos runs 0.4648 in 2000-2002 to 0.5468 in 2024-2026, and a fixed target would have
+quietly aged every low-volume player.  The constants are the reliability ones: 50 attempts for difficulty,
+which is nearly a deterministic property of a shot chart, and 250 / 450 for shot-making on twos and threes
+(section 18's numbers).  Over the 3,401 offensive rows with 500+ attempts the block is wide and real:
+difficulty on twos 0.405 to 0.685, shot-making on twos +/- 0.09, expected points per attempt 0.83 to 1.35.
+
+The provenance is the 13 rates' own.  `scripts/49_role_panel.py` stores the window's totals per row;
+`spm.chain_offset` rebuilds them from the TRAINING block with `xshoot.player_shot_frame(train, ...)`, which
+never sees the held-out season -- so 21.21's leak control does not apply.  `scratch/cmp_shotq.py` checks the
+two paths agree to 0.00e+00 on all ten windows.
+
+**On the accuracy line: -0.045 (109.845 -> 109.801), z -1.13, 17 of 28.**  On the prior's own leave-window-out
+fit, -0.044 weighted MSE at the cheap booster and -0.026 at the shipped `quality=4`.  Real in direction and
+not significant -- but item 4 is where it earns its place, and it is not where the criterion pointed.
+
+### 2. Experience: the largest gain ever measured on the prior's own fit, and it costs +0.054
+
+`roles.career_inputs`: seasons played, career possessions in thousands and the age he entered at, all counted
+BEFORE the training block's first season (for a held-out H at K = 3 the block is H-2, H-1, H+1, so the count
+stops at H-3 and cannot reach H).  HANDOFF 3.3's motivation: age is in the prior and experience is not, and a
+25-year-old rookie and a 25-year-old in year seven are different players.
+
+On the prior's own leave-window-out fit it is **-0.077 weighted MSE** against the ratio set, where the entire
+derived-plus-ratio block of 21.24 was -0.119 and shot quality is -0.044; with shot quality beside it, -0.112.
+On the low-exposure rows -- the ones the ridge has least data on, and therefore the ones the prior actually
+decides -- it looks better still at -0.247.
+
+**On the criterion it is +0.054, z +1.65, 11 of 28.**  With shot quality, +0.041.  Rejected; `best_career` and
+`best_both` stay in the registry as the record.
+
+The mechanism, and it will recur: **the prior's target is the player's APM pooled over his OTHER windows, so a
+player with more windows has a target pooled from more data, and a lower-noise target is intrinsically easier
+to predict.**  `exp_yrs` names exactly those players.  The model lowers its held-out MSE by knowing which rows
+have quiet targets, without knowing anything more about what any player is worth, and the criterion -- which
+scores actual points in a held-out season -- gets none of that back.  The possession weight does not undo it:
+the weight is the pooled possession count, which prices the target's noise on average, not row by row.
+
+Generalised, this is a fourth entry for 21.20's list: **any feature that predicts how well-measured a row's
+target is will beat the prior's own fit and lose the criterion.**  Splitting the bench by exposure does not
+catch it -- the low-possession stratum liked experience MORE, not less.  Nothing short of the criterion caught
+it, and nothing short of the criterion will catch the next one.
+
+### 3. Three cheap corrections, all flat: Huber, inverse-variance weights, asymmetric pooling
+
+HANDOFF 3.2 and 3.3, all measured first on `scratch/prior_bench.py` (~20 s each against the tracker's fifteen
+minutes), all rejected before spending a run:
+
+**Huber instead of RMSE** (`loss="Huber"`, `delta` in target units; the target's sd is 2.6).  At the cheap
+booster it is a real gain -- delta 3 is -0.039 weighted MSE, delta 2 is -0.033, and MAE is far worse (+0.197,
+so the tails carry signal).  **At `quality=4`, the booster that ships, it is +0.061.**  The bag and the
+model-selection search already buy what the robust loss was buying: 21.25's "the parts interact", a second
+time, and a reminder that a knob measured at the cheap operating point does not transfer to the shipped one.
+
+**Inverse-variance weights on the target rows** instead of raw pooled possessions -- `n / (1 + n / n0)`, since
+a pooled target's variance is `sigma^2/n + tau^2` and beyond `n0 = sigma^2/tau^2` more possessions buy almost
+no precision.  Swept n0 = 5k / 10k / 20k / 50k: **-0.003 at best**, worse at either end.  The possession
+weight was already close enough.  `training_rows(sat_poss=)` is wired and off.
+
+**Asymmetric pooling**, past windows discounted differently from future ones on top of `win_decay`, since
+aging is directional and the 0.3 distance kernel is not.  Swept 0.5 / 0.7 / 1.4 / 2.0: **every one is worse**
+(+0.025 to +0.075), in both directions.  The symmetric kernel is right.  `training_rows(win_past=)` is wired
+and off.
+
+### 4. Where shot quality actually pays: it unlocks the blend-0.7 offensive target
+
+In shipping shape the criterion says nothing -- `ship_shot7` is +0.002 on `ship_side7` and `ship_shot6` is
++0.007 on `ship_side6`, both z under 0.6.  The floors say something else.  21.26 shipped `blend0.6` on offense
+**only because `blend0.7` failed the bigness floor at -0.303 against 0.30**, at a cost of about 0.02 per 100.
+Shot quality moves that gap to **-0.270**: the features that separate a rim-running big from a jump shooter at
+the same FG% are exactly the ones the offensive board was mis-ranking by size.
+
+Rebuilt through the real shipping path (`scratch/ship_try2.py`, which moves the prior's feature lists as well
+as the targets, then `08_ratings.py` + `22_vs_consensus.py` + the floor tests):
+
+| candidate | criterion | vs shipped | total / off / def | def spread | floors |
+|---|---|---|---|---|---|
+| `ship_side6` (what ships) | 110.710 | | 0.792 / 0.792 / 0.766 | 1.33 | 10 of 10 |
+| `ship_side7` (blend 0.7, no shot quality) | 110.691 | -0.018 | | | **bigness -0.303** |
+| **`ship_shot7`** (blend 0.7, shot quality on offense) | **110.694** | **-0.016 (z -0.88)** | 0.789 / 0.789 / 0.762 | 1.33 | **10 of 10** |
+| **`ship_shot7d`** (the same, shot quality on defense too) | **110.707** | **-0.003 (z -0.09)** | 0.793 / 0.789 / **0.768** | **1.30** | **10 of 10** |
+
+So there are two candidates and they buy different things.  `ship_shot7` is the criterion's: -0.016, all floors
+green, but the defensive agreement falls to 0.762 against its 0.76 floor and there is almost no headroom left.
+`ship_shot7d` is the floors': flat on the criterion, but the defensive agreement goes UP to 0.768 and the
+defensive spread -- the "1.33x too wide" that owns the only permanently-failing test and blocked three
+candidates in 21.26 -- comes down to **1.30, the narrowest any shipping candidate has measured**.
+
+Neither is shipped here.  Both are a wash on the criterion (z -0.88 and -0.09 against a project bar that has
+been z -3 for every kept item), and which one is right depends on whether the next pass wants the score or the
+headroom.  **`ship_shot7d` is the recommendation** if the defensive four-factor work (HANDOFF 3.6) is coming,
+because it is the first thing found that narrows the defensive spread at no cost.
+
+### 5. What the pass says about the prior
+
+Five things were measured on the criterion and four of them are zero or worse.  The one that is not is worth
+-0.045 on the line and nothing in shipping shape, and it is the only item on HANDOFF's list that added
+information rather than re-expressing what was there.  Read against 3.5's ceiling -- the prior's target has a
+split-half reliability of 0.808 on offense, so nothing can correlate with it past 0.899, and the shipped
+booster reaches 0.590 -- **the missing third is not sitting in the box score waiting for a better feature.**
+Capacity did not move it (21.24), re-expression was worth 0.05 (21.25), and the two richest new sources on
+the shelf are worth 0.045 and less than nothing.  The next real gain is more likely in the ridge, in the
+defensive fit, or in getting off three-season chunks than in another column on the panel.
+

@@ -196,6 +196,45 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
             S[n] = MspiFast(n, target=w, target_d="rapm1", gbdt_params=_FULLQ4, win_decay=0.3,
                             gbdt_params_d=dict(FAST), win_decay_d=1.0,
                             gbdt_features={"O": list(_RF), "D": list(_FF)})
+        # SHOT QUALITY (FINDINGS 22.1): the six features built from the shooter's own locations
+        # (gbdt_prior.SHOTQ) on top of the ratio set.  The first thing added to the prior that is new
+        # INFORMATION rather than a re-expression of the 13 rates.
+        from .gbdt_prior import SHOT_FEATURES as _SF, SHOTQ as _SQ
+        _FSQ = [*_FF, *_SQ]                  # the plain list plus shot quality: the defensive candidate
+        S["best_shot"] = MspiFast("best_shot", gbdt_params=_FULLQ4, win_decay=0.3, decay=0.5,
+                                  decay_exposure=True, target="apm",
+                                  gbdt_features={"O": list(_SF), "D": list(_SF)})
+        S["best_shot_o"] = MspiFast("best_shot_o", gbdt_params=_FULLQ4, win_decay=0.3, decay=0.5,
+                                    decay_exposure=True, target="apm",
+                                    gbdt_features={"O": list(_SF), "D": list(_RF)})
+        # the shipping shape: the accuracy-first prior on OFFENSE, the cheap one on DEFENSE, with and
+        # without shot quality on the defensive side (the consensus floors decide that one, not the criterion)
+        for w in ("blend0.7", "blend0.6"):
+            n_ = "ship_shot" + w.replace("blend0.", "")
+            S[n_] = MspiFast(n_, target=w, target_d="rapm1", gbdt_params=_FULLQ4, win_decay=0.3,
+                             gbdt_params_d=dict(FAST), win_decay_d=1.0,
+                             gbdt_features={"O": list(_SF), "D": list(_FF)})
+            S[n_ + "d"] = MspiFast(n_ + "d", target=w, target_d="rapm1", gbdt_params=_FULLQ4, win_decay=0.3,
+                                   gbdt_params_d=dict(FAST), win_decay_d=1.0,
+                                   gbdt_features={"O": list(_SF), "D": list(_FSQ)})
+        # EXPERIENCE (FINDINGS 22.2) on top of shot quality: `best_both` is the two information blocks
+        # together, which is what the prior's own leave-window-out fit likes best
+        from .gbdt_prior import CAREER as _CA, PRIOR_FEATURES as _PF
+        S["best_career"] = MspiFast("best_career", gbdt_params=_FULLQ4, win_decay=0.3, decay=0.5,
+                                    decay_exposure=True, target="apm",
+                                    gbdt_features={"O": [*_RF, *_CA], "D": [*_RF, *_CA]})
+        S["best_both"] = MspiFast("best_both", gbdt_params=_FULLQ4, win_decay=0.3, decay=0.5,
+                                  decay_exposure=True, target="apm",
+                                  gbdt_features={"O": list(_PF), "D": list(_PF)})
+        # the shipping shape of it: the accuracy-first prior on OFFENSE, the cheap one on DEFENSE
+        for w in ("blend0.7", "blend0.6"):
+            n_ = "ship_both" + w.replace("blend0.", "")
+            S[n_] = MspiFast(n_, target=w, target_d="rapm1", gbdt_params=_FULLQ4, win_decay=0.3,
+                             gbdt_params_d=dict(FAST), win_decay_d=1.0,
+                             gbdt_features={"O": list(_PF), "D": list(_FF)})
+            S[n_ + "d"] = MspiFast(n_ + "d", target=w, target_d="rapm1", gbdt_params=_FULLQ4, win_decay=0.3,
+                                   gbdt_params_d=dict(FAST), win_decay_d=1.0,
+                                   gbdt_features={"O": list(_PF), "D": [*_FF, *_SQ, *_CA]})
         # the same without the nearby-window discount (the consensus floors, not the criterion, may want it)
         S["ship_ratio_b07_wd1"] = MspiFast("ship_ratio_b07_wd1", target="blend0.7",
                                            **{**_SK, "win_decay": 1.0})

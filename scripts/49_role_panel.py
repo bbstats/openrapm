@@ -8,7 +8,8 @@ like the board):
   3. RAPM_1     the shipped ridge with prior_offset = Simple SPM; u and the shrinkage a per player
 
 Writes outputs/role_panel.parquet with, per row: window, side, player_id, ps_idx, season (the year
-the player played most in the window), poss, the 13 centred padded rates and the same 13 uncentred (raw_*), share, gs_pct, age, apm,
+the player played most in the window), poss, the 13 centred padded rates, the same 13 uncentred (raw_*), the block shot totals (shot_*),
+share, gs_pct, age, apm,
 spm, u, a, rapm1 (= spm + u).  Raw sign on both sides throughout.  outputs/xrapm_panel.parquet, the
 reference systems' input, is asserted unchanged.
 
@@ -32,8 +33,10 @@ from eracoef.roles import RAW_INPUTS, build_roles, player_season_inputs, window_
 from eracoef.spm import (apm_fit, apm_lambda_check, fit_spm, panel_inputs_report, season_of_units,  # noqa: E402
                          spm_predict)
 from eracoef.windows import build_window, window_label, window_seasons  # noqa: E402
-from eracoef.xshoot import DEFENSE_TARGETS  # noqa: E402
+from eracoef.xshoot import (DEFENSE_TARGETS, SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS,  # noqa: E402
+                            player_shot_frame)
 
+SHOT_COLS_ALL = [*SHOT_TOTAL_COLS, *SHOT_LEAGUE_COLS]
 pd.set_option("display.width", 250, "display.max_columns", 60, "display.precision", 3)
 cfg = load_config()
 OUT = Path(cfg["_root"]) / "outputs"
@@ -70,6 +73,7 @@ for w in window_seasons(cfg):
     wd_o, wd_d = designs(seasons)
     inp = window_inputs(wd_o, inputs, cap=CAP)
     season = season_of_units(wd_o)
+    sf = player_shot_frame(seasons, cfg, wd_o.spec.ps_table["player_id"].to_numpy())
     for side, wd in (("O", wd_o), ("D", wd_d)):
         a = apm_fit(wd, cfg)
         R = a["ro"] if side == "O" else a["rd"]
@@ -84,6 +88,10 @@ for w in window_seasons(cfg):
         d.insert(2, "player_id", wd.spec.ps_table["player_id"].to_numpy())
         d.insert(3, "ps_idx", np.arange(wd.spec.n_ps))
         d.insert(4, "season", season)
+        # where his shots came from: the block's per-shooter totals with the league's expected makes from
+        # his own locations, which gbdt_prior.add_shotq turns into shot difficulty and shot-making
+        for c, col in zip(SHOT_COLS_ALL, sf[SHOT_COLS_ALL].to_numpy(dtype=float).T):
+            d[c] = col
         d["poss"] = a["poss_o"] if side == "O" else a["poss_d"]
         for c in RAW_INPUTS:
             d[c] = inp[c].to_numpy()
@@ -154,7 +162,8 @@ for w in window_seasons(cfg):
     del wd_o, wd_d
 P["rapm1"] = P["spm"] + P["u"]
 
-cols = ["window", "side", "player_id", "ps_idx", "season", "poss", *FEATURES, *RAW_INPUTS, "apm", "spm", "u", "a", "rapm1"]
+cols = ["window", "side", "player_id", "ps_idx", "season", "poss", *FEATURES,
+        *[f"raw_{c}" for c in FEATURES], *SHOT_COLS_ALL, *RAW_INPUTS, "apm", "spm", "u", "a", "rapm1"]
 P[cols].to_parquet(PANEL_PATH, index=False)
 if h_before is not None:
     assert hashlib.sha256(XP.read_bytes()).hexdigest() == h_before, "xrapm_panel.parquet changed; the reference must not move"

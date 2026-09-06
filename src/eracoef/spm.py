@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 
 from .cv import make_exposure, plugin_fit
-from .roles import INPUTS, RAW_INPUTS, design7, window_inputs
+from .roles import CAREER_INPUTS, INPUTS, RAW_INPUTS, career_inputs, design7, window_inputs
 
 SIDES = ("O", "D")
 
@@ -194,10 +194,23 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
                 prior_d = prior_o
             if prior_o is None or prior_d is None:
                 raise RuntimeError(f"Context has no GBDT prior for mode {mode!r} (outputs/role_panel.parquet)")
-            from .gbdt_prior import gbdt_offset
+            from .gbdt_prior import SHOTQ, gbdt_offset
             ro, rd = centred_rates(exp)
-            common = dict(features=list(wd.spec.features), extra=inputs[list(RAW_INPUTS)],
-                          raw=(exp.season_rates_, exp.season_rates_d_))
+            shots = None
+            if any(f in SHOTQ for f in (*prior_o.features["O"], *prior_d.features["D"])):
+                # the shot totals of the TRAINING block only, the way the panel row's came from its window's
+                # three seasons -- the held-out season is not among `train`, so nothing here has seen it
+                from .xshoot import player_shot_frame
+                shots = player_shot_frame(train, cfg, wd.spec.ps_table["player_id"].to_numpy())
+            extra = inputs[list(RAW_INPUTS)].reset_index(drop=True)
+            if any(f in CAREER_INPUTS for f in (*prior_o.features["O"], *prior_d.features["D"])):
+                # seasons played, career possessions and entry age BEFORE the block's first season, so the
+                # count stops two seasons short of H and cannot have seen it
+                ci = career_inputs(ctx.role_inputs, min(int(s_) for s_ in train),
+                                   wd.spec.ps_table["player_id"].to_numpy(), age=inputs["age"].to_numpy())
+                extra = pd.concat([extra, ci[list(CAREER_INPUTS)]], axis=1)
+            common = dict(features=list(wd.spec.features), extra=extra,
+                          raw=(exp.season_rates_, exp.season_rates_d_), shots=shots)
             g = np.zeros(2 * m)
             if "O" in sides:
                 g += gbdt_offset(prior_o, ro, rd, season_of_units(wd), poss_o, poss_d, exclude, sides=("O",), **common)

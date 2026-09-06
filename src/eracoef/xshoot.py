@@ -170,6 +170,41 @@ def block_totals(seasons, cfg, extra_seasons=()) -> tuple[dict, dict]:
     return T, F
 
 
+SHOT_TOTAL_COLS = [f"shot_{c}" for c in SHOT_COLS]        # shot_fg2a, shot_fg2m, shot_xl2, shot_fg3a, ...
+SHOT_LEAGUE_COLS = ["shot_lg2", "shot_lg3", "shot_lgpps"]
+
+
+def player_shot_frame(seasons, cfg, player_ids=None) -> pd.DataFrame:
+    """Per-shooter regular-season shot totals over a block, with the block's own league levels beside them.
+
+    `shot_fg2a ... shot_xl3` are the sums of `SHOT_COLS` over the block's games; `shot_lg2` / `shot_lg3` are
+    the league's make rate on twos and threes over the same games and `shot_lgpps` its points per field-goal
+    attempt, constant down the frame.  Those three are the pad targets of the shot-quality features
+    (`gbdt_prior.add_shotq`): padding toward the BLOCK's own level rather than a constant leaves a 40-attempt
+    player at his era's average instead of 1997's, and the league make rate on twos moved 0.468 -> 0.550
+    across the 28 seasons.
+
+    `player_ids` returns one row per id, in that order, zeros for a player who took no shot in the block;
+    without it the frame carries a `player_id` column and only the shooters the block saw.
+    """
+    T, _ = block_totals([int(s) for s in seasons], cfg)
+    t = T["RS"]
+    m2, a2 = float(t.fg2m.sum()), float(t.fg2a.sum())
+    m3, a3 = float(t.fg3m.sum()), float(t.fg3a.sum())
+    lg2 = m2 / a2 if a2 > 0 else 0.48
+    lg3 = m3 / a3 if a3 > 0 else 0.35
+    lgpps = (2.0 * m2 + 3.0 * m3) / (a2 + a3) if a2 + a3 > 0 else 1.05
+    tot = t[SHOT_COLS].astype(float)
+    tot.index = tot.index.astype(np.int64)
+    tot.columns = SHOT_TOTAL_COLS
+    if player_ids is None:
+        out = tot.rename_axis("player_id").reset_index()
+    else:
+        out = tot.reindex(np.asarray(player_ids, dtype=np.int64)).fillna(0.0).reset_index(drop=True)
+    out["shot_lg2"], out["shot_lg3"], out["shot_lgpps"] = lg2, lg3, lgpps
+    return out
+
+
 def rates_from_totals(T: dict, F: dict, k_fixed: dict | None = None) -> ShooterRates:
     """`rates_from_tables` from the per-half totals."""
     league, k = {}, {}
