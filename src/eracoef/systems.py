@@ -90,6 +90,16 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
             for r in (0.15, 0.2, 0.4, 0.6, 0.8):
                 n = f"mspi1_lam{f:g}_r{r:g}".replace(".", "")
                 S[n] = MspiFast(n, lam=float(cfg["lam_plugin"]) * f, lam_ratio=r)
+        L05 = float(cfg["lam_plugin"]) * 0.5
+        # the low-possession players' ridge on its own (cfg low_poss_threshold), at the x0.5 ridge
+        for b in (0.5, 2.0, 4.0):
+            n = f"mspi1_lam05_low{b:g}".replace(".", "")
+            S[n] = MspiFast(n, lam=L05, lam_buckets={"low_poss": b})
+        # the GBDT prior's shape, at the x0.5 ridge (chimeraboost overrides)
+        for tag, prm in (("d4", {"depth": 4}), ("d8", {"depth": 8}), ("l2x5", {"l2_leaf_reg": 5.0}),
+                         ("l2x20", {"l2_leaf_reg": 20.0}), ("bag3", {"n_ensembles": 3}),
+                         ("lr05", {"learning_rate": 0.05}), ("mcw20", {"min_child_weight": 20.0})):
+            S[f"mspi1_lam05_{tag}"] = MspiFast(f"mspi1_lam05_{tag}", lam=L05, gbdt_params=prm)
         # one target for both sides (one solve): the opponent-3PM-replaced target on offense too
         S["mspi1_x3both"] = MspiFast("mspi1_x3both", off_target="x3def")
         # the APM-trained offense with the RAPM_1-trained defense (each side's calibrated version)

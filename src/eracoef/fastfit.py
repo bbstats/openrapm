@@ -46,6 +46,7 @@ class MspiFast:
     lam_ratio: float | None = None
     off_target: str = "xpts_ft"
     def_target: str = "x3def"
+    lam_buckets: dict | None = None      # extra ridge multipliers per spec.col_groups name (low_poss, high_poss, ...)
 
     def fit(self, train, ctx: Context) -> Ratings:
         from . import xshoot
@@ -76,7 +77,8 @@ class MspiFast:
         ratio = float(cfg["lam_ratio_plugin"] if self.lam_ratio is None else self.lam_ratio)
         m = wd.spec.n_ps
         # one layout and one set of cross-products; the second side changes only the response
-        mm = MixedModelRAPM(lam=lam, lam_ratio=ratio, beta_fixed=beta, prior_offset=off, spec=wd.spec)
+        mm = MixedModelRAPM(lam=lam, lam_ratio=ratio, beta_fixed=beta, prior_offset=off, spec=wd.spec,
+                            lam_buckets=self.lam_buckets)
         X, y, w = mm._validate(Xt, np.asarray(y_o, dtype=float), wd.w)
         layout = mm._layout(X)
         mom = mm._moments(layout, y, w)
