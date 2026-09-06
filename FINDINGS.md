@@ -2031,3 +2031,8 @@ consensus total UP (0.785 -> 0.796) and offense up (0.779 -> 0.804), defense 0.7
 `cal_map -> outputs/calmap_ship.parquet (ship_blend07_linear+log2&xlog&prior_linear+log2&xlog)`.  The chart's
 line stays the criterion's best (`best`, 110.32: the pure APM prior on both sides with the decay and the age
 term); what the floors allow is now 0.5 per 100 behind it.
+
+Two more blends against the floors: 0.3 APM on DEFENSE beside the 0.7 offense (`ship_b07d03`) scores 110.729
+and fails the defensive agreement (0.742); 0.85 APM on offense (`ship_blend085`) scores 110.768 and passes
+(bigness gap -0.271, defense 0.7665) -- 0.03 better than the 0.7 blend for 0.03 less margin on the bigness
+floor, not worth the churn.  The 0.7 blend stays shipped.

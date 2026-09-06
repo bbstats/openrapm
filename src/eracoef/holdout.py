@@ -134,10 +134,12 @@ class Context:
             ctx.mspi_apm = GBDTPrior(ctx.rpanel, cfg, mode="full", target_col="apm")   # trained on unshrunk APM
         return ctx
 
-    def prior(self, mode: str, target_col: str | None, params: dict, panel: str | None = None):
-        """A GBDTPrior with chimeraboost overrides `params`, built once per (mode, target, params, panel) on this
-        Context.  `panel`: a role panel other than the configured one (a path relative to the root)."""
-        key = (mode, target_col, tuple(sorted((params or {}).items())), panel)
+    def prior(self, mode: str, target_col: str | None, params: dict, panel: str | None = None, features=None):
+        """A GBDTPrior with chimeraboost overrides `params`, built once per (mode, target, params, panel, features)
+        on this Context.  `panel`: a role panel other than the configured one (a path relative to the root);
+        `features`: {"O": [...], "D": [...]} instead of the configured lists."""
+        fkey = None if not features else tuple((k, tuple(v)) for k, v in sorted(features.items()))
+        key = (mode, target_col, tuple(sorted((params or {}).items())), panel, fkey)
         if key not in self._priors:
             rp = self.rpanel
             if panel:
@@ -148,7 +150,7 @@ class Context:
             if target_col and target_col.startswith("blend"):          # "blend0.7": 0.7 apm + 0.3 rapm1, raw sign
                 wgt = float(target_col[5:])
                 rp = rp.assign(**{target_col: wgt * rp["apm"].to_numpy(dtype=float) + (1.0 - wgt) * rp["rapm1"].to_numpy(dtype=float)})
-            p = GBDTPrior(rp, self.cfg, mode=mode, target_col=target_col)
+            p = GBDTPrior(rp, self.cfg, mode=mode, target_col=target_col, features=features)
             p.params = dict(params or {})
             self._priors[key] = p
         return self._priors[key]

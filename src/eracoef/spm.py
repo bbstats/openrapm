@@ -136,7 +136,8 @@ def season_of_units(wd) -> np.ndarray:
 
 
 def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, target: str = "rapm1",
-                 params: dict | None = None, panel: str | None = None, target_d: str | None = None) -> Callable:
+                 params: dict | None = None, panel: str | None = None, target_d: str | None = None,
+                 features: dict | None = None) -> Callable:
     """The per-player offset builder for a PluginSystem.  Signature `offset(train, ctx, wd) -> (2 * n_ps,)`,
     raw sign, possession-centred per side.
 
@@ -178,9 +179,9 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
             def col(t):
                 return t if (t == "apm" or t.startswith("blend")) else None
 
-            if params or panel or target_d or target.startswith("blend"):
-                prior_o = ctx.prior(mode, col(target), params, panel)
-                prior_d = ctx.prior(mode, col(t_d), params, panel)
+            if params or panel or target_d or features or target.startswith("blend"):
+                prior_o = ctx.prior(mode, col(target), params, panel, features)
+                prior_d = ctx.prior(mode, col(t_d), params, panel, features)
             else:
                 prior_o = ctx.gbdt if mode == "residual" else getattr(ctx, "mspi_apm" if target == "apm" else "mspi", None)
                 prior_d = prior_o

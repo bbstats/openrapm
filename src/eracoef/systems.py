@@ -124,9 +124,17 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         S["ship_rapm1"] = MspiFast("ship_rapm1", gbdt_params=FAST)
         S["ship_p05"] = MspiFast("ship_p05", gbdt_params=FAST, panel="outputs/role_panel_lam0.5.parquet")
         # a blended offensive target (w APM + (1 - w) RAPM_1), RAPM_1 on defense: between the two floors
-        for w in (0.5, 0.7):
+        for w in (0.5, 0.7, 0.85):
             S[f"ship_blend{w:g}".replace(".", "")] = MspiFast(f"ship_blend{w:g}".replace(".", ""), gbdt_params=FAST,
                                                                target=f"blend{w}", target_d="rapm1")
+        S["ship_b07d03"] = MspiFast("ship_b07d03", gbdt_params=FAST, target="blend0.7", target_d="blend0.3")
+        from .design import FEATURES as _F
+        ALLF = [*_F, "season", "share", "gs_pct", "age"]
+        S["best_allfeat"] = MspiFast("best_allfeat", gbdt_params=FAST, decay=0.5, decay_exposure=True, target="apm",
+                                     gbdt_features={"O": ALLF, "D": ALLF})
+        S["best_apm300"] = MspiFast("best_apm300", gbdt_params=FAST, decay=0.5, decay_exposure=True, target="apm",
+                                    panel="outputs/role_panel_apm300.parquet")
+        S["best_b07"] = MspiFast("best_b07", gbdt_params=FAST, target="blend0.7", target_d="rapm1", decay=0.5, decay_exposure=True)
         S["ship_p035"] = MspiFast("ship_p035", gbdt_params=FAST, panel="outputs/role_panel_lam0.35.parquet")
         S["best_mix"] = MspiFast("best_mix", gbdt_params=FAST, target="apm", target_d="rapm1", decay=0.5, decay_exposure=True)
         BEST = dict(lam=L05, gbdt_params=FAST, decay=0.5, decay_exposure=True)
