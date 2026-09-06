@@ -78,11 +78,26 @@ class MspiFast:
     target_d: str | None = None          # the GBDT's training target on DEFENSE when it differs from `target`
     gbdt_features: dict | None = None    # {"O": [...], "D": [...]} for the GBDT instead of the configured lists
 
+    def counter_columns(self) -> set | None:
+        """The per-possession counters this system's two targets read, so the design need not assemble the
+        other hundred (`designcache.build_window_cached`).  None if a target's needs are not declared."""
+        from . import xshoot
+        from .design import target_counter_columns
+        cols = set()
+        for t in (self.off_target, self.def_target):
+            if t in TARGETS:
+                cols |= target_counter_columns(t)
+            elif t in xshoot.DEFENSE_TARGET_COLUMNS:
+                cols |= xshoot.DEFENSE_TARGET_COLUMNS[t]
+            else:
+                return None
+        return cols | {"poss"}
+
     def fit(self, train, ctx: Context) -> Ratings:
         from . import xshoot
         from .spm import chain_offset
         cfg = ctx.cfg
-        wd = ctx.design(train, "pts", tuple(self.phases))
+        wd = ctx.design(train, "pts", tuple(self.phases), counter_cols=self.counter_columns())
         ys = {}
 
         def target_y(name):

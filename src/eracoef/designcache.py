@@ -163,8 +163,14 @@ def _build_piece(season: int, phase: str, cfg: dict) -> dict:
     return piece
 
 
-def build_window_cached(seasons, cfg, phases=("RS",), gt_weight=None, target="pts") -> WindowData:
-    """`windows.build_window` from cached per-season pieces (no `margin_bins`)."""
+def build_window_cached(seasons, cfg, phases=("RS",), gt_weight=None, target="pts",
+                        counter_cols=None) -> WindowData:
+    """`windows.build_window` from cached per-season pieces (no `margin_bins`).
+
+    `counter_cols`: keep only these of the 118 per-possession counters (the slot ids and `half` always).
+    The whole table is 195,000 x 118 doubles for a 3-season block and copying it is a fifth of the build;
+    a fit that reads six of them (`fastfit.MspiFast`, through `counter_columns`) need not pay for the rest.
+    """
     seasons = [int(s) for s in seasons]
     phases = list(phases)
     pieces = [season_pieces(s, p, cfg) for s in seasons for p in phases]
@@ -246,13 +252,16 @@ def build_window_cached(seasons, cfg, phases=("RS",), gt_weight=None, target="pt
     # kept) and the game index -- so the indices are sorted as built and no hstack or sort is needed
     lo, ld = np.sort(off, axis=1), np.sort(de, axis=1)
     assert (np.diff(lo, axis=1) > 0).all() and (np.diff(ld, axis=1) > 0).all(), "duplicate player ids inside a lineup"
-    fcols = 2 * n_ps + np.arange(n_f + 1)
-    indices = np.hstack([lo, ld + n_ps, np.broadcast_to(fcols, (n, n_f + 1))]).ravel()
-    data = np.hstack([np.ones((n, 10)), Fd, r_game.astype(float)[:, None]]).ravel()
-    per_row = 10 + n_f + 1
-    indptr = np.arange(0, n * per_row + 1, per_row, dtype=np.int64)
-    X = sp.csr_matrix((data, indices, indptr), shape=(n, 2 * n_ps + n_f + 1))
-    X.has_sorted_indices = True
+    def make_X():
+        fcols = 2 * n_ps + np.arange(n_f + 1)
+        indices = np.hstack([lo, ld + n_ps, np.broadcast_to(fcols, (n, n_f + 1))]).ravel()
+        data = np.hstack([np.ones((n, 10)), Fd, r_game.astype(float)[:, None]]).ravel()
+        per_row = 10 + n_f + 1
+        indptr = np.arange(0, n * per_row + 1, per_row, dtype=np.int64)
+        Xm = sp.csr_matrix((data, indices, indptr), shape=(n, 2 * n_ps + n_f + 1))
+        Xm.has_sorted_indices = True
+        return Xm
+
     Z = sp.csr_matrix((np.ones(n * 10), np.hstack([lo, ld + n_ps]).ravel(), np.arange(0, n * 10 + 1, 10, dtype=np.int64)),
                       shape=(n, 2 * n_ps))
     Z.has_sorted_indices = True
@@ -299,17 +308,25 @@ def build_window_cached(seasons, cfg, phases=("RS",), gt_weight=None, target="pt
     counters = None
     if pieces[0]["have"]:
         ccols = pieces[0]["ccols"]
+        take = None
+        if counter_cols is not None:
+            want = set(counter_cols)
+            take = np.array([j for j, c in enumerate(ccols) if c in want], dtype=np.int64)
+            ccols = [ccols[j] for j in take]
         n_off = np.cumsum([0] + [p["n_st"] for p in pieces])
         blocks = []
         for s, side in zip(sides, ("h", "a")):
             keep = np.zeros(n_off[-1], dtype=bool)
             keep[s["stint"]] = True
-            blocks.extend(p["counters"][side][keep[a:b]] for p, a, b in zip(pieces, n_off[:-1], n_off[1:]))
+            for p, a, b in zip(pieces, n_off[:-1], n_off[1:]):
+                rows_i = np.flatnonzero(keep[a:b])
+                blocks.append(p["counters"][side][rows_i] if take is None
+                              else p["counters"][side][np.ix_(rows_i, take)])
         counters = pd.DataFrame(np.vstack(blocks), columns=ccols)
         P = np.vstack([np.vstack([p["pids"][side] for p in pieces])[s["stint"]] for s, side in zip(sides, ("h", "a"))])
         for k in range(5):
             counters[f"pid_s{k + 1}"] = P[:, k]
         counters["half"] = pd.Series(rows["half"].to_numpy(), dtype=object)
     parts = dict(Z=Z, F=Fd, lineup_o=lo, lineup_d=ld, game_idx=r_game.astype(np.int64))
-    return WindowData(X=X, y=y, w=w, groups=groups, spec=spec, game_box=game_box, game_poss=game_poss, rows=rows,
+    return WindowData(X_src=make_X, y=y, w=w, groups=groups, spec=spec, game_box=game_box, game_poss=game_poss, rows=rows,
                       games=games, counters=counters, parts=parts)

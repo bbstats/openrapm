@@ -77,8 +77,8 @@ class System(Protocol):
 
 
 # ---------------------------------------------------------------------------------------- context
-def default_loader(seasons, cfg, target, phases=("RS",)):
-    return build_window(list(seasons), cfg, phases=tuple(phases), target=target)
+def default_loader(seasons, cfg, target, phases=("RS",), counter_cols=None):
+    return build_window(list(seasons), cfg, phases=tuple(phases), target=target, counter_cols=counter_cols)
 
 
 @dataclass
@@ -205,19 +205,22 @@ class Context:
         seasons = list(train) + ([self.current_h] if self.current_h is not None else [])
         return {self.win_of[s] for s in seasons}
 
-    def design(self, seasons, target="pts", phases=("RS",)) -> WindowData:
+    def design(self, seasons, target="pts", phases=("RS",), counter_cols=None) -> WindowData:
         """A cached design.  `target` is a design.TARGETS key, or a callable
         (seasons, cfg, wd_pts) -> WindowData | (WindowData, report) for a derived target.  `phases` ("RS",) or
-        ("RS", "PO"): the playoff rows in the training design, with the design's own playoff level columns."""
+        ("RS", "PO"): the playoff rows in the training design, with the design's own playoff level columns.
+        `counter_cols` keeps only those per-possession counters (designcache.build_window_cached); it is
+        honoured by the default loader only, and it is part of the cache key."""
         phases = tuple(phases)
+        cc = None if counter_cols is None or self.loader is not default_loader else tuple(sorted(counter_cols))
         key = (tuple(int(s) for s in seasons), target if isinstance(target, str) else getattr(target, "__name__", repr(target)),
-               *(() if phases == ("RS",) else (phases,)))
+               *(() if phases == ("RS",) else (phases,)), *(() if cc is None else (cc,)))
         if key not in self._cache:
             if len(self._cache) >= self.cache_size:
                 self._cache.clear()
             if isinstance(target, str):
-                wd = self.loader(list(seasons), self.cfg, target) if phases == ("RS",) else \
-                    self.loader(list(seasons), self.cfg, target, phases)
+                wd = self.loader(list(seasons), self.cfg, target) if phases == ("RS",) and cc is None else \
+                    self.loader(list(seasons), self.cfg, target, phases, **({} if cc is None else {"counter_cols": cc}))
             else:
                 wd = target(list(seasons), self.cfg, self.design(seasons, "pts", phases))
                 if isinstance(wd, tuple):

@@ -84,6 +84,28 @@ class ShooterRates:
         """The half whose totals price each row: the other regular-season half, or all of it."""
         return np.asarray(pd.Series(row_half).map(OTHER).fillna("RS"))
 
+    def _sorted(self, name: str, h: str) -> tuple[np.ndarray, np.ndarray]:
+        """One rate table as (sorted player ids, values), built once per table and kept on the object."""
+        cache = self.__dict__.setdefault("_sorted_cache", {})
+        if (name, h) not in cache:
+            d = getattr(self, name)[h]
+            keys = np.fromiter(d.keys(), dtype=np.int64, count=len(d))
+            vals = np.fromiter(d.values(), dtype=float, count=len(d))
+            o = np.argsort(keys, kind="stable")
+            cache[(name, h)] = (keys[o], vals[o])
+        return cache[(name, h)]
+
+    def take(self, name: str, h: str, pid, fill: float) -> np.ndarray:
+        """`pd.Series(pid).map(table).fillna(fill)` by binary search: the same numbers, ~10x faster, and the
+        pricing loops call it once per lineup slot per half on every row of the design."""
+        keys, vals = self._sorted(name, h)
+        pid = np.asarray(pid, dtype=np.int64)
+        if not len(keys):
+            return np.full(len(pid), float(fill))
+        i = np.searchsorted(keys, pid)
+        np.clip(i, 0, len(keys) - 1, out=i)
+        return np.where(keys[i] == pid, vals[i], float(fill))
+
 
 def rates_from_tables(shots: pd.DataFrame, ft: pd.DataFrame, extra: pd.DataFrame | None = None,
                       k_fixed: dict | None = None) -> ShooterRates:
@@ -197,22 +219,20 @@ def expected_makes(cnt: pd.DataFrame, rates: ShooterRates, location: bool = True
     """
     n = len(cnt)
     which = rates.for_rows("fg2", cnt["half"].to_numpy())
+    masks = [(h, m) for h in ("A", "B", "RS") if (m := which == h).any()]     # once, not once per slot
     x2, x3, xft = np.zeros(n), np.zeros(n), np.zeros(n)
     xp1, xc1 = np.zeros(n), np.zeros(n)
     for s in SLOTS:
         pid = cnt[f"pid_s{s}"].to_numpy()
         r2 = np.ones(n); r3 = np.ones(n); f2 = np.full(n, rates.league["fg2"]); f3 = np.full(n, rates.league["fg3"])
         q = np.full(n, rates.league["ft"])
-        for h in ("A", "B", "RS"):
-            m = which == h
-            if not m.any():
-                continue
-            ids = pd.Series(pid[m])
-            r2[m] = ids.map(rates.ratio2[h]).fillna(1.0).to_numpy()
-            r3[m] = ids.map(rates.ratio3[h]).fillna(1.0).to_numpy()
-            f2[m] = ids.map(rates.p2[h]).fillna(rates.league["fg2"]).to_numpy()
-            f3[m] = ids.map(rates.p3[h]).fillna(rates.league["fg3"]).to_numpy()
-            q[m] = ids.map(rates.pft[h]).fillna(rates.league["ft"]).to_numpy()
+        for h, m in masks:
+            p = pid[m]
+            r2[m] = rates.take("ratio2", h, p, 1.0)
+            r3[m] = rates.take("ratio3", h, p, 1.0)
+            f2[m] = rates.take("p2", h, p, rates.league["fg2"])
+            f3[m] = rates.take("p3", h, p, rates.league["fg3"])
+            q[m] = rates.take("pft", h, p, rates.league["ft"])
         c = {k: cnt[f"{k}_s{s}"].to_numpy(dtype=float) for k in
              ("fg2a", "xl2", "fg3a", "xl3", "fta", "fg2a1", "xl2_1", "fg3a1", "xl3_1", "fta1", "ftlast1")}
         if location:
@@ -283,9 +303,11 @@ def gates(cnt: pd.DataFrame, xm: pd.DataFrame, y: np.ndarray, season: np.ndarray
     return g
 
 
-def _check(wd):
-    if wd.counters is None or "fg2a_s1" not in wd.counters.columns:
-        raise RuntimeError("the stints carry no shooter slot counters; rebuild them (STINT_SCHEMA 4)")
+def _check(wd, col: str = "fg2a_s1"):
+    """The slot counters this target needs are on the design (a design built with a `counter_cols`
+    whitelist carries only the ones its own targets asked for)."""
+    if wd.counters is None or col not in wd.counters.columns:
+        raise RuntimeError(f"the design carries no {col}; rebuild the stints (STINT_SCHEMA 4) or widen counter_cols")
 
 
 def _rates_for(seasons, cfg, x):
@@ -365,20 +387,19 @@ def def_three_design(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, cal
     split-half reliability of high-volume shooters, FINDINGS.md section 18).  No location curve.
     Meant to supply the DEFENSIVE coefficients only; offense comes from the free-throw target.
     """
-    _check(wd_pts)
+    _check(wd_pts, "fg3a_s1")
     cnt, season = wd_pts.counters, wd_pts.rows["season"].to_numpy()
     seasons = sorted(int(s) for s in seasons)
     rates = shooter_rates(seasons, cfg, prev=prev, k_fixed={"fg3": k3})
     which = rates.for_rows("fg3", cnt["half"].to_numpy())
     n = len(cnt)
     x3 = cnt["fg3a_sx"].to_numpy(dtype=float) * rates.league["fg3"]
+    masks = [(h, m) for h in ("A", "B", "RS") if (m := which == h).any()]     # once, not once per slot
     for s in SLOTS:
         pid = cnt[f"pid_s{s}"].to_numpy()
         p = np.full(n, rates.league["fg3"])
-        for h in ("A", "B", "RS"):
-            m = which == h
-            if m.any():
-                p[m] = pd.Series(pid[m]).map(rates.p3[h]).fillna(rates.league["fg3"]).to_numpy()
+        for h, m in masks:
+            p[m] = rates.take("p3", h, pid[m], rates.league["fg3"])
         x3 += cnt[f"fg3a_s{s}"].to_numpy(dtype=float) * p
     poss = cnt["poss"].to_numpy(dtype=float)
     c = cnt
@@ -416,6 +437,15 @@ TARGET_REGISTRY = {
     "xcont": _named(continuation_design, "xcont"),
     "xcont_lineup": _named(continuation_design, "xcont_lineup", r="lineup"),
 }
+
+# the counters each defensive target reads (designcache's `counter_cols`; the slot ids and `half` are
+# always kept).  x3def: actual points with the opponents' threes repriced, free throws as shipped.
+DEFENSE_TARGET_COLUMNS = {
+    "x3def": {"pts", "fg3m", "ftm", "ftm_tech", "xftm", "xftm_tech", "poss", "fg3a_sx",
+              *(f"fg3a_s{s}" for s in SLOTS)},
+}
+DEFENSE_TARGET_COLUMNS["x3def_p1"] = DEFENSE_TARGET_COLUMNS["x3def"]
+DEFENSE_TARGET_COLUMNS["x3def_p2"] = DEFENSE_TARGET_COLUMNS["x3def"]
 
 # targets meant for the DEFENSIVE coefficients only (scripts/45_holdout.py: def3_<name> = offense from
 # hybrid_xft, defense from a fit on this target); pN = N seasons before the block added to the rate
