@@ -108,6 +108,7 @@ class Context:
     _teams: dict = field(default_factory=dict, repr=False)
     _bigness: dict = field(default_factory=dict, repr=False)
     _bench: dict = field(default_factory=dict, repr=False)
+    _priors: dict = field(default_factory=dict, repr=False)   # GBDTPrior per (mode, target, params), see prior()
     reports: list = field(default_factory=list, repr=False)
 
     @classmethod
@@ -132,6 +133,18 @@ class Context:
             ctx.mspi = GBDTPrior(ctx.rpanel, cfg, mode="full")
             ctx.mspi_apm = GBDTPrior(ctx.rpanel, cfg, mode="full", target_col="apm")   # trained on unshrunk APM
         return ctx
+
+    def prior(self, mode: str, target_col: str | None, params: dict):
+        """A GBDTPrior with chimeraboost overrides `params`, built once per (mode, target, params) on this Context."""
+        key = (mode, target_col, tuple(sorted((params or {}).items())))
+        if key not in self._priors:
+            if self.rpanel is None:
+                raise RuntimeError("outputs/role_panel.parquet is missing; run scripts/49_role_panel.py")
+            from .gbdt_prior import GBDTPrior
+            p = GBDTPrior(self.rpanel, self.cfg, mode=mode, target_col=target_col)
+            p.params = dict(params or {})
+            self._priors[key] = p
+        return self._priors[key]
 
     def bigness(self, season: int, min_minutes: float = 500.0) -> dict:
         """player_id -> True if in the top tercile of the big-man score (orb + blk + 0.3 drb - 0.5 ast - 0.4 fg3m

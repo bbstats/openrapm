@@ -1,7 +1,11 @@
 """The iterate-and-improve tracker: one system, the K=3 criterion, one row in docs/progress.csv, one chart.
 
-    python scripts/54_track.py --system=mspi_linear+sat --calmap=outputs/calmap_chain.parquet --label="what changed"
-            [--k=3] [--workers=4] [--when=2026-09-05T12:00] [--dry]
+    python scripts/54_track.py --system=mspi --label="what changed" [--maps=linear+sat] [--k=3] [--workers=4]
+            [--when=2026-09-05T12:00] [--dry] [--push]
+
+The system is the UNMAPPED one; the calibration map (calmap.py, `--maps`, default linear+sat on both sides) is
+fitted leave-one-season-out on the dumped ratings and the mapped score is what is logged (`game`), next to the
+unmapped one (`game_unmapped`).
 
 Loss  = the pooled team-game MSE of the held-out seasons (holdout.pooled, column `game`), K = 3 -- the
         shipped block length.  Lower is better.
@@ -38,16 +42,33 @@ def _flag(name, default=None):
     return hit[0].split("=", 1)[1] if hit else default
 
 
-def measure(system: str, k: int, calmap=None, workers: int = 4) -> dict:
+def measure(system: str, k: int, workers: int = 4, maps=("linear+sat",)) -> dict:
+    """Dump the system's ratings once per held-out season (timed), fit the calibration map leave-one-season-out
+    on the dump, score with the criterion's scorer.  Loss = the MAPPED system's pooled team-game error; time = the
+    dump's fit seconds summed over the held-out seasons."""
+    from eracoef.calmap import SideMap, dump_ratings, evaluate, load_frames, unmapped_rows
+    from eracoef.holdout import Context
     ho = Holdout.from_config(cfg, ks=[k])
     t0 = time.time()
-    res, _, _ = run_parallel(ho, [system], out=OUT / f"holdout_track_{system}.parquet", verbose=False,
-                             workers=workers, calmap=calmap)
+    R = dump_ratings(ho, [system], OUT / f"ratings_track_{system}.parquet", workers=workers, verbose=False)
     wall = time.time() - t0
-    r = res[(res.split == "all") & (res.group == "all")]
-    P = pooled(r).iloc[0]
-    return dict(game=float(P.game), stint=float(P.mse), scale_off=float(P.scale_off), scale_def=float(P.scale_def),
-                seconds=float(r.seconds.sum()), wall=float(wall), seasons=int(r.held_out.nunique()))
+    secs = float(R.groupby("held_out").seconds.first().sum())
+    ctx = Context.load(cfg)
+    frames = load_frames(ctx, ho.seasons(), level=ho.level, verbose=False)
+    res, params = [unmapped_rows(R, frames, system, k)], []
+    for fam in maps:
+        fo, fd = (fam.split(":") + [None])[:2]
+        r, p = evaluate(R, frames, system, k, SideMap.parse(fo), SideMap.parse(fd or fo), f"{system}_{fam.replace(':', '_')}")
+        res.append(r)
+        params.append(p)
+    res = pd.concat(res, ignore_index=True)
+    res.to_parquet(OUT / f"holdout_track_{system}.parquet", index=False)
+    pd.concat(params, ignore_index=True).to_parquet(OUT / f"calmap_track_{system}.parquet", index=False)
+    P = pooled(res).set_index("system")
+    mapped = P.loc[f"{system}_{maps[0].replace(':', '_')}"]
+    return dict(game=float(mapped.game), game_unmapped=float(P.loc[system].game), stint=float(mapped.mse),
+                scale_off=float(mapped.scale_off), scale_def=float(mapped.scale_def),
+                seconds=secs, wall=float(wall), seasons=int(res.held_out.nunique()))
 
 
 def append(row: dict) -> pd.DataFrame:
@@ -109,7 +130,7 @@ def main():
     if "--dry" in sys.argv:
         chart(pd.read_csv(LOG, parse_dates=["when"]))
         return
-    m = measure(system, k, calmap=_flag("calmap"), workers=int(_flag("workers", 4)))
+    m = measure(system, k, workers=int(_flag("workers", 4)), maps=tuple((_flag("maps") or "linear+sat").split(",")))
     row = dict(when=when, label=label, system=system, k=k, **m)
     log = append(row)
     chart(log)

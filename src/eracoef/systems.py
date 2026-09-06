@@ -69,6 +69,9 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
             S[f"mspi_apm_s{sc:g}".replace(".", "")] = chain(f"mspi_apm_s{sc:g}".replace(".", ""), ("O", "D"), mode="full",
                                                           scale=sc, target="apm")
 
+        # the same board in one pass per block (fastfit.py): identical numbers, about half the time
+        from .fastfit import MspiFast
+        S["mspi1"] = MspiFast("mspi1")
         # the APM-trained offense with the RAPM_1-trained defense (each side's calibrated version)
         S["mspi_mix"] = SplitSystem("mspi_mix", offense=S["mspi_apm"], defense=S["mspi"])
         # a replacement level for players the block never saw, on the board and on the chains

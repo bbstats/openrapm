@@ -48,12 +48,15 @@ def dump_systems(ho: Holdout, systems: list, ctx: Context, held=None, verbose: b
             ctx.current_k = k
             train = ctx.neighbourhood(h, k)
             for s in systems:
+                t1 = time.time()
                 rat = _fit(s, train, ctx, ho.lams[0])
+                secs = time.time() - t1
                 d = rat.df.copy()
                 for c in ("prior_o", "prior_d"):
                     if c not in d.columns:
                         d[c] = np.nan
-                rows.append(d.assign(held_out=int(h), k=int(k), system=s.name, fill_o=rat.fill_o, fill_d=rat.fill_d))
+                rows.append(d.assign(held_out=int(h), k=int(k), system=s.name, fill_o=rat.fill_o, fill_d=rat.fill_d,
+                                     seconds=secs))
         if verbose:
             print(f"  {h} dumped ({time.time() - t0:.0f}s)", flush=True)
     ctx.current_h = None

@@ -135,7 +135,8 @@ def season_of_units(wd) -> np.ndarray:
     return np.asarray(wd.spec.seasons, dtype=np.int64)[np.asarray(wd.spec.season_of_ps, dtype=np.int64)]
 
 
-def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, target: str = "rapm1") -> Callable:
+def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, target: str = "rapm1",
+                 params: dict | None = None) -> Callable:
     """The per-player offset builder for a PluginSystem.  Signature `offset(train, ctx, wd) -> (2 * n_ps,)`,
     raw sign, possession-centred per side.
 
@@ -153,7 +154,7 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
     # trained on the shrunk RAPM_1 is too timid: starters want 1.2, deep bench 2.0); `target` = "apm" uses
     # the chain trained on unshrunk APM instead (ctx.mspi_apm)
 
-    def offset(train, ctx, wd) -> np.ndarray:
+    def offset(train, ctx, wd, exp=None) -> np.ndarray:
         if ctx.rpanel is None or ctx.role_inputs is None:
             raise RuntimeError("outputs/role_panel.parquet or data/cache/roles.parquet is missing; "
                                "run scripts/49_role_panel.py")
@@ -161,7 +162,8 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
         s = cfg.get("spm", {})
         exclude = ctx.labels(train)
         inputs = window_inputs(wd, ctx.role_inputs, cap=float(cfg.get("roles", {}).get("share_cap", 0.9)))
-        exp = make_exposure(wd, mode="full", pad_target=cfg["pad_target"]).fit(wd.X, sample_weight=wd.w)
+        if exp is None:
+            exp = make_exposure(wd, mode="full", pad_target=cfg["pad_target"]).fit(wd.X, sample_weight=wd.w)
         poss_o = np.asarray(exp.season_poss_off_, dtype=float)
         poss_d = np.asarray(exp.season_poss_def_, dtype=float)
         m = wd.spec.n_ps
@@ -169,7 +171,10 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
         fd = fit_spm(ctx.rpanel, "D", exclude, pen=float(s.get("pen", 1.0)), min_poss=float(s.get("min_poss", 500)))
         off = spm_offset(fo, fd, inputs, poss_o, poss_d)
         if sides:
-            prior = ctx.gbdt if mode == "residual" else getattr(ctx, "mspi_apm" if target == "apm" else "mspi", None)
+            if params:
+                prior = ctx.prior(mode, "apm" if target == "apm" else None, params)
+            else:
+                prior = ctx.gbdt if mode == "residual" else getattr(ctx, "mspi_apm" if target == "apm" else "mspi", None)
             if prior is None:
                 raise RuntimeError(f"Context has no GBDT prior for mode {mode!r} (outputs/role_panel.parquet)")
             from .gbdt_prior import gbdt_offset
