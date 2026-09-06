@@ -2010,3 +2010,24 @@ spread 1.33, ten of ten floors.  `config.yaml`: `gbdt.params: {linear_leaves: fa
 chart tracks; the gap between it and what the floors allow is now a measured 0.8 per 100, and the reason is
 one thing: the unshrunk prior's ordering of the bigs on offense and of everyone on defense is not the
 public metrics' ordering, while held-out games prefer it.
+
+### 19. A blended offensive target clears every floor: shipped at 110.80
+
+The GBDT's offensive target as a blend, w APM + (1 - w) RAPM_1 (`Context.prior` makes the column;
+`gbdt_target: blend0.7`), RAPM_1 on defense, the map with the prior term on offense only
+(`linear+log2&xlog&prior : linear+log2&xlog`), rebuilt through `08_ratings.py` and run against the tests:
+
+| offensive target | criterion | consensus total / off / def | def spread | tests |
+|---|---|---|---|---|
+| APM (`ship_mix`) | 110.773 | 0.800 / 0.805 / 0.766 | 1.32 | bigness gap -0.303: fails |
+| **0.7 APM + 0.3 RAPM_1 (`ship_blend07`)** | **110.802** | **0.796 / 0.804 / 0.767** | **1.32** | **10 of 10** |
+| 0.5 / 0.5 (`ship_blend05`) | 110.820 | | | 10 of 10 |
+| RAPM_1 (`ship_rapm1`, map without the prior term) | 111.146 | 0.768 / 0.769 / 0.765 | 1.33 | 10 of 10 |
+| section 20's board | 111.296 | 0.785 / 0.779 / 0.768 | | 10 of 10 |
+
+**Shipped: `ship_blend07`.**  Half a point per 100 better than section 20's board on the criterion with the
+consensus total UP (0.785 -> 0.796) and offense up (0.779 -> 0.804), defense 0.768 -> 0.767.  `config.yaml`:
+`ratings_prior.gbdt_target: blend0.7`, `gbdt_target_def: rapm1`, `gbdt.params` without the audition fits,
+`cal_map -> outputs/calmap_ship.parquet (ship_blend07_linear+log2&xlog&prior_linear+log2&xlog)`.  The chart's
+line stays the criterion's best (`best`, 110.32: the pure APM prior on both sides with the decay and the age
+term); what the floors allow is now 0.5 per 100 behind it.

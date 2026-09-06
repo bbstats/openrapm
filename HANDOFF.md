@@ -21,7 +21,7 @@ if the final chain had not finished (`git status`).  Tests: 82 passed, 1 xfailed
 |---|---|---|---|
 | shipped before this phase (`mspi_linear+sat`, section 20) | 111.30 | 134 s | 1.00 |
 | the criterion's best now (`best`) | 110.32 | 32 s | 0.24 |
-| what ships now (`ship_rapm1`, no held-out season, floors green) | 111.15 | 32 s | |
+| what ships now (`ship_blend07`, no held-out season, floors green) | 110.80 | 32 s | |
 
 **True loss** = (score / 111.30) x (28-fit seconds / 134).  Every time cut was checked to reproduce the
 ratings to 1e-13 (`scratch/cmp_design.py` for the design, the ratings-vs-dump check in the scratch scripts).
@@ -47,15 +47,15 @@ shooter-totals caches, the GBDT without its audition fits (`gbdt.params`).  134 
 
 ### What ships, and why not the best
 
-Every board with the APM prior fails one of the owner's consensus floors (`tests/test_vs_consensus.py`): on
-defense the agreement drops under 0.76 (0.68 with it on both sides, 0.751 with the prior term on defense
-only), on offense the rank gap against bigness passes 0.30 (-0.30 to -0.35 for every map tried), and the
-half-ridge panel prior fails defense too (0.74-0.75).  **What ships** (`ship_rapm1`): the RAPM_1 prior on both
-sides, the GBDT without its audition fits, the map `linear+log2&xlog` (no prior term: that one trips the
-defensive floor): criterion 111.15, consensus 0.768 / 0.769 / 0.765, spread 1.33, ten of ten floors.
-`config.yaml -> gbdt.params`, `ratings_prior.cal_map -> outputs/calmap_ship.parquet`; `gbdt_target`,
-`gbdt_target_def`, `gbdt_panel` are wired into `08_ratings.py` and off.  The decay and the age term need a
-held-out season and do not ship.  Section 21.18 has the candidate table.
+Every board with the APM prior as is fails one of the owner's consensus floors (`tests/test_vs_consensus.py`):
+on defense the agreement drops under 0.76 (0.68 with it on both sides, 0.751 with the map's prior term on
+defense only), on offense the rank gap against bigness passes 0.30 (-0.30 to -0.35 for every map tried), and
+the half-ridge panel prior fails defense too (0.74-0.75).  **What ships** (`ship_blend07`): the GBDT prior
+trained on 0.7 APM + 0.3 RAPM_1 on OFFENSE (`ratings_prior.gbdt_target: blend0.7`, a synthetic panel column
+made in `Context.prior`), the RAPM_1 prior on defense (`gbdt_target_def: rapm1`), the GBDT without its
+audition fits, the map `linear+log2&xlog&prior` on offense and `linear+log2&xlog` on defense: criterion
+110.80 (section 20's board 111.30, the plain RAPM_1 board 111.15), ten of ten floors green.  The decay and
+the age term need a held-out season and do not ship.  Section 21.18 has the candidate table.
 
 ### Flat or negative (do not re-run): section 21 items 4, 7, 12, 14 and the reads inside 1, 2, 9, 17
 
@@ -71,7 +71,7 @@ prior^2 map terms, season weights beyond the decay, padding scale and target, pa
 | `src/eracoef/fastfit.py` | `MspiFast`: the one-pass board fit with every knob (`lam`, `lam_ratio`, `gbdt_params`, `target`, `target_d`, `panel`, `decay`, `decay_exposure`, `season_weights`, `pad_scale`, `pad_target`, `phases`, `lam_buckets`); `direct_layout` |
 | `src/eracoef/designcache.py` | per-season pieces (disk + LRU) and `build_window_cached`; `windows.build_window` routes to it unless `margin_bins` |
 | `src/eracoef/calmap.py` | families x exposure terms (`&`-combinable: `sat`, `log2`, `age2`, `xlog`, `prior`, ...), `SeasonFrame.covariates`, `apply_params(prior_o=, prior_d=)` |
-| `src/eracoef/systems.py` | `best`, `ship`, `ship_mix`, `ship_rapm1`, the `mspi1_*` variants |
+| `src/eracoef/systems.py` | `best`, `ship`, `ship_mix`, `ship_rapm1`, `ship_blend07`, the `mspi1_*` variants |
 | `scratch/` (untracked) | `cmp_design.py` (design equality vs git HEAD), `remap.py` (re-score dumps with a map), `consensus_read.py` (mapped candidates against the consensus), `panel_lam.py` (role panel at a scaled ridge / APM penalty), the patch scripts |
 
 ### Verification

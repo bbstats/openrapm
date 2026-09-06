@@ -175,9 +175,12 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
             off = spm_offset(fo, fd, inputs, poss_o, poss_d)
         if sides:
             t_d = target_d or target
-            if params or panel or target_d:
-                prior_o = ctx.prior(mode, "apm" if target == "apm" else None, params, panel)
-                prior_d = ctx.prior(mode, "apm" if t_d == "apm" else None, params, panel)
+            def col(t):
+                return t if (t == "apm" or t.startswith("blend")) else None
+
+            if params or panel or target_d or target.startswith("blend"):
+                prior_o = ctx.prior(mode, col(target), params, panel)
+                prior_d = ctx.prior(mode, col(t_d), params, panel)
             else:
                 prior_o = ctx.gbdt if mode == "residual" else getattr(ctx, "mspi_apm" if target == "apm" else "mspi", None)
                 prior_d = prior_o

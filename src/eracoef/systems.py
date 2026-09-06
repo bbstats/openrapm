@@ -123,6 +123,10 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         S["ship_mix"] = MspiFast("ship_mix", gbdt_params=FAST, target="apm", target_d="rapm1")
         S["ship_rapm1"] = MspiFast("ship_rapm1", gbdt_params=FAST)
         S["ship_p05"] = MspiFast("ship_p05", gbdt_params=FAST, panel="outputs/role_panel_lam0.5.parquet")
+        # a blended offensive target (w APM + (1 - w) RAPM_1), RAPM_1 on defense: between the two floors
+        for w in (0.5, 0.7):
+            S[f"ship_blend{w:g}".replace(".", "")] = MspiFast(f"ship_blend{w:g}".replace(".", ""), gbdt_params=FAST,
+                                                               target=f"blend{w}", target_d="rapm1")
         S["ship_p035"] = MspiFast("ship_p035", gbdt_params=FAST, panel="outputs/role_panel_lam0.35.parquet")
         S["best_mix"] = MspiFast("best_mix", gbdt_params=FAST, target="apm", target_d="rapm1", decay=0.5, decay_exposure=True)
         BEST = dict(lam=L05, gbdt_params=FAST, decay=0.5, decay_exposure=True)

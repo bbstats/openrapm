@@ -64,18 +64,19 @@ ratings_prior:
   # the rating alone is the identity within noise); the exposure term is the replacement gap and is worth
   # -0.8 / -0.9 / -1.0 per 100 at K = 2 / 3 / 4 (z -6 to -7, 24-25 of 28).  K = 3 matches the 3-season block.
   # `08_ratings.py` re-centres each side per window after it.  Set to null to ship the unmapped chain.
-  # FINDINGS 21 (iterate mode).  The criterion's best trains the GBDT prior on the panel's unshrunk APM
-  # (`gbdt_target: apm`, 110.32 at K = 3 against 111.30 for section 20's board) but every board with that prior
-  # on offense fails a consensus floor (defensive agreement under 0.76 with it on defense, the offensive rank gap
-  # against bigness over 0.30 with it on offense, section 21.18).  What ships keeps the RAPM_1 target on both
-  # sides, drops the GBDT's audition fits (gbdt.params) and takes the map with a log-exposure level and a
-  # rating-by-exposure slope (`linear+log2&xlog`, no prior term: that one also trips the defensive floor):
-  # 111.15 on the criterion, 0.768 / 0.769 / 0.765 against the consensus, all ten floors green.
-  # `gbdt_target_def` (a different target on defense) and `gbdt_panel` (another role panel) are the knobs the
-  # candidates used; both are off.
-  gbdt_target: rapm1
+  # FINDINGS 21 (iterate mode).  The criterion's best trains the GBDT prior on the panel's unshrunk APM on
+  # both sides (110.32 at K = 3 against 111.30 for section 20's board), but that board fails the consensus
+  # floors (defensive agreement under 0.76; the offensive rank gap against bigness over 0.30 whenever the pure
+  # APM target is on offense).  What ships (section 21.19): the offensive target 0.7 APM + 0.3 RAPM_1
+  # (`gbdt_target: blend0.7`, the column is made in holdout.Context.prior), RAPM_1 on defense
+  # (`gbdt_target_def`), the GBDT without its audition fits (gbdt.params), and the map with a log-exposure
+  # level, a rating-by-exposure slope and -- on offense only -- the prior part of the rating as its own term:
+  # 110.80 on the criterion, 0.796 / 0.804 / 0.767 against the consensus, ten of ten floors.  `gbdt_panel`
+  # (another role panel for the prior) is wired and off.
+  gbdt_target: blend0.7
+  gbdt_target_def: rapm1
   gbdt_panel: null
-  cal_map: {table: outputs/calmap_ship.parquet, system: ship_rapm1_linear+log2&xlog, base: ship_rapm1, k: 3}
+  cal_map: {table: outputs/calmap_ship.parquet, system: ship_blend07_linear+log2&xlog&prior_linear+log2&xlog, base: ship_blend07, k: 3}
 # The random effect unit: "window" gives one player effect per 3-season window, "season" one per
 # player-season (the original spec).  Possession thresholds below are in the unit's own scale.
 player_unit: window

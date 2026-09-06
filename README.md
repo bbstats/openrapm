@@ -39,11 +39,13 @@ The multi-stage prior-informed RAPM (`mspi`, FINDINGS section 19):
    gap (a player the block barely saw is several points worse than his rating says) and is worth a point
    per 100 out of season.
 
-Out of season it predicts held-out games at 111.15 points per 100 (K=3, the block's own length) against
-112.23 without the map and 112.74 for the previous board.  FINDINGS section 21 is the iterate-and-improve
-record: the whole fit runs in a quarter of the time it did (`src/eracoef/fastfit.py`, `designcache.py`), and
-a prior trained on unshrunk APM predicts held-out games 0.8 per 100 better still but orders the bigs on
-offense and the defenders unlike every public metric, so it is measured (`docs/progress.png`) and not shipped.
+Out of season it predicts held-out games at 110.80 points per 100 (K=3, the block's own length) against
+112.14 without the map and 112.74 for the previous board.  FINDINGS section 21 is the iterate-and-improve
+record: the whole fit runs in a quarter of the time it did (`src/eracoef/fastfit.py`, `designcache.py`); the
+boosted prior's offensive target is now 0.7 unshrunk APM + 0.3 prior-informed RAPM (the less shrunk the
+target, the better the mapped board predicts, but the pure APM prior orders the bigs on offense and the
+defenders unlike every public metric and fails the consensus floors, so it is measured on `docs/progress.png`
+and not shipped); the map also carries the prior part of the offensive rating as its own term.
 
 ## Pipeline
 
@@ -54,7 +56,7 @@ offense and the defenders unlike every public metric, so it is measured (`docs/p
     python scripts/27_xrapm_prior.py                # the player-level panel
     python scripts/49_role_panel.py --check         # APM, role prior, prior-informed RAPM per block
     python scripts/50_boruta.py                     # feature selection for the boosted prior
-    python scripts/54_track.py --systems=ship_rapm1 --maps=linear+log2\&xlog   # held-out ratings + the map (outputs/calmap_track_ship_rapm1.parquet -> outputs/calmap_ship.parquet)
+    python scripts/54_track.py --systems=ship_blend07 --maps=linear+log2\&xlog\&prior:linear+log2\&xlog   # held-out ratings + the map (outputs/calmap_track_ship_blend07.parquet -> outputs/calmap_ship.parquet)
     python scripts/08_ratings.py                    # the board (outputs/player_ratings.parquet)
     python scripts/52_site.py                       # docs/data/ratings.json for the page
 

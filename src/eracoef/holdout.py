@@ -145,6 +145,9 @@ class Context:
             if rp is None:
                 raise RuntimeError("outputs/role_panel.parquet is missing; run scripts/49_role_panel.py")
             from .gbdt_prior import GBDTPrior
+            if target_col and target_col.startswith("blend"):          # "blend0.7": 0.7 apm + 0.3 rapm1, raw sign
+                wgt = float(target_col[5:])
+                rp = rp.assign(**{target_col: wgt * rp["apm"].to_numpy(dtype=float) + (1.0 - wgt) * rp["rapm1"].to_numpy(dtype=float)})
             p = GBDTPrior(rp, self.cfg, mode=mode, target_col=target_col)
             p.params = dict(params or {})
             self._priors[key] = p
