@@ -2036,3 +2036,33 @@ Two more blends against the floors: 0.3 APM on DEFENSE beside the 0.7 offense (`
 and fails the defensive agreement (0.742); 0.85 APM on offense (`ship_blend085`) scores 110.768 and passes
 (bigness gap -0.271, defense 0.7665) -- 0.03 better than the 0.7 blend for 0.03 less margin on the bigness
 floor, not worth the churn.  The 0.7 blend stays shipped.
+
+### 20. The team's total wants a bend the per-player map cannot make
+
+The calibration map is a function of ONE player's rating, so the criterion's team-game prediction is the
+possession-weighted sum of the five on the floor and is linear in whatever the map did.  Fit the map as usual,
+leave-one-season-out, then a second stage on the mapped team-game total u (`calmap.TeamBend`, fitted on the
+same 27 seasons, applied to the 28th):
+
+| shape | `best` | `ship_blend07` | `mspi1` (section 20's board) |
+|---|---|---|---|
+| linear (the map as it is) | 110.3185 | 110.8022 | 111.2955 |
+| **a u + b u^3 / s^2** | **110.2464 (z -3.0, 20/28)** | **110.7216 (z -3.3, 21/28)** | **111.2113 (z -2.8, 21/28)** |
+| a u + b u abs(u) / s | 110.2482 | 110.7200 | |
+| a u + b (tanh(u/s) - u/s) s | 110.2554 | 110.7265 | 111.2135 |
+| + a quintic, or four knots either side | 110.2468 / 110.2487 | | |
+| the two sides bent apart | 110.3269 | 110.8056 | 111.2973 |
+| offense x defense (the multiplicative matchup) | 110.3209 | 110.8051 | 111.2954 |
+
+**One parameter, 0.07-0.08 per 100 on every board tried, and nothing beyond it.**  The shape is odd and
+symmetric: gamma = (1.087, -0.029) stretches the middle by 9% and pulls a 3-sd team-game in by 18%.  A cubic in
+each side separately is WORSE, and the multiplicative offense-defense term (a great offense meeting a bad
+defense) is worth nothing -- so this is not a matchup effect, it is the total regressing: the five ratings of a
+team-game come from one training block and their errors are correlated, so their sum needs more shrinking than
+each rating does.
+
+It is a PREDICTION-TIME term, like the age term: a rating carries no team, so the board cannot ship it.  In
+`calmap` it is the `|<bend>` suffix of a map name (`linear+log2&age2&xlog&prior|cubic`); the fitted row of
+each season's parameters carries `bend`, `scale_u` and `g0`/`g1`.  `bent_prediction` gives every row of a
+team-game the same g(u) - u, so the team-game total is exactly g(u) and the season's level is refit around it.
+

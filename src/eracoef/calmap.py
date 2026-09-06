@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -136,6 +136,7 @@ class SeasonFrame:
     L: np.ndarray
     G: sp.csr_matrix
     wg: np.ndarray
+    key: np.ndarray | None = None         # team-game index of each row (the rows G aggregates)
     extra: pd.DataFrame | None = None     # per player in `ids` order: covariates AT H (age), for the Age term
     ctx: object = None                    # for covariates that depend on the training block (moved, per K)
 
@@ -174,7 +175,7 @@ class SeasonFrame:
         G = sp.csr_matrix((poss / wg[key], (key, np.arange(len(key)))), shape=(n_tg, len(key)))
         return cls(h=h, wd=wd, Zo=wd.X[:, :m].tocsr(), Zd=wd.X[:, m:2 * m].tocsr(),
                    ids=wd.spec.ps_table["player_id"].to_numpy(), y=np.asarray(wd.y, dtype=float), w=w, poss=poss,
-                   A=A, L=L, G=G, wg=wg, extra=extra, ctx=ctx)
+                   A=A, L=L, G=G, wg=wg, key=key, extra=extra, ctx=ctx)
 
     def profiled(self, C: np.ndarray) -> np.ndarray:
         """Columns with the season's level profiled out (what the criterion's refit does to any contribution)."""
@@ -521,6 +522,71 @@ class SideMap:
         return np.concatenate([self.fam.identity(), np.zeros(self.expo.n_params)])
 
 
+class TeamBend:
+    """A bend in the TEAM's summed rating, fitted after the per-player map.
+
+    The map is a function of one player's rating, so the criterion's prediction for a team-game is the
+    possession-weighted SUM of the five on the floor: whatever the map does, the total is linear in it.  A
+    bend in that total -- extreme team-games pulled in, the middle stretched -- is not reachable per player,
+    and out of season it is worth 0.07-0.08 per 100 on every board tried (FINDINGS 21.20).  `basis` is in the
+    mapped total u, standardised by its own weighted RMS, and gamma = (1, 0, ...) is the map left alone.
+
+    It is a PREDICTION-TIME term, like the age term: a rating carries no team, so it cannot ship in the board.
+    """
+    name, n_params = "none", 0
+
+    def basis(self, u: np.ndarray, s: float) -> np.ndarray:
+        return np.asarray(u, dtype=float)[:, None]
+
+
+class CubicBend(TeamBend):
+    """g(u) = a u + b u^3 / s^2."""
+    name, n_params = "cubic", 2
+
+    def basis(self, u, s):
+        u = np.asarray(u, dtype=float)
+        return np.column_stack([u, u ** 3 / s ** 2])
+
+
+class QuadBend(TeamBend):
+    """g(u) = a u + b u|u| / s: the same compression with a sign asymmetry allowed."""
+    name, n_params = "quad", 2
+
+    def basis(self, u, s):
+        u = np.asarray(u, dtype=float)
+        return np.column_stack([u, u * np.abs(u) / s])
+
+
+class TanhBend(TeamBend):
+    """g(u) = a u + b (tanh(u / s) - u / s) s: a saturating compression, no runaway cubic tail."""
+    name, n_params = "tanh", 2
+
+    def basis(self, u, s):
+        u = np.asarray(u, dtype=float)
+        return np.column_stack([u, (np.tanh(u / s) - u / s) * s])
+
+
+BENDS = {b.name: b for b in (TeamBend(), CubicBend(), QuadBend(), TanhBend())}
+
+
+def parse_maps(fam: str):
+    """"<family_o>[:<family_d>][|<bend>]" -> (map_o, map_d, bend).  The name a run logs is the same string
+    with ":" and "|" replaced by "_"."""
+    rest, _, bend = fam.partition("|")
+    fo, fd = (rest.split(":") + [None])[:2]
+    return SideMap.parse(fo), SideMap.parse(fd or fo), BENDS[bend or "none"]
+
+
+def fit_bend(D: "Design", th: np.ndarray, bend: TeamBend, exclude_h=None) -> tuple[np.ndarray, float]:
+    """The bend's parameters on every season but `exclude_h`, given the map's own parameters `th`."""
+    sel = np.ones(len(D.h), dtype=bool) if exclude_h is None else D.h != exclude_h
+    u, y, w = D.X[sel] @ th, D.y[sel], D.w[sel]
+    s = float(np.sqrt(np.average(u ** 2, weights=w))) or 1.0
+    B = bend.basis(u, s)
+    BtW = (B * w[:, None]).T
+    return np.linalg.solve(BtW @ B, BtW @ y), s
+
+
 # ---------------------------------------------------------------------------------------- 4. fitting and scoring
 def _side_scale(dump: pd.DataFrame, system: str, k: int, side: str, min_poss: float = 1000.0) -> float:
     d = dump[(dump.system == system) & (dump.k == k) & (dump.poss >= min_poss)]
@@ -599,28 +665,50 @@ def mapped_ratings(rat: Ratings, theta, map_o: SideMap, map_d: SideMap, scale_o:
     return Ratings(d, fill_o=fo, fill_d=fd)
 
 
-def _param_row(name, system, k, h, map_o, map_d, D, th) -> dict:
+def _param_row(name, system, k, h, map_o, map_d, D, th, bend=None, gamma=None, s_u=np.nan) -> dict:
     p = map_o.n_params
-    return dict(system=name, base=system, k=k, held_out=h, map_o=map_o.name, map_d=map_d.name,
-                scale_o=D.scale_o, scale_d=D.scale_d,
-                **{f"o{j}": float(v) for j, v in enumerate(th[:p])}, **{f"d{j}": float(v) for j, v in enumerate(th[p:])})
+    row = dict(system=name, base=system, k=k, held_out=h, map_o=map_o.name, map_d=map_d.name,
+               scale_o=D.scale_o, scale_d=D.scale_d,
+               **{f"o{j}": float(v) for j, v in enumerate(th[:p])}, **{f"d{j}": float(v) for j, v in enumerate(th[p:])})
+    if bend is not None and bend.n_params:
+        row.update(bend=bend.name, scale_u=float(s_u), **{f"g{j}": float(v) for j, v in enumerate(np.atleast_1d(gamma))})
+    return row
+
+
+def bent_prediction(p, f: SeasonFrame, bend: TeamBend, gamma, s_u: float, level: str = "home"):
+    """`predict_season`'s prediction with the team-game total bent: each row's contribution takes its own
+    team-game's g(u) - u, so the team-game total is exactly g(u) and the season's level is refit around it."""
+    from .holdout import _wls
+    c = p.c_off + p.c_def
+    u = f.game(f.profiled(c))
+    delta = bend.basis(u, s_u) @ np.asarray(gamma, dtype=float) - u
+    c2 = c + delta[f.key]
+    pred = f.A @ _wls(f.A, f.y - c2, f.w) + c2
+    return replace(p, pred=pred, c_off=p.c_off + delta[f.key], c_def=p.c_def)
 
 
 def evaluate(dump: pd.DataFrame, frames: dict, system: str, k: int, map_o: SideMap, map_d: SideMap, name: str,
-             ridge: float = 0.0, lam: float = 0.0, level: str = "home", min_poss: float = 1000.0):
+             ridge: float = 0.0, lam: float = 0.0, level: str = "home", min_poss: float = 1000.0,
+             bend: TeamBend | None = None):
     """Leave-one-season-out: fit the map on the other seasons' team-game residuals, apply it to H, score H
     with the criterion's own scorer.  Returns (result rows in RESULT_COLUMNS, the per-season parameters,
-    held_out = -1 for the all-seasons fit)."""
+    held_out = -1 for the all-seasons fit).  `bend`: a TeamBend fitted on the same other seasons, after the
+    map, on the team-game total."""
     D = build_design(dump, frames, system, k, map_o, map_d, min_poss)
     rows, params = [], []
     for h, f in frames.items():
         th = fit_theta(D, exclude_h=h, ridge=ridge, map_o=map_o, map_d=map_d)
         rat = mapped_ratings(ratings_for(dump, system, k, h), th, map_o, map_d, D.scale_o, D.scale_d, extra=f.covariates(k))
         p = predict_season(rat, f.wd, level=level)
+        gamma, s_u = (None, np.nan)
+        if bend is not None and bend.n_params:
+            gamma, s_u = fit_bend(D, th, bend, exclude_h=h)
+            p = bent_prediction(p, f, bend, gamma, s_u, level=level)
         rows.append(dict(held_out=h, k=k, train="", system=name, lam=lam, split="all", group="all", **score(p), seconds=0.0))
-        params.append(_param_row(name, system, k, h, map_o, map_d, D, th))
+        params.append(_param_row(name, system, k, h, map_o, map_d, D, th, bend, gamma, s_u))
     th_all = fit_theta(D, exclude_h=None, ridge=ridge, map_o=map_o, map_d=map_d)
-    params.append(_param_row(name, system, k, -1, map_o, map_d, D, th_all))
+    g_all, s_all = fit_bend(D, th_all, bend) if (bend is not None and bend.n_params) else (None, np.nan)
+    params.append(_param_row(name, system, k, -1, map_o, map_d, D, th_all, bend, g_all, s_all))
     return pd.DataFrame(rows)[RESULT_COLUMNS], pd.DataFrame(params)
 
 

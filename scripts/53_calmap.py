@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from eracoef.calmap import SideMap, dump_ratings, evaluate, load_frames, unmapped_rows  # noqa: E402
+from eracoef.calmap import SideMap, dump_ratings, evaluate, load_frames, parse_maps, unmapped_rows  # noqa: E402
 from eracoef.config import load_config  # noqa: E402
 from eracoef.holdout import Context, Holdout, paired, pooled  # noqa: E402
 
@@ -58,10 +58,9 @@ def main():
         for k in ks:
             res.append(unmapped_rows(dump, frames, system, k))
             for fam in fams:
-                fo, fd = (fam.split(":") + [None])[:2]
-                map_o, map_d = SideMap.parse(fo), SideMap.parse(fd or fo)
-                name = f"{system}_{fam.replace(':', '_')}"
-                r, p = evaluate(dump, frames, system, k, map_o, map_d, name, ridge=ridge)
+                map_o, map_d, bend = parse_maps(fam)
+                name = f"{system}_{fam.replace(':', '_').replace('|', '_')}"
+                r, p = evaluate(dump, frames, system, k, map_o, map_d, name, ridge=ridge, bend=bend)
                 res.append(r)
                 params.append(p)
                 print(f"  {name} K={k} done ({time.time() - t0:.0f}s)", flush=True)
