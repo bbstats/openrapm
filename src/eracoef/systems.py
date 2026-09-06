@@ -15,6 +15,8 @@ mean the same thing in every script.
     mspi_resid        role prior + the boosted box prior on both sides
     mspi_resid_o      role prior on both sides + the boosted box prior on offense only
     rankmap_<s>     any of the above with the leave-one-season-out rank map (needs a rank table)
+    <s>_<family>    any of the above with the smooth calibration map (calmap.py; needs the parameter table
+                    from scripts/53_calmap.py fit, passed as `calmap=`); the names are the table's own
 """
 from __future__ import annotations
 
@@ -24,7 +26,7 @@ from .holdout import (PluginSystem, RankMappedSystem, ReplacementSystem, SplitSy
                       beta_team)
 
 
-def registry(cfg, rankmap=None) -> dict:
+def registry(cfg, rankmap=None, calmap=None) -> dict:
     S = {
         "rapm": PluginSystem("rapm", beta=beta_none),
         "pi": PluginSystem("pi", beta=beta_team),
@@ -106,4 +108,10 @@ def registry(cfg, rankmap=None) -> dict:
                 S[f"rankmap_{n}"] = RankMappedSystem(f"rankmap_{n}", S[n], rank_table)
         if "rankmap_def3_p0" in S:                     # the board as it ships, plus the replacement level
             S["rankmap_def3_p0_rep"] = ReplacementSystem("rankmap_def3_p0_rep", S["rankmap_def3_p0"])
+    if calmap:
+        from .calmap import CalMappedSystem
+        params = pd.read_parquet(calmap)
+        for (name, base), _ in params.groupby(["system", "base"]):
+            if base in S:
+                S[name] = CalMappedSystem(name, S[base], params, name)
     return S

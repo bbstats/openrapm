@@ -24,7 +24,7 @@ Every earlier held-out script is one invocation of this:
 
 usage: python scripts/45_holdout.py [first] [last] --systems=a,b,c [--k=2,4] [--lams=18352]
            [--splits=movers,exposure,bigs,bench] [--rank] [--consensus] [--tag=name] [--ref=hybrid_xft]
-           [--workers=4] [--spread] [--top=1997-1999] [--pdp] [--rankmap=<rank parquet>] [--quiet]
+           [--workers=4] [--spread] [--top=1997-1999] [--pdp] [--rankmap=<rank parquet>] [--calmap=<calmap parquet>] [--quiet]
     --workers=N  run the held-out seasons across N processes (config holdout.workers; 1 = in this process)
     --spread     per system and side, the possession-weighted sd of the prior against the sd of the residual
                  (players with 1000+ possessions), on the consensus window and on 1997-1999
@@ -76,7 +76,8 @@ def _fit_block(system, seasons, ctx):
 
 def main():
     rm = _flag("rankmap")
-    SYSTEMS = registry(cfg, rankmap=rm)
+    cm = _flag("calmap")
+    SYSTEMS = registry(cfg, rankmap=rm, calmap=cm)
 
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     names = _list("systems", ["rapm", "pi", "hybrid", "hybrid_xft"])
@@ -101,7 +102,7 @@ def main():
         if workers > 1:
             res, _, gbdt_reports = run_parallel(ho, names, splits=split_names, rank="--rank" in sys.argv,
                                                 out=OUT / f"holdout_{tag}.parquet", verbose=not quiet, workers=workers,
-                                                rankmap=rm)
+                                                rankmap=rm, calmap=cm)
         else:
             res = ho.run(systems, ctx, splits=splits, rank="--rank" in sys.argv, out=OUT / f"holdout_{tag}.parquet",
                          verbose=not quiet)

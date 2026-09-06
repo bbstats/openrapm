@@ -646,7 +646,7 @@ def _worker(job: dict):
     from .systems import registry
     cfg = job["cfg"]
     ctx = Context.load(cfg)
-    reg = registry(cfg, rankmap=job.get("rankmap"))
+    reg = registry(cfg, rankmap=job.get("rankmap"), calmap=job.get("calmap"))
     systems = [reg[n] for n in job["names"]]
     ho: Holdout = job["holdout"]
     res = ho.run(systems, ctx, splits={s: SPLITS[s] for s in job.get("splits", [])}, rank=job.get("rank", False),
@@ -656,7 +656,7 @@ def _worker(job: dict):
 
 
 def run_parallel(ho: "Holdout", names: list, splits=(), rank: bool = False, out: Path | None = None,
-                 verbose: bool = True, workers: int = 4, rankmap=None) -> tuple[pd.DataFrame, pd.DataFrame | None, list]:
+                 verbose: bool = True, workers: int = 4, rankmap=None, calmap=None) -> tuple[pd.DataFrame, pd.DataFrame | None, list]:
     """`Holdout.run` over `workers` spawned processes, contiguous blocks of held-out seasons each, with the
     BLAS / numba thread count pinned to cpu_count // workers so the processes do not oversubscribe the
     machine (the handoff's 20x trap).  Returns (results, rank rows or None, the GBDT drag reports)."""
@@ -675,7 +675,7 @@ def run_parallel(ho: "Holdout", names: list, splits=(), rank: bool = False, out:
             print(f"parallel: {workers} workers x {threads} threads, seasons {[ (c[0], c[-1]) for c in chunks ]}", flush=True)
         with ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context("spawn")) as ex:
             jobs = [dict(cfg=ho.cfg, holdout=ho, names=list(names), held=c, splits=list(splits), rank=rank,
-                         rankmap=rankmap, verbose=verbose) for c in chunks if c]
+                         rankmap=rankmap, calmap=calmap, verbose=verbose) for c in chunks if c]
             parts = [f.result() for f in [ex.submit(_worker, j) for j in jobs]]
     finally:
         for k, v in old.items():

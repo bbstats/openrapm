@@ -33,9 +33,14 @@ The multi-stage prior-informed RAPM (`mspi`, FINDINGS section 19):
 4. **A boosted box-score prior**: a gradient-boosted model (chimeraboost) of that RAPM from the
    player's padded box rates, the season and the role inputs, cross-fitted by block.
 5. **The rating**: the ridge pulled toward the boosted prior. Positive is good on both ends.
+6. **A calibration map** (FINDINGS section 20): per side a scalar on the rating and a level in the
+   player's block exposure, fitted on the test itself at team-game level, leave-one-season-out. The
+   rating alone was already calibrated; the exposure term is the replacement gap (a player the block
+   barely saw is several points worse than his rating says) and is worth a point per 100 out of season.
 
-Out of season it predicts held-out games at 112.06 points per 100 (K=4) against 112.33 for the
-previous board; the linear box prior it replaces over-rated its own top end (FINDINGS 18-19).
+Out of season it predicts held-out games at 111.05 points per 100 (K=4) against 112.06 without the
+map and 112.56 for the previous board; the linear box prior it replaces over-rated its own top end
+(FINDINGS 18-19), and with the same map that board ties this one (FINDINGS 20).
 
 ## Pipeline
 
@@ -46,6 +51,8 @@ previous board; the linear box prior it replaces over-rated its own top end (FIN
     python scripts/27_xrapm_prior.py                # the player-level panel
     python scripts/49_role_panel.py --check         # APM, role prior, prior-informed RAPM per block
     python scripts/50_boruta.py                     # feature selection for the boosted prior
+    python scripts/53_calmap.py dump --systems=mspi --k=2,3,4   # held-out ratings, then:
+    python scripts/53_calmap.py fit  --systems=mspi --k=2,3,4   # the calibration map (outputs/calmap_chain.parquet)
     python scripts/08_ratings.py                    # the board (outputs/player_ratings.parquet)
     python scripts/52_site.py                       # docs/data/ratings.json for the page
 

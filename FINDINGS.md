@@ -1580,3 +1580,104 @@ game-level error is the whole test and shipped the multi-stage chain as it stood
 against 112.33 for the previous board, 20 of 28 seasons, consensus 0.772 / 0.778 / 0.785. The rank
 map is off (it costs 0.3 per 100 on this prior). The replacement level is an evaluation-time rule and
 changes no rating. The site is one page (docs/index.html) and the project is called OpenRAPM.
+
+## 20. The calibration map: the rating alone is already calibrated at game level; the exposure term is worth a point
+
+The owner's question after section 19 (2026-09-05): the multi-stage board's offense looks too timid (the
+starters' x1.20 in `51_garbage.py`, defenders creeping up the leaderboard), so find a smooth function of the
+offensive and defensive ratings that is best calibrated out of season -- "something like the opposite of a
+sigmoid". Also: unseen players keep the criterion's 0 for now (parsimony), and game level is the whole test.
+
+### What was built (`src/eracoef/calmap.py`, `scripts/53_calmap.py`, `tests/test_calmap.py`)
+
+* `dump`: every system fitted once per held-out season and K with the RATINGS kept
+  (`outputs/ratings_chain.parquet`: `mspi` and `def3_p0`, K = 2, 3, 4, 28 seasons, 196 s). K = 3 was added
+  because the shipped board is a 3-season block and the map's parameters depend on K.
+* A map per side is linear in its parameters: a family in the rating (`linear`, `poly2`, `poly3`, `sinh`,
+  `expo`, `hinge` = one slope per tail) plus, optionally, a level term in the player's TRAINING exposure
+  (`sat` = c poss / (poss + 1000), `log`, `log2`, `bins`, `unseen`). Every exposure term is 0 at poss = 0, so
+  a player the block never saw keeps his 0 and the term is the replacement gap as a smooth function of
+  exposure. The season's level (intercept, home) is profiled out of every column exactly as the criterion's
+  refit does, the columns are aggregated to team-games, and the parameters are one weighted least squares
+  on the pooled TEAM-GAME residuals -- the owner's north star, not the stint error the rank map was fitted
+  on. Leave-one-season-out: season H is scored with the map fitted on the other 27, through the criterion's
+  own `predict_season` + `score`. `CalMappedSystem` applies a parameter table inside the holdout runner
+  (`45_holdout.py --calmap=`) and reproduces the offline scores to 1e-6.
+
+### 1. A map of the rating alone is the identity at game level
+
+`mspi`, all-seasons fit, K = 2 / 3 / 4: the scalar the games want on offense is 1.03 / 0.98 / 0.96, on
+defense 1.00 / 0.98 / 0.98. Every shape family lands within 0.03 per 100 of the unmapped board (z between
+-1.0 and +1.4). The stint-level scalar of section 19 (1.27 on offense) is real at stint level and is NOT what
+games want. The two disagree because the stint regressor varies within a game (starters against second
+units) and the game regressor varies between games (who each team is); a starter-bench LEVEL error is
+visible to the first and absorbed by the second's per-season intercept. So "offense is too timid" was a
+statement about the gap between starters and bench, not about the top of the board. The role-group slopes
+recomputed at game level say the same: `mspi` starters 1.04 / 0.94 (K = 2 / 4) on offense, 0.97 / 0.94 on
+defense; bench 1.0 / 0.97 and 1.10 / 1.07; deep bench 1.3 / 1.3 and 1.4 / 1.4 with standard errors of 0.13-0.18.
+
+The shape, for the record: `hinge` gives the top of offense 1.11 / 1.03 / 1.01 and the bottom 0.91 / 0.91 /
+0.87; defense (raw sign) 0.89 / 0.77 / 0.77 at the bad end and 1.09 / 1.14 / 1.14 at the good end. Not an
+anti-sigmoid: the good tails are calibrated or want a little more, the bad tails want compressing. Worth
+nothing at game level.
+
+**The previous board is miscalibrated at game level and a scalar fixes it.** `def3_p0`'s offense wants
+0.78 (K = 2-4), defense 1.02-1.05. `def3_p0_linear` is -0.58 / -0.59 / -0.54 per 100 against `def3_p0` (z -5,
+22-24 of 28) -- twice what the rank map (fitted at stint level) took -- and against `mspi` it is -0.04 /
+-0.04 / -0.02, z -0.2 to -0.3, 11-13 of 28. So the chain's whole game-level edge over the old board
+(section 19: -0.55) was the old board's offensive amplitude, and the two boards are tied once that is fixed.
+
+### 2. The exposure term is worth a point on every system
+
+| map (both sides) | K=2 | K=3 | K=4 | vs `mspi`, K=2 / 3 / 4 |
+|---|---|---|---|---|
+| `mspi` (ships before this) | 112.32 | 112.21 | 112.06 | |
+| `mspi_linear` | 112.33 | 112.22 | 112.06 | +0.01 / +0.01 / 0.00 |
+| `mspi_linear+unseen` (a fitted replacement level) | 111.89 | 111.85 | 111.70 | -0.43 / -0.36 / -0.36 (z -5.0 / -4.1 / -4.8, 24/28) |
+| **`mspi_linear+sat`** | **111.52** | **111.30** | **111.05** | **-0.79 / -0.91 / -1.01 (z -5.7 / -6.3 / -7.1, 25 / 24 / 25 of 28): WINS** |
+| `mspi_linear+sat500` / `sat2000` | 111.51 / 111.58 | 111.31 / 111.34 | 111.10 / 111.07 | within 0.06 of `sat` |
+| `mspi_linear+log2` | 111.49 | 111.27 | 111.03 | -0.03 / -0.03 / -0.02 vs `linear+sat` (z -1.3 / -1.2 / -0.9) |
+| `mspi_linear+bins` | 111.50 | 111.31 | 111.14 | -0.03 / +0.01 / +0.08 vs `linear+sat` |
+| `mspi_poly2+sat` / `hinge+sat` | 111.45 / 111.47 | 111.26 / 111.27 | 110.99 / 111.00 | -0.06 / -0.04 / -0.06 vs `linear+sat` (z -1.0 to -1.6) |
+| `def3_p0_linear+sat` | 111.51 | 111.25 | 111.08 | 0.00 / -0.03 / +0.05 vs `mspi_linear+sat` (z 0.0 / -0.2 / +0.5) |
+
+`linear+sat`, all-seasons fit at K = 3: offense 0.85 x + 2.88 sat(poss), defense 0.885 x - 3.15 sat(poss),
+sat = poss / (poss + 1000). A rotation player (block possessions 5,000+, sat 0.83+) is 2.4 + 2.6 = 5 points
+per 100 better than a player the block never saw and 1.6 better than one it saw for 500 possessions; the
+term is flat among regulars (sat 0.91 at 10,000, 0.95 at 20,000), so it reorders the low-minute end of the
+board and leaves the top alone (the 1997-99 top 15 is the same list in the same order, every rating +2
+before re-centring). The bins say the same shape unsmoothed (K = 4, relative to 4,000+: unseen -4.2 / +3.1,
+1-499 -1.8 / +3.0, 500-1,499 -0.8 / +1.7, 1,500-3,999 -0.8 / +0.8). Half of the gain is the unseen player
+(`linear+unseen`, -0.36 to -0.43), half the gradient among players the block did see; the 7+-bench floors
+of section 19 are where both live.
+
+Once the rating slope shares the fit with exposure it drops below 1 (0.85 / 0.89): the ratings are a little
+too WIDE at game level, not too narrow, on both sides. The stint-level `scale_off` diagnostic stays at 1.20
+after the map, as it must (the map is fitted at game level). At stint level `mspi_linear+sat` is -0.40 /
++0.28 / +0.45 against `mspi` (z -1.9 / +1.3 / +2.2): the stint verdict is split, as in section 19, and the
+owner has ruled it out of the test.
+
+**Choice: `linear+sat`, s = 1000.** One rating scalar and one exposure coefficient per side; s was the first
+value tried and the neighbours are within 0.06 with no consistent sign; the two-tail and quadratic shapes
+buy 0.03-0.06 at z -1 to -1.6 and are not a win over it under the stop rules.
+
+### What it does to the board
+
+Consensus (2024-26, read once, holdout runner): `mspi_linear+sat` 0.786 total / 0.780 offense / 0.767
+defense, archetype bias 0.12, against `mspi`'s 0.772 / 0.778 / 0.785, bias 0.21. Spread against the
+residual (1000+ possessions, 1997-99): prior 1.15 against a residual of 0.61 on offense (the rating sd 1.35,
+from 1.45). Shipped through `08_ratings.py` (`config.yaml -> ratings_prior.cal_map`, K = 3: offense
+0.849 x + 2.883 sat, defense 0.885 x - 3.148 sat), then each side re-centred possession-weighted per window
+so 0 stays the average player on the floor -- the criterion refits the level per season, so the centring is
+invisible to it. The 2024-26 top ten is Jokic, Wembanyama, Gilgeous-Alexander, Leonard, Holmgren, Gobert,
+White, Doncic, Antetokounmpo, Davis: the same names as before, one or two places moved.
+
+**Not answered by this test:** whether defenders sit too high at the top. The game-level criterion sees
+no offense-defense miscalibration at the top of `mspi` (good tails 1.0-1.1 on both sides), and no map of
+the rating alone moves the error. What the criterion could see and fixed is the low-exposure end.
+
+**What the owner's rule on unseen players means here.** The criterion still gives an unseen player 0
+and the map's exposure term is 0 for him, so no special rule was added; but every rated player moves up
+by his exposure term, so after re-centring an unseen player stands about 5 points per 100 below a
+regular. That is the replacement level of section 19 item 5 arrived at as the poss -> 0 end of one
+smooth function fitted on the criterion, not as a rule. Reported so it is not mistaken for parsimony.

@@ -204,6 +204,38 @@ if RM:
         rat[f"rating_total{suffix}"] = rat[f"rating_off{suffix}"] + rat[f"rating_def{suffix}"]
     print(f"rank map applied from {RM['table']} ({RM['system']}, K={RM['k']})")
 
+# The calibration map (FINDINGS.md section 20; src/eracoef/calmap.py, scripts/53_calmap.py).  Fitted on the
+# out-of-season criterion at TEAM-GAME level, leave-one-season-out: per side a scalar on the rating plus a
+# level in the player's block exposure, c * poss / (poss + 1000).  The rating alone was already calibrated at
+# game level (the scalar is 0.85-0.9); the exposure term is the replacement gap -- a player the block barely
+# saw is 3-6 points worse than his rating says -- and is worth -0.8 to -1.0 per 100 at game level (z -6 to -7,
+# 24-25 of 28 seasons) on this board and on the previous one alike.  After the map each side is re-centred
+# (possession-weighted, per window) so 0 stays the average player on the floor; the criterion refits the
+# level per season, so the centring changes nothing it measures.
+CM = PRIOR.get("cal_map")
+if CM:
+    from eracoef.calmap import apply_params, params_row
+    tbl = Path(cfg["_root"]) / CM["table"]
+    if not tbl.exists():
+        raise SystemExit(f"{tbl} is missing; run scripts/53_calmap.py dump then fit")
+    row = params_row(pd.read_parquet(tbl), CM["system"], CM["base"], int(CM["k"]), None)
+    for suffix in ("", "_po"):
+        if f"rating_off{suffix}" not in rat.columns:
+            continue
+        rat[f"rating_off{suffix}_raw"] = rat[f"rating_off{suffix}"]
+        rat[f"rating_def{suffix}_raw"] = rat[f"rating_def{suffix}"]
+        o, d = apply_params(row, rat[f"rating_off{suffix}"].to_numpy(), -rat[f"rating_def{suffix}"].to_numpy(),
+                            rat["poss_off"].to_numpy())                      # the map is in raw sign
+        w = rat["poss_off"].to_numpy(dtype=float)
+        for col, v in ((f"rating_off{suffix}", o), (f"rating_def{suffix}", -d)):
+            v = pd.Series(v, index=rat.index)
+            mean = (v * w).groupby(rat["window"]).transform("sum") / pd.Series(w, index=rat.index).groupby(rat["window"]).transform("sum")
+            rat[col] = v - mean
+        rat[f"rating_total{suffix}"] = rat[f"rating_off{suffix}"] + rat[f"rating_def{suffix}"]
+    print(f"calibration map applied from {CM['table']} ({CM['system']}, K={CM['k']}): "
+          f"offense {row.map_o} {[round(float(row[f'o{j}']), 3) for j in range(2)]}, "
+          f"defense {row.map_d} {[round(float(row[f'd{j}']), 3) for j in range(2)]}, re-centred per window")
+
 SORT = "rating_total" if "rating_total" in rat.columns else "rapm_mm_total"
 cols = ["window", "window_mid", "season", "player_id", "player_name", "poss_off", "poss_def", "shrinkage",
         "prior_off", "prior_def", "prior_total", "boost_off", "boost_def", "boost_total",

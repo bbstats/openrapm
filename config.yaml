@@ -58,6 +58,13 @@ ratings_prior:
   # leave-one-season-out test by 0.4 points per 100 at team-game level.  Rank-preserving per side.
   # The rank map is OFF for the multi-stage board (FINDINGS 19: it costs 0.3 per 100 on this prior).
   rank_map: null
+  # The calibration map (FINDINGS section 20; calmap.py, scripts/53_calmap.py): per side a scalar on the rating
+  # plus a level in the player's block exposure, c * poss / (poss + 1000), fitted leave-one-season-out on the
+  # criterion at TEAM-GAME level.  The rating alone is already calibrated at game level (every smooth map of
+  # the rating alone is the identity within noise); the exposure term is the replacement gap and is worth
+  # -0.8 / -0.9 / -1.0 per 100 at K = 2 / 3 / 4 (z -6 to -7, 24-25 of 28).  K = 3 matches the 3-season block.
+  # `08_ratings.py` re-centres each side per window after it.  Set to null to ship the unmapped chain.
+  cal_map: {table: outputs/calmap_chain.parquet, system: mspi_linear+sat, base: mspi, k: 3}
 # The random effect unit: "window" gives one player effect per 3-season window, "season" one per
 # player-season (the original spec).  Possession thresholds below are in the unit's own scale.
 player_unit: window
