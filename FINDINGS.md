@@ -1951,3 +1951,21 @@ target puts a wide defensive prior on the board that no modern metric spreads th
 "whether defenders sit too high at the top" open; this is where it bites.  The shipped configuration above
 is therefore NOT committed as is: the candidates that keep the offensive gain and the defensive floors are
 read next (the APM prior on offense with the RAPM_1 prior on defense, `ship_mix`; the RAPM_1 prior on both).
+
+**The candidates, mapped (`linear+log2&xlog&prior`, no decay, no age: the shipped fit), criterion at K = 3 and
+the consensus read once:**
+
+| candidate | prior O / D | criterion | consensus total / off / def | def spread | bias |
+|---|---|---|---|---|---|
+| `ship` | APM / APM | 110.639 | 0.745 / 0.806 / 0.678 | 1.56 | 0.46 |
+| **`ship_mix`** | **APM / RAPM_1** | **110.742** | **0.789 / 0.805 / 0.751** | **1.34** | **0.17** |
+| `ship_rapm1` | RAPM_1 / RAPM_1 | 110.911 | 0.775 / 0.804 / 0.751 | 1.34 | 0.26 |
+| section 20's board | RAPM_1 / RAPM_1, ridge, `linear+sat` | 111.296 | 0.785 / 0.779 / 0.768 | | 0.12 |
+
+The offensive gain is the APM target's (0.806 against 0.779 on the consensus, and 0.17 per 100 on the
+criterion between `ship_mix` and `ship_rapm1`); the defensive loss is also the APM target's.  **Shipped:
+`ship_mix`** -- `ratings_prior.gbdt_target: apm`, `gbdt_target_def: rapm1` (`chain_offset(target_d=)`,
+`MspiFast.target_d`), the map on its own dump -- 0.55 per 100 better than section 20's board on the criterion,
+the consensus total up 0.785 -> 0.789, offense 0.779 -> 0.805, defense 0.768 -> 0.751 (the floor is 0.75),
+spread 1.34 (the floor 1.4).  The criterion's own best (`best`: APM on both sides, the decay, the age term)
+stays the chart's line at 110.32; with the decay and the age term the mix scores 110.58 (`best_mix`).

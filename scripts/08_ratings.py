@@ -74,7 +74,8 @@ if USE_CHAIN:
     # (`gbdt.params`), and the ridge at a fraction of lam_plugin (`lam_scale`)
     chain_fn = chain_offset(CHAIN_SIDES, mode=str(cfg.get("gbdt", {}).get("mode", "full")),
                             target=str(PRIOR.get("gbdt_target", "rapm1")),
-                            params=dict(cfg.get("gbdt", {}).get("params", {}) or {}) or None)
+                            params=dict(cfg.get("gbdt", {}).get("params", {}) or {}) or None,
+                            target_d=PRIOR.get("gbdt_target_def"))
 LAM_SCALE = float(PRIOR.get("lam_scale", 1.0))
 if LAM_SCALE != 1.0:
     cfg["lam_plugin"] = float(cfg["lam_plugin"]) * LAM_SCALE

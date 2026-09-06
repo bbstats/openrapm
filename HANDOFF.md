@@ -1,88 +1,93 @@
-# Handoff: the calibration map ships
+# Handoff: iterate-and-improve mode
 
-Written 2026-09-05. The owner asked for a smooth function of the offensive and defensive ratings that is
-best calibrated out of season. Answer, measured at team-game level: **no function of the rating alone helps
-the multi-stage board**, it is already calibrated at game level. A **level term in the player's block
-exposure** is worth 0.8-1.0 per 100 and ships. `FINDINGS.md` section 20 is the full record.
+Written 2026-09-06. The owner's instruction for this phase: keep improving the K = 3 out-of-season team-game
+error, charge every fit for its time, post the chart, write nothing but FINDINGS.  `FINDINGS.md` section 21
+(items 1-18) is the record; `docs/progress.png` / `docs/progress.csv` the chart and its log.
 
-**Tree state: everything below is UNCOMMITTED on `hybrid-and-xpts`.** Tests: 82 passed, 1 xfailed.
+**Tree state: committed and pushed on `hybrid-and-xpts`** except the rebuilt board artefacts of the last step
+if the final chain had not finished (`git status`).  Tests: 82 passed, 1 xfailed on the last full run.
 
 ---
 
 ## Part 0: do first
 
-1. **Commit and push.** `git add -A && git commit`, push `hybrid-and-xpts`, fast-forward `main`
-   (`bbstats/openrapm`). `docs/data/ratings.json` is already regenerated with the map.
+1. **Fast-forward `main`** (`bbstats/openrapm`) to `hybrid-and-xpts` so the site picks up the new board.
 2. **DNS for openrapm.com** (unchanged, still not done): four GitHub `A` records + `www` CNAME at Porkbun,
    wait for the cert, then `gh api -X PUT repos/bbstats/openrapm/pages -F https_enforced=true`.
 
-## Part 1: what was found
+## Part 1: where it stands
 
-1. **A map of the rating alone is the identity.** Games want a scalar of 0.96-1.03 per side at every K;
-   quadratic, cubic, sinh, exp and two-tail hinge are all within 0.03 per 100 of the unmapped board.
-   The stint-level x1.27 of section 19 is a **starter-vs-bench LEVEL error absorbed by the game-level
-   intercept**, not top-end timidity. Fit corrections on the objective you score.
-2. **The exposure term is the lever.** `linear+sat` = per side, a scalar on the rating plus
-   `c * poss/(poss+1000)` in block possessions, fitted leave-one-season-out on team-game residuals:
-   **-0.79 / -0.91 / -1.01 per 100 vs `mspi` at K=2/3/4, z -5.7 / -6.3 / -7.1, 24-25 of 28. WINS.**
-   Half is the unseen player, half the gradient among players the block did see. Richer shapes
-   (`log2`, `bins`, `poly2+sat`, `hinge+sat`, sat scales 250-4000) are all within 0.06. Not wins.
-3. **The old board ties this one once both are mapped.** `def3_p0`'s offense is 22% too wide at game
-   level; a scalar alone takes -0.58 off it, and `def3_p0_linear+sat` is within 0.05 of `mspi_linear+sat`
-   at every K. The chain's section-19 edge WAS the old board's amplitude. What still separates them is
-   the Stockton problem and the consensus read, not the criterion.
-4. **The top-end question is unanswered.** With exposure in the fit the good tails are calibrated on both
-   sides (~1.0); the BAD tails want compressing. The criterion cannot adjudicate "defenders too high" at
-   this sample size. If the owner wants it moved it is a modelling change, not a map.
-5. **Consensus** 2024-26, read once: 0.785 / 0.779 / 0.768 with the map, from 0.772 / 0.778 / 0.785.
-   Archetype bias 0.12 from 0.21. Same top ten. Test floors (0.75/0.76/0.75) hold.
-6. **Unseen players** keep the owner's rule of 0 (the exposure term is 0 at poss=0), but every rated
-   player moves up, so after re-centring an unseen player sits ~5 per 100 below a regular. The
-   replacement level came back as the poss->0 end of one fitted function, not as a rule.
+| | criterion (K = 3, mapped) | 28 fits | true loss |
+|---|---|---|---|
+| shipped before this phase (`mspi_linear+sat`, section 20) | 111.30 | 134 s | 1.00 |
+| the criterion's best now (`best`) | 110.32 | 32 s | 0.24 |
+| what ships now (`ship_mix`, no held-out season) | 110.74 | 32 s | |
 
-### Shipped
+**True loss** = (score / 111.30) x (28-fit seconds / 134).  Every time cut was checked to reproduce the
+ratings to 1e-13 (`scratch/cmp_design.py` for the design, the ratings-vs-dump check in the scratch scripts).
 
-`config.yaml -> ratings_prior.cal_map: {table: outputs/calmap_chain.parquet, system: mspi_linear+sat,
-base: mspi, k: 3}`. `08_ratings.py` applies the all-seasons K=3 row (offense `0.849x + 2.883 sat`,
-defense `0.885x - 3.148 sat`, raw sign), keeps `rating_*_raw`, and re-centres each side possession-weighted
-per window. **K=3 because the shipped block is 3 seasons and the exposure coefficient scales with block
-length** (2.883 at K=3, 3.405 at K=4).
+### What moved the score (all leave-one-season-out, all in `src/eracoef/calmap.py` or `fastfit.py`)
+
+1. **The age term** in the map (age at H, quadratic): -0.15, 28 of 28.  Prediction-time only.
+2. **The ridge x0.5** under the map: -0.16 (later moot, see 5).
+3. **H-2 at half weight** in the ridge rows and behind the padded rates (`decay`, `decay_exposure`): -0.10 and -0.04.
+4. **The map's terms**: log-exposure level, rating-by-log-exposure slope, the prior part of the rating as its own
+   column (`linear+log2&age2&xlog&prior`): -0.11 and -0.11.
+5. **The GBDT prior trained on the panel's unshrunk APM instead of RAPM_1** (`target="apm"`): -0.29, z -3.1,
+   the largest single gain, and with it the ridge goes back to the shipped value.  A sweep of the panel's
+   ridge (x0.7 ... x0.15 ... APM) is monotone: the less the prior's target is shrunk, the better the mapped
+   board.  Unmapped it is worse -- the map does the shrinking.
+
+### What moved the clock (identical numbers)
+
+One-pass fit (`fastfit.MspiFast`: one design, one exposure, one offset, cross-products once, two solves), the
+design assembled from cached per-season pieces kept on disk (`designcache.py`, `data/cache/pieces/`), X written
+straight in CSR, the exposure fitted from the design's parts, no edf trace, sparse accumulators, box / shots /
+shooter-totals caches, the GBDT without its audition fits (`gbdt.params`).  134 s -> 32 s for the 28 fits.
+
+### What ships, and why not the best
+
+The APM prior on both sides fails the owner's consensus floors on defense (0.68 against 0.75; spread 1.56x).
+`ship_mix` keeps the APM prior on offense and the RAPM_1 prior on defense: 0.789 / 0.805 / 0.751, spread 1.34,
+criterion 110.74.  `config.yaml -> ratings_prior.gbdt_target: apm, gbdt_target_def: rapm1, gbdt.params: {no
+auditions}, cal_map -> outputs/calmap_ship.parquet (system ship_mix_linear+log2&xlog&prior)`; `08_ratings.py`
+hands the map the prior parts (`calmap.apply_params(prior_o=, prior_d=)`).  The decay and the age term need a
+held-out season and do not ship.
+
+### Flat or negative (do not re-run): section 21 items 4, 7, 12, 14 and the reads inside 1, 2, 9, 17
+
+lam_ratio, lam_buckets, GBDT shape and regularisation (both targets), playoff rows, one target for both sides,
+x3def_p1, mover / rookie-age / age-by-exposure / rating-by-age / rating-by-exposure / prior-by-exposure /
+prior^2 map terms, season weights beyond the decay, padding scale and target, panel APM at penalty 30.
 
 ## Part 2: machinery
 
 | file | what |
 |---|---|
-| `src/eracoef/calmap.py` (new) | `dump_systems`/`dump_ratings`, `SeasonFrame` (held-out season reduced to lineup matrices + level projection + team-game aggregation), `FAMILIES` (rating shapes) x `EXPOSURES` (level terms) via `SideMap` ("family+exposure"), `build_design`/`fit_theta`/`evaluate` (LOO through the criterion's own scorer), `CalMappedSystem` |
-| `scripts/53_calmap.py` (new) | `dump` -> `outputs/ratings_<tag>.parquet`; `fit` -> `outputs/holdout_calmap_<tag>.parquet` + `outputs/calmap_<tag>.parquet` (params; `held_out=-1` is the all-seasons fit) |
-| `systems.py`, `holdout.py`, `45_holdout.py` | `registry(cfg, rankmap, calmap)`; `--calmap=` threads through the parallel runner |
-| `08_ratings.py`, `config.yaml` | the `cal_map` block |
-| `tests/test_calmap.py` (new, 5) | incl. the pooled WLS == a direct grid search on the criterion's team-game score |
+| `scripts/54_track.py` | the tracker: dump a system at K = 3 (timed), fit the map leave-one-season-out, score, log a row, draw the chart.  `--systems=a,b --maps=... --label=...`; one dump per system |
+| `src/eracoef/fastfit.py` | `MspiFast`: the one-pass board fit with every knob (`lam`, `lam_ratio`, `gbdt_params`, `target`, `target_d`, `panel`, `decay`, `decay_exposure`, `season_weights`, `pad_scale`, `pad_target`, `phases`, `lam_buckets`); `direct_layout` |
+| `src/eracoef/designcache.py` | per-season pieces (disk + LRU) and `build_window_cached`; `windows.build_window` routes to it unless `margin_bins` |
+| `src/eracoef/calmap.py` | families x exposure terms (`&`-combinable: `sat`, `log2`, `age2`, `xlog`, `prior`, ...), `SeasonFrame.covariates`, `apply_params(prior_o=, prior_d=)` |
+| `src/eracoef/systems.py` | `best`, `ship`, `ship_mix`, `ship_rapm1`, the `mspi1_*` variants |
+| `scratch/` (untracked) | `cmp_design.py` (design equality vs git HEAD), `remap.py` (re-score dumps with a map), `consensus_read.py` (mapped candidates against the consensus), `panel_lam.py` (role panel at a scaled ridge / APM penalty), the patch scripts |
 
 ### Verification
 
 ```
-.venv/Scripts/python -m pytest tests -q                                                    # 82 passed, 1 xfailed
-.venv/Scripts/python scripts/53_calmap.py dump --systems=mspi,def3_p0 --k=2,3,4 --workers=4 --tag=chain   # ~3.5 min
-.venv/Scripts/python scripts/53_calmap.py fit  --tag=chain --systems=mspi,def3_p0 --k=2,3,4               # ~1.5 min
+.venv/Scripts/python -m pytest tests -q                                                # 82 passed, 1 xfailed
+.venv/Scripts/python scripts/54_track.py --systems=best --maps=linear+log2\&age2\&xlog\&prior --label=...   # ~45 s
 .venv/Scripts/python scripts/08_ratings.py && .venv/Scripts/python scripts/52_site.py && .venv/Scripts/python scripts/22_vs_consensus.py
 ```
 
-### Traps (new this session; earlier ones all still stand)
+### Traps (new; the earlier ones stand)
 
-- **Long bash heredocs fail in this shell.** Write the text with the Write tool and `cat >>` it.
-- **The exposure term needs exposure to vary**, or the column is collinear with the intercept and
-  `fit_theta` raises "Singular matrix". The tests give their table varying possessions for this reason.
-- **`level: full` on a one-season frame has a duplicate intercept column**; `SeasonFrame` uses `pinv`.
-- **`neighbourhood()` is asymmetric at odd K**: K=3 is {H-2, H-1, H+1}, because `H-d` is taken before
-  `H+d`. Flips at the era edges.
-- **The LOO wall is not perfectly clean.** The map for H is fitted on rows from H's neighbours, whose
-  ratings were trained on blocks that include H. 4 params on ~66k rows so the influence is tiny, but the
-  channel exists and the old rank map had it too. Worth one sentence if anyone re-derives this.
+- **One system per dump for timing**: the GBDT cache per process flatters a later system in the same run.
+- **The tracker's `seconds` is the per-fit wall in a 4-worker run**, about 1.5x a single warm fit (contention);
+  compare like with like.
+- **`53_calmap.py fit` overwrites `outputs/holdout_calmap_<tag>.parquet`** with only the maps of that run.
+- **`apply_params` needs the prior parts** for any map with a `prior` term; without them the term is silently 0.
+- **The panel's APM target vs the consensus**: anything that widens the defensive prior trips
+  `test_defensive_spread_is_calibrated` (1.4x) and the 0.75 defensive floor.  Read the consensus before shipping.
+- Long bash heredocs still fail in this shell; the patch scripts were written with the Write tool.
 
-### Standing warning, kept
-
-Added this session: "offense is too timid" was true at stint level and false at game level, and "the chain
-beats the old board" was really "the old board's offense is too wide". Measure first, on the objective
-you score.
-
-(Earlier handoffs: `HANDOFF_rankmap_archive.md`; FINDINGS 19 has the chain's own build and diagnostics.)
+(Earlier handoffs: `HANDOFF_rankmap_archive.md`; the calibration-map handoff is in git history at d1bc3cc.)
