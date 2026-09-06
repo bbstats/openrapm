@@ -8,7 +8,7 @@ like the board):
   3. RAPM_1     the shipped ridge with prior_offset = Simple SPM; u and the shrinkage a per player
 
 Writes outputs/role_panel.parquet with, per row: window, side, player_id, ps_idx, season (the year
-the player played most in the window), poss, the 13 centred padded rates, share, gs_pct, age, apm,
+the player played most in the window), poss, the 13 centred padded rates and the same 13 uncentred (raw_*), share, gs_pct, age, apm,
 spm, u, a, rapm1 (= spm + u).  Raw sign on both sides throughout.  outputs/xrapm_panel.parquet, the
 reference systems' input, is asserted unchanged.
 
@@ -74,6 +74,11 @@ for w in window_seasons(cfg):
         a = apm_fit(wd, cfg)
         R = a["ro"] if side == "O" else a["rd"]
         d = pd.DataFrame(R, columns=FEATURES)
+        # the same rates UNCENTRED: what an efficiency ratio needs (gbdt_prior.RATIOS), since a ratio of
+        # rates centred on the average player is meaningless
+        R_raw = a["pipe"]["exposure"].season_rates_ if side == "O" else a["pipe"]["exposure"].season_rates_d_
+        for j, c in enumerate(FEATURES):
+            d[f"raw_{c}"] = np.asarray(R_raw, dtype=float)[:, j]
         d.insert(0, "window", lab)
         d.insert(1, "side", side)
         d.insert(2, "player_id", wd.spec.ps_table["player_id"].to_numpy())
