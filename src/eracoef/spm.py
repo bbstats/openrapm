@@ -136,7 +136,7 @@ def season_of_units(wd) -> np.ndarray:
 
 
 def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, target: str = "rapm1",
-                 params: dict | None = None, panel: str | None = None) -> Callable:
+                 params: dict | None = None, panel: str | None = None, target_d: str | None = None) -> Callable:
     """The per-player offset builder for a PluginSystem.  Signature `offset(train, ctx, wd) -> (2 * n_ps,)`,
     raw sign, possession-centred per side.
 
@@ -174,16 +174,24 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
             fd = fit_spm(ctx.rpanel, "D", exclude, pen=float(s.get("pen", 1.0)), min_poss=float(s.get("min_poss", 500)))
             off = spm_offset(fo, fd, inputs, poss_o, poss_d)
         if sides:
-            if params or panel:
-                prior = ctx.prior(mode, "apm" if target == "apm" else None, params, panel)
+            t_d = target_d or target
+            if params or panel or target_d:
+                prior_o = ctx.prior(mode, "apm" if target == "apm" else None, params, panel)
+                prior_d = ctx.prior(mode, "apm" if t_d == "apm" else None, params, panel)
             else:
-                prior = ctx.gbdt if mode == "residual" else getattr(ctx, "mspi_apm" if target == "apm" else "mspi", None)
-            if prior is None:
+                prior_o = ctx.gbdt if mode == "residual" else getattr(ctx, "mspi_apm" if target == "apm" else "mspi", None)
+                prior_d = prior_o
+            if prior_o is None or prior_d is None:
                 raise RuntimeError(f"Context has no GBDT prior for mode {mode!r} (outputs/role_panel.parquet)")
             from .gbdt_prior import gbdt_offset
             ro, rd = centred_rates(exp)
-            g = gbdt_offset(prior, ro, rd, season_of_units(wd), poss_o, poss_d, exclude, sides=sides,
-                            features=list(wd.spec.features), extra=inputs[list(RAW_INPUTS)]) * float(scale)
+            common = dict(features=list(wd.spec.features), extra=inputs[list(RAW_INPUTS)])
+            g = np.zeros(2 * m)
+            if "O" in sides:
+                g += gbdt_offset(prior_o, ro, rd, season_of_units(wd), poss_o, poss_d, exclude, sides=("O",), **common)
+            if "D" in sides:
+                g += gbdt_offset(prior_d, ro, rd, season_of_units(wd), poss_o, poss_d, exclude, sides=("D",), **common)
+            g = g * float(scale)
             if mode == "residual":
                 off = off + g
             else:                                   # the GBDT replaces the SPM on the sides it covers
@@ -192,7 +200,7 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
                         off[sl] = g[sl]
         return off
 
-    offset.__name__ = f"chain_offset_{mode}_{target}_x{scale:g}_" + ("".join(sides) or "spm")
+    offset.__name__ = f"chain_offset_{mode}_{target}{'_' + target_d if target_d else ''}_x{scale:g}_" + ("".join(sides) or "spm")
     return offset
 
 

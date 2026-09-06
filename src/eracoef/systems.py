@@ -113,7 +113,16 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
             n = f"mspi1_lam{f:g}_fast_dec05".replace(".", "")
             S[n] = MspiFast(n, lam=float(cfg["lam_plugin"]) * f, gbdt_params=FAST, decay=0.5)
         S["mspi1_lam05_fast_dec05x"] = MspiFast("mspi1_lam05_fast_dec05x", lam=L05, gbdt_params=FAST, decay=0.5, decay_exposure=True)
-        S["best"] = MspiFast("best", lam=L05, gbdt_params=FAST, decay=0.5, decay_exposure=True, target="apm")
+        # the best on the criterion: the APM-trained prior at the shipped ridge (x0.5 / x0.7 / x1 within 0.03), the
+        # GBDT without audition fits, H-2 at half weight in the rows and the exposure
+        S["best"] = MspiFast("best", gbdt_params=FAST, decay=0.5, decay_exposure=True, target="apm")
+        # the same fit with no held-out season: what 08_ratings.py ships (decay inert, no age term in its map)
+        S["ship"] = MspiFast("ship", gbdt_params=FAST, target="apm")
+        # the shipping candidates that must pass the consensus floors (tests/test_vs_consensus.py): the APM prior
+        # on offense with the RAPM_1 prior on defense, and the RAPM_1 prior on both sides
+        S["ship_mix"] = MspiFast("ship_mix", gbdt_params=FAST, target="apm", target_d="rapm1")
+        S["ship_rapm1"] = MspiFast("ship_rapm1", gbdt_params=FAST)
+        S["best_mix"] = MspiFast("best_mix", gbdt_params=FAST, target="apm", target_d="rapm1", decay=0.5, decay_exposure=True)
         BEST = dict(lam=L05, gbdt_params=FAST, decay=0.5, decay_exposure=True)
         # the padding of the box rates behind the prior: its constants halved / doubled, the league target
         S["mspi1_best_pad05"] = MspiFast("mspi1_best_pad05", pad_scale=0.5, **BEST)
@@ -132,6 +141,10 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
             S[n] = MspiFast(n, **{**APM, "lam": float(cfg["lam_plugin"]) * f})
         S["mspi1_apm30"] = MspiFast("mspi1_apm30", panel="outputs/role_panel_apm30.parquet", **APM)   # APM at penalty 30
         S["mspi1_apm_nodec"] = MspiFast("mspi1_apm_nodec", **{**APM, "decay": None, "decay_exposure": False})
+        # the GBDT's regularisation on the noisier APM target
+        for tag, prm in (("l2x5", {"l2_leaf_reg": 5.0}), ("l2x20", {"l2_leaf_reg": 20.0}), ("mcw20", {"min_child_weight": 20.0}),
+                         ("d4", {"depth": 4}), ("d8", {"depth": 8}), ("lr05", {"learning_rate": 0.05})):
+            S[f"mspi1_apm_{tag}"] = MspiFast(f"mspi1_apm_{tag}", **{**APM, "gbdt_params": {**FAST, **prm}})
         # cheaper GBDT trees: depth 4 (flat in loss in section 21.4), 64 bins
         S["mspi1_best_d4"] = MspiFast("mspi1_best_d4", **{**BEST, "gbdt_params": {**FAST, "depth": 4}})
         S["mspi1_best_mb64"] = MspiFast("mspi1_best_mb64", **{**BEST, "gbdt_params": {**FAST, "max_bins": 64}})

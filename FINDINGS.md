@@ -1908,3 +1908,46 @@ x0.15 and the APM target itself are queued.
 
 Cheaper GBDT trees at the best: depth 4 110.642 in 32.1 s, 64 bins 110.662 in 32.2 s, both 110.652 in 33.0 s,
 against 110.627 in 32.3 s.  The trees are not where the time is any more; not taken.
+
+### 16. The prior trained on unshrunk APM: -0.29 per 100 (z -3.1), the map does the shrinking
+
+The sweep to its end: panel ridge x0.25 110.498 (-0.14, z -2.7, 18 of 28), x0.15 110.441 (-0.19, z -3.4, 20 of
+28), and the GBDT trained on the panel's APM itself (`target="apm"`, penalty 100, the least shrunk target the
+panel has) **110.338 (-0.29, z -3.1, 18 of 28)**, all in the same time.  Unmapped the APM-trained prior is
+WORSE (112.31 against 112.18) -- section 19 item 4 was right on the unmapped criterion -- and mapped it is the
+largest single gain since the exposure term: the prior learned from unshrunk targets carries the spread among
+the bench that RAPM_1 had shrunk away, and the map's prior term and exposure slope then set its weight.  It is
+`best` from here (`mspi1_best_apm`: one-pass fit, ridge x0.5, GBDT without auditions on APM, H-2 at half weight
+in the rows and the exposure).  The SPM fit is skipped when the GBDT covers both sides (it was computed and
+overwritten), ratings unchanged.
+
+On the APM-prior dump the map reads converged: a bend in the prior term (`prior2`) +0.013 (z +3.9, worse), the
+prior's weight by age +0.008, by exposure -0.005, a quadratic rating family +0.002.
+
+### 17. Under the APM prior the ridge goes back to the shipped value; the decay still earns 0.18
+
+With the APM-trained prior (110.338 at ridge x0.5): x0.35 +0.055 (z +3.4, worse), x0.7 -0.027 (z -1.8, 19 of
+28), x1 -0.026 (z -0.9).  The halved ridge was compensating for a prior shrunk too far; with the unshrunk
+target the shipped `lam_plugin` is as good as any, so **`best` is the APM prior at the shipped ridge**
+(`mspi1_apm_lam1`, 110.319) and nothing about the ridge needs to ship.  APM at penalty 30 instead of 100 as
+the panel target +0.03 (z +1.3); no season decay +0.18 (z +3.9): the decay is worth what it was.  The GBDT's
+regularisation on the noisier target: l2 5 / 20 +0.03 / +0.04, min child weight 20 +0.03, depth 4 -0.006,
+depth 8 +0.06, learning rate 0.05 +0.02 -- the defaults hold.
+
+### 18. Shipped
+
+`config.yaml`: `ratings_prior.gbdt_target: apm`, `gbdt.params: {linear_leaves: false, cross_features: false}`,
+`cal_map` -> `outputs/calmap_ship.parquet`, system `ship_linear+log2&xlog&prior` on base `ship` = the same fit
+with no held-out season (the decay is inert without an H and the age term has no "age at H" for a window
+rating), K = 3.  `08_ratings.py` reads the three knobs and hands the map the prior parts of the ratings
+(`calmap.apply_params(prior_o=, prior_d=)`), then re-centres per window as before.  The criterion score of the
+shipped fit itself (no decay, no age term) is logged in `docs/progress.csv` under `ship`.
+
+**The APM-prior board fails the owner's validation floors.**  Read once on 2024-26 after the map: total 0.744
+/ offense 0.803 / defense 0.678 against the test floors 0.75 / 0.76 / 0.75, and the defensive spread 1.56 times
+the consensus's against the 1.4 the tests allow (`tests/test_vs_consensus.py`, 1 of 68 failing).  The
+criterion is happy (its stint-level scale on defense 0.93) and the public metrics are not: the unshrunk
+target puts a wide defensive prior on the board that no modern metric spreads that far.  Section 20 left
+"whether defenders sit too high at the top" open; this is where it bites.  The shipped configuration above
+is therefore NOT committed as is: the candidates that keep the offensive gain and the defensive floors are
+read next (the APM prior on offense with the RAPM_1 prior on defense, `ship_mix`; the RAPM_1 prior on both).

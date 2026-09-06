@@ -70,7 +70,14 @@ if USE_CHAIN:
     if chain_ctx.rpanel is None or chain_ctx.role_inputs is None:
         raise SystemExit("ratings_prior.role_prior is 'spm' but outputs/role_panel.parquet or data/cache/roles.parquet "
                          "is missing; run scripts/49_role_panel.py")
-    chain_fn = chain_offset(CHAIN_SIDES, mode=str(cfg.get("gbdt", {}).get("mode", "full")))
+    # FINDINGS 21: the prior trained on unshrunk APM (`gbdt_target`), the GBDT without its audition fits
+    # (`gbdt.params`), and the ridge at a fraction of lam_plugin (`lam_scale`)
+    chain_fn = chain_offset(CHAIN_SIDES, mode=str(cfg.get("gbdt", {}).get("mode", "full")),
+                            target=str(PRIOR.get("gbdt_target", "rapm1")),
+                            params=dict(cfg.get("gbdt", {}).get("params", {}) or {}) or None)
+LAM_SCALE = float(PRIOR.get("lam_scale", 1.0))
+if LAM_SCALE != 1.0:
+    cfg["lam_plugin"] = float(cfg["lam_plugin"]) * LAM_SCALE
 panel = None
 if USE_HYBRID and not USE_CHAIN:
     xp = OUT / "xrapm_panel.parquet"
@@ -225,16 +232,19 @@ if CM:
         rat[f"rating_off{suffix}_raw"] = rat[f"rating_off{suffix}"]
         rat[f"rating_def{suffix}_raw"] = rat[f"rating_def{suffix}"]
         o, d = apply_params(row, rat[f"rating_off{suffix}"].to_numpy(), -rat[f"rating_def{suffix}"].to_numpy(),
-                            rat["poss_off"].to_numpy())                      # the map is in raw sign
+                            rat["poss_off"].to_numpy(),                       # the map is in raw sign
+                            prior_o=rat[f"prior_off{suffix}"].to_numpy(), prior_d=-rat[f"prior_def{suffix}"].to_numpy())
         w = rat["poss_off"].to_numpy(dtype=float)
         for col, v in ((f"rating_off{suffix}", o), (f"rating_def{suffix}", -d)):
             v = pd.Series(v, index=rat.index)
             mean = (v * w).groupby(rat["window"]).transform("sum") / pd.Series(w, index=rat.index).groupby(rat["window"]).transform("sum")
             rat[col] = v - mean
         rat[f"rating_total{suffix}"] = rat[f"rating_off{suffix}"] + rat[f"rating_def{suffix}"]
+    n_o = sum(1 for c in row.index if c.startswith("o") and c[1:].isdigit() and pd.notna(row[c]))
+    n_d = sum(1 for c in row.index if c.startswith("d") and c[1:].isdigit() and pd.notna(row[c]))
     print(f"calibration map applied from {CM['table']} ({CM['system']}, K={CM['k']}): "
-          f"offense {row.map_o} {[round(float(row[f'o{j}']), 3) for j in range(2)]}, "
-          f"defense {row.map_d} {[round(float(row[f'd{j}']), 3) for j in range(2)]}, re-centred per window")
+          f"offense {row.map_o} {[round(float(row[f'o{j}']), 3) for j in range(n_o)]}, "
+          f"defense {row.map_d} {[round(float(row[f'd{j}']), 3) for j in range(n_d)]}, re-centred per window")
 
 SORT = "rating_total" if "rating_total" in rat.columns else "rapm_mm_total"
 cols = ["window", "window_mid", "season", "player_id", "player_name", "poss_off", "poss_def", "shrinkage",

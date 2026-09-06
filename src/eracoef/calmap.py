@@ -443,6 +443,30 @@ class PriorSat(Exposure):
         return (np.nan_to_num(np.asarray(extra["prior"], dtype=float)) * p / (p + 1000.0))[:, None]
 
 
+class Prior2(Exposure):
+    """c x prior^2 (standardised): a bend in the prior's re-weighting."""
+    name, n_params = "prior2", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "prior" not in extra.columns:
+            return np.zeros((len(p), 1))
+        v = np.nan_to_num(np.asarray(extra["prior"], dtype=float))
+        return (v * v)[:, None]
+
+
+class PriorAge(Exposure):
+    """c x prior x (age - 27) / 5: the prior's weight by age (a young player's box line means more or less)."""
+    name, n_params = "priorage", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "prior" not in extra.columns or "age" not in extra.columns:
+            return np.zeros((len(p), 1))
+        v = np.nan_to_num(np.asarray(extra["prior"], dtype=float))
+        return (v * (np.asarray(extra["age"], dtype=float) - 27.0) / 5.0)[:, None]
+
+
 class Combo(Exposure):
     """Several exposure terms side by side: "sat&age2"."""
     def __init__(self, parts):
@@ -457,7 +481,8 @@ class Combo(Exposure):
 FAMILIES = {f.name: f for f in (Linear(), Poly2(), Poly3(), Sinh(), Expo(), Hinge())}
 EXPOSURES = {e.name: e for e in (Exposure(), Sat(), Sat(250), Sat(500), Sat(2000), Sat(4000), LogExp(), LogExp(quad=True),
                                  Bins(), Unseen(), Age(), Age(quad=False), Moved(), Moved(slope=True), UnseenAge(),
-                                 AgeSat(), XSat(), XSat(300), XSat(3000), XLog(), XAge(), Prior(), PriorSat())}
+                                 AgeSat(), XSat(), XSat(300), XSat(3000), XLog(), XAge(), Prior(), PriorSat(), Prior2(),
+                                 PriorAge())}
 
 
 def parse_exposure(name: str) -> Exposure:
@@ -609,14 +634,21 @@ def unmapped_rows(dump: pd.DataFrame, frames: dict, system: str, k: int, lam: fl
 
 
 # ---------------------------------------------------------------------------------------- 5. the system
-def apply_params(row: pd.Series, o: np.ndarray, d: np.ndarray, poss: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """The map of one parameter row applied to raw-sign offense and defense arrays with the training possessions."""
+def apply_params(row: pd.Series, o: np.ndarray, d: np.ndarray, poss: np.ndarray, prior_o=None, prior_d=None,
+                 extra: pd.DataFrame | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """The map of one parameter row applied to raw-sign offense and defense arrays with the training possessions.
+    `prior_o` / `prior_d` (raw sign) feed the map's prior terms; `extra` any other per-player covariates (age)."""
     map_o, map_d = SideMap.parse(str(row.map_o)), SideMap.parse(str(row.map_d))
     th_o = np.array([float(row[f"o{j}"]) for j in range(map_o.n_params)])
     th_d = np.array([float(row[f"d{j}"]) for j in range(map_d.n_params)])
     poss = np.asarray(poss, dtype=float)
-    return (map_o.apply(np.asarray(o, dtype=float), poss, th_o, float(row.scale_o)),
-            map_d.apply(np.asarray(d, dtype=float), poss, th_d, float(row.scale_d)))
+    ex_o = ex_d = extra
+    if prior_o is not None:
+        base = extra if extra is not None else pd.DataFrame(index=range(len(poss)))
+        ex_o = base.assign(prior=np.asarray(prior_o, dtype=float) / float(row.scale_o))
+        ex_d = base.assign(prior=np.asarray(prior_d, dtype=float) / float(row.scale_d))
+    return (map_o.apply(np.asarray(o, dtype=float), poss, th_o, float(row.scale_o), ex_o),
+            map_d.apply(np.asarray(d, dtype=float), poss, th_d, float(row.scale_d), ex_d))
 
 
 def params_row(params: pd.DataFrame, system: str, base: str, k: int, held_out: int | None) -> pd.Series:
@@ -644,6 +676,8 @@ class CalMappedSystem:
         k = ctx.current_k if ctx.current_k is not None else len(train)
         row = params_row(self.params, self.mapped, self.inner.name, k, ctx.current_h)
         d = r.df.copy()
-        d["o"], d["d"] = apply_params(row, d.o.to_numpy(), d.d.to_numpy(), d.poss.to_numpy())
+        po = d.prior_o.to_numpy() if "prior_o" in d.columns else None
+        pdd = d.prior_d.to_numpy() if "prior_d" in d.columns else None
+        d["o"], d["d"] = apply_params(row, d.o.to_numpy(), d.d.to_numpy(), d.poss.to_numpy(), po, pdd)
         fo, fd = apply_params(row, np.array([r.fill_o]), np.array([r.fill_d]), np.zeros(1))
         return Ratings(d, fill_o=float(fo[0]), fill_d=float(fd[0]))

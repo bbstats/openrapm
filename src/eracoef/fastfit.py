@@ -75,6 +75,7 @@ class MspiFast:
     pad_scale: float = 1.0               # BoxExposure pad_scale: the padding constants of the rates times this
     pad_target: str | None = None        # BoxExposure pad_target ("league" | "poss_conditional"); None = config
     panel: str | None = None             # a role panel other than the configured one for the GBDT prior (path)
+    target_d: str | None = None          # the GBDT's training target on DEFENSE when it differs from `target`
 
     def fit(self, train, ctx: Context) -> Ratings:
         from . import xshoot
@@ -123,7 +124,7 @@ class MspiFast:
         else:
             exp.fit(wd.X, sample_weight=wd.w)
         off = chain_offset(self.sides, self.mode, scale=self.scale, target=self.target,
-                           params=self.gbdt_params, panel=self.panel)(train, ctx, wd, exp=exp)
+                           params=self.gbdt_params, panel=self.panel, target_d=self.target_d)(train, ctx, wd, exp=exp)
         nf = len(wd.spec.features)
         beta = np.zeros(2 * nf)
         lam = float(cfg["lam_plugin"] if self.lam is None else self.lam)
