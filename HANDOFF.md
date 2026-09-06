@@ -22,7 +22,7 @@ if the final chain had not finished (`git status`).  Tests: 82 passed, 1 xfailed
 | shipped before this phase (`mspi_linear+sat`, section 20) | 111.30 | 134 s | 1.00 |
 | the criterion's best now (`best_ratio_full`, map `linear+log2&age2&xlog&prior&tshare|rowcubic`) | **109.85** | 59 s | 0.44 |
 | the same board with the cheap prior (`best`) | 109.98 | **23.2 s** | **0.171** |
-| what ships (`ship_blend07`, no held-out season, floors green) | 110.80 | 32 s | |
+| what ships (`ship_side6`, no held-out season, ten of ten floors) | 110.71 | 43 s | |
 
 **True loss** = (score / 111.30) x (28-fit seconds / 134).  Every time cut was checked to reproduce the
 ratings bit for bit (`scratch/cmp_design.py`, `cmp_counters.py`, `cmp_expo.py`, `cmp_x3def.py`).

@@ -2238,3 +2238,44 @@ for 20 s, and dropping the nearby-window target costs +0.025 -- the stack is don
 The true loss of the line is now 0.44 against 0.17 for the system it replaces.  That is the owner's call and
 the metric's, not a regression: 21.22 already showed the product is 97% clock.
 
+### 26. The accuracy-first prior, shipped: 110.710 with every floor green
+
+21.25's line cannot ship -- the age term and the two bends are prediction-time and the APM prior on both sides
+fails the consensus.  The shipping shape (no held-out season, so no decay and no age term; no bends; the
+offensive target blended toward RAPM_1; RAPM_1 on defense) was built and read against the floors:
+
+| candidate | criterion | consensus total / off / def | floors |
+|---|---|---|---|
+| `ship_blend07` (what was shipped) | 110.802 | 0.796 / 0.804 / 0.767 | 10 of 10 |
+| `ship_ratio_b07` (ratio prior BOTH sides, tshare BOTH sides) | 110.646 | 0.779 / 0.786 / 0.754 | defense 0.754, bigness -0.303 |
+| `ship_ratio_b05` (same, tshare on offense only) | 110.713 | 0.784 / 0.789 / 0.761 | 10 of 10, defense by 0.001 |
+| `ship_ratio_b06` | 110.681 | 0.787 / 0.792 / 0.761 | 10 of 10, defense by 0.001 |
+| `ship_ratio_o7` (ratio FEATURES on offense only) | 110.671 | | defense 0.755, bigness -0.303 |
+| `ship_side85` (accuracy prior on offense, shipped prior on defense) | 110.656 | | bigness -0.329 |
+| `ship_side7` | 110.691 | 0.790 / 0.786 / 0.766 | bigness -0.303 |
+| **`ship_side6`** | **110.710** | **0.792 / 0.792 / 0.766** | **10 of 10** |
+
+Three things the ladder settles.
+
+**The `tshare` map term belongs on OFFENSE only.**  On defense it takes the agreement from 0.766 to 0.754 --
+the same thing the `prior` term did in 21.18.  It is worth -0.059 per 100 on offense and it stays there.
+
+**The defensive floor is broken by the BOOSTER, not the features.**  `ship_ratio_o7` gives defense the plain
+feature list and still fails at 0.755; what defense will not tolerate is `quality=4` (the bag and the search)
+and the nearby-window target.  So the two sides now take separate priors -- `chain_offset(params_d=,
+win_decay_d=)`, `MspiFast.gbdt_params_d` / `win_decay_d`, config `gbdt.params_def` and
+`ratings_prior.gbdt_win_decay_def`.  Offense gets the accuracy-first prior, defense keeps exactly what shipped
+this morning, and the defensive agreement comes back to 0.766 against the floor's 0.76.  It also costs less:
+43 s for the 28 fits against 59.
+
+**The offensive blend is what the bigness floor buys.**  0.85 is -0.329, 0.7 is -0.303 (the floor is 0.30),
+0.6 is -0.283.  Each step down costs about 0.02 per 100 on the criterion.
+
+**SHIPPED: `ship_side6`.**  `config.yaml`: `gbdt_target: blend0.6`, `gbdt_target_def: rapm1`,
+`gbdt_win_decay: 0.3` with `gbdt_win_decay_def: 1.0`, `gbdt.params: {quality: 4, ensemble_n_jobs: 1}` with
+`gbdt.params_def: {linear_leaves: false, cross_features: false}`, `features_full_O` the 37-name ratio list and
+`features_full_D` the 15-name one, `cal_map -> ship_side6_linear+log2&xlog&prior&tshare_linear+log2&xlog`.
+**110.710 on the criterion against 110.802**, consensus 0.792 / 0.792 / 0.766, defensive spread 1.33, offensive
+bigness gap -0.283, ten of ten floors, 82 passed and 1 xfailed.  08_ratings now builds the `tshare` covariate
+per window (a map term with no column would apply as zero, silently) and reads the per-side prior knobs.
+

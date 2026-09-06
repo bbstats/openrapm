@@ -73,10 +73,14 @@ ratings_prior:
   # level, a rating-by-exposure slope and -- on offense only -- the prior part of the rating as its own term:
   # 110.80 on the criterion, 0.796 / 0.804 / 0.767 against the consensus, ten of ten floors.  `gbdt_panel`
   # (another role panel for the prior) is wired and off.
-  gbdt_target: blend0.7
+  gbdt_target: blend0.6
   gbdt_target_def: rapm1
   gbdt_panel: null
-  cal_map: {table: outputs/calmap_ship.parquet, system: ship_blend07_linear+log2&xlog&prior_linear+log2&xlog, base: ship_blend07, k: 3}
+  # the prior's training target pooled over the player's OTHER windows with this discount per
+  # window of distance (1.0 = every other window alike, the original pooling)
+  gbdt_win_decay: 0.3
+  gbdt_win_decay_def: 1.0   # defense pools every other window alike, as shipped
+  cal_map: {table: outputs/calmap_ship.parquet, system: ship_side6_linear+log2&xlog&prior&tshare_linear+log2&xlog, base: ship_side6, k: 3}
 # The random effect unit: "window" gives one player effect per 3-season window, "season" one per
 # player-season (the original spec).  Possession thresholds below are in the unit's own scale.
 player_unit: window
@@ -155,13 +159,20 @@ gbdt:
   # scripts/50_boruta.py, 25 trials, 2026-09-05: accepted + tentative + season (rejected dropped; season kept by design)
   features_O: [ast, blk, drb, fg2_miss, fg2m, fg3_miss, fg3m, ft_miss, ftm, orb, pf, stl, tov, season]   # rejected: season; tentative: drb, fg3_miss, pf, tov
   features_D: [ast, blk, drb, fg2_miss, fg2m, fg3_miss, fg3m, ftm, pf, stl, tov, season]   # rejected: ft_miss, orb, season; tentative: fg3m, ftm, pf
-  features_full_O: [age, ast, blk, drb, fg2_miss, fg2m, fg3_miss, fg3m, ftm, gs_pct, orb, pf, season, share, stl]   # rejected: ft_miss, tov; tentative: fg2_miss, orb
-  features_full_D: [age, ast, blk, drb, fg2_miss, fg2m, fg3_miss, fg3m, ftm, gs_pct, orb, pf, season, share, stl]   # rejected: ft_miss, tov; tentative: age, ftm, orb
+  features_full_O: [fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss, orb, drb, ast, tov, stl, blk, pf, season, share, gs_pct, age, pts, fga, fta, fg3a, usage, bigness, reb, stocks, creation, shotmix, efg, ts, p3r, ftr, fg3p, fg2p, ftp, astr, tovr, orbsh]
+  features_full_D: [age, ast, blk, drb, fg2_miss, fg2m, fg3_miss, fg3m, ftm, gs_pct, orb, pf, season, share, stl]
   drag_tol: 0.02          # counterbalance a leave-window-out training set whose weighted mean drifts more than this
   boruta_trials: 50
   seed: 0
   thread_count: 3
-  params: {linear_leaves: false, cross_features: false}   # no audition fits (FINDINGS 21.1: +0.003 per 100, 6% of the time)
+  params_def: {linear_leaves: false, cross_features: false}   # DEFENSE keeps the cheap prior:
+    # the consensus's defensive-agreement floor does not tolerate the bagged, searched one
+    # (FINDINGS 21.26).  The two sides' priors are separate objects; only the map couples them.
+  params: {quality: 4, ensemble_n_jobs: 1}   # 5 bagged members WITH the audition fits and cross
+    # features.  On the plain feature list the search was worth +0.004 and the bag +0.004; on the
+    # list below they are -0.037 and -0.027 (FINDINGS 21.25: the parts interact, and a richer
+    # feature set gives the search something to find).  ensemble_n_jobs 1 so the bag does not fork
+    # inside the holdout runner's own workers.
 
 paths:
   raw: data/raw

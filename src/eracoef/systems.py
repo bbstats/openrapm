@@ -176,6 +176,31 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                                          **_RK)                      # the full recipe, pooling every window
         S["best_ratio_q5full"] = MspiFast("best_ratio_q5full", gbdt_params={"quality": 5, "ensemble_n_jobs": 1},
                                           win_decay=0.3, **_RK)
+        # the SHIPPING shape of the accuracy-first line (21.25): no held-out season, so no decay; the
+        # offensive target blended back toward RAPM_1 for the consensus floors, RAPM_1 on defense
+        _FULLQ4 = {"quality": 4, "ensemble_n_jobs": 1}
+        _SK = dict(gbdt_features={"O": list(_RF), "D": list(_RF)}, gbdt_params=_FULLQ4, win_decay=0.3,
+                   target_d="rapm1")
+        for w in ("apm", "blend0.85", "blend0.7", "blend0.6", "blend0.5"):
+            n = "ship_ratio_" + w.replace("blend", "b").replace(".", "")
+            S[n] = MspiFast(n, target=w, **_SK)
+        # the ratio feature set on OFFENSE only: the defensive agreement with the consensus is the binding
+        # floor and it is that side's prior that moves it (FINDINGS 21.26)
+        for w in ("blend0.7", "blend0.6"):
+            n = "ship_ratio_o" + w.replace("blend0.", "")
+            S[n] = MspiFast(n, target=w, target_d="rapm1", gbdt_params=_FULLQ4, win_decay=0.3,
+                            gbdt_features={"O": list(_RF), "D": list(_FF)})
+        # what actually ships (21.26): the accuracy-first prior on OFFENSE, today's shipped prior on DEFENSE
+        for w in ("blend0.85", "blend0.7", "blend0.6"):
+            n = "ship_side" + w.replace("blend0.", "")
+            S[n] = MspiFast(n, target=w, target_d="rapm1", gbdt_params=_FULLQ4, win_decay=0.3,
+                            gbdt_params_d=dict(FAST), win_decay_d=1.0,
+                            gbdt_features={"O": list(_RF), "D": list(_FF)})
+        # the same without the nearby-window discount (the consensus floors, not the criterion, may want it)
+        S["ship_ratio_b07_wd1"] = MspiFast("ship_ratio_b07_wd1", target="blend0.7",
+                                           **{**_SK, "win_decay": 1.0})
+        S["ship_ratio_b05_wd1"] = MspiFast("ship_ratio_b05_wd1", target="blend0.5",
+                                           **{**_SK, "win_decay": 1.0})
         # the aggregations INSTEAD of the raw rates they are made of: a smaller, better-conditioned set
         _SM = ["season", "share", "gs_pct", "age", *DERIVED, *RATIOS]
         S["best_small"] = MspiFast("best_small", gbdt_params=FAST, decay=0.5, decay_exposure=True, target="apm",
