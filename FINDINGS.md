@@ -1835,3 +1835,8 @@ five defensive, the fixed columns with explicit zeros, the game index; no hstack
 way, and BoxExposure fitted from the design's parts without touching X (`fit(None)` with `parts` set: the
 lineups and game index come from the assembly).  Assembly 0.26 s from 0.51 on the old path; every array equal;
 ratings equal to the dump to 1e-13; a warm fit 1.03 s.  `mspi1_lam05_fast_dec05`: 110.786 in 45.1 s.
+
+Fourth pass: the box tables read once per (season, phase) (`boxtable.season_box`), the uncentred exposure
+columns computed once for the means and reused by the layout, the counters frame built from one matrix:
+41.4 s, ratings unchanged (true loss 0.31).  The defensive target with the season before the block in the
+shooters' 3P% (`x3def_p1`) scores the same to 3 decimals and costs 6% more time: not taken.
