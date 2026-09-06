@@ -1853,3 +1853,14 @@ MORE (+0.77 against 0.90).  The score map from here: `linear+log2&age2&xlog&prio
 
 The assembly with its string columns kept as object arrays (pandas was converting 60k-row "phase" and "half"
 columns to arrow strings twice) and the counters copied once: 0.21 s from 0.26.
+
+With the prior map the earlier dumps re-read (`scratch/remap.py`, paired against `mspi1_lam05_fast_dec05` at
+110.671): ridge x0.35 +0.03 (z +1.8), x0.7 -0.01, decay 0.7 +0.03 (z +2.1), 0.3 -0.01, no decay +0.11 (z +3.1),
+and the decay on the games behind the padded rates too (`decay_exposure`) **-0.043 (z -2.2, 18 of 28), 110.627**.
+The last is the one thing that moved; whether it costs time is measured next.
+
+Measured with the prior map: `decay_exposure` 110.627 in 40.9 s against 110.671 in 40.5 s -- the time
+difference is inside run-to-run noise (about 1 s on 28 fits), so it is taken: **`mspi1_lam05_fast_dec05x`
+(= `best`)**.  The shooters' per-half totals behind the defensive target are now cached per season
+(`xshoot.season_totals` / `block_totals`; a block's totals are the sum over its seasons, ratings unchanged to
+1e-13): a warm fit 0.91 s.

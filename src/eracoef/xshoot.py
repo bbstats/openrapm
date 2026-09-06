@@ -104,8 +104,51 @@ def rates_from_tables(shots: pd.DataFrame, ft: pd.DataFrame, extra: pd.DataFrame
             out = {h: t.add(e, fill_value=0.0) for h, t in out.items()}
         return out
 
-    T = totals(shots, ["fg2a", "fg2m", "xl2", "fg3a", "fg3m", "xl3"])
-    F = totals(ft, ["ftm", "fta"])
+    T = totals(shots, SHOT_COLS) if isinstance(shots, pd.DataFrame) else shots     # or the totals themselves
+    F = totals(ft, FT_COLS) if isinstance(ft, pd.DataFrame) else ft
+    return rates_from_totals(T, F, k_fixed)
+
+
+SHOT_COLS = ["fg2a", "fg2m", "xl2", "fg3a", "fg3m", "xl3"]
+FT_COLS = ["ftm", "fta"]
+_TOTALS_CACHE: dict = {}
+
+
+def season_totals(season: int, cfg) -> tuple[dict, dict]:
+    """Per shooter per half ("A", "B", "RS") totals of one regular season, shots and free throws, read once per
+    process.  A block's totals are the sum over its seasons (`block_totals`)."""
+    key = int(season)
+    if key not in _TOTALS_CACHE:
+        shots = load_shots([key], cfg)
+        halves = shots.drop_duplicates("game_id").set_index("game_id")["half"]
+        ft = load_ft([key], cfg, halves)
+        T = {h: shots[shots.half == h].groupby("player_id")[SHOT_COLS].sum() for h in ("A", "B")}
+        T["RS"] = shots.groupby("player_id")[SHOT_COLS].sum()
+        F = {h: ft[ft.half == h].groupby("player_id")[FT_COLS].sum() for h in ("A", "B")}
+        F["RS"] = ft.groupby("player_id")[FT_COLS].sum()
+        _TOTALS_CACHE[key] = (T, F)
+    return _TOTALS_CACHE[key]
+
+
+def block_totals(seasons, cfg, extra_seasons=()) -> tuple[dict, dict]:
+    """The per-half totals of a block of seasons: each half summed over the seasons; `extra_seasons` (earlier
+    ones, `prev`) added whole to every half."""
+    parts = [season_totals(s, cfg) for s in seasons]
+    T, F = {}, {}
+    for h in ("A", "B", "RS"):
+        T[h] = pd.concat([t[h] for t, _ in parts]).groupby(level=0).sum()
+        F[h] = pd.concat([f[h] for _, f in parts]).groupby(level=0).sum()
+    if extra_seasons:
+        ex = [season_totals(s, cfg) for s in extra_seasons]
+        eT = pd.concat([t["RS"] for t, _ in ex]).groupby(level=0).sum()
+        eF = pd.concat([f["RS"] for _, f in ex]).groupby(level=0).sum()
+        T = {h: t.add(eT, fill_value=0.0) for h, t in T.items()}
+        F = {h: f.add(eF, fill_value=0.0) for h, f in F.items()}
+    return T, F
+
+
+def rates_from_totals(T: dict, F: dict, k_fixed: dict | None = None) -> ShooterRates:
+    """`rates_from_tables` from the per-half totals."""
     league, k = {}, {}
     league["fg2"], k["fg2"] = mom_k(T["RS"].fg2m.to_numpy(), T["RS"].fg2a.to_numpy())
     league["fg3"], k["fg3"] = mom_k(T["RS"].fg3m.to_numpy(), T["RS"].fg3a.to_numpy())
@@ -136,14 +179,12 @@ def shooter_rates(seasons, cfg, prev: int = 0, k_fixed: dict | None = None) -> S
     just after it) can never be one of them.  Seasons with no stints built are skipped.
     """
     seasons = sorted(int(s) for s in seasons)
-    shots = load_shots(seasons, cfg)
-    halves = shots.drop_duplicates("game_id").set_index("game_id")["half"]
-    extra = None
+    have = []
     if prev:
         d = resolve(cfg, "stints")
         have = [s for s in range(seasons[0] - prev, seasons[0]) if (d / f"{s}_RS_shots.parquet").exists()]
-        extra = load_shots(have, cfg) if have else None
-    return rates_from_tables(shots, load_ft(seasons, cfg, halves), extra=extra, k_fixed=k_fixed)
+    T, F = block_totals(seasons, cfg, extra_seasons=have)
+    return rates_from_totals(T, F, k_fixed=k_fixed)
 
 
 # ---------------------------------------------------------------------------------------- pricing the rows
