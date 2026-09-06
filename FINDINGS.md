@@ -2090,3 +2090,51 @@ term it sits beside is not replaceable by it (dropping `log2` costs +0.74).
 Also negative: role GROWTH, log((possessions at H + 200) / (possessions per training season + 200)), +0.38 as
 a level and +0.03 as a slope -- the criterion does not want a rating re-weighted by a changed role.
 
+### 22. The bend belongs at BOTH levels, and the true loss has a hole in it
+
+**The stint-level cubic.**  The team-game bend of 21.20 acts on the mean contribution of the team-game's
+stints; the same cubic taken at STINT level and then averaged is a different column, because (mean c)^3 and
+mean(c^3) differ by the spread of the lineups inside the team-game.  Alone the row column is worse (+0.07);
+beside the team one it is worth **-0.205 per 100 (z -4.8, 24/28)**, and a fifth power adds nothing (+0.002).
+The two coefficients have opposite signs: the team-game total is compressed at the tails, the stint spread
+inside it is not.  `calmap.RowCubicBend` (`|rowcubic`), `row_columns`; the column is a nonlinear function of
+the map's parameters, so it is rebuilt from scratch for each held-out season (`evaluate`), which costs 8 s of
+scoring and nothing of fit time.  The criterion's line is now
+
+    best / linear+log2&age2&xlog&prior&tshare|rowcubic     109.981 at K = 3, 23.2 s for the 28 fits
+
+against 111.296 for the board section 20 shipped, and 110.318 at the start of this session.
+
+Also measured, not taken: the spread of the five mapped ratings on the floor as its own column (-0.031 on
+offense, -0.046 with both sides, z -1.7) and the best and worst man on the floor (-0.034).  The row cubic is
+the same effect in one parameter and four times the size.
+
+**The metric has a hole.**  A quarter of a block's rows are single-possession stints carrying 7% of the
+weight; every per-row cost is paid on them in full.  Dropping the short rows (`MspiFast.min_den`,
+`designcache.build_window_cached(min_den=)`) trades loss for time, and the TRUE loss (loss x time) keeps
+improving all the way down:
+
+| rows kept | criterion | 28 fits | true loss |
+|---|---|---|---|
+| all | 110.189 | 23.1 s | 0.171 |
+| >= 2 possessions (76%) | 110.253 | 20.9 s | 0.155 |
+| >= 3 (53%) | 110.445 | 18.4 s | 0.136 |
+| >= 4 (36%) | 110.676 | 16.4 s | 0.122 |
+| >= 5 | 110.807 | 15.5 s | 0.115 |
+| >= 6 | 111.010 | 14.5 s | 0.108 |
+| >= 8 | 111.460 | 13.6 s | 0.101 |
+| >= 12 | 112.515 | 12.9 s | 0.097 |
+
+At `min_den` 8 the board is already worse than the one section 20 shipped (111.296) and the true loss says it
+is 40% better.  Loss differences here are ~0.1% and time differences are tens of percent, so the product
+rewards throwing data away without limit.  **Nothing on this curve is taken**; the chart's line stays the
+system that fits every row.  The frontier is recorded because the owner may want a rule (a floor on the loss,
+or the time counted only while the loss does not rise) rather than the bare product.
+
+**Where a run's 23 s goes** (`FASTFIT_TIMER=1`, summed over the 4 workers): design 5.6, the GBDT prior 4.8,
+the cross-products 4.0, the two targets 3.1, the exposure 3.0, the solves 2.1, the layout 0.7.  The GBDT's
+parameters barely move its clock once the library is warm (0.14 s per leave-window-out pair at depth 6, 0.15
+at depth 4, 0.12 at depth 4 + 64 bins, 0.09 at learning rate 0.2 -- the 0.49 s of a first fit is the JIT).
+Tracked: `best_g4` 110.188 / 23.1 s, `best_g4b64` 110.208 / 22.9 s, `best_glr2` 110.208 / 22.4 s -- none of
+them worth the churn.
+

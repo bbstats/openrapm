@@ -669,9 +669,15 @@ class TeamBend:
     It is a PREDICTION-TIME term, like the age term: a rating carries no team, so it cannot ship in the board.
     """
     name, n_params = "none", 0
+    row_powers: tuple = ()          # odd powers of the STINT-level contribution to add as extra columns
 
     def basis(self, u: np.ndarray, s: float) -> np.ndarray:
         return np.asarray(u, dtype=float)[:, None]
+
+    def columns(self, u: np.ndarray, s: float, rows: np.ndarray | None = None) -> np.ndarray:
+        """The team-level basis with the row-level columns (`row_columns`) beside it."""
+        B = self.basis(u, s)
+        return B if rows is None or not self.row_powers else np.column_stack([B, rows])
 
 
 class CubicBend(TeamBend):
@@ -681,6 +687,18 @@ class CubicBend(TeamBend):
     def basis(self, u, s):
         u = np.asarray(u, dtype=float)
         return np.column_stack([u, u ** 3 / s ** 2])
+
+
+class RowCubicBend(CubicBend):
+    """The team-game cubic plus the same cubic taken at STINT level and then aggregated: g = a u + b u^3/s^2
+    + c mean(c_row^3)/s_row^2.
+
+    (mean c)^3 and mean(c^3) differ by the spread of the lineups inside the team-game, so the pair separates
+    "this team-game's total is extreme" from "the lineups inside it were extreme" -- and the criterion wants
+    both, with opposite signs (FINDINGS 21.22).  The row column alone is worse than the team one; together
+    they are worth 0.21 per 100 more than the team cubic.
+    """
+    name, n_params, row_powers = "rowcubic", 3, (3,)
 
 
 class QuadBend(TeamBend):
@@ -701,7 +719,7 @@ class TanhBend(TeamBend):
         return np.column_stack([u, (np.tanh(u / s) - u / s) * s])
 
 
-BENDS = {b.name: b for b in (TeamBend(), CubicBend(), QuadBend(), TanhBend())}
+BENDS = {b.name: b for b in (TeamBend(), CubicBend(), RowCubicBend(), QuadBend(), TanhBend())}
 
 
 def parse_maps(fam: str):
@@ -712,14 +730,36 @@ def parse_maps(fam: str):
     return SideMap.parse(fo), SideMap.parse(fd or fo), BENDS[bend or "none"]
 
 
-def fit_bend(D: "Design", th: np.ndarray, bend: TeamBend, exclude_h=None) -> tuple[np.ndarray, float]:
-    """The bend's parameters on every season but `exclude_h`, given the map's own parameters `th`."""
+def fit_bend(D: "Design", th: np.ndarray, bend: TeamBend, exclude_h=None, rows: np.ndarray | None = None
+             ) -> tuple[np.ndarray, float]:
+    """The bend's parameters on every season but `exclude_h`, given the map's own parameters `th`.  `rows`:
+    the stacked row-level columns of `row_columns`, in D's own row order."""
     sel = np.ones(len(D.h), dtype=bool) if exclude_h is None else D.h != exclude_h
     u, y, w = D.X[sel] @ th, D.y[sel], D.w[sel]
     s = float(np.sqrt(np.average(u ** 2, weights=w))) or 1.0
-    B = bend.basis(u, s)
+    B = bend.columns(u, s, None if rows is None else rows[sel])
     BtW = (B * w[:, None]).T
     return np.linalg.solve(BtW @ B, BtW @ y), s
+
+
+def row_columns(dump: pd.DataFrame, frames: dict, system: str, k: int, map_o: SideMap, map_d: SideMap,
+                D: "Design", th: np.ndarray, powers) -> tuple[np.ndarray, dict, float]:
+    """Per team-game, the aggregated odd powers of the STINT-level mapped contribution, under the map
+    parameters `th`.  Returns (the columns stacked in D's row order, the same per season, the standardising
+    RMS of the stint contribution).  Rebuilt per held-out season, because it is a NONLINEAR function of the
+    map's parameters and those are refit each time."""
+    prof, ws = {}, []
+    for h, f in frames.items():
+        rat = mapped_ratings(ratings_for(dump, system, k, h), th, map_o, map_d, D.scale_o, D.scale_d,
+                             extra=f.covariates(k))
+        r = rat.aligned(f.ids)
+        c = np.asarray(f.Zo @ np.nan_to_num(r.o.to_numpy(dtype=float))) +             np.asarray(f.Zd @ np.nan_to_num(r.d.to_numpy(dtype=float)))
+        prof[h] = f.profiled(c)
+        ws.append(f.w)
+    s = float(np.sqrt(np.average(np.concatenate([prof[h] for h in frames]) ** 2,
+                                 weights=np.concatenate(ws)))) or 1.0
+    per = {h: np.column_stack([frames[h].game(prof[h] ** q / s ** (q - 1)) for q in powers]) for h in frames}
+    return np.vstack([per[h] for h in frames]), per, s
 
 
 # ---------------------------------------------------------------------------------------- 4. fitting and scoring
@@ -834,13 +874,14 @@ def _param_row(name, system, k, h, map_o, map_d, D, th, bend=None, gamma=None, s
     return row
 
 
-def bent_prediction(p, f: SeasonFrame, bend: TeamBend, gamma, s_u: float, level: str = "home"):
+def bent_prediction(p, f: SeasonFrame, bend: TeamBend, gamma, s_u: float, level: str = "home",
+                    rows: np.ndarray | None = None):
     """`predict_season`'s prediction with the team-game total bent: each row's contribution takes its own
     team-game's g(u) - u, so the team-game total is exactly g(u) and the season's level is refit around it."""
     from .holdout import _wls
     c = p.c_off + p.c_def
     u = f.game(f.profiled(c))
-    delta = bend.basis(u, s_u) @ np.asarray(gamma, dtype=float) - u
+    delta = bend.columns(u, s_u, rows) @ np.asarray(gamma, dtype=float) - u
     c2 = c + delta[f.key]
     pred = f.A @ _wls(f.A, f.y - c2, f.w) + c2
     return replace(p, pred=pred, c_off=p.c_off + delta[f.key], c_def=p.c_def)
@@ -861,12 +902,20 @@ def evaluate(dump: pd.DataFrame, frames: dict, system: str, k: int, map_o: SideM
         p = predict_season(rat, f.wd, level=level)
         gamma, s_u = (None, np.nan)
         if bend is not None and bend.n_params:
-            gamma, s_u = fit_bend(D, th, bend, exclude_h=h)
-            p = bent_prediction(p, f, bend, gamma, s_u, level=level)
+            rcols = per_h = None
+            if bend.row_powers:
+                rcols, per_h, _ = row_columns(dump, frames, system, k, map_o, map_d, D, th, bend.row_powers)
+            gamma, s_u = fit_bend(D, th, bend, exclude_h=h, rows=rcols)
+            p = bent_prediction(p, f, bend, gamma, s_u, level=level, rows=None if per_h is None else per_h[h])
         rows.append(dict(held_out=h, k=k, train="", system=name, lam=lam, split="all", group="all", **score(p), seconds=0.0))
         params.append(_param_row(name, system, k, h, map_o, map_d, D, th, bend, gamma, s_u))
     th_all = fit_theta(D, exclude_h=None, ridge=ridge, map_o=map_o, map_d=map_d)
-    g_all, s_all = fit_bend(D, th_all, bend) if (bend is not None and bend.n_params) else (None, np.nan)
+    g_all, s_all = (None, np.nan)
+    if bend is not None and bend.n_params:
+        rows_all = None
+        if bend.row_powers:
+            rows_all, _, _ = row_columns(dump, frames, system, k, map_o, map_d, D, th_all, bend.row_powers)
+        g_all, s_all = fit_bend(D, th_all, bend, rows=rows_all)
     params.append(_param_row(name, system, k, -1, map_o, map_d, D, th_all, bend, g_all, s_all))
     return pd.DataFrame(rows)[RESULT_COLUMNS], pd.DataFrame(params)
 

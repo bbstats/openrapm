@@ -164,12 +164,16 @@ def _build_piece(season: int, phase: str, cfg: dict) -> dict:
 
 
 def build_window_cached(seasons, cfg, phases=("RS",), gt_weight=None, target="pts",
-                        counter_cols=None) -> WindowData:
+                        counter_cols=None, min_den=0.0) -> WindowData:
     """`windows.build_window` from cached per-season pieces (no `margin_bins`).
 
     `counter_cols`: keep only these of the 118 per-possession counters (the slot ids and `half` always).
     The whole table is 195,000 x 118 doubles for a 3-season block and copying it is a fifth of the build;
     a fit that reads six of them (`fastfit.MspiFast`, through `counter_columns`) need not pay for the rest.
+
+    `min_den`: drop rows whose target denominator (possessions, for the points targets) is below this.  A
+    quarter of a block's rows are single-possession stints carrying 7% of the weight, and every per-row cost
+    -- the assembly, the exposure, the cross-products -- is paid on them in full.
     """
     seasons = [int(s) for s in seasons]
     phases = list(phases)
@@ -222,7 +226,7 @@ def build_window_cached(seasons, cfg, phases=("RS",), gt_weight=None, target="pt
         poss = col(f"poss_{side}")
         den = col(f"{tg['den']}_{side}")
         num = sum(k * col(f"{c}_{side}") for c, k in tg["num"].items())
-        keep = den > 0
+        keep = den > max(0.0, float(min_den) - 1e-9)
         sides.append(dict(off=off_ps[keep], de=def_ps[keep], poss=poss[keep], den=den[keep], num=num[keep],
                           home=np.where(neutral[keep], 0.0, sign), margin=sign * margin_h[keep],
                           stint=np.flatnonzero(keep), is_home_off=sign > 0))

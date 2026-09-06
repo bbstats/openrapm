@@ -134,6 +134,15 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                                      gbdt_features={"O": ALLF, "D": ALLF})
         S["best_apm300"] = MspiFast("best_apm300", gbdt_params=FAST, decay=0.5, decay_exposure=True, target="apm",
                                     panel="outputs/role_panel_apm300.parquet")
+        # the GBDT prior is a fifth of a tracked run's fit seconds; cheaper trees at the same loss
+        for tag, prm in (("g4", {"depth": 4}), ("g4b64", {"depth": 4, "max_bins": 64}),
+                         ("glr2", {"learning_rate": 0.2}), ("gb64", {"max_bins": 64})):
+            S[f"best_{tag}"] = MspiFast(f"best_{tag}", gbdt_params={**FAST, **prm}, decay=0.5, decay_exposure=True,
+                                        target="apm")
+        # the single-possession stints dropped: a quarter of the rows, 7% of the weight
+        for md in (2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 12.0):
+            n = f"best_md{md:g}"
+            S[n] = MspiFast(n, gbdt_params=FAST, decay=0.5, decay_exposure=True, target="apm", min_den=md)
         S["best_b07"] = MspiFast("best_b07", gbdt_params=FAST, target="blend0.7", target_d="rapm1", decay=0.5, decay_exposure=True)
         S["ship_p035"] = MspiFast("ship_p035", gbdt_params=FAST, panel="outputs/role_panel_lam0.35.parquet")
         S["best_mix"] = MspiFast("best_mix", gbdt_params=FAST, target="apm", target_d="rapm1", decay=0.5, decay_exposure=True)
