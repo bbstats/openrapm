@@ -2138,3 +2138,32 @@ at depth 4, 0.12 at depth 4 + 64 bins, 0.09 at learning rate 0.2 -- the 0.49 s o
 Tracked: `best_g4` 110.188 / 23.1 s, `best_g4b64` 110.208 / 22.9 s, `best_glr2` 110.208 / 22.4 s -- none of
 them worth the churn.
 
+### 23. Two more second-stage columns, one leak, and the control that catches them
+
+With the team + stint bend in place, four more columns that no per-player map can make, each fitted
+leave-one-season-out on the pooled team-game design:
+
+| column | vs the line (109.984) | z |
+|---|---|---|
+| u x home | +0.005 | +1.5 |
+| u x the unseen men on the floor | -0.001 | -0.2 |
+| the stint contribution x the stint's length | +0.005 | +2.2 |
+| **u x the team-game's mean log stint length** | **-0.149** | **-3.3, 21/28** |
+| all four together | -0.308 | -5.0 |
+
+**The big one is a leak, and the control says so again.**  Stint lengths are a property of the held-out game's
+substitutions, and substitutions follow the score: a blowout empties the bench and leaves long stints.  The
+control is the same quantity averaged over the TEAM'S OTHER GAMES that season (leave-one-game-out; the team of
+a team-game is the majority team of its offensive five, from the season's box scores) -- style, with nothing
+of this game in it.  It is worth **+0.008 (z +1.1)**; the two together are worth what THIS game's alone is
+(-0.155).  So the whole of it is the game's own flow.  The "all four" line is the same column in company and
+goes with it.
+
+That the criterion refits only the intercept and the home term -- not the design's margin, garbage-time or
+playoff columns (`holdout.level_columns`, level `home` and not `full`) -- is the same rule stated in advance:
+context that is a consequence of the score is not an input.  **The pattern to reuse: any candidate covariate
+measured on the held-out season gets a control that measures the same thing from data the outcome could not
+have touched (the other half of the season, the team's other games, the training block).  Two of three
+candidates this session died on it (21.21 and this one); the ones that lived -- age at H, the bends, the
+training-block role -- are the line.**
+
