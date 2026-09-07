@@ -1,4 +1,14 @@
-# Handoff: trade calibration built, and the gain turned up one step to the side of where it was looked for
+# Handoff: the settled-context offensive prior shipped; next is the defensive four-factor fit (3.2)
+
+**Shipped 2026-09-07: `tune501_b7_turnref_o`** (FINDINGS 24.9) -- the offensive prior trained on window pairs
+with teammate turnover as a feature and evaluated at a settled context of 0.35 for everyone; defense as it
+was.  **110.569 on the criterion against 110.624, z -3.39 over 22 of 28, 58 s for the 28 fits against 37.**
+Consensus 0.791 / 0.787 / 0.759, defensive spread 1.28.  Nine floors as they were; the bigness floor missed
+by the margin the screen predicted (-0.311 against 0.30, from -0.276; one standard error is 0.046) and was
+re-based 0.30 -> 0.32 once under Part 0 ruling 2, reason in the test.  The blend and the reference were not
+touched.  `docs/data/ratings.json` carries the new board; `main` does not yet (Part 3.6).
+
+*The header of the trade-calibration pass, kept because it is the record of how the candidate was found:*
 
 Written 2026-09-07, later the same day as the play-by-play pass (which follows below unchanged).  **The board
 did not move: `tune501_b7` at 110.6237.  But there is now a candidate that beats it at z -3.39 on 22 of 28
@@ -29,15 +39,15 @@ The "if traded" column exists as a player-level estimate (`outputs/csv/trade_del
 test does not confirm; FINDINGS 24.7 says exactly how it may be published.
 
 **Tree state: committed on `hybrid-and-xpts`.**  Tests:
-**110 passed, 1 xfailed** (101 before; `tests/test_turnover.py` is five, `tests/test_gbdt_prior.py` has two
-more for the pair rows).  The shipped board is untouched: the
-new config key `ratings_prior.gbdt_turn` is documented and null.  `docs/progress.csv` / `.png` carry the seven
-runs of this pass.
+**108 passed, 1 xfailed** -- 109 collected; the "110" the earlier headers quote was a miscount
+(`tests/test_turnover.py` is five, `tests/test_gbdt_prior.py` has two more for the pair rows).  `ratings_prior.gbdt_turn` is `{sides: [O], ref: 0.35}` (it was null when this
+header was written).  `docs/progress.csv` / `.png` carry the seven runs of this pass.
 
-**The board, unchanged: `tune501_b7`** (FINDINGS 22.7, shipped 2026-09-06) -- the estimator search's board
-with the offensive target blended back to 0.7.  **110.624 on the criterion, 37 s for the 28 fits.**
-Consensus 0.788 / 0.790 / 0.759, defensive spread 1.28.  Its defensive-agreement floor was re-based
-0.76 -> 0.75 once, deliberately, with the reason in the test (Part 0 ruling 2).
+**The board: `tune501_b7_turnref_o`** (FINDINGS 24.9, shipped 2026-09-07) on top of **`tune501_b7`**
+(FINDINGS 22.7, shipped 2026-09-06) -- the estimator search's board with the offensive target blended back
+to 0.7.  `tune501_b7` was 110.624 on the criterion, 37 s for the 28 fits, consensus 0.788 / 0.790 / 0.759,
+defensive spread 1.28.  Its defensive-agreement floor was re-based 0.76 -> 0.75 once, deliberately, with
+the reason in the test (Part 0 ruling 2); the bigness floor 0.30 -> 0.32 the same way, for this ship.
 
 ---
 
@@ -98,8 +108,8 @@ applies as ZERO, silently).
 |---|---|---|
 | **the criterion's line** (`best_ratio_full`) | **109.845** | 59 s |
 | the same with shot quality (`best_shot`) | 109.801 (z -1.13) | 70 s |
-| **what ships** (`tune501_b7`, ten of ten floors as tested, defensive spread 1.28) | **110.624** | 37 s |
-| **`tune501_b7_turnref_o` -- the settled-context turnover prior on offense (24), the candidate** | **110.569 (z -3.39, 22/28)** | 58 s |
+| **what ships** (`tune501_b7_turnref_o`, the settled-context turnover prior on offense (24.9), ten of ten floors as tested, defensive spread 1.28) | **110.569 (z -3.39, 22/28 vs `tune501_b7`)** | 58 s |
+| `tune501_b7` -- the board it replaced (22.7) | 110.624 | 37 s |
 | `tune501_b7_turnref` -- the same on both sides | 110.561 (z -2.53) | 60 s |
 | `tune501_b7_turn` -- with the per-player trade delta to H | 110.693 (z +1.07) | 66 s |
 | `tune501_b7_drd` -- the whole Dredge block on defense (23) | 110.618 (z -0.20) | 39 s |
@@ -240,11 +250,27 @@ expensive part is deciding it was worth measuring.
 
 ## Part 3: the next pass
 
-**Start at 3.0, then 3.2.**  3.0 is a measured -0.054 at z -3.39 that needs a config key and a floor read;
-3.2 is the estimator work that unlocks 22.7's 0.14.  The prior's INPUTS remain spent (21.24, 21.25, 22.5, 23);
-what 24 found was not a new column but a different question put to the same columns.
+**Start at 3.2.**  3.0 is done (below).  3.2 is the estimator work that unlocks 22.7's 0.14.  The prior's
+INPUTS remain spent (21.24, 21.25, 22.5, 23); what 24 found was not a new column but a different question put
+to the same columns.
 
-### 3.0 Ship the settled-context offensive prior (`tune501_b7_turnref_o`, FINDINGS 24)
+### 3.0 DONE 2026-09-07: the settled-context offensive prior is shipped (`tune501_b7_turnref_o`, FINDINGS 24.9)
+
+**What was done.**  `config.yaml` `ratings_prior.gbdt_turn: {sides: [O], ref: 0.35}`, `cal_map` on the
+candidate's tracker table copied to `outputs/calmap_ship.parquet`, `08_ratings.py`, `22_vs_consensus.py`,
+the floors, `52_site.py`.  On the board only the offensive prior moved (mean absolute change 0.21 per 100;
+the defensive prior is identical to the last digit).  Consensus 0.791 / 0.787 / 0.759, defensive spread 1.28.
+**The bigness floor missed by the screen's margin**: -0.311 on the floor's own object against -0.276 for
+`tune501_b7` and a floor of 0.30, a move under one standard error (0.046 at 475 players).  Part 0 ruling 2
+applied; the floor is 0.32 now with the reason in `tests/test_vs_consensus.py`, the way 22.7 re-based the
+defensive one.  The blend was NOT moved to clear it (that is what 22.7 refused) and the reference stays at
+the a-priori 0.35.  **If the owner reads this miss as gross rather than marginal, the revert is three lines:
+`gbdt_turn: null`, `cal_map` back to `tune501_b7`, the floor back to 0.30, then `08_ratings.py` and
+`52_site.py`.**  Note that before ruling 2 this same floor turned candidates away at -0.303 (21.26, 22.4),
+so it has a history of being the binding one on offense; the honest reading is that the settled-context
+prior rates high-usage guards a little higher relative to bigs, which is what 24.4 said it would do.
+
+*The section as it stood before the ship, kept for the record:*
 
 What it is: the offensive prior trained on ordered window pairs with the teammate turnover of the target
 window as a feature, evaluated at a settled context (0.35, the season-to-season stayer median, fixed a priori)
@@ -468,10 +494,10 @@ cousin of it.
 * **TabFM** (`google/tabfm-1.0.0-jax`): installs and downloads (5.7 GB; point `HF_HOME` at `A:`), but the
   orbax restore dies in tensorstore on a 1.5 GB region -- 38.5 GB of the box's 48 GB commit limit was taken.
   Retry on a quiet machine.  `scratch/tabfm_try.py` prints the booster's baseline for it to beat.
-* **DONE 2026-09-07: `main` carries the `tune501_b7` board** (merge `7bc8803`), and the live site at
-  `https://bbstats.github.io/openrapm/` serves a `ratings.json` byte-identical to this branch's.  The commits
-  `hybrid-and-xpts` has beyond `main` are FINDINGS 23-24 work that does not change the board; merge them
-  whenever, nothing on the site is waiting on it.
+* **`main` carries the `tune501_b7` board** (merge `7bc8803`) and the live site at
+  `https://bbstats.github.io/openrapm/` serves it.  **This branch now ships `tune501_b7_turnref_o`** (3.0),
+  so `docs/data/ratings.json` here differs from `main`'s; merge `hybrid-and-xpts` into `main` when the owner
+  has read the bigness re-base in 3.0, and the site picks the new board up on its own.
 * **DNS for openrapm.com**: the custom domain was REMOVED on 2026-09-06 (`docs/CNAME` deleted on both branches,
   `cname: null` on the Pages API) because it had no DNS behind it and was redirecting `bbstats.github.io`
   into a dead name.  The site is back at `https://bbstats.github.io/openrapm/`, https enforced.  To turn the

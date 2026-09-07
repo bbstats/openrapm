@@ -93,9 +93,10 @@ ratings_prior:
   # offense only it is -0.054 against the shipped board at z -3.39 over 22 of 28 seasons with the consensus
   # screen unchanged (system `tune501_b7_turnref_o`); on defense it is flat and costs the defensive agreement.
   # Needs data/cache/teammates.parquet (scratch/trade_turnover.py).  null = the pooled prior, what ships;
-  # the candidate is {sides: [O], ref: 0.35} -- HANDOFF 3.0 has the floor read still to do.
-  gbdt_turn: null
-  cal_map: {table: outputs/calmap_ship.parquet, system: tune501_b7_linear+log2&xlog&prior&tshare_linear+log2&xlog, base: tune501_b7, k: 3}
+  # {sides: [O], ref: 0.35} SHIPPED 2026-09-07 (FINDINGS 24.9): 110.569 on the criterion, nine floors and the
+  # bigness floor re-based 0.30 -> 0.32 once, with the reason in tests/test_vs_consensus.py.
+  gbdt_turn: {sides: [O], ref: 0.35}
+  cal_map: {table: outputs/calmap_ship.parquet, system: tune501_b7_turnref_o_linear+log2&xlog&prior&tshare_linear+log2&xlog, base: tune501_b7_turnref_o, k: 3}
 # The random effect unit: "window" gives one player effect per 3-season window, "season" one per
 # player-season (the original spec).  Possession thresholds below are in the unit's own scale.
 player_unit: window

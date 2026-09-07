@@ -40,8 +40,12 @@ The multi-stage prior-informed RAPM (`mspi`, FINDINGS section 19):
    gap (a player the block barely saw is several points worse than his rating says) and is worth a point
    per 100 out of season.
 
-Out of season it predicts held-out games at 110.80 points per 100 (K=3, the block's own length) against
-112.14 without the map and 112.74 for the previous board.  FINDINGS section 21 is the iterate-and-improve
+Out of season it predicts held-out games at 110.57 points per 100 (K=3, the block's own length; the
+28-season criterion of `scripts/45_holdout.py`) against 110.62 for the board it replaces and 125.6 with no
+ratings at all.  The offensive prior is trained on ordered window pairs with the teammate turnover of the
+target window as a feature and evaluated at a settled context for everyone (FINDINGS 24: a box line is worth
+more beside teammates a player knows, and the pooled prior had the average turnover baked into its target).
+FINDINGS section 21 is the iterate-and-improve
 record: the whole fit runs in a quarter of the time it did (`src/eracoef/fastfit.py`, `designcache.py`); the
 boosted prior's offensive target is now 0.7 unshrunk APM + 0.3 prior-informed RAPM (the less shrunk the
 target, the better the mapped board predicts, but the pure APM prior orders the bigs on offense and the

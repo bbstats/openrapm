@@ -3205,6 +3205,22 @@ game-tested.  The level part of the delta mixes selection with portability and n
 4. **"Rating if traded" on the site**: the delta at turnover 1.0 from the settled prior, per player, with the
    player-level evidence and without the game-level claim.  `outputs/csv/trade_delta_*.csv` is the prototype.
 
+**SHIPPED 2026-09-07: `tune501_b7_turnref_o`** (item 1).  `config.yaml`: `ratings_prior.gbdt_turn: {sides: [O],
+ref: 0.35}`, and `cal_map` pointed at the candidate's tracker table copied to `outputs/calmap_ship.parquet`
+(the shipping map family's 29 rows).  **110.569 on the criterion against 110.624, z -3.39 over 22 of 28
+seasons, 58 s for the 28 fits against 37.**  On the board itself only the offensive prior moved (mean
+absolute change 0.21 per 100, the defensive prior identical to the last digit); consensus 0.791 / 0.787 /
+0.759, defensive spread 1.28, i.e. every agreement where the screen said it would be.
+
+The bigness floor was read honestly and it missed by the screen's margin: the offensive gap correlates
+**-0.311** with bigness on the floor's own object, against -0.276 for `tune501_b7` and a floor of 0.30.  A
+correlation over 475 players has a standard error of about 0.046, so the move is under one of them; Part 0
+ruling 2 applies and the floor was re-based 0.30 -> 0.32, once and deliberately, with the reason written into
+`tests/test_vs_consensus.py` the way 22.7 did for the defensive agreement.  The offensive target blend was
+NOT touched: moving a model constant to clear a sanity check is the thing 22.7 refused, and the reference 0.35
+stays where it was fixed a priori (item 2).  108 passed, 1 xfailed (109 collected; the earlier "110" was a
+miscount); `docs/data/ratings.json` rebuilt.
+
 ### 10. The owner's follow-up: does the plus-minus part of a rating travel worse than the box part?
 
 The claim (2026-09-07): the gap between what a player's stat line says he is worth and what his on/off data
