@@ -41,6 +41,12 @@ TARGETS = {
 }
 
 
+def target_counter_columns(target) -> set:
+    """The per-possession counters a `TARGETS` response reads (designcache's `counter_cols`)."""
+    tg = TARGETS[target] if isinstance(target, str) else dict(target)
+    return set(tg["num"]) | {tg["den"]}
+
+
 def ps_key(player_id, season) -> np.ndarray:
     """Integer key for (player_id, season)."""
     return np.asarray(season, dtype=np.int64) * 100_000_000 + np.asarray(player_id, dtype=np.int64)
@@ -132,7 +138,9 @@ class DesignSpec:
 
 @dataclass
 class WindowData:
-    X: sp.csr_matrix
+    # the design matrix, or a zero-argument builder for it: [Z_O | Z_D | F | game_idx] costs 60 MB and a
+    # twentieth of a block's build, and a fit that works from `parts` (fastfit.MspiFast) never reads it
+    X_src: object
     y: np.ndarray
     w: np.ndarray
     groups: np.ndarray
@@ -148,6 +156,13 @@ class WindowData:
     # Z (n x 2 n_ps, csr, sorted), F (n x n_fixed dense), lineup_o / lineup_d (n x 5 Z-unit indices, sorted per
     # row), game_idx (n,)
     parts: dict | None = None
+
+    @property
+    def X(self) -> sp.csr_matrix:
+        """The design matrix, built on first use if it was passed as a builder."""
+        if callable(self.X_src):
+            self.X_src = self.X_src()
+        return self.X_src
 
     @property
     def game_half(self) -> np.ndarray:
@@ -179,7 +194,7 @@ class WindowData:
     def with_target(self, y: np.ndarray, w: np.ndarray | None = None) -> "WindowData":
         """The same design with a different response (and, optionally, weight): how a derived target
         such as expected points is attached without rebuilding anything."""
-        return WindowData(self.X, np.asarray(y, dtype=float), self.w if w is None else np.asarray(w, dtype=float),
+        return WindowData(self.X_src, np.asarray(y, dtype=float), self.w if w is None else np.asarray(w, dtype=float),
                           self.groups, self.spec, self.game_box, self.game_poss, self.rows, self.games, self.counters)
 
 
@@ -411,5 +426,5 @@ def build_design(stints: pd.DataFrame, box: pd.DataFrame, features: list, cfg: d
             counters[f"pid_s{k + 1}"] = np.concatenate([st[slots[k]].to_numpy(dtype=np.int64)[s["stint"]]
                                                         for s, slots in zip(sides, (HOME_SLOTS, AWAY_SLOTS))])
         counters["half"] = rows["half"].to_numpy()
-    return WindowData(X=X, y=y, w=w, groups=groups, spec=spec, game_box=game_box, game_poss=game_poss, rows=rows, games=games,
+    return WindowData(X_src=X, y=y, w=w, groups=groups, spec=spec, game_box=game_box, game_poss=game_poss, rows=rows, games=games,
                       counters=counters)

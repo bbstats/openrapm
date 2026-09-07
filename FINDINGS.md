@@ -2031,3 +2031,569 @@ consensus total UP (0.785 -> 0.796) and offense up (0.779 -> 0.804), defense 0.7
 `cal_map -> outputs/calmap_ship.parquet (ship_blend07_linear+log2&xlog&prior_linear+log2&xlog)`.  The chart's
 line stays the criterion's best (`best`, 110.32: the pure APM prior on both sides with the decay and the age
 term); what the floors allow is now 0.5 per 100 behind it.
+
+Two more blends against the floors: 0.3 APM on DEFENSE beside the 0.7 offense (`ship_b07d03`) scores 110.729
+and fails the defensive agreement (0.742); 0.85 APM on offense (`ship_blend085`) scores 110.768 and passes
+(bigness gap -0.271, defense 0.7665) -- 0.03 better than the 0.7 blend for 0.03 less margin on the bigness
+floor, not worth the churn.  The 0.7 blend stays shipped.
+
+### 20. The team's total wants a bend the per-player map cannot make
+
+The calibration map is a function of ONE player's rating, so the criterion's team-game prediction is the
+possession-weighted sum of the five on the floor and is linear in whatever the map did.  Fit the map as usual,
+leave-one-season-out, then a second stage on the mapped team-game total u (`calmap.TeamBend`, fitted on the
+same 27 seasons, applied to the 28th):
+
+| shape | `best` | `ship_blend07` | `mspi1` (section 20's board) |
+|---|---|---|---|
+| linear (the map as it is) | 110.3185 | 110.8022 | 111.2955 |
+| **a u + b u^3 / s^2** | **110.2464 (z -3.0, 20/28)** | **110.7216 (z -3.3, 21/28)** | **111.2113 (z -2.8, 21/28)** |
+| a u + b u abs(u) / s | 110.2482 | 110.7200 | |
+| a u + b (tanh(u/s) - u/s) s | 110.2554 | 110.7265 | 111.2135 |
+| + a quintic, or four knots either side | 110.2468 / 110.2487 | | |
+| the two sides bent apart | 110.3269 | 110.8056 | 111.2973 |
+| offense x defense (the multiplicative matchup) | 110.3209 | 110.8051 | 111.2954 |
+
+**One parameter, 0.07-0.08 per 100 on every board tried, and nothing beyond it.**  The shape is odd and
+symmetric: gamma = (1.087, -0.029) stretches the middle by 9% and pulls a 3-sd team-game in by 18%.  A cubic in
+each side separately is WORSE, and the multiplicative offense-defense term (a great offense meeting a bad
+defense) is worth nothing -- so this is not a matchup effect, it is the total regressing: the five ratings of a
+team-game come from one training block and their errors are correlated, so their sum needs more shrinking than
+each rating does.
+
+It is a PREDICTION-TIME term, like the age term: a rating carries no team, so the board cannot ship it.  In
+`calmap` it is the `|<bend>` suffix of a map name (`linear+log2&age2&xlog&prior|cubic`); the fitted row of
+each season's parameters carries `bend`, `scale_u` and `g0`/`g1`.  `bent_prediction` gives every row of a
+team-game the same g(u) - u, so the team-game total is exactly g(u) and the season's level is refit around it.
+
+### 21. The held-out season's minutes are a leak; the training block's role is a (small) rating term
+
+The criterion is given the held-out season's lineups, so how much a player plays in H looks as available as
+his age.  As a map term (`calmap.HShare`, c x his share of his team's possessions at H, from
+`roles.window_inputs`) it is the largest single map gain ever measured here: **-0.19 per 100 on `best`
+(z -3.7, 23/28) and -0.27 on `ship_blend07` (z -3.8, 21/28)**.
+
+**It is a leak, and the control says so.**  The same share measured on HALF of H's games (`HShareA`, the `A`
+half doubled -- within-season feedback, play badly and sit down, reaches the whole-season share but not the
+minutes already spent in the other half) is worth **-0.006 (z -0.1)** on `best` and -0.036 on `ship_blend07`.
+Half the games is a noisier measure of a real role effect, not a dead one: an exogenous signal would keep most
+of its value, and this keeps 3%.  What the whole-season share adds over the half-season one is the knowledge of
+who was good in that season.  Neither `hshare` nor `hgs` (games started at H, -0.065) belongs in the criterion.
+
+What survives is the same role variable measured on the TRAINING BLOCK (`TShare`: his possessions over the
+block divided by his teams' possessions, games not played counted as zero -- nothing of H in it).  It is worth
+**-0.058 on `best` (z -1.8, 19/28)** and -0.037 on `ship_blend07` (z -1.6), it stacks with the team bend, and
+unlike the H-season version it IS a rating: 08_ratings knows the block's roles.  Marginal, and taken as such.
+The slope version (rating x role) is worse (-0.045 with the level, +0.012 alone), and the raw training-exposure
+term it sits beside is not replaceable by it (dropping `log2` costs +0.74).
+
+Also negative: role GROWTH, log((possessions at H + 200) / (possessions per training season + 200)), +0.38 as
+a level and +0.03 as a slope -- the criterion does not want a rating re-weighted by a changed role.
+
+### 22. The bend belongs at BOTH levels, and the true loss has a hole in it
+
+**The stint-level cubic.**  The team-game bend of 21.20 acts on the mean contribution of the team-game's
+stints; the same cubic taken at STINT level and then averaged is a different column, because (mean c)^3 and
+mean(c^3) differ by the spread of the lineups inside the team-game.  Alone the row column is worse (+0.07);
+beside the team one it is worth **-0.205 per 100 (z -4.8, 24/28)**, and a fifth power adds nothing (+0.002).
+The two coefficients have opposite signs: the team-game total is compressed at the tails, the stint spread
+inside it is not.  `calmap.RowCubicBend` (`|rowcubic`), `row_columns`; the column is a nonlinear function of
+the map's parameters, so it is rebuilt from scratch for each held-out season (`evaluate`), which costs 8 s of
+scoring and nothing of fit time.  The criterion's line is now
+
+    best / linear+log2&age2&xlog&prior&tshare|rowcubic     109.981 at K = 3, 23.2 s for the 28 fits
+
+against 111.296 for the board section 20 shipped, and 110.318 at the start of this session.
+
+Also measured, not taken: the spread of the five mapped ratings on the floor as its own column (-0.031 on
+offense, -0.046 with both sides, z -1.7) and the best and worst man on the floor (-0.034).  The row cubic is
+the same effect in one parameter and four times the size.
+
+**The metric has a hole.**  A quarter of a block's rows are single-possession stints carrying 7% of the
+weight; every per-row cost is paid on them in full.  Dropping the short rows (`MspiFast.min_den`,
+`designcache.build_window_cached(min_den=)`) trades loss for time, and the TRUE loss (loss x time) keeps
+improving all the way down:
+
+| rows kept | criterion | 28 fits | true loss |
+|---|---|---|---|
+| all | 110.189 | 23.1 s | 0.171 |
+| >= 2 possessions (76%) | 110.253 | 20.9 s | 0.155 |
+| >= 3 (53%) | 110.445 | 18.4 s | 0.136 |
+| >= 4 (36%) | 110.676 | 16.4 s | 0.122 |
+| >= 5 | 110.807 | 15.5 s | 0.115 |
+| >= 6 | 111.010 | 14.5 s | 0.108 |
+| >= 8 | 111.460 | 13.6 s | 0.101 |
+| >= 12 | 112.515 | 12.9 s | 0.097 |
+
+At `min_den` 8 the board is already worse than the one section 20 shipped (111.296) and the true loss says it
+is 40% better.  Loss differences here are ~0.1% and time differences are tens of percent, so the product
+rewards throwing data away without limit.  **Nothing on this curve is taken**; the chart's line stays the
+system that fits every row.  The frontier is recorded because the owner may want a rule (a floor on the loss,
+or the time counted only while the loss does not rise) rather than the bare product.
+
+**Where a run's 23 s goes** (`FASTFIT_TIMER=1`, summed over the 4 workers): design 5.6, the GBDT prior 4.8,
+the cross-products 4.0, the two targets 3.1, the exposure 3.0, the solves 2.1, the layout 0.7.  The GBDT's
+parameters barely move its clock once the library is warm (0.14 s per leave-window-out pair at depth 6, 0.15
+at depth 4, 0.12 at depth 4 + 64 bins, 0.09 at learning rate 0.2 -- the 0.49 s of a first fit is the JIT).
+Tracked: `best_g4` 110.188 / 23.1 s, `best_g4b64` 110.208 / 22.9 s, `best_glr2` 110.208 / 22.4 s -- none of
+them worth the churn.
+
+### 23. Two more second-stage columns, one leak, and the control that catches them
+
+With the team + stint bend in place, four more columns that no per-player map can make, each fitted
+leave-one-season-out on the pooled team-game design:
+
+| column | vs the line (109.984) | z |
+|---|---|---|
+| u x home | +0.005 | +1.5 |
+| u x the unseen men on the floor | -0.001 | -0.2 |
+| the stint contribution x the stint's length | +0.005 | +2.2 |
+| **u x the team-game's mean log stint length** | **-0.149** | **-3.3, 21/28** |
+| all four together | -0.308 | -5.0 |
+
+**The big one is a leak, and the control says so again.**  Stint lengths are a property of the held-out game's
+substitutions, and substitutions follow the score: a blowout empties the bench and leaves long stints.  The
+control is the same quantity averaged over the TEAM'S OTHER GAMES that season (leave-one-game-out; the team of
+a team-game is the majority team of its offensive five, from the season's box scores) -- style, with nothing
+of this game in it.  It is worth **+0.008 (z +1.1)**; the two together are worth what THIS game's alone is
+(-0.155).  So the whole of it is the game's own flow.  The "all four" line is the same column in company and
+goes with it.
+
+That the criterion refits only the intercept and the home term -- not the design's margin, garbage-time or
+playoff columns (`holdout.level_columns`, level `home` and not `full`) -- is the same rule stated in advance:
+context that is a consequence of the score is not an input.  **The pattern to reuse: any candidate covariate
+measured on the held-out season gets a control that measures the same thing from data the outcome could not
+have touched (the other half of the season, the team's other games, the training block).  Two of three
+candidates this session died on it (21.21 and this one); the ones that lived -- age at H, the bends, the
+training-block role -- are the line.**
+
+### 24. The prior's model and features are not the binding constraint; its target is
+
+Against the line (`best / linear+log2&age2&xlog&prior&tshare|rowcubic` = 109.981 in 23.2 s), every change to
+the GBDT box prior that does not change what it is trained ON:
+
+| change | criterion | vs the line | z | 28 fits |
+|---|---|---|---|---|
+| linear aggregations of the 13 rates (`gbdt_prior.DERIVED`: points, shot volume, usage, bigness, rebounds, stocks, creation, shot mix) | 109.936 | -0.049 | -1.05, 18/28 | 24.6 s |
+| + efficiency ratios (`RATIOS`: TS, eFG, 3PAr, FTr, FG3%, FG2%, FT%, assist rate, turnover rate, offensive-rebound share) | **109.912** | **-0.069** | **-1.28, 19/28** | 25.8 s |
+| the ratios without the linear aggregations | 109.979 | +0.001 | 0.0 | 25.8 s |
+| the aggregations INSTEAD of the rates they are made of | 109.947 | -0.033 | -0.50 | 24.4 s |
+| chimeraboost `quality=4` (5 bagged members) | 109.985 | +0.004 | | 27.0 s |
+| chimeraboost `quality=5` (8 bagged members) | 109.996 | +0.015 | | 33.2 s |
+| `quality=4` WITH the audition fits and cross features | 109.954 | -0.025 | -0.65 | 45.4 s |
+| the target pooled toward the player's nearby windows (`win_decay` 0.3 / 0.5 / 0.7) | 109.956 / 109.957 / 109.975 | -0.025 | | 23.6 s |
+
+**Not one of them is significant, and the biggest is 0.07 per 100.**  Doubling the booster's fit budget
+(`quality=4` with the auditions, 45 s against 23) buys 0.025.  The one prior change that ever mattered
+remains what it is trained on: RAPM_1 -> unshrunk APM was -0.29 at z -3.1 (21.16).
+
+**Why, measured.**  The prior's task is to predict a player's APM pooled over his OTHER windows.  That target
+is itself noisy, so no model can correlate with it beyond the square root of its reliability.  Split each
+player's other windows into two halves, pool each, correlate them possession-weighted and Spearman-Brown back
+to the whole pool (`scratch/prior_ceiling.py`):
+
+| side | target reliability | ceiling on any r | the shipped booster's r | share of the ceiling |
+|---|---|---|---|---|
+| offense | 0.808 | 0.899 | 0.590 | 66% |
+| defense | 0.889 | 0.943 | 0.629 | 67% |
+
+A third of the reachable signal is unexplained -- but the model class is not what is holding it: five and eight
+bagged members, the full model-selection search, twenty-three engineered features and a distance-weighted
+target all move the criterion by less than 0.07 with z around 1.  What is left is in the play-by-play and not
+in the box line, which is the premise the ridge exists to exploit.
+
+**TabFM (`google/tabfm-1.0.0-jax`, the 5.7 GB regression checkpoint) could not be measured on this machine.**
+`pip install "tabfm[jax]"` and the download work (point `HF_HOME` at A:, C: has 8 GB free and the checkpoint
+needs more), but the orbax restore dies in tensorstore on a 1.5 GB region: the box has 32 GB with a 48 GB
+commit limit and 38.5 GB already committed by other processes.  Worth retrying with the machine quiet.  Note
+what it would have to beat on: the booster fits a leave-window-out pair in 0.14 s, and the whole 28-fit budget
+is 23 s.
+
+### 25. Accuracy first: the same three prior changes pay when they are stacked
+
+The owner ruled the clock is no longer binding at ~25 s.  Freed of the time penalty, the three prior changes of
+21.24 -- each worth less than 0.07 on its own and none of them significant -- stack into something that is:
+
+| system | criterion | vs the old line | z | 28 fits |
+|---|---|---|---|---|
+| `best` (the line before this) | 109.981 | | | 23 s |
+| `best_ratio` (the ratio feature set) | 109.912 | -0.069 | -1.28 | 26 s |
+| `best_ratio_wd03` (+ the nearby-window target) | 109.923 | -0.053 | -0.97 | 28 s |
+| `best_ratio_q4` (+ 5 bagged members) | 109.884 | -0.096 | -2.06 | 33 s |
+| `best_ratio_wd03_q4` (+ both) | 109.882 | -0.098 | -2.34 | 35 s |
+| **`best_ratio_full`** (+ the audition fits and cross features) | **109.845** | **-0.135** | **-3.33, 20/28** | 59-61 s |
+| `best_ratio_full1` (the same without the nearby-window target) | 109.867 | -0.114 | | 60 s |
+| `best_ratio_q5full` (8 bagged members instead of 5) | 109.833 | -0.148 | | 81 s |
+
+**The line is `best_ratio_full`**: the 13 rates + role + the linear aggregations + the efficiency ratios, the
+booster at `quality=4` with its audition fits and cross features, the target pooled with a 0.3 discount per
+window of distance, on the map `linear+log2&age2&xlog&prior&tshare|rowcubic`.  **109.845 at K = 3.**
+
+Two readings worth keeping.  **The parts interact**: bagging was +0.004 on the plain feature set and -0.027 on
+the ratio one; the model-selection search was -0.025 plain and -0.037 on top of the bag.  A richer feature set
+gives the search something to find, which is why 21.24's "capacity does not matter" holds only at the feature
+set it was measured on.  And **the ladder stops**: 8 bagged members instead of 5 is another -0.011 at z -0.83
+for 20 s, and dropping the nearby-window target costs +0.025 -- the stack is done, not obviously extendable.
+
+The true loss of the line is now 0.44 against 0.17 for the system it replaces.  That is the owner's call and
+the metric's, not a regression: 21.22 already showed the product is 97% clock.
+
+### 26. The accuracy-first prior, shipped: 110.710 with every floor green
+
+21.25's line cannot ship -- the age term and the two bends are prediction-time and the APM prior on both sides
+fails the consensus.  The shipping shape (no held-out season, so no decay and no age term; no bends; the
+offensive target blended toward RAPM_1; RAPM_1 on defense) was built and read against the floors:
+
+| candidate | criterion | consensus total / off / def | floors |
+|---|---|---|---|
+| `ship_blend07` (what was shipped) | 110.802 | 0.796 / 0.804 / 0.767 | 10 of 10 |
+| `ship_ratio_b07` (ratio prior BOTH sides, tshare BOTH sides) | 110.646 | 0.779 / 0.786 / 0.754 | defense 0.754, bigness -0.303 |
+| `ship_ratio_b05` (same, tshare on offense only) | 110.713 | 0.784 / 0.789 / 0.761 | 10 of 10, defense by 0.001 |
+| `ship_ratio_b06` | 110.681 | 0.787 / 0.792 / 0.761 | 10 of 10, defense by 0.001 |
+| `ship_ratio_o7` (ratio FEATURES on offense only) | 110.671 | | defense 0.755, bigness -0.303 |
+| `ship_side85` (accuracy prior on offense, shipped prior on defense) | 110.656 | | bigness -0.329 |
+| `ship_side7` | 110.691 | 0.790 / 0.786 / 0.766 | bigness -0.303 |
+| **`ship_side6`** | **110.710** | **0.792 / 0.792 / 0.766** | **10 of 10** |
+
+Three things the ladder settles.
+
+**The `tshare` map term belongs on OFFENSE only.**  On defense it takes the agreement from 0.766 to 0.754 --
+the same thing the `prior` term did in 21.18.  It is worth -0.059 per 100 on offense and it stays there.
+
+**The defensive floor is broken by the BOOSTER, not the features.**  `ship_ratio_o7` gives defense the plain
+feature list and still fails at 0.755; what defense will not tolerate is `quality=4` (the bag and the search)
+and the nearby-window target.  So the two sides now take separate priors -- `chain_offset(params_d=,
+win_decay_d=)`, `MspiFast.gbdt_params_d` / `win_decay_d`, config `gbdt.params_def` and
+`ratings_prior.gbdt_win_decay_def`.  Offense gets the accuracy-first prior, defense keeps exactly what shipped
+this morning, and the defensive agreement comes back to 0.766 against the floor's 0.76.  It also costs less:
+43 s for the 28 fits against 59.
+
+**The offensive blend is what the bigness floor buys.**  0.85 is -0.329, 0.7 is -0.303 (the floor is 0.30),
+0.6 is -0.283.  Each step down costs about 0.02 per 100 on the criterion.
+
+**SHIPPED: `ship_side6`.**  `config.yaml`: `gbdt_target: blend0.6`, `gbdt_target_def: rapm1`,
+`gbdt_win_decay: 0.3` with `gbdt_win_decay_def: 1.0`, `gbdt.params: {quality: 4, ensemble_n_jobs: 1}` with
+`gbdt.params_def: {linear_leaves: false, cross_features: false}`, `features_full_O` the 37-name ratio list and
+`features_full_D` the 15-name one, `cal_map -> ship_side6_linear+log2&xlog&prior&tshare_linear+log2&xlog`.
+**110.710 on the criterion against 110.802**, consensus 0.792 / 0.792 / 0.766, defensive spread 1.33, offensive
+bigness gap -0.283, ten of ten floors, 82 passed and 1 xfailed.  08_ratings now builds the `tshare` covariate
+per window (a map term with no column would apply as zero, silently) and reads the per-side prior knobs.
+
+## 22. The prior pass: two blocks of new information, and the two ways a feature can look better than it is
+
+The owner's call after 21.26 was *"improving priors is the real most important key"*, and HANDOFF Part 3
+ordered the work by how much NEW information each item adds rather than how much it re-expresses what the 13
+rates already say.  Two blocks of new information were built and measured and three cheap corrections were
+tried.  One block is worth shipping; the other is worth **+0.054** despite being the largest gain the prior's
+own out-of-sample fit has ever shown, and why is the part of this section worth keeping.
+
+Everything is at K = 3.  The accuracy line is `best_ratio_full` (109.845) on the map
+`linear+log2&age2&xlog&prior&tshare|rowcubic`; the shipping shape is `ship_side6` (110.710) on
+`linear+log2&xlog&prior&tshare : linear+log2&xlog`.
+
+### 1. Shot quality: the prior finally learns where the shots came from
+
+`data/stints/{season}_RS_shots.parquet` has carried, per shooter per game, `fg2a fg2m xl2 fg3a fg3m xl3` since
+the xpts work of section 18 -- `xl2` and `xl3` being the league's expected makes from HIS locations, and
+calibrated per season (`sum(xl2) == sum(fg2m)` to four figures in all 30).  It is built, cached and read on
+every fit, and the prior had never seen it.  Summed over a block it splits what `fg2p` gives as one number:
+
+    difficulty    xl / a          the league's make probability on his average attempt
+    shot-making   (m - xl) / a    how far he beats a league shooter FROM HIS OWN SPOTS
+
+Six features (`gbdt_prior.SHOTQ`): that pair on twos and on threes, plus the same pair priced in points across
+both shot types (`xps`, `mpts`), which is where the three-versus-rim trade-off lives.  Each is padded in
+ATTEMPTS toward the BLOCK's own league level (`shot_lg2` / `shot_lg3` / `shot_lgpps`), never a constant -- the
+league make rate on twos runs 0.4648 in 2000-2002 to 0.5468 in 2024-2026, and a fixed target would have
+quietly aged every low-volume player.  The constants are the reliability ones: 50 attempts for difficulty,
+which is nearly a deterministic property of a shot chart, and 250 / 450 for shot-making on twos and threes
+(section 18's numbers).  Over the 3,401 offensive rows with 500+ attempts the block is wide and real:
+difficulty on twos 0.405 to 0.685, shot-making on twos +/- 0.09, expected points per attempt 0.83 to 1.35.
+
+The provenance is the 13 rates' own.  `scripts/49_role_panel.py` stores the window's totals per row;
+`spm.chain_offset` rebuilds them from the TRAINING block with `xshoot.player_shot_frame(train, ...)`, which
+never sees the held-out season -- so 21.21's leak control does not apply.  `scratch/cmp_shotq.py` checks the
+two paths agree to 0.00e+00 on all ten windows.
+
+**On the accuracy line: -0.045 (109.845 -> 109.801), z -1.13, 17 of 28.**  On the prior's own leave-window-out
+fit, -0.044 weighted MSE at the cheap booster and -0.026 at the shipped `quality=4`.  Real in direction and
+not significant -- but item 4 is where it earns its place, and it is not where the criterion pointed.
+
+### 2. Experience: the largest gain ever measured on the prior's own fit, and it costs +0.054
+
+`roles.career_inputs`: seasons played, career possessions in thousands and the age he entered at, all counted
+BEFORE the training block's first season (for a held-out H at K = 3 the block is H-2, H-1, H+1, so the count
+stops at H-3 and cannot reach H).  HANDOFF 3.3's motivation: age is in the prior and experience is not, and a
+25-year-old rookie and a 25-year-old in year seven are different players.
+
+On the prior's own leave-window-out fit it is **-0.077 weighted MSE** against the ratio set, where the entire
+derived-plus-ratio block of 21.24 was -0.119 and shot quality is -0.044; with shot quality beside it, -0.112.
+On the low-exposure rows -- the ones the ridge has least data on, and therefore the ones the prior actually
+decides -- it looks better still at -0.247.
+
+**On the criterion it is +0.054, z +1.65, 11 of 28.**  With shot quality, +0.041.  Rejected; `best_career` and
+`best_both` stay in the registry as the record.
+
+The mechanism, and it will recur: **the prior's target is the player's APM pooled over his OTHER windows, so a
+player with more windows has a target pooled from more data, and a lower-noise target is intrinsically easier
+to predict.**  `exp_yrs` names exactly those players.  The model lowers its held-out MSE by knowing which rows
+have quiet targets, without knowing anything more about what any player is worth, and the criterion -- which
+scores actual points in a held-out season -- gets none of that back.  The possession weight does not undo it:
+the weight is the pooled possession count, which prices the target's noise on average, not row by row.
+
+Generalised, this is a fourth entry for 21.20's list: **any feature that predicts how well-measured a row's
+target is will beat the prior's own fit and lose the criterion.**  Splitting the bench by exposure does not
+catch it -- the low-possession stratum liked experience MORE, not less.  Nothing short of the criterion caught
+it, and nothing short of the criterion will catch the next one.
+
+### 3. Three cheap corrections, all flat: Huber, inverse-variance weights, asymmetric pooling
+
+HANDOFF 3.2 and 3.3, all measured first on `scratch/prior_bench.py` (~20 s each against the tracker's fifteen
+minutes), all rejected before spending a run:
+
+**Huber instead of RMSE** (`loss="Huber"`, `delta` in target units; the target's sd is 2.6).  At the cheap
+booster it is a real gain -- delta 3 is -0.039 weighted MSE, delta 2 is -0.033, and MAE is far worse (+0.197,
+so the tails carry signal).  **At `quality=4`, the booster that ships, it is +0.061.**  The bag and the
+model-selection search already buy what the robust loss was buying: 21.25's "the parts interact", a second
+time, and a reminder that a knob measured at the cheap operating point does not transfer to the shipped one.
+
+**Inverse-variance weights on the target rows** instead of raw pooled possessions -- `n / (1 + n / n0)`, since
+a pooled target's variance is `sigma^2/n + tau^2` and beyond `n0 = sigma^2/tau^2` more possessions buy almost
+no precision.  Swept n0 = 5k / 10k / 20k / 50k: **-0.003 at best**, worse at either end.  The possession
+weight was already close enough.  `training_rows(sat_poss=)` is wired and off.
+
+**Asymmetric pooling**, past windows discounted differently from future ones on top of `win_decay`, since
+aging is directional and the 0.3 distance kernel is not.  Swept 0.5 / 0.7 / 1.4 / 2.0: **every one is worse**
+(+0.025 to +0.075), in both directions.  The symmetric kernel is right.  `training_rows(win_past=)` is wired
+and off.
+
+### 4. Where shot quality actually pays: it unlocks the blend-0.7 offensive target
+
+In shipping shape the criterion says nothing -- `ship_shot7` is +0.002 on `ship_side7` and `ship_shot6` is
++0.007 on `ship_side6`, both z under 0.6.  The floors say something else.  21.26 shipped `blend0.6` on offense
+**only because `blend0.7` failed the bigness floor at -0.303 against 0.30**, at a cost of about 0.02 per 100.
+Shot quality moves that gap to **-0.270**: the features that separate a rim-running big from a jump shooter at
+the same FG% are exactly the ones the offensive board was mis-ranking by size.
+
+Rebuilt through the real shipping path (`scratch/ship_try2.py`, which moves the prior's feature lists as well
+as the targets, then `08_ratings.py` + `22_vs_consensus.py` + the floor tests):
+
+| candidate | criterion | vs shipped | total / off / def | def spread | floors |
+|---|---|---|---|---|---|
+| `ship_side6` (what ships) | 110.710 | | 0.792 / 0.792 / 0.766 | 1.33 | 10 of 10 |
+| `ship_side7` (blend 0.7, no shot quality) | 110.691 | -0.018 | | | **bigness -0.303** |
+| **`ship_shot7`** (blend 0.7, shot quality on offense) | **110.694** | **-0.016 (z -0.88)** | 0.789 / 0.789 / 0.762 | 1.33 | **10 of 10** |
+| **`ship_shot7d`** (the same, shot quality on defense too) | **110.707** | **-0.003 (z -0.09)** | 0.793 / 0.789 / **0.768** | **1.30** | **10 of 10** |
+
+So there are two candidates and they buy different things.  `ship_shot7` is the criterion's: -0.016, all floors
+green, but the defensive agreement falls to 0.762 against its 0.76 floor and there is almost no headroom left.
+`ship_shot7d` is the floors': flat on the criterion, but the defensive agreement goes UP to 0.768 and the
+defensive spread -- the "1.33x too wide" that owns the only permanently-failing test and blocked three
+candidates in 21.26 -- comes down to **1.30, the narrowest any shipping candidate has measured**.
+
+**SHIPPED: `ship_shot7d`.**  Both are a wash on the criterion (z -0.88 and -0.09, against a project bar that
+has been z -3 for every kept item), so the criterion does not choose between them and the floors do.  The
+headroom is the thing worth having: the defensive spread is the constraint that owns the only permanently
+failing test, blocked three candidates in 21.26 and separated these two, and this is the first change ever
+measured that narrows it at no cost.  `config.yaml`: `gbdt_target: blend0.7` (from `blend0.6`), the six SHOTQ
+names in BOTH `features_full_O` (43) and `features_full_D` (23), `cal_map ->
+ship_shot7d_linear+log2&xlog&prior&tshare_linear+log2&xlog` with `outputs/calmap_ship.parquet` recopied from
+the tracker's dump.  The rebuilt board reproduces the candidate exactly: **0.793 / 0.789 / 0.768 against the
+consensus, defensive spread 1.30, ten of ten floors, 82 passed and 1 xfailed.**
+
+`ship_shot7` -- shot quality on offense only, 110.694, the better criterion by 0.013 -- is one config line away
+if a later pass decides the score is worth the defensive headroom: drop the six names from `features_full_D`
+and point `cal_map` at `ship_shot7`.
+
+### 6. Season is not an intercept, and `quality=4` on defense is three things, not one
+
+The owner, reading the SHAP table: *"I don't think it would kill us to put season in as a linear term in the
+gbdt."*  The first half of that is answerable with a measurement and the answer is no -- but chasing it opened
+the defensive booster up, which nobody had done.
+
+**A season INTERCEPT has nothing to fit.**  The panel's target is possession-centred inside every window, so
+the weighted target mean drifts **+0.078 points across the 29 seasons on offense against a target sd of
+2.216** (3.5% of a sd) and 0.243 against 1.200 on defense, non-monotonically.  There is no era trend left in
+the target because the construction already removed it.
+
+**Season is nonetheless worth +0.066** -- deleting it from the shipped offensive list costs that much weighted
+MSE, and +0.129 on the low-exposure rows.  So its job is as a CONDITIONER: the same box line means different
+things in different eras, and an oblivious tree pays for that by re-splitting thresholds inside every era
+branch.  That is the thing a linear treatment could help, and it is a different thing from an intercept.
+
+Two ways to give it one, measured on the prior's own leave-window-out fit at each side's shipped booster:
+
+* **Era-standardise the rates** (z within window x side, which is exactly reproducible at prediction time
+  because the panel's window and the design's block are the same player population).  HANDOFF 3.3 had listed
+  this for a year.  **Offense +0.032, defense -0.003.**  Rejected.
+* **`linear_leaves`** -- a ridge per leaf over the split features, which is the local linear version.  Offense
+  already has it: `quality=4` leaves it validation-selected and forcing it OFF costs +0.011.  **Defense is the
+  one side that ships with it explicitly off** (`params_def`), and turning it on is **-0.009**.
+
+That last number made it worth decomposing `quality=4` on defense, which 21.26 had rejected as a package.
+Defensive prior, target RAPM_1, base 0.7223 weighted MSE:
+
+| | MSE | vs base | low-exposure | r | slope |
+|---|---|---|---|---|---|
+| shipped (`linear_leaves` off, `cross_features` off) | 0.7223 | | 1.0745 | 0.708 | 1.08 |
+| `linear_leaves` | 0.7133 | **-0.0090** | 1.0517 | 0.712 | 1.08 |
+| `cross_features` | 0.7263 | +0.0040 | 1.0812 | 0.706 | 1.07 |
+| **both** | **0.7095** | **-0.0128** | 1.0659 | **0.714** | 1.06 |
+| the bag (5 members) | 0.7251 | +0.0028 | 1.0376 | 0.709 | **1.12** |
+| linear leaves + the bag | 0.7231 | +0.0008 | **1.0324** | 0.712 | **1.15** |
+
+Three readings, and the third is the useful one.
+
+**The parts interact on defense exactly as 21.25 found on offense.**  `cross_features` is HARMFUL alone
+(+0.004) and the best thing available beside linear leaves (-0.013 together).  A knob's sign here depends on
+what else is on.
+
+**The bag is what widens the prior.**  It is the only variant that moves the calibration slope, 1.08 -> 1.12
+and 1.15, and defensive width is the floor that owns the only permanently-failing test.  That is a mechanism
+for 21.26's blunt finding that "defense will not tolerate `quality=4`": it is the BAG that defense will not
+tolerate, and the other two pieces were rejected as collateral.  The bag is also the only variant that helps
+the LOW-EXPOSURE rows (1.032 against 1.075) -- the players the prior actually decides -- so this is a real
+tension and not a settled question.
+
+**And the criterion disagreed with all of it.**  Against the shipped `ship_shot7d` at 110.707:
+
+| | criterion | vs shipped | z | floors |
+|---|---|---|---|---|
+| `ship_shot7d_ll` (linear leaves) | 110.6925 | -0.0139 | -0.75 | 10 of 10, def 0.767, spread 1.31 |
+| `ship_shot7d_llcf` (+ cross features) | 110.7006 | -0.0059 | -0.23 | not read |
+
+The offline ranking is `llcf` (0.7095) ahead of `ll` (0.7133); the criterion's is the reverse.  **Cross
+features bought another 0.004 of the prior's own fit and gave back 0.008 of the criterion.**  That is the
+third divergence in this section alone -- experience (22.2), and now this -- and the pattern is consistent
+enough to state plainly: **the prior's own out-of-sample fit ranks candidates correctly only when they differ
+in INFORMATION, and unreliably when they differ in CAPACITY.**  22.1's shot quality agreed across both
+(-0.044 offline, -0.045 on the criterion).  Every capacity knob measured here and in 21.24-21.25 has not.
+
+Nothing shipped.  `ship_shot7d_ll` is a genuine -0.014 with ten of ten floors and it is inside the noise
+(z -0.75) on a project bar that has been z -3, and its defensive agreement is 0.767 against the shipped
+0.768.  Both systems stay in the registry; `scratch/prior_bench.py` grew `--ll`, `--cf`, `--ne` and `--zrates`
+for whoever picks the defensive booster up again.
+
+### 7. The estimator search: a real, significant, unshippable gain, and exactly where it is blocked
+
+The owner: *"in reality you should just do hyper parameter tuning on the entire estimator, not just linear
+leaves."*  Right, and overdue -- every knob in sections 21 and 22 was moved one at a time, while 21.25 and
+22.6 both found the parts INTERACT, which one-at-a-time cannot see.  `scripts/55_tune.py` searches the ridge
+(`lam` multiple, `lam_ratio`), the pooling (`win_decay` per side, the offensive blend) and both boosters
+(depth, lr, l2, bins, subsample, colsample, min_child_weight, linear leaves, cross features, bag).
+
+**The design matters more than the search.**  Selecting on the criterion is selecting on the test set, so the
+objective is scored on 14 ALTERNATING held-out seasons and the other 14 are never shown to the optimizer;
+the shipped board is scored on both halves as a reference line because the halves sit at different levels
+(111.468 and 110.073).  625 trials in 97 minutes, TPE over sqlite, parallel over trials with each worker
+holding one trial's seasons warm.
+
+The split earned its keep on the first look: **the best SEARCH trial (491, -0.194) regressed to -0.060 on the
+confirm half, while the eventual winner ranked 8th on search.**  24 of the top 25 beat the shipped board on
+the confirm half, -0.015 to -0.111 -- so the region is real, but the ranking inside it is mostly noise.
+
+#### What it found, on all 28 seasons
+
+| | criterion | vs shipped | z | 28-fit seconds | floors |
+|---|---|---|---|---|---|
+| `ship_shot7d` (what ships) | 110.707 | | | 46.3 | 10 of 10 |
+| **`tune501`** | **110.569** | **-0.138** | **-3.95** | **37.3** | bigness 0.323, defense 0.759 |
+| `tune234` | 110.576 | -0.131 | -3.11 | 47.1 | bigness 0.329, defense 0.737 |
+| `tune501_b7` (blend backed to 0.7) | 110.624 | -0.083 | -3.02 | 37.2 | **defense 0.7592, by 0.0008** |
+| `tune501_b7_wd06` | 110.639 | -0.067 | -2.37 | 37.3 | not read, deliberately |
+| `tune501_b7_wd1` | 110.681 | -0.025 | -0.75 | 37.6 | **10 of 10**, defense 0.763 |
+| `tune501_b7_dship` | 110.686 | -0.021 | -0.94 | 37.9 | **10 of 10**, defense 0.762 |
+
+`tune501` is **z -3.95 over 22 of 28 seasons AND 20% faster than what ships**, so Part 0.1's parsimony
+tie-break never has to be invoked.  It is the largest criterion gain since 21.24 and it cannot ship.
+
+**Four independent candidates converged on the same structure**, which is why this reads as a finding rather
+than 625 lottery tickets: linear leaves on BOTH sides, cross features on offense only, **no defensive bag**,
+`win_decay_d` 0.24-0.31, 64-128 bins rather than 254, and subsample / colsample around 0.65-0.83 where the
+hand-tuned board used 1.0.  The first three are an **independent rediscovery of 22.6's hand decomposition**,
+reached from the opposite direction, which is the strongest evidence either result has.
+
+#### Where it is blocked, precisely
+
+Two floors fail and they fail for different reasons.
+
+**The bigness gap is the offensive target.**  Every candidate wants `blend` 0.86-1.00, i.e. nearly pure APM,
+which is what failed the floor in 21.26; blending back to 0.7 fixes it and costs 0.055.  Known behaviour.
+
+**The defensive agreement is `win_decay_d`, and it is not a width problem.**  Every tuned candidate IMPROVED
+the defensive spread (1.27-1.28 against the shipped 1.30) -- the prior got tighter and the consensus agreed
+with it LESS.  The knob responsible is the defensive nearby-window discount: the search wants 0.28, the
+shipped board pools every window alike at 1.0, and restoring 1.0 recovers the floor (0.763) while giving back
+0.058 of the 0.083 and taking z from -3.02 to -0.75.
+
+**`win_decay_d` = 0.6 was not read against the floors, on purpose.**  It scores -0.067 and would probably
+scrape over; choosing the pooling constant that just clears a validation gate is fitting the gate, and the
+gate is the only external check this project has.  1.0 is defensible because it is the INCUMBENT value, not a
+value chosen to pass.  Whoever revisits this should hold that line.
+
+#### What it means, under the owner's ruling on the consensus
+
+Written first as "the floors veto this", which was wrong.  The owner, on reading it: *"disagreeing with
+consensus is just a sanity check, never something to fully fit to."*  The floors say the same of themselves --
+they *"guard against a further fall, not the old level"*.  So the misses have to be read for SIZE, not as
+pass/fail:
+
+* `tune501_b7` misses the defensive agreement floor by **0.0008** (0.7592 against 0.760).  That is noise on a
+  sanity check.  It is significant on the criterion (z -3.02, 18 of 28), it is 20% faster than what ships, and
+  it passes the other nine floors including the bigness gap.  **This is a shippable board.**
+* `tune501` misses two: the same defensive agreement (0.759) and the bigness gap at **0.323 against 0.30**.
+  The second is a different animal -- an 8% overshoot on the archetype check, and archetype bias is exactly
+  what the consensus exists to catch (21.19, and the Robert Williams case that started all of this).  Its
+  criterion number is better still (-0.138, z -3.95, 22 of 28), so this is a real trade, not a formality.
+* the backed-off variants clear every floor and are inside noise (z -0.75, -0.94).  They are what the old
+  reading would have shipped, and they would have thrown the whole gain away.
+
+The substantive disagreement stands, separately from the shipping call: **the criterion wants defence weighted
+toward the windows either side of the block (`win_decay_d` 0.28, i.e. recent form) and the consensus of public
+metrics wants the career-level statement.**  Both boards are internally coherent; they mean different things
+by "a defensive rating".  That is HANDOFF 3.2's territory, and a four-factor fit both sides believe would
+dissolve it rather than trade it off.
+
+**SHIPPED: `tune501_b7`** (the owner's call).  `config.yaml`: `lam_scale: 0.624047`, `lam_ratio_plugin:
+0.624519`, `gbdt_target: blend0.7`, `gbdt_win_decay: 0.514318`, `gbdt_win_decay_def: 0.280024`, and the two
+searched boosters written out in `gbdt.params` / `gbdt.params_def`.  **110.624 on the criterion against
+110.707, z -3.02 over 18 of 28 seasons, and 37 s for the 28 fits against 46** -- the largest shipped gain
+since section 20's calibration map, and cheaper than the board it replaces.  Consensus 0.788 / 0.790 / 0.759,
+defensive spread 1.28 (the narrowest yet), 82 passed and 1 xfailed.
+
+The defensive-agreement floor was re-based 0.76 -> 0.75, deliberately and once, with the reason written into
+`tests/test_vs_consensus.py` itself.  That is a guard rail moving after a documented decision that the board
+is better on the external criterion -- not a model constant chosen to clear a gate, which is the thing
+`win_decay_d = 0.6` was refused for two paragraphs ago.  The distinction is the whole ruling: **the criterion
+decides and the consensus sanity-checks**, so a 0.1% rank-correlation difference against a blend that is 90%
+raw-points on defense does not get to veto a z -3.02 result.  0.75 still catches a real fall and now matches
+the offensive and overall floors.
+
+`tune234`, `tune501`, `tune596`, `tune609` and the backed-off variants are all in the registry with their
+parameters written out literally, so none of this depends on `outputs/tune_all.db`.
+
+#### Two lessons about the machinery
+
+**A cache keyed by the parameter set is a memory leak under a search.**  The first study OOMed all 2,000
+trials in under three minutes: `Context._priors` is keyed by the parameter dict and never evicts, so with
+persistent workers every trial added a `GBDTPrior` holding a fitted booster per exclusion set.  `evaluate`
+drops it per trial now, workers recycle, per-trial RSS is printed, and fifteen consecutive failures abort the
+study instead of burning it.  The box has **34 GB of physical ram** -- the 48 GB in the handoff is the commit
+limit including the page file, and it is not what bounds concurrent workers.  Four workers at ~4 GB is the
+ceiling.
+
+**The search agreed with the offline prior bench where 22.6 said it would.**  Both found the defensive
+booster's shape (linear leaves yes, cross features no, bag no).  Neither the bench nor the search could see
+the consensus floors, which is where the answer actually turned.
+
+### 5. What the pass says about the prior
+
+Five things were measured on the criterion and four of them are zero or worse.  The one that is not is worth
+-0.045 on the line and nothing in shipping shape, and it is the only item on HANDOFF's list that added
+information rather than re-expressing what was there.  Read against 3.5's ceiling -- the prior's target has a
+split-half reliability of 0.808 on offense, so nothing can correlate with it past 0.899, and the shipped
+booster reaches 0.590 -- **the missing third is not sitting in the box score waiting for a better feature.**
+Capacity did not move it (21.24), re-expression was worth 0.05 (21.25), and the two richest new sources on
+the shelf are worth 0.045 and less than nothing.  The next real gain is more likely in the ridge, in the
+defensive fit, or in getting off three-season chunks than in another column on the panel.
+

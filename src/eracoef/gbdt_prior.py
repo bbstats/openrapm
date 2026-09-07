@@ -29,38 +29,180 @@ import numpy as np
 import pandas as pd
 
 from .design import FEATURES
+from .roles import CAREER_INPUTS
 
 SIDES = ("O", "D")
 ROLE_INPUTS = ["share", "gs_pct", "age"]
 DEFAULT_FEATURES = [*FEATURES, "season"]                 # mode "residual": what the box line adds to the role level
 FULL_FEATURES = [*FEATURES, "season", *ROLE_INPUTS]       # mode "full": the GBDT is the whole prior
 
+# Aggregations of the 13 rates, in the rates' own (centred, per-100) units.  An oblivious tree splits one
+# column at a time, so a quantity that lives on a DIAGONAL of the rate space -- points, shot volume, the
+# big-man axis -- costs it a staircase of splits to approximate and costs us nothing to hand over.  Every
+# one is LINEAR in the rates, so it means the same thing centred as uncentred and no panel column is needed.
+DERIVED = {
+    "pts":      {"fg2m": 2.0, "fg3m": 3.0, "ftm": 1.0},                       # points per 100
+    "fga":      {"fg2m": 1.0, "fg2_miss": 1.0, "fg3m": 1.0, "fg3_miss": 1.0},
+    "fta":      {"ftm": 1.0, "ft_miss": 1.0},
+    "fg3a":     {"fg3m": 1.0, "fg3_miss": 1.0},
+    "usage":    {"fg2m": 1.0, "fg2_miss": 1.0, "fg3m": 1.0, "fg3_miss": 1.0,   # possessions he finishes
+                 "ftm": 0.44, "ft_miss": 0.44, "tov": 1.0},
+    "bigness":  {"orb": 1.0, "blk": 1.0, "drb": 0.3, "ast": -0.5, "fg3m": -0.4},   # 22_vs_consensus's definition
+    "reb":      {"orb": 1.0, "drb": 1.0},
+    "stocks":   {"stl": 1.0, "blk": 1.0},
+    "creation": {"ast": 1.0, "tov": -1.0},
+    "shotmix":  {"fg3m": 1.0, "fg3_miss": 1.0, "fg2m": -1.0, "fg2_miss": -1.0},    # threes minus twos taken
+}
+# Efficiency: a ratio of two rates, which an axis-aligned tree cannot make at all.  These need the rates'
+# LEVEL back (a ratio of centred rates is meaningless), so they are built from the `raw_` columns -- the
+# uncentred padded rates, stored in the panel by scratch/add_raw_rates.py and passed through by
+# `chain_offset` at prediction time.  Each denominator is padded so a 200-possession player is not a ratio
+# of two roundings.  (num, den, pad in attempts per 100.)
+RATIOS = {
+    "efg":   ({"fg2m": 1.0, "fg3m": 1.5}, {"fg2m": 1, "fg2_miss": 1, "fg3m": 1, "fg3_miss": 1}, 3.0, 0.50),
+    "ts":    ({"fg2m": 2.0, "fg3m": 3.0, "ftm": 1.0},
+              {"fg2m": 2, "fg2_miss": 2, "fg3m": 2, "fg3_miss": 2, "ftm": 0.88, "ft_miss": 0.88}, 6.0, 0.54),
+    "p3r":   ({"fg3m": 1, "fg3_miss": 1}, {"fg2m": 1, "fg2_miss": 1, "fg3m": 1, "fg3_miss": 1}, 3.0, 0.25),
+    "ftr":   ({"ftm": 1, "ft_miss": 1}, {"fg2m": 1, "fg2_miss": 1, "fg3m": 1, "fg3_miss": 1}, 3.0, 0.25),
+    "fg3p":  ({"fg3m": 1}, {"fg3m": 1, "fg3_miss": 1}, 3.0, 0.34),
+    "fg2p":  ({"fg2m": 1}, {"fg2m": 1, "fg2_miss": 1}, 3.0, 0.48),
+    "ftp":   ({"ftm": 1}, {"ftm": 1, "ft_miss": 1}, 2.0, 0.75),
+    "astr":  ({"ast": 1}, {"fg2m": 1, "fg2_miss": 1, "fg3m": 1, "fg3_miss": 1, "ftm": 0.44, "ft_miss": 0.44,
+                           "tov": 1}, 3.0, 0.18),
+    "tovr":  ({"tov": 1}, {"fg2m": 1, "fg2_miss": 1, "fg3m": 1, "fg3_miss": 1, "ftm": 0.44, "ft_miss": 0.44,
+                           "tov": 1}, 3.0, 0.13),
+    "orbsh": ({"orb": 1}, {"orb": 1, "drb": 1}, 3.0, 0.22),
+}
+# Shot quality: WHERE his attempts came from, which no box rate can say.  `data/stints/{season}_RS_shots.parquet`
+# carries, per shooter per game, fg2a / fg2m / xl2 and fg3a / fg3m / xl3, where xl2 and xl3 are the LEAGUE's
+# expected makes from HIS locations (shotcurve.py, and calibrated per season: sum(xl2) == sum(fg2m) to four
+# figures).  Summed over a block (xshoot.player_shot_frame) they split what the rates give as one number:
+#
+#   difficulty    xl / a         the league make probability of his average attempt -- a rim-runner and a
+#                                mid-range shooter at the same FG% sit at opposite ends of it
+#   shot-making   (m - xl) / a   how far he beats a league shooter FROM HIS OWN SPOTS
+#
+# `fg2p` (the RATIOS entry) is the sum of the two; the pair is the decomposition, and the tree cannot make it
+# from the rates because neither half is a function of makes and attempts alone.  `xps` and `mpts` are the same
+# pair priced in points across both shot types, which is where the three-versus-rim trade-off lives.
+#
+# Every one is padded in ATTEMPTS toward the BLOCK's own league level (`shot_lg2` / `shot_lg3` / `shot_lgpps`,
+# per-window columns in the panel, recomputed from the training block at prediction time), so a 40-attempt
+# player is his era's average and not 1997's -- the league make rate on twos went 0.468 -> 0.550 over the 28
+# seasons.  The shot-making constants are the reliability ones (FINDINGS 18: threes need ~450 attempts);
+# difficulty is a near-deterministic property of a player's shot chart and barely needs padding at all.
+SHOT_TOTALS = ["shot_fg2a", "shot_fg2m", "shot_xl2", "shot_fg3a", "shot_fg3m", "shot_xl3"]
+SHOT_LEAGUE = ["shot_lg2", "shot_lg3", "shot_lgpps"]
+SHOTQ_K = {"q2": 50.0, "q3": 50.0, "m2": 250.0, "m3": 450.0, "xps": 100.0, "mpts": 300.0}
+SHOTQ = ["q2", "q3", "m2", "m3", "xps", "mpts"]
+
+DERIVED_FEATURES = [*FULL_FEATURES, *DERIVED]
+RATIO_FEATURES = [*DERIVED_FEATURES, *RATIOS]
+SHOT_FEATURES = [*RATIO_FEATURES, *SHOTQ]
+# Experience (roles.career_inputs, stored in the panel and rebuilt from the training block at prediction
+# time): seasons played, career possessions in thousands and the age he entered at, all counted BEFORE the
+# block's first season.  Age is in the prior already and is not the same thing -- a 25-year-old rookie and a
+# 25-year-old in year seven are different players, and the panel had no way to say which was which.
+CAREER = list(CAREER_INPUTS)                          # defined in roles.py, where they are built
+PRIOR_FEATURES = [*SHOT_FEATURES, *CAREER]           # everything: the accuracy-first prior of FINDINGS 22
+
+
+def add_shotq(df: pd.DataFrame) -> pd.DataFrame:
+    """Add the `SHOTQ` columns if the frame carries the shot totals and the block's league levels."""
+    if "q2" in df.columns or not all(c in df.columns for c in (*SHOT_TOTALS, *SHOT_LEAGUE)):
+        return df
+    col = {c: df[c].to_numpy(dtype=float) for c in (*SHOT_TOTALS, *SHOT_LEAGUE)}
+    a2, m2, x2 = col["shot_fg2a"], col["shot_fg2m"], col["shot_xl2"]
+    a3, m3, x3 = col["shot_fg3a"], col["shot_fg3m"], col["shot_xl3"]
+    lg2, lg3, lgp = col["shot_lg2"], col["shot_lg3"], col["shot_lgpps"]
+    k, a = SHOTQ_K, a2 + a3
+    df["q2"] = (x2 + k["q2"] * lg2) / (a2 + k["q2"])
+    df["q3"] = (x3 + k["q3"] * lg3) / (a3 + k["q3"])
+    df["m2"] = (m2 - x2) / (a2 + k["m2"])                           # padded toward 0: the league beats nobody
+    df["m3"] = (m3 - x3) / (a3 + k["m3"])
+    df["xps"] = (2.0 * x2 + 3.0 * x3 + k["xps"] * lgp) / (a + k["xps"])
+    df["mpts"] = (2.0 * (m2 - x2) + 3.0 * (m3 - x3)) / (a + k["mpts"])
+    return df
+
+
+def add_derived(df: pd.DataFrame) -> pd.DataFrame:
+    """Add every `DERIVED`, `RATIOS` and `SHOTQ` column the frame can make (in place; the rest are skipped)."""
+    for name, wts in DERIVED.items():
+        if name in df.columns or not all(c in df.columns for c in wts):
+            continue
+        df[name] = sum(k * df[c].to_numpy(dtype=float) for c, k in wts.items())
+    for name, (num, den, pad, target) in RATIOS.items():
+        cols = set(num) | set(den)
+        if name in df.columns or not all(f"raw_{c}" in df.columns for c in cols):
+            continue
+        n = sum(k * df[f"raw_{c}"].to_numpy(dtype=float) for c, k in num.items())
+        d = sum(k * df[f"raw_{c}"].to_numpy(dtype=float) for c, k in den.items())
+        df[name] = (n + pad * target) / (d + pad)
+    return add_shotq(df)
+
 
 # ------------------------------------------------------------------------------------ training rows
 def training_rows(panel: pd.DataFrame, side: str, exclude=(), features=None, target_col: str = "rapm1",
-                  poss_col: str = "poss") -> pd.DataFrame:
+                  poss_col: str = "poss", win_decay: float = 1.0, win_past: float = 1.0,
+                  sat_poss: float | None = None) -> pd.DataFrame:
     """Rows of one side with every window in `exclude` removed from BOTH the rows and the pooled targets.
 
     target = possession-weighted mean of `target_col` over the player's other (non-excluded) windows,
     weight = the possessions behind that mean.  Rows without another window are dropped.
+
+    `win_decay` < 1 weights a window by `win_decay ** |i - j|` in the pool, so "what he is worth in the rest
+    of his career" becomes "what he is worth in the windows either side of this one".  1.0 (the default)
+    weights every other window alike and is the original pooling exactly.  `win_past` multiplies the windows
+    BEFORE this one on top of that, since aging is directional and the distance kernel is not.
+
+    `sat_poss` (n0) turns the row weight from raw pooled possessions n into the inverse-variance weight
+    n / (1 + n / n0): the pooled target's variance is sigma^2 / n + tau^2, so beyond n0 = sigma^2 / tau^2
+    possessions more of them buy almost no precision and should not buy more say.  None = raw possessions.
     """
     feats = list(DEFAULT_FEATURES if features is None else features)
     ex = set(exclude)
     p = panel[(panel.side == side) & ~panel.window.isin(ex)].copy()
+    if any(f in DERIVED or f in RATIOS or f in SHOTQ for f in feats):
+        add_derived(p)
     w = p[poss_col].to_numpy(dtype=float)
     v = p[target_col].to_numpy(dtype=float)
-    p["_wv"] = w * v
-    p["_w"] = w
-    g = p.groupby("player_id")
-    tot_wv = g["_wv"].transform("sum").to_numpy()
-    tot_w = g["_w"].transform("sum").to_numpy()
-    other_w = tot_w - w
-    other_wv = tot_wv - w * v
+    if float(win_decay) != 1.0 or float(win_past) != 1.0:
+        other_w, other_wv = _pooled_by_distance(p, w, v, float(win_decay), float(win_past))
+    else:
+        p["_wv"] = w * v
+        p["_w"] = w
+        g = p.groupby("player_id")
+        tot_wv = g["_wv"].transform("sum").to_numpy()
+        tot_w = g["_w"].transform("sum").to_numpy()
+        other_w = tot_w - w
+        other_wv = tot_wv - w * v
     keep = other_w > 0
     out = p.loc[keep, ["player_id", "window", *feats]].copy()
     out["target"] = other_wv[keep] / other_w[keep]
-    out["weight"] = other_w[keep]
+    n = other_w[keep]
+    out["weight"] = n if sat_poss is None else n / (1.0 + n / float(sat_poss))
     return out.reset_index(drop=True)
+
+
+def _pooled_by_distance(p: pd.DataFrame, w: np.ndarray, v: np.ndarray, decay: float, past: float = 1.0):
+    """The pooled weight and weighted sum over the player's OTHER windows, each discounted by `decay` to the
+    power of how many windows away it is and, if `past` != 1, by `past` again when it is an EARLIER window.
+    One (player, window) row per player per window, so the whole thing is two small matrix products against
+    a 10 x 10 distance kernel."""
+    wins = sorted(p.window.unique())
+    wi = p.window.map({lab: i for i, lab in enumerate(wins)}).to_numpy()
+    pid, pi = np.unique(p.player_id.to_numpy(), return_inverse=True)
+    n_w = len(wins)
+    W = np.zeros((len(pid), n_w))
+    WV = np.zeros((len(pid), n_w))
+    np.add.at(W, (pi, wi), w)
+    np.add.at(WV, (pi, wi), w * v)
+    d = np.arange(n_w)
+    K = float(decay) ** np.abs(d[:, None] - d[None, :])
+    if float(past) != 1.0:
+        K = K * np.where(d[None, :] < d[:, None], float(past), 1.0)     # row i = the window being scored
+    np.fill_diagonal(K, 0.0)                       # his own window never enters his own target
+    return (W @ K)[pi, wi], (WV @ K)[pi, wi]
 
 
 def reference_mean(panel: pd.DataFrame, side: str, **kw) -> float:
@@ -127,7 +269,8 @@ class GBDTPrior:
     """
 
     def __init__(self, panel: pd.DataFrame, cfg: dict, seed: int | None = None, thread_count=None, features=None,
-                 mode: str | None = None, target_col: str | None = None):
+                 mode: str | None = None, target_col: str | None = None, win_decay: float = 1.0,
+                 win_past: float = 1.0, sat_poss: float | None = None):
         g = cfg.get("gbdt", {})
         self.panel = panel
         self.cfg = cfg
@@ -146,14 +289,20 @@ class GBDTPrior:
             f = f or g.get(key.format(side)) or default
             self.features[side] = list(f)
         self.params = dict(g.get("params", {}) or {})
+        self.win_decay = float(win_decay)
+        self.win_past = float(win_past)
+        self.sat_poss = None if sat_poss is None else float(sat_poss)
+        self._pool = dict(win_decay=self.win_decay, win_past=self.win_past, sat_poss=self.sat_poss)
         self._models: dict = {}
-        self._ref = {side: reference_mean(panel, side, target_col=self.target_col) for side in SIDES}
+        self._ref = {side: reference_mean(panel, side, target_col=self.target_col, **self._pool)
+                     for side in SIDES}
         self.reports: list = []
 
     def model(self, side: str, exclude=()):
         key = (side, frozenset(exclude))
         if key not in self._models:
-            rows = training_rows(self.panel, side, exclude, self.features[side], target_col=self.target_col)
+            rows = training_rows(self.panel, side, exclude, self.features[side], target_col=self.target_col,
+                                 **self._pool)
             rows, rep = counterbalance(rows, self._ref[side], self.tol)
             m = fit_gbdt(rows, self.features[side], seed=self.seed, thread_count=self.thread_count, **self.params)
             rep.update(mode=self.mode, side=side, exclude=",".join(sorted(exclude)), n_rows=int(len(rows)),
@@ -168,21 +317,33 @@ class GBDTPrior:
 
 
 def gbdt_offset(prior: GBDTPrior, ro, rd, season, poss_o, poss_d, exclude=(), sides=SIDES, features=None,
-                extra: pd.DataFrame | None = None) -> np.ndarray:
+                extra: pd.DataFrame | None = None, raw=None, shots: pd.DataFrame | None = None) -> np.ndarray:
     """The (2m,) raw-sign GBDT offset from a window's centred rates and seasons (and, for mode "full", the role
-    inputs in `extra`, aligned to ps_idx), possession-centred per side; zeros on a side not in `sides`."""
+    inputs in `extra`, aligned to ps_idx), possession-centred per side; zeros on a side not in `sides`.
+
+    `shots` is `xshoot.player_shot_frame(train, cfg, ps_table.player_id)`: the training block's own shot totals
+    and league levels, in ps_idx order, from which `add_shotq` rebuilds the SHOTQ features exactly as the panel
+    build did for a training row."""
     feats = list(FEATURES if features is None else features)
     m = len(season)
     out = np.zeros(2 * m)
-    for side, R, poss, off in (("O", ro, poss_o, 0), ("D", rd, poss_d, m)):
+    for j, (side, R, poss, off) in enumerate((("O", ro, poss_o, 0), ("D", rd, poss_d, m))):
         if side not in sides:
             continue
         X = pd.DataFrame(np.asarray(R, dtype=float), columns=feats)
         X["season"] = np.asarray(season, dtype=float)
+        if raw is not None:                              # the uncentred rates, for the efficiency ratios
+            for c, col in zip(feats, np.asarray(raw[j], dtype=float).T):
+                X[f"raw_{c}"] = col
         if extra is not None:
             for c in extra.columns:
                 if c in prior.features[side] and c not in X.columns:
                     X[c] = np.asarray(extra[c], dtype=float)
+        if shots is not None:
+            for c in (*SHOT_TOTALS, *SHOT_LEAGUE):
+                X[c] = np.asarray(shots[c], dtype=float)
+        if any(f in DERIVED or f in RATIOS or f in SHOTQ for f in prior.features[side]):
+            add_derived(X)
         g = prior.predict(side, X, exclude)
         w = np.maximum(np.asarray(poss, dtype=float), 0.0)
         if w.sum() > 0:

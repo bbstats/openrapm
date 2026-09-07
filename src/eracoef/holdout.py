@@ -77,8 +77,9 @@ class System(Protocol):
 
 
 # ---------------------------------------------------------------------------------------- context
-def default_loader(seasons, cfg, target, phases=("RS",)):
-    return build_window(list(seasons), cfg, phases=tuple(phases), target=target)
+def default_loader(seasons, cfg, target, phases=("RS",), counter_cols=None, min_den=0.0):
+    return build_window(list(seasons), cfg, phases=tuple(phases), target=target, counter_cols=counter_cols,
+                        min_den=min_den)
 
 
 @dataclass
@@ -134,10 +135,13 @@ class Context:
             ctx.mspi_apm = GBDTPrior(ctx.rpanel, cfg, mode="full", target_col="apm")   # trained on unshrunk APM
         return ctx
 
-    def prior(self, mode: str, target_col: str | None, params: dict, panel: str | None = None):
-        """A GBDTPrior with chimeraboost overrides `params`, built once per (mode, target, params, panel) on this
-        Context.  `panel`: a role panel other than the configured one (a path relative to the root)."""
-        key = (mode, target_col, tuple(sorted((params or {}).items())), panel)
+    def prior(self, mode: str, target_col: str | None, params: dict, panel: str | None = None, features=None,
+              win_decay: float = 1.0):
+        """A GBDTPrior with chimeraboost overrides `params`, built once per (mode, target, params, panel, features)
+        on this Context.  `panel`: a role panel other than the configured one (a path relative to the root);
+        `features`: {"O": [...], "D": [...]} instead of the configured lists."""
+        fkey = None if not features else tuple((k, tuple(v)) for k, v in sorted(features.items()))
+        key = (mode, target_col, tuple(sorted((params or {}).items())), panel, fkey, float(win_decay))
         if key not in self._priors:
             rp = self.rpanel
             if panel:
@@ -148,7 +152,8 @@ class Context:
             if target_col and target_col.startswith("blend"):          # "blend0.7": 0.7 apm + 0.3 rapm1, raw sign
                 wgt = float(target_col[5:])
                 rp = rp.assign(**{target_col: wgt * rp["apm"].to_numpy(dtype=float) + (1.0 - wgt) * rp["rapm1"].to_numpy(dtype=float)})
-            p = GBDTPrior(rp, self.cfg, mode=mode, target_col=target_col)
+            p = GBDTPrior(rp, self.cfg, mode=mode, target_col=target_col, features=features,
+                          win_decay=float(win_decay))
             p.params = dict(params or {})
             self._priors[key] = p
         return self._priors[key]
@@ -203,19 +208,30 @@ class Context:
         seasons = list(train) + ([self.current_h] if self.current_h is not None else [])
         return {self.win_of[s] for s in seasons}
 
-    def design(self, seasons, target="pts", phases=("RS",)) -> WindowData:
+    def design(self, seasons, target="pts", phases=("RS",), counter_cols=None, min_den=0.0) -> WindowData:
         """A cached design.  `target` is a design.TARGETS key, or a callable
         (seasons, cfg, wd_pts) -> WindowData | (WindowData, report) for a derived target.  `phases` ("RS",) or
-        ("RS", "PO"): the playoff rows in the training design, with the design's own playoff level columns."""
+        ("RS", "PO"): the playoff rows in the training design, with the design's own playoff level columns.
+        `counter_cols` keeps only those per-possession counters (designcache.build_window_cached); it is
+        honoured by the default loader only, and it is part of the cache key."""
         phases = tuple(phases)
+        own = self.loader is default_loader
+        cc = None if counter_cols is None or not own else tuple(sorted(counter_cols))
+        md = float(min_den) if own else 0.0
         key = (tuple(int(s) for s in seasons), target if isinstance(target, str) else getattr(target, "__name__", repr(target)),
-               *(() if phases == ("RS",) else (phases,)))
+               *(() if phases == ("RS",) else (phases,)), *(() if cc is None else (cc,)),
+               *(() if not md else (md,)))
         if key not in self._cache:
             if len(self._cache) >= self.cache_size:
                 self._cache.clear()
             if isinstance(target, str):
-                wd = self.loader(list(seasons), self.cfg, target) if phases == ("RS",) else \
-                    self.loader(list(seasons), self.cfg, target, phases)
+                kw = {}
+                if cc is not None:
+                    kw['counter_cols'] = cc
+                if md:
+                    kw['min_den'] = md
+                wd = self.loader(list(seasons), self.cfg, target) if phases == ("RS",) and not kw else \
+                    self.loader(list(seasons), self.cfg, target, phases, **kw)
             else:
                 wd = target(list(seasons), self.cfg, self.design(seasons, "pts", phases))
                 if isinstance(wd, tuple):

@@ -75,7 +75,10 @@ if USE_CHAIN:
     chain_fn = chain_offset(CHAIN_SIDES, mode=str(cfg.get("gbdt", {}).get("mode", "full")),
                             target=str(PRIOR.get("gbdt_target", "rapm1")),
                             params=dict(cfg.get("gbdt", {}).get("params", {}) or {}) or None,
-                            target_d=PRIOR.get("gbdt_target_def"), panel=PRIOR.get("gbdt_panel"))
+                            target_d=PRIOR.get("gbdt_target_def"), panel=PRIOR.get("gbdt_panel"),
+                            win_decay=float(PRIOR.get("gbdt_win_decay", 1.0)),
+                            params_d=dict(cfg.get("gbdt", {}).get("params_def", {}) or {}) or None,
+                            win_decay_d=PRIOR.get("gbdt_win_decay_def"))
 LAM_SCALE = float(PRIOR.get("lam_scale", 1.0))
 if LAM_SCALE != 1.0:
     cfg["lam_plugin"] = float(cfg["lam_plugin"]) * LAM_SCALE
@@ -227,6 +230,23 @@ if CM:
     if not tbl.exists():
         raise SystemExit(f"{tbl} is missing; run scripts/53_calmap.py dump then fit")
     row = params_row(pd.read_parquet(tbl), CM["system"], CM["base"], int(CM["k"]), None)
+    # per-player covariates the map's terms may need.  `tshare`: his share of his teams' possessions over the
+    # window, games not played counted as zero (calmap.TShare, the same quantity SeasonFrame.covariates builds
+    # from the training block).  A map with the term and no column would apply it as zero, silently.
+    from eracoef.roles import build_roles, player_season_inputs
+    ri = player_season_inputs(build_roles(cfg), cap=float(cfg.get("roles", {}).get("share_cap", 0.9)))
+    ri = ri[ri.games > 0]
+    parts = []
+    for lab in rat["window"].unique():
+        first, last = (int(x) for x in str(lab).split("-"))
+        t = ri[ri.season.between(first, last)].groupby("player_id")[["poss_on", "team_poss"]].sum()
+        sh = (t.poss_on / t.team_poss.replace(0.0, np.nan)).fillna(0.0)
+        m = rat["window"] == lab
+        parts.append(pd.DataFrame({"i": rat.index[m],
+                                   "tshare": rat.loc[m, "player_id"].map(sh).fillna(0.0).to_numpy()}))
+    EXTRA = pd.concat(parts).set_index("i").reindex(rat.index)
+    print(f"map covariates: tshare over the window, mean {EXTRA.tshare.mean():.4f}, "
+          f"{(EXTRA.tshare > 0).mean():.1%} of players non-zero")
     for suffix in ("", "_po"):
         if f"rating_off{suffix}" not in rat.columns:
             continue
@@ -234,7 +254,8 @@ if CM:
         rat[f"rating_def{suffix}_raw"] = rat[f"rating_def{suffix}"]
         o, d = apply_params(row, rat[f"rating_off{suffix}"].to_numpy(), -rat[f"rating_def{suffix}"].to_numpy(),
                             rat["poss_off"].to_numpy(),                       # the map is in raw sign
-                            prior_o=rat[f"prior_off{suffix}"].to_numpy(), prior_d=-rat[f"prior_def{suffix}"].to_numpy())
+                            prior_o=rat[f"prior_off{suffix}"].to_numpy(), prior_d=-rat[f"prior_def{suffix}"].to_numpy(),
+                            extra=EXTRA)
         w = rat["poss_off"].to_numpy(dtype=float)
         for col, v in ((f"rating_off{suffix}", o), (f"rating_def{suffix}", -d)):
             v = pd.Series(v, index=rat.index)

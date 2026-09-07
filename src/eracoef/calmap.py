@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -71,13 +71,17 @@ def _dump_worker(job: dict) -> pd.DataFrame:
     return dump_systems(job["holdout"], [reg[n] for n in job["names"]], ctx, held=job["held"], verbose=job.get("verbose", True))
 
 
-def dump_ratings(ho: Holdout, names: list, out: Path, workers: int = 4, rankmap=None, verbose: bool = True) -> pd.DataFrame:
+def dump_ratings(ho: Holdout, names: list, out: Path, workers: int = 4, rankmap=None, verbose: bool = True,
+                 held: list | None = None) -> pd.DataFrame:
     """Every system's ratings for every held-out season and K, one parquet.  Same process layout as
-    holdout.run_parallel (spawned workers, BLAS threads pinned)."""
+    holdout.run_parallel (spawned workers, BLAS threads pinned).
+
+    `held` restricts the held-out seasons, the way `Holdout.run` already allows; None = all of `ho.seasons()`.
+    A hyperparameter search uses it to score on half the seasons and keep the other half untouched."""
     import multiprocessing
     from concurrent.futures import ProcessPoolExecutor
 
-    held = ho.seasons()
+    held = list(held) if held is not None else ho.seasons()
     workers = max(1, min(int(workers), len(held)))
     threads = max(1, (os.cpu_count() or workers) // workers)
     chunks = [c.tolist() for c in np.array_split(np.asarray(held), workers)]
@@ -136,6 +140,7 @@ class SeasonFrame:
     L: np.ndarray
     G: sp.csr_matrix
     wg: np.ndarray
+    key: np.ndarray | None = None         # team-game index of each row (the rows G aggregates)
     extra: pd.DataFrame | None = None     # per player in `ids` order: covariates AT H (age), for the Age term
     ctx: object = None                    # for covariates that depend on the training block (moved, per K)
 
@@ -152,6 +157,12 @@ class SeasonFrame:
             for pid, t in self.ctx.main_team(s).items():
                 before.setdefault(pid, t)
         ex["moved"] = [1.0 if (q in now and q in before and now[q] != before[q]) else 0.0 for q in ex.player_id]
+        ex["blk_team"] = [int(before.get(q, -1)) for q in ex.player_id]
+        ri = self.ctx.role_inputs
+        if ri is not None:                       # the same role measured on the TRAINING block instead of H
+            t = ri[ri.season.isin(list(train)) & (ri.games > 0)].groupby("player_id")[["poss_on", "team_poss"]].sum()
+            sh = (t.poss_on / t.team_poss.replace(0.0, np.nan)).to_dict()
+            ex["tshare"] = [float(sh.get(q, 0.0) or 0.0) for q in ex.player_id]
         return ex
 
     @classmethod
@@ -159,9 +170,21 @@ class SeasonFrame:
         wd = ctx.design([h], "pts")
         extra = None
         if ctx.role_inputs is not None:
-            ri = ctx.role_inputs[ctx.role_inputs.season == h][["player_id", "age"]]
+            ri = ctx.role_inputs[ctx.role_inputs.season == h][["player_id", "age", "share", "gs_pct", "poss_on", "team_poss"]]
             extra = pd.DataFrame({"player_id": wd.spec.ps_table["player_id"].to_numpy()}).merge(ri, on="player_id", how="left")
             extra["age"] = extra.age.fillna(float(ri.age.median()) if len(ri) else 27.0)
+            for c in ("share", "gs_pct", "poss_on"):        # the held-out season's ROLE: known at prediction
+                extra[c] = extra[c].fillna(0.0)             # time, like the lineups themselves and the age
+            extra["team_poss"] = extra.pop("team_poss").fillna(0.0) if "team_poss" in extra.columns else 0.0
+            # the same share measured on HALF of H only: within-season feedback (play badly, sit down) can
+            # reach the whole-season share but not the other half's
+            gp = wd.game_poss.merge(wd.games[["game_idx", "half"]], on="game_idx", how="left")
+            pa = gp[gp.half == "A"].groupby("psx_idx")["poss_off"].sum()
+            per_psx = np.zeros(wd.spec.n_psx)
+            per_psx[pa.index.to_numpy()] = pa.to_numpy(dtype=float)
+            ps_poss_a = np.bincount(wd.spec.ps_of_psx, weights=per_psx, minlength=wd.spec.n_ps)
+            tp = extra["team_poss"].to_numpy(dtype=float)
+            extra["share_a"] = np.where(tp > 0, 2.0 * ps_poss_a / np.where(tp > 0, tp, 1.0), 0.0)
         m = wd.spec.n_ps
         A = level_columns(wd, level)
         w = np.asarray(wd.w, dtype=float)
@@ -174,7 +197,7 @@ class SeasonFrame:
         G = sp.csr_matrix((poss / wg[key], (key, np.arange(len(key)))), shape=(n_tg, len(key)))
         return cls(h=h, wd=wd, Zo=wd.X[:, :m].tocsr(), Zd=wd.X[:, m:2 * m].tocsr(),
                    ids=wd.spec.ps_table["player_id"].to_numpy(), y=np.asarray(wd.y, dtype=float), w=w, poss=poss,
-                   A=A, L=L, G=G, wg=wg, extra=extra, ctx=ctx)
+                   A=A, L=L, G=G, wg=wg, key=key, extra=extra, ctx=ctx)
 
     def profiled(self, C: np.ndarray) -> np.ndarray:
         """Columns with the season's level profiled out (what the criterion's refit does to any contribution)."""
@@ -419,6 +442,123 @@ class XAge(Exposure):
         return (np.asarray(x, dtype=float) * (np.asarray(extra["age"], dtype=float) - 27.0) / 5.0)[:, None]
 
 
+class HShare(Exposure):
+    """A level in the player's role in the HELD-OUT season: c x share / 0.1 (share of his team's possessions
+    while he is on the floor, `roles.window_inputs`).
+
+    The held-out season's lineups are an input of the criterion, so how much a player plays in H is known at
+    prediction time -- as much as his age is.  A rating fitted on a bench role and carried into a starter's
+    role is the case this asks about.  Not a rating of the window (the window has no role at H): a
+    prediction-time term, like the Age one.
+    """
+    name, n_params = "hshare", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "share" not in extra.columns:
+            return np.zeros((len(p), 1))
+        return (np.nan_to_num(np.asarray(extra["share"], dtype=float)) / 0.1)[:, None]
+
+
+class XHShare(Exposure):
+    """b x (share at H) / 0.1: does a rating carry further for a player who plays a big role in H?"""
+    name, n_params = "xhshare", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "share" not in extra.columns or x is None:
+            return np.zeros((len(p), 1))
+        return (np.asarray(x, dtype=float) * np.nan_to_num(np.asarray(extra["share"], dtype=float)) / 0.1)[:, None]
+
+
+class HShareA(Exposure):
+    """`HShare` from HALF of the held-out season's games (the `A` half), doubled: the control for within-season
+    feedback -- a player benched for playing badly loses whole-season minutes, but the other half's minutes
+    were spent before anyone knew."""
+    name, n_params = "hsharea", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "share_a" not in extra.columns:
+            return np.zeros((len(p), 1))
+        return (np.nan_to_num(np.asarray(extra["share_a"], dtype=float)) / 0.1)[:, None]
+
+
+class TShare(Exposure):
+    """`HShare` measured on the TRAINING block instead of the held-out season: the same role variable with
+    nothing of H in it, the control that says whether the H-season term is a leak or a real signal."""
+    name, n_params = "tshare", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "tshare" not in extra.columns:
+            return np.zeros((len(p), 1))
+        return (np.nan_to_num(np.asarray(extra["tshare"], dtype=float)) / 0.1)[:, None]
+
+
+class XTShare(Exposure):
+    """b x the training-block role: does a rating carry further for a player who was a starter when it was fit?"""
+    name, n_params = "xtshare", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "tshare" not in extra.columns or x is None:
+            return np.zeros((len(p), 1))
+        return (np.asarray(x, dtype=float) * np.nan_to_num(np.asarray(extra["tshare"], dtype=float)) / 0.1)[:, None]
+
+
+class HStarts(Exposure):
+    """A level in the player's games-started share at H."""
+    name, n_params = "hgs", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "gs_pct" not in extra.columns:
+            return np.zeros((len(p), 1))
+        return np.nan_to_num(np.asarray(extra["gs_pct"], dtype=float))[:, None]
+
+
+class HGrow(Exposure):
+    """A level in how much the player's role GREW into the held-out season: log((poss at H + 200) /
+    (his possessions per training season + 200)).  `extra["grow"]` is set by `build_design`."""
+    name, n_params = "hgrow", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "grow" not in extra.columns:
+            return np.zeros((len(p), 1))
+        return np.nan_to_num(np.asarray(extra["grow"], dtype=float))[:, None]
+
+
+class XHGrow(Exposure):
+    """b x the role growth: a rating carried into a bigger role, re-weighted."""
+    name, n_params = "xhgrow", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "grow" not in extra.columns or x is None:
+            return np.zeros((len(p), 1))
+        return (np.asarray(x, dtype=float) * np.nan_to_num(np.asarray(extra["grow"], dtype=float)))[:, None]
+
+
+class TeamMean(Exposure):
+    """c x (the mean rating of the player's TRAINING-BLOCK teammates, him left out), standardised.
+
+    The five ratings of a team-game come out of one training block, where a team that outscored its true
+    strength lifts everyone who played for it: those errors are correlated, and the sum of five of them
+    carries the team's share five times.  This is that share as a per-player column, so the map can take
+    some of it back off.  `extra["team"]` is set by `build_design` / `mapped_ratings` from the block's teams
+    (`SeasonFrame.covariates`'s `blk_team`) and the dump's own ratings; without it the term is 0.
+    """
+    name, n_params = "team", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "team" not in extra.columns:
+            return np.zeros((len(p), 1))
+        return np.nan_to_num(np.asarray(extra["team"], dtype=float))[:, None]
+
+
 class Prior(Exposure):
     """c x prior / scale: the prior part of the rating as its own column, so the map can re-weight the prior against
     the residual (f = a x + c prior = a resid + (a + c) prior): the ridge's prior-vs-data blend, re-chosen on the
@@ -482,7 +622,7 @@ FAMILIES = {f.name: f for f in (Linear(), Poly2(), Poly3(), Sinh(), Expo(), Hing
 EXPOSURES = {e.name: e for e in (Exposure(), Sat(), Sat(250), Sat(500), Sat(2000), Sat(4000), LogExp(), LogExp(quad=True),
                                  Bins(), Unseen(), Age(), Age(quad=False), Moved(), Moved(slope=True), UnseenAge(),
                                  AgeSat(), XSat(), XSat(300), XSat(3000), XLog(), XAge(), Prior(), PriorSat(), Prior2(),
-                                 PriorAge())}
+                                 PriorAge(), TeamMean(), HShare(), XHShare(), HStarts(), HGrow(), XHGrow(), TShare(), HShareA(), XTShare())}
 
 
 def parse_exposure(name: str) -> Exposure:
@@ -521,10 +661,131 @@ class SideMap:
         return np.concatenate([self.fam.identity(), np.zeros(self.expo.n_params)])
 
 
+class TeamBend:
+    """A bend in the TEAM's summed rating, fitted after the per-player map.
+
+    The map is a function of one player's rating, so the criterion's prediction for a team-game is the
+    possession-weighted SUM of the five on the floor: whatever the map does, the total is linear in it.  A
+    bend in that total -- extreme team-games pulled in, the middle stretched -- is not reachable per player,
+    and out of season it is worth 0.07-0.08 per 100 on every board tried (FINDINGS 21.20).  `basis` is in the
+    mapped total u, standardised by its own weighted RMS, and gamma = (1, 0, ...) is the map left alone.
+
+    It is a PREDICTION-TIME term, like the age term: a rating carries no team, so it cannot ship in the board.
+    """
+    name, n_params = "none", 0
+    row_powers: tuple = ()          # odd powers of the STINT-level contribution to add as extra columns
+
+    def basis(self, u: np.ndarray, s: float) -> np.ndarray:
+        return np.asarray(u, dtype=float)[:, None]
+
+    def columns(self, u: np.ndarray, s: float, rows: np.ndarray | None = None) -> np.ndarray:
+        """The team-level basis with the row-level columns (`row_columns`) beside it."""
+        B = self.basis(u, s)
+        return B if rows is None or not self.row_powers else np.column_stack([B, rows])
+
+
+class CubicBend(TeamBend):
+    """g(u) = a u + b u^3 / s^2."""
+    name, n_params = "cubic", 2
+
+    def basis(self, u, s):
+        u = np.asarray(u, dtype=float)
+        return np.column_stack([u, u ** 3 / s ** 2])
+
+
+class RowCubicBend(CubicBend):
+    """The team-game cubic plus the same cubic taken at STINT level and then aggregated: g = a u + b u^3/s^2
+    + c mean(c_row^3)/s_row^2.
+
+    (mean c)^3 and mean(c^3) differ by the spread of the lineups inside the team-game, so the pair separates
+    "this team-game's total is extreme" from "the lineups inside it were extreme" -- and the criterion wants
+    both, with opposite signs (FINDINGS 21.22).  The row column alone is worse than the team one; together
+    they are worth 0.21 per 100 more than the team cubic.
+    """
+    name, n_params, row_powers = "rowcubic", 3, (3,)
+
+
+class QuadBend(TeamBend):
+    """g(u) = a u + b u|u| / s: the same compression with a sign asymmetry allowed."""
+    name, n_params = "quad", 2
+
+    def basis(self, u, s):
+        u = np.asarray(u, dtype=float)
+        return np.column_stack([u, u * np.abs(u) / s])
+
+
+class TanhBend(TeamBend):
+    """g(u) = a u + b (tanh(u / s) - u / s) s: a saturating compression, no runaway cubic tail."""
+    name, n_params = "tanh", 2
+
+    def basis(self, u, s):
+        u = np.asarray(u, dtype=float)
+        return np.column_stack([u, (np.tanh(u / s) - u / s) * s])
+
+
+BENDS = {b.name: b for b in (TeamBend(), CubicBend(), RowCubicBend(), QuadBend(), TanhBend())}
+
+
+def parse_maps(fam: str):
+    """"<family_o>[:<family_d>][|<bend>]" -> (map_o, map_d, bend).  The name a run logs is the same string
+    with ":" and "|" replaced by "_"."""
+    rest, _, bend = fam.partition("|")
+    fo, fd = (rest.split(":") + [None])[:2]
+    return SideMap.parse(fo), SideMap.parse(fd or fo), BENDS[bend or "none"]
+
+
+def fit_bend(D: "Design", th: np.ndarray, bend: TeamBend, exclude_h=None, rows: np.ndarray | None = None
+             ) -> tuple[np.ndarray, float]:
+    """The bend's parameters on every season but `exclude_h`, given the map's own parameters `th`.  `rows`:
+    the stacked row-level columns of `row_columns`, in D's own row order."""
+    sel = np.ones(len(D.h), dtype=bool) if exclude_h is None else D.h != exclude_h
+    u, y, w = D.X[sel] @ th, D.y[sel], D.w[sel]
+    s = float(np.sqrt(np.average(u ** 2, weights=w))) or 1.0
+    B = bend.columns(u, s, None if rows is None else rows[sel])
+    BtW = (B * w[:, None]).T
+    return np.linalg.solve(BtW @ B, BtW @ y), s
+
+
+def row_columns(dump: pd.DataFrame, frames: dict, system: str, k: int, map_o: SideMap, map_d: SideMap,
+                D: "Design", th: np.ndarray, powers) -> tuple[np.ndarray, dict, float]:
+    """Per team-game, the aggregated odd powers of the STINT-level mapped contribution, under the map
+    parameters `th`.  Returns (the columns stacked in D's row order, the same per season, the standardising
+    RMS of the stint contribution).  Rebuilt per held-out season, because it is a NONLINEAR function of the
+    map's parameters and those are refit each time."""
+    prof, ws = {}, []
+    for h, f in frames.items():
+        rat = mapped_ratings(ratings_for(dump, system, k, h), th, map_o, map_d, D.scale_o, D.scale_d,
+                             extra=f.covariates(k))
+        r = rat.aligned(f.ids)
+        c = np.asarray(f.Zo @ np.nan_to_num(r.o.to_numpy(dtype=float))) +             np.asarray(f.Zd @ np.nan_to_num(r.d.to_numpy(dtype=float)))
+        prof[h] = f.profiled(c)
+        ws.append(f.w)
+    s = float(np.sqrt(np.average(np.concatenate([prof[h] for h in frames]) ** 2,
+                                 weights=np.concatenate(ws)))) or 1.0
+    per = {h: np.column_stack([frames[h].game(prof[h] ** q / s ** (q - 1)) for q in powers]) for h in frames}
+    return np.vstack([per[h] for h in frames]), per, s
+
+
 # ---------------------------------------------------------------------------------------- 4. fitting and scoring
 def _side_scale(dump: pd.DataFrame, system: str, k: int, side: str, min_poss: float = 1000.0) -> float:
     d = dump[(dump.system == system) & (dump.k == k) & (dump.poss >= min_poss)]
     return float(np.sqrt(np.average(d[side].to_numpy() ** 2, weights=d.poss.to_numpy()))) or 1.0
+
+
+def team_mean(x: np.ndarray, poss: np.ndarray, team: np.ndarray) -> np.ndarray:
+    """Per player, the possession-weighted mean rating of the OTHERS on his training-block team (0 with no
+    team, or when he is the only one).  Leaving him out matters: with him in, the column is partly his own
+    rating and the map cannot tell the two apart."""
+    x = np.nan_to_num(np.asarray(x, dtype=float))
+    w = np.nan_to_num(np.asarray(poss, dtype=float))
+    t = np.asarray(team)
+    idx, uniq = pd.factorize(t)
+    ok = idx >= 0
+    sw = np.bincount(idx[ok], weights=w[ok], minlength=len(uniq))
+    sx = np.bincount(idx[ok], weights=(w * x)[ok], minlength=len(uniq))
+    den = sw[idx] - w
+    out = np.where(den > 0, (sx[idx] - w * x) / np.where(den > 0, den, 1.0), 0.0)
+    return np.where(ok & (t != -1), out, 0.0)
 
 
 @dataclass
@@ -550,6 +811,14 @@ def build_design(dump: pd.DataFrame, frames: dict, system: str, k: int, map_o: S
         if ex is not None and "prior_o" in r.columns:
             ex_o = ex.assign(prior=r.prior_o.to_numpy(dtype=float) / so)
             ex_d = ex.assign(prior=r.prior_d.to_numpy(dtype=float) / sd)
+        if ex is not None and "poss_on" in ex.columns:
+            hp = np.nan_to_num(np.asarray(ex["poss_on"], dtype=float))
+            ex_o = ex_o.assign(grow=np.log((hp + 200.0) / (poss / max(k, 1) + 200.0)))
+            ex_d = ex_d.assign(grow=ex_o["grow"].to_numpy())
+        if ex is not None and "blk_team" in ex.columns:
+            tm = ex["blk_team"].to_numpy()
+            ex_o = ex_o.assign(team=team_mean(r.o.to_numpy(dtype=float), poss, tm) / so)
+            ex_d = ex_d.assign(team=team_mean(r.d.to_numpy(dtype=float), poss, tm) / sd)
         Bo = map_o.basis(r.o.to_numpy(), poss, so, ex_o)
         Bd = map_d.basis(r.d.to_numpy(), poss, sd, ex_d)
         C = np.column_stack([np.asarray(f.Zo @ Bo), np.asarray(f.Zd @ Bd)])
@@ -599,28 +868,59 @@ def mapped_ratings(rat: Ratings, theta, map_o: SideMap, map_d: SideMap, scale_o:
     return Ratings(d, fill_o=fo, fill_d=fd)
 
 
-def _param_row(name, system, k, h, map_o, map_d, D, th) -> dict:
+def _param_row(name, system, k, h, map_o, map_d, D, th, bend=None, gamma=None, s_u=np.nan) -> dict:
     p = map_o.n_params
-    return dict(system=name, base=system, k=k, held_out=h, map_o=map_o.name, map_d=map_d.name,
-                scale_o=D.scale_o, scale_d=D.scale_d,
-                **{f"o{j}": float(v) for j, v in enumerate(th[:p])}, **{f"d{j}": float(v) for j, v in enumerate(th[p:])})
+    row = dict(system=name, base=system, k=k, held_out=h, map_o=map_o.name, map_d=map_d.name,
+               scale_o=D.scale_o, scale_d=D.scale_d,
+               **{f"o{j}": float(v) for j, v in enumerate(th[:p])}, **{f"d{j}": float(v) for j, v in enumerate(th[p:])})
+    if bend is not None and bend.n_params:
+        row.update(bend=bend.name, scale_u=float(s_u), **{f"g{j}": float(v) for j, v in enumerate(np.atleast_1d(gamma))})
+    return row
+
+
+def bent_prediction(p, f: SeasonFrame, bend: TeamBend, gamma, s_u: float, level: str = "home",
+                    rows: np.ndarray | None = None):
+    """`predict_season`'s prediction with the team-game total bent: each row's contribution takes its own
+    team-game's g(u) - u, so the team-game total is exactly g(u) and the season's level is refit around it."""
+    from .holdout import _wls
+    c = p.c_off + p.c_def
+    u = f.game(f.profiled(c))
+    delta = bend.columns(u, s_u, rows) @ np.asarray(gamma, dtype=float) - u
+    c2 = c + delta[f.key]
+    pred = f.A @ _wls(f.A, f.y - c2, f.w) + c2
+    return replace(p, pred=pred, c_off=p.c_off + delta[f.key], c_def=p.c_def)
 
 
 def evaluate(dump: pd.DataFrame, frames: dict, system: str, k: int, map_o: SideMap, map_d: SideMap, name: str,
-             ridge: float = 0.0, lam: float = 0.0, level: str = "home", min_poss: float = 1000.0):
+             ridge: float = 0.0, lam: float = 0.0, level: str = "home", min_poss: float = 1000.0,
+             bend: TeamBend | None = None):
     """Leave-one-season-out: fit the map on the other seasons' team-game residuals, apply it to H, score H
     with the criterion's own scorer.  Returns (result rows in RESULT_COLUMNS, the per-season parameters,
-    held_out = -1 for the all-seasons fit)."""
+    held_out = -1 for the all-seasons fit).  `bend`: a TeamBend fitted on the same other seasons, after the
+    map, on the team-game total."""
     D = build_design(dump, frames, system, k, map_o, map_d, min_poss)
     rows, params = [], []
     for h, f in frames.items():
         th = fit_theta(D, exclude_h=h, ridge=ridge, map_o=map_o, map_d=map_d)
         rat = mapped_ratings(ratings_for(dump, system, k, h), th, map_o, map_d, D.scale_o, D.scale_d, extra=f.covariates(k))
         p = predict_season(rat, f.wd, level=level)
+        gamma, s_u = (None, np.nan)
+        if bend is not None and bend.n_params:
+            rcols = per_h = None
+            if bend.row_powers:
+                rcols, per_h, _ = row_columns(dump, frames, system, k, map_o, map_d, D, th, bend.row_powers)
+            gamma, s_u = fit_bend(D, th, bend, exclude_h=h, rows=rcols)
+            p = bent_prediction(p, f, bend, gamma, s_u, level=level, rows=None if per_h is None else per_h[h])
         rows.append(dict(held_out=h, k=k, train="", system=name, lam=lam, split="all", group="all", **score(p), seconds=0.0))
-        params.append(_param_row(name, system, k, h, map_o, map_d, D, th))
+        params.append(_param_row(name, system, k, h, map_o, map_d, D, th, bend, gamma, s_u))
     th_all = fit_theta(D, exclude_h=None, ridge=ridge, map_o=map_o, map_d=map_d)
-    params.append(_param_row(name, system, k, -1, map_o, map_d, D, th_all))
+    g_all, s_all = (None, np.nan)
+    if bend is not None and bend.n_params:
+        rows_all = None
+        if bend.row_powers:
+            rows_all, _, _ = row_columns(dump, frames, system, k, map_o, map_d, D, th_all, bend.row_powers)
+        g_all, s_all = fit_bend(D, th_all, bend, rows=rows_all)
+    params.append(_param_row(name, system, k, -1, map_o, map_d, D, th_all, bend, g_all, s_all))
     return pd.DataFrame(rows)[RESULT_COLUMNS], pd.DataFrame(params)
 
 

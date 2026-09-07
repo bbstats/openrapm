@@ -178,7 +178,7 @@ def crossfit_beta(wd: WindowData, lam=None, lams=None, cv=5, lam_ratio=1.0, lam_
     w_mult: optional per-row weight multiplier (game-level bootstrap), used with exposure game_mult.
     """
     if w_mult is not None:
-        wd = WindowData(wd.X, wd.y, wd.w * np.asarray(w_mult, dtype=float), wd.groups, wd.spec, wd.game_box,
+        wd = WindowData(wd.X_src, wd.y, wd.w * np.asarray(w_mult, dtype=float), wd.groups, wd.spec, wd.game_box,
                         wd.game_poss, wd.rows, wd.games)
     fits, lam_used = {}, {}
     for half in ("A", "B"):

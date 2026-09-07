@@ -24,6 +24,28 @@ from .estimator import MixedModelRAPM, Moments, _Layout
 from .holdout import Context, Ratings
 
 
+# a per-process section clock, on only with FASTFIT_TIMER set: where a run's fit seconds go
+SECTIONS: dict = {}
+
+
+def _timer():
+    import os
+    import time
+    if not os.environ.get("FASTFIT_TIMER"):
+        return lambda name: None
+    if not SECTIONS:
+        import atexit
+        atexit.register(lambda: print("  fit sections (pid, seconds): " + "  ".join(
+            f"{k} {v:.2f}" for k, v in SECTIONS.items()) + f"  total {sum(SECTIONS.values()):.2f}", flush=True))
+    last = [time.time()]
+
+    def mark(name):
+        now = time.time()
+        SECTIONS[name] = SECTIONS.get(name, 0.0) + now - last[0]
+        last[0] = now
+    return mark
+
+
 def derived_target(wd, name: str) -> np.ndarray:
     """A `design.TARGETS` response recomputed from the design's own counters (the rows are the same, the
     weight is the same: only y changes)."""
@@ -76,12 +98,34 @@ class MspiFast:
     pad_target: str | None = None        # BoxExposure pad_target ("league" | "poss_conditional"); None = config
     panel: str | None = None             # a role panel other than the configured one for the GBDT prior (path)
     target_d: str | None = None          # the GBDT's training target on DEFENSE when it differs from `target`
+    gbdt_features: dict | None = None    # {"O": [...], "D": [...]} for the GBDT instead of the configured lists
+    gbdt_params_d: dict | None = None    # chimeraboost overrides for the DEFENSIVE prior (None = the same)
+    win_decay_d: float | None = None     # the window discount on defense (None = the same as offense)
+    win_decay: float = 1.0               # the prior's target pooled over the player's windows with this decay
+    min_den: float = 0.0                 # drop design rows under this many possessions (designcache)
+
+    def counter_columns(self) -> set | None:
+        """The per-possession counters this system's two targets read, so the design need not assemble the
+        other hundred (`designcache.build_window_cached`).  None if a target's needs are not declared."""
+        from . import xshoot
+        from .design import target_counter_columns
+        cols = set()
+        for t in (self.off_target, self.def_target):
+            if t in TARGETS:
+                cols |= target_counter_columns(t)
+            elif t in xshoot.DEFENSE_TARGET_COLUMNS:
+                cols |= xshoot.DEFENSE_TARGET_COLUMNS[t]
+            else:
+                return None
+        return cols | {"poss"}
 
     def fit(self, train, ctx: Context) -> Ratings:
         from . import xshoot
         from .spm import chain_offset
         cfg = ctx.cfg
-        wd = ctx.design(train, "pts", tuple(self.phases))
+        T = _timer()
+        wd = ctx.design(train, "pts", tuple(self.phases), counter_cols=self.counter_columns(), min_den=self.min_den)
+        T("design")
         ys = {}
 
         def target_y(name):
@@ -96,6 +140,7 @@ class MspiFast:
             return ys[name]
 
         y_o, y_d = target_y(self.off_target), target_y(self.def_target)
+        T("targets")
         game_mult = None
 
         def season_weight(season):
@@ -123,8 +168,12 @@ class MspiFast:
             exp.fit(None, sample_weight=wd.w)
         else:
             exp.fit(wd.X, sample_weight=wd.w)
+        T("exposure")
         off = chain_offset(self.sides, self.mode, scale=self.scale, target=self.target,
-                           params=self.gbdt_params, panel=self.panel, target_d=self.target_d)(train, ctx, wd, exp=exp)
+                           params=self.gbdt_params, panel=self.panel, target_d=self.target_d,
+                           features=self.gbdt_features, win_decay=self.win_decay,
+                           params_d=self.gbdt_params_d, win_decay_d=self.win_decay_d)(train, ctx, wd, exp=exp)
+        T("prior")
         nf = len(wd.spec.features)
         beta = np.zeros(2 * nf)
         lam = float(cfg["lam_plugin"] if self.lam is None else self.lam)
@@ -141,10 +190,13 @@ class MspiFast:
         else:
             X, _, _ = mm._validate(exp.transform(wd.X), np.asarray(y_o, dtype=float), wd.w)
             layout = mm._layout(X)
+        T("layout")
         mom = Moments(layout, np.asarray(y_o, dtype=float), w, mm._season_cols(), mm._scale())
         mom.want_edf = False
+        T("moments")
         u = {"o": np.asarray(mom.solve_chol(lam).u, dtype=float)}
         u["d"] = np.asarray(mom.with_y(layout, np.asarray(y_d, dtype=float), w).solve_chol(lam).u, dtype=float)
+        T("solves")
         df = pd.DataFrame({"player_id": wd.spec.ps_table["player_id"].to_numpy(),
                            "o": off[:m] + u["o"][:m], "d": off[m:] + u["d"][m:],
                            "poss": np.asarray(exp.season_poss_off_, dtype=float),

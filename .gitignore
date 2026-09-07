@@ -250,3 +250,20 @@ outputs/diagnostic_payload.json
 outputs/logs/
 scratch/
 data/cache/pieces/
+
+# iterate-mode scratch: one dump per system per tracker run (scripts/54_track.py), each ~10 minutes of
+# compute and worth keeping on disk -- scratch/maps.py and scratch/pairsys.py re-score them without refitting
+# -- but none of it belongs in the history.  The SHIPPED map table (outputs/calmap_ship.parquet) and the role
+# panel (outputs/role_panel.parquet) do not match these patterns and stay tracked.
+outputs/ratings_track_*.parquet
+outputs/holdout_track_*.parquet
+outputs/calmap_track_*.parquet
+outputs/holdout_calmap_track_*.parquet
+outputs/calmap_ship_*.parquet
+outputs/role_panel_*.parquet
+outputs/*_cands.parquet
+outputs/*_cands_consensus.parquet
+outputs/ratings_timing*.parquet
+outputs/*.parquet.bak*
+outputs/tune_*.csv
+outputs/tune_*.db

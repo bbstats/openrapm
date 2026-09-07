@@ -46,7 +46,7 @@ def measure(system: str, k: int, workers: int = 4, maps=("linear+sat",)) -> dict
     """Dump the system's ratings once per held-out season (timed), fit the calibration map leave-one-season-out
     on the dump, score with the criterion's scorer.  Loss = the MAPPED system's pooled team-game error; time = the
     dump's fit seconds summed over the held-out seasons."""
-    from eracoef.calmap import SideMap, dump_ratings, evaluate, load_frames, unmapped_rows
+    from eracoef.calmap import dump_ratings, evaluate, load_frames, parse_maps, unmapped_rows
     from eracoef.holdout import Context
     ho = Holdout.from_config(cfg, ks=[k])
     t0 = time.time()
@@ -57,15 +57,16 @@ def measure(system: str, k: int, workers: int = 4, maps=("linear+sat",)) -> dict
     frames = load_frames(ctx, ho.seasons(), level=ho.level, verbose=False)
     res, params = [unmapped_rows(R, frames, system, k)], []
     for fam in maps:
-        fo, fd = (fam.split(":") + [None])[:2]
-        r, p = evaluate(R, frames, system, k, SideMap.parse(fo), SideMap.parse(fd or fo), f"{system}_{fam.replace(':', '_')}")
+        map_o, map_d, bend = parse_maps(fam)
+        tag = fam.replace(":", "_").replace("|", "_")
+        r, p = evaluate(R, frames, system, k, map_o, map_d, f"{system}_{tag}", bend=bend)
         res.append(r)
         params.append(p)
     res = pd.concat(res, ignore_index=True)
     res.to_parquet(OUT / f"holdout_track_{system}.parquet", index=False)
     pd.concat(params, ignore_index=True).to_parquet(OUT / f"calmap_track_{system}.parquet", index=False)
     P = pooled(res).set_index("system")
-    mapped = P.loc[f"{system}_{maps[0].replace(':', '_')}"]
+    mapped = P.loc[f"{system}_{maps[0].replace(':', '_').replace('|', '_')}"]
     return dict(game=float(mapped.game), game_unmapped=float(P.loc[system].game), stint=float(mapped.mse),
                 scale_off=float(mapped.scale_off), scale_def=float(mapped.scale_def),
                 seconds=secs, wall=float(wall), seasons=int(res.held_out.nunique()))

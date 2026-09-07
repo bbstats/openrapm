@@ -45,10 +45,12 @@ def window_seasons(cfg, rolling=False):
     return [(s, s + 2) for s in range(first, last - 1, step)]
 
 
-def build_window(seasons, cfg, phases=("RS",), gt_weight=None, margin_bins=False, target="pts"):
+def build_window(seasons, cfg, phases=("RS",), gt_weight=None, margin_bins=False, target="pts",
+                 counter_cols=None, min_den=0.0):
     if not margin_bins:                        # the same design from cached per-season pieces (designcache.py)
         from .designcache import build_window_cached
-        return build_window_cached(seasons, cfg, phases=phases, gt_weight=gt_weight, target=target)
+        return build_window_cached(seasons, cfg, phases=phases, gt_weight=gt_weight, target=target,
+                                   counter_cols=counter_cols, min_den=min_den)
     stints = pd.concat([load_stints(s, p, cfg) for s in seasons for p in phases], ignore_index=True)
     box = season_box(seasons, list(phases), cfg)
     return build_design(stints, box, cfg["features"], cfg, gt_weight=gt_weight, margin_bins=margin_bins,
