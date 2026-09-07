@@ -19,7 +19,16 @@ confirm is printed.  A candidate that wins the search by more than it wins the c
 
 Parallelism is over TRIALS, not seasons: each worker fits all of one trial's seasons in one process, so the
 design cache, the scoring frames and the shot tables are loaded once per worker and stay warm.  Results
-stream to outputs/tune_<study>.csv after every trial, so the run can be killed and resumed.
+stream to outputs/tune_<study>.csv after every trial and the optuna study lives in sqlite beside it, so the
+run resumes exactly where it was killed.
+
+MEMORY.  The box has 34 GB of PHYSICAL ram (the handoff's 48 GB is the commit limit, which includes the page
+file and is not what concurrent workers are bounded by).  A worker sits at ~4 GB, so 4 workers is the safe
+ceiling and 5 is not.  The first attempt at this study OOMed every one of its 2000 trials in under three
+minutes because `Context._priors` is keyed by the parameter set and never evicts: each trial added a
+GBDTPrior holding a fitted booster per exclusion set, and the workers are persistent.  `evaluate` now clears
+it after each trial, workers recycle every `--recycle` tasks, the per-trial RSS is printed, and fifteen
+consecutive failures abort the study instead of burning it.
 """
 import os
 import sys
@@ -133,7 +142,18 @@ def evaluate(p: dict, held: list, k: int, system: str | None = None) -> dict:
     frames = {s: f for s, f in w["frames"].items() if s in set(held)}
     r, _ = cal_evaluate(R, frames, "tune", k, SideMap.parse(fo), SideMap.parse(fd), "tune_mapped")
     P = pooled(r).set_index("system")
-    return dict(game=float(P.loc["tune_mapped"].game), seconds=secs, n=len(held))
+    # Context._priors is keyed by the parameter set, so every trial adds a GBDTPrior holding one fitted
+    # booster per exclusion set and NOTHING ever evicts it.  With persistent workers that grew without bound
+    # and the first study OOMed the box after ~40 trials.  The cache earns its keep WITHIN a trial (the
+    # seasons share exclusion sets); across trials the key never repeats, so drop it.
+    ctx._priors.clear()
+    rss = 0.0
+    try:
+        import psutil
+        rss = psutil.Process().memory_info().rss / 1e9
+    except Exception:
+        pass
+    return dict(game=float(P.loc["tune_mapped"].game), seconds=secs, n=len(held), rss=rss)
 
 
 def _job(args):
@@ -202,7 +222,8 @@ def main():
     if n_trials == 0:
         print("nothing left to run; raise --trials")
     ctxm = multiprocessing.get_context("spawn")
-    with ProcessPoolExecutor(max_workers=workers, mp_context=ctxm) as ex:
+    with ProcessPoolExecutor(max_workers=workers, mp_context=ctxm,
+                             max_tasks_per_child=int(flag("recycle", 25))) as ex:
         pending, asked = {}, 0
         while len(done) < n_trials:
             while len(pending) < workers and asked < n_trials:
@@ -218,6 +239,10 @@ def main():
                 study.tell(t, state=optuna.trial.TrialState.FAIL)
                 print(f"  trial {idx:4d} FAILED: {err.splitlines()[-1][:110]}", flush=True)
                 done.append(dict(trial=idx, game=np.nan, **p))
+                fails = sum(1 for d in done[-15:] if not np.isfinite(d.get("game", np.nan)))
+                if len(done) >= 15 and fails >= 15:
+                    raise SystemExit("15 consecutive failures -- the machine is out of memory or the space "
+                                     "is broken; fix it rather than burning the study")
                 continue
             study.tell(t, r["game"])
             row = dict(trial=idx, game=r["game"], seconds=r["seconds"], n=r["n"], **p)
@@ -225,8 +250,8 @@ def main():
             pd.DataFrame(done).to_csv(log, index=False)
             best = min(d["game"] for d in done if not np.isnan(d.get("game", np.nan)))
             print(f"  trial {idx:4d}  search {r['game']:9.4f}   best {best:9.4f}   "
-                  f"{r['seconds']:5.1f}s fit   [{len(done)}/{n_trials}, {(time.time() - t0) / 60:.1f} min]",
-                  flush=True)
+                  f"{r['seconds']:5.1f}s fit  {r.get('rss', 0):4.1f}GB  "
+                  f"[{len(done)}/{n_trials}, {(time.time() - t0) / 60:.1f} min]", flush=True)
 
     D = pd.DataFrame(done).sort_values("game")
     D.to_csv(log, index=False)
