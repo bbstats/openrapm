@@ -298,6 +298,27 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         # and the same with the SHIPPED defensive booster, if the booster rather than the pooling is at fault
         S["tune501_b7_dship"] = _replace(S["tune501_b7"], name="tune501_b7_dship", win_decay_d=1.0,
                                          gbdt_params_d={"linear_leaves": True, "cross_features": False})
+        # ---------------------------------------------------------------- the Dredge block (HANDOFF 3.1)
+        # The play-by-play counters (dredge.py): Russells, rim blocks, blocked threes, unassisted makes,
+        # stolen turnovers, loose-ball fouls, technicals and flagrants, offensive fouls committed.  Only
+        # the DEFENSIVE side is tried, because that is the only side the pre-filter found anything on --
+        # and even there what it found has the FINDINGS 22.2 signature, so the criterion is the gate.
+        #
+        # On the shipped defensive list and the shipped defensive booster, `scratch/prior_bench.py D`:
+        #   + unast, unastsh                             -0.0129 pooled,  +0.0354 on the low-exposure rows
+        #   + the whole block                            -0.0118 pooled,  +0.1157 low
+        #   + loose, techflg, offoul                     -0.0011 pooled,  +0.0321 low
+        #   + stolen, stolensh                           +0.0055 pooled,  +0.0012 low
+        #   + russ, russsh, blkrim, blkrimsh, blk3sh     +0.0270 pooled,  +0.0825 low
+        # Every pooled gain costs low-exposure accuracy, which is the half of the fit the held-out season
+        # can feel, and the block split -- the thing Dredge most promised, against `blk` at 15.7% of the
+        # defensive SHAP -- is the WORST of the five.  Two candidates go to the criterion anyway: the
+        # bench "has been wrong by 0.13" and shot quality was flat on the line before it shipped.
+        from .gbdt_prior import DREDGE as _DR
+        S["tune501_b7_drd"] = _replace(S["tune501_b7"], name="tune501_b7_drd",
+                                       gbdt_features={"O": list(_SF2), "D": [*_FF2, *_SQ2, *_DR]})
+        S["tune501_b7_dru"] = _replace(S["tune501_b7"], name="tune501_b7_dru",
+                                       gbdt_features={"O": list(_SF2), "D": [*_FF2, *_SQ2, "unast", "unastsh"]})
         # the same without the nearby-window discount (the consensus floors, not the criterion, may want it)
         S["ship_ratio_b07_wd1"] = MspiFast("ship_ratio_b07_wd1", target="blend0.7",
                                            **{**_SK, "win_decay": 1.0})

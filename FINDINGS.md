@@ -2597,3 +2597,170 @@ Capacity did not move it (21.24), re-expression was worth 0.05 (21.25), and the 
 the shelf are worth 0.045 and less than nothing.  The next real gain is more likely in the ridge, in the
 defensive fit, or in getting off three-season chunks than in another column on the panel.
 
+## 23. The play-by-play block: built to the event, validated against the box score, and worth nothing
+
+HANDOFF 3.1 was the owner's call for this pass: FINDINGS 22.5 concluded the box score is nearly spent, the
+play-by-play is not, and shot quality (22.1) -- the one thing last pass added that paid -- came out of the
+shots tables rather than the box.  So take the rest of the events.  The reference was Justin Willard's
+**Dredge** (Nylon Calculus, 2016), an elastic net onto 15-year RAPM trained on 2001-2015 and tested out of
+sample on 1997-2000 and 2016 -- our era, our target, our validation design -- whose published coefficients
+say the box line is throwing away most of what its own events know.  Twelve features, none of them built.
+
+They are built now.  `src/eracoef/dredge.py` counts thirteen event types per (player, season) out of
+`data/raw/pbp`, `scripts/56_dredge.py` caches them per season, `gbdt_prior.add_dredge` turns them into
+thirteen padded features, and the panel, the tests and the prediction path all carry them.  **And the
+criterion says the whole block is worth +0.0008 at z 0.03, which is nothing at all.**
+
+This section is the record of how that was established, because a negative result is only worth the
+verification behind it, and of the one measurement that explains it.
+
+### 1. What the v3 feed can attribute, audited before a line was written
+
+`data/raw/pbp` is the **v3** play-by-play: exactly one `personId` per event.  So a counter is buildable when
+the player we want is the player the row names.  `scratch/dredge_audit.py` and `dredge_audit2.py` read
+1997, 1999, 2001, 2003, 2006, 2010, 2015, 2019, 2023 and 2026 and found the feed cleaner than expected:
+
+| | what the audit found | seasons |
+|---|---|---|
+| row order | the file is chronological -- **zero clock inversions** in any era -- so "the row above" is meaningful | all 30 |
+| blocks | BLOCK is its own row with the blocker; the blocked attempt is **always** the row directly above (112 of 112 in 1997, 114 of 114 in 2026) and the BLOCK row's own `shotValue` is 2 or 3 in **100%** of cases | all 30 |
+| Russells | the rebound after a block is the next `Rebound` row; team rebounds carry the team in `personId` with `teamId` 0 | all 30 |
+| steals | STEAL is its own row and a `Turnover` row naming the loser sits directly beside it, every time | all 30 |
+| fouls | `Foul` rows name the committer, which is what the loose-ball, technical, flagrant and offensive-foul terms want | all 30 |
+| assists | the assist is text in the SHOOTER's description (`"... (2 PTS) (Payton 1 AST)"`), so unassisted makes need no name parsing | all 30 |
+| **offensive fouls DRAWN** | **not present.**  `"Asik OFF.Foul (P3)"` names only the fouler, in 1997 and 2026 alike | **none** |
+
+`OffFoulsDrawn100` is Dredge's best find (coefficient 1.22, "one of my favourite discoveries") and it is the
+one term our feed cannot give us; it needs the v2 play-by-play or pbpstats, i.e. an ingest job.  It is
+therefore **not** part of what follows, and the null result below does not speak to it.
+
+### 2. Two gates, both passed exactly
+
+**Against the box score.**  The counters and the game logs count the same events from different feeds, so
+they must agree.  Over all 30 seasons the worst |ratio - 1| is **0.0000 on made field goals, 0.0001 on
+turnovers, 0.0012 on steals and 0.0024 on blocks**.  The parser is reading the events, not an interpretation
+of them.
+
+**Between the two paths.**  `scratch/cmp_dredge.py` rebuilds every feature the prediction path will build and
+compares it to what the panel stored, for all ten windows and all thirteen features: **0.00e+00**, the same
+check 22.1 ran for shot quality.
+
+### 3. One counter that measures the scorer instead of the shot
+
+The season report shows the rim share of blocked twos swinging **0.77 -> 0.48 -> 0.74 -> 0.42** with jumps of
+0.17 to 0.23 between ADJACENT seasons.  Basketball does not move that fast.  `scratch/dredge_audit3.py`
+rules out the obvious cause -- only 0 to 2% of blocked twos have no location at all -- so the swing is in the
+recorded distance itself, i.e. in how the scorer typed the row.  **`blkrim` and `blkrimsh` measure a
+distance-recording convention as much as they measure a shot**, and the artifact is the size of their whole
+between-player spread.  This is FINDINGS 22.2's failure mode wearing a different hat, and it is exactly what
+HANDOFF 3.1 said to look for before a count became a column.
+
+Two era traps were designed out rather than measured after the fact.  `foul_off` is the AGGREGATE of every
+`Offensive*` subtype, because `Offensive Charge` does not exist as a subtype before ~2006 and a column that
+is structurally zero for a third of the panel is learned as "old era" when `season` is a feature -- and
+Justin's own finding that non-charges tested MORE valuable than charges says the aggregate is the better
+feature anyway.  `goaltend` is counted but held out of the default list: his footnote says 1997 has
+suspiciously FEW goaltends and our feed says it has MORE, one of the two is wrong, and neither of us has
+reconciled it against a published source.
+
+### 4. The pre-filter, at the operating point
+
+The first bench was run on the wrong base and said the opposite of the truth.  On the 43-name offensive line
+at `quality=4` the whole block reads **-0.050 weighted MSE on defense**, which would have been the largest
+feature-block gain ever measured here.  On the **shipped** defensive list (23 names) with the **shipped**
+defensive booster it reads -0.012, and every part of it costs low-exposure accuracy.  HANDOFF's trap --
+*"a knob measured at the cheap booster does not transfer"* -- applies to feature sets and to the base list,
+not just to boosters.  Measured at the operating point, `scratch/prior_bench.py`:
+
+| defensive candidate | pooled MSE | low-exposure rows |
+|---|---|---|
+| the shipped list | 2.6358 | 4.9474 |
+| + `unast`, `unastsh` | **-0.0129** | +0.0354 |
+| + the whole block (12) | -0.0118 | **+0.1157** |
+| + `loose`, `techflg`, `offoul` | -0.0011 | +0.0321 |
+| + `stolen`, `stolensh` | +0.0055 | +0.0012 |
+| + `russ`, `russsh`, `blkrim`, `blkrimsh`, `blk3sh` | **+0.0270** | +0.0825 |
+
+**Every pooled gain is paid for on the low-exposure rows** -- the half of the fit the held-out season can
+actually feel, because those are the players the prior IS the rating for.  That is the 22.2 signature: MSE
+bought by identifying which rows have quiet targets rather than by knowing more basketball.  And the block
+split, the thing Dredge most promised against `blk` at 15.7% of the defensive SHAP, is the worst of the five.
+
+On OFFENSE there is nothing to discuss: every group is worse (+0.004 to +0.018) and the whole block together
+is -0.0001.
+
+### 5. The criterion
+
+Two candidates went to the tracker anyway, because the bench "is necessary, not sufficient, and it has been
+wrong by 0.13", and because shot quality was flat on the line before it shipped.  Against the shipped board
+`tune501_b7` at 110.6237 over the same 28 held-out seasons:
+
+| | criterion | vs the board | z | wins | 28 fits |
+|---|---|---|---|---|---|
+| `tune501_b7` (what ships) | 110.6237 | | | | 37.2 s |
+| `tune501_b7_drd` -- the whole block on defense | 110.6244 | +0.0008 | 0.03 | 15/28 | 38.9 s |
+| `tune501_b7_dru` -- `unast`, `unastsh` on defense | 110.6343 | +0.0106 | 0.75 | 13/28 | 38.8 s |
+
+Nothing, and 4.5% slower for it.
+
+### 6. Dredge's actual claim, tested properly, does not reproduce
+
+Adding a decomposition beside the counter it decomposes is the weak form of the hypothesis.  The strong form
+-- Justin's own -- is that `blk` is the wrong SHAPE: a Russell is worth 0.445 and a raw block 0.236, so the
+split should REPLACE it.  That is a different test and it had not been run:
+
+| defensive list | pooled MSE | low-exposure |
+|---|---|---|
+| the shipped list | 2.6358 | 4.9474 |
+| `blk` -> `russ`, `blkrim`, `blk3sh` | +0.0608 | +0.0950 |
+| `blk` -> all five block features | +0.0478 | +0.1169 |
+| `blk` dropped, nothing in its place | +0.3277 | +0.2660 |
+| `tov` -> `stolen`, `stolensh` | +0.0183 | +0.0022 |
+| `ast` -> `unast`, `unastsh` | +0.0136 | +0.0259 |
+
+`blk` is worth +0.328 to the defensive prior, which is what its SHAP share says.  Its play-by-play
+decomposition recovers **81%** of that and no more, and the same holds for turnovers and for assists.  On all
+three terms Dredge singled out, **the raw counter beats its own decomposition.**
+
+### 7. Why: the Russell share is not a property of a player
+
+`scratch/dredge_rely.py` runs the owner's own reliability test on the features themselves -- build each from
+season t and from season t + 1 for the same player, keep the 8,432 pairs with 1,500+ possessions in both,
+and correlate:
+
+| feature | year-over-year r | | feature | r |
+|---|---|---|---|---|
+| `blk` per 100 (the box counter) | **0.918** | | `goalt` | 0.774 |
+| `russ` (Russells per 100) | 0.903 | | `offoul` | 0.752 |
+| `blkrim` | 0.900 | | `blkrimsh` | 0.713 |
+| `unast` | 0.897 | | `stolensh` | 0.689 |
+| `unastsh` | 0.892 | | `techflg` | 0.686 |
+| `stolen` | 0.824 | | `blk3sh` | 0.636 |
+| `loose` | 0.799 | | **`russsh` (the Russell SHARE)** | **0.126** |
+
+**Whether the defence recovers your block is not something about you.**  The Russell share is 0.575 for
+everybody, its between-player sd is 0.038, and 98% of that spread is sampling noise.  `russ` looks reliable
+at 0.903 only because it is `blk` multiplied by a constant plus noise -- which is precisely why replacing
+`blk` with it costs 0.061: you keep the counter's information, lose precision on it, and gain nothing.
+
+That is the whole result.  The features that ARE reliable -- `unastsh` at 0.892 is a real and stable property
+of a player -- are the ones a boosted tree can already reconstruct from the counters it has.  Dredge needed
+them because an elastic net is linear and cannot express "a block is worth more when your team gets the
+ball"; our prior is a depth-4-to-7 booster over 23 to 43 features that has `blk`, `drb`, `stl`, `pf`, `ast`,
+`usage`, `astr`, `share` and `gs_pct` and crosses them freely.  **A decomposition is worth having when the
+model cannot make it, and ours can.**
+
+### 8. What this says about the pass
+
+22.5 said the box score was nearly spent and named the play-by-play as the resolution.  The play-by-play is
+now spent too, in the specific sense that the events behind the box line, counted honestly and measured at
+the operating point, add nothing the booster did not already have.  Two things survive from it:
+
+* **the machinery is built and cheap.**  `data/dredge/*.parquet` is 30 seasons of per-player event counts,
+  validated to 0.0024 against the box score, and any future counter is one entry in `COUNTERS` away.  The
+  ingest job for `OffFoulsDrawn` -- the one published coefficient we could not test -- now has somewhere to
+  land.
+* **the negative is informative about where to look.**  Three passes have now added information to the prior
+  (capacity, re-expression, shot quality, experience, and the play-by-play) and the total is 0.05.  The
+  prior's ceiling argument in 22.5 is holding.  What is left is the ESTIMATOR: the defensive four-factor fit
+  that HANDOFF 3.2 puts at a measured, significant, cheaper 0.14.

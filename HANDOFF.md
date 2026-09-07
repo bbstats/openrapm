@@ -1,19 +1,25 @@
-# Handoff: the prior pass is done, and it says the box score is nearly spent
+# Handoff: the play-by-play is spent too, and the estimator is what is left
 
-Written 2026-09-06 (end of the third day of iterate-and-improve mode).  `FINDINGS.md` sections 21 and **22**
-are the record; `docs/progress.png` / `docs/progress.csv` the chart and its log; `PIPELINE.md` draws how the
-shipped model works, stage by stage.
+Written 2026-09-07 (fourth day of iterate-and-improve mode).  **This pass built HANDOFF 3.1's Dredge block
+end to end, validated it to 0.0024 against the box score and to 0.00e+00 between its two paths, and measured
+it on the criterion at +0.0008, z 0.03.  It is worth nothing.**  FINDINGS **23** is the record, including the
+one measurement that explains it: the Russell share -- Justin Willard's headline feature, a block the defence
+recovers -- has a year-over-year reliability of **0.126**.  Whether your block is recovered is not a property
+of you.  **Nothing shipped and the board is unchanged.**  `FINDINGS.md` sections 21, 22 and **23** are the
+record; `docs/progress.png` / `docs/progress.csv` the chart and its log; `PIPELINE.md` draws how the shipped
+model works, stage by stage.
 
 **Tree state: clean and committed on `hybrid-and-xpts`.**  `git status` is quiet (the tracker's dumps are
-ignored).  Tests: 82 passed, 1 xfailed; the shipped board rebuilds and passes all ten consensus floors, one
-of which was re-based this pass (Part 0 ruling 2).
+ignored).  Tests: **94 passed, 1 xfailed** (82 before; `tests/test_dredge.py` is the twelve new ones).  The
+shipped board rebuilds and passes all ten consensus floors.
 
-**Shipped this pass: `tune501_b7`** (FINDINGS 22.7) -- the estimator search's board with the offensive target
-blended back to 0.7.  **110.624 on the criterion against the 110.707 it replaces, z -3.02 over 18 of 28, and
-37 s for the 28 fits against 46**: the largest shipped gain since section 20's calibration map, and cheaper.
-Consensus 0.788 / 0.790 / 0.759, defensive spread 1.28.  The defensive-agreement floor was re-based 0.76 ->
-0.75 once, deliberately, with the reason in the test (Part 0 ruling 2).  `ship_shot7d` (22.4, shot quality on
-both sides) was shipped earlier in the same pass and is what this replaces.
+**The board is still `tune501_b7`** (FINDINGS 22.7, shipped 2026-09-06) -- the estimator search's board with
+the offensive target blended back to 0.7.  **110.624 on the criterion, 37 s for the 28 fits.**  Consensus
+0.788 / 0.790 / 0.759, defensive spread 1.28.  Its defensive-agreement floor was re-based 0.76 -> 0.75 once,
+deliberately, with the reason in the test (Part 0 ruling 2).  Nothing this pass touched it: the two Dredge
+candidates are in `docs/progress.csv` at +0.0008 and +0.0106 and were not read against the floors, because a
+candidate the criterion cannot separate from the board and which is 4.5% slower loses on Part 0 ruling 1's
+tie-break before the consensus is consulted.
 
 ---
 
@@ -50,7 +56,9 @@ both sides) was shipped earlier in the same pass and is what this replaces.
 4. **Schedule context is not worth it** (*"evens out really well"*) -- rest days and back-to-backs, declined.
 5. **The four-factor defensive fit is right but was too big for v1.**  It is now the most promising thing left
    (Part 3).
-6. **The prior was the work, and the prior is now mostly spent.**  Part 3 says what replaced it.
+6. **The prior is spent, and that is now measured twice.**  22.5 said the box score was nearly spent and
+   named the play-by-play as the resolution; section 23 built the play-by-play block and it is zero.  Part 3
+   is the estimator from here.
 
 ## Part 1: where it stands
 
@@ -58,52 +66,53 @@ both sides) was shipped earlier in the same pass and is what this replaces.
 |---|---|---|
 | **the criterion's line** (`best_ratio_full`) | **109.845** | 59 s |
 | the same with shot quality (`best_shot`) | 109.801 (z -1.13) | 70 s |
-| the board this pass started from (`ship_side6`) | 110.710 | 43 s |
-| **what ships** (`ship_shot7d`, ten of ten floors, defensive spread 1.30) | **110.707** | 50 s |
-| `ship_shot7` -- shot quality on offense only, ten of ten | 110.694 (z -0.88) | 47 s |
+| **what ships** (`tune501_b7`, nine of ten floors, defensive spread 1.28) | **110.624** | 37 s |
+| `tune501_b7_drd` -- the whole Dredge block on defense (23) | 110.6244 (z 0.03) | 39 s |
+| `ship_shot7d` -- the board `tune501_b7` replaced, ten of ten | 110.707 | 50 s |
 | no ratings at all | 125.6 | |
 
-### Why the board moved (FINDINGS 22.4)
+### Why the board is where it is (FINDINGS 22.7)
 
-21.26 shipped `blend0.6` on offense **only because `blend0.7` failed the bigness floor** at -0.303 against
-0.30, at a cost of about 0.02 per 100.  The shot-quality features move that gap to -0.270 -- separating a
-rim-running big from a jump shooter at the same FG% is exactly what the offensive board was mis-ranking by
-size -- so blend 0.7 became shippable again.  Putting the same features on DEFENSE as well is flat on the
-criterion and takes the defensive agreement 0.766 -> 0.768 and the defensive spread 1.33 -> 1.30.
+`tune501_b7` came out of a 625-trial search over the whole estimator, validated on 14 held-out seasons the
+optimizer never saw.  It is -0.083 against `ship_shot7d` at z -3.02 over 18 of 28 and 20% cheaper, and it
+fails ONE consensus floor -- defensive agreement 0.7592 against 0.76 -- which was re-based once, deliberately,
+under Part 0 ruling 2 ("a MARGINAL miss is not a veto").  Its defensive SPREAD improves to 1.28, so the prior
+is not too wide; the agreement alone moved, and the suspect is the search's defensive nearby-window discount
+of 0.28 where the shipped board pools every window alike.  **3.2 is the work that would let that knob stay.**
 
-The criterion cannot choose between the two versions (z -0.88 and -0.09), so the floors did.  `ship_shot7`
-(offense only) is 0.013 better on the criterion and leaves the defensive agreement at 0.762 against its 0.76
-floor -- almost no headroom.  `ship_shot7d` keeps the headroom, and Part 3.1's defensive work is what the
-headroom is for.  To flip: drop the six `SHOTQ` names from `features_full_D` and point `cal_map` at
-`ship_shot7`.  `scratch/ship_try2.py` runs either through the whole shipping path without touching
-`config.yaml` permanently.
+`scratch/ship_try2.py` runs any candidate through the whole shipping path -- targets, map, and the prior's
+feature lists on either side -- without touching `config.yaml` permanently.
 
-### What this pass measured (all on the criterion, all in FINDINGS 22)
+### What this pass measured (all on the criterion, all in FINDINGS 23)
 
 | | criterion | verdict |
 |---|---|---|
-| shot quality -- where his attempts came from (`gbdt_prior.SHOTQ`) | **-0.045** on the line, flat in shipping shape | **SHIPPED**; it is what unlocks blend 0.7 |
-| experience -- seasons, career possessions, entry age (`roles.career_inputs`) | **+0.054** | rejected, and read 22.2 before trying anything like it |
-| Huber loss instead of RMSE | -0.039 at the cheap booster, **+0.061 at `quality=4`** | rejected |
-| inverse-variance target weights (`training_rows(sat_poss=)`) | -0.003 at best | wired and off |
-| asymmetric window pooling (`training_rows(win_past=)`) | +0.025 to +0.075, both directions | wired and off |
+| the whole Dredge play-by-play block on defense (`gbdt_prior.DREDGE`, 12 features) | **+0.0008, z 0.03** | rejected; and 4.5% slower |
+| unassisted-make rate and share alone, on defense | +0.0106, z 0.75 | rejected |
+| the block split REPLACING `blk` (Dredge's actual claim) | +0.061 on the prior's own fit | rejected before the criterion |
+| stolen turnovers replacing `tov`, unassisted makes replacing `ast` | +0.018, +0.014 | rejected before the criterion |
+| every Dredge group on OFFENSE | +0.004 to +0.018 on the prior's own fit | rejected before the criterion |
+| defensive goaltends (`goalt`) | not measured on the criterion | held back: unreconciled era trend |
+| offensive fouls DRAWN (`OffFoulsDrawn100`, his 1.22) | **not buildable from the v3 feed** | needs an ingest job; untested |
 
 ## Part 2: machinery
 
 | file | what |
 |---|---|
 | `scripts/54_track.py` | the tracker: dump a system at K = 3 (timed), fit the map leave-one-season-out, score, log a row, redraw the chart.  `--systems=a,b "--maps=..." --label=...`; one dump per system |
-| `scratch/prior_bench.py` | **the 20-second pre-filter**: the prior's own leave-window-out fit per feature set, with the low-exposure stratum beside the pooled number.  `--q4 --loss= --delta= --sat= --past= --kmul=`.  **Read 22.2 first: it is necessary, not sufficient, and it has been wrong by 0.13** |
+| `scratch/prior_bench.py` | **the 20-second pre-filter**: the prior's own leave-window-out fit per feature set, with the low-exposure stratum beside the pooled number.  `--q4 --loss= --delta= --sat= --past= --kmul=`, and a set may be written `shipD+russsh:blkrimsh` (add) or `shipD-blk+russ:blkrim` (REPLACE).  **Read 22.2 and 23.4 first: it is necessary, not sufficient, it has been wrong by 0.13, and the BASE LIST is part of the operating point** |
 | `scratch/pairsys.py` | the paired test between two TRACKED systems: pooled difference, z over the 28 seasons, wins |
 | `scratch/maps.py` | map work on an EXISTING dump, ~2 s each, no refit |
 | `scratch/ship_try2.py` | a candidate through the REAL shipping path: config (targets, map, **and the prior's feature lists**), `08_ratings.py`, `22_vs_consensus.py`, the floor tests.  Restores `config.yaml` in a `finally` |
 | `scratch/consensus_read.py` | the cheap screening read of mapped candidates off the tracker's own parameter tables (no refits) |
+| `scripts/56_dredge.py` | build and cache the play-by-play counter tables, 30 seasons in ~7 min, with the era report and the box-score cross-check.  `[first] [last] [--force]` |
+| `src/eracoef/dredge.py` | `COUNTERS`, `game_counts`, `season_dredge`, **`player_dredge_frame(seasons, cfg, ids)`** -- the block's per-player event counts and its own league totals, the Dredge block's single source, used by the panel build and by prediction alike |
 | `src/eracoef/fastfit.py` | `MspiFast`: every knob (`lam`, `gbdt_params`/`_d`, `gbdt_features`, `target`/`_d`, `win_decay`/`_d`, `decay`, `season_weights`, `pad_scale`, `phases`, `lam_buckets`, `min_den`); `FASTFIT_TIMER=1` for the section clock |
-| `src/eracoef/gbdt_prior.py` | `DERIVED`, `RATIOS`, **`SHOTQ`** (+ `add_shotq`), **`CAREER`**, the feature lists `FULL_/DERIVED_/RATIO_/SHOT_/PRIOR_FEATURES`, `training_rows(win_decay=, win_past=, sat_poss=)`, `GBDTPrior` |
+| `src/eracoef/gbdt_prior.py` | `DERIVED`, `RATIOS`, **`SHOTQ`** (+ `add_shotq`), **`CAREER`**, **`DREDGE_RATES`/`DREDGE_SHARES`/`DREDGE`** (+ `add_dredge`), the feature lists `FULL_/DERIVED_/RATIO_/SHOT_/DREDGE_/PRIOR_FEATURES`, `training_rows(win_decay=, win_past=, sat_poss=)`, `GBDTPrior` |
 | `src/eracoef/xshoot.py` | **`player_shot_frame(seasons, cfg, ids)`**: the block's per-shooter shot totals and its own league levels -- the shot-quality features' single source, used by the panel build and by prediction alike |
 | `src/eracoef/roles.py` | **`career_inputs(inputs, before_season, ids, age=)`** (rejected block, kept for the record) |
 | `src/eracoef/calmap.py` | families x exposure terms x a bend; `parse_maps` takes `mapO:mapD` and `\|cubic` / `\|rowcubic` |
-| `scratch/` (untracked) | `cmp_shotq.py` / `cmp_career.py` (the identical-numbers checks: both paths agree to 0.00e+00 on all ten windows), `add_shot_cols.py` / `add_career_cols.py` (the in-place panel patches, backups at `.bak2` / `.bak3`), `prior_ceiling.py`, `smoke_shot.py`, `tabfm_try.py` |
+| `scratch/` (untracked) | `cmp_shotq.py` / `cmp_career.py` / **`cmp_dredge.py`** (the identical-numbers checks: every path agrees to 0.00e+00 on all ten windows), `add_shot_cols.py` / `add_career_cols.py` / **`add_dredge_cols.py`** (the in-place panel patches, backups at `.bak2` / `.bak3` / `.bak4`), **`dredge_audit.py` / `dredge_audit2.py` / `dredge_audit3.py`** (what the v3 feed can attribute, per era), **`dredge_rely.py`** (year-over-year reliability of any counter-derived feature), `prior_ceiling.py`, `smoke_shot.py`, `tabfm_try.py` |
 
 ### Verification
 
@@ -112,7 +121,8 @@ headroom is for.  To flip: drop the six `SHOTQ` names from `features_full_D` and
 .venv/Scripts/python scratch/prior_bench.py O ratio,shot --q4                  # a feature set, ~30 s
 .venv/Scripts/python scripts/54_track.py --systems=X "--maps=..." --label=...  # the criterion, ~10 min
 .venv/Scripts/python scratch/pairsys.py <base> <cand>                          # is it real?
-.venv/Scripts/python scratch/ship_try2.py TAG blend0.7 rapm1 <system> [--od --dshot]
+.venv/Scripts/python scratch/ship_try2.py TAG blend0.7 rapm1 <system> [--od --dshot --drd=russsh,...]
+.venv/Scripts/python scripts/56_dredge.py                                      # the pbp counters, ~7 min
 .venv/Scripts/python scripts/08_ratings.py && .venv/Scripts/python -m pytest tests/test_vs_consensus.py -q
 ```
 
@@ -131,6 +141,16 @@ headroom is for.  To flip: drop the six `SHOTQ` names from `features_full_D` and
 - **The tracker's `seconds` varies +/-6% with machine load.**
 - **A map term with no covariate column applies as ZERO, silently.**
 - **The `tshare` and `prior` map terms belong on OFFENSE only.**
+- **A feature set must be benched against the list it would actually JOIN.**  The Dredge block read -0.050
+  on the offensive 43-name line and -0.012 on the shipped defensive 23-name one, at different boosters.
+  Same features, opposite conclusion (23.4).
+- **`shotDistance` conventions move between adjacent seasons.**  The rim share of blocked twos swings
+  0.77 -> 0.48 -> 0.74 -> 0.42 with almost nothing unlocated.  Any cross-era feature built on raw distance
+  needs `scratch/dredge_audit3.py`'s check; the shot-quality features escape it because `xl` is fit per
+  season (23.3).
+- **Check a candidate's year-over-year reliability before building a model around it.**  `russsh` scores
+  0.126 -- it is 0.575 for everybody -- and that one number explains the whole of section 23.
+  `scratch/dredge_rely.py` does it for any counter-derived feature in about a minute.
 - **The consensus floors are not the criterion.**  Read them before shipping, every time; the screening read
   (`consensus_read.py`, 2024-2026, 475 players) is NOT the same object as the floors in
   `tests/test_vs_consensus.py`, which score the board `08_ratings.py` builds.  Screen with the first, decide
@@ -141,170 +161,86 @@ headroom is for.  To flip: drop the six `SHOTQ` names from `features_full_D` and
 
 ## Part 3: the next pass
 
-The prior pass is Part 1's table and FINDINGS 22.5's conclusion: **capacity did not move it (21.24),
-re-expression was worth 0.05 (21.25), and the two richest new sources on the shelf are worth 0.045 and less
-than nothing.**  Against 3.5's ceiling -- the prior's target has a split-half reliability of 0.808 on offense
-so nothing can correlate past 0.899, and the shipped booster reaches 0.590 -- the missing third is not sitting
-in the box score waiting for a better column.  So the next pass leaves the BOX SCORE alone and goes to the
-play-by-play behind it, which is 3.1.
+**Start at 3.2.**  The prior has now been attacked from every direction available: capacity did not move it
+(21.24), re-expression was worth 0.05 (21.25), the two richest box sources were worth 0.045 and less than
+nothing (22.5), and the play-by-play behind the box line is worth **zero** (23).  Against 3.5's ceiling --
+the prior's target has a split-half reliability of 0.808 on offense so nothing can correlate past 0.899, and
+the shipped booster reaches 0.590 -- the missing third is not in a column.  **It is in the estimator**, and
+3.2 has a measured, significant, cheaper 0.14 sitting behind one defensive disagreement.
 
-### 3.1 Play-by-play features for the prior (the owner's call, 2026-09-06)
+### 3.1 DONE and answered: the play-by-play block is built, and it is worth nothing (FINDINGS 23)
 
-FINDINGS 22.5 concluded the BOX SCORE is nearly spent.  The play-by-play is not, and that is the resolution:
-shot quality (22.1) was itself a play-by-play block -- it came out of the shots tables, not the box -- and it
-is the one thing this pass added that paid.  The 13 rates are a nightly summary; every event that made them is
-already on disk in `data/raw/pbp/{season}/{game_id}.parquet`, 24 columns with `actionType`, `subType`,
-`description`, `personId` and shot coordinates, for all 30 seasons.  Nothing below needs a new download except
-where it says so.
+**Do not start here.  This is finished.**  The twelve Dredge features HANDOFF 3.1 listed are built, tested,
+wired into both paths and measured, and the answer is no.  What follows is what exists now and what the
+result rules out, so nobody spends another pass on it.
 
-#### STATUS as of 2026-09-07: nothing is built
+**What was built.**  `src/eracoef/dredge.py` counts thirteen event types per (player, season) out of
+`data/raw/pbp` -- Russells, rim blocks, blocked threes, unassisted and assisted makes, stolen and total
+turnovers, loose-ball fouls, technicals/flagrants, offensive fouls committed, steals and defensive goaltends,
+with each player's offensive and defensive possessions from the stints as the denominators.
+`scripts/56_dredge.py` builds and caches `data/dredge/{season}_RS.parquet` (30 seasons, ~7 minutes, one
+command) and prints the era report and the box-score cross-check.  `gbdt_prior.add_dredge` makes thirteen
+padded features (`DREDGE_RATES`, `DREDGE_SHARES`; `DREDGE` is the twelve minus `goalt`).
+`scripts/49_role_panel.py` writes the 30 columns into the panel, so a rebuild is not destructive, and
+`spm.chain_offset` rebuilds them from the training block at prediction time.  `tests/test_dredge.py` is
+twelve cases built from the real row shapes.
 
-**Zero of the twelve Dredge features exist in code.**  No unassisted-shot share, no Russells, no rim blocks,
-no loose-ball / technical / flagrant counts, no stolen turnovers, no offensive fouls.  What this section
-contains is the ANALYSIS only -- the published coefficients, the audit of what our own feed can attribute, and
-the era-coverage traps.  All of it is still to do, and the ordered list is at the end.
+**What it cost to verify, and both gates passed.**  The counters against the BOX SCORE, all 30 seasons:
+worst |ratio - 1| **0.0000** on made field goals, 0.0001 on turnovers, 0.0012 on steals, 0.0024 on blocks.
+The panel path against the prediction path (`scratch/cmp_dredge.py`), ten windows, thirteen features:
+**0.00e+00**.
 
-(Do not be misled by grep: `flagrant`, `loose ball` and `kicked` appear in `src/eracoef/stints.py`, but that
-is the possession parser deciding whether a foul ends a possession.  Nothing there is a player feature.)
+**The result.**  On the criterion, against the shipped `tune501_b7` at 110.6237 over the same 28 seasons:
 
-#### STATUS: Boruta has never seen the features that actually ship
+| | criterion | vs the board | z | wins |
+|---|---|---|---|---|
+| the whole block on defense (`tune501_b7_drd`) | 110.6244 | +0.0008 | 0.03 | 15/28 |
+| `unast` + `unastsh` on defense (`tune501_b7_dru`) | 110.6343 | +0.0106 | 0.75 | 13/28 |
 
-Worth knowing before anyone assumes the shipped feature lists were selected:
+and 4.5% slower for it.  On offense the prior's own fit rejects every group before the criterion is reached.
 
-* `scripts/50_boruta.py` hardcodes its candidate set per mode --
-  `MODES = {"residual": ("u", DEFAULT_FEATURES, ...), "full": ("rapm1", FULL_FEATURES, ...)}` -- and
-  `FULL_FEATURES` is the **17-name** list (13 rates + `season` + the 3 role inputs).
-* `gbdt.features_O` / `features_D` in `config.yaml` WERE Boruta-selected (2026-09-05, 25 trials), but they
-  belong to `mode: residual`, and **the board ships `mode: full`, so those two lines are inert.**
-* `gbdt.features_full_O` (43 names) and `features_full_D` (23 names) -- the lists that DO ship -- were
-  assembled by hand across 21.24 (the aggregations and efficiency ratios) and 22.1 (shot quality), and were
-  validated on the criterion, never by Boruta.  In its present form `50_boruta.py` structurally cannot assess
-  them: it would drop everything past the 17 base names before it started.  **Widening that candidate set is
-  a prerequisite for any Boruta run that means anything.**
+**Why, and this is the part that generalises.**  Year-over-year reliability of the features themselves
+(`scratch/dredge_rely.py`, 8,432 player-pairs with 1,500+ possessions in both seasons): `blk` per 100 scores
+0.918, `unastsh` 0.892, `blkrim` 0.900 -- and **`russsh`, the Russell share, scores 0.126.**  It is 0.575 for
+everybody and the spread around it is sampling noise.  Meanwhile Dredge's STRONG claim -- that `blk` is the
+wrong shape and the split should REPLACE it -- was tested directly and reverses: dropping `blk` costs the
+defensive prior +0.328 weighted MSE, replacing it with `russ`/`blkrim`/`blk3sh` recovers only 81% of that,
+and the same holds for `tov` -> stolen (+0.018) and `ast` -> unassisted (+0.014).  **On all three terms he
+singled out, the raw counter beats its own decomposition.**  He needed the split because an elastic net is
+linear; our booster has `blk`, `drb`, `stl`, `pf`, `ast`, `usage`, `astr`, `share` and `gs_pct` and crosses
+them freely.  A decomposition is worth having when the model cannot make it, and ours can.
 
-**And a caveat that decides Boruta's ROLE.**  It selects against the prior's own target -- the same offline
-objective that ranked the career-experience block as the largest feature gain ever measured here, immediately
-before it cost **+0.054 on the criterion** (22.2).  Boruta would very likely have ACCEPTED `exp_yrs`, for
-precisely the reason that made it worthless: it predicts the target well, partly by identifying which rows
-have low-noise targets.  So use Boruta as a **cheap pre-filter to drop noise candidates, never as the gate.**
-The criterion is the gate.  This matters most for the Dredge block, where a dozen candidates overlap heavily.
+**Two traps this turned up, both worth carrying forward.**
 
-#### The reference: Dredge (Justin Willard, Nylon Calculus, 2016)
+* **The base list is part of the operating point, not just the booster.**  The first bench read the whole
+  block at **-0.050** on defense -- what would have been the largest feature gain ever measured here -- because
+  it was run on the 43-name OFFENSIVE line at `quality=4`.  On the shipped 23-name defensive list with the
+  shipped defensive booster it reads -0.012, with every part of it costing low-exposure accuracy.  Same
+  features, same data, opposite conclusion.  `scratch/prior_bench.py` now takes `shipD+a:b` and `shipD-blk+a:b`
+  so a candidate can be benched against the list it would actually join, and replacing a feature can be
+  tested as well as adding one.
+* **`blkrim` measures the scorer.**  The rim share of blocked twos swings 0.77 -> 0.48 -> 0.74 -> 0.42 with
+  0.17-0.23 jumps between ADJACENT seasons, and `scratch/dredge_audit3.py` rules out missing locations (0-2%
+  unlocated).  It is the recorded distance convention.  Anything built on `shotDistance` ACROSS eras needs
+  this check; the shipped shot-quality features escape it only because `xl` is fit per season from the same
+  distances.
 
-The closest published thing to what we are doing, and worth reading in full.  Elastic net (`glmnet`, hence the
-name) predicting **15-year RAPM**, trained on 2001-2015 and tested out of sample on **1997-2000 and 2016** --
-our era, our target, our validation design.  Players under 3,000 possessions dropped, everyone weighted by
-possessions, then a team adjustment and a mean reversion.  He reports interaction terms helped out of sample
-"by a significant amount" despite his overfitting fears.
+**What is NOT ruled out, and what the machinery is now for.**
 
-His published simple-linear coefficients, per 100 possessions unless noted.  **These are the sizes to
-calibrate expectations against, not values to copy** -- his target is a 15-year RAPM and ours is a held-out
-season's points:
-
-| term | coef | his note |
-|---|---|---|
-| **DREB%** (0-1) | 6.48 | needs a nonlinear transform; "not all rebounds are the same" -- split by FG vs 3PT misses |
-| **OREB%** (0-1) | 3.87 | |
-| **Shot%** (0-1) | 2.24 | usage without turnovers |
-| **Stl100** | 1.33 | ~0.25 of the value is offensive (a steal starts a break) |
-| **TechsFlgs100** | **+1.25** | technicals and flagrants, and the sign is POSITIVE -- "a proxy for feisty defenders and guys who fight hard in the paint" |
-| **OffFoulsDrawn100** | **1.22** | "one of my favourite discoveries"; and **non-charges tested MORE valuable than charges** |
-| PtsOverAvg100 | 0.872 | efficiency and volume together |
-| UnAstShot% | 0.841 | unassisted FGM% x shot% -- "players get credit for assists, they should get more credit for unassisted shots" |
-| Blocked0to5Ft100 | 0.523 | rim blocks; "blocking a three-point shot did not test well" |
-| **Russells100** | 0.445 | a block THE DEFENCE RECOVERS -- why raw blocks are overrated |
-| TOV100 | -0.407 | |
-| AstDunksLayups100 | 0.352 | |
-| loose ball fouls 100 | ~0.33 | not in the simple model but in richer ones; hustle proxy |
-| BLK100 | 0.236 | "in their pure form, highly overrated" |
-| MPG | 0.132 | better players play more |
-| PFsDrawn100 | 0.0846 | all fouls drawn, not just shooting |
-| Ast100 | 0.0580 | "assists by themselves have very little value" (BPM drops them entirely) |
-| 3FGA100 | 0.0376 | a spacing effect |
-| 3FGA100PosAdj | 0.0126 | `3PA100 * (position + 3)`, position adjusted by height |
-| StolenTOV100 | -0.0838 | his own research says stolen turnovers are ~2x as bad as other turnovers |
-| PTS_FB100 | -0.0499 | fast-break points; punishes gambling defenders |
-| **DefGoaltends100** | **-2.75** | the largest coefficient in the model, "-1.5 in more complex ones"; a proxy for chasing blocks at the expense of defence |
-
-Two of his readings bear directly on our SHAP table: **assists are nearly worthless alone** (ours gives `ast`
-3.0% on offense) and **blocks are overrated in raw form while the recovered ones are not** (ours gives `blk`
-15.7% on defense, the single largest defensive feature -- exactly the term Dredge says to split).  His
-**DRE** (2015, same design) adds the claim that older linear metrics **massively overvalue rebounds**
-(0.2 on TRB, offensive rebounds not significant) and that **steals are worth ~1.7 each**.
-
-**BPM 2.0** (Myers, Basketball-Reference), the same regress-onto-RAPM design over 1997-2016, concludes what our
-defensive spread problem says from the other side: post players are hardest to measure from a box line, and
-elite defenders are underrated while bad ones are overrated.
-
-#### What our own feed can actually attribute -- measured, and this is the gate
-
-Our `data/raw/pbp` is the **v3** feed: **one `personId` per event**.  So "who blocked it" is fine when the
-block is its own row, and "who drew it" is not there at all unless a later event names him.  Verified on 2015
-and 1997:
-
-| Dredge term | how it lands in our feed | buildable? |
-|---|---|---|
-| **unassisted shot %** | `personId` is the SHOOTER and the assist is text in his description -- `"Vucevic 19' Jump Bank Shot (2 PTS) (Payton 1 AST)"`.  We only need "does `AST` appear", not who | **YES, all 30 seasons, no name parsing.  Do this first.** |
-| **blocks / Russells / rim blocks** | BLOCK is its OWN row with the blocker's `personId` (`"Holiday BLOCK (1 BLK)"`), 1997 included.  A Russell is that row followed by a defensive rebound; a rim block is it paired with the missed shot's `shotDistance` | **YES, all 30 seasons** |
-| **steals / stolen turnovers** | STEAL is its own row with the stealer; pair with the adjacent `Turnover` row | **YES, all 30 seasons** |
-| **loose ball fouls, technicals, flagrants** | `Foul` rows, `personId` = the committer, which is what the term wants | **YES, all 30 seasons** |
-| offensive fouls **committed** | `Foul / Offensive`, `personId` = the offensive player | YES, all 30 seasons |
-| **offensive fouls DRAWN** (coef 1.22) | **NOT PRESENT.**  `"Asik OFF.Foul (P3)"` names only the fouler, in 1997 and 2015 alike | **NO -- needs another source** |
-| fouls drawn (all) | shooting fouls are recoverable from the free throws that follow; the rest are not | partial |
-| assists to dunks / layups | needs the ASSISTER, who is a bare surname in the shooter's description | needs name resolution |
-| defensive goaltends | `Violation / Defensive Goaltending` rows exist throughout -- but see the warning below | YES, with a caveat |
-| fast-break points | not an event; needs possession-transition logic over our own stints | derivable, more work |
-
-**The blocker: `OffFoulsDrawn100` is Dredge's best find and we cannot currently build it.**  Justin notes it is
-only available 2006+ (plus 2001, oddly), which fits -- he was using the **v2** play-by-play, which carries
-`PLAYER1/2/3_ID` and names the drawer.  Two routes, cost them before committing: refetch v2
-(`playbyplayv2`, one call per game, ~35,000 games) or use `pbpstats`' enhanced play-by-play, which resolves
-this attribution for us.  `data/raw/pbpstats/` exists but holds exactly **one** cached game, so either way this
-is an ingest job, not a feature job.  Everything above it in the table is free.
-
-**A discrepancy to resolve before trusting goaltends.**  Justin's footnote says 1997 has suspiciously FEW
-goaltending violations -- 249 in the whole season against 500-700 now.  Our feed says the opposite: **1.27 per
-game in 1997 falling to 0.43 in 2026**, which extrapolates to ~1,500 in 1997.  One of the two is wrong, and
-since a feature with a spurious era trend is exactly the 22.2 failure mode wearing a different hat, **count
-the season totals and reconcile them against a published source before this becomes a column.**
-
-**The subtype-detail trap, generally.**  Distinct `subType` values go 69 (1997) -> 95 (2005) -> 129 (2026), and
-`Foul / Offensive Charge` does not exist as a subtype before ~2006 (charges sit inside `Foul / Offensive`;
-the early `Offensive` rate of 4-5.4 per game is about the later era's Offensive plus Charge, 3.23 + 1.31 in
-2015).  `Violation / Kicked Ball` is 2005+.  A column that is structurally zero for a third of the panel will
-be learned as "old era", not as "none happened" -- `season` is a feature and it will happily oblige.  **Build
-the era-stable aggregate first and test any modern-only split as a separate, later question.**  Justin's own
-finding that non-charges beat charges says the aggregate is the better feature anyway.
-
-#### Build route and order
-
-The template is 22.1's, which worked end to end: a per-(player, season) counter table built once and cached
-beside the shots tables, summed over a block by a `xshoot.player_shot_frame`-style helper, stored per row by
-`scripts/49_role_panel.py`, rebuilt from the TRAINING block at prediction time by `spm.chain_offset`, and a
-`scratch/cmp_*.py` proving the two paths agree to 0.00e+00 before anything is measured.  Rates per 100
-possessions, padded, centred like the 13.
-
-Order, by value over cost.  **Step 0 is that there is nothing for Boruta to select from yet**, so build
-before selecting:
-
-1. **unassisted shot share** -- free, all seasons, no attribution needed.
-2. **the block split: Russells and rim blocks** -- all seasons, and it attacks `blk`, the largest defensive
-   feature we have, which Dredge says is the wrong shape.
-3. **loose ball fouls, technicals + flagrants** -- all seasons, trivial, and both are hustle proxies with
-   surprising signs worth confirming on our own criterion.
-4. **stolen turnovers** -- all seasons, a sequence pair.
-5. **offensive fouls committed** -- all seasons, and the natural stepping stone to the drawn version.
-6. *then* decide whether `OffFoulsDrawn` is worth an ingest job.  It is the highest published coefficient
-   available to us, and it is the one that costs real work.
-7. **then** widen `50_boruta.py`'s `MODES["full"]` candidate set to the real shipped list plus whatever of the
-   above survived, run it to prune the overlap, and take what is left through `prior_bench` -> the criterion
-   -> the floors.  Boruta prunes; it does not decide.
-
-#### Measurement discipline (do not skip)
-
-`scratch/prior_bench.py` first, at `quality=4`, then the tracker, then `scratch/pairsys.py` for the z.  This
-pass measured five things and four were zero or worse, and the one that looked best offline cost the most in
-reality.  **A feature block is worth having when the criterion says so and not before.**
+* **`OffFoulsDrawn100`** -- Dredge's 1.22 and his own favourite -- is the one published coefficient our feed
+  cannot give us: `"Asik OFF.Foul (P3)"` names only the fouler, in 1997 and 2026 alike.  It needs the v2
+  play-by-play (`playbyplayv2`, ~35,000 games) or pbpstats' enhanced feed.  Section 23 does not speak to it.
+  If anyone does that ingest, the counter is one entry in `dredge.COUNTERS` and the rest is built.
+* **`goaltend`** is counted but out of `DREDGE`: Justin's footnote says 1997 has suspiciously FEW goaltends
+  and our feed says it has 1.27 a game against 0.43 now.  Reconcile against a published source before it is a
+  column.  (It benched -0.014 pooled / +0.042 low-exposure, i.e. the 22.2 signature, so this is not urgent.)
+* **`50_boruta.py` still cannot assess the shipped lists.**  `MODES["full"]` is hardcoded to the 17-name
+  `FULL_FEATURES` while the board ships 43 and 23, so those two lines have never been selected -- they were
+  assembled by hand across 21.24 and 22.1 and validated on the criterion.  Widening that candidate set is
+  still a prerequisite for any Boruta run that means anything, and the Dredge block is no longer the reason
+  to do it.  Note the caveat that decides Boruta's role: it selects against the prior's own target, the same
+  objective that ranked career experience highest immediately before it cost +0.054 on the criterion.  Use it
+  to prune, never to decide.
 
 Sources: Dredge, https://fansided.com/2016/07/26/introducing-dredge-a-play-by-play-derived-metric/ ; DRE,
 https://fansided.com/2015/02/23/introducing-dre-a-hopefully-better-simple-metric/ ; block types,
@@ -312,7 +248,7 @@ https://fansided.com/2015/09/21/shot-blocking-details-mining-19-years-of-play-by
 https://www.basketball-reference.com/about/bpm2.html ; pbpstats enhanced play-by-play,
 https://pbpstats.readthedocs.io/en/latest/pbpstats.resources.enhanced_pbp.html
 
-### 3.2 The defensive four-factor fit -- now the single thing blocking a measured 0.14
+### 3.2 The defensive four-factor fit -- START HERE: the one thing blocking a measured 0.14
 
 **FINDINGS 22.7 put a number on this.**  A 625-trial search over the whole estimator, validated on 14
 held-out seasons the optimizer never saw, found `tune501`: **-0.138 on the criterion at z -3.95 over 22 of 28
@@ -386,6 +322,8 @@ mechanism of 22.2, which is worth knowing independently.
   into a dead name.  The site is back at `https://bbstats.github.io/openrapm/`, https enforced.  To turn the
   domain on: four GitHub `A` records + a `www` CNAME at Porkbun FIRST, then re-add `docs/CNAME` on `main`,
   wait for the cert, then `gh api -X PUT repos/bbstats/openrapm/pages -F https_enforced=true`.
+* Never re-run, from 23: the Dredge block on either side, in any grouping, added or substituted -- and any
+  feature built on the Russell share.
 * Never re-run, from 21 and 22: lam_ratio, lam_buckets by exposure, playoff rows, one target for both sides,
   x3def_p1, the mover / rookie-age / age-by-exposure / rating-by-age / rating-by-exposure / prior-by-exposure /
   prior^2 map terms, season weights beyond the decay, padding scale and target, panel APM at penalty 30 and
