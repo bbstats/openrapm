@@ -2606,13 +2606,18 @@ shots tables rather than the box.  So take the rest of the events.  The referenc
 sample on 1997-2000 and 2016 -- our era, our target, our validation design -- whose published coefficients
 say the box line is throwing away most of what its own events know.  Twelve features, none of them built.
 
-They are built now.  `src/eracoef/dredge.py` counts thirteen event types per (player, season) out of
-`data/raw/pbp`, `scripts/56_dredge.py` caches them per season, `gbdt_prior.add_dredge` turns them into
-thirteen padded features, and the panel, the tests and the prediction path all carry them.  **And the
-criterion says the whole block is worth +0.0008 at z 0.03, which is nothing at all.**
+They are built now, and so is the owner's assist-location extension on top of them (23.11).
+`src/eracoef/dredge.py` counts twenty-one event types per (player, season) out of `data/raw/pbp`,
+`scripts/56_dredge.py` caches them per season, `gbdt_prior.add_dredge` turns them into twenty-six padded
+features, and the panel, the tests and the prediction path all carry them.  **And the criterion cannot
+distinguish any grouping of them from the board: seven candidates, best z -0.20, worst z 2.33.**
 
-This section is the record of how that was established, because a negative result is only worth the
-verification behind it, and of the one measurement that explains it.
+This section is the record of how that was established -- a null finding is only worth the verification
+behind it -- and of the two measurements that explain it.
+
+**Signs, once, for all of it.**  Every metric here is a mean squared error, so LOWER IS BETTER, and every
+"vs" column is candidate minus baseline.  A NEGATIVE number is an improvement; a positive one is a
+regression.  The paired `z` follows the same convention, so a negative z means the candidate beat the base.
 
 **Every number below was recomputed after 23.8's bug was found.**  The first version of this section had
 the league level read from the frame's first row, so nine of the ten windows were padded toward 1997-1999.
@@ -2946,6 +2951,12 @@ the prior's own fit became +0.0005 on the criterion**, and that is now the third
 Dredge block, the era-relative form, and this) that an offline gain has not survived the ridge.  22.5's
 ceiling argument does not just say the prior is near its limit; it says gains measured against the prior's
 own target are not evidence about the board, and this section is four independent demonstrations of it.
+
+To be exact about the signs, because "it did not work" is doing a lot of work in that sentence: all four
+candidates IMPROVED the prior's own fit, by -0.018 to -0.029.  On the criterion they read z -0.20, -0.08,
+0.32 and 0.12.  One of them (the Dredge block, -0.0055) is nominally the better board and is still a
+rejection, because z -0.20 over 28 seasons is noise and Part 0 ruling 1 breaks a tie the criterion cannot
+call in favour of the simpler and faster candidate -- which is the one that was already shipping.
 
 What survives is the machinery and the fact.  `data/dredge/*.parquet` now carries assists by zone for
 every player in all 30 seasons, validated to 0.0002, and `pot_ast` is a defensible reconstruction of a

@@ -3,8 +3,10 @@
 Written 2026-09-07 (fourth day of iterate-and-improve mode).  **The board did not move.  It is
 `tune501_b7` at 110.6237, byte for byte what 22.7 shipped.**  This pass built HANDOFF 3.1's play-by-play
 block end to end and then the owner's assist-location extension on top of it, validated both harder than
-anything here has been validated before, and measured seven candidates on the criterion.  All seven are
-zero or worse.  `FINDINGS.md` **23** is the record; `docs/progress.png` / `docs/progress.csv` the chart and
+anything here has been validated before, and measured seven candidates on the criterion.  **Not one of
+them reached significance**: the best is -0.0055 at z -0.20, which is noise, and the worst is +0.0327 at
+z 2.33, which is real and is a control (see below).  Lower is better throughout -- every "vs base" column
+is candidate minus baseline on a mean squared error, so a NEGATIVE number is an improvement.  `FINDINGS.md` **23** is the record; `docs/progress.png` / `docs/progress.csv` the chart and
 its log; `PIPELINE.md` draws how the shipped model works, stage by stage.
 
 | what was measured | criterion vs the board | verdict |
@@ -18,8 +20,8 @@ its log; `PIPELINE.md` draws how the shipped model works, stage by stage.
 
 **The one thing to carry forward is not any of the features.**  Four of those candidates were NEGATIVE on
 the prior's own leave-window-out fit -- the Dredge block at -0.020, its era-relative form at -0.029, the
-era-calibrated pair at -0.021, `pot_ast` at -0.018 -- and every one of them is zero or worse on the
-criterion.  22.5 said the prior is near its ceiling; this pass says something sharper and more useful:
+era-calibrated pair at -0.021, `pot_ast` at -0.018, all four genuine improvements offline -- and not one
+of them is distinguishable from zero on the criterion (z -0.20, -0.08, 0.32, 0.12).  22.5 said the prior is near its ceiling; this pass says something sharper and more useful:
 **a gain measured against the prior's own target is not evidence about the board.**  Use `prior_bench.py`
 to REJECT a candidate cheaply.  Never use it to believe in one.
 
@@ -195,8 +197,8 @@ expensive part is deciding it was worth measuring.
   season (23.3).
 - **A gain against the prior's OWN TARGET is not evidence about the board.**  Four candidates this pass were
   negative on `prior_bench` -- the Dredge block -0.020, its era-relative form -0.029, the era-calibrated
-  pair -0.021, `pot_ast` -0.018 -- and all four are zero or worse on the criterion.  Use the bench to
-  REJECT cheaply; never to believe.  FINDINGS 23.12.
+  pair -0.021, `pot_ast` -0.018 -- i.e. all four were real improvements to the prior's own fit, and not one
+  of them is distinguishable from zero on the criterion.  Use the bench to REJECT cheaply; never to believe.  FINDINGS 23.12.
 - **An identical-paths check proves the two paths AGREE, never that either is RIGHT.**  `add_dredge` read
   a per-window constant from the frame's first row, so every row was padded toward 1997-1999, and
   `cmp_dredge.py` reported 0.00e+00 throughout because it calls the function once per window on both sides.
@@ -292,8 +294,8 @@ DEFENSIVE prior is harmful at z 2.33.  FINDINGS 23.11.
 
 * **A gain against the prior's own target is not evidence about the board.**  This section measured four
   things that were negative offline -- the Dredge block (-0.020), its era-relative form (-0.029), the two
-  era-calibrated features (-0.021) and `pot_ast` (-0.018) -- and all four are zero or worse on the
-  criterion.  22.5's ceiling argument is not only about how much is left in the prior; it is about what
+  era-calibrated features (-0.021) and `pot_ast` (-0.018), every one of them an improvement offline -- and
+  not one of them is distinguishable from zero on the criterion.  22.5's ceiling argument is not only about how much is left in the prior; it is about what
   `prior_bench` can and cannot tell you.  Use it to REJECT, and never to believe.
 
 * **An identical-paths check proves the paths AGREE, never that either is right.**  `add_dredge` read the
