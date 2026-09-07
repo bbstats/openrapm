@@ -16,8 +16,17 @@ offensive target it unlocks.  110.707 on the criterion, consensus 0.793 / 0.789 
 
 ## Part 0: the owner's standing rulings (read before choosing anything)
 
-1. **Accuracy beats the clock.**  Fit every row, score every game.  The fit time is a number the chart
-   carries, not a term to optimise.  Do not trade accuracy for time again.
+1. **Accuracy wins, PROVIDED THE TESTING IS ROBUST -- and the model has to stay shippable as open source.**
+   The owner, 2026-09-06, correcting the earlier reading of this: *"The speed thing is more just like I don't
+   want us to build some insanely complex model that is overfit and too slow, because I want this to be open
+   source! but ultimately accuracy is the winner, provided the testing is very robust."*  So:
+   * fit every row, score every game; the fit time is a number the chart carries, not a term to optimise, and
+     a real accuracy gain is never traded away for seconds.
+   * but complexity and fit time are a TIE-BREAK, and a strong one.  Between two candidates that the criterion
+     cannot separate, take the simpler and faster one every time -- somebody else has to be able to run this.
+   * and "robust testing" is the precondition, not a nicety.  A gain that survives only the search half, or
+     only the prior's own fit, or only one map, is not a gain.  See 22.2 and 22.6 for what that looks like
+     when it goes wrong.
 2. **The 3-season window is on the way out.**  *"Nobody really looks at chunks, we will ultimately move away
    from this mode."*  Do not tune K or the window length; prefer work that survives the move to a continuous
    or per-season rating.
