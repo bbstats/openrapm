@@ -2858,7 +2858,101 @@ aggregations, at which point it is not assessing the list that ships.
 `50_boruta.py --modes=wide` is kept, and it is a useful NOISE detector -- nothing in the rejected column is
 surprising except the collinear parts.  It is not a gate and cannot be made into one.
 
-### 11. What this says about the pass
+### 11. Assists by location, and a tracking statistic carried back to 1997
+
+The owner, 2026-09-07: *"blk100 split by location may be better? also assists by location i think can be
+super helpful"*, with his own 2019 finding that a player's assist counts BY ZONE reconstruct his TOTAL
+POTENTIAL ASSISTS at r-squared ~1 -- rim 1.556, short mid 1.111, long mid 1.142, corner three 2.542,
+above-break three 2.420, intercept 1.672 per game.  The coefficients are close to the reciprocal of each
+zone's make rate, which is what a potential assist IS (a pass that would have been an assist had the shot
+dropped), so the fit is mechanical rather than lucky.
+
+**That makes it the one idea in this section that is a different KIND of thing.**  Potential assists are a
+TRACKING statistic; they begin in 2013-14 and no box score recovers them.  Assist location is in the
+play-by-play from 1997.  So `pot_ast` back-fills a tracking-era creation measure across the whole panel --
+and the era problem that would normally sink such a column (23.9) does not arise, because it is
+reconstructed from a source that spans the panel rather than spliced onto one that does not.
+
+#### Attributing the passer, and the era gradient hiding in the failures
+
+The v3 feed names only the shooter; the assist is text in HIS description.  Three things make the surname
+resolvable and one of them makes it self-checking: every row carries `playerName` beside `personId` so the
+game's roster is in the file, the passer is on the SHOOTER's team, and the `N` in `(NAME N AST)` is his
+running assist count, so the check is per player per game rather than an aggregate.
+
+The first resolver got **0.99 of assists in 1997 and 0.92 in 2024**, and a coverage rate that drifts with
+the era is an era feature in disguise -- the same failure mode as 23.3, arriving through the back door.
+`scratch/assist_audit.py` named the three causes on 2023-24 and all three are mechanical:
+
+| cause | example | fix |
+|---|---|---|
+| **accents** -- most of the modern shortfall | the description writes "Doncic", `playerName` writes "Dončić"; also Jokic, Micic, Bogdanovic, Porzingis, Vucevic, Nurkic, Saric | NFKD, drop the combining marks |
+| **suffixes** | "Butler" against a roster of "Butler III"; "Bullock" against "Bullock Jr." | strip Jr./Sr./II/III/IV |
+| **two of one surname** | "Jal. Williams" against a roster whose `playerName` is the bare "Williams" twice | key the roster on `playerNameI` too, which is the initial-plus-surname form the feed already carries |
+
+After the fix, resolution is **0.981 to 0.9998 in every one of the 30 seasons with no gradient** (1997
+0.9986, 2026 0.9933), the assisted shot is locatable in **0.997 to 1.000** of cases in every era, and the
+assist totals agree with the box score to **0.0002**.  A surname that still matches two players is left
+unresolved rather than guessed, and `ast_res` carries the count so the coverage is a column and not a
+footnote.
+
+The zone mix moves exactly the way basketball did, which is the point: long mid-range assists **0.228 ->
+0.050**, above-break threes **0.180 -> 0.289**, corner threes **0.041 -> 0.137**.  That is a real trend and
+the prior should see it.  `blk_smr` by contrast wobbles 0.22 -> 0.40 -> 0.25 -> 0.48, which is 23.3's
+distance-recording artifact again, so the block split by location is built and is not recommended.
+
+#### It is the most reliable feature in the block, and the best offline result of the pass
+
+Year-over-year, 8,432 player-pairs with 1,500+ possessions in both seasons:
+
+| feature | r | | feature | r |
+|---|---|---|---|---|
+| **`pot_ast`** | **0.922** | | `astlmr` | 0.865 |
+| `blk` per 100 (the box counter) | 0.918 | | `astab3` | 0.843 |
+| `astrim` | 0.885 | | `astc3` | 0.814 |
+| `astlmrsh` | 0.867 | | **`russsh`** | **0.126** |
+
+And on the prior's own fit it is the only thing in this entire section that helps on OFFENSE:
+
+| | pooled MSE | low-exposure |
+|---|---|---|
+| the shipped offensive list | 3.2018 | 5.1587 |
+| **+ `pot_ast`** | **-0.0181** | +0.0338 |
+| + the five zone rates | +0.0184 | +0.0038 |
+| + the five zone shares | +0.0198 | +0.0539 |
+| `ast` -> `pot_ast` | +0.0201 | +0.0943 |
+| `ast`, `astr` -> `pot_ast` | +0.0290 | +0.0401 |
+| + `pot_ast` on DEFENSE | -0.0075 | +0.0022 |
+
+Note that it is `pot_ast` SPECIFICALLY and not the zones: the five counts on their own are worse, so the
+owner's linear combination is doing work the booster does not find by itself.  That is the opposite of the
+Russell result, and it is what a real feature looks like offline.
+
+#### And the criterion says no for the third time
+
+| | criterion | vs the board | z | wins |
+|---|---|---|---|---|
+| `tune501_b7` (what ships) | 110.6237 | | | |
+| `tune501_b7_past` -- `pot_ast` on offense | 110.6241 | +0.0005 | 0.12 | 12/28 |
+| `tune501_b7_past2` -- on both sides | 110.6564 | **+0.0327** | **2.33** | 7/28 |
+
+The second row is worth reading as a control rather than a candidate: a PASSING feature in a DEFENSIVE
+prior is significantly harmful at z 2.33, which says the criterion is discriminating and not merely noisy
+when it returns z 0.12 for the offensive version.  The zero is a real zero.
+
+So: the best offline signal of the pass, the most reliable feature in the block, a mechanism that makes
+sense, a validation to 0.0002 against an independent feed -- and none of it reaches the board.  **-0.018 on
+the prior's own fit became +0.0005 on the criterion**, and that is now the third time in this section (the
+Dredge block, the era-relative form, and this) that an offline gain has not survived the ridge.  22.5's
+ceiling argument does not just say the prior is near its limit; it says gains measured against the prior's
+own target are not evidence about the board, and this section is four independent demonstrations of it.
+
+What survives is the machinery and the fact.  `data/dredge/*.parquet` now carries assists by zone for
+every player in all 30 seasons, validated to 0.0002, and `pot_ast` is a defensible reconstruction of a
+tracking statistic over an era that has no tracking.  It is not a feature of this board.  It may well be a
+column somebody wants for its own sake.
+
+### 12. What this says about the pass
 
 22.5 said the box score was nearly spent and named the play-by-play as the resolution.  The play-by-play is
 now spent too, in the specific sense that the events behind the box line, counted honestly and measured at

@@ -327,6 +327,17 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         from .gbdt_prior import DREDGE_R as _DRR
         S["tune501_b7_drr"] = _replace(S["tune501_b7"], name="tune501_b7_drr",
                                        gbdt_features={"O": list(_SF2), "D": [*_FF2, *_SQ2, *_DRR]})
+        # POTENTIAL ASSISTS, reconstructed from assists by zone (gbdt_prior.POTENTIAL_AST, the owner's 2019
+        # fit at r-squared ~1).  Potential assists are a TRACKING statistic and begin in 2013-14; assist
+        # location is in the play-by-play from 1997, so this carries the measure back over the whole panel.
+        # It is the only thing in the Dredge block the prior's own fit likes on OFFENSE (-0.018, where every
+        # other group is worse) and it is the most reliable feature in the block year over year (0.922,
+        # against 0.918 for blocks per 100 and 0.126 for the Russell share).
+        S["tune501_b7_past"] = _replace(S["tune501_b7"], name="tune501_b7_past",
+                                        gbdt_features={"O": [*_SF2, "pot_ast"], "D": [*_FF2, *_SQ2]})
+        S["tune501_b7_past2"] = _replace(S["tune501_b7"], name="tune501_b7_past2",
+                                         gbdt_features={"O": [*_SF2, "pot_ast"],
+                                                        "D": [*_FF2, *_SQ2, "pot_ast"]})
         S["tune501_b7_dcal"] = _replace(S["tune501_b7"], name="tune501_b7_dcal",
                                         gbdt_features={"O": list(_SF2),
                                                        "D": [*_FF2, *_SQ2, "blkrimsh_r", "goalt_r"]})

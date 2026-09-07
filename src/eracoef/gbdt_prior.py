@@ -123,20 +123,45 @@ DREDGE_RATES = {
     "offoul":  ("foul_off", "poss_off", 900.0),      # offensive fouls COMMITTED (the drawn ones need v2 pbp)
     "goalt":   ("goaltend", "poss_def", 4000.0),     # defensive goaltends: NOT in DREDGE by default (era trend)
 }
+# assists by the location of the shot they created, and blocks by the same zones
+DREDGE_RATES_LOC = {
+    "astrim":  ("ast_rim", "poss_off", 600.0),
+    "astsmr":  ("ast_smr", "poss_off", 600.0),
+    "astlmr":  ("ast_lmr", "poss_off", 600.0),
+    "astc3":   ("ast_c3", "poss_off", 600.0),
+    "astab3":  ("ast_ab3", "poss_off", 600.0),
+    "blksmr":  ("blk_smr", "poss_def", 900.0),
+    "blklmr":  ("blk_lmr", "poss_def", 900.0),
+}
 DREDGE_SHARES = {
     "unastsh":  ("fgm_unast", "fgm_all", 90.0),
     "russsh":   ("blk_rus", "blk", 40.0),
     "blkrimsh": ("blk_rim", "blk", 40.0),
     "blk3sh":   ("blk_3", "blk", 40.0),
     "stolensh": ("tov_stolen", "tov_all", 60.0),
+    # the assist MIX: what fraction of the passes he completed created each kind of shot.  `ast_res` is the
+    # denominator rather than `ast` so an unresolved surname cannot look like a missing assist.
+    "astrimsh": ("ast_rim", "ast_res", 60.0),
+    "astsmrsh": ("ast_smr", "ast_res", 60.0),
+    "astlmrsh": ("ast_lmr", "ast_res", 60.0),
+    "astc3sh":  ("ast_c3", "ast_res", 60.0),
+    "astab3sh": ("ast_ab3", "ast_res", 60.0),
 }
+# The owner's 2019 fit: potential assists per game from assists by zone, r-squared ~1.  The coefficients are
+# close to the reciprocal of each zone's make rate, which is what a potential assist is.  The per-game
+# intercept (1.672) is dropped: these are per-100 rates and the intercept does not vary between players.
+POTENTIAL_AST = {"ast_rim": 1.556, "ast_smr": 1.111, "ast_lmr": 1.142, "ast_c3": 2.542, "ast_ab3": 2.420}
 DREDGE_TOTALS: list = []          # filled from dredge.py below (import kept local: it reads the stints)
 DREDGE_LEAGUE: list = []
-DREDGE_ALL = [*DREDGE_RATES, *DREDGE_SHARES]
+DREDGE_ALL = [*DREDGE_RATES, *DREDGE_RATES_LOC, *DREDGE_SHARES, "pot_ast"]
 DREDGE_REL = [f"{n}_r" for n in DREDGE_ALL]        # the era-relative twin of each, built alongside it
 # what a feature set gets by default: `goalt` is held out until its era trend is reconciled against a
 # published source (dredge.py's module docstring, HANDOFF 3.1)
 DREDGE = [f for f in DREDGE_ALL if f != "goalt"]
+# the location block on its own: assists by zone, their mix, the potential-assist proxy, blocks by zone
+DREDGE_LOC = [*DREDGE_RATES_LOC, "astrimsh", "astsmrsh", "astlmrsh", "astc3sh", "astab3sh", "pot_ast"]
+DREDGE_AST = ["astrim", "astsmr", "astlmr", "astc3", "astab3",
+              "astrimsh", "astsmrsh", "astlmrsh", "astc3sh", "astab3sh", "pot_ast"]
 DREDGE_R = [f"{f}_r" for f in DREDGE]
 DREDGE_ANY = [*DREDGE_ALL, *DREDGE_REL]            # every name add_dredge builds, for the "is it wanted" tests
 
@@ -167,7 +192,7 @@ def add_dredge(df: pd.DataFrame) -> pd.DataFrame:
     for d in (col, lg):
         d["poss_all"] = d["poss_off"] + d["poss_def"]
         d["fgm_all"] = d["fgm_unast"] + d["fgm_ast"]
-    for name, (num, den, k) in ((*DREDGE_RATES.items(), *DREDGE_SHARES.items())):
+    for name, (num, den, k) in ((*DREDGE_RATES.items(), *DREDGE_RATES_LOC.items(), *DREDGE_SHARES.items())):
         scale = 100.0 if den.startswith("poss") else 1.0
         level = lg[num] / np.maximum(lg[den], 1e-9)
         v = (col[num] + k * level) / (col[den] + k)
@@ -175,6 +200,14 @@ def add_dredge(df: pd.DataFrame) -> pd.DataFrame:
         # and the same number as a multiple of the block's own league level: dimensionless, so a change in
         # how the feed RECORDS an event divides out and only the change in who does it survives
         df[f"{name}_r"] = v / np.maximum(level, 1e-12)
+    # potential assists per 100 possessions, reconstructed from the zone counts: a TRACKING statistic that
+    # begins in 2013-14, carried back to 1997 because assist location is in the play-by-play throughout
+    num = sum(w * col[c] for c, w in POTENTIAL_AST.items())
+    lnum = sum(w * lg[c] for c, w in POTENTIAL_AST.items())
+    lev = lnum / np.maximum(lg["poss_off"], 1e-9)
+    v = (num + 600.0 * lev) / (col["poss_off"] + 600.0)
+    df["pot_ast"] = 100.0 * v
+    df["pot_ast_r"] = v / np.maximum(lev, 1e-12)
     return df
 
 

@@ -10,7 +10,7 @@ record; `docs/progress.png` / `docs/progress.csv` the chart and its log; `PIPELI
 model works, stage by stage.
 
 **Tree state: clean and committed on `hybrid-and-xpts`.**  `git status` is quiet (the tracker's dumps are
-ignored).  Tests: **95 passed, 1 xfailed** (82 before; `tests/test_dredge.py` is the thirteen new ones).  The
+ignored).  Tests: **101 passed, 1 xfailed** (82 before; `tests/test_dredge.py` is the nineteen new ones).  The
 shipped board rebuilds and passes all ten consensus floors.
 
 **The board is still `tune501_b7`** (FINDINGS 22.7, shipped 2026-09-06) -- the estimator search's board with
@@ -95,6 +95,9 @@ feature lists on either side -- without touching `config.yaml` permanently.
 | stolen turnovers replacing `tov`, unassisted makes replacing `ast` | +0.026, +0.030 | rejected before the criterion |
 | every Dredge group on OFFENSE | +0.004 to +0.018 on the prior's own fit | rejected before the criterion |
 | **BorutaShap on a candidate set containing the board** (`50_boruta.py --modes=wide`) | rejects `blk`, `tov`, `orb` and eight more shipped names | **unusable as a gate**, structurally (23.10) |
+| **potential assists** reconstructed from assists by ZONE (`pot_ast`, the owner's 2019 r-squared ~1 fit) | **+0.0005, z 0.12** on offense; +0.033, z 2.33 both sides | rejected -- and it was -0.018 offline, the best of the pass (23.11) |
+| assists by zone as five rates, or five shares, or replacing `ast` | +0.018 to +0.029 on the prior's own fit | rejected before the criterion |
+| blocks by zone (`blksmr`, `blklmr`) | +0.020 on the prior's own fit, and `blk_smr`'s era share wobbles 0.22-0.48 | rejected: 23.3's distance artifact again |
 | offensive fouls DRAWN (`OffFoulsDrawn100`, his 1.22) | **not buildable from the v3 feed** | needs an ingest job; untested |
 
 ## Part 2: machinery
@@ -223,7 +226,25 @@ tracking data starts in 2013-14, and a dimensionless multiple of a player's own 
 a column that can share a panel with seasons the source does not cover.  (Absence is harder than level and
 this does not solve it.)
 
-**Three traps this turned up, all worth carrying forward.**
+**The assist block is built (the owner's, 2026-09-07) and is the best thing the prior's own fit has ever
+said about a new column -- and the criterion still says no.**  `dredge.py` now credits each assist to the
+PASSER, resolved from the surname in the SHOOTER's row (accents, suffixes and same-surname collisions all
+handled; 0.981-0.9998 resolved in every season with no era gradient, and the totals agree with the box
+score to 0.0002), and files it under the zone of the shot it created.  `pot_ast` applies the owner's 2019
+zone weights, which reconstruct TOTAL POTENTIAL ASSISTS at r-squared ~1 -- a tracking statistic that begins
+in 2013-14, carried back to 1997 because assist location is in the play-by-play throughout.  It is the most
+reliable feature in the block year over year (0.922, against 0.918 for blocks per 100) and -0.018 on the
+prior's offensive fit, where nothing else has ever been negative.  The criterion reads +0.0005 at z 0.12.
+The both-sides version is the control that proves the criterion is discriminating: a PASSING feature in a
+DEFENSIVE prior is harmful at z 2.33.  FINDINGS 23.11.
+
+**Four traps this turned up, all worth carrying forward.**
+
+* **A gain against the prior's own target is not evidence about the board.**  This section measured four
+  things that were negative offline -- the Dredge block (-0.020), its era-relative form (-0.029), the two
+  era-calibrated features (-0.021) and `pot_ast` (-0.018) -- and all four are zero or worse on the
+  criterion.  22.5's ceiling argument is not only about how much is left in the prior; it is about what
+  `prior_bench` can and cannot tell you.  Use it to REJECT, and never to believe.
 
 * **An identical-paths check proves the paths AGREE, never that either is right.**  `add_dredge` read the
   block's league totals from the frame's FIRST ROW, so `training_rows` -- which hands it all ten windows at

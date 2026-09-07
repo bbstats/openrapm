@@ -62,6 +62,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+import re
+import unicodedata
+
 from .config import resolve
 from .design import AWAY_SLOTS, HOME_SLOTS
 from .shotcurve import shot_bin
@@ -71,6 +74,27 @@ from .stints import RIM_FT
 # newest are ~1.64e6), so this is how a team row -- a team rebound, a team technical -- is told from a
 # player row.  Team rebounds carry the team in `personId` with `teamId` 0, which is why both are read.
 TEAM_LO, TEAM_HI = 1_610_612_700, 1_610_612_800
+
+# NBA shot-chart coordinates, tenths of a foot, (0, 0) at the basket.  The corner-three line is the straight
+# segment at |x| = 22 ft running out to y = 9.25 ft, where the arc begins.
+CORNER_X, CORNER_Y = 220.0, 92.5
+# a two at or inside RIM_FT is the rim, out to SHORT_FT is the short mid-range, beyond it the long one
+SHORT_FT = 13.0
+ZONES = ["rim", "smr", "lmr", "c3", "ab3"]
+AST_RX = re.compile(r"\(([^()]*?) (\d+) AST\)")
+_SUFFIX = re.compile(r"\b(jr|sr|ii|iii|iv|v)\.?$")
+
+
+def _norm(name: str) -> str:
+    """A surname in a form both the description and the roster agree on: no accents, no suffix, no case.
+
+    The description writes "Doncic" where `playerName` writes "Dončić", and drops "III" and "Jr.".  Both
+    sides go through this, so neither convention has to be the right one.
+    """
+    t = unicodedata.normalize("NFKD", str(name))
+    t = "".join(c for c in t if not unicodedata.combining(c)).lower().strip()
+    t = _SUFFIX.sub("", t).strip().rstrip(".").strip()
+    return re.sub(r"\s+", " ", t)
 
 COUNTERS = [
     "fgm_unast",    # made field goals with no assist in the description
@@ -86,9 +110,30 @@ COUNTERS = [
     "foul_loose",   # Foul / Loose Ball
     "foul_tech",    # any Technical or Flagrant subtype
     "goaltend",     # Violation / Defensive Goaltending  (counted, NOT in the default features)
+    # assists credited to the PASSER, split by where the shot he created came from.  `ast_res` is how many
+    # of his assists resolved at all, so the coverage is a column and not a footnote.
+    "ast_res", "ast_rim", "ast_smr", "ast_lmr", "ast_c3", "ast_ab3",
+    # and blocks by the same zones (blk_rim and blk_3 are already above; these complete the split)
+    "blk_smr", "blk_lmr",
 ]
 POSS = ["poss_off", "poss_def"]
 DREDGE_COLS = [*COUNTERS, *POSS]
+
+
+def shot_zone(shot_value: float, dist: float, x: float, y: float, desc: str) -> str | None:
+    """The zone of one field-goal attempt, or None when a two has no usable location.
+
+    Twos go through `shotcurve.shot_bin`, which is the project's own binning and is what reads a
+    description for the rim when 1997 records a layup at distance 0.  Threes split on the corner line,
+    which needs the coordinates rather than the distance -- a corner three is 22 ft and an above-break one
+    23.75, and the feed drops `shotDistance` on some of them (FINDINGS 23.3).
+    """
+    if float(shot_value) == 3.0:
+        return "c3" if (abs(float(x)) >= CORNER_X and float(y) <= CORNER_Y) else "ab3"
+    b = shot_bin(float(dist), False, str(desc))
+    if b < 0:
+        return None
+    return "rim" if b <= RIM_FT else ("smr" if b <= SHORT_FT else "lmr")
 
 
 # ------------------------------------------------------------------------------------ one game
@@ -117,6 +162,52 @@ def game_counts(pbp: pd.DataFrame) -> pd.DataFrame:
     hits.append((pid[made & assisted], "fgm_ast"))
     hits.append((pid[made & ~assisted], "fgm_unast"))
 
+    # the assist goes to the PASSER, named only by surname in the shooter's description, and is filed under
+    # the zone of the shot he created
+    def _num(col):
+        """A numeric column, or zeros when the frame does not carry it (1997 has every field, but the
+        unit tests build the minimum shape and a missing column must not be an exception)."""
+        if col not in df.columns:
+            return np.zeros(n)
+        return pd.to_numeric(df[col], errors="coerce").fillna(0.0).to_numpy(dtype=float)
+
+    xl, yl = _num("xLegacy"), _num("yLegacy")
+    namev = df["playerName"].astype(str).str.strip().to_numpy()
+    # the roster, keyed on BOTH name forms the feed carries: `playerName` is the bare surname and
+    # `playerNameI` the initial-plus-surname one, which is what tells two Williamses apart
+    initv = (df["playerNameI"].astype(str).str.strip().to_numpy() if "playerNameI" in df.columns
+             else np.full(n, "", dtype=object))
+    roster: dict = {}
+    for p_, t_, nm, ini in zip(pid, row_team, namev, initv):
+        if not (0 < p_ < TEAM_LO):
+            continue
+        for form in (nm, ini):
+            if form and str(form) != "nan":
+                roster.setdefault((int(t_), _norm(form)), set()).add(int(p_))
+    by_zone: dict = {z: [] for z in ZONES}
+    resolved = []
+    for i in np.flatnonzero(made & assisted):
+        m = AST_RX.search(descv[i])
+        if m is None:
+            continue
+        who, team = _norm(m.group(1)), int(row_team[i])
+        hit = roster.get((team, who)) or set()
+        if len(hit) != 1:                     # the bare surname behind an initial the roster does not carry
+            tail = who.split(". ")[-1].split(" ")[-1]
+            cand = {p_ for (t_, nm), ps in roster.items() if t_ == team and nm.split(" ")[-1] == tail
+                    for p_ in ps}
+            hit = cand if len(cand) == 1 else hit
+        if len(hit) != 1:                     # still two of the same name: leave it out rather than guess
+            continue
+        who_id = next(iter(hit))
+        resolved.append(who_id)
+        z = shot_zone(sv[i], sd[i], xl[i], yl[i], descv[i])
+        if z is not None:
+            by_zone[z].append(who_id)
+    hits.append((np.asarray(resolved, dtype=np.int64), "ast_res"))
+    for z, v in by_zone.items():
+        hits.append((np.asarray(v, dtype=np.int64), f"ast_{z}"))
+
     is_tov = (atv == "Turnover") & player
     hits.append((pid[is_tov], "tov_all"))
 
@@ -138,19 +229,25 @@ def game_counts(pbp: pd.DataFrame) -> pd.DataFrame:
         for i in range(n - 1, -1, -1):
             nxt_reb[i] = i if is_reb[i] else nxt_reb[i + 1]
         b_all, b_rus, b_rim, b_3 = [], [], [], []
+        b_smr, b_lmr = [], []
         for i in np.flatnonzero(is_blk):
             b_all.append(pid[i])
             three = float(sv[i]) == 3.0
             if three:
                 b_3.append(pid[i])
             elif i > 0 and atv[i - 1] == "Missed Shot":
-                bin_ = shot_bin(float(sd[i - 1]), False, str(descv[i - 1]))
-                if 0 <= bin_ <= RIM_FT:
+                z = shot_zone(2.0, sd[i - 1], 0.0, 0.0, descv[i - 1])
+                if z == "rim":
                     b_rim.append(pid[i])
+                elif z == "smr":
+                    b_smr.append(pid[i])
+                elif z == "lmr":
+                    b_lmr.append(pid[i])
             j = nxt_reb[i + 1] if i + 1 <= n else -1
             if j >= 0 and row_team[j] == row_team[i] and row_team[i] != 0:
                 b_rus.append(pid[i])
-        for v, name in ((b_all, "blk"), (b_rus, "blk_rus"), (b_rim, "blk_rim"), (b_3, "blk_3")):
+        for v, name in ((b_all, "blk"), (b_rus, "blk_rus"), (b_rim, "blk_rim"), (b_3, "blk_3"),
+                        (b_smr, "blk_smr"), (b_lmr, "blk_lmr")):
             hits.append((np.asarray(v, dtype=np.int64), name))
     if is_stl.any():
         st = []

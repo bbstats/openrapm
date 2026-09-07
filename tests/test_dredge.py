@@ -14,9 +14,12 @@ from eracoef.gbdt_prior import DREDGE_ALL, DREDGE_RATES, DREDGE_SHARES, add_dred
 HOME, AWAY = 1610612740, 1610612753
 
 
-def ev(team, person, action, sub="", desc="", value=0, dist=-1):
+def ev(team, person, action, sub="", desc="", value=0, dist=-1, name="", x=0, y=0):
+    """One play-by-play row in the real feed's shape.  `name` is the row's `playerName` (the bare surname
+    the roster is keyed on) and `x`/`y` the shot-chart coordinates in tenths of a foot."""
     return dict(teamId=team, personId=person, actionType=action, subType=sub, description=desc,
-                shotValue=value, shotDistance=dist)
+                shotValue=value, shotDistance=dist, playerName=name, playerNameI=name,
+                xLegacy=x, yLegacy=y)
 
 
 def frame(rows):
@@ -120,6 +123,77 @@ def test_defensive_goaltending_is_counted_off_the_violation_row():
     c = counts([ev(HOME, 12, "Violation", "Defensive Goaltending", "Asik Violation:Defensive Goaltending"),
                 ev(HOME, 12, "Violation", "Kicked Ball", "Asik Violation:Kicked Ball")])
     assert c.loc[12, "goaltend"] == 1
+
+
+def _made(team, shooter, sname, passer_txt, value, dist, x=0, y=0, sub="Jump Shot"):
+    d = f"{sname} {dist}' {sub} ({value} PTS) ({passer_txt} 3 AST)"
+    return ev(team, shooter, "Made Shot", sub, d, value, dist, name=sname, x=x, y=y)
+
+
+def test_the_assist_goes_to_the_passer_and_is_filed_under_the_shot_he_created():
+    # five shots by 11, each assisted by 12, one in every zone
+    rows = [ev(HOME, 12, "Rebound", "Unknown", "Payton REBOUND (Off:0 Def:1)", name="Payton")]
+    rows += [
+        _made(HOME, 11, "Vucevic", "Payton", 2, 2, sub="Layup Shot"),        # rim
+        _made(HOME, 11, "Vucevic", "Payton", 2, 9),                          # short mid
+        _made(HOME, 11, "Vucevic", "Payton", 2, 18),                         # long mid
+        _made(HOME, 11, "Vucevic", "Payton", 3, 22, x=-228, y=-2),           # corner three
+        _made(HOME, 11, "Vucevic", "Payton", 3, 26, x=-114, y=201),          # above the break
+    ]
+    c = counts(rows)
+    assert c.loc[12, "ast_res"] == 5                       # every one resolved to the passer
+    for z in ("rim", "smr", "lmr", "c3", "ab3"):
+        assert c.loc[12, f"ast_{z}"] == 1, z
+    assert c.loc[11, "fgm_ast"] == 5 and c.loc[11, "ast_res"] == 0   # the SHOOTER gets no assist
+
+
+def test_the_passers_surname_survives_accents_and_suffixes():
+    # the description writes "Doncic" and "Butler" where the roster writes "Dončić" and "Butler III"
+    rows = [ev(HOME, 12, "Rebound", "Unknown", "REBOUND", name="Don\u010di\u0107"),
+            ev(HOME, 13, "Rebound", "Unknown", "REBOUND", name="Butler III"),
+            _made(HOME, 11, "Vucevic", "Doncic", 2, 2, sub="Layup Shot"),
+            _made(HOME, 11, "Vucevic", "Butler", 2, 2, sub="Layup Shot")]
+    c = counts(rows)
+    assert c.loc[12, "ast_rim"] == 1 and c.loc[13, "ast_rim"] == 1
+
+
+def test_two_players_with_one_surname_are_told_apart_by_the_initial_and_never_guessed():
+    # the feed disambiguates in `playerNameI`; a bare surname that still matches two is left unresolved
+    rows = [ev(HOME, 12, "Rebound", "Unknown", "REBOUND", name="Williams"),
+            ev(HOME, 13, "Rebound", "Unknown", "REBOUND", name="Williams"),
+            _made(HOME, 11, "Vucevic", "Jal. Williams", 2, 2, sub="Layup Shot"),
+            _made(HOME, 11, "Vucevic", "Williams", 2, 2, sub="Layup Shot")]
+    rows[0]["playerNameI"], rows[1]["playerNameI"] = "Jal. Williams", "K. Williams"
+    c = counts(rows)
+    assert c.loc[12, "ast_rim"] == 1                       # the initial names him
+    assert 13 not in c.index or c.loc[13, "ast_rim"] == 0   # the bare one is dropped, not guessed
+    assert c.loc[12, "ast_res"] == 1                        # ... and the coverage says so
+
+
+def test_the_passer_must_be_on_the_shooters_team():
+    rows = [ev(AWAY, 12, "Rebound", "Unknown", "REBOUND", name="Payton"),
+            _made(HOME, 11, "Vucevic", "Payton", 2, 2, sub="Layup Shot")]
+    c = counts(rows)
+    assert 12 not in c.index or c.loc[12, "ast_res"] == 0
+
+
+def test_a_corner_three_is_told_from_an_above_break_one_by_the_coordinates():
+    from eracoef.dredge import shot_zone
+    assert shot_zone(3, 22, -228, -2, "3PT Jump Shot") == "c3"       # 22.8 ft out, on the baseline
+    assert shot_zone(3, 0, 225, -6, "3PT Jump Shot") == "c3"         # the feed drops the distance: still c3
+    assert shot_zone(3, 26, -114, 201, "3PT Jump Shot") == "ab3"     # up top
+    assert shot_zone(2, 0, 0, 0, "Layup") == "rim"                   # 1997 records a layup at distance 0
+    assert shot_zone(2, 0, 0, 0, "Jump Shot") is None                # ... and an unlocated two is neither
+
+
+def test_potential_assists_are_the_owners_zone_weights():
+    from eracoef.gbdt_prior import POTENTIAL_AST
+    d = add_dredge(_totals(ast_rim=10.0, ast_smr=10.0, ast_lmr=10.0, ast_c3=10.0, ast_ab3=10.0,
+                           ast_res=50.0, poss_off=1000.0, poss_def=1000.0))
+    # the player and his league sit at the same rate, so padding cannot move it off the weighted sum
+    per100 = 100.0 * sum(POTENTIAL_AST.values()) * 10.0 / 1000.0
+    assert d["pot_ast"].iloc[0] == pytest.approx(per100)
+    assert d["pot_ast_r"].iloc[0] == pytest.approx(1.0)
 
 
 def _totals(**kw):
