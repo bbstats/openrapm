@@ -194,7 +194,7 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
                 prior_d = prior_o
             if prior_o is None or prior_d is None:
                 raise RuntimeError(f"Context has no GBDT prior for mode {mode!r} (outputs/role_panel.parquet)")
-            from .gbdt_prior import SHOTQ, gbdt_offset
+            from .gbdt_prior import DREDGE_ALL, SHOTQ, gbdt_offset
             ro, rd = centred_rates(exp)
             wants = set(prior_o.features["O"]) | set(prior_d.features["D"])
             shots = None
@@ -203,6 +203,12 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
                 # three seasons -- the held-out season is not among `train`, so nothing here has seen it
                 from .xshoot import player_shot_frame
                 shots = player_shot_frame(train, cfg, wd.spec.ps_table["player_id"].to_numpy())
+            dredge = None
+            if wants & set(DREDGE_ALL):
+                # and the same for the play-by-play event counts: the training block's own totals and its own
+                # league levels, so the padding target is the era's and never the held-out season's
+                from .dredge import player_dredge_frame
+                dredge = player_dredge_frame(train, cfg, wd.spec.ps_table["player_id"].to_numpy())
             extra = inputs[list(RAW_INPUTS)].reset_index(drop=True)
             if wants & set(CAREER_INPUTS):
                 # seasons played, career possessions and entry age BEFORE the block's first season, so the
@@ -211,7 +217,7 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
                                    wd.spec.ps_table["player_id"].to_numpy(), age=inputs["age"].to_numpy())
                 extra = pd.concat([extra, ci[list(CAREER_INPUTS)]], axis=1)
             common = dict(features=list(wd.spec.features), extra=extra,
-                          raw=(exp.season_rates_, exp.season_rates_d_), shots=shots)
+                          raw=(exp.season_rates_, exp.season_rates_d_), shots=shots, dredge=dredge)
             g = np.zeros(2 * m)
             if "O" in sides:
                 g += gbdt_offset(prior_o, ro, rd, season_of_units(wd), poss_o, poss_d, exclude, sides=("O",), **common)

@@ -96,9 +96,83 @@ SHOT_LEAGUE = ["shot_lg2", "shot_lg3", "shot_lgpps"]
 SHOTQ_K = {"q2": 50.0, "q3": 50.0, "m2": 250.0, "m3": 450.0, "xps": 100.0, "mpts": 300.0}
 SHOTQ = ["q2", "q3", "m2", "m3", "xps", "mpts"]
 
+# Dredge: what the events behind the box line say, which the nightly summary threw away.  `dredge.py`
+# counts them per (player, season) out of the play-by-play and `dredge.player_dredge_frame` sums a block's
+# seasons into `dr_*` totals with the block's own league totals (`dr_lg_*`) beside them, exactly as
+# `xshoot.player_shot_frame` does for shot quality.  Each feature is one counter over one denominator,
+# padded toward the BLOCK's league level so a 300-possession player lands on his era's rate and not on the
+# thirty-season average -- blocks per 100 possessions have fallen by a third since 1997 and `season` is a
+# feature, so an unpadded rate would hand the tree the era twice.
+#
+# The pairs are the point.  Dredge's finding is that `blk` is the wrong SHAPE, not the wrong size: a block
+# the defence recovers is worth twice a raw one, a rim block more again, and a blocked three "did not test
+# well".  So each block counter appears both as a rate (how many) and as a SHARE of his blocks (what kind),
+# and the share is the half the 13 rates cannot express at all.  Same for assisted versus unassisted makes
+# and for stolen versus dropped turnovers.
+#
+#   name -> (numerator counter, denominator, padding constant)
+# a denominator of poss_* is a possession count and the feature is per 100; anything else is a counter and
+# the feature is a share.  `poss_all` (offense + defense) and `fgm_all` are made from the stored columns.
+DREDGE_RATES = {
+    "unast":   ("fgm_unast", "poss_off", 600.0),     # unassisted makes per 100:  Dredge's UnAstShot%
+    "russ":    ("blk_rus", "poss_def", 900.0),       # Russells per 100:          his 0.445 against 0.236 for BLK
+    "blkrim":  ("blk_rim", "poss_def", 900.0),       # rim blocks per 100:        0.523
+    "loose":   ("foul_loose", "poss_all", 900.0),    # loose-ball fouls per 100:  ~0.33, a hustle proxy
+    "techflg": ("foul_tech", "poss_all", 2500.0),    # technicals and flagrants:  +1.25, and the sign is his
+    "stolen":  ("tov_stolen", "poss_off", 600.0),    # turnovers he had stolen:   ~2x as costly as the rest
+    "offoul":  ("foul_off", "poss_off", 900.0),      # offensive fouls COMMITTED (the drawn ones need v2 pbp)
+    "goalt":   ("goaltend", "poss_def", 4000.0),     # defensive goaltends: NOT in DREDGE by default (era trend)
+}
+DREDGE_SHARES = {
+    "unastsh":  ("fgm_unast", "fgm_all", 90.0),
+    "russsh":   ("blk_rus", "blk", 40.0),
+    "blkrimsh": ("blk_rim", "blk", 40.0),
+    "blk3sh":   ("blk_3", "blk", 40.0),
+    "stolensh": ("tov_stolen", "tov_all", 60.0),
+}
+DREDGE_TOTALS: list = []          # filled from dredge.py below (import kept local: it reads the stints)
+DREDGE_LEAGUE: list = []
+DREDGE_ALL = [*DREDGE_RATES, *DREDGE_SHARES]
+# what a feature set gets by default: `goalt` is held out until its era trend is reconciled against a
+# published source (dredge.py's module docstring, HANDOFF 3.1)
+DREDGE = [f for f in DREDGE_ALL if f != "goalt"]
+
+
+def _dredge_cols():
+    """The panel column names the block needs, imported lazily so `gbdt_prior` stays cheap to import."""
+    global DREDGE_TOTALS, DREDGE_LEAGUE
+    if not DREDGE_TOTALS:
+        from .dredge import DREDGE_LEAGUE_COLS, DREDGE_TOTAL_COLS
+        DREDGE_TOTALS, DREDGE_LEAGUE = list(DREDGE_TOTAL_COLS), list(DREDGE_LEAGUE_COLS)
+    return DREDGE_TOTALS, DREDGE_LEAGUE
+
+
+def add_dredge(df: pd.DataFrame) -> pd.DataFrame:
+    """Add the `DREDGE_ALL` columns if the frame carries the counter totals and the block's league totals.
+
+    Every one is `(num + k * league_ratio) / (den + k)`, times 100 when the denominator is possessions:
+    the player's own rate shrunk toward the block's league rate with `k` denominator units of padding, the
+    same shape `add_shotq` uses and the same shape `pad.shrink` uses for the 13 rates.
+    """
+    tot, lgc = _dredge_cols()
+    if "russ" in df.columns or not all(c in df.columns for c in (*tot, *lgc)):
+        return df
+    col = {c[3:]: df[c].to_numpy(dtype=float) for c in tot}                     # dr_blk    -> blk
+    lg = {c[6:]: float(np.asarray(df[c], dtype=float).flat[0]) for c in lgc}    # dr_lg_blk -> blk
+    for d in (col, lg):
+        d["poss_all"] = d["poss_off"] + d["poss_def"]
+        d["fgm_all"] = d["fgm_unast"] + d["fgm_ast"]
+    for name, (num, den, k) in ((*DREDGE_RATES.items(), *DREDGE_SHARES.items())):
+        scale = 100.0 if den.startswith("poss") else 1.0
+        level = lg[num] / max(lg[den], 1e-9)
+        df[name] = scale * (col[num] + k * level) / (col[den] + k)
+    return df
+
+
 DERIVED_FEATURES = [*FULL_FEATURES, *DERIVED]
 RATIO_FEATURES = [*DERIVED_FEATURES, *RATIOS]
 SHOT_FEATURES = [*RATIO_FEATURES, *SHOTQ]
+DREDGE_FEATURES = [*SHOT_FEATURES, *DREDGE]
 # Experience (roles.career_inputs, stored in the panel and rebuilt from the training block at prediction
 # time): seasons played, career possessions in thousands and the age he entered at, all counted BEFORE the
 # block's first season.  Age is in the prior already and is not the same thing -- a 25-year-old rookie and a
@@ -138,7 +212,7 @@ def add_derived(df: pd.DataFrame) -> pd.DataFrame:
         n = sum(k * df[f"raw_{c}"].to_numpy(dtype=float) for c, k in num.items())
         d = sum(k * df[f"raw_{c}"].to_numpy(dtype=float) for c, k in den.items())
         df[name] = (n + pad * target) / (d + pad)
-    return add_shotq(df)
+    return add_dredge(add_shotq(df))
 
 
 # ------------------------------------------------------------------------------------ training rows
@@ -162,7 +236,7 @@ def training_rows(panel: pd.DataFrame, side: str, exclude=(), features=None, tar
     feats = list(DEFAULT_FEATURES if features is None else features)
     ex = set(exclude)
     p = panel[(panel.side == side) & ~panel.window.isin(ex)].copy()
-    if any(f in DERIVED or f in RATIOS or f in SHOTQ for f in feats):
+    if any(f in DERIVED or f in RATIOS or f in SHOTQ or f in DREDGE_ALL for f in feats):
         add_derived(p)
     w = p[poss_col].to_numpy(dtype=float)
     v = p[target_col].to_numpy(dtype=float)
@@ -317,13 +391,15 @@ class GBDTPrior:
 
 
 def gbdt_offset(prior: GBDTPrior, ro, rd, season, poss_o, poss_d, exclude=(), sides=SIDES, features=None,
-                extra: pd.DataFrame | None = None, raw=None, shots: pd.DataFrame | None = None) -> np.ndarray:
+                extra: pd.DataFrame | None = None, raw=None, shots: pd.DataFrame | None = None,
+                dredge: pd.DataFrame | None = None) -> np.ndarray:
     """The (2m,) raw-sign GBDT offset from a window's centred rates and seasons (and, for mode "full", the role
     inputs in `extra`, aligned to ps_idx), possession-centred per side; zeros on a side not in `sides`.
 
     `shots` is `xshoot.player_shot_frame(train, cfg, ps_table.player_id)`: the training block's own shot totals
     and league levels, in ps_idx order, from which `add_shotq` rebuilds the SHOTQ features exactly as the panel
-    build did for a training row."""
+    build did for a training row.  `dredge` is `dredge.player_dredge_frame(train, cfg, ...)` and does
+    the same for the Dredge counters."""
     feats = list(FEATURES if features is None else features)
     m = len(season)
     out = np.zeros(2 * m)
@@ -342,7 +418,10 @@ def gbdt_offset(prior: GBDTPrior, ro, rd, season, poss_o, poss_d, exclude=(), si
         if shots is not None:
             for c in (*SHOT_TOTALS, *SHOT_LEAGUE):
                 X[c] = np.asarray(shots[c], dtype=float)
-        if any(f in DERIVED or f in RATIOS or f in SHOTQ for f in prior.features[side]):
+        if dredge is not None:
+            for c in (*_dredge_cols()[0], *_dredge_cols()[1]):
+                X[c] = np.asarray(dredge[c], dtype=float)
+        if any(f in DERIVED or f in RATIOS or f in SHOTQ or f in DREDGE_ALL for f in prior.features[side]):
             add_derived(X)
         g = prior.predict(side, X, exclude)
         w = np.maximum(np.asarray(poss, dtype=float), 0.0)

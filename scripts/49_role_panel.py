@@ -9,6 +9,7 @@ like the board):
 
 Writes outputs/role_panel.parquet with, per row: window, side, player_id, ps_idx, season (the year
 the player played most in the window), poss, the 13 centred padded rates, the same 13 uncentred (raw_*), the block shot totals (shot_*),
+the block dredge counters (dr_*),
 share, gs_pct, age, apm,
 spm, u, a, rapm1 (= spm + u).  Raw sign on both sides throughout.  outputs/xrapm_panel.parquet, the
 reference systems' input, is asserted unchanged.
@@ -33,10 +34,12 @@ from eracoef.roles import RAW_INPUTS, build_roles, player_season_inputs, window_
 from eracoef.spm import (apm_fit, apm_lambda_check, fit_spm, panel_inputs_report, season_of_units,  # noqa: E402
                          spm_predict)
 from eracoef.windows import build_window, window_label, window_seasons  # noqa: E402
+from eracoef.dredge import DREDGE_LEAGUE_COLS, DREDGE_TOTAL_COLS, player_dredge_frame  # noqa: E402
 from eracoef.xshoot import (DEFENSE_TARGETS, SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS,  # noqa: E402
                             player_shot_frame)
 
 SHOT_COLS_ALL = [*SHOT_TOTAL_COLS, *SHOT_LEAGUE_COLS]
+DREDGE_COLS_ALL = [*DREDGE_TOTAL_COLS, *DREDGE_LEAGUE_COLS]
 pd.set_option("display.width", 250, "display.max_columns", 60, "display.precision", 3)
 cfg = load_config()
 OUT = Path(cfg["_root"]) / "outputs"
@@ -74,6 +77,7 @@ for w in window_seasons(cfg):
     inp = window_inputs(wd_o, inputs, cap=CAP)
     season = season_of_units(wd_o)
     sf = player_shot_frame(seasons, cfg, wd_o.spec.ps_table["player_id"].to_numpy())
+    df_ = player_dredge_frame(seasons, cfg, wd_o.spec.ps_table["player_id"].to_numpy())
     for side, wd in (("O", wd_o), ("D", wd_d)):
         a = apm_fit(wd, cfg)
         R = a["ro"] if side == "O" else a["rd"]
@@ -92,6 +96,10 @@ for w in window_seasons(cfg):
         # his own locations, which gbdt_prior.add_shotq turns into shot difficulty and shot-making
         for c in SHOT_COLS_ALL:
             d[c] = sf[c].to_numpy(dtype=float)
+        # and what the events behind the box line say: Russells, rim blocks, unassisted makes, stolen
+        # turnovers, loose-ball and technical fouls (dredge.py; gbdt_prior.add_dredge makes the features)
+        for c in DREDGE_COLS_ALL:
+            d[c] = df_[c].to_numpy(dtype=float)
         d["poss"] = a["poss_o"] if side == "O" else a["poss_d"]
         for c in RAW_INPUTS:
             d[c] = inp[c].to_numpy()
@@ -163,7 +171,8 @@ for w in window_seasons(cfg):
 P["rapm1"] = P["spm"] + P["u"]
 
 cols = ["window", "side", "player_id", "ps_idx", "season", "poss", *FEATURES,
-        *[f"raw_{c}" for c in FEATURES], *SHOT_COLS_ALL, *RAW_INPUTS, "apm", "spm", "u", "a", "rapm1"]
+        *[f"raw_{c}" for c in FEATURES], *SHOT_COLS_ALL, *DREDGE_COLS_ALL, *RAW_INPUTS,
+        "apm", "spm", "u", "a", "rapm1"]
 P[cols].to_parquet(PANEL_PATH, index=False)
 if h_before is not None:
     assert hashlib.sha256(XP.read_bytes()).hexdigest() == h_before, "xrapm_panel.parquet changed; the reference must not move"
