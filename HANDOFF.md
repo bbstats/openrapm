@@ -119,9 +119,138 @@ The prior pass is Part 1's table and FINDINGS 22.5's conclusion: **capacity did 
 re-expression was worth 0.05 (21.25), and the two richest new sources on the shelf are worth 0.045 and less
 than nothing.**  Against 3.5's ceiling -- the prior's target has a split-half reliability of 0.808 on offense
 so nothing can correlate past 0.899, and the shipped booster reaches 0.590 -- the missing third is not sitting
-in the box score waiting for a better column.  So the next pass should leave the panel alone.
+in the box score waiting for a better column.  So the next pass leaves the BOX SCORE alone and goes to the
+play-by-play behind it, which is 3.1.
 
-### 3.1 The defensive four-factor fit (do this first)
+### 3.1 Play-by-play features for the prior (the owner's call, 2026-09-06)
+
+FINDINGS 22.5 concluded the BOX SCORE is nearly spent.  The play-by-play is not, and that is the resolution:
+shot quality (22.1) was itself a play-by-play block -- it came out of the shots tables, not the box -- and it
+is the one thing this pass added that paid.  The 13 rates are a nightly summary; every event that made them is
+already on disk in `data/raw/pbp/{season}/{game_id}.parquet`, 24 columns with `actionType`, `subType`,
+`description`, `personId` and shot coordinates, for all 30 seasons.  Nothing below needs a new download except
+where it says so.
+
+#### The reference: Dredge (Justin Willard, Nylon Calculus, 2016)
+
+The closest published thing to what we are doing, and worth reading in full.  Elastic net (`glmnet`, hence the
+name) predicting **15-year RAPM**, trained on 2001-2015 and tested out of sample on **1997-2000 and 2016** --
+our era, our target, our validation design.  Players under 3,000 possessions dropped, everyone weighted by
+possessions, then a team adjustment and a mean reversion.  He reports interaction terms helped out of sample
+"by a significant amount" despite his overfitting fears.
+
+His published simple-linear coefficients, per 100 possessions unless noted.  **These are the sizes to
+calibrate expectations against, not values to copy** -- his target is a 15-year RAPM and ours is a held-out
+season's points:
+
+| term | coef | his note |
+|---|---|---|
+| **DREB%** (0-1) | 6.48 | needs a nonlinear transform; "not all rebounds are the same" -- split by FG vs 3PT misses |
+| **OREB%** (0-1) | 3.87 | |
+| **Shot%** (0-1) | 2.24 | usage without turnovers |
+| **Stl100** | 1.33 | ~0.25 of the value is offensive (a steal starts a break) |
+| **TechsFlgs100** | **+1.25** | technicals and flagrants, and the sign is POSITIVE -- "a proxy for feisty defenders and guys who fight hard in the paint" |
+| **OffFoulsDrawn100** | **1.22** | "one of my favourite discoveries"; and **non-charges tested MORE valuable than charges** |
+| PtsOverAvg100 | 0.872 | efficiency and volume together |
+| UnAstShot% | 0.841 | unassisted FGM% x shot% -- "players get credit for assists, they should get more credit for unassisted shots" |
+| Blocked0to5Ft100 | 0.523 | rim blocks; "blocking a three-point shot did not test well" |
+| **Russells100** | 0.445 | a block THE DEFENCE RECOVERS -- why raw blocks are overrated |
+| TOV100 | -0.407 | |
+| AstDunksLayups100 | 0.352 | |
+| loose ball fouls 100 | ~0.33 | not in the simple model but in richer ones; hustle proxy |
+| BLK100 | 0.236 | "in their pure form, highly overrated" |
+| MPG | 0.132 | better players play more |
+| PFsDrawn100 | 0.0846 | all fouls drawn, not just shooting |
+| Ast100 | 0.0580 | "assists by themselves have very little value" (BPM drops them entirely) |
+| 3FGA100 | 0.0376 | a spacing effect |
+| 3FGA100PosAdj | 0.0126 | `3PA100 * (position + 3)`, position adjusted by height |
+| StolenTOV100 | -0.0838 | his own research says stolen turnovers are ~2x as bad as other turnovers |
+| PTS_FB100 | -0.0499 | fast-break points; punishes gambling defenders |
+| **DefGoaltends100** | **-2.75** | the largest coefficient in the model, "-1.5 in more complex ones"; a proxy for chasing blocks at the expense of defence |
+
+Two of his readings bear directly on our SHAP table: **assists are nearly worthless alone** (ours gives `ast`
+3.0% on offense) and **blocks are overrated in raw form while the recovered ones are not** (ours gives `blk`
+15.7% on defense, the single largest defensive feature -- exactly the term Dredge says to split).  His
+**DRE** (2015, same design) adds the claim that older linear metrics **massively overvalue rebounds**
+(0.2 on TRB, offensive rebounds not significant) and that **steals are worth ~1.7 each**.
+
+**BPM 2.0** (Myers, Basketball-Reference), the same regress-onto-RAPM design over 1997-2016, concludes what our
+defensive spread problem says from the other side: post players are hardest to measure from a box line, and
+elite defenders are underrated while bad ones are overrated.
+
+#### What our own feed can actually attribute -- measured, and this is the gate
+
+Our `data/raw/pbp` is the **v3** feed: **one `personId` per event**.  So "who blocked it" is fine when the
+block is its own row, and "who drew it" is not there at all unless a later event names him.  Verified on 2015
+and 1997:
+
+| Dredge term | how it lands in our feed | buildable? |
+|---|---|---|
+| **unassisted shot %** | `personId` is the SHOOTER and the assist is text in his description -- `"Vucevic 19' Jump Bank Shot (2 PTS) (Payton 1 AST)"`.  We only need "does `AST` appear", not who | **YES, all 30 seasons, no name parsing.  Do this first.** |
+| **blocks / Russells / rim blocks** | BLOCK is its OWN row with the blocker's `personId` (`"Holiday BLOCK (1 BLK)"`), 1997 included.  A Russell is that row followed by a defensive rebound; a rim block is it paired with the missed shot's `shotDistance` | **YES, all 30 seasons** |
+| **steals / stolen turnovers** | STEAL is its own row with the stealer; pair with the adjacent `Turnover` row | **YES, all 30 seasons** |
+| **loose ball fouls, technicals, flagrants** | `Foul` rows, `personId` = the committer, which is what the term wants | **YES, all 30 seasons** |
+| offensive fouls **committed** | `Foul / Offensive`, `personId` = the offensive player | YES, all 30 seasons |
+| **offensive fouls DRAWN** (coef 1.22) | **NOT PRESENT.**  `"Asik OFF.Foul (P3)"` names only the fouler, in 1997 and 2015 alike | **NO -- needs another source** |
+| fouls drawn (all) | shooting fouls are recoverable from the free throws that follow; the rest are not | partial |
+| assists to dunks / layups | needs the ASSISTER, who is a bare surname in the shooter's description | needs name resolution |
+| defensive goaltends | `Violation / Defensive Goaltending` rows exist throughout -- but see the warning below | YES, with a caveat |
+| fast-break points | not an event; needs possession-transition logic over our own stints | derivable, more work |
+
+**The blocker: `OffFoulsDrawn100` is Dredge's best find and we cannot currently build it.**  Justin notes it is
+only available 2006+ (plus 2001, oddly), which fits -- he was using the **v2** play-by-play, which carries
+`PLAYER1/2/3_ID` and names the drawer.  Two routes, cost them before committing: refetch v2
+(`playbyplayv2`, one call per game, ~35,000 games) or use `pbpstats`' enhanced play-by-play, which resolves
+this attribution for us.  `data/raw/pbpstats/` exists but holds exactly **one** cached game, so either way this
+is an ingest job, not a feature job.  Everything above it in the table is free.
+
+**A discrepancy to resolve before trusting goaltends.**  Justin's footnote says 1997 has suspiciously FEW
+goaltending violations -- 249 in the whole season against 500-700 now.  Our feed says the opposite: **1.27 per
+game in 1997 falling to 0.43 in 2026**, which extrapolates to ~1,500 in 1997.  One of the two is wrong, and
+since a feature with a spurious era trend is exactly the 22.2 failure mode wearing a different hat, **count
+the season totals and reconcile them against a published source before this becomes a column.**
+
+**The subtype-detail trap, generally.**  Distinct `subType` values go 69 (1997) -> 95 (2005) -> 129 (2026), and
+`Foul / Offensive Charge` does not exist as a subtype before ~2006 (charges sit inside `Foul / Offensive`;
+the early `Offensive` rate of 4-5.4 per game is about the later era's Offensive plus Charge, 3.23 + 1.31 in
+2015).  `Violation / Kicked Ball` is 2005+.  A column that is structurally zero for a third of the panel will
+be learned as "old era", not as "none happened" -- `season` is a feature and it will happily oblige.  **Build
+the era-stable aggregate first and test any modern-only split as a separate, later question.**  Justin's own
+finding that non-charges beat charges says the aggregate is the better feature anyway.
+
+#### Build route and order
+
+The template is 22.1's, which worked end to end: a per-(player, season) counter table built once and cached
+beside the shots tables, summed over a block by a `xshoot.player_shot_frame`-style helper, stored per row by
+`scripts/49_role_panel.py`, rebuilt from the TRAINING block at prediction time by `spm.chain_offset`, and a
+`scratch/cmp_*.py` proving the two paths agree to 0.00e+00 before anything is measured.  Rates per 100
+possessions, padded, centred like the 13.
+
+Order, by value over cost:
+
+1. **unassisted shot share** -- free, all seasons, no attribution needed.
+2. **the block split: Russells and rim blocks** -- all seasons, and it attacks `blk`, the largest defensive
+   feature we have, which Dredge says is the wrong shape.
+3. **loose ball fouls, technicals + flagrants** -- all seasons, trivial, and both are hustle proxies with
+   surprising signs worth confirming on our own criterion.
+4. **stolen turnovers** -- all seasons, a sequence pair.
+5. **offensive fouls committed** -- all seasons, and the natural stepping stone to the drawn version.
+6. *then* decide whether `OffFoulsDrawn` is worth an ingest job.  It is the highest published coefficient
+   available to us, and it is the one that costs real work.
+
+#### Measurement discipline (do not skip)
+
+`scratch/prior_bench.py` first, at `quality=4`, then the tracker, then `scratch/pairsys.py` for the z.  This
+pass measured five things and four were zero or worse, and the one that looked best offline cost the most in
+reality.  **A feature block is worth having when the criterion says so and not before.**
+
+Sources: Dredge, https://fansided.com/2016/07/26/introducing-dredge-a-play-by-play-derived-metric/ ; DRE,
+https://fansided.com/2015/02/23/introducing-dre-a-hopefully-better-simple-metric/ ; block types,
+https://fansided.com/2015/09/21/shot-blocking-details-mining-19-years-of-play-by-play-data/ ; BPM 2.0,
+https://www.basketball-reference.com/about/bpm2.html ; pbpstats enhanced play-by-play,
+https://pbpstats.readthedocs.io/en/latest/pbpstats.resources.enhanced_pbp.html
+
+### 3.2 The defensive four-factor fit
 
 Fit opponent eFG allowed, turnovers forced, offensive rebounds allowed and free-throw rate allowed separately,
 each with its own ridge ratio -- the asymmetry came out ESTIMATED, not imposed (forcing turnovers is a real
@@ -134,10 +263,12 @@ expected points allowed.  It was 0.4's "right but too big for v1" and it is now 
 * it is the only remaining item that changes the ESTIMATOR rather than the prior's inputs, and the estimator
   is where FINDINGS 22.5 says the signal must be.
 * `ship_shot7d` already narrows the spread to 1.30 for free, which is the direction this work goes further in.
+* it is the estimator-side complement to 3.1: 3.1 gives the prior more to say about defence, this changes what
+  the ridge is fitting.  They do not collide and either can go first.
 
 A day's work; the principled version of what `x3def` did by hand.
 
-### 3.2 Per-player shrinkage from the prior's own confidence
+### 3.3 Per-player shrinkage from the prior's own confidence
 
 Every player is pulled toward his prior by the same lambda, but the prior is far more predictive for some than
 others.  `quality=4` already fits 5 bagged members, so the disagreement across members is a per-player
@@ -145,13 +276,13 @@ predictive spread, free.  Feed it into a per-player penalty (`lam_buckets` is th
 exposure groups).  This is the mechanism that would let the prior carry the bench hard without overriding
 stars -- the failure mode the criterion has complained about since FINDINGS 19.
 
-### 3.3 Single-season targets, and getting off chunks
+### 3.4 Single-season targets, and getting off chunks
 
 Train the prior on single-season APM instead of three-season: more rows, noisier each, and a step toward the
 continuous rating the product is going to (0.2).  It is also the only change that would break the pooled-target
 mechanism of 22.2, which is worth knowing independently.
 
-### 3.4 Still open, not scheduled
+### 3.5 Still open, not scheduled
 
 * **TabFM** (`google/tabfm-1.0.0-jax`): installs and downloads (5.7 GB; point `HF_HOME` at `A:`), but the
   orbax restore dies in tensorstore on a 1.5 GB region -- 38.5 GB of the box's 48 GB commit limit was taken.
