@@ -3204,3 +3204,29 @@ game-tested.  The level part of the delta mixes selection with portability and n
    turnover, and the prediction-time covariate the same quantity, remove the distribution gap of 24.6.
 4. **"Rating if traded" on the site**: the delta at turnover 1.0 from the settled prior, per player, with the
    player-level evidence and without the game-level claim.  `outputs/csv/trade_delta_*.csv` is the prototype.
+
+### 10. The owner's follow-up: does the plus-minus part of a rating travel worse than the box part?
+
+The claim (2026-09-07): the gap between what a player's stat line says he is worth and what his on/off data
+says -- the plus-minus part of the rating -- should travel LESS in a trade, because some of it is really his
+old teammates.  Section 2 tested it at team-game level and found nothing, but the criterion's block brackets
+H, so a traded player's plus-minus there already includes a season with his new teammates.  `scratch/trade_resid.py`
+is the player-level version: rating in w split into the box part (the shipped pooled prior, leave-window-out)
+and the plus-minus part (RAPM_1 minus that, and separately raw APM minus that); adjacent window pairs; each
+part's weight allowed to change with the turnover of w' against w; cluster bootstrap over players.
+
+| side | plus-minus part defined as | a stayer's weights, box / plus-minus | per unit of turnover, box / plus-minus | fully traded keeps, box / plus-minus | difference z |
+|---|---|---|---|---|---|
+| O | RAPM_1 minus box | 1.22 / 0.19 | -0.21 (z -2.1) / +0.01 (z +0.1) | 83% / 105% | +1.6 (wrong direction) |
+| O | APM minus box | 1.09 / 0.20 | -0.16 (z -1.9) / -0.09 (z -1.4) | 86% / 56% | +0.6 |
+| D | RAPM_1 minus box | 1.09 / 0.41 | -0.11 (z -1.3) / -0.11 (z -1.5) | 90% / 72% | -0.1 |
+| D | APM minus box | 0.93 / 0.15 | -0.12 (z -1.1) / -0.01 (z -0.3) | 88% / 94% | +0.8 |
+
+**No.**  The plus-minus part never loses significantly more of its weight than the box part; on offense with
+the shrunk residual it loses none.  The more telling number is the first column: over three-season windows the
+on/off data beyond the box score carries a fifth of the box part's weight into the next window on offense
+(0.19 against 1.22) and less than half on defense.  There is not much there to lose in a trade, because the
+ridge has already shrunk it and because three seasons of lineups average most of the teammate contamination
+out.  The level term is the same journeyman tax as section 3 (-0.3 to -0.4 on offense, +0.35 to +0.45 raw sign
+on defense, holding both parts fixed).  Per-season plus-minus is where the teammate contamination is loudest
+and this is one more thing 3.5 would let us ask properly.
