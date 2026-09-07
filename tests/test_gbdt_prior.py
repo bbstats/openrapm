@@ -23,14 +23,14 @@ def _panel(seed=0, n_players=240):
             r = skill + 0.3 * rng.normal(size=len(FEATURES))
             season = 2000 + 3 * int(wi) + int(rng.integers(0, 3))
             base = 1.5 * r[0] - 1.0 * r[9] + 0.5 * r[8] + 0.02 * (season - 2004)
-            share = float(np.clip(base_share + 0.05 * rng.normal(), 0.02, 0.9))
-            poss = share * 15000.0
+            poss_pct = float(np.clip(base_share + 0.05 * rng.normal(), 0.02, 0.9))
+            poss = poss_pct * 15000.0
             gs, age = float(rng.uniform(0, 1)), float(rng.uniform(19, 38))
-            role = 3.0 * share - 2.0                                     # the role prior's part of RAPM_1
+            role = 3.0 * poss_pct - 2.0                                     # the role prior's part of RAPM_1
             for side, sign in (("O", 1.0), ("D", -1.0)):
                 u = sign * base + rng.normal(0, 0.5)
                 rows.append(dict(window=WINDOWS[wi], side=side, player_id=pid, poss=poss, season=season,
-                                 **dict(zip(FEATURES, r)), share=share, gs_pct=gs, age=age,
+                                 **dict(zip(FEATURES, r)), poss_pct=poss_pct, gs_pct=gs, age=age,
                                  spm=sign * role, u=u, rapm1=sign * role + u))
     return pd.DataFrame(rows)
 
@@ -115,6 +115,6 @@ def test_full_mode_uses_role_inputs():
     m = len(held)
     ro = held[FEATURES].to_numpy()
     off = gbdt_offset(prior, ro, ro, held.season.to_numpy(), held.poss.to_numpy(), held.poss.to_numpy(),
-                      exclude={"W1"}, sides=("O", "D"), extra=held[["share", "gs_pct", "age"]].reset_index(drop=True))
+                      exclude={"W1"}, sides=("O", "D"), extra=held[["poss_pct", "gs_pct", "age"]].reset_index(drop=True))
     assert off.shape == (2 * m,) and abs(np.average(off[:m], weights=held.poss)) < 1e-9
-    assert np.corrcoef(off[:m], held.share)[0, 1] > 0.3                    # the role level is in the prior now
+    assert np.corrcoef(off[:m], held.poss_pct)[0, 1] > 0.3                    # the role level is in the prior now

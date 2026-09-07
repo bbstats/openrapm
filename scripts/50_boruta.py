@@ -4,7 +4,7 @@ On the pooled training rows of outputs/role_panel.parquet (every window; the tar
 player's value over his OTHER windows), with chimeraboost's exact SHAP values as the importance
 (src/eracoef/gbdt_prior.py: make_boruta).  Two modes, matching GBDTPrior:
     residual   target u (RAPM_1 beyond the role prior), candidates = 13 rates + season
-    full       target rapm1, candidates = 13 rates + season + share, gs_pct, age
+    full       target rapm1, candidates = 13 rates + season + poss_pct, gs_pct, age
     wide       target rapm1, candidates = DREDGE_FEATURES (55) -- a superset of BOTH shipped lists and of
                the play-by-play block, and the only mode that can assess what the board actually uses
 Prints accepted / tentative / rejected, writes outputs/csv/boruta_{mode}_{side}.csv (the importance

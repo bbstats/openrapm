@@ -170,10 +170,10 @@ class SeasonFrame:
         wd = ctx.design([h], "pts")
         extra = None
         if ctx.role_inputs is not None:
-            ri = ctx.role_inputs[ctx.role_inputs.season == h][["player_id", "age", "share", "gs_pct", "poss_on", "team_poss"]]
+            ri = ctx.role_inputs[ctx.role_inputs.season == h][["player_id", "age", "poss_pct", "gs_pct", "poss_on", "team_poss"]]
             extra = pd.DataFrame({"player_id": wd.spec.ps_table["player_id"].to_numpy()}).merge(ri, on="player_id", how="left")
             extra["age"] = extra.age.fillna(float(ri.age.median()) if len(ri) else 27.0)
-            for c in ("share", "gs_pct", "poss_on"):        # the held-out season's ROLE: known at prediction
+            for c in ("poss_pct", "gs_pct", "poss_on"):        # the held-out season's ROLE: known at prediction
                 extra[c] = extra[c].fillna(0.0)             # time, like the lineups themselves and the age
             extra["team_poss"] = extra.pop("team_poss").fillna(0.0) if "team_poss" in extra.columns else 0.0
             # the same share measured on HALF of H only: within-season feedback (play badly, sit down) can
@@ -443,7 +443,7 @@ class XAge(Exposure):
 
 
 class HShare(Exposure):
-    """A level in the player's role in the HELD-OUT season: c x share / 0.1 (share of his team's possessions
+    """A level in the player's role in the HELD-OUT season: c x poss_pct / 0.1 (share of his team's possessions
     while he is on the floor, `roles.window_inputs`).
 
     The held-out season's lineups are an input of the criterion, so how much a player plays in H is known at
@@ -455,9 +455,9 @@ class HShare(Exposure):
 
     def basis(self, poss, extra=None, x=None):
         p = np.asarray(poss, dtype=float)
-        if extra is None or "share" not in extra.columns:
+        if extra is None or "poss_pct" not in extra.columns:
             return np.zeros((len(p), 1))
-        return (np.nan_to_num(np.asarray(extra["share"], dtype=float)) / 0.1)[:, None]
+        return (np.nan_to_num(np.asarray(extra["poss_pct"], dtype=float)) / 0.1)[:, None]
 
 
 class XHShare(Exposure):
@@ -466,9 +466,9 @@ class XHShare(Exposure):
 
     def basis(self, poss, extra=None, x=None):
         p = np.asarray(poss, dtype=float)
-        if extra is None or "share" not in extra.columns or x is None:
+        if extra is None or "poss_pct" not in extra.columns or x is None:
             return np.zeros((len(p), 1))
-        return (np.asarray(x, dtype=float) * np.nan_to_num(np.asarray(extra["share"], dtype=float)) / 0.1)[:, None]
+        return (np.asarray(x, dtype=float) * np.nan_to_num(np.asarray(extra["poss_pct"], dtype=float)) / 0.1)[:, None]
 
 
 class HShareA(Exposure):

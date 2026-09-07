@@ -153,7 +153,7 @@ holdout:
 # The role prior and the boosted box prior (src/eracoef/roles.py, spm.py, gbdt_prior.py; FINDINGS 19).
 roles:
   cache: data/cache/roles.parquet   # per player-season-team: games, starts, minutes, on-floor and team possessions, age
-  share_cap: 0.9                    # share of one full team-season of possessions, capped
+  share_cap: 0.9                    # poss_pct is capped here: one full team-season of possessions
 spm:
   apm_lam: 100            # the APM penalty: under 1% of lam_plugin, so nobody is pulled toward zero by much
   apm_lam_ratio: 1.0
@@ -166,9 +166,9 @@ gbdt:
   # scripts/50_boruta.py, 25 trials, 2026-09-05: accepted + tentative + season (rejected dropped; season kept by design)
   features_O: [ast, blk, drb, fg2_miss, fg2m, fg3_miss, fg3m, ft_miss, ftm, orb, pf, stl, tov, season]   # rejected: season; tentative: drb, fg3_miss, pf, tov
   features_D: [ast, blk, drb, fg2_miss, fg2m, fg3_miss, fg3m, ftm, pf, stl, tov, season]   # rejected: ft_miss, orb, season; tentative: fg3m, ftm, pf
-  features_full_O: [fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss, orb, drb, ast, tov, stl, blk, pf, season, share, gs_pct, age, pts, fga, fta, fg3a, usage, bigness, reb, stocks, creation, shotmix, efg, ts, p3r, ftr, fg3p, fg2p, ftp, astr, tovr, orbsh, q2, q3, m2, m3, xps, mpts]
+  features_full_O: [fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss, orb, drb, ast, tov, stl, blk, pf, season, poss_pct, gs_pct, age, pts, fga, fta, fg3a, usage, bigness, reb, stocks, creation, shotmix, efg, ts, p3r, ftr, fg3p, fg2p, ftp, astr, tovr, orbsh, q2, q3, m2, m3, xps, mpts]
   # the last six on each line are FINDINGS 22.1's shot quality (gbdt_prior.SHOTQ)
-  features_full_D: [fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss, orb, drb, ast, tov, stl, blk, pf, season, share, gs_pct, age, q2, q3, m2, m3, xps, mpts]
+  features_full_D: [fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss, orb, drb, ast, tov, stl, blk, pf, season, poss_pct, gs_pct, age, q2, q3, m2, m3, xps, mpts]
   drag_tol: 0.02          # counterbalance a leave-window-out training set whose weighted mean drifts more than this
   boruta_trials: 50
   seed: 0

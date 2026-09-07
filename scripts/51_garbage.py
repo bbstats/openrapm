@@ -37,9 +37,9 @@ GROUPS = ["deep", "bench", "starter"]
 
 def role_flags(ctx: Context, h: int, ids, deep_share: float) -> dict:
     r = ctx.role_inputs[(ctx.role_inputs.season == h)].set_index("player_id")
-    share = r["share"].reindex(ids).fillna(0.0).to_numpy()
+    poss_pct = r["poss_pct"].reindex(ids).fillna(0.0).to_numpy()
     gs = r["gs_pct"].reindex(ids).fillna(0.0).to_numpy()
-    deep = share < deep_share
+    deep = poss_pct < deep_share
     bench = (~deep) & (gs < float(cfg.get("holdout", {}).get("bench_gs_pct", 0.5)))
     starter = ~deep & ~bench
     return {"deep": deep.astype(float), "bench": bench.astype(float), "starter": starter.astype(float)}
@@ -112,7 +112,7 @@ def main():
 
     P = R.groupby(["subset", "system", "side", "group"]).apply(pool, include_groups=False).reset_index()
     P.to_csv(OUT / "csv" / "garbage_slopes.csv", index=False)
-    print(f"\n=== what the held-out seasons want each role group's ratings multiplied by (K={k}, deep = share < {deep_share})")
+    print(f"\n=== what the held-out seasons want each role group's ratings multiplied by (K={k}, deep = poss_pct < {deep_share})")
     print("    1 = calibrated; below 1 = too spread; above 1 = too timid.  mass = mean |contribution| per row, points per 100")
     for subset in ("all", "garbage time", "competitive"):
         print(f"\n-- rows: {subset}")

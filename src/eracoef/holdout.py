@@ -755,7 +755,7 @@ def pooled(res: pd.DataFrame, by=POOL_BY) -> pd.DataFrame:
             "game": float((d.tg * d.tg_n).sum() / tn),
             "game_base": float((d.tg_base * d.tg_n).sum() / tn),
             "game_vs_no_ratings": 1.0 - float((d.tg * d.tg_n).sum() / (d.tg_base * d.tg_n).sum()),
-            "share": float(n),
+            "share": float(n),          # this group's share of the pooled rows, not the role input
         })
     out = res.groupby(list(by), sort=True).apply(agg, include_groups=False).reset_index()
     tot = out.groupby([b for b in by if b != "group"] if "group" in by else list(by))["share"].transform("sum")

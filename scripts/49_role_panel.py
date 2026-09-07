@@ -10,7 +10,7 @@ like the board):
 Writes outputs/role_panel.parquet with, per row: window, side, player_id, ps_idx, season (the year
 the player played most in the window), poss, the 13 centred padded rates, the same 13 uncentred (raw_*), the block shot totals (shot_*),
 the block dredge counters (dr_*),
-share, gs_pct, age, apm,
+poss_pct, gs_pct, age, apm,
 spm, u, a, rapm1 (= spm + u).  Raw sign on both sides throughout.  outputs/xrapm_panel.parquet, the
 reference systems' input, is asserted unchanged.
 
@@ -123,7 +123,7 @@ for lab in sorted(P.window.unique()):
     for side in ("O", "D"):
         fit = fit_spm(P, side, exclude={lab}, pen=float(S.get("pen", 1.0)), min_poss=float(S.get("min_poss", 500)))
         sel = (P.window == lab) & (P.side == side)
-        g = spm_predict(fit, P.loc[sel, "share"], P.loc[sel, "gs_pct"], P.loc[sel, "age"])
+        g = spm_predict(fit, P.loc[sel, "poss_pct"], P.loc[sel, "gs_pct"], P.loc[sel, "age"])
         wgt = np.maximum(P.loc[sel, "poss"].to_numpy(dtype=float), 0.0)
         if wgt.sum() > 0:
             g = g - np.average(g, weights=wgt)

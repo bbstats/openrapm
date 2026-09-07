@@ -129,7 +129,7 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                                                                target=f"blend{w}", target_d="rapm1")
         S["ship_b07d03"] = MspiFast("ship_b07d03", gbdt_params=FAST, target="blend0.7", target_d="blend0.3")
         from .design import FEATURES as _F
-        ALLF = [*_F, "season", "share", "gs_pct", "age"]
+        ALLF = [*_F, "season", "poss_pct", "gs_pct", "age"]
         S["best_allfeat"] = MspiFast("best_allfeat", gbdt_params=FAST, decay=0.5, decay_exposure=True, target="apm",
                                      gbdt_features={"O": ALLF, "D": ALLF})
         S["best_apm300"] = MspiFast("best_apm300", gbdt_params=FAST, decay=0.5, decay_exposure=True, target="apm",
@@ -336,7 +336,7 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         S["ship_ratio_b05_wd1"] = MspiFast("ship_ratio_b05_wd1", target="blend0.5",
                                            **{**_SK, "win_decay": 1.0})
         # the aggregations INSTEAD of the raw rates they are made of: a smaller, better-conditioned set
-        _SM = ["season", "share", "gs_pct", "age", *DERIVED, *RATIOS]
+        _SM = ["season", "poss_pct", "gs_pct", "age", *DERIVED, *RATIOS]
         S["best_small"] = MspiFast("best_small", gbdt_params=FAST, decay=0.5, decay_exposure=True, target="apm",
                                    gbdt_features={"O": _SM, "D": _SM})
         # the single-possession stints dropped: a quarter of the rows, 7% of the weight

@@ -6,8 +6,8 @@ Three stages, per side (O and D), per window:
              shipped 18,352), so nobody is pulled toward zero by more than a few percent.  The rating a
              player "would have" if we trusted his own possessions.  Noisy for the bench, unbiased for
              everyone, and the only target here that is not itself a shrunk number.
-  Simple SPM a possession-weighted ridge of APM on seven role-and-age inputs (roles.INPUTS: share of
-             team possessions, its square, games-started share, its square, age, age^2, age^3), fit
+  Simple SPM a possession-weighted ridge of APM on seven role-and-age inputs (roles.INPUTS: poss_pct,
+             its square, the games-started share gs_pct, its square, age, age^2, age^3), fit
              LEAVE-WINDOW-OUT so the prior used for a window never saw that window's APM.
   RAPM_1     the shipped ridge (`lam_plugin`, `lam_ratio_plugin`) with `prior_offset` = Simple SPM.
              A player with no possessions gets exactly his role level; a 10th man sits almost on it.
@@ -86,7 +86,7 @@ def fit_spm(panel: pd.DataFrame, side: str, exclude=(), pen: float = 1.0, min_po
     d = panel[(panel.side == side) & ~panel.window.isin(ex) & (panel.poss >= float(min_poss))]
     if len(d) < 50:
         raise RuntimeError(f"fit_spm {side}: only {len(d)} rows after excluding {sorted(ex)}")
-    X = design7(d["share"].to_numpy(), d["gs_pct"].to_numpy(), d["age"].to_numpy())
+    X = design7(d["poss_pct"].to_numpy(), d["gs_pct"].to_numpy(), d["age"].to_numpy())
     w = d["poss"].to_numpy(dtype=float)
     y = d[target].to_numpy(dtype=float)
     mu, sd = _weighted_std(X, w)
@@ -99,8 +99,8 @@ def fit_spm(panel: pd.DataFrame, side: str, exclude=(), pen: float = 1.0, min_po
     return SPMFit(side=side, coef=b[1:], intercept=float(b[0]), mean=mu, sd=sd, n=int(len(d)), pen=float(pen))
 
 
-def spm_predict(fit: SPMFit, share, gs_pct, age) -> np.ndarray:
-    X = design7(share, gs_pct, age)
+def spm_predict(fit: SPMFit, poss_pct, gs_pct, age) -> np.ndarray:
+    X = design7(poss_pct, gs_pct, age)
     return fit.intercept + ((X - fit.mean) / fit.sd) @ fit.coef
 
 
@@ -109,7 +109,7 @@ def spm_offset(fit_o: SPMFit, fit_d: SPMFit, inputs: pd.DataFrame, poss_o, poss_
     per side so the level of the board does not move against the fixed block."""
     parts = []
     for fit, poss in ((fit_o, poss_o), (fit_d, poss_d)):
-        g = spm_predict(fit, inputs["share"].to_numpy(), inputs["gs_pct"].to_numpy(), inputs["age"].to_numpy())
+        g = spm_predict(fit, inputs["poss_pct"].to_numpy(), inputs["gs_pct"].to_numpy(), inputs["age"].to_numpy())
         w = np.maximum(np.asarray(poss, dtype=float), 0.0)
         if centre and w.sum() > 0:
             g = g - np.average(g, weights=w)

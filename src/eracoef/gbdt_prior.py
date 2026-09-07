@@ -32,7 +32,7 @@ from .design import FEATURES
 from .roles import CAREER_INPUTS
 
 SIDES = ("O", "D")
-ROLE_INPUTS = ["share", "gs_pct", "age"]
+ROLE_INPUTS = ["poss_pct", "gs_pct", "age"]
 DEFAULT_FEATURES = [*FEATURES, "season"]                 # mode "residual": what the box line adds to the role level
 FULL_FEATURES = [*FEATURES, "season", *ROLE_INPUTS]       # mode "full": the GBDT is the whole prior
 
