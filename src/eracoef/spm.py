@@ -135,10 +135,14 @@ def season_of_units(wd) -> np.ndarray:
     return np.asarray(wd.spec.seasons, dtype=np.int64)[np.asarray(wd.spec.season_of_ps, dtype=np.int64)]
 
 
+TURN_REF = 0.35     # a typical stayer's teammate turnover, season to season (median 0.36; FINDINGS 24)
+
+
 def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, target: str = "rapm1",
                  params: dict | None = None, panel: str | None = None, target_d: str | None = None,
                  features: dict | None = None, win_decay: float = 1.0,
-                 params_d: dict | None = None, win_decay_d: float | None = None) -> Callable:
+                 params_d: dict | None = None, win_decay_d: float | None = None,
+                 turn: str | None = None, turn_ref: float = TURN_REF, turn_sides=("O", "D")) -> Callable:
     """The per-player offset builder for a PluginSystem.  Signature `offset(train, ctx, wd) -> (2 * n_ps,)`,
     raw sign, possession-centred per side.
 
@@ -148,10 +152,19 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
                        `gbdt_sides`; the Simple SPM on any side not in `gbdt_sides`.
 
     Everything is kept off the window labels in `ctx.labels(train)`: the SPM is refit without them, and the
-    GBDT model for that exclusion set is fetched from `ctx.gbdt` / `ctx.mspi` (cached per set)."""
+    GBDT model for that exclusion set is fetched from `ctx.gbdt` / `ctx.mspi` (cached per set).
+
+    `turn`: the TURNOVER-AWARE prior (GBDTPrior `turn`, trained on window pairs with the teammate turnover as a
+    feature).  "ref" evaluates it at `turn_ref` for everyone -- the box line's worth in a settled context, the
+    offset the ridge should shrink toward, since the block's possessions were played in the block's context;
+    "h" evaluates it at each player's turnover of the held-out season with respect to the block
+    (turnover.familiar_share; `turn_ref` for a player H never sees, and for the shipped board, which has no H).
+    The difference of the two is the trade delta, applied AFTER the ridge (fastfit.MspiFast)."""
     sides = tuple(gbdt_sides)
     if mode not in ("residual", "full"):
         raise ValueError(f"mode must be 'residual' or 'full', got {mode!r}")
+    if turn not in (None, "ref", "h", "pairs"):
+        raise ValueError(f"turn must be None, 'ref', 'h' or 'pairs', got {turn!r}")
     # `scale` multiplies the GBDT's prediction before it becomes the offset (the criterion said the prior
     # trained on the shrunk RAPM_1 is too timid: starters want 1.2, deep bench 2.0); `target` = "apm" uses
     # the chain trained on unshrunk APM instead (ctx.mspi_apm)
@@ -186,9 +199,12 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
             p_d = params if params_d is None else params_d
             wd_d = win_decay if win_decay_d is None else float(win_decay_d)
             if (params or p_d or panel or target_d or features or target.startswith("blend")
-                    or win_decay != 1.0 or wd_d != 1.0):
-                prior_o = ctx.prior(mode, col(target), params, panel, features, win_decay)
-                prior_d = ctx.prior(mode, col(t_d), p_d, panel, features, wd_d)
+                    or win_decay != 1.0 or wd_d != 1.0 or turn):
+                tkey = "pairs" if turn == "pairs" else bool(turn)
+                prior_o = ctx.prior(mode, col(target), params, panel, features, win_decay,
+                                    turn=tkey if "O" in turn_sides else False)
+                prior_d = ctx.prior(mode, col(t_d), p_d, panel, features, wd_d,
+                                    turn=tkey if "D" in turn_sides else False)
             else:
                 prior_o = ctx.gbdt if mode == "residual" else getattr(ctx, "mspi_apm" if target == "apm" else "mspi", None)
                 prior_d = prior_o
@@ -216,6 +232,15 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
                 ci = career_inputs(ctx.role_inputs, min(int(s_) for s_ in train),
                                    wd.spec.ps_table["player_id"].to_numpy(), age=inputs["age"].to_numpy())
                 extra = pd.concat([extra, ci[list(CAREER_INPUTS)]], axis=1)
+            if turn in ("ref", "h"):
+                extra = extra.assign(turn=float(turn_ref))
+                if turn == "h" and ctx.current_h is not None:
+                    from .turnover import cached_table, familiar_share
+                    tm = cached_table(ctx)
+                    if tm is None:
+                        raise RuntimeError("data/cache/teammates.parquet is missing (turnover.build_teammates)")
+                    f = familiar_share(tm, list(train), [int(ctx.current_h)], player_ids=wd.spec.ps_table["player_id"].to_numpy())
+                    extra["turn"] = f.turnover.fillna(float(turn_ref)).to_numpy()
             common = dict(features=list(wd.spec.features), extra=extra,
                           raw=(exp.season_rates_, exp.season_rates_d_), shots=shots, dredge=dredge)
             g = np.zeros(2 * m)
@@ -232,7 +257,8 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
                         off[sl] = g[sl]
         return off
 
-    offset.__name__ = f"chain_offset_{mode}_{target}{'_' + target_d if target_d else ''}_x{scale:g}_" + ("".join(sides) or "spm")
+    offset.__name__ = (f"chain_offset_{mode}_{target}{'_' + target_d if target_d else ''}_x{scale:g}_" + ("".join(sides) or "spm")
+                       + (f"_turn{turn}" if turn else ""))
     return offset
 
 

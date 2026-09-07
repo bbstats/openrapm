@@ -48,6 +48,53 @@ def test_pooled_target_by_hand():
     assert len(training_rows(p, "O", exclude={"W1"}, target_col="rapm1")) == 0   # player 1 has nothing left to pool
 
 
+def test_pair_rows_pool_back_to_the_training_rows_and_carry_turnover():
+    from eracoef.gbdt_prior import pair_rows
+    p = _panel()
+    wins = sorted(p.window.unique())
+    pairs = [(a, b) for a in wins for b in wins if a != b]
+    rng = np.random.default_rng(2)
+    turn = pd.DataFrame([dict(player_id=pid, window=a, window_to=b, turnover=float(rng.uniform()))
+                         for pid in p.player_id.unique() for a, b in pairs])
+    # (the pooled rows measure window distance among the windows LEFT after the exclusion, so with a decay and
+    # an excluded middle window the two disagree by design; the pair rows keep the calendar distance)
+    for decay, exclude in ((1.0, {"W2"}), (0.5, set())):
+        pr = pair_rows(p, "O", exclude=exclude, target_col="rapm1", win_decay=decay, turn=turn)
+        tr = training_rows(p, "O", exclude=exclude, target_col="rapm1", win_decay=decay)
+        assert not (set(pr.window) | set(pr.window_to)) & exclude
+        assert "turn" in pr.columns and pr.turn.between(0, 1).all()
+        # the weighted mean of a player-window's pair targets is the pooled target, and the weights add up
+        pr["_wt"] = pr.weight * pr.target
+        g = pr.groupby(["player_id", "window"]).agg(w=("weight", "sum"), wt=("_wt", "sum"))
+        g["target"] = g.wt / g.w
+        j = tr.set_index(["player_id", "window"]).join(g, rsuffix="_pair", how="inner")
+        assert len(j) == len(tr)
+        assert np.allclose(j.target, j.target_pair) and np.allclose(j.weight, j.w)
+    # a pair the turnover table does not cover is dropped; without a table there is no turn column
+    short = turn[~((turn.player_id == 0) & (turn.window == "W0"))]
+    pr2 = pair_rows(p, "O", target_col="rapm1", turn=short)
+    assert not ((pr2.player_id == 0) & (pr2.window == "W0")).any()
+    assert "turn" not in pair_rows(p, "O", target_col="rapm1").columns
+
+
+def test_turn_prior_trains_on_pairs_and_predicts_with_the_turn_column():
+    p = _panel()
+    wins = sorted(p.window.unique())
+    rng = np.random.default_rng(1)
+    turn = pd.DataFrame([dict(player_id=pid, window=a, window_to=b, turnover=float(rng.uniform()))
+                         for pid in p.player_id.unique() for a in wins for b in wins if a != b])
+    cfg = {"gbdt": {**CFG["gbdt"], "params": {"n_estimators": 30}}}
+    prior = GBDTPrior(p, cfg, mode="full", target_col="rapm1", turn=turn)
+    assert prior.features["O"][-1] == "turn" and prior.features["D"][-1] == "turn"
+    X = p[(p.side == "O") & (p.window == "W3")][prior.features["O"][:-1]].copy()
+    lo, hi = prior.predict("O", X.assign(turn=0.35), exclude={"W3"}), prior.predict("O", X.assign(turn=1.0), exclude={"W3"})
+    assert lo.shape == hi.shape == (len(X),) and np.isfinite(lo).all() and np.isfinite(hi).all()
+    assert prior.reports and prior.reports[0]["n_rows"] > len(X)      # pair rows, more than one per player-window
+    plain = GBDTPrior(p, cfg, mode="full", target_col="rapm1", pairs=True)     # pair rows, no turnover feature
+    assert "turn" not in plain.features["O"]
+    assert np.isfinite(plain.predict("O", X, exclude={"W3"})).all()
+
+
 def test_excluded_window_never_reaches_rows_or_targets():
     p = _panel()
     poisoned = p.copy()

@@ -314,6 +314,23 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         # can feel, and the block split -- the thing Dredge most promised, against `blk` at 15.7% of the
         # defensive SHAP -- is the WORST of the five.  Two candidates go to the criterion anyway: the
         # bench "has been wrong by 0.13" and shot quality was flat on the line before it shipped.
+        # ---------------------------------------------------------------- trade calibration (FINDINGS 24)
+        # The same board with the TURNOVER-AWARE prior: trained on window pairs with the teammate turnover of
+        # the target window as a feature, the ridge shrinking toward its settled-context value (turn 0.35) and
+        # the rating carrying the delta to each player's turnover in the held-out season.  On the prior's own
+        # pair rows the feature is -0.043 (z -2.7) on offense and -0.031 (z -4.1) on defense; the criterion
+        # decides whether a team-game feels it.
+        S["tune501_b7_turn"] = _replace(S["tune501_b7"], name="tune501_b7_turn", turn=True)
+        # the control: the same pair-row prior evaluated at the settled value for everyone, no delta -- whether
+        # un-pooling the target with `turn` in the booster changes the prior the ridge shrinks toward
+        S["tune501_b7_turnref"] = _replace(S["tune501_b7"], name="tune501_b7_turnref", turn="ref")
+        # two more controls: the pair rows with NO turnover feature (is it the un-pooling?), and the turnover
+        # prior evaluated at the training pairs' own mean turnover 0.7 (is it the settled-context evaluation?)
+        S["tune501_b7_pairs"] = _replace(S["tune501_b7"], name="tune501_b7_pairs", turn="pairs")
+        S["tune501_b7_turn07"] = _replace(S["tune501_b7"], name="tune501_b7_turn07", turn="ref", turn_ref=0.7)
+        # and one side at a time: where the gain lives, and whether the defensive floors need to be asked
+        S["tune501_b7_turnref_o"] = _replace(S["tune501_b7"], name="tune501_b7_turnref_o", turn="ref", turn_sides=("O",))
+        S["tune501_b7_turnref_d"] = _replace(S["tune501_b7"], name="tune501_b7_turnref_d", turn="ref", turn_sides=("D",))
         from .gbdt_prior import DREDGE as _DR
         S["tune501_b7_drd"] = _replace(S["tune501_b7"], name="tune501_b7_drd",
                                        gbdt_features={"O": list(_SF2), "D": [*_FF2, *_SQ2, *_DR]})

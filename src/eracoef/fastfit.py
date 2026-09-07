@@ -103,6 +103,12 @@ class MspiFast:
     win_decay_d: float | None = None     # the window discount on defense (None = the same as offense)
     win_decay: float = 1.0               # the prior's target pooled over the player's windows with this decay
     min_den: float = 0.0                 # drop design rows under this many possessions (designcache)
+    turn: bool | str = False             # the turnover-aware prior: ridge toward its settled-context value, then add
+                                         # the trade delta to the held-out season's context (spm.chain_offset `turn`);
+                                         # "ref" = the settled-context prior alone, no delta; "pairs" = the pair-row
+                                         # prior without the turnover feature (the un-pooling control)
+    turn_ref: float = 0.35               # the settled-context turnover the ridge shrinks toward (spm.TURN_REF)
+    turn_sides: tuple = ("O", "D")       # the sides that take the turnover-aware prior (the other keeps the pooled one)
 
     def counter_columns(self) -> set | None:
         """The per-possession counters this system's two targets read, so the design need not assemble the
@@ -169,10 +175,16 @@ class MspiFast:
         else:
             exp.fit(wd.X, sample_weight=wd.w)
         T("exposure")
-        off = chain_offset(self.sides, self.mode, scale=self.scale, target=self.target,
-                           params=self.gbdt_params, panel=self.panel, target_d=self.target_d,
-                           features=self.gbdt_features, win_decay=self.win_decay,
-                           params_d=self.gbdt_params_d, win_decay_d=self.win_decay_d)(train, ctx, wd, exp=exp)
+        chain_kw = dict(scale=self.scale, target=self.target, params=self.gbdt_params, panel=self.panel,
+                        target_d=self.target_d, features=self.gbdt_features, win_decay=self.win_decay,
+                        params_d=self.gbdt_params_d, win_decay_d=self.win_decay_d)
+        chain_kw["turn_ref"] = float(self.turn_ref)
+        chain_kw["turn_sides"] = tuple(self.turn_sides)
+        tmode = None if not self.turn else ("pairs" if self.turn == "pairs" else "ref")
+        off = chain_offset(self.sides, self.mode, turn=tmode, **chain_kw)(train, ctx, wd, exp=exp)
+        delta = 0.0
+        if self.turn is True:      # the trade delta: the prior at H's turnover minus at the settled value
+            delta = chain_offset(self.sides, self.mode, turn="h", **chain_kw)(train, ctx, wd, exp=exp) - off
         T("prior")
         nf = len(wd.spec.features)
         beta = np.zeros(2 * nf)
@@ -197,6 +209,7 @@ class MspiFast:
         u = {"o": np.asarray(mom.solve_chol(lam).u, dtype=float)}
         u["d"] = np.asarray(mom.with_y(layout, np.asarray(y_d, dtype=float), w).solve_chol(lam).u, dtype=float)
         T("solves")
+        off = off + delta            # the ridge shrank toward the settled-context prior; the rating carries the delta
         df = pd.DataFrame({"player_id": wd.spec.ps_table["player_id"].to_numpy(),
                            "o": off[:m] + u["o"][:m], "d": off[m:] + u["d"][m:],
                            "poss": np.asarray(exp.season_poss_off_, dtype=float),

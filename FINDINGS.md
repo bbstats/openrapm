@@ -2983,3 +2983,224 @@ the operating point, add nothing the booster did not already have.  Four things 
   (capacity, re-expression, shot quality, experience, and the play-by-play) and the total is 0.05.  The
   prior's ceiling argument in 22.5 is holding.  What is left is the ESTIMATOR: the defensive four-factor fit
   that HANDOFF 3.2 puts at a measured, significant, cheaper 0.14.
+
+## 24. Trade calibration: teammate turnover, and a prior that knows what a box line is worth in a settled context
+
+The owner's ask (2026-09-07): a "rating" and a "rating if traded", and behind them a trade-weighted SPM that
+measures how teammate turnover -- roughly 100% in a trade -- changes what a box line is worth and which stats
+carry it.  This section builds the measure, tests the idea at the three places it can live (the calibration
+map, the prior's own target, the prior itself), and finds the gain somewhere other than where it was looked
+for.  **A rating travels almost fully into a new context at team-game level; a player's box line does not
+travel fully at player level, by about 0.85 points per 100 on offense and 0.55 on defense for a fully
+turned-over context; the booster can say who loses most (high-usage scorers on offense, older players on
+defense); applying that per-player trade delta to the held-out season makes the criterion WORSE; and the same
+turnover-aware prior evaluated at a SETTLED context on offense is -0.054 against the shipped board at
+z -3.39 over 22 of 28 seasons, with the consensus screen unchanged.**  Lower is better throughout; every
+"vs board" number is candidate minus `tune501_b7` (110.6237).
+
+### 1. The measure: teammate turnover (`src/eracoef/turnover.py`)
+
+For every player and season, from the stints: `shared(p, t, s)` = possessions p and t were on the floor
+together (both ends).  The **familiar share** of p from span a to span b is the share of his teammate-possessions
+in b spent with anyone he shared 100+ possessions with in a; **turnover** is one minus that.  A trade is the
+extreme case; the same number is continuous for everyone.  `build_teammates` caches the per-season table
+(`data/cache/teammates.parquet`, 241,714 pairs, 2 s), `familiar_share` computes any span pair from it,
+`season_turnover` / `window_pair_turnover` the two tables the analyses use.  Five tests in
+`tests/test_turnover.py`.
+
+| span | who | n | mean | p10 | median | p90 |
+|---|---|---|---|---|---|---|
+| season to next (500+ poss) | stayers (main team unchanged) | 6,688 | 0.379 | 0.136 | 0.362 | 0.643 |
+| | movers | 3,647 | 0.911 | 0.691 | **1.000** | 1.000 |
+| adjacent 3-season windows (1000+ poss) | everyone | 6,783 | 0.702 | 0.356 | 0.727 | 1.000 |
+| two windows apart | everyone | 3,782 | 0.93 | 0.78 | 0.98 | 1.000 |
+| K = 3 block (H-2, H-1, H+1) to H | stayers | 7,998 | 0.296 | 0.036 | 0.232 | 0.631 |
+| | movers | 3,533 | 0.644 | 0.174 | 0.730 | 1.000 |
+
+Two things to keep in view.  The binary main-team rule and the continuous measure agree (97% of the 0.9+
+season-to-season rows are movers, 4% of the under-0.5 rows).  And the criterion's training block BRACKETS H,
+so a player who moved into H and stayed reads 0.73, not 1.0: his H+1 season is with the new teammates.  The
+prior's training pairs (windows three years apart) sit at 0.70 on average; the criterion's held-out season
+sits at 0.40 with respect to its block.  That gap is the whole of section 24.6.
+
+### 2. The calibration map: a rating travels
+
+On the shipped board's dump (`scratch/trade_maps.py`, no refits), terms added to the shipping map:
+
+| term (offense : defense) | vs board | z | wins |
+|---|---|---|---|
+| `moved` level (21.7 again, this board) | +0.010 | +0.81 | 13/28 |
+| `moved` x rating and `moved` x prior (does the box line or the possession evidence fail to travel?) | -0.020 | -0.66 | 15/28 |
+| `turn` x rating and `turn` x prior | -0.003 | -0.14 | 14/28 |
+| **`turn` level** | **-0.084** | **-1.98** | 17/28 |
+| `turn` level, offense only | -0.081 | -1.85 | 18/28 |
+| `turn` level, defense only | -0.004 | -0.28 | 15/28 |
+| `turnp` level (turnover against the block's PAST seasons only) | +0.014 | +1.30 | 10/28 |
+| **CONTROL: `turna` level (`turn` measured on half of H's games)** | **-0.084** | **-2.00** | 18/28 |
+
+The component split is zero both ways: for a mover, the prior and the possession evidence carry into the new
+context in the same proportion as for anyone else.  A level in the turnover is worth -0.08, it lives on
+offense, and the half-season control returns the identical number, so it is exogenous (the HShare leak of 21.21
+kept 3% of its value on half the games; this keeps 100%).  But the version that means "moved into H" -- the
+turnover against the block's past seasons -- is worth nothing.  What the level prices is a player whose H
+teammates the block never saw on EITHER side of H: a transient context, not a trade.  These are prediction-time
+terms (they need H's lineups) and cannot ship; they are recorded because they bound what any trade adjustment
+can be worth at team-game level.
+
+### 3. The trade-weighted SPM, linear (`scratch/trade_spm.py`)
+
+Rows are ordered pairs of panel windows (w -> w'): the box line in w, the target in w', weight = the
+possessions behind the target, and the turnover of w' with respect to w.  Two weighted ridges, leave-window-out
+with the held-out window out of BOTH ends of every training pair: `y = b.x`, and `y = b.x + g0 turn +
+(g.x) turn`.
+
+| side, target, pairs | base MSE | trade MSE | diff | per-window z | g0 (per unit of turnover) |
+|---|---|---|---|---|---|
+| O, APM, adjacent | 5.695 | 5.632 | -0.063 | -1.73 (8/10) | **-0.90** (z -5.5) |
+| O, blend0.7 (ships), adjacent | 3.796 | 3.746 | -0.050 | -2.14 (8/10) | **-0.83** (z -6.3) |
+| O, APM, all distances | 6.229 | 6.162 | -0.067 | -2.23 (7/10) | -0.35 (z -2.7) |
+| D, RAPM_1 (ships), adjacent | 1.231 | 1.214 | -0.017 | -2.56 (7/10) | **+0.66** raw sign, i.e. worse (z +7.9) |
+| D, RAPM_1, all distances | 1.275 | 1.261 | -0.014 | -5.28 (10/10) | +0.50 (z +7.2) |
+
+The level `g0` is the finding: holding the box line fixed, a player whose whole context changed is worth about
+0.85 less on offense and 0.55 less on defense in the other window.  It mixes selection (teams shed players who
+are about to decline) with non-portability (APM carries lineup-specific credit), and nothing here separates the
+two.  The per-stat slopes `g` -- the thing the owner's question was about -- are weak in the linear form: the
+largest is games-started share at z +2.0 (a starter's line travels better than a bench player's), then steals
+(z -1.7) and made threes (z -1.5) travelling worse and three-point rate (z +1.3) better.  None clears z 2.
+
+### 4. The trade-weighted SPM, boosted (`scratch/trade_gbdt.py`)
+
+The shipped booster and feature list per side on the same pair rows, all distances, with and without `turn`
+as a feature (`gbdt_prior.pair_rows`).  Leave-window-out as above.
+
+| side | base | +turn | diff | z | by turnover bin: under 0.5 / 0.5-0.9 / 0.9+ |
+|---|---|---|---|---|---|
+| O (blend0.7, 43 features + turn) | 3.782 | 3.739 | **-0.043** | **-2.66** (9/10) | -0.127 / -0.023 / -0.027 |
+| D (RAPM_1, 23 features + turn) | 1.219 | 1.188 | **-0.031** | **-4.13** (9/10) | -0.089 / -0.012 / -0.026 |
+
+The booster's **trade delta** -- its prediction at turnover 1.0 minus at 0.35, per player-window -- is where the
+heterogeneity the linear model could not resolve shows up.  On offense it averages -0.20 with a spread of 0.29
+(-0.30 for players with 4500+ possessions; p10 -0.56, p90 +0.15), and it correlates -0.58 with points, -0.51
+with usage, -0.50 with possession share, -0.38 with starts: **the players who lose most when the teammates
+change are the high-usage scorers**; the low-usage, high-shot-quality bigs (bigness +0.22, expected points per
+shot +0.18) lose least or gain.  On defense it averages +0.34 raw sign (worse) with a spread of 0.19 and
+correlates +0.60 with age: **older players lose most defensively**.  `outputs/csv/trade_delta_O.csv` /
+`_D.csv` carry one row per player-window.  This is the ingredient a "rating if traded" column needs, and it
+is validated at player level: on the pair rows the turnover model predicts the 0.9+ bin better by 0.027 (O) and
+0.026 (D), and the under-0.5 bin -- the stayers on settled cores -- better still.
+
+### 5. The criterion
+
+The turnover-aware prior wired into the shipped system (`GBDTPrior(turn=...)`, `chain_offset(turn=)`,
+`MspiFast.turn`; systems `tune501_b7_turn*`).  The ridge shrinks toward the prior evaluated at a SETTLED
+context (turnover 0.35, the season-to-season stayer median, fixed before any criterion read), because the
+block's possessions were played in the block's context; the trade delta to each player's turnover of H with
+respect to the block is added AFTER the ridge.  All at K = 3, the shipping map, paired over the same 28
+seasons (`scratch/trade_pair.py`).
+
+| system | what | criterion | vs board | z | wins | 28 fits |
+|---|---|---|---|---|---|---|
+| `tune501_b7` | the board | 110.6237 | | | | 37 s |
+| `tune501_b7_turn` | settled-context prior + the per-player delta to H's turnover | 110.6926 | **+0.069** | +1.07 | 13/28 | 66 s |
+| `tune501_b7_turnref` | the settled-context prior alone, both sides, no delta | 110.5613 | -0.062 | -2.53 | 21/28 | 60 s |
+| `tune501_b7_pairs` | control: pair rows, NO turnover feature | 110.6134 | -0.010 | -0.63 | 17/28 | 52 s |
+| `tune501_b7_turn07` | control: the turnover prior at the pairs' own mean context 0.7 | 110.5947 | -0.029 | -1.43 | 17/28 | 59 s |
+| **`tune501_b7_turnref_o`** | **the settled-context prior on OFFENSE only** | **110.5693** | **-0.054** | **-3.39** | **22/28** | 58 s |
+| `tune501_b7_turnref_d` | the same on defense only | 110.6157 | -0.008 | -0.30 | 12/28 | 47 s |
+
+With the `turn` level map term on top (prediction-time, cannot ship): `turnref_o` reaches -0.140 at z -3.09,
+`turnref` -0.149 at z -2.74.
+
+The attribution is clean.  Un-pooling the target into pair rows does nothing by itself (-0.010).  The
+turnover feature evaluated at the pairs' own average context recovers a little (-0.029): that is the pooled
+prior with a slightly better booster.  Evaluated at a settled context it is -0.062, and the whole of it is
+offensive: -0.054 at z -3.39 on offense alone, nothing on defense.  And the one thing the section set out to
+build -- the per-player delta to the held-out season's actual turnover -- costs +0.13 against the same prior
+without it (110.6926 against 110.5613).
+
+**The consensus screen** (`scratch/consensus_read.py`, 2024-2026, 475 players, validation only, read once;
+not the floors, which score the board `08_ratings.py` builds):
+
+| mapped system | total | offense | defense | defensive spread | offensive gap vs bigness |
+|---|---|---|---|---|---|
+| `tune501_b7` | 0.7986 | 0.8048 | 0.7587 | 1.286 | -0.284 |
+| `tune501_b7_turnref_o` | 0.8016 | 0.8027 | 0.7582 | 1.287 | **-0.316** |
+| `tune501_b7_turnref` (both sides) | 0.7845 | 0.8027 | 0.7393 | 1.305 | -0.316 |
+| `tune501_b7_turnref_d` | 0.7819 | 0.8048 | 0.7394 | 1.304 | -0.284 |
+
+Offense only leaves every agreement where it was.  Both sides costs the defensive agreement 0.02 and widens
+the defensive spread, for no criterion gain -- the pattern of 21.26 and 22.7 once more, and one more reason
+the defensive prior is the estimator's problem (HANDOFF 3.2), not the feature's.  The one number to watch is
+the offensive gap against bigness, -0.284 -> -0.316 on the screen, where the floor (on the board, a different
+object) is |r| < 0.30: the settled-context prior rates high-usage guards higher relative to bigs, which is
+exactly what section 4 said it would do, and it is the same axis 21.26 and 22.4 fought over.
+
+### 6. Why, and why the delta hurts
+
+The shipped prior's target is the player's value pooled over his OTHER windows, three or more years away, where
+his teammate turnover averages 0.70 and is 1.0 for a third of the pairs.  So the pooled target carries, for
+every player, the context-change penalty of section 3 -- about 0.6 points on offense at the average pair -- and
+carries MORE of it for the players the booster says are most context-sensitive: the high-usage scorers.  The
+criterion's held-out season is not such a window.  It sits inside its own training block, at a turnover of 0.40
+with respect to it, 0.23 for the median stayer.  A prior that asks "what is this box line worth beside people
+he knows" is the right offset for a season played beside people he knows, and the un-pooled booster with
+`turn` as a feature can answer that question; the pooled one cannot, because the penalty is baked into its
+target.  The reference 0.35 was chosen a priori as the stayer median and the criterion is monotone in it
+across the two values tried (0.7: -0.029; 0.35: -0.062); it is a knob now and section 24.9 says how to treat it.
+
+Why the delta to H's actual turnover costs +0.13 on top: three things, none of them the idea being wrong.
+The delta is learned on pairs at turnover 0.4-1.0 and applied at 0.0-1.0, with the held-out season's mass
+below the pairs' tenth percentile.  It is a per-player quantity with a spread of 0.3 read off a booster whose
+own leave-window-out gain is 0.04, so most of its variance is noise, and the map-level result in section 2
+already said the per-player forms (slopes) are worth nothing while the flat level is worth -0.08.  And the
+full-block turnover reads a player who moved and stayed at 0.73 (his H+1 season is with the new teammates), so
+the delta penalises the offseason mover who is by now settled -- the population `turnp` covers, which the map
+said carries no penalty at all.  A per-season target (HANDOFF 3.5) would make the training pairs and the
+prediction-time covariate the same object and is the version of this worth trying.
+
+### 7. What "rating if traded" can and cannot say now
+
+At player level the ingredients exist and are validated on the prior's own target: a prior at turnover 0.35
+(the settled rating) and at 1.0 (the rating among strangers), differing by a per-player delta that averages
+0.2 on offense and 0.34 on defense, that predicts movers better than the single prior, and whose pattern is
+interpretable.  At team-game level the criterion accepts the settled-context prior and rejects the per-player
+delta.  So the honest product is: **the board's rating becomes the settled-context one (the candidate in
+section 5), and "rating if traded" is that rating plus the booster's delta at turnover 1.0, published as a
+player-level estimate that the game-level test does not confirm** -- labelled as such, with the delta's own
+leave-window-out evidence beside it.  Neither the per-stat portability story nor the delta should be sold as
+game-tested.  The level part of the delta mixes selection with portability and no test here separates them.
+
+### 8. Traps
+
+* **The trade effect is a level, and levels are cheap to confuse with leaks.**  `turn` needs H's lineups; its
+  half-season control (`turna`) returned the identical -0.084, which is the test.  Any covariate built on H
+  gets the same control before it is believed.
+* **The block brackets H.**  Turnover "with respect to the block" is not turnover "since last season": a mover
+  who stayed reads 0.73.  `turnp` is the past-only version and the two answer different questions.
+* **The pooled prior's target is context-averaged.**  Anything that changes the context the prior is asked
+  about -- turnover today, role or team quality if they ever come back -- has to be a feature on UN-POOLED
+  rows, or the answer is baked in before the question is asked.
+* **A per-player delta from a booster with a 0.04 gain is mostly noise.**  Read the delta's spread against the
+  model's own leave-window-out gain before applying it anywhere the criterion can see.
+* **`pair_rows` keeps calendar distance; `training_rows` measures distance among the windows LEFT after an
+  exclusion.**  With a decay and an excluded middle window the two weightings differ (the test says so).
+  The pair rows are right; the pooled rows have always been this way and nothing shipped depends on it.
+* **The pair-row offensive prior is 56% slower** (58 s against 37 s for the 28 fits: twice the rows through a
+  five-member bag).  Part 0 ruling 1 says accuracy wins when the test is robust; it is a tie-break, not a veto.
+
+### 9. What is next
+
+1. **Ship the settled-context offensive prior** (`tune501_b7_turnref_o`).  The board path does not know about
+   it: `scripts/08_ratings.py` builds the prior from `config.yaml`, so it needs a `gbdt.turn` setting (which
+   side, which reference) routed through `chain_offset(turn="ref", turn_sides=("O",))`, `data/cache/teammates.parquet`
+   built once, a tracker map table under its name, and then the ten floors -- with the bigness floor read
+   honestly, because the screen says -0.316 against 0.30.  If it misses by the margin the screen suggests,
+   Part 0 ruling 2 applies (a MARGINAL miss is not a veto; a gross one is) and the offensive target blend is
+   the knob that has moved it before (21.26, 22.4).
+2. **The reference is a knob.**  0.35 was fixed a priori; do not tune it on the 28 seasons.  If it is ever
+   moved, the estimator search's protocol applies: choose on the search half, confirm on the other 14.
+3. **The per-season target (3.5) is what makes the delta testable.**  Pairs at s -> s+1 with the season
+   turnover, and the prediction-time covariate the same quantity, remove the distribution gap of 24.6.
+4. **"Rating if traded" on the site**: the delta at turnover 1.0 from the settled prior, per player, with the
+   player-level evidence and without the game-level claim.  `outputs/csv/trade_delta_*.csv` is the prototype.

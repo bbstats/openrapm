@@ -1,57 +1,57 @@
-# Handoff: seven candidates measured, none shipped, and one sharper reason why
+# Handoff: trade calibration built, and the gain turned up one step to the side of where it was looked for
 
-Written 2026-09-07 (fourth day of iterate-and-improve mode).  **The board did not move.  It is
-`tune501_b7` at 110.6237, byte for byte what 22.7 shipped.**  This pass built HANDOFF 3.1's play-by-play
-block end to end and then the owner's assist-location extension on top of it, validated both harder than
-anything here has been validated before, and measured seven candidates on the criterion.  **Not one of
-them reached significance**: the best is -0.0055 at z -0.20, which is noise, and the worst is +0.0327 at
-z 2.33, which is real and is a control (see below).  Lower is better throughout -- every "vs base" column
-is candidate minus baseline on a mean squared error, so a NEGATIVE number is an improvement.  `FINDINGS.md` **23** is the record; `docs/progress.png` / `docs/progress.csv` the chart and
-its log; `PIPELINE.md` draws how the shipped model works, stage by stage.
+Written 2026-09-07, later the same day as the play-by-play pass (which follows below unchanged).  **The board
+did not move: `tune501_b7` at 110.6237.  But there is now a candidate that beats it at z -3.39 on 22 of 28
+seasons, and it is one config key away from the floors.**  The owner asked for "trade calibration": a rating
+and a rating-if-traded, behind them a trade-weighted SPM that measures how teammate turnover changes what a
+box line is worth.  `FINDINGS.md` **24** is the record.  Lower is better throughout; "vs board" is candidate
+minus `tune501_b7` on the criterion.
 
-| what was measured | criterion vs the board | verdict |
+| what was measured | vs board | verdict |
 |---|---|---|
-| the Dredge block on defense (12 features) | -0.0055, z -0.20 | rejected |
-| the same block era-relative | +0.0006, z -0.08 | rejected |
-| era-calibrated rim-block share + goaltends | +0.0045, z 0.32 | rejected |
-| unassisted makes on defense | +0.0106, z 0.75 | rejected |
-| **potential assists from assist zones** (`pot_ast`) on offense | **+0.0005, z 0.12** | rejected |
-| the same on both sides | +0.0327, **z 2.33** | rejected -- and this one is the CONTROL |
+| a rating's prior and possession evidence weighted apart for movers (map) | -0.003, z -0.14 | a rating travels; nothing to calibrate at team-game level |
+| a level in the held-out season's teammate turnover (map, needs H; its half-season control identical) | -0.084, z -1.98 | real, exogenous, cannot ship, bounds the prize |
+| the per-player TRADE DELTA (prior at his turnover into H minus at a settled context) | **+0.069, z +1.07** | rejected: the thing that was asked for, and it hurts |
+| pair-row prior, no turnover feature (control) | -0.010, z -0.63 | un-pooling is not it |
+| the turnover prior at the pairs' own mean context 0.7 (control) | -0.029, z -1.43 | a slightly better pooled prior |
+| the turnover prior at a SETTLED context (0.35), both sides | -0.062, z -2.53, 21/28 | real; defense pays on the consensus screen |
+| **the same on OFFENSE only (`tune501_b7_turnref_o`)** | **-0.054, z -3.39, 22/28** | **the candidate**; consensus screen unchanged; bigness reading -0.316 |
 
-**The one thing to carry forward is not any of the features.**  Four of those candidates were NEGATIVE on
-the prior's own leave-window-out fit -- the Dredge block at -0.020, its era-relative form at -0.029, the
-era-calibrated pair at -0.021, `pot_ast` at -0.018, all four genuine improvements offline -- and not one
-of them is distinguishable from zero on the criterion (z -0.20, -0.08, 0.32, 0.12).  22.5 said the prior is near its ceiling; this pass says something sharper and more useful:
-**a gain measured against the prior's own target is not evidence about the board.**  Use `prior_bench.py`
-to REJECT a candidate cheaply.  Never use it to believe in one.
+**What was learned, in one paragraph.**  Teammate turnover is measured for everyone now (`src/eracoef/turnover.py`;
+movers sit at a median of 1.0 season to season, stayers at 0.36).  At player level a fully turned-over player
+is worth about 0.85 points per 100 less on offense and 0.55 less on defense than his box line says (z 5 to 8
+on the prior's own target), and the booster can say who: high-usage scorers on offense, older players on
+defense.  At team-game level none of that per-player structure predicts anything -- but the shipped prior's
+TARGET is pooled over windows three years away, where turnover averages 0.70, so it carries that penalty baked
+in, and the held-out season sits inside its own block at turnover 0.40.  A prior that can be asked "what is
+this box line worth beside people he knows" is the right offset, and it is worth -0.054 on offense at z -3.39.
+The "if traded" column exists as a player-level estimate (`outputs/csv/trade_delta_*.csv`) that the game-level
+test does not confirm; FINDINGS 24.7 says exactly how it may be published.
 
-That the criterion is discriminating rather than merely noisy is not an assumption here.  Putting a PASSING
-feature into the DEFENSIVE prior is harmful at **z 2.33** on the same 28 seasons that read z 0.12 for the
-offensive version.  The zeroes are real zeroes.
-
-**Two findings worth keeping on their own.**  The Russell share -- Justin Willard's headline feature, a
-block the defence recovers -- has a year-over-year reliability of **0.126**: it is 0.575 for everybody and
-the spread around it is sampling noise.  And **BorutaShap cannot gate this feature list**, structurally: on
-a candidate set containing engineered aggregates of its own members it keeps the aggregates and rejects the
-parts, and which one survives is a coin toss -- it accepts `blk` on offense and rejects it on defense, on
-the same panel, while preferring `stocks` (= `stl` + `blk`), a swap that costs +0.050 when made directly.
-
-**Tree state: clean and committed on `hybrid-and-xpts`.**  `git status` is quiet (the tracker's dumps are
-ignored).  Tests: **101 passed, 1 xfailed** (82 before; `tests/test_dredge.py` is the nineteen new ones).
-The shipped board rebuilds under all of this and passes all ten consensus floors.  None of the seven
-candidates was read against the floors: a candidate the criterion cannot separate from the board loses on
-Part 0 ruling 1's tie-break before the consensus is consulted.
+**Tree state: committed on `hybrid-and-xpts`.**  Tests:
+**110 passed, 1 xfailed** (101 before; `tests/test_turnover.py` is five, `tests/test_gbdt_prior.py` has two
+more for the pair rows).  The shipped board is untouched: the
+new config key `ratings_prior.gbdt_turn` is documented and null.  `docs/progress.csv` / `.png` carry the seven
+runs of this pass.
 
 **The board, unchanged: `tune501_b7`** (FINDINGS 22.7, shipped 2026-09-06) -- the estimator search's board
 with the offensive target blended back to 0.7.  **110.624 on the criterion, 37 s for the 28 fits.**
 Consensus 0.788 / 0.790 / 0.759, defensive spread 1.28.  Its defensive-agreement floor was re-based
 0.76 -> 0.75 once, deliberately, with the reason in the test (Part 0 ruling 2).
 
-**One rename.**  The role input `share` is now **`poss_pct`** -- it is `poss_on / team_poss` capped at 0.9,
-and the old name said nothing about what it was a share of.  Code tokens only, in `src/`, `scripts/`,
-`tests/`, `config.yaml` and the panel column; `calmap`'s `hshare` / `tshare` exposure KEYS are deliberately
-untouched, because the shipped `cal_map` string contains `tshare` and a map term whose covariate column is
-missing applies as ZERO, silently.
+---
+
+*The header of the play-by-play pass, kept because its conclusions still stand:*
+
+**Seven candidates measured, none shipped (FINDINGS 23).**  The Dredge block on defense -0.0055 (z -0.20),
+era-relative +0.0006, era-calibrated pair +0.0045, unassisted makes +0.0106, `pot_ast` on offense +0.0005
+(z 0.12) and on both sides +0.0327 (z 2.33, the control).  Four of those were NEGATIVE on the prior's own
+leave-window-out fit and not one is distinguishable from zero on the criterion: **a gain measured against the
+prior's own target is not evidence about the board.**  Use `prior_bench.py` to REJECT a candidate cheaply,
+never to believe in one.  The Russell share has a year-over-year reliability of 0.126; BorutaShap cannot gate
+this feature list, structurally (23.10).  The role input `share` was renamed **`poss_pct`** (code tokens only;
+`calmap`'s `hshare` / `tshare` exposure KEYS untouched, because a map term whose covariate column is missing
+applies as ZERO, silently).
 
 ---
 
@@ -99,6 +99,9 @@ missing applies as ZERO, silently.
 | **the criterion's line** (`best_ratio_full`) | **109.845** | 59 s |
 | the same with shot quality (`best_shot`) | 109.801 (z -1.13) | 70 s |
 | **what ships** (`tune501_b7`, ten of ten floors as tested, defensive spread 1.28) | **110.624** | 37 s |
+| **`tune501_b7_turnref_o` -- the settled-context turnover prior on offense (24), the candidate** | **110.569 (z -3.39, 22/28)** | 58 s |
+| `tune501_b7_turnref` -- the same on both sides | 110.561 (z -2.53) | 60 s |
+| `tune501_b7_turn` -- with the per-player trade delta to H | 110.693 (z +1.07) | 66 s |
 | `tune501_b7_drd` -- the whole Dredge block on defense (23) | 110.618 (z -0.20) | 39 s |
 | `ship_shot7d` -- the board `tune501_b7` replaced, ten of ten | 110.707 | 50 s |
 | no ratings at all | 125.6 | |
@@ -136,6 +139,13 @@ feature lists on either side -- without touching `config.yaml` permanently.
 
 | file | what |
 |---|---|
+| `src/eracoef/turnover.py` | **teammate turnover** (24.1): `build_teammates` (the per-season shared-possession table, `data/cache/teammates.parquet`), `familiar_share(tm, ref_seasons, new_seasons)`, `season_turnover`, `window_pair_turnover`, `cached_table(ctx)` |
+| `gbdt_prior.pair_rows` / `GBDTPrior(turn=, pairs=)` | the prior on ORDERED WINDOW PAIRS with `turn` as a feature (24.4-24.5); `Context.prior(turn=True\|"pairs")`, `Context.turn_table()` |
+| `spm.chain_offset(turn="ref"\|"h"\|"pairs", turn_ref=, turn_sides=)` and `MspiFast.turn` / `turn_ref` / `turn_sides` | the settled-context prior ("ref"), the per-player delta to H ("h", added AFTER the ridge), the un-pooling control ("pairs"); `TURN_REF = 0.35` |
+| `calmap.Turn` / `MovedPrior` | map terms `turn` / `turnx` / `turnprior` (+ `turnp*` past-only, `turna*` half-season control), `mprior`; `SeasonFrame.turnover(k, train)` builds the covariates |
+| `scratch/trade_turnover.py` | build the teammate table and print the turnover distributions; writes `outputs/csv/turnover_season.csv` / `turnover_windows.csv` (ignored, 40 s) |
+| `scratch/trade_spm.py` / `trade_gbdt.py` | the trade-weighted SPM, linear and boosted, leave-window-out on the pair rows; the boosted one writes `outputs/csv/trade_delta_{O,D}.csv` |
+| `scratch/trade_maps.py` / `trade_pair.py` | the map terms on an existing dump with the control set; the paired test when a dump carries several maps |
 | `scripts/54_track.py` | the tracker: dump a system at K = 3 (timed), fit the map leave-one-season-out, score, log a row, redraw the chart.  `--systems=a,b "--maps=..." --label=...`; one dump per system |
 | `scratch/prior_bench.py` | **the 20-second pre-filter**: the prior's own leave-window-out fit per feature set, with the low-exposure stratum beside the pooled number.  `--q4 --loss= --delta= --sat= --past= --kmul=`, and a set may be written `shipD+russsh:blkrimsh` (add) or `shipD-blk+russ:blkrim` (REPLACE).  **Read 22.2 and 23.4 first: it is necessary, not sufficient, it has been wrong by 0.13, and the BASE LIST is part of the operating point** |
 | `scratch/pairsys.py` | the paired test between two TRACKED systems: pooled difference, z over the 28 seasons, wins |
@@ -154,7 +164,11 @@ feature lists on either side -- without touching `config.yaml` permanently.
 ### Verification
 
 ```
-.venv/Scripts/python -m pytest tests -q                                       # 101 passed, 1 xfailed
+.venv/Scripts/python -m pytest tests -q                                       # 110 passed, 1 xfailed
+.venv/Scripts/python scratch/trade_turnover.py                                # the teammate table + turnover tables, 40 s
+.venv/Scripts/python scratch/trade_gbdt.py O                                  # the boosted trade SPM and the delta CSV, 35 s
+.venv/Scripts/python scratch/trade_maps.py tune501_b7 --set=all               # the map terms with the control, 25 s
+.venv/Scripts/python scratch/trade_pair.py tune501_b7 tune501_b7_turnref_o    # paired z, every map in the dump
 .venv/Scripts/python scratch/prior_bench.py D "shipD,shipD+pot_ast" --ll=1 --cf=0     # ~20 s a set
 .venv/Scripts/python scripts/54_track.py --systems=X "--maps=linear+log2&xlog&prior&tshare:linear+log2&xlog" --label=...
 .venv/Scripts/python scratch/pairsys.py tune501_b7 <cand> [<cand2> ...]       # the z over 28 seasons
@@ -212,16 +226,52 @@ expensive part is deciding it was worth measuring.
   with the second.
 - **`ensemble_n_jobs: 1`** on any `chimeraboost` fit inside the holdout's workers, or the bag forks and the
   wall time explodes.
+- **The pooled prior's target is context-averaged** (24.6).  Anything that changes the context the prior is
+  asked about has to be a feature on UN-POOLED rows (`pair_rows`), or the answer is baked in before the
+  question is asked.
+- **The K = 3 block brackets H.**  Turnover "with respect to the block" reads a mover who stayed at 0.73, not
+  1.0 (his H+1 season is with the new teammates).  `turnp` is the past-only version; they answer different
+  questions, and the criterion liked only the first.
+- **A covariate built on H gets the half-season control before it is believed.**  `turna` returned the identical
+  -0.084 to `turn`; HShare kept 3% on half the games and was a leak.
+- **A per-player delta from a booster whose own leave-window-out gain is 0.04 is mostly noise** at a spread of
+  0.3.  The criterion charged +0.13 for applying it.
 - Long bash heredocs still fail in this shell; write patch scripts with the Write tool.
 
 ## Part 3: the next pass
 
-**Start at 3.2.**  The prior has now been attacked from every direction available: capacity did not move it
-(21.24), re-expression was worth 0.05 (21.25), the two richest box sources were worth 0.045 and less than
-nothing (22.5), and the play-by-play behind the box line is worth **zero** (23).  Against 3.5's ceiling --
-the prior's target has a split-half reliability of 0.808 on offense so nothing can correlate past 0.899, and
-the shipped booster reaches 0.590 -- the missing third is not in a column.  **It is in the estimator**, and
-3.2 has a measured, significant, cheaper 0.14 sitting behind one defensive disagreement.
+**Start at 3.0, then 3.2.**  3.0 is a measured -0.054 at z -3.39 that needs a config key and a floor read;
+3.2 is the estimator work that unlocks 22.7's 0.14.  The prior's INPUTS remain spent (21.24, 21.25, 22.5, 23);
+what 24 found was not a new column but a different question put to the same columns.
+
+### 3.0 Ship the settled-context offensive prior (`tune501_b7_turnref_o`, FINDINGS 24)
+
+What it is: the offensive prior trained on ordered window pairs with the teammate turnover of the target
+window as a feature, evaluated at a settled context (0.35, the season-to-season stayer median, fixed a priori)
+for everyone; the defensive prior stays pooled as shipped.  **-0.054 vs the board at z -3.39, 22 of 28; the
+consensus screen unchanged on every agreement (total 0.802 vs 0.799, defense 0.758 vs 0.759); 58 s against
+37 s for the 28 fits.**  Attribution is done: pair rows alone -0.010, the prior at the pairs' mean context
+-0.029, both sides -0.062 with the defensive agreement paying 0.02, defense alone -0.008.
+
+What is left, in order:
+1. `.venv/Scripts/python scratch/trade_turnover.py` once on the machine (it builds `data/cache/teammates.parquet`;
+   the board path raises without it).
+2. `config.yaml`: `ratings_prior.gbdt_turn: {sides: [O], ref: 0.35}` (the key is wired in `08_ratings.py` and
+   documented in the config; null ships the pooled prior), and `cal_map.system` / `base` pointed at
+   `tune501_b7_turnref_o`'s tracker table (`outputs/calmap_track_tune501_b7_turnref_o.parquet` exists under the
+   shipping map family; copy it to `calmap_ship.parquet` the way 22.7 did).
+3. `08_ratings.py`, then `pytest tests/test_vs_consensus.py -q`.  **Read the bigness floor honestly**: the
+   screen has the offensive gap against bigness at -0.316 where the floor on the board is |r| < 0.30 (the
+   screen and the floor are different objects; the board read -0.284 on the screen and passed).  If it misses
+   by that margin, Part 0 ruling 2 applies -- a marginal miss on a sanity check is not a veto against z -3.39 --
+   and the offensive target blend is the knob that has moved this axis before (21.26, 22.4).  A gross miss is.
+4. Then `52_site.py`, the README's number, FINDINGS 24.9 marked shipped, and this section closed.
+
+Do NOT tune the reference on the 28 seasons.  If it is ever moved, the search-half protocol of 22.7 applies.
+The per-player trade delta stays out of the board: the criterion charged +0.13 for it.  The "rating if traded"
+column for the site is FINDINGS 24.7's player-level estimate, published with its own evidence and without a
+game-level claim; `outputs/csv/trade_delta_*.csv` is the prototype and 3.5 (per-season targets) is what would
+make it testable.
 
 ### 3.1 DONE and answered: the play-by-play block is built, and it is worth nothing (FINDINGS 23)
 
@@ -408,7 +458,10 @@ defensive bag's width back out (3.3).
 
 Train the prior on single-season APM instead of three-season: more rows, noisier each, and a step toward the
 continuous rating the product is going to (0.2).  It is also the only change that would break the pooled-target
-mechanism of 22.2, which is worth knowing independently.
+mechanism of 22.2, which is worth knowing independently.  **And it is what makes the trade delta testable**
+(24.6): pairs at s -> s+1 carry the season turnover (movers at 1.0, stayers at 0.36 -- twice the contrast of
+the window pairs), and the prediction-time covariate becomes the same quantity instead of a block-bracketed
+cousin of it.
 
 ### 3.6 Still open, not scheduled
 
@@ -423,6 +476,9 @@ mechanism of 22.2, which is worth knowing independently.
   into a dead name.  The site is back at `https://bbstats.github.io/openrapm/`, https enforced.  To turn the
   domain on: four GitHub `A` records + a `www` CNAME at Porkbun FIRST, then re-add `docs/CNAME` on `main`,
   wait for the cert, then `gh api -X PUT repos/bbstats/openrapm/pages -F https_enforced=true`.
+* Never re-run, from 24: the per-player trade delta applied to the held-out season at K = 3 (`tune501_b7_turn`,
+  +0.069); the turnover prior on defense (flat, and it costs the defensive agreement); the mover / turnover
+  slopes on the rating or the prior in the map (zero both ways); the `turnp` (past-only) level.
 * Never re-run, from 23: the Dredge block on either side, in any grouping, added or substituted, absolute or
   era-relative; the block split by location on either axis; assists by zone as rates or shares; `pot_ast`
   on either side; any feature built on the Russell share; and BorutaShap as a gate on the shipped lists.

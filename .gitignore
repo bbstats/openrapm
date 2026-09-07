@@ -267,3 +267,5 @@ outputs/ratings_timing*.parquet
 outputs/*.parquet.bak*
 outputs/tune_*.csv
 outputs/tune_*.db
+# teammate-turnover tables (FINDINGS 24): 1.5 MB, rebuilt in 40 s by scratch/trade_turnover.py
+outputs/csv/turnover_*.csv

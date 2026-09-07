@@ -300,6 +300,42 @@ def training_rows(panel: pd.DataFrame, side: str, exclude=(), features=None, tar
     return out.reset_index(drop=True)
 
 
+def pair_rows(panel: pd.DataFrame, side: str, exclude=(), features=None, target_col: str = "rapm1",
+              poss_col: str = "poss", win_decay: float = 1.0, win_past: float = 1.0,
+              turn: pd.DataFrame | None = None) -> pd.DataFrame:
+    """`training_rows` un-pooled: one row per ORDERED pair of the player's windows (w -> w'), the feature line
+    of w, the target of w', weight = the possessions behind that target times `win_decay` to the power of the
+    distance (and `win_past` again when w' is earlier), and -- the reason to un-pool -- the teammate TURNOVER of
+    w' with respect to w as the column `turn` (turnover.window_pair_turnover: player_id, window, window_to,
+    turnover).  For a model without `turn` the weighted least-squares optimum is the pooled fit's exactly, since
+    the within-player spread of the targets is a constant; with it the booster can learn what a box line is
+    worth in a context that has changed.  Pairs the turnover table does not cover are dropped."""
+    feats = list(DEFAULT_FEATURES if features is None else features)
+    feats = [f for f in feats if f != "turn"]
+    ex = set(exclude)
+    p = panel[(panel.side == side) & ~panel.window.isin(ex)].copy()
+    if any(f in DERIVED or f in RATIOS or f in SHOTQ or f in DREDGE_ANY for f in feats):
+        add_derived(p)
+    wins = sorted(panel.window.unique())
+    idx = {lab: i for i, lab in enumerate(wins)}
+    left = p[["player_id", "window", *feats]]
+    right = p[["player_id", "window", poss_col, target_col]].rename(
+        columns={"window": "window_to", poss_col: "_poss_to", target_col: "target"})
+    out = left.merge(right, on="player_id")
+    out = out[out.window != out.window_to]
+    d = out.window_to.map(idx).to_numpy() - out.window.map(idx).to_numpy()
+    w = out["_poss_to"].to_numpy(dtype=float) * float(win_decay) ** np.abs(d)
+    if float(win_past) != 1.0:
+        w = w * np.where(d < 0, float(win_past), 1.0)
+    out["weight"] = w
+    if turn is not None:
+        out = out.merge(turn[["player_id", "window", "window_to", "turnover"]].rename(columns={"turnover": "turn"}),
+                        on=["player_id", "window", "window_to"], how="inner")
+        out = out[out.turn.notna()]
+    out = out[out.weight > 0].drop(columns="_poss_to")
+    return out.reset_index(drop=True)
+
+
 def _pooled_by_distance(p: pd.DataFrame, w: np.ndarray, v: np.ndarray, decay: float, past: float = 1.0):
     """The pooled weight and weighted sum over the player's OTHER windows, each discounted by `decay` to the
     power of how many windows away it is and, if `past` != 1, by `past` again when it is an EARLIER window.
@@ -325,6 +361,10 @@ def reference_mean(panel: pd.DataFrame, side: str, **kw) -> float:
     """The full-panel weighted target mean the leave-window-out training sets are compared against."""
     r = training_rows(panel, side, exclude=(), **kw)
     return float(np.average(r["target"], weights=r["weight"])) if len(r) else 0.0
+
+
+def _weighted_mean(rows: pd.DataFrame) -> float:
+    return float(np.average(rows["target"], weights=rows["weight"])) if len(rows) else 0.0
 
 
 def drag(rows: pd.DataFrame, full_mean: float) -> float:
@@ -386,10 +426,17 @@ class GBDTPrior:
 
     def __init__(self, panel: pd.DataFrame, cfg: dict, seed: int | None = None, thread_count=None, features=None,
                  mode: str | None = None, target_col: str | None = None, win_decay: float = 1.0,
-                 win_past: float = 1.0, sat_poss: float | None = None):
+                 win_past: float = 1.0, sat_poss: float | None = None, turn: pd.DataFrame | None = None,
+                 pairs: bool = False):
         g = cfg.get("gbdt", {})
         self.panel = panel
         self.cfg = cfg
+        # `turn`: the window-pair teammate turnover table.  With it the prior trains on PAIR rows (pair_rows)
+        # with `turn` as a feature on both sides, so a prediction needs a `turn` column: 1.0 asks what the box
+        # line is worth among strangers, a typical stayer's 0.35 what it is worth where he is.  `pairs` alone
+        # trains on the pair rows WITHOUT the feature (the control for the un-pooling itself).
+        self.turn = turn
+        self.pairs = bool(pairs) or turn is not None
         self.mode = str(g.get("mode", "residual") if mode is None else mode)
         if self.mode not in ("residual", "full"):
             raise ValueError(f"gbdt mode must be 'residual' or 'full', got {self.mode!r}")
@@ -404,21 +451,30 @@ class GBDTPrior:
             f = (features or {}).get(side) if isinstance(features, dict) else features
             f = f or g.get(key.format(side)) or default
             self.features[side] = list(f)
+            if self.turn is not None and "turn" not in self.features[side]:
+                self.features[side].append("turn")
         self.params = dict(g.get("params", {}) or {})
         self.win_decay = float(win_decay)
         self.win_past = float(win_past)
         self.sat_poss = None if sat_poss is None else float(sat_poss)
         self._pool = dict(win_decay=self.win_decay, win_past=self.win_past, sat_poss=self.sat_poss)
         self._models: dict = {}
-        self._ref = {side: reference_mean(panel, side, target_col=self.target_col, **self._pool)
+        self._ref = {side: (reference_mean(panel, side, target_col=self.target_col, **self._pool) if not self.pairs
+                            else _weighted_mean(self.rows(side)))
                      for side in SIDES}
         self.reports: list = []
+
+    def rows(self, side: str, exclude=()) -> pd.DataFrame:
+        """This prior's training rows for one side and exclusion set (pooled, or pair rows, with `turn` if set)."""
+        if not self.pairs:
+            return training_rows(self.panel, side, exclude, self.features[side], target_col=self.target_col, **self._pool)
+        return pair_rows(self.panel, side, exclude, self.features[side], target_col=self.target_col,
+                         win_decay=self.win_decay, win_past=self.win_past, turn=self.turn)
 
     def model(self, side: str, exclude=()):
         key = (side, frozenset(exclude))
         if key not in self._models:
-            rows = training_rows(self.panel, side, exclude, self.features[side], target_col=self.target_col,
-                                 **self._pool)
+            rows = self.rows(side, exclude)
             rows, rep = counterbalance(rows, self._ref[side], self.tol)
             m = fit_gbdt(rows, self.features[side], seed=self.seed, thread_count=self.thread_count, **self.params)
             rep.update(mode=self.mode, side=side, exclude=",".join(sorted(exclude)), n_rows=int(len(rows)),

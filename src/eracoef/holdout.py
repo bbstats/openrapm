@@ -135,13 +135,27 @@ class Context:
             ctx.mspi_apm = GBDTPrior(ctx.rpanel, cfg, mode="full", target_col="apm")   # trained on unshrunk APM
         return ctx
 
+    def turn_table(self) -> pd.DataFrame:
+        """The window-pair teammate turnover table (turnover.window_pair_turnover) over the configured windows,
+        built once per Context from data/cache/teammates.parquet."""
+        if getattr(self, "_turn_table", None) is None:
+            from .turnover import cached_table, window_pair_turnover
+            tm = cached_table(self)
+            if tm is None:
+                raise RuntimeError("data/cache/teammates.parquet is missing; run scratch/trade_turnover.py "
+                                   "(turnover.build_teammates)")
+            wins = [(window_label(list(range(w[0], w[1] + 1))), list(range(w[0], w[1] + 1))) for w in window_seasons(self.cfg)]
+            self._turn_table = window_pair_turnover(tm, wins)
+        return self._turn_table
+
     def prior(self, mode: str, target_col: str | None, params: dict, panel: str | None = None, features=None,
-              win_decay: float = 1.0):
+              win_decay: float = 1.0, turn: bool | str = False):
         """A GBDTPrior with chimeraboost overrides `params`, built once per (mode, target, params, panel, features)
         on this Context.  `panel`: a role panel other than the configured one (a path relative to the root);
-        `features`: {"O": [...], "D": [...]} instead of the configured lists."""
+        `features`: {"O": [...], "D": [...]} instead of the configured lists; `turn`: True = trained on window
+        pairs with the teammate turnover as a feature (GBDTPrior `turn`), "pairs" = on the pairs without it."""
         fkey = None if not features else tuple((k, tuple(v)) for k, v in sorted(features.items()))
-        key = (mode, target_col, tuple(sorted((params or {}).items())), panel, fkey, float(win_decay))
+        key = (mode, target_col, tuple(sorted((params or {}).items())), panel, fkey, float(win_decay), str(turn))
         if key not in self._priors:
             rp = self.rpanel
             if panel:
@@ -153,7 +167,8 @@ class Context:
                 wgt = float(target_col[5:])
                 rp = rp.assign(**{target_col: wgt * rp["apm"].to_numpy(dtype=float) + (1.0 - wgt) * rp["rapm1"].to_numpy(dtype=float)})
             p = GBDTPrior(rp, self.cfg, mode=mode, target_col=target_col, features=features,
-                          win_decay=float(win_decay))
+                          win_decay=float(win_decay), turn=self.turn_table() if turn is True else None,
+                          pairs=(turn == "pairs"))
             p.params = dict(params or {})
             self._priors[key] = p
         return self._priors[key]
