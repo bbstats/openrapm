@@ -468,9 +468,10 @@ cousin of it.
 * **TabFM** (`google/tabfm-1.0.0-jax`): installs and downloads (5.7 GB; point `HF_HOME` at `A:`), but the
   orbax restore dies in tensorstore on a 1.5 GB region -- 38.5 GB of the box's 48 GB commit limit was taken.
   Retry on a quiet machine.  `scratch/tabfm_try.py` prints the booster's baseline for it to beat.
-* **Fast-forward `main`** (`bbstats/openrapm`) to `hybrid-and-xpts`.  Pages serves `main` at `/docs`, so
-  until this is done the site shows the board of 2026-09-05, not `tune501_b7`.  `docs/data/ratings.json` on
-  this branch is already rebuilt from the shipped board.
+* **DONE 2026-09-07: `main` carries the `tune501_b7` board** (merge `7bc8803`), and the live site at
+  `https://bbstats.github.io/openrapm/` serves a `ratings.json` byte-identical to this branch's.  The commits
+  `hybrid-and-xpts` has beyond `main` are FINDINGS 23-24 work that does not change the board; merge them
+  whenever, nothing on the site is waiting on it.
 * **DNS for openrapm.com**: the custom domain was REMOVED on 2026-09-06 (`docs/CNAME` deleted on both branches,
   `cname: null` on the Pages API) because it had no DNS behind it and was redirecting `bbstats.github.io`
   into a dead name.  The site is back at `https://bbstats.github.io/openrapm/`, https enforced.  To turn the
