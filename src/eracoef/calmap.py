@@ -71,13 +71,17 @@ def _dump_worker(job: dict) -> pd.DataFrame:
     return dump_systems(job["holdout"], [reg[n] for n in job["names"]], ctx, held=job["held"], verbose=job.get("verbose", True))
 
 
-def dump_ratings(ho: Holdout, names: list, out: Path, workers: int = 4, rankmap=None, verbose: bool = True) -> pd.DataFrame:
+def dump_ratings(ho: Holdout, names: list, out: Path, workers: int = 4, rankmap=None, verbose: bool = True,
+                 held: list | None = None) -> pd.DataFrame:
     """Every system's ratings for every held-out season and K, one parquet.  Same process layout as
-    holdout.run_parallel (spawned workers, BLAS threads pinned)."""
+    holdout.run_parallel (spawned workers, BLAS threads pinned).
+
+    `held` restricts the held-out seasons, the way `Holdout.run` already allows; None = all of `ho.seasons()`.
+    A hyperparameter search uses it to score on half the seasons and keep the other half untouched."""
     import multiprocessing
     from concurrent.futures import ProcessPoolExecutor
 
-    held = ho.seasons()
+    held = list(held) if held is not None else ho.seasons()
     workers = max(1, min(int(workers), len(held)))
     threads = max(1, (os.cpu_count() or workers) // workers)
     chunks = [c.tolist() for c in np.array_split(np.asarray(held), workers)]

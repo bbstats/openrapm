@@ -265,3 +265,5 @@ outputs/*_cands.parquet
 outputs/*_cands_consensus.parquet
 outputs/ratings_timing*.parquet
 outputs/*.parquet.bak*
+outputs/tune_*.csv
+outputs/tune_*.db
