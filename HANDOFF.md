@@ -268,21 +268,38 @@ expected points allowed.  It was 0.4's "right but too big for v1" and it is now 
 
 A day's work; the principled version of what `x3def` did by hand.
 
-### 3.3 Per-player shrinkage from the prior's own confidence
+### 3.3 The defensive booster, now that its pieces are separated (FINDINGS 22.6)
+
+21.26 rejected `quality=4` on defense as a package because the consensus floors would not take it.  It is
+three things and only one of them is the problem:
+
+* **`linear_leaves` is the good part** -- -0.009 weighted MSE on the prior's own fit, and the criterion agrees
+  (`ship_shot7d_ll`, 110.6925, -0.014 against the shipped board, ten of ten floors).  It is inside the noise
+  at z -0.75 and was not shipped, but it is the closest thing to a free defensive gain on the table.
+* **`cross_features` is harmful alone and helpful beside linear leaves** (+0.004, then -0.013 together) -- and
+  the criterion reverses that: `ship_shot7d_llcf` is only -0.006.  Do not trust the offline ranking on this.
+* **the BAG is what defense will not tolerate.**  It is the only piece that moves the prior's calibration
+  slope (1.08 -> 1.15), i.e. widens it, and defensive width is the binding floor.  **But it is also the only
+  piece that improves the LOW-EXPOSURE rows** (1.032 against 1.075), which are the players the prior actually
+  decides.  That tension is unresolved and is the interesting part: a bagged defensive prior with the width
+  taken back out -- by 3.4's per-player shrinkage, or by a scalar -- has never been tried.
+
+### 3.4 Per-player shrinkage from the prior's own confidence
 
 Every player is pulled toward his prior by the same lambda, but the prior is far more predictive for some than
 others.  `quality=4` already fits 5 bagged members, so the disagreement across members is a per-player
 predictive spread, free.  Feed it into a per-player penalty (`lam_buckets` is the machinery, currently keyed on
 exposure groups).  This is the mechanism that would let the prior carry the bench hard without overriding
-stars -- the failure mode the criterion has complained about since FINDINGS 19.
+stars -- the failure mode the criterion has complained about since FINDINGS 19, and the way to take the
+defensive bag's width back out (3.3).
 
-### 3.4 Single-season targets, and getting off chunks
+### 3.5 Single-season targets, and getting off chunks
 
 Train the prior on single-season APM instead of three-season: more rows, noisier each, and a step toward the
 continuous rating the product is going to (0.2).  It is also the only change that would break the pooled-target
 mechanism of 22.2, which is worth knowing independently.
 
-### 3.5 Still open, not scheduled
+### 3.6 Still open, not scheduled
 
 * **TabFM** (`google/tabfm-1.0.0-jax`): installs and downloads (5.7 GB; point `HF_HOME` at `A:`), but the
   orbax restore dies in tensorstore on a 1.5 GB region -- 38.5 GB of the box's 48 GB commit limit was taken.

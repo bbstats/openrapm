@@ -223,6 +223,25 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         S["best_both"] = MspiFast("best_both", gbdt_params=_FULLQ4, win_decay=0.3, decay=0.5,
                                   decay_exposure=True, target="apm",
                                   gbdt_features={"O": list(_PF), "D": list(_PF)})
+        # DEFENSIVE LINEAR LEAVES (the owner, 2026-09-06: "it would not kill us to put season in as a linear
+        # term").  A season INTERCEPT has nothing to capture -- the panel's target is possession-centred
+        # inside every window, so it drifts 0.078 over 29 years against a target sd of 2.2 -- but season is
+        # worth +0.066 as a CONDITIONER, and defense is the one side that ships with `linear_leaves: False`.
+        # A ridge per leaf over the split features is that conditioning made local and linear: -0.009 weighted
+        # MSE on the prior's own fit, the largest defensive gain measured this pass.
+        _LLD = {"linear_leaves": True, "cross_features": False}
+        # and the pieces of quality=4 decomposed on defense: linear leaves are the good part (-0.009), cross
+        # features are HARMFUL alone (+0.004) and the best thing available beside them (-0.013 together), and
+        # the BAG is what widens the prior (slope 1.08 -> 1.15) -- which is what the defensive spread floor
+        # polices, and a mechanism for why 21.26 had to reject the whole package on this side.
+        S["ship_shot7d_llcf"] = MspiFast("ship_shot7d_llcf", target="blend0.7", target_d="rapm1",
+                                         gbdt_params=_FULLQ4, win_decay=0.3, win_decay_d=1.0,
+                                         gbdt_params_d={"linear_leaves": True, "cross_features": True},
+                                         gbdt_features={"O": list(_SF), "D": [*_FF, *_SQ]})
+        S["ship_shot7d_ll"] = MspiFast("ship_shot7d_ll", target="blend0.7", target_d="rapm1",
+                                       gbdt_params=_FULLQ4, win_decay=0.3, gbdt_params_d=_LLD,
+                                       win_decay_d=1.0,
+                                       gbdt_features={"O": list(_SF), "D": [*_FF, *_SQ]})
         # the same without the nearby-window discount (the consensus floors, not the criterion, may want it)
         S["ship_ratio_b07_wd1"] = MspiFast("ship_ratio_b07_wd1", target="blend0.7",
                                            **{**_SK, "win_decay": 1.0})

@@ -2405,6 +2405,75 @@ consensus, defensive spread 1.30, ten of ten floors, 82 passed and 1 xfailed.**
 if a later pass decides the score is worth the defensive headroom: drop the six names from `features_full_D`
 and point `cal_map` at `ship_shot7`.
 
+### 6. Season is not an intercept, and `quality=4` on defense is three things, not one
+
+The owner, reading the SHAP table: *"I don't think it would kill us to put season in as a linear term in the
+gbdt."*  The first half of that is answerable with a measurement and the answer is no -- but chasing it opened
+the defensive booster up, which nobody had done.
+
+**A season INTERCEPT has nothing to fit.**  The panel's target is possession-centred inside every window, so
+the weighted target mean drifts **+0.078 points across the 29 seasons on offense against a target sd of
+2.216** (3.5% of a sd) and 0.243 against 1.200 on defense, non-monotonically.  There is no era trend left in
+the target because the construction already removed it.
+
+**Season is nonetheless worth +0.066** -- deleting it from the shipped offensive list costs that much weighted
+MSE, and +0.129 on the low-exposure rows.  So its job is as a CONDITIONER: the same box line means different
+things in different eras, and an oblivious tree pays for that by re-splitting thresholds inside every era
+branch.  That is the thing a linear treatment could help, and it is a different thing from an intercept.
+
+Two ways to give it one, measured on the prior's own leave-window-out fit at each side's shipped booster:
+
+* **Era-standardise the rates** (z within window x side, which is exactly reproducible at prediction time
+  because the panel's window and the design's block are the same player population).  HANDOFF 3.3 had listed
+  this for a year.  **Offense +0.032, defense -0.003.**  Rejected.
+* **`linear_leaves`** -- a ridge per leaf over the split features, which is the local linear version.  Offense
+  already has it: `quality=4` leaves it validation-selected and forcing it OFF costs +0.011.  **Defense is the
+  one side that ships with it explicitly off** (`params_def`), and turning it on is **-0.009**.
+
+That last number made it worth decomposing `quality=4` on defense, which 21.26 had rejected as a package.
+Defensive prior, target RAPM_1, base 0.7223 weighted MSE:
+
+| | MSE | vs base | low-exposure | r | slope |
+|---|---|---|---|---|---|
+| shipped (`linear_leaves` off, `cross_features` off) | 0.7223 | | 1.0745 | 0.708 | 1.08 |
+| `linear_leaves` | 0.7133 | **-0.0090** | 1.0517 | 0.712 | 1.08 |
+| `cross_features` | 0.7263 | +0.0040 | 1.0812 | 0.706 | 1.07 |
+| **both** | **0.7095** | **-0.0128** | 1.0659 | **0.714** | 1.06 |
+| the bag (5 members) | 0.7251 | +0.0028 | 1.0376 | 0.709 | **1.12** |
+| linear leaves + the bag | 0.7231 | +0.0008 | **1.0324** | 0.712 | **1.15** |
+
+Three readings, and the third is the useful one.
+
+**The parts interact on defense exactly as 21.25 found on offense.**  `cross_features` is HARMFUL alone
+(+0.004) and the best thing available beside linear leaves (-0.013 together).  A knob's sign here depends on
+what else is on.
+
+**The bag is what widens the prior.**  It is the only variant that moves the calibration slope, 1.08 -> 1.12
+and 1.15, and defensive width is the floor that owns the only permanently-failing test.  That is a mechanism
+for 21.26's blunt finding that "defense will not tolerate `quality=4`": it is the BAG that defense will not
+tolerate, and the other two pieces were rejected as collateral.  The bag is also the only variant that helps
+the LOW-EXPOSURE rows (1.032 against 1.075) -- the players the prior actually decides -- so this is a real
+tension and not a settled question.
+
+**And the criterion disagreed with all of it.**  Against the shipped `ship_shot7d` at 110.707:
+
+| | criterion | vs shipped | z | floors |
+|---|---|---|---|---|
+| `ship_shot7d_ll` (linear leaves) | 110.6925 | -0.0139 | -0.75 | 10 of 10, def 0.767, spread 1.31 |
+| `ship_shot7d_llcf` (+ cross features) | 110.7006 | -0.0059 | -0.23 | not read |
+
+The offline ranking is `llcf` (0.7095) ahead of `ll` (0.7133); the criterion's is the reverse.  **Cross
+features bought another 0.004 of the prior's own fit and gave back 0.008 of the criterion.**  That is the
+third divergence in this section alone -- experience (22.2), and now this -- and the pattern is consistent
+enough to state plainly: **the prior's own out-of-sample fit ranks candidates correctly only when they differ
+in INFORMATION, and unreliably when they differ in CAPACITY.**  22.1's shot quality agreed across both
+(-0.044 offline, -0.045 on the criterion).  Every capacity knob measured here and in 21.24-21.25 has not.
+
+Nothing shipped.  `ship_shot7d_ll` is a genuine -0.014 with ten of ten floors and it is inside the noise
+(z -0.75) on a project bar that has been z -3, and its defensive agreement is 0.767 against the shipped
+0.768.  Both systems stay in the registry; `scratch/prior_bench.py` grew `--ll`, `--cf`, `--ne` and `--zrates`
+for whoever picks the defensive booster up again.
+
 ### 5. What the pass says about the prior
 
 Five things were measured on the criterion and four of them are zero or worse.  The one that is not is worth
