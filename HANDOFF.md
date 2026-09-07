@@ -27,13 +27,27 @@ offensive target it unlocks.  110.707 on the criterion, consensus 0.793 / 0.789 
    * and "robust testing" is the precondition, not a nicety.  A gain that survives only the search half, or
      only the prior's own fit, or only one map, is not a gain.  See 22.2 and 22.6 for what that looks like
      when it goes wrong.
-2. **The 3-season window is on the way out.**  *"Nobody really looks at chunks, we will ultimately move away
+2. **The consensus is a SANITY CHECK, never a fitting target.**  The owner, 2026-09-06: *"disagreeing with
+   consensus is just a sanity check, never something to fully fit to."*  It exists to catch a board that has
+   gone gross-wrong -- the Robert Williams 25th case that the internal benchmarks certified -- and the floors
+   in `tests/test_vs_consensus.py` say so themselves: they *"guard against a further fall, not the old level"*.
+   So:
+   * never choose a constant because it clears a floor.  22.7 declined to read `win_decay_d = 0.6` against
+     the floors for exactly this reason, and that was right.
+   * a MARGINAL miss is not a veto.  0.759 against a 0.76 floor is noise on a sanity check, and a candidate
+     that is significant on the criterion should not be thrown away for it.  Report the number honestly and
+     decide on the criterion.
+   * a GROSS miss still is a veto, because that is what the check is for.
+   * the criterion (`scripts/45_holdout.py`, held-out seasons, actual points) remains the one test that is
+     both external and legal to select on.  It decides; the consensus sanity-checks.
+
+3. **The 3-season window is on the way out.**  *"Nobody really looks at chunks, we will ultimately move away
    from this mode."*  Do not tune K or the window length; prefer work that survives the move to a continuous
    or per-season rating.
-3. **Schedule context is not worth it** (*"evens out really well"*) -- rest days and back-to-backs, declined.
-4. **The four-factor defensive fit is right but was too big for v1.**  It is now the most promising thing left
+4. **Schedule context is not worth it** (*"evens out really well"*) -- rest days and back-to-backs, declined.
+5. **The four-factor defensive fit is right but was too big for v1.**  It is now the most promising thing left
    (Part 3).
-5. **The prior was the work, and the prior is now mostly spent.**  Part 3 says what replaced it.
+6. **The prior was the work, and the prior is now mostly spent.**  Part 3 says what replaced it.
 
 ## Part 1: where it stands
 
@@ -259,7 +273,19 @@ https://fansided.com/2015/09/21/shot-blocking-details-mining-19-years-of-play-by
 https://www.basketball-reference.com/about/bpm2.html ; pbpstats enhanced play-by-play,
 https://pbpstats.readthedocs.io/en/latest/pbpstats.resources.enhanced_pbp.html
 
-### 3.2 The defensive four-factor fit
+### 3.2 The defensive four-factor fit -- now the single thing blocking a measured 0.14
+
+**FINDINGS 22.7 put a number on this.**  A 625-trial search over the whole estimator, validated on 14
+held-out seasons the optimizer never saw, found `tune501`: **-0.138 on the criterion at z -3.95 over 22 of 28
+seasons, and 20% FASTER than what ships**.  It fails the consensus, and the reason is entirely defensive --
+the gain lives in `win_decay_d` = 0.28 (pooling the defensive prior's target over nearby windows instead of
+the whole career), and the defensive agreement floor refuses it.  Restoring the shipped 1.0 recovers the floor
+and gives back 0.058 of the 0.083, taking z from -3.02 to -0.75.
+
+So this is no longer "the most promising thing left".  It is the thing standing between this board and a
+measured, significant, cheaper gain, and the disagreement is substantive: the criterion wants defence weighted
+toward recent form, the consensus wants the career statement.  A defensive fit that both sides believe is what
+unlocks 22.7.
 
 Fit opponent eFG allowed, turnovers forced, offensive rebounds allowed and free-throw rate allowed separately,
 each with its own ridge ratio -- the asymmetry came out ESTIMATED, not imposed (forcing turnovers is a real

@@ -2474,6 +2474,103 @@ Nothing shipped.  `ship_shot7d_ll` is a genuine -0.014 with ten of ten floors an
 0.768.  Both systems stay in the registry; `scratch/prior_bench.py` grew `--ll`, `--cf`, `--ne` and `--zrates`
 for whoever picks the defensive booster up again.
 
+### 7. The estimator search: a real, significant, unshippable gain, and exactly where it is blocked
+
+The owner: *"in reality you should just do hyper parameter tuning on the entire estimator, not just linear
+leaves."*  Right, and overdue -- every knob in sections 21 and 22 was moved one at a time, while 21.25 and
+22.6 both found the parts INTERACT, which one-at-a-time cannot see.  `scripts/55_tune.py` searches the ridge
+(`lam` multiple, `lam_ratio`), the pooling (`win_decay` per side, the offensive blend) and both boosters
+(depth, lr, l2, bins, subsample, colsample, min_child_weight, linear leaves, cross features, bag).
+
+**The design matters more than the search.**  Selecting on the criterion is selecting on the test set, so the
+objective is scored on 14 ALTERNATING held-out seasons and the other 14 are never shown to the optimizer;
+the shipped board is scored on both halves as a reference line because the halves sit at different levels
+(111.468 and 110.073).  625 trials in 97 minutes, TPE over sqlite, parallel over trials with each worker
+holding one trial's seasons warm.
+
+The split earned its keep on the first look: **the best SEARCH trial (491, -0.194) regressed to -0.060 on the
+confirm half, while the eventual winner ranked 8th on search.**  24 of the top 25 beat the shipped board on
+the confirm half, -0.015 to -0.111 -- so the region is real, but the ranking inside it is mostly noise.
+
+#### What it found, on all 28 seasons
+
+| | criterion | vs shipped | z | 28-fit seconds | floors |
+|---|---|---|---|---|---|
+| `ship_shot7d` (what ships) | 110.707 | | | 46.3 | 10 of 10 |
+| **`tune501`** | **110.569** | **-0.138** | **-3.95** | **37.3** | bigness 0.323, defense 0.759 |
+| `tune234` | 110.576 | -0.131 | -3.11 | 47.1 | bigness 0.329, defense 0.737 |
+| `tune501_b7` (blend backed to 0.7) | 110.624 | -0.083 | -3.02 | 37.2 | **defense 0.7592, by 0.0008** |
+| `tune501_b7_wd06` | 110.639 | -0.067 | -2.37 | 37.3 | not read, deliberately |
+| `tune501_b7_wd1` | 110.681 | -0.025 | -0.75 | 37.6 | **10 of 10**, defense 0.763 |
+| `tune501_b7_dship` | 110.686 | -0.021 | -0.94 | 37.9 | **10 of 10**, defense 0.762 |
+
+`tune501` is **z -3.95 over 22 of 28 seasons AND 20% faster than what ships**, so Part 0.1's parsimony
+tie-break never has to be invoked.  It is the largest criterion gain since 21.24 and it cannot ship.
+
+**Four independent candidates converged on the same structure**, which is why this reads as a finding rather
+than 625 lottery tickets: linear leaves on BOTH sides, cross features on offense only, **no defensive bag**,
+`win_decay_d` 0.24-0.31, 64-128 bins rather than 254, and subsample / colsample around 0.65-0.83 where the
+hand-tuned board used 1.0.  The first three are an **independent rediscovery of 22.6's hand decomposition**,
+reached from the opposite direction, which is the strongest evidence either result has.
+
+#### Where it is blocked, precisely
+
+Two floors fail and they fail for different reasons.
+
+**The bigness gap is the offensive target.**  Every candidate wants `blend` 0.86-1.00, i.e. nearly pure APM,
+which is what failed the floor in 21.26; blending back to 0.7 fixes it and costs 0.055.  Known behaviour.
+
+**The defensive agreement is `win_decay_d`, and it is not a width problem.**  Every tuned candidate IMPROVED
+the defensive spread (1.27-1.28 against the shipped 1.30) -- the prior got tighter and the consensus agreed
+with it LESS.  The knob responsible is the defensive nearby-window discount: the search wants 0.28, the
+shipped board pools every window alike at 1.0, and restoring 1.0 recovers the floor (0.763) while giving back
+0.058 of the 0.083 and taking z from -3.02 to -0.75.
+
+**`win_decay_d` = 0.6 was not read against the floors, on purpose.**  It scores -0.067 and would probably
+scrape over; choosing the pooling constant that just clears a validation gate is fitting the gate, and the
+gate is the only external check this project has.  1.0 is defensible because it is the INCUMBENT value, not a
+value chosen to pass.  Whoever revisits this should hold that line.
+
+#### What it means, under the owner's ruling on the consensus
+
+Written first as "the floors veto this", which was wrong.  The owner, on reading it: *"disagreeing with
+consensus is just a sanity check, never something to fully fit to."*  The floors say the same of themselves --
+they *"guard against a further fall, not the old level"*.  So the misses have to be read for SIZE, not as
+pass/fail:
+
+* `tune501_b7` misses the defensive agreement floor by **0.0008** (0.7592 against 0.760).  That is noise on a
+  sanity check.  It is significant on the criterion (z -3.02, 18 of 28), it is 20% faster than what ships, and
+  it passes the other nine floors including the bigness gap.  **This is a shippable board.**
+* `tune501` misses two: the same defensive agreement (0.759) and the bigness gap at **0.323 against 0.30**.
+  The second is a different animal -- an 8% overshoot on the archetype check, and archetype bias is exactly
+  what the consensus exists to catch (21.19, and the Robert Williams case that started all of this).  Its
+  criterion number is better still (-0.138, z -3.95, 22 of 28), so this is a real trade, not a formality.
+* the backed-off variants clear every floor and are inside noise (z -0.75, -0.94).  They are what the old
+  reading would have shipped, and they would have thrown the whole gain away.
+
+The substantive disagreement stands, separately from the shipping call: **the criterion wants defence weighted
+toward the windows either side of the block (`win_decay_d` 0.28, i.e. recent form) and the consensus of public
+metrics wants the career-level statement.**  Both boards are internally coherent; they mean different things
+by "a defensive rating".  That is HANDOFF 3.2's territory, and a four-factor fit both sides believe would
+dissolve it rather than trade it off.
+
+`tune234`, `tune501`, `tune596`, `tune609` and the backed-off variants are all in the registry with their
+parameters written out literally, so none of this depends on `outputs/tune_all.db`.
+
+#### Two lessons about the machinery
+
+**A cache keyed by the parameter set is a memory leak under a search.**  The first study OOMed all 2,000
+trials in under three minutes: `Context._priors` is keyed by the parameter dict and never evicts, so with
+persistent workers every trial added a `GBDTPrior` holding a fitted booster per exclusion set.  `evaluate`
+drops it per trial now, workers recycle, per-trial RSS is printed, and fifteen consecutive failures abort the
+study instead of burning it.  The box has **34 GB of physical ram** -- the 48 GB in the handoff is the commit
+limit including the page file, and it is not what bounds concurrent workers.  Four workers at ~4 GB is the
+ceiling.
+
+**The search agreed with the offline prior bench where 22.6 said it would.**  Both found the defensive
+booster's shape (linear leaves yes, cross features no, bag no).  Neither the bench nor the search could see
+the consensus floors, which is where the answer actually turned.
+
 ### 5. What the pass says about the prior
 
 Five things were measured on the criterion and four of them are zero or worse.  The one that is not is worth

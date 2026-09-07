@@ -242,6 +242,62 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                                        gbdt_params=_FULLQ4, win_decay=0.3, gbdt_params_d=_LLD,
                                        win_decay_d=1.0,
                                        gbdt_features={"O": list(_SF), "D": [*_FF, *_SQ]})
+        # ---------------------------------------------------------------- the search's frontier (FINDINGS 22.7)
+        # scripts/55_tune.py, 625 trials over the whole estimator, scored on 14 alternating held-out seasons
+        # with the other 14 kept back.  These four are the confirm-half frontier: 234 the most accurate, 501
+        # the parsimony pick, 596 and 609 most of the gain at a fraction of the cost.  Written out literally
+        # so the board does not depend on outputs/tune_all.db.
+        #
+        # All four agree on three things the hand tuning had wrong or half-right: linear leaves on BOTH sides,
+        # cross features on offense only, no defensive bag (22.6 found the same by hand), and a defensive
+        # nearby-window discount of ~0.25-0.31 where the shipped board pools every window alike.
+        from .gbdt_prior import FULL_FEATURES as _FF2, SHOT_FEATURES as _SF2, SHOTQ as _SQ2
+        TUNED: dict = {}
+        TUNED["tune234"] = dict(lam_mult=0.99103, lam_ratio=0.543385, blend=0.858776, win_decay=0.269307, win_decay_d=0.243613, o_depth=7, o_lr=0.11344, o_l2=0.416167, o_bins=128, o_subsample=0.756377, o_colsample=0.730909, o_mcw=1.4135, o_ll=True, o_cf=True, o_bag=5, d_depth=5, d_lr=0.0603821, d_l2=14.9619, d_bins=254, d_subsample=0.708535, d_colsample=0.678646, d_mcw=31.0206, d_ll=True, d_cf=False, d_bag=1)
+        TUNED["tune501"] = dict(lam_mult=0.624047, lam_ratio=0.624519, blend=0.99967, win_decay=0.514318, win_decay_d=0.280024, o_depth=5, o_lr=0.0882469, o_l2=2.35039, o_bins=64, o_subsample=0.681911, o_colsample=0.604113, o_mcw=2.10825, o_ll=True, o_cf=True, o_bag=5, d_depth=4, d_lr=0.0872486, d_l2=18.8061, d_bins=128, d_subsample=0.654803, d_colsample=0.83231, d_mcw=3.26392, d_ll=True, d_cf=False, d_bag=1)
+        TUNED["tune596"] = dict(lam_mult=0.427274, lam_ratio=0.91966, blend=0.971711, win_decay=0.403848, win_decay_d=0.308089, o_depth=4, o_lr=0.16041, o_l2=3.37425, o_bins=64, o_subsample=0.66728, o_colsample=0.754107, o_mcw=1.06444, o_ll=True, o_cf=True, o_bag=1, d_depth=4, d_lr=0.106781, d_l2=29.8289, d_bins=128, d_subsample=0.526268, d_colsample=0.708751, d_mcw=1.62074, d_ll=True, d_cf=False, d_bag=1)
+        TUNED["tune609"] = dict(lam_mult=0.458471, lam_ratio=0.839104, blend=0.981735, win_decay=0.796479, win_decay_d=0.251493, o_depth=7, o_lr=0.0468551, o_l2=1.92763, o_bins=64, o_subsample=0.684056, o_colsample=0.740265, o_mcw=1.02222, o_ll=True, o_cf=True, o_bag=1, d_depth=3, d_lr=0.0419275, d_l2=6.0647, d_bins=64, d_subsample=0.78782, d_colsample=0.716312, d_mcw=29.9372, d_ll=True, d_cf=False, d_bag=1)
+
+        def _tuned(name, p, blend=None):
+            """A tuner parameter dict -> the MspiFast it describes (scripts/55_tune.py `build`)."""
+            def booster(side):
+                b = dict(depth=int(p[f"{side}_depth"]), learning_rate=float(p[f"{side}_lr"]),
+                         l2_leaf_reg=float(p[f"{side}_l2"]), max_bins=int(p[f"{side}_bins"]),
+                         subsample=float(p[f"{side}_subsample"]), colsample=float(p[f"{side}_colsample"]),
+                         min_child_weight=float(p[f"{side}_mcw"]), linear_leaves=bool(p[f"{side}_ll"]),
+                         cross_features=bool(p[f"{side}_cf"]))
+                if int(p[f"{side}_bag"]) > 1:
+                    b.update(n_ensembles=int(p[f"{side}_bag"]), ensemble_n_jobs=1)
+                return b
+            w = float(p["blend"] if blend is None else blend)
+            return MspiFast(name, target=("apm" if w >= 0.999 else f"blend{round(w, 3)}"), target_d="rapm1",
+                            lam=float(cfg["lam_plugin"]) * float(p["lam_mult"]),
+                            lam_ratio=float(p["lam_ratio"]), win_decay=float(p["win_decay"]),
+                            win_decay_d=float(p["win_decay_d"]),
+                            gbdt_params=booster("o"), gbdt_params_d=booster("d"),
+                            gbdt_features={"O": list(_SF2), "D": [*_FF2, *_SQ2]})
+
+        for _n, _p in TUNED.items():
+            S[_n] = _tuned(_n, _p)
+        # the offensive target every candidate wants is nearly pure APM, which is what broke the bigness
+        # floor in 21.26.  The same boosters with the target blended back toward RAPM_1, for the floors.
+        for _b in (0.7, 0.6):
+            for _n in ("tune501", "tune234"):
+                _nm = f"{_n}_b{str(_b).replace('0.', '')}"
+                S[_nm] = _tuned(_nm, TUNED[_n], blend=_b)
+        # Every tuned candidate fails the consensus.  tune501_b7 fails ONE floor by 0.0008 (defensive
+        # agreement 0.7592 against 0.76) while its defensive SPREAD improves to 1.28, so the prior is not too
+        # wide -- the agreement alone moved.  The suspect is the defensive nearby-window discount, which the
+        # search set to 0.28 and the shipped board leaves at 1.0: 21.26's pattern exactly, where what the
+        # criterion wants on defense is what the floors refuse.  Back that one knob off and keep the rest.
+        from dataclasses import replace as _replace
+        for _wd in (1.0, 0.6):
+            _t = f"{_wd:g}".replace(".", "")
+            S[f"tune501_b7_wd{_t}"] = _replace(S["tune501_b7"], name=f"tune501_b7_wd{_t}", win_decay_d=_wd)
+            S[f"tune501_b6_wd{_t}"] = _replace(S["tune501_b6"], name=f"tune501_b6_wd{_t}", win_decay_d=_wd)
+        # and the same with the SHIPPED defensive booster, if the booster rather than the pooling is at fault
+        S["tune501_b7_dship"] = _replace(S["tune501_b7"], name="tune501_b7_dship", win_decay_d=1.0,
+                                         gbdt_params_d={"linear_leaves": True, "cross_features": False})
         # the same without the nearby-window discount (the consensus floors, not the criterion, may want it)
         S["ship_ratio_b07_wd1"] = MspiFast("ship_ratio_b07_wd1", target="blend0.7",
                                            **{**_SK, "win_decay": 1.0})
