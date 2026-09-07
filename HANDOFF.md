@@ -1,4 +1,13 @@
-# Handoff: the settled-context offensive prior shipped; next is the defensive four-factor fit (3.2)
+# Handoff: the settled-context offensive prior shipped; the four-factor defence measured and declined
+
+**Measured 2026-09-07, later the same day: HANDOFF 3.2, the defensive four-factor fit (FINDINGS 25).**  Built
+(`fastfit.factor_defense`, an identity test), measured in twelve forms, not shipped.  Full replacement of the
+defensive residual is +0.10 to +0.31 against the board; the best half blend -0.040 at z -0.94 and 7x slower.
+The zero-prior pair says where the value is: without a defensive prior the factor residual beats the points
+residual by 0.11 (z -1.44); with the prior shared out across factors by fixed shares the gain is lost.  The
+consensus likes the raw-eFG factor defense (0.768 vs 0.758) and the criterion rejects it: 22.7's disagreement
+again, the other way round.  **Part 3.2 below is now the record and 3.2b (per-factor priors) is what would
+finish it; start at 3.5 or 3.2b.**
 
 **Shipped 2026-09-07: `tune501_b7_turnref_o`** (FINDINGS 24.9) -- the offensive prior trained on window pairs
 with teammate turnover as a feature and evaluated at a settled context of 0.35 for everyone; defense as it
@@ -110,6 +119,10 @@ applies as ZERO, silently).
 | the same with shot quality (`best_shot`) | 109.801 (z -1.13) | 70 s |
 | **what ships** (`tune501_b7_turnref_o`, the settled-context turnover prior on offense (24.9), ten of ten floors as tested, defensive spread 1.28) | **110.569 (z -3.39, 22/28 vs `tune501_b7`)** | 58 s |
 | `tune501_b7` -- the board it replaced (22.7) | 110.624 | 37 s |
+| `tune501_b7_turnref_o_ffx5` -- the four-factor defence, repriced eFG, half blend (25), the best form | 110.529 (z -0.94, 18/28) | 427 s |
+| `tune501_b7_turnref_o_ffx` -- the same, full replacement | 110.667 (z +1.33) | 427 s |
+| `tune501_b7_turnref_o_nodp` / `_nodp_ffx` -- NO defensive prior, points residual / factor residual | 111.026 / 110.915 | 57 / 127 s |
+| `tune501_b7_turnref_o_dprior` -- the defensive prior alone, no residual | 112.482 | 90 s |
 | `tune501_b7_turnref` -- the same on both sides | 110.561 (z -2.53) | 60 s |
 | `tune501_b7_turn` -- with the per-player trade delta to H | 110.693 (z +1.07) | 66 s |
 | `tune501_b7_drd` -- the whole Dredge block on defense (23) | 110.618 (z -0.20) | 39 s |
@@ -155,7 +168,9 @@ feature lists on either side -- without touching `config.yaml` permanently.
 | `calmap.Turn` / `MovedPrior` | map terms `turn` / `turnx` / `turnprior` (+ `turnp*` past-only, `turna*` half-season control), `mprior`; `SeasonFrame.turnover(k, train)` builds the covariates |
 | `scratch/trade_turnover.py` | build the teammate table and print the turnover distributions; writes `outputs/csv/turnover_season.csv` / `turnover_windows.csv` (ignored, 40 s) |
 | `scratch/trade_spm.py` / `trade_gbdt.py` | the trade-weighted SPM, linear and boosted, leave-window-out on the pair rows; the boosted one writes `outputs/csv/trade_delta_{O,D}.csv` |
-| `scratch/trade_maps.py` / `trade_pair.py` | the map terms on an existing dump with the control set; the paired test when a dump carries several maps |
+| `scratch/trade_maps.py` / `trade_pair.py` | the map terms on an existing dump with the control set; the paired test when a dump carries several maps (**the base is read at its SHIPPING map**; it used to take the first, the `&turn` one, and the "vs base" column was off by 0.09) |
+| **`fastfit.factor_defense`** / `factor_rows` / `points_per_factor` / `FACTOR_LAMS` / `MspiFast(def_factors=, factor_reml=, factor_x3=, factor_lam_scale=, factor_lams=, no_def_prior=)` | **the four-factor defence (25)**: four factor fits on the points layout, the prior split by zero-prior slopes, recombined with the row-level gradients; `factor_diag` on the system after a fit carries g, the shares, the ridges chosen.  `tests/test_factor_defense.py` (5) holds the identity |
+| `xshoot.expected_threes(seasons, cfg, wd)` | each row's expected opponent threes at the shooters' padded other-half rate: x3def's repricing as a function, used by `def_three_design` and by the repriced eFG factor |
 | `scripts/54_track.py` | the tracker: dump a system at K = 3 (timed), fit the map leave-one-season-out, score, log a row, redraw the chart.  `--systems=a,b "--maps=..." --label=...`; one dump per system |
 | `scratch/prior_bench.py` | **the 20-second pre-filter**: the prior's own leave-window-out fit per feature set, with the low-exposure stratum beside the pooled number.  `--q4 --loss= --delta= --sat= --past= --kmul=`, and a set may be written `shipD+russsh:blkrimsh` (add) or `shipD-blk+russ:blkrim` (REPLACE).  **Read 22.2 and 23.4 first: it is necessary, not sufficient, it has been wrong by 0.13, and the BASE LIST is part of the operating point** |
 | `scratch/pairsys.py` | the paired test between two TRACKED systems: pooled difference, z over the 28 seasons, wins |
@@ -246,13 +261,27 @@ expensive part is deciding it was worth measuring.
   -0.084 to `turn`; HShare kept 3% on half the games and was a leak.
 - **A per-player delta from a booster whose own leave-window-out gain is 0.04 is mostly noise** at a spread of
   0.3.  The criterion charged +0.13 for applying it.
+- **A within-block, player-level split-half read can point the WRONG WAY on a defensive residual.**  Tightening the
+  factor ridges 16-32x brought the factor sum level with the points residual player by player and cost +0.50
+  and +0.83 on the criterion (25.3).  The criterion values the residual's team-coherent content, which a
+  correlation across players cannot see.  Use split-half to reject a residual, never to choose its ridge.
+- **REML on a joint offense/defense fit is not a guide to the defensive half** when the offensive half carries
+  the real skill: on eFG% it chose the ratio LOOSER (1.0 against 1.5) while the defensive half read 0.19
+  split-half (25.3).  Fix the ratio a priori or select it on the defensive half alone.
+- **A prior shared out across sub-fits by FIXED shares leaves a persistent, uninformative residual** (25.5):
+  the factor residual was more reliable year over year than the points residual (0.75 vs 0.71) and predicted
+  worse.  Reliability is not information when the thing that persists is a mis-split prior.
+- **The tracker's `seconds` for a system that computes shooter rates or REML per fit runs 4-7x the board's**
+  (ffx 427 s against 58 s); measure the winner alone before quoting a time.
 - Long bash heredocs still fail in this shell; write patch scripts with the Write tool.
 
 ## Part 3: the next pass
 
-**Start at 3.2.**  3.0 is done (below).  3.2 is the estimator work that unlocks 22.7's 0.14.  The prior's
-INPUTS remain spent (21.24, 21.25, 22.5, 23); what 24 found was not a new column but a different question put
-to the same columns.
+**Start at 3.5 or 3.2b.**  3.0 is done and 3.2 is measured (both below).  3.2 as written -- per-factor
+shrinkage with the points prior shared out -- does not unlock 22.7's 0.14; it loses.  What survives of it is a
+measured -0.11 for per-factor shrinkage WITHOUT a prior, which 3.2b (per-factor priors, FINDINGS 25.6) would
+build on; 3.5 (single-season targets) is the product direction and the thing that makes 24's trade delta
+testable.  The prior's INPUTS remain spent (21.24, 21.25, 22.5, 23).
 
 ### 3.0 DONE 2026-09-07: the settled-context offensive prior is shipped (`tune501_b7_turnref_o`, FINDINGS 24.9)
 
@@ -425,7 +454,24 @@ https://fansided.com/2015/09/21/shot-blocking-details-mining-19-years-of-play-by
 https://www.basketball-reference.com/about/bpm2.html ; pbpstats enhanced play-by-play,
 https://pbpstats.readthedocs.io/en/latest/pbpstats.resources.enhanced_pbp.html
 
-### 3.2 The defensive four-factor fit -- START HERE: the one thing blocking a measured 0.14
+### 3.2 DONE and answered 2026-09-07: the defensive four-factor fit is built, and it does not beat one ridge (FINDINGS 25)
+
+**Do not start here.**  It is built (`fastfit.factor_defense`: four factor fits on the points layout, each
+with its own ridge and ratio, the prior split across them, recombined with the row-level gradients eFG 1.55 /
+TOV -1.04 / OREB 0.63 / FTR 0.32; an identity test proves the plumbing) and measured in twelve forms against
+the board.  Full replacement +0.10 (repriced eFG) to +0.31; the half blend -0.040 at z -0.94, 18 of 28, at
+7x the fit time; the ridges tightened 16-32x +0.50 / +0.83.  The bounds: the defensive prior alone +1.91,
+no defensive prior +0.46 -- and with no prior the FACTOR residual beats the points residual by 0.11
+(z -1.44).  So per-factor shrinkage is worth something and the fixed-share prior split costs more than it.
+The consensus prefers the raw-eFG factor defense (0.768 vs 0.758 on defense) and the criterion rejects it.
+
+**3.2b, what would finish it (not scheduled): per-factor priors.**  Four defensive factor targets in the
+role panel (`49_role_panel.py`, one zero-prior ridge per factor per window) and four defensive boosters, so
+each factor shrinks toward a prior of its own kind.  Keep FINDINGS 15's a-priori ridges (REML per fit chose
+the wrong direction on the defensive half and costs 8-15 s a fit); read the consensus screen, because the
+form the criterion prefers (repriced eFG) breaks the defensive spread floor at 1.49.  About a day.
+
+*The section as it stood before, kept for the record of why it was expected to work:*
 
 **FINDINGS 22.7 put a number on this.**  A 625-trial search over the whole estimator, validated on 14
 held-out seasons the optimizer never saw, found `tune501`: **-0.138 on the criterion at z -3.95 over 22 of 28
@@ -503,6 +549,9 @@ cousin of it.
   into a dead name.  The site is back at `https://bbstats.github.io/openrapm/`, https enforced.  To turn the
   domain on: four GitHub `A` records + a `www` CNAME at Porkbun FIRST, then re-add `docs/CNAME` on `main`,
   wait for the cert, then `gh api -X PUT repos/bbstats/openrapm/pages -F https_enforced=true`.
+* Never re-run, from 25: the four-factor defence with the fixed-share prior split at any ridge, raw or
+  repriced eFG, full or half blend; REML over the factor ratio; factor ridges chosen on a player-level
+  split-half read.
 * Never re-run, from 24: the per-player trade delta applied to the held-out season at K = 3 (`tune501_b7_turn`,
   +0.069); the turnover prior on defense (flat, and it costs the defensive agreement); the mover / turnover
   slopes on the rating or the prior in the map (zero both ways); the `turnp` (past-only) level.

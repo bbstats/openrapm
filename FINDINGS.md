@@ -3246,3 +3246,130 @@ ridge has already shrunk it and because three seasons of lineups average most of
 out.  The level term is the same journeyman tax as section 3 (-0.3 to -0.4 on offense, +0.35 to +0.45 raw sign
 on defense, holding both parts fixed).  Per-season plus-minus is where the teammate contamination is loudest
 and this is one more thing 3.5 would let us ask properly.
+
+## 25. The defensive four-factor fit: measured, the criterion says no, and the zero-prior pair says why
+
+Written 2026-09-07, HANDOFF 3.2.  Lower is better; "vs board" is candidate minus `tune501_b7_turnref_o`
+(110.5693, the board shipped in 24.9) on the K = 3 criterion under the shipping map, paired over the same 28
+held-out seasons (`scratch/trade_pair.py`, which now takes the base's SHIPPING map when the dump carries two).
+
+### 1. What was built (`fastfit.factor_defense`, `tests/test_factor_defense.py`)
+
+The defensive residual from four factor fits instead of one points fit.  Each factor -- opponents' eFG% (per
+100 attempts, weighted by attempts), turnovers forced (per 100 possessions), offensive rebounds allowed (per
+100 chances), free-throw rate allowed (per 100 attempts) -- is solved on the points fit's OWN layout: the same
+players, the same fixed block, the same exposure, only the response and the row weight change
+(`factor_rows`; a row with no denominator gets weight 0 and stays in the design).  Each has its own ridge and
+its own offense/defense ratio: FINDINGS 15's, fixed a priori (`FACTOR_LAMS`: eFG 3495 / 1.5, TOV 2176 / 0.75,
+OREB 414 / 3.0, FTR 1355 / 1.0), or re-selected by REML inside the fit on the residual around the prior share
+(`factor_reml`, a 21-point log grid; `"2d"` searches the ratio too).  The points prior (the GBDT, in points
+per 100) is shared out across the factors by the slope of each factor's zero-prior effect on the zero-prior
+points effect, per side, normalised so the four shares recombine to exactly one prior, and each factor fit
+shrinks toward its share.  The four defensive effects are recombined into points allowed with
+`points_per_factor`, the gradient of the row's points on its four rates (possession-weighted, a level per
+season): **eFG 1.55, TOV -1.04, OREB 0.63, FTR 0.32 points per 100 per point of rate, R-squared 0.88** on the
+2021-2024 block.  So the rating is prior_d + sum_f g_f u_f, the same object as prior_d + u_d with the
+residual shrunk factor by factor.  `factor_x3` reprices the eFG numerator at the shooters' expected threes
+(`xshoot.expected_threes`, the piece of x3def the factor needs, refactored out of `def_three_design`).
+
+The plumbing is proved by an identity: with the eFG factor built to be exactly half the points response on
+the same rows and weights, the prior share comes out at one half, the gradient at two, and the recombined
+defense equals the points fit to 1e-8 (`test_the_identity_the_efg_factor_reproduces_the_points_fit`).
+
+### 2. The criterion
+
+| system | what | criterion | vs board | z | wins | 28 fits |
+|---|---|---|---|---|---|---|
+| `tune501_b7_turnref_o` | the board | 110.5693 | | | | 58 s |
+| `..._ff` | FINDINGS 15's ridges, raw eFG | 110.8480 | +0.279 | 2.89 | 10/28 | 91 s |
+| `..._ffr` | REML ridges (1d) | 110.8124 | +0.243 | 2.32 | 11/28 | 130 s |
+| `..._ffr62` | REML x 0.62 (the search's discount) | 110.8838 | +0.315 | 2.80 | 8/28 | 127 s |
+| `..._ffr5` | REML, blended half and half with the points residual | 110.5631 | -0.006 | -0.08 | 16/28 | 128 s |
+| `..._ff5` | FINDINGS 15's ridges, the same blend | 110.5924 | +0.023 | 0.48 | 14/28 | 89 s |
+| `..._ffx` | **repriced eFG**, REML | 110.6674 | +0.098 | 1.33 | 13/28 | 427 s |
+| **`..._ffx5`** | **repriced eFG, REML, half blend** | **110.5289** | **-0.040** | **-0.94** | **18/28** | 427 s |
+| `..._ffx16` | repriced, ridges x 16 | 111.0700 | +0.501 | 4.78 | 5/28 | 223 s |
+| `..._ffx32` | repriced, ridges x 32 | 111.3949 | +0.826 | 6.51 | 3/28 | 323 s |
+
+and the three bounds that make the table readable:
+
+| system | what | criterion | vs board | z | wins |
+|---|---|---|---|---|---|
+| `..._dprior` | the defensive PRIOR alone, no residual (ridges at 1e6) | 112.4820 | +1.913 | 10.23 | 1/28 |
+| `..._nodp` | NO defensive prior, the points residual | 111.0263 | +0.457 | 7.63 | 1/28 |
+| `..._nodp_ffx` | NO defensive prior, the factor residual (repriced, REML) | 110.9154 | +0.346 | 3.85 | 7/28 |
+
+**`nodp_ffx` against `nodp`: -0.111, z -1.44, 17 of 28.**  The residual is worth 1.9 points per 100 at
+team-game level and the prior 0.46 on top of it; per-factor shrinkage on its own is a small real gain; and
+with the prior shared out by fixed shares the whole of that gain and more is lost (+0.10 full, -0.04 half).
+
+### 3. The split-half read, and a trap
+
+One block (2021, 2022, 2024 for H = 2023), fit on half A and half B of the games, correlated over players
+with 500+ possessions in both:
+
+| residual | split-half r | sd (pts/100) | predicts the OTHER half's points residual |
+|---|---|---|---|
+| the points fit's u_d | 0.477 | 0.57 | 0.477 |
+| factor sum, REML 1d, raw eFG | 0.323 | 2.06 | 0.327 |
+| ... of which eFG D-half | **0.193** | 1.34 | 0.244 |
+| ... TOV / OREB / FTR D-halves | 0.47 / 0.40 / 0.52 | 0.81 / 0.98 / 0.58 | 0.15 / 0.16 / 0.12 |
+| factor sum, REML 2d (eFG ratio chosen 1.0, LOOSER) | 0.314 | 2.30 | 0.309 |
+| factor sum, REML 1d, **repriced eFG** (eFG D-half 0.19 -> 0.33) | 0.387 | 1.81 | 0.361 |
+| the same at ridges x 4 / x 8 / x 16 / x 32 | 0.445 / 0.490 / 0.535 / 0.572 | 1.01 / 0.68 / 0.44 / 0.27 | 0.425 / 0.455 / 0.475 / 0.484 |
+
+Three things.  The eFG defensive half is the largest contributor and nearly noise at ratio 1.5, and REML over
+the ratio makes it LOOSER, not tighter: REML on a joint fit is not a guide to the defensive half when the
+offensive half carries the real skill.  Repricing the threes is the one clean repair, worth 0.14 of split-half
+reliability on that factor and 0.15 on the criterion (ff to ffx).  And **the within-block player-level read
+and the team-game criterion disagree in DIRECTION on the ridge**: tightening the factor ridges 16-32x brings
+the factor sum level with the points residual player by player, and costs +0.50 and +0.83 on the criterion.
+The criterion values the residual for its team-coherent, lineup-level content -- the scheme that spreads over
+a roster -- which a correlation across players cannot see and which a tight ridge removes first.  A
+split-half correlation across players is a rejection tool for a defensive residual, never a selection tool.
+
+### 4. The consensus screen (`scratch/consensus_read.py`, 2024-2026, 475 players, validation only)
+
+| mapped system | total | offense | defense | defensive spread | defensive gap vs bigness |
+|---|---|---|---|---|---|
+| `tune501_b7_turnref_o` | 0.8016 | 0.8027 | 0.7582 | 1.287 | 0.219 |
+| `..._ffr` | 0.8058 | 0.8029 | 0.7683 | 1.341 | 0.323 |
+| `..._ffr5` | 0.8085 | 0.8029 | 0.7777 | 1.335 | 0.307 |
+| `..._ffx` | 0.7956 | 0.8030 | 0.7392 | 1.489 | 0.323 |
+| `..._ffx5` | 0.8008 | 0.8029 | 0.7533 | 1.414 | 0.295 |
+| `..._nodp` (no defensive prior) | 0.8196 | 0.8024 | **0.7851** | 1.154 | **-0.091** |
+| `..._nodp_ffx` | 0.8060 | 0.8024 | 0.7429 | 1.386 | 0.221 |
+
+The raw-eFG factor defense is the consensus's preference (defense 0.768 / 0.778 against 0.758) and the
+criterion's rejection; the repriced one, which the criterion prefers, the consensus likes less (0.739) and it
+breaks the defensive spread floor (1.49 against 1.4).  And the consensus's favourite defense on this screen,
+by a distance, is NO defensive prior at all: 0.785 with the archetype bias gone (-0.09).  That is FINDINGS
+16 restated on the shipped machinery: the defensive box prior predicts (+0.46 when removed) and
+mis-attributes, and the four-factor fit does not resolve the two, it moves along the same axis.
+
+### 5. Verdict
+
+Not shipped.  The best form (`ffx5`, -0.040 at z -0.94) is inside the noise, 7x slower, and marginal on the
+spread floor; Part 0 ruling 1's tie-break goes to the board.  What was learned is where the idea's value
+actually lives: **per-factor shrinkage without a prior is worth -0.11; the fixed-share prior split costs
+more than that.**  A share h_f puts a big's prior into rebounding-points and a guard's into foul-points the
+same way for everyone, and the residual around a wrong share is persistent (year-over-year reliability of
+the factor residual 0.75 against 0.71 for the points residual at a gap of one season; 0.71 against 0.64 at
+three) without being points information.
+
+### 6. What would finish it
+
+Per-factor PRIORS: four defensive factor targets in the role panel (`49_role_panel.py`, one zero-prior ridge
+per factor per window, cheap) and four defensive boosters on the box score, so each factor fit shrinks toward
+a prior of its own kind -- a big's rebounding rate toward his OREB-allowed effect, his blocks toward his
+eFG-allowed effect -- instead of a share of the points prior.  The zero-prior pair says the shrinkage half of
+the idea is worth about -0.11; whether four priors recover the points prior's 0.46 on top of it is the open
+question, and the consensus screen would have to be read (the raw-eFG form is the one it likes).  About a
+day.  The REML-per-fit path should not be carried into it: it is 8-15 s a fit and chose the wrong direction
+on the one half that matters; FINDINGS 15's a-priori ridges, or a once-selected set, are the right form.
+
+### 7. Never re-run
+
+The four-factor defense with the fixed-share prior split, at any ridge (FINDINGS 15's, REML 1d or 2d, x0.62
+to x32), raw or repriced eFG, full or half blend; the ridges tightened past REML on a player-level split-half
+read (section 3's trap).

@@ -331,6 +331,50 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         # and one side at a time: where the gain lives, and whether the defensive floors need to be asked
         S["tune501_b7_turnref_o"] = _replace(S["tune501_b7"], name="tune501_b7_turnref_o", turn="ref", turn_sides=("O",))
         S["tune501_b7_turnref_d"] = _replace(S["tune501_b7"], name="tune501_b7_turnref_d", turn="ref", turn_sides=("D",))
+        # ---------------------------------------------------------------- the four-factor defence (HANDOFF 3.2)
+        # The defensive residual from four factor fits on the same layout -- opponents' eFG%, turnovers forced,
+        # offensive rebounds allowed, free-throw rate allowed -- each with its own ridge and ratio (FINDINGS 15's,
+        # fixed a priori), the points prior shared out across them, and the four recombined into points allowed
+        # (fastfit.factor_defense).  On top of the shipped board; `ff5` blends half and half.
+        S["tune501_b7_turnref_o_ff"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_ff", def_factors=1.0)
+        S["tune501_b7_turnref_o_ff5"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_ff5", def_factors=0.5)
+        for _s in (0.5, 2.0):
+            _t = f"ff_ls{_s:g}".replace(".", "")
+            S[f"tune501_b7_turnref_o_{_t}"] = _replace(S["tune501_b7_turnref_o"], name=f"tune501_b7_turnref_o_{_t}",
+                                                       def_factors=1.0, factor_lam_scale=_s)
+        # the factor ridges re-selected by REML inside each fit, on the residual around the prior share (FINDINGS 15's
+        # were chosen with no prior and leave the residual 1.6x too wide); `ffr62` then applies the same 0.62
+        # discount the estimator search put on the points ridge (tune501's lam_mult), fixed a priori
+        S["tune501_b7_turnref_o_ffr"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_ffr",
+                                                 def_factors=1.0, factor_reml=True)
+        S["tune501_b7_turnref_o_ffr62"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_ffr62",
+                                                   def_factors=1.0, factor_reml=True, factor_lam_scale=0.624047)
+        S["tune501_b7_turnref_o_ffr5"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_ffr5",
+                                                  def_factors=0.5, factor_reml=True)
+        # what the split-half read said (FINDINGS 25): the eFG% defensive half is noise at ratio 1.5, and the ratio
+        # was fixed by a joint fit the offensive half dominates.  REML over the ratio too ("2d"), and the eFG%
+        # numerator repriced at the shooters' expected threes (x3def's repair on the factor that needs it)
+        S["tune501_b7_turnref_o_ff2d"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_ff2d",
+                                                  def_factors=1.0, factor_reml="2d")
+        S["tune501_b7_turnref_o_ffx"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_ffx",
+                                                 def_factors=1.0, factor_reml="2d", factor_x3=True)
+        S["tune501_b7_turnref_o_ffx5"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_ffx5",
+                                                  def_factors=0.5, factor_reml="2d", factor_x3=True)
+        # the factor ridges tightened well past REML: the split-half read on one block (2021-2024 minus 2023) put the
+        # factor sum's cross-half prediction of the points residual level with the points fit's own at 16-32x,
+        # and below it everywhere looser.  Chosen on that read, not on the criterion.
+        for _s in (16, 32):
+            S[f"tune501_b7_turnref_o_ffx{_s}"] = _replace(S["tune501_b7_turnref_o"], name=f"tune501_b7_turnref_o_ffx{_s}",
+                                                          def_factors=1.0, factor_reml=True, factor_x3=True,
+                                                          factor_lam_scale=float(_s))
+        # the other bound: the defensive prior ALONE (the factor ridges at 1e6 leave no residual at all), so the
+        # value of a defensive residual at team-game level is a number
+        S["tune501_b7_turnref_o_dprior"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_dprior",
+                                                    def_factors=1.0, factor_lam_scale=1e6)
+        # the diagnostic pair: no defensive prior at all, points residual against factor residual
+        S["tune501_b7_turnref_o_nodp"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_nodp", no_def_prior=True)
+        S["tune501_b7_turnref_o_nodp_ffx"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_nodp_ffx",
+                                                      no_def_prior=True, def_factors=1.0, factor_reml=True, factor_x3=True)
         from .gbdt_prior import DREDGE as _DR
         S["tune501_b7_drd"] = _replace(S["tune501_b7"], name="tune501_b7_drd",
                                        gbdt_features={"O": list(_SF2), "D": [*_FF2, *_SQ2, *_DR]})

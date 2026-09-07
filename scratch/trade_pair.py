@@ -21,7 +21,10 @@ def load(system):
 
 base = load(names[0])
 if base.system.nunique() != 1:
-    base = base[base.system == sorted(base.system.unique())[0]]
+    # the SHIPPING map family if the dump carries one (the `&turn` maps cannot ship and score lower), else the first
+    maps = sorted(base.system.unique())
+    ship = [m for m in maps if "&turn" not in m[len(names[0]):]]
+    base = base[base.system == (ship or maps)[0]]
 bg = float(pooled(base).game.iloc[0])
 bs = base.set_index("held_out")[["tg"]]
 print(f"\n  base {names[0]}: {bg:.4f} over {len(bs)} seasons ({base.system.iloc[0]})\n")

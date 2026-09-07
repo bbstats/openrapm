@@ -56,6 +56,167 @@ def derived_target(wd, name: str) -> np.ndarray:
     return tg["scale"] * num / den
 
 
+# ---------------------------------------------------------------- the four-factor defence (HANDOFF 3.2)
+FACTORS = ("efg", "tov", "oreb", "ftr")
+# per factor (lam, lam_D / lam_O): selected once by REML-in-band on the factor's own design and its own
+# scale (FINDINGS 15, 2024-2026, zero prior, `factors.select_lambda`), never on the criterion.  The asymmetry
+# is the point: forcing turnovers is a defensive skill (0.75), holding the opponents' eFG% down much less of
+# one (1.5), keeping them off the offensive glass barely one at all (3.0).
+FACTOR_LAMS = {"efg": (3495.0, 1.5), "tov": (2176.0, 0.75), "oreb": (414.0, 3.0), "ftr": (1355.0, 1.0)}
+FACTOR_COUNTERS = {"fgm", "fg3m", "fga", "tov", "poss", "reb_cont", "reb_chance", "fta", "att"}
+
+
+def factor_rows(wd, name: str, x3=None) -> tuple[np.ndarray, np.ndarray]:
+    """A factor's response and weight on the POINTS design's rows: the rate per 100 of its own denominator,
+    weighted by that denominator (design.TARGETS: an eFG% row carries information in proportion to its
+    attempts, not its possessions).  A row with no denominator gets weight 0 and response 0, so it drops out
+    of every cross-product without leaving the design.  `x3` (expected opponent three-point makes per row,
+    xshoot.expected_threes) reprices the eFG% numerator the way x3def reprices the points target: the makes
+    from three replaced by the shooters' expectation, so the defenders are not fit to whether threes dropped."""
+    tg = TARGETS[name]
+    c = wd.counters
+    num = sum(k * c[col].to_numpy(dtype=float) for col, k in tg["num"].items())
+    if name == "efg" and x3 is not None:
+        num = num - 1.5 * c["fg3m"].to_numpy(dtype=float) + 1.5 * np.asarray(x3, dtype=float)
+    den = c[tg["den"]].to_numpy(dtype=float)
+    ok = den > 0
+    y = np.zeros(len(den))
+    y[ok] = tg["scale"] * num[ok] / den[ok]
+    return y, np.where(ok, den, 0.0)
+
+
+def points_per_factor(y_pts, ys: dict, ws: dict, w_poss, season) -> tuple[dict, float]:
+    """d(points per 100) / d(factor), one number per factor: a possession-weighted least squares of the row's
+    points on its four rates with a level per season, over the rows where every rate is defined.  It is the
+    linearisation of the identity pts = 2 eFG FGA + FT% FTA around the block's own play (the rates are the
+    realised ones, so nothing is attenuated); what it leaves is the curvature, and the R^2 says how much."""
+    ok = np.ones(len(y_pts), bool)
+    for f in FACTORS:
+        ok &= ws[f] > 0
+    s = np.asarray(season)[ok]
+    levels = np.unique(s)
+    D = (s[:, None] == levels[None, :]).astype(float)
+    X = np.column_stack([D] + [np.asarray(ys[f])[ok] for f in FACTORS])
+    sw = np.sqrt(np.asarray(w_poss, dtype=float)[ok])
+    yk = np.asarray(y_pts, dtype=float)[ok]
+    coef = np.linalg.lstsq(X * sw[:, None], yk * sw, rcond=None)[0]
+    res = yk - X @ coef
+    mu = np.average(yk, weights=sw ** 2)
+    r2 = 1.0 - float(np.sum((sw * res) ** 2) / np.sum((sw * (yk - mu)) ** 2))
+    return {f: float(coef[len(levels) + i]) for i, f in enumerate(FACTORS)}, r2
+
+
+def _wslope(x, y, w):
+    """The weighted least-squares slope of y on x through the weighted means."""
+    w = np.asarray(w, dtype=float)
+    if w.sum() <= 0:
+        return 0.0
+    mx, my = np.average(x, weights=w), np.average(y, weights=w)
+    vx = np.average((x - mx) ** 2, weights=w)
+    return float(np.average((x - mx) * (y - my), weights=w) / vx) if vx > 0 else 0.0
+
+
+REML_GRID = (1.0 / 16.0, 64.0, 21)      # the REML search for a factor's ridge: FACTOR_LAMS times this log grid
+RATIO_GRID = (0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0)   # ... and, for reml="2d", over lam_D / lam_O as well
+
+
+def factor_defense(wd, layout: _Layout, off, y_o, y_d, y_pts, w, lam, ratio, lam_buckets, factor_lams=None,
+                   lam_scale: float = 1.0, min_poss: float = 1000.0, reml=False, x3=None) -> dict:
+    """The defensive effects from four factor fits instead of one points fit (HANDOFF 3.2).
+
+    Each factor is solved on the SAME layout as the points fit -- same players, same fixed block, same
+    exposure -- with its own response and denominator weight (`factor_rows`) and its own ridge and
+    offense/defense ratio (`FACTOR_LAMS`), so the shrinkage differs by what kind of defending it is.  The
+    points prior `off` (the GBDT, in points per 100) is shared out across the factors the way the block's own
+    zero-prior effects split it -- the slope of each factor's zero-prior effect on the zero-prior points
+    effect, per side, normalised so the four shares recombine to exactly one prior -- and each factor fit
+    shrinks toward its share.  The four defensive effects are then recombined into points allowed with the
+    gradients of `points_per_factor`, so the rating is prior_d + sum_f g_f u_f: the same object as the points
+    fit's prior_d + u_d, with the residual shrunk factor by factor.
+
+    Returns the raw-sign defensive rating (`d`), its per-player residual (`u_d`) and the diagnostics."""
+    from dataclasses import replace as _rep
+    m = wd.spec.n_ps
+    Z = layout.Z
+    poss_row = wd.rows["poss"].to_numpy(dtype=float)
+    sw = w / np.where(poss_row > 0, poss_row, 1.0)          # the season weights the fit put on top of poss
+    season = wd.rows["season"].to_numpy()
+    lams = {**FACTOR_LAMS, **(factor_lams or {})}
+    ys, ws = {}, {}
+    for f in FACTORS:
+        ys[f], den = factor_rows(wd, f, x3=x3)
+        ws[f] = den * sw
+    g, r2 = points_per_factor(y_pts, ys, ws, w, season)
+
+    # the zero-prior solves, points and factors, for the split of the prior
+    lay0 = _rep(layout, offset=None)
+    mm_p = MixedModelRAPM(lam=lam, lam_ratio=ratio, spec=wd.spec, lam_buckets=lam_buckets)
+    mom0 = Moments(lay0, np.asarray(y_o, dtype=float), w, mm_p._season_cols(), mm_p._scale())
+    mom0.want_edf = False
+    u_o0 = np.asarray(mom0.solve_chol(lam).u, dtype=float)
+    u_d0 = np.asarray(mom0.with_y(lay0, np.asarray(y_d, dtype=float), w).solve_chol(lam).u, dtype=float)
+    poss_o = np.asarray(Z[:, :m].T @ w).ravel()          # each player's weighted possessions on offense
+    poss_d = np.asarray(Z[:, m:].T @ w).ravel()
+    keep_o, keep_d = poss_o >= min_poss, poss_d >= min_poss
+
+    moms, u0, h_o, h_d = {}, {}, {}, {}
+    for f in FACTORS:
+        lam_f, ratio_f = lams[f]
+        lam_f = float(lam_f) * (1.0 if reml else float(lam_scale))
+        mm_f = MixedModelRAPM(lam=lam_f, lam_ratio=float(ratio_f), spec=wd.spec, lam_buckets=lam_buckets)
+        mom = Moments(lay0, ys[f], ws[f], mm_f._season_cols(), mm_f._scale())
+        mom.want_edf = False
+        moms[f] = (mom, lam_f)
+        u0[f] = np.asarray(mom.solve_chol(lam_f).u, dtype=float)
+        h_o[f] = _wslope(u_o0[:m], u0[f][:m], poss_o * keep_o)
+        h_d[f] = _wslope(u_d0[m:], u0[f][m:], poss_d * keep_d)
+    # normalise the shares so the factor priors recombine to exactly the points prior
+    s_o = sum(g[f] * h_o[f] for f in FACTORS)
+    s_d = sum(g[f] * h_d[f] for f in FACTORS)
+    for f in FACTORS:
+        h_o[f] = h_o[f] / s_o if abs(s_o) > 1e-9 else 0.0
+        h_d[f] = h_d[f] / s_d if abs(s_d) > 1e-9 else 0.0
+
+    off = np.asarray(off, dtype=float)
+    u_d = np.zeros(m)
+    sd_u, lam_used, ratio_used, at_edge = {}, {}, {}, {}
+    for f in FACTORS:
+        mom, lam_f = moms[f]
+        ratio_f = float(lams[f][1])
+        pi = np.concatenate([h_o[f] * off[:m], h_d[f] * off[m:]])
+        lay_f = _rep(layout, offset=np.asarray(Z @ pi).ravel())
+        mom_f = mom.with_y(lay_f, ys[f], ws[f])
+        if reml:
+            # the factor's ridge re-selected on the residual AROUND ITS PRIOR SHARE: FINDINGS 15's value was
+            # chosen with no prior, and a residual around a prior is smaller, so its ridge is tighter.  REML
+            # profile over a log grid around that value.  "2d" searches the offense/defense ratio as well:
+            # the defensive half is the one this fit reads, and a ratio fixed by the joint fit of section 15
+            # (1.5 on eFG%) leaves it shrunk far too little against the offensive half's real skill.
+            grid = float(lam_f) * np.geomspace(REML_GRID[0], REML_GRID[1], REML_GRID[2])
+            ratios = list(RATIO_GRID) if reml == "2d" else [ratio_f]
+            best = None
+            for r in ratios:
+                mom_r = mom_f if r == ratio_f else Moments(
+                    lay_f, ys[f], ws[f], mom.season_cols,
+                    MixedModelRAPM(lam=lam_f, lam_ratio=r, spec=wd.spec, lam_buckets=lam_buckets)._scale())
+                mom_r.want_edf = False
+                prof = [float(mom_r.solve_eig(float(l), reml=True).reml) for l in grid]
+                j = int(np.argmin(prof))
+                if best is None or prof[j] < best[0]:
+                    best = (prof[j], j, r, mom_r)
+            _, j, r, mom_f = best
+            at_edge[f] = j in (0, len(grid) - 1) or (len(ratios) > 1 and r in (ratios[0], ratios[-1]))
+            lam_f, ratio_f = float(grid[j]) * float(lam_scale), float(r)
+        u_f = np.asarray(mom_f.solve_chol(lam_f).u, dtype=float)
+        lam_used[f], ratio_used[f] = lam_f, ratio_f
+        u_d += g[f] * u_f[m:]
+        sd_u[f] = float(np.sqrt(np.average(u_f[m:][keep_d] ** 2, weights=poss_d[keep_d]))) if keep_d.any() else 0.0
+    diag = dict(g=g, r2=r2, h_o=h_o, h_d=h_d, share_sum_o=float(s_o), share_sum_d=float(s_d), sd_u=sd_u,
+                lam=lam_used, ratio=ratio_used, at_edge=at_edge,
+                sd_u_pts=float(np.sqrt(np.average(u_d0[m:][keep_d] ** 2, weights=poss_d[keep_d]))) if keep_d.any() else 0.0)
+    return dict(d=off[m:] + u_d, u_d=u_d, u_d_pts0=u_d0[m:], diag=diag)
+
+
 def direct_layout(wd, exp, prior_offset: np.ndarray) -> _Layout:
     """The estimator's layout for a plug-in fit with beta = 0, built from the design's own parts: the exposure
     columns straight from the padded rates and the lineups (what BoxExposure.transform computes, without the
@@ -109,6 +270,16 @@ class MspiFast:
                                          # prior without the turnover feature (the un-pooling control)
     turn_ref: float = 0.35               # the settled-context turnover the ridge shrinks toward (spm.TURN_REF)
     turn_sides: tuple = ("O", "D")       # the sides that take the turnover-aware prior (the other keeps the pooled one)
+    def_factors: float | None = None     # HANDOFF 3.2: the defensive residual from four factor fits (efg, tov, oreb,
+                                         # ftr), each with its own ridge and ratio, recombined into points allowed
+                                         # (`factor_defense`).  1.0 replaces the points fit's residual, a fraction
+                                         # blends the two, None = the points fit as shipped
+    factor_lams: dict | None = None      # per-factor (lam, ratio) overrides of FACTOR_LAMS
+    factor_lam_scale: float = 1.0        # every factor's ridge times this (after the REML choice, if on)
+    factor_reml: bool | str = False      # each factor's ridge re-selected by REML on the residual around its prior
+                                         # share; "2d" selects the offense/defense ratio as well
+    factor_x3: bool = False              # the eFG% factor with opponent threes repriced at the shooter's expectation
+    no_def_prior: bool = False           # DIAGNOSTIC: the defensive prior zeroed before the solves
 
     def counter_columns(self) -> set | None:
         """The per-possession counters this system's two targets read, so the design need not assemble the
@@ -123,6 +294,8 @@ class MspiFast:
                 cols |= xshoot.DEFENSE_TARGET_COLUMNS[t]
             else:
                 return None
+        if self.def_factors is not None:
+            cols |= FACTOR_COUNTERS
         return cols | {"poss"}
 
     def fit(self, train, ctx: Context) -> Ratings:
@@ -186,6 +359,9 @@ class MspiFast:
         if self.turn is True:      # the trade delta: the prior at H's turnover minus at the settled value
             delta = chain_offset(self.sides, self.mode, turn="h", **chain_kw)(train, ctx, wd, exp=exp) - off
         T("prior")
+        if self.no_def_prior:
+            off = np.array(off, dtype=float)
+            off[wd.spec.n_ps:] = 0.0
         nf = len(wd.spec.features)
         beta = np.zeros(2 * nf)
         lam = float(cfg["lam_plugin"] if self.lam is None else self.lam)
@@ -209,9 +385,20 @@ class MspiFast:
         u = {"o": np.asarray(mom.solve_chol(lam).u, dtype=float)}
         u["d"] = np.asarray(mom.with_y(layout, np.asarray(y_d, dtype=float), w).solve_chol(lam).u, dtype=float)
         T("solves")
+        d_resid = u["d"][m:]
+        self.factor_diag = None
+        if self.def_factors is not None:
+            x3 = xshoot.expected_threes(train, cfg, wd)[0] if self.factor_x3 else None
+            fd = factor_defense(wd, layout, off, y_o, y_d, target_y("pts"), w, lam, ratio, self.lam_buckets,
+                                factor_lams=self.factor_lams, lam_scale=float(self.factor_lam_scale),
+                                reml=self.factor_reml, x3=x3)
+            a = float(self.def_factors)
+            d_resid = a * fd["u_d"] + (1.0 - a) * d_resid
+            self.factor_diag = fd["diag"]
+            T("factors")
         off = off + delta            # the ridge shrank toward the settled-context prior; the rating carries the delta
         df = pd.DataFrame({"player_id": wd.spec.ps_table["player_id"].to_numpy(),
-                           "o": off[:m] + u["o"][:m], "d": off[m:] + u["d"][m:],
+                           "o": off[:m] + u["o"][:m], "d": off[m:] + d_resid,
                            "poss": np.asarray(exp.season_poss_off_, dtype=float),
                            "prior_o": off[:m], "prior_d": off[m:]})
         return Ratings(df)
