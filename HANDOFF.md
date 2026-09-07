@@ -10,7 +10,7 @@ record; `docs/progress.png` / `docs/progress.csv` the chart and its log; `PIPELI
 model works, stage by stage.
 
 **Tree state: clean and committed on `hybrid-and-xpts`.**  `git status` is quiet (the tracker's dumps are
-ignored).  Tests: **94 passed, 1 xfailed** (82 before; `tests/test_dredge.py` is the twelve new ones).  The
+ignored).  Tests: **95 passed, 1 xfailed** (82 before; `tests/test_dredge.py` is the thirteen new ones).  The
 shipped board rebuilds and passes all ten consensus floors.
 
 **The board is still `tune501_b7`** (FINDINGS 22.7, shipped 2026-09-06) -- the estimator search's board with
@@ -67,7 +67,7 @@ tie-break before the consensus is consulted.
 | **the criterion's line** (`best_ratio_full`) | **109.845** | 59 s |
 | the same with shot quality (`best_shot`) | 109.801 (z -1.13) | 70 s |
 | **what ships** (`tune501_b7`, ten of ten floors as tested, defensive spread 1.28) | **110.624** | 37 s |
-| `tune501_b7_drd` -- the whole Dredge block on defense (23) | 110.6244 (z 0.03) | 39 s |
+| `tune501_b7_drd` -- the whole Dredge block on defense (23) | 110.618 (z -0.20) | 39 s |
 | `ship_shot7d` -- the board `tune501_b7` replaced, ten of ten | 110.707 | 50 s |
 | no ratings at all | 125.6 | |
 
@@ -88,12 +88,13 @@ feature lists on either side -- without touching `config.yaml` permanently.
 
 | | criterion | verdict |
 |---|---|---|
-| the whole Dredge play-by-play block on defense (`gbdt_prior.DREDGE`, 12 features) | **+0.0008, z 0.03** | rejected; and 4.5% slower |
-| unassisted-make rate and share alone, on defense | +0.0106, z 0.75 | rejected |
-| the block split REPLACING `blk` (Dredge's actual claim) | +0.061 on the prior's own fit | rejected before the criterion |
-| stolen turnovers replacing `tov`, unassisted makes replacing `ast` | +0.018, +0.014 | rejected before the criterion |
+| the whole Dredge play-by-play block on defense (`gbdt_prior.DREDGE`, 12 features) | **-0.0055, z -0.20** | rejected |
+| the same block ERA-RELATIVE (`DREDGE_R`, each feature over its block's league level) | +0.0006, z -0.08 | rejected |
+| era-relative rim-block share and goaltends only (`blkrimsh_r`, `goalt_r`) | +0.0045, z 0.32 | rejected |
+| the block split REPLACING `blk` (Dredge's actual claim) | +0.043 on the prior's own fit | rejected before the criterion |
+| stolen turnovers replacing `tov`, unassisted makes replacing `ast` | +0.026, +0.030 | rejected before the criterion |
 | every Dredge group on OFFENSE | +0.004 to +0.018 on the prior's own fit | rejected before the criterion |
-| defensive goaltends (`goalt`) | not measured on the criterion | held back: unreconciled era trend |
+| **BorutaShap on a candidate set containing the board** (`50_boruta.py --modes=wide`) | rejects `blk`, `tov`, `orb` and eight more shipped names | **unusable as a gate**, structurally (23.10) |
 | offensive fouls DRAWN (`OffFoulsDrawn100`, his 1.22) | **not buildable from the v3 feed** | needs an ingest job; untested |
 
 ## Part 2: machinery
@@ -195,8 +196,9 @@ The panel path against the prediction path (`scratch/cmp_dredge.py`), ten window
 
 | | criterion | vs the board | z | wins |
 |---|---|---|---|---|
-| the whole block on defense (`tune501_b7_drd`) | 110.6244 | +0.0008 | 0.03 | 15/28 |
-| `unast` + `unastsh` on defense (`tune501_b7_dru`) | 110.6343 | +0.0106 | 0.75 | 13/28 |
+| the whole block on defense (`tune501_b7_drd`) | 110.6182 | -0.0055 | -0.20 | 16/28 |
+| the same block era-relative (`tune501_b7_drr`) | 110.6243 | +0.0006 | -0.08 | 14/28 |
+| `blkrimsh_r` + `goalt_r` only (`tune501_b7_dcal`) | 110.6281 | +0.0045 | 0.32 | 14/28 |
 
 and 4.5% slower for it.  On offense the prior's own fit rejects every group before the criterion is reached.
 
@@ -211,7 +213,26 @@ singled out, the raw counter beats its own decomposition.**  He needed the split
 linear; our booster has `blk`, `drb`, `stl`, `pf`, `ast`, `usage`, `astr`, `share` and `gs_pct` and crosses
 them freely.  A decomposition is worth having when the model cannot make it, and ours can.
 
-**Two traps this turned up, both worth carrying forward.**
+**The era-calibration (the owner's, 2026-09-07) is built and measured.**  `add_dredge` builds each feature
+twice: absolute, and divided by its own block's league level (`russsh` and `russsh_r`, thirteen pairs, ten
+lines) so a change in how the feed RECORDS an event divides out.  On the prior's own fit it works -- the
+relative block is -0.029 against -0.020, and `blkrimsh_r` + `goalt_r` alone are -0.021 at a fifth of the
+low-exposure cost, the best balance anything here reached.  The criterion refuses all of it.  It is kept
+because it costs nothing and because it is the mechanism a source that does NOT span the panel will need:
+tracking data starts in 2013-14, and a dimensionless multiple of a player's own era is the only form of such
+a column that can share a panel with seasons the source does not cover.  (Absence is harder than level and
+this does not solve it.)
+
+**Three traps this turned up, all worth carrying forward.**
+
+* **An identical-paths check proves the paths AGREE, never that either is right.**  `add_dredge` read the
+  block's league totals from the frame's FIRST ROW, so `training_rows` -- which hands it all ten windows at
+  once -- padded every row toward 1997-1999.  `cmp_dredge.py` reported 0.00e+00 throughout because it calls
+  the function once per window on both sides: both were wrong the same way.  Every number in the first
+  version of section 23 was affected and the criterion's reading moved from +0.0008 to -0.0055; no
+  conclusion changed.  The companion check is a test that puts two eras in ONE frame
+  (`test_the_league_level_is_read_per_row_not_from_the_first_row`), and anything with a per-block constant
+  needs one.
 
 * **The base list is part of the operating point, not just the booster.**  The first bench read the whole
   block at **-0.050** on defense -- what would have been the largest feature gain ever measured here -- because
@@ -235,13 +256,19 @@ them freely.  A decomposition is worth having when the model cannot make it, and
 * **`goaltend`** is counted but out of `DREDGE`: Justin's footnote says 1997 has suspiciously FEW goaltends
   and our feed says it has 1.27 a game against 0.43 now.  Reconcile against a published source before it is a
   column.  (It benched -0.014 pooled / +0.042 low-exposure, i.e. the 22.2 signature, so this is not urgent.)
-* **`50_boruta.py` still cannot assess the shipped lists.**  `MODES["full"]` is hardcoded to the 17-name
-  `FULL_FEATURES` while the board ships 43 and 23, so those two lines have never been selected -- they were
-  assembled by hand across 21.24 and 22.1 and validated on the criterion.  Widening that candidate set is
-  still a prerequisite for any Boruta run that means anything, and the Dredge block is no longer the reason
-  to do it.  Note the caveat that decides Boruta's role: it selects against the prior's own target, the same
-  objective that ranked career experience highest immediately before it cost +0.054 on the criterion.  Use it
-  to prune, never to decide.
+* **Boruta is settled and the answer is no.**  `50_boruta.py` now has a `wide` mode on
+  `DREDGE_FEATURES` (55 names, a superset of both shipped lists), so the two lines that ship have finally
+  been assessed.  It **rejects `blk`** -- whose removal costs the defensive prior +0.328, the largest effect
+  of any single column measured here -- along with `tov`, `orb`, `ftm`, `fg2m`, `fg3m` and five more of the
+  23 shipped names, while ACCEPTING `unast` (worth zero on the criterion) and holding `russsh` (reliability
+  0.126) as tentative.  The reason is structural, not a tuning problem: **on a candidate set containing
+  engineered linear aggregates of its own members, Boruta keeps the aggregates and rejects the parts.**
+  `stocks` is `stl + blk`, so given `stocks` a shadow copy of `blk` is as good as `blk`; `pts` swallows the
+  three make counts, `fga` the misses, `reb` the rebounds.  **The offensive run proves it: `blk` is ACCEPTED
+  on offense and `stocks` REJECTED, the exact reverse of defense, on the same panel and the same 55
+  candidates.**  Which of a collinear pair survives is a coin toss.  Swapping `blk` for `stocks` -- Boruta's
+  defensive preference -- costs +0.050 directly.  It is a useful noise detector (it rejects every Dredge
+  feature on offense, agreeing with the criterion) and cannot be made into a gate.  FINDINGS 23.10.
 
 Sources: Dredge, https://fansided.com/2016/07/26/introducing-dredge-a-play-by-play-derived-metric/ ; DRE,
 https://fansided.com/2015/02/23/introducing-dre-a-hopefully-better-simple-metric/ ; block types,

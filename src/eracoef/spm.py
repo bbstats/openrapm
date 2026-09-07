@@ -194,7 +194,7 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
                 prior_d = prior_o
             if prior_o is None or prior_d is None:
                 raise RuntimeError(f"Context has no GBDT prior for mode {mode!r} (outputs/role_panel.parquet)")
-            from .gbdt_prior import DREDGE_ALL, SHOTQ, gbdt_offset
+            from .gbdt_prior import DREDGE_ANY, SHOTQ, gbdt_offset
             ro, rd = centred_rates(exp)
             wants = set(prior_o.features["O"]) | set(prior_d.features["D"])
             shots = None
@@ -204,7 +204,7 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
                 from .xshoot import player_shot_frame
                 shots = player_shot_frame(train, cfg, wd.spec.ps_table["player_id"].to_numpy())
             dredge = None
-            if wants & set(DREDGE_ALL):
+            if wants & set(DREDGE_ANY):
                 # and the same for the play-by-play event counts: the training block's own totals and its own
                 # league levels, so the padding target is the era's and never the held-out season's
                 from .dredge import player_dredge_frame

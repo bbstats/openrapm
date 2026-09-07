@@ -133,9 +133,12 @@ DREDGE_SHARES = {
 DREDGE_TOTALS: list = []          # filled from dredge.py below (import kept local: it reads the stints)
 DREDGE_LEAGUE: list = []
 DREDGE_ALL = [*DREDGE_RATES, *DREDGE_SHARES]
+DREDGE_REL = [f"{n}_r" for n in DREDGE_ALL]        # the era-relative twin of each, built alongside it
 # what a feature set gets by default: `goalt` is held out until its era trend is reconciled against a
 # published source (dredge.py's module docstring, HANDOFF 3.1)
 DREDGE = [f for f in DREDGE_ALL if f != "goalt"]
+DREDGE_R = [f"{f}_r" for f in DREDGE]
+DREDGE_ANY = [*DREDGE_ALL, *DREDGE_REL]            # every name add_dredge builds, for the "is it wanted" tests
 
 
 def _dredge_cols():
@@ -155,17 +158,23 @@ def add_dredge(df: pd.DataFrame) -> pd.DataFrame:
     same shape `add_shotq` uses and the same shape `pad.shrink` uses for the 13 rates.
     """
     tot, lgc = _dredge_cols()
-    if "russ" in df.columns or not all(c in df.columns for c in (*tot, *lgc)):
+    if "russ" in df.columns or not all(c in df.columns for c in (*tot, *lgc)):     # already built, or cannot be
         return df
-    col = {c[3:]: df[c].to_numpy(dtype=float) for c in tot}                     # dr_blk    -> blk
-    lg = {c[6:]: float(np.asarray(df[c], dtype=float).flat[0]) for c in lgc}    # dr_lg_blk -> blk
+    col = {c[3:]: df[c].to_numpy(dtype=float) for c in tot}      # dr_blk    -> blk
+    # per ROW, not per frame: the league columns are constant down a WINDOW and `training_rows` hands this
+    # every window at once, so a scalar here pads 2026 toward 1997's league and hides the era in the feature
+    lg = {c[6:]: df[c].to_numpy(dtype=float) for c in lgc}       # dr_lg_blk -> blk
     for d in (col, lg):
         d["poss_all"] = d["poss_off"] + d["poss_def"]
         d["fgm_all"] = d["fgm_unast"] + d["fgm_ast"]
     for name, (num, den, k) in ((*DREDGE_RATES.items(), *DREDGE_SHARES.items())):
         scale = 100.0 if den.startswith("poss") else 1.0
-        level = lg[num] / max(lg[den], 1e-9)
-        df[name] = scale * (col[num] + k * level) / (col[den] + k)
+        level = lg[num] / np.maximum(lg[den], 1e-9)
+        v = (col[num] + k * level) / (col[den] + k)
+        df[name] = scale * v
+        # and the same number as a multiple of the block's own league level: dimensionless, so a change in
+        # how the feed RECORDS an event divides out and only the change in who does it survives
+        df[f"{name}_r"] = v / np.maximum(level, 1e-12)
     return df
 
 
@@ -236,7 +245,7 @@ def training_rows(panel: pd.DataFrame, side: str, exclude=(), features=None, tar
     feats = list(DEFAULT_FEATURES if features is None else features)
     ex = set(exclude)
     p = panel[(panel.side == side) & ~panel.window.isin(ex)].copy()
-    if any(f in DERIVED or f in RATIOS or f in SHOTQ or f in DREDGE_ALL for f in feats):
+    if any(f in DERIVED or f in RATIOS or f in SHOTQ or f in DREDGE_ANY for f in feats):
         add_derived(p)
     w = p[poss_col].to_numpy(dtype=float)
     v = p[target_col].to_numpy(dtype=float)
@@ -421,7 +430,7 @@ def gbdt_offset(prior: GBDTPrior, ro, rd, season, poss_o, poss_d, exclude=(), si
         if dredge is not None:
             for c in (*_dredge_cols()[0], *_dredge_cols()[1]):
                 X[c] = np.asarray(dredge[c], dtype=float)
-        if any(f in DERIVED or f in RATIOS or f in SHOTQ or f in DREDGE_ALL for f in prior.features[side]):
+        if any(f in DERIVED or f in RATIOS or f in SHOTQ or f in DREDGE_ANY for f in prior.features[side]):
             add_derived(X)
         g = prior.predict(side, X, exclude)
         w = np.maximum(np.asarray(poss, dtype=float), 0.0)

@@ -2614,6 +2614,10 @@ criterion says the whole block is worth +0.0008 at z 0.03, which is nothing at a
 This section is the record of how that was established, because a negative result is only worth the
 verification behind it, and of the one measurement that explains it.
 
+**Every number below was recomputed after 23.8's bug was found.**  The first version of this section had
+the league level read from the frame's first row, so nine of the ten windows were padded toward 1997-1999.
+The conclusion did not change; the numbers did, and the ones printed here are the corrected ones.
+
 ### 1. What the v3 feed can attribute, audited before a line was written
 
 `data/raw/pbp` is the **v3** play-by-play: exactly one `personId` per event.  So a counter is buildable when
@@ -2675,16 +2679,23 @@ not just to boosters.  Measured at the operating point, `scratch/prior_bench.py`
 | defensive candidate | pooled MSE | low-exposure rows |
 |---|---|---|
 | the shipped list | 2.6358 | 4.9474 |
-| + `unast`, `unastsh` | **-0.0129** | +0.0354 |
-| + the whole block (12) | -0.0118 | **+0.1157** |
-| + `loose`, `techflg`, `offoul` | -0.0011 | +0.0321 |
-| + `stolen`, `stolensh` | +0.0055 | +0.0012 |
-| + `russ`, `russsh`, `blkrim`, `blkrimsh`, `blk3sh` | **+0.0270** | +0.0825 |
+| + the whole block (12) | **-0.0196** | **+0.0910** |
+| + `unast`, `unastsh` | +0.0067 | +0.0793 |
+| + `loose`, `techflg`, `offoul` | +0.0093 | +0.0189 |
+| + `goalt` | +0.0134 | -0.0092 |
+| + `russ`, `russsh`, `blkrim`, `blkrimsh`, `blk3sh` | +0.0201 | +0.0297 |
+| + `stolen`, `stolensh` | +0.0217 | +0.0220 |
+| + the whole block, ERA-RELATIVE (23.9) | **-0.0286** | **+0.1290** |
+| + `blkrimsh_r`, `goalt_r` only (23.9) | -0.0205 | +0.0195 |
+
+**Every group is worse on its own and only the whole block gains**, which is what a set of twelve weakly
+informative columns looks like when the booster is allowed to cross them: the gain is in the crossing, not
+in any feature.
 
 **Every pooled gain is paid for on the low-exposure rows** -- the half of the fit the held-out season can
 actually feel, because those are the players the prior IS the rating for.  That is the 22.2 signature: MSE
 bought by identifying which rows have quiet targets rather than by knowing more basketball.  And the block
-split, the thing Dredge most promised against `blk` at 15.7% of the defensive SHAP, is the worst of the five.
+split, the thing Dredge most promised against `blk` at 15.7% of the defensive SHAP, is among the worst.
 
 On OFFENSE there is nothing to discuss: every group is worse (+0.004 to +0.018) and the whole block together
 is -0.0001.
@@ -2695,13 +2706,16 @@ Two candidates went to the tracker anyway, because the bench "is necessary, not 
 wrong by 0.13", and because shot quality was flat on the line before it shipped.  Against the shipped board
 `tune501_b7` at 110.6237 over the same 28 held-out seasons:
 
-| | criterion | vs the board | z | wins | 28 fits |
-|---|---|---|---|---|---|
-| `tune501_b7` (what ships) | 110.6237 | | | | 37.2 s |
-| `tune501_b7_drd` -- the whole block on defense | 110.6244 | +0.0008 | 0.03 | 15/28 | 38.9 s |
-| `tune501_b7_dru` -- `unast`, `unastsh` on defense | 110.6343 | +0.0106 | 0.75 | 13/28 | 38.8 s |
+| | criterion | vs the board | z | wins |
+|---|---|---|---|---|
+| `tune501_b7` (what ships) | 110.6237 | | | |
+| `tune501_b7_drd` -- the whole block on defense | 110.6182 | -0.0055 | -0.20 | 16/28 |
+| `tune501_b7_drr` -- the same block era-relative | 110.6243 | +0.0006 | -0.08 | 14/28 |
+| `tune501_b7_dcal` -- `blkrimsh_r`, `goalt_r` only | 110.6281 | +0.0045 | 0.32 | 14/28 |
 
-Nothing, and 4.5% slower for it.
+Nothing, three ways, and 4.5% slower for it.  Note that the whole block is **-0.020 on the prior's own fit
+and -0.006 on the criterion**: a third of the offline gain survives contact with the ridge, which is the same
+ratio 22.5 reported and is why the bench is a pre-filter and not a verdict.
 
 ### 6. Dredge's actual claim, tested properly, does not reproduce
 
@@ -2712,15 +2726,17 @@ split should REPLACE it.  That is a different test and it had not been run:
 | defensive list | pooled MSE | low-exposure |
 |---|---|---|
 | the shipped list | 2.6358 | 4.9474 |
-| `blk` -> `russ`, `blkrim`, `blk3sh` | +0.0608 | +0.0950 |
-| `blk` -> all five block features | +0.0478 | +0.1169 |
-| `blk` dropped, nothing in its place | +0.3277 | +0.2660 |
-| `tov` -> `stolen`, `stolensh` | +0.0183 | +0.0022 |
-| `ast` -> `unast`, `unastsh` | +0.0136 | +0.0259 |
+| `blk` -> `russ`, `blkrim`, `blk3sh` | +0.0431 | +0.1148 |
+| `blk` -> all five block features | +0.0545 | +0.1329 |
+| `blk` -> `stocks` (`stl` + `blk`, which Boruta prefers -- 23.10) | +0.0500 | -0.0060 |
+| `blk` dropped, nothing in its place | **+0.3277** | +0.2660 |
+| `tov` -> `stolen`, `stolensh` | +0.0255 | +0.0368 |
+| `ast` -> `unast`, `unastsh` | +0.0303 | +0.0070 |
 
 `blk` is worth +0.328 to the defensive prior, which is what its SHAP share says.  Its play-by-play
-decomposition recovers **81%** of that and no more, and the same holds for turnovers and for assists.  On all
-three terms Dredge singled out, **the raw counter beats its own decomposition.**
+decomposition recovers **87%** of that and no more, and adding the shares back makes it worse rather than
+better.  The same holds for turnovers and for assists.  On all three terms Dredge singled out, **the raw
+counter beats its own decomposition.**
 
 ### 7. Why: the Russell share is not a property of a player
 
@@ -2750,16 +2766,114 @@ ball"; our prior is a depth-4-to-7 booster over 23 to 43 features that has `blk`
 `usage`, `astr`, `share` and `gs_pct` and crosses them freely.  **A decomposition is worth having when the
 model cannot make it, and ours can.**
 
-### 8. What this says about the pass
+### 8. The bug, and why the identical-paths check could not catch it
+
+`add_dredge` read the block's league totals with `.flat[0]` -- the frame's FIRST row.  The league columns are
+constant down a WINDOW, and `training_rows` hands the function all ten windows at once, so **every row was
+padded toward 1997-1999's league level**.  The era normalisation the module claims to do was not happening,
+and worse, the resulting columns carried the era rather than removing it -- the exact failure the block was
+designed against.
+
+`scratch/cmp_dredge.py` reported 0.00e+00 throughout and could not have done otherwise: it calls
+`add_dredge` once per window on both sides, so both paths were wrong in the same way.  **An identical-paths
+check proves the two paths agree, never that either is right.**  It is still the right check -- it is what
+caught nothing here because there was nothing of its kind to catch -- but it needs a companion, and the
+companion is a test that puts two different eras in one frame:
+`test_the_league_level_is_read_per_row_not_from_the_first_row` builds two identical players in leagues that
+recover 80% and 20% of their blocks and asserts that the frame-of-two agrees with each frame-of-one.
+
+What it changed: every bench number moved by 0.005 to 0.02, the criterion's reading of the whole block moved
+from +0.0008 to **-0.0055**, and no conclusion in this section changed.  The numbers above are the corrected
+ones.
+
+### 9. Era-calibrating the counters: the owner's proposal, measured
+
+The owner, 2026-09-07: *"let's just smartly calibrate for seasons where we don't have goaltending/shot
+distance."*  The concrete form is the one `xshoot` already uses for shot quality -- divide the padded feature
+by its own block's league level, so the number says "x times his era's average" and a change in how the feed
+RECORDS an event divides out while a change in who does it survives.  `add_dredge` now builds both: `russsh`
+and `russsh_r`, thirteen pairs, ten lines.
+
+On the prior's own fit it does what it should.  The whole block era-relative is **-0.0286** against -0.0196
+absolute, and the two features the artifact actually contaminates -- `blkrimsh` (23.3) and the disputed
+`goalt` -- are **-0.0205 on their own at a fifth of the low-exposure cost** of the full block, much the best
+balance anything in this section reached.
+
+**The criterion refuses all of it**: the relative block is +0.0006 at z -0.08 and the two-feature version is
++0.0045.  So era-calibration is real and does what it claims -- and it is not what was standing between the
+Dredge block and a gain.  It is kept because it costs nothing and because it is the mechanism any FUTURE
+count-based source will need: tracking data does not exist before 2013-14, and a dimensionless multiple of a
+player's own era is the only form of such a column that can share a panel with seasons the source does not
+cover.  (Absence is a harder problem than level, and this does not solve it.)
+
+### 10. BorutaShap, finally run on a candidate set that contains the board -- and it is unusable here
+
+`50_boruta.py` could never assess the shipped lists: `MODES["full"]` was hardcoded to the 17-name
+`FULL_FEATURES` while the board ships 43 names on offense and 23 on defense, so it dropped everything past
+the base rates before it started.  A `wide` mode now runs it on `DREDGE_FEATURES` (55 names: a superset of
+both shipped lists and of the new block).  Defense, 40 trials, the shipped defensive booster:
+
+| | |
+|---|---|
+| **accepted** | age, astr, blk3sh, drb, fg3_miss, fga, gs_pct, pf, pts, share, stl, stocks, tovr, **unast** |
+| **tentative** | ast, bigness, blkrim, creation, fg2_miss, loose, q2, q3, russ, **russsh**, season |
+| **rejected** | **blk**, blkrimsh, efg, fg2m, fg2p, fg3a, fg3m, fg3p, ft_miss, fta, ftm, ftp, ftr, m2, m3, mpts, offoul, orb, orbsh, p3r, reb, shotmix, stolen, stolensh, techflg, **tov**, ts, unastsh, usage, xps |
+
+**It rejects `blk`.**  Removing `blk` costs the defensive prior +0.328 weighted MSE, the largest effect of
+any single column measured in this project, and it holds 15.7% of the defensive SHAP.  It also rejects `tov`,
+`orb`, `ftm`, `fg2m` and `fg3m` -- six of the thirteen core box rates, eleven of the twenty-three shipped
+names.  And it ACCEPTS `unast`, which the criterion prices at zero, and leaves `russsh` -- year-over-year
+reliability **0.126** -- as tentative rather than rejecting it.
+
+The OFFENSIVE run, same panel and same 55 candidates, settles what is going on:
+
+| | offense | defense |
+|---|---|---|
+| `blk` | **accepted** | **rejected** |
+| `stocks` (= `stl` + `blk`) | **rejected** | **accepted** |
+| `reb` / `drb` / `orb` | reb accepted, drb and orb rejected | drb accepted, reb and orb rejected |
+| `unast`, `blk3sh` | rejected | accepted |
+
+**The same feature is essential on one side and noise on the other, and its aggregate is the exact reverse.**
+That is not a judgement about basketball; it is a coin toss between collinear alternatives.  Offense rejects
+20 of its 43 shipped names and accepts nothing the board does not already carry.
+
+The mechanism is not mysterious and it is worth stating because it generalises: **on a candidate set that
+contains engineered linear aggregates of its own members, Boruta keeps the aggregates and rejects the
+parts, and which of the two it keeps is arbitrary.**  `stocks` is `stl + blk`; given `stocks` and `stl`, a shadow copy of `blk` is as good as `blk`, so
+`blk` fails its own test.  `pts` swallows `fg2m`/`fg3m`/`ftm`, `fga` swallows the misses, `reb` swallows
+`orb`.  Every one of the ten `DERIVED` aggregations 21.24 added is a trap of this shape.  The direct check
+confirms it: swapping `blk` for `stocks`, exactly what Boruta prefers, costs **+0.050** (23.6).
+
+On offense it also rejects every Dredge feature outright, which agrees with the criterion.
+
+So the answer to "should Boruta prune this list" is no, and not for the reason HANDOFF 3.1 anticipated.  The
+anticipated reason was that it selects against the prior's own target, the objective that ranked career
+experience highest immediately before it cost +0.054 on the criterion -- and that is confirmed too, in its
+acceptance of `unast` and its tolerance of `russsh`.  But the sharper reason is structural: **the shipped
+feature set is deliberately collinear, and Boruta's whole premise is that a feature must beat a shadow of
+itself with everything else present.**  It cannot be used on this list at all without first removing the
+aggregations, at which point it is not assessing the list that ships.
+
+`50_boruta.py --modes=wide` is kept, and it is a useful NOISE detector -- nothing in the rejected column is
+surprising except the collinear parts.  It is not a gate and cannot be made into one.
+
+### 11. What this says about the pass
 
 22.5 said the box score was nearly spent and named the play-by-play as the resolution.  The play-by-play is
 now spent too, in the specific sense that the events behind the box line, counted honestly and measured at
-the operating point, add nothing the booster did not already have.  Two things survive from it:
+the operating point, add nothing the booster did not already have.  Four things survive from it:
 
 * **the machinery is built and cheap.**  `data/dredge/*.parquet` is 30 seasons of per-player event counts,
   validated to 0.0024 against the box score, and any future counter is one entry in `COUNTERS` away.  The
   ingest job for `OffFoulsDrawn` -- the one published coefficient we could not test -- now has somewhere to
-  land.
+  land.  The owner's interest is the general shape of this: season table -> block frame -> padded feature ->
+  identical in the panel and the prediction path -> validated against an independent source.  That is the
+  route tracking data would take, and it now exists and has been exercised end to end.
+* **era-relative counters** (23.9), which the criterion did not want here but which is the mechanism a source
+  that does not span the panel will need.
+* **Boruta is settled**: it cannot gate this feature list, for a structural reason (23.10), and the
+  question does not need asking again.
 * **the negative is informative about where to look.**  Three passes have now added information to the prior
   (capacity, re-expression, shot quality, experience, and the play-by-play) and the total is 0.05.  The
   prior's ceiling argument in 22.5 is holding.  What is left is the ESTIMATOR: the defensive four-factor fit

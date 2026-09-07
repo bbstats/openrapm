@@ -157,6 +157,26 @@ def test_padding_pulls_a_thin_row_all_the_way_to_the_league_and_leaves_a_thick_o
     assert a["russsh"].iloc[0] == pytest.approx(0.5)
 
 
+def test_the_league_level_is_read_per_row_not_from_the_first_row():
+    """Two windows in one frame, with different leagues: `training_rows` hands add_dredge all ten at once,
+    and a scalar league level would pad 2026 toward 1997 and put the era back into every column."""
+    old = _totals(blk=100.0, blk_rus=50.0, poss_def=10000.0)
+    new = _totals(blk=100.0, blk_rus=50.0, poss_def=10000.0)
+    old["dr_lg_blk"], old["dr_lg_blk_rus"] = 4000.0, 3200.0        # a league that recovers 80% of its blocks
+    new["dr_lg_blk"], new["dr_lg_blk_rus"] = 4000.0, 800.0         # ... and one that recovers 20%
+    both = add_dredge(pd.concat([old, new], ignore_index=True))
+    apart = add_dredge(old.copy()), add_dredge(new.copy())
+    for i, one in enumerate(apart):
+        assert both["russsh"].iloc[i] == pytest.approx(one["russsh"].iloc[0]), "the frame's first row leaked"
+        assert both["russsh_r"].iloc[i] == pytest.approx(one["russsh_r"].iloc[0])
+    # and this is what the era-relative form is FOR.  The two players are identical -- 50 Russells from 100
+    # blocks each -- so any difference between them is their era and nothing else.  The absolute feature
+    # carries that difference; the `_r` one puts the first well below his league and the second well above,
+    # which is the only true statement about them.
+    assert abs(both["russsh"].iloc[0] - both["russsh"].iloc[1]) > 0.1
+    assert both["russsh_r"].iloc[0] < 0.85 < 1.2 < both["russsh_r"].iloc[1]
+
+
 def test_add_dredge_is_a_no_op_without_the_columns():
     df = pd.DataFrame({"season": [2000.0]})
     assert list(add_dredge(df).columns) == ["season"]

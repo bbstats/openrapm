@@ -319,6 +319,17 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                                        gbdt_features={"O": list(_SF2), "D": [*_FF2, *_SQ2, *_DR]})
         S["tune501_b7_dru"] = _replace(S["tune501_b7"], name="tune501_b7_dru",
                                        gbdt_features={"O": list(_SF2), "D": [*_FF2, *_SQ2, "unast", "unastsh"]})
+        # The ERA-RELATIVE form of the same block (add_dredge's `_r` columns: each feature divided by its
+        # own block's league level, so a change in how the feed RECORDS an event divides out).  On the
+        # prior's own fit the whole relative block is -0.029 against -0.020 for the absolute one, and the
+        # two features the era artifact actually contaminates -- the rim share of blocked twos and the
+        # disputed goaltend count -- are -0.021 on their own at a fifth of the low-exposure cost.
+        from .gbdt_prior import DREDGE_R as _DRR
+        S["tune501_b7_drr"] = _replace(S["tune501_b7"], name="tune501_b7_drr",
+                                       gbdt_features={"O": list(_SF2), "D": [*_FF2, *_SQ2, *_DRR]})
+        S["tune501_b7_dcal"] = _replace(S["tune501_b7"], name="tune501_b7_dcal",
+                                        gbdt_features={"O": list(_SF2),
+                                                       "D": [*_FF2, *_SQ2, "blkrimsh_r", "goalt_r"]})
         # the same without the nearby-window discount (the consensus floors, not the criterion, may want it)
         S["ship_ratio_b07_wd1"] = MspiFast("ship_ratio_b07_wd1", target="blend0.7",
                                            **{**_SK, "win_decay": 1.0})
