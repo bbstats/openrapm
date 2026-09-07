@@ -157,6 +157,38 @@ already on disk in `data/raw/pbp/{season}/{game_id}.parquet`, 24 columns with `a
 `description`, `personId` and shot coordinates, for all 30 seasons.  Nothing below needs a new download except
 where it says so.
 
+#### STATUS as of 2026-09-07: nothing is built
+
+**Zero of the twelve Dredge features exist in code.**  No unassisted-shot share, no Russells, no rim blocks,
+no loose-ball / technical / flagrant counts, no stolen turnovers, no offensive fouls.  What this section
+contains is the ANALYSIS only -- the published coefficients, the audit of what our own feed can attribute, and
+the era-coverage traps.  All of it is still to do, and the ordered list is at the end.
+
+(Do not be misled by grep: `flagrant`, `loose ball` and `kicked` appear in `src/eracoef/stints.py`, but that
+is the possession parser deciding whether a foul ends a possession.  Nothing there is a player feature.)
+
+#### STATUS: Boruta has never seen the features that actually ship
+
+Worth knowing before anyone assumes the shipped feature lists were selected:
+
+* `scripts/50_boruta.py` hardcodes its candidate set per mode --
+  `MODES = {"residual": ("u", DEFAULT_FEATURES, ...), "full": ("rapm1", FULL_FEATURES, ...)}` -- and
+  `FULL_FEATURES` is the **17-name** list (13 rates + `season` + the 3 role inputs).
+* `gbdt.features_O` / `features_D` in `config.yaml` WERE Boruta-selected (2026-09-05, 25 trials), but they
+  belong to `mode: residual`, and **the board ships `mode: full`, so those two lines are inert.**
+* `gbdt.features_full_O` (43 names) and `features_full_D` (23 names) -- the lists that DO ship -- were
+  assembled by hand across 21.24 (the aggregations and efficiency ratios) and 22.1 (shot quality), and were
+  validated on the criterion, never by Boruta.  In its present form `50_boruta.py` structurally cannot assess
+  them: it would drop everything past the 17 base names before it started.  **Widening that candidate set is
+  a prerequisite for any Boruta run that means anything.**
+
+**And a caveat that decides Boruta's ROLE.**  It selects against the prior's own target -- the same offline
+objective that ranked the career-experience block as the largest feature gain ever measured here, immediately
+before it cost **+0.054 on the criterion** (22.2).  Boruta would very likely have ACCEPTED `exp_yrs`, for
+precisely the reason that made it worthless: it predicts the target well, partly by identifying which rows
+have low-noise targets.  So use Boruta as a **cheap pre-filter to drop noise candidates, never as the gate.**
+The criterion is the gate.  This matters most for the Dredge block, where a dozen candidates overlap heavily.
+
 #### The reference: Dredge (Justin Willard, Nylon Calculus, 2016)
 
 The closest published thing to what we are doing, and worth reading in full.  Elastic net (`glmnet`, hence the
@@ -252,7 +284,8 @@ beside the shots tables, summed over a block by a `xshoot.player_shot_frame`-sty
 `scratch/cmp_*.py` proving the two paths agree to 0.00e+00 before anything is measured.  Rates per 100
 possessions, padded, centred like the 13.
 
-Order, by value over cost:
+Order, by value over cost.  **Step 0 is that there is nothing for Boruta to select from yet**, so build
+before selecting:
 
 1. **unassisted shot share** -- free, all seasons, no attribution needed.
 2. **the block split: Russells and rim blocks** -- all seasons, and it attacks `blk`, the largest defensive
@@ -263,6 +296,9 @@ Order, by value over cost:
 5. **offensive fouls committed** -- all seasons, and the natural stepping stone to the drawn version.
 6. *then* decide whether `OffFoulsDrawn` is worth an ingest job.  It is the highest published coefficient
    available to us, and it is the one that costs real work.
+7. **then** widen `50_boruta.py`'s `MODES["full"]` candidate set to the real shipped list plus whatever of the
+   above survived, run it to prune the overlap, and take what is left through `prior_bench` -> the criterion
+   -> the floors.  Boruta prunes; it does not decide.
 
 #### Measurement discipline (do not skip)
 
