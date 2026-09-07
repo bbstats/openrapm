@@ -4,13 +4,16 @@ Written 2026-09-06 (end of the third day of iterate-and-improve mode).  `FINDING
 are the record; `docs/progress.png` / `docs/progress.csv` the chart and its log; `PIPELINE.md` draws how the
 shipped model works, stage by stage.
 
-**Tree state: clean and committed on `hybrid-and-xpts`.**  Nothing uncommitted but `outputs/*.parquet` scratch
-dumps.  Tests: 82 passed, 1 xfailed; the shipped board rebuilds and passes 10 of 10 consensus floors.
+**Tree state: clean and committed on `hybrid-and-xpts`.**  `git status` is quiet (the tracker's dumps are
+ignored).  Tests: 82 passed, 1 xfailed; the shipped board rebuilds and passes all ten consensus floors, one
+of which was re-based this pass (Part 0 ruling 2).
 
-**Shipped this pass: `ship_shot7d`** (FINDINGS 22.4) -- shot quality on both sides and the blend-0.7
-offensive target it unlocks.  110.707 on the criterion, consensus 0.793 / 0.789 / 0.768, **defensive spread
-1.30, the narrowest any board has measured**, ten of ten floors.  The site serves it at
-`https://bbstats.github.io/openrapm/` once `main` is fast-forwarded (Part 3.5).
+**Shipped this pass: `tune501_b7`** (FINDINGS 22.7) -- the estimator search's board with the offensive target
+blended back to 0.7.  **110.624 on the criterion against the 110.707 it replaces, z -3.02 over 18 of 28, and
+37 s for the 28 fits against 46**: the largest shipped gain since section 20's calibration map, and cheaper.
+Consensus 0.788 / 0.790 / 0.759, defensive spread 1.28.  The defensive-agreement floor was re-based 0.76 ->
+0.75 once, deliberately, with the reason in the test (Part 0 ruling 2).  `ship_shot7d` (22.4, shot quality on
+both sides) was shipped earlier in the same pass and is what this replaces.
 
 ---
 

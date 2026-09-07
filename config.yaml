@@ -25,7 +25,7 @@ features: [fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss, orb, drb, ast, tov, stl
 lam_beta: 10149.5        # ridge on the two cross-fitted half-fits (beta)
 lam_ratio_beta: 0.5      # lambda_D / lambda_O there
 lam_plugin: 18351.8      # ridge on the plug-in ratings fit (u given beta)
-lam_ratio_plugin: 0.2872 # lambda_D / lambda_O there; REML tau2_O 0.66 vs tau2_D 2.3
+lam_ratio_plugin: 0.624519
 lam_buckets: {}       # e.g. {low_poss: 2.0}; only add after the calibration-by-bucket test says so
 # Which box prior the shipped ratings shrink toward, per side.
 #   offense: player  the prior priced to predict a PLAYER (windows.player_priced_beta), not a team.
@@ -84,9 +84,10 @@ ratings_prior:
   gbdt_panel: null
   # the prior's training target pooled over the player's OTHER windows with this discount per
   # window of distance (1.0 = every other window alike, the original pooling)
-  gbdt_win_decay: 0.3
-  gbdt_win_decay_def: 1.0   # defense pools every other window alike, as shipped
-  cal_map: {table: outputs/calmap_ship.parquet, system: ship_shot7d_linear+log2&xlog&prior&tshare_linear+log2&xlog, base: ship_shot7d, k: 3}
+  gbdt_win_decay: 0.514318
+  gbdt_win_decay_def: 0.280024
+  lam_scale: 0.624047
+  cal_map: {table: outputs/calmap_ship.parquet, system: tune501_b7_linear+log2&xlog&prior&tshare_linear+log2&xlog, base: tune501_b7, k: 3}
 # The random effect unit: "window" gives one player effect per 3-season window, "season" one per
 # player-season (the original spec).  Possession thresholds below are in the unit's own scale.
 player_unit: window
@@ -172,10 +173,10 @@ gbdt:
   boruta_trials: 50
   seed: 0
   thread_count: 3
-  params_def: {linear_leaves: false, cross_features: false}   # DEFENSE keeps the cheap prior:
+  params_def: {depth: 4, learning_rate: 0.0872486, l2_leaf_reg: 18.8061, max_bins: 128, subsample: 0.654803, colsample: 0.83231, min_child_weight: 3.26392, linear_leaves: true, cross_features: false}
     # the consensus's defensive-agreement floor does not tolerate the bagged, searched one
     # (FINDINGS 21.26).  The two sides' priors are separate objects; only the map couples them.
-  params: {quality: 4, ensemble_n_jobs: 1}   # 5 bagged members WITH the audition fits and cross
+  params: {depth: 5, learning_rate: 0.0882469, l2_leaf_reg: 2.35039, max_bins: 64, subsample: 0.681911, colsample: 0.604113, min_child_weight: 2.10825, linear_leaves: true, cross_features: true, n_ensembles: 5, ensemble_n_jobs: 1}
     # features.  On the plain feature list the search was worth +0.004 and the bag +0.004; on the
     # list below they are -0.037 and -0.027 (FINDINGS 21.25: the parts interact, and a richer
     # feature set gives the search something to find).  ensemble_n_jobs 1 so the bag does not fork
