@@ -72,13 +72,19 @@ if USE_CHAIN:
                          "is missing; run scripts/49_role_panel.py")
     # FINDINGS 21: the prior trained on unshrunk APM (`gbdt_target`), the GBDT without its audition fits
     # (`gbdt.params`), and the ridge at a fraction of lam_plugin (`lam_scale`)
+    # FINDINGS 24: the turnover-aware prior, `gbdt_turn: {sides: [O], ref: 0.35}` -- trained on window pairs
+    # with the teammate turnover as a feature and evaluated at a settled context (no held-out season here, so
+    # no delta).  null = the pooled prior, what ships.
+    turn_cfg = PRIOR.get("gbdt_turn") or {}
     chain_fn = chain_offset(CHAIN_SIDES, mode=str(cfg.get("gbdt", {}).get("mode", "full")),
                             target=str(PRIOR.get("gbdt_target", "rapm1")),
                             params=dict(cfg.get("gbdt", {}).get("params", {}) or {}) or None,
                             target_d=PRIOR.get("gbdt_target_def"), panel=PRIOR.get("gbdt_panel"),
                             win_decay=float(PRIOR.get("gbdt_win_decay", 1.0)),
                             params_d=dict(cfg.get("gbdt", {}).get("params_def", {}) or {}) or None,
-                            win_decay_d=PRIOR.get("gbdt_win_decay_def"))
+                            win_decay_d=PRIOR.get("gbdt_win_decay_def"),
+                            turn="ref" if turn_cfg else None, turn_ref=float(turn_cfg.get("ref", 0.35)),
+                            turn_sides=tuple(turn_cfg.get("sides", ("O", "D"))))
 LAM_SCALE = float(PRIOR.get("lam_scale", 1.0))
 if LAM_SCALE != 1.0:
     cfg["lam_plugin"] = float(cfg["lam_plugin"]) * LAM_SCALE

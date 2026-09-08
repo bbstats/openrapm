@@ -412,6 +412,25 @@ def continuation_design(seasons, cfg, wd_pts, x=None, location=True, r="league",
     return wd_pts.with_target(y), dict(target=f"xcont_{r}", x=x, gates=g, calibration=cal)
 
 
+def expected_threes(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0):
+    """Each row's EXPECTED opponent three-point makes: every attempt at the shooter's padded other-half 3P%
+    (x3def's repricing, the one piece of it the four-factor eFG% needs too).  Returns (x3, rates)."""
+    cnt = wd_pts.counters
+    seasons = sorted(int(s) for s in seasons)
+    rates = shooter_rates(seasons, cfg, prev=prev, k_fixed={"fg3": k3})
+    which = rates.for_rows("fg3", cnt["half"].to_numpy())
+    n = len(cnt)
+    x3 = cnt["fg3a_sx"].to_numpy(dtype=float) * rates.league["fg3"]
+    masks = [(h, m) for h in ("A", "B", "RS") if (m := which == h).any()]     # once, not once per slot
+    for s in SLOTS:
+        pid = cnt[f"pid_s{s}"].to_numpy()
+        p = np.full(n, rates.league["fg3"])
+        for h, m in masks:
+            p[m] = rates.take("p3", h, pid[m], rates.league["fg3"])
+        x3 += cnt[f"fg3a_s{s}"].to_numpy(dtype=float) * p
+    return x3, rates
+
+
 def def_three_design(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, calibrate: bool = True):
     """The DEFENSIVE target: actual points with every opponent three-point make replaced by
     3 x the shooter's padded 3P%, free throws adjusted as shipped, everything else as it happened.
@@ -425,18 +444,7 @@ def def_three_design(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, cal
     """
     _check(wd_pts, "fg3a_s1")
     cnt, season = wd_pts.counters, wd_pts.rows["season"].to_numpy()
-    seasons = sorted(int(s) for s in seasons)
-    rates = shooter_rates(seasons, cfg, prev=prev, k_fixed={"fg3": k3})
-    which = rates.for_rows("fg3", cnt["half"].to_numpy())
-    n = len(cnt)
-    x3 = cnt["fg3a_sx"].to_numpy(dtype=float) * rates.league["fg3"]
-    masks = [(h, m) for h in ("A", "B", "RS") if (m := which == h).any()]     # once, not once per slot
-    for s in SLOTS:
-        pid = cnt[f"pid_s{s}"].to_numpy()
-        p = np.full(n, rates.league["fg3"])
-        for h, m in masks:
-            p[m] = rates.take("p3", h, pid[m], rates.league["fg3"])
-        x3 += cnt[f"fg3a_s{s}"].to_numpy(dtype=float) * p
+    x3, rates = expected_threes(seasons, cfg, wd_pts, prev=prev, k3=k3)
     poss = cnt["poss"].to_numpy(dtype=float)
     c = cnt
     pts_adj = (c["pts"] - 3.0 * c["fg3m"] + 3.0 * x3

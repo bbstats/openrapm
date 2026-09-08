@@ -129,7 +129,7 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                                                                target=f"blend{w}", target_d="rapm1")
         S["ship_b07d03"] = MspiFast("ship_b07d03", gbdt_params=FAST, target="blend0.7", target_d="blend0.3")
         from .design import FEATURES as _F
-        ALLF = [*_F, "season", "share", "gs_pct", "age"]
+        ALLF = [*_F, "season", "poss_pct", "gs_pct", "age"]
         S["best_allfeat"] = MspiFast("best_allfeat", gbdt_params=FAST, decay=0.5, decay_exposure=True, target="apm",
                                      gbdt_features={"O": ALLF, "D": ALLF})
         S["best_apm300"] = MspiFast("best_apm300", gbdt_params=FAST, decay=0.5, decay_exposure=True, target="apm",
@@ -298,13 +298,200 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         # and the same with the SHIPPED defensive booster, if the booster rather than the pooling is at fault
         S["tune501_b7_dship"] = _replace(S["tune501_b7"], name="tune501_b7_dship", win_decay_d=1.0,
                                          gbdt_params_d={"linear_leaves": True, "cross_features": False})
+        # ---------------------------------------------------------------- the Dredge block (HANDOFF 3.1)
+        # The play-by-play counters (dredge.py): Russells, rim blocks, blocked threes, unassisted makes,
+        # stolen turnovers, loose-ball fouls, technicals and flagrants, offensive fouls committed.  Only
+        # the DEFENSIVE side is tried, because that is the only side the pre-filter found anything on --
+        # and even there what it found has the FINDINGS 22.2 signature, so the criterion is the gate.
+        #
+        # On the shipped defensive list and the shipped defensive booster, `scratch/prior_bench.py D`:
+        #   + unast, unastsh                             -0.0129 pooled,  +0.0354 on the low-exposure rows
+        #   + the whole block                            -0.0118 pooled,  +0.1157 low
+        #   + loose, techflg, offoul                     -0.0011 pooled,  +0.0321 low
+        #   + stolen, stolensh                           +0.0055 pooled,  +0.0012 low
+        #   + russ, russsh, blkrim, blkrimsh, blk3sh     +0.0270 pooled,  +0.0825 low
+        # Every pooled gain costs low-exposure accuracy, which is the half of the fit the held-out season
+        # can feel, and the block split -- the thing Dredge most promised, against `blk` at 15.7% of the
+        # defensive SHAP -- is the WORST of the five.  Two candidates go to the criterion anyway: the
+        # bench "has been wrong by 0.13" and shot quality was flat on the line before it shipped.
+        # ---------------------------------------------------------------- trade calibration (FINDINGS 24)
+        # The same board with the TURNOVER-AWARE prior: trained on window pairs with the teammate turnover of
+        # the target window as a feature, the ridge shrinking toward its settled-context value (turn 0.35) and
+        # the rating carrying the delta to each player's turnover in the held-out season.  On the prior's own
+        # pair rows the feature is -0.043 (z -2.7) on offense and -0.031 (z -4.1) on defense; the criterion
+        # decides whether a team-game feels it.
+        S["tune501_b7_turn"] = _replace(S["tune501_b7"], name="tune501_b7_turn", turn=True)
+        # the control: the same pair-row prior evaluated at the settled value for everyone, no delta -- whether
+        # un-pooling the target with `turn` in the booster changes the prior the ridge shrinks toward
+        S["tune501_b7_turnref"] = _replace(S["tune501_b7"], name="tune501_b7_turnref", turn="ref")
+        # two more controls: the pair rows with NO turnover feature (is it the un-pooling?), and the turnover
+        # prior evaluated at the training pairs' own mean turnover 0.7 (is it the settled-context evaluation?)
+        S["tune501_b7_pairs"] = _replace(S["tune501_b7"], name="tune501_b7_pairs", turn="pairs")
+        S["tune501_b7_turn07"] = _replace(S["tune501_b7"], name="tune501_b7_turn07", turn="ref", turn_ref=0.7)
+        # and one side at a time: where the gain lives, and whether the defensive floors need to be asked
+        S["tune501_b7_turnref_o"] = _replace(S["tune501_b7"], name="tune501_b7_turnref_o", turn="ref", turn_sides=("O",))
+        S["tune501_b7_turnref_d"] = _replace(S["tune501_b7"], name="tune501_b7_turnref_d", turn="ref", turn_sides=("D",))
+        # ---------------------------------------------------------------- the four-factor defence (HANDOFF 3.2)
+        # The defensive residual from four factor fits on the same layout -- opponents' eFG%, turnovers forced,
+        # offensive rebounds allowed, free-throw rate allowed -- each with its own ridge and ratio (FINDINGS 15's,
+        # fixed a priori), the points prior shared out across them, and the four recombined into points allowed
+        # (fastfit.factor_defense).  On top of the shipped board; `ff5` blends half and half.
+        S["tune501_b7_turnref_o_ff"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_ff", def_factors=1.0)
+        S["tune501_b7_turnref_o_ff5"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_ff5", def_factors=0.5)
+        for _s in (0.5, 2.0):
+            _t = f"ff_ls{_s:g}".replace(".", "")
+            S[f"tune501_b7_turnref_o_{_t}"] = _replace(S["tune501_b7_turnref_o"], name=f"tune501_b7_turnref_o_{_t}",
+                                                       def_factors=1.0, factor_lam_scale=_s)
+        # the factor ridges re-selected by REML inside each fit, on the residual around the prior share (FINDINGS 15's
+        # were chosen with no prior and leave the residual 1.6x too wide); `ffr62` then applies the same 0.62
+        # discount the estimator search put on the points ridge (tune501's lam_mult), fixed a priori
+        S["tune501_b7_turnref_o_ffr"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_ffr",
+                                                 def_factors=1.0, factor_reml=True)
+        S["tune501_b7_turnref_o_ffr62"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_ffr62",
+                                                   def_factors=1.0, factor_reml=True, factor_lam_scale=0.624047)
+        S["tune501_b7_turnref_o_ffr5"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_ffr5",
+                                                  def_factors=0.5, factor_reml=True)
+        # what the split-half read said (FINDINGS 25): the eFG% defensive half is noise at ratio 1.5, and the ratio
+        # was fixed by a joint fit the offensive half dominates.  REML over the ratio too ("2d"), and the eFG%
+        # numerator repriced at the shooters' expected threes (x3def's repair on the factor that needs it)
+        S["tune501_b7_turnref_o_ff2d"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_ff2d",
+                                                  def_factors=1.0, factor_reml="2d")
+        S["tune501_b7_turnref_o_ffx"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_ffx",
+                                                 def_factors=1.0, factor_reml="2d", factor_x3=True)
+        S["tune501_b7_turnref_o_ffx5"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_ffx5",
+                                                  def_factors=0.5, factor_reml="2d", factor_x3=True)
+        # the factor ridges tightened well past REML: the split-half read on one block (2021-2024 minus 2023) put the
+        # factor sum's cross-half prediction of the points residual level with the points fit's own at 16-32x,
+        # and below it everywhere looser.  Chosen on that read, not on the criterion.
+        for _s in (16, 32):
+            S[f"tune501_b7_turnref_o_ffx{_s}"] = _replace(S["tune501_b7_turnref_o"], name=f"tune501_b7_turnref_o_ffx{_s}",
+                                                          def_factors=1.0, factor_reml=True, factor_x3=True,
+                                                          factor_lam_scale=float(_s))
+        # ---------------------------------------------------------------- who he is (bio.py, FINDINGS 26)
+        # height and weight from the bio feed, a constant per player.  Offline (prior_bench) -0.145 on the defensive
+        # line and -0.27 on the offensive one -- but binned to 2 in / 15 lb the defensive gain keeps 0.12 of it and the
+        # offensive one 0.03: on offense the pair is naming the player (the 22.2 trap), on defense it is physiology.
+        # So: defense fine and binned, both sides binned, both sides fine as the identification control.
+        S["tune501_b7_turnref_o_hw"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hw",
+                                                gbdt_features={"O": list(_SF2), "D": [*_FF2, *_SQ2, "height", "weight"]})
+        S["tune501_b7_turnref_o_h"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_h",
+                                               gbdt_features={"O": list(_SF2), "D": [*_FF2, *_SQ2, "height"]})
+        S["tune501_b7_turnref_o_hwc"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hwc",
+                                                 gbdt_features={"O": list(_SF2), "D": [*_FF2, *_SQ2, "height2", "weight15"]})
+        S["tune501_b7_turnref_o_hwb"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hwb",
+                                                 gbdt_features={"O": [*_SF2, "height2", "weight15"], "D": [*_FF2, *_SQ2, "height2", "weight15"]})
+        S["tune501_b7_turnref_o_hwbf"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hwbf",
+                                                  gbdt_features={"O": [*_SF2, "height", "weight"], "D": [*_FF2, *_SQ2, "height", "weight"]})
+        # and the draft slot (1-60, undrafted 61): -0.05 offline on top of the pair on either side
+        S["tune501_b7_turnref_o_hwbd"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hwbd",
+                                                  gbdt_features={"O": [*_SF2, "height2", "weight15", "draft_pick"],
+                                                                 "D": [*_FF2, *_SQ2, "height2", "weight15", "draft_pick"]})
+        S["tune501_b7_turnref_o_dp"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_dp",
+                                                gbdt_features={"O": [*_SF2, "draft_pick"], "D": [*_FF2, *_SQ2, "draft_pick"]})
+        # ---------------------------------------------------------------- plus-minus as an input (FINDINGS 28)
+        # his own on-court record before the block (gbdt_prior.PAST: discounted APM, the possessions behind it,
+        # and the shrunk RAPM_1), on pair rows so nothing of the target is in the feature.  The investigator (27)
+        # says the prior is compressed at the top on both sides; this is the information that would lift it.
+        from .gbdt_prior import PAST as _PAST
+        _HW = ["height2", "weight15"]
+        S["tune501_b7_turnref_o_hwb_past"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hwb_past",
+                                                      gbdt_features={"O": [*_SF2, *_HW, *_PAST], "D": [*_FF2, *_SQ2, *_HW, *_PAST]})
+        S["tune501_b7_turnref_o_hwb_pasto"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hwb_pasto",
+                                                       gbdt_features={"O": [*_SF2, *_HW, *_PAST], "D": [*_FF2, *_SQ2, *_HW]})
+        S["tune501_b7_turnref_o_hwb_pastd"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hwb_pastd",
+                                                       gbdt_features={"O": [*_SF2, *_HW], "D": [*_FF2, *_SQ2, *_HW, *_PAST]})
+        # APM alone (no shrunk twin), and the pair-row control with no PAST at all on defense (offense already pairs)
+        S["tune501_b7_turnref_o_hwb_pasta"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hwb_pasta",
+                                                       gbdt_features={"O": [*_SF2, *_HW, "past_apm", "past_poss"], "D": [*_FF2, *_SQ2, *_HW, "past_apm", "past_poss"]})
+        # the owner, 2026-09-07: "we need to split up o/d plus minus per 100" -- they are (the panel's APM is per
+        # side); this gives each prior the OTHER side's record too, named: the offensive prior sees his past
+        # defensive APM beside his past offensive one, and the defensive prior (pooled as shipped) the reverse
+        _PX = ["past_apm_o", "past_poss_o", "past_apm_d", "past_poss_d"]
+        S["tune501_b7_turnref_o_hwb_pastx"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hwb_pastx",
+                                                       gbdt_features={"O": [*_SF2, *_HW, "past_rapm", *_PX], "D": [*_FF2, *_SQ2, *_HW]})
+        S["tune501_b7_turnref_o_hwb_pastxd"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hwb_pastxd",
+                                                        gbdt_features={"O": [*_SF2, *_HW, "past_rapm", *_PX], "D": [*_FF2, *_SQ2, *_HW, *_PX]})
+        # ---------------------------------------------------------------- the kitchen-sink Boruta (FINDINGS 29)
+        # 50_boruta.py --modes=sink,sinknoagg on pair rows, 111 candidates: what it accepted without the linear
+        # aggregates (the readable form, 23.10), each side as-is; the shipped lists with its rejects removed; both.
+        # `turn` is left off the defensive list (the defensive prior is pooled; turn on defense was flat, 24.5).
+        _BD = ["age", "astr", "blk", "blkrim", "drb", "entry_age", "exp_poss", "fg2_miss", "fg2m", "fg3_miss", "gs_pct",
+               "height", "n_teams", "past_apm", "past_poss", "past_rapm", "pf", "russ", "season", "stl", "weight"]
+        _BO = ["age", "ast", "astlmr", "astrim_r", "exp_poss", "exp_yrs", "fg3_miss", "fg3m", "ftm", "ftp", "gs_pct", "loose",
+               "mpts", "orb", "orbsh", "past_apm", "past_poss", "past_poss_d", "past_rapm", "pf", "poss_pct", "season", "stl",
+               "stolensh_r", "techflg", "tovr", "ts", "unast_r", "weight", "weight15"]
+        _RD = {"fg3m", "ftm", "ft_miss", "ast", "tov", "poss_pct", "q2", "q3", "m2", "m3", "xps", "mpts", "height2", "weight15"}
+        _RO = {"fg2m", "fg2_miss", "ft_miss", "drb", "tov", "blk", "p3r", "ftr", "fg3p", "fg2p", "astr", "q2", "q3", "m2", "m3",
+               "xps", "height2"}
+        from .gbdt_prior import PAST_OWN as _PAST_OWN
+        _SO = [*_SF2, *_HW, *_PAST_OWN]                       # the shipped offensive list (hwb_pasto)
+        _SD = [*_FF2, *_SQ2, *_HW]
+        _base = S["tune501_b7_turnref_o_hwb_pasto"]
+        S["tune501_b7_pasto_bD"] = _replace(_base, name="tune501_b7_pasto_bD", gbdt_features={"O": list(_SO), "D": list(_BD)})
+        S["tune501_b7_pasto_bO"] = _replace(_base, name="tune501_b7_pasto_bO", gbdt_features={"O": list(_BO), "D": list(_SD)})
+        S["tune501_b7_pasto_bOD"] = _replace(_base, name="tune501_b7_pasto_bOD", gbdt_features={"O": list(_BO), "D": list(_BD)})
+        S["tune501_b7_pasto_pD"] = _replace(_base, name="tune501_b7_pasto_pD",
+                                            gbdt_features={"O": list(_SO), "D": [f for f in _SD if f not in _RD]})
+        S["tune501_b7_pasto_pO"] = _replace(_base, name="tune501_b7_pasto_pO",
+                                            gbdt_features={"O": [f for f in _SO if f not in _RO], "D": list(_SD)})
+        S["tune501_b7_pasto_pOD"] = _replace(_base, name="tune501_b7_pasto_pOD",
+                                             gbdt_features={"O": [f for f in _SO if f not in _RO], "D": [f for f in _SD if f not in _RD]})
+        # ---------------------------------------------------------------- the destination (FINDINGS 30, context.py)
+        # the owner: a high-usage player's usage drops on the new team (28.8), so give the prior the team he is
+        # traded to -- his own usage minutes, the destination's usage minutes already spoken for, and its quality,
+        # every teammate measured in the feature window, the roster from the target window
+        from .context import DEST as _DEST
+        _PO = [f for f in _SO if f not in _RO]
+        _PD = [f for f in _SD if f not in _RD]
+        S["tune501_b7_pasto_pOD_dest"] = _replace(_base, name="tune501_b7_pasto_pOD_dest", gbdt_features={"O": [*_PO, *_DEST], "D": list(_PD)})
+        S["tune501_b7_pasto_pOD_destum"] = _replace(_base, name="tune501_b7_pasto_pOD_destum", gbdt_features={"O": [*_PO, "own_um", "dest_um"], "D": list(_PD)})
+        # the owner's extension: block-minutes and rebound-minutes on the DEFENSIVE prior, own and the destination's
+        from .context import DEST_D as _DESTD
+        S["tune501_b7_pasto_pOD_destd"] = _replace(_base, name="tune501_b7_pasto_pOD_destd", gbdt_features={"O": list(_PO), "D": [*_PD, *_DESTD]})
+        S["tune501_b7_pasto_pOD_destdm"] = _replace(_base, name="tune501_b7_pasto_pOD_destdm",
+                                                    gbdt_features={"O": list(_PO), "D": [*_PD, "own_bm", "own_rm", "dest_bm", "dest_rm"]})
+        # the other bound: the defensive prior ALONE (the factor ridges at 1e6 leave no residual at all), so the
+        # value of a defensive residual at team-game level is a number
+        S["tune501_b7_turnref_o_dprior"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_dprior",
+                                                    def_factors=1.0, factor_lam_scale=1e6)
+        # the diagnostic pair: no defensive prior at all, points residual against factor residual
+        S["tune501_b7_turnref_o_nodp"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_nodp", no_def_prior=True)
+        S["tune501_b7_turnref_o_nodp_ffx"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_nodp_ffx",
+                                                      no_def_prior=True, def_factors=1.0, factor_reml=True, factor_x3=True)
+        from .gbdt_prior import DREDGE as _DR
+        S["tune501_b7_drd"] = _replace(S["tune501_b7"], name="tune501_b7_drd",
+                                       gbdt_features={"O": list(_SF2), "D": [*_FF2, *_SQ2, *_DR]})
+        S["tune501_b7_dru"] = _replace(S["tune501_b7"], name="tune501_b7_dru",
+                                       gbdt_features={"O": list(_SF2), "D": [*_FF2, *_SQ2, "unast", "unastsh"]})
+        # The ERA-RELATIVE form of the same block (add_dredge's `_r` columns: each feature divided by its
+        # own block's league level, so a change in how the feed RECORDS an event divides out).  On the
+        # prior's own fit the whole relative block is -0.029 against -0.020 for the absolute one, and the
+        # two features the era artifact actually contaminates -- the rim share of blocked twos and the
+        # disputed goaltend count -- are -0.021 on their own at a fifth of the low-exposure cost.
+        from .gbdt_prior import DREDGE_R as _DRR
+        S["tune501_b7_drr"] = _replace(S["tune501_b7"], name="tune501_b7_drr",
+                                       gbdt_features={"O": list(_SF2), "D": [*_FF2, *_SQ2, *_DRR]})
+        # POTENTIAL ASSISTS, reconstructed from assists by zone (gbdt_prior.POTENTIAL_AST, the owner's 2019
+        # fit at r-squared ~1).  Potential assists are a TRACKING statistic and begin in 2013-14; assist
+        # location is in the play-by-play from 1997, so this carries the measure back over the whole panel.
+        # It is the only thing in the Dredge block the prior's own fit likes on OFFENSE (-0.018, where every
+        # other group is worse) and it is the most reliable feature in the block year over year (0.922,
+        # against 0.918 for blocks per 100 and 0.126 for the Russell share).
+        S["tune501_b7_past"] = _replace(S["tune501_b7"], name="tune501_b7_past",
+                                        gbdt_features={"O": [*_SF2, "pot_ast"], "D": [*_FF2, *_SQ2]})
+        S["tune501_b7_past2"] = _replace(S["tune501_b7"], name="tune501_b7_past2",
+                                         gbdt_features={"O": [*_SF2, "pot_ast"],
+                                                        "D": [*_FF2, *_SQ2, "pot_ast"]})
+        S["tune501_b7_dcal"] = _replace(S["tune501_b7"], name="tune501_b7_dcal",
+                                        gbdt_features={"O": list(_SF2),
+                                                       "D": [*_FF2, *_SQ2, "blkrimsh_r", "goalt_r"]})
         # the same without the nearby-window discount (the consensus floors, not the criterion, may want it)
         S["ship_ratio_b07_wd1"] = MspiFast("ship_ratio_b07_wd1", target="blend0.7",
                                            **{**_SK, "win_decay": 1.0})
         S["ship_ratio_b05_wd1"] = MspiFast("ship_ratio_b05_wd1", target="blend0.5",
                                            **{**_SK, "win_decay": 1.0})
         # the aggregations INSTEAD of the raw rates they are made of: a smaller, better-conditioned set
-        _SM = ["season", "share", "gs_pct", "age", *DERIVED, *RATIOS]
+        _SM = ["season", "poss_pct", "gs_pct", "age", *DERIVED, *RATIOS]
         S["best_small"] = MspiFast("best_small", gbdt_params=FAST, decay=0.5, decay_exposure=True, target="apm",
                                    gbdt_features={"O": _SM, "D": _SM})
         # the single-possession stints dropped: a quarter of the rows, 7% of the weight

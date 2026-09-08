@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import os
 import time
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -143,14 +143,53 @@ class SeasonFrame:
     key: np.ndarray | None = None         # team-game index of each row (the rows G aggregates)
     extra: pd.DataFrame | None = None     # per player in `ids` order: covariates AT H (age), for the Age term
     ctx: object = None                    # for covariates that depend on the training block (moved, per K)
+    _turn: dict = field(default_factory=dict, repr=False)   # the turnover columns per K (they cost a second each)
+
+    def turnover(self, k: int, train: list) -> dict | None:
+        """Teammate turnover of H with respect to the training block, per player in `extra` order
+        (turnover.familiar_share; None without data/cache/teammates.parquet):
+          turn   the share of his H teammate-possessions spent with people he never shared 100 possessions
+                 with anywhere in the block -- 1.0 for a player whose whole context is new
+          turnp  the same against the block's PAST seasons only (the K = 3 block brackets H, so a mover's
+                 H+1 season is with his NEW teammates and `turn` reads him as half familiar)
+          turna  `turn` measured on HALF of H's games (the `A` half): the within-season control, as HShareA
+                 is for HShare -- an exogenous covariate keeps its value on half the games, a leak does not."""
+        if k in self._turn:
+            return self._turn[k]
+        tm = _teammates(self.ctx)
+        if tm is None:
+            self._turn[k] = None
+            return None
+        from .turnover import familiar_share, teammates_from_stints
+        ids = self.extra.player_id.to_numpy()
+        out = {"turn": familiar_share(tm, train, [self.h], player_ids=ids).turnover.fillna(0.0).to_numpy()}
+        past = [s for s in train if s < self.h]
+        out["turnp"] = (familiar_share(tm, past, [self.h], player_ids=ids).turnover.fillna(0.0).to_numpy()
+                        if past else out["turn"].copy())
+        g = self.wd.games
+        ga = set(g.loc[(g["half"] == "A") & (g["phase"] == "RS"), "game_id"].astype(str))
+        from .config import resolve
+        from .design import AWAY_SLOTS, HOME_SLOTS
+        st = pd.read_parquet(Path(resolve(self.ctx.cfg, "stints")) / f"{self.h}_RS.parquet",
+                             columns=[*HOME_SLOTS, *AWAY_SLOTS, "poss_h", "poss_a", "game_id"])
+        ta = teammates_from_stints(st[st["game_id"].astype(str).isin(ga)]).assign(season=int(self.h))
+        tm_a = pd.concat([tm[tm.season.isin(list(train))], ta], ignore_index=True)
+        out["turna"] = familiar_share(tm_a, train, [self.h], player_ids=ids).turnover.fillna(0.0).to_numpy()
+        self._turn[k] = out
+        return out
 
     def covariates(self, k: int) -> pd.DataFrame | None:
         """`extra` plus the K-dependent ones: `moved` = main team in H differs from the main team in the nearest
-        training season he appears in (holdout.by_movers)."""
+        training season he appears in (holdout.by_movers); `turn` / `turnp` / `turna` = teammate turnover of H
+        with respect to the block (`turnover`)."""
         if self.extra is None or self.ctx is None:
             return self.extra
         ex = self.extra.copy()
         train = self.ctx.neighbourhood(self.h, k)
+        t = self.turnover(k, train)
+        if t is not None:
+            for key, val in t.items():
+                ex[key] = val
         now = self.ctx.main_team(self.h)
         before: dict = {}
         for s in sorted(train, key=lambda s: abs(s - self.h)):
@@ -170,10 +209,10 @@ class SeasonFrame:
         wd = ctx.design([h], "pts")
         extra = None
         if ctx.role_inputs is not None:
-            ri = ctx.role_inputs[ctx.role_inputs.season == h][["player_id", "age", "share", "gs_pct", "poss_on", "team_poss"]]
+            ri = ctx.role_inputs[ctx.role_inputs.season == h][["player_id", "age", "poss_pct", "gs_pct", "poss_on", "team_poss"]]
             extra = pd.DataFrame({"player_id": wd.spec.ps_table["player_id"].to_numpy()}).merge(ri, on="player_id", how="left")
             extra["age"] = extra.age.fillna(float(ri.age.median()) if len(ri) else 27.0)
-            for c in ("share", "gs_pct", "poss_on"):        # the held-out season's ROLE: known at prediction
+            for c in ("poss_pct", "gs_pct", "poss_on"):        # the held-out season's ROLE: known at prediction
                 extra[c] = extra[c].fillna(0.0)             # time, like the lineups themselves and the age
             extra["team_poss"] = extra.pop("team_poss").fillna(0.0) if "team_poss" in extra.columns else 0.0
             # the same share measured on HALF of H only: within-season feedback (play badly, sit down) can
@@ -205,6 +244,12 @@ class SeasonFrame:
 
     def game(self, C: np.ndarray) -> np.ndarray:
         return np.asarray(self.G @ C)
+
+
+def _teammates(ctx) -> pd.DataFrame | None:
+    """data/cache/teammates.parquet (turnover.build_teammates), read once per Context; None if not built."""
+    from .turnover import cached_table
+    return cached_table(ctx)
 
 
 def load_frames(ctx: Context, seasons, level: str = "home", verbose: bool = True) -> dict:
@@ -384,6 +429,43 @@ class Moved(Exposure):
         return m[:, None]
 
 
+class Turn(Exposure):
+    """Teammate turnover of H with respect to the training block (SeasonFrame.turnover; `extra[key]`).
+    `key`: "turn" = against the whole block, "turnp" = against its past seasons only, "turna" = the half-season
+    control.  `on`: None = a level in the turnover; "x" = a slope on the standardised rating (does a rating carry
+    less into a new context?); "prior" = a slope on the prior part alone (is it the box line or the possession
+    evidence that fails to travel?).  A player the block never saw has no rating to carry, so the term is 0."""
+    def __init__(self, key: str = "turn", on: str | None = None):
+        self.key, self.on = key, on
+        self.name = key + ("" if on is None else ("x" if on == "x" else "prior"))
+        self.n_params = 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or self.key not in extra.columns:
+            return np.zeros((len(p), 1))
+        t = np.nan_to_num(np.asarray(extra[self.key], dtype=float)) * (p > 0)
+        if self.on == "x":
+            return (t * (np.zeros(len(p)) if x is None else np.asarray(x, dtype=float)))[:, None]
+        if self.on == "prior":
+            if "prior" not in extra.columns:
+                return np.zeros((len(p), 1))
+            return (t * np.nan_to_num(np.asarray(extra["prior"], dtype=float)))[:, None]
+        return t[:, None]
+
+
+class MovedPrior(Exposure):
+    """moved x the prior part of the rating: the binary-rule twin of Turn("turn", "prior")."""
+    name, n_params = "mprior", 1
+
+    def basis(self, poss, extra=None, x=None):
+        p = np.asarray(poss, dtype=float)
+        if extra is None or "moved" not in extra.columns or "prior" not in extra.columns:
+            return np.zeros((len(p), 1))
+        m = np.nan_to_num(np.asarray(extra["moved"], dtype=float)) * (p > 0)
+        return (m * np.nan_to_num(np.asarray(extra["prior"], dtype=float)))[:, None]
+
+
 class UnseenAge(Exposure):
     """The unseen player's age (a rookie against a veteran the block never saw): (age - 27) / 5 on poss = 0."""
     name, n_params = "uage", 1
@@ -443,7 +525,7 @@ class XAge(Exposure):
 
 
 class HShare(Exposure):
-    """A level in the player's role in the HELD-OUT season: c x share / 0.1 (share of his team's possessions
+    """A level in the player's role in the HELD-OUT season: c x poss_pct / 0.1 (share of his team's possessions
     while he is on the floor, `roles.window_inputs`).
 
     The held-out season's lineups are an input of the criterion, so how much a player plays in H is known at
@@ -455,9 +537,9 @@ class HShare(Exposure):
 
     def basis(self, poss, extra=None, x=None):
         p = np.asarray(poss, dtype=float)
-        if extra is None or "share" not in extra.columns:
+        if extra is None or "poss_pct" not in extra.columns:
             return np.zeros((len(p), 1))
-        return (np.nan_to_num(np.asarray(extra["share"], dtype=float)) / 0.1)[:, None]
+        return (np.nan_to_num(np.asarray(extra["poss_pct"], dtype=float)) / 0.1)[:, None]
 
 
 class XHShare(Exposure):
@@ -466,9 +548,9 @@ class XHShare(Exposure):
 
     def basis(self, poss, extra=None, x=None):
         p = np.asarray(poss, dtype=float)
-        if extra is None or "share" not in extra.columns or x is None:
+        if extra is None or "poss_pct" not in extra.columns or x is None:
             return np.zeros((len(p), 1))
-        return (np.asarray(x, dtype=float) * np.nan_to_num(np.asarray(extra["share"], dtype=float)) / 0.1)[:, None]
+        return (np.asarray(x, dtype=float) * np.nan_to_num(np.asarray(extra["poss_pct"], dtype=float)) / 0.1)[:, None]
 
 
 class HShareA(Exposure):
@@ -622,7 +704,8 @@ FAMILIES = {f.name: f for f in (Linear(), Poly2(), Poly3(), Sinh(), Expo(), Hing
 EXPOSURES = {e.name: e for e in (Exposure(), Sat(), Sat(250), Sat(500), Sat(2000), Sat(4000), LogExp(), LogExp(quad=True),
                                  Bins(), Unseen(), Age(), Age(quad=False), Moved(), Moved(slope=True), UnseenAge(),
                                  AgeSat(), XSat(), XSat(300), XSat(3000), XLog(), XAge(), Prior(), PriorSat(), Prior2(),
-                                 PriorAge(), TeamMean(), HShare(), XHShare(), HStarts(), HGrow(), XHGrow(), TShare(), HShareA(), XTShare())}
+                                 PriorAge(), TeamMean(), HShare(), XHShare(), HStarts(), HGrow(), XHGrow(), TShare(), HShareA(), XTShare(),
+                                 MovedPrior(), *(Turn(key, on) for key in ("turn", "turnp", "turna") for on in (None, "x", "prior")))}
 
 
 def parse_exposure(name: str) -> Exposure:
@@ -854,8 +937,9 @@ def mapped_ratings(rat: Ratings, theta, map_o: SideMap, map_d: SideMap, scale_o:
     if extra is not None:
         ex = d[["player_id"]].merge(extra, on="player_id", how="left")
         ex["age"] = ex.age.fillna(float(extra.age.median()))
-        if "moved" in ex.columns:
-            ex["moved"] = ex.moved.fillna(0.0)
+        for c in ("moved", "turn", "turnp", "turna"):
+            if c in ex.columns:
+                ex[c] = ex[c].fillna(0.0)
     ex_o = ex_d = ex
     if ex is not None and "prior_o" in d.columns:
         ex_o = ex.assign(prior=d.prior_o.to_numpy(dtype=float) / scale_o)

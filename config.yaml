@@ -87,7 +87,23 @@ ratings_prior:
   gbdt_win_decay: 0.514318
   gbdt_win_decay_def: 0.280024
   lam_scale: 0.624047
-  cal_map: {table: outputs/calmap_ship.parquet, system: tune501_b7_linear+log2&xlog&prior&tshare_linear+log2&xlog, base: tune501_b7, k: 3}
+  # FINDINGS 24 (trade calibration).  The turnover-aware prior: trained on ordered window pairs with the
+  # teammate turnover of the target window as a feature (gbdt_prior.pair_rows, turnover.py) and evaluated at a
+  # SETTLED context for everyone -- `ref` 0.35 is the season-to-season stayer median, fixed a priori.  On
+  # offense only it is -0.054 against the shipped board at z -3.39 over 22 of 28 seasons with the consensus
+  # screen unchanged (system `tune501_b7_turnref_o`); on defense it is flat and costs the defensive agreement.
+  # Needs data/cache/teammates.parquet (scratch/trade_turnover.py).  null = the pooled prior, what ships;
+  # {sides: [O], ref: 0.35} SHIPPED 2026-09-07 (FINDINGS 24.9): 110.569 on the criterion, nine floors and the
+  # bigness floor re-based 0.30 -> 0.32 once, with the reason in tests/test_vs_consensus.py.
+  # 2026-09-07 later: height2 and weight15 (bio.py, FINDINGS 26) on both feature lists, system
+  # tune501_b7_turnref_o_hwb, 110.5635, ten of ten floors; the owner: "just ship".
+  # 2026-09-07 latest: past_apm, past_poss, past_rapm on the OFFENSIVE list (gbdt_prior.PAST, FINDINGS 28), system
+  # tune501_b7_turnref_o_hwb_pasto, 110.4785 (z -2.5 on the criterion, z -4.3 on the investigator); the bigness
+  # floor re-based 0.32 -> 0.35 with the reason in the test.
+  # 2026-09-08: both lists pruned of the kitchen-sink Boruta's rejects (FINDINGS 29), system tune501_b7_pasto_pOD,
+  # 110.4547, ten of ten floors, 31 offensive names and 11 defensive.
+  gbdt_turn: {sides: [O], ref: 0.35}
+  cal_map: {table: outputs/calmap_ship.parquet, system: tune501_b7_pasto_pOD_linear+log2&xlog&prior&tshare_linear+log2&xlog, base: tune501_b7_pasto_pOD, k: 3}
 # The random effect unit: "window" gives one player effect per 3-season window, "season" one per
 # player-season (the original spec).  Possession thresholds below are in the unit's own scale.
 player_unit: window
@@ -153,7 +169,7 @@ holdout:
 # The role prior and the boosted box prior (src/eracoef/roles.py, spm.py, gbdt_prior.py; FINDINGS 19).
 roles:
   cache: data/cache/roles.parquet   # per player-season-team: games, starts, minutes, on-floor and team possessions, age
-  share_cap: 0.9                    # share of one full team-season of possessions, capped
+  share_cap: 0.9                    # poss_pct is capped here: one full team-season of possessions
 spm:
   apm_lam: 100            # the APM penalty: under 1% of lam_plugin, so nobody is pulled toward zero by much
   apm_lam_ratio: 1.0
@@ -166,9 +182,9 @@ gbdt:
   # scripts/50_boruta.py, 25 trials, 2026-09-05: accepted + tentative + season (rejected dropped; season kept by design)
   features_O: [ast, blk, drb, fg2_miss, fg2m, fg3_miss, fg3m, ft_miss, ftm, orb, pf, stl, tov, season]   # rejected: season; tentative: drb, fg3_miss, pf, tov
   features_D: [ast, blk, drb, fg2_miss, fg2m, fg3_miss, fg3m, ftm, pf, stl, tov, season]   # rejected: ft_miss, orb, season; tentative: fg3m, ftm, pf
-  features_full_O: [fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss, orb, drb, ast, tov, stl, blk, pf, season, share, gs_pct, age, pts, fga, fta, fg3a, usage, bigness, reb, stocks, creation, shotmix, efg, ts, p3r, ftr, fg3p, fg2p, ftp, astr, tovr, orbsh, q2, q3, m2, m3, xps, mpts]
+  features_full_O: [fg3m, fg3_miss, ftm, orb, ast, stl, pf, season, poss_pct, gs_pct, age, pts, fga, fta, fg3a, usage, bigness, reb, stocks, creation, shotmix, efg, ts, ftp, tovr, orbsh, mpts, weight15, past_apm, past_poss, past_rapm]
   # the last six on each line are FINDINGS 22.1's shot quality (gbdt_prior.SHOTQ)
-  features_full_D: [fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss, orb, drb, ast, tov, stl, blk, pf, season, share, gs_pct, age, q2, q3, m2, m3, xps, mpts]
+  features_full_D: [fg3_miss, fg2m, fg2_miss, orb, drb, stl, blk, pf, season, gs_pct, age]
   drag_tol: 0.02          # counterbalance a leave-window-out training set whose weighted mean drifts more than this
   boruta_trials: 50
   seed: 0

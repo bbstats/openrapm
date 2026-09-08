@@ -243,6 +243,7 @@ outputs/xrapm_panel.parquet
 outputs/defensive_prior_grid.parquet
 outputs/free_scale_ratings.parquet
 outputs/investigate_rapm.parquet
+outputs/investigate_*.parquet
 outputs/remedy.parquet
 outputs/diagnostic_payload.json
 
@@ -267,3 +268,5 @@ outputs/ratings_timing*.parquet
 outputs/*.parquet.bak*
 outputs/tune_*.csv
 outputs/tune_*.db
+# teammate-turnover tables (FINDINGS 24): 1.5 MB, rebuilt in 40 s by scratch/trade_turnover.py
+outputs/csv/turnover_*.csv

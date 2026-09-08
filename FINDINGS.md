@@ -2597,3 +2597,1497 @@ Capacity did not move it (21.24), re-expression was worth 0.05 (21.25), and the 
 the shelf are worth 0.045 and less than nothing.  The next real gain is more likely in the ridge, in the
 defensive fit, or in getting off three-season chunks than in another column on the panel.
 
+## 23. The play-by-play block: built to the event, validated against the box score, and worth nothing
+
+HANDOFF 3.1 was the owner's call for this pass: FINDINGS 22.5 concluded the box score is nearly spent, the
+play-by-play is not, and shot quality (22.1) -- the one thing last pass added that paid -- came out of the
+shots tables rather than the box.  So take the rest of the events.  The reference was Justin Willard's
+**Dredge** (Nylon Calculus, 2016), an elastic net onto 15-year RAPM trained on 2001-2015 and tested out of
+sample on 1997-2000 and 2016 -- our era, our target, our validation design -- whose published coefficients
+say the box line is throwing away most of what its own events know.  Twelve features, none of them built.
+
+They are built now, and so is the owner's assist-location extension on top of them (23.11).
+`src/eracoef/dredge.py` counts twenty-one event types per (player, season) out of `data/raw/pbp`,
+`scripts/56_dredge.py` caches them per season, `gbdt_prior.add_dredge` turns them into twenty-six padded
+features, and the panel, the tests and the prediction path all carry them.  **And the criterion cannot
+distinguish any grouping of them from the board: seven candidates, best z -0.20, worst z 2.33.**
+
+This section is the record of how that was established -- a null finding is only worth the verification
+behind it -- and of the two measurements that explain it.
+
+**Signs, once, for all of it.**  Every metric here is a mean squared error, so LOWER IS BETTER, and every
+"vs" column is candidate minus baseline.  A NEGATIVE number is an improvement; a positive one is a
+regression.  The paired `z` follows the same convention, so a negative z means the candidate beat the base.
+
+**Every number below was recomputed after 23.8's bug was found.**  The first version of this section had
+the league level read from the frame's first row, so nine of the ten windows were padded toward 1997-1999.
+The conclusion did not change; the numbers did, and the ones printed here are the corrected ones.
+
+### 1. What the v3 feed can attribute, audited before a line was written
+
+`data/raw/pbp` is the **v3** play-by-play: exactly one `personId` per event.  So a counter is buildable when
+the player we want is the player the row names.  `scratch/dredge_audit.py` and `dredge_audit2.py` read
+1997, 1999, 2001, 2003, 2006, 2010, 2015, 2019, 2023 and 2026 and found the feed cleaner than expected:
+
+| | what the audit found | seasons |
+|---|---|---|
+| row order | the file is chronological -- **zero clock inversions** in any era -- so "the row above" is meaningful | all 30 |
+| blocks | BLOCK is its own row with the blocker; the blocked attempt is **always** the row directly above (112 of 112 in 1997, 114 of 114 in 2026) and the BLOCK row's own `shotValue` is 2 or 3 in **100%** of cases | all 30 |
+| Russells | the rebound after a block is the next `Rebound` row; team rebounds carry the team in `personId` with `teamId` 0 | all 30 |
+| steals | STEAL is its own row and a `Turnover` row naming the loser sits directly beside it, every time | all 30 |
+| fouls | `Foul` rows name the committer, which is what the loose-ball, technical, flagrant and offensive-foul terms want | all 30 |
+| assists | the assist is text in the SHOOTER's description (`"... (2 PTS) (Payton 1 AST)"`), so unassisted makes need no name parsing | all 30 |
+| **offensive fouls DRAWN** | **not present.**  `"Asik OFF.Foul (P3)"` names only the fouler, in 1997 and 2026 alike | **none** |
+
+`OffFoulsDrawn100` is Dredge's best find (coefficient 1.22, "one of my favourite discoveries") and it is the
+one term our feed cannot give us; it needs the v2 play-by-play or pbpstats, i.e. an ingest job.  It is
+therefore **not** part of what follows, and the null result below does not speak to it.
+
+### 2. Two gates, both passed exactly
+
+**Against the box score.**  The counters and the game logs count the same events from different feeds, so
+they must agree.  Over all 30 seasons the worst |ratio - 1| is **0.0000 on made field goals, 0.0001 on
+turnovers, 0.0012 on steals and 0.0024 on blocks**.  The parser is reading the events, not an interpretation
+of them.
+
+**Between the two paths.**  `scratch/cmp_dredge.py` rebuilds every feature the prediction path will build and
+compares it to what the panel stored, for all ten windows and all thirteen features: **0.00e+00**, the same
+check 22.1 ran for shot quality.
+
+### 3. One counter that measures the scorer instead of the shot
+
+The season report shows the rim share of blocked twos swinging **0.77 -> 0.48 -> 0.74 -> 0.42** with jumps of
+0.17 to 0.23 between ADJACENT seasons.  Basketball does not move that fast.  `scratch/dredge_audit3.py`
+rules out the obvious cause -- only 0 to 2% of blocked twos have no location at all -- so the swing is in the
+recorded distance itself, i.e. in how the scorer typed the row.  **`blkrim` and `blkrimsh` measure a
+distance-recording convention as much as they measure a shot**, and the artifact is the size of their whole
+between-player spread.  This is FINDINGS 22.2's failure mode wearing a different hat, and it is exactly what
+HANDOFF 3.1 said to look for before a count became a column.
+
+Two era traps were designed out rather than measured after the fact.  `foul_off` is the AGGREGATE of every
+`Offensive*` subtype, because `Offensive Charge` does not exist as a subtype before ~2006 and a column that
+is structurally zero for a third of the panel is learned as "old era" when `season` is a feature -- and
+Justin's own finding that non-charges tested MORE valuable than charges says the aggregate is the better
+feature anyway.  `goaltend` is counted but held out of the default list: his footnote says 1997 has
+suspiciously FEW goaltends and our feed says it has MORE, one of the two is wrong, and neither of us has
+reconciled it against a published source.
+
+### 4. The pre-filter, at the operating point
+
+The first bench was run on the wrong base and said the opposite of the truth.  On the 43-name offensive line
+at `quality=4` the whole block reads **-0.050 weighted MSE on defense**, which would have been the largest
+feature-block gain ever measured here.  On the **shipped** defensive list (23 names) with the **shipped**
+defensive booster it reads -0.012, and every part of it costs low-exposure accuracy.  HANDOFF's trap --
+*"a knob measured at the cheap booster does not transfer"* -- applies to feature sets and to the base list,
+not just to boosters.  Measured at the operating point, `scratch/prior_bench.py`:
+
+| defensive candidate | pooled MSE | low-exposure rows |
+|---|---|---|
+| the shipped list | 2.6358 | 4.9474 |
+| + the whole block (12) | **-0.0196** | **+0.0910** |
+| + `unast`, `unastsh` | +0.0067 | +0.0793 |
+| + `loose`, `techflg`, `offoul` | +0.0093 | +0.0189 |
+| + `goalt` | +0.0134 | -0.0092 |
+| + `russ`, `russsh`, `blkrim`, `blkrimsh`, `blk3sh` | +0.0201 | +0.0297 |
+| + `stolen`, `stolensh` | +0.0217 | +0.0220 |
+| + the whole block, ERA-RELATIVE (23.9) | **-0.0286** | **+0.1290** |
+| + `blkrimsh_r`, `goalt_r` only (23.9) | -0.0205 | +0.0195 |
+
+**Every group is worse on its own and only the whole block gains**, which is what a set of twelve weakly
+informative columns looks like when the booster is allowed to cross them: the gain is in the crossing, not
+in any feature.
+
+**Every pooled gain is paid for on the low-exposure rows** -- the half of the fit the held-out season can
+actually feel, because those are the players the prior IS the rating for.  That is the 22.2 signature: MSE
+bought by identifying which rows have quiet targets rather than by knowing more basketball.  And the block
+split, the thing Dredge most promised against `blk` at 15.7% of the defensive SHAP, is among the worst.
+
+On OFFENSE there is nothing to discuss: every group is worse (+0.004 to +0.018) and the whole block together
+is -0.0001.
+
+### 5. The criterion
+
+Two candidates went to the tracker anyway, because the bench "is necessary, not sufficient, and it has been
+wrong by 0.13", and because shot quality was flat on the line before it shipped.  Against the shipped board
+`tune501_b7` at 110.6237 over the same 28 held-out seasons:
+
+| | criterion | vs the board | z | wins |
+|---|---|---|---|---|
+| `tune501_b7` (what ships) | 110.6237 | | | |
+| `tune501_b7_drd` -- the whole block on defense | 110.6182 | -0.0055 | -0.20 | 16/28 |
+| `tune501_b7_drr` -- the same block era-relative | 110.6243 | +0.0006 | -0.08 | 14/28 |
+| `tune501_b7_dcal` -- `blkrimsh_r`, `goalt_r` only | 110.6281 | +0.0045 | 0.32 | 14/28 |
+
+Nothing, three ways, and 4.5% slower for it.  Note that the whole block is **-0.020 on the prior's own fit
+and -0.006 on the criterion**: a third of the offline gain survives contact with the ridge, which is the same
+ratio 22.5 reported and is why the bench is a pre-filter and not a verdict.
+
+### 6. Dredge's actual claim, tested properly, does not reproduce
+
+Adding a decomposition beside the counter it decomposes is the weak form of the hypothesis.  The strong form
+-- Justin's own -- is that `blk` is the wrong SHAPE: a Russell is worth 0.445 and a raw block 0.236, so the
+split should REPLACE it.  That is a different test and it had not been run:
+
+| defensive list | pooled MSE | low-exposure |
+|---|---|---|
+| the shipped list | 2.6358 | 4.9474 |
+| `blk` -> `russ`, `blkrim`, `blk3sh` | +0.0431 | +0.1148 |
+| `blk` -> all five block features | +0.0545 | +0.1329 |
+| `blk` -> `stocks` (`stl` + `blk`, which Boruta prefers -- 23.10) | +0.0500 | -0.0060 |
+| `blk` dropped, nothing in its place | **+0.3277** | +0.2660 |
+| `tov` -> `stolen`, `stolensh` | +0.0255 | +0.0368 |
+| `ast` -> `unast`, `unastsh` | +0.0303 | +0.0070 |
+
+`blk` is worth +0.328 to the defensive prior, which is what its SHAP share says.  Its play-by-play
+decomposition recovers **87%** of that and no more, and adding the shares back makes it worse rather than
+better.  The same holds for turnovers and for assists.  On all three terms Dredge singled out, **the raw
+counter beats its own decomposition.**
+
+### 7. Why: the Russell share is not a property of a player
+
+`scratch/dredge_rely.py` runs the owner's own reliability test on the features themselves -- build each from
+season t and from season t + 1 for the same player, keep the 8,432 pairs with 1,500+ possessions in both,
+and correlate:
+
+| feature | year-over-year r | | feature | r |
+|---|---|---|---|---|
+| `blk` per 100 (the box counter) | **0.918** | | `goalt` | 0.774 |
+| `russ` (Russells per 100) | 0.903 | | `offoul` | 0.752 |
+| `blkrim` | 0.900 | | `blkrimsh` | 0.713 |
+| `unast` | 0.897 | | `stolensh` | 0.689 |
+| `unastsh` | 0.892 | | `techflg` | 0.686 |
+| `stolen` | 0.824 | | `blk3sh` | 0.636 |
+| `loose` | 0.799 | | **`russsh` (the Russell SHARE)** | **0.126** |
+
+**Whether the defence recovers your block is not something about you.**  The Russell share is 0.575 for
+everybody, its between-player sd is 0.038, and 98% of that spread is sampling noise.  `russ` looks reliable
+at 0.903 only because it is `blk` multiplied by a constant plus noise -- which is precisely why replacing
+`blk` with it costs 0.061: you keep the counter's information, lose precision on it, and gain nothing.
+
+That is the whole result.  The features that ARE reliable -- `unastsh` at 0.892 is a real and stable property
+of a player -- are the ones a boosted tree can already reconstruct from the counters it has.  Dredge needed
+them because an elastic net is linear and cannot express "a block is worth more when your team gets the
+ball"; our prior is a depth-4-to-7 booster over 23 to 43 features that has `blk`, `drb`, `stl`, `pf`, `ast`,
+`usage`, `astr`, `share` and `gs_pct` and crosses them freely.  **A decomposition is worth having when the
+model cannot make it, and ours can.**
+
+### 8. The bug, and why the identical-paths check could not catch it
+
+`add_dredge` read the block's league totals with `.flat[0]` -- the frame's FIRST row.  The league columns are
+constant down a WINDOW, and `training_rows` hands the function all ten windows at once, so **every row was
+padded toward 1997-1999's league level**.  The era normalisation the module claims to do was not happening,
+and worse, the resulting columns carried the era rather than removing it -- the exact failure the block was
+designed against.
+
+`scratch/cmp_dredge.py` reported 0.00e+00 throughout and could not have done otherwise: it calls
+`add_dredge` once per window on both sides, so both paths were wrong in the same way.  **An identical-paths
+check proves the two paths agree, never that either is right.**  It is still the right check -- it is what
+caught nothing here because there was nothing of its kind to catch -- but it needs a companion, and the
+companion is a test that puts two different eras in one frame:
+`test_the_league_level_is_read_per_row_not_from_the_first_row` builds two identical players in leagues that
+recover 80% and 20% of their blocks and asserts that the frame-of-two agrees with each frame-of-one.
+
+What it changed: every bench number moved by 0.005 to 0.02, the criterion's reading of the whole block moved
+from +0.0008 to **-0.0055**, and no conclusion in this section changed.  The numbers above are the corrected
+ones.
+
+### 9. Era-calibrating the counters: the owner's proposal, measured
+
+The owner, 2026-09-07: *"let's just smartly calibrate for seasons where we don't have goaltending/shot
+distance."*  The concrete form is the one `xshoot` already uses for shot quality -- divide the padded feature
+by its own block's league level, so the number says "x times his era's average" and a change in how the feed
+RECORDS an event divides out while a change in who does it survives.  `add_dredge` now builds both: `russsh`
+and `russsh_r`, thirteen pairs, ten lines.
+
+On the prior's own fit it does what it should.  The whole block era-relative is **-0.0286** against -0.0196
+absolute, and the two features the artifact actually contaminates -- `blkrimsh` (23.3) and the disputed
+`goalt` -- are **-0.0205 on their own at a fifth of the low-exposure cost** of the full block, much the best
+balance anything in this section reached.
+
+**The criterion refuses all of it**: the relative block is +0.0006 at z -0.08 and the two-feature version is
++0.0045.  So era-calibration is real and does what it claims -- and it is not what was standing between the
+Dredge block and a gain.  It is kept because it costs nothing and because it is the mechanism any FUTURE
+count-based source will need: tracking data does not exist before 2013-14, and a dimensionless multiple of a
+player's own era is the only form of such a column that can share a panel with seasons the source does not
+cover.  (Absence is a harder problem than level, and this does not solve it.)
+
+### 10. BorutaShap, finally run on a candidate set that contains the board -- and it is unusable here
+
+`50_boruta.py` could never assess the shipped lists: `MODES["full"]` was hardcoded to the 17-name
+`FULL_FEATURES` while the board ships 43 names on offense and 23 on defense, so it dropped everything past
+the base rates before it started.  A `wide` mode now runs it on `DREDGE_FEATURES` (55 names: a superset of
+both shipped lists and of the new block).  Defense, 40 trials, the shipped defensive booster:
+
+| | |
+|---|---|
+| **accepted** | age, astr, blk3sh, drb, fg3_miss, fga, gs_pct, pf, pts, share, stl, stocks, tovr, **unast** |
+| **tentative** | ast, bigness, blkrim, creation, fg2_miss, loose, q2, q3, russ, **russsh**, season |
+| **rejected** | **blk**, blkrimsh, efg, fg2m, fg2p, fg3a, fg3m, fg3p, ft_miss, fta, ftm, ftp, ftr, m2, m3, mpts, offoul, orb, orbsh, p3r, reb, shotmix, stolen, stolensh, techflg, **tov**, ts, unastsh, usage, xps |
+
+**It rejects `blk`.**  Removing `blk` costs the defensive prior +0.328 weighted MSE, the largest effect of
+any single column measured in this project, and it holds 15.7% of the defensive SHAP.  It also rejects `tov`,
+`orb`, `ftm`, `fg2m` and `fg3m` -- six of the thirteen core box rates, eleven of the twenty-three shipped
+names.  And it ACCEPTS `unast`, which the criterion prices at zero, and leaves `russsh` -- year-over-year
+reliability **0.126** -- as tentative rather than rejecting it.
+
+The OFFENSIVE run, same panel and same 55 candidates, settles what is going on:
+
+| | offense | defense |
+|---|---|---|
+| `blk` | **accepted** | **rejected** |
+| `stocks` (= `stl` + `blk`) | **rejected** | **accepted** |
+| `reb` / `drb` / `orb` | reb accepted, drb and orb rejected | drb accepted, reb and orb rejected |
+| `unast`, `blk3sh` | rejected | accepted |
+
+**The same feature is essential on one side and noise on the other, and its aggregate is the exact reverse.**
+That is not a judgement about basketball; it is a coin toss between collinear alternatives.  Offense rejects
+20 of its 43 shipped names and accepts nothing the board does not already carry.
+
+The mechanism is not mysterious and it is worth stating because it generalises: **on a candidate set that
+contains engineered linear aggregates of its own members, Boruta keeps the aggregates and rejects the
+parts, and which of the two it keeps is arbitrary.**  `stocks` is `stl + blk`; given `stocks` and `stl`, a shadow copy of `blk` is as good as `blk`, so
+`blk` fails its own test.  `pts` swallows `fg2m`/`fg3m`/`ftm`, `fga` swallows the misses, `reb` swallows
+`orb`.  Every one of the ten `DERIVED` aggregations 21.24 added is a trap of this shape.  The direct check
+confirms it: swapping `blk` for `stocks`, exactly what Boruta prefers, costs **+0.050** (23.6).
+
+On offense it also rejects every Dredge feature outright, which agrees with the criterion.
+
+So the answer to "should Boruta prune this list" is no, and not for the reason HANDOFF 3.1 anticipated.  The
+anticipated reason was that it selects against the prior's own target, the objective that ranked career
+experience highest immediately before it cost +0.054 on the criterion -- and that is confirmed too, in its
+acceptance of `unast` and its tolerance of `russsh`.  But the sharper reason is structural: **the shipped
+feature set is deliberately collinear, and Boruta's whole premise is that a feature must beat a shadow of
+itself with everything else present.**  It cannot be used on this list at all without first removing the
+aggregations, at which point it is not assessing the list that ships.
+
+`50_boruta.py --modes=wide` is kept, and it is a useful NOISE detector -- nothing in the rejected column is
+surprising except the collinear parts.  It is not a gate and cannot be made into one.
+
+### 11. Assists by location, and a tracking statistic carried back to 1997
+
+The owner, 2026-09-07: *"blk100 split by location may be better? also assists by location i think can be
+super helpful"*, with his own 2019 finding that a player's assist counts BY ZONE reconstruct his TOTAL
+POTENTIAL ASSISTS at r-squared ~1 -- rim 1.556, short mid 1.111, long mid 1.142, corner three 2.542,
+above-break three 2.420, intercept 1.672 per game.  The coefficients are close to the reciprocal of each
+zone's make rate, which is what a potential assist IS (a pass that would have been an assist had the shot
+dropped), so the fit is mechanical rather than lucky.
+
+**That makes it the one idea in this section that is a different KIND of thing.**  Potential assists are a
+TRACKING statistic; they begin in 2013-14 and no box score recovers them.  Assist location is in the
+play-by-play from 1997.  So `pot_ast` back-fills a tracking-era creation measure across the whole panel --
+and the era problem that would normally sink such a column (23.9) does not arise, because it is
+reconstructed from a source that spans the panel rather than spliced onto one that does not.
+
+#### Attributing the passer, and the era gradient hiding in the failures
+
+The v3 feed names only the shooter; the assist is text in HIS description.  Three things make the surname
+resolvable and one of them makes it self-checking: every row carries `playerName` beside `personId` so the
+game's roster is in the file, the passer is on the SHOOTER's team, and the `N` in `(NAME N AST)` is his
+running assist count, so the check is per player per game rather than an aggregate.
+
+The first resolver got **0.99 of assists in 1997 and 0.92 in 2024**, and a coverage rate that drifts with
+the era is an era feature in disguise -- the same failure mode as 23.3, arriving through the back door.
+`scratch/assist_audit.py` named the three causes on 2023-24 and all three are mechanical:
+
+| cause | example | fix |
+|---|---|---|
+| **accents** -- most of the modern shortfall | the description writes "Doncic", `playerName` writes "Dončić"; also Jokic, Micic, Bogdanovic, Porzingis, Vucevic, Nurkic, Saric | NFKD, drop the combining marks |
+| **suffixes** | "Butler" against a roster of "Butler III"; "Bullock" against "Bullock Jr." | strip Jr./Sr./II/III/IV |
+| **two of one surname** | "Jal. Williams" against a roster whose `playerName` is the bare "Williams" twice | key the roster on `playerNameI` too, which is the initial-plus-surname form the feed already carries |
+
+After the fix, resolution is **0.981 to 0.9998 in every one of the 30 seasons with no gradient** (1997
+0.9986, 2026 0.9933), the assisted shot is locatable in **0.997 to 1.000** of cases in every era, and the
+assist totals agree with the box score to **0.0002**.  A surname that still matches two players is left
+unresolved rather than guessed, and `ast_res` carries the count so the coverage is a column and not a
+footnote.
+
+The zone mix moves exactly the way basketball did, which is the point: long mid-range assists **0.228 ->
+0.050**, above-break threes **0.180 -> 0.289**, corner threes **0.041 -> 0.137**.  That is a real trend and
+the prior should see it.  `blk_smr` by contrast wobbles 0.22 -> 0.40 -> 0.25 -> 0.48, which is 23.3's
+distance-recording artifact again, so the block split by location is built and is not recommended.
+
+#### It is the most reliable feature in the block, and the best offline result of the pass
+
+Year-over-year, 8,432 player-pairs with 1,500+ possessions in both seasons:
+
+| feature | r | | feature | r |
+|---|---|---|---|---|
+| **`pot_ast`** | **0.922** | | `astlmr` | 0.865 |
+| `blk` per 100 (the box counter) | 0.918 | | `astab3` | 0.843 |
+| `astrim` | 0.885 | | `astc3` | 0.814 |
+| `astlmrsh` | 0.867 | | **`russsh`** | **0.126** |
+
+And on the prior's own fit it is the only thing in this entire section that helps on OFFENSE:
+
+| | pooled MSE | low-exposure |
+|---|---|---|
+| the shipped offensive list | 3.2018 | 5.1587 |
+| **+ `pot_ast`** | **-0.0181** | +0.0338 |
+| + the five zone rates | +0.0184 | +0.0038 |
+| + the five zone shares | +0.0198 | +0.0539 |
+| `ast` -> `pot_ast` | +0.0201 | +0.0943 |
+| `ast`, `astr` -> `pot_ast` | +0.0290 | +0.0401 |
+| + `pot_ast` on DEFENSE | -0.0075 | +0.0022 |
+
+Note that it is `pot_ast` SPECIFICALLY and not the zones: the five counts on their own are worse, so the
+owner's linear combination is doing work the booster does not find by itself.  That is the opposite of the
+Russell result, and it is what a real feature looks like offline.
+
+#### And the criterion says no for the third time
+
+| | criterion | vs the board | z | wins |
+|---|---|---|---|---|
+| `tune501_b7` (what ships) | 110.6237 | | | |
+| `tune501_b7_past` -- `pot_ast` on offense | 110.6241 | +0.0005 | 0.12 | 12/28 |
+| `tune501_b7_past2` -- on both sides | 110.6564 | **+0.0327** | **2.33** | 7/28 |
+
+The second row is worth reading as a control rather than a candidate: a PASSING feature in a DEFENSIVE
+prior is significantly harmful at z 2.33, which says the criterion is discriminating and not merely noisy
+when it returns z 0.12 for the offensive version.  The zero is a real zero.
+
+So: the best offline signal of the pass, the most reliable feature in the block, a mechanism that makes
+sense, a validation to 0.0002 against an independent feed -- and none of it reaches the board.  **-0.018 on
+the prior's own fit became +0.0005 on the criterion**, and that is now the third time in this section (the
+Dredge block, the era-relative form, and this) that an offline gain has not survived the ridge.  22.5's
+ceiling argument does not just say the prior is near its limit; it says gains measured against the prior's
+own target are not evidence about the board, and this section is four independent demonstrations of it.
+
+To be exact about the signs, because "it did not work" is doing a lot of work in that sentence: all four
+candidates IMPROVED the prior's own fit, by -0.018 to -0.029.  On the criterion they read z -0.20, -0.08,
+0.32 and 0.12.  One of them (the Dredge block, -0.0055) is nominally the better board and is still a
+rejection, because z -0.20 over 28 seasons is noise and Part 0 ruling 1 breaks a tie the criterion cannot
+call in favour of the simpler and faster candidate -- which is the one that was already shipping.
+
+What survives is the machinery and the fact.  `data/dredge/*.parquet` now carries assists by zone for
+every player in all 30 seasons, validated to 0.0002, and `pot_ast` is a defensible reconstruction of a
+tracking statistic over an era that has no tracking.  It is not a feature of this board.  It may well be a
+column somebody wants for its own sake.
+
+### 12. What this says about the pass
+
+22.5 said the box score was nearly spent and named the play-by-play as the resolution.  The play-by-play is
+now spent too, in the specific sense that the events behind the box line, counted honestly and measured at
+the operating point, add nothing the booster did not already have.  Four things survive from it:
+
+* **the machinery is built and cheap.**  `data/dredge/*.parquet` is 30 seasons of per-player event counts,
+  validated to 0.0024 against the box score, and any future counter is one entry in `COUNTERS` away.  The
+  ingest job for `OffFoulsDrawn` -- the one published coefficient we could not test -- now has somewhere to
+  land.  The owner's interest is the general shape of this: season table -> block frame -> padded feature ->
+  identical in the panel and the prediction path -> validated against an independent source.  That is the
+  route tracking data would take, and it now exists and has been exercised end to end.
+* **era-relative counters** (23.9), which the criterion did not want here but which is the mechanism a source
+  that does not span the panel will need.
+* **Boruta is settled**: it cannot gate this feature list, for a structural reason (23.10), and the
+  question does not need asking again.
+* **the negative is informative about where to look.**  Three passes have now added information to the prior
+  (capacity, re-expression, shot quality, experience, and the play-by-play) and the total is 0.05.  The
+  prior's ceiling argument in 22.5 is holding.  What is left is the ESTIMATOR: the defensive four-factor fit
+  that HANDOFF 3.2 puts at a measured, significant, cheaper 0.14.
+
+## 24. Trade calibration: teammate turnover, and a prior that knows what a box line is worth in a settled context
+
+The owner's ask (2026-09-07): a "rating" and a "rating if traded", and behind them a trade-weighted SPM that
+measures how teammate turnover -- roughly 100% in a trade -- changes what a box line is worth and which stats
+carry it.  This section builds the measure, tests the idea at the three places it can live (the calibration
+map, the prior's own target, the prior itself), and finds the gain somewhere other than where it was looked
+for.  **A rating travels almost fully into a new context at team-game level; a player's box line does not
+travel fully at player level, by about 0.85 points per 100 on offense and 0.55 on defense for a fully
+turned-over context; the booster can say who loses most (high-usage scorers on offense, older players on
+defense); applying that per-player trade delta to the held-out season makes the criterion WORSE; and the same
+turnover-aware prior evaluated at a SETTLED context on offense is -0.054 against the shipped board at
+z -3.39 over 22 of 28 seasons, with the consensus screen unchanged.**  Lower is better throughout; every
+"vs board" number is candidate minus `tune501_b7` (110.6237).
+
+### 1. The measure: teammate turnover (`src/eracoef/turnover.py`)
+
+For every player and season, from the stints: `shared(p, t, s)` = possessions p and t were on the floor
+together (both ends).  The **familiar share** of p from span a to span b is the share of his teammate-possessions
+in b spent with anyone he shared 100+ possessions with in a; **turnover** is one minus that.  A trade is the
+extreme case; the same number is continuous for everyone.  `build_teammates` caches the per-season table
+(`data/cache/teammates.parquet`, 241,714 pairs, 2 s), `familiar_share` computes any span pair from it,
+`season_turnover` / `window_pair_turnover` the two tables the analyses use.  Five tests in
+`tests/test_turnover.py`.
+
+| span | who | n | mean | p10 | median | p90 |
+|---|---|---|---|---|---|---|
+| season to next (500+ poss) | stayers (main team unchanged) | 6,688 | 0.379 | 0.136 | 0.362 | 0.643 |
+| | movers | 3,647 | 0.911 | 0.691 | **1.000** | 1.000 |
+| adjacent 3-season windows (1000+ poss) | everyone | 6,783 | 0.702 | 0.356 | 0.727 | 1.000 |
+| two windows apart | everyone | 3,782 | 0.93 | 0.78 | 0.98 | 1.000 |
+| K = 3 block (H-2, H-1, H+1) to H | stayers | 7,998 | 0.296 | 0.036 | 0.232 | 0.631 |
+| | movers | 3,533 | 0.644 | 0.174 | 0.730 | 1.000 |
+
+Two things to keep in view.  The binary main-team rule and the continuous measure agree (97% of the 0.9+
+season-to-season rows are movers, 4% of the under-0.5 rows).  And the criterion's training block BRACKETS H,
+so a player who moved into H and stayed reads 0.73, not 1.0: his H+1 season is with the new teammates.  The
+prior's training pairs (windows three years apart) sit at 0.70 on average; the criterion's held-out season
+sits at 0.40 with respect to its block.  That gap is the whole of section 24.6.
+
+### 2. The calibration map: a rating travels
+
+On the shipped board's dump (`scratch/trade_maps.py`, no refits), terms added to the shipping map:
+
+| term (offense : defense) | vs board | z | wins |
+|---|---|---|---|
+| `moved` level (21.7 again, this board) | +0.010 | +0.81 | 13/28 |
+| `moved` x rating and `moved` x prior (does the box line or the possession evidence fail to travel?) | -0.020 | -0.66 | 15/28 |
+| `turn` x rating and `turn` x prior | -0.003 | -0.14 | 14/28 |
+| **`turn` level** | **-0.084** | **-1.98** | 17/28 |
+| `turn` level, offense only | -0.081 | -1.85 | 18/28 |
+| `turn` level, defense only | -0.004 | -0.28 | 15/28 |
+| `turnp` level (turnover against the block's PAST seasons only) | +0.014 | +1.30 | 10/28 |
+| **CONTROL: `turna` level (`turn` measured on half of H's games)** | **-0.084** | **-2.00** | 18/28 |
+
+The component split is zero both ways: for a mover, the prior and the possession evidence carry into the new
+context in the same proportion as for anyone else.  A level in the turnover is worth -0.08, it lives on
+offense, and the half-season control returns the identical number, so it is exogenous (the HShare leak of 21.21
+kept 3% of its value on half the games; this keeps 100%).  But the version that means "moved into H" -- the
+turnover against the block's past seasons -- is worth nothing.  What the level prices is a player whose H
+teammates the block never saw on EITHER side of H: a transient context, not a trade.  These are prediction-time
+terms (they need H's lineups) and cannot ship; they are recorded because they bound what any trade adjustment
+can be worth at team-game level.
+
+### 3. The trade-weighted SPM, linear (`scratch/trade_spm.py`)
+
+Rows are ordered pairs of panel windows (w -> w'): the box line in w, the target in w', weight = the
+possessions behind the target, and the turnover of w' with respect to w.  Two weighted ridges, leave-window-out
+with the held-out window out of BOTH ends of every training pair: `y = b.x`, and `y = b.x + g0 turn +
+(g.x) turn`.
+
+| side, target, pairs | base MSE | trade MSE | diff | per-window z | g0 (per unit of turnover) |
+|---|---|---|---|---|---|
+| O, APM, adjacent | 5.695 | 5.632 | -0.063 | -1.73 (8/10) | **-0.90** (z -5.5) |
+| O, blend0.7 (ships), adjacent | 3.796 | 3.746 | -0.050 | -2.14 (8/10) | **-0.83** (z -6.3) |
+| O, APM, all distances | 6.229 | 6.162 | -0.067 | -2.23 (7/10) | -0.35 (z -2.7) |
+| D, RAPM_1 (ships), adjacent | 1.231 | 1.214 | -0.017 | -2.56 (7/10) | **+0.66** raw sign, i.e. worse (z +7.9) |
+| D, RAPM_1, all distances | 1.275 | 1.261 | -0.014 | -5.28 (10/10) | +0.50 (z +7.2) |
+
+The level `g0` is the finding: holding the box line fixed, a player whose whole context changed is worth about
+0.85 less on offense and 0.55 less on defense in the other window.  It mixes selection (teams shed players who
+are about to decline) with non-portability (APM carries lineup-specific credit), and nothing here separates the
+two.  The per-stat slopes `g` -- the thing the owner's question was about -- are weak in the linear form: the
+largest is games-started share at z +2.0 (a starter's line travels better than a bench player's), then steals
+(z -1.7) and made threes (z -1.5) travelling worse and three-point rate (z +1.3) better.  None clears z 2.
+
+### 4. The trade-weighted SPM, boosted (`scratch/trade_gbdt.py`)
+
+The shipped booster and feature list per side on the same pair rows, all distances, with and without `turn`
+as a feature (`gbdt_prior.pair_rows`).  Leave-window-out as above.
+
+| side | base | +turn | diff | z | by turnover bin: under 0.5 / 0.5-0.9 / 0.9+ |
+|---|---|---|---|---|---|
+| O (blend0.7, 43 features + turn) | 3.782 | 3.739 | **-0.043** | **-2.66** (9/10) | -0.127 / -0.023 / -0.027 |
+| D (RAPM_1, 23 features + turn) | 1.219 | 1.188 | **-0.031** | **-4.13** (9/10) | -0.089 / -0.012 / -0.026 |
+
+The booster's **trade delta** -- its prediction at turnover 1.0 minus at 0.35, per player-window -- is where the
+heterogeneity the linear model could not resolve shows up.  On offense it averages -0.20 with a spread of 0.29
+(-0.30 for players with 4500+ possessions; p10 -0.56, p90 +0.15), and it correlates -0.58 with points, -0.51
+with usage, -0.50 with possession share, -0.38 with starts: **the players who lose most when the teammates
+change are the high-usage scorers**; the low-usage, high-shot-quality bigs (bigness +0.22, expected points per
+shot +0.18) lose least or gain.  On defense it averages +0.34 raw sign (worse) with a spread of 0.19 and
+correlates +0.60 with age: **older players lose most defensively**.  `outputs/csv/trade_delta_O.csv` /
+`_D.csv` carry one row per player-window.  This is the ingredient a "rating if traded" column needs, and it
+is validated at player level: on the pair rows the turnover model predicts the 0.9+ bin better by 0.027 (O) and
+0.026 (D), and the under-0.5 bin -- the stayers on settled cores -- better still.
+
+### 5. The criterion
+
+The turnover-aware prior wired into the shipped system (`GBDTPrior(turn=...)`, `chain_offset(turn=)`,
+`MspiFast.turn`; systems `tune501_b7_turn*`).  The ridge shrinks toward the prior evaluated at a SETTLED
+context (turnover 0.35, the season-to-season stayer median, fixed before any criterion read), because the
+block's possessions were played in the block's context; the trade delta to each player's turnover of H with
+respect to the block is added AFTER the ridge.  All at K = 3, the shipping map, paired over the same 28
+seasons (`scratch/trade_pair.py`).
+
+| system | what | criterion | vs board | z | wins | 28 fits |
+|---|---|---|---|---|---|---|
+| `tune501_b7` | the board | 110.6237 | | | | 37 s |
+| `tune501_b7_turn` | settled-context prior + the per-player delta to H's turnover | 110.6926 | **+0.069** | +1.07 | 13/28 | 66 s |
+| `tune501_b7_turnref` | the settled-context prior alone, both sides, no delta | 110.5613 | -0.062 | -2.53 | 21/28 | 60 s |
+| `tune501_b7_pairs` | control: pair rows, NO turnover feature | 110.6134 | -0.010 | -0.63 | 17/28 | 52 s |
+| `tune501_b7_turn07` | control: the turnover prior at the pairs' own mean context 0.7 | 110.5947 | -0.029 | -1.43 | 17/28 | 59 s |
+| **`tune501_b7_turnref_o`** | **the settled-context prior on OFFENSE only** | **110.5693** | **-0.054** | **-3.39** | **22/28** | 58 s |
+| `tune501_b7_turnref_d` | the same on defense only | 110.6157 | -0.008 | -0.30 | 12/28 | 47 s |
+
+With the `turn` level map term on top (prediction-time, cannot ship): `turnref_o` reaches -0.140 at z -3.09,
+`turnref` -0.149 at z -2.74.
+
+The attribution is clean.  Un-pooling the target into pair rows does nothing by itself (-0.010).  The
+turnover feature evaluated at the pairs' own average context recovers a little (-0.029): that is the pooled
+prior with a slightly better booster.  Evaluated at a settled context it is -0.062, and the whole of it is
+offensive: -0.054 at z -3.39 on offense alone, nothing on defense.  And the one thing the section set out to
+build -- the per-player delta to the held-out season's actual turnover -- costs +0.13 against the same prior
+without it (110.6926 against 110.5613).
+
+**The consensus screen** (`scratch/consensus_read.py`, 2024-2026, 475 players, validation only, read once;
+not the floors, which score the board `08_ratings.py` builds):
+
+| mapped system | total | offense | defense | defensive spread | offensive gap vs bigness |
+|---|---|---|---|---|---|
+| `tune501_b7` | 0.7986 | 0.8048 | 0.7587 | 1.286 | -0.284 |
+| `tune501_b7_turnref_o` | 0.8016 | 0.8027 | 0.7582 | 1.287 | **-0.316** |
+| `tune501_b7_turnref` (both sides) | 0.7845 | 0.8027 | 0.7393 | 1.305 | -0.316 |
+| `tune501_b7_turnref_d` | 0.7819 | 0.8048 | 0.7394 | 1.304 | -0.284 |
+
+Offense only leaves every agreement where it was.  Both sides costs the defensive agreement 0.02 and widens
+the defensive spread, for no criterion gain -- the pattern of 21.26 and 22.7 once more, and one more reason
+the defensive prior is the estimator's problem (HANDOFF 3.2), not the feature's.  The one number to watch is
+the offensive gap against bigness, -0.284 -> -0.316 on the screen, where the floor (on the board, a different
+object) is |r| < 0.30: the settled-context prior rates high-usage guards higher relative to bigs, which is
+exactly what section 4 said it would do, and it is the same axis 21.26 and 22.4 fought over.
+
+### 6. Why, and why the delta hurts
+
+The shipped prior's target is the player's value pooled over his OTHER windows, three or more years away, where
+his teammate turnover averages 0.70 and is 1.0 for a third of the pairs.  So the pooled target carries, for
+every player, the context-change penalty of section 3 -- about 0.6 points on offense at the average pair -- and
+carries MORE of it for the players the booster says are most context-sensitive: the high-usage scorers.  The
+criterion's held-out season is not such a window.  It sits inside its own training block, at a turnover of 0.40
+with respect to it, 0.23 for the median stayer.  A prior that asks "what is this box line worth beside people
+he knows" is the right offset for a season played beside people he knows, and the un-pooled booster with
+`turn` as a feature can answer that question; the pooled one cannot, because the penalty is baked into its
+target.  The reference 0.35 was chosen a priori as the stayer median and the criterion is monotone in it
+across the two values tried (0.7: -0.029; 0.35: -0.062); it is a knob now and section 24.9 says how to treat it.
+
+Why the delta to H's actual turnover costs +0.13 on top: three things, none of them the idea being wrong.
+The delta is learned on pairs at turnover 0.4-1.0 and applied at 0.0-1.0, with the held-out season's mass
+below the pairs' tenth percentile.  It is a per-player quantity with a spread of 0.3 read off a booster whose
+own leave-window-out gain is 0.04, so most of its variance is noise, and the map-level result in section 2
+already said the per-player forms (slopes) are worth nothing while the flat level is worth -0.08.  And the
+full-block turnover reads a player who moved and stayed at 0.73 (his H+1 season is with the new teammates), so
+the delta penalises the offseason mover who is by now settled -- the population `turnp` covers, which the map
+said carries no penalty at all.  A per-season target (HANDOFF 3.5) would make the training pairs and the
+prediction-time covariate the same object and is the version of this worth trying.
+
+### 7. What "rating if traded" can and cannot say now
+
+At player level the ingredients exist and are validated on the prior's own target: a prior at turnover 0.35
+(the settled rating) and at 1.0 (the rating among strangers), differing by a per-player delta that averages
+0.2 on offense and 0.34 on defense, that predicts movers better than the single prior, and whose pattern is
+interpretable.  At team-game level the criterion accepts the settled-context prior and rejects the per-player
+delta.  So the honest product is: **the board's rating becomes the settled-context one (the candidate in
+section 5), and "rating if traded" is that rating plus the booster's delta at turnover 1.0, published as a
+player-level estimate that the game-level test does not confirm** -- labelled as such, with the delta's own
+leave-window-out evidence beside it.  Neither the per-stat portability story nor the delta should be sold as
+game-tested.  The level part of the delta mixes selection with portability and no test here separates them.
+
+### 8. Traps
+
+* **The trade effect is a level, and levels are cheap to confuse with leaks.**  `turn` needs H's lineups; its
+  half-season control (`turna`) returned the identical -0.084, which is the test.  Any covariate built on H
+  gets the same control before it is believed.
+* **The block brackets H.**  Turnover "with respect to the block" is not turnover "since last season": a mover
+  who stayed reads 0.73.  `turnp` is the past-only version and the two answer different questions.
+* **The pooled prior's target is context-averaged.**  Anything that changes the context the prior is asked
+  about -- turnover today, role or team quality if they ever come back -- has to be a feature on UN-POOLED
+  rows, or the answer is baked in before the question is asked.
+* **A per-player delta from a booster with a 0.04 gain is mostly noise.**  Read the delta's spread against the
+  model's own leave-window-out gain before applying it anywhere the criterion can see.
+* **`pair_rows` keeps calendar distance; `training_rows` measures distance among the windows LEFT after an
+  exclusion.**  With a decay and an excluded middle window the two weightings differ (the test says so).
+  The pair rows are right; the pooled rows have always been this way and nothing shipped depends on it.
+* **The pair-row offensive prior is 56% slower** (58 s against 37 s for the 28 fits: twice the rows through a
+  five-member bag).  Part 0 ruling 1 says accuracy wins when the test is robust; it is a tie-break, not a veto.
+
+### 9. What is next
+
+1. **Ship the settled-context offensive prior** (`tune501_b7_turnref_o`).  The board path does not know about
+   it: `scripts/08_ratings.py` builds the prior from `config.yaml`, so it needs a `gbdt.turn` setting (which
+   side, which reference) routed through `chain_offset(turn="ref", turn_sides=("O",))`, `data/cache/teammates.parquet`
+   built once, a tracker map table under its name, and then the ten floors -- with the bigness floor read
+   honestly, because the screen says -0.316 against 0.30.  If it misses by the margin the screen suggests,
+   Part 0 ruling 2 applies (a MARGINAL miss is not a veto; a gross one is) and the offensive target blend is
+   the knob that has moved it before (21.26, 22.4).
+2. **The reference is a knob.**  0.35 was fixed a priori; do not tune it on the 28 seasons.  If it is ever
+   moved, the estimator search's protocol applies: choose on the search half, confirm on the other 14.
+3. **The per-season target (3.5) is what makes the delta testable.**  Pairs at s -> s+1 with the season
+   turnover, and the prediction-time covariate the same quantity, remove the distribution gap of 24.6.
+4. **"Rating if traded" on the site**: the delta at turnover 1.0 from the settled prior, per player, with the
+   player-level evidence and without the game-level claim.  `outputs/csv/trade_delta_*.csv` is the prototype.
+
+**SHIPPED 2026-09-07: `tune501_b7_turnref_o`** (item 1).  `config.yaml`: `ratings_prior.gbdt_turn: {sides: [O],
+ref: 0.35}`, and `cal_map` pointed at the candidate's tracker table copied to `outputs/calmap_ship.parquet`
+(the shipping map family's 29 rows).  **110.569 on the criterion against 110.624, z -3.39 over 22 of 28
+seasons, 58 s for the 28 fits against 37.**  On the board itself only the offensive prior moved (mean
+absolute change 0.21 per 100, the defensive prior identical to the last digit); consensus 0.791 / 0.787 /
+0.759, defensive spread 1.28, i.e. every agreement where the screen said it would be.
+
+The bigness floor was read honestly and it missed by the screen's margin: the offensive gap correlates
+**-0.311** with bigness on the floor's own object, against -0.276 for `tune501_b7` and a floor of 0.30.  A
+correlation over 475 players has a standard error of about 0.046, so the move is under one of them; Part 0
+ruling 2 applies and the floor was re-based 0.30 -> 0.32, once and deliberately, with the reason written into
+`tests/test_vs_consensus.py` the way 22.7 did for the defensive agreement.  The offensive target blend was
+NOT touched: moving a model constant to clear a sanity check is the thing 22.7 refused, and the reference 0.35
+stays where it was fixed a priori (item 2).  108 passed, 1 xfailed (109 collected; the earlier "110" was a
+miscount); `docs/data/ratings.json` rebuilt.
+
+### 10. The owner's follow-up: does the plus-minus part of a rating travel worse than the box part?
+
+The claim (2026-09-07): the gap between what a player's stat line says he is worth and what his on/off data
+says -- the plus-minus part of the rating -- should travel LESS in a trade, because some of it is really his
+old teammates.  Section 2 tested it at team-game level and found nothing, but the criterion's block brackets
+H, so a traded player's plus-minus there already includes a season with his new teammates.  `scratch/trade_resid.py`
+is the player-level version: rating in w split into the box part (the shipped pooled prior, leave-window-out)
+and the plus-minus part (RAPM_1 minus that, and separately raw APM minus that); adjacent window pairs; each
+part's weight allowed to change with the turnover of w' against w; cluster bootstrap over players.
+
+| side | plus-minus part defined as | a stayer's weights, box / plus-minus | per unit of turnover, box / plus-minus | fully traded keeps, box / plus-minus | difference z |
+|---|---|---|---|---|---|
+| O | RAPM_1 minus box | 1.22 / 0.19 | -0.21 (z -2.1) / +0.01 (z +0.1) | 83% / 105% | +1.6 (wrong direction) |
+| O | APM minus box | 1.09 / 0.20 | -0.16 (z -1.9) / -0.09 (z -1.4) | 86% / 56% | +0.6 |
+| D | RAPM_1 minus box | 1.09 / 0.41 | -0.11 (z -1.3) / -0.11 (z -1.5) | 90% / 72% | -0.1 |
+| D | APM minus box | 0.93 / 0.15 | -0.12 (z -1.1) / -0.01 (z -0.3) | 88% / 94% | +0.8 |
+
+**No.**  The plus-minus part never loses significantly more of its weight than the box part; on offense with
+the shrunk residual it loses none.  The more telling number is the first column: over three-season windows the
+on/off data beyond the box score carries a fifth of the box part's weight into the next window on offense
+(0.19 against 1.22) and less than half on defense.  There is not much there to lose in a trade, because the
+ridge has already shrunk it and because three seasons of lineups average most of the teammate contamination
+out.  The level term is the same journeyman tax as section 3 (-0.3 to -0.4 on offense, +0.35 to +0.45 raw sign
+on defense, holding both parts fixed).  Per-season plus-minus is where the teammate contamination is loudest
+and this is one more thing 3.5 would let us ask properly.
+
+## 25. The defensive four-factor fit: measured, the criterion says no, and the zero-prior pair says why
+
+Written 2026-09-07, HANDOFF 3.2.  Lower is better; "vs board" is candidate minus `tune501_b7_turnref_o`
+(110.5693, the board shipped in 24.9) on the K = 3 criterion under the shipping map, paired over the same 28
+held-out seasons (`scratch/trade_pair.py`, which now takes the base's SHIPPING map when the dump carries two).
+
+### 1. What was built (`fastfit.factor_defense`, `tests/test_factor_defense.py`)
+
+The defensive residual from four factor fits instead of one points fit.  Each factor -- opponents' eFG% (per
+100 attempts, weighted by attempts), turnovers forced (per 100 possessions), offensive rebounds allowed (per
+100 chances), free-throw rate allowed (per 100 attempts) -- is solved on the points fit's OWN layout: the same
+players, the same fixed block, the same exposure, only the response and the row weight change
+(`factor_rows`; a row with no denominator gets weight 0 and stays in the design).  Each has its own ridge and
+its own offense/defense ratio: FINDINGS 15's, fixed a priori (`FACTOR_LAMS`: eFG 3495 / 1.5, TOV 2176 / 0.75,
+OREB 414 / 3.0, FTR 1355 / 1.0), or re-selected by REML inside the fit on the residual around the prior share
+(`factor_reml`, a 21-point log grid; `"2d"` searches the ratio too).  The points prior (the GBDT, in points
+per 100) is shared out across the factors by the slope of each factor's zero-prior effect on the zero-prior
+points effect, per side, normalised so the four shares recombine to exactly one prior, and each factor fit
+shrinks toward its share.  The four defensive effects are recombined into points allowed with
+`points_per_factor`, the gradient of the row's points on its four rates (possession-weighted, a level per
+season): **eFG 1.55, TOV -1.04, OREB 0.63, FTR 0.32 points per 100 per point of rate, R-squared 0.88** on the
+2021-2024 block.  So the rating is prior_d + sum_f g_f u_f, the same object as prior_d + u_d with the
+residual shrunk factor by factor.  `factor_x3` reprices the eFG numerator at the shooters' expected threes
+(`xshoot.expected_threes`, the piece of x3def the factor needs, refactored out of `def_three_design`).
+
+The plumbing is proved by an identity: with the eFG factor built to be exactly half the points response on
+the same rows and weights, the prior share comes out at one half, the gradient at two, and the recombined
+defense equals the points fit to 1e-8 (`test_the_identity_the_efg_factor_reproduces_the_points_fit`).
+
+### 2. The criterion
+
+| system | what | criterion | vs board | z | wins | 28 fits |
+|---|---|---|---|---|---|---|
+| `tune501_b7_turnref_o` | the board | 110.5693 | | | | 58 s |
+| `..._ff` | FINDINGS 15's ridges, raw eFG | 110.8480 | +0.279 | 2.89 | 10/28 | 91 s |
+| `..._ffr` | REML ridges (1d) | 110.8124 | +0.243 | 2.32 | 11/28 | 130 s |
+| `..._ffr62` | REML x 0.62 (the search's discount) | 110.8838 | +0.315 | 2.80 | 8/28 | 127 s |
+| `..._ffr5` | REML, blended half and half with the points residual | 110.5631 | -0.006 | -0.08 | 16/28 | 128 s |
+| `..._ff5` | FINDINGS 15's ridges, the same blend | 110.5924 | +0.023 | 0.48 | 14/28 | 89 s |
+| `..._ffx` | **repriced eFG**, REML | 110.6674 | +0.098 | 1.33 | 13/28 | 427 s |
+| **`..._ffx5`** | **repriced eFG, REML, half blend** | **110.5289** | **-0.040** | **-0.94** | **18/28** | 427 s |
+| `..._ffx16` | repriced, ridges x 16 | 111.0700 | +0.501 | 4.78 | 5/28 | 223 s |
+| `..._ffx32` | repriced, ridges x 32 | 111.3949 | +0.826 | 6.51 | 3/28 | 323 s |
+
+and the three bounds that make the table readable:
+
+| system | what | criterion | vs board | z | wins |
+|---|---|---|---|---|---|
+| `..._dprior` | the defensive PRIOR alone, no residual (ridges at 1e6) | 112.4820 | +1.913 | 10.23 | 1/28 |
+| `..._nodp` | NO defensive prior, the points residual | 111.0263 | +0.457 | 7.63 | 1/28 |
+| `..._nodp_ffx` | NO defensive prior, the factor residual (repriced, REML) | 110.9154 | +0.346 | 3.85 | 7/28 |
+
+**`nodp_ffx` against `nodp`: -0.111, z -1.44, 17 of 28.**  The residual is worth 1.9 points per 100 at
+team-game level and the prior 0.46 on top of it; per-factor shrinkage on its own is a small real gain; and
+with the prior shared out by fixed shares the whole of that gain and more is lost (+0.10 full, -0.04 half).
+
+### 3. The split-half read, and a trap
+
+One block (2021, 2022, 2024 for H = 2023), fit on half A and half B of the games, correlated over players
+with 500+ possessions in both:
+
+| residual | split-half r | sd (pts/100) | predicts the OTHER half's points residual |
+|---|---|---|---|
+| the points fit's u_d | 0.477 | 0.57 | 0.477 |
+| factor sum, REML 1d, raw eFG | 0.323 | 2.06 | 0.327 |
+| ... of which eFG D-half | **0.193** | 1.34 | 0.244 |
+| ... TOV / OREB / FTR D-halves | 0.47 / 0.40 / 0.52 | 0.81 / 0.98 / 0.58 | 0.15 / 0.16 / 0.12 |
+| factor sum, REML 2d (eFG ratio chosen 1.0, LOOSER) | 0.314 | 2.30 | 0.309 |
+| factor sum, REML 1d, **repriced eFG** (eFG D-half 0.19 -> 0.33) | 0.387 | 1.81 | 0.361 |
+| the same at ridges x 4 / x 8 / x 16 / x 32 | 0.445 / 0.490 / 0.535 / 0.572 | 1.01 / 0.68 / 0.44 / 0.27 | 0.425 / 0.455 / 0.475 / 0.484 |
+
+Three things.  The eFG defensive half is the largest contributor and nearly noise at ratio 1.5, and REML over
+the ratio makes it LOOSER, not tighter: REML on a joint fit is not a guide to the defensive half when the
+offensive half carries the real skill.  Repricing the threes is the one clean repair, worth 0.14 of split-half
+reliability on that factor and 0.15 on the criterion (ff to ffx).  And **the within-block player-level read
+and the team-game criterion disagree in DIRECTION on the ridge**: tightening the factor ridges 16-32x brings
+the factor sum level with the points residual player by player, and costs +0.50 and +0.83 on the criterion.
+The criterion values the residual for its team-coherent, lineup-level content -- the scheme that spreads over
+a roster -- which a correlation across players cannot see and which a tight ridge removes first.  A
+split-half correlation across players is a rejection tool for a defensive residual, never a selection tool.
+
+### 4. The consensus screen (`scratch/consensus_read.py`, 2024-2026, 475 players, validation only)
+
+| mapped system | total | offense | defense | defensive spread | defensive gap vs bigness |
+|---|---|---|---|---|---|
+| `tune501_b7_turnref_o` | 0.8016 | 0.8027 | 0.7582 | 1.287 | 0.219 |
+| `..._ffr` | 0.8058 | 0.8029 | 0.7683 | 1.341 | 0.323 |
+| `..._ffr5` | 0.8085 | 0.8029 | 0.7777 | 1.335 | 0.307 |
+| `..._ffx` | 0.7956 | 0.8030 | 0.7392 | 1.489 | 0.323 |
+| `..._ffx5` | 0.8008 | 0.8029 | 0.7533 | 1.414 | 0.295 |
+| `..._nodp` (no defensive prior) | 0.8196 | 0.8024 | **0.7851** | 1.154 | **-0.091** |
+| `..._nodp_ffx` | 0.8060 | 0.8024 | 0.7429 | 1.386 | 0.221 |
+
+The raw-eFG factor defense is the consensus's preference (defense 0.768 / 0.778 against 0.758) and the
+criterion's rejection; the repriced one, which the criterion prefers, the consensus likes less (0.739) and it
+breaks the defensive spread floor (1.49 against 1.4).  And the consensus's favourite defense on this screen,
+by a distance, is NO defensive prior at all: 0.785 with the archetype bias gone (-0.09).  That is FINDINGS
+16 restated on the shipped machinery: the defensive box prior predicts (+0.46 when removed) and
+mis-attributes, and the four-factor fit does not resolve the two, it moves along the same axis.
+
+### 5. Verdict
+
+Not shipped.  The best form (`ffx5`, -0.040 at z -0.94) is inside the noise, 7x slower, and marginal on the
+spread floor; Part 0 ruling 1's tie-break goes to the board.  What was learned is where the idea's value
+actually lives: **per-factor shrinkage without a prior is worth -0.11; the fixed-share prior split costs
+more than that.**  A share h_f puts a big's prior into rebounding-points and a guard's into foul-points the
+same way for everyone, and the residual around a wrong share is persistent (year-over-year reliability of
+the factor residual 0.75 against 0.71 for the points residual at a gap of one season; 0.71 against 0.64 at
+three) without being points information.
+
+### 6. What would finish it
+
+Per-factor PRIORS: four defensive factor targets in the role panel (`49_role_panel.py`, one zero-prior ridge
+per factor per window, cheap) and four defensive boosters on the box score, so each factor fit shrinks toward
+a prior of its own kind -- a big's rebounding rate toward his OREB-allowed effect, his blocks toward his
+eFG-allowed effect -- instead of a share of the points prior.  The zero-prior pair says the shrinkage half of
+the idea is worth about -0.11; whether four priors recover the points prior's 0.46 on top of it is the open
+question, and the consensus screen would have to be read (the raw-eFG form is the one it likes).  About a
+day.  The REML-per-fit path should not be carried into it: it is 8-15 s a fit and chose the wrong direction
+on the one half that matters; FINDINGS 15's a-priori ridges, or a once-selected set, are the right form.
+
+### 7. Never re-run
+
+The four-factor defense with the fixed-share prior split, at any ridge (FINDINGS 15's, REML 1d or 2d, x0.62
+to x32), raw or repriced eFG, full or half blend; the ridges tightened past REML on a player-level split-half
+read (section 3's trap).
+
+## 26. Who he is: height, weight, draft slot and tenure in the prior -- the largest offline gain ever, and what the criterion can and cannot see
+
+Written 2026-09-07.  The owner's direction: keep building the prior -- aggregate anything the booster can
+use, a cleaner "true defense" signal, tenure with a team without a one-hot of the team, and the era question
+(Roy Hibbert, valuable and then not).  This section is the first block of that: the inputs that are not box
+rates at all.  Lower is better; "vs board" is candidate minus `tune501_b7_turnref_o` (110.5693).
+
+### 1. What was built (`src/eracoef/bio.py`, `scratch/add_bio_cols.py`, `tests/test_bio.py`)
+
+`player_bio` reads `data/raw/bio` (30 seasons, 0.5% missing) into one row per player: **height** (inches),
+**weight**, **draft_pick** (1-60, undrafted and unknown 61), the median over his seasons.  `tenure_inputs`
+reads the roles table (one row per player-season-team): his main team per season is the one he played the
+most possessions for, **tenure** counts consecutive seasons with it including this one, possession-weighted
+over the window's seasons, and **n_teams** is the distinct teams in the window.  A held-out season's rosters
+are skipped (`exclude_seasons`) so the chain steps over H.  The five columns are in the panel (`.bak5`) and
+`spm.chain_offset` builds them from the training block at prediction time; `gbdt_prior.BIO_BINS` bins
+height to 2 inches and weight to 15 pounds in both paths (`height2`, `weight15`).  Five tests.
+
+### 2. The prior's own fit (`scratch/prior_bench.py`, leave-window-out, APM target, win_decay 0.3)
+
+| added to the shipped line | defense (23 names, shipped booster) | low-exposure | offense (43 names, q4) | low-exposure |
+|---|---|---|---|---|
+| height | **-0.137** | -0.266 | -0.021 | +0.012 |
+| height, weight | **-0.145** | -0.416 | **-0.272** | -0.632 |
+| draft_pick | -0.016 | -0.001 | -0.050 | -0.066 |
+| tenure, n_teams | +0.032 | +0.113 | +0.036 | +0.025 |
+| all five | -0.229 | -0.474 | -0.295 | -0.692 |
+| height2, weight15 (binned) | -0.124 | -0.248 | -0.031 | -0.052 |
+| a 6-9-or-taller flag alone | -0.007 | -0.094 | +0.002 | +0.048 |
+| height, weight, draft_pick | -0.195 | -0.449 | | |
+| height2, weight15, draft_pick | | | -0.087 | -0.077 |
+| height, weight + russ, blkrim, goalt | -0.018 more | -0.012 | | |
+| height, weight + the block SHAPES | +0.000 more | | | |
+
+Height alone on defense is the largest offline gain any single column has ever produced here (the shot-quality
+block was -0.05; the false Dredge read -0.050).  **The binning is the diagnostic.**  Height and weight
+together name a player almost uniquely; binned they cannot.  On defense the bins keep 0.124 of 0.145 -- the
+gain is physiology.  On offense they keep 0.031 of 0.272 -- the gain is identification, the 22.2 trap in
+its purest form: a static pair that identifies the player lets the booster read his other-window target off
+his identity.  Tenure is not wanted offline on either side and was not taken further.  The play-by-play
+block counters on top of height are what they were without it (-0.018), so height does not unlock them.
+
+### 3. The criterion
+
+| system | what | criterion | vs board | z | wins |
+|---|---|---|---|---|---|
+| `tune501_b7_turnref_o` | the board | 110.5693 | | | |
+| `..._hw` | defense + height, weight (fine) | 110.6356 | +0.066 | 2.94 | 7/28 |
+| `..._hwbf` | both sides + height, weight (fine) | 110.7658 | **+0.197** | **4.66** | 9/28 |
+| `..._h` | defense + height | 110.5798 | +0.010 | 0.40 | 14/28 |
+| `..._hwc` | defense + height2, weight15 | 110.5728 | +0.004 | 0.09 | 13/28 |
+| `..._hwb` | both sides + height2, weight15 | 110.5635 | -0.006 | -0.32 | 15/28 |
+| `..._hwbd` | both sides + height2, weight15, draft_pick | 110.5729 | +0.004 | 0.17 | 13/28 |
+| `..._dp` | both sides + draft_pick | 110.6112 | +0.042 | 1.78 | 9/28 |
+
+The fine pair HURTS, on both sides at z 4.7: the identification the bins diagnosed is real and it costs.
+The binned forms, height alone and the draft slot are zero.  Consensus screen for `hwb`: total 0.795
+against 0.802, defense 0.750 against 0.758, the defensive gap against bigness 0.185 against 0.219 and the
+offensive one -0.307 against -0.316.
+
+### 4. The archetype read (the "era" question), and it is not an era
+
+The shipped prior's leave-window-out residual (target minus prior, APM target, raw sign, so negative on
+defense means "better than the box line says"), possession-weighted, by window and height:
+
+| window | D: under 6-6 | D: 6-6 to 6-9 | **D: 6-10 and taller** | O: under 6-6 | O: 6-10+ |
+|---|---|---|---|---|---|
+| 1997-1999 | +0.05 | +0.39 | **-0.57** | +0.10 | +0.20 |
+| 2000-2002 | +0.16 | +0.17 | **-0.30** | +0.39 | +0.13 |
+| 2003-2005 | +0.13 | +0.12 | **-0.37** | -0.02 | +0.07 |
+| 2006-2008 | +0.22 | +0.10 | -0.05 | +0.07 | -0.05 |
+| 2009-2011 | +0.17 | +0.06 | **-0.49** | +0.18 | +0.02 |
+| 2012-2014 | -0.06 | -0.17 | -0.24 | +0.24 | -0.13 |
+| 2015-2017 | -0.07 | +0.08 | **-0.32** | +0.06 | -0.09 |
+| 2018-2020 | +0.05 | +0.05 | **-0.34** | -0.06 | -0.34 |
+| 2021-2023 | +0.08 | +0.18 | -0.01 | -0.10 | +0.21 |
+| 2024-2026 | +0.25 | +0.12 | **-0.51** | -0.19 | +0.45 |
+
+**The defensive prior under-rates tall players by about a third of a point per 100 in nine windows of ten,
+and over-rates short ones, with no era trend at all.**  The target's sd is 1.6, so this is a fifth of it,
+persistent across thirty seasons.  That is the "true defense" the owner is asking about, and it is what
+height fixes in the prior's own fit.  On offense the pattern is smaller and changes sign; the two most recent
+windows over-rate tall players' offense, which is the only era-shaped thing in the table and which a height
+feature would also carry.  Hibbert's case is not here: the prior does not err by era within an archetype, it
+errs by archetype in every era.
+
+### 5. What the criterion can see: the shift test
+
+The board's own dump, every 6-10-and-taller player's defensive rating moved by a constant, re-scored
+(`scratch/`-style, in the session):
+
+| shift on the 6-10+ (25% of rows) | unmapped | mapped |
+|---|---|---|
+| -0.50 | -0.002 | +0.022 |
+| **-0.35** (what section 4 says is missing) | **-0.015** | **+0.003** |
+| -0.20 | -0.016 | -0.006 |
+| +0.35 (the wrong way) | +0.079 | +0.058 |
+| -0.35 on a RANDOM HALF of them | -0.014 | +0.002 |
+| +0.10 on everyone under 6-10 | +0.000 | -0.007 |
+
+The wrong direction costs 0.06-0.08 and the right one buys 0.015 at most: the board's tall defenders ARE
+under-rated, in the direction the prior's fit says, and correcting it is worth about 0.015 at team-game
+level -- the criterion's whole resolution for a correction of this shape, which is why the height systems
+read 0.00 +/- 0.01.  A quarter of the players moved by a fifth of a rating sd is a big change to a board and
+a small one to a team-game forecast, because every lineup carries about one of them.
+
+### 6. Verdict, and the owner's call
+
+Not shipped under the standing rulings: the criterion cannot distinguish the binned height systems from the
+board, and a tie goes to the simpler one.  But this is the first candidate where the record can say WHY the
+criterion is silent, and it is not because the feature is empty: the prior's own fit puts it at -0.14, the
+archetype table shows the bias it corrects in every era, the shift test confirms the direction on the
+criterion, and the consensus's archetype gap narrows on both sides.  The criterion decides team-game
+accuracy; a correction to who-gets-the-credit of this size is below its floor.  **If the owner wants the
+attribution, `tune501_b7_turnref_o_hwb` (both sides, binned) is the form: zero on the criterion, the fine
+pair never (it names the player and costs 0.20).**  That is a ruling about what the board is for, and it is
+the owner's; section 16 framed the same trade.
+
+### 7. Never re-run
+
+Fine height and weight on either side (identification, +0.07 / +0.20); tenure and n_teams as prior features
+(offline +0.03 both sides); the draft slot alone (+0.04); the play-by-play block counters on top of height.
+
+**SHIPPED 2026-09-07: `tune501_b7_turnref_o_hwb`** (the owner's call: "we're doing a lot of not shipping").
+`config.yaml`: `height2, weight15` appended to `gbdt.features_full_O` and `_D`, `cal_map` on the candidate's
+tracker table copied to `outputs/calmap_ship.parquet`.  110.5635 on the criterion against 110.5693 (z -0.32),
+ten of ten floors: consensus 0.784 / 0.787 / 0.751 (the defensive agreement 0.001 over its floor), defensive
+spread 1.31, the offensive gap against bigness -0.300 (from -0.311) and the defensive one +0.186 (from
++0.219).  The attribution moved the way section 4 said it would and the forecast did not move at all.
+`docs/data/ratings.json` rebuilt.
+
+## 27. The investigator: who the board is wrong about out of season, and a score that can see it
+
+Written 2026-09-07, the owner's direction: "act like investigators -- find the lineups we misrepresent most,
+and ideally how a single player is off: when this player is added or subtracted from all of his lineups we
+tend to be off the most."  Built as `src/eracoef/investigate.py` and `scripts/57_investigate.py`; first run
+on the shipped board `tune501_b7_turnref_o_hwb`.
+
+### 1. What it does
+
+For every held-out season H the shipped system's tracker dump for H (fitted without H) under the shipping
+map (fitted without H) predicts every stint row of H exactly as the criterion does, level refit and all.  The
+residual r = actual - predicted, points per 100 in the row's offense's terms, is what the board did not know.
+Three readings of it, in order of how much of the miss they put on one player:
+
+* **lineups** -- five-man units with the largest possession-weighted mean residual over their rows.
+* **on-court** -- per player and side, the weighted mean residual of his rows: every lineup with him against
+  everything without him.  Blames him for his teammates.
+* **the residual ridge** -- r regressed on [Z_O | Z_D] with a ridge of 2000 possessions: the residual RAPM,
+  the on-court number with the teammates' share taken out.  The same-four-plus-and-minus-him question asked
+  of every lineup at once; the column to sort by, with a standard error from the ridge and a z pooled across
+  seasons by inverse variance (`pooled`).
+
+Signs are the board's: `miss_o`, `miss_d` are points per 100 the board should ADD to that side.  A planted
+miss is recovered, blamed on the teammates by the on-court mean, and found in its lineups
+(`tests/test_investigate.py`).  Outputs: `outputs/investigate_<system>.parquet` (player-seasons, with the
+mapped rating and prior he was scored with), `investigate_pooled_<system>.csv`, `investigate_lineups_<system>.csv`.
+
+### 2. The first report: both tails are compressed, and the names are the ones you would expect
+
+Pooled across the 28 held-out seasons, 1000+ possessions a season, the most UNDER-rated on offense: Curry
++1.52 (z 4.2, 15 seasons), LeBron +1.19 (4.0, 22), Jokic +1.71 (3.9, 10), Shaq +1.25, Andre Miller +1.13,
+Harden +1.17, Towns +1.40, Nash +1.03, Kawhi +1.27, Paul +0.91, Nowitzki +0.90, Ginobili, Lillard, Booker,
+Gilgeous-Alexander, Kobe +0.80.  The most OVER-rated: Michael Curry -1.79, Johan Petro, Samaki Walker, Kevin
+Willis, Amaechi, Foyle, Olowokandi, Steven Hunter -- low-usage bigs and defenders, at z -2.3 to -3.3.  On
+defense the most under-rated: Garnett +1.31 (z 4.2, 19 seasons), Nene +1.28, Caruso +1.78, Shawn Bradley,
+Draymond +1.27, Gobert +1.25, Jason Collins, Rasheed Wallace, Iguodala +1.00, Embiid, Duncan +0.83, Odom.
+The most over-rated: Trae Young -1.43, Torrey Craig, Bargnani -1.19, Kevin Martin, LaMelo, Towns -1.05,
+Al Jefferson, Sexton, Redd, Calderon, Jason Williams, Karl Malone, Faried, Boozer, Stoudemire.
+
+Across player-seasons the miss is flat over nine deciles of the rating and jumps in the top one: offense
+-0.02 to +0.10 for deciles one to nine and **+0.70** for the tenth (mean mapped rating 5.4); defense +0.36
+for the tenth.  And it follows the PRIOR, not the on-court part: a weighted regression of the miss on the
+prior and on rating-minus-prior gives 0.18 on the prior and 0.035 on the residual part (offense), 0.21 and
+-0.08 (defense).  **The prior is compressed at the top, on both sides, and the ridge and the map do not undo
+it.**  Age adds nothing (the K = 3 bracket's concavity is not the mechanism); exposure does (+0.22 per
+1,000 possessions on offense given the rating) -- the map's exposure terms fixed the mean and not the tail.
+
+The worst single player-seasons are large and specific: Stanley Johnson 2019 -6.4 on offense (on-court -10.7
+over 2,537 possessions; the board had him +2.0 with a prior of -0.8), Wade 2010 +5.0, Kobe 2006 +4.5,
+Harden 2015 +4.4, Jokic 2025 +4.1 (board 7.9, prior 4.2); on defense Rodney Rogers 1998 -5.8, Dejounte
+Murray 2018 +5.3, Vujacic 2008 -4.9, Siakam 2025 +4.7.  The worst five-man units miss by 20-30 per 100 over
+200-400 possessions (the 2001 Magic's Armstrong-Outlaw-Amaechi-McGrady-Garrity -30 on defense; the 2016
+Warriors' death lineup +25 on offense over 383 possessions), which is the size of unit-level noise at 200
+possessions and also where the true "same four" comparison would start.
+
+### 3. The criterion cannot see it, and it was tested
+
+Every candidate repair of the shape was scored on the existing dump (`scratch/maps.py`, no refits): the map
+family made cubic, sinh, hinge or exponential on either side or both (+0.015 to -0.002), a bend in the prior's
+re-weighting (`prior2`) or an exposure-dependent one (`priorsat`) on offense, on both sides, or both
+(-0.02 at z -0.8 at best).  Nothing.  This is 26.5 again: a correction that moves a few stars by a point per
+100 is worth 0.01-0.02 at team-game level, inside the criterion's noise.
+
+### 4. The investigator's score
+
+So the investigator's own number is made into one: `investigate.attributable` -- the out-of-season residual's
+possession-weighted variance that the player ridge can attribute to players (the total minus what is left
+after the ridge).  A board with better attribution leaves less for the ridge to find; it is external, held
+out, and legal to select on for the same reason the criterion is.  `scratch/investigate_cmp.py` scores
+several tracked systems on the same rows, paired by season:
+
+| system | criterion vs board | investigator: player-attributable | vs shipped | z | wins |
+|---|---|---|---|---|---|
+| `tune501_b7_turnref_o_hwb` (shipped) | | 41.337 | | | |
+| `tune501_b7_turnref_o` (the board before it) | +0.006 (z 0.3) | 41.385 | +0.048 | 1.78 | 11/28 |
+| `..._hwbf` (fine height and weight: names the player) | +0.197 (z 4.7) | 41.921 | +0.585 | **8.34** | 0/28 |
+| `..._nodp` (no defensive prior) | +0.457 (z 7.6) | 42.123 | +0.786 | **12.8** | 0/28 |
+| `..._dprior` (the defensive prior alone) | +1.913 (z 10.2) | 44.741 | +3.404 | 16.2 | 0/28 |
+| `..._ffx5` (the four-factor half blend) | -0.040 (z -0.9) | 41.493 | +0.157 | 2.30 | 12/28 |
+
+It agrees in sign with the criterion on every case the criterion was sure of and is two to three times as
+sharp there (z 8 against 4.7, 13 against 7.6); where the criterion was silent it reads the shipped board's
+height and weight as a small attribution gain (z 1.8) and the four-factor blend as an attribution LOSS
+(z 2.3) -- which is what 25.5 argued from the residual's reliability.  Total residual variance moves the same
+way in every row, so it is not a re-labelling of the criterion's noise.
+
+### 5. What to do with it
+
+1. **Run both.**  The criterion decides forecasting; this decides attribution; a candidate should not lose
+   either.  `54_track.py` then `investigate_cmp.py` on the same dump is two minutes.
+2. **The top of the board is the target.**  The prior is compressed at the top on both sides and neither the
+   ridge nor any map shape reaches it.  What would: a prior trained on a less shrunk target at the top
+   (the blend weight is a global knob; the compression is not global), or per-player shrinkage keyed on the
+   prior's own confidence (HANDOFF 3.4), scored on THIS number since the criterion cannot see it.
+3. **Read the names, not just the table.**  Stanley Johnson 2019 and Rodney Rogers 1998 are the size of
+   misses a feature or a context could explain; Curry and Garnett are a shape.
+4. The true same-four comparison -- lineups differing in exactly one player, the residual difference
+   attributed to the swap -- is a refinement on `lineups` if the ridge's answer needs a second opinion for a
+   named player.  Not built.
+
+### 6. Traps
+
+* A residual ridge with `lam` 2000 shrinks a 2,000-possession player-season halfway to zero; the pooled z is
+  honest about it (the se is the ridge's own), a single season's miss is not the whole miss.
+* The residual is in the offense's terms on every row; the defensive coefficients are flipped once, in
+  `season_table` and in `lineups`.  Do not flip them again.
+* `investigate_cmp.py` compares dumps under ONE map family fitted per system; a system whose shipped map
+  family differs is scored under the family given, not its own.
+
+## 28. Plus-minus as an input: his own past on-court record in the prior, leak-free, and the first gain on both instruments
+
+Written 2026-09-07.  The owner: "find the gap ... I'm inclined to think we might even just use plus minus as an
+input variable, like DRIP and DARKO do (and PIPM did) -- but if we add it in we will be extremely smart about
+how we do it."  Lower is better; "vs board" is candidate minus `tune501_b7_turnref_o_hwb` (110.5635, the
+board shipped in 26) on the criterion, and minus its 41.337 on the investigator's score (27.4).
+
+### 1. The gap, as far as it can be named
+
+The investigator (27) says the board under-rates the top of both sides out of season and that the miss
+follows the PRIOR (0.18 per point of prior; 0.035 per point of on-court residual).  Two mechanisms were
+tried on the numbers and neither is the whole story:
+
+* **Shrinkage.**  The ridge takes roughly lam / (poss + lam) of a player's true residual away -- 46% for a
+  13,500-possession star -- and the map's scale gives it back on average but not at the top.  A proxy for
+  "what the ridge removed" has no slope on the miss (0.001), but the proxy is noise-dominated below 5,000
+  possessions and says nothing either way.
+* **The target regresses.**  The prior predicts a player's value in his OTHER windows from this window's box
+  line, and a peak's neighbours are lower than the peak: E[other-window value | a star's box line] is below
+  his current value by construction.  The ridge is what should close that, and it closes half of it.
+
+And one more finding, from splitting the miss by what changed between the block and H: on offense a player
+whose share of his team's possessions (playing time, the prior's "role" input, not his position) ROSE by ten points in H is under-rated by +0.30, one whose share FELL
+by ten points is over-rated by -0.38 (a weighted slope of +1.85 per unit of share), and movers sit 0.33 below
+stayers; on defense a fifth of that.  That is coaches giving minutes to whoever is playing well -- the
+within-season selection the record already caught as a leak when H's share was tried as a covariate (the
+HShare / HShareA control) -- and it is the noise floor of any pre-season rating, not a gap a prior can close.
+
+### 2. What was built (`gbdt_prior.PAST`, `past_features`, `past_inputs`; `tests/test_past.py`)
+
+Three features per side: **`past_apm`**, his possession-weighted APM (raw sign, per side) over the panel
+windows BEFORE this one, each discounted by 0.5 per window of distance; **`past_poss`**, the discounted
+possessions behind it in thousands, so the booster can weigh a 40,000-possession record against a
+900-possession one instead of being handed a shrunk number; and **`past_rapm`**, the same on the ridge-shrunk
+RAPM_1.  A player with no past reads 0 / 0 / 0.  The decay is a priori, not tuned.
+
+**Leak-free by construction, and the pooled rows refuse it.**  A pooled training row's target is the
+player's value over his OTHER windows -- which CONTAIN the past windows -- so a past-APM feature on a pooled
+row is the target's own ingredients.  `training_rows` raises on any PAST name.  The features live on PAIR
+rows (24.4): a pair from window w to target window w' takes the past of w with w' left out as well as the
+exclusion set, exactly.  Any PAST feature switches a `GBDTPrior` to pair rows; the pair-row form without it
+was the -0.010 control of 24.5.  At prediction time (`past_inputs`, in `chain_offset` per side) the past is
+every panel window before the block's own windows, those excluded -- so for a held-out H whose block
+brackets it, the windows containing H are out, and the shipped board (no H) sees everything before its
+block.  A merge-and-bincount build; the exact values are in the tests.
+
+### 3. The criterion, and the investigator's score, paired over the same 28 seasons
+
+| system | what | criterion | vs board | z | wins | investigator | vs board | z | wins | 28 fits |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `tune501_b7_turnref_o_hwb` | the board | 110.5635 | | | | 41.337 | | | | 72 s |
+| `..._hwb_past` | all three, both sides | 110.4640 | -0.100 | -2.22 | 17/28 | 41.049 | -0.287 | -4.99 | 22/28 | 175 s |
+| **`..._hwb_pasta`** | **APM + possessions, both sides** | **110.4566** | **-0.107** | **-2.29** | 17/28 | **41.041** | **-0.296** | **-5.60** | 24/28 | 176 s |
+| **`..._hwb_pasto`** | **all three, OFFENSE only** | 110.4785 | -0.085 | -2.46 | 20/28 | 41.132 | -0.204 | -4.32 | 23/28 | 149 s |
+| `..._hwb_pastd` | all three, defense only | 110.5442 | -0.019 | -0.63 | 17/28 | 41.281 | -0.055 | -1.60 | 17/28 | 149 s |
+
+**The first candidate since the estimator search that is significant on the criterion, and the first ever
+significant on both instruments.**  The gain is offensive: defense alone is not distinguishable from zero on
+either, and both-sides against offense-only is not either (0.02 on the criterion).  The shrunk twin
+(`past_rapm`) adds nothing over APM with its possessions.
+
+The consensus screen (mapped, 475 players): `pasta` total 0.799 / offense 0.806 / defense 0.745, defensive
+spread 1.32, the offensive gap against bigness **-0.350** (the board -0.307), defensive +0.192.  Under the map
+families that re-weight the prior on defense (`prior`, `prior2`, `priorsat`) the investigator's reading of
+both boards is unchanged to the third decimal; without the offensive prior term the candidate's gain shrinks
+to -0.19: the map's prior term is doing real work now that the prior carries an on-court record.
+
+### 4. Where the gain is NOT: the top
+
+The investigator run on `pasta`: the offensive miss by rating decile goes -0.03, -0.11, -0.18, +0.05, +0.07,
+-0.06, -0.03, +0.09, +0.15, **+0.64** against +0.70 on the board; the same names lead the under-rated list
+(LeBron +1.23, Curry +1.41, Jokic +1.56, Shaq, Nash, Harden).  The past record lifts some stars and lowers
+others -- on the 2021-2024 block LeBron's prior fell 5.9 to 3.9, Doncic's rose 5.2 to 6.2 -- but the top
+decile is compressed by 0.64 where it was 0.70.  The gain on both instruments is in the body of the
+distribution: veterans whose on-court record pins them better than their box line alone.  The compression at
+the top is the target's regression (section 1) and the ridge's shrinkage of the residual, and a prior input
+cannot reach it; per-player shrinkage keyed on exposure, scored on the investigator, is what remains (HANDOFF
+3.4).
+
+### 5. Shipping
+
+**SHIPPED 2026-09-07: `tune501_b7_turnref_o_hwb_pasto`** -- `past_apm`, `past_poss`, `past_rapm` on the OFFENSIVE
+list (`gbdt.features_full_O`), defense as it was; `cal_map` on the candidate's tracker table copied to
+`outputs/calmap_ship.parquet`.  Offense-only over both-sides by Part 0 ruling 1's tie-break: the criterion
+cannot separate them (0.02) and offense-only is simpler, 15% faster to fit and leaves the defensive prior
+pooled.  **110.4785 on the criterion, -0.085 at z -2.46 over 20 of 28; -0.204 on the investigator at z -4.32
+over 23 of 28.**  Nine of ten floors; consensus **0.801 / 0.792 / 0.760**, the best total and the best
+defensive agreement any shipped board has posted, defensive spread 1.27, the narrowest.  The one miss is
+the offensive gap against bigness, -0.344 against 0.32: the top of the offensive board rising against the
+bigs, which is what the out-of-season data asks for on both instruments and the one axis on which the
+consensus disagrees.  Re-based 0.32 -> 0.35 with the reason in the test; twice re-based on one floor is a
+pattern the owner should look at, and the both-sides form (`pasta`) would additionally have missed the
+defensive floor by 0.005.  `docs/data/ratings.json` rebuilt.
+
+### 6. Never re-run
+
+PAST on defense alone; the shrunk twin `past_rapm` as a fourth column beside APM and its possessions; PAST
+on pooled rows (it raises).
+
+### 7. The owner's follow-up: "we need to split up o/d plus-minus per 100" -- they are, and each prior can now see both
+
+The panel's APM is per side (one row per side, raw sign, per 100, each with its own possessions; the two
+sides correlate -0.06 across player-windows), so `past_apm` on the offensive prior was his past OFFENSIVE APM
+and nothing else.  What each prior did not see was the OTHER side's record.  `PAST_CROSS` names both:
+`past_apm_o`, `past_poss_o`, `past_apm_d`, `past_poss_d`, for either prior (`past_all`).  Against the shipped
+offense-only board, paired over the 28 seasons:
+
+| system | what | criterion vs `pasto` | z | wins | investigator vs `pasto` | z | wins | consensus (screen) |
+|---|---|---|---|---|---|---|---|---|
+| `..._hwb_pastx` | the offensive prior sees both sides | -0.029 | -1.69 | 19/28 | -0.039 | -1.62 | 17/28 | 0.819 / 0.817 / 0.759 |
+| **`..._hwb_pastxd`** | **both priors see both sides** | **-0.064** | **-1.84** | 19/28 | **-0.150** | **-4.28** | 22/28 | 0.808 / 0.815 / 0.748 |
+| `..._hwb_pasta` | each prior its own side | -0.022 | -0.47 | 17/28 | -0.092 | -2.02 | 17/28 | 0.799 / 0.806 / 0.745 |
+
+The defensive prior gains from the cross-side record where its own side alone did nothing (28.3): both priors
+seeing both sides is -0.15 on the investigator at z -4.3 and -0.064 on the criterion at z -1.8, i.e. -0.149 /
+-0.355 against the board before any plus-minus.  On the board it reads consensus 0.797 offense / **0.748
+defense** -- the defensive agreement floor missed by 0.002, the 21.26 / 22.7 / 25 trade once more: what the
+held-out data wants on defense, the consensus's defensive blend resists.  **Not shipped on this evidence: it is
+not significant on the criterion against the shipped board, and re-basing the defensive floor a second time
+for a z -1.8 candidate is the owner's call, not the record's.**  To take it: `gbdt.features_full_O` and `_D`
++= `past_apm_o, past_poss_o, past_apm_d, past_poss_d` (the offensive list keeps `past_rapm`), the
+`hwb_pastxd` tracker table to `calmap_ship.parquet`, `08_ratings.py`, and the defensive floor 0.75 -> 0.74 with
+the reason.  Fit time 66 s with the vectorised build (the shipped board's is 65 s).
+
+## 29. The kitchen-sink BorutaShap: 111 candidates on pair rows, what survives, and what the criterion makes of it
+
+Written 2026-09-08.  The owner: "now that we have added new stats in, we need to take the absolute fullest
+kitchen sink and run borutashap."  `scripts/50_boruta.py --modes=sink,sinknoagg --sides=D,O --trials=50`,
+5.7 hours; the importance histories are `outputs/csv/boruta_sink{,noagg}_{D,O}.csv`.
+
+### 1. The set, and why it runs on pair rows
+
+Everything both paths can build, 111 names (`SINK` in `50_boruta.py`): the 55 of `wide` (the 13 rates,
+season, the role inputs, the ten linear aggregates, the ten efficiency ratios, the six shot-quality columns,
+the play-by-play block), the 26 era-relative Dredge twins, the career block (`exp_yrs`, `exp_poss`,
+`entry_age`), who he is (`height`, `weight`, `draft_pick`, `tenure`, `n_teams`, and the bins `height2`,
+`weight15`), his past plus-minus on both sides (the seven `PAST` names) and the teammate turnover of the
+target window (`turn`).  The past plus-minus and `turn` only exist on PAIR rows (28.2), so the whole sink is
+scored on the shipped prior's pair rows -- 15,078 per side, the shipped target per side (`blend0.7` on
+offense, `rapm1` on defense), the shipped window discount -- with the cheap booster (linear leaves, no
+cross features), which is what the defensive side ships and one fifth of the offensive bag.
+
+`sinknoagg` is the same 101 names without the ten pure linear aggregates (`pts`, `fga`, `fta`, `fg3a`,
+`usage`, `bigness`, `reb`, `stocks`, `creation`, `shotmix`), because 23.10 found that on a set containing
+linear aggregates of its own members Boruta keeps the aggregate and rejects the parts by coin toss.  It did
+again: with the aggregates in, defense REJECTS `blk` and accepts `stocks`; without them, defense accepts
+`blk`, `blkrim` and `russ`.  The readable verdicts are the `sinknoagg` ones.
+
+### 2. The verdicts (sinknoagg; the sink where it differs)
+
+**Accepted on both sides in both forms:** `past_apm`, `past_poss`, `past_rapm` (the plus-minus block, the
+strongest new signal on either side), `turn`, `age`, `pf`, `stl`, `weight`, `exp_poss`.
+
+**Defense (22 accepted):** age, astr, blk, blkrim, drb, entry_age, exp_poss, fg2_miss, fg2m, fg3_miss,
+gs_pct, height, n_teams, past_apm, past_poss, past_rapm, pf, russ, season, stl, turn, weight; tentative
+astlmr, loose, orb, past_poss_o, unast_r.  Of the 25 shipped defensive names it rejects 14: fg3m, ftm,
+ft_miss, ast, tov, poss_pct, the six shot-quality columns, height2, weight15.
+
+**Offense (30 accepted):** age, ast, astlmr, astrim_r, exp_poss, exp_yrs, fg3_miss, fg3m, ftm, ftp, gs_pct,
+loose, mpts, orb, orbsh, past_apm, past_poss, past_poss_d, past_rapm, pf, poss_pct, stl, stolensh_r,
+techflg, tovr, ts, turn, unast_r, weight, weight15; tentative astc3_r, draft_pick, efg.  Of the 47 shipped
+offensive names it rejects 18: fg2m, fg2_miss, ft_miss, drb, tov, blk, season, p3r, ftr, fg3p, fg2p, astr,
+five of the six shot-quality columns, height2.
+
+**Rejected on both sides in both forms:** the whole assists-by-zone block and its era-relative twins,
+`pot_ast`, most of the block-location counters, `draft_pick`, `tenure`, `height2`, `tov`, `ft_miss`,
+`q2`, `q3`, `m2`, `m3`, `xps`, and the cross-side past APM (`past_apm_o`, `past_apm_d`: each prior wants its
+OWN side's record; the other side's possessions are tentative-to-accepted, the other side's value is not).
+
+Three things to read with the record's cautions.  The career block is accepted on both sides, and 22.2
+measured it at +0.054 on the criterion: it names the players with many windows, and Boruta selects against
+the prior's own target, which rewards exactly that.  The shot-quality block is rejected on both sides, and it
+shipped in 22.4 on the criterion (-0.04, z -1.1 at best): a rejection is "not better than its own shadow
+on this target with this booster", and the shipped offensive booster is a five-member bag with cross
+features, not the cheap one Boruta ran.  And `season` is rejected on offense and accepted on defense; it
+is kept on both by design.
+
+
+### 2b. The full table: every candidate, both sides, both forms (`outputs/csv/boruta_sink_table.csv`)
+
+A / T / R = accepted / tentative / rejected, then the mean importance over the 50 trials (z, the shadow max is the bar);
+`noagg` is without the ten linear aggregates (the readable form), `sink` with them; `ships` = on the board's list now.
+Sorted by the sum of the two `noagg` importances.  The owner: always provide this table.
+
+| feature | O noagg | O sink | ships O | D noagg | D sink | ships D |
+|---|---|---|---|---|---|---|
+| `weight` | A +8.12 | A +8.00 |  | A +2.70 | A +2.35 |  |
+| `gs_pct` | A -0.03 | R -0.18 | yes | A +4.58 | A +4.21 | yes |
+| `stl` | A +0.96 | A +0.75 | yes | A +3.30 | A -0.15 | yes |
+| `past_rapm` | A +0.17 | A -0.15 | yes | A +3.04 | A +2.80 |  |
+| `past_apm` | A +1.15 | A +1.30 | yes | A +2.02 | A +1.41 |  |
+| `exp_poss` | A +1.95 | A +2.27 |  | A +1.04 | A +0.75 |  |
+| `age` | A +1.06 | A +1.08 | yes | A +0.85 | A +0.84 | yes |
+| `russ` | R -0.29 | R -0.24 |  | A +2.03 | R -0.21 |  |
+| `pf` | A +0.61 | A +0.23 | yes | A +1.01 | A +0.25 | yes |
+| `turn` | A +0.93 | A +0.97 |  | A +0.39 | A +0.25 |  |
+| `height` | R -0.15 | R -0.11 |  | A +1.39 | A +1.19 |  |
+| `fg3m` | A +1.46 | A +0.41 | yes | R -0.29 | R -0.26 |  |
+| `fg3_miss` | A +0.57 | A +0.83 | yes | A +0.31 | R -0.21 | yes |
+| `ftm` | A +0.83 | A -0.01 | yes | R -0.09 | R -0.23 |  |
+| `entry_age` | R -0.17 | R -0.13 |  | A +0.78 | A +0.74 |  |
+| `past_poss` | A +0.14 | A +0.19 | yes | A +0.38 | A +0.39 |  |
+| `unast_r` | A +0.74 | R -0.24 |  | T -0.30 | R -0.30 |  |
+| `ts` | A +0.72 | A +0.62 | yes | R -0.28 | R -0.23 |  |
+| `blkrim` | R -0.11 | R -0.23 |  | A +0.52 | R -0.09 |  |
+| `fg2m` | R -0.25 | R -0.26 |  | A +0.31 | R -0.16 | yes |
+| `orbsh` | A +0.15 | A +0.10 | yes | R -0.13 | R -0.20 |  |
+| `blk` | R -0.19 | R -0.11 |  | A +0.19 | R -0.22 | yes |
+| `orb` | A +0.31 | A +0.42 | yes | T -0.32 | R -0.02 | yes |
+| `ftp` | A +0.09 | A +0.12 | yes | R -0.12 | R -0.21 |  |
+| `astr` | R -0.21 | R -0.26 |  | A +0.15 | A -0.08 |  |
+| `tovr` | A +0.05 | R -0.12 | yes | R -0.17 | R -0.25 |  |
+| `blk3sh` | R -0.16 | R -0.20 |  | R +0.02 | A +0.11 |  |
+| `ast` | A +0.21 | R -0.26 | yes | R -0.37 | R -0.31 |  |
+| `poss_pct` | A -0.05 | A -0.14 | yes | R -0.16 | R -0.02 |  |
+| `n_teams` | R -0.21 | R -0.22 |  | A -0.04 | A -0.14 |  |
+| `exp_yrs` | A -0.04 | A +0.00 |  | R -0.24 | T -0.23 |  |
+| `fg2_miss` | R -0.25 | R -0.14 |  | A -0.04 | R -0.23 | yes |
+| `drb` | R -0.15 | R -0.20 |  | A -0.15 | R -0.15 | yes |
+| `loose` | A -0.09 | R -0.09 |  | T -0.21 | A -0.07 |  |
+| `q2` | R -0.08 | T -0.22 |  | R -0.23 | R -0.11 |  |
+| `techflg_r` | R -0.10 | A -0.15 |  | R -0.21 | R -0.23 |  |
+| `mpts` | A -0.01 | T -0.17 | yes | R -0.31 | R -0.26 |  |
+| `blksmr_r` | R -0.15 | R -0.13 |  | R -0.17 | R -0.27 |  |
+| `blk3sh_r` | R -0.21 | R -0.18 |  | R -0.11 | R -0.14 |  |
+| `season` | R -0.10 | R -0.16 | yes | A -0.22 | R -0.13 | yes |
+| `techflg` | A -0.15 | R -0.14 |  | R -0.19 | R -0.16 |  |
+| `blkrim_r` | R -0.25 | R -0.13 |  | R -0.10 | R -0.27 |  |
+| `astrim_r` | A -0.01 | A +0.25 |  | R -0.36 | R -0.23 |  |
+| `tov` | R -0.19 | R -0.22 |  | R -0.18 | R -0.21 |  |
+| `weight15` | A -0.07 | A +0.04 | yes | R -0.31 | R -0.26 |  |
+| `draft_pick` | T -0.23 | R -0.12 |  | R -0.16 | R -0.15 |  |
+| `stolensh_r` | A -0.12 | A -0.16 |  | R -0.27 | R -0.19 |  |
+| `xps` | R -0.18 | R -0.16 |  | R -0.21 | R -0.17 |  |
+| `m2` | R -0.18 | R -0.16 |  | R -0.21 | R -0.22 |  |
+| `astlmr` | A -0.09 | R -0.13 |  | T -0.31 | R -0.17 |  |
+| `unast` | R -0.27 | R -0.23 |  | R -0.14 | R -0.27 |  |
+| `offoul` | R -0.16 | R -0.25 |  | R -0.25 | R -0.13 |  |
+| `blksmr` | R -0.14 | A -0.08 |  | R -0.28 | R -0.24 |  |
+| `ft_miss` | R -0.21 | R -0.23 |  | R -0.22 | R -0.20 |  |
+| `q3` | R -0.23 | R -0.23 |  | R -0.20 | R -0.10 |  |
+| `astlmrsh` | R -0.23 | R -0.24 |  | R -0.21 | R +0.00 |  |
+| `loose_r` | R -0.16 | R -0.16 |  | R -0.28 | R -0.16 |  |
+| `astrimsh_r` | R -0.16 | R -0.27 |  | R -0.29 | R -0.24 |  |
+| `fg2p` | R -0.21 | R -0.24 |  | R -0.24 | R -0.06 |  |
+| `astlmrsh_r` | R -0.18 | R -0.14 |  | R -0.27 | R -0.23 |  |
+| `tenure` | R -0.13 | R -0.19 |  | R -0.32 | R -0.24 |  |
+| `russsh_r` | R -0.22 | R -0.23 |  | R -0.23 | R -0.11 |  |
+| `stolen` | R -0.11 | R -0.07 |  | R -0.35 | R -0.26 |  |
+| `m3` | R -0.18 | R -0.15 |  | R -0.28 | R -0.23 |  |
+| `pot_ast_r` | R -0.08 | R -0.23 |  | R -0.38 | R -0.30 |  |
+| `astc3sh` | R -0.23 | R -0.23 |  | R -0.24 | R -0.17 |  |
+| `efg` | T -0.23 | R -0.24 | yes | R -0.24 | R -0.19 |  |
+| `fg3p` | R -0.20 | R -0.16 |  | R -0.27 | R -0.16 |  |
+| `blklmr_r` | R -0.20 | R -0.20 |  | R -0.28 | R -0.23 |  |
+| `stolensh` | R -0.17 | R -0.19 |  | R -0.32 | R -0.28 |  |
+| `ftr` | R -0.21 | R -0.09 |  | R -0.28 | R -0.22 |  |
+| `astrimsh` | R -0.18 | R -0.20 |  | R -0.32 | R -0.28 |  |
+| `past_poss_d` | A -0.07 | T -0.22 |  | R -0.43 | R -0.34 |  |
+| `blkrimsh_r` | R -0.20 | R -0.18 |  | R -0.30 | R -0.23 |  |
+| `astab3sh_r` | R -0.27 | R -0.24 |  | R -0.26 | R -0.23 |  |
+| `astc3sh_r` | R -0.22 | R -0.20 |  | R -0.31 | R -0.26 |  |
+| `p3r` | R -0.25 | R -0.24 |  | R -0.28 | R -0.27 |  |
+| `astc3_r` | T -0.24 | T -0.18 |  | R -0.30 | R -0.24 |  |
+| `astsmrsh` | R -0.21 | R -0.20 |  | R -0.33 | R -0.26 |  |
+| `russ_r` | R -0.26 | R -0.24 |  | R -0.29 | R -0.27 |  |
+| `astsmrsh_r` | R -0.24 | R -0.24 |  | R -0.31 | R -0.27 |  |
+| `past_apm_o` | R -0.32 | R -0.31 |  | R -0.24 | R -0.17 |  |
+| `astab3sh` | R -0.25 | R -0.25 |  | R -0.31 | R -0.27 |  |
+| `past_poss_o` | R -0.32 | R -0.31 |  | T -0.25 | T -0.31 |  |
+| `astc3` | R -0.27 | R -0.23 |  | R -0.31 | R -0.24 |  |
+| `astrim` | R -0.25 | R -0.24 |  | R -0.33 | R -0.24 |  |
+| `astab3` | R -0.26 | R -0.28 |  | R -0.32 | R -0.26 |  |
+| `unastsh_r` | R -0.27 | R -0.24 |  | R -0.31 | R -0.27 |  |
+| `blklmr` | R -0.24 | R -0.18 |  | R -0.36 | R -0.29 |  |
+| `astab3_r` | R -0.24 | R -0.23 |  | R -0.36 | R -0.29 |  |
+| `offoul_r` | R -0.26 | R -0.18 |  | R -0.34 | R -0.27 |  |
+| `stolen_r` | R -0.27 | R -0.25 |  | R -0.33 | R -0.23 |  |
+| `russsh` | R -0.26 | R -0.26 |  | R -0.35 | R -0.26 |  |
+| `blkrimsh` | R -0.26 | R -0.20 |  | R -0.35 | R -0.28 |  |
+| `astsmr` | R -0.27 | R -0.28 |  | R -0.34 | R -0.27 |  |
+| `astlmr_r` | R -0.27 | R -0.25 |  | R -0.36 | R -0.30 |  |
+| `astsmr_r` | R -0.27 | R -0.23 |  | R -0.36 | R -0.32 |  |
+| `pot_ast` | R -0.25 | R -0.27 |  | R -0.38 | R -0.28 |  |
+| `unastsh` | R -0.27 | R -0.23 |  | R -0.38 | R -0.28 |  |
+| `past_apm_d` | R -0.25 | R -0.23 |  | R -0.43 | R -0.34 |  |
+| `height2` | R -0.32 | R -0.31 |  | R -0.43 | R -0.34 |  |
+| `bigness` | - | R -0.18 | yes | - | R -0.23 |  |
+| `creation` | - | A +1.16 | yes | - | R -0.16 |  |
+| `fg3a` | - | R -0.19 | yes | - | R -0.26 |  |
+| `fta` | - | R -0.14 | yes | - | R -0.09 |  |
+| `fga` | - | R -0.26 | yes | - | A +1.08 |  |
+| `reb` | - | A -0.14 | yes | - | A -0.13 |  |
+| `pts` | - | A +2.30 | yes | - | A -0.12 |  |
+| `shotmix` | - | R -0.12 | yes | - | R -0.26 |  |
+| `stocks` | - | R -0.21 | yes | - | A +4.79 |  |
+| `usage` | - | R -0.25 | yes | - | R -0.20 |  |
+
+### 3. What the criterion and the investigator make of it
+
+Five lists built from the verdicts, each on the shipped board (`tune501_b7_turnref_o_hwb_pasto`, 110.4785 on
+the criterion, 41.132 on the investigator), paired over the 28 seasons:
+
+| system | what | criterion vs board | z | wins | investigator vs board | z | wins | names O / D |
+|---|---|---|---|---|---|---|---|---|
+| `tune501_b7_pasto_bD` | Boruta's defensive list as-is | +0.044 | 1.02 | 15/28 | +0.024 | 0.78 | 14/28 | 48 / 21 |
+| `tune501_b7_pasto_bO` | Boruta's offensive list as-is | **+0.199** | **4.84** | 5/28 | **+0.574** | **9.14** | 2/28 | 30 / 25 |
+| `tune501_b7_pasto_bOD` | both Boruta lists | +0.244 | 4.26 | 8/28 | +0.600 | 7.60 | 3/28 | 30 / 21 |
+| `tune501_b7_pasto_pD` | the shipped defensive list minus its 14 rejects | +0.004 | 0.21 | 15/28 | +0.013 | 0.45 | 13/28 | 48 / 11 |
+| `tune501_b7_pasto_pO` | the shipped offensive list minus its 17 rejects | -0.028 | -1.17 | 16/28 | -0.057 | -1.87 | 16/28 | 31 / 25 |
+| **`tune501_b7_pasto_pOD`** | **both prunings** | -0.024 | -0.54 | 15/28 | -0.044 | -0.89 | 14/28 | **31 / 11** |
+
+**Boruta's own lists lose, and lose most where they differ most from what ships.**  The offensive list is
++0.20 on the criterion at z 4.8 and +0.57 on the investigator at z 9.1: it carries the career block (22.2's
+trap, +0.054 when it was tried alone, and here beside six play-by-play names and without the ratios and the
+shot-quality columns it is four times that).  Selection against the prior's own target rewards a column that
+names the player, and Boruta cannot tell that from knowledge -- the record's rule, now measured on a set that
+had every chance.
+
+**The prunings are the useful result.**  Removing what Boruta rejected from the SHIPPED lists costs nothing
+on either instrument -- the defensive list from 25 names to 11 at +0.004, the offensive from 48 to 31 at
+-0.028 (z -1.2) and -0.057 on the investigator (z -1.9) -- and Part 0 ruling 1's tie-break is exactly for
+this: between candidates the criterion cannot separate, the simpler one.  The dropped names include the
+shot-quality block on defense and five of its six columns on offense (22.4's feature, worth -0.04 at z -1.1
+when it shipped and nothing now that the prior carries a past record), the binned height on both sides
+(26's attribution feature; the investigator does not miss it), the efficiency ratios that the past record
+and the rates already imply, and `tov`, `ft_miss`, `drb`, `blk` on offense.
+
+
+### 4. Shipping
+
+**SHIPPED 2026-09-08: `tune501_b7_pasto_pOD`** -- the shipped lists with Boruta's rejects removed, 31 offensive
+names and 11 defensive against 48 and 25: `gbdt.features_full_O` / `_D` in `config.yaml`, `cal_map` on the
+candidate's tracker table copied to `outputs/calmap_ship.parquet`.  **110.4547 on the criterion (-0.024 against
+110.4785, z -0.54) and 41.089 on the investigator (-0.044, z -0.89): not separable from the board before it
+on either, 42 names against 73, 58 s for the 28 fits against 65 -- Part 0 ruling 1's tie-break.**  Ten of ten
+floors: consensus **0.801 / 0.795 / 0.760**, defensive spread 1.28, the offensive gap against bigness -0.349
+(the floor is 0.35; it was -0.344 on the board before), the defensive +0.222.  `docs/data/ratings.json`
+rebuilt.  What ships on each side now:
+
+* offense (31): fg3m, fg3_miss, ftm, orb, ast, stl, pf, season, poss_pct, gs_pct, age, pts, fga, fta, fg3a,
+  usage, bigness, reb, stocks, creation, shotmix, ts, ftp, tovr, orbsh, mpts, weight15, past_apm, past_poss,
+  past_rapm -- and `turn` (the settled-context turnover prior, 24.9).
+* defense (11): fg3_miss, fg2m, fg2_miss, orb, drb, stl, blk, pf, season, gs_pct, age.
+
+The defensive prior is back to eleven box columns, the season and two role inputs: no shot quality, no
+height, no past record.  The three instruments together -- Boruta on the prior's target, the criterion at
+team-game level, the investigator at player level -- agree that nothing added to the defensive prior since
+22.4 was carrying weight there, and the board's defensive agreement with the consensus is the best it has
+been.  What the defensive prior is still missing is 27.2's list (Garnett, Draymond, Gobert under-rated,
+Trae Young, Bargnani over-rated), which no column here reached.
+
+### 5. Never re-run
+
+Boruta's accepted lists as feature lists on either side (the career block in a list is +0.20 on the
+criterion); Boruta as a gate (23.10 stands; the coin toss on `blk` happened again); the shot-quality block,
+the binned height and the efficiency ratios back on the lists they were pruned from without a new reason.
+
+### 8. The owner's hypothesis: really good players do not transfer because their usage drops on the new team -- confirmed, and it carries most of the effect
+
+The 2024-2026 board at `target_pct_new_teammates` = 0 and = 1 (`scratch/turnover_compare.py`,
+`outputs/csv/target_pct_new_teammates_2024-2026.csv`) has the prime high-usage scorers losing the most
+relative to the field with all-new teammates (Gilgeous-Alexander -0.93, Doncic -0.92, Maxey -0.80 on the
+mapped total) and veteran bigs and connectors gaining (Tucker, Jordan, Draymond, Gobert +0.7 to +1.1).
+Across the 547 qualified players the delta correlates +0.46 with career possessions, +0.45 with age, +0.24
+with height, -0.33 with usage, -0.37 with points, and +0.01 with assist ratio: not passing.  In the joint
+regression (R-squared 0.58) one sd of usage is -0.21, of true shooting -0.21, of height +0.16, of career
+possessions +0.28, of assist ratio -0.02.  Prime-age high-usage players are the worst cell (-0.42), old
+low-usage players the best (+0.40).
+
+The owner read that as usage: a star's usage falls on a new team.  Tested on 2,646 adjacent-window pairs
+with 1,500+ possessions in both windows, by usage tercile in the feature window and the target window's
+turnover (settled < 0.3, 0.3-0.6, churned > 0.6):
+
+| change, target minus feature window | low usage | mid | high usage |
+|---|---|---|---|
+| usage per 100, churned roster | +0.54 | -0.30 | **-1.35** |
+| offensive APM, churned roster | +0.01 | 0.00 | **-0.42** |
+| possession share, churned roster | +0.019 | -0.001 | **-0.038** |
+| usage per 100, settled roster | -0.62 | -0.30 | -0.15 |
+| offensive APM, settled roster | +0.21 | -0.87 | +0.19 |
+
+High-usage players on a churned roster lose 1.35 usage per 100, 0.42 of APM and 3.8 points of playing-time
+share; low-usage players on a churned roster gain usage.  In the high-usage tercile the APM change regressed
+on turnover alone is -1.47 per unit of turnover; adding the usage change takes the turnover coefficient to
+-0.42 (72% carried by usage), adding the share change and age to -0.24 (84%).  **A scorer's skill transfers,
+his role does not, and plus-minus measures role times skill.**  The quarter-point per unit of turnover that
+remains is the part that reads as chemistry.  The record and the literature agree once "portable" is split
+into production (which is) and impact (which is not, because the role is not).
+
+## 30. The team he is traded to: the destination's usage minutes and quality as inputs, and the trade-to question
+
+Written 2026-09-08.  The owner, after 28.8: "usage x poss share is what I would call usage minutes.  If we
+measure the training window usage minutes we should be able to estimate how their usage might drop ... what I
+would like to build is a team-traded-to feature set such that we can (a) predict better and (b) inject an
+'average team', or what's the best team for this player to be traded to."  Built as `src/eracoef/context.py`,
+the pair-row and prediction-path wiring in `gbdt_prior` and `spm`, `scratch/trade_to.py`; `tests/test_context.py`.
+
+### 1. What was built
+
+Usage minutes = usage per 100 x possession share: his slice of his team's possessions.  Three offensive
+columns: **`own_um`** (his, in the feature window), **`dest_um`** (four times the shared-possession-weighted mean
+of his TARGET-window teammates' usage minutes, each measured in the FEATURE window: the usage already spoken
+for beside him), **`dest_apm`** (the same weighting of their offensive APM: how good the group is).  The
+defensive analogues at the owner's request -- "block-minutes" and "rebound-minutes" -- **`own_bm`, `own_rm`,
+`dest_bm`, `dest_rm`, `dest_apm_d`** (`DEST_D`).  Leak-free the way the turnover feature is: WHO he plays
+beside comes from the target window (the teammates table), every number attached to a teammate from the
+feature window; a teammate the feature window never saw takes its league values.  At prediction time the
+feature window is the training block (usage from the block's padded rates and share, APM from the block's own
+APM fit, the same definitions the panel's columns have) and the roster is the target season's (H for the
+criterion, the block's own seasons for the board).  `ctx.dest_override` asks the trade-to question: the same
+context for everyone ({dest_um, dest_apm}), or one roster for everyone ({roster, weights}).
+
+On the pair rows (2021-2024 minus 2023, offense): own_um mean 8.7 (sd 6.2, max 31.6), dest_um mean 43.5
+(sd 7.3), dest_apm mean +1.4 (sd 0.9); dest_um correlates 0.18 with own_um and dest_apm -0.07 with the
+turnover feature -- the axes are their own.  One fit costs a second more than the board (the block's APM fit).
+
+### 2. The criterion and the investigator, against the shipped board (`tune501_b7_pasto_pOD`)
+
+| system | what | criterion vs board | z | wins | investigator vs board | z | wins |
+|---|---|---|---|---|---|---|---|
+| `..._dest` | own_um, dest_um, dest_apm on offense | **-0.072** | -1.80 | 17/28 | **+0.125** | +2.64 | 11/28 |
+| `..._destum` | own_um, dest_um only | -0.053 | -1.22 | 17/28 | +0.098 | +2.06 | 12/28 |
+| `..._destd` | own_bm, own_rm, dest_bm, dest_rm, dest_apm_d on DEFENSE | -0.024 | -0.59 | 15/28 | -0.054 | -1.10 | 15/28 |
+| `..._destdm` | the minutes only, no roster APM, on defense | +0.010 | +0.26 | 14/28 | -0.056 | -1.22 | 18/28 |
+
+The defensive analogues are zero on both instruments: a rim protector's block-minutes and the destination's
+already spoken for do not move the defensive prior, and the roster's defensive quality does not either.
+
+**The two instruments disagree, and the disagreement is the point.**  The destination helps the team-game
+forecast (-0.07, not quite significant) and hurts the player-level attribution (z +2.6): with the group's
+quality as an input the prior forecasts a player's value IN THAT CONTEXT, which is what a forecast should do,
+and it shifts credit between him and the people beside him, which is what a rating should not.  Section 16
+framed the same trade for the defensive box prior.  **Not shipped as the board's prior.  It is the trade-to
+instrument**: the board rates a player at his actual context; the destination features answer what he would
+be worth elsewhere.
+
+### 3. The trade-to question (`scratch/trade_to.py`, 2024-2026, the offensive prior)
+
+The system fitted once per context: his actual rosters, the block's possession-weighted mean context
+(dest_um 39.8, dest_apm +1.70), and each of the 30 teams' rosters weighted by the team's own co-occurrence
+structure (`context.team_roster` with the teammates table: each player's mean shared possessions with the
+team's eight highest-minute players, so a hypothetical newcomer shares the floor the way a rotation player
+does, not the way the bench does).  66 s for the 32 fits.
+
+| player | actual | league-average | best fits | worst fits |
+|---|---|---|---|---|
+| Gilgeous-Alexander | +5.02 | +5.39 | GSW +5.45, PHI +5.43, IND +5.41, ATL +5.41 | NYK +4.93, OKC +4.92, CHI +4.91 |
+| Jokic | +4.03 | +4.09 | BKN +4.64, GSW +4.59, MEM +4.54, WAS +4.53 | BOS +3.48, HOU +3.46, MIN +3.42, NYK +3.39 |
+| Draymond Green | +0.23 | +0.14 | BKN +0.83, UTA +0.74, MEM +0.73, WAS +0.72 | HOU -0.45, MIN -0.47, NYK -0.50 |
+| Trae Young | +4.30 | +4.03 | DAL +4.12, PHI +4.12, MEM +4.07, WAS +4.06 | HOU +3.46, DEN +3.45, BOS +3.45, NYK +3.41 |
+
+The pattern is one pattern: every high-usage creator's best destinations are the rosters with the LEAST
+usage already spoken for (Brooklyn, Washington, Memphis, Utah, Golden State in this block) and the worst
+are the loaded ones (New York, Boston, Minnesota, Houston, Denver) -- usage minutes are the mechanism, and
+the spread across teams is about 1 point per 100 of offensive prior for a star.  A player's own team is not
+always his best fit (Jokic on Denver +3.64 against +4.03 actual; Gilgeous-Alexander on Oklahoma City +4.92
+against +5.02): the roster override weights a newcomer like the average rotation player, the actual context
+weights his real co-occurrence, and a star plays beside the starters more than the average rotation player
+does.  That is the approximation to keep in mind when reading a single team's number; the ranking is robust
+to it.
+
+### 4. Traps
+
+* The actual context at prediction time is the TARGET seasons' rosters: `[H]` under the criterion, the block's
+  own seasons for the board.  A tool that sets `ctx.current_h` to a block season by habit gets the first
+  season's rosters only; `trade_to.py` leaves it None, as the board does.
+* The roster override without the teammates table weights every player by his own minutes, which is
+  bench-heavy and reads a star's own team a half-point below his actual context.  Pass `tm`.
+* DEST features need the teammates table on the pair rows (`GBDTPrior teammates=`, set by `Context.prior`);
+  `pair_rows` raises without it.
+
+### 5. Never re-run
+
+The destination features as the board's prior on offense (forecast better, attribution worse: the
+instruments disagree and the board is a rating); block-minutes and rebound-minutes on defense, own or the
+destination's, with or without the roster's defensive APM (zero on both instruments).

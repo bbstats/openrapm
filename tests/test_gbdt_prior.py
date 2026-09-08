@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from eracoef.design import FEATURES
-from eracoef.gbdt_prior import (DEFAULT_FEATURES, GBDTPrior, counterbalance, drag, gbdt_offset, reference_mean,
+from eracoef.gbdt_prior import (TURN_FEATURE, DEFAULT_FEATURES, GBDTPrior, counterbalance, drag, gbdt_offset, reference_mean,
                                 training_rows)
 
 WINDOWS = ["W0", "W1", "W2", "W3"]
@@ -23,14 +23,14 @@ def _panel(seed=0, n_players=240):
             r = skill + 0.3 * rng.normal(size=len(FEATURES))
             season = 2000 + 3 * int(wi) + int(rng.integers(0, 3))
             base = 1.5 * r[0] - 1.0 * r[9] + 0.5 * r[8] + 0.02 * (season - 2004)
-            share = float(np.clip(base_share + 0.05 * rng.normal(), 0.02, 0.9))
-            poss = share * 15000.0
+            poss_pct = float(np.clip(base_share + 0.05 * rng.normal(), 0.02, 0.9))
+            poss = poss_pct * 15000.0
             gs, age = float(rng.uniform(0, 1)), float(rng.uniform(19, 38))
-            role = 3.0 * share - 2.0                                     # the role prior's part of RAPM_1
+            role = 3.0 * poss_pct - 2.0                                     # the role prior's part of RAPM_1
             for side, sign in (("O", 1.0), ("D", -1.0)):
                 u = sign * base + rng.normal(0, 0.5)
                 rows.append(dict(window=WINDOWS[wi], side=side, player_id=pid, poss=poss, season=season,
-                                 **dict(zip(FEATURES, r)), share=share, gs_pct=gs, age=age,
+                                 **dict(zip(FEATURES, r)), poss_pct=poss_pct, gs_pct=gs, age=age,
                                  spm=sign * role, u=u, rapm1=sign * role + u))
     return pd.DataFrame(rows)
 
@@ -46,6 +46,53 @@ def test_pooled_target_by_hand():
     assert r.loc[(1, "W1"), "target"] == 1.0 and r.loc[(1, "W1"), "weight"] == 100.0
     assert (2, "W0") not in r.index                                     # one window only: scored, not trained
     assert len(training_rows(p, "O", exclude={"W1"}, target_col="rapm1")) == 0   # player 1 has nothing left to pool
+
+
+def test_pair_rows_pool_back_to_the_training_rows_and_carry_turnover():
+    from eracoef.gbdt_prior import pair_rows
+    p = _panel()
+    wins = sorted(p.window.unique())
+    pairs = [(a, b) for a in wins for b in wins if a != b]
+    rng = np.random.default_rng(2)
+    turn = pd.DataFrame([dict(player_id=pid, window=a, window_to=b, turnover=float(rng.uniform()))
+                         for pid in p.player_id.unique() for a, b in pairs])
+    # (the pooled rows measure window distance among the windows LEFT after the exclusion, so with a decay and
+    # an excluded middle window the two disagree by design; the pair rows keep the calendar distance)
+    for decay, exclude in ((1.0, {"W2"}), (0.5, set())):
+        pr = pair_rows(p, "O", exclude=exclude, target_col="rapm1", win_decay=decay, turn=turn)
+        tr = training_rows(p, "O", exclude=exclude, target_col="rapm1", win_decay=decay)
+        assert not (set(pr.window) | set(pr.window_to)) & exclude
+        assert TURN_FEATURE in pr.columns and pr[TURN_FEATURE].between(0, 1).all()
+        # the weighted mean of a player-window's pair targets is the pooled target, and the weights add up
+        pr["_wt"] = pr.weight * pr.target
+        g = pr.groupby(["player_id", "window"]).agg(w=("weight", "sum"), wt=("_wt", "sum"))
+        g["target"] = g.wt / g.w
+        j = tr.set_index(["player_id", "window"]).join(g, rsuffix="_pair", how="inner")
+        assert len(j) == len(tr)
+        assert np.allclose(j.target, j.target_pair) and np.allclose(j.weight, j.w)
+    # a pair the turnover table does not cover is dropped; without a table there is no turn column
+    short = turn[~((turn.player_id == 0) & (turn.window == "W0"))]
+    pr2 = pair_rows(p, "O", target_col="rapm1", turn=short)
+    assert not ((pr2.player_id == 0) & (pr2.window == "W0")).any()
+    assert TURN_FEATURE not in pair_rows(p, "O", target_col="rapm1").columns
+
+
+def test_turn_prior_trains_on_pairs_and_predicts_with_the_turn_column():
+    p = _panel()
+    wins = sorted(p.window.unique())
+    rng = np.random.default_rng(1)
+    turn = pd.DataFrame([dict(player_id=pid, window=a, window_to=b, turnover=float(rng.uniform()))
+                         for pid in p.player_id.unique() for a in wins for b in wins if a != b])
+    cfg = {"gbdt": {**CFG["gbdt"], "params": {"n_estimators": 30}}}
+    prior = GBDTPrior(p, cfg, mode="full", target_col="rapm1", turn=turn)
+    assert prior.features["O"][-1] == TURN_FEATURE and prior.features["D"][-1] == TURN_FEATURE
+    X = p[(p.side == "O") & (p.window == "W3")][prior.features["O"][:-1]].copy()
+    lo, hi = prior.predict("O", X.assign(**{TURN_FEATURE: 0.35}), exclude={"W3"}), prior.predict("O", X.assign(**{TURN_FEATURE: 1.0}), exclude={"W3"})
+    assert lo.shape == hi.shape == (len(X),) and np.isfinite(lo).all() and np.isfinite(hi).all()
+    assert prior.reports and prior.reports[0]["n_rows"] > len(X)      # pair rows, more than one per player-window
+    plain = GBDTPrior(p, cfg, mode="full", target_col="rapm1", pairs=True)     # pair rows, no turnover feature
+    assert TURN_FEATURE not in plain.features["O"]
+    assert np.isfinite(plain.predict("O", X, exclude={"W3"})).all()
 
 
 def test_excluded_window_never_reaches_rows_or_targets():
@@ -115,6 +162,6 @@ def test_full_mode_uses_role_inputs():
     m = len(held)
     ro = held[FEATURES].to_numpy()
     off = gbdt_offset(prior, ro, ro, held.season.to_numpy(), held.poss.to_numpy(), held.poss.to_numpy(),
-                      exclude={"W1"}, sides=("O", "D"), extra=held[["share", "gs_pct", "age"]].reset_index(drop=True))
+                      exclude={"W1"}, sides=("O", "D"), extra=held[["poss_pct", "gs_pct", "age"]].reset_index(drop=True))
     assert off.shape == (2 * m,) and abs(np.average(off[:m], weights=held.poss)) < 1e-9
-    assert np.corrcoef(off[:m], held.share)[0, 1] > 0.3                    # the role level is in the prior now
+    assert np.corrcoef(off[:m], held.poss_pct)[0, 1] > 0.3                    # the role level is in the prior now

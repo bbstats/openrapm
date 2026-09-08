@@ -1,12 +1,12 @@
-"""Role inputs for the Simple SPM prior: playing-time share, starts, and age, per player-season.
+"""Role inputs for the Simple SPM prior: the share of team possessions played, starts, and age.
 
 The role prior (spm.py) pulls every player toward "what a player with this role and age is worth"
 before the box score says anything.  Three inputs, all from data already on disk or one request away:
 
-  share    the player's on-floor possessions (both ends) summed over every team he played for,
+  poss_pct the player's on-floor possessions (both ends) summed over every team he played for,
            divided by ONE full team-season of possessions (the mean of his teams' season totals).
-           The denominator counts the games he did not play, so injury lowers the share; a player
-           traded mid-season keeps his full-season share because the numerator is summed, not
+           The denominator counts the games he did not play, so injury lowers it; a player
+           traded mid-season keeps his full-season figure because the numerator is summed, not
            averaged.  Capped at `share_cap` (0.9).
   gs_pct   games started / games played.  Starters are each team's first five rows in the V3 box
            file (the rule stints.GameParser already relies on); played = minutes > 0.
@@ -28,8 +28,8 @@ from .config import resolve
 from .design import AWAY_SLOTS, HOME_SLOTS
 from .ingest import GAME_PREFIX, TIMEOUT, _retry, game_table, load_gamelog, raw_dir, season_str
 
-INPUTS = ["share", "share2", "gs_pct", "gs_pct2", "age", "age2", "age3"]
-RAW_INPUTS = ["share", "gs_pct", "age"]
+INPUTS = ["poss_pct", "poss_pct2", "gs_pct", "gs_pct2", "age", "age2", "age3"]
+RAW_INPUTS = ["poss_pct", "gs_pct", "age"]
 
 
 def parse_minutes(s) -> float:
@@ -170,17 +170,17 @@ def roles_path(cfg) -> Path:
 
 
 def player_season_inputs(roles: pd.DataFrame, cap: float = 0.9) -> pd.DataFrame:
-    """Per player-season: share (summed over teams / one team-season, capped), gs_pct, age (+ age_imputed)."""
+    """Per player-season: poss_pct (summed over teams / one team-season, capped), gs_pct, age (+ age_imputed)."""
     r = roles.copy()
     g = r.groupby(["player_id", "season"], as_index=False).agg(
         games=("games", "sum"), starts=("starts", "sum"), minutes=("minutes", "sum"), poss_on=("poss_on", "sum"),
         team_poss=("team_poss", "mean"), age=("age", "first"))
-    g["share"] = np.where(g.team_poss > 0, g.poss_on / np.where(g.team_poss > 0, g.team_poss, 1.0), 0.0).clip(0.0, cap)
+    g["poss_pct"] = np.where(g.team_poss > 0, g.poss_on / np.where(g.team_poss > 0, g.team_poss, 1.0), 0.0).clip(0.0, cap)
     g["gs_pct"] = np.where(g.games > 0, g.starts / np.where(g.games > 0, g.games, 1.0), 0.0).clip(0.0, 1.0)
     med = g.groupby("season")["age"].transform("median")
     g["age_imputed"] = g.age.isna().astype(int)
     g["age"] = g.age.fillna(med).fillna(float(g.age.median()) if g.age.notna().any() else 27.0)
-    return g[["player_id", "season", "games", "starts", "minutes", "poss_on", "team_poss", "share", "gs_pct", "age", "age_imputed"]]
+    return g[["player_id", "season", "games", "starts", "minutes", "poss_on", "team_poss", "poss_pct", "gs_pct", "age", "age_imputed"]]
 
 
 CAREER_INPUTS = ["exp_yrs", "exp_poss", "entry_age"]
@@ -220,9 +220,9 @@ def career_inputs(inputs: pd.DataFrame, before_season: int, player_ids=None, age
     return out
 
 
-def design7(share, gs_pct, age) -> np.ndarray:
-    """The Simple SPM design: share, share^2, gs_pct, gs_pct^2, age, age^2, age^3 (no intercept)."""
-    s, g, a = (np.asarray(v, dtype=float) for v in (share, gs_pct, age))
+def design7(poss_pct, gs_pct, age) -> np.ndarray:
+    """The Simple SPM design: poss_pct, poss_pct^2, gs_pct, gs_pct^2, age, age^2, age^3 (no intercept)."""
+    s, g, a = (np.asarray(v, dtype=float) for v in (poss_pct, gs_pct, age))
     return np.column_stack([s, s ** 2, g, g ** 2, a, a ** 2, a ** 3])
 
 
@@ -242,13 +242,13 @@ def window_inputs(wd, inputs: pd.DataFrame, cap: float = 0.9) -> pd.DataFrame:
     np.add.at(w_psx, gp["psx_idx"].to_numpy(), gp["poss_off"].to_numpy(dtype=float))
     psx["w"] = w_psx
     m = psx.merge(inputs[["player_id", "season", *RAW_INPUTS]], on=["player_id", "season"], how="left")
-    missing = m["share"].isna()
+    missing = m["poss_pct"].isna()
     for c in RAW_INPUTS:
         lm = m.groupby("season").apply(
             lambda d: np.average(d[c].fillna(0.0), weights=np.where(d[c].notna(), d.w, 0.0))
             if (d[c].notna() & (d.w > 0)).any() else d[c].mean(), include_groups=False)
         m[c] = m[c].fillna(m["season"].map(lm)).fillna(float(m[c].mean()) if m[c].notna().any() else 0.0)
-    m["share"] = m["share"].clip(0.0, cap)
+    m["poss_pct"] = m["poss_pct"].clip(0.0, cap)
     n_ps = spec.n_ps
     out = np.zeros((n_ps, len(RAW_INPUTS)))
     den = np.zeros(n_ps)
