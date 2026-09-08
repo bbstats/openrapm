@@ -232,6 +232,19 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
                 ci = career_inputs(ctx.role_inputs, min(int(s_) for s_ in train),
                                    wd.spec.ps_table["player_id"].to_numpy(), age=inputs["age"].to_numpy())
                 extra = pd.concat([extra, ci[list(CAREER_INPUTS)]], axis=1)
+            from .bio import PLAYER_INPUTS
+            from .gbdt_prior import BIO_BINS
+            want_bio = (wants & set(PLAYER_INPUTS)) | {BIO_BINS[f][0] for f in wants if f in BIO_BINS}
+            if want_bio:
+                # height, weight, draft slot (a constant per player) and tenure with his team over the training
+                # block; the held-out season's rosters are skipped so the tenure chain never reads H.  A binned
+                # name (height2, weight15) needs its base column, which add_derived bins in both paths alike
+                from .bio import player_inputs
+                from .roles import build_roles
+                pi = player_inputs(cfg, build_roles(cfg, verbose=False), [int(s_) for s_ in train],
+                                   wd.spec.ps_table["player_id"].to_numpy(),
+                                   exclude_seasons=() if ctx.current_h is None else (int(ctx.current_h),))
+                extra = pd.concat([extra, pi[[c for c in PLAYER_INPUTS if c in want_bio]]], axis=1)
             if turn in ("ref", "h"):
                 extra = extra.assign(turn=float(turn_ref))
                 if turn == "h" and ctx.current_h is not None:

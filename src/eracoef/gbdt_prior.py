@@ -241,8 +241,22 @@ def add_shotq(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+# Who he is (bio.py): height and weight BINNED, 2 inches and 15 pounds.  The fine pair names the player -- on
+# the offensive line it buys 0.27 of the prior's own fit and the bins keep 0.03 of it (FINDINGS 26) -- so the
+# binned form is the one that carries physiology and not identity.   name -> (base column, bin width)
+BIO_BINS = {"height2": ("height", 2.0), "weight15": ("weight", 15.0)}
+
+
+def _wants_derived(feats) -> bool:
+    return any(f in DERIVED or f in RATIOS or f in SHOTQ or f in DREDGE_ANY or f in BIO_BINS for f in feats)
+
+
 def add_derived(df: pd.DataFrame) -> pd.DataFrame:
-    """Add every `DERIVED`, `RATIOS` and `SHOTQ` column the frame can make (in place; the rest are skipped)."""
+    """Add every `DERIVED`, `RATIOS`, `SHOTQ`, Dredge and `BIO_BINS` column the frame can make (in place; the
+    rest are skipped)."""
+    for name, (base, width) in BIO_BINS.items():
+        if name not in df.columns and base in df.columns:
+            df[name] = np.round(df[base].to_numpy(dtype=float) / width) * width
     for name, wts in DERIVED.items():
         if name in df.columns or not all(c in df.columns for c in wts):
             continue
@@ -278,7 +292,7 @@ def training_rows(panel: pd.DataFrame, side: str, exclude=(), features=None, tar
     feats = list(DEFAULT_FEATURES if features is None else features)
     ex = set(exclude)
     p = panel[(panel.side == side) & ~panel.window.isin(ex)].copy()
-    if any(f in DERIVED or f in RATIOS or f in SHOTQ or f in DREDGE_ANY for f in feats):
+    if _wants_derived(feats):
         add_derived(p)
     w = p[poss_col].to_numpy(dtype=float)
     v = p[target_col].to_numpy(dtype=float)
@@ -314,7 +328,7 @@ def pair_rows(panel: pd.DataFrame, side: str, exclude=(), features=None, target_
     feats = [f for f in feats if f != "turn"]
     ex = set(exclude)
     p = panel[(panel.side == side) & ~panel.window.isin(ex)].copy()
-    if any(f in DERIVED or f in RATIOS or f in SHOTQ or f in DREDGE_ANY for f in feats):
+    if _wants_derived(feats):
         add_derived(p)
     wins = sorted(panel.window.unique())
     idx = {lab: i for i, lab in enumerate(wins)}
@@ -510,8 +524,9 @@ def gbdt_offset(prior: GBDTPrior, ro, rd, season, poss_o, poss_d, exclude=(), si
             for c, col in zip(feats, np.asarray(raw[j], dtype=float).T):
                 X[f"raw_{c}"] = col
         if extra is not None:
+            need = set(prior.features[side]) | {BIO_BINS[f][0] for f in prior.features[side] if f in BIO_BINS}
             for c in extra.columns:
-                if c in prior.features[side] and c not in X.columns:
+                if c in need and c not in X.columns:
                     X[c] = np.asarray(extra[c], dtype=float)
         if shots is not None:
             for c in (*SHOT_TOTALS, *SHOT_LEAGUE):
@@ -519,7 +534,7 @@ def gbdt_offset(prior: GBDTPrior, ro, rd, season, poss_o, poss_d, exclude=(), si
         if dredge is not None:
             for c in (*_dredge_cols()[0], *_dredge_cols()[1]):
                 X[c] = np.asarray(dredge[c], dtype=float)
-        if any(f in DERIVED or f in RATIOS or f in SHOTQ or f in DREDGE_ANY for f in prior.features[side]):
+        if _wants_derived(prior.features[side]):
             add_derived(X)
         g = prior.predict(side, X, exclude)
         w = np.maximum(np.asarray(poss, dtype=float), 0.0)

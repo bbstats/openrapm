@@ -367,6 +367,27 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
             S[f"tune501_b7_turnref_o_ffx{_s}"] = _replace(S["tune501_b7_turnref_o"], name=f"tune501_b7_turnref_o_ffx{_s}",
                                                           def_factors=1.0, factor_reml=True, factor_x3=True,
                                                           factor_lam_scale=float(_s))
+        # ---------------------------------------------------------------- who he is (bio.py, FINDINGS 26)
+        # height and weight from the bio feed, a constant per player.  Offline (prior_bench) -0.145 on the defensive
+        # line and -0.27 on the offensive one -- but binned to 2 in / 15 lb the defensive gain keeps 0.12 of it and the
+        # offensive one 0.03: on offense the pair is naming the player (the 22.2 trap), on defense it is physiology.
+        # So: defense fine and binned, both sides binned, both sides fine as the identification control.
+        S["tune501_b7_turnref_o_hw"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hw",
+                                                gbdt_features={"O": list(_SF2), "D": [*_FF2, *_SQ2, "height", "weight"]})
+        S["tune501_b7_turnref_o_h"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_h",
+                                               gbdt_features={"O": list(_SF2), "D": [*_FF2, *_SQ2, "height"]})
+        S["tune501_b7_turnref_o_hwc"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hwc",
+                                                 gbdt_features={"O": list(_SF2), "D": [*_FF2, *_SQ2, "height2", "weight15"]})
+        S["tune501_b7_turnref_o_hwb"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hwb",
+                                                 gbdt_features={"O": [*_SF2, "height2", "weight15"], "D": [*_FF2, *_SQ2, "height2", "weight15"]})
+        S["tune501_b7_turnref_o_hwbf"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hwbf",
+                                                  gbdt_features={"O": [*_SF2, "height", "weight"], "D": [*_FF2, *_SQ2, "height", "weight"]})
+        # and the draft slot (1-60, undrafted 61): -0.05 offline on top of the pair on either side
+        S["tune501_b7_turnref_o_hwbd"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hwbd",
+                                                  gbdt_features={"O": [*_SF2, "height2", "weight15", "draft_pick"],
+                                                                 "D": [*_FF2, *_SQ2, "height2", "weight15", "draft_pick"]})
+        S["tune501_b7_turnref_o_dp"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_dp",
+                                                gbdt_features={"O": [*_SF2, "draft_pick"], "D": [*_FF2, *_SQ2, "draft_pick"]})
         # the other bound: the defensive prior ALONE (the factor ridges at 1e6 leave no residual at all), so the
         # value of a defensive residual at team-game level is a number
         S["tune501_b7_turnref_o_dprior"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_dprior",

@@ -1,4 +1,15 @@
-# Handoff: the settled-context offensive prior shipped; the four-factor defence measured and declined
+# Handoff: the settled-context offensive prior shipped; the four-factor defence and the bio block measured
+
+**Measured 2026-09-07, latest: the prior's first non-box inputs -- height, weight, draft slot, tenure (FINDINGS
+26; the owner's "keep building the prior" direction).**  Height is the largest offline gain any column has
+produced here (-0.14 on the defensive prior; the pair -0.27 on offense) and the criterion reads it at zero.
+Two things explain that and both are measured: the fine height-weight pair NAMES the player (binned it keeps
+0.12 of the defensive gain and 0.03 of the offensive one; on the criterion the fine pair costs +0.20 at
+z 4.7), and the criterion's resolution for a shift shared by an archetype is about 0.015 (the shift test,
+26.5).  The defensive prior under-rates 6-10-and-taller players by a third of a point in nine windows of ten,
+with no era trend: the "era" question is an archetype question.  **Not shipped under the rulings; 3.7 puts
+the call to the owner, because the criterion is silent on attribution of this size by construction.**
+`bio.py`, the panel columns and the prediction path stay, tested.
 
 **Measured 2026-09-07, later the same day: HANDOFF 3.2, the defensive four-factor fit (FINDINGS 25).**  Built
 (`fastfit.factor_defense`, an identity test), measured in twelve forms, not shipped.  Full replacement of the
@@ -170,6 +181,7 @@ feature lists on either side -- without touching `config.yaml` permanently.
 | `scratch/trade_spm.py` / `trade_gbdt.py` | the trade-weighted SPM, linear and boosted, leave-window-out on the pair rows; the boosted one writes `outputs/csv/trade_delta_{O,D}.csv` |
 | `scratch/trade_maps.py` / `trade_pair.py` | the map terms on an existing dump with the control set; the paired test when a dump carries several maps (**the base is read at its SHIPPING map**; it used to take the first, the `&turn` one, and the "vs base" column was off by 0.09) |
 | **`fastfit.factor_defense`** / `factor_rows` / `points_per_factor` / `FACTOR_LAMS` / `MspiFast(def_factors=, factor_reml=, factor_x3=, factor_lam_scale=, factor_lams=, no_def_prior=)` | **the four-factor defence (25)**: four factor fits on the points layout, the prior split by zero-prior slopes, recombined with the row-level gradients; `factor_diag` on the system after a fit carries g, the shares, the ridges chosen.  `tests/test_factor_defense.py` (5) holds the identity |
+| **`src/eracoef/bio.py`** | **who he is (26)**: `player_bio(cfg)` (height, weight, draft_pick per player from `data/raw/bio`, cached at `data/cache/bio.parquet`), `season_tenure` / `tenure_inputs(roles, seasons, ids, exclude_seasons=)` (tenure with his main team, teams in the window; the held-out season skipped), `player_inputs`; `gbdt_prior.BIO_BINS` bins height and weight in both paths.  Panel columns via `scratch/add_bio_cols.py` (backup `.bak5`); `chain_offset` builds them from the training block.  `tests/test_bio.py` (5) |
 | `xshoot.expected_threes(seasons, cfg, wd)` | each row's expected opponent threes at the shooters' padded other-half rate: x3def's repricing as a function, used by `def_three_design` and by the repriced eFG factor |
 | `scripts/54_track.py` | the tracker: dump a system at K = 3 (timed), fit the map leave-one-season-out, score, log a row, redraw the chart.  `--systems=a,b "--maps=..." --label=...`; one dump per system |
 | `scratch/prior_bench.py` | **the 20-second pre-filter**: the prior's own leave-window-out fit per feature set, with the low-exposure stratum beside the pooled number.  `--q4 --loss= --delta= --sat= --past= --kmul=`, and a set may be written `shipD+russsh:blkrimsh` (add) or `shipD-blk+russ:blkrim` (REPLACE).  **Read 22.2 and 23.4 first: it is necessary, not sufficient, it has been wrong by 0.13, and the BASE LIST is part of the operating point** |
@@ -271,6 +283,15 @@ expensive part is deciding it was worth measuring.
 - **A prior shared out across sub-fits by FIXED shares leaves a persistent, uninformative residual** (25.5):
   the factor residual was more reliable year over year than the points residual (0.75 vs 0.71) and predicted
   worse.  Reliability is not information when the thing that persists is a mis-split prior.
+- **A static per-player pair can NAME the player, and the prior's own fit rewards that as if it were knowledge**
+  (22.2's trap, purest form): fine height + weight is -0.27 on the offensive prior's fit and +0.20 on the
+  criterion at z 4.7.  Bin any static player attribute before believing it, and read the binned-versus-fine
+  gap as the identification share (26.2).
+- **The criterion's resolution for a correction shared by an archetype is about 0.015** (26.5): moving every
+  6-10+ player's defense by 0.35 -- the size of the bias the prior's own fit shows -- moves it 0.015 unmapped,
+  0.003 mapped.  It cannot adjudicate attribution at that scale; it can veto a shift the wrong way (+0.06).
+  A candidate that reads 0.00 +/- 0.01 with a measured attribution gain is a ruling for the owner, not a
+  rejection.
 - **The tracker's `seconds` for a system that computes shooter rates or REML per fit runs 4-7x the board's**
   (ffx 427 s against 58 s); measure the winner alone before quoting a time.
 - Long bash heredocs still fail in this shell; write patch scripts with the Write tool.
@@ -535,6 +556,22 @@ mechanism of 22.2, which is worth knowing independently.  **And it is what makes
 the window pairs), and the prediction-time covariate becomes the same quantity instead of a block-bracketed
 cousin of it.
 
+### 3.7 The owner's call: height and weight (binned) in the prior, for attribution (FINDINGS 26)
+
+`tune501_b7_turnref_o_hwb` -- height2 and weight15 on both sides -- is zero on the criterion (-0.006, z -0.32),
+narrows the archetype gap against the consensus on both sides (defense 0.219 -> 0.185, offense -0.316 ->
+-0.307), costs 0.008 of defensive agreement, and corrects a bias the record can now show in every era: the
+defensive prior under-rates 6-10-and-taller players by a third of a point per 100.  The criterion cannot see
+a correction of that shape (its resolution is 0.015) and the shift test says the direction is right.  Under
+Part 0 the tie goes to the board.  If the board is for attribution as well as forecasting, this is the
+cheapest attribution gain on the table and the fine pair is never the form (it names the player).  To ship:
+`gbdt.features_full_O` / `_D` += `height2, weight15`, the tracker table for `hwb` to `calmap_ship.parquet`,
+`08_ratings.py`, the floors.  **What the owner asked for beyond this and is not yet measured:** the padding
+(pad_k, pad_target were swept in 21 and are in the registry), a booster re-tune with any new column in (the
+625-trial protocol of 22.7), aggregations the tree cannot make from the 13 rates that are not yet in `DERIVED`
+/ `RATIOS` (most linear and ratio forms are), and a team-context feature that is not a one-hot -- the
+turnover/tenure machinery is the safe form of that and tenure was not wanted offline.
+
 ### 3.6 Still open, not scheduled
 
 * **TabFM** (`google/tabfm-1.0.0-jax`): installs and downloads (5.7 GB; point `HF_HOME` at `A:`), but the
@@ -549,6 +586,8 @@ cousin of it.
   into a dead name.  The site is back at `https://bbstats.github.io/openrapm/`, https enforced.  To turn the
   domain on: four GitHub `A` records + a `www` CNAME at Porkbun FIRST, then re-add `docs/CNAME` on `main`,
   wait for the cert, then `gh api -X PUT repos/bbstats/openrapm/pages -F https_enforced=true`.
+* Never re-run, from 26: fine (unbinned) height and weight in the prior on either side; tenure and n_teams as
+  prior features; the draft slot alone; the play-by-play block counters on top of height.
 * Never re-run, from 25: the four-factor defence with the fixed-share prior split at any ridge, raw or
   repriced eFG, full or half blend; REML over the factor ratio; factor ridges chosen on a player-level
   split-half read.

@@ -3373,3 +3373,126 @@ on the one half that matters; FINDINGS 15's a-priori ridges, or a once-selected 
 The four-factor defense with the fixed-share prior split, at any ridge (FINDINGS 15's, REML 1d or 2d, x0.62
 to x32), raw or repriced eFG, full or half blend; the ridges tightened past REML on a player-level split-half
 read (section 3's trap).
+
+## 26. Who he is: height, weight, draft slot and tenure in the prior -- the largest offline gain ever, and what the criterion can and cannot see
+
+Written 2026-09-07.  The owner's direction: keep building the prior -- aggregate anything the booster can
+use, a cleaner "true defense" signal, tenure with a team without a one-hot of the team, and the era question
+(Roy Hibbert, valuable and then not).  This section is the first block of that: the inputs that are not box
+rates at all.  Lower is better; "vs board" is candidate minus `tune501_b7_turnref_o` (110.5693).
+
+### 1. What was built (`src/eracoef/bio.py`, `scratch/add_bio_cols.py`, `tests/test_bio.py`)
+
+`player_bio` reads `data/raw/bio` (30 seasons, 0.5% missing) into one row per player: **height** (inches),
+**weight**, **draft_pick** (1-60, undrafted and unknown 61), the median over his seasons.  `tenure_inputs`
+reads the roles table (one row per player-season-team): his main team per season is the one he played the
+most possessions for, **tenure** counts consecutive seasons with it including this one, possession-weighted
+over the window's seasons, and **n_teams** is the distinct teams in the window.  A held-out season's rosters
+are skipped (`exclude_seasons`) so the chain steps over H.  The five columns are in the panel (`.bak5`) and
+`spm.chain_offset` builds them from the training block at prediction time; `gbdt_prior.BIO_BINS` bins
+height to 2 inches and weight to 15 pounds in both paths (`height2`, `weight15`).  Five tests.
+
+### 2. The prior's own fit (`scratch/prior_bench.py`, leave-window-out, APM target, win_decay 0.3)
+
+| added to the shipped line | defense (23 names, shipped booster) | low-exposure | offense (43 names, q4) | low-exposure |
+|---|---|---|---|---|
+| height | **-0.137** | -0.266 | -0.021 | +0.012 |
+| height, weight | **-0.145** | -0.416 | **-0.272** | -0.632 |
+| draft_pick | -0.016 | -0.001 | -0.050 | -0.066 |
+| tenure, n_teams | +0.032 | +0.113 | +0.036 | +0.025 |
+| all five | -0.229 | -0.474 | -0.295 | -0.692 |
+| height2, weight15 (binned) | -0.124 | -0.248 | -0.031 | -0.052 |
+| a 6-9-or-taller flag alone | -0.007 | -0.094 | +0.002 | +0.048 |
+| height, weight, draft_pick | -0.195 | -0.449 | | |
+| height2, weight15, draft_pick | | | -0.087 | -0.077 |
+| height, weight + russ, blkrim, goalt | -0.018 more | -0.012 | | |
+| height, weight + the block SHAPES | +0.000 more | | | |
+
+Height alone on defense is the largest offline gain any single column has ever produced here (the shot-quality
+block was -0.05; the false Dredge read -0.050).  **The binning is the diagnostic.**  Height and weight
+together name a player almost uniquely; binned they cannot.  On defense the bins keep 0.124 of 0.145 -- the
+gain is physiology.  On offense they keep 0.031 of 0.272 -- the gain is identification, the 22.2 trap in
+its purest form: a static pair that identifies the player lets the booster read his other-window target off
+his identity.  Tenure is not wanted offline on either side and was not taken further.  The play-by-play
+block counters on top of height are what they were without it (-0.018), so height does not unlock them.
+
+### 3. The criterion
+
+| system | what | criterion | vs board | z | wins |
+|---|---|---|---|---|---|
+| `tune501_b7_turnref_o` | the board | 110.5693 | | | |
+| `..._hw` | defense + height, weight (fine) | 110.6356 | +0.066 | 2.94 | 7/28 |
+| `..._hwbf` | both sides + height, weight (fine) | 110.7658 | **+0.197** | **4.66** | 9/28 |
+| `..._h` | defense + height | 110.5798 | +0.010 | 0.40 | 14/28 |
+| `..._hwc` | defense + height2, weight15 | 110.5728 | +0.004 | 0.09 | 13/28 |
+| `..._hwb` | both sides + height2, weight15 | 110.5635 | -0.006 | -0.32 | 15/28 |
+| `..._hwbd` | both sides + height2, weight15, draft_pick | 110.5729 | +0.004 | 0.17 | 13/28 |
+| `..._dp` | both sides + draft_pick | 110.6112 | +0.042 | 1.78 | 9/28 |
+
+The fine pair HURTS, on both sides at z 4.7: the identification the bins diagnosed is real and it costs.
+The binned forms, height alone and the draft slot are zero.  Consensus screen for `hwb`: total 0.795
+against 0.802, defense 0.750 against 0.758, the defensive gap against bigness 0.185 against 0.219 and the
+offensive one -0.307 against -0.316.
+
+### 4. The archetype read (the "era" question), and it is not an era
+
+The shipped prior's leave-window-out residual (target minus prior, APM target, raw sign, so negative on
+defense means "better than the box line says"), possession-weighted, by window and height:
+
+| window | D: under 6-6 | D: 6-6 to 6-9 | **D: 6-10 and taller** | O: under 6-6 | O: 6-10+ |
+|---|---|---|---|---|---|
+| 1997-1999 | +0.05 | +0.39 | **-0.57** | +0.10 | +0.20 |
+| 2000-2002 | +0.16 | +0.17 | **-0.30** | +0.39 | +0.13 |
+| 2003-2005 | +0.13 | +0.12 | **-0.37** | -0.02 | +0.07 |
+| 2006-2008 | +0.22 | +0.10 | -0.05 | +0.07 | -0.05 |
+| 2009-2011 | +0.17 | +0.06 | **-0.49** | +0.18 | +0.02 |
+| 2012-2014 | -0.06 | -0.17 | -0.24 | +0.24 | -0.13 |
+| 2015-2017 | -0.07 | +0.08 | **-0.32** | +0.06 | -0.09 |
+| 2018-2020 | +0.05 | +0.05 | **-0.34** | -0.06 | -0.34 |
+| 2021-2023 | +0.08 | +0.18 | -0.01 | -0.10 | +0.21 |
+| 2024-2026 | +0.25 | +0.12 | **-0.51** | -0.19 | +0.45 |
+
+**The defensive prior under-rates tall players by about a third of a point per 100 in nine windows of ten,
+and over-rates short ones, with no era trend at all.**  The target's sd is 1.6, so this is a fifth of it,
+persistent across thirty seasons.  That is the "true defense" the owner is asking about, and it is what
+height fixes in the prior's own fit.  On offense the pattern is smaller and changes sign; the two most recent
+windows over-rate tall players' offense, which is the only era-shaped thing in the table and which a height
+feature would also carry.  Hibbert's case is not here: the prior does not err by era within an archetype, it
+errs by archetype in every era.
+
+### 5. What the criterion can see: the shift test
+
+The board's own dump, every 6-10-and-taller player's defensive rating moved by a constant, re-scored
+(`scratch/`-style, in the session):
+
+| shift on the 6-10+ (25% of rows) | unmapped | mapped |
+|---|---|---|
+| -0.50 | -0.002 | +0.022 |
+| **-0.35** (what section 4 says is missing) | **-0.015** | **+0.003** |
+| -0.20 | -0.016 | -0.006 |
+| +0.35 (the wrong way) | +0.079 | +0.058 |
+| -0.35 on a RANDOM HALF of them | -0.014 | +0.002 |
+| +0.10 on everyone under 6-10 | +0.000 | -0.007 |
+
+The wrong direction costs 0.06-0.08 and the right one buys 0.015 at most: the board's tall defenders ARE
+under-rated, in the direction the prior's fit says, and correcting it is worth about 0.015 at team-game
+level -- the criterion's whole resolution for a correction of this shape, which is why the height systems
+read 0.00 +/- 0.01.  A quarter of the players moved by a fifth of a rating sd is a big change to a board and
+a small one to a team-game forecast, because every lineup carries about one of them.
+
+### 6. Verdict, and the owner's call
+
+Not shipped under the standing rulings: the criterion cannot distinguish the binned height systems from the
+board, and a tie goes to the simpler one.  But this is the first candidate where the record can say WHY the
+criterion is silent, and it is not because the feature is empty: the prior's own fit puts it at -0.14, the
+archetype table shows the bias it corrects in every era, the shift test confirms the direction on the
+criterion, and the consensus's archetype gap narrows on both sides.  The criterion decides team-game
+accuracy; a correction to who-gets-the-credit of this size is below its floor.  **If the owner wants the
+attribution, `tune501_b7_turnref_o_hwb` (both sides, binned) is the form: zero on the criterion, the fine
+pair never (it names the player and costs 0.20).**  That is a ruling about what the board is for, and it is
+the owner's; section 16 framed the same trade.
+
+### 7. Never re-run
+
+Fine height and weight on either side (identification, +0.07 / +0.20); tenure and n_teams as prior features
+(offline +0.03 both sides); the draft slot alone (+0.04); the play-by-play block counters on top of height.
