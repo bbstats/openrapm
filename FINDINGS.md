@@ -3504,3 +3504,112 @@ ten of ten floors: consensus 0.784 / 0.787 / 0.751 (the defensive agreement 0.00
 spread 1.31, the offensive gap against bigness -0.300 (from -0.311) and the defensive one +0.186 (from
 +0.219).  The attribution moved the way section 4 said it would and the forecast did not move at all.
 `docs/data/ratings.json` rebuilt.
+
+## 27. The investigator: who the board is wrong about out of season, and a score that can see it
+
+Written 2026-09-07, the owner's direction: "act like investigators -- find the lineups we misrepresent most,
+and ideally how a single player is off: when this player is added or subtracted from all of his lineups we
+tend to be off the most."  Built as `src/eracoef/investigate.py` and `scripts/57_investigate.py`; first run
+on the shipped board `tune501_b7_turnref_o_hwb`.
+
+### 1. What it does
+
+For every held-out season H the shipped system's tracker dump for H (fitted without H) under the shipping
+map (fitted without H) predicts every stint row of H exactly as the criterion does, level refit and all.  The
+residual r = actual - predicted, points per 100 in the row's offense's terms, is what the board did not know.
+Three readings of it, in order of how much of the miss they put on one player:
+
+* **lineups** -- five-man units with the largest possession-weighted mean residual over their rows.
+* **on-court** -- per player and side, the weighted mean residual of his rows: every lineup with him against
+  everything without him.  Blames him for his teammates.
+* **the residual ridge** -- r regressed on [Z_O | Z_D] with a ridge of 2000 possessions: the residual RAPM,
+  the on-court number with the teammates' share taken out.  The same-four-plus-and-minus-him question asked
+  of every lineup at once; the column to sort by, with a standard error from the ridge and a z pooled across
+  seasons by inverse variance (`pooled`).
+
+Signs are the board's: `miss_o`, `miss_d` are points per 100 the board should ADD to that side.  A planted
+miss is recovered, blamed on the teammates by the on-court mean, and found in its lineups
+(`tests/test_investigate.py`).  Outputs: `outputs/investigate_<system>.parquet` (player-seasons, with the
+mapped rating and prior he was scored with), `investigate_pooled_<system>.csv`, `investigate_lineups_<system>.csv`.
+
+### 2. The first report: both tails are compressed, and the names are the ones you would expect
+
+Pooled across the 28 held-out seasons, 1000+ possessions a season, the most UNDER-rated on offense: Curry
++1.52 (z 4.2, 15 seasons), LeBron +1.19 (4.0, 22), Jokic +1.71 (3.9, 10), Shaq +1.25, Andre Miller +1.13,
+Harden +1.17, Towns +1.40, Nash +1.03, Kawhi +1.27, Paul +0.91, Nowitzki +0.90, Ginobili, Lillard, Booker,
+Gilgeous-Alexander, Kobe +0.80.  The most OVER-rated: Michael Curry -1.79, Johan Petro, Samaki Walker, Kevin
+Willis, Amaechi, Foyle, Olowokandi, Steven Hunter -- low-usage bigs and defenders, at z -2.3 to -3.3.  On
+defense the most under-rated: Garnett +1.31 (z 4.2, 19 seasons), Nene +1.28, Caruso +1.78, Shawn Bradley,
+Draymond +1.27, Gobert +1.25, Jason Collins, Rasheed Wallace, Iguodala +1.00, Embiid, Duncan +0.83, Odom.
+The most over-rated: Trae Young -1.43, Torrey Craig, Bargnani -1.19, Kevin Martin, LaMelo, Towns -1.05,
+Al Jefferson, Sexton, Redd, Calderon, Jason Williams, Karl Malone, Faried, Boozer, Stoudemire.
+
+Across player-seasons the miss is flat over nine deciles of the rating and jumps in the top one: offense
+-0.02 to +0.10 for deciles one to nine and **+0.70** for the tenth (mean mapped rating 5.4); defense +0.36
+for the tenth.  And it follows the PRIOR, not the on-court part: a weighted regression of the miss on the
+prior and on rating-minus-prior gives 0.18 on the prior and 0.035 on the residual part (offense), 0.21 and
+-0.08 (defense).  **The prior is compressed at the top, on both sides, and the ridge and the map do not undo
+it.**  Age adds nothing (the K = 3 bracket's concavity is not the mechanism); exposure does (+0.22 per
+1,000 possessions on offense given the rating) -- the map's exposure terms fixed the mean and not the tail.
+
+The worst single player-seasons are large and specific: Stanley Johnson 2019 -6.4 on offense (on-court -10.7
+over 2,537 possessions; the board had him +2.0 with a prior of -0.8), Wade 2010 +5.0, Kobe 2006 +4.5,
+Harden 2015 +4.4, Jokic 2025 +4.1 (board 7.9, prior 4.2); on defense Rodney Rogers 1998 -5.8, Dejounte
+Murray 2018 +5.3, Vujacic 2008 -4.9, Siakam 2025 +4.7.  The worst five-man units miss by 20-30 per 100 over
+200-400 possessions (the 2001 Magic's Armstrong-Outlaw-Amaechi-McGrady-Garrity -30 on defense; the 2016
+Warriors' death lineup +25 on offense over 383 possessions), which is the size of unit-level noise at 200
+possessions and also where the true "same four" comparison would start.
+
+### 3. The criterion cannot see it, and it was tested
+
+Every candidate repair of the shape was scored on the existing dump (`scratch/maps.py`, no refits): the map
+family made cubic, sinh, hinge or exponential on either side or both (+0.015 to -0.002), a bend in the prior's
+re-weighting (`prior2`) or an exposure-dependent one (`priorsat`) on offense, on both sides, or both
+(-0.02 at z -0.8 at best).  Nothing.  This is 26.5 again: a correction that moves a few stars by a point per
+100 is worth 0.01-0.02 at team-game level, inside the criterion's noise.
+
+### 4. The investigator's score
+
+So the investigator's own number is made into one: `investigate.attributable` -- the out-of-season residual's
+possession-weighted variance that the player ridge can attribute to players (the total minus what is left
+after the ridge).  A board with better attribution leaves less for the ridge to find; it is external, held
+out, and legal to select on for the same reason the criterion is.  `scratch/investigate_cmp.py` scores
+several tracked systems on the same rows, paired by season:
+
+| system | criterion vs board | investigator: player-attributable | vs shipped | z | wins |
+|---|---|---|---|---|---|
+| `tune501_b7_turnref_o_hwb` (shipped) | | 41.337 | | | |
+| `tune501_b7_turnref_o` (the board before it) | +0.006 (z 0.3) | 41.385 | +0.048 | 1.78 | 11/28 |
+| `..._hwbf` (fine height and weight: names the player) | +0.197 (z 4.7) | 41.921 | +0.585 | **8.34** | 0/28 |
+| `..._nodp` (no defensive prior) | +0.457 (z 7.6) | 42.123 | +0.786 | **12.8** | 0/28 |
+| `..._dprior` (the defensive prior alone) | +1.913 (z 10.2) | 44.741 | +3.404 | 16.2 | 0/28 |
+| `..._ffx5` (the four-factor half blend) | -0.040 (z -0.9) | 41.493 | +0.157 | 2.30 | 12/28 |
+
+It agrees in sign with the criterion on every case the criterion was sure of and is two to three times as
+sharp there (z 8 against 4.7, 13 against 7.6); where the criterion was silent it reads the shipped board's
+height and weight as a small attribution gain (z 1.8) and the four-factor blend as an attribution LOSS
+(z 2.3) -- which is what 25.5 argued from the residual's reliability.  Total residual variance moves the same
+way in every row, so it is not a re-labelling of the criterion's noise.
+
+### 5. What to do with it
+
+1. **Run both.**  The criterion decides forecasting; this decides attribution; a candidate should not lose
+   either.  `54_track.py` then `investigate_cmp.py` on the same dump is two minutes.
+2. **The top of the board is the target.**  The prior is compressed at the top on both sides and neither the
+   ridge nor any map shape reaches it.  What would: a prior trained on a less shrunk target at the top
+   (the blend weight is a global knob; the compression is not global), or per-player shrinkage keyed on the
+   prior's own confidence (HANDOFF 3.4), scored on THIS number since the criterion cannot see it.
+3. **Read the names, not just the table.**  Stanley Johnson 2019 and Rodney Rogers 1998 are the size of
+   misses a feature or a context could explain; Curry and Garnett are a shape.
+4. The true same-four comparison -- lineups differing in exactly one player, the residual difference
+   attributed to the swap -- is a refinement on `lineups` if the ridge's answer needs a second opinion for a
+   named player.  Not built.
+
+### 6. Traps
+
+* A residual ridge with `lam` 2000 shrinks a 2,000-possession player-season halfway to zero; the pooled z is
+  honest about it (the se is the ridge's own), a single season's miss is not the whole miss.
+* The residual is in the offense's terms on every row; the defensive coefficients are flipped once, in
+  `season_table` and in `lineups`.  Do not flip them again.
+* `investigate_cmp.py` compares dumps under ONE map family fitted per system; a system whose shipped map
+  family differs is scored under the family given, not its own.

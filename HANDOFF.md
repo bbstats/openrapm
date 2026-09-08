@@ -190,6 +190,7 @@ feature lists on either side -- without touching `config.yaml` permanently.
 | `scratch/trade_spm.py` / `trade_gbdt.py` | the trade-weighted SPM, linear and boosted, leave-window-out on the pair rows; the boosted one writes `outputs/csv/trade_delta_{O,D}.csv` |
 | `scratch/trade_maps.py` / `trade_pair.py` | the map terms on an existing dump with the control set; the paired test when a dump carries several maps (**the base is read at its SHIPPING map**; it used to take the first, the `&turn` one, and the "vs base" column was off by 0.09) |
 | **`fastfit.factor_defense`** / `factor_rows` / `points_per_factor` / `FACTOR_LAMS` / `MspiFast(def_factors=, factor_reml=, factor_x3=, factor_lam_scale=, factor_lams=, no_def_prior=)` | **the four-factor defence (25)**: four factor fits on the points layout, the prior split by zero-prior slopes, recombined with the row-level gradients; `factor_diag` on the system after a fit carries g, the shares, the ridges chosen.  `tests/test_factor_defense.py` (5) holds the identity |
+| **`src/eracoef/investigate.py`** / **`scripts/57_investigate.py`** / `scratch/investigate_cmp.py` | **the investigator (27)**: `residual_ridge` (the same-four question of every lineup at once), `on_court`, `lineups`, `season_table`, `pooled`, and **`attributable`, the second score**.  `57_investigate.py [--system=] [--lam=2000] [--min-poss=1000] [--top=20]` runs the shipped board over the 28 held-out seasons in a minute and writes `outputs/investigate_*`; `investigate_cmp.py <sys1> <sys2> ...` pairs tracked systems on the score.  `tests/test_investigate.py` (4) |
 | **`src/eracoef/bio.py`** | **who he is (26)**: `player_bio(cfg)` (height, weight, draft_pick per player from `data/raw/bio`, cached at `data/cache/bio.parquet`), `season_tenure` / `tenure_inputs(roles, seasons, ids, exclude_seasons=)` (tenure with his main team, teams in the window; the held-out season skipped), `player_inputs`; `gbdt_prior.BIO_BINS` bins height and weight in both paths.  Panel columns via `scratch/add_bio_cols.py` (backup `.bak5`); `chain_offset` builds them from the training block.  `tests/test_bio.py` (5) |
 | `xshoot.expected_threes(seasons, cfg, wd)` | each row's expected opponent threes at the shooters' padded other-half rate: x3def's repricing as a function, used by `def_three_design` and by the repriced eFG factor |
 | `scripts/54_track.py` | the tracker: dump a system at K = 3 (timed), fit the map leave-one-season-out, score, log a row, redraw the chart.  `--systems=a,b "--maps=..." --label=...`; one dump per system |
@@ -301,6 +302,9 @@ expensive part is deciding it was worth measuring.
   0.003 mapped.  It cannot adjudicate attribution at that scale; it can veto a shift the wrong way (+0.06).
   A candidate that reads 0.00 +/- 0.01 with a measured attribution gain is a ruling for the owner, not a
   rejection.
+- **The criterion decides forecasting and is nearly blind to attribution; the investigator's score sees
+  attribution and agrees with the criterion where it is sure** (27.4).  A candidate that reads zero on the
+  criterion is not settled until `investigate_cmp.py` has read it; one that reads zero on both is.
 - **The tracker's `seconds` for a system that computes shooter rates or REML per fit runs 4-7x the board's**
   (ffx 427 s against 58 s); measure the winner alone before quoting a time.
 - Long bash heredocs still fail in this shell; write patch scripts with the Write tool.
@@ -573,11 +577,24 @@ it).  It reads the shipped system's tracker dump, predicts every held-out stint 
 without that season, and reports the residual three ways.  Outputs: `outputs/investigate_<system>.parquet`
 (player-seasons: miss per side with its se, the on-court miss, the mapped rating and prior he was scored
 with), `investigate_pooled_<system>.csv` (per player across seasons, z), `investigate_lineups_<system>.csv`.
-What to do with the first run is section 27 (or the summary at the end of the pass if 27 is not yet
-written): sort the pooled table by |z|, read the names, and ask of each whether the miss sits in the prior
-(box line says X, court says Y -- a feature question) or in the residual (the ridge could not see it -- an
-estimator or a context question).  The true "same four" matched version -- lineups differing in exactly one
-player -- is a refinement on top of `lineups` if the ridge's answer needs a second opinion.
+**The first run (FINDINGS 27) says both tails are compressed**: out of season the board under-rates Curry,
+LeBron, Jokic, Shaq, Harden, Nash by 1-1.5 per 100 (z 3-4 over 10-22 seasons each) and Garnett, Draymond,
+Gobert, Duncan, Caruso on defense, and over-rates low-usage bigs and Trae Young, Bargnani, Kevin Martin.
+The miss is flat over nine deciles of the rating and +0.7 in the top one, and it follows the PRIOR (0.18 per
+point) not the on-court part (0.035): the prior is compressed at the top on both sides.  No map shape
+reaches it (cubic, sinh, hinge, expo, prior2, priorsat: all inside 0.02) because the criterion cannot see a
+few stars moving a point (26.5).
+
+**So there is a second score: `investigate.attributable`** -- the out-of-season residual variance the player
+ridge can put on players -- and `scratch/investigate_cmp.py` scores tracked systems on it, paired by season.
+It agrees in sign with the criterion wherever the criterion was sure (the fine bio pair worse at z 8.3, no
+defensive prior at z 12.8, prior-only at z 16) and reads where the criterion is silent (the shipped
+height-weight board better than its predecessor at z 1.8; the four-factor half blend WORSE at z 2.3).
+**Run both from now on**: the criterion decides forecasting, this decides attribution, a candidate should
+lose neither.  What to aim at: the top of the board -- a prior less compressed at the top (the target's
+shrinkage is global, the compression is not), or per-player shrinkage keyed on the prior's confidence (3.4),
+scored on this number.  The true "same four" matched version -- lineups differing in exactly one player --
+is a refinement on `lineups` if the ridge's answer needs a second opinion for a named player.
 
 ### 3.7 DONE: height and weight (binned) in the prior, shipped 2026-09-07 (FINDINGS 26)
 
