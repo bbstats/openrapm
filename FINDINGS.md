@@ -3613,3 +3613,102 @@ way in every row, so it is not a re-labelling of the criterion's noise.
   `season_table` and in `lineups`.  Do not flip them again.
 * `investigate_cmp.py` compares dumps under ONE map family fitted per system; a system whose shipped map
   family differs is scored under the family given, not its own.
+
+## 28. Plus-minus as an input: his own past on-court record in the prior, leak-free, and the first gain on both instruments
+
+Written 2026-09-07.  The owner: "find the gap ... I'm inclined to think we might even just use plus minus as an
+input variable, like DRIP and DARKO do (and PIPM did) -- but if we add it in we will be extremely smart about
+how we do it."  Lower is better; "vs board" is candidate minus `tune501_b7_turnref_o_hwb` (110.5635, the
+board shipped in 26) on the criterion, and minus its 41.337 on the investigator's score (27.4).
+
+### 1. The gap, as far as it can be named
+
+The investigator (27) says the board under-rates the top of both sides out of season and that the miss
+follows the PRIOR (0.18 per point of prior; 0.035 per point of on-court residual).  Two mechanisms were
+tried on the numbers and neither is the whole story:
+
+* **Shrinkage.**  The ridge takes roughly lam / (poss + lam) of a player's true residual away -- 46% for a
+  13,500-possession star -- and the map's scale gives it back on average but not at the top.  A proxy for
+  "what the ridge removed" has no slope on the miss (0.001), but the proxy is noise-dominated below 5,000
+  possessions and says nothing either way.
+* **The target regresses.**  The prior predicts a player's value in his OTHER windows from this window's box
+  line, and a peak's neighbours are lower than the peak: E[other-window value | a star's box line] is below
+  his current value by construction.  The ridge is what should close that, and it closes half of it.
+
+And one more finding, from splitting the miss by what changed between the block and H: on offense a player
+whose share of his team's possessions (playing time, the prior's "role" input, not his position) ROSE by ten points in H is under-rated by +0.30, one whose share FELL
+by ten points is over-rated by -0.38 (a weighted slope of +1.85 per unit of share), and movers sit 0.33 below
+stayers; on defense a fifth of that.  That is coaches giving minutes to whoever is playing well -- the
+within-season selection the record already caught as a leak when H's share was tried as a covariate (the
+HShare / HShareA control) -- and it is the noise floor of any pre-season rating, not a gap a prior can close.
+
+### 2. What was built (`gbdt_prior.PAST`, `past_features`, `past_inputs`; `tests/test_past.py`)
+
+Three features per side: **`past_apm`**, his possession-weighted APM (raw sign, per side) over the panel
+windows BEFORE this one, each discounted by 0.5 per window of distance; **`past_poss`**, the discounted
+possessions behind it in thousands, so the booster can weigh a 40,000-possession record against a
+900-possession one instead of being handed a shrunk number; and **`past_rapm`**, the same on the ridge-shrunk
+RAPM_1.  A player with no past reads 0 / 0 / 0.  The decay is a priori, not tuned.
+
+**Leak-free by construction, and the pooled rows refuse it.**  A pooled training row's target is the
+player's value over his OTHER windows -- which CONTAIN the past windows -- so a past-APM feature on a pooled
+row is the target's own ingredients.  `training_rows` raises on any PAST name.  The features live on PAIR
+rows (24.4): a pair from window w to target window w' takes the past of w with w' left out as well as the
+exclusion set, exactly.  Any PAST feature switches a `GBDTPrior` to pair rows; the pair-row form without it
+was the -0.010 control of 24.5.  At prediction time (`past_inputs`, in `chain_offset` per side) the past is
+every panel window before the block's own windows, those excluded -- so for a held-out H whose block
+brackets it, the windows containing H are out, and the shipped board (no H) sees everything before its
+block.  A merge-and-bincount build; the exact values are in the tests.
+
+### 3. The criterion, and the investigator's score, paired over the same 28 seasons
+
+| system | what | criterion | vs board | z | wins | investigator | vs board | z | wins | 28 fits |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `tune501_b7_turnref_o_hwb` | the board | 110.5635 | | | | 41.337 | | | | 72 s |
+| `..._hwb_past` | all three, both sides | 110.4640 | -0.100 | -2.22 | 17/28 | 41.049 | -0.287 | -4.99 | 22/28 | 175 s |
+| **`..._hwb_pasta`** | **APM + possessions, both sides** | **110.4566** | **-0.107** | **-2.29** | 17/28 | **41.041** | **-0.296** | **-5.60** | 24/28 | 176 s |
+| **`..._hwb_pasto`** | **all three, OFFENSE only** | 110.4785 | -0.085 | -2.46 | 20/28 | 41.132 | -0.204 | -4.32 | 23/28 | 149 s |
+| `..._hwb_pastd` | all three, defense only | 110.5442 | -0.019 | -0.63 | 17/28 | 41.281 | -0.055 | -1.60 | 17/28 | 149 s |
+
+**The first candidate since the estimator search that is significant on the criterion, and the first ever
+significant on both instruments.**  The gain is offensive: defense alone is not distinguishable from zero on
+either, and both-sides against offense-only is not either (0.02 on the criterion).  The shrunk twin
+(`past_rapm`) adds nothing over APM with its possessions.
+
+The consensus screen (mapped, 475 players): `pasta` total 0.799 / offense 0.806 / defense 0.745, defensive
+spread 1.32, the offensive gap against bigness **-0.350** (the board -0.307), defensive +0.192.  Under the map
+families that re-weight the prior on defense (`prior`, `prior2`, `priorsat`) the investigator's reading of
+both boards is unchanged to the third decimal; without the offensive prior term the candidate's gain shrinks
+to -0.19: the map's prior term is doing real work now that the prior carries an on-court record.
+
+### 4. Where the gain is NOT: the top
+
+The investigator run on `pasta`: the offensive miss by rating decile goes -0.03, -0.11, -0.18, +0.05, +0.07,
+-0.06, -0.03, +0.09, +0.15, **+0.64** against +0.70 on the board; the same names lead the under-rated list
+(LeBron +1.23, Curry +1.41, Jokic +1.56, Shaq, Nash, Harden).  The past record lifts some stars and lowers
+others -- on the 2021-2024 block LeBron's prior fell 5.9 to 3.9, Doncic's rose 5.2 to 6.2 -- but the top
+decile is compressed by 0.64 where it was 0.70.  The gain on both instruments is in the body of the
+distribution: veterans whose on-court record pins them better than their box line alone.  The compression at
+the top is the target's regression (section 1) and the ridge's shrinkage of the residual, and a prior input
+cannot reach it; per-player shrinkage keyed on exposure, scored on the investigator, is what remains (HANDOFF
+3.4).
+
+### 5. Shipping
+
+**SHIPPED 2026-09-07: `tune501_b7_turnref_o_hwb_pasto`** -- `past_apm`, `past_poss`, `past_rapm` on the OFFENSIVE
+list (`gbdt.features_full_O`), defense as it was; `cal_map` on the candidate's tracker table copied to
+`outputs/calmap_ship.parquet`.  Offense-only over both-sides by Part 0 ruling 1's tie-break: the criterion
+cannot separate them (0.02) and offense-only is simpler, 15% faster to fit and leaves the defensive prior
+pooled.  **110.4785 on the criterion, -0.085 at z -2.46 over 20 of 28; -0.204 on the investigator at z -4.32
+over 23 of 28.**  Nine of ten floors; consensus **0.801 / 0.792 / 0.760**, the best total and the best
+defensive agreement any shipped board has posted, defensive spread 1.27, the narrowest.  The one miss is
+the offensive gap against bigness, -0.344 against 0.32: the top of the offensive board rising against the
+bigs, which is what the out-of-season data asks for on both instruments and the one axis on which the
+consensus disagrees.  Re-based 0.32 -> 0.35 with the reason in the test; twice re-based on one floor is a
+pattern the owner should look at, and the both-sides form (`pasta`) would additionally have missed the
+defensive floor by 0.005.  `docs/data/ratings.json` rebuilt.
+
+### 6. Never re-run
+
+PAST on defense alone; the shrunk twin `past_rapm` as a fourth column beside APM and its possessions; PAST
+on pooled rows (it raises).

@@ -388,6 +388,21 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                                                                  "D": [*_FF2, *_SQ2, "height2", "weight15", "draft_pick"]})
         S["tune501_b7_turnref_o_dp"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_dp",
                                                 gbdt_features={"O": [*_SF2, "draft_pick"], "D": [*_FF2, *_SQ2, "draft_pick"]})
+        # ---------------------------------------------------------------- plus-minus as an input (FINDINGS 28)
+        # his own on-court record before the block (gbdt_prior.PAST: discounted APM, the possessions behind it,
+        # and the shrunk RAPM_1), on pair rows so nothing of the target is in the feature.  The investigator (27)
+        # says the prior is compressed at the top on both sides; this is the information that would lift it.
+        from .gbdt_prior import PAST as _PAST
+        _HW = ["height2", "weight15"]
+        S["tune501_b7_turnref_o_hwb_past"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hwb_past",
+                                                      gbdt_features={"O": [*_SF2, *_HW, *_PAST], "D": [*_FF2, *_SQ2, *_HW, *_PAST]})
+        S["tune501_b7_turnref_o_hwb_pasto"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hwb_pasto",
+                                                       gbdt_features={"O": [*_SF2, *_HW, *_PAST], "D": [*_FF2, *_SQ2, *_HW]})
+        S["tune501_b7_turnref_o_hwb_pastd"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hwb_pastd",
+                                                       gbdt_features={"O": [*_SF2, *_HW], "D": [*_FF2, *_SQ2, *_HW, *_PAST]})
+        # APM alone (no shrunk twin), and the pair-row control with no PAST at all on defense (offense already pairs)
+        S["tune501_b7_turnref_o_hwb_pasta"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hwb_pasta",
+                                                       gbdt_features={"O": [*_SF2, *_HW, "past_apm", "past_poss"], "D": [*_FF2, *_SQ2, *_HW, "past_apm", "past_poss"]})
         # the other bound: the defensive prior ALONE (the factor ridges at 1e6 leave no residual at all), so the
         # value of a defensive residual at team-game level is a number
         S["tune501_b7_turnref_o_dprior"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_dprior",

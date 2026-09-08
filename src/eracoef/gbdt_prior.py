@@ -247,6 +247,53 @@ def add_shotq(df: pd.DataFrame) -> pd.DataFrame:
 BIO_BINS = {"height2": ("height", 2.0), "weight15": ("weight", 15.0)}
 
 
+# Plus-minus as an input (FINDINGS 28; the owner: "like DRIP and DARKO do, but extremely smart about how").
+# His own on-court record BEFORE the window: the possession-weighted APM (raw sign, per side) over the panel
+# windows before this one, each discounted by PAST_DECAY per window of distance, the discounted possessions
+# behind it in thousands (so the booster can weigh a 40,000-possession record against a 900-possession one),
+# and the same on the ridge-shrunk RAPM_1.  Leak-free by construction: a pooled training row's target CONTAINS
+# the past windows, so these are only allowed on PAIR rows (pair_rows), where the pair's target window is
+# excluded from the past as well as the exclusion set; at prediction time the past is every panel window
+# before the block, the block's own windows excluded (past_inputs).  A player with no past reads 0 / 0 / 0.
+PAST = ["past_apm", "past_poss", "past_rapm"]
+PAST_DECAY = 0.5
+
+
+def past_features(p: pd.DataFrame, wins: list, keys: pd.DataFrame, exclude=(), decay: float = PAST_DECAY) -> pd.DataFrame:
+    """PAST for each row of `keys` (player_id, window[, window_to]) from one side's panel rows `p` (player_id,
+    window, poss, apm, rapm1): the windows before `window` in the order `wins`, not in `exclude`, not
+    `window_to`, discounted by decay ** distance.  `window` may be a label beyond the panel (the block) given as
+    an index in `wins` via a `_wi` column instead."""
+    idx = {lab: i for i, lab in enumerate(wins)}
+    q = p[~p.window.isin(set(exclude))][["player_id", "window", "poss", "apm", "rapm1"]].copy()
+    q["wi"] = q.window.map(idx).astype(float)
+    n = len(keys)
+    pid = keys.player_id.to_numpy()
+    wi = keys["_wi"].to_numpy(dtype=float) if "_wi" in keys.columns else keys.window.map(idx).to_numpy(dtype=float)
+    to = keys.window_to.map(idx).to_numpy(dtype=float) if "window_to" in keys.columns else np.full(n, -1.0)
+    # every (key row, past window) pair at once: a merge on the player, then the window tests and the discount
+    k = pd.DataFrame({"_i": np.arange(n), "player_id": pid, "_w": wi, "_to": to})
+    m = k.merge(q, on="player_id", how="inner")
+    m = m[(m.wi < m._w) & (m.wi != m._to)]
+    wt = m.poss.to_numpy(dtype=float) * float(decay) ** (m._w.to_numpy() - m.wi.to_numpy())
+    s = np.bincount(m._i.to_numpy(), weights=wt, minlength=n)
+    sa = np.bincount(m._i.to_numpy(), weights=wt * m.apm.to_numpy(dtype=float), minlength=n)
+    sr = np.bincount(m._i.to_numpy(), weights=wt * m.rapm1.to_numpy(dtype=float), minlength=n)
+    ok = s > 0
+    a, r = np.where(ok, sa / np.where(ok, s, 1.0), 0.0), np.where(ok, sr / np.where(ok, s, 1.0), 0.0)
+    return pd.DataFrame({"past_apm": a, "past_poss": s / 1000.0, "past_rapm": r}, index=keys.index)
+
+
+def past_inputs(panel: pd.DataFrame, side: str, exclude, player_ids, decay: float = PAST_DECAY) -> pd.DataFrame:
+    """PAST at prediction time, aligned to `player_ids`: every panel window before the excluded ones (the
+    block's own), the excluded ones left out.  With nothing excluded every window is past."""
+    wins = sorted(panel.window.unique())
+    ex = set(exclude)
+    first = min((i for i, w in enumerate(wins) if w in ex), default=len(wins))
+    keys = pd.DataFrame({"player_id": np.asarray(player_ids), "_wi": float(first)})
+    return past_features(panel[panel.side == side], wins, keys, exclude=ex, decay=decay)
+
+
 def _wants_derived(feats) -> bool:
     return any(f in DERIVED or f in RATIOS or f in SHOTQ or f in DREDGE_ANY or f in BIO_BINS for f in feats)
 
@@ -290,6 +337,9 @@ def training_rows(panel: pd.DataFrame, side: str, exclude=(), features=None, tar
     possessions more of them buy almost no precision and should not buy more say.  None = raw possessions.
     """
     feats = list(DEFAULT_FEATURES if features is None else features)
+    if any(f in PAST for f in feats):
+        raise ValueError("past_* features leak into a POOLED target (it contains the past windows); train on pair "
+                         "rows (GBDTPrior pairs=True, which any PAST feature switches on)")
     ex = set(exclude)
     p = panel[(panel.side == side) & ~panel.window.isin(ex)].copy()
     if _wants_derived(feats):
@@ -326,6 +376,8 @@ def pair_rows(panel: pd.DataFrame, side: str, exclude=(), features=None, target_
     worth in a context that has changed.  Pairs the turnover table does not cover are dropped."""
     feats = list(DEFAULT_FEATURES if features is None else features)
     feats = [f for f in feats if f != "turn"]
+    past = [f for f in feats if f in PAST]
+    feats = [f for f in feats if f not in PAST]
     ex = set(exclude)
     p = panel[(panel.side == side) & ~panel.window.isin(ex)].copy()
     if _wants_derived(feats):
@@ -346,8 +398,13 @@ def pair_rows(panel: pd.DataFrame, side: str, exclude=(), features=None, target_
         out = out.merge(turn[["player_id", "window", "window_to", "turnover"]].rename(columns={"turnover": "turn"}),
                         on=["player_id", "window", "window_to"], how="inner")
         out = out[out.turn.notna()]
-    out = out[out.weight > 0].drop(columns="_poss_to")
-    return out.reset_index(drop=True)
+    out = out[out.weight > 0].drop(columns="_poss_to").reset_index(drop=True)
+    if past:
+        # his record before w, the pair's target window w' left out of it as well as the exclusion set
+        pf = past_features(panel[panel.side == side], wins, out[["player_id", "window", "window_to"]], exclude=ex)
+        for f in past:
+            out[f] = pf[f].to_numpy()
+    return out
 
 
 def _pooled_by_distance(p: pd.DataFrame, w: np.ndarray, v: np.ndarray, decay: float, past: float = 1.0):
@@ -467,6 +524,8 @@ class GBDTPrior:
             self.features[side] = list(f)
             if self.turn is not None and "turn" not in self.features[side]:
                 self.features[side].append("turn")
+            if any(x in PAST for x in self.features[side]):
+                self.pairs = True          # a PAST feature is only leak-free on pair rows
         self.params = dict(g.get("params", {}) or {})
         self.win_decay = float(win_decay)
         self.win_past = float(win_past)
@@ -523,11 +582,12 @@ def gbdt_offset(prior: GBDTPrior, ro, rd, season, poss_o, poss_d, exclude=(), si
         if raw is not None:                              # the uncentred rates, for the efficiency ratios
             for c, col in zip(feats, np.asarray(raw[j], dtype=float).T):
                 X[f"raw_{c}"] = col
-        if extra is not None:
+        ex = extra[side] if isinstance(extra, dict) else extra      # per-side inputs (PAST) or one table for both
+        if ex is not None:
             need = set(prior.features[side]) | {BIO_BINS[f][0] for f in prior.features[side] if f in BIO_BINS}
-            for c in extra.columns:
+            for c in ex.columns:
                 if c in need and c not in X.columns:
-                    X[c] = np.asarray(extra[c], dtype=float)
+                    X[c] = np.asarray(ex[c], dtype=float)
         if shots is not None:
             for c in (*SHOT_TOTALS, *SHOT_LEAGUE):
                 X[c] = np.asarray(shots[c], dtype=float)

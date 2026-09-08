@@ -1,3 +1,25 @@
+# Handoff: plus-minus is an input now, the investigator is the second instrument, and the board is `tune501_b7_turnref_o_hwb_pasto`
+
+**Shipped 2026-09-07, latest: `tune501_b7_turnref_o_hwb_pasto`** (FINDINGS 28) -- the offensive prior sees the
+player's own past on-court record: his discounted APM over the panel windows before the block, the possessions
+behind it, and the shrunk twin, on PAIR rows so nothing of the target is in the feature (`gbdt_prior.PAST`;
+pooled rows refuse it).  **110.4785 on the criterion, -0.085 at z -2.46 over 20 of 28, and -0.204 on the
+investigator's score at z -4.32 over 23 of 28: the first candidate significant on both instruments.**
+Consensus 0.801 / 0.792 / 0.760 (the best total and defensive agreement of any shipped board), defensive
+spread 1.27.  One floor missed and re-based with the reason in the test: the offensive gap against bigness,
+-0.344 against 0.32, now 0.35 -- the second re-base of that floor in a day, which the owner should look at
+(Part 0 ruling 2 applied; the top of the offensive board rose against the bigs, as the held-out data asks).
+The gain is in the body of the distribution, not the top: the stars are still under-rated by 1-1.5 (27.2, 28.4).
+
+**The investigator (FINDINGS 27) is the second instrument.**  `scripts/57_investigate.py` names who the board
+is wrong about out of season; `scratch/investigate_cmp.py` scores tracked systems on the residual variance a
+player ridge can attribute to players.  Run both on every candidate: the criterion decides forecasting, this
+decides attribution, and a candidate should lose neither.  `HANDOFF` Part 3.8 and 3.9.
+
+---
+
+*The header of the previous pass, kept:*
+
 # Handoff: the settled-context offensive prior shipped; the four-factor defence and the bio block measured
 
 **Measured 2026-09-07, latest: the prior's first non-box inputs -- height, weight, draft slot, tenure (FINDINGS
@@ -190,6 +212,7 @@ feature lists on either side -- without touching `config.yaml` permanently.
 | `scratch/trade_spm.py` / `trade_gbdt.py` | the trade-weighted SPM, linear and boosted, leave-window-out on the pair rows; the boosted one writes `outputs/csv/trade_delta_{O,D}.csv` |
 | `scratch/trade_maps.py` / `trade_pair.py` | the map terms on an existing dump with the control set; the paired test when a dump carries several maps (**the base is read at its SHIPPING map**; it used to take the first, the `&turn` one, and the "vs base" column was off by 0.09) |
 | **`fastfit.factor_defense`** / `factor_rows` / `points_per_factor` / `FACTOR_LAMS` / `MspiFast(def_factors=, factor_reml=, factor_x3=, factor_lam_scale=, factor_lams=, no_def_prior=)` | **the four-factor defence (25)**: four factor fits on the points layout, the prior split by zero-prior slopes, recombined with the row-level gradients; `factor_diag` on the system after a fit carries g, the shares, the ridges chosen.  `tests/test_factor_defense.py` (5) holds the identity |
+| **`gbdt_prior.PAST` / `past_features` / `past_inputs`** | **plus-minus as an input (28)**: his discounted past APM per side, its possessions, the shrunk twin; pair rows only (`training_rows` raises), the pair's target window left out of the past; `chain_offset` builds them per side from `ctx.rpanel` with the block's windows excluded.  `tests/test_past.py` (3) |
 | **`src/eracoef/investigate.py`** / **`scripts/57_investigate.py`** / `scratch/investigate_cmp.py` | **the investigator (27)**: `residual_ridge` (the same-four question of every lineup at once), `on_court`, `lineups`, `season_table`, `pooled`, and **`attributable`, the second score**.  `57_investigate.py [--system=] [--lam=2000] [--min-poss=1000] [--top=20]` runs the shipped board over the 28 held-out seasons in a minute and writes `outputs/investigate_*`; `investigate_cmp.py <sys1> <sys2> ...` pairs tracked systems on the score.  `tests/test_investigate.py` (4) |
 | **`src/eracoef/bio.py`** | **who he is (26)**: `player_bio(cfg)` (height, weight, draft_pick per player from `data/raw/bio`, cached at `data/cache/bio.parquet`), `season_tenure` / `tenure_inputs(roles, seasons, ids, exclude_seasons=)` (tenure with his main team, teams in the window; the held-out season skipped), `player_inputs`; `gbdt_prior.BIO_BINS` bins height and weight in both paths.  Panel columns via `scratch/add_bio_cols.py` (backup `.bak5`); `chain_offset` builds them from the training block.  `tests/test_bio.py` (5) |
 | `xshoot.expected_threes(seasons, cfg, wd)` | each row's expected opponent threes at the shooters' padded other-half rate: x3def's repricing as a function, used by `def_three_design` and by the repriced eFG factor |
@@ -569,6 +592,18 @@ mechanism of 22.2, which is worth knowing independently.  **And it is what makes
 the window pairs), and the prediction-time covariate becomes the same quantity instead of a block-bracketed
 cousin of it.
 
+### 3.9 DONE and shipped: plus-minus as an input (FINDINGS 28), and what is left of the gap
+
+Built and shipped (above).  Measured and not taken: PAST on defense (-0.02 / -0.06, neither significant),
+the both-sides form (not separable from offense-only, slower, and it misses the defensive floor by 0.005).
+**What is left of the gap is the top**: the offensive miss by rating decile is +0.64 in the top decile against
++0.70 before, and Curry, LeBron, Jokic lead the under-rated list as before.  28.1 names the two mechanisms --
+the prior's target is the player's OTHER windows, so a peak's prior is its neighbours' average, and the ridge
+gives back only half of the difference -- and no prior input reaches it.  What would: per-player shrinkage
+keyed on exposure or on the prior's own confidence (3.4), or a map term that stretches the top BY EXPOSURE,
+both scored on the investigator, because the criterion's resolution for a few stars moving a point is 0.015.
+The within-season playing-time change (28.1: +1.85 per unit of possession share; "role" here is minutes, not position) is the noise floor, not a target.
+
 ### 3.8 The investigator (the owner's direction, 2026-09-07): who and what the board is most wrong about
 
 Built: `investigate.residual_ridge` / `on_court` / `lineups` / `season_table` / `pooled` and
@@ -626,6 +661,9 @@ turnover/tenure machinery is the safe form of that and tenure was not wanted off
   into a dead name.  The site is back at `https://bbstats.github.io/openrapm/`, https enforced.  To turn the
   domain on: four GitHub `A` records + a `www` CNAME at Porkbun FIRST, then re-add `docs/CNAME` on `main`,
   wait for the cert, then `gh api -X PUT repos/bbstats/openrapm/pages -F https_enforced=true`.
+* Never re-run, from 28: PAST on defense alone; `past_rapm` beside APM and its possessions; PAST on pooled rows;
+  the map's prior terms (`prior`, `prior2`, `priorsat`) on defense scored on the investigator (unchanged to
+  the third decimal).
 * Never re-run, from 26: fine (unbinned) height and weight in the prior on either side; tenure and n_teams as
   prior features; the draft slot alone; the play-by-play block counters on top of height.
 * Never re-run, from 25: the four-factor defence with the fixed-share prior split at any ridge, raw or
