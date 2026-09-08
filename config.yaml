@@ -100,8 +100,10 @@ ratings_prior:
   # 2026-09-07 latest: past_apm, past_poss, past_rapm on the OFFENSIVE list (gbdt_prior.PAST, FINDINGS 28), system
   # tune501_b7_turnref_o_hwb_pasto, 110.4785 (z -2.5 on the criterion, z -4.3 on the investigator); the bigness
   # floor re-based 0.32 -> 0.35 with the reason in the test.
+  # 2026-09-08: both lists pruned of the kitchen-sink Boruta's rejects (FINDINGS 29), system tune501_b7_pasto_pOD,
+  # 110.4547, ten of ten floors, 31 offensive names and 11 defensive.
   gbdt_turn: {sides: [O], ref: 0.35}
-  cal_map: {table: outputs/calmap_ship.parquet, system: tune501_b7_turnref_o_hwb_pasto_linear+log2&xlog&prior&tshare_linear+log2&xlog, base: tune501_b7_turnref_o_hwb_pasto, k: 3}
+  cal_map: {table: outputs/calmap_ship.parquet, system: tune501_b7_pasto_pOD_linear+log2&xlog&prior&tshare_linear+log2&xlog, base: tune501_b7_pasto_pOD, k: 3}
 # The random effect unit: "window" gives one player effect per 3-season window, "season" one per
 # player-season (the original spec).  Possession thresholds below are in the unit's own scale.
 player_unit: window
@@ -180,9 +182,9 @@ gbdt:
   # scripts/50_boruta.py, 25 trials, 2026-09-05: accepted + tentative + season (rejected dropped; season kept by design)
   features_O: [ast, blk, drb, fg2_miss, fg2m, fg3_miss, fg3m, ft_miss, ftm, orb, pf, stl, tov, season]   # rejected: season; tentative: drb, fg3_miss, pf, tov
   features_D: [ast, blk, drb, fg2_miss, fg2m, fg3_miss, fg3m, ftm, pf, stl, tov, season]   # rejected: ft_miss, orb, season; tentative: fg3m, ftm, pf
-  features_full_O: [fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss, orb, drb, ast, tov, stl, blk, pf, season, poss_pct, gs_pct, age, pts, fga, fta, fg3a, usage, bigness, reb, stocks, creation, shotmix, efg, ts, p3r, ftr, fg3p, fg2p, ftp, astr, tovr, orbsh, q2, q3, m2, m3, xps, mpts, height2, weight15, past_apm, past_poss]
+  features_full_O: [fg3m, fg3_miss, ftm, orb, ast, stl, pf, season, poss_pct, gs_pct, age, pts, fga, fta, fg3a, usage, bigness, reb, stocks, creation, shotmix, efg, ts, ftp, tovr, orbsh, mpts, weight15, past_apm, past_poss, past_rapm]
   # the last six on each line are FINDINGS 22.1's shot quality (gbdt_prior.SHOTQ)
-  features_full_D: [fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss, orb, drb, ast, tov, stl, blk, pf, season, poss_pct, gs_pct, age, q2, q3, m2, m3, xps, mpts, height2, weight15]
+  features_full_D: [fg3_miss, fg2m, fg2_miss, orb, drb, stl, blk, pf, season, gs_pct, age]
   drag_tol: 0.02          # counterbalance a leave-window-out training set whose weighted mean drifts more than this
   boruta_trials: 50
   seed: 0

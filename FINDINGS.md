@@ -3737,3 +3737,116 @@ for a z -1.8 candidate is the owner's call, not the record's.**  To take it: `gb
 += `past_apm_o, past_poss_o, past_apm_d, past_poss_d` (the offensive list keeps `past_rapm`), the
 `hwb_pastxd` tracker table to `calmap_ship.parquet`, `08_ratings.py`, and the defensive floor 0.75 -> 0.74 with
 the reason.  Fit time 66 s with the vectorised build (the shipped board's is 65 s).
+
+## 29. The kitchen-sink BorutaShap: 111 candidates on pair rows, what survives, and what the criterion makes of it
+
+Written 2026-09-08.  The owner: "now that we have added new stats in, we need to take the absolute fullest
+kitchen sink and run borutashap."  `scripts/50_boruta.py --modes=sink,sinknoagg --sides=D,O --trials=50`,
+5.7 hours; the importance histories are `outputs/csv/boruta_sink{,noagg}_{D,O}.csv`.
+
+### 1. The set, and why it runs on pair rows
+
+Everything both paths can build, 111 names (`SINK` in `50_boruta.py`): the 55 of `wide` (the 13 rates,
+season, the role inputs, the ten linear aggregates, the ten efficiency ratios, the six shot-quality columns,
+the play-by-play block), the 26 era-relative Dredge twins, the career block (`exp_yrs`, `exp_poss`,
+`entry_age`), who he is (`height`, `weight`, `draft_pick`, `tenure`, `n_teams`, and the bins `height2`,
+`weight15`), his past plus-minus on both sides (the seven `PAST` names) and the teammate turnover of the
+target window (`turn`).  The past plus-minus and `turn` only exist on PAIR rows (28.2), so the whole sink is
+scored on the shipped prior's pair rows -- 15,078 per side, the shipped target per side (`blend0.7` on
+offense, `rapm1` on defense), the shipped window discount -- with the cheap booster (linear leaves, no
+cross features), which is what the defensive side ships and one fifth of the offensive bag.
+
+`sinknoagg` is the same 101 names without the ten pure linear aggregates (`pts`, `fga`, `fta`, `fg3a`,
+`usage`, `bigness`, `reb`, `stocks`, `creation`, `shotmix`), because 23.10 found that on a set containing
+linear aggregates of its own members Boruta keeps the aggregate and rejects the parts by coin toss.  It did
+again: with the aggregates in, defense REJECTS `blk` and accepts `stocks`; without them, defense accepts
+`blk`, `blkrim` and `russ`.  The readable verdicts are the `sinknoagg` ones.
+
+### 2. The verdicts (sinknoagg; the sink where it differs)
+
+**Accepted on both sides in both forms:** `past_apm`, `past_poss`, `past_rapm` (the plus-minus block, the
+strongest new signal on either side), `turn`, `age`, `pf`, `stl`, `weight`, `exp_poss`.
+
+**Defense (22 accepted):** age, astr, blk, blkrim, drb, entry_age, exp_poss, fg2_miss, fg2m, fg3_miss,
+gs_pct, height, n_teams, past_apm, past_poss, past_rapm, pf, russ, season, stl, turn, weight; tentative
+astlmr, loose, orb, past_poss_o, unast_r.  Of the 25 shipped defensive names it rejects 14: fg3m, ftm,
+ft_miss, ast, tov, poss_pct, the six shot-quality columns, height2, weight15.
+
+**Offense (30 accepted):** age, ast, astlmr, astrim_r, exp_poss, exp_yrs, fg3_miss, fg3m, ftm, ftp, gs_pct,
+loose, mpts, orb, orbsh, past_apm, past_poss, past_poss_d, past_rapm, pf, poss_pct, stl, stolensh_r,
+techflg, tovr, ts, turn, unast_r, weight, weight15; tentative astc3_r, draft_pick, efg.  Of the 47 shipped
+offensive names it rejects 18: fg2m, fg2_miss, ft_miss, drb, tov, blk, season, p3r, ftr, fg3p, fg2p, astr,
+five of the six shot-quality columns, height2.
+
+**Rejected on both sides in both forms:** the whole assists-by-zone block and its era-relative twins,
+`pot_ast`, most of the block-location counters, `draft_pick`, `tenure`, `height2`, `tov`, `ft_miss`,
+`q2`, `q3`, `m2`, `m3`, `xps`, and the cross-side past APM (`past_apm_o`, `past_apm_d`: each prior wants its
+OWN side's record; the other side's possessions are tentative-to-accepted, the other side's value is not).
+
+Three things to read with the record's cautions.  The career block is accepted on both sides, and 22.2
+measured it at +0.054 on the criterion: it names the players with many windows, and Boruta selects against
+the prior's own target, which rewards exactly that.  The shot-quality block is rejected on both sides, and it
+shipped in 22.4 on the criterion (-0.04, z -1.1 at best): a rejection is "not better than its own shadow
+on this target with this booster", and the shipped offensive booster is a five-member bag with cross
+features, not the cheap one Boruta ran.  And `season` is rejected on offense and accepted on defense; it
+is kept on both by design.
+
+### 3. What the criterion and the investigator make of it
+
+Five lists built from the verdicts, each on the shipped board (`tune501_b7_turnref_o_hwb_pasto`, 110.4785 on
+the criterion, 41.132 on the investigator), paired over the 28 seasons:
+
+| system | what | criterion vs board | z | wins | investigator vs board | z | wins | names O / D |
+|---|---|---|---|---|---|---|---|---|
+| `tune501_b7_pasto_bD` | Boruta's defensive list as-is | +0.044 | 1.02 | 15/28 | +0.024 | 0.78 | 14/28 | 48 / 21 |
+| `tune501_b7_pasto_bO` | Boruta's offensive list as-is | **+0.199** | **4.84** | 5/28 | **+0.574** | **9.14** | 2/28 | 30 / 25 |
+| `tune501_b7_pasto_bOD` | both Boruta lists | +0.244 | 4.26 | 8/28 | +0.600 | 7.60 | 3/28 | 30 / 21 |
+| `tune501_b7_pasto_pD` | the shipped defensive list minus its 14 rejects | +0.004 | 0.21 | 15/28 | +0.013 | 0.45 | 13/28 | 48 / 11 |
+| `tune501_b7_pasto_pO` | the shipped offensive list minus its 17 rejects | -0.028 | -1.17 | 16/28 | -0.057 | -1.87 | 16/28 | 31 / 25 |
+| **`tune501_b7_pasto_pOD`** | **both prunings** | -0.024 | -0.54 | 15/28 | -0.044 | -0.89 | 14/28 | **31 / 11** |
+
+**Boruta's own lists lose, and lose most where they differ most from what ships.**  The offensive list is
++0.20 on the criterion at z 4.8 and +0.57 on the investigator at z 9.1: it carries the career block (22.2's
+trap, +0.054 when it was tried alone, and here beside six play-by-play names and without the ratios and the
+shot-quality columns it is four times that).  Selection against the prior's own target rewards a column that
+names the player, and Boruta cannot tell that from knowledge -- the record's rule, now measured on a set that
+had every chance.
+
+**The prunings are the useful result.**  Removing what Boruta rejected from the SHIPPED lists costs nothing
+on either instrument -- the defensive list from 25 names to 11 at +0.004, the offensive from 48 to 31 at
+-0.028 (z -1.2) and -0.057 on the investigator (z -1.9) -- and Part 0 ruling 1's tie-break is exactly for
+this: between candidates the criterion cannot separate, the simpler one.  The dropped names include the
+shot-quality block on defense and five of its six columns on offense (22.4's feature, worth -0.04 at z -1.1
+when it shipped and nothing now that the prior carries a past record), the binned height on both sides
+(26's attribution feature; the investigator does not miss it), the efficiency ratios that the past record
+and the rates already imply, and `tov`, `ft_miss`, `drb`, `blk` on offense.
+
+
+### 4. Shipping
+
+**SHIPPED 2026-09-08: `tune501_b7_pasto_pOD`** -- the shipped lists with Boruta's rejects removed, 31 offensive
+names and 11 defensive against 48 and 25: `gbdt.features_full_O` / `_D` in `config.yaml`, `cal_map` on the
+candidate's tracker table copied to `outputs/calmap_ship.parquet`.  **110.4547 on the criterion (-0.024 against
+110.4785, z -0.54) and 41.089 on the investigator (-0.044, z -0.89): not separable from the board before it
+on either, 42 names against 73, 58 s for the 28 fits against 65 -- Part 0 ruling 1's tie-break.**  Ten of ten
+floors: consensus **0.801 / 0.795 / 0.760**, defensive spread 1.28, the offensive gap against bigness -0.349
+(the floor is 0.35; it was -0.344 on the board before), the defensive +0.222.  `docs/data/ratings.json`
+rebuilt.  What ships on each side now:
+
+* offense (31): fg3m, fg3_miss, ftm, orb, ast, stl, pf, season, poss_pct, gs_pct, age, pts, fga, fta, fg3a,
+  usage, bigness, reb, stocks, creation, shotmix, ts, ftp, tovr, orbsh, mpts, weight15, past_apm, past_poss,
+  past_rapm -- and `turn` (the settled-context turnover prior, 24.9).
+* defense (11): fg3_miss, fg2m, fg2_miss, orb, drb, stl, blk, pf, season, gs_pct, age.
+
+The defensive prior is back to eleven box columns, the season and two role inputs: no shot quality, no
+height, no past record.  The three instruments together -- Boruta on the prior's target, the criterion at
+team-game level, the investigator at player level -- agree that nothing added to the defensive prior since
+22.4 was carrying weight there, and the board's defensive agreement with the consensus is the best it has
+been.  What the defensive prior is still missing is 27.2's list (Garnett, Draymond, Gobert under-rated,
+Trae Young, Bargnani over-rated), which no column here reached.
+
+### 5. Never re-run
+
+Boruta's accepted lists as feature lists on either side (the career block in a list is +0.20 on the
+criterion); Boruta as a gate (23.10 stands; the coin toss on `blk` happened again); the shot-quality block,
+the binned height and the efficiency ratios back on the lists they were pruned from without a new reason.

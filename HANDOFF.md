@@ -1,3 +1,22 @@
+# Handoff: the kitchen-sink Boruta pruned the board to 42 names; plus-minus is an input; the investigator is the second instrument
+
+**Shipped 2026-09-08, latest: `tune501_b7_pasto_pOD`** (FINDINGS 29) -- the owner's kitchen-sink BorutaShap
+(111 candidates on pair rows, 5.7 hours, `50_boruta.py --modes=sink,sinknoagg`) and what the criterion made of
+it.  Boruta's own lists LOSE (+0.20 / +0.57 on the two instruments: the career block, 22.2's trap, on a set
+that had every chance); removing its rejects from the SHIPPED lists costs nothing on either instrument, so
+the tie-break shipped the simpler board: **31 offensive names and 11 defensive against 48 and 25, 110.4547
+(-0.024, z -0.5), 41.089 on the investigator (-0.044), 58 s for the 28 fits, ten of ten floors, consensus
+0.801 / 0.795 / 0.760.**  The defensive prior is back to the box line, season and two role inputs: no shot
+quality, no height, no past record -- none of it carried weight there.  What Boruta kept on both sides:
+the past plus-minus block, turnover, age, fouls, steals, weight, career possessions; what it threw out
+everywhere: assists by zone, most play-by-play counters, draft slot, tenure, binned height, five of six
+shot-quality columns.  **Next: the top of the board (3.9) and the defensive names of 27.2, which no column
+reached.**
+
+---
+
+*The header of the previous pass, kept:*
+
 # Handoff: plus-minus is an input now, the investigator is the second instrument, and the board is `tune501_b7_turnref_o_hwb_pasto`
 
 **Shipped 2026-09-07, latest: `tune501_b7_turnref_o_hwb_pasto`** (FINDINGS 28) -- the offensive prior sees the
@@ -212,6 +231,7 @@ feature lists on either side -- without touching `config.yaml` permanently.
 | `scratch/trade_spm.py` / `trade_gbdt.py` | the trade-weighted SPM, linear and boosted, leave-window-out on the pair rows; the boosted one writes `outputs/csv/trade_delta_{O,D}.csv` |
 | `scratch/trade_maps.py` / `trade_pair.py` | the map terms on an existing dump with the control set; the paired test when a dump carries several maps (**the base is read at its SHIPPING map**; it used to take the first, the `&turn` one, and the "vs base" column was off by 0.09) |
 | **`fastfit.factor_defense`** / `factor_rows` / `points_per_factor` / `FACTOR_LAMS` / `MspiFast(def_factors=, factor_reml=, factor_x3=, factor_lam_scale=, factor_lams=, no_def_prior=)` | **the four-factor defence (25)**: four factor fits on the points layout, the prior split by zero-prior slopes, recombined with the row-level gradients; `factor_diag` on the system after a fit carries g, the shares, the ridges chosen.  `tests/test_factor_defense.py` (5) holds the identity |
+| `scripts/50_boruta.py` | BorutaShap per side and mode; **`--modes=sink,sinknoagg` (29)**: every column both paths can build (111) on the shipped prior's PAIR rows (`pair_training_rows`), with and without the ten linear aggregates.  5.7 hours at 50 trials; histories in `outputs/csv/boruta_sink*_{D,O}.csv`.  Prunes, never decides (23.10, 29.3) |
 | **`gbdt_prior.PAST` / `past_features` / `past_inputs`** | **plus-minus as an input (28)**: his discounted past APM per side, its possessions, the shrunk twin; pair rows only (`training_rows` raises), the pair's target window left out of the past; `chain_offset` builds them per side from `ctx.rpanel` with the block's windows excluded.  `tests/test_past.py` (3) |
 | **`src/eracoef/investigate.py`** / **`scripts/57_investigate.py`** / `scratch/investigate_cmp.py` | **the investigator (27)**: `residual_ridge` (the same-four question of every lineup at once), `on_court`, `lineups`, `season_table`, `pooled`, and **`attributable`, the second score**.  `57_investigate.py [--system=] [--lam=2000] [--min-poss=1000] [--top=20]` runs the shipped board over the 28 held-out seasons in a minute and writes `outputs/investigate_*`; `investigate_cmp.py <sys1> <sys2> ...` pairs tracked systems on the score.  `tests/test_investigate.py` (4) |
 | **`src/eracoef/bio.py`** | **who he is (26)**: `player_bio(cfg)` (height, weight, draft_pick per player from `data/raw/bio`, cached at `data/cache/bio.parquet`), `season_tenure` / `tenure_inputs(roles, seasons, ids, exclude_seasons=)` (tenure with his main team, teams in the window; the held-out season skipped), `player_inputs`; `gbdt_prior.BIO_BINS` bins height and weight in both paths.  Panel columns via `scratch/add_bio_cols.py` (backup `.bak5`); `chain_offset` builds them from the training block.  `tests/test_bio.py` (5) |
@@ -665,6 +685,9 @@ turnover/tenure machinery is the safe form of that and tenure was not wanted off
   into a dead name.  The site is back at `https://bbstats.github.io/openrapm/`, https enforced.  To turn the
   domain on: four GitHub `A` records + a `www` CNAME at Porkbun FIRST, then re-add `docs/CNAME` on `main`,
   wait for the cert, then `gh api -X PUT repos/bbstats/openrapm/pages -F https_enforced=true`.
+* Never re-run, from 29: Boruta's accepted lists as feature lists on either side; Boruta as a gate; the
+  shot-quality block, the binned height and the efficiency ratios back on the lists they were pruned from
+  without a new reason.
 * Never re-run, from 28: PAST on defense alone; `past_rapm` beside APM and its possessions; PAST on pooled rows;
   the offensive prior alone seeing both sides' past (`pastx`, not separable from own-side);
   the map's prior terms (`prior`, `prior2`, `priorsat`) on defense scored on the investigator (unchanged to

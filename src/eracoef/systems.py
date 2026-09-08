@@ -411,6 +411,31 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                                                        gbdt_features={"O": [*_SF2, *_HW, "past_rapm", *_PX], "D": [*_FF2, *_SQ2, *_HW]})
         S["tune501_b7_turnref_o_hwb_pastxd"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hwb_pastxd",
                                                         gbdt_features={"O": [*_SF2, *_HW, "past_rapm", *_PX], "D": [*_FF2, *_SQ2, *_HW, *_PX]})
+        # ---------------------------------------------------------------- the kitchen-sink Boruta (FINDINGS 29)
+        # 50_boruta.py --modes=sink,sinknoagg on pair rows, 111 candidates: what it accepted without the linear
+        # aggregates (the readable form, 23.10), each side as-is; the shipped lists with its rejects removed; both.
+        # `turn` is left off the defensive list (the defensive prior is pooled; turn on defense was flat, 24.5).
+        _BD = ["age", "astr", "blk", "blkrim", "drb", "entry_age", "exp_poss", "fg2_miss", "fg2m", "fg3_miss", "gs_pct",
+               "height", "n_teams", "past_apm", "past_poss", "past_rapm", "pf", "russ", "season", "stl", "weight"]
+        _BO = ["age", "ast", "astlmr", "astrim_r", "exp_poss", "exp_yrs", "fg3_miss", "fg3m", "ftm", "ftp", "gs_pct", "loose",
+               "mpts", "orb", "orbsh", "past_apm", "past_poss", "past_poss_d", "past_rapm", "pf", "poss_pct", "season", "stl",
+               "stolensh_r", "techflg", "tovr", "ts", "unast_r", "weight", "weight15"]
+        _RD = {"fg3m", "ftm", "ft_miss", "ast", "tov", "poss_pct", "q2", "q3", "m2", "m3", "xps", "mpts", "height2", "weight15"}
+        _RO = {"fg2m", "fg2_miss", "ft_miss", "drb", "tov", "blk", "p3r", "ftr", "fg3p", "fg2p", "astr", "q2", "q3", "m2", "m3",
+               "xps", "height2"}
+        from .gbdt_prior import PAST_OWN as _PAST_OWN
+        _SO = [*_SF2, *_HW, *_PAST_OWN]                       # the shipped offensive list (hwb_pasto)
+        _SD = [*_FF2, *_SQ2, *_HW]
+        _base = S["tune501_b7_turnref_o_hwb_pasto"]
+        S["tune501_b7_pasto_bD"] = _replace(_base, name="tune501_b7_pasto_bD", gbdt_features={"O": list(_SO), "D": list(_BD)})
+        S["tune501_b7_pasto_bO"] = _replace(_base, name="tune501_b7_pasto_bO", gbdt_features={"O": list(_BO), "D": list(_SD)})
+        S["tune501_b7_pasto_bOD"] = _replace(_base, name="tune501_b7_pasto_bOD", gbdt_features={"O": list(_BO), "D": list(_BD)})
+        S["tune501_b7_pasto_pD"] = _replace(_base, name="tune501_b7_pasto_pD",
+                                            gbdt_features={"O": list(_SO), "D": [f for f in _SD if f not in _RD]})
+        S["tune501_b7_pasto_pO"] = _replace(_base, name="tune501_b7_pasto_pO",
+                                            gbdt_features={"O": [f for f in _SO if f not in _RO], "D": list(_SD)})
+        S["tune501_b7_pasto_pOD"] = _replace(_base, name="tune501_b7_pasto_pOD",
+                                             gbdt_features={"O": [f for f in _SO if f not in _RO], "D": [f for f in _SD if f not in _RD]})
         # the other bound: the defensive prior ALONE (the factor ridges at 1e6 leave no residual at all), so the
         # value of a defensive residual at team-game level is a number
         S["tune501_b7_turnref_o_dprior"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_dprior",
