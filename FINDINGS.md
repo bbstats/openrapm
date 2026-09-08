@@ -3496,3 +3496,11 @@ the owner's; section 16 framed the same trade.
 
 Fine height and weight on either side (identification, +0.07 / +0.20); tenure and n_teams as prior features
 (offline +0.03 both sides); the draft slot alone (+0.04); the play-by-play block counters on top of height.
+
+**SHIPPED 2026-09-07: `tune501_b7_turnref_o_hwb`** (the owner's call: "we're doing a lot of not shipping").
+`config.yaml`: `height2, weight15` appended to `gbdt.features_full_O` and `_D`, `cal_map` on the candidate's
+tracker table copied to `outputs/calmap_ship.parquet`.  110.5635 on the criterion against 110.5693 (z -0.32),
+ten of ten floors: consensus 0.784 / 0.787 / 0.751 (the defensive agreement 0.001 over its floor), defensive
+spread 1.31, the offensive gap against bigness -0.300 (from -0.311) and the defensive one +0.186 (from
++0.219).  The attribution moved the way section 4 said it would and the forecast did not move at all.
+`docs/data/ratings.json` rebuilt.

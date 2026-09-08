@@ -7,9 +7,18 @@ Two things explain that and both are measured: the fine height-weight pair NAMES
 0.12 of the defensive gain and 0.03 of the offensive one; on the criterion the fine pair costs +0.20 at
 z 4.7), and the criterion's resolution for a shift shared by an archetype is about 0.015 (the shift test,
 26.5).  The defensive prior under-rates 6-10-and-taller players by a third of a point in nine windows of ten,
-with no era trend: the "era" question is an archetype question.  **Not shipped under the rulings; 3.7 puts
-the call to the owner, because the criterion is silent on attribution of this size by construction.**
-`bio.py`, the panel columns and the prediction path stay, tested.
+with no era trend: the "era" question is an archetype question.  **The owner's call, 2026-09-07: "we're doing a
+lot of not shipping -- just ship."  Shipped as `tune501_b7_turnref_o_hwb`: 110.5635, ten of ten floors,
+consensus 0.784 / 0.787 / 0.751, the archetype gaps narrower on both sides.**  The board is now
+`tune501_b7_turnref_o_hwb`; every "vs board" below this line that says 110.5693 is against the board before it.
+
+**The owner's next direction, 2026-09-07: act like investigators.**  Find the lineups the board misrepresents
+most, and above all the PLAYER: "when this player is added or subtracted from all of his lineups we tend to
+be off the most", the same-four plus-minus idea.  `src/eracoef/investigate.py` and `scripts/57_investigate.py`
+are the first cut (Part 3.8): the out-of-season residual of the shipped board's mapped prediction on every
+stint row of every held-out season, then the five-man units with the largest pooled miss, each player's
+on-court miss per side, and a residual ridge on the lineup matrices -- the same-four question asked of every
+lineup at once -- pooled across seasons with a z.
 
 **Measured 2026-09-07, later the same day: HANDOFF 3.2, the defensive four-factor fit (FINDINGS 25).**  Built
 (`fastfit.factor_defense`, an identity test), measured in twelve forms, not shipped.  Full replacement of the
@@ -556,7 +565,21 @@ mechanism of 22.2, which is worth knowing independently.  **And it is what makes
 the window pairs), and the prediction-time covariate becomes the same quantity instead of a block-bracketed
 cousin of it.
 
-### 3.7 The owner's call: height and weight (binned) in the prior, for attribution (FINDINGS 26)
+### 3.8 The investigator (the owner's direction, 2026-09-07): who and what the board is most wrong about
+
+Built: `investigate.residual_ridge` / `on_court` / `lineups` / `season_table` / `pooled` and
+`scripts/57_investigate.py` (usage in its header; `tests/test_investigate.py` plants a miss and recovers
+it).  It reads the shipped system's tracker dump, predicts every held-out stint row under the map fitted
+without that season, and reports the residual three ways.  Outputs: `outputs/investigate_<system>.parquet`
+(player-seasons: miss per side with its se, the on-court miss, the mapped rating and prior he was scored
+with), `investigate_pooled_<system>.csv` (per player across seasons, z), `investigate_lineups_<system>.csv`.
+What to do with the first run is section 27 (or the summary at the end of the pass if 27 is not yet
+written): sort the pooled table by |z|, read the names, and ask of each whether the miss sits in the prior
+(box line says X, court says Y -- a feature question) or in the residual (the ridge could not see it -- an
+estimator or a context question).  The true "same four" matched version -- lineups differing in exactly one
+player -- is a refinement on top of `lineups` if the ridge's answer needs a second opinion.
+
+### 3.7 DONE: height and weight (binned) in the prior, shipped 2026-09-07 (FINDINGS 26)
 
 `tune501_b7_turnref_o_hwb` -- height2 and weight15 on both sides -- is zero on the criterion (-0.006, z -0.32),
 narrows the archetype gap against the consensus on both sides (defense 0.219 -> 0.185, offense -0.316 ->
