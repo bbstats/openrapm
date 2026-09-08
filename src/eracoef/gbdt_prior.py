@@ -255,6 +255,9 @@ BIO_BINS = {"height2": ("height", 2.0), "weight15": ("weight", 15.0)}
 # the past windows, so these are only allowed on PAIR rows (pair_rows), where the pair's target window is
 # excluded from the past as well as the exclusion set; at prediction time the past is every panel window
 # before the block, the block's own windows excluded (past_inputs).  A player with no past reads 0 / 0 / 0.
+# the teammate-turnover feature of the pair rows (24.4): the share of the TARGET window's teammate-possessions spent
+# with people he never shared 100 possessions with in the feature window; 1 = every teammate new, a stayer ~0.35
+TURN_FEATURE = "target_pct_new_teammates"
 PAST_OWN = ["past_apm", "past_poss", "past_rapm"]                 # his record on THIS prior's side
 PAST_CROSS = ["past_apm_o", "past_poss_o", "past_apm_d", "past_poss_d"]   # both sides, named, for either prior
 PAST = [*PAST_OWN, *PAST_CROSS]
@@ -386,7 +389,7 @@ def pair_rows(panel: pd.DataFrame, side: str, exclude=(), features=None, target_
     the within-player spread of the targets is a constant; with it the booster can learn what a box line is
     worth in a context that has changed.  Pairs the turnover table does not cover are dropped."""
     feats = list(DEFAULT_FEATURES if features is None else features)
-    feats = [f for f in feats if f != "turn"]
+    feats = [f for f in feats if f != TURN_FEATURE]
     past = [f for f in feats if f in PAST]
     feats = [f for f in feats if f not in PAST]
     ex = set(exclude)
@@ -406,9 +409,9 @@ def pair_rows(panel: pd.DataFrame, side: str, exclude=(), features=None, target_
         w = w * np.where(d < 0, float(win_past), 1.0)
     out["weight"] = w
     if turn is not None:
-        out = out.merge(turn[["player_id", "window", "window_to", "turnover"]].rename(columns={"turnover": "turn"}),
+        out = out.merge(turn[["player_id", "window", "window_to", "turnover"]].rename(columns={"turnover": TURN_FEATURE}),
                         on=["player_id", "window", "window_to"], how="inner")
-        out = out[out.turn.notna()]
+        out = out[out[TURN_FEATURE].notna()]
     out = out[out.weight > 0].drop(columns="_poss_to").reset_index(drop=True)
     if past:
         # his record before w, the pair's target window w' left out of it as well as the exclusion set
@@ -533,8 +536,8 @@ class GBDTPrior:
             f = (features or {}).get(side) if isinstance(features, dict) else features
             f = f or g.get(key.format(side)) or default
             self.features[side] = list(f)
-            if self.turn is not None and "turn" not in self.features[side]:
-                self.features[side].append("turn")
+            if self.turn is not None and TURN_FEATURE not in self.features[side]:
+                self.features[side].append(TURN_FEATURE)
             if any(x in PAST for x in self.features[side]):
                 self.pairs = True          # a PAST feature is only leak-free on pair rows
         self.params = dict(g.get("params", {}) or {})

@@ -246,14 +246,15 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
                                    exclude_seasons=() if ctx.current_h is None else (int(ctx.current_h),))
                 extra = pd.concat([extra, pi[[c for c in PLAYER_INPUTS if c in want_bio]]], axis=1)
             if turn in ("ref", "h"):
-                extra = extra.assign(turn=float(turn_ref))
+                from .gbdt_prior import TURN_FEATURE
+                extra = extra.assign(**{TURN_FEATURE: float(turn_ref)})
                 if turn == "h" and ctx.current_h is not None:
                     from .turnover import cached_table, familiar_share
                     tm = cached_table(ctx)
                     if tm is None:
                         raise RuntimeError("data/cache/teammates.parquet is missing (turnover.build_teammates)")
                     f = familiar_share(tm, list(train), [int(ctx.current_h)], player_ids=wd.spec.ps_table["player_id"].to_numpy())
-                    extra["turn"] = f.turnover.fillna(float(turn_ref)).to_numpy()
+                    extra[TURN_FEATURE] = f.turnover.fillna(float(turn_ref)).to_numpy()
             from .gbdt_prior import PAST, past_inputs
             if wants & set(PAST):
                 # his on-court record before the block, per side: every panel window before the excluded ones

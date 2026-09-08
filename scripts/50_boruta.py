@@ -32,7 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from eracoef.config import load_config  # noqa: E402
 from eracoef.bio import PLAYER_INPUTS  # noqa: E402
 from eracoef.gbdt_prior import (BIO_BINS, CAREER, DEFAULT_FEATURES, DERIVED, DREDGE_FEATURES, DREDGE_R,  # noqa: E402
-                                FULL_FEATURES, PAST, run_boruta, training_rows)
+                                FULL_FEATURES, PAST, TURN_FEATURE, run_boruta, training_rows)
 
 cfg = load_config()
 OUT = Path(cfg["_root"]) / "outputs"
@@ -55,7 +55,7 @@ panel = pd.read_parquet(Path(cfg["_root"]) / cfg.get("paths", {}).get("role_pane
 # contains it) and the teammate turnover of the target window.  `sinknoagg` is the same without the ten pure
 # linear aggregates, the form FINDINGS 23.10 says Boruta can actually read: given `stocks` a shadow `blk` is as
 # good as `blk`, and which of a collinear pair survives is a coin toss.
-SINK = [*DREDGE_FEATURES, *DREDGE_R, *CAREER, *PLAYER_INPUTS, *BIO_BINS, *PAST, "turn"]
+SINK = [*DREDGE_FEATURES, *DREDGE_R, *CAREER, *PLAYER_INPUTS, *BIO_BINS, *PAST, TURN_FEATURE]
 SINK_NOAGG = [f for f in SINK if f not in DERIVED]
 MODES = {"residual": ("u", DEFAULT_FEATURES, "features_{}"), "full": ("rapm1", FULL_FEATURES, "features_full_{}"),
          "wide": ("rapm1", DREDGE_FEATURES, "features_full_{}"),
