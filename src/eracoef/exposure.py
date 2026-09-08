@@ -228,6 +228,11 @@ class BoxExposure(BaseEstimator, TransformerMixin):
         po_tr = tab_cov["poss_off"].to_numpy(dtype=float)
         pd_tr = tab_cov["poss_def"].to_numpy(dtype=float)
         mult = np.ones(len(g_tr)) if self.game_mult is None else np.asarray(self.game_mult, dtype=float)[g_tr]
+        if (mult == 0.0).any():
+            # a game the caller weighted to zero (the in-season cut, inseason.py) must not reach the padding
+            # constants, the leave-one-out tables or the target bins either -- they are estimated on these rows
+            live = mult > 0
+            g_tr, x_tr, c_tr, po_tr, pd_tr, mult = g_tr[live], x_tr[live], c_tr[live], po_tr[live], pd_tr[live], mult[live]
 
         # per player-season, which is the unit the padding constants are estimated on
         n_psx = spec.n_psx

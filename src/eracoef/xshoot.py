@@ -137,10 +137,25 @@ FT_COLS = ["ftm", "fta"]
 _TOTALS_CACHE: dict = {}
 
 
-def season_totals(season: int, cfg) -> tuple[dict, dict]:
+def season_totals(season: int, cfg, keep=None) -> tuple[dict, dict]:
     """Per shooter per half ("A", "B", "RS") totals of one regular season, shots and free throws, read once per
-    process.  A block's totals are the sum over its seasons (`block_totals`)."""
+    process.  A block's totals are the sum over its seasons (`block_totals`).
+
+    `keep`: the game_ids of that season the caller may see (inseason.keep_games).  A cut season is read
+    fresh and NOT cached, because the totals then depend on the cut and not only on the season.
+    """
     key = int(season)
+    if keep is not None:
+        shots = load_shots([key], cfg)
+        shots = shots[shots.game_id.isin(set(keep))]
+        halves = shots.drop_duplicates("game_id").set_index("game_id")["half"]
+        ft = load_ft([key], cfg, halves)
+        ft = ft[ft.game_id.isin(set(keep))] if "game_id" in ft.columns else ft
+        T = {h: shots[shots.half == h].groupby("player_id")[SHOT_COLS].sum() for h in ("A", "B")}
+        T["RS"] = shots.groupby("player_id")[SHOT_COLS].sum()
+        F = {h: ft[ft.half == h].groupby("player_id")[FT_COLS].sum() for h in ("A", "B")}
+        F["RS"] = ft.groupby("player_id")[FT_COLS].sum()
+        return T, F
     if key not in _TOTALS_CACHE:
         shots = load_shots([key], cfg)
         halves = shots.drop_duplicates("game_id").set_index("game_id")["half"]
@@ -153,10 +168,11 @@ def season_totals(season: int, cfg) -> tuple[dict, dict]:
     return _TOTALS_CACHE[key]
 
 
-def block_totals(seasons, cfg, extra_seasons=()) -> tuple[dict, dict]:
+def block_totals(seasons, cfg, extra_seasons=(), keep=None) -> tuple[dict, dict]:
     """The per-half totals of a block of seasons: each half summed over the seasons; `extra_seasons` (earlier
-    ones, `prev`) added whole to every half."""
-    parts = [season_totals(s, cfg) for s in seasons]
+    ones, `prev`) added whole to every half.  `keep` is {season: game_ids} for any season the caller may only
+    see part of (inseason.keep_games); a season it does not name is read whole."""
+    parts = [season_totals(s, cfg, keep=None if keep is None else keep.get(int(s))) for s in seasons]
     T, F = {}, {}
     for h in ("A", "B", "RS"):
         T[h] = pd.concat([t[h] for t, _ in parts]).groupby(level=0).sum()
@@ -174,7 +190,7 @@ SHOT_TOTAL_COLS = [f"shot_{c}" for c in SHOT_COLS]        # shot_fg2a, shot_fg2m
 SHOT_LEAGUE_COLS = ["shot_lg2", "shot_lg3", "shot_lgpps"]
 
 
-def player_shot_frame(seasons, cfg, player_ids=None) -> pd.DataFrame:
+def player_shot_frame(seasons, cfg, player_ids=None, keep=None) -> pd.DataFrame:
     """Per-shooter regular-season shot totals over a block, with the block's own league levels beside them.
 
     `shot_fg2a ... shot_xl3` are the sums of `SHOT_COLS` over the block's games; `shot_lg2` / `shot_lg3` are
@@ -187,7 +203,7 @@ def player_shot_frame(seasons, cfg, player_ids=None) -> pd.DataFrame:
     `player_ids` returns one row per id, in that order, zeros for a player who took no shot in the block;
     without it the frame carries a `player_id` column and only the shooters the block saw.
     """
-    T, _ = block_totals([int(s) for s in seasons], cfg)
+    T, _ = block_totals([int(s) for s in seasons], cfg, keep=keep)
     t = T["RS"]
     m2, a2 = float(t.fg2m.sum()), float(t.fg2a.sum())
     m3, a3 = float(t.fg3m.sum()), float(t.fg3a.sum())
@@ -229,7 +245,7 @@ def rates_from_totals(T: dict, F: dict, k_fixed: dict | None = None) -> ShooterR
     return ShooterRates(ratio2, ratio3, p2, p3, pft, league, k)
 
 
-def shooter_rates(seasons, cfg, prev: int = 0, k_fixed: dict | None = None) -> ShooterRates:
+def shooter_rates(seasons, cfg, prev: int = 0, k_fixed: dict | None = None, keep=None) -> ShooterRates:
     """The padded per-shooter rates for a block of seasons, from the shots tables and the box scores.
 
     `prev` adds the P seasons BEFORE the block's first season, whole.  Anchored to the block's start
@@ -241,7 +257,7 @@ def shooter_rates(seasons, cfg, prev: int = 0, k_fixed: dict | None = None) -> S
     if prev:
         d = resolve(cfg, "stints")
         have = [s for s in range(seasons[0] - prev, seasons[0]) if (d / f"{s}_RS_shots.parquet").exists()]
-    T, F = block_totals(seasons, cfg, extra_seasons=have)
+    T, F = block_totals(seasons, cfg, extra_seasons=have, keep=keep)
     return rates_from_totals(T, F, k_fixed=k_fixed)
 
 
@@ -412,12 +428,12 @@ def continuation_design(seasons, cfg, wd_pts, x=None, location=True, r="league",
     return wd_pts.with_target(y), dict(target=f"xcont_{r}", x=x, gates=g, calibration=cal)
 
 
-def expected_threes(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0):
+def expected_threes(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, keep=None):
     """Each row's EXPECTED opponent three-point makes: every attempt at the shooter's padded other-half 3P%
     (x3def's repricing, the one piece of it the four-factor eFG% needs too).  Returns (x3, rates)."""
     cnt = wd_pts.counters
     seasons = sorted(int(s) for s in seasons)
-    rates = shooter_rates(seasons, cfg, prev=prev, k_fixed={"fg3": k3})
+    rates = shooter_rates(seasons, cfg, prev=prev, k_fixed={"fg3": k3}, keep=keep)
     which = rates.for_rows("fg3", cnt["half"].to_numpy())
     n = len(cnt)
     x3 = cnt["fg3a_sx"].to_numpy(dtype=float) * rates.league["fg3"]
@@ -431,7 +447,7 @@ def expected_threes(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0):
     return x3, rates
 
 
-def def_three_design(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, calibrate: bool = True):
+def def_three_design(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, calibrate: bool = True, keep=None):
     """The DEFENSIVE target: actual points with every opponent three-point make replaced by
     3 x the shooter's padded 3P%, free throws adjusted as shipped, everything else as it happened.
 
@@ -444,7 +460,7 @@ def def_three_design(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, cal
     """
     _check(wd_pts, "fg3a_s1")
     cnt, season = wd_pts.counters, wd_pts.rows["season"].to_numpy()
-    x3, rates = expected_threes(seasons, cfg, wd_pts, prev=prev, k3=k3)
+    x3, rates = expected_threes(seasons, cfg, wd_pts, prev=prev, k3=k3, keep=keep)
     poss = cnt["poss"].to_numpy(dtype=float)
     c = cnt
     pts_adj = (c["pts"] - 3.0 * c["fg3m"] + 3.0 * x3
@@ -467,8 +483,8 @@ def def_three_design(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, cal
 
 
 def _named(fn, name, **kw):
-    def target(seasons, cfg, wd_pts):
-        return fn(seasons, cfg, wd_pts, **kw)
+    def target(seasons, cfg, wd_pts, **more):
+        return fn(seasons, cfg, wd_pts, **kw, **more)
     target.__name__ = name
     return target
 

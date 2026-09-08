@@ -220,26 +220,72 @@ def career_inputs(inputs: pd.DataFrame, before_season: int, player_ids=None, age
     return out
 
 
+def cut_role_inputs(inputs: pd.DataFrame, season: int, keep_game_ids, cfg, cap: float = 0.9) -> pd.DataFrame:
+    """`player_season_inputs` with one season rebuilt from part of its games (the in-season cut, inseason.py).
+
+    A rating fit on the first q of a season must not see the role the player ended it in: `poss_pct` and
+    `gs_pct` are the share of possessions and of starts SO FAR, from the kept games only, and the team's
+    denominator is its own kept-game possessions, so the share is a share to date rather than a fraction of a
+    full season.  `age` is a property of the season and is kept.  Rows of every other season pass through.
+    """
+    season = int(season)
+    keep = {str(g) for g in keep_game_ids}
+    cols = ["game_id", "period", *HOME_SLOTS, *AWAY_SLOTS, "poss_h", "poss_a"]
+    st = pd.read_parquet(Path(resolve(cfg, "stints")) / f"{season}_RS.parquet", columns=cols)
+    st["game_id"] = st["game_id"].astype(str)
+    st = st[st["game_id"].isin(keep)]
+    games = game_table(load_gamelog(season, "RS", cfg))
+    games["game_id"] = games["game_id"].astype(str)
+    slots = [*HOME_SLOTS, *AWAY_SLOTS]
+    if len(st):
+        shares = shares_from_stints(st, games)
+        g = shares.groupby("player_id", as_index=False).agg(poss_on=("poss_on", "sum"), team_poss=("team_poss", "mean"))
+        appear = pd.concat([st[["game_id", c]].rename(columns={c: "player_id"}) for c in slots], ignore_index=True)
+        played = appear.drop_duplicates().groupby("player_id", as_index=False).size().rename(columns={"size": "games"})
+        opener = st[st["period"] == 1].drop_duplicates("game_id")
+        starts = pd.concat([opener[["game_id", c]].rename(columns={c: "player_id"}) for c in slots], ignore_index=True)
+        started = starts.drop_duplicates().groupby("player_id", as_index=False).size().rename(columns={"size": "starts"})
+        g = g.merge(played, on="player_id", how="left").merge(started, on="player_id", how="left")
+    else:
+        g = pd.DataFrame(columns=["player_id", "poss_on", "team_poss", "games", "starts"], dtype=float)
+    g = g.fillna({"games": 0.0, "starts": 0.0})
+    old = inputs[inputs.season == season]
+    out = old[["player_id", "season", "minutes", "age", "age_imputed"]].merge(
+        g.astype({"player_id": np.int64}), on="player_id", how="left")
+    for c in ("poss_on", "team_poss", "games", "starts"):
+        out[c] = out[c].fillna(0.0)
+    out["poss_pct"] = np.where(out.team_poss > 0, out.poss_on / np.where(out.team_poss > 0, out.team_poss, 1.0), 0.0).clip(0.0, cap)
+    out["gs_pct"] = np.where(out.games > 0, out.starts / np.where(out.games > 0, out.games, 1.0), 0.0).clip(0.0, 1.0)
+    return pd.concat([inputs[inputs.season != season], out[list(inputs.columns)]], ignore_index=True)
+
+
 def design7(poss_pct, gs_pct, age) -> np.ndarray:
     """The Simple SPM design: poss_pct, poss_pct^2, gs_pct, gs_pct^2, age, age^2, age^3 (no intercept)."""
     s, g, a = (np.asarray(v, dtype=float) for v in (poss_pct, gs_pct, age))
     return np.column_stack([s, s ** 2, g, g ** 2, a, a ** 2, a ** 3])
 
 
-def window_inputs(wd, inputs: pd.DataFrame, cap: float = 0.9) -> pd.DataFrame:
+def window_inputs(wd, inputs: pd.DataFrame, cap: float = 0.9, psx_weights=None) -> pd.DataFrame:
     """The per-season inputs blended to the design's Z unit, aligned to wd.spec.ps_table.
 
     Possession-weighted over the player's seasons in the window (RS offensive possessions from
     wd.game_poss, the weights the design itself uses); a player-season with no roles row takes the
     season's possession-weighted league mean and is counted in .attrs["n_missing"].
+
+    `psx_weights`: per player-season weights to use instead, one per psx unit -- the exposure's own
+    `psx_poss_off_`, which carries the in-season kernel and cut (inseason.py).  Without it a
+    down-weighted season would still count for its full possessions here.
     """
     spec = wd.spec
     psx = spec.psx_table[["psx_idx", "player_id", "season", "ps_idx"]].copy()
-    gp = wd.game_poss
-    rs = wd.games.loc[wd.games["phase"] == "RS", "game_idx"].to_numpy()
-    gp = gp[np.isin(gp["game_idx"], rs)]
-    w_psx = np.zeros(len(psx))
-    np.add.at(w_psx, gp["psx_idx"].to_numpy(), gp["poss_off"].to_numpy(dtype=float))
+    if psx_weights is not None:
+        w_psx = np.asarray(psx_weights, dtype=float)
+    else:
+        gp = wd.game_poss
+        rs = wd.games.loc[wd.games["phase"] == "RS", "game_idx"].to_numpy()
+        gp = gp[np.isin(gp["game_idx"], rs)]
+        w_psx = np.zeros(len(psx))
+        np.add.at(w_psx, gp["psx_idx"].to_numpy(), gp["poss_off"].to_numpy(dtype=float))
     psx["w"] = w_psx
     m = psx.merge(inputs[["player_id", "season", *RAW_INPUTS]], on=["player_id", "season"], how="left")
     missing = m["poss_pct"].isna()

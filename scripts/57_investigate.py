@@ -22,7 +22,8 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from eracoef.calmap import build_design, fit_theta, load_frames, mapped_ratings, parse_maps, ratings_for  # noqa: E402
+from eracoef.calmap import (build_design, cut_of, fit_theta, load_frames, mapped_ratings, parse_maps,  # noqa: E402
+                             ratings_for, train_of)
 from eracoef.config import load_config  # noqa: E402
 from eracoef.holdout import Context, Holdout, predict_season  # noqa: E402
 from eracoef.investigate import lineups, pooled, season_table  # noqa: E402
@@ -64,14 +65,15 @@ def main():
     seasons = [int(s) for s in (flag("seasons") or "").split(",") if s] or ho.seasons()
     ctx = Context.load(cfg)
     t0 = time.time()
-    frames = load_frames(ctx, seasons, level=level, verbose=True)
+    frames = load_frames(ctx, seasons, level=level, verbose=True, cut=cut_of(dump, system))
     map_o, map_d, bend = parse_maps(fam)
     D = build_design(dump, frames, system, k, map_o, map_d)
     names = names_of(cfg)
     players, units = [], []
     for h, f in frames.items():
         th = fit_theta(D, exclude_h=h, map_o=map_o, map_d=map_d)
-        rat = mapped_ratings(ratings_for(dump, system, k, h), th, map_o, map_d, D.scale_o, D.scale_d, extra=f.covariates(k))
+        rat = mapped_ratings(ratings_for(dump, system, k, h), th, map_o, map_d, D.scale_o, D.scale_d,
+                             extra=f.covariates(k, train_of(dump, system, k, h)))
         p = predict_season(rat, f.wd, level=level)
         r = p.y - p.pred
         players.append(season_table(h, f.ids, f.Zo, f.Zd, r, p.w, rat=rat.df, lam=lam))

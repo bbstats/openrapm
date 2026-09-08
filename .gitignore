@@ -270,3 +270,10 @@ outputs/tune_*.csv
 outputs/tune_*.db
 # teammate-turnover tables (FINDINGS 24): 1.5 MB, rebuilt in 40 s by scratch/trade_turnover.py
 outputs/csv/turnover_*.csv
+# in-season dumps (FINDINGS 31): one per system per cut, rebuilt by scratch/inseason_run.py in a minute or
+# two.  The MAP table the season board ships under (outputs/calmap_insea_ship_q75.parquet) does not match
+# these patterns and stays tracked, the way calmap_ship.parquet does.
+outputs/ratings_insea_*.parquet
+outputs/inseason_*_attrib.csv
+outputs/holdout_insea_*.parquet
+outputs/csv/holdout_insea_*.csv

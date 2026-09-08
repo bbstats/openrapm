@@ -3,6 +3,10 @@
 Reads outputs/player_ratings.parquet (scripts/08_ratings.py).  One row per player per three-season
 window: window, name, offense, defense, total (positive = good, points per 100 possessions), and the
 regular-season possessions the rating rests on.  docs/index.html is static and reads this file.
+
+If outputs/season_ratings.parquet exists (scripts/60_season_board.py) its rows go in beside them under
+`seasons`, keyed by season instead of window, and the page offers both views.  A season's rating is fit
+on that season and the two before it, so the latest one is the season in progress.
 usage: python scripts/52_site.py
 """
 import json
@@ -27,5 +31,23 @@ out = root / "docs" / "data"
 out.mkdir(parents=True, exist_ok=True)
 meta = dict(windows=sorted(d.w.unique().tolist()), built=pd.Timestamp.utcnow().strftime("%Y-%m-%d"),
             n_players=int(d.player_id.nunique()) if "player_id" in d.columns else int(rat.player_id.nunique()))
-(out / "ratings.json").write_text(json.dumps(dict(meta=meta, rows=rows), separators=(",", ":")), encoding="utf-8")
+payload = dict(meta=meta, rows=rows)
+
+# the season board, when it has been built: the same columns keyed by season, `p` the player's own
+# regular-season possessions (the fit's kernel-weighted ones are a different quantity and would read oddly
+# beside a block row)
+sp = root / "outputs" / "season_ratings.parquet"
+if sp.exists():
+    sr = pd.read_parquet(sp)
+    scols = {"season": "s", "player_name": "n", "rating_off": "o", "rating_def": "d", "rating_total": "t",
+             "poss_season": "p"}
+    e = sr[list(scols)].rename(columns=scols).copy()
+    e["n"] = e["n"].fillna("").astype(str)
+    e = e[e.p > 0].sort_values(["s", "t"], ascending=[True, False])
+    payload["seasons"] = [dict(s=int(r.s), n=r.n, o=round(float(r.o), 2), d=round(float(r.d), 2),
+                               t=round(float(r.t), 2), p=int(r.p)) for r in e.itertuples(index=False)]
+    meta["seasons"] = sorted(int(x) for x in e.s.unique())
+    print(f"  season board: {len(payload['seasons'])} rows, {len(meta['seasons'])} seasons")
+
+(out / "ratings.json").write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
 print(f"wrote docs/data/ratings.json: {len(rows)} rows, {len(meta['windows'])} windows")

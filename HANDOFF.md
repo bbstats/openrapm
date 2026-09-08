@@ -1,3 +1,35 @@
+# Handoff: the rating is in-season now -- a rolling kernel anchored on the season being rated, and two instruments that separate predicting from crediting
+
+**Built 2026-09-08, latest (FINDINGS 31): the season board.**  A rating is now ANCHORED at a season and fit
+on that season and the two before it, the earlier ones halved and quartered (`kernel = {0: 1, -1: 0.5,
+-2: 0.25}`), with nothing after it in the fit -- so the latest row is a rating of the season in progress and
+`scripts/60_season_board.py` re-run updates it.  `src/eracoef/inseason.py` is the module; two new fields on
+`fastfit.MspiFast` (`kernel`, `cut`) carry it and every existing system is byte-identical (the flat kernel
+reproduces `tune501_b7_pasto_pOD` to 0.0e+00).
+
+**The instrument, and why it exists.**  The owner: *"the ultimate goal here is 'in-season, super good at
+dividing credit AND being predictive, for the current season' -- it would be good for us to isolate/decompose
+those 2 a little more formally."*  So a fit may see only the first `q` of the held-out season (the CUT) and
+is scored on the rest of it, and the same residual is read twice: the criterion's team-game MSE
+(**prediction**) and `investigate.attributable` (**attribution** -- what a player ridge can still put on
+named players).  `scratch/inseason_run.py` runs both for every kernel at every cut in one pass.
+
+**What it says (search half, 14 seasons, K = 3, mapped; the full table is FINDINGS 31.4).**  The chunk board
+is not close in season: **+2.2 per 100 at the start of a season and +5.5 to +6.9 once it is a third old**
+(z 3.3 to 6.9, 0-3 wins of 13), and +4.0 to +8.6 on attribution -- mostly coverage, 0.717 against 0.95-0.99,
+because a block that ended before the season began has no rating for a quarter of the players on the floor.
+The current season ALONE is +1.7 at a quarter and +0.7 at a half, catching up only at three quarters.  The
+kernel wants to decay: `ks52` beats the flat rolling window by **-0.47 per 100 (z -3.9) and -0.57 on
+attribution**, and its optimum is a PLATEAU with three neighbours inside 0.11 -- interior, not a grid edge.
+
+**The block board is untouched.**  `08_ratings.py`, `config.yaml`'s `ratings_prior`, and
+`tests/test_vs_consensus.py` are exactly as they were; the season board is a second product beside it
+(`outputs/season_ratings.parquet`, config `ratings_prior.season_board`, a Block/Season switch on the site).
+
+---
+
+*The header of the previous pass, kept:*
+
 # Handoff: the kitchen-sink Boruta pruned the board to 42 names; plus-minus is an input; the investigator is the second instrument
 
 **Shipped 2026-09-08, latest: `tune501_b7_pasto_pOD`** (FINDINGS 29) -- the owner's kitchen-sink BorutaShap
@@ -238,6 +270,11 @@ feature lists on either side -- without touching `config.yaml` permanently.
 | **`src/eracoef/investigate.py`** / **`scripts/57_investigate.py`** / `scratch/investigate_cmp.py` | **the investigator (27)**: `residual_ridge` (the same-four question of every lineup at once), `on_court`, `lineups`, `season_table`, `pooled`, and **`attributable`, the second score**.  `57_investigate.py [--system=] [--lam=2000] [--min-poss=1000] [--top=20]` runs the shipped board over the 28 held-out seasons in a minute and writes `outputs/investigate_*`; `investigate_cmp.py <sys1> <sys2> ...` pairs tracked systems on the score.  `tests/test_investigate.py` (4) |
 | **`src/eracoef/bio.py`** | **who he is (26)**: `player_bio(cfg)` (height, weight, draft_pick per player from `data/raw/bio`, cached at `data/cache/bio.parquet`), `season_tenure` / `tenure_inputs(roles, seasons, ids, exclude_seasons=)` (tenure with his main team, teams in the window; the held-out season skipped), `player_inputs`; `gbdt_prior.BIO_BINS` bins height and weight in both paths.  Panel columns via `scratch/add_bio_cols.py` (backup `.bak5`); `chain_offset` builds them from the training block.  `tests/test_bio.py` (5) |
 | `xshoot.expected_threes(seasons, cfg, wd)` | each row's expected opponent threes at the shooters' padded other-half rate: x3def's repricing as a function, used by `def_three_design` and by the repriced eFG factor |
+| **`src/eracoef/inseason.py`** | **in season (31)**: `season_rank` / `season_frac`, `kernel_game_mult` (one per-game weight array for the kernel AND the cut), `keep_games`, `anchor_of` (= max(train)), `KernelSystem` (its own `train_for`: the anchor and the seasons its kernel names, zero-weighted ones kept so every kernel excludes the same windows), `BlockSystem` (the last FINISHED window before the season -- the in-season chunk baseline).  `tests/test_inseason.py` (16) |
+| `fastfit.MspiFast(kernel=, cut=)` | the two fields that carry it; `holdout.cut_season`, `Holdout.run`'s `train_for` hook and the `cut` result column; `calmap.SeasonFrame(cut=)` / `cut_of` / `train_of`; `roles.cut_role_inputs` and `window_inputs(psx_weights=)`; `spm.season_of_units(weights=)` and `cut_inputs_cached`; `xshoot.season_totals(keep=)` down every path |
+| **`scratch/inseason_run.py`** | **the in-season instrument**: every kernel at every cut, dumped once per cut, mapped leave-one-season-out, read on BOTH instruments with a paired z.  `--systems= --cuts= --held=all\|search\|confirm --tag= --reuse` |
+| `scratch/inseason_ident.py` | the real-data identities: flat kernel == the board (0.0e+00), cut 1 == no cut, cut 0 == the shorter kernel (5e-14 once the exclusion sets match) |
+| **`scripts/60_season_board.py`** | the season board: one rating per player per season from the kernel fit, the in-season map, re-centred per season -> `outputs/season_ratings.parquet`.  `52_site.py` puts it in `docs/data/ratings.json` under `seasons` and the page has a Block/Season switch |
 | `scripts/54_track.py` | the tracker: dump a system at K = 3 (timed), fit the map leave-one-season-out, score, log a row, redraw the chart.  `--systems=a,b "--maps=..." --label=...`; one dump per system |
 | `scratch/prior_bench.py` | **the 20-second pre-filter**: the prior's own leave-window-out fit per feature set, with the low-exposure stratum beside the pooled number.  `--q4 --loss= --delta= --sat= --past= --kmul=`, and a set may be written `shipD+russsh:blkrimsh` (add) or `shipD-blk+russ:blkrim` (REPLACE).  **Read 22.2 and 23.4 first: it is necessary, not sufficient, it has been wrong by 0.13, and the BASE LIST is part of the operating point** |
 | `scratch/pairsys.py` | the paired test between two TRACKED systems: pooled difference, z over the 28 seasons, wins |
@@ -266,6 +303,13 @@ feature lists on either side -- without touching `config.yaml` permanently.
 .venv/Scripts/python scratch/pairsys.py tune501_b7 <cand> [<cand2> ...]       # the z over 28 seasons
 .venv/Scripts/python scratch/ship_try2.py TAG blend0.7 rapm1 <system> [--od --dshot --drd=...]
 .venv/Scripts/python scripts/08_ratings.py && .venv/Scripts/python -m pytest tests/test_vs_consensus.py -q
+```
+and, for the in-season work (31):
+```
+.venv/Scripts/python scratch/inseason_ident.py                                  # the identities, ~40 s
+.venv/Scripts/python scratch/inseason_run.py --systems=ks52_lam05,ks52,ks11,blk --cuts=0.75 \
+    --tag=ship --held=all                                                       # both instruments, 28 seasons, 70 s
+.venv/Scripts/python scripts/60_season_board.py && .venv/Scripts/python scripts/52_site.py   # the board, 70 s
 ```
 and, for the play-by-play block specifically:
 ```
@@ -355,6 +399,23 @@ expensive part is deciding it was worth measuring.
 - Long bash heredocs still fail in this shell; write patch scripts with the Write tool.
 
 ## Part 3: the next pass
+
+### 3.11 DONE 2026-09-08: in season -- the kernel, the cut, and the season board (FINDINGS 31)
+
+Built and measured; the season board ships beside the block board and the block board is untouched.  What is
+left, in the order the instruments point:
+
+1. **Per-season targets for the prior** (3.5, now the binding constraint).  The role panel is still one row
+   per player per DISJOINT window and the prior's target is his OTHER windows, so the coarsest thing in an
+   in-season rating is the prior.  Season pairs also give the trade delta twice the contrast (24.6).
+2. **A cut-aware `PAST`**: `past_apm` is his record up to the block, not up to today.  In season it should be
+   his record up to the cut, which the panel cannot express either -- the same rebuild as 1.
+3. **The kernel by exposure**: a player with 200 possessions this season wants more of his past than a
+   starter does.  `lam_buckets` is the machinery and the kernel is currently one number for everyone.
+4. **Not measured**: playoff rows in a kernel fit (the anchor season's playoffs are weighted 0 whenever the
+   cut is below 1, deliberately); `win_decay` re-tuned for a kernel fit; the season board against the
+   consensus (it is a different estimand from the block the floors score -- read `--consensus` on `ks52` if
+   anyone wants the screen).
 
 **Start at 3.5 or 3.2b.**  3.0 is done and 3.2 is measured (both below).  3.2 as written -- per-factor
 shrinkage with the points prior shared out -- does not unlock 22.7's 0.14; it loses.  What survives of it is a

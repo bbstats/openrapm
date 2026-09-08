@@ -50,7 +50,7 @@ from .cv import plugin_fit
 from .design import WindowData
 from .windows import build_window, hybrid_beta, window_label, window_seasons
 
-RESULT_COLUMNS = ["held_out", "k", "train", "system", "lam", "split", "group", "n", "mse", "base", "calib",
+RESULT_COLUMNS = ["held_out", "k", "train", "system", "lam", "cut", "split", "group", "n", "mse", "base", "calib",
                   "calib_side", "scale", "scale_off", "scale_def", "covered", "tg", "tg_base", "tg_n", "seconds"]
 
 
@@ -608,13 +608,25 @@ def by_bench(p: Prediction, wd_h: WindowData, ctx: Context, h: int, train: list)
     return _count_split(flag, wd_h, ctx.cfg.get("holdout", {}).get("bench_edges", [0, 3, 5, 7, 11]), "bench")
 
 
+def by_rookie(p: Prediction, wd_h: WindowData, ctx: Context, h: int, train: list) -> np.ndarray:
+    """How many of the ten on the floor had never played a game before season H (roles.parquet knows every
+    season from 1997, so a 1997 or 1998 row calls veterans rookies -- read the split from 1999 on).  The
+    in-season question the block board answers worst: a player the fit has no past for at all."""
+    ri = ctx.role_inputs
+    seen = set() if ri is None else set(ri[(ri.season < int(h)) & (ri.games > 0)].player_id.astype(int))
+    ids = wd_h.spec.ps_table["player_id"].to_numpy()
+    flag = np.array([0.0 if int(q) in seen else 1.0 for q in ids])
+    return _count_split(flag, wd_h, [0, 1, 2, 11], "rookies")
+
+
 def by_gt(p: Prediction, wd_h: WindowData, ctx: Context, h: int, train: list) -> np.ndarray:
     """Garbage-time rows (the stint parser's rule: a 4th-quarter margin of 15 late or 20 at any point) against the rest."""
     gt = wd_h.rows["is_gt"].to_numpy().astype(bool)
     return np.where(gt, "garbage time", "competitive")
 
 
-SPLITS = {"movers": by_movers, "exposure": by_exposure, "bigs": by_bigs, "bench": by_bench, "gt": by_gt}
+SPLITS = {"movers": by_movers, "exposure": by_exposure, "bigs": by_bigs, "bench": by_bench, "gt": by_gt,
+          "rookie": by_rookie}
 
 
 # ---------------------------------------------------------------------------------------- the runner
@@ -657,16 +669,26 @@ class Holdout:
                   f"systems {[s.name for s in systems]}", flush=True)
         for h in held:
             ctx.current_h = h
-            wd_h = ctx.design([h], "pts")                       # ALWAYS scored against actual points
+            wd_full = ctx.design([h], "pts")                    # ALWAYS scored against actual points
+            cut_frames: dict = {}
             for k in self.ks:
                 ctx.current_k = k
-                train = ctx.neighbourhood(h, k)
                 for system in systems:
+                    # an in-season system says which seasons it trains on (inseason.KernelSystem: the anchor
+                    # and the ones before it) and which part of the held-out season it may not have seen
+                    train = system.train_for(h, ctx) if hasattr(system, "train_for") else ctx.neighbourhood(h, k)
+                    if train is None:
+                        continue
+                    q = getattr(system, "cut", None)
+                    wd_h = wd_full if q is None else cut_season(wd_full, h, float(q), cut_frames)
+                    if wd_h is None:                            # nothing of the season is left to score
+                        continue
                     for lam in self.lams:
                         t1 = time.time()
                         rat = _fit(system, train, ctx, lam)
                         p = predict_season(rat, wd_h, level=self.level)
-                        base = dict(held_out=h, k=k, train=",".join(map(str, train)), system=system.name, lam=lam)
+                        base = dict(held_out=h, k=k, train=",".join(map(str, train)), system=system.name, lam=lam,
+                                    cut=np.nan if q is None else float(q))
                         rows.append(dict(**base, split="all", group="all", **score(p), seconds=time.time() - t1))
                         for sname, fn in splits.items():
                             grp = fn(p, wd_h, ctx, h, train)
@@ -686,6 +708,23 @@ class Holdout:
             res.to_parquet(out, index=False)
         ctx.current_h = None
         return res
+
+
+def cut_season(wd_full: WindowData, h: int, cut: float, cache: dict | None = None) -> WindowData | None:
+    """The held-out season's rows AFTER the cut: the games an in-season fit has not seen and is scored on.
+    The level is refit on these rows alone (`predict_season`), which is what makes the map fitted on the same
+    frame agree with the runner.  None when the cut leaves nothing (cut >= 1)."""
+    if cut is None or float(cut) >= 1.0:
+        return wd_full
+    if cache is not None and float(cut) in cache:
+        return cache[float(cut)]
+    from .inseason import season_frac
+    frac = season_frac(wd_full.games)
+    m = frac[wd_full.rows["game_idx"].to_numpy()] >= float(cut)
+    out = wd_full.subset(m) if m.any() else None
+    if cache is not None:
+        cache[float(cut)] = out
+    return out
 
 
 def _fit(system, train, ctx, lam):

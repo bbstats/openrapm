@@ -46,7 +46,7 @@ def measure(system: str, k: int, workers: int = 4, maps=("linear+sat",)) -> dict
     """Dump the system's ratings once per held-out season (timed), fit the calibration map leave-one-season-out
     on the dump, score with the criterion's scorer.  Loss = the MAPPED system's pooled team-game error; time = the
     dump's fit seconds summed over the held-out seasons."""
-    from eracoef.calmap import dump_ratings, evaluate, load_frames, parse_maps, unmapped_rows
+    from eracoef.calmap import cut_of, dump_ratings, evaluate, load_frames, parse_maps, unmapped_rows
     from eracoef.holdout import Context
     ho = Holdout.from_config(cfg, ks=[k])
     t0 = time.time()
@@ -54,7 +54,10 @@ def measure(system: str, k: int, workers: int = 4, maps=("linear+sat",)) -> dict
     wall = time.time() - t0
     secs = float(R.groupby("held_out").seconds.first().sum())
     ctx = Context.load(cfg)
-    frames = load_frames(ctx, ho.seasons(), level=ho.level, verbose=False)
+    # an in-season system (inseason.py) is scored on the games it has not seen, so its frames are cut the
+    # same way its fit was; the loss it logs is therefore NOT comparable with a full-season row
+    cut = cut_of(R, system)
+    frames = load_frames(ctx, ho.seasons(), level=ho.level, verbose=False, cut=cut)
     res, params = [unmapped_rows(R, frames, system, k)], []
     for fam in maps:
         map_o, map_d, bend = parse_maps(fam)
