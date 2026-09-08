@@ -403,6 +403,14 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         # APM alone (no shrunk twin), and the pair-row control with no PAST at all on defense (offense already pairs)
         S["tune501_b7_turnref_o_hwb_pasta"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hwb_pasta",
                                                        gbdt_features={"O": [*_SF2, *_HW, "past_apm", "past_poss"], "D": [*_FF2, *_SQ2, *_HW, "past_apm", "past_poss"]})
+        # the owner, 2026-09-07: "we need to split up o/d plus minus per 100" -- they are (the panel's APM is per
+        # side); this gives each prior the OTHER side's record too, named: the offensive prior sees his past
+        # defensive APM beside his past offensive one, and the defensive prior (pooled as shipped) the reverse
+        _PX = ["past_apm_o", "past_poss_o", "past_apm_d", "past_poss_d"]
+        S["tune501_b7_turnref_o_hwb_pastx"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hwb_pastx",
+                                                       gbdt_features={"O": [*_SF2, *_HW, "past_rapm", *_PX], "D": [*_FF2, *_SQ2, *_HW]})
+        S["tune501_b7_turnref_o_hwb_pastxd"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_hwb_pastxd",
+                                                        gbdt_features={"O": [*_SF2, *_HW, "past_rapm", *_PX], "D": [*_FF2, *_SQ2, *_HW, *_PX]})
         # the other bound: the defensive prior ALONE (the factor ridges at 1e6 leave no residual at all), so the
         # value of a defensive residual at team-game level is a number
         S["tune501_b7_turnref_o_dprior"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_dprior",

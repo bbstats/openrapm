@@ -255,15 +255,18 @@ BIO_BINS = {"height2": ("height", 2.0), "weight15": ("weight", 15.0)}
 # the past windows, so these are only allowed on PAIR rows (pair_rows), where the pair's target window is
 # excluded from the past as well as the exclusion set; at prediction time the past is every panel window
 # before the block, the block's own windows excluded (past_inputs).  A player with no past reads 0 / 0 / 0.
-PAST = ["past_apm", "past_poss", "past_rapm"]
+PAST_OWN = ["past_apm", "past_poss", "past_rapm"]                 # his record on THIS prior's side
+PAST_CROSS = ["past_apm_o", "past_poss_o", "past_apm_d", "past_poss_d"]   # both sides, named, for either prior
+PAST = [*PAST_OWN, *PAST_CROSS]
 PAST_DECAY = 0.5
 
 
-def past_features(p: pd.DataFrame, wins: list, keys: pd.DataFrame, exclude=(), decay: float = PAST_DECAY) -> pd.DataFrame:
+def past_features(p: pd.DataFrame, wins: list, keys: pd.DataFrame, exclude=(), decay: float = PAST_DECAY,
+                  suffix: str = "") -> pd.DataFrame:
     """PAST for each row of `keys` (player_id, window[, window_to]) from one side's panel rows `p` (player_id,
     window, poss, apm, rapm1): the windows before `window` in the order `wins`, not in `exclude`, not
     `window_to`, discounted by decay ** distance.  `window` may be a label beyond the panel (the block) given as
-    an index in `wins` via a `_wi` column instead."""
+    an index in `wins` via a `_wi` column instead.  `suffix` names the columns for a side ("_o" / "_d")."""
     idx = {lab: i for i, lab in enumerate(wins)}
     q = p[~p.window.isin(set(exclude))][["player_id", "window", "poss", "apm", "rapm1"]].copy()
     q["wi"] = q.window.map(idx).astype(float)
@@ -281,7 +284,15 @@ def past_features(p: pd.DataFrame, wins: list, keys: pd.DataFrame, exclude=(), d
     sr = np.bincount(m._i.to_numpy(), weights=wt * m.rapm1.to_numpy(dtype=float), minlength=n)
     ok = s > 0
     a, r = np.where(ok, sa / np.where(ok, s, 1.0), 0.0), np.where(ok, sr / np.where(ok, s, 1.0), 0.0)
-    return pd.DataFrame({"past_apm": a, "past_poss": s / 1000.0, "past_rapm": r}, index=keys.index)
+    return pd.DataFrame({f"past_apm{suffix}": a, f"past_poss{suffix}": s / 1000.0, f"past_rapm{suffix}": r}, index=keys.index)
+
+
+def past_all(panel: pd.DataFrame, side: str, wins: list, keys: pd.DataFrame, exclude=(), decay: float = PAST_DECAY) -> pd.DataFrame:
+    """Every PAST column for one prior's side: his own side's record unsuffixed, and both sides named."""
+    own = past_features(panel[panel.side == side], wins, keys, exclude=exclude, decay=decay)
+    o = past_features(panel[panel.side == "O"], wins, keys, exclude=exclude, decay=decay, suffix="_o")
+    d = past_features(panel[panel.side == "D"], wins, keys, exclude=exclude, decay=decay, suffix="_d")
+    return pd.concat([own, o[["past_apm_o", "past_poss_o"]], d[["past_apm_d", "past_poss_d"]]], axis=1)
 
 
 def past_inputs(panel: pd.DataFrame, side: str, exclude, player_ids, decay: float = PAST_DECAY) -> pd.DataFrame:
@@ -291,7 +302,7 @@ def past_inputs(panel: pd.DataFrame, side: str, exclude, player_ids, decay: floa
     ex = set(exclude)
     first = min((i for i, w in enumerate(wins) if w in ex), default=len(wins))
     keys = pd.DataFrame({"player_id": np.asarray(player_ids), "_wi": float(first)})
-    return past_features(panel[panel.side == side], wins, keys, exclude=ex, decay=decay)
+    return past_all(panel, side, wins, keys, exclude=ex, decay=decay)
 
 
 def _wants_derived(feats) -> bool:
@@ -401,7 +412,7 @@ def pair_rows(panel: pd.DataFrame, side: str, exclude=(), features=None, target_
     out = out[out.weight > 0].drop(columns="_poss_to").reset_index(drop=True)
     if past:
         # his record before w, the pair's target window w' left out of it as well as the exclusion set
-        pf = past_features(panel[panel.side == side], wins, out[["player_id", "window", "window_to"]], exclude=ex)
+        pf = past_all(panel, side, wins, out[["player_id", "window", "window_to"]], exclude=ex)
         for f in past:
             out[f] = pf[f].to_numpy()
     return out

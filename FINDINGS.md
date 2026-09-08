@@ -3712,3 +3712,28 @@ defensive floor by 0.005.  `docs/data/ratings.json` rebuilt.
 
 PAST on defense alone; the shrunk twin `past_rapm` as a fourth column beside APM and its possessions; PAST
 on pooled rows (it raises).
+
+### 7. The owner's follow-up: "we need to split up o/d plus-minus per 100" -- they are, and each prior can now see both
+
+The panel's APM is per side (one row per side, raw sign, per 100, each with its own possessions; the two
+sides correlate -0.06 across player-windows), so `past_apm` on the offensive prior was his past OFFENSIVE APM
+and nothing else.  What each prior did not see was the OTHER side's record.  `PAST_CROSS` names both:
+`past_apm_o`, `past_poss_o`, `past_apm_d`, `past_poss_d`, for either prior (`past_all`).  Against the shipped
+offense-only board, paired over the 28 seasons:
+
+| system | what | criterion vs `pasto` | z | wins | investigator vs `pasto` | z | wins | consensus (screen) |
+|---|---|---|---|---|---|---|---|---|
+| `..._hwb_pastx` | the offensive prior sees both sides | -0.029 | -1.69 | 19/28 | -0.039 | -1.62 | 17/28 | 0.819 / 0.817 / 0.759 |
+| **`..._hwb_pastxd`** | **both priors see both sides** | **-0.064** | **-1.84** | 19/28 | **-0.150** | **-4.28** | 22/28 | 0.808 / 0.815 / 0.748 |
+| `..._hwb_pasta` | each prior its own side | -0.022 | -0.47 | 17/28 | -0.092 | -2.02 | 17/28 | 0.799 / 0.806 / 0.745 |
+
+The defensive prior gains from the cross-side record where its own side alone did nothing (28.3): both priors
+seeing both sides is -0.15 on the investigator at z -4.3 and -0.064 on the criterion at z -1.8, i.e. -0.149 /
+-0.355 against the board before any plus-minus.  On the board it reads consensus 0.797 offense / **0.748
+defense** -- the defensive agreement floor missed by 0.002, the 21.26 / 22.7 / 25 trade once more: what the
+held-out data wants on defense, the consensus's defensive blend resists.  **Not shipped on this evidence: it is
+not significant on the criterion against the shipped board, and re-basing the defensive floor a second time
+for a z -1.8 candidate is the owner's call, not the record's.**  To take it: `gbdt.features_full_O` and `_D`
++= `past_apm_o, past_poss_o, past_apm_d, past_poss_d` (the offensive list keeps `past_rapm`), the
+`hwb_pastxd` tracker table to `calmap_ship.parquet`, `08_ratings.py`, and the defensive floor 0.75 -> 0.74 with
+the reason.  Fit time 66 s with the vectorised build (the shipped board's is 65 s).

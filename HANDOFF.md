@@ -596,6 +596,10 @@ cousin of it.
 
 Built and shipped (above).  Measured and not taken: PAST on defense (-0.02 / -0.06, neither significant),
 the both-sides form (not separable from offense-only, slower, and it misses the defensive floor by 0.005).
+**The owner's follow-up (28.7): the sides are split by construction, and each prior can now see BOTH sides'
+record (`PAST_CROSS`).  Both priors seeing both sides (`tune501_b7_turnref_o_hwb_pastxd`) is -0.15 on the
+investigator at z -4.3 and -0.064 on the criterion at z -1.8 against the shipped board, and misses the
+defensive agreement floor by 0.002 (0.748).  The owner's call; the steps are in 28.7.**
 **What is left of the gap is the top**: the offensive miss by rating decile is +0.64 in the top decile against
 +0.70 before, and Curry, LeBron, Jokic lead the under-rated list as before.  28.1 names the two mechanisms --
 the prior's target is the player's OTHER windows, so a peak's prior is its neighbours' average, and the ridge
@@ -662,6 +666,7 @@ turnover/tenure machinery is the safe form of that and tenure was not wanted off
   domain on: four GitHub `A` records + a `www` CNAME at Porkbun FIRST, then re-add `docs/CNAME` on `main`,
   wait for the cert, then `gh api -X PUT repos/bbstats/openrapm/pages -F https_enforced=true`.
 * Never re-run, from 28: PAST on defense alone; `past_rapm` beside APM and its possessions; PAST on pooled rows;
+  the offensive prior alone seeing both sides' past (`pastx`, not separable from own-side);
   the map's prior terms (`prior`, `prior2`, `priorsat`) on defense scored on the investigator (unchanged to
   the third decimal).
 * Never re-run, from 26: fine (unbinned) height and weight in the prior on either side; tenure and n_teams as

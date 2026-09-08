@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from eracoef.gbdt_prior import PAST, PAST_DECAY, pair_rows, past_features, past_inputs, training_rows
+from eracoef.gbdt_prior import PAST, PAST_DECAY, PAST_OWN, pair_rows, past_features, past_inputs, training_rows
 
 WINS = ["2000-2002", "2003-2005", "2006-2008", "2009-2011"]
 
@@ -25,7 +25,7 @@ def test_past_features_discount_exclude_and_zero_without_a_past():
     p = _panel()
     keys = pd.DataFrame({"player_id": [1, 1, 1, 2, 2], "window": [WINS[0], WINS[2], WINS[3], WINS[2], WINS[3]]})
     f = past_features(p[p.side == "O"], WINS, keys)
-    assert list(f.columns) == PAST
+    assert list(f.columns) == PAST_OWN
     assert f.past_apm[0] == 0 and f.past_poss[0] == 0                           # nothing before the first window
     d = PAST_DECAY
     w0, w1 = 1000 * d ** 2, 2000 * d                                             # window 2: windows 0 and 1 before it
@@ -62,3 +62,16 @@ def test_past_inputs_use_only_the_windows_before_the_block():
     assert f.past_apm[2] == 0 and len(f) == 3                                    # never seen at all
     g = past_inputs(p, "D", set(), [1])                                          # nothing excluded: everything is past
     assert g.past_poss[0] > f.past_poss[0]
+
+
+def test_cross_side_past_is_the_other_side_record():
+    from eracoef.gbdt_prior import past_all
+    p = _panel()
+    p.loc[p.side == "D", "apm"] = -3.0                                          # defense reads -3 everywhere
+    keys = pd.DataFrame({"player_id": [1], "window": [WINS[3]]})
+    f = past_all(p, "O", WINS, keys)
+    assert set(PAST) <= set(f.columns)
+    assert abs(f.past_apm[0] - f.past_apm_o[0]) < 1e-12 and abs(f.past_apm_d[0] + 3.0) < 1e-9
+    assert abs(f.past_poss_o[0] - f.past_poss_d[0]) < 1e-12                     # the same windows behind both
+    g = past_all(p, "D", WINS, keys)
+    assert abs(g.past_apm[0] + 3.0) < 1e-9 and abs(g.past_apm_o[0] - f.past_apm_o[0]) < 1e-12
