@@ -3971,3 +3971,35 @@ Trae Young, Bargnani over-rated), which no column here reached.
 Boruta's accepted lists as feature lists on either side (the career block in a list is +0.20 on the
 criterion); Boruta as a gate (23.10 stands; the coin toss on `blk` happened again); the shot-quality block,
 the binned height and the efficiency ratios back on the lists they were pruned from without a new reason.
+
+### 8. The owner's hypothesis: really good players do not transfer because their usage drops on the new team -- confirmed, and it carries most of the effect
+
+The 2024-2026 board at `target_pct_new_teammates` = 0 and = 1 (`scratch/turnover_compare.py`,
+`outputs/csv/target_pct_new_teammates_2024-2026.csv`) has the prime high-usage scorers losing the most
+relative to the field with all-new teammates (Gilgeous-Alexander -0.93, Doncic -0.92, Maxey -0.80 on the
+mapped total) and veteran bigs and connectors gaining (Tucker, Jordan, Draymond, Gobert +0.7 to +1.1).
+Across the 547 qualified players the delta correlates +0.46 with career possessions, +0.45 with age, +0.24
+with height, -0.33 with usage, -0.37 with points, and +0.01 with assist ratio: not passing.  In the joint
+regression (R-squared 0.58) one sd of usage is -0.21, of true shooting -0.21, of height +0.16, of career
+possessions +0.28, of assist ratio -0.02.  Prime-age high-usage players are the worst cell (-0.42), old
+low-usage players the best (+0.40).
+
+The owner read that as usage: a star's usage falls on a new team.  Tested on 2,646 adjacent-window pairs
+with 1,500+ possessions in both windows, by usage tercile in the feature window and the target window's
+turnover (settled < 0.3, 0.3-0.6, churned > 0.6):
+
+| change, target minus feature window | low usage | mid | high usage |
+|---|---|---|---|
+| usage per 100, churned roster | +0.54 | -0.30 | **-1.35** |
+| offensive APM, churned roster | +0.01 | 0.00 | **-0.42** |
+| possession share, churned roster | +0.019 | -0.001 | **-0.038** |
+| usage per 100, settled roster | -0.62 | -0.30 | -0.15 |
+| offensive APM, settled roster | +0.21 | -0.87 | +0.19 |
+
+High-usage players on a churned roster lose 1.35 usage per 100, 0.42 of APM and 3.8 points of playing-time
+share; low-usage players on a churned roster gain usage.  In the high-usage tercile the APM change regressed
+on turnover alone is -1.47 per unit of turnover; adding the usage change takes the turnover coefficient to
+-0.42 (72% carried by usage), adding the share change and age to -0.24 (84%).  **A scorer's skill transfers,
+his role does not, and plus-minus measures role times skill.**  The quarter-point per unit of turnover that
+remains is the part that reads as chemistry.  The record and the literature agree once "portable" is split
+into production (which is) and impact (which is not, because the role is not).
