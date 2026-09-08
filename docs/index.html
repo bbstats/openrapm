@@ -30,7 +30,8 @@
 <main>
   <h1>OpenRAPM</h1>
   <div class="controls">
-    <label>Block <select id="block"></select></label>
+    <label>View <select id="view"><option value="season">Season</option><option value="block">3-year block</option></select></label>
+    <label><span id="picklabel">Block</span> <select id="block"></select></label>
     <label>Min possessions <input id="minp" type="number" value="2000" min="0" step="500"></label>
     <label>Find <input id="find" type="search" placeholder="player name" autocomplete="off"></label>
   </div>
@@ -47,7 +48,8 @@
   </table>
   <footer>
     A multi-stage prior-informed RAPM: a role-and-age prior, then a gradient-boosted box-score prior, then a ridge on the
-    on-court result, chosen by out-of-season prediction of held-out games. Source, method and every measurement:
+    on-court result, chosen by out-of-season prediction of held-out games. A season's rating is fit on that season and the
+    two before it, the earlier ones weighted a half and a quarter, with nothing after it in the fit. Source, method and every measurement:
     <a href="https://github.com/bbstats/openrapm">github.com/bbstats/openrapm</a>. Architecture changes are welcome; the test that
     decides is <code>scripts/45_holdout.py</code>. <span id="built"></span>
   </footer>
@@ -56,11 +58,24 @@
 (async function () {
   const data = await (await fetch("data/ratings.json")).json();
   const rows = data.rows, windows = data.meta.windows;
+  const seasonRows = data.seasons || [], seasons = data.meta.seasons || [];
   const $ = id => document.getElementById(id);
-  const block = $("block"), minp = $("minp"), find = $("find"), tbody = $("table").querySelector("tbody");
+  const view = $("view"), block = $("block"), minp = $("minp"), find = $("find"), tbody = $("table").querySelector("tbody");
   let sortKey = "t";
-  windows.forEach(w => { const o = document.createElement("option"); o.value = w; o.textContent = w; block.appendChild(o); });
-  block.value = windows[windows.length - 1];
+  // the season board is the default view when it has been built (scripts/60_season_board.py); the
+  // three-year blocks stay available in the same picker
+  view.value = seasons.length ? "season" : "block";
+  if (!seasons.length) view.parentElement.style.display = "none";
+  function fillPicker() {
+    const single = view.value === "season";
+    const keys = single ? seasons : windows;
+    block.replaceChildren();
+    keys.forEach(w => { const o = document.createElement("option"); o.value = w; o.textContent = w; block.appendChild(o); });
+    block.value = keys[keys.length - 1];
+    $("picklabel").textContent = single ? "Season" : "Block";
+  }
+  fillPicker();
+  view.addEventListener("change", () => { fillPicker(); render(); });
   $("built").textContent = "Built " + data.meta.built + ".";
   document.querySelectorAll("th[data-k]").forEach(th => th.addEventListener("click", () => {
     sortKey = th.dataset.k;
@@ -72,7 +87,9 @@
   const fmt = v => (v > 0 ? "+" : "") + v.toFixed(1);
   function render() {
     const w = block.value, mp = +minp.value || 0, q = find.value.trim().toLowerCase();
-    let r = rows.filter(x => x.w === w && x.p >= mp);
+    const single = view.value === "season";
+    let r = single ? seasonRows.filter(x => String(x.s) === String(w) && x.p >= mp)
+                   : rows.filter(x => x.w === w && x.p >= mp);
     if (q) r = r.filter(x => x.n.toLowerCase().includes(q));
     r.sort((a, b) => b[sortKey] - a[sortKey]);
     tbody.replaceChildren();

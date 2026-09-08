@@ -280,6 +280,13 @@ class MspiFast:
                                          # share; "2d" selects the offense/defense ratio as well
     factor_x3: bool = False              # the eFG% factor with opponent threes repriced at the shooter's expectation
     no_def_prior: bool = False           # DIAGNOSTIC: the defensive prior zeroed before the solves
+    kernel: dict | None = None           # in-season mode (inseason.py): the weight of each training season by its
+                                         # offset from the ANCHOR (= max(train)), e.g. {0: 1, -1: 0.5, -2: 0.25}; an
+                                         # offset the kernel does not name gets 0.  Unlike `decay` / `season_weights`
+                                         # it needs no held-out season, so it applies on the board as well.
+    cut: float | None = None             # the share of the ANCHOR season's games the fit may see (0..1); the rest of
+                                         # that season is weighted 0 in the ridge, in the exposure, and in every input
+                                         # built from season tables (inseason.keep_games).  None = the whole season
 
     def counter_columns(self) -> set | None:
         """The per-possession counters this system's two targets read, so the design need not assemble the
@@ -306,6 +313,15 @@ class MspiFast:
         wd = ctx.design(train, "pts", tuple(self.phases), counter_cols=self.counter_columns(), min_den=self.min_den)
         T("design")
         ys = {}
+        # the in-season kernel (inseason.py): one per-game weight array feeds the ridge rows, the games behind
+        # the padded rates and the possessions, so they cannot disagree; `keep` names the same games for the
+        # inputs built from season tables rather than from the design
+        kern_mult, keep = None, None
+        if self.kernel is not None or self.cut is not None:
+            from .inseason import anchor_of, kernel_game_mult, keep_games
+            anchor = anchor_of(train)
+            kern_mult = kernel_game_mult(wd, anchor, self.kernel, self.cut)
+            keep = keep_games(wd, anchor, self.cut)
 
         def target_y(name):
             if name not in ys:
@@ -314,7 +330,7 @@ class MspiFast:
                 elif name in TARGETS:
                     ys[name] = derived_target(wd, name)
                 else:
-                    wd_t = xshoot.DEFENSE_TARGETS[name](train, cfg, wd)
+                    wd_t = xshoot.DEFENSE_TARGETS[name](train, cfg, wd, keep=keep)
                     ys[name] = (wd_t[0] if isinstance(wd_t, tuple) else wd_t).y
             return ys[name]
 
@@ -340,13 +356,18 @@ class MspiFast:
             gm = np.ones(int(g["game_idx"].max()) + 1)
             gm[g["game_idx"].to_numpy()] = season_weight(g["season"].to_numpy())
             game_mult = gm
+        if kern_mult is not None:
+            game_mult = kern_mult
+        w_rows = np.asarray(wd.w, dtype=float)
+        if kern_mult is not None:            # never mutate wd.w: ctx.design caches the design across systems
+            w_rows = w_rows * kern_mult[wd.rows["game_idx"].to_numpy()]
         exp = make_exposure(wd, mode="full", pad_target=self.pad_target or cfg["pad_target"], game_mult=game_mult,
                             pad_scale=float(self.pad_scale))
         if wd.parts is not None:
             exp.parts = wd.parts
-            exp.fit(None, sample_weight=wd.w)
+            exp.fit(None, sample_weight=w_rows)
         else:
-            exp.fit(wd.X, sample_weight=wd.w)
+            exp.fit(wd.X, sample_weight=w_rows)
         T("exposure")
         chain_kw = dict(scale=self.scale, target=self.target, params=self.gbdt_params, panel=self.panel,
                         target_d=self.target_d, features=self.gbdt_features, win_decay=self.win_decay,
@@ -354,10 +375,10 @@ class MspiFast:
         chain_kw["turn_ref"] = float(self.turn_ref)
         chain_kw["turn_sides"] = tuple(self.turn_sides)
         tmode = None if not self.turn else ("pairs" if self.turn == "pairs" else "ref")
-        off = chain_offset(self.sides, self.mode, turn=tmode, **chain_kw)(train, ctx, wd, exp=exp)
+        off = chain_offset(self.sides, self.mode, turn=tmode, **chain_kw)(train, ctx, wd, exp=exp, keep=keep)
         delta = 0.0
         if self.turn is True:      # the trade delta: the prior at H's turnover minus at the settled value
-            delta = chain_offset(self.sides, self.mode, turn="h", **chain_kw)(train, ctx, wd, exp=exp) - off
+            delta = chain_offset(self.sides, self.mode, turn="h", **chain_kw)(train, ctx, wd, exp=exp, keep=keep) - off
         T("prior")
         if self.no_def_prior:
             off = np.array(off, dtype=float)
@@ -370,7 +391,7 @@ class MspiFast:
         # one layout and one set of cross-products; the second side changes only the response
         mm = MixedModelRAPM(lam=lam, lam_ratio=ratio, beta_fixed=beta, prior_offset=off, spec=wd.spec,
                             lam_buckets=self.lam_buckets)
-        w = np.asarray(wd.w, dtype=float)
+        w = w_rows
         if self.decay is not None or self.season_weights:
             w = w * season_weight(wd.rows["season"].to_numpy())
         if wd.parts is not None:
@@ -388,7 +409,7 @@ class MspiFast:
         d_resid = u["d"][m:]
         self.factor_diag = None
         if self.def_factors is not None:
-            x3 = xshoot.expected_threes(train, cfg, wd)[0] if self.factor_x3 else None
+            x3 = xshoot.expected_threes(train, cfg, wd, keep=keep)[0] if self.factor_x3 else None
             fd = factor_defense(wd, layout, off, y_o, y_d, target_y("pts"), w, lam, ratio, self.lam_buckets,
                                 factor_lams=self.factor_lams, lam_scale=float(self.factor_lam_scale),
                                 reml=self.factor_reml, x3=x3)
@@ -400,5 +421,10 @@ class MspiFast:
         df = pd.DataFrame({"player_id": wd.spec.ps_table["player_id"].to_numpy(),
                            "o": off[:m] + u["o"][:m], "d": off[m:] + d_resid,
                            "poss": np.asarray(exp.season_poss_off_, dtype=float),
+                           "poss_d": np.asarray(exp.season_poss_def_, dtype=float),
                            "prior_o": off[:m], "prior_d": off[m:]})
+        if kern_mult is not None:
+            # a player the kernel gave no possessions is not rated: his prior was built from inputs the cut
+            # kept off, and scoring him would put a number on the games the fit is being tested against
+            df = df[df.poss > 0].reset_index(drop=True)
         return Ratings(df)

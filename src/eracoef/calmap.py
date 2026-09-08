@@ -46,8 +46,11 @@ def dump_systems(ho: Holdout, systems: list, ctx: Context, held=None, verbose: b
         ctx.current_h = h
         for k in ho.ks:
             ctx.current_k = k
-            train = ctx.neighbourhood(h, k)
             for s in systems:
+                # an in-season system names its own training seasons and the part of H it did not see
+                train = s.train_for(h, ctx) if hasattr(s, "train_for") else ctx.neighbourhood(h, k)
+                if train is None:
+                    continue
                 t1 = time.time()
                 rat = _fit(s, train, ctx, ho.lams[0])
                 secs = time.time() - t1
@@ -55,8 +58,10 @@ def dump_systems(ho: Holdout, systems: list, ctx: Context, held=None, verbose: b
                 for c in ("prior_o", "prior_d"):
                     if c not in d.columns:
                         d[c] = np.nan
+                q = getattr(s, "cut", None)
                 rows.append(d.assign(held_out=int(h), k=int(k), system=s.name, fill_o=rat.fill_o, fill_d=rat.fill_d,
-                                     seconds=secs))
+                                     seconds=secs, train=",".join(map(str, train)),
+                                     cut=np.nan if q is None else float(q)))
         if verbose:
             print(f"  {h} dumped ({time.time() - t0:.0f}s)", flush=True)
     ctx.current_h = None
@@ -116,6 +121,25 @@ def ratings_for(dump: pd.DataFrame, system: str, k: int, h: int) -> Ratings:
     return Ratings(d[cols].reset_index(drop=True), fill_o=float(d.fill_o.iloc[0]), fill_d=float(d.fill_d.iloc[0]))
 
 
+def cut_of(dump: pd.DataFrame, system: str) -> float | None:
+    """The cut a dumped in-season system was fit at, or None: the frames it is scored on must match it."""
+    if "cut" not in dump.columns:
+        return None
+    v = dump.loc[dump.system == system, "cut"].dropna()
+    return float(v.iloc[0]) if len(v) else None
+
+
+def train_of(dump: pd.DataFrame, system: str, k: int, h: int) -> list | None:
+    """The seasons a dumped system actually trained on for (K, H) -- a kernel system's are not
+    `Context.neighbourhood`'s, and the map's covariates are measured on the training seasons."""
+    if "train" not in dump.columns:
+        return None
+    d = dump[(dump.system == system) & (dump.k == k) & (dump.held_out == h)]
+    if len(d) == 0 or pd.isna(d.train.iloc[0]):
+        return None
+    return [int(x) for x in str(d.train.iloc[0]).split(",") if x]
+
+
 # ---------------------------------------------------------------------------------------- 2. the season frame
 @dataclass
 class SeasonFrame:
@@ -143,6 +167,8 @@ class SeasonFrame:
     key: np.ndarray | None = None         # team-game index of each row (the rows G aggregates)
     extra: pd.DataFrame | None = None     # per player in `ids` order: covariates AT H (age), for the Age term
     ctx: object = None                    # for covariates that depend on the training block (moved, per K)
+    cut: float | None = None              # the share of H the fit had seen; the frame holds the rows AFTER it
+    wd_full: object = None                # the whole season's design, for the covariates that need its games
     _turn: dict = field(default_factory=dict, repr=False)   # the turnover columns per K (they cost a second each)
 
     def turnover(self, k: int, train: list) -> dict | None:
@@ -178,14 +204,19 @@ class SeasonFrame:
         self._turn[k] = out
         return out
 
-    def covariates(self, k: int) -> pd.DataFrame | None:
+    def covariates(self, k: int, train: list | None = None) -> pd.DataFrame | None:
         """`extra` plus the K-dependent ones: `moved` = main team in H differs from the main team in the nearest
         training season he appears in (holdout.by_movers); `turn` / `turnp` / `turna` = teammate turnover of H
-        with respect to the block (`turnover`)."""
+        with respect to the block (`turnover`).
+
+        `train`: the seasons the system being mapped actually trained on (`train_of`).  A kernel system's are
+        not `Context.neighbourhood`'s, and `tshare` -- the role measured on the training block -- would
+        otherwise be read off seasons the fit never saw.
+        """
         if self.extra is None or self.ctx is None:
             return self.extra
         ex = self.extra.copy()
-        train = self.ctx.neighbourhood(self.h, k)
+        train = list(train) if train else self.ctx.neighbourhood(self.h, k)
         t = self.turnover(k, train)
         if t is not None:
             for key, val in t.items():
@@ -198,6 +229,12 @@ class SeasonFrame:
         ex["moved"] = [1.0 if (q in now and q in before and now[q] != before[q]) else 0.0 for q in ex.player_id]
         ex["blk_team"] = [int(before.get(q, -1)) for q in ex.player_id]
         ri = self.ctx.role_inputs
+        if ri is not None and self.cut is not None and int(self.h) in train:
+            # the training block includes the season being scored, up to the cut: the share SO FAR, not the
+            # share it ends at (roles.cut_role_inputs, the table the prior was built from)
+            from .inseason import keep_games
+            from .spm import cut_inputs_cached
+            ri = cut_inputs_cached(self.ctx, keep_games(self.wd_full, int(self.h), float(self.cut)))
         if ri is not None:                       # the same role measured on the TRAINING block instead of H
             t = ri[ri.season.isin(list(train)) & (ri.games > 0)].groupby("player_id")[["poss_on", "team_poss"]].sum()
             sh = (t.poss_on / t.team_poss.replace(0.0, np.nan)).to_dict()
@@ -205,8 +242,15 @@ class SeasonFrame:
         return ex
 
     @classmethod
-    def build(cls, ctx: Context, h: int, level: str = "home") -> "SeasonFrame":
-        wd = ctx.design([h], "pts")
+    def build(cls, ctx: Context, h: int, level: str = "home", cut: float | None = None) -> "SeasonFrame":
+        """`cut`: score the season from that share of it onward -- the rows an in-season fit at that cut has
+        not seen (holdout.cut_season).  The level, the team-game grouping and every covariate are then built
+        on those rows alone, so the map agrees with the runner row for row."""
+        wd_full = ctx.design([h], "pts")
+        wd = wd_full
+        if cut is not None and float(cut) < 1.0:
+            from .holdout import cut_season
+            wd = cut_season(wd_full, int(h), float(cut))
         extra = None
         if ctx.role_inputs is not None:
             ri = ctx.role_inputs[ctx.role_inputs.season == h][["player_id", "age", "poss_pct", "gs_pct", "poss_on", "team_poss"]]
@@ -236,7 +280,8 @@ class SeasonFrame:
         G = sp.csr_matrix((poss / wg[key], (key, np.arange(len(key)))), shape=(n_tg, len(key)))
         return cls(h=h, wd=wd, Zo=wd.X[:, :m].tocsr(), Zd=wd.X[:, m:2 * m].tocsr(),
                    ids=wd.spec.ps_table["player_id"].to_numpy(), y=np.asarray(wd.y, dtype=float), w=w, poss=poss,
-                   A=A, L=L, G=G, wg=wg, key=key, extra=extra, ctx=ctx)
+                   A=A, L=L, G=G, wg=wg, key=key, extra=extra, ctx=ctx,
+                   cut=None if cut is None else float(cut), wd_full=wd_full)
 
     def profiled(self, C: np.ndarray) -> np.ndarray:
         """Columns with the season's level profiled out (what the criterion's refit does to any contribution)."""
@@ -252,9 +297,9 @@ def _teammates(ctx) -> pd.DataFrame | None:
     return cached_table(ctx)
 
 
-def load_frames(ctx: Context, seasons, level: str = "home", verbose: bool = True) -> dict:
+def load_frames(ctx: Context, seasons, level: str = "home", verbose: bool = True, cut: float | None = None) -> dict:
     t0 = time.time()
-    out = {int(h): SeasonFrame.build(ctx, int(h), level) for h in seasons}
+    out = {int(h): SeasonFrame.build(ctx, int(h), level, cut=cut) for h in seasons}
     if verbose:
         print(f"built {len(out)} season frames ({time.time() - t0:.0f}s)", flush=True)
     return out
@@ -838,7 +883,7 @@ def row_columns(dump: pd.DataFrame, frames: dict, system: str, k: int, map_o: Si
     prof, ws = {}, []
     for h, f in frames.items():
         rat = mapped_ratings(ratings_for(dump, system, k, h), th, map_o, map_d, D.scale_o, D.scale_d,
-                             extra=f.covariates(k))
+                             extra=f.covariates(k, train_of(dump, system, k, h)))
         r = rat.aligned(f.ids)
         c = np.asarray(f.Zo @ np.nan_to_num(r.o.to_numpy(dtype=float))) +             np.asarray(f.Zd @ np.nan_to_num(r.d.to_numpy(dtype=float)))
         prof[h] = f.profiled(c)
@@ -889,7 +934,7 @@ def build_design(dump: pd.DataFrame, frames: dict, system: str, k: int, map_o: S
     for h, f in frames.items():
         r = ratings_for(dump, system, k, h).aligned(f.ids)
         poss = r.poss.to_numpy(dtype=float)
-        ex = f.covariates(k)
+        ex = f.covariates(k, train_of(dump, system, k, h))
         ex_o = ex_d = ex
         if ex is not None and "prior_o" in r.columns:
             ex_o = ex.assign(prior=r.prior_o.to_numpy(dtype=float) / so)
@@ -986,7 +1031,8 @@ def evaluate(dump: pd.DataFrame, frames: dict, system: str, k: int, map_o: SideM
     rows, params = [], []
     for h, f in frames.items():
         th = fit_theta(D, exclude_h=h, ridge=ridge, map_o=map_o, map_d=map_d)
-        rat = mapped_ratings(ratings_for(dump, system, k, h), th, map_o, map_d, D.scale_o, D.scale_d, extra=f.covariates(k))
+        rat = mapped_ratings(ratings_for(dump, system, k, h), th, map_o, map_d, D.scale_o, D.scale_d,
+                             extra=f.covariates(k, train_of(dump, system, k, h)))
         p = predict_season(rat, f.wd, level=level)
         gamma, s_u = (None, np.nan)
         if bend is not None and bend.n_params:
@@ -995,7 +1041,8 @@ def evaluate(dump: pd.DataFrame, frames: dict, system: str, k: int, map_o: SideM
                 rcols, per_h, _ = row_columns(dump, frames, system, k, map_o, map_d, D, th, bend.row_powers)
             gamma, s_u = fit_bend(D, th, bend, exclude_h=h, rows=rcols)
             p = bent_prediction(p, f, bend, gamma, s_u, level=level, rows=None if per_h is None else per_h[h])
-        rows.append(dict(held_out=h, k=k, train="", system=name, lam=lam, split="all", group="all", **score(p), seconds=0.0))
+        rows.append(dict(held_out=h, k=k, train="", system=name, lam=lam, cut=f.cut if f.cut is not None else np.nan,
+                         split="all", group="all", **score(p), seconds=0.0))
         params.append(_param_row(name, system, k, h, map_o, map_d, D, th, bend, gamma, s_u))
     th_all = fit_theta(D, exclude_h=None, ridge=ridge, map_o=map_o, map_d=map_d)
     g_all, s_all = (None, np.nan)
@@ -1013,7 +1060,8 @@ def unmapped_rows(dump: pd.DataFrame, frames: dict, system: str, k: int, lam: fl
     rows = []
     for h, f in frames.items():
         p = predict_season(ratings_for(dump, system, k, h), f.wd, level=level)
-        rows.append(dict(held_out=h, k=k, train="", system=system, lam=lam, split="all", group="all", **score(p), seconds=0.0))
+        rows.append(dict(held_out=h, k=k, train="", system=system, lam=lam, cut=f.cut if f.cut is not None else np.nan,
+                         split="all", group="all", **score(p), seconds=0.0))
     return pd.DataFrame(rows)[RESULT_COLUMNS]
 
 

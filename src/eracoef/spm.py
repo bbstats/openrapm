@@ -130,9 +130,44 @@ def apm_lambda_check(panels: dict, side: str, **kw) -> pd.DataFrame:
     return t
 
 
-def season_of_units(wd) -> np.ndarray:
-    """The season (year) each Z unit played most, from the design."""
-    return np.asarray(wd.spec.seasons, dtype=np.int64)[np.asarray(wd.spec.season_of_ps, dtype=np.int64)]
+def season_of_units(wd, weights=None) -> np.ndarray:
+    """The season (year) each Z unit played most, from the design.
+
+    `weights`: per player-season possessions to decide "most" with, instead of the design's own unweighted
+    ones -- the exposure's `psx_poss_off_`, which carries the in-season kernel and cut (inseason.py).  Without
+    it a player whose current season is cut away would still be labelled with it.
+    """
+    years = np.asarray(wd.spec.seasons, dtype=np.int64)
+    if weights is None:
+        return years[np.asarray(wd.spec.season_of_ps, dtype=np.int64)]
+    spec = wd.spec
+    w = np.asarray(weights, dtype=float)
+    ps_of_psx = spec.ps_of_psx if spec.ps_of_psx is not None else np.arange(spec.n_psx)
+    season_of_psx = spec.season_of_psx if spec.season_of_psx is not None else spec.season_of_ps
+    best = np.full(spec.n_ps, -1.0)
+    out = np.asarray(spec.season_of_ps, dtype=np.int64).copy()
+    for k in np.argsort(w):
+        i = int(ps_of_psx[k])
+        if w[k] >= best[i]:
+            best[i], out[i] = w[k], int(season_of_psx[k])
+    return years[out]
+
+
+def cut_inputs_cached(ctx, keep: dict) -> pd.DataFrame:
+    """`roles.cut_role_inputs` for every season in `keep` (inseason.keep_games), cached on the Context: the
+    same (season, cut) is asked for once per fit and the fits repeat across systems."""
+    from .roles import cut_role_inputs
+    cache = getattr(ctx, "_cut_inputs", None)
+    if cache is None:
+        cache = ctx._cut_inputs = {}
+    key = tuple(sorted((int(s), len(g), str(min(map(str, g))) if len(g) else "") for s, g in keep.items()))
+    if key not in cache:
+        ri = ctx.role_inputs
+        for season, gids in keep.items():
+            ri = cut_role_inputs(ri, int(season), gids, ctx.cfg,
+                                 cap=float(ctx.cfg.get("roles", {}).get("share_cap", 0.9)))
+        cache[key] = ri
+    return cache[key]
 
 
 TURN_REF = 0.35     # a typical stayer's teammate turnover, season to season (median 0.36; FINDINGS 24)
@@ -169,16 +204,21 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
     # trained on the shrunk RAPM_1 is too timid: starters want 1.2, deep bench 2.0); `target` = "apm" uses
     # the chain trained on unshrunk APM instead (ctx.mspi_apm)
 
-    def offset(train, ctx, wd, exp=None) -> np.ndarray:
+    def offset(train, ctx, wd, exp=None, keep=None) -> np.ndarray:
         if ctx.rpanel is None or ctx.role_inputs is None:
             raise RuntimeError("outputs/role_panel.parquet or data/cache/roles.parquet is missing; "
                                "run scripts/49_role_panel.py")
         cfg = ctx.cfg
         s = cfg.get("spm", {})
         exclude = ctx.labels(train)
-        inputs = window_inputs(wd, ctx.role_inputs, cap=float(cfg.get("roles", {}).get("share_cap", 0.9)))
         if exp is None:
             exp = make_exposure(wd, mode="full", pad_target=cfg["pad_target"]).fit(wd.X, sample_weight=wd.w)
+        # the in-season cut (inseason.py): the role inputs of a season the fit only partly saw are rebuilt from
+        # the games it saw, and every player-season is weighted by the exposure's own (kernel-weighted)
+        # possessions, so a down-weighted season does not count for its full length here either
+        role_inputs = ctx.role_inputs if not keep else cut_inputs_cached(ctx, keep)
+        inputs = window_inputs(wd, role_inputs, cap=float(cfg.get("roles", {}).get("share_cap", 0.9)),
+                               psx_weights=np.asarray(exp.psx_poss_off_, dtype=float))
         poss_o = np.asarray(exp.season_poss_off_, dtype=float)
         poss_d = np.asarray(exp.season_poss_def_, dtype=float)
         m = wd.spec.n_ps
@@ -218,7 +258,7 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
                 # the shot totals of the TRAINING block only, the way the panel row's came from its window's
                 # three seasons -- the held-out season is not among `train`, so nothing here has seen it
                 from .xshoot import player_shot_frame
-                shots = player_shot_frame(train, cfg, wd.spec.ps_table["player_id"].to_numpy())
+                shots = player_shot_frame(train, cfg, wd.spec.ps_table["player_id"].to_numpy(), keep=keep)
             dredge = None
             if wants & set(DREDGE_ANY):
                 # and the same for the play-by-play event counts: the training block's own totals and its own
@@ -276,13 +316,14 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
                     extra = {k: pd.concat([v, di], axis=1) for k, v in extra.items()}
                 else:
                     extra = pd.concat([extra, di], axis=1)
+            seasons_ps = season_of_units(wd, weights=np.asarray(exp.psx_poss_off_, dtype=float))
             common = dict(features=list(wd.spec.features), extra=extra,
                           raw=(exp.season_rates_, exp.season_rates_d_), shots=shots, dredge=dredge)
             g = np.zeros(2 * m)
             if "O" in sides:
-                g += gbdt_offset(prior_o, ro, rd, season_of_units(wd), poss_o, poss_d, exclude, sides=("O",), **common)
+                g += gbdt_offset(prior_o, ro, rd, seasons_ps, poss_o, poss_d, exclude, sides=("O",), **common)
             if "D" in sides:
-                g += gbdt_offset(prior_d, ro, rd, season_of_units(wd), poss_o, poss_d, exclude, sides=("D",), **common)
+                g += gbdt_offset(prior_d, ro, rd, seasons_ps, poss_o, poss_d, exclude, sides=("D",), **common)
             g = g * float(scale)
             if mode == "residual":
                 off = off + g

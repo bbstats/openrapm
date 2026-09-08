@@ -4091,3 +4091,194 @@ to it.
 The destination features as the board's prior on offense (forecast better, attribution worse: the
 instruments disagree and the board is a rating); block-minutes and rebound-minutes on defense, own or the
 destination's, with or without the roster's defensive APM (zero on both instruments).
+
+
+## 31. In season: the rolling kernel, the game cut, and prediction against attribution
+
+Written 2026-09-08.  The owner: *"rolling 3 years is cleaner/fuller than our current block/chunk method ...
+from those rolling 3yr numbers I want good, clean single year numbers that come from it"*, and, asked what
+the single-year number is for: *"the ultimate goal here is 'in-season, super good at dividing credit AND
+being predictive, for the current season' -- it would be good for us to isolate/decompose those 2 a little
+more formally."*  This section builds the rating, builds the instrument that separates the two goals, and
+reports what the instruments say.  `src/eracoef/inseason.py`, `scratch/inseason_run.py`,
+`scripts/60_season_board.py`, `tests/test_inseason.py`.
+
+### 1. What a rating is now: an anchor, a kernel, and a cut
+
+A rating is ANCHORED at a season and fit on that season and the two before it, the earlier ones
+down-weighted: `kernel = {0: 1, -1: w1, -2: w2}`, keyed on the offset from the anchor, which is `max(train)`
+-- the held-out season in the criterion, the rating's own season on the board.  Nothing after the anchor is
+in it, so the latest season's row is a rating of the season in progress.
+
+For measurement there is also a CUT: `cut = q` lets the fit see the anchor season's regular-season games
+whose chronological position is below q and nothing else of it, and it is scored on the games after q.  One
+per-game weight array (`inseason.kernel_game_mult`) carries both, and the ridge rows, the games behind the
+padded box rates and the possessions in `Ratings.poss` are all derived from it, so they cannot disagree.
+`keep_games` names the same games for the inputs that are built from season tables instead of the design.
+
+`fastfit.MspiFast` gained two fields (`kernel`, `cut`) and everything else is the shipped estimator, so the
+identities are exact: the flat kernel `{1, 1, 1}` with no cut reproduces `tune501_b7_pasto_pOD` on the same
+three seasons to **0.0e+00**, and `cut = 1` is `cut = None` to 0.0e+00 (`scratch/inseason_ident.py`).
+
+### 2. The leak audit, and the one accepted leak
+
+A cut is only worth having if the fit really cannot see the games it is scored on.  Everything a fit reads,
+and what was done about it:
+
+| input | built from | leaked? | what was done |
+|---|---|---|---|
+| ridge rows, padded rates, `Ratings.poss` | the design, weighted by `game_mult` | no | the kernel array |
+| pad k, the leave-one-out tables, the target bins | the covariate games, unweighted | **yes** | `exposure.py` drops zero-weight games before they are estimated |
+| the centring means | `sample_weight=wd.w` | **yes** | the kernel-weighted rows |
+| role inputs `poss_pct`, `gs_pct` -- the prior's main inputs | `roles.parquet`, whole season, weighted by uncut possessions | **yes, twice** | `roles.cut_role_inputs` rebuilds them from the kept games (share SO FAR, the team's denominator cut with him); `window_inputs(psx_weights=)` weights each player-season by the exposure's own possessions |
+| the GBDT's `season` feature | the season he played most, unweighted | label only | `spm.season_of_units(weights=)` |
+| shot quality (`mpts`) and the x3def target of the pre-cut rows | `xshoot.block_totals` | **yes** | `season_totals(keep=)` down every path (uncached for a cut season) |
+| `xftm`, the shooter's leave-one-game-out season free-throw percentage | baked into the stints at build time | **yes** | **accepted and documented**: it is a padded, leave-one-out LEVEL, and removing it means rebuilding the stints per cut |
+| bio, career, PAST, turnover at the settled reference | windows before the block, or constants | no | -- |
+| the map's `tshare` | roles over the training block | **yes** | `SeasonFrame(cut=)` reads the cut table too |
+
+**The leak detector.**  A fit at `cut = 0` on {a-2, a-1, a} knows nothing of `a`, so it must equal the same
+kernel fit on {a-2, a-1} alone.  It does, to **5.0e-14** -- once the two are given the same window-exclusion
+set.  Before that they differed by **1.4 points per 100**, and the whole of it was the prior's exclusion set:
+a cut fit trains on the anchor season, so `ctx.labels(train)` keeps the GBDT prior off the anchor's window as
+well.  That is the conservative behaviour and it is kept.  It also means a kernel system's `train_for` keeps
+the seasons its kernel weights at ZERO in the training list, so every kernel excludes the same windows and
+the comparison between them is about the kernel and nothing else.
+
+### 3. The decomposition: one residual, two instruments
+
+For held-out season H and cut q the fit predicts the games of H after the cut, and the SAME residual is read
+twice:
+
+* **prediction** -- the pooled team-game MSE of the mapped prediction (`calmap.evaluate`, the criterion,
+  with the shipping map family fitted leave-one-season-out on the same cut dump).  This is the criterion
+  doing what it always did, except that it now scores the rest of a season in progress.
+* **attribution** -- `investigate.attributable`: the residual variance a player ridge on the same rows can
+  still put on named players.  What the board failed to credit to the right man.
+
+Lower is better on both, and both come from one `Prediction`, so they pair season by season exactly.
+
+### 4. The search half: the chunk board is not close, and the kernel wants to decay
+
+`scratch/inseason_run.py --held=search` (the 14 odd-indexed held-out seasons, the 22.7 protocol), K = 3, the
+shipping map.  `blk` is the in-season baseline a chunk product offers -- the last window that had FINISHED
+before the season, no part of the season in it.  `ks11` is the flat rolling three-year window and the
+reference column; `ks00` is the current season alone.
+
+| system | kernel | q = 0 | q = 0.25 | q = 0.5 | q = 0.75 |
+|---|---|---|---|---|---|
+| `blk` | the last finished block | 116.225 | 115.184 | 115.488 | 116.491 |
+| `ks00` | {1, 0, 0} | -- (no data) | 112.897 | 110.947 | 110.145 |
+| `ks11` | {1, 1, 1} | 114.239 | 111.194 | 110.225 | 110.349 |
+| `ks55` | {1, .5, .5} | 114.286 | 110.951 | 109.949 | 110.037 |
+| `ks86` | {1, .8, .6} | 114.167 | 110.961 | 109.984 | 110.127 |
+| `ks74` | {1, .7, .4} | 114.122 | 110.884 | 109.850 | 109.958 |
+| **`ks52`** | **{1, .5, .25}** | **114.136** | **110.707** | **109.753** | **109.844** |
+
+and the same systems on the attribution instrument (the residual variance a player ridge can attribute,
+against `ks11`):
+
+| system | q = 0 | q = 0.25 | q = 0.5 | q = 0.75 |
+|---|---|---|---|---|
+| `blk` | +4.005 (z 3.9) | +6.464 (z 6.6) | +7.703 (z 8.3) | +8.571 (z 8.7) |
+| `ks00` | -- | +3.068 (z 7.9) | +1.260 (z 3.2) | -0.156 (z -0.3) |
+| `ks55` | +0.220 | -0.215 (z -2.3) | -0.337 (z -2.9) | -0.384 (z -2.4) |
+| **`ks52`** | +0.095 | **-0.485 (z -3.3)** | **-0.565 (z -3.4)** | **-0.693 (z -2.8)** |
+
+**Three readings, and the instruments agree on all three.**
+
+1. **The chunk board is far behind in season**: +2.2 per 100 at the start of a season and +5.5 to +6.9 once
+   the season is a third old, at z 3.3 to 6.9, winning 0 or 3 of 13 seasons; and +4.0 to +8.6 on attribution.
+   Its coverage is 0.717 against 0.95-0.99, which is most of the story -- a block that ended before the
+   season began has no rating at all for a quarter of the players on the floor.  This is the owner's first
+   claim, measured: rolling is cleaner than chunks, and the gap is large.
+2. **The current season alone is not enough either**, until it is nearly over: `ks00` is +1.7 at q = 0.25 and
+   +0.7 at q = 0.5, and only catches up at q = 0.75 (-0.14, z -0.3).  The past two seasons are worth about a
+   point of team-game error through the first half of a season.
+3. **The kernel wants to decay.**  Every decaying kernel beats the flat one at every cut past q = 0, and
+   `ks52` = {1, 0.5, 0.25} is the best of the pre-registered grid on BOTH instruments at every cut:
+   -0.47 per 100 (z -3.9 to -2.2) and -0.49 to -0.69 on attribution.  At q = 0, where the anchor season is
+   empty and the kernel is only {w1, w2} on two past seasons, everything is inside noise -- as it should be,
+   since the kernel then only sets the ratio of two seasons and the overall shrinkage.
+
+**The optimum is interior, not a grid edge** (memory trap 5).  Three more kernels either side of `ks52`
+-- {1, .6, .3}, {1, .4, .15}, {1, .3, .1} -- are all within 0.11 per 100 of it and none is significant at
+both cuts: q = 0.5 reads -0.087 for `ks42` and +0.043 for `ks63`, q = 0.25 reads +0.034 and +0.096.  It is a
+plateau with `ks52` inside it, bounded below by `ks00` (much worse) and above by `ks11`.  Part 0 ruling 1
+takes the simpler member: **the kernel is {1, 1/2, 1/4}, one halving per season.**
+
+### 5. The confirm half, and the ridge
+
+The other 14 held-out seasons, the ones no kernel was chosen on (`--held=confirm`), against the flat rolling
+window.  Prediction first, then attribution:
+
+| | q = 0 | q = 0.25 | q = 0.5 | q = 0.75 |
+|---|---|---|---|---|
+| `ks52` vs `ks11`, criterion | -0.150 (z -1.8, 10/14) | **-0.225 (z -3.0, 12/14)** | **-0.205 (z -2.4, 10/14)** | -0.035 (z -0.2) |
+| `ks52` vs `ks11`, attribution | -0.104 (z -0.9) | -0.145 (z -1.5) | **-0.363 (z -2.9)** | **-0.281 (z -2.0)** |
+| `ks00` vs `ks11`, criterion | -- | +2.104 (z 10.5, 0/14) | +1.293 (z 5.4) | +1.304 (z 3.9) |
+| `blk` vs `ks11`, criterion | +2.736 (z 5.4) | +4.404 (z 7.3) | +5.345 (z 8.8) | +6.198 (z 7.3) |
+| `blk` vs `ks11`, attribution | +4.157 (z 5.5) | +6.193 (z 7.6) | +7.337 (z 9.5) | +7.148 (z 7.6) |
+
+It replicates.  The kernel gain is smaller here than on the search half (-0.2 against -0.47), which is what a
+search half is for, and it is the same sign at every cut on both instruments.
+
+**The ridge is the second knob, and it is not a trade.**  The shipped penalty was chosen for a block fit on
+three whole seasons; a kernel fit has an effective 1.75 of them, and the criterion says it should be LOOSER.
+`ks52_lam05` (the same kernel at half the ridge) on the search half is -0.02 / -0.02 / -0.11 per 100 at
+q = 0.25 / 0.5 / 0.75 -- inside noise -- and -0.22 / -0.16 / -0.15 on attribution at z -3.5 / -2.4 / -2.0.
+On the confirm half it is **better on both**: -0.145 (z -3.2), -0.116 (z -1.8), -0.155 (z -2.0) on the
+criterion and -0.315 (z -7.4), -0.253 (z -4.3), -0.245 (z -3.8) on attribution.  Doubling the ridge instead
+costs +0.15 to +0.21 on the criterion and +0.31 to +0.47 on attribution.  So the decomposition's two knobs
+behave differently: the KERNEL is a genuine trade in principle and reads the same way on both instruments
+here, while the RIDGE was simply mis-set for this shape of fit and half of it is free on both.
+
+**All 28 seasons at q = 0.75, the shipping read** (`--tag=ship --held=all`; this one is a report, not a
+choice -- the choices were made on the search half):
+
+| system | criterion | vs the chosen | z | wins | attribution | covered |
+|---|---|---|---|---|---|---|
+| **`ks52_lam05`** | **108.534** | -- | -- | -- | **59.517** | 0.988 |
+| `ks52` | 108.654 | +0.125 | 2.49 | 9/28 | 59.698 (z 3.6) | 0.988 |
+| `ks11` | 108.928 | +0.392 | 2.72 | 6/28 | 60.197 (z 4.7) | 0.988 |
+| `blk` | 115.021 | +6.822 | 9.43 | 0/26 | 68.384 (z 11.1) | 0.716 |
+
+### 6. What ships: the season board beside the block board
+
+`scripts/60_season_board.py` fits `ks52_lam05` once per anchor season from 1997 to 2026 (66 s for all thirty),
+applies the map fitted on the q = 0.75 in-season dump -- chosen out of sample on fits of this shape, not on
+the block board's -- and re-centres each side within the season.  `outputs/season_ratings.parquet` is
+19,605 rows with the `player_ratings` vocabulary, `season` in place of `window`, and both possession counts:
+`poss_off` is the kernel-weighted exposure the rating rests on and `poss_season` the player's own regular-season
+possessions in the season being rated (the site shows the second, because the first would read oddly beside a
+block row).  `52_site.py` writes it into `docs/data/ratings.json` under `seasons` and the page has a
+Block / Season switch.
+
+Against the block board it is the same board, slightly narrower: 2026 against 2024-2026 is **Spearman 0.969
+on 580 shared players**, standard deviation 2.52 against 2.93 -- a kernel fit sees an effective 1.75 seasons
+where a block sees three, so the ridge shrinks it a little more.  The top of 2026 is Wembanyama, Gilgeous-
+Alexander, Jokic, Leonard, Doncic against Gilgeous-Alexander, Leonard, Jokic, Wembanyama, Doncic on the block.
+
+**The block board is untouched**: `08_ratings.py`, `config.yaml`'s `ratings_prior` (bar the new
+`season_board` block) and `tests/test_vs_consensus.py` are exactly as they were, and the ten floors still
+score the board they always scored.  The season board is a second product, not a replacement.
+
+### 7. Traps, and what is next
+
+* **A cut fit excludes one more window than the fit it should equal.**  `ctx.labels(train)` keeps the GBDT
+  prior off every disjoint window the training seasons touch, and a cut fit trains on the anchor season, so
+  it also keeps the prior off the anchor's window.  That is 1.4 points per 100 of difference and it is not a
+  leak; it is why `train_for` KEEPS the seasons a kernel weights at zero, so every kernel excludes the same
+  windows and a comparison between kernels is about the kernel alone.
+* **The loss a cut run logs is not comparable with a full-season loss.**  It scores part of a season with the
+  level refit on those rows; `docs/progress.csv` should not carry these rows beside the board's.
+* **`Ratings.poss` means something different here** -- kernel-weighted, and cut.  `ReplacementSystem`'s 500
+  and the exposure-split edges are in those units, and the map's exposure term was refit on this dump, so the
+  board is consistent; anything comparing exposure across the two boards is not.
+* **`ks00` at q = 0 is an empty fit** and is dropped from the tables: no player has a possession, so the
+  system returns no rows at all rather than a board of zeros.
+* Next, in the order the instruments point: **per-season targets for the prior** (HANDOFF 3.5 -- the panel is
+  still the disjoint one, and the prior's target is a player's OTHER blocks, which is the coarsest thing left
+  in an in-season rating); a **cut-aware `PAST`** (his own record up to today rather than up to the block);
+  and the **kernel by exposure** -- a player with 200 possessions this season wants more of his past than a
+  starter does, and `lam_buckets` is the machinery.

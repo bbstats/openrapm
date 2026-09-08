@@ -436,6 +436,35 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                                             gbdt_features={"O": [f for f in _SO if f not in _RO], "D": list(_SD)})
         S["tune501_b7_pasto_pOD"] = _replace(_base, name="tune501_b7_pasto_pOD",
                                              gbdt_features={"O": [f for f in _SO if f not in _RO], "D": [f for f in _SD if f not in _RD]})
+        # ---------------------------------------------------------------- in-season, the rolling kernel (inseason.py)
+        # The board's system fit on the season being rated and the two before it, the earlier ones down-weighted,
+        # with the anchor season cut at q so it can be scored on the games it has not seen.  `ks<w1><w2>` names
+        # the kernel (11 = the flat rolling 3-year window, 00 = a single season, 55 = {1, .5, .5} ...), `_q<qq>`
+        # the cut.  `blk_q<qq>` is the in-season baseline a chunk product offers: the last window that had
+        # FINISHED before the season, and no part of the season itself.
+        from .inseason import BlockSystem, KernelSystem
+        _KERNELS = {"11": (1.0, 1.0), "00": (0.0, 0.0), "55": (0.5, 0.5), "52": (0.5, 0.25),
+                    "74": (0.7, 0.4), "86": (0.8, 0.6),
+                    # the two either side of the search's winner (ks52), so its optimum is read as interior
+                    # and not as a grid edge (memory trap 5)
+                    "63": (0.6, 0.3), "42": (0.4, 0.15), "31": (0.3, 0.1)}
+        _CUTS = {"q0": 0.0, "q25": 0.25, "q50": 0.5, "q75": 0.75}
+        for tag, (w1, w2) in _KERNELS.items():
+            kern = {0: 1.0, -1: float(w1), -2: float(w2)}
+            inner = _replace(_base, name=f"ks{tag}", kernel=kern,
+                             gbdt_features={"O": [f for f in _SO if f not in _RO], "D": [f for f in _SD if f not in _RD]})
+            S[f"ks{tag}"] = inner                                  # no cut: the season board's own fit
+            for qt, q in _CUTS.items():
+                S[f"ks{tag}_{qt}"] = KernelSystem(f"ks{tag}_{qt}", inner, cut=q)
+            for f in (0.5, 2.0):                                   # the ridge knob of the decomposition
+                lamt = f"lam{str(f).replace('.', '')}"
+                loose = _replace(inner, name=f"ks{tag}_{lamt}", lam=float(cfg["lam_plugin"]) * TUNED["tune501"]["lam_mult"] * f)
+                S[loose.name] = loose
+                for qt, q in _CUTS.items():
+                    S[f"ks{tag}_{lamt}_{qt}"] = KernelSystem(f"ks{tag}_{lamt}_{qt}", loose, cut=q)
+        for qt, q in _CUTS.items():
+            S[f"blk_{qt}"] = BlockSystem(f"blk_{qt}", S["tune501_b7_pasto_pOD"], cut=q)
+
         # ---------------------------------------------------------------- the destination (FINDINGS 30, context.py)
         # the owner: a high-usage player's usage drops on the new team (28.8), so give the prior the team he is
         # traded to -- his own usage minutes, the destination's usage minutes already spoken for, and its quality,

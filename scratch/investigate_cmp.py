@@ -11,7 +11,8 @@ sys.path.insert(0, "src")
 import numpy as np
 import pandas as pd
 
-from eracoef.calmap import build_design, fit_theta, load_frames, mapped_ratings, parse_maps, ratings_for
+from eracoef.calmap import (build_design, cut_of, fit_theta, load_frames, mapped_ratings, parse_maps,
+                            ratings_for, train_of)
 from eracoef.config import load_config
 from eracoef.holdout import Context, Holdout, predict_season
 from eracoef.investigate import attributable
@@ -23,17 +24,22 @@ fam = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--maps=")), "l
 K = 3
 ho = Holdout.from_config(cfg, ks=[K])
 ctx = Context.load(cfg)
-frames = load_frames(ctx, ho.seasons(), level=ho.level, verbose=False)
 map_o, map_d, _ = parse_maps(fam)
 t0 = time.time()
 res = {}
+FR: dict = {}                     # one set of frames per cut: an in-season system is scored after its cut
 for s in names:
     dump = pd.read_parquet(f"outputs/ratings_track_{s}.parquet")
+    cut = cut_of(dump, s)
+    if cut not in FR:
+        FR[cut] = load_frames(ctx, ho.seasons(), level=ho.level, verbose=False, cut=cut)
+    frames = FR[cut]
     D = build_design(dump, frames, s, K, map_o, map_d)
     rows = []
     for h, f in frames.items():
         th = fit_theta(D, exclude_h=h, map_o=map_o, map_d=map_d)
-        rat = mapped_ratings(ratings_for(dump, s, K, h), th, map_o, map_d, D.scale_o, D.scale_d, extra=f.covariates(k=K))
+        rat = mapped_ratings(ratings_for(dump, s, K, h), th, map_o, map_d, D.scale_o, D.scale_d,
+                             extra=f.covariates(K, train_of(dump, s, K, h)))
         p = predict_season(rat, f.wd, level=ho.level)
         a = attributable(f.Zo, f.Zd, p.y - p.pred, p.w, lam)
         rows.append(dict(held_out=h, w=float(p.w.sum()), **a))
