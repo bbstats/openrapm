@@ -243,6 +243,7 @@ outputs/xrapm_panel.parquet
 outputs/defensive_prior_grid.parquet
 outputs/free_scale_ratings.parquet
 outputs/investigate_rapm.parquet
+outputs/investigate_*.parquet
 outputs/remedy.parquet
 outputs/diagnostic_payload.json
 
