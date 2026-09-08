@@ -135,6 +135,10 @@ class Context:
             ctx.mspi_apm = GBDTPrior(ctx.rpanel, cfg, mode="full", target_col="apm")   # trained on unshrunk APM
         return ctx
 
+    def _teammates_or_none(self):
+        from .turnover import cached_table
+        return cached_table(self)
+
     def turn_table(self) -> pd.DataFrame:
         """The window-pair teammate turnover table (turnover.window_pair_turnover) over the configured windows,
         built once per Context from data/cache/teammates.parquet."""
@@ -168,7 +172,7 @@ class Context:
                 rp = rp.assign(**{target_col: wgt * rp["apm"].to_numpy(dtype=float) + (1.0 - wgt) * rp["rapm1"].to_numpy(dtype=float)})
             p = GBDTPrior(rp, self.cfg, mode=mode, target_col=target_col, features=features,
                           win_decay=float(win_decay), turn=self.turn_table() if turn is True else None,
-                          pairs=(turn == "pairs"))
+                          pairs=(turn == "pairs"), teammates=self._teammates_or_none())
             p.params = dict(params or {})
             self._priors[key] = p
         return self._priors[key]

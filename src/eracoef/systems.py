@@ -436,6 +436,20 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                                             gbdt_features={"O": [f for f in _SO if f not in _RO], "D": list(_SD)})
         S["tune501_b7_pasto_pOD"] = _replace(_base, name="tune501_b7_pasto_pOD",
                                              gbdt_features={"O": [f for f in _SO if f not in _RO], "D": [f for f in _SD if f not in _RD]})
+        # ---------------------------------------------------------------- the destination (FINDINGS 30, context.py)
+        # the owner: a high-usage player's usage drops on the new team (28.8), so give the prior the team he is
+        # traded to -- his own usage minutes, the destination's usage minutes already spoken for, and its quality,
+        # every teammate measured in the feature window, the roster from the target window
+        from .context import DEST as _DEST
+        _PO = [f for f in _SO if f not in _RO]
+        _PD = [f for f in _SD if f not in _RD]
+        S["tune501_b7_pasto_pOD_dest"] = _replace(_base, name="tune501_b7_pasto_pOD_dest", gbdt_features={"O": [*_PO, *_DEST], "D": list(_PD)})
+        S["tune501_b7_pasto_pOD_destum"] = _replace(_base, name="tune501_b7_pasto_pOD_destum", gbdt_features={"O": [*_PO, "own_um", "dest_um"], "D": list(_PD)})
+        # the owner's extension: block-minutes and rebound-minutes on the DEFENSIVE prior, own and the destination's
+        from .context import DEST_D as _DESTD
+        S["tune501_b7_pasto_pOD_destd"] = _replace(_base, name="tune501_b7_pasto_pOD_destd", gbdt_features={"O": list(_PO), "D": [*_PD, *_DESTD]})
+        S["tune501_b7_pasto_pOD_destdm"] = _replace(_base, name="tune501_b7_pasto_pOD_destdm",
+                                                    gbdt_features={"O": list(_PO), "D": [*_PD, "own_bm", "own_rm", "dest_bm", "dest_rm"]})
         # the other bound: the defensive prior ALONE (the factor ridges at 1e6 leave no residual at all), so the
         # value of a defensive residual at team-game level is a number
         S["tune501_b7_turnref_o_dprior"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_dprior",

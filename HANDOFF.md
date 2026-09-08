@@ -232,6 +232,7 @@ feature lists on either side -- without touching `config.yaml` permanently.
 | `scratch/trade_maps.py` / `trade_pair.py` | the map terms on an existing dump with the control set; the paired test when a dump carries several maps (**the base is read at its SHIPPING map**; it used to take the first, the `&turn` one, and the "vs base" column was off by 0.09) |
 | **`fastfit.factor_defense`** / `factor_rows` / `points_per_factor` / `FACTOR_LAMS` / `MspiFast(def_factors=, factor_reml=, factor_x3=, factor_lam_scale=, factor_lams=, no_def_prior=)` | **the four-factor defence (25)**: four factor fits on the points layout, the prior split by zero-prior slopes, recombined with the row-level gradients; `factor_diag` on the system after a fit carries g, the shares, the ridges chosen.  `tests/test_factor_defense.py` (5) holds the identity |
 | `scripts/50_boruta.py` | BorutaShap per side and mode; **`--modes=sink,sinknoagg` (29)**: every column both paths can build (111) on the shipped prior's PAIR rows (`pair_training_rows`), with and without the ten linear aggregates.  5.7 hours at 50 trials; histories in `outputs/csv/boruta_sink*_{D,O}.csv`.  Prunes, never decides (23.10, 29.3) |
+| **`src/eracoef/context.py`** / `scratch/trade_to.py` | **the destination (30)**: usage minutes (usage x possession share), block-minutes and rebound-minutes, his own and the target roster's already spoken for, with the roster's offensive and defensive APM -- roster identity from the target window, every teammate's number from the feature window (`DEST`, `DEST_D`; pair rows only, like PAST).  `destination_inputs(..., override=)` and `ctx.dest_override` ask the trade-to question; `team_roster(roles, seasons, team_id, tm=)` builds a team's roster with its own co-occurrence weights.  `trade_to.py "<name>" ...` fits the window once per context (actual, league average, each team) and writes `outputs/csv/trade_to_<window>.csv`.  `tests/test_context.py` (2) |
 | `gbdt_prior.TURN_FEATURE` = **`target_pct_new_teammates`** | the pair rows' turnover feature (24.4), renamed 2026-09-08 at the owner's request: the share of the TARGET window's teammate-possessions spent with people he never played beside in the feature window (1 = all new; the shipped board evaluates everyone at 0.35).  The MAP's `turn` covariate (calmap.Turn, SeasonFrame.turnover) is a different object and keeps its name.  `scratch/turnover_compare.py <window>` builds the board at 0 and at 1 and writes `outputs/csv/target_pct_new_teammates_<window>.csv` (prior, raw and mapped ratings, deltas) |
 | **`gbdt_prior.PAST` / `past_features` / `past_inputs`** | **plus-minus as an input (28)**: his discounted past APM per side, its possessions, the shrunk twin; pair rows only (`training_rows` raises), the pair's target window left out of the past; `chain_offset` builds them per side from `ctx.rpanel` with the block's windows excluded.  `tests/test_past.py` (3) |
 | **`src/eracoef/investigate.py`** / **`scripts/57_investigate.py`** / `scratch/investigate_cmp.py` | **the investigator (27)**: `residual_ridge` (the same-four question of every lineup at once), `on_court`, `lineups`, `season_table`, `pooled`, and **`attributable`, the second score**.  `57_investigate.py [--system=] [--lam=2000] [--min-poss=1000] [--top=20]` runs the shipped board over the 28 held-out seasons in a minute and writes `outputs/investigate_*`; `investigate_cmp.py <sys1> <sys2> ...` pairs tracked systems on the score.  `tests/test_investigate.py` (4) |
@@ -613,6 +614,18 @@ mechanism of 22.2, which is worth knowing independently.  **And it is what makes
 the window pairs), and the prediction-time covariate becomes the same quantity instead of a block-bracketed
 cousin of it.
 
+### 3.10 The destination (FINDINGS 30): built, measured, kept as the trade-to instrument, not the board's prior
+
+The owner's mechanism (28.8: a star's usage drops on the new team) made into inputs: his usage minutes, the
+target roster's usage minutes already spoken for, and the roster's quality, every teammate measured in the
+feature window.  On offense: -0.072 on the criterion (z -1.8) and +0.125 on the investigator (z +2.6) -- the
+forecast improves, the attribution worsens, because the roster's quality lets the prior forecast value IN
+CONTEXT while shifting credit between a player and his teammates.  Not shipped as the prior; the board rates
+a player at his actual context.  `scratch/trade_to.py` answers what he would be worth elsewhere: for every
+high-usage creator in 2024-2026 the best destinations are the rosters with the least usage spoken for
+(Brooklyn, Washington, Memphis, Utah, Golden State) and the worst the loaded ones (New York, Boston,
+Minnesota, Houston, Denver), about a point of offensive prior between them.  The defensive analogues (block-minutes, rebound-minutes, the roster's defensive APM) are zero on both instruments.
+
 ### 3.9 DONE and shipped: plus-minus as an input (FINDINGS 28), and what is left of the gap
 
 Built and shipped (above).  Measured and not taken: PAST on defense (-0.02 / -0.06, neither significant),
@@ -686,6 +699,8 @@ turnover/tenure machinery is the safe form of that and tenure was not wanted off
   into a dead name.  The site is back at `https://bbstats.github.io/openrapm/`, https enforced.  To turn the
   domain on: four GitHub `A` records + a `www` CNAME at Porkbun FIRST, then re-add `docs/CNAME` on `main`,
   wait for the cert, then `gh api -X PUT repos/bbstats/openrapm/pages -F https_enforced=true`.
+* Never re-run, from 30: the destination features as the board's prior on offense; block-minutes and
+  rebound-minutes on defense with or without the roster's defensive APM.
 * Never re-run, from 29: Boruta's accepted lists as feature lists on either side; Boruta as a gate; the
   shot-quality block, the binned height and the efficiency ratios back on the lists they were pruned from
   without a new reason.

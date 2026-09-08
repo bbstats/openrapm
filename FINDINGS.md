@@ -4003,3 +4003,91 @@ on turnover alone is -1.47 per unit of turnover; adding the usage change takes t
 his role does not, and plus-minus measures role times skill.**  The quarter-point per unit of turnover that
 remains is the part that reads as chemistry.  The record and the literature agree once "portable" is split
 into production (which is) and impact (which is not, because the role is not).
+
+## 30. The team he is traded to: the destination's usage minutes and quality as inputs, and the trade-to question
+
+Written 2026-09-08.  The owner, after 28.8: "usage x poss share is what I would call usage minutes.  If we
+measure the training window usage minutes we should be able to estimate how their usage might drop ... what I
+would like to build is a team-traded-to feature set such that we can (a) predict better and (b) inject an
+'average team', or what's the best team for this player to be traded to."  Built as `src/eracoef/context.py`,
+the pair-row and prediction-path wiring in `gbdt_prior` and `spm`, `scratch/trade_to.py`; `tests/test_context.py`.
+
+### 1. What was built
+
+Usage minutes = usage per 100 x possession share: his slice of his team's possessions.  Three offensive
+columns: **`own_um`** (his, in the feature window), **`dest_um`** (four times the shared-possession-weighted mean
+of his TARGET-window teammates' usage minutes, each measured in the FEATURE window: the usage already spoken
+for beside him), **`dest_apm`** (the same weighting of their offensive APM: how good the group is).  The
+defensive analogues at the owner's request -- "block-minutes" and "rebound-minutes" -- **`own_bm`, `own_rm`,
+`dest_bm`, `dest_rm`, `dest_apm_d`** (`DEST_D`).  Leak-free the way the turnover feature is: WHO he plays
+beside comes from the target window (the teammates table), every number attached to a teammate from the
+feature window; a teammate the feature window never saw takes its league values.  At prediction time the
+feature window is the training block (usage from the block's padded rates and share, APM from the block's own
+APM fit, the same definitions the panel's columns have) and the roster is the target season's (H for the
+criterion, the block's own seasons for the board).  `ctx.dest_override` asks the trade-to question: the same
+context for everyone ({dest_um, dest_apm}), or one roster for everyone ({roster, weights}).
+
+On the pair rows (2021-2024 minus 2023, offense): own_um mean 8.7 (sd 6.2, max 31.6), dest_um mean 43.5
+(sd 7.3), dest_apm mean +1.4 (sd 0.9); dest_um correlates 0.18 with own_um and dest_apm -0.07 with the
+turnover feature -- the axes are their own.  One fit costs a second more than the board (the block's APM fit).
+
+### 2. The criterion and the investigator, against the shipped board (`tune501_b7_pasto_pOD`)
+
+| system | what | criterion vs board | z | wins | investigator vs board | z | wins |
+|---|---|---|---|---|---|---|---|
+| `..._dest` | own_um, dest_um, dest_apm on offense | **-0.072** | -1.80 | 17/28 | **+0.125** | +2.64 | 11/28 |
+| `..._destum` | own_um, dest_um only | -0.053 | -1.22 | 17/28 | +0.098 | +2.06 | 12/28 |
+| `..._destd` | own_bm, own_rm, dest_bm, dest_rm, dest_apm_d on DEFENSE | -0.024 | -0.59 | 15/28 | -0.054 | -1.10 | 15/28 |
+| `..._destdm` | the minutes only, no roster APM, on defense | +0.010 | +0.26 | 14/28 | -0.056 | -1.22 | 18/28 |
+
+The defensive analogues are zero on both instruments: a rim protector's block-minutes and the destination's
+already spoken for do not move the defensive prior, and the roster's defensive quality does not either.
+
+**The two instruments disagree, and the disagreement is the point.**  The destination helps the team-game
+forecast (-0.07, not quite significant) and hurts the player-level attribution (z +2.6): with the group's
+quality as an input the prior forecasts a player's value IN THAT CONTEXT, which is what a forecast should do,
+and it shifts credit between him and the people beside him, which is what a rating should not.  Section 16
+framed the same trade for the defensive box prior.  **Not shipped as the board's prior.  It is the trade-to
+instrument**: the board rates a player at his actual context; the destination features answer what he would
+be worth elsewhere.
+
+### 3. The trade-to question (`scratch/trade_to.py`, 2024-2026, the offensive prior)
+
+The system fitted once per context: his actual rosters, the block's possession-weighted mean context
+(dest_um 39.8, dest_apm +1.70), and each of the 30 teams' rosters weighted by the team's own co-occurrence
+structure (`context.team_roster` with the teammates table: each player's mean shared possessions with the
+team's eight highest-minute players, so a hypothetical newcomer shares the floor the way a rotation player
+does, not the way the bench does).  66 s for the 32 fits.
+
+| player | actual | league-average | best fits | worst fits |
+|---|---|---|---|---|
+| Gilgeous-Alexander | +5.02 | +5.39 | GSW +5.45, PHI +5.43, IND +5.41, ATL +5.41 | NYK +4.93, OKC +4.92, CHI +4.91 |
+| Jokic | +4.03 | +4.09 | BKN +4.64, GSW +4.59, MEM +4.54, WAS +4.53 | BOS +3.48, HOU +3.46, MIN +3.42, NYK +3.39 |
+| Draymond Green | +0.23 | +0.14 | BKN +0.83, UTA +0.74, MEM +0.73, WAS +0.72 | HOU -0.45, MIN -0.47, NYK -0.50 |
+| Trae Young | +4.30 | +4.03 | DAL +4.12, PHI +4.12, MEM +4.07, WAS +4.06 | HOU +3.46, DEN +3.45, BOS +3.45, NYK +3.41 |
+
+The pattern is one pattern: every high-usage creator's best destinations are the rosters with the LEAST
+usage already spoken for (Brooklyn, Washington, Memphis, Utah, Golden State in this block) and the worst
+are the loaded ones (New York, Boston, Minnesota, Houston, Denver) -- usage minutes are the mechanism, and
+the spread across teams is about 1 point per 100 of offensive prior for a star.  A player's own team is not
+always his best fit (Jokic on Denver +3.64 against +4.03 actual; Gilgeous-Alexander on Oklahoma City +4.92
+against +5.02): the roster override weights a newcomer like the average rotation player, the actual context
+weights his real co-occurrence, and a star plays beside the starters more than the average rotation player
+does.  That is the approximation to keep in mind when reading a single team's number; the ranking is robust
+to it.
+
+### 4. Traps
+
+* The actual context at prediction time is the TARGET seasons' rosters: `[H]` under the criterion, the block's
+  own seasons for the board.  A tool that sets `ctx.current_h` to a block season by habit gets the first
+  season's rosters only; `trade_to.py` leaves it None, as the board does.
+* The roster override without the teammates table weights every player by his own minutes, which is
+  bench-heavy and reads a star's own team a half-point below his actual context.  Pass `tm`.
+* DEST features need the teammates table on the pair rows (`GBDTPrior teammates=`, set by `Context.prior`);
+  `pair_rows` raises without it.
+
+### 5. Never re-run
+
+The destination features as the board's prior on offense (forecast better, attribution worse: the
+instruments disagree and the board is a rating); block-minutes and rebound-minutes on defense, own or the
+destination's, with or without the roster's defensive APM (zero on both instruments).

@@ -258,6 +258,7 @@ BIO_BINS = {"height2": ("height", 2.0), "weight15": ("weight", 15.0)}
 # the teammate-turnover feature of the pair rows (24.4): the share of the TARGET window's teammate-possessions spent
 # with people he never shared 100 possessions with in the feature window; 1 = every teammate new, a stayer ~0.35
 TURN_FEATURE = "target_pct_new_teammates"
+_TM_TABLE: list = [None]          # the teammates table for context.DEST on pair rows (set by GBDTPrior from the Context)
 PAST_OWN = ["past_apm", "past_poss", "past_rapm"]                 # his record on THIS prior's side
 PAST_CROSS = ["past_apm_o", "past_poss_o", "past_apm_d", "past_poss_d"]   # both sides, named, for either prior
 PAST = [*PAST_OWN, *PAST_CROSS]
@@ -390,8 +391,10 @@ def pair_rows(panel: pd.DataFrame, side: str, exclude=(), features=None, target_
     worth in a context that has changed.  Pairs the turnover table does not cover are dropped."""
     feats = list(DEFAULT_FEATURES if features is None else features)
     feats = [f for f in feats if f != TURN_FEATURE]
+    from .context import DEST_ALL
     past = [f for f in feats if f in PAST]
-    feats = [f for f in feats if f not in PAST]
+    dest = [f for f in feats if f in DEST_ALL]
+    feats = [f for f in feats if f not in PAST and f not in DEST_ALL]
     ex = set(exclude)
     p = panel[(panel.side == side) & ~panel.window.isin(ex)].copy()
     if _wants_derived(feats):
@@ -418,6 +421,15 @@ def pair_rows(panel: pd.DataFrame, side: str, exclude=(), features=None, target_
         pf = past_all(panel, side, wins, out[["player_id", "window", "window_to"]], exclude=ex)
         for f in past:
             out[f] = pf[f].to_numpy()
+    if dest:
+        # the destination (context.py): the target window's teammates, each measured in the feature window
+        if _TM_TABLE[0] is None:
+            raise ValueError("DEST features need the teammates table (data/cache/teammates.parquet; GBDTPrior teammates=)")
+        from .context import destination_features, usage_minutes_panel
+        windows = {lab: list(range(int(lab[:4]), int(lab[5:9]) + 1)) for lab in wins}
+        df = destination_features(usage_minutes_panel(panel), _TM_TABLE[0], windows, out[["player_id", "window", "window_to"]])
+        for f in dest:
+            out[f] = df[f].to_numpy()
     return out
 
 
@@ -512,7 +524,7 @@ class GBDTPrior:
     def __init__(self, panel: pd.DataFrame, cfg: dict, seed: int | None = None, thread_count=None, features=None,
                  mode: str | None = None, target_col: str | None = None, win_decay: float = 1.0,
                  win_past: float = 1.0, sat_poss: float | None = None, turn: pd.DataFrame | None = None,
-                 pairs: bool = False):
+                 pairs: bool = False, teammates: pd.DataFrame | None = None):
         g = cfg.get("gbdt", {})
         self.panel = panel
         self.cfg = cfg
@@ -522,6 +534,8 @@ class GBDTPrior:
         # trains on the pair rows WITHOUT the feature (the control for the un-pooling itself).
         self.turn = turn
         self.pairs = bool(pairs) or turn is not None
+        if teammates is not None:
+            _TM_TABLE[0] = teammates
         self.mode = str(g.get("mode", "residual") if mode is None else mode)
         if self.mode not in ("residual", "full"):
             raise ValueError(f"gbdt mode must be 'residual' or 'full', got {self.mode!r}")
@@ -538,8 +552,9 @@ class GBDTPrior:
             self.features[side] = list(f)
             if self.turn is not None and TURN_FEATURE not in self.features[side]:
                 self.features[side].append(TURN_FEATURE)
-            if any(x in PAST for x in self.features[side]):
-                self.pairs = True          # a PAST feature is only leak-free on pair rows
+            from .context import DEST_ALL
+            if any(x in PAST or x in DEST_ALL for x in self.features[side]):
+                self.pairs = True          # a PAST or DEST feature is only leak-free on pair rows
         self.params = dict(g.get("params", {}) or {})
         self.win_decay = float(win_decay)
         self.win_past = float(win_past)

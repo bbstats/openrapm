@@ -260,6 +260,22 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
                 # his on-court record before the block, per side: every panel window before the excluded ones
                 ids = wd.spec.ps_table["player_id"].to_numpy()
                 extra = {s_: pd.concat([extra, past_inputs(ctx.rpanel, s_, exclude, ids)], axis=1) for s_ in ("O", "D")}
+            from .context import DEST_ALL, block_usage_apm, destination_inputs
+            if wants & set(DEST_ALL):
+                # the destination: the target seasons' rosters (H for the criterion, the block's own for the board),
+                # every teammate measured on the BLOCK; ctx.dest_override asks the trade-to question instead
+                from .turnover import cached_table
+                tm = cached_table(ctx)
+                if tm is None:
+                    raise RuntimeError("data/cache/teammates.parquet is missing (turnover.build_teammates)")
+                blk = block_usage_apm(wd, exp, inputs, cfg)
+                tgt = [int(ctx.current_h)] if ctx.current_h is not None else [int(s_) for s_ in train]
+                di = destination_inputs(blk, tm, tgt, wd.spec.ps_table["player_id"].to_numpy(),
+                                        override=getattr(ctx, "dest_override", None))
+                if isinstance(extra, dict):
+                    extra = {k: pd.concat([v, di], axis=1) for k, v in extra.items()}
+                else:
+                    extra = pd.concat([extra, di], axis=1)
             common = dict(features=list(wd.spec.features), extra=extra,
                           raw=(exp.season_rates_, exp.season_rates_d_), shots=shots, dredge=dredge)
             g = np.zeros(2 * m)
