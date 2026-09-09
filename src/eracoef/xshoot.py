@@ -447,7 +447,8 @@ def expected_threes(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, keep
     return x3, rates
 
 
-def def_three_design(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, calibrate: bool = True, keep=None):
+def def_three_design(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, calibrate: bool = True,
+                     keep=None, w3: float = 0.0, wft: float = 0.0):
     """The DEFENSIVE target: actual points with every opponent three-point make replaced by
     3 x the shooter's padded 3P%, free throws adjusted as shipped, everything else as it happened.
 
@@ -463,8 +464,15 @@ def def_three_design(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, cal
     x3, rates = expected_threes(seasons, cfg, wd_pts, prev=prev, k3=k3, keep=keep)
     poss = cnt["poss"].to_numpy(dtype=float)
     c = cnt
-    pts_adj = (c["pts"] - 3.0 * c["fg3m"] + 3.0 * x3
-               - c["ftm"] - c["ftm_tech"] + c["xftm"] + c["xftm_tech"]).to_numpy(dtype=float)
+    # `w3` / `wft` are how much of the REALISED deviation the defense keeps, 0 being the original full
+    # replacement.  Full replacement assumes a defense has no effect at all on whether a three or a free
+    # throw drops, and FINDINGS 35.1 measures that as false: the true between-team spread is 0.59 points
+    # on opponent 3P% and 0.52 on opponent FT%, against 1.31 and 2.47 for the offenses.  Weighting a
+    # channel does not change its signal-to-noise ratio -- it changes how much that channel counts in the
+    # composite target relative to the channels a defense really does control, which is the thing worth
+    # choosing.  The criterion picks it; nothing here is set from the measurement directly.
+    pts_adj = (c["pts"] - 3.0 * (1.0 - float(w3)) * (c["fg3m"] - x3)
+               - (1.0 - float(wft)) * (c["ftm"] + c["ftm_tech"] - c["xftm"] - c["xftm_tech"])).to_numpy(dtype=float)
     y = 100.0 * pts_adj / poss
     rows = []
     for s in np.unique(season):
@@ -479,7 +487,9 @@ def def_three_design(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, cal
     cal = pd.DataFrame()
     if calibrate:
         y, cal = align(y, wd_pts.y, wd_pts.w, season, poss)
-    return wd_pts.with_target(y), dict(target=f"x3def_p{prev}", x=None, gates=g, calibration=cal, k3=rates.k["fg3"])
+    name = f"x3def_p{prev}" + (f"_w{w3:g}" if w3 else "") + (f"_f{wft:g}" if wft else "")
+    return wd_pts.with_target(y), dict(target=name, x=None, gates=g, calibration=cal, k3=rates.k["fg3"],
+                                       w3=float(w3), wft=float(wft))
 
 
 def _named(fn, name, **kw):
@@ -504,13 +514,22 @@ DEFENSE_TARGET_COLUMNS = {
     "x3def": {"pts", "fg3m", "ftm", "ftm_tech", "xftm", "xftm_tech", "poss", "fg3a_sx",
               *(f"fg3a_s{s}" for s in SLOTS)},
 }
+for _w in (0.15, 0.25, 0.4, 0.6, 1.0):
+    for _p in ("w", "f", "b"):
+        DEFENSE_TARGET_COLUMNS[f"x3def_{_p}{_w:g}"] = DEFENSE_TARGET_COLUMNS["x3def"]
 DEFENSE_TARGET_COLUMNS["x3def_p1"] = DEFENSE_TARGET_COLUMNS["x3def"]
 DEFENSE_TARGET_COLUMNS["x3def_p2"] = DEFENSE_TARGET_COLUMNS["x3def"]
 
 # targets meant for the DEFENSIVE coefficients only (scripts/45_holdout.py: def3_<name> = offense from
 # hybrid_xft, defense from a fit on this target); pN = N seasons before the block added to the rate
+# how much of the realised three-point (and free-throw) deviation the DEFENSE keeps: 0 is the shipped
+# full replacement, 1 is raw points.  FINDINGS 35.1 says the honest answer is neither.
+DEF_W = (0.15, 0.25, 0.4, 0.6, 1.0)
 DEFENSE_TARGETS = {
     "x3def": _named(def_three_design, "x3def"),
+    **{f"x3def_w{w:g}": _named(def_three_design, f"x3def_w{w:g}", w3=w) for w in DEF_W},
+    **{f"x3def_f{w:g}": _named(def_three_design, f"x3def_f{w:g}", wft=w) for w in DEF_W},
+    **{f"x3def_b{w:g}": _named(def_three_design, f"x3def_b{w:g}", w3=w, wft=w) for w in DEF_W},
     "x3def_p1": _named(def_three_design, "x3def_p1", prev=1),
     "x3def_p2": _named(def_three_design, "x3def_p2", prev=2),
 }

@@ -580,6 +580,35 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
             for qt, q in _CUTS.items():
                 S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
 
+        # ---------------------------------------------------------------- how much of a three the defense keeps
+        # FINDINGS 35.1: a defense's true spread on opponent 3P% is 0.59 points and on opponent FT% 0.52,
+        # so the shipped `x3def` -- which replaces BOTH outright -- assumes a zero that is not there.
+        # `_dw<w>` keeps a fraction w of the realised three-point deviation, `_df<w>` of the free-throw one
+        # and `_db<w>` of both; w = 0 is the shipped board and w = 1 is raw points on that channel.
+        from .xshoot import DEF_W as _DEF_W
+        _w_base = S["tune501_b7_pasto_pOD"]
+        # and the same dial on OFFENSE.  The formula is side-agnostic -- it works on the row's offensive
+        # counters either way -- so `x3def_w1` IS the shipped `xpts_ft` (nothing replaced but free throws)
+        # and `x3def` is full three-point replacement.  Sweeping `off_target` across the two therefore
+        # sweeps the offensive three-point adjustment end to end, which is where FINDINGS 35.4 says the
+        # largest unexploited gain sits (-0.357 at team level, and twice tried and failed at player level).
+        for _w in ("", *[f"_w{w:g}" for w in _DEF_W]):
+            _nm = f"tune501_b7_pasto_pOD_ow{_w or '0'}"
+            S[_nm] = _replace(_w_base, name=_nm, off_target=f"x3def{_w}")
+            _k = _replace(S["ks52_lam05"], name=f"ks52_lam05_ow{_w or '0'}", off_target=f"x3def{_w}")
+            S[_k.name] = _k
+            for qt, q in _CUTS.items():
+                S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
+        for _p, _tag in (("w", "dw"), ("f", "df"), ("b", "db")):
+            for _w in _DEF_W:
+                _nm = f"tune501_b7_pasto_pOD_{_tag}{_w:g}"
+                S[_nm] = _replace(_w_base, name=_nm, def_target=f"x3def_{_p}{_w:g}")
+                _k = _replace(S["ks52_lam05"], name=f"ks52_lam05_{_tag}{_w:g}",
+                              def_target=f"x3def_{_p}{_w:g}")
+                S[_k.name] = _k
+                for qt, q in _CUTS.items():
+                    S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
+
         # ---------------------------------------------------------------- the two penalties, swept apart
         # The owner, 2026-09-09: *"penalties should be different o/d/other effects in another bucket
         # probably?"*.  Two of the three already are.  `lam` is the OFFENSIVE penalty and `lam_ratio`

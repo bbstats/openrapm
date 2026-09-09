@@ -4938,3 +4938,85 @@ threes, 6.9 points from a test statistic of -3.38 on about 1,100 attempts each, 
 noisier subset and is consistent with a true spread of the size measured here.
 
 **Nothing in the article contradicts section 35.1, and two of its results independently reproduce it.**
+
+## 36. Into the ratings: the defense keeps none of its threes, the offense keeps a quarter of its own
+
+FINDINGS 35 validated the luck adjustment at TEAM level.  This is the other half of the question, and the
+answer is asymmetric in a way that is worth understanding rather than just recording.
+
+The instrument is a dial.  `xshoot.def_three_design` now takes `w3` and `wft`, the fraction of the
+REALISED three-point and free-throw deviation a fit keeps; `w = 0` is the shipped full replacement by the
+shooter's other-half rate and `w = 1` is raw points on that channel.  The formula works on the row's
+offensive counters either way, so the same target serves as `def_target` (sweeping what a defense keeps)
+or as `off_target` (sweeping what an offense keeps), and `x3def_w1` IS the shipped `xpts_ft`.
+
+### 36.1 The defense should keep none of it, even though it earns some
+
+Search half, K = 3, against `tune501_b7_pasto_pOD`, team-game level, sweeping what the DEFENSE keeps:
+
+| kept | 0 (ships) | 0.15 | 0.25 | 0.4 | 0.6 | 1.0 |
+|---|---|---|---|---|---|---|
+| vs board | 0 | +0.010 | +0.028 | +0.072 | +0.163 | +0.454 |
+| z | | 0.54 | 0.92 | 1.49 | 2.25 | 3.72 |
+
+Monotone: **every bit of real defensive three-point signal handed back to the ridge makes the ratings
+worse.**  That is not a contradiction of 35.1, it is the distinction between the two tests.  A defense's
+0.59 points of true spread is a TEAM property, and the ridge's job is to split it among five players
+against 1.05 points of season noise.  The signal exists and does not survive attribution.  Free throws
+say the same at a smaller scale (keeping a quarter reads -0.010 at z -0.91, indistinguishable).
+
+**This is why FINDINGS 17, 18 and 33 all failed and why 35 succeeded**: a luck adjustment that helps
+team-level prediction need not help player-level attribution, and only the second question decides a
+rating.  Both tests are now built and they disagree by design.
+
+### 36.2 The offense is the opposite, and it is the largest gain this project has measured in a while
+
+The same dial on `off_target`, where 1.0 is the shipped board:
+
+| kept | 0 | 0.15 | 0.25 | 0.4 | 0.6 | 1.0 (ships) |
+|---|---|---|---|---|---|---|
+| search half | -0.259 | -0.262 | -0.256 | -0.234 | -0.182 | 0 |
+| z | -2.64 | -3.14 | -3.46 | -3.93 | -4.53 | |
+
+and it **replicates**, which is what FINDINGS 33's candidate did not do:
+
+| | search | confirm | all 28 | z | seasons won |
+|---|---|---|---|---|---|
+| keep none (`ow0`) | -0.259 | -0.132 | **-0.196** | -2.66 | 18/28 |
+| **keep a quarter (`ow_w0.25`)** | -0.256 | **-0.161** | **-0.208** | **-3.75** | **20/28** |
+| keep 0.4 | -0.234 | | -0.196 | -4.37 | 21/28 |
+
+**-0.21 per 100 at z -3.75 over 20 of 28 seasons**, against shipped gains in this project of -0.05 to
+-0.09.  Anything from 0 to 0.4 gives the same magnitude and the data does not resolve within that range;
+0.25 is taken because it is the best on the CONFIRM half, is interior, and is neutral at stint level
+(+0.04) where full replacement is worse (+0.19).
+
+**Why this works where `xshoot` (18) and `tl3` (33) failed.**  The expectation is the SHOOTER's own
+other-half-of-block three-point rate, so replacing a make removes the possession's noise while keeping his
+ability -- unlike the team-level version, which priced every shooter alike, and unlike `xshoot`, which
+replaced two-point shooting as well, where 35.4 says the offense keeps 84% of a season's signal.  Only
+the three-point channel is touched, which is exactly the channel 35.4 identified (-0.357 at team level,
+the largest single component on either side).
+
+### 36.3 It wins the second instrument too, which is rare here
+
+In season (`ks52_lam05`, search half), against the season board:
+
+| cut | prediction | z | attribution | z | won |
+|---|---|---|---|---|---|
+| 0.25 | -0.088 | -1.61 | **-0.163** | **-3.12** | 12/14 |
+| 0.75 | -0.113 | -1.61 | -0.133 | -1.37 | 10/14 |
+
+Significant on the block criterion, significant on the investigator's attribution score early in a season,
+and the right sign everywhere else.  Under HANDOFF's rule -- a candidate should lose neither instrument --
+this one loses neither.
+
+**The consensus screen is unmoved** (2024-2026, 475 players, read once): total 0.8428 -> 0.8419, defense
+identical at 0.781, offense 0.8354 -> 0.8276, offensive spread 0.826 -> 0.756.  A slight narrowing on
+offense is what removing variance does.
+
+### 36.4 Not shipped
+
+`config.yaml` is untouched.  Shipping means `ratings_prior.target: x3def_w0.25`, a refit of the
+calibration map, `08_ratings.py`, the floors in `tests/test_vs_consensus.py` read honestly, and
+`52_site.py`.  That is the owner's call.
