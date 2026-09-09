@@ -4950,7 +4950,7 @@ shooter's other-half rate and `w = 1` is raw points on that channel.  The formul
 offensive counters either way, so the same target serves as `def_target` (sweeping what a defense keeps)
 or as `off_target` (sweeping what an offense keeps), and `x3def_w1` IS the shipped `xpts_ft`.
 
-### 36.1 The defense should keep none of it, even though it earns some (unmapped; the sign holds, see 36.5)
+### 36.1 The defense should keep none of it, even though it earns some (UNMAPPED; 36.6 WITHDRAWS the monotonicity)
 
 Search half, K = 3, against `tune501_b7_pasto_pOD`, team-game level, sweeping what the DEFENSE keeps:
 
@@ -5057,3 +5057,46 @@ The defensive conclusion stands.  Only the offensive magnitudes were wrong.
 gain can be entirely absorbed by the shipped calibration map.*  A target that changes a side's amplitude
 will show a large unmapped gain and none at all once the map is fitted.  Run `54_track.py` and
 `pairsys.py` before quoting any number as a gain, never `45_holdout.py` alone.
+
+### 36.6 The audit: every conclusion of this pass re-read on the mapped criterion
+
+36.5 found that the numbers behind FINDINGS 33, 34.5 and 36.1 were all unmapped, so every conclusion drawn
+from them was re-run properly -- `54_track.py` fits the shipping map leave-one-season-out on each system's
+own dump, `scratch/pairsys.py` pairs them over the same 28 seasons.
+
+| what was claimed | unmapped | **mapped** | z | won | verdict |
+|---|---|---|---|---|---|
+| no luck adjustment at all (`_pts`) | +0.459 | **+0.259** | 3.50 | 8/28 | **number corrected** |
+| team-level free throws (`_tlfto`, 33) | +0.438 | +0.266 | 3.70 | 8/28 | **sharper**: recovers ~0%, not 5% |
+| team-LOO threes, offense (`_tlxft3o_O`, 33) | -0.113 | **-0.001** | -0.03 | 14/28 | stands, and it is exactly zero |
+| plus two-point shooting (`_tlxft32o`, 33) | +2.276 | +1.629 | 8.72 | 1/28 | stands |
+| on-court ORTG/DRTG in the prior (`_onc`, 34.5) | +0.078 | +0.052 | 2.22 | 11/28 | stands |
+| the same, offense only (`_oncO`, 34.5) | +0.054 | +0.037 | 1.84 | 13/28 | stands |
+| defense keeps a quarter of its threes (`_dw0.25`, 36.1) | +0.028 | **-0.007** | -0.34 | 14/28 | **CLAIM WITHDRAWN** |
+| defense keeps all of them (`_dw1`, 36.1) | +0.454 | +0.248 | 3.25 | 8/28 | stands |
+
+**Five rejections stand, one is sharper, and one claim is withdrawn.**
+
+**Withdrawn: 36.1's monotonicity.**  I wrote that *"every bit of real defensive three-point signal handed
+back to the ridge makes the ratings worse."*  Mapped, that is false at the small end: letting a defense
+keep a quarter of its realised three-point deviation is **-0.007 at z -0.34**, dead flat.  What is true is
+the endpoint -- removing the adjustment altogether costs **+0.248 at z 3.25** -- so the defensive
+three-point adjustment is worth about a quarter of a point per 100 and **anything between erasing all of
+it and keeping a quarter is the same board**.  That is a better fit to 35.1 than what I wrote: the measured
+25% season-scale skill share is not contradicted by the ratings, it is simply free to keep or discard.
+
+**Corrected number: the shipped free-throw adjustment is worth 0.26 per 100, not 0.46.**  `xpts_ft` against
+raw points reads +0.459 unmapped and +0.259 mapped.  Still real, still significant, 44% smaller than the
+unmapped figure and than what FINDINGS 33 quoted.
+
+**Sharper: the team-level free-throw target recovers nothing.**  33 said it gave back 5% of the shipped
+gain.  Mapped, `_tlfto` at +0.266 is INDISTINGUISHABLE FROM having no free-throw adjustment at all
+(+0.259).  Pricing every shooter at his team's rate is exactly as good as not adjusting free throws, which
+is a cleaner statement of the same mechanism.
+
+**How much the map absorbs, and it is not uniform.**  It took 99% of the offensive three-point target's
+effect, 44% of the free-throw target's, 29% of the two-point disaster's and 33% of the on-court prior's.
+That is the amplitude story quantified: the three-point targets were almost purely a change in offensive
+scale, which a per-side calibration curve already delivers, while the others changed something a curve
+cannot reach.  **A candidate's map absorption is itself diagnostic -- near-total absorption means the
+candidate was only rescaling a side.**
