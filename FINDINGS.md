@@ -5100,3 +5100,61 @@ That is the amplitude story quantified: the three-point targets were almost pure
 scale, which a per-side calibration curve already delivers, while the others changed something a curve
 cannot reach.  **A candidate's map absorption is itself diagnostic -- near-total absorption means the
 candidate was only rescaling a side.**
+
+## 37. The per-factor defence, re-tested with measured penalties: the constants were already right
+
+The plan after 36 was to split the shooting factor by zone, on the argument that one eFG penalty cannot
+serve the rim, long twos and threes at once.  Two measurements killed it before it was built, and both are
+worth keeping because they validate the shipped model rather than replacing it.
+
+### 37.1 The four penalty ratios were chosen by REML and are independently correct
+
+`FACTOR_LAMS`'s second entry is `lam_D / lam_O`, how much harder the DEFENSIVE half of a factor is shrunk.
+FINDINGS 15 chose all four by REML on the factor's own design.  35.1's split-half between-team variances
+give the same quantity from completely different arithmetic -- the optimal ratio is `tau2_off / tau2_def`,
+since the noise is common to the two sides:
+
+| factor | the model uses | measured (1997-2026) |
+|---|---|---|
+| eFG% | 1.50 | **1.50** |
+| turnovers | 0.75 | 0.88 |
+| offensive rebounds | 3.00 | 2.38 |
+| free-throw rate | 1.00 | 0.90 |
+
+eFG lands on 1.50 to the digit.  **This corrects my own reasoning in 36**: I had put eFG's ratio near 2.5
+by averaging the three zones' k-ratios, which is not how a composite's variance ratio works -- eFG's true
+spread is 1.61 points on offense and 1.31 on defense, and 1.61^2 / 1.31^2 = 1.50.  A composite is not the
+average of its parts here.
+
+### 37.2 But the zones underneath it really do differ, and it does not matter
+
+Defensive-to-offensive penalty ratio by zone, the same estimator: **rim 1.15, long twos 2.72, threes
+5.01.**  So one eFG factor at 1.50 is a compromise across a fourfold range, which is a real argument for
+splitting it -- and the reason not to build it is that the thing being refined is already at zero.
+
+FINDINGS 25's best per-factor form re-run on the CURRENT board, mapped, 28 seasons:
+
+| | mapped | z | seasons won |
+|---|---|---|---|
+| `_ff5` -- 25's best form (half blend, repriced eFG) | +0.005 | 0.19 | 14/28 |
+| `_ff5m` -- the same with the MEASURED ratios | -0.010 | -0.19 | 14/28 |
+
+**Both are exactly nothing**, and swapping REML's ratios for the measured ones moves the board by 0.015.
+The -0.040 (z -0.94) that 25 saw has gone with the board it was measured on.  Splitting eFG three ways
+would refine a component that contributes zero, at roughly ten times the fit time.  **Not built.**
+
+There is a second reason it would have underdelivered: `factor_x3` already reprices the eFG numerator with
+the shooters' expected threes, so the three-point channel -- the zone whose ratio differs most from eFG's
+1.50 -- is already neutralised inside the factor.  The split would mostly be re-deriving `x3def`.
+
+### 37.3 What this pass established, in one place
+
+* Every rate a possession's points depend on now has a measured skill share on each side (35.1), and the
+  measurement independently confirms the four ridge ratios (37.1) and the premise behind `x3def` (35.6).
+* Component-wise luck adjustment removes 6.6% / 10.4% of TEAM forward error (35.3) and none of the
+  player-level error once the calibration map is fitted (36.5, 36.6).
+* The per-factor defensive residual is flat on the current board with either set of penalties (37.2).
+
+**The target and the penalties are right.**  What is left is not in luck adjustment and not in per-factor
+shrinkage; it is in attribution, where the one live candidate remains the in-season -0.163 at z -3.12
+of 36.3, and in the two owner decisions of 34.3 and 36.5.

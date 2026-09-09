@@ -558,6 +558,21 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                 for qt, q in _CUTS.items():
                     S[f"{_nm}_{qt}"] = KernelSystem(f"{_nm}_{qt}", _inner, cut=q)
 
+        # ---------------------------------------------------------------- the per-factor defence, re-tested
+        # FINDINGS 25 measured the four-factor defensive residual on an older board (best form -0.040 at
+        # z -0.94, 7x the fit time) and 36 gave a reason to look again: the four penalty RATIOS were chosen
+        # by REML in FINDINGS 15 and are now confirmed by an independent measurement of the same quantity
+        # (35.1's split-half between-team variances, `tau2_off / tau2_def`): eFG 1.50 against 1.50 measured,
+        # turnovers 0.75 against 0.88, offensive rebounds 3.00 against 2.38, free-throw rate 1.00 against
+        # 0.90.  `_ff5` is 25's best form on the CURRENT board; `_ff5m` swaps in the measured ratios.
+        _ff_base = S["tune501_b7_pasto_pOD"]
+        S["tune501_b7_pasto_pOD_ff5"] = _replace(_ff_base, name="tune501_b7_pasto_pOD_ff5",
+                                                 def_factors=0.5, factor_x3=True)
+        S["tune501_b7_pasto_pOD_ff5m"] = _replace(
+            _ff_base, name="tune501_b7_pasto_pOD_ff5m", def_factors=0.5, factor_x3=True,
+            factor_lams={"efg": (3495.0, 1.50), "tov": (2176.0, 0.88),
+                         "oreb": (414.0, 2.38), "ftr": (1355.0, 0.90)})
+
         # ---------------------------------------------------------------- luck-adjusted on-court in the prior
         # The owner, 2026-09-09: *"what about luck-adj on-court ORTG/DRTG in the prior?"*.  The prior already
         # sees his past plus-minus as an APM (`PAST`, FINDINGS 28), which separates him from his teammates and
