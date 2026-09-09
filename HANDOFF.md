@@ -26,6 +26,14 @@ attribution**, and its optimum is a PLATEAU with three neighbours inside 0.11 --
 `tests/test_vs_consensus.py` are exactly as they were; the season board is a second product beside it
 (`outputs/season_ratings.parquet`, config `ratings_prior.season_board`, a Block/Season switch on the site).
 
+**Published 2026-09-08: the live site opens in Season mode** (https://bbstats.github.io/openrapm/, `main` at the
+merge of this branch).  **After the ship, three measurements (FINDINGS 31.8), all settled:** the credit score's
+level is ~94% noise floor and its paired differences are real -- the season board has captured **84%** of the
+player signal a lineup model can see, the chunk board 45%; the ridge holds a tenth of what is left (x0.25-x0.5
+optimal on both instruments); the prior reads a player's other windows off his rate fingerprint and closing
+that channel (`GBDTPrior folds`) is flat on the criterion -- kept as an instrument, not shipped.  **Tree state:
+committed on `hybrid-and-xpts` and merged to `main`; 148 passed, 1 xfailed.**  Start at Part 3.11.
+
 ---
 
 *The header of the previous pass, kept:*
@@ -310,6 +318,9 @@ and, for the in-season work (31):
 .venv/Scripts/python scratch/inseason_run.py --systems=ks52_lam05,ks52,ks11,blk --cuts=0.75 \
     --tag=ship --held=all                                                       # both instruments, 28 seasons, 70 s
 .venv/Scripts/python scripts/60_season_board.py && .venv/Scripts/python scripts/52_site.py   # the board, 70 s
+.venv/Scripts/python scripts/61_credit.py --who=ks52_lam05_q75      # credit vs forecast, who is missed, 60 s
+.venv/Scripts/python scratch/credit_null.py --tag=ship               # the permutation null: read 31.8 first, 40 s
+.venv/Scripts/python scratch/foldtest.py --side=D                    # a feature's identification share, 60 s
 ```
 and, for the play-by-play block specifically:
 ```
@@ -416,6 +427,14 @@ left, in the order the instruments point:
    cut is below 1, deliberately); `win_decay` re-tuned for a kernel fit; the season board against the
    consensus (it is a different estimand from the block the floors score -- read `--consensus` on `ks52` if
    anyone wants the screen).
+5. **Measured after the ship (31.8) and settled**: the credit score's level is ~94% noise floor, its paired
+   differences are real (`scratch/credit_null.py`); the season board has captured **84%** of the player signal
+   a lineup model can see, the chunk board 45%; the ridge holds about a tenth of what is left (x0.25-x0.5 is
+   the optimum on both instruments); the prior reads a player's other windows off his rate fingerprint (10%
+   of its offline accuracy) and closing that channel with player-grouped folds (`GBDTPrior folds`,
+   `MspiFast.gbdt_folds`) is flat on the criterion and slightly worse on credit -- not shipped, the
+   instrument (`scratch/foldtest.py`) kept.  `scripts/61_credit.py` is the credit-against-forecast report
+   (its `credit %` column is the naive, noise-diluted share; read 31.8 before quoting it).
 
 **Start at 3.5 or 3.2b.**  3.0 is done and 3.2 is measured (both below).  3.2 as written -- per-factor
 shrinkage with the points prior shared out -- does not unlock 22.7's 0.14; it loses.  What survives of it is a
@@ -760,6 +779,9 @@ turnover/tenure machinery is the safe form of that and tenure was not wanted off
   into a dead name.  The site is back at `https://bbstats.github.io/openrapm/`, https enforced.  To turn the
   domain on: four GitHub `A` records + a `www` CNAME at Porkbun FIRST, then re-add `docs/CNAME` on `main`,
   wait for the cert, then `gh api -X PUT repos/bbstats/openrapm/pages -F https_enforced=true`.
+* Never re-run, from 31: the GBDT prior with player-grouped folds as the board's prior (flat on the criterion,
+  +0.1 on credit); the ridge outside x0.25-x0.5 of the shipped value on a kernel fit; a naive
+  `1 - player / player_zero` credit share without the permutation null (it reads 26% where the truth is 84%).
 * Never re-run, from 30: the destination features as the board's prior on offense; block-minutes and
   rebound-minutes on defense with or without the roster's defensive APM.
 * Never re-run, from 29: Boruta's accepted lists as feature lists on either side; Boruta as a gate; the

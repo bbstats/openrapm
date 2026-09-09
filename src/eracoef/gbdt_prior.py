@@ -524,10 +524,19 @@ class GBDTPrior:
     def __init__(self, panel: pd.DataFrame, cfg: dict, seed: int | None = None, thread_count=None, features=None,
                  mode: str | None = None, target_col: str | None = None, win_decay: float = 1.0,
                  win_past: float = 1.0, sat_poss: float | None = None, turn: pd.DataFrame | None = None,
-                 pairs: bool = False, teammates: pd.DataFrame | None = None):
+                 pairs: bool = False, teammates: pd.DataFrame | None = None, folds: int = 0):
         g = cfg.get("gbdt", {})
         self.panel = panel
         self.cfg = cfg
+        # `folds` > 0: player-grouped cross-fitting.  Players are split into that many groups by a stable rule
+        # (their rank among the panel's ids), one model per (exclusion set, group) is trained WITHOUT that
+        # group's rows, and a player is scored by the model that never saw a row of his.  So no feature can
+        # identify him to a row of his own: the prior's fingerprint channel (scratch/foldtest.py: the shipped
+        # defensive list loses 0.08 of 0.83 MSE with the player's rows out, a raw player id loses everything)
+        # is closed, and his own history reaches the prior only through the explicit, time-ordered PAST block.
+        self.folds = int(folds or 0)
+        ids = np.sort(panel.player_id.unique())
+        self._fold_of = pd.Series(np.arange(len(ids)) % max(self.folds, 1), index=ids) if self.folds else None
         # `turn`: the window-pair teammate turnover table.  With it the prior trains on PAIR rows (pair_rows)
         # with `turn` as a feature on both sides, so a prediction needs a `turn` column: 1.0 asks what the box
         # line is worth among strangers, a typical stayer's 0.35 what it is worth where he is.  `pairs` alone
@@ -573,26 +582,46 @@ class GBDTPrior:
         return pair_rows(self.panel, side, exclude, self.features[side], target_col=self.target_col,
                          win_decay=self.win_decay, win_past=self.win_past, turn=self.turn)
 
-    def model(self, side: str, exclude=()):
-        key = (side, frozenset(exclude))
+    def model(self, side: str, exclude=(), fold: int | None = None):
+        """The model for one side and exclusion set; with `fold` given, the one trained without that player
+        group's rows (self.folds > 0).  Cached per (side, exclusion, fold)."""
+        key = (side, frozenset(exclude), fold)
         if key not in self._models:
             rows = self.rows(side, exclude)
+            if fold is not None:
+                rows = rows[rows.player_id.map(self._fold_of).to_numpy() != int(fold)]
             rows, rep = counterbalance(rows, self._ref[side], self.tol)
             m = fit_gbdt(rows, self.features[side], seed=self.seed, thread_count=self.thread_count, **self.params)
             rep.update(mode=self.mode, side=side, exclude=",".join(sorted(exclude)), n_rows=int(len(rows)),
+                       fold=-1 if fold is None else int(fold),
                        best_iteration=int(getattr(m, "best_iteration_", -1) or -1))
             self.reports.append(rep)
             self._models[key] = (m, rep)
         return self._models[key]
 
-    def predict(self, side: str, X: pd.DataFrame, exclude=()) -> np.ndarray:
-        m, _ = self.model(side, exclude)
-        return np.asarray(m.predict(X[self.features[side]].to_numpy(dtype=float)), dtype=float)
+    def predict(self, side: str, X: pd.DataFrame, exclude=(), player_ids=None) -> np.ndarray:
+        """Predictions for the rows of X.  With folds on, `player_ids` (one per row) routes each row to the
+        model that never saw that player; a player the panel does not know goes to the all-rows model."""
+        Xm = X[self.features[side]].to_numpy(dtype=float)
+        if not self.folds or player_ids is None:
+            m, _ = self.model(side, exclude)
+            return np.asarray(m.predict(Xm), dtype=float)
+        f = pd.Series(np.asarray(player_ids)).map(self._fold_of).to_numpy()
+        out = np.zeros(len(Xm))
+        unknown = pd.isna(f)
+        if unknown.any():
+            m, _ = self.model(side, exclude)
+            out[unknown] = np.asarray(m.predict(Xm[unknown]), dtype=float)
+        for k in np.unique(f[~unknown]).astype(int):
+            sel = (~unknown) & (f == k)
+            m, _ = self.model(side, exclude, fold=int(k))
+            out[sel] = np.asarray(m.predict(Xm[sel]), dtype=float)
+        return out
 
 
 def gbdt_offset(prior: GBDTPrior, ro, rd, season, poss_o, poss_d, exclude=(), sides=SIDES, features=None,
                 extra: pd.DataFrame | None = None, raw=None, shots: pd.DataFrame | None = None,
-                dredge: pd.DataFrame | None = None) -> np.ndarray:
+                dredge: pd.DataFrame | None = None, player_ids=None) -> np.ndarray:
     """The (2m,) raw-sign GBDT offset from a window's centred rates and seasons (and, for mode "full", the role
     inputs in `extra`, aligned to ps_idx), possession-centred per side; zeros on a side not in `sides`.
 
@@ -625,7 +654,7 @@ def gbdt_offset(prior: GBDTPrior, ro, rd, season, poss_o, poss_d, exclude=(), si
                 X[c] = np.asarray(dredge[c], dtype=float)
         if _wants_derived(prior.features[side]):
             add_derived(X)
-        g = prior.predict(side, X, exclude)
+        g = prior.predict(side, X, exclude, player_ids=player_ids)
         w = np.maximum(np.asarray(poss, dtype=float), 0.0)
         if w.sum() > 0:
             g = g - np.average(g, weights=w)

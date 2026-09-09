@@ -177,7 +177,8 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
                  params: dict | None = None, panel: str | None = None, target_d: str | None = None,
                  features: dict | None = None, win_decay: float = 1.0,
                  params_d: dict | None = None, win_decay_d: float | None = None,
-                 turn: str | None = None, turn_ref: float = TURN_REF, turn_sides=("O", "D")) -> Callable:
+                 turn: str | None = None, turn_ref: float = TURN_REF, turn_sides=("O", "D"),
+                 folds: int = 0) -> Callable:
     """The per-player offset builder for a PluginSystem.  Signature `offset(train, ctx, wd) -> (2 * n_ps,)`,
     raw sign, possession-centred per side.
 
@@ -239,12 +240,12 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
             p_d = params if params_d is None else params_d
             wd_d = win_decay if win_decay_d is None else float(win_decay_d)
             if (params or p_d or panel or target_d or features or target.startswith("blend")
-                    or win_decay != 1.0 or wd_d != 1.0 or turn):
+                    or win_decay != 1.0 or wd_d != 1.0 or turn or folds):
                 tkey = "pairs" if turn == "pairs" else bool(turn)
                 prior_o = ctx.prior(mode, col(target), params, panel, features, win_decay,
-                                    turn=tkey if "O" in turn_sides else False)
+                                    turn=tkey if "O" in turn_sides else False, folds=int(folds or 0))
                 prior_d = ctx.prior(mode, col(t_d), p_d, panel, features, wd_d,
-                                    turn=tkey if "D" in turn_sides else False)
+                                    turn=tkey if "D" in turn_sides else False, folds=int(folds or 0))
             else:
                 prior_o = ctx.gbdt if mode == "residual" else getattr(ctx, "mspi_apm" if target == "apm" else "mspi", None)
                 prior_d = prior_o
@@ -318,7 +319,8 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
                     extra = pd.concat([extra, di], axis=1)
             seasons_ps = season_of_units(wd, weights=np.asarray(exp.psx_poss_off_, dtype=float))
             common = dict(features=list(wd.spec.features), extra=extra,
-                          raw=(exp.season_rates_, exp.season_rates_d_), shots=shots, dredge=dredge)
+                          raw=(exp.season_rates_, exp.season_rates_d_), shots=shots, dredge=dredge,
+                          player_ids=wd.spec.ps_table["player_id"].to_numpy())
             g = np.zeros(2 * m)
             if "O" in sides:
                 g += gbdt_offset(prior_o, ro, rd, seasons_ps, poss_o, poss_d, exclude, sides=("O",), **common)
