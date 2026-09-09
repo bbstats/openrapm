@@ -436,6 +436,27 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                                             gbdt_features={"O": [f for f in _SO if f not in _RO], "D": list(_SD)})
         S["tune501_b7_pasto_pOD"] = _replace(_base, name="tune501_b7_pasto_pOD",
                                              gbdt_features={"O": [f for f in _SO if f not in _RO], "D": [f for f in _SD if f not in _RD]})
+        # ---------------------------------------------------------------- single-season targets (HANDOFF 3.5)
+        # The same board with the prior trained on a PER-SEASON panel (scripts/49_role_panel.py --season):
+        # a training row is a player in ONE season, its pairs are s -> s', so the turnover feature carries the
+        # SEASON move (movers 1.0, stayers 0.36 -- twice the contrast of the window pairs, 24.6), PAST is his
+        # record up to the season and not up to the block, and the coarsest object in an in-season rating stops
+        # being the prior.  More rows, noisier each.  Nothing else moves: the panel's own labels drive the
+        # exclusion set (Context.labels), the pair-row turnover table (Context.turn_table) and the PAST
+        # discount (gbdt_prior.past_decay_for, which holds the reach in YEARS constant).
+        #
+        # `win_decay` is the one number the granularity changes the meaning of: 0.514 per 3-season window is
+        # 0.80 per season, so `_sp` keeps the tuned NUMBER (a much shorter reach) and `_spy` keeps the tuned
+        # REACH IN YEARS.  Both are reported; neither is a search.
+        _SPANEL = "outputs/role_panel_season.parquet"
+        _pod = S["tune501_b7_pasto_pOD"]
+        _cbrt = 1.0 / 3.0
+        S["sp_pasto_pOD"] = _replace(_pod, name="sp_pasto_pOD", panel=_SPANEL)
+        S["spy_pasto_pOD"] = _replace(_pod, name="spy_pasto_pOD", panel=_SPANEL,
+                                      win_decay=float(_pod.win_decay) ** _cbrt,
+                                      win_decay_d=(None if _pod.win_decay_d is None
+                                                   else float(_pod.win_decay_d) ** _cbrt))
+
         # ---------------------------------------------------------------- in-season, the rolling kernel (inseason.py)
         # The board's system fit on the season being rated and the two before it, the earlier ones down-weighted,
         # with the anchor season cut at q so it can be scored on the games it has not seen.  `ks<w1><w2>` names
@@ -462,6 +483,17 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                 S[loose.name] = loose
                 for qt, q in _CUTS.items():
                     S[f"ks{tag}_{lamt}_{qt}"] = KernelSystem(f"ks{tag}_{lamt}_{qt}", loose, cut=q)
+        # the season-target prior (3.5) on the shipped kernel and ridge, with the cuts: whether a per-season
+        # prior is worth more IN season, where the block-bracketed one is coarsest
+        for _sp, _wd in (("sp", 1.0), ("spy", _cbrt)):
+            for _inner in ("ks52", "ks52_lam05"):
+                _b = S[_inner]
+                _k = _replace(_b, name=f"{_sp}_{_inner}", panel=_SPANEL,
+                              win_decay=float(_b.win_decay) ** _wd,
+                              win_decay_d=(None if _b.win_decay_d is None else float(_b.win_decay_d) ** _wd))
+                S[_k.name] = _k
+                for qt, q in _CUTS.items():
+                    S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
         for qt, q in _CUTS.items():
             S[f"blk_{qt}"] = BlockSystem(f"blk_{qt}", S["tune501_b7_pasto_pOD"], cut=q)
         # the prior with player-grouped cross-fitting (GBDTPrior folds): the fingerprint channel closed, his

@@ -4360,3 +4360,97 @@ identification share in a minute.
 
 **Never re-run:** the GBDT prior with player-grouped folds as the board's prior (flat / slightly worse);
 lambda outside x0.25-x0.5 of the shipped value on a kernel fit (both directions worse).
+
+## 32. Single-season targets: the prior on a per-season panel, and the attenuation that kills it
+
+HANDOFF 3.5, the binding constraint of 3.11: train the prior on SINGLE-season APM instead of the
+three-season window, so a training row is a player in one season, its pairs are `s -> s'` and carry the
+season's teammate turnover (movers 1.0, stayers 0.36 -- twice the contrast of the window pairs, 24.6), his
+PAST is his record up to the season rather than up to the block, and the coarsest object in an in-season
+rating stops being the prior.  Built, measured on both instruments, and the answer is **no, by a wide
+margin** -- with a mechanism that is worth more than the verdict.
+
+### 1. What was built
+
+`scripts/49_role_panel.py --season` runs the same three passes over one-season windows: APM at the tiny
+penalty, the leave-season-out Simple SPM, the shipped ridge with the SPM as its offset.
+`outputs/role_panel_season.parquet`, **29,138 rows** (14,569 player-seasons a side against 7,610 in the
+block panel), 68 seconds.  A fourth pass now joins the career and bio columns in the same script, so a panel
+is reproducible from ONE command instead of `49` plus `scratch/add_career_cols.py` and
+`scratch/add_bio_cols.py` after the fact; the block panel is unchanged (same 103 columns).
+
+Nothing downstream was told about the granularity.  It is read off the panel's own labels:
+
+| what | where | on a block panel | on a season panel |
+|---|---|---|---|
+| the exclusion set | `Context.labels(train, panel)`, `windows.labels_covering` | the block's windows (as before) | exactly the training seasons and H |
+| the pair rows' turnover | `Context.turn_table(panel)` | 15,078 window pairs | 112,068 season pairs |
+| the PAST discount | `gbdt_prior.past_decay_for` | 0.5 per 3-season window | 0.5 ** (1/3) per season, so the reach in YEARS is the same |
+
+A system takes it with `panel=`, which already existed.  The block board is byte-identical (148 passed, 1
+xfailed, plus `tests/test_season_panel.py`, 6 cases).  `45_holdout.py --held=search|confirm` now implements
+the 22.7 protocol directly instead of by hand.
+
+`win_decay` is the one number whose MEANING the granularity changes (0.514 per 3-season window is 0.80 per
+season), so both readings were run: `sp_*` keeps the tuned NUMBER, `spy_*` keeps the tuned REACH IN YEARS.
+They agree to 0.01 everywhere below, so the unit is not the story.
+
+### 2. The criterion: worse by ten times a normal win
+
+Search half, 14 held-out seasons, K = 3, against the shipped `tune501_b7_pasto_pOD`:
+
+| system | team-game | z | wins | stint | z |
+|---|---|---|---|---|---|
+| `sp_pasto_pOD` | **+0.523** | 4.42 | 2/14 | +0.961 | 5.24 |
+| `spy_pasto_pOD` | **+0.521** | 4.76 | 1/14 | +1.088 | 6.43 |
+
+For scale, the gains this project ships are 0.05 and the whole in-season kernel was worth 0.47.
+
+### 3. In season, where the estimand is closer, it is still worse -- but the loss shrinks with the cut
+
+`scratch/inseason_run.py --held=search`, K = 3, the shipping map, against `ks52_lam05` (the season board's
+own system) at each cut.  Both instruments, same fits:
+
+| cut | prediction (team-game) | z | attribution | z |
+|---|---|---|---|---|
+| q = 0 | +0.617 | 3.97 | +1.267 | 6.23 |
+| q = 0.25 | +0.443 | 3.92 | +0.839 | 5.90 |
+| q = 0.5 | +0.238 | 2.52 | +0.478 | 7.19 |
+| q = 0.75 | +0.131 | 1.10 | +0.346 | 2.88 |
+
+Monotone in the cut, on both instruments, and never crossing zero.  The more of the anchor season the fit
+has seen, the less the season-trained prior loses -- which is the mechanism naming itself.
+
+### 4. The mechanism: errors in variables, and the defensive prior loses half its spread
+
+The prior is TRAINED on one-season feature lines and APPLIED to three-season ones.  A one-season rate is the
+same quantity measured with more noise, so the fitted function is attenuated -- and what comes out is too
+narrow.  `45_holdout.py --spread`, possession-weighted sd over players with 1000+ possessions:
+
+| block | side | shipped prior | season-panel prior | ratio |
+|---|---|---|---|---|
+| 2024-2026 | offense | 1.480 | 1.362 | 0.92 |
+| 2024-2026 | **defense** | 0.674 | **0.442** | **0.66** |
+| 1997-1999 | offense | 1.629 | 1.313 | 0.81 |
+| 1997-1999 | **defense** | 0.884 | **0.451** | **0.51** |
+
+The defensive prior loses a third to a HALF of its spread; offense loses a tenth to a fifth.  That is the
+expected ordering -- the box score's defensive vocabulary is the weakest signal in the model (R^2 0.26), so
+it attenuates first -- and it explains both the size of the loss and why it falls as the cut rises: at
+q = 0.75 the fit's own feature line is closer to one season, so the mismatch is smaller.
+
+Note what this does NOT say.  It does not say a single-season target carries less information; the
+correlation of the two priors with the final rating is nearly unchanged on offense (0.923 against 0.920).
+It says the training line and the prediction line must be the SAME OBJECT, and here they are not.
+
+### 5. What this rules out, and the one thing it does not
+
+**Never re-run:** the shipped board, or the season board, with the prior trained on a per-season panel as
+built -- both instruments, every cut, z 2.5 to 7.  Nor `win_decay` as the suspect: the two conventions agree.
+
+What survives is the diagnosis, and it is testable: keep the FEATURE line on the block panel and take the
+TARGET from the season panel -- cross-panel pair rows, `left` = a block window, `right` = a single season
+outside it.  That keeps every gain 3.5 was after (the season turnover contrast, per-season PAST, seven times
+the rows) and removes the one thing measured here to be doing the damage.  It needs a leakage guard the
+current pair rows do not have -- a target season inside the feature window, or inside a window the PAST
+sums over, is the model reading its own answer -- which is why it was not built in this pass.

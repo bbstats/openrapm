@@ -1,6 +1,12 @@
 # Handoff: the rating is in-season now -- a rolling kernel anchored on the season being rated, and two instruments that separate predicting from crediting
 
-**Built 2026-09-08, latest (FINDINGS 31): the season board.**  A rating is now ANCHORED at a season and fit
+**Latest, 2026-09-09 (FINDINGS 32): single-season targets are built and the prior cannot take them.**  The
+per-season role panel exists (`49_role_panel.py --season`) and every consumer reads the granularity off the
+panel's labels, but a prior trained on one-season feature lines and applied to three-season ones is
+attenuated -- half its spread on defense -- and costs +0.52 per 100 (z 4.4) on the board and +0.13 to +0.62
+in season.  Start at Part 3.12; what survives is cross-panel pair rows (block features, season targets).
+
+**Built 2026-09-08 (FINDINGS 31): the season board.**  A rating is now ANCHORED at a season and fit
 on that season and the two before it, the earlier ones halved and quartered (`kernel = {0: 1, -1: 0.5,
 -2: 0.25}`), with nothing after it in the fit -- so the latest row is a rating of the season in progress and
 `scripts/60_season_board.py` re-run updates it.  `src/eracoef/inseason.py` is the module; two new fields on
@@ -32,7 +38,7 @@ level is ~94% noise floor and its paired differences are real -- the season boar
 player signal a lineup model can see, the chunk board 45%; the ridge holds a tenth of what is left (x0.25-x0.5
 optimal on both instruments); the prior reads a player's other windows off his rate fingerprint and closing
 that channel (`GBDTPrior folds`) is flat on the criterion -- kept as an instrument, not shipped.  **Tree state:
-committed on `hybrid-and-xpts` and merged to `main`; 148 passed, 1 xfailed.**  Start at Part 3.11.
+committed on `hybrid-and-xpts` and merged to `main`; 148 passed, 1 xfailed.**
 
 ---
 
@@ -411,16 +417,47 @@ expensive part is deciding it was worth measuring.
 
 ## Part 3: the next pass
 
+### 3.12 DONE and answered 2026-09-09: single-season targets are built, and the prior cannot take them (FINDINGS 32)
+
+**Do not start here; 3.5 is answered.**  `scripts/49_role_panel.py --season` builds
+`outputs/role_panel_season.parquet` (29,138 rows, 68 s) and every consumer reads the granularity off the
+panel's own labels -- the exclusion set (`Context.labels(train, panel)`), the pair rows' turnover table
+(`Context.turn_table(panel)`, 112,068 season pairs) and the PAST discount (`gbdt_prior.past_decay_for`,
+which holds the reach in YEARS constant).  Systems `sp_pasto_pOD` / `spy_pasto_pOD` and
+`sp_ks52_lam05` / `spy_ks52_lam05` take it with `panel=`.  The block board is byte-identical.
+
+**It loses on both instruments, everywhere.**  Search half, K = 3: **+0.52 per 100 at team-game level
+(z 4.4, 2 of 14)** on the block board, and in season +0.62 / +0.44 / +0.24 / +0.13 at the four cuts with
+attribution +1.27 / +0.84 / +0.48 / +0.35.  Ten times the size of a normal win, and the two `win_decay`
+conventions agree, so the unit is not it.
+
+**Why, and this is the part worth keeping.**  The prior is trained on ONE-season feature lines and applied
+to THREE-season ones, so it is attenuated: `--spread` says the season-panel prior's possession-weighted sd
+is 0.92 and 0.81 of the shipped one on offense and **0.66 and 0.51 on DEFENSE**, where the box score's
+signal is weakest and attenuates first.  That also explains the monotone shrink with the cut.
+
+**The one thing left of 3.5**, and it is a real candidate: CROSS-PANEL pair rows -- the feature line from the
+block panel, the target from the season panel.  It keeps the season turnover contrast, the per-season PAST
+and seven times the rows, and removes the mismatch this pass measured.  It needs a leakage guard the current
+`pair_rows` does not have (a target season inside the feature window, or inside a window the PAST sums
+over), which is why it was not built here.
+
+**Also new and reusable:** `49_role_panel.py` joins the career and bio columns itself (a panel is
+reproducible from one command, not 49 plus two scratch scripts), `--out=` writes any panel path, and
+`45_holdout.py --held=search|confirm` implements the 22.7 protocol directly.  Tree: committed on
+`hybrid-and-xpts`; 154 passed, 1 xfailed.
+
 ### 3.11 DONE 2026-09-08: in season -- the kernel, the cut, and the season board (FINDINGS 31)
 
 Built and measured; the season board ships beside the block board and the block board is untouched.  What is
 left, in the order the instruments point:
 
-1. **Per-season targets for the prior** (3.5, now the binding constraint).  The role panel is still one row
-   per player per DISJOINT window and the prior's target is his OTHER windows, so the coarsest thing in an
-   in-season rating is the prior.  Season pairs also give the trade delta twice the contrast (24.6).
+1. ~~**Per-season targets for the prior** (3.5).~~  DONE and answered 2026-09-09, section 3.12: the panel is
+   built and the prior cannot take it (+0.52 per 100, z 4.4; attenuated, worst on defense).  What is left of
+   it is cross-panel pair rows -- block features, season targets -- with a leakage guard.
 2. **A cut-aware `PAST`**: `past_apm` is his record up to the block, not up to today.  In season it should be
-   his record up to the cut, which the panel cannot express either -- the same rebuild as 1.
+   his record up to the cut.  The season panel expresses it now (3.12), but only through a prior the
+   criterion refuses; on the block panel it is still the same rebuild as 1.
 3. **The kernel by exposure**: a player with 200 possessions this season wants more of his past than a
    starter does.  `lam_buckets` is the machinery and the kernel is currently one number for everyone.
 4. **Not measured**: playoff rows in a kernel fit (the anchor season's playoffs are weighted 0 whenever the
@@ -436,7 +473,8 @@ left, in the order the instruments point:
    instrument (`scratch/foldtest.py`) kept.  `scripts/61_credit.py` is the credit-against-forecast report
    (its `credit %` column is the naive, noise-diluted share; read 31.8 before quoting it).
 
-**Start at 3.5 or 3.2b.**  3.0 is done and 3.2 is measured (both below).  3.2 as written -- per-factor
+**Start at 3.2b, or at the cross-panel pair rows of 3.12.**  3.5 is answered (3.12: no), 3.0 is done and
+3.2 is measured (both below).  3.2 as written -- per-factor
 shrinkage with the points prior shared out -- does not unlock 22.7's 0.14; it loses.  What survives of it is a
 measured -0.11 for per-factor shrinkage WITHOUT a prior, which 3.2b (per-factor priors, FINDINGS 25.6) would
 build on; 3.5 (single-season targets) is the product direction and the thing that makes 24's trade delta
@@ -685,7 +723,10 @@ exposure groups).  This is the mechanism that would let the prior carry the benc
 stars -- the failure mode the criterion has complained about since FINDINGS 19, and the way to take the
 defensive bag's width back out (3.3).
 
-### 3.5 Single-season targets, and getting off chunks
+### 3.5 DONE and answered 2026-09-09 (FINDINGS 32, HANDOFF 3.12): single-season targets lose
+
+*The section as it stood before it was built, kept for the record:*
+
 
 Train the prior on single-season APM instead of three-season: more rows, noisier each, and a step toward the
 continuous rating the product is going to (0.2).  It is also the only change that would break the pooled-target

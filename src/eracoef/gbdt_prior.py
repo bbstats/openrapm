@@ -262,7 +262,18 @@ _TM_TABLE: list = [None]          # the teammates table for context.DEST on pair
 PAST_OWN = ["past_apm", "past_poss", "past_rapm"]                 # his record on THIS prior's side
 PAST_CROSS = ["past_apm_o", "past_poss_o", "past_apm_d", "past_poss_d"]   # both sides, named, for either prior
 PAST = [*PAST_OWN, *PAST_CROSS]
-PAST_DECAY = 0.5
+PAST_DECAY = 0.5           # per 3-season window; `past_decay_for` rescales it to a panel's own window length
+
+
+def past_decay_for(wins, decay: float | None = None) -> float:
+    """The discount per window of distance for a panel whose windows are `wins`.  PAST_DECAY is one
+    3-SEASON window, so a per-season panel discounts by its cube root and a player's record still reaches
+    the same number of YEARS back; the configured windows return PAST_DECAY exactly."""
+    if decay is not None:
+        return float(decay)
+    from .windows import label_step
+    step = label_step(wins)
+    return PAST_DECAY if step == 3.0 else float(PAST_DECAY ** (step / 3.0))
 
 
 def past_features(p: pd.DataFrame, wins: list, keys: pd.DataFrame, exclude=(), decay: float = PAST_DECAY,
@@ -291,15 +302,18 @@ def past_features(p: pd.DataFrame, wins: list, keys: pd.DataFrame, exclude=(), d
     return pd.DataFrame({f"past_apm{suffix}": a, f"past_poss{suffix}": s / 1000.0, f"past_rapm{suffix}": r}, index=keys.index)
 
 
-def past_all(panel: pd.DataFrame, side: str, wins: list, keys: pd.DataFrame, exclude=(), decay: float = PAST_DECAY) -> pd.DataFrame:
-    """Every PAST column for one prior's side: his own side's record unsuffixed, and both sides named."""
+def past_all(panel: pd.DataFrame, side: str, wins: list, keys: pd.DataFrame, exclude=(),
+             decay: float | None = None) -> pd.DataFrame:
+    """Every PAST column for one prior's side: his own side's record unsuffixed, and both sides named.
+    `decay` None = `past_decay_for(wins)`, the panel's own window length."""
+    decay = past_decay_for(wins, decay)
     own = past_features(panel[panel.side == side], wins, keys, exclude=exclude, decay=decay)
     o = past_features(panel[panel.side == "O"], wins, keys, exclude=exclude, decay=decay, suffix="_o")
     d = past_features(panel[panel.side == "D"], wins, keys, exclude=exclude, decay=decay, suffix="_d")
     return pd.concat([own, o[["past_apm_o", "past_poss_o"]], d[["past_apm_d", "past_poss_d"]]], axis=1)
 
 
-def past_inputs(panel: pd.DataFrame, side: str, exclude, player_ids, decay: float = PAST_DECAY) -> pd.DataFrame:
+def past_inputs(panel: pd.DataFrame, side: str, exclude, player_ids, decay: float | None = None) -> pd.DataFrame:
     """PAST at prediction time, aligned to `player_ids`: every panel window before the excluded ones (the
     block's own), the excluded ones left out.  With nothing excluded every window is past."""
     wins = sorted(panel.window.unique())
