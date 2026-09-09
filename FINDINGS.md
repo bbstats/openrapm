@@ -4703,3 +4703,48 @@ So "should the rating lean on the box score or on the plus-minus" is not settled
 picking x0.25 on the grounds that it is a better PRODUCT is legitimate under Part 0 ruling 1 in a way
 that picking it on the criterion would not be.  It is the owner's call, and memory trap 4 is the warning
 label: a flat surface cannot choose, so say which loss the constant is for.
+
+### 34.4 The two penalties, swept apart: already separate, already right, and the surface is flat
+
+The owner, 2026-09-09: *"penalties should be different o/d/other effects in another bucket probably?"*
+
+**Two of the three already are, and had been all along.**  `lam` is the OFFENSIVE penalty; `lam_ratio`
+multiplies it for defense (`estimator._scale` divides the defensive columns by `sqrt(lam_ratio)`), so the
+effective defensive penalty is `lam * lam_ratio` and the shipped ratio is 0.62.  The other effects -- home
+court, the margin rubber band, `is_po`, the box columns -- carry `pen_diag = 0` and are UNPENALIZED, which
+is their own bucket by construction.  `lam_buckets` is a third bucket keyed on exposure.  What had never
+been done is sweeping the two player penalties INDEPENDENTLY on a single season, which 34.1 did not do --
+it moved them together, and that cannot be right when offense lands at 20% evidence and defense at 44%.
+
+`od_o<a>_d<b>` crosses four offensive penalties with five defensive ones on the one-season kernel.
+Prediction, 14 held-out seasons at cut 0.75 (lower better):
+
+| offense \ defense | x0.031 | x0.0625 | x0.125 | x0.25 | x0.5 |
+|---|---|---|---|---|---|
+| x0.125 | 110.723 | 110.500 | 110.325 | 110.249 | 110.288 |
+| x0.25 | 110.572 | 110.348 | 110.174 | 110.101 | 110.141 |
+| **x0.5** | 110.519 | 110.295 | 110.121 | **110.047** | 110.090 |
+| x1 | 110.539 | 110.314 | 110.138 | 110.064 | 110.107 |
+
+**Interior in both directions** -- offense x0.5 with x0.25 and x1 worse either side, defense x0.25 with
+x0.125 and x0.5 worse -- so both are real optima and not grid edges.  And the shipped split already sits
+essentially on it: at offense x0.5 the shipped ratio puts defense at x0.31, between the two best cells.
+**Separating the penalties buys nothing: the best cell is 110.047 against 110.049 for the single-multiplier
+fit of 34.1.**  The answer to the question is that it was already done.
+
+**The flatness is the finding again, and it is now two-dimensional.**  Against the best cell, only the
+weakest offensive penalty is distinguishable (z 2.2 to 3.4); every other cell reads z 0.5 to 1.3.  Across
+that indistinguishable region the evidence share runs
+
+| offensive penalty | x0.125 | x0.25 | x0.5 | x1 |
+|---|---|---|---|---|
+| offense evidence share | 47.5% | 32.6% | 19.0% | 9.6% |
+
+| defensive penalty | x0.031 | x0.0625 | x0.125 | x0.25 | x0.5 |
+|---|---|---|---|---|---|
+| defense evidence share | 72.0% | 66.6% | 58.3% | 46.6% | 32.9% |
+
+and the two are cleanly separable: the offensive share depends only on the offensive penalty and the
+defensive share only on the defensive one, to a tenth of a percent.  So the balance between box score and
+plus-minus can be set to almost anything from 10% to 33% on offense, and 33% to 72% on defense, without the
+criterion noticing.  That is a product decision with a measurement attached, not a tuning problem.

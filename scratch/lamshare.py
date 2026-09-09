@@ -103,7 +103,13 @@ def main():
     S = registry(cfg)
     ctx = Context.load(cfg)
     seasons = [int(s) for s in _flag("seasons", "2014,2019,2024").split(",")]
-    mults = [float(m) for m in _flag("mults", "0.03,0.0625,0.125,0.25,0.5,1,2,4").split(",")]
+    # a mult is either "0.5" (both sides) or "0.5:0.25" (offense:defense).  Offense and defense have
+    # ALWAYS had separate penalties here -- `lam` is the offensive one and `lam_ratio` multiplies it for
+    # defense -- so this sweeps the two independently instead of dragging them together.
+    mults = []
+    for tok in _flag("mults", "0.03,0.0625,0.125,0.25,0.5,1,2,4").split(","):
+        a, _, b = tok.partition(":")
+        mults.append((float(a), float(b) if b else float(a)))
     floor = float(_flag("floor", "500"))
     kern = _flag("kernel", "00")
     base = S[f"ks{kern}"]
@@ -114,20 +120,22 @@ def main():
     rows = []
     for nm in names:
         off, dfn = PAIRS[nm] if nm in PAIRS else (nm.split(":") * 2)[:2]
-        for m in mults:
-            s = _replace(base, name=f"{nm}_x{m:g}", lam=lam0 * m, off_target=off, def_target=dfn)
+        for a, b in mults:
+            s = _replace(base, name=f"{nm}_x{a:g}_{b:g}", lam=lam0 * a, lam_ratio=b / a,
+                         off_target=off, def_target=dfn)
             for season in seasons:
                 tr = train_for(s, season, cfg)
-                rows.append(dict(target=nm, off=off, dfn=dfn, mult=m, lam=lam0 * m, n_train=len(tr),
+                rows.append(dict(target=nm, off=off, dfn=dfn, mult=a, mult_d=b,
+                                 lam=lam0 * a, lam_d=lam0 * b, n_train=len(tr),
                                  **decompose(s, season, ctx, floor, train=tr)))
-                print(f"  {nm:6s} x{m:<7g} {season}  done", flush=True)
+                print(f"  {nm:6s} O x{a:<6g} D x{b:<6g} {season}  done", flush=True)
     D = pd.DataFrame(rows)
 
     print(f"\n=== single-season fits, kernel ks{kern}, {len(seasons)} seasons, players with {floor:.0f}+ possessions")
     print("    share = var(rating - prior) / var(rating): 0 = the rating IS the box prior, 1 = no prior")
     print("    corr_pr = correlation of the prior with the residual (negative = the ridge undoing the prior)\n")
-    g = D.groupby(["target", "mult"]).agg(
-        lam=("lam", "first"), n=("n", "mean"),
+    g = D.groupby(["target", "mult", "mult_d"]).agg(
+        lam=("lam", "first"), lam_d=("lam_d", "first"), n=("n", "mean"),
         sd_prior_o=("sd_prior_o", "mean"), sd_resid_o=("sd_resid_o", "mean"), share_o=("share_o", "mean"),
         corr_pr_o=("corr_pr_o", "mean"),
         sd_prior_d=("sd_prior_d", "mean"), sd_resid_d=("sd_resid_d", "mean"), share_d=("share_d", "mean"),

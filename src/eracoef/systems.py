@@ -558,6 +558,27 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                 for qt, q in _CUTS.items():
                     S[f"{_nm}_{qt}"] = KernelSystem(f"{_nm}_{qt}", _inner, cut=q)
 
+        # ---------------------------------------------------------------- the two penalties, swept apart
+        # The owner, 2026-09-09: *"penalties should be different o/d/other effects in another bucket
+        # probably?"*.  Two of the three already are.  `lam` is the OFFENSIVE penalty and `lam_ratio`
+        # multiplies it for defense (estimator._scale divides the defensive columns by sqrt(lam_ratio)), and
+        # the fixed effects -- home court, the margin rubber band, is_po, the box columns -- carry
+        # `pen_diag = 0`, so they are unpenalized already and live in their own bucket by construction.
+        # `lam_buckets` is a third bucket keyed on exposure (low_poss / high_poss, per side).
+        # What had NEVER been swept is the two player penalties INDEPENDENTLY on a single season: FINDINGS 34
+        # moved them together, which cannot be right when offense ends up 20% evidence and defense 44%.
+        # `od_o<a>_d<b>`: the offensive penalty is a x ks00's lambda and the defensive one is b x it.
+        _OD_A = {"0125": 0.125, "025": 0.25, "05": 0.5, "1": 1.0}
+        _OD_B = {"003": 0.03125, "00625": 0.0625, "0125": 0.125, "025": 0.25, "05": 0.5}
+        _od_base = S["ks00"]
+        for _at, _a in _OD_A.items():
+            for _bt, _b in _OD_B.items():
+                _nm = f"od_o{_at}_d{_bt}"
+                _inner = _replace(_od_base, name=_nm, lam=float(_od_base.lam) * _a, lam_ratio=_b / _a)
+                S[_nm] = _inner
+                for qt, q in _CUTS.items():
+                    S[f"{_nm}_{qt}"] = KernelSystem(f"{_nm}_{qt}", _inner, cut=q)
+
         # ---------------------------------------------------------------- the destination (FINDINGS 30, context.py)
         # the owner: a high-usage player's usage drops on the new team (28.8), so give the prior the team he is
         # traded to -- his own usage minutes, the destination's usage minutes already spoken for, and its quality,
