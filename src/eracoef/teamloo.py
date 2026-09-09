@@ -47,7 +47,30 @@ deviation.  Two consequences, in opposite directions:
 
 Rebalancing is defined on the LABEL (points scored for offense, points allowed for defense), which is
 what the paper's rule specifies and what the regression needs.  `rebalance="rate"` rebalances on the
-component's own rate instead and exists to bound how much of (A) the label-based partner removes.
+component's own rate instead and is slightly BETTER on the simulation, which bounds how much of (A) a
+label-chosen partner removes.
+
+**Two attempts to do better than the paper's heuristic, both measured and both rejected** (the composite
+is points per possession, so an unattenuated coefficient is 100; the numbers are the mean absolute miss
+across the three offensive components on `tests/test_teamloo.simulate_season`):
+
+| | fg3 | fg2 | ft | mean miss |
+|---|---|---|---|---|
+| plain leave-one-out | 101.9 | 81.7 | 44.5 | 25.2 |
+| the paper's rule, partner on the label | 107.9 | 96.7 | 67.4 | 14.6 |
+| partner on the component's own rate | 107.4 | 97.6 | 69.2 | **13.5** |
+| the exact within-team column (rejected: leaks) | 61.6 | 60.0 | 56.4 | 40.7 |
+| split-half instrument (rejected: weak) | 79.8 | 124.5 | -280.1 | 141.6 |
+
+The within-team column fails because identity (A) makes it a deterministic function of the game's own
+rate, which drives the game's own points: the fit reaches R2 0.99 by regressing the outcome on itself.
+The instrument (`split_loo_rates`, `matchup_regression(iv=True)`) is valid in principle -- two disjoint
+halves of a team's other games have independent noise -- and fails in practice because 40 games is a weak
+first stage, which is the classic weak-instrument blow-up.  So the paper's heuristic stands as the best
+available correction, and `split_loo_rates` is kept because the split itself is reusable.
+
+**None of this touches the target.**  The regression is a diagnostic; the target uses the rates and the
+constant, so the coefficient's attenuation has no downstream effect on any rating.
 
 ## What the target actually does, stated plainly
 
@@ -426,7 +449,64 @@ def _composites(tg: pd.DataFrame, loo: pd.DataFrame, side: str) -> pd.DataFrame:
     return pd.DataFrame(out, index=tg.index)
 
 
-def matchup_regression(tg: pd.DataFrame, loo: pd.DataFrame, design: str = "composite") -> dict:
+def split_loo_rates(tg: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Two leave-one-out rate sets per row, built from DISJOINT halves of the team's other games.
+
+    For team T and game j, partition T's games by alternating chronological rank.  Set A is the rate over
+    T's parity-0 games with j removed if j is one of them; set B the same for parity 1.  Both exclude j,
+    and given the team's true rate their sampling noise is INDEPENDENT of each other -- which is what
+    makes one a valid instrument for the other (`matchup_regression(iv=True)`).
+
+    This is the same idea as `x3def`'s other-half-of-the-block rate, applied per team and per game.
+    """
+    out = []
+    for parity in (0, 1):
+        cols = {}
+        league = {c: float(tg[f"m_{c}"].sum() / max(tg[f"n_{c}"].sum(), 1.0)) for c in COMPONENTS}
+        for side, key in (("off", "team_id"), ("def", "opp_id")):
+            for c in list(COMPONENTS) + ["tov", "poss"]:
+                cols[f"{side}_{c}"] = np.full(len(tg), np.nan)
+            for _, idx in tg.groupby(key, sort=False).indices.items():
+                idx = np.asarray(idx, dtype=np.int64)
+                order = np.argsort(tg["rank"].to_numpy()[idx], kind="stable")
+                par = np.empty(idx.size, dtype=np.int64)
+                par[order] = np.arange(idx.size) % 2
+                mine = par == parity
+                for c in COMPONENTS:
+                    n = tg[f"n_{c}"].to_numpy(float)[idx]
+                    m = tg[f"m_{c}"].to_numpy(float)[idx]
+                    Sn, Sm = n[mine].sum(), m[mine].sum()
+                    # remove j from the half only when j belongs to it
+                    dn = np.where(mine, n, 0.0)
+                    dm = np.where(mine, m, 0.0)
+                    cols[f"{side}_{c}"][idx] = _safe_div(Sm - dm, Sn - dn, Sm, Sn, league[c])
+                pos = tg["poss"].to_numpy(float)[idx]
+                tov = tg["tov"].to_numpy(float)[idx]
+                Sp, St = pos[mine].sum(), tov[mine].sum()
+                dp = np.where(mine, pos, 0.0)
+                dt = np.where(mine, tov, 0.0)
+                cols[f"{side}_poss"][idx] = np.maximum(Sp - dp, 1e-9)
+                cols[f"{side}_tov"][idx] = _safe_div(St - dt, Sp - dp, St, Sp, 0.14)
+                for c in COMPONENTS:
+                    n = tg[f"n_{c}"].to_numpy(float)[idx]
+                    dn = np.where(mine, n, 0.0)
+                    cols[f"{side}_share_{c}"] = cols.get(f"{side}_share_{c}", np.full(len(tg), np.nan))
+                    cols[f"{side}_share_{c}"][idx] = (n[mine].sum() - dn) / np.maximum(Sp - dp, 1e-9)
+        out.append(pd.DataFrame(cols, index=tg.index))
+    return out[0], out[1]
+
+
+def _split_composites(half: pd.DataFrame, side: str) -> pd.DataFrame:
+    """The owner's composites built from ONE half of a team's other games (`split_loo_rates`)."""
+    keep = 1.0 - half[f"{side}_tov"].to_numpy(float)
+    d = {f"{side}_{c}": VALUE[c] * half[f"{side}_{c}"].to_numpy(float)
+         * half[f"{side}_share_{c}"].to_numpy(float) * keep for c in COMPONENTS}
+    d[f"{side}_tov"] = 100.0 * half[f"{side}_tov"].to_numpy(float)
+    return pd.DataFrame(d, index=half.index)
+
+
+def matchup_regression(tg: pd.DataFrame, loo: pd.DataFrame, design: str = "composite",
+                       iv: bool = False) -> dict:
     """Points per 100 of a team-game on the two teams' leave-one-out rates and home.
 
     `design`: "composite" (the owner's three products per side plus turnovers), "raw" (the six rates
@@ -455,15 +535,33 @@ def matchup_regression(tg: pd.DataFrame, loo: pd.DataFrame, design: str = "compo
         X["home"] = tg["home"].to_numpy(dtype=float)
     else:
         raise ValueError(f"design must be composite|raw|realised, got {design!r}")
+    Z = None
+    if iv and design == "composite":
+        # Errors in variables, not the paper's mean shift, is what attenuates this fit: a team's rate over
+        # its other games is a NOISY measure of its true rate, and the noise pulls the coefficient toward
+        # zero however the mean is balanced.  The fix uses the structure already here -- split the team's
+        # other games in two, regress on one half and INSTRUMENT with the other.  Both exclude game j and
+        # their noise is independent, so the instrument is valid and the attenuation cancels.
+        A, B = split_loo_rates(tg)
+        X = pd.concat([_split_composites(A, "off"), _split_composites(A, "def")], axis=1)
+        X["home"] = tg["home"].to_numpy(dtype=float)
+        Z = pd.concat([_split_composites(B, "off"), _split_composites(B, "def")], axis=1)
+        Z["home"] = tg["home"].to_numpy(dtype=float)
     names = list(X.columns)
     A = np.column_stack([np.ones(len(tg)), X.to_numpy(dtype=float)])
     sw = np.sqrt(w)
-    beta, *_ = np.linalg.lstsq(A * sw[:, None], y * sw, rcond=None)
+    if Z is not None:
+        # two-stage least squares, possession weighted: beta = (Z'X)^-1 Z'y with an intercept in both
+        Zm = np.column_stack([np.ones(len(tg)), Z.to_numpy(dtype=float)]) * sw[:, None]
+        Xm = A * sw[:, None]
+        beta = np.linalg.lstsq(Zm.T @ Xm, Zm.T @ (y * sw), rcond=None)[0]
+    else:
+        beta, *_ = np.linalg.lstsq(A * sw[:, None], y * sw, rcond=None)
     pred = A @ beta
     ybar = float((w * y).sum() / w.sum())
     sse = float((w * (y - pred) ** 2).sum())
     sst = float((w * (y - ybar) ** 2).sum())
-    return dict(design=design, coef=dict(zip(["const"] + names, beta.tolist())),
+    return dict(design=design, iv=bool(iv), coef=dict(zip(["const"] + names, beta.tolist())),
                 r2=1.0 - sse / sst if sst > 0 else float("nan"), rmse=float(np.sqrt(sse / w.sum())),
                 pred=pred, n=len(tg))
 

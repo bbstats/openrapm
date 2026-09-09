@@ -1,3 +1,19 @@
+# Handoff: what a single-season ridge actually weighs, and the team-game luck adjustment that does not replicate
+
+**Latest, 2026-09-09 (FINDINGS 34): the single-season penalty does NOT pick the box score, and a luck
+adjustment cannot change what it weighs.**  The owner asked for a lambda that does not collapse onto the
+prior.  Measured (`scratch/lamshare.py`, the `ls_<target>_x<mult>` systems, both in-season instruments):
+every target's optimum is x0.5 of the block penalty, INTERIOR, and there a single-season rating is 20%
+on-court evidence on offense and 44% on defense -- the criterion's own answer, not a degeneracy, and it
+tracks the prior's quality (offensive prior sd 1.44 -> 20%, defensive sd 0.80 -> 44%).  The shipped season
+board already sits at x0.5.  **The luck-adjusted target has the SAME argmin and a LOWER share (16.4%)**:
+removing variance from the target removes signal and noise together, so it buys a better level, never a
+bigger share.  **The one actionable thing: between x0.25 and x1 both instruments are flat (z -0.13 and
+z -0.26) while the offensive evidence share goes 10% -> 33%.**  Three times the on-court content for a
+difference neither instrument can see, so that is a product choice and it is nearly free.  Start at 3.14.
+
+---
+
 # Handoff: the team-game luck adjustment is built and answered; the board is unchanged
 
 **Latest, 2026-09-09 (FINDINGS 33): the owner's single-season, leave-one-out luck adjustment does not
@@ -452,6 +468,30 @@ expensive part is deciding it was worth measuring.
 - Long bash heredocs still fail in this shell; write patch scripts with the Write tool.
 
 ## Part 3: the next pass
+
+### 3.14 DONE and answered 2026-09-09: what a single-season ridge weighs (FINDINGS 34)
+
+The owner's question -- does single-year prior-informed RAPM just pick the box score -- is measured and the
+answer is no, with a caveat that is worth more than the answer.
+
+**The instruments.**  `scratch/lamshare.py [--seasons=] [--targets=ship,pts,tl3] [--mults=] [--kernel=00|52]
+[--csv]` decomposes any fit into the prior it was handed and the residual the ridge kept, and reports
+`share = var(rating - prior) / var(rating)` per side.  It is a decomposition, not a criterion, and a fit is
+under a second.  `train_for` builds the seasons a kernel names -- handing a kernel system `[season]` alone
+silently turns it into the one-season kernel, which is how this script first reported ks52 and ks00 as
+identical.  The `ls_<target>_x<mult>` systems (systems.py) cross five targets with eight penalties on the
+one-season kernel so `scratch/inseason_run.py` can score the same grid.
+
+**What it says.**  Interior optimum at x0.5 for every target, on prediction AND attribution.  There: 20%
+evidence on offense, 44% on defense.  x1 (the block board's penalty) halves that and predicts slightly
+worse.  The luck-adjusted target does not move the argmin and lowers the share.
+
+**The caveat, and it is the finding.**  Between x0.25 and x1 both instruments are FLAT (z -0.13 prediction,
+z -0.26 attribution) while the offensive evidence share moves 10% -> 33%.  The criterion cannot choose here,
+which is memory trap 4 exactly.  If the product should lean less on the box score, x0.25 is nearly free --
+but it must be chosen as a product decision and said to be one, not read off the criterion.
+
+**Not done:** whether x0.25 holds up on the confirm half, and whether the block board wants the same move.
 
 ### 3.13 DONE and answered 2026-09-09: the team-game leave-one-out target (FINDINGS 33)
 

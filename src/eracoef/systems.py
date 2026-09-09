@@ -536,6 +536,28 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                     _tl_reg(f"{_b_name}_{_t}_O", _replace(_b, name=f"{_b_name}_{_t}_O", off_target=_t))
                     _tl_reg(f"{_b_name}_{_t}_D", _replace(_b, name=f"{_b_name}_{_t}_D", def_target=_t))
 
+        # ---------------------------------------------------------------- does a single-season ridge pick the prior?
+        # The owner, 2026-09-09: *"the goal here is to get single year PI rapm to actually give us a lambda
+        # that doesn't pick one or the other (i think it usually just picks box score)"*.  On a SINGLE season
+        # at the shipped penalty the residual carries about 10% of the offensive rating's variance and 30% of
+        # the defensive one (`scratch/lamshare.py`), so on offense the rating very nearly IS the box prior.
+        # This family sweeps the penalty and the TARGET together on the one-season kernel, so the question
+        # "does a less noisy target buy the on-court evidence more weight AT ITS OWN BEST PENALTY" can be
+        # answered rather than argued.  `ls_<target>_x<mult>`; the multiplier is of `ks00`'s own lambda.
+        _LS_TARGETS = {"ship": ("xpts_ft", "x3def"), "pts": ("pts", "pts"), "xft": ("xpts_ft", "xpts_ft"),
+                       "tl3": ("tlxft3o", "x3def"), "tl3b": ("tlxft3o", "tlxft3o")}
+        _LS_MULTS = {"x003": 0.03, "x00625": 0.0625, "x0125": 0.125, "x025": 0.25,
+                     "x05": 0.5, "x1": 1.0, "x2": 2.0, "x4": 4.0}
+        _ls_base = S["ks00"]
+        for _tn, (_to, _td) in _LS_TARGETS.items():
+            for _mt, _m in _LS_MULTS.items():
+                _nm = f"ls_{_tn}_{_mt}"
+                _inner = _replace(_ls_base, name=_nm, lam=float(_ls_base.lam) * _m,
+                                  off_target=_to, def_target=_td)
+                S[_nm] = _inner
+                for qt, q in _CUTS.items():
+                    S[f"{_nm}_{qt}"] = KernelSystem(f"{_nm}_{qt}", _inner, cut=q)
+
         # ---------------------------------------------------------------- the destination (FINDINGS 30, context.py)
         # the owner: a high-usage player's usage drops on the new team (28.8), so give the prior the team he is
         # traded to -- his own usage minutes, the destination's usage minutes already spoken for, and its quality,

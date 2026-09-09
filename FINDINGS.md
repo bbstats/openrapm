@@ -4639,3 +4639,67 @@ percentage, 0.20 of three-point and 0.04 of free-throw (33.3, the premise of `x3
 leave-one-out moment estimate is nearly unbiased while the regression coefficient is badly attenuated
 (33.2, which is the correct reading of the Science Advances result for this use); and a make-rate
 replacement whose gates all pass can still be worthless, which is memory trap 6 for the third time.
+
+## 34. Does a single-season ridge just pick the box score? The penalty, the target, and what the evidence is worth
+
+The owner, 2026-09-09: *"the goal here is to get single year PI rapm to actually give us a lambda that
+doesn't pick one or the other (i think it usually just picks box score)"*, and *"i think points are just
+too noisy so - luck adj points might work"*.
+
+The prior is an OFFSET here: the ridge fits the residual of `y - X @ prior` and the rating is
+`prior + residual`.  So one number answers the question --
+
+    share = var(rating - prior) / var(rating)      possession-weighted, players with 500+ possessions
+
+-- running from 0 (the rating IS the box prior) to 1 (no prior at all).  `scratch/lamshare.py` reports it
+for any penalty and any target; the `ls_<target>_x<mult>` systems sweep both on the one-season kernel and
+`scratch/inseason_run.py` scores them.  14 held-out seasons, cut 0.75, both instruments.
+
+### 34.1 The answer: it does not degenerate, and the optimum is interior
+
+| penalty | pts: game | share O | ship: game | share O | share D | tl3: game | share O |
+|---|---|---|---|---|---|---|---|
+| x0.03 | 112.187 | 69.2% | 111.342 | 68.5% | 75.2% | 111.106 | 63.2% |
+| x0.125 | 111.139 | 48.2% | 110.435 | 47.4% | 65.1% | 110.330 | 41.5% |
+| x0.25 | 110.730 | 33.6% | 110.138 | 33.0% | 56.0% | 110.091 | 28.0% |
+| **x0.5** | **110.526** | 20.0% | **110.049** | **19.6%** | **43.7%** | **110.029** | 16.4% |
+| x1 (the block board's) | 110.529 | 10.3% | 110.145 | 10.1% | 30.0% | 110.127 | 8.5% |
+| x2 | 110.702 | 4.5% | 110.405 | 4.5% | 17.7% | 110.379 | 3.8% |
+| x4 | 111.087 | 1.7% | 110.908 | 1.7% | 8.5% | 110.875 | 1.5% |
+
+**Every target's optimum is x0.5, interior, with both neighbours worse -- so this is a real choice and not
+a grid edge (memory trap 5).**  The attribution instrument agrees exactly: x0.5 is -0.150 at z -2.07 over
+11 of 14 seasons against the block penalty, and the same U shape either side.
+
+So the ridge is NOT running to the box-score corner.  At its own best penalty a single-season rating is
+**20% on-court evidence on offense and 44% on defense**.  The owner's reading is right in direction --
+the prior dominates offense four to one -- and wrong in kind: that is the criterion's own answer, not a
+degenerate lambda.  It also tracks the prior's quality exactly, which is the check that it is the right
+answer: the offensive prior has sd 1.44 and gets 20%, the defensive prior sd 0.80 and gets 44%.
+
+The shipped SEASON board already sits at x0.5 (`ks52_lam05`).  The block board's penalty is x1, which on
+a single season halves the evidence share to 10% and predicts slightly worse.
+
+### 34.2 The luck adjustment does not move it, and the reason is structural
+
+`tl3` (the FINDINGS 33 three-point target) has the SAME argmin, x0.5, and a LOWER evidence share there:
+16.4% against 19.6%.  Its criterion is 110.029 against 110.049, which is nothing.
+
+That is not a failure of this particular adjustment; it is what a variance reduction does.  The optimal
+penalty is set by the ratio of true residual signal to measurement noise, and a luck adjustment that
+removes 3% of the target's variance removes signal and noise in nearly the same proportion, so the ratio
+-- and therefore the penalty and the share -- barely moves.  **A less noisy target buys a better LEVEL,
+not a bigger share of the rating.**  To move the share you need evidence with a better signal-to-noise
+ratio, not evidence with less variance.
+
+### 34.3 The useful finding: the criterion cannot adjudicate this, and the choice is nearly free
+
+Between x0.25 and x1 the surface is flat -- x0.25 reads **-0.020 (z -0.13)** on prediction and
+**-0.037 (z -0.26)** on attribution against the block penalty -- while the evidence share goes from
+**10% to 33% on offense** and 30% to 56% on defense.  Three times the on-court content for a difference
+neither instrument can see.
+
+So "should the rating lean on the box score or on the plus-minus" is not settled by prediction here, and
+picking x0.25 on the grounds that it is a better PRODUCT is legitimate under Part 0 ruling 1 in a way
+that picking it on the criterion would not be.  It is the owner's call, and memory trap 4 is the warning
+label: a flat surface cannot choose, so say which loss the constant is for.
