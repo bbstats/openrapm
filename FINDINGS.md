@@ -4282,3 +4282,81 @@ score the board they always scored.  The season board is a second product, not a
   in an in-season rating); a **cut-aware `PAST`** (his own record up to today rather than up to the block);
   and the **kernel by exposure** -- a player with 200 possessions this season wants more of his past than a
   starter does, and `lam_buckets` is the machinery.
+
+### 8. The credit score against its own noise floor, and what is actually left to fix
+
+**The level of `attributable` is mostly noise; its differences are not.**  A ridge on twenty games of pure
+noise "finds" players too.  A stratified permutation null -- the residual shuffled among rows of similar
+length, so the lineup link is broken and the row scale kept (a two-possession stint's per-100 value must not
+land on a forty-possession row) -- measures how much (`scratch/credit_null.py`, 8 seasons, q = 0.75):
+
+| board | `player` | noise floor | **real** | credit captured |
+|---|---|---|---|---|
+| no ratings at all | 82.3 | 57.6 | **24.7** | 0% |
+| **season board** (`ks52_lam05`) | 61.0 | 57.0 | **3.96** | **84.0%** |
+| flat rolling 3-year | 62.0 | 57.0 | 5.03 | 79.7% |
+| 3-year chunk | 71.0 | 57.3 | 13.72 | 44.5% |
+
+So the season board has captured 84% of the player signal a lineup model can see, not the 26% a naive
+`1 - player / player_zero` reads, and the chunk board leaves 3.5x the misattribution.  The noise floor is
+the same for every board to 0.3 (56.99-57.26), which is why every PAIRED difference in this section stands as
+written: `d player` and `d real` agree to 0.02.  The levels quoted in 31.5 are diluted by the floor; the
+differences and their z are not.
+
+**In sample the score is structurally zero**, as it must be: on the games the fit SAW (the third quarter of
+H, size-matched to the scored quarter) the ridge finds 50.6 against a floor of 59.3, i.e. below chance,
+because a ridge residual is near-orthogonal to its own design; on the unseen quarter it finds 61.4 against
+58.5.  There is no in-sample version of this test, which is the whole reason it is out of sample.
+
+**The ridge is nearly exhausted** (`--tag=lamsweep`, 28 seasons, q = 0.75):
+
+| lambda vs shipped | criterion | real misattribution |
+|---|---|---|
+| x0.125 | 108.646 | 4.14 |
+| x0.25 | 108.536 | 4.00 |
+| **x0.5** | **108.534** | **3.96** |
+| x1 | 108.654 | 4.08 |
+| x2 | 108.886 | 4.39 |
+
+A sixteen-fold range of lambda moves what is left by 0.43 of 3.96, with an interior optimum near x0.25-x0.5
+on BOTH instruments (so this knob is not a trade).  In the owner's decomposition -- bias = (1 - w)(prior -
+truth), shrinkage times prior error -- shrinkage holds about a tenth of the remainder.  The rest is the prior
+(FINDINGS 27: the miss follows the prior at 0.18 per point against 0.035 for the on-court part; the decile
+curve, +0.51 in the top offensive decile), plus what neither knob reaches: estimation variance, a player who
+changed between the games fit and the games scored, and the free-throw luck the target deliberately leaves
+in the residual.
+
+**The fingerprint channel, and the test that closes it** (`scratch/foldtest.py`, the shipped defensive
+operating point, leave-window-out).  FINDINGS 26.2 read the fine height + weight pair's +0.20 on the
+criterion as memorisation: the pair names the player, the model finds his OWN other rows in training and
+reads the target off them.  Player-grouped cross-fitting tests that directly: the scoring player's every row
+is held out of the model, against a control that holds out the same number of rows at random.
+
+| block added to the shipped list | rows in (control) | his rows out | keeps |
+|---|---|---|---|
+| raw player id (positive control) | -0.0200 | **-0.0001** | 0% |
+| fine height + weight | -0.0562 | -0.0405 | **72%** |
+| binned height + weight | -0.0267 | -0.0156 | 58% |
+| **the shipped list itself** (MSE) | 0.8312 | **0.9127** | -- |
+
+The control works -- a raw id is worth 0.02 with his rows in and nothing with them out -- so the test has
+power, and the fine pair keeps 72% of its gain: it was about a quarter memorisation, mostly real.  The larger
+finding is the last row: the SHIPPED eleven-feature defensive list loses 0.08 of 0.83 MSE with the player's
+own rows out, against nothing for a random 10% of rows.  A player's rate profile is a fingerprint, and the
+prior has been reading his other windows off it -- an implicit, unordered, future-inclusive version of what
+`past_apm` does explicitly.
+
+**Closing it changes nothing** (`GBDTPrior(folds=10)`, `MspiFast.gbdt_folds`, system `ks52_lam05_f10`, 28
+seasons, q = 0.75): criterion 108.530 against 108.534 (z 0.13, 14 of 28); attribution +0.096 raw at z 2.57
+against the unfolded prior, +0.11 real at z 1.47 on the 8-season null.  So the fingerprint is not a leak
+at the level the criterion measures -- the held-out season's windows were already excluded, and reading a
+player's other windows is pooling, not cheating -- and removing it costs the prior 10% of its offline
+accuracy for no gain on the board.  It also settles 26.2 the other way: the fine pair's criterion cost was
+not identity.  What it was is open; the pair is not on the shipped lists and stays off.
+
+`folds` stays in the code at 0 (byte-identical off; `tests/test_gbdt_folds.py`, 4 cases including the
+positive control) because the INSTRUMENT is the useful part: any candidate feature can now be read for its
+identification share in a minute.
+
+**Never re-run:** the GBDT prior with player-grouped folds as the board's prior (flat / slightly worse);
+lambda outside x0.25-x0.5 of the shipped value on a kernel fit (both directions worse).

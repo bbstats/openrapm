@@ -280,6 +280,9 @@ class MspiFast:
                                          # share; "2d" selects the offense/defense ratio as well
     factor_x3: bool = False              # the eFG% factor with opponent threes repriced at the shooter's expectation
     no_def_prior: bool = False           # DIAGNOSTIC: the defensive prior zeroed before the solves
+    gbdt_folds: int = 0                  # player-grouped cross-fitting of the GBDT prior (GBDTPrior folds): a player
+                                         # is scored by a model that never saw a row of his, so the prior cannot
+                                         # read his own other windows off his rate fingerprint (scratch/foldtest.py)
     kernel: dict | None = None           # in-season mode (inseason.py): the weight of each training season by its
                                          # offset from the ANCHOR (= max(train)), e.g. {0: 1, -1: 0.5, -2: 0.25}; an
                                          # offset the kernel does not name gets 0.  Unlike `decay` / `season_weights`
@@ -374,6 +377,7 @@ class MspiFast:
                         params_d=self.gbdt_params_d, win_decay_d=self.win_decay_d)
         chain_kw["turn_ref"] = float(self.turn_ref)
         chain_kw["turn_sides"] = tuple(self.turn_sides)
+        chain_kw["folds"] = int(self.gbdt_folds or 0)
         tmode = None if not self.turn else ("pairs" if self.turn == "pairs" else "ref")
         off = chain_offset(self.sides, self.mode, turn=tmode, **chain_kw)(train, ctx, wd, exp=exp, keep=keep)
         delta = 0.0

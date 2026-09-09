@@ -277,3 +277,7 @@ outputs/ratings_insea_*.parquet
 outputs/inseason_*_attrib.csv
 outputs/holdout_insea_*.parquet
 outputs/csv/holdout_insea_*.csv
+outputs/calmap_insea_*.parquet
+!outputs/calmap_insea_ship_q75.parquet
+outputs/credit_*.parquet
+outputs/credit_*.csv

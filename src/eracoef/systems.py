@@ -456,14 +456,22 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
             S[f"ks{tag}"] = inner                                  # no cut: the season board's own fit
             for qt, q in _CUTS.items():
                 S[f"ks{tag}_{qt}"] = KernelSystem(f"ks{tag}_{qt}", inner, cut=q)
-            for f in (0.5, 2.0):                                   # the ridge knob of the decomposition
-                lamt = f"lam{str(f).replace('.', '')}"
+            for f in (0.125, 0.25, 0.5, 2.0):                      # the ridge knob of the decomposition
+                lamt = f"lam{str(f).replace('.', '')}"       # lam05, lam20, lam025, lam0125
                 loose = _replace(inner, name=f"ks{tag}_{lamt}", lam=float(cfg["lam_plugin"]) * TUNED["tune501"]["lam_mult"] * f)
                 S[loose.name] = loose
                 for qt, q in _CUTS.items():
                     S[f"ks{tag}_{lamt}_{qt}"] = KernelSystem(f"ks{tag}_{lamt}_{qt}", loose, cut=q)
         for qt, q in _CUTS.items():
             S[f"blk_{qt}"] = BlockSystem(f"blk_{qt}", S["tune501_b7_pasto_pOD"], cut=q)
+        # the prior with player-grouped cross-fitting (GBDTPrior folds): the fingerprint channel closed, his
+        # history reaching the prior only through PAST.  On the chosen kernel and ridge, and on the block board.
+        for nf in (10,):
+            fo = _replace(S["ks52_lam05"], name=f"ks52_lam05_f{nf}", gbdt_folds=nf)
+            S[fo.name] = fo
+            for qt, q in _CUTS.items():
+                S[f"{fo.name}_{qt}"] = KernelSystem(f"{fo.name}_{qt}", fo, cut=q)
+            S[f"tune501_b7_pasto_pOD_f{nf}"] = _replace(S["tune501_b7_pasto_pOD"], name=f"tune501_b7_pasto_pOD_f{nf}", gbdt_folds=nf)
 
         # ---------------------------------------------------------------- the destination (FINDINGS 30, context.py)
         # the owner: a high-usage player's usage drops on the new team (28.8), so give the prior the team he is
