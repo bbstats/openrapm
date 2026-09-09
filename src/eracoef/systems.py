@@ -573,6 +573,29 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
             factor_lams={"efg": (3495.0, 1.50), "tov": (2176.0, 0.88),
                          "oreb": (414.0, 2.38), "ftr": (1355.0, 0.90)})
 
+        # ---------------------------------------------------------------- the season board's own penalties
+        # The owner, 2026-09-09: *"it should never be single number / single number. o/d are different"*, and
+        # single season only -- the 3-season chunk board is on its way out (Part 0 ruling 3).  So sweep the
+        # SEASON board's two player penalties apart, and a third bucket for players the season barely saw.
+        # `sod_o<a>_d<b>`: offense at a x ks52_lam05's lambda, defense at b x it.  `_lp<r>` multiplies the
+        # penalty on players under `low_poss_threshold` possessions by r on top of that.
+        _sod = S["ks52_lam05"]
+        _SA = {"025": 0.25, "05": 0.5, "1": 1.0, "2": 2.0}
+        _SB = {"0125": 0.125, "025": 0.25, "05": 0.5, "1": 1.0}
+        for _at, _a in _SA.items():
+            for _bt, _b in _SB.items():
+                _nm = f"sod_o{_at}_d{_bt}"
+                _in = _replace(_sod, name=_nm, lam=float(_sod.lam) * _a, lam_ratio=_b / _a)
+                S[_nm] = _in
+                for qt, q in _CUTS.items():
+                    S[f"{_nm}_{qt}"] = KernelSystem(f"{_nm}_{qt}", _in, cut=q)
+        for _r in (2.0, 4.0):
+            _nm = f"sod_lp{_r:g}"
+            _in = _replace(_sod, name=_nm, lam_buckets={"low_poss": _r})
+            S[_nm] = _in
+            for qt, q in _CUTS.items():
+                S[f"{_nm}_{qt}"] = KernelSystem(f"{_nm}_{qt}", _in, cut=q)
+
         # ---------------------------------------------------------------- luck-adjusted on-court in the prior
         # The owner, 2026-09-09: *"what about luck-adj on-court ORTG/DRTG in the prior?"*.  The prior already
         # sees his past plus-minus as an APM (`PAST`, FINDINGS 28), which separates him from his teammates and

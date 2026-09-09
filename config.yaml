@@ -43,12 +43,14 @@ ratings_prior:
                       # with offense/defense 'gbdt' the box prior is the boosted one (gbdt_prior.py).  Flip only
                       # when scripts/48_ladder.py says WINS against def3_p0 at both K and both levels.
   boost: false        # the boosted correction is worth 0 on total and -0.020 on offense (30_ladder)
-  target: xpts_ft     # made free throws replaced by the shooter's padded expectation (design.TARGETS);
-                      # the one luck adjustment that beat actual points out of season (FINDINGS 16-18).
-                      # NOT `x3def_w0.25` (three quarters of every made three priced at the SHOOTER's
-                      # other-half rate): that is worth -0.21 per 100 UNMAPPED and -0.024 at z -0.63 once
-                      # the shipping calibration map is fitted, because what it buys is offensive
-                      # amplitude and the map already delivers that.  FINDINGS 36.5.
+  target: x3def_w0.25 # free throws replaced by the shooter's padded expectation, AND three quarters of
+                      # every made three replaced by 3 x that SHOOTER's other-half-of-block 3P%
+                      # (xshoot.DEFENSE_TARGETS; `w3` is the fraction of the realised deviation KEPT, so
+                      # 1.0 is the old `xpts_ft` and 0 is full replacement).  Shipped for ATTRIBUTION, not
+                      # prediction: in season it is -0.163 on the investigator at z -3.12 over 12 of 14
+                      # seasons while the criterion reads -0.024 at z -0.63 (the calibration map already
+                      # delivers the amplitude half of it -- FINDINGS 36.5).  Owner's ruling, 2026-09-09,
+                      # under the 26.5 standing rule.  FINDINGS 35-36.
   # The DEFENSIVE coefficients come from a second fit on this target (xshoot.DEFENSE_TARGETS):
   # every opponent three-point make replaced by 3 x the shooter's other-half-of-block 3P% padded
   # toward the league with k = 450 attempts.  Opponent 3P% needs 4,000-7,000 attempts to stabilise,
@@ -107,7 +109,7 @@ ratings_prior:
   # 2026-09-08: both lists pruned of the kitchen-sink Boruta's rejects (FINDINGS 29), system tune501_b7_pasto_pOD,
   # 110.4547, ten of ten floors, 31 offensive names and 11 defensive.
   gbdt_turn: {sides: [O], ref: 0.35}
-  cal_map: {table: outputs/calmap_ship.parquet, system: tune501_b7_pasto_pOD_linear+log2&xlog&prior&tshare_linear+log2&xlog, base: tune501_b7_pasto_pOD, k: 3}
+  cal_map: {table: outputs/calmap_ship.parquet, system: tune501_b7_pasto_pOD_ow_w0.25_linear+log2&xlog&prior&tshare_linear+log2&xlog, base: tune501_b7_pasto_pOD_ow_w0.25, k: 3}
   # The SEASON board (scripts/60_season_board.py, src/eracoef/inseason.py; FINDINGS 31).  The same estimator
   # fit on the season being rated and the two before it, the earlier ones down-weighted by the kernel named
   # here (systems.py `ks<w1><w2>`), with nothing after that season in it -- so the latest row is the season in
@@ -115,8 +117,11 @@ ratings_prior:
   # board's: it was chosen out of sample on fits shaped like these.  The block board (08_ratings.py) is
   # unchanged and still what tests/test_vs_consensus.py scores.
   season_board:
-    system: ks52_lam05
-    cal_map: {table: outputs/calmap_insea_ship_q75.parquet, system: ks52_lam05_q75_map, base: ks52_lam05_q75, k: 3}
+    # The same estimator on the luck-adjusted OFFENSIVE target (`ratings_prior.target` above): in season it
+    # splits credit better by -0.163 on the investigator at z -3.12 over 12 of 14 seasons, with prediction
+    # flat.  Shipped on the owner's ruling, 2026-09-09 (FINDINGS 36.3, the 26.5 standing rule).
+    system: ks52_lam05_ow_w0.25
+    cal_map: {table: outputs/calmap_insea_ship2_q75.parquet, system: ks52_lam05_ow_w0.25_q75_map, base: ks52_lam05_ow_w0.25_q75, k: 3}
 # The random effect unit: "window" gives one player effect per 3-season window, "season" one per
 # player-season (the original spec).  Possession thresholds below are in the unit's own scale.
 player_unit: window
