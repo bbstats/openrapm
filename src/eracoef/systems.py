@@ -505,6 +505,37 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                 S[f"{fo.name}_{qt}"] = KernelSystem(f"{fo.name}_{qt}", fo, cut=q)
             S[f"tune501_b7_pasto_pOD_f{nf}"] = _replace(S["tune501_b7_pasto_pOD"], name=f"tune501_b7_pasto_pOD_f{nf}", gbdt_folds=nf)
 
+        # ---------------------------------------------------------------- the team-game luck adjustment (teamloo.py)
+        # The owner's proposal, 2026-09-09: build a team's shooting rates from its OTHER games (rebalanced
+        # leave-one-out, Austin/Pe'er/Korem 2025) and move each game's makes toward them, so the ridge's
+        # target carries less of the bounce.  Self-contained: one season of play-by-play is enough, which is
+        # what "Open" needs.  Make-rate replacement has LOST here twice -- shooter level (18) and lineup level
+        # (17) -- and free throws WON (15), so this is a pre-registered LADDER read rung by rung and not a
+        # candidate.  `_pts` is the no-adjustment control; `tlfto` is free throws alone, the rung that must
+        # reproduce the shipped free-throw gain or nothing above it means anything; then threes, then twos,
+        # then the defensive and matchup priors, then the partial scalar `a`.  `_O` / `_D` hand the target to
+        # ONE side and leave the other as it ships.
+        from . import teamloo as _tl
+        # the split forms exist for every rung the ladder actually reaches.  They matter more than
+        # expected: a whole-target rung replaces the DEFENSIVE target too, so `tlxft3o` is standing in
+        # for x3def as well as for xpts_ft, and only `_O` / `_D` can say which half is paying.
+        _TL_SPLIT = ("tlfto", "tlft3o", "tlft32o", "tlft32b",
+                     "tlxft3o", "tlxft3d", "tlxft3b", "tlxft32o", "tlxft32b")
+        for _b_name in ("tune501_b7_pasto_pOD", "ks52_lam05"):
+            _b, _tl_cuts = S[_b_name], (_CUTS if _b_name.startswith("ks") else {})
+
+            def _tl_reg(nm, sysm, _cuts=_tl_cuts):
+                S[nm] = sysm
+                for qt, q in _cuts.items():
+                    S[f"{nm}_{qt}"] = KernelSystem(f"{nm}_{qt}", sysm, cut=q)
+
+            _tl_reg(f"{_b_name}_pts", _replace(_b, name=f"{_b_name}_pts", off_target="pts", def_target="pts"))
+            for _t in _tl.TARGETS:
+                _tl_reg(f"{_b_name}_{_t}", _replace(_b, name=f"{_b_name}_{_t}", off_target=_t, def_target=_t))
+                if _t in _TL_SPLIT:
+                    _tl_reg(f"{_b_name}_{_t}_O", _replace(_b, name=f"{_b_name}_{_t}_O", off_target=_t))
+                    _tl_reg(f"{_b_name}_{_t}_D", _replace(_b, name=f"{_b_name}_{_t}_D", def_target=_t))
+
         # ---------------------------------------------------------------- the destination (FINDINGS 30, context.py)
         # the owner: a high-usage player's usage drops on the new team (28.8), so give the prior the team he is
         # traded to -- his own usage minutes, the destination's usage minutes already spoken for, and its quality,

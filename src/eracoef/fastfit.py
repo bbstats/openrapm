@@ -294,7 +294,7 @@ class MspiFast:
     def counter_columns(self) -> set | None:
         """The per-possession counters this system's two targets read, so the design need not assemble the
         other hundred (`designcache.build_window_cached`).  None if a target's needs are not declared."""
-        from . import xshoot
+        from . import teamloo, xshoot
         from .design import target_counter_columns
         cols = set()
         for t in (self.off_target, self.def_target):
@@ -302,6 +302,8 @@ class MspiFast:
                 cols |= target_counter_columns(t)
             elif t in xshoot.DEFENSE_TARGET_COLUMNS:
                 cols |= xshoot.DEFENSE_TARGET_COLUMNS[t]
+            elif t in teamloo.TARGET_COLUMNS:
+                cols |= teamloo.TARGET_COLUMNS[t]
             else:
                 return None
         if self.def_factors is not None:
@@ -309,7 +311,7 @@ class MspiFast:
         return cols | {"poss"}
 
     def fit(self, train, ctx: Context) -> Ratings:
-        from . import xshoot
+        from . import teamloo, xshoot
         from .spm import chain_offset
         cfg = ctx.cfg
         T = _timer()
@@ -333,7 +335,14 @@ class MspiFast:
                 elif name in TARGETS:
                     ys[name] = derived_target(wd, name)
                 else:
-                    wd_t = xshoot.DEFENSE_TARGETS[name](train, cfg, wd, keep=keep)
+                    # the callable targets: a defensive repricing (xshoot) or a team-game luck
+                    # adjustment (teamloo).  Both take (train, cfg, wd, keep=) and return a WindowData
+                    # (or (WindowData, report)); `keep` carries the in-season cut down either path.
+                    fn = xshoot.DEFENSE_TARGETS.get(name) or teamloo.TARGETS.get(name)
+                    if fn is None:
+                        raise KeyError(f"unknown target {name!r}: not in design.TARGETS, "
+                                       f"xshoot.DEFENSE_TARGETS or teamloo.TARGETS")
+                    wd_t = fn(train, cfg, wd, keep=keep)
                     ys[name] = (wd_t[0] if isinstance(wd_t, tuple) else wd_t).y
             return ys[name]
 

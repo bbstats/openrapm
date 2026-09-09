@@ -4454,3 +4454,188 @@ outside it.  That keeps every gain 3.5 was after (the season turnover contrast, 
 the rows) and removes the one thing measured here to be doing the damage.  It needs a leakage guard the
 current pair rows do not have -- a target season inside the feature window, or inside a window the PAST
 sums over, is the model reading its own answer -- which is why it was not built in this pass.
+
+
+## 33. The team-game leave-one-out target: what a team's other games say about this one
+
+The owner, 2026-09-09, on making the rating runnable from a single season: *"just data on this season,
+padded appropriately, including +/- data, etc. ... I know that ridge w/ box prior usually just picks the
+prior. So I think we need to build a true, good luck adjusted target ... for all 82 games, leave the game
+in question out, and see which stats are most predictive of that game."*  With the distributional
+adjustment of Austin, Pe'er and Korem (*Distributional bias compromises leave-one-out cross-validation*,
+Science Advances 2025).
+
+`src/eracoef/teamloo.py`, `scripts/62_teamloo.py`, `tests/test_teamloo.py` (24 cases).  Every season is
+built alone: nothing in this module reads a second season, which is the point.
+
+### 33.1 What was built
+
+For every team-game, the team's rate on each shooting component over its OTHER games, then a blend of
+this game's rate with that one, then the ridge's target rebuilt with the blended rate:
+
+    p_adj  =  pad.shrink(p_game, n_game, k, p_other_games)
+    y      =  100 * (3*(fg3m + a*(p3_adj*fg3a - fg3m)) + 2*(fg2m + a*(p2_adj*fg2a - fg2m)) + ft) / poss
+
+Attempts, attempt shares and turnovers stay exactly as they happened; only the make RATE moves.  The
+blend is `pad.shrink`, the project's one padding function.  `a` is a partial-adjustment scalar so "how
+much of it" is measured rather than assumed.  A ladder of targets registers through
+`fastfit.MspiFast.target_y`, the same callable hook `xshoot.DEFENSE_TARGETS` uses, so `keep` carries the
+in-season cut down the same path.
+
+### 33.2 The mechanical bias is exact, and it decides where the paper's fix belongs
+
+With attempt weights n_j and the team's own weighted mean pbar, the plain leave-one-out rate satisfies
+
+    p_loo(j) - pbar  ==  -n_j (p_j - pbar) / (S_n - n_j)                                   (A)
+
+identically -- tested at `test_plain_loo_is_an_exact_negative_multiple_of_the_deviation`, to 1e-12.  So
+the leave-one-out rate is an exactly negative multiple of the game's own deviation, and the two uses of
+it are affected in opposite ways.
+
+**In the regression the bias is real and rebalancing fixes most of it.**  The composite regressor is
+points per possession, so an unattenuated coefficient is 100.  On 2024, plain leave-one-out gives 99.7 /
+101.2 / 105.4 on the offensive three-point, two-point and free-throw terms and 82.0 / 94.6 / 81.6 on the
+defensive ones; rebalanced gives 116.9 / 119.1 / 111.6 and 104.5 / 112.2 / 95.7.  Every coefficient
+de-attenuates, in 28 of 30 seasons.
+
+**In the moment estimate it very nearly cancels, and rebalancing over-corrects.**  The between-team
+variance of a team's own mean is inflated by that mean's sampling noise, and (A) subtracts an amount of
+the same order.  Measured four ways, attempt-weighted over 1997-2026:
+
+| | rebalanced LOO | plain LOO | split-half | method of moments | reb / split-half |
+|---|---|---|---|---|---|
+| offense, threes | 2.13e-04 | 1.79e-04 | 1.72e-04 | 1.70e-04 | 1.23 |
+| offense, twos | 2.83e-04 | 2.66e-04 | 2.56e-04 | 2.63e-04 | 1.10 |
+| offense, free throws | 6.64e-04 | 6.60e-04 | 6.09e-04 | 6.41e-04 | 1.09 |
+
+Plain leave-one-out, the split-half reference and the ordinary method of moments agree to 4-9%; the
+rebalanced covariance runs 9-23% above all three.  Both bounds are understood: the partner is chosen on
+the label, which is correlated with the team's own shooting, and the split-half reference is attenuated
+by real within-season change in a team.  **So the constant comes from the method of moments
+(`teamloo.K_SOURCE`) and the rates stay rebalanced.**  Rebalance where the bias bites, not where it
+cancels.
+
+### 33.3 What a defence controls, measured independently
+
+Split-half between-team variance as a share of the offence's, pooled 1997-2026:
+
+| | share |
+|---|---|
+| opponent two-point percentage | 0.85 |
+| opponent three-point percentage | 0.20 |
+| opponent free-throw percentage | 0.04 |
+
+An independent confirmation of the premise `x3def` was built on (FINDINGS 18): defences control
+two-point shooting substantially, three-point shooting a fifth as much, and free throws not at all.
+
+### 33.4 How much of a game's own shooting survives, which is the number to read first
+
+| component | attempts per team-game | k, attempts | share of the game's own rate surviving |
+|---|---|---|---|
+| threes | 25.8 | 1842 | 1.9% |
+| twos | 61.1 | 1023 | 6.2% |
+| free throws | 23.3 | 297 | 8.5% |
+
+This is nearly full replacement, not a mild shrink.  And the closure identity says the same thing from
+the other side: at k = 0 the team-game total returns actual points exactly (1e-13 on real data) while
+every stint of that game moves, because the game's makes have been spread over its attempts.  So the
+target erases which LINEUP did the shooting within a game before any shrinkage happens at all -- the
+FINDINGS 17 mechanism.  None of this is visible in the season gates, which pass everywhere (points ratio
+within 0.02%, no clipping): memory trap 6 exactly, a target's gates cannot tell you whether it should be
+the target.
+
+### 33.5 The ladder, on the search half (K = 3, 14 held-out seasons, against `tune501_b7_pasto_pOD`)
+
+Team-game level; negative is better.  The rungs were fixed before any was run.
+
+| rung | what it is | team-game | z | wins | stint |
+|---|---|---|---|---|---|
+| R0 `_pts` | no luck adjustment at all (the control) | +0.459 | 3.70 | 3/14 | +0.689 |
+| R1 `_tlfto` | free throws at the TEAM's other-games rate | +0.438 | 3.69 | 3/14 | +0.766 |
+| R2 `_tlxft3o` | shipped shooter-level free throws + team-LOO threes | **-0.173** | **-2.72** | **11/14** | +0.106 |
+| R2 `_tlxft3o_O` | the same, OFFENSIVE half only (defence stays `x3def`) | **-0.170** | **-2.79** | **11/14** | +0.108 |
+| R2 `_tlxft3o_D` | the same, defensive half only | -0.004 | -0.42 | 6/14 | -0.004 |
+| R4 `_tlxft3b` | the matchup prior (offence + defence - league) | +0.010 | 0.09 | 9/14 | +0.342 |
+| R3 `_tlxft32o` | plus the two-point term | +2.276 | 6.57 | 0/14 | +5.458 |
+| R3 `_tlxft32b` | plus twos, matchup prior | +0.316 | 1.40 | 4/14 | +3.364 |
+
+**R1 fails and the pre-registered fallback fires.**  The shipped free-throw target is worth -0.459 per
+100 (that is what R0 gives back); the team-level free-throw term recovers 0.021 of it, which is 5%.  The
+mechanism is the constant: a shooter's free-throw percentage pads with k about 24 attempts, so his own
+game survives the blend and the target knows WHO shot; the team's pads with k = 297, so it prices a 90%
+shooter and a 60% shooter identically.  Between-shooter variance is where the free-throw gain lives, and
+the team level throws it away.  This is the rung the plan said to stop at, and stopping at it was right:
+the fallback that keeps shooter-level free throws is what wins.
+
+**R3 fails hard and in the direction FINDINGS 17 and 18 predicted.**  Adding the two-point term costs
++2.28 per 100 at z 6.6, losing all 14 seasons.  Two-point shooting is real skill -- the defence controls
+0.85 of it and the offence's own rate is 6% surviving -- so replacing a game's two-point makes by the
+team's season rate deletes signal, not luck.
+
+**R2 wins, and it is entirely offensive.**  Replacing three-point makes by the shooting team's
+rebalanced other-games three-point percentage is worth **-0.17 per 100 at z -2.8 over 11 of 14 seasons**
+on the offensive half.  The defensive half reads exactly zero (-0.004, z -0.4), which is the right answer
+and a good check: `x3def` already reprices opponent threes at the shooter's rate, so a second way of
+doing the same job adds nothing.  The matchup prior (R4) is also zero and costs the offensive gain.
+
+**It loses at stint level** (+0.108, z 1.1, 5 of 14), not significantly, and the owner's ruling of
+2026-09-05 is that game level decides.  Reported, not hidden.
+
+### 33.6 The confirm half does not confirm, and that is the verdict
+
+The search-then-confirm protocol of 22.7 exists for exactly this.  `tune501_b7_pasto_pOD_tlxft3o_O` on
+the fourteen seasons the search never saw:
+
+| | team-game | z | wins | stint | z | wins |
+|---|---|---|---|---|---|---|
+| search half | **-0.170** | -2.79 | 11/14 | +0.108 | 1.09 | 5/14 |
+| **confirm half** | **-0.055** | **-0.90** | 9/14 | **+0.258** | **3.64** | 3/14 |
+
+The gain falls to a third of its size and loses significance.  At stint level the confirm half is
+significantly WORSE, z 3.6 over 11 of 14 seasons.  Under Part 0 ruling 1 -- *"a gain that survives only
+the search half ... is not a gain"* -- **this is not a ship, and it is not close.**
+
+Read honestly, the whole ladder says one thing: at team-game granularity there is very little three-point
+luck left to remove that `x3def` and `xpts_ft` have not already removed, and every other component is
+signal rather than luck.  The free-throw rung lost the shooter's identity (5% of the shipped gain), the
+two-point rung deleted real shot-making (+2.28 per 100), and the three-point rung -- the one place where
+the premise is true -- is worth about a tenth of a point that does not replicate.
+
+### 33.7 In season it is flat, and flat on attribution too
+
+`scratch/inseason_run.py --systems=ks52_lam05,ks52_lam05_tlxft3o_O --cuts=0.25,0.5,0.75 --held=search`,
+against `ks52_lam05` at each cut:
+
+| cut | prediction (team-game) | z | wins | attribution | z |
+|---|---|---|---|---|---|
+| 0.25 | -0.059 | -1.09 | 10/14 | -0.012 | -0.19 |
+| 0.50 | -0.030 | -0.39 | 8/14 | +0.043 | +0.45 |
+| 0.75 | -0.006 | -0.08 | 9/14 | +0.036 | +0.39 |
+
+Right sign, no size, and it shrinks as the season fills in -- which is what a variance reduction that
+carries no extra information looks like once there is enough data not to need it.  The attribution
+instrument (`investigate.attributable`) reads zero at every cut, so this is not the 27.4 case of a
+candidate that trades forecasting for crediting.  It is simply not worth anything.
+
+### 33.8 The partial scalar, and why it does not rescue it
+
+On the search half, against the shipped board: a = 0 is the shipped target by construction (0.000),
+a = 0.25 is +0.183, a = 0.50 is -0.011, a = 0.75 is -0.130, a = 1 is -0.170.  The argmax is at the
+boundary, so memory trap 5 applies -- but a = 1 is the principled endpoint (the whole adjustment), not an
+arbitrary grid edge, and the reading is that the constant is not too aggressive.  The bump at a = 0.25 is
+about two standard errors and not explained; it is not worth chasing given 33.6.
+
+### 33.9 What this rules out, and what is worth keeping
+
+**Never re-run:** the free-throw term at team level (the constant is 297 attempts against the shooter's
+24, and between-shooter variance is the entire gain); the two-point term at any weight; the matchup prior
+as the blend's mean; and the three-point term as a ship without a new reason to expect it to replicate.
+
+**Worth keeping, and it is the part that was asked for.**  `scripts/62_teamloo.py` is a self-contained,
+single-season instrument.  It needs one season of play-by-play and no panel, no prior, no second season,
+and it answers "which stats predict this game" directly.  Three of its readings are independent
+confirmations of things this project believed on other evidence: a defence controls 0.85 of two-point
+percentage, 0.20 of three-point and 0.04 of free-throw (33.3, the premise of `x3def`); the plain
+leave-one-out moment estimate is nearly unbiased while the regression coefficient is badly attenuated
+(33.2, which is the correct reading of the Science Advances result for this use); and a make-rate
+replacement whose gates all pass can still be worthless, which is memory trap 6 for the third time.
