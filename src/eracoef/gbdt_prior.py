@@ -262,6 +262,12 @@ _TM_TABLE: list = [None]          # the teammates table for context.DEST on pair
 PAST_OWN = ["past_apm", "past_poss", "past_rapm"]                 # his record on THIS prior's side
 PAST_CROSS = ["past_apm_o", "past_poss_o", "past_apm_d", "past_poss_d"]   # both sides, named, for either prior
 PAST = [*PAST_OWN, *PAST_CROSS]
+# His LUCK-ADJUSTED ON-COURT ratings over the same past windows (the owner, 2026-09-09).  Not an APM: it
+# does not separate him from his teammates, so it is biased toward whoever he played with and carries far
+# less variance than `past_apm` -- which is exactly why it may be worth having beside it.  Needs a panel
+# with `onc_o` / `onc_d` (scripts/49_role_panel.py, or scratch/add_onc_cols.py on an older one).
+PAST_ONC = ["past_onc_o", "past_onc_d"]
+PAST_ONC_CROSS = ["past_onc_o_o", "past_onc_d_o", "past_onc_o_d", "past_onc_d_d"]
 PAST_DECAY = 0.5           # per 3-season window; `past_decay_for` rescales it to a panel's own window length
 
 
@@ -283,7 +289,11 @@ def past_features(p: pd.DataFrame, wins: list, keys: pd.DataFrame, exclude=(), d
     `window_to`, discounted by decay ** distance.  `window` may be a label beyond the panel (the block) given as
     an index in `wins` via a `_wi` column instead.  `suffix` names the columns for a side ("_o" / "_d")."""
     idx = {lab: i for i, lab in enumerate(wins)}
-    q = p[~p.window.isin(set(exclude))][["player_id", "window", "poss", "apm", "rapm1"]].copy()
+    # `onc_o` / `onc_d` are his luck-adjusted on-court ratings (investigate.oncourt_rates), carried here
+    # when the panel has them so PAST can offer the booster a BIASED, low-variance record of the same
+    # player beside the unbiased noisy one (`apm`).  A panel built before they existed simply omits them.
+    onc = [c for c in ("onc_o", "onc_d") if c in p.columns]
+    q = p[~p.window.isin(set(exclude))][["player_id", "window", "poss", "apm", "rapm1"] + onc].copy()
     q["wi"] = q.window.map(idx).astype(float)
     n = len(keys)
     pid = keys.player_id.to_numpy()
@@ -299,7 +309,11 @@ def past_features(p: pd.DataFrame, wins: list, keys: pd.DataFrame, exclude=(), d
     sr = np.bincount(m._i.to_numpy(), weights=wt * m.rapm1.to_numpy(dtype=float), minlength=n)
     ok = s > 0
     a, r = np.where(ok, sa / np.where(ok, s, 1.0), 0.0), np.where(ok, sr / np.where(ok, s, 1.0), 0.0)
-    return pd.DataFrame({f"past_apm{suffix}": a, f"past_poss{suffix}": s / 1000.0, f"past_rapm{suffix}": r}, index=keys.index)
+    out = {f"past_apm{suffix}": a, f"past_poss{suffix}": s / 1000.0, f"past_rapm{suffix}": r}
+    for c in onc:
+        sc = np.bincount(m._i.to_numpy(), weights=wt * m[c].to_numpy(dtype=float), minlength=n)
+        out[f"past_{c}{suffix}"] = np.where(ok, sc / np.where(ok, s, 1.0), 0.0)
+    return pd.DataFrame(out, index=keys.index)
 
 
 def past_all(panel: pd.DataFrame, side: str, wins: list, keys: pd.DataFrame, exclude=(),
@@ -310,7 +324,9 @@ def past_all(panel: pd.DataFrame, side: str, wins: list, keys: pd.DataFrame, exc
     own = past_features(panel[panel.side == side], wins, keys, exclude=exclude, decay=decay)
     o = past_features(panel[panel.side == "O"], wins, keys, exclude=exclude, decay=decay, suffix="_o")
     d = past_features(panel[panel.side == "D"], wins, keys, exclude=exclude, decay=decay, suffix="_d")
-    return pd.concat([own, o[["past_apm_o", "past_poss_o"]], d[["past_apm_d", "past_poss_d"]]], axis=1)
+    cols_o = [c for c in ("past_apm_o", "past_poss_o", "past_onc_o_o", "past_onc_d_o") if c in o.columns]
+    cols_d = [c for c in ("past_apm_d", "past_poss_d", "past_onc_o_d", "past_onc_d_d") if c in d.columns]
+    return pd.concat([own, o[cols_o], d[cols_d]], axis=1)
 
 
 def past_inputs(panel: pd.DataFrame, side: str, exclude, player_ids, decay: float | None = None) -> pd.DataFrame:
@@ -406,9 +422,12 @@ def pair_rows(panel: pd.DataFrame, side: str, exclude=(), features=None, target_
     feats = list(DEFAULT_FEATURES if features is None else features)
     feats = [f for f in feats if f != TURN_FEATURE]
     from .context import DEST_ALL
-    past = [f for f in feats if f in PAST]
+    past = [f for f in feats if f in PAST or f in PAST_ONC or f in PAST_ONC_CROSS]
     dest = [f for f in feats if f in DEST_ALL]
-    feats = [f for f in feats if f not in PAST and f not in DEST_ALL]
+    # the PAST family is BUILT below from other windows, not read off this row -- reading `onc_o` off
+    # the row itself would be the target's own window and a leak
+    _built = set(PAST) | set(PAST_ONC) | set(PAST_ONC_CROSS) | set(DEST_ALL)
+    feats = [f for f in feats if f not in _built]
     ex = set(exclude)
     p = panel[(panel.side == side) & ~panel.window.isin(ex)].copy()
     if _wants_derived(feats):

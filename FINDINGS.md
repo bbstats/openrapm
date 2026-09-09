@@ -4748,3 +4748,39 @@ and the two are cleanly separable: the offensive share depends only on the offen
 defensive share only on the defensive one, to a tenth of a percent.  So the balance between box score and
 plus-minus can be set to almost anything from 10% to 33% on offense, and 33% to 72% on defense, without the
 criterion noticing.  That is a product decision with a measurement attached, not a tuning problem.
+
+### 34.5 Luck-adjusted on-court ORTG/DRTG in the prior: built, and it costs a little
+
+The owner, 2026-09-09: *"what about luck-adj on-court ORTG/DRTG in the prior? would that do anything/help
+at all?"*
+
+**What it is.**  `investigate.oncourt_rates(wd_o, wd_d)` reads each player's possession-weighted mean of
+the LUCK-ADJUSTED response over the rows he was on the floor for -- the free-throw-adjusted target on
+offense, the opponent-three-adjusted one on defense, which are the two designs the role panel already
+builds -- centred on the window's own level and padded toward it with a moment constant of about 300
+possessions (`pad.shrink`; unpadded, a two-hundred-possession player returns +100 per 100 and the booster
+sees a superstar).  Stored in the panel as `onc_o` / `onc_d` by `scripts/49_role_panel.py`, or by
+`scratch/add_onc_cols.py` on a panel that already exists; discounted over past windows into
+`past_onc_o` / `past_onc_d` by `past_features`, exactly as `past_apm` is.
+
+**It is a genuinely different column, not the same one twice.**  It correlates 0.675 with `apm` over
+player-windows with 3,000+ possessions.  The difference is what the prior might want: `apm` separates a
+player from his teammates and pays for it in variance, `onc` does not separate him at all and is much
+quieter.  A booster can weigh a biased low-variance signal against an unbiased noisy one.
+
+**The criterion says no.**  Search half, K = 3, against `tune501_b7_pasto_pOD`, team-game level:
+
+| | team-game | z | wins | stint | z |
+|---|---|---|---|---|---|
+| both sides (`_onc`) | +0.078 | 2.03 | 1/14 | +0.021 | 0.50 |
+| offense only (`_oncO`) | +0.054 | 1.85 | 4/14 | +0.017 | 0.46 |
+| defense only (`_oncD`) | +0.024 | 1.04 | 6/14 | +0.004 | 0.11 |
+
+Small, consistently the wrong sign, and significant on both sides together.  The offensive half is what
+costs; the defensive one is flat.  The likely mechanism is the one FINDINGS 30 measured for the
+destination features: a teammate-contaminated column lets the prior credit a player for the people around
+him, and the prior already holds the de-contaminated version of the same record in `past_apm`.  **Not
+shipped; `config.yaml` untouched.**
+
+**The board is unchanged by the panel edit, checked**: `tune501_b7_pasto_pOD` reads 112.4597 on this run
+and 112.4597 on the FINDINGS 33 runs before the four columns existed, to the digit.

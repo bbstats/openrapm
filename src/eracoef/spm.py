@@ -300,8 +300,8 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
                         raise RuntimeError("data/cache/teammates.parquet is missing (turnover.build_teammates)")
                     f = familiar_share(tm, list(train), [int(ctx.current_h)], player_ids=wd.spec.ps_table["player_id"].to_numpy())
                     extra[TURN_FEATURE] = f.turnover.fillna(float(turn_ref)).to_numpy()
-            from .gbdt_prior import PAST, past_inputs
-            if wants & set(PAST):
+            from .gbdt_prior import PAST, PAST_ONC, PAST_ONC_CROSS, past_inputs
+            if wants & (set(PAST) | set(PAST_ONC) | set(PAST_ONC_CROSS)):
                 # his on-court record before the block, per side: every panel window before the excluded ones
                 ids = wd.spec.ps_table["player_id"].to_numpy()
                 extra = {s_: pd.concat([extra, past_inputs(rpanel, s_, exclude, ids)], axis=1) for s_ in ("O", "D")}

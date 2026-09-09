@@ -558,6 +558,28 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                 for qt, q in _CUTS.items():
                     S[f"{_nm}_{qt}"] = KernelSystem(f"{_nm}_{qt}", _inner, cut=q)
 
+        # ---------------------------------------------------------------- luck-adjusted on-court in the prior
+        # The owner, 2026-09-09: *"what about luck-adj on-court ORTG/DRTG in the prior?"*.  The prior already
+        # sees his past plus-minus as an APM (`PAST`, FINDINGS 28), which separates him from his teammates and
+        # pays for it in variance.  `PAST_ONC` is the same record read the other way: his RAW on-court rate on
+        # the luck-adjusted targets, biased toward whoever he played with and far quieter
+        # (`investigate.oncourt_rates`, padded with a moment constant near 300 possessions; it correlates 0.68
+        # with the APM, so it is not the same column twice).  Pair rows only, like PAST.
+        from .gbdt_prior import PAST_ONC as _PAST_ONC
+        _onc_base = S["tune501_b7_pasto_pOD"]
+        _oncO = [*_onc_base.gbdt_features["O"], *_PAST_ONC]
+        _oncD = [*_onc_base.gbdt_features["D"], *_PAST_ONC]
+        for _tag, _fo, _fd in (("onc", _oncO, _oncD),
+                               ("oncO", _oncO, _onc_base.gbdt_features["D"]),
+                               ("oncD", _onc_base.gbdt_features["O"], _oncD)):
+            S[f"tune501_b7_pasto_pOD_{_tag}"] = _replace(
+                _onc_base, name=f"tune501_b7_pasto_pOD_{_tag}", gbdt_features={"O": list(_fo), "D": list(_fd)})
+            _k = _replace(S["ks52_lam05"], name=f"ks52_lam05_{_tag}",
+                          gbdt_features={"O": list(_fo), "D": list(_fd)})
+            S[_k.name] = _k
+            for qt, q in _CUTS.items():
+                S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
+
         # ---------------------------------------------------------------- the two penalties, swept apart
         # The owner, 2026-09-09: *"penalties should be different o/d/other effects in another bucket
         # probably?"*.  Two of the three already are.  `lam` is the OFFENSIVE penalty and `lam_ratio`

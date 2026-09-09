@@ -41,6 +41,7 @@ from eracoef.roles import (CAREER_INPUTS, RAW_INPUTS, build_roles, career_inputs
                            player_season_inputs, window_inputs)
 from eracoef.spm import (apm_fit, apm_lambda_check, fit_spm, panel_inputs_report, season_of_units,  # noqa: E402
                          spm_predict)
+from eracoef.investigate import oncourt_rates
 from eracoef.windows import build_window, window_label, window_seasons  # noqa: E402
 from eracoef.dredge import DREDGE_LEAGUE_COLS, DREDGE_TOTAL_COLS, player_dredge_frame  # noqa: E402
 from eracoef.xshoot import (DEFENSE_TARGETS, SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS,  # noqa: E402
@@ -95,6 +96,7 @@ for w in WINDOWS:
     season = season_of_units(wd_o)
     sf = player_shot_frame(seasons, cfg, wd_o.spec.ps_table["player_id"].to_numpy())
     df_ = player_dredge_frame(seasons, cfg, wd_o.spec.ps_table["player_id"].to_numpy())
+    onc = oncourt_rates(wd_o, wd_d)
     for side, wd in (("O", wd_o), ("D", wd_d)):
         a = apm_fit(wd, cfg)
         R = a["ro"] if side == "O" else a["rd"]
@@ -117,6 +119,12 @@ for w in WINDOWS:
         # turnovers, loose-ball and technical fouls (dredge.py; gbdt_prior.add_dredge makes the features)
         for c in DREDGE_COLS_ALL:
             d[c] = df_[c].to_numpy(dtype=float)
+        # his LUCK-ADJUSTED on-court ratings (the owner, 2026-09-09), both sides on every row like
+        # PAST_CROSS: the possession-weighted mean of the free-throw-adjusted target over the rows he was
+        # on offense for, and of the opponent-three-adjusted one over the rows he defended, each centred
+        # on the window's own level.  Biased by his teammates and far less noisy than `apm` beside it.
+        for c in ("onc_o", "onc_d", "onc_poss_o", "onc_poss_d"):
+            d[c] = onc[c].to_numpy(dtype=float)
         d["poss"] = a["poss_o"] if side == "O" else a["poss_d"]
         for c in RAW_INPUTS:
             d[c] = inp[c].to_numpy()
