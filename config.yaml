@@ -44,7 +44,11 @@ ratings_prior:
                       # when scripts/48_ladder.py says WINS against def3_p0 at both K and both levels.
   boost: false        # the boosted correction is worth 0 on total and -0.020 on offense (30_ladder)
   target: xpts_ft     # made free throws replaced by the shooter's padded expectation (design.TARGETS);
-                      # the one luck adjustment that beat actual points out of season (FINDINGS 16-18)
+                      # the one luck adjustment that beat actual points out of season (FINDINGS 16-18).
+                      # NOT `x3def_w0.25` (three quarters of every made three priced at the SHOOTER's
+                      # other-half rate): that is worth -0.21 per 100 UNMAPPED and -0.024 at z -0.63 once
+                      # the shipping calibration map is fitted, because what it buys is offensive
+                      # amplitude and the map already delivers that.  FINDINGS 36.5.
   # The DEFENSIVE coefficients come from a second fit on this target (xshoot.DEFENSE_TARGETS):
   # every opponent three-point make replaced by 3 x the shooter's other-half-of-block 3P% padded
   # toward the league with k = 450 attempts.  Opponent 3P% needs 4,000-7,000 attempts to stabilise,

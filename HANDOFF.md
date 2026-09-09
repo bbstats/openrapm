@@ -1,3 +1,19 @@
+# Handoff: the luck adjustment works at team level, does not survive the map at player level
+
+**Latest, 2026-09-09 (FINDINGS 35-36).**  Every rate a possession's points depend on now has its own
+measured shrinkage constant on each side (`teamloo.RATE_SPECS`, `skill_table`), nothing is a chosen number,
+and `scratch/forward.py` tests an adjustment DIRECTLY -- first half of a team's season predicts its second
+half, 1,784 team-seasons, no ratings pipeline in the way.  **At team level it works**: shrinking the
+outcome rates and leaving the style rates alone removes 6.6% of the forward error on offense and 10.4% on
+defense.  **At player level it does not.**  Handing a defense back its real three-point signal is
+monotonically worse, because 0.59 points of team spread will not split five ways against a season's noise;
+and the offensive version's apparent -0.21 per 100 is **-0.024 at z -0.63 once the shipping map is fitted**
+(36.5, and the new trap: never quote an unmapped gain).  `config.yaml` is unchanged and the board rebuilds
+to ten of ten floors.  What is left on the table is the in-season ATTRIBUTION gain, -0.163 at z -3.12, a
+ruling for the owner under 26.5.  Start at 3.15.
+
+---
+
 # Handoff: what a single-season ridge actually weighs, and the team-game luck adjustment that does not replicate
 
 **Latest, 2026-09-09 (FINDINGS 34): the single-season penalty does NOT pick the box score, and a luck
@@ -465,6 +481,17 @@ expensive part is deciding it was worth measuring.
 - **A search-half gain at z -2.8 can be two thirds noise** (33.6): -0.170 on the search half, -0.055 on the
   confirm half, and significantly WORSE at stint level there.  Run the confirm half before believing any
   candidate, and read the stint column even when game level decides.
+- **An unmapped criterion gain can be entirely absorbed by the shipped calibration map** (36.5).  A target
+  that changes a side's AMPLITUDE shows a large gain in `45_holdout.py` and none at all once the map is
+  fitted: the offensive three-point target read -0.21 per 100 unmapped and -0.024 at z -0.63 mapped, because
+  a per-side calibration curve is exactly what corrects amplitude and it got there first.  **Run
+  `54_track.py` then `scratch/pairsys.py` before quoting any number as a gain**, never `45_holdout.py`
+  alone; Part 1's table has always been mapped and that is the convention a candidate must be read in.
+- **The two instruments answer different questions and are allowed to disagree** (36.1 vs 35.3).  A luck
+  adjustment that improves TEAM-level forward prediction need not survive attribution to five players: a
+  defense's real 0.59 points of three-point spread is a team property and handing it back to the ridge is
+  monotonically worse.  `scratch/forward.py` asks the first question in an afternoon, the criterion the
+  second; a candidate needs both, and neither substitutes for the other.
 - Long bash heredocs still fail in this shell; write patch scripts with the Write tool.
 
 ## Part 3: the next pass

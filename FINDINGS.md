@@ -4950,7 +4950,7 @@ shooter's other-half rate and `w = 1` is raw points on that channel.  The formul
 offensive counters either way, so the same target serves as `def_target` (sweeping what a defense keeps)
 or as `off_target` (sweeping what an offense keeps), and `x3def_w1` IS the shipped `xpts_ft`.
 
-### 36.1 The defense should keep none of it, even though it earns some
+### 36.1 The defense should keep none of it, even though it earns some (unmapped; the sign holds, see 36.5)
 
 Search half, K = 3, against `tune501_b7_pasto_pOD`, team-game level, sweeping what the DEFENSE keeps:
 
@@ -4969,7 +4969,7 @@ say the same at a smaller scale (keeping a quarter reads -0.010 at z -0.91, indi
 team-level prediction need not help player-level attribution, and only the second question decides a
 rating.  Both tests are now built and they disagree by design.
 
-### 36.2 The offense is the opposite, and it is the largest gain this project has measured in a while
+### 36.2 The offense is the opposite -- UNMAPPED.  Read 36.5 before believing any number here
 
 The same dial on `off_target`, where 1.0 is the shipped board:
 
@@ -5015,8 +5015,45 @@ this one loses neither.
 identical at 0.781, offense 0.8354 -> 0.8276, offensive spread 0.826 -> 0.756.  A slight narrowing on
 offense is what removing variance does.
 
-### 36.4 Not shipped
+### 36.4 Not shipped (and 36.5 says why it cannot be)
 
 `config.yaml` is untouched.  Shipping means `ratings_prior.target: x3def_w0.25`, a refit of the
 calibration map, `08_ratings.py`, the floors in `tests/test_vs_consensus.py` read honestly, and
 `52_site.py`.  That is the owner's call.
+
+### 36.5 The correction: the shipping map already delivers what the target was buying
+
+**Every number in 36.1 to 36.3 above came from `45_holdout.py` without `--calmap`, and the board ships
+WITH a calibration map.**  Refitting the map on each candidate and pairing them properly
+(`54_track.py` then `scratch/pairsys.py`, 28 seasons, K = 3, which is the convention HANDOFF's Part 1
+table has always quoted) gives a completely different answer:
+
+| offensive target | unmapped | **mapped** | z | seasons won |
+|---|---|---|---|---|
+| keep none of the realised three (`ow0`) | -0.196 | **-0.004** | -0.01 | 11/28 |
+| keep a quarter (`ow_w0.25`) | -0.208 | **-0.024** | -0.63 | 12/28 |
+| keep 0.4 (`ow_w0.4`) | -0.196 | **-0.029** | -0.96 | 14/28 |
+
+**Nothing survives.**  The apparent -0.21 was almost entirely offensive AMPLITUDE -- the consensus screen
+shows `scale_off` moving 1.06 to 1.15 when the target changes -- and a per-side calibration curve is
+exactly the thing that already corrects amplitude.  The map and the target were buying the same thing, and
+the map got there first.  So the candidate is **not shipped**; `config.yaml` is back to `xpts_ft` and the
+board rebuilds to ten of ten floors.
+
+**What survives the correction, and it is not nothing.**  The in-season numbers in 36.3 were always
+mapped, because `scratch/inseason_run.py` fits the map itself.  At a quarter of a season the candidate is
+**-0.163 on the investigator's attribution score at z -3.12 over 12 of 14 seasons**, with prediction
+-0.088 at z -1.61.  Under the standing rule (26.5: a candidate that reads zero on the criterion with a
+measured attribution gain is a ruling for the owner, not a rejection) that is worth putting in front of
+the owner rather than filing away.  It says the target splits credit among five players better even where
+it cannot predict the team's points better -- which is the same offense/defense asymmetry 36.1 and 36.2
+found, seen from the other side.
+
+**And 36.1's sign is unaffected.**  Handing the defense back its realised threes was WORSE unmapped by
++0.010 to +0.454, monotone; a map corrects amplitude and cannot reverse a monotone loss of that size.
+The defensive conclusion stands.  Only the offensive magnitudes were wrong.
+
+**The trap, stated plainly, because this project has not written it down before:** *an unmapped criterion
+gain can be entirely absorbed by the shipped calibration map.*  A target that changes a side's amplitude
+will show a large unmapped gain and none at all once the map is fitted.  Run `54_track.py` and
+`pairsys.py` before quoting any number as a gain, never `45_holdout.py` alone.
