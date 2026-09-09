@@ -4891,3 +4891,50 @@ shrunk.  That split was made from the argument, not from this table, and the tab
 The adjustment is validated at TEAM level and has not been taken into the ratings yet.  That is the next
 step and it is a different question: this says the adjustment removes luck, not that a player model can
 use it.  Nothing here is shipped and `config.yaml` is untouched.
+
+### 35.6 External sanity check: Squared Statistics on Boston's defensive three-point record
+
+The owner pointed at *Boston vs the Field: Defensive 3PT* (squared2020, 23 January 2021), which argues
+that defensive three-point percentage is dominated by randomness at the top of the rankings while real
+differences exist between the extremes.  It is the right check, because it reaches that conclusion from a
+completely different direction -- proportions tests and order statistics on tracked shot categories -- and
+it constrains our number from both sides at once.
+
+**1. His headline number falls straight out of ours.**  He notes Boston finished top ten in defensive
+3FG% in all seven seasons from 2014 to 2020 and puts that below 1% under randomness.  With our estimated
+true spread of 0.59 points and one-season binomial noise of 1.05 points, a league-average defense makes the
+top ten with probability 0.310, and **seven in a row is 0.00028** -- his "less than 1%", derived
+independently.  So his result and ours reject the same hypothesis: defensive three-point percentage is not
+pure noise.
+
+**2. And the spread we estimate makes Boston unremarkable.**  A defense 1.8 standard deviations better
+than average (about 1.07 points) takes the top ten 70% of the time and runs seven straight with
+probability 0.084.  With thirty teams and several overlapping seven-year windows, one Boston is expected.
+A 100%-luck model cannot produce him; our model produces him without strain.
+
+**3. The raw season totals agree with the split-half estimator, which is the real validation.**  Over
+2015-2026, team defensive 3P% has an observed standard deviation of **1.17 points** against **0.95** from
+binomial noise alone, implying a true spread of **0.68 points** by ordinary moments -- against **0.59**
+from the independent split-half covariance.  Two estimators built on different assumptions, both under a
+percentage point.  The gap between them is the expected direction: split-half is attenuated by
+within-season roster and rotation change, so it is the lower bound, and `K_SOURCE = "mom"` therefore
+shrinks slightly less and keeps slightly more of the defense's real signal.
+
+**4. His "unrankable" claim, in raw numbers.**  The observed best-to-worst gap across thirty defenses
+averages **4.63 points**, where a league with no defensive skill whatsoever would still show **3.88**.
+The entire visible spread is 19% wider than a coin-flip league's.  That is his conclusion restated: the
+metric separates the extremes and says almost nothing about the ordering in between.
+
+**5. It is not a schedule artifact, checked.**  A defense's opponents are not a random draw, so part of
+the measured effect could be whose shooting it happened to face.  Removing the shooting team's own
+leave-one-out three-point rate from every team-game before estimating moves the defensive spread from
+**0.59 to 0.58** points.  Schedule is not driving it.
+
+**Where he goes further than we can.**  His mechanism work uses tracked shot categories -- wide-open
+attempts, catch-and-shoot against pull-up, corner against above the break -- and finds Boston's advantage
+is not in location (t = 0.012, p = 0.99) or shot type (t = 1.356, p = 0.176) but in rhythm disruption and
+paint presence.  We have no tracking data and cannot test that.  His Boston-Washington gap on wide-open
+threes, 6.9 points from a test statistic of -3.38 on about 1,100 attempts each, is the extreme pair of a
+noisier subset and is consistent with a true spread of the size measured here.
+
+**Nothing in the article contradicts section 35.1, and two of its results independently reproduce it.**
