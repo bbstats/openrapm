@@ -99,9 +99,33 @@ CACHE_VERSION = 1
 COMPONENTS = ("fg3", "fg2", "ft")
 VALUE = {"fg3": 3.0, "fg2": 2.0, "ft": 1.0}
 
+# EVERY rate a possession's points depend on, as (made, attempts) so ONE estimator covers all of them:
+# a make rate, a turnover rate and a share of attempts are all proportions, and the same method of
+# moments reads each.  The owner, 2026-09-09: *"we should be empirical rather than picking our %s"* --
+# so nothing here is a chosen constant, every entry gets its own k on each side from the same code.
+#   name        numerator        denominator      what it is
+RATE_SPECS = {
+    "fg3":       ("fg3m", "fg3a"),        # three-point percentage
+    "rim":       ("fgm_rim", "fga_rim"),  # two-point percentage at the rim
+    "mid":       ("fgm_mid", "fga_mid"),  # the LONG TWOS
+    "fg2":       ("m_fg2", "n_fg2"),      # both twos together, kept for the existing target
+    "ft":        ("ftm", "fta"),          # free-throw percentage
+    "tov":       ("tov", "poss"),         # turnover rate per possession
+    "oreb":      ("reb_cont", "reb_chance"),   # offensive rebound rate, per chance
+    "rim_share": ("fga_rim", "fga"),      # the shot MIX: where the attempts went
+    "mid_share": ("fga_mid", "fga"),
+    "thr_share": ("fga_thr", "fga"),
+    "ftr":       ("fta", "att"),          # free throws drawn per attempt
+    "fga_rate":  ("fga", "att"),          # the share of attempts that are field goals (the rest are FT trips)
+    "chance":    ("reb_chance", "att"),   # how often an attempt leaves a rebound to be had
+}
+# what a component is worth in points, where that is defined (a mix or a rate has no single value)
+POINT_VALUE = {"fg3": 3.0, "rim": 2.0, "mid": 2.0, "fg2": 2.0, "ft": 1.0}
+
 # the per-possession counters summed into a team-game row (stints.POSS_COUNTERS names)
 TG_COUNTERS = ("pts", "pts_tech", "poss", "fga", "fgm", "fg3a", "fg3m", "fta", "ftm",
-               "fta_tech", "ftm_tech", "tov", "att", "reb_cont", "reb_chance", "xftm", "xftm_tech")
+               "fta_tech", "ftm_tech", "tov", "att", "reb_cont", "reb_chance", "xftm", "xftm_tech",
+               "fga_rim", "fgm_rim", "fga_mid", "fgm_mid", "fga_thr", "fgm_thr")
 
 P_CLIP = (0.02, 0.98)          # a blended rate outside this is a bug, not a team
 K_CAP = 1.0e6                  # tau2 <= 0: no between-team spread to preserve, so replace outright
@@ -118,6 +142,12 @@ CALIB_BAND = (0.995, 1.005)    # the season-total gate, as xshoot uses it
 # the derivation asks for: rebalance where the paper's bias bites (the regression), not where it
 # cancels (the moment).  Every candidate is reported side by side; `k_loo` etc. carry the others.
 K_SOURCE = "mom"
+
+def rates_in(tg) -> tuple:
+    """The `RATE_SPECS` names this frame carries both sides of, in registry order.  A frame built
+    by hand or by a simulation serves only the ones it defines, so nothing has to be stubbed."""
+    return tuple(r for r in RATE_SPECS if f"n_{r}" in tg.columns and f"m_{r}" in tg.columns)
+
 
 _TG_CACHE: dict = {}
 
@@ -206,10 +236,11 @@ def _build_team_games(season: int, cfg, keep=None) -> pd.DataFrame:
     tg = tg.drop(columns=["home_team_id", "away_team_id"])
     # the three components: attempts and makes.  `fta` / `ftm` are the non-technical free throws
     # (`fta_tech` / `ftm_tech` are held separately and are not a team's shooting in any useful sense).
-    tg["n_fg3"], tg["m_fg3"] = tg["fg3a"], tg["fg3m"]
     tg["n_fg2"], tg["m_fg2"] = tg["fga"] - tg["fg3a"], tg["fgm"] - tg["fg3m"]
-    tg["n_ft"], tg["m_ft"] = tg["fta"], tg["ftm"]
-    for c in COMPONENTS:
+    for name, (num, den) in RATE_SPECS.items():
+        if num in tg.columns and den in tg.columns:
+            tg[f"m_{name}"], tg[f"n_{name}"] = tg[num].to_numpy(float), tg[den].to_numpy(float)
+    for c in rates_in(tg):
         n = tg[f"n_{c}"].to_numpy(dtype=float)
         tg[f"p_{c}"] = np.where(n > 0, tg[f"m_{c}"].to_numpy(dtype=float) / np.where(n > 0, n, 1.0), np.nan)
     poss = tg["poss"].to_numpy(dtype=float)
@@ -249,7 +280,7 @@ def rebalance_partners(label: np.ndarray, w: np.ndarray) -> np.ndarray:
     return np.where(np.isfinite(cost[np.arange(G), partner]), partner, -1)
 
 
-def loo_rates(tg: pd.DataFrame, rebalance: str = "label") -> pd.DataFrame:
+def loo_rates(tg: pd.DataFrame, rebalance: str = "label", rates=None) -> pd.DataFrame:
     """Per row, each component's rate over the team's OTHER games, both as the team on offense
     (grouped by `team_id`) and as the team defending (grouped by `opp_id`).
 
@@ -265,13 +296,14 @@ def loo_rates(tg: pd.DataFrame, rebalance: str = "label") -> pd.DataFrame:
     if rebalance not in ("label", "rate", "none"):
         raise ValueError(f"rebalance must be label|rate|none, got {rebalance!r}")
     n_rows = len(tg)
+    rates = tuple(rates) if rates is not None else rates_in(tg)
     out = {}
-    league = {c: float(tg[f"m_{c}"].sum() / max(tg[f"n_{c}"].sum(), 1.0)) for c in COMPONENTS}
+    league = {c: float(tg[f"m_{c}"].sum() / max(tg[f"n_{c}"].sum(), 1.0)) for c in rates}
     for side, key in (("off", "team_id"), ("def", "opp_id")):
         partner = np.full(n_rows, -1, dtype=np.int64)
-        cols = {f"{side}_p_{c}": np.full(n_rows, np.nan) for c in COMPONENTS}
-        cols.update({f"{side}_pl_{c}": np.full(n_rows, np.nan) for c in COMPONENTS})
-        cols.update({f"{side}_n_{c}": np.zeros(n_rows) for c in COMPONENTS})
+        cols = {f"{side}_p_{c}": np.full(n_rows, np.nan) for c in rates}
+        cols.update({f"{side}_pl_{c}": np.full(n_rows, np.nan) for c in rates})
+        cols.update({f"{side}_n_{c}": np.zeros(n_rows) for c in rates})
         label = tg["pts100"].to_numpy(dtype=float)       # points scored (off) / allowed (def), same column
         poss = tg["poss"].to_numpy(dtype=float)
         for _, idx in tg.groupby(key, sort=False).indices.items():
@@ -279,7 +311,7 @@ def loo_rates(tg: pd.DataFrame, rebalance: str = "label") -> pd.DataFrame:
             pj = rebalance_partners(label[idx], poss[idx]) if rebalance == "label" \
                 else np.full(idx.size, -1, dtype=np.int64)
             partner[idx] = np.where(pj >= 0, idx[np.maximum(pj, 0)], -1)
-            for c in COMPONENTS:
+            for c in rates:
                 n = tg[f"n_{c}"].to_numpy(dtype=float)[idx]
                 m = tg[f"m_{c}"].to_numpy(dtype=float)[idx]
                 Sn, Sm = n.sum(), m.sum()
@@ -393,9 +425,104 @@ def _half_cov(tg: pd.DataFrame, c: str, key: str) -> tuple[float, int]:
     return float((w * (pa - ma) * (pb - mb)).sum() / w.sum()), int(len(j))
 
 
-def k_table(tg: pd.DataFrame, loo: pd.DataFrame) -> pd.DataFrame:
-    """`estimate_k` for every component and side, as a frame."""
-    return pd.DataFrame([estimate_k(tg, loo, c, side) for side in ("off", "def") for c in COMPONENTS])
+def k_table(tg: pd.DataFrame, loo: pd.DataFrame, rates=None) -> pd.DataFrame:
+    """`estimate_k` for every rate the frame serves, on both sides."""
+    rates = tuple(rates) if rates is not None else rates_in(tg)
+    return pd.DataFrame([estimate_k(tg, loo, c, side) for side in ("off", "def") for c in rates])
+
+
+def skill_table(kt: pd.DataFrame, per_game: float | None = None, games: float = 82.0) -> pd.DataFrame:
+    """Turn the constants into the numbers the question is actually about: how much of what you SEE is
+    real, on each side, at the sample size you are looking at.
+
+    For a proportion measured over n attempts the sampling variance is p(1-p)/n, so with tau2 the true
+    between-team variance the real share of the observed spread is
+
+        real(n) = tau2 / (tau2 + p(1-p)/n)
+
+    which is the same quantity `pad.shrink` applies row by row -- it is `n / (n + k)`.  Nothing is chosen:
+    the answer moves with the sample, which is why "3P defense is 90% luck" is only true at one sample
+    size.  `sd_pp` is the true spread in PERCENTAGE POINTS, the most legible form of tau2.
+
+    `per_game` overrides the attempts per team-game implied by the table (`att / n_tg`).
+    """
+    rows = []
+    for (side, c), g in kt.groupby(["side", "component"], sort=False):
+        w = g["att"].to_numpy(float)
+        tau2 = float(np.average(g["tau2_half"].to_numpy(float), weights=w))
+        within = float(np.average(g["within"].to_numpy(float), weights=w))
+        n_g = float(per_game if per_game is not None else np.average(g["att"] / g["n_tg"], weights=w))
+        real = lambda n: tau2 / (tau2 + within / n) if tau2 > 0 and n > 0 else 0.0
+        rows.append(dict(side=side, component=c, p=float(np.average(g["p"], weights=w)),
+                         sd_pp=100.0 * np.sqrt(max(tau2, 0.0)), att_per_game=n_g,
+                         k=within / tau2 if tau2 > 1e-9 else K_CAP,
+                         real_game=real(n_g), real_10=real(10 * n_g), real_season=real(games * n_g)))
+    D = pd.DataFrame(rows)
+    off = D[D.side == "off"].set_index("component")["sd_pp"]
+    D["def_vs_off"] = [np.nan if r["side"] == "off" or off.get(r["component"], 0) <= 0
+                       else r["sd_pp"] / off[r["component"]] for _, r in D.iterrows()]
+    return D
+
+
+# ------------------------------------------------------------------- the possession model
+# What a set of rates is worth in points per 100 possessions.  One function, used for BOTH the raw and
+# the shrunk rates, so any error in the model itself is common to the two and cancels out of the paired
+# comparison -- which is the only reason a structural model is safe to put in a test at all.
+#
+#   a possession is a turnover with probability `tov`, otherwise it produces at least one attempt
+#   an attempt is a shot from one of the three zones in the proportions `*_share`, plus `ftr` free
+#     throws drawn per attempt at `ft`
+#   a missed attempt is rebounded by the offense with probability `oreb`, giving another attempt, so
+#     the attempts per live possession are the geometric series 1 / (1 - miss * oreb)
+MODEL_RATES = ("tov", "oreb", "chance", "fga_rate", "ft", "ftr",
+               "fg3", "rim", "mid", "rim_share", "mid_share", "thr_share")
+
+# Which of them are OUTCOMES, where a short sample is mostly luck, and which are STYLE, where it is
+# mostly choice.  A team decides how many of its shots are threes and it does not decide whether they
+# go in; a miss mechanically creates a rebound chance.  Shrinking a style rate toward the league throws
+# away a real, stable team property, and `scratch/forward.py` measures exactly that -- shrinking
+# `chance` or `fga_rate` costs 0.09 to 0.17 in forward MSE at z 3 to 4, on both sides.
+OUTCOME_RATES = ("tov", "oreb", "ft", "ftr", "fg3", "rim", "mid")
+STYLE_RATES = ("chance", "fga_rate", "rim_share", "mid_share", "thr_share")
+
+
+def possession_points(r: dict) -> dict:
+    """Points per 100 possessions implied by a dict of rates, with the pieces it went through.
+
+    `r` needs `MODEL_RATES`.  The three shares are renormalised to sum to one, so a shrunk set that no
+    longer adds up exactly is still a valid shot mix.
+    """
+    sh = np.array([r["rim_share"], r["mid_share"], r["thr_share"]], dtype=float)
+    tot = sh.sum(axis=0) if sh.ndim > 1 else sh.sum()
+    sh = sh / np.where(tot > 0, tot, 1.0)
+    q = np.array([r["rim"], r["mid"], r["fg3"]], dtype=float)
+    val = np.array([2.0, 2.0, 3.0])[:, None] if sh.ndim > 1 else np.array([2.0, 2.0, 3.0])
+    # an ATTEMPT is a field goal or a free-throw trip (stints.py's definition), so the zone shares --
+    # which are shares of FIELD GOALS -- have to be scaled by `fga_rate` before they can be mixed with
+    # the free throws, and the rebound chance is per attempt rather than per miss
+    fga_rate = np.asarray(r["fga_rate"], float)
+    pts_att = fga_rate * (sh * q * val).sum(axis=0) + np.asarray(r["ftr"], float) * np.asarray(r["ft"], float)
+    live = 1.0 / np.maximum(1.0 - np.asarray(r["chance"], float) * np.asarray(r["oreb"], float), 1e-6)
+    att = (1.0 - np.asarray(r["tov"], float)) * live
+    return dict(pts100=100.0 * att * pts_att, att_per_poss=att, pts_per_att=pts_att, live=live)
+
+
+def rates_from_totals(tot: dict, shrink_k: dict | None = None, league: dict | None = None) -> dict:
+    """The `MODEL_RATES` from summed counters, optionally shrunk toward `league` with `shrink_k`.
+
+    `tot` holds `m_<rate>` and `n_<rate>` sums.  With `shrink_k` None the realised rates come back
+    unchanged, which is the raw arm of any comparison.
+    """
+    out = {}
+    for c in MODEL_RATES:
+        n = np.asarray(tot[f"n_{c}"], dtype=float)
+        m = np.asarray(tot[f"m_{c}"], dtype=float)
+        p = np.where(n > 0, m / np.where(n > 0, n, 1.0), 0.0)
+        if shrink_k is None:
+            out[c] = p
+        else:
+            out[c] = pad.shrink(p, n, float(shrink_k[c]), float(league[c]))
+    return out
 
 
 # --------------------------------------------------------------------------- the adjusted rates

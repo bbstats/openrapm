@@ -4784,3 +4784,110 @@ shipped; `config.yaml` untouched.**
 
 **The board is unchanged by the panel edit, checked**: `tune501_b7_pasto_pOD` reads 112.4597 on this run
 and 112.4597 on the FINDINGS 33 runs before the four columns existed, to the digit.
+
+## 35. Luck-adjust everything, estimate every constant, and test the adjustment before the rating
+
+The owner, 2026-09-09: *"there is no world in which defensive 3P% and/or FT% can stand as true predictive
+things"*, *"we need to luck adjust EVERYTHING (TOV%/ORB% in addition to FT% / 3P%, long twos, etc). no
+quick and dirty solutions"*, and *"we should be empirical rather than picking our %s here (eg 3pt defense
+isn't 100% luck just - 90-95%ish)"*.
+
+Three changes: every rate a possession's points depend on is now in one registry with one estimator;
+nothing is a chosen constant; and the adjustment is tested on its own before it goes near a rating.
+
+### 35.1 What a team controls, all of it, estimated the same way
+
+`teamloo.RATE_SPECS` is eleven (made, attempts) pairs -- a make rate, a turnover rate and a share of
+attempts are all proportions, so the same method of moments reads each one on each side.
+`teamloo.skill_table` turns the variances into the number the question is about: how much of what you
+SEE is real, at the sample size you are looking at, `tau2 / (tau2 + p(1-p)/n)`.  Pooled 1997-2026,
+`sd_pp` is the true between-team spread in percentage points:
+
+| | offense sd | defense sd | def / off | real in 1 game (def) | in 10 (def) | in a season (def) |
+|---|---|---|---|---|---|---|
+| three-point % | 1.31 | **0.59** | 0.45 | 0.4% | 3.9% | **24.9%** |
+| free-throw % | 2.47 | **0.52** | 0.21 | 0.4% | 3.5% | **23.1%** |
+| rim % | 2.47 | 2.31 | 0.93 | 5.7% | 37.6% | 83.2% |
+| long twos % | 1.77 | 1.08 | 0.61 | 1.8% | 15.3% | 59.6% |
+| turnover rate | 0.96 | 1.03 | **1.07** | 7.3% | 44.2% | 86.6% |
+| offensive rebound rate | 2.04 | 1.32 | 0.65 | 4.0% | 29.3% | 77.3% |
+| free throws drawn per attempt | 1.93 | 2.04 | **1.06** | 17.8% | 68.4% | 94.7% |
+| share of shots at the rim | 3.08 | 2.37 | 0.77 | 18.7% | 69.7% | 95.0% |
+| share of shots from three | 3.97 | 1.85 | 0.47 | 13.4% | 60.7% | 92.7% |
+
+**Nothing is 0% and nothing is 100%, which is the owner's point made numerically.**  A defense does move
+opponent three-point percentage, by about 0.6 points of true spread against the offense's 1.3.  The luck
+share depends entirely on the sample: essentially all of a single game, three quarters of a full season.
+So "3P defense is 90% luck" is true at roughly a ten-to-thirty game sample and false at either extreme,
+and the shipped `x3def` -- which replaces every opponent three outright, i.e. assumes 100% -- is wrong in
+a way `pad.shrink` fixes for free, since `n / (n + k)` moves with the sample by itself.
+
+Two readings worth keeping beyond that.  **Defenses control WHERE shots come from more than whether they
+go in**: the defensive share of three-point rate is 0.47 of the offensive one against 0.45 for the make
+rate, and on fouls drawn (1.06) and turnovers (1.07) the defense is the equal partner.  And **defensive
+free-throw percentage is not zero** (0.52 points of spread, 23% of a season).  That is almost certainly
+not shot suppression but whom a defense chooses to foul, and it is repeatable either way.
+
+### 35.2 The possession model, and its closure
+
+`teamloo.possession_points` turns a set of rates into points per 100: a possession is a turnover at rate
+`tov`, otherwise it produces attempts; an attempt is a field goal at `fga_rate` split across three zones
+by the shares and made at the zone rate, plus `ftr` free throws at `ft`; a miss leaves a rebound chance at
+`chance` which the offense takes at `oreb`, giving the geometric series `1 / (1 - chance * oreb)`.  Fed
+each season's realised rates it returns actual points per 100 to within 0.5% in 1999, 2010 and 2024.
+**Both arms of every test below go through this same function**, so the model's own error is common to
+them and cancels.
+
+### 35.3 The test that should have come first, and the adjustment passes it
+
+`scratch/forward.py`: for each of 1,784 team-seasons, build the profile from the FIRST half of that
+team's games and predict its SECOND-half points per 100.  No ratings pipeline anywhere in it.
+
+The scoring is what makes it a test rather than a demonstration.  Shrinking any noisy predictor toward
+the mean lowers its forward error, so a naive comparison is won by shrinkage for reasons that have
+nothing to do with components.  Each arm is therefore scored by a leave-one-SEASON-out regression of the
+held-out season's results on that arm, which absorbs any global rescaling: **a globally shrunk raw rating
+scores identically to raw, so the only thing the adjusted arm can win on is the component structure.**
+
+| | offense MSE | vs raw | z | won | defense MSE | vs raw | z | won |
+|---|---|---|---|---|---|---|---|---|
+| raw | 8.907 | | | | 8.293 | | | |
+| every rate shrunk | 8.466 | -0.440 | -1.69 | 21/30 | 7.661 | -0.632 | -1.40 | 16/30 |
+| outcomes only, style left alone | 8.449 | -0.458 | -1.50 | 22/30 | 7.711 | -0.582 | -1.19 | 15/30 |
+| **outcomes only, with raw beside it** | **8.316** | **-0.591** | **-2.76** | **23/30** | **7.433** | **-0.860** | **-2.65** | **21/30** |
+
+**The luck adjustment works.**  It removes 6.6% of the forward error on offense and 10.4% on defense,
+significant on both sides, over thirty seasons.  Every previous attempt at this failed; the difference is
+that this one adjusts each component by its own estimated amount and is measured directly instead of
+through the ratings.
+
+### 35.4 Which components, one at a time
+
+Each rate shrunk ALONE, everything else realised, against raw:
+
+| component | offense | z | defense | z |
+|---|---|---|---|---|
+| **three-point %** | **-0.357** | **-2.47** | **-0.568** | **-2.37** |
+| long twos % | -0.119 | -1.25 | -0.124 | -0.42 |
+| free-throw % | -0.025 | -0.94 | -0.092 | -1.72 |
+| rim % | -0.061 | -0.67 | +0.058 | 0.93 |
+| offensive rebound rate | -0.061 | -1.22 | +0.035 | 0.37 |
+| free throws drawn | -0.017 | -0.56 | -0.044 | -1.35 |
+| turnover rate | +0.007 | 0.19 | -0.026 | -0.42 |
+| rebound chance per attempt | +0.153 | 4.06 | +0.167 | 3.94 |
+| field goals per attempt | +0.086 | 1.86 | +0.117 | 3.04 |
+| the three shot shares | +0.001 to +0.003 | | +0.001 to +0.008 | |
+
+**Three-point shooting is almost the whole thing**, on both sides, and it is the one component where the
+skill share is genuinely low.  Free throws help more on defense than offense, exactly as 35.1 predicts.
+
+**And shrinking a STYLE rate costs real accuracy**: the rebound-chance rate and the field-goals-per-attempt
+rate lose 0.09 to 0.17 at z 3 to 4 on both sides.  A team chooses its shot mix and does not choose whether
+shots drop, so `teamloo.OUTCOME_RATES` and `STYLE_RATES` split them a priori and only the outcomes are
+shrunk.  That split was made from the argument, not from this table, and the table agrees with it.
+
+### 35.5 What is not done
+
+The adjustment is validated at TEAM level and has not been taken into the ratings yet.  That is the next
+step and it is a different question: this says the adjustment removes luck, not that a player model can
+use it.  Nothing here is shipped and `config.yaml` is untouched.
