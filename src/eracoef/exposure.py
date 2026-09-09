@@ -119,7 +119,7 @@ class BoxExposure(BaseEstimator, TransformerMixin):
 
     def __init__(self, game_box=None, game_poss=None, features=None, pad_k="auto", pad_scale=1.0,
                  pad_target="league", mode="crossfit", half="A", game_half=None, center=True, spec=None,
-                 min_half_poss=20.0, game_mult=None, fixed_padding=None):
+                 min_half_poss=20.0, game_mult=None, fixed_padding=None, phases=("RS",)):
         self.game_box = game_box
         self.game_poss = game_poss
         self.features = features
@@ -132,6 +132,7 @@ class BoxExposure(BaseEstimator, TransformerMixin):
         self.center = center
         self.spec = spec
         self.min_half_poss = min_half_poss
+        self.phases = tuple(phases)
         self.game_mult = game_mult
         self.fixed_padding = fixed_padding
 
@@ -142,11 +143,17 @@ class BoxExposure(BaseEstimator, TransformerMixin):
         return list(self.spec.features)
 
     def _table(self, feats):
-        """Merged per-(game, player-season) counts and possessions for RS games."""
+        """Merged per-(game, player-season) counts and possessions for the phases this exposure counts.
+
+        Regular season only by default, which is what every box rate in this project has always meant: a
+        player's exposure profile is his season's play, and eighty playoff games would only add noise to
+        it.  A fit whose ROWS are playoff possessions has to count those instead, or every total here is
+        zero and the ridge sees a design with no exposure at all (`phases`, playoffs.py)."""
         gp = self.game_poss[["game_idx", "psx_idx", "poss_off", "poss_def"]]
         gb = self.game_box[["game_idx", "psx_idx", "phase"] + feats]
-        rs_games = np.unique(gb.loc[gb["phase"] == "RS", "game_idx"].to_numpy())
-        gb = gb[gb["phase"] == "RS"].drop(columns="phase")
+        keep = gb["phase"].isin(tuple(self.phases))
+        rs_games = np.unique(gb.loc[keep, "game_idx"].to_numpy())
+        gb = gb[keep].drop(columns="phase")
         tab = gp.merge(gb, on=["game_idx", "psx_idx"], how="outer")
         tab[feats] = tab[feats].fillna(0.0)
         tab[["poss_off", "poss_def"]] = tab[["poss_off", "poss_def"]].fillna(0.0)

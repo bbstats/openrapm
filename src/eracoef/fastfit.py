@@ -290,6 +290,16 @@ class MspiFast:
     cut: float | None = None             # the share of the ANCHOR season's games the fit may see (0..1); the rest of
                                          # that season is weighted 0 in the ridge, in the exposure, and in every input
                                          # built from season tables (inseason.keep_games).  None = the whole season
+    half: str | None = None              # "A" / "B": fit on that half of the GAMES only, the other weighted 0
+                                         # everywhere (rows, exposure, padded rates), so the untouched half can
+                                         # score it.  Playoff games alternate A/B WITHIN a series, so this is a
+                                         # within-series split and both halves see the same teams and lineups.
+    prior_from: object | None = None     # a callable (train, ctx, wd) -> the 2*n_ps prior offset, INSTEAD of the
+                                         # box-score chain.  It is what makes a rating the prior for another
+                                         # rating: `playoffs.RegularSeasonPrior` fits this same estimator on the
+                                         # regular season and hands its ratings to a fit that sees only playoff
+                                         # possessions, so the playoffs move a player off his season number by as
+                                         # much as 6.5% of the data can justify and no more.
 
     def counter_columns(self) -> set | None:
         """The per-possession counters this system's two targets read, so the design need not assemble the
@@ -368,13 +378,16 @@ class MspiFast:
             gm = np.ones(int(g["game_idx"].max()) + 1)
             gm[g["game_idx"].to_numpy()] = season_weight(g["season"].to_numpy())
             game_mult = gm
+        if self.half is not None:
+            hm = (wd.game_half == str(self.half)).astype(float)
+            kern_mult = hm if kern_mult is None else kern_mult * hm
         if kern_mult is not None:
             game_mult = kern_mult
         w_rows = np.asarray(wd.w, dtype=float)
         if kern_mult is not None:            # never mutate wd.w: ctx.design caches the design across systems
             w_rows = w_rows * kern_mult[wd.rows["game_idx"].to_numpy()]
         exp = make_exposure(wd, mode="full", pad_target=self.pad_target or cfg["pad_target"], game_mult=game_mult,
-                            pad_scale=float(self.pad_scale))
+                            pad_scale=float(self.pad_scale), phases=tuple(self.phases))
         if wd.parts is not None:
             exp.parts = wd.parts
             exp.fit(None, sample_weight=w_rows)
@@ -388,9 +401,10 @@ class MspiFast:
         chain_kw["turn_sides"] = tuple(self.turn_sides)
         chain_kw["folds"] = int(self.gbdt_folds or 0)
         tmode = None if not self.turn else ("pairs" if self.turn == "pairs" else "ref")
-        off = chain_offset(self.sides, self.mode, turn=tmode, **chain_kw)(train, ctx, wd, exp=exp, keep=keep)
+        off = (np.asarray(self.prior_from(train, ctx, wd), dtype=float) if self.prior_from is not None
+               else chain_offset(self.sides, self.mode, turn=tmode, **chain_kw)(train, ctx, wd, exp=exp, keep=keep))
         delta = 0.0
-        if self.turn is True:      # the trade delta: the prior at H's turnover minus at the settled value
+        if self.turn is True and self.prior_from is None:   # the trade delta: the prior at H's turnover minus at the settled value
             delta = chain_offset(self.sides, self.mode, turn="h", **chain_kw)(train, ctx, wd, exp=exp, keep=keep) - off
         T("prior")
         if self.no_def_prior:

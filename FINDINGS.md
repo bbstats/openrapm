@@ -5158,3 +5158,65 @@ the shooters' expected threes, so the three-point channel -- the zone whose rati
 **The target and the penalties are right.**  What is left is not in luck adjustment and not in per-factor
 shrinkage; it is in attribution, where the one live candidate remains the in-season -0.163 at z -3.12
 of 36.3, and in the two owner decisions of 34.3 and 36.5.
+
+## 38. A rating as the prior for another rating: regular season -> playoffs
+
+The owner, 2026-09-09: *"SPM is the prior for reg season PI RAPM, then PI RAPM is the playoff prior for
+playoff PI'' RAPM.  just not sure how to include playoff stats."*
+
+**No playoff box score is needed.**  The chain already ends in a number per player per side, so that number
+is the OFFSET for a third fit that sees only playoff possessions:
+
+    box score -> Simple SPM -> regular-season PI-RAPM -> playoff PI-RAPM
+                                    (the prior)          (the offset + what the playoffs add)
+
+`src/eracoef/playoffs.py`: `playoff_system(inner, ...)` returns `inner` with `phases=("PO",)` and
+`prior_from=RegularSeasonPrior(inner)`, which fits the same estimator on the regular season and aligns its
+ratings onto the playoff design's players.  The prior chain is REPLACED rather than stacked -- the
+regular-season rating already contains the box prior, and putting it back would count it twice.
+
+### 38.1 Three things had to be fixed first, and two are bugs in shared code
+
+* **`fastfit.MspiFast.prior_from`** is new: a fit's offset can now come from any callable instead of the
+  box-score chain.  Two lines.
+* **The exposure counted regular-season rows only, always** (`exposure._table` filtered `phase == "RS"` and
+  dropped the rest).  On a playoff-only design every exposure total came out ZERO, so the ridge saw a design
+  with no exposure at all.  `BoxExposure(phases=)` now follows the fit's own phases and defaults to `("RS",)`,
+  so nothing else moves.
+* **The unpenalized fixed block was SINGULAR on a one-phase design** and the solve returned values around
+  1e12.  `is_po` is constant 1 there (a copy of the season indicators summed) and `po_home` is a copy of
+  `home`.  `Moments` now names dependent fixed columns with a pivoted QR of the correlation-scaled Gram and
+  deactivates them; on a full-rank block -- every design fitted here until now -- it drops nothing.  This one
+  would have bitten anybody who ever restricted a fit to one phase.
+
+### 38.2 The test, and it holds
+
+Playoff games alternate A / B WITHIN each series, so fitting the update on one half and scoring the other
+holds the teams, the series and the lineups fixed and varies only the games.  `scratch/playoff_chain.py`
+does both directions over the ten blocks -- 20 splits -- and predicts each held-out team-game's points from
+the ten players on the floor.
+
+| playoff penalty | RS rating only | + playoff update | diff | z | won | slopes free: diff | z |
+|---|---|---|---|---|---|---|---|
+| x1 | 121.866 | 121.366 | -0.500 | -1.77 | 15/20 | -0.469 | -1.70 |
+| **x2** | 121.866 | **121.275** | **-0.591** | **-3.49** | **16/20** | **-0.541** | **-3.03** |
+| x4 | 121.866 | 121.452 | -0.414 | -4.47 | 17/20 | -0.371 | -3.60 |
+| x8 | 121.866 | 121.644 | -0.222 | -4.47 | 17/20 | -0.183 | -3.12 |
+
+**A playoff run says something the regular season did not.**  The optimum is interior at twice the
+regular-season penalty (x0.5 is +0.34, worse than doing nothing), which is the right shape: a third of a
+playoff run is a fifteenth of a season, so it should be shrunk harder than a season is.
+
+**And it survives the amplitude check**, which the offensive three-point target of 36 did not.  Refitting
+one slope per side on the held-out half -- deliberately generous to both arms, and the thing a calibration
+map does -- leaves -0.541 at z -3.03.  What the playoffs contribute is RANKING, not scale.
+
+At the shipped penalty a playoff run moves a rating by 0.35 points per 100 (one standard deviation, players
+with 500+ playoff possessions) against a rating spread of 1.86, so about a fifth of the between-player
+spread.  At x2 it is less.  Nobody is being reinvented by a playoff run, which is as it should be.
+
+### 38.3 Not shipped, and what would have to be true
+
+There is no playoff product yet: `scratch/playoff_chain.py` validates the estimator, it does not publish a
+board.  Before one ships, the penalty should be chosen on half the blocks and read on the other (the 22.7
+protocol), and the attribution instrument should see it, because 38.2 measures prediction only.
