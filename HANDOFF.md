@@ -1,3 +1,17 @@
+# Handoff: the luck adjustment is measured end to end -- it works on teams, not on players
+
+**Latest, 2026-09-09 (FINDINGS 35-37).**  Every rate now has a measured skill share on each side and no
+constant is chosen; `scratch/forward.py` tests an adjustment directly (first half of a team's season
+predicts its second, 1,784 team-seasons, no ratings pipeline).  **Team level: it works**, -6.6% offense and
+-10.4% defense.  **Player level: nothing survives the calibration map**, and the audit of every claim in the
+pass (36.6) withdrew one, corrected one number and left five rejections standing.  The shipped constants
+come out RIGHT: the four REML penalty ratios match the independent measurement to the digit on eFG, and the
+per-factor defence is flat on the current board either way, so the zone split was not built.  `config.yaml`
+is unchanged, ten of ten floors.  **Two rulings wait for the owner (3.15); what is left is attribution, not
+luck adjustment.**  Start at 3.15.
+
+---
+
 # Handoff: the luck adjustment works at team level, does not survive the map at player level
 
 **Latest, 2026-09-09 (FINDINGS 35-36).**  Every rate a possession's points depend on now has its own
@@ -495,6 +509,40 @@ expensive part is deciding it was worth measuring.
 - Long bash heredocs still fail in this shell; write patch scripts with the Write tool.
 
 ## Part 3: the next pass
+
+### 3.15 DONE and answered 2026-09-09: the luck adjustment, end to end (FINDINGS 35-37)
+
+**Do not start here.**  Three passes, all measured, all committed, nothing shipped, `config.yaml` unchanged
+and the board rebuilds to ten of ten floors.
+
+**What was built and is worth keeping.**  `teamloo.RATE_SPECS` puts every rate a possession's points depend
+on -- three make rates by zone, free throws, turnovers, offensive rebounds, the shot mix, the foul rate --
+through ONE estimator on each side, so no constant is chosen any more (`skill_table` reports the true spread
+and the real share at any sample size).  `teamloo.possession_points` turns rates into points per 100 and
+closes to 0.5% across eras.  **`scratch/forward.py` is the instrument that should have existed years ago**:
+first half of a team's season predicts its second half, 1,784 team-seasons, no ratings pipeline in the way,
+scored so that generic shrinkage cannot win.
+
+**What it says.**  At TEAM level the adjustment works -- shrinking the outcome rates and leaving the style
+rates alone removes 6.6% of forward error on offense and 10.4% on defense.  At PLAYER level none of it
+survives the calibration map (36.5/36.6).  The two are not in conflict: a defense's 0.59 points of true
+three-point spread is a team property that will not divide five ways against a season of noise.
+
+**And the shipped constants are right, confirmed independently.**  The four `FACTOR_LAMS` ratios REML chose
+in FINDINGS 15 match the split-half measurement (eFG 1.50 against 1.50); `x3def`'s premise matches
+squared2020's tracking-based analysis (35.6); the per-factor defensive residual is flat on the current board
+with either set of penalties (37.2), so the zone split was NOT built.
+
+**Two rulings waiting for the owner**, both because the data genuinely cannot settle them:
+1. **The penalty strength** (34.3): between x0.25 and x1 both instruments read zero while the offensive
+   evidence share moves 10% -> 33%.  A product decision, and nearly free.
+2. **The in-season attribution candidate** (36.3): the offensive three-point target is **-0.163 on the
+   investigator at z -3.12 over 12 of 14 seasons** with prediction flat.  Under 26.5 that is a ruling, not
+   a rejection.
+
+**Never re-run:** the team-level free-throw target (indistinguishable from no adjustment at all, 36.6); any
+two-point replacement (+1.63 mapped); on-court ORTG/DRTG in the prior (+0.05, z 2.22); giving a defense back
+ALL its realised threes (+0.25, z 3.25).  **Free either way:** a defense keeping up to a quarter of them.
 
 ### 3.14 DONE and answered 2026-09-09: what a single-season ridge weighs (FINDINGS 34)
 
