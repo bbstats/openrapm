@@ -632,6 +632,20 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
             for qt, q in _CUTS.items():
                 S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
 
+        # and on the season-granularity role panel.  A prior trained on 3-season windows is attenuated
+        # when it is applied per season -- defense loses about half its spread -- so a single-season
+        # board wants a single-season panel.  `win_decay` is per WINDOW and a window is one season here,
+        # so `spy` cube-roots it to the same decay per year; `sp` leaves it.
+        for _sp, _wd in (("sp", 1.0), ("spy", _cbrt)):
+            for _kt in ("ks52_lam05_ow_w0.25", "ks00_lam05_ow_w0.25"):
+                _b = S[_kt]
+                _k = _replace(_b, name=f"{_sp}_{_kt}", panel=_SPANEL,
+                              win_decay=float(_b.win_decay) ** _wd,
+                              win_decay_d=(None if _b.win_decay_d is None else float(_b.win_decay_d) ** _wd))
+                S[_k.name] = _k
+                for qt, q in _CUTS.items():
+                    S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
+
         for _p, _tag in (("w", "dw"), ("f", "df"), ("b", "db")):
             for _w in _DEF_W:
                 _nm = f"tune501_b7_pasto_pOD_{_tag}{_w:g}"
