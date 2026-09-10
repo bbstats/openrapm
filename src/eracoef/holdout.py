@@ -128,7 +128,12 @@ class Context:
             ctx.role_inputs = player_season_inputs(ctx.roles, cap=float(cfg.get("roles", {}).get("share_cap", 0.9)))
         pp = Path(cfg["_root"]) / cfg.get("paths", {}).get("role_panel", "outputs/role_panel.parquet")
         if pp.exists():
-            ctx.rpanel = pd.read_parquet(pp)
+            # The trust boundary (src/eracoef/seasons.py).  Every fit downstream of the panel -- the
+            # box prior, the role prior, the calibration map -- draws its training rows from here, so
+            # dropping units that reach into a season in progress once, at the source, is what keeps
+            # all three of them honest.  The ridge does not read the panel and is unaffected.
+            from .seasons import drop_untrainable
+            ctx.rpanel, _ = drop_untrainable(pd.read_parquet(pp), cfg, what="the role panel")
             from .gbdt_prior import GBDTPrior
             ctx.gbdt = GBDTPrior(ctx.rpanel, cfg, mode="residual")
             ctx.mspi = GBDTPrior(ctx.rpanel, cfg, mode="full")

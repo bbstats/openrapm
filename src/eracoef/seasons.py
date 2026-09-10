@@ -160,3 +160,31 @@ def check_trainable(seasons, cfg, what: str = "this fit") -> Trainable:
             f"{what} was given season(s) {late}, whose Finals are not over (the cutoff is {cut}).  "
             f"Only the ridge may see a season in progress; see src/eracoef/seasons.py.")
     return Trainable(tuple(int(s) for s in seasons), cut)
+
+
+def unit_last_season(labels) -> "pd.Series":
+    """The last season a panel unit covers, from its label.  "2024-2026" -> 2026, "2026" -> 2026."""
+    lab = pd.Series(labels, dtype="object").astype(str)
+    return lab.str.rsplit("-", n=1).str[-1].astype(int)
+
+
+def drop_untrainable(panel: "pd.DataFrame", cfg, label_col: str = "window", what: str = "the panel"):
+    """Panel rows a fit may use: those whose unit ENDS at or before the cutoff.
+
+    A unit that reaches into a season in progress is dropped whole.  A three-season block ending in
+    the current season carries that season's evidence in every one of its rows, so there is no
+    honest way to keep part of it; a one-season row is simply that season.
+
+    Returns (kept, dropped_labels).  The caller is expected to say what it dropped -- silence here
+    is how a leak guard stops being noticed.
+    """
+    if panel is None or label_col not in getattr(panel, "columns", ()):
+        return panel, ()
+    cut = trainable_through(cfg)
+    last = unit_last_season(panel[label_col])
+    keep = last <= cut
+    dropped = tuple(sorted(set(panel.loc[~keep, label_col].astype(str))))
+    if dropped:
+        print(f"  {what}: {int((~keep).sum())} rows dropped from {list(dropped)} -- past the "
+              f"trainable cutoff {cut} (src/eracoef/seasons.py)", flush=True)
+    return panel.loc[keep].reset_index(drop=True), dropped
