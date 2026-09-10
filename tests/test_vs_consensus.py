@@ -1,5 +1,5 @@
-"""Sanity tests for the shipped 2024-26 board against an external consensus of modern all-in-one
-metrics (data/external/consensus.csv, refreshed by scripts/22_vs_consensus.py --refresh).
+"""Sanity tests for the shipped board against an external consensus of modern all-in-one metrics
+(data/external/consensus.csv).
 
 Why these exist.  The ratings were previously validated against our OWN next-window on-court RAPM.
 That benchmark is built from the same margin data and shares the same blind spots, so it certified
@@ -15,6 +15,12 @@ Five of the original six targets flipped when the ratings moved to the hybrid pr
 now.  One is left: pure on-court defensive RAPM still rates backup bigs above the consensus, which
 is an attribution question the box prior was never going to answer.
 
+The board these score is the SEASON board (scripts/60_season_board.py), pooled over the three
+seasons the consensus covers and weighted by possessions.  That pooling is deliberate: the floors
+below were calibrated against a three-season board, and scoring a single season against a
+three-season consensus would move the estimand and quietly make every floor mean something else.
+Pool first, compare like with like, and the numbers stay readable.
+
 Everything skips cleanly if the ratings or the consensus file are not built yet.
 """
 import re
@@ -27,9 +33,10 @@ import pytest
 from scipy.stats import spearmanr
 
 ROOT = Path(__file__).resolve().parents[1]
-RATINGS = ROOT / "outputs" / "player_ratings.parquet"
+# the season board, freshly built if it is there and the shipped copy otherwise
+RATINGS = [ROOT / "outputs" / "season_ratings.parquet", ROOT / "artifacts" / "season_ratings.parquet"]
 CONSENSUS = ROOT / "data" / "external" / "consensus.csv"
-WINDOW = "2024-2026"
+SEASONS = [2024, 2025, 2026]        # what the consensus snapshot covers
 MIN_POSS = 1000
 SUFFIX = re.compile(r"\b(jr|sr|ii|iii|iv|v)\b")
 
@@ -49,7 +56,7 @@ def _bigness(player_ids):
     from eracoef.boxtable import season_box
     from eracoef.config import load_config
     try:
-        box = season_box([2024, 2025, 2026], ["RS"], load_config())
+        box = season_box(SEASONS, ["RS"], load_config())
     except Exception:                                     # no box cache in a fresh clone
         pytest.skip("box scores not built; run scripts/01_ingest.py")
     g = box[box.phase == "RS"].groupby("player_id", as_index=False)[
@@ -60,24 +67,44 @@ def _bigness(player_ids):
     return pd.Series(player_ids).map(g.set_index("player_id").bigness).to_numpy()
 
 
+def _pooled(rat):
+    """The season board pooled over SEASONS, each player weighted by the possessions behind him.
+
+    A possession-weighted mean of his season ratings, which is what a multi-season rating of the
+    same player is: the seasons he played more of count for more.
+    """
+    d = rat[rat.season.isin(SEASONS) & rat.player_name.notna()].copy()
+    w = d["poss_off"].to_numpy(dtype=float)
+    out = {}
+    for c in ("rating_total", "rating_off", "rating_def"):
+        d["_wv"] = d[c].to_numpy(dtype=float) * w
+        out[c] = d.groupby("player_id")["_wv"].sum() / d.groupby("player_id")["poss_off"].sum()
+    g = pd.DataFrame(out)
+    g["poss_off"] = d.groupby("player_id")["poss_off"].sum()
+    # the name he went by in the latest of those seasons
+    nm = d.sort_values("season").drop_duplicates("player_id", keep="last").set_index("player_id")["player_name"]
+    g["player_name"] = nm
+    return g.reset_index()
+
+
 @pytest.fixture(scope="module")
 def board():
-    if not RATINGS.exists() or not CONSENSUS.exists():
-        pytest.skip("run scripts/08_ratings.py and scripts/22_vs_consensus.py first")
+    src = next((p for p in RATINGS if p.exists()), None)
+    if src is None or not CONSENSUS.exists():
+        pytest.skip("run scripts/60_season_board.py first (or restore artifacts/season_ratings.parquet)")
     con = pd.read_csv(CONSENSUS)[["player_name", "team", "adj_offense", "adj_defense", "adj_overall"]]
     con = con.dropna(subset=["player_name", "adj_overall"])
     con["key"] = con.player_name.map(_norm)
     con = con.drop_duplicates("key")
 
-    rat = pd.read_parquet(RATINGS)
-    ours = rat[(rat.window == WINDOW) & rat.player_name.notna()].copy()
+    ours = _pooled(pd.read_parquet(src))
     ours["key"] = ours.player_name.map(_norm)
     ours = ours.sort_values("poss_off").drop_duplicates("key", keep="last")
 
     m = ours.merge(con, on="key", how="inner")
     m = m[m.poss_off >= MIN_POSS].copy()
     if len(m) < 300:
-        pytest.skip(f"only {len(m)} players matched; the join or the window is wrong")
+        pytest.skip(f"only {len(m)} players matched; the join or the season set is wrong")
     m["bigness"] = _bigness(m.player_id)
     for side, con_col in (("total", "adj_overall"), ("off", "adj_offense"), ("def", "adj_defense")):
         m[f"rk_ours_{side}"] = m[f"rating_{side}"].rank(ascending=False)
