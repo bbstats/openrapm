@@ -39,6 +39,7 @@ from dataclasses import replace                                   # noqa: E402
 
 from eracoef.config import load_config                            # noqa: E402
 from eracoef.holdout import Context, predict_season, team_game_mse  # noqa: E402
+from eracoef.investigate import attributable                       # noqa: E402
 from eracoef.playoffs import playoff_system                       # noqa: E402
 from eracoef.systems import registry                              # noqa: E402
 
@@ -66,6 +67,17 @@ def score_on(rat, wd, mask, slope: bool = False) -> tuple[float, float]:
     return team_game_mse(p.y, X @ beta, p.poss, p.game_idx, p.is_home_off)
 
 
+def credit_on(rat, wd, mask, lam: float = 2000.0) -> float:
+    """The investigator's score on the held-out half: how much of the residual a player ridge can still put
+    on named players.  Lower is better -- a rating that has already credited the right people leaves less
+    behind.  The criterion is nearly blind to this (FINDINGS 26.5), so a candidate needs both."""
+    sub = wd.subset(mask)
+    p = predict_season(rat, sub)
+    m = sub.spec.n_ps
+    X = sub.X
+    return float(attributable(X[:, :m], X[:, m:2 * m], p.y - p.pred, p.w, lam=lam)["player"])
+
+
 def main():
     cfg = load_config()
     S = registry(cfg)
@@ -74,6 +86,11 @@ def main():
     blocks = [[int(x) for x in b.split("-")] for b in
               (flag("blocks") or "2015-2017,2018-2020,2021-2023,2024-2026").split(",")]
     blocks = [list(range(b[0], b[-1] + 1)) for b in blocks]
+    which = flag("held", "all")           # the 22.7 protocol: choose the penalty on one half of the blocks
+    if which == "search":                 # and read it on the other
+        blocks = blocks[::2]
+    elif which == "confirm":
+        blocks = blocks[1::2]
     mults = [float(m) for m in (flag("mults") or "0.5,1,2,4,8").split(",")]
     pd.set_option("display.width", 200)
 
@@ -91,6 +108,7 @@ def main():
             rs = rs_sys.prior_from.ratings(seasons, ctx)
             mse_rs, poss = score_on(rs, wd, mask)
             mse_rs_s, _ = score_on(rs, wd, mask, slope=True)
+            cr_rs = credit_on(rs, wd, mask)
             for m in mults:
                 sysm = replace(playoff_system(base, f"po_{lab}_x{m:g}", lam_po=float(base.lam) * m),
                                half=fit_half)
@@ -100,14 +118,16 @@ def main():
                 mse_po_s, _ = score_on(po, wd, mask, slope=True)
                 rows.append(dict(block=lab, fit=fit_half, mult=m, poss=poss,
                                  mse_rs=mse_rs, mse_po=mse_po, diff=mse_po - mse_rs,
-                                 mse_rs_s=mse_rs_s, mse_po_s=mse_po_s, diff_s=mse_po_s - mse_rs_s))
+                                 mse_rs_s=mse_rs_s, mse_po_s=mse_po_s, diff_s=mse_po_s - mse_rs_s,
+                                 cr_rs=cr_rs, cr_po=(cr_po := credit_on(po, wd, mask)),
+                                 diff_cr=cr_po - cr_rs))
             print(f"  {lab} fit {fit_half} score {score_half}  ({time.time() - t0:.0f}s)", flush=True)
     D = pd.DataFrame(rows)
 
     print("\n=== the playoff update against the regular-season rating alone, on held-out playoff games")
     print("    negative = the playoff update predicts the other half of each series better\n")
     print(f"  {'penalty':>9} {'RS only':>10} {'+ playoff':>10} {'diff':>9} {'z':>7} {'won':>8}"
-          f"   |{'slopes free: diff':>19} {'z':>7} {'won':>8}")
+          f"   |{'slopes free':>12} {'z':>7}   |{'attribution':>12} {'z':>7}")
     out = []
     for m, g in D.groupby("mult"):
         w = g["poss"].to_numpy(float)
@@ -118,10 +138,13 @@ def main():
         ds = g["diff_s"].to_numpy(float)
         zs = float(ds.mean() / (ds.std(ddof=1) / np.sqrt(len(ds)))) if len(ds) > 1 else float("nan")
         dif_s = float(np.average(g.mse_po_s, weights=w) - np.average(g.mse_rs_s, weights=w))
+        dc = g["diff_cr"].to_numpy(float)
+        zc = float(dc.mean() / (dc.std(ddof=1) / np.sqrt(len(dc)))) if len(dc) > 1 else float("nan")
         print(f"  x{m:<8g} {rs:10.3f} {po:10.3f} {po - rs:+9.3f} {z:7.2f} {int((d < 0).sum()):>3}/{len(d):<4}"
-              f"   |{dif_s:+19.3f} {zs:7.2f} {int((ds < 0).sum()):>3}/{len(ds):<4}")
+              f"   |{dif_s:+12.3f} {zs:7.2f}   |{float(np.mean(dc)):+12.3f} {zc:7.2f}")
         out.append(dict(mult=m, mse_rs=rs, mse_po=po, diff=po - rs, z=z, won=int((d < 0).sum()), n=len(d),
-                        diff_slope=dif_s, z_slope=zs, won_slope=int((ds < 0).sum())))
+                        diff_slope=dif_s, z_slope=zs, won_slope=int((ds < 0).sum()),
+                        diff_credit=float(np.mean(dc)), z_credit=zc))
     if "--csv" in sys.argv:
         p = Path(cfg["_root"]) / "outputs" / "csv"
         D.to_csv(p / "playoff_chain_rows.csv", index=False)

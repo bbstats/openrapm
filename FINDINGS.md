@@ -5220,3 +5220,37 @@ spread.  At x2 it is less.  Nobody is being reinvented by a playoff run, which i
 There is no playoff product yet: `scratch/playoff_chain.py` validates the estimator, it does not publish a
 board.  Before one ships, the penalty should be chosen on half the blocks and read on the other (the 22.7
 protocol), and the attribution instrument should see it, because 38.2 measures prediction only.
+
+### 38.4 The penalty chosen properly, the attribution instrument, and the delta itself
+
+**The 22.7 protocol.**  The penalty was chosen on five blocks and read on the other five, never on all ten.
+
+| | prediction | z | slopes free | z | attribution | z |
+|---|---|---|---|---|---|---|
+| search half, x1 | -0.721 | -1.59 | -0.804 | -1.73 | -1.051 | -2.23 |
+| **search half, x2 (chosen)** | **-0.725** | **-2.68** | -0.775 | -2.72 | -0.936 | -3.20 |
+| search half, x4 | -0.490 | -3.30 | -0.522 | -3.37 | -0.627 | -3.63 |
+| **confirm half, x2** | **-0.459** | **-2.16** | -0.312 | -1.50 | **-0.508** | **-2.27** |
+
+**It replicates**: 63% of the search-half size, still significant on prediction and on attribution.  And it
+wins the SECOND instrument, which the offensive three-point target of 36 never did -- a playoff run does not
+just predict the rest of the series better, it puts the residual on the right players.
+
+**The delta is what ships, not a playoff rating** (the owner: *"let's surface the playoffs as a 'delta'
+rather than a rating"*).  That is also what the estimator produces: the playoff fit's offset IS the
+regular-season rating, so its residual IS the delta, exactly.  `scripts/63_playoff_delta.py` writes
+`outputs/playoff_delta.parquet`, one row per player per window with his regular-season rating, the delta per
+side and the playoff possessions behind it.
+
+Over 2,260 player-windows with 200+ playoff possessions the delta's spread is **0.21 points per 100**
+against **2.43** for the ratings themselves.  A playoff run moves a player about a tenth of the distance
+between players, and the largest move in thirty seasons is about 1.0.  Nobody is reinvented, which is what
+6.5% of the data should buy.
+
+**And the extremes are the ones a fan would name**, which is the cheapest external check there is.  Raised
+most: **Robert Horry, in two separate windows** (1997-1999 and 2000-2002), Jason Terry, Dirk Nowitzki and
+J.J. Barea all from 2009-2011, Tony Parker, Russell Westbrook.  Lowered most: **Chris Paul**, DeMar DeRozan,
+Giannis Antetokounmpo in 2021-2023, Chris Bosh, Karl-Anthony Towns.  The method was given no narratives and
+recovered the two most famous ones in the sport.
+
+**Still not on the site.**  The table exists and is validated; publishing it is a separate decision.
