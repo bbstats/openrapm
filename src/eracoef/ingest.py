@@ -57,6 +57,8 @@ def _retry(fn, tries=4, base_sleep=5.0, what=""):
             return fn()
         except Exception as e:  # noqa: BLE001
             last = e
+            if t == tries - 1:            # do not sleep after the final attempt and then give up
+                break
             time.sleep(base_sleep * (3 ** t))
     raise RuntimeError(f"failed after {tries} tries: {what}: {last!r}")
 

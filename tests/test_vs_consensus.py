@@ -55,9 +55,16 @@ def _bigness(player_ids):
     """
     from eracoef.boxtable import season_box
     from eracoef.config import load_config
+    cfg = load_config()
+    # Check the cache BEFORE calling the loader.  season_box -> ingest.load_gamelog scrapes when the
+    # file is missing, and in a fresh clone that means four retries with exponential backoff before
+    # it gives up -- 65 seconds of a test suite doing nothing.  Look first.
+    gl = Path(cfg["_root"]) / cfg.get("paths", {}).get("raw", "data/raw") / "gamelog"
+    if not all((gl / f"{s}_RS.parquet").exists() for s in SEASONS):
+        pytest.skip("box scores not built; run scripts/01_ingest.py")
     try:
-        box = season_box(SEASONS, ["RS"], load_config())
-    except Exception:                                     # no box cache in a fresh clone
+        box = season_box(SEASONS, ["RS"], cfg)
+    except Exception:
         pytest.skip("box scores not built; run scripts/01_ingest.py")
     g = box[box.phase == "RS"].groupby("player_id", as_index=False)[
         ["minutes", "orb", "drb", "blk", "ast", "fg3m"]].sum()
