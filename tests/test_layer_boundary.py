@@ -40,6 +40,7 @@ sys.path.insert(0, str(SRC.parents[1]))
 
 # Clean on both rules: no I/O verb, no data-layer import.
 MODEL_LAYER = [
+    "archetype.py",     # the box-profile mixture and the per-cluster gap
     "cv.py",            # pipelines, cross-fitted beta, the plug-in fit
     "estimator.py",     # the mixed model (Henderson), the eigen lambda path
     "exposure.py",      # cross-fitted, empirical-Bayes padded per-100 rates

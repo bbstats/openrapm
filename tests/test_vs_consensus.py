@@ -52,24 +52,30 @@ def _norm(s: str) -> str:
     return re.sub(r"\s+", " ", SUFFIX.sub(" ", s)).strip()
 
 
-def _bigness(player_ids):
-    """Per-36 rebound-and-block minus playmaking index, the axis the defect runs along.
+def _box():
+    """The regular-season box scores for SEASONS, or a skip.  The tests that need a player's PROFILE --
+    the bigness axis and the archetype clusters -- go through here.
 
-    Needs the box cache, so the tests that use it skip in a fresh clone.
+    Check the cache BEFORE calling the loader.  season_box -> ingest.load_gamelog scrapes when the file is
+    missing, and in a fresh clone that means four retries with exponential backoff before it gives up --
+    65 seconds of a test suite doing nothing.  Look first.
     """
     from eracoef.boxtable import season_box
     from eracoef.config import load_config
     cfg = load_config()
-    # Check the cache BEFORE calling the loader.  season_box -> ingest.load_gamelog scrapes when the
-    # file is missing, and in a fresh clone that means four retries with exponential backoff before
-    # it gives up -- 65 seconds of a test suite doing nothing.  Look first.
     gl = Path(cfg["_root"]) / cfg.get("paths", {}).get("raw", "data/raw") / "gamelog"
     if not all((gl / f"{s}_RS.parquet").exists() for s in SEASONS):
         pytest.skip("box scores not built; run scripts/01_ingest.py")
     try:
-        box = season_box(SEASONS, ["RS"], cfg)
+        return season_box(SEASONS, ["RS"], cfg)
     except Exception:
         pytest.skip("box scores not built; run scripts/01_ingest.py")
+
+
+def _bigness(player_ids):
+    """Per-36 rebound-and-block minus playmaking index, the axis the original defect ran along.  Still
+    reported by two guards; the archetype test below is the one that decides."""
+    box = _box()
     g = box[box.phase == "RS"].groupby("player_id", as_index=False)[
         ["minutes", "orb", "drb", "blk", "ast", "fg3m"]].sum()
     for c in ("orb", "drb", "blk", "ast", "fg3m"):
@@ -161,29 +167,41 @@ def test_offensive_spread_is_calibrated(board):
     assert 0.55 <= ratio <= 1.3, f"offensive spread ratio {ratio:.2f} is off"
 
 
-def test_offense_has_no_big_man_bias(board):
-    """The offensive gap should not track archetype.
+def test_no_archetype_bias_by_cluster(board):
+    """The archetype guard, on clusters the data chose rather than one hand-made axis.
 
-    The floor was 0.30 until 2026-09-07 and is 0.32 now, re-based deliberately and once.  The settled-context
-    offensive prior (`gbdt_turn: {sides: [O], ref: 0.35}`, FINDINGS 24.9) measures -0.311 on this test where
-    `tune501_b7` measured -0.276, while beating it by 0.054 on the out-of-season criterion at z -3.39 over 22
-    of 28 seasons.  A correlation over 475 players has a standard error of about 0.046, so the move is
-    under one of them, and the consensus is a sanity check, never a fitting target (HANDOFF Part 0 ruling 2:
-    a marginal miss is not a veto, a gross one is).  This floor has history: it turned candidates away at
-    -0.303 in FINDINGS 21.26 and 22.4, before ruling 2 was written, and the search's `tune501` read 0.323
-    here (22.7).
+    It replaces `test_offense_has_no_big_man_bias`, which correlated the offensive gap with
+    `bigness` = per-36 (orb + blk + 0.3 drb - 0.5 ast - 0.4 fg3m) and had been re-based twice (0.30 ->
+    0.32 -> 0.35) as the board moved along that axis.  The owner, 2026-09-10: *"the guardrail is arbitrary
+    ... would rather use a bayesian gaussian mixture (legit unsupervised clusters rather than
+    center/big/guard)"*.  Three reasons it is the better instrument:
 
-    Re-based again 2026-09-07, 0.32 -> 0.35, for the plus-minus prior (FINDINGS 28): -0.344 here, where the
-    candidate is -0.085 on the criterion at z -2.5 AND -0.20 on the investigator's score at z -4.3, the first
-    candidate significant on both.  The move is the top of the offensive board rising against the bigs, which
-    is what the out-of-season data asks for (27.2: the stars are under-rated by 1-1.5 per 100); the consensus's
-    bigness axis is the one place it disagrees.  Twice re-based is a pattern worth the owner's eye; 0.35 still
-    catches the defect (the APM prior read past 0.5 on this axis before the hybrid).  A further fall, not the
-    old level."""
-    r = board.gap_off.corr(board.bigness) if "bigness" in board else None
-    if r is None:
-        pytest.skip("bigness not on the ratings table")
-    assert abs(r) < 0.35, f"offensive gap correlates {r:+.3f} with bigness"    # -0.344 on hwb_pasto, -0.300 before
+      * the axis was measuring an offense/defense ATTRIBUTION disagreement and calling it bias.  The
+        single-season board reads -0.437 on the old test and +0.068 on the same test applied to the TOTAL:
+        it and the consensus agree about how good bigs are and disagree about which side of the ball it is
+        on.  Only a total-gap statistic can tell those apart, and this one is on the total;
+      * it caught the wrong board.  By cluster, the shipped three-season board is the more archetype-biased
+        of the two (0.21 against 0.14), which is the opposite of what `bigness` says;
+      * it is calibrated.  Adding a flat bump to every big man moves this statistic by 0.16 per point per
+        100, measured on both boards (2026-09-10), so a floor converts into points: 0.30 permits about 0.6
+        per 100 of archetype distortion on today's board and about 0.95 on the single-season one.
+
+    The floor is 0.30 because both boards have to pass it today.  **When the board becomes the
+    single-season one, re-base this to 0.25** -- that board reads 0.107-0.174 over ten seeds, so 0.25 is
+    still four seed-sds of headroom and it halves what the floor permits.  Seeds are averaged because the
+    mixture is refit per run: over ten seeds at k = 8 the statistic moves with sd 0.02 and the two boards'
+    ranges do not overlap (`python scripts/58_archetype.py stability`)."""
+    from eracoef.archetype import RATES, cluster_gaps, fit_clusters, gap_columns, per36, spread
+    box = _box()
+    prof = per36(box[box.phase == "RS"])
+    m = board.merge(prof[["player_id", *RATES]], on="player_id", how="inner")
+    assert len(m) >= 300, f"only {len(m)} players carried a box profile"
+    gaps = gap_columns(m, m)
+    X = m[RATES].to_numpy(dtype=float)
+    vals = [spread(cluster_gaps(fit_clusters(X, k=8, seed=sd)[0], gaps)) for sd in (0, 1, 2)]
+    got = float(np.mean(vals))
+    assert got < 0.30, (f"per-cluster total gap spreads {got:.3f} across archetypes "
+                        f"(seeds {[round(v, 3) for v in vals]}); 0.30 is about 0.6 points per 100 of bias")
 
 
 # ------------------------------------------------------------------ fixed by the hybrid prior

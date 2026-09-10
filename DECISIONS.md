@@ -90,6 +90,30 @@ side) ties `linear+log2&xlog&prior&tshare : linear+log2&xlog` (6 and 4) at -0.00
 single-season kernel and -0.002, z -0.08 on the three-season one. The standing rule takes the simpler and
 faster. The four-term family was chosen before the playoff fold moved what the criterion scores.
 
+**The archetype guard is now unsupervised, and calibrated in points** (2026-09-10, the owner's call:
+*"the guardrail is arbitrary ... would rather use a bayesian gaussian mixture (legit unsupervised clusters
+rather than center/big/guard)"*). `src/eracoef/archetype.py` fits a Bayesian Gaussian mixture on the per-36 box
+profile and reports the board-minus-consensus gap per cluster; the statistic is the sd, across clusters of at
+least ten players, of the mean TOTAL gap. `tests/test_vs_consensus.py::test_no_archetype_bias_by_cluster`
+replaces `test_offense_has_no_big_man_bias`, with the floor at 0.30.
+
+Three things had to hold before it could replace a test, and were measured (`58_archetype.py stability`):
+
+  * **stable under the seed.** Ten seeds at k = 8: the three-season board reads 0.182-0.246 and the
+    single-season board 0.107-0.174, sd 0.02 each and **the ranges do not overlap**. The test averages
+    seeds 0-2 and costs 2.5 s;
+  * **stable under k.** Over k in {6, 8, 10, 12}: 0.190-0.229 and 0.081-0.137. Same ordering. Per single
+    season it is noisier (0.206-0.320 against 0.175-0.267) and the ranges do overlap, so the statistic is
+    pooled over the three seasons the consensus covers, not read per season;
+  * **calibrated.** Adding a flat bump to every player in the top bigness tercile moves it by **0.16 per
+    point per 100**, the same slope on both boards. So the floor converts: 0.30 permits about 0.6 per 100 of
+    archetype distortion on today's board and about 0.95 on the single-season one. When the board becomes
+    the single-season one, re-base to 0.25 -- still four seed-sds of headroom, and half the tolerance.
+
+`tests/test_archetype.py` pins the instrument itself against a synthetic world of three known types: the
+mixture recovers them at 95%+ purity from k = 6, an unbiased board reads under 0.10, a one-point type-shaped
+bonus takes it over the shipped floor, and a fabricated four-player cluster with an absurd gap cannot move it.
+
 **The big-man floor is measuring an offense/defense ATTRIBUTION disagreement, not a bias** (2026-09-10,
 asked for by the owner after the single-season board failed it at -0.437). Decomposed by stage, on the same
 475 players:

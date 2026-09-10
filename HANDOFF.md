@@ -312,10 +312,17 @@ profile, then the board-minus-consensus gap per cluster. By that measure the sin
 archetype-biased of the two — sd of the per-cluster total gap 0.133 against the shipped board's 0.229 — which
 is the opposite of what the hand-made `bigness` floor says.
 
-Open, for the owner: replace `test_offense_has_no_big_man_bias` with a floor on the cluster-gap spread (it
-needs a stability check first — the mixture is refit per run and the clusters must not move under the seed),
-and separately decide whether an archetype penalty belongs in the fit at all. Nothing about the mixture is
-wired into the model; `58_archetype.py` only reports.
+**Done, 2026-09-10: the mixture replaced the axis.** `test_offense_has_no_big_man_bias` is gone;
+`test_no_archetype_bias_by_cluster` puts a floor of 0.30 on the per-cluster total-gap spread. It survived the
+three checks a floor needs — stable under the seed (ten seeds: 0.182–0.246 shipped, 0.107–0.174 single-season,
+ranges disjoint), stable under k, and **calibrated at 0.16 of statistic per point per 100 of injected
+archetype bias**, so the floor converts into points: 0.30 allows about 0.6 per 100 today. Pooled over the
+three seasons, never per season (per-season ranges overlap). `tests/test_archetype.py` pins the instrument on
+a synthetic three-type world. **All ten floors now pass on the single-season board.**
+
+Still open, for the owner: whether an archetype penalty belongs in the FIT rather than only in a guard.
+Nothing about the mixture touches the model — `archetype.py` is model-layer, takes frames, and only reports.
+When the board becomes the single-season one, re-base the floor to 0.25 (noted in the test).
 
 `60_season_board.py` takes `--out=<stem>` now. A one-season or candidate run used to overwrite
 `outputs/season_ratings.parquet`, which `tests/test_vs_consensus.py` reads as the shipped board; it
