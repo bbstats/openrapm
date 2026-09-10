@@ -25,3 +25,7 @@ htmlcov/
 
 # Local research scratch, not part of the project.
 /scratch/
+
+# Node, only ever installed transiently to render-test the page.
+node_modules/
+package-lock.json
