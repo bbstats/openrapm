@@ -13,7 +13,9 @@ before the box score says anything.  Three inputs, all from data already on disk
   age      from nba_api LeagueDashPlayerBioStats, one request per season, cached under
            data/raw/bio/.  A missing age gets the season median and `age_imputed` = 1.
 
-`build_roles` writes data/cache/roles.parquet (one row per player-season-team); `window_inputs`
+`build_roles` writes data/cache/roles_RSPO.parquet (one row per player-season-team, regular
+season and playoffs pooled -- the name carries the phases so an older RS-only table cannot be read
+back as this one); `window_inputs`
 blends the per-season inputs down to the design's Z unit the way BoxExposure blends its padding
 constants (possession-weighted over the player's seasons in the window).
 """
@@ -27,6 +29,10 @@ import pandas as pd
 from .config import resolve
 from .design import AWAY_SLOTS, HOME_SLOTS
 from .ingest import GAME_PREFIX, TIMEOUT, _retry, game_table, load_gamelog, raw_dir, season_str
+
+# The phases a player's role is measured over.  Owner's ruling, 2026-09-10: one rating per player per
+# season from that season's games, "regular season and playoffs together, nothing else".
+ROLE_PHASES = ("RS", "PO")
 
 INPUTS = ["poss_pct", "poss_pct2", "gs_pct", "gs_pct2", "age", "age2", "age3"]
 RAW_INPUTS = ["poss_pct", "gs_pct", "age"]
@@ -98,16 +104,25 @@ def _box_dir(season: int, cfg) -> Path:
     return raw_dir(cfg) / "box" / str(season)
 
 
-def season_roles(season: int, cfg) -> pd.DataFrame:
-    """One season, regular season only: player_id, season, team_id, games, starts, minutes, poss_on, team_poss."""
+def season_roles(season: int, cfg, phases: tuple = ROLE_PHASES) -> pd.DataFrame:
+    """One season: player_id, season, team_id, games, starts, minutes, poss_on, team_poss.
+
+    Pooled over `phases`.  A playoff game is a game: it is a start, minutes, and possessions on the floor
+    for both the player and his team, so `poss_pct` and `gs_pct` stay shares and a deep run does not
+    inflate them.  This was `("RS",)` while the playoffs were a separate delta block.
+    """
     bdir = _box_dir(season, cfg)
-    boxes = {}
-    for f in sorted(bdir.glob(f"{GAME_PREFIX['RS']}*.parquet")):
-        boxes[f.stem] = pd.read_parquet(f, columns=["teamId", "personId", "minutes"])
+    boxes, st_parts, gm_parts = {}, [], []
+    for ph in phases:
+        for f in sorted(bdir.glob(f"{GAME_PREFIX[ph]}*.parquet")):
+            boxes[f.stem] = pd.read_parquet(f, columns=["teamId", "personId", "minutes"])
+        sp = Path(resolve(cfg, "stints")) / f"{season}_{ph}.parquet"
+        if sp.exists():
+            st_parts.append(pd.read_parquet(sp, columns=["game_id", *HOME_SLOTS, *AWAY_SLOTS, "poss_h", "poss_a"]))
+            gm_parts.append(game_table(load_gamelog(season, ph, cfg)))
     roles = roles_from_boxes(boxes)
-    stints = pd.read_parquet(Path(resolve(cfg, "stints")) / f"{season}_RS.parquet",
-                             columns=["game_id", *HOME_SLOTS, *AWAY_SLOTS, "poss_h", "poss_a"])
-    games = game_table(load_gamelog(season, "RS", cfg))
+    stints = pd.concat(st_parts, ignore_index=True)
+    games = pd.concat(gm_parts, ignore_index=True)
     games["game_id"] = games["game_id"].astype(str)
     stints["game_id"] = stints["game_id"].astype(str)
     shares = shares_from_stints(stints, games)
@@ -142,15 +157,16 @@ def season_ages(season: int, cfg, force: bool = False) -> pd.DataFrame:
     return out.drop_duplicates("player_id")
 
 
-def build_roles(cfg, seasons=None, force: bool = False, verbose: bool = True) -> pd.DataFrame:
-    """Every season's roles + ages -> data/cache/roles.parquet (one row per player-season-team)."""
-    path = roles_path(cfg)
+def build_roles(cfg, seasons=None, force: bool = False, verbose: bool = True,
+                phases: tuple = ROLE_PHASES) -> pd.DataFrame:
+    """Every season's roles + ages -> data/cache/roles_RSPO.parquet (one row per player-season-team)."""
+    path = roles_path(cfg, phases)
     if path.exists() and not force:
         return pd.read_parquet(path)
     seasons = list(range(int(cfg["first_season"]), int(cfg["last_season"]) + 1)) if seasons is None else list(seasons)
     parts = []
     for s in seasons:
-        r = season_roles(s, cfg)
+        r = season_roles(s, cfg, phases)
         a = season_ages(s, cfg)
         r = r.merge(a, on=["player_id", "season"], how="left")
         miss = float(r.age.isna().mean()) if len(r) else 0.0
@@ -164,9 +180,12 @@ def build_roles(cfg, seasons=None, force: bool = False, verbose: bool = True) ->
     return out
 
 
-def roles_path(cfg) -> Path:
-    p = cfg.get("roles", {}).get("cache", "data/cache/roles.parquet")
-    return Path(cfg["_root"]) / p if "_root" in cfg else Path(p)
+def roles_path(cfg, phases: tuple = ROLE_PHASES) -> Path:
+    """The cache carries its phases in its name, so an RS-only table built before the playoffs joined the
+    fit cannot be read back as an RS+PO one -- it would be a silent, plausible-looking undercount."""
+    p = Path(cfg.get("roles", {}).get("cache", "data/cache/roles.parquet"))
+    p = p.with_name(f"{p.stem}_{''.join(phases)}{p.suffix}")
+    return Path(cfg["_root"]) / p if "_root" in cfg else p
 
 
 def player_season_inputs(roles: pd.DataFrame, cap: float = 0.9) -> pd.DataFrame:

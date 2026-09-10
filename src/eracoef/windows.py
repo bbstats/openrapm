@@ -23,7 +23,7 @@ from .boxtable import season_box
 from .checks import beta_table
 from .config import resolve
 from .cv import crossfit_beta, lambda_ratio_grid, plugin_fit
-from .design import FEATURES, build_design
+from .design import FEATURES, FIT_PHASES, build_design
 from .stints import build_season
 
 _STINT_CACHE: dict = {}
@@ -45,7 +45,7 @@ def window_seasons(cfg, rolling=False):
     return [(s, s + 2) for s in range(first, last - 1, step)]
 
 
-def build_window(seasons, cfg, phases=("RS",), gt_weight=None, margin_bins=False, target="pts",
+def build_window(seasons, cfg, phases=FIT_PHASES, gt_weight=None, margin_bins=False, target="pts",
                  counter_cols=None, min_den=0.0):
     if not margin_bins:                        # the same design from cached per-season pieces (designcache.py)
         from .designcache import build_window_cached

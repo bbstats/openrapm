@@ -11,6 +11,12 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 
+# The phases a fit trains on.  Owner's ruling, 2026-09-10: "the playoff delta is gone; playoff games
+# just join the fit like any other games".  The rows the criterion SCORES are pinned separately and
+# are still regular season only -- see holdout.score / calmap -- so the yardstick has not moved.
+FIT_PHASES = ("RS", "PO")
+SCORE_PHASES = ("RS",)
+
 FEATURES = ["fg3m", "fg3_miss", "fg2m", "fg2_miss", "ftm", "ft_miss",
             "orb", "drb", "ast", "tov", "stl", "blk", "pf"]
 HOME_SLOTS = [f"h{i}" for i in range(1, 6)]

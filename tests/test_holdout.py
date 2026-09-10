@@ -30,7 +30,7 @@ def world():
                    rho=0.85, turnover=0.3, seed=11, eps_var=0.2, leak=False)
     st, box, truth = sim["stints"], sim["box"], sim["truth"]["ps"]
 
-    def loader(seasons, cfg, target):
+    def loader(seasons, cfg, target, phases=None, **kw):    # simulate() builds RS games only
         assert target == "pts"
         return build_design(st[st.season.isin(seasons)], box[box.season.isin(seasons)], FEATURES, cfg)
 

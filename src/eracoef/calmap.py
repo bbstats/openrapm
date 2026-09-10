@@ -31,6 +31,7 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 
+from .design import SCORE_PHASES
 from .holdout import (RESULT_COLUMNS, THREAD_VARS, Context, Holdout, Ratings, _fit, level_columns, predict_season,
                       score)
 
@@ -246,7 +247,7 @@ class SeasonFrame:
         """`cut`: score the season from that share of it onward -- the rows an in-season fit at that cut has
         not seen (holdout.cut_season).  The level, the team-game grouping and every covariate are then built
         on those rows alone, so the map agrees with the runner row for row."""
-        wd_full = ctx.design([h], "pts")
+        wd_full = ctx.design([h], "pts", SCORE_PHASES)   # the map is fitted on what the criterion scores
         wd = wd_full
         if cut is not None and float(cut) < 1.0:
             from .holdout import cut_season

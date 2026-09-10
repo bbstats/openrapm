@@ -119,7 +119,7 @@ class BoxExposure(BaseEstimator, TransformerMixin):
 
     def __init__(self, game_box=None, game_poss=None, features=None, pad_k="auto", pad_scale=1.0,
                  pad_target="league", mode="crossfit", half="A", game_half=None, center=True, spec=None,
-                 min_half_poss=20.0, game_mult=None, fixed_padding=None, phases=("RS",)):
+                 min_half_poss=20.0, game_mult=None, fixed_padding=None, phases=("RS", "PO")):
         self.game_box = game_box
         self.game_poss = game_poss
         self.features = features

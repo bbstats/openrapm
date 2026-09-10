@@ -36,7 +36,7 @@ def test_rates_pad_toward_own_mix():
     assert 0.85 < r.pft["B"][1] < 0.9                  # 90% padded toward the league ~0.74
     assert r.k["fg2"] > 0 and r.league["fg2"] > 0.4
     # the RS totals pool both halves: twice the attempts, so less padding, so nearer the raw 1.2
-    assert r.ratio2["A"][1] < r.ratio2["RS"][1] < 1.2
+    assert r.ratio2["A"][1] < r.ratio2["ALL"][1] < 1.2
 
 
 def test_extra_seasons_and_fixed_k():
@@ -48,7 +48,7 @@ def test_extra_seasons_and_fixed_k():
     extra = pd.DataFrame([dict(game_id="g0", player_id=1, half="A", fg2a=0, fg2m=0, xl2=0.0, fg3a=200, fg3m=80, xl3=72.0)])
     more = rates_from_tables(shots, ft, extra=extra, k_fixed={"fg3": 450.0})
     assert more.p3["B"][1] > base.p3["B"][1]                    # more evidence of a 40% shooter than the league ~0.33
-    assert more.p3["A"][1] > base.p3["A"][1] and more.p3["RS"][1] > base.p3["RS"][1]
+    assert more.p3["A"][1] > base.p3["A"][1] and more.p3["ALL"][1] > base.p3["ALL"][1]
     assert more.pft["B"][1] == base.pft["B"][1]                 # the extra table has no free throws: untouched
 
 
@@ -63,9 +63,9 @@ def _cnt(pids, half, **slot):
 
 
 def test_expected_makes_prices_each_slot_with_the_other_half():
-    r = ShooterRates(ratio2={"A": {1: 1.5}, "B": {1: 1.2}, "RS": {1: 1.3}}, ratio3={"A": {}, "B": {}, "RS": {}},
-                     p2={"A": {1: 0.6}, "B": {1: 0.55}, "RS": {1: 0.58}}, p3={"A": {}, "B": {}, "RS": {}},
-                     pft={"A": {1: 0.9}, "B": {1: 0.8}, "RS": {1: 0.85}}, league={"fg2": 0.5, "fg3": 0.36, "ft": 0.75},
+    r = ShooterRates(ratio2={"A": {1: 1.5}, "B": {1: 1.2}, "ALL": {1: 1.3}}, ratio3={"A": {}, "B": {}, "ALL": {}},
+                     p2={"A": {1: 0.6}, "B": {1: 0.55}, "ALL": {1: 0.58}}, p3={"A": {}, "B": {}, "ALL": {}},
+                     pft={"A": {1: 0.9}, "B": {1: 0.8}, "ALL": {1: 0.85}}, league={"fg2": 0.5, "fg3": 0.36, "ft": 0.75},
                      k={"fg2": 30.0, "fg3": 30.0, "ft": 30.0})
     # row in half A -> priced with the B rates; player 1 in slot 2 took two twos (league expectation 0.9),
     # one of them the first attempt (0.5), and two free throws on the first attempt; slot x had one three

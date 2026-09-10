@@ -20,7 +20,7 @@ import pandas as pd
 import scipy.sparse as sp
 
 from .config import resolve
-from .design import AWAY_SLOTS, HOME_SLOTS, TARGETS, DesignSpec, WindowData, _order_games, ps_key
+from .design import AWAY_SLOTS, FIT_PHASES, HOME_SLOTS, TARGETS, DesignSpec, WindowData, _order_games, ps_key
 from .stints import POSS_COUNTERS, SLOT_COUNTERS
 
 _PIECES: "OrderedDict[tuple, dict]" = OrderedDict()
@@ -163,7 +163,7 @@ def _build_piece(season: int, phase: str, cfg: dict) -> dict:
     return piece
 
 
-def build_window_cached(seasons, cfg, phases=("RS",), gt_weight=None, target="pts",
+def build_window_cached(seasons, cfg, phases=FIT_PHASES, gt_weight=None, target="pts",
                         counter_cols=None, min_den=0.0) -> WindowData:
     """`windows.build_window` from cached per-season pieces (no `margin_bins`).
 

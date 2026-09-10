@@ -42,28 +42,37 @@ SLOTS = ("1", "2", "3", "4", "5")
 
 
 # ---------------------------------------------------------------------------------------- the tables
+# The phases a shooter's totals are summed over; ("RS",) until the playoffs joined the fit.
+SHOT_PHASES = ("RS", "PO")
+
 _SHOTS_CACHE: dict = {}
 
 
-def load_shots(seasons, cfg) -> pd.DataFrame:
-    """Per game x shooter field-goal totals with the league expectation, regular season, with halves
-    (one parquet per season, read once per process)."""
+def load_shots(seasons, cfg, phases: tuple = SHOT_PHASES) -> pd.DataFrame:
+    """Per game x shooter field-goal totals with the league expectation, over `phases`, with halves
+    (one parquet per season and phase, read once per process).
+
+    A playoff game prices a shooter's attempts like any other (owner's ruling, 2026-09-10).  The PO
+    shots tables carry their own A/B split, so the halves stay balanced within each phase.
+    """
     d = resolve(cfg, "stints")
     parts = []
     for s in seasons:
-        p = d / f"{int(s)}_RS_shots.parquet"
-        if p not in _SHOTS_CACHE:
-            if not p.exists():
-                raise FileNotFoundError(f"{p} is missing; rebuild the stints (scripts/02_stints.py {s} {s} RS --force)")
-            _SHOTS_CACHE[p] = pd.read_parquet(p)
-        parts.append(_SHOTS_CACHE[p])
+        for ph in phases:
+            p = d / f"{int(s)}_{ph}_shots.parquet"
+            if p not in _SHOTS_CACHE:
+                if not p.exists():
+                    raise FileNotFoundError(
+                        f"{p} is missing; rebuild the stints (scripts/02_stints.py {s} {s} {ph} --force)")
+                _SHOTS_CACHE[p] = pd.read_parquet(p)
+            parts.append(_SHOTS_CACHE[p])
     return pd.concat(parts, ignore_index=True)
 
 
-def load_ft(seasons, cfg, halves: pd.Series) -> pd.DataFrame:
+def load_ft(seasons, cfg, halves: pd.Series, phases: tuple = SHOT_PHASES) -> pd.DataFrame:
     """Per game x shooter free-throw totals from the box score, with the game's half."""
     from .boxtable import season_box
-    b = season_box([int(s) for s in seasons], ["RS"], cfg)[["game_id", "player_id", "ftm", "ft_miss"]].copy()
+    b = season_box([int(s) for s in seasons], list(phases), cfg)[["game_id", "player_id", "ftm", "ft_miss"]].copy()
     b["fta"] = b.ftm + b.ft_miss
     b["half"] = b.game_id.map(halves)
     return b[b.half.notna()]
@@ -71,7 +80,11 @@ def load_ft(seasons, cfg, halves: pd.Series) -> pd.DataFrame:
 
 @dataclass
 class ShooterRates:
-    """Per shooter, per totals-half ("A", "B", "RS"): the padded rates that price his attempts."""
+    """Per shooter, per totals-half ("A", "B", "ALL"): the padded rates that price his attempts.
+
+    "ALL" is both halves of every phase the totals were built over.  It was called "RS" while they were
+    regular season only; the playoffs are in them now and the name is the honest one.
+    """
     ratio2: dict            # half -> {player_id: p_pad / p_mix}   (location-adjusted twos)
     ratio3: dict
     p2: dict                # half -> {player_id: padded flat 2P%} (no location)
@@ -81,9 +94,9 @@ class ShooterRates:
     k: dict                 # kind -> padding constant, in attempts
 
     def for_rows(self, kind: str, row_half) -> np.ndarray:
-        """The half whose totals price each row: the other regular-season half, or all of it."""
+        """The half whose totals price each row: the other half, or all of it."""
         h = np.asarray(row_half, dtype=object)
-        return np.where(h == "A", "B", np.where(h == "B", "A", "RS"))
+        return np.where(h == "A", "B", np.where(h == "B", "A", "ALL"))
 
     def _sorted(self, name: str, h: str) -> tuple[np.ndarray, np.ndarray]:
         """One rate table as (sorted player ids, values), built once per table and kept on the object."""
@@ -121,7 +134,7 @@ def rates_from_tables(shots: pd.DataFrame, ft: pd.DataFrame, extra: pd.DataFrame
         out = {}
         for h in ("A", "B"):
             out[h] = df[df.half == h].groupby("player_id")[cols].sum()
-        out["RS"] = df.groupby("player_id")[cols].sum()
+        out["ALL"] = df.groupby("player_id")[cols].sum()
         if extra is not None and len(extra) and all(c in extra.columns for c in cols):
             e = extra.groupby("player_id")[cols].sum()
             out = {h: t.add(e, fill_value=0.0) for h, t in out.items()}
@@ -137,50 +150,54 @@ FT_COLS = ["ftm", "fta"]
 _TOTALS_CACHE: dict = {}
 
 
-def season_totals(season: int, cfg, keep=None) -> tuple[dict, dict]:
-    """Per shooter per half ("A", "B", "RS") totals of one regular season, shots and free throws, read once per
-    process.  A block's totals are the sum over its seasons (`block_totals`).
+def season_totals(season: int, cfg, keep=None, phases: tuple = SHOT_PHASES) -> tuple[dict, dict]:
+    """Per shooter per half ("A", "B", "ALL") totals of one season over `phases`, shots and free throws, read
+    once per process.  A block's totals are the sum over its seasons (`block_totals`).
 
     `keep`: the game_ids of that season the caller may see (inseason.keep_games).  A cut season is read
-    fresh and NOT cached, because the totals then depend on the cut and not only on the season.
+    fresh and NOT cached, because the totals then depend on the cut and not only on the season.  A cut names
+    regular-season games only, so filtering by it drops the playoffs whatever `phases` says -- which is what
+    a fit that has seen only the first q of a season should see.
     """
-    key = int(season)
+    key = (int(season), tuple(phases))
     if keep is not None:
-        shots = load_shots([key], cfg)
+        shots = load_shots([int(season)], cfg, phases)
         shots = shots[shots.game_id.isin(set(keep))]
         halves = shots.drop_duplicates("game_id").set_index("game_id")["half"]
-        ft = load_ft([key], cfg, halves)
+        ft = load_ft([int(season)], cfg, halves, phases)
         ft = ft[ft.game_id.isin(set(keep))] if "game_id" in ft.columns else ft
         T = {h: shots[shots.half == h].groupby("player_id")[SHOT_COLS].sum() for h in ("A", "B")}
-        T["RS"] = shots.groupby("player_id")[SHOT_COLS].sum()
+        T["ALL"] = shots.groupby("player_id")[SHOT_COLS].sum()
         F = {h: ft[ft.half == h].groupby("player_id")[FT_COLS].sum() for h in ("A", "B")}
-        F["RS"] = ft.groupby("player_id")[FT_COLS].sum()
+        F["ALL"] = ft.groupby("player_id")[FT_COLS].sum()
         return T, F
     if key not in _TOTALS_CACHE:
-        shots = load_shots([key], cfg)
+        shots = load_shots([int(season)], cfg, phases)
         halves = shots.drop_duplicates("game_id").set_index("game_id")["half"]
-        ft = load_ft([key], cfg, halves)
+        ft = load_ft([int(season)], cfg, halves, phases)
         T = {h: shots[shots.half == h].groupby("player_id")[SHOT_COLS].sum() for h in ("A", "B")}
-        T["RS"] = shots.groupby("player_id")[SHOT_COLS].sum()
+        T["ALL"] = shots.groupby("player_id")[SHOT_COLS].sum()
         F = {h: ft[ft.half == h].groupby("player_id")[FT_COLS].sum() for h in ("A", "B")}
-        F["RS"] = ft.groupby("player_id")[FT_COLS].sum()
+        F["ALL"] = ft.groupby("player_id")[FT_COLS].sum()
         _TOTALS_CACHE[key] = (T, F)
     return _TOTALS_CACHE[key]
 
 
-def block_totals(seasons, cfg, extra_seasons=(), keep=None) -> tuple[dict, dict]:
+def block_totals(seasons, cfg, extra_seasons=(), keep=None,
+                 phases: tuple = SHOT_PHASES) -> tuple[dict, dict]:
     """The per-half totals of a block of seasons: each half summed over the seasons; `extra_seasons` (earlier
     ones, `prev`) added whole to every half.  `keep` is {season: game_ids} for any season the caller may only
     see part of (inseason.keep_games); a season it does not name is read whole."""
-    parts = [season_totals(s, cfg, keep=None if keep is None else keep.get(int(s))) for s in seasons]
+    parts = [season_totals(s, cfg, keep=None if keep is None else keep.get(int(s)), phases=phases)
+             for s in seasons]
     T, F = {}, {}
-    for h in ("A", "B", "RS"):
+    for h in ("A", "B", "ALL"):
         T[h] = pd.concat([t[h] for t, _ in parts]).groupby(level=0).sum()
         F[h] = pd.concat([f[h] for _, f in parts]).groupby(level=0).sum()
     if extra_seasons:
-        ex = [season_totals(s, cfg) for s in extra_seasons]
-        eT = pd.concat([t["RS"] for t, _ in ex]).groupby(level=0).sum()
-        eF = pd.concat([f["RS"] for _, f in ex]).groupby(level=0).sum()
+        ex = [season_totals(s, cfg, phases=phases) for s in extra_seasons]
+        eT = pd.concat([t["ALL"] for t, _ in ex]).groupby(level=0).sum()
+        eF = pd.concat([f["ALL"] for _, f in ex]).groupby(level=0).sum()
         T = {h: t.add(eT, fill_value=0.0) for h, t in T.items()}
         F = {h: f.add(eF, fill_value=0.0) for h, f in F.items()}
     return T, F
@@ -191,7 +208,8 @@ SHOT_LEAGUE_COLS = ["shot_lg2", "shot_lg3", "shot_lgpps"]
 
 
 def player_shot_frame(seasons, cfg, player_ids=None, keep=None) -> pd.DataFrame:
-    """Per-shooter regular-season shot totals over a block, with the block's own league levels beside them.
+    """Per-shooter shot totals over a block (regular season and playoffs), with the block's own league
+    levels beside them.
 
     `shot_fg2a ... shot_xl3` are the sums of `SHOT_COLS` over the block's games; `shot_lg2` / `shot_lg3` are
     the league's make rate on twos and threes over the same games and `shot_lgpps` its points per field-goal
@@ -204,7 +222,7 @@ def player_shot_frame(seasons, cfg, player_ids=None, keep=None) -> pd.DataFrame:
     without it the frame carries a `player_id` column and only the shooters the block saw.
     """
     T, _ = block_totals([int(s) for s in seasons], cfg, keep=keep)
-    t = T["RS"]
+    t = T["ALL"]
     m2, a2 = float(t.fg2m.sum()), float(t.fg2a.sum())
     m3, a3 = float(t.fg3m.sum()), float(t.fg3a.sum())
     lg2 = m2 / a2 if a2 > 0 else 0.48
@@ -224,13 +242,13 @@ def player_shot_frame(seasons, cfg, player_ids=None, keep=None) -> pd.DataFrame:
 def rates_from_totals(T: dict, F: dict, k_fixed: dict | None = None) -> ShooterRates:
     """`rates_from_tables` from the per-half totals."""
     league, k = {}, {}
-    league["fg2"], k["fg2"] = mom_k(T["RS"].fg2m.to_numpy(), T["RS"].fg2a.to_numpy())
-    league["fg3"], k["fg3"] = mom_k(T["RS"].fg3m.to_numpy(), T["RS"].fg3a.to_numpy())
-    league["ft"], k["ft"] = mom_k(F["RS"].ftm.to_numpy(), F["RS"].fta.to_numpy(), fallback_rate=0.75)
+    league["fg2"], k["fg2"] = mom_k(T["ALL"].fg2m.to_numpy(), T["ALL"].fg2a.to_numpy())
+    league["fg3"], k["fg3"] = mom_k(T["ALL"].fg3m.to_numpy(), T["ALL"].fg3a.to_numpy())
+    league["ft"], k["ft"] = mom_k(F["ALL"].ftm.to_numpy(), F["ALL"].fta.to_numpy(), fallback_rate=0.75)
     for kind, v in (k_fixed or {}).items():
         k[kind] = float(v)
     ratio2, ratio3, p2, p3, pft = {}, {}, {}, {}, {}
-    for h in ("A", "B", "RS"):
+    for h in ("A", "B", "ALL"):
         t = T[h]
         for kind, ratio, flat in (("fg2", ratio2, p2), ("fg3", ratio3, p3)):
             a, m, xl = t[f"{kind}a"].to_numpy(), t[f"{kind}m"].to_numpy(), t[f"xl{kind[-1]}"].to_numpy()
@@ -271,7 +289,7 @@ def expected_makes(cnt: pd.DataFrame, rates: ShooterRates, location: bool = True
     """
     n = len(cnt)
     which = rates.for_rows("fg2", cnt["half"].to_numpy())
-    masks = [(h, m) for h in ("A", "B", "RS") if (m := which == h).any()]     # once, not once per slot
+    masks = [(h, m) for h in ("A", "B", "ALL") if (m := which == h).any()]     # once, not once per slot
     x2, x3, xft = np.zeros(n), np.zeros(n), np.zeros(n)
     xp1, xc1 = np.zeros(n), np.zeros(n)
     for s in SLOTS:
@@ -437,7 +455,7 @@ def expected_threes(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, keep
     which = rates.for_rows("fg3", cnt["half"].to_numpy())
     n = len(cnt)
     x3 = cnt["fg3a_sx"].to_numpy(dtype=float) * rates.league["fg3"]
-    masks = [(h, m) for h in ("A", "B", "RS") if (m := which == h).any()]     # once, not once per slot
+    masks = [(h, m) for h in ("A", "B", "ALL") if (m := which == h).any()]     # once, not once per slot
     for s in SLOTS:
         pid = cnt[f"pid_s{s}"].to_numpy()
         p = np.full(n, rates.league["fg3"])

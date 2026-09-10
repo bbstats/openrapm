@@ -36,7 +36,7 @@ def world():
                    rho=0.85, turnover=0.3, seed=5, eps_var=0.2, leak=False)
     st, box, truth = sim["stints"], sim["box"], sim["truth"]["ps"]
 
-    def loader(seasons, cfg, target):
+    def loader(seasons, cfg, target, phases=None, **kw):    # simulate() builds RS games only
         return build_design(st[st.season.isin(seasons)], box[box.season.isin(seasons)], FEATURES, cfg)
 
     ctx = Context(cfg=CFG, loader=loader)

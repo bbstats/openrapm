@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 
 from .cv import make_exposure
-from .design import TARGETS
+from .design import FIT_PHASES, TARGETS
 from .estimator import MixedModelRAPM, Moments, _Layout
 from .holdout import Context, Ratings
 
@@ -250,7 +250,7 @@ class MspiFast:
     off_target: str = "xpts_ft"
     def_target: str = "x3def"
     lam_buckets: dict | None = None      # extra ridge multipliers per spec.col_groups name (low_poss, high_poss, ...)
-    phases: tuple = ("RS",)              # ("RS", "PO"): train on the playoff stints too (the held-out scoring stays RS)
+    phases: tuple = FIT_PHASES           # the stints this trains on; the held-out scoring stays RS
     decay: float | None = None           # rows of training season s weighted decay^(|s - H| - 1), H = ctx.current_h
     decay_exposure: bool = False         # the same weights on the games behind the padded rates (BoxExposure.game_mult)
     season_weights: dict | None = None   # explicit weight per season offset (s - H), e.g. {-2: 0.5, -1: 0.8, 1: 1.0};
