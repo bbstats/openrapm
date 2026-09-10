@@ -61,6 +61,26 @@ def window_label(seasons) -> str:
     return f"{seasons[0]}-{seasons[-1]}"
 
 
+def label_seasons(label: str) -> list:
+    """The seasons a window label spans: "1997-1999" -> [1997, 1998, 1999], "2004-2004" -> [2004]."""
+    a, b = str(label).split("-")
+    return list(range(int(a), int(b) + 1))
+
+
+def label_step(labels) -> float:
+    """Seasons per window in a panel's labels: 3 for the configured windows, 1 for a per-season panel.
+    The median span, so a short last window does not move it."""
+    spans = [len(label_seasons(lab)) for lab in sorted(set(labels))]
+    return float(np.median(spans)) if spans else 1.0
+
+
+def labels_covering(labels, seasons) -> set:
+    """Every window label whose seasons intersect `seasons`.  On the configured windows this is the label of
+    each season's own window; on a per-season panel it is the seasons themselves."""
+    want = {int(s) for s in seasons}
+    return {lab for lab in set(labels) if want.intersection(label_seasons(lab))}
+
+
 def window_mid(seasons) -> float:
     return float(np.mean(seasons))
 

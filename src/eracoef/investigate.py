@@ -24,6 +24,8 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 
+from . import pad
+
 
 def residual_ridge(Zo, Zd, r, w, lam: float = 2000.0):
     """r ~ Zo a + Zd b, weighted by w, ridge `lam` on every coefficient (in the weights' units: a player with
@@ -81,6 +83,61 @@ def on_court(Zo, Zd, r, w):
         s = np.asarray(Z.T @ (w * r)).ravel()
         out += [np.where(p > 0, s / np.where(p > 0, p, 1.0), 0.0), p]
     return tuple(out)
+
+
+def oncourt_rates(wd_o, wd_d) -> "pd.DataFrame":
+    """Each player's LUCK-ADJUSTED on-court offensive and defensive rating over a window, centred.
+
+    The owner, 2026-09-09: *"what about luck-adj on-court ORTG/DRTG in the prior?"*.  `wd_o` and `wd_d`
+    are the window's designs on the luck-adjusted targets (`xpts_ft` and `x3def`, which is what the role
+    panel already builds), so the possession-weighted mean of each design's response over the rows a
+    player is on the floor for IS that rating with the free-throw and opponent-three luck already out.
+
+    This is deliberately NOT an APM: it does not separate him from his teammates, so it is biased toward
+    whoever he played with and has far less variance than the regression estimate beside it (`apm`).  That
+    is the point -- the prior's booster can weigh a biased low-variance signal against an unbiased noisy
+    one.  Both are centred on the window's possession-weighted mean, so an era's scoring level is out.
+
+    Returns one row per `ps_idx` with `onc_o`, `onc_d`, `onc_poss_o`, `onc_poss_d`.  `onc_d` is in the
+    RAW sign of the design (points the opponent scored per 100), so lower is a better defender.
+    """
+    if wd_o.spec.n_ps != wd_d.spec.n_ps:
+        raise ValueError("the two designs must share a player layout; build them from the same window")
+    out = {}
+    for tag, wd in (("o", wd_o), ("d", wd_d)):
+        n_ps = wd.spec.n_ps
+        Z = wd.parts["Z"] if wd.parts is not None else wd.X[:, :2 * n_ps]
+        Zo, Zd = sp.csr_matrix(Z)[:, :n_ps], sp.csr_matrix(Z)[:, n_ps:]
+        mo, po, md, pdd = on_court(Zo, Zd, wd.y, wd.w)
+        # a player's OWN offensive rating comes from the rows his team was on offense for, and his
+        # defensive rating from the rows it was defending -- the other half of each design
+        out[f"onc_{tag}"], out[f"onc_poss_{tag}"] = (mo, po) if tag == "o" else (md, pdd)
+    # Centre on the window's own level, then PAD toward it -- unpadded, a player with two hundred
+    # possessions returns a rate of +100 per 100 and the booster sees a superstar (`pad.py`'s rule: no
+    # rate from counts is used unpadded, ever).  The constant is the method of moments in POSSESSION
+    # units: a rate over n possessions has sampling variance sigma^2 / n with sigma^2 the possession-level
+    # variance of the target itself, so
+    #     tau2 = Var_w(x) - sigma^2 E_w[1/n]        k = sigma^2 / tau2
+    # and `pad.shrink` does the rest.  Comes out near 700 possessions, about a fifth of a season's play.
+    res = {"ps_idx": np.arange(len(out["onc_o"]))}
+    ks = {}
+    for tag, wd in (("o", wd_o), ("d", wd_d)):
+        x, n = out[f"onc_{tag}"], out[f"onc_poss_{tag}"]
+        if n.sum() <= 0:
+            res[f"onc_{tag}"], res[f"onc_poss_{tag}"], ks[tag] = x, n, float("nan")
+            continue
+        lvl = float(np.average(x, weights=n))
+        xc = x - lvl
+        sigma2 = float(np.average((wd.y - np.average(wd.y, weights=wd.w)) ** 2, weights=wd.w))
+        ok = n > 0
+        tau2 = float(np.average(xc[ok] ** 2, weights=n[ok]) - sigma2 * np.average(1.0 / n[ok], weights=n[ok]))
+        k = sigma2 / tau2 if tau2 > 1e-9 else 1e9
+        ks[tag] = float(k)
+        res[f"onc_{tag}"] = pad.shrink(xc, n, k, 0.0)
+        res[f"onc_poss_{tag}"] = n
+    frame = pd.DataFrame(res)
+    frame.attrs["pad_k"] = ks
+    return frame
 
 
 def _lineup_keys(Z) -> np.ndarray:

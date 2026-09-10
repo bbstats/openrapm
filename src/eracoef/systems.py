@@ -436,6 +436,27 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                                             gbdt_features={"O": [f for f in _SO if f not in _RO], "D": list(_SD)})
         S["tune501_b7_pasto_pOD"] = _replace(_base, name="tune501_b7_pasto_pOD",
                                              gbdt_features={"O": [f for f in _SO if f not in _RO], "D": [f for f in _SD if f not in _RD]})
+        # ---------------------------------------------------------------- single-season targets (HANDOFF 3.5)
+        # The same board with the prior trained on a PER-SEASON panel (scripts/49_role_panel.py --season):
+        # a training row is a player in ONE season, its pairs are s -> s', so the turnover feature carries the
+        # SEASON move (movers 1.0, stayers 0.36 -- twice the contrast of the window pairs, 24.6), PAST is his
+        # record up to the season and not up to the block, and the coarsest object in an in-season rating stops
+        # being the prior.  More rows, noisier each.  Nothing else moves: the panel's own labels drive the
+        # exclusion set (Context.labels), the pair-row turnover table (Context.turn_table) and the PAST
+        # discount (gbdt_prior.past_decay_for, which holds the reach in YEARS constant).
+        #
+        # `win_decay` is the one number the granularity changes the meaning of: 0.514 per 3-season window is
+        # 0.80 per season, so `_sp` keeps the tuned NUMBER (a much shorter reach) and `_spy` keeps the tuned
+        # REACH IN YEARS.  Both are reported; neither is a search.
+        _SPANEL = "outputs/role_panel_season.parquet"
+        _pod = S["tune501_b7_pasto_pOD"]
+        _cbrt = 1.0 / 3.0
+        S["sp_pasto_pOD"] = _replace(_pod, name="sp_pasto_pOD", panel=_SPANEL)
+        S["spy_pasto_pOD"] = _replace(_pod, name="spy_pasto_pOD", panel=_SPANEL,
+                                      win_decay=float(_pod.win_decay) ** _cbrt,
+                                      win_decay_d=(None if _pod.win_decay_d is None
+                                                   else float(_pod.win_decay_d) ** _cbrt))
+
         # ---------------------------------------------------------------- in-season, the rolling kernel (inseason.py)
         # The board's system fit on the season being rated and the two before it, the earlier ones down-weighted,
         # with the anchor season cut at q so it can be scored on the games it has not seen.  `ks<w1><w2>` names
@@ -462,6 +483,17 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                 S[loose.name] = loose
                 for qt, q in _CUTS.items():
                     S[f"ks{tag}_{lamt}_{qt}"] = KernelSystem(f"ks{tag}_{lamt}_{qt}", loose, cut=q)
+        # the season-target prior (3.5) on the shipped kernel and ridge, with the cuts: whether a per-season
+        # prior is worth more IN season, where the block-bracketed one is coarsest
+        for _sp, _wd in (("sp", 1.0), ("spy", _cbrt)):
+            for _inner in ("ks52", "ks52_lam05"):
+                _b = S[_inner]
+                _k = _replace(_b, name=f"{_sp}_{_inner}", panel=_SPANEL,
+                              win_decay=float(_b.win_decay) ** _wd,
+                              win_decay_d=(None if _b.win_decay_d is None else float(_b.win_decay_d) ** _wd))
+                S[_k.name] = _k
+                for qt, q in _CUTS.items():
+                    S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
         for qt, q in _CUTS.items():
             S[f"blk_{qt}"] = BlockSystem(f"blk_{qt}", S["tune501_b7_pasto_pOD"], cut=q)
         # the prior with player-grouped cross-fitting (GBDTPrior folds): the fingerprint channel closed, his
@@ -472,6 +504,169 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
             for qt, q in _CUTS.items():
                 S[f"{fo.name}_{qt}"] = KernelSystem(f"{fo.name}_{qt}", fo, cut=q)
             S[f"tune501_b7_pasto_pOD_f{nf}"] = _replace(S["tune501_b7_pasto_pOD"], name=f"tune501_b7_pasto_pOD_f{nf}", gbdt_folds=nf)
+
+        # ---------------------------------------------------------------- the team-game luck adjustment (teamloo.py)
+        # The owner's proposal, 2026-09-09: build a team's shooting rates from its OTHER games (rebalanced
+        # leave-one-out, Austin/Pe'er/Korem 2025) and move each game's makes toward them, so the ridge's
+        # target carries less of the bounce.  Self-contained: one season of play-by-play is enough, which is
+        # what "Open" needs.  Make-rate replacement has LOST here twice -- shooter level (18) and lineup level
+        # (17) -- and free throws WON (15), so this is a pre-registered LADDER read rung by rung and not a
+        # candidate.  `_pts` is the no-adjustment control; `tlfto` is free throws alone, the rung that must
+        # reproduce the shipped free-throw gain or nothing above it means anything; then threes, then twos,
+        # then the defensive and matchup priors, then the partial scalar `a`.  `_O` / `_D` hand the target to
+        # ONE side and leave the other as it ships.
+        from . import teamloo as _tl
+        # the split forms exist for every rung the ladder actually reaches.  They matter more than
+        # expected: a whole-target rung replaces the DEFENSIVE target too, so `tlxft3o` is standing in
+        # for x3def as well as for xpts_ft, and only `_O` / `_D` can say which half is paying.
+        _TL_SPLIT = ("tlfto", "tlft3o", "tlft32o", "tlft32b",
+                     "tlxft3o", "tlxft3d", "tlxft3b", "tlxft32o", "tlxft32b")
+        for _b_name in ("tune501_b7_pasto_pOD", "ks52_lam05"):
+            _b, _tl_cuts = S[_b_name], (_CUTS if _b_name.startswith("ks") else {})
+
+            def _tl_reg(nm, sysm, _cuts=_tl_cuts):
+                S[nm] = sysm
+                for qt, q in _cuts.items():
+                    S[f"{nm}_{qt}"] = KernelSystem(f"{nm}_{qt}", sysm, cut=q)
+
+            _tl_reg(f"{_b_name}_pts", _replace(_b, name=f"{_b_name}_pts", off_target="pts", def_target="pts"))
+            for _t in _tl.TARGETS:
+                _tl_reg(f"{_b_name}_{_t}", _replace(_b, name=f"{_b_name}_{_t}", off_target=_t, def_target=_t))
+                if _t in _TL_SPLIT:
+                    _tl_reg(f"{_b_name}_{_t}_O", _replace(_b, name=f"{_b_name}_{_t}_O", off_target=_t))
+                    _tl_reg(f"{_b_name}_{_t}_D", _replace(_b, name=f"{_b_name}_{_t}_D", def_target=_t))
+
+        # ---------------------------------------------------------------- does a single-season ridge pick the prior?
+        # The owner, 2026-09-09: *"the goal here is to get single year PI rapm to actually give us a lambda
+        # that doesn't pick one or the other (i think it usually just picks box score)"*.  On a SINGLE season
+        # at the shipped penalty the residual carries about 10% of the offensive rating's variance and 30% of
+        # the defensive one (`scratch/lamshare.py`), so on offense the rating very nearly IS the box prior.
+        # This family sweeps the penalty and the TARGET together on the one-season kernel, so the question
+        # "does a less noisy target buy the on-court evidence more weight AT ITS OWN BEST PENALTY" can be
+        # answered rather than argued.  `ls_<target>_x<mult>`; the multiplier is of `ks00`'s own lambda.
+        _LS_TARGETS = {"ship": ("xpts_ft", "x3def"), "pts": ("pts", "pts"), "xft": ("xpts_ft", "xpts_ft"),
+                       "tl3": ("tlxft3o", "x3def"), "tl3b": ("tlxft3o", "tlxft3o")}
+        _LS_MULTS = {"x003": 0.03, "x00625": 0.0625, "x0125": 0.125, "x025": 0.25,
+                     "x05": 0.5, "x1": 1.0, "x2": 2.0, "x4": 4.0}
+        _ls_base = S["ks00"]
+        for _tn, (_to, _td) in _LS_TARGETS.items():
+            for _mt, _m in _LS_MULTS.items():
+                _nm = f"ls_{_tn}_{_mt}"
+                _inner = _replace(_ls_base, name=_nm, lam=float(_ls_base.lam) * _m,
+                                  off_target=_to, def_target=_td)
+                S[_nm] = _inner
+                for qt, q in _CUTS.items():
+                    S[f"{_nm}_{qt}"] = KernelSystem(f"{_nm}_{qt}", _inner, cut=q)
+
+        # ---------------------------------------------------------------- the per-factor defence, re-tested
+        # FINDINGS 25 measured the four-factor defensive residual on an older board (best form -0.040 at
+        # z -0.94, 7x the fit time) and 36 gave a reason to look again: the four penalty RATIOS were chosen
+        # by REML in FINDINGS 15 and are now confirmed by an independent measurement of the same quantity
+        # (35.1's split-half between-team variances, `tau2_off / tau2_def`): eFG 1.50 against 1.50 measured,
+        # turnovers 0.75 against 0.88, offensive rebounds 3.00 against 2.38, free-throw rate 1.00 against
+        # 0.90.  `_ff5` is 25's best form on the CURRENT board; `_ff5m` swaps in the measured ratios.
+        _ff_base = S["tune501_b7_pasto_pOD"]
+        S["tune501_b7_pasto_pOD_ff5"] = _replace(_ff_base, name="tune501_b7_pasto_pOD_ff5",
+                                                 def_factors=0.5, factor_x3=True)
+        S["tune501_b7_pasto_pOD_ff5m"] = _replace(
+            _ff_base, name="tune501_b7_pasto_pOD_ff5m", def_factors=0.5, factor_x3=True,
+            factor_lams={"efg": (3495.0, 1.50), "tov": (2176.0, 0.88),
+                         "oreb": (414.0, 2.38), "ftr": (1355.0, 0.90)})
+
+        # ---------------------------------------------------------------- the season board's own penalties
+        # The owner, 2026-09-09: *"it should never be single number / single number. o/d are different"*, and
+        # single season only -- the 3-season chunk board is on its way out (Part 0 ruling 3).  So sweep the
+        # SEASON board's two player penalties apart, and a third bucket for players the season barely saw.
+        # `sod_o<a>_d<b>`: offense at a x ks52_lam05's lambda, defense at b x it.  `_lp<r>` multiplies the
+        # penalty on players under `low_poss_threshold` possessions by r on top of that.
+        _sod = S["ks52_lam05"]
+        _SA = {"025": 0.25, "05": 0.5, "1": 1.0, "2": 2.0}
+        _SB = {"0125": 0.125, "025": 0.25, "05": 0.5, "1": 1.0}
+        for _at, _a in _SA.items():
+            for _bt, _b in _SB.items():
+                _nm = f"sod_o{_at}_d{_bt}"
+                _in = _replace(_sod, name=_nm, lam=float(_sod.lam) * _a, lam_ratio=_b / _a)
+                S[_nm] = _in
+                for qt, q in _CUTS.items():
+                    S[f"{_nm}_{qt}"] = KernelSystem(f"{_nm}_{qt}", _in, cut=q)
+        for _r in (2.0, 4.0):
+            _nm = f"sod_lp{_r:g}"
+            _in = _replace(_sod, name=_nm, lam_buckets={"low_poss": _r})
+            S[_nm] = _in
+            for qt, q in _CUTS.items():
+                S[f"{_nm}_{qt}"] = KernelSystem(f"{_nm}_{qt}", _in, cut=q)
+
+        # ---------------------------------------------------------------- luck-adjusted on-court in the prior
+        # The owner, 2026-09-09: *"what about luck-adj on-court ORTG/DRTG in the prior?"*.  The prior already
+        # sees his past plus-minus as an APM (`PAST`, FINDINGS 28), which separates him from his teammates and
+        # pays for it in variance.  `PAST_ONC` is the same record read the other way: his RAW on-court rate on
+        # the luck-adjusted targets, biased toward whoever he played with and far quieter
+        # (`investigate.oncourt_rates`, padded with a moment constant near 300 possessions; it correlates 0.68
+        # with the APM, so it is not the same column twice).  Pair rows only, like PAST.
+        from .gbdt_prior import PAST_ONC as _PAST_ONC
+        _onc_base = S["tune501_b7_pasto_pOD"]
+        _oncO = [*_onc_base.gbdt_features["O"], *_PAST_ONC]
+        _oncD = [*_onc_base.gbdt_features["D"], *_PAST_ONC]
+        for _tag, _fo, _fd in (("onc", _oncO, _oncD),
+                               ("oncO", _oncO, _onc_base.gbdt_features["D"]),
+                               ("oncD", _onc_base.gbdt_features["O"], _oncD)):
+            S[f"tune501_b7_pasto_pOD_{_tag}"] = _replace(
+                _onc_base, name=f"tune501_b7_pasto_pOD_{_tag}", gbdt_features={"O": list(_fo), "D": list(_fd)})
+            _k = _replace(S["ks52_lam05"], name=f"ks52_lam05_{_tag}",
+                          gbdt_features={"O": list(_fo), "D": list(_fd)})
+            S[_k.name] = _k
+            for qt, q in _CUTS.items():
+                S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
+
+        # ---------------------------------------------------------------- how much of a three the defense keeps
+        # FINDINGS 35.1: a defense's true spread on opponent 3P% is 0.59 points and on opponent FT% 0.52,
+        # so the shipped `x3def` -- which replaces BOTH outright -- assumes a zero that is not there.
+        # `_dw<w>` keeps a fraction w of the realised three-point deviation, `_df<w>` of the free-throw one
+        # and `_db<w>` of both; w = 0 is the shipped board and w = 1 is raw points on that channel.
+        from .xshoot import DEF_W as _DEF_W
+        _w_base = S["tune501_b7_pasto_pOD"]
+        # and the same dial on OFFENSE.  The formula is side-agnostic -- it works on the row's offensive
+        # counters either way -- so `x3def_w1` IS the shipped `xpts_ft` (nothing replaced but free throws)
+        # and `x3def` is full three-point replacement.  Sweeping `off_target` across the two therefore
+        # sweeps the offensive three-point adjustment end to end, which is where FINDINGS 35.4 says the
+        # largest unexploited gain sits (-0.357 at team level, and twice tried and failed at player level).
+        for _w in ("", *[f"_w{w:g}" for w in _DEF_W]):
+            _nm = f"tune501_b7_pasto_pOD_ow{_w or '0'}"
+            S[_nm] = _replace(_w_base, name=_nm, off_target=f"x3def{_w}")
+            _k = _replace(S["ks52_lam05"], name=f"ks52_lam05_ow{_w or '0'}", off_target=f"x3def{_w}")
+            S[_k.name] = _k
+            for qt, q in _CUTS.items():
+                S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
+        for _p, _tag in (("w", "dw"), ("f", "df"), ("b", "db")):
+            for _w in _DEF_W:
+                _nm = f"tune501_b7_pasto_pOD_{_tag}{_w:g}"
+                S[_nm] = _replace(_w_base, name=_nm, def_target=f"x3def_{_p}{_w:g}")
+                _k = _replace(S["ks52_lam05"], name=f"ks52_lam05_{_tag}{_w:g}",
+                              def_target=f"x3def_{_p}{_w:g}")
+                S[_k.name] = _k
+                for qt, q in _CUTS.items():
+                    S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
+
+        # ---------------------------------------------------------------- the two penalties, swept apart
+        # The owner, 2026-09-09: *"penalties should be different o/d/other effects in another bucket
+        # probably?"*.  Two of the three already are.  `lam` is the OFFENSIVE penalty and `lam_ratio`
+        # multiplies it for defense (estimator._scale divides the defensive columns by sqrt(lam_ratio)), and
+        # the fixed effects -- home court, the margin rubber band, is_po, the box columns -- carry
+        # `pen_diag = 0`, so they are unpenalized already and live in their own bucket by construction.
+        # `lam_buckets` is a third bucket keyed on exposure (low_poss / high_poss, per side).
+        # What had NEVER been swept is the two player penalties INDEPENDENTLY on a single season: FINDINGS 34
+        # moved them together, which cannot be right when offense ends up 20% evidence and defense 44%.
+        # `od_o<a>_d<b>`: the offensive penalty is a x ks00's lambda and the defensive one is b x it.
+        _OD_A = {"0125": 0.125, "025": 0.25, "05": 0.5, "1": 1.0}
+        _OD_B = {"003": 0.03125, "00625": 0.0625, "0125": 0.125, "025": 0.25, "05": 0.5}
+        _od_base = S["ks00"]
+        for _at, _a in _OD_A.items():
+            for _bt, _b in _OD_B.items():
+                _nm = f"od_o{_at}_d{_bt}"
+                _inner = _replace(_od_base, name=_nm, lam=float(_od_base.lam) * _a, lam_ratio=_b / _a)
+                S[_nm] = _inner
+                for qt, q in _CUTS.items():
+                    S[f"{_nm}_{qt}"] = KernelSystem(f"{_nm}_{qt}", _inner, cut=q)
 
         # ---------------------------------------------------------------- the destination (FINDINGS 30, context.py)
         # the owner: a high-usage player's usage drops on the new team (28.8), so give the prior the team he is

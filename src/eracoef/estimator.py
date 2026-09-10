@@ -161,8 +161,24 @@ class Moments:
             self.A += Xc.T @ (wc[:, None] * Xc)
             self.b += Xc.T @ (wc * yc)
             self.yWy += float(yc @ (wc * yc))
-        # fixed columns with no data (e.g. is_po in an RS-only window) are dropped from the solve
+        # Fixed columns with no data (e.g. is_po in an RS-only window) are dropped from the solve, and so
+        # are columns that are exactly DEPENDENT on the others.  The fixed block is unpenalized, so a
+        # singular one has no unique solution and the solve returns values around 1e12: on a playoff-only
+        # design `is_po` is constant 1 (a copy of the season indicators summed) and `po_home` is a copy of
+        # `home`.  A pivoted QR of the correlation-scaled Gram names the dependent ones; on a full-rank
+        # block -- every design this project has fitted until now -- it drops nothing and changes nothing.
         self.active = np.diag(self.A) > 0
+        idx = np.flatnonzero(self.active)
+        if idx.size > 1:
+            Aa = self.A[np.ix_(idx, idx)]
+            d = np.sqrt(np.clip(np.diag(Aa), 1e-300, None))
+            R = Aa / np.outer(d, d)
+            ev = np.linalg.eigvalsh(R)
+            if ev[0] <= 1e-9 * max(ev[-1], 1.0):        # rank deficient: name the dependent columns
+                import scipy.linalg as _sla
+                rank = int(np.sum(ev > 1e-9 * max(ev[-1], 1.0)))
+                _, _, piv = _sla.qr(R, pivoting=True, mode="economic")
+                self.active[idx[piv[rank:]]] = False
         self.p_act = int(self.active.sum())
         self.season_cols = season_cols
         self.n_z = 0 if Z is None else Z.shape[1]

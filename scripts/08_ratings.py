@@ -127,9 +127,20 @@ t0 = time.time()
 for w in window_seasons(cfg):
     seasons = list(range(w[0], w[1] + 1))
     lab = window_label(seasons)
-    # the target the ratings are fit to: "xpts_ft" replaces made free throws by the shooter's
-    # expectation (FINDINGS.md sections 16-18: the one luck adjustment that beat actual points)
-    wd = build_window(seasons, cfg, target=PRIOR.get("target", "pts"))
+    # The target the ratings are fit to.  A `design.TARGETS` name is a fixed combination of counters and
+    # `build_window` makes it directly; anything else is a CALLABLE target (xshoot.DEFENSE_TARGETS), which
+    # needs the raw-points design first because it prices a shooter's makes off the block's own shot
+    # totals.  Both paths exist in `fastfit.target_y` and the criterion has always used the second one, so
+    # the board must too or it cannot ship what the criterion chose (FINDINGS 36).
+    from eracoef.design import TARGETS as _DT
+    from eracoef.xshoot import DEFENSE_TARGETS as _CT
+    OFF_TARGET = PRIOR.get("target", "pts")
+    if OFF_TARGET in _DT or OFF_TARGET == "pts":
+        wd = build_window(seasons, cfg, target=OFF_TARGET)
+    else:
+        wd, rep_o = _CT[OFF_TARGET](seasons, cfg, build_window(seasons, cfg))
+        print(f"    offense from target {OFF_TARGET}: keeps {rep_o.get('w3', 0.0):.2f} of the realised "
+              f"three-point deviation, 3PM ratio {rep_o['gates'].r3.mean():.4f}", flush=True)
     chain = None
     if USE_CHAIN:
         # the whole prior is the offset; the block's own window is the only label to keep it off
@@ -161,7 +172,7 @@ for w in window_seasons(cfg):
     DEF_TARGET = PRIOR.get("defense_target")
     if DEF_TARGET:
         from eracoef.xshoot import DEFENSE_TARGETS
-        wd_pts = wd if PRIOR.get("target", "pts") == "pts" else build_window(seasons, cfg)
+        wd_pts = wd if OFF_TARGET == "pts" else build_window(seasons, cfg)
         wd_d, rep_d = DEFENSE_TARGETS[DEF_TARGET](seasons, cfg, wd_pts)
         r_d = player_ratings_table(wd_d, beta, cfg, seasons, beta_po=beta_po, names=None,
                                    prior_offset=chain if USE_CHAIN else (offset_for(wd_d, lab) if USE_BOOST else None),

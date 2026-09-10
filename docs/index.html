@@ -24,25 +24,32 @@
   footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
   footer a { color: inherit; }
   .count { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+    .note { color: #666; font-size: 0.9rem; max-width: 62ch; line-height: 1.5; margin: 0 0 1rem; }
 </style>
 </head>
 <body>
 <main>
   <h1>OpenRAPM</h1>
   <div class="controls">
-    <label>View <select id="view"><option value="season">Season</option><option value="block">3-year block</option></select></label>
+    <label>View <select id="view"><option value="season">Season</option><option value="block">3-year block</option><option value="playoff">Playoff delta</option></select></label>
     <label><span id="picklabel">Block</span> <select id="block"></select></label>
     <label>Min possessions <input id="minp" type="number" value="2000" min="0" step="500"></label>
     <label>Find <input id="find" type="search" placeholder="player name" autocomplete="off"></label>
   </div>
   <p class="count" id="count"></p>
+  <p class="note" id="note" hidden>The playoff delta is how far a postseason moved a player off his
+  regular-season rating, not a playoff rating of its own. It is the residual of a fit that sees only
+  playoff possessions and takes the regular-season number as its prior, so a full run is worth about a
+  fifth of a point and the largest in thirty seasons is about one. Chosen and checked on separate halves
+  of the seasons; it predicts the rest of a series better and puts the credit on better players.</p>
   <table id="table">
     <thead><tr>
       <th>#</th><th>Player</th>
-      <th data-k="o" aria-sort="none" title="sort">Offense</th>
-      <th data-k="d" aria-sort="none" title="sort">Defense</th>
-      <th data-k="t" aria-sort="descending" title="sort">Total</th>
-      <th data-k="p" aria-sort="none" title="sort">Poss.</th>
+      <th data-k="r" id="th_r" aria-sort="none" title="sort" hidden>Season</th>
+      <th data-k="o" id="th_o" aria-sort="none" title="sort">Offense</th>
+      <th data-k="d" id="th_d" aria-sort="none" title="sort">Defense</th>
+      <th data-k="t" id="th_t" aria-sort="descending" title="sort">Total</th>
+      <th data-k="p" id="th_p" aria-sort="none" title="sort">Poss.</th>
     </tr></thead>
     <tbody></tbody>
   </table>
@@ -59,6 +66,9 @@
   const data = await (await fetch("data/ratings.json")).json();
   const rows = data.rows, windows = data.meta.windows;
   const seasonRows = data.seasons || [], seasons = data.meta.seasons || [];
+  // the playoff DELTA (scripts/63_playoff_delta.py): how far a postseason moved a player off his
+  // regular-season number, which is what the estimator produces -- not a standalone playoff rating
+  const poRows = data.playoffs || [], poWindows = data.meta.playoff_windows || [];
   const $ = id => document.getElementById(id);
   const view = $("view"), block = $("block"), minp = $("minp"), find = $("find"), tbody = $("table").querySelector("tbody");
   let sortKey = "t";
@@ -66,13 +76,24 @@
   // three-year blocks stay available in the same picker
   view.value = seasons.length ? "season" : "block";
   if (!seasons.length) view.parentElement.style.display = "none";
+  if (!poRows.length) view.querySelector('option[value="playoff"]').remove();
   function fillPicker() {
-    const single = view.value === "season";
-    const keys = single ? seasons : windows;
+    const v = view.value;
+    const keys = v === "season" ? seasons : (v === "playoff" ? poWindows : windows);
     block.replaceChildren();
     keys.forEach(w => { const o = document.createElement("option"); o.value = w; o.textContent = w; block.appendChild(o); });
     block.value = keys[keys.length - 1];
-    $("picklabel").textContent = single ? "Season" : "Block";
+    $("picklabel").textContent = v === "season" ? "Season" : "Block";
+    // the playoff view has one extra column (his regular-season total) and its own units, and a playoff
+    // possession floor of two thousand would empty the table -- a whole postseason is a few hundred
+    const po = v === "playoff";
+    $("th_r").hidden = !po;
+    $("th_o").textContent = po ? "Δ Offense" : "Offense";
+    $("th_d").textContent = po ? "Δ Defense" : "Defense";
+    $("th_t").textContent = po ? "Δ Total" : "Total";
+    $("th_p").textContent = po ? "Playoff poss." : "Poss.";
+    minp.value = po ? 400 : 2000;
+    $("note").hidden = !po;
   }
   fillPicker();
   view.addEventListener("change", () => { fillPicker(); render(); });
@@ -85,22 +106,27 @@
   [block, minp].forEach(el => el.addEventListener("change", render));
   find.addEventListener("input", render);
   const fmt = v => (v > 0 ? "+" : "") + v.toFixed(1);
+  const fmt2 = v => (v > 0 ? "+" : "") + v.toFixed(2);   // a delta lives in hundredths, not tenths
   function render() {
     const w = block.value, mp = +minp.value || 0, q = find.value.trim().toLowerCase();
-    const single = view.value === "season";
-    let r = single ? seasonRows.filter(x => String(x.s) === String(w) && x.p >= mp)
-                   : rows.filter(x => x.w === w && x.p >= mp);
+    const v = view.value, po = v === "playoff";
+    let r = v === "season" ? seasonRows.filter(x => String(x.s) === String(w) && x.p >= mp)
+          : po ? poRows.filter(x => x.w === w && x.p >= mp)
+               : rows.filter(x => x.w === w && x.p >= mp);
     if (q) r = r.filter(x => x.n.toLowerCase().includes(q));
     r.sort((a, b) => b[sortKey] - a[sortKey]);
     tbody.replaceChildren();
     r.forEach((p, i) => {
       const tr = document.createElement("tr");
-      [i + 1, p.n, fmt(p.o), fmt(p.d), fmt(p.t), p.p.toLocaleString()].forEach(v => {
+      const cells = po ? [i + 1, p.n, fmt(p.r), fmt2(p.o), fmt2(p.d), fmt2(p.t), p.p.toLocaleString()]
+                       : [i + 1, p.n, fmt(p.o), fmt(p.d), fmt(p.t), p.p.toLocaleString()];
+      cells.forEach(v => {
         const td = document.createElement("td"); td.textContent = v; tr.appendChild(td);
       });
       tbody.appendChild(tr);
     });
-    $("count").textContent = r.length + " players, " + w + ", at least " + mp.toLocaleString() + " possessions";
+    $("count").textContent = r.length + " players, " + w + ", at least " + mp.toLocaleString()
+      + (po ? " playoff possessions" : " possessions");
   }
   render();
 })();

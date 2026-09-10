@@ -26,6 +26,8 @@ usage: python scripts/45_holdout.py [first] [last] --systems=a,b,c [--k=2,4] [--
            [--splits=movers,exposure,bigs,bench] [--rank] [--consensus] [--tag=name] [--ref=hybrid_xft]
            [--workers=4] [--spread] [--top=1997-1999] [--pdp] [--rankmap=<rank parquet>] [--calmap=<calmap parquet>] [--quiet]
     --workers=N  run the held-out seasons across N processes (config holdout.workers; 1 = in this process)
+    --held=X     all (default), search (the odd-indexed half of the held-out seasons) or confirm (the other
+                 half): the 22.7 protocol, choose on one and read the answer on the other
     --spread     per system and side, the possession-weighted sd of the prior against the sd of the residual
                  (players with 1000+ possessions), on the consensus window and on 1997-1999
     --top=A-B    fit each system on that block and print the top 15 offense with prior, residual and rating
@@ -91,6 +93,7 @@ def main():
     ref = _flag("ref", names[0])
     quiet = "--quiet" in sys.argv
     workers = int(_flag("workers", cfg.get("holdout", {}).get("workers", 1)))
+    which = _flag("held", "all")
     skip_run = "--norun" in sys.argv
 
     ctx = Context.load(cfg)
@@ -98,14 +101,24 @@ def main():
                              ks=_list("k", None, int), lam=_list("lams", None, float))
     t0 = time.time()
     gbdt_reports = []
+    # the 22.7 protocol: choose on the odd-indexed half of the held-out seasons, confirm on the other
+    held = ho.seasons()
+    if which == "search":
+        held = held[::2]
+    elif which == "confirm":
+        held = held[1::2]
+    elif which != "all":
+        raise SystemExit(f"--held must be all, search or confirm, got {which!r}")
     if not skip_run:
+        if which != "all":
+            print(f"held-out seasons ({which}): {held}", flush=True)
         if workers > 1:
             res, _, gbdt_reports = run_parallel(ho, names, splits=split_names, rank="--rank" in sys.argv,
                                                 out=OUT / f"holdout_{tag}.parquet", verbose=not quiet, workers=workers,
-                                                rankmap=rm, calmap=cm)
+                                                rankmap=rm, calmap=cm, held=held)
         else:
             res = ho.run(systems, ctx, splits=splits, rank="--rank" in sys.argv, out=OUT / f"holdout_{tag}.parquet",
-                         verbose=not quiet)
+                         verbose=not quiet, held=held)
             gbdt_reports = [r for prior in (ctx.gbdt, ctx.mspi) if prior is not None
                             for r in getattr(prior, "reports", [])]
         print()

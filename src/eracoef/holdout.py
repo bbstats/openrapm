@@ -139,18 +139,36 @@ class Context:
         from .turnover import cached_table
         return cached_table(self)
 
-    def turn_table(self) -> pd.DataFrame:
-        """The window-pair teammate turnover table (turnover.window_pair_turnover) over the configured windows,
-        built once per Context from data/cache/teammates.parquet."""
-        if getattr(self, "_turn_table", None) is None:
+    def panel_frame(self, panel: str | None) -> pd.DataFrame | None:
+        """A role panel read once per Context: `panel` (a path relative to the root) or the configured one."""
+        if not panel:
+            return self.rpanel
+        cache = self.__dict__.setdefault("_panels", {})
+        if panel not in cache:
+            cache[panel] = pd.read_parquet(Path(self.cfg["_root"]) / panel)
+        return cache[panel]
+
+    def turn_table(self, panel: pd.DataFrame | None = None) -> pd.DataFrame:
+        """The window-pair teammate turnover table (turnover.window_pair_turnover), built once per Context per
+        window set from data/cache/teammates.parquet.  `panel`: its labels are the windows (a per-season panel
+        gives season-pair turnover, twice the contrast of the window pairs -- movers at 1.0, stayers at 0.36);
+        None = the configured windows."""
+        if panel is None:
+            wins = [(window_label(list(range(w[0], w[1] + 1))), list(range(w[0], w[1] + 1)))
+                    for w in window_seasons(self.cfg)]
+        else:
+            from .windows import label_seasons
+            wins = [(lab, label_seasons(lab)) for lab in sorted(panel.window.unique())]
+        key = tuple(lab for lab, _ in wins)
+        cache = self.__dict__.setdefault("_turn_tables", {})
+        if key not in cache:
             from .turnover import cached_table, window_pair_turnover
             tm = cached_table(self)
             if tm is None:
                 raise RuntimeError("data/cache/teammates.parquet is missing; run scratch/trade_turnover.py "
                                    "(turnover.build_teammates)")
-            wins = [(window_label(list(range(w[0], w[1] + 1))), list(range(w[0], w[1] + 1))) for w in window_seasons(self.cfg)]
-            self._turn_table = window_pair_turnover(tm, wins)
-        return self._turn_table
+            cache[key] = window_pair_turnover(tm, wins)
+        return cache[key]
 
     def prior(self, mode: str, target_col: str | None, params: dict, panel: str | None = None, features=None,
               win_decay: float = 1.0, turn: bool | str = False, folds: int = 0):
@@ -162,9 +180,7 @@ class Context:
         key = (mode, target_col, tuple(sorted((params or {}).items())), panel, fkey, float(win_decay), str(turn),
                int(folds or 0))
         if key not in self._priors:
-            rp = self.rpanel
-            if panel:
-                rp = pd.read_parquet(Path(self.cfg["_root"]) / panel)
+            rp = self.panel_frame(panel)
             if rp is None:
                 raise RuntimeError("outputs/role_panel.parquet is missing; run scripts/49_role_panel.py")
             from .gbdt_prior import GBDTPrior
@@ -172,7 +188,8 @@ class Context:
                 wgt = float(target_col[5:])
                 rp = rp.assign(**{target_col: wgt * rp["apm"].to_numpy(dtype=float) + (1.0 - wgt) * rp["rapm1"].to_numpy(dtype=float)})
             p = GBDTPrior(rp, self.cfg, mode=mode, target_col=target_col, features=features,
-                          win_decay=float(win_decay), turn=self.turn_table() if turn is True else None,
+                          win_decay=float(win_decay),
+                          turn=self.turn_table(None if not panel else rp) if turn is True else None,
                           pairs=(turn == "pairs"), teammates=self._teammates_or_none(), folds=int(folds or 0))
             p.params = dict(params or {})
             self._priors[key] = p
@@ -223,9 +240,16 @@ class Context:
             d += 1
         return sorted(out)
 
-    def labels(self, train) -> set:
-        """Window labels a prior must stay off: the training block's and the held-out season's."""
+    def labels(self, train, panel: pd.DataFrame | None = None) -> set:
+        """Window labels a prior must stay off: the training block's and the held-out season's.
+
+        `panel`: a role panel whose own labels are used instead of the configured windows, so a per-season
+        panel (scripts/49_role_panel.py --season) excludes exactly the seasons and not their 3-season
+        neighbours.  On a block panel the two agree by construction."""
         seasons = list(train) + ([self.current_h] if self.current_h is not None else [])
+        if panel is not None:
+            from .windows import labels_covering
+            return labels_covering(panel.window.unique(), seasons)
         return {self.win_of[s] for s in seasons}
 
     def design(self, seasons, target="pts", phases=("RS",), counter_cols=None, min_den=0.0) -> WindowData:
@@ -755,14 +779,16 @@ def _worker(job: dict):
 
 
 def run_parallel(ho: "Holdout", names: list, splits=(), rank: bool = False, out: Path | None = None,
-                 verbose: bool = True, workers: int = 4, rankmap=None, calmap=None) -> tuple[pd.DataFrame, pd.DataFrame | None, list]:
+                 verbose: bool = True, workers: int = 4, rankmap=None, calmap=None,
+                 held: list | None = None) -> tuple[pd.DataFrame, pd.DataFrame | None, list]:
     """`Holdout.run` over `workers` spawned processes, contiguous blocks of held-out seasons each, with the
     BLAS / numba thread count pinned to cpu_count // workers so the processes do not oversubscribe the
-    machine (the handoff's 20x trap).  Returns (results, rank rows or None, the GBDT drag reports)."""
+    machine (the handoff's 20x trap).  `held` restricts the held-out seasons (the search half, say).
+    Returns (results, rank rows or None, the GBDT drag reports)."""
     import multiprocessing
     from concurrent.futures import ProcessPoolExecutor
 
-    held = ho.seasons()
+    held = ho.seasons() if held is None else [int(h) for h in held]
     workers = max(1, min(int(workers), len(held)))
     threads = max(1, (os.cpu_count() or workers) // workers)
     chunks = [c.tolist() for c in np.array_split(np.asarray(held), workers)]

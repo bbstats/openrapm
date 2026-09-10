@@ -211,7 +211,11 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
                                "run scripts/49_role_panel.py")
         cfg = ctx.cfg
         s = cfg.get("spm", {})
-        exclude = ctx.labels(train)
+        # the panel this system's prior is trained on (`panel`, else the configured one).  Its OWN labels are
+        # what the exclusion set must name: a per-season panel excludes the block's seasons themselves, a block
+        # panel their windows, and on the block panel the two are the same set.
+        rpanel = ctx.panel_frame(panel)
+        exclude = ctx.labels(train, rpanel)
         if exp is None:
             exp = make_exposure(wd, mode="full", pad_target=cfg["pad_target"]).fit(wd.X, sample_weight=wd.w)
         # the in-season cut (inseason.py): the role inputs of a season the fit only partly saw are rebuilt from
@@ -226,8 +230,8 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
         if mode == "full" and set(sides) >= {"O", "D"}:
             off = np.zeros(2 * m)              # the GBDT replaces the SPM on both sides: no SPM fit needed
         else:
-            fo = fit_spm(ctx.rpanel, "O", exclude, pen=float(s.get("pen", 1.0)), min_poss=float(s.get("min_poss", 500)))
-            fd = fit_spm(ctx.rpanel, "D", exclude, pen=float(s.get("pen", 1.0)), min_poss=float(s.get("min_poss", 500)))
+            fo = fit_spm(rpanel, "O", exclude, pen=float(s.get("pen", 1.0)), min_poss=float(s.get("min_poss", 500)))
+            fd = fit_spm(rpanel, "D", exclude, pen=float(s.get("pen", 1.0)), min_poss=float(s.get("min_poss", 500)))
             off = spm_offset(fo, fd, inputs, poss_o, poss_d)
         if sides:
             t_d = target_d or target
@@ -296,11 +300,11 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
                         raise RuntimeError("data/cache/teammates.parquet is missing (turnover.build_teammates)")
                     f = familiar_share(tm, list(train), [int(ctx.current_h)], player_ids=wd.spec.ps_table["player_id"].to_numpy())
                     extra[TURN_FEATURE] = f.turnover.fillna(float(turn_ref)).to_numpy()
-            from .gbdt_prior import PAST, past_inputs
-            if wants & set(PAST):
+            from .gbdt_prior import PAST, PAST_ONC, PAST_ONC_CROSS, past_inputs
+            if wants & (set(PAST) | set(PAST_ONC) | set(PAST_ONC_CROSS)):
                 # his on-court record before the block, per side: every panel window before the excluded ones
                 ids = wd.spec.ps_table["player_id"].to_numpy()
-                extra = {s_: pd.concat([extra, past_inputs(ctx.rpanel, s_, exclude, ids)], axis=1) for s_ in ("O", "D")}
+                extra = {s_: pd.concat([extra, past_inputs(rpanel, s_, exclude, ids)], axis=1) for s_ in ("O", "D")}
             from .context import DEST_ALL, block_usage_apm, destination_inputs
             if wants & set(DEST_ALL):
                 # the destination: the target seasons' rosters (H for the criterion, the block's own for the board),

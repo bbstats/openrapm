@@ -16,7 +16,13 @@ reference systems' input, is asserted unchanged.
 
 --check   also fit APM at config spm.apm_check_lams and print the SPM coefficients side by side
           (outputs/csv/spm_lambda_check.csv); the coefficients must not depend on the APM penalty.
-usage: python scripts/49_role_panel.py [--check]
+--season  one row per player per SEASON instead of per 3-season window (HANDOFF 3.5): every window is
+          [s, s], the labels are "2004-2004", and the panel is written to outputs/role_panel_season.parquet
+          (--out= overrides).  Everything downstream reads the granularity off the labels themselves --
+          the exclusion set (holdout.Context.labels), the pair rows' turnover table (Context.turn_table)
+          and the PAST discount (gbdt_prior.past_decay_for) -- so a system takes it with panel=.
+--out=P   write the panel to P instead of the configured/default path.
+usage: python scripts/49_role_panel.py [--check] [--season] [--out=outputs/role_panel_x.parquet]
 """
 import hashlib
 import sys
@@ -30,9 +36,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from eracoef.config import load_config  # noqa: E402
 from eracoef.cv import plugin_fit  # noqa: E402
 from eracoef.design import FEATURES  # noqa: E402
-from eracoef.roles import RAW_INPUTS, build_roles, player_season_inputs, window_inputs  # noqa: E402
+from eracoef.bio import PLAYER_INPUTS, player_inputs  # noqa: E402
+from eracoef.roles import (CAREER_INPUTS, RAW_INPUTS, build_roles, career_inputs,  # noqa: E402
+                           player_season_inputs, window_inputs)
 from eracoef.spm import (apm_fit, apm_lambda_check, fit_spm, panel_inputs_report, season_of_units,  # noqa: E402
                          spm_predict)
+from eracoef.investigate import oncourt_rates
 from eracoef.windows import build_window, window_label, window_seasons  # noqa: E402
 from eracoef.dredge import DREDGE_LEAGUE_COLS, DREDGE_TOTAL_COLS, player_dredge_frame  # noqa: E402
 from eracoef.xshoot import (DEFENSE_TARGETS, SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS,  # noqa: E402
@@ -49,7 +58,16 @@ LAM_P, RAT_P = float(cfg["lam_plugin"]), float(cfg["lam_ratio_plugin"])
 CAP = float(cfg.get("roles", {}).get("share_cap", 0.9))
 CHECK = "--check" in sys.argv
 CHECK_LAMS = [float(x) for x in S.get("apm_check_lams", [30, 100, 300])] if CHECK else []
-PANEL_PATH = Path(cfg["_root"]) / cfg.get("paths", {}).get("role_panel", "outputs/role_panel.parquet")
+SEASON = "--season" in sys.argv
+WINDOWS = ([(s_, s_) for s_ in range(int(cfg["first_season"]), int(cfg["last_season"]) + 1)] if SEASON
+           else window_seasons(cfg))
+_out = [a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--out=")]
+PANEL_PATH = Path(cfg["_root"]) / (_out[0] if _out else
+                                   ("outputs/role_panel_season.parquet" if SEASON else
+                                    cfg.get("paths", {}).get("role_panel", "outputs/role_panel.parquet")))
+# a panel other than the shipped one names its own reports, so a --season build does not overwrite the
+# block panel's spm_coefs.csv / role_panel_report.csv
+TAG = "" if PANEL_PATH.stem == "role_panel" else "_" + PANEL_PATH.stem.replace("role_panel_", "")
 XP = OUT / "xrapm_panel.parquet"
 h_before = hashlib.sha256(XP.read_bytes()).hexdigest() if XP.exists() else None
 
@@ -70,7 +88,7 @@ def designs(seasons):
 # ------------------------------------------------------------------ pass 1: APM and the inputs
 t0 = time.time()
 parts = []
-for w in window_seasons(cfg):
+for w in WINDOWS:
     seasons = list(range(w[0], w[1] + 1))
     lab = window_label(seasons)
     wd_o, wd_d = designs(seasons)
@@ -78,6 +96,7 @@ for w in window_seasons(cfg):
     season = season_of_units(wd_o)
     sf = player_shot_frame(seasons, cfg, wd_o.spec.ps_table["player_id"].to_numpy())
     df_ = player_dredge_frame(seasons, cfg, wd_o.spec.ps_table["player_id"].to_numpy())
+    onc = oncourt_rates(wd_o, wd_d)
     for side, wd in (("O", wd_o), ("D", wd_d)):
         a = apm_fit(wd, cfg)
         R = a["ro"] if side == "O" else a["rd"]
@@ -100,6 +119,12 @@ for w in window_seasons(cfg):
         # turnovers, loose-ball and technical fouls (dredge.py; gbdt_prior.add_dredge makes the features)
         for c in DREDGE_COLS_ALL:
             d[c] = df_[c].to_numpy(dtype=float)
+        # his LUCK-ADJUSTED on-court ratings (the owner, 2026-09-09), both sides on every row like
+        # PAST_CROSS: the possession-weighted mean of the free-throw-adjusted target over the rows he was
+        # on offense for, and of the opponent-three-adjusted one over the rows he defended, each centred
+        # on the window's own level.  Biased by his teammates and far less noisy than `apm` beside it.
+        for c in ("onc_o", "onc_d", "onc_poss_o", "onc_poss_d"):
+            d[c] = onc[c].to_numpy(dtype=float)
         d["poss"] = a["poss_o"] if side == "O" else a["poss_d"]
         for c in RAW_INPUTS:
             d[c] = inp[c].to_numpy()
@@ -130,7 +155,7 @@ for lab in sorted(P.window.unique()):
         P.loc[sel, "spm"] = g
         coef_rows.append(fit.table().assign(window=lab, n=fit.n))
 coefs = pd.concat(coef_rows, ignore_index=True)
-coefs.to_csv(OUT / "csv" / "spm_coefs.csv", index=False)
+coefs.to_csv(OUT / "csv" / f"spm_coefs{TAG}.csv", index=False)
 print("\n=== Simple SPM coefficients per unit of the raw input, mean over the leave-one-out fits (raw sign)")
 print(coefs.pivot_table(index="input", columns="side", values="coef_raw", aggfunc=["mean", "std"]).round(4).to_string())
 
@@ -147,7 +172,7 @@ if CHECK:
 
 # ------------------------------------------------------------------ pass 3: RAPM_1 with the SPM as the offset
 P["u"], P["a"] = 0.0, 0.0
-for w in window_seasons(cfg):
+for w in WINDOWS:
     seasons = list(range(w[0], w[1] + 1))
     lab = window_label(seasons)
     wd_o, wd_d = designs(seasons)
@@ -170,8 +195,27 @@ for w in window_seasons(cfg):
     del wd_o, wd_d
 P["rapm1"] = P["spm"] + P["u"]
 
+# ------------------------------------------------------------------ pass 4: the joined columns (no fit)
+# what he had behind him before the window's first season (roles.career_inputs) and what does not change
+# with a season at all (bio.player_inputs: height, weight, draft slot, tenure, teams).  A join on the panel's
+# own keys -- scratch/add_career_cols.py and scratch/add_bio_cols.py did this to the shipped panel after the
+# fact; doing it here is what makes a panel reproducible from one command, --season included.
+for c in [*CAREER_INPUTS, *PLAYER_INPUTS]:
+    P[c] = np.nan
+for w in WINDOWS:
+    seasons = list(range(w[0], w[1] + 1))
+    sel = P.window == window_label(seasons)
+    ids = P.loc[sel, "player_id"].to_numpy()
+    ci = career_inputs(inputs, seasons[0], ids, age=P.loc[sel, "age"].to_numpy())
+    P.loc[sel, CAREER_INPUTS] = ci[CAREER_INPUTS].to_numpy(dtype=float)
+    P.loc[sel, PLAYER_INPUTS] = player_inputs(cfg, roles, seasons, ids)[PLAYER_INPUTS].to_numpy(dtype=float)
+assert P[[*CAREER_INPUTS, *PLAYER_INPUTS]].notna().all().all(), "some rows got no career or player inputs"
+print(f"  pass 4: career and bio columns joined, mean {P.exp_yrs.mean():.2f} seasons behind a row, "
+      f"height {P.loc[P.side == 'O', 'height'].mean():.1f} in ({time.time() - t0:.0f}s)", flush=True)
+
 cols = ["window", "side", "player_id", "ps_idx", "season", "poss", *FEATURES,
         *[f"raw_{c}" for c in FEATURES], *SHOT_COLS_ALL, *DREDGE_COLS_ALL, *RAW_INPUTS,
+        *CAREER_INPUTS, *PLAYER_INPUTS,
         "apm", "spm", "u", "a", "rapm1"]
 P[cols].to_parquet(PANEL_PATH, index=False)
 if h_before is not None:
@@ -179,7 +223,7 @@ if h_before is not None:
 
 rep = panel_inputs_report(P)
 print("\n=== per window and side: possession-weighted sd of apm, spm, u and rapm1 (points per 100)")
-print(rep[["window", "side", "n", "apm_sd", "spm_sd", "u_sd", "rapm1_sd", "share_mean", "gs_pct_mean", "age_mean"]]
+print(rep[["window", "side", "n", "apm_sd", "spm_sd", "u_sd", "rapm1_sd", "poss_pct_mean", "gs_pct_mean", "age_mean"]]
       .round(3).to_string(index=False))
-rep.to_csv(OUT / "csv" / "role_panel_report.csv", index=False)
-print(f"\nwrote {PANEL_PATH.relative_to(cfg['_root'])} ({len(P)} rows) and outputs/csv/spm_coefs.csv  ({time.time() - t0:.0f}s)")
+rep.to_csv(OUT / "csv" / f"role_panel_report{TAG}.csv", index=False)
+print(f"\nwrote {PANEL_PATH.relative_to(cfg['_root'])} ({len(P)} rows) and outputs/csv/spm_coefs{TAG}.csv  ({time.time() - t0:.0f}s)")

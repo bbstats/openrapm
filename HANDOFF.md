@@ -1,6 +1,87 @@
+# Handoff: the playoff delta works; the luck adjustment works on teams and not on players
+
+**Latest, 2026-09-09 (FINDINGS 38).**  A rating can be the prior for another rating: the regular-season
+number becomes the OFFSET for a fit on playoff possessions, so that fit's residual is the playoff DELTA and
+no playoff box score is needed.  Penalty chosen on five blocks and read on five: **-0.459 per 100 at z -2.16
+on held-out playoff games and -0.508 at z -2.27 on attribution**, surviving a per-side slope refit.  The
+delta's spread is 0.21 against 2.43 for the ratings, and its extremes are Robert Horry twice and the 2011
+Mavericks at the top, Chris Paul and DeRozan at the bottom.  Three fixes made it possible and two were bugs
+in shared code (the exposure always filtered to RS; the unpenalized fixed block goes singular on a one-phase
+design).  `scripts/63_playoff_delta.py`; not published.  Start at 3.16.
+
+---
+
+# Handoff: the luck adjustment is measured end to end -- it works on teams, not on players
+
+**Latest, 2026-09-09 (FINDINGS 35-37).**  Every rate now has a measured skill share on each side and no
+constant is chosen; `scratch/forward.py` tests an adjustment directly (first half of a team's season
+predicts its second, 1,784 team-seasons, no ratings pipeline).  **Team level: it works**, -6.6% offense and
+-10.4% defense.  **Player level: nothing survives the calibration map**, and the audit of every claim in the
+pass (36.6) withdrew one, corrected one number and left five rejections standing.  The shipped constants
+come out RIGHT: the four REML penalty ratios match the independent measurement to the digit on eFG, and the
+per-factor defence is flat on the current board either way, so the zone split was not built.  `config.yaml`
+is unchanged, ten of ten floors.  **Two rulings wait for the owner (3.15); what is left is attribution, not
+luck adjustment.**  Start at 3.15.
+
+---
+
+# Handoff: the luck adjustment works at team level, does not survive the map at player level
+
+**Latest, 2026-09-09 (FINDINGS 35-36).**  Every rate a possession's points depend on now has its own
+measured shrinkage constant on each side (`teamloo.RATE_SPECS`, `skill_table`), nothing is a chosen number,
+and `scratch/forward.py` tests an adjustment DIRECTLY -- first half of a team's season predicts its second
+half, 1,784 team-seasons, no ratings pipeline in the way.  **At team level it works**: shrinking the
+outcome rates and leaving the style rates alone removes 6.6% of the forward error on offense and 10.4% on
+defense.  **At player level it does not.**  Handing a defense back its real three-point signal is
+monotonically worse, because 0.59 points of team spread will not split five ways against a season's noise;
+and the offensive version's apparent -0.21 per 100 is **-0.024 at z -0.63 once the shipping map is fitted**
+(36.5, and the new trap: never quote an unmapped gain).  `config.yaml` is unchanged and the board rebuilds
+to ten of ten floors.  What is left on the table is the in-season ATTRIBUTION gain, -0.163 at z -3.12, a
+ruling for the owner under 26.5.  Start at 3.15.
+
+---
+
+# Handoff: what a single-season ridge actually weighs, and the team-game luck adjustment that does not replicate
+
+**Latest, 2026-09-09 (FINDINGS 34): the single-season penalty does NOT pick the box score, and a luck
+adjustment cannot change what it weighs.**  The owner asked for a lambda that does not collapse onto the
+prior.  Measured (`scratch/lamshare.py`, the `ls_<target>_x<mult>` systems, both in-season instruments):
+every target's optimum is x0.5 of the block penalty, INTERIOR, and there a single-season rating is 20%
+on-court evidence on offense and 44% on defense -- the criterion's own answer, not a degeneracy, and it
+tracks the prior's quality (offensive prior sd 1.44 -> 20%, defensive sd 0.80 -> 44%).  The shipped season
+board already sits at x0.5.  **The luck-adjusted target has the SAME argmin and a LOWER share (16.4%)**:
+removing variance from the target removes signal and noise together, so it buys a better level, never a
+bigger share.  **The one actionable thing: between x0.25 and x1 both instruments are flat (z -0.13 and
+z -0.26) while the offensive evidence share goes 10% -> 33%.**  Three times the on-court content for a
+difference neither instrument can see, so that is a product choice and it is nearly free.  Start at 3.14.
+
+---
+
+# Handoff: the team-game luck adjustment is built and answered; the board is unchanged
+
+**Latest, 2026-09-09 (FINDINGS 33): the owner's single-season, leave-one-out luck adjustment does not
+replicate.**  `src/eracoef/teamloo.py` builds a team's shooting rates from its OTHER games (rebalanced
+leave-one-out, Austin/Pe'er/Korem 2025) and moves each game's makes toward them.  A pre-registered ladder
+was read rung by rung: free throws at team level recover 5% of the shipped free-throw gain (the constant
+is 297 attempts against a shooter's 24, so it forgets WHO shot); the two-point term costs +2.28 per 100;
+the three-point term wins the search half at -0.170 (z -2.8) and gives back two thirds of it on the
+confirm half (-0.055, z -0.90), while being significantly worse at stint level there.  Part 0 ruling 1
+applies: not shipped, `config.yaml` untouched.  Start at Part 3.13.  What is worth keeping is the
+instrument -- `scripts/62_teamloo.py` answers "which stats predict this game" from ONE season with no
+panel and no prior, and independently confirms that a defence controls 0.85 of opponent two-point
+percentage, 0.20 of three-point and 0.04 of free-throw.
+
+---
+
 # Handoff: the rating is in-season now -- a rolling kernel anchored on the season being rated, and two instruments that separate predicting from crediting
 
-**Built 2026-09-08, latest (FINDINGS 31): the season board.**  A rating is now ANCHORED at a season and fit
+**Latest, 2026-09-09 (FINDINGS 32): single-season targets are built and the prior cannot take them.**  The
+per-season role panel exists (`49_role_panel.py --season`) and every consumer reads the granularity off the
+panel's labels, but a prior trained on one-season feature lines and applied to three-season ones is
+attenuated -- half its spread on defense -- and costs +0.52 per 100 (z 4.4) on the board and +0.13 to +0.62
+in season.  Start at Part 3.12; what survives is cross-panel pair rows (block features, season targets).
+
+**Built 2026-09-08 (FINDINGS 31): the season board.**  A rating is now ANCHORED at a season and fit
 on that season and the two before it, the earlier ones halved and quartered (`kernel = {0: 1, -1: 0.5,
 -2: 0.25}`), with nothing after it in the fit -- so the latest row is a rating of the season in progress and
 `scripts/60_season_board.py` re-run updates it.  `src/eracoef/inseason.py` is the module; two new fields on
@@ -32,7 +113,7 @@ level is ~94% noise floor and its paired differences are real -- the season boar
 player signal a lineup model can see, the chunk board 45%; the ridge holds a tenth of what is left (x0.25-x0.5
 optimal on both instruments); the prior reads a player's other windows off his rate fingerprint and closing
 that channel (`GBDTPrior folds`) is flat on the criterion -- kept as an instrument, not shipped.  **Tree state:
-committed on `hybrid-and-xpts` and merged to `main`; 148 passed, 1 xfailed.**  Start at Part 3.11.
+committed on `hybrid-and-xpts` and merged to `main`; 148 passed, 1 xfailed.**
 
 ---
 
@@ -278,6 +359,7 @@ feature lists on either side -- without touching `config.yaml` permanently.
 | **`src/eracoef/investigate.py`** / **`scripts/57_investigate.py`** / `scratch/investigate_cmp.py` | **the investigator (27)**: `residual_ridge` (the same-four question of every lineup at once), `on_court`, `lineups`, `season_table`, `pooled`, and **`attributable`, the second score**.  `57_investigate.py [--system=] [--lam=2000] [--min-poss=1000] [--top=20]` runs the shipped board over the 28 held-out seasons in a minute and writes `outputs/investigate_*`; `investigate_cmp.py <sys1> <sys2> ...` pairs tracked systems on the score.  `tests/test_investigate.py` (4) |
 | **`src/eracoef/bio.py`** | **who he is (26)**: `player_bio(cfg)` (height, weight, draft_pick per player from `data/raw/bio`, cached at `data/cache/bio.parquet`), `season_tenure` / `tenure_inputs(roles, seasons, ids, exclude_seasons=)` (tenure with his main team, teams in the window; the held-out season skipped), `player_inputs`; `gbdt_prior.BIO_BINS` bins height and weight in both paths.  Panel columns via `scratch/add_bio_cols.py` (backup `.bak5`); `chain_offset` builds them from the training block.  `tests/test_bio.py` (5) |
 | `xshoot.expected_threes(seasons, cfg, wd)` | each row's expected opponent threes at the shooters' padded other-half rate: x3def's repricing as a function, used by `def_three_design` and by the repriced eFG factor |
+| **`src/eracoef/teamloo.py`** / **`scripts/62_teamloo.py`** | **the team-game leave-one-out target (33)**: `team_games` (per-season team-game counters, cached, `keep=` for the cut), `loo_rates` (rebalanced LOO per team and side; `rebalance=label|rate|none`), `estimate_k` (tau2 four ways -- rebalanced, plain, split-half, method of moments; `K_SOURCE="mom"` because rebalancing OVER-corrects a moment), `adjusted_rates` (through `pad.shrink` only), `matchup_regression` (the owner's fit, and the per-team-game predictive net rating), `team_design` (the stint target; its closure is a TEAM-GAME identity, not a row one) and the 25-name ladder in `TARGETS` / `TARGET_COLUMNS`, registered through `fastfit.target_y`.  `62_teamloo.py [first] [last] [--csv] [--cut=q]` prints the constants, the regression and eight gates.  `tests/test_teamloo.py` (24).  **Answered no (33.6); the instrument is what is worth keeping** |
 | **`src/eracoef/inseason.py`** | **in season (31)**: `season_rank` / `season_frac`, `kernel_game_mult` (one per-game weight array for the kernel AND the cut), `keep_games`, `anchor_of` (= max(train)), `KernelSystem` (its own `train_for`: the anchor and the seasons its kernel names, zero-weighted ones kept so every kernel excludes the same windows), `BlockSystem` (the last FINISHED window before the season -- the in-season chunk baseline).  `tests/test_inseason.py` (16) |
 | `fastfit.MspiFast(kernel=, cut=)` | the two fields that carry it; `holdout.cut_season`, `Holdout.run`'s `train_for` hook and the `cut` result column; `calmap.SeasonFrame(cut=)` / `cut_of` / `train_of`; `roles.cut_role_inputs` and `window_inputs(psx_weights=)`; `spm.season_of_units(weights=)` and `cut_inputs_cached`; `xshoot.season_totals(keep=)` down every path |
 | **`scratch/inseason_run.py`** | **the in-season instrument**: every kernel at every cut, dumped once per cut, mapped leave-one-season-out, read on BOTH instruments with a paired z.  `--systems= --cuts= --held=all\|search\|confirm --tag= --reuse` |
@@ -311,6 +393,12 @@ feature lists on either side -- without touching `config.yaml` permanently.
 .venv/Scripts/python scratch/pairsys.py tune501_b7 <cand> [<cand2> ...]       # the z over 28 seasons
 .venv/Scripts/python scratch/ship_try2.py TAG blend0.7 rapm1 <system> [--od --dshot --drd=...]
 .venv/Scripts/python scripts/08_ratings.py && .venv/Scripts/python -m pytest tests/test_vs_consensus.py -q
+```
+and, for the team-game luck adjustment (33):
+```
+.venv/Scripts/python scripts/62_teamloo.py 1997 2026 --csv      # the constants, the regression, the gates, 40 s
+.venv/Scripts/python scripts/45_holdout.py --systems=tune501_b7_pasto_pOD,tune501_b7_pasto_pOD_tlxft3o_O     --k=3 --held=search --ref=tune501_b7_pasto_pOD --tag=tl      # 25 s; --held=confirm for the other half
+.venv/Scripts/python scratch/inseason_run.py --systems=ks52_lam05,ks52_lam05_tlxft3o_O     --cuts=0.25,0.5,0.75 --held=search --ref=ks52_lam05 --tag=tl  # both in-season instruments, 115 s
 ```
 and, for the in-season work (31):
 ```
@@ -407,20 +495,207 @@ expensive part is deciding it was worth measuring.
   criterion is not settled until `investigate_cmp.py` has read it; one that reads zero on both is.
 - **The tracker's `seconds` for a system that computes shooter rates or REML per fit runs 4-7x the board's**
   (ffx 427 s against 58 s); measure the winner alone before quoting a time.
+- **The paper's fix for leave-one-out bias belongs in the REGRESSION, not in the moment estimate** (33.2).
+  The within-team term is exact -- `p_loo(j) - pbar == -n_j (p_j - pbar) / (S_n - n_j)` -- and it cancels
+  against the sampling noise in the team's own mean, so a plain-LOO covariance is already close to unbiased
+  for a between-team variance and REBALANCING OVER-CORRECTS IT by 9-23%.  The same rebalancing is worth
+  15-20 points of coefficient in the regression.  Ask which quantity the bias is corrupting before applying
+  a correction to both.
+- **A luck-adjusted target's closure can be a TEAM-GAME identity while every row moves** (33.4).  `teamloo`
+  at zero shrinkage returns actual points per team-game to 1e-13 and still changes every stint of that game,
+  because it has spread the game's makes over its attempts.  A gate that aggregates cannot see what the
+  target did to the rows the ridge actually reads.
+- **A search-half gain at z -2.8 can be two thirds noise** (33.6): -0.170 on the search half, -0.055 on the
+  confirm half, and significantly WORSE at stint level there.  Run the confirm half before believing any
+  candidate, and read the stint column even when game level decides.
+- **An unmapped criterion gain can be entirely absorbed by the shipped calibration map** (36.5).  A target
+  that changes a side's AMPLITUDE shows a large gain in `45_holdout.py` and none at all once the map is
+  fitted: the offensive three-point target read -0.21 per 100 unmapped and -0.024 at z -0.63 mapped, because
+  a per-side calibration curve is exactly what corrects amplitude and it got there first.  **Run
+  `54_track.py` then `scratch/pairsys.py` before quoting any number as a gain**, never `45_holdout.py`
+  alone; Part 1's table has always been mapped and that is the convention a candidate must be read in.
+- **The two instruments answer different questions and are allowed to disagree** (36.1 vs 35.3).  A luck
+  adjustment that improves TEAM-level forward prediction need not survive attribution to five players: a
+  defense's real 0.59 points of three-point spread is a team property and handing it back to the ridge is
+  monotonically worse.  `scratch/forward.py` asks the first question in an afternoon, the criterion the
+  second; a candidate needs both, and neither substitutes for the other.
 - Long bash heredocs still fail in this shell; write patch scripts with the Write tool.
 
 ## Part 3: the next pass
+
+### 3.16 DONE 2026-09-09: the playoff delta (FINDINGS 38)
+
+**A rating as the prior for another rating.**  `playoffs.playoff_system(inner)` gives `inner` back with
+`phases=("PO",)` and `prior_from=RegularSeasonPrior(inner)`: the regular-season rating becomes the OFFSET of
+a fit that sees only playoff possessions, so the fit's residual IS the playoff delta and no playoff box
+score is needed anywhere.  `scripts/63_playoff_delta.py` writes `outputs/playoff_delta.parquet`;
+`scratch/playoff_chain.py` is the test.
+
+**It works and it replicates.**  Playoff games alternate A/B within a series, so fitting the update on one
+half and scoring the other holds teams, series and lineups fixed.  Penalty chosen on five blocks, read on
+the other five: **x2 the regular-season penalty, -0.459 per 100 at z -2.16 on the confirm half and -0.508 at
+z -2.27 on ATTRIBUTION.**  It survives a per-side slope refit (-0.312), so it is ranking and not amplitude --
+which is what FINDINGS 36's candidate failed.  The delta's spread is 0.21 against 2.43 for the ratings.
+
+**The extremes are Robert Horry twice, Jason Terry, Dirk and Barea from the 2011 Mavericks at the top, and
+Chris Paul, DeRozan and Giannis at the bottom.**  No narratives were given to the method.
+
+**Three fixes went in to make it possible, two of them bugs in shared code:** `MspiFast.prior_from`;
+`BoxExposure(phases=)`, because the exposure filtered to `phase == "RS"` ALWAYS and a playoff-only design
+therefore had zero exposure; and dependent-column detection in `Moments`, because `is_po` is constant and
+`po_home` duplicates `home` on a one-phase design, which left the unpenalized block singular and the solve
+returning 1e12.  `MspiFast.half` fits one half of the games so the other can score it.
+
+**Not published.**  The site does not carry the delta.  Open: per-SEASON deltas (thinner still, untested)
+and whether the playoff delta belongs beside the season board or as its own view.
+
+### 3.15 DONE and answered 2026-09-09: the luck adjustment, end to end (FINDINGS 35-37)
+
+**Do not start here.**  Three passes, all measured, all committed, nothing shipped, `config.yaml` unchanged
+and the board rebuilds to ten of ten floors.
+
+**What was built and is worth keeping.**  `teamloo.RATE_SPECS` puts every rate a possession's points depend
+on -- three make rates by zone, free throws, turnovers, offensive rebounds, the shot mix, the foul rate --
+through ONE estimator on each side, so no constant is chosen any more (`skill_table` reports the true spread
+and the real share at any sample size).  `teamloo.possession_points` turns rates into points per 100 and
+closes to 0.5% across eras.  **`scratch/forward.py` is the instrument that should have existed years ago**:
+first half of a team's season predicts its second half, 1,784 team-seasons, no ratings pipeline in the way,
+scored so that generic shrinkage cannot win.
+
+**What it says.**  At TEAM level the adjustment works -- shrinking the outcome rates and leaving the style
+rates alone removes 6.6% of forward error on offense and 10.4% on defense.  At PLAYER level none of it
+survives the calibration map (36.5/36.6).  The two are not in conflict: a defense's 0.59 points of true
+three-point spread is a team property that will not divide five ways against a season of noise.
+
+**And the shipped constants are right, confirmed independently.**  The four `FACTOR_LAMS` ratios REML chose
+in FINDINGS 15 match the split-half measurement (eFG 1.50 against 1.50); `x3def`'s premise matches
+squared2020's tracking-based analysis (35.6); the per-factor defensive residual is flat on the current board
+with either set of penalties (37.2), so the zone split was NOT built.
+
+**Two rulings waiting for the owner**, both because the data genuinely cannot settle them:
+1. **The penalty strength** (34.3): between x0.25 and x1 both instruments read zero while the offensive
+   evidence share moves 10% -> 33%.  A product decision, and nearly free.
+2. **The in-season attribution candidate** (36.3): the offensive three-point target is **-0.163 on the
+   investigator at z -3.12 over 12 of 14 seasons** with prediction flat.  Under 26.5 that is a ruling, not
+   a rejection.
+
+**Never re-run:** the team-level free-throw target (indistinguishable from no adjustment at all, 36.6); any
+two-point replacement (+1.63 mapped); on-court ORTG/DRTG in the prior (+0.05, z 2.22); giving a defense back
+ALL its realised threes (+0.25, z 3.25).  **Free either way:** a defense keeping up to a quarter of them.
+
+### 3.14 DONE and answered 2026-09-09: what a single-season ridge weighs (FINDINGS 34)
+
+The owner's question -- does single-year prior-informed RAPM just pick the box score -- is measured and the
+answer is no, with a caveat that is worth more than the answer.
+
+**The instruments.**  `scratch/lamshare.py [--seasons=] [--targets=ship,pts,tl3] [--mults=] [--kernel=00|52]
+[--csv]` decomposes any fit into the prior it was handed and the residual the ridge kept, and reports
+`share = var(rating - prior) / var(rating)` per side.  It is a decomposition, not a criterion, and a fit is
+under a second.  `train_for` builds the seasons a kernel names -- handing a kernel system `[season]` alone
+silently turns it into the one-season kernel, which is how this script first reported ks52 and ks00 as
+identical.  The `ls_<target>_x<mult>` systems (systems.py) cross five targets with eight penalties on the
+one-season kernel so `scratch/inseason_run.py` can score the same grid.
+
+**What it says.**  Interior optimum at x0.5 for every target, on prediction AND attribution.  There: 20%
+evidence on offense, 44% on defense.  x1 (the block board's penalty) halves that and predicts slightly
+worse.  The luck-adjusted target does not move the argmin and lowers the share.
+
+**The caveat, and it is the finding.**  Between x0.25 and x1 both instruments are FLAT (z -0.13 prediction,
+z -0.26 attribution) while the offensive evidence share moves 10% -> 33%.  The criterion cannot choose here,
+which is memory trap 4 exactly.  If the product should lean less on the box score, x0.25 is nearly free --
+but it must be chosen as a product decision and said to be one, not read off the criterion.
+
+**Not done:** whether x0.25 holds up on the confirm half, and whether the block board wants the same move.
+
+### 3.13 DONE and answered 2026-09-09: the team-game leave-one-out target (FINDINGS 33)
+
+**Do not start here.**  The owner's single-season luck adjustment is built, measured on both halves of
+the protocol, and the answer is no.  What follows is what exists and what the result rules out.
+
+**What was built.**  `src/eracoef/teamloo.py`: the per-season team-game table (`team_games`, cached at
+`data/cache/teamloo/`, `keep=` for the in-season cut), rebalanced leave-one-out rates per team and side
+(`loo_rates`, the rule of Austin/Pe'er/Korem 2025), the shrinkage constant four ways (`estimate_k`;
+`K_SOURCE = "mom"`), the blended rates (`adjusted_rates`, through `pad.shrink` and nothing else), the
+owner's matchup regression (`matchup_regression`, with the per-team-game predictive rating as its fitted
+value) and the stint-level target (`team_design`).  A 25-name ladder registers through `TARGETS` and
+`fastfit.MspiFast.target_y` -- the same callable hook `xshoot.DEFENSE_TARGETS` uses, so the in-season
+`keep` travels down it unchanged.  `scripts/62_teamloo.py` is the report and its own sanity gates;
+`tests/test_teamloo.py` is 24 cases.  Nothing here reads a second season.
+
+**The result.**  Against `tune501_b7_pasto_pOD`, K = 3, team-game level:
+
+| | search half | confirm half |
+|---|---|---|
+| free throws at the team rate (`_tlfto`) | +0.438 (z 3.7) | not run -- it failed its gate |
+| **shooter free throws + team-LOO threes, offence (`_tlxft3o_O`)** | **-0.170 (z -2.8, 11/14)** | **-0.055 (z -0.90, 9/14)** |
+| the same at stint level | +0.108 (z 1.1) | **+0.258 (z 3.6, 3/14)** |
+| plus the two-point term (`_tlxft32o`) | +2.276 (z 6.6, 0/14) | not run |
+| the matchup prior (`_tlxft3b`) | +0.010 (z 0.1) | not run |
+
+In season (`ks52_lam05`, cuts 0.25/0.5/0.75) it is -0.059 / -0.030 / -0.006 on prediction (z -1.1 to
+-0.1) and zero on attribution at every cut.
+
+**It does not replicate.**  Part 0 ruling 1 applies and the candidate is not shipped; `config.yaml` is
+untouched and the board is unchanged.
+
+**Why, in one paragraph, and it generalises.**  The constant decides everything.  A team's free-throw
+percentage pads with k = 297 attempts against a shooter's 24, so the team-level free-throw term prices a
+90% shooter and a 60% shooter identically and recovers 5% of the shipped free-throw gain -- between-shooter
+variance IS the gain.  A team's two-point percentage is 85% defended (33.3) and 6% of a game's own rate
+survives the blend, so replacing it deletes shot-making, +2.28 per 100.  Three-point percentage is the one
+place the premise holds -- a defence controls a fifth of it -- and `x3def` already removes that luck from
+the defensive half, which is why the defensive rung reads exactly zero (-0.004) and only the offensive one
+moves at all.  There was about a tenth of a point there and it did not survive the confirm half.
+
+**What is worth keeping** is the instrument, not the target: `62_teamloo.py` answers "which stats predict
+this game" from one season of play-by-play with no panel and no prior, and three of its readings confirm,
+independently, things the project believed on other evidence (what a defence controls; that the plain-LOO
+moment estimate is nearly unbiased while the regression coefficient is badly attenuated; that a target's
+gates cannot tell you whether it should be the target).  If the single-season direction is picked up
+again, the next thing to try is NOT another make-rate replacement -- it is the possession-level pieces the
+ladder never touched (turnovers and offensive rebounds are still fully realised in every rung above).
+
+### 3.12 DONE and answered 2026-09-09: single-season targets are built, and the prior cannot take them (FINDINGS 32)
+
+**Do not start here; 3.5 is answered.**  `scripts/49_role_panel.py --season` builds
+`outputs/role_panel_season.parquet` (29,138 rows, 68 s) and every consumer reads the granularity off the
+panel's own labels -- the exclusion set (`Context.labels(train, panel)`), the pair rows' turnover table
+(`Context.turn_table(panel)`, 112,068 season pairs) and the PAST discount (`gbdt_prior.past_decay_for`,
+which holds the reach in YEARS constant).  Systems `sp_pasto_pOD` / `spy_pasto_pOD` and
+`sp_ks52_lam05` / `spy_ks52_lam05` take it with `panel=`.  The block board is byte-identical.
+
+**It loses on both instruments, everywhere.**  Search half, K = 3: **+0.52 per 100 at team-game level
+(z 4.4, 2 of 14)** on the block board, and in season +0.62 / +0.44 / +0.24 / +0.13 at the four cuts with
+attribution +1.27 / +0.84 / +0.48 / +0.35.  Ten times the size of a normal win, and the two `win_decay`
+conventions agree, so the unit is not it.
+
+**Why, and this is the part worth keeping.**  The prior is trained on ONE-season feature lines and applied
+to THREE-season ones, so it is attenuated: `--spread` says the season-panel prior's possession-weighted sd
+is 0.92 and 0.81 of the shipped one on offense and **0.66 and 0.51 on DEFENSE**, where the box score's
+signal is weakest and attenuates first.  That also explains the monotone shrink with the cut.
+
+**The one thing left of 3.5**, and it is a real candidate: CROSS-PANEL pair rows -- the feature line from the
+block panel, the target from the season panel.  It keeps the season turnover contrast, the per-season PAST
+and seven times the rows, and removes the mismatch this pass measured.  It needs a leakage guard the current
+`pair_rows` does not have (a target season inside the feature window, or inside a window the PAST sums
+over), which is why it was not built here.
+
+**Also new and reusable:** `49_role_panel.py` joins the career and bio columns itself (a panel is
+reproducible from one command, not 49 plus two scratch scripts), `--out=` writes any panel path, and
+`45_holdout.py --held=search|confirm` implements the 22.7 protocol directly.  Tree: committed on
+`hybrid-and-xpts`; 154 passed, 1 xfailed.
 
 ### 3.11 DONE 2026-09-08: in season -- the kernel, the cut, and the season board (FINDINGS 31)
 
 Built and measured; the season board ships beside the block board and the block board is untouched.  What is
 left, in the order the instruments point:
 
-1. **Per-season targets for the prior** (3.5, now the binding constraint).  The role panel is still one row
-   per player per DISJOINT window and the prior's target is his OTHER windows, so the coarsest thing in an
-   in-season rating is the prior.  Season pairs also give the trade delta twice the contrast (24.6).
+1. ~~**Per-season targets for the prior** (3.5).~~  DONE and answered 2026-09-09, section 3.12: the panel is
+   built and the prior cannot take it (+0.52 per 100, z 4.4; attenuated, worst on defense).  What is left of
+   it is cross-panel pair rows -- block features, season targets -- with a leakage guard.
 2. **A cut-aware `PAST`**: `past_apm` is his record up to the block, not up to today.  In season it should be
-   his record up to the cut, which the panel cannot express either -- the same rebuild as 1.
+   his record up to the cut.  The season panel expresses it now (3.12), but only through a prior the
+   criterion refuses; on the block panel it is still the same rebuild as 1.
 3. **The kernel by exposure**: a player with 200 possessions this season wants more of his past than a
    starter does.  `lam_buckets` is the machinery and the kernel is currently one number for everyone.
 4. **Not measured**: playoff rows in a kernel fit (the anchor season's playoffs are weighted 0 whenever the
@@ -436,7 +711,8 @@ left, in the order the instruments point:
    instrument (`scratch/foldtest.py`) kept.  `scripts/61_credit.py` is the credit-against-forecast report
    (its `credit %` column is the naive, noise-diluted share; read 31.8 before quoting it).
 
-**Start at 3.5 or 3.2b.**  3.0 is done and 3.2 is measured (both below).  3.2 as written -- per-factor
+**Start at 3.2b, or at the cross-panel pair rows of 3.12.**  3.5 is answered (3.12: no), 3.0 is done and
+3.2 is measured (both below).  3.2 as written -- per-factor
 shrinkage with the points prior shared out -- does not unlock 22.7's 0.14; it loses.  What survives of it is a
 measured -0.11 for per-factor shrinkage WITHOUT a prior, which 3.2b (per-factor priors, FINDINGS 25.6) would
 build on; 3.5 (single-season targets) is the product direction and the thing that makes 24's trade delta
@@ -685,7 +961,10 @@ exposure groups).  This is the mechanism that would let the prior carry the benc
 stars -- the failure mode the criterion has complained about since FINDINGS 19, and the way to take the
 defensive bag's width back out (3.3).
 
-### 3.5 Single-season targets, and getting off chunks
+### 3.5 DONE and answered 2026-09-09 (FINDINGS 32, HANDOFF 3.12): single-season targets lose
+
+*The section as it stood before it was built, kept for the record:*
+
 
 Train the prior on single-season APM instead of three-season: more rows, noisier each, and a step toward the
 continuous rating the product is going to (0.2).  It is also the only change that would break the pooled-target
