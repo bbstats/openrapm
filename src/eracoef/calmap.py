@@ -305,6 +305,20 @@ def load_frames(ctx: Context, seasons, level: str = "home", verbose: bool = True
     return out
 
 
+def frames_for_dump(ctx: Context, seasons, dump: pd.DataFrame, names, level: str = "home",
+                    verbose: bool = True) -> dict:
+    """`load_frames` cut to match the fits in `dump`.  An in-season system saw the first `cut` of the
+    held-out season, so it may only be SCORED on the games after it -- the same rows holdout.cut_season
+    gives the criterion.  Scoring it on the whole season hands the fit back its own training games, and
+    the shorter the kernel the larger that leak is.  Systems fit at different cuts are scored on
+    different games, so a run mixing them could not be paired; that is an error, not a warning."""
+    cuts = {cut_of(dump, str(s)) for s in names}
+    if len(cuts) > 1:
+        raise ValueError(f"the systems were fit at different cuts {sorted(c for c in cuts if c is not None)}; "
+                         "they are scored on different games and could not be compared -- run one cut at a time")
+    return load_frames(ctx, seasons, level=level, verbose=verbose, cut=cuts.pop() if cuts else None)
+
+
 # ---------------------------------------------------------------------------------------- 3. the map families
 class Family:
     """A per-side map of the RATING, f(x) = sum_j theta_j phi_j(x; scale), phi_1 = x.  `scale` standardises x,

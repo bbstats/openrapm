@@ -18,7 +18,8 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from eracoef.calmap import SideMap, dump_ratings, evaluate, load_frames, parse_maps, unmapped_rows  # noqa: E402
+from eracoef.calmap import (SideMap, dump_ratings, evaluate, frames_for_dump, parse_maps,  # noqa: E402
+                            unmapped_rows)
 from eracoef.config import load_config  # noqa: E402
 from eracoef.holdout import Context, Holdout, paired, pooled  # noqa: E402
 
@@ -48,7 +49,10 @@ def main():
         return
     dump = pd.read_parquet(OUT / f"ratings_{tag}.parquet")
     ctx = Context.load(cfg)
-    frames = load_frames(ctx, ho.seasons(), level=ho.level)
+    # `frames_for_dump`, not `load_frames`: an in-season system must be scored on the games after its cut,
+    # the same rows the criterion uses.  54_track.py and 57_investigate.py always did this; this script
+    # did not, and scored a q75 fit on the whole season including its own training games.
+    frames = frames_for_dump(ctx, ho.seasons(), dump, names, level=ho.level)
     fams = _list("maps", ["linear", "poly2", "hinge", "linear+unseen", "linear+bins", "linear+log", "linear+log2",
                           "linear+sat", "linear+sat500", "linear+sat2000", "poly2+sat", "hinge+sat"])
     ridge = float(_flag("ridge", 0.0))

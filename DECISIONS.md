@@ -70,6 +70,33 @@ is flat among regulars, so it reorders the low-minute end and leaves the top alo
 on the team-game total and on the stint rows (-0.07 and -0.21). The earlier stint-fitted rank map (-0.41, z
 -6.2) is superseded and off.
 
+**What ruling 1 costs on the criterion, and what the map needs afterwards** (2026-09-10, post-cut estimand).
+One rating per player per season from that season's games only is the owner's ruling, not a candidate, but the
+price is now measured. At K = 3, cut q75, mapped on each kernel's own leave-one-season-out map, the
+single-season kernel `ks00_lam05_ow_w0.25` reads **112.41 against the three-season kernel's 111.80 -- +0.606
+per 100, z +2.91, winning 9 of 28 seasons**. Unmapped it is 113.76 against 113.24. That is the cost of the
+ruling and it is not recovered by the map.
+
+The map itself does transport. Refitted on the single-season dump the exposure term barely moves: at the
+bottom of the 2026 board (51 players under 250 possessions, shared with the shipped board) it takes -2.85,
+where the shipped `ks52`-fitted map took -2.77 on the same players. **Refitting the map on the right kernel
+removes none of the -2.8 the bottom of the board gets** -- it is what the criterion asks for, not a stale
+constant, and the handoff's item 4 premise is wrong. Their prior is -1.80 and their ratings have an sd of 0.70:
+the bottom is compressed and uniformly negative because the games say a player with 200 possessions is worth
+about that much less than the ones with 4,000, not because the map was fitted at the wrong possession scale.
+
+On the moved estimand the shipped map FAMILY is also no longer earning its parameters: `linear+sat` (2 per
+side) ties `linear+log2&xlog&prior&tshare : linear+log2&xlog` (6 and 4) at -0.007 per 100, z -0.12 on the
+single-season kernel and -0.002, z -0.08 on the three-season one. The standing rule takes the simpler and
+faster. The four-term family was chosen before the playoff fold moved what the criterion scores.
+
+**The season-granularity role panel is criterion-neutral** (2026-09-10, on the rebuilt panel that finally
+carries the `onc_*` columns). Same kernel, same map family, panel swapped: `sp_ks00` against `ks00` is **+0.008
+per 100, z +0.10, 16 of 28 seasons** -- a tie. Cube-rooting `win_decay` to the same decay per year (`spy`) is
++0.016, z +0.48: nothing. On the three-season kernel the season panel is +0.106, z +1.32, also not separable.
+So the panel granularity is free to follow the product rather than the criterion, and the earlier "a season
+panel loses half its defensive spread" is a question about the prior's spread, not about prediction.
+
 **The boosted GBDT prior beats the linear one.** `mspi` scored 112.06 at K = 4 against 112.33 for the
 linear-prior board, 20 of 28 seasons. Its prior is a third narrower and the on-court residual carries half
 again as much of the rating (1997-99 offense: prior sd 1.15 against a residual of 0.67, where the linear prior
@@ -279,6 +306,16 @@ third to a HALF of its spread. Destination/"traded-to" features as the prior: -0
 (0.786 -> 0.765): refitting beta on `Rbeta + u` launders shrunk residual into unshrunk prior.
 
 ## The measurement traps
+
+**An in-season fit scored on the whole season is scored on its own training games.** `scripts/53_calmap.py
+fit` built its scoring frames with `load_frames(...)` and no cut, while `54_track.py` and `57_investigate.py`
+had always passed `cut_of(dump, system)`. A system fit on the first 75% of H was then scored on 100% of H. The
+leak is proportional to how much of the rating comes from H, so it favours the SHORTEST kernel: the
+single-season kernel read 105.31 against the three-season kernel's 106.06 and won 28 of 28 seasons at z 9.3.
+Scored on the games after the cut, the same fits read 113.76 against 113.24 and the single-season kernel LOSES
+19 of 28. The sign of the headline comparison was the leak. *The check:* `calmap.frames_for_dump` now takes the
+cut from the dump and refuses a run that mixes cuts; `tests/test_calmap_cut.py` pins it, including that the
+script never calls the uncut loader.
 
 **Benchmarking a model against another model built from the same data.** The board's tilt toward big men was
 certified as "evidence, not bias" by regressing the shipped rating on the same player's NEXT window pure

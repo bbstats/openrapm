@@ -137,9 +137,21 @@ kernel-weighted possessions. The shipped board has the same defect, milder (−2
 | 500–1k | 43 | −1.66 | −3.85 | −2.19 |
 | 4k+ | 288 | +0.25 | +0.31 | +0.06 |
 
-So item 4 is mostly item 3: the map is a constant that does not transport, and re-fitting it on the
-single-season kernel comes before anything is done to the prior. Height and weight are still the
-obvious lever afterwards, and the note below still stands.
+**That reading was wrong, and the re-fit disproved it, 2026-09-10.** The map DOES transport. Fitted
+on the single-season kernel's own dump (`outputs/calmap_insea_ks00_q75.parquet`, family `linear+sat`,
+scored after the cut) the bottom bucket takes −2.85 where the `ks52`-fitted map took −2.77 on the same
+51 players — refitting made it very slightly *stronger*, not weaker. The exposure term is what the
+criterion asks for at 200 possessions, not a stale constant, so item 4 is NOT item 3. Anything done
+here has to beat the map on the criterion, not merely argue that the bottom looks too low.
+
+| his own possessions | n | prior + u | `ks52` map | its own map |
+|---|---|---|---|---|
+| <250 | 51 | −1.83 | −4.72 | −4.68 |
+| 250–500 | 35 | −1.46 | −3.82 | −3.96 |
+| 500–1k | 43 | −1.68 | −3.35 | −3.63 |
+| 4k+ | 293 | +0.23 | +0.24 | +0.18 |
+
+Height and weight in the SPM are still the obvious lever, and the note below still stands.
 
 **The demographic-only prior already exists and the owner had forgotten.** `spm.fit_spm`
 (`spm.py:81`) is a possession-weighted ridge of APM on seven role inputs — possession share, its
@@ -257,9 +269,27 @@ to keep pooling for this test or re-base the floors, and write the reason into t
     .venv/Scripts/python scripts/52_site.py          # 14,568 rows, 30 seasons, 1.0 MB
     git log --oneline -14                            # ends at 73f0ab9 "Phase 0: delete the research sprawl"
 
-First concrete step: re-fit the calibration map on the single-season kernel (`53_calmap.py`, the
-`ks00_lam05_ow_w0.25_q75` system is registered) and see how much of the −3.10 at the bottom of the
-board is a real exposure effect and how much was the `ks52` possession scale.
+That first step is DONE, 2026-09-10, and it answered three questions and found a leak. See DECISIONS.md.
+
+  * `53_calmap.py fit` was scoring an in-season fit on the WHOLE held-out season, including the games it
+    trained on. It flipped the headline: leaked, the single-season kernel beat the three-season one 28 of
+    28 at z 9.3; scored after its own cut it loses 19 of 28. `calmap.frames_for_dump` + `tests/test_calmap_cut.py`.
+  * **Ruling 1 costs +0.606 per 100, z +2.91, 9 of 28 seasons** (`ks00` 112.41 against `ks52` 111.80, K=3,
+    q75, each on its own map). The map does not recover it.
+  * **Item 4's premise is wrong.** Refitting the map on the single-season kernel leaves the bottom of the
+    board where it was: the 51 players under 250 possessions in 2026 take −2.85 from their own kernel's map
+    against −2.77 from the shipped one. The exposure term is not a stale constant; the games ask for it.
+  * The shipped map FAMILY no longer earns its parameters on the moved estimand: `linear+sat` ties
+    `linear+log2&xlog&prior&tshare : linear+log2&xlog` at z −0.12. Take the simpler one.
+  * The rebuilt season panel is a tie on the criterion (`sp_ks00` vs `ks00`: +0.008, z +0.10), so item 2's
+    granularity question is a product question, not a prediction one.
+
+Artifacts: `outputs/calmap_insea_ks00_q75.parquet` (both kernels' maps), `outputs/season_ratings_ks00.parquet`
+(the single-season board, built with `--map-system=`/`--map-base=`, new flags on `60_season_board.py`).
+
+Next concrete step: score `outputs/season_ratings_ks00.parquet` against the consensus the way
+`tests/test_vs_consensus.py` scores the shipped board, per possession bucket — handoff item 5, and the
+decision the floors need before the board can be switched.
 
 `60_season_board.py` takes `--out=<stem>` now. A one-season or candidate run used to overwrite
 `outputs/season_ratings.parquet`, which `tests/test_vs_consensus.py` reads as the shipped board; it

@@ -14,7 +14,8 @@ Per season, per player:
 
 The map is the one fitted on the in-season dump (scratch/inseason_run.py), so the level and the exposure
 term were chosen out of sample on fits shaped like these -- not on the block board's.
-usage: python scripts/60_season_board.py [--system=ks55] [--first=1997] [--last=2026] [--map=<parquet>] [--out=<stem>]
+usage: python scripts/60_season_board.py [--system=ks55] [--first=1997] [--last=2026] [--out=<stem>]
+       [--map=<parquet>] [--map-system=<name in it>] [--map-base=<the dumped system>] [--map-k=3]
 """
 import sys
 import time
@@ -49,8 +50,9 @@ name = flag("system", SB.get("system", "ks55"))
 first = int(flag("first", cfg["first_season"]))
 last = int(flag("last", cfg["last_season"]))
 CM = dict(SB.get("cal_map") or {})
-if flag("map"):
-    CM["table"] = flag("map")
+for _f, _key in (("map", "table"), ("map-system", "system"), ("map-base", "base"), ("map-k", "k")):
+    if flag(_f):
+        CM[_key] = flag(_f)          # a candidate kernel needs a map fitted on ITS OWN dump, not the shipped one
 
 ctx = Context.load(cfg)
 S = registry(cfg)
