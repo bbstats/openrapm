@@ -29,6 +29,7 @@ from eracoef.boxtable import player_names, season_box  # noqa: E402
 from eracoef.calmap import apply_params, params_row  # noqa: E402
 from eracoef.config import load_config  # noqa: E402
 from eracoef.holdout import Context  # noqa: E402
+from eracoef.inseason import kernel_seasons  # noqa: E402
 from eracoef.roles import build_roles, player_season_inputs  # noqa: E402
 from eracoef.stints import season_names  # noqa: E402
 from eracoef.systems import registry  # noqa: E402
@@ -61,13 +62,16 @@ if name not in S:
 system = S[name]
 if getattr(system, "kernel", None) is None:
     raise SystemExit(f"{name} has no kernel; the season board needs an in-season system (inseason.py)")
-offsets = sorted(int(o) for o in system.kernel)
+
 print(f"season board: {name}, kernel {system.kernel}, seasons {first}-{last}", flush=True)
 
 roles = player_season_inputs(build_roles(cfg, verbose=False), cap=float(cfg.get("roles", {}).get("share_cap", 0.9)))
 rows, t0 = [], time.time()
 for a in range(first, last + 1):
-    train = [a + o for o in offsets if a + o >= int(cfg["first_season"])]
+    # `kernel_seasons`, not every offset the kernel names: a season the kernel weights ZERO must not enter
+    # the list, or the inputs built from season tables (the shot-quality features, the role inputs) pool it
+    # anyway.  See inseason.kernel_seasons.
+    train = kernel_seasons(system.kernel, a, cfg["first_season"])
     rat = system.fit(train, ctx)                      # ctx.current_h stays None: this is a board, not a test
     d = rat.df.copy()
     d["season"] = a

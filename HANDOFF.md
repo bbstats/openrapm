@@ -1,10 +1,14 @@
-# Handoff: the cleanup landed, Phase 1 has not started
+# Handoff: the board is one season now; rulings 1, 2 and 3 are done
 
 **This file is transient.** It exists to start the next session and should be deleted when Phase 1
 ships. `DECISIONS.md` is the permanent record; do not turn this back into a lab notebook — the last
 one reached 7,800 lines and was deleted on purpose (tag `archive/research-2026-09` has it).
 
-Branch `cleanup`, 14 commits, working tree clean, `main` untouched.
+Branch `cleanup`, working tree clean, `main` untouched. **Rulings 1, 2 and 3 have landed**: the board
+is one rating per player per season from that season's games, regular season and playoffs together,
+and the three-season block is gone from the product. What is left of Phase 1 is item 3 (re-pick every
+constant at the new scale) and item 4 (the prior for low-minute players), plus the four things under
+"Not started at all".
 
 ---
 
@@ -104,6 +108,13 @@ three other blocks, so the target is no noisier.
 one-season rows and *scoring* three-season rows. Train on seasons and score seasons and there is no
 mismatch. Verify that claim rather than trusting this paragraph.
 
+**Measured 2026-09-10: the season panel is a TIE on the criterion** (`sp_ks00` against `ks00`: +0.008
+per 100, z +0.10, 16 of 28), on the rebuilt panel that finally carries the `onc_*` columns. Cube-rooting
+`win_decay` to the same decay per year (`spy`) is +0.016, z +0.48. So the granularity is a product
+decision, not a prediction one, and the board still ships on the block panel. What is NOT yet measured
+is the panel's effect on the floors and on the prior's own spread, which is where the "loses half its
+defensive spread" claim lives.
+
 ### 3. Re-pick every constant, on trainable seasons only
 
 All of these were calibrated at three-season scale and none of them transport:
@@ -167,29 +178,40 @@ form that survived. Do not un-bin them.
 
 Report, as a first-class number, predicted-vs-actual error for players under 500 possessions.
 
-### 5. Measure before switching
+### 5. Measure before switching — DONE, and the switch is made, 2026-09-10
 
-The owner asked to measure both. Do not replace the live board until the single-season board has
-been scored against the current kernel board on the criterion, broken out by possession bucket.
+`config.yaml` names `ks00_lam05_ow_w0.25` with the `linear+sat` map fitted on its own dump
+(`artifacts/calmap_insea_ks00_q75.parquet`). `artifacts/season_ratings.parquet`, `outputs/`, and
+`docs/data/ratings.json` are all rebuilt from it: 14,578 rows, 1997–2026, 1.0 MB. The three-season
+map artifact is deleted (git history has it).
+
+| | shipped now (`ks00`) | the `ks52` board it replaced |
+|---|---|---|
+| criterion, mapped, K=3 q75 | 112.36 | **111.80** (+0.557, z +2.57, 10 of 28) |
+| consensus total | **0.835** | 0.809 |
+| consensus offense / defense | **0.835** / 0.756 | 0.824 / 0.755 |
+| defensive spread | 1.33 | 1.38 |
+| archetype spread (58_archetype) | **0.145** | 0.213 |
+| under 5k own possessions, total | **0.651** | 0.643 |
+
+Ten of ten floors pass. The criterion is the tiebreak between candidates; which product to build is
+not a tiebreak, and ruling 1 names it.
 
 ---
 
 ## Baselines to beat
 
-The season board as it stands today (kernel `ks52_lam05_ow_w0.25`, RS only), pooled over 2024-2026,
-484 matched players, against `data/external/consensus.csv`:
+The board as it ships today (`ks00_lam05_ow_w0.25`, RS + playoffs, one season per rating), pooled over
+2024-2026, 475 matched players, against `data/external/consensus.csv`: **total 0.835, offense 0.835,
+defense 0.756, defensive spread 1.33**. The `ks52` board it replaced read 0.809 / 0.824 / 0.755 / 1.38
+on the same players. Criterion: 112.36 mapped at K = 3, q75, against `ks52`'s 111.80.
 
-| | season board | the block board it replaced |
-|---|---|---|
-| total | **0.810** | 0.793 |
-| offense | **0.822** | 0.789 |
-| defense | **0.758** | 0.768 |
-| defensive spread | 1.39 | 1.30 |
-
-Ten of ten floors in `tests/test_vs_consensus.py` pass. Those floors are now computed on the season
-board *pooled over the three seasons the consensus covers* — deliberately, so the estimand matches
-what they were calibrated against. When the board becomes single-season, decide explicitly whether
-to keep pooling for this test or re-base the floors, and write the reason into the test.
+Ten of ten floors in `tests/test_vs_consensus.py` pass. **The pooling question is settled**: the floors
+stay pooled over the three seasons the consensus covers even though the board is now single-season,
+because the consensus snapshot is itself a multi-season blend and because every floor was calibrated on
+that estimand — all ten pass on the new board unchanged, so there was nothing to re-base except the
+archetype floor, which moved 0.30 → 0.25 as its own docstring instructed. Score a candidate with
+`OPENRAPM_BOARD=<parquet> pytest tests/test_vs_consensus.py`.
 
 ---
 
@@ -265,17 +287,19 @@ to keep pooling for this test or re-base the floors, and write the reason into t
 
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest tests -q          # 209 passed, 1 xfailed, ~100 s
-    .venv/Scripts/python scripts/52_site.py          # 14,568 rows, 30 seasons, 1.0 MB
-    git log --oneline -14                            # ends at 73f0ab9 "Phase 0: delete the research sprawl"
+    .venv/Scripts/python -m pytest tests -q          # 229 passed, 1 xfailed, ~110 s
+    .venv/Scripts/python scripts/52_site.py          # 14,578 rows, 30 seasons, 1.0 MB
+    .venv/Scripts/python scripts/60_season_board.py  # ks00_lam05_ow_w0.25, kernel {0: 1.0}, 70 s
 
 That first step is DONE, 2026-09-10, and it answered three questions and found a leak. See DECISIONS.md.
 
   * `53_calmap.py fit` was scoring an in-season fit on the WHOLE held-out season, including the games it
     trained on. It flipped the headline: leaked, the single-season kernel beat the three-season one 28 of
     28 at z 9.3; scored after its own cut it loses 19 of 28. `calmap.frames_for_dump` + `tests/test_calmap_cut.py`.
-  * **Ruling 1 costs +0.606 per 100, z +2.91, 9 of 28 seasons** (`ks00` 112.41 against `ks52` 111.80, K=3,
-    q75, each on its own map). The map does not recover it.
+  * **Ruling 1 costs +0.557 per 100, z +2.57, 10 of 28 seasons** (`ks00` 112.36 against `ks52` 111.80, K=3,
+    q75, each on its own map). The map does not recover it. It read +0.606 before the zero-weight season
+    was taken out of the training list — see DECISIONS.md; a weight of zero has to be checked against the
+    FEATURE path as well as the design path.
   * **Item 4's premise is wrong.** Refitting the map on the single-season kernel leaves the bottom of the
     board where it was: the 51 players under 250 possessions in 2026 take −2.85 from their own kernel's map
     against −2.77 from the shipped one. The exposure term is not a stale constant; the games ask for it.

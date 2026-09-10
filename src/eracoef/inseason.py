@@ -127,6 +127,21 @@ def anchor_of(train) -> int:
     return int(max(int(s) for s in train))
 
 
+def kernel_seasons(kernel: dict | None, anchor: int, first_season: int) -> list:
+    """The seasons a kernel fit trains on: the anchor plus every offset the kernel gives a NON-ZERO weight.
+
+    A zero weight has to drop out of the list, not just out of the game weights.  `kernel_game_mult` already
+    zeroes those games, so the design, the padded box rates and `Ratings.poss` are unaffected -- but the
+    inputs built from season tables rather than from the design (`xshoot.season_totals`, the shot-quality
+    features, the role inputs) are built over whatever seasons the list names, and they would quietly pool
+    three seasons for a rating the kernel says is one.  On the single-season kernel that moved a 2026
+    offensive rating by up to 0.61 per 100, which is ruling 1's "that season's games only" broken by the
+    feature side door.
+    """
+    offs = sorted(int(o) for o, v in (kernel or {0: 1.0}).items() if float(v) != 0.0)
+    return [int(anchor) + o for o in offs if int(anchor) + o >= int(first_season)]
+
+
 def _has_field(obj, name: str) -> bool:
     return any(f.name == name for f in fields(obj)) if is_dataclass(obj) else False
 
@@ -142,9 +157,7 @@ class KernelSystem:
     cut: float | None = None
 
     def train_for(self, h: int, ctx) -> list | None:
-        s0 = int(ctx.cfg["first_season"])
-        offs = sorted(int(o) for o in (self.inner.kernel or {0: 1.0}))
-        return [int(h) + o for o in offs if int(h) + o >= s0] or None
+        return kernel_seasons(self.inner.kernel, h, ctx.cfg["first_season"]) or None
 
     def fit(self, train, ctx):
         if self.cut is None or not _has_field(self.inner, "cut"):

@@ -186,11 +186,12 @@ def test_no_archetype_bias_by_cluster(board):
         100, measured on both boards (2026-09-10), so a floor converts into points: 0.30 permits about 0.6
         per 100 of archetype distortion on today's board and about 0.95 on the single-season one.
 
-    The floor is 0.30 because both boards have to pass it today.  **When the board becomes the
-    single-season one, re-base this to 0.25** -- that board reads 0.107-0.174 over ten seeds, so 0.25 is
-    still four seed-sds of headroom and it halves what the floor permits.  Seeds are averaged because the
-    mixture is refit per run: over ten seeds at k = 8 the statistic moves with sd 0.02 and the two boards'
-    ranges do not overlap (`python scripts/58_archetype.py stability`)."""
+    The floor was 0.30 while the three-season board still shipped, and is **0.25 since the single-season
+    board became the board** (2026-09-10, as this test said to do): it reads 0.108-0.171 over ten seeds, so
+    0.25 is four seed-sds of headroom and it halves what the floor permits -- about 0.4 per 100 rather than
+    0.95.  Seeds are averaged because the mixture is refit per run: over ten seeds at k = 8 the statistic
+    moves with sd 0.02, and it is pooled over the three seasons the consensus covers because per single
+    season the ranges overlap (`python scripts/58_archetype.py stability`)."""
     from eracoef.archetype import RATES, cluster_gaps, fit_clusters, gap_columns, per36, spread
     box = _box()
     prof = per36(box[box.phase == "RS"])
@@ -200,8 +201,8 @@ def test_no_archetype_bias_by_cluster(board):
     X = m[RATES].to_numpy(dtype=float)
     vals = [spread(cluster_gaps(fit_clusters(X, k=8, seed=sd)[0], gaps)) for sd in (0, 1, 2)]
     got = float(np.mean(vals))
-    assert got < 0.30, (f"per-cluster total gap spreads {got:.3f} across archetypes "
-                        f"(seeds {[round(v, 3) for v in vals]}); 0.30 is about 0.6 points per 100 of bias")
+    assert got < 0.25, (f"per-cluster total gap spreads {got:.3f} across archetypes "
+                        f"(seeds {[round(v, 3) for v in vals]}); 0.25 is about 0.4 points per 100 of bias")
 
 
 # ------------------------------------------------------------------ fixed by the hybrid prior

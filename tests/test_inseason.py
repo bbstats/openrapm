@@ -19,7 +19,8 @@ import pytest
 from eracoef.cv import make_exposure
 from eracoef.design import FEATURES, build_design
 from eracoef.holdout import RESULT_COLUMNS, SPLITS, Context, Holdout, Ratings, TableSystem, cut_season
-from eracoef.inseason import BlockSystem, KernelSystem, anchor_of, kernel_game_mult, keep_games, season_frac, season_rank
+from eracoef.inseason import (BlockSystem, KernelSystem, anchor_of, kernel_game_mult, kernel_seasons,
+                              keep_games, season_frac, season_rank)
 from eracoef.simulate import simulate
 
 CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "features": FEATURES,
@@ -139,6 +140,22 @@ def test_kernel_and_block_systems_name_their_own_training_seasons(world):
     blk = BlockSystem("blk", TableSystem("t", table), cut=0.5)
     assert blk.train_for(2004, ctx) == [2001, 2002, 2003]          # the last window that FINISHED before 2004
     assert blk.train_for(2002, ctx) is None                        # no window has finished yet
+
+
+def test_a_zero_weight_season_is_not_a_training_season(world):
+    """`kernel_game_mult` zeroes those games, which is enough for the design and the possessions -- and
+    not enough for the inputs built from season tables (the shot-quality features, the role inputs),
+    which are built over whatever the season LIST names.  A single-season kernel whose list still said
+    three seasons moved a 2026 offensive rating by up to 0.61 per 100 that way, which is ruling 1's
+    "that season's games only" broken through the feature side door."""
+    ctx, table = world
+    inner = TableSystem("t", table)
+    inner.kernel = {0: 1.0, -1: 0.0, -2: 0.0}
+    assert KernelSystem("ks00", inner).train_for(2004, ctx) == [2004]
+    assert kernel_seasons(inner.kernel, 2004, 1997) == [2004]
+    assert kernel_seasons({0: 1.0, -1: 0.5, -2: 0.0}, 2004, 1997) == [2003, 2004]
+    assert kernel_seasons({0: 1.0, -1: 0.5, -2: 0.25}, 1998, 1997) == [1997, 1998]   # truncated, not padded
+    assert kernel_seasons(None, 2004, 1997) == [2004]
 
 
 def test_the_runner_scores_an_in_season_system_after_its_cut(world):

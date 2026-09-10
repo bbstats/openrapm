@@ -70,6 +70,26 @@ is flat among regulars, so it reorders the low-minute end and leaves the top alo
 on the team-game total and on the stint rows (-0.07 and -0.21). The earlier stint-fitted rank map (-0.41, z
 -6.2) is superseded and off.
 
+**The board is one season, shipped 2026-09-10.** `ratings_prior.season_board.system` is
+`ks00_lam05_ow_w0.25` with the `linear+sat` map fitted on its own dump
+(`artifacts/calmap_insea_ks00_q75.parquet`), and `artifacts/season_ratings.parquet` and the site are rebuilt
+from it: 14,578 rows over 1997-2026. Owner's ruling 1. Against the three-season board it replaced: **+0.557
+per 100 on the criterion (z +2.57, 10 of 28 seasons)** and **0.835 against 0.809 on consensus agreement**,
+with all ten floors passing and the archetype spread at 0.145 against 0.213. The criterion is the tiebreak
+between candidates; which product to build is not a tiebreak, and the ruling names it.
+
+**A zero-weight season was still a training season.** `KernelSystem.train_for` and the board both built the
+list as "every offset the kernel names", so the single-season kernel trained on `[a-2, a-1, a]` with the first
+two weighted zero. `kernel_game_mult` zeroes those games, so the design, the padded box rates and
+`Ratings.poss` were all correct -- but the inputs built from SEASON TABLES rather than from the design (the
+shot-quality features from `xshoot`, the role inputs) are built over whatever the list names, and they pooled
+three seasons for a rating the kernel said was one. It moved a 2026 offensive rating by up to **0.61 per 100**
+(mean 0.056) and left the defensive prior and the possessions identical, which is the signature: only the
+offensive features come from those tables. `inseason.kernel_seasons` is now the one place the list is built,
+and `tests/test_inseason.py::test_a_zero_weight_season_is_not_a_training_season` pins it. Fixing it improved
+the criterion (112.410 -> 112.362 mapped) and cost 0.004 of consensus agreement. **The check: a weight of
+zero in a model has to be checked against the FEATURE path as well as the design path.**
+
 **What ruling 1 costs on the criterion, and what the map needs afterwards** (2026-09-10, post-cut estimand).
 One rating per player per season from that season's games only is the owner's ruling, not a candidate, but the
 price is now measured. At K = 3, cut q75, mapped on each kernel's own leave-one-season-out map, the
