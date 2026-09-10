@@ -1,0 +1,41 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    # The point of this job is the claim the README makes: a fresh clone with NO scraped data
+    # installs and passes. It runs with data/ empty, so if a test quietly depends on a local
+    # artifact rather than skipping cleanly, this is what catches it.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - name: No data is present
+        run: test ! -d data/raw && test ! -d data/stints && echo "clean clone confirmed"
+      - run: pytest -q --durations=10
+
+  boundaries:
+    # The two rules, on their own so a failure names itself in the checks list rather than being
+    # one line inside a 200-test run.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -e ".[dev]"
+      - name: Model code does not load its own data
+        run: pytest tests/test_layer_boundary.py -q
+      - name: Nothing fitted sees a season in progress
+        run: pytest tests/test_seasons.py -q
