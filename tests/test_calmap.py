@@ -110,3 +110,32 @@ def test_calmapped_system_applies_table(world):
     want = mapped_ratings(base, th, m, m, row.scale_o, row.scale_d).df
     got = r.df.set_index("player_id").loc[want.player_id]
     assert np.allclose(got.o.to_numpy(), want.o.to_numpy()) and np.allclose(got.d.to_numpy(), want.d.to_numpy())
+
+
+def test_splits_reach_the_calmap_scorer(world):
+    """The criterion is a team-game number, so a 200-possession player is a rounding error in the pooled
+    row and every change to the bottom of the board scores as a tie.  `evaluate` / `unmapped_rows` take
+    `splits` (holdout.SPLITS) and score each held-out season again inside groups of rows, which is what lets
+    the criterion itself -- not a side diagnostic -- answer the bench-player question.
+
+    Two things have to hold: the pooled row must be untouched by asking for splits (otherwise every number
+    ever read off this script moved), and the groups must actually partition the season's possessions.
+    """
+    import pandas as pd
+    from eracoef.holdout import SPLITS
+    ctx, _, dump, frames = world
+    sp = {"exposure": SPLITS["exposure"]}
+    plain = unmapped_rows(dump, frames, "true", 2)
+    split = unmapped_rows(dump, frames, "true", 2, splits=sp, ctx=ctx)
+    assert set(split.split) == {"all", "exposure"}
+    pooled_only = split[split.split == "all"].reset_index(drop=True)
+    pd.testing.assert_frame_equal(plain, pooled_only)
+    for h, g in split[split.split == "exposure"].groupby("held_out"):
+        assert g.group.nunique() == len(g), "a group is scored twice"
+        assert abs(g.n.sum() - float(plain.loc[plain.held_out == h, "n"].iloc[0])) < 1e-6
+
+    m = SideMap.parse("linear")
+    r, _ = evaluate(dump, frames, "true", 2, m, m, "true_linear", min_poss=1, splits=sp, ctx=ctx)
+    assert set(r.split) == {"all", "exposure"}
+    r_plain, _ = evaluate(dump, frames, "true", 2, m, m, "true_linear", min_poss=1)
+    pd.testing.assert_frame_equal(r[r.split == "all"].reset_index(drop=True), r_plain)

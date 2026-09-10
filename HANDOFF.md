@@ -114,9 +114,18 @@ and improves the prior at <250 (z -1.39) and 250-500 (z -1.90) possessions and n
 does the reverse -- helps the middle and top, makes the deepest bench worse, and fails the defensive floor at
 0.7485.
 
-**The ruling the owner owes:** may a measurement the criterion structurally cannot see move the board? If
-yes, ship `board_bioDw`. If no, the standing tie rule keeps the shipped board and `61_lowposs.py` stays a
-diagnostic. Nothing else in Phase 1 is blocked on the answer.
+**Ruling 9, 2026-09-10:** *"Bench players need to be in the accuracy test."* Done -- `53_calmap.py` takes
+`--splits=exposure,bench` now and `evaluate` / `unmapped_rows` score each held-out season inside groups. The
+pooled row is bit-identical either way (`test_splits_reach_the_calmap_scorer`). **Use it on every candidate
+from here.** With it, `board_bioDw` is **-0.202 per 100 at z -2.16 over 19 of 28 seasons** on the rows where
+the smallest training exposure on the floor is zero, and neutral in the other three groups -- so the pooled
+tie was an average over a real gain and three nothings. `board_bioDh` clears nothing at |z| = 2 in that split
+and still fails the defensive floor.
+
+**Next on this item, and it is bigger than the feature list:** in the two lowest exposure groups the mapped
+systems are WORSE than the unmapped ones by +0.92 and +1.26 per 100, while the map is worth -1.24 pooled. The
+calibration map's exposure term buys its pooled gain by taxing the bench. Fix that and the bottom of the
+board moves further than any prior feature can move it.
 
 **Two things already measured, so do not redo them.** The bottom of the board is the calibration map's
 exposure term, not a defect in the prior: players under 250 possessions take -2.85 from the map, and

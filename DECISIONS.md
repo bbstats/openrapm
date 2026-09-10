@@ -439,10 +439,40 @@ attribution disagreement rather than a total one (total 0.8354 -> 0.8334).
 On offense, adding `height2` beside the `weight15` already there is worse at the bottom (<250 z +1.27) and
 worse in the middle (1500-4500 z +1.73) and better nowhere. Rejected.
 
-**The open ruling.** `board_bioDw` is a tie on the criterion, passes all ten floors, and is better where the
-criterion structurally cannot look. Whether a measurement the criterion cannot see may move the board is not
-a tiebreak the criterion can settle, so it is the owner's. The standing rule as written ("between two
-candidates the criterion cannot separate, take the simpler") keeps the shipped board.
+**The owner's ruling, 2026-09-10: put the bench players in the accuracy test.** Asked whether a measurement
+the criterion cannot see may move the board, the answer was neither yes nor no: *"Bench players need to be in
+the accuracy test."* Not a side diagnostic with its own estimand -- the criterion itself, split.
+
+The machinery already existed and had never reached the script that picks a board. `holdout.SPLITS` scores a
+held-out season again inside groups of rows, and `45_holdout.py` has always used it; `53_calmap.py` wrote
+`split="all", group="all"` and nothing else. `evaluate` and `unmapped_rows` now take `splits` and `ctx`, and
+the script takes `--splits=exposure,bench`. The pooled row is bit-identical either way
+(`test_splits_reach_the_calmap_scorer` asserts that, and the re-scored `biosweep2` reproduced -0.011979 and
+-0.006555 exactly), so no number ever read off this script moved.
+
+**With bench players in it, the criterion separates what the pooled number could not.** `by_exposure` bins
+each row by the SMALLEST training exposure among the ten on the floor -- the group whose prediction rests on
+a player the training block barely saw. Mapped against the shipped board's own mapped rows, K=3, q75:
+
+| smallest exposure on the floor | none (0) | 1-499 | 500-1499 | 1500-3999 |
+|---|---|---|---|---|
+| possessions in the group | 136k | 593k | 836k | 427k |
+| + weight15 on defense | **-0.202 (z -2.16, 19/28)** | +0.001 (z +0.03) | -0.030 (z -1.46) | +0.012 (z +0.29) |
+| + height2 on defense | -0.236 (z -1.77) | -0.045 (z -0.92) | +0.002 (z +0.06) | -0.008 (z -0.20) |
+
+So weight on defense is significantly better on exactly the rows where a player the training never saw is on
+the floor, and neutral everywhere else -- which is what the pooled row was averaging away. Height is better
+in the same place and does not clear |z| = 2 anywhere in this split; it also fails the defensive consensus
+floor at 0.7485, so it stays rejected. Read the z's as eight tests, not one: `bench` (how many of the ten
+started fewer games than `bench_gs_pct`) gives height -0.134 at z -2.66 in its "5-6 bench" group and weight
+nothing significant, so the two splits do not agree about height and do about weight only at the extreme.
+
+**A bigger lever fell out of the same table.** In the two lowest exposure groups the MAPPED systems are far
+worse than the unmapped ones -- +0.92 per 100 at "1-499" and +1.26 at "none (0)" -- while the map is worth
+about -1.24 pooled. The calibration map's exposure term is buying its pooled gain by taxing exactly the
+players ruling 1's second sentence is about (it takes -2.85 from a player under 250 possessions). That is now
+visible in the criterion rather than only in the map's coefficients, and it is a larger number than anything
+the prior's feature list can move.
 
 ## What was tried and rejected
 

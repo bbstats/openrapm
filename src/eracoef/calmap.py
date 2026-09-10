@@ -31,8 +31,8 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 
-from .holdout import (RESULT_COLUMNS, THREAD_VARS, Context, Holdout, Ratings, _fit, level_columns, predict_season,
-                      score)
+from .holdout import (RESULT_COLUMNS, SPLITS, THREAD_VARS, Context, Holdout, Ratings, _fit, level_columns,
+                      predict_season, score)
 
 
 # ---------------------------------------------------------------------------------------- 1. the dump
@@ -1034,9 +1034,33 @@ def bent_prediction(p, f: SeasonFrame, bend: TeamBend, gamma, s_u: float, level:
     return replace(p, pred=pred, c_off=p.c_off + delta[f.key], c_def=p.c_def)
 
 
+def _scored_rows(p, h, k, name, lam, f, splits=None, ctx=None, train=None) -> list[dict]:
+    """One result row for the whole season, plus one per group of every split in `splits`.
+
+    The criterion is scored at TEAM-GAME level, where a 200-possession player is a rounding error, so the
+    pooled row cannot see the bottom of the board at all and calls every change to it a tie.  The splits
+    (`holdout.SPLITS`) are how it sees them: "exposure" bins each row by the SMALLEST training exposure among
+    the ten on the floor -- the 0-499 group is exactly the rows whose prediction rests on a player the
+    training block barely saw -- and "bench" by how many of the ten started fewer games than
+    `holdout.bench_gs_pct`.  `45_holdout.py` always had this; `53_calmap.py`, which is what actually picks a
+    board, scored `split="all"` only.
+    """
+    base = dict(held_out=h, k=k, train="", system=name, lam=lam,
+                cut=f.cut if f.cut is not None else np.nan, seconds=0.0)
+    rows = [dict(**base, split="all", group="all", **score(p))]
+    for sname, fn in (splits or {}).items():
+        g = fn(p, f.wd, ctx, h, list(train or []))
+        for label in pd.unique(pd.Series(g)):
+            mask = np.asarray(g) == label
+            if mask.sum() < 2:
+                continue
+            rows.append(dict(**base, split=sname, group=str(label), **score(p, mask)))
+    return rows
+
+
 def evaluate(dump: pd.DataFrame, frames: dict, system: str, k: int, map_o: SideMap, map_d: SideMap, name: str,
              ridge: float = 0.0, lam: float = 0.0, level: str = "home", min_poss: float = 1000.0,
-             bend: TeamBend | None = None):
+             bend: TeamBend | None = None, splits=None, ctx: Context | None = None):
     """Leave-one-season-out: fit the map on the other seasons' team-game residuals, apply it to H, score H
     with the criterion's own scorer.  Returns (result rows in RESULT_COLUMNS, the per-season parameters,
     held_out = -1 for the all-seasons fit).  `bend`: a TeamBend fitted on the same other seasons, after the
@@ -1055,8 +1079,7 @@ def evaluate(dump: pd.DataFrame, frames: dict, system: str, k: int, map_o: SideM
                 rcols, per_h, _ = row_columns(dump, frames, system, k, map_o, map_d, D, th, bend.row_powers)
             gamma, s_u = fit_bend(D, th, bend, exclude_h=h, rows=rcols)
             p = bent_prediction(p, f, bend, gamma, s_u, level=level, rows=None if per_h is None else per_h[h])
-        rows.append(dict(held_out=h, k=k, train="", system=name, lam=lam, cut=f.cut if f.cut is not None else np.nan,
-                         split="all", group="all", **score(p), seconds=0.0))
+        rows.extend(_scored_rows(p, h, k, name, lam, f, splits, ctx, train_of(dump, system, k, h)))
         params.append(_param_row(name, system, k, h, map_o, map_d, D, th, bend, gamma, s_u))
     th_all = fit_theta(D, exclude_h=None, ridge=ridge, map_o=map_o, map_d=map_d)
     g_all, s_all = (None, np.nan)
@@ -1069,13 +1092,13 @@ def evaluate(dump: pd.DataFrame, frames: dict, system: str, k: int, map_o: SideM
     return pd.DataFrame(rows)[RESULT_COLUMNS], pd.DataFrame(params)
 
 
-def unmapped_rows(dump: pd.DataFrame, frames: dict, system: str, k: int, lam: float = 0.0, level: str = "home") -> pd.DataFrame:
+def unmapped_rows(dump: pd.DataFrame, frames: dict, system: str, k: int, lam: float = 0.0, level: str = "home",
+                  splits=None, ctx: Context | None = None) -> pd.DataFrame:
     """The base system scored from the dump, so the paired test is against exactly the same fits."""
     rows = []
     for h, f in frames.items():
         p = predict_season(ratings_for(dump, system, k, h), f.wd, level=level)
-        rows.append(dict(held_out=h, k=k, train="", system=system, lam=lam, cut=f.cut if f.cut is not None else np.nan,
-                         split="all", group="all", **score(p), seconds=0.0))
+        rows.extend(_scored_rows(p, h, k, system, lam, f, splits, ctx, train_of(dump, system, k, h)))
     return pd.DataFrame(rows)[RESULT_COLUMNS]
 
 
