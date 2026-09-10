@@ -298,22 +298,6 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         # and the same with the SHIPPED defensive booster, if the booster rather than the pooling is at fault
         S["tune501_b7_dship"] = _replace(S["tune501_b7"], name="tune501_b7_dship", win_decay_d=1.0,
                                          gbdt_params_d={"linear_leaves": True, "cross_features": False})
-        # ---------------------------------------------------------------- the Dredge block (HANDOFF 3.1)
-        # The play-by-play counters (dredge.py): Russells, rim blocks, blocked threes, unassisted makes,
-        # stolen turnovers, loose-ball fouls, technicals and flagrants, offensive fouls committed.  Only
-        # the DEFENSIVE side is tried, because that is the only side the pre-filter found anything on --
-        # and even there what it found has the FINDINGS 22.2 signature, so the criterion is the gate.
-        #
-        # On the shipped defensive list and the shipped defensive booster, `scratch/prior_bench.py D`:
-        #   + unast, unastsh                             -0.0129 pooled,  +0.0354 on the low-exposure rows
-        #   + the whole block                            -0.0118 pooled,  +0.1157 low
-        #   + loose, techflg, offoul                     -0.0011 pooled,  +0.0321 low
-        #   + stolen, stolensh                           +0.0055 pooled,  +0.0012 low
-        #   + russ, russsh, blkrim, blkrimsh, blk3sh     +0.0270 pooled,  +0.0825 low
-        # Every pooled gain costs low-exposure accuracy, which is the half of the fit the held-out season
-        # can feel, and the block split -- the thing Dredge most promised, against `blk` at 15.7% of the
-        # defensive SHAP -- is the WORST of the five.  Two candidates go to the criterion anyway: the
-        # bench "has been wrong by 0.13" and shot quality was flat on the line before it shipped.
         # ---------------------------------------------------------------- trade calibration (FINDINGS 24)
         # The same board with the TURNOVER-AWARE prior: trained on window pairs with the teammate turnover of
         # the target window as a feature, the ridge shrinking toward its settled-context value (turn 0.35) and
@@ -690,33 +674,6 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         S["tune501_b7_turnref_o_nodp"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_nodp", no_def_prior=True)
         S["tune501_b7_turnref_o_nodp_ffx"] = _replace(S["tune501_b7_turnref_o"], name="tune501_b7_turnref_o_nodp_ffx",
                                                       no_def_prior=True, def_factors=1.0, factor_reml=True, factor_x3=True)
-        from .gbdt_prior import DREDGE as _DR
-        S["tune501_b7_drd"] = _replace(S["tune501_b7"], name="tune501_b7_drd",
-                                       gbdt_features={"O": list(_SF2), "D": [*_FF2, *_SQ2, *_DR]})
-        S["tune501_b7_dru"] = _replace(S["tune501_b7"], name="tune501_b7_dru",
-                                       gbdt_features={"O": list(_SF2), "D": [*_FF2, *_SQ2, "unast", "unastsh"]})
-        # The ERA-RELATIVE form of the same block (add_dredge's `_r` columns: each feature divided by its
-        # own block's league level, so a change in how the feed RECORDS an event divides out).  On the
-        # prior's own fit the whole relative block is -0.029 against -0.020 for the absolute one, and the
-        # two features the era artifact actually contaminates -- the rim share of blocked twos and the
-        # disputed goaltend count -- are -0.021 on their own at a fifth of the low-exposure cost.
-        from .gbdt_prior import DREDGE_R as _DRR
-        S["tune501_b7_drr"] = _replace(S["tune501_b7"], name="tune501_b7_drr",
-                                       gbdt_features={"O": list(_SF2), "D": [*_FF2, *_SQ2, *_DRR]})
-        # POTENTIAL ASSISTS, reconstructed from assists by zone (gbdt_prior.POTENTIAL_AST, the owner's 2019
-        # fit at r-squared ~1).  Potential assists are a TRACKING statistic and begin in 2013-14; assist
-        # location is in the play-by-play from 1997, so this carries the measure back over the whole panel.
-        # It is the only thing in the Dredge block the prior's own fit likes on OFFENSE (-0.018, where every
-        # other group is worse) and it is the most reliable feature in the block year over year (0.922,
-        # against 0.918 for blocks per 100 and 0.126 for the Russell share).
-        S["tune501_b7_past"] = _replace(S["tune501_b7"], name="tune501_b7_past",
-                                        gbdt_features={"O": [*_SF2, "pot_ast"], "D": [*_FF2, *_SQ2]})
-        S["tune501_b7_past2"] = _replace(S["tune501_b7"], name="tune501_b7_past2",
-                                         gbdt_features={"O": [*_SF2, "pot_ast"],
-                                                        "D": [*_FF2, *_SQ2, "pot_ast"]})
-        S["tune501_b7_dcal"] = _replace(S["tune501_b7"], name="tune501_b7_dcal",
-                                        gbdt_features={"O": list(_SF2),
-                                                       "D": [*_FF2, *_SQ2, "blkrimsh_r", "goalt_r"]})
         # the same without the nearby-window discount (the consensus floors, not the criterion, may want it)
         S["ship_ratio_b07_wd1"] = MspiFast("ship_ratio_b07_wd1", target="blend0.7",
                                            **{**_SK, "win_decay": 1.0})

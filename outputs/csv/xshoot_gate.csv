@@ -1,7 +1,0 @@
-season,r2,r3,rft,pts,pts1,chance1,r2_ok,r3_ok,rft_ok,pts1_ok,chance1_ok,pts_ok,target,sd_pts,sd_x
-2024,1.0,0.99805,1.00363,0.99996,1.0,1.0,True,True,True,True,True,True,x3def_p1,63.55309,47.50025
-2025,1.0,1.01132,1.0032,1.00458,1.0,1.0,True,True,True,True,True,True,x3def_p1,63.55309,47.50025
-2026,1.0,1.01278,1.00317,1.00498,1.0,1.0,True,True,True,True,True,True,x3def_p1,63.55309,47.50025
-2024,1.0,0.99347,1.00363,0.99842,1.0,1.0,True,True,True,True,True,True,x3def_p2,63.55309,47.55335
-2025,1.0,1.00682,1.0032,1.00297,1.0,1.0,True,True,True,True,True,True,x3def_p2,63.55309,47.55335
-2026,1.0,1.00793,1.00317,1.0033,1.0,1.0,True,True,True,True,True,True,x3def_p2,63.55309,47.55335

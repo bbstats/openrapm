@@ -5,7 +5,6 @@ player's value over his OTHER windows), with chimeraboost's exact SHAP values as
 (src/eracoef/gbdt_prior.py: make_boruta).  Two modes, matching GBDTPrior:
     residual   target u (RAPM_1 beyond the role prior), candidates = 13 rates + season
     full       target rapm1, candidates = 13 rates + season + poss_pct, gs_pct, age
-    wide       target rapm1, candidates = DREDGE_FEATURES (55) -- a superset of BOTH shipped lists and of
                the play-by-play block, and the only mode that can assess what the board actually uses
     sink       the shipped target per side on PAIR rows, candidates = everything (SINK, ~95 names): wide, the
                era-relative twins, career, bio, past plus-minus on both sides, teammate turnover
@@ -31,8 +30,8 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from eracoef.config import load_config  # noqa: E402
 from eracoef.bio import PLAYER_INPUTS  # noqa: E402
-from eracoef.gbdt_prior import (BIO_BINS, CAREER, DEFAULT_FEATURES, DERIVED, DREDGE_FEATURES, DREDGE_R,  # noqa: E402
-                                FULL_FEATURES, PAST, TURN_FEATURE, run_boruta, training_rows)
+from eracoef.gbdt_prior import (BIO_BINS, CAREER, DEFAULT_FEATURES, DERIVED, FULL_FEATURES,  # noqa: E402
+                                PAST, SHOT_FEATURES, TURN_FEATURE, run_boruta, training_rows)
 
 cfg = load_config()
 OUT = Path(cfg["_root"]) / "outputs"
@@ -55,10 +54,9 @@ panel = pd.read_parquet(Path(cfg["_root"]) / cfg.get("paths", {}).get("role_pane
 # contains it) and the teammate turnover of the target window.  `sinknoagg` is the same without the ten pure
 # linear aggregates, the form FINDINGS 23.10 says Boruta can actually read: given `stocks` a shadow `blk` is as
 # good as `blk`, and which of a collinear pair survives is a coin toss.
-SINK = [*DREDGE_FEATURES, *DREDGE_R, *CAREER, *PLAYER_INPUTS, *BIO_BINS, *PAST, TURN_FEATURE]
+SINK = [*SHOT_FEATURES, *CAREER, *PLAYER_INPUTS, *BIO_BINS, *PAST, TURN_FEATURE]
 SINK_NOAGG = [f for f in SINK if f not in DERIVED]
 MODES = {"residual": ("u", DEFAULT_FEATURES, "features_{}"), "full": ("rapm1", FULL_FEATURES, "features_full_{}"),
-         "wide": ("rapm1", DREDGE_FEATURES, "features_full_{}"),
          "sink": ("pairs", SINK, "features_full_{}"), "sinknoagg": ("pairs", SINK_NOAGG, "features_full_{}")}
 
 
