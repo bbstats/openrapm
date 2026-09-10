@@ -40,6 +40,7 @@ MODEL_LAYER = [
     "inseason.py",      # the rolling kernel and the game cut
     "investigate.py",   # the attribution instrument
     "pad.py",           # the padding helper
+    "pbo.py",           # the probability of backtest overfitting
     "simulate.py",      # the synthetic fixture the tests fit against
     "spm.py",           # APM, the role prior, the chain's offset
 ]
