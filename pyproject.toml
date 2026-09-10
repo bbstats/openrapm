@@ -34,4 +34,5 @@ where = ["src"]
 testpaths = ["tests"]
 markers = [
   "slow: recomputes a calibration table; a few seconds, not milliseconds",
+  "network: genuinely needs the network; exempt from the block in tests/conftest.py",
 ]
