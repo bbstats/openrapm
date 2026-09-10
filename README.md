@@ -14,9 +14,12 @@ python -m venv .venv && .venv/bin/pip install -e ".[dev]"     # .venv/Scripts/pi
 pytest -q
 ```
 
-**That works on a fresh clone with no data.** Most of the suite runs against synthetic fixtures or
-is pure function, and the handful that need the scraped play-by-play skip with a message telling you
-which command builds it. You can read, change and test the model without downloading anything.
+**That works on a fresh clone with no data**: 194 pass, 16 skip, 90 seconds. Most of the suite runs
+against synthetic fixtures or is pure function; the 16 that need scraped play-by-play skip with the
+command that builds it. Tests cannot reach the network at all — `tests/conftest.py` blocks it — so
+nothing is downloaded behind your back and the number above is what you will see.
+
+You can read, change and test the model without downloading anything.
 
 Python 3.11+. The one unfamiliar dependency is [`chimeraboost`](https://github.com/bbstats/chimeraboost),
 the gradient booster the box prior uses; it is first-party and Apache-2.0.
