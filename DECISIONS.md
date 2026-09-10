@@ -206,10 +206,35 @@ that floor has already been re-based twice for: relative to the consensus its of
 Its own comment says twice re-based is a pattern worth the owner's eye, so it was left failing rather than
 re-based a third time.
 
+**The board keeps the BLOCK panel, and the reason is defensive attenuation** (2026-09-10, the measurement
+the criterion could not make). A board built on `sp_ks00_lam05_ow_w0.25` -- same kernel, same map family,
+only the prior's training substrate swapped to one row per player-season -- against the shipped one:
+
+| | block panel (ships) | season panel |
+|---|---|---|
+| criterion | 112.36 | 112.42 (+0.063, z +0.70, a tie) |
+| consensus total / offense | 0.835 / 0.835 | **0.846** / **0.865** |
+| consensus defense | **0.756** | **0.739 -- below the 0.75 floor** |
+| rating defensive sd | 1.33 | 1.22 |
+| PRIOR defensive sd | **0.682** | **0.476** |
+| archetype spread | 0.145 | **0.108** |
+
+Nine floors pass on it and `test_defense_agrees_with_the_consensus` fails. The old claim that a
+season-granularity prior "loses half its defensive spread" is **real and it is not the missing `onc_*`
+columns** -- this panel has them. The defensive prior is 30% narrower (0.476 against 0.682) and the finished
+defensive rating follows it down. Offense gains from the finer substrate (0.835 -> 0.865, and the archetype
+spread improves) which is what makes this a genuine trade rather than a worse panel.
+
+So: the panel stays block-granular until the defensive attenuation has a fix, and **the decay constants are
+therefore unblocked** -- they can be re-picked on the block panel, which is the substrate that ships. The
+obvious candidate for the fix is that `win_decay` is per WINDOW and a window is one season on this panel:
+`spy` cube-roots it to the same decay per year and is worth +0.002 (z +0.06) on the criterion, so it is not
+the answer by itself.
+
 **The season-granularity role panel is criterion-neutral** (2026-09-10, on the rebuilt panel that finally
-carries the `onc_*` columns). Same kernel, same map family, panel swapped: `sp_ks00` against `ks00` is **+0.008
-per 100, z +0.10, 16 of 28 seasons** -- a tie. Cube-rooting `win_decay` to the same decay per year (`spy`) is
-+0.016, z +0.48: nothing. On the three-season kernel the season panel is +0.106, z +1.32, also not separable.
+carries the `onc_*` columns, re-measured after zero-weight seasons left the training list). Same kernel, same
+map, panel swapped: `sp_ks00` against `ks00` is **+0.063 per 100, z +0.70, 14 of 28 seasons** -- a tie.
+Cube-rooting `win_decay` to the same decay per year (`spy`) is +0.002, z +0.06: nothing. On the three-season kernel the season panel is +0.106, z +1.32, also not separable.
 So the panel granularity is free to follow the product rather than the criterion, and the earlier "a season
 panel loses half its defensive spread" is a question about the prior's spread, not about prediction.
 
