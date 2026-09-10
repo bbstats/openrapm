@@ -295,9 +295,27 @@ re-based twice already and its own comment says a third time wants the owner. Sc
 
     OPENRAPM_BOARD=outputs/season_ratings_ks00.parquet .venv/Scripts/python -m pytest tests/test_vs_consensus.py -q
 
-Next concrete step: put the bigness number in front of the owner — the single-season board lifts guards over
-bigs relative to the consensus, further than the shipped board does, and that is the one thing standing between
-`season_ratings_ks00.parquet` and being the board. Everything else about ruling 1 is measured.
+The owner asked why, 2026-09-10, and called the guardrail arbitrary: *"eventually it might just be a useful
+loss function to guard against archetype over/under-fitting. could add it into the loss function even if we
+want to get fancy. but would rather use a bayesian gaussian mixture (legit unsupervised clusters rather than
+center/big/guard)"*.
+
+The why, in full in DECISIONS.md: **the offensive box-and-role prior is the whole source** (-0.469 against
+bigness on every kernel and every map), the single-season fit keeps more of it because there is a third as
+much on-court evidence to pull back with, and the shipped map's `prior` re-weighting term had been correcting
+0.064 of it as a side effect that `linear+sat` does not reproduce. On the TOTAL the two boards agree with the
+consensus and the new one is closer (+0.068 against +0.169) — the disagreement is about which side of the ball
+a big man's value is on, not about how good he is.
+
+`scripts/58_archetype.py` is the owner's mixture, built: a Bayesian Gaussian mixture on the per-36 box
+profile, then the board-minus-consensus gap per cluster. By that measure the single-season board is the LESS
+archetype-biased of the two — sd of the per-cluster total gap 0.133 against the shipped board's 0.229 — which
+is the opposite of what the hand-made `bigness` floor says.
+
+Open, for the owner: replace `test_offense_has_no_big_man_bias` with a floor on the cluster-gap spread (it
+needs a stability check first — the mixture is refit per run and the clusters must not move under the seed),
+and separately decide whether an archetype penalty belongs in the fit at all. Nothing about the mixture is
+wired into the model; `58_archetype.py` only reports.
 
 `60_season_board.py` takes `--out=<stem>` now. A one-season or candidate run used to overwrite
 `outputs/season_ratings.parquet`, which `tests/test_vs_consensus.py` reads as the shipped board; it

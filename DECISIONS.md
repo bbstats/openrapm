@@ -90,6 +90,40 @@ side) ties `linear+log2&xlog&prior&tshare : linear+log2&xlog` (6 and 4) at -0.00
 single-season kernel and -0.002, z -0.08 on the three-season one. The standing rule takes the simpler and
 faster. The four-term family was chosen before the playoff fold moved what the criterion scores.
 
+**The big-man floor is measuring an offense/defense ATTRIBUTION disagreement, not a bias** (2026-09-10,
+asked for by the owner after the single-season board failed it at -0.437). Decomposed by stage, on the same
+475 players:
+
+| | offense gap vs bigness | defense gap | TOTAL gap |
+|---|---|---|---|
+| shipped `ks52` board | -0.326 | +0.279 | +0.169 |
+| single-season board | **-0.437** | +0.166 | **+0.068** |
+
+The two boards agree with the consensus about how good bigs ARE; they disagree about which side of the ball it
+comes from, and the single-season board's total is the closer of the two. Within the offense, the source is the
+**box-and-role prior and nothing else**: its gap-vs-bigness is **-0.469 on every kernel and every map tried**.
+Two things then move it, and both were measured by building the same board three ways
+(`season_ratings_ks00_shipmap.parquet` is the middle row):
+
+  * the on-court residual `u` pulls back toward bigs (+0.12 with bigness on its own), and a single-season fit
+    gives it a third of the evidence, so less of the pull survives: -0.390 becomes -0.425;
+  * the shipped map's `prior` re-weighting term shrinks the prior and so incidentally corrects another 0.064
+    (-0.390 -> -0.326). `linear+sat` has no such term, so the new board keeps the whole tilt (-0.426 with the
+    shipped map, -0.437 with its own).
+
+In points the disagreement is small: per +1 sd of bigness the consensus offense falls 0.291 per 100, the board
+0.420 and the prior 0.554. It reads as a 0.44 correlation because both sides are standardised and the board's
+offensive spread is 1.19 against the consensus's 1.96.
+
+**Unsupervised archetypes say the new board is the less biased one** (`scripts/58_archetype.py`, a Bayesian
+Gaussian mixture on the per-36 box profile -- the owner's suggestion, and no hand-picked axis). Per-cluster
+mean total gap, sd across clusters: **0.229 on the shipped board against 0.133 on the single-season one**. The
+shipped board's worst clusters are the rim-running centres at +0.21 / +0.27 (Gobert, Allen, Mobley; Okongwu,
+Looney) and the offensive engines at -0.38 (Jokic, Gilgeous-Alexander, Harden); on the single-season board
+those are +0.11 and -0.10. The centre cluster is where offense and defense are large and opposite (-0.42 /
++0.39), which is the attribution story again. So `test_offense_has_no_big_man_bias` and the cluster spread
+disagree about which board is worse, and the cluster spread is the one without five hand-chosen weights in it.
+
 **The two instruments disagree about ruling 1, and the disagreement is stable across the board.** The
 single-season board (`ks00_lam05_ow_w0.25` + its own `linear+sat` map) is **worse on the criterion by 0.606 per
 100** and **better against the external consensus everywhere**: pooled over 2024-2026 on the 475 players both
