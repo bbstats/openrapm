@@ -55,26 +55,35 @@ target; between two candidates the criterion cannot separate, take the simpler a
 
 ## Phase 1 — the work, in order
 
-Everything below is unstarted. It is the whole of ruling 1, 2 and 3.
+Ruling 3 is done (`9b281b3`). Rulings 1 and 2 are not.
 
-### 1. Fold playoffs into the fit
+### 1. Fold playoffs into the fit — DONE, 2026-09-10
 
-`MspiFast.phases` already exists (`fastfit.py:253`) and `("RS","PO")` already works —
-`systems.py` has `mspi1_lam05_po` using it. The design carries a `playoff` fixed-effect column and
-`config.yaml:18 neutral_site_seasons_po: [2020]` already zeroes home court for the bubble.
+`design.FIT_PHASES = ("RS", "PO")` is the one training default, shared by `windows.build_window`,
+`designcache.build_window_cached`, `holdout.default_loader`, `Context.design`, `exposure.BoxExposure`
+and `fastfit.MspiFast`. `roles.ROLE_PHASES` and `xshoot.SHOT_PHASES` carry the role inputs and the
+shooter totals. `tests/test_playoffs_in_fit.py` pins all of it.
 
-What is **not** done, and each is a place playoffs are silently dropped:
+`design.SCORE_PHASES = ("RS",)` is pinned by hand at the two sites that build the rows the criterion
+scores (`holdout.py`, `calmap.py`). **This is a decision, not an oversight, and it is still open:**
+the baselines below were measured on that estimand, so moving the yardstick in the same change that
+moved the fit would have made the two unreadable. Whether the criterion should score playoff games
+too is the next person's call. `tests/test_playoffs_in_fit.py` fails if it drifts silently.
 
-- `roles.py:110` and `roles.py:237` — `load_gamelog(season, "RS", cfg)`. Role inputs (minutes,
-  starts, possessions) are regular-season only.
-- `xshoot.py:66`, `:141` onward — shooter totals that price the luck-adjusted targets are RS-only.
-- `holdout.py:208` — `season_box([season], ["RS"], ...)`, and the `phases=("RS",)` defaults at
-  `holdout.py:80` and `:260`. Those defaults are what every caller silently inherits.
-- `exposure.py:283-296` — `pad_k: auto` split-half constants. Confirm the halves are built from
-  pooled RS+PO, not RS alone.
+The measurement is in DECISIONS.md: the criterion cannot separate the two (+0.022 per 100 for RS-only
+at team-game level, z 0.83), and the consensus check moves 0.810 → 0.809 total.
 
-DECISIONS.md records that two of the three fixes needed to make the playoff delta work were bugs in
-shared code, one of them *"the exposure always filtered to RS"*. Expect more of that shape.
+Two things this file expected to be broken were correct by construction, and the notes are kept
+because the reasoning is not obvious: `roles.cut_role_inputs` reads regular-season stints because
+`inseason.keep_games` names regular-season ids only, and `kernel_game_mult` already zeroes the anchor
+season's playoff games under a cut. A fit that has seen the first q of a season cannot see its
+playoffs. `exposure.py`'s split-half `pad_k` needed no change either: the halves are built from
+whatever `BoxExposure.phases` names, so flipping that default was the whole fix.
+
+The one caveat on the measurement: at q75 the anchor season's playoffs are excluded by the cut, so
+the fold only reaches H-1 and H-2's playoff rows plus the role and shooter inputs. On the BOARD,
+where there is no cut, it reaches the rated season's own playoffs — which is the case that matters
+for the product and which the criterion, by construction, cannot score.
 
 ### 2. Move to one row per player per season
 
@@ -107,6 +116,24 @@ All of these were calibrated at three-season scale and none of them transport:
 This is ruling 1's second sentence and it matters more than usual now. A single-season rating is
 **20% on-court evidence on offense and 44% on defense** (DECISIONS.md); the rest is the prior. For a
 bench player the prior essentially *is* the rating.
+
+**Measured first, 2026-09-10: the bottom of the board is the calibration map, not the prior.** On a
+single-season fit of 2026 (`ks00_lam05_ow_w0.25`), all 52 players under 250 possessions land between
+−6.18 and −3.60. Not one is average and the spread among them is 0.70. The prior does not say that —
+it says −1.86, and `u` adds −0.04. The `log2` + `xlog` exposure terms in `calmap_insea_ship2_q75`
+add the other −3.10, and they were fitted on `ks52` at q75, where the same player carried 1.75× the
+kernel-weighted possessions. The shipped board has the same defect, milder (−2.74 at <250):
+
+| his own possessions | n | prior + u | shipped rating | the map |
+|---|---|---|---|---|
+| <250 | 52 | −1.90 | −5.00 | −3.10 |
+| 250–500 | 35 | −1.28 | −4.08 | −2.80 |
+| 500–1k | 43 | −1.66 | −3.85 | −2.19 |
+| 4k+ | 288 | +0.25 | +0.31 | +0.06 |
+
+So item 4 is mostly item 3: the map is a constant that does not transport, and re-fitting it on the
+single-season kernel comes before anything is done to the prior. Height and weight are still the
+obvious lever afterwards, and the note below still stands.
 
 **The demographic-only prior already exists and the owner had forgotten.** `spm.fit_spm`
 (`spm.py:81`) is a possession-weighted ridge of APM on seven role inputs — possession share, its
@@ -208,5 +235,10 @@ to keep pooling for this test or re-base the floors, and write the reason into t
     .venv/Scripts/python scripts/52_site.py          # 14,568 rows, 30 seasons, 1.0 MB
     git log --oneline -14                            # ends at 73f0ab9 "Phase 0: delete the research sprawl"
 
-First concrete step: `python scripts/60_season_board.py --first=2026 --last=2026` and look at what a
-single-season fit does to the bottom of the board.
+First concrete step: re-fit the calibration map on the single-season kernel (`53_calmap.py`, the
+`ks00_lam05_ow_w0.25_q75` system is registered) and see how much of the −3.10 at the bottom of the
+board is a real exposure effect and how much was the `ks52` possession scale.
+
+`60_season_board.py` takes `--out=<stem>` now. A one-season or candidate run used to overwrite
+`outputs/season_ratings.parquet`, which `tests/test_vs_consensus.py` reads as the shipped board; it
+then fails as a big-man-bias assertion, which looks nothing like a clobbered artifact.

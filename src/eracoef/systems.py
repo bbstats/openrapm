@@ -624,6 +624,14 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                 S[_k.name] = _k
                 for qt, q in _CUTS.items():
                     S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
+        # the same board fit on regular-season rows only, so the playoff fold can be read on the criterion
+        # with nothing else moving.  Owner's ruling 3, 2026-09-10, made ("RS", "PO") the default.
+        for _kt in ("ks52_lam05_ow_w0.25", "ks00_lam05_ow_w0.25"):
+            _k = _replace(S[_kt], name=f"{_kt}_rs", phases=("RS",))
+            S[_k.name] = _k
+            for qt, q in _CUTS.items():
+                S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
+
         for _p, _tag in (("w", "dw"), ("f", "df"), ("b", "db")):
             for _w in _DEF_W:
                 _nm = f"tune501_b7_pasto_pOD_{_tag}{_w:g}"

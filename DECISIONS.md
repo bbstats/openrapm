@@ -144,6 +144,22 @@ rating is 20% on-court evidence on offense and 44% on defense. Between x0.25 and
 while the offensive evidence share moves 10% to 33% — a product decision with a measurement attached, and the
 owner's to make.
 
+**The playoffs are in the fit, and cost nothing.** Owner's ruling, 2026-09-10: the playoff delta is gone and
+playoff games join the fit like any other games. `phases=("RS",)` had been the default in six places -- the
+training design, the design cache, the two holdout entry points, the box exposure's padded rates, and
+`MspiFast` itself -- and each was somewhere the playoffs were silently dropped; so were the role inputs
+(minutes, starts, possessions) and the shooter totals that price the luck-adjusted targets. `design.FIT_PHASES`
+is now the one default and `design.SCORE_PHASES` pins the rows the criterion scores, which are still regular
+season only so the estimand these baselines were measured on has not moved. On the criterion at q75, K = 3,
+28 held-out seasons, with nothing but `phases` differing: regular season only is **+0.022 per 100 at team-game
+level (z 0.83, 13 of 28 seasons)** and +0.068 at stint level (z 1.73). Against the consensus, pooled over
+2024-2026 and 485 matched players, total 0.810 -> 0.809, offense 0.822 -> **0.824**, defense 0.758 -> 0.755,
+defensive spread 1.39 -> 1.38. The criterion cannot separate them and neither can the sanity check: this was a
+ruling about what the product is, and the measurement says it is free. Two things the handoff expected to be
+broken were correct by construction: `roles.cut_role_inputs` reads regular-season stints because `keep_games`
+names regular-season ids only, and `kernel_game_mult` already zeroes the anchor season's playoff games under a
+cut -- so a fit that has seen the first q of a season can never see its playoffs.
+
 ## What was tried and rejected
 
 **The LRBoost branch (a boosted correction on a frozen linear prior).** Five things had to be right before it
