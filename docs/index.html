@@ -19,7 +19,9 @@
   th:nth-child(1), td:nth-child(1) { color: var(--muted); }
   th:nth-child(2), td:nth-child(2) { text-align: left; }
   th { color: var(--muted); font-weight: 600; cursor: pointer; user-select: none; }
-  th[aria-sort="descending"] { color: var(--accent); }
+  th[aria-sort="descending"], th[aria-sort="ascending"] { color: var(--accent); }
+  th[aria-sort="descending"]::after { content: " 93"; }
+  th[aria-sort="ascending"]::after { content: " 91"; }
   th:first-child, th:nth-child(2) { cursor: default; }
   footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
   footer a { color: inherit; }
@@ -71,7 +73,8 @@
   const poRows = data.playoffs || [], poWindows = data.meta.playoff_windows || [];
   const $ = id => document.getElementById(id);
   const view = $("view"), block = $("block"), minp = $("minp"), find = $("find"), tbody = $("table").querySelector("tbody");
-  let sortKey = "t";
+  let sortKey = "t", sortDir = -1;      // -1 sorts high to low, +1 low to high; a second click on the
+                                       // same column flips it, a click on a new one starts high to low
   // the season board is the default view when it has been built (scripts/60_season_board.py); the
   // three-year blocks stay available in the same picker
   view.value = seasons.length ? "season" : "block";
@@ -99,8 +102,10 @@
   view.addEventListener("change", () => { fillPicker(); render(); });
   $("built").textContent = "Built " + data.meta.built + ".";
   document.querySelectorAll("th[data-k]").forEach(th => th.addEventListener("click", () => {
+    sortDir = sortKey === th.dataset.k ? -sortDir : -1;
     sortKey = th.dataset.k;
-    document.querySelectorAll("th[data-k]").forEach(x => x.setAttribute("aria-sort", x === th ? "descending" : "none"));
+    const dir = sortDir < 0 ? "descending" : "ascending";
+    document.querySelectorAll("th[data-k]").forEach(x => x.setAttribute("aria-sort", x === th ? dir : "none"));
     render();
   }));
   [block, minp].forEach(el => el.addEventListener("change", render));
@@ -114,7 +119,7 @@
           : po ? poRows.filter(x => x.w === w && x.p >= mp)
                : rows.filter(x => x.w === w && x.p >= mp);
     if (q) r = r.filter(x => x.n.toLowerCase().includes(q));
-    r.sort((a, b) => b[sortKey] - a[sortKey]);
+    r.sort((a, b) => (a[sortKey] - b[sortKey]) * sortDir);
     tbody.replaceChildren();
     r.forEach((p, i) => {
       const tr = document.createElement("tr");

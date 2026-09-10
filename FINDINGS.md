@@ -5254,3 +5254,39 @@ Giannis Antetokounmpo in 2021-2023, Chris Bosh, Karl-Anthony Towns.  The method 
 recovered the two most famous ones in the sport.
 
 **Still not on the site.**  The table exists and is validated; publishing it is a separate decision.
+
+### 38.5 Correction: the delta's defensive half had the wrong sign, and so did the Season column
+
+The owner, 2026-09-10, from the published page: *"i'm almost positive your 'season' number in playoff delta
+is just offense (trae/steph/luka/dame all at the top for example) instead of both."*  He was right, and the
+cause reaches further than the column he spotted.
+
+**`Ratings.d` is the RAW-sign defensive rating** -- points the opponent scored, so a NEGATIVE number is a
+good defender -- while everything published (`08_ratings`'s `rating_def`, the site, the season board) is
+flipped so positive is good.  `63_playoff_delta.py` added the raw sign instead of flipping it first, which
+means it was SUBTRACTING every player his own defence.  Two consequences:
+
+* `rs_total` demoted good defenders and promoted pure scorers, which is exactly the Trae Young / Curry /
+  Doncic / Lillard top the owner saw.  Now it agrees with the published board on every row (the column is
+  taken straight from `player_ratings.parquet` rather than recomputed, so the two views cannot drift again).
+* **`d_def` and therefore `d_total` were wrong too**, which invalidates the name check in 38.4.  It is
+  restated below and it is a BETTER check than the broken one, which is its own small warning about reading
+  plausibility into a list.
+
+**The corrected extremes** (800+ playoff possessions).  Raised most: **LeBron James 2015-2017** (+0.91),
+**Draymond Green 2018-2020**, **Kawhi Leonard 2012-2014** (+0.76, the year he was Finals MVP as a
+low-usage regular-season player), Karl-Anthony Towns and Jaden McDaniels 2024-2026, **Boris Diaw 2012-2014**
+(the Spurs' Finals swing piece), David Robinson, Anthony Davis, Tony Allen, JR Smith 2015-2017.  Lowered
+most: **Damian Lillard 2018-2020**, Isaiah Thomas 2015-2017, LaMarcus Aldridge, Jamal Murray 2024-2026,
+Caron Butler, Brandon Roy.  The defensive half now carries most of the spread, which is the right shape:
+playoff defence tightens and the estimator sees it.
+
+**What is NOT affected.**  Every measurement in 38.2 and 38.4 -- the penalty sweep, the search/confirm
+split, the attribution instrument -- ran through `Ratings` objects and `predict_season`, which handle the
+raw sign internally and never touched this arithmetic.  **-0.459 per 100 at z -2.16 and -0.508 at z -2.27
+stand.**  The bug was in the published TABLE, not in the estimator or its validation.
+
+**Also fixed on the page**: the table sorts both ways now.  A second click on the same column flips it and
+the header shows an arrow; a click on a new column starts high to low.  `scratch/site_smoke.mjs` drives the
+toggle on three columns in all three views and fails if the order or the `aria-sort` value is wrong, so this
+is checked rather than eyeballed.

@@ -13,6 +13,7 @@ const src = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const data = JSON.parse(readFileSync("docs/data/ratings.json", "utf8"));
 
 const listeners = new Map();
+const thListeners = [];       // the header cells register their own click handlers, one per column
 function el(id, tag = "div") {
   return {
     id, tagName: tag, value: "", textContent: "", hidden: false, dataset: {}, children: [],
@@ -31,10 +32,17 @@ const nodes = Object.fromEntries(ids.map(i => [i, el(i)]));
 nodes.table.querySelector = () => tbody;
 nodes.view.querySelector = () => ({ remove() { this.removed = true; } });
 
+const ths = ["r", "o", "d", "t", "p"].map(k => {
+  const t = nodes["th_" + k];
+  t.dataset.k = k;
+  t.addEventListener = (ev, fn) => { if (ev === "click") thListeners.push([k, fn, t]); };
+  t.setAttribute = (a, v) => { t.aria = v; };
+  return t;
+});
 global.document = {
   getElementById: id => nodes[id] ?? el(id),
   createElement: tag => el("_" + tag, tag),
-  querySelectorAll: () => [],
+  querySelectorAll: sel => (sel === "th[data-k]" ? ths : []),
 };
 global.fetch = async () => ({ json: async () => data });
 
@@ -55,6 +63,29 @@ function show(view, label) {
   if (got !== want) { console.error(`COLUMN MISMATCH: header wants ${want}, row has ${got}`); process.exitCode = 1; }
   if (!rows.length) { console.error("EMPTY TABLE"); process.exitCode = 1; }
 }
+function clickHeader(k) {
+  const hit = thListeners.find(([key]) => key === k);
+  if (!hit) { console.error(`no handler for column ${k}`); process.exitCode = 1; return; }
+  hit[1]();
+}
+function col(i) { return tbody.children.map(tr => parseFloat(String(tr.children[i].textContent).replace(/,/g, ""))); }
+function checkSort(label, k, idx) {
+  clickHeader(k);                                     // first click: high to low
+  const desc = col(idx), dirA = ths.find(t => t.dataset.k === k).aria;
+  clickHeader(k);                                     // second click on the SAME column: low to high
+  const asc = col(idx), dirB = ths.find(t => t.dataset.k === k).aria;
+  const isDesc = desc.every((v, i) => i === 0 || desc[i - 1] >= v);
+  const isAsc = asc.every((v, i) => i === 0 || asc[i - 1] <= v);
+  console.log(`    sort ${label}: first click ${dirA} ${isDesc ? "ok" : "WRONG"}, `
+            + `second click ${dirB} ${isAsc ? "ok" : "WRONG"}  [${desc.slice(0, 3)} -> ${asc.slice(0, 3)}]`);
+  if (!isDesc || !isAsc || dirA !== "descending" || dirB !== "ascending") process.exitCode = 1;
+}
+
 show("season", "Season");
 show("block", "3-year block");
 show("playoff", "Playoff delta");
+console.log("");
+console.log("--- sorting, in the playoff view (7 columns: #, Player, Season, dO, dD, dTotal, Poss)");
+checkSort("Season", "r", 2);
+checkSort("delta total", "t", 5);
+checkSort("playoff possessions", "p", 6);

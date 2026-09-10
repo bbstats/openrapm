@@ -59,6 +59,11 @@ if sp.exists():
 pp = root / "outputs" / "playoff_delta.parquet"
 if pp.exists():
     pl = pd.read_parquet(pp)
+    # the Season column must be the number the OTHER views show for that player, not the playoff script's
+    # own regular-season fit -- that one is unmapped, so it correlates 0.90 with the board rather than 1.00
+    # and a reader switching views would see two different "season" ratings for the same man
+    pl = pl.merge(rat[["player_id", "window", "rating_total"]], on=["player_id", "window"], how="left")
+    pl["rs_total"] = pl["rating_total"].fillna(pl["rs_total"])
     pcols = {"window": "w", "name": "n", "rs_total": "r", "d_off": "o", "d_def": "d", "d_total": "t",
              "po_poss": "p"}
     f = pl[list(pcols)].rename(columns=pcols).copy()

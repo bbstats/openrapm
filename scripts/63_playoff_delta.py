@@ -79,6 +79,13 @@ def main():
              .merge(po[["player_id", "o", "d", "poss"]]
                     .rename(columns={"o": "po_off", "d": "po_def", "poss": "po_poss"}),
                     on="player_id", how="inner"))
+        # `Ratings.d` is the RAW-sign defensive rating -- points the opponent scored, so NEGATIVE is a good
+        # defender -- while everything published (08_ratings' `rating_def`, the site, the season board) is
+        # flipped so positive is good.  Flip here, once, before anything is added up.  Adding the raw sign
+        # instead is what put Trae Young, Curry, Doncic and Lillard at the top of a column that was meant to
+        # be a total: it was subtracting each of them their own defence and rewarding the worst defenders.
+        for c in ("rs_def", "po_def"):
+            j[c] = -j[c]
         # the playoff fit's residual IS the delta: its offset was the regular-season rating
         j["d_off"] = j.po_off - j.rs_off
         j["d_def"] = j.po_def - j.rs_def
