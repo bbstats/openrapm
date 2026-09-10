@@ -1,3 +1,16 @@
+# Handoff: the playoff delta works; the luck adjustment works on teams and not on players
+
+**Latest, 2026-09-09 (FINDINGS 38).**  A rating can be the prior for another rating: the regular-season
+number becomes the OFFSET for a fit on playoff possessions, so that fit's residual is the playoff DELTA and
+no playoff box score is needed.  Penalty chosen on five blocks and read on five: **-0.459 per 100 at z -2.16
+on held-out playoff games and -0.508 at z -2.27 on attribution**, surviving a per-side slope refit.  The
+delta's spread is 0.21 against 2.43 for the ratings, and its extremes are Robert Horry twice and the 2011
+Mavericks at the top, Chris Paul and DeRozan at the bottom.  Three fixes made it possible and two were bugs
+in shared code (the exposure always filtered to RS; the unpenalized fixed block goes singular on a one-phase
+design).  `scripts/63_playoff_delta.py`; not published.  Start at 3.16.
+
+---
+
 # Handoff: the luck adjustment is measured end to end -- it works on teams, not on players
 
 **Latest, 2026-09-09 (FINDINGS 35-37).**  Every rate now has a measured skill share on each side and no
@@ -509,6 +522,32 @@ expensive part is deciding it was worth measuring.
 - Long bash heredocs still fail in this shell; write patch scripts with the Write tool.
 
 ## Part 3: the next pass
+
+### 3.16 DONE 2026-09-09: the playoff delta (FINDINGS 38)
+
+**A rating as the prior for another rating.**  `playoffs.playoff_system(inner)` gives `inner` back with
+`phases=("PO",)` and `prior_from=RegularSeasonPrior(inner)`: the regular-season rating becomes the OFFSET of
+a fit that sees only playoff possessions, so the fit's residual IS the playoff delta and no playoff box
+score is needed anywhere.  `scripts/63_playoff_delta.py` writes `outputs/playoff_delta.parquet`;
+`scratch/playoff_chain.py` is the test.
+
+**It works and it replicates.**  Playoff games alternate A/B within a series, so fitting the update on one
+half and scoring the other holds teams, series and lineups fixed.  Penalty chosen on five blocks, read on
+the other five: **x2 the regular-season penalty, -0.459 per 100 at z -2.16 on the confirm half and -0.508 at
+z -2.27 on ATTRIBUTION.**  It survives a per-side slope refit (-0.312), so it is ranking and not amplitude --
+which is what FINDINGS 36's candidate failed.  The delta's spread is 0.21 against 2.43 for the ratings.
+
+**The extremes are Robert Horry twice, Jason Terry, Dirk and Barea from the 2011 Mavericks at the top, and
+Chris Paul, DeRozan and Giannis at the bottom.**  No narratives were given to the method.
+
+**Three fixes went in to make it possible, two of them bugs in shared code:** `MspiFast.prior_from`;
+`BoxExposure(phases=)`, because the exposure filtered to `phase == "RS"` ALWAYS and a playoff-only design
+therefore had zero exposure; and dependent-column detection in `Moments`, because `is_po` is constant and
+`po_home` duplicates `home` on a one-phase design, which left the unpenalized block singular and the solve
+returning 1e12.  `MspiFast.half` fits one half of the games so the other can score it.
+
+**Not published.**  The site does not carry the delta.  Open: per-SEASON deltas (thinner still, untested)
+and whether the playoff delta belongs beside the season board or as its own view.
 
 ### 3.15 DONE and answered 2026-09-09: the luck adjustment, end to end (FINDINGS 35-37)
 
