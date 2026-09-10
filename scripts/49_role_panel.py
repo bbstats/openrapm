@@ -205,10 +205,17 @@ assert P[[*CAREER_INPUTS, *PLAYER_INPUTS]].notna().all().all(), "some rows got n
 print(f"  pass 4: career and bio columns joined, mean {P.exp_yrs.mean():.2f} seasons behind a row, "
       f"height {P.loc[P.side == 'O', 'height'].mean():.1f} in ({time.time() - t0:.0f}s)", flush=True)
 
+# `onc_o` / `onc_d` are computed in pass 1 and were being dropped here, which is worse than it looks:
+# gbdt_prior takes them with `if c in p.columns`, so a panel without them trains a prior that is
+# quietly missing the luck-adjusted on-court features AND the whole past_onc_* family, and nothing
+# fails.  The assert below is what stops that happening again.
+ONC_COLS = ["onc_o", "onc_d", "onc_poss_o", "onc_poss_d"]
 cols = ["window", "side", "player_id", "ps_idx", "season", "poss", *FEATURES,
         *[f"raw_{c}" for c in FEATURES], *SHOT_COLS_ALL, *RAW_INPUTS,
-        *CAREER_INPUTS, *PLAYER_INPUTS,
+        *CAREER_INPUTS, *PLAYER_INPUTS, *ONC_COLS,
         "apm", "spm", "u", "a", "rapm1"]
+missing = [c for c in cols if c not in P.columns]
+assert not missing, f"the panel is missing {missing}; a prior built on it would degrade in silence"
 P[cols].to_parquet(PANEL_PATH, index=False)
 if h_before is not None:
     assert hashlib.sha256(XP.read_bytes()).hexdigest() == h_before, "xrapm_panel.parquet changed; the reference must not move"

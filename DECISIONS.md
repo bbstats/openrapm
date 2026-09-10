@@ -144,21 +144,55 @@ rating is 20% on-court evidence on offense and 44% on defense. Between x0.25 and
 while the offensive evidence share moves 10% to 33% — a product decision with a measurement attached, and the
 owner's to make.
 
-**The playoffs are in the fit, and cost nothing.** Owner's ruling, 2026-09-10: the playoff delta is gone and
-playoff games join the fit like any other games. `phases=("RS",)` had been the default in six places -- the
-training design, the design cache, the two holdout entry points, the box exposure's padded rates, and
-`MspiFast` itself -- and each was somewhere the playoffs were silently dropped; so were the role inputs
-(minutes, starts, possessions) and the shooter totals that price the luck-adjusted targets. `design.FIT_PHASES`
-is now the one default and `design.SCORE_PHASES` pins the rows the criterion scores, which are still regular
-season only so the estimand these baselines were measured on has not moved. On the criterion at q75, K = 3,
-28 held-out seasons, with nothing but `phases` differing: regular season only is **+0.022 per 100 at team-game
-level (z 0.83, 13 of 28 seasons)** and +0.068 at stint level (z 1.73). Against the consensus, pooled over
-2024-2026 and 485 matched players, total 0.810 -> 0.809, offense 0.822 -> **0.824**, defense 0.758 -> 0.755,
-defensive spread 1.39 -> 1.38. The criterion cannot separate them and neither can the sanity check: this was a
-ruling about what the product is, and the measurement says it is free. Two things the handoff expected to be
-broken were correct by construction: `roles.cut_role_inputs` reads regular-season stints because `keep_games`
-names regular-season ids only, and `kernel_game_mult` already zeroes the anchor season's playoff games under a
-cut -- so a fit that has seen the first q of a season can never see its playoffs.
+**A season is its regular season and its playoffs, one entity.** Owner, 2026-09-10: the playoff delta is
+gone and "playoff games just join the fit like any other games", then "RS + playoffs should be considered a
+single entity in our new version". `phases=("RS",)` had been the default in six places -- the training design,
+the design cache, the two holdout entry points, the box exposure's padded rates, and `MspiFast` itself -- and
+each was somewhere the playoffs were silently dropped; so were the role inputs (minutes, starts, possessions)
+and the shooter totals that price the luck-adjusted targets. There is now one constant, `design.SEASON_PHASES`,
+and `tests/test_playoffs_in_fit.py` fails if a second one appears.
+
+**This moved the criterion's estimand, and the move exposed a bug that had hidden the playoffs on both sides
+at once.** A cut q trains on the anchor season's games with `season_frac < q` and scores the ones with
+`frac >= q`. `season_frac` gave a playoff game **-1**, which is below every cut -- so a playoff game was
+excluded from training by a special case in `kernel_game_mult` AND excluded from scoring by the same
+comparison. It was in neither half, and the first attempt to move the estimand came back identical to four
+decimal places, which is how it was found. A playoff game now scores 1.0: it comes after every regular-season
+game, so a cut trains on none of them and scores all of them, and the special case is gone.
+
+The criterion is therefore higher than every number recorded above this entry: the shipped board is 113.11
+per 100 at team-game level over 28 held-out seasons at q75, against **109.36 on regular-season rows alone**.
+Playoff games are harder to predict. Numbers measured before 2026-09-10 are on the old estimand and do not
+compare.
+
+On the estimand that includes them, the fold is worth something real. Regular-season-only training against
+the same board with nothing but `phases` differing, K = 3, q75, 28 seasons: **+0.057 per 100 at team-game
+level (z 2.28) and +0.128 at stint level (z 3.75)**. On the old RS-only estimand the same comparison read
++0.022 (z 0.83) -- not separable. You predict playoff games better if you trained on playoff games, and the
+yardstick that could not see that was the one that scored none of them. Against the consensus, pooled over
+2024-2026 and 485 matched players, the board moves 0.810 -> 0.809 total, 0.822 -> **0.824** offense, 0.758 ->
+0.755 defense, defensive spread 1.39 -> 1.38.
+
+The design keeps its `is_po` and `po_home` fixed columns, and that is not a contradiction. They are level
+controls on the environment, the same kind of thing as the per-season intercepts `int_<s>`, which nobody
+would call treating each season as a separate entity. Dropping them would make the playoffs' scoring level
+something the fit has to explain with the players on the floor, and the players on the floor in the playoffs
+are disproportionately the good ones. A level control is what keeps the two phases one entity rather than an
+advantage for whoever got there.
+
+One thing the handoff expected to be broken was correct by construction: `roles.cut_role_inputs` reads
+regular-season stints because `inseason.keep_games` names regular-season ids only, and a cut excludes the
+anchor's playoffs anyway.
+
+**The single-season board is worse, and much worse early in the season.** The owner's item 5 gate, measured
+with only the kernel differing, paired within cut over 28 held-out seasons on the whole-season estimand:
+`ks00` (one season) against the shipped `ks52` ({1, 0.5, 0.25}) is **+0.50 per 100 at team-game level at q75
+(z 2.43, 11 of 28 seasons) and +2.12 at q25 (z 11.2, 1 of 28)**, and coverage falls 0.987 -> 0.972 and
+0.955 -> 0.886. At q0 the single-season kernel is degenerate: no games at all, `covered` 0.00, so it has
+nothing to say about a season in progress until it is played. No calibration map is involved in any of these
+-- `45_holdout.py` applies none unless asked -- so this is the kernel, not the map. The caveat that keeps it
+from being the final answer: `ks00` reads the block role panel, so its prior is attenuated at season
+granularity; `sp_`/`spy_` twins on the season panel are registered and unmeasured.
 
 ## What was tried and rejected
 

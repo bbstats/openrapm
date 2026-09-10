@@ -64,14 +64,20 @@ Ruling 3 is done (`9b281b3`). Rulings 1 and 2 are not.
 and `fastfit.MspiFast`. `roles.ROLE_PHASES` and `xshoot.SHOT_PHASES` carry the role inputs and the
 shooter totals. `tests/test_playoffs_in_fit.py` pins all of it.
 
-`design.SCORE_PHASES = ("RS",)` is pinned by hand at the two sites that build the rows the criterion
-scores (`holdout.py`, `calmap.py`). **This is a decision, not an oversight, and it is still open:**
-the baselines below were measured on that estimand, so moving the yardstick in the same change that
-moved the fit would have made the two unreadable. Whether the criterion should score playoff games
-too is the next person's call. `tests/test_playoffs_in_fit.py` fails if it drifts silently.
+The owner then ruled: *"RS + playoffs should be considered a single entity in our new version."* So
+there is **one** constant, `design.SEASON_PHASES`, and the criterion scores playoff games too. There
+is no second constant and `tests/test_playoffs_in_fit.py` fails if one appears.
 
-The measurement is in DECISIONS.md: the criterion cannot separate the two (+0.022 per 100 for RS-only
-at team-game level, z 0.83), and the consensus check moves 0.810 → 0.809 total.
+That move exposed a bug that had hidden the playoffs on both sides at once. `season_frac` gave a
+playoff game **−1**, which is below every cut — so it was excluded from training by a special case in
+`kernel_game_mult` and excluded from *scoring* by the same comparison. It was in neither half. The
+first attempt to move the estimand came back identical to four decimal places, which is how it was
+found. A playoff game now scores 1.0.
+
+**Every criterion number below this line is on the new estimand and does not compare to one measured
+before 2026-09-10.** The shipped board reads 113.11 per 100 at team-game level at q75, against 109.36
+on regular-season rows alone. On the estimand that includes them the fold is worth +0.057 per 100
+(z 2.28); on the old one it read +0.022 (z 0.83) and looked like nothing.
 
 Two things this file expected to be broken were correct by construction, and the notes are kept
 because the reasoning is not obvious: `roles.cut_role_inputs` reads regular-season stints because
@@ -205,7 +211,23 @@ to keep pooling for this test or re-base the floors, and write the reason into t
    deleting it. `xpts_ft`, the shipped offensive target, lives in `design.TARGETS` and does **not**
    depend on `xpts.py`.
 
-7. **Read the traps in `DECISIONS.md` before trusting any number.** Especially: an unmapped gain is
+7. **`scripts/49_role_panel.py` does not rebuild the shipped panel.** This is the biggest open hole
+   and it blocks Phase 1 item 2, which needs `--season` to be trustworthy.
+   - It computes `onc_o` / `onc_d` / `onc_poss_*` in pass 1 and then **dropped them at write time**.
+     `gbdt_prior` takes them with `if c in p.columns`, so a panel without them trains a prior quietly
+     missing the luck-adjusted on-court features *and* the whole `past_onc_*` family, and nothing
+     fails. Fixed 2026-09-10, with an assert on the written column list.
+   - `outputs/role_panel_season.parquet` — what every `sp_*` system reads — **has never had them**
+     (103 columns against the block panel's 107). Some of "a season-granularity prior loses half its
+     defensive spread" may be this bug rather than granularity. Rebuild it before believing that.
+   - A rebuild lands defensive shrinkage at **0.219** where the shipped `artifacts/role_panel.parquet`
+     has **0.314**, and an isolated probe of the same `plugin_fit` on regular-season rows alone
+     reproduces 0.209 — so the gap is not the playoff fold. Something built the shipped panel that is
+     not in the repo. Deciding whether to accept the rebuilt panel needs the criterion, not an
+     argument; it is a different prior, not a refresh.
+   - The 49 `dr_*` columns the shipped panel carries have no reader in `src/` and can go.
+
+8. **Read the traps in `DECISIONS.md` before trusting any number.** Especially: an unmapped gain is
    not a gain (the calibration map absorbed 99% of one candidate); a feature can predict how
    well-*measured* a row is rather than how good the player is; an argmax on a grid boundary has
    chosen nothing.

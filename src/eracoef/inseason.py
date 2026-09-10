@@ -65,10 +65,18 @@ def season_rank(games: pd.DataFrame) -> np.ndarray:
 
 
 def season_frac(games: pd.DataFrame) -> np.ndarray:
-    """`season_rank` divided by the number of regular-season games that season: each game's position in
-    [0, 1), indexed by `game_idx`, -1 for playoff games.  A cut q keeps the games with frac < q."""
+    """Each game's position in its own season on [0, 1], indexed by `game_idx`.  A regular-season game is
+    its chronological rank over the count of them, so it lands in [0, 1).  A PLAYOFF game is 1.0: it comes
+    after every regular-season game, which is the only thing the cut needs to know about it.
+
+    A cut q trains on the games with frac < q and scores the ones with frac >= q, so this is what makes the
+    held-out season one entity -- a fit that saw the first three quarters of the regular season is asked to
+    predict the rest of the season, and the rest of the season includes its playoffs.  This was -1 until
+    2026-09-10, which put playoff games on the training side of every comparison and then dropped them from
+    the scored side, so they were in neither.
+    """
     n = int(games["game_idx"].max()) + 1
-    out = np.full(n, -1.0)
+    out = np.full(n, 1.0)
     rs = games[games["phase"] == "RS"].sort_values("game_idx")
     for _, g in rs.groupby("season", sort=False):
         idx = g["game_idx"].to_numpy()
@@ -80,9 +88,9 @@ def kernel_game_mult(wd, anchor: int, kernel: dict | None, cut: float | None = N
     """The per-game weight of a kernel fit, indexed by `game_idx`.
 
     A game of season s takes `kernel[s - anchor]`, or 0 if the kernel does not name that offset.  With
-    a cut below 1, every game of the ANCHOR season at or past the cut takes 0 as well, and so does
-    every playoff game of the anchor season (the season is not over).  Seasons other than the anchor
-    are never cut.
+    a cut below 1, every game of the ANCHOR season at or past the cut takes 0 as well, and that now
+    includes its playoff games without a special case: `season_frac` scores them 1.0, so any cut below
+    1 excludes them.  Seasons other than the anchor are never cut, playoffs and all.
     """
     games = wd.games
     n = int(games["game_idx"].max()) + 1
@@ -95,8 +103,7 @@ def kernel_game_mult(wd, anchor: int, kernel: dict | None, cut: float | None = N
     if cut is not None and float(cut) < 1.0:
         frac = season_frac(games)
         is_anchor = season == int(anchor)
-        gm[is_anchor & (frac >= float(cut))] = 0.0        # played after the cut
-        gm[is_anchor & (frac < 0.0)] = 0.0                # playoff games of a season in progress
+        gm[is_anchor & (frac >= float(cut))] = 0.0        # played after the cut, playoff games included
     return gm
 
 

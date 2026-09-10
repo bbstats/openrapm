@@ -43,7 +43,7 @@ SLOTS = ("1", "2", "3", "4", "5")
 
 # ---------------------------------------------------------------------------------------- the tables
 # The phases a shooter's totals are summed over; ("RS",) until the playoffs joined the fit.
-SHOT_PHASES = ("RS", "PO")
+from .design import SEASON_PHASES as SHOT_PHASES  # noqa: E402
 
 _SHOTS_CACHE: dict = {}
 

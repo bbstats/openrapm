@@ -30,9 +30,10 @@ from .config import resolve
 from .design import AWAY_SLOTS, HOME_SLOTS
 from .ingest import GAME_PREFIX, TIMEOUT, _retry, game_table, load_gamelog, raw_dir, season_str
 
-# The phases a player's role is measured over.  Owner's ruling, 2026-09-10: one rating per player per
-# season from that season's games, "regular season and playoffs together, nothing else".
-ROLE_PHASES = ("RS", "PO")
+# The phases a player's role is measured over: `design.SEASON_PHASES`, imported by name so there is one
+# place the answer lives.  Owner's ruling, 2026-09-10: one rating per player per season from that season's
+# games, "regular season and playoffs together, nothing else".
+from .design import SEASON_PHASES as ROLE_PHASES  # noqa: E402
 
 INPUTS = ["poss_pct", "poss_pct2", "gs_pct", "gs_pct2", "age", "age2", "age3"]
 RAW_INPUTS = ["poss_pct", "gs_pct", "age"]

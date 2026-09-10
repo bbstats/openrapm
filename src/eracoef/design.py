@@ -11,11 +11,18 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 
-# The phases a fit trains on.  Owner's ruling, 2026-09-10: "the playoff delta is gone; playoff games
-# just join the fit like any other games".  The rows the criterion SCORES are pinned separately and
-# are still regular season only -- see holdout.score / calmap -- so the yardstick has not moved.
-FIT_PHASES = ("RS", "PO")
-SCORE_PHASES = ("RS",)
+# A season is its regular season and its playoffs, and they are ONE ENTITY.  Owner, 2026-09-10:
+# "the playoff delta is gone; playoff games just join the fit like any other games", and then
+# "RS + playoffs should be considered a single entity in our new version".  So there is one constant
+# and no second one for scoring: every fit trains on both phases and the criterion scores both.
+#
+# The design's `is_po` and `po_home` fixed columns stay, and are not a contradiction.  They are level
+# controls on the ENVIRONMENT, the same kind of thing as the per-season intercepts `int_<s>` -- which
+# nobody would call treating each season as a separate entity.  Dropping them would make the playoffs'
+# lower scoring level something the fit has to explain with the players on the floor, and the players
+# on the floor in the playoffs are disproportionately the good ones.  A level control is what keeps
+# them one entity rather than an advantage for whoever got there.
+SEASON_PHASES = ("RS", "PO")
 
 FEATURES = ["fg3m", "fg3_miss", "fg2m", "fg2_miss", "ftm", "ft_miss",
             "orb", "drb", "ast", "tov", "stl", "blk", "pf"]

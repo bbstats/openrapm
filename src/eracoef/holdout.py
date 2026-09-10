@@ -47,7 +47,7 @@ import numpy as np
 import pandas as pd
 
 from .cv import plugin_fit
-from .design import FIT_PHASES, SCORE_PHASES, WindowData
+from .design import SEASON_PHASES, WindowData
 from .windows import build_window, hybrid_beta, window_label, window_seasons
 
 RESULT_COLUMNS = ["held_out", "k", "train", "system", "lam", "cut", "split", "group", "n", "mse", "base", "calib",
@@ -77,7 +77,7 @@ class System(Protocol):
 
 
 # ---------------------------------------------------------------------------------------- context
-def default_loader(seasons, cfg, target, phases=FIT_PHASES, counter_cols=None, min_den=0.0):
+def default_loader(seasons, cfg, target, phases=SEASON_PHASES, counter_cols=None, min_den=0.0):
     return build_window(list(seasons), cfg, phases=tuple(phases), target=target, counter_cols=counter_cols,
                         min_den=min_den)
 
@@ -205,7 +205,7 @@ class Context:
         per 36, the definition of scripts/22_vs_consensus.py) among players with `min_minutes` that season."""
         if season not in self._bigness:
             from .boxtable import season_box
-            b = season_box([season], list(FIT_PHASES), self.cfg)
+            b = season_box([season], list(SEASON_PHASES), self.cfg)
             g = b.groupby("player_id")[["orb", "blk", "drb", "ast", "fg3m", "minutes"]].sum()
             g = g[g.minutes >= min_minutes]
             per36 = g[["orb", "blk", "drb", "ast", "fg3m"]].div(g.minutes.clip(lower=1), axis=0) * 36
@@ -257,11 +257,11 @@ class Context:
             return labels_covering(panel.window.unique(), seasons)
         return {self.win_of[s] for s in seasons}
 
-    def design(self, seasons, target="pts", phases=FIT_PHASES, counter_cols=None, min_den=0.0) -> WindowData:
+    def design(self, seasons, target="pts", phases=SEASON_PHASES, counter_cols=None, min_den=0.0) -> WindowData:
         """A cached design.  `target` is a design.TARGETS key, or a callable
         (seasons, cfg, wd_pts) -> WindowData | (WindowData, report) for a derived target.  `phases` names the
-        phases whose rows enter the design; it defaults to `design.FIT_PHASES`, both of them, and the design
-        carries its own playoff level columns.  The rows the criterion SCORES pass `SCORE_PHASES` by hand.
+        phases whose rows enter the design and defaults to `design.SEASON_PHASES`, both of them -- for the
+        fit AND for the rows the criterion scores, because a season is one entity.
         `counter_cols` keeps only those per-possession counters (designcache.build_window_cached); it is
         honoured by the default loader only, and it is part of the cache key."""
         phases = tuple(phases)
@@ -269,7 +269,7 @@ class Context:
         cc = None if counter_cols is None or not own else tuple(sorted(counter_cols))
         md = float(min_den) if own else 0.0
         key = (tuple(int(s) for s in seasons), target if isinstance(target, str) else getattr(target, "__name__", repr(target)),
-               *(() if phases == FIT_PHASES else (phases,)), *(() if cc is None else (cc,)),
+               *(() if phases == SEASON_PHASES else (phases,)), *(() if cc is None else (cc,)),
                *(() if not md else (md,)))
         if key not in self._cache:
             if len(self._cache) >= self.cache_size:
@@ -280,7 +280,7 @@ class Context:
                     kw['counter_cols'] = cc
                 if md:
                     kw['min_den'] = md
-                wd = self.loader(list(seasons), self.cfg, target) if phases == FIT_PHASES and not kw else \
+                wd = self.loader(list(seasons), self.cfg, target) if phases == SEASON_PHASES and not kw else \
                     self.loader(list(seasons), self.cfg, target, phases, **kw)
             else:
                 wd = target(list(seasons), self.cfg, self.design(seasons, "pts", phases))
@@ -294,7 +294,7 @@ class Context:
         """player_id -> the team he played the most minutes for that season (box scores)."""
         if season not in self._teams:
             from .boxtable import season_box
-            b = season_box([season], list(FIT_PHASES), self.cfg).groupby(
+            b = season_box([season], list(SEASON_PHASES), self.cfg).groupby(
                 ["player_id", "team_id"], as_index=False)["minutes"].sum()
             b = b.sort_values("minutes").drop_duplicates("player_id", keep="last")
             self._teams[season] = dict(zip(b.player_id.astype(int), b.team_id.astype(int)))
@@ -701,9 +701,10 @@ class Holdout:
                   f"systems {[s.name for s in systems]}", flush=True)
         for h in held:
             ctx.current_h = h
-            # ALWAYS scored against actual points, and against regular-season rows only: the playoffs
-            # now train the fit but the criterion's estimand is the one the baselines were measured on.
-            wd_full = ctx.design([h], "pts", SCORE_PHASES)
+            # ALWAYS scored against actual points, and over the whole season -- playoffs included, because
+            # a season is one entity.  This MOVED the criterion's estimand on 2026-09-10; every number
+            # measured before that date was on regular-season rows alone.
+            wd_full = ctx.design([h], "pts")
             cut_frames: dict = {}
             for k in self.ks:
                 ctx.current_k = k
