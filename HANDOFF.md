@@ -6,7 +6,7 @@ back into a lab notebook — the last one reached 7,800 lines and was deleted on
 `archive/research-2026-09` has it).
 
 Branch `cleanup`, 27 commits ahead of `main`, working tree clean, `main` untouched.
-`pytest -q`: **229 passed, 1 xfailed, ~110 s.**
+`pytest -q`: **231 passed, 1 xfailed, ~110 s.**
 
 ---
 
