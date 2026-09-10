@@ -362,6 +362,88 @@ nothing to say about a season in progress until it is played. No calibration map
 from being the final answer: `ks00` reads the block role panel, so its prior is attenuated at season
 granularity; `sp_`/`spy_` twins on the season panel are registered and unmeasured.
 
+**`gbdt_win_decay_def` (0.280024) is unchanged, and it does transport.** Phase 1 item 3, the first constant
+re-picked with the panel settled as block-granular. The dial weights another window of the SAME player by
+`decay ** |i - j|` when the defensive prior pools his training target; it was tuned by `tune501` against a
+three-season product. `board_wdd<t>` in `systems.py` is the shipped board with only that number replaced.
+Seven points, K=3, q75, mapped `linear+sat`, paired against the shipped board's OWN mapped rows over 28
+held-out seasons (`cut` populated on every row, so no fit is scored on its training games):
+
+| decay | 0.035 | 0.070 | **0.280** | 0.198 | 0.396 | 0.560 | 1.000 |
+|---|---|---|---|---|---|---|---|
+| per 100 vs 0.280 | -0.029 | -0.026 | -- | -0.011 | -0.008 | +0.014 | +0.045 |
+| z | -1.39 | -1.79 | -- | -0.72 | -0.40 | +0.82 | +1.25 |
+
+(0.140, the first grid's low end, is -0.032 at z -1.76 over 16 of 28 seasons.) **Nothing separates at
+|z| >= 2**, so the standing tie rule keeps the incumbent. What the sweep does buy is the shape: the sign is
+monotone across the grid -- every value below 0.280 is better and every value above it is worse -- so the
+direction is real even though no point is significant, and "pool every other window alike" (1.0), the value
+the dial had before `tune501`, is the single worst point on the grid. The low end is a plateau, not a peak:
+0.035, 0.070 and 0.140 are within 0.006 per 100 of each other, which is why moving to any of them would be
+choosing noise. Built out to a full board, 0.140 changes nothing that is measurable elsewhere either --
+consensus total 0.8354 -> 0.8358, offense 0.8350 -> 0.8351, defense 0.7565 -> **0.7582**, defensive spread
+1.3314 -> 1.3305, ten of ten floors pass on both. The 0.280 rebuild through the same map path reproduces the
+shipped board to four decimals on every one of those, which is the check that the comparison was fair.
+
+Decay 0 is not available and would not mean what it looks like: `_pooled_by_distance` weights every other
+window by `0 ** |i - j|`, `training_rows` keeps only `other_w > 0`, and the booster is handed an empty frame
+(`ValueError: X has 0 sample(s)`). 0.035 is the floor this dial has.
+
+**The prior's body lever is the feature list, not `design7`.** The handoff pointed Phase 1 item 2 at
+`roles.design7` -- the Simple SPM's seven role-and-age inputs, with no box score and no body. That is true of
+`design7` and beside the point for the board: `ks00_lam05_ow_w0.25` runs `mode="full"` with `sides=("O","D")`,
+and `spm.offset` returns `np.zeros(2 * m)` on exactly that condition. The SPM offset is identically zero in
+the shipped board and `design7` reaches the rating only indirectly, through the `rapm1` column
+`49_role_panel.py` writes into the panel the GBDT trains on. The live lever is `gbdt_features`: the offensive
+prior carries `weight15` and **no height at all**, and the defensive prior carries **no body of any kind** --
+11 features, box counters plus `season`, `gs_pct`, `age` -- on the side where one season is only 44% evidence.
+`board_bio{O,D,OD}` adds the binned pair from `gbdt_prior.BIO_BINS`.
+
+**And the criterion cannot see the question, so `scripts/61_lowposs.py` was built to.** The out-of-season
+criterion is scored at TEAM-GAME level, where a 200-possession player is a rounding error; it will call any
+change to the bench a tie forever. The new script scores the prior itself, leave-one-panel-window-out: refit
+with window w excluded, predict w's own rows, and compare to the row's training target -- the player's value
+pooled over his other windows, or the exact other-window value of the pair when the feature list carries a
+PAST block. Buckets are SEASON-EQUIVALENT possessions (the window's possessions over its length), so "under
+500" means what `low_poss_threshold` now means. On the shipped board, skill (1 - mse/null_mse, the null being
+the panel mean for everyone) by bucket:
+
+| season-equiv poss | <250 | 250-500 | 500-1500 | 1500-4500 | 4500+ |
+|---|---|---|---|---|---|
+| offense | 0.193 | 0.173 | 0.179 | 0.255 | **0.480** |
+| defense | 0.096 | 0.160 | 0.171 | 0.265 | **0.327** |
+
+That is the shape of the problem in one table: the prior a starter gets is two to five times as good as the
+prior a bench player gets, on both sides.
+
+**Height and weight in the prior: weight belongs on defense, height does not, and neither belongs on
+offense.** Five variants, all mapped `linear+sat`, K=3, q75, `cut` populated. The criterion is a tie for every
+one of them (`board_bioO` -0.020 at z -1.00, `bioD` -0.003 at z -0.14, `bioDh` -0.012 at z -0.50, `bioDw`
+-0.007 at z -0.32), so it arbitrates nothing and the other two measurements do:
+
+| defensive prior | criterion z | prior d_mse, <250 | 250-500 | consensus def | floors |
+|---|---|---|---|---|---|
+| shipped (no body) | -- | -- | -- | 0.7565 | 10/10 |
+| + height2 + weight15 | -0.14 | +0.015 (z +0.57) | **-0.072 (z -2.72)** | 0.7489 | **9/10** |
+| + height2 only | -0.50 | +0.015 (z +0.57) | **-0.072 (z -2.62)** | 0.7485 | **9/10** |
+| + weight15 only | -0.32 | -0.028 (z -1.39) | -0.028 (z -1.90) | 0.7519 | 10/10 |
+
+**Height is what breaks the floor.** It also helps the wrong players: it improves the prior in the middle and
+at the top (1500-4500 z -2.37, 4500+ z -1.87) and makes the deepest bench slightly WORSE. Weight does the
+opposite -- it helps only the two lowest buckets, which is the population ruling 1's second sentence names,
+and is neutral everywhere else. Consensus defensive agreement falls under all three (0.7565 -> 0.7519 for
+weight alone) and the defensive spread widens (1.331 -> 1.341); FINDINGS 21.26 predicted exactly this, that
+the consensus floors do not tolerate a richer defensive feature list, and it is again the offense/defense
+attribution disagreement rather than a total one (total 0.8354 -> 0.8334).
+
+On offense, adding `height2` beside the `weight15` already there is worse at the bottom (<250 z +1.27) and
+worse in the middle (1500-4500 z +1.73) and better nowhere. Rejected.
+
+**The open ruling.** `board_bioDw` is a tie on the criterion, passes all ten floors, and is better where the
+criterion structurally cannot look. Whether a measurement the criterion cannot see may move the board is not
+a tiebreak the criterion can settle, so it is the owner's. The standing rule as written ("between two
+candidates the criterion cannot separate, take the simpler") keeps the shipped board.
+
 ## What was tried and rejected
 
 **The LRBoost branch (a boosted correction on a frozen linear prior).** Five things had to be right before it

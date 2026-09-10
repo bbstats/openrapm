@@ -1,11 +1,11 @@
-# Handoff: the board is one season now; rulings 1, 2 and 3 have landed
+# Handoff: the bottom of the board is measurable now, and one ruling is waiting
 
 **This file is transient.** It exists to start the next session and should be deleted when Phase 1
 ships. `DECISIONS.md` is the permanent record and carries every number quoted here; do not turn this
 back into a lab notebook — the last one reached 7,800 lines and was deleted on purpose (tag
 `archive/research-2026-09` has it).
 
-Branch `cleanup`, 26 commits ahead of `main`, working tree clean, `main` untouched.
+Branch `cleanup`, 27 commits ahead of `main`, working tree clean, `main` untouched.
 `pytest -q`: **229 passed, 1 xfailed, ~110 s.**
 
 ---
@@ -90,27 +90,40 @@ z +0.06, so it is not the fix by itself.
 Reproduce with the commands at the bottom of this file. `--tag=spanel2` is the current dump; the earlier
 `insea_spanel` one predates the zero-weight-season fix and should not be read.
 
-### 2. Make the prior carry low-minute players
+### 2. Make the prior carry low-minute players -- MEASURED, and one ruling is waiting
 
-Ruling 1's second sentence. A single-season rating is **20% on-court evidence on offense and 44% on
-defense**; for a bench player the prior essentially *is* the rating.
+**The criterion cannot see this question.** It is scored at team-game level, where a 200-possession player is
+a rounding error, so it calls every change to the bench a tie. `scripts/61_lowposs.py` is the instrument that
+can see it: refit the prior with one panel window excluded, predict that window's own rows, compare to the
+row's training target, and report by SEASON-EQUIVALENT possessions. On the shipped board, skill by bucket:
+
+| season-equiv poss | <250 | 250-500 | 500-1500 | 1500-4500 | 4500+ |
+|---|---|---|---|---|---|
+| offense | 0.193 | 0.173 | 0.179 | 0.255 | **0.480** |
+| defense | 0.096 | 0.160 | 0.171 | 0.265 | **0.327** |
+
+A starter's prior is two to five times as good as a bench player's. That is the problem, quantified.
+
+**The handoff's lever was the wrong one, and the right one is measured.** `roles.design7` has no body -- but
+the board runs `mode="full"` on both sides and `spm.offset` returns `np.zeros(2 * m)` on exactly that
+condition, so the Simple SPM offset is identically zero in the shipped board. `design7` reaches the rating
+only through the `rapm1` column `49_role_panel.py` writes into the panel. The live lever is `gbdt_features`,
+and the finding is in `DECISIONS.md`: **height belongs nowhere, weight belongs on defense.** `board_bioDw`
+(`weight15` added to the 11-feature defensive prior) is a criterion tie at z -0.32, passes ten of ten floors,
+and improves the prior at <250 (z -1.39) and 250-500 (z -1.90) possessions and nowhere else. `board_bioDh`
+does the reverse -- helps the middle and top, makes the deepest bench worse, and fails the defensive floor at
+0.7485.
+
+**The ruling the owner owes:** may a measurement the criterion structurally cannot see move the board? If
+yes, ship `board_bioDw`. If no, the standing tie rule keeps the shipped board and `61_lowposs.py` stays a
+diagnostic. Nothing else in Phase 1 is blocked on the answer.
 
 **Two things already measured, so do not redo them.** The bottom of the board is the calibration map's
-exposure term, not a defect in the prior: players under 250 possessions take −2.85 from the map, and
-re-fitting that map on the single-season kernel changed it by 0.08 (the `ks52` map gave −2.77 on the
+exposure term, not a defect in the prior: players under 250 possessions take -2.85 from the map, and
+re-fitting that map on the single-season kernel changed it by 0.08 (the `ks52` map gave -2.77 on the
 same players). It is what the games ask for at 200 possessions. And the offensive prior's archetype
-tilt (−0.469 against bigness, on every kernel and every map) is an offense/defense **attribution**
+tilt (-0.469 against bigness, on every kernel and every map) is an offense/defense **attribution**
 disagreement with the consensus, not a bias: the total gap is +0.068.
-
-**The lever the owner named:** height and weight are in `bio.py` (`PLAYER_INPUTS`) and reach the GBDT
-as `height2` / `weight15` bins (`gbdt_prior.BIO_BINS`), but never reach the SPM. `spm.fit_spm`
-(`spm.py:81`) is a possession-weighted ridge of APM on seven role inputs — possession share and its
-square, starts share and its square, age, age², age³ (`roles.design7`). No box score, no body. Adding
-binned height and weight to `design7` is small and well-scoped. **The trap:** fine height and weight
-together name a player almost uniquely and were +0.20 on the criterion at z 4.7 while being −0.27 on
-the prior's own fit. Binned is the form that survived. Do not un-bin them.
-
-Report, as a first-class number, predicted-versus-actual error for players under 500 possessions.
 
 ### 3. Finish re-picking the constants
 
@@ -122,15 +135,19 @@ Four are done and the old headline ("none of them transport") is already wrong:
 | `lam_ratio_plugin` (0.6245) | **unchanged.** Flat: ×0.5 and ×2 are +0.060 and +0.061, z +1.05 and +1.19 |
 | `low_poss_threshold`, `starter_poss_threshold` | **1500/4500 → 500/1500.** Design possessions are one season now. Touches no rating (`lam_buckets` is empty; the 2026 fit is bit-identical) — it names the diagnostic groups |
 | `boost_min_poss` (4500) | **dead.** No reader in `src/` or `scripts/`. Delete it with the booster |
+| `gbdt_win_decay_def` (0.280024) | **unchanged, and it transports.** Seven points; nothing separates at \|z\| >= 2, but the sign is monotone -- every value below 0.280 is better, every value above it worse, and 1.0 ("pool every window alike") is the worst point on the grid. The low end is a plateau: 0.035 / 0.070 / 0.140 are within 0.006 per 100 of each other |
 
 `board_lam<m>` and `board_lr<m>` in `systems.py` register those sweeps on the exact system that ships:
 re-run with `53_calmap.py dump --tag=lamsweep` then `fit --tag=lamsweep --maps=linear+sat`. **Every
 sweep must bracket the current value on both sides** — the old lambda grid was {0.125, 0.25, 0.5, 2.0}
 with no 1.0 in it, so 0.5 had won a boundary it was never asked to beat.
 
-The three decays are **unblocked** now that the panel stays block-granular: `gbdt_win_decay` (0.514),
-`gbdt_win_decay_def` (0.280) and `PAST_DECAY` (`gbdt_prior.py`, 0.5) are per WINDOW of that panel, and the
-panel is the one that ships. Sweep them the same way, bracketing on both sides.
+Two decays are left and both are unblocked: `gbdt_win_decay` (0.514) and `PAST_DECAY`
+(`gbdt_prior.py`, 0.5). Sweep them the way `board_wdd<t>` did -- and note what that sweep cost to get right:
+the first grid's low end won, which is an argmax on a boundary and has chosen nothing, so it needed a second
+pass beneath it. Bracket on both sides FIRST. Decay 0 is not a value this dial has:
+`_pooled_by_distance` weights every other window by `0 ** |i - j|`, `training_rows` keeps only `other_w > 0`,
+and the booster gets an empty frame.
 
 Left: `lam_scale`, the three decays, `gbdt.params` / `params_def`,
 `features_full_O` / `_D`, `k3 = 450` (`xshoot.py:431`), `FACTOR_LAMS` (`fastfit.py:65`), and the shipped
@@ -214,15 +231,25 @@ criterion included.
     .venv/Scripts/python scripts/60_season_board.py  # ks00_lam05_ow_w0.25, kernel {0: 1.0}, ~70 s
     .venv/Scripts/python scripts/52_site.py          # 14,578 rows, 30 seasons, 1.0 MB
     .venv/Scripts/python scripts/58_archetype.py     # 0.145 spread, 8 clusters, centres at +0.11
-    git log --oneline -1                             # 49a4f59 "The board's two ridge constants..."
+    .venv/Scripts/python scripts/61_lowposs.py       # defensive skill 0.096 at <250, 0.327 at 4500+, ~25 s
 
-**First concrete step:** re-pick `gbdt_win_decay_def` (0.280) on the block panel. It is the constant that
-sets how much of a player's other windows the DEFENSIVE prior pools, defence is where both open problems
-live (the panel's attenuation and the 0.756 floor), and it is per-window on a substrate that is now settled.
-Register the sweep beside `board_lam<m>` in `systems.py`, bracket 0.280 on both sides, then:
+**First concrete step:** get the owner's ruling on item 2 above -- it is one question and it unblocks a
+finished, measured candidate. Then sweep `gbdt_win_decay` (0.514) the way `board_wdd<t>` swept its defensive
+twin, registering the grid beside it in `systems.py`:
 
-    .venv/Scripts/python scripts/53_calmap.py dump --systems=<the sweep>_q75 --k=3 --workers=4 --tag=decaysweep
-    .venv/Scripts/python scripts/53_calmap.py fit  --systems=<the sweep>_q75 --k=3 --maps=linear+sat --tag=decaysweep
+    .venv/Scripts/python scripts/53_calmap.py dump --systems=<the sweep>_q75 --k=3 --workers=4 --tag=wdosweep
+    .venv/Scripts/python scripts/53_calmap.py fit  --systems=<the sweep>_q75 --k=3 --maps=linear+sat --tag=wdosweep
+
+The dump is about 20 seconds per system and the fit about 5. A board is ~8 minutes; only build one for a
+candidate that already passed the criterion.
+
+Reproducing the item-2 decision:
+
+    .venv/Scripts/python scripts/61_lowposs.py --systems=ks00_lam05_ow_w0.25,board_bioD,board_bioDh,board_bioDw
+    .venv/Scripts/python scripts/53_calmap.py dump --systems=ks00_lam05_ow_w0.25_q75,board_bioDh_q75,board_bioDw_q75 --k=3 --workers=4 --tag=biosweep2
+    .venv/Scripts/python scripts/53_calmap.py fit --systems=ks00_lam05_ow_w0.25_q75,board_bioDh_q75,board_bioDw_q75 --k=3 --maps=linear+sat --tag=biosweep2
+    .venv/Scripts/python scripts/60_season_board.py --system=board_bioDw --map=outputs/calmap_biosweep2.parquet --map-system=board_bioDw_q75_linear+sat --map-base=board_bioDw_q75 --out=season_ratings_bioDw
+    OPENRAPM_BOARD=outputs/season_ratings_bioDw.parquet .venv/Scripts/python -m pytest tests/test_vs_consensus.py -q
 
 Reproducing the panel decision, if it is questioned (`SP=sp_ks00_lam05_ow_w0.25`):
 

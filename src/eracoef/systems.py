@@ -649,6 +649,51 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
             for qt, q in _CUTS.items():
                 S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
 
+        # --------------------------------------------- how much of a player's OTHER windows the defensive prior pools
+        # Phase 1 item 3, and the first constant re-picked now that the panel is settled as block-granular.
+        # `gbdt_win_decay_def` (0.280024) weights another window of the SAME player by decay ** |i - j| when the
+        # defensive prior pools his record; 0 is "this window only" and 1 is "every window equally".  It was tuned
+        # (tune501) against a three-season product, and defence is where both open problems live -- the panel's
+        # attenuation and the 0.756 consensus floor -- so it is the one worth asking again.  `board_wdd<t>` is the
+        # shipped board with that decay replaced; the grid brackets 0.280 on both sides and carries 1.0 (pool
+        # everything) as the far end, because an argmax on a boundary has chosen nothing.
+        # x0125 and x025 extend BENEATH the first grid, whose low end (0.140) came back best: an argmax on a
+        # boundary has chosen nothing, and only a value on each side of it turns that into a minimum.  Decay 0
+        # exactly is not available and is not "this window alone" -- `_pooled_by_distance` weights every other
+        # window by 0 ** |i - j|, `training_rows` keeps only `other_w > 0`, and the booster is handed an empty
+        # frame -- so x0125 (0.035) is the floor this dial has.
+        _BOARD_WDDS = {"x0125": 0.125, "x025": 0.25, "x05": 0.5, "x071": 0.7071, "x1": 1.0,
+                       "x141": 1.4142, "x2": 2.0}
+        for _mt, _m in _BOARD_WDDS.items():
+            _k = _replace(_board, name=f"board_wdd{_mt}", win_decay_d=float(_board.win_decay_d) * _m)
+            S[_k.name] = _k
+            for qt, q in _CUTS.items():
+                S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
+        _k = _replace(_board, name="board_wddfull", win_decay_d=1.0)
+        S[_k.name] = _k
+        for qt, q in _CUTS.items():
+            S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
+
+        # ------------------------------------------------------------------- does the prior know how big he is
+        # Phase 1 item 2: "low minute players should have REALLY GOOD REASONABLE PRIORS".  The handoff pointed
+        # at `roles.design7` -- but the board runs the GBDT in mode="full" on BOTH sides, so the Simple SPM
+        # offset is identically zero there and design7 only reaches the rating through the panel's `rapm1`
+        # target.  The live lever is the feature list: the offensive prior already carries `weight15` and no
+        # height at all, and the DEFENSIVE one carries no body of any kind (11 features, box counters plus
+        # season / gs_pct / age) -- on the side where a single season is only 44% evidence.  `board_bio<t>`
+        # adds the binned pair (`gbdt_prior.BIO_BINS`; fine height and weight together name a player almost
+        # uniquely, so binned is the only form allowed) to defense, to offense, or to both.
+        _bio = ["height2", "weight15"]
+        for _t, _sides, _cols in (("O", ("O",), _bio), ("D", ("D",), _bio), ("OD", ("O", "D"), _bio),
+                                  ("Dh", ("D",), ["height2"]), ("Dw", ("D",), ["weight15"])):
+            _f = {_s: list(_board.gbdt_features[_s]) for _s in ("O", "D")}
+            for _s in _sides:
+                _f[_s] = [*_f[_s], *[c for c in _cols if c not in _f[_s]]]
+            _k = _replace(_board, name=f"board_bio{_t}", gbdt_features=_f)
+            S[_k.name] = _k
+            for qt, q in _CUTS.items():
+                S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
+
         # the same board fit on regular-season rows only, so the playoff fold can be read on the criterion
         # with nothing else moving.  Owner's ruling 3, 2026-09-10, made ("RS", "PO") the default.
         for _kt in ("ks52_lam05_ow_w0.25", "ks00_lam05_ow_w0.25"):
