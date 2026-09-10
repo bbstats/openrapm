@@ -287,9 +287,17 @@ That first step is DONE, 2026-09-10, and it answered three questions and found a
 Artifacts: `outputs/calmap_insea_ks00_q75.parquet` (both kernels' maps), `outputs/season_ratings_ks00.parquet`
 (the single-season board, built with `--map-system=`/`--map-base=`, new flags on `60_season_board.py`).
 
-Next concrete step: score `outputs/season_ratings_ks00.parquet` against the consensus the way
-`tests/test_vs_consensus.py` scores the shipped board, per possession bucket — handoff item 5, and the
-decision the floors need before the board can be switched.
+Item 5 is also done. The single-season board is **better against the consensus in every bucket** (0.839
+total against the shipped 0.809, and 0.675 against 0.643 among players with under 5,000 of their own
+possessions) while being 0.606 per 100 worse on the criterion. Nine floors pass;
+`test_offense_has_no_big_man_bias` reads −0.437 against its 0.35 floor and was LEFT FAILING — it has been
+re-based twice already and its own comment says a third time wants the owner. Score a candidate board with
+
+    OPENRAPM_BOARD=outputs/season_ratings_ks00.parquet .venv/Scripts/python -m pytest tests/test_vs_consensus.py -q
+
+Next concrete step: put the bigness number in front of the owner — the single-season board lifts guards over
+bigs relative to the consensus, further than the shipped board does, and that is the one thing standing between
+`season_ratings_ks00.parquet` and being the board. Everything else about ruling 1 is measured.
 
 `60_season_board.py` takes `--out=<stem>` now. A one-season or candidate run used to overwrite
 `outputs/season_ratings.parquet`, which `tests/test_vs_consensus.py` reads as the shipped board; it

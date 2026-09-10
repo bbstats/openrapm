@@ -23,6 +23,7 @@ Pool first, compare like with like, and the numbers stay readable.
 
 Everything skips cleanly if the ratings or the consensus file are not built yet.
 """
+import os
 import re
 import unicodedata
 from pathlib import Path
@@ -33,8 +34,11 @@ import pytest
 from scipy.stats import spearmanr
 
 ROOT = Path(__file__).resolve().parents[1]
-# the season board, freshly built if it is there and the shipped copy otherwise
-RATINGS = [ROOT / "outputs" / "season_ratings.parquet", ROOT / "artifacts" / "season_ratings.parquet"]
+# the season board, freshly built if it is there and the shipped copy otherwise.  A candidate board
+# (`60_season_board.py --out=<stem>`) is scored by pointing OPENRAPM_BOARD at it, which is how these
+# floors get read for a candidate without overwriting the shipped artifact the rest of them read.
+RATINGS = [Path(p) for p in [os.environ.get("OPENRAPM_BOARD")] if p] or [
+    ROOT / "outputs" / "season_ratings.parquet", ROOT / "artifacts" / "season_ratings.parquet"]
 CONSENSUS = ROOT / "data" / "external" / "consensus.csv"
 SEASONS = [2024, 2025, 2026]        # what the consensus snapshot covers
 MIN_POSS = 1000

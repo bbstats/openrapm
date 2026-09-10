@@ -90,6 +90,21 @@ side) ties `linear+log2&xlog&prior&tshare : linear+log2&xlog` (6 and 4) at -0.00
 single-season kernel and -0.002, z -0.08 on the three-season one. The standing rule takes the simpler and
 faster. The four-term family was chosen before the playoff fold moved what the criterion scores.
 
+**The two instruments disagree about ruling 1, and the disagreement is stable across the board.** The
+single-season board (`ks00_lam05_ow_w0.25` + its own `linear+sat` map) is **worse on the criterion by 0.606 per
+100** and **better against the external consensus everywhere**: pooled over 2024-2026 on the 475 players both
+boards match, rank agreement is 0.839 total / 0.848 offense / 0.757 defense against the shipped board's 0.809 /
+0.824 / 0.755, and it is ahead in every possession bucket including the smallest (players with under 5,000 of
+their own possessions over the three seasons: 0.675 against 0.643). Defensive spread 1.34 against 1.38. The
+consensus is a sanity check and never a fitting target, so this does not overturn the criterion -- but ruling 1
+is the owner's and the sanity check does not object to it.
+
+Nine of the ten consensus floors pass on it. The tenth, `test_offense_has_no_big_man_bias`, reads **-0.437
+against a floor of 0.35** (the shipped board is -0.344). The single-season board pushes further along the axis
+that floor has already been re-based twice for: relative to the consensus its offense lifts guards over bigs.
+Its own comment says twice re-based is a pattern worth the owner's eye, so it was left failing rather than
+re-based a third time.
+
 **The season-granularity role panel is criterion-neutral** (2026-09-10, on the rebuilt panel that finally
 carries the `onc_*` columns). Same kernel, same map family, panel swapped: `sp_ks00` against `ks00` is **+0.008
 per 100, z +0.10, 16 of 28 seasons** -- a tie. Cube-rooting `win_decay` to the same decay per year (`spy`) is
