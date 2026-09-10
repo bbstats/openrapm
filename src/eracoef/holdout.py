@@ -544,6 +544,14 @@ def team_game_mse(y, pred, poss, game_idx, is_home_off) -> tuple[float, float]:
     return float(np.average(((g.act - g.prd) / g.poss * 100.0) ** 2, weights=g.poss)), float(g.poss.sum())
 
 
+def _keeps_whole_team_games(p: Prediction, idx: np.ndarray) -> bool:
+    """True if `idx` takes every row of each team-game it takes any row of."""
+    key = np.stack([np.asarray(p.game_idx), np.asarray(p.is_home_off, dtype=np.int64)])
+    _, inv, cnt = np.unique(key, axis=1, return_inverse=True, return_counts=True)
+    kept = np.bincount(inv[idx], minlength=len(cnt))
+    return bool(np.all((kept == 0) | (kept == cnt)))
+
+
 def score(p: Prediction, mask=None) -> dict:
     """The scores of a prediction, on all rows or on a subset (the level stays the full-season refit).
 
@@ -552,7 +560,16 @@ def score(p: Prediction, mask=None) -> dict:
                        an amplitude diagnostic and an upper bound, never a score
       scale_*          those scalars; 1.0 = calibrated, below 1 = the ratings are too wide
       covered          share of the season's players the training block had a rating for
-      tg, tg_base      the same two errors after team-game aggregation
+      tg, tg_base      the same two errors after team-game aggregation -- NaN when `mask` cuts a team-game
+
+    **`tg` is only defined on a mask that keeps whole team-games.**  It sums a team's points over its rows in
+    a game and scores that total; on a mask that takes some of a team-game's stints and not others, the sum is
+    a partial point total scored against a level fitted on complete ones, and the number is not the criterion
+    restricted to those rows -- it is not the criterion at all.  Measured on the shipped board, the
+    stint-level `exposure` split's groups recombine to 337.6 where the pooled score is 113.6, a factor of
+    three, and the sign of a map comparison flips inside it.  So masks that cut team-games (`exposure`,
+    `bench`, `bigs`, `movers`, `rookie` -- anything labelling a STINT) return NaN here and must be read on
+    `mse`, at stint level.  `tgexp` labels a team-game and recombines to the pooled score exactly.
     """
     idx = np.arange(len(p.y)) if mask is None else np.flatnonzero(mask)
     y, w = p.y[idx], p.w[idx]
@@ -564,8 +581,11 @@ def score(p: Prediction, mask=None) -> dict:
     cc = _wls(Ac, y, w)
     A2 = np.column_stack([p.A[idx], p.c_off[idx], p.c_def[idx]])
     c2 = _wls(A2, y, w)
-    tg, tg_n = team_game_mse(y, p.pred[idx], p.poss[idx], p.game_idx[idx], p.is_home_off[idx])
-    tg_base, _ = team_game_mse(y, p.base_pred[idx], p.poss[idx], p.game_idx[idx], p.is_home_off[idx])
+    if mask is None or _keeps_whole_team_games(p, idx):
+        tg, tg_n = team_game_mse(y, p.pred[idx], p.poss[idx], p.game_idx[idx], p.is_home_off[idx])
+        tg_base, _ = team_game_mse(y, p.base_pred[idx], p.poss[idx], p.game_idx[idx], p.is_home_off[idx])
+    else:
+        tg = tg_base = tg_n = np.nan
     return dict(n=float(w.sum()), mse=wmse(p.pred[idx]), base=wmse(p.base_pred[idx]), calib=wmse(Ac @ cc),
                 calib_side=wmse(A2 @ c2), scale=float(cc[-1]), scale_off=float(c2[-2]), scale_def=float(c2[-1]),
                 covered=float((p.rat.poss.to_numpy() > 0.0).mean()), tg=tg, tg_base=tg_base, tg_n=tg_n)
@@ -657,8 +677,36 @@ def by_gt(p: Prediction, wd_h: WindowData, ctx: Context, h: int, train: list) ->
     return np.where(gt, "garbage time", "competitive")
 
 
+def by_tg_exposure(p: Prediction, wd_h: WindowData, ctx: Context, h: int, train: list) -> np.ndarray:
+    """Each TEAM-GAME binned by the share of its possessions played by players the training block barely saw.
+
+    `by_exposure` labels a STINT, so its groups cut a team-game in half and the criterion's own unit -- points
+    summed over a team's rows in a game -- is never complete inside one of them.  Their numbers are still the
+    right question ("how well do we predict the stints a bench player was on the floor for"), but they are NOT
+    a decomposition of the pooled score and cannot be read as one telling you where the pooled gain came from.
+    This one is constant within a team-game, so the groups partition the team-games exactly and their scores
+    do add up to the pooled one.
+
+    The share counts each of the ten on the floor as a tenth of the row's possessions, low = fewer than
+    `holdout.low_exposure` training possessions (500, `low_poss_threshold` at season scale).
+    """
+    m = wd_h.spec.n_ps
+    thr = float(ctx.cfg.get("holdout", {}).get("low_exposure", 500.0))
+    edges = [float(e) for e in ctx.cfg.get("holdout", {}).get("tg_exposure_edges", [0.0, 0.05, 0.15, 0.30, 1.01])]
+    low = (p.rat.poss.to_numpy(dtype=float) < thr).astype(float)
+    n_low = wd_h.X[:, :2 * m] @ np.tile(low, 2)
+    poss = p.poss
+    d = pd.DataFrame({"g": p.game_idx, "h": p.is_home_off, "poss": poss, "lp": poss * n_low / 10.0})
+    tg = d.groupby(["g", "h"]).sum()
+    share = (tg.lp / tg.poss.clip(lower=1e-9)).rename("share")
+    labels = [f"{a:.0%}-{b:.0%}" if b <= 1.0 else f"{a:.0%}+" for a, b in zip(edges[:-1], edges[1:])]
+    b = np.clip(np.digitize(share.to_numpy(), edges) - 1, 0, len(labels) - 1)
+    lab = pd.Series(np.asarray(labels, dtype=object)[b], index=share.index)
+    return lab.reindex(pd.MultiIndex.from_arrays([d.g, d.h])).to_numpy()
+
+
 SPLITS = {"movers": by_movers, "exposure": by_exposure, "bigs": by_bigs, "bench": by_bench, "gt": by_gt,
-          "rookie": by_rookie}
+          "rookie": by_rookie, "tgexp": by_tg_exposure}
 
 
 # ---------------------------------------------------------------------------------------- the runner
@@ -847,9 +895,12 @@ def pooled(res: pd.DataFrame, by=POOL_BY) -> pd.DataFrame:
             "scale_off": float((d.scale_off * d.n).sum() / n),
             "scale_def": float((d.scale_def * d.n).sum() / n),
             "covered": float(d.covered.mean()),
-            "game": float((d.tg * d.tg_n).sum() / tn),
-            "game_base": float((d.tg_base * d.tg_n).sum() / tn),
-            "game_vs_no_ratings": 1.0 - float((d.tg * d.tg_n).sum() / (d.tg_base * d.tg_n).sum()),
+            # NaN, not a number, when the group's mask cut team-games: `score` refuses to aggregate a
+            # partial team-game and this is the one place that would quietly turn its NaN into a divide
+            "game": float((d.tg * d.tg_n).sum() / tn) if tn > 0 else np.nan,
+            "game_base": float((d.tg_base * d.tg_n).sum() / tn) if tn > 0 else np.nan,
+            "game_vs_no_ratings": (1.0 - float((d.tg * d.tg_n).sum() / (d.tg_base * d.tg_n).sum())
+                                   if tn > 0 else np.nan),
             "share": float(n),          # this group's share of the pooled rows, not the role input
         })
     out = res.groupby(list(by), sort=True).apply(agg, include_groups=False).reset_index()

@@ -193,6 +193,11 @@ holdout:
   bigs_edges: [0, 3, 4, 5, 11]      # --splits=bigs: number of top-tercile-bigness players among the ten
   bench_edges: [0, 3, 5, 7, 11]     # --splits=bench: number of bench players (gs_pct below bench_gs_pct) among the ten
   bench_gs_pct: 0.5
+  low_exposure: 500                 # --splits=tgexp: training possessions below which a player is "barely seen"
+  # --splits=tgexp: share of a TEAM-GAME's possessions played by those players.  Unlike `exposure_edges` this
+  # one is constant within a team-game, so the groups partition the criterion's own unit and their scores add
+  # up to the pooled score -- which is what makes it readable as "where did the pooled gain come from".
+  tg_exposure_edges: [0.0, 0.05, 0.15, 0.30, 1.01]
   exposure_edges: [0, 1, 500, 1500, 4000, 1000000000]   # the --splits=exposure bins (smallest exposure on the floor)
   consensus:
     window: [2024, 2026]

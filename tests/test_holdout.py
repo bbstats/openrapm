@@ -195,3 +195,35 @@ def test_ratings_table_prior_parts(world):
     plain = player_ratings_table(wd, zeros, CFG, seasons)
     assert np.allclose(plain.prior_off, 0.0) and not np.allclose(plain.u_off, t.u_off)
     assert np.allclose(t.prior_total, t.prior_off + t.prior_def)
+
+
+def test_team_game_score_is_nan_when_the_mask_cuts_a_team_game():
+    """`tg` sums a team's points over its rows in a game.  On a mask that keeps some of a team-game's stints
+    and not others, that sum is a PARTIAL point total scored against a level fitted on complete ones -- not
+    the criterion restricted to those rows, and not the criterion at all.  It read three times the pooled
+    error on the shipped board and flipped the sign of a map comparison before this guard existed.
+
+    Whole team-games kept: `tg` is the real number and the groups recombine.  Cut: NaN, read `mse` instead.
+    """
+    import numpy as np
+    from eracoef.holdout import Prediction, _keeps_whole_team_games, score
+
+    n = 12
+    rng = np.random.default_rng(0)
+    game_idx = np.repeat(np.arange(3), 4)
+    is_home_off = np.tile(np.array([0, 0, 1, 1]), 3)
+    p = Prediction(y=rng.normal(size=n), w=np.ones(n), poss=np.full(n, 50.0),
+                   home=np.zeros(n), c_off=np.zeros(n), c_def=np.zeros(n),
+                   pred=rng.normal(size=n), base_pred=np.zeros(n), game_idx=game_idx,
+                   is_home_off=is_home_off, rat=pd.DataFrame({"poss": [1.0, 2.0]}), A=np.ones((n, 1)))
+
+    whole = np.isin(game_idx, [0, 1])                  # both teams, every stint, of two games
+    assert _keeps_whole_team_games(p, np.flatnonzero(whole))
+    assert np.isfinite(score(p, whole)["tg"])
+
+    cut = np.zeros(n, dtype=bool)                      # one stint out of a team-game's two
+    cut[[0, 2, 4]] = True
+    assert not _keeps_whole_team_games(p, np.flatnonzero(cut))
+    assert np.isnan(score(p, cut)["tg"])
+    assert np.isfinite(score(p, cut)["mse"]), "the stint-level score stays valid on any mask"
+    assert np.isfinite(score(p)["tg"]), "no mask at all is still scored"

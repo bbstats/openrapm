@@ -115,17 +115,31 @@ does the reverse -- helps the middle and top, makes the deepest bench worse, and
 0.7485.
 
 **Ruling 9, 2026-09-10:** *"Bench players need to be in the accuracy test."* Done -- `53_calmap.py` takes
-`--splits=exposure,bench` now and `evaluate` / `unmapped_rows` score each held-out season inside groups. The
-pooled row is bit-identical either way (`test_splits_reach_the_calmap_scorer`). **Use it on every candidate
-from here.** With it, `board_bioDw` is **-0.202 per 100 at z -2.16 over 19 of 28 seasons** on the rows where
-the smallest training exposure on the floor is zero, and neutral in the other three groups -- so the pooled
-tie was an average over a real gain and three nothings. `board_bioDh` clears nothing at |z| = 2 in that split
-and still fails the defensive floor.
+`--splits=` now and `evaluate` / `unmapped_rows` score each held-out season inside groups. The pooled row is
+bit-identical either way (`test_splits_reach_the_calmap_scorer`).
 
-**Next on this item, and it is bigger than the feature list:** in the two lowest exposure groups the mapped
-systems are WORSE than the unmapped ones by +0.92 and +1.26 per 100, while the map is worth -1.24 pooled. The
-calibration map's exposure term buys its pooled gain by taxing the bench. Fix that and the bottom of the
-board moves further than any prior feature can move it.
+**Use `--splits=tgexp`, not `--splits=exposure`.** This cost a round trip and is trap 16 in `DECISIONS.md`.
+`by_exposure` labels a STINT, so its groups cut team-games in half, and the criterion sums a team's points
+over its rows in a game -- on a partial mask that is a partial point total against a level fitted on complete
+games. Its groups recombine to 337.6 where the pooled score is 113.6. It produced two confident wrong numbers
+before the recombination check caught it (a z of -2.16 for `board_bioDw` that is not there, and a story about
+the calibration map taxing the bench that is backwards). `score` returns NaN for `tg` on any mask that cuts a
+team-game now, so it cannot happen again; a stint-cutting split is read on `mse`.
+
+`by_tg_exposure` (`tgexp`) bins each TEAM-GAME by the share of its possessions played by players the training
+block saw fewer than 500 of. Constant within a team-game, recombines to the pooled score exactly.
+
+**What it says.** The calibration map's exposure term is *not* taxing the bench -- against no map at all it is
+worth -1.14 in the least bench-heavy games and **-4.47 (z -3.33)** in the 15-30% group, its largest gain by
+far, where plain `linear` manages -0.87. And `board_bioDw` is not a candidate: under `tgexp` it is -0.022,
+-0.003, +0.097 and +0.351 across the four groups, nothing significant, and the two bench-heavy groups mildly
+favour the shipped board. It is -0.396 at z -2.73 on zero-exposure rows at STINT level, which is a real
+measurement of a different unit; the criterion's unit is the team-game and it says no.
+
+**So item 2 is open again, with a working instrument and two levers ruled out.** Height and weight in the
+prior do not move the bench at team-game level, and the map is not the culprit. `61_lowposs.py` still shows
+the gap that started this (defensive skill 0.096 under 250 possessions against 0.327 above 4500), so the
+prior really is much worse there -- nothing tried so far closes it.
 
 **Two things already measured, so do not redo them.** The bottom of the board is the calibration map's
 exposure term, not a defect in the prior: players under 250 possessions take -2.85 from the map, and

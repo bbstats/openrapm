@@ -450,29 +450,44 @@ the script takes `--splits=exposure,bench`. The pooled row is bit-identical eith
 (`test_splits_reach_the_calmap_scorer` asserts that, and the re-scored `biosweep2` reproduced -0.011979 and
 -0.006555 exactly), so no number ever read off this script moved.
 
-**With bench players in it, the criterion separates what the pooled number could not.** `by_exposure` bins
-each row by the SMALLEST training exposure among the ten on the floor -- the group whose prediction rests on
-a player the training block barely saw. Mapped against the shipped board's own mapped rows, K=3, q75:
+**Then the split itself turned out to be the trap.** The first reading of it -- that weight on defense is
+-0.202 per 100 at z -2.16 on the zero-exposure rows, and that the calibration map "buys its pooled gain by
+taxing the bench" -- was **wrong, and both halves of it were wrong for the same reason.** `by_exposure`
+labels a STINT. Its groups therefore cut a team-game in half, and `tg` -- the criterion -- sums a team's
+points over its rows in a game. On a partial mask that sum is a partial point total scored against a level
+fitted on complete games. It is not the criterion restricted to those rows; it is not the criterion.
+Measured: the `exposure` groups recombine to **337.6** where the pooled score is **113.6**, a factor of three.
 
-| smallest exposure on the floor | none (0) | 1-499 | 500-1499 | 1500-3999 |
+`by_tg_exposure` (`--splits=tgexp`) is the sound one. It bins each TEAM-GAME by the share of its possessions
+played by players the training block saw fewer than 500 of, so it is constant within a team-game, the groups
+partition the criterion's own unit, and they recombine to the pooled score **exactly** (112.362 either way).
+`score` now returns NaN for `tg` on any mask that cuts a team-game (`_keeps_whole_team_games`,
+`test_team_game_score_is_nan_when_the_mask_cuts_a_team_game`), so this cannot be read wrong again. A
+stint-cutting split must be read on `mse`, at stint level, where a subset is perfectly well defined.
+
+**What the sound split says about the map: the opposite.** Each map against no map at all, by how bench-heavy
+the team-game is:
+
+| share of the team-game played by barely-seen players | 0-5% | 5-15% | 15-30% | 30%+ |
 |---|---|---|---|---|
-| possessions in the group | 136k | 593k | 836k | 427k |
-| + weight15 on defense | **-0.202 (z -2.16, 19/28)** | +0.001 (z +0.03) | -0.030 (z -1.46) | +0.012 (z +0.29) |
-| + height2 on defense | -0.236 (z -1.77) | -0.045 (z -0.92) | +0.002 (z +0.06) | -0.008 (z -0.20) |
+| `linear` (rescale only, no exposure term) | -0.777 | -0.424 | -0.874 | +2.64 |
+| `linear+sat` (what ships) | **-1.143** | **-0.636** | **-4.472 (z -3.33)** | +1.71 |
 
-So weight on defense is significantly better on exactly the rows where a player the training never saw is on
-the floor, and neutral everywhere else -- which is what the pooled row was averaging away. Height is better
-in the same place and does not clear |z| = 2 anywhere in this split; it also fails the defensive consensus
-floor at 0.7485, so it stays rejected. Read the z's as eight tests, not one: `bench` (how many of the ten
-started fewer games than `bench_gs_pct`) gives height -0.134 at z -2.66 in its "5-6 bench" group and weight
-nothing significant, so the two splits do not agree about height and do about weight only at the extreme.
+The exposure term does not tax the bench. It earns its largest gain by far exactly where the bench is, and
+the 30%+ group -- where every map loses to no map -- is 22 seasons with a standard error of 2 to 5 and says
+nothing at |z| < 1.2. The pooled -1.24 is not bought at the bottom of the board's expense.
 
-**A bigger lever fell out of the same table.** In the two lowest exposure groups the MAPPED systems are far
-worse than the unmapped ones -- +0.92 per 100 at "1-499" and +1.26 at "none (0)" -- while the map is worth
-about -1.24 pooled. The calibration map's exposure term is buying its pooled gain by taxing exactly the
-players ruling 1's second sentence is about (it takes -2.85 from a player under 250 possessions). That is now
-visible in the criterion rather than only in the map's coefficients, and it is a larger number than anything
-the prior's feature list can move.
+**And what it says about the bio candidate: nothing.** `board_bioDw` under `tgexp`, mapped against the
+shipped board's mapped rows: -0.022 (z -0.93) at 0-5%, -0.003 at 5-15%, **+0.097** at 15-30%, **+0.351** at
+30%+. No group is significant and the two bench-heavy groups mildly favour the shipped board. At STINT level
+inside the `exposure` split -- the valid metric there -- it is -0.396 at z -2.73 over 19 of 28 seasons on the
+zero-exposure rows, which is a real measurement of a different thing: how well the margin of the individual
+stints a barely-seen player is on the floor for is predicted, before nine other players and a level refit
+dilute him. **The two do not agree, and the criterion's own unit is the team-game.** So the standing tie rule
+stands and the shipped board keeps its feature list; `board_bioDw` is not a candidate any more.
+
+The instrument survives the correction and is the lasting result: `--splits=tgexp` is how a candidate gets
+asked about the bench from here, and it is a decomposition, so the answer adds up.
 
 ## What was tried and rejected
 
@@ -559,6 +574,15 @@ third to a HALF of its spread. Destination/"traded-to" features as the prior: -0
 (0.786 -> 0.765): refitting beta on `Rbeta + u` launders shrunk residual into unshrunk prior.
 
 ## The measurement traps
+
+**A team-game score on a mask that cuts team-games is not a score.** The criterion sums a team's points over
+its rows in a game. Restrict it to a subset of stints and that sum becomes a partial point total compared
+against a level fitted on complete games -- three times the pooled error on the shipped board (337.6 against
+113.6), and enough to flip the sign of a map comparison and manufacture a z of -2.16 that is not there. Every
+split in `holdout.SPLITS` except `tgexp` labels a STINT, so `tg` is NaN for all of them now
+(`_keeps_whole_team_games`) and they must be read on `mse`. The check: **do the group scores recombine to the
+pooled score?** If they do not, the group is not a piece of the thing you are pooling.
+
 
 **An in-season fit scored on the whole season is scored on its own training games.** `scripts/53_calmap.py
 fit` built its scoring frames with `load_frames(...)` and no cut, while `54_track.py` and `57_investigate.py`
