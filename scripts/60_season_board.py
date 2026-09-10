@@ -14,7 +14,7 @@ Per season, per player:
 
 The map is the one fitted on the in-season dump (scratch/inseason_run.py), so the level and the exposure
 term were chosen out of sample on fits shaped like these -- not on the block board's.
-usage: python scripts/60_season_board.py [--system=ks55] [--first=1997] [--last=2026] [--map=<parquet>]
+usage: python scripts/60_season_board.py [--system=ks55] [--first=1997] [--last=2026] [--map=<parquet>] [--out=<stem>]
 """
 import sys
 import time
@@ -121,9 +121,13 @@ cols = ["season", "train", "player_id", "player_name", "poss_off", "poss_def", "
         "prior_off", "prior_def", "prior_total", "u_off", "u_def", "u_total",
         "rating_off_raw", "rating_def_raw", "rating_total_raw", "rating_off", "rating_def", "rating_total"]
 rat = rat[cols].sort_values(["season", "rating_total"], ascending=[True, False]).reset_index(drop=True)
-rat.to_parquet(OUT / "season_ratings.parquet", index=False)
-rat.round(4).to_csv(CSV / "season_ratings.csv", index=False)
-print(f"\nwrote outputs/season_ratings.parquet: {len(rat)} rows, {rat.season.nunique()} seasons "
+# `--out=<stem>` writes beside the board instead of over it.  A partial run (one season, or a
+# candidate system) that overwrote `season_ratings` used to break tests/test_vs_consensus.py
+# silently, which reads this file as the shipped board.
+stem = flag("out", "season_ratings")
+rat.to_parquet(OUT / f"{stem}.parquet", index=False)
+rat.round(4).to_csv(CSV / f"{stem}.csv", index=False)
+print(f"\nwrote outputs/{stem}.parquet: {len(rat)} rows, {rat.season.nunique()} seasons "
       f"({time.time() - t0:.0f}s)")
 top = rat[rat.season == rat.season.max()].head(15)
 print(f"\ntop 15, {int(rat.season.max())} (kernel-weighted possessions, and his own in the season):\n")

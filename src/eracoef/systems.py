@@ -617,10 +617,13 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         for _w in ("", *[f"_w{w:g}" for w in _DEF_W]):
             _nm = f"tune501_b7_pasto_pOD_ow{_w or '0'}"
             S[_nm] = _replace(_w_base, name=_nm, off_target=f"x3def{_w}")
-            _k = _replace(S["ks52_lam05"], name=f"ks52_lam05_ow{_w or '0'}", off_target=f"x3def{_w}")
-            S[_k.name] = _k
-            for qt, q in _CUTS.items():
-                S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
+            # on the shipped kernel and on the single-season one, so ruling 1's board can be scored
+            # against the board it would replace with only the kernel differing
+            for _kt in ("ks52_lam05", "ks00_lam05"):
+                _k = _replace(S[_kt], name=f"{_kt}_ow{_w or '0'}", off_target=f"x3def{_w}")
+                S[_k.name] = _k
+                for qt, q in _CUTS.items():
+                    S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
         for _p, _tag in (("w", "dw"), ("f", "df"), ("b", "db")):
             for _w in _DEF_W:
                 _nm = f"tune501_b7_pasto_pOD_{_tag}{_w:g}"
