@@ -255,7 +255,7 @@ criterion included.
     .venv/Scripts/python scripts/52_site.py          # 14,578 rows, 30 seasons, 1.0 MB
     .venv/Scripts/python scripts/58_archetype.py     # 0.145 spread, 8 clusters, centres at +0.11
     .venv/Scripts/python scripts/61_lowposs.py       # defensive skill 0.096 at <250, 0.327 at 4500+, ~25 s
-    git log --oneline -1                             # c9ad053 "Bench players are in the accuracy test now..."
+    git log --oneline -1                             # 71969bf "A team-game score on a mask that cuts team-games..."
 
 **First concrete step:** get the owner's ruling on item 2 above -- it is one question and it unblocks a
 finished, measured candidate. Then sweep `gbdt_win_decay` (0.514) the way `board_wdd<t>` swept its defensive
