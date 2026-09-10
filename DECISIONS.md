@@ -70,6 +70,29 @@ is flat among regulars, so it reorders the low-minute end and leaves the top alo
 on the team-game total and on the stint rows (-0.07 and -0.21). The earlier stint-fitted rank map (-0.41, z
 -6.2) is superseded and off.
 
+**The two ridge constants were re-picked at season scale and did not move** (2026-09-10, Phase 1 item 3).
+The handoff's blanket claim was that none of the three-season constants transport. For the two that decide how
+much of a season's on-court evidence reaches a rating, that is false. Sweeping the SHIPPED board's own lambda
+(5,726 = `lam_plugin` x tune501's 0.624 x 0.5), mapped, K = 3, q75, paired against it:
+
+| x lambda | 0.25 | 0.5 | 0.71 | **1.0** | 1.41 | 2.0 | 4.0 |
+|---|---|---|---|---|---|---|---|
+| per 100 | +0.387 | +0.060 | -0.003 | **0** | +0.064 | +0.189 | +0.647 |
+| z | +3.85 | +1.16 | -0.11 | | +2.34 | +3.28 | +4.97 |
+
+A clean interior minimum, bracketed and significant on both sides, with 0.71 tied (z -0.11). The old grid
+{0.125, 0.25, 0.5, 2.0} had **no 1.0 in it**, which is why this needed re-running rather than re-reading:
+0.5 had won a boundary it was never asked to beat. `lam_ratio` (0.6245) is flatter still -- x0.5 and x2 are
++0.060 and +0.061 at z +1.05 and +1.19, nothing separable within a factor of two either way. Neither
+constant changes.
+
+**`low_poss_threshold` and `starter_poss_threshold` did move, and touch no rating.** They are per-player
+possessions in the DESIGN, which is now one season, so 1500 / 4500 named 160 of 582 players "low" and left
+270 "high". They are 500 / 1500 now, which keeps the meaning they had per season. The 2026 fit is
+bit-identical either way because `lam_buckets` is empty -- they name the diagnostic groups, and the bucket
+penalties if one is ever used. `boost_min_poss` has no reader anywhere in `src/` or `scripts/`: it is dead
+with the booster and is marked as such rather than silently kept.
+
 **The board is one season, shipped 2026-09-10.** `ratings_prior.season_board.system` is
 `ks00_lam05_ow_w0.25` with the `linear+sat` map fitted on its own dump
 (`artifacts/calmap_insea_ks00_q75.parquet`), and `artifacts/season_ratings.parquet` and the site are rebuilt

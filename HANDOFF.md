@@ -115,15 +115,34 @@ decision, not a prediction one, and the board still ships on the block panel. Wh
 is the panel's effect on the floors and on the prior's own spread, which is where the "loses half its
 defensive spread" claim lives.
 
-### 3. Re-pick every constant, on trainable seasons only
+### 3. Re-pick every constant, on trainable seasons only — STARTED 2026-09-10
 
-All of these were calibrated at three-season scale and none of them transport:
+**Four done, and the headline "none of them transport" is already wrong.**
 
-`lam_plugin` (18351.8), `lam_ratio_plugin`, `lam_scale`, `gbdt_win_decay` (0.514 *per window*),
-`gbdt_win_decay_def`, `PAST_DECAY` (`gbdt_prior.py`, 0.5 per window), `low_poss_threshold` (1500),
-`boost_min_poss` (4500), `gbdt.params` / `params_def`, `features_full_O` / `_D`,
+| constant | verdict |
+|---|---|
+| `lam_plugin` (via the board's 5,726) | **unchanged.** Interior minimum, bracketed at z +2.34 above and +1.16 below; x0.71 tied at z −0.11. The old grid had no 1.0 in it, so 0.5 had won a boundary it was never asked to beat |
+| `lam_ratio_plugin` (0.6245) | **unchanged.** Flat: x0.5 and x2 are +0.060 and +0.061, z +1.05 and +1.19 |
+| `low_poss_threshold`, `starter_poss_threshold` | **1500/4500 → 500/1500.** Design possessions are one season now. Touches no rating (`lam_buckets` is empty; the 2026 fit is bit-identical) — it names the diagnostic groups |
+| `boost_min_poss` (4500) | **dead.** No reader in `src/` or `scripts/`; it went with the booster. Marked in config, delete with the booster |
+
+`board_lam<m>` and `board_lr<m>` in `systems.py` are the sweep, on the exact system that ships; re-run with
+`53_calmap.py dump/fit --tag=lamsweep`. Every sweep must bracket the current value on BOTH sides — that is
+what caught the old grid.
+
+Still to do, and these are the ones that plausibly move, because they are per-WINDOW rates on a panel that
+is still block-granular:
+
+`lam_scale`, `gbdt_win_decay` (0.514 *per window*), `gbdt_win_decay_def`, `PAST_DECAY`
+(`gbdt_prior.py`, 0.5 per window), `gbdt.params` / `params_def`, `features_full_O` / `_D`,
 `k3 = 450` (`xshoot.py:431`), `FACTOR_LAMS` (`fastfit.py:65`), and the shipped targets
 `xpts_ft` / `x3def_w0.25`.
+
+The decay constants are the interesting ones and they are NOT free to re-pick alone: `win_decay` is per
+window of the PANEL, and the panel is still block-granular even though the board is not. `systems.py`
+already carries the `spy_` variants that cube-root it to the same decay per year. Decide the panel's
+granularity first (item 2), then re-pick the decays on whichever panel wins — re-picking them on the block
+panel now would be a constant fitted to a substrate that is about to change.
 
 `FACTOR_LAMS` and `xpts.FIXED_LAMBDA` carry comments saying they were selected by REML **on
 2024-2026** — the current block — and then held fixed everywhere including inside the criterion.

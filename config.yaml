@@ -131,14 +131,22 @@ ratings_prior:
 # The random effect unit: "window" gives one player effect per 3-season window, "season" one per
 # player-season (the original spec).  Possession thresholds below are in the unit's own scale.
 player_unit: window
-low_poss_threshold: 1500  # player-windows under this many RS possessions form the "low_poss" group
-starter_poss_threshold: 4500  # and at or above this many form "high_poss" (the starter bucket)
+# Re-scaled 2026-09-10 with the board: these are per-player possessions IN THE DESIGN, and the design is
+# now one season, so the three-season numbers (1500 / 4500) named 160 of 582 players "low" and left only
+# 270 "high".  Divided by three they keep their meaning -- under 500 in a season is deep bench, 1500 or
+# more is a rotation regular.  They do not touch a rating while `lam_buckets` is empty (verified: the 2026
+# fit is bit-identical either way); they name the diagnostic groups and the bucket penalties if one is used.
+low_poss_threshold: 500   # player-seasons under this many possessions form the "low_poss" group
+starter_poss_threshold: 1500  # and at or above this many form "high_poss" (the rotation bucket)
 lam_delta: null       # playoff block ridge; null = no delta block. Chosen by 03_cv.py step 7.
 lam_grid: {start: 100, stop: 60000, num: 28, log: true}
 lam_ratio_grid: [0.25, 0.33, 0.5, 0.75, 1.0, 1.5, 2.0]
 lam_delta_grid: [1e2, 3e2, 1e3, 3e3, 1e4, 3e4, 1e5, 1e6]
 pad_k: auto           # or a per-feature dict override, e.g. {stl: 400, blk: 600}
-boost_min_poss: 4500     # the booster trains only above this; it scores everyone
+# DEAD, 2026-09-10: nothing in src/ or scripts/ reads this.  It configured the boosted correction, which
+# `ratings_prior.boost: false` turned off (worth 0 on total, -0.020 on offense).  Left named rather than
+# deleted only because Phase 1 item 3 lists it; delete it with the booster.
+boost_min_poss: 4500     # the booster trained only above this; it scored everyone
 boost_quality: null      # ChimeraBoost quality 1-5; null = library default (3)
 # Playing time as a booster feature, per side.  It is frozen at the training reference when
 # scoring, so it only ever absorbs role effects; it never reaches a rating.  Against five

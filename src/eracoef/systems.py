@@ -624,6 +624,31 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                 S[_k.name] = _k
                 for qt, q in _CUTS.items():
                     S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
+        # ...and the same for the ratio between the two sides' penalties (`lam_ratio_plugin` x tune501's,
+        # 0.6245 on the board).  `board_lr<m>` multiplies it; the offensive penalty is untouched, so this
+        # moves defensive shrinkage alone.
+        _BOARD_LRS = {"x05": 0.5, "x071": 0.7071, "x1": 1.0, "x141": 1.4142, "x2": 2.0}
+
+        # ------------------------------------------------------- the board's ridge, re-picked at season scale
+        # Phase 1 item 3.  `lam_plugin` (18351.8) was chosen when a player unit held THREE seasons of
+        # possessions; the board now rates one.  `board_lam<m>` is the shipped board with its lambda
+        # multiplied by m, so the sweep is on the exact system that ships and the grid brackets 1.0 on both
+        # sides -- the old grid {0.125, 0.25, 0.5, 2.0} had no 1.0 in it at all, and 0.5 won a boundary it
+        # was never asked to beat.
+        _BOARD_LAMS = {"x025": 0.25, "x05": 0.5, "x071": 0.7071, "x1": 1.0, "x141": 1.4142, "x2": 2.0, "x4": 4.0}
+        _board = S["ks00_lam05_ow_w0.25"]
+        for _mt, _m in _BOARD_LAMS.items():
+            _k = _replace(_board, name=f"board_lam{_mt}", lam=float(_board.lam) * _m)
+            S[_k.name] = _k
+            for qt, q in _CUTS.items():
+                S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
+
+        for _mt, _m in _BOARD_LRS.items():
+            _k = _replace(_board, name=f"board_lr{_mt}", lam_ratio=float(_board.lam_ratio) * _m)
+            S[_k.name] = _k
+            for qt, q in _CUTS.items():
+                S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
+
         # the same board fit on regular-season rows only, so the playoff fold can be read on the criterion
         # with nothing else moving.  Owner's ruling 3, 2026-09-10, made ("RS", "PO") the default.
         for _kt in ("ks52_lam05_ow_w0.25", "ks00_lam05_ow_w0.25"):
