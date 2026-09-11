@@ -47,6 +47,7 @@ MODEL_LAYER = [
     "investigate.py",   # the attribution instrument
     "pad.py",           # the padding helper
     "pbo.py",           # the probability of backtest overfitting
+    "priorridge.py",    # the ratings ridge: prior as the centre, penalty by game-grouped CV
     "rloocv.py",        # rebalanced leave-one-out: the splitter and the partner rule, numpy only
     "simulate.py",      # the synthetic fixture the tests fit against
 ]
