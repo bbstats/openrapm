@@ -131,3 +131,54 @@ def test_it_produces_ratings_the_criterion_can_score(design):
     truth = truth[truth.season == 2002]
     j = rat.df.merge(truth[["player_id", "impact_O"]], on="player_id")
     assert np.corrcoef(j.o, j.impact_O)[0, 1] > 0.3
+
+# ------------------------------------------------------------------ the closeness-weighted objective
+def test_armse_is_the_root_mean_square_on_the_mean_absolute_scale():
+    from eracoef.priorridge import MAE_SCALE, armse
+    assert MAE_SCALE == pytest.approx(np.sqrt(2.0 / np.pi))
+    assert armse(100.0) == pytest.approx(10.0 * MAE_SCALE)
+    # a normal error of sd 3: the root mean square is 3, the mean ABSOLUTE deviation is what ARMSE reports
+    sample = np.random.default_rng(0).normal(0.0, 3.0, 400_000)
+    assert armse(float((sample ** 2).mean())) == pytest.approx(float(np.abs(sample).mean()), rel=0.01)
+
+
+def test_close_games_get_more_weight_than_blowouts(design):
+    _, _, wd = design
+    model = PriorRidgeCV(n_folds=1, alphas=[4000.0])
+    key, possessions, weight, average_margin = model._team_games(wd)
+    assert average_margin.min() >= 0.0 and average_margin.max() <= 25.0     # the design clips at margin_clip
+    assert np.unique(key).size == 2 * np.unique(wd.rows["game_idx"]).size   # two team-games per game
+
+    flat = PriorRidgeCV(weight_by_closeness=False)._team_games(wd)[2]
+    per_possession = weight / np.maximum(flat, 1e-9)
+    game_of_team_game = np.zeros(weight.size)
+    game_of_team_game[key] = average_margin[
+        np.unique(wd.rows["game_idx"].to_numpy(), return_inverse=True)[1]]
+    close = per_possession[game_of_team_game <= np.median(game_of_team_game)]
+    wide = per_possession[game_of_team_game > np.median(game_of_team_game)]
+    assert close.mean() > wide.mean(), "a close game must weigh more per possession than a blowout"
+
+
+def test_closeness_weighting_changes_the_penalty_it_picks(design):
+    _, _, wd = design
+    alphas = np.logspace(2, 5, 7)
+    weighted = PriorRidgeCV(alphas=alphas, n_folds=4).fit(wd, None, None)
+    plain = PriorRidgeCV(alphas=alphas, n_folds=4, weight_by_closeness=False).fit(wd, None, None)
+    assert weighted.cv_error_ is not None and plain.cv_error_ is not None
+    assert not np.allclose(weighted.cv_error_.to_numpy(), plain.cv_error_.to_numpy())
+    assert (weighted.cv_armse_ ** 2).round(9).equals((weighted.cv_error_ * (2.0 / np.pi)).round(9))
+
+
+def test_the_reported_error_is_a_team_game_error_not_a_stint_one(design):
+    """A team-game pools ~100 possessions, so its error is far smaller than a single stint's.  If the
+    objective were still stint-level the number would be several times larger."""
+    _, _, wd = design
+    model = PriorRidgeCV(alphas=[4000.0], n_folds=4).fit(wd, None, None)
+    assert 0.0 < model.cv_armse_.iloc[0] < 25.0
+
+
+def test_the_floor_keeps_a_perfectly_tied_game_finite(design):
+    _, _, wd = design
+    model = PriorRidgeCV(n_folds=1, alphas=[4000.0], closeness_floor=1.0)
+    weight = model._team_games(wd)[2]
+    assert np.isfinite(weight).all() and (weight > 0).all()

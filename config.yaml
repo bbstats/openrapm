@@ -199,15 +199,6 @@ holdout:
   # up to the pooled score -- which is what makes it readable as "where did the pooled gain come from".
   game_bench_share_edges: [0.0, 0.05, 0.15, 0.30, 1.01]
   exposure_edges: [0, 1, 500, 1500, 4000, 1000000000]   # the --splits=exposure bins (smallest exposure on the floor)
-  # --players: the PLAYER-level loss.  Every player of the held-out window counts ONCE, not once per
-  # possession, which is the only way the bottom of the board is visible at all.
-  player_edges: [100, 250, 500, 1500, 4500, 1000000000]   # the player's OWN possessions in the held-out window
-  player_labels: ["100-250", "250-500", "500-1500", "1500-4500", "4500+"]
-  player_top_k: 50        # top-k concordance: how many of the truth's best 50 the board also puts in its best 50
-  points_per_win: 30      # points of margin per win, converting a rating to wins
-  dollars_per_win: 3000000  # a flat $/win; the dollars loss is a rescaled wins loss, so this only sets the units
-  truth_lam: null         # the PRIOR-FREE fit the players are scored against; null = lam_plugin.  Re-read any
-                          # verdict at spm.apm_lam (100, nearly unbiased, very noisy) before believing it.
   consensus:
     window: [2024, 2026]
     min_poss: 1000

@@ -23,7 +23,7 @@ Every earlier held-out script is one invocation of this:
     44_yoy_shot     --systems=hybrid,hybrid_xft,hybrid_xshoot,...
 
 usage: python scripts/45_holdout.py [first] [last] --systems=a,b,c [--k=2,4] [--lams=18352]
-           [--splits=movers,exposure,bigs,bench] [--rank] [--players] [--consensus] [--tag=name] [--ref=hybrid_xft]
+           [--splits=movers,exposure,bigs,bench] [--rank] [--consensus] [--tag=name] [--ref=hybrid_xft]
            [--workers=4] [--spread] [--top=1997-1999] [--pdp] [--rankmap=<rank parquet>] [--calmap=<calmap parquet>] [--quiet]
     --workers=N  run the held-out seasons across N processes (config holdout.workers; 1 = in this process)
     --held=X     all (default), search (the odd-indexed half of the held-out seasons) or confirm (the other
@@ -32,8 +32,6 @@ usage: python scripts/45_holdout.py [first] [last] --systems=a,b,c [--k=2,4] [--
                  (players with 1000+ possessions), on the consensus window and on 1997-1999
     --top=A-B    fit each system on that block and print the top 15 offense with prior, residual and rating
     --pdp        the boosted prior's partial dependence of assists, steals and threes by season
-    --players    the PLAYER-level loss beside the team-game criterion: Kendall tau, top-k concordance and
-                 the dollars misallocated on an average two-player trade, by the player's own possessions
 """
 import sys
 import time
@@ -44,7 +42,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from eracoef.config import load_config  # noqa: E402
-from eracoef.holdout import (SPLITS, Context, Holdout, player_report, pooled_rank, report,  # noqa: E402
+from eracoef.holdout import (SPLITS, Context, Holdout, pooled_rank, report,  # noqa: E402
                              run_parallel, vs_consensus)
 from eracoef.systems import registry  # noqa: E402
 
@@ -118,21 +116,16 @@ def main():
         if workers > 1:
             res, _, gbdt_reports = run_parallel(ho, names, splits=split_names, rank="--rank" in sys.argv,
                                                 out=OUT / f"holdout_{tag}.parquet", verbose=not quiet, workers=workers,
-                                                rankmap=rm, calmap=cm, held=held, players="--players" in sys.argv)
+                                                rankmap=rm, calmap=cm, held=held)
         else:
             res = ho.run(systems, ctx, splits=splits, rank="--rank" in sys.argv, out=OUT / f"holdout_{tag}.parquet",
-                         verbose=not quiet, held=held, players="--players" in sys.argv)
+                         verbose=not quiet, held=held)
             gbdt_reports = [r for prior in (ctx.gbdt, ctx.mspi) if prior is not None
                             for r in getattr(prior, "reports", [])]
         print()
         print(report(res, ref=ref))
         (OUT / "csv").mkdir(exist_ok=True)
         res.round(6).to_csv(OUT / "csv" / f"holdout_{tag}.csv", index=False)
-
-        if ho.player_ is not None:
-            ho.player_.to_parquet(OUT / f"holdout_{tag}_players.parquet", index=False)
-            print()
-            print(player_report(ho.player_, ref=ref))
 
         if ho.rank_ is not None:
             ho.rank_.to_parquet(OUT / f"holdout_{tag}_rank.parquet", index=False)

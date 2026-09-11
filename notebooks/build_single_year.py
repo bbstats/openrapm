@@ -43,9 +43,9 @@ ROOT = Path("A:/code/spmm")
 sys.path.insert(0, str(ROOT / "src"))
 
 from eracoef.config import load_config
-from eracoef.holdout import Context, Ratings, player_scores, player_truth, predict_season, score
+from eracoef.holdout import Context, Ratings, predict_season, score
 from eracoef.inseason import season_frac
-from eracoef.priorridge import PriorRidgeCV
+from eracoef.priorridge import PriorRidgeCV, armse
 from eracoef.rloocv import rebalance_partners
 
 config = load_config(ROOT / "config.yaml")
@@ -186,13 +186,27 @@ md(r"""
 
 The penalty is cross-validated over whole **games**, because the same ten players repeat across a game's
 stints and splitting inside one leaks the answer.
+
+**What the CV is minimising.** Not stint error — that is mostly binomial noise. It sums each team's points
+over its rows in a game, compares that with what the ratings predicted, and weights the team-game by its
+possessions divided by the game's **average |margin|**. A 30-point blowout says much less about who is
+good than a game decided by two.
+
+The number printed is **ARMSE** — the root of the weighted mean square, scaled by `sqrt(2/pi)` so it sits
+on the mean-absolute scale. Read it as *"a typical team-game misses by this many points per 100"*.
+
+**Read the whole curve, not just the argmax.** With a good prior and three quarters of one season, this
+objective is nearly flat above ~1e5 — everything up there is within 0.002 ARMSE, and at those penalties the
+rating essentially *is* the prior. The grid runs to 2e6 so the minimum is bracketed rather than sitting on
+an edge, but a flat curve means the games cannot tell you much about this dial, not that a huge penalty won.
 """)
 
 code(r"""
 ridge = PriorRidgeCV().fit(fit_games, prior_offense, prior_defense)
 
 print(f"penalty chosen: {ridge.alpha_:,.0f}")
-print(ridge.cv_error_.rename("cv error").to_frame().T.to_string())
+print(f"average |margin| per game: {ridge.average_margin_.mean():.2f} points")
+print(ridge.cv_armse_.rename("cv ARMSE").to_frame().T.to_string())
 """)
 
 code(r"""
@@ -207,30 +221,21 @@ print(board[["player_name", "offense", "defense", "total", "possessions"]].head(
 md(r"""
 ## 6. The score
 
-* **`tg`** — team-game criterion, points per 100. **Lower is better.** Weights a player by how much he
-  played, so it cannot see the bottom of the board.
-* **`tau`** — Kendall tau over pairs of **teammates**. Higher is better. Every player counts once.
-* **`money_skill`** — of the money a coin-flip board misallocates on a cross-team trade, the share yours
-  avoids. 0 is saying nothing, 1 is perfect.
+**`game_armse`** — what a typical team-game misses by, in points per 100. **Lower is better.**
+`base_armse` is the same with no player ratings at all, so the gap is what your board is worth.
 
-The truth is a prior-free ridge on the scored games at `lam=100` — noisy, nearly unbiased, and carrying
-no box prior, so it cannot flatter whichever prior you just built.
+Scored on the last 25% of the season, which the fit never saw.
 
 **One season is one sample.** Loop before you believe a difference.
 """)
 
 code(r"""
-truth = player_truth(context, score_games, lam=100.0)
-
-
 def evaluate(name, offense=None, defense=None):
     model = PriorRidgeCV().fit(fit_games, offense, defense)
     ratings = Ratings(model.as_ratings_frame())
-    stint = score(predict_season(ratings, score_games, level="home"))
-    player = player_scores(ratings, truth).set_index("group").loc["all"]
-    return dict(system=name, tg=stint["tg"], tg_base=stint["tg_base"], penalty=model.alpha_,
-                tau=player.tau, tau_league=player.tau_league, money_skill=player.money_skill,
-                sd_offense=ratings.df.o.std(), sd_defense=ratings.df.d.std())
+    result = score(predict_season(ratings, score_games, level="home"))
+    return dict(system=name, game_armse=armse(result["tg"]), base_armse=armse(result["tg_base"]),
+                penalty=model.alpha_, sd_offense=ratings.df.o.std(), sd_defense=ratings.df.d.std())
 
 
 print(pd.DataFrame([evaluate("no prior"),
@@ -254,23 +259,20 @@ def run(season_list):
         design = context.design([s], "pts")
         position = season_frac(design.games)[design.rows["game_idx"].to_numpy()]
         early, late = design.subset(position < 0.75), design.subset(position >= 0.75)
-        actual = player_truth(context, late, lam=100.0)
 
         for name, args in (("no prior", (None, None)), ("your prior", (offense, defense))):
             model = PriorRidgeCV().fit(early, *args)
             ratings = Ratings(model.as_ratings_frame())
-            player = player_scores(ratings, actual).set_index("group").loc["all"]
+            result = score(predict_season(ratings, late, level="home"))
             results.append(dict(season=s, system=name, penalty=model.alpha_,
-                                tg=score(predict_season(ratings, late, level="home"))["tg"],
-                                tau=player.tau, tau_league=player.tau_league,
-                                money_skill=player.money_skill))
+                                game_armse=armse(result["tg"]), base_armse=armse(result["tg_base"])))
         print(f"  {s} done", flush=True)
     return pd.DataFrame(results)
 
 
 # results = run(range(2015, 2020))
-# print(results.groupby("system")[["tg", "tau", "tau_league", "money_skill", "penalty"]].mean().round(4))
-# gap = results.pivot_table(index="season", columns="system", values="tau")
+# print(results.groupby("system")[["game_armse", "base_armse", "penalty"]].mean().round(4))
+# gap = results.pivot_table(index="season", columns="system", values="game_armse")
 # print((gap["your prior"] - gap["no prior"]).round(4))
 ''')
 
@@ -284,8 +286,9 @@ md(r"""
 | `chimera_offense` / `chimera_defense` | the boosters, tuned values out of `config.yaml` |
 | `fit_prior(..., rebalance=False)` | plain leave-season-out, no partner dropped |
 | `PriorRidgeCV(alphas=, defense_penalty_ratio=, n_folds=)` | the ridge |
+| `PriorRidgeCV(weight_by_closeness=False)` | score every team-game by possessions alone, ignoring how close it was |
+| `PriorRidgeCV(closeness_floor=)` | the smallest average margin the weighting will believe, in points |
 | `0.75` in cell 4 | how much of the season the fit sees |
-| `player_truth(..., lam=)` | 100 is nearly unbiased and noisy; `config["lam_plugin"]` is low-variance but shrinks bench players harder than starters and flatters a board that does the same. **A verdict that flips between the two has decided nothing.** |
 
 Deliberately absent: `gbdt_win_decay`, `PAST_DECAY`, `past_apm`, `past_poss`, `past_rapm`, the 3-season
 block panel, the calibration map.
