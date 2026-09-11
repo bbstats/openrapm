@@ -212,6 +212,53 @@ targets `xpts_ft` / `x3def_w0.25`. `FACTOR_LAMS` and `xpts.FIXED_LAMBDA` carry c
 selected by REML **on 2024-2026** — the current block — and then held fixed everywhere, inside the
 criterion included.
 
+### 4. The evaluation is scored on team-games. It should be scored on PLAYERS. -- OWNER'S DIRECTION
+
+*"players is the only thing that matters here"* (2026-09-11). This is the biggest open item and everything
+in item 2 is downstream of it.
+
+**The problem, stated once.** The criterion is a possession-weighted MSE over team-games. A player enters it
+in proportion to how much he played, so a 200-possession player is a rounding error and every change to the
+bottom of the board scores as a tie. Measured this session: the defensive prior for players under 250
+possessions per season went from skill 0.096 to 0.233 -- it more than doubled -- and the team-game criterion
+moved 0.130% of its MSE. We ship a list of players. We evaluate a points-per-game regression.
+
+**Build two player-level losses. They are different questions and both matter.**
+
+1. **Rank.** For held-out season H, from a fit that never saw H: does the rating ORDER players the way H's
+   own on-court results do? Every player counts once, not once per possession. Report Kendall tau and a
+   top-k concordance separately -- full-list rank correlation is dominated by the easy middle, and the
+   decisions people make with this board are at the top and at the replacement-level line.
+2. **Dollars in a theoretical trade.** The loss that has the right shape: convert rating to wins
+   (rating per 100 x possessions / 100 / ~30 points per win), wins to dollars at the season's cap, then
+   for every pair of players the board ORDERS WRONG, charge the dollars you would have misallocated taking
+   one for the other. This weights an error by what it costs, which is convex in impact and scales with
+   minutes, so a wrong call on a starter costs more than a wrong call on a 12th man WITHOUT making the 12th
+   man invisible the way possession weighting does.
+
+**Four traps, all of which have already bitten something in this repo:**
+
+- **"Actual" for a held-out season is itself an estimate.** A bench player's own APM in H is unbiased and
+  extremely noisy; his RAPM is shrunk toward a prior, which is the thing being scored. Pick one, say which,
+  and never compare numbers computed against different ones. See the same issue in `61_lowposs.py`'s docstring.
+- **Equal weighting makes noise dominate at the bottom.** The fix is not to reweight by possessions -- that
+  is the current criterion -- but to make the TARGET more measurable: score against the player's value over
+  the seasons AFTER H, not H alone. That is the owner's year-over-year test.
+- **A rank loss is not decomposable into team-games**, so `holdout.score`'s `tg` column has nothing to say
+  about it. Do not try to make one split of the other (trap 16).
+- **The consensus is a sanity check and never a fitting target.** A player-rank loss looks a lot like the
+  consensus floors. It is not the same thing and must be built from on-court results, not from other people's
+  metrics.
+
+**Where to start.** `holdout.py` already has per-player rank machinery (`pooled_rank`, the decile slopes) and
+`61_lowposs.py` is already player-level, but it scores the PRIOR against the panel rather than the finished
+rating against a held-out season. Neither is the criterion. The new loss belongs beside `score()` in
+`holdout.py` so `53_calmap.py` and `45_holdout.py` both get it, and it needs its own paired test over the 28
+held-out seasons so a candidate can be judged on it the way it is judged on the team-game number today.
+
+**Until it exists, report both numbers for every candidate** -- the team-game criterion and the per-bucket
+prior accuracy from `61_lowposs.py` -- and say plainly which population each one can see.
+
 ### 4. Not started at all
 
 - **The poison test** (`tests/test_no_current_season.py`): rebuild every fitted artifact twice, once
