@@ -672,6 +672,42 @@ Smoke test on 2015, prior against no prior at all: team-game 114.58 -> 114.66, a
 while within-roster tau goes 0.133 -> 0.226 and money_skill 0.286 -> 0.316. One season decides nothing,
 but it is the session's finding in miniature -- the criterion cannot see what the prior is for.
 
+### De-biasing the prior's cross-validation: measured, and it is not where the money is (2026-09-11)
+
+*"i don't care WHAT we do, provided it makes for better models. empirical data wins / scoreboard wins."*
+Five ways of choosing the single-year prior's training rows, 27 held-out seasons (1999-2025), each fit on
+the first 75% of its season and scored on the last 25%, on the team-game criterion AND the player losses.
+`scratch/loo_bakeoff.py`, results in `outputs/loo_bakeoff.parquet`.
+
+| | tg | within-roster tau | money_skill | train rows |
+|---|---|---|---|---|
+| no prior at all | 114.576 | 0.1156 | 0.2630 | -- |
+| `plain` (train on every season but H) | 112.847 | 0.1878 | 0.3116 | 14,092 |
+| `reb_season` (+ drop the partner season) | 112.835 | 0.1886 | 0.3122 | 13,632 |
+| `tilt_season` (+ reweight to the full mean) | 112.848 | 0.1889 | 0.3117 | 14,092 |
+| `drop_player` (+ drop H's players) | 112.792 | 0.1880 | 0.3127 | 10,196 |
+| `drop_player_tilt` (both) | 112.761 | 0.1876 | 0.3123 | 10,196 |
+
+**The answer is that none of them matter, and the table says why in its first two rows.** The prior itself
+is worth **+62% of within-roster tau** (0.1156 -> 0.1878) and 1.73 per 100 of team-game error. Every
+de-biasing variant then moves tau by at most 0.0011 -- half a percent of what the prior already bought.
+The place to spend effort is the prior, not the cross-validation around it.
+
+Paired against `plain`, the only three results past |z| = 2, and they do not agree:
+
+* `drop_player_tilt` is **-0.085 per 100 on the criterion, z -2.49, 21 of 27 seasons** -- and **-0.0081
+  on money_skill at 100-250 possessions, z -2.65**. It wins the team-game number and loses the deepest
+  bench's money. Under ruling "players is the only thing that matters here" the criterion win does not
+  carry, and the prior it produces is 1.0-1.3% NARROWER on offense, so part of that criterion gain is
+  plain shrinkage rather than information.
+* `tilt_season` is **+0.0011 on within-roster tau, z +2.21**, costs no data at all, and is flat on
+  everything else.
+
+**And three hits is what 28 comparisons produce by chance.** Four variants x seven metrics, so ~1.3
+results past |z| = 2 are expected with nothing going on. This is at the edge of noise and is reported as
+such. `plain` stays the default; `tilt_season` is free and harmless if you want it; `drop_player` throws
+away 28% of the training rows and buys nothing.
+
 ## What was tried and rejected
 
 **The LRBoost branch (a boosted correction on a frozen linear prior).** Five things had to be right before it

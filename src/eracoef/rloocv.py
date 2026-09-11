@@ -36,7 +36,8 @@ from __future__ import annotations
 
 import numpy as np
 
-__all__ = ["rebalance_partners", "RebalancedLeaveOneGroupOut", "rebalanced_splits", "loo_mean_shift"]
+__all__ = ["rebalance_partners", "RebalancedLeaveOneGroupOut", "rebalanced_splits", "loo_mean_shift",
+           "tilt_weights", "balanced_weights"]
 
 
 def _fold_totals(label, w, groups):
@@ -157,3 +158,69 @@ def rebalanced_splits(label, w=None, groups=None, rebalance: bool = True) -> lis
     cv = RebalancedLeaveOneGroupOut(sample_weight=w, balance_on=label, rebalance=rebalance)
     g = np.arange(np.asarray(label).size) if groups is None else groups
     return list(cv.split(None, label, g))
+
+
+# --------------------------------------------------------------------- reweighting instead of deleting
+def tilt_weights(label, w=None, target_mean=None, moments: int = 1, min_ess: float = 0.25):
+    """Reweight rows so their weighted mean of `label` lands on `target_mean`, keeping every row.
+
+    The deletion rule above fixes the mean by throwing folds away, which costs data and -- because the
+    partner is chosen FOR its label -- quietly narrows the label distribution it is meant to preserve.
+    This does the same job with weights: exponential tilting, `w_i * exp(a y_i)`, which is the
+    minimum-relative-entropy reweighting subject to hitting the mean, so it is the smallest distortion
+    of the sample that satisfies the constraint.  `moments=2` also matches the variance
+    (`w_i * exp(a y_i + b y_i^2)`), falling back to mean-only if that does not solve.
+
+    Returns weights renormalised to the original total.  `min_ess` is the floor on what fraction of the
+    EFFECTIVE sample size (Kish: (sum w)^2 / sum w^2) may survive the tilt, and a tilt that costs more
+    raises rather than returning: reweighting a handful of rows into the whole training set is a worse
+    problem than the bias being corrected, and it is invisible in the weights themselves.  A ratio cap
+    cannot catch this -- with the total held fixed, no single row's weight can grow by more than n.
+    """
+    from scipy.optimize import brentq
+    label = np.asarray(label, dtype=float)
+    w = np.ones(label.size) if w is None else np.asarray(w, dtype=float).copy()
+    tot = float(w.sum())
+    if target_mean is None:
+        return w
+    target = float(target_mean)
+    lo, hi = float(label.min()), float(label.max())
+    if not lo < target < hi:
+        raise ValueError(f"target_mean {target} is outside the label range [{lo}, {hi}]")
+
+    def mean_at(a, b=0.0):
+        z = a * (label - label.mean()) + b * (label - label.mean()) ** 2
+        e = w * np.exp(z - z.max())
+        return float((e * label).sum() / e.sum()), e
+
+    a = brentq(lambda x: mean_at(x)[0] - target, -50.0, 50.0, xtol=1e-12)
+    e = mean_at(a)[1]
+    if moments >= 2:
+        from scipy.optimize import fsolve
+        v0 = float(np.average((label - target) ** 2, weights=w))
+
+        def eqs(p):
+            m, ee = mean_at(p[0], p[1])
+            return [m - target, float(np.average((label - m) ** 2, weights=ee)) - v0]
+        sol, _, ok, _ = fsolve(eqs, [a, 0.0], full_output=True)[:4]
+        if ok == 1:
+            e = mean_at(sol[0], sol[1])[1]
+    out = e * (tot / e.sum())
+    ess = lambda v: float(v.sum() ** 2 / np.maximum((v ** 2).sum(), 1e-300))    # noqa: E731  (Kish)
+    frac = ess(out) / max(ess(w), 1e-300)
+    if frac < min_ess:
+        raise ValueError(f"tilt costs {1 - frac:.0%} of the effective sample size (floor {min_ess:.0%}); "
+                         f"the two distributions are too far apart for reweighting to be honest")
+    return out
+
+
+def balanced_weights(label, w=None, groups=None, fold=None):
+    """The training weights for one fold of a leave-one-group-out, tilted so the training rows' mean
+    label equals the FULL mean -- the reweighting answer to the same bias `rebalance_partners` deletes
+    for.  Returns (train_index, tilted weights on those rows)."""
+    label = np.asarray(label, dtype=float)
+    w = np.ones(label.size) if w is None else np.asarray(w, dtype=float)
+    full = float((w * label).sum() / w.sum())
+    keep = np.ones(label.size, dtype=bool) if groups is None else (np.asarray(groups) != fold)
+    idx = np.flatnonzero(keep)
+    return idx, tilt_weights(label[idx], w[idx], target_mean=full)

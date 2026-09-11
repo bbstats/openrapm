@@ -130,3 +130,32 @@ def test_teamloo_still_gets_the_same_partners_it_always_did():
     rng = np.random.default_rng(11)
     label, w = rng.normal(110, 9, 41), rng.uniform(90, 110, 41)
     assert np.array_equal(tl(label, w), rebalance_partners(label, w))
+
+
+# ------------------------------------------------------------------ reweighting instead of deleting
+def test_tilting_hits_the_target_mean_and_keeps_every_row():
+    """The alternative to deleting a partner: nudge the weights instead.  Exponential tilting is the
+    smallest change to the sample that satisfies the constraint, and it throws nothing away."""
+    from eracoef.rloocv import balanced_weights, tilt_weights
+    rng = np.random.default_rng(13)
+    y, w = rng.normal(0, 1, 4000), rng.uniform(1, 3, 4000)
+    groups = np.repeat(np.arange(8), 500)
+    full = np.average(y, weights=w)
+    idx, tw = balanced_weights(y, w, groups, fold=3)
+    assert len(idx) == 3500 and len(tw) == 3500                 # only the held-out fold is gone
+    assert np.average(y[idx], weights=tw) == pytest.approx(full, abs=1e-9)
+    assert tw.sum() == pytest.approx(w[idx].sum())              # total weight preserved
+    assert abs(np.average(y[idx], weights=w[idx]) - full) > abs(np.average(y[idx], weights=tw) - full)
+    with pytest.raises(ValueError):                             # a target outside the label range
+        tilt_weights(y, w, target_mean=float(y.max()) + 1.0)
+
+
+def test_tilting_refuses_a_correction_that_would_eat_the_sample():
+    from eracoef.rloocv import tilt_weights
+    y = np.array([0.0, 0.0, 0.0, 0.0, 10.0])
+    # a target that only the single extreme row can reach: the tilt would BE that row
+    with pytest.raises(ValueError, match="effective sample size"):
+        tilt_weights(y, np.ones(5), target_mean=9.99)
+    # a ratio cap could not have caught it -- with the total held fixed no weight can grow by more than n
+    out = tilt_weights(y, np.ones(5), target_mean=2.5)
+    assert out.sum() == pytest.approx(5.0) and np.average(y, weights=out) == pytest.approx(2.5)
