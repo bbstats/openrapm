@@ -573,12 +573,21 @@ and the team-game criterion moved 0.130% of its MSE. Two player-level losses now
 `holdout.py`, reached by `45_holdout.py --players` and `53_calmap.py --players`, one row per player and every
 player counted once:
 
-  * **rank** -- Kendall tau-b of the board's ordering against the held-out window's own on-court results, plus
-    a top-50 concordance, because a full-list tau is dominated by the easy middle and the decisions people
-    make with a board are at the top and at the replacement-level line;
-  * **dollars** -- for every PAIR the board orders wrong, the money misallocated taking one for the other.
-    `money_skill` is the share of that a coin-flip board would lose which this board avoids: 1 is perfect,
-    0 is saying nothing. The shipped board is at **0.298** against a near-unbiased truth.
+  * **rank, WITHIN a roster** -- Kendall tau-b over pairs of TEAMMATES. Owner, 2026-09-11: *"rank should only
+    apply to within that team."* That is the decision an ordering supports (who plays, who is extended), and
+    a league-wide tau is partly scoring "is this a good team": the board and the truth both inherit
+    team-level effects and that easy part inflates the number. Within a roster the team mean is gone and
+    what is left is separating players who share their possessions. `tau_league` is kept beside it, and
+    `top_k` (top-50 concordance) stays league-wide, because "who are the best 50 players" is a league
+    question and a full-list tau is dominated by the easy middle;
+  * **dollars, ACROSS rosters** -- *"money should only apply to trades (really mid season here)."* For every
+    CROSS-TEAM pair the board orders wrong, the money misallocated taking one for the other. `money_skill`
+    is the share of that a coin-flip board would lose which this board avoids: 1 is perfect, 0 is saying
+    nothing. The shipped board is at **0.299** against a near-unbiased truth. With 30 teams ~97% of
+    league-wide pairs are already cross-team, so the restriction moves the number very little -- it is there
+    to name what the loss is. The mid-season part needs no separate machinery: on a `_q75` frame the scored
+    possessions ARE the season's last quarter, so the dollars are already deadline-onward, rest-of-season
+    dollars.
 
 **What "actual" is, and it is one thing.** `player_truth` is the prior-free ridge fit (`beta_none`, no box
 term, no role offset) of EXACTLY the rows the criterion scores -- season H, or H's post-cut games for an
@@ -598,7 +607,9 @@ are now re-centred on the average possession before the conversion (`test_the_lo
 *Rank and dollars order players by different quantities on purpose.* Rank is the board's own claim, points
 per 100. A trade compares totals, so both sides of the dollars loss are the rating times the player's own
 possessions in the window -- minutes held at what actually happened, not something either board is asked to
-predict.
+predict. Two tests pin the split: giving every player on a team the same wrong bonus leaves `tau` at 1.0 and
+wrecks `tau_league`, and reversing a roster's internal order costs `tau` while the cross-team dollars do not
+see it.
 
 *A pair the board is indifferent about costs half the gap, not nothing.* Charging only the strictly
 discordant pairs put a board with nothing to say at ZERO dollars lost -- the best possible score for the
@@ -609,15 +620,24 @@ worst possible board. Indifference means picking at random, so it is charged hal
 at player level, and it is the first evidence for it from a loss that can see the bench. Against the shipped
 `ks00_lam05_ow_w0.25`, K=3, q75 frames, 28 held-out seasons, paired:
 
-| truth (`--truth-lam`) | tau | dollars per trade | level: shipped tau / money_skill |
-|---|---|---|---|
-| `lam_plugin` (default) | **+0.0034, z +3.84** | -1,096, z -1.73 | 0.2437 / 0.4796 |
-| `spm.apm_lam` = 100 (near-unbiased) | **+0.0041, z +3.83** | **-30,101, z -3.29** | 0.1817 / 0.2976 |
+| truth (`--truth-lam`) | tau (within roster) | tau_league | dollars per trade | level: shipped tau / money_skill |
+|---|---|---|---|---|
+| `lam_plugin` (default) | +0.0035, z +1.75 | +0.0034, z +3.84 | -1,075, z -1.68 | 0.1722 / 0.4811 |
+| `spm.apm_lam` = 100 (near-unbiased) | **+0.0074, z +3.17** | +0.0041, z +3.83 | **-29,821, z -3.22** | 0.1598 / 0.2986 |
 
-Same sign at both truths, and positive in every possession bucket at the default truth (+0.0093 at z +2.41 in
-250-500, +0.0042 at z +2.97 in 500-1500). **Always read a player-level verdict at both truths.** The
-calibration map is why: `linear+sat` against no map at all is tau **-0.0224 at z -8.75** on the shrunk truth
-and **+0.0050 at z +1.74** on the near-unbiased one. The player loss has decided nothing about the map. The
+Same sign on every measure at both truths. **The within-roster question separates the two boards almost twice
+as hard as the league-wide one** at the honest truth (+0.0074 against +0.0041), which is the dilution the
+owner's restriction was aimed at. It is also a harder question: the shipped board scores 0.160 within a
+roster against 0.182 league-wide.
+
+**Read `tau_pairs` before reading a bucket.** Within-roster tau on the whole board rests on ~2,286 teammate
+pairs per season, but a possession bucket cuts it to ~37 pairs in 100-250 and ~61 in 250-500 -- the bucket
+z's there are ±0.4 and decide nothing. The league-wide tau, which keeps ~1,200 to ~21,000 pairs per bucket,
+is the one to read at the bottom of the board.
+
+**Always read a player-level verdict at both truths.** The
+calibration map is why: `linear+sat` against no map at all is tau **-0.0269 at z -6.82** on the shrunk truth
+and **+0.0060 at z +1.35** on the near-unbiased one. The player loss has decided nothing about the map. The
 default truth is low-variance but shrinks a low-possession player harder than a starter, so it rewards a
 board that does the same; `apm_lam` is nearly unbiased and very noisy, and noise in an unbiased target costs
 power without choosing a winner.
@@ -717,8 +737,9 @@ the same new instrument produced a confidently wrong number on the day it was bu
 times possessions, so an additive shift the team-game criterion cannot even see -- it refits the intercept --
 made a true-talent board score WORSE than a near-useless one, because every player being positive orders them
 by minutes. (2) The truth is itself a ridge fit, and a heavily shrunk truth pulls low-possession players
-harder than starters, which rewards a board that does the same: the calibration map reads z -8.75 against the
-default truth and z +1.74 against a nearly unbiased one. *The checks:* both sides are re-centred before the
+harder than starters, which rewards a board that does the same -- and it bites the WITHIN-ROSTER rank hardest,
+because a coach plays his better players more and minutes are most of the within-team signal to begin with.
+The calibration map reads z -6.82 against the default truth and z +1.35 against a nearly unbiased one. *The checks:* both sides are re-centred before the
 conversion, and a shift-invariance test pins it; and every player-level verdict is read at two truth lambdas
 (`53_calmap.py --players --truth-lam=100`), with anything that changes sign between them treated as undecided.
 

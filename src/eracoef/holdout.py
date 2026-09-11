@@ -714,14 +714,21 @@ SPLITS = {"movers": by_movers, "exposure": by_exposure, "bigs": by_bigs, "bench"
 to how much he played and a 200-possession player is a rounding error.  We ship a LIST OF PLAYERS.  These
 two losses score that list, one row per player, every player counting once:
 
-  rank     does the board ORDER the held-out season's players the way the season's own on-court results do
-           (Kendall tau-b, plus a top-k concordance -- a full-list tau is dominated by the easy middle and
-           the decisions people make with a board are at the top and at the replacement-level line)
-  dollars  for every PAIR the board orders wrong, the money you would misallocate taking one for the other:
-           convert the truth rating to wins (points per 100 x possessions / 100 / points_per_win) and wins
-           to dollars, then charge |dollars_i - dollars_j| on each discordant pair.  This weights an error
-           by what it costs, which scales with minutes WITHOUT making the 12th man invisible the way
-           possession weighting does.
+  rank     does the board order a ROSTER the way that roster's own on-court results do -- Kendall tau-b over
+           the pairs of TEAMMATES only, because that is the decision an ordering supports (who plays, who is
+           extended) and because a league-wide tau is partly scoring "is this a good team": the board and the
+           truth both inherit team-level effects, and that easy part inflates the number.  Within a roster the
+           team mean is gone and what is left is the hard part, separating players who share their possessions.
+           `tau_league` keeps the league-wide number beside it.  `top_k` stays league-wide -- "who are the
+           best 50 players" is a league question, and a full-list tau is dominated by the easy middle.
+  dollars  a TRADE, so the pairs are players on DIFFERENT teams.  For every such pair the board orders wrong,
+           the money you would misallocate taking one for the other: convert the truth rating to wins (points
+           per 100 x possessions / 100 / points_per_win) and wins to dollars, then charge
+           |dollars_i - dollars_j|.  This weights an error by what it costs, which scales with minutes WITHOUT
+           making the 12th man invisible the way possession weighting does.  With 30 teams ~97% of league-wide
+           pairs are already cross-team, so the restriction moves the number very little; it is there to name
+           what the loss is.  On a `_q75` frame the possessions are the season's last quarter, so the dollars
+           are already deadline-onward, rest-of-season dollars -- which is when trades actually happen.
 
 What "actual" is, stated once, because comparing numbers computed against different truths is meaningless:
 `player_truth` is the PRIOR-FREE ridge fit (`beta_none`, no box term, no role offset) of exactly the rows
@@ -732,16 +739,17 @@ toward the AVERAGE PLAYER (zero), not toward anything under test.
 Two honest caveats, both of which the parameters expose:
   * shrinkage is the lambda's, and a heavily shrunk truth pulls low-possession players harder than
     starters, so truth ORDER correlates with minutes and a board whose spread also scales with minutes is
-    flattered.  `truth_lam` defaults to `lam_plugin`; re-run a verdict at `spm.apm_lam` (100, nearly
-    unbiased and very noisy) before believing it.
+    flattered.  This bites the WITHIN-ROSTER rank hardest: a coach plays his better players more, so minutes
+    are most of the within-team signal to begin with.  `truth_lam` defaults to `lam_plugin`; re-run a verdict
+    at `spm.apm_lam` (100, nearly unbiased and very noisy) before believing it.
   * an in-season system is scored against a QUARTER of a season of on-court results.  That is noisy, but it
     is the only truth that system has not already trained on.
 """
 PLAYER_EDGES = [100.0, 250.0, 500.0, 1500.0, 4500.0, np.inf]
 PLAYER_LABELS = ["100-250", "250-500", "500-1500", "1500-4500", "4500+"]
 PLAYER_COLUMNS = ["held_out", "k", "train", "system", "lam", "cut", "group", "n_players", "poss",
-                  "tau", "tau_o", "tau_d", "top_k", "k_top", "wins_lost", "dollars_lost", "dollars_flat",
-                  "money_skill", "discordant", "sd", "truth_sd", "seconds"]
+                  "tau", "tau_o", "tau_d", "tau_pairs", "tau_league", "top_k", "k_top", "wins_lost",
+                  "dollars_lost", "dollars_flat", "money_skill", "discordant", "sd", "truth_sd", "seconds"]
 
 
 @dataclass(frozen=True)
@@ -762,30 +770,49 @@ def player_truth(ctx: "Context", wd: WindowData, lam: float | None = None, seaso
     b = beta_none(set(), ctx)
     pipe = plugin_fit(wd, b, lam=lam, lam_ratio=float(cfg["lam_ratio_plugin"]), pad_target=cfg["pad_target"])
     r = ratings_from_fit(wd, pipe, b)
-    return PlayerTruth(df=r.df[["player_id", "o", "d", "poss"]].reset_index(drop=True), lam=lam,
-                       seasons=tuple(seasons), cut=float(cut))
+    df = r.df[["player_id", "o", "d", "poss"]].reset_index(drop=True)
+    # his main team in the scored season: rank is a WITHIN-roster question and dollars a BETWEEN-roster one,
+    # so both need to know who played beside whom.  -1 for anyone the box scores do not place.
+    teams: dict = {}
+    # the design knows which seasons it is built from, so a caller cannot silently leave the rosters out
+    # and get a NaN within-team tau back
+    for h in (seasons or wd.spec.seasons):
+        for pid, tm in ctx.main_team(int(h)).items():
+            teams.setdefault(int(pid), int(tm))
+    df["team"] = df.player_id.astype(int).map(teams).fillna(-1).astype(int)
+    return PlayerTruth(df=df, lam=lam, seasons=tuple(seasons or wd.spec.seasons), cut=float(cut))
 
 
-def _pairs(x: np.ndarray) -> np.ndarray:
-    """sign(x_i - x_j) over the n(n-1)/2 unordered pairs, in a fixed order shared by every array here."""
+def _pairs(x: np.ndarray, keep: np.ndarray | None = None) -> np.ndarray:
+    """sign(x_i - x_j) over the unordered pairs, in a fixed order shared by every array here.
+    `keep` is a boolean mask over those pairs (`_same_team`), applied identically to every array."""
     iu = np.triu_indices(len(x), 1)
-    return np.sign(x[:, None] - x[None, :])[iu]
+    d = np.sign(x[:, None] - x[None, :])[iu]
+    return d if keep is None else d[keep]
 
 
-def _tau_b(board: np.ndarray, truth: np.ndarray) -> float:
+def _same_team(team: np.ndarray) -> np.ndarray:
+    """Per pair: True when both played most of the season for the same team.  A player the box scores do
+    not place (team -1) is on nobody's roster, so he is in neither the within-team nor the cross-team set."""
+    iu = np.triu_indices(len(team), 1)
+    known = (team[:, None] >= 0) & (team[None, :] >= 0)
+    return ((team[:, None] == team[None, :]) & known)[iu], known[iu]
+
+
+def _tau_b(board: np.ndarray, truth: np.ndarray, keep: np.ndarray | None = None) -> float:
     """Kendall tau-b: (concordant - discordant) pairs, with pairs tied on either side taken out of the
     matching side of the denominator.  NaN when one of the arrays is constant -- a board that says
     nothing has no ordering to score, which is a different statement from an ordering that is wrong."""
-    if len(board) < 2:
+    if len(board) < 2 or (keep is not None and keep.sum() < 1):
         return np.nan
-    a, b = _pairs(board), _pairs(truth)
+    a, b = _pairs(board, keep), _pairs(truth, keep)
     ab = a * b
     n0 = float(len(a))
     den = np.sqrt((n0 - float((a == 0).sum())) * (n0 - float((b == 0).sum())))
     return float((float((ab > 0).sum()) - float((ab < 0).sum())) / den) if den > 0 else np.nan
 
 
-def _dollar_loss(board_d: np.ndarray, truth_d: np.ndarray) -> dict:
+def _dollar_loss(board_d: np.ndarray, truth_d: np.ndarray, keep: np.ndarray | None = None) -> dict:
     """The money misallocated on an average two-player trade made on this board's ordering.
 
     Both arrays are DOLLARS -- a rating times the player's own possessions -- because that is what a trade
@@ -799,10 +826,11 @@ def _dollar_loss(board_d: np.ndarray, truth_d: np.ndarray) -> dict:
     flat board.  Scale is the dollars of the window being scored, so compare it only within a (K, cut) group
     -- `flat`, what a board with nothing to say would lose, is returned with it so the ratio is readable.
     """
-    if len(board_d) < 2:
+    if len(board_d) < 2 or (keep is not None and keep.sum() < 1):
         return dict(dollars=np.nan, flat=np.nan, discordant=np.nan)
-    a, b = _pairs(board_d), _pairs(truth_d)
+    a, b = _pairs(board_d, keep), _pairs(truth_d, keep)
     gap = np.abs(truth_d[:, None] - truth_d[None, :])[np.triu_indices(len(truth_d), 1)]
+    gap = gap if keep is None else gap[keep]
     charge = np.where(a * b < 0, 1.0, np.where((a == 0) & (b != 0), 0.5, 0.0))
     n0 = float(len(a))
     return dict(dollars=float((gap * charge).sum() / n0), flat=float(0.5 * gap.sum() / n0),
@@ -817,6 +845,10 @@ def player_scores(rat: Ratings, truth: PlayerTruth, edges=None, labels=None, top
     training block never saw is scored at the board's fill (0, the average player) rather than dropped:
     a board with nothing to say about a rookie should pay for it, not be excused from the question.
     Groups are the player's own possessions, and a group's pairs are the pairs INSIDE it.
+
+    `tau` runs over TEAMMATE pairs and the dollars over CROSS-TEAM pairs (`_same_team`), from the player's
+    main team in the scored season; `tau_pairs` is how many teammate pairs the number rests on, which gets
+    thin inside a possession group and should be read before a bucket's z.
 
     Value is offense minus defense (`d` is raw sign: points allowed), the board's own total.
     `top_k` is the share of the truth's best `k` players the board also puts in its best `k`.
@@ -847,17 +879,22 @@ def player_scores(rat: Ratings, truth: PlayerTruth, edges=None, labels=None, top
     # points, wins, then money.  `poss` is what he actually played, identically on both sides.
     per_dollar = poss / 100.0 / float(points_per_win) * float(dollars_per_win)
     board_m, truth_m = board_v * per_dollar, truth_v * per_dollar
+    team = t["team"].to_numpy(dtype=int) if "team" in t.columns else np.full(len(t), -1)
     grp = np.asarray(labels, dtype=object)[np.clip(np.digitize(poss, edges) - 1, 0, len(labels) - 1)]
     rows = []
     for g, m in [("all", np.ones(len(t), dtype=bool))] + [(lab, grp == lab) for lab in labels]:
         if m.sum() < 2:
             continue
-        s = _dollar_loss(board_m[m], truth_m[m])
+        mate, known = _same_team(team[m])
+        cross = known & ~mate
+        s = _dollar_loss(board_m[m], truth_m[m], cross)
         kk = int(min(top_k, max(1, m.sum() // 5)))
         bv, tv = board_v[m], truth_v[m]
         hit = len(set(np.argsort(-bv)[:kk].tolist()) & set(np.argsort(-tv)[:kk].tolist())) / kk
-        rows.append(dict(group=g, n_players=int(m.sum()), poss=float(poss[m].sum()), tau=_tau_b(bv, tv),
-                         tau_o=_tau_b(board_o[m], truth_o[m]), tau_d=_tau_b(-board_d[m], -truth_d[m]),
+        rows.append(dict(group=g, n_players=int(m.sum()), poss=float(poss[m].sum()),
+                         tau=_tau_b(bv, tv, mate), tau_o=_tau_b(board_o[m], truth_o[m], mate),
+                         tau_d=_tau_b(-board_d[m], -truth_d[m], mate), tau_pairs=int(mate.sum()),
+                         tau_league=_tau_b(bv, tv),
                          top_k=float(hit), k_top=kk, wins_lost=s["dollars"] / float(dollars_per_win),
                          dollars_lost=s["dollars"], dollars_flat=s["flat"],
                          money_skill=1.0 - s["dollars"] / s["flat"] if s["flat"] > 0 else np.nan,
@@ -869,12 +906,13 @@ def player_report(pf: pd.DataFrame, ref: str | None = None, digits: int = 4) -> 
     """The printed player-level summary: pooled per group, then paired by held-out season against `ref`."""
     pd.set_option("display.width", 250, "display.max_columns", 40, "display.precision", digits)
     lines = ["=== player-level loss, every player counted once, pooled over held-out seasons",
-             "    tau / top_k / money_skill: HIGHER is better.  dollars_lost: LOWER is better -- the $ misallocated",
-             "    on an average two-player trade made on this board's ordering, against what a board with nothing",
-             "    to say would lose (money_skill is the share of that it avoids).  Groups are the player's own",
-             "    possessions in the held-out window, so the last two rows are the bench the criterion cannot see."]
-    num = [c for c in ("n_players", "tau", "tau_o", "tau_d", "top_k", "wins_lost", "dollars_lost",
-                       "money_skill", "discordant") if c in pf]
+             "    tau: WITHIN-ROSTER rank (teammate pairs only, the team mean gone).  tau_league: the league-wide one.",
+             "    top_k: league-wide top-50 concordance.  All three HIGHER is better.",
+             "    dollars_lost: LOWER is better -- the $ misallocated on an average CROSS-TEAM two-player trade made",
+             "    on this board's ordering; money_skill is the share of a coin-flip board's loss it avoids.",
+             "    Groups are the player's own possessions, so the last rows are the bench the criterion cannot see."]
+    num = [c for c in ("n_players", "tau", "tau_o", "tau_d", "tau_league", "top_k", "wins_lost",
+                       "dollars_lost", "money_skill", "discordant") if c in pf]
     P = pf.groupby(["k", "lam", "system", "group"], sort=True)[num].mean().reset_index()
     P["seasons"] = pf.groupby(["k", "lam", "system", "group"], sort=True).held_out.nunique().to_numpy()
     for (k, lam, group), d in P.groupby(["k", "lam", "group"], sort=True):
@@ -882,7 +920,8 @@ def player_report(pf: pd.DataFrame, ref: str | None = None, digits: int = 4) -> 
         lines.append(d.drop(columns=["k", "lam", "group"]).to_string(index=False))
     if ref is not None and ref in set(pf.system):
         lines.append(f"\n=== paired by held-out season against {ref}")
-        for value, better in (("tau", "POSITIVE"), ("top_k", "POSITIVE"), ("dollars_lost", "negative")):
+        for value, better in (("tau", "POSITIVE"), ("tau_league", "POSITIVE"), ("top_k", "POSITIVE"),
+                              ("dollars_lost", "negative")):
             t = paired(pf, ref, value, by=("k", "lam", "group"))
             if len(t):
                 lines.append(f"\n-- {value} ({better} = better)")

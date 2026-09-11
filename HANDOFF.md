@@ -6,7 +6,7 @@ back into a lab notebook — the last one reached 7,800 lines and was deleted on
 `archive/research-2026-09` has it).
 
 Branch `cleanup`, 27 commits ahead of `main`, working tree clean, `main` untouched.
-`pytest -q`: **242 passed, 1 xfailed, ~130 s.**
+`pytest -q`: **244 passed, 1 xfailed, ~130 s.**
 
 ---
 
@@ -29,6 +29,11 @@ Rulings, not suggestions.
 8. **The archetype guard is unsupervised** (2026-09-10): *"the guardrail is arbitrary ... would rather
    use a bayesian gaussian mixture (legit unsupervised clusters rather than center/big/guard)"*. Done.
    The open half is whether an archetype penalty belongs in the FIT, not just in a guard.
+
+9. **Bench players need to be in the accuracy test** (2026-09-10). Done; see item 2.
+10. **Ship `board_D_interactions_stats_possplayed`** (2026-09-10).
+11. **Rank is a within-roster question, money is a between-roster one** (2026-09-11): *"money should only
+   apply to trades (really mid season here)"*, *"rank should only apply to within that team"*. Done; item 4.
 
 Standing rules: accuracy wins provided the testing is robust and the thing stays open-source-shippable;
 the external consensus is a sanity check and never a fitting target; between two candidates the
@@ -215,20 +220,27 @@ criterion included.
 ### 4. The evaluation is scored on PLAYERS now -- BUILT 2026-09-11, one half still open
 
 *"players is the only thing that matters here."* Two player-level losses live beside `score()` in
-`holdout.py`, every player counted once: **rank** (Kendall tau-b plus a top-50 concordance) and **dollars**
-(for every pair the board orders wrong, the money misallocated taking one for the other; `money_skill` is the
-share of a coin-flip board's loss that this board avoids). `45_holdout.py --players` and
-`53_calmap.py --players [--truth-lam=X]` both print them; the full case, the three design decisions that each
-reversed a number, and the two new traps are in `DECISIONS.md`. `tests/test_player_loss.py` is ten tests.
+`holdout.py`, every player counted once, and ruling 11 (2026-09-11) says which pairs each one runs over:
+**rank WITHIN a roster** (*"rank should only apply to within that team"* -- teammate pairs, Kendall tau-b;
+`tau_league` and a league-wide top-50 concordance sit beside it) and **dollars ACROSS rosters** (*"money
+should only apply to trades (really mid season here)"* -- cross-team pairs, the money misallocated taking one
+for the other; `money_skill` is the share of a coin-flip board's loss avoided). On a `_q75` frame the scored
+possessions are the season's last quarter, so the dollars are already deadline-onward. `45_holdout.py
+--players` and `53_calmap.py --players [--truth-lam=X]` both print them; the full case, the three design
+decisions that each reversed a number, and the two new traps are in `DECISIONS.md`.
+`tests/test_player_loss.py` is twelve tests.
 
-**What it decided.** `board_D_interactions_stats_possplayed` wins at player level too -- tau **+0.0034 at
-z +3.84** against the shipped board (28 seasons, K=3, q75 frames) at the default truth and **+0.0041 at
-z +3.83** at `--truth-lam=100`, positive in every possession bucket, dollars negative at both. That is the
-first evidence for the owner's call from a loss that can see the bench.
+**What it decided.** `board_D_interactions_stats_possplayed` wins at player level too, on every measure at
+both truths (28 seasons, K=3, q75 frames): within-roster tau **+0.0074 at z +3.17** and dollars **-29,821 at
+z -3.22** at `--truth-lam=100`, +0.0035 (z +1.75) and -1,075 (z -1.68) at the default truth. The within-roster
+question separates the two boards almost twice as hard as the league-wide one, which is the dilution the
+ruling was aimed at. First evidence for the owner's call from a loss that can see the bench.
 
-**Read every player-level verdict at both truths.** The calibration map is tau -0.0224 at z -8.75 against the
-default (shrunk) truth and +0.0050 at z +1.74 against the near-unbiased one, so the player loss has decided
-nothing about the map. A verdict that changes sign between the two has decided nothing.
+**Read every player-level verdict at both truths**, and read `tau_pairs` before reading a possession bucket.
+The calibration map is tau -0.0269 at z -6.82 against the default (shrunk) truth and +0.0060 at z +1.35
+against the near-unbiased one, so the player loss has decided nothing about the map -- a verdict that changes
+sign between the two has decided nothing. And within-roster tau in the 100-250 bucket rests on ~37 teammate
+pairs a season, so its z's are noise; read the bottom of the board on `tau_league`.
 
     .venv/Scripts/python scripts/53_calmap.py fit --tag=verify2 --k=3 --maps=linear+sat --players         --systems=ks00_lam05_ow_w0.25_q75,board_D_interactions_stats_possplayed_q75
 
@@ -310,7 +322,7 @@ H+1..H+3 gets the number with no new code. Nobody has done it.
 
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest tests -q          # 242 passed, 1 xfailed, ~130 s
+    .venv/Scripts/python -m pytest tests -q          # 244 passed, 1 xfailed, ~130 s
     .venv/Scripts/python scripts/60_season_board.py  # ks00_lam05_ow_w0.25, kernel {0: 1.0}, ~70 s
     .venv/Scripts/python scripts/52_site.py          # 14,578 rows, 30 seasons, 1.0 MB
     .venv/Scripts/python scripts/58_archetype.py     # 0.145 spread, 8 clusters, centres at +0.11

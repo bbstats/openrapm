@@ -34,6 +34,8 @@ def world():
         return build_design(st[st.season.isin(seasons)], box[box.season.isin(seasons)], FEATURES, cfg)
 
     ctx = Context(cfg=CFG, loader=loader)
+    for season, g in truth.groupby("season"):        # rosters from the truth, not from box scores
+        ctx._teams[int(season)] = dict(zip(g.player_id.astype(int), g.team.astype(int)))
     table = truth.rename(columns={"impact_O": "o", "impact_D": "d"})[["player_id", "season", "o", "d"]]
     return sim, ctx, table
 
@@ -105,6 +107,7 @@ def test_player_rows_schema_and_groups(results):
     ho, _ = results
     pf = ho.player_
     assert list(pf.columns) == PLAYER_COLUMNS
+    assert (pf[pf.group == "all"].tau_pairs > 0).all()        # the within-roster tau rests on real pairs
     assert set(pf.held_out) == {2002, 2003, 2004}
     assert set(pf.group) <= {"all", *LABELS}
     # the buckets partition the players: their headcounts add up to the "all" row
@@ -165,6 +168,39 @@ def test_the_losses_ignore_where_a_board_puts_its_zero(results):
         a = pf.xs("true", level="system")[col]
         b = pf.xs("shifted", level="system")[col]
         assert np.allclose(a.to_numpy(), b.reindex(a.index).to_numpy()), col
+
+
+# ------------------------------------------------------------------ within a roster, across rosters
+def test_rank_is_within_roster_and_ignores_team_level_error(world):
+    """`tau` runs over teammate pairs, so giving every player on a team the same wrong bonus cannot touch
+    it -- the team mean is not what an ordering is for.  The league-wide `tau_league` does move, which is
+    the part of it that was scoring "is this a good team" rather than "who on this team is better"."""
+    _, ctx, _ = world
+    truth = player_truth(ctx, ctx.design([2003], "pts"))
+    rng = np.random.default_rng(5)
+    bump = dict(zip(sorted(set(truth.df.team)), rng.normal(0, 6.0, truth.df.team.nunique())))
+    shifted = truth.df.assign(o=truth.df.o + truth.df.team.map(bump).to_numpy())
+    a = player_scores(Ratings(truth.df), truth, edges=EDGES, labels=LABELS, top_k=10).set_index("group")
+    b = player_scores(Ratings(shifted), truth, edges=EDGES, labels=LABELS, top_k=10).set_index("group")
+    assert a.loc["all", "tau"] == pytest.approx(1.0)
+    assert b.loc["all", "tau"] == pytest.approx(1.0)          # teammates still ordered perfectly
+    assert b.loc["all", "tau_league"] < 0.95                  # the league-wide order is wrecked
+    assert b.loc["all", "dollars_lost"] > 0                   # and so are the trades, which are cross-team
+
+
+def test_the_trade_loss_is_cross_team_and_ignores_teammate_pairs(world):
+    """A trade is between rosters.  Reordering a team INTERNALLY costs rank and costs no dollars."""
+    _, ctx, _ = world
+    truth = player_truth(ctx, ctx.design([2003], "pts"))
+    d = truth.df
+    # reverse each roster's own ordering, leaving every player's value where it was across teams
+    swapped = d.copy()
+    for tm, g in d.groupby("team"):
+        swapped.loc[g.index, "o"] = g.o.to_numpy()[np.argsort(np.argsort(-g.o.to_numpy()))]
+    a = player_scores(Ratings(d), truth, edges=EDGES, labels=LABELS, top_k=10).set_index("group")
+    b = player_scores(Ratings(swapped), truth, edges=EDGES, labels=LABELS, top_k=10).set_index("group")
+    assert b.loc["all", "tau"] < a.loc["all", "tau"]          # the roster order is now wrong
+    assert b.loc["all", "dollars_lost"] > 0
 
 
 def test_the_bench_is_visible_to_the_player_loss(results, world):
