@@ -35,6 +35,15 @@ Rulings, not suggestions.
 11. **Rank is a within-roster question, money is a between-roster one** (2026-09-11): *"money should only
    apply to trades (really mid season here)"*, *"rank should only apply to within that team"*. Done; item 4.
 
+12. **Single year or bust** (2026-09-11): *"i dont want to do that. single year or bust."* A player's
+   season-H rating may use H's games for the evidence and **no games of his own from any other season**.
+   The model's coefficients may still be learned from history -- that is what a prior is -- but the
+   `past_*` block is a per-player channel and it is out. **This unships `board_D_interactions_stats_possplayed`
+   as specified**: its defensive list carries `poss_pct_x_past_apm` and `past_apm`. The criterion cost is
+   known and is not small -- `board_D_interactions_nopast` was +0.005 per 100, i.e. the whole defensive
+   gain was the past block. Whether single-year defense also loses on the PLAYER losses is open, and
+   `notebooks/single_year.ipynb` is where the owner is answering it.
+
 Standing rules: accuracy wins provided the testing is robust and the thing stays open-source-shippable;
 the external consensus is a sanity check and never a fitting target; between two candidates the
 criterion cannot separate, take the simpler and faster. **The criterion is the tiebreak between
@@ -249,6 +258,31 @@ reliability criterion -- which needs a training set that stops before H, because
 neighbourhood already contains H+1 and H+2. A different RUN, not a different loss: `Holdout` takes the
 truth window from the frame it is handed, so a run whose training block ends at H-1 and whose scored frame is
 H+1..H+3 gets the number with no new code. Nobody has done it.
+
+### 5. The owner took the prior over -- `notebooks/single_year.ipynb` (2026-09-11)
+
+A self-contained notebook: plain scikit-learn for both models, `eracoef` used only to load data and to
+score. `python notebooks/build_single_year.py` regenerates it from source, so edit the generator, not
+the .ipynb, for anything that should survive.
+
+  * panel `outputs/role_panel_season.parquet` (one row per player-season, rebuilt 2026-09-11 WITH the
+    `onc_*` columns -- the copy that was on disk predated that fix and was training a prior quietly
+    missing them);
+  * prior: `HistGradientBoostingRegressor`, trained on every season but H, no `past_*`, no career
+    pooling, so `gbdt_win_decay` does not exist in it;
+  * PI-RAPM: `Ridge`, with Frisch-Waugh to keep the penalty off the fixed effects and a column rescale
+    to give the two sides different effective penalties from one `alpha`;
+  * honest split: fit the first 75% of H's games, score the last 25% -- the shipped `_q75` estimand;
+  * scored on the team-game criterion AND the player losses, against a `lam=100` truth.
+
+**The thing it teaches in the first ten minutes, and it is in the notebook as a warning:** `rapm1` is
+**0.976** correlated with `spm`, and `spm` is a deterministic linear function of role inputs the GBDT is
+being handed. So it "predicts" `rapm1` at r = 0.99 and that number is worth nothing. Read
+`corr(pred, apm)` (~0.53) or the scored cell. `apm` sd 4.19, `u` sd 0.35, `rapm1` sd 1.62.
+
+One season (2015) as a smoke test, prior vs no prior: team-game 114.58 -> 114.66 (a tie, slightly
+worse) while within-roster tau goes 0.133 -> 0.226 and money_skill 0.286 -> 0.316. One sample, nothing
+significant -- but it is the session's thesis in one line, and cell 8 loops it over seasons.
 
 ### 4. Not started at all
 

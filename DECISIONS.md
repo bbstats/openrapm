@@ -646,6 +646,32 @@ power without choosing a winner.
 H, the owner's reliability criterion -- needs a training set that stops before H, because the criterion's
 symmetric neighbourhood already contains H+1 and H+2. That is a different run, not a different loss.
 
+### Single year or bust (2026-09-11)
+
+*"i dont want to do that. single year or bust."* A player's season-H rating uses H's games for the evidence
+and no games of his own from any other season. The trigger was noticing what the prior actually does: the
+board rates H from H's games, but the prior reaches `past_apm` / `past_poss` / `past_rapm` -- that specific
+player's own pre-H on-court record -- so "from that season's games only" was true of the evidence and not
+of the prior. A prior's COEFFICIENTS may still be learned from history; that is what a prior is. The
+per-player channel is what is out.
+
+**It unships the candidate approved the day before.** `board_D_interactions_stats_possplayed`'s defensive
+list carries `poss_pct_x_past_apm` and, through `_originals_for`, `past_apm` itself. The cost is known and
+is not small: `board_D_interactions_nopast` -- the same interaction features with the past block removed --
+was **+0.005 per 100 on the criterion, i.e. nothing**, so the whole defensive criterion gain WAS the past
+block. What is open is whether single-year defense also loses on the player losses, which are the losses
+that can see the population the past block was bought for.
+
+`notebooks/single_year.ipynb` is the owner's own instrument for answering that: plain scikit-learn on both
+sides (`HistGradientBoostingRegressor` for the prior, `Ridge` for PI-RAPM), `eracoef` only to load and to
+score, one row per player-season, no `past_*`, no career pooling, and therefore no `gbdt_win_decay`. It
+fits the first 75% of a season and scores the last 25% -- the shipped `_q75` estimand -- on the team-game
+criterion and the player losses together. `python notebooks/build_single_year.py` regenerates it.
+
+Smoke test on 2015, prior against no prior at all: team-game 114.58 -> 114.66, a tie and slightly worse,
+while within-roster tau goes 0.133 -> 0.226 and money_skill 0.286 -> 0.316. One season decides nothing,
+but it is the session's finding in miniature -- the criterion cannot see what the prior is for.
+
 ## What was tried and rejected
 
 **The LRBoost branch (a boosted correction on a frozen linear prior).** Five things had to be right before it
@@ -742,6 +768,15 @@ because a coach plays his better players more and minutes are most of the within
 The calibration map reads z -6.82 against the default truth and z +1.35 against a nearly unbiased one. *The checks:* both sides are re-centred before the
 conversion, and a shift-invariance test pins it; and every player-level verdict is read at two truth lambdas
 (`53_calmap.py --players --truth-lam=100`), with anything that changes sign between them treated as undecided.
+
+**`rapm1` is 97.6% `spm`, so r-squared against it is not skill.** The role panel's shipped target is
+`rapm1 = spm + u`, and `spm` is a leave-window-out LINEAR ridge of APM on the role inputs -- which are
+sitting in the booster's own feature list. Correlation of `rapm1` with `spm` is **0.976** (offense, season
+panel); `apm` has sd 4.19 against `rapm1`'s 1.62 and `u`'s 0.35. A GBDT handed those features "predicts"
+`rapm1` at r = 0.99 and has relearned an equation, not the game. This is not a reason to stop using
+`rapm1` -- the booster's job is to beat `spm`'s linear FORM, and it does -- it is a reason never to read a
+fit statistic against it. *The check:* report `corr(pred, apm)` beside it (~0.53 on the same fit), or skip
+to the criterion and the player losses, which are the only things that decide anything.
 
 **A team-game score on a mask that cuts team-games is not a score.** The criterion sums a team's points over
 its rows in a game. Restrict it to a subset of stints and that sum becomes a partial point total compared
