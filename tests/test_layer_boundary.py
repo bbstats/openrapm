@@ -47,6 +47,7 @@ MODEL_LAYER = [
     "investigate.py",   # the attribution instrument
     "pad.py",           # the padding helper
     "pbo.py",           # the probability of backtest overfitting
+    "rloocv.py",        # rebalanced leave-one-out: the splitter and the partner rule, numpy only
     "simulate.py",      # the synthetic fixture the tests fit against
 ]
 

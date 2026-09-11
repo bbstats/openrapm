@@ -177,6 +177,56 @@ for s, d in pri.items():
 """)
 
 md(r"""
+## 3b. Rebalanced LOO — and where it is worth the cost
+
+Austin, Pe'er and Korem (*Distributional bias compromises leave-one-out cross-validation*, Science
+Advances 2025): hold fold j out and the remaining weighted mean shifts AWAY from fold j's own label, by
+arithmetic, not noise. So a model trained leave-one-X-out is fitted on a training set tilted away from
+the very X it is about to predict. `eracoef.rloocv` implements their fix — drop one further fold, chosen
+so the mean lands back — behind an sklearn splitter.
+
+**Measured on this panel, so you do not have to take it on faith:**
+
+| fold | fold-mean sd | max mean shift, plain → rebalanced | spurious corr, plain → rebalanced |
+|---|---|---|---|
+| **season** (what `prior_for_season` does) | 0.015 | 0.0011 → 0.0003 | — |
+| **player** (`DROP_PLAYER = True`) | 1.27 | 0.0121 → 0.0104 | **−0.54 → −0.38** |
+
+Leaving a **season** out is a no-op: the targets are already flat across seasons, so there is no tilt to
+correct — 0.0011 on a target whose sd is 1.62 is 0.07% of a standard deviation. **Do not bother.**
+
+Leaving a **player** out is where the artifact is real: the correlation between the training mean and
+the held-out player's own mean is −0.54 on offense and −0.59 on defense, and rebalancing removes a third
+to two thirds of it. The absolute tilt is still small, so expect a small effect — but if you turn on
+`DROP_PLAYER`, turn this on with it.
+""")
+
+code(r'''
+from eracoef.rloocv import RebalancedLeaveOneGroupOut, loo_mean_shift
+
+pO = PANEL[(PANEL.side == "O") & (PANEL.poss > 0)]
+for key in ("season", "player_id"):
+    sh = loo_mean_shift(pO[TARGET].to_numpy(), pO.poss.to_numpy(), pO[key].to_numpy())
+    print(f"{key:10s} folds {len(sh['plain']):5d}  max|shift| {sh['max_abs_plain']:.4f} -> "
+          f"{sh['rebalanced'].__abs__().max():.4f}   partners found {sh['dropped']}")
+
+
+def prior_rloocv(side, target=None, features=None, params=None):
+    """prior_for_season's leave-one-PLAYER-out cousin, rebalanced.  Slow (one fit per player) unless you
+    cut the panel down first -- it is here to show the splitter, not as the default path."""
+    target   = TARGET   if target   is None else target
+    features = FEATURES if features is None else features
+    p  = PANEL[(PANEL.side == side) & (PANEL.poss > 0)].reset_index(drop=True)
+    cv = RebalancedLeaveOneGroupOut(sample_weight=p.poss.to_numpy(), balance_on=p[target].to_numpy())
+    pred = np.full(len(p), np.nan)
+    for train, test in cv.split(p[features], p[target], groups=p.player_id.to_numpy()):
+        gb = HistGradientBoostingRegressor(**(params or GB))
+        gb.fit(p.loc[train, features], p.loc[train, target], sample_weight=p.loc[train, "poss"])
+        pred[test] = gb.predict(p.loc[test, features])
+    return p.assign(pred=pred)
+''')
+
+md(r"""
 ## 4. The honest split
 
 The board rates a season from that season's games, so the honest test is **in-season**: fit on the

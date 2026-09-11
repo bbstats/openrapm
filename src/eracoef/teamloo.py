@@ -253,31 +253,9 @@ def _build_team_games(season: int, cfg, keep=None) -> pd.DataFrame:
 
 
 # --------------------------------------------------------------------------- rebalanced leave-one-out
-def rebalance_partners(label: np.ndarray, w: np.ndarray) -> np.ndarray:
-    """For each row j, the other row whose removal alongside j puts the remaining weighted mean of
-    `label` closest to the full weighted mean WITHOUT crossing it; -1 when no partner improves on
-    leaving j out alone.  This is the rule of Austin, Pe'er and Korem (2025) for a continuous label.
-
-    G is at most 82 here, so the G x G table is built outright.
-    """
-    label = np.asarray(label, dtype=float)
-    w = np.asarray(w, dtype=float)
-    G = label.size
-    if G < 3:
-        return np.full(G, -1, dtype=np.int64)
-    S, W = float((w * label).sum()), float(w.sum())
-    M = S / W
-    s_j, w_j = w * label, w
-    d1 = (S - s_j) / np.maximum(W - w_j, 1e-9) - M                       # what leaving j out alone does
-    num = S - s_j[:, None] - s_j[None, :]
-    den = W - w_j[:, None] - w_j[None, :]
-    d2 = np.where(den > 1e-9, num / np.where(den > 1e-9, den, 1.0), np.nan) - M
-    np.fill_diagonal(d2, np.nan)
-    # keep only partners that move the mean back toward the full mean without overshooting it
-    ok = np.isfinite(d2) & (np.sign(d2) * np.sign(d1)[:, None] >= 0) & (np.abs(d2) < np.abs(d1)[:, None])
-    cost = np.where(ok, np.abs(d2), np.inf)
-    partner = np.argmin(cost, axis=1).astype(np.int64)
-    return np.where(np.isfinite(cost[np.arange(G), partner]), partner, -1)
+# The rule itself lives in `rloocv`, where it is general over folds (a season, not just a game) and has
+# an sklearn-shaped splitter around it.  One game per fold is the case this module needs.
+from .rloocv import rebalance_partners  # noqa: E402,F401
 
 
 def loo_rates(tg: pd.DataFrame, rebalance: str = "label", rates=None) -> pd.DataFrame:
