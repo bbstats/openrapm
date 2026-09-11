@@ -588,6 +588,7 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         # (`investigate.oncourt_rates`, padded with a moment constant near 300 possessions; it correlates 0.68
         # with the APM, so it is not the same column twice).  Pair rows only, like PAST.
         from .gbdt_prior import PAST_ONC as _PAST_ONC
+        from .gbdt_prior import interaction_inputs as _interaction_inputs
         _onc_base = S["tune501_b7_pasto_pOD"]
         _oncO = [*_onc_base.gbdt_features["O"], *_PAST_ONC]
         _oncD = [*_onc_base.gbdt_features["D"], *_PAST_ONC]
@@ -686,30 +687,54 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         # ------------------------------------------------- how much he played, times what he did (ruling 10)
         # The owner, 2026-09-10: "gs% * feature and poss played % x feature, for all available features,
         # boruta test adding in these interaction features".  Done: `--modes=rolex`, 179 candidates on pair
-        # rows, 50 trials, both sides.  The result that makes the case is not which products were accepted
+        # rows, 50 trials, both sides.  The result that makes the case is not which interaction features were accepted
         # but that BOTH MULTIPLIERS WERE REJECTED ALONE on both sides -- `gs_pct` and `poss_pct` carry
-        # nothing the booster can use as columns of their own, and eight of their products on defense and
-        # ten on offense clear the shadow bar.  Playing time is not a feature here, it is a modifier.
+        # nothing the booster can use as columns of their own, and eight of their interaction features on defense and
+        # ten on offense clear the shadow bar: the booster can use gs% and poss played % only through a stat.
         # Boruta prunes, it does not decide (FINDINGS 22.2), so these are candidates for the criterion.
-        _XD = ["gsx_astr", "gsx_entry_age", "gsx_stl", "gsx_stocks", "gsx_tenure",
-               "ppx_fga", "ppx_past_apm", "ppx_stocks"]
-        _XO = ["gsx_ftm", "gsx_past_apm", "gsx_pf", "gsx_pts", "gsx_stl",
-               "ppx_creation", "ppx_mpts", "ppx_p3r", "ppx_pts", "ppx_stl"]
+        _XD = ["gs_pct_x_astr", "gs_pct_x_entry_age", "gs_pct_x_stl", "gs_pct_x_stocks", "gs_pct_x_tenure",
+               "poss_pct_x_fga", "poss_pct_x_past_apm", "poss_pct_x_stocks"]
+        _XO = ["gs_pct_x_ftm", "gs_pct_x_past_apm", "gs_pct_x_pf", "gs_pct_x_pts", "gs_pct_x_stl",
+               "poss_pct_x_creation", "poss_pct_x_mpts", "poss_pct_x_p3r", "poss_pct_x_pts", "poss_pct_x_stl"]
         # Boruta's whole accepted list per side, which REPLACES the shipped one: it rejects 8 of the 11 names
         # the defensive prior carries and 16 of the 31 on offense, so this is a much larger change than the
-        # products alone and is registered separately rather than mixed into them.
+        # interaction features alone and is registered separately rather than mixed into them.
         _BD = ["age", "entry_age", "exp_poss", "fga", "height", "past_apm", "past_poss", "past_rapm", "pf",
                "pts", "season", "stocks", "weight", *_XD]
         _BO = ["age", "blk", "creation", "exp_poss", "exp_yrs", "fg3_miss", "fg3m", "ftp", "orb", "orbsh",
                "past_apm", "past_poss", "pf", "season", "stl", "ts", "weight", "weight15", *_XO]
         _shipD, _shipO = list(_board.gbdt_features["D"]), list(_board.gbdt_features["O"])
-        # The control the result needs.  `ppx_past_apm` brings the player's own past plus-minus record onto
-        # the DEFENSIVE side for the first time -- the shipped defensive list has no PAST column at all -- so
-        # a gain from `board_rolexD` could be the past block arriving rather than the products doing anything.
-        # `_np` drops that one interaction; `_past` adds the raw PAST block and no interactions at all.
-        _XDn = [f for f in _XD if f != "ppx_past_apm"]
+        # The control the result needs.  `poss_pct_x_past_apm` brings the player's own past plus-minus record
+        # onto the DEFENSIVE side for the first time -- the shipped defensive list has no PAST column at all --
+        # so a gain from `board_playtimeD` could be the past block arriving rather than the interaction
+        # features doing anything.  `Dn` drops that one interaction; `Dp` adds the raw PAST block and no
+        # interaction features at all.
+        #
+        # And the owner, on reading the first result: "I told you to do products PLUS the original stats."
+        # Right, and `board_playtimeD` did not.  It carries `poss_pct_x_stocks` and `gs_pct_x_stocks` with no
+        # `stocks`, `gs_pct_x_astr` with no `astr`, `gs_pct_x_entry_age` with no `entry_age` -- Boruta accepted
+        # those original stats too and they were dropped between its verdict and the system.  An interaction
+        # feature cannot stand in for the stat inside it: `poss_pct * stocks` is near zero for a man who barely
+        # plays whatever his rate is, so without `stocks` beside it the booster cannot tell "does not play"
+        # from "is not good at this".  `_originals_for` names the stat inside each interaction feature.
+        # Defense was missing SIX of its seven; offense was missing one (`p3r`), which is most of why the
+        # offensive interaction features looked worthless -- they already had their original stats.
+        def _originals_for(_x):
+            return [c for c in sorted(_interaction_inputs(_x)) if c not in ("gs_pct", "poss_pct")]
+        for _t, _fo, _fd in (("Dx", _shipO, [*_shipD, *_XD, *_originals_for(_XD)]),
+                             ("Dxm", _shipO, [*_shipD, *_XD, *_originals_for(_XD), "poss_pct"]),
+                             ("Ox", [*_shipO, *_XO, *_originals_for(_XO)], _shipD),
+                             ("ODx", [*_shipO, *_XO, *_originals_for(_XO)],
+                              [*_shipD, *_XD, *_originals_for(_XD), "poss_pct"])):
+            _k = _replace(_board, name=f"board_playtime{_t}",
+                          gbdt_features={"O": list(dict.fromkeys(_fo)), "D": list(dict.fromkeys(_fd))})
+            S[_k.name] = _k
+            for qt, q in _CUTS.items():
+                S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
+
+        _XDn = [f for f in _XD if f != "poss_pct_x_past_apm"]
         for _t, _fd in (("Dn", [*_shipD, *_XDn]), ("Dp", [*_shipD, "past_apm", "past_poss", "past_rapm"])):
-            _k = _replace(_board, name=f"board_rolex{_t}",
+            _k = _replace(_board, name=f"board_playtime{_t}",
                           gbdt_features={"O": list(_shipO), "D": list(dict.fromkeys(_fd))})
             S[_k.name] = _k
             for qt, q in _CUTS.items():
@@ -719,7 +744,7 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                              ("OD", [*_shipO, *_XO], [*_shipD, *_XD]),
                              ("bD", _shipO, _BD),
                              ("bOD", _BO, _BD)):
-            _k = _replace(_board, name=f"board_rolex{_t}",
+            _k = _replace(_board, name=f"board_playtime{_t}",
                           gbdt_features={"O": list(dict.fromkeys(_fo)), "D": list(dict.fromkeys(_fd))})
             S[_k.name] = _k
             for qt, q in _CUTS.items():

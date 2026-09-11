@@ -404,11 +404,11 @@ criterion is scored at TEAM-GAME level, where a 200-possession player is a round
 change to the bench a tie forever. The new script scores the prior itself, leave-one-panel-window-out: refit
 with window w excluded, predict w's own rows, and compare to the row's training target -- the player's value
 pooled over his other windows, or the exact other-window value of the pair when the feature list carries a
-PAST block. Buckets are SEASON-EQUIVALENT possessions (the window's possessions over its length), so "under
+PAST block. Buckets are POSSESSIONS PER SEASON (the window's possessions over its length), so "under
 500" means what `low_poss_threshold` now means. On the shipped board, skill (1 - mse/null_mse, the null being
 the panel mean for everyone) by bucket:
 
-| season-equiv poss | <250 | 250-500 | 500-1500 | 1500-4500 | 4500+ |
+| poss per season | <250 | 250-500 | 500-1500 | 1500-4500 | 4500+ |
 |---|---|---|---|---|---|
 | offense | 0.193 | 0.173 | 0.179 | 0.255 | **0.480** |
 | defense | 0.096 | 0.160 | 0.171 | 0.265 | **0.327** |
@@ -458,7 +458,7 @@ points over its rows in a game. On a partial mask that sum is a partial point to
 fitted on complete games. It is not the criterion restricted to those rows; it is not the criterion.
 Measured: the `exposure` groups recombine to **337.6** where the pooled score is **113.6**, a factor of three.
 
-`by_tg_exposure` (`--splits=tgexp`) is the sound one. It bins each TEAM-GAME by the share of its possessions
+`by_game_bench_share` (`--splits=game_bench_share`) is the sound one. It bins each TEAM-GAME by the share of its possessions
 played by players the training block saw fewer than 500 of, so it is constant within a team-game, the groups
 partition the criterion's own unit, and they recombine to the pooled score **exactly** (112.362 either way).
 `score` now returns NaN for `tg` on any mask that cuts a team-game (`_keeps_whole_team_games`,
@@ -477,7 +477,7 @@ The exposure term does not tax the bench. It earns its largest gain by far exact
 the 30%+ group -- where every map loses to no map -- is 22 seasons with a standard error of 2 to 5 and says
 nothing at |z| < 1.2. The pooled -1.24 is not bought at the bottom of the board's expense.
 
-**And what it says about the bio candidate: nothing.** `board_bioDw` under `tgexp`, mapped against the
+**And what it says about the bio candidate: nothing.** `board_bioDw` under `game_bench_share`, mapped against the
 shipped board's mapped rows: -0.022 (z -0.93) at 0-5%, -0.003 at 5-15%, **+0.097** at 15-30%, **+0.351** at
 30%+. No group is significant and the two bench-heavy groups mildly favour the shipped board. At STINT level
 inside the `exposure` split -- the valid metric there -- it is -0.396 at z -2.73 over 19 of 28 seasons on the
@@ -486,47 +486,71 @@ stints a barely-seen player is on the floor for is predicted, before nine other 
 dilute him. **The two do not agree, and the criterion's own unit is the team-game.** So the standing tie rule
 stands and the shipped board keeps its feature list; `board_bioDw` is not a candidate any more.
 
-The instrument survives the correction and is the lasting result: `--splits=tgexp` is how a candidate gets
+The instrument survives the correction and is the lasting result: `--splits=game_bench_share` is how a candidate gets
 asked about the bench from here, and it is a decomposition, so the answer adds up.
 
-**Playing time is a MODIFIER, not a feature -- and the defensive prior was missing its own past.** The
+**Playing time only works multiplied by a stat -- and the defensive prior was missing its own past.** The
 owner, 2026-09-10, after height and weight failed: *"games started% and minutes played can 100% help us
 here"*, then *"gs% * feature and poss played % x feature, for all available features, boruta test adding in
-these interaction features"*. `gbdt_prior.role_interactions` builds `gsx_<f>` = `gs_pct * f` and `ppx_<f>` =
-`poss_pct * f`; `50_boruta.py --modes=rolex` ran the kitchen sink plus all 118 products, 179 candidates, 50
+these interaction features"*. `gbdt_prior.interaction_features` builds `gs_pct_x_<f>` = `gs_pct * f` and `poss_pct_x_<f>` =
+`poss_pct * f`; `50_boruta.py --modes=interactions` ran the kitchen sink plus all 118 interaction features, 179 candidates, 50
 trials, pair rows, both sides, the shipped target and window decay per side.
 
 **The result is in the rejections.** `gs_pct` (-0.32 D, -0.27 O) and `poss_pct` (-0.30 D, -0.25 O) are
-rejected on BOTH sides, near the shadow floor -- and their products are at the top of defense: `ppx_stocks`
-3.77, second of 179 behind `past_rapm`; `gsx_entry_age` 2.68; `gsx_stocks` 1.65; `ppx_past_apm` 1.37, against
-a `Max_Shadow` bar of 0.59. Eight products accepted on defense, ten on offense; Boruta also rejects 8 of the
+rejected on BOTH sides, near the shadow floor -- and the interaction features built from them are at the top of defense: `poss_pct_x_stocks`
+3.77, second of 179 behind `past_rapm`; `gs_pct_x_entry_age` 2.68; `gs_pct_x_stocks` 1.65; `poss_pct_x_past_apm` 1.37, against
+a `Max_Shadow` bar of 0.59. Eight accepted on defense, ten on offense; Boruta also rejects 8 of the
 11 names the defensive prior ships and 16 of the 31 on offense. Two blocks per 100 possessions in 200
 possessions and two per 100 in 5,000 are the same number and nothing like the same evidence, and a depth-4
 oblivious tree can only say so by splitting on the rate and again on the exposure inside every leaf.
 
-**The criterion then says the products are not what moves it -- the PAST block is.** The ablation, because
-`ppx_past_apm` puts the player's own plus-minus record on the defensive side for the first time (the shipped
+**The criterion then says the interaction features are not what moves it -- the PAST block is.** The ablation, because
+`poss_pct_x_past_apm` puts the player's own plus-minus record on the defensive side for the first time (the shipped
 defensive list has no `past_*` column at all), so a gain could be the past block arriving:
 
 | defensive prior | criterion | z | seasons | consensus def | floors | prior, <250 poss | 250-500 |
 |---|---|---|---|---|---|---|---|
 | shipped | -- | -- | -- | 0.7565 | 10/10 | -- | -- |
-| + `past_apm/poss/rapm`, no products | **-0.133** | **-2.68** | 20/28 | **0.7468** | **9/10** | -0.140 (z -3.42) | -0.037 (z -2.21) |
-| + 7 products, no past | +0.005 | +0.15 | 13/28 | -- | -- | -0.109 (z -3.69) | -0.083 (z -4.39) |
-| + past + 8 products (`board_rolexD`) | -0.090 | -1.68 | 19/28 | **0.7583** | **10/10** | -0.138 (z -3.94) | **-0.095 (z -4.45)** |
+| + `past_apm/poss/rapm`, no interaction features | **-0.133** | **-2.68** | 20/28 | **0.7468** | **9/10** | -0.140 (z -3.42) | -0.037 (z -2.21) |
+| + 7 interaction features, no past | +0.005 | +0.15 | 13/28 | -- | -- | -0.109 (z -3.69) | -0.083 (z -4.39) |
+| + past + 8 interaction features (`board_playtimeD`) | -0.090 | -1.68 | 19/28 | **0.7583** | **10/10** | -0.138 (z -3.94) | **-0.095 (z -4.45)** |
 
-Products alone move the criterion by nothing at all. The past block alone is the first thing since the
+Interaction features alone move the criterion by nothing at all. The past block alone is the first thing since the
 single-season board to clear |z| = 2 on it -- and it **fails the defensive consensus floor at 0.7468**, with
 the defensive spread blown out to 1.383.
 
-**So the two are complementary, and only together are they shippable.** The products cost 0.043 of the past
+**So the two are complementary, and only together are they shippable.** The interaction features cost 0.043 of the past
 block's criterion gain and buy back 0.0115 of consensus defensive agreement -- 0.7468 to 0.7583, from below
-the floor to ABOVE the shipped board. And the prior diagnostic says why the products are worth having on
-their own terms: `board_rolexD` improves the defensive prior in **all five possession buckets**, by z -3.94
-at under 250 season-equivalent possessions and **z -4.45 at 250-500**, where neither ingredient alone is as
+the floor to ABOVE the shipped board. And the prior diagnostic says why the interaction features are worth having on
+their own terms: `board_playtimeD` improves the defensive prior in **all five possession buckets**, by z -3.94
+at under 250 possessions per season and **z -4.45 at 250-500**, where neither ingredient alone is as
 good as the pair. Nothing else tried this session moved a single bucket.
 
-**Offense: rejected.** `board_rolexOD` drops offensive consensus agreement 0.8350 -> 0.8257 and makes the
+**Adding the ORIGINAL STATS back is what makes it clear the bar.** The owner, on reading the above: *"I
+told you to do products PLUS the original stats."* Right -- the Boruta run did include all 61 originals
+beside the 118 interaction features, but the systems built from its verdict did not. `board_playtimeD`
+carries `poss_pct_x_stocks` and `gs_pct_x_stocks` with no `stocks`, `gs_pct_x_astr` with no `astr`,
+`gs_pct_x_entry_age` with no `entry_age`. Boruta accepted those original stats too and they were dropped
+between its verdict and the system. An interaction feature cannot stand in for the stat inside it:
+`poss_pct * stocks` is near zero for a man who barely plays whatever his rate is, so without `stocks` beside
+it the booster cannot tell "does not play" from "is not good at this". **Defense was missing six of its
+seven original stats; offense was missing one (`p3r`)**, which is most of why the offensive interaction
+features looked worthless -- they already had theirs.
+
+| defensive prior | criterion | z | seasons | floors | consensus def | prior <250 | 250-500 |
+|---|---|---|---|---|---|---|---|
+| `playtimeD` (interactions only) | -0.090 | -1.68 | 19/28 | 10/10 | 0.7583 | -0.138 (z -3.94) | -0.095 (z -4.45) |
+| `playtimeDx` (+ original stats) | -0.110 | **-2.19** | 19/28 | 10/10 | **0.7588** | -0.176 (z -5.66, 10/10) | -0.075 (z -5.85, 10/10) |
+| `playtimeDxm` (+ `poss_pct` too) | **-0.147** | **-2.74** | 20/28 | 10/10 | 0.7563 | **-0.177 (z -5.95, 10/10)** | -0.088 (z -4.09, 10/10) |
+| `playtimeODx` (both sides) | **-0.155** | -2.38 | 21/28 | 10/10 | 0.7567 | same as Dxm | same as Dxm |
+
+Every one of them clears |z| = 2 on the criterion where the interaction features alone did not, and every
+one passes ten of ten floors. `board_playtimeDxm` is the recommendation: the best criterion z of the
+defence-only candidates, the defensive prior better in all five buckets and **all ten panel windows** in the
+two lowest, and offense untouched. `ODx` has the larger raw gain and a worse z, and it drops offensive
+consensus agreement 0.8350 -> 0.8306, so offense stays rejected either way.
+
+**Offense: rejected.** `board_playtimeOD` drops offensive consensus agreement 0.8350 -> 0.8257 and makes the
 offensive prior worse in four of five buckets (z +2.03 at 4500+). Defense only.
 
 **Boruta's full replacement lists lose.** Swapping in everything it accepted and dropping everything it
@@ -534,11 +558,11 @@ rejected is +0.056 on the criterion, worse than the shipped board and far worse 
 names and only ADDING. "Boruta prunes, it does not decide" held exactly as FINDINGS 22.2 says.
 
 Three bugs stood between the idea and the measurement, all the same bug: an interaction is a name no gate
-recognises. `ppx_past_apm` did not force pair rows the way `past_apm` does; `spm.offset`'s `wants` set gated
+recognises. `poss_pct_x_past_apm` did not force pair rows the way `past_apm` does; `spm.offset`'s `wants` set gated
 the career, bio and PAST blocks on names that never matched, so the prediction frame lost ingredients the
-training rows had; and `pair_rows` selects only feature columns, so a deferred product's multiplier was
-absent from the pair frame while present on the panel. `role_x_needs` is the fix in all three places, and
-`test_role_interactions_reach_training_and_prediction_alike` is the regression.
+training rows had; and `pair_rows` selects only feature columns, so a deferred interaction feature's playing-time column was
+absent from the pair frame while present on the panel. `interaction_inputs` is the fix in all three places, and
+`test_interaction_features_reach_training_and_prediction_alike` is the regression.
 
 ## What was tried and rejected
 
@@ -630,7 +654,7 @@ third to a HALF of its spread. Destination/"traded-to" features as the prior: -0
 its rows in a game. Restrict it to a subset of stints and that sum becomes a partial point total compared
 against a level fitted on complete games -- three times the pooled error on the shipped board (337.6 against
 113.6), and enough to flip the sign of a map comparison and manufacture a z of -2.16 that is not there. Every
-split in `holdout.SPLITS` except `tgexp` labels a STINT, so `tg` is NaN for all of them now
+split in `holdout.SPLITS` except `game_bench_share` labels a STINT, so `tg` is NaN for all of them now
 (`_keeps_whole_team_games`) and they must be read on `mse`. The check: **do the group scores recombine to the
 pooled score?** If they do not, the group is not a piece of the thing you are pooling.
 

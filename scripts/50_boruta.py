@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from eracoef.config import load_config  # noqa: E402
 from eracoef.bio import PLAYER_INPUTS  # noqa: E402
 from eracoef.gbdt_prior import (BIO_BINS, CAREER, DEFAULT_FEATURES, DERIVED, FULL_FEATURES,  # noqa: E402
-                                PAST, SHOT_FEATURES, TURN_FEATURE, role_interactions, run_boruta,
+                                PAST, SHOT_FEATURES, TURN_FEATURE, interaction_features, run_boruta,
                                 training_rows)
 
 cfg = load_config()
@@ -58,13 +58,13 @@ panel = pd.read_parquet(Path(cfg["_root"]) / cfg.get("paths", {}).get("role_pane
 SINK = [*SHOT_FEATURES, *CAREER, *PLAYER_INPUTS, *BIO_BINS, *PAST, TURN_FEATURE]
 SINK_NOAGG = [f for f in SINK if f not in DERIVED]
 # ...and the sink crossed with HOW MUCH HE PLAYED (the owner, 2026-09-10: "gs% * feature and poss played %
-# x feature, for all available features"). `gsx_<f>` and `ppx_<f>` for every candidate that is not itself one
+# x feature, for all available features"). `gs_pct_x_<f>` and `poss_pct_x_<f>` for every candidate that is not itself one
 # of the two multipliers, so the booster can be handed "two blocks per 100 in 5,000 possessions" as one
 # number instead of having to split on the rate and then again on the exposure inside every leaf.
-ROLEX = [*SINK, *role_interactions(SINK)]
+INTERACTIONS = [*SINK, *interaction_features(SINK)]
 MODES = {"residual": ("u", DEFAULT_FEATURES, "features_{}"), "full": ("rapm1", FULL_FEATURES, "features_full_{}"),
          "sink": ("pairs", SINK, "features_full_{}"), "sinknoagg": ("pairs", SINK_NOAGG, "features_full_{}"),
-         "rolex": ("pairs", ROLEX, "features_full_{}")}
+         "interactions": ("pairs", INTERACTIONS, "features_full_{}")}
 
 
 def pair_training_rows(side, feats):

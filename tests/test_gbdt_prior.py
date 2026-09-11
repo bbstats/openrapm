@@ -167,8 +167,8 @@ def test_full_mode_uses_role_inputs():
     assert np.corrcoef(off[:m], held.poss_pct)[0, 1] > 0.3                    # the role level is in the prior now
 
 
-def test_role_interactions_reach_training_and_prediction_alike():
-    """`gsx_<f>` / `ppx_<f>`: how much he played, times what he did (owner ruling, 2026-09-10).
+def test_interaction_features_reach_training_and_prediction_alike():
+    """`gs_pct_x_<f>` / `poss_pct_x_<f>`: how much he played, times what he did (owner ruling, 2026-09-10).
 
     The failure mode this guards is the one that cost three round trips: an interaction is a name that no
     gate recognises, so a frame assembled from a want-list gets the product's INGREDIENTS left off and the
@@ -178,30 +178,30 @@ def test_role_interactions_reach_training_and_prediction_alike():
       1. the product is the product;
       2. an interaction on a `past_*` base forces PAIR rows, the way the raw feature does, and is refused
          on a pooled target;
-      3. the pair frame carries the MULTIPLIER even when it is not itself a feature (`ppx_past_apm` on a
+      3. the pair frame carries the MULTIPLIER even when it is not itself a feature (`poss_pct_x_past_apm` on a
          defensive list with no `poss_pct` in it);
-      4. `role_x_needs` names both ingredients, which is what every want-list gate keys off.
+      4. `interaction_inputs` names both ingredients, which is what every want-list gate keys off.
     """
     import numpy as np
     import pandas as pd
     import pytest
-    from eracoef.gbdt_prior import _past_based, add_derived, role_interactions, role_x, role_x_needs, training_rows
+    from eracoef.gbdt_prior import _interaction_on_past, add_derived, interaction_features, interaction_parts, interaction_inputs, training_rows
 
-    assert role_x("ppx_past_apm") == ("poss_pct", "past_apm")
-    assert role_x("blk") is None and role_x("gsx") is None
-    assert role_x_needs(["gsx_blk", "ppx_past_apm"]) == {"gs_pct", "blk", "poss_pct", "past_apm"}
-    assert _past_based("ppx_past_apm") and not _past_based("ppx_blk")
-    assert "gs_pct" not in [role_x(f)[1] for f in role_interactions(["gs_pct", "poss_pct", "blk"])]
+    assert interaction_parts("poss_pct_x_past_apm") == ("poss_pct", "past_apm")
+    assert interaction_parts("blk") is None and interaction_parts("gsx") is None
+    assert interaction_inputs(["gs_pct_x_blk", "poss_pct_x_past_apm"]) == {"gs_pct", "blk", "poss_pct", "past_apm"}
+    assert _interaction_on_past("poss_pct_x_past_apm") and not _interaction_on_past("poss_pct_x_blk")
+    assert "gs_pct" not in [interaction_parts(f)[1] for f in interaction_features(["gs_pct", "poss_pct", "blk"])]
 
     df = pd.DataFrame({"gs_pct": [0.0, 0.5, 1.0], "poss_pct": [0.1, 0.2, 0.4], "blk": [1.0, -2.0, 3.0]})
-    out = add_derived(df.copy(), ["gsx_blk", "ppx_blk"])
-    assert np.allclose(out.gsx_blk, df.gs_pct * df.blk)
-    assert np.allclose(out.ppx_blk, df.poss_pct * df.blk)
-    assert "gsx_gs_pct" not in out.columns, "only the names asked for are built"
+    out = add_derived(df.copy(), ["gs_pct_x_blk", "poss_pct_x_blk"])
+    assert np.allclose(out.gs_pct_x_blk, df.gs_pct * df.blk)
+    assert np.allclose(out.poss_pct_x_blk, df.poss_pct * df.blk)
+    assert "gs_pct_x_gs_pct" not in out.columns, "only the names asked for are built"
 
     panel = pd.DataFrame({"window": ["a"] * 4, "side": ["D"] * 4, "player_id": [1, 2, 3, 4],
                           "poss": [100.0] * 4, "rapm1": [0.1, -0.2, 0.3, 0.0],
                           "gs_pct": [0.0, 1.0, 0.5, 0.2], "poss_pct": [0.1, 0.4, 0.2, 0.3],
                           "blk": [1.0, 2.0, -1.0, 0.5]})
     with pytest.raises(ValueError, match="pair"):
-        training_rows(panel, "D", features=["ppx_past_apm"], target_col="rapm1")
+        training_rows(panel, "D", features=["poss_pct_x_past_apm"], target_col="rapm1")

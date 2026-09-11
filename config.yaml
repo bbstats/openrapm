@@ -197,7 +197,7 @@ holdout:
   # --splits=tgexp: share of a TEAM-GAME's possessions played by those players.  Unlike `exposure_edges` this
   # one is constant within a team-game, so the groups partition the criterion's own unit and their scores add
   # up to the pooled score -- which is what makes it readable as "where did the pooled gain come from".
-  tg_exposure_edges: [0.0, 0.05, 0.15, 0.30, 1.01]
+  game_bench_share_edges: [0.0, 0.05, 0.15, 0.30, 1.01]
   exposure_edges: [0, 1, 500, 1500, 4000, 1000000000]   # the --splits=exposure bins (smallest exposure on the floor)
   consensus:
     window: [2024, 2026]

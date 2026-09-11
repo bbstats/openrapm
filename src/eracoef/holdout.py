@@ -569,7 +569,7 @@ def score(p: Prediction, mask=None) -> dict:
     stint-level `exposure` split's groups recombine to 337.6 where the pooled score is 113.6, a factor of
     three, and the sign of a map comparison flips inside it.  So masks that cut team-games (`exposure`,
     `bench`, `bigs`, `movers`, `rookie` -- anything labelling a STINT) return NaN here and must be read on
-    `mse`, at stint level.  `tgexp` labels a team-game and recombines to the pooled score exactly.
+    `mse`, at stint level.  `game_bench_share` labels a team-game and recombines to the pooled score exactly.
     """
     idx = np.arange(len(p.y)) if mask is None else np.flatnonzero(mask)
     y, w = p.y[idx], p.w[idx]
@@ -677,7 +677,7 @@ def by_gt(p: Prediction, wd_h: WindowData, ctx: Context, h: int, train: list) ->
     return np.where(gt, "garbage time", "competitive")
 
 
-def by_tg_exposure(p: Prediction, wd_h: WindowData, ctx: Context, h: int, train: list) -> np.ndarray:
+def by_game_bench_share(p: Prediction, wd_h: WindowData, ctx: Context, h: int, train: list) -> np.ndarray:
     """Each TEAM-GAME binned by the share of its possessions played by players the training block barely saw.
 
     `by_exposure` labels a STINT, so its groups cut a team-game in half and the criterion's own unit -- points
@@ -692,7 +692,7 @@ def by_tg_exposure(p: Prediction, wd_h: WindowData, ctx: Context, h: int, train:
     """
     m = wd_h.spec.n_ps
     thr = float(ctx.cfg.get("holdout", {}).get("low_exposure", 500.0))
-    edges = [float(e) for e in ctx.cfg.get("holdout", {}).get("tg_exposure_edges", [0.0, 0.05, 0.15, 0.30, 1.01])]
+    edges = [float(e) for e in ctx.cfg.get("holdout", {}).get("game_bench_share_edges", [0.0, 0.05, 0.15, 0.30, 1.01])]
     low = (p.rat.poss.to_numpy(dtype=float) < thr).astype(float)
     n_low = wd_h.X[:, :2 * m] @ np.tile(low, 2)
     poss = p.poss
@@ -706,7 +706,7 @@ def by_tg_exposure(p: Prediction, wd_h: WindowData, ctx: Context, h: int, train:
 
 
 SPLITS = {"movers": by_movers, "exposure": by_exposure, "bigs": by_bigs, "bench": by_bench, "gt": by_gt,
-          "rookie": by_rookie, "tgexp": by_tg_exposure}
+          "rookie": by_rookie, "game_bench_share": by_game_bench_share}
 
 
 # ---------------------------------------------------------------------------------------- the runner

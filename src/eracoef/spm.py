@@ -255,13 +255,13 @@ def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, targ
                 prior_d = prior_o
             if prior_o is None or prior_d is None:
                 raise RuntimeError(f"Context has no GBDT prior for mode {mode!r} (outputs/role_panel.parquet)")
-            from .gbdt_prior import SHOTQ, gbdt_offset, role_x_needs
+            from .gbdt_prior import SHOTQ, gbdt_offset, interaction_inputs
             ro, rd = centred_rates(exp)
             wants = set(prior_o.features["O"]) | set(prior_d.features["D"])
-            # a `gsx_` / `ppx_` interaction wants its BASE and its MULTIPLIER on the prediction frame, and
-            # every block below is gated on `wants`.  Without this, `gsx_entry_age` asks for the career block
+            # a `gs_pct_x_` / `poss_pct_x_` interaction wants its BASE and its MULTIPLIER on the prediction frame, and
+            # every block below is gated on `wants`.  Without this, `gs_pct_x_entry_age` asks for the career block
             # by a name no gate recognises and the column the training rows had is simply absent at prediction.
-            wants |= role_x_needs(wants)
+            wants |= interaction_inputs(wants)
             shots = None
             if wants & set(SHOTQ):
                 # the shot totals of the TRAINING block only, the way the panel row's came from its window's

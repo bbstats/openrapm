@@ -11,7 +11,7 @@ leave-one-window-out, and reports the error by how many possessions the player h
 For each panel window w the prior is refit with w excluded and asked to predict w's own rows; "actual" is the
 row's training target -- the player's value pooled over his OTHER windows (`training_rows`), or the exact
 other-window value of the pair (`pair_rows`) when the feature list carries a PAST block.  Buckets are
-SEASON-EQUIVALENT possessions, the window's possessions divided by its length, so "under 500" means the same
+POSSESSIONS PER SEASON, the window's possessions divided by its length, so "under 500" means the same
 thing it means in `low_poss_threshold` now that the board rates one season.
 
 The honest caveat: on the pooled path a row in window v has a target that pools v's other windows, w
@@ -33,7 +33,7 @@ from eracoef.windows import label_step  # noqa: E402
 
 pd.set_option("display.width", 250, "display.max_columns", 40, "display.precision", 3)
 
-# season-equivalent possessions.  500 and 1500 are `low_poss_threshold` / `starter_poss_threshold`.
+# possessions per season.  500 and 1500 are `low_poss_threshold` / `starter_poss_threshold`.
 EDGES = [0.0, 250.0, 500.0, 1500.0, 4500.0, np.inf]
 LABELS = ["<250", "250-500", "500-1500", "1500-4500", "4500+"]
 
@@ -106,7 +106,7 @@ def main():
         print(f"  {n} done ({time.time() - t0:.0f}s)", flush=True)
     R = pd.concat(out, ignore_index=True)
     cols = ["system", "side", "bucket", "n", "rmse", "null", "skill", "sd_pred", "sd_act"]
-    print("\n=== prior error by SEASON-EQUIVALENT possessions, leave-one-window-out "
+    print("\n=== prior error by POSSESSIONS PER SEASON, leave-one-window-out "
           "(rmse against the player's other windows; null = predict the panel mean; skill = 1 - mse/null_mse)")
     for side in ("O", "D"):
         print(f"\n-- {side}")

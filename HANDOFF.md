@@ -95,9 +95,9 @@ Reproduce with the commands at the bottom of this file. `--tag=spanel2` is the c
 **The criterion cannot see this question.** It is scored at team-game level, where a 200-possession player is
 a rounding error, so it calls every change to the bench a tie. `scripts/61_lowposs.py` is the instrument that
 can see it: refit the prior with one panel window excluded, predict that window's own rows, compare to the
-row's training target, and report by SEASON-EQUIVALENT possessions. On the shipped board, skill by bucket:
+row's training target, and report by POSSESSIONS PER SEASON. On the shipped board, skill by bucket:
 
-| season-equiv poss | <250 | 250-500 | 500-1500 | 1500-4500 | 4500+ |
+| poss per season | <250 | 250-500 | 500-1500 | 1500-4500 | 4500+ |
 |---|---|---|---|---|---|
 | offense | 0.193 | 0.173 | 0.179 | 0.255 | **0.480** |
 | defense | 0.096 | 0.160 | 0.171 | 0.265 | **0.327** |
@@ -118,7 +118,7 @@ does the reverse -- helps the middle and top, makes the deepest bench worse, and
 `--splits=` now and `evaluate` / `unmapped_rows` score each held-out season inside groups. The pooled row is
 bit-identical either way (`test_splits_reach_the_calmap_scorer`).
 
-**Use `--splits=tgexp`, not `--splits=exposure`.** This cost a round trip and is trap 16 in `DECISIONS.md`.
+**Use `--splits=game_bench_share`, not `--splits=exposure`.** This cost a round trip and is trap 16 in `DECISIONS.md`.
 `by_exposure` labels a STINT, so its groups cut team-games in half, and the criterion sums a team's points
 over its rows in a game -- on a partial mask that is a partial point total against a level fitted on complete
 games. Its groups recombine to 337.6 where the pooled score is 113.6. It produced two confident wrong numbers
@@ -126,47 +126,51 @@ before the recombination check caught it (a z of -2.16 for `board_bioDw` that is
 the calibration map taxing the bench that is backwards). `score` returns NaN for `tg` on any mask that cuts a
 team-game now, so it cannot happen again; a stint-cutting split is read on `mse`.
 
-`by_tg_exposure` (`tgexp`) bins each TEAM-GAME by the share of its possessions played by players the training
+`by_game_bench_share` (`game_bench_share`) bins each TEAM-GAME by the share of its possessions played by players the training
 block saw fewer than 500 of. Constant within a team-game, recombines to the pooled score exactly.
 
 **What it says.** The calibration map's exposure term is *not* taxing the bench -- against no map at all it is
 worth -1.14 in the least bench-heavy games and **-4.47 (z -3.33)** in the 15-30% group, its largest gain by
-far, where plain `linear` manages -0.87. And `board_bioDw` is not a candidate: under `tgexp` it is -0.022,
+far, where plain `linear` manages -0.87. And `board_bioDw` is not a candidate: under `game_bench_share` it is -0.022,
 -0.003, +0.097 and +0.351 across the four groups, nothing significant, and the two bench-heavy groups mildly
 favour the shipped board. It is -0.396 at z -2.73 on zero-exposure rows at STINT level, which is a real
 measurement of a different unit; the criterion's unit is the team-game and it says no.
 
 **Ruling 10, 2026-09-10, and it is the one that worked:** *"games started% and minutes played can 100%
 help us here"* -> *"gs% * feature and poss played % x feature, for all available features, boruta test adding
-in these interaction features"*. Built (`gbdt_prior.role_interactions`, `50_boruta.py --modes=rolex`) and
-measured end to end. **`board_rolexD` is a finished candidate that passes every gate**, and the case for it
+in these interaction features"*. Built (`gbdt_prior.interaction_features`, `50_boruta.py --modes=interactions`) and
+measured end to end. **`board_playtimeD` is a finished candidate that passes every gate**, and the case for it
 is in `DECISIONS.md`:
 
-| | shipped | `board_rolexD` |
+| | shipped | `board_playtimeD` |
 |---|---|---|
 | criterion, mapped, K=3 q75 | -- | **-0.090 per 100, z -1.68, 19 of 28 seasons** |
 | consensus total / offense / defense | 0.8354 / 0.8350 / 0.7565 | 0.8335 / 0.8354 / **0.7583** |
 | floors | 10/10 | **10/10** |
-| prior error, <250 season-equiv poss | -- | **-0.138 (z -3.94, 9 of 10 windows)** |
+| prior error, <250 poss per season | -- | **-0.138 (z -3.94, 9 of 10 windows)** |
 | prior error, 250-500 | -- | **-0.095 (z -4.45, 9 of 10)** |
 
-It is the shipped defensive list plus eight products; **nothing else this session moved a single possession
+It is the shipped defensive list plus eight interaction features; **nothing else this session moved a single possession
 bucket.** Boruta rejected `gs_pct` and `poss_pct` outright on both sides while accepting eight of their
-products on defense -- playing time carries nothing as a column and a lot as a multiplier.
+interaction features on defense -- gs% and poss played % carry nothing as columns of their own.
 
-**Run the ablation before you believe any of it, because it changes the story.** `board_rolexDp` (the raw
-PAST block on defense, no products) is **-0.133 at z -2.68 over 20 of 28** -- better on the criterion, and
+**Run the ablation before you believe any of it, because it changes the story.** `board_playtimeDp` (the raw
+PAST block on defense, no interaction features) is **-0.133 at z -2.68 over 20 of 28** -- better on the criterion, and
 the first thing since the single-season board to clear |z| = 2 -- but it **fails the defensive consensus
-floor at 0.7468**. `board_rolexDn` (products, no past) is +0.005 on the criterion: nothing. So the criterion
-gain is the past block arriving on a defensive prior that had no `past_*` column at all, and the products'
+floor at 0.7468**. `board_playtimeDn` (interaction features, no past) is +0.005 on the criterion: nothing. So the criterion
+gain is the past block arriving on a defensive prior that had no `past_*` column at all, and the interaction features'
 job is different: they cost 0.043 of that gain, buy back 0.0115 of consensus defensive agreement, and carry
 the whole bench improvement (z -4.39 at 250-500 with no past block present). **Only the pair is shippable.**
 
-**The owner's call:** ship `board_rolexD`. The criterion is -0.090 at z -1.68, which the standing tie rule
+**The owner's call:** ship `board_playtimeDxm` -- the shipped defensive list, the eight accepted
+interaction features, the six original stats they are built from, and `poss_pct`. -0.147 per 100 at z -2.74
+over 20 of 28 seasons, ten of ten floors, the defensive prior better in all five buckets and all ten panel
+windows in the two lowest. `board_playtimeD` (interaction features with no original stats) was the earlier,
+weaker version of the same idea at z -1.68. The criterion is -0.090 at z -1.68, which the standing tie rule
 would not act on alone -- but every floor passes, defensive agreement goes UP, and the prior improves
-significantly in all five buckets. Offense is rejected (`board_rolexOD` drops offensive consensus to 0.8257).
+significantly in all five buckets. Offense is rejected (`board_playtimeOD` drops offensive consensus to 0.8257).
 
-**What is still open on item 2 after this.** `tgexp` says the criterion's team-game gain sits in the games
+**What is still open on item 2 after this.** `game_bench_share` says the criterion's team-game gain sits in the games
 with the FEWEST barely-seen players (-0.105 at z -2.29 in the 0-5% group) and is slightly negative, not
 significant, in the bench-heavy ones. So the bench improvement is real in the prior and still invisible to
 the criterion's own unit. That gap is the thing ruling 9 was aimed at and it is not closed.
