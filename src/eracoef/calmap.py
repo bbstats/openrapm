@@ -31,8 +31,8 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 
-from .holdout import (RESULT_COLUMNS, SPLITS, THREAD_VARS, Context, Holdout, Ratings, _fit, level_columns,
-                      predict_season, score)
+from .holdout import (PLAYER_COLUMNS, RESULT_COLUMNS, SPLITS, THREAD_VARS, Context, Holdout, Ratings, _fit,
+                      level_columns, player_scores, player_truth, predict_season, score)
 
 
 # ---------------------------------------------------------------------------------------- 1. the dump
@@ -1058,9 +1058,26 @@ def _scored_rows(p, h, k, name, lam, f, splits=None, ctx=None, train=None) -> li
     return rows
 
 
+def player_rows(rat: Ratings, f: SeasonFrame, h: int, k: int, name: str, lam: float, ho: Holdout,
+                ctx: Context, truths: dict) -> pd.DataFrame:
+    """The PLAYER-level loss of one system on one held-out frame (holdout.player_scores).
+
+    The truth -- a prior-free ridge fit of the frame -- is built once per held-out season and cached in
+    `truths`, so every candidate in the run is scored against the same one.  The frame is the criterion's,
+    so an in-season system is scored on the games after its cut and never on its own training games."""
+    if h not in truths:
+        truths[h] = player_truth(ctx, f.wd, lam=ho.truth_lam, seasons=(h,),
+                                 cut=np.nan if f.cut is None else float(f.cut))
+    pl = player_scores(rat, truths[h], edges=ho.player_edges, labels=ho.player_labels, top_k=ho.player_top_k,
+                       points_per_win=ho.points_per_win, dollars_per_win=ho.dollars_per_win)
+    return pl.assign(held_out=h, k=k, train="", system=name, lam=lam,
+                     cut=np.nan if f.cut is None else float(f.cut), seconds=0.0)[PLAYER_COLUMNS]
+
+
 def evaluate(dump: pd.DataFrame, frames: dict, system: str, k: int, map_o: SideMap, map_d: SideMap, name: str,
              ridge: float = 0.0, lam: float = 0.0, level: str = "home", min_poss: float = 1000.0,
-             bend: TeamBend | None = None, splits=None, ctx: Context | None = None):
+             bend: TeamBend | None = None, splits=None, ctx: Context | None = None,
+             ho: Holdout | None = None, player_out: list | None = None, truths: dict | None = None):
     """Leave-one-season-out: fit the map on the other seasons' team-game residuals, apply it to H, score H
     with the criterion's own scorer.  Returns (result rows in RESULT_COLUMNS, the per-season parameters,
     held_out = -1 for the all-seasons fit).  `bend`: a TeamBend fitted on the same other seasons, after the
@@ -1080,6 +1097,8 @@ def evaluate(dump: pd.DataFrame, frames: dict, system: str, k: int, map_o: SideM
             gamma, s_u = fit_bend(D, th, bend, exclude_h=h, rows=rcols)
             p = bent_prediction(p, f, bend, gamma, s_u, level=level, rows=None if per_h is None else per_h[h])
         rows.extend(_scored_rows(p, h, k, name, lam, f, splits, ctx, train_of(dump, system, k, h)))
+        if player_out is not None and ho is not None and ctx is not None:
+            player_out.append(player_rows(rat, f, h, k, name, lam, ho, ctx, truths if truths is not None else {}))
         params.append(_param_row(name, system, k, h, map_o, map_d, D, th, bend, gamma, s_u))
     th_all = fit_theta(D, exclude_h=None, ridge=ridge, map_o=map_o, map_d=map_d)
     g_all, s_all = (None, np.nan)
@@ -1093,12 +1112,16 @@ def evaluate(dump: pd.DataFrame, frames: dict, system: str, k: int, map_o: SideM
 
 
 def unmapped_rows(dump: pd.DataFrame, frames: dict, system: str, k: int, lam: float = 0.0, level: str = "home",
-                  splits=None, ctx: Context | None = None) -> pd.DataFrame:
+                  splits=None, ctx: Context | None = None, ho: Holdout | None = None,
+                  player_out: list | None = None, truths: dict | None = None) -> pd.DataFrame:
     """The base system scored from the dump, so the paired test is against exactly the same fits."""
     rows = []
     for h, f in frames.items():
-        p = predict_season(ratings_for(dump, system, k, h), f.wd, level=level)
+        rat = ratings_for(dump, system, k, h)
+        p = predict_season(rat, f.wd, level=level)
         rows.extend(_scored_rows(p, h, k, system, lam, f, splits, ctx, train_of(dump, system, k, h)))
+        if player_out is not None and ho is not None and ctx is not None:
+            player_out.append(player_rows(rat, f, h, k, system, lam, ho, ctx, truths if truths is not None else {}))
     return pd.DataFrame(rows)[RESULT_COLUMNS]
 
 

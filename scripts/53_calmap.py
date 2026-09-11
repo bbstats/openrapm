@@ -9,6 +9,13 @@
         leave-one-season-out on the TEAM-GAME residuals, score every held-out season with the criterion's scorer,
         and print the ladder against the unmapped system.  Writes outputs/holdout_calmap_<tag>.parquet (scores)
         and outputs/calmap_<tag>.parquet (the per-season parameters, held_out = -1 for the all-seasons fit).
+
+    --players   also score every candidate at PLAYER level -- Kendall tau, a top-k concordance and the dollars
+        misallocated on an average two-player trade, every player counted once, by the player's own
+        possessions.  The team-game criterion weights a player by how much he played and cannot see the
+        bottom of the board at all; this is the loss that can.  Writes
+        outputs/holdout_calmap_<tag>_players.parquet.  --truth-lam=<x> re-scores against a
+        differently shrunk truth; read any verdict at both lam_plugin and spm.apm_lam (100).
 """
 import sys
 import time
@@ -21,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from eracoef.calmap import (SideMap, dump_ratings, evaluate, frames_for_dump, parse_maps,  # noqa: E402
                             unmapped_rows)
 from eracoef.config import load_config  # noqa: E402
-from eracoef.holdout import SPLITS, Context, Holdout, paired, pooled  # noqa: E402
+from eracoef.holdout import SPLITS, Context, Holdout, paired, player_report, pooled  # noqa: E402
 
 pd.set_option("display.width", 250, "display.max_columns", 40, "display.precision", 3)
 cfg = load_config()
@@ -43,7 +50,11 @@ def main():
     tag = _flag("tag", "chain")
     names = _list("systems", ["mspi"])
     ks = _list("k", [2, 4], int)
-    ho = Holdout.from_config(cfg, ks=ks)
+    # --truth-lam: the penalty of the PRIOR-FREE fit the players are scored against.  Default lam_plugin
+    # (low variance, but it shrinks a low-possession player harder than a starter); spm.apm_lam (100) is
+    # nearly unbiased and very noisy.  A player-level verdict that flips between them has decided nothing.
+    tl = _flag("truth-lam")
+    ho = Holdout.from_config(cfg, ks=ks, truth_lam=(float(tl) if tl else None))
     if cmd == "dump":
         dump_ratings(ho, names, OUT / f"ratings_{tag}.parquet", workers=int(_flag("workers", 4)), rankmap=_flag("rankmap"))
         return
@@ -66,15 +77,22 @@ def main():
         raise SystemExit(f"unknown split(s) {bad}; have {sorted(SPLITS)}")
     splits = {x: SPLITS[x] for x in sp} or None
     t0 = time.time()
+    # the criterion is a team-game number and a list of PLAYERS is what ships, so --players scores the same
+    # candidates a second way: Kendall tau, a top-k concordance and the dollars misallocated on an average
+    # two-player trade, every player counting once (holdout.player_scores).  The truth is built once per
+    # held-out frame and shared, so every candidate in a run is scored against the same one.
+    pout = [] if "--players" in sys.argv else None
+    truths = {}
     res, params = [], []
     for system in names:
         for k in ks:
-            res.append(unmapped_rows(dump, frames, system, k, splits=splits, ctx=ctx))
+            res.append(unmapped_rows(dump, frames, system, k, splits=splits, ctx=ctx, ho=ho,
+                                     player_out=pout, truths=truths))
             for fam in fams:
                 map_o, map_d, bend = parse_maps(fam)
                 name = f"{system}_{fam.replace(':', '_').replace('|', '_')}"
                 r, p = evaluate(dump, frames, system, k, map_o, map_d, name, ridge=ridge, bend=bend,
-                                splits=splits, ctx=ctx)
+                                splits=splits, ctx=ctx, ho=ho, player_out=pout, truths=truths)
                 res.append(r)
                 params.append(p)
                 print(f"  {name} K={k} done ({time.time() - t0:.0f}s)", flush=True)
@@ -96,6 +114,12 @@ def main():
             print(f"\n=== paired against {system} within --splits={sname}, team-game level; negative = better")
             t = paired(R[R.split == sname], system, "tg")
             print(t[["k", "group", "system", "mean_diff", "se", "z", "wins", "n_seasons"]].to_string(index=False))
+    if pout:
+        PL = pd.concat(pout, ignore_index=True)
+        PL.to_parquet(OUT / f"holdout_calmap_{tag}_players.parquet", index=False)
+        print()
+        print(player_report(PL, ref=names[0]))
+        print(f"wrote outputs/holdout_calmap_{tag}_players.parquet")
     print("\n=== parameters, all-seasons fit (held_out = -1)")
     print(P[P.held_out == -1].drop(columns=["held_out"]).round(3).to_string(index=False))
     print(f"\nwrote outputs/holdout_calmap_{tag}.parquet, outputs/calmap_{tag}.parquet ({time.time() - t0:.0f}s)")

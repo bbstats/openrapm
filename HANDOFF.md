@@ -1,4 +1,4 @@
-# Handoff: the bottom of the board is measurable now, and one ruling is waiting
+# Handoff: the board is scored on players now, and the constants are still being re-picked
 
 **This file is transient.** It exists to start the next session and should be deleted when Phase 1
 ships. `DECISIONS.md` is the permanent record and carries every number quoted here; do not turn this
@@ -6,7 +6,7 @@ back into a lab notebook — the last one reached 7,800 lines and was deleted on
 `archive/research-2026-09` has it).
 
 Branch `cleanup`, 27 commits ahead of `main`, working tree clean, `main` untouched.
-`pytest -q`: **231 passed, 1 xfailed, ~110 s.**
+`pytest -q`: **242 passed, 1 xfailed, ~130 s.**
 
 ---
 
@@ -212,52 +212,31 @@ targets `xpts_ft` / `x3def_w0.25`. `FACTOR_LAMS` and `xpts.FIXED_LAMBDA` carry c
 selected by REML **on 2024-2026** — the current block — and then held fixed everywhere, inside the
 criterion included.
 
-### 4. The evaluation is scored on team-games. It should be scored on PLAYERS. -- OWNER'S DIRECTION
+### 4. The evaluation is scored on PLAYERS now -- BUILT 2026-09-11, one half still open
 
-*"players is the only thing that matters here"* (2026-09-11). This is the biggest open item and everything
-in item 2 is downstream of it.
+*"players is the only thing that matters here."* Two player-level losses live beside `score()` in
+`holdout.py`, every player counted once: **rank** (Kendall tau-b plus a top-50 concordance) and **dollars**
+(for every pair the board orders wrong, the money misallocated taking one for the other; `money_skill` is the
+share of a coin-flip board's loss that this board avoids). `45_holdout.py --players` and
+`53_calmap.py --players [--truth-lam=X]` both print them; the full case, the three design decisions that each
+reversed a number, and the two new traps are in `DECISIONS.md`. `tests/test_player_loss.py` is ten tests.
 
-**The problem, stated once.** The criterion is a possession-weighted MSE over team-games. A player enters it
-in proportion to how much he played, so a 200-possession player is a rounding error and every change to the
-bottom of the board scores as a tie. Measured this session: the defensive prior for players under 250
-possessions per season went from skill 0.096 to 0.233 -- it more than doubled -- and the team-game criterion
-moved 0.130% of its MSE. We ship a list of players. We evaluate a points-per-game regression.
+**What it decided.** `board_D_interactions_stats_possplayed` wins at player level too -- tau **+0.0034 at
+z +3.84** against the shipped board (28 seasons, K=3, q75 frames) at the default truth and **+0.0041 at
+z +3.83** at `--truth-lam=100`, positive in every possession bucket, dollars negative at both. That is the
+first evidence for the owner's call from a loss that can see the bench.
 
-**Build two player-level losses. They are different questions and both matter.**
+**Read every player-level verdict at both truths.** The calibration map is tau -0.0224 at z -8.75 against the
+default (shrunk) truth and +0.0050 at z +1.74 against the near-unbiased one, so the player loss has decided
+nothing about the map. A verdict that changes sign between the two has decided nothing.
 
-1. **Rank.** For held-out season H, from a fit that never saw H: does the rating ORDER players the way H's
-   own on-court results do? Every player counts once, not once per possession. Report Kendall tau and a
-   top-k concordance separately -- full-list rank correlation is dominated by the easy middle, and the
-   decisions people make with this board are at the top and at the replacement-level line.
-2. **Dollars in a theoretical trade.** The loss that has the right shape: convert rating to wins
-   (rating per 100 x possessions / 100 / ~30 points per win), wins to dollars at the season's cap, then
-   for every pair of players the board ORDERS WRONG, charge the dollars you would have misallocated taking
-   one for the other. This weights an error by what it costs, which is convex in impact and scales with
-   minutes, so a wrong call on a starter costs more than a wrong call on a 12th man WITHOUT making the 12th
-   man invisible the way possession weighting does.
+    .venv/Scripts/python scripts/53_calmap.py fit --tag=verify2 --k=3 --maps=linear+sat --players         --systems=ks00_lam05_ow_w0.25_q75,board_D_interactions_stats_possplayed_q75
 
-**Four traps, all of which have already bitten something in this repo:**
-
-- **"Actual" for a held-out season is itself an estimate.** A bench player's own APM in H is unbiased and
-  extremely noisy; his RAPM is shrunk toward a prior, which is the thing being scored. Pick one, say which,
-  and never compare numbers computed against different ones. See the same issue in `61_lowposs.py`'s docstring.
-- **Equal weighting makes noise dominate at the bottom.** The fix is not to reweight by possessions -- that
-  is the current criterion -- but to make the TARGET more measurable: score against the player's value over
-  the seasons AFTER H, not H alone. That is the owner's year-over-year test.
-- **A rank loss is not decomposable into team-games**, so `holdout.score`'s `tg` column has nothing to say
-  about it. Do not try to make one split of the other (trap 16).
-- **The consensus is a sanity check and never a fitting target.** A player-rank loss looks a lot like the
-  consensus floors. It is not the same thing and must be built from on-court results, not from other people's
-  metrics.
-
-**Where to start.** `holdout.py` already has per-player rank machinery (`pooled_rank`, the decile slopes) and
-`61_lowposs.py` is already player-level, but it scores the PRIOR against the panel rather than the finished
-rating against a held-out season. Neither is the criterion. The new loss belongs beside `score()` in
-`holdout.py` so `53_calmap.py` and `45_holdout.py` both get it, and it needs its own paired test over the 28
-held-out seasons so a candidate can be judged on it the way it is judged on the team-game number today.
-
-**Until it exists, report both numbers for every candidate** -- the team-game criterion and the per-bucket
-prior accuracy from `61_lowposs.py` -- and say plainly which population each one can see.
+**What is left: the year-over-year form.** Score a season-H board against the seasons AFTER H -- the owner's
+reliability criterion -- which needs a training set that stops before H, because the criterion's symmetric
+neighbourhood already contains H+1 and H+2. A different RUN, not a different loss: `Holdout` takes the
+truth window from the frame it is handed, so a run whose training block ends at H-1 and whose scored frame is
+H+1..H+3 gets the number with no new code. Nobody has done it.
 
 ### 4. Not started at all
 
@@ -331,15 +310,14 @@ prior accuracy from `61_lowposs.py` -- and say plainly which population each one
 
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest tests -q          # 229 passed, 1 xfailed, ~110 s
+    .venv/Scripts/python -m pytest tests -q          # 242 passed, 1 xfailed, ~130 s
     .venv/Scripts/python scripts/60_season_board.py  # ks00_lam05_ow_w0.25, kernel {0: 1.0}, ~70 s
     .venv/Scripts/python scripts/52_site.py          # 14,578 rows, 30 seasons, 1.0 MB
     .venv/Scripts/python scripts/58_archetype.py     # 0.145 spread, 8 clusters, centres at +0.11
     .venv/Scripts/python scripts/61_lowposs.py       # defensive skill 0.096 at <250, 0.327 at 4500+, ~25 s
     git log --oneline -1                             # 71969bf "A team-game score on a mask that cuts team-games..."
 
-**First concrete step:** get the owner's ruling on item 2 above -- it is one question and it unblocks a
-finished, measured candidate. Then sweep `gbdt_win_decay` (0.514) the way `board_defdecay_<value>` swept its defensive
+**First concrete step:** sweep `gbdt_win_decay` (0.514) the way `board_defdecay_<value>` swept its defensive
 twin, registering the grid beside it in `systems.py`:
 
     .venv/Scripts/python scripts/53_calmap.py dump --systems=<the sweep>_q75 --k=3 --workers=4 --tag=wdosweep

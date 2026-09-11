@@ -564,6 +564,68 @@ training rows had; and `pair_rows` selects only feature columns, so a deferred i
 absent from the pair frame while present on the panel. `interaction_inputs` is the fix in all three places, and
 `test_interaction_features_reach_training_and_prediction_alike` is the regression.
 
+### The board is a list of PLAYERS, so it is scored on players (2026-09-11)
+
+*"players is the only thing that matters here."* The criterion is a possession-weighted MSE over team-games,
+so a player enters it in proportion to how much he played and a 200-possession player is a rounding error:
+the defensive prior for players under 250 possessions per season more than doubled in skill (0.096 -> 0.233)
+and the team-game criterion moved 0.130% of its MSE. Two player-level losses now sit beside `score()` in
+`holdout.py`, reached by `45_holdout.py --players` and `53_calmap.py --players`, one row per player and every
+player counted once:
+
+  * **rank** -- Kendall tau-b of the board's ordering against the held-out window's own on-court results, plus
+    a top-50 concordance, because a full-list tau is dominated by the easy middle and the decisions people
+    make with a board are at the top and at the replacement-level line;
+  * **dollars** -- for every PAIR the board orders wrong, the money misallocated taking one for the other.
+    `money_skill` is the share of that a coin-flip board would lose which this board avoids: 1 is perfect,
+    0 is saying nothing. The shipped board is at **0.298** against a near-unbiased truth.
+
+**What "actual" is, and it is one thing.** `player_truth` is the prior-free ridge fit (`beta_none`, no box
+term, no role offset) of EXACTLY the rows the criterion scores -- season H, or H's post-cut games for an
+in-season system, so a `_q75` candidate is never scored on games it trained on. It contains no box prior, so
+it cannot favour the board whose prior it shares, and it shrinks toward the average player, not toward
+anything under test. One truth is built per held-out frame and shared by every candidate in the run.
+
+**Three design decisions that each reversed a number, and all three are pinned by tests.**
+
+*The losses must ignore where a board puts its zero.* `predict_season` refits the intercept on the held-out
+season, so the team-game criterion cannot see a constant shift in a board at all. The dollars loss could:
+dollars are a rating TIMES possessions, so a board whose zero sits at replacement instead of average makes
+every player positive and orders them by minutes. On the simulator, an uncentred true-talent board (mean
++6.7) lost MORE dollars than a near-useless shrunken RAPM while beating it on every rank measure. Both sides
+are now re-centred on the average possession before the conversion (`test_the_losses_ignore_where_a_board_puts_its_zero`).
+
+*Rank and dollars order players by different quantities on purpose.* Rank is the board's own claim, points
+per 100. A trade compares totals, so both sides of the dollars loss are the rating times the player's own
+possessions in the window -- minutes held at what actually happened, not something either board is asked to
+predict.
+
+*A pair the board is indifferent about costs half the gap, not nothing.* Charging only the strictly
+discordant pairs put a board with nothing to say at ZERO dollars lost -- the best possible score for the
+worst possible board. Indifference means picking at random, so it is charged half
+(`test_a_zero_board_sits_at_the_no_information_point`).
+
+**What it decided.** `board_D_interactions_stats_possplayed` -- the owner's call on the criterion -- also wins
+at player level, and it is the first evidence for it from a loss that can see the bench. Against the shipped
+`ks00_lam05_ow_w0.25`, K=3, q75 frames, 28 held-out seasons, paired:
+
+| truth (`--truth-lam`) | tau | dollars per trade | level: shipped tau / money_skill |
+|---|---|---|---|
+| `lam_plugin` (default) | **+0.0034, z +3.84** | -1,096, z -1.73 | 0.2437 / 0.4796 |
+| `spm.apm_lam` = 100 (near-unbiased) | **+0.0041, z +3.83** | **-30,101, z -3.29** | 0.1817 / 0.2976 |
+
+Same sign at both truths, and positive in every possession bucket at the default truth (+0.0093 at z +2.41 in
+250-500, +0.0042 at z +2.97 in 500-1500). **Always read a player-level verdict at both truths.** The
+calibration map is why: `linear+sat` against no map at all is tau **-0.0224 at z -8.75** on the shrunk truth
+and **+0.0050 at z +1.74** on the near-unbiased one. The player loss has decided nothing about the map. The
+default truth is low-variance but shrinks a low-possession player harder than a starter, so it rewards a
+board that does the same; `apm_lam` is nearly unbiased and very noisy, and noise in an unbiased target costs
+power without choosing a winner.
+
+**Still open.** The year-over-year form of the question -- score a season-H board against the seasons AFTER
+H, the owner's reliability criterion -- needs a training set that stops before H, because the criterion's
+symmetric neighbourhood already contains H+1 and H+2. That is a different run, not a different loss.
+
 ## What was tried and rejected
 
 **The LRBoost branch (a boosted correction on a frozen linear prior).** Five things had to be right before it
@@ -649,6 +711,16 @@ third to a HALF of its spread. Destination/"traded-to" features as the prior: -0
 (0.786 -> 0.765): refitting beta on `Rbeta + u` launders shrunk residual into unshrunk prior.
 
 ## The measurement traps
+
+**A player-level loss can be gamed by the zero point and by the truth's own shrinkage.** Two separate ways
+the same new instrument produced a confidently wrong number on the day it was built. (1) Dollars are a rating
+times possessions, so an additive shift the team-game criterion cannot even see -- it refits the intercept --
+made a true-talent board score WORSE than a near-useless one, because every player being positive orders them
+by minutes. (2) The truth is itself a ridge fit, and a heavily shrunk truth pulls low-possession players
+harder than starters, which rewards a board that does the same: the calibration map reads z -8.75 against the
+default truth and z +1.74 against a nearly unbiased one. *The checks:* both sides are re-centred before the
+conversion, and a shift-invariance test pins it; and every player-level verdict is read at two truth lambdas
+(`53_calmap.py --players --truth-lam=100`), with anything that changes sign between them treated as undecided.
 
 **A team-game score on a mask that cuts team-games is not a score.** The criterion sums a team's points over
 its rows in a game. Restrict it to a subset of stints and that sum becomes a partial point total compared
