@@ -489,6 +489,57 @@ stands and the shipped board keeps its feature list; `board_bioDw` is not a cand
 The instrument survives the correction and is the lasting result: `--splits=tgexp` is how a candidate gets
 asked about the bench from here, and it is a decomposition, so the answer adds up.
 
+**Playing time is a MODIFIER, not a feature -- and the defensive prior was missing its own past.** The
+owner, 2026-09-10, after height and weight failed: *"games started% and minutes played can 100% help us
+here"*, then *"gs% * feature and poss played % x feature, for all available features, boruta test adding in
+these interaction features"*. `gbdt_prior.role_interactions` builds `gsx_<f>` = `gs_pct * f` and `ppx_<f>` =
+`poss_pct * f`; `50_boruta.py --modes=rolex` ran the kitchen sink plus all 118 products, 179 candidates, 50
+trials, pair rows, both sides, the shipped target and window decay per side.
+
+**The result is in the rejections.** `gs_pct` (-0.32 D, -0.27 O) and `poss_pct` (-0.30 D, -0.25 O) are
+rejected on BOTH sides, near the shadow floor -- and their products are at the top of defense: `ppx_stocks`
+3.77, second of 179 behind `past_rapm`; `gsx_entry_age` 2.68; `gsx_stocks` 1.65; `ppx_past_apm` 1.37, against
+a `Max_Shadow` bar of 0.59. Eight products accepted on defense, ten on offense; Boruta also rejects 8 of the
+11 names the defensive prior ships and 16 of the 31 on offense. Two blocks per 100 possessions in 200
+possessions and two per 100 in 5,000 are the same number and nothing like the same evidence, and a depth-4
+oblivious tree can only say so by splitting on the rate and again on the exposure inside every leaf.
+
+**The criterion then says the products are not what moves it -- the PAST block is.** The ablation, because
+`ppx_past_apm` puts the player's own plus-minus record on the defensive side for the first time (the shipped
+defensive list has no `past_*` column at all), so a gain could be the past block arriving:
+
+| defensive prior | criterion | z | seasons | consensus def | floors | prior, <250 poss | 250-500 |
+|---|---|---|---|---|---|---|---|
+| shipped | -- | -- | -- | 0.7565 | 10/10 | -- | -- |
+| + `past_apm/poss/rapm`, no products | **-0.133** | **-2.68** | 20/28 | **0.7468** | **9/10** | -0.140 (z -3.42) | -0.037 (z -2.21) |
+| + 7 products, no past | +0.005 | +0.15 | 13/28 | -- | -- | -0.109 (z -3.69) | -0.083 (z -4.39) |
+| + past + 8 products (`board_rolexD`) | -0.090 | -1.68 | 19/28 | **0.7583** | **10/10** | -0.138 (z -3.94) | **-0.095 (z -4.45)** |
+
+Products alone move the criterion by nothing at all. The past block alone is the first thing since the
+single-season board to clear |z| = 2 on it -- and it **fails the defensive consensus floor at 0.7468**, with
+the defensive spread blown out to 1.383.
+
+**So the two are complementary, and only together are they shippable.** The products cost 0.043 of the past
+block's criterion gain and buy back 0.0115 of consensus defensive agreement -- 0.7468 to 0.7583, from below
+the floor to ABOVE the shipped board. And the prior diagnostic says why the products are worth having on
+their own terms: `board_rolexD` improves the defensive prior in **all five possession buckets**, by z -3.94
+at under 250 season-equivalent possessions and **z -4.45 at 250-500**, where neither ingredient alone is as
+good as the pair. Nothing else tried this session moved a single bucket.
+
+**Offense: rejected.** `board_rolexOD` drops offensive consensus agreement 0.8350 -> 0.8257 and makes the
+offensive prior worse in four of five buckets (z +2.03 at 4500+). Defense only.
+
+**Boruta's full replacement lists lose.** Swapping in everything it accepted and dropping everything it
+rejected is +0.056 on the criterion, worse than the shipped board and far worse than keeping the shipped
+names and only ADDING. "Boruta prunes, it does not decide" held exactly as FINDINGS 22.2 says.
+
+Three bugs stood between the idea and the measurement, all the same bug: an interaction is a name no gate
+recognises. `ppx_past_apm` did not force pair rows the way `past_apm` does; `spm.offset`'s `wants` set gated
+the career, bio and PAST blocks on names that never matched, so the prediction frame lost ingredients the
+training rows had; and `pair_rows` selects only feature columns, so a deferred product's multiplier was
+absent from the pair frame while present on the panel. `role_x_needs` is the fix in all three places, and
+`test_role_interactions_reach_training_and_prediction_alike` is the regression.
+
 ## What was tried and rejected
 
 **The LRBoost branch (a boosted correction on a frozen linear prior).** Five things had to be right before it

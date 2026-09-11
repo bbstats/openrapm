@@ -223,13 +223,55 @@ def past_inputs(panel: pd.DataFrame, side: str, exclude, player_ids, decay: floa
     return past_all(panel, side, wins, keys, exclude=ex, decay=decay)
 
 
+# How much he played, times what he did (the owner, 2026-09-10: "gs% * feature and poss played % x feature,
+# for all available features").  Playing time is not one more box column: it says how much of what the box
+# score shows is real.  Two blocks per 100 possessions in 200 possessions and two per 100 in 5,000 are the
+# same NUMBER and nothing like the same evidence, and the only way a tree can say so is to split on the rate
+# and then again on the exposure inside every leaf -- which costs depth the defensive booster does not have
+# (depth 4, and `gs_pct` is one of only eleven names it carries).  The product hands it that directly.
+# `gsx_<f>` = gs_pct * f, `ppx_<f>` = poss_pct * f.  Built on demand from the requested feature list, since
+# the cross of two multipliers with everything a panel can make is a few hundred columns.
+ROLE_MULTS = {"gsx": "gs_pct", "ppx": "poss_pct"}
+
+
+def role_x(name: str):
+    """"gsx_blk" -> ("gs_pct", "blk"); anything else -> None."""
+    pre, _, base = str(name).partition("_")
+    return (ROLE_MULTS[pre], base) if pre in ROLE_MULTS and base else None
+
+
+def _past_based(name: str) -> bool:
+    """True for an interaction whose BASE is a leak-carrying column (`ppx_past_apm`, `gsx_onc_o`, ...)."""
+    from .context import DEST_ALL
+    x = role_x(name)
+    return bool(x) and (x[1] in PAST or x[1] in PAST_ONC or x[1] in PAST_ONC_CROSS or x[1] in DEST_ALL)
+
+
+def role_x_needs(names) -> set:
+    """The columns any `gsx_` / `ppx_` name in `names` needs on the frame before it can be built: its base
+    and its multiplier.  A prediction frame is assembled from a want-list, so an interaction that does not
+    put its own ingredients on that list is a column the training rows have and the prediction rows do not."""
+    out: set = set()
+    for f in names:
+        x = role_x(f)
+        if x:
+            out |= {x[0], x[1]}
+    return out
+
+
+def role_interactions(names) -> list:
+    """Every `gsx_` / `ppx_` name that can be formed from `names`, both multipliers, in a stable order."""
+    base = [f for f in dict.fromkeys(names) if f not in ROLE_MULTS.values() and role_x(f) is None]
+    return [f"{pre}_{f}" for pre in ROLE_MULTS for f in base]
+
+
 def _wants_derived(feats) -> bool:
-    return any(f in DERIVED or f in RATIOS or f in SHOTQ or f in BIO_BINS for f in feats)
+    return any(f in DERIVED or f in RATIOS or f in SHOTQ or f in BIO_BINS or role_x(f) for f in feats)
 
 
-def add_derived(df: pd.DataFrame) -> pd.DataFrame:
+def add_derived(df: pd.DataFrame, feats=None) -> pd.DataFrame:
     """Add every `DERIVED`, `RATIOS`, `SHOTQ`, Dredge and `BIO_BINS` column the frame can make (in place; the
-    rest are skipped)."""
+    rest are skipped), then the `gsx_` / `ppx_` interactions named in `feats`."""
     for name, (base, width) in BIO_BINS.items():
         if name not in df.columns and base in df.columns:
             df[name] = np.round(df[base].to_numpy(dtype=float) / width) * width
@@ -244,7 +286,19 @@ def add_derived(df: pd.DataFrame) -> pd.DataFrame:
         n = sum(k * df[f"raw_{c}"].to_numpy(dtype=float) for c, k in num.items())
         d = sum(k * df[f"raw_{c}"].to_numpy(dtype=float) for c, k in den.items())
         df[name] = (n + pad * target) / (d + pad)
-    return add_shotq(df)
+    add_shotq(df)
+    # last, so an interaction may multiply a DERIVED, RATIOS or SHOTQ column as well as a raw one.  Built in
+    # one assignment: there are 118 of them on the full sink and inserting those one at a time fragments the
+    # frame badly enough that pandas warns about it.
+    new = {}
+    for name in (feats or ()):
+        x = role_x(name)
+        if x is None or name in df.columns or name in new:
+            continue
+        mult, base = x
+        if mult in df.columns and base in df.columns:
+            new[name] = df[mult].to_numpy(dtype=float) * df[base].to_numpy(dtype=float)
+    return df if not new else pd.concat([df, pd.DataFrame(new, index=df.index)], axis=1, copy=False)
 
 
 # ------------------------------------------------------------------------------------ training rows
@@ -266,13 +320,13 @@ def training_rows(panel: pd.DataFrame, side: str, exclude=(), features=None, tar
     possessions more of them buy almost no precision and should not buy more say.  None = raw possessions.
     """
     feats = list(DEFAULT_FEATURES if features is None else features)
-    if any(f in PAST for f in feats):
+    if any(f in PAST or _past_based(f) for f in feats):
         raise ValueError("past_* features leak into a POOLED target (it contains the past windows); train on pair "
                          "rows (GBDTPrior pairs=True, which any PAST feature switches on)")
     ex = set(exclude)
     p = panel[(panel.side == side) & ~panel.window.isin(ex)].copy()
     if _wants_derived(feats):
-        add_derived(p)
+        p = add_derived(p, feats)
     w = p[poss_col].to_numpy(dtype=float)
     v = p[target_col].to_numpy(dtype=float)
     if float(win_decay) != 1.0 or float(win_past) != 1.0:
@@ -306,19 +360,29 @@ def pair_rows(panel: pd.DataFrame, side: str, exclude=(), features=None, target_
     feats = list(DEFAULT_FEATURES if features is None else features)
     feats = [f for f in feats if f != TURN_FEATURE]
     from .context import DEST_ALL
-    past = [f for f in feats if f in PAST or f in PAST_ONC or f in PAST_ONC_CROSS]
-    dest = [f for f in feats if f in DEST_ALL]
     # the PAST family is BUILT below from other windows, not read off this row -- reading `onc_o` off
-    # the row itself would be the target's own window and a leak
+    # the row itself would be the target's own window and a leak.  A `gsx_` / `ppx_` interaction ON one of
+    # them is built below too, in the second `add_derived` pass, and belongs in the same exemption: without
+    # this the pair frame is asked for `gsx_past_apm` before `past_apm` exists.
     _built = set(PAST) | set(PAST_ONC) | set(PAST_ONC_CROSS) | set(DEST_ALL)
-    feats = [f for f in feats if f not in _built]
+    _later = _built | {TURN_FEATURE}
+    _deferred = [f for f in feats if (role_x(f) or ("", ""))[1] in _later]
+    # ...and `ppx_past_apm` makes `past_apm` wanted even when the list does not name it on its own
+    _need = dict.fromkeys([*feats, *role_x_needs(_deferred)])
+    past = [f for f in _need if f in PAST or f in PAST_ONC or f in PAST_ONC_CROSS]
+    dest = [f for f in _need if f in DEST_ALL]
+    feats = [f for f in feats if f not in _built and f not in _deferred]
+    # the pair frame carries only the selected columns, so a deferred interaction's MULTIPLIER has to be
+    # carried along even when it is not a feature -- `ppx_past_apm` on a defensive list with no `poss_pct`
+    # in it built fine on the panel (which has the column) and then not at all on the pairs, which did not
+    helpers = [c for c in sorted(role_x_needs(_deferred) - set(feats) - _later) if c in panel.columns]
     ex = set(exclude)
     p = panel[(panel.side == side) & ~panel.window.isin(ex)].copy()
     if _wants_derived(feats):
-        add_derived(p)
+        p = add_derived(p, feats)
     wins = sorted(panel.window.unique())
     idx = {lab: i for i, lab in enumerate(wins)}
-    left = p[["player_id", "window", *feats]]
+    left = p[["player_id", "window", *feats, *helpers]]
     right = p[["player_id", "window", poss_col, target_col]].rename(
         columns={"window": "window_to", poss_col: "_poss_to", target_col: "target"})
     out = left.merge(right, on="player_id")
@@ -347,7 +411,11 @@ def pair_rows(panel: pd.DataFrame, side: str, exclude=(), features=None, target_
         df = destination_features(usage_minutes_panel(panel), _TM_TABLE[0], windows, out[["player_id", "window", "window_to"]])
         for f in dest:
             out[f] = df[f].to_numpy()
-    return out
+    # again, now that the PAST / DEST / turnover columns exist: an interaction whose base is one of those
+    # could not be built in the first pass, and a silently missing feature column is a KeyError at fit time
+    # at best and a different model than the one asked for at worst
+    out = add_derived(out, [f for f in (features or ()) if role_x(f)])
+    return out.drop(columns=[c for c in helpers if c not in (features or ())], errors="ignore")
 
 
 def _pooled_by_distance(p: pd.DataFrame, w: np.ndarray, v: np.ndarray, decay: float, past: float = 1.0):
@@ -479,8 +547,11 @@ class GBDTPrior:
             if self.turn is not None and TURN_FEATURE not in self.features[side]:
                 self.features[side].append(TURN_FEATURE)
             from .context import DEST_ALL
-            if any(x in PAST or x in DEST_ALL for x in self.features[side]):
-                self.pairs = True          # a PAST or DEST feature is only leak-free on pair rows
+            # a PAST or DEST feature is only leak-free on pair rows -- and so is `ppx_past_apm`, which is
+            # one multiplied by a role input.  Without the second clause the interaction reads as an
+            # ordinary name, the pooled path is taken, and `past_apm` is not on the panel to multiply.
+            if any(x in PAST or x in DEST_ALL or _past_based(x) for x in self.features[side]):
+                self.pairs = True
         self.params = dict(g.get("params", {}) or {})
         self.win_decay = float(win_decay)
         self.win_past = float(win_past)
@@ -558,7 +629,8 @@ def gbdt_offset(prior: GBDTPrior, ro, rd, season, poss_o, poss_d, exclude=(), si
                 X[f"raw_{c}"] = col
         ex = extra[side] if isinstance(extra, dict) else extra      # per-side inputs (PAST) or one table for both
         if ex is not None:
-            need = set(prior.features[side]) | {BIO_BINS[f][0] for f in prior.features[side] if f in BIO_BINS}
+            need = set(prior.features[side]) | role_x_needs(prior.features[side])
+            need |= {BIO_BINS[f][0] for f in need if f in BIO_BINS}
             for c in ex.columns:
                 if c in need and c not in X.columns:
                     X[c] = np.asarray(ex[c], dtype=float)
@@ -566,7 +638,7 @@ def gbdt_offset(prior: GBDTPrior, ro, rd, season, poss_o, poss_d, exclude=(), si
             for c in (*SHOT_TOTALS, *SHOT_LEAGUE):
                 X[c] = np.asarray(shots[c], dtype=float)
         if _wants_derived(prior.features[side]):
-            add_derived(X)
+            X = add_derived(X, prior.features[side])
         g = prior.predict(side, X, exclude, player_ids=player_ids)
         w = np.maximum(np.asarray(poss, dtype=float), 0.0)
         if w.sum() > 0:

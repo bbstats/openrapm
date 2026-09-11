@@ -683,6 +683,48 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         # season / gs_pct / age) -- on the side where a single season is only 44% evidence.  `board_bio<t>`
         # adds the binned pair (`gbdt_prior.BIO_BINS`; fine height and weight together name a player almost
         # uniquely, so binned is the only form allowed) to defense, to offense, or to both.
+        # ------------------------------------------------- how much he played, times what he did (ruling 10)
+        # The owner, 2026-09-10: "gs% * feature and poss played % x feature, for all available features,
+        # boruta test adding in these interaction features".  Done: `--modes=rolex`, 179 candidates on pair
+        # rows, 50 trials, both sides.  The result that makes the case is not which products were accepted
+        # but that BOTH MULTIPLIERS WERE REJECTED ALONE on both sides -- `gs_pct` and `poss_pct` carry
+        # nothing the booster can use as columns of their own, and eight of their products on defense and
+        # ten on offense clear the shadow bar.  Playing time is not a feature here, it is a modifier.
+        # Boruta prunes, it does not decide (FINDINGS 22.2), so these are candidates for the criterion.
+        _XD = ["gsx_astr", "gsx_entry_age", "gsx_stl", "gsx_stocks", "gsx_tenure",
+               "ppx_fga", "ppx_past_apm", "ppx_stocks"]
+        _XO = ["gsx_ftm", "gsx_past_apm", "gsx_pf", "gsx_pts", "gsx_stl",
+               "ppx_creation", "ppx_mpts", "ppx_p3r", "ppx_pts", "ppx_stl"]
+        # Boruta's whole accepted list per side, which REPLACES the shipped one: it rejects 8 of the 11 names
+        # the defensive prior carries and 16 of the 31 on offense, so this is a much larger change than the
+        # products alone and is registered separately rather than mixed into them.
+        _BD = ["age", "entry_age", "exp_poss", "fga", "height", "past_apm", "past_poss", "past_rapm", "pf",
+               "pts", "season", "stocks", "weight", *_XD]
+        _BO = ["age", "blk", "creation", "exp_poss", "exp_yrs", "fg3_miss", "fg3m", "ftp", "orb", "orbsh",
+               "past_apm", "past_poss", "pf", "season", "stl", "ts", "weight", "weight15", *_XO]
+        _shipD, _shipO = list(_board.gbdt_features["D"]), list(_board.gbdt_features["O"])
+        # The control the result needs.  `ppx_past_apm` brings the player's own past plus-minus record onto
+        # the DEFENSIVE side for the first time -- the shipped defensive list has no PAST column at all -- so
+        # a gain from `board_rolexD` could be the past block arriving rather than the products doing anything.
+        # `_np` drops that one interaction; `_past` adds the raw PAST block and no interactions at all.
+        _XDn = [f for f in _XD if f != "ppx_past_apm"]
+        for _t, _fd in (("Dn", [*_shipD, *_XDn]), ("Dp", [*_shipD, "past_apm", "past_poss", "past_rapm"])):
+            _k = _replace(_board, name=f"board_rolex{_t}",
+                          gbdt_features={"O": list(_shipO), "D": list(dict.fromkeys(_fd))})
+            S[_k.name] = _k
+            for qt, q in _CUTS.items():
+                S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
+        for _t, _fo, _fd in (("D", _shipO, [*_shipD, *_XD]),
+                             ("O", [*_shipO, *_XO], _shipD),
+                             ("OD", [*_shipO, *_XO], [*_shipD, *_XD]),
+                             ("bD", _shipO, _BD),
+                             ("bOD", _BO, _BD)):
+            _k = _replace(_board, name=f"board_rolex{_t}",
+                          gbdt_features={"O": list(dict.fromkeys(_fo)), "D": list(dict.fromkeys(_fd))})
+            S[_k.name] = _k
+            for qt, q in _CUTS.items():
+                S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
+
         _bio = ["height2", "weight15"]
         for _t, _sides, _cols in (("O", ("O",), _bio), ("D", ("D",), _bio), ("OD", ("O", "D"), _bio),
                                   ("Dh", ("D",), ["height2"]), ("Dw", ("D",), ["weight15"])):

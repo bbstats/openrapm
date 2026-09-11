@@ -136,10 +136,40 @@ far, where plain `linear` manages -0.87. And `board_bioDw` is not a candidate: u
 favour the shipped board. It is -0.396 at z -2.73 on zero-exposure rows at STINT level, which is a real
 measurement of a different unit; the criterion's unit is the team-game and it says no.
 
-**So item 2 is open again, with a working instrument and two levers ruled out.** Height and weight in the
-prior do not move the bench at team-game level, and the map is not the culprit. `61_lowposs.py` still shows
-the gap that started this (defensive skill 0.096 under 250 possessions against 0.327 above 4500), so the
-prior really is much worse there -- nothing tried so far closes it.
+**Ruling 10, 2026-09-10, and it is the one that worked:** *"games started% and minutes played can 100%
+help us here"* -> *"gs% * feature and poss played % x feature, for all available features, boruta test adding
+in these interaction features"*. Built (`gbdt_prior.role_interactions`, `50_boruta.py --modes=rolex`) and
+measured end to end. **`board_rolexD` is a finished candidate that passes every gate**, and the case for it
+is in `DECISIONS.md`:
+
+| | shipped | `board_rolexD` |
+|---|---|---|
+| criterion, mapped, K=3 q75 | -- | **-0.090 per 100, z -1.68, 19 of 28 seasons** |
+| consensus total / offense / defense | 0.8354 / 0.8350 / 0.7565 | 0.8335 / 0.8354 / **0.7583** |
+| floors | 10/10 | **10/10** |
+| prior error, <250 season-equiv poss | -- | **-0.138 (z -3.94, 9 of 10 windows)** |
+| prior error, 250-500 | -- | **-0.095 (z -4.45, 9 of 10)** |
+
+It is the shipped defensive list plus eight products; **nothing else this session moved a single possession
+bucket.** Boruta rejected `gs_pct` and `poss_pct` outright on both sides while accepting eight of their
+products on defense -- playing time carries nothing as a column and a lot as a multiplier.
+
+**Run the ablation before you believe any of it, because it changes the story.** `board_rolexDp` (the raw
+PAST block on defense, no products) is **-0.133 at z -2.68 over 20 of 28** -- better on the criterion, and
+the first thing since the single-season board to clear |z| = 2 -- but it **fails the defensive consensus
+floor at 0.7468**. `board_rolexDn` (products, no past) is +0.005 on the criterion: nothing. So the criterion
+gain is the past block arriving on a defensive prior that had no `past_*` column at all, and the products'
+job is different: they cost 0.043 of that gain, buy back 0.0115 of consensus defensive agreement, and carry
+the whole bench improvement (z -4.39 at 250-500 with no past block present). **Only the pair is shippable.**
+
+**The owner's call:** ship `board_rolexD`. The criterion is -0.090 at z -1.68, which the standing tie rule
+would not act on alone -- but every floor passes, defensive agreement goes UP, and the prior improves
+significantly in all five buckets. Offense is rejected (`board_rolexOD` drops offensive consensus to 0.8257).
+
+**What is still open on item 2 after this.** `tgexp` says the criterion's team-game gain sits in the games
+with the FEWEST barely-seen players (-0.105 at z -2.29 in the 0-5% group) and is slightly negative, not
+significant, in the bench-heavy ones. So the bench improvement is real in the prior and still invisible to
+the criterion's own unit. That gap is the thing ruling 9 was aimed at and it is not closed.
 
 **Two things already measured, so do not redo them.** The bottom of the board is the calibration map's
 exposure term, not a defect in the prior: players under 250 possessions take -2.85 from the map, and
