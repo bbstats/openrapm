@@ -108,9 +108,9 @@ A starter's prior is two to five times as good as a bench player's. That is the 
 the board runs `mode="full"` on both sides and `spm.offset` returns `np.zeros(2 * m)` on exactly that
 condition, so the Simple SPM offset is identically zero in the shipped board. `design7` reaches the rating
 only through the `rapm1` column `49_role_panel.py` writes into the panel. The live lever is `gbdt_features`,
-and the finding is in `DECISIONS.md`: **height belongs nowhere, weight belongs on defense.** `board_bioDw`
+and the finding is in `DECISIONS.md`: **height belongs nowhere, weight belongs on defense.** `board_D_weight`
 (`weight15` added to the 11-feature defensive prior) is a criterion tie at z -0.32, passes ten of ten floors,
-and improves the prior at <250 (z -1.39) and 250-500 (z -1.90) possessions and nowhere else. `board_bioDh`
+and improves the prior at <250 (z -1.39) and 250-500 (z -1.90) possessions and nowhere else. `board_D_height`
 does the reverse -- helps the middle and top, makes the deepest bench worse, and fails the defensive floor at
 0.7485.
 
@@ -122,7 +122,7 @@ bit-identical either way (`test_splits_reach_the_calmap_scorer`).
 `by_exposure` labels a STINT, so its groups cut team-games in half, and the criterion sums a team's points
 over its rows in a game -- on a partial mask that is a partial point total against a level fitted on complete
 games. Its groups recombine to 337.6 where the pooled score is 113.6. It produced two confident wrong numbers
-before the recombination check caught it (a z of -2.16 for `board_bioDw` that is not there, and a story about
+before the recombination check caught it (a z of -2.16 for `board_D_weight` that is not there, and a story about
 the calibration map taxing the bench that is backwards). `score` returns NaN for `tg` on any mask that cuts a
 team-game now, so it cannot happen again; a stint-cutting split is read on `mse`.
 
@@ -131,7 +131,7 @@ block saw fewer than 500 of. Constant within a team-game, recombines to the pool
 
 **What it says.** The calibration map's exposure term is *not* taxing the bench -- against no map at all it is
 worth -1.14 in the least bench-heavy games and **-4.47 (z -3.33)** in the 15-30% group, its largest gain by
-far, where plain `linear` manages -0.87. And `board_bioDw` is not a candidate: under `game_bench_share` it is -0.022,
+far, where plain `linear` manages -0.87. And `board_D_weight` is not a candidate: under `game_bench_share` it is -0.022,
 -0.003, +0.097 and +0.351 across the four groups, nothing significant, and the two bench-heavy groups mildly
 favour the shipped board. It is -0.396 at z -2.73 on zero-exposure rows at STINT level, which is a real
 measurement of a different unit; the criterion's unit is the team-game and it says no.
@@ -139,10 +139,10 @@ measurement of a different unit; the criterion's unit is the team-game and it sa
 **Ruling 10, 2026-09-10, and it is the one that worked:** *"games started% and minutes played can 100%
 help us here"* -> *"gs% * feature and poss played % x feature, for all available features, boruta test adding
 in these interaction features"*. Built (`gbdt_prior.interaction_features`, `50_boruta.py --modes=interactions`) and
-measured end to end. **`board_playtimeD` is a finished candidate that passes every gate**, and the case for it
+measured end to end. **`board_D_interactions` is a finished candidate that passes every gate**, and the case for it
 is in `DECISIONS.md`:
 
-| | shipped | `board_playtimeD` |
+| | shipped | `board_D_interactions` |
 |---|---|---|
 | criterion, mapped, K=3 q75 | -- | **-0.090 per 100, z -1.68, 19 of 28 seasons** |
 | consensus total / offense / defense | 0.8354 / 0.8350 / 0.7565 | 0.8335 / 0.8354 / **0.7583** |
@@ -154,21 +154,21 @@ It is the shipped defensive list plus eight interaction features; **nothing else
 bucket.** Boruta rejected `gs_pct` and `poss_pct` outright on both sides while accepting eight of their
 interaction features on defense -- gs% and poss played % carry nothing as columns of their own.
 
-**Run the ablation before you believe any of it, because it changes the story.** `board_playtimeDp` (the raw
+**Run the ablation before you believe any of it, because it changes the story.** `board_D_past_only` (the raw
 PAST block on defense, no interaction features) is **-0.133 at z -2.68 over 20 of 28** -- better on the criterion, and
 the first thing since the single-season board to clear |z| = 2 -- but it **fails the defensive consensus
-floor at 0.7468**. `board_playtimeDn` (interaction features, no past) is +0.005 on the criterion: nothing. So the criterion
+floor at 0.7468**. `board_D_interactions_nopast` (interaction features, no past) is +0.005 on the criterion: nothing. So the criterion
 gain is the past block arriving on a defensive prior that had no `past_*` column at all, and the interaction features'
 job is different: they cost 0.043 of that gain, buy back 0.0115 of consensus defensive agreement, and carry
 the whole bench improvement (z -4.39 at 250-500 with no past block present). **Only the pair is shippable.**
 
-**The owner's call:** ship `board_playtimeDxm` -- the shipped defensive list, the eight accepted
+**The owner's call:** ship `board_D_interactions_stats_possplayed` -- the shipped defensive list, the eight accepted
 interaction features, the six original stats they are built from, and `poss_pct`. -0.147 per 100 at z -2.74
 over 20 of 28 seasons, ten of ten floors, the defensive prior better in all five buckets and all ten panel
-windows in the two lowest. `board_playtimeD` (interaction features with no original stats) was the earlier,
+windows in the two lowest. `board_D_interactions` (interaction features with no original stats) was the earlier,
 weaker version of the same idea at z -1.68. The criterion is -0.090 at z -1.68, which the standing tie rule
 would not act on alone -- but every floor passes, defensive agreement goes UP, and the prior improves
-significantly in all five buckets. Offense is rejected (`board_playtimeOD` drops offensive consensus to 0.8257).
+significantly in all five buckets. Offense is rejected (`board_OD_interactions` drops offensive consensus to 0.8257).
 
 **What is still open on item 2 after this.** `game_bench_share` says the criterion's team-game gain sits in the games
 with the FEWEST barely-seen players (-0.105 at z -2.29 in the 0-5% group) and is slightly negative, not
@@ -200,7 +200,7 @@ sweep must bracket the current value on both sides** — the old lambda grid was
 with no 1.0 in it, so 0.5 had won a boundary it was never asked to beat.
 
 Two decays are left and both are unblocked: `gbdt_win_decay` (0.514) and `PAST_DECAY`
-(`gbdt_prior.py`, 0.5). Sweep them the way `board_wdd<t>` did -- and note what that sweep cost to get right:
+(`gbdt_prior.py`, 0.5). Sweep them the way `board_defdecay_<value>` did -- and note what that sweep cost to get right:
 the first grid's low end won, which is an argmax on a boundary and has chosen nothing, so it needed a second
 pass beneath it. Bracket on both sides FIRST. Decay 0 is not a value this dial has:
 `_pooled_by_distance` weights every other window by `0 ** |i - j|`, `training_rows` keeps only `other_w > 0`,
@@ -292,7 +292,7 @@ criterion included.
     git log --oneline -1                             # 71969bf "A team-game score on a mask that cuts team-games..."
 
 **First concrete step:** get the owner's ruling on item 2 above -- it is one question and it unblocks a
-finished, measured candidate. Then sweep `gbdt_win_decay` (0.514) the way `board_wdd<t>` swept its defensive
+finished, measured candidate. Then sweep `gbdt_win_decay` (0.514) the way `board_defdecay_<value>` swept its defensive
 twin, registering the grid beside it in `systems.py`:
 
     .venv/Scripts/python scripts/53_calmap.py dump --systems=<the sweep>_q75 --k=3 --workers=4 --tag=wdosweep
@@ -303,10 +303,10 @@ candidate that already passed the criterion.
 
 Reproducing the item-2 decision:
 
-    .venv/Scripts/python scripts/61_lowposs.py --systems=ks00_lam05_ow_w0.25,board_bioD,board_bioDh,board_bioDw
-    .venv/Scripts/python scripts/53_calmap.py dump --systems=ks00_lam05_ow_w0.25_q75,board_bioDh_q75,board_bioDw_q75 --k=3 --workers=4 --tag=biosweep2
-    .venv/Scripts/python scripts/53_calmap.py fit --systems=ks00_lam05_ow_w0.25_q75,board_bioDh_q75,board_bioDw_q75 --k=3 --maps=linear+sat --tag=biosweep2
-    .venv/Scripts/python scripts/60_season_board.py --system=board_bioDw --map=outputs/calmap_biosweep2.parquet --map-system=board_bioDw_q75_linear+sat --map-base=board_bioDw_q75 --out=season_ratings_bioDw
+    .venv/Scripts/python scripts/61_lowposs.py --systems=ks00_lam05_ow_w0.25,board_D_height_weight,board_D_height,board_D_weight
+    .venv/Scripts/python scripts/53_calmap.py dump --systems=ks00_lam05_ow_w0.25_q75,board_D_height_q75,board_D_weight_q75 --k=3 --workers=4 --tag=biosweep2
+    .venv/Scripts/python scripts/53_calmap.py fit --systems=ks00_lam05_ow_w0.25_q75,board_D_height_q75,board_D_weight_q75 --k=3 --maps=linear+sat --tag=biosweep2
+    .venv/Scripts/python scripts/60_season_board.py --system=board_D_weight --map=outputs/calmap_biosweep2.parquet --map-system=board_D_weight_q75_linear+sat --map-base=board_D_weight_q75 --out=season_ratings_bioDw
     OPENRAPM_BOARD=outputs/season_ratings_bioDw.parquet .venv/Scripts/python -m pytest tests/test_vs_consensus.py -q
 
 Reproducing the panel decision, if it is questioned (`SP=sp_ks00_lam05_ow_w0.25`):

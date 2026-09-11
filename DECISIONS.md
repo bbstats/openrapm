@@ -365,7 +365,7 @@ granularity; `sp_`/`spy_` twins on the season panel are registered and unmeasure
 **`gbdt_win_decay_def` (0.280024) is unchanged, and it does transport.** Phase 1 item 3, the first constant
 re-picked with the panel settled as block-granular. The dial weights another window of the SAME player by
 `decay ** |i - j|` when the defensive prior pools his training target; it was tuned by `tune501` against a
-three-season product. `board_wdd<t>` in `systems.py` is the shipped board with only that number replaced.
+three-season product. `board_defdecay_<value>` in `systems.py` is the shipped board with only that number replaced.
 Seven points, K=3, q75, mapped `linear+sat`, paired against the shipped board's OWN mapped rows over 28
 held-out seasons (`cut` populated on every row, so no fit is scored on its training games):
 
@@ -397,7 +397,7 @@ the shipped board and `design7` reaches the rating only indirectly, through the 
 `49_role_panel.py` writes into the panel the GBDT trains on. The live lever is `gbdt_features`: the offensive
 prior carries `weight15` and **no height at all**, and the defensive prior carries **no body of any kind** --
 11 features, box counters plus `season`, `gs_pct`, `age` -- on the side where one season is only 44% evidence.
-`board_bio{O,D,OD}` adds the binned pair from `gbdt_prior.BIO_BINS`.
+`board_{O,D,OD}_height_weight` adds the binned pair from `gbdt_prior.BIO_BINS`.
 
 **And the criterion cannot see the question, so `scripts/61_lowposs.py` was built to.** The out-of-season
 criterion is scored at TEAM-GAME level, where a 200-possession player is a rounding error; it will call any
@@ -418,7 +418,7 @@ prior a bench player gets, on both sides.
 
 **Height and weight in the prior: weight belongs on defense, height does not, and neither belongs on
 offense.** Five variants, all mapped `linear+sat`, K=3, q75, `cut` populated. The criterion is a tie for every
-one of them (`board_bioO` -0.020 at z -1.00, `bioD` -0.003 at z -0.14, `bioDh` -0.012 at z -0.50, `bioDw`
+one of them (`board_O_height_weight` -0.020 at z -1.00, `bioD` -0.003 at z -0.14, `bioDh` -0.012 at z -0.50, `bioDw`
 -0.007 at z -0.32), so it arbitrates nothing and the other two measurements do:
 
 | defensive prior | criterion z | prior d_mse, <250 | 250-500 | consensus def | floors |
@@ -477,14 +477,14 @@ The exposure term does not tax the bench. It earns its largest gain by far exact
 the 30%+ group -- where every map loses to no map -- is 22 seasons with a standard error of 2 to 5 and says
 nothing at |z| < 1.2. The pooled -1.24 is not bought at the bottom of the board's expense.
 
-**And what it says about the bio candidate: nothing.** `board_bioDw` under `game_bench_share`, mapped against the
+**And what it says about the bio candidate: nothing.** `board_D_weight` under `game_bench_share`, mapped against the
 shipped board's mapped rows: -0.022 (z -0.93) at 0-5%, -0.003 at 5-15%, **+0.097** at 15-30%, **+0.351** at
 30%+. No group is significant and the two bench-heavy groups mildly favour the shipped board. At STINT level
 inside the `exposure` split -- the valid metric there -- it is -0.396 at z -2.73 over 19 of 28 seasons on the
 zero-exposure rows, which is a real measurement of a different thing: how well the margin of the individual
 stints a barely-seen player is on the floor for is predicted, before nine other players and a level refit
 dilute him. **The two do not agree, and the criterion's own unit is the team-game.** So the standing tie rule
-stands and the shipped board keeps its feature list; `board_bioDw` is not a candidate any more.
+stands and the shipped board keeps its feature list; `board_D_weight` is not a candidate any more.
 
 The instrument survives the correction and is the lasting result: `--splits=game_bench_share` is how a candidate gets
 asked about the bench from here, and it is a decomposition, so the answer adds up.
@@ -513,7 +513,7 @@ defensive list has no `past_*` column at all), so a gain could be the past block
 | shipped | -- | -- | -- | 0.7565 | 10/10 | -- | -- |
 | + `past_apm/poss/rapm`, no interaction features | **-0.133** | **-2.68** | 20/28 | **0.7468** | **9/10** | -0.140 (z -3.42) | -0.037 (z -2.21) |
 | + 7 interaction features, no past | +0.005 | +0.15 | 13/28 | -- | -- | -0.109 (z -3.69) | -0.083 (z -4.39) |
-| + past + 8 interaction features (`board_playtimeD`) | -0.090 | -1.68 | 19/28 | **0.7583** | **10/10** | -0.138 (z -3.94) | **-0.095 (z -4.45)** |
+| + past + 8 interaction features (`board_D_interactions`) | -0.090 | -1.68 | 19/28 | **0.7583** | **10/10** | -0.138 (z -3.94) | **-0.095 (z -4.45)** |
 
 Interaction features alone move the criterion by nothing at all. The past block alone is the first thing since the
 single-season board to clear |z| = 2 on it -- and it **fails the defensive consensus floor at 0.7468**, with
@@ -522,13 +522,13 @@ the defensive spread blown out to 1.383.
 **So the two are complementary, and only together are they shippable.** The interaction features cost 0.043 of the past
 block's criterion gain and buy back 0.0115 of consensus defensive agreement -- 0.7468 to 0.7583, from below
 the floor to ABOVE the shipped board. And the prior diagnostic says why the interaction features are worth having on
-their own terms: `board_playtimeD` improves the defensive prior in **all five possession buckets**, by z -3.94
+their own terms: `board_D_interactions` improves the defensive prior in **all five possession buckets**, by z -3.94
 at under 250 possessions per season and **z -4.45 at 250-500**, where neither ingredient alone is as
 good as the pair. Nothing else tried this session moved a single bucket.
 
 **Adding the ORIGINAL STATS back is what makes it clear the bar.** The owner, on reading the above: *"I
 told you to do products PLUS the original stats."* Right -- the Boruta run did include all 61 originals
-beside the 118 interaction features, but the systems built from its verdict did not. `board_playtimeD`
+beside the 118 interaction features, but the systems built from its verdict did not. `board_D_interactions`
 carries `poss_pct_x_stocks` and `gs_pct_x_stocks` with no `stocks`, `gs_pct_x_astr` with no `astr`,
 `gs_pct_x_entry_age` with no `entry_age`. Boruta accepted those original stats too and they were dropped
 between its verdict and the system. An interaction feature cannot stand in for the stat inside it:
@@ -537,20 +537,20 @@ it the booster cannot tell "does not play" from "is not good at this". **Defense
 seven original stats; offense was missing one (`p3r`)**, which is most of why the offensive interaction
 features looked worthless -- they already had theirs.
 
-| defensive prior | criterion | z | seasons | floors | consensus def | prior <250 | 250-500 |
+| what is added to the shipped defensive list | criterion | z | seasons | floors | consensus def | prior <250 | 250-500 |
 |---|---|---|---|---|---|---|---|
-| `playtimeD` (interactions only) | -0.090 | -1.68 | 19/28 | 10/10 | 0.7583 | -0.138 (z -3.94) | -0.095 (z -4.45) |
-| `playtimeDx` (+ original stats) | -0.110 | **-2.19** | 19/28 | 10/10 | **0.7588** | -0.176 (z -5.66, 10/10) | -0.075 (z -5.85, 10/10) |
-| `playtimeDxm` (+ `poss_pct` too) | **-0.147** | **-2.74** | 20/28 | 10/10 | 0.7563 | **-0.177 (z -5.95, 10/10)** | -0.088 (z -4.09, 10/10) |
-| `playtimeODx` (both sides) | **-0.155** | -2.38 | 21/28 | 10/10 | 0.7567 | same as Dxm | same as Dxm |
+| the 8 interaction features only (`board_D_interactions`) | -0.090 | -1.68 | 19/28 | 10/10 | 0.7583 | -0.138 (z -3.94) | -0.095 (z -4.45) |
+| ...and the 6 original stats (`board_D_interactions_stats`) | -0.110 | **-2.19** | 19/28 | 10/10 | **0.7588** | -0.176 (z -5.66, 10/10) | -0.075 (z -5.85, 10/10) |
+| ...and `poss_pct` (`board_D_interactions_stats_possplayed`) | **-0.147** | **-2.74** | 20/28 | 10/10 | 0.7563 | **-0.177 (z -5.95, 10/10)** | -0.088 (z -4.09, 10/10) |
+| the same on both sides (`board_OD_interactions_stats_possplayed`) | **-0.155** | -2.38 | 21/28 | 10/10 | 0.7567 | as above | as above |
 
 Every one of them clears |z| = 2 on the criterion where the interaction features alone did not, and every
-one passes ten of ten floors. `board_playtimeDxm` is the recommendation: the best criterion z of the
+one passes ten of ten floors. `board_D_interactions_stats_possplayed` is the recommendation: the best criterion z of the
 defence-only candidates, the defensive prior better in all five buckets and **all ten panel windows** in the
-two lowest, and offense untouched. `ODx` has the larger raw gain and a worse z, and it drops offensive
+two lowest, and offense untouched. The both-sides version has the larger raw gain and a worse z, and it drops offensive
 consensus agreement 0.8350 -> 0.8306, so offense stays rejected either way.
 
-**Offense: rejected.** `board_playtimeOD` drops offensive consensus agreement 0.8350 -> 0.8257 and makes the
+**Offense: rejected.** `board_OD_interactions` drops offensive consensus agreement 0.8350 -> 0.8257 and makes the
 offensive prior worse in four of five buckets (z +2.03 at 4500+). Defense only.
 
 **Boruta's full replacement lists lose.** Swapping in everything it accepted and dropping everything it

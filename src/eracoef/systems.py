@@ -655,7 +655,7 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         # `gbdt_win_decay_def` (0.280024) weights another window of the SAME player by decay ** |i - j| when the
         # defensive prior pools his record; 0 is "this window only" and 1 is "every window equally".  It was tuned
         # (tune501) against a three-season product, and defence is where both open problems live -- the panel's
-        # attenuation and the 0.756 consensus floor -- so it is the one worth asking again.  `board_wdd<t>` is the
+        # attenuation and the 0.756 consensus floor -- so it is the one worth asking again.  `board_defdecay_<value>` is the
         # shipped board with that decay replaced; the grid brackets 0.280 on both sides and carries 1.0 (pool
         # everything) as the far end, because an argmax on a boundary has chosen nothing.
         # x0125 and x025 extend BENEATH the first grid, whose low end (0.140) came back best: an argmax on a
@@ -666,11 +666,12 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         _BOARD_WDDS = {"x0125": 0.125, "x025": 0.25, "x05": 0.5, "x071": 0.7071, "x1": 1.0,
                        "x141": 1.4142, "x2": 2.0}
         for _mt, _m in _BOARD_WDDS.items():
-            _k = _replace(_board, name=f"board_wdd{_mt}", win_decay_d=float(_board.win_decay_d) * _m)
+            _wdd = float(_board.win_decay_d) * _m
+            _k = _replace(_board, name=f"board_defdecay_{_wdd:.3f}".replace(".", "p"), win_decay_d=_wdd)
             S[_k.name] = _k
             for qt, q in _CUTS.items():
                 S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
-        _k = _replace(_board, name="board_wddfull", win_decay_d=1.0)
+        _k = _replace(_board, name="board_defdecay_1p000", win_decay_d=1.0)
         S[_k.name] = _k
         for qt, q in _CUTS.items():
             S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
@@ -681,7 +682,7 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         # offset is identically zero there and design7 only reaches the rating through the panel's `rapm1`
         # target.  The live lever is the feature list: the offensive prior already carries `weight15` and no
         # height at all, and the DEFENSIVE one carries no body of any kind (11 features, box counters plus
-        # season / gs_pct / age) -- on the side where a single season is only 44% evidence.  `board_bio<t>`
+        # season / gs_pct / age) -- on the side where a single season is only 44% evidence.  `board_<side>_height_weight`
         # adds the binned pair (`gbdt_prior.BIO_BINS`; fine height and weight together name a player almost
         # uniquely, so binned is the only form allowed) to defense, to offense, or to both.
         # ------------------------------------------------- how much he played, times what he did (ruling 10)
@@ -706,12 +707,12 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         _shipD, _shipO = list(_board.gbdt_features["D"]), list(_board.gbdt_features["O"])
         # The control the result needs.  `poss_pct_x_past_apm` brings the player's own past plus-minus record
         # onto the DEFENSIVE side for the first time -- the shipped defensive list has no PAST column at all --
-        # so a gain from `board_playtimeD` could be the past block arriving rather than the interaction
+        # so a gain from `board_D_interactions` could be the past block arriving rather than the interaction
         # features doing anything.  `Dn` drops that one interaction; `Dp` adds the raw PAST block and no
         # interaction features at all.
         #
         # And the owner, on reading the first result: "I told you to do products PLUS the original stats."
-        # Right, and `board_playtimeD` did not.  It carries `poss_pct_x_stocks` and `gs_pct_x_stocks` with no
+        # Right, and `board_D_interactions` did not.  It carries `poss_pct_x_stocks` and `gs_pct_x_stocks` with no
         # `stocks`, `gs_pct_x_astr` with no `astr`, `gs_pct_x_entry_age` with no `entry_age` -- Boruta accepted
         # those original stats too and they were dropped between its verdict and the system.  An interaction
         # feature cannot stand in for the stat inside it: `poss_pct * stocks` is near zero for a man who barely
@@ -721,42 +722,46 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         # offensive interaction features looked worthless -- they already had their original stats.
         def _originals_for(_x):
             return [c for c in sorted(_interaction_inputs(_x)) if c not in ("gs_pct", "poss_pct")]
-        for _t, _fo, _fd in (("Dx", _shipO, [*_shipD, *_XD, *_originals_for(_XD)]),
-                             ("Dxm", _shipO, [*_shipD, *_XD, *_originals_for(_XD), "poss_pct"]),
-                             ("Ox", [*_shipO, *_XO, *_originals_for(_XO)], _shipD),
-                             ("ODx", [*_shipO, *_XO, *_originals_for(_XO)],
+        for _t, _fo, _fd in (("D_interactions_stats", _shipO, [*_shipD, *_XD, *_originals_for(_XD)]),
+                             ("D_interactions_stats_possplayed", _shipO,
+                              [*_shipD, *_XD, *_originals_for(_XD), "poss_pct"]),
+                             ("O_interactions_stats", [*_shipO, *_XO, *_originals_for(_XO)], _shipD),
+                             ("OD_interactions_stats_possplayed",
+                              [*_shipO, *_XO, *_originals_for(_XO)],
                               [*_shipD, *_XD, *_originals_for(_XD), "poss_pct"])):
-            _k = _replace(_board, name=f"board_playtime{_t}",
+            _k = _replace(_board, name=f"board_{_t}",
                           gbdt_features={"O": list(dict.fromkeys(_fo)), "D": list(dict.fromkeys(_fd))})
             S[_k.name] = _k
             for qt, q in _CUTS.items():
                 S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
 
         _XDn = [f for f in _XD if f != "poss_pct_x_past_apm"]
-        for _t, _fd in (("Dn", [*_shipD, *_XDn]), ("Dp", [*_shipD, "past_apm", "past_poss", "past_rapm"])):
-            _k = _replace(_board, name=f"board_playtime{_t}",
+        for _t, _fd in (("D_interactions_nopast", [*_shipD, *_XDn]),
+                        ("D_past_only", [*_shipD, "past_apm", "past_poss", "past_rapm"])):
+            _k = _replace(_board, name=f"board_{_t}",
                           gbdt_features={"O": list(_shipO), "D": list(dict.fromkeys(_fd))})
             S[_k.name] = _k
             for qt, q in _CUTS.items():
                 S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
-        for _t, _fo, _fd in (("D", _shipO, [*_shipD, *_XD]),
-                             ("O", [*_shipO, *_XO], _shipD),
-                             ("OD", [*_shipO, *_XO], [*_shipD, *_XD]),
-                             ("bD", _shipO, _BD),
-                             ("bOD", _BO, _BD)):
-            _k = _replace(_board, name=f"board_playtime{_t}",
+        for _t, _fo, _fd in (("D_interactions", _shipO, [*_shipD, *_XD]),
+                             ("O_interactions", [*_shipO, *_XO], _shipD),
+                             ("OD_interactions", [*_shipO, *_XO], [*_shipD, *_XD]),
+                             ("D_boruta_list", _shipO, _BD),
+                             ("OD_boruta_list", _BO, _BD)):
+            _k = _replace(_board, name=f"board_{_t}",
                           gbdt_features={"O": list(dict.fromkeys(_fo)), "D": list(dict.fromkeys(_fd))})
             S[_k.name] = _k
             for qt, q in _CUTS.items():
                 S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)
 
         _bio = ["height2", "weight15"]
-        for _t, _sides, _cols in (("O", ("O",), _bio), ("D", ("D",), _bio), ("OD", ("O", "D"), _bio),
-                                  ("Dh", ("D",), ["height2"]), ("Dw", ("D",), ["weight15"])):
+        for _t, _sides, _cols in (("O_height_weight", ("O",), _bio), ("D_height_weight", ("D",), _bio),
+                                  ("OD_height_weight", ("O", "D"), _bio),
+                                  ("D_height", ("D",), ["height2"]), ("D_weight", ("D",), ["weight15"])):
             _f = {_s: list(_board.gbdt_features[_s]) for _s in ("O", "D")}
             for _s in _sides:
                 _f[_s] = [*_f[_s], *[c for c in _cols if c not in _f[_s]]]
-            _k = _replace(_board, name=f"board_bio{_t}", gbdt_features=_f)
+            _k = _replace(_board, name=f"board_{_t}", gbdt_features=_f)
             S[_k.name] = _k
             for qt, q in _CUTS.items():
                 S[f"{_k.name}_{qt}"] = KernelSystem(f"{_k.name}_{qt}", _k, cut=q)

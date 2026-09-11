@@ -6,7 +6,7 @@ prior essentially IS the rating -- and the out-of-season criterion cannot see hi
 TEAM-GAME level, where a 200-possession player is a rounding error.  This script scores the prior directly,
 leave-one-window-out, and reports the error by how many possessions the player himself played.
 
-    python scripts/61_lowposs.py --systems=ks00_lam05_ow_w0.25,board_bioD
+    python scripts/61_lowposs.py --systems=ks00_lam05_ow_w0.25,board_D_height_weight
 
 For each panel window w the prior is refit with w excluded and asked to predict w's own rows; "actual" is the
 row's training target -- the player's value pooled over his OTHER windows (`training_rows`), or the exact
