@@ -708,6 +708,59 @@ results past |z| = 2 are expected with nothing going on. This is at the edge of 
 such. `plain` stays the default; `tilt_season` is free and harmless if you want it; `drop_player` throws
 away 28% of the training rows and buys nothing.
 
+### Choose a training target's penalty on the end-to-end score, never on its own accuracy (2026-09-12)
+
+The prior's target is now `LeaveSeasonOutRAPM` -- one rating per PLAYER from every season except H
+(`src/eracoef/looseason.py`).  Its three penalties were swept twice, against two different objectives, and
+the two disagree in a way that is worth stating as a rule.
+
+**The wrong objective.** `LeaveSeasonOutRAPM.sweep` scores a penalty by how well the resulting RAPM
+predicts an unseen season's games directly.  Over 1997-2026 it chose offense 28,690, defense 69,711,
+context 0.  Taking that answer cost **0.017 game ARMSE on 2015**, consistently across three different board
+configurations: the defensive prior narrowed from sd 0.78 to 0.62 and `PriorRidgeCV` answered by driving
+its own defensive penalty to the grid ceiling -- the ridge finding nothing useful to do with the data
+rather than confidence in the prior.
+
+**Why, in one line:** a ridge penalty trades bias for variance, direct prediction rewards the variance
+reduction, and a training LABEL is punished by the bias.  The booster averages unbiased noise away across
+2,500 players; it cannot average away shrinkage.  And nothing downstream repairs it -- `PriorRidgeCV`
+shrinks the residual TOWARD the prior, so a compressed prior is a compressed board with no mechanism to
+re-inflate.  This is the same principle as the truth-lambda rule the player losses needed: noisy but
+unbiased beats quiet but shrunk, whenever something else is going to average over it.
+
+**The right objective**, pooled over five seasons, building the prior and the board each time
+(`scratch/sweep_end_to_end.py`, `outputs/end_to_end_sweep.parquet`):
+
+| target penalties (O / D / context) | game ARMSE | prior sd, O / D |
+|---|---|---|
+| 160,000 / 40,000 / 0 | 8.3492 | 0.41 / 0.74 |
+| **40,000 / 40,000 / 0 (taken)** | **8.3501** | 0.85 / 0.75 |
+| 40,000 / 10,000 / 0 | 8.3881 | 0.86 / 1.23 |
+| 160,000 / 160,000 / 0 | 8.4295 | 0.41 / 0.33 |
+
+Baseline with no ratings at all: 8.9261.
+
+**Defense is well identified** (40,000 beats 10,000 by 0.038 and 160,000 by 0.080) and **offense is not**:
+40,000 and 160,000 tie 0.0009 apart while the offensive prior's spread halves, which says the offensive
+rating is carried by the residual rather than by the prior.  The grid's top is the nominal winner, so that
+axis is unresolved on the high side; 40,000 is taken because it is interior and tied.
+
+**Context 0 wins on every row of both sweeps.**  Including the context columns UNPENALISED is exactly
+Frisch-Waugh -- the owner's point that a linear regression already strips a covariate out by carrying it --
+and the equivalence only holds when that coefficient is free.  A ridge that penalises `home` and `margin`
+along with the players is not controlling for them, it is partly ignoring them.
+
+**A Frisch-Waugh bug the rewrite exposed.**  The old ridge residualised `y` on the context and then fit raw
+`Z`, which is neither of the two correct routes.  FWL residualises BOTH sides; residualising only the target
+leaves the gram at `Z'WZ` instead of `Z'WMZ`, so every player is shrunk harder than the penalty says and
+unevenly -- a player whose minutes correlate with context (lopsided home/road, garbage time, always on with
+a lead) more than one whose do not.  Both classes assemble `[Z | A]` and solve once with a block-diagonal
+penalty now, which is exact FWL at context lambda 0.  *The check:*
+`test_a_zero_context_penalty_is_the_frisch_waugh_fit` pins it against a two-sided residualiser.
+
+**Not the board's 3-D CV.**  Sweeping three penalties per season instead of one is worth ~0.008 ARMSE,
+noise, and it is kept because it removes two assumptions rather than because it pays.
+
 ## What was tried and rejected
 
 **The LRBoost branch (a boosted correction on a frozen linear prior).** Five things had to be right before it

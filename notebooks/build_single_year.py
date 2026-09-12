@@ -17,10 +17,12 @@ def code(text):
 
 # kept out of line so its docstring's triple quotes never nest inside another literal
 CELL_FIT_PRIOR = '\n'.join([
-    'def fit_prior(held_out_season, side, penalty=None):',
+    'def fit_prior(held_out_season, side):',
     '    """Map a box score to the RAPM of every season except `held_out_season`."""',
     '    target = rapm.ratings(held_out_season=held_out_season,',
-    '                          alpha=RAPM_PENALTY if penalty is None else penalty)',
+    '                          offense_lambda=RAPM_OFFENSE_LAMBDA,',
+    '                          defense_lambda=RAPM_DEFENSE_LAMBDA,',
+    '                          context_lambda=RAPM_CONTEXT_LAMBDA)',
     '    column = "offense" if side == "O" else "defense"',
     '',
     '    train = aggregate_features(held_out_season, side).join(',
@@ -148,16 +150,66 @@ The penalty matters more here than anywhere else: too heavy and the prior learns
 thing, too light and it learns noise. So it is scored the way the board is scored — fit without season S,
 predict S's games, take the team-game error weighted toward close games.
 
-Swept over 1997–2026 on seven seasons, the minimum is **43,089**, bracketed on both sides (8.5269 ARMSE,
-against 8.5426 at 20,000 and 8.5429 at 92,832). The cell below re-runs a smaller version; each alpha is a
-5,720 × 5,720 solve per scoring season, so a wide grid is minutes, not seconds.
+### Sweep these on the end-to-end score, not on the RAPM's own accuracy
+
+Pooled over five seasons, building the prior and the board each time:
+
+| target penalties | game ARMSE | prior sd (O / D) |
+|---|---|---|
+| 160,000 / 40,000 / 0 | 8.3492 | 0.41 / 0.74 |
+| **40,000 / 40,000 / 0** | **8.3501** | 0.85 / 0.75 |
+| 40,000 / 10,000 / 0 | 8.3881 | 0.86 / 1.23 |
+| 160,000 / 160,000 / 0 | 8.4295 | 0.41 / 0.33 |
+
+Baseline with no ratings at all: 8.9261.
+
+**Defence is well identified** — 40,000 beats 10,000 by 0.038 and 160,000 by 0.080. **Offence is not**:
+40,000 and 160,000 tie at 0.0009 apart despite the offensive prior's spread halving (0.85 → 0.41), which
+says the offensive rating is carried by the residual rather than the prior. The grid's top is the nominal
+winner, so that axis is unresolved on the high side; 40,000 is taken because it is interior and tied.
+**Context 0 wins on every single row**, as it did on the other objective.
+
+---
+
+**Why the RAPM's own `sweep` is the wrong tool here, kept as a cautionary record.** It
+scores the penalty that makes this RAPM the best *direct predictor* of an unseen season. That is not the
+penalty that makes it the best *training target for a prior*, and the two disagree in a predictable
+direction: heavier shrinkage gives a lower-variance RAPM that predicts better and teaches the booster to
+predict shrunken values, which makes a narrower and worse prior. Measured on 2015, taking this sweep's
+answer (28,690 / 69,711) instead of 43,089 / 43,089 narrowed the defensive prior from sd 0.78 to 0.62 and
+cost **0.017 game ARMSE**, with `PriorRidgeCV` responding by driving its own defensive penalty to the grid
+ceiling — the ridge finding nothing useful to do with the data.
+
+Choose these penalties on the end-to-end score instead (build the prior, fit the board, score the held-out
+25%). What the RAPM-accuracy sweep found, for the record:
+
+| | | |
+|---|---|---|
+| **offense** | 28,690 | interior — 11,808 reads 8.5311 and 69,711 reads 8.5225 |
+| **defense** | 69,711 | **heavier than offense, ratio 2.43.** The hard-coded value was 0.625, i.e. the wrong side |
+| **context** | 0 | unpenalised, and not close: 0 → 8.5134, 1e3 → 8.5145, 1e5 → 8.7037, 1e7 → 9.0879 |
+
+Two caveats worth carrying. The defense axis is **flat** — at offense 28,690, a defense penalty of 28,690
+reads 8.5137 against 69,711's 8.5134, so 2.43 is not really identified; what *is* clear is that anything
+lighter than offense is worse, so 0.625 was pointing the wrong way. And "context = 0 on a grid whose edge
+is 0" is not a boundary problem: you cannot penalise less than not at all, and the curve rises monotonically
+from there.
+
+Each triple is a ~5,900 × 5,900 solve per scoring season, so widen the grid only if you mean it.
 """)
 
 code(r"""
-RAPM_PENALTY = 43089.0          # swept 1997-2026; re-run below if you change anything upstream
+# Swept on the END-TO-END score -- build the prior, fit the board, score the held-out 25% -- pooled over
+# five seasons.  40,000 / 40,000 is a dead heat with the grid's top offense value (8.3501 vs 8.3492) and
+# is interior, so it is the one to hold.  See the note above before changing these.
+RAPM_OFFENSE_LAMBDA = 40000.0
+RAPM_DEFENSE_LAMBDA = 40000.0     # interior and clear: 10,000 reads 8.3881, 160,000 reads 8.4295
+RAPM_CONTEXT_LAMBDA = 0.0         # unpenalised context wins on both objectives
 
-# sweep = rapm.sweep(np.logspace(3, 5.5, 6), design_for, scoring_seasons=[2003, 2011, 2019])
-# print(sweep.round(5).to_string())
+# grid = np.logspace(np.log10(2000), 6, 8)
+# sweep = rapm.sweep(design_for, offense_lambdas=grid, defense_lambdas=grid,
+#                    context_lambdas=[0.0, 1e3, 1e5, 1e7], scoring_seasons=[2000, 2005, 2010, 2015, 2020])
+# print(sweep.head(10).to_string(index=False))
 """)
 
 md(r"""
@@ -234,8 +286,9 @@ md(r"""
 `PriorRidgeCV` (`src/eracoef/priorridge.py`) is a ridge with three changes from `RidgeCV`:
 
 1. it shrinks toward the **prior**, so a player with no minutes lands on his box score, not on zero;
-2. the context columns — intercept, home, playoff, garbage time, margin — are **not** penalised;
-3. defense gets its own penalty, `defense_penalty_ratio` times offense's.
+2. **three penalties, swept independently** — offense, defense, and the context block (season intercept,
+   home, playoff, garbage time, margin). Defense used to be pinned at 0.6245 × offense and the context at
+   exactly 0; both are grids now, and 0 is still on the context grid so the old fit stays reachable.
 
 The penalty is cross-validated over whole **games**, because the same ten players repeat across a game's
 stints and splitting inside one leaks the answer.
@@ -257,9 +310,12 @@ an edge, but a flat curve means the games cannot tell you much about this dial, 
 code(r"""
 ridge = PriorRidgeCV().fit(fit_games, prior_offense, prior_defense)
 
-print(f"penalty chosen: {ridge.alpha_:,.0f}")
+print(f"offense {ridge.offense_lambda_:>12,.0f}")
+print(f"defense {ridge.defense_lambda_:>12,.0f}   (ratio to offense "
+      f"{ridge.defense_lambda_ / ridge.offense_lambda_:.3f}; the old hard-coded value was 0.625)")
+print(f"context {ridge.context_lambda_:>12,.0f}   (0 = the old unpenalised context)")
 print(f"average |margin| per game: {ridge.average_margin_.mean():.2f} points")
-print(ridge.cv_armse_.rename("cv ARMSE").to_frame().T.to_string())
+print(ridge.cv_armse_.head(8).to_string(index=False))
 """)
 
 code(r"""
@@ -288,7 +344,9 @@ def evaluate(name, offense=None, defense=None):
     ratings = Ratings(model.as_ratings_frame())
     result = score(predict_season(ratings, score_games, level="home"))
     return dict(system=name, game_armse=armse(result["tg"]), base_armse=armse(result["tg_base"]),
-                penalty=model.alpha_, sd_offense=ratings.df.o.std(), sd_defense=ratings.df.d.std())
+                offense_lambda=model.offense_lambda_, defense_lambda=model.defense_lambda_,
+                context_lambda=model.context_lambda_,
+                sd_offense=ratings.df.o.std(), sd_defense=ratings.df.d.std())
 
 
 print(pd.DataFrame([evaluate("no prior"),
@@ -318,14 +376,15 @@ def run(season_list):
             model = PriorRidgeCV().fit(early, *args)
             ratings = Ratings(model.as_ratings_frame())
             result = score(predict_season(ratings, late, level="home"))
-            results.append(dict(season=s, system=name, penalty=model.alpha_,
+            results.append(dict(season=s, system=name, offense_lambda=model.offense_lambda_,
+                                defense_lambda=model.defense_lambda_,
                                 game_armse=armse(result["tg"]), base_armse=armse(result["tg_base"])))
         print(f"  {s} done", flush=True)
     return pd.DataFrame(results)
 
 
 # results = run(range(2015, 2020))
-# print(results.groupby("system")[["game_armse", "base_armse", "penalty"]].mean().round(4))
+# print(results.groupby("system")[["game_armse", "base_armse", "offense_lambda", "defense_lambda"]].mean().round(4))
 # gap = results.pivot_table(index="season", columns="system", values="game_armse")
 # print((gap["your prior"] - gap["no prior"]).round(4))
 ''')
@@ -336,10 +395,10 @@ md(r"""
 | name | what it changes |
 |---|---|
 | `features` | what the prior sees. Drop `on_court` for box-score-only, `body` for production-only |
-| `RAPM_PENALTY` | how hard the target is shrunk. Swept at 43,089; re-sweep if you change the features or the seasons |
+| `RAPM_OFFENSE_LAMBDA` / `RAPM_DEFENSE_LAMBDA` / `RAPM_CONTEXT_LAMBDA` | how hard the target is shrunk, per block. Re-sweep if you change the features, the seasons or the possession floor |
 | `LeaveSeasonOutRAPM(min_possessions=)` | how many possessions a player needs to be in the target at all |
 | `chimera_offense` / `chimera_defense` | the boosters, tuned values out of `config.yaml` |
-| `PriorRidgeCV(alphas=, defense_penalty_ratio=, n_folds=)` | the ridge |
+| `PriorRidgeCV(offense_lambdas=, defense_lambdas=, context_lambdas=, n_folds=)` | the ridge's three grids |
 | `PriorRidgeCV(weight_by_closeness=False)` | score every team-game by possessions alone, ignoring how close it was |
 | `PriorRidgeCV(closeness_floor=)` | the smallest average margin the weighting will believe, in points |
 | `0.75` in cell 4 | how much of the season the fit sees |
