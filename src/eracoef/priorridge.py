@@ -47,7 +47,7 @@ __all__ = ["PriorRidgeCV"]
 # The grid must BRACKET the answer on both sides -- an argmax on a boundary has chosen nothing.  It runs
 # this high because with a good box prior and three quarters of one season of games, the team-game
 # objective is nearly flat above ~1e5: the residual it would buy is worth less than the noise in it.
-DEFAULT_ALPHAS = np.round(np.logspace(np.log10(300.0), np.log10(2.0e6), 15), 1)
+DEFAULT_ALPHAS = np.round(np.logspace(np.log10(300.0), np.log10(2.0e7), 25), 1)
 
 # A root mean square reads bigger than the typical miss, because squaring pays extra attention to the tail.
 # For a normal error the mean ABSOLUTE deviation is sqrt(2 / pi) = 0.7979 of the standard deviation, so
@@ -58,6 +58,45 @@ MAE_SCALE = 0.7978845608028654
 def armse(mean_squared_error):
     """A mean squared error on the mean-absolute scale: sqrt(mse) * sqrt(2 / pi)."""
     return np.sqrt(np.asarray(mean_squared_error, dtype=float)) * MAE_SCALE
+
+
+def team_game_weights(design, weight_by_closeness: bool = True, closeness_floor: float = 1.0):
+    """(team-game index per row, possessions per row, weight per team-game, average |margin| per game).
+
+    A team-game is one team's rows inside one game -- the unit a board is actually used on.  Its weight is
+    its possessions, divided by the game's possession-weighted average |margin| when `weight_by_closeness`
+    is on, because a 30-point blowout says much less about who is good than a game decided by two.
+    """
+    game = design.rows["game_idx"].to_numpy()
+    home = design.rows["is_home_off"].to_numpy().astype(np.int64)
+    possessions = design.rows["poss"].to_numpy(dtype=float)
+    _, key = np.unique(np.stack([game, home]), axis=1, return_inverse=True)
+
+    margin = np.abs(np.asarray(design.X[:, design.spec.f_col("margin")].todense()).ravel())
+    game_ids, game_index = np.unique(game, return_inverse=True)
+    game_possessions = np.bincount(game_index, weights=possessions, minlength=game_ids.size)
+    average_margin = (np.bincount(game_index, weights=possessions * margin, minlength=game_ids.size)
+                      / np.maximum(game_possessions, 1e-9))
+
+    n_team_games = int(key.max()) + 1
+    weight = np.bincount(key, weights=possessions, minlength=n_team_games)
+    if weight_by_closeness:
+        closeness = np.zeros(n_team_games)
+        closeness[key] = 1.0 / np.maximum(average_margin, float(closeness_floor))[game_index]
+        weight = weight * closeness
+    return key, possessions, weight, average_margin
+
+
+def team_game_mse(key, possessions, weight, row_error, rows=None):
+    """Row errors in points per 100, pooled into team-games, then a weighted mean square of those."""
+    rows = np.arange(row_error.size) if rows is None else rows
+    n = weight.size
+    points = np.bincount(key[rows], weights=row_error * possessions[rows], minlength=n)
+    counted = np.bincount(key[rows], weights=possessions[rows], minlength=n)
+    seen = counted > 0
+    error = points[seen] / counted[seen]
+    w = weight[seen]
+    return float((w * error ** 2).sum() / w.sum()), float(w.sum())
 
 
 def _weighted_least_squares(columns, target, weights):
@@ -87,41 +126,9 @@ class PriorRidgeCV:
 
     # ------------------------------------------------------------------ the team-game objective
     def _team_games(self, design):
-        """(team-game index per row, possessions per row, weight per team-game, average |margin| per game).
+        return team_game_weights(design, self.weight_by_closeness, self.closeness_floor)
 
-        A team-game is one team's rows inside one game -- the unit the board is actually used on.  Its
-        weight is its possessions, divided by the game's possession-weighted average |margin| when
-        `weight_by_closeness` is on.
-        """
-        game = design.rows["game_idx"].to_numpy()
-        home = design.rows["is_home_off"].to_numpy().astype(np.int64)
-        possessions = design.rows["poss"].to_numpy(dtype=float)
-        _, key = np.unique(np.stack([game, home]), axis=1, return_inverse=True)
-
-        margin = np.abs(np.asarray(design.X[:, design.spec.f_col("margin")].todense()).ravel())
-        game_ids, game_index = np.unique(game, return_inverse=True)
-        game_possessions = np.bincount(game_index, weights=possessions, minlength=game_ids.size)
-        average_margin = (np.bincount(game_index, weights=possessions * margin, minlength=game_ids.size)
-                          / np.maximum(game_possessions, 1e-9))
-
-        n_team_games = int(key.max()) + 1
-        weight = np.bincount(key, weights=possessions, minlength=n_team_games)
-        if self.weight_by_closeness:
-            closeness = np.zeros(n_team_games)
-            closeness[key] = 1.0 / np.maximum(average_margin, self.closeness_floor)[game_index]
-            weight = weight * closeness
-        return key, possessions, weight, average_margin
-
-    @staticmethod
-    def _weighted_mse(key, possessions, weight, row_error, rows):
-        """Row errors in points per 100, pooled into team-games, then a weighted mean square of those."""
-        n = weight.size
-        points = np.bincount(key[rows], weights=row_error * possessions[rows], minlength=n)
-        counted = np.bincount(key[rows], weights=possessions[rows], minlength=n)
-        seen = counted > 0
-        team_game_error = points[seen] / counted[seen]
-        w = weight[seen]
-        return float((w * team_game_error ** 2).sum() / w.sum()), float(w.sum())
+    _weighted_mse = staticmethod(team_game_mse)
 
     # ------------------------------------------------------------------ the pieces of one design
     def _parts(self, design, prior_offense, prior_defense):
