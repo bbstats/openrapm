@@ -152,24 +152,42 @@ predict S's games, take the team-game error weighted toward close games.
 
 ### Sweep these on the end-to-end score, not on the RAPM's own accuracy
 
-Pooled over five seasons, building the prior and the board each time:
+Pooled over five seasons, building the prior and the board each time and scoring the held-out 25%.
+**game ARMSE, points per 100 possessions — lower is better.** Baseline with no player ratings at all:
+8.9261 points per 100 possessions.
 
-| target penalties | game ARMSE | prior sd (O / D) |
-|---|---|---|
-| 160,000 / 40,000 / 0 | 8.3492 | 0.41 / 0.74 |
-| **40,000 / 40,000 / 0** | **8.3501** | 0.85 / 0.75 |
-| 40,000 / 10,000 / 0 | 8.3881 | 0.86 / 1.23 |
-| 160,000 / 160,000 / 0 | 8.4295 | 0.41 / 0.33 |
+| target defence λ → | 10,000 | 20,000 | **40,000** | 80,000 | 160,000 |
+|---|---|---|---|---|---|
+| offence 10,000 | 8.4675 | 8.4440 | 8.4311 | 8.4588 | 8.5235 |
+| **offence 40,000** | 8.3854 | 8.3662 | **8.3503** | 8.3699 | 8.4358 |
+| offence 160,000 | 8.4052 | 8.3825 | **8.3483** | 8.3751 | 8.4321 |
+| offence 640,000 | 8.4523 | 8.4359 | 8.4118 | 8.4348 | 8.4901 |
+| offence 2,560,000 | 8.4527 | 8.4284 | 8.4053 | 8.4267 | 8.4807 |
+| offence 10,240,000 | 8.4583 | 8.4305 | 8.4153 | 8.4269 | 8.4884 |
 
-Baseline with no ratings at all: 8.9261.
+**Both axes are interior now** — the surface rises in every direction from the middle, so neither is
+sitting on a grid edge. **Defence is 40,000 and it is decisive**: moving one step either way costs
+0.016 to 0.086 points per 100 possessions.
 
-**Defence is well identified** — 40,000 beats 10,000 by 0.038 and 160,000 by 0.080. **Offence is not**:
-40,000 and 160,000 tie at 0.0009 apart despite the offensive prior's spread halving (0.85 → 0.41), which
-says the offensive rating is carried by the residual rather than the prior. The grid's top is the nominal
-winner, so that axis is unresolved on the high side; 40,000 is taken because it is interior and tied.
-**Context 0 wins on every single row**, as it did on the other objective.
+**Offence is bracketed but still not identified.** 40,000 and 160,000 sit 0.0020 points per 100
+possessions apart, they split the five seasons 2–3, and the per-season swing between them is ±0.1 —
+so that gap is noise. **40,000 is taken**, because 160,000 halves the board's own offensive spread
+(sd 0.87 → 0.45 points per 100 possessions) for no measurable accuracy, and a board that compressed
+says less about players.
+
+**Context 0 wins again**: 8.3483 at 0, 8.3647 at 1,000, worse at 100,000. Three sweeps, same answer.
 
 ---
+
+**Still open: the board's own penalties.** In this run `PriorRidgeCV` pinned its offensive penalty at
+the grid's top in 24% of fits and its defensive penalty in 25%. With a multi-season prior this good and
+only three quarters of one season of games, the board often wants to barely update the prior at all.
+The default grids now run to 1,000,000,000, where the residual is numerically nil — so the top of the
+grid *is* "keep the prior unchanged" — but how often it gets chosen has not been re-measured.
+
+---
+
+**Why the RAPM's own `sweep` is the wrong tool here---
 
 **Why the RAPM's own `sweep` is the wrong tool here, kept as a cautionary record.** It
 scores the penalty that makes this RAPM the best *direct predictor* of an unseen season. That is not the

@@ -37,9 +37,10 @@ __all__ = ["PriorRidgeCV", "armse", "penalty_grid", "team_game_weights", "team_g
            "DEFAULT_PLAYER_LAMBDAS", "DEFAULT_CONTEXT_LAMBDAS", "MAE_SCALE"]
 
 # The grids must BRACKET the answer on both sides -- an argmax on a boundary has chosen nothing.  They run
-# this high because with a good box prior and three quarters of one season, the team-game objective is
-# nearly flat above ~1e5: the residual a lighter penalty would buy is worth less than the noise in it.
-DEFAULT_PLAYER_LAMBDAS = np.round(np.logspace(np.log10(500.0), np.log10(2.0e6), 9), 1)
+# to 1e9 because with a good multi-season prior and only three quarters of one season of games, the board
+# often wants to barely update the prior at all: on a 2e6 ceiling it pinned there in a quarter of fits.
+# At 1e9 the residual is numerically nil, so the top of the grid IS "keep the prior unchanged".
+DEFAULT_PLAYER_LAMBDAS = np.round(np.logspace(np.log10(500.0), np.log10(1.0e9), 11), 1)
 DEFAULT_CONTEXT_LAMBDAS = np.array([0.0, 1.0e3, 1.0e5, 1.0e7])
 
 # A root mean square reads bigger than the typical miss, because squaring pays extra attention to the tail.
