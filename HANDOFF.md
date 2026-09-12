@@ -1,12 +1,12 @@
-# Handoff: the board is scored on players now, and the constants are still being re-picked
+# Handoff: single year or bust, end to end, with the penalties swept
 
 **This file is transient.** It exists to start the next session and should be deleted when Phase 1
 ships. `DECISIONS.md` is the permanent record and carries every number quoted here; do not turn this
 back into a lab notebook — the last one reached 7,800 lines and was deleted on purpose (tag
 `archive/research-2026-09` has it).
 
-Branch `cleanup`, 27 commits ahead of `main`, working tree clean, `main` untouched.
-`pytest -q`: **244 passed, 1 xfailed, ~130 s.**
+Branch `cleanup`, 49 commits ahead of `main`, working tree clean, `main` untouched.
+`pytest -q`: **271 passed, 1 xfailed, ~120 s.**
 
 ---
 
@@ -32,8 +32,14 @@ Rulings, not suggestions.
 
 9. **Bench players need to be in the accuracy test** (2026-09-10). Done; see item 2.
 10. **Ship `board_D_interactions_stats_possplayed`** (2026-09-10).
-11. **Rank is a within-roster question, money is a between-roster one** (2026-09-11): *"money should only
-   apply to trades (really mid season here)"*, *"rank should only apply to within that team"*. Done; item 4.
+11. **Rank is a within-roster question, money is a between-roster one** (2026-09-11). SUPERSEDED by 13.
+12. **Single year or bust** (2026-09-11). See item 6.
+13. **The player-level losses are gone** (2026-09-12): their "truth" was a plain RAPM of the scored games,
+   and a plain RAPM is worse than the board being scored, so ranking against it measured how close we were
+   to being worse. Tagged `archive/player-losses-2026-09-11` and deleted. What the owner wants instead --
+   *"how well does this predictive value carry over during a trade"* -- is NOT built and was deferred
+   deliberately.
+14. **Every number carries its unit and its metric name** (2026-09-12). No bare figures.
 
 12. **Single year or bust** (2026-09-11): *"i dont want to do that. single year or bust."* A player's
    season-H rating may use H's games for the evidence and **no games of his own from any other season**.
@@ -259,6 +265,55 @@ neighbourhood already contains H+1 and H+2. A different RUN, not a different los
 truth window from the frame it is handed, so a run whose training block ends at H-1 and whose scored frame is
 H+1..H+3 gets the number with no new code. Nobody has done it.
 
+### 6. The single-year pipeline, and where it stands (2026-09-12)
+
+Ruling 12 ("single year or bust") turned into a working pipeline. Three stages, all of them plain
+scikit-learn-shaped, none of them touching season H:
+
+1. **Target** -- `src/eracoef/looseason.py`, `LeaveSeasonOutRAPM`: one rating per PLAYER over every season
+   except H, players with 100+ possessions (one offensive AND one defensive trip, counted once). With
+   player units the normal equations are additive over seasons, so 30 seasons of 1.84M stints accumulate in
+   about 10 seconds and each held-out season is one solve of a 5,900-column system rather than a refit.
+2. **SPM** -- a `ChimeraBoostRegressor` mapping a player's all-other-seasons feature averages to that
+   target, then asked about H's own box score.
+3. **Board** -- `src/eracoef/priorridge.py`, `PriorRidgeCV`: a ridge centred on the prior rather than on
+   zero, penalties chosen by cross-validation over whole GAMES on a team-game objective weighted toward
+   close ones.
+
+`scripts/62_single_year_board.py` runs all three across every season; `notebooks/single_year.ipynb` is the
+same thing cell by cell, with the generator at `notebooks/build_single_year.py` (edit the generator, not
+the .ipynb).
+
+**Everything is reported as ARMSE in points per 100 possessions** -- `sqrt(mse) * sqrt(2/pi)`, the typical
+miss when predicting one team's scoring rate in one game. The scale to hold: **9.1147 with no player
+ratings at all, 8.3872 with this pipeline, and 8.1180 for a cheat that already knows how both teams played
+those very games**. So roughly three quarters of what is knowable, and the whole knowable range is about
+1.0 points per 100 possessions wide -- a single team-game is around 91% shooting noise.
+
+**Penalties, swept end to end** (build the prior, fit the board, score the held-out 25%; the surface is in
+`DECISIONS.md`): target offense 40,000, defense 40,000, context 0. Both axes interior. Defense is decisive;
+offense is bracketed but not identified (40,000 and 160,000 are 0.0020 apart and split the seasons 2-3), so
+40,000 is taken because 160,000 halves the board's offensive spread for nothing.
+
+**Three things still open, in the order they matter:**
+
+- **The board's own penalties pin at the grid top.** In the last sweep `PriorRidgeCV` chose the ceiling for
+  offense in 24% of fits and defense in 25% -- with a multi-season prior this good, three quarters of one
+  season of games often has nothing to add. `DEFAULT_PLAYER_LAMBDAS` runs to 1e9 now, where the residual is
+  numerically nil so the top of the grid IS "keep the prior unchanged", but how often that gets chosen has
+  not been re-measured.
+- **Nothing has compared this board to the SHIPPED one head to head.** `ks00_lam05_ow_w0.25` plus its
+  calibration map has never been scored on ARMSE at the same cut, and it cannot be scored on the shipped
+  artifact because that one is fit on whole seasons. It needs a `_q75` run through `53_calmap.py`.
+- **The booster's hyperparameters are stale.** `gbdt.params` / `params_def` in `config.yaml` were tuned for
+  `rapm1` on the three-season block panel. Nothing has re-tuned them for this target.
+
+**And the covariate shift is real but bounded.** Stage 2 trains on career averages and predicts on one
+season, and a single season is 10-25% wider in every feature (median ratio 1.18). A booster clamps rather
+than extrapolates, so extreme seasons get pulled toward the middle. The worst offenders are `exp_yrs`
+(2.03) and `tenure` (2.28), where a career MEAN of a monotonically increasing quantity is not the same
+variable as its value in one season -- those two deserve a look before anyone trusts them.
+
 ### 5. The owner took the prior over -- `notebooks/single_year.ipynb` (2026-09-11)
 
 A self-contained notebook: plain scikit-learn for both models, `eracoef` used only to load data and to
@@ -356,7 +411,7 @@ significant -- but it is the session's thesis in one line, and cell 8 loops it o
 
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest tests -q          # 244 passed, 1 xfailed, ~130 s
+    .venv/Scripts/python -m pytest tests -q          # 271 passed, 1 xfailed, ~120 s
     .venv/Scripts/python scripts/60_season_board.py  # ks00_lam05_ow_w0.25, kernel {0: 1.0}, ~70 s
     .venv/Scripts/python scripts/52_site.py          # 14,578 rows, 30 seasons, 1.0 MB
     .venv/Scripts/python scripts/58_archetype.py     # 0.145 spread, 8 clusters, centres at +0.11
