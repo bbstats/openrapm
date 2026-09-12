@@ -295,6 +295,37 @@ those very games**. So roughly three quarters of what is knowable, and the whole
 offense is bracketed but not identified (40,000 and 160,000 are 0.0020 apart and split the seasons 2-3), so
 40,000 is taken because 160,000 halves the board's offensive spread for nothing.
 
+**IT IS NOT SHIPPABLE YET, and the reason is one number.**  `scripts/62_single_year_board.py` builds all
+thirty seasons (`outputs/season_ratings_sy.parquet`), and the boards look like basketball -- 2026 opens
+Towns, Shai, Anunoby, White, Adebayo, Wembanyama; 2015 opens Millsap, Curry, Duncan, LeBron, Bogut.  But it
+fails **five of the ten consensus floors** in `tests/test_vs_consensus.py`:
+
+| floor | shipped board | this one |
+|---|---|---|
+| offensive spread ratio (0.55 to 1.30) | inside | **0.43** |
+| offensive rank agreement (>= 0.75) | 0.835 | **0.722** |
+| overall rank agreement (>= 0.75) | 0.835 | **0.736** |
+| top five overlap (>= 3 of 5) | passes | **2** -- misses Giannis, Luka, Wembanyama |
+| no star buried | passes | **LaMelo Ball 167th** |
+
+The offensive spread is the root of it: this board's offence is less than half as wide as the consensus's.
+Two measurements explain why, and both are in `DECISIONS.md`:
+
+- the **offensive penalty of the target is not identified** -- 40,000 and 160,000 are 0.0020 ARMSE points
+  per 100 possessions apart, and 160,000 halves the board's offensive spread, so the objective simply
+  cannot see offensive scale at all;
+- the **season's own games are nearly inert**.  Fit on the first 75% of a season and scored on the last
+  25%, pooled over 2005 / 2015 / 2022, the best board penalty gives 8.5294 ARMSE points per 100
+  possessions against 8.5397 for the prior alone -- the whole plus-minus stage is worth **0.0103 ARMSE
+  points per 100 possessions** and about **0.03 of rating spread** (sd 0.904 against 0.878).  That is why
+  `PriorRidgeCV` pins at its ceiling: above ~70,000 the curve is flat and the argmin wanders into the
+  region where the rating IS the prior.
+
+So the board is, in practice, the SPM with a rounding error of RAPM on top, and it is compressed.  Calling
+it a RAPM is not honest at these settings.  **The team-game objective cannot see rating spread**, which is
+the gap that has to be closed before this ships -- the deleted player-level losses were an attempt at
+exactly that and were deleted for a good reason, so something else is needed.
+
 **Three things still open, in the order they matter:**
 
 - **The board's own penalties pin at the grid top.** In the last sweep `PriorRidgeCV` chose the ceiling for
