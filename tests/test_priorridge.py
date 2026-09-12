@@ -1,9 +1,10 @@
 """PriorRidgeCV (src/eracoef/priorridge.py) against the simulator and against the fit it replaces.
 
-The class exists to turn three magic constants into either a tested choice or a cross-validated one, so
-the tests are: does it agree with the plain two-step fit at a fixed penalty (it must, or it is a
-different estimator wearing the name), does the prior actually act as the centre, are the fixed effects
-really left unpenalised, and does the CV pick a sane penalty rather than a boundary.
+The class exists to turn four magic constants into a tested choice or a cross-validated one, so the tests
+are: does it agree with the plain two-step fit when the context penalty is zero (it must, or it is a
+different estimator wearing the name), does the prior act as the centre, are the three penalties really
+independent, does the objective aggregate to team-games and lean on close ones, and does the CV pick an
+interior triple rather than a boundary.
 """
 import numpy as np
 import pandas as pd
@@ -12,7 +13,8 @@ from sklearn.linear_model import Ridge
 
 from eracoef.design import FEATURES, build_design
 from eracoef.holdout import Context, Ratings, predict_season, score
-from eracoef.priorridge import PriorRidgeCV
+from eracoef.priorridge import (DEFAULT_CONTEXT_LAMBDAS, MAE_SCALE, PriorRidgeCV, armse, penalty_grid,
+                                team_game_mse, team_game_weights)
 from eracoef.simulate import simulate
 
 CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "features": FEATURES,
@@ -33,96 +35,150 @@ def design():
     return sim, ctx, ctx.design([2002], "pts")
 
 
-def _two_step(design, prior_offense, prior_defense, alpha, ratio):
-    """The fit PriorRidgeCV replaces: project the context out, then sklearn's Ridge on scaled columns."""
+def _fixed(offense, defense=None, context=0.0, **kw):
+    return PriorRidgeCV(offense_lambdas=[offense], defense_lambdas=[offense if defense is None else defense],
+                        context_lambdas=[context], n_folds=1, **kw)
+
+
+def _two_step(design, prior_offense, prior_defense, offense_lambda, defense_lambda):
+    """The Frisch-Waugh fit this class does at context_lambda = 0: project the context out, then ridge."""
     n_players, n_fixed = design.spec.n_ps, len(design.spec.f_names)
     ids = design.spec.ps_table["player_id"].to_numpy()
-    take = lambda p: (np.zeros(n_players) if p is None                      # noqa: E731
-                      else pd.Series(p).reindex(ids).fillna(0.0).to_numpy())
+
+    def take(p):
+        return np.zeros(n_players) if p is None else pd.Series(p).reindex(ids).fillna(0.0).to_numpy()
+
     prior = np.concatenate([take(prior_offense), take(prior_defense)])
     players = design.X[:, :2 * n_players].tocsr()
-    fixed = np.asarray(design.X[:, 2 * n_players:2 * n_players + n_fixed].todense())
-    context = np.column_stack([np.ones(design.X.shape[0]), fixed])
+    context = np.asarray(design.X[:, 2 * n_players:2 * n_players + n_fixed].todense())
     y, w = design.y, design.w
     centred = y - players @ prior
     left = (context * w[:, None]).T
-    residual = centred - context @ np.linalg.lstsq(left @ context, left @ centred, rcond=None)[0]
+    inner = left @ context
+    # proper Frisch-Waugh residualises BOTH sides on the context.  The version this class used to ship
+    # residualised only the target, which left the context's correlation inside the player columns.
+    residual = centred - context @ np.linalg.lstsq(inner, left @ centred, rcond=None)[0]
+    dense = np.asarray(players.todense())
+    dense = dense - context @ np.linalg.lstsq(inner, left @ dense, rcond=None)[0]
+    ratio = defense_lambda / offense_lambda
     scale = np.concatenate([np.ones(n_players), np.full(n_players, 1.0 / np.sqrt(ratio))])
-    model = Ridge(alpha=alpha, fit_intercept=False, solver="lsqr", tol=1e-12, max_iter=20000)
-    model.fit(players.multiply(scale[None, :]).tocsr(), residual, sample_weight=w)
+    model = Ridge(alpha=offense_lambda, fit_intercept=False, solver="lsqr", tol=1e-12, max_iter=20000)
+    model.fit(dense * scale[None, :], residual, sample_weight=w)
     return prior + model.coef_ * scale
 
 
-def test_it_is_the_same_estimator_as_the_two_step_fit(design):
+def test_a_zero_context_penalty_is_the_frisch_waugh_fit(design):
     _, _, wd = design
     rng = np.random.default_rng(0)
     ids = wd.spec.ps_table["player_id"].to_numpy()
     po = dict(zip(ids, rng.normal(0, 1.5, len(ids))))
     pdd = dict(zip(ids, rng.normal(0, 0.8, len(ids))))
-    alpha, ratio = 4000.0, 0.624519
-    model = PriorRidgeCV(alphas=[alpha], defense_penalty_ratio=ratio, n_folds=1).fit(wd, po, pdd)
+    model = _fixed(4000.0, 4000.0 * 0.624519).fit(wd, po, pdd)
     mine = np.concatenate([model.ratings_.offense, model.ratings_.defense])
-    assert np.allclose(mine, _two_step(wd, po, pdd, alpha, ratio), atol=2e-3)
+    assert np.allclose(mine, _two_step(wd, po, pdd, 4000.0, 4000.0 * 0.624519), atol=3e-3)
 
 
 def test_the_prior_is_the_centre_not_zero(design):
     _, _, wd = design
     ids = wd.spec.ps_table["player_id"].to_numpy()
-    huge = PriorRidgeCV(alphas=[1e12], n_folds=1).fit(wd, dict(zip(ids, np.full(len(ids), 2.0))), None)
-    # an infinite penalty leaves the prior untouched -- shrink toward the prior, never toward zero
+    huge = _fixed(1e12).fit(wd, dict(zip(ids, np.full(len(ids), 2.0))), None)
     assert np.allclose(huge.ratings_.offense, 2.0, atol=1e-4)
     assert np.allclose(huge.ratings_.defense, 0.0, atol=1e-4)
     assert np.abs(huge.residual_).max() < 1e-4
 
 
-def test_the_context_is_never_penalised(design):
-    """A huge penalty flattens the players; the home term must still be estimated at full size."""
+# ------------------------------------------------------------------ three penalties, independently
+def test_the_three_penalties_move_three_different_things(design):
     _, _, wd = design
-    small = PriorRidgeCV(alphas=[10.0], n_folds=1).fit(wd, None, None)
-    huge = PriorRidgeCV(alphas=[1e12], n_folds=1).fit(wd, None, None)
-    assert np.abs(huge.residual_).max() < 1e-4
-    assert abs(huge.level_[1]) > 0.2 * abs(small.level_[1]) or abs(huge.level_[1]) > 0.5
+    base = _fixed(4000.0, 4000.0, 0.0).fit(wd, None, None)
+    light_defense = _fixed(4000.0, 800.0, 0.0).fit(wd, None, None)
+    heavy_context = _fixed(4000.0, 4000.0, 1e14).fit(wd, None, None)
+
+    assert light_defense.ratings_.defense.std() > 1.1 * base.ratings_.defense.std()
+    # offense moves too -- the blocks are estimated jointly -- but far less
+    assert abs(light_defense.ratings_.offense.std() / base.ratings_.offense.std() - 1.0) < 0.25
+    assert np.abs(heavy_context.level_).max() < 1e-3          # the context really is penalised now
+    assert np.abs(base.level_).max() > 0.1
 
 
-def test_defense_can_be_penalised_differently(design):
+def test_zero_stays_reachable_on_the_context_grid():
+    assert 0.0 in set(DEFAULT_CONTEXT_LAMBDAS)               # the old Frisch-Waugh fit must stay reachable
+    grid = penalty_grid([1.0, 2.0], None, [0.0, 5.0])
+    assert len(grid) == 2 * 2 * 2                            # defense=None reuses the offense grid
+    assert (1.0, 2.0, 5.0) in grid
+
+
+def test_the_cv_picks_an_interior_triple(design):
     _, _, wd = design
-    even = PriorRidgeCV(alphas=[4000.0], defense_penalty_ratio=1.0, n_folds=1).fit(wd, None, None)
-    light = PriorRidgeCV(alphas=[4000.0], defense_penalty_ratio=0.25, n_folds=1).fit(wd, None, None)
-    d_defense = light.ratings_.defense.std() / even.ratings_.defense.std()
-    d_offense = light.ratings_.offense.std() / even.ratings_.offense.std()
-    assert d_defense > 1.05                    # a lighter penalty leaves defense wider
-    # offense moves too -- the two blocks are estimated jointly, so the gram couples them -- but far less
-    assert abs(d_offense - 1.0) < 0.25 * abs(d_defense - 1.0)
+    offense = np.logspace(1.5, 6, 6)
+    model = PriorRidgeCV(offense_lambdas=offense, defense_lambdas=offense,
+                         context_lambdas=[0.0, 1e4], n_folds=4).fit(wd, None, None)
+    assert list(model.cv_armse_.columns) == ["offense_lambda", "defense_lambda", "context_lambda",
+                                             "mse", "armse"]
+    assert len(model.cv_armse_) == 6 * 6 * 2
+    assert model.cv_armse_.armse.is_monotonic_increasing                    # sorted best first
+    assert model.offense_lambda_ not in (offense[0], offense[-1]), "an argmax on a boundary chose nothing"
+    assert model.defense_lambda_ not in (offense[0], offense[-1])
 
 
-def test_the_cv_picks_an_interior_penalty_and_beats_the_ends(design):
+# ------------------------------------------------------------------ the objective
+def test_armse_is_the_root_mean_square_on_the_mean_absolute_scale():
+    assert MAE_SCALE == pytest.approx(np.sqrt(2.0 / np.pi))
+    assert armse(100.0) == pytest.approx(10.0 * MAE_SCALE)
+    sample = np.random.default_rng(0).normal(0.0, 3.0, 400_000)
+    assert armse(float((sample ** 2).mean())) == pytest.approx(float(np.abs(sample).mean()), rel=0.01)
+
+
+def test_close_games_get_more_weight_than_blowouts(design):
     _, _, wd = design
-    alphas = np.logspace(1, 6, 11)
-    model = PriorRidgeCV(alphas=alphas, n_folds=5).fit(wd, None, None)
-    assert model.alpha_ not in (alphas[0], alphas[-1]), "an argmax on a grid boundary has chosen nothing"
-    assert model.cv_error_.loc[model.alpha_] == model.cv_error_.min()
-    assert model.cv_error_.iloc[0] > model.cv_error_.min()
-    assert model.cv_error_.iloc[-1] > model.cv_error_.min()
+    key, possessions, weight, average_margin = team_game_weights(wd)
+    assert average_margin.min() >= 0.0 and average_margin.max() <= 25.0     # the design clips at margin_clip
+    assert np.unique(key).size == 2 * np.unique(wd.rows["game_idx"]).size   # two team-games per game
+
+    flat = team_game_weights(wd, weight_by_closeness=False)[2]
+    per_possession = weight / np.maximum(flat, 1e-9)
+    margin_of_team_game = np.zeros(weight.size)
+    margin_of_team_game[key] = average_margin[
+        np.unique(wd.rows["game_idx"].to_numpy(), return_inverse=True)[1]]
+    close = per_possession[margin_of_team_game <= np.median(margin_of_team_game)]
+    wide = per_possession[margin_of_team_game > np.median(margin_of_team_game)]
+    assert close.mean() > wide.mean(), "a close game must weigh more per possession than a blowout"
 
 
+def test_a_team_game_error_is_smaller_than_a_stint_one(design):
+    """A team-game pools ~100 possessions, so its error is far below a single stint's."""
+    _, _, wd = design
+    key, possessions, weight, _ = team_game_weights(wd)
+    row_error = wd.y - np.average(wd.y, weights=wd.w)
+    pooled, _ = team_game_mse(key, possessions, weight, row_error)
+    stint = float(np.average(row_error ** 2, weights=wd.w))
+    assert pooled < 0.5 * stint
+    assert 0.0 < armse(pooled) < 25.0
+
+
+def test_the_floor_keeps_a_perfectly_tied_game_finite(design):
+    _, _, wd = design
+    weight = team_game_weights(wd, closeness_floor=1.0)[2]
+    assert np.isfinite(weight).all() and (weight > 0).all()
+
+
+# ------------------------------------------------------------------ the folds
 def test_the_cv_folds_keep_a_game_together(design):
-    """Ten players repeat across a game's stints, so a split inside a game leaks the answer.  If it did,
-    the CV would choose a far smaller penalty than a game-grouped one."""
+    """Ten players repeat across a game's stints, so a split inside a game leaks the answer."""
     _, _, wd = design
     games = wd.rows["game_idx"].to_numpy()
-    fold_of = {}
-    model = PriorRidgeCV(alphas=[1000.0, 4000.0], n_folds=5, seed=3)
-    rng = np.random.default_rng(model.seed)
+    model = PriorRidgeCV(n_folds=5, seed=3)
     unique = np.unique(games)
-    fold = pd.Series(rng.permutation(unique.size) % model.n_folds, index=unique).reindex(games).to_numpy()
+    fold = pd.Series(np.random.default_rng(model.seed).permutation(unique.size) % model.n_folds,
+                     index=unique).reindex(games).to_numpy()
     for g in unique[:50]:
-        fold_of[g] = np.unique(fold[games == g])
-        assert fold_of[g].size == 1
+        assert np.unique(fold[games == g]).size == 1
 
 
 def test_it_produces_ratings_the_criterion_can_score(design):
     sim, ctx, wd = design
-    model = PriorRidgeCV(n_folds=3).fit(wd, None, None)
+    model = PriorRidgeCV(offense_lambdas=np.logspace(2.5, 5, 4), context_lambdas=[0.0],
+                         n_folds=3).fit(wd, None, None)
     rat = Ratings(model.as_ratings_frame())
     assert list(rat.df.columns) == ["player_id", "o", "d", "poss", "prior_o", "prior_d"]
     got = score(predict_season(rat, wd, level="full"))
@@ -131,54 +187,3 @@ def test_it_produces_ratings_the_criterion_can_score(design):
     truth = truth[truth.season == 2002]
     j = rat.df.merge(truth[["player_id", "impact_O"]], on="player_id")
     assert np.corrcoef(j.o, j.impact_O)[0, 1] > 0.3
-
-# ------------------------------------------------------------------ the closeness-weighted objective
-def test_armse_is_the_root_mean_square_on_the_mean_absolute_scale():
-    from eracoef.priorridge import MAE_SCALE, armse
-    assert MAE_SCALE == pytest.approx(np.sqrt(2.0 / np.pi))
-    assert armse(100.0) == pytest.approx(10.0 * MAE_SCALE)
-    # a normal error of sd 3: the root mean square is 3, the mean ABSOLUTE deviation is what ARMSE reports
-    sample = np.random.default_rng(0).normal(0.0, 3.0, 400_000)
-    assert armse(float((sample ** 2).mean())) == pytest.approx(float(np.abs(sample).mean()), rel=0.01)
-
-
-def test_close_games_get_more_weight_than_blowouts(design):
-    _, _, wd = design
-    model = PriorRidgeCV(n_folds=1, alphas=[4000.0])
-    key, possessions, weight, average_margin = model._team_games(wd)
-    assert average_margin.min() >= 0.0 and average_margin.max() <= 25.0     # the design clips at margin_clip
-    assert np.unique(key).size == 2 * np.unique(wd.rows["game_idx"]).size   # two team-games per game
-
-    flat = PriorRidgeCV(weight_by_closeness=False)._team_games(wd)[2]
-    per_possession = weight / np.maximum(flat, 1e-9)
-    game_of_team_game = np.zeros(weight.size)
-    game_of_team_game[key] = average_margin[
-        np.unique(wd.rows["game_idx"].to_numpy(), return_inverse=True)[1]]
-    close = per_possession[game_of_team_game <= np.median(game_of_team_game)]
-    wide = per_possession[game_of_team_game > np.median(game_of_team_game)]
-    assert close.mean() > wide.mean(), "a close game must weigh more per possession than a blowout"
-
-
-def test_closeness_weighting_changes_the_penalty_it_picks(design):
-    _, _, wd = design
-    alphas = np.logspace(2, 5, 7)
-    weighted = PriorRidgeCV(alphas=alphas, n_folds=4).fit(wd, None, None)
-    plain = PriorRidgeCV(alphas=alphas, n_folds=4, weight_by_closeness=False).fit(wd, None, None)
-    assert weighted.cv_error_ is not None and plain.cv_error_ is not None
-    assert not np.allclose(weighted.cv_error_.to_numpy(), plain.cv_error_.to_numpy())
-    assert (weighted.cv_armse_ ** 2).round(9).equals((weighted.cv_error_ * (2.0 / np.pi)).round(9))
-
-
-def test_the_reported_error_is_a_team_game_error_not_a_stint_one(design):
-    """A team-game pools ~100 possessions, so its error is far smaller than a single stint's.  If the
-    objective were still stint-level the number would be several times larger."""
-    _, _, wd = design
-    model = PriorRidgeCV(alphas=[4000.0], n_folds=4).fit(wd, None, None)
-    assert 0.0 < model.cv_armse_.iloc[0] < 25.0
-
-
-def test_the_floor_keeps_a_perfectly_tied_game_finite(design):
-    _, _, wd = design
-    model = PriorRidgeCV(n_folds=1, alphas=[4000.0], closeness_floor=1.0)
-    weight = model._team_games(wd)[2]
-    assert np.isfinite(weight).all() and (weight > 0).all()

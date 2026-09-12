@@ -33,8 +33,8 @@ def world():
     return sim, ctx, designs
 
 
-def _fitted(designs, seasons, alpha=2000.0, min_possessions=0.0):
-    model = LeaveSeasonOutRAPM(defense_penalty_ratio=1.0, min_possessions=min_possessions)
+def _fitted(designs, seasons, min_possessions=0.0):
+    model = LeaveSeasonOutRAPM(min_possessions=min_possessions)
     for s in seasons:
         model.add_season(s, designs[s])
     return model
@@ -47,8 +47,8 @@ def test_leaving_a_season_out_equals_fitting_without_it(world):
     everything = _fitted(designs, SEASONS)
     subset = _fitted(designs, [s for s in SEASONS if s != 2003])
 
-    held = everything.ratings(held_out_season=2003, alpha=2000.0).set_index("player_id")
-    direct = subset.ratings(alpha=2000.0).set_index("player_id")
+    held = everything.ratings(held_out_season=2003, offense_lambda=2000.0).set_index("player_id")
+    direct = subset.ratings(offense_lambda=2000.0).set_index("player_id")
     shared = held.index.intersection(direct.index)
     assert len(shared) > 50
     assert np.allclose(held.loc[shared, "offense"], direct.loc[shared, "offense"], atol=1e-8)
@@ -58,8 +58,8 @@ def test_leaving_a_season_out_equals_fitting_without_it(world):
 
 def test_the_order_seasons_are_added_in_does_not_matter(world):
     _, _, designs = world
-    forward = _fitted(designs, SEASONS).ratings(alpha=2000.0).set_index("player_id").sort_index()
-    backward = _fitted(designs, SEASONS[::-1]).ratings(alpha=2000.0).set_index("player_id").sort_index()
+    forward = _fitted(designs, SEASONS).ratings(offense_lambda=2000.0).set_index("player_id").sort_index()
+    backward = _fitted(designs, SEASONS[::-1]).ratings(offense_lambda=2000.0).set_index("player_id").sort_index()
     assert np.allclose(forward.offense, backward.offense, atol=1e-9)
 
 
@@ -67,7 +67,7 @@ def test_the_order_seasons_are_added_in_does_not_matter(world):
 def test_it_recovers_the_simulated_talent(world):
     sim, _, designs = world
     model = _fitted(designs, SEASONS)
-    rating = model.ratings(alpha=1000.0)
+    rating = model.ratings(offense_lambda=1000.0)
     truth = sim["truth"]["ps"].groupby("player_id")[["impact_O", "impact_D"]].mean().reset_index()
     joined = rating.merge(truth, on="player_id")
     assert len(joined) > 50
@@ -81,7 +81,7 @@ def test_more_seasons_beat_fewer(world):
     truth = sim["truth"]["ps"].groupby("player_id")[["impact_O"]].mean().reset_index()
 
     def quality(seasons):
-        r = _fitted(designs, seasons).ratings(alpha=1000.0).merge(truth, on="player_id")
+        r = _fitted(designs, seasons).ratings(offense_lambda=1000.0).merge(truth, on="player_id")
         return np.corrcoef(r.offense, r.impact_O)[0, 1]
 
     assert quality(SEASONS) > quality([2002])
@@ -90,35 +90,34 @@ def test_more_seasons_beat_fewer(world):
 def test_a_bigger_penalty_shrinks_the_ratings(world):
     _, _, designs = world
     model = _fitted(designs, SEASONS)
-    light = model.ratings(alpha=200.0)
-    heavy = model.ratings(alpha=50000.0)
+    light = model.ratings(offense_lambda=200.0)
+    heavy = model.ratings(offense_lambda=50000.0)
     assert heavy.offense.std() < 0.5 * light.offense.std()
     assert len(light) == len(heavy)
 
 
 def test_defense_can_be_penalised_differently(world):
     _, _, designs = world
-    even = LeaveSeasonOutRAPM(defense_penalty_ratio=1.0, min_possessions=0.0)
-    light = LeaveSeasonOutRAPM(defense_penalty_ratio=0.2, min_possessions=0.0)
-    for s in SEASONS:
-        even.add_season(s, designs[s])
-        light.add_season(s, designs[s])
-    assert light.ratings(alpha=5000.0).defense.std() > even.ratings(alpha=5000.0).defense.std()
+    model = _fitted(designs, SEASONS)
+    even = model.ratings(offense_lambda=5000.0, defense_lambda=5000.0)
+    light = model.ratings(offense_lambda=5000.0, defense_lambda=1000.0)
+    assert light.defense.std() > even.defense.std()
+    # and the context is its own dial: pinning it hard must move the ratings
+    pinned = model.ratings(offense_lambda=5000.0, context_lambda=1e14)
+    assert not np.allclose(pinned.offense.to_numpy(), even.offense.to_numpy())
 
 
 # ------------------------------------------------------------ the possession floor
 def test_the_possession_floor_drops_the_barely_seen(world):
     _, _, designs = world
     model = _fitted(designs, SEASONS)
-    everyone = model.ratings(alpha=2000.0)
-    floored = LeaveSeasonOutRAPM(defense_penalty_ratio=1.0, min_possessions=1e9)
-    for s in SEASONS:
-        floored.add_season(s, designs[s])
-    assert len(floored.ratings(alpha=2000.0)) == 0
+    everyone = model.ratings(offense_lambda=2000.0)
+    floored = _fitted(designs, SEASONS, min_possessions=1e9)
+    assert len(floored.ratings(offense_lambda=2000.0)) == 0
     assert (everyone.possessions > 0).all()
     # the floor counts a possession ONCE, not once per side
     model_100 = _fitted(designs, SEASONS, min_possessions=100.0)
-    kept = model_100.ratings(alpha=2000.0)
+    kept = model_100.ratings(offense_lambda=2000.0)
     assert (kept.possessions >= 100.0).all()
     assert len(kept) <= len(everyone)
 
@@ -128,13 +127,13 @@ def test_each_season_keeps_its_own_level(world):
     """Add 40 points per 100 to one season's scoring.  The context is projected out per season, so the
     ratings must not move -- if the level were pooled the shifted season would drag everyone."""
     _, _, designs = world
-    base = _fitted(designs, SEASONS).ratings(alpha=2000.0).set_index("player_id")
+    base = _fitted(designs, SEASONS).ratings(offense_lambda=2000.0).set_index("player_id")
 
     from dataclasses import replace
     shifted = dict(designs)
     bumped = designs[2002]
     shifted[2002] = replace(bumped, y=bumped.y + 40.0)
-    moved = _fitted(shifted, SEASONS).ratings(alpha=2000.0).set_index("player_id")
+    moved = _fitted(shifted, SEASONS).ratings(offense_lambda=2000.0).set_index("player_id")
 
     shared = base.index.intersection(moved.index)
     assert np.allclose(base.loc[shared, "offense"], moved.loc[shared, "offense"], atol=1e-6)
@@ -145,19 +144,23 @@ def test_the_sweep_prefers_an_interior_penalty_and_reports_armse(world):
     _, _, designs = world
     model = _fitted(designs, SEASONS, min_possessions=50.0)
     alphas = np.logspace(1, 6, 6)
-    table = model.sweep(alphas, lambda s: designs[s], scoring_seasons=[2002, 2003], verbose=False)
-    assert list(table.columns) == ["mse", "armse"]
+    table = model.sweep(lambda s: designs[s], offense_lambdas=alphas, defense_lambdas=alphas,
+                        context_lambdas=[0.0], scoring_seasons=[2002, 2003], verbose=False)
+    assert list(table.columns) == ["offense_lambda", "defense_lambda", "context_lambda", "mse", "armse"]
     assert np.allclose(table.armse, np.sqrt(table.mse) * np.sqrt(2.0 / np.pi))
-    best = float(table.armse.idxmin())
-    assert best not in (alphas[0], alphas[-1]), "an argmax on a grid boundary has chosen nothing"
+    assert len(table) == 6 * 6
+    assert table.armse.is_monotonic_increasing                  # sorted best first
+    best = table.iloc[0]
+    assert best.offense_lambda not in (alphas[0], alphas[-1]), "an argmax on a boundary has chosen nothing"
 
 
 def test_the_sweep_never_scores_a_season_it_trained_on(world):
     """Scoring season S must be out of the fit that predicts it, or the sweep picks no penalty at all."""
     _, _, designs = world
     model = _fitted(designs, SEASONS, min_possessions=0.0)
-    honest = model.sweep([2000.0], lambda s: designs[s], scoring_seasons=[2002], verbose=False)
-    leaky_rating = model.ratings(alpha=2000.0)
+    honest = model.sweep(lambda s: designs[s], offense_lambdas=[2000.0], defense_lambdas=[2000.0],
+                         context_lambdas=[0.0], scoring_seasons=[2002], verbose=False)
+    leaky_rating = model.ratings(offense_lambda=2000.0)
     from eracoef.priorridge import team_game_mse, team_game_weights
     key, poss, weight, _ = team_game_weights(designs[2002])
     leaky, _ = team_game_mse(key, poss, weight, model.predict_error(designs[2002], leaky_rating))
@@ -167,7 +170,7 @@ def test_the_sweep_never_scores_a_season_it_trained_on(world):
 def test_an_unrated_player_scores_as_average(world):
     _, _, designs = world
     model = _fitted(designs, SEASONS)
-    rating = model.ratings(alpha=2000.0)
+    rating = model.ratings(offense_lambda=2000.0)
     error_full = model.predict_error(designs[2002], rating)
     error_empty = model.predict_error(designs[2002], rating.iloc[:0])
     assert np.isfinite(error_full).all() and np.isfinite(error_empty).all()
