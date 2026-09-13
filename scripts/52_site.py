@@ -5,11 +5,15 @@ positive good on both ends.  A season's rating is fit on that season's games -- 
 playoffs together -- so the latest row is the season in progress and re-running this updates it.
 
 Reads outputs/season_ratings.parquet (scripts/60_season_board.py), falling back to the shipped copy
-in artifacts/ so that a fresh clone can build the page without refitting anything.
+in artifacts/ so that a fresh clone can build the page without refitting anything.  `OPENRAPM_BOARD`
+overrides both -- the same convention tests/test_vs_consensus.py uses -- so a candidate board can be
+published without overwriting the shipped artifact the rest of the scripts read.
 
 usage: python scripts/52_site.py
+       OPENRAPM_BOARD=outputs/season_ratings_sy.parquet python scripts/52_site.py
 """
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -21,7 +25,8 @@ from eracoef.config import load_config  # noqa: E402
 cfg = load_config()
 root = Path(cfg["_root"])
 
-CANDIDATES = [root / "outputs" / "season_ratings.parquet", root / "artifacts" / "season_ratings.parquet"]
+CANDIDATES = ([Path(os.environ["OPENRAPM_BOARD"])] if os.environ.get("OPENRAPM_BOARD") else
+              [root / "outputs" / "season_ratings.parquet", root / "artifacts" / "season_ratings.parquet"])
 src = next((p for p in CANDIDATES if p.exists()), None)
 if src is None:
     raise SystemExit("no season board found.  Run `python scripts/60_season_board.py` first, or "

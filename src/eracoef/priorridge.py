@@ -33,8 +33,9 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-__all__ = ["PriorRidgeCV", "armse", "penalty_grid", "team_game_weights", "team_game_mse",
-           "DEFAULT_PLAYER_LAMBDAS", "DEFAULT_CONTEXT_LAMBDAS", "MAE_SCALE"]
+__all__ = ["PriorRidgeCV", "armse", "calibration_miss", "penalty_grid", "team_game_weights",
+           "team_game_mse", "solve_diag", "solve_penalised", "DEFAULT_PLAYER_LAMBDAS",
+           "DEFAULT_CONTEXT_LAMBDAS", "MAE_SCALE"]
 
 # The grids must BRACKET the answer on both sides -- an argmax on a boundary has chosen nothing.  They run
 # to 1e9 because with a good multi-season prior and only three quarters of one season of games, the board
@@ -52,6 +53,30 @@ MAE_SCALE = 0.7978845608028654
 def armse(mean_squared_error):
     """A mean squared error on the mean-absolute scale: sqrt(mse) * sqrt(2 / pi)."""
     return np.sqrt(np.asarray(mean_squared_error, dtype=float)) * MAE_SCALE
+
+
+def calibration_miss(scale_off, scale_def):
+    """How far a board's AMPLITUDE is from right: |log(scale_off)| + |log(scale_def)|, 0 = calibrated.
+
+    `holdout.score` regresses the held-out season's stints on the two sides' lineup contributions
+    separately; the coefficients `scale_off` / `scale_def` are what that season wants each side
+    multiplied by.  Above 1 = the board is too narrow, below 1 = too wide.
+
+    The logs, because a board at half the right spread (2.0) and one at twice it (0.5) are equally
+    wrong and a raw distance from 1 would call the first one four times worse.  Symmetric: a
+    factor f and a factor 1/f score alike.
+
+    **This is a tie-break, never the score.**  A team-game total is linear in a per-player linear
+    map, so a uniform rescale of the board trades almost nothing at game level (`calmap`, and the
+    two target penalties that scored 0.0020 apart while one halved the offensive spread).  The
+    prediction score cannot see compression; this can.  Use it to separate candidates that the
+    prediction score has already called equal -- it can never make a worse-predicting board win.
+    """
+    o = np.asarray(scale_off, dtype=float)
+    d = np.asarray(scale_def, dtype=float)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        v = np.abs(np.log(np.where(o > 0, o, np.nan))) + np.abs(np.log(np.where(d > 0, d, np.nan)))
+    return float(v) if np.ndim(v) == 0 else v
 
 
 def penalty_grid(offense_lambdas=None, defense_lambdas=None, context_lambdas=None) -> list:
@@ -101,14 +126,33 @@ def team_game_mse(key, possessions, weight, row_error, rows=None):
     return float((w * error ** 2).sum() / w.sum()), float(w.sum())
 
 
-def solve_penalised(gram, rhs, sizes, triple):
-    """(gram + diag(penalty)) x = rhs, with one penalty per block.  `sizes` is (offense, defense, context)."""
-    penalty = np.concatenate([np.full(n, lam) for n, lam in zip(sizes, triple)])
+def solve_diag(gram, rhs, penalty):
+    """(gram + diag(penalty)) x = rhs, on an explicit per-COLUMN penalty.
+
+    A zero context penalty can leave that block rank-deficient -- inside a CV fold an unpenalised fixed
+    column can be identically zero (a fold with no garbage-time rows) -- and then `solve` raises.  It
+    raises on HALF the grid, every triple with `context_lambda = 0`, and `lstsq` costs five to ten times
+    a solve on a thousand columns.  So retry with a jitter on the UNPENALISED diagonal only: it is the
+    same fit to nine figures (the penalised player block is untouched, and where two fixed columns are
+    collinear the FITTED VALUES are identical however the pair splits the credit), and it keeps the fast
+    path.  `lstsq` is still there for anything that survives both.
+    """
+    penalty = np.asarray(penalty, dtype=float)
     matrix = gram + np.diag(penalty)
     try:
         return np.linalg.solve(matrix, rhs)
-    except np.linalg.LinAlgError:              # a zero context penalty can leave that block rank-deficient
-        return np.linalg.lstsq(matrix, rhs, rcond=None)[0]
+    except np.linalg.LinAlgError:
+        jitter = 1e-9 * max(float(np.mean(np.abs(np.diag(matrix)))), 1.0)
+        matrix[np.diag_indices_from(matrix)] += np.where(penalty == 0.0, jitter, 0.0)
+        try:
+            return np.linalg.solve(matrix, rhs)
+        except np.linalg.LinAlgError:
+            return np.linalg.lstsq(matrix, rhs, rcond=None)[0]
+
+
+def solve_penalised(gram, rhs, sizes, triple):
+    """(gram + diag(penalty)) x = rhs, with one penalty per block.  `sizes` is (offense, defense, context)."""
+    return solve_diag(gram, rhs, np.concatenate([np.full(n, lam) for n, lam in zip(sizes, triple)]))
 
 
 class PriorRidgeCV:
@@ -119,15 +163,31 @@ class PriorRidgeCV:
     weight_by_closeness   weight each team-game by 1 / average |margin|; False = possessions alone
     closeness_floor       the smallest average margin the weighting will believe, in points
     seed                  fold assignment
+    free_prior_scale      let the fit decide HOW FAR TO TRUST the prior, per side, instead of being told
+                          to trust it exactly.  The lineup sum of each side's prior enters as one free
+                          UNPENALISED column, so the rating is `scale * prior + residual` rather than
+                          `prior + residual`.  `prior_scale_` reads 1.0 when the prior is priced right,
+                          above 1 when it is compressed and the games want it stretched, below 1 when it
+                          is noisier than it is being priced at.  This is the one lever that acts on the
+                          board's AMPLITUDE, which the team-game objective is nearly blind to: a uniform
+                          rescale of a per-player linear map barely moves a team total.
+    lam_buckets           {group: ratio} multiplying the player penalty on a `spec.col_groups` column
+                          group -- "low_poss", "high_poss", "high_poss_O", "high_poss_D" (the thresholds
+                          are config.yaml's low_poss / starter_poss).  A ridge already shrinks each
+                          player by n_i / (n_i + lambda), so possession-dependent shrinkage is there for
+                          free; this says the bench wants a DIFFERENT lambda, not just a smaller n.
     """
 
     def __init__(self, offense_lambdas=None, defense_lambdas=None, context_lambdas=None, n_folds: int = 5,
-                 weight_by_closeness: bool = True, closeness_floor: float = 1.0, seed: int = 0):
+                 weight_by_closeness: bool = True, closeness_floor: float = 1.0, seed: int = 0,
+                 free_prior_scale: bool = False, lam_buckets=None):
         self.grid = penalty_grid(offense_lambdas, defense_lambdas, context_lambdas)
         self.n_folds = int(n_folds)
         self.weight_by_closeness = bool(weight_by_closeness)
         self.closeness_floor = float(closeness_floor)
         self.seed = int(seed)
+        self.free_prior_scale = bool(free_prior_scale)
+        self.lam_buckets = dict(lam_buckets or {})
 
     # ------------------------------------------------------------------ the pieces of one design
     def _parts(self, design, prior_offense, prior_defense):
@@ -144,15 +204,24 @@ class PriorRidgeCV:
         players = design.X[:, :2 * n_players].tocsr()
         # the design's own fixed block already carries a season intercept, so no extra ones column
         context = np.asarray(design.X[:, 2 * n_players:2 * n_players + n_fixed].todense())
+        if self.free_prior_scale:
+            # each side's prior summed over the five players on the floor: one column, unpenalised
+            context = np.column_stack([context,
+                                       players[:, :n_players] @ prior[:n_players],
+                                       players[:, n_players:] @ prior[n_players:]])
         return player_ids, players, context, prior
 
     @staticmethod
-    def _blocks(players, context, prior, target, weights, rows):
-        """The normal equations of [players | context] on `rows`, with the prior taken out of the target."""
+    def _blocks(players, context, offset, target, weights, rows):
+        """The normal equations of [players | context] on `rows`, with `offset` taken out of the target.
+
+        `offset` is the prior when it enters as a fixed centre, and zero when `free_prior_scale` has put
+        it into `context` as two free columns instead.
+        """
         block = players[rows]
         ctx = context[rows]
         w = weights[rows]
-        centred = (target - players @ prior)[rows]
+        centred = (target - players @ offset)[rows]
 
         weighted = block.T.multiply(w)
         gram_pp = np.asarray((weighted @ block).todense())
@@ -161,11 +230,22 @@ class PriorRidgeCV:
         rhs = np.concatenate([np.asarray(weighted @ centred).ravel(), (ctx * w[:, None]).T @ centred])
         return np.block([[gram_pp, gram_pc], [gram_pc.T, gram_cc]]), rhs
 
+    def _penalty(self, triple, n_players, n_context, spec):
+        """One penalty per COLUMN: offense, defense, the context block -- and 0 on the two free prior
+        columns, which are the last of the context block and must stay unpenalised whatever it is set to."""
+        player = np.concatenate([np.full(n_players, triple[0]), np.full(n_players, triple[1])])
+        for name, ratio in self.lam_buckets.items():
+            player[spec.col_groups[name]] *= float(ratio)
+        n_free = 2 if self.free_prior_scale else 0
+        return np.concatenate([player, np.full(n_context - n_free, triple[2]), np.zeros(n_free)])
+
     # ------------------------------------------------------------------ fit
     def fit(self, design, prior_offense=None, prior_defense=None):
         player_ids, players, context, prior = self._parts(design, prior_offense, prior_defense)
         n_players, n_context = design.spec.n_ps, context.shape[1]
-        sizes = (n_players, n_players, n_context)
+        # with a free scale the prior is a COLUMN, not a centre, so nothing comes out of the target
+        offset = np.zeros_like(prior) if self.free_prior_scale else prior
+        penalty = {t: self._penalty(t, n_players, n_context, design.spec) for t in self.grid}
         target, weights = design.y, design.w
         games = design.rows["game_idx"].to_numpy()
         key, possessions, team_game_weight, average_margin = team_game_weights(
@@ -178,15 +258,15 @@ class PriorRidgeCV:
             fold = pd.Series(fold_of_game, index=unique_games).reindex(games).to_numpy()
             error = {t: 0.0 for t in self.grid}
             seen = {t: 0.0 for t in self.grid}
-            centred = target - players @ prior
+            centred = target - players @ offset
             for f in range(self.n_folds):
                 train = np.flatnonzero(fold != f)
                 valid = np.flatnonzero(fold == f)
                 if train.size == 0 or valid.size == 0:
                     continue
-                gram, rhs = self._blocks(players, context, prior, target, weights, train)
+                gram, rhs = self._blocks(players, context, offset, target, weights, train)
                 for triple in self.grid:
-                    coef = solve_penalised(gram, rhs, sizes, triple)
+                    coef = solve_diag(gram, rhs, penalty[triple])
                     gap = (centred[valid] - players[valid] @ coef[:2 * n_players]
                            - context[valid] @ coef[2 * n_players:])
                     mse, w = team_game_mse(key, possessions, team_game_weight, gap, valid)
@@ -202,18 +282,22 @@ class PriorRidgeCV:
             best = self.grid[0]
 
         self.offense_lambda_, self.defense_lambda_, self.context_lambda_ = best
-        gram, rhs = self._blocks(players, context, prior, target, weights, np.arange(target.size))
-        coef = solve_penalised(gram, rhs, sizes, best)
+        gram, rhs = self._blocks(players, context, offset, target, weights, np.arange(target.size))
+        coef = solve_diag(gram, rhs, penalty[best])
         self.residual_ = coef[:2 * n_players]
         self.level_ = coef[2 * n_players:]
+        # what the season's games decided the prior was worth, per side; None when it was not asked
+        self.prior_scale_ = self.level_[-2:].copy() if self.free_prior_scale else None
+        scale = self.prior_scale_ if self.free_prior_scale else np.ones(2)
+        centre = np.concatenate([scale[0] * prior[:n_players], scale[1] * prior[n_players:]])
         possessions_of = np.asarray(players[:, :n_players]
                                     .multiply(design.rows["poss"].to_numpy()[:, None]).sum(axis=0)).ravel()
         self.ratings_ = pd.DataFrame({
             "player_id": player_ids,
-            "offense": prior[:n_players] + self.residual_[:n_players],
-            "defense": prior[n_players:] + self.residual_[n_players:],
-            "prior_offense": prior[:n_players],
-            "prior_defense": prior[n_players:],
+            "offense": centre[:n_players] + self.residual_[:n_players],
+            "defense": centre[n_players:] + self.residual_[n_players:],
+            "prior_offense": centre[:n_players],
+            "prior_defense": centre[n_players:],
             "possessions": possessions_of,
         })
         return self

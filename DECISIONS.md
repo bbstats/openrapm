@@ -733,6 +733,12 @@ unbiased beats quiet but shrunk, whenever something else is going to average ove
 points per 100 possessions**; the baseline with no player ratings at all is **8.9261 points per 100
 possessions**.
 
+> **Every number in this table is inflated, and the table is kept for the reasoning, not the values.**  The
+> 36-name feature list it was run on carried the four `onc_*` columns, and season H's `onc_*` is computed
+> over the quarter the score holds out -- worth +0.375 per 100 at z +7.47 (next section).  The rule the
+> section states survives; the surface does not, and it was re-swept on the honest setup, where the
+> penalty turns out not to be identified at all.
+
 | target defence lambda -> | 10,000 | 20,000 | **40,000** | 80,000 | 160,000 |
 |---|---|---|---|---|---|
 | offence 10,000 | 8.4675 | 8.4440 | 8.4311 | 8.4588 | 8.5235 |
@@ -776,6 +782,132 @@ penalty now, which is exact FWL at context lambda 0.  *The check:*
 
 **Not the board's 3-D CV.**  Sweeping three penalties per season instead of one is worth ~0.008 ARMSE,
 noise, and it is kept because it removes two assumptions rather than because it pays.
+
+### The single-year board: an amplitude instrument, a Boruta selection, and a leak (2026-09-13)
+
+Three things were wrong with the single-year board and they compounded: its prior's features were
+hand-picked rather than selected, everything downstream had been tuned on top of that, and the board came
+out compressed with the plus-minus stage contributing nothing.  What follows is what each turned out to be.
+
+**The objective could not see compression, and now it can.**  `calmap.py:808-811` already said why: a
+team-game total is linear in a per-player linear map, so a uniform rescale of the board trades almost
+nothing at game level.  The demonstration: target offence penalties 40,000 and 160,000 scored **8.3503
+against 8.3483 game ARMSE** -- a tie, 0.0020 apart -- while 160,000 **halved** the board's offensive spread,
+sd 0.866 to 0.448.  `holdout.score` was already returning the instrument that sees it and the callers were
+throwing it away.  `scale_off` / `scale_def` are what the held-out quarter wants each side multiplied by;
+`priorridge.calibration_miss` is |log(scale_off)| + |log(scale_def)|, zero when calibrated, symmetric in
+the factor.  The same pair read **0.239 against 0.576**.  **The rule: choose on `game_armse`, and where
+candidates sit within noise of each other -- these axes are flat, so that is most of the time -- break the
+tie on `miss`.**  It is a tie-break and never a score: a board that predicts worse cannot win on it.
+
+**`onc_*` leaks into the DIAGNOSTIC, and stays in the BOARD.**  `scripts/50_boruta.py` grew a `--panel=`
+flag and a `single_year` mode (the target is the `LeaveSeasonOutRAPM` joined on `player_id`, not pooled --
+it already IS the leave-one-out quantity and `training_rows` would pool it a second time).  Over 56
+candidates and 50 trials it ranks **`onc_o` first on offence at importance 7.26 against 1.18 for the next
+name**, and `onc_d` first on defence at 6.61.  Dropping the four columns costs 0.169 game ARMSE.
+
+The 75/25 diagnostic cannot be believed on that number.  `outputs/role_panel_season.parquet` is built from
+each season's FULL design (`scripts/49_role_panel.py`: `onc = oncourt_rates(wd_o, wd_d)`), so season H's
+`onc_o` -- his points per 100 while on the floor -- is averaged over every game of H, the scored quarter
+included.  Rebuild it from the first 75% on the same luck-adjusted targets and change nothing else
+(`scratch/onc_leak.py`; the whole-season rebuild arm reproduces the panel to **0.0000**, so the arms differ
+in the window and in nothing else):
+
+| | 2015 | 2024 | 2025 | 2026 | pooled |
+|---|---|---|---|---|---|
+| panel `onc_*` (whole season) | 8.4732 | 8.8065 | 9.1021 | 9.0196 | 8.8503 |
+| honest `onc_*` (first 75%) | 8.7766 | 9.3273 | 9.4179 | 9.3780 | 9.2249 |
+| the gap | +0.303 | +0.521 | +0.316 | +0.358 | **+0.375, z +7.47, 4/4** |
+
+**So the 75/25 score cannot compare two boards that differ in `onc_*`** -- including the 8.3872 the
+single-year board was being benchmarked at, and both earlier end-to-end penalty sweeps, whose 36-name list
+carried `onc_*` too.  It remains valid for every comparison that holds them fixed.
+
+**It does not follow that the columns should go, and taking them out first was the wrong turn.**  The leak
+is in the evaluation, not the product.  The board rates a COMPLETED season, ruling 12 allows H's own games
+as the evidence, and at ship time H's on-court record is legitimately known -- as it is to every public
+metric in the consensus, all of which use the season's own plus-minus.  "Would `onc_*` help if we only had
+75% of the season" is a question the product never asks.  With the criterion silent the consensus decides,
+as a sanity check: **with `onc_*`, rho 0.753 / 0.811 / 0.766 and nine of ten floors; without, 0.721 / 0.667
+/ 0.663 and all three agreement floors fail, defence by 11%** -- a gross miss, which the standing rule does
+treat as a veto.  `singleyear.FEATURE_SETS` keeps `boruta_noonc` so the comparison can be re-run.
+
+The cost is real and is recorded rather than hidden: `onc_*` makes the PRIOR and the EVIDENCE the same
+games, so the ridge is no longer combining two independent sources.  It shows up as the plus-minus stage
+doing less -- the season's own games move the board by sd 0.19 on offence with them, 0.32 without.  An
+honest 75/25 diagnostic needs a panel built from a 75% design, and that is not built.
+
+**What Boruta actually keeps, and what it does not.**  The hypothesis being tested was that the
+hand-picked list was missing the efficiency ratios and the shot-quality pair -- the things an axis-aligned
+tree cannot construct, since a ratio of two columns is not a function of either one.  **It is not
+supported on this target.**  Boruta rejects *every* `RATIOS` and *every* `SHOTQ` feature on defence, and
+all but `fg3p` and `p3r` (both essentially on the bar) on offence: 33 of 54 rejected on offence, 37 on
+defence.  The board agreed -- the full 54-name list left prediction flat on 2015 (8.3853 against 8.3872)
+and made the prior *narrower*, offensive spread 0.717 against the shipped board's 1.056.  What survives is
+small: 21 names on offence and 17 on defence, and dropping to them costs nothing (8.8503 against 8.8397,
+z well inside noise, on a third of the features).  `outputs/csv/boruta_single_year_*.csv` has every
+candidate and its importance; read the rejections, never a prose list of winners.
+
+**`free_prior_scale` is the lever on amplitude, and it is the one that mattered.**  A ridge already shrinks
+each player by n_i / (n_i + lambda), so possession-dependent shrinkage is free and per-player shrinkage was
+never the missing piece.  The missing piece was that the fit was *told* how far to trust the prior instead
+of deciding.  `PriorRidgeCV(free_prior_scale=True)` enters each side's prior as one free UNPENALISED
+column, so the rating is `scale * prior + residual`; pinning the scale at its own optimum is the same
+least-squares problem, which is the sense in which it contains the old fit exactly
+(`test_a_free_prior_scale_is_the_fixed_fit_at_the_scale_it_chose`).  Over four seasons:
+
+| | game ARMSE | miss | rating_off sd | u_off sd |
+|---|---|---|---|---|
+| fixed centre | 8.7896 | 1.038 | 0.705 | 0.009 |
+| free prior scale | 8.8397 | **0.274** | **1.454** | **0.191** |
+| paired difference | +0.050, **z +0.92** | -0.764, **z -4.07** | | |
+
+A tie on the score and decisive on calibration, which is exactly the case the tie-break rule was written
+for.  The fit asks for **2 to 3 times** the prior it is handed.  It also un-sticks the plus-minus stage: the
+board's own penalty had pinned at the 1e9 ceiling in 7 of 8 fits -- "keep the prior exactly as it came" --
+and the season's own games moved the offensive board by sd 0.009.  With the scale free the penalty is
+interior in **4 of 4** seasons and the games move it by 0.191.
+
+**REML: not adopted, and the reason is the loss.**  The motivation was that the board's CV curve is flat
+and its argmin wandered to the grid ceiling.  Both halves of that dissolved.  `MixedModelRAPMCV` with the
+box block zeroed and the GBDT prior as `prior_offset` puts the REML lambda at **2,516, identical in all
+four seasons and interior once the grid runs down to 20** -- against the board's own team-game CV at 12,608
+to 316,569.  REML maximises a stint Gaussian likelihood; the board is selected on a closeness-weighted
+team-game error, and this project has already been burned by choosing a constant on stint MSE
+(`lam_plugin`, trap 3).  Meanwhile the ceiling-pinning that REML was meant to cure is gone, cured by
+`free_prior_scale` instead.  `scratch/reml_lambda.py`.
+
+**`lam_buckets`: a null, and a clean one.**  The claim was that the under-500-possession group wants its
+penalty multiplied.  Swept over ratios 0.25 to 10 -- a 40-fold range -- the score moves **0.004 per 100**,
+monotonically, and `miss` does not move at all (0.195 to 0.195).  For scale, every other effect in this
+section is one to two orders of magnitude larger.  The best point is the *lightest* bench penalty tested,
+which is the opposite of the hypothesis, and it is on a grid edge, which means it has chosen nothing.
+`lam_buckets` stays `{}`.  `scratch/bucket_grid.py`.
+
+**The luck-adjusted targets are flat here, and are kept anyway.**  The board now explains `xpts_ft` on
+offence and `x3def_w0.25` on defence, one fit per side, scored always on the points actually scored.
+Within-season on the 75/25 diagnostic that is worth **-0.0013 per 100, z -0.10** -- nothing.  It is kept
+because the evidence for these targets is out-of-season (+0.26 and -0.39 to -0.47 per 100, above in this
+file) and a within-season split cannot see an attribution gain, not because this measurement supports it.
+
+**The target's penalty is no longer identified, so the incumbent stays.**  Re-swept coarsely on the honest
+setup (`outputs/end_to_end_sweep_honest*.parquet`), 19 triples over five seasons: the surface spans 0.048
+per 100 in total, it is **non-monotone** in both axes (offence 10,000 / defence 1,250 beats offence 2,500 /
+defence 1,250), and the argmin slides to whatever edge is lowest on every widening.  Best-of-19 against the
+incumbent 40,000 / 40,000 is z -1.80 over five seasons, which is not significant before accounting for
+having selected it out of 19.  **40,000 / 40,000 / 0 is kept**, on the `lam_plugin` precedent: the incumbent
+is the one value not chosen with knowledge of the answer.  The mechanism behind the flatness is visible in
+the sweep's own columns -- as the offensive penalty goes 10,000 to 160,000 the prior's spread collapses
+1.168 to 0.288 and `prior_scale_` rises 1.59 to 5.44 to compensate, leaving the finished board at 1.85
+against 1.44.  **The free scale absorbs what the penalty used to control**, which is why a dial that was
+worth re-sweeping for six hours is now worth 0.048.
+
+**One engineering note that is worth more than it sounds.**  `solve_penalised` fell back to `np.linalg.lstsq`
+on *half* of every penalty grid -- every triple with `context_lambda = 0`, because inside a CV fold an
+unpenalised fixed column can be identically zero (a fold with no garbage-time rows) and `solve` then raises.
+`lstsq` costs five to ten times a solve on a thousand columns.  `solve_diag` now retries with a jitter on
+the unpenalised diagonal only, which is the same fit to nine figures.  A season went from about twenty
+minutes to about thirty seconds, which is the difference between a sweep being affordable and not.
 
 ## What was tried and rejected
 

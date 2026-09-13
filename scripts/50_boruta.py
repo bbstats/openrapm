@@ -9,6 +9,12 @@ player's value over his OTHER windows), with chimeraboost's exact SHAP values as
     sink       the shipped target per side on PAIR rows, candidates = everything (SINK, ~95 names): wide, the
                era-relative twins, career, bio, past plus-minus on both sides, teammate turnover
     sinknoagg  the sink without the ten pure linear aggregates (the form 23.10 says Boruta can read)
+    single_year  the SINGLE-YEAR pipeline's prior (scripts/62_single_year_board.py).  Target = a
+               LeaveSeasonOutRAPM over every season, joined on player_id, NOT pooled: it already IS the
+               leave-one-out quantity and `training_rows` would pool it a second time.  Candidates = the
+               sink minus PAST and the turnover feature (both need pair rows, and both are banned under
+               "single year or bust") minus `season` (a row pooled over twelve of them has none), plus
+               the four on-court columns.  Needs --panel=outputs/role_panel_season.parquet.
 Prints accepted / tentative / rejected, writes outputs/csv/boruta_{mode}_{side}.csv (the importance
 history) and the YAML lines for config.yaml -> gbdt.features_* / features_full_*.  `season` is kept
 whether or not Boruta accepts it: it is the era term the prior exists for; the verdict is recorded.
@@ -19,7 +25,8 @@ ever measured here, immediately before it cost +0.054 on the criterion.  Read an
 not noise against the offline target", never as "this belongs on the board".  The criterion is the gate.
 
 usage: python scripts/50_boruta.py [--trials=50] [--sides=O,D] [--modes=residual,full,wide] [--threads=12]
-                                   [--params=cheap|config]
+                                   [--params=cheap|config] [--panel=outputs/role_panel_season.parquet]
+                                   [--first=1997] [--last=2026]
 """
 import sys
 import time
@@ -28,8 +35,10 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from eracoef import singleyear as sy  # noqa: E402
 from eracoef.config import load_config  # noqa: E402
 from eracoef.bio import PLAYER_INPUTS  # noqa: E402
+from eracoef.singleyear import ONC  # noqa: E402
 from eracoef.gbdt_prior import (BIO_BINS, CAREER, DEFAULT_FEATURES, DERIVED, FULL_FEATURES,  # noqa: E402
                                 PAST, SHOT_FEATURES, TURN_FEATURE, interaction_features, run_boruta,
                                 training_rows)
@@ -48,7 +57,12 @@ trials = int(_flag("trials", G.get("boruta_trials", 50)))
 sides = _flag("sides", "O,D").split(",")
 modes = _flag("modes", "residual,full").split(",")
 threads = int(_flag("threads", 12))
-panel = pd.read_parquet(Path(cfg["_root"]) / cfg.get("paths", {}).get("role_panel", "outputs/role_panel.parquet"))
+# `--panel=` overrides `paths.role_panel`: the single-year modes read the PER-SEASON panel
+# (outputs/role_panel_season.parquet) while everything else reads the 3-season block one.
+panel_path = Path(cfg["_root"]) / _flag("panel", cfg.get("paths", {}).get("role_panel",
+                                                                         "outputs/role_panel.parquet"))
+panel = pd.read_parquet(panel_path)
+print(f"panel: {panel_path} ({len(panel):,} rows, {panel.window.nunique()} windows)", flush=True)
 # The kitchen sink (the owner, 2026-09-07: "take the absolute fullest kitchen sink and run borutashap"): every
 # column both paths can build -- the 55 of `wide`, the era-relative Dredge twins, the career block, who he is
 # (bio.py, and the bins), his past plus-minus on both sides (PAST, which needs PAIR rows: the pooled target
@@ -62,9 +76,45 @@ SINK_NOAGG = [f for f in SINK if f not in DERIVED]
 # of the two multipliers, so the booster can be handed "two blocks per 100 in 5,000 possessions" as one
 # number instead of having to split on the rate and then again on the exposure inside every leaf.
 INTERACTIONS = [*SINK, *interaction_features(SINK)]
+# The single-year candidate set: the sink minus everything that needs a pair row or a second season of the
+# same player.  PAST and the turnover feature are banned outright ("single year or bust"); `season` is
+# dropped because a training row here is a player pooled over every season but one.  `singleyear.ONC` is
+# added -- the board carries his own season's on-court record and Boruta should get to judge it.
+SINGLE_YEAR = [f for f in SHOT_FEATURES if f != "season"] + [*CAREER, *PLAYER_INPUTS, *BIO_BINS, *ONC]
 MODES = {"residual": ("u", DEFAULT_FEATURES, "features_{}"), "full": ("rapm1", FULL_FEATURES, "features_full_{}"),
          "sink": ("pairs", SINK, "features_full_{}"), "sinknoagg": ("pairs", SINK_NOAGG, "features_full_{}"),
-         "interactions": ("pairs", INTERACTIONS, "features_full_{}")}
+         "interactions": ("pairs", INTERACTIONS, "features_full_{}"),
+         "single_year": ("loso", SINGLE_YEAR, "features_sy_{}")}
+
+
+def loso_training_rows(side, feats, panel):
+    """One row per player: his other-seasons features, and a RAPM over EVERY season as the target.
+
+    `training_rows` manufactures its target by pooling the player's other windows.  Here the target is
+    already a leave-one-out quantity -- `LeaveSeasonOutRAPM` fits one rating per player over a set of
+    seasons -- so pooling again would count it twice.  This joins it on `player_id` instead and takes
+    the weight from the possessions behind it, which is what `scripts/62_single_year_board.py` does.
+
+    The RAPM is fit over ALL seasons, not leaving one out: feature selection is a population-level
+    decision made once, like every other feature list in this project, and there is no held-out season
+    to protect at this stage.  Thirty seasons of designs are accumulated and discarded one at a time.
+    """
+    from eracoef.holdout import Context
+    from eracoef.looseason import LeaveSeasonOutRAPM
+    from eracoef.xshoot import DEFENSE_TARGETS
+    name = sy.OFFENSE_TARGET if side == "O" else sy.DEFENSE_TARGET
+    spec = DEFENSE_TARGETS[name] if name in DEFENSE_TARGETS else name
+    ctx = Context.load(cfg)
+    first = int(_flag("first", cfg.get("first_season", 1997)))
+    last = int(_flag("last", cfg.get("last_season", 2026)))
+    rapm = LeaveSeasonOutRAPM(min_possessions=sy.MIN_POSSESSIONS)
+    for s in range(first, last + 1):
+        rapm.add_season(s, ctx.design([s], spec))      # not held: ctx.design keeps only the last four
+    target = rapm.ratings(offense_lambda=sy.RAPM_OFFENSE_LAMBDA, defense_lambda=sy.RAPM_DEFENSE_LAMBDA,
+                          context_lambda=sy.RAPM_CONTEXT_LAMBDA)
+    rows = sy.prior_rows(target, panel[(panel.side == side) & (panel.poss > 0)],
+                         "offense" if side == "O" else "defense", feats)
+    return rows.reset_index(), name
 
 
 def pair_training_rows(side, feats):
@@ -88,7 +138,11 @@ yaml_lines = []
 for mode in modes:
     target, feats, key = MODES[mode]
     for side in sides:
-        if target == "pairs":
+        if target == "loso":
+            rows, tgt = loso_training_rows(side, feats, panel)
+            print(f"\n=== mode {mode} (target: a LeaveSeasonOutRAPM on {tgt}, joined not pooled), side "
+                  f"{side}: {len(rows)} rows, {len(feats)} candidates, {trials} trials", flush=True)
+        elif target == "pairs":
             rows, tgt, wd = pair_training_rows(side, feats)
             print(f"\n=== mode {mode} (target {tgt}, PAIR rows, win_decay {wd:g}), side {side}: {len(rows)} rows, "
                   f"{len(feats)} candidates, {trials} trials", flush=True)
@@ -111,7 +165,9 @@ for mode in modes:
             tbl = pd.DataFrame({"importance": imp, "verdict": [verdict.get(f, "") for f in imp.index]})
             with pd.option_context("display.max_rows", None):
                 print(tbl.to_string())
-        shipped = list(cfg["gbdt"].get(key.format(side)) or [])
+        # what the pipeline carries today, to read the verdicts against
+        shipped = list(cfg["gbdt"].get(key.format(side))
+                       or (sy.PRIOR_FEATURES if mode == "single_year" else []))
         if shipped:
             drop = [f for f in shipped if f in res["rejected"]]
             miss = [f for f in res["accepted"] if f not in shipped]

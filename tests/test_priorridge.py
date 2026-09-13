@@ -13,8 +13,8 @@ from sklearn.linear_model import Ridge
 
 from eracoef.design import FEATURES, build_design
 from eracoef.holdout import Context, Ratings, predict_season, score
-from eracoef.priorridge import (DEFAULT_CONTEXT_LAMBDAS, MAE_SCALE, PriorRidgeCV, armse, penalty_grid,
-                                team_game_mse, team_game_weights)
+from eracoef.priorridge import (DEFAULT_CONTEXT_LAMBDAS, MAE_SCALE, PriorRidgeCV, armse,
+                                calibration_miss, penalty_grid, team_game_mse, team_game_weights)
 from eracoef.simulate import simulate
 
 CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "features": FEATURES,
@@ -187,3 +187,117 @@ def test_it_produces_ratings_the_criterion_can_score(design):
     truth = truth[truth.season == 2002]
     j = rat.df.merge(truth[["player_id", "impact_O"]], on="player_id")
     assert np.corrcoef(j.o, j.impact_O)[0, 1] > 0.3
+
+
+# ------------------------------------------------------------------ the amplitude lever
+def _shrunk_prior(wd, lam=3000.0):
+    """A prior with the shape the games like and less than the amplitude they want: the board this
+    design fits with no prior at all, at a real penalty.  Any ridge-shrunk quantity is compressed."""
+    base = _fixed(lam).fit(wd, None, None).ratings_
+    return dict(zip(base.player_id, base.offense)), dict(zip(base.player_id, base.defense))
+
+
+def test_a_free_prior_scale_is_the_fixed_fit_at_the_scale_it_chose(design):
+    """`free_prior_scale` is a generalisation, and this is the sense in which it contains the old fit.
+
+    Pinning the scale at its own optimum is the same least-squares problem, so handing the fixed-centre
+    fit `scale * prior` must reproduce the free fit exactly -- not approximately.
+    """
+    _, _, wd = design
+    prior_o, prior_d = _shrunk_prior(wd)
+    free = _fixed(3000.0, free_prior_scale=True).fit(wd, prior_o, prior_d)
+    assert free.prior_scale_ is not None and free.prior_scale_.shape == (2,)
+    s_o, s_d = free.prior_scale_
+    same = _fixed(3000.0).fit(wd, {k: s_o * v for k, v in prior_o.items()},
+                              {k: s_d * v for k, v in prior_d.items()})
+    assert _fixed(3000.0).fit(wd, prior_o, prior_d).prior_scale_ is None
+    assert np.allclose(free.ratings_.offense, same.ratings_.offense, atol=1e-8)
+    assert np.allclose(free.ratings_.defense, same.ratings_.defense, atol=1e-8)
+
+
+def test_a_shrunk_prior_is_stretched_back(design):
+    """The failure this lever exists for.  A ridge-shrunk prior is compressed, and with a FIXED centre
+    it stays compressed -- the ridge can only add a penalised residual on top.  That is the single-year
+    board's offensive spread at 0.43 of the consensus.  With the scale free, amplitude is a coefficient,
+    and an unpenalised one, so the games can ask for more of the prior than they were given.
+    """
+    _, _, wd = design
+    prior_o, prior_d = _shrunk_prior(wd)
+    free = _fixed(3000.0, free_prior_scale=True).fit(wd, prior_o, prior_d)
+    fixed = _fixed(3000.0).fit(wd, prior_o, prior_d)
+    assert free.prior_scale_[0] > 1.2, free.prior_scale_
+    assert free.ratings_.offense.std() > 1.2 * fixed.ratings_.offense.std()
+
+    # and it scales: halve the prior and the fit asks for about twice as much of it
+    half = _fixed(3000.0, free_prior_scale=True).fit(
+        wd, {k: 0.5 * v for k, v in prior_o.items()}, {k: 0.5 * v for k, v in prior_d.items()})
+    assert np.allclose(half.prior_scale_, 2.0 * free.prior_scale_, rtol=1e-6)
+
+
+def test_the_free_columns_are_never_penalised(design):
+    """They are the last two of the context block, and the context penalty must not reach them."""
+    _, _, wd = design
+    prior_o, prior_d = _shrunk_prior(wd)
+    heavy = _fixed(3000.0, context=1.0e14, free_prior_scale=True).fit(wd, prior_o, prior_d)
+    assert np.abs(heavy.level_[:-2]).max() < 1e-3          # the context block really is penalised
+    assert np.all(np.abs(heavy.prior_scale_) > 0.3), heavy.prior_scale_
+
+
+def test_lam_buckets_shrink_one_group_far_more_than_the_rest(design):
+    """A bucket ratio multiplies the penalty on a `spec.col_groups` group.  The other columns move a
+    little -- the blocks are estimated jointly and they share the context -- but only a little."""
+    _, _, wd = design
+    rng = np.random.default_rng(1)
+    ids = wd.spec.ps_table["player_id"].to_numpy()
+    prior_o = dict(zip(ids, rng.normal(0, 1.0, len(ids))))
+    flat = _fixed(3000.0).fit(wd, prior_o, None)
+    bucket = _fixed(3000.0, lam_buckets={"low_poss": 50.0}).fit(wd, prior_o, None)
+    low = wd.spec.col_groups["low_poss"]
+    low_o = low[low < wd.spec.n_ps]
+    high = np.setdiff1d(np.arange(wd.spec.n_ps), low_o)
+    assert low_o.size, "the fixture has no low-possession players to bucket"
+    moved_low = np.abs(bucket.residual_[low_o] - flat.residual_[low_o]).mean()
+    moved_high = np.abs(bucket.residual_[high] - flat.residual_[high]).mean()
+    assert np.abs(bucket.residual_[low_o]).max() < np.abs(flat.residual_[low_o]).max()
+    assert moved_low > 10 * moved_high, (moved_low, moved_high)
+
+
+# ------------------------------------------------------------------ the amplitude diagnostic
+def test_calibration_miss_is_zero_when_calibrated_and_symmetric_in_the_factor():
+    """|log(scale_off)| + |log(scale_def)|.  A board at half the right spread and one at twice it are
+    equally wrong, which a raw distance from 1 would get wrong by a factor of four."""
+    assert calibration_miss(1.0, 1.0) == 0.0
+    assert calibration_miss(2.0, 1.0) == pytest.approx(calibration_miss(0.5, 1.0))
+    assert calibration_miss(1.5, 1.0) < calibration_miss(2.0, 1.0)
+    assert calibration_miss(1.2, 1.2) == pytest.approx(2 * calibration_miss(1.2, 1.0))
+    got = calibration_miss([1.0, 2.0], [1.0, 1.0])
+    assert got.shape == (2,) and got[0] == 0.0
+    assert np.isnan(calibration_miss(0.0, 1.0)), "a non-positive scale has no log and no verdict"
+
+
+def test_the_scale_reads_the_compression_factor_back(design):
+    """Why the miss is an amplitude instrument: `scale_off` / `scale_def` are regression coefficients on
+    each side's lineup contribution, so halving a board multiplies them by exactly two.
+
+    That is the property the team-game score does not have.  A team-game total is linear in a per-player
+    linear map, so out of sample -- where the ratings explain little of the variance -- the cost of a
+    wrong amplitude is second order, which is how the two target penalties that scored 0.0020 apart came
+    to differ by a factor of two in offensive spread.  In sample, as here, the score does notice; the
+    scale notices either way, and by the exact factor.
+    """
+    sim, ctx, wd = design
+    rng = np.random.default_rng(3)
+    ids = wd.spec.ps_table["player_id"].to_numpy()
+    prior_o = dict(zip(ids, rng.normal(0, 1.5, len(ids))))
+    prior_d = dict(zip(ids, rng.normal(0, 1.5, len(ids))))
+    full = _fixed(3000.0).fit(wd, prior_o, prior_d).as_ratings_frame()
+    half = full.assign(o=full.o * 0.5, d=full.d * 0.5)
+
+    def read(frame):
+        return score(predict_season(Ratings(frame), wd, level="home"))
+
+    a, b = read(full), read(half)
+    assert b["scale_off"] == pytest.approx(2.0 * a["scale_off"], rel=1e-6)
+    assert b["scale_def"] == pytest.approx(2.0 * a["scale_def"], rel=1e-6)
+    assert (calibration_miss(b["scale_off"], b["scale_def"])
+            > calibration_miss(a["scale_off"], a["scale_def"]))

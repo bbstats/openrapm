@@ -51,6 +51,7 @@ MODEL_LAYER = [
     "priorridge.py",    # the ratings ridge: prior as the centre, penalty by game-grouped CV
     "rloocv.py",        # rebalanced leave-one-out: the splitter and the partner rule, numpy only
     "simulate.py",      # the synthetic fixture the tests fit against
+    "singleyear.py",    # the single-year prior's feature list and its per-player aggregation
 ]
 
 # Model code that still reaches its own data, and what through.  Nothing may be added here.

@@ -33,7 +33,8 @@ CELL_FIT_PRIOR = '\n'.join([
     '    model.fit(train[features].to_numpy(dtype=float), train[column].to_numpy(dtype=float),',
     '              sample_weight=train.possessions.to_numpy(dtype=float))',
     '',
-    '    held = panel[(panel.side == side) & (panel.season == held_out_season)]',
+    '    held = singleyear.season_frame(',
+    '        panel[(panel.side == side) & (panel.season == held_out_season)], features)',
     '    return pd.DataFrame({"player_id": held.player_id.to_numpy(),',
     '                         "prediction": model.predict(held[features].to_numpy(dtype=float))}), model, train',
 ])
@@ -71,6 +72,7 @@ from chimeraboost import ChimeraBoostRegressor
 ROOT = Path("A:/code/spmm")
 sys.path.insert(0, str(ROOT / "src"))
 
+from eracoef import singleyear
 from eracoef.config import load_config
 from eracoef.holdout import Context, Ratings, predict_season, score
 from eracoef.inseason import season_frac
@@ -95,18 +97,12 @@ code(r"""
 panel = pd.read_parquet(ROOT / "outputs/role_panel_season.parquet")
 panel = panel[panel.poss > 0].reset_index(drop=True)
 
-box_score    = ["fg3m", "fg3_miss", "fg2m", "fg2_miss", "ftm", "ft_miss",
-                "orb", "drb", "ast", "tov", "stl", "blk", "pf"]
-playing_time = ["poss_pct", "gs_pct", "age"]
-shot_quality = [c for c in panel.columns if c.startswith("shot_")]
-body         = ["height", "weight", "draft_pick", "exp_yrs", "entry_age", "tenure", "n_teams"]
-on_court     = [c for c in panel.columns if c.startswith("onc_")]
-
-features = box_score + playing_time + shot_quality + body + on_court
+features = singleyear.PRIOR_FEATURES        # 54 names; see src/eracoef/singleyear.py for what and why
 
 print(panel.shape, "seasons", panel.season.min(), "-", panel.season.max())
-print(len(features), "features")
+print(len(features), "features:", ", ".join(features))
 assert not any(c.startswith("past_") for c in features), "single year or bust"
+assert "season" not in features, "a row pooled over twelve seasons has no season"
 """)
 
 md(r"""
@@ -245,10 +241,10 @@ chimera_defense = dict(config["gbdt"]["params_def"])
 
 
 def aggregate_features(held_out_season, side):
-    # one row per player: his features averaged over every season but held_out_season, by possessions
-    rows = panel[(panel.side == side) & (panel.season != held_out_season)]
-    totals = rows[features].mul(rows.poss, axis=0).groupby(rows.player_id).sum()
-    return totals.div(rows.groupby("player_id").poss.sum(), axis=0)
+    # One row per player: his INPUTS averaged over every season but held_out_season, by possessions, and
+    # the ratios and shot-quality columns built on that average.  The order matters -- a possession-
+    # weighted mean of ts is not the ts of the mean.  singleyear.aggregate does both halves.
+    return singleyear.aggregate(panel[(panel.side == side) & (panel.season != held_out_season)], features)
 """)
 
 code(CELL_FIT_PRIOR)
@@ -274,7 +270,8 @@ A ratio much above 1.0 means the prior is being asked to extrapolate, which a tr
 """)
 
 code(r"""
-one_season = panel[(panel.side == "O") & (panel.season == season)][features].std()
+one_season = singleyear.season_frame(
+    panel[(panel.side == "O") & (panel.season == season)], features)[features].std()
 career = training["O"][features].std()
 shift = pd.DataFrame({"one season": one_season, "career average": career,
                       "ratio": one_season / career.replace(0, np.nan)})
@@ -412,7 +409,7 @@ md(r"""
 
 | name | what it changes |
 |---|---|
-| `features` | what the prior sees. Drop `on_court` for box-score-only, `body` for production-only |
+| `features` | what the prior sees (`singleyear.PRIOR_FEATURES`). Anything in it must be a panel column or something `gbdt_prior.add_derived` can build from one |
 | `RAPM_OFFENSE_LAMBDA` / `RAPM_DEFENSE_LAMBDA` / `RAPM_CONTEXT_LAMBDA` | how hard the target is shrunk, per block. Re-sweep if you change the features, the seasons or the possession floor |
 | `LeaveSeasonOutRAPM(min_possessions=)` | how many possessions a player needs to be in the target at all |
 | `chimera_offense` / `chimera_defense` | the boosters, tuned values out of `config.yaml` |
