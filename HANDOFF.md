@@ -341,7 +341,12 @@ board here, against `data/external/consensus.csv` on 2024-26 with 1,000+ possess
 |---|---|---|---|---|
 | defence share of off+def variance | 23.8% | **52.0%** | **39.6%** | 55.3% |
 | defence / offence spread, relative to the consensus | 1.00 | **1.86x** | **1.45x** | 1.99x |
-| share of defensive variance that is BETWEEN teams | 19.5% | 9.9% | **25.4%** | 10.7% |
+| R-squared of the defensive rating on TEAM | 19.5% | 9.9% | **25.4%** | 10.7% |
+
+The third row is a one-way ANOVA: regress each player's defensive rating on nothing but which team he
+plays for, and read the R-squared.  It answers "how much of a player's defensive rating can you guess from
+his team alone".  A rating that is a property of the PLAYER should score low on it; the consensus scores
+19.5%.
 
 **Read the column the observation was made on.**  `https://bbstats.github.io/openrapm/` is built by GitHub
 Pages from **`main`/docs**, and `main`'s `docs/data/ratings.json` is still the THREE-YEAR WINDOW board built
@@ -353,11 +358,11 @@ window board, whose 2024-26 top is Shai, Wembanyama, Kawhi, Jokic, Luka -- not a
 
 - The live window board and the `artifacts/` season board are badly tilted (52% and 55% of off+def variance
   on defence, against 23.8%) but their defensive ratings are LESS team-clustered than the consensus's
-  (9.9% and 10.7% between teams, against 19.5%).  Their problem is amplitude: defence is simply too wide
-  relative to offence.
+  (9.9% and 10.7% against 19.5%).  Their problem is amplitude: defence is simply too wide relative to
+  offence.
 - The single-year board halves the tilt (39.6%, 1.45x) and acquires the other defect instead: 25.4% of its
-  defensive variance is between teams, the only board here ABOVE the consensus.  Its problem is
-  attribution: it is handing a player his team's defence.
+  defensive rating is predictable from his team alone, the only board here ABOVE the consensus.  Its
+  problem is attribution: it is handing a player his team's defence.
 
 Read the rows separately, because they are two different defects.
 
@@ -370,8 +375,20 @@ row, so it is a defect inherited and roughly halved, not one introduced here.
 
 **Row three is the new one, and it is the more serious, because this branch CAUSED it.**  A player rating
 should be a property of the PLAYER, so most of its variance should sit WITHIN teams; the single-year board
-puts 25.4% between teams against the consensus's 19.5%, where both older boards sit near 10%.  We are
-handing a player his team's defence, and we started doing it here.
+puts 25.4% against the consensus's 19.5%, where both older boards sit near 10%.  We are handing a player
+his team's defence, and we started doing it here.  Cleveland is the clearest case -- a good defensive team,
+and our board likes nearly everyone who played there.  Defensive rank of the 475 players in the join:
+
+| | this board | consensus |
+|---|---|---|
+| Evan Mobley | 6 | 33 |
+| Jarrett Allen | 11 | 45 |
+| Donovan Mitchell | 56 | 166 |
+| Larry Nance Jr. | 85 | 264 |
+| Max Strus | 126 | 298 |
+| **James Harden** | **141** | **441** |
+
+Mobley and Allen really are elite defenders and both boards say so.  Harden at 141st is the tell.
 The mechanism is not mysterious and it is documented in `DECISIONS.md`:
 
 - `rating_def` is essentially all prior.  Over thirty seasons `prior_def` has sd 1.057 and `u_def` -- what
@@ -391,11 +408,11 @@ on-court defensive impact is 0.26, against 0.53 on offence.
 
 1. **Drop `onc_d` from the defensive list only**, keeping `onc_o` on offence.  One flag away -- add the
    split to `singleyear.FEATURE_SETS`.  It will cost defensive rank agreement (the no-`onc` board read 0.667
-   against a 0.75 floor) and should cut the between-team share; the question is the exchange rate, and
+   against a 0.75 floor) and should cut the team R-squared; the question is the exchange rate, and
    whether the plus-minus stage picks up the slack once the prior stops pre-empting it.
 2. **Weight the two sides in `rating_total`** instead of summing them raw.  The criterion cannot choose the
    weight -- a team total is linear in a per-player linear map, so it is nearly blind to exactly this -- so
-   it would have to be chosen on the between-team share or on the consensus, and choosing on the consensus
+   it would have to be chosen on the team R-squared or on the consensus, and choosing on the consensus
    is against the standing rules.  Prefer 1 and 3.
 3. **Give the defensive side a teammate-adjusted on-court feature** rather than the raw one: `onc_d` minus
    the possession-weighted mean of his teammates' `onc_d`, or the APM already in the panel (`apm`, which IS
@@ -403,8 +420,8 @@ on-court defensive impact is 0.26, against 0.53 on offence.
    the panel already carries both columns.
 
 **Measure it with** `scratch/consensus_report.py` (the three rows above are one command over several boards)
-and the between-team share, which is four lines of pandas on the consensus join -- neither is in the test
-suite yet, and the between-team share probably should be, because no existing floor catches it.
+and the team R-squared, which is four lines of pandas on the consensus join -- neither is in the test
+suite yet, and the team R-squared probably should be, because no existing floor catches it.
 
 **Three things still open, in the order they matter:**
 
