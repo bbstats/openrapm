@@ -909,6 +909,70 @@ unpenalised fixed column can be identically zero (a fold with no garbage-time ro
 the unpenalised diagonal only, which is the same fit to nine figures.  A season went from about twenty
 minutes to about thirty seconds, which is the difference between a sweep being affordable and not.
 
+### The year-over-year test, and what it says about the single-year rankings (2026-09-13)
+
+**The test.**  Rate a season from that season's games only.  Use those ratings, and nothing else, to predict
+every stint of the season BEFORE it and the season AFTER it, with only the level (intercept and home edge)
+refit on the scored season.  Score against the points actually scored, per stint and summed to team-games.
+Twenty-eight scored seasons (1998-2025), each predicted twice, every table paired by scored season.
+`scripts/63_yoy.py`, on top of `holdout.py`'s runner; nothing is fit inside it, so what is measured is
+exactly the table handed in.
+
+Why it replaces the within-season 75/25 split as the test for this pipeline: the 75/25 split holds a quarter
+of the games out of the ridge but not out of the prior's on-court features (the leak above); here the scored
+games are a different season from the rated one, so nothing in the rated season's prior or evidence has seen
+them.  It is the owner's own reliability test (2026-09-04), run for the first time on one-season ratings.
+
+One requirement, and it turns out to cost almost nothing: the prior's population-level fits for the rated
+season must not have seen the two seasons being scored.  `scripts/62_single_year_board.py
+--exclude_neighbours=1` leaves the rated season and its two neighbours out of the leave-season-out target and
+out of the prior's training rows (`outputs/season_ratings_sy_yoy.parquet`).  Against the same pipeline with
+the neighbours in, that is worth **+0.21 team-game MSE, 15 of 56 better** -- the leak through population
+coefficients is small.  The 75/25 on-court leak (+0.375 per 100 at z +7.47) was the one that mattered, and
+this test does not have it.
+
+**What it says.**  Pooled over both directions, 56 scored-season observations, team-game error in points per
+100 (`game_armse`); `scale_off` / `scale_def` are what the scored season wants each side multiplied by:
+
+| | game_armse | scale_off | scale_def | paired vs single-year, team-game MSE |
+|---|---|---|---|---|
+| single-year rankings, neighbours excluded | 8.804 | 0.73 | 0.71 | -- |
+| single-year rankings, neighbours in (`season_ratings_sy`) | 8.812 | 0.72 | 0.71 | +0.21, z +2.2, 15 of 56 |
+| shipped rankings (`artifacts/season_ratings.parquet`) | **8.587** | 1.18 | 0.78 | **-5.93, z -16.9, 56 of 56** |
+| single-year PRIOR alone (`prior_*` columns) | 8.840 | 0.71 | 0.70 | |
+| shipped PRIOR alone | 8.681 | 1.32 | 1.51 | -4.32 vs the single-year prior, 50 of 56 |
+| single-year offence + shipped defence | 8.730 | 0.76 | 0.73 | -2.04, z -12.7, 52 of 56 |
+| shipped offence + single-year defence | 8.659 | 1.13 | 0.74 | -3.97, z -14.3, 55 of 56 |
+
+Three findings, in the order they matter.
+
+1. **The single-year rankings predict the neighbouring seasons worse than the shipped rankings, in every one
+   of 56 comparisons, and the gap is ranking, not amplitude.**  After each side is rescaled to what the scored
+   season wants, the shipped rankings are still better by 6.2 stint MSE (z -19.5, 56 of 56), against 7.5
+   before rescaling.  The `movers` split shows the gap in every group, including lineups where none of the
+   ten changed team, so it is not specifically a team-to-team attribution failure.
+2. **The prior is the weak stage.**  The shipped prior on its own (8.68) beats the finished single-year
+   rankings (8.80); the ridge stage adds about 0.04 per 100 on top of the single-year prior and about 0.09 on
+   top of the shipped one.  Both sides lose.  Swapping in the shipped offence is worth -3.97 and the shipped
+   defence -2.04, and **the defensive comparison is the legal one**: `features_full_D` is eleven box rates
+   with no on-court and no `past_*` column, so it is a single-year-legal prior that beats ours -- whereas
+   the shipped offensive list carries `past_apm`, `past_poss`, `past_rapm`, the player's own other seasons,
+   which ruling 12 bans, so its offensive edge is not a target this pipeline may chase.
+3. **Amplitude, both tables, in numbers.**  The single-year rankings are too wide for the neighbouring
+   season on both sides -- 0.73 offence, 0.71 defence, below 1 in 28 of 28 seasons in both directions.  The
+   free prior scale asks for 2.8x the prior within the season; the neighbouring season wants about 2.0x.  The
+   shipped rankings are too NARROW on offence (1.18) and too WIDE on defence (0.78), which is the owner's
+   "defence is counted too much" as a measurement.  A diagnostic: the score barely moves under a uniform
+   rescale, and finding 1 says the gap is elsewhere.
+
+**Decision rule from here.**  A change to the single-year pipeline is adopted only if it improves the pooled
+year-over-year team-game error with a paired mean difference at least twice its standard error over the 56
+observations, with no gross miss on the consensus checks; ties go to the simpler version.  One change per
+run, named after the change.  The consensus report (`scratch/consensus_report.py`) now also prints
+`def_share` (defence's share of rating variance) and `team_r2_*` (how much of a player's rating his team
+alone predicts); the neighbours-excluded table reads 0.758 / 0.788 / 0.758 agreement, top-five overlap 3,
+defensive team R-squared 0.241 against the consensus's 0.195.  Reported every time, chosen on never.
+
 ## What was tried and rejected
 
 **The LRBoost branch (a boosted correction on a frozen linear prior).** Five things had to be right before it

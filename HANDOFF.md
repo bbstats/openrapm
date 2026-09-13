@@ -1,578 +1,144 @@
-# Handoff: single year or bust, end to end, with the penalties swept
-
-**This file is transient.** It exists to start the next session and should be deleted when Phase 1
-ships. `DECISIONS.md` is the permanent record and carries every number quoted here; do not turn this
-back into a lab notebook — the last one reached 7,800 lines and was deleted on purpose (tag
-`archive/research-2026-09` has it).
-
-Branch `cleanup`, 49 commits ahead of `main`, working tree clean, `main` untouched.
-`pytest -q`: **271 passed, 1 xfailed, ~120 s.**
-
----
-
-## What the owner decided, and what it now means
-
-Rulings, not suggestions.
-
-1. **One rating per player per season, from that season's games only** — regular season and playoffs
-   together, nothing else. **Shipped 2026-09-10.** On low-minute players: *"low minute players should
-   have REALLY GOOD REASONABLE PRIORS now. if they dont we should fix that eventually."* → item 2 below.
-2. **The 3-year block is gone**, as a product and as a training substrate. Gone from the product; the
-   *prior's panel* is still block-granular, which is the open half (item 1 below).
-3. **The playoff delta is gone.** Playoff games join the fit like any other games. Done.
-4. **Two layers.** Anyone may add a data source; the model layer may not open a file. *"anything that
-   is ever trained on/fit on other than just for inference CANNOT USE the 'current NBA season' until
-   the finals are over."* All data may always be **loaded**; the current season may never be **trained on**.
-5. **Keep chimeraboost.** *"chimeraboost is great :) keep it for now. trying to get more users!"*
-6. **PR gate: PBO, plus a runtime test that fails above 5x the baseline.**
-7. **Delete hard**, tag first.
-8. **The archetype guard is unsupervised** (2026-09-10): *"the guardrail is arbitrary ... would rather
-   use a bayesian gaussian mixture (legit unsupervised clusters rather than center/big/guard)"*. Done.
-   The open half is whether an archetype penalty belongs in the FIT, not just in a guard.
-
-9. **Bench players need to be in the accuracy test** (2026-09-10). Done; see item 2.
-10. **Ship `board_D_interactions_stats_possplayed`** (2026-09-10).
-11. **Rank is a within-roster question, money is a between-roster one** (2026-09-11). SUPERSEDED by 13.
-12. **Single year or bust** (2026-09-11). See item 6.
-13. **The player-level losses are gone** (2026-09-12): their "truth" was a plain RAPM of the scored games,
-   and a plain RAPM is worse than the board being scored, so ranking against it measured how close we were
-   to being worse. Tagged `archive/player-losses-2026-09-11` and deleted. What the owner wants instead --
-   *"how well does this predictive value carry over during a trade"* -- is NOT built and was deferred
-   deliberately.
-14. **Every number carries its unit and its metric name** (2026-09-12). No bare figures.
-
-12. **Single year or bust** (2026-09-11): *"i dont want to do that. single year or bust."* A player's
-   season-H rating may use H's games for the evidence and **no games of his own from any other season**.
-   The model's coefficients may still be learned from history -- that is what a prior is -- but the
-   `past_*` block is a per-player channel and it is out. **This unships `board_D_interactions_stats_possplayed`
-   as specified**: its defensive list carries `poss_pct_x_past_apm` and `past_apm`. The criterion cost is
-   known and is not small -- `board_D_interactions_nopast` was +0.005 per 100, i.e. the whole defensive
-   gain was the past block. Whether single-year defense also loses on the PLAYER losses is open, and
-   `notebooks/single_year.ipynb` is where the owner is answering it.
-
-Standing rules: accuracy wins provided the testing is robust and the thing stays open-source-shippable;
-the external consensus is a sanity check and never a fitting target; between two candidates the
-criterion cannot separate, take the simpler and faster. **The criterion is the tiebreak between
-candidates — which product to build is not a tiebreak, and a ruling names it.**
-
----
-
-## What the board is today
-
-`config.yaml` → `ratings_prior.season_board`: system `ks00_lam05_ow_w0.25` (kernel `{0: 1.0}`), map
-`linear+sat` per side from `artifacts/calmap_insea_ks00_q75.parquet`. `artifacts/season_ratings.parquet`
-and `docs/data/ratings.json` are built from it: 14,578 rows, 1997–2026, 1.0 MB.
-
-Against the three-season board it replaced, on the 475 players both match in the consensus:
-
-| | shipped (`ks00`) | the `ks52` board it replaced |
-|---|---|---|
-| criterion, mapped, K=3 q75 | 112.36 | **111.80** (+0.557, z +2.57, 10 of 28 seasons) |
-| consensus total / offense / defense | **0.835** / **0.835** / 0.756 | 0.809 / 0.824 / 0.755 |
-| defensive spread | 1.33 | 1.38 |
-| archetype spread (`58_archetype.py`) | **0.145** | 0.213 |
-| consensus total, under 5k own possessions | **0.651** | 0.643 |
-
-Ten of ten floors in `tests/test_vs_consensus.py` pass. **The pooling question is settled**: the floors
-stay pooled over the three seasons the consensus covers even though the board is single-season, because
-the consensus snapshot is itself a multi-season blend and every floor was calibrated on that estimand.
-All ten passed unchanged, so nothing needed re-basing except the archetype floor (0.30 → 0.25, as its own
-docstring instructed). Score a candidate board without touching the shipped one:
-
-    OPENRAPM_BOARD=outputs/season_ratings_cand.parquet .venv/Scripts/python -m pytest tests/test_vs_consensus.py -q
-
----
-
-## Phase 1, what is left
-
-### 1. The prior panel stays block-granular — DECIDED 2026-09-10, with one thing to fix
-
-The board is one season; `artifacts/role_panel.parquet`, the prior's training substrate, is one row per
-player-window and **stays that way for now**. The season twin was built and scored end to end
-(`outputs/season_ratings_spanel.parquet`, from `sp_ks00_lam05_ow_w0.25`):
-
-| | block panel (ships) | season panel |
-|---|---|---|
-| criterion | 112.36 | 112.42 (+0.063, z +0.70 — a tie) |
-| consensus total / offense | 0.835 / 0.835 | **0.846** / **0.865** |
-| consensus defense | **0.756** | **0.739 — below the 0.75 floor** |
-| rating defensive sd | 1.33 | 1.22 |
-| PRIOR defensive sd | **0.682** | **0.476** |
-| archetype spread | 0.145 | **0.108** |
-
-Nine floors pass; `test_defense_agrees_with_the_consensus` fails. The old claim that a season-granularity
-prior "loses half its defensive spread" is **real, and it is not the missing `onc_*` columns** — this panel
-has them. The defensive prior is 30% narrower and the finished defensive rating follows it down. Offense
-gains from the finer substrate, so this is a trade, not a worse panel: **fix the defensive attenuation and
-the season panel probably wins.** `spy` (cube-rooting `win_decay` to the same decay per year) is +0.002,
-z +0.06, so it is not the fix by itself.
-
-Reproduce with the commands at the bottom of this file. `--tag=spanel2` is the current dump; the earlier
-`insea_spanel` one predates the zero-weight-season fix and should not be read.
-
-### 2. Make the prior carry low-minute players -- MEASURED, and one ruling is waiting
-
-**The criterion cannot see this question.** It is scored at team-game level, where a 200-possession player is
-a rounding error, so it calls every change to the bench a tie. `scripts/61_lowposs.py` is the instrument that
-can see it: refit the prior with one panel window excluded, predict that window's own rows, compare to the
-row's training target, and report by POSSESSIONS PER SEASON. On the shipped board, skill by bucket:
-
-| poss per season | <250 | 250-500 | 500-1500 | 1500-4500 | 4500+ |
-|---|---|---|---|---|---|
-| offense | 0.193 | 0.173 | 0.179 | 0.255 | **0.480** |
-| defense | 0.096 | 0.160 | 0.171 | 0.265 | **0.327** |
-
-A starter's prior is two to five times as good as a bench player's. That is the problem, quantified.
-
-**The handoff's lever was the wrong one, and the right one is measured.** `roles.design7` has no body -- but
-the board runs `mode="full"` on both sides and `spm.offset` returns `np.zeros(2 * m)` on exactly that
-condition, so the Simple SPM offset is identically zero in the shipped board. `design7` reaches the rating
-only through the `rapm1` column `49_role_panel.py` writes into the panel. The live lever is `gbdt_features`,
-and the finding is in `DECISIONS.md`: **height belongs nowhere, weight belongs on defense.** `board_D_weight`
-(`weight15` added to the 11-feature defensive prior) is a criterion tie at z -0.32, passes ten of ten floors,
-and improves the prior at <250 (z -1.39) and 250-500 (z -1.90) possessions and nowhere else. `board_D_height`
-does the reverse -- helps the middle and top, makes the deepest bench worse, and fails the defensive floor at
-0.7485.
-
-**Ruling 9, 2026-09-10:** *"Bench players need to be in the accuracy test."* Done -- `53_calmap.py` takes
-`--splits=` now and `evaluate` / `unmapped_rows` score each held-out season inside groups. The pooled row is
-bit-identical either way (`test_splits_reach_the_calmap_scorer`).
-
-**Use `--splits=game_bench_share`, not `--splits=exposure`.** This cost a round trip and is trap 16 in `DECISIONS.md`.
-`by_exposure` labels a STINT, so its groups cut team-games in half, and the criterion sums a team's points
-over its rows in a game -- on a partial mask that is a partial point total against a level fitted on complete
-games. Its groups recombine to 337.6 where the pooled score is 113.6. It produced two confident wrong numbers
-before the recombination check caught it (a z of -2.16 for `board_D_weight` that is not there, and a story about
-the calibration map taxing the bench that is backwards). `score` returns NaN for `tg` on any mask that cuts a
-team-game now, so it cannot happen again; a stint-cutting split is read on `mse`.
-
-`by_game_bench_share` (`game_bench_share`) bins each TEAM-GAME by the share of its possessions played by players the training
-block saw fewer than 500 of. Constant within a team-game, recombines to the pooled score exactly.
-
-**What it says.** The calibration map's exposure term is *not* taxing the bench -- against no map at all it is
-worth -1.14 in the least bench-heavy games and **-4.47 (z -3.33)** in the 15-30% group, its largest gain by
-far, where plain `linear` manages -0.87. And `board_D_weight` is not a candidate: under `game_bench_share` it is -0.022,
--0.003, +0.097 and +0.351 across the four groups, nothing significant, and the two bench-heavy groups mildly
-favour the shipped board. It is -0.396 at z -2.73 on zero-exposure rows at STINT level, which is a real
-measurement of a different unit; the criterion's unit is the team-game and it says no.
-
-**Ruling 10, 2026-09-10, and it is the one that worked:** *"games started% and minutes played can 100%
-help us here"* -> *"gs% * feature and poss played % x feature, for all available features, boruta test adding
-in these interaction features"*. Built (`gbdt_prior.interaction_features`, `50_boruta.py --modes=interactions`) and
-measured end to end. **`board_D_interactions` is a finished candidate that passes every gate**, and the case for it
-is in `DECISIONS.md`:
-
-| | shipped | `board_D_interactions` |
-|---|---|---|
-| criterion, mapped, K=3 q75 | -- | **-0.090 per 100, z -1.68, 19 of 28 seasons** |
-| consensus total / offense / defense | 0.8354 / 0.8350 / 0.7565 | 0.8335 / 0.8354 / **0.7583** |
-| floors | 10/10 | **10/10** |
-| prior error, <250 poss per season | -- | **-0.138 (z -3.94, 9 of 10 windows)** |
-| prior error, 250-500 | -- | **-0.095 (z -4.45, 9 of 10)** |
-
-It is the shipped defensive list plus eight interaction features; **nothing else this session moved a single possession
-bucket.** Boruta rejected `gs_pct` and `poss_pct` outright on both sides while accepting eight of their
-interaction features on defense -- gs% and poss played % carry nothing as columns of their own.
-
-**Run the ablation before you believe any of it, because it changes the story.** `board_D_past_only` (the raw
-PAST block on defense, no interaction features) is **-0.133 at z -2.68 over 20 of 28** -- better on the criterion, and
-the first thing since the single-season board to clear |z| = 2 -- but it **fails the defensive consensus
-floor at 0.7468**. `board_D_interactions_nopast` (interaction features, no past) is +0.005 on the criterion: nothing. So the criterion
-gain is the past block arriving on a defensive prior that had no `past_*` column at all, and the interaction features'
-job is different: they cost 0.043 of that gain, buy back 0.0115 of consensus defensive agreement, and carry
-the whole bench improvement (z -4.39 at 250-500 with no past block present). **Only the pair is shippable.**
-
-**The owner's call:** ship `board_D_interactions_stats_possplayed` -- the shipped defensive list, the eight accepted
-interaction features, the six original stats they are built from, and `poss_pct`. -0.147 per 100 at z -2.74
-over 20 of 28 seasons, ten of ten floors, the defensive prior better in all five buckets and all ten panel
-windows in the two lowest. `board_D_interactions` (interaction features with no original stats) was the earlier,
-weaker version of the same idea at z -1.68. The criterion is -0.090 at z -1.68, which the standing tie rule
-would not act on alone -- but every floor passes, defensive agreement goes UP, and the prior improves
-significantly in all five buckets. Offense is rejected (`board_OD_interactions` drops offensive consensus to 0.8257).
-
-**What is still open on item 2 after this.** `game_bench_share` says the criterion's team-game gain sits in the games
-with the FEWEST barely-seen players (-0.105 at z -2.29 in the 0-5% group) and is slightly negative, not
-significant, in the bench-heavy ones. So the bench improvement is real in the prior and still invisible to
-the criterion's own unit. That gap is the thing ruling 9 was aimed at and it is not closed.
-
-**Two things already measured, so do not redo them.** The bottom of the board is the calibration map's
-exposure term, not a defect in the prior: players under 250 possessions take -2.85 from the map, and
-re-fitting that map on the single-season kernel changed it by 0.08 (the `ks52` map gave -2.77 on the
-same players). It is what the games ask for at 200 possessions. And the offensive prior's archetype
-tilt (-0.469 against bigness, on every kernel and every map) is an offense/defense **attribution**
-disagreement with the consensus, not a bias: the total gap is +0.068.
-
-### 3. Finish re-picking the constants
-
-Four are done and the old headline ("none of them transport") is already wrong:
-
-| constant | verdict, 2026-09-10 |
-|---|---|
-| `lam_plugin` (the board's effective 5,726) | **unchanged.** Interior minimum, z +2.34 above and +1.16 below; ×0.71 tied at z −0.11 |
-| `lam_ratio_plugin` (0.6245) | **unchanged.** Flat: ×0.5 and ×2 are +0.060 and +0.061, z +1.05 and +1.19 |
-| `low_poss_threshold`, `starter_poss_threshold` | **1500/4500 → 500/1500.** Design possessions are one season now. Touches no rating (`lam_buckets` is empty; the 2026 fit is bit-identical) — it names the diagnostic groups |
-| `boost_min_poss` (4500) | **dead.** No reader in `src/` or `scripts/`. Delete it with the booster |
-| `gbdt_win_decay_def` (0.280024) | **unchanged, and it transports.** Seven points; nothing separates at \|z\| >= 2, but the sign is monotone -- every value below 0.280 is better, every value above it worse, and 1.0 ("pool every window alike") is the worst point on the grid. The low end is a plateau: 0.035 / 0.070 / 0.140 are within 0.006 per 100 of each other |
-
-`board_lam<m>` and `board_lr<m>` in `systems.py` register those sweeps on the exact system that ships:
-re-run with `53_calmap.py dump --tag=lamsweep` then `fit --tag=lamsweep --maps=linear+sat`. **Every
-sweep must bracket the current value on both sides** — the old lambda grid was {0.125, 0.25, 0.5, 2.0}
-with no 1.0 in it, so 0.5 had won a boundary it was never asked to beat.
-
-Two decays are left and both are unblocked: `gbdt_win_decay` (0.514) and `PAST_DECAY`
-(`gbdt_prior.py`, 0.5). Sweep them the way `board_defdecay_<value>` did -- and note what that sweep cost to get right:
-the first grid's low end won, which is an argmax on a boundary and has chosen nothing, so it needed a second
-pass beneath it. Bracket on both sides FIRST. Decay 0 is not a value this dial has:
-`_pooled_by_distance` weights every other window by `0 ** |i - j|`, `training_rows` keeps only `other_w > 0`,
-and the booster gets an empty frame.
-
-Left: `lam_scale`, the three decays, `gbdt.params` / `params_def`,
-`features_full_O` / `_D`, `k3 = 450` (`xshoot.py:431`), `FACTOR_LAMS` (`fastfit.py:65`), and the shipped
-targets `xpts_ft` / `x3def_w0.25`. `FACTOR_LAMS` and `xpts.FIXED_LAMBDA` carry comments saying they were
-selected by REML **on 2024-2026** — the current block — and then held fixed everywhere, inside the
-criterion included.
-
-### 4. The evaluation is scored on PLAYERS now -- BUILT 2026-09-11, one half still open
-
-*"players is the only thing that matters here."* Two player-level losses live beside `score()` in
-`holdout.py`, every player counted once, and ruling 11 (2026-09-11) says which pairs each one runs over:
-**rank WITHIN a roster** (*"rank should only apply to within that team"* -- teammate pairs, Kendall tau-b;
-`tau_league` and a league-wide top-50 concordance sit beside it) and **dollars ACROSS rosters** (*"money
-should only apply to trades (really mid season here)"* -- cross-team pairs, the money misallocated taking one
-for the other; `money_skill` is the share of a coin-flip board's loss avoided). On a `_q75` frame the scored
-possessions are the season's last quarter, so the dollars are already deadline-onward. `45_holdout.py
---players` and `53_calmap.py --players [--truth-lam=X]` both print them; the full case, the three design
-decisions that each reversed a number, and the two new traps are in `DECISIONS.md`.
-`tests/test_player_loss.py` is twelve tests.
-
-**What it decided.** `board_D_interactions_stats_possplayed` wins at player level too, on every measure at
-both truths (28 seasons, K=3, q75 frames): within-roster tau **+0.0074 at z +3.17** and dollars **-29,821 at
-z -3.22** at `--truth-lam=100`, +0.0035 (z +1.75) and -1,075 (z -1.68) at the default truth. The within-roster
-question separates the two boards almost twice as hard as the league-wide one, which is the dilution the
-ruling was aimed at. First evidence for the owner's call from a loss that can see the bench.
-
-**Read every player-level verdict at both truths**, and read `tau_pairs` before reading a possession bucket.
-The calibration map is tau -0.0269 at z -6.82 against the default (shrunk) truth and +0.0060 at z +1.35
-against the near-unbiased one, so the player loss has decided nothing about the map -- a verdict that changes
-sign between the two has decided nothing. And within-roster tau in the 100-250 bucket rests on ~37 teammate
-pairs a season, so its z's are noise; read the bottom of the board on `tau_league`.
-
-    .venv/Scripts/python scripts/53_calmap.py fit --tag=verify2 --k=3 --maps=linear+sat --players         --systems=ks00_lam05_ow_w0.25_q75,board_D_interactions_stats_possplayed_q75
-
-**What is left: the year-over-year form.** Score a season-H board against the seasons AFTER H -- the owner's
-reliability criterion -- which needs a training set that stops before H, because the criterion's symmetric
-neighbourhood already contains H+1 and H+2. A different RUN, not a different loss: `Holdout` takes the
-truth window from the frame it is handed, so a run whose training block ends at H-1 and whose scored frame is
-H+1..H+3 gets the number with no new code. Nobody has done it.
-
-### 6. The single-year pipeline, and where it stands (2026-09-13)
-
-Ruling 12 ("single year or bust") turned into a working pipeline. Three stages, all of them plain
-scikit-learn-shaped, none of them fit on season H:
-
-1. **Target** -- `src/eracoef/looseason.py`, `LeaveSeasonOutRAPM`: one rating per PLAYER over every season
-   except H, players with 100+ possessions. With player units the normal equations are additive over
-   seasons, so 30 seasons accumulate in about 10 seconds and each held-out season is one solve.
-   **Two of them now**, one per side's target (below).
-2. **SPM** -- a `ChimeraBoostRegressor` mapping a player's all-other-seasons feature averages to that
-   target, then asked about H's own box score. What it sees is `src/eracoef/singleyear.py`, which owns the
-   feature list, the aggregate-then-derive order and the pipeline's constants in ONE place -- they used to
-   be copied into three scripts and had drifted.
-3. **Board** -- `src/eracoef/priorridge.py`, `PriorRidgeCV`: a ridge centred on the prior rather than on
-   zero, penalties chosen by cross-validation over whole GAMES on a team-game objective weighted toward
-   close ones, **and the prior's amplitude a free coefficient** (`free_prior_scale`).
-
-`scripts/62_single_year_board.py` runs all three across every season (~35 s per season);
-`notebooks/single_year.ipynb` is the same thing cell by cell, with the generator at
-`notebooks/build_single_year.py` (edit the generator, not the .ipynb).
-
-**IT NOW CLEARS NINE OF THE TEN CONSENSUS FLOORS**, against five failures before:
-
-| floor | before | now |
-|---|---|---|
-| offensive spread ratio (0.55 to 1.30) | 0.428 FAIL | 0.556 |
-| offensive rank agreement (>= 0.75) | 0.722 FAIL | 0.756 |
-| defensive rank agreement (>= 0.75) | 0.777 | 0.791 |
-| overall rank agreement (>= 0.75) | 0.736 FAIL | 0.763 |
-| no star buried | LaMelo 167th FAIL | passes |
-| top five overlap (>= 3 of 5) | 2 FAIL | **2, still failing** |
-
-The one that still fails is the top-five overlap: this board opens Jokic, Shai, Kawhi, Towns, Tatum where
-the consensus wants Giannis, Luka and Wembanyama in there. The shipped multi-season board also puts Kawhi
-in its top five, and the test's own docstring says so.
-
-**What closed the gap was not the features.** Four things were measured; only one of them paid.
-
-- **`free_prior_scale` (the whole story).** The board was compressed because the fit was TOLD how far to
-  trust the prior. Now each side's prior enters as one free unpenalised column, so the rating is
-  `scale * prior + residual`, and the fit asks for **1.5x to 3.7x** the prior it is handed. Pooled over
-  four seasons it is a TIE on the score (+0.050 per 100, z +0.92) and decisive on calibration (miss 1.038
-  -> 0.274, z -4.07). The board's own penalty stopped pinning at the 1e9 ceiling, and the season's own
-  games went from moving the offensive board by sd 0.009 to sd 0.267.
-- **The feature rewrite was worth nothing.** The premise was that the hand-picked list was missing the
-  efficiency ratios and shot quality. Boruta rejects every one of them on defence and all but two on
-  offence; the full 54-name list left 2015 flat (8.3853 against 8.3872) and made the prior NARROWER.
-  What ships is BorutaShap's selection, 21 names on offence and 17 on defence.
-- **The luck-adjusted targets are flat here** (-0.0013 per 100, z -0.10) and are kept on their
-  out-of-season evidence, not on this measurement. One fit per side, always scored on actual points.
-- **`lam_buckets` is a null** (0.004 per 100 across a 40x range) and **REML was rejected** (it wants 2,516
-  where the board's team-game CV wants 12,608 to 316,569 -- it optimises the stint likelihood, which is
-  the wrong loss, and the ceiling-pinning it was meant to cure was already gone).
-
-**READ THIS BEFORE TRUSTING ANY 75/25 NUMBER IN THIS PIPELINE.** The diagnostic holds the last quarter of a
-season's GAMES out of the ridge. It does not hold them out of the PRIOR: the panel is built from each
-season's full design, so season H's `onc_o` -- his points per 100 while on the floor -- is averaged over
-every game of H including the scored ones. Rebuilding it from the first 75% costs **+0.375 per 100, z
-+7.47, 4 of 4 seasons** (`scratch/onc_leak.py`). So **the 75/25 score cannot compare two boards that differ
-in `onc_*`**, which includes the 8.3872 this file used to quote as the number to beat and both earlier
-end-to-end penalty sweeps. It is still valid for comparisons that hold `onc_*` fixed.
-
-The columns stay in anyway, and the reasoning is in `DECISIONS.md`: the leak is in the evaluation, not the
-product -- the board rates a COMPLETED season, ruling 12 allows H's own games, and every public metric in
-the consensus uses the season's own plus-minus. Without them the board fails all three agreement floors,
-defence by 11%. The price is that prior and evidence are now the same games, so the plus-minus stage does
-less than it should.
-
-**DEFENCE IS COUNTED TOO MUCH -- the owner's eye test, 2026-09-13, and it measures.**  *"I do think
-defense is getting counted a little too much from my extremely informed eye test."*  It does, on every
-board here, against `data/external/consensus.csv` on 2024-26 with 1,000+ possessions (475 players):
-
-| | consensus | LIVE SITE (window) | single-year board | season board in artifacts/ |
+# Handoff: the single-year player rankings, one experiment at a time
+
+**This file is transient.**  It starts the next session and is deleted when Phase 1 ships.  `DECISIONS.md`
+is the permanent record and carries every number quoted here.  Do not let this grow into a lab notebook
+again: the last one reached 578 lines and was cut on 2026-09-13 (`git show 03301a2:handoff.md` has it).
+
+Branch `cleanup`, ahead of `main`, `main` untouched.  `pytest -q`: **285 passed, 1 xfailed, ~120 s.**
+
+## How we work now (the owner, 2026-09-13)
+
+- **One change per experiment**, named after the change.  Never two things in one run.
+- **One test decides**: the year-over-year test below.  The consensus checks and the diagnostics are
+  reported every time and chosen on never.
+- **Plain words.**  No invented labels, no single-letter names, no "board" (say the player rankings),
+  no "floor" (say the check or the threshold).  Define a term the first time it is used.
+- Delete hard, tag first.  Every number carries its unit and the name of the test it came from.
+
+## The rulings that bind
+
+1. **One rating per player per season, from that season's games only**, regular season and playoffs.
+2. **Single year or bust** (2026-09-11): a player's own other seasons may not reach his rating.  Model
+   coefficients may be learned from other seasons; a per-player `past_*` channel may not.
+3. **Never train on the current season until its Finals are over.**  Loading is always allowed.
+4. **Keep chimeraboost.**  **Bench players must be in the accuracy test.**  **The archetype guard is
+   unsupervised.**  **The consensus is a sanity check, never a fitting target**; a gross miss is a veto.
+5. The player-level losses (rank, dollars) were deleted (2026-09-12): their truth was a plain RAPM,
+   which is worse than what it scored.  "How well does the rating carry over in a trade" is still wanted
+   and still not built.
+
+## What exists
+
+**Shipped** (`config.yaml` → `ratings_prior.season_board`, `artifacts/season_ratings.parquet`,
+`docs/data/ratings.json`): one season's games, a prior trained on the three-season block panel, a
+calibration map.  Its offensive prior carries `past_apm`, `past_poss`, `past_rapm`, which ruling 2 bans.
+The live site is built from `main`, which still shows the older three-year-window rankings.
+
+**The single-year pipeline** (`scripts/62_single_year_board.py`; `notebooks/single_year.ipynb` is the same
+thing cell by cell, generated by `notebooks/build_single_year.py`).  Three stages, none fit on the rated season:
+
+1. **Target**: `looseason.LeaveSeasonOutRAPM`, one RAPM rating per player over every season except the
+   rated one (penalties 40,000 / 40,000 / 0, closed).
+2. **Prior**: chimeraboost from a player's all-other-seasons feature averages to that target, then asked
+   about the rated season's own box score.  Feature lists in `singleyear.FEATURE_SETS`; the default
+   `boruta` is 21 names on offence, 17 on defence, both including the on-court points columns `onc_*`.
+3. **Rating**: `priorridge.PriorRidgeCV` on the rated season's games, centred on the prior, the prior's
+   amplitude a free coefficient (`free_prior_scale`), penalties by cross-validation over whole games.
+
+Against the consensus (`scratch/consensus_report.py`, 475 players, 2024-26): agreement 0.758 offence /
+0.788 defence / 0.758 total, all above 0.75; top-five overlap 3 of 5.  The defensive rating is more
+predictable from a player's team than the consensus's is (R-squared on team 0.241 against 0.195): the
+defensive prior is mostly `onc_d`, points allowed while he is on the floor, a lineup quantity.
+
+## The test: year-over-year
+
+Rate a season from its own games.  Predict every stint of the season before and the season after from the
+ten players' ratings alone, refitting only the intercept and home edge on the scored season.  Score
+against actual points, per stint and summed to team-games.  28 scored seasons, each predicted twice, every
+table paired by scored season.  The rated season's prior must not have seen the two scored seasons:
+
+    .venv/Scripts/python scripts/62_single_year_board.py --exclude_neighbours=1 --score=0 --out=season_ratings_<name>
+    .venv/Scripts/python scripts/63_yoy.py --rankings=<name>=outputs/season_ratings_<name>.parquet,sy_yoy=outputs/season_ratings_sy_yoy.parquet --ref=sy_yoy --tag=<name>
+    .venv/Scripts/python scratch/consensus_report.py outputs/season_ratings_<name>.parquet
+
+About 20 minutes for the build, under a minute for the test.  Read `game_armse` (what a typical team-game
+misses by, points per 100) and the paired table: `mean_diff` below zero is better than the reference,
+`z` is the mean difference over its standard error, `wins` is scored seasons better out of 56.
+
+**Decision rule:** adopt a change only if `z` is -2 or below on the pooled team-game row with no gross
+consensus miss.  Ties go to the simpler version.  `scale_off` / `scale_def` (what the scored season wants
+each side multiplied by), `calib_side` (error left after that rescale), the `movers` split and the
+consensus numbers are diagnostics.  `--columns=prior` tests the prior alone, which is how a stage is blamed.
+
+## Experiment 1 (2026-09-13): the test itself, run on what exists
+
+| rankings | game_armse | scale_off | scale_def | paired vs single-year, team-game MSE |
 |---|---|---|---|---|
-| defence share of off+def variance | 23.8% | **52.0%** | **39.6%** | 55.3% |
-| defence / offence spread, relative to the consensus | 1.00 | **1.86x** | **1.45x** | 1.99x |
-| R-squared of the defensive rating on TEAM | 19.5% | 9.9% | **25.4%** | 10.7% |
+| single-year, neighbours excluded (`season_ratings_sy_yoy`) | 8.804 | 0.73 | 0.71 | reference |
+| single-year, neighbours in (`season_ratings_sy`) | 8.812 | 0.72 | 0.71 | +0.21, z +2.2, 15 of 56 |
+| shipped (`artifacts/season_ratings.parquet`) | **8.587** | 1.18 | 0.78 | **-5.93, z -16.9, 56 of 56** |
+| single-year prior alone | 8.840 | 0.71 | 0.70 | |
+| shipped prior alone | 8.681 | 1.32 | 1.51 | |
+| single-year offence + shipped defence | 8.730 | | | -2.04, z -12.7, 52 of 56 |
+| shipped offence + single-year defence | 8.659 | | | -3.97, z -14.3, 55 of 56 |
 
-The third row is a one-way ANOVA: regress each player's defensive rating on nothing but which team he
-plays for, and read the R-squared.  It answers "how much of a player's defensive rating can you guess from
-his team alone".  A rating that is a property of the PLAYER should score low on it; the consensus scores
-19.5%.
+What it says (full record in `DECISIONS.md`):
 
-**Read the column the observation was made on.**  `https://bbstats.github.io/openrapm/` is built by GitHub
-Pages from **`main`/docs**, and `main`'s `docs/data/ratings.json` is still the THREE-YEAR WINDOW board built
-2026-09-10 (its rows are keyed `w`, "2024-2026", not `s`).  So the eye test above was made against the
-window board, whose 2024-26 top is Shai, Wembanyama, Kawhi, Jokic, Luka -- not against anything on branch
-`cleanup`.  Nothing in this branch is user-visible until `main` moves.
+- The single-year rankings predict neighbouring seasons worse than the shipped ones in 56 of 56, and the
+  gap survives rescaling each side, so it is ranking quality, not amplitude.
+- The prior is the weak stage: the shipped prior alone beats the finished single-year rankings.  Both
+  sides lose.  The shipped DEFENSIVE prior is eleven box rates with no on-court and no past column, so it
+  is a single-year-legal prior that beats ours; the shipped offensive edge rests partly on the banned
+  `past_*` channel and is not a target.
+- The single-year rankings are too wide for the neighbouring season on both sides (28 of 28 seasons, both
+  directions); the shipped ones are too narrow on offence and too wide on defence.
+- Leaving the neighbours out of the prior's training changes almost nothing, so the earlier tables were
+  only slightly optimistic.
 
-**The two boards fail DIFFERENTLY, and conflating them will send the next person the wrong way.**
+## The queue, one at a time
 
-- The live window board and the `artifacts/` season board are badly tilted (52% and 55% of off+def variance
-  on defence, against 23.8%) but their defensive ratings are LESS team-clustered than the consensus's
-  (9.9% and 10.7% against 19.5%).  Their problem is amplitude: defence is simply too wide relative to
-  offence.
-- The single-year board halves the tilt (39.6%, 1.45x) and acquires the other defect instead: 25.4% of its
-  defensive rating is predictable from his team alone, the only board here ABOVE the consensus.  Its
-  problem is attribution: it is handing a player his team's defence.
+1. **Experiment 2: drop `onc_d` from the defensive list only.**  Add `"boruta_noonc_d"` to
+   `singleyear.FEATURE_SETS` (`BORUTA_O` unchanged, `BORUTA_D` without `ONC`), build with
+   `--features=boruta_noonc_d --exclude_neighbours=1`, run the test against `sy_yoy`.  Hypothesis: a lineup
+   quantity does not carry to the next season, and the shipped defensive prior wins without one.  Expect
+   consensus defensive agreement to fall (the no-`onc` table read 0.667 on both sides); the year-over-year
+   test decides.
+2. **Experiment 3: the same on offence** (`onc_o`), only after 2 is read.
+3. **Experiment 4: a teammate-adjusted on-court column** (`onc_d` minus the possession-weighted mean of his
+   teammates', or the panel's `apm`), only if 2 moves the right way but costs too much agreement.
+4. **Experiment 5: the prior's target and booster settings** against the shipped defensive prior's recipe
+   (`rapm1` per window, decay pooling), only if 2-4 leave the defensive gap.  `gbdt.params` /
+   `params_def` were tuned for another target and never re-tuned here.
 
-Read the rows separately, because they are two different defects.
+## Closed, do not reopen
 
-**Row one and two: the total over-weights defence.**  `rating_total` is `rating_off + rating_def` with
-equal weight, and the two sides are not equally calibrated against the consensus -- on the single-year
-board offence is 0.556 of the consensus's spread and defence 0.807.  So even with both inside their floors,
-the SUM tilts defensive, and that is what the top of the board shows: Derrick White 5th, OG Anunoby 7th,
-Alex Caruso 9th in 2026, with Jokic 6th on a defensive rating of 0.28.  Both older boards are WORSE on this
-row, so it is a defect inherited and roughly halved, not one introduced here.
+The target's penalties (flat, 0.048 per 100 across 19 triples); `lam_buckets` (0.004 per 100 over a
+40x range); REML (optimises the wrong loss); the feature rewrite (Boruta rejects every ratio and shot-quality
+column here); any within-season 75/25 comparison between tables whose `onc_*` differ (the prior's on-court
+columns see the scored quarter; +0.375 per 100); `spy` decay cube-rooting; `board_D_weight` / `_height`.
 
-**Row three is the new one, and it is the more serious, because this branch CAUSED it.**  A player rating
-should be a property of the PLAYER, so most of its variance should sit WITHIN teams; the single-year board
-puts 25.4% against the consensus's 19.5%, where both older boards sit near 10%.  We are handing a player
-his team's defence, and we started doing it here.  Cleveland is the clearest case -- a good defensive team,
-and our board likes nearly everyone who played there.  Defensive rank of the 475 players in the join:
+## Parked, not started
 
-| | this board | consensus |
-|---|---|---|
-| Evan Mobley | 6 | 33 |
-| Jarrett Allen | 11 | 45 |
-| Donovan Mitchell | 56 | 166 |
-| Larry Nance Jr. | 85 | 264 |
-| Max Strus | 126 | 298 |
-| **James Harden** | **141** | **441** |
+The poison test (`tests/test_no_current_season.py`, rebuild with the current season replaced by noise and
+assert identical hashes); the merge gate as a command (`openrapm evaluate --against=ship`: delta, seasons
+won, PBO, runtime ratio); sealed confirm seasons; the CLI replacing the numbered scripts; an archetype
+penalty in the fit; the remaining constants (`gbdt_win_decay` 0.514, `PAST_DECAY` 0.5, `k3 = 450`,
+`FACTOR_LAMS`, both chosen on 2024-26); `scripts/49_role_panel.py` does not reproduce the shipped panel
+(defensive shrinkage 0.219 against 0.314); `systems.py` builds 1,446 systems and wants a registry.
 
-Mobley and Allen really are elite defenders and both boards say so.  Harden at 141st is the tell.
-The mechanism is not mysterious and it is documented in `DECISIONS.md`:
+## Traps that cost a day
 
-- `rating_def` is essentially all prior.  Over thirty seasons `prior_def` has sd 1.057 and `u_def` -- what
-  the season's own games add -- has sd 0.112.  The plus-minus stage is doing almost nothing on defence.
-- and the defensive prior is dominated by `onc_d`, BorutaShap importance **6.61 against 0.90 for the next
-  feature**.  `onc_d` is the player's own ON-COURT points allowed per 100: a LINEUP quantity, explicitly
-  "not an APM ... biased toward whoever he played with" (`investigate.oncourt_rates`).
-
-So the defensive rating is, in practice, a shrunk version of how his team defended while he was on the
-floor.  That is exactly the failure `DECISIONS.md` already names twice -- *"a lineup-level coefficient
-transfers to individuals exactly to the extent the stat is not conserved"*, and the REML trap, *"cannot
-separate 'this lineup defended well' from 'this player defends well', so it over-states defensive player
-variance"*.  The box score cannot rescue it either: weighted R-squared of a player's 13 box rates on his own
-on-court defensive impact is 0.26, against 0.53 on offence.
-
-**What to try, cheapest first.**  None of these has been run.
-
-1. **Drop `onc_d` from the defensive list only**, keeping `onc_o` on offence.  One flag away -- add the
-   split to `singleyear.FEATURE_SETS`.  It will cost defensive rank agreement (the no-`onc` board read 0.667
-   against a 0.75 floor) and should cut the team R-squared; the question is the exchange rate, and
-   whether the plus-minus stage picks up the slack once the prior stops pre-empting it.
-2. **Weight the two sides in `rating_total`** instead of summing them raw.  The criterion cannot choose the
-   weight -- a team total is linear in a per-player linear map, so it is nearly blind to exactly this -- so
-   it would have to be chosen on the team R-squared or on the consensus, and choosing on the consensus
-   is against the standing rules.  Prefer 1 and 3.
-3. **Give the defensive side a teammate-adjusted on-court feature** rather than the raw one: `onc_d` minus
-   the possession-weighted mean of his teammates' `onc_d`, or the APM already in the panel (`apm`, which IS
-   teammate-separated) in its place.  This is the honest version of what `onc_d` is being asked to do, and
-   the panel already carries both columns.
-
-**Measure it with** `scratch/consensus_report.py` (the three rows above are one command over several boards)
-and the team R-squared, which is four lines of pandas on the consensus join -- neither is in the test
-suite yet, and the team R-squared probably should be, because no existing floor catches it.
-
-**Three things still open, in the order they matter:**
-
-- **The board is still mis-calibrated, in a correctable direction.** Over thirty seasons the held-out
-  quarter wants offence x0.854 and defence x1.049 -- much better than the x1.70 / x1.69 it wanted before,
-  but 28 of 30 seasons sit on the same side on each. It is NOT the residual: sweeping the residual penalty
-  from 13,037 to 1e9 costs 0.12 to 0.19 per 100 (z +4.7 to +5.05) and barely moves the miss, and even at
-  1e9 -- where the board IS `scale * prior` -- the held-out quarter still reads 0.796. The scale fitted on
-  the first 75% is simply bigger than the last 25% wants (4.04 against 3.2).
-- **An honest 75/25 diagnostic needs a panel built from a 75% design.** Until then, every cross-`onc_*`
-  comparison is off the table and the box features carry a smaller version of the same optimism.
-- **The booster's hyperparameters are stale.** `gbdt.params` / `params_def` were tuned for `rapm1` on the
-  three-season block panel. Nothing has re-tuned them for this target, and the feature list has now changed
-  under them twice.
-
-**The target's penalty is no longer identified and the incumbent stays.** Re-swept coarsely on the honest
-setup: 19 triples, surface spans 0.048 per 100 in total, non-monotone in both axes, argmin slides to
-whichever edge is lowest on every widening. Best-of-19 against 40,000 / 40,000 is z -1.80. The reason is
-visible -- the free scale absorbs what the penalty used to control, so a dial once worth a six-hour sweep
-is now worth 0.048.
-
-### 5. The owner took the prior over -- `notebooks/single_year.ipynb` (2026-09-11)
-
-A self-contained notebook: plain scikit-learn for both models, `eracoef` used only to load data and to
-score. `python notebooks/build_single_year.py` regenerates it from source, so edit the generator, not
-the .ipynb, for anything that should survive.
-
-  * panel `outputs/role_panel_season.parquet` (one row per player-season, rebuilt 2026-09-11 WITH the
-    `onc_*` columns -- the copy that was on disk predated that fix and was training a prior quietly
-    missing them);
-  * prior: `HistGradientBoostingRegressor`, trained on every season but H, no `past_*`, no career
-    pooling, so `gbdt_win_decay` does not exist in it;
-  * PI-RAPM: `Ridge`, with Frisch-Waugh to keep the penalty off the fixed effects and a column rescale
-    to give the two sides different effective penalties from one `alpha`;
-  * honest split: fit the first 75% of H's games, score the last 25% -- the shipped `_q75` estimand;
-  * scored on the team-game criterion AND the player losses, against a `lam=100` truth.
-
-**The thing it teaches in the first ten minutes, and it is in the notebook as a warning:** `rapm1` is
-**0.976** correlated with `spm`, and `spm` is a deterministic linear function of role inputs the GBDT is
-being handed. So it "predicts" `rapm1` at r = 0.99 and that number is worth nothing. Read
-`corr(pred, apm)` (~0.53) or the scored cell. `apm` sd 4.19, `u` sd 0.35, `rapm1` sd 1.62.
-
-One season (2015) as a smoke test, prior vs no prior: team-game 114.58 -> 114.66 (a tie, slightly
-worse) while within-roster tau goes 0.133 -> 0.226 and money_skill 0.286 -> 0.316. One sample, nothing
-significant -- but it is the session's thesis in one line, and cell 8 loops it over seasons.
-
-### 4. Not started at all
-
-- **The poison test** (`tests/test_no_current_season.py`): rebuild every fitted artifact twice, once
-  with the current season's parquets replaced by noise, and assert every artifact hashes identical.
-  This is the real guarantee; `seasons.py` is only the courtesy. `in_progress()` is **empty** today
-  (2026's Finals are over), so the test needs a synthetic in-progress season the way
-  `tests/test_seasons.py` already does.
-- **The merge gate as a command.** `pbo.py` exists and is tested; nothing calls it. Wire
-  `openrapm evaluate --against=ship` to print the four numbers CONTRIBUTING.md promises: delta, seasons
-  won, PBO, runtime ratio. The runtime one is a failing test above 5×.
-- **The sealed confirm seasons.** A fixed subset whose per-season scores are never printed; CI returns
-  one bit. Blum & Hardt's Ladder applied.
-- **The CLI.** `openrapm ingest | stints | train | rate | evaluate | site` replacing the 13 numbered
-  scripts, and with it the copies of `sys.path.insert(...)  # noqa: E402`.
-- **An archetype penalty in the fit** (ruling 8's open half). `archetype.py` only reports today.
-
----
-
-## Things that will cost you a day if you meet them fresh
-
-1. **The editable install breaks fresh-clone testing.** `pip install -e` puts `A:\code\spmm\src` on
-   `sys.path`, so a clone imports the *working tree's* `eracoef` and `config.ROOT` resolves to the main
-   repo — it reads the main repo's data and every skip turns into a pass. Two verification attempts were
-   silently wrong before this was caught. Use:
-
-       PYTHONPATH='<clone>\src' A:/code/spmm/.venv/Scripts/python -m pytest tests -q
-
-2. **Tests cannot reach the network** (`tests/conftest.py`, session-scoped — a function-scoped block
-   runs *after* module-scoped fixtures, which is where the scraping was). `test_the_network_block_works`
-   is the regression. If a test needs the network, take the `allow_network` fixture.
-
-3. **`scripts/49_role_panel.py` does not reproduce the shipped panel.** The biggest open hole, and it
-   blocks item 1.
-   - It computed `onc_o` / `onc_d` / `onc_poss_*` in pass 1 and **dropped them at write time**.
-     `gbdt_prior` takes them with `if c in p.columns`, so a panel without them trains a prior quietly
-     missing the luck-adjusted on-court features *and* the whole `past_onc_*` family, and nothing fails.
-     Fixed 2026-09-10 with an assert on the written column list.
-   - A rebuild lands defensive shrinkage at **0.219** where `artifacts/role_panel.parquet` has **0.314**,
-     and an isolated probe of the same `plugin_fit` on regular-season rows reproduces 0.209 — so the gap
-     is not the playoff fold. Something built the shipped panel that is not in the repo.
-   - The 49 `dr_*` columns the shipped panel carries have no reader in `src/` and can go.
-
-4. **`grep check_trainable`** lists the call sites where the season boundary is a runtime check rather
-   than a type. Converting them is how the boundary gets real.
-
-5. **`NEEDS_SPLIT` in `tests/test_layer_boundary.py`** is the honest list of model code that still
-   reaches its own data, with the specific import named. Eight modules are genuinely clean
-   (`MODEL_LAYER`). Shrinking `NEEDS_SPLIT` is real work and nothing may be added to it.
-
-6. **`systems.py` builds 1,446 systems** through nested loops and wants a rewrite to a small registry.
-
-7. **Deferred deletions**, left because Phase 1 rewrites them: `windows.py` (still block-based and widely
-   imported), `systems.py`, `teamloo.py`, `xpts.py` + `factors.py`, `checks.py`. `xshoot.py` imports
-   `league_constants` and `lineup_rates` from `xpts.py` — lift those two before deleting it. `xpts_ft`,
-   the shipped offensive target, lives in `design.TARGETS` and does **not** depend on `xpts.py`.
-
-8. **Read the traps in `DECISIONS.md` before trusting any number.** Seventeen of them, each having produced
-   a confident wrong number here. The four that cost the most recently:
-   - **an in-season fit scored on the whole season is scored on its own training games.** `53_calmap.py
-     fit` did this until 2026-09-10 and it *reversed* which kernel won. Any comparison involving a `_q*`
-     system must show `cut` populated in its holdout rows;
-   - **a weight of zero is not zero on the feature path.** `kernel_game_mult` zeroed the games of a
-     zero-weight season, but the season stayed in the training LIST, and the inputs built from season
-     tables (shot-quality features, role inputs) are built over whatever the list names — three seasons
-     of shot data reaching a "one season only" rating, worth up to 0.61 per 100;
-   - **an unmapped gain is not a gain** — the calibration map absorbed 99% of one candidate;
-   - **an argmax on a grid boundary has chosen nothing.**
-
----
+1. `pip install -e` puts this working tree on `sys.path`, so a fresh clone silently tests THIS repo's
+   data.  Use `PYTHONPATH='<clone>\src' A:/code/spmm/.venv/Scripts/python -m pytest tests -q`.
+2. Tests cannot reach the network (`tests/conftest.py`); take the `allow_network` fixture if one must.
+3. A score on a mask that cuts team-games is not a score: `score` returns NaN for `tg` there; read
+   stint-cutting splits (`movers`, `exposure`) on `mse`.
+4. An argmax on a grid edge has chosen nothing; bracket every sweep on both sides first.
+5. Seventeen more in `DECISIONS.md`, "The measurement traps".  Read them before trusting a number.
 
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest tests -q          # 285 passed, 1 xfailed, ~120 s
-    .venv/Scripts/python scripts/60_season_board.py  # ks00_lam05_ow_w0.25, kernel {0: 1.0}, ~70 s
-    .venv/Scripts/python scripts/62_single_year_board.py          # 30 seasons, ~35 s each
-    OPENRAPM_BOARD=outputs/season_ratings_sy.parquet \
-        .venv/Scripts/python -m pytest tests/test_vs_consensus.py -q   # 9 passed, 1 failed (top five)
-    OPENRAPM_BOARD=outputs/season_ratings_sy.parquet \
-        .venv/Scripts/python scripts/52_site.py      # 14,578 rows, 30 seasons, 1.0 MB
-    .venv/Scripts/python scripts/58_archetype.py     # 0.145 spread, 8 clusters, centres at +0.11
-    .venv/Scripts/python scripts/61_lowposs.py       # defensive skill 0.096 at <250, 0.327 at 4500+, ~25 s
-    git log --oneline -1                             # 71969bf "A team-game score on a mask that cuts team-games..."
-
-**First concrete step:** sweep `gbdt_win_decay` (0.514) the way `board_defdecay_<value>` swept its defensive
-twin, registering the grid beside it in `systems.py`:
-
-    .venv/Scripts/python scripts/53_calmap.py dump --systems=<the sweep>_q75 --k=3 --workers=4 --tag=wdosweep
-    .venv/Scripts/python scripts/53_calmap.py fit  --systems=<the sweep>_q75 --k=3 --maps=linear+sat --tag=wdosweep
-
-The dump is about 20 seconds per system and the fit about 5. A board is ~8 minutes; only build one for a
-candidate that already passed the criterion.
-
-Reproducing the item-2 decision:
-
-    .venv/Scripts/python scripts/61_lowposs.py --systems=ks00_lam05_ow_w0.25,board_D_height_weight,board_D_height,board_D_weight
-    .venv/Scripts/python scripts/53_calmap.py dump --systems=ks00_lam05_ow_w0.25_q75,board_D_height_q75,board_D_weight_q75 --k=3 --workers=4 --tag=biosweep2
-    .venv/Scripts/python scripts/53_calmap.py fit --systems=ks00_lam05_ow_w0.25_q75,board_D_height_q75,board_D_weight_q75 --k=3 --maps=linear+sat --tag=biosweep2
-    .venv/Scripts/python scripts/60_season_board.py --system=board_D_weight --map=outputs/calmap_biosweep2.parquet --map-system=board_D_weight_q75_linear+sat --map-base=board_D_weight_q75 --out=season_ratings_bioDw
-    OPENRAPM_BOARD=outputs/season_ratings_bioDw.parquet .venv/Scripts/python -m pytest tests/test_vs_consensus.py -q
-
-Reproducing the panel decision, if it is questioned (`SP=sp_ks00_lam05_ow_w0.25`):
-
-    .venv/Scripts/python scripts/53_calmap.py dump --systems=${SP}_q75,spy_ks00_lam05_ow_w0.25_q75 --k=3 --workers=4 --tag=spanel2
-    .venv/Scripts/python scripts/53_calmap.py fit --systems=${SP}_q75,spy_ks00_lam05_ow_w0.25_q75 --k=3 --maps=linear+sat --tag=spanel2
-    .venv/Scripts/python scripts/60_season_board.py --system=$SP --map=outputs/calmap_spanel2.parquet --map-system="${SP}_q75_linear+sat" --map-base=${SP}_q75 --out=season_ratings_spanel
-    OPENRAPM_BOARD=outputs/season_ratings_spanel.parquet .venv/Scripts/python -m pytest tests/test_vs_consensus.py -q
-
-The dump is ~6 minutes and the board ~8 (the season-panel prior is heavier than the block one).
+    .venv/Scripts/python -m pytest tests -q                                  # 285 passed, 1 xfailed, ~120 s
+    .venv/Scripts/python scripts/63_yoy.py --rankings=sy_yoy=outputs/season_ratings_sy_yoy.parquet,ship=artifacts/season_ratings.parquet --ref=sy_yoy --tag=verify --splits=
+                                                                             # ship -5.93 team-game MSE, 56 of 56
+    OPENRAPM_BOARD=outputs/season_ratings_sy_yoy.parquet .venv/Scripts/python -m pytest tests/test_vs_consensus.py -q

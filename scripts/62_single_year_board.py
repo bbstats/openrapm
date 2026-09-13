@@ -4,10 +4,18 @@
                                            [--score=1] [--target_off=xpts_ft] [--target_def=x3def_w0.25]
                                            [--free_scale=1] [--buckets=low_poss:2] [--boards=2015,2024]
                                            [--features=boruta_noonc|boruta|sy_noonc|sy]
+                                           [--exclude_neighbours=0]
 
 `--first` / `--last` are the seasons the TARGET is accumulated over and must stay the full range -- a
 leave-one-season-out RAPM with one season in it has nothing left.  `--boards=` restricts which seasons a
 rating is produced for, which is how a change is measured on two seasons instead of thirty.
+
+`--exclude_neighbours=N` also keeps the N seasons either side of the rated one out of the target and out
+of the prior's training rows.  That is the setting for the year-over-year test (`scripts/63_yoy.py`),
+which scores a season's rankings on the neighbouring seasons' games: with the default 0 the prior's
+coefficients were learned from the very seasons being scored.  The rated season's own games are still
+the evidence, exactly as in the shipped setting; only the population-level fits stop short of the
+scored seasons.
 
 For each season H:
   1. the TARGET is a RAPM over every season except H, one rating per player (looseason.LeaveSeasonOutRAPM),
@@ -112,6 +120,8 @@ def main():
     seasons = list(range(first, last + 1))
     boards = [int(x) for x in _flag("boards", "").split(",") if x] or seasons
     assert set(boards) <= set(seasons), f"--boards outside [{first}, {last}]"
+    exclude_neighbours = int(_flag("exclude_neighbours", 0))
+    assert exclude_neighbours >= 0
 
     panel = pd.read_parquet(ROOT / "outputs/role_panel_season.parquet")
     panel = panel[panel.poss > 0].reset_index(drop=True)
@@ -121,7 +131,8 @@ def main():
         assert not any(c.startswith("past_") for c in names_), "single year or bust"
     print(f"targets: offense {names['O']}, defense {names['D']}; features {feature_set} "
           f"(O {len(features['O'])}, D {len(features['D'])}); "
-          f"free_prior_scale {FREE_PRIOR_SCALE}; lam_buckets {LAM_BUCKETS or '{}'}", flush=True)
+          f"free_prior_scale {FREE_PRIOR_SCALE}; lam_buckets {LAM_BUCKETS or '{}'}; "
+          f"exclude_neighbours {exclude_neighbours}", flush=True)
 
     t0 = time.time()
     # One accumulator per TARGET, because the two sides explain different things.  The designs are NOT
@@ -142,13 +153,16 @@ def main():
     rows, diagnostics = [], []
     for season in boards:
         prior, table, lam = {}, {}, {}
+        # the seasons nothing population-level may be fit on: the rated one, plus its neighbours when
+        # those are the seasons this table is going to be scored on
+        unseen = [s for s in range(season - exclude_neighbours, season + exclude_neighbours + 1)]
         for side, params in (("O", cfg["gbdt"]["params"]), ("D", cfg["gbdt"]["params_def"])):
             column = "offense" if side == "O" else "defense"
             target = rapm[names[side]].ratings(
-                held_out_season=season, offense_lambda=RAPM_OFFENSE_LAMBDA,
+                held_out_season=unseen, offense_lambda=RAPM_OFFENSE_LAMBDA,
                 defense_lambda=RAPM_DEFENSE_LAMBDA, context_lambda=RAPM_CONTEXT_LAMBDA)
             feats = features[side]
-            train = sy.prior_rows(target, panel[(panel.side == side) & (panel.season != season)],
+            train = sy.prior_rows(target, panel[(panel.side == side) & ~panel.season.isin(unseen)],
                                   column, feats)
             model = ChimeraBoostRegressor(random_state=0, **dict(params))
             model.fit(train[feats].to_numpy(float), train.target.to_numpy(float),
