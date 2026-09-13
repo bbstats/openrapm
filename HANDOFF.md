@@ -333,6 +333,63 @@ the consensus uses the season's own plus-minus. Without them the board fails all
 defence by 11%. The price is that prior and evidence are now the same games, so the plus-minus stage does
 less than it should.
 
+**DEFENCE IS COUNTED TOO MUCH -- the owner's eye test, 2026-09-13, and it measures.**  *"I do think
+defense is getting counted a little too much from my extremely informed eye test."*  It does, two separate
+ways, both against `data/external/consensus.csv` on 2024-26 with 1,000+ possessions (475 players):
+
+| | this board | consensus | shipped multi-season board |
+|---|---|---|---|
+| defence share of off+def variance | **39.6%** | 23.8% | 55.3% |
+| defence / offence spread, relative to the consensus | **1.45x** | 1.00 | 1.99x |
+| share of defensive variance that is BETWEEN teams | **25.4%** | 19.5% | 10.7% |
+
+Read the rows separately, because they are two different defects.
+
+**Row one and two: the total over-weights defence.**  `rating_total` is `rating_off + rating_def` with
+equal weight, and the two sides are not equally calibrated against the consensus -- our offence is 0.556 of
+its spread and our defence 0.807.  So even with both inside their floors, the SUM tilts defensive by about
+45%, and that is what the top of the board shows: Derrick White 5th, OG Anunoby 7th, Alex Caruso 9th in
+2026, with Jokic 6th on a defensive rating of 0.28.  Note the shipped multi-season board is worse on this
+row, not better (55.3%, 1.99x) -- it is not a regression introduced here, it is a defect this board
+inherited and halved.
+
+**Row three is the new one, and it is the more serious.**  A player rating should be a property of the
+PLAYER, so most of its variance should sit WITHIN teams; ours puts 25.4% between teams against the
+consensus's 19.5%, and against the multi-season board's 10.7%.  We are handing a player his team's defence.
+The mechanism is not mysterious and it is documented in `DECISIONS.md`:
+
+- `rating_def` is essentially all prior.  Over thirty seasons `prior_def` has sd 1.057 and `u_def` -- what
+  the season's own games add -- has sd 0.112.  The plus-minus stage is doing almost nothing on defence.
+- and the defensive prior is dominated by `onc_d`, BorutaShap importance **6.61 against 0.90 for the next
+  feature**.  `onc_d` is the player's own ON-COURT points allowed per 100: a LINEUP quantity, explicitly
+  "not an APM ... biased toward whoever he played with" (`investigate.oncourt_rates`).
+
+So the defensive rating is, in practice, a shrunk version of how his team defended while he was on the
+floor.  That is exactly the failure `DECISIONS.md` already names twice -- *"a lineup-level coefficient
+transfers to individuals exactly to the extent the stat is not conserved"*, and the REML trap, *"cannot
+separate 'this lineup defended well' from 'this player defends well', so it over-states defensive player
+variance"*.  The box score cannot rescue it either: weighted R-squared of a player's 13 box rates on his own
+on-court defensive impact is 0.26, against 0.53 on offence.
+
+**What to try, cheapest first.**  None of these has been run.
+
+1. **Drop `onc_d` from the defensive list only**, keeping `onc_o` on offence.  One flag away -- add the
+   split to `singleyear.FEATURE_SETS`.  It will cost defensive rank agreement (the no-`onc` board read 0.667
+   against a 0.75 floor) and should cut the between-team share; the question is the exchange rate, and
+   whether the plus-minus stage picks up the slack once the prior stops pre-empting it.
+2. **Weight the two sides in `rating_total`** instead of summing them raw.  The criterion cannot choose the
+   weight -- a team total is linear in a per-player linear map, so it is nearly blind to exactly this -- so
+   it would have to be chosen on the between-team share or on the consensus, and choosing on the consensus
+   is against the standing rules.  Prefer 1 and 3.
+3. **Give the defensive side a teammate-adjusted on-court feature** rather than the raw one: `onc_d` minus
+   the possession-weighted mean of his teammates' `onc_d`, or the APM already in the panel (`apm`, which IS
+   teammate-separated) in its place.  This is the honest version of what `onc_d` is being asked to do, and
+   the panel already carries both columns.
+
+**Measure it with** `scratch/consensus_report.py` (the three rows above are one command over several boards)
+and the between-team share, which is four lines of pandas on the consensus join -- neither is in the test
+suite yet, and the between-team share probably should be, because no existing floor catches it.
+
 **Three things still open, in the order they matter:**
 
 - **The board is still mis-calibrated, in a correctable direction.** Over thirty seasons the held-out
