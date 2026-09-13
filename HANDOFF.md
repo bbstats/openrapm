@@ -334,28 +334,44 @@ defence by 11%. The price is that prior and evidence are now the same games, so 
 less than it should.
 
 **DEFENCE IS COUNTED TOO MUCH -- the owner's eye test, 2026-09-13, and it measures.**  *"I do think
-defense is getting counted a little too much from my extremely informed eye test."*  It does, two separate
-ways, both against `data/external/consensus.csv` on 2024-26 with 1,000+ possessions (475 players):
+defense is getting counted a little too much from my extremely informed eye test."*  It does, on every
+board here, against `data/external/consensus.csv` on 2024-26 with 1,000+ possessions (475 players):
 
-| | this board | consensus | shipped multi-season board |
-|---|---|---|---|
-| defence share of off+def variance | **39.6%** | 23.8% | 55.3% |
-| defence / offence spread, relative to the consensus | **1.45x** | 1.00 | 1.99x |
-| share of defensive variance that is BETWEEN teams | **25.4%** | 19.5% | 10.7% |
+| | consensus | LIVE SITE (window) | single-year board | season board in artifacts/ |
+|---|---|---|---|---|
+| defence share of off+def variance | 23.8% | **52.0%** | **39.6%** | 55.3% |
+| defence / offence spread, relative to the consensus | 1.00 | **1.86x** | **1.45x** | 1.99x |
+| share of defensive variance that is BETWEEN teams | 19.5% | 9.9% | **25.4%** | 10.7% |
+
+**Read the column the observation was made on.**  `https://bbstats.github.io/openrapm/` is built by GitHub
+Pages from **`main`/docs**, and `main`'s `docs/data/ratings.json` is still the THREE-YEAR WINDOW board built
+2026-09-10 (its rows are keyed `w`, "2024-2026", not `s`).  So the eye test above was made against the
+window board, whose 2024-26 top is Shai, Wembanyama, Kawhi, Jokic, Luka -- not against anything on branch
+`cleanup`.  Nothing in this branch is user-visible until `main` moves.
+
+**The two boards fail DIFFERENTLY, and conflating them will send the next person the wrong way.**
+
+- The live window board and the `artifacts/` season board are badly tilted (52% and 55% of off+def variance
+  on defence, against 23.8%) but their defensive ratings are LESS team-clustered than the consensus's
+  (9.9% and 10.7% between teams, against 19.5%).  Their problem is amplitude: defence is simply too wide
+  relative to offence.
+- The single-year board halves the tilt (39.6%, 1.45x) and acquires the other defect instead: 25.4% of its
+  defensive variance is between teams, the only board here ABOVE the consensus.  Its problem is
+  attribution: it is handing a player his team's defence.
 
 Read the rows separately, because they are two different defects.
 
 **Row one and two: the total over-weights defence.**  `rating_total` is `rating_off + rating_def` with
-equal weight, and the two sides are not equally calibrated against the consensus -- our offence is 0.556 of
-its spread and our defence 0.807.  So even with both inside their floors, the SUM tilts defensive by about
-45%, and that is what the top of the board shows: Derrick White 5th, OG Anunoby 7th, Alex Caruso 9th in
-2026, with Jokic 6th on a defensive rating of 0.28.  Note the shipped multi-season board is worse on this
-row, not better (55.3%, 1.99x) -- it is not a regression introduced here, it is a defect this board
-inherited and halved.
+equal weight, and the two sides are not equally calibrated against the consensus -- on the single-year
+board offence is 0.556 of the consensus's spread and defence 0.807.  So even with both inside their floors,
+the SUM tilts defensive, and that is what the top of the board shows: Derrick White 5th, OG Anunoby 7th,
+Alex Caruso 9th in 2026, with Jokic 6th on a defensive rating of 0.28.  Both older boards are WORSE on this
+row, so it is a defect inherited and roughly halved, not one introduced here.
 
-**Row three is the new one, and it is the more serious.**  A player rating should be a property of the
-PLAYER, so most of its variance should sit WITHIN teams; ours puts 25.4% between teams against the
-consensus's 19.5%, and against the multi-season board's 10.7%.  We are handing a player his team's defence.
+**Row three is the new one, and it is the more serious, because this branch CAUSED it.**  A player rating
+should be a property of the PLAYER, so most of its variance should sit WITHIN teams; the single-year board
+puts 25.4% between teams against the consensus's 19.5%, where both older boards sit near 10%.  We are
+handing a player his team's defence, and we started doing it here.
 The mechanism is not mysterious and it is documented in `DECISIONS.md`:
 
 - `rating_def` is essentially all prior.  Over thirty seasons `prior_def` has sd 1.057 and `u_def` -- what
