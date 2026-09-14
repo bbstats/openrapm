@@ -1019,7 +1019,49 @@ found after the fact:
 
 The free amplitude also reads 3.4x to 9.4x on offence across seasons, against 1.6x to 2.2x before: the
 booster's output is much narrower (noisier labels, sd 0.815 against 0.567) and the amplitude is weakly
-identified.  Not chosen on, but it is the symptom to watch when the capped run is read.
+identified.  Not chosen on, but it is the symptom to watch when the capped run is read.  (The capped rerun
+was stopped unread once the owner made clear this was not the design; experiment 3 is.)
+
+### Experiment 3: the owner's design -- the career row per player PLUS chunks of his seasons (2026-09-13)
+
+**The change.**  `prior_rows` kept exactly: one row per player, his box score averaged over every season
+but the rated one (and its neighbours, for the test), labelled with his RAPM over those seasons.  ADDED,
+for the same player and with the same label: one row per contiguous run of 1, 2 and 3 of his seasons, his
+inputs averaged over the chunk, plus two features saying how much evidence the row rests on
+(`chunk_poss`, `chunk_seasons`; the rated season's own row reads its possessions and 1).  Weights: a
+player's chunk rows together weigh what his career row weighs, split by chunk possessions, so no one's
+weight grows with career length.  35,647 training rows against 2,860; 70 seconds a season.
+`singleyear.chunk_rows`, `--rows=chunks --chunk_sizes=1,2,3`.  The owner's reasoning: an SPM suffers from a
+small sample, and the same player at several noise levels teaches the booster how the map degrades with
+less evidence -- padding learned from data instead of set per stat.
+
+**Result, year-over-year, both directions, 56 observations** (`outputs/yoy_exp3_chunks.log`):
+
+| | game_armse | scale_off | scale_def | paired vs career row only, team-game MSE |
+|---|---|---|---|---|
+| career row only (`season_ratings_sy_yoy`) | 8.804 | 0.73 | 0.71 | reference |
+| career row + chunks (`season_ratings_sy_chunks`) | **8.736** | 0.75 | 0.77 | **-1.90, z -5.7, 42 of 56** |
+| stint level, each side rescaled to the scored season | | | | **-5.42, z -18.5, 56 of 56** |
+| the PRIOR alone, chunks vs career row only | 8.798 vs 8.840 | | | -1.12, z -2.0, 31 of 56 |
+| shipped rankings, for scale | 8.587 | 1.18 | 0.78 | -5.93; rescaled -6.21 |
+
+Passes the decision rule.  Two things distinguish it from experiment 2.  **The prior itself improves** (z
+-2.0, on the line), where the single-season-only prior was a tie.  And **once amplitude is taken out, this
+design is nearly the shipped rankings**: after each side is rescaled to what the scored season wants, it
+beats the career-row prior by 5.42 in every one of 56 comparisons, against the shipped rankings' 6.21.
+The gap that remains at native scale is amplitude -- the rankings are too wide for the neighbouring season
+by a quarter on both sides (0.75 / 0.77), the free prior scale asking for 2.2x within the season.  That is
+a different problem from the one experiments 1-3 were about, and it is the next one.
+
+**Consensus (`outputs/consensus_exp3_chunks.log`):** agreement 0.730 offence / 0.745 defence / 0.729 total
+against 0.758 / 0.788 / 0.758 for the career row alone; three checks below 0.75 by 0.005 to 0.021; top-five
+overlap 2.  Offensive spread relative to the consensus 0.764 (from 0.544, closer to 1), defensive 1.085.
+Team R-squared on defence 0.179, below the consensus's 0.195.  A moderate miss, not the gross one
+experiment 2 produced (0.570 / 0.656 / 0.651); between the "marginal is not a veto" and "gross is" lines
+of the standing rule, and left to the owner.
+
+What the season's own games add fell (offence sd 0.23 against 0.25, defence 0.19 against 0.09 -- the
+defensive ridge is off its ceiling here too), and the rating spread rose (offence sd 1.83 against 1.38).
 
 ## What was tried and rejected
 

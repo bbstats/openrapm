@@ -108,23 +108,31 @@ agreement collapses to 0.570 / 0.656 / 0.651, a gross miss and a veto as it stan
 defects found afterwards, in `DECISIONS.md`: no per-player weight cap (top tenth of players hold 53% of the
 weight), and one-season players lose their label (1,917 players train against 2,494).
 
+## Experiment 3 (2026-09-13): the owner's design, the career row per player PLUS chunks of his seasons
+
+`--rows=chunks --chunk_sizes=1,2,3`: the career row kept, plus one row per contiguous 1-, 2- and 3-season
+chunk of the player's career with the same label, and two features saying how much evidence the row rests
+on.  35,647 rows.  Year-over-year: **8.736 against 8.804, -1.90 team-game MSE, z -5.7, 42 of 56**; the
+prior itself improves (z -2.0); and with amplitude taken out it beats the career-row prior in **56 of 56**,
+nearly the shipped rankings' margin.  What is left at native scale is amplitude: too wide for the
+neighbouring season by a quarter on both sides.  Consensus 0.730 / 0.745 / 0.729, three checks under 0.75
+by 0.005 to 0.021, a moderate miss, the owner's call.  Full record in `DECISIONS.md`.
+
 ## The queue, one at a time
 
-1. **Experiment 3: the owner's design.  The career row per player, PLUS chunk rows.**  Keep `prior_rows`
-   exactly as it is and add, for the same player, one row per contiguous chunk of his seasons (sizes 1, 2
-   and 3 to start), features averaged over the chunk, the same label as his career row, plus two features
-   saying how much evidence the row rests on (`chunk_poss`, `chunk_seasons`; the rated season's row reads
-   its own possessions and 1).  Weights: his chunk rows together weigh what his career row weighs, split
-   by possessions, so no player's total weight grows with his career length.  `--rows=chunks
-   --chunk_sizes=1,2,3`.  Read the year-over-year test first, the consensus second.
-2. **Experiment 3b: more chunk sizes**, only if 3 pays.  Then the disjoint label (each chunk labelled from
-   the seasons outside it) as its own change, if the booster looks like it is copying its own noise.
-3. **Experiment 4: drop `onc_d` from the defensive list only** (`BORUTA_D` without `ONC`).  Lower priority
-   now: experiment 2 already took the defensive team R-squared below the consensus's.
-4. **Experiment 5: the booster's settings** (`gbdt.params` / `params_def`, tuned for another target and row
-   shape), only after the row shape is settled.
-5. The weight-capped rerun of experiment 2 (`--rows=season_capped`) was stopped unread; it is not the
-   owner's design.
+1. **Experiment 4: the amplitude.**  The free prior scale is chosen by cross-validation within the season
+   and reads 2.2x; the neighbouring season wants about 0.75 of that.  Candidates, one per run: choose the
+   scale on the whole-game folds with the prior's own `onc_*` rebuilt from the training folds only (the
+   within-season leak inflates it), or cap it, or fix it at the year-over-year value.  Read `scale_off` /
+   `scale_def` moving toward 1 AND the native-scale test improving.
+2. **Experiment 3b: more chunk sizes** (4 up to the career length), same weights.  Rows grow with the square
+   of career length; expect about 2 minutes a season.
+3. **Experiment 3c: the disjoint label** (each chunk labelled from the seasons outside it), only if the
+   booster looks like it is copying its own noise.
+4. **Experiment 5: drop `onc_d` from the defensive list only.**  Lower priority: the defensive team
+   R-squared is already below the consensus's under experiment 3.
+5. **Experiment 6: the booster's settings** (`gbdt.params` / `params_def`), only after the row shape and
+   the amplitude are settled.
 
 ## Closed, do not reopen
 
