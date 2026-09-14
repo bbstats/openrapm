@@ -224,7 +224,8 @@ def main():
     chunk_flag = _flag("chunk_sizes", "1,2,3")        # "all" = every contiguous window of a career
     chunk_sizes = "all" if chunk_flag == "all" else tuple(int(x) for x in chunk_flag.split(",") if x)
     crossfit = _flag("crossfit", "scale")            # 0 | 1 (scale and penalty) | scale (the scale only)
-    player_folds = int(_flag("player_folds", 0))     # N > 1: every player's prior from the fit without his rows
+    # adopted 2026-09-14 (the owner: "adopt"): every player's prior from the fit without his rows
+    player_folds = int(_flag("player_folds", 5))     # 0 or 1: the plain single fit
     # experiment 7: the booster's settings, the same change on both sides.  --params_mult=l2_leaf_reg:5,...
     # multiplies a numeric setting; --params_set=depth:3,... sets one.
     params_mult = {k: float(v) for k, v in (p.split(":") for p in _flag("params_mult", "").split(",") if p)}
