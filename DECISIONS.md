@@ -1157,6 +1157,32 @@ diagnostic is for is comparing two tables and the two sides.
 
 The incumbent's prior alone reads 8.722 against the shipped prior's 8.681 (`outputs/yoy_incumbent_prior.log`).
 
+### The owner's idea: the off-court record beside the on-court one (2026-09-14)
+
+*"On court rating is a useful but flawed metric. Usually we also include off-court-rating."*
+`investigate.offcourt_rates`: for each player-season, his team's luck-adjusted points scored and allowed
+per 100 over the rows of games he played in where his team was on the floor WITHOUT him, centred and
+padded exactly as the on-court columns are (`scripts/65_offcourt_panel.py` writes them into the season
+panel; the recomputed on-court columns match the panel's to six decimals).  Feature set `boruta_offc`:
+the incumbent's lists plus `offc_o`, `offc_d`, their possessions, and the net `onc - offc` per side, on
+both sides.  Cross-fitting rebuilds all of them per fold.  One change, on the incumbent.
+
+| | game_armse | paired vs incumbent | each side rescaled | consensus off / def / total | games add, off / def |
+|---|---|---|---|---|---|
+| incumbent (4b) | 8.693 | -- | -- | 0.730 / 0.753 / 0.737 | 0.22 / 0.18 |
+| + off-court and net (`sy_offc`) | 8.688 | -0.15, z -1.6, 32 of 56 | -0.02, z -0.3, 29 of 56 | 0.726 / 0.755 / 0.731 | 0.22 / 0.22 |
+
+**A tie on the test, and the eye test on the 2026 top 20 says worse.**  The order of the top seven is
+nearly unchanged (Wembanyama, Kawhi, Jokic, Giannis, Curry, LeBron, Harden) but Shai Gilgeous-Alexander
+falls from 8th to 32nd, Donovan Mitchell 26th to 47th, Jalen Brunson 28th to 51st, while Ajay Mitchell
+and Cason Wallace rise to 9th and 10th and Al Horford enters at 11th on 1,992 possessions.  The
+mechanism: an off-court column on a deep team is the player's TEAMMATES' quality, so a role player on
+Oklahoma City reads as good because the Thunder stay good without him, and the star on the same team
+reads as ordinary because the team does not collapse without him.  The on/off net is the honest
+version of that comparison, but it enters beside the raw off-court column and the booster used both.
+Rejected on the standing tie rule (the simpler wins a tie) with the eye test agreeing; not a ruling,
+the owner reads the top 20.
+
 ## What was tried and rejected
 
 **The LRBoost branch (a boosted correction on a frozen linear prior).** Five things had to be right before it

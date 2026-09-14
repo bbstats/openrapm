@@ -86,6 +86,7 @@ diagnostics.  `--columns=prior` tests the SPM alone, which is how a stage is bla
 | 6. `onc_d` off the defensive list (`sy_noonc_d`) | 8.684 | -0.24 vs 4b, z -2.6, 36 of 56; rescaled also better; **owner's call** | 0.80 / 0.88 | 0.731 / 0.689 / 0.705 |
 | 7a. booster regularisation x5 (`sy_reg5`) | 8.692 | tie, z -0.4; rejected | 0.81 / 0.90 | 0.730 / 0.763 / 0.727 |
 | 7b. booster depth 3 (`sy_depth3`) | 8.697 | +0.10, z +0.8; rejected | 0.81 / 0.90 | 0.750 / 0.757 / 0.738 |
+| 8. off-court record + on/off net as features, the owner's idea (`sy_offc`) | 8.688 | -0.15 vs 4b, z -1.6, a tie; 2026 top 20 worse (Shai 8th to 32nd, OKC role players up) | 0.81 / 0.88 | 0.726 / 0.755 / 0.731 |
 
 What each taught: the SPM is the weak stage against the shipped rankings (1); the row shape matters and
 replacing the career row is wrong (2 against 3); with amplitude removed the incumbent ranks nearly as
