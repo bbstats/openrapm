@@ -4,8 +4,8 @@
                                            [--score=1] [--target_off=xpts_ft] [--target_def=x3def_w0.25]
                                            [--free_scale=1] [--buckets=low_poss:2] [--boards=2015,2024]
                                            [--features=boruta_noonc|boruta|sy_noonc|sy]
-                                           [--exclude_neighbours=0] [--rows=player|season|season_capped|chunks]
-                                           [--chunk_sizes=1,2,3] [--crossfit=0|1|scale]
+                                           [--exclude_neighbours=0] [--rows=chunks|player|season|season_capped]
+                                           [--chunk_sizes=1,2,3] [--crossfit=scale|0|1]
 
 `--crossfit=1` (2026-09-13, the amplitude run): the free prior scale is a least-squares coefficient on the
 prior summed over the five on the floor, and the prior carries the season's own on-court columns, so the
@@ -168,10 +168,12 @@ def main():
     assert set(boards) <= set(seasons), f"--boards outside [{first}, {last}]"
     exclude_neighbours = int(_flag("exclude_neighbours", 0))
     assert exclude_neighbours >= 0
-    row_shape = _flag("rows", "player")
+    # the incumbent since 2026-09-14 (DECISIONS.md, experiments 3 and 4b): the career row plus 1-, 2- and
+    # 3-season chunks, and the free prior scale priced on cross-fitted columns
+    row_shape = _flag("rows", "chunks")
     assert row_shape in ("player", "season", "season_capped", "chunks"), "--rows=player|season|season_capped|chunks"
     chunk_sizes = tuple(int(x) for x in _flag("chunk_sizes", "1,2,3").split(",") if x)
-    crossfit = _flag("crossfit", "0")                # 0 | 1 (scale and penalty) | scale (the scale only)
+    crossfit = _flag("crossfit", "scale")            # 0 | 1 (scale and penalty) | scale (the scale only)
     assert crossfit in ("0", "1", "scale"), "--crossfit=0|1|scale"
 
     panel = pd.read_parquet(ROOT / "outputs/role_panel_season.parquet")

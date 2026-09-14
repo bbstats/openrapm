@@ -1099,10 +1099,26 @@ sees nothing left for the residual to do and switches it off.  The year-over-yea
 the residual, says it was worth keeping.  Consensus: defence 0.705 against 0.745, offence 0.730 unchanged,
 total 0.723; defensive share of variance 0.313 (from 0.386; the consensus 0.238).
 
-**Next, one change: cross-fit the scale only** (`--crossfit=scale`, `crossfit_penalty=False`): the penalty
-grid scored with the full prior columns as in experiment 3, the cross-fitted columns entering for the
-final fit alone, so the scale is priced honestly and the residual is not switched off.  Not adopted
-either way until that is read.
+**Experiment 4b, cross-fit the scale only -- ADOPTED as the single-year pipeline's incumbent (2026-09-14).**
+`--crossfit=scale` (`crossfit_penalty=False`): the penalty grid scored with the full prior columns as in
+experiment 3, the cross-fitted columns entering for the final fit alone, so the scale is priced honestly
+and the residual is not switched off.  Same 56 observations (`outputs/yoy_exp4b_scaleonly.log`):
+
+| | game_armse | scale_off | scale_def | games add, sd off / def | paired vs experiment 3 |
+|---|---|---|---|---|---|
+| experiment 3 | 8.736 | 0.75 | 0.77 | 0.23 / 0.19 | reference |
+| experiment 4, scale and penalty cross-fitted | 8.707 | 0.80 | 0.89 | 0.04 / 0.06 | -0.75, z -6.5, 46 of 56 |
+| **experiment 4b, scale only** (`season_ratings_sy_chunks_cfs`) | **8.693** | 0.80 | 0.90 | 0.22 / 0.18 | **-1.14, z -13.9, 54 of 56** |
+| 4b, each side rescaled to the scored season | | | | | +0.13, z +5.6, 10 of 56 |
+| shipped rankings | 8.587 | 1.18 | 0.78 | | -4.04 |
+
+The amplitude gain of experiment 4 with the residual kept: the best single-year rankings on the test so
+far, 54 of 56 against experiment 3, at a rescaled cost of 0.13 (against experiment 4's 0.81).  Consensus
+0.730 / **0.753** / 0.737 -- defence back above 0.75, total 0.737 against 0.729; defensive share of rating
+variance 0.338 (experiment 3: 0.386; the consensus 0.238); team R-squared on defence 0.191, below the
+consensus's 0.195.  `scripts/62_single_year_board.py` now defaults to `--rows=chunks --crossfit=scale`.
+The gap to the shipped rankings is 4.04 team-game MSE (8.693 against 8.587), from 5.93 when the test was
+first run; the shipped offensive prior's `past_*` channel, banned by ruling 12, is part of what is left.
 
 ## What was tried and rejected
 
