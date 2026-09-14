@@ -5,7 +5,8 @@
                                            [--free_scale=1] [--buckets=low_poss:2] [--boards=2015,2024]
                                            [--features=boruta_noonc|boruta|sy_noonc|sy]
                                            [--exclude_neighbours=0] [--rows=chunks|player|season|season_capped]
-                                           [--chunk_sizes=1,2,3] [--crossfit=scale|0|1]
+                                           [--chunk_sizes=1,2,3|all] [--crossfit=scale|0|1]
+                                           [--params_mult=l2_leaf_reg:5,min_child_weight:5] [--params_set=depth:3]
 
 `--crossfit=1` (2026-09-13, the amplitude run): the free prior scale is a least-squares coefficient on the
 prior summed over the five on the floor, and the prior carries the season's own on-court columns, so the
@@ -172,8 +173,21 @@ def main():
     # 3-season chunks, and the free prior scale priced on cross-fitted columns
     row_shape = _flag("rows", "chunks")
     assert row_shape in ("player", "season", "season_capped", "chunks"), "--rows=player|season|season_capped|chunks"
-    chunk_sizes = tuple(int(x) for x in _flag("chunk_sizes", "1,2,3").split(",") if x)
+    chunk_flag = _flag("chunk_sizes", "1,2,3")        # "all" = every contiguous window of a career
+    chunk_sizes = "all" if chunk_flag == "all" else tuple(int(x) for x in chunk_flag.split(",") if x)
     crossfit = _flag("crossfit", "scale")            # 0 | 1 (scale and penalty) | scale (the scale only)
+    # experiment 7: the booster's settings, the same change on both sides.  --params_mult=l2_leaf_reg:5,...
+    # multiplies a numeric setting; --params_set=depth:3,... sets one.
+    params_mult = {k: float(v) for k, v in (p.split(":") for p in _flag("params_mult", "").split(",") if p)}
+    params_set = {k: float(v) for k, v in (p.split(":") for p in _flag("params_set", "").split(",") if p)}
+
+    def tuned(params: dict) -> dict:
+        out = dict(params)
+        for k, m in params_mult.items():
+            out[k] = type(params[k])(params[k] * m)
+        for k, v in params_set.items():
+            out[k] = type(params[k])(v)
+        return out
     assert crossfit in ("0", "1", "scale"), "--crossfit=0|1|scale"
 
     panel = pd.read_parquet(ROOT / "outputs/role_panel_season.parquet")
@@ -185,7 +199,8 @@ def main():
     print(f"targets: offense {names['O']}, defense {names['D']}; features {feature_set} "
           f"(O {len(features['O'])}, D {len(features['D'])}); "
           f"free_prior_scale {FREE_PRIOR_SCALE}; lam_buckets {LAM_BUCKETS or '{}'}; "
-          f"exclude_neighbours {exclude_neighbours}; rows {row_shape}; crossfit {crossfit}", flush=True)
+          f"exclude_neighbours {exclude_neighbours}; rows {row_shape} (sizes {chunk_sizes}); crossfit {crossfit}; "
+          f"params_mult {params_mult or '{}'}; params_set {params_set or '{}'}", flush=True)
 
     t0 = time.time()
     # One accumulator per TARGET, because the two sides explain different things.  The designs are NOT
@@ -211,7 +226,7 @@ def main():
         unseen = [s for s in range(season - exclude_neighbours, season + exclude_neighbours + 1)]
         labels_by_target: dict = {}
         models, held_frames, model_feats_of = {}, {}, {}
-        for side, params in (("O", cfg["gbdt"]["params"]), ("D", cfg["gbdt"]["params_def"])):
+        for side, params in (("O", tuned(cfg["gbdt"]["params"])), ("D", tuned(cfg["gbdt"]["params_def"]))):
             column = "offense" if side == "O" else "defense"
             feats = features[side]
             training = panel[(panel.side == side) & ~panel.season.isin(unseen)]
@@ -227,7 +242,9 @@ def main():
             elif row_shape == "chunks":
                 # the owner's design: the career row plus contiguous chunks of his seasons, with two
                 # features saying how much evidence each row rests on
-                train = sy.chunk_rows(label(unseen), training, column, feats, sizes=chunk_sizes)
+                sizes = (range(1, int(training.groupby("player_id").season.nunique().max()) + 1)
+                         if chunk_sizes == "all" else chunk_sizes)
+                train = sy.chunk_rows(label(unseen), training, column, feats, sizes=sizes)
                 model_feats = feats + sy.CHUNK_FEATURES
             else:
                 # one label per TRAINING season: the RAPM with the rated season(s) and that season out, so

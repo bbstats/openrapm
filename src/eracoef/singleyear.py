@@ -116,6 +116,10 @@ FEATURE_SETS = {
     "boruta": {"O": BORUTA_O, "D": BORUTA_D or PRIOR_FEATURES},
     "boruta_noonc": {"O": [f for f in BORUTA_O if f not in ONC],
                      "D": [f for f in (BORUTA_D or PRIOR_FEATURES) if f not in ONC]},
+    # experiment 6 (2026-09-14): the on-court columns off the DEFENSIVE list only.  `onc_d` is points
+    # allowed while he is on the floor, a lineup quantity; the shipped defensive prior has no on-court
+    # column and beats the single-year one on the year-over-year test (DECISIONS.md, experiment 1).
+    "boruta_noonc_d": {"O": BORUTA_O, "D": [f for f in BORUTA_D if f not in ONC]},
 }
 
 
