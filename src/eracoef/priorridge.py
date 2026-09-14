@@ -33,7 +33,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-__all__ = ["PriorRidgeCV", "armse", "calibration_miss", "penalty_grid", "team_game_weights",
+__all__ = ["PriorRidgeCV", "game_folds", "armse", "calibration_miss", "penalty_grid", "team_game_weights",
            "team_game_mse", "solve_diag", "solve_penalised", "DEFAULT_PLAYER_LAMBDAS",
            "DEFAULT_CONTEXT_LAMBDAS", "MAE_SCALE"]
 
@@ -155,6 +155,20 @@ def solve_penalised(gram, rhs, sizes, triple):
     return solve_diag(gram, rhs, np.concatenate([np.full(n, lam) for n, lam in zip(sizes, triple)]))
 
 
+def game_folds(design, n_folds: int, seed: int = 0):
+    """The CV fold of every row: whole games dealt at random by `seed`; None when there are too few games.
+
+    A function of the design's games alone, so anything that needs the same folds the ridge will use
+    (saving cross-fitted fold priors to reuse across penalty sweeps) can reproduce them exactly.
+    """
+    games = design.rows["game_idx"].to_numpy()
+    unique_games = np.unique(games)
+    if n_folds <= 1 or unique_games.size < n_folds:
+        return None
+    fold_of_game = np.random.default_rng(seed).permutation(unique_games.size) % n_folds
+    return pd.Series(fold_of_game, index=unique_games).reindex(games).to_numpy()
+
+
 class PriorRidgeCV:
     """Ridge on a stint design, centred on a per-player prior, three penalties chosen by game-grouped CV.
 
@@ -271,11 +285,7 @@ class PriorRidgeCV:
             design, self.weight_by_closeness, self.closeness_floor)
         self.average_margin_ = average_margin
 
-        fold = None
-        if self.n_folds > 1 and np.unique(games).size >= self.n_folds:
-            unique_games = np.unique(games)
-            fold_of_game = np.random.default_rng(self.seed).permutation(unique_games.size) % self.n_folds
-            fold = pd.Series(fold_of_game, index=unique_games).reindex(games).to_numpy()
+        fold = game_folds(design, self.n_folds, self.seed)
 
         self.cross_fitted_ = False
         crossfit_columns = None

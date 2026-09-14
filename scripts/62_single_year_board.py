@@ -7,7 +7,8 @@
                                            [--exclude_neighbours=0] [--rows=chunks|player|season|season_capped]
                                            [--chunk_sizes=1,2,3|all] [--crossfit=scale|0|1]
                                            [--params_mult=l2_leaf_reg:5,min_child_weight:5] [--params_set=depth:3]
-                                           [--player_folds=0|5]
+                                           [--player_folds=0|5] [--unshrink_label=0|1] [--lambda_player=<value>]
+                                           [--save_priors=<name>] [--priors_from=<name>]
 
 `--player_folds=5` (2026-09-14, the owner's call after the memorisation test): the SPM is fitted once
 per player fold and every player's prior comes from the fit that never saw any of his rows, so it cannot
@@ -88,7 +89,7 @@ from eracoef.holdout import Context, Ratings, predict_season, score  # noqa: E40
 from eracoef.inseason import season_frac  # noqa: E402
 from eracoef.investigate import offcourt_rates, oncourt_rates  # noqa: E402
 from eracoef.looseason import LeaveSeasonOutRAPM  # noqa: E402
-from eracoef.priorridge import PriorRidgeCV, armse, calibration_miss  # noqa: E402
+from eracoef.priorridge import PriorRidgeCV, armse, calibration_miss, game_folds  # noqa: E402
 from eracoef.xshoot import DEFENSE_TARGETS  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -161,6 +162,20 @@ class OutOfPlayerSPM:
         return out
 
 
+def _saved_fold_prior(folds: list, design):
+    """The saved per-fold priors, served by matching the ridge's train mask to the fold it holds out."""
+    fold = game_folds(design, 5, 0)
+
+    def fold_prior(train_mask):
+        held = ~np.asarray(train_mask, dtype=bool)
+        for f, pair in enumerate(folds):
+            if np.array_equal(held, fold == f):
+                return pair
+        raise ValueError("the ridge's fold does not match any saved fold; rebuild the priors")
+
+    return fold_prior
+
+
 def _fold_prior_builder(wd_o, wd_d, models, held_frames, model_feats):
     """A prior for a CV fold that has NOT seen the fold's games: the season's on-court columns (`onc_*`)
     rebuilt from the training rows alone, the fitted boosters re-asked.  `--crossfit=1`.
@@ -226,6 +241,16 @@ def main():
     crossfit = _flag("crossfit", "scale")            # 0 | 1 (scale and penalty) | scale (the scale only)
     # adopted 2026-09-14 (the owner: "adopt"): every player's prior from the fit without his rows
     player_folds = int(_flag("player_folds", 5))     # 0 or 1: the plain single fit
+    # experiment 1 (2026-09-14): un-shrink the label.  A ridge shrinks a player by n / (n + lambda), so the
+    # label's spread grows fifteen-fold from short careers to long ones and the SPM learns "more career
+    # possessions = bigger number".  Multiplying by (n + lambda) / n puts every player's label on one scale.
+    unshrink = _flag("unshrink_label", "0") not in ("0", "no", "false")
+    # experiment 2: the ridge's player penalty fixed at one value for every season instead of chosen by
+    # cross-validation inside the season (which cannot validate a per-player residual and switches the
+    # games off in 2024-2026).  Chosen on the year-over-year test, once.
+    lambda_player = _flag("lambda_player")
+    # the priors are the slow stage (five booster fits a season); save them once, sweep the ridge on them
+    save_priors, priors_from = _flag("save_priors"), _flag("priors_from")
     # experiment 7: the booster's settings, the same change on both sides.  --params_mult=l2_leaf_reg:5,...
     # multiplies a numeric setting; --params_set=depth:3,... sets one.
     params_mult = {k: float(v) for k, v in (p.split(":") for p in _flag("params_mult", "").split(",") if p)}
@@ -251,7 +276,14 @@ def main():
           f"free_prior_scale {FREE_PRIOR_SCALE}; lam_buckets {LAM_BUCKETS or '{}'}; "
           f"exclude_neighbours {exclude_neighbours}; rows {row_shape} (sizes {chunk_sizes}); crossfit {crossfit}; "
           f"params_mult {params_mult or '{}'}; params_set {params_set or '{}'}; "
-          f"player_folds {player_folds}", flush=True)
+          f"player_folds {player_folds}; unshrink_label {unshrink}; lambda_player {lambda_player or 'CV'}; "
+          f"priors_from {priors_from or '-'}; save_priors {save_priors or '-'}", flush=True)
+    if lambda_player is not None:
+        global BOARD_PLAYER_LAMBDAS, BOARD_CONTEXT_LAMBDAS
+        BOARD_PLAYER_LAMBDAS = np.array([float(lambda_player)])
+        BOARD_CONTEXT_LAMBDAS = np.array([0.0])
+    saved = pd.read_pickle(ROOT / "outputs" / f"priors_{priors_from}.pkl") if priors_from else None
+    to_save: dict = {}
 
     t0 = time.time()
     # One accumulator per TARGET, because the two sides explain different things.  The designs are NOT
@@ -263,6 +295,8 @@ def main():
 
     rapm = {}
     for name in dict.fromkeys(names.values()):
+        if saved is not None:
+            break                                    # the priors are on disk; no labels, no boosters
         rapm[name] = LeaveSeasonOutRAPM(min_possessions=MIN_POSSESSIONS)
         for s in seasons:
             rapm[name].add_season(s, design_for(name, s))
@@ -280,12 +314,20 @@ def main():
         for side, params in (("O", tuned(cfg["gbdt"]["params"])), ("D", tuned(cfg["gbdt"]["params_def"]))):
             column = "offense" if side == "O" else "defense"
             feats = features[side]
+            if saved is not None:
+                prior[side] = saved[season][side]
+                continue
             training = panel[(panel.side == side) & ~panel.season.isin(unseen)]
 
             def label(exclude):
-                return rapm[names[side]].ratings(
+                out = rapm[names[side]].ratings(
                     held_out_season=exclude, offense_lambda=RAPM_OFFENSE_LAMBDA,
                     defense_lambda=RAPM_DEFENSE_LAMBDA, context_lambda=RAPM_CONTEXT_LAMBDA)
+                if unshrink:
+                    n = out.possessions.to_numpy(float)
+                    out["offense"] = out.offense * (n + RAPM_OFFENSE_LAMBDA) / n
+                    out["defense"] = out.defense * (n + RAPM_DEFENSE_LAMBDA) / n
+                return out
 
             model_feats = list(feats)
             if row_shape == "player":
@@ -318,9 +360,17 @@ def main():
             models[side], held_frames[side], model_feats_of[side] = model, held, model_feats
 
         fold_prior = None
-        if crossfit != "0":
+        if saved is not None and crossfit != "0":
+            fold_prior = _saved_fold_prior(saved[season]["folds"], design_for(names["O"], season))
+        elif crossfit != "0":
             wd_o, wd_d = design_for("xpts_ft", season), design_for("x3def", season)
             fold_prior = _fold_prior_builder(wd_o, wd_d, models, held_frames, model_feats_of)
+        if save_priors:
+            # the full priors and, per game fold the ridge will use, the priors rebuilt without that fold
+            fold = game_folds(design_for(names["O"], season), 5, 0)
+            folds = [] if fold is None or fold_prior is None else [fold_prior(fold != f) for f in range(5)]
+            to_save[season] = {"O": prior["O"], "D": prior["D"], "folds": folds}
+            pd.to_pickle(to_save, ROOT / "outputs" / f"priors_{save_priors}.pkl")
 
         # one ridge per side's target; each contributes only its own half of the board
         scale = {}
