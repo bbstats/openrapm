@@ -5,7 +5,7 @@
                                            [--free_scale=1] [--buckets=low_poss:2] [--boards=2015,2024]
                                            [--features=boruta_noonc|boruta|sy_noonc|sy]
                                            [--exclude_neighbours=0] [--rows=player|season|season_capped|chunks]
-                                           [--chunk_sizes=1,2,3] [--crossfit=0]
+                                           [--chunk_sizes=1,2,3] [--crossfit=0|1|scale]
 
 `--crossfit=1` (2026-09-13, the amplitude run): the free prior scale is a least-squares coefficient on the
 prior summed over the five on the floor, and the prior carries the season's own on-court columns, so the
@@ -112,12 +112,12 @@ FREE_PRIOR_SCALE = True     # --free_scale=0 pins the prior at exactly the ampli
 LAM_BUCKETS: dict = {}      # --buckets=low_poss:2 multiplies the bench's penalty
 
 
-def _ridge(design, prior, free_prior_scale=None, lam_buckets=None, fold_prior=None):
+def _ridge(design, prior, free_prior_scale=None, lam_buckets=None, fold_prior=None, crossfit_penalty=True):
     return PriorRidgeCV(offense_lambdas=BOARD_PLAYER_LAMBDAS, defense_lambdas=BOARD_PLAYER_LAMBDAS,
                         context_lambdas=BOARD_CONTEXT_LAMBDAS, n_folds=5,
                         free_prior_scale=FREE_PRIOR_SCALE if free_prior_scale is None else free_prior_scale,
                         lam_buckets=LAM_BUCKETS if lam_buckets is None else lam_buckets).fit(
-        design, prior["O"], prior["D"], fold_prior=fold_prior)
+        design, prior["O"], prior["D"], fold_prior=fold_prior, crossfit_penalty=crossfit_penalty)
 
 
 def _fold_prior_builder(wd_o, wd_d, models, held_frames, model_feats):
@@ -171,7 +171,8 @@ def main():
     row_shape = _flag("rows", "player")
     assert row_shape in ("player", "season", "season_capped", "chunks"), "--rows=player|season|season_capped|chunks"
     chunk_sizes = tuple(int(x) for x in _flag("chunk_sizes", "1,2,3").split(",") if x)
-    crossfit = _flag("crossfit", "0") not in ("0", "no", "false")
+    crossfit = _flag("crossfit", "0")                # 0 | 1 (scale and penalty) | scale (the scale only)
+    assert crossfit in ("0", "1", "scale"), "--crossfit=0|1|scale"
 
     panel = pd.read_parquet(ROOT / "outputs/role_panel_season.parquet")
     panel = panel[panel.poss > 0].reset_index(drop=True)
@@ -246,7 +247,7 @@ def main():
             models[side], held_frames[side], model_feats_of[side] = model, held, model_feats
 
         fold_prior = None
-        if crossfit:
+        if crossfit != "0":
             wd_o, wd_d = design_for("xpts_ft", season), design_for("x3def", season)
             fold_prior = _fold_prior_builder(wd_o, wd_d, models, held_frames, model_feats_of)
 
@@ -254,7 +255,8 @@ def main():
         scale = {}
         # one fit per DISTINCT target: when both sides explain the same thing (--target_off=pts
         # --target_def=pts) the second fit would be the first one over again
-        fits = {name: _ridge(design_for(name, season), prior, fold_prior=fold_prior)
+        fits = {name: _ridge(design_for(name, season), prior, fold_prior=fold_prior,
+                             crossfit_penalty=(crossfit == "1"))
                 for name in dict.fromkeys(names.values())}
         for side in ("O", "D"):
             ridge = fits[names[side]]

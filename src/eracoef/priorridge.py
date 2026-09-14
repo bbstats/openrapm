@@ -242,7 +242,8 @@ class PriorRidgeCV:
         return np.concatenate([player, np.full(n_context - n_free, triple[2]), np.zeros(n_free)])
 
     # ------------------------------------------------------------------ fit
-    def fit(self, design, prior_offense=None, prior_defense=None, fold_prior=None):
+    def fit(self, design, prior_offense=None, prior_defense=None, fold_prior=None,
+            crossfit_penalty: bool = True):
         """Fit on `design`, centred on (or, with `free_prior_scale`, scaled from) the two priors.
 
         `fold_prior(train_mask) -> (prior_offense, prior_defense)`, optional and only used with
@@ -252,6 +253,12 @@ class PriorRidgeCV:
         Without it, a prior that carries the season's own on-court record (the single-year prior's `onc_*`)
         contains the outcome of every row it is regressed on, and the scale reads those outcomes back.
         The ratings still take `scale * (the full prior handed in) + residual`; only the pricing changes.
+
+        `crossfit_penalty=False` cross-fits the SCALE only: the penalty grid is scored with the full prior
+        columns as before, and the cross-fitted columns enter for the final fit alone.  Measured 2026-09-13
+        (experiment 4): with the cross-fitted columns in the penalty CV too, the residual penalty pins at
+        its ceiling in 19 of 30 seasons on defence and the season's own games stop contributing, which the
+        year-over-year test says costs ranking quality even as the amplitude improves.
         """
         player_ids, players, context, prior = self._parts(design, prior_offense, prior_defense)
         n_players, n_context = design.spec.n_ps, context.shape[1]
@@ -271,6 +278,7 @@ class PriorRidgeCV:
             fold = pd.Series(fold_of_game, index=unique_games).reindex(games).to_numpy()
 
         self.cross_fitted_ = False
+        crossfit_columns = None
         if fold_prior is not None and self.free_prior_scale and fold is not None:
             column_o, column_d = np.zeros(target.size), np.zeros(target.size)
             for f in range(self.n_folds):
@@ -281,8 +289,10 @@ class PriorRidgeCV:
                 block = players[rows_f]
                 column_o[rows_f] = block[:, :n_players] @ self._align(po, player_ids, n_players)
                 column_d[rows_f] = block[:, n_players:] @ self._align(pdf, player_ids, n_players)
-            context[:, -2], context[:, -1] = column_o, column_d
+            crossfit_columns = (column_o, column_d)
             self.cross_fitted_ = True
+            if crossfit_penalty:
+                context[:, -2], context[:, -1] = column_o, column_d
 
         if fold is not None and len(self.grid) > 1:
             error = {t: 0.0 for t in self.grid}
@@ -311,6 +321,8 @@ class PriorRidgeCV:
             best = self.grid[0]
 
         self.offense_lambda_, self.defense_lambda_, self.context_lambda_ = best
+        if crossfit_columns is not None and not crossfit_penalty:
+            context[:, -2], context[:, -1] = crossfit_columns          # the scale priced honestly, the penalty as before
         gram, rhs = self._blocks(players, context, offset, target, weights, np.arange(target.size))
         coef = solve_diag(gram, rhs, penalty[best])
         self.residual_ = coef[:2 * n_players]

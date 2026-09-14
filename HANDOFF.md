@@ -118,13 +118,19 @@ nearly the shipped rankings' margin.  What is left at native scale is amplitude:
 neighbouring season by a quarter on both sides.  Consensus 0.730 / 0.745 / 0.729, three checks under 0.75
 by 0.005 to 0.021, a moderate miss, the owner's call.  Full record in `DECISIONS.md`.
 
+## Experiment 4 (2026-09-13): amplitude, the free prior scale cross-fitted
+
+`--crossfit=1` rebuilds the prior's on-court columns inside each CV fold from the training games, so the
+scale is priced on games the prior has not seen.  Year-over-year **8.707 against 8.736, -0.75, z -6.5, 46 of
+56**, defence amplitude 0.77 to 0.89.  But with amplitude taken out it is worse in **56 of 56**: the honest
+CV switches the residual off (penalty at the ceiling in 19 of 30 seasons on defence) and the season's own
+games stop contributing.  Consensus defence 0.705 from 0.745.  A trade, not adopted.  `DECISIONS.md`.
+
 ## The queue, one at a time
 
-1. **Experiment 4: the amplitude.**  The free prior scale is chosen by cross-validation within the season
-   and reads 2.2x; the neighbouring season wants about 0.75 of that.  Candidates, one per run: choose the
-   scale on the whole-game folds with the prior's own `onc_*` rebuilt from the training folds only (the
-   within-season leak inflates it), or cap it, or fix it at the year-over-year value.  Read `scale_off` /
-   `scale_def` moving toward 1 AND the native-scale test improving.
+1. **Experiment 4b: cross-fit the scale only** (`--crossfit=scale`): the penalty chosen as in experiment 3,
+   the cross-fitted columns for the final fit alone.  Running.  Want: amplitude toward 1, the rescaled row
+   not worse, the residual kept (`u_off` / `u_def` sd near 0.23 / 0.19).
 2. **Experiment 3b: more chunk sizes** (4 up to the career length), same weights.  Rows grow with the square
    of career length; expect about 2 minutes a season.
 3. **Experiment 3c: the disjoint label** (each chunk labelled from the seasons outside it), only if the

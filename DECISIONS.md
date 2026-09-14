@@ -1063,6 +1063,47 @@ of the standing rule, and left to the owner.
 What the season's own games add fell (offence sd 0.23 against 0.25, defence 0.19 against 0.09 -- the
 defensive ridge is off its ceiling here too), and the rating spread rose (offence sd 1.83 against 1.38).
 
+### Experiment 4: amplitude -- cross-fitting the free prior scale (2026-09-13)
+
+**The problem.**  The rating is `scale * prior + residual`, the scale a free least-squares coefficient on
+the prior summed over the five on the floor, fitted on the season's games.  The prior carries the season's
+own on-court columns (`onc_*`, averaged over every game), so that column contains the outcome of every row
+it is regressed on and the coefficient reads them back: 2.2x within the season where the neighbouring
+seasons want about 0.75 of that on both sides (experiment 3).
+
+**The change.**  `PriorRidgeCV.fit(fold_prior=...)`: the prior's on-court columns are rebuilt inside each
+of the five whole-game CV folds from the training games alone (`oncourt_rates` on the two targets the
+panel used, which reproduces the panel's columns to four decimals on the full season), the boosters are
+re-asked, and each row's prior column takes the value from the prior that never saw its fold.  The scale
+is then priced on games the prior has not seen.  The final rating still takes `scale * (full prior) +
+residual`.  `--crossfit=1`, on top of experiment 3's rows.
+
+**Result, year-over-year, both directions, 56 observations** (`outputs/yoy_exp4_crossfit.log`):
+
+| | game_armse | scale_off | scale_def | paired vs experiment 3, team-game MSE |
+|---|---|---|---|---|
+| experiment 3 (`season_ratings_sy_chunks`) | 8.736 | 0.75 | 0.77 | reference |
+| + cross-fitted scale and penalty (`season_ratings_sy_chunks_cf`) | **8.707** | 0.80 | **0.89** | **-0.75, z -6.5, 46 of 56** |
+| stint level, each side rescaled to the scored season | | | | **+0.81, z +10.3, 0 of 56** |
+| shipped rankings | 8.587 | 1.18 | 0.78 | -4.04 |
+
+**It passes the rule at native scale and it is a trade, and the diagnostic row says which.**  The amplitude
+moved the right way -- defence from 0.77 to 0.89, offence 0.75 to 0.80, the within-season scale from 2.2x
+to about 1.9x -- and that is the whole of the gain: with each side rescaled to the scored season, the
+cross-fitted rankings are WORSE in 56 of 56.  The mechanism is visible: with the cross-fitted columns in
+the penalty CV too, the residual penalty pins at the 1e9 ceiling in 19 of 30 seasons on defence and 17
+on offence (6 and 2 before), so the season's own games stop contributing (what they add: sd 0.04 offence,
+0.06 defence, against 0.23 / 0.19).  An honest within-season CV cannot validate a per-player residual --
+the same five appear together in every fold, trap 2 -- so once the prior column stops leaking, the CV
+sees nothing left for the residual to do and switches it off.  The year-over-year test, which can see
+the residual, says it was worth keeping.  Consensus: defence 0.705 against 0.745, offence 0.730 unchanged,
+total 0.723; defensive share of variance 0.313 (from 0.386; the consensus 0.238).
+
+**Next, one change: cross-fit the scale only** (`--crossfit=scale`, `crossfit_penalty=False`): the penalty
+grid scored with the full prior columns as in experiment 3, the cross-fitted columns entering for the
+final fit alone, so the scale is priced honestly and the residual is not switched off.  Not adopted
+either way until that is read.
+
 ## What was tried and rejected
 
 **The LRBoost branch (a boosted correction on a frozen linear prior).** Five things had to be right before it
