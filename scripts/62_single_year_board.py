@@ -8,7 +8,7 @@
                                            [--chunk_sizes=1,2,3|all] [--crossfit=scale|0|1]
                                            [--params_mult=l2_leaf_reg:5,min_child_weight:5] [--params_set=depth:3]
                                            [--player_folds=0|5] [--unshrink_label=0|1] [--lambda_player=<value>]
-                                           [--save_priors=<name>] [--priors_from=<name>]
+                                           [--save_priors=<name>] [--priors_from=<name>] [--centre=1]
 
 `--player_folds=5` (2026-09-14, the owner's call after the memorisation test): the SPM is fitted once
 per player fold and every player's prior comes from the fit that never saw any of his rows, so it cannot
@@ -129,6 +129,49 @@ def _ridge(design, prior, free_prior_scale=None, lam_buckets=None, fold_prior=No
         design, prior["O"], prior["D"], fold_prior=fold_prior, crossfit_penalty=crossfit_penalty)
 
 
+TIER_EDGES = [0.0, 500.0, 1500.0, 4444.0, np.inf]       # label possessions; the top tier is fully un-shrunk
+
+
+def unshrink_label(target: pd.DataFrame, lam_o: float, lam_d: float, n_floor: float) -> pd.DataFrame:
+    """Put every player's label on one scale, and shrink the thin ones toward their tier's level, not 0.
+
+    A ridge coefficient is about s_i * raw_i with s_i = n_i / (n_i + lambda): a 54,000-possession
+    player keeps 57% of his true impact, a 2,600-possession one 6%, so the label's spread grows
+    fifteen-fold with career length and the SPM learns "more career possessions = bigger number" -- the
+    lever that put LeBron and Curry near the top of 2026 (DECISIONS.md).  Dividing by s_i restores the
+    scale, but for a thin player it multiplies noise by hundreds.  So the un-shrinking is capped at
+    s_floor = n_floor / (n_floor + lambda), and what the cap leaves un-recovered is filled from the
+    player's possession TIER: its mean impact, estimated stably by un-shrinking the tier's MEAN
+    coefficient (hundreds of players average the noise away).  That is the owner's second point
+    (2026-09-14): near-zero-possession players should sit at the replacement level of their kind,
+    -2 or -3, not at 0.
+
+        label_i = beta_i / max(s_i, s_floor)  +  (1 - s_i / max(s_i, s_floor)) * m(tier_i)
+        m(tier)  = mean_tier(beta) / mean_tier(s)
+
+    Above n_floor the second term is zero and the label is the raw-scale coefficient; below it the label
+    is shrunk toward the tier level by s_i / s_floor, the usual empirical-Bayes form with an honest
+    centre.  The row weight stays the label's possessions, the right precision weight for a label whose
+    noise variance falls as 1 / n.
+    """
+    out = target.copy()
+    n = out.possessions.to_numpy(float)
+    tier = np.digitize(n, TIER_EDGES[1:-1])
+    for column, lam in (("offense", lam_o), ("defense", lam_d)):
+        beta = out[column].to_numpy(float)
+        s = n / (n + lam)
+        s_floor = n_floor / (n_floor + lam)
+        s_cap = np.maximum(s, s_floor)
+        m = np.zeros(len(TIER_EDGES) - 1)
+        for t in range(len(m)):
+            mask = tier == t
+            if mask.any():
+                m[t] = beta[mask].mean() / s[mask].mean()
+        out[column] = beta / s_cap + (1.0 - s / s_cap) * m[tier]
+        out.attrs[f"tier_level_{column}"] = m.round(3).tolist()
+    return out
+
+
 class OutOfPlayerSPM:
     """The SPM fitted once on everything and once per player fold; `predict` gives each player the fit
     that never saw his rows (`--player_folds=N`; 0 = the plain single fit)."""
@@ -245,6 +288,7 @@ def main():
     # label's spread grows fifteen-fold from short careers to long ones and the SPM learns "more career
     # possessions = bigger number".  Multiplying by (n + lambda) / n puts every player's label on one scale.
     unshrink = _flag("unshrink_label", "0") not in ("0", "no", "false")
+    unshrink_floor = float(_flag("unshrink_floor", 4444))       # see unshrink_label()
     # experiment 2: the ridge's player penalty fixed at one value for every season instead of chosen by
     # cross-validation inside the season (which cannot validate a per-player residual and switches the
     # games off in 2024-2026).  Chosen on the year-over-year test, once.
@@ -324,14 +368,17 @@ def main():
                     held_out_season=exclude, offense_lambda=RAPM_OFFENSE_LAMBDA,
                     defense_lambda=RAPM_DEFENSE_LAMBDA, context_lambda=RAPM_CONTEXT_LAMBDA)
                 if unshrink:
-                    n = out.possessions.to_numpy(float)
-                    out["offense"] = out.offense * (n + RAPM_OFFENSE_LAMBDA) / n
-                    out["defense"] = out.defense * (n + RAPM_DEFENSE_LAMBDA) / n
+                    out = unshrink_label(out, RAPM_OFFENSE_LAMBDA, RAPM_DEFENSE_LAMBDA, unshrink_floor)
                 return out
 
             model_feats = list(feats)
             if row_shape == "player":
                 train = sy.prior_rows(label(unseen), training, column, feats)
+            if unshrink and season == boards[0] and row_shape != "player":
+                lab = label(unseen)
+                print(f"  prior {side}: un-shrunk label, tier levels {lab.attrs.get(f'tier_level_{column}')} "
+                      f"per 100 for tiers {TIER_EDGES[:-1]}+ label possessions; label sd {lab[column].std():.3f}",
+                      flush=True)
             elif row_shape == "chunks":
                 # the owner's design: the career row plus contiguous chunks of his seasons, with two
                 # features saying how much evidence each row rests on
@@ -404,6 +451,20 @@ def main():
         pd.concat(rows, ignore_index=True).to_parquet(out, index=False)
 
     board = pd.concat(rows, ignore_index=True)
+    # The owner, 2026-09-14: "players' values are not centered well ... guys are positive that should be
+    # pushed down".  The SPM prior's possession-weighted mean is not zero (the label's mean is positive for
+    # the heavy-minute players who dominate a season's possessions, and the free scale multiplies it:
+    # +1.47 on offence in 2026), and nothing downstream re-centres it.  So: per season and side, the
+    # possession-weighted mean of the rating is zero -- the average possession is played by a zero
+    # player, the RAPM convention.  A level shift only: the year-over-year test refits the level and the
+    # consensus checks are rank- and spread-based, so neither moves.  --centre=0 keeps the raw level.
+    if _flag("centre", "1") not in ("0", "no", "false"):
+        for side in ("offense", "defense"):
+            level = (board.groupby("season").apply(
+                lambda g, c=side: np.average(g[c], weights=g.possessions), include_groups=False)
+                     .reindex(board.season).to_numpy())
+            board[side] = board[side] - level
+            board[f"prior_{side}"] = board[f"prior_{side}"] - level
     # 52_site.py's schema: raw sign in, positive-good out, one row per player-season
     board = board.rename(columns={"possessions": "poss_off"})
     board["poss_season"] = board.poss_off
