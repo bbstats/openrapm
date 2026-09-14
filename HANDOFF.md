@@ -135,3 +135,6 @@ penalty in the fit; the remaining constants (`gbdt_win_decay` 0.514, `PAST_DECAY
     .venv/Scripts/python scripts/63_yoy.py --rankings=incumbent=outputs/season_ratings_sy_chunks_cfs.parquet,ship=artifacts/season_ratings.parquet --ref=incumbent --tag=verify --splits=
                                                                              # ship -4.04 team-game MSE, 54 of 56
     OPENRAPM_BOARD=outputs/season_ratings_sy_chunks_cfs.parquet .venv/Scripts/python -m pytest tests/test_vs_consensus.py -q
+                        # 6 passed, 4 failed: offence 0.730 and total 0.737 against 0.75; top five shares 2 of 5
+                        # (ours has Harden, Kawhi, LeBron where the consensus has Giannis, Luka, Wembanyama);
+                        # LaMelo Ball 216th.  The single-year rankings have never passed all ten; the shipped ones do.
