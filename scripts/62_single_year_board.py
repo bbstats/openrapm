@@ -372,13 +372,13 @@ def main():
                 return out
 
             model_feats = list(feats)
-            if row_shape == "player":
-                train = sy.prior_rows(label(unseen), training, column, feats)
-            if unshrink and season == boards[0] and row_shape != "player":
+            if unshrink and season == boards[0]:
                 lab = label(unseen)
                 print(f"  prior {side}: un-shrunk label, tier levels {lab.attrs.get(f'tier_level_{column}')} "
                       f"per 100 for tiers {TIER_EDGES[:-1]}+ label possessions; label sd {lab[column].std():.3f}",
                       flush=True)
+            if row_shape == "player":
+                train = sy.prior_rows(label(unseen), training, column, feats)
             elif row_shape == "chunks":
                 # the owner's design: the career row plus contiguous chunks of his seasons, with two
                 # features saying how much evidence each row rests on
