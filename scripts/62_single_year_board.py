@@ -74,13 +74,23 @@ quarter wants each side multiplied by.  A team-game total is linear in a per-pla
 Writes outputs/<out>.parquet with one row per player-season, which scripts/52_site.py reads, and
 outputs/<out>_score.parquet with the per-season diagnostic.
 """
+import os
 import sys
 import time
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
-from chimeraboost import ChimeraBoostRegressor
+# Thread pinning, BEFORE numpy and chimeraboost are imported (2026-09-14).  The booster's linear leaves
+# are thousands of tiny solves; a BLAS that spins up twelve threads for each one thrashes, and numba's
+# thread pool on top of it can livelock when more than one process is running: the same 1997 fit that
+# took 15 s alone in the morning ran 45+ minutes with two processes up, and 111 s with everything
+# pinned to one thread.  BLAS gets one thread; numba's count is OPENRAPM_NUMBA_THREADS (default 4).
+for _var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+    os.environ.setdefault(_var, "1")
+os.environ.setdefault("NUMBA_NUM_THREADS", os.environ.get("OPENRAPM_NUMBA_THREADS", "4"))
+
+import numpy as np  # noqa: E402
+import pandas as pd  # noqa: E402
+from chimeraboost import ChimeraBoostRegressor  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from eracoef import singleyear as sy  # noqa: E402
