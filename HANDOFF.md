@@ -87,6 +87,7 @@ diagnostics.  `--columns=prior` tests the SPM alone, which is how a stage is bla
 | 7a. booster regularisation x5 (`sy_reg5`) | 8.692 | tie, z -0.4; rejected | 0.81 / 0.90 | 0.730 / 0.763 / 0.727 |
 | 7b. booster depth 3 (`sy_depth3`) | 8.697 | +0.10, z +0.8; rejected | 0.81 / 0.90 | 0.750 / 0.757 / 0.738 |
 | 8. off-court record + on/off net as features, the owner's idea (`sy_offc`) | 8.688 | -0.15 vs 4b, z -1.6, a tie; 2026 top 20 worse (Shai 8th to 32nd, OKC role players up) | 0.81 / 0.88 | 0.726 / 0.755 / 0.731 |
+| 9. out-of-player priors, five label-balanced player folds (`sy_oop`) | 8.705 | +0.34 vs 4b, z +2.6, 24 of 56: worse, because the memorised career channel predicts and ruling 2 bans it; **owner's ruling** | 0.79 / 0.89 | 0.721 / 0.750 / 0.733, top five 3 |
 
 What each taught: the SPM is the weak stage against the shipped rankings (1); the row shape matters and
 replacing the career row is wrong (2 against 3); with amplitude removed the incumbent ranks nearly as
@@ -96,6 +97,12 @@ honest within-season CV cannot validate the residual, so the scale is cross-fitt
 less team-predictable than the consensus's own (0.191 against 0.195).
 
 ## Waiting on the owner
+
+**Experiment 9, out-of-player priors (`--player_folds=5`).**  The SPM was memorising long-career stars
+(Curry's 2026 prior falls 1.8 per 100 without his own rows, LeBron's 1.4).  Removing it is worse on the
+year-over-year test (+0.34, z +2.6) because a player's own career level does predict his next season --
+which is the per-player channel ruling 2 bans.  The ruling outranks the test; the owner decides.  To
+adopt: default `--player_folds=5` in `scripts/62_single_year_board.py` (five fits a season, ~3 min).
 
 **Experiment 6, `onc_d` off the defensive list.**  Passes the year-over-year test at native scale AND with
 amplitude removed, and the season's own games finally do real work on defence (what they add: sd 0.40

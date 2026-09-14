@@ -52,11 +52,13 @@ def summary(yoy_path: Path, names: list, ref: str) -> list:
     from eracoef.holdout import paired, pooled
     res = pd.read_parquet(yoy_path)
     res = res[res.split == "all"].copy()
+    # direction BEFORE the name is stripped, or both directions collapse onto one held-out key and the
+    # paired test runs over 28 averaged observations instead of 56
+    has_dir = res.system.str.contains(":")
+    res["direction"] = np.where(has_dir, res.system.str.rsplit(":", n=1).str[-1], "prev")
     res["system"] = res.system.str.rsplit(":", n=1).str[0]
-    res["direction"] = res.system.str.rsplit(":", n=1).str[1] if res.system.str.contains(":").any() else "prev"
     both = res.copy()
-    if "direction" in both:
-        both["held_out"] = both.held_out + both.direction.map({"prev": 0.0, "next": 0.5}).fillna(0.0)
+    both["held_out"] = both.held_out + both.direction.map({"prev": 0.0, "next": 0.5}).fillna(0.0)
     P = pooled(both).set_index("system")
     T = paired(both, ref, "tg").set_index("system") if ref in set(both.system) else None
     rows = []

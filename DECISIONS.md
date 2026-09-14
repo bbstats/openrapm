@@ -1183,6 +1183,38 @@ version of that comparison, but it enters beside the raw off-court column and th
 Rejected on the standing tie rule (the simpler wins a tie) with the eye test agreeing; not a ruling,
 the owner reads the top 20.
 
+### The SPM memorises long-career stars, and the out-of-player prior removes it at a price (2026-09-14)
+
+The owner: *"I think but am not sure that the model is memorizing the players ... LeBron should not by
+any metric imaginable be ranked this highly."*  Test (`scratch/memorisation_2026.py`): the 2026 SPM
+fitted five times on player folds, every player's prior from the fit that never saw his rows, against the
+prior from the fit that did.  Across 391 players with 1,000+ possessions the two agree (correlation 0.98
+offence, 0.95 defence; typical gap 0.12 per 100); for a few long-career stars they do not: Curry's prior
+falls 1.8 per 100 (4.7 to 2.9), LeBron's 1.4 (4.4 to 3.0), Brunson's 1.1, Klay's 0.9, Kawhi's 0.6;
+Harden's and Shai's do not move.  Mechanism: every one of a player's chunk rows carries his career label,
+and career possessions (LeBron 276,000) and years played identify him, so the booster returns his career
+number for his 2026 row.  The panel rows are current (LeBron 2026: age 41, 4,797 possessions).
+
+**The fix, the owner's design: LOSO x five player folds, folds balanced on the label.**  `--player_folds=5`:
+the SPM fitted once per fold, each player's prior from the fit without his rows (`OutOfPlayerSPM`).  The
+folds are built by `rloocv.BalancedGroupKFold`: players sorted by weighted mean label, dealt in snake
+order, so every fold's weighted mean equals the full mean and the leave-out shift of Austin, Pe'er and
+Korem (2025) is zero by construction (measured 0.005 per 100 against a label sd of 0.82; no partner fold
+dropped).  Cross-fitting re-asks the right fold model per player.  Five fits a season, about 3 minutes.
+
+| | game_armse | paired vs incumbent | each side rescaled | consensus off / def / total, top five | 2026 top 20 |
+|---|---|---|---|---|---|
+| incumbent (4b) | 8.693 | -- | -- | 0.730 / 0.753 / 0.737, 2 | |
+| out-of-player priors (`sy_oop`) | 8.705 | **+0.34, z +2.6, 24 of 56** | +0.71, z +5.4, 11 of 56 | 0.721 / 0.750 / 0.733, **3** | LeBron 5th to 13th, Curry 4th to 6th; Shai 8th to 5th, Luka 27th to 10th, Butler 39th to 16th; Draymond 14th to 43rd, Jamal Murray 16th to 64th, Derrick White 17th to 34th |
+
+**Worse on the test, and that is the point.**  The memorised channel carried real information -- a
+player's own long-run level -- and the year-over-year test rewards it, because a career-level number
+does predict his next season.  It is exactly the per-player channel ruling 12 bans ("no games of his own
+from any other season"), reaching the rating through the booster's memory instead of a `past_*`
+column.  So the test and the ruling disagree here and the ruling outranks the test.  Not adopted by the
+assistant; it is a ruling, and the owner reads the top 20 (which now has Shai 5th, Luka 10th, LeBron
+13th, but also drops Draymond, Murray and White a long way).
+
 ## What was tried and rejected
 
 **The LRBoost branch (a boosted correction on a frozen linear prior).** Five things had to be right before it
