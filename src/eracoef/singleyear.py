@@ -33,9 +33,11 @@ import pandas as pd
 
 from .gbdt_prior import CAREER, SHOT_FEATURES, SHOT_LEAGUE, SHOT_TOTALS, add_derived
 from .design import FEATURES
+from .rloocv import BalancedGroupKFold
 
 __all__ = ["PRIOR_FEATURES", "INPUT_COLUMNS", "BIO", "ONC", "OFFC", "NET", "ROLE_INPUTS", "aggregate", "season_frame",
-           "prior_rows", "season_rows", "chunk_rows", "CHUNK_FEATURES", "FEATURE_SETS", "feature_set", "OFFENSE_TARGET", "DEFENSE_TARGET",
+           "prior_rows", "season_rows", "chunk_rows", "CHUNK_FEATURES", "stratified_player_folds",
+           "fold_mean_shift", "FEATURE_SETS", "feature_set", "OFFENSE_TARGET", "DEFENSE_TARGET",
            "RAPM_OFFENSE_LAMBDA",
            "RAPM_DEFENSE_LAMBDA", "RAPM_CONTEXT_LAMBDA", "MIN_POSSESSIONS"]
 
@@ -227,6 +229,38 @@ def season_rows(labels: dict, rows: pd.DataFrame, column: str, features=None,
 # `chunk_rows`, so it can learn that a one-season row is to be trusted less than a career row; the rated
 # season's own row reads its possessions and 1.
 CHUNK_FEATURES = ["chunk_poss", "chunk_seasons"]
+
+
+def stratified_player_folds(train: pd.DataFrame, n_folds: int = 5) -> np.ndarray:
+    """A fold id per training row, all of a player's rows in one fold, folds balanced on the LABEL.
+
+    The out-of-player prior (2026-09-14): every player's prior comes from a booster that never saw any of
+    his rows, so it cannot learn "this fingerprint is LeBron" and return his career number (measured:
+    Curry's 2026 prior fell 1.8 per 100 and LeBron's 1.4 when their own rows were left out).
+
+    Why the folds are balanced on the label.  Austin, Pe'er and Korem (2025): hold a fold out and the
+    training mean label moves away from the fold's own mean by -n_j (p_j - pbar) / (S - n_j), and a
+    booster's baseline is that mean, so every player in the fold is predicted a constant too low or too
+    high.  The shift is zero when every fold's weighted mean label equals the full mean.  So: players
+    sorted by label, dealt in snake order into the folds, weights carried -- no partner fold dropped, no
+    rows lost, and `fold_mean_shift` prints the residual shift so it can be seen to be ~0.
+
+    `train` is `chunk_rows` / `prior_rows` output: indexed by player_id, with `target` and `weight`.
+    The splitter itself is `rloocv.BalancedGroupKFold`, reusable wherever groups need balanced folds.
+    """
+    return BalancedGroupKFold(n_folds).fold_ids(train.target.to_numpy(float), train.index.to_numpy(),
+                                                train.weight.to_numpy(float))
+
+
+def fold_mean_shift(train: pd.DataFrame, fold: np.ndarray) -> np.ndarray:
+    """Per fold: the training mean label with that fold held out, minus the full mean (weighted)."""
+    label, w = train.target.to_numpy(float), train.weight.to_numpy(float)
+    S, W = float((w * label).sum()), float(w.sum())
+    out = []
+    for f in np.unique(fold):
+        m = fold == f
+        out.append((S - (w[m] * label[m]).sum()) / max(W - w[m].sum(), 1e-9) - S / W)
+    return np.asarray(out)
 
 
 def chunk_rows(target: pd.DataFrame, rows: pd.DataFrame, column: str, features=None,

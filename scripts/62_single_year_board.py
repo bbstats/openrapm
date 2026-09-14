@@ -7,6 +7,13 @@
                                            [--exclude_neighbours=0] [--rows=chunks|player|season|season_capped]
                                            [--chunk_sizes=1,2,3|all] [--crossfit=scale|0|1]
                                            [--params_mult=l2_leaf_reg:5,min_child_weight:5] [--params_set=depth:3]
+                                           [--player_folds=0|5]
+
+`--player_folds=5` (2026-09-14, the owner's call after the memorisation test): the SPM is fitted once
+per player fold and every player's prior comes from the fit that never saw any of his rows, so it cannot
+return his career number from his fingerprint.  The folds are balanced on the label (`singleyear.
+stratified_player_folds`), which is the condition under which the leave-out mean shift of Austin, Pe'er
+and Korem (2025) is zero; the residual shift is printed.  Five fits per season instead of one.
 
 `--crossfit=1` (2026-09-13, the amplitude run): the free prior scale is a least-squares coefficient on the
 prior summed over the five on the floor, and the prior carries the season's own on-court columns, so the
@@ -121,6 +128,39 @@ def _ridge(design, prior, free_prior_scale=None, lam_buckets=None, fold_prior=No
         design, prior["O"], prior["D"], fold_prior=fold_prior, crossfit_penalty=crossfit_penalty)
 
 
+class OutOfPlayerSPM:
+    """The SPM fitted once on everything and once per player fold; `predict` gives each player the fit
+    that never saw his rows (`--player_folds=N`; 0 = the plain single fit)."""
+
+    def __init__(self, params: dict, n_folds: int):
+        self.params, self.n_folds = dict(params), int(n_folds)
+
+    def fit(self, train: pd.DataFrame, model_feats: list) -> "OutOfPlayerSPM":
+        X, y, w = train[model_feats].to_numpy(float), train.target.to_numpy(float), train.weight.to_numpy(float)
+        self.full_ = ChimeraBoostRegressor(random_state=0, **self.params).fit(X, y, sample_weight=w)
+        self.fold_models_, self.excluded_ = [], []
+        self.shift_ = np.zeros(0)
+        if self.n_folds > 1:
+            fold = sy.stratified_player_folds(train, self.n_folds)
+            self.shift_ = sy.fold_mean_shift(train, fold)
+            for f in range(self.n_folds):
+                keep = fold != f
+                self.fold_models_.append(ChimeraBoostRegressor(random_state=0, **self.params).fit(
+                    X[keep], y[keep], sample_weight=w[keep]))
+                self.excluded_.append(set(train.index[~keep].tolist()))
+        return self
+
+    def predict(self, frame: pd.DataFrame, model_feats: list) -> np.ndarray:
+        X = frame[model_feats].to_numpy(float)
+        out = self.full_.predict(X)
+        ids = frame.player_id.to_numpy()
+        for model, excluded in zip(self.fold_models_, self.excluded_):
+            idx = np.fromiter((p in excluded for p in ids), dtype=bool, count=len(ids))
+            if idx.any():
+                out[idx] = model.predict(X[idx])
+        return out
+
+
 def _fold_prior_builder(wd_o, wd_d, models, held_frames, model_feats):
     """A prior for a CV fold that has NOT seen the fold's games: the season's on-court columns (`onc_*`)
     rebuilt from the training rows alone, the fitted boosters re-asked.  `--crossfit=1`.
@@ -150,8 +190,7 @@ def _fold_prior_builder(wd_o, wd_d, models, held_frames, model_feats):
         for side in ("O", "D"):
             h = held_frames[side].drop(columns=rebuilt).merge(onc, on="player_id", how="left")
             h[rebuilt] = h[rebuilt].fillna(0.0)
-            out[side] = dict(zip(h.player_id.to_numpy(),
-                                 models[side].predict(h[model_feats[side]].to_numpy(float))))
+            out[side] = dict(zip(h.player_id.to_numpy(), models[side].predict(h, model_feats[side])))
         return out["O"], out["D"]
 
     return fold_prior
@@ -185,6 +224,7 @@ def main():
     chunk_flag = _flag("chunk_sizes", "1,2,3")        # "all" = every contiguous window of a career
     chunk_sizes = "all" if chunk_flag == "all" else tuple(int(x) for x in chunk_flag.split(",") if x)
     crossfit = _flag("crossfit", "scale")            # 0 | 1 (scale and penalty) | scale (the scale only)
+    player_folds = int(_flag("player_folds", 0))     # N > 1: every player's prior from the fit without his rows
     # experiment 7: the booster's settings, the same change on both sides.  --params_mult=l2_leaf_reg:5,...
     # multiplies a numeric setting; --params_set=depth:3,... sets one.
     params_mult = {k: float(v) for k, v in (p.split(":") for p in _flag("params_mult", "").split(",") if p)}
@@ -209,7 +249,8 @@ def main():
           f"(O {len(features['O'])}, D {len(features['D'])}); "
           f"free_prior_scale {FREE_PRIOR_SCALE}; lam_buckets {LAM_BUCKETS or '{}'}; "
           f"exclude_neighbours {exclude_neighbours}; rows {row_shape} (sizes {chunk_sizes}); crossfit {crossfit}; "
-          f"params_mult {params_mult or '{}'}; params_set {params_set or '{}'}", flush=True)
+          f"params_mult {params_mult or '{}'}; params_set {params_set or '{}'}; "
+          f"player_folds {player_folds}", flush=True)
 
     t0 = time.time()
     # One accumulator per TARGET, because the two sides explain different things.  The designs are NOT
@@ -265,13 +306,14 @@ def main():
                                        cap_per_player=(row_shape == "season_capped"))
             if season == boards[0]:
                 print(f"  prior {side}: {len(train):,} training rows ({row_shape})", flush=True)
-            model = ChimeraBoostRegressor(random_state=0, **dict(params))
-            model.fit(train[model_feats].to_numpy(float), train.target.to_numpy(float),
-                      sample_weight=train.weight.to_numpy(float))
+            model = OutOfPlayerSPM(params, player_folds).fit(train, model_feats)
+            if player_folds > 1 and season == boards[0]:
+                print(f"  prior {side}: {player_folds} player folds balanced on the label; training-mean "
+                      f"shift per held-out fold {np.round(model.shift_, 4).tolist()} per 100 "
+                      f"(label sd {train.target.std():.3f})", flush=True)
             held = sy.season_frame(panel[(panel.side == side) & (panel.season == season)], feats)
             held = held.assign(chunk_poss=held.poss.to_numpy(float), chunk_seasons=1.0)
-            prior[side] = dict(zip(held.player_id.to_numpy(),
-                                   model.predict(held[model_feats].to_numpy(float))))
+            prior[side] = dict(zip(held.player_id.to_numpy(), model.predict(held, model_feats)))
             models[side], held_frames[side], model_feats_of[side] = model, held, model_feats
 
         fold_prior = None
