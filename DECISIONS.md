@@ -1120,6 +1120,43 @@ consensus's 0.195.  `scripts/62_single_year_board.py` now defaults to `--rows=ch
 The gap to the shipped rankings is 4.04 team-game MSE (8.693 against 8.587), from 5.93 when the test was
 first run; the shipped offensive prior's `past_*` channel, banned by ruling 12, is part of what is left.
 
+### The overnight queue: four single changes on the incumbent (2026-09-14, 00:34 to 02:37)
+
+Each built on experiment 4b (`--rows=chunks --chunk_sizes=1,2,3 --crossfit=scale`) with one thing changed,
+scored on the year-over-year test against it, both directions, 56 observations.  `outputs/yoy_<name>.log`,
+`outputs/consensus_<name>.log`.
+
+| change | game_armse | native scale, paired vs incumbent | each side rescaled | scale off / def | games add, off / def | consensus off / def / total | verdict |
+|---|---|---|---|---|---|---|---|
+| incumbent (4b) | 8.693 | -- | -- | 0.80 / 0.90 | 0.22 / 0.18 | 0.730 / 0.753 / 0.737 | |
+| every contiguous chunk size, 1 to the full career (`sy_chunks_all`, 59,514 rows) | 8.682 | -0.30, z -2.1, 32 of 56 | **+1.44, z +10.0, 3 of 56** | 0.85 / 0.92 | 0.31 / 0.14 | 0.707 / 0.765 / 0.704 | **rejected** |
+| `onc_d` off the defensive list (`sy_noonc_d`) | 8.684 | **-0.24, z -2.6, 36 of 56** | **-0.36, z -3.8, 40 of 56** | 0.80 / 0.88 | 0.22 / **0.40** | 0.731 / **0.689** / 0.705 | passes the test; consensus defence 8% under 0.75; **the owner's call** |
+| booster `l2_leaf_reg` and `min_child_weight` x5, both sides (`sy_reg5`) | 8.692 | -0.04, z -0.4, 34 of 56 | +0.08, z +1.0 | 0.81 / 0.90 | 0.32 / 0.17 | 0.730 / 0.763 / 0.727 | tie, rejected |
+| booster depth 3, both sides (`sy_depth3`) | 8.697 | +0.10, z +0.8, 28 of 56 | +0.14, z +1.6 | 0.81 / 0.90 | 0.31 / 0.15 | 0.750 / 0.757 / 0.738 | rejected |
+
+**Every chunk size: rejected, and the reason is the rescaled row.**  The native-scale gain (z -2.1, 32 of
+56, just on the line) is amplitude -- both scales move toward 1 -- and with amplitude removed the rankings
+are worse in 53 of 56.  Offensive and total consensus agreement fall 0.02 to 0.03.  The extra rows are
+long chunks, nearly the career row again with nearly the same label, and they dilute the short chunks
+that carry the noise information.  Sizes 1, 2 and 3 stay.
+
+**`onc_d` off the defensive list: the one that passed, and it is left to the owner.**  Better at native
+scale and better with amplitude removed, and what the season's own games add on defence goes from sd 0.18
+to 0.40 -- the plus-minus stage doing on defence what it was supposed to do once the prior stops handing a
+player his lineup's points allowed.  The defensive rating's team R-squared falls to 0.101, half the
+consensus's 0.195.  The price is consensus defensive agreement 0.689 against 0.753, 8% under the 0.75
+check -- more than the 0.4% the standing rule called marginal, less than the 11% it called gross.  The
+prior spread on defence rises (sd 1.38 against 1.16).  Not adopted without a ruling; the consensus is the
+attribution sanity check and this is an attribution change.
+
+**The booster's settings: closed.**  Five times the regularisation is a tie (z -0.4) and depth 3 is
+slightly worse; the incumbent settings stay on the standing tie rule.  One more caution for the amplitude
+question: a rating calibrated within its own season is EXPECTED to read below 1 on the neighbouring
+season, because true impact changes from year to year, so `scale_*` at 1.0 is not the target; what the
+diagnostic is for is comparing two tables and the two sides.
+
+The incumbent's prior alone reads 8.722 against the shipped prior's 8.681 (`outputs/yoy_incumbent_prior.log`).
+
 ## What was tried and rejected
 
 **The LRBoost branch (a boosted correction on a frozen linear prior).** Five things had to be right before it

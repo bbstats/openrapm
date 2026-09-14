@@ -82,6 +82,10 @@ diagnostics.  `--columns=prior` tests the SPM alone, which is how a stage is bla
 | 3. career row + 1-3 season chunks (`sy_chunks`) | 8.736 | -1.90 vs 1, 42 of 56 | 0.75 / 0.77 | 0.730 / 0.745 / 0.729 |
 | 4. + scale and penalty cross-fitted (`sy_chunks_cf`) | 8.707 | -0.75 vs 3, but worse rescaled 56 of 56 | 0.80 / 0.89 | 0.730 / 0.705 / 0.723 |
 | **4b. + scale only cross-fitted, the incumbent** (`sy_chunks_cfs`) | **8.693** | **-1.14 vs 3, z -13.9, 54 of 56** | 0.80 / 0.90 | 0.730 / 0.753 / 0.737 |
+| 3b. every chunk size to the full career (`sy_chunks_all`) | 8.682 | -0.30 vs 4b, z -2.1, but rescaled worse 53 of 56; rejected | 0.85 / 0.92 | 0.707 / 0.765 / 0.704 |
+| 6. `onc_d` off the defensive list (`sy_noonc_d`) | 8.684 | -0.24 vs 4b, z -2.6, 36 of 56; rescaled also better; **owner's call** | 0.80 / 0.88 | 0.731 / 0.689 / 0.705 |
+| 7a. booster regularisation x5 (`sy_reg5`) | 8.692 | tie, z -0.4; rejected | 0.81 / 0.90 | 0.730 / 0.763 / 0.727 |
+| 7b. booster depth 3 (`sy_depth3`) | 8.697 | +0.10, z +0.8; rejected | 0.81 / 0.90 | 0.750 / 0.757 / 0.738 |
 
 What each taught: the SPM is the weak stage against the shipped rankings (1); the row shape matters and
 replacing the career row is wrong (2 against 3); with amplitude removed the incumbent ranks nearly as
@@ -90,17 +94,26 @@ honest within-season CV cannot validate the residual, so the scale is cross-fitt
 (4 against 4b).  Offence agreement with the consensus sits at 0.730 through 3-4b; the defensive rating is
 less team-predictable than the consensus's own (0.191 against 0.195).
 
+## Waiting on the owner
+
+**Experiment 6, `onc_d` off the defensive list.**  Passes the year-over-year test at native scale AND with
+amplitude removed, and the season's own games finally do real work on defence (what they add: sd 0.40
+against 0.18).  Consensus defensive agreement 0.689, 8% under 0.75 -- between the standing rule's
+"marginal" (0.4%) and "gross" (11%).  Adopt or not is the ruling needed.  To adopt: make
+`boruta_noonc_d` the default feature set in `scripts/62_single_year_board.py`.
+
 ## The queue, one at a time
 
-1. **Experiment 3b: more chunk sizes** (4 up to the career length), same weights.  Rows grow with the
-   square of career length; expect about 2 minutes a season.
-2. **Experiment 3c: the disjoint label** (each chunk labelled from the seasons outside it), only if the
-   booster looks like it is copying its own noise.
-3. **Experiment 5: the amplitude that remains** (0.80 / 0.90).  Candidates: a scale fitted on the
-   cross-fitted columns but shrunk toward 1, or the on-court columns padded harder in the rated season.
-4. **Experiment 6: drop `onc_d` from the defensive list only.**  Lower priority: the defensive team
-   R-squared is already below the consensus's.
-5. **Experiment 7: the booster's settings** (`gbdt.params` / `params_def`), only after the above.
+1. **Experiment 3c: the disjoint label** (each chunk labelled from the seasons outside it), only if the
+   booster looks like it is copying its own noise.  Not indicated yet.
+2. **Experiment 8: the offensive side.**  Offensive consensus agreement has sat at 0.73 through every
+   version; the shipped offensive prior beats ours but with the banned `past_*` channel.  Candidates:
+   `onc_o` off the offensive list (the twin of 6), or the offensive booster's feature list re-selected
+   on the chunk rows.
+3. **Not a target: `scale_*` at 1.0.**  A rating calibrated within its season reads below 1 on the
+   neighbouring season because true impact changes year to year.  Compare tables and sides on it; do not
+   chase it.
+4. Closed overnight: every chunk size (3b), booster regularisation and depth (7a, 7b).
 
 ## Closed, do not reopen
 
