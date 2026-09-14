@@ -31,6 +31,13 @@ This skill turns the parquet tables the rankings script writes into one interact
    down; hover for the two ranks).  Rows in one table's top N but not another's are highlighted.
    Toggle "show every player" to see the whole season; type to filter by name; click headers to sort.
 
+## When the user is on a phone
+
+The interactive page is a local file and a phone cannot open it.  The script also writes
+`outputs/compare_<names>_<season>_phone.html`: the same rows as one static table with inline styles.
+Read that file and send it as the `htmlBody` of a Gmail message to the user's own address (they chose
+this on 2026-09-14), subject "Experiment comparison, <season>: <names>".  One email per experiment.
+
 ## How to report it in chat
 
 Give the path of the page, then a plain-words reading of the top 20: who moved in, who moved out, who

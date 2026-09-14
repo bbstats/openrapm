@@ -162,6 +162,52 @@ renderSummary(); render();
 """
 
 
+def phone_body(merged: pd.DataFrame, names: list, season: int, top: int, title: str, summ: list) -> str:
+    """The union of the top N as one static HTML table with inline styles: the body of an email."""
+    ref = names[0]
+    td = "padding:4px 6px;border-bottom:1px solid #e5e7eb;text-align:right;white-space:nowrap;font-size:13px"
+    th = "padding:4px 6px;background:#f3f4f6;border-bottom:2px solid #d1d5db;font-size:12px;text-align:right"
+    head = f'<th style="{th}">rank</th><th style="{th};text-align:left">player</th>'
+    for n in names:
+        head += f'<th style="{th}">{html.escape(n)} off / def / total</th>'
+        if n != ref:
+            head += f'<th style="{th}">rank</th><th style="{th}">change</th>'
+    rows = merged[merged.in_top].sort_values(f"rank_{ref}")
+    body = ""
+    for r in rows.itertuples():
+        d = r._asdict()
+        mark = ' style="background:#fef3c7"' if d["marked"] else ""
+        cells = f'<td style="{td}">{int(d[f"rank_{ref}"]) if pd.notna(d[f"rank_{ref}"]) else ""}</td>' \
+                f'<td style="{td};text-align:left">{html.escape(str(d["player_name"]))}</td>'
+        for n in names:
+            o, de, t = d[f"off_{n}"], d[f"def_{n}"], d[f"tot_{n}"]
+            cells += (f'<td style="{td}">{o:.1f} / {de:.1f} / <b>{t:.1f}</b></td>' if pd.notna(t)
+                      else f'<td style="{td}"></td>')
+            if n != ref:
+                rk, ch = d[f"rank_{n}"], d[f"drank_{n}"]
+                colour = "#0f766e" if pd.notna(ch) and ch > 0 else "#b91c1c" if pd.notna(ch) and ch < 0 else "#6b7280"
+                chs = "" if pd.isna(ch) else (f"+{int(ch)}" if ch > 0 else str(int(ch)))
+                cells += (f'<td style="{td}">{int(rk) if pd.notna(rk) else ""}</td>'
+                          f'<td style="{td};color:{colour};font-weight:600">{chs}</td>')
+        body += f"<tr{mark}>{cells}</tr>"
+    lines = []
+    for s in summ:
+        extra = ("reference" if "mean_diff" not in s
+                 else f"{s['mean_diff']:+.2f} team-game MSE vs {html.escape(ref)}, z {s['z']:.1f}, "
+                      f"{s['wins']} of {s['n_seasons']} seasons better")
+        lines.append(f"{html.escape(s['name'])}: year-over-year error {s['game_armse']:.3f} per 100; "
+                     f"next season wants offence x{s['scale_off']:.2f}, defence x{s['scale_def']:.2f}; {extra}")
+    summary_html = "".join(f'<p style="margin:0 0 6px;color:#6b7280;font-size:13px">{ln}</p>' for ln in lines)
+    return (f'<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#1f2933">'
+            f'<h2 style="font-size:18px;margin:0 0 6px">{html.escape(title)}</h2>{summary_html}'
+            f'<table style="border-collapse:collapse;width:100%"><thead><tr>{head}</tr></thead>'
+            f'<tbody>{body}</tbody></table>'
+            f'<p style="color:#6b7280;font-size:12px">Every player in any top {top} for {season}, ordered by '
+            f'{html.escape(ref)}.  Change is rank places moved against {html.escape(ref)}: green up, red down.  '
+            f'Highlighted rows are in one top {top} but not another.  Ratings in points per 100 possessions, '
+            f'positive good on both ends.</p></div>')
+
+
 def main():
     specs = [a for a in sys.argv[1:] if not a.startswith("--") and "=" in a]
     if len(specs) < 1:
@@ -222,6 +268,11 @@ def main():
     out = ROOT / _flag("out", f"outputs/compare_{'_'.join(names)}_{season}.html")
     out.write_text(page, encoding="utf-8")
     print(f"wrote {out}")
+    # a phone version: the same rows as a static table with inline styles, for the body of an email
+    # (mail clients strip scripts).  Two tables only; the first is the reference.
+    phone = out.with_name(out.stem + "_phone.html")
+    phone.write_text(phone_body(merged, names, season, top, title, summ), encoding="utf-8")
+    print(f"wrote {phone} (email body)")
     if _flag("open", "1") not in ("0", "no", "false"):
         subprocess.run(["cmd", "/c", "start", "", str(out)], check=False)
 
