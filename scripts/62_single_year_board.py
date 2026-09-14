@@ -5,7 +5,14 @@
                                            [--free_scale=1] [--buckets=low_poss:2] [--boards=2015,2024]
                                            [--features=boruta_noonc|boruta|sy_noonc|sy]
                                            [--exclude_neighbours=0] [--rows=player|season|season_capped|chunks]
-                                           [--chunk_sizes=1,2,3]
+                                           [--chunk_sizes=1,2,3] [--crossfit=0]
+
+`--crossfit=1` (2026-09-13, the amplitude run): the free prior scale is a least-squares coefficient on the
+prior summed over the five on the floor, and the prior carries the season's own on-court columns, so the
+coefficient reads the season's outcomes back and comes out too big (the year-over-year test wants the
+rankings multiplied by about 0.75 on both sides).  With cross-fitting each row's prior column is built from
+a prior whose on-court columns were rebuilt WITHOUT that row's CV fold, so the scale is priced on games the
+prior has not seen.  The final rating is still `scale * (full-season prior) + residual`.
 
 `--rows=chunks` is the owner's design (2026-09-13): the career row per player kept exactly, PLUS rows built
 from contiguous chunks of his seasons at the sizes given, with `singleyear.CHUNK_FEATURES` telling the
@@ -71,6 +78,7 @@ from eracoef import singleyear as sy  # noqa: E402
 from eracoef.config import load_config  # noqa: E402
 from eracoef.holdout import Context, Ratings, predict_season, score  # noqa: E402
 from eracoef.inseason import season_frac  # noqa: E402
+from eracoef.investigate import oncourt_rates  # noqa: E402
 from eracoef.looseason import LeaveSeasonOutRAPM  # noqa: E402
 from eracoef.priorridge import PriorRidgeCV, armse, calibration_miss  # noqa: E402
 from eracoef.xshoot import DEFENSE_TARGETS  # noqa: E402
@@ -104,12 +112,39 @@ FREE_PRIOR_SCALE = True     # --free_scale=0 pins the prior at exactly the ampli
 LAM_BUCKETS: dict = {}      # --buckets=low_poss:2 multiplies the bench's penalty
 
 
-def _ridge(design, prior, free_prior_scale=None, lam_buckets=None):
+def _ridge(design, prior, free_prior_scale=None, lam_buckets=None, fold_prior=None):
     return PriorRidgeCV(offense_lambdas=BOARD_PLAYER_LAMBDAS, defense_lambdas=BOARD_PLAYER_LAMBDAS,
                         context_lambdas=BOARD_CONTEXT_LAMBDAS, n_folds=5,
                         free_prior_scale=FREE_PRIOR_SCALE if free_prior_scale is None else free_prior_scale,
                         lam_buckets=LAM_BUCKETS if lam_buckets is None else lam_buckets).fit(
-        design, prior["O"], prior["D"])
+        design, prior["O"], prior["D"], fold_prior=fold_prior)
+
+
+def _fold_prior_builder(wd_o, wd_d, models, held_frames, model_feats):
+    """A prior for a CV fold that has NOT seen the fold's games: the season's on-court columns (`onc_*`)
+    rebuilt from the training rows alone, the fitted boosters re-asked.  `--crossfit=1`.
+
+    The panel's `onc_o` / `onc_d` are averaged over every game of the season, so a prior column built from
+    them already contains the outcome of any game the ridge holds out, and the free prior scale -- a
+    least-squares coefficient on that column -- is inflated by it.  `wd_o` / `wd_d` are the season's
+    designs on the two targets the panel built `onc_*` from (`xpts_ft`, `x3def`), so the rebuilt columns
+    differ from the panel's in the games used and nothing else (`scratch/onc_leak.py` checked that the
+    full-season rebuild reproduces the panel to four decimals).
+    """
+    ids_of_ps = wd_o.spec.ps_table["player_id"].to_numpy()
+
+    def fold_prior(train_mask):
+        got = oncourt_rates(wd_o.subset(train_mask), wd_d.subset(train_mask))
+        onc = pd.DataFrame({"player_id": ids_of_ps, **{c: got[c].to_numpy(dtype=float) for c in sy.ONC}})
+        out = {}
+        for side in ("O", "D"):
+            h = held_frames[side].drop(columns=sy.ONC).merge(onc, on="player_id", how="left")
+            h[sy.ONC] = h[sy.ONC].fillna(0.0)
+            out[side] = dict(zip(h.player_id.to_numpy(),
+                                 models[side].predict(h[model_feats[side]].to_numpy(float))))
+        return out["O"], out["D"]
+
+    return fold_prior
 
 
 def _first_75(design):
@@ -136,6 +171,7 @@ def main():
     row_shape = _flag("rows", "player")
     assert row_shape in ("player", "season", "season_capped", "chunks"), "--rows=player|season|season_capped|chunks"
     chunk_sizes = tuple(int(x) for x in _flag("chunk_sizes", "1,2,3").split(",") if x)
+    crossfit = _flag("crossfit", "0") not in ("0", "no", "false")
 
     panel = pd.read_parquet(ROOT / "outputs/role_panel_season.parquet")
     panel = panel[panel.poss > 0].reset_index(drop=True)
@@ -146,7 +182,7 @@ def main():
     print(f"targets: offense {names['O']}, defense {names['D']}; features {feature_set} "
           f"(O {len(features['O'])}, D {len(features['D'])}); "
           f"free_prior_scale {FREE_PRIOR_SCALE}; lam_buckets {LAM_BUCKETS or '{}'}; "
-          f"exclude_neighbours {exclude_neighbours}; rows {row_shape}", flush=True)
+          f"exclude_neighbours {exclude_neighbours}; rows {row_shape}; crossfit {crossfit}", flush=True)
 
     t0 = time.time()
     # One accumulator per TARGET, because the two sides explain different things.  The designs are NOT
@@ -171,6 +207,7 @@ def main():
         # those are the seasons this table is going to be scored on
         unseen = [s for s in range(season - exclude_neighbours, season + exclude_neighbours + 1)]
         labels_by_target: dict = {}
+        models, held_frames, model_feats_of = {}, {}, {}
         for side, params in (("O", cfg["gbdt"]["params"]), ("D", cfg["gbdt"]["params_def"])):
             column = "offense" if side == "O" else "defense"
             feats = features[side]
@@ -206,12 +243,19 @@ def main():
             held = held.assign(chunk_poss=held.poss.to_numpy(float), chunk_seasons=1.0)
             prior[side] = dict(zip(held.player_id.to_numpy(),
                                    model.predict(held[model_feats].to_numpy(float))))
+            models[side], held_frames[side], model_feats_of[side] = model, held, model_feats
+
+        fold_prior = None
+        if crossfit:
+            wd_o, wd_d = design_for("xpts_ft", season), design_for("x3def", season)
+            fold_prior = _fold_prior_builder(wd_o, wd_d, models, held_frames, model_feats_of)
 
         # one ridge per side's target; each contributes only its own half of the board
         scale = {}
         # one fit per DISTINCT target: when both sides explain the same thing (--target_off=pts
         # --target_def=pts) the second fit would be the first one over again
-        fits = {name: _ridge(design_for(name, season), prior) for name in dict.fromkeys(names.values())}
+        fits = {name: _ridge(design_for(name, season), prior, fold_prior=fold_prior)
+                for name in dict.fromkeys(names.values())}
         for side in ("O", "D"):
             ridge = fits[names[side]]
             table[side] = ridge.ratings_

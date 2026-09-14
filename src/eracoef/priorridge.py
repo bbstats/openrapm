@@ -190,17 +190,19 @@ class PriorRidgeCV:
         self.lam_buckets = dict(lam_buckets or {})
 
     # ------------------------------------------------------------------ the pieces of one design
+    @staticmethod
+    def _align(prior, player_ids, n_players):
+        """A {player_id: value} prior as a vector in the design's player order; absent players get 0."""
+        if prior is None:
+            return np.zeros(n_players)
+        return pd.Series(prior).reindex(player_ids).fillna(0.0).to_numpy(dtype=float)
+
     def _parts(self, design, prior_offense, prior_defense):
         n_players = design.spec.n_ps
         n_fixed = len(design.spec.f_names)
         player_ids = design.spec.ps_table["player_id"].to_numpy()
-
-        def align(prior):
-            if prior is None:
-                return np.zeros(n_players)
-            return pd.Series(prior).reindex(player_ids).fillna(0.0).to_numpy(dtype=float)
-
-        prior = np.concatenate([align(prior_offense), align(prior_defense)])
+        prior = np.concatenate([self._align(prior_offense, player_ids, n_players),
+                                self._align(prior_defense, player_ids, n_players)])
         players = design.X[:, :2 * n_players].tocsr()
         # the design's own fixed block already carries a season intercept, so no extra ones column
         context = np.asarray(design.X[:, 2 * n_players:2 * n_players + n_fixed].todense())
@@ -240,7 +242,17 @@ class PriorRidgeCV:
         return np.concatenate([player, np.full(n_context - n_free, triple[2]), np.zeros(n_free)])
 
     # ------------------------------------------------------------------ fit
-    def fit(self, design, prior_offense=None, prior_defense=None):
+    def fit(self, design, prior_offense=None, prior_defense=None, fold_prior=None):
+        """Fit on `design`, centred on (or, with `free_prior_scale`, scaled from) the two priors.
+
+        `fold_prior(train_mask) -> (prior_offense, prior_defense)`, optional and only used with
+        `free_prior_scale`: a prior rebuilt from the rows where `train_mask` is True, i.e. one that has NOT
+        seen the held-out fold.  With it the two free prior columns are CROSS-FITTED: each row's value comes
+        from the prior built without that row's fold, so the scale is priced on games the prior did not see.
+        Without it, a prior that carries the season's own on-court record (the single-year prior's `onc_*`)
+        contains the outcome of every row it is regressed on, and the scale reads those outcomes back.
+        The ratings still take `scale * (the full prior handed in) + residual`; only the pricing changes.
+        """
         player_ids, players, context, prior = self._parts(design, prior_offense, prior_defense)
         n_players, n_context = design.spec.n_ps, context.shape[1]
         # with a free scale the prior is a COLUMN, not a centre, so nothing comes out of the target
@@ -252,10 +264,27 @@ class PriorRidgeCV:
             design, self.weight_by_closeness, self.closeness_floor)
         self.average_margin_ = average_margin
 
-        if self.n_folds > 1 and np.unique(games).size >= self.n_folds and len(self.grid) > 1:
+        fold = None
+        if self.n_folds > 1 and np.unique(games).size >= self.n_folds:
             unique_games = np.unique(games)
             fold_of_game = np.random.default_rng(self.seed).permutation(unique_games.size) % self.n_folds
             fold = pd.Series(fold_of_game, index=unique_games).reindex(games).to_numpy()
+
+        self.cross_fitted_ = False
+        if fold_prior is not None and self.free_prior_scale and fold is not None:
+            column_o, column_d = np.zeros(target.size), np.zeros(target.size)
+            for f in range(self.n_folds):
+                rows_f = np.flatnonzero(fold == f)
+                if rows_f.size == 0:
+                    continue
+                po, pdf = fold_prior(fold != f)
+                block = players[rows_f]
+                column_o[rows_f] = block[:, :n_players] @ self._align(po, player_ids, n_players)
+                column_d[rows_f] = block[:, n_players:] @ self._align(pdf, player_ids, n_players)
+            context[:, -2], context[:, -1] = column_o, column_d
+            self.cross_fitted_ = True
+
+        if fold is not None and len(self.grid) > 1:
             error = {t: 0.0 for t in self.grid}
             seen = {t: 0.0 for t in self.grid}
             centred = target - players @ offset
