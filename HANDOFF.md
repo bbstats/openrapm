@@ -97,20 +97,30 @@ What it says (full record in `DECISIONS.md`):
 - Leaving the neighbours out of the prior's training changes almost nothing, so the earlier tables were
   only slightly optimistic.
 
+## Experiment 2 (2026-09-13): the prior trained on one row per player-season
+
+The owner's intent: a leave-one-season-out SPM, trained on every other season's player-seasons, run on the
+rated season's box score.  What existed trained on one row per player (career averages).  `--rows=season`
+builds the intended shape.  Year-over-year: **8.715 against 8.804, -2.48 team-game MSE, z -7.0, 47 of 56**,
+and the gain survives rescaling.  The prior alone is a tie; the gain is the ridge stage getting in (the
+defensive penalty leaves the 1e9 ceiling, the team R-squared on defence falls to 0.190).  **But consensus
+agreement collapses to 0.570 / 0.656 / 0.651, a gross miss and a veto as it stands.**  Two specification
+defects found afterwards, in `DECISIONS.md`: no per-player weight cap (top tenth of players hold 53% of the
+weight), and one-season players lose their label (1,917 players train against 2,494).
+
 ## The queue, one at a time
 
-1. **Experiment 2: drop `onc_d` from the defensive list only.**  Add `"boruta_noonc_d"` to
-   `singleyear.FEATURE_SETS` (`BORUTA_O` unchanged, `BORUTA_D` without `ONC`), build with
-   `--features=boruta_noonc_d --exclude_neighbours=1`, run the test against `sy_yoy`.  Hypothesis: a lineup
-   quantity does not carry to the next season, and the shipped defensive prior wins without one.  Expect
-   consensus defensive agreement to fall (the no-`onc` table read 0.667 on both sides); the year-over-year
-   test decides.
-2. **Experiment 3: the same on offence** (`onc_o`), only after 2 is read.
-3. **Experiment 4: a teammate-adjusted on-court column** (`onc_d` minus the possession-weighted mean of his
-   teammates', or the panel's `apm`), only if 2 moves the right way but costs too much agreement.
-4. **Experiment 5: the prior's target and booster settings** against the shipped defensive prior's recipe
-   (`rapm1` per window, decay pooling), only if 2-4 leave the defensive gap.  `gbdt.params` /
-   `params_def` were tuned for another target and never re-tuned here.
+1. **Experiment 2b: the same rows with the per-player weight cap** (`--rows=season_capped`).  Running.
+   Read the year-over-year test first, the consensus second, and the per-season free amplitude
+   (`prior_scale_off`, 3.4x to 9.4x uncapped) as the symptom.
+2. **Experiment 2c: a label for one-season players**, if 2b still misses the consensus badly.  Their one
+   season is the rated season or a lone training season; the latter has no other-season label and is dropped.
+3. **Experiment 3: contiguous 2- and 3-season chunks as extra rows**, with possessions as a feature, folds
+   grouped by player.  Only if 2b passes both checks.
+4. **Experiment 4: drop `onc_d` from the defensive list only** (`BORUTA_D` without `ONC`).  Lower priority
+   now: experiment 2 already took the defensive team R-squared below the consensus's.
+5. **Experiment 5: the booster's settings** (`gbdt.params` / `params_def`, tuned for another target and row
+   shape), only after the row shape is settled.
 
 ## Closed, do not reopen
 

@@ -4,7 +4,13 @@
                                            [--score=1] [--target_off=xpts_ft] [--target_def=x3def_w0.25]
                                            [--free_scale=1] [--buckets=low_poss:2] [--boards=2015,2024]
                                            [--features=boruta_noonc|boruta|sy_noonc|sy]
-                                           [--exclude_neighbours=0]
+                                           [--exclude_neighbours=0] [--rows=player|season|season_capped]
+
+`--rows=season` (2026-09-13) trains the prior on one row per PLAYER-SEASON -- a season's own box score,
+labelled with the player's RAPM over his OTHER seasons, the rated season and that one both left out -- so a
+training row is the same kind of row the prior is asked about at inference (one noisy season) and never
+shares a game with its label.  `--rows=player` is the earlier shape: one row per player, his box score
+averaged over every season but the rated one.  `singleyear.season_rows` / `singleyear.prior_rows`.
 
 `--first` / `--last` are the seasons the TARGET is accumulated over and must stay the full range -- a
 leave-one-season-out RAPM with one season in it has nothing left.  `--boards=` restricts which seasons a
@@ -122,6 +128,8 @@ def main():
     assert set(boards) <= set(seasons), f"--boards outside [{first}, {last}]"
     exclude_neighbours = int(_flag("exclude_neighbours", 0))
     assert exclude_neighbours >= 0
+    row_shape = _flag("rows", "player")
+    assert row_shape in ("player", "season", "season_capped"), "--rows=player|season|season_capped"
 
     panel = pd.read_parquet(ROOT / "outputs/role_panel_season.parquet")
     panel = panel[panel.poss > 0].reset_index(drop=True)
@@ -132,7 +140,7 @@ def main():
     print(f"targets: offense {names['O']}, defense {names['D']}; features {feature_set} "
           f"(O {len(features['O'])}, D {len(features['D'])}); "
           f"free_prior_scale {FREE_PRIOR_SCALE}; lam_buckets {LAM_BUCKETS or '{}'}; "
-          f"exclude_neighbours {exclude_neighbours}", flush=True)
+          f"exclude_neighbours {exclude_neighbours}; rows {row_shape}", flush=True)
 
     t0 = time.time()
     # One accumulator per TARGET, because the two sides explain different things.  The designs are NOT
@@ -156,14 +164,29 @@ def main():
         # the seasons nothing population-level may be fit on: the rated one, plus its neighbours when
         # those are the seasons this table is going to be scored on
         unseen = [s for s in range(season - exclude_neighbours, season + exclude_neighbours + 1)]
+        labels_by_target: dict = {}
         for side, params in (("O", cfg["gbdt"]["params"]), ("D", cfg["gbdt"]["params_def"])):
             column = "offense" if side == "O" else "defense"
-            target = rapm[names[side]].ratings(
-                held_out_season=unseen, offense_lambda=RAPM_OFFENSE_LAMBDA,
-                defense_lambda=RAPM_DEFENSE_LAMBDA, context_lambda=RAPM_CONTEXT_LAMBDA)
             feats = features[side]
-            train = sy.prior_rows(target, panel[(panel.side == side) & ~panel.season.isin(unseen)],
-                                  column, feats)
+            training = panel[(panel.side == side) & ~panel.season.isin(unseen)]
+
+            def label(exclude):
+                return rapm[names[side]].ratings(
+                    held_out_season=exclude, offense_lambda=RAPM_OFFENSE_LAMBDA,
+                    defense_lambda=RAPM_DEFENSE_LAMBDA, context_lambda=RAPM_CONTEXT_LAMBDA)
+
+            if row_shape == "player":
+                train = sy.prior_rows(label(unseen), training, column, feats)
+            else:
+                # one label per TRAINING season: the RAPM with the rated season(s) and that season out, so
+                # a row's box score and its label share no game.  One solve each, ~0.7 s, cached per target
+                if names[side] not in labels_by_target:
+                    labels_by_target[names[side]] = {s: label(unseen + [s])
+                                                     for s in seasons if s not in unseen}
+                train = sy.season_rows(labels_by_target[names[side]], training, column, feats,
+                                       cap_per_player=(row_shape == "season_capped"))
+            if season == boards[0]:
+                print(f"  prior {side}: {len(train):,} training rows ({row_shape})", flush=True)
             model = ChimeraBoostRegressor(random_state=0, **dict(params))
             model.fit(train[feats].to_numpy(float), train.target.to_numpy(float),
                       sample_weight=train.weight.to_numpy(float))

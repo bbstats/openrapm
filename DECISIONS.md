@@ -973,6 +973,52 @@ run, named after the change.  The consensus report (`scratch/consensus_report.py
 alone predicts); the neighbours-excluded table reads 0.758 / 0.788 / 0.758 agreement, top-five overlap 3,
 defensive team R-squared 0.241 against the consensus's 0.195.  Reported every time, chosen on never.
 
+### Experiment 2: the prior trained on one row per player-season, not one per player (2026-09-13)
+
+**The change.**  The owner's intent for the single-year prior was a leave-one-season-out SPM: for the rated
+season, a booster trained on every OTHER season's player-seasons, then run on the rated season's box score.
+What had been built since 2026-09-12 trained instead on one row per PLAYER, his box score averaged over
+every season but the rated one -- a clean career average at training, one noisy season at inference, two
+different kinds of row.  `--rows=season` trains on one row per player-season (12,248 rows against 2,860),
+each labelled with his RAPM over his seasons OTHER than that one and the rated one, so a row's box score
+and its label share no game.  Everything else held: features, targets, penalties, the ridge.
+
+**Result, year-over-year, both directions, 56 observations** (`outputs/yoy_exp2_rows.log`):
+
+| | game_armse | scale_off | scale_def | paired vs one-row-per-player, team-game MSE |
+|---|---|---|---|---|
+| one row per player (`season_ratings_sy_yoy`) | 8.804 | 0.73 | 0.71 | reference |
+| one row per player-season (`season_ratings_sy_rows`) | **8.715** | 0.85 | 0.77 | **-2.48, z -7.0, 47 of 56** |
+| after each side is rescaled to the scored season | | | | -1.63, z -4.7, 45 of 56 |
+| the PRIOR alone, player-season rows vs player rows | 8.825 vs 8.840 | | | -0.37, z -0.57, 21 of 56 |
+| shipped rankings, for scale | 8.587 | 1.18 | 0.78 | -5.93, 56 of 56 |
+
+It passes the decision rule on the test, and the gap to the shipped rankings closes from 5.93 to 3.45.
+**The gain is in the ridge stage, not the prior.**  The prior on its own is a tie.  What changed is that the
+season's own games now get in: the defensive ridge penalty, pinned at the 1e9 ceiling under the old prior
+("keep the prior exactly"), is interior in every season, and what the games add on defence goes from sd
+0.000 to sd 0.31 per 100.  The reading: a booster trained on single seasons learns how far to trust one
+season's on-court number, so the prior no longer pre-empts the games, and the defensive rating stops being
+a copy of the team's -- the team R-squared on defence falls from 0.241 to **0.190**, below the consensus's
+0.195, the first version here to get there.
+
+**And it fails the consensus sanity check grossly, which is a veto as it stands.**  Agreement 0.570 offence /
+0.656 defence / 0.651 total against 0.758 / 0.788 / 0.758 before, top-five overlap 2.  Per season the prior
+alone agrees less too (2024 offence 0.404 against 0.483).  Two defects in the specification as run, both
+found after the fact:
+
+1. **No per-player weight cap.**  Each row is weighted by the possessions behind its label, so a
+   fifteen-season player has fifteen rows each carrying his whole career, and the top tenth of players
+   hold 53% of the training weight against 43% under one row per player.  Capping (divide by his row
+   count) brings it to 39%.  `season_rows(cap_per_player=True)`, `--rows=season_capped`, the next run.
+2. **One-season players lose their label.**  A player with a single season outside the excluded ones has
+   nothing left to label it from, so 1,917 players train against 2,494.  The missing ones are exactly the
+   short-career, low-sample players the consensus cut (1,000+ possessions over 2024-26) is full of.
+
+The free amplitude also reads 3.4x to 9.4x on offence across seasons, against 1.6x to 2.2x before: the
+booster's output is much narrower (noisier labels, sd 0.815 against 0.567) and the amplitude is weakly
+identified.  Not chosen on, but it is the symptom to watch when the capped run is read.
+
 ## What was tried and rejected
 
 **The LRBoost branch (a boosted correction on a frozen linear prior).** Five things had to be right before it

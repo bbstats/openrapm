@@ -35,7 +35,7 @@ from .gbdt_prior import CAREER, SHOT_FEATURES, SHOT_LEAGUE, SHOT_TOTALS, add_der
 from .design import FEATURES
 
 __all__ = ["PRIOR_FEATURES", "INPUT_COLUMNS", "BIO", "ONC", "ROLE_INPUTS", "aggregate", "season_frame",
-           "prior_rows", "FEATURE_SETS", "feature_set", "OFFENSE_TARGET", "DEFENSE_TARGET",
+           "prior_rows", "season_rows", "FEATURE_SETS", "feature_set", "OFFENSE_TARGET", "DEFENSE_TARGET",
            "RAPM_OFFENSE_LAMBDA",
            "RAPM_DEFENSE_LAMBDA", "RAPM_CONTEXT_LAMBDA", "MIN_POSSESSIONS"]
 
@@ -170,3 +170,41 @@ def prior_rows(target: pd.DataFrame, rows: pd.DataFrame, column: str, features=N
     out = (aggregate(rows, features)
            .join(target.set_index("player_id")[[column, "possessions"]], how="inner").dropna())
     return out.assign(target=out[column].to_numpy(float), weight=out.possessions.to_numpy(float))
+
+
+def season_rows(labels: dict, rows: pd.DataFrame, column: str, features=None,
+                cap_per_player: bool = False) -> pd.DataFrame:
+    """Training rows, one per PLAYER-SEASON: a season's own panel row, labelled from his OTHER seasons.
+
+    `labels[s]` is the target frame (`player_id`, `offense`, `defense`, `possessions`) fit WITHOUT season
+    s -- and without the rated season, which the caller already left out of `rows` -- so a row's box score
+    and its label never share a game.  The weight is the possessions behind the label, as in `prior_rows`.
+
+    `cap_per_player=True` divides each row's weight by the number of rows the player has, so his rows
+    together weigh what his one row weighed under `prior_rows`.  Without it a fifteen-season player has
+    fifteen rows each carrying his whole career's possessions, and the top tenth of players hold 53% of
+    the training weight against 43% under one row per player (measured, 2026-09-13, rated season 2024).
+    The rows of one player are not independent, so that is not more evidence, just more weight.
+
+    Why one row per player-season and not one per player (`prior_rows`, 2026-09-13): at inference the
+    prior is handed ONE season's box score, and a booster trained on career averages has learned the map
+    at the clean end and never seen how it degrades with noise -- on the year-over-year test the
+    one-row-per-player prior was too wide for the neighbouring season in 28 of 28 seasons.  Here a
+    training row is the same kind of row as the inference row.  The rows of one player are not
+    independent, so the effective sample is still the number of players; what the extra rows carry is the
+    noise level, not new players.
+    """
+    features = list(PRIOR_FEATURES if features is None else features)
+    parts = []
+    for s, target in labels.items():
+        own = rows[rows.season == s]
+        if own.empty:
+            continue
+        frame = season_frame(own, features).set_index("player_id")
+        lab = target.set_index("player_id")[[column, "possessions"]]
+        parts.append(frame.join(lab, how="inner").dropna(subset=features + [column]))
+    out = pd.concat(parts)
+    weight = out.possessions.to_numpy(float)
+    if cap_per_player:
+        weight = weight / out.groupby(level=0).possessions.transform("count").to_numpy(float)
+    return out.assign(target=out[column].to_numpy(float), weight=weight)
