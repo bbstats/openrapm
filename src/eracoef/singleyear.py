@@ -35,7 +35,7 @@ from .gbdt_prior import CAREER, SHOT_FEATURES, SHOT_LEAGUE, SHOT_TOTALS, add_der
 from .design import FEATURES
 
 __all__ = ["PRIOR_FEATURES", "INPUT_COLUMNS", "BIO", "ONC", "ROLE_INPUTS", "aggregate", "season_frame",
-           "prior_rows", "season_rows", "FEATURE_SETS", "feature_set", "OFFENSE_TARGET", "DEFENSE_TARGET",
+           "prior_rows", "season_rows", "chunk_rows", "CHUNK_FEATURES", "FEATURE_SETS", "feature_set", "OFFENSE_TARGET", "DEFENSE_TARGET",
            "RAPM_OFFENSE_LAMBDA",
            "RAPM_DEFENSE_LAMBDA", "RAPM_CONTEXT_LAMBDA", "MIN_POSSESSIONS"]
 
@@ -139,16 +139,18 @@ def _check(frame: pd.DataFrame, features) -> pd.DataFrame:
     return frame
 
 
-def aggregate(rows: pd.DataFrame, features=None) -> pd.DataFrame:
+def aggregate(rows: pd.DataFrame, features=None, by=None) -> pd.DataFrame:
     """One row per player: his `INPUT_COLUMNS` averaged over `rows` by possessions, then derived.
 
     `rows` is already the side and the seasons the caller wants (typically every season but the held-out
-    one, one side).  Indexed by `player_id`, so it joins straight onto a target frame.
+    one, one side).  Indexed by `player_id`, so it joins straight onto a target frame.  `by` is an
+    alternative grouping key aligned with `rows` (`chunk_rows` uses one per chunk of a player's seasons).
     """
     features = list(PRIOR_FEATURES if features is None else features)
     cols = [c for c in INPUT_COLUMNS if c in rows.columns]
-    weight = rows.groupby("player_id").poss.sum()
-    mean = rows[cols].mul(rows.poss, axis=0).groupby(rows.player_id).sum().div(weight, axis=0)
+    key = rows.player_id if by is None else by
+    weight = rows.poss.groupby(key).sum()
+    mean = rows[cols].mul(rows.poss, axis=0).groupby(key).sum().div(weight, axis=0)
     return _check(add_derived(mean, features), features)
 
 
@@ -208,3 +210,60 @@ def season_rows(labels: dict, rows: pd.DataFrame, column: str, features=None,
     if cap_per_player:
         weight = weight / out.groupby(level=0).possessions.transform("count").to_numpy(float)
     return out.assign(target=out[column].to_numpy(float), weight=weight)
+
+
+# How much evidence a training row's box score rests on.  Two extra features the booster sees under
+# `chunk_rows`, so it can learn that a one-season row is to be trusted less than a career row; the rated
+# season's own row reads its possessions and 1.
+CHUNK_FEATURES = ["chunk_poss", "chunk_seasons"]
+
+
+def chunk_rows(target: pd.DataFrame, rows: pd.DataFrame, column: str, features=None,
+               sizes=(1, 2, 3)) -> pd.DataFrame:
+    """The owner's design (2026-09-13): the career row per player, PLUS rows built from chunks of his seasons.
+
+    `prior_rows` is kept exactly -- one row per player, his box score averaged over every season in `rows`
+    -- and to it are added, for the same player, one row per CONTIGUOUS run of `size` of his seasons (in
+    the order he played them) for each size in `sizes`: his inputs averaged over that chunk, then derived,
+    carrying the SAME label as his career row.  The point is an artificial increase of the sample that shows
+    the booster the same player at several noise levels, with `CHUNK_FEATURES` saying which level.  Rows of
+    one player are not independent, so this is not more players; it is information about how the map
+    degrades with less evidence, which is the padding question learned from data instead of set per stat.
+
+    Weights: the career row keeps the weight `prior_rows` gives it (the possessions behind the label); a
+    player's chunk rows TOGETHER weigh the same, split among them by chunk possessions.  So every player's
+    total weight is twice his career row's, whatever his career length, and half of it sits on the row that
+    matches the inference row least and half on the ones that match it more.
+
+    Contiguous only: a chunk of 2004 and 2024 averaged together is nobody's season.
+    """
+    features = list(PRIOR_FEATURES if features is None else features)
+    label = target.set_index("player_id")[[column, "possessions"]]
+    per_player = rows.groupby("player_id")
+    base = prior_rows(target, rows, column, features)
+    base = base.assign(chunk_poss=per_player.poss.sum().reindex(base.index).to_numpy(float),
+                       chunk_seasons=per_player.season.nunique().reindex(base.index).to_numpy(float))
+
+    ordered = rows.sort_values(["player_id", "season"]).reset_index(drop=True)
+    ordered["k"] = ordered.groupby("player_id").cumcount()
+    n_seasons = ordered.groupby("player_id").k.transform("max") + 1
+    parts = []
+    for size in sizes:
+        for offset in range(int(size)):
+            start = ordered.k - offset
+            fits = (start >= 0) & (start + size <= n_seasons)
+            part = ordered[fits]
+            key = part.player_id.astype(str) + ":" + str(size) + ":" + start[fits].astype(str)
+            parts.append(part.assign(chunk=key.to_numpy()))
+    dup = pd.concat(parts, ignore_index=True)
+    chunks = aggregate(dup, features, by=dup.chunk)
+    grouped = dup.groupby("chunk")
+    chunks["chunk_poss"] = grouped.poss.sum().reindex(chunks.index).to_numpy(float)
+    chunks["chunk_seasons"] = grouped.season.nunique().reindex(chunks.index).to_numpy(float)
+    chunks["player_id"] = grouped.player_id.first().reindex(chunks.index).to_numpy()
+    chunks = (chunks.join(label, on="player_id", how="inner")
+              .dropna(subset=features + [column]).set_index("player_id"))
+    share = chunks.chunk_poss / chunks.groupby(level=0).chunk_poss.transform("sum")
+    chunks = chunks.assign(target=chunks[column].to_numpy(float),
+                           weight=(share * chunks.possessions).to_numpy(float))
+    return pd.concat([base, chunks])

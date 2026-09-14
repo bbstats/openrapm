@@ -4,7 +4,12 @@
                                            [--score=1] [--target_off=xpts_ft] [--target_def=x3def_w0.25]
                                            [--free_scale=1] [--buckets=low_poss:2] [--boards=2015,2024]
                                            [--features=boruta_noonc|boruta|sy_noonc|sy]
-                                           [--exclude_neighbours=0] [--rows=player|season|season_capped]
+                                           [--exclude_neighbours=0] [--rows=player|season|season_capped|chunks]
+                                           [--chunk_sizes=1,2,3]
+
+`--rows=chunks` is the owner's design (2026-09-13): the career row per player kept exactly, PLUS rows built
+from contiguous chunks of his seasons at the sizes given, with `singleyear.CHUNK_FEATURES` telling the
+booster how much evidence each row rests on.  `singleyear.chunk_rows` has the weights and the reasoning.
 
 `--rows=season` (2026-09-13) trains the prior on one row per PLAYER-SEASON -- a season's own box score,
 labelled with the player's RAPM over his OTHER seasons, the rated season and that one both left out -- so a
@@ -129,7 +134,8 @@ def main():
     exclude_neighbours = int(_flag("exclude_neighbours", 0))
     assert exclude_neighbours >= 0
     row_shape = _flag("rows", "player")
-    assert row_shape in ("player", "season", "season_capped"), "--rows=player|season|season_capped"
+    assert row_shape in ("player", "season", "season_capped", "chunks"), "--rows=player|season|season_capped|chunks"
+    chunk_sizes = tuple(int(x) for x in _flag("chunk_sizes", "1,2,3").split(",") if x)
 
     panel = pd.read_parquet(ROOT / "outputs/role_panel_season.parquet")
     panel = panel[panel.poss > 0].reset_index(drop=True)
@@ -175,8 +181,14 @@ def main():
                     held_out_season=exclude, offense_lambda=RAPM_OFFENSE_LAMBDA,
                     defense_lambda=RAPM_DEFENSE_LAMBDA, context_lambda=RAPM_CONTEXT_LAMBDA)
 
+            model_feats = list(feats)
             if row_shape == "player":
                 train = sy.prior_rows(label(unseen), training, column, feats)
+            elif row_shape == "chunks":
+                # the owner's design: the career row plus contiguous chunks of his seasons, with two
+                # features saying how much evidence each row rests on
+                train = sy.chunk_rows(label(unseen), training, column, feats, sizes=chunk_sizes)
+                model_feats = feats + sy.CHUNK_FEATURES
             else:
                 # one label per TRAINING season: the RAPM with the rated season(s) and that season out, so
                 # a row's box score and its label share no game.  One solve each, ~0.7 s, cached per target
@@ -188,11 +200,12 @@ def main():
             if season == boards[0]:
                 print(f"  prior {side}: {len(train):,} training rows ({row_shape})", flush=True)
             model = ChimeraBoostRegressor(random_state=0, **dict(params))
-            model.fit(train[feats].to_numpy(float), train.target.to_numpy(float),
+            model.fit(train[model_feats].to_numpy(float), train.target.to_numpy(float),
                       sample_weight=train.weight.to_numpy(float))
             held = sy.season_frame(panel[(panel.side == side) & (panel.season == season)], feats)
+            held = held.assign(chunk_poss=held.poss.to_numpy(float), chunk_seasons=1.0)
             prior[side] = dict(zip(held.player_id.to_numpy(),
-                                   model.predict(held[feats].to_numpy(float))))
+                                   model.predict(held[model_feats].to_numpy(float))))
 
         # one ridge per side's target; each contributes only its own half of the board
         scale = {}

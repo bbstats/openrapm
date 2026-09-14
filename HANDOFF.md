@@ -99,9 +99,9 @@ What it says (full record in `DECISIONS.md`):
 
 ## Experiment 2 (2026-09-13): the prior trained on one row per player-season
 
-The owner's intent: a leave-one-season-out SPM, trained on every other season's player-seasons, run on the
-rated season's box score.  What existed trained on one row per player (career averages).  `--rows=season`
-builds the intended shape.  Year-over-year: **8.715 against 8.804, -2.48 team-game MSE, z -7.0, 47 of 56**,
+Not the owner's design (see experiment 3 for that); the assistant's first step toward it, and it replaced the
+career row rather than adding to it.  `--rows=season` trains the SPM on one row per player-season instead of
+one career-average row per player.  Year-over-year: **8.715 against 8.804, -2.48 team-game MSE, z -7.0, 47 of 56**,
 and the gain survives rescaling.  The prior alone is a tie; the gain is the ridge stage getting in (the
 defensive penalty leaves the 1e9 ceiling, the team R-squared on defence falls to 0.190).  **But consensus
 agreement collapses to 0.570 / 0.656 / 0.651, a gross miss and a veto as it stands.**  Two specification
@@ -110,17 +110,21 @@ weight), and one-season players lose their label (1,917 players train against 2,
 
 ## The queue, one at a time
 
-1. **Experiment 2b: the same rows with the per-player weight cap** (`--rows=season_capped`).  Running.
-   Read the year-over-year test first, the consensus second, and the per-season free amplitude
-   (`prior_scale_off`, 3.4x to 9.4x uncapped) as the symptom.
-2. **Experiment 2c: a label for one-season players**, if 2b still misses the consensus badly.  Their one
-   season is the rated season or a lone training season; the latter has no other-season label and is dropped.
-3. **Experiment 3: contiguous 2- and 3-season chunks as extra rows**, with possessions as a feature, folds
-   grouped by player.  Only if 2b passes both checks.
-4. **Experiment 4: drop `onc_d` from the defensive list only** (`BORUTA_D` without `ONC`).  Lower priority
+1. **Experiment 3: the owner's design.  The career row per player, PLUS chunk rows.**  Keep `prior_rows`
+   exactly as it is and add, for the same player, one row per contiguous chunk of his seasons (sizes 1, 2
+   and 3 to start), features averaged over the chunk, the same label as his career row, plus two features
+   saying how much evidence the row rests on (`chunk_poss`, `chunk_seasons`; the rated season's row reads
+   its own possessions and 1).  Weights: his chunk rows together weigh what his career row weighs, split
+   by possessions, so no player's total weight grows with his career length.  `--rows=chunks
+   --chunk_sizes=1,2,3`.  Read the year-over-year test first, the consensus second.
+2. **Experiment 3b: more chunk sizes**, only if 3 pays.  Then the disjoint label (each chunk labelled from
+   the seasons outside it) as its own change, if the booster looks like it is copying its own noise.
+3. **Experiment 4: drop `onc_d` from the defensive list only** (`BORUTA_D` without `ONC`).  Lower priority
    now: experiment 2 already took the defensive team R-squared below the consensus's.
-5. **Experiment 5: the booster's settings** (`gbdt.params` / `params_def`, tuned for another target and row
+4. **Experiment 5: the booster's settings** (`gbdt.params` / `params_def`, tuned for another target and row
    shape), only after the row shape is settled.
+5. The weight-capped rerun of experiment 2 (`--rows=season_capped`) was stopped unread; it is not the
+   owner's design.
 
 ## Closed, do not reopen
 

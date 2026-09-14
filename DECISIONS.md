@@ -975,13 +975,15 @@ defensive team R-squared 0.241 against the consensus's 0.195.  Reported every ti
 
 ### Experiment 2: the prior trained on one row per player-season, not one per player (2026-09-13)
 
-**The change.**  The owner's intent for the single-year prior was a leave-one-season-out SPM: for the rated
-season, a booster trained on every OTHER season's player-seasons, then run on the rated season's box score.
-What had been built since 2026-09-12 trained instead on one row per PLAYER, his box score averaged over
-every season but the rated one -- a clean career average at training, one noisy season at inference, two
-different kinds of row.  `--rows=season` trains on one row per player-season (12,248 rows against 2,860),
-each labelled with his RAPM over his seasons OTHER than that one and the rated one, so a row's box score
-and its label share no game.  Everything else held: features, targets, penalties, the ridge.
+**The change, and whose idea it was.**  NOT the owner's design -- it was the assistant's proposed first step
+toward it and was wrongly reported as the owner's intent.  The owner wants the SPM trained on ONE row per
+player (his career average with the rated season out, what `prior_rows` builds) PLUS extra rows for the same
+player built from chunks of his seasons -- leave two out, any three, any one -- as an artificial increase of
+the sample that teaches the booster how noise changes the map (experiment 3 below).  What this experiment
+ran instead REPLACED the career row with single-season rows: `--rows=season` trains on one row per
+player-season (12,248 rows against 2,860), each labelled with his RAPM over his seasons OTHER than that one
+and the rated one.  Everything else held: features, targets, penalties, the ridge.  It is kept as a
+measurement of one ingredient of the owner's design, no more.
 
 **Result, year-over-year, both directions, 56 observations** (`outputs/yoy_exp2_rows.log`):
 
