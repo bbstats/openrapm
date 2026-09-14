@@ -79,7 +79,7 @@ from eracoef import singleyear as sy  # noqa: E402
 from eracoef.config import load_config  # noqa: E402
 from eracoef.holdout import Context, Ratings, predict_season, score  # noqa: E402
 from eracoef.inseason import season_frac  # noqa: E402
-from eracoef.investigate import oncourt_rates  # noqa: E402
+from eracoef.investigate import offcourt_rates, oncourt_rates  # noqa: E402
 from eracoef.looseason import LeaveSeasonOutRAPM  # noqa: E402
 from eracoef.priorridge import PriorRidgeCV, armse, calibration_miss  # noqa: E402
 from eracoef.xshoot import DEFENSE_TARGETS  # noqa: E402
@@ -133,14 +133,23 @@ def _fold_prior_builder(wd_o, wd_d, models, held_frames, model_feats):
     full-season rebuild reproduces the panel to four decimals).
     """
     ids_of_ps = wd_o.spec.ps_table["player_id"].to_numpy()
+    # the off-court family too, when the panel carries it (scripts/65_offcourt_panel.py)
+    with_offc = all(c in held_frames["O"].columns for c in sy.OFFC + sy.NET)
+    rebuilt = sy.ONC + (sy.OFFC + sy.NET if with_offc else [])
 
     def fold_prior(train_mask):
-        got = oncourt_rates(wd_o.subset(train_mask), wd_d.subset(train_mask))
+        fo, fd = wd_o.subset(train_mask), wd_d.subset(train_mask)
+        got = oncourt_rates(fo, fd)
         onc = pd.DataFrame({"player_id": ids_of_ps, **{c: got[c].to_numpy(dtype=float) for c in sy.ONC}})
+        if with_offc:
+            off = offcourt_rates(fo, fd)
+            for c in sy.OFFC:
+                onc[c] = off[c].to_numpy(dtype=float)
+            onc["net_o"], onc["net_d"] = onc.onc_o - onc.offc_o, onc.onc_d - onc.offc_d
         out = {}
         for side in ("O", "D"):
-            h = held_frames[side].drop(columns=sy.ONC).merge(onc, on="player_id", how="left")
-            h[sy.ONC] = h[sy.ONC].fillna(0.0)
+            h = held_frames[side].drop(columns=rebuilt).merge(onc, on="player_id", how="left")
+            h[rebuilt] = h[rebuilt].fillna(0.0)
             out[side] = dict(zip(h.player_id.to_numpy(),
                                  models[side].predict(h[model_feats[side]].to_numpy(float))))
         return out["O"], out["D"]
@@ -346,11 +355,12 @@ def main():
               f"defense {by_season.prior_scale_def.mean():.2f} "
               f"(min {by_season.prior_scale_def.min():.2f}, max {by_season.prior_scale_def.max():.2f})")
 
+    # the owner reads the top 20 of the latest season for EVERY experiment (2026-09-14): the eye test
     for season in dict.fromkeys([boards[-1], 2015 if 2015 in boards else boards[0]]):
         top = board[board.season == season].sort_values("rating_total", ascending=False)
-        print(f"\n=== {season}, top 12 (points per 100 possessions, positive good on both ends)")
+        print(f"\n=== {season}, top 20 (points per 100 possessions, positive good on both ends)")
         print(top[["player_name", "rating_off", "rating_def", "rating_total",
-                   "poss_off"]].head(12).to_string(index=False))
+                   "poss_off"]].head(20).to_string(index=False))
 
 
 def _names() -> pd.DataFrame:

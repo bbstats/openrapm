@@ -34,7 +34,7 @@ import pandas as pd
 from .gbdt_prior import CAREER, SHOT_FEATURES, SHOT_LEAGUE, SHOT_TOTALS, add_derived
 from .design import FEATURES
 
-__all__ = ["PRIOR_FEATURES", "INPUT_COLUMNS", "BIO", "ONC", "ROLE_INPUTS", "aggregate", "season_frame",
+__all__ = ["PRIOR_FEATURES", "INPUT_COLUMNS", "BIO", "ONC", "OFFC", "NET", "ROLE_INPUTS", "aggregate", "season_frame",
            "prior_rows", "season_rows", "chunk_rows", "CHUNK_FEATURES", "FEATURE_SETS", "feature_set", "OFFENSE_TARGET", "DEFENSE_TARGET",
            "RAPM_OFFENSE_LAMBDA",
            "RAPM_DEFENSE_LAMBDA", "RAPM_CONTEXT_LAMBDA", "MIN_POSSESSIONS"]
@@ -58,6 +58,10 @@ MIN_POSSESSIONS = 100.0
 # table) and this one may not import it.  `tests/test_singleyear.py` asserts the two stay equal.
 BIO = ["height", "weight", "draft_pick", "tenure", "n_teams"]
 ONC = ["onc_o", "onc_d", "onc_poss_o", "onc_poss_d"]        # his own season's on-court record, per side
+# his team's record WITHOUT him, same games, same centring and padding (`investigate.offcourt_rates`),
+# and the on/off net.  The owner, 2026-09-14: "usually we also include off-court-rating".
+OFFC = ["offc_o", "offc_d", "offc_poss_o", "offc_poss_d"]
+NET = ["net_o", "net_d"]                                    # onc minus offc, per side
 ROLE_INPUTS = ["poss_pct", "gs_pct", "age"]
 
 # What the booster sees.  54 names: 42 of SHOT_FEATURES (all but `season`), 3 career, 5 bio, 4 on-court.
@@ -66,7 +70,7 @@ PRIOR_FEATURES = [f for f in SHOT_FEATURES if f != "season"] + CAREER + BIO + ON
 # What the panel must carry for `add_derived` to build the rest.  The raw (uncentred) rates are the
 # RATIOS' inputs; the shot totals and the block league levels are the SHOTQ inputs.
 INPUT_COLUMNS = (list(FEATURES) + ROLE_INPUTS + [f"raw_{c}" for c in FEATURES]
-                 + list(SHOT_TOTALS) + list(SHOT_LEAGUE) + CAREER + BIO + ONC)
+                 + list(SHOT_TOTALS) + list(SHOT_LEAGUE) + CAREER + BIO + ONC + OFFC + NET)
 
 
 # ---------------------------------------------------------------------------------- named feature sets
@@ -120,6 +124,9 @@ FEATURE_SETS = {
     # allowed while he is on the floor, a lineup quantity; the shipped defensive prior has no on-court
     # column and beats the single-year one on the year-over-year test (DECISIONS.md, experiment 1).
     "boruta_noonc_d": {"O": BORUTA_O, "D": [f for f in BORUTA_D if f not in ONC]},
+    # the owner's idea (2026-09-14): the off-court record and the on/off net beside the on-court record,
+    # both sides.  `scripts/65_offcourt_panel.py` writes the columns into the season panel.
+    "boruta_offc": {"O": BORUTA_O + OFFC + NET, "D": BORUTA_D + OFFC + NET},
 }
 
 

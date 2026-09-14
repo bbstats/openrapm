@@ -71,6 +71,72 @@ def attributable(Zo, Zd, r, w, lam: float = 2000.0) -> dict:
                 ss_d=float(np.average(theta[m:] ** 2, weights=np.maximum(pd_, 1e-9))))
 
 
+def offcourt_rates(wd_o, wd_d) -> "pd.DataFrame":
+    """Each player's LUCK-ADJUSTED OFF-court rating: his team's points per 100 (scored, `offc_o`; allowed,
+    `offc_d`) over the rows of games he played in where his team was on the floor WITHOUT him.  The owner,
+    2026-09-14: *"On court rating is a useful but flawed metric. Usually we also include off-court-rating."*
+
+    Same inputs, same centring and the same method-of-moments padding as `oncourt_rates`, so `onc_o -
+    offc_o` is the on/off net on one scale.  A player's team in a game is read off the design: he is the
+    home team's if he appears on offence in a home-offence row or on defence in an away-offence row.
+    Games he did not play in contribute nothing (his team without him for a whole game is a different
+    question).  Returns one row per `ps_idx`: `offc_o`, `offc_d`, `offc_poss_o`, `offc_poss_d`; `offc_d`
+    in the RAW sign (points allowed per 100), lower is better.
+    """
+    if wd_o.spec.n_ps != wd_d.spec.n_ps:
+        raise ValueError("the two designs must share a player layout; build them from the same window")
+    res = {"ps_idx": np.arange(wd_o.spec.n_ps)}
+    ks = {}
+    for tag, wd in (("o", wd_o), ("d", wd_d)):
+        n_ps = wd.spec.n_ps
+        Z = sp.csr_matrix(wd.parts["Z"] if wd.parts is not None else wd.X[:, :2 * n_ps])
+        Zo, Zd = Z[:, :n_ps], Z[:, n_ps:]
+        y, w = np.asarray(wd.y, dtype=float), np.asarray(wd.w, dtype=float)
+        game = wd.rows["game_idx"].to_numpy()
+        home_off = wd.rows["is_home_off"].to_numpy(dtype=bool)
+        # a group is (game, which team is on offence): 2 * game + 1 when the home team is
+        grp = 2 * game + home_off.astype(int)
+        n_grp = 2 * (int(game.max()) + 1)
+        M = sp.csr_matrix((np.ones(len(grp)), (np.arange(len(grp)), grp)), shape=(len(grp), n_grp))
+        total_sum = np.asarray(M.T @ (w * y)).ravel()             # per group: points scored (weighted)
+        total_w = np.asarray(M.T @ w).ravel()
+        Ao, Ad = (Zo.T @ M).tocsr(), (Zd.T @ M).tocsr()          # player x group: rows he was on for
+        home = np.asarray((Ao[:, 1::2] + Ad[:, 0::2]).todense())  # player x game: on the home team
+        away = np.asarray((Ao[:, 0::2] + Ad[:, 1::2]).todense())
+        is_home = home > away
+        played = (home + away) > 0
+        # his team's OFFENCE group per game: 2g+1 if home, 2g if away; its DEFENCE group is the other
+        off_grp = np.zeros((n_ps, n_grp))
+        def_grp = np.zeros((n_ps, n_grp))
+        off_grp[:, 1::2] = played & is_home
+        off_grp[:, 0::2] = played & ~is_home
+        def_grp[:, 0::2] = played & is_home
+        def_grp[:, 1::2] = played & ~is_home
+        on_o_sum, on_o_w = np.asarray(Zo.T @ (w * y)).ravel(), np.asarray(Zo.T @ w).ravel()
+        on_d_sum, on_d_w = np.asarray(Zd.T @ (w * y)).ravel(), np.asarray(Zd.T @ w).ravel()
+        if tag == "o":
+            s, n = off_grp @ total_sum - on_o_sum, off_grp @ total_w - on_o_w
+        else:
+            s, n = def_grp @ total_sum - on_d_sum, def_grp @ total_w - on_d_w
+        n = np.maximum(n, 0.0)
+        x = np.where(n > 0, s / np.where(n > 0, n, 1.0), 0.0)
+        if n.sum() <= 0:
+            res[f"offc_{tag}"], res[f"offc_poss_{tag}"], ks[tag] = x, n, float("nan")
+            continue
+        lvl = float(np.average(x, weights=n))
+        xc = x - lvl
+        sigma2 = float(np.average((y - np.average(y, weights=w)) ** 2, weights=w))
+        ok = n > 0
+        tau2 = float(np.average(xc[ok] ** 2, weights=n[ok]) - sigma2 * np.average(1.0 / n[ok], weights=n[ok]))
+        k = sigma2 / tau2 if tau2 > 1e-9 else 1e9
+        ks[tag] = float(k)
+        res[f"offc_{tag}"] = pad.shrink(xc, n, k, 0.0)
+        res[f"offc_poss_{tag}"] = n
+    frame = pd.DataFrame(res)
+    frame.attrs["pad_k"] = ks
+    return frame
+
+
 def on_court(Zo, Zd, r, w):
     """Per player: the weighted mean residual of his offensive rows and of his defensive rows, and the
     possessions behind each.  Returns (mean_o, poss_o, mean_d, poss_d), mean_d in the offense's sign."""
