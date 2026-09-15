@@ -1243,6 +1243,13 @@ Against: the rescaled row is worse by 0.49.  Recommended for adoption on the sta
 number is simpler than a CV that cannot see what it chooses).  **ADOPTED by the owner, 2026-09-15**: the
 rankings script defaults to `--lambda_player=13037`; the product table was rebuilt and the site republished.
 
+**Offence and defence separately (2026-09-15, the owner: "same penalty on both sides though?").**  The
+1-D sweep had tied the two sides.  A 4 x 4 grid over 2,000 / 13,037 / 84,978 / 553,918 for each side, the
+ridge alone on the saved priors, paired against 13,037 / 13,037 over the same 56 observations: **every one
+of the fifteen other pairings is worse.**  The nearest are offence 84,978 / defence 13,037 (+0.18 team-game
+MSE, z +2.7, 21 of 56) and offence 13,037 / defence 2,000 (+0.52, z +5.7, 12 of 56); offence at 2,000 is
++1.8 to +2.4 whatever the defence.  The equal pair stays.  `outputs/yoy_sy_lo<off>_ld<def>.log`.
+
 **Experiment 1: the un-shrunk label, with thin players shrunk toward their possession tier.**
 `--unshrink_label=1`: label_i = beta_i / max(s_i, s_floor) + (1 - s_i / max(s_i, s_floor)) x m(tier_i),
 s_i = n_i / (n_i + 40,000), s_floor at 4,444 possessions, m(tier) the tier's mean coefficient un-shrunk by
