@@ -1240,7 +1240,8 @@ are back on for offence in every season (2026: what they add, sd 0.39 against 0.
 rises (offence 0.72 to 0.78, top five 4 of 5), and the 2026 list moves the way the owner's eye test asked --
 Jokic 2nd, Shai 4th, Curry 7th, Harden 14th, LeBron out of the top 20, Jamal Murray off the offensive top.
 Against: the rescaled row is worse by 0.49.  Recommended for adoption on the standing tie rule (one fixed
-number is simpler than a CV that cannot see what it chooses); the owner's ruling.
+number is simpler than a CV that cannot see what it chooses).  **ADOPTED by the owner, 2026-09-15**: the
+rankings script defaults to `--lambda_player=13037`; the product table was rebuilt and the site republished.
 
 **Experiment 1: the un-shrunk label, with thin players shrunk toward their possession tier.**
 `--unshrink_label=1`: label_i = beta_i / max(s_i, s_floor) + (1 - s_i / max(s_i, s_floor)) x m(tier_i),

@@ -7,7 +7,7 @@
                                            [--exclude_neighbours=0] [--rows=chunks|player|season|season_capped]
                                            [--chunk_sizes=1,2,3|all] [--crossfit=scale|0|1]
                                            [--params_mult=l2_leaf_reg:5,min_child_weight:5] [--params_set=depth:3]
-                                           [--player_folds=0|5] [--unshrink_label=0|1] [--lambda_player=<value>]
+                                           [--player_folds=0|5] [--unshrink_label=0|1] [--lambda_player=13037|cv|<value>]
                                            [--save_priors=<name>] [--priors_from=<name>] [--centre=1]
 
 `--player_folds=5` (2026-09-14, the owner's call after the memorisation test): the SPM is fitted once
@@ -302,7 +302,10 @@ def main():
     # experiment 2: the ridge's player penalty fixed at one value for every season instead of chosen by
     # cross-validation inside the season (which cannot validate a per-player residual and switches the
     # games off in 2024-2026).  Chosen on the year-over-year test, once.
-    lambda_player = _flag("lambda_player")
+    # adopted 2026-09-15 (the owner: "adopt"): 13,037 on both sides, every season, from the sweep of
+    # 2,000 to 1e9 on the year-over-year test (DECISIONS.md).  --lambda_player=cv restores the per-season CV.
+    lambda_player = _flag("lambda_player", "13037")
+    lambda_player = None if str(lambda_player).lower() == "cv" else lambda_player
     # the priors are the slow stage (five booster fits a season); save them once, sweep the ridge on them
     save_priors, priors_from = _flag("save_priors"), _flag("priors_from")
     # experiment 7: the booster's settings, the same change on both sides.  --params_mult=l2_leaf_reg:5,...

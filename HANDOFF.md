@@ -1,167 +1,114 @@
 # Handoff: the single-year player rankings, one experiment at a time
 
 **This file is transient.**  It starts the next session and is deleted when Phase 1 ships.  `DECISIONS.md`
-is the permanent record and carries every number quoted here.  Do not let this grow into a lab notebook
-again: the last one reached 578 lines and was cut on 2026-09-13 (`git show 03301a2:handoff.md` has it).
+is the permanent record and carries every number quoted here.  Do not let this grow into a lab notebook.
 
-Branch `cleanup`, ahead of `main`, `main` untouched.  `pytest -q`: **285 passed, 1 xfailed, ~120 s.**
+Branch `cleanup`; `main` is fast-forwarded to it at each publish.  `pytest -q`: **285 passed, 1 xfailed, ~120 s.**
 
-## How we work now (the owner, 2026-09-13)
+## How we work (the owner, 2026-09-13/14)
 
-- **One change per experiment**, named after the change.  Never two things in one run.
-- **One test decides**: the year-over-year test below.  The consensus checks and the diagnostics are
-  reported every time and chosen on never.
-- **Plain words.**  No invented labels, no single-letter names, no "board" (say the player rankings),
-  no "floor" (say the check or the threshold).  Define a term the first time it is used.
-- Delete hard, tag first.  Every number carries its unit and the name of the test it came from.
+- **Two jobs only: implement the owner's ideas, or propose new ones.**  Never run an idea the owner has
+  not said "go" to.  One experiment at a time; never a queue of several overnight.
+- **One test decides**: the year-over-year test below.  The consensus checks and the 2026 top 20 (the eye
+  test) are read every time and can veto; they are never fitted to.
+- **Every experiment ends with the 2026 top 20**, emailed as a phone-readable table when the owner is on a
+  phone (`/experiment-comparison`; `scripts/66_compare.py` writes the page and the email body).
+- **Plain words.**  No invented labels, no single-letter names, no "board" (say the player rankings), no
+  "floor" (say the check).  Define a term the first time it is used.  End every message with a one-sentence
+  TL;DR unless the message is itself one sentence.
 
 ## The rulings that bind
 
 1. **One rating per player per season, from that season's games only**, regular season and playoffs.
-2. **Single year or bust** (2026-09-11): a player's own other seasons may not reach his rating.  Model
-   coefficients may be learned from other seasons; a per-player `past_*` channel may not.
+2. **Single year or bust**: a player's own other seasons may not reach his rating, not even through the
+   booster's memory (hence the out-of-player priors).  Model coefficients may be learned from other seasons.
 3. **Never train on the current season until its Finals are over.**  Loading is always allowed.
-4. **Keep chimeraboost.**  **Bench players must be in the accuracy test.**  **The archetype guard is
-   unsupervised.**  **The consensus is a sanity check, never a fitting target**; a gross miss is a veto.
-5. The player-level losses (rank, dollars) were deleted (2026-09-12): their truth was a plain RAPM,
-   which is worse than what it scored.  "How well does the rating carry over in a trade" is still wanted
-   and still not built.
-6. **The SPM is trained on one row per player** (2026-09-13), his career average with the rated season
-   out, PLUS extra rows for the same player built from chunks of his seasons, as an artificial increase
-   of the sample that teaches the booster how noise changes the map.  Not one row per player-season.
+4. **The SPM is trained on one row per player** (his career average with the rated season out) PLUS chunk
+   rows of his seasons; not one row per player-season.
+5. **Keep chimeraboost.  The consensus is a sanity check, never a fitting target**; a gross miss vetoes.
+6. Each season is centred at possession-weighted zero per side (the RAPM convention), 2026-09-14.
 
-## What exists
+## What ships (the incumbent, `scripts/62_single_year_board.py` defaults)
 
-**Shipped** (`config.yaml` → `ratings_prior.season_board`, `artifacts/season_ratings.parquet`,
-`docs/data/ratings.json`): one season's games, a prior trained on the three-season block panel, a
-calibration map.  Its offensive prior carries `past_apm`, `past_poss`, `past_rapm`, which ruling 2 bans.
-The live site is built from `main`, which still shows the older three-year-window rankings.
+1. **Target**: `looseason.LeaveSeasonOutRAPM`, one RAPM per player over every season except the rated one
+   (penalties 40,000 / 40,000 / 0, closed).
+2. **SPM**: chimeraboost on `singleyear.chunk_rows` (the career row plus contiguous 1-, 2-, 3-season
+   chunks, 35,647 rows, two features saying how much evidence a row rests on), features `boruta`
+   (21 offence / 17 defence, on-court columns in).  **Out-of-player**: five player folds balanced on the
+   label (`rloocv.BalancedGroupKFold`), every player's prior from the fit that never saw his rows.
+3. **Rating**: `priorridge.PriorRidgeCV`, `scale x prior + residual`, the scale priced on cross-fitted prior
+   columns (`--crossfit=scale`), the residual penalty **fixed at 13,037 on both sides** (adopted 2026-09-15;
+   the per-season CV had switched the games off on offence in 2024-2026).  Then centred.
 
-**The single-year pipeline** (`scripts/62_single_year_board.py`; `notebooks/single_year.ipynb` is the same
-thing cell by cell, generated by `notebooks/build_single_year.py`).  Three stages, none fit on the rated season:
+The product table (`outputs/season_ratings_product.parquet`, every other season allowed in the prior) is
+what `docs/data/ratings.json` and the site are built from.  `artifacts/season_ratings.parquet` is still the
+older system, kept for the tests; do not overwrite it.
 
-1. **Target**: `looseason.LeaveSeasonOutRAPM`, one RAPM rating per player over every season except the
-   rated one (penalties 40,000 / 40,000 / 0, closed).
-2. **SPM**: chimeraboost from a player's box score to that target, trained on `singleyear.chunk_rows`
-   (ruling 6: the career row plus contiguous 1-, 2- and 3-season chunks, two features saying how much
-   evidence a row rests on; 35,647 rows), then asked about the rated season's own box score.  Feature
-   lists in `singleyear.FEATURE_SETS`; the default `boruta` is 21 names on offence, 17 on defence, both
-   including the on-court points columns `onc_*`.
-3. **Rating**: `priorridge.PriorRidgeCV` on the rated season's games, `scale * prior + residual`, the
-   scale a free coefficient priced on CROSS-FITTED prior columns (`--crossfit=scale`: the prior's on-court
-   columns rebuilt inside each whole-game CV fold from the training games), penalties by the same CV.
+Threads: the script pins BLAS to one thread and numba to four before importing anything.  Unpinned, one
+booster fit went from 15 s to 45 minutes when a second process was running.  **Never run two builds at
+once**, and kill a chain's python children when you stop it (stopping the wrapper leaves them running).
 
 ## The test: year-over-year
 
 Rate a season from its own games.  Predict every stint of the season before and the season after from the
 ten players' ratings alone, refitting only the intercept and home edge on the scored season.  Score
-against actual points, per stint and summed to team-games.  28 scored seasons, each predicted twice, every
-table paired by scored season.  The rated season's prior must not have seen the two scored seasons:
+against actual points per team-game.  28 scored seasons, each predicted twice, paired by scored season.
+The prior must not have seen the two scored seasons (`--exclude_neighbours=1`):
 
-    .venv/Scripts/python scripts/62_single_year_board.py --exclude_neighbours=1 --score=0 --out=season_ratings_<name>
-    .venv/Scripts/python scripts/63_yoy.py --rankings=<name>=outputs/season_ratings_<name>.parquet,incumbent=outputs/season_ratings_sy_chunks_cfs.parquet --ref=incumbent --tag=<name>
-    .venv/Scripts/python scratch/consensus_report.py outputs/season_ratings_<name>.parquet
+    .venv/Scripts/python scripts/62_single_year_board.py --exclude_neighbours=1 --score=0 --boards=<ten seasons> --out=season_ratings_<name>_<first>
+        (three chunks of ten seasons, stitched; one chunk at a time keeps memory under control; ~3 min a season)
+    .venv/Scripts/python scripts/63_yoy.py --rankings=<name>=outputs/season_ratings_<name>.parquet,incumbent=outputs/season_ratings_sy_lam13037.parquet --ref=incumbent --tag=<name> --splits=
+    .venv/Scripts/python scratch/consensus_report.py outputs/season_ratings_<name>.parquet outputs/season_ratings_sy_lam13037.parquet
+    .venv/Scripts/python scripts/66_compare.py incumbent=outputs/season_ratings_sy_lam13037.parquet <name>=outputs/season_ratings_<name>.parquet --season=2026 --top=20 --yoy=outputs/yoy_<name>.parquet --ref=incumbent
 
-About 40 minutes for the build, under a minute for the test.  Read `game_armse` (what a typical team-game
-misses by, points per 100) and the paired table: `mean_diff` below zero is better than the reference,
-`z` is the mean difference over its standard error, `wins` is scored seasons better out of 56.
+Read `game_armse` (points per 100 per team-game) and the paired row: `mean_diff` below zero is better,
+`z` is the difference over its standard error, `wins` of 56.  **Decision rule:** adopt only if `z` is -2
+or below with no gross consensus miss and the 2026 top 20 not worse; ties go to the simpler version.
+The row "each side rescaled to the scored season" asks whether the order improved with the spread
+removed; `--columns=prior` tests the SPM alone.  `scale_*` below 1 on the neighbouring season is expected
+(players change year to year) and is not a target.
 
-**Decision rule:** adopt a change only if `z` is -2 or below on the pooled team-game row with no gross
-consensus miss.  Ties go to the simpler version.  `scale_off` / `scale_def` (what the scored season wants
-each side multiplied by), the row "each side rescaled to the scored season" (ranking quality with
-amplitude removed), `u_off` / `u_def` (what the season's own games add) and the consensus numbers are
-diagnostics.  `--columns=prior` tests the SPM alone, which is how a stage is blamed.
+**Saved priors**: `--save_priors=<name>` writes every season's priors and their per-game-fold versions;
+`--priors_from=<name>` reruns the ridge alone in a second a season, which is how the penalty was swept.
 
-## Where the experiments stand (all 2026-09-13/14, full record in `DECISIONS.md`)
+## The record so far (all in `DECISIONS.md`; year-over-year error per team-game, points per 100)
 
-| rankings | year-over-year, points per 100 per team-game | vs the row above | next season wants off / def × | consensus off / def / total |
-|---|---|---|---|---|
-| shipped (`artifacts/`) | 8.587 | | 1.18 / 0.78 | 0.835 / 0.756 / 0.835 |
-| 1. one career row per player (`sy_yoy`) | 8.804 | | 0.73 / 0.71 | 0.758 / 0.788 / 0.758 |
-| 2. one row per player-season, NOT the design (`sy_rows`) | 8.715 | -2.48, 47 of 56 | 0.85 / 0.77 | 0.570 / 0.656 / 0.651, veto |
-| 3. career row + 1-3 season chunks (`sy_chunks`) | 8.736 | -1.90 vs 1, 42 of 56 | 0.75 / 0.77 | 0.730 / 0.745 / 0.729 |
-| 4. + scale and penalty cross-fitted (`sy_chunks_cf`) | 8.707 | -0.75 vs 3, but worse rescaled 56 of 56 | 0.80 / 0.89 | 0.730 / 0.705 / 0.723 |
-| **4b. + scale only cross-fitted, the incumbent** (`sy_chunks_cfs`) | **8.693** | **-1.14 vs 3, z -13.9, 54 of 56** | 0.80 / 0.90 | 0.730 / 0.753 / 0.737 |
-| 3b. every chunk size to the full career (`sy_chunks_all`) | 8.682 | -0.30 vs 4b, z -2.1, but rescaled worse 53 of 56; rejected | 0.85 / 0.92 | 0.707 / 0.765 / 0.704 |
-| 6. `onc_d` off the defensive list (`sy_noonc_d`) | 8.684 | -0.24 vs 4b, z -2.6, 36 of 56; rescaled also better; **owner's call** | 0.80 / 0.88 | 0.731 / 0.689 / 0.705 |
-| 7a. booster regularisation x5 (`sy_reg5`) | 8.692 | tie, z -0.4; rejected | 0.81 / 0.90 | 0.730 / 0.763 / 0.727 |
-| 7b. booster depth 3 (`sy_depth3`) | 8.697 | +0.10, z +0.8; rejected | 0.81 / 0.90 | 0.750 / 0.757 / 0.738 |
-| 8. off-court record + on/off net as features, the owner's idea (`sy_offc`) | 8.688 | -0.15 vs 4b, z -1.6, a tie; 2026 top 20 worse (Shai 8th to 32nd, OKC role players up) | 0.81 / 0.88 | 0.726 / 0.755 / 0.731 |
-| 9. out-of-player priors, five label-balanced player folds (`sy_oop`) | 8.705 | +0.34 vs 4b, z +2.6, 24 of 56: worse, because the memorised career channel predicts and ruling 2 bans it; **ADOPTED by the owner, the incumbent** | 0.79 / 0.89 | 0.721 / 0.750 / 0.733, top five 3 |
-| 10. one fixed ridge penalty, 13,037 both sides (`sy_lam13037`); 2,000 to 1e9 swept | 8.697 | -0.22 vs 9, z -1.6, 29 of 56: a tie; games back on for offence; **recommended, owner's ruling** | 0.80 / 0.89 | **0.777 / 0.757 / 0.771, top five 4** |
-| 11. un-shrunk label, thin players toward their tier's level (`sy_unshrink`) | 8.667 | -1.06 vs 9, z -4.3, 41 of 56, but rescaled worse 3 of 56 and the 2026 top 20 scrambled (Clingan 3rd, Jokic 12th, Curry 61st); **rejected** | 0.82 / 0.88 | 0.677 / 0.689 / 0.680, gross miss |
+| rankings | error | verdict |
+|---|---|---|
+| shipped before this branch (`artifacts/`) | 8.587 | uses the banned `past_*` channel on offence |
+| career row only, one per player | 8.804 | the starting point |
+| + 1-3 season chunks (owner's design) | 8.736 | adopted |
+| + scale cross-fitted, penalty not | 8.693 | adopted |
+| + out-of-player priors | 8.705 | worse on the test, adopted by ruling 2 (memorised careers were the gain) |
+| + fixed penalty 13,037 (**the incumbent**) | 8.697 | tie; consensus 0.777 / 0.757 / 0.771, top five 4 of 5; adopted |
+| rejected: every chunk size; booster settings; off-court features; one row per player-season; cross-fitting the penalty; the un-shrunk label (8.667 on the test, but Clingan 3rd and Jokic 12th in 2026) | | |
 
-What each taught: the SPM is the weak stage against the shipped rankings (1); the row shape matters and
-replacing the career row is wrong (2 against 3); with amplitude removed the incumbent ranks nearly as
-well as the shipped rankings; the free scale was inflated by the prior's own on-court columns, and an
-honest within-season CV cannot validate the residual, so the scale is cross-fitted and the penalty is not
-(4 against 4b).  Offence agreement with the consensus sits at 0.730 through 3-4b; the defensive rating is
-less team-predictable than the consensus's own (0.191 against 0.195).
+## Next, in order (the owner, 2026-09-15)
 
-## Waiting on the owner
-
-**Experiment 10, the fixed ridge penalty 13,037.**  A tie on the test, every consensus check up, the eye
-test better (Jokic 2nd, LeBron out of the top 20).  To adopt: default `--lambda_player=13037` in
-`scripts/62_single_year_board.py`, then rebuild the product table and republish.
-
-**Still open from the owner's 2026-09-14 notes:** the bench sits at 0 when it should sit at replacement
-level (experiment 11 got the level right, -5 per 100 under 500 possessions, and put it in the wrong
-place); a replacement-level fill for players with too few possessions to rate, outside the SPM, is the
-next idea.  The Bayesian Gaussian mixture bias check (`scripts/58_archetype.py --board=...`) has not
-been run on the new tables yet.  Centring at possession-weighted zero per season is in (`--centre=1`).
-
-**Experiment 6, `onc_d` off the defensive list.**  Passes the year-over-year test at native scale AND with
-amplitude removed, and the season's own games finally do real work on defence (what they add: sd 0.40
-against 0.18).  Consensus defensive agreement 0.689, 8% under 0.75 -- between the standing rule's
-"marginal" (0.4%) and "gross" (11%).  Adopt or not is the ruling needed.  To adopt: make
-`boruta_noonc_d` the default feature set in `scripts/62_single_year_board.py`.
-
-## The queue, one at a time
-
-1. **Experiment 3c: the disjoint label** (each chunk labelled from the seasons outside it), only if the
-   booster looks like it is copying its own noise.  Not indicated yet.
-2. **Experiment 8: the offensive side.**  Offensive consensus agreement has sat at 0.73 through every
-   version; the shipped offensive prior beats ours but with the banned `past_*` channel.  Candidates:
-   `onc_o` off the offensive list (the twin of 6), or the offensive booster's feature list re-selected
-   on the chunk rows.
-3. **Not a target: `scale_*` at 1.0.**  A rating calibrated within its season reads below 1 on the
-   neighbouring season because true impact changes year to year.  Compare tables and sides on it; do not
-   chase it.
-4. Closed overnight: every chunk size (3b), booster regularisation and depth (7a, 7b).
-
-## Closed, do not reopen
-
-The target's penalties (flat, 0.048 per 100 across 19 triples); `lam_buckets` (0.004 per 100 over a
-40x range); REML (optimises the wrong loss); the feature rewrite (Boruta rejects every ratio and shot-quality
-column here); any within-season 75/25 comparison between tables whose `onc_*` differ (the prior's on-court
-columns see the scored quarter; +0.375 per 100); `spy` decay cube-rooting; `board_D_weight` / `_height`;
-one row per player-season replacing the career row (experiment 2); cross-fitting the penalty CV (experiment 4).
-
-## Parked, not started
-
-The poison test (`tests/test_no_current_season.py`, rebuild with the current season replaced by noise and
-assert identical hashes); the merge gate as a command (`openrapm evaluate --against=ship`: delta, seasons
-won, PBO, runtime ratio); sealed confirm seasons; the CLI replacing the numbered scripts; an archetype
-penalty in the fit; the remaining constants (`gbdt_win_decay` 0.514, `PAST_DECAY` 0.5, `k3 = 450`,
-`FACTOR_LAMS`, both chosen on 2024-26); `scripts/49_role_panel.py` does not reproduce the shipped panel
-(defensive shrinkage 0.219 against 0.314); `systems.py` builds 1,446 systems and wants a registry.
+1. **Replacement-level fill for thin players.**  Players with too few possessions to rate sit at 0; they
+   should sit at the replacement level of their kind, about -2 to -5 per 100 (experiment 11 measured
+   -5.4 under 500 label possessions, -3.9 to 1,500, -2.5 to 4,444 on offence; defence the mirror).  Do it
+   OUTSIDE the SPM: a fill or a shrink target for the rating of a player under a possession threshold, by
+   possessions and perhaps age, never a change to the label (that route scrambled the top of the list).
+   Read the bottom of the 2026 list and the year-over-year test.
+2. The Bayesian Gaussian mixture bias check on the incumbent (`scripts/58_archetype.py --board=...`).
+3. Offence agreement with the consensus is 0.78 now; the shipped offensive prior is still better on the
+   test only through the banned channel.  Ideas welcome; none queued.
 
 ## Traps that cost a day
 
-1. `pip install -e` puts this working tree on `sys.path`, so a fresh clone silently tests THIS repo's
-   data.  Use `PYTHONPATH='<clone>\src' A:/code/spmm/.venv/Scripts/python -m pytest tests -q`.
-2. Tests cannot reach the network (`tests/conftest.py`); take the `allow_network` fixture if one must.
-3. A score on a mask that cuts team-games is not a score: `score` returns NaN for `tg` there; read
-   stint-cutting splits (`movers`, `exposure`) on `mse`.
-4. An argmax on a grid edge has chosen nothing; bracket every sweep on both sides first.
-5. Seventeen more in `DECISIONS.md`, "The measurement traps".  Read them before trusting a number.
+1. `pip install -e` puts this working tree on `sys.path`: a fresh clone silently tests THIS repo's data.
+2. Tests cannot reach the network (`tests/conftest.py`).
+3. A score on a mask that cuts team-games is not a score; read stint-cutting splits on `mse`.
+4. Two builds at once, or an unpinned numba pool, and a 15-second fit takes an hour.
+5. `TaskStop` on a chain stops the bash wrapper only; its python children keep running and its `for`
+   loop keeps launching.  Check `Get-Process python` before starting anything.
+6. Seventeen more in `DECISIONS.md`, "The measurement traps".
 
 ## Verify you are where this file says
 
     .venv/Scripts/python -m pytest tests -q                                  # 285 passed, 1 xfailed, ~120 s
-    .venv/Scripts/python scripts/63_yoy.py --rankings=incumbent=outputs/season_ratings_sy_chunks_cfs.parquet,ship=artifacts/season_ratings.parquet --ref=incumbent --tag=verify --splits=
-                                                                             # ship -4.04 team-game MSE, 54 of 56
-    OPENRAPM_BOARD=outputs/season_ratings_sy_chunks_cfs.parquet .venv/Scripts/python -m pytest tests/test_vs_consensus.py -q
-                        # 6 passed, 4 failed: offence 0.730 and total 0.737 against 0.75; top five shares 2 of 5
-                        # (ours has Harden, Kawhi, LeBron where the consensus has Giannis, Luka, Wembanyama);
-                        # LaMelo Ball 216th.  The single-year rankings have never passed all ten; the shipped ones do.
+    .venv/Scripts/python scripts/63_yoy.py --rankings=incumbent=outputs/season_ratings_sy_lam13037.parquet,ship=artifacts/season_ratings.parquet --ref=incumbent --tag=verify --splits=
+                                                                             # incumbent 8.697; ship -4.0 team-game MSE
+    .venv/Scripts/python scratch/consensus_report.py outputs/season_ratings_sy_lam13037.parquet
+                                                                             # 0.777 / 0.757 / 0.771, top5 4
