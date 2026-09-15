@@ -87,7 +87,9 @@ diagnostics.  `--columns=prior` tests the SPM alone, which is how a stage is bla
 | 7a. booster regularisation x5 (`sy_reg5`) | 8.692 | tie, z -0.4; rejected | 0.81 / 0.90 | 0.730 / 0.763 / 0.727 |
 | 7b. booster depth 3 (`sy_depth3`) | 8.697 | +0.10, z +0.8; rejected | 0.81 / 0.90 | 0.750 / 0.757 / 0.738 |
 | 8. off-court record + on/off net as features, the owner's idea (`sy_offc`) | 8.688 | -0.15 vs 4b, z -1.6, a tie; 2026 top 20 worse (Shai 8th to 32nd, OKC role players up) | 0.81 / 0.88 | 0.726 / 0.755 / 0.731 |
-| 9. out-of-player priors, five label-balanced player folds (`sy_oop`) | 8.705 | +0.34 vs 4b, z +2.6, 24 of 56: worse, because the memorised career channel predicts and ruling 2 bans it; **owner's ruling** | 0.79 / 0.89 | 0.721 / 0.750 / 0.733, top five 3 |
+| 9. out-of-player priors, five label-balanced player folds (`sy_oop`) | 8.705 | +0.34 vs 4b, z +2.6, 24 of 56: worse, because the memorised career channel predicts and ruling 2 bans it; **ADOPTED by the owner, the incumbent** | 0.79 / 0.89 | 0.721 / 0.750 / 0.733, top five 3 |
+| 10. one fixed ridge penalty, 13,037 both sides (`sy_lam13037`); 2,000 to 1e9 swept | 8.697 | -0.22 vs 9, z -1.6, 29 of 56: a tie; games back on for offence; **recommended, owner's ruling** | 0.80 / 0.89 | **0.777 / 0.757 / 0.771, top five 4** |
+| 11. un-shrunk label, thin players toward their tier's level (`sy_unshrink`) | 8.667 | -1.06 vs 9, z -4.3, 41 of 56, but rescaled worse 3 of 56 and the 2026 top 20 scrambled (Clingan 3rd, Jokic 12th, Curry 61st); **rejected** | 0.82 / 0.88 | 0.677 / 0.689 / 0.680, gross miss |
 
 What each taught: the SPM is the weak stage against the shipped rankings (1); the row shape matters and
 replacing the career row is wrong (2 against 3); with amplitude removed the incumbent ranks nearly as
@@ -98,11 +100,15 @@ less team-predictable than the consensus's own (0.191 against 0.195).
 
 ## Waiting on the owner
 
-**Experiment 9, out-of-player priors (`--player_folds=5`).**  The SPM was memorising long-career stars
-(Curry's 2026 prior falls 1.8 per 100 without his own rows, LeBron's 1.4).  Removing it is worse on the
-year-over-year test (+0.34, z +2.6) because a player's own career level does predict his next season --
-which is the per-player channel ruling 2 bans.  The ruling outranks the test; the owner decides.  To
-adopt: default `--player_folds=5` in `scripts/62_single_year_board.py` (five fits a season, ~3 min).
+**Experiment 10, the fixed ridge penalty 13,037.**  A tie on the test, every consensus check up, the eye
+test better (Jokic 2nd, LeBron out of the top 20).  To adopt: default `--lambda_player=13037` in
+`scripts/62_single_year_board.py`, then rebuild the product table and republish.
+
+**Still open from the owner's 2026-09-14 notes:** the bench sits at 0 when it should sit at replacement
+level (experiment 11 got the level right, -5 per 100 under 500 possessions, and put it in the wrong
+place); a replacement-level fill for players with too few possessions to rate, outside the SPM, is the
+next idea.  The Bayesian Gaussian mixture bias check (`scripts/58_archetype.py --board=...`) has not
+been run on the new tables yet.  Centring at possession-weighted zero per season is in (`--centre=1`).
 
 **Experiment 6, `onc_d` off the defensive list.**  Passes the year-over-year test at native scale AND with
 amplitude removed, and the season's own games finally do real work on defence (what they add: sd 0.40

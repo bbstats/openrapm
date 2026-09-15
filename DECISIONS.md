@@ -1215,6 +1215,57 @@ column.  So the test and the ruling disagree here and the ruling outranks the te
 assistant; it is a ruling, and the owner reads the top 20 (which now has Shai 5th, Luka 10th, LeBron
 13th, but also drops Draymond, Murray and White a long way).
 
+### Experiments 1 and 2 of 2026-09-14 evening: the ridge penalty, and the un-shrunk label
+
+Both on the incumbent (out-of-player priors, `season_ratings_sy_oop`), one change each, 56 observations.
+The priors were rebuilt once with `--save_priors` so the ridge alone could be swept in a second a season.
+A thread-pinning bug cost the evening: with numba at twelve threads and a second process on the machine
+the same booster fit went from 15 s to 45+ minutes; `62_single_year_board.py` now pins BLAS to one thread
+and numba to four before importing anything (30 s for the offensive fit, 9 s for the defensive one).
+
+**Experiment 2: one fixed ridge penalty for every season instead of the per-season whole-game CV.**  The
+CV had switched the season's games OFF on offence in 2024-2026 (penalty at the 1e9 ceiling, offensive
+rating = SPM x 1.9), and an honest within-season CV cannot validate a per-player residual (experiment 4).
+
+| penalty, both sides, all seasons | game_armse | paired vs incumbent (8.706) | each side rescaled | consensus off / def / total, top five |
+|---|---|---|---|---|
+| 2,000 | 8.781 | +2.08, z +8.6, 7 of 56 | +1.71, 9 of 56 | |
+| **13,037** | **8.697** | **-0.22, z -1.6, 29 of 56** (a tie) | +0.49, 15 of 56 | **0.777 / 0.757 / 0.771, 4** |
+| 84,978 | 8.718 | +0.37, z +2.5, 16 of 56 | +1.74, 0 of 56 | |
+| 553,918 to 1e9 | 8.732 to 8.736 | +0.76 to +0.86, 8 to 12 of 56 | +2.26 to +2.39, 0 of 56 | |
+| incumbent, chosen per season by CV | 8.706 | reference | | 0.721 / 0.750 / 0.733, 3 |
+
+No single penalty beats the per-season choice on the test; 13,037 ties it.  What 13,037 changes: the games
+are back on for offence in every season (2026: what they add, sd 0.39 against 0.00), every consensus check
+rises (offence 0.72 to 0.78, top five 4 of 5), and the 2026 list moves the way the owner's eye test asked --
+Jokic 2nd, Shai 4th, Curry 7th, Harden 14th, LeBron out of the top 20, Jamal Murray off the offensive top.
+Against: the rescaled row is worse by 0.49.  Recommended for adoption on the standing tie rule (one fixed
+number is simpler than a CV that cannot see what it chooses); the owner's ruling.
+
+**Experiment 1: the un-shrunk label, with thin players shrunk toward their possession tier.**
+`--unshrink_label=1`: label_i = beta_i / max(s_i, s_floor) + (1 - s_i / max(s_i, s_floor)) x m(tier_i),
+s_i = n_i / (n_i + 40,000), s_floor at 4,444 possessions, m(tier) the tier's mean coefficient un-shrunk by
+the tier's mean s.  Tier levels learned (offence, per 100): -5.4 under 500 label possessions, -3.9 to
+1,500, -2.5 to 4,444, +0.3 above; defence the mirror.  The free prior scale reads 0.84 / 0.92 instead of
+1.9 / 2.0 -- the prior arrives on the right scale by itself.
+
+| | game_armse | paired vs incumbent | each side rescaled | consensus off / def / total, top five |
+|---|---|---|---|---|
+| un-shrunk label (`sy_unshrink`) | **8.667** | **-1.06, z -4.3, 41 of 56** | **+2.28, z +10.9, 3 of 56** | **0.677 / 0.689 / 0.680, 2** |
+
+**Passes the test and is REJECTED, and this is the clearest case yet of what the test cannot see.**  The
+native-scale gain is real and it comes from the bottom of the roster: players under 200 possessions now
+sit at -5.2 per 100 instead of 0, which is the truth about replacement-level minutes and predicts the
+neighbouring season's games where those minutes are played.  But the top of the list is scrambled --
+2026: Wembanyama, Giannis, Donovan Clingan, Holmgren, Neemias Queta, Ausar Thompson, Shai, Ajay Mitchell,
+Hartenstein, Kalkbrenner, Cooper Flagg, Jokic 12th; Curry 61st, Luka 72nd -- young bigs and rookies
+everywhere, the consensus checks fall to 0.68 (a gross miss, 9% under), the rescaled row is the worst
+recorded, and the games add nothing (penalty at the ceiling, sd 0.00 on offence).  The mechanism: the tier
+level enters the label of every thin-career player, and "few career possessions" is what a rookie or a
+young big looks like at inference, so the SPM hands them the tier's optimism.  The bench level is right and
+the way it was put in is wrong.  Keep the idea (thin players at replacement level) and find another route
+-- a replacement-level FILL for players with too few possessions to rate, outside the SPM, is the obvious one.
+
 ## What was tried and rejected
 
 **The LRBoost branch (a boosted correction on a frozen linear prior).** Five things had to be right before it
