@@ -8,6 +8,7 @@
                                            [--chunk_sizes=1,2,3|all] [--crossfit=scale|0|1]
                                            [--params_mult=l2_leaf_reg:5,min_child_weight:5] [--params_set=depth:3]
                                            [--player_folds=0|5] [--unshrink_label=0|1] [--lambda_player=13037|cv|<value>]
+                                           [--lambda_off=<value>] [--lambda_def=<value>]
                                            [--save_priors=<name>] [--priors_from=<name>] [--centre=1]
 
 `--player_folds=5` (2026-09-14, the owner's call after the memorisation test): the SPM is fitted once
@@ -112,6 +113,8 @@ RAPM_CONTEXT_LAMBDA = sy.RAPM_CONTEXT_LAMBDA
 MIN_POSSESSIONS = sy.MIN_POSSESSIONS
 
 BOARD_PLAYER_LAMBDAS = np.round(np.logspace(np.log10(2000.0), np.log10(1.0e9), 8), 0)
+BOARD_OFFENSE_LAMBDAS = BOARD_PLAYER_LAMBDAS       # per side, when --lambda_off / --lambda_def are given
+BOARD_DEFENSE_LAMBDAS = BOARD_PLAYER_LAMBDAS
 BOARD_CONTEXT_LAMBDAS = np.array([0.0, 1.0e3])
 
 SCORE_TARGET = "pts"        # the board is always SCORED on the points that were actually scored
@@ -132,7 +135,7 @@ LAM_BUCKETS: dict = {}      # --buckets=low_poss:2 multiplies the bench's penalt
 
 
 def _ridge(design, prior, free_prior_scale=None, lam_buckets=None, fold_prior=None, crossfit_penalty=True):
-    return PriorRidgeCV(offense_lambdas=BOARD_PLAYER_LAMBDAS, defense_lambdas=BOARD_PLAYER_LAMBDAS,
+    return PriorRidgeCV(offense_lambdas=BOARD_OFFENSE_LAMBDAS, defense_lambdas=BOARD_DEFENSE_LAMBDAS,
                         context_lambdas=BOARD_CONTEXT_LAMBDAS, n_folds=5,
                         free_prior_scale=FREE_PRIOR_SCALE if free_prior_scale is None else free_prior_scale,
                         lam_buckets=LAM_BUCKETS if lam_buckets is None else lam_buckets).fit(
@@ -336,9 +339,13 @@ def main():
           f"player_folds {player_folds}; unshrink_label {unshrink}; lambda_player {lambda_player or 'CV'}; "
           f"priors_from {priors_from or '-'}; save_priors {save_priors or '-'}", flush=True)
     if lambda_player is not None:
-        global BOARD_PLAYER_LAMBDAS, BOARD_CONTEXT_LAMBDAS
+        global BOARD_PLAYER_LAMBDAS, BOARD_CONTEXT_LAMBDAS, BOARD_OFFENSE_LAMBDAS, BOARD_DEFENSE_LAMBDAS
         BOARD_PLAYER_LAMBDAS = np.array([float(lambda_player)])
         BOARD_CONTEXT_LAMBDAS = np.array([0.0])
+        # the two sides' penalties separately (2026-09-15, the owner: "same penalty on both sides though?");
+        # each defaults to --lambda_player
+        BOARD_OFFENSE_LAMBDAS = np.array([float(_flag("lambda_off", lambda_player))])
+        BOARD_DEFENSE_LAMBDAS = np.array([float(_flag("lambda_def", lambda_player))])
     saved = pd.read_pickle(ROOT / "outputs" / f"priors_{priors_from}.pkl") if priors_from else None
     to_save: dict = {}
 
