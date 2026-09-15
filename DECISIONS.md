@@ -1250,6 +1250,26 @@ of the fifteen other pairings is worse.**  The nearest are offence 84,978 / defe
 MSE, z +2.7, 21 of 56) and offence 13,037 / defence 2,000 (+0.52, z +5.7, 12 of 56); offence at 2,000 is
 +1.8 to +2.4 whatever the defence.  The equal pair stays.  `outputs/yoy_sy_lo<off>_ld<def>.log`.
 
+**The fine grid (2026-09-15, the owner: "defense really should be penalized more"):** offence 6,519 to
+26,074 and defence 13,037 to 104,296 in root-2 steps, 35 pairings, same saved priors, paired against
+13,037 / 13,037.  Paired team-game MSE (negative = better), rows offence, columns defence:
+
+| off \ def | 13,037 | 18,437 | 26,074 | 36,875 | 52,148 | 73,750 | 104,296 |
+|---|---|---|---|---|---|---|---|
+| 6,519 | +0.23 | +0.30 | +0.38 | +0.46 | +0.54 | +0.62 | +0.69 |
+| 9,219 | +0.07 | +0.14 | +0.22 | +0.31 | +0.39 | +0.46 | +0.53 |
+| 13,037 | 0 | +0.07 | +0.15 | +0.23 | +0.31 | +0.39 | +0.45 |
+| 18,437 | -0.02 | +0.05 | +0.13 | +0.21 | +0.29 | +0.37 | +0.43 |
+| 26,074 | 0.00 | +0.07 | +0.15 | +0.23 | +0.31 | +0.39 | +0.45 |
+
+**Every step up in the defence penalty is worse, monotonically**, +0.07 per root-2 step at first and
+z above 5 by 26,074, and consensus defensive agreement falls with it (0.757 at 13,037, 0.741, 0.727,
+0.715, 0.705, 0.697, 0.691).  With the coarse grid's defence 2,000 at +0.52, 13,037 is an interior
+optimum on defence.  Offence is a plateau from 13,037 to 26,074 (18,437 reads -0.02, z -1.0, a tie) and
+worse below; the consensus's OFFENSIVE agreement rises as the offence penalty falls (0.797 at 6,519)
+while the test gets worse, which is the forecasting-versus-attribution split again.  13,037 / 13,037
+stays; a heavier defence penalty is the one direction the test rules out.
+
 **Experiment 1: the un-shrunk label, with thin players shrunk toward their possession tier.**
 `--unshrink_label=1`: label_i = beta_i / max(s_i, s_floor) + (1 - s_i / max(s_i, s_floor)) x m(tier_i),
 s_i = n_i / (n_i + 40,000), s_floor at 4,444 possessions, m(tier) the tier's mean coefficient un-shrunk by
