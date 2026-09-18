@@ -18,14 +18,29 @@
   th, td { padding: 6px 9px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
   th:nth-child(1), td:nth-child(1) { text-align: left; white-space: normal; }
   th { color: var(--muted); font-weight: 600; }
-  th:nth-child(4), th:nth-child(5) { color: var(--ink); }
+  th:nth-child(2), th:nth-child(3) { color: var(--ink); }
   td.over, td.under { background: var(--zero); border-radius: 4px; }
   td.over { background: rgb(var(--over) / calc(var(--depth) * 0.55)); }
   td.under { background: rgb(var(--under) / calc(var(--depth) * 0.55)); }
+  .blurb { margin-top: 22px; color: var(--muted); max-width: 66ch; font-size: 13.5px; }
+  .blurb p { margin: 0 0 10px; } .blurb b { color: var(--ink); }
   .sig { color: var(--muted); font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 </style>
 </head>
 <body>
 <main>
-<h1>Bias by player type<small>red: we rate the type higher &nbsp;&middot;&nbsp; blue: we rate it lower &nbsp;&middot;&nbsp; points per 100, 2026, scaled</small></h1>
-<table><thead><tr><th>Player type</th><th>Consensus</th><th>Ours</th><th>vs consensus</th><th>vs 2026 observed</th></tr></thead><tbody><tr><td>Guards who handle the ball<br><span class="sig">+ast -blk -orb +tov</span></td><td>+0.18</td><td>+0.42</td><td class="over" style="--depth: 0.266"><b>+0.239</b></td><td class="under" style="--depth: 0.027"><b>-0.025</b></td></tr><tr><td>High-volume three-point shooters<br><span class="sig">+fg3_miss +fg3m +pts -orb</span></td><td>+2.16</td><td>+1.27</td><td class="under" style="--depth: 0.987"><b>-0.889</b></td><td class="over" style="--depth: 0.165"><b>+0.149</b></td></tr><tr><td>Forwards who rebound and block<br><span class="sig">+drb +blk -stl -ast</span></td><td>-0.34</td><td>+0.21</td><td class="over" style="--depth: 0.603"><b>+0.543</b></td><td class="over" style="--depth: 0.072"><b>+0.065</b></td></tr><tr><td>Low-usage wings<br><span class="sig">-tov -ast -ftm -pts</span></td><td>-0.58</td><td>-0.43</td><td class="over" style="--depth: 0.169"><b>+0.152</b></td><td class="over" style="--depth: 0.076"><b>+0.068</b></td></tr><tr><td>Big men who score and block shots<br><span class="sig">+blk +drb +pts +ftm</span></td><td>+2.37</td><td>+3.06</td><td class="over" style="--depth: 0.764"><b>+0.687</b></td><td class="over" style="--depth: 0.527"><b>+0.475</b></td></tr><tr><td>High-usage scorers who draw fouls<br><span class="sig">+ftm +pts +tov +ast</span></td><td>+2.81</td><td>+2.61</td><td class="under" style="--depth: 0.231"><b>-0.208</b></td><td class="over" style="--depth: 0.506"><b>+0.455</b></td></tr><tr><td>Ball-hawk defenders<br><span class="sig">+stl -pts -ftm -drb</span></td><td>+0.57</td><td>+0.76</td><td class="over" style="--depth: 0.213"><b>+0.192</b></td><td class="under" style="--depth: 0.233"><b>-0.210</b></td></tr><tr><td>Rim-protecting centers<br><span class="sig">+orb -fg3_miss -fg3m +blk</span></td><td>-0.03</td><td>-0.06</td><td class="under" style="--depth: 0.036"><b>-0.032</b></td><td class="under" style="--depth: 0.100"><b>-0.090</b></td></tr></tbody></table></main></body></html>
+<h1>OpenRAPM: bias by player type<small>red: OpenRAPM rates the type higher &nbsp;&middot;&nbsp; blue: lower &nbsp;&middot;&nbsp; points per 100 possessions, 2026, on a matched scale</small></h1>
+<table><thead><tr><th>Player type</th><th>vs consensus</th><th>vs 2026 observed</th></tr></thead><tbody><tr><td>Guards who handle the ball<br><span class="sig">+ast -blk -orb +tov</span></td><td class="over" style="--depth: 0.266"><b>+0.239</b></td><td class="under" style="--depth: 0.027"><b>-0.025</b></td></tr><tr><td>High-volume three-point shooters<br><span class="sig">+fg3_miss +fg3m +pts -orb</span></td><td class="under" style="--depth: 0.987"><b>-0.889</b></td><td class="over" style="--depth: 0.165"><b>+0.149</b></td></tr><tr><td>Forwards who rebound and block<br><span class="sig">+drb +blk -stl -ast</span></td><td class="over" style="--depth: 0.603"><b>+0.543</b></td><td class="over" style="--depth: 0.072"><b>+0.065</b></td></tr><tr><td>Low-usage wings<br><span class="sig">-tov -ast -ftm -pts</span></td><td class="over" style="--depth: 0.169"><b>+0.152</b></td><td class="over" style="--depth: 0.076"><b>+0.068</b></td></tr><tr><td>Big men who score and block shots<br><span class="sig">+blk +drb +pts +ftm</span></td><td class="over" style="--depth: 0.764"><b>+0.687</b></td><td class="over" style="--depth: 0.527"><b>+0.475</b></td></tr><tr><td>High-usage scorers who draw fouls<br><span class="sig">+ftm +pts +tov +ast</span></td><td class="under" style="--depth: 0.231"><b>-0.208</b></td><td class="over" style="--depth: 0.506"><b>+0.455</b></td></tr><tr><td>Ball-hawk defenders<br><span class="sig">+stl -pts -ftm -drb</span></td><td class="over" style="--depth: 0.213"><b>+0.192</b></td><td class="under" style="--depth: 0.233"><b>-0.210</b></td></tr><tr><td>Rim-protecting centers<br><span class="sig">+orb -fg3_miss -fg3m +blk</span></td><td class="under" style="--depth: 0.036"><b>-0.032</b></td><td class="under" style="--depth: 0.100"><b>-0.090</b></td></tr></tbody></table><div class="blurb">
+<p><b>vs 2026 observed.</b> OpenRAPM's 2026 rating is used as the prediction for every team-game of the
+season, and a ridge is fitted to what is left over, with a free amplitude per side and a free level per
+team. The coefficient it returns is the part of the miss that belongs to the player, so this column is
+OpenRAPM against what actually happened on the court &mdash; no outside metric is involved.</p>
+<p><b>vs consensus.</b> The consensus is a GLS-weighted mean of DRIP, LEBRON, EPM, DARKO DPM,
+Time-Decay RAPM, and Time-Decay-Luck-Adjusted RAPM. The weighting de-duplicates the vote, so metrics
+that say nearly the same thing share one vote rather than each getting a full one.</p>
+<p>The two yardsticks agree with each other at <b>R&sup2; = 0.57</b> across the 339 players both
+cover, so they are close but not interchangeable &mdash; which is why a type can be red in one column
+and blue in the other.</p>
+<p>Player types are fitted, not hand-made: a Bayesian Gaussian mixture over per-36 box rates. The line
+under each name is the four rates that type is furthest from the league on.</p>
+</div></main></body></html>

@@ -66,6 +66,23 @@ RATE_WORDS = {"pts": "points", "fg3m": "threes made", "fg3_miss": "threes missed
               "ast": "assists", "orb": "offensive rebounds", "drb": "defensive rebounds", "stl": "steals",
               "blk": "blocks", "tov": "turnovers", "pf": "fouls"}
 
+# The only prose on the page: what the two columns are measured against.  Both are OpenRAPM minus that
+# source, so positive means OpenRAPM rates the type higher.
+BLURB = """<div class="blurb">
+<p><b>vs 2026 observed.</b> OpenRAPM's 2026 rating is used as the prediction for every team-game of the
+season, and a ridge is fitted to what is left over, with a free amplitude per side and a free level per
+team. The coefficient it returns is the part of the miss that belongs to the player, so this column is
+OpenRAPM against what actually happened on the court &mdash; no outside metric is involved.</p>
+<p><b>vs consensus.</b> The consensus is a GLS-weighted mean of DRIP, LEBRON, EPM, DARKO DPM,
+Time-Decay RAPM, and Time-Decay-Luck-Adjusted RAPM. The weighting de-duplicates the vote, so metrics
+that say nearly the same thing share one vote rather than each getting a full one.</p>
+<p>The two yardsticks agree with each other at <b>R&sup2; = {r2:.2f}</b> across the {n} players both
+cover, so they are close but not interchangeable &mdash; which is why a type can be red in one column
+and blue in the other.</p>
+<p>Player types are fitted, not hand-made: a Bayesian Gaussian mixture over per-36 box rates. The line
+under each name is the four rates that type is furthest from the league on.</p>
+</div>"""
+
 
 def norm(name) -> str:
     text = unicodedata.normalize("NFKD", str(name)).encode("ascii", "ignore").decode().lower()
@@ -198,7 +215,11 @@ def build(board_path: Path, cfg: dict, seasons: list, k: int, seed: int, alpha_p
     m["games"] = m.ours_scaled + m.residual
     m["bias_vs_games"] = -m.residual                     # positive = we rate him above what the games say
 
+    both = m.dropna(subset=["adj_overall", "games"])
+    r2 = float(np.corrcoef(both.adj_overall, both.games)[0, 1] ** 2)
+
     return {"board": board_path.name, "seasons": seasons, "k": k, "seed": seed,
+            "r2_consensus_observed": r2,
             "players": len(m), "components_used": int((weights > 0.01).sum()),
             "global_stretch": scale, "residual_players": int(m.residual.notna().sum()),
             "groups": group_rows(m, meta, "ours_vs_consensus", "adj_overall", "bias_vs_consensus"),
@@ -227,19 +248,21 @@ def page(result: dict) -> str:
   th, td { padding: 6px 9px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
   th:nth-child(1), td:nth-child(1) { text-align: left; white-space: normal; }
   th { color: var(--muted); font-weight: 600; }
-  th:nth-child(4), th:nth-child(5) { color: var(--ink); }
+  th:nth-child(2), th:nth-child(3) { color: var(--ink); }
   td.over, td.under { background: var(--zero); border-radius: 4px; }
   td.over { background: rgb(var(--over) / calc(var(--depth) * 0.55)); }
   td.under { background: rgb(var(--under) / calc(var(--depth) * 0.55)); }
+  .blurb { margin-top: 22px; color: var(--muted); max-width: 66ch; font-size: 13.5px; }
+  .blurb p { margin: 0 0 10px; } .blurb b { color: var(--ink); }
   .sig { color: var(--muted); font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 </style>
 </head>
 <body>
 <main>
-<h1>Bias by player type<small>red: we rate the type higher &nbsp;&middot;&nbsp; blue: we rate it lower &nbsp;&middot;&nbsp; points per 100, 2026, scaled</small></h1>
+<h1>OpenRAPM: bias by player type<small>red: OpenRAPM rates the type higher &nbsp;&middot;&nbsp; blue: lower &nbsp;&middot;&nbsp; points per 100 possessions, 2026, on a matched scale</small></h1>
 """
     def cell(value) -> str:
-        """A diverging tint: red = we rate the type ABOVE that source, blue = below, gray at zero.
+        """A diverging tint: red = OpenRAPM rates the type ABOVE that source, blue = below, gray at zero.
 
         The depth is `min(|bias| / 0.9, 1)`, so the largest bias on the page is the full tint and the
         owner's 0.1 threshold for "nothing" is a tenth of it -- barely visible, which is the point.
@@ -251,14 +274,15 @@ def page(result: dict) -> str:
         return (f'<td class="{pole}" style="--depth: {depth:.3f}"><b>{value:+.3f}</b></td>')
 
     by_group = {r["group"]: r for r in result["groups_vs_games"]}
-    out = ['<table><thead><tr><th>Player type</th><th>Consensus</th><th>Ours</th>'
-           '<th>vs consensus</th><th>vs 2026 observed</th></tr></thead><tbody>']
+    out = ['<table><thead><tr><th>Player type</th><th>vs consensus</th>'
+           '<th>vs 2026 observed</th></tr></thead><tbody>']
     for r in result["groups"]:
         other = by_group.get(r["group"])
         out.append(f"<tr><td>{r['name']}<br><span class=\"sig\">{r['signature']}</span></td>"
-                   f"<td>{r['theirs']:+.2f}</td><td>{r['ours']:+.2f}</td>"
                    f"{cell(r['bias'])}{cell(other['bias'] if other else None)}</tr>")
-    return head + "".join(out) + "</tbody></table></main></body></html>"
+    return (head + "".join(out) + "</tbody></table>"
+            + BLURB.format(r2=result["r2_consensus_observed"], n=result["residual_players"])
+            + "</main></body></html>")
 
 
 def main() -> None:
