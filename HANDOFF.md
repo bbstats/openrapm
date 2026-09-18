@@ -3,7 +3,7 @@
 **This file is transient.**  It starts the next session and is deleted when Phase 1 ships.  `DECISIONS.md`
 is the permanent record and carries every number quoted here.  Do not let this grow into a lab notebook.
 
-Branch `cleanup`; `main` is fast-forwarded to it at each publish.  `pytest -q`: **315 passed, 1 xfailed, ~160 s** with the scraped data present; **305 passed,
+Branch `cleanup`; `main` is fast-forwarded to it at each publish.  `pytest -q`: **330 passed, 1 xfailed, ~165 s** with the scraped data present; **305 passed,
 10 skipped, 1 xfailed** on a clone without it (2026-09-17).
 
 ## How we work (the owner, 2026-09-13/14)
@@ -288,9 +288,45 @@ without first raising the 3.7% and 5.6%.
    loop keeps launching.  Check `Get-Process python` before starting anything.
 6. Seventeen more in `DECISIONS.md`, "The measurement traps".
 
+## Filed for the next rebuild (2026-09-18)
+
+**`poss_def` in the shipped parquet is still a copy of `poss_off`.** The board script was fixed on
+2026-09-18 — `side_possessions()` had always computed both counts correctly but only ran when a
+`--blend` flag asked for it, and it now runs every season — but
+`outputs/season_ratings_product.parquet` was built before that and carries the old column in all
+14,579 rows. **No rating is affected**: `poss_def` is assigned after the ridge and feeds nothing.
+Rebuild whenever the next real run happens; there is no reason to spend 90 minutes on it alone.
+
+What it is worth, measured on 2026: 551 of 582 players move, mean 8.2 possessions — about nine in
+twenty-five hundred, as expected. But the per-player ratio runs 0.87 to 1.25, so at the bottom of the
+rankings it is not a rounding matter, and the bottom is where the exposure work lives. Anything that
+reads a per-side count at low exposure (`scripts/68_exposure_slope.py`, `--match_spread`) wants the
+rebuilt table. That script detects the stale column and says so.
+
+## What the 2026-09-17/18 cleanup changed (all in the git log; six commits)
+
+Nothing that moves a rating. The four that would have cost a day each:
+
+1. **Nine consensus checks never ran in CI.** A module-scoped fixture in `tests/test_vs_consensus.py`
+   computed `bigness` eagerly, which skips without `data/raw` — and CI asserts `data/` is empty. Every
+   PR check reported green on tests that did not execute. The network-block guard was never collected
+   at all, because it lived in `conftest.py`.
+2. **A misspelled flag was ignored.** Nineteen copies of the same `_flag()`, none of which looked at
+   the flags it was *not* given. `--exclude_neighbors=1` ran without the exclusion and produced a
+   number that looked like one that had not. `scripts/_cli.py` is the one copy now and refuses an
+   unknown name; `tests/test_config.py` checks every flag this file tells you to type.
+3. **`scripts/52_site.py` republished the superseded rankings** if you ran the README's build step,
+   and printed a filename identical for both candidates, so the swap was invisible.
+4. **Five scripts fitted from the season panel with no `drop_untrainable` gate** (50, 62, 67, 71, 72).
+   Latent — nothing is in progress — but it is the shape of thing noticed only in the year it starts
+   lying. `tests/test_no_current_season.py` is the guard `seasons.py` had claimed for months.
+
+`pytest -q` is **330 passed, 1 xfailed** with the scraped data, **305 passed / 10 skipped / 1 xfailed**
+on a clone without it.
+
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest tests -q                                  # 285 passed, 1 xfailed, ~120 s
+    .venv/Scripts/python -m pytest tests -q                                  # 330 passed, 1 xfailed, ~165 s
     .venv/Scripts/python scripts/63_yoy.py --rankings=incumbent=outputs/season_ratings_sy_lam13037.parquet,ship=artifacts/season_ratings.parquet --ref=incumbent --tag=verify --splits=
                                                                              # incumbent 8.697; ship -4.0 team-game MSE
     .venv/Scripts/python scripts/64_consensus_report.py outputs/season_ratings_sy_lam13037.parquet
