@@ -7,7 +7,7 @@
                                            [--exclude_neighbours=0] [--rows=chunks|player|season|season_capped]
                                            [--chunk_sizes=1,2,3|all] [--crossfit=scale|0|1]
                                            [--params_mult=l2_leaf_reg:5,min_child_weight:5] [--params_set=depth:3]
-                                           [--player_folds=0|5] [--unshrink_label=0|1] [--lambda_player=13037|cv|<value>]
+                                           [--player_folds=0|5] [--unshrink_label=def|1|off|0] [--lambda_player=13037|cv|<value>]
                                            [--lambda_off=<value>] [--lambda_def=<value>]
                                            [--save_priors=<name>] [--priors_from=<name>] [--centre=1]
                                            [--blend_off=<x>/<k>/<a|lin>] [--blend_def=<x>/<k>/<a|lin>]
@@ -39,7 +39,8 @@ averaged over every season but the rated one.  `singleyear.season_rows` / `singl
 leave-one-season-out RAPM with one season in it has nothing left.  `--boards=` restricts which seasons a
 rating is produced for, which is how a change is measured on two seasons instead of thirty.
 
-Three more flags, all off by default and none of them in the shipped run:
+Three more flags.  The first two are off by default and not in the shipped run; the third describes a
+setting that IS shipped:
 
   `--trade_weight=F`   weight every training row of the prior by its player's `team_movement`
                        (the chance two possessions of his career came from different teams,
@@ -52,9 +53,15 @@ Three more flags, all off by default and none of them in the shipped run:
                        `singleyear.team_movement` / `reweight_by_movement`.
   `--dump_shap=NAME`   write outputs/prior_shap_NAME.parquet: per feature, how far one moves a
                        player's prior.  Diagnostic; changes no number.
-  `--unshrink_floor=N` the possession floor used by `unshrink_label` when `--unshrink_label` is on
-                       (default 4,444).  The un-shrunk label was measured and REJECTED on the eye
-                       test (DECISIONS.md), so this is here for reproducing that, not for use.
+  `--unshrink_label=`  which labels are put back on one scale before the SPM is trained on them.
+                       **`def` is the default and is shipped** (adopted 2026-09-18, experiment 22): the
+                       defensive label only, worth z -5.24 on the year-over-year test and z -7.14 on the
+                       trade loss, with the consensus top five at 5 of 5 and offence moving a median
+                       0.022 per 100.  `1` does BOTH sides and is rejected -- it collapses the 2026
+                       offensive spread from 1.60 to 1.14 and empties the top of the list of its
+                       offensive stars.  `off` is the offensive label alone, untested.  `0` is the
+                       pre-adoption behaviour.  `--unshrink_floor=N` is the possession floor the
+                       un-shrinking is capped at (default 4,444); see `unshrink_label`.
 
 `--exclude_neighbours=N` also keeps the N seasons either side of the rated one out of the target and out
 of the prior's training rows.  That is the setting for the year-over-year test (`scripts/63_yoy.py`),
@@ -165,8 +172,14 @@ def _ridge(design, prior, free_prior_scale=None, lam_buckets=None, fold_prior=No
 TIER_EDGES = [0.0, 500.0, 1500.0, 4444.0, np.inf]       # label possessions; the top tier is fully un-shrunk
 
 
-def unshrink_label(target: pd.DataFrame, lam_o: float, lam_d: float, n_floor: float) -> pd.DataFrame:
+def unshrink_label(target: pd.DataFrame, lam_o: float, lam_d: float, n_floor: float,
+                   sides: tuple = ("offense", "defense")) -> pd.DataFrame:
     """Put every player's label on one scale, and shrink the thin ones toward their tier's level, not 0.
+
+    `sides` is which columns to do it to.  The two sides are separable and they behave differently: the
+    trade loss reads the defensive half as the largest per-player gain measured here (z -6.1 among
+    players over 1,500 possessions) while the offensive half collapses the 2026 offensive spread from
+    1.60 to 1.14 and empties the top of the list of its offensive stars (DECISIONS.md, experiment 21).
 
     A ridge coefficient is about s_i * raw_i with s_i = n_i / (n_i + lambda): a 54,000-possession
     player keeps 57% of his true impact, a 2,600-possession one 6%, so the label's spread grows
@@ -190,7 +203,7 @@ def unshrink_label(target: pd.DataFrame, lam_o: float, lam_d: float, n_floor: fl
     out = target.copy()
     n = out.possessions.to_numpy(float)
     tier = np.digitize(n, TIER_EDGES[1:-1])
-    for column, lam in (("offense", lam_o), ("defense", lam_d)):
+    for column, lam in [c for c in (("offense", lam_o), ("defense", lam_d)) if c[0] in sides]:
         beta = out[column].to_numpy(float)
         s = n / (n + lam)
         s_floor = n_floor / (n_floor + lam)
@@ -415,7 +428,18 @@ def main():
     # experiment 1 (2026-09-14): un-shrink the label.  A ridge shrinks a player by n / (n + lambda), so the
     # label's spread grows fifteen-fold from short careers to long ones and the SPM learns "more career
     # possessions = bigger number".  Multiplying by (n + lambda) / n puts every player's label on one scale.
-    unshrink = _flag("unshrink_label", "0") not in ("0", "no", "false")
+    # `=def` is the SHIPPED setting (adopted 2026-09-18, experiment 22): the defensive label is un-shrunk
+    # and the offensive one is not, because the gain and the damage sit on opposite sides.  `=1` does both
+    # and is the version rejected on the eye test; `=0` restores the pre-adoption behaviour.
+    _unshrink = str(_flag("unshrink_label", "def")).lower()
+    unshrink_sides = {"0": (), "no": (), "false": (),
+                      "1": ("offense", "defense"), "yes": ("offense", "defense"),
+                      "true": ("offense", "defense"), "both": ("offense", "defense"),
+                      "off": ("offense",), "offense": ("offense",),
+                      "def": ("defense",), "defense": ("defense",)}.get(_unshrink)
+    if unshrink_sides is None:
+        raise SystemExit(f"--unshrink_label={_unshrink}: write 0, 1, off or def.")
+    unshrink = bool(unshrink_sides)
     unshrink_floor = float(_flag("unshrink_floor", 4444))       # see unshrink_label()
     # the owner's rule (2026-09-16): weight each player's training rows by how much TEAM VARIATION sits
     # behind his label, 1 minus the share of his possessions on his most-played team.  The label is one
@@ -479,7 +503,7 @@ def main():
           f"free_prior_scale {FREE_PRIOR_SCALE}; lam_buckets {LAM_BUCKETS or '{}'}; "
           f"exclude_neighbours {exclude_neighbours}; rows {row_shape} (sizes {chunk_sizes}); crossfit {crossfit}; "
           f"params_mult {params_mult or '{}'}; params_set {params_set or '{}'}; "
-          f"player_folds {player_folds}; unshrink_label {unshrink}; lambda_player {lambda_player or 'CV'}; "
+          f"player_folds {player_folds}; unshrink_label {'+'.join(unshrink_sides) or 0}; lambda_player {lambda_player or 'CV'}; "
           f"priors_from {priors_from or '-'}; save_priors {save_priors or '-'}; "
           f"blend_off {blend['O'] or '-'}; blend_def {blend['D'] or '-'}", flush=True)
     if lambda_player is not None:
@@ -531,12 +555,13 @@ def main():
                 out = rapm[names[side]].ratings(
                     held_out_season=exclude, offense_lambda=RAPM_OFFENSE_LAMBDA,
                     defense_lambda=RAPM_DEFENSE_LAMBDA, context_lambda=RAPM_CONTEXT_LAMBDA)
-                if unshrink:
-                    out = unshrink_label(out, RAPM_OFFENSE_LAMBDA, RAPM_DEFENSE_LAMBDA, unshrink_floor)
+                if column in unshrink_sides:
+                    out = unshrink_label(out, RAPM_OFFENSE_LAMBDA, RAPM_DEFENSE_LAMBDA, unshrink_floor,
+                                         sides=(column,))
                 return out
 
             model_feats = list(feats)
-            if unshrink and season == boards[0]:
+            if column in unshrink_sides and season == boards[0]:
                 lab = label(unseen)
                 print(f"  prior {side}: un-shrunk label, tier levels {lab.attrs.get(f'tier_level_{column}')} "
                       f"per 100 for tiers {TIER_EDGES[:-1]}+ label possessions; label sd {lab[column].std():.3f}",

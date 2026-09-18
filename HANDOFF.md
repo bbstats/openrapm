@@ -3,8 +3,9 @@
 **This file is transient.**  It starts the next session and is deleted when Phase 1 ships.  `DECISIONS.md`
 is the permanent record and carries every number quoted here.  Do not let this grow into a lab notebook.
 
-Branch `cleanup`; `main` is fast-forwarded to it at each publish.  `pytest -q`: **330 passed, 1 xfailed, ~165 s** with the scraped data present; **320 passed, 10 skipped,
-1 xfailed** on a clone without it (the CI run of 2026-09-18).
+Branch `cleanup`; `main` is fast-forwarded to it at each publish.  `pytest -q`: **337 passed, 1 xfailed, ~160 s** with the scraped data present (2026-09-18, after the seven
+movement tests).  On a clone without the data the seven need no data either, so the skipped count is
+unchanged at 10; CI reports the exact figure.
 
 ## How we work (the owner, 2026-09-13/14)
 
@@ -37,6 +38,11 @@ Branch `cleanup`; `main` is fast-forwarded to it at each publish.  `pytest -q`: 
    chunks, 35,647 rows, two features saying how much evidence a row rests on), features `boruta`
    (21 offence / 17 defence, on-court columns in).  **Out-of-player**: five player folds balanced on the
    label (`rloocv.BalancedGroupKFold`), every player's prior from the fit that never saw his rows.
+   **The DEFENSIVE label is un-shrunk and the offensive one is not** (`--unshrink_label=def`, the default,
+   adopted 2026-09-18): a ridge keeps only `n / (n + lambda)` of a player, so the label's spread grows with
+   career length and the SPM learns "longer career = bigger number".  Un-shrinking both sides was rejected
+   on the eye test; defence alone is z -5.24 on the test, z -7.14 on the trade loss, consensus top five 5
+   of 5, and moves offence a median 0.022 per 100.
 3. **Rating**: `priorridge.PriorRidgeCV`, `scale x prior + residual`, the scale priced on cross-fitted prior
    columns (`--crossfit=scale`), the residual penalty **fixed at 13,037 on both sides** (adopted 2026-09-15;
    the per-season CV had switched the games off on offence in 2024-2026).  Then centred.
@@ -58,9 +64,9 @@ The prior must not have seen the two scored seasons (`--exclude_neighbours=1`):
 
     .venv/Scripts/python scripts/62_single_year_board.py --exclude_neighbours=1 --score=0 --boards=<ten seasons> --out=season_ratings_<name>_<first>
         (three chunks of ten seasons, stitched; one chunk at a time keeps memory under control; ~3 min a season)
-    .venv/Scripts/python scripts/63_yoy.py --rankings=<name>=outputs/season_ratings_<name>.parquet,incumbent=outputs/season_ratings_sy_lam13037.parquet --ref=incumbent --tag=<name> --splits=
-    .venv/Scripts/python scripts/64_consensus_report.py outputs/season_ratings_<name>.parquet outputs/season_ratings_sy_lam13037.parquet
-    .venv/Scripts/python scripts/66_compare.py incumbent=outputs/season_ratings_sy_lam13037.parquet <name>=outputs/season_ratings_<name>.parquet --season=2026 --top=20 --yoy=outputs/yoy_<name>.parquet --ref=incumbent
+    .venv/Scripts/python scripts/63_yoy.py --rankings=<name>=outputs/season_ratings_<name>.parquet,incumbent=outputs/season_ratings_unshrinkdef.parquet --ref=incumbent --tag=<name> --splits=
+    .venv/Scripts/python scripts/64_consensus_report.py outputs/season_ratings_<name>.parquet outputs/season_ratings_unshrinkdef.parquet
+    .venv/Scripts/python scripts/66_compare.py incumbent=outputs/season_ratings_unshrinkdef.parquet <name>=outputs/season_ratings_<name>.parquet --season=2026 --top=20 --yoy=outputs/yoy_<name>.parquet --ref=incumbent
 
 Read `game_armse` (points per 100 per team-game) and the paired row: `mean_diff` below zero is better,
 `z` is the difference over its standard error, `wins` of 56.  **Decision rule:** adopt only if `z` is -2
@@ -81,8 +87,9 @@ removed; `--columns=prior` tests the SPM alone.  `scale_*` below 1 on the neighb
 | + 1-3 season chunks (owner's design) | 8.736 | adopted |
 | + scale cross-fitted, penalty not | 8.693 | adopted |
 | + out-of-player priors | 8.705 | worse on the test, adopted by ruling 2 (memorised careers were the gain) |
-| + fixed penalty 13,037 (**the incumbent**) | 8.697 | tie; consensus 0.777 / 0.757 / 0.771, top five 4 of 5; adopted |
-| rejected: every chunk size; booster settings; off-court features; one row per player-season; cross-fitting the penalty; the un-shrunk label (8.667 on the test, but Clingan 3rd and Jokic 12th in 2026) | | |
+| + fixed penalty 13,037 | 8.697 | tie; consensus 0.777 / 0.757 / 0.771, top five 4 of 5; adopted |
+| + the DEFENSIVE label un-shrunk (**the incumbent**) | **8.682** | **z -5.24, 43 of 56; trade loss defence z -7.14, 27 of 30; consensus 0.777 / 0.763 / 0.764, top five 5 of 5; adopted 2026-09-18** |
+| rejected: every chunk size; booster settings; off-court features; one row per player-season; cross-fitting the penalty; the un-shrunk label on BOTH sides (8.667 on the test, but the 2026 offensive spread collapses 1.60 to 1.14 and Curry falls to 61st); `onc_d` off the defensive list (the trade loss finds nothing and every public defensive metric agrees less) | | |
 
 ## What 2026-09-15 settled (experiments 11-15, all in `DECISIONS.md`; nothing adopted)
 
@@ -352,7 +359,7 @@ on a clone without it.
 ## Verify you are where this file says
 
     .venv/Scripts/python -m pytest tests -q                                  # 330 passed, 1 xfailed, ~165 s
-    .venv/Scripts/python scripts/63_yoy.py --rankings=incumbent=outputs/season_ratings_sy_lam13037.parquet,ship=artifacts/season_ratings.parquet --ref=incumbent --tag=verify --splits=
-                                                                             # incumbent 8.697; ship -4.0 team-game MSE
-    .venv/Scripts/python scripts/64_consensus_report.py outputs/season_ratings_sy_lam13037.parquet
-                                                                             # 0.777 / 0.757 / 0.771, top5 4
+    .venv/Scripts/python scripts/63_yoy.py --rankings=incumbent=outputs/season_ratings_unshrinkdef.parquet,ship=artifacts/season_ratings.parquet --ref=incumbent --tag=verify --splits=
+                                                                             # incumbent 8.682; ship -4.0 team-game MSE
+    .venv/Scripts/python scripts/64_consensus_report.py outputs/season_ratings_unshrinkdef.parquet
+                                                                             # 0.777 / 0.763 / 0.764, top5 5

@@ -2131,6 +2131,171 @@ The arms are `outputs/tradeset_noonc_d_*` and `outputs/tradeset_cfs_*` (both `--
 against the existing `outputs/tradeset_team_*`; the page is
 `outputs/compare_base4b_noonc_d_shipped_2026.html`.
 
+### Experiment 22: un-shrink the DEFENSIVE label only -- it passes every standing check (2026-09-18)
+
+Experiment 21 found the un-shrunk label's whole measured gain on defence and its whole visible damage on
+offence, so `scripts/62_single_year_board.py --unshrink_label=def` now does one side (the flag takes
+`0|1|off|def`; `unshrink_label` takes a `sides` argument).  Built on the incumbent's settings -- fixed
+penalty 13,037, `--exclude_neighbours=1`, three chunks of ten seasons, 93 minutes -- and stitched to
+`outputs/season_ratings_unshrinkdef.parquet`, 14,579 rows over 30 seasons.
+
+**It moves what it was aimed at and nothing else.**  Against the incumbent, absolute change per
+player-season: defence median **0.441** points per 100, ninth decile 1.381, largest 3.648; offence median
+**0.022**, ninth decile 0.051 -- below the owner's 0.1 threshold, so offence is untouched in the sense
+that matters (the residue is the shared context penalty, not the label).
+
+| | the incumbent | un-shrunk BOTH sides | **un-shrunk defence only** |
+|---|---|---|---|
+| year-over-year, `game_armse` | 8.6971 | 8.6672 | **8.6819** |
+| paired vs incumbent, team-game | -- | -0.84, z -3.77, 39 of 56 | **-0.42, z -5.24, 43 of 56** |
+| the same, stint level | -- | +1.57, z +5.31, 17 of 56 | +0.09, z +0.89, 29 of 56 |
+| the same, each side rescaled (order only) | -- | **+1.79, z +7.75, 8 of 56** | +0.10, z +1.20, 28 of 56 |
+| the trade loss, defence | -- | -0.0092, z -6.3 (vs 4b) | **-0.0093, z -7.14, 27 of 30** |
+| the trade loss, offence | -- | +0.0017, z +0.8 | -0.0005, z -2.42, 20 of 30 |
+| consensus rho off / def / total | 0.777 / 0.757 / 0.771 | 0.677 / 0.689 / 0.680 | **0.777 / 0.763 / 0.764** |
+| consensus top five of 5 | 4 | 2 | **5** |
+| 2026 offensive spread (2,000+ poss) | 1.60 | 1.14 | **1.64** |
+| 2026 top five | Wemby, Jokic, Kawhi, SGA, Giannis | Wemby, Giannis, Clingan, Holmgren, Queta | **the incumbent's five, one swap of order** |
+
+**The standing adoption rule is met on all three counts**: z is -5.24, well past -2; there is no consensus
+miss at all -- defensive agreement RISES 0.757 to 0.763 and the top five goes 4 of 5 to **5 of 5**, the
+best any candidate has scored; and the 2026 top 20 is not worse -- Curry 11th and Luka 12th (they were
+61st and 72nd with both sides un-shrunk), with Ausar Thompson 11th to 6th, Queta 16th to 10th and Clingan
+41st to 20th.
+
+**The reservation, and it is real.**  The year-over-year gain does NOT survive removing amplitude: with
+each side rescaled to the scored season the paired difference is +0.10 at z +1.20, an exact tie.  At stint
+level it is also a tie (+0.09, z +0.89).  So on the criterion's own objective this reads as better
+DEFENSIVE CALIBRATION -- `scale_def` moves 0.8890 to 0.8979, toward 1 -- rather than a better order.  What
+says it is more than calibration is the trade loss, which prices the rating with two free unpenalised
+scale columns and is therefore amplitude-blind by construction: defence -0.0093 at **z -7.14, 27 of 30
+seasons**, the largest per-player gain any candidate has posted here.  Two objectives, and the one that
+counts a bench player the same as a starter is the one that sees it.
+
+Against the both-sides version this is the whole point: there, the order was clearly WORSE (rescaled
+z +7.75, 8 of 56) and the team-game gain was amplitude.  Here the order is neutral and the per-player
+loss improves.
+
+**The one countervailing reading**: in consensus bar units the defensive disagreement grows after matching
+spread, 1.741 to 1.974, while defensive RANK agreement improves.  The two disagree because the bars are
+2026 only over 391 players and `rho_def` pools 2024-26 over 475; it is not resolved and is recorded as
+unresolved.
+
+**ADOPTED (the owner, 2026-09-18).**  `--unshrink_label=def` is the default in
+`scripts/62_single_year_board.py` and `season_ratings_unshrinkdef.parquet` is the incumbent the
+year-over-year test compares against, replacing `season_ratings_sy_lam13037.parquet`.  The shipped product
+table was rebuilt at `--exclude_neighbours=0` in the same session, which also clears the `poss_def` column
+that had been a copy of `poss_off` since before 2026-09-18.
+
+### Experiment 21: the trade loss re-judges eight candidates on disk, and splits the verdict on the
+### un-shrunk label (2026-09-18)
+
+Eight distinct candidates already built were re-scored with the trade loss -- the per-player loss that
+counts a bench player the same as a starter -- against the baseline they were built on, experiment 4b.
+`scripts/70_tradeset.py --team_effects=team` on each (85 s each, not the 9 minutes `HANDOFF.md` quotes;
+that figure included the penalty grid) then `scripts/73_tradeloss.py`.  30 seasons, 12,103 players a
+side, paired by season, on the exact intersection of eligible player-seasons.
+
+| candidate | offence | z | defence | z | won of 30 | the team-game verdict it had |
+|---|---|---|---|---|---|---|
+| `sy_unshrink`, the un-shrunk label | +0.0017 | +0.8 | **-0.0092** | **-6.3** | 25 | passed, rejected on the eye test |
+| `sy_noonc`, on-court off BOTH sides | +0.0003 | +0.2 | **-0.0049** | **-2.5** | 22 | never ruled on |
+| the incumbent, fixed penalty 13,037 | -0.0000 | -0.0 | -0.0024 | -2.2 | 21 | adopted as a TIE |
+| `sy_offc`, the off-court record | +0.0002 | +0.2 | -0.0012 | -1.5 | 17 | rejected |
+| `sy_reg5`, regularisation x5 | +0.0001 | +0.2 | -0.0004 | -0.6 | 17 | rejected as a tie |
+| `sy_depth3`, booster depth 3 | +0.0002 | +0.4 | +0.0008 | +1.2 | 13 | rejected |
+| `sy_oop`, out-of-player priors | +0.0016 | +2.0 | +0.0008 | +0.8 | 13 | worse; kept by ruling 2 |
+| `sy_chunks_all`, every chunk size | +0.0033 | +2.5 | +0.0024 | +2.5 | 10 | rejected |
+| `sy_rows`, one row per player-season | +0.0105 | +4.9 | +0.0086 | +4.7 | 5 | rejected |
+
+**Six of the eight confirm the ruling the team-game test already made**, which is the first evidence that
+this loss and that test mostly agree.  Two do not, and `sy_noonc` -- on-court off BOTH sides at z -2.5 on
+defence, against z -0.40 for `sy_noonc_d`, off the defensive list only -- has no explanation yet and is
+noted as an open oddity rather than a finding.
+
+**The un-shrunk label: every prediction instrument prefers it and every attribution instrument rejects
+it.**  It was rejected on 2026-09-14 on the 2026 top 20 alone, having passed the test at 8.667 against
+8.697.  What is known now:
+
+| instrument | reading | verdict |
+|---|---|---|
+| year-over-year, team-game | 8.667 against 8.697 | better |
+| the trade loss, defence | -0.0092, z -6.3, 25 of 30 | much better |
+| ... **over 1,500 possessions** | **-0.0097, z -6.1, 25 of 30** | **not an artefact of thin evidence** |
+| the trade loss, offence | +0.0017, z +0.8 | a tie |
+| consensus rank agreement | 0.677 / 0.689 / 0.680, top five 2 of 5 | worse on all three, ~10% under |
+| the consensus bars, spread matched | rms 2.91 offence, 2.24 defence (2.03 / 1.74 shipped) | worse on both sides |
+| the 2026 top 20 | Curry 7th to 61st, Luka 10th to 72nd, Jokic 2nd to 12th, Kawhi 3rd to 24th | the veto |
+
+The obvious suspicion -- that the trade loss gain hides among players the trade set cannot see, since a
+first-year player has no absence contrast -- was checked and is **wrong**: by tier the defensive gain is
+-0.0033 (z -1.3) under 500 possessions, -0.0089 (z -4.2) from 500 to 1,500, and -0.0097 (z -6.1) above
+1,500.  It is strongest where the evidence is thickest.
+
+**The mechanism of the eye-test damage is visible and it is OFFENSIVE.**  The offensive spread over 2026
+players with 2,000+ possessions collapses from 1.60 to **1.14** while defence holds at 1.25 against 1.36,
+and the 2026 list fills with defensive bigs and rookies -- Kalkbrenner 175th to 10th, Jakucionis 145th to
+15th, Flagg 75th to 11th, Ighodaro 60th to 13th, Murray-Boyles 71st to 18th -- while the offensive stars
+fall.  **So the whole measured gain is defensive and the whole visible damage is offensive**, which the
+current flag cannot separate: `unshrink_label` in `scripts/62_single_year_board.py` loops over both
+columns.  A per-side version is a two-line change and one 90-minute build, and it is the experiment this
+re-judging has earned.  Not run, and nothing adopted.
+
+### Experiment 20: the amplitude swept per side -- the contradiction is within-season vs across-season,
+### and nothing ships (2026-09-18)
+
+Two instruments disagreed about which side of the published rating is mis-scaled, so the criterion was
+asked directly.  `scripts/75_amplitude.py` multiplies a finished table by one number per side and changes
+nothing else; `scripts/63_yoy.py` then scores each arm, refitting only the scored season's intercept and
+home edge.  51 arms over two sweeps on `season_ratings_sy_lam13037.parquet` (the `--exclude_neighbours=1`
+table, so no prior saw the scored seasons), 28 seasons, both directions, 56 observations.  Four minutes.
+
+**What the test says, pooled `game_armse`, points per 100 per team-game:**
+
+| arm | offence x | defence x | game_armse | vs unchanged | z | won of 56 |
+|---|---|---|---|---|---|---|
+| the consensus bars | 1.196 | 0.867 | 8.7886 | **+2.53** | +17.8 | 1 |
+| unchanged | 1.00 | 1.00 | 8.6971 | -- | -- | -- |
+| the trade set | 0.749 | 0.919 | 8.6261 | -1.94 | -14.5 | 55 |
+| the grid's own best | **0.65** | **0.85** | **8.6160** | -2.21 | -12.6 | 54 |
+
+The second sweep was needed because the first grid's argmin sat on its edge at offence 0.70 (trap 6: an
+argmin on a boundary has chosen nothing).  Extended to 0.45, the minimum is interior at 0.65 on offence
+and 0.85 on defence, and the surface is a plateau -- 8.616 to 8.629 anywhere between 0.55 and 0.75 on
+offence.  So the test wants the offensive rating about a third narrower and the defensive about a sixth.
+
+**It moves nobody.**  The order-only row -- stint error with each side rescaled to the scored season --
+is **zero to machine precision (4e-14) for all 27 arms of the first sweep**.  A uniform rescale is
+entirely a units change: the whole list breathes in or out together and no player passes another.  That
+is the measured version of the standing warning that the test punishes spread whatever the order did.
+
+**Why this does NOT license shrinking the published rating, and this is the finding.**  `HANDOFF.md`
+already says it: `scale_*` below 1 on a NEIGHBOURING season is expected, because a player's true impact
+changes from year to year, and a shrunk rating is the better forecast of a different season even when it
+is perfectly calibrated for its own.  This sweep is measured entirely across seasons, so it cannot tell
+"the rating is too wide" from "players regress".  Sort the instruments by what they measure and the
+contradiction largely dissolves:
+
+| | offence | defence | measured |
+|---|---|---|---|
+| the year-over-year sweep | x0.65 | x0.85 | across seasons |
+| the trade set, pooled over the three-season window | x0.749 | x0.919 | mostly across |
+| **the trade set, inside a single season** | **x1.03 to 1.12** | x1.38 to 1.51 | within |
+| **the consensus error bars, spread matched** | **x1.196** | x0.848 | within (2026) |
+
+**On offence the two within-season instruments agree that the rating is too NARROW** (x1.03-1.12 and
+x1.196) while both across-season instruments want it narrower, which is exactly the signature of
+regression to the mean and not of a miscalibrated rating.  **On defence they still conflict**: the trade
+set's within-season reading wants defence much wider (x1.38-1.51) and the bars want it 15% narrower
+(x0.848).  That one is unresolved.
+
+**Conclusion: the amplitude item is closed as a rescale.**  The 0.069 of game error the trade set
+attributed to "the offensive rating is a quarter too wide" is a forecasting gain, available to anyone
+willing to publish a shrunk number, and it buys nothing for a rating of the season it describes -- it
+cannot, since it reorders nobody.  Nothing was rebuilt and no published number changed.  What remains
+live is the defensive disagreement above, which is a question about the rated season itself and is
+therefore answerable without the neighbours.
+
 ### The team-movement weight: the measure is Gini-Simpson, and the rule now has tests (2026-09-18)
 
 The owner's idea of 2026-09-16 -- weight the prior's training rows by how much team variation sits behind
@@ -2191,6 +2356,49 @@ number quoted anywhere above still holds; nothing in `src/` or `scripts/` read t
 `Disagreement Among Metrics` columns, both of which changed meaning (`var` was a percentage and is now
 `var_offense + var_defense`, a sum of standard deviations rather than a quadrature sum, which is the
 conservative choice -- it assumes a player's offensive and defensive errors are perfectly correlated).
+
+**The blend changed on 2026-09-18 and every consensus number above it is against the OLD one.**  The
+owner rebuilt `adj_offense` / `adj_defense` / `adj_overall` so the blend is a real consensus rather than
+one dominated by a few collinear raw-points metrics.  Same 582 players, `var_offense` and `var_defense`
+untouched to the decimal; the central values moved, defence most (correlation with the previous blend
+0.975 on offence, **0.911 on defence**).  What that does to the readings, 2026, 475 player-seasons for the
+rank agreement and 391 players over 1,000 possessions for the bars:
+
+| | rho off / def / total, OLD blend | rho off / def / total, REAL consensus | top five |
+|---|---|---|---|
+| the incumbent before adoption (`sy_lam13037`) | 0.777 / 0.757 / 0.771 | **0.792 / 0.834 / 0.808** | 4 -> 5 |
+| the adopted defence-only un-shrink | 0.777 / 0.763 / 0.764 | **0.790 / 0.801 / 0.797** | 5 -> 4 |
+| un-shrunk BOTH sides (rejected) | 0.677 / 0.689 / 0.680 | 0.675 / 0.730 / 0.699 | 2 -> 2 |
+| `onc_d` off the defensive list (rejected) | 0.731 / 0.689 / 0.705 | 0.736 / **0.797** / 0.742 | -> 3 |
+
+**Two of the session's rulings lose a line of evidence and neither reverses.**
+
+* **Experiment 22 (adopted).**  Under the old blend the defence-only un-shrink RAISED defensive agreement
+  0.757 to 0.763; under the real consensus it LOWERS it, 0.834 to 0.801, and the top five goes 5 to 4.
+  That line of the adoption case is withdrawn.  It is still far from a veto -- 0.801 against a 0.75 check
+  -- and the two instruments the adoption actually rested on are untouched: the year-over-year test at
+  z -5.24 and the trade loss at z -7.14.  The owner should know the consensus now mildly disagrees.
+* **Experiment 19 (kept `onc_d`).**  Its defensive agreement was 0.689 against the old blend, which read
+  as a broad miss; against the real consensus it is 0.797, no miss at all.  The component split that
+  carried the argument was measured on `impact_metrics_2526.csv` directly and is unaffected, but the
+  blend-level number no longer supports it.  The ruling stands on the trade loss finding nothing
+  (z -0.40), which was always the primary reason.
+
+**The bars, re-read against the real consensus** (2026, 391 players, each side scaled first, medians):
+
+| | our typical gap | their typical uncertainty | inside 1 | inside 2 |
+|---|---|---|---|---|
+| offence, adopted | 0.72 | 0.70 | 46% | 78% |
+| defence, adopted | 0.50 | 0.47 | 49% | 75% |
+| defence, previous incumbent | 0.42 | 0.47 | 55% | 81% |
+
+**This overturns what the old blend appeared to say.**  Against it our typical distance was about twice
+the consensus's own uncertainty and -- the part that looked diagnostic -- the same size in points whether
+the metrics agreed with each other or not, which read as "we are measuring something else".  Against the
+real consensus our typical gap is the same size as their own disagreement (0.72 against 0.70; 0.50 against
+0.47) and it GROWS where they are less sure (offence, narrowest fifth of their uncertainty 0.81 points,
+widest fifth 1.05, correlation +0.13).  That is the pattern of two measurements of the same thing, one
+noisier.  The earlier reading was an artefact of a blend whose defence was 90% two collinear metrics.
 
 **The standing way to read the check, from here:** `scripts/74_consensus_bars.py`, **each side scaled on
 its own** (the owner, 2026-09-18: *"feel free to scale first when comparing to the consensus, esp by O vs
