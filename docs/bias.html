@@ -12,7 +12,6 @@
   body { margin: 0; color: var(--ink); font: 15px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
   main { max-width: 860px; margin: 0 auto; padding: 28px 20px 48px; }
   h1 { font-size: 26px; margin: 0 0 14px; }
-  h1 small { font-weight: 400; font-size: 14px; color: var(--muted); display: block; margin-top: 4px; }
   table { border-collapse: separate; border-spacing: 2px 0; width: 100%;
           font-variant-numeric: tabular-nums; }
   th, td { padding: 6px 9px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
@@ -29,7 +28,7 @@
 </head>
 <body>
 <main>
-<h1>OpenRAPM: bias by player type<small>R&sup2; = 0.57</small></h1>
+<h1>OpenRAPM: bias by player type</h1>
 <table><thead><tr><th>Player type</th><th>vs consensus</th><th>vs 2026 observed</th></tr></thead><tbody><tr><td>Low-usage wings who stay out of the way<br><span class="sig">-ftm -tov -pts -ast</span></td><td class="over" style="--depth: 0.832"><b>+0.749</b></td><td class="under" style="--depth: 0.007"><b>-0.006</b></td></tr><tr><td>Two-way big men who score<br><span class="sig">+ftm +blk +pts +drb</span></td><td class="over" style="--depth: 0.239"><b>+0.215</b></td><td class="over" style="--depth: 0.376"><b>+0.338</b></td></tr><tr><td>Guards who handle the ball<br><span class="sig">+ast -orb +tov -drb</span></td><td class="over" style="--depth: 0.076"><b>+0.069</b></td><td class="over" style="--depth: 0.175"><b>+0.158</b></td></tr><tr><td>Rim-protecting centers<br><span class="sig">+orb -fg3_miss +blk -fg3m</span></td><td class="over" style="--depth: 0.180"><b>+0.162</b></td><td class="under" style="--depth: 0.111"><b>-0.100</b></td></tr><tr><td>Wings who shoot threes<br><span class="sig">+fg3m +fg3_miss -drb -blk</span></td><td class="under" style="--depth: 0.093"><b>-0.084</b></td><td class="under" style="--depth: 0.062"><b>-0.056</b></td></tr><tr><td>Ball-hawk defenders who rarely shoot<br><span class="sig">+stl -pts -ftm -fg3m</span></td><td class="over" style="--depth: 0.350"><b>+0.315</b></td><td class="over" style="--depth: 0.040"><b>+0.036</b></td></tr><tr><td>High-usage scorers who draw fouls<br><span class="sig">+ftm +pts +tov +ast</span></td><td class="over" style="--depth: 0.082"><b>+0.074</b></td><td class="over" style="--depth: 0.147"><b>+0.132</b></td></tr><tr><td>Busy all-round forwards<br><span class="sig">+stl +drb +pf +orb</span></td><td class="under" style="--depth: 0.012"><b>-0.011</b></td><td class="over" style="--depth: 0.024"><b>+0.022</b></td></tr></tbody></table><div class="blurb">
 <p><b>vs 2026 observed.</b> We fit a RAPM model against the <em>residuals</em> of OpenRAPM's
 predictions. These are the average results for each player type (possession-weighted).</p>

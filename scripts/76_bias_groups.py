@@ -271,7 +271,6 @@ def page(result: dict) -> str:
   body { margin: 0; color: var(--ink); font: 15px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
   main { max-width: 860px; margin: 0 auto; padding: 28px 20px 48px; }
   h1 { font-size: 26px; margin: 0 0 14px; }
-  h1 small { font-weight: 400; font-size: 14px; color: var(--muted); display: block; margin-top: 4px; }
   table { border-collapse: separate; border-spacing: 2px 0; width: 100%;
           font-variant-numeric: tabular-nums; }
   th, td { padding: 6px 9px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
@@ -288,7 +287,7 @@ def page(result: dict) -> str:
 </head>
 <body>
 <main>
-<h1>OpenRAPM: bias by player type<small>R&sup2; = R2VALUE</small></h1>
+<h1>OpenRAPM: bias by player type</h1>
 """
     def cell(value) -> str:
         """A diverging tint: red = OpenRAPM rates the type ABOVE that source, blue = below, gray at zero.
@@ -309,8 +308,7 @@ def page(result: dict) -> str:
         other = by_group.get(r["group"])
         out.append(f"<tr><td>{r['name']}<br><span class=\"sig\">{r['signature']}</span></td>"
                    f"{cell(r['bias'])}{cell(other['bias'] if other else None)}</tr>")
-    return (head.replace("R2VALUE", f"{result['r2_consensus_observed']:.2f}")
-            + "".join(out) + "</tbody></table>" + BLURB + "</main></body></html>")
+    return head + "".join(out) + "</tbody></table>" + BLURB + "</main></body></html>"
 
 
 def main() -> None:

@@ -65,7 +65,9 @@
   const season = $("season"), minp = $("minp"), find = $("find"), tbody = $("table").querySelector("tbody");
   let sortKey = "t", sortDir = -1;      // -1 sorts high to low, +1 low to high; a second click on the
                                        // same column flips it, a click on a new one starts high to low
-  seasons.forEach(y => {
+  // newest first: the selected season is 2026, and listing it last left the dropdown scrolled to
+  // the bottom every time it was opened
+  [...seasons].reverse().forEach(y => {
     const o = document.createElement("option");
     o.value = y; o.textContent = y;
     season.appendChild(o);
