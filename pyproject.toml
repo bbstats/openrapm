@@ -6,7 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
   "numpy>=1.26",
   "scipy>=1.11",
-  "pandas>=2.1",
+  "pandas>=2.2",          # groupby().apply(include_groups=) lands in 2.2; used in six places
   "pyarrow>=14",
   "scikit-learn>=1.4",
   "chimeraboost>=0.32",

@@ -89,6 +89,10 @@ is a blend of public metrics, read once, to catch a board that has gone gross-wr
 constant because it clears a floor in `tests/test_vs_consensus.py`. A marginal miss is not a veto —
 0.759 against a 0.76 floor is noise. A gross miss is, because that is what the check is for.
 
+**`FINDINGS N.N` in a comment is not a dead link.**  `FINDINGS.md` was removed from the tree in
+`0f7c0b2` and preserved whole under the tag `archive/research-2026-09`:
+`git show archive/research-2026-09:FINDINGS.md`.
+
 **Read the traps before trusting a number.** `DECISIONS.md` ends with the specific ways this
 pipeline has produced confident wrong numbers: benchmarks that shared the estimate's blind spot,
 an argmax sitting on a grid boundary, a feature that predicted how well-*measured* a row was rather

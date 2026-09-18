@@ -145,7 +145,8 @@ def player_priced_beta(panel, features, exclude=(), min_poss=2000, pen=5.0) -> n
     on-court impact (`u / a`, the de-shrunk residual, weighted by the shrinkage `a`), so it prices
     the box score for the player.  Returns the model's raw 26-vector, offense then defense.
 
-    `panel` is outputs/xrapm_panel.parquet from scripts/27_xrapm_prior.py: one row per player per
+    `panel` is outputs/xrapm_panel.parquet from scripts/49_role_panel.py (scripts/27_xrapm_prior.py was
+    retired in 73f0ab9): one row per player per
     window per side, with the 13 rates, `poss`, `u` and `a`.  `exclude` drops windows from the FIT
     (not the panel), which is how a window's prior is kept off its own data.
 
@@ -176,7 +177,7 @@ def hybrid_beta(panel, features, window_label_, min_poss=2000, pen=5.0) -> np.nd
 
     Defense gets no box prior at all because the box score has no defensive vocabulary -- the
     weighted R^2 of a player's 13 rates on his own defensive on-court impact is 0.26, and pure RAPM
-    beats the box-primed defensive rating 0.877 to 0.755 (FINDINGS.md, scripts/30_ladder.py).  The
+    beats the box-primed defensive rating 0.877 to 0.755 (FINDINGS.md, and the retired scripts/30_ladder.py).  The
     box term enters the model as an offset `Xbox @ beta` with separate offensive and defensive
     columns, so zeroing the defensive half IS "no defensive prior", in one fit at one penalty.
 
@@ -203,7 +204,7 @@ def player_ratings_table(wd, beta, cfg, seasons, beta_po=None, names=None,
     Defense is flipped so positive = good; total is offense plus defense.
 
     `prior_offset` is the per-Z-column boosted correction in raw sign.  Passing it makes `u` the
-    residual refit *given* the correction, which is what scripts/10_boost.py ships.  Adding a
+    residual refit *given* the correction, which is what the retired scripts/10_boost.py shipped.  Adding a
     correction on top of a residual that was fit without it double-counts whatever it explains.
     `prior_parts` = (offense, defense) halves of an offset that IS the prior (the role-prior chain of
     spm.py / gbdt_prior.py, raw sign): they are added into `prior_off` / `prior_def` so that

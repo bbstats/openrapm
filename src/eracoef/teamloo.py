@@ -132,7 +132,9 @@ K_CAP = 1.0e6                  # tau2 <= 0: no between-team spread to preserve, 
 CALIB_BAND = (0.995, 1.005)    # the season-total gate, as xshoot uses it
 
 # Which estimate of the between-team variance sets the shrinkage constant.  Measured over 1997-2026
-# (scripts/62_teamloo.py, attempt-weighted pool): the rebalanced-LOO covariance runs 9-23% ABOVE the
+# (the retired scripts/62_teamloo.py, attempt-weighted pool -- deleted, and note the 62 prefix was
+# later reused by 62_single_year_board.py, so look in git history and not on disk): the
+# rebalanced-LOO covariance runs 9-23% ABOVE the
 # split-half reference on offense, while plain LOO and the method of moments agree with it to 4-9%.
 # The two bounds are understood -- rebalancing over-corrects the moment (its partner is chosen on the
 # label, which is correlated with the team's own shooting), and the split-half reference is attenuated

@@ -53,7 +53,7 @@ from .factors import CLIP, FACTORS, crossfit_rate, fit_factor, lineup_rate
 BUCKETS = {"rim": 2.0, "mid": 2.0, "thr": 3.0}          # first-attempt bucket -> points if made
 ATT1 = ["att1_rim", "att1_mid", "att1_thr", "att1_ft"]
 
-# Selected once by scripts/37_factors.py on 2024-26 (REML in band, interior of a widened grid) and
+# Selected once by the retired scripts/37_factors.py on 2024-26 (REML in band, interior of a widened grid) and
 # held fixed everywhere, exactly as lam_plugin is: re-selecting per training block would cost an
 # hour a block and would make the target itself a function of the block.
 FIXED_LAMBDA = {"efg": (3494.76, 1.50), "tov": (2175.85, 0.75), "oreb": (414.35, 3.00), "ftr": (1354.69, 1.00)}

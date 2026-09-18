@@ -1,5 +1,12 @@
 # How the model works
 
+**What this draws is the three-season-window board** (`scripts/60_season_board.py`), which is still
+built, still scored by the criterion and still read by several tests. It is not what the site
+publishes: since 2026-09 that is one rating per player per season from `scripts/62_single_year_board.py`,
+summarised in `README.md` under "What ships" and specified in `HANDOFF.md`. The two share the stints,
+the design, the exposures and the criterion; they differ in the label, the prior's training rows and
+the ridge.
+
 Two loops. The **build** turns play-by-play into a rating for every player-window. The **criterion** holds a
 season out and scores the build against games it never saw; it is what every choice below was selected on.
 Nothing here is a preference — each box is in the code at the file named beside it.
@@ -49,10 +56,10 @@ flowchart TD
     TGO --> RIDGE
     TGD --> RIDGE
 
-    MAP["<b>Calibration map</b> — fitted leave-one-season-out on the criterion<br/>offense: a·x + level in log exposure + b·x·log exposure + c·prior + d·role<br/>defense: the same without the prior and role terms<br/>then re-centred per window<br/><code>calmap.py</code>, table in <code>outputs/calmap_ship.parquet</code>"]
+    MAP["<b>Calibration map</b> — fitted leave-one-season-out on the criterion<br/>offense: a·x + level in log exposure + b·x·log exposure + c·prior + d·role<br/>defense: the same without the prior and role terms<br/>then re-centred per window<br/><code>calmap.py</code>, table in <code>artifacts/calmap_ship.parquet</code>"]
     RIDGE --> MAP
 
-    OUT["<b>outputs/player_ratings.parquet</b> — ten 3-season windows, 1997-2026<br/>offense and defense per 100 possessions, positive is good on both sides<br/><code>scripts/08_ratings.py</code> → <code>scripts/52_site.py</code> → <code>docs/</code>"]
+    OUT["<b>outputs/season_ratings.parquet</b> — ten 3-season windows, 1997-2026<br/>offense and defense per 100 possessions, positive is good on both sides<br/><code>scripts/60_season_board.py</code> → <code>scripts/52_site.py</code> → <code>docs/</code>"]
     MAP --> OUT
 ```
 

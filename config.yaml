@@ -19,8 +19,9 @@ neutral_site_seasons_po: [2020]   # 2020 bubble playoffs: home = 0
 
 features: [fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss, orb, drb, ast, tov, stl, blk, pf]
 
-# Regularization. lam / lam_ratio are chosen once (03_cv.py) and used in every window.
-# chosen once by scripts/03_cv.py on 2000-02 and 2012-14 (RS rows), written to outputs/lambda.yaml.
+# Regularization. lam / lam_ratio were chosen once (by the retired scripts/03_cv.py, deleted in
+# 73f0ab9; the numbers and how they were picked are in DECISIONS.md) and are used in every window.
+# chosen on 2000-02 and 2012-14 (RS rows) by the retired scripts/03_cv.py (deleted in 73f0ab9).
 # Re-tuned under player_unit: window (possessions per unit roughly triple).
 lam_beta: 10149.5        # ridge on the two cross-fitted half-fits (beta)
 lam_ratio_beta: 0.5      # lambda_D / lambda_O there
@@ -31,18 +32,21 @@ lam_buckets: {}       # e.g. {low_poss: 2.0}; only add after the calibration-by-
 #   offense: player  the prior priced to predict a PLAYER (windows.player_priced_beta), not a team.
 #   defense: none    no box prior at all -- the box score has no defensive vocabulary (R^2 0.26 of a
 #                    player's rates on his own defensive on-court impact), and pure RAPM beats the
-#                    box-primed defensive rating 0.877 to 0.755.  See scripts/30_ladder.py.
+#                    box-primed defensive rating 0.877 to 0.755.  See DECISIONS.md; scripts/30_ladder.py was retired in 73f0ab9.
 # Both sides use lam_plugin / lam_ratio_plugin above; the defensive knob is NOT re-tuned here.  The
 # ladder's internal criterion (next-window on-court impact) cannot select it: it is flat across the
 # weakest four penalties and then declines, so it has no interior optimum and just runs to the weak
-# end, because the benchmark shares the estimate's blind spot.  See scripts/33_hybrid.py.
+# end, because the benchmark shares the estimate's blind spot.  See DECISIONS.md; scripts/33_hybrid.py was retired in 73f0ab9.
 ratings_prior:
   offense: gbdt
   defense: gbdt
-  role_prior: spm    # 'spm': the role-and-age prior chain of src/eracoef/spm.py (APM -> Simple SPM -> ridge);
-                      # with offense/defense 'gbdt' the box prior is the boosted one (gbdt_prior.py).  Flip only
-                      # when scripts/48_ladder.py says WINS against def3_p0 at both K and both levels.
-  boost: false        # the boosted correction is worth 0 on total and -0.020 on offense (30_ladder)
+  # DEAD, 2026-09-17: nothing in src/ or scripts/ reads either of these two.  The instruction that used
+  # to sit here -- "flip only when scripts/48_ladder.py says WINS" -- described an effect that flipping
+  # them has not had for some time: the chain is chosen in code, not from config.  tests/test_config.py
+  # keeps the list of unread keys honest.  Left named rather than deleted because they record what the
+  # shipped prior IS: the role-and-age chain of src/eracoef/spm.py, and no boosted correction.
+  role_prior: spm    # the APM -> Simple SPM -> ridge chain (src/eracoef/spm.py)
+  boost: false       # the boosted correction was worth 0 on total and -0.020 on offense (30_ladder)
   target: x3def_w0.25 # free throws replaced by the shooter's padded expectation, AND three quarters of
                       # every made three replaced by 3 x that SHOOTER's other-half-of-block 3P%
                       # (xshoot.DEFENSE_TARGETS; `w3` is the fraction of the realised deviation KEPT, so
@@ -69,7 +73,8 @@ ratings_prior:
   # criterion at TEAM-GAME level.  The rating alone is already calibrated at game level (every smooth map of
   # the rating alone is the identity within noise); the exposure term is the replacement gap and is worth
   # -0.8 / -0.9 / -1.0 per 100 at K = 2 / 3 / 4 (z -6 to -7, 24-25 of 28).  K = 3 matches the 3-season block.
-  # `08_ratings.py` re-centres each side per window after it.  Set to null to ship the unmapped chain.
+  # the board script re-centres each side per window after it (scripts/60_season_board.py; the
+  # `08_ratings.py` that used to do it was retired in 73f0ab9).  Set to null to ship the unmapped chain.
   # FINDINGS 21 (iterate mode).  The criterion's best trains the GBDT prior on the panel's unshrunk APM on
   # both sides, but that board fails the consensus floors (defensive agreement under 0.76; the offensive rank
   # gap against bigness over 0.30 whenever the pure APM target is on offense).  21.26 therefore shipped the
@@ -138,7 +143,8 @@ player_unit: window
 # fit is bit-identical either way); they name the diagnostic groups and the bucket penalties if one is used.
 low_poss_threshold: 500   # player-seasons under this many possessions form the "low_poss" group
 starter_poss_threshold: 1500  # and at or above this many form "high_poss" (the rotation bucket)
-lam_delta: null       # playoff block ridge; null = no delta block. Chosen by 03_cv.py step 7.
+lam_delta: null       # playoff block ridge; null = no delta block.  Chosen by step 7 of the retired
+                      # scripts/03_cv.py (73f0ab9).
 lam_grid: {start: 100, stop: 60000, num: 28, log: true}
 lam_ratio_grid: [0.25, 0.33, 0.5, 0.75, 1.0, 1.5, 2.0]
 lam_delta_grid: [1e2, 3e2, 1e3, 3e3, 1e4, 3e4, 1e5, 1e6]
@@ -170,6 +176,9 @@ margin_clip: 25
 margin_bins: [-25, -15, -8, -3, 3, 8, 15, 25]   # 7 bins for the binned-margin robustness run
 time_halves: 2
 
+# DEAD, 2026-09-17: nothing in src/ or scripts/ reads this block.  Its chooser, scripts/03_cv.py,
+# was retired in 73f0ab9; the penalties it picked are the lam / lam_ratio above and the reasoning
+# is in DECISIONS.md.  Kept as the record of how they were chosen.  tests/test_config.py.
 cv:
   n_folds: 5
   seed: 0
@@ -214,7 +223,8 @@ spm:
   pen: 1.0                # ridge on the seven standardised role inputs
   min_poss: 500           # a player-window needs this many possessions to train the SPM
 gbdt:
-  mode: full              # what scripts/08_ratings.py uses when it ships: "residual" = Simple SPM + a GBDT trained on
+  mode: full              # what the board ships (scripts/60_season_board.py; 08_ratings.py was
+                          # retired in 73f0ab9): "residual" = Simple SPM + a GBDT trained on
                           # the residual beyond it (u); "full" = a GBDT trained on RAPM_1 with the role inputs, alone
   # scripts/50_boruta.py, 25 trials, 2026-09-05: accepted + tentative + season (rejected dropped; season kept by design)
   features_O: [ast, blk, drb, fg2_miss, fg2m, fg3_miss, fg3m, ft_miss, ftm, orb, pf, stl, tov, season]   # rejected: season; tentative: drb, fg3_miss, pf, tov

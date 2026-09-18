@@ -15,7 +15,7 @@ Three stages, per side (O and D), per window:
 Sign convention: everything here is in the model's RAW sign on both sides (defense positive = points
 allowed), like `xrapm_panel.u`.  Offsets built here go straight into `plugin_fit(prior_offset=...)`
 without negation; the flip to positive-is-good happens only in `windows.player_ratings_table` and
-scripts/08_ratings.py.
+scripts/60_season_board.py.
 """
 from __future__ import annotations
 
