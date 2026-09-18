@@ -69,21 +69,10 @@ RATE_WORDS = {"pts": "points", "fg3m": "threes made", "fg3_miss": "threes missed
 # The only prose on the page: what the two columns are measured against.  Both are OpenRAPM minus that
 # source, so positive means OpenRAPM rates the type higher.
 BLURB = """<div class="blurb">
-<p><b>vs 2026 observed.</b> OpenRAPM's 2026 rating is used as the prediction for every team-game of the
-season, and a ridge is fitted to what is left over, with a free amplitude per side and a free level per
-team. The coefficient it returns is the part of the miss that belongs to the player, so this column is
-OpenRAPM against what actually happened on the court &mdash; no outside metric is involved.</p>
+<p><b>vs 2026 observed.</b> We fit a RAPM model against the <em>residuals</em> of OpenRAPM's
+predictions. These are the average results for each player type (possession-weighted).</p>
 <p><b>vs consensus.</b> The consensus is a GLS-weighted mean of DRIP, LEBRON, EPM, DARKO DPM,
-Time-Decay RAPM, and Time-Decay-Luck-Adjusted RAPM. The weighting de-duplicates the vote, so metrics
-that say nearly the same thing share one vote rather than each getting a full one.</p>
-<p>The two yardsticks agree with each other at <b>R&sup2; = {r2:.2f}</b> across the {n} players both
-cover. By player type, though, their disagreements with OpenRAPM are unrelated &mdash;
-<b>r = {r_types:+.2f}</b> across the eight types &mdash; which is why a type can be red in one column
-and blue in the other.</p>
-<p>Player types are fitted, not hand-made: a Bayesian Gaussian mixture over per-36 box rates, fitted on
-<b>{fit_first}&ndash;{fit_last}</b> and then used to place each {season} player, so no player helped
-define his own type this season. The line under each name is the four rates that type is furthest from
-the league on.</p>
+Time-Decay RAPM, and Time-Decay-Luck-Adjusted RAPM.</p>
 </div>"""
 
 
@@ -299,7 +288,7 @@ def page(result: dict) -> str:
 </head>
 <body>
 <main>
-<h1>OpenRAPM: bias by player type<small>red: OpenRAPM rates the type higher &nbsp;&middot;&nbsp; blue: lower &nbsp;&middot;&nbsp; points per 100 possessions, 2026, on a matched scale</small></h1>
+<h1>OpenRAPM: bias by player type<small>R&sup2; = R2VALUE</small></h1>
 """
     def cell(value) -> str:
         """A diverging tint: red = OpenRAPM rates the type ABOVE that source, blue = below, gray at zero.
@@ -320,11 +309,8 @@ def page(result: dict) -> str:
         other = by_group.get(r["group"])
         out.append(f"<tr><td>{r['name']}<br><span class=\"sig\">{r['signature']}</span></td>"
                    f"{cell(r['bias'])}{cell(other['bias'] if other else None)}</tr>")
-    return (head + "".join(out) + "</tbody></table>"
-            + BLURB.format(r2=result["r2_consensus_observed"], n=result["residual_players"],
-                           r_types=result["r_types"], fit_first=result["fit_seasons"][0],
-                           fit_last=result["fit_seasons"][-1], season=result["seasons"][-1])
-            + "</main></body></html>")
+    return (head.replace("R2VALUE", f"{result['r2_consensus_observed']:.2f}")
+            + "".join(out) + "</tbody></table>" + BLURB + "</main></body></html>")
 
 
 def main() -> None:
