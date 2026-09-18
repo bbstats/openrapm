@@ -42,11 +42,14 @@ rating is produced for, which is how a change is measured on two seasons instead
 Three more flags, all off by default and none of them in the shipped run:
 
   `--trade_weight=F`   weight every training row of the prior by its player's `team_movement`
-                       (1 minus the share of his possessions on his most-played team) plus F.  The
-                       owner's idea, 2026-09-16: a label is only identified by team variation, so
-                       weight the rows by how much of it each player has.  F = 0 drops the one-team
-                       players outright.  `--rows=chunks` only; it has no effect on the other row
-                       shapes.  `singleyear.team_movement` / `reweight_by_movement`.
+                       (the chance two possessions of his career came from different teams,
+                       `1 - sum(share ** 2)`) plus F.  The owner's idea, 2026-09-16: a label is only
+                       identified by team variation, so weight the rows by how much of it each player
+                       has.  **F = 0 drops the one-team players outright** -- 29% of the players behind
+                       a 2026 label, every single-franchise star among them -- which is what the one
+                       run of this rule lost on, so sweep F above zero if it is revived.
+                       `--rows=chunks` only; it has no effect on the other row shapes.
+                       `singleyear.team_movement` / `reweight_by_movement`.
   `--dump_shap=NAME`   write outputs/prior_shap_NAME.parquet: per feature, how far one moves a
                        player's prior.  Diagnostic; changes no number.
   `--unshrink_floor=N` the possession floor used by `unshrink_label` when `--unshrink_label` is on
@@ -548,10 +551,10 @@ def main():
                 train = sy.chunk_rows(label(unseen), training, column, feats, sizes=sizes)
                 model_feats = feats + sy.CHUNK_FEATURES
                 if trade_weight is not None:
-                    # the owner's rule (2026-09-16): weight a player's rows by 1 minus the share of his
-                    # possessions on his most-played team, over the seasons his label was fitted on.  The
-                    # label is one career-pooled RAPM, so how well it is identified depends on the team
-                    # variation behind all of it, and this is that quantity.
+                    # the owner's rule (2026-09-16): weight a player's rows by the chance that two
+                    # possessions of his career came from different teams, over the seasons his label was
+                    # fitted on.  The label is one career-pooled RAPM, so how well it is identified
+                    # depends on the team variation behind all of it, and this is that quantity.
                     played = roles_played[~roles_played.season.isin(unseen)]
                     per_team = played.groupby(["player_id", "team_id"], as_index=False).poss_on.sum()
                     moved = sy.team_movement(per_team, min_poss=MIN_POSSESSIONS)

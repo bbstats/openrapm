@@ -265,7 +265,10 @@ In the order I would try them:
 
 1. **Use the trade loss to re-judge the ranking candidates already on disk.**  Dozens of them exist and
    the team-game test called many of them ties because it cannot see the bench.  The trade loss counts
-   every player once.  No new modelling, about 20 minutes.
+   every player once.  No new modelling, about 20 minutes.  **Started 2026-09-18**:
+   `scripts/73_tradeloss.py` is the comparison (same players, paired by season), two candidates are
+   judged, and the first result is that a change adopted as a TIE -- the fixed penalty 13,037 -- is a
+   real defensive gain by this loss, z -2.19.  Nine minutes per candidate to add one.
 2. **A standard error per player**, from the inverse of the regression's own matrix.  Then read only
    corrections larger than their own error, and weight the feature fit by real precision.  Pascal
    Siakam's +1.71 rests on 448 possessions of absence, and nothing currently marks that.
@@ -277,6 +280,28 @@ In the order I would try them:
 
 Not worth trying: adopting alpha as a rating (illegal under ruling 1), or training the prior on it
 without first raising the 3.7% and 5.6%.
+
+## What 2026-09-18 settled (experiment 19 and the error bars; DECISIONS.md carries the numbers)
+
+- **`onc_d` stays on the defensive feature list.**  The last unresolved candidate, open since
+  2026-09-14, is closed: the trade loss finds nothing (defence z -0.40, 16 of 30) where it detects the
+  fixed penalty at z -2.19; agreement falls against every public defensive metric and falls FURTHEST
+  against the luck-adjusted ones, so this is not the `def3` pattern that excuses a consensus drop.  The
+  2026 top 20 was not the reason -- to the eye it was arguably better (Draymond Green 77th to 10th).
+- **Two new instruments**, both read-only, neither used to choose anything:
+  `scripts/73_tradeloss.py` (two rankings by the trade loss, same players, paired by season) and
+  `scripts/74_consensus_bars.py` (how far we sit from the consensus in units of its own error bar).
+- **The consensus file now carries a standard deviation per player per side** (`var_offense`,
+  `var_defense`).  `adj_*` is unchanged to the decimal, so no number above moved.  Read a disagreement in
+  bar units from now on, and read the bar as the public metrics' disagreement with each other -- not as
+  our uncertainty, and never as a target.
+- **An uncentred candidate cannot be differenced against a centred one without removing the level
+  first.**  4b and `sy_noonc_d` predate the centring rule; the first movement figure quoted for
+  experiment 19 was 7% high because of it.
+- **`team_movement` is the Gini-Simpson index now** (`1 - sum(share ** 2)`, the chance two possessions of
+  a career came from different teams), the form the owner corrected the measure to on 2026-09-16 and which
+  had never been implemented, plus the seven tests it never had.  No rating moved: `--trade_weight` is off
+  in the shipped run.  It still zeroes the one-team players at floor 0, which is what its one run lost on.
 
 ## Traps that cost a day
 

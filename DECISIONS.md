@@ -2050,6 +2050,187 @@ against -0.10; the best are Trey Murphy III +1.04 against +0.47 and Markkanen +1
 adopt alpha as a rating, and do not train the prior on it until the 3.7% and 5.6% are raised.
 Experiments 18, 18b and 18c above have the full record; `HANDOFF.md` has the commands and the traps.
 
+### Experiment 19: the trade loss re-judges `onc_d` off the defensive list (2026-09-18)
+
+`onc_d` off the defensive feature list (`season_ratings_sy_noonc_d.parquet`) has been the one candidate
+left unresolved since the overnight queue of 2026-09-14: better on the year-over-year test in both
+directions (8.684 against experiment 4b's 8.693; -0.24 at z -2.6 at native scale, -0.36 at z -3.8 with
+the spread removed) and 8% under the consensus defensive check (0.689 against 0.753), so it was left for
+a ruling rather than adopted, because the consensus is the attribution check and this is an attribution
+change.  Two things arrived afterwards that bear on it: the trade set's finding that the defensive prior
+reads team offence as defensive credit, which is the same defect with a named mechanism, and the trade
+loss itself -- the first per-player loss in this project that counts a bench player the same as a
+starter.  Nothing new was fitted; three trade set arms and a component split, about 20 minutes.
+
+**The trade loss declines to support it.**  `scripts/73_tradeloss.py` compares two rankings' corrections
+on the exact intersection of eligible player-seasons (24,206 player-season-sides, 12,103 per side, 30
+seasons, no rows dropped from either arm), paired by season, against the baseline it was built on:
+
+| against 4b | side | trade loss, candidate | 4b | mean difference | z | seasons won of 30 |
+|---|---|---|---|---|---|---|
+| `sy_noonc_d` | offence | 0.3002 | 0.3003 | -0.0000 | -0.06 | 17 |
+| `sy_noonc_d` | **defence** | **0.2576** | 0.2582 | **-0.0006** | **-0.40** | 16 |
+| the shipped penalty 13,037 | offence | 0.3003 | 0.3003 | -0.0000 | -0.00 | 13 |
+| the shipped penalty 13,037 | **defence** | **0.2558** | 0.2582 | **-0.0024** | **-2.19** | 21 |
+
+The offensive row is a tie by construction -- the change is defensive -- and the defensive row is a tie
+by measurement.
+
+**It is not a power problem, and the bottom two rows are a finding of their own.**  The same instrument,
+on the same players and the same pairing, reads the fixed residual penalty of 13,037 as a real defensive
+gain over 4b at z -2.19, 21 of 30 seasons.  **That change was adopted on 2026-09-15 as a TIE on the
+team-game test** (8.697 against 8.693).  So the trade loss can see a defensive improvement of 0.0024
+points per 100 at z -2.2 and sees 0.0006 at z -0.4 here; and the first candidate it has been pointed at
+after the fact turns a team-game tie into a measured gain.  That is the case for priority item 3 -- 
+re-judging the candidates already on disk -- made by example.
+
+**The consensus drop is NOT the `def3` pattern, and this is what decides it.**  The standing way to read a
+fall in consensus defensive agreement is to split it by component first, because the blend is 90%
+raw-points metrics: when the opponent-three-point adjustment cost 0.888 -> 0.814, every raw-points
+component agreed less and every luck-adjusted one agreed MORE, which is what a luck adjustment should
+do.  Here, 2026, players over 1,000 possessions, 391 matched, Spearman against `rating_def`:
+
+| | xDRAPM | pred_depm | DRAPM | td_drapm | td_ladrapm | LA_DRAPM | DLEBRON |
+|---|---|---|---|---|---|---|---|
+| shipped | 0.747 | 0.807 | 0.701 | 0.720 | 0.685 | 0.681 | 0.814 |
+| 4b | 0.745 | 0.809 | 0.709 | 0.731 | 0.692 | 0.685 | 0.831 |
+| `sy_noonc_d` | 0.673 | 0.739 | 0.573 | 0.652 | **0.594** | **0.543** | 0.774 |
+
+Agreement falls against every component, and it falls FURTHEST against the luck-adjusted ones
+(`LA_DRAPM` 0.685 -> 0.543, `td_ladrapm` 0.692 -> 0.594) -- the opposite of the `def3` signature, and
+against exactly the metrics the owner keeps the file for.  (`xDLEBRON` is empty in
+`data/external/impact_metrics_2526.csv` and is not readable.)
+
+**The 2026 top 20 is not worse to the eye; it is arguably better.**  Defensive specialists rise --
+Draymond Green 77th to 10th, Derrick White 32nd to 13th, Rudy Gobert 23rd to 15th, Donovan Clingan 41st
+to 20th, LeBron James 33rd to 6th -- and the top three (Wembanyama, Jokic, Kawhi) do not move.  What
+leaves is Shai Gilgeous-Alexander 4th to 12th, Cade Cunningham 20th to 48th and Ajay Mitchell 9th to
+38th.  The defensive spread over players with 2,000+ possessions rises from 1.36 to 1.49.  So the eye
+test does not veto, and the two attribution instruments disagree with each other about the same table.
+
+**The movement is real in size**, by the owner's own threshold.  Neither 4b nor `sy_noonc_d` is centred
+-- both were built on 2026-09-14, before the possession-weighted centring rule, and 4b's 2026 table sits
+at +1.61 on offence and +0.33 on defence -- so a raw difference between them carries a constant, and the
+level shift (+0.206 on defence in 2026) has to come out before the movement is read.  Level removed, the
+defensive rating moves a median of **0.365** points per 100 in 2026, ninth decile 0.937, largest 2.108,
+with 82.8% of players over the 0.1 threshold; over all 30 seasons, shift removed season by season,
+median **0.300**, ninth decile 0.823, 82.0% over the threshold.  (The raw figures, 0.391 and 88.0%, were
+quoted first and are 7% high.)  This is not a cosmetic change either way.
+
+**Recommendation: keep `onc_d` on the defensive list; do not adopt.**  The only criterion that prefers it
+is the one that cannot see the bench.  The loss built to see the bench is silent, and agreement with
+every public defensive metric -- including the luck-adjusted ones that are the closest proxy to the
+target, and which a defensible change should move TOWARD -- falls by 0.04 to 0.14.  Ties go to the
+incumbent.
+
+**RULED (the owner, 2026-09-18): keep `onc_d`.**  `onc_d` stays on the defensive feature list, the
+shipped rankings are unchanged, and nothing was rebuilt or republished.  The candidate is closed; do not
+reopen it on the year-over-year number alone.
+
+The arms are `outputs/tradeset_noonc_d_*` and `outputs/tradeset_cfs_*` (both `--team_effects=team`),
+against the existing `outputs/tradeset_team_*`; the page is
+`outputs/compare_base4b_noonc_d_shipped_2026.html`.
+
+### The team-movement weight: the measure is Gini-Simpson, and the rule now has tests (2026-09-18)
+
+The owner's idea of 2026-09-16 -- weight the prior's training rows by how much team variation sits behind
+a player's label, since the label is one career-pooled leave-season-out RAPM and it is team variation that
+identifies it.  `scripts/62_single_year_board.py --trade_weight=<floor>`, off by default and not in the
+shipped run.  Raised again on 2026-09-18 by the owner as *"a little brittle / not robust"*, and it was:
+
+**The measure was `1 - the share of his possessions on his most-played team`**, which ignores the shape of
+the tail.  A player at 50/10/10/10/10/10 read 0.50, identical to one at 50/50, though the first has five
+independent contrasts and the second has one.  The owner found that defect the same day he proposed the
+measure and the fix was never implemented; it is implemented now.
+
+**`team_movement` is `1 - sum(share ** 2)`, the Gini-Simpson index**: the chance that two possessions of
+his career came from different teams.  It is a strict generalisation and never below the old form --
+`sum(share ** 2) <= max(share)` always, with equality exactly when every team he played for got the same
+share of him, so one team, 50/50 and three-at-a-third all read the same as before -- and the six-team
+case reads 0.70 against 0.50.  On the 2,584 players with 100+ possessions before 2026: correlation 0.985,
+rank 0.992, 70% of players gain, largest gap 0.211, and the 767 one-team players sit at exactly zero under
+both.  Its reciprocal is the effective number of teams.  Rejected alternatives: a geometric or harmonic
+mean of the shares (one tiny share crushes a mean, which is backwards -- a cameo on a seventh team is a
+little more contrast, not almost none) and entropy perplexity (too generous to the tail: 4.47 effective
+teams for the 50/10-times-five case against this index's 3.33).  Also rejected, and tempting: the label's
+own standard error, which is dominated by total possessions -- and possessions are already the row weight,
+so it would count exposure twice.  Movement is the part of precision that exposure does not carry.
+
+**Seven tests, where there were none** (`tests/test_singleyear.py`): the three cases that pin the shape
+down, the cameo, invariance to how many possessions the shares are made of, the `min_poss` drop, the
+strict-generalisation property over 200 random splits, that the reweighting preserves total weight and
+moves only its distribution across players, that a positive floor keeps everybody, and that an all-zero
+training set raises instead of quietly fitting a constant.
+
+**What the rule still loses on, unchanged by this.**  At `floor=0` it zeroes the one-team players -- 29% of
+those behind a 2026 label, every single-franchise star among them -- and the booster then extrapolates at
+the top; the one run scored a tie at game level and lost on the amplitude-free row.  **Nothing was rebuilt
+and no rating moved**: the flag is off in the shipped run and `--rows=chunks` is its only effect.  If the
+idea is revived, sweep the floor above zero, and judge it on the trade loss rather than the team-game
+test, because better-identified bench players is the point and the team-game test cannot see them.
+
+**What it is still blind to:** teams, not teammate sets.  Two seasons on one team with a rebuilt roster
+give real contrast and score zero.  The finest version is the effective number of distinct teammate sets,
+or the coefficient's variance directly.
+
+### The consensus has error bars now, and the check is read in bar units (the owner, 2026-09-18)
+
+`data/external/consensus.csv` gained `var_offense` and `var_defense`: a **standard deviation** per player
+per side (the column name says variance; the numbers are standard deviations).  The owner built them and
+the method is his, recorded here because how they were made decides how they may be read:
+
+1. **The votes are de-duplicated before they are counted.**  Each metric does not get one vote;
+   the weights are `(R + lambda I)^-1 1` on the metrics' own correlation matrix, so five collinear
+   metrics split a single vote and an independent metric keeps a whole one.
+2. **The bar is the correlation-weighted spread around that consensus.**  Because the collinear five can
+   no longer outvote one independent dissenter, a lone disagreeing metric widens the bar instead of being
+   averaged away.  A wide bar means the public metrics genuinely do not know where a player belongs.
+
+`adj_offense`, `adj_defense` and `adj_overall` are unchanged to the last decimal, so every consensus
+number quoted anywhere above still holds; nothing in `src/` or `scripts/` read the old `var` or
+`Disagreement Among Metrics` columns, both of which changed meaning (`var` was a percentage and is now
+`var_offense + var_defense`, a sum of standard deviations rather than a quadrature sum, which is the
+conservative choice -- it assumes a player's offensive and defensive errors are perfectly correlated).
+
+**The standing way to read the check, from here:** `scripts/74_consensus_bars.py`, **each side scaled on
+its own** (the owner, 2026-09-18: *"feel free to scale first when comparing to the consensus, esp by O vs
+D"*).  Spearman against the blend treats a disagreement about Jokic's defence (bar 0.39) and one about
+Wembanyama's offence (bar 2.05) as the same size of miss.  The bars say whether we are outside what the
+public metrics can themselves resolve.  2026, 391 players over 1,000 possessions, the shipped rankings:
+
+| side | bar median | our sd | consensus sd | rms as published | rms, level and spread matched | over 1 bar | over 2 bars | correlation | rms on the best-fit line |
+|---|---|---|---|---|---|---|---|---|---|
+| offence | 0.70 | 1.59 | 1.91 | 2.02 | **2.03** | 52.4% | 25.3% | 0.826 | 1.93 |
+| defence | 0.47 | 1.29 | 1.12 | 2.27 | **1.93** | 47.6% | 20.2% | 0.805 | 1.74 |
+
+Three readings, and the third is the one that matters:
+
+* **The level is close**: -0.32 bars on offence and -0.57 on defence over these players, which is a
+  level offset and not a disagreement about players.
+* **The spreads are mismatched in OPPOSITE directions by side.**  Matching each side's standard deviation
+  to the consensus's asks for **x1.196 on offence** -- our published offensive spread is 20% narrower
+  than theirs -- and **x0.867 on defence**, ours 15% wider.  So the O/D balance differs by about 1.38
+  between the two, which is a bigger statement than either side's amplitude.  Read it beside the trade
+  set: that instrument wants offence NARROWER (x0.749 across adjacent seasons) and defence about right
+  (x0.919).  The two agree in direction on defence and **contradict each other on offence**, which is
+  worth an experiment before any amplitude is changed.
+* **Player by player we are well outside the bars, and units are not the reason.**  After matching level
+  and spread per side the root mean square disagreement is 2.03 bars on offence and 1.93 on defence --
+  no better than as published, because the mismatch is not mostly a scale.  The best any straight line
+  can do is 1.93 and 1.74, with half the players more than one bar out and a fifth more than two.  The
+  correlations are 0.826 and 0.805.
+
+**Do not read the least-squares slope as a spread comparison.**  It is `correlation x sd_ratio`, so a
+low correlation drags it down on its own: on defence it is 0.698 while the spreads differ by 0.867, and
+quoting it as a scale is how our defensive spread was first written up here as 1.4 times the consensus's
+when the honest figure is 1.15.  Corrected 2026-09-18, same session.
+
+**What this does not say.**  The bar is the public metrics' disagreement with each other, not the
+uncertainty of our rating.  Five metrics that share a defect agree tightly and produce a narrow bar, and
+being two bars away from them is then a claim about them as much as about us -- which is exactly what
+`onc_d` off the defensive list was doing, in the wrong direction, in experiment 19.  Use the bars to
+size a disagreement, never as a target to shrink.
+
 ## What was tried and rejected
 
 **The LRBoost branch (a boosted correction on a frozen linear prior).** Five things had to be right before it
