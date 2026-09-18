@@ -1,7 +1,7 @@
 """Where the published rankings sit above or below the consensus, by player type, on the OVERALL rating.
 
     python scripts/76_bias_groups.py [--board=outputs/season_ratings_product.parquet] [--k=8] [--seed=0]
-                                     [--seasons=2024,2025,2026] [--out=docs/bias.html] [--json=1]
+                                     [--seasons=2026] [--out=docs/bias.html]
 
 The types are not hand-made: a Bayesian Gaussian mixture over each player's per-36 box profile
 (`eracoef.archetype`, the same fit `scripts/58_archetype.py` uses), which prunes the components the data
@@ -13,11 +13,15 @@ END a player's value comes from, and both sources can be equally right about how
 total says a rating is wrong.  Possession-weighted because a 1,000-possession man and a 5,000-possession
 man are not equally part of how wrong the rankings are.
 
-**Two bias columns, because the two sources are not on one scale.**  Our published overall spread is
-narrower than the consensus's, so a group of stars would show a bias that is really the amplitude
-difference and nothing about that type of player.  `bias` is measured after our overall is stretched ONCE,
-globally, to the consensus's spread -- never per group, which would define the answer away.  `bias_raw` is
-the same without that stretch.  Both are points per 100, positive = we rate the group ABOVE the consensus.
+**Two tables, and one bias column in each.**  The first compares the published overall rating with the
+consensus; the second compares it with what the season's own games say, which is
+`scripts/70_tradeset.py --block=0`: the rating is the prediction for every team-game, and a ridge is
+fitted to what is left, so the coefficient is the part of the residual belonging to the player.  Both are
+read the same way -- a single global rescale is taken out first, never a per-group one, which would define
+the answer away -- and in both, positive means WE RATE THE TYPE ABOVE the other source, points per 100.
+
+Ordered by `|bias| x possessions`, so a small bias over a quarter of the league outranks a large one over
+a twentieth.
 
 The names are chosen by hand and each is checked against the group's own profile at run time: every group
 carries a `signature` built from the rates it is most extreme on, and the page prints it beside the name,
@@ -49,14 +53,14 @@ SUFFIX = re.compile(r"\b(jr|sr|ii|iii|iv|v)\b")
 # assists.  A signature is stable in a way a cluster number is not, and a group whose signature is not
 # listed prints as UNNAMED rather than borrowing a neighbour's name.
 NAMES = {
-    "+ftm +pts +tov +drb": "Big men who run the offense",
-    "+ftm +pts +tov +ast": "High-usage guards and wings",
-    "+fg3m +fg3_miss -drb -orb": "Three-point specialists",
-    "+blk +drb -ast -stl": "Shooting big men",
+    "+ftm +pts +tov +ast": "High-usage scorers who draw fouls",
+    "+blk +drb +pts +ftm": "Big men who score and block shots",
+    "+fg3_miss +fg3m +pts -orb": "High-volume three-point shooters",
+    "+drb +blk -stl -ast": "Forwards who rebound and block",
     "+orb -fg3_miss -fg3m +blk": "Rim-protecting centers",
-    "+stl -pts -tov -ftm": "Ball-hawk defenders",
-    "+ast -orb +tov -blk": "Guards who pass and shoot",
-    "-tov -ast -pts -blk": "Low-usage wings and forwards",
+    "+stl -pts -ftm -drb": "Ball-hawk defenders",
+    "+ast -blk -orb +tov": "Guards who handle the ball",
+    "-tov -ast -ftm -pts": "Low-usage wings",
 }
 RATE_WORDS = {"pts": "points", "fg3m": "threes made", "fg3_miss": "threes missed", "ftm": "free throws",
               "ast": "assists", "orb": "offensive rebounds", "drb": "defensive rebounds", "stl": "steals",
@@ -107,7 +111,77 @@ def samples(group: pd.DataFrame, z: pd.DataFrame, centre: pd.Series) -> dict:
             "least_typical": typical.player_name.tail(3).tolist()[::-1]}
 
 
-def build(board_path: Path, cfg: dict, seasons: list, k: int, seed: int) -> dict:
+def residual_rapm(alpha_path: Path, seasons: list) -> pd.DataFrame:
+    """What the games say our rating missed, per player, from a RAPM fitted to our own residual.
+
+    `scripts/70_tradeset.py --block=0` takes the published rating as the prediction for every team-game
+    of the rated season, subtracts it, and fits a ridge on the player columns of what is left, with one
+    free unpenalised column per side for the amplitude and one free level per team.  So the coefficient
+    is the per-player part of the residual after the best single rescale, which is the same treatment the
+    consensus comparison gets, and the two tables are read the same way.
+
+    `rating` in that table is positive-good on both sides.  Returned per player, pooled over `seasons`
+    possession-weighted: `ours_scaled` is our rating at the amplitude the games ask for, `games` is that
+    plus the per-player residual.
+    """
+    a = pd.read_parquet(alpha_path)
+    a = a[a.season.isin(seasons) & a.eligible].copy()
+    a["scaled"] = a.rating_scale * a.rating
+    wide = a.pivot_table(index=["player_id", "season"], columns="side",
+                         values=["scaled", "alpha_good", "poss_off"]).reset_index()
+    wide.columns = [c[0] if not c[1] else f"{c[0]}_{c[1][:3]}" for c in wide.columns]
+    wide = wide.dropna(subset=["scaled_off", "scaled_def", "alpha_good_off", "alpha_good_def"])
+    wide["ours_scaled"] = wide.scaled_off + wide.scaled_def
+    wide["residual"] = wide.alpha_good_off + wide.alpha_good_def
+    w = wide.poss_off_off.to_numpy(float)
+    out = pd.DataFrame({c: (wide[c] * w).groupby(wide.player_id).sum()
+                        / wide.groupby("player_id").poss_off_off.sum()
+                        for c in ("ours_scaled", "residual")})
+    return out.reset_index()
+
+
+def group_meta(m: pd.DataFrame, z: pd.DataFrame) -> dict:
+    """Per group, the things that describe the TYPE: its profile, its signature, its name, its members.
+
+    Computed once from the whole group and shared by every table, because the second table covers fewer
+    players -- a residual needs the player to have been on the floor enough for the fit to identify him --
+    and a group's name must not change between two tables about the same group.
+    """
+    meta = {}
+    for g, group in m.groupby("group"):
+        centre = z.loc[group.index, RATES].mean()
+        sig = signature(centre)
+        meta[int(g)] = {"signature": sig, "profile": centre.round(2).to_dict(),
+                        "name": NAMES.get(sig, "UNNAMED"), "centre": centre,
+                        **samples(group, z, centre)}
+    return meta
+
+
+def group_rows(m: pd.DataFrame, meta: dict, ours: str, theirs: str, bias: str) -> list:
+    """One row per group: the two levels and the bias, possession-weighted, ordered by what it costs.
+
+    The order is `|bias| x possessions` -- how much of the league a type's bias applies to, not how
+    large the bias is on one player, because a 0.6 miss over a quarter of the possessions is a bigger
+    problem than a 1.1 miss over a twentieth.
+    """
+    rows = []
+    for g, group in m.groupby("group"):
+        group = group.dropna(subset=[ours, theirs])
+        if len(group) < 10:                     # a five-player component's mean is noise, not a type
+            continue
+        w = group.poss.to_numpy(float)
+        described = {k: v for k, v in meta[int(g)].items() if k != "centre"}
+        rows.append({"group": int(g), "players": len(group), "possessions": float(w.sum()),
+                     "bias": float(np.average(group[bias], weights=w)),
+                     "ours": float(np.average(group[ours], weights=w)),
+                     "theirs": float(np.average(group[theirs], weights=w)), **described})
+    for r in rows:
+        r["cost"] = abs(r["bias"]) * r["possessions"]
+    rows.sort(key=lambda r: -r["cost"])
+    return rows
+
+
+def build(board_path: Path, cfg: dict, seasons: list, k: int, seed: int, alpha_path: Path) -> dict:
     m = joined(board_path, cfg, seasons)
     labels, weights = fit_clusters(m[RATES].to_numpy(float), k=k, seed=seed)
     m["group"] = labels
@@ -115,33 +189,20 @@ def build(board_path: Path, cfg: dict, seasons: list, k: int, seed: int) -> dict
 
     # one global stretch, so a group's bias is about that group and not about the two spreads
     scale = float(m.adj_overall.std(ddof=1) / m.rating_total.std(ddof=1))
-    ours = m.adj_overall.mean() + (m.rating_total - m.rating_total.mean()) * scale
-    m["gap"] = ours - m.adj_overall
-    m["gap_raw"] = m.rating_total - m.adj_overall
+    m["ours_vs_consensus"] = m.adj_overall.mean() + (m.rating_total - m.rating_total.mean()) * scale
+    m["bias_vs_consensus"] = m.ours_vs_consensus - m.adj_overall
 
-    rows = []
-    for g, group in m.groupby("group"):
-        if len(group) < 10:                     # a five-player component's mean is noise, not a type
-            continue
-        w = group.poss.to_numpy(float)
-        centre = z.loc[group.index, RATES].mean()
-        rows.append({"group": int(g), "players": len(group), "possessions": float(w.sum()),
-                     "bias": float(np.average(group.gap, weights=w)),
-                     "bias_raw": float(np.average(group.gap_raw, weights=w)),
-                     "spread_of_gap": float(group.gap.std(ddof=1)),
-                     "our_overall": float(np.average(group.rating_total, weights=w)),
-                     "consensus_overall": float(np.average(group.adj_overall, weights=w)),
-                     "signature": signature(centre), "profile": centre.round(2).to_dict(),
-                     "minutes_per_game_median": float(group.minutes.median()),
-                     **samples(group, z, centre)})
-    rows.sort(key=lambda r: -abs(r["bias"]))
-    share = sum(r["possessions"] for r in rows)
-    for r in rows:
-        r["possession_share"] = r["possessions"] / share
-        r["name"] = NAMES.get(r["signature"], "UNNAMED")
+    meta = group_meta(m, z)
+    games = residual_rapm(alpha_path, seasons)
+    m = m.merge(games, on="player_id", how="left")
+    m["games"] = m.ours_scaled + m.residual
+    m["bias_vs_games"] = -m.residual                     # positive = we rate him above what the games say
+
     return {"board": board_path.name, "seasons": seasons, "k": k, "seed": seed,
             "players": len(m), "components_used": int((weights > 0.01).sum()),
-            "global_stretch": scale, "groups": rows}
+            "global_stretch": scale, "residual_players": int(m.residual.notna().sum()),
+            "groups": group_rows(m, meta, "ours_vs_consensus", "adj_overall", "bias_vs_consensus"),
+            "groups_vs_games": group_rows(m, meta, "ours_scaled", "games", "bias_vs_games")}
 
 
 def page(result: dict) -> str:
@@ -178,59 +239,31 @@ def page(result: dict) -> str:
 <main>
 <h1>Bias by player type</h1>
 """
-    g = result["groups"]
-    intro = (f"<p class=\"note\">How far the published overall rating sits above or below the consensus, "
-             f"for each player type, over {'-'.join(str(s) for s in (result['seasons'][0], result['seasons'][-1]))}. "
-             f"Possession-weighted, points per 100 possessions, positive means <b>we rate the type above the "
-             f"consensus</b>. {result['players']} players with 1,000+ possessions, "
-             f"{len(g)} types from a Bayesian Gaussian mixture over per-36 box rates "
-             f"({result['components_used']} of {result['k']} components used, seed {result['seed']}).</p>"
-             f"<p class=\"note\">Only the overall rating is shown. A type whose offense and defense are "
-             f"wrong in opposite directions is a disagreement about which end the value comes from, and both "
-             f"sources can be right about how good the player is; only the total says a rating is wrong. Our "
-             f"overall is stretched once, globally, by x{result['global_stretch']:.3f} to match the "
-             f"consensus's spread, so that a type of stars does not read as biased merely because the two "
-             f"scales differ; the unstretched figure is in the last column.</p>")
+    def table(rows, theirs_label):
+        out = [f"<table><thead><tr><th>Player type</th><th>{theirs_label}</th><th>Ours</th>"
+               f"<th>Bias</th></tr></thead><tbody>"]
+        for r in rows:
+            cls = "over" if r["bias"] > 0 else "under"
+            out.append(f"<tr><td>{r['name']}<br><span class=\"sig\">{r['signature']}</span></td>"
+                       f"<td>{r['theirs']:+.2f}</td><td>{r['ours']:+.2f}</td>"
+                       f"<td class=\"{cls}\"><b>{r['bias']:+.3f}</b></td></tr>")
+        return "".join(out) + "</tbody></table>"
 
-    rows = []
-    for r in g:
-        cls = "over" if r["bias"] > 0 else "under"
-        rows.append(
-            f"<tr><td>{r['name']}<br><span class=\"sig\">{r['signature']}</span></td>"
-            f"<td class=\"{cls}\"><b>{r['bias']:+.3f}</b></td>"
-            f"<td>{r['our_overall']:+.2f}</td><td>{r['consensus_overall']:+.2f}</td>"
-            f"<td>{r['players']}</td><td>{100 * r['possession_share']:.1f}%</td>"
-            f"<td>{r['bias_raw']:+.3f}</td></tr>")
-    table = ("<table><thead><tr><th>Player type</th><th>Bias</th><th>Ours</th><th>Consensus</th>"
-             "<th>Players</th><th>Possessions</th><th>Unstretched</th></tr></thead><tbody>"
-             + "".join(rows) + "</tbody></table>")
-
-    blocks = []
-    for r in g:
-        profile = ", ".join(f"{RATE_WORDS[c]} {v:+.2f}" for c, v in
-                            sorted(r["profile"].items(), key=lambda kv: -abs(kv[1]))[:6])
-        blocks.append(
-            f"<h2>{r['name']} <span class=\"sig\">{r['bias']:+.3f}</span></h2>"
-            f"<div class=\"who\">"
-            f"<div><span>per-36 rates against the league, strongest first:</span> {profile}</div>"
-            f"<div><span>most possessions:</span> {', '.join(r['most_played'])}</div>"
-            f"<div><span>most typical of the type:</span> {', '.join(r['most_typical'])}</div>"
-            f"<div><span>least typical, still in it:</span> {', '.join(r['least_typical'])}</div>"
-            f"</div>")
-
-    foot = (f"<footer>Built by <code>scripts/76_bias_groups.py</code> from "
-            f"<code>outputs/{result['board']}</code> and <code>data/external/consensus.csv</code>. "
-            f"The consensus is a sanity check and never a fitting target. "
-            f"<a href=\"index.html\">Back to the rankings</a>.</footer></main></body></html>")
-    return head + intro + table + "".join(blocks) + foot
+    return (head
+            + "<h2>Against the consensus, scaled</h2>"
+            + table(result["groups"], "Consensus")
+            + "<h2>Against what the games say, scaled</h2>"
+            + table(result["groups_vs_games"], "Games")
+            + "</main></body></html>")
 
 
 def main() -> None:
     check_flags()
     cfg = load_config()
-    seasons = [int(s) for s in flag("seasons", "2024,2025,2026").split(",")]
+    seasons = [int(s) for s in flag("seasons", "2026").split(",")]
     result = build(ROOT / flag("board", "outputs/season_ratings_product.parquet"), cfg, seasons,
-                   int(flag("k", 8)), int(flag("seed", 0)))
+                   int(flag("k", 8)), int(flag("seed", 0)),
+                   ROOT / flag("alpha", "outputs/tradeset_actual_b0_alpha.parquet"))
     out = ROOT / flag("json_out", "outputs/bias_groups.json")
     out.write_text(json.dumps(result, indent=1), encoding="utf-8")
     html = ROOT / flag("out", "docs/bias.html")
@@ -242,15 +275,13 @@ def main() -> None:
     print(f"wrote {out.relative_to(ROOT).as_posix()}: {len(result['groups'])} groups over "
           f"{result['players']} players, {result['components_used']} of {result['k']} components used, "
           f"our overall stretched x{result['global_stretch']:.3f} to the consensus's spread")
-    for r in result["groups"]:
-        print(f"\n  group {r['group']}  {r['signature']:<24} {r['name']}")
-        print(f"    {r['players']} players, {100 * r['possession_share']:.1f}% of possessions, "
-              f"bias {r['bias']:+.3f} (raw {r['bias_raw']:+.3f}), "
-              f"ours {r['our_overall']:+.2f} theirs {r['consensus_overall']:+.2f}")
-        print(f"    profile: " + ", ".join(f"{c} {v:+.2f}" for c, v in r["profile"].items()))
-        print(f"    most played:   {', '.join(r['most_played'])}")
-        print(f"    most typical:  {', '.join(r['most_typical'])}")
-        print(f"    least typical: {', '.join(r['least_typical'])}")
+    print(f"  the residual RAPM covers {result['residual_players']} of {result['players']} players")
+    for key, label in (("groups", "against the consensus"), ("groups_vs_games", "against the games")):
+        print(f"\n=== {label}, ordered by |bias| x possessions")
+        for r in result[key]:
+            print(f"  {r['name']:<30} bias {r['bias']:+.3f}  ours {r['ours']:+.2f}  "
+                  f"theirs {r['theirs']:+.2f}  {r['players']:>3} players, "
+                  f"{r['possessions'] / 1000:>5.0f}k possessions  {r['signature']}")
 
 
 if __name__ == "__main__":
