@@ -40,7 +40,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
-from eracoef.archetype import RATES, fit_clusters, per36  # noqa: E402
+from eracoef.archetype import RATES, cluster_proba, fit_mixture, per36  # noqa: E402
 from eracoef.boxtable import season_box  # noqa: E402
 from eracoef.config import load_config  # noqa: E402
 
@@ -54,13 +54,13 @@ SUFFIX = re.compile(r"\b(jr|sr|ii|iii|iv|v)\b")
 # listed prints as UNNAMED rather than borrowing a neighbour's name.
 NAMES = {
     "+ftm +pts +tov +ast": "High-usage scorers who draw fouls",
-    "+blk +drb +pts +ftm": "Big men who score and block shots",
-    "+fg3_miss +fg3m +pts -orb": "High-volume three-point shooters",
-    "+drb +blk -stl -ast": "Forwards who rebound and block",
-    "+orb -fg3_miss -fg3m +blk": "Rim-protecting centers",
-    "+stl -pts -ftm -drb": "Ball-hawk defenders",
-    "+ast -blk -orb +tov": "Guards who handle the ball",
-    "-tov -ast -ftm -pts": "Low-usage wings",
+    "+ftm +blk +pts +drb": "Two-way big men who score",
+    "+orb -fg3_miss +blk -fg3m": "Rim-protecting centers",
+    "+fg3m +fg3_miss -drb -blk": "Wings who shoot threes",
+    "+ast -orb +tov -drb": "Guards who handle the ball",
+    "+stl +drb +pf +orb": "Busy all-round forwards",
+    "-ftm -tov -pts -ast": "Low-usage wings who stay out of the way",
+    "+stl -pts -ftm -fg3m": "Ball-hawk defenders who rarely shoot",
 }
 RATE_WORDS = {"pts": "points", "fg3m": "threes made", "fg3_miss": "threes missed", "ftm": "free throws",
               "ast": "assists", "orb": "offensive rebounds", "drb": "defensive rebounds", "stl": "steals",
@@ -77,10 +77,13 @@ OpenRAPM against what actually happened on the court &mdash; no outside metric i
 Time-Decay RAPM, and Time-Decay-Luck-Adjusted RAPM. The weighting de-duplicates the vote, so metrics
 that say nearly the same thing share one vote rather than each getting a full one.</p>
 <p>The two yardsticks agree with each other at <b>R&sup2; = {r2:.2f}</b> across the {n} players both
-cover, so they are close but not interchangeable &mdash; which is why a type can be red in one column
+cover. By player type, though, their disagreements with OpenRAPM are unrelated &mdash;
+<b>r = {r_types:+.2f}</b> across the eight types &mdash; which is why a type can be red in one column
 and blue in the other.</p>
-<p>Player types are fitted, not hand-made: a Bayesian Gaussian mixture over per-36 box rates. The line
-under each name is the four rates that type is furthest from the league on.</p>
+<p>Player types are fitted, not hand-made: a Bayesian Gaussian mixture over per-36 box rates, fitted on
+<b>{fit_first}&ndash;{fit_last}</b> and then used to place each {season} player, so no player helped
+define his own type this season. The line under each name is the four rates that type is furthest from
+the league on.</p>
 </div>"""
 
 
@@ -111,6 +114,23 @@ def joined(board_path: Path, cfg: dict, seasons: list) -> pd.DataFrame:
     profile = per36(box[box.phase == "RS"])
     return g.merge(profile[["player_id", "minutes", *RATES]], on="player_id", how="inner") \
             .reset_index(drop=True)
+
+
+def training_profiles(cfg: dict, seasons: list, board_path: Path) -> pd.DataFrame:
+    """One row per player-season over `seasons`: his per-36 rates in that season alone.
+
+    One row per player-season and not one per player, because what gets scored is a single season's
+    rates, and a training row should be the same kind of row as the row the model is asked about.  The
+    possession cut is the page's own, applied per season.
+    """
+    board = pd.read_parquet(board_path)[["player_id", "season", "poss_off"]]
+    rows = []
+    for season in seasons:
+        box = season_box([season], ["RS"], cfg)
+        profile = per36(box[box.phase == "RS"]).assign(season=season)
+        played = board[(board.season == season) & (board.poss_off >= MIN_POSS)]
+        rows.append(profile.merge(played[["player_id"]], on="player_id", how="inner"))
+    return pd.concat(rows, ignore_index=True)
 
 
 def signature(z_profile: pd.Series, n: int = 4) -> str:
@@ -198,11 +218,20 @@ def group_rows(m: pd.DataFrame, meta: dict, ours: str, theirs: str, bias: str) -
     return rows
 
 
-def build(board_path: Path, cfg: dict, seasons: list, k: int, seed: int, alpha_path: Path) -> dict:
+def build(board_path: Path, cfg: dict, seasons: list, k: int, seed: int, alpha_path: Path,
+          fit_seasons: list) -> dict:
     m = joined(board_path, cfg, seasons)
-    labels, weights = fit_clusters(m[RATES].to_numpy(float), k=k, seed=seed)
-    m["group"] = labels
-    z = pd.DataFrame({c: (m[c] - m[c].mean()) / m[c].std() for c in RATES})
+    train = training_profiles(cfg, fit_seasons, board_path)
+    model, mean, sd = fit_mixture(train[RATES].to_numpy(float), k=k, seed=seed)
+    weights = model.weights_
+
+    proba = cluster_proba(model, mean, sd, m[RATES].to_numpy(float))
+    for i in range(proba.shape[1]):
+        m[f"p{i}"] = proba[:, i]
+    m["group"] = proba.argmax(axis=1)
+    m["group_proba"] = proba.max(axis=1)
+    # the type is described against the TRAINING seasons' league, the same standardisation the fit used
+    z = pd.DataFrame({c: (m[c] - mu) / s for c, mu, s in zip(RATES, mean, sd)})
 
     # one global stretch, so a group's bias is about that group and not about the two spreads
     scale = float(m.adj_overall.std(ddof=1) / m.rating_total.std(ddof=1))
@@ -218,12 +247,23 @@ def build(board_path: Path, cfg: dict, seasons: list, k: int, seed: int, alpha_p
     both = m.dropna(subset=["adj_overall", "games"])
     r2 = float(np.corrcoef(both.adj_overall, both.games)[0, 1] ** 2)
 
-    return {"board": board_path.name, "seasons": seasons, "k": k, "seed": seed,
-            "r2_consensus_observed": r2,
+    proba_out = m[["player_id", "player_name", "poss", "group", "group_proba",
+                   *[f"p{i}" for i in range(proba.shape[1])]]].copy()
+    proba_out.insert(1, "season", seasons[-1])
+    proba_out.to_parquet(ROOT / "outputs" / "bgmm_proba.parquet", index=False)
+
+    rows_c = group_rows(m, meta, "ours_vs_consensus", "adj_overall", "bias_vs_consensus")
+    rows_g = group_rows(m, meta, "ours_scaled", "games", "bias_vs_games")
+    paired = {r["group"]: r["bias"] for r in rows_g}
+    shared = [(r["bias"], paired[r["group"]]) for r in rows_c if r["group"] in paired]
+    r_types = float(np.corrcoef([a for a, _ in shared], [b for _, b in shared])[0, 1])
+
+    return {"board": board_path.name, "seasons": seasons, "fit_seasons": fit_seasons,
+            "k": k, "seed": seed, "r2_consensus_observed": r2, "r_types": r_types,
+            "train_rows": int(len(train)), "mean_top_proba": float(m.group_proba.mean()),
             "players": len(m), "components_used": int((weights > 0.01).sum()),
             "global_stretch": scale, "residual_players": int(m.residual.notna().sum()),
-            "groups": group_rows(m, meta, "ours_vs_consensus", "adj_overall", "bias_vs_consensus"),
-            "groups_vs_games": group_rows(m, meta, "ours_scaled", "games", "bias_vs_games")}
+            "groups": rows_c, "groups_vs_games": rows_g}
 
 
 def page(result: dict) -> str:
@@ -281,7 +321,9 @@ def page(result: dict) -> str:
         out.append(f"<tr><td>{r['name']}<br><span class=\"sig\">{r['signature']}</span></td>"
                    f"{cell(r['bias'])}{cell(other['bias'] if other else None)}</tr>")
     return (head + "".join(out) + "</tbody></table>"
-            + BLURB.format(r2=result["r2_consensus_observed"], n=result["residual_players"])
+            + BLURB.format(r2=result["r2_consensus_observed"], n=result["residual_players"],
+                           r_types=result["r_types"], fit_first=result["fit_seasons"][0],
+                           fit_last=result["fit_seasons"][-1], season=result["seasons"][-1])
             + "</main></body></html>")
 
 
@@ -291,7 +333,8 @@ def main() -> None:
     seasons = [int(s) for s in flag("seasons", "2026").split(",")]
     result = build(ROOT / flag("board", "outputs/season_ratings_product.parquet"), cfg, seasons,
                    int(flag("k", 8)), int(flag("seed", 0)),
-                   ROOT / flag("alpha", "outputs/tradeset_actual_b0_alpha.parquet"))
+                   ROOT / flag("alpha", "outputs/tradeset_actual_b0_alpha.parquet"),
+                   [int(s) for s in flag("fit_seasons", "2023,2024,2025").split(",")])
     out = ROOT / flag("json_out", "outputs/bias_groups.json")
     out.write_text(json.dumps(result, indent=1), encoding="utf-8")
     html = ROOT / flag("out", "docs/bias.html")

@@ -33,18 +33,43 @@ def per36(box: pd.DataFrame, rates: list | None = None) -> pd.DataFrame:
     return g
 
 
-def fit_clusters(X: np.ndarray, k: int = 8, seed: int = 0, n_init: int = 5) -> tuple[np.ndarray, np.ndarray]:
-    """Standardise, fit a Bayesian Gaussian mixture, return (label per row, weight per component).
+def fit_mixture(X: np.ndarray, k: int = 8, seed: int = 0, n_init: int = 5) -> tuple:
+    """Fit a Bayesian Gaussian mixture and return `(model, mean, sd)` -- the standardisation included.
 
     Bayesian, not plain EM, so `k` is an upper bound rather than a choice: a component the data does not
-    support has its weight driven toward zero instead of splitting a real cluster in two."""
+    support has its weight driven toward zero instead of splitting a real cluster in two.
+
+    **The mean and sd come back because a season scored by this fit has to be standardised by the
+    TRAINING seasons' constants.**  Standardising the scored season by its own mean and sd would slide
+    every player toward the middle of his own year and read a league-wide shift -- pace, the rise of the
+    three -- as every player changing type.
+    """
     from sklearn.mixture import BayesianGaussianMixture
 
     Z = np.asarray(X, dtype=float)
-    Z = (Z - Z.mean(0)) / np.where(Z.std(0) > 0, Z.std(0), 1.0)
+    mean, sd = Z.mean(0), np.where(Z.std(0) > 0, Z.std(0), 1.0)
     bgm = BayesianGaussianMixture(n_components=int(k), covariance_type="full",
                                   weight_concentration_prior=1.0 / int(k), max_iter=1000,
-                                  n_init=int(n_init), random_state=int(seed)).fit(Z)
+                                  n_init=int(n_init), random_state=int(seed)).fit((Z - mean) / sd)
+    return bgm, mean, sd
+
+
+def cluster_proba(model, mean: np.ndarray, sd: np.ndarray, X: np.ndarray) -> np.ndarray:
+    """One row per player, one column per component: how much he belongs to each type.
+
+    Standardised by the fit's own `mean` and `sd`, never by `X`'s, so a season the mixture never saw is
+    placed against the seasons it learned from.
+    """
+    return model.predict_proba((np.asarray(X, dtype=float) - mean) / sd)
+
+
+def fit_clusters(X: np.ndarray, k: int = 8, seed: int = 0, n_init: int = 5) -> tuple[np.ndarray, np.ndarray]:
+    """Standardise, fit a Bayesian Gaussian mixture, return (label per row, weight per component).
+
+    In-sample: fits and labels the same rows.  Use `fit_mixture` plus `cluster_proba` to fit on one set
+    of seasons and place another."""
+    bgm, mean, sd = fit_mixture(X, k=k, seed=seed, n_init=n_init)
+    Z = (np.asarray(X, dtype=float) - mean) / sd
     return bgm.predict(Z), bgm.weights_
 
 
