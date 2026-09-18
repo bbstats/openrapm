@@ -239,22 +239,21 @@ def page(result: dict) -> str:
 <main>
 <h1>Bias by player type</h1>
 """
-    def table(rows, theirs_label):
-        out = [f"<table><thead><tr><th>Player type</th><th>{theirs_label}</th><th>Ours</th>"
-               f"<th>Bias</th></tr></thead><tbody>"]
-        for r in rows:
-            cls = "over" if r["bias"] > 0 else "under"
-            out.append(f"<tr><td>{r['name']}<br><span class=\"sig\">{r['signature']}</span></td>"
-                       f"<td>{r['theirs']:+.2f}</td><td>{r['ours']:+.2f}</td>"
-                       f"<td class=\"{cls}\"><b>{r['bias']:+.3f}</b></td></tr>")
-        return "".join(out) + "</tbody></table>"
-
-    return (head
-            + "<h2>Against the consensus, scaled</h2>"
-            + table(result["groups"], "Consensus")
-            + "<h2>Against what the games say, scaled</h2>"
-            + table(result["groups_vs_games"], "Games")
-            + "</main></body></html>")
+    by_group = {r["group"]: r for r in result["groups_vs_games"]}
+    out = ['<table><thead><tr><th>Player type</th><th>Consensus</th><th>Ours</th>'
+           '<th>Bias vs consensus</th><th>Bias vs Season Performance+</th></tr></thead><tbody>']
+    for r in result["groups"]:
+        other = by_group.get(r["group"])
+        cls = "over" if r["bias"] > 0 else "under"
+        cell = "&ndash;"
+        if other is not None:
+            cell = (f"<b>{other['bias']:+.3f}</b>", )[0]
+            cell = f"<span class=\"{'over' if other['bias'] > 0 else 'under'}\"><b>{cell}</b></span>"
+        out.append(f"<tr><td>{r['name']}<br><span class=\"sig\">{r['signature']}</span></td>"
+                   f"<td>{r['theirs']:+.2f}</td><td>{r['ours']:+.2f}</td>"
+                   f"<td class=\"{cls}\"><b>{r['bias']:+.3f}</b></td>"
+                   f"<td>{cell}</td></tr>")
+    return head + "".join(out) + "</tbody></table></main></body></html>"
 
 
 def main() -> None:
