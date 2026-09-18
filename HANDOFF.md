@@ -3,21 +3,23 @@
 **This file is transient.**  It starts the next session and is deleted when Phase 1 ships.  `DECISIONS.md`
 is the permanent record and carries every number quoted here.  Do not let this grow into a lab notebook.
 
-Branch `cleanup`; `main` is fast-forwarded to it at each publish.  `pytest -q`: **337 passed, 1 xfailed, ~160 s** with the scraped data present (2026-09-18, after the seven
-movement tests).  On a clone without the data the seven need no data either, so the skipped count is
-unchanged at 10; CI reports the exact figure.
+Branch `cleanup`; `main` is fast-forwarded to it at each publish, and the live site is served from `docs/`
+on `main`.  `pytest -q`: **336 passed, 1 failed, 1 xfailed, ~165 s** with the scraped data.  The failure is
+accepted and named at the bottom of this file; nothing else is red.
 
 ## How we work (the owner, 2026-09-13/14)
 
 - **Two jobs only: implement the owner's ideas, or propose new ones.**  Never run an idea the owner has
   not said "go" to.  One experiment at a time; never a queue of several overnight.
-- **One test decides**: the year-over-year test below.  The consensus checks and the 2026 top 20 (the eye
-  test) are read every time and can veto; they are never fitted to.
-- **Every experiment ends with the 2026 top 20**, emailed as a phone-readable table when the owner is on a
-  phone (`/experiment-comparison`; `scripts/66_compare.py` writes the page and the email body).
+- **One test decides**: the year-over-year test below.  The consensus checks, the trade loss and the 2026
+  top 20 (the eye test) are read every time and can veto; they are never fitted to.
+- **Every experiment ends with the 2026 top 20** (`/experiment-comparison`; `scripts/66_compare.py`).
 - **Plain words.**  No invented labels, no single-letter names, no "board" (say the player rankings), no
-  "floor" (say the check).  Define a term the first time it is used.  End every message with a one-sentence
-  TL;DR unless the message is itself one sentence.
+  "floor" (say the check).  Define a term the first time it is used.  End every message with a
+  one-sentence TL;DR unless the message is itself one sentence.  **Movement is reported in points per 100,
+  never in rank places**, and under 0.1 is nothing.
+- **On the site and in anything published the ratings are "OpenRAPM"** -- never "ours" or "we" -- and the
+  published pages are American English.  The repo's own prose is British; leave it.
 
 ## The rulings that bind
 
@@ -35,50 +37,55 @@ unchanged at 10; CI reports the exact figure.
 1. **Target**: `looseason.LeaveSeasonOutRAPM`, one RAPM per player over every season except the rated one
    (penalties 40,000 / 40,000 / 0, closed).
 2. **SPM**: chimeraboost on `singleyear.chunk_rows` (the career row plus contiguous 1-, 2-, 3-season
-   chunks, 35,647 rows, two features saying how much evidence a row rests on), features `boruta`
-   (21 offence / 17 defence, on-court columns in).  **Out-of-player**: five player folds balanced on the
-   label (`rloocv.BalancedGroupKFold`), every player's prior from the fit that never saw his rows.
-   **The DEFENSIVE label is un-shrunk and the offensive one is not** (`--unshrink_label=def`, the default,
-   adopted 2026-09-18): a ridge keeps only `n / (n + lambda)` of a player, so the label's spread grows with
-   career length and the SPM learns "longer career = bigger number".  Un-shrinking both sides was rejected
-   on the eye test; defence alone is z -5.24 on the test, z -7.14 on the trade loss, consensus top five 5
-   of 5, and moves offence a median 0.022 per 100.
-3. **Rating**: `priorridge.PriorRidgeCV`, `scale x prior + residual`, the scale priced on cross-fitted prior
-   columns (`--crossfit=scale`), the residual penalty **fixed at 13,037 on both sides** (adopted 2026-09-15;
-   the per-season CV had switched the games off on offence in 2024-2026).  Then centred.
+   chunks, two features saying how much evidence a row rests on), features `boruta` (21 offence /
+   17 defence, on-court columns in).  **Out-of-player**: five player folds balanced on the label, every
+   player's prior from the fit that never saw his rows.  **The DEFENSIVE label is un-shrunk and the
+   offensive one is not** (`--unshrink_label=def`, the default, adopted 2026-09-18).
+3. **Rating**: `priorridge.PriorRidgeCV`, `scale x prior + residual`, the scale priced on cross-fitted
+   prior columns (`--crossfit=scale`), the residual penalty fixed at **13,037** on both sides.  Then centred.
 
-The product table (`outputs/season_ratings_product.parquet`, every other season allowed in the prior) is
-what `docs/data/ratings.json` and the site are built from.  `artifacts/season_ratings.parquet` is still the
-older system, kept for the tests; do not overwrite it.
+`outputs/season_ratings_product.parquet` (every other season allowed in the prior) is what
+`docs/data/ratings.json` and the site are built from; it was rebuilt on 2026-09-18 and `poss_def` is a real
+column now.  `outputs/season_ratings_unshrinkdef.parquet` is the same settings at
+`--exclude_neighbours=1` and is **the incumbent every candidate is scored against**.
+`artifacts/season_ratings.parquet` is the older system, kept for the tests; do not overwrite it.
 
-Threads: the script pins BLAS to one thread and numba to four before importing anything.  Unpinned, one
-booster fit went from 15 s to 45 minutes when a second process was running.  **Never run two builds at
-once**, and kill a chain's python children when you stop it (stopping the wrapper leaves them running).
+Threads: the script pins BLAS to one thread and numba to four before importing anything.  **Never run two
+builds at once**, and kill a chain's python children when you stop it.
 
 ## The test: year-over-year
 
-Rate a season from its own games.  Predict every stint of the season before and the season after from the
-ten players' ratings alone, refitting only the intercept and home edge on the scored season.  Score
-against actual points per team-game.  28 scored seasons, each predicted twice, paired by scored season.
-The prior must not have seen the two scored seasons (`--exclude_neighbours=1`):
+Rate a season from its own games.  Predict every stint of the season before and after from the ten players'
+ratings alone, refitting only the intercept and home edge on the scored season.  28 scored seasons, each
+predicted twice, 56 observations.  The prior must not have seen the two scored seasons:
 
     .venv/Scripts/python scripts/62_single_year_board.py --exclude_neighbours=1 --score=0 --boards=<ten seasons> --out=season_ratings_<name>_<first>
-        (three chunks of ten seasons, stitched; one chunk at a time keeps memory under control; ~3 min a season)
+        (three chunks of ten seasons, stitched; ~3 min a season, so ~95 min for thirty)
     .venv/Scripts/python scripts/63_yoy.py --rankings=<name>=outputs/season_ratings_<name>.parquet,incumbent=outputs/season_ratings_unshrinkdef.parquet --ref=incumbent --tag=<name> --splits=
     .venv/Scripts/python scripts/64_consensus_report.py outputs/season_ratings_<name>.parquet outputs/season_ratings_unshrinkdef.parquet
     .venv/Scripts/python scripts/66_compare.py incumbent=outputs/season_ratings_unshrinkdef.parquet <name>=outputs/season_ratings_<name>.parquet --season=2026 --top=20 --yoy=outputs/yoy_<name>.parquet --ref=incumbent
 
-Read `game_armse` (points per 100 per team-game) and the paired row: `mean_diff` below zero is better,
-`z` is the difference over its standard error, `wins` of 56.  **Decision rule:** adopt only if `z` is -2
-or below with no gross consensus miss and the 2026 top 20 not worse; ties go to the simpler version.
-The row "each side rescaled to the scored season" asks whether the order improved with the spread
-removed; `--columns=prior` tests the SPM alone.  `scale_*` below 1 on the neighbouring season is expected
+**Decision rule:** adopt only if `z` is -2 or below with no gross consensus miss and the 2026 top 20 not
+worse; ties go to the simpler version.  Read the row "each side rescaled to the scored season" to see
+whether the ORDER improved or only the spread.  `scale_*` below 1 on a neighbouring season is expected
 (players change year to year) and is not a target.
 
-**Saved priors**: `--save_priors=<name>` writes every season's priors and their per-game-fold versions;
-`--priors_from=<name>` reruns the ridge alone in a second a season, which is how the penalty was swept.
+**Saved priors**: `--save_priors=<name>` then `--priors_from=<name>` reruns the ridge alone in a second a
+season, which is how the penalty was swept.
 
-## The record so far (all in `DECISIONS.md`; year-over-year error per team-game, points per 100)
+## The second criterion: the trade loss (new, 2026-09-18)
+
+The year-over-year test is an error per team-game, so a 200-possession man is a rounding error in it.  The
+trade loss counts every player once.  **It has already overturned one reading and confirmed six others.**
+
+    .venv/Scripts/python scripts/70_tradeset.py --rankings=outputs/season_ratings_<name>.parquet --team_effects=team --out=tradeset_<name>   (85 s)
+    .venv/Scripts/python scripts/73_tradeloss.py --alphas=incumbent=outputs/tradeset_team_alpha.parquet,<name>=outputs/tradeset_<name>_alpha.parquet --ref=incumbent
+
+Paired by season on the exact intersection of eligible players; `--tier=` splits by exposure.  Read
+`mean_diff` below zero as better and `z` against its own standard error.  It detects a defensive change of
+0.0024 at z -2.2, so it has power at the size that matters.
+
+## The record so far (year-over-year error per team-game, points per 100)
 
 | rankings | error | verdict |
 |---|---|---|
@@ -86,280 +93,126 @@ removed; `--columns=prior` tests the SPM alone.  `scale_*` below 1 on the neighb
 | career row only, one per player | 8.804 | the starting point |
 | + 1-3 season chunks (owner's design) | 8.736 | adopted |
 | + scale cross-fitted, penalty not | 8.693 | adopted |
-| + out-of-player priors | 8.705 | worse on the test, adopted by ruling 2 (memorised careers were the gain) |
-| + fixed penalty 13,037 | 8.697 | tie; consensus 0.777 / 0.757 / 0.771, top five 4 of 5; adopted |
-| + the DEFENSIVE label un-shrunk (**the incumbent**) | **8.682** | **z -5.24, 43 of 56; trade loss defence z -7.14, 27 of 30; consensus 0.777 / 0.763 / 0.764, top five 5 of 5; adopted 2026-09-18** |
-| rejected: every chunk size; booster settings; off-court features; one row per player-season; cross-fitting the penalty; the un-shrunk label on BOTH sides (8.667 on the test, but the 2026 offensive spread collapses 1.60 to 1.14 and Curry falls to 61st); `onc_d` off the defensive list (the trade loss finds nothing and every public defensive metric agrees less) | | |
+| + out-of-player priors | 8.705 | worse on the test, adopted by ruling 2 |
+| + fixed penalty 13,037 | 8.697 | tie on the test; **the trade loss later read it z -2.19 on defence** |
+| + the DEFENSIVE label un-shrunk (**the incumbent**) | **8.682** | z -5.24, 43 of 56; trade loss defence z -7.14, 27 of 30; adopted 2026-09-18 |
+| rejected | | every chunk size; booster settings; off-court features; one row per player-season; cross-fitting the penalty; the un-shrunk label on BOTH sides (the 2026 offensive spread collapses 1.60 to 1.14, Curry falls to 61st); `onc_d` off the defensive list (the trade loss finds nothing) |
 
-## What 2026-09-15 settled (experiments 11-15, all in `DECISIONS.md`; nothing adopted)
+## THE FINDING to carry forward: OpenRAPM is about a sixth too wide, and three sources agree
 
-- **The box prior is FLAT in exposure and the truth is steep.**  Centred at possession-weighted zero, the
-  prior gives -0.76 to a man with 0-50 possessions and -0.81 to one with 1,000-2,000; APM gives -9.94 and
-  -2.15.  Measured on 30 seasons, monotone, z 7 to 15.  **This is the real defect.**
-- **About half of it is forecastable.**  The same men read -5.15 the season before and -3.64 the season
-  after, playing about 700 possessions in each, so they are properly measured there and it is not ageing.
-  The level to aim at is therefore the NEIGHBOURING seasons' APM, not the rated season's:
+Full numbers in `DECISIONS.md`, "The amplitude finding".
 
-  | possessions | 0-50 | 50-100 | 100-200 | 200-500 | 500-1k | 1-2k | 2-4k | 4k+ |
-  |---|---|---|---|---|---|---|---|---|
-  | offence, neighbours | **-4.40** | -3.44 | -3.29 | -3.44 | -2.85 | -2.07 | -1.21 | +0.83 |
-  | defence, neighbours (positive = allows more) | **+1.69** | +1.25 | +1.30 | +0.86 | +0.85 | +0.20 | -0.02 | -0.04 |
+| source | offence | defence | what it measures |
+|---|---|---|---|
+| the consensus, GLS scale | x0.85 | x0.85 | the same season, against public metrics |
+| the trade set, three-season window | x0.749 | x0.919 | adjacent seasons' team-games |
+| the year-over-year sweep, interior optimum | x0.65 | x0.85 | the neighbouring seasons' games |
 
-- **Four ways of applying it all failed, for two reasons.**  Fitting the level against the rated season's
-  own APM runs away (the loss weights each player by his own information, so a four-possession man costs
-  it nothing: it produced -22.41 per 100).  Adding covariates did not help -- more flexibility only
-  changes the shape of the runaway.  Applying a correction AFTER the ridge fails differently: nothing
-  re-prices it, the rankings get wider, and the test punishes the extra spread whatever the order did.
-- **And a feature cannot teach it.**  `singleyear.chunk_rows` gives every training row of a player the
-  SAME label as his career row, so the booster can learn "noisier inputs, regress harder" but never
-  "fewer possessions, genuinely worse".  Handing it the garbage-time exposure came in at z -1.73 and left
-  the prior's exposure spread unchanged (+2.42 to +2.30 against the +11.2 that is really there).
+**One sign, three independent readings.**  There is no offence/defence imbalance -- an earlier claim of one
+was an artefact of the consensus being scaled to EPM, withdrawn the same day.
 
-## Where this stands (2026-09-15, end of session)
+**A rescale is still not adoptable** (experiment 20): the two across-season sources cannot separate "too
+wide" from "players regress", and a uniform rescale reorders nobody -- the order-only row is zero to 4e-14.
+So this wants fixing INSIDE the fit, not bolted on afterwards.
 
-**The exposure correction is closed.  The owner: *"whatever our version is as last posted seems to be good
-enough."***  Six attempts (experiments 12-17) and not one beat the incumbent; the best available outcome
-was the exact tie of the linear ramp at N = 100.  The shipped rankings are unchanged and nothing needs
-rebuilding.  The case for closing it is in `DECISIONS.md` -- the short version is that the men being
-corrected are 7% of the players and **0.13% of the possessions**, and the site already rates a
-four-possession man -1.96 per 100, which is a defensible replacement level.
+**The lead that goes with it: the high-usage creators.**  Six of the eight highest-usage players sit below
+their consensus offence after the spreads are matched -- LaMelo Ball -1.70, Ja Morant -1.61, Luka -1.59,
+Jokic -1.50, Booker -1.06, Giannis -0.83 -- while the correlation with usage over all 391 players is
+**-0.00**, so it is the extreme top and not a gradient.  The trade set independently found **shot creation,
+three-point rate and offensive rebound share are under-credited by the box prior**, and shot creation is
+what this group is.  Not the explanation, measured and dismissed: age, experience, team quality; the whole
+per-36 box profile explains 21% of the player-by-player gap.
 
-Do not reopen this without a new reason.  In particular, do not reopen it on the strength of the
-measurement alone: the gap between the box prior and APM at low exposure is real and documented, and the
-rankings are still better without a patch for it.
+**Also named and unexploited: on defence the prior reads team offence as defensive credit** -- a player
+whose team scored while he was on the floor has his defensive correction pushed down 0.062.
 
-**The owner named the next experiment on 2026-09-16: the trade set.  It is built, measured and NOT
-shipped; the findings and the reason are below.**
+## What is closed.  Do not reopen without a new reason.
 
-Left in the working tree from this session, all harmless and off by default:
+- **The exposure correction** (the prior is flat in exposure, the truth is steep).  Six attempts, none beat
+  the incumbent; the owner: *"whatever our version is as last posted seems to be good enough."*
+- **The trade set as a product.**  Alpha reads neighbouring seasons, so it can never be published under
+  ruling 1, and a season's statistics see 3.7% of it on offence and 5.6% on defence.  It is an instrument.
+- **`onc_d` off the defensive feature list** (experiment 19): the trade loss finds nothing (z -0.40) where
+  it detects the penalty change at z -2.19, and agreement fell against every public defensive metric,
+  furthest against the luck-adjusted ones, so it was not the `def3` pattern that excuses a drop.  Ruled:
+  keep `onc_d`.  Note the 2026 top 20 was NOT the reason -- to the eye it was arguably better.
+- **The amplitude as a rescale** (experiment 20).  See above.
+- **The team-movement weight as it stands.**  `singleyear.team_movement` is the Gini-Simpson index now
+  (`1 - sum(share ** 2)`, the chance two possessions of a career came from different teams) with seven
+  tests, but `--trade_weight` is off by default and at floor 0 it deletes the one-team players -- 29% of
+  them, every single-franchise star -- which is what its one run lost on.  Sweep the floor if it is revived.
 
-- `scripts/62_single_year_board.py`: `--blend_off=x/N/lin` / `--blend_def=x/N/lin`, the linear ramp
-  `w = min(n / N, 1)`.  The rational weight `x/k/a` is unchanged.  No default behaviour moved.
-- `outputs/season_ratings_blend*.parquet` and `season_ratings_ramp*.parquet`: the two sweeps, disposable.
-- `outputs/priors_sy_base.pkl`: **keep this.**  The saved priors at `--exclude_neighbours=1`, which is what
-  makes any ridge-side experiment a one-second-a-season rerun instead of a 90-minute build.
-- `scripts/67_blend_apm.py`, `68_exposure_slope.py`, `69_closeness_panel.py`: the measurement scripts
-  behind experiments 12-15, untracked.
+## The instruments, all read-only
 
-## The trade set (2026-09-16, the owner's design): findings, and why nothing shipped
+| script | what it answers |
+|---|---|
+| `63_yoy.py` | the criterion: team-game error, both directions, paired by season |
+| `70_tradeset.py` + `73_tradeloss.py` | the per-player loss that counts a bench player once |
+| `74_consensus_bars.py` | how far OpenRAPM sits from the consensus in units of its own uncertainty, each side scaled |
+| `75_amplitude.py` | a per-side multiplier sweep on a finished table |
+| `76_bias_groups.py` | the published page: bias by player type, `vs consensus` and `vs 2026 observed` |
+| `64_consensus_report.py` | rank agreement and spreads for several tables side by side |
 
-**The owner's verdict on reading the ratings: *"basically no movement."*  Not shipped.  But the
-dismissal was argued on rank places and the owner's own threshold overturns it, so the measurement is
-recorded here in the unit that decides: points per 100, with anything under 0.1 counted as nothing.**
+`outputs/bgmm_proba.parquet` carries `player_id`, `season`, the winning player type and **all eight mixture
+probabilities** for 2026, from a mixture fitted on 2023-2025 (one row per player-season) and used to place
+2026 out of sample, standardised by the training seasons' own constants.  **The owner wants those eight
+columns available to the prior code; that work has not started.**
 
-Absolute change against the incumbent, 12,103 eligible player-seasons with absence evidence, 30 seasons:
+Whether the two deltas on that page are related was the test the owner set for building position-level
+categories: across the eight types, `vs consensus` against `vs 2026 observed` is **r -0.04** (the
+2026-fitted types read +0.03).  No relationship, so position categories are not warranted by it.
 
-| | median | ninth decile | largest | over 0.1 | over 0.25 |
-|---|---|---|---|---|---|
-| the per-player correction alone | **0.273** | 0.784 | 2.43 | **79.1%** | 53.2% |
-| the uniform rescale's part | 0.381 | 0.909 | 3.88 | 83.3% | 64.2% |
-| both together | 0.512 | 1.244 | 4.61 | 89.7% | 74.4% |
+## The site
 
-By exposure, the per-player part alone: under 500 possessions median 0.130 and 58.7% over the
-threshold; 500 to 1,500, 0.244 and 79.1%; 1,500 to 3,000, 0.306 and 82.8%; over 3,000, 0.356 and 85.0%.
-
-**So the movement is real in size and it is not concentrated in the bench.**  The rank reading that
-prompted the dismissal was the wrong instrument, and it was also wrong on the facts: the middle of the
-list is not as tightly packed as it looks.  Near the middle of a 2026 season 0.84 points per 100 spans
-20% of the players, so the men who moved 18 to 26 places moved a median of **0.243** points per 100.
-The top of the list genuinely does not move -- the 2026 top five is the same five men reordered, the top
-20 keeps 15.7 of its 20 names over 30 seasons and rank agreement is 0.942 -- but "nothing changed" is
-not what the points say.
-
-**Why it still does not ship, and this is the real reason.**  Alpha reads the games of the seasons
-either side of the rated one, so it can never be a published rating (ruling 1).  The route to shipping
-was to teach the prior what alpha knows, and a season's statistics see **3.7% of alpha on offence and
-5.6% on defence**.  The correction is large enough to matter and mostly invisible to the box score.
-
-### What it is
-
-For a rated season, every team-game of that season and the two either side is one row.  A player's
-entry is his share of that team's possessions in that game, and it is **zero for a game he missed and
-zero for his old team's games once he is traded**.  The rated season's rating is subtracted from every
-row and the remainder is ridged back onto the same player columns.  That coefficient is **alpha**: what
-a player's comings and goings say that his rating did not already know.  Every teammate has a column
-too, which is why this is a regression and not a difference of averages -- a team's record without one
-man is mostly a statement about the other four, which is what the off-court record died of.
-
-Three terms, used the same way everywhere:
-
-* **the trade set** -- the pooled team-games of the three seasons, one row per team per game.
-* **alpha** -- the per-player correction the trade set puts on top of the rating, points per 100.
-* **the trade loss** -- the size of alpha over eligible players, every player counting once, by
-  possession tier.  The year-over-year test is a team-game error in which a 200-possession man is a
-  rounding error; this is the loss that can see him.  Offence 0.300 and defence 0.256 pooled, against a
-  rating spread of 1.67 and 1.12, so the correction is about a quarter of the spread.
-
-### How to run it
-
-    python scripts/70_tradeset.py --team_effects=team --out=tradeset_team   # the alpha table and losses
-    python scripts/71_tradeset_features.py --alpha=outputs/tradeset_team_alpha.parquet --out=tradeset_team
-    python scripts/72_tradeset_shap.py --out=tradeset_team   # WHICH statistics move a player, and how far
-    python scripts/70_tradeset.py --block=0 --out=tradeset_block0            # the two controls
-    python scripts/70_tradeset.py --team_effects=team_season --out=tradeset_ts
-
-Nine minutes, three minutes, three minutes.  `src/eracoef/tradeset.py` carries the reasoning;
-`tests/test_tradeset.py` is 14 tests including truth recovery on a simulated league.  `scripts/63_yoy.py`
-gained `--offset=`.  Every output is a new `tradeset_*` name: no shipped artefact is written and
-`role_panel_season.parquet` is read only.
-
-### What it found
-
-1. **The offensive rating is about a quarter too wide.**  The multiplier the three seasons ask for is
-   **0.749 on offence and 0.919 on defence**, and correcting only that -- one number per side, no player
-   told apart from another -- removes 0.069 of game error two seasons out.  This is the largest single
-   thing the trade set found and it is not about any player.  Note the sign flips inside a single season
-   (1.03 to 1.12 offence, 1.38 to 1.51 defence): within its own games the ridge has over-shrunk, across
-   seasons it has not shrunk enough.
-2. **The per-player correction removes 0.053 on top of that**, 53 of 56 observations, with one free
-   level per team in the fit.  Without that team term it reads 0.098 and **about half of it is the team
-   being good, not the player**.  Under a free level per team per SEASON it is 0.023; that version also
-   absorbs a player's standing among his own teammates, so read it as a lower bound.
-3. **Nine tenths of the per-player gain needs the neighbouring seasons.**  The same machinery on the
-   rated season alone, where there are no absences to see, removes 0.009.  The absences are doing the
-   work, not the extra data.
-4. **Three statistics are under-credited by the rating**, each pushing a correction up about 0.02 per
-   100 at its high end: **three-point rate, shot creation, offensive rebound share**.  This is the most
-   directly actionable thing here.
-5. **On defence the prior reads team offence as defensive credit.**  On-court plus-minus is the loudest
-   real statistic on both sides, and a player whose team scored most while he was on the floor has his
-   defensive correction pushed **down 0.062**.  That is a defect with a named mechanism.
-
-Scored through the year-over-year test at two seasons out, the corrected ratings read 8.6784 against the
-incumbent's 8.7949, better in 52 of 54 seasons.  Most of that is item 1.
-
-### Why the statistics cannot yet carry it
-
-Out of fold, with the how-much-he-played family removed, a season's statistics account for **3.7% of
-alpha on offence and 5.6% on defence**, against 0.8% and 1.7% for the rankings' own rating and the
-panel's `rapm1`.  (That second number was written up as "the rankings' prior" and is not: the
-feature scripts 71 and 72 use is `rapm1`, the role prior plus the season's own residual, not the
-box prior the rankings are centred on.  Corrected 2026-09-17; the measurement is unchanged.)
-Three to four and a half times better, and still a few per cent.  Read one player at a time it is
-starker: Westbrook is corrected -1.52 and the statistics see -0.06 of it; Dort -1.25 against -0.05;
-Durant -1.15 against -0.10.  The best cases are Trey Murphy III at +1.04 against +0.47 and Markkanen at
-+1.16 against +0.44.  **Most of what an absence reveals is not in the box score at all.**
-
-So alpha is a good instrument and a poor teacher.  Its value from here is diagnostic: it is the only
-thing in this project that measures a per-player error with bench players counted the same as starters.
-
-### Traps, all of them paid for
-
-* **The rating must enter as two free unpenalised columns, one per side** (`--free_scale=1`, the
-  default).  Without them the amplitude error becomes a negative alpha for every strong player and a
-  positive one for every weak one -- a rescale wearing a per-player costume.  With them the correlation
-  between alpha and the rating is -0.001 on both sides.
-* **Always pass `--team_effects=team`.**  `none` is the default only because it is the plain form of the
-  design.  `outputs/tradeset_*` with no suffix is the uncontrolled arm and must not be quoted;
-  `tradeset_team_*` is the one to read, `tradeset_ts_*` the strict bound.
-* **The corrected rating is `scale x rating + alpha`, never `rating + alpha`.**  The first scored arm
-  omitted the multiplier and was reading half a fit as the whole.
-* **The penalty grid must be scored two seasons out** (`--offset=2`).  At the default offset the scored
-  games are inside the window alpha was fitted on.
-* **Career possessions ranks near the top of every feature table and is measurement trap 8**, not a
-  finding: a longer career means a better-measured correction, so the feature predicts alpha's noise.
-  The percentages above already exclude that family.
-* **A first-year player's whole contrast comes from a season he was not in the league**, so his team's
-  previous year does all the work.  That is why Dylan Harper lands 20th in the corrected 2026 list.
-  Defensible, but not the same kind of evidence a veteran's missed games give.
-* Two bugs were caught before any number was quoted and both are in `DECISIONS.md` 18 and 18c: the
-  missing amplitude multiplier above, and a melt that repeated each player's correction once per
-  statistic and inflated it 42-fold.
-
-### If this line is continued
-
-In the order I would try them:
-
-1. **Use the trade loss to re-judge the ranking candidates already on disk.**  Dozens of them exist and
-   the team-game test called many of them ties because it cannot see the bench.  The trade loss counts
-   every player once.  No new modelling, about 20 minutes.  **Started 2026-09-18**:
-   `scripts/73_tradeloss.py` is the comparison (same players, paired by season), two candidates are
-   judged, and the first result is that a change adopted as a TIE -- the fixed penalty 13,037 -- is a
-   real defensive gain by this loss, z -2.19.  Nine minutes per candidate to add one.
-2. **A standard error per player**, from the inverse of the regression's own matrix.  Then read only
-   corrections larger than their own error, and weight the feature fit by real precision.  Pascal
-   Siakam's +1.71 rests on 448 possessions of absence, and nothing currently marks that.
-3. **One column per player per season, penalised on the differences between them.**  Alpha is currently
-   a three-season average deviation from a one-season rating, which mixes "the rating missed something"
-   with "he was different the next year".
-4. The per-component luck-adjusted target (`teamloo`) as the game margin, and the plain played-or-not
-   entry, both one run each.
-
-Not worth trying: adopting alpha as a rating (illegal under ruling 1), or training the prior on it
-without first raising the 3.7% and 5.6%.
-
-## What 2026-09-18 settled (experiment 19 and the error bars; DECISIONS.md carries the numbers)
-
-- **`onc_d` stays on the defensive feature list.**  The last unresolved candidate, open since
-  2026-09-14, is closed: the trade loss finds nothing (defence z -0.40, 16 of 30) where it detects the
-  fixed penalty at z -2.19; agreement falls against every public defensive metric and falls FURTHEST
-  against the luck-adjusted ones, so this is not the `def3` pattern that excuses a consensus drop.  The
-  2026 top 20 was not the reason -- to the eye it was arguably better (Draymond Green 77th to 10th).
-- **Two new instruments**, both read-only, neither used to choose anything:
-  `scripts/73_tradeloss.py` (two rankings by the trade loss, same players, paired by season) and
-  `scripts/74_consensus_bars.py` (how far we sit from the consensus in units of its own error bar).
-- **The consensus file now carries a standard deviation per player per side** (`var_offense`,
-  `var_defense`).  `adj_*` is unchanged to the decimal, so no number above moved.  Read a disagreement in
-  bar units from now on, and read the bar as the public metrics' disagreement with each other -- not as
-  our uncertainty, and never as a target.
-- **An uncentred candidate cannot be differenced against a centred one without removing the level
-  first.**  4b and `sy_noonc_d` predate the centring rule; the first movement figure quoted for
-  experiment 19 was 7% high because of it.
-- **`team_movement` is the Gini-Simpson index now** (`1 - sum(share ** 2)`, the chance two possessions of
-  a career came from different teams), the form the owner corrected the measure to on 2026-09-16 and which
-  had never been implemented, plus the seven tests it never had.  No rating moved: `--trade_weight` is off
-  in the shipped run.  It still zeroes the one-team players at floor 0, which is what its one run lost on.
+`docs/index.html` (rankings, newest season first) and `docs/bias.html` (bias by player type).  Rebuild with
+`scripts/52_site.py` then `scripts/76_bias_groups.py`, commit, and fast-forward `main` to publish.  The bias
+page is deliberately a title, one table and two short paragraphs; the owner has trimmed it twice.
 
 ## Traps that cost a day
 
-1. `pip install -e` puts this working tree on `sys.path`: a fresh clone silently tests THIS repo's data.
-2. Tests cannot reach the network (`tests/conftest.py`).
-3. A score on a mask that cuts team-games is not a score; read stint-cutting splits on `mse`.
-4. Two builds at once, or an unpinned numba pool, and a 15-second fit takes an hour.
-5. `TaskStop` on a chain stops the bash wrapper only; its python children keep running and its `for`
-   loop keeps launching.  Check `Get-Process python` before starting anything.
-6. Seventeen more in `DECISIONS.md`, "The measurement traps".
+1. **The consensus file was rescaled twice on 2026-09-18** -- once to make it a real consensus rather than
+   one dominated by collinear raw-points metrics, once to turn off the scaling to EPM.  **No consensus
+   spread or agreement figure is comparable across those changes.**  Both rescales moved `adj_*` for ~550 of
+   582 players at correlation 0.99+, so a number can look like the same measurement and not be.
+2. **`defense` in the rankings parquet is points allowed, negative-good.  `rating_def` is the positive-good
+   column**, and `rating_total = rating_off + rating_def`.  Adding `offense + defense` gives a
+   plausible-looking table with the defensive sign inverted.
+3. **An uncentred table cannot be differenced against a centred one** without removing the level first.
+   Anything built before 2026-09-14 predates the centring rule; 4b sits at +1.61 on offence in 2026.
+4. **Stint level and team-game level disagree in this project**, and have given opposite signs on
+   amplitude.  Say which one a number is.
+5. `pip install -e` puts this working tree on `sys.path`: a fresh clone silently tests THIS repo's data.
+6. Tests cannot reach the network (`tests/conftest.py`).
+7. A score on a mask that cuts team-games is not a score; read stint-cutting splits on `mse`.
+8. Two builds at once, or an unpinned numba pool, and a 15-second fit takes an hour.
+9. `TaskStop` on a chain stops the bash wrapper only; its python children keep running.  Check
+   `Get-Process python` before starting anything.
+10. Seventeen more in `DECISIONS.md`, "The measurement traps".
 
-## Filed for the next rebuild (2026-09-18)
+## The one failing test, accepted by the owner (2026-09-18)
 
-**`poss_def` in the shipped parquet is still a copy of `poss_off`.** The board script was fixed on
-2026-09-18 — `side_possessions()` had always computed both counts correctly but only ran when a
-`--blend` flag asked for it, and it now runs every season — but
-`outputs/season_ratings_product.parquet` was built before that and carries the old column in all
-14,579 rows. **No rating is affected**: `poss_def` is assigned after the ridge and feeds nothing.
-Rebuild whenever the next real run happens; there is no reason to spend 90 minutes on it alone.
+`tests/test_vs_consensus.py::test_star_guards_are_not_buried` puts LaMelo Ball at rank 162 against a
+hand-set ceiling of 160 on the rebuilt published table.  **In points that is 0.016 per 100** -- he sits
+0.168, the player at rank 160 sits 0.184 -- six times smaller than the owner's threshold for nothing, and
+the check is a rank ceiling, the instrument the owner has ruled does not measure size.  The owner: *"that
+test can fail, no worries."*  The honest fix, not done, is to replace the rank ceiling with a points check.
 
-What it is worth, measured on 2026: 551 of 582 players move, mean 8.2 possessions — about nine in
-twenty-five hundred, as expected. But the per-player ratio runs 0.87 to 1.25, so at the bottom of the
-rankings it is not a rounding matter, and the bottom is where the exposure work lives. Anything that
-reads a per-side count at low exposure (`scripts/68_exposure_slope.py`, `--match_spread`) wants the
-rebuilt table. That script detects the stale column and says so.
+## Where to start next
 
-## What the 2026-09-17/18 cleanup changed (all in the git log; six commits)
-
-Nothing that moves a rating. The four that would have cost a day each:
-
-1. **Nine consensus checks never ran in CI.** A module-scoped fixture in `tests/test_vs_consensus.py`
-   computed `bigness` eagerly, which skips without `data/raw` — and CI asserts `data/` is empty. Every
-   PR check reported green on tests that did not execute. The network-block guard was never collected
-   at all, because it lived in `conftest.py`.
-2. **A misspelled flag was ignored.** Nineteen copies of the same `_flag()`, none of which looked at
-   the flags it was *not* given. `--exclude_neighbors=1` ran without the exclusion and produced a
-   number that looked like one that had not. `scripts/_cli.py` is the one copy now and refuses an
-   unknown name; `tests/test_config.py` checks every flag this file tells you to type.
-3. **`scripts/52_site.py` republished the superseded rankings** if you ran the README's build step,
-   and printed a filename identical for both candidates, so the swap was invisible.
-4. **Five scripts fitted from the season panel with no `drop_untrainable` gate** (50, 62, 67, 71, 72).
-   Latent — nothing is in progress — but it is the shape of thing noticed only in the year it starts
-   lying. `tests/test_no_current_season.py` is the guard `seasons.py` had claimed for months.
-
-`pytest -q` is **330 passed, 1 xfailed** with the scraped data, **320 passed / 10 skipped / 1 xfailed**
-on a clone without it.
+1. **Credit shot creation properly in the prior.**  The one live lead with two independent measurements
+   behind it (the creator gap above, and the trade set's under-credited statistics).  A feature change,
+   then the test and the trade loss like anything else.  One build.
+2. **Split on-court plus-minus into its offensive and defensive halves** so the defensive fit cannot read
+   team scoring as defensive credit.  Named mechanism, one build.
+3. **The eight mixture probability columns into the prior**, which the owner has asked for.  The input is
+   written; nothing is wired.
+4. **A standard error per player for alpha**, from the inverse of the trade set's own matrix, so a
+   correction can be read against its own noise.  Half a day.
 
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest tests -q                                  # 330 passed, 1 xfailed, ~165 s
+    .venv/Scripts/python -m pytest tests -q                                  # 336 passed, 1 failed (LaMelo, accepted), 1 xfailed
     .venv/Scripts/python scripts/63_yoy.py --rankings=incumbent=outputs/season_ratings_unshrinkdef.parquet,ship=artifacts/season_ratings.parquet --ref=incumbent --tag=verify --splits=
-                                                                             # incumbent 8.682; ship -4.0 team-game MSE
-    .venv/Scripts/python scripts/64_consensus_report.py outputs/season_ratings_unshrinkdef.parquet
-                                                                             # 0.777 / 0.763 / 0.764, top5 5
+                                                                             # incumbent 8.682
+    .venv/Scripts/python scripts/64_consensus_report.py outputs/season_ratings_product.parquet
+                                                                             # 0.787 / 0.803 / 0.795, spreads 1.03 / 1.04, top5 4

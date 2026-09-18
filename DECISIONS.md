@@ -2131,6 +2131,56 @@ The arms are `outputs/tradeset_noonc_d_*` and `outputs/tradeset_cfs_*` (both `--
 against the existing `outputs/tradeset_team_*`; the page is
 `outputs/compare_base4b_noonc_d_shipped_2026.html`.
 
+### The amplitude finding: three independent sources agree OpenRAPM is about a sixth too wide (2026-09-18)
+
+The consensus file was rescaled twice on 2026-09-18.  The second change is the one that matters here: the
+owner turned OFF the scaling to EPM and used the scale the GLS weighting implies.  On offence that is a
+pure rescale -- correlation with the previous column **0.9994** -- taking the consensus's offensive spread
+from 1.89 to 1.40, with defence barely moving (1.03 to 1.06) and the per-player uncertainty on offence
+falling with it (0.76 to 0.56).  **Every consensus spread figure measured before that file is against a
+different scale and must not be compared with one measured after it.**
+
+**It killed a finding and replaced it with a better one.**  Against the EPM-scaled file, OpenRAPM's
+offence read 18% too NARROW and its defence 17% too wide -- an offence/defence imbalance, written up
+earlier the same day and now withdrawn.  Against the GLS scale both sides want the same multiplier:
+
+| | OpenRAPM sd | consensus sd | asks for | correlation |
+|---|---|---|---|---|
+| offence | 1.63 | 1.40 | **x0.85** | 0.829 |
+| defence | 1.41 | 1.19 | **x0.85** | 0.780 |
+| total | 2.42 | 1.95 | x0.81 | 0.806 |
+
+So there is no per-side imbalance against the consensus, only one uniform amplitude difference.  And that
+now agrees with everything else that has looked at it:
+
+| source | offence | defence | what it measures |
+|---|---|---|---|
+| the consensus, GLS scale | x0.85 | x0.85 | the same season, against public metrics |
+| the trade set, three-season window | x0.749 | x0.919 | adjacent seasons' team-games |
+| the year-over-year sweep, interior optimum | x0.65 | x0.85 | the neighbouring seasons' games |
+
+**Three sources, one sign: the published rating is wider than every other reading of the same players.**
+Experiment 20's conclusion stands unchanged -- a rescale is not adoptable, because the year-over-year and
+trade-set versions are measured across seasons and cannot separate "too wide" from "players regress", and
+because a uniform rescale reorders nobody (the order-only row is zero to 4e-14).  What changed is that the
+within-season instrument no longer contradicts them, so the case that the SPREAD itself is too wide is now
+consistent rather than split, and it wants fixing inside the fit rather than after it.
+
+**What also survives the rescale, at half its former size: the high-usage creators.**  Six of the eight
+highest-usage players sit below their consensus offence after the spreads are matched -- LaMelo Ball
+-1.70, Ja Morant -1.61, Luka Doncic -1.59, Jokic -1.50, Booker -1.06, Giannis -0.83 -- against -2.30,
+-2.27, -2.14, -2.06, -1.52 and -1.18 on the EPM-scaled file.  Luka's total gap is 1.2 rather than 2.7
+(OpenRAPM +4.47, consensus +5.70; the offence is +4.13 against +5.50) and his defence is not in dispute
+(+0.34 against +0.20).  The correlation with usage over all 391 players is **-0.00**, so this is the
+extreme top of the league and not a usage gradient.
+
+**The mechanism with the best claim, because it was measured independently:** the trade set found shot
+creation, three-point rate and offensive rebound share to be UNDER-credited by the box prior.  Shot
+creation is the defining trait of exactly this group, and a single-season rating shrinks toward that
+prior.  What is NOT the explanation, measured and dismissed: age (no correlation with the gap),
+experience (none), and team quality (team R-squared 0.166 against the consensus's 0.160).  The whole
+per-36 box profile explains 21% of the player-by-player gap, so most of it is not a box-score story.
+
 ### Experiment 22: un-shrink the DEFENSIVE label only -- it passes every standing check (2026-09-18)
 
 Experiment 21 found the un-shrunk label's whole measured gain on defence and its whole visible damage on
