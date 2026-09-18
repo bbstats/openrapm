@@ -2,7 +2,8 @@
 
     python scripts/63_yoy.py --rankings=sy=outputs/season_ratings_sy_yoy.parquet,ship=artifacts/season_ratings.parquet
                              [--ref=sy] [--splits=movers] [--tag=yoy] [--first=1998] [--last=2025]
-                             [--columns=rating|prior]
+                             [--columns=rating|prior] [--fill=name:500x0.5,name2:-1.6/-0.5]
+                             [--offset=1]
 
 For every scored season the previous season's rankings and the next season's rankings are each asked to
 predict its games, from the ten players' offensive and defensive ratings alone; only the season's level
@@ -23,6 +24,20 @@ and may use model coefficients learned from OTHER seasons -- but not from the tw
 trained on every other season (the shipped `--exclude_neighbours=0` default) has seen the scored season's
 outcomes through the prior's coefficients and reads optimistically here.
 
+**`--fill=` gives a table a replacement level for the players it has no row for.**  A season's rankings
+cover only the players who played that season, so a rookie of the scored season -- 10% of its possessions
+going forward, 6% going back -- is scored as the AVERAGE player (0), which is the one thing he is not.
+`--fill=name:500` gives that table `holdout.ReplacementSystem`: the possession-weighted mean rating of its
+own players under 500 possessions, read off the rating season and nothing else; `500x0.25` takes a
+quarter of that level, which is the depth the test settled on (DECISIONS.md).  `--fill=name:-1.6/-0.5`
+sets the two levels by hand, positive-good, offence first.  A name not listed keeps the 0 fill, so the
+incumbent and the fill can be paired in one run by handing the same parquet in twice under two names.
+
+**`--offset=N`** asks the rankings N seasons away instead of the adjacent one.  The trade set
+(`scripts/70_tradeset.py`) is fitted on the games one season either side of the rated one, so scoring it
+at the default offset would be scoring a fit on the very rows it used; at 2 the scored games are outside
+its window.  Both arms of any comparison must use the same offset, and the absolute numbers move with it.
+
 Each table needs `player_id`, `season`, `rating_off`, `rating_def` (both positive-good) and `poss_off`.
 Writes outputs/yoy_<tag>.parquet with one row per scored season x direction x table x split x group.
 """
@@ -36,15 +51,22 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from eracoef.config import load_config  # noqa: E402
-from eracoef.holdout import SPLITS, Context, Holdout, Ratings, paired, pooled  # noqa: E402
+from eracoef.holdout import (SPLITS, Context, Holdout, Ratings, ReplacementSystem,  # noqa: E402
+                             paired, pooled)
 
 ROOT = Path(__file__).resolve().parents[1]
-DIRECTIONS = {"prev": -1, "next": +1}     # which season's rankings predict the scored one
+# which season's rankings predict the scored one.  `--offset=N` moves both directions out to N
+# seasons: the trade set needs 2, because its alpha is fitted on the games one season either side and
+# scoring it there would be scoring a fit on its own rows.
+def directions(offset: int = 1) -> dict:
+    return {"prev": -int(offset), "next": +int(offset)}
 
 
-def _flag(name, default=None):
-    hit = [a for a in sys.argv[1:] if a.startswith(f"--{name}=")]
-    return hit[0].split("=", 1)[1] if hit else default
+
+# The shared command line (scripts/_cli.py): `flag` records every name it is asked for so
+# `check_flags` below can refuse one that was never asked for.  A misspelled flag used to be
+# ignored silently, which is how a run looks right and is wrong.
+from _cli import check_flags, flag as _flag, switch   # noqa: E402
 
 
 @dataclass
@@ -78,7 +100,35 @@ def load_table(path: Path, columns: str = "rating") -> pd.DataFrame:
                          "poss": t.poss_off.astype(float)})
 
 
+def _filled(system, spec):
+    """`spec` None = the criterion's 0 fill; "<max_poss>" = ReplacementSystem; "<off>/<def>" = fixed,
+    positive-good (a defensive rating is stored points-allowed, so its sign flips going in)."""
+    if not spec:
+        return system
+    if "/" in spec:
+        o, d = (float(x) for x in spec.split("/"))
+        return _FixedFill(system.name, system, o, -d)
+    poss, _, shrink = spec.partition("x")
+    return ReplacementSystem(system.name, system, max_poss=float(poss), shrink=float(shrink or 1.0))
+
+
+@dataclass
+class _FixedFill:
+    """`inner` with the absent player's rating set by hand, raw sign."""
+    name: str
+    inner: object
+    fill_o: float
+    fill_d: float
+
+    def train_for(self, h, ctx):
+        return self.inner.train_for(h, ctx)
+
+    def fit(self, train, ctx):
+        return Ratings(self.inner.fit(train, ctx).df, fill_o=self.fill_o, fill_d=self.fill_d)
+
+
 def main():
+    check_flags()      # refuse a flag this script does not understand (scripts/_cli.py)
     cfg = load_config(ROOT / "config.yaml")
     spec = _flag("rankings")
     if not spec:
@@ -93,8 +143,23 @@ def main():
     tag = _flag("tag", "yoy")
     first, last = int(_flag("first", cfg["holdout"]["first"])), int(_flag("last", cfg["holdout"]["last"]))
 
-    systems = [NeighbourTable(f"{name}:{d}", t, off, frozenset(t.season.unique()))
-               for name, t in tables.items() for d, off in DIRECTIONS.items()]
+    fills = {}
+    for part in (_flag("fill", "") or "").split(","):
+        if part:
+            name, spec = part.rsplit(":", 1)
+            fills[name] = spec
+    unknown = set(fills) - set(tables)
+    assert not unknown, f"--fill names not in --rankings: {sorted(unknown)}"
+    systems = []
+    offset = int(_flag("offset", "1"))
+    if offset != 1:
+        print(f"offset {offset}: each season is predicted by the rankings {offset} seasons before and after it")
+    for name, t in tables.items():
+        for d, off in directions(offset).items():
+            sysm = NeighbourTable(f"{name}:{d}", t, off, frozenset(t.season.unique()))
+            systems.append(_filled(sysm, fills.get(name)))
+    for name, spec in fills.items():
+        print(f"fill {name}: {spec if '/' in spec else f'mean rating of the table players under {spec} possessions'}")
     ctx = Context.load(cfg)
     ho = Holdout.from_config(cfg, first=first, last=last, ks=[1], lam=[0.0])
     t0 = time.time()

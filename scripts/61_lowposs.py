@@ -38,9 +38,10 @@ EDGES = [0.0, 250.0, 500.0, 1500.0, 4500.0, np.inf]
 LABELS = ["<250", "250-500", "500-1500", "1500-4500", "4500+"]
 
 
-def _flag(name, default=None):
-    hit = [a for a in sys.argv[1:] if a.startswith(f"--{name}=")]
-    return hit[0].split("=", 1)[1] if hit else default
+# The shared command line (scripts/_cli.py): `flag` records every name it is asked for so
+# `check_flags` below can refuse one that was never asked for.  A misspelled flag used to be
+# ignored silently, which is how a run looks right and is wrong.
+from _cli import check_flags, flag as _flag, switch   # noqa: E402
 
 
 def prior_for(system, ctx):
@@ -93,6 +94,7 @@ def score(system, ctx, panel) -> pd.DataFrame:
 
 
 def main():
+    check_flags()      # refuse a flag this script does not understand (scripts/_cli.py)
     cfg = load_config()
     ctx = Context.load(cfg)
     reg = registry(cfg)
@@ -129,7 +131,7 @@ def main():
                                 d_mse=per_w.mean(), se=se, z=per_w.mean() / se if se else np.nan,
                                 wins=int((per_w < 0).sum()), n_win=len(per_w)))
         print(pd.DataFrame(rep).round(4).to_string(index=False))
-    Path(cfg["_root"], "outputs").mkdir(exist_ok=True)
+    Path(cfg["_root"], "outputs", "csv").mkdir(parents=True, exist_ok=True)   # the file below is in csv/
     R.to_csv(Path(cfg["_root"]) / "outputs" / "csv" / "lowposs.csv", index=False)
     print(f"\nwrote outputs/csv/lowposs.csv ({time.time() - t0:.0f}s)")
 

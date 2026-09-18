@@ -47,9 +47,10 @@ MAP = "linear+log2&xlog&prior&tshare:linear+log2&xlog"     # the shipping map fa
 THREAD_VARS = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMBA_NUM_THREADS")
 
 
-def flag(name, default=None):
-    hit = [a for a in sys.argv[1:] if a.startswith(f"--{name}=")]
-    return hit[0].split("=", 1)[1] if hit else default
+# The shared command line (scripts/_cli.py): `flag` records every name it is asked for so
+# `check_flags` below can refuse one that was never asked for.  A misspelled flag used to be
+# ignored silently, which is how a run looks right and is wrong.
+from _cli import check_flags, flag as flag, switch   # noqa: E402
 
 
 # --------------------------------------------------------------------------- the space
@@ -170,6 +171,7 @@ def _job(args):
 
 # --------------------------------------------------------------------------- the study
 def main():
+    check_flags()      # refuse a flag this script does not understand (scripts/_cli.py)
     import multiprocessing
     from concurrent.futures import ProcessPoolExecutor
 

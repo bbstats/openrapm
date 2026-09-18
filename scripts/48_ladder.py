@@ -52,4 +52,5 @@ print(f"\n=== paired against {REF}; negative = better; verdict needs both K")
 for level in ("stint", "game"):
     print(f"\n-- {level} level")
     print(V[V.level == level].drop(columns="level").to_string(index=False))
+(Path(files[0]).parent / "csv").mkdir(parents=True, exist_ok=True)
 V.to_csv(Path(files[0]).parent / "csv" / f"ladder_vs_{REF}.csv", index=False)

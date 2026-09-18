@@ -32,9 +32,10 @@ SUFFIX = re.compile(r"\b(jr|sr|ii|iii|iv|v)\b")
 MIN_POSS = 1000
 
 
-def flag(name, default=None):
-    hit = [a for a in sys.argv[1:] if a.startswith(f"--{name}=")]
-    return hit[0].split("=", 1)[1] if hit else default
+# The shared command line (scripts/_cli.py): `flag` records every name it is asked for so
+# `check_flags` below can refuse one that was never asked for.  A misspelled flag used to be
+# ignored silently, which is how a run looks right and is wrong.
+from _cli import check_flags, flag as flag, switch   # noqa: E402
 
 
 def norm(s: str) -> str:
@@ -124,6 +125,7 @@ def stability(cfg, seasons):
 
 
 def main():
+    check_flags()      # refuse a flag this script does not understand (scripts/_cli.py)
     cfg = load_config()
     seasons = [int(s) for s in flag("seasons", "2024,2025,2026").split(",")]
     if len(sys.argv) > 1 and sys.argv[1] == "stability":

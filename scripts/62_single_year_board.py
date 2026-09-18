@@ -10,6 +10,7 @@
                                            [--player_folds=0|5] [--unshrink_label=0|1] [--lambda_player=13037|cv|<value>]
                                            [--lambda_off=<value>] [--lambda_def=<value>]
                                            [--save_priors=<name>] [--priors_from=<name>] [--centre=1]
+                                           [--blend_off=<x>/<k>/<a|lin>] [--blend_def=<x>/<k>/<a|lin>]
 
 `--player_folds=5` (2026-09-14, the owner's call after the memorisation test): the SPM is fitted once
 per player fold and every player's prior comes from the fit that never saw any of his rows, so it cannot
@@ -38,6 +39,20 @@ averaged over every season but the rated one.  `singleyear.season_rows` / `singl
 leave-one-season-out RAPM with one season in it has nothing left.  `--boards=` restricts which seasons a
 rating is produced for, which is how a change is measured on two seasons instead of thirty.
 
+Three more flags, all off by default and none of them in the shipped run:
+
+  `--trade_weight=F`   weight every training row of the prior by its player's `team_movement`
+                       (1 minus the share of his possessions on his most-played team) plus F.  The
+                       owner's idea, 2026-09-16: a label is only identified by team variation, so
+                       weight the rows by how much of it each player has.  F = 0 drops the one-team
+                       players outright.  `--rows=chunks` only; it has no effect on the other row
+                       shapes.  `singleyear.team_movement` / `reweight_by_movement`.
+  `--dump_shap=NAME`   write outputs/prior_shap_NAME.parquet: per feature, how far one moves a
+                       player's prior.  Diagnostic; changes no number.
+  `--unshrink_floor=N` the possession floor used by `unshrink_label` when `--unshrink_label` is on
+                       (default 4,444).  The un-shrunk label was measured and REJECTED on the eye
+                       test (DECISIONS.md), so this is here for reproducing that, not for use.
+
 `--exclude_neighbours=N` also keeps the N seasons either side of the rated one out of the target and out
 of the prior's training rows.  That is the setting for the year-over-year test (`scripts/63_yoy.py`),
 which scores a season's rankings on the neighbouring seasons' games: with the default 0 the prior's
@@ -56,7 +71,7 @@ For each season H:
      cross-validation over whole games on a closeness-weighted team-game objective.
 
 Nothing that touches season H is ever fit on season H, and no player's own other seasons reach his H
-rating except through population-level model coefficients ("single year or bust", HANDOFF ruling 12).
+rating except through population-level model coefficients ("single year or bust", HANDOFF ruling 2).
 
 **Two targets, one per side.**  The offensive fit explains `xpts_ft` -- points with made free throws
 replaced by the shooter's padded expectation -- and the defensive fit explains `x3def_w0.25`, which also
@@ -120,9 +135,10 @@ BOARD_CONTEXT_LAMBDAS = np.array([0.0, 1.0e3])
 SCORE_TARGET = "pts"        # the board is always SCORED on the points that were actually scored
 
 
-def _flag(name, default=None):
-    hit = [a for a in sys.argv[1:] if a.startswith(f"--{name}=")]
-    return hit[0].split("=", 1)[1] if hit else default
+# The shared command line (scripts/_cli.py): `flag` records every name it is asked for so
+# `check_flags` below can refuse one that was never asked for.  A misspelled flag used to be
+# ignored silently, which is how a run looks right and is wrong.
+from _cli import check_flags, flag as _flag, switch   # noqa: E402
 
 
 def _target(name):
@@ -218,6 +234,40 @@ class OutOfPlayerSPM:
         return out
 
 
+def prior_shap_slopes(model, train: pd.DataFrame, feats: list, side: str, season: int) -> pd.DataFrame:
+    """Per feature, how far one standard deviation of it moves the PRIOR, out of player fold.
+
+    The same quantity `scripts/72_tradeset_shap.py` reports for the trade-set correction, so the two
+    can be read side by side: `slope_per_sd` is the weighted least-squares slope of the feature's
+    TreeSHAP contribution on the standardised feature, in points per 100 of prior per standard
+    deviation of the statistic.  Signed.  The plain mean of a contribution is ~0 by construction
+    (contributions are deviations from the model's own mean), so it is reported only to show that.
+
+    Out of fold: each player's contributions come from the fit that never saw a row of his, matching
+    how his prior is actually produced.
+    """
+    X = train[feats].to_numpy(float)
+    contribution = model.full_.shap_values(X)
+    ids = train.index.to_numpy()
+    for fold, excluded in zip(model.fold_models_, model.excluded_):
+        index = np.fromiter((p in excluded for p in ids), dtype=bool, count=len(ids))
+        if index.any():
+            contribution[index] = fold.shap_values(X[index])
+    weight = train.weight.to_numpy(float)
+    out = []
+    for j, name in enumerate(feats):
+        column, part = X[:, j], contribution[:, j]
+        mean_x = float(np.average(column, weights=weight))
+        sd_x = float(np.sqrt(np.average((column - mean_x) ** 2, weights=weight)))
+        standardised = (column - mean_x) / (sd_x if sd_x > 0 else 1.0)
+        mean_shap = float(np.average(part, weights=weight))
+        out.append(dict(season=season, side=side, feature=name,
+                        slope_per_sd=float(np.average((part - mean_shap) * standardised, weights=weight)),
+                        mean_signed=mean_shap,
+                        moves_typical=float(np.average(np.abs(part), weights=weight))))
+    return pd.DataFrame(out)
+
+
 def _saved_fold_prior(folds: list, design):
     """The saved per-fold priors, served by matching the ridge's train mask to the fold it holds out."""
     fold = game_folds(design, 5, 0)
@@ -267,14 +317,77 @@ def _fold_prior_builder(wd_o, wd_d, models, held_frames, model_feats):
     return fold_prior
 
 
+def blend_prior(prior: dict, poss: dict, x: float, k: float, a: float) -> dict:
+    """The owner's replacement blend (2026-09-15): `prior * w(n) + x * (1 - w(n))`.
+
+    Two shapes for the weight.  `a` a number gives the rational weight `w = n^a / (n^a + k^a)`, which never
+    quite reaches the prior.  **`a = "lin"` gives the owner's ramp (2026-09-15, experiment 17): `w =
+    min(n / k, 1)`** -- no prior at all at zero possessions, exactly the replacement level `x` there, and
+    exactly the prior at `k` possessions and above, linear in between.  `k` is then the possession count at
+    which the prior is trusted whole, and it is the only thing swept.
+
+    `n` is the player's possessions ON THAT SIDE -- offensive possessions on offence, defensive on defence
+    -- and `x` is in the same raw sign as the prior it is blended into, so a defensive `x` above zero means
+    a player with few possessions allows more.  `k` and `a` come from `scripts/67_blend_apm.py`, fitted
+    against APM and never RAPM: a ridge penalty pulls his RAPM to zero, so a blend fitted on RAPM would put
+    `x` at zero and call a man nobody has seen league average.
+
+    Applied to the prior only.  The label is untouched -- experiment 1 put the tier level INTO the label
+    and scrambled the top of the list, because "few career possessions" is what a rookie looks like at
+    inference and the booster handed them the tier's optimism.
+    """
+    if not k:
+        return prior
+    linear = isinstance(a, str)
+    out = {}
+    for pid, value in prior.items():
+        n = float(poss.get(pid, 0.0))
+        if linear:
+            w = min(n / k, 1.0) if n > 0 else 0.0
+        else:
+            w = 0.0 if n <= 0 else n ** a / (n ** a + k ** a)
+        out[pid] = value * w + x * (1.0 - w)
+    return out
+
+
+def side_possessions(design) -> tuple[dict, dict]:
+    """{player_id: offensive possessions}, {player_id: defensive possessions} for one season's design.
+
+    The two differ by about nine possessions in twenty-five hundred, but the owner asked for the right
+    count on each side and `design.game_poss` already carries both.
+
+    The board's OWN `poss_def` column is a different thing and is still a copy of `poss_off` (see
+    where the board is assembled below).  This docstring used to claim that copy was 'fixed
+    alongside this'; it was not.  Changing it would move a column in every published season's
+    parquet for about 0.4% of a possession count, so it wants a rebuild and a decision of its own
+    rather than a quiet edit.  The one reader of it, scripts/68_exposure_slope.py, already detects
+    and documents the copy.
+    """
+    table = (design.game_poss.groupby("psx_idx")[["poss_off", "poss_def"]].sum()
+             .reindex(range(design.spec.n_psx)).fillna(0.0))
+    psx = design.spec.psx_table
+    ids = psx["player_id"].to_numpy()
+    off = table.poss_off.to_numpy()[psx["psx_idx"].to_numpy()]
+    dfe = table.poss_def.to_numpy()[psx["psx_idx"].to_numpy()]
+    return (pd.Series(off).groupby(ids).sum().to_dict(),
+            pd.Series(dfe).groupby(ids).sum().to_dict())
+
+
 def _first_75(design):
     position = season_frac(design.games)[design.rows["game_idx"].to_numpy()]
     return design.subset(position < 0.75), design.subset(position >= 0.75)
 
 
 def main():
+    check_flags()      # refuse a flag this script does not understand (scripts/_cli.py)
     cfg = load_config(ROOT / "config.yaml")
     ctx = Context.load(cfg)
+    # one row per player, season and team, for the movement weighting; loaded here because the model
+    # layer may not open a file
+    roles_played = None
+    if _flag("trade_weight") is not None:
+        _roles = pd.read_parquet(ROOT / "data/cache/roles_RSPO.parquet")
+        roles_played = _roles[_roles.poss_on > 0][["player_id", "season", "team_id", "poss_on"]]
     first, last = int(_flag("first", 1997)), int(_flag("last", 2026))
     out = ROOT / "outputs" / f"{_flag('out', 'season_ratings_sy')}.parquet"
     do_score = _flag("score", "1") not in ("0", "no", "false")
@@ -302,6 +415,18 @@ def main():
     # possessions = bigger number".  Multiplying by (n + lambda) / n puts every player's label on one scale.
     unshrink = _flag("unshrink_label", "0") not in ("0", "no", "false")
     unshrink_floor = float(_flag("unshrink_floor", 4444))       # see unshrink_label()
+    # the owner's rule (2026-09-16): weight each player's training rows by how much TEAM VARIATION sits
+    # behind his label, 1 minus the share of his possessions on his most-played team.  The label is one
+    # career-pooled RAPM, so its identification rests on the whole career's movement; a player who never
+    # left one team teaches the map from the most teammate-collinear evidence there is.  The value given
+    # is a FLOOR added to the movement: 0 is the rule exactly and drops one-team players, 0.25 keeps them
+    # at a quarter weight.  Absent = off, the shipped behaviour.  `--rows=chunks` only.
+    trade_weight = None if _flag("trade_weight") is None else float(_flag("trade_weight"))
+    # --dump_shap=<name> writes outputs/prior_shap_<name>.parquet: per feature, how far one
+    # standard deviation moves the prior, signed, out of player fold.  Comparable with
+    # scripts/72_tradeset_shap.py, which reports the same quantity for the correction.
+    dump_shap = _flag("dump_shap")
+    shap_rows: list = []
     # experiment 2: the ridge's player penalty fixed at one value for every season instead of chosen by
     # cross-validation inside the season (which cannot validate a per-player residual and switches the
     # games off in 2024-2026).  Chosen on the year-over-year test, once.
@@ -311,6 +436,18 @@ def main():
     lambda_player = None if str(lambda_player).lower() == "cv" else lambda_player
     # the priors are the slow stage (five booster fits a season); save them once, sweep the ridge on them
     save_priors, priors_from = _flag("save_priors"), _flag("priors_from")
+    # experiment 12 (2026-09-15, the owner's design): blend the PRIOR toward a replacement level before the
+    # ridge sees it -- `prior * w(n) + x * (1 - w(n))`, `w = n^a / (n^a + k^a)`, `n` the possessions on that
+    # side.  `--blend_off=x/k/a` and `--blend_def=x/k/a`, each in the raw sign of its own prior; the pooled
+    # APM fit of scripts/67_blend_apm.py reads -10.8/64.2/1 on offence and +16.3/12.1/1 on defence.
+    def _blend_flag(name):
+        raw = _flag(name)
+        if not raw:
+            return None
+        x, k, a = raw.split("/")
+        # `a = lin` is the owner's linear ramp, `w = min(n / k, 1)`; anything else is the rational weight
+        return float(x), float(k), ("lin" if a.strip().lower() == "lin" else float(a))
+    blend = {"O": _blend_flag("blend_off"), "D": _blend_flag("blend_def")}
     # experiment 7: the booster's settings, the same change on both sides.  --params_mult=l2_leaf_reg:5,...
     # multiplies a numeric setting; --params_set=depth:3,... sets one.
     params_mult = {k: float(v) for k, v in (p.split(":") for p in _flag("params_mult", "").split(",") if p)}
@@ -337,7 +474,8 @@ def main():
           f"exclude_neighbours {exclude_neighbours}; rows {row_shape} (sizes {chunk_sizes}); crossfit {crossfit}; "
           f"params_mult {params_mult or '{}'}; params_set {params_set or '{}'}; "
           f"player_folds {player_folds}; unshrink_label {unshrink}; lambda_player {lambda_player or 'CV'}; "
-          f"priors_from {priors_from or '-'}; save_priors {save_priors or '-'}", flush=True)
+          f"priors_from {priors_from or '-'}; save_priors {save_priors or '-'}; "
+          f"blend_off {blend['O'] or '-'}; blend_def {blend['D'] or '-'}", flush=True)
     if lambda_player is not None:
         global BOARD_PLAYER_LAMBDAS, BOARD_CONTEXT_LAMBDAS, BOARD_OFFENSE_LAMBDAS, BOARD_DEFENSE_LAMBDAS
         BOARD_PLAYER_LAMBDAS = np.array([float(lambda_player)])
@@ -406,6 +544,21 @@ def main():
                          if chunk_sizes == "all" else chunk_sizes)
                 train = sy.chunk_rows(label(unseen), training, column, feats, sizes=sizes)
                 model_feats = feats + sy.CHUNK_FEATURES
+                if trade_weight is not None:
+                    # the owner's rule (2026-09-16): weight a player's rows by 1 minus the share of his
+                    # possessions on his most-played team, over the seasons his label was fitted on.  The
+                    # label is one career-pooled RAPM, so how well it is identified depends on the team
+                    # variation behind all of it, and this is that quantity.
+                    played = roles_played[~roles_played.season.isin(unseen)]
+                    per_team = played.groupby(["player_id", "team_id"], as_index=False).poss_on.sum()
+                    moved = sy.team_movement(per_team, min_poss=MIN_POSSESSIONS)
+                    train = sy.reweight_by_movement(train, moved, floor=trade_weight)
+                    if season == boards[0]:
+                        kept = (moved.reindex(train.index.unique()).fillna(0.0) + trade_weight) > 0
+                        print(f"  prior {side}: weighted by team movement, floor {trade_weight:g}; "
+                              f"mean movement {moved.mean():.3f}, "
+                              f"{int((~kept).sum())} of {len(kept)} players left at zero weight",
+                              flush=True)
             else:
                 # one label per TRAINING season: the RAPM with the rated season(s) and that season out, so
                 # a row's box score and its label share no game.  One solve each, ~0.7 s, cached per target
@@ -417,6 +570,8 @@ def main():
             if season == boards[0]:
                 print(f"  prior {side}: {len(train):,} training rows ({row_shape})", flush=True)
             model = OutOfPlayerSPM(params, player_folds).fit(train, model_feats)
+            if dump_shap:
+                shap_rows.append(prior_shap_slopes(model, train, model_feats, side, season))
             if player_folds > 1 and season == boards[0]:
                 print(f"  prior {side}: {player_folds} player folds balanced on the label; training-mean "
                       f"shift per held-out fold {np.round(model.shift_, 4).tolist()} per 100 "
@@ -426,12 +581,34 @@ def main():
             prior[side] = dict(zip(held.player_id.to_numpy(), model.predict(held, model_feats)))
             models[side], held_frames[side], model_feats_of[side] = model, held, model_feats
 
+        # the blend, before anything downstream sees the prior.  The cross-fitted fold priors get the
+        # SAME transform below: the free scale is priced on those columns, so a fold prior that skipped
+        # the blend would price the scale on a different prior from the one that ships.
+        poss_side = {}
+        if any(blend.values()):
+            off_poss, def_poss = side_possessions(design_for(names["O"], season))
+            poss_side = {"O": off_poss, "D": def_poss}
+            for side in ("O", "D"):
+                if blend[side]:
+                    prior[side] = blend_prior(prior[side], poss_side[side], *blend[side])
+
         fold_prior = None
         if saved is not None and crossfit != "0":
             fold_prior = _saved_fold_prior(saved[season]["folds"], design_for(names["O"], season))
         elif crossfit != "0":
             wd_o, wd_d = design_for("xpts_ft", season), design_for("x3def", season)
             fold_prior = _fold_prior_builder(wd_o, wd_d, models, held_frames, model_feats_of)
+        if fold_prior is not None and any(blend.values()):
+            inner = fold_prior
+
+            def fold_prior(train_mask, _inner=inner, _poss=poss_side):
+                po, pd_ = _inner(train_mask)
+                if blend["O"]:
+                    po = blend_prior(po, _poss["O"], *blend["O"])
+                if blend["D"]:
+                    pd_ = blend_prior(pd_, _poss["D"], *blend["D"])
+                return po, pd_
+
         if save_priors:
             # the full priors and, per game fold the ridge will use, the priors rebuilt without that fold
             fold = game_folds(design_for(names["O"], season), 5, 0)
@@ -470,6 +647,11 @@ def main():
                   f"  scale {d['scale_off']:.2f} / {d['scale_def']:.2f}  miss {d['miss']:.3f}", flush=True)
         pd.concat(rows, ignore_index=True).to_parquet(out, index=False)
 
+    if dump_shap and shap_rows:
+        out_shap = ROOT / "outputs" / f"prior_shap_{dump_shap}.parquet"
+        pd.concat(shap_rows, ignore_index=True).to_parquet(out_shap, index=False)
+        print(f"wrote {out_shap.name}: prior feature slopes, {len(shap_rows)} fits")
+
     board = pd.concat(rows, ignore_index=True)
     # The owner, 2026-09-14: "players' values are not centered well ... guys are positive that should be
     # pushed down".  The SPM prior's possession-weighted mean is not zero (the label's mean is positive for
@@ -488,7 +670,7 @@ def main():
     # 52_site.py's schema: raw sign in, positive-good out, one row per player-season
     board = board.rename(columns={"possessions": "poss_off"})
     board["poss_season"] = board.poss_off
-    board["poss_def"] = board.poss_off
+    board["poss_def"] = board.poss_off       # a copy, NOT the defensive count -- see side_possessions
     board["rating_off"] = board.offense
     board["rating_def"] = -board.defense                 # positive good on both ends
     board["rating_total"] = board.rating_off + board.rating_def

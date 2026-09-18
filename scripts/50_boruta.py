@@ -48,9 +48,10 @@ OUT = Path(cfg["_root"]) / "outputs"
 G = cfg.get("gbdt", {})
 
 
-def _flag(name, default):
-    hit = [a for a in sys.argv[1:] if a.startswith(f"--{name}=")]
-    return hit[0].split("=", 1)[1] if hit else default
+# The shared command line (scripts/_cli.py): `flag` records every name it is asked for so
+# `check_flags` below can refuse one that was never asked for.  A misspelled flag used to be
+# ignored silently, which is how a run looks right and is wrong.
+from _cli import check_flags, flag as _flag, switch   # noqa: E402
 
 
 trials = int(_flag("trials", G.get("boruta_trials", 50)))
@@ -132,6 +133,8 @@ def pair_training_rows(side, feats):
 # times over.  "cheap" is the unbagged shape the defensive side ships anyway.
 PARAMS = {"cheap": {"linear_leaves": True, "cross_features": False},
           "config": dict(G.get("params", {}) or {})}[_flag("params", "cheap")]
+
+check_flags()      # refuse a flag this script does not understand (scripts/_cli.py)
 
 t0 = time.time()
 yaml_lines = []

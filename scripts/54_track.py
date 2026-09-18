@@ -37,9 +37,10 @@ PNG = DOCS / "progress.png"
 BLUE, ORANGE, TEXT, TEXT2, SURFACE, GRID = "#2a78d6", "#eb6834", "#0b0b0b", "#52514e", "#fcfcfb", "#e6e5e1"
 
 
-def _flag(name, default=None):
-    hit = [a for a in sys.argv[1:] if a.startswith(f"--{name}=")]
-    return hit[0].split("=", 1)[1] if hit else default
+# The shared command line (scripts/_cli.py): `flag` records every name it is asked for so
+# `check_flags` below can refuse one that was never asked for.  A misspelled flag used to be
+# ignored silently, which is how a run looks right and is wrong.
+from _cli import check_flags, flag as _flag, switch   # noqa: E402
 
 
 def measure(system: str, k: int, workers: int = 4, maps=("linear+sat",)) -> dict:
@@ -127,10 +128,11 @@ def chart(log: pd.DataFrame):
 
 
 def main():
+    check_flags()      # refuse a flag this script does not understand (scripts/_cli.py)
     systems = [x for x in (_flag("systems") or _flag("system", "mspi1")).split(",") if x]
     k = int(_flag("k", 3))
     label = _flag("label")
-    if "--dry" in sys.argv:
+    if switch("dry"):
         chart(pd.read_csv(LOG, parse_dates=["when"]))
         return
     for system in systems:
@@ -143,7 +145,7 @@ def main():
         print(f"{system}: game {m['game']:.4f} (unmapped {m['game_unmapped']:.4f}) seconds {m['seconds']:.1f}", flush=True)
     show = log[["when", "label", "system", "game", "seconds", "wall", "loss_frac", "time_frac", "true_loss"]].copy()
     print(show.to_string(index=False, float_format=lambda v: f"{v:.4f}"))
-    if "--push" in sys.argv:
+    if switch("push"):
         subprocess.run(["git", "add", str(LOG), str(PNG)], cwd=ROOT, check=True)
         subprocess.run(["git", "commit", "-q", "-m", f"Progress: {label} ({m['game']:.3f}, {m['seconds']:.0f}s)"], cwd=ROOT, check=True)
         subprocess.run(["git", "push", "-q"], cwd=ROOT, check=True)

@@ -47,21 +47,27 @@ from eracoef.xshoot import (DEFENSE_TARGETS, SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS, 
 
 SHOT_COLS_ALL = [*SHOT_TOTAL_COLS, *SHOT_LEAGUE_COLS]
 pd.set_option("display.width", 250, "display.max_columns", 60, "display.precision", 3)
+from _cli import check_flags, flag, switch   # noqa: E402
+
 cfg = load_config()
 OUT = Path(cfg["_root"]) / "outputs"
 (OUT / "csv").mkdir(exist_ok=True)
 S = cfg.get("spm", {})
 LAM_P, RAT_P = float(cfg["lam_plugin"]), float(cfg["lam_ratio_plugin"])
 CAP = float(cfg.get("roles", {}).get("share_cap", 0.9))
-CHECK = "--check" in sys.argv
+CHECK = switch("check")
 CHECK_LAMS = [float(x) for x in S.get("apm_check_lams", [30, 100, 300])] if CHECK else []
-SEASON = "--season" in sys.argv
+# `--season` is a bare switch: one window per season instead of the blocks.  It used to be matched by
+# `"--season" in sys.argv`, so the natural-looking `--season=2026` matched nothing, the run silently
+# rebuilt the BLOCK panel instead, and it wrote it over the tracked artifacts/role_panel.parquet.
+SEASON = switch("season")
 WINDOWS = ([(s_, s_) for s_ in range(int(cfg["first_season"]), int(cfg["last_season"]) + 1)] if SEASON
            else window_seasons(cfg))
-_out = [a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--out=")]
-PANEL_PATH = Path(cfg["_root"]) / (_out[0] if _out else
+_out = flag("out")
+PANEL_PATH = Path(cfg["_root"]) / (_out if _out else
                                    ("outputs/role_panel_season.parquet" if SEASON else
                                     cfg.get("paths", {}).get("role_panel", "outputs/role_panel.parquet")))
+check_flags()      # refuse a flag this script does not understand (scripts/_cli.py)
 # a panel other than the shipped one names its own reports, so a --season build does not overwrite the
 # block panel's spm_coefs.csv / role_panel_report.csv
 TAG = "" if PANEL_PATH.stem == "role_panel" else "_" + PANEL_PATH.stem.replace("role_panel_", "")

@@ -202,7 +202,7 @@ class Context:
 
     def bigness(self, season: int, min_minutes: float = 500.0) -> dict:
         """player_id -> True if in the top tercile of the big-man score (orb + blk + 0.3 drb - 0.5 ast - 0.4 fg3m
-        per 36, the definition of scripts/22_vs_consensus.py) among players with `min_minutes` that season."""
+        per 36, the definition of the retired scripts/22_vs_consensus.py) among players with `min_minutes`."""
         if season not in self._bigness:
             from .boxtable import season_box
             b = season_box([season], list(SEASON_PHASES), self.cfg)
@@ -315,7 +315,10 @@ def beta_team(labs, ctx: Context) -> np.ndarray:
     let the prior see the answer.
     """
     if ctx.base is None:
-        raise RuntimeError("outputs/coefs.parquet is not built; run scripts/04_fit_all.py")
+        raise RuntimeError(
+            "outputs/coefs.parquet is not built.  scripts/04_fit_all.py, which used to build it, was "
+            "retired in 73f0ab9; the code survives as eracoef.windows.run_all + write_outputs, which "
+            "nothing now calls.  Only the linear-box systems (rapm, pi) need this file.")
     fe = ctx.features
     d = ctx.base[~ctx.base.window.isin(labs)]
     o = d[d.side == "O"].groupby("feature")["beta"].mean().reindex(fe).to_numpy()
@@ -326,7 +329,9 @@ def beta_team(labs, ctx: Context) -> np.ndarray:
 def beta_hybrid(labs, ctx: Context) -> np.ndarray:
     """The shipped prior: player-priced offense, no defensive prior at all."""
     if ctx.panel is None:
-        raise RuntimeError("outputs/xrapm_panel.parquet is not built; run scripts/27_xrapm_prior.py")
+        raise RuntimeError("outputs/xrapm_panel.parquet is not built; run scripts/49_role_panel.py "
+                           "(scripts/27_xrapm_prior.py, which the message used to name, was retired "
+                           "in 73f0ab9)")
     return hybrid_beta(ctx.panel, ctx.features, labs)
 
 
@@ -453,6 +458,13 @@ class ReplacementSystem:
     name: str
     inner: System
     max_poss: float = 500.0
+    shrink: float = 1.0        # a fraction of that level.  The year-over-year test settled on 0.25
+                               # (DECISIONS.md: the only depth better in BOTH directions -- deeper
+                               # keeps paying on departures and stops paying on rookies).  The
+                               # default stays 1.0 because the registered systems were built with it.
+
+    def train_for(self, h, ctx: Context):
+        return self.inner.train_for(h, ctx) if hasattr(self.inner, "train_for") else ctx.neighbourhood(h, ctx.current_k)
 
     def fit(self, train, ctx: Context) -> Ratings:
         r = self.inner.fit(train, ctx)
@@ -460,7 +472,8 @@ class ReplacementSystem:
         if len(low) == 0:
             return r
         w = low.poss.to_numpy(dtype=float)
-        return Ratings(r.df, fill_o=float(np.average(low.o, weights=w)), fill_d=float(np.average(low.d, weights=w)))
+        return Ratings(r.df, fill_o=self.shrink * float(np.average(low.o, weights=w)),
+                       fill_d=self.shrink * float(np.average(low.d, weights=w)))
 
 
 @dataclass
@@ -1071,6 +1084,21 @@ def fit_rank_map(rank: pd.DataFrame, system: str, side: str, k: int, exclude_h=N
 
 
 # ---------------------------------------------------------------------------------------- validation and diagnostics
+def consensus_table_missing(out) -> str:
+    """Why `outputs/vs_consensus.parquet` is not there, and what to use instead.
+
+    The script that built it, `scripts/22_vs_consensus.py`, was deleted in 73f0ab9 and nothing
+    replaced it, so this path has been dead on every machine since.  The live external check is
+    `tests/test_vs_consensus.py`, which joins `data/external/consensus.csv` (tracked) to a board
+    by name; point `OPENRAPM_BOARD` at a candidate to score it without touching the shipped one.
+    """
+    return (f"{out} is not built, and nothing in the tree builds it any more: "
+            "scripts/22_vs_consensus.py was deleted in 73f0ab9.  The external check that survived it "
+            "is the test suite -- `OPENRAPM_BOARD=<your board>.parquet pytest "
+            "tests/test_vs_consensus.py -q` -- which reads data/external/consensus.csv directly.  "
+            "This mode needs a per-player table with a `bigness` column and no longer has one.")
+
+
 def vs_consensus(rat: Ratings, cfg, min_poss: float | None = None) -> dict:
     """The external check, read once: rank agreement with the consensus of modern metrics on 2024-26.
 
@@ -1079,7 +1107,7 @@ def vs_consensus(rat: Ratings, cfg, min_poss: float | None = None) -> dict:
     """
     out = Path(cfg["_root"]) / "outputs" / "vs_consensus.parquet"
     if not out.exists():
-        raise RuntimeError("outputs/vs_consensus.parquet is not built; run scripts/22_vs_consensus.py")
+        raise RuntimeError(consensus_table_missing(out))
     from scipy.stats import spearmanr
     min_poss = float(cfg.get("holdout", {}).get("consensus", {}).get("min_poss", 1000) if min_poss is None else min_poss)
     con = pd.read_parquet(out)[["player_id", "adj_offense", "adj_defense", "adj_overall", "bigness"]]

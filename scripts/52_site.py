@@ -25,8 +25,14 @@ from eracoef.config import load_config  # noqa: E402
 cfg = load_config()
 root = Path(cfg["_root"])
 
+# First path that exists wins, so the order IS the decision about what gets published.  The product
+# table goes first because it is what ships; `artifacts/season_ratings.parquet` is the older
+# scripts/60 system, kept for the tests, and publishing it would quietly replace the live rankings
+# with a superseded set (it rates Jokic 4th in 2026 where the shipped table has him 2nd).
 CANDIDATES = ([Path(os.environ["OPENRAPM_BOARD"])] if os.environ.get("OPENRAPM_BOARD") else
-              [root / "outputs" / "season_ratings.parquet", root / "artifacts" / "season_ratings.parquet"])
+              [root / "outputs" / "season_ratings_product.parquet",
+               root / "outputs" / "season_ratings.parquet",
+               root / "artifacts" / "season_ratings.parquet"])
 src = next((p for p in CANDIDATES if p.exists()), None)
 if src is None:
     raise SystemExit("no season board found.  Run `python scripts/60_season_board.py` first, or "
@@ -55,4 +61,5 @@ out.mkdir(parents=True, exist_ok=True)
 path = out / "ratings.json"
 path.write_text(json.dumps(dict(meta=meta, rows=rows), separators=(",", ":")), encoding="utf-8")
 print(f"wrote {path.relative_to(root)}: {len(rows)} rows over {len(meta['seasons'])} seasons "
-      f"({meta['seasons'][0]}-{meta['seasons'][-1]}), {path.stat().st_size / 1e6:.1f} MB, from {src.name}")
+      f"({meta['seasons'][0]}-{meta['seasons'][-1]}), {path.stat().st_size / 1e6:.1f} MB, "
+      f"from {src.relative_to(root) if src.is_relative_to(root) else src}")

@@ -20,6 +20,8 @@ mean the same thing in every script.
 """
 from __future__ import annotations
 
+import warnings
+
 import pandas as pd
 
 from .holdout import (PluginSystem, RankMappedSystem, ReplacementSystem, SplitSystem, beta_hybrid, beta_mixed, beta_none,
@@ -559,7 +561,7 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
 
         # ---------------------------------------------------------------- the season board's own penalties
         # The owner, 2026-09-09: *"it should never be single number / single number. o/d are different"*, and
-        # single season only -- the 3-season chunk board is on its way out (Part 0 ruling 3).  So sweep the
+        # single season only -- the 3-season chunk board is on its way out (the owner, 2026-09-10; HANDOFF ruling 1 now).  So sweep the
         # SEASON board's two player penalties apart, and a third bucket for players the season barely saw.
         # `sod_o<a>_d<b>`: offense at a x ks52_lam05's lambda, defense at b x it.  `_lp<r>` multiplies the
         # penalty on players under `low_poss_threshold` possessions by r on top of that.
@@ -685,7 +687,7 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
         # season / gs_pct / age) -- on the side where a single season is only 44% evidence.  `board_<side>_height_weight`
         # adds the binned pair (`gbdt_prior.BIO_BINS`; fine height and weight together name a player almost
         # uniquely, so binned is the only form allowed) to defense, to offense, or to both.
-        # ------------------------------------------------- how much he played, times what he did (ruling 10)
+        # ------------------------------------------------- how much he played, times what he did
         # The owner, 2026-09-10: "gs% * feature and poss played % x feature, for all available features,
         # boruta test adding in these interaction features".  Done: `--modes=rolex`, 179 candidates on pair
         # rows, 50 trials, both sides.  The result that makes the case is not which interaction features were accepted
@@ -921,8 +923,17 @@ def registry(cfg, rankmap=None, calmap=None) -> dict:
                                                                 offset=chain_offset(("O", "D"), "full")),
                                            defense=PluginSystem(f"mspi_{tag}_d", target=d_t, beta=beta_none,
                                                                 offset=chain_offset(("O", "D"), "full")))
-    except ImportError:
-        pass
+    except ImportError as e:
+        # This guard was written for the one import on its first line (`xshoot`, "once built").  It has
+        # since come to cover twenty, spread over 880 lines, and it swallowed all of them: an
+        # ImportError anywhere in the block truncated the registry at that point and said nothing, so
+        # the system you asked for came back "unknown" and the reason was invisible.  Narrowing the
+        # guard means de-indenting the whole block, which is a refactor of the file every experiment
+        # goes through; making the truncation audible costs four lines and is what actually loses the
+        # time.  If you are reading this warning, a name defined after the failing import is gone.
+        warnings.warn(f"the system registry stopped early: {e!r}.  {len(S)} systems were registered "
+                      f"before it; every system defined after that import is missing, and asking for "
+                      f"one by name will read as unknown.", RuntimeWarning, stacklevel=2)
     if rankmap:
         rank_table = pd.read_parquet(rankmap)
         have = set(rank_table.system)

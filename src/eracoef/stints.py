@@ -870,7 +870,9 @@ def build_season(season: int, phase: str, cfg, force=False, verbose=True):
     # the league's make probability by distance this season (the regular season's curve, for the
     # playoffs too), so every attempt carries the league's view of it into the shooter counters
     from .shotcurve import curve_for
-    curve = curve_for(season, cfg, verbose=verbose)
+    # `force` reaches here too: a curve cached from an incomplete scrape used to survive every
+    # later `02_stints.py --force`, because only the stints were rebuilt and the curve was not.
+    curve = curve_for(season, cfg, force=force, verbose=verbose)
     neutral_seasons = set(cfg.get("neutral_site_seasons_po", []))
     parts, diags, name_parts, shot_parts = [], [], [], []
     t0 = time.time()

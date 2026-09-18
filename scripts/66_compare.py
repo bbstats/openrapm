@@ -30,9 +30,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _flag(name, default=None):
-    hit = [a for a in sys.argv[1:] if a.startswith(f"--{name}=")]
-    return hit[0].split("=", 1)[1] if hit else default
+# The shared command line (scripts/_cli.py): `flag` records every name it is asked for so
+# `check_flags` below can refuse one that was never asked for.  A misspelled flag used to be
+# ignored silently, which is how a run looks right and is wrong.
+from _cli import check_flags, flag as _flag, switch   # noqa: E402
 
 
 def load(path: Path, season: int) -> pd.DataFrame:
@@ -211,6 +212,7 @@ def phone_body(merged: pd.DataFrame, names: list, season: int, top: int, title: 
 
 
 def main():
+    check_flags()      # refuse a flag this script does not understand (scripts/_cli.py)
     specs = [a for a in sys.argv[1:] if not a.startswith("--") and "=" in a]
     if len(specs) < 1:
         raise SystemExit(__doc__)

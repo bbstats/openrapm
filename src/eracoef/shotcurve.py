@@ -163,16 +163,33 @@ def curve_path(season: int, cfg) -> Path:
     return Path(cfg["_root"]) / "data" / "shotcurve" / f"{season}_RS.parquet"
 
 
-def season_shot_rows(season: int, cfg, phase: str = "RS") -> pd.DataFrame:
-    """Every field-goal attempt of a season, from the cached play-by-play."""
+# How much of a season's game log has to be readable before its curve is worth fitting.  One game
+# that will not parse is not a curve's problem; three hundred of them mean the play-by-play was never
+# fully scraped, and a curve fitted on what IS there is a different league's curve, quietly applied to
+# every shot of the season.
+MIN_READABLE_SHARE = 0.95
+
+
+def season_shot_rows(season: int, cfg, phase: str = "RS", min_share: float = MIN_READABLE_SHARE) -> pd.DataFrame:
+    """Every field-goal attempt of a season, from the cached play-by-play.
+
+    Raises when too little of the season parses: the caller's alternative is a curve built from a
+    partial scrape, which is the same shape as a correct one and cannot be told apart afterwards.
+    """
     from .ingest import fetch_pbp, game_table, load_gamelog
     games = game_table(load_gamelog(season, phase, cfg))
-    parts = []
+    parts, unreadable = [], []
     for g in games.itertuples(index=False):
         try:
             parts.append(shot_rows(fetch_pbp(g.game_id, cfg)))
-        except Exception:  # noqa: BLE001  a game that cannot be read is not a curve's problem
-            continue
+        except Exception as e:  # noqa: BLE001  one game that cannot be read is not a curve's problem
+            unreadable.append((g.game_id, repr(e)[:120]))
+    if len(games) and len(parts) < float(min_share) * len(games):
+        raise RuntimeError(
+            f"{season} {phase}: only {len(parts)} of {len(games)} games could be read "
+            f"({100 * len(parts) / len(games):.1f}%, floor {100 * float(min_share):.0f}%).  The "
+            f"play-by-play cache is incomplete -- rerun scripts/01_ingest.py for this season.  First "
+            f"failure: {unreadable[0] if unreadable else None}")
     return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=["three", "made", "bin"])
 
 
@@ -181,6 +198,8 @@ def curve_for(season: int, cfg, force: bool = False, verbose: bool = False) -> S
     path = curve_path(season, cfg)
     if path.exists() and not force:
         return ShotCurve(season, pd.read_parquet(path))
+    # `season_shot_rows` raises rather than returning a thin sample: nothing downstream could tell a
+    # curve fitted on 40% of a season from one fitted on all of it, and the cache would keep it.
     rows = season_shot_rows(season, cfg, "RS")
     curve = fit_curve(rows, season)
     path.parent.mkdir(parents=True, exist_ok=True)

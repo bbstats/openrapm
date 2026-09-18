@@ -33,9 +33,10 @@ cfg = load_config()
 OUT = Path(cfg["_root"]) / "outputs"
 
 
-def flag(name, default=None):
-    hit = [a for a in sys.argv[1:] if a.startswith(f"--{name}=")]
-    return hit[0].split("=", 1)[1] if hit else default
+# The shared command line (scripts/_cli.py): `flag` records every name it is asked for so
+# `check_flags` below can refuse one that was never asked for.  A misspelled flag used to be
+# ignored silently, which is how a run looks right and is wrong.
+from _cli import check_flags, flag as flag, switch   # noqa: E402
 
 
 def names_of(cfg) -> dict:
@@ -48,6 +49,7 @@ def names_of(cfg) -> dict:
 
 
 def main():
+    check_flags()      # refuse a flag this script does not understand (scripts/_cli.py)
     cm = cfg.get("ratings_prior", {}).get("cal_map") or {}
     system = flag("system", cm.get("base"))
     k = int(flag("k", cm.get("k", 3)))

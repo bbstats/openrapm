@@ -43,16 +43,17 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from eracoef.config import load_config  # noqa: E402
 from eracoef.holdout import (SPLITS, Context, Holdout, pooled_rank, report,  # noqa: E402
-                             run_parallel, vs_consensus)
+                             consensus_table_missing, run_parallel, vs_consensus)
 from eracoef.systems import registry  # noqa: E402
 
 cfg = load_config()
 OUT = Path(cfg["_root"]) / "outputs"
 
 
-def _flag(name, default=None):
-    hit = [a for a in sys.argv[1:] if a.startswith(f"--{name}=")]
-    return hit[0].split("=", 1)[1] if hit else default
+# The shared command line (scripts/_cli.py): `flag` records every name it is asked for so
+# `check_flags` below can refuse one that was never asked for.  A misspelled flag used to be
+# ignored silently, which is how a run looks right and is wrong.
+from _cli import check_flags, flag as _flag, switch   # noqa: E402
 
 
 def _list(name, default, conv=str):
@@ -78,6 +79,7 @@ def _fit_block(system, seasons, ctx):
 
 
 def main():
+    check_flags()      # refuse a flag this script does not understand (scripts/_cli.py)
     rm = _flag("rankmap")
     cm = _flag("calmap")
     SYSTEMS = registry(cfg, rankmap=rm, calmap=cm)
@@ -88,14 +90,18 @@ def main():
     if unknown:
         raise SystemExit(f"unknown systems {unknown}; known: {sorted(SYSTEMS)}")
     systems = [SYSTEMS[n] for n in names]
+    # `--consensus` reads a table nothing has built since 73f0ab9, so it can only raise -- and it used
+    # to raise AFTER the whole fit.  Say so now, while it costs a second.
+    if switch("consensus") and not (OUT / "vs_consensus.parquet").exists():
+        raise SystemExit(consensus_table_missing(OUT / "vs_consensus.parquet"))
     split_names = _list("splits", [])
     splits = {s: SPLITS[s] for s in split_names}
     tag = _flag("tag", "_".join(names)[:60])
     ref = _flag("ref", names[0])
-    quiet = "--quiet" in sys.argv
+    quiet = switch("quiet")
     workers = int(_flag("workers", cfg.get("holdout", {}).get("workers", 1)))
     which = _flag("held", "all")
-    skip_run = "--norun" in sys.argv
+    skip_run = switch("norun")
 
     ctx = Context.load(cfg)
     ho = Holdout.from_config(cfg, first=int(args[0]) if args else None, last=int(args[1]) if len(args) > 1 else None,
@@ -114,11 +120,11 @@ def main():
         if which != "all":
             print(f"held-out seasons ({which}): {held}", flush=True)
         if workers > 1:
-            res, _, gbdt_reports = run_parallel(ho, names, splits=split_names, rank="--rank" in sys.argv,
+            res, _, gbdt_reports = run_parallel(ho, names, splits=split_names, rank=switch("rank"),
                                                 out=OUT / f"holdout_{tag}.parquet", verbose=not quiet, workers=workers,
                                                 rankmap=rm, calmap=cm, held=held)
         else:
-            res = ho.run(systems, ctx, splits=splits, rank="--rank" in sys.argv, out=OUT / f"holdout_{tag}.parquet",
+            res = ho.run(systems, ctx, splits=splits, rank=switch("rank"), out=OUT / f"holdout_{tag}.parquet",
                          verbose=not quiet, held=held)
             gbdt_reports = [r for prior in (ctx.gbdt, ctx.mspi) if prior is not None
                             for r in getattr(prior, "reports", [])]
@@ -144,7 +150,7 @@ def main():
             print(f"    {len(g)} fits; |drag| max {g.drag_before.abs().max():.4f}, counterbalanced {int(g.applied.sum())}; "
                   f"rows {int(g.n_rows.min())}-{int(g.n_rows.max())}; best iteration median {g.best_iteration.median():.0f}")
 
-    if "--consensus" in sys.argv:
+    if switch("consensus"):
         w = cfg["holdout"]["consensus"]["window"]
         seasons = list(range(int(w[0]), int(w[1]) + 1))
         print(f"\n=== against the consensus, {seasons[0]}-{seasons[-1]}, VALIDATION ONLY, read once")
@@ -155,7 +161,7 @@ def main():
         C.to_parquet(OUT / f"holdout_{tag}_consensus.parquet", index=False)
         print(C.round(4).to_string(index=False))
 
-    if "--spread" in sys.argv:
+    if switch("spread"):
         w = cfg["holdout"]["consensus"]["window"]
         blocks = [list(range(int(w[0]), int(w[1]) + 1)), [1997, 1998, 1999]]
         print("\n=== prior spread against residual spread, possession-weighted sd over players with 1000+ possessions")
@@ -192,7 +198,7 @@ def main():
             print(f"\n-- {s.name}")
             print(t.round(2).to_string(index=False))
 
-    if "--pdp" in sys.argv:
+    if switch("pdp"):
         if ctx.gbdt is None:
             raise SystemExit("--pdp needs outputs/role_panel.parquet (scripts/49_role_panel.py)")
         from eracoef.gbdt_prior import partial_dependence, training_rows

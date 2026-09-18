@@ -26,12 +26,14 @@ from eracoef.xshoot import DEFENSE_TARGETS  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _flag(name, default=None):
-    hit = [a for a in sys.argv[1:] if a.startswith(f"--{name}=")]
-    return hit[0].split("=", 1)[1] if hit else default
+# The shared command line (scripts/_cli.py): `flag` records every name it is asked for so
+# `check_flags` below can refuse one that was never asked for.  A misspelled flag used to be
+# ignored silently, which is how a run looks right and is wrong.
+from _cli import check_flags, flag as _flag, switch   # noqa: E402
 
 
 def main():
+    check_flags()      # refuse a flag this script does not understand (scripts/_cli.py)
     path = ROOT / _flag("panel", "outputs/role_panel_season.parquet")
     cfg = load_config(ROOT / "config.yaml")
     ctx = Context.load(cfg)
