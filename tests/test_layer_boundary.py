@@ -52,6 +52,7 @@ MODEL_LAYER = [
     "rloocv.py",        # rebalanced leave-one-out: the splitter and the partner rule, numpy only
     "simulate.py",      # the synthetic fixture the tests fit against
     "singleyear.py",    # the single-year prior's feature list and its per-player aggregation
+    "tradeset.py",      # the team-game with-and-without-you ridge and its losses
 ]
 
 # Model code that still reaches its own data, and what through.  Nothing may be added here.

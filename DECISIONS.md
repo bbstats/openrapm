@@ -1,5 +1,15 @@
 # OpenRAPM: what the out-of-season test decided, and what it could not
 
+> **Where `FINDINGS N.N` points.**  Sixty-one comments in `src/` and a handful here cite section
+> numbers in `FINDINGS.md`, the 5,292-line research log that was removed from the tree in the
+> open-source cleanup (commit `0f7c0b2`).  It is preserved whole under the annotated tag
+> `archive/research-2026-09`; read a section with
+>
+>     git show archive/research-2026-09:FINDINGS.md
+>
+> Nothing in the tree named that tag until 2026-09-17, so every one of those citations looked
+> like a reference to a deleted file.  They are not: the sections are all still there.
+
 ## What the test is
 
 Hold out one NBA season H. Fit the whole system on a symmetric neighbourhood of seasons around it — K = 2 is
@@ -677,7 +687,8 @@ but it is the session's finding in miniature -- the criterion cannot see what th
 *"i don't care WHAT we do, provided it makes for better models. empirical data wins / scoreboard wins."*
 Five ways of choosing the single-year prior's training rows, 27 held-out seasons (1999-2025), each fit on
 the first 75% of its season and scored on the last 25%, on the team-game criterion AND the player losses.
-`scratch/loo_bakeoff.py`, results in `outputs/loo_bakeoff.parquet`.
+`scratch/loo_bakeoff.py` (a local one-off; its source is gone and `scratch/` is gitignored, so the
+table below is the record, not the script), results in `outputs/loo_bakeoff.parquet`.
 
 | | tg | within-roster tau | money_skill | train rows |
 |---|---|---|---|---|
@@ -1270,7 +1281,7 @@ worse below; the consensus's OFFENSIVE agreement rises as the offence penalty fa
 while the test gets worse, which is the forecasting-versus-attribution split again.  13,037 / 13,037
 stays; a heavier defence penalty is the one direction the test rules out.
 
-**Experiment 1: the un-shrunk label, with thin players shrunk toward their possession tier.**
+**Experiment 1: the un-shrunk label, with players with few possessions shrunk toward their possession tier.**
 `--unshrink_label=1`: label_i = beta_i / max(s_i, s_floor) + (1 - s_i / max(s_i, s_floor)) x m(tier_i),
 s_i = n_i / (n_i + 40,000), s_floor at 4,444 possessions, m(tier) the tier's mean coefficient un-shrunk by
 the tier's mean s.  Tier levels learned (offence, per 100): -5.4 under 500 label possessions, -3.9 to
@@ -1289,10 +1300,755 @@ neighbouring season's games where those minutes are played.  But the top of the 
 Hartenstein, Kalkbrenner, Cooper Flagg, Jokic 12th; Curry 61st, Luka 72nd -- young bigs and rookies
 everywhere, the consensus checks fall to 0.68 (a gross miss, 9% under), the rescaled row is the worst
 recorded, and the games add nothing (penalty at the ceiling, sd 0.00 on offence).  The mechanism: the tier
-level enters the label of every thin-career player, and "few career possessions" is what a rookie or a
+level enters the label of every short-career player, and "few career possessions" is what a rookie or a
 young big looks like at inference, so the SPM hands them the tier's optimism.  The bench level is right and
-the way it was put in is wrong.  Keep the idea (thin players at replacement level) and find another route
+the way it was put in is wrong.  Keep the idea (players with few possessions at replacement level) and find another route
 -- a replacement-level FILL for players with too few possessions to rate, outside the SPM, is the obvious one.
+
+**Experiment 11: a replacement level for the players a season's rankings have no row for.**  A season's
+table covers only the men who played that season, so when it predicts a neighbouring season the rookies and
+the returnees of THAT season have no rating and the criterion scores each of them as the average player.
+They are not a rounding error: **10.0% of the scored season's possessions going forward, 6.0% going back,
+94 to 98 players a season.**  The fill is `holdout.ReplacementSystem`, now with a `shrink` fraction, wired
+into the year-over-year test as `63_yoy.py --fill=<name>:500x<fraction>`: the absent player scores that
+fraction of the possession-weighted mean rating of the rating season's OWN players under 500 possessions.
+It reads nothing but the rating season, it changes no rating in the table, and so the 2026 top 20, the
+consensus checks and the site are untouched by construction -- the two vetoes cannot fire on it.
+
+The bench level itself is stable: **-1.73 offence / -0.47 defence, -2.20 total** under 500 possessions,
+-2.33 under 1,000, -2.22 under 2,000.  The depth that wins is a quarter of it.
+
+| fill, as a fraction of the bench level | total | game_armse | paired vs incumbent | prev (rookies) | next (departures) |
+|---|---|---|---|---|---|
+| none (the incumbent) | 0 | 8.6971 | -- | -- | -- |
+| **0.25** | **-0.55** | **8.6919** | **-0.144, z -5.24, 42 of 56** | **-0.084, z -1.89** | **-0.204, z -6.99** |
+| 0.50 | -1.11 | 8.6898 | -0.200, z -3.55, 39 of 56 | -0.048, z -0.53 | -0.352, z -6.20 |
+| 0.75 | -1.66 | 8.6910 | -0.169, z -1.92, 36 of 56 | +0.107, z +0.78 | -0.445, z -5.34 |
+| 1.00 | -2.20 | 8.6954 | -0.050, z -0.41, 34 of 56 | | |
+| 1.82 (-3.0 / -1.0 by hand) | -4.00 | 8.7209 | +0.638, z +2.83, 28 of 56 | | |
+
+**The two directions are different populations and that is what fixes the depth.**  Going backwards -- a
+season rated by the NEXT season's rankings -- the absent men are the ones who left the league, and deeper
+is monotonically better out to the full bench level.  Going forwards they are the rookies, and the fill
+stops paying past a quarter and is worse than nothing by three quarters: a first pick plays starter minutes
+and is not a bench player.  **0.25 is the only depth that is better in both directions**, it has the best
+z of the five, and the forward direction is the one a rating is actually used in.  The pooled error is flat
+from 0.25 to 0.75 (8.6919 / 8.6898 / 8.6910), so the choice is made on the direction split, not on the
+pooled number.
+
+**The in-table players with few possessions needed nothing.**  The idea that started this (experiment 1: the bench sits at
+0 and should sit at replacement) is not true INSIDE the table.  Under 100 possessions a player already
+reads -1.61 offence / -0.47 defence with sd 0.42, and his own season's games move him by 0.06; under 500,
+-1.71 / -0.46.  Centring at possession-weighted zero plus a box prior on a box score with few possessions already puts him
+at the bench level.  Only the players with NO row were at 0, and that is the whole of the effect.
+
+**Experiment 12: the prior blended toward a replacement level, the blend fitted on APM (the owner's
+design, 2026-09-15).**  Between the box prior and the final ridge:
+
+    new_prior = old_prior * w(n) + x * (1 - w(n)),     w(n) = n^a / (n^a + k^a)
+
+per side, `n` the offensive possessions on offence and the defensive ones on defence.  Fitted against APM
+and never RAPM -- a ridge penalty pulls every player toward zero, so the RAPM of a player with few possessions is near zero by
+construction and a blend fitted on it would return `x` ~ 0, which is the error being corrected.
+`scripts/67_blend_apm.py`: the season's normal equations solved with NO penalty on either player block,
+and the blend chosen to minimise `(b - APM)' G (b - APM)` with `G` the player gram after the context block
+is profiled out -- the same thing as least squares on the season's own stints with the context refit free.
+
+**Three things had to be right before the fit meant anything, and each was wrong first.**
+
+1. *The blend must carry its own free prior scale.*  Fitted as written, `k` pinned at the bottom of the
+   grid in every season with `|x|` at 40 to 64.  That corner is `w` ~ constant, where `x (1 - w)` is a free
+   constant and `w * prior` is a plain RESCALE -- so the blend was being used as a prior scale, which
+   `PriorRidgeCV.free_prior_scale` already provides and would have absorbed downstream.  The fit now reads
+   `b = s * w * prior + x * (1 - w)` and the reference it must beat is `s * prior` alone.
+2. *`G` is singular by construction.*  Profiling the context out takes the season intercept with it, and
+   "add a constant to every offensive rating" puts five times that constant on every row, which IS the
+   intercept column.  Both all-ones directions are exactly null, so **APM cannot see a constant added to
+   every player: only how a correction VARIES with possessions is identified.**  `np.linalg.solve` does not
+   raise on that -- it returns a huge vector -- so `solve_diag`'s lstsq fallback never fires.  2018 has two
+   further null directions and came back with `|apm| = 4e20`, and that one season swamped every pooled fit
+   (held-out objectives of 2e10 against a 1.2e7 reference).  APM is now a minimum-norm solve through an
+   eigendecomposition; every direction it drops is one the objective is flat along.
+3. *The 4 x 4 needs a normalised basis and a guarded argmin.*  Unnormalised, the degenerate corner returned
+   `|theta| = 1e5` of pure rounding error and the argmin picked it.  A least-squares minimum cannot fall
+   outside [0, quad], so any grid point that does is dropped.
+
+**Validation before any number was read:** the fitted scale comes out at 1.6 to 2.4 per side, and the
+ridge's own `free_prior_scale` independently reads 1.9 / 2.0.  Two estimators, one number.
+
+| | offence | defence |
+|---|---|---|
+| held-out APM distance vs a free scale alone, `a` free | 0.9883, better in 25 of 30 | 0.9926, 21 of 30 |
+| the same with **`a` = 1**, the owner's plain `n / (n + k)` | **0.9895, better in 26 of 30** | **0.9936, 22 of 30** |
+| pooled `k` (identical in all 30 leave-one-out fits, `a` = 1) | **64.2** | **12.1** |
+| pooled `x`, 1997 -> 2026 | -15.4 -> -10.8 | +22.7 -> +16.3 |
+
+**The steepness exponent is not needed.**  Freeing `a` wins 25 of 30 where `a` = 1 wins 26 of 30, and the
+pooled ratio is 0.9883 against 0.9895 -- a tenth of the gain, in the wrong direction on the season count.
+Once the fit carries `s`, the absorption the exponent was meant to dodge is handled by the scale instead.
+The owner's original curve stands.
+
+**`x` and `k` do NOT hold still season by season, and the pooled fit does.**  On one season alone
+`x_off` has sd 11.95 on a mean of -16.30 and `k_off` runs 5.3 to 1,791.  Pooled over 29 seasons, `k` is
+64.16 on offence and 12.14 on defence in **every one of the 30 leave-one-out fits**, and `x` drifts
+smoothly with the era rather than jumping.  One season cannot price this blend; thirty can.
+
+What the pooled curve does, points per 100, `a` = 1:
+
+| possessions | 200 | 500 | 1,000 | 2,000 | 4,000 | 6,000 |
+|---|---|---|---|---|---|---|
+| offence, added | -3.60 | -1.69 | -0.89 | -0.46 | -0.23 | -0.16 |
+| offence, multiple kept on his own prior | 1.52 | 1.78 | 1.89 | 1.95 | 1.98 | 1.99 |
+| defence, added (positive = allows more) | +1.27 | +0.53 | +0.27 | +0.13 | +0.07 | +0.04 |
+
+Only the VARIATION down those rows is identified, not the level: the gap between a 200-possession man and
+a 6,000-possession one is **-3.44 on offence and +1.23 on defence**, and that much APM can see.  1999, the
+50-game season, is the worst held-out season on both sides (1.016 and 1.012) -- the least data, as expected.
+
+**Not yet a rankings result.**  Everything above is APM distance, the blend's own fitting criterion.  It
+says the blend generalises to a season it was not fitted on; it does not say the rankings improve.  The
+year-over-year test has not been run on it.
+
+**Experiment 13: the replacement level as a MODEL on covariates instead of one constant (the owner's
+design, 2026-09-15).**  Experiment 12's scalar `x` produced twenty 2026 players below -10 per 100 and one
+at -22.41 on four possessions.  The diagnosis was that a constant target sits entirely in the direction
+the loss cannot see, so `x` floated.  The fix: `x` becomes `g(z) = z . beta` over `singleyear.
+LEVEL_COVARIATES` -- age, exp_yrs, exp_poss, entry_age, height, weight, draft_pick, poss_pct, gs_pct,
+tenure, n_teams -- every one measured EXACTLY however few minutes a man played, with `beta` pinned by
+players who DO have minutes so a man with few possessions borrows strength from players with heavy minutes who resemble him.
+`scripts/67_blend_apm.py --covs=level`; the basis went from 2 columns a side to `1 + p` and the closed
+form is unchanged.  **`--covs=scalar` reproduces experiment 12 to a maximum relative objective difference
+of 0.0 on six season-sides, with identical k, scale and level** -- the scalar is a point in this family,
+not an approximation of one.
+
+| held-out APM distance vs a free prior scale alone | offence | defence |
+|---|---|---|
+| the scalar (experiment 12) | 0.9895, 26 of 30 | 0.9936, 22 of 30 |
+| **the covariate model** | **0.9799, 26 of 30** | **0.9801, 25 of 30** |
+| the same without `height` | 0.9802, 26 of 30 | 0.9807, 25 of 30 |
+| without `poss_pct` and `gs_pct` | 0.9817, 25 of 30 | 0.9829, 25 of 30 |
+
+**The fit roughly doubles on offence and triples on defence, and the level is still not a level.**
+
+1. *`height` buys nothing*: 0.9802 against 0.9799.  `DECISIONS.md` above already found height belongs
+   nowhere on offence and makes the deepest bench worse; nothing here overturns it.
+2. *With `poss_pct` and `gs_pct` in, the fitted level RISES with possessions*: -5.33 under 100 possessions,
+   +0.59 at 1-2k, **+15.39 above 4,000**.  A replacement level cannot do that.  `poss_pct` was the largest
+   offensive coefficient (+11.52, z 7.8), so the model had learned "the coach played him a lot, therefore
+   he is good" -- the very covariate this file already sized as 97% hindsight.  `g` had quietly become a
+   SECOND PRIOR, not a bench level.
+3. *Dropping those two fixes the shape and costs almost nothing* (0.9817 / 0.9829, level now flat at -6.6
+   to -12.7 across every tier).  The hindsight pair was carrying nothing real: the control passes.
+4. *The magnitude is still wrong by a factor of six.*  The intercept reads **-8.82 offence** for an average
+   player against a measured bench of **-1.55**, and `exp_poss` at -6.84 (z -12.5) against `exp_yrs` at
+   +5.02 (z 7.8) nearly cancel for a normal player and extrapolate violently for a veteran.  Applied, the
+   correction `(1 - w) g` is:
+
+| possessions | under 100 | 100-200 | 200-500 | 500-1k | 1-2k | 2-4k | over 4k |
+|---|---|---|---|---|---|---|---|
+| offence, mean (worst) | **-4.82 (-9.83)** | -3.37 (-8.19) | -2.70 (-7.88) | -1.25 | -0.82 | -0.48 | -0.36 (-1.30) |
+| defence, mean (worst) | **+3.48 (+12.44)** | +1.47 | +0.82 | +0.35 | +0.19 | +0.09 | +0.06 |
+
+**The covariates were never going to fix this, and the reason is the loss, not the parameterisation.**
+Each player's weight in `(b - apm)' G (b - apm)` is his own information `G_ii`, so the level is set by the
+mid-range players who want a -0.4 correction, and the players with the fewest possessions -- who carry no weight at all --
+inherit the WHOLE of `g`.  Any parameterisation of a level runs away there; more flexibility just changes
+the shape of the runaway.  The real content of the experiment is a genuine, generalising, possession-
+dependent correction to the box prior worth about **-0.4 per 100 on a full-time player**, confirmed on 25
+to 26 of 30 unseen seasons.  That is an exposure calibration of the prior, and it must not be expressed as
+a replacement level, because a replacement level is precisely the quantity this loss cannot measure.
+
+**What is already known and keeps being re-derived**: the box prior ALREADY places players with few possessions at the
+measured bench (-1.55 offence / -0.45 defence under 100 possessions, sd 0.42, their own season's games
+moving them 0.06).  There is no gap at the bottom to close.  Experiments 12 and 13 both found their real
+gain in the middle and then damaged the bottom on the way out.
+
+**Experiment 14: the exposure slope, and what it accidentally uncovered (2026-09-15).**  The parsimonious
+end of experiments 12 and 13: one slope per side on log possessions added to the RATING, replacing the
+blend, `k`, `a` and the eleven covariates with two numbers.  `scripts/68_exposure_slope.py`.
+
+The motivating measurement is sound and stands on its own.  Centred at possession-weighted zero, one row
+per player, 30 seasons, `scratch/bucket_apm.py` and `scratch/bucket_persist.py`:
+
+| possessions | 0-50 | 100-200 | 500-1k | 1-2k | 4k+ |
+|---|---|---|---|---|---|
+| box prior, offence | **-0.76** | -0.80 | -0.83 | -0.80 | +0.45 |
+| APM, offence | **-9.94** | -5.37 | -3.35 | -2.15 | +1.31 |
+
+**The prior is FLAT in exposure where the truth is steep** -- it hands -0.76 to a man with 0-50
+possessions and -0.81 to one with 1,000-2,000, a difference of 0.05 on a standard error of 0.03, while APM
+runs across eleven points.  And the deficit is not a rough few possessions: those same men read -5.15 the
+season before and -3.64 the season after, playing about 700 possessions in each, so **48% of the
+deficit from the season with few possessions persists** (86% by 200 possessions, essentially all of it by 1,000).  Both directions
+were measured because forward alone cannot separate persistence from ageing; it is symmetric, so it is a
+property of the man.  Fitted against the rating, the slope is **+1.170 offence / -0.381 defence per decade**,
+leave-one-neighbour-out sd 0.042 and 0.040 -- about as stable as a coefficient gets.
+
+**And it does not buy a single point of forecasting accuracy.**
+
+| year-over-year, both directions, 56 paired | game_armse | vs incumbent | order row (each side rescaled) |
+|---|---|---|---|
+| incumbent | 8.6971 | -- | -- |
+| the slope, full dose | 8.7450 | **+1.310, z +13.3, 2 of 56** | -0.009, z -0.1 |
+| quarter dose | 8.7057 | +0.235, z +9.6, 5 of 56 | -0.077, z -3.6 |
+
+Every dose is worse, monotonically in the dose, while the ORDER row is mildly better -- the signature of a
+candidate that is all amplitude.  `scale_off` went 0.796 to 0.707: the board was already 26% too wide and
+the slope made it wider.
+
+**Holding the spread fixed reversed it, and the control showed why.**  Renormalised to the incumbent's
+spread, the full dose read 8.6533 at z -12.9 and every dose passed.  But a pure uniform shrink -- the
+incumbent multiplied by 0.85, no exposure term at all -- reads **8.6430 at z -16.6, 56 of 56, with an order
+row of 4.9e-14, i.e. no reordering whatsoever by construction.**  The shrink alone beats the exposure
+correction that carried it.  The apparent win was the renormalisation smuggling in an amplitude fix.
+
+Tested fairly, with amplitude equalised on both sides (`--rankings=season_ratings_ps7080 --mult=0.5
+--match_spread=1`), the exposure correction is **-0.102 at z -1.77, 33 of 56, with an order row of z -0.69**:
+short of the -2 bar and no order gain. **Rejected.**
+
+**What was actually found, and it is the largest single term on this test.**  A per-side constant
+multiplier, changing no player's rank at all:
+
+| | game_armse | vs incumbent | wins | order row |
+|---|---|---|---|---|
+| incumbent | 8.6971 | -- | -- | -- |
+| x0.90 both sides | 8.6573 | -1.085, z -17.7 | 56 of 56 | 0 |
+| x0.80 both sides | 8.6323 | -1.764, z -15.5 | 56 of 56 | 0 |
+| x0.70 both sides | 8.6222 | -2.038, z -12.9 | 54 of 56 | 0 |
+| **offence x0.70, defence x0.80** | **8.6187** | **-2.139, z -13.7** | **54 of 56** | **1.6e-14** |
+| offence x0.60, defence x0.70 | 8.6188 | +0.005 vs ps7080, z +0.1 | 27 of 56 | 0 |
+
+A plateau from about x0.60/0.70 to x0.70/0.80.  The stint-level per-side regression says the MSE-optimal
+factors are 0.796 and 0.889 (`scale_off` / `scale_def` at the incumbent), and the closeness-weighted
+team-game objective wants rather more shrinkage than that; the two are allowed to disagree and
+`game_armse` decides.
+
+***The check this forces on everything else.*** **The board's amplitude is worth 0.078 points per 100 on
+this test, and every experiment scored on `game_armse` that moves the board's spread has been partly
+measuring that.**  For scale: the absent-player fill (experiment 11) was 0.008, the whole fine penalty grid
+0.02.  The amplitude term is five to fifteen times larger than the differences those experiments were
+deciding.  *The check:* pair candidates at MATCHED calibration -- read the "each side rescaled to the
+scored season" row, or equalise the spread first -- before quoting any `game_armse` difference as a
+ranking gain.  A uniform per-side rescale reorders nobody, so it is a calibration fix and never a ranking
+result; the single-year pipeline has no amplitude-calibration stage at all (the ridge's `free_prior_scale`
+prices the PRIOR, not the finished board), which is why this was sitting unclaimed.
+
+**Also true and separately useful:** a same-season attribution gap can be real, large, monotone, z 7 to 15,
+persistent across neighbouring seasons, and still worth nothing for forecasting.  Experiments 12, 13 and 14
+all found their signal in the middle of the exposure range and then either damaged the bottom or moved only
+the amplitude.
+
+**Experiment 15: tell the prior what SCORE STATE a player's statistics were compiled in (the owner's
+idea, 2026-09-15).**  The owner's question after experiment 14: "can't we deal with it by using the current
+margin of victory -- eg it's a garbage time possession?"  The asymmetry is real and it is in the code.  The
+ratings side already knows the score state: `design.py` carries a garbage-time column plus `margin` and
+`margin x time-remaining`, so APM is already net of the blowout effect.  **The prior's inputs know nothing
+about it** -- zero garbage-time references anywhere in the box-score feature build -- so a player's counting
+statistics are credited at full value whether the game was tied or a rout.
+
+And the premise holds.  From the stints (`scratch/gt_share.py`, all seasons, per side):
+
+| possessions | 0-50 | 100-200 | 500-1k | 2-4k | 4k+ |
+|---|---|---|---|---|---|
+| share of his possessions in garbage time | **61%** | 40% | 19% | 5.6% | **2.5%** |
+| mean absolute score margin while on court | 18.0 | 15.2 | 11.0 | 7.8 | 6.7 |
+
+Monotone across every group: a man with 0-50 possessions takes three fifths of them in blowouts, a
+4,000-possession man one fortieth.  His per-possession rates describe a different game.
+
+`scripts/69_closeness_panel.py` adds three columns per player-season **per side** (his offensive and his
+defensive possessions need not sit at the same score state): `gt_share`, `closeness` (the possession-
+weighted mean of 1 / max(|margin|, 1) -- deliberately the same form `priorridge.team_game_weights` uses on
+the ratings objective, so "close" means one thing in both halves of the pipeline) and `abs_margin`.
+Feature set `boruta_close`.  The owner's call was to hand the prior the exposure and let the booster learn
+the discount rather than reweighting the statistics -- and, explicitly, **not to pad these columns**.
+
+*They are not padded, and that was the trap.*  None of the three is in `RATIOS`, `DERIVED` or `BIO_BINS`
+and none has a `raw_` twin, so `add_derived` skips them: 166 player-seasons sit at exactly 1.000 and 192
+at exactly 0.000, which padding can never produce.  Padded, a 61% share and a 2.5% share would both
+collapse toward the league mean of 0.052 and the column would still exist, still look sensible and carry
+nothing.  `CLOSENESS` is in `INPUT_COLUMNS` so `aggregate` carries the columns into the career and chunk
+training rows; that is possession-weighted averaging, not shrinkage.
+
+| year-over-year, both directions, 56 paired | game_armse | vs incumbent | order row (each side rescaled) |
+|---|---|---|---|
+| incumbent | 8.6971 | -- | -- |
+| `boruta_close` | 8.6925 | -0.134, z -1.73, 29 of 56 | -0.150, **z -2.09**, 32 of 56 |
+
+**A near miss on the score that decides, and the mechanism did not fire.**  The consensus checks all pass
+and defensive rank agreement IMPROVES, 0.757 to 0.770, with `spread_off` 0.707 and the 2026 top of the
+list intact (Kawhi, Wembanyama, Jokic, Shai, Giannis, Towns).  Unlike experiment 14 this is not amplitude:
+`scale_off` barely moves, 0.7958 to 0.8015.  So the small gain is real ranking movement.  But it is not the
+gain that was aimed at, because **the prior is no less flat in exposure than before**: its spread from the
+fewest possessions to the most reads **+2.424 before and +2.303 after** -- slightly flatter -- against the
++11.2 that APM says is really there.
+
+***Why no feature could have fixed it, and this is the finding worth keeping.***  `singleyear.chunk_rows`
+gives every training row of a player **the SAME label as his career row** -- its own docstring says so.
+The features vary across his chunks, including `chunk_poss` and now the three closeness columns; the target
+does not.  So the booster cannot learn "fewer possessions means genuinely worse" from within a player, only
+"short careers are worse" across players -- and the career leave-season-out RAPM label is itself shrunk at
+penalty 40,000, which flattens even that.
+
+That separates two things this project has been conflating:
+
+  (a) *noisier inputs for the same true value* -> regress the estimate harder.  This is what the chunk
+      design teaches, it is what its docstring means by "how the map degrades with less evidence", and it
+      works.
+  (b) *fewer possessions correlating with genuinely lower true value* -> shift the estimate down.
+      **Nothing in the pipeline teaches this, and (b) is what experiment 14 measured.**
+
+Experiments 12, 13 and 14 all tried to patch (b) onto the OUTPUT and failed, because the fitting loss
+weights each player by his own information and is therefore blind to the men being corrected.  Experiment
+15 tried to teach it through a FEATURE and failed, because the target has no exposure gradient to learn
+from.  The only place (b) can enter is the label -- which is what experiment 1 did, and it scrambled the
+top of the list.  *The check:* before adding a feature meant to teach a gradient, confirm the TARGET
+varies along that gradient.  A constant-per-player label cannot teach a within-player effect however many
+columns are added beside it.
+
+### Experiment 16: the owner's blend with the level MEASURED, not fitted (2026-09-15)
+
+`new_prior = prior * w(n) + x * (1 - w(n))`, `w = n / (n + k)`, applied to the PRIOR before the ridge and
+inside the cross-fitted fold priors, so the ridge re-prices the amplitude afterwards.  `x` was NOT fitted:
+it was read off the neighbouring seasons' APM for the lowest possession group (-4.40 offence, +1.69
+defence) and divided by the ridge's prior scale of about 1.9, giving **-2.3 on offence and +0.9 on
+defence**.  Only `k` was swept, over 50 / 150 / 400 / 1,000 / 2,500, on the saved priors (`priors_sy_base`,
+built at `--exclude_neighbours=1`), one second a season.
+
+| year-over-year, both directions, 56 paired | game_armse | vs incumbent | order row (each side rescaled) |
+|---|---|---|---|
+| incumbent | 8.6971 | -- | -- |
+| k = 50 | 8.7040 | +0.188, **z +2.90**, 18 of 56 | -0.067, z -1.00, 37 of 56 |
+| k = 150 | 8.7137 | +0.456, z +4.61, 14 of 56 | +0.081, z +0.83, 30 of 56 |
+| k = 400 | 8.7247 | +0.756, z +5.84, 15 of 56 | +0.385, z +2.97, 24 of 56 |
+| k = 1,000 | 8.7322 | +0.963, z +6.35, 16 of 56 | +0.761, z +4.89, 16 of 56 |
+| k = 2,500 | 8.7358 | +1.058, z +6.42, 15 of 56 | +1.136, z +6.61, 12 of 56 |
+
+Monotone in `k`: every larger blend is worse.  Nothing clears the rule (z -2 or below), so **nothing is
+adopted**.  The consensus does not veto -- k = 50 is marginally BETTER than the incumbent on every
+agreement number (rho 0.781 / 0.760 / 0.779 against 0.777 / 0.757 / 0.771, top five 4 of 5 both) -- and the
+2026 top 20 is untouched except two adjacent swaps (Doncic up one past Mitchell, Barnes up one past
+Butler).  The bottom of the 2026 list moves as designed and stays sane: 6 players below -6 per 100 at
+k = 50 and 17 at k = 150, against 0 for the incumbent and 57 for experiment 12.
+
+***The mechanism fired, for the first time in five attempts.***  Experiments 12-15 never changed the
+prior's exposure gradient.  This one does, and lands close to the measured target.  Offence, mean rating
+by possessions, 0-50 against 1-2k, over 30 seasons:
+
+| | 0-50 | 200-500 | 1-2k | 4k+ | gradient, 0-50 minus 1-2k |
+|---|---|---|---|---|---|
+| incumbent | -1.59 | -1.71 | -1.74 | +0.94 | **+0.15** (flat, slightly backwards) |
+| k = 50 | -4.70 | -2.22 | -1.78 | +0.97 | **-2.92** |
+| k = 150 | -5.27 | -2.84 | -1.85 | +1.00 | -3.42 |
+| the measurement (neighbours' APM) | -4.40 | -3.44 | -2.07 | +0.83 | **-2.33** |
+
+So the defect named on 2026-09-15 is now fixable, and the ridge did re-price it rather than letting it run
+away.  The rankings are still worse.
+
+***Where it lost, and it is amplitude and not order.***  The exposure split puts the whole cost on the men
+being corrected -- stint level, k = 50, possessions 1-499 in the rated season: **+1.197, z +3.65**, against
++0.171 at 1,500-3,999 and +0.039 at 500-1,499.  But on the same split with each side rescaled to the
+scored season the cost is **-0.002, z -0.01**: dead neutral.  The order of those men is neither better nor
+worse; their LEVEL is further from what the neighbouring season pays than the flat prior was.  The
+realised gradient overshoots the measurement by about 25% (-2.92 against -2.33) because the ridge's free
+prior scale rose with the blend (1.65 / 2.06 to 1.65 / 2.08 at k = 50, and 1.87 / 2.70 at k = 2,500)
+instead of absorbing it.  *The check:* when a correction is applied through the prior, read the realised
+gradient in the finished rankings, not the `x` that was handed in -- a free scale downstream can amplify it.
+
+### Experiment 17: the owner's linear ramp -- no prior at zero possessions, the whole prior at N (2026-09-15)
+
+The owner's design, replacing the rational weight of experiment 16: `new_prior = prior * w + x * (1 - w)`,
+**`w = min(n / N, 1)`**, `n` the player's possessions on that side.  At zero possessions a man gets no
+prior at all and exactly the replacement level; at `N` possessions and above he gets exactly the prior;
+linear in between.  The replacement level was fixed by the owner at **-1.5 on each side** (entered as
+`+1.5` on defence, whose prior is in the raw sign where positive means allows more), and **only `N` was
+swept**.  Implemented as `--blend_off=x/N/lin`, `--blend_def=x/N/lin`; the rational weight is unchanged.
+
+| year-over-year, both directions, 56 paired | game_armse | vs incumbent | order row (each side rescaled) |
+|---|---|---|---|
+| incumbent | 8.6971 | -- | -- |
+| **N = 100** | **8.6972** | **-0.0002, z -0.003, 33 of 56** | -0.020, z -0.46, 32 of 56 |
+| N = 250 | 8.7006 | +0.093, z +1.24, 27 of 56 | +0.039, z +0.58, 24 of 56 |
+| N = 500 | 8.7092 | +0.328, z +3.19, 20 of 56 | +0.254, z +2.76, 19 of 56 |
+| N = 1,000 | 8.7213 | +0.658, z +4.84, 14 of 56 | +0.670, z +4.94, 14 of 56 |
+| N = 2,000 | 8.7303 | +0.906, z +5.44, 17 of 56 | +1.194, z +6.84, 8 of 56 |
+| N = 4,000 | 8.7341 | +1.020, z +5.74, 15 of 56 | +1.784, z +9.75, 4 of 56 |
+
+Monotone in `N` again, and **N = 100 is an exact tie** -- one ten-thousandth of a point per 100, z -0.003.
+Not adopted: the rule needs z -2 or below, and a tie goes to the simpler version, which is the incumbent
+with no blend at all.  The consensus does not veto anywhere (N = 100 reads 0.777 / 0.757 / 0.772 against
+the incumbent's 0.777 / 0.757 / 0.771; N = 500 is the best of the lot at 0.780 / 0.765 / 0.781 and is z
++3.19 on the test, which is the usual reminder that the consensus is a sanity check and not a target).
+The 2026 top 20 is untouched at both N = 100 and N = 250 -- the single move is Doncic and Mitchell swapping
+9th and 10th.  The bottom of the 2026 list: 8 players below -6 per 100 at N = 100 and 28 at N = 250,
+against 0 for the incumbent.
+
+***The tie is made of a small loss where it acts and nothing anywhere else.***  The exposure split, stint
+level, N = 100: possessions 1-499 costs **+0.387, z +1.63**, and every other group is a hair worse too
+(1,500-3,999 at +0.033, 500-1,499 at +0.013).  On the rescaled row the 1-499 group is +0.013, z +0.08.  So
+the ramp buys no ranking gain anywhere; it is merely cheap enough at N = 100 that the total washes out.
+
+***What the ramp cannot do, and this is the finding worth keeping.***  It does move the exposure gradient,
+offence, mean rating by possessions over 30 seasons:
+
+| | 0-50 | 50-100 | 100-200 | 200-500 | 500-1k | 1-2k | 2-4k | 4k+ |
+|---|---|---|---|---|---|---|---|---|
+| incumbent | -1.59 | -1.64 | -1.70 | -1.71 | -1.83 | -1.74 | -0.89 | +0.94 |
+| N = 100 | **-3.82** | -2.35 | -1.70 | -1.71 | -1.83 | -1.74 | -0.89 | +0.94 |
+| N = 250 | -4.26 | -3.66 | -2.87 | -1.77 | -1.83 | -1.74 | -0.89 | +0.95 |
+| N = 1,000 | -4.36 | -4.20 | -4.04 | -3.51 | -2.45 | -1.67 | -0.84 | +0.98 |
+| **the measurement** | **-4.40** | **-3.44** | **-3.29** | **-3.44** | **-2.85** | **-2.07** | **-1.21** | **+0.83** |
+
+But the measurement is not a ramp.  It is a **cliff below about fifty possessions and then a plateau**:
+-3.44, -3.29, -3.44 across 50 to 500, flat, before it rises.  A straight line from `x` to the prior cannot
+make that shape.  The `N` that fits the cliff (100) leaves 100-500 untouched; the `N` that fits 200-500
+(1,000) has already driven 50-200 half a point past the truth and costs z +4.84.  Every version of this
+correction so far -- rational weight, linear ramp, log slope -- has been a monotone function of
+possessions, and the thing being corrected is a step.
+
+### The exposure correction is CLOSED: the shipped level is good enough (the owner, 2026-09-15)
+
+After experiments 12 to 17 the owner looked at the live site, saw a man with four possessions rated -1.96
+per 100, and ruled: *"whatever our version is as last posted seems to be good enough."*  **No exposure
+correction ships, and the line is closed.**  The shipped rankings are unchanged.
+
+The case for closing it, written down so it is not reopened by accident:
+
+- **The group is 7% of the players and 0.13% of the possessions.**  At or below 100 possessions in the
+  rated season: 1,023 of 14,579 player-seasons over 30 seasons, carrying 0.13% of all offensive
+  possessions (0-50 possessions alone is 3.9% of players and **0.04%** of possessions).  In 2026 it is 46
+  of 582 players.  The criterion is a possession-weighted team-game error, so it can barely see them --
+  and a tie on it is the arithmetically expected result, not evidence the correction works.
+- **The shipped number for a man with no evidence is already defensible.**  Darius Brown II, 4
+  possessions, 2026: -1.45 offence and -0.51 defence, **-1.96 total**, which is about where the
+  conventional replacement level sits.  The correction was never needed to keep the bottom of the list
+  sane; the incumbent has nobody below -6 per 100 in 2026 without it.
+- **Six attempts, nothing reached the bar.**  Rational-weight blend on the output (12, 13), log slope on
+  the output (14), a feature (15), rational-weight blend on the prior (16, best z +2.90), the owner's
+  linear ramp on the prior (17, best an exact tie at z -0.003).  Not one was better; the best case
+  available was "free of harm".
+
+***A trap this cost, worth carrying.***  A replacement level handed to `--blend_off` / `--blend_def` is
+**not** the level the player ends up with: the ridge's free prior scale multiplies the prior it is given,
+by 2.07 on offence and 1.82 on defence averaged over 30 seasons.  Experiment 17 was run with `x = -1.5`
+per the owner's specification and delivered **-4.12 / -3.19, a total of -7.31**, for the four-possession
+man -- about double what was asked for, and past even the measured -6.09.  *The check:* after any change
+routed through the prior, read the realised number on a real player, not the constant that was handed in.
+
+### Experiment 18: the trade set -- what a player's absence says that his rating did not (2026-09-16)
+
+The owner's design.  A season's rating is fitted on that season's stints, where the same five men keep
+appearing together, so how the credit for a good lineup is SPLIT among them is barely identified.  What
+identifies it is a player being gone.  So: take the rated season and the two either side, pool every
+team-game, give each player a column whose entry is his share of that team's possessions in that game --
+zero when he did not play and zero for his old team's games once he is traded -- subtract the rated
+season's rating from every row, and ridge what is left back onto the same columns.  That coefficient is
+**alpha**.  `src/eracoef/tradeset.py`, `scripts/70_tradeset.py`, `scripts/71_tradeset_features.py`,
+`tests/test_tradeset.py`; `scripts/63_yoy.py` gained `--offset=`.
+
+A modern three-season block is **7,880 team-games against about 1,550 player columns**, which fits in
+seconds; the whole 30 seasons with a six-point penalty grid runs in about nine minutes.
+
+Every teammate has a column, which is the entire reason this is a regression and not a difference of
+averages.  The straight off-court record was tried on 2026-09-14 and rejected because a role player on a
+deep team read as good when his team stayed good without him -- the off-court number is his teammates'
+quality.  Here the other four are estimated alongside him.
+
+**The rating enters as two free unpenalised columns, one per side (`tradeset.rating_columns`), and that
+is not a detail.**  Without them every strong player got a negative alpha and every weak one a positive
+alpha, because the rating's amplitude is wrong and a rescale in a per-player costume is what a ridge
+will produce.  With them the correlation between alpha and the rating is **-0.001 on both sides**: the
+tilt is entirely in the scale and alpha is what is left over.
+
+***What the three seasons say about amplitude.***  The multiplier each side asks for, 1.00 meaning the
+rating as it stands:
+
+| | mean | min | max |
+|---|---|---|---|
+| offence | **0.749** | 0.589 | 0.967 |
+| defence | **0.919** | 0.762 | 1.074 |
+
+The offensive rating is about a quarter too wide for the neighbouring seasons to bear out.  Note the
+sign flips when the block is the rated season alone (1.03 to 1.12 offence, 1.38 to 1.51 defence): inside
+its own games the ridge has over-shrunk, across seasons it has not shrunk enough.
+
+***The penalty, scored on the games TWO seasons away*** (outside the window alpha was fitted on), 56
+paired observations, `game_armse` in points per 100 per team-game.  Three arms: the rating as it stands,
+the rating with only its amplitude corrected, and the rating with the per-player correction on top.
+
+| penalty | rescale only | rescale + alpha |
+|---|---|---|
+| the rating alone | 8.8046 | -- |
+| 300 | 8.7763 | 9.0222 |
+| 1,000 | 8.7564 | 8.7554 |
+| 3,000 | 8.7416 | 8.6489 |
+| **10,000** | 8.7305 | **8.6328** |
+| 30,000 | 8.7250 | 8.6549 |
+| 100,000 | 8.7223 | 8.6861 |
+
+10,000 is interior.  Split in two, in game_armse removed: **0.0740 by the rescale alone** and **0.0977
+by the per-player correction on top of it**, the latter -2.659 mse at a paired statistic of -20.4,
+**56 of 56 observations better**.  **That 0.0977 is UNCONTROLLED: experiment 18b puts one free level per
+team into the same fit and it falls to 0.0530.  Quote 18b's number, not this one.**
+
+***The control that makes the number mean something (`--block=0`).***  The corrected rating carries
+three seasons of games and the plain one carries a single season, so part of any gap is just the larger
+sample rather than anything an absence revealed.  Run the identical machinery on the rated season ALONE
+-- no neighbouring seasons, therefore no with-and-without contrast at all, and alpha can only be a
+team-game refit of the games the rating already saw:
+
+| | rescale removes | the per-player part removes |
+|---|---|---|
+| three seasons (the trade set) | 0.0740 | **0.0977** |
+| the rated season alone (control) | 0.0566 | **0.0091** |
+
+**Nine tenths of the per-player gain needs the neighbouring seasons.**  Refitting on the season's own
+games buys 0.0091 and the absences buy the rest.  That is the claim the trade set makes, and it is the
+one number in this entry that would have been wrong without the control.
+
+***The trade loss.***  What the absences say a season's ratings are out by, in points per 100, every
+player counting once -- which is the point, since the year-over-year test is a team-game error in which
+a 200-possession man is a rounding error.  Pooled over 30 seasons, 403 eligible players a season (one
+team all year, 100+ possessions, and games his team played without him):
+
+| side | all | under 500 poss | 500 to 1,500 | over 1,500 |
+|---|---|---|---|---|
+| offence | **0.328** | 0.171 | 0.229 | 0.354 |
+| defence | **0.281** | 0.146 | 0.200 | 0.302 |
+
+Weighting each player by the effective sample of his own contrast raises those to 0.364 and 0.310.
+Dropping the two one-sided seasons (1997 and 2026 have one neighbour) moves them to 0.332 and 0.283.
+Alpha's spread is 0.412 offence and 0.351 defence against the rating's own 1.669 and 1.122, so this is a
+correction of roughly a quarter of the rating's spread, not a rewrite.
+
+***Which statistics see it (`scripts/71_tradeset_features.py`).***  Alpha regressed on the season panel's
+Boruta features plus the rankings' own rating and the panel's `rapm1`, chimeraboost, five
+out-of-player folds, 12,103 player-seasons a side.  (The second of those two was called "prior"
+in scripts 71/72 and written up here as the rankings' prior.  It is `rapm1` -- the role prior plus
+the season's own residual -- not the box prior the rankings are centred on.  Name corrected
+2026-09-17; the numbers below are unchanged, they were always measured on `rapm1`.)  Weighted out-of-fold share of alpha accounted for:
+
+| side | every feature | without the how-much-he-played features | the rankings' own two numbers |
+|---|---|---|---|
+| offence | 0.0686 | **0.0501** | 0.0115 |
+| defence | 0.0770 | **0.0607** | 0.0217 |
+
+**The middle column is the honest one.**  Career possessions is the top feature on both sides, and
+on-court possessions carries the largest ridge coefficient on offence (-0.43 per standard deviation).
+That is measurement trap 8 firing again: alpha is noisier and more shrunk for a player with less
+exposure, so a feature naming those players predicts alpha's NOISE without knowing anything about
+basketball.  Removing the whole family costs about a quarter of the fit and leaves 5.0% and 6.1%.
+
+Against the rankings' own rating and prior at 1.2% and 2.2%, **a season's statistics see four to five
+times as much of the correction as the rankings themselves do**.  That is the result the trade set was
+built to produce: there is signal in the box score and the play-by-play that the current prior is not
+using, and this is the first instrument in the project that can point at it per player.
+
+Ranked feature tables for both sides are in `outputs/tradeset_features.parquet` and printed in full by
+the script; every feature is labelled with whether it measures how much a player played, how he played,
+or is one of the rankings' own numbers.
+
+***2026.***  The correction is small at the top and the order barely moves: Wembanyama, Jokic and Kawhi
+stay the top three.  The largest corrections go to players whose teams played a great deal without them
+-- Chris Paul -2.02 on 456 possessions played against 8,688 his team played without him, Nick Smith Jr.
+-1.66, Myles Turner +1.32, Ty Jerome +1.34.  Pascal Siakam is the largest positive at +1.71 on only 448
+possessions of absence, which is the shape to be careful of: a short contrast is a loud one.
+
+***What this is not.***  Alpha reads the games of the seasons either side, so it can never enter a
+published rating (ruling 1).  It is a diagnostic and a training target.  When it becomes the prior's
+target, the prior for season H must be trained on other players' rows only (the existing out-of-player
+folds) and, for the strict check, on alphas from seasons at least three away from H so their windows
+never touch H-1 or H+1; run the candidate both ways and if the gain disappears with the buffer it was
+the leak.  Nothing here rewrites any shipped artefact: every output is a new `tradeset_*` name.
+
+### Experiment 18b: team terms, and how much of the trade set was really team quality (2026-09-16)
+
+The owner asked for this before anything else, and it was the right call: **about half of the
+per-player gain reported in experiment 18 was the team, not the player.**
+
+A team's output is the sum of its players' columns, so with nothing standing for the team a player's
+alpha can absorb "his team was good that year."  That is exactly the channel that sank the off-court
+record on 2026-09-14.  `tradeset.team_columns` frees one column per team on offence and one per team
+on defence, unpenalised, in two strengths (`--team_effects=team|team_season`):
+
+* **per team, pooled over the three seasons** -- removes persistent team quality: the franchise, the
+  coaching, the building.  A team's change from one season to the next still identifies the players
+  who moved.
+* **per team and per season** -- the strict bound.  Each team's level in each season is free, so a
+  player is identified only by variation in who was on the floor inside that team-season.  The season
+  intercepts are dropped under this one, since each team-season column already carries its season's
+  level.
+
+Two sets of columns and not one, because a team's scoring and its defending are separate facts.
+
+***The penalty grid, all arms at the same six penalties, 56 paired observations, scored two seasons
+out.***  Every arm chose 10,000 and every choice is interior.  In points per 100 of `game_armse`
+removed, split into the part a single multiplier per side buys and the part the per-player correction
+buys on top of it:
+
+| arm | the rescale | the per-player part | paired statistic | seasons better |
+|---|---|---|---|---|
+| no team terms (experiment 18's headline) | 0.0740 | **0.0977** | -20.4 | 56 of 56 |
+| one level per team | 0.0685 | **0.0530** | -10.9 | 53 of 56 |
+| one level per team per season | 0.0647 | **0.0234** | -6.0 | 44 of 56 |
+| the rated season alone, no team terms | 0.0566 | 0.0091 | -5.8 | 43 of 56 |
+
+**The correction survives both controls and it is half the size.**  46% of it was team quality under
+the pooled-team term and 76% under the strict one.  Experiment 18's 0.0977 should be read as an
+uncontrolled number; **0.0530 is the defensible one.**
+
+***Which arm to believe.***  The pooled-team term.  The strict version also absorbs a player's own
+standing relative to his teammates within a season -- that is partly a team-season fact, so it
+removes real signal along with the confound -- and it should be read as a lower bound, not the
+answer.  The pooled term removes the thing the off-court record actually died of and leaves the
+cross-season contrast intact, which is the contrast the trade set is built on.
+
+***The finding that MATTERS survives, and barely moves on defence.***  What a season's statistics can
+see of the correction, out of fold, with the how-much-he-played family removed:
+
+| side | no team terms | one level per team | the rankings' own two numbers, team terms on |
+|---|---|---|---|
+| offence | 0.0501 | **0.0367** | 0.0081 |
+| defence | 0.0607 | **0.0556** | 0.0172 |
+
+So with team quality taken out, the box score and the play-by-play still see **four and a half times**
+what the rating and prior see on offence and **three times** on defence.  Defence loses almost nothing
+(0.0607 to 0.0556); offence takes the larger cut, which is consistent with offensive team quality
+being the more persistent of the two.  **The reason to have built the trade set stands.**
+
+The trade loss shrinks in step, as it must, since alpha is smaller: offence 0.328 to 0.300 and defence
+0.281 to 0.256 pooled, same tier ordering.
+
+`outputs/tradeset_team_*` is the pooled-team arm and `outputs/tradeset_ts_*` the strict one;
+`outputs/tradeset_*` without a suffix remains the uncontrolled arm and should not be quoted on its own.
+
+***A test premise that was wrong, recorded because it is the natural guess.***  I first asserted that
+under per-team-season terms a player who never leaves the floor would keep no correction, being
+collinear with his own team's column.  He keeps one: his possession SHARE still varies game to game,
+and more appearances means less shrinkage, which dominates.  The property that does hold, and is what
+`tests/test_tradeset.py` now checks, is that pooling each team-season's lineup correction over its own
+games moves closer to zero once the team has a column of its own -- the team-level part of alpha goes
+to the team.
+
+### Experiment 18c: which statistics move a correction, and by how much (2026-09-16)
+
+`scripts/72_tradeset_shap.py`, on the team-controlled alpha (`outputs/tradeset_team_alpha.parquet`).
+Exact interventional TreeSHAP from chimeraboost, computed OUT OF FOLD -- each player's contributions
+come from the fold model that never saw a row of his -- in the model's additive space, which is
+alpha's own units.  **Every number here is points per 100 possessions of correction: how far a
+statistic moves a player's rating away from what his own season's games said.**
+
+Three columns per statistic.  `moves_typical` is the mean absolute contribution: how much it moves a
+player at all.  `low` and `high` are the mean SIGNED contribution among the bottom and top fifth of
+the statistic, which is the only readable form of direction -- an importance rank cannot say which way.
+
+***Offence, the eight that move a player most:***
+
+| statistic | moves_typical | low fifth | high fifth | measures |
+|---|---|---|---|---|
+| `onc_d` (opponent points while on court) | 0.027 | -0.035 | +0.050 | how he played |
+| `exp_poss` (career possessions) | 0.022 | 0.000 | -0.042 | **how much he played** |
+| `onc_o` (own points while on court) | 0.019 | -0.036 | +0.016 | how he played |
+| `p3r` (three-point rate) | 0.019 | -0.032 | +0.019 | how he played |
+| `poss_pct` (possession share) | 0.018 | +0.019 | -0.028 | **how much he played** |
+| `weight` | 0.017 | -0.013 | +0.024 | how he played |
+| `creation` | 0.013 | -0.019 | +0.025 | how he played |
+| `orbsh` (offensive rebound share) | 0.012 | -0.014 | +0.023 | how he played |
+
+***Defence, the six that move a player most:***
+
+| statistic | moves_typical | low fifth | high fifth | measures |
+|---|---|---|---|---|
+| `exp_poss` | 0.030 | -0.026 | +0.031 | **how much he played** |
+| `onc_o` | 0.029 | +0.041 | -0.062 | how he played |
+| `gs_pct` (games-started share) | 0.013 | -0.007 | +0.024 | **how much he played** |
+| `height` | 0.011 | -0.014 | +0.018 | how he played |
+| `stocks` (steals plus blocks) | 0.010 | -0.015 | +0.018 | how he played |
+| `drb` | 0.007 | -0.010 | +0.013 | how he played |
+
+`rating` and `prior` -- the rankings' own two numbers, handed in as features on purpose -- move a
+player 0.013 and 0.012 on offence and 0.025 and 0.029 on defence, and both push DOWN at their high end
+(offence `rating` high -0.034; defence `prior` high -0.046).  That is the amplitude story showing up
+per player: the higher the rating, the more the absences take back.
+
+***Three findings.***
+
+1. **Shooting threes, creating shots and offensive rebounding all push a correction UP**, each about
+   0.02 per 100 at the high end.  The rating under-credits the players who do those three things and
+   the trade set adds it back.  This is the most directly actionable thing the trade set has produced.
+2. **On-court plus-minus is the loudest real statistic on both sides, and on DEFENCE it points the
+   wrong way.**  A player whose team scored most while he was on the floor has his defensive
+   correction pushed DOWN 0.062.  The prior is reading team offence as defensive credit.
+3. **`exp_poss` is near the top on both sides and it is the warning, not the finding** (measurement
+   trap 8).  A longer career means a better-MEASURED correction, so the feature predicts alpha's noise.
+   Totals, summing `moves_typical` by family: the how-he-played statistics move a typical player
+   **0.158 on offence and 0.118 on defence**, the how-much-he-played family **0.060 and 0.073**.  So
+   two thirds of the real movement on offence is basketball and only three fifths of it on defence.
+
+***Per player, 2026, and this is the number that sets the ceiling.***  The largest corrections beside
+how much of each the statistics account for: Westbrook -1.52 against -0.06, Chris Paul -1.42 / -0.29,
+Amen Thompson -1.29 / -0.23, Dort -1.25 / -0.05, Markkanen +1.16 / +0.44, Durant -1.15 / -0.10, Trey
+Murphy III +1.04 / +0.47.  **Most of what an absence reveals is not in the box score at all**, which is
+the same thing the 3.7% and 5.6% shares say, read one player at a time.
+
+***A bug caught before the numbers were quoted.***  Melting the per-player frame repeated each
+player's correction once per statistic, so summing it multiplied every correction by the number of
+features -- 42 across the two sides.  The first run read Westbrook at -34.39 instead of -1.52 and the
+error was invisible in the ranking, which was correct throughout.  The script now carries the
+correction and the prediction as one row per player per side, never melted.
+
+### The trade set is a diagnostic, not a product: the owner's verdict (2026-09-16)
+
+Shown the corrected ratings, the owner: ***"basically no movement."***  **Not shipped.**
+
+**The owner's measurement rule, given in the same breath and adopted:** *"anything that's within 0.1
+is 'nothing'."*  Report how far a change moves players in **points per 100**, not in rank places -- a
+rank move has no size, and the middle of a list can be packed tightly enough that a large one is a
+rounding error.  Applied here it **overturns the dismissal it was offered to support.**
+
+Absolute change against the incumbent, 12,103 eligible player-seasons with absence evidence, 30 seasons:
+
+| | median | ninth decile | largest | over 0.1 | over 0.25 |
+|---|---|---|---|---|---|
+| the per-player correction alone | **0.273** | 0.784 | 2.43 | **79.1%** | 53.2% |
+| the uniform rescale's part | 0.381 | 0.909 | 3.88 | 83.3% | 64.2% |
+| both together | 0.512 | 1.244 | 4.61 | 89.7% | 74.4% |
+
+Per-player part by exposure: under 500 possessions median 0.130, 58.7% over the threshold; 500 to
+1,500, 0.244 and 79.1%; 1,500 to 3,000, 0.306 and 82.8%; over 3,000, 0.356 and 85.0%.  **Four fifths of
+players move more than the threshold and the movement grows with exposure**, so it is not a bench
+artefact.
+
+The packing density is an empirical question and the guess was wrong: near the middle of a 2026 season
+**0.84 points per 100 spans 20% of the players**, so the men who moved 18 to 26 places moved a median of
+**0.243** points per 100.  What IS true is that the top does not move -- the 2026 top five is the same
+five men reordered, the top 20 keeps 15.7 of its 20 names over 30 seasons, rank agreement 0.942,
+Kendall 0.802, and 0.947 among players with 1,000+ possessions.  Nothing happens where the eye test
+looks; the middle of the list is rearranged by amounts that clear the owner's own threshold.
+
+**Why it does not ship, and the reason is not the size of the movement.**  Alpha reads the seasons
+either side of the rated one, so it can never be a published rating (ruling 1).  The route to shipping
+was to teach the prior what alpha knows, and a season's statistics see **3.7% of alpha on offence and
+5.6% on defence** out of fold.  The correction is real and it is mostly invisible to the box score.
+Per player: Westbrook -1.52 with the statistics seeing -0.06, Dort -1.25 against -0.05, Durant -1.15
+against -0.10; the best are Trey Murphy III +1.04 against +0.47 and Markkanen +1.16 against +0.44.
+
+**What the line produced that outlives it**, in order of what it should change:
+
+1. The offensive rating is about **a quarter too wide** across adjacent seasons (multiplier 0.749
+   offence, 0.919 defence), worth 0.069 of game error on its own, and the sign REVERSES inside a single
+   season (1.03-1.12 and 1.38-1.51).  Within its own games the ridge over-shrinks; across seasons it
+   does not shrink enough.  That is a live, unexploited finding about the incumbent.
+2. Three statistics the rating under-credits, each about 0.02 per 100 at its high end: **three-point
+   rate, shot creation, offensive rebound share**.
+3. A named defect: on defence the prior **reads team offence as defensive credit** (on-court plus-minus
+   pushes the defensive correction down 0.062 at its high end).
+4. The first per-player loss in this project that counts a bench player the same as a starter (the trade
+   loss: offence 0.300, defence 0.256, against a rating spread of 1.67 and 1.12).
+
+**How to use it from here:** as an instrument, on candidates the team-game criterion calls ties.  Do not
+adopt alpha as a rating, and do not train the prior on it until the 3.7% and 5.6% are raised.
+Experiments 18, 18b and 18c above have the full record; `HANDOFF.md` has the commands and the traps.
 
 ## What was tried and rejected
 

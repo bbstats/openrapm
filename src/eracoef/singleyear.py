@@ -35,9 +35,10 @@ from .gbdt_prior import CAREER, SHOT_FEATURES, SHOT_LEAGUE, SHOT_TOTALS, add_der
 from .design import FEATURES
 from .rloocv import BalancedGroupKFold
 
-__all__ = ["PRIOR_FEATURES", "INPUT_COLUMNS", "BIO", "ONC", "OFFC", "NET", "ROLE_INPUTS", "aggregate", "season_frame",
+__all__ = ["PRIOR_FEATURES", "INPUT_COLUMNS", "BIO", "ONC", "OFFC", "NET", "ROLE_INPUTS", "CLOSENESS", "LEVEL_COVARIATES", "aggregate", "season_frame",
            "prior_rows", "season_rows", "chunk_rows", "CHUNK_FEATURES", "stratified_player_folds",
            "fold_mean_shift", "FEATURE_SETS", "feature_set", "OFFENSE_TARGET", "DEFENSE_TARGET",
+           "team_movement", "reweight_by_movement",
            "RAPM_OFFENSE_LAMBDA",
            "RAPM_DEFENSE_LAMBDA", "RAPM_CONTEXT_LAMBDA", "MIN_POSSESSIONS"]
 
@@ -66,12 +67,36 @@ OFFC = ["offc_o", "offc_d", "offc_poss_o", "offc_poss_d"]
 NET = ["net_o", "net_d"]                                    # onc minus offc, per side
 ROLE_INPUTS = ["poss_pct", "gs_pct", "age"]
 
+# What score state a player's statistics were compiled in (scripts/69_closeness_panel.py).  `closeness` is
+# the possession-weighted mean of 1 / max(|margin|, 1) -- the same form `priorridge.team_game_weights`
+# uses on the ratings objective, so "close" means one thing in both halves of the pipeline.
+CLOSENESS = ["gt_share", "closeness", "abs_margin"]
+
+# What a REPLACEMENT LEVEL may be modelled on (experiment 13, the owner 2026-09-15).  Every one of these
+# is measured EXACTLY however few minutes a man played -- his age and height do not get noisy at 40
+# possessions, his box-score RATES do -- which is the whole point: the blend hands a player with few possessions over to
+# the covariates that still work instead of to a floating constant.  `scripts/67_blend_apm.py` fits the
+# coefficients against APM, and they are pinned by players who DO have minutes, so a 155-possession man
+# borrows strength from players with heavy minutes who look like him.
+#
+# `age` is imputed to the season median for about 10.5% of player-seasons: `roles.player_season_inputs`
+# sets an `age_imputed` flag and `scripts/49_role_panel.py` does not carry it, so the flag cannot be used
+# as a column here.  Anyone adding it must widen the panel first.
+#
+# `poss_pct` and `gs_pct` are measured on the RATED season and are the covariate DECISIONS.md already
+# sized as almost entirely hindsight: possession share at H was the largest map gain ever measured
+# (-0.19, z -3.7) and worth -0.006 on HALF of H's games, keeping 3% of its value.  For a replacement
+# level the coach's revealed opinion of a man nobody has plus-minus on is legitimate information, but it
+# carries that control or it is not measured.
+LEVEL_COVARIATES = ["age", "exp_yrs", "exp_poss", "entry_age", "height", "weight", "draft_pick",
+                    "poss_pct", "gs_pct", "tenure", "n_teams"]
+
 # What the booster sees.  54 names: 42 of SHOT_FEATURES (all but `season`), 3 career, 5 bio, 4 on-court.
 PRIOR_FEATURES = [f for f in SHOT_FEATURES if f != "season"] + CAREER + BIO + ONC
 
 # What the panel must carry for `add_derived` to build the rest.  The raw (uncentred) rates are the
 # RATIOS' inputs; the shot totals and the block league levels are the SHOTQ inputs.
-INPUT_COLUMNS = (list(FEATURES) + ROLE_INPUTS + [f"raw_{c}" for c in FEATURES]
+INPUT_COLUMNS = (list(FEATURES) + ROLE_INPUTS + CLOSENESS + [f"raw_{c}" for c in FEATURES]
                  + list(SHOT_TOTALS) + list(SHOT_LEAGUE) + CAREER + BIO + ONC + OFFC + NET)
 
 
@@ -100,7 +125,7 @@ BORUTA_D = ["blk", "drb", "exp_poss", "exp_yrs", "fga", "gs_pct", "height", "onc
 # still compare boards that hold them fixed, which is every other comparison in this module.
 #
 # It does NOT follow that the columns should go, and that was the wrong turn.  The leak is in the
-# EVALUATION, not in the product.  The board rates a COMPLETED season, ruling 12 allows H's own games as
+# EVALUATION, not in the product.  The board rates a COMPLETED season, ruling 1 allows H's own games as
 # the evidence, and at ship time H's on-court record is legitimately known -- as it is to every public
 # metric in `data/external/consensus.csv`, all of which use the season's own plus-minus.  "Would `onc_*`
 # help if we only had 75% of the season" is a question the product never asks.
@@ -129,6 +154,15 @@ FEATURE_SETS = {
     # the owner's idea (2026-09-14): the off-court record and the on/off net beside the on-court record,
     # both sides.  `scripts/65_offcourt_panel.py` writes the columns into the season panel.
     "boruta_offc": {"O": BORUTA_O + OFFC + NET, "D": BORUTA_D + OFFC + NET},
+    # experiment 15 (the owner, 2026-09-15): tell the prior what SCORE STATE a player's statistics were
+    # compiled in.  The ratings side already knows -- the design carries a garbage-time column and a
+    # margin slope -- but nothing in the prior's inputs does, and that asymmetry is the leading
+    # explanation for the prior being flat in exposure where APM is steep (DECISIONS.md, experiment 14).
+    # A man with 0-50 possessions takes 61% of them in garbage time against 2.5% for a 4,000+ player, at
+    # an average score gap of 18 points against 6.7, so his per-possession rates describe a different
+    # game.  `scripts/69_closeness_panel.py` writes the three columns.  The owner's call was to hand the
+    # prior the exposure and let the booster learn the discount, rather than reweighting the statistics.
+    "boruta_close": {"O": BORUTA_O + CLOSENESS, "D": BORUTA_D + CLOSENESS},
 }
 
 
@@ -312,3 +346,48 @@ def chunk_rows(target: pd.DataFrame, rows: pd.DataFrame, column: str, features=N
     chunks = chunks.assign(target=chunks[column].to_numpy(float),
                            weight=(share * chunks.possessions).to_numpy(float))
     return pd.concat([base, chunks])
+
+
+def team_movement(per_team: pd.DataFrame, min_poss: float = 100.0) -> pd.Series:
+    """Per player, 1 minus the share of his possessions spent on his most-played team.
+
+    The owner's measure (2026-09-16) of how much team variation sits behind a player's label.  A man
+    who never left one team scores 0; an even split across two teams scores 0.5; the most-travelled
+    careers here reach 0.80.
+
+    Why this and not "was he traded this season": the prior's label is ONE leave-season-out RAPM per
+    player pooled over his whole career, so how well it is identified depends on the team variation
+    across all of it, not on what happened in any one season.  A mid-season trade flag would be the
+    right idea measured at the wrong granularity.
+
+    `per_team` is one row per (player_id, team_id) with `poss_on`, restricted by the caller to the
+    seasons the label was fitted on -- never the rated season, so the two agree about what evidence
+    exists.  Returned indexed by player_id.
+    """
+    totals = per_team.groupby("player_id").poss_on.sum()
+    main = per_team.groupby("player_id").poss_on.max()
+    movement = 1.0 - main / totals
+    return movement[totals >= float(min_poss)]
+
+
+def reweight_by_movement(train: pd.DataFrame, movement: pd.Series, floor: float = 0.0) -> pd.DataFrame:
+    """Multiply every training row's weight by its player's `team_movement`, plus `floor`.
+
+    The total weight is preserved, so the booster's own regularisation means the same thing before and
+    after and only the DISTRIBUTION of weight across players changes.
+
+    `floor=0` is the owner's rule exactly, and it drops the one-team players outright: 29.4% of the
+    players behind a 2026 label, holding 10.1% of the weight.  A positive floor keeps them in at
+    reduced weight, which is the knob to sweep if the pure version overshoots.
+
+    Note what this does NOT do, because the guess went the other way first: it does not tilt the map
+    toward journeymen.  Movement RISES with career length (mean 0.11 under 2,000 possessions against
+    0.41 over 30,000), so the weight moves toward long careers -- the same rows the memorisation work
+    already found are the easiest targets to predict.  The criterion is the only arbiter of that.
+    """
+    factor = movement.reindex(train.index).fillna(0.0).to_numpy(float) + float(floor)
+    weight = train.weight.to_numpy(float) * factor
+    total = weight.sum()
+    if total <= 0:
+        raise ValueError("the movement weighting left no training weight at all")
+    return train.assign(weight=weight * (train.weight.to_numpy(float).sum() / total))
