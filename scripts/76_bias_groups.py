@@ -214,45 +214,50 @@ def page(result: dict) -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OpenRAPM: bias by player type</title>
 <style>
-  :root { color-scheme: light dark; --line: #d9d8d3; --muted: #6b6a66; --accent: #2a78d6;
-          --over: #b3452b; --under: #2a6fb3; }
-  @media (prefers-color-scheme: dark) { :root { --line: #3a3a38; --muted: #a09f98; --accent: #3987e5;
-          --over: #e07a5f; --under: #7fb2e5; } }
-  body { margin: 0; font: 15px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
-  main { max-width: 900px; margin: 0 auto; padding: 28px 20px 48px; }
-  h1 { font-size: 26px; margin: 0 0 6px; }
-  h2 { font-size: 17px; margin: 26px 0 4px; }
-  p.note { color: var(--muted); max-width: 70ch; margin: 0 0 14px; }
-  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; margin-bottom: 8px; }
-  th, td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  :root { color-scheme: light dark; --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19;
+          --over: 227 73 72; --under: 42 120 214; --zero: #f0efec; }
+  @media (prefers-color-scheme: dark) { :root { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee;
+          --over: 230 103 103; --under: 57 135 229; --zero: #383835; } }
+  body { margin: 0; color: var(--ink); font: 15px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 28px 20px 48px; }
+  h1 { font-size: 26px; margin: 0 0 14px; }
+  h1 small { font-weight: 400; font-size: 14px; color: var(--muted); display: block; margin-top: 4px; }
+  table { border-collapse: separate; border-spacing: 2px 0; width: 100%;
+          font-variant-numeric: tabular-nums; }
+  th, td { padding: 6px 9px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
   th:nth-child(1), td:nth-child(1) { text-align: left; white-space: normal; }
   th { color: var(--muted); font-weight: 600; }
-  td.over { color: var(--over); } td.under { color: var(--under); }
+  th:nth-child(4), th:nth-child(5) { color: var(--ink); }
+  td.over, td.under { background: var(--zero); border-radius: 4px; }
+  td.over { background: rgb(var(--over) / calc(var(--depth) * 0.55)); }
+  td.under { background: rgb(var(--under) / calc(var(--depth) * 0.55)); }
   .sig { color: var(--muted); font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .who { max-width: 70ch; }
-  .who div { margin: 2px 0; } .who span { color: var(--muted); }
-  footer { margin-top: 30px; color: var(--muted); font-size: 13px; }
-  footer a, h1 a { color: inherit; }
 </style>
 </head>
 <body>
 <main>
-<h1>Bias by player type</h1>
+<h1>Bias by player type<small>red: we rate the type higher &nbsp;&middot;&nbsp; blue: we rate it lower &nbsp;&middot;&nbsp; points per 100, 2026, scaled</small></h1>
 """
+    def cell(value) -> str:
+        """A diverging tint: red = we rate the type ABOVE that source, blue = below, gray at zero.
+
+        The depth is `min(|bias| / 0.9, 1)`, so the largest bias on the page is the full tint and the
+        owner's 0.1 threshold for "nothing" is a tenth of it -- barely visible, which is the point.
+        """
+        if value is None:
+            return '<td>&ndash;</td>'
+        depth = min(abs(value) / 0.9, 1.0)
+        pole = "over" if value > 0 else "under"
+        return (f'<td class="{pole}" style="--depth: {depth:.3f}"><b>{value:+.3f}</b></td>')
+
     by_group = {r["group"]: r for r in result["groups_vs_games"]}
     out = ['<table><thead><tr><th>Player type</th><th>Consensus</th><th>Ours</th>'
-           '<th>Bias vs consensus</th><th>Bias vs Season Performance+</th></tr></thead><tbody>']
+           '<th>vs consensus</th><th>vs 2026 observed</th></tr></thead><tbody>']
     for r in result["groups"]:
         other = by_group.get(r["group"])
-        cls = "over" if r["bias"] > 0 else "under"
-        cell = "&ndash;"
-        if other is not None:
-            cell = (f"<b>{other['bias']:+.3f}</b>", )[0]
-            cell = f"<span class=\"{'over' if other['bias'] > 0 else 'under'}\"><b>{cell}</b></span>"
         out.append(f"<tr><td>{r['name']}<br><span class=\"sig\">{r['signature']}</span></td>"
                    f"<td>{r['theirs']:+.2f}</td><td>{r['ours']:+.2f}</td>"
-                   f"<td class=\"{cls}\"><b>{r['bias']:+.3f}</b></td>"
-                   f"<td>{cell}</td></tr>")
+                   f"{cell(r['bias'])}{cell(other['bias'] if other else None)}</tr>")
     return head + "".join(out) + "</tbody></table></main></body></html>"
 
 
