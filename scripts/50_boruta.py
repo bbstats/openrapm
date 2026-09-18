@@ -36,7 +36,8 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from eracoef import singleyear as sy  # noqa: E402
-from eracoef.config import load_config  # noqa: E402
+from eracoef.config import load_config
+from eracoef.seasons import drop_untrainable  # noqa: E402
 from eracoef.bio import PLAYER_INPUTS  # noqa: E402
 from eracoef.singleyear import ONC  # noqa: E402
 from eracoef.gbdt_prior import (BIO_BINS, CAREER, DEFAULT_FEATURES, DERIVED, FULL_FEATURES,  # noqa: E402
@@ -62,7 +63,9 @@ threads = int(_flag("threads", 12))
 # (outputs/role_panel_season.parquet) while everything else reads the 3-season block one.
 panel_path = Path(cfg["_root"]) / _flag("panel", cfg.get("paths", {}).get("role_panel",
                                                                          "outputs/role_panel.parquet"))
-panel = pd.read_parquet(panel_path)
+# The trust boundary (src/eracoef/seasons.py): feature selection is a fit, so rows whose unit reaches
+# into a season still being played may not reach it.  Drops nothing while no season is in progress.
+panel, _ = drop_untrainable(pd.read_parquet(panel_path), cfg, what="the panel")
 print(f"panel: {panel_path} ({len(panel):,} rows, {panel.window.nunique()} windows)", flush=True)
 # The kitchen sink (the owner, 2026-09-07: "take the absolute fullest kitchen sink and run borutashap"): every
 # column both paths can build -- the 55 of `wide`, the era-relative Dredge twins, the career block, who he is

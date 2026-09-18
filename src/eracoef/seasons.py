@@ -41,10 +41,14 @@ Finals are unfinished, and `Trainable` raises on a season past its cutoff), and
 `tests/test_layer_boundary.py`, which keeps the loaders the only channel through which data can
 reach a fit at all.
 
-The stronger check this docstring used to promise -- rebuild every fitted artifact with the current
-season's rows replaced by noise and assert not one byte moves -- has never been written.  It would
-be worth having: the tests above prove the guard is correct and that nothing routes around it, but
-only the rebuild proves no fitted artifact on disk was built before the guard existed.
+`tests/test_no_current_season.py` carries the claim end to end: a block that only REACHES INTO a
+season in progress is dropped whole, replacing that season's rows with noise does not move the
+training rows by one byte, and every script that fits from the panel gates its read while the
+three that write the panel back do not.  That last part is the one that had gone wrong -- five
+scripts read the season panel straight off the disk with no gate until 2026-09-18.
+
+What none of it can prove is that a fitted artifact already on disk was built after the guard
+existed.  For that, rebuild it.
 """
 from __future__ import annotations
 

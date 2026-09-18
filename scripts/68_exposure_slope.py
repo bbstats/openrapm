@@ -98,10 +98,12 @@ def main():
     out = ROOT / "outputs" / f"{_flag('out', 'season_ratings_slope')}.parquet"
 
     if "poss_def" not in board or bool((board.poss_off == board.poss_def).all()):
-        # scripts/62_single_year_board.py copies poss_off into poss_def; the real per-side counts differ
-        # by about nine possessions in twenty-five hundred, so this is a rounding matter here, but the
-        # slope is defined per side and should read the side it is correcting
-        print("note: the rankings table has poss_def == poss_off, so both sides use the same count")
+        # scripts/62_single_year_board.py copied poss_off into poss_def until 2026-09-18; the real
+        # per-side counts differ by about nine possessions in twenty-five hundred, so this is a
+        # rounding matter here, but the slope is defined per side and should read the side it is
+        # correcting.  A table that still trips this was written by the older script -- rebuild it.
+        print("note: the rankings table has poss_def == poss_off, so both sides use the same count;"
+              " it predates 2026-09-18 and was built before the defensive count was carried")
 
     print(f"rankings {rankings}: {len(board):,} rows, {board.season.nunique()} seasons; "
           f"exclude_neighbours {exclude}; quadratic {quad}; slope multiplier {mult}")

@@ -42,7 +42,8 @@ import pandas as pd  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 from eracoef import singleyear as sy  # noqa: E402
-from eracoef.config import load_config  # noqa: E402
+from eracoef.config import load_config
+from eracoef.seasons import drop_untrainable  # noqa: E402
 
 # `OutOfPlayerSPM` is the rankings' own prior fit, folds and all.  Imported rather than reimplemented so
 # that "what predicts alpha" is measured by exactly the model that would have to use it.
@@ -105,7 +106,11 @@ def main():
     alpha = pd.read_parquet(ROOT / _flag("alpha", f"outputs/{tag}_alpha.parquet"))
     arm = str(alpha.team_effects.iloc[0]) if "team_effects" in alpha.columns else "unrecorded"
     print(f"alpha table: team effects {arm} (this script assumes 'none')")
-    panel = pd.read_parquet(ROOT / _flag("panel", "outputs/role_panel_season.parquet"))
+    # The trust boundary (src/eracoef/seasons.py): rows whose unit reaches into a season still
+    # being played may not reach a fit.  Gating at the read is what keeps every fit below honest;
+    # it drops nothing while no season is in progress, and says so when it does.
+    panel, _ = drop_untrainable(pd.read_parquet(ROOT / _flag("panel", "outputs/role_panel_season.parquet")),
+                                cfg, what="the season panel")
     feature_sets = sy.feature_set(_flag("features", "boruta"))
     folds = int(_flag("player_folds", "5"))
     min_without = float(_flag("min_without", "1"))

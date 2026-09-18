@@ -77,7 +77,8 @@ import pandas as pd  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from eracoef import singleyear as sy  # noqa: E402
-from eracoef.config import load_config  # noqa: E402
+from eracoef.config import load_config
+from eracoef.seasons import drop_untrainable  # noqa: E402
 from eracoef.holdout import Context  # noqa: E402
 from eracoef.priorridge import PriorRidgeCV  # noqa: E402
 from eracoef.xshoot import DEFENSE_TARGETS  # noqa: E402
@@ -294,7 +295,11 @@ def main():
     else:
         covs = [c for c in covs_flag.split(",") if c and c not in dropped]
 
-    panel = pd.read_parquet(ROOT / "outputs/role_panel_season.parquet")
+    # The trust boundary (src/eracoef/seasons.py): rows whose unit reaches into a season still
+    # being played may not reach a fit.  Gating at the read is what keeps every fit below honest;
+    # it drops nothing while no season is in progress, and says so when it does.
+    panel, _ = drop_untrainable(pd.read_parquet(ROOT / "outputs/role_panel_season.parquet"),
+                                cfg, what="the season panel")
     missing = [c for c in covs if c not in panel.columns]
     assert not missing, f"covariates not in the season panel: {missing}"
     # standardise on the WHOLE panel, once, so a coefficient means the same thing in every season and the

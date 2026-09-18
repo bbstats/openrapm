@@ -110,7 +110,8 @@ from chimeraboost import ChimeraBoostRegressor  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from eracoef import singleyear as sy  # noqa: E402
-from eracoef.config import load_config  # noqa: E402
+from eracoef.config import load_config
+from eracoef.seasons import drop_untrainable  # noqa: E402
 from eracoef.holdout import Context, Ratings, predict_season, score  # noqa: E402
 from eracoef.inseason import season_frac  # noqa: E402
 from eracoef.investigate import offcourt_rates, oncourt_rates  # noqa: E402
@@ -356,12 +357,10 @@ def side_possessions(design) -> tuple[dict, dict]:
     The two differ by about nine possessions in twenty-five hundred, but the owner asked for the right
     count on each side and `design.game_poss` already carries both.
 
-    The board's OWN `poss_def` column is a different thing and is still a copy of `poss_off` (see
-    where the board is assembled below).  This docstring used to claim that copy was 'fixed
-    alongside this'; it was not.  Changing it would move a column in every published season's
-    parquet for about 0.4% of a possession count, so it wants a rebuild and a decision of its own
-    rather than a quiet edit.  The one reader of it, scripts/68_exposure_slope.py, already detects
-    and documents the copy.
+    The board's `poss_def` column comes from here (2026-09-18).  It used to be a copy of `poss_off`,
+    which made `--match_spread` and any per-side exposure correction read the wrong count on
+    defence; a parquet written before that date still carries the copy, and
+    scripts/68_exposure_slope.py says so when it sees one.
     """
     table = (design.game_poss.groupby("psx_idx")[["poss_off", "poss_def"]].sum()
              .reindex(range(design.spec.n_psx)).fillna(0.0))
@@ -462,7 +461,11 @@ def main():
         return out
     assert crossfit in ("0", "1", "scale"), "--crossfit=0|1|scale"
 
-    panel = pd.read_parquet(ROOT / "outputs/role_panel_season.parquet")
+    # The trust boundary (src/eracoef/seasons.py): rows whose unit reaches into a season still
+    # being played may not reach a fit.  Gating at the read is what keeps every fit below honest;
+    # it drops nothing while no season is in progress, and says so when it does.
+    panel, _ = drop_untrainable(pd.read_parquet(ROOT / "outputs/role_panel_season.parquet"),
+                                cfg, what="the season panel")
     panel = panel[panel.poss > 0].reset_index(drop=True)
     feature_set = _flag("features", "boruta")
     features = sy.feature_set(feature_set)
@@ -584,10 +587,11 @@ def main():
         # the blend, before anything downstream sees the prior.  The cross-fitted fold priors get the
         # SAME transform below: the free scale is priced on those columns, so a fold prior that skipped
         # the blend would price the scale on a different prior from the one that ships.
-        poss_side = {}
+        # Always, not only when a blend asks: the board carries a defensive possession count and it
+        # has to be the defensive one.  The design is already built and cached, so this is a groupby.
+        off_poss, def_poss = side_possessions(design_for(names["O"], season))
+        poss_side = {"O": off_poss, "D": def_poss}
         if any(blend.values()):
-            off_poss, def_poss = side_possessions(design_for(names["O"], season))
-            poss_side = {"O": off_poss, "D": def_poss}
             for side in ("O", "D"):
                 if blend[side]:
                     prior[side] = blend_prior(prior[side], poss_side[side], *blend[side])
@@ -633,6 +637,8 @@ def main():
                            if ridge.prior_scale_ is not None else 1.0)
         merged = (table["O"][["player_id", "offense", "prior_offense", "possessions"]]
                   .merge(table["D"][["player_id", "defense", "prior_defense"]], on="player_id"))
+        # the DEFENSIVE possession count, not a copy of the offensive one (side_possessions)
+        merged["poss_def"] = merged.player_id.map(def_poss).fillna(0.0).to_numpy(float)
         rows.append(merged.assign(season=season, offense_lambda=lam["O"][0],
                                   defense_lambda=lam["D"][1], context_lambda=lam["O"][2],
                                   prior_scale_off=scale["O"], prior_scale_def=scale["D"]))
@@ -670,7 +676,6 @@ def main():
     # 52_site.py's schema: raw sign in, positive-good out, one row per player-season
     board = board.rename(columns={"possessions": "poss_off"})
     board["poss_season"] = board.poss_off
-    board["poss_def"] = board.poss_off       # a copy, NOT the defensive count -- see side_possessions
     board["rating_off"] = board.offense
     board["rating_def"] = -board.defense                 # positive good on both ends
     board["rating_total"] = board.rating_off + board.rating_def
