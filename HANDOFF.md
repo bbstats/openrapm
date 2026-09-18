@@ -3,8 +3,8 @@
 **This file is transient.**  It starts the next session and is deleted when Phase 1 ships.  `DECISIONS.md`
 is the permanent record and carries every number quoted here.  Do not let this grow into a lab notebook.
 
-Branch `cleanup`; `main` is fast-forwarded to it at each publish.  `pytest -q`: **330 passed, 1 xfailed, ~165 s** with the scraped data present; **305 passed,
-10 skipped, 1 xfailed** on a clone without it (2026-09-17).
+Branch `cleanup`; `main` is fast-forwarded to it at each publish.  `pytest -q`: **330 passed, 1 xfailed, ~165 s** with the scraped data present; **320 passed, 10 skipped,
+1 xfailed** on a clone without it (the CI run of 2026-09-18).
 
 ## How we work (the owner, 2026-09-13/14)
 
@@ -321,7 +321,7 @@ Nothing that moves a rating. The four that would have cost a day each:
    Latent — nothing is in progress — but it is the shape of thing noticed only in the year it starts
    lying. `tests/test_no_current_season.py` is the guard `seasons.py` had claimed for months.
 
-`pytest -q` is **330 passed, 1 xfailed** with the scraped data, **305 passed / 10 skipped / 1 xfailed**
+`pytest -q` is **330 passed, 1 xfailed** with the scraped data, **320 passed / 10 skipped / 1 xfailed**
 on a clone without it.
 
 ## Verify you are where this file says

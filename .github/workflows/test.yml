@@ -38,4 +38,4 @@ jobs:
       - name: Model code does not load its own data
         run: pytest tests/test_layer_boundary.py -q
       - name: Nothing fitted sees a season in progress
-        run: pytest tests/test_seasons.py -q
+        run: pytest tests/test_seasons.py tests/test_no_current_season.py -q

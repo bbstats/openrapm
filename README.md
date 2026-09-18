@@ -14,8 +14,8 @@ python -m venv .venv && .venv/bin/pip install -e ".[dev]"     # .venv/Scripts/pi
 pytest -q
 ```
 
-**That works on a fresh clone with no data**: 305 pass, 10 skip, 1 xfail, about 145 seconds
-(measured 2026-09-17). Most of the suite runs against synthetic fixtures or is pure function; the
+**That works on a fresh clone with no data**: 320 pass, 10 skip, 1 xfail, about 220 seconds
+(the CI run of 2026-09-18, on 3.11 and 3.12 alike). Most of the suite runs against synthetic fixtures or is pure function; the
 10 that need scraped play-by-play name the command that builds it in their skip message. Tests
 cannot reach the network at all — `tests/conftest.py` blocks it, and `tests/test_network_block.py`
 is the regression for that — so nothing is downloaded behind your back and the number above is
