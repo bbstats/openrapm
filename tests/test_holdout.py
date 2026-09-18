@@ -10,7 +10,7 @@ import pytest
 
 from eracoef.design import FEATURES, build_design
 from eracoef.holdout import (RESULT_COLUMNS, SPLITS, Context, Holdout, PluginSystem, Ratings, SplitSystem,
-                             TableSystem, beta_none, fit_rank_map, paired, pooled, pooled_rank, predict_season,
+                             ReplacementSystem, TableSystem, beta_none, fit_rank_map, paired, pooled, pooled_rank, predict_season,
                              rank_calibration, ratings_from_fit, replacement_quality, report, score, team_residual)
 from eracoef.simulate import simulate
 
@@ -227,3 +227,57 @@ def test_team_game_score_is_nan_when_the_mask_cuts_a_team_game():
     assert np.isnan(score(p, cut)["tg"])
     assert np.isfinite(score(p, cut)["mse"]), "the stint-level score stays valid on any mask"
     assert np.isfinite(score(p)["tg"]), "no mask at all is still scored"
+
+
+# ------------------------------------------------------------------- the replacement level
+# `ReplacementSystem` decides what a player the training block never saw is worth.  It had no test of
+# its own until 2026-09-17, while the same rule copied into `tradeset.replacement_fill` did; these
+# mirror `tests/test_tradeset.py::test_replacement_fill_matches_the_holdout_rule` so the two copies
+# cannot drift apart silently.
+def _three_players(poss):
+    return pd.DataFrame({"player_id": [1, 2, 3], "season": [2002] * 3, "o": [-2.0, -4.0, 8.0],
+                         "d": [1.0, 3.0, -9.0], "poss": list(poss)})
+
+
+class _StubContext:
+    """Only what `ReplacementSystem` touches: the two attributes `train_for` reads."""
+    current_k = 2
+
+    def neighbourhood(self, h, k):
+        return [h - k, h + k]
+
+
+def test_replacement_system_fills_from_the_low_exposure_mean():
+    inner = TableSystem("inner", _three_players([100.0, 300.0, 5000.0]))
+    r = ReplacementSystem("repl", inner, max_poss=500.0, shrink=0.25).fit([2002], None)
+    assert r.fill_o == pytest.approx(0.25 * np.average([-2.0, -4.0], weights=[100.0, 300.0]))
+    assert r.fill_d == pytest.approx(0.25 * np.average([1.0, 3.0], weights=[100.0, 300.0]))
+    # and it is the fill an absent player actually scores, not just a number on the dataclass
+    assert r.aligned([1, -99]).o.to_numpy()[1] == pytest.approx(r.fill_o)
+
+
+def test_replacement_system_shrink_one_is_the_unshrunk_level():
+    """The default, and the back-compatible behaviour every registered system still relies on."""
+    inner = TableSystem("inner", _three_players([100.0, 300.0, 5000.0]))
+    r = ReplacementSystem("repl", inner, max_poss=500.0).fit([2002], None)
+    assert r.fill_o == pytest.approx(np.average([-2.0, -4.0], weights=[100.0, 300.0]))
+    assert r.fill_d == pytest.approx(np.average([1.0, 3.0], weights=[100.0, 300.0]))
+
+
+def test_replacement_system_with_no_low_exposure_players_keeps_the_zero_fill():
+    inner = TableSystem("inner", _three_players([900.0, 1200.0, 5000.0]))
+    r = ReplacementSystem("repl", inner, max_poss=500.0, shrink=0.25).fit([2002], None)
+    assert r.fill_o == 0.0 and r.fill_d == 0.0
+
+
+def test_replacement_system_train_for_delegates_to_the_inner():
+    """A wrapper that ate the inner system's training seasons would silently fit on the wrong block."""
+    table = _three_players([100.0, 300.0, 5000.0])
+    plain = ReplacementSystem("repl", TableSystem("inner", table))      # no train_for on the inner
+    assert plain.train_for(2004, _StubContext()) == [2002, 2006]
+
+    class _Inner(TableSystem):
+        def train_for(self, h, ctx):
+            return [h - 1]
+
+    assert ReplacementSystem("repl", _Inner("inner", table)).train_for(2004, _StubContext()) == [2003]

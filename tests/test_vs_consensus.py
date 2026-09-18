@@ -15,11 +15,16 @@ Five of the original six targets flipped when the ratings moved to the hybrid pr
 now.  One is left: pure on-court defensive RAPM still rates backup bigs above the consensus, which
 is an attribution question the box prior was never going to answer.
 
-The board these score is the SEASON board (scripts/60_season_board.py), pooled over the three
-seasons the consensus covers and weighted by possessions.  That pooling is deliberate: the floors
-below were calibrated against a three-season board, and scoring a single season against a
-three-season consensus would move the estimand and quietly make every floor mean something else.
-Pool first, compare like with like, and the numbers stay readable.
+The board these score is the one that SHIPS -- `outputs/season_ratings_product.parquet` from
+`scripts/62_single_year_board.py`, which is also what `docs/data/ratings.json` is built from --
+pooled over the three seasons the consensus covers and weighted by possessions.  `artifacts/
+season_ratings.parquet` (the older `scripts/60_season_board.py` system) is the fallback, so a clone
+with no `outputs/` still runs these; it is a frozen copy and a pass on it says nothing about the
+board you just built.
+
+That pooling is deliberate: the floors below were calibrated against a three-season board, and
+scoring a single season against a three-season consensus would move the estimand and quietly make
+every floor mean something else.  Pool first, compare like with like, and the numbers stay readable.
 
 Everything skips cleanly if the ratings or the consensus file are not built yet.
 """
@@ -34,11 +39,13 @@ import pytest
 from scipy.stats import spearmanr
 
 ROOT = Path(__file__).resolve().parents[1]
-# the season board, freshly built if it is there and the shipped copy otherwise.  A candidate board
-# (`60_season_board.py --out=<stem>`) is scored by pointing OPENRAPM_BOARD at it, which is how these
-# floors get read for a candidate without overwriting the shipped artifact the rest of them read.
+# A candidate board (`62_single_year_board.py --out=<stem>`) is scored by pointing OPENRAPM_BOARD at
+# it, which is how these floors get read for a candidate without overwriting anything the rest of
+# them read.  Order matters: the first path that exists wins.
 RATINGS = [Path(p) for p in [os.environ.get("OPENRAPM_BOARD")] if p] or [
-    ROOT / "outputs" / "season_ratings.parquet", ROOT / "artifacts" / "season_ratings.parquet"]
+    ROOT / "outputs" / "season_ratings_product.parquet",     # what ships (scripts/62)
+    ROOT / "outputs" / "season_ratings.parquet",             # a local scripts/60 build
+    ROOT / "artifacts" / "season_ratings.parquet"]           # the committed fallback, for CI
 CONSENSUS = ROOT / "data" / "external" / "consensus.csv"
 SEASONS = [2024, 2025, 2026]        # what the consensus snapshot covers
 MIN_POSS = 1000
@@ -122,7 +129,6 @@ def board():
     m = m[m.poss_off >= MIN_POSS].copy()
     if len(m) < 300:
         pytest.skip(f"only {len(m)} players matched; the join or the season set is wrong")
-    m["bigness"] = _bigness(m.player_id)
     for side, con_col in (("total", "adj_overall"), ("off", "adj_offense"), ("def", "adj_defense")):
         m[f"rk_ours_{side}"] = m[f"rating_{side}"].rank(ascending=False)
         m[f"rk_con_{side}"] = m[con_col].rank(ascending=False)
@@ -206,7 +212,7 @@ def test_no_archetype_bias_by_cluster(board):
 
 
 # ------------------------------------------------------------------ fixed by the hybrid prior
-# These five were the defect.  They flipped when scripts/08_ratings.py moved to the hybrid prior --
+# These five were the defect.  They flipped when the retired scripts/08_ratings.py moved to the hybrid prior --
 # box score priced to predict a PLAYER on offense, no box prior at all on defense -- so they are
 # guards now: defensive spread 2.13 -> 1.23, defensive agreement 0.755 -> 0.888, archetype bias
 # +0.63 -> +0.20, overall agreement 0.784 -> 0.896, and the star guards came back up the board.
@@ -233,7 +239,12 @@ def test_defense_agrees_with_the_consensus(board):
 
 
 def test_no_archetype_bias_overall(board):
-    r = board.gap_total.corr(board.bigness)
+    # `_bigness` needs the scraped box scores and skips without them.  It is called HERE rather than in
+    # the `board` fixture so that it skips this test alone: every other check in this file runs off the
+    # two committed files (artifacts/season_ratings.parquet and data/external/consensus.csv), and when
+    # the call sat in the fixture it took all eleven of them down on any machine without data/raw --
+    # which is every CI run, by design (.github/workflows/test.yml asserts data/ is empty).
+    r = board.gap_total.corr(pd.Series(_bigness(board.player_id), index=board.index))
     assert abs(r) < 0.30, f"total gap correlates {r:+.3f} with bigness"
 
 

@@ -14,8 +14,9 @@ Why this is session-scoped
 The first version of this block was `scope="function"` and did not work.  pytest instantiates
 higher-scoped fixtures first, so a `scope="module"` fixture -- `test_vs_consensus.board`, the one
 that actually scrapes -- was set up BEFORE the function-scoped block was installed.  The suite went
-on downloading and the block looked like it was passing.  `test_the_network_block_works` below is
-there so that never goes unnoticed again.
+on downloading and the block looked like it was passing.  `tests/test_network_block.py` is
+there so that never goes unnoticed again.  It lives in its own file because pytest does not collect
+tests out of `conftest.py` -- the guard sat here for weeks and was never once run.
 
 A test that genuinely needs the network -- and it should be very rare -- takes the `allow_network`
 fixture.
@@ -69,13 +70,3 @@ def allow_network():
     finally:
         _block()
 
-
-def test_the_network_block_works():
-    """The regression for the scope bug.  If this passes and the suite still writes to data/raw,
-    something is holding a reference to the real socket functions from before the block."""
-    with pytest.raises(NetworkBlocked):
-        socket.create_connection(("stats.nba.com", 443), timeout=1)
-    with pytest.raises(NetworkBlocked):
-        socket.getaddrinfo("stats.nba.com", 443)
-    with pytest.raises(NetworkBlocked):
-        socket.socket(socket.AF_INET, socket.SOCK_STREAM)

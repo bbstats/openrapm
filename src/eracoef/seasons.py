@@ -35,9 +35,16 @@ Using it
     ratings = prior.rate(scoreable(cfg))    # every season, including the one in progress
 
 `Trainable` refuses to hold a season past its own cutoff, so a fit cannot be handed one by accident.
-That check is a courtesy, not the guarantee: the guarantee is `tests/test_no_current_season.py`,
-which rebuilds every fitted artifact with the current season's data replaced by noise and asserts
-that not one byte of them moves.
+What enforces the rule today is that check plus two tests: `tests/test_seasons.py`, which pins the
+cutoff against a synthetic game log (a title is sixteen playoff wins, nothing is trainable while the
+Finals are unfinished, and `Trainable` raises on a season past its cutoff), and
+`tests/test_layer_boundary.py`, which keeps the loaders the only channel through which data can
+reach a fit at all.
+
+The stronger check this docstring used to promise -- rebuild every fitted artifact with the current
+season's rows replaced by noise and assert not one byte moves -- has never been written.  It would
+be worth having: the tests above prove the guard is correct and that nothing routes around it, but
+only the rebuild proves no fitted artifact on disk was built before the guard existed.
 """
 from __future__ import annotations
 
