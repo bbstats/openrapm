@@ -49,11 +49,11 @@ SUFFIX = re.compile(r"\b(jr|sr|ii|iii|iv|v)\b")
 # assists.  A signature is stable in a way a cluster number is not, and a group whose signature is not
 # listed prints as UNNAMED rather than borrowing a neighbour's name.
 NAMES = {
-    "+ftm +pts +tov +drb": "Big men who run the offence",
+    "+ftm +pts +tov +drb": "Big men who run the offense",
     "+ftm +pts +tov +ast": "High-usage guards and wings",
     "+fg3m +fg3_miss -drb -orb": "Three-point specialists",
     "+blk +drb -ast -stl": "Shooting big men",
-    "+orb -fg3_miss -fg3m +blk": "Rim-protecting centres",
+    "+orb -fg3_miss -fg3m +blk": "Rim-protecting centers",
     "+stl -pts -tov -ftm": "Ball-hawk defenders",
     "+ast -orb +tov -blk": "Guards who pass and shoot",
     "-tov -ast -pts -blk": "Low-usage wings and forwards",
@@ -185,7 +185,7 @@ def page(result: dict) -> str:
              f"consensus</b>. {result['players']} players with 1,000+ possessions, "
              f"{len(g)} types from a Bayesian Gaussian mixture over per-36 box rates "
              f"({result['components_used']} of {result['k']} components used, seed {result['seed']}).</p>"
-             f"<p class=\"note\">Only the overall rating is shown. A type whose offence and defence are "
+             f"<p class=\"note\">Only the overall rating is shown. A type whose offense and defense are "
              f"wrong in opposite directions is a disagreement about which end the value comes from, and both "
              f"sources can be right about how good the player is; only the total says a rating is wrong. Our "
              f"overall is stretched once, globally, by x{result['global_stretch']:.3f} to match the "
