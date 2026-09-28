@@ -33,7 +33,9 @@
   table { border-collapse: separate; border-spacing: 0; width: 100%; font-variant-numeric: tabular-nums; }
   th, td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
   th { color: var(--muted); font-weight: 600; font-size: 13px; cursor: pointer; user-select: none;
-       vertical-align: bottom; }
+       vertical-align: bottom; white-space: normal; min-width: 58px; }
+  th.rank, th.name { white-space: nowrap; min-width: 0; }
+  th.sep, td.sep { border-right: 2px solid var(--line); }
   th.rank, td.rank { color: var(--muted); cursor: default; }
   th.name, td.name { text-align: left; position: sticky; left: 0; background: Canvas; }
   th.name { cursor: default; }
@@ -67,11 +69,11 @@
 <body>
 <main>
   <h1>Plain RAPM, piece by piece</h1>
-  <p class="eq" data-view="player"><b>RAPM</b> = <span class="term">On-court rtg</span> + <span class="term">Teammates</span>
+  <p class="eq" data-view="player"><b>RAPM</b> = <span class="term">On court rtg</span> + <span class="term">Teammates</span>
     + <span class="term">Opponents</span> + <span class="term">Context</span> + <span class="term">Ridge penalty</span></p>
-  <p class="eq" data-view="poss" hidden><b>RAPM</b> = <span class="term">On court</span>
-    + <span class="term">Off court (GP)</span> + <span class="term">Off court (DNP)</span>
-    + <span class="term">Other games</span></p>
+  <p class="eq" data-view="poss" hidden><b>RAPM</b> = <span class="term">On court credit</span>
+    + <span class="term">Off court adjustment (GP)</span> + <span class="term">Off court adjustment (DNP)</span>
+    + <span class="term">Team SOS adjustment</span></p>
   <p class="sub" data-view="player">Every player's plain RAPM, split by who was on the court: five pieces that add up
     to it exactly. Click a player to see his pieces add up.</p>
   <p class="sub" data-view="poss" hidden>The same RAPM, split by which possessions it came from: four pieces that add
@@ -94,7 +96,7 @@
     <table id="table"><thead></thead><tbody></tbody></table>
   </div>
   <dl data-view="player">
-    <dt>On-court rtg</dt>
+    <dt>On court rtg</dt>
     <dd>His on-court rating: points per 100 possessions his team scored minus allowed while he was on the court.
       Only those possessions: nothing from when he sits. The starting point.</dd>
     <dt>Teammates</dt>
@@ -109,26 +111,30 @@
     <dd>The regression's pull toward zero, which keeps small samples from producing extreme ratings. Negative for
       good players, and larger the fewer possessions he has.</dd>
   </dl>
-  <p class="lead" data-view="poss" hidden>Every possession's result, measured against what its situation predicts,
-    counts toward his RAPM with a weight the regression sets. Each piece adds up one group of possessions. Context
-    and the ridge penalty are not pieces here: context is taken out of every possession, and the penalty sets the
-    weights.</p>
+  <p class="lead" data-view="poss" hidden>Each piece is exactly how much his RAPM would move if that group of
+    possessions had come out average for their situation. Context and the ridge penalty are not pieces here: context
+    is taken out of every possession, and the penalty sets how much each possession counts. On court rtg and Off
+    court rtg are the actual ratings, shown for comparison; they are not pieces.</p>
   <dl data-view="poss" hidden>
-    <dt>On court</dt>
-    <dd>The possessions he played. Not the same number as On-court rtg in the other split: each possession here is
-      weighted by how much it tells the regression about him.</dd>
-    <dt>Off court (GP)</dt>
-    <dd>His team's possessions without him, in games he played. A team that falls apart without him adds to his
-      rating; one that stays good takes away.</dd>
-    <dt>Off court (DNP)</dt>
-    <dd>His team's possessions in games he didn't play (injury, rest or coach's decision), in seasons he played for
-      that team. A season missed entirely can't be placed, because injured players aren't in the box scores, so it
-      counts under other games.</dd>
-    <dt>Other games</dt>
-    <dd>Games that weren't his: games between other teams, plus his team's seasons without him (before he arrived,
-      after he left, or a season he missed entirely). They move his rating only through the players he shared the
-      court with: they set his teammates' and opponents' ratings. If his opponents prove strong in their other
-      games, he gets more credit for beating them.</dd>
+    <dt>On court rtg</dt>
+    <dd>Actual: points per 100 possessions his team scored minus allowed with him on the court.</dd>
+    <dt>Off court rtg</dt>
+    <dd>Actual: the same with him off the court, in games he played.</dd>
+    <dt>On court credit</dt>
+    <dd>The part of his RAPM that comes from his own possessions: his team's results with him on the court, measured
+      against what the situation predicts, after each possession's credit is shared with the other nine players on
+      the court.</dd>
+    <dt>Off court adjustment (GP)</dt>
+    <dd>How his team did without him, in games he played. A team that falls apart without him adds to his rating;
+      one that stays good takes away.</dd>
+    <dt>Off court adjustment (DNP)</dt>
+    <dd>The same for his team's games he didn't play (injury, rest or coach's decision), in seasons he was on the
+      team. A season missed entirely can't be placed, because injured players aren't in the box scores, so it counts
+      under Team SOS adjustment.</dd>
+    <dt>Team SOS adjustment</dt>
+    <dd>Games his team wasn't in: his teammates' games for other teams, his opponents' games against everyone else,
+      and his team in seasons he wasn't on it. They move his rating only through how good the players around him
+      look: if his opponents prove strong elsewhere, he gets more credit for beating them.</dd>
   </dl>
   <dl>
     <dt>RAPM</dt>
@@ -154,10 +160,12 @@
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const fold = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
-  // the two splits: [data field, column name, header tooltip], and the sentence under an opened player
+  // the two splits: pieces as [data field, column name, header tooltip, chart label], columns shown beside them for
+  // comparison (not pieces), and the sentence under an opened player
   const VIEWS = {
     player: {
-      pieces: [["m", "On-court rtg", "Points per 100 possessions scored minus allowed while he was on the court"],
+      extra: [],
+      pieces: [["m", "On court rtg", "Points per 100 possessions scored minus allowed while he was on the court"],
                ["t", "Teammates", "Minus the combined RAPM of his four teammates on the court"],
                ["o", "Opponents", "The combined RAPM of the five opponents on the court"],
                ["x", "Context", "Minus what home court, playoffs, garbage time, the score margin and the season predict"],
@@ -174,16 +182,17 @@
       },
     },
     poss: {
-      pieces: [["h", "On court", "The possessions he played"],
-               ["w", "Off court (GP)", "His team's possessions without him, in games he played"],
-               ["g", "Off court (DNP)", "His team's possessions in games he didn't play"],
-               ["e", "Other games", "Games that weren't his: other teams' games, and his team's seasons without him"]],
-      story: p => {
-        const v = (x, many) => (x >= 0 ? (many ? "add " : "adds ") : (many ? "take away " : "takes away ")) + abs2(x);
-        return `${p.n}'s on-court possessions count for ${fmt(p.h)}. Off court in games he played ${v(p.w, false)}, ` +
-               `off court in games he didn't play ${v(p.g, false)} and other games ${v(p.e, true)}, ` +
-               `for a RAPM of ${fmt(p.a)}.`;
-      },
+      extra: [["m", "On court rtg", "Actual: his team's net rating with him on the court"],
+              ["f", "Off court rtg", "Actual: his team's net rating with him off the court, in games he played"]],
+      pieces: [["h", "On court credit", "The part of his RAPM from his own possessions", "On court credit"],
+               ["w", "Off court adjustment (GP)", "How his team did without him, in games he played", "Off court adj. (GP)"],
+               ["g", "Off court adjustment (DNP)", "How his team did in games he didn't play", "Off court adj. (DNP)"],
+               ["e", "Team SOS adjustment", "How the players around him did in games his team wasn't in", "Team SOS adj."]],
+      story: p => `With ${p.n} on the court, his team was ${fmt(p.m)} per 100 possessions` +
+                  (p.f === null ? "" : `; with him off the court, in games he played, ${fmt(p.f)}`) +
+                  `. RAPM credits him ${fmt(p.h)} from his own possessions, then adjusts ${fmt(p.w)} for how his ` +
+                  `team did without him, ${fmt(p.g)} for games he missed and ${fmt(p.e)} for team strength of ` +
+                  `schedule, for a RAPM of ${fmt(p.a)}.`,
     },
   };
 
@@ -235,12 +244,14 @@
   // there is, one unit to a pixel, so its labels stay readable on a phone instead of shrinking with it.
   function waterfall(p, pieces) {
     let run = 0;
-    const bars = pieces.map(([k, name]) => { const a = run; run += p[k]; return { name, v: p[k], a, b: run }; });
+    const bars = pieces.map(([k, name, , label]) => { const a = run; run += p[k];
+                                                      return { name: label || name, v: p[k], a, b: run }; });
     bars.push({ name: "RAPM", v: p.a, a: 0, b: p.a, total: true });
     let lo = Math.min(0, ...bars.map(b => Math.min(b.a, b.b))), hi = Math.max(0, ...bars.map(b => Math.max(b.a, b.b)));
     const pad = (hi - lo || 1) * 0.04; lo -= pad; hi += pad;
     const W = Math.round(Math.min(620, Math.max(300, document.querySelector(".scroll").clientWidth - 24)));
-    const L = W < 440 ? 112 : 124, R = 58, rowH = 27, top = 4, barH = 17, H = top * 2 + bars.length * rowH;
+    const L = Math.min(170, Math.round(16 + 6.9 * Math.max(...bars.map(b => b.name.length))));
+    const R = 58, rowH = 27, top = 4, barH = 17, H = top * 2 + bars.length * rowH;
     const X = v => L + (v - lo) / (hi - lo) * (W - L - R);
     let s = `<svg class="wf" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-hidden="true">`;
     s += `<line class="zero" x1="${X(0)}" x2="${X(0)}" y1="0" y2="${H}"/>`;
@@ -257,11 +268,13 @@
   }
 
   function head() {
-    const pieces = VIEWS[state.view].pieces;
-    const cols = [...pieces, ["a", "RAPM", "The sum of the pieces"], ["p", "Poss.", "Offensive possessions"]];
-    thead.innerHTML = `<tr><th class="rank">#</th><th class="name">Player</th>` + cols.map(([k, name, title]) =>
-      `<th data-k="${k}" title="${esc(title)}" aria-sort="${k === state.sortKey ? (state.sortDir < 0 ? "descending"
-        : "ascending") : "none"}">${name}</th>`).join("") + `</tr>`;
+    const v = VIEWS[state.view];
+    const cols = [...v.extra.map(([k, name, title], j) => [k, name, title, j === v.extra.length - 1 ? "sep" : ""]),
+                  ...v.pieces.map(([k, name, title]) => [k, name, title, ""]),
+                  ["a", "RAPM", "The sum of the pieces", ""], ["p", "Poss.", "Offensive possessions", ""]];
+    thead.innerHTML = `<tr><th class="rank">#</th><th class="name">Player</th>` + cols.map(([k, name, title, cls]) =>
+      `<th data-k="${k}" class="${cls}" title="${esc(title)}" aria-sort="${k === state.sortKey ? (state.sortDir < 0
+        ? "descending" : "ascending") : "none"}">${name}</th>`).join("") + `</tr>`;
     thead.querySelectorAll("th[data-k]").forEach(th => th.addEventListener("click", () => {
       state.sortDir = state.sortKey === th.dataset.k ? -state.sortDir : -1;
       state.sortKey = th.dataset.k;
@@ -284,7 +297,12 @@
     const min = state.min === null ? DEFAULT_MIN[state.span] : state.min, q = fold(state.q);
     minp.value = min;
     let rows = (data.rows[state.period] || []).filter(r => r.p >= min && (!q || fold(r.n).includes(q)));
-    rows.sort((a, b) => (a[state.sortKey] - b[state.sortKey]) * state.sortDir);
+    rows.sort((a, b) => {                // a missing value (no off-court possessions) sorts last either way
+      const x = a[state.sortKey], y = b[state.sortKey];
+      if (x === null || x === undefined) return 1;
+      if (y === null || y === undefined) return -1;
+      return (x - y) * state.sortDir;
+    });
     tbody.replaceChildren();
     rows.forEach((p, i) => {
       const tr = document.createElement("tr");
@@ -293,6 +311,8 @@
       tr.setAttribute("aria-expanded", state.open === p.n);
       cell(tr, i + 1, "rank");
       cell(tr, p.n, "name");
+      view.extra.forEach(([k], j) => cell(tr, p[k] === null || p[k] === undefined ? "" : fmt(p[k]),
+                                          j === view.extra.length - 1 ? "sep" : ""));
       view.pieces.forEach(([k]) => cell(tr, fmt(p[k]), "", shade(p[k])));
       cell(tr, fmt(p.a), "total");
       cell(tr, p.p.toLocaleString(), "");
@@ -302,7 +322,7 @@
       tbody.appendChild(tr);
       if (state.open === p.n) {
         const d = document.createElement("tr"), td = document.createElement("td");
-        d.className = "detail"; td.colSpan = view.pieces.length + 4;
+        d.className = "detail"; td.colSpan = view.extra.length + view.pieces.length + 4;
         td.innerHTML = `<div class="inner"><p class="story">${esc(view.story(p))}</p>${waterfall(p, view.pieces)}</div>`;
         d.appendChild(td); tbody.appendChild(d);
       }
@@ -314,7 +334,7 @@
 
   function setView(view) {
     state.view = view;
-    const keys = VIEWS[view].pieces.map(([k]) => k).concat(["a", "p"]);
+    const keys = [...VIEWS[view].extra, ...VIEWS[view].pieces].map(([k]) => k).concat(["a", "p"]);
     if (!keys.includes(state.sortKey)) { state.sortKey = "a"; state.sortDir = -1; }
     document.querySelectorAll("[data-set-view]").forEach(b => b.setAttribute("aria-pressed", b.dataset.setView === view));
     document.querySelectorAll("[data-view]").forEach(el => { el.hidden = el.dataset.view !== view; });

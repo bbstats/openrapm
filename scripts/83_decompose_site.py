@@ -25,7 +25,9 @@ theirs.  scripts/82_decompose_rapm.py has the seven-piece version that starts fr
 
 **By possession** -- which possessions the rating came from:
 
-    RAPM = on court + off court (GP) + off court (DNP) + other games
+    RAPM = on court credit + off court adjustment (GP) + off court adjustment (DNP) + team SOS adjustment
+
+(the page also shows the actual on-court and off-court ratings beside them, for comparison; they are not pieces)
 
 RAPM is linear in the outcomes: his published rating is c'beta = sum over rows of h_r y_r, h = W X A^-1 c.  The
 context columns are unpenalised, so h is orthogonal to every one of them, and measuring each outcome against its
@@ -33,7 +35,7 @@ fitted context prediction leaves the total unchanged.  Each piece adds up h_r x 
 one group of rows: the possessions he played; his team's possessions without him in games he played; his teams'
 possessions in games he did not play, in seasons he played for them; and every other possession in the span.  A
 row's team comes from the box scores (the team of the players on that side).  A season he missed entirely cannot be
-placed -- injured players are not in the box scores -- so it lands in other games; for a traded player, his other
+placed -- injured players are not in the box scores -- so it lands in team SOS; for a traded player, his other
 team's games before or after his stint count as games he missed.
 
 Plain RAPM: raw points, regular season and playoffs, one fit per span -- every season alone, and each of
@@ -64,9 +66,9 @@ from eracoef.config import load_config  # noqa: E402
 from eracoef.looseason import LeaveSeasonOutRAPM  # noqa: E402
 from eracoef.windows import build_window  # noqa: E402
 
-FIELDS = ["n", "p", "m", "t", "o", "x", "r", "a", "h", "w", "g", "e"]   # name, possessions, the five pieces by
-PIECES = ["margin", "teammates", "opponents", "context", "ridge"]        # player, RAPM, the four by possession
-SOURCES = ["his_minutes", "team_without_him", "games_missed", "everything_else"]
+FIELDS = ["n", "p", "m", "t", "o", "x", "r", "a", "h", "w", "g", "e", "f"]   # name, possessions, the five pieces
+PIECES = ["margin", "teammates", "opponents", "context", "ridge"]             # by player, RAPM, the four by
+SOURCES = ["his_minutes", "team_without_him", "games_missed", "everything_else"]  # possession, off-court rtg
 UNPLACED_TOL = 0.001           # rows whose team the box scores cannot name: under this share of the span's rows
 NAME_SOURCES = ("outputs/season_ratings_product.parquet", "outputs/season_ratings.parquet",
                 "artifacts/season_ratings.parquet")  # scripts/52_site.py's order
@@ -232,6 +234,9 @@ def decompose(fit: dict) -> tuple:
         missed = ((team_att & ~played_att) | (team_def & ~played_def)) & ~on & ~without
         rec.update(his_minutes=hz[on].sum(), team_without_him=hz[without].sum(), games_missed=hz[missed].sum(),
                    everything_else=hz[~(on | without | missed)].sum())
+        # the actual off-court rating beside them: his team's net points per 100 without him, games he played
+        off_att, off_def = team_att & played_att & ~on, team_def & played_def & ~on
+        rec["off_rtg"] = mean(y, off_att) - mean(y, off_def) if off_att.any() and off_def.any() else np.nan
         miss["identity"] = max(miss["identity"], abs(sum(rec[k] for k in PIECES) - rec["rapm"]))
         miss["sources"] = max(miss["sources"], abs(sum(rec[k] for k in SOURCES) - rec["rapm"]))
         miss["ridge"] = max(miss["ridge"], abs(mean(resid, ro) - fit["lam"] * beta[i] / fit["diag"][i]),
@@ -307,7 +312,8 @@ def main() -> None:
             worst["unnamed"] += int(tab["name"].isna().sum())
             tab = tab.sort_values("rapm", ascending=False)
             rows[label(seasons)] = [[r.name, int(round(r.poss)), *(round(float(getattr(r, k)), 2) for k in PIECES),
-                                     round(float(r.rapm), 2), *(round(float(getattr(r, k)), 2) for k in SOURCES)]
+                                     round(float(r.rapm), 2), *(round(float(getattr(r, k)), 2) for k in SOURCES),
+                                     None if np.isnan(r.off_rtg) else round(float(r.off_rtg), 2)]
                                     for r in tab.itertuples(index=False)]
             top = tab.iloc[0]
             print(f"  {label(seasons)}: {len(tab)} players, top {top['name']} {top.rapm:+.2f} "
