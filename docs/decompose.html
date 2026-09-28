@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OpenRAPM: plain RAPM, piece by piece</title>
+<title>OpenRAPM: vanilla RAPM decomposition</title>
 <link rel="stylesheet" href="site.css">
 <script src="site.js"></script>
 <style>
@@ -72,17 +72,17 @@
 <main>
   <nav class="site">
     <a href="./">Ratings</a>
-    <a href="decompose.html" aria-current="page">Piece by piece</a>
+    <a href="decompose.html" aria-current="page">Decomposition</a>
     <a href="bias.html">Bias</a>
     <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
   </nav>
-  <h1>Plain RAPM, piece by piece</h1>
+  <h1>Vanilla RAPM decomposition</h1>
   <p class="eq" data-view="player"><b>RAPM</b> = <span class="term">On court rtg</span> + <span class="term">Teammates</span>
     + <span class="term">Opponents</span> + <span class="term">Context</span> + <span class="term">Ridge penalty</span></p>
   <p class="eq" data-view="poss" hidden><b>RAPM</b> = <span class="term">On court credit</span>
     + <span class="term">Off court adjustment (GP)</span> + <span class="term">Off court adjustment (DNP)</span>
     + <span class="term">Team SOS adjustment</span></p>
-  <p class="sub" data-view="player">Every player's plain RAPM, split by who was on the court: five pieces that add up
+  <p class="sub" data-view="player">Every player's vanilla RAPM, split by who was on the court: five pieces that add up
     to it exactly. Click a player to see his pieces add up.</p>
   <p class="sub" data-view="poss" hidden>The same RAPM, split by which possessions it came from: four pieces that add
     up to it exactly. Click a player to see his pieces add up.</p>
@@ -149,7 +149,7 @@
   </dl>
   <dl>
     <dt>RAPM</dt>
-    <dd>Plain regularized adjusted plus-minus on points: regular season and playoffs, fit on the chosen span alone,
+    <dd>Vanilla regularized adjusted plus-minus on points: regular season and playoffs, fit on the chosen span alone,
       ridge penalty 3,000 per side. Unlike the <a href="index.html">main ratings</a>, it has no box-score prior.</dd>
   </dl>
   <footer>
@@ -313,12 +313,12 @@
   let shown = [];
   $("csv-view").addEventListener("click", e => {
     e.preventDefault();
-    downloadCSV(`openrapm_rapm_pieces_${state.span}_${state.period}.csv`, shown.map(x => [state.period, x]));
+    downloadCSV(`openrapm_decomposition_${state.span}_${state.period}.csv`, shown.map(x => [state.period, x]));
   });
   $("csv-all").addEventListener("click", e => {
     e.preventDefault();
     const d = cache[state.span];
-    downloadCSV(`openrapm_rapm_pieces_${state.span}_all.csv`,
+    downloadCSV(`openrapm_decomposition_${state.span}_all.csv`,
                 d.meta.periods.flatMap(per => d.rows[per].map(x => [per, x])));
   });
 

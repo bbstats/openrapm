@@ -165,7 +165,7 @@ categories: across the eight types, `vs consensus` against `vs 2026 observed` is
 ## The site
 
 `docs/index.html` (rankings, newest season first), `docs/bias.html` (bias by player type) and
-`docs/decompose.html` (plain RAPM split two exact ways: by player, on-court rtg + teammates + opponents + context +
+`docs/decompose.html`, the "Decomposition" tab (vanilla RAPM split two exact ways: by player, on-court rtg + teammates + opponents + context +
 ridge penalty; by possession, on court credit + off court adjustment (GP) + off court adjustment (DNP) + team SOS adjustment,
 with the actual on and off court ratings beside them; single seasons
 and the ten three-season windows, penalty 3,000).  Rebuild with `scripts/52_site.py`,

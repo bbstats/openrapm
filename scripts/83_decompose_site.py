@@ -1,4 +1,4 @@
-"""Plain RAPM, piece by piece, for the site: every player's RAPM over one season and over each three-season window,
+"""Vanilla RAPM decomposition, for the site: every player's RAPM over one season and over each three-season window,
 split two ways that each add up to it exactly -- by player and by possession.  Writes docs/data/decompose_1y.json
 and docs/data/decompose_3y.json for docs/decompose.html.
 
@@ -38,7 +38,7 @@ row's team comes from the box scores (the team of the players on that side).  A 
 placed -- injured players are not in the box scores -- so it lands in team SOS; for a traded player, his other
 team's games before or after his stint count as games he missed.
 
-Plain RAPM: raw points, regular season and playoffs, one fit per span -- every season alone, and each of
+Vanilla RAPM (plain ridge, no prior): raw points, regular season and playoffs, one fit per span -- every season alone, and each of
 config.yaml's ten three-season windows -- at a penalty of 3,000 per side, the owner's choice in scripts 80-82.
 Unlike the main page's ratings it has no box-score prior.  The run stops on a failed check.
 """
@@ -122,7 +122,7 @@ def side_team(teams: pd.Series, game_ids: np.ndarray, players: np.ndarray) -> np
 
 
 def span_fit(seasons, cfg, lam: float) -> dict:
-    """One span's plain RAPM: its rows in global columns, every row's ten players, the fit, the published ratings."""
+    """One span's vanilla RAPM: its rows in global columns, every row's ten players, the fit, the published ratings."""
     rapm, designs = LeaveSeasonOutRAPM(min_possessions=0.0), {}
     for season in seasons:
         designs[season] = build_window([season], cfg, target="pts")
