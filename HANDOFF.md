@@ -164,9 +164,12 @@ categories: across the eight types, `vs consensus` against `vs 2026 observed` is
 
 ## The site
 
-`docs/index.html` (rankings, newest season first) and `docs/bias.html` (bias by player type).  Rebuild with
-`scripts/52_site.py` then `scripts/76_bias_groups.py`, commit, and fast-forward `main` to publish.  The bias
-page is deliberately a title, one table and two short paragraphs; the owner has trimmed it twice.
+`docs/index.html` (rankings, newest season first), `docs/bias.html` (bias by player type) and
+`docs/decompose.html` (plain RAPM split two exact ways: by player, on-court rtg + teammates + opponents + context +
+ridge penalty; by possession, his minutes + team without him + games he missed + everything else; single seasons
+and the ten three-season windows, penalty 3,000).  Rebuild with `scripts/52_site.py`,
+`scripts/76_bias_groups.py` and `scripts/83_decompose_site.py`, commit, and fast-forward `main` to publish.  The
+bias page is deliberately a title, one table and two short paragraphs; the owner has trimmed it twice.
 
 ## Traps that cost a day
 

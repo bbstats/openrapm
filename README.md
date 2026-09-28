@@ -92,6 +92,7 @@ python scripts/02_stints.py 1997 2026 RS,PO   # possessions with the same ten on
 python scripts/49_role_panel.py --season      # APM, role prior, prior-informed RAPM, one row per season
 python scripts/62_single_year_board.py --out=season_ratings_product    # the ratings, ~3 min a season
 python scripts/52_site.py                     # -> docs/data/ratings.json for the page
+python scripts/83_decompose_site.py           # -> docs/data/decompose_*.json for docs/decompose.html
 ```
 
 Step 1 hits stats.nba.com once per game for about 40,000 games and takes days. It is cached and

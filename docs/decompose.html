@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenRAPM: plain RAPM, piece by piece</title>
+<style>
+  :root { color-scheme: light dark; --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6;
+          --chip: #f0efec; --pos: 42 120 214; --neg: 227 73 72; }
+  @media (prefers-color-scheme: dark) {
+    :root { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5;
+            --chip: #2e2e2c; --pos: 57 135 229; --neg: 230 103 103; } }
+  body { margin: 0; color: var(--ink); background: Canvas;
+         font: 15px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { max-width: 1000px; margin: 0 auto; padding: 28px 16px 48px; }
+  h1 { font-size: 26px; margin: 0 0 10px; }
+  .eq { margin: 0 0 4px; font-size: 16px; line-height: 2.1; }
+  .term { display: inline-block; padding: 0 9px; border-radius: 999px; background: var(--chip);
+          line-height: 1.75; white-space: nowrap; }
+  .sub { color: var(--muted); font-size: 13.5px; margin: 0 0 16px; max-width: 72ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-bottom: 12px; }
+  label { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
+  select, input { font: inherit; padding: 4px 7px; border: 1px solid var(--line); border-radius: 5px;
+                  background: transparent; color: inherit; }
+  input[type=number] { width: 84px; } input[type=search] { width: 170px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg button { font: inherit; font-size: 13px; padding: 5px 12px; border: 0; background: transparent;
+                color: var(--muted); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  .count { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+  .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { border-collapse: separate; border-spacing: 0; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; cursor: pointer; user-select: none;
+       vertical-align: bottom; }
+  th.rank, td.rank { color: var(--muted); cursor: default; }
+  th.name, td.name { text-align: left; position: sticky; left: 0; background: Canvas; }
+  th.name { cursor: default; }
+  th[aria-sort="descending"], th[aria-sort="ascending"] { color: var(--accent); }
+  th[aria-sort="descending"]::after { content: " \2193"; }
+  th[aria-sort="ascending"]::after { content: " \2191"; }
+  td.total { font-weight: 700; }
+  tr.player { cursor: pointer; }
+  tr.player:hover td.name, tr.player:focus-visible td.name { color: var(--accent); }
+  tr.player:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  tr.open td { border-bottom-color: transparent; }
+  tr.detail td { text-align: left; white-space: normal; padding: 2px 8px 16px; }
+  .inner { position: sticky; left: 8px; max-width: min(640px, calc(100vw - 48px)); }
+  .story { margin: 0 0 8px; }
+  svg.wf { display: block; }
+  svg.wf text { font: 12.5px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--ink); }
+  svg.wf text.lab { fill: var(--muted); }
+  svg.wf text.tot { font-weight: 700; }
+  svg.wf rect.pos { fill: rgb(var(--pos)); } svg.wf rect.neg { fill: rgb(var(--neg)); }
+  svg.wf rect.tot { fill: var(--ink); }
+  svg.wf line.zero { stroke: var(--line); } svg.wf line.link { stroke: var(--muted); stroke-dasharray: 2 3; }
+  dl { margin: 24px 0 0; font-size: 13.5px; max-width: 72ch; }
+  .lead { margin: 24px 0 -14px; color: var(--muted); font-size: 13.5px; max-width: 72ch; }
+  dt { font-weight: 600; margin-top: 10px; }
+  dd { margin: 2px 0 0; color: var(--muted); }
+  dd a { color: inherit; }
+  footer { margin-top: 24px; color: var(--muted); font-size: 13px; max-width: 72ch; }
+  footer a, .sub a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Plain RAPM, piece by piece</h1>
+  <p class="eq" data-view="player"><b>RAPM</b> = <span class="term">On-court rtg</span> + <span class="term">Teammates</span>
+    + <span class="term">Opponents</span> + <span class="term">Context</span> + <span class="term">Ridge penalty</span></p>
+  <p class="eq" data-view="poss" hidden><b>RAPM</b> = <span class="term">His minutes</span>
+    + <span class="term">Team without him</span> + <span class="term">Games he missed</span>
+    + <span class="term">Everything else</span></p>
+  <p class="sub" data-view="player">Every player's plain RAPM, split by who was on the court: five pieces that add up
+    to it exactly. Click a player to see his pieces add up.</p>
+  <p class="sub" data-view="poss" hidden>The same RAPM, split by which possessions it came from: four pieces that add
+    up to it exactly. Click a player to see his pieces add up.</p>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Split">
+      <button type="button" data-set-view="player" aria-pressed="true">By player</button>
+      <button type="button" data-set-view="poss" aria-pressed="false">By possession</button>
+    </div>
+    <div class="seg" role="group" aria-label="Span">
+      <button type="button" data-span="1y" aria-pressed="true">1 season</button>
+      <button type="button" data-span="3y" aria-pressed="false">3 seasons</button>
+    </div>
+    <label>Period <select id="period"></select></label>
+    <label>Min possessions <input id="minp" type="number" min="0" step="250"></label>
+    <label>Find <input id="find" type="search" placeholder="player name" autocomplete="off"></label>
+  </div>
+  <p class="count" id="count">Loading&hellip;</p>
+  <div class="scroll">
+    <table id="table"><thead></thead><tbody></tbody></table>
+  </div>
+  <dl data-view="player">
+    <dt>On-court rtg</dt>
+    <dd>His on-court rating: points per 100 possessions his team scored minus allowed while he was on the court.
+      Only those possessions: nothing from when he sits. The starting point.</dd>
+    <dt>Teammates</dt>
+    <dd>Minus the combined RAPM of the four teammates on the court with him, weighted by time together. Strong
+      teammates make it negative: they account for part of the margin.</dd>
+    <dt>Opponents</dt>
+    <dd>The combined RAPM of the five opponents on the court with him, weighted by time. Strong opponents make it
+      positive.</dd>
+    <dt>Context</dt>
+    <dd>Minus what home court, playoffs, garbage time, the score margin and the season predict for his minutes.</dd>
+    <dt>Ridge penalty</dt>
+    <dd>The regression's pull toward zero, which keeps small samples from producing extreme ratings. Negative for
+      good players, and larger the fewer possessions he has.</dd>
+  </dl>
+  <p class="lead" data-view="poss" hidden>Every possession's result, measured against what its situation predicts,
+    counts toward his RAPM with a weight the regression sets. Each piece adds up one group of possessions.</p>
+  <dl data-view="poss" hidden>
+    <dt>His minutes</dt>
+    <dd>The possessions he played. Not the same number as On-court rtg in the other split: each possession here is
+      weighted by how much it tells the regression about him.</dd>
+    <dt>Team without him</dt>
+    <dd>His team's possessions without him, in games he played. A team that falls apart without him adds to his
+      rating; one that stays good takes away.</dd>
+    <dt>Games he missed</dt>
+    <dd>His team's possessions in games he didn't play, in seasons he played for that team. A season missed
+      entirely can't be placed, because injured players aren't in the box scores, so it counts under everything
+      else.</dd>
+    <dt>Everything else</dt>
+    <dd>Every other possession in the span. It reaches his rating through his teammates' and opponents' ratings.</dd>
+  </dl>
+  <dl>
+    <dt>RAPM</dt>
+    <dd>Plain regularized adjusted plus-minus on points: regular season and playoffs, fit on the chosen span alone,
+      ridge penalty 3,000 per side. Unlike the <a href="index.html">main ratings</a>, it has no box-score prior.</dd>
+  </dl>
+  <footer>
+    Why both splits add up: by player, the five pieces are the regression's own equation for each player, and each
+    averages zero across the league, weighted by possessions. By possession, RAPM is a weighted sum of every
+    possession's result, so grouping the possessions splits it exactly. Every row adds up to his RAPM to rounding.
+    Teammates' and opponents' ratings come from the same fit.
+    <a href="index.html">Ratings</a> &middot; <a href="bias.html">Bias by player type</a> &middot;
+    <a href="https://github.com/bbstats/openrapm">Source</a> (<code>scripts/83_decompose_site.py</code>).
+    <span id="built"></span>
+  </footer>
+</main>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const DEFAULT_MIN = { "1y": 1000, "3y": 3000 };
+  const abs2 = v => Math.abs(v).toFixed(2);
+  const fmt = v => (v > 0 ? "+" : v < 0 ? "−" : "") + abs2(v);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const fold = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+  // the two splits: [data field, column name, header tooltip], and the sentence under an opened player
+  const VIEWS = {
+    player: {
+      pieces: [["m", "On-court rtg", "Points per 100 possessions scored minus allowed while he was on the court"],
+               ["t", "Teammates", "Minus the combined RAPM of his four teammates on the court"],
+               ["o", "Opponents", "The combined RAPM of the five opponents on the court"],
+               ["x", "Context", "Minus what home court, playoffs, garbage time, the score margin and the season predict"],
+               ["r", "Ridge penalty", "The ridge's pull toward zero"]],
+      story: p => {
+        const first = p.m >= 0
+          ? `With ${p.n} on the court, his team outscored opponents by ${abs2(p.m)} points per 100 possessions.`
+          : `With ${p.n} on the court, his team was outscored by ${abs2(p.m)} points per 100 possessions.`;
+        const steps = [p.t <= 0 ? `Teammates take away ${abs2(p.t)}` : `Weak teammates add ${abs2(p.t)}`,
+                       p.o >= 0 ? `strong opponents add ${abs2(p.o)}` : `weak opponents take away ${abs2(p.o)}`,
+                       p.x >= 0 ? `context adds ${abs2(p.x)}` : `context takes away ${abs2(p.x)}`,
+                       p.r <= 0 ? `the ridge penalty takes away ${abs2(p.r)}` : `the ridge penalty adds ${abs2(p.r)}`];
+        return `${first} ${steps.slice(0, 3).join(", ")} and ${steps[3]}, for a RAPM of ${fmt(p.a)}.`;
+      },
+    },
+    poss: {
+      pieces: [["h", "His minutes", "The possessions he played"],
+               ["w", "Team without him", "His team's possessions without him, in games he played"],
+               ["g", "Games he missed", "His team's possessions in games he didn't play"],
+               ["e", "Everything else", "Every other possession in the span"]],
+      story: p => {
+        const v = (x, many) => (x >= 0 ? (many ? "add " : "adds ") : (many ? "take away " : "takes away ")) + abs2(x);
+        return `${p.n}'s own minutes count for ${fmt(p.h)}. His team's possessions without him ${v(p.w, true)}, ` +
+               `games he missed ${v(p.g, true)} and everything else ${v(p.e, false)}, for a RAPM of ${fmt(p.a)}.`;
+      },
+    },
+  };
+
+  const cache = {};
+  const state = { view: "player", span: "1y", period: null, min: null, q: "", open: null, sortKey: "a", sortDir: -1 };
+  const table = $("table"), thead = table.querySelector("thead"), tbody = table.querySelector("tbody");
+  const period = $("period"), minp = $("minp"), find = $("find");
+
+  async function load(span) {
+    if (!cache[span]) {
+      const doc = await (await fetch("data/decompose_" + span + ".json")).json();
+      const f = doc.meta.fields, rows = {};
+      for (const [k, list] of Object.entries(doc.rows))
+        rows[k] = list.map(r => Object.fromEntries(f.map((name, j) => [name, r[j]])));
+      cache[span] = { meta: doc.meta, rows };
+    }
+    return cache[span];
+  }
+
+  // "2024-26" -> [2024, 2026], "2025" -> [2025, 2025]
+  function years(p) {
+    const [a, b] = String(p).split("-"), start = +a;
+    if (b === undefined) return [start, start];
+    let end = start - (start % 100) + +b;
+    if (end < start) end += 100;
+    return [start, end];
+  }
+  // the same stretch of time in the other span: a season's window, or a window's last season
+  function carry(p, span, periods) {
+    if (!p) return periods[0];
+    if (periods.includes(p)) return p;
+    const [a, b] = years(p);
+    const hit = span === "1y" ? periods.find(q => +q === b)
+                              : periods.find(q => { const [x, y] = years(q); return x <= a && a <= y; });
+    return hit || periods[0];
+  }
+
+  function writeAddress() {
+    const h = new URLSearchParams();
+    if (state.view !== "player") h.set("view", state.view);
+    if (state.span !== "1y") h.set("span", state.span);
+    h.set("period", state.period);
+    if (state.min !== null) h.set("min", state.min);
+    if (state.open) h.set("player", state.open);
+    history.replaceState(null, "", "#" + h.toString());
+  }
+
+  // a waterfall: each piece starts where the last one ended, and the last bar is the total.  Drawn at the width
+  // there is, one unit to a pixel, so its labels stay readable on a phone instead of shrinking with it.
+  function waterfall(p, pieces) {
+    let run = 0;
+    const bars = pieces.map(([k, name]) => { const a = run; run += p[k]; return { name, v: p[k], a, b: run }; });
+    bars.push({ name: "RAPM", v: p.a, a: 0, b: p.a, total: true });
+    let lo = Math.min(0, ...bars.map(b => Math.min(b.a, b.b))), hi = Math.max(0, ...bars.map(b => Math.max(b.a, b.b)));
+    const pad = (hi - lo || 1) * 0.04; lo -= pad; hi += pad;
+    const W = Math.round(Math.min(620, Math.max(300, document.querySelector(".scroll").clientWidth - 24)));
+    const L = W < 440 ? 112 : 124, R = 58, rowH = 27, top = 4, barH = 17, H = top * 2 + bars.length * rowH;
+    const X = v => L + (v - lo) / (hi - lo) * (W - L - R);
+    let s = `<svg class="wf" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-hidden="true">`;
+    s += `<line class="zero" x1="${X(0)}" x2="${X(0)}" y1="0" y2="${H}"/>`;
+    bars.forEach((b, i) => {
+      const y = top + i * rowH, x0 = X(Math.min(b.a, b.b)), x1 = X(Math.max(b.a, b.b));
+      if (i > 0) s += `<line class="link" x1="${X(b.total ? b.b : b.a)}" x2="${X(b.total ? b.b : b.a)}" y1="${y - rowH + (rowH + barH) / 2}" y2="${y + (rowH - barH) / 2}"/>`;
+      const cls = b.total ? "tot" : b.v >= 0 ? "pos" : "neg";
+      s += `<text class="lab${b.total ? " tot" : ""}" x="${L - 8}" y="${y + rowH / 2 + 4}" text-anchor="end">${b.name}</text>`;
+      s += `<rect class="${cls}" x="${x0}" y="${y + (rowH - barH) / 2}" width="${Math.max(1.5, x1 - x0)}" height="${barH}" rx="3"/>`;
+      const room = W - x1 > 58;
+      s += `<text class="${b.total ? "tot" : ""}" x="${room ? x1 + 6 : x0 - 6}" y="${y + rowH / 2 + 4}" text-anchor="${room ? "start" : "end"}">${fmt(b.v)}</text>`;
+    });
+    return s + "</svg>";
+  }
+
+  function head() {
+    const pieces = VIEWS[state.view].pieces;
+    const cols = [...pieces, ["a", "RAPM", "The sum of the pieces"], ["p", "Poss.", "Offensive possessions"]];
+    thead.innerHTML = `<tr><th class="rank">#</th><th class="name">Player</th>` + cols.map(([k, name, title]) =>
+      `<th data-k="${k}" title="${esc(title)}" aria-sort="${k === state.sortKey ? (state.sortDir < 0 ? "descending"
+        : "ascending") : "none"}">${name}</th>`).join("") + `</tr>`;
+    thead.querySelectorAll("th[data-k]").forEach(th => th.addEventListener("click", () => {
+      state.sortDir = state.sortKey === th.dataset.k ? -state.sortDir : -1;
+      state.sortKey = th.dataset.k;
+      head();
+      render();
+    }));
+  }
+
+  function cell(tr, text, cls, style) {
+    const td = document.createElement("td");
+    td.textContent = text;
+    if (cls) td.className = cls;
+    if (style) td.style.background = style;
+    tr.appendChild(td);
+  }
+  const shade = v => `rgb(var(${v >= 0 ? "--pos" : "--neg"}) / ${Math.min(Math.abs(v) / 8, 1) * 0.42})`;
+
+  function render() {
+    const data = cache[state.span], view = VIEWS[state.view];
+    const min = state.min === null ? DEFAULT_MIN[state.span] : state.min, q = fold(state.q);
+    minp.value = min;
+    let rows = (data.rows[state.period] || []).filter(r => r.p >= min && (!q || fold(r.n).includes(q)));
+    rows.sort((a, b) => (a[state.sortKey] - b[state.sortKey]) * state.sortDir);
+    tbody.replaceChildren();
+    rows.forEach((p, i) => {
+      const tr = document.createElement("tr");
+      tr.className = "player" + (state.open === p.n ? " open" : "");
+      tr.tabIndex = 0;
+      tr.setAttribute("aria-expanded", state.open === p.n);
+      cell(tr, i + 1, "rank");
+      cell(tr, p.n, "name");
+      view.pieces.forEach(([k]) => cell(tr, fmt(p[k]), "", shade(p[k])));
+      cell(tr, fmt(p.a), "total");
+      cell(tr, p.p.toLocaleString(), "");
+      const toggle = () => { state.open = state.open === p.n ? null : p.n; render(); };
+      tr.addEventListener("click", toggle);
+      tr.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+      tbody.appendChild(tr);
+      if (state.open === p.n) {
+        const d = document.createElement("tr"), td = document.createElement("td");
+        d.className = "detail"; td.colSpan = view.pieces.length + 4;
+        td.innerHTML = `<div class="inner"><p class="story">${esc(view.story(p))}</p>${waterfall(p, view.pieces)}</div>`;
+        d.appendChild(td); tbody.appendChild(d);
+      }
+    });
+    $("count").textContent = `${rows.length} players, ${state.period} (${data.meta.span}), at least ` +
+                             `${min.toLocaleString()} possessions`;
+    writeAddress();
+  }
+
+  function setView(view) {
+    state.view = view;
+    const keys = VIEWS[view].pieces.map(([k]) => k).concat(["a", "p"]);
+    if (!keys.includes(state.sortKey)) { state.sortKey = "a"; state.sortDir = -1; }
+    document.querySelectorAll("[data-set-view]").forEach(b => b.setAttribute("aria-pressed", b.dataset.setView === view));
+    document.querySelectorAll("[data-view]").forEach(el => { el.hidden = el.dataset.view !== view; });
+    head();
+  }
+
+  async function show(span) {
+    const data = await load(span);
+    state.span = span;
+    state.period = carry(state.period, span, data.meta.periods);
+    document.querySelectorAll("[data-span]").forEach(b => b.setAttribute("aria-pressed", b.dataset.span === span));
+    period.replaceChildren(...data.meta.periods.map(p => { const o = document.createElement("option");
+                                                           o.value = o.textContent = p; return o; }));
+    period.value = state.period;
+    $("built").textContent = "Built " + data.meta.built + ".";
+    render();
+  }
+
+  document.querySelectorAll("[data-set-view]").forEach(b => b.addEventListener("click", () => {
+    if (b.dataset.setView !== state.view) { setView(b.dataset.setView); if (cache[state.span]) render(); }
+  }));
+  document.querySelectorAll("[data-span]").forEach(b => b.addEventListener("click", () => {
+    if (b.dataset.span !== state.span) { state.min = null; show(b.dataset.span); }
+  }));
+  period.addEventListener("change", () => { state.period = period.value; render(); });
+  minp.addEventListener("change", () => { state.min = minp.value === "" ? null : Math.max(0, +minp.value); render(); });
+  find.addEventListener("input", () => { state.q = find.value; render(); });
+  let resized;                           // an open breakdown is redrawn for the new width
+  addEventListener("resize", () => {
+    clearTimeout(resized);
+    resized = setTimeout(() => { if (state.open && cache[state.span]) render(); }, 150);
+  });
+
+  // the address carries the view, so a player's breakdown can be linked:
+  // #view=poss&span=3y&period=2024-26&player=...
+  const h = new URLSearchParams(location.hash.slice(1));
+  state.period = h.get("period");
+  state.open = h.get("player");
+  if (h.get("min") !== null && h.get("min") !== "") state.min = Math.max(0, +h.get("min"));
+  setView(h.get("view") === "poss" ? "poss" : "player");
+  show(h.get("span") === "3y" ? "3y" : "1y").then(() => {
+    const open = tbody.querySelector("tr.open");
+    if (open) open.scrollIntoView({ block: "center" });
+  }).catch(() => { $("count").textContent = "Could not load the data."; });
+})();
+</script>
+</body>
+</html>
