@@ -78,7 +78,7 @@
     <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
   </nav>
   <h1>Vanilla RAPM decomposition</h1>
-  <p class="eq" data-view="poss"><span class="term" style="--c: var(--c-blue)">On court credit</span>
+  <p class="eq" data-view="poss"><span class="term" style="--c: var(--c-blue)">On court signal</span>
     + <span class="term" style="--c: var(--c-teal)">Off court adjustment (GP)</span>
     + <span class="term" style="--c: var(--c-green)">Off court adjustment (DNP)</span>
     + <span class="term" style="--c: var(--c-purple)">Team SOS adjustment</span>
@@ -142,10 +142,11 @@
     <dd>Actual: points per 100 possessions his team scored minus allowed with him on the court.</dd>
     <dt>Off court rtg</dt>
     <dd>Actual: the same with him off the court, in games he played.</dd>
-    <dt>On court credit</dt>
-    <dd>The part of his RAPM that comes from his own possessions: his team's results with him on the court, measured
-      against what the situation predicts, after each possession's credit is shared with the other nine players on
-      the court.</dd>
+    <dt>On court signal</dt>
+    <dd>What his own possessions say about him: his team's results with him on the court, measured against what the
+      situation predicts, before any comparison with his team without him. Not a share of the credit: every
+      possession counts for each of his teammates on the court too, so these add up to far more than his team's
+      margin. The off court adjustments make the comparison.</dd>
     <dt>Off court adjustment (GP)</dt>
     <dd>How his team did without him, in games he played. A team that falls apart without him adds to his rating;
       one that stays good takes away.</dd>
@@ -198,7 +199,7 @@
     },
     poss: {
       extra: ACTUAL,
-      pieces: [["h", "On court credit", "The part of his RAPM from his own possessions", "On court credit", "--c-blue"],
+      pieces: [["h", "On court signal", "What his own possessions say about him, before the off-court comparison", "On court signal", "--c-blue"],
                ["w", "Off court adjustment (GP)", "How his team did without him, in games he played", "Off court adj. (GP)", "--c-teal"],
                ["g", "Off court adjustment (DNP)", "How his team did in games he didn't play", "Off court adj. (DNP)", "--c-green"],
                ["e", "Team SOS adjustment", "How the players around him did in games his team wasn't in", "Team SOS adj.", "--c-purple"]],
@@ -302,7 +303,7 @@
   // the CSV: both splits, both actual ratings and the NBA player id, which the table leaves out; UTF-8 with a
   // byte-order mark so a spreadsheet opens names like Jokić as written
   const CSV_HEAD = ["span", "period", "player_id", "player", "possessions", "rapm", "on_court_rtg", "off_court_rtg",
-                    "teammates", "opponents", "context", "ridge_penalty", "on_court_credit", "off_court_adjustment_gp",
+                    "teammates", "opponents", "context", "ridge_penalty", "on_court_signal", "off_court_adjustment_gp",
                     "off_court_adjustment_dnp", "team_sos_adjustment"];
   function downloadCSV(filename, pairs) {
     const q = v => { if (v === null || v === undefined) return "";

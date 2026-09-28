@@ -25,7 +25,7 @@ theirs.  scripts/82_decompose_rapm.py has the seven-piece version that starts fr
 
 **By possession** -- which possessions the rating came from:
 
-    RAPM = on court credit + off court adjustment (GP) + off court adjustment (DNP) + team SOS adjustment
+    RAPM = on court signal + off court adjustment (GP) + off court adjustment (DNP) + team SOS adjustment
 
 (the page also shows the actual on-court and off-court ratings beside them, for comparison; they are not pieces)
 
