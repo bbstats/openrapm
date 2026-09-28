@@ -77,19 +77,20 @@
     <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
   </nav>
   <h1>Vanilla RAPM decomposition</h1>
-  <p class="eq" data-view="player"><b>RAPM</b> = <span class="term">On court rtg</span> + <span class="term">Teammates</span>
-    + <span class="term">Opponents</span> + <span class="term">Context</span> + <span class="term">Ridge penalty</span></p>
-  <p class="eq" data-view="poss" hidden><b>RAPM</b> = <span class="term">On court credit</span>
+  <p class="eq" data-view="poss"><b>RAPM</b> = <span class="term">On court credit</span>
     + <span class="term">Off court adjustment (GP)</span> + <span class="term">Off court adjustment (DNP)</span>
     + <span class="term">Team SOS adjustment</span></p>
-  <p class="sub" data-view="player">Every player's vanilla RAPM, split by who was on the court: five pieces that add up
-    to it exactly. Click a player to see his pieces add up.</p>
-  <p class="sub" data-view="poss" hidden>The same RAPM, split by which possessions it came from: four pieces that add
-    up to it exactly. Click a player to see his pieces add up.</p>
+  <p class="eq" data-view="player" hidden><b>RAPM</b> = <span class="term">On court rtg</span>
+    + <span class="term">Teammates</span> + <span class="term">Opponents</span> + <span class="term">Context</span>
+    + <span class="term">Ridge penalty</span></p>
+  <p class="sub" data-view="poss">Every player's vanilla RAPM, split by which possessions it came from: four pieces
+    that add up to it exactly. Click a player to see his pieces add up.</p>
+  <p class="sub" data-view="player" hidden>The same RAPM, split by who was on the court: five pieces that add up to it
+    exactly. Click a player to see his pieces add up.</p>
   <div class="controls">
     <div class="seg" role="group" aria-label="Split">
-      <button type="button" data-set-view="player" aria-pressed="true">By player</button>
-      <button type="button" data-set-view="poss" aria-pressed="false">By possession</button>
+      <button type="button" data-set-view="poss" aria-pressed="true">By possession</button>
+      <button type="button" data-set-view="player" aria-pressed="false">By player</button>
     </div>
     <div class="seg" role="group" aria-label="Span">
       <button type="button" data-span="1y" aria-pressed="true">1 season</button>
@@ -106,10 +107,14 @@
   <div class="scroll">
     <table id="table"><thead></thead><tbody></tbody></table>
   </div>
-  <dl data-view="player">
+  <p class="lead" data-view="player" hidden>On court rtg is where this split starts. Off court rtg is the actual
+    rating shown for comparison; it is not a piece.</p>
+  <dl data-view="player" hidden>
     <dt>On court rtg</dt>
     <dd>His on-court rating: points per 100 possessions his team scored minus allowed while he was on the court.
       Only those possessions: nothing from when he sits. The starting point.</dd>
+    <dt>Off court rtg</dt>
+    <dd>Actual: the same with him off the court, in games he played. Shown for comparison; not a piece.</dd>
     <dt>Teammates</dt>
     <dd>Minus the combined RAPM of the four teammates on the court with him, weighted by time together. Strong
       teammates make it negative: they account for part of the margin.</dd>
@@ -122,11 +127,11 @@
     <dd>The regression's pull toward zero, which keeps small samples from producing extreme ratings. Negative for
       good players, and larger the fewer possessions he has.</dd>
   </dl>
-  <p class="lead" data-view="poss" hidden>Each piece is exactly how much his RAPM would move if that group of
+  <p class="lead" data-view="poss">Each piece is exactly how much his RAPM would move if that group of
     possessions had come out average for their situation. Context and the ridge penalty are not pieces here: context
     is taken out of every possession, and the penalty sets how much each possession counts. On court rtg and Off
     court rtg are the actual ratings, shown for comparison; they are not pieces.</p>
-  <dl data-view="poss" hidden>
+  <dl data-view="poss">
     <dt>On court rtg</dt>
     <dd>Actual: points per 100 possessions his team scored minus allowed with him on the court.</dd>
     <dt>Off court rtg</dt>
@@ -170,44 +175,46 @@
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const fold = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
-  // the two splits: pieces as [data field, column name, header tooltip, chart label], columns shown beside them for
-  // comparison (not pieces), and the sentence under an opened player
+  // the two splits: pieces as [data field, column name, header tooltip, chart label]; the actual on and off court
+  // ratings both splits show first (in the by-player split the on-court one is also its first piece, so it is not
+  // repeated); and the sentence under an opened player.  By possession comes first and opens by default.
+  const ACTUAL = [["m", "On court rtg", "Actual: his team's net rating with him on the court"],
+                  ["f", "Off court rtg", "Actual: his team's net rating with him off the court, in games he played"]];
+  const onOff = p => `With ${p.n} on the court, his team was ${fmt(p.m)} per 100 possessions` +
+                     (p.f === null ? "" : `; with him off the court, in games he played, ${fmt(p.f)}`);
   const VIEWS = {
     player: {
-      extra: [],
+      extra: ACTUAL,
       pieces: [["m", "On court rtg", "Points per 100 possessions scored minus allowed while he was on the court"],
                ["t", "Teammates", "Minus the combined RAPM of his four teammates on the court"],
                ["o", "Opponents", "The combined RAPM of the five opponents on the court"],
                ["x", "Context", "Minus what home court, playoffs, garbage time, the score margin and the season predict"],
                ["r", "Ridge penalty", "The ridge's pull toward zero"]],
       story: p => {
-        const first = p.m >= 0
-          ? `With ${p.n} on the court, his team outscored opponents by ${abs2(p.m)} points per 100 possessions.`
-          : `With ${p.n} on the court, his team was outscored by ${abs2(p.m)} points per 100 possessions.`;
-        const steps = [p.t <= 0 ? `Teammates take away ${abs2(p.t)}` : `Weak teammates add ${abs2(p.t)}`,
+        const steps = [p.t <= 0 ? `teammates take away ${abs2(p.t)}` : `weak teammates add ${abs2(p.t)}`,
                        p.o >= 0 ? `strong opponents add ${abs2(p.o)}` : `weak opponents take away ${abs2(p.o)}`,
                        p.x >= 0 ? `context adds ${abs2(p.x)}` : `context takes away ${abs2(p.x)}`,
                        p.r <= 0 ? `the ridge penalty takes away ${abs2(p.r)}` : `the ridge penalty adds ${abs2(p.r)}`];
-        return `${first} ${steps.slice(0, 3).join(", ")} and ${steps[3]}, for a RAPM of ${fmt(p.a)}.`;
+        return `${onOff(p)}. Starting from the on-court ${fmt(p.m)}, ${steps.slice(0, 3).join(", ")} and ` +
+               `${steps[3]}, for a RAPM of ${fmt(p.a)}.`;
       },
     },
     poss: {
-      extra: [["m", "On court rtg", "Actual: his team's net rating with him on the court"],
-              ["f", "Off court rtg", "Actual: his team's net rating with him off the court, in games he played"]],
+      extra: ACTUAL,
       pieces: [["h", "On court credit", "The part of his RAPM from his own possessions", "On court credit"],
                ["w", "Off court adjustment (GP)", "How his team did without him, in games he played", "Off court adj. (GP)"],
                ["g", "Off court adjustment (DNP)", "How his team did in games he didn't play", "Off court adj. (DNP)"],
                ["e", "Team SOS adjustment", "How the players around him did in games his team wasn't in", "Team SOS adj."]],
-      story: p => `With ${p.n} on the court, his team was ${fmt(p.m)} per 100 possessions` +
-                  (p.f === null ? "" : `; with him off the court, in games he played, ${fmt(p.f)}`) +
-                  `. RAPM credits him ${fmt(p.h)} from his own possessions, then adjusts ${fmt(p.w)} for how his ` +
+      story: p => `${onOff(p)}. RAPM credits him ${fmt(p.h)} from his own possessions, then adjusts ${fmt(p.w)} for how his ` +
                   `team did without him, ${fmt(p.g)} for games he missed and ${fmt(p.e)} for team strength of ` +
                   `schedule, for a RAPM of ${fmt(p.a)}.`,
     },
   };
 
   const cache = {};
-  const state = { view: "player", span: "1y", period: null, min: null, q: "", open: null, sortKey: "a", sortDir: -1 };
+  const state = { view: "poss", span: "1y", period: null, min: null, q: "", open: null, sortKey: "a", sortDir: -1 };
+  // the piece columns a view shows after the actual ratings: its pieces minus any already shown among them
+  const pieceColumns = v => v.pieces.filter(([k]) => !v.extra.some(([e]) => e === k));
   const table = $("table"), thead = table.querySelector("thead"), tbody = table.querySelector("tbody");
   const period = $("period"), minp = $("minp"), find = $("find");
 
@@ -242,7 +249,7 @@
 
   function writeAddress() {
     const h = new URLSearchParams();
-    if (state.view !== "player") h.set("view", state.view);
+    if (state.view !== "poss") h.set("view", state.view);
     if (state.span !== "1y") h.set("span", state.span);
     h.set("period", state.period);
     if (state.min !== null) h.set("min", state.min);
@@ -280,7 +287,7 @@
   function head() {
     const v = VIEWS[state.view];
     const cols = [...v.extra.map(([k, name, title], j) => [k, name, title, j === v.extra.length - 1 ? "sep" : ""]),
-                  ...v.pieces.map(([k, name, title]) => [k, name, title, ""]),
+                  ...pieceColumns(v).map(([k, name, title]) => [k, name, title, ""]),
                   ["a", "RAPM", "The sum of the pieces", ""], ["p", "Poss.", "Offensive possessions", ""]];
     thead.innerHTML = `<tr><th class="rank">#</th><th class="name">Player</th>` + cols.map(([k, name, title, cls]) =>
       `<th data-k="${k}" class="${cls}" title="${esc(title)}" aria-sort="${k === state.sortKey ? (state.sortDir < 0
@@ -353,7 +360,7 @@
       cell(tr, p.n, "name");
       view.extra.forEach(([k], j) => cell(tr, p[k] === null || p[k] === undefined ? "" : fmt(p[k]),
                                           j === view.extra.length - 1 ? "sep" : ""));
-      view.pieces.forEach(([k]) => cell(tr, fmt(p[k]), "", shade(p[k])));
+      pieceColumns(view).forEach(([k]) => cell(tr, fmt(p[k]), "", shade(p[k])));
       cell(tr, fmt(p.a), "total");
       cell(tr, p.p.toLocaleString(), "");
       const toggle = () => { state.open = state.open === p.n ? null : p.n; render(); };
@@ -362,7 +369,7 @@
       tbody.appendChild(tr);
       if (state.open === p.n) {
         const d = document.createElement("tr"), td = document.createElement("td");
-        d.className = "detail"; td.colSpan = view.extra.length + view.pieces.length + 4;
+        d.className = "detail"; td.colSpan = view.extra.length + pieceColumns(view).length + 4;
         td.innerHTML = `<div class="inner"><p class="story">${esc(view.story(p))}</p>${waterfall(p, view.pieces)}</div>`;
         d.appendChild(td); tbody.appendChild(d);
       }
@@ -410,12 +417,12 @@
   });
 
   // the address carries the view, so a player's breakdown can be linked:
-  // #view=poss&span=3y&period=2024-26&player=...
+  // #view=player&span=3y&period=2024-26&player=...  (no view: by possession, the default)
   const h = new URLSearchParams(location.hash.slice(1));
   state.period = h.get("period");
   state.open = h.get("player");
   if (h.get("min") !== null && h.get("min") !== "") state.min = Math.max(0, +h.get("min"));
-  setView(h.get("view") === "poss" ? "poss" : "player");
+  setView(h.get("view") === "player" ? "player" : "poss");
   show(h.get("span") === "3y" ? "3y" : "1y").then(() => {
     const open = tbody.querySelector("tr.open");
     if (open) open.scrollIntoView({ block: "center" });
