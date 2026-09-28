@@ -49,16 +49,15 @@
   tr.player:hover td.name, tr.player:focus-visible td.name { color: var(--accent); }
   tr.player:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   tr.open td { border-bottom-color: transparent; }
-  tr.detail td { text-align: left; white-space: normal; padding: 2px 8px 16px; }
+  tr.detail td { text-align: left; white-space: normal; padding: 10px 8px 16px; }
   .inner { position: sticky; left: 8px; max-width: min(640px, calc(100vw - 48px)); }
-  .story { margin: 0 0 8px; }
   svg.wf { display: block; }
   svg.wf text { font: 12.5px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--ink); }
   svg.wf text.lab { fill: var(--muted); }
   svg.wf text.tot { font-weight: 700; }
   svg.wf rect.pos { fill: rgb(var(--pos)); } svg.wf rect.neg { fill: rgb(var(--neg)); }
   svg.wf rect.tot { fill: var(--ink); }
-  svg.wf line.zero { stroke: var(--line); } svg.wf line.link { stroke: var(--muted); stroke-dasharray: 2 3; }
+  svg.wf line.zero { stroke: var(--line); } svg.wf line.link { stroke: var(--muted); stroke-width: 1.3; stroke-dasharray: 2 2; }
   dl { margin: 24px 0 0; font-size: 13.5px; max-width: 72ch; }
   .lead { margin: 24px 0 -14px; color: var(--muted); font-size: 13.5px; max-width: 72ch; }
   dt { font-weight: 600; margin-top: 10px; }
@@ -175,13 +174,11 @@
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const fold = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
-  // the two splits: pieces as [data field, column name, header tooltip, chart label]; the actual on and off court
-  // ratings both splits show first (in the by-player split the on-court one is also its first piece, so it is not
-  // repeated); and the sentence under an opened player.  By possession comes first and opens by default.
+  // the two splits: pieces as [data field, column name, header tooltip, chart label], and the actual on and off
+  // court ratings both show first (in the by-player split the on-court one is also its first piece, so it is not
+  // repeated).  By possession comes first and opens by default.
   const ACTUAL = [["m", "On court rtg", "Actual: his team's net rating with him on the court"],
                   ["f", "Off court rtg", "Actual: his team's net rating with him off the court, in games he played"]];
-  const onOff = p => `With ${p.n} on the court, his team was ${fmt(p.m)} per 100 possessions` +
-                     (p.f === null ? "" : `; with him off the court, in games he played, ${fmt(p.f)}`);
   const VIEWS = {
     player: {
       extra: ACTUAL,
@@ -190,14 +187,6 @@
                ["o", "Opponents", "The combined RAPM of the five opponents on the court"],
                ["x", "Context", "Minus what home court, playoffs, garbage time, the score margin and the season predict"],
                ["r", "Ridge penalty", "The ridge's pull toward zero"]],
-      story: p => {
-        const steps = [p.t <= 0 ? `teammates take away ${abs2(p.t)}` : `weak teammates add ${abs2(p.t)}`,
-                       p.o >= 0 ? `strong opponents add ${abs2(p.o)}` : `weak opponents take away ${abs2(p.o)}`,
-                       p.x >= 0 ? `context adds ${abs2(p.x)}` : `context takes away ${abs2(p.x)}`,
-                       p.r <= 0 ? `the ridge penalty takes away ${abs2(p.r)}` : `the ridge penalty adds ${abs2(p.r)}`];
-        return `${onOff(p)}. Starting from the on-court ${fmt(p.m)}, ${steps.slice(0, 3).join(", ")} and ` +
-               `${steps[3]}, for a RAPM of ${fmt(p.a)}.`;
-      },
     },
     poss: {
       extra: ACTUAL,
@@ -205,9 +194,6 @@
                ["w", "Off court adjustment (GP)", "How his team did without him, in games he played", "Off court adj. (GP)"],
                ["g", "Off court adjustment (DNP)", "How his team did in games he didn't play", "Off court adj. (DNP)"],
                ["e", "Team SOS adjustment", "How the players around him did in games his team wasn't in", "Team SOS adj."]],
-      story: p => `${onOff(p)}. RAPM credits him ${fmt(p.h)} from his own possessions, then adjusts ${fmt(p.w)} for how his ` +
-                  `team did without him, ${fmt(p.g)} for games he missed and ${fmt(p.e)} for team strength of ` +
-                  `schedule, for a RAPM of ${fmt(p.a)}.`,
     },
   };
 
@@ -268,9 +254,10 @@
     const pad = (hi - lo || 1) * 0.04; lo -= pad; hi += pad;
     const W = Math.round(Math.min(620, Math.max(300, document.querySelector(".scroll").clientWidth - 24)));
     const L = Math.min(170, Math.round(16 + 6.9 * Math.max(...bars.map(b => b.name.length))));
-    const R = 58, rowH = 27, top = 4, barH = 17, H = top * 2 + bars.length * rowH;
+    const R = 58, rowH = 33, top = 4, barH = 16, H = top * 2 + bars.length * rowH;   // 17px between bars
     const X = v => L + (v - lo) / (hi - lo) * (W - L - R);
-    let s = `<svg class="wf" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-hidden="true">`;
+    const label = bars.map(b => `${b.name} ${fmt(b.v)}`).join(", ");
+    let s = `<svg class="wf" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">`;
     s += `<line class="zero" x1="${X(0)}" x2="${X(0)}" y1="0" y2="${H}"/>`;
     bars.forEach((b, i) => {
       const y = top + i * rowH, x0 = X(Math.min(b.a, b.b)), x1 = X(Math.max(b.a, b.b));
@@ -370,7 +357,7 @@
       if (state.open === p.n) {
         const d = document.createElement("tr"), td = document.createElement("td");
         d.className = "detail"; td.colSpan = view.extra.length + pieceColumns(view).length + 4;
-        td.innerHTML = `<div class="inner"><p class="story">${esc(view.story(p))}</p>${waterfall(p, view.pieces)}</div>`;
+        td.innerHTML = `<div class="inner">${waterfall(p, view.pieces)}</div>`;
         d.appendChild(td); tbody.appendChild(d);
       }
     });
