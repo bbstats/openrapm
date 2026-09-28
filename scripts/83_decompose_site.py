@@ -25,7 +25,7 @@ theirs.  scripts/82_decompose_rapm.py has the seven-piece version that starts fr
 
 **By possession** -- which possessions the rating came from:
 
-    RAPM = his minutes + team without him + games he missed + everything else
+    RAPM = on court + off court (GP) + off court (DNP) + everything else
 
 RAPM is linear in the outcomes: his published rating is c'beta = sum over rows of h_r y_r, h = W X A^-1 c.  The
 context columns are unpenalised, so h is orthogonal to every one of them, and measuring each outcome against its

@@ -69,8 +69,8 @@
   <h1>Plain RAPM, piece by piece</h1>
   <p class="eq" data-view="player"><b>RAPM</b> = <span class="term">On-court rtg</span> + <span class="term">Teammates</span>
     + <span class="term">Opponents</span> + <span class="term">Context</span> + <span class="term">Ridge penalty</span></p>
-  <p class="eq" data-view="poss" hidden><b>RAPM</b> = <span class="term">His minutes</span>
-    + <span class="term">Team without him</span> + <span class="term">Games he missed</span>
+  <p class="eq" data-view="poss" hidden><b>RAPM</b> = <span class="term">On court</span>
+    + <span class="term">Off court (GP)</span> + <span class="term">Off court (DNP)</span>
     + <span class="term">Everything else</span></p>
   <p class="sub" data-view="player">Every player's plain RAPM, split by who was on the court: five pieces that add up
     to it exactly. Click a player to see his pieces add up.</p>
@@ -112,16 +112,16 @@
   <p class="lead" data-view="poss" hidden>Every possession's result, measured against what its situation predicts,
     counts toward his RAPM with a weight the regression sets. Each piece adds up one group of possessions.</p>
   <dl data-view="poss" hidden>
-    <dt>His minutes</dt>
+    <dt>On court</dt>
     <dd>The possessions he played. Not the same number as On-court rtg in the other split: each possession here is
       weighted by how much it tells the regression about him.</dd>
-    <dt>Team without him</dt>
+    <dt>Off court (GP)</dt>
     <dd>His team's possessions without him, in games he played. A team that falls apart without him adds to his
       rating; one that stays good takes away.</dd>
-    <dt>Games he missed</dt>
-    <dd>His team's possessions in games he didn't play, in seasons he played for that team. A season missed
-      entirely can't be placed, because injured players aren't in the box scores, so it counts under everything
-      else.</dd>
+    <dt>Off court (DNP)</dt>
+    <dd>His team's possessions in games he didn't play (injury, rest or coach's decision), in seasons he played for
+      that team. A season missed entirely can't be placed, because injured players aren't in the box scores, so it
+      counts under everything else.</dd>
     <dt>Everything else</dt>
     <dd>Every other possession in the span. It reaches his rating through his teammates' and opponents' ratings.</dd>
   </dl>
@@ -169,14 +169,15 @@
       },
     },
     poss: {
-      pieces: [["h", "His minutes", "The possessions he played"],
-               ["w", "Team without him", "His team's possessions without him, in games he played"],
-               ["g", "Games he missed", "His team's possessions in games he didn't play"],
+      pieces: [["h", "On court", "The possessions he played"],
+               ["w", "Off court (GP)", "His team's possessions without him, in games he played"],
+               ["g", "Off court (DNP)", "His team's possessions in games he didn't play"],
                ["e", "Everything else", "Every other possession in the span"]],
       story: p => {
         const v = (x, many) => (x >= 0 ? (many ? "add " : "adds ") : (many ? "take away " : "takes away ")) + abs2(x);
-        return `${p.n}'s own minutes count for ${fmt(p.h)}. His team's possessions without him ${v(p.w, true)}, ` +
-               `games he missed ${v(p.g, true)} and everything else ${v(p.e, false)}, for a RAPM of ${fmt(p.a)}.`;
+        return `${p.n}'s on-court possessions count for ${fmt(p.h)}. Off court in games he played ${v(p.w, false)}, ` +
+               `off court in games he didn't play ${v(p.g, false)} and everything else ${v(p.e, false)}, ` +
+               `for a RAPM of ${fmt(p.a)}.`;
       },
     },
   };
