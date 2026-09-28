@@ -78,17 +78,17 @@
     <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
   </nav>
   <h1>Vanilla RAPM decomposition</h1>
-  <p class="eq" data-view="poss"><span class="term" style="--c: var(--c-rapm)"><b>RAPM</b></span> =
-    <span class="term" style="--c: var(--c-blue)">On court credit</span>
+  <p class="eq" data-view="poss"><span class="term" style="--c: var(--c-blue)">On court credit</span>
     + <span class="term" style="--c: var(--c-teal)">Off court adjustment (GP)</span>
     + <span class="term" style="--c: var(--c-green)">Off court adjustment (DNP)</span>
-    + <span class="term" style="--c: var(--c-purple)">Team SOS adjustment</span></p>
-  <p class="eq" data-view="player" hidden><span class="term" style="--c: var(--c-rapm)"><b>RAPM</b></span> =
-    <span class="term" style="--c: var(--c-blue)">On court rtg</span>
+    + <span class="term" style="--c: var(--c-purple)">Team SOS adjustment</span>
+    = <span class="term" style="--c: var(--c-rapm)"><b>RAPM</b></span></p>
+  <p class="eq" data-view="player" hidden><span class="term" style="--c: var(--c-blue)">On court rtg</span>
     + <span class="term" style="--c: var(--c-teal)">Teammates</span>
     + <span class="term" style="--c: var(--c-green)">Opponents</span>
     + <span class="term" style="--c: var(--c-purple)">Context</span>
-    + <span class="term" style="--c: var(--c-slate)">Ridge penalty</span></p>
+    + <span class="term" style="--c: var(--c-slate)">Ridge penalty</span>
+    = <span class="term" style="--c: var(--c-rapm)"><b>RAPM</b></span></p>
   <p class="sub" data-view="poss">Every player's vanilla RAPM, split by which possessions it came from: four pieces
     that add up to it exactly. Click a player to see his pieces add up.</p>
   <p class="sub" data-view="player" hidden>The same RAPM, split by who was on the court: five pieces that add up to it
