@@ -29,6 +29,9 @@
   .seg button + button { border-left: 1px solid var(--line); }
   .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
   .count { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+  .meta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0 16px; }
+  .dl { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+  .dl a { color: inherit; }
   .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   table { border-collapse: separate; border-spacing: 0; width: 100%; font-variant-numeric: tabular-nums; }
   th, td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
@@ -91,7 +94,10 @@
     <label>Min possessions <input id="minp" type="number" min="0" step="250"></label>
     <label>Find <input id="find" type="search" placeholder="player name" autocomplete="off"></label>
   </div>
-  <p class="count" id="count">Loading&hellip;</p>
+  <div class="meta">
+    <p class="count" id="count">Loading&hellip;</p>
+    <p class="dl">Download CSV: <a href="#" id="csv-view">this view</a> &middot; <a href="#" id="csv-all">all seasons</a></p>
+  </div>
   <div class="scroll">
     <table id="table"><thead></thead><tbody></tbody></table>
   </div>
@@ -283,6 +289,35 @@
     }));
   }
 
+  // the CSV: both splits, both actual ratings and the NBA player id, which the table leaves out; UTF-8 with a
+  // byte-order mark so a spreadsheet opens names like Jokić as written
+  const CSV_HEAD = ["span", "period", "player_id", "player", "possessions", "rapm", "on_court_rtg", "off_court_rtg",
+                    "teammates", "opponents", "context", "ridge_penalty", "on_court_credit", "off_court_adjustment_gp",
+                    "off_court_adjustment_dnp", "team_sos_adjustment"];
+  function downloadCSV(filename, pairs) {
+    const q = v => { if (v === null || v === undefined) return "";
+                     const s = String(v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    const span = cache[state.span].meta.span;
+    const body = pairs.map(([per, x]) => [span, per, x.id, x.n, x.p, x.a, x.m, x.f, x.t, x.o, x.x, x.r,
+                                          x.h, x.w, x.g, x.e]);
+    const text = "﻿" + [CSV_HEAD, ...body].map(r => r.map(q).join(",")).join("\r\n") + "\r\n";
+    const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+    const a = Object.assign(document.createElement("a"), { href: url, download: filename });
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  let shown = [];
+  $("csv-view").addEventListener("click", e => {
+    e.preventDefault();
+    downloadCSV(`openrapm_rapm_pieces_${state.span}_${state.period}.csv`, shown.map(x => [state.period, x]));
+  });
+  $("csv-all").addEventListener("click", e => {
+    e.preventDefault();
+    const d = cache[state.span];
+    downloadCSV(`openrapm_rapm_pieces_${state.span}_all.csv`,
+                d.meta.periods.flatMap(per => d.rows[per].map(x => [per, x])));
+  });
+
   function cell(tr, text, cls, style) {
     const td = document.createElement("td");
     td.textContent = text;
@@ -303,6 +338,7 @@
       if (y === null || y === undefined) return -1;
       return (x - y) * state.sortDir;
     });
+    shown = rows;
     tbody.replaceChildren();
     rows.forEach((p, i) => {
       const tr = document.createElement("tr");
@@ -349,6 +385,7 @@
     period.replaceChildren(...data.meta.periods.map(p => { const o = document.createElement("option");
                                                            o.value = o.textContent = p; return o; }));
     period.value = state.period;
+    $("csv-all").textContent = span === "1y" ? "all seasons" : "all 3-season spans";
     $("built").textContent = "Built " + data.meta.built + ".";
     render();
   }

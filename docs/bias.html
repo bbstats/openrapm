@@ -24,14 +24,33 @@
   .blurb { margin-top: 22px; color: var(--muted); max-width: 66ch; font-size: 13.5px; }
   .blurb p { margin: 0 0 10px; } .blurb b { color: var(--ink); }
   .sig { color: var(--muted); font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .dl { margin: 10px 0 0; color: var(--muted); font-size: 13px; } .dl a { color: inherit; }
 </style>
 </head>
 <body>
 <main>
 <h1>OpenRAPM: bias by player type</h1>
-<table><thead><tr><th>Player type</th><th>vs consensus</th><th>vs 2026 observed</th></tr></thead><tbody><tr><td>Low-usage wings who stay out of the way<br><span class="sig">-ftm -tov -pts -ast</span></td><td class="over" style="--depth: 0.601"><b>+0.541</b></td><td class="under" style="--depth: 0.007"><b>-0.006</b></td></tr><tr><td>Guards who handle the ball<br><span class="sig">+ast -orb +tov -drb</span></td><td class="over" style="--depth: 0.256"><b>+0.231</b></td><td class="over" style="--depth: 0.175"><b>+0.158</b></td></tr><tr><td>High-usage scorers who draw fouls<br><span class="sig">+ftm +pts +tov +ast</span></td><td class="over" style="--depth: 0.483"><b>+0.435</b></td><td class="over" style="--depth: 0.147"><b>+0.132</b></td></tr><tr><td>Busy all-round forwards<br><span class="sig">+stl +drb +pf +orb</span></td><td class="under" style="--depth: 0.100"><b>-0.090</b></td><td class="over" style="--depth: 0.024"><b>+0.022</b></td></tr><tr><td>Two-way big men who score<br><span class="sig">+ftm +blk +pts +drb</span></td><td class="over" style="--depth: 0.219"><b>+0.197</b></td><td class="over" style="--depth: 0.376"><b>+0.338</b></td></tr><tr><td>Rim-protecting centers<br><span class="sig">+orb -fg3_miss +blk -fg3m</span></td><td class="under" style="--depth: 0.090"><b>-0.081</b></td><td class="under" style="--depth: 0.111"><b>-0.100</b></td></tr><tr><td>Ball-hawk defenders who rarely shoot<br><span class="sig">+stl -pts -ftm -fg3m</span></td><td class="under" style="--depth: 0.055"><b>-0.049</b></td><td class="over" style="--depth: 0.040"><b>+0.036</b></td></tr><tr><td>Wings who shoot threes<br><span class="sig">+fg3m +fg3_miss -drb -blk</span></td><td class="over" style="--depth: 0.011"><b>+0.010</b></td><td class="under" style="--depth: 0.062"><b>-0.056</b></td></tr></tbody></table><div class="blurb">
+<table><thead><tr><th>Player type</th><th>vs consensus</th><th>vs 2026 observed</th></tr></thead><tbody><tr><td>Low-usage wings who stay out of the way<br><span class="sig">-ftm -tov -pts -ast</span></td><td class="over" style="--depth: 0.601"><b>+0.541</b></td><td class="under" style="--depth: 0.007"><b>-0.006</b></td></tr><tr><td>Guards who handle the ball<br><span class="sig">+ast -orb +tov -drb</span></td><td class="over" style="--depth: 0.256"><b>+0.231</b></td><td class="over" style="--depth: 0.175"><b>+0.158</b></td></tr><tr><td>High-usage scorers who draw fouls<br><span class="sig">+ftm +pts +tov +ast</span></td><td class="over" style="--depth: 0.483"><b>+0.435</b></td><td class="over" style="--depth: 0.147"><b>+0.132</b></td></tr><tr><td>Busy all-round forwards<br><span class="sig">+stl +drb +pf +orb</span></td><td class="under" style="--depth: 0.100"><b>-0.090</b></td><td class="over" style="--depth: 0.024"><b>+0.022</b></td></tr><tr><td>Two-way big men who score<br><span class="sig">+ftm +blk +pts +drb</span></td><td class="over" style="--depth: 0.219"><b>+0.197</b></td><td class="over" style="--depth: 0.376"><b>+0.338</b></td></tr><tr><td>Rim-protecting centers<br><span class="sig">+orb -fg3_miss +blk -fg3m</span></td><td class="under" style="--depth: 0.090"><b>-0.081</b></td><td class="under" style="--depth: 0.111"><b>-0.100</b></td></tr><tr><td>Ball-hawk defenders who rarely shoot<br><span class="sig">+stl -pts -ftm -fg3m</span></td><td class="under" style="--depth: 0.055"><b>-0.049</b></td><td class="over" style="--depth: 0.040"><b>+0.036</b></td></tr><tr><td>Wings who shoot threes<br><span class="sig">+fg3m +fg3_miss -drb -blk</span></td><td class="over" style="--depth: 0.011"><b>+0.010</b></td><td class="under" style="--depth: 0.062"><b>-0.056</b></td></tr></tbody></table><p class="dl"><a href="#" id="csv">Download CSV</a></p><div class="blurb">
 <p><b>vs 2026 observed.</b> We fit a RAPM model against the <em>residuals</em> of OpenRAPM's
 predictions. These are the average results for each player type (possession-weighted).</p>
 <p><b>vs consensus.</b> The consensus is a GLS-weighted mean of DRIP, LEBRON, EPM, DARKO DPM,
 Time-Decay RAPM, and Time-Decay-Luck-Adjusted RAPM.</p>
-</div></main></body></html>
+</div></main><script>
+document.getElementById("csv").addEventListener("click", e => {
+  e.preventDefault();
+  const q = v => /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  const slug = s => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_");
+  const head = [...document.querySelectorAll("thead th")].map(th => slug(th.textContent));
+  const rows = [[head[0], "signature", ...head.slice(1)]];
+  document.querySelectorAll("tbody tr").forEach(tr => {
+    const td = [...tr.children], sig = td[0].querySelector(".sig");
+    rows.push([td[0].firstChild.textContent.trim(), sig ? sig.textContent.trim() : "",
+               ...td.slice(1).map(c => c.textContent.trim().replace("\u2013", ""))]);
+  });
+  const text = "\uFEFF" + rows.map(r => r.map(q).join(",")).join("\r\n") + "\r\n";
+  const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+  const a = Object.assign(document.createElement("a"), { href: url, download: "openrapm_bias_by_player_type.csv" });
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+</script></body></html>

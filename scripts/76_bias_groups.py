@@ -75,6 +75,29 @@ predictions. These are the average results for each player type (possession-weig
 Time-Decay RAPM, and Time-Decay-Luck-Adjusted RAPM.</p>
 </div>"""
 
+# The download under the table: the table itself as CSV, read off the page so it can never disagree with it.
+# UTF-8 with a byte-order mark, so a spreadsheet opens it as written.
+DOWNLOAD = '<p class="dl"><a href="#" id="csv">Download CSV</a></p>'
+CSV_SCRIPT = """<script>
+document.getElementById("csv").addEventListener("click", e => {
+  e.preventDefault();
+  const q = v => /[",\\r\\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  const slug = s => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_");
+  const head = [...document.querySelectorAll("thead th")].map(th => slug(th.textContent));
+  const rows = [[head[0], "signature", ...head.slice(1)]];
+  document.querySelectorAll("tbody tr").forEach(tr => {
+    const td = [...tr.children], sig = td[0].querySelector(".sig");
+    rows.push([td[0].firstChild.textContent.trim(), sig ? sig.textContent.trim() : "",
+               ...td.slice(1).map(c => c.textContent.trim().replace("\\u2013", ""))]);
+  });
+  const text = "\\uFEFF" + rows.map(r => r.map(q).join(",")).join("\\r\\n") + "\\r\\n";
+  const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+  const a = Object.assign(document.createElement("a"), { href: url, download: "openrapm_bias_by_player_type.csv" });
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+</script>"""
+
 
 def norm(name) -> str:
     text = unicodedata.normalize("NFKD", str(name)).encode("ascii", "ignore").decode().lower()
@@ -283,6 +306,7 @@ def page(result: dict) -> str:
   .blurb { margin-top: 22px; color: var(--muted); max-width: 66ch; font-size: 13.5px; }
   .blurb p { margin: 0 0 10px; } .blurb b { color: var(--ink); }
   .sig { color: var(--muted); font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .dl { margin: 10px 0 0; color: var(--muted); font-size: 13px; } .dl a { color: inherit; }
 </style>
 </head>
 <body>
@@ -308,7 +332,8 @@ def page(result: dict) -> str:
         other = by_group.get(r["group"])
         out.append(f"<tr><td>{r['name']}<br><span class=\"sig\">{r['signature']}</span></td>"
                    f"{cell(r['bias'])}{cell(other['bias'] if other else None)}</tr>")
-    return head + "".join(out) + "</tbody></table>" + BLURB + "</main></body></html>"
+    return (head + "".join(out) + "</tbody></table>" + DOWNLOAD + BLURB + "</main>" + CSV_SCRIPT
+            + "</body></html>")
 
 
 def main() -> None:

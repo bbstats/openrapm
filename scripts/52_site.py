@@ -46,14 +46,17 @@ if missing:
     raise SystemExit(f"{src.name} is missing {missing}; rebuild it with scripts/60_season_board.py")
 
 d = rat[list(cols)].rename(columns=cols).copy()
-d["n"] = d["n"].fillna("").astype(str)
+d["id"] = rat["player_id"].to_numpy() if "player_id" in rat.columns else 0   # the NBA id: in the file and the
+d["n"] = d["n"].fillna("").astype(str)                                         # CSV download, not on the page
 d = d[d.p > 0].sort_values(["s", "t"], ascending=[True, False])
 rows = [dict(s=int(r.s), n=r.n, o=round(float(r.o), 2), d=round(float(r.d), 2),
-             t=round(float(r.t), 2), p=int(r.p))
+             t=round(float(r.t), 2), p=int(r.p), id=int(r.id))
         for r in d.itertuples(index=False)]
 
+# "Built" is when the ratings were built -- the source table's date -- so re-exporting the same table (to add a
+# field, say) does not tell readers the ratings changed
 meta = dict(seasons=sorted(int(s) for s in d.s.unique()),
-            built=pd.Timestamp.now("UTC").strftime("%Y-%m-%d"),
+            built=pd.Timestamp(src.stat().st_mtime, unit="s", tz="UTC").strftime("%Y-%m-%d"),
             n_players=int(rat.player_id.nunique()) if "player_id" in rat.columns else 0)
 
 out = root / "docs" / "data"

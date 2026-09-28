@@ -66,9 +66,10 @@ from eracoef.config import load_config  # noqa: E402
 from eracoef.looseason import LeaveSeasonOutRAPM  # noqa: E402
 from eracoef.windows import build_window  # noqa: E402
 
-FIELDS = ["n", "p", "m", "t", "o", "x", "r", "a", "h", "w", "g", "e", "f"]   # name, possessions, the five pieces
-PIECES = ["margin", "teammates", "opponents", "context", "ridge"]             # by player, RAPM, the four by
-SOURCES = ["his_minutes", "team_without_him", "games_missed", "everything_else"]  # possession, off-court rtg
+FIELDS = ["n", "p", "m", "t", "o", "x", "r", "a", "h", "w", "g", "e", "f", "id"]   # name, possessions, the five
+PIECES = ["margin", "teammates", "opponents", "context", "ridge"]         # pieces by player, RAPM, the four by
+SOURCES = ["his_minutes", "team_without_him", "games_missed", "everything_else"]   # possession, off-court rtg,
+#                                                         the NBA id (in the files and the CSV, not on the page)
 UNPLACED_TOL = 0.001           # rows whose team the box scores cannot name: under this share of the span's rows
 NAME_SOURCES = ("outputs/season_ratings_product.parquet", "outputs/season_ratings.parquet",
                 "artifacts/season_ratings.parquet")  # scripts/52_site.py's order
@@ -309,11 +310,12 @@ def main() -> None:
                 worst["centre"] = max(worst["centre"], abs(float(np.average(tab[k], weights=tab.poss))))
             ids = fit["player_ids"][tab.i.to_numpy()]
             tab["name"] = span_names(names, ids, seasons)
+            tab["player_id"] = ids
             worst["unnamed"] += int(tab["name"].isna().sum())
             tab = tab.sort_values("rapm", ascending=False)
             rows[label(seasons)] = [[r.name, int(round(r.poss)), *(round(float(getattr(r, k)), 2) for k in PIECES),
                                      round(float(r.rapm), 2), *(round(float(getattr(r, k)), 2) for k in SOURCES),
-                                     None if np.isnan(r.off_rtg) else round(float(r.off_rtg), 2)]
+                                     None if np.isnan(r.off_rtg) else round(float(r.off_rtg), 2), int(r.player_id)]
                                     for r in tab.itertuples(index=False)]
             top = tab.iloc[0]
             print(f"  {label(seasons)}: {len(tab)} players, top {top['name']} {top.rapm:+.2f} "
