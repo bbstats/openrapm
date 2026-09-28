@@ -7,15 +7,19 @@
 <link rel="stylesheet" href="site.css">
 <script src="site.js"></script>
 <style>
+  /* one colour per term of the equation, cool for the pieces and hot for RAPM; its table column is shaded in it,
+     light for low values and dark for high ones */
   :root { --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6;
-          --chip: #f0efec; --pos: 42 120 214; --neg: 227 73 72; }
+          --c-blue: 37 99 235; --c-teal: 13 148 136; --c-green: 22 163 74; --c-purple: 124 58 237;
+          --c-slate: 71 85 105; --c-rapm: 234 88 12; }
   :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5;
-          --chip: #2e2e2c; --pos: 57 135 229; --neg: 230 103 103; }
+          --c-blue: 96 145 255; --c-teal: 45 196 180; --c-green: 74 205 120; --c-purple: 167 139 250;
+          --c-slate: 148 163 184; --c-rapm: 251 146 60; }
   body { color: var(--ink); font: 15px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
   h1 { font-size: 26px; margin: 0 0 10px; }
   .eq { margin: 0 0 4px; font-size: 16px; line-height: 2.1; }
-  .term { display: inline-block; padding: 0 9px; border-radius: 999px; background: var(--chip);
-          line-height: 1.75; white-space: nowrap; }
+  .term { display: inline-block; padding: 0 9px; border-radius: 999px; line-height: 1.75; white-space: nowrap;
+          background: rgb(var(--c) / 0.14); box-shadow: inset 0 0 0 1.5px rgb(var(--c) / 0.6); }
   .sub { color: var(--muted); font-size: 13.5px; margin: 0 0 16px; max-width: 72ch; }
   .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-bottom: 12px; }
   label { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
@@ -55,8 +59,6 @@
   svg.wf text { font: 12.5px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--ink); }
   svg.wf text.lab { fill: var(--muted); }
   svg.wf text.tot { font-weight: 700; }
-  svg.wf rect.pos { fill: rgb(var(--pos)); } svg.wf rect.neg { fill: rgb(var(--neg)); }
-  svg.wf rect.tot { fill: var(--ink); }
   svg.wf line.zero { stroke: var(--line); } svg.wf line.link { stroke: var(--muted); stroke-width: 1.3; stroke-dasharray: 2 2; }
   dl { margin: 24px 0 0; font-size: 13.5px; max-width: 72ch; }
   .lead { margin: 24px 0 -14px; color: var(--muted); font-size: 13.5px; max-width: 72ch; }
@@ -76,12 +78,17 @@
     <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
   </nav>
   <h1>Vanilla RAPM decomposition</h1>
-  <p class="eq" data-view="poss"><b>RAPM</b> = <span class="term">On court credit</span>
-    + <span class="term">Off court adjustment (GP)</span> + <span class="term">Off court adjustment (DNP)</span>
-    + <span class="term">Team SOS adjustment</span></p>
-  <p class="eq" data-view="player" hidden><b>RAPM</b> = <span class="term">On court rtg</span>
-    + <span class="term">Teammates</span> + <span class="term">Opponents</span> + <span class="term">Context</span>
-    + <span class="term">Ridge penalty</span></p>
+  <p class="eq" data-view="poss"><span class="term" style="--c: var(--c-rapm)"><b>RAPM</b></span> =
+    <span class="term" style="--c: var(--c-blue)">On court credit</span>
+    + <span class="term" style="--c: var(--c-teal)">Off court adjustment (GP)</span>
+    + <span class="term" style="--c: var(--c-green)">Off court adjustment (DNP)</span>
+    + <span class="term" style="--c: var(--c-purple)">Team SOS adjustment</span></p>
+  <p class="eq" data-view="player" hidden><span class="term" style="--c: var(--c-rapm)"><b>RAPM</b></span> =
+    <span class="term" style="--c: var(--c-blue)">On court rtg</span>
+    + <span class="term" style="--c: var(--c-teal)">Teammates</span>
+    + <span class="term" style="--c: var(--c-green)">Opponents</span>
+    + <span class="term" style="--c: var(--c-purple)">Context</span>
+    + <span class="term" style="--c: var(--c-slate)">Ridge penalty</span></p>
   <p class="sub" data-view="poss">Every player's vanilla RAPM, split by which possessions it came from: four pieces
     that add up to it exactly. Click a player to see his pieces add up.</p>
   <p class="sub" data-view="player" hidden>The same RAPM, split by who was on the court: five pieces that add up to it
@@ -179,23 +186,27 @@
   // repeated).  By possession comes first and opens by default.
   const ACTUAL = [["m", "On court rtg", "Actual: his team's net rating with him on the court"],
                   ["f", "Off court rtg", "Actual: his team's net rating with him off the court, in games he played"]];
+  // the fifth entry of a piece is its colour, the same as its term in the equation
   const VIEWS = {
     player: {
       extra: ACTUAL,
-      pieces: [["m", "On court rtg", "Points per 100 possessions scored minus allowed while he was on the court"],
-               ["t", "Teammates", "Minus the combined RAPM of his four teammates on the court"],
-               ["o", "Opponents", "The combined RAPM of the five opponents on the court"],
-               ["x", "Context", "Minus what home court, playoffs, garbage time, the score margin and the season predict"],
-               ["r", "Ridge penalty", "The ridge's pull toward zero"]],
+      pieces: [["m", "On court rtg", "Points per 100 possessions scored minus allowed while he was on the court", "", "--c-blue"],
+               ["t", "Teammates", "Minus the combined RAPM of his four teammates on the court", "", "--c-teal"],
+               ["o", "Opponents", "The combined RAPM of the five opponents on the court", "", "--c-green"],
+               ["x", "Context", "Minus what home court, playoffs, garbage time, the score margin and the season predict", "", "--c-purple"],
+               ["r", "Ridge penalty", "The ridge's pull toward zero", "", "--c-slate"]],
     },
     poss: {
       extra: ACTUAL,
-      pieces: [["h", "On court credit", "The part of his RAPM from his own possessions", "On court credit"],
-               ["w", "Off court adjustment (GP)", "How his team did without him, in games he played", "Off court adj. (GP)"],
-               ["g", "Off court adjustment (DNP)", "How his team did in games he didn't play", "Off court adj. (DNP)"],
-               ["e", "Team SOS adjustment", "How the players around him did in games his team wasn't in", "Team SOS adj."]],
+      pieces: [["h", "On court credit", "The part of his RAPM from his own possessions", "On court credit", "--c-blue"],
+               ["w", "Off court adjustment (GP)", "How his team did without him, in games he played", "Off court adj. (GP)", "--c-teal"],
+               ["g", "Off court adjustment (DNP)", "How his team did in games he didn't play", "Off court adj. (DNP)", "--c-green"],
+               ["e", "Team SOS adjustment", "How the players around him did in games his team wasn't in", "Team SOS adj.", "--c-purple"]],
     },
   };
+  const RAPM_COLOR = "--c-rapm";
+  // a column's colour: RAPM's, or its term's in this view; a column that is not a term here has none
+  const colorOf = (v, k) => k === "a" ? RAPM_COLOR : (v.pieces.find(([p]) => p === k) || [])[4] || null;
 
   const cache = {};
   const state = { view: "poss", span: "1y", period: null, min: null, q: "", open: null, sortKey: "a", sortDir: -1 };
@@ -247,9 +258,9 @@
   // there is, one unit to a pixel, so its labels stay readable on a phone instead of shrinking with it.
   function waterfall(p, pieces) {
     let run = 0;
-    const bars = pieces.map(([k, name, , label]) => { const a = run; run += p[k];
-                                                      return { name: label || name, v: p[k], a, b: run }; });
-    bars.push({ name: "RAPM", v: p.a, a: 0, b: p.a, total: true });
+    const bars = pieces.map(([k, name, , label, color]) => { const a = run; run += p[k];
+                                                             return { name: label || name, v: p[k], a, b: run, color }; });
+    bars.push({ name: "RAPM", v: p.a, a: 0, b: p.a, total: true, color: RAPM_COLOR });
     let lo = Math.min(0, ...bars.map(b => Math.min(b.a, b.b))), hi = Math.max(0, ...bars.map(b => Math.max(b.a, b.b)));
     const pad = (hi - lo || 1) * 0.04; lo -= pad; hi += pad;
     const W = Math.round(Math.min(620, Math.max(300, document.querySelector(".scroll").clientWidth - 24)));
@@ -262,9 +273,8 @@
     bars.forEach((b, i) => {
       const y = top + i * rowH, x0 = X(Math.min(b.a, b.b)), x1 = X(Math.max(b.a, b.b));
       if (i > 0) s += `<line class="link" x1="${X(b.total ? b.b : b.a)}" x2="${X(b.total ? b.b : b.a)}" y1="${y - rowH + (rowH + barH) / 2}" y2="${y + (rowH - barH) / 2}"/>`;
-      const cls = b.total ? "tot" : b.v >= 0 ? "pos" : "neg";
       s += `<text class="lab${b.total ? " tot" : ""}" x="${L - 8}" y="${y + rowH / 2 + 4}" text-anchor="end">${b.name}</text>`;
-      s += `<rect class="${cls}" x="${x0}" y="${y + (rowH - barH) / 2}" width="${Math.max(1.5, x1 - x0)}" height="${barH}" rx="3"/>`;
+      s += `<rect style="fill: rgb(var(${b.color}))" x="${x0}" y="${y + (rowH - barH) / 2}" width="${Math.max(1.5, x1 - x0)}" height="${barH}" rx="3"/>`;
       const room = W - x1 > 58;
       s += `<text class="${b.total ? "tot" : ""}" x="${room ? x1 + 6 : x0 - 6}" y="${y + rowH / 2 + 4}" text-anchor="${room ? "start" : "end"}">${fmt(b.v)}</text>`;
     });
@@ -276,9 +286,11 @@
     const cols = [...v.extra.map(([k, name, title], j) => [k, name, title, j === v.extra.length - 1 ? "sep" : ""]),
                   ...pieceColumns(v).map(([k, name, title]) => [k, name, title, ""]),
                   ["a", "RAPM", "The sum of the pieces", ""], ["p", "Poss.", "Offensive possessions", ""]];
+    // a term's column carries its colour as a bar under the heading
+    const mark = k => colorOf(v, k) ? ` style="box-shadow: inset 0 -3px 0 rgb(var(${colorOf(v, k)}))"` : "";
     thead.innerHTML = `<tr><th class="rank">#</th><th class="name">Player</th>` + cols.map(([k, name, title, cls]) =>
-      `<th data-k="${k}" class="${cls}" title="${esc(title)}" aria-sort="${k === state.sortKey ? (state.sortDir < 0
-        ? "descending" : "ascending") : "none"}">${name}</th>`).join("") + `</tr>`;
+      `<th data-k="${k}" class="${cls}"${mark(k)} title="${esc(title)}" aria-sort="${k === state.sortKey
+        ? (state.sortDir < 0 ? "descending" : "ascending") : "none"}">${name}</th>`).join("") + `</tr>`;
     thead.querySelectorAll("th[data-k]").forEach(th => th.addEventListener("click", () => {
       state.sortDir = state.sortKey === th.dataset.k ? -state.sortDir : -1;
       state.sortKey = th.dataset.k;
@@ -323,7 +335,6 @@
     if (style) td.style.background = style;
     tr.appendChild(td);
   }
-  const shade = v => `rgb(var(${v >= 0 ? "--pos" : "--neg"}) / ${Math.min(Math.abs(v) / 8, 1) * 0.42})`;
 
   function render() {
     const data = cache[state.span], view = VIEWS[state.view];
@@ -337,6 +348,19 @@
       return (x - y) * state.sortDir;
     });
     shown = rows;
+    // each term's column is shaded in its colour, light for its lowest values and dark for its highest, over the
+    // players shown (5th to 95th percentile, so one outlier does not wash the rest out)
+    const ranges = {};
+    for (const k of [...view.pieces.map(([key]) => key), "a"]) {
+      const v = rows.map(r => r[k]).filter(x => x !== null && x !== undefined).sort((x, y) => x - y);
+      ranges[k] = v.length ? [v[Math.floor(0.05 * (v.length - 1))], v[Math.ceil(0.95 * (v.length - 1))]] : [0, 1];
+    }
+    const tint = (k, x) => {
+      const c = colorOf(view, k);
+      if (!c || x === null || x === undefined) return "";
+      const [lo, hi] = ranges[k], t = hi > lo ? Math.min(1, Math.max(0, (x - lo) / (hi - lo))) : 0.5;
+      return `rgb(var(${c}) / ${(0.05 + 0.5 * t).toFixed(3)})`;
+    };
     tbody.replaceChildren();
     rows.forEach((p, i) => {
       const tr = document.createElement("tr");
@@ -346,9 +370,9 @@
       cell(tr, i + 1, "rank");
       cell(tr, p.n, "name");
       view.extra.forEach(([k], j) => cell(tr, p[k] === null || p[k] === undefined ? "" : fmt(p[k]),
-                                          j === view.extra.length - 1 ? "sep" : ""));
-      pieceColumns(view).forEach(([k]) => cell(tr, fmt(p[k]), "", shade(p[k])));
-      cell(tr, fmt(p.a), "total");
+                                          j === view.extra.length - 1 ? "sep" : "", tint(k, p[k])));
+      pieceColumns(view).forEach(([k]) => cell(tr, fmt(p[k]), "", tint(k, p[k])));
+      cell(tr, fmt(p.a), "total", tint("a", p.a));
       cell(tr, p.p.toLocaleString(), "");
       const toggle = () => { state.open = state.open === p.n ? null : p.n; render(); };
       tr.addEventListener("click", toggle);
