@@ -71,7 +71,7 @@
     + <span class="term">Opponents</span> + <span class="term">Context</span> + <span class="term">Ridge penalty</span></p>
   <p class="eq" data-view="poss" hidden><b>RAPM</b> = <span class="term">On court</span>
     + <span class="term">Off court (GP)</span> + <span class="term">Off court (DNP)</span>
-    + <span class="term">Everything else</span></p>
+    + <span class="term">Other games</span></p>
   <p class="sub" data-view="player">Every player's plain RAPM, split by who was on the court: five pieces that add up
     to it exactly. Click a player to see his pieces add up.</p>
   <p class="sub" data-view="poss" hidden>The same RAPM, split by which possessions it came from: four pieces that add
@@ -110,7 +110,9 @@
       good players, and larger the fewer possessions he has.</dd>
   </dl>
   <p class="lead" data-view="poss" hidden>Every possession's result, measured against what its situation predicts,
-    counts toward his RAPM with a weight the regression sets. Each piece adds up one group of possessions.</p>
+    counts toward his RAPM with a weight the regression sets. Each piece adds up one group of possessions. Context
+    and the ridge penalty are not pieces here: context is taken out of every possession, and the penalty sets the
+    weights.</p>
   <dl data-view="poss" hidden>
     <dt>On court</dt>
     <dd>The possessions he played. Not the same number as On-court rtg in the other split: each possession here is
@@ -121,9 +123,12 @@
     <dt>Off court (DNP)</dt>
     <dd>His team's possessions in games he didn't play (injury, rest or coach's decision), in seasons he played for
       that team. A season missed entirely can't be placed, because injured players aren't in the box scores, so it
-      counts under everything else.</dd>
-    <dt>Everything else</dt>
-    <dd>Every other possession in the span. It reaches his rating through his teammates' and opponents' ratings.</dd>
+      counts under other games.</dd>
+    <dt>Other games</dt>
+    <dd>Games that weren't his: games between other teams, plus his team's seasons without him (before he arrived,
+      after he left, or a season he missed entirely). They move his rating only through the players he shared the
+      court with: they set his teammates' and opponents' ratings. If his opponents prove strong in their other
+      games, he gets more credit for beating them.</dd>
   </dl>
   <dl>
     <dt>RAPM</dt>
@@ -172,11 +177,11 @@
       pieces: [["h", "On court", "The possessions he played"],
                ["w", "Off court (GP)", "His team's possessions without him, in games he played"],
                ["g", "Off court (DNP)", "His team's possessions in games he didn't play"],
-               ["e", "Everything else", "Every other possession in the span"]],
+               ["e", "Other games", "Games that weren't his: other teams' games, and his team's seasons without him"]],
       story: p => {
         const v = (x, many) => (x >= 0 ? (many ? "add " : "adds ") : (many ? "take away " : "takes away ")) + abs2(x);
         return `${p.n}'s on-court possessions count for ${fmt(p.h)}. Off court in games he played ${v(p.w, false)}, ` +
-               `off court in games he didn't play ${v(p.g, false)} and everything else ${v(p.e, false)}, ` +
+               `off court in games he didn't play ${v(p.g, false)} and other games ${v(p.e, true)}, ` +
                `for a RAPM of ${fmt(p.a)}.`;
       },
     },

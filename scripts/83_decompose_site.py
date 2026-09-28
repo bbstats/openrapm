@@ -25,7 +25,7 @@ theirs.  scripts/82_decompose_rapm.py has the seven-piece version that starts fr
 
 **By possession** -- which possessions the rating came from:
 
-    RAPM = on court + off court (GP) + off court (DNP) + everything else
+    RAPM = on court + off court (GP) + off court (DNP) + other games
 
 RAPM is linear in the outcomes: his published rating is c'beta = sum over rows of h_r y_r, h = W X A^-1 c.  The
 context columns are unpenalised, so h is orthogonal to every one of them, and measuring each outcome against its
@@ -33,7 +33,7 @@ fitted context prediction leaves the total unchanged.  Each piece adds up h_r x 
 one group of rows: the possessions he played; his team's possessions without him in games he played; his teams'
 possessions in games he did not play, in seasons he played for them; and every other possession in the span.  A
 row's team comes from the box scores (the team of the players on that side).  A season he missed entirely cannot be
-placed -- injured players are not in the box scores -- so it lands in everything else; for a traded player, his other
+placed -- injured players are not in the box scores -- so it lands in other games; for a traded player, his other
 team's games before or after his stint count as games he missed.
 
 Plain RAPM: raw points, regular season and playoffs, one fit per span -- every season alone, and each of
