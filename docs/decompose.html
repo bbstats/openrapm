@@ -4,15 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OpenRAPM: plain RAPM, piece by piece</title>
+<link rel="stylesheet" href="site.css">
+<script src="site.js"></script>
 <style>
-  :root { color-scheme: light dark; --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6;
+  :root { --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6;
           --chip: #f0efec; --pos: 42 120 214; --neg: 227 73 72; }
-  @media (prefers-color-scheme: dark) {
-    :root { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5;
-            --chip: #2e2e2c; --pos: 57 135 229; --neg: 230 103 103; } }
-  body { margin: 0; color: var(--ink); background: Canvas;
-         font: 15px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
-  main { max-width: 1000px; margin: 0 auto; padding: 28px 16px 48px; }
+  :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5;
+          --chip: #2e2e2c; --pos: 57 135 229; --neg: 230 103 103; }
+  body { color: var(--ink); font: 15px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
   h1 { font-size: 26px; margin: 0 0 10px; }
   .eq { margin: 0 0 4px; font-size: 16px; line-height: 2.1; }
   .term { display: inline-block; padding: 0 9px; border-radius: 999px; background: var(--chip);
@@ -71,6 +70,12 @@
 </head>
 <body>
 <main>
+  <nav class="site">
+    <a href="./">Ratings</a>
+    <a href="decompose.html" aria-current="page">Piece by piece</a>
+    <a href="bias.html">Bias</a>
+    <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
+  </nav>
   <h1>Plain RAPM, piece by piece</h1>
   <p class="eq" data-view="player"><b>RAPM</b> = <span class="term">On court rtg</span> + <span class="term">Teammates</span>
     + <span class="term">Opponents</span> + <span class="term">Context</span> + <span class="term">Ridge penalty</span></p>
@@ -152,7 +157,6 @@
     averages zero across the league, weighted by possessions. By possession, RAPM is a weighted sum of every
     possession's result, so grouping the possessions splits it exactly. Every row adds up to his RAPM to rounding.
     Teammates' and opponents' ratings come from the same fit.
-    <a href="index.html">Ratings</a> &middot; <a href="bias.html">Bias by player type</a> &middot;
     <a href="https://github.com/bbstats/openrapm">Source</a> (<code>scripts/83_decompose_site.py</code>).
     <span id="built"></span>
   </footer>

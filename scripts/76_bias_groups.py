@@ -286,13 +286,14 @@ def page(result: dict) -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OpenRAPM: bias by player type</title>
+<link rel="stylesheet" href="site.css">
+<script src="site.js"></script>
 <style>
-  :root { color-scheme: light dark; --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19;
+  :root { --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6;
           --over: 227 73 72; --under: 42 120 214; --zero: #f0efec; }
-  @media (prefers-color-scheme: dark) { :root { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee;
-          --over: 230 103 103; --under: 57 135 229; --zero: #383835; } }
-  body { margin: 0; color: var(--ink); font: 15px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
-  main { max-width: 860px; margin: 0 auto; padding: 28px 20px 48px; }
+  :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5;
+          --over: 230 103 103; --under: 57 135 229; --zero: #383835; }
+  body { color: var(--ink); font: 15px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
   h1 { font-size: 26px; margin: 0 0 14px; }
   table { border-collapse: separate; border-spacing: 2px 0; width: 100%;
           font-variant-numeric: tabular-nums; }
@@ -311,6 +312,12 @@ def page(result: dict) -> str:
 </head>
 <body>
 <main>
+<nav class="site">
+  <a href="./">Ratings</a>
+  <a href="decompose.html">Piece by piece</a>
+  <a href="bias.html" aria-current="page">Bias</a>
+  <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
+</nav>
 <h1>OpenRAPM: bias by player type</h1>
 """
     def cell(value) -> str:

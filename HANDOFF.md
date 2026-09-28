@@ -170,6 +170,9 @@ ridge penalty; by possession, on court credit + off court adjustment (GP) + off 
 with the actual on and off court ratings beside them; single seasons
 and the ten three-season windows, penalty 3,000).  Rebuild with `scripts/52_site.py`,
 `scripts/76_bias_groups.py` and `scripts/83_decompose_site.py`, commit, and fast-forward `main` to publish.  The
+tabs at the top and the dark-mode button are `docs/site.css` and `docs/site.js`, shared by all three pages (76
+writes them into bias.html); a new page needs the same `<nav class="site">` block and its colours given again
+under `:root[data-theme="dark"]`.  The
 bias page is deliberately a title, one table and two short paragraphs; the owner has trimmed it twice.
 
 ## Traps that cost a day

@@ -1,0 +1,17 @@
+/* Shared by every page: the width, the tabs at the top and the light/dark switch.  Each page keeps its own
+   colours as variables and gives their dark values under :root[data-theme="dark"]; site.js sets data-theme
+   before the page paints, from the saved choice or the system's. */
+:root { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+body { margin: 0; background: Canvas; color: CanvasText; }
+main { max-width: 1000px; margin: 0 auto; padding: 14px 16px 48px; }
+
+nav.site { display: flex; align-items: center; gap: 2px; border-bottom: 1px solid var(--line); margin: 0 0 22px; }
+nav.site a { padding: 9px 12px 8px; color: var(--muted); text-decoration: none; font-size: 14px;
+             border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+nav.site a:first-child { padding-left: 0; }
+nav.site a:hover { color: CanvasText; }
+nav.site a[aria-current="page"] { color: CanvasText; font-weight: 600; border-bottom-color: var(--accent); }
+nav.site .theme { margin-left: auto; display: inline-flex; padding: 5px; border: 1px solid var(--line);
+                  border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+nav.site .theme:hover { color: CanvasText; }

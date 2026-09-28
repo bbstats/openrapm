@@ -4,11 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OpenRAPM</title>
+<link rel="stylesheet" href="site.css">
+<script src="site.js"></script>
 <style>
-  :root { color-scheme: light dark; --line: #d9d8d3; --muted: #6b6a66; --accent: #2a78d6; }
-  @media (prefers-color-scheme: dark) { :root { --line: #3a3a38; --muted: #a09f98; --accent: #3987e5; } }
-  body { margin: 0; font: 15px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
-  main { max-width: 820px; margin: 0 auto; padding: 28px 20px 48px; }
+  :root { --line: #d9d8d3; --muted: #6b6a66; --accent: #2a78d6; }
+  :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --accent: #3987e5; }
+  body { font: 15px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
   h1 { font-size: 26px; margin: 0 0 16px; }
   .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-bottom: 14px; }
   label { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
@@ -29,11 +30,16 @@
   .meta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0 16px; }
   .dl { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
   .dl a { color: inherit; }
-    .note { color: #666; font-size: 0.9rem; max-width: 62ch; line-height: 1.5; margin: 0 0 1rem; }
 </style>
 </head>
 <body>
 <main>
+  <nav class="site">
+    <a href="./" aria-current="page">Ratings</a>
+    <a href="decompose.html">Piece by piece</a>
+    <a href="bias.html">Bias</a>
+    <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
+  </nav>
   <h1>OpenRAPM</h1>
   <div class="controls">
     <label>Season <select id="season"></select></label>
@@ -54,8 +60,6 @@
     </tr></thead>
     <tbody></tbody>
   </table>
-  <p class="note"><a href="bias.html">Where these ratings disagree with the public consensus, by player type</a> &mdash; one number per type, on the overall rating, possession-weighted.</p>
-  <p class="note"><a href="decompose.html">Plain RAPM, piece by piece</a> &mdash; every player's plain RAPM split two ways that each add up to it exactly: by player (on-court rating, teammates, opponents, context, ridge penalty) and by possession (on court credit, off court adjustments for games he played and games he missed, team strength-of-schedule adjustment). Single seasons and three-season spans.</p>
   <footer>
     A multi-stage prior-informed RAPM: a role-and-age prior, then a gradient-boosted box-score prior, then a ridge on the
     on-court result, chosen by out-of-season prediction of held-out games. One rating per player per season, from that
