@@ -4,7 +4,7 @@
 is the permanent record and carries every number quoted here.  Do not let this grow into a lab notebook.
 
 Branch `cleanup`; `main` is fast-forwarded to it at each publish, and the live site is served from `docs/`
-on `main`.  `pytest -q`: **336 passed, 1 failed, 1 xfailed, ~165 s** with the scraped data.  The failure is
+on `main`.  `pytest -q`: **364 passed, 1 failed, 1 xfailed, ~126 s** with the scraped data.  The failure is
 accepted and named at the bottom of this file; nothing else is red.
 
 ## How we work (the owner, 2026-09-13/14)
@@ -60,7 +60,8 @@ ratings alone, refitting only the intercept and home edge on the scored season. 
 predicted twice, 56 observations.  The prior must not have seen the two scored seasons:
 
     .venv/Scripts/python scripts/62_single_year_board.py --exclude_neighbours=1 --score=0 --boards=<ten seasons> --out=season_ratings_<name>_<first>
-        (three chunks of ten seasons, stitched; ~3 min a season, so ~95 min for thirty)
+        (three chunks of ten seasons, stitched BY HAND: concatenate the three parquets; ~3 min a season, so
+         ~95 min for thirty.  With --chunk_label=outside, ~11 min a season: 280-310 extra RAPM solves each)
     .venv/Scripts/python scripts/63_yoy.py --rankings=<name>=outputs/season_ratings_<name>.parquet,incumbent=outputs/season_ratings_unshrinkdef.parquet --ref=incumbent --tag=<name> --splits=
     .venv/Scripts/python scripts/64_consensus_report.py outputs/season_ratings_<name>.parquet outputs/season_ratings_unshrinkdef.parquet
     .venv/Scripts/python scripts/66_compare.py incumbent=outputs/season_ratings_unshrinkdef.parquet <name>=outputs/season_ratings_<name>.parquet --season=2026 --top=20 --yoy=outputs/yoy_<name>.parquet --ref=incumbent
@@ -79,11 +80,22 @@ The year-over-year test is an error per team-game, so a 200-possession man is a 
 trade loss counts every player once.  **It has already overturned one reading and confirmed six others.**
 
     .venv/Scripts/python scripts/70_tradeset.py --rankings=outputs/season_ratings_<name>.parquet --team_effects=team --out=tradeset_<name>   (85 s)
-    .venv/Scripts/python scripts/73_tradeloss.py --alphas=incumbent=outputs/tradeset_team_alpha.parquet,<name>=outputs/tradeset_<name>_alpha.parquet --ref=incumbent
+    .venv/Scripts/python scripts/73_tradeloss.py --alphas=incumbent=outputs/tradeset_unshrinkdef_alpha.parquet,<name>=outputs/tradeset_<name>_alpha.parquet --ref=incumbent
 
 Paired by season on the exact intersection of eligible players; `--tier=` splits by exposure.  Read
 `mean_diff` below zero as better and `z` against its own standard error.  It detects a defensive change of
 0.0024 at z -2.2, so it has power at the size that matters.
+
+**Every experiment is also split by player-quality tier: top 30, 31-90, 91-150, 151-300, 301+** (the owner,
+2026-09-30: "in general we should do this").  Both tests, tiers set by the incumbent's rank in the rated season:
+
+    .venv/Scripts/python scripts/88_yoy_by_player.py --cands=<name>=outputs/season_ratings_<name>.parquet --tag=<name>
+        (the year-over-year difference shared among the players on the floor and summed by quality tier, by team
+         change and by age; the groups add up to 63_yoy.py's number exactly; ~3 min)
+    .venv/Scripts/python scripts/73_tradeloss.py --alphas=<as above> --ref=incumbent --quality=outputs/season_ratings_unshrinkdef.parquet --tier=each
+
+Direction names in both year-over-year scripts: "prev" / "the PREVIOUS season's rankings predict this season"
+is a rating looking FORWARD at the season after it; "next" is a rating looking BACK at the season before it.
 
 ## The record so far (year-over-year error per team-game, points per 100)
 
@@ -96,7 +108,31 @@ Paired by season on the exact intersection of eligible players; `--tier=` splits
 | + out-of-player priors | 8.705 | worse on the test, adopted by ruling 2 |
 | + fixed penalty 13,037 | 8.697 | tie on the test; **the trade loss later read it z -2.19 on defence** |
 | + the DEFENSIVE label un-shrunk (**the incumbent**) | **8.682** | z -5.24, 43 of 56; trade loss defence z -7.14, 27 of 30; adopted 2026-09-18 |
+| 25: chunk rows labelled from the seasons OUTSIDE the chunk | 8.700 | z +5.0; trade loss z +4.5 / +5.0; rejected 2026-09-29 (25b, weighting those rows by their label's possessions: much worse) |
+| 26: + RAPM pieces, same-team measure, game difficulty, rated as if every player changed teams | 8.682 | a tie (z +0.1); trade loss z +3.5 / +5.4; not adopted |
+| 27: + a team-season random intercept | 8.679 | a tie (z -0.4); trade loss z +3.8 / +3.9; not adopted.  26 and 27 predict the season BEFORE better (z -2.5, -2.8) and the season after worse: an age tilt (veterans up, young players down), not a team-change effect |
+| 28: + every chunk's label moved to its own age (aging curve) | 8.721 | z +4.1; trade loss z +5.1 / +4.1; rejected: over-corrects (Curry 92nd, Durant 136th), though consensus agreement rises to 0.818 |
+| 29: the incumbent + the team-movement weight, floor 0.5, rebalanced within career bands | **8.669** | **z -4.1, 39 of 56**; trade loss a tie; consensus unchanged; 2026 top 20 close to the incumbent's.  Meets the adoption rule; awaiting the owner (it halves one-team players' weight, which they said they do not want) |
+| 30: windows of two, four or six seasons split in the middle, each half labelled by the other; same-team measure as an input; rated as if every player changed teams | 8.706 | z +3.4, 16 of 56; trade loss z +2.8 / +7.6; rejected 2026-10-01.  Order alone leans better (z -1.6) but the ratings are too wide; best consensus agreement yet (0.829 total); loses as much on players who changed teams as on those who stayed.  LeBron James 126th in 2026 |
+| 30b: experiment 30's models with the trade flag switched on only for the players who changed teams; and every player rated as if he stayed | 8.682 (matched) / **8.680** (stayed) | the flag does not help movers: matched against all-stayed a tie (z +0.8).  All-stayed against the incumbent: a tie (z -0.3) but stint level z -5.1 (mostly the bench), trade loss offence z -4.4 / defence z +4.1, best consensus yet (0.864).  Not adopted under the rule; owner's call.  Durant 72nd, LeBron 65th in 2026.  `62 --rate_same_team=both`, `89_stitch_by_move.py` |
 | rejected | | every chunk size; booster settings; off-court features; one row per player-season; cross-fitting the penalty; the un-shrunk label on BOTH sides (the 2026 offensive spread collapses 1.60 to 1.14, Curry falls to 61st); `onc_d` off the defensive list (the trade loss finds nothing) |
+
+## Open with the owner (2026-10-01)
+
+1. **Experiment 29, the team-movement weight** (`--trade_weight=0.5 --trade_bands=1`): the only change that
+   passes the rule (z -4.1), and it wins equally for traded and not-traded players.  It only reweights the box
+   prior's training rows -- one career-wide number per player (`1 - sum(share ** 2)` + 0.5, so a one-team
+   player counts half), nothing at rating time.  The owner does not want one-team players halved; not adopted.
+2. **The stayed list** (experiment 30b): a tie on the test, better at stint level and on consensus, defensive
+   trade loss worse, Durant 72nd and LeBron 65th in 2026.  The owner's call.
+3. **Proposed next, none started:** experiment 31, experiment 30 rated as if traded plus `age` as an input (the
+   owner's idea; years of experience is already in, `age` never has been); weighting each label by its own
+   precision instead of team count (the non-blind version of 29); and a one-season check of whether the
+   veteran penalty in the traded list comes from the window weights (rows weigh by the feature half's
+   possessions, so traded veterans' windows lean 57% toward "season 1 predicts season 2").
+
+The chains and one-off scripts behind experiments 25-30b are in `scratch/2026-10-01_experiments_25_to_30b/`
+(gitignored; they still point at the session's old temp folder for `movement.py`).
 
 ## THE FINDING to carry forward: OpenRAPM is about a sixth too wide, and three sources agree
 
@@ -137,10 +173,9 @@ whose team scored while he was on the floor has his defensive correction pushed 
   furthest against the luck-adjusted ones, so it was not the `def3` pattern that excuses a drop.  Ruled:
   keep `onc_d`.  Note the 2026 top 20 was NOT the reason -- to the eye it was arguably better.
 - **The amplitude as a rescale** (experiment 20).  See above.
-- **The team-movement weight as it stands.**  `singleyear.team_movement` is the Gini-Simpson index now
-  (`1 - sum(share ** 2)`, the chance two possessions of a career came from different teams) with seven
-  tests, but `--trade_weight` is off by default and at floor 0 it deletes the one-team players -- 29% of
-  them, every single-franchise star -- which is what its one run lost on.  Sweep the floor if it is revived.
+- **The trade flag as a rating-time switch** (experiments 26, 30, 30b).  Rating everyone as if traded loses;
+  switching it on only for the players who really changed teams ties switching it off for everyone (z +0.8).
+  The flag learns who gets traded (veterans, often declining), not what a trade does.
 
 ## The instruments, all read-only
 
@@ -152,6 +187,9 @@ whose team scored while he was on the floor has his defensive correction pushed 
 | `75_amplitude.py` | a per-side multiplier sweep on a finished table |
 | `76_bias_groups.py` | the published page: bias by player type, `vs consensus` and `vs 2026 observed` |
 | `64_consensus_report.py` | rank agreement and spreads for several tables side by side |
+| `88_yoy_by_player.py` | the year-over-year difference split among the players on the court, by quality tier, team change and age; `tg_abs` gives each group its own typical miss |
+| `89_stitch_by_move.py` | the trade-flag test's list: each player's "traded" or "stayed" rating (`62 --rate_same_team=both`) by what he did next; score it with `63_yoy.py` / `88_yoy_by_player.py` as `name=<fwd>|<bwd>` |
+| `73_tradeloss.py --movers=1 --tier=each` | the trade loss for players who changed teams the season before or after, and for those who did not |
 
 `outputs/bgmm_proba.parquet` carries `player_id`, `season`, the winning player type and **all eight mixture
 probabilities** for 2026, from a mixture fitted on 2023-2025 (one row per player-season) and used to place
@@ -195,6 +233,10 @@ bias page is deliberately a title, one table and two short paragraphs; the owner
 9. `TaskStop` on a chain stops the bash wrapper only; its python children keep running.  Check
    `Get-Process python` before starting anything.
 10. Seventeen more in `DECISIONS.md`, "The measurement traps".
+11. chimeraboost 0.34 changed no rating but made `shap_values` exact interventional TreeSHAP (~200x slower):
+    a Boruta trial on 33,000 rows took 30 minutes.  `gbdt_prior.run_boruta(explain_rows=1000)` fixes it.
+12. Script 62 pins BLAS to one thread, so a 6,000-column label solve takes 5 s; outside labels need ~300 a
+    season and are solved by Cholesky on `--label_threads` cores (0.6 s each) for that reason.
 
 ## The one failing test, accepted by the owner (2026-09-18)
 
@@ -218,7 +260,7 @@ test can fail, no worries."*  The honest fix, not done, is to replace the rank c
 
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest tests -q                                  # 336 passed, 1 failed (LaMelo, accepted), 1 xfailed
+    .venv/Scripts/python -m pytest tests -q                                  # 364 passed, 1 failed (LaMelo, accepted), 1 xfailed
     .venv/Scripts/python scripts/63_yoy.py --rankings=incumbent=outputs/season_ratings_unshrinkdef.parquet,ship=artifacts/season_ratings.parquet --ref=incumbent --tag=verify --splits=
                                                                              # incumbent 8.682
     .venv/Scripts/python scripts/64_consensus_report.py outputs/season_ratings_product.parquet

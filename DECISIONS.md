@@ -2489,6 +2489,763 @@ being two bars away from them is then a claim about them as much as about us -- 
 `onc_d` off the defensive list was doing, in the wrong direction, in experiment 19.  Use the bars to
 size a disagreement, never as a target to shrink.
 
+### Experiment 23: the pieces of vanilla RAPM predict next season's RAPM, not next season's points (2026-09-28)
+
+**The owner's idea** ("99% certain"): the pieces of a season's vanilla RAPM -- the Decomposition page's two
+exact splits -- predict a player's RAPM in the season before and after better than their sum does.
+
+**How it was run.**
+- `scripts/84_piece_panel.py` splits every piece into its offensive and defensive half: 14,578
+  player-seasons, 1997-2026, penalty 3,000 per side.  Every per-side identity holds to 1e-13, and the two
+  halves add up to the page's net pieces exactly.
+- `scripts/85_piece_rating.py` does the rest.  A pair is a season t (the inputs) and a neighbouring season
+  the player also played (the target: his vanilla RAPM there, at 3,000, per side).  Both directions are
+  pooled, and the weight is the harmonic possessions of the two seasons.
+- The rating for season t comes from fits on pairs touching neither t-1 nor t+1, with five player folds:
+  the incumbent's `--exclude_neighbours=1` plus the out-of-player rule.
+- Every candidate has a like-for-like control, the same model given RAPM and possessions but no pieces.
+- Each split adds up to RAPM exactly, so no linear fit ever sees a redundant set.  The eight-piece basis
+  is the five by-player pieces plus the three off-court possession groups, and every linear fit asserts
+  full rank first.
+- The whole chain took 55 minutes: GBDT early stopping keeps 50-60 trees on a target this noisy, so a fit
+  takes about 0.2 s.
+
+**The pieces do deserve different weights.**  Players with 1,000+ possessions in both seasons, OLS per
+split, per point of the piece.  RAPM itself gives every piece 0.47 on offence and 0.40 on defence:
+
+| piece | offence | defence |
+|---|---|---|
+| on-court rtg | 0.64 (0.55-0.69) | 0.44 (0.38-0.50) |
+| teammates | 0.59 (0.50-0.65) | 0.39 (0.33-0.45) |
+| opponents | 0.84 (0.73-0.93) | 0.54 (0.47-0.62) |
+| context | 0.64 (0.55-0.72) | 0.46 (0.40-0.53) |
+| ridge penalty | 0.92 (0.78-1.02) | 0.54 (0.43-0.64) |
+| on court signal | 0.45 (0.41-0.49) | 0.40 (0.36-0.43) |
+| off court adjustment (GP) | 0.40 (0.34-0.44) | 0.28 (0.24-0.33) |
+| off court adjustment (DNP) | 0.25 (0.15-0.34) | 0.23 (0.15-0.28) |
+| team SOS adjustment | 0.90 (0.73-1.05) | 0.57 (0.47-0.66) |
+
+- On offence every by-player piece earns MORE than the total's weight.  That is possible because the
+  pieces cancel one another: on-court rtg correlates -0.80 with the ridge penalty and -0.78 with teammates.
+- Out of sample, on the same players, the by-player weights beat RAPM x slope on offence against both
+  truths: -0.051 at z -10.2 (30 of 30 seasons), and -0.052 at penalty 100, z -4.0.
+- On defence the sign flips between the two truths (-0.025 at z -7.0, then +0.030 at z +3.6), so it is
+  undecided.
+- The elastic net on the eight-piece basis kept nearly everything: pure L1, a tiny alpha.  Tables:
+  `outputs/csv/piece_coef_table1.csv`, `_table2.csv`, `_oos.csv`.
+
+**Every player, against the like-for-like control** (net; a negative difference is better):
+
+| test | pieces, linear | pieces, GBDT |
+|---|---|---|
+| next/previous RAPM at 3,000 | -0.065, z -9.3, 29 of 30 | -0.084, z -7.2, 28 of 30 |
+| -- players who changed team | z +1.5 | z +1.5 |
+| -- players who stayed | z -11.4 | z -7.8 |
+| next/previous RAPM at 100, spread removed | +0.185, z +5.4, 4 of 30 | +0.166, z +3.4, 7 of 30 |
+| year-over-year, team-game, as built | -0.55, z -10.1, 52 of 56 | -0.99, z -15.0, 56 of 56 |
+| -- each side rescaled (order only) | +0.60, z +5.8, 11 of 56 | +0.27, z +2.0, 25 of 56 |
+| -- every table at vanilla's spread | +2.23, z +14.7, 1 of 56 | +1.52, z +8.5, 5 of 56 |
+| trade loss, offence / defence | +0.0029 z +3.9 / +0.0034 z +4.0 | +0.0006 z +0.7 / +0.0011 z +1.2 |
+
+Year-over-year `game_armse` as built:
+
+| table | error |
+|---|---|
+| incumbent | 8.6819 |
+| pieces GBDT | 8.6735 |
+| pieces GBDT on Boruta's inputs | 8.6744 |
+| pieces linear | 8.6901 |
+| RAPM + possessions, GBDT | 8.7095 |
+| RAPM + possessions, linear | 8.7099 |
+| RAPM x slope | 8.7197 |
+| vanilla RAPM | 8.7184 |
+
+That vanilla row is the first time single-season vanilla RAPM has been scored on this test.
+
+**Reading: what the pieces predict is RAPM's own habit, not the player.**
+- **Against next season's RAPM, the whole gain belongs to players who stayed on their team**, and it
+  reverses against the lightly penalised truth once spread is removed.  That is the planned trap:
+  - the same teammates make the same shared-credit split again;
+  - a penalty-3,000 truth rewards a model that shrinks the way it does.
+- **On actual points, the team-game win as built is spread:**
+  - the piece models come out wider than their controls (the scored season wants them x1.59, the control
+    x1.83), and every model trained on a shrunk target is too narrow;
+  - at one common spread they lose;
+  - with each side rescaled they lose;
+  - the trade loss, which is spread-blind by construction and counts every player once, finds the linear
+    version worse on both sides and the GBDT a tie.
+- **Three independent order readings agree.**
+- **Split by how many of the ten on the court changed team** (stint level, each side rescaled):
+  - the GBDT ties where nobody moved (-0.05, z -0.10), ties with 1-2 movers (z +1.0) and loses with 3+
+    (z +2.5);
+  - the linear version loses in every group (z +1.5, +6.1, +4.7).
+  - The pieces' extra signal lives with unchanged teammates, and even there it only ties on actual points.
+
+**Boruta** (50 trials, per side, with and without the RAPM total; full table in
+`outputs/csv/piece_boruta_table.csv`):
+- **Offence:** the top two inputs are not pieces.  Team possessions without him in games he played scores
+  3.54 and his own possessions 2.53, both above RAPM itself (2.36).  Pieces accepted beyond the total:
+  on-court rtg 0.88, teammates 0.66, on court signal 0.39.
+- **Defence:** RAPM itself 4.05, on court signal 1.67, opponents 1.27.
+- Boruta dropped 12 and 17 inputs, so a GBDT on its kept inputs was run.  It matches the full GBDT (8.6744,
+  the same verdicts) and carries a small selection leak, because Boruta saw every season.
+
+**Movement**, the pieces against their own control at vanilla's spread:
+- GBDT: median 0.41 points per 100, ninth decile 1.04, 87% of players past 0.1.
+- Linear: median 0.28, ninth decile 0.71, 81% past 0.1.
+- The pieces reorder players a good deal, and the tests that see order say the new order is worse.
+
+**2026 top 20, pieces GBDT:**
+- The top 10: Wembanyama, Gilgeous-Alexander, Jokic, Vassell (the incumbent's 58th), Ausar Thompson,
+  Leonard, Amen Thompson (43rd), Ajay Mitchell, Holmgren, Caruso (51st).
+- Out of the incumbent's top 20: Antetokounmpo to 64th, Curry 85th, LeBron James 119th, Clingan 182nd.
+- Page: `outputs/compare_incumbent_vanilla_pieces_gbdt_rapm_gbdt_pieces_linear_2026.html`.
+
+**Also measured, and recorded here only:** OpenRAPM x slope, rescaled season by season to vanilla's spread,
+scored 8.6170 against the incumbent's 8.6819.  It narrows offence (the scored season wants x1.05 against
+x0.79), in line with "The amplitude finding"; a rescale is still not adoptable (experiment 20).
+
+**Verdict: not adopted as a rating.**  The idea is right that the pieces are not worth equal weights.  It is
+wrong that re-weighting them predicts the next season's points better.  Offence for players with heavy
+minutes is the one corner where the weights survive both truths, and it was never scored on points alone.
+Awaiting the owner.
+
+### Experiment 24: the same models told whether the player stayed on his team (2026-09-28)
+
+**The owner's follow-up**: pieces x "stayed on the same main team", linear then GBDT.
+- The flag belongs to the PAIR: same main team in the rated season and in the target season, in either
+  direction.
+- The linear models get the flag plus the flag x every input; the GBDT gets it as one more input.
+- The controls get the flag too.
+- Every player-season is rated twice, as if he stays and as if he moves.  The direct test takes each pair's
+  real flag.  The year-over-year test uses `_fwd` tables (same team the next season) for the rows where the
+  rated season predicts the one after, and `_bwd` for the rows where it predicts the one before, stitched
+  into one system (`outputs/yoy_pieces_stay_stitched.parquet`).
+- 48.1% of player-seasons keep their main team into the next season.
+
+| test, against the like-for-like control (also told the flag) | pieces x stayed, linear | pieces + stayed, GBDT |
+|---|---|---|
+| next/previous RAPM at 3,000 | -0.074, z -9.5, 28 of 30 | -0.088, z -8.7, 28 of 30 |
+| -- players who changed team | z +0.3 | z -0.1 |
+| -- players who stayed | z -10.4 | z -8.4 |
+| next/previous RAPM at 100, spread removed | +0.256, z +6.2, 4 of 30 | +0.211, z +4.6, 7 of 30 |
+| year-over-year, team-game, as built | -0.55, z -8.5, 49 of 56 | -0.97, z -13.4, 55 of 56 |
+| -- each side rescaled (order only) | +0.87, z +8.7, 7 of 56 | +0.58, z +4.6, 16 of 56 |
+| -- every table at vanilla's spread | +3.59, z +19.7, 0 of 56 | +2.44, z +12.6, 2 of 56 |
+| trade loss, rated as if he moves (off / def) | z +5.4 / +1.6 | z +0.7 / -1.3 |
+| trade loss, rated as if he stays (off / def) | z +3.8 / +4.8 | z +1.4 / +1.6 |
+
+Year-over-year `game_armse` as built:
+
+| table | error |
+|---|---|
+| pieces GBDT with the flag | 8.6661 (lowest yet) |
+| pieces linear with the flag | 8.6821 |
+| RAPM + possessions GBDT with the flag | 8.7011 |
+| RAPM + possessions linear with the flag | 8.7019 |
+| incumbent (experiment 23) | 8.6819 |
+| vanilla | 8.7184 |
+
+**Reading: the same verdict as experiment 23.**
+- The flag helps every model a little as built.  The pieces with it beat the pieces without it: z -4.4
+  linear, z -5.4 GBDT.  Rescaled, those are ties (z -0.4, z 0.0).
+- It stops the pieces hurting players who changed team: z +1.5 before, a tie now.
+- But the pieces' gain over the control is still all players who stayed, and still reverses against the
+  lightly penalised truth.
+- On real points, order only or at one spread, the pieces lose to the control, and by more than without the
+  flag.
+- The spread-blind trade loss finds the GBDT a tie and the linear version worse.
+
+**2026 rankings against vanilla** (rank agreement, players with 1,000+ possessions):
+- Linear 0.90 as if he stays, 0.85 as if he moves; GBDT 0.88 / 0.84.
+- Players with heavy minutes rise: Brunson 88th to 11-24th, Murray 133rd to 15-57th, Doncic 47th to
+  13-38th, Vassell 20th to 4-5th, Cunningham 26th to 6-16th.
+- Players with few possessions fall: Josh Green 17th (1,809 possessions) to 63-132nd, Hugo Gonzalez 19th to
+  72-109th, Butler 11th to 23-83rd.
+- That is the possessions signal Boruta ranked first in experiment 23, not the pieces.
+- Page: `outputs/compare_vanilla_linear_if_stays_linear_if_moves_gbdt_if_stays_gbdt_if_moves_2026.html`.
+
+**Verdict: not adopted.**  Awaiting the owner.
+
+### Experiment 25: each chunk row labelled with the player's RAPM OUTSIDE the chunk (2026-09-29)
+
+**The change** (the owner's plan of 2026-09-28, the first of three: team and game context in the prior).
+- Until now every training row of a player -- his career row and all his 1-, 2- and 3-season chunks --
+  carried the SAME label: his RAPM over every training season.  A label that is constant across a
+  player's rows cannot teach anything that differs between his chunks (experiment 15), and the next
+  experiment's same-team input is exactly such a thing.
+- Now a chunk's label is his RAPM over the training seasons OUTSIDE the chunk, so its box score and its
+  label share no game.  The career row keeps its label.  A chunk with no season of his outside it is
+  dropped (about 4% of rows: 34,222 against 35,647 for 1997).
+- Nothing else changed: features, weights (a player's chunk rows together still weigh what his career
+  row weighs), booster, out-of-player folds, ridge, penalty.  `--chunk_label=outside`;
+  `singleyear.chunk_rows(labels=...)`.
+
+**How it was run.**
+- chimeraboost went from 0.32 to 0.34 first.  2015 and 2024 rebuilt under 0.34 match the incumbent to
+  0.0 on every column, so the incumbent was not rebuilt; it reproduces 8.682 below.
+- The default setting under the new code reproduces 2015's 492 players exactly, before and after the
+  speed fix.
+- Outside labels need one RAPM per distinct set of chunk seasons: **278 to 308 per season and side**, not
+  the 84 the plan guessed, because a player who skipped seasons makes chunk sets nobody else has.
+- At one BLAS thread (the build's pinning) a solve took 5.0 s, so a season took 52 minutes; the first
+  run was stopped at three seasons.  The outside labels are now solved by Cholesky with BLAS allowed
+  twelve cores for the duration: 0.62 s a solve, 11 minutes a season, 5.5 hours for thirty.  They agree
+  with the shipped solver to 2.3e-7 per 100.  The career label keeps the shipped solver on one thread.
+- Unit tests: a 1-season chunk of season s carries exactly the label `season_rows` gives s; a chunk
+  that straddles the excluded seasons (2011 + 2013) is labelled without both; weights unchanged.
+
+**Year-over-year, both directions, 56 observations** (`outputs/yoy_outside_labels.log`):
+
+| | game_armse | scale_off | scale_def | paired vs incumbent, team-game MSE |
+|---|---|---|---|---|
+| incumbent | **8.6819** | 0.795 | 0.898 | -- |
+| outside labels | 8.6999 | 0.781 | 0.868 | +0.488, z +4.98, 14 of 56 |
+| -- stint level | | | | +0.305, z +2.48, 22 of 56 |
+| -- each side rescaled to the scored season | | | | **+0.008, z +0.08, 31 of 56** |
+
+**Trade loss** (`outputs/tradeloss_outside_labels.log`, against `tradeset_unshrinkdef_alpha`, 24,206
+player-season-sides in both): offence +0.0033, z +4.5, 6 of 30 seasons; defence +0.0055, z +5.0, 6 of 30.
+
+**Consensus** (2024-26, 1,000+ possessions): rank agreement 0.775 / 0.806 / 0.779 (offence / defence /
+total) against the incumbent's 0.785 / 0.803 / 0.794; spreads 1.027 / 1.010 against 1.029 / 1.007; top
+five 4 against 4.  No gross miss.
+
+**Movement against the incumbent** (`outputs/movement_outside_labels.log`), all 14,579 player-seasons:
+- median 0.24 per 100 on offence, 0.34 on defence, 0.43 total; ninth decile 0.65 / 0.89 / 1.10; 87% of
+  players move more than 0.1 in total, in every possession tier.
+- Almost all of it is order, not spread: a per-season rescale of each side accounts for a median 0.02
+  on offence and 0.04 on defence.
+- The ridge stretches the new offensive prior more (prior scale 2.32 against 2.10, larger in 29 of 30
+  seasons), and the finished offence ends a little wider (sd 1.86 against 1.79 among 1,000+
+  possessions), which is what `scale_off` reads.
+
+**2026 top 20** (`outputs/compare_incumbent_outside_labels_2026.html`; the phone table was emailed):
+- The top six are the same six: Wembanyama, Leonard, Antetokounmpo, Jokic, Gilgeous-Alexander, Ausar
+  Thompson.  Wembanyama's defence rises 1.3 (5.9 to 7.3).
+- In: Caruso 51st to 18th (defence +2.0), Butler 36th to 8th (offence +1.1), Donovan Mitchell 23rd to
+  7th, Cason Wallace 32nd to 16th (defence +1.2), Brunson 33rd to 20th (offence +1.0), Anunoby 24th to
+  19th.
+- Out: Champagnie 18th to 54th (offence -1.0), Cunningham 14th to 28th, Diabaté 16th to 29th, Durant
+  15th to 26th, LeBron James 19th to 27th, Clingan 20th to 22nd.
+
+**Reading.**
+- The label now varies within a player, which is what experiments 26 and 27 need, and it is honest in
+  the same way `--rows=season` was: no row is scored against its own games.
+- On its own it loses every test that sees level and spread: the year-over-year test at z +5.0, the trade
+  loss at z +4.5 and +5.0.  With each side rescaled it is a tie (z +0.08), so it does not order players
+  worse on the neighbouring seasons' games; the trade loss, which is blind to spread, still says worse.
+- It moves players a lot (median 0.43 in total), mostly by reordering them.
+
+**Verdict: not adopted on its own.**  By the plan, experiments 26 and 27 use outside labels regardless,
+because a same-team input needs a label that changes with the team.  The plan also says: if this loses
+badly on its own, ask the owner before going on.  It does; awaiting the owner.
+
+### Experiment 25b: the outside labels, each chunk weighted by the possessions its own label rests on (2026-09-29)
+
+**Why.**  Experiment 25's movement looked like fitted noise, not a pattern: age explains 0.3% of who
+moved, and the tilts by possessions (-0.14 to +0.09) are small beside a median move of 0.43.  An outside
+label rests on his career minus the chunk, so it is noisier than the career label, yet each chunk row kept
+the career label's weight.  The owner's go (2026-09-29): weight each chunk row by `share x the possessions
+its own label rests on` instead.  Career rows untouched.  `--chunk_weight=label`,
+`singleyear.chunk_rows(weight_by="label")`; everything else as experiment 25.
+- The weight moved as intended: in 1997 the career rows carry 33.8 million possessions of weight as
+  before, the chunk rows 23.7 million, where they had carried as much as the career rows.
+
+**Year-over-year, both directions, 56 observations** (`outputs/yoy_outside_reweighted.log`,
+`_vs25.log`):
+
+| | game_armse | scale_off | scale_def | vs incumbent, team-game MSE | vs experiment 25 |
+|---|---|---|---|---|---|
+| incumbent | **8.6819** | 0.795 | 0.898 | -- | |
+| experiment 25 | 8.6999 | 0.781 | 0.868 | +0.488, z +5.0, 14 of 56 | -- |
+| reweighted | 8.6926 | 0.859 | 0.985 | +0.310, z +1.6, 25 of 56 | -0.178, z -0.8, 28 of 56 |
+| -- stint level | | | | +1.41, z +5.4, 12 of 56 | |
+| -- each side rescaled (order only) | | | | **+1.90, z +8.1, 8 of 56** | |
+
+- The previous season's rankings predict worse (8.716, z +3.1) and the next season's slightly better
+  (8.670, z -0.8, 17 of 28).
+- The team-game near-tie is amplitude: the rankings came out narrower (offence sd 1.53 against 1.79
+  among 1,000+ possessions), which that score rewards, while the order got much worse.
+
+**Trade loss** against the incumbent: offence +0.0104, z +8.2, 2 of 30; defence +0.0152, z +9.5, 2 of 30.
+Against experiment 25: +0.0071, z +5.8 and +0.0097, z +5.0, 4 of 30 each.
+
+**Consensus:** rank agreement 0.721 / 0.768 / **0.702** against the incumbent's 0.785 / 0.803 / 0.794;
+spreads 0.832 / 0.906; top five 4.  Offence and total fall below 0.75: a gross miss.
+
+**Movement** (`outputs/movement_outside_reweighted.log`): median 1.33 per 100 in total, 96% of players past
+0.1.  It has a direction, by possessions (mean signed change in total, rating then prior):
+
+| possessions | rating | prior |
+|---|---|---|
+| under 500 | +2.06 | +2.08 |
+| 500-1,500 | +1.97 | +2.08 |
+| 1,500-4,444 | +0.55 | +0.61 |
+| 4,444+ | -0.86 | -1.15 |
+
+**2026 top 20** (`outputs/compare_incumbent_outside_labels_outside_reweighted_2026.html`, emailed):
+- In, nearly all injury-shortened seasons of established players: Trae Young 128th to 15th (849
+  possessions), Tatum 85th to 13th (1,467), Dejounte Murray 75th to 14th (805), Jalen Williams 57th to
+  17th, Porzingis 53rd to 19th, Horford 39th to 10th; also Jarrett Allen 35th to 8th, Curry 11th to 3rd.
+- Out: Diabaté 16th to 89th, Champagnie 18th to 88th, Clingan 20th to 76th, Queta 10th to 47th, Ajay
+  Mitchell 7th to 39th, Cunningham 14th to 50th; Gilgeous-Alexander 5th to 12th, Ausar Thompson 6th to
+  20th.
+
+**Reading: weighting by a label's possessions is weighting by career length, and career length is
+quality.**
+- The rows that carry the "few possessions" part of the map are now mostly long-career players' short
+  seasons -- injury years, rookie years -- whose labels are their good levels elsewhere.  The short
+  seasons of short careers, which are mostly worse players with worse labels, weigh little.
+- So the booster learned that a season with few possessions belongs to a good player.  Every player
+  under 1,500 possessions rises about 2 points per 100 before centring pushes the heavy-minute players
+  down, and injured stars with a few hundred 2026 possessions jump into the top 20.
+- The same family as measurement trap 8 (a feature that says how well-measured a row is) and the
+  team-movement weight: a weight that follows career length changes which players the map is learned
+  on, not just how noisy they are.
+
+**Verdict: rejected**, on every test that sees order, with a gross consensus miss.  The noise explanation
+for experiment 25's loss may still be right, but label-possession weights are not the way to act on it.
+Awaiting the owner.
+
+### Experiment 26: team and game context in the prior, rated as if every player changed teams (2026-09-29)
+
+**The change** (the owner's plan of 2026-09-28, on experiment 25's outside labels and career weights):
+- **The pieces** of each season's vanilla RAPM as inputs, per side, on the prior's own luck-adjusted designs:
+  the Decomposition page's by-player split (on-court rtg, teammates, opponents, context, ridge penalty), its
+  by-possession split (on court signal, off court adjustment GP and DNP, team SOS adjustment) and the actual
+  off-court rating, `_o` from the offensive design and `_d` from the defensive one, each padded toward 0
+  over its possessions at 3,000.  `src/eracoef/pieces.py` (moved out of script 84, whose raw-points panel
+  is bit-identical through it); `scripts/86_context_panel.py` writes them.  Every identity under 1e-11; a
+  fold of every row reproduces the panel's pieces exactly; the panel's on-court columns come from the same
+  designs (gap 0.0).
+- **Game difficulty**: the pieces' opponents, context and team SOS, the closeness columns already in the
+  panel, and `po_share`, the share of his possessions in the playoffs.
+- **The soft same-team measure** on every training row (the owner's harmonic-mean idea): the sum over
+  franchises of HM(the row's possession share with the team, the label seasons' share).  Charlotte's
+  1997-2002 id is New Orleans's franchise.  Exactly 1 on every career row; across 31,772 chunk rows in 2026,
+  16.2% exactly 0, 7.4% exactly 1, median 0.47.
+- **Rated as if every player changed teams**: `same_team = 0` for everyone at rating time, which is also the
+  only value ruling 2 allows.  The cross-fit rebuilds the pieces from each fold's training games, and the
+  fold priors carry `same_team = 0` too.
+- The incumbent's settings reproduce 2015 exactly on the new panel and code.
+
+**Boruta** (`scripts/87_context_boruta.py`; the rows 62 trained on for 2026, 33,617 a side; 50 trials; the
+cheap booster; each trial's mean |SHAP| over a fresh random 1,000 rows, because chimeraboost 0.34's exact
+interventional SHAP made an all-rows trial take 30 minutes).  Full table:
+`outputs/csv/boruta_context_table.csv`.
+- Offence keeps 47 of 48 candidates (rejects `onc_d`), defence 39 of 44 (rejects pc_on_rtg_d,
+  pc_on_signal_o, pc_on_rtg_o, pc_teammates_o and `chunk_seasons`, which the booster keeps by design).
+- `same_team` is accepted on both sides: importance +0.53 on offence, +1.18 on defence (the best shadow
+  sits at -0.35 and -0.39).
+- The strongest new input on both sides is the ridge-penalty piece: +2.84 on offence (third, after career
+  possessions and years), +4.93 on defence (first).  `gt_share` is second on defence (+3.70).
+- Kept = accepted + tentative: feature set `boruta_context`, 45 offensive and 38 defensive names.
+
+**Year-over-year, both directions, 56 observations** (`outputs/yoy_team_context.log`, `_vs25.log`):
+
+| | game_armse | scale_off | scale_def | vs incumbent, team-game MSE | vs experiment 25 |
+|---|---|---|---|---|---|
+| incumbent | 8.6819 | 0.795 | 0.898 | -- | |
+| experiment 25 | 8.6999 | 0.781 | 0.868 | +0.488, z +5.0, 14 of 56 | -- |
+| **team context** | **8.6820** | 0.820 | 0.864 | +0.018, z +0.1, 28 of 56 | -0.388, z -1.9, 35 of 56 |
+| -- stint level | | | | -0.083, z -0.4, 33 of 56 | |
+| -- each side rescaled (order only) | | | | +0.032, z +0.2, 28 of 56 | |
+
+- By direction it splits: a season's ratings predict the season BEFORE it better than the incumbent's do
+  (8.658 against 8.677, -0.49, z -2.5, 18 of 28) and the season AFTER it worse (8.706 against 8.687,
+  +0.53, z +2.0, 10 of 28).  **Corrected 2026-09-30**: first written the other way round.  63_yoy.py's block
+  "the NEXT season's rankings predict this season" is a rating looking back at the season before it.  The
+  age tilt fits the corrected direction: against the incumbent, players 34 and over rise 0.20 and players
+  under 25 fall 0.08-0.09, which is right for the season before and wrong for the season after (the split
+  by player below).
+
+**Trade loss** against the incumbent: offence +0.0045, z +3.5, 6 of 30; defence +0.0060, z +5.4, 4 of 30.
+Against experiment 25: +0.0011, z +1.3 and +0.0005, z +0.5 -- ties.
+
+**Consensus:** rank agreement 0.769 / 0.777 / 0.757 against 0.785 / 0.803 / 0.794; spreads 0.953 / 0.989;
+top five 3 against 4.  Team R-squared on defence 0.123 against 0.164 (the consensus's own is 0.160): the
+defensive ratings lean less on the team.  A drop, not a gross miss.
+
+**What "changed teams" does** (`outputs/season_ratings_team_context_same_team_diag.parquet`, the SPM prior
+before the ridge at `same_team = 0` against the player's real value):
+- Defence: median move 0.02, ninth decile 0.60, 40.5% of players past 0.1; the real value would make
+  the defensive prior better by 0.115 on average, and the move follows how much of his team he kept
+  (correlation -0.42).  Players who stayed lose the team's defensive credit.
+- Offence: median 0.005, ninth decile 0.15 -- nearly nothing.
+
+**Movement against the incumbent**: median 0.30 per 100 on offence, 0.45 on defence, 0.59 total; 91% of
+players past 0.1; almost all of it order, not spread.
+
+**2026 top 20** (`outputs/compare_incumbent_outside_labels_team_context_2026.html`, emailed):
+- Jokic 1st, Gilgeous-Alexander 2nd, Antetokounmpo 3rd, Wembanyama 4th -- his defence falls from 5.9 to 3.5.
+- In: Caruso 51st to 5th (defence +2.4), Cason Wallace 32nd to 8th (defence +2.3), Butler 36th to 9th,
+  Dyson Daniels 22nd to 12th, Anunoby 24th to 14th, Paul George 74th to 17th, Fox 49th to 18th, Adebayo
+  29th to 20th.
+- Out: Doncic 12th to 56th (both sides), Holmgren 8th to 43rd (defence 3.5 to 1.4), Queta 10th to 38th,
+  Towns 9th to 30th, Diabaté 16th to 74th, Champagnie 18th to 55th, Jamal Murray 17th to 28th, Ajay
+  Mitchell 7th to 21st.
+- Oklahoma City's defenders rise while its young centre falls: partly the pattern that sank the off-court
+  record in 2026-09-14's eye test.
+
+**Reading.**
+- The context wins back all of experiment 25's loss on the year-over-year test and ties the incumbent;
+  against its own base it is better (z -1.9).  It does not beat the incumbent on any test that decides.
+- "Rated as if he changed teams" acts almost only on defence, and in the direction the idea predicted:
+  one-team players lose defensive credit that belongs to their team.
+- The trade loss still says worse (z +3.5 and +5.4, the same size as experiment 25's), and the
+  consensus drops without a gross miss.
+
+**Verdict: not adopted** -- a tie on the test that decides goes to the simpler version, the incumbent, and
+the trade loss and the consensus lean against.  Awaiting the owner; experiment 27 (a team-season
+intercept) is next in the plan.
+
+### Experiment 27: experiment 26 plus one random intercept per team-season (2026-09-30)
+
+**The change** (the owner's plan; go given 2026-09-29).  Every booster fit of experiment 26 -- the full fit
+and the five player folds, both sides -- becomes F(inputs) + b[team-season]:
+- A training row's group is its main team-season, the (franchise, season) holding most of its possessions;
+  the career row's is the biggest of his label span.  832 team-seasons in 2026's training rows.
+- chimeraboost 0.34's own `random_effects=True` refuses a bagged model and the offensive booster is a bag of
+  five, so the algorithm runs by hand with chimeraboost's own solver (`fit_with_team_season` in script 62):
+  fit F; `estimate_ratio_reml` and `solve_intercepts` on its residuals; refit F from scratch on y - b.
+- The weights are normalised to mean 1 for the solve only: read as row counts, possession weights switch
+  the shrinkage off (chimeraboost's own fit with them gives intercepts of sd 0.27 against 0.17 normalised).
+- Rated with the trees alone.  The rated season is never a training season, so its team-seasons carry no
+  intercept: every player is rated as if on an average team, consistent with "changed teams".
+- **The check against chimeraboost's own version** (2026 defensive rows, both on normalised weights):
+  intercepts correlate 0.980 (sd 0.166 against 0.174), variance ratio 8.2 against the helper's 7.6 after its
+  refit, trees-only predictions correlate 0.988 (median gap 0.13 per 100).  The trees differ more than the
+  intercepts because chimeraboost replays its first fit's tree structures on y - b and the helper refits.
+
+**The intercepts are small and never absent**: the variance ratio (noise over team-season variance, in rows)
+runs 17-25 on offence and 12-22 on defence across the 30 seasons, never infinite; the intercepts' sd is 0.04
+per 100 on offence and 0.16 on defence (0.14-0.23).
+
+**Year-over-year, both directions, 56 observations** (`outputs/yoy_team_intercept.log`, `_vs26.log`):
+
+| | game_armse | scale_off | scale_def | vs incumbent, team-game MSE | vs experiment 26 |
+|---|---|---|---|---|---|
+| incumbent | 8.6819 | 0.795 | 0.898 | -- | |
+| experiment 26 | 8.6820 | 0.820 | 0.864 | +0.018, z +0.1, 28 of 56 | -- |
+| **team-season intercept** | **8.6788** | 0.824 | 0.866 | -0.072, z -0.4, 27 of 56 | -0.090, z -1.3, 33 of 56 |
+| -- stint level | | | | -0.211, z -1.0, 34 of 56 | -0.128, z -1.3 |
+| -- each side rescaled (order only) | | | | -0.057, z -0.3, 26 of 56 | -0.089, z -1.1 |
+
+- The same split by direction as experiment 26, a little stronger: a season's ratings predict the season
+  before it better than the incumbent's do (8.656 against 8.677, -0.54, z -2.8, 17 of 28) and the season
+  after it worse (8.701 against 8.687, +0.39, z +1.6, 10 of 28).  (Corrected 2026-09-30; see experiment 26.)
+
+**Trade loss** against the incumbent: offence +0.0045, z +3.8, 6 of 30; defence +0.0051, z +3.9, 7 of 30.
+Against experiment 26: offence 0.0000, z 0.0; defence -0.0009, z -1.2, 22 of 30.
+
+**Consensus:** 0.765 / 0.782 / 0.758 (incumbent 0.785 / 0.803 / 0.794; experiment 26 0.769 / 0.777 /
+0.757); spreads 0.951 / 0.982; top five 4.
+
+**Movement against experiment 26**: median 0.11 per 100 on offence, 0.26 on defence; against the incumbent
+it keeps experiment 26's size.
+
+**2026 top 20** (`outputs/compare_incumbent_team_context_team_intercept_2026.html`, emailed):
+- Jokic 1st, Wembanyama back to 2nd (defence 5.3, from experiment 26's 3.5), Antetokounmpo, Curry,
+  Gilgeous-Alexander, Leonard, Harden 7th, Dyson Daniels 8th, Ausar Thompson, Cunningham.
+- The intercept undoes part of experiment 26's worst moves: Holmgren 43rd to 17th, Doncic 56th to 22nd,
+  Caruso 5th to 11th, Cason Wallace 8th to 16th.
+- Still out of the incumbent's top 20: Ajay Mitchell 24th, Towns 30th, Queta 40th, Diabaté 44th,
+  Champagnie 54th, LeBron James 33rd, Jamal Murray 25th; Dejounte Murray is 18th on 805 possessions.
+
+**Reading.**
+- The best year-over-year score of the three (8.6788) and the best ordering against experiment 26, but a tie
+  with the incumbent on every row that decides, and the trade loss still says worse at z +3.8 / +3.9.
+- The team-season effects the booster was carrying were small (sd 0.16 per 100 on defence), and taking them
+  out repairs part of the 2026 list's damage at the top.
+- **The one result that holds across experiments 26 and 27: their ratings predict the season BEFORE the
+  rated one better than the incumbent's do (z -2.5, z -2.8) and the season after it worse.**  Pooled over
+  both directions it is a tie.  (Corrected 2026-09-30: first reported the other way round.)  The split by
+  player below traces it to age.
+
+**Verdict: not adopted** -- a tie on the test that decides, the trade loss against.  The plan's three
+experiments are done: outside labels cost the year-over-year test z +5.0 on their own; team context and
+then the team-season intercept win all of it back and a little more, but never beat the incumbent.
+
+### Where experiments 26 and 27 win and lose: by player quality, by team change and by age (2026-09-30)
+
+**The owner's follow-ups** (2026-09-30): check the direction split for players who changed teams, look at aging,
+and **split every result by player-quality tier: top 30, 31-90, 91-150, 151-300, 301+ -- "in general we should
+do this."**
+
+**The tool.** `scripts/88_yoy_by_player.py` shares each team-game's squared-error difference (candidate minus
+the incumbent) among the players on the floor by their possessions in it, and adds the shares up by player group.
+The groups add up to the year-over-year test's own paired difference in every season and direction (largest gap
+5e-15), so each group's number is its part of the result.  Tiers are the incumbent's rank by total rating in the
+rated season; team change is the main team in the scored season against the rated one; age is in the scored
+season.  `scripts/73_tradeloss.py --quality=<rankings> --tier=each` splits the trade loss the same way.
+Logs: `outputs/yoy_by_player_exp26_27.log`, `outputs/tradeloss_quality_exp26_27.log`.
+
+**First, a correction.**  Experiments 26 and 27 predict the season BEFORE the rated one better and the season
+after worse -- the reverse of what was first reported.
+
+**Experiment 27 against the incumbent, team-game level, each group's part of the paired difference** (below zero
+= experiment 27 better; "looking back" = a season's ratings predicting the season before it):
+
+| group | share of possessions | looking back | z | looking forward | z | both | z |
+|---|---|---|---|---|---|---|---|
+| top 30 | 0.12 | -0.060 | -2.0 | +0.061 | +1.8 | +0.001 | +0.0 |
+| 31-90 | 0.19 | -0.115 | -2.6 | +0.102 | +1.8 | -0.007 | -0.2 |
+| 91-150 | 0.16 | -0.064 | -1.7 | +0.080 | +2.4 | +0.008 | +0.3 |
+| 151-300 | 0.29 | -0.169 | -2.8 | +0.085 | +1.2 | -0.042 | -0.9 |
+| 301+ | 0.16 | -0.112 | -3.1 | +0.023 | +0.5 | -0.045 | -1.4 |
+| no rating that season | 0.08 | -0.017 | -1.1 | +0.042 | +1.9 | +0.013 | +0.9 |
+| stayed on his team | 0.64 | -0.359 | -2.7 | +0.217 | +1.4 | -0.071 | -0.7 |
+| changed teams | 0.28 | -0.161 | -2.8 | +0.134 | +1.8 | -0.014 | -0.3 |
+| 23 and under | 0.21 | -0.142 | -3.0 | +0.080 | +1.5 | -0.031 | -0.8 |
+| 24-26 | 0.27 | -0.150 | -2.7 | +0.047 | +0.7 | -0.052 | -1.1 |
+| 27-29 | 0.24 | -0.139 | -3.0 | +0.071 | +1.2 | -0.034 | -0.8 |
+| 30-32 | 0.16 | -0.084 | -2.3 | +0.079 | +2.0 | -0.002 | -0.1 |
+| 33+ | 0.12 | -0.023 | -0.8 | +0.116 | +2.7 | +0.047 | +1.7 |
+| all | 1.00 | -0.537 | -2.8 | +0.393 | +1.6 | -0.072 | -0.4 |
+
+- **Not a team-change effect.**  Per unit of possession share, players who changed teams gain looking back and
+  lose looking forward exactly as much as players who stayed (-0.58 against -0.56 back, +0.48 against +0.34
+  forward).  "Rated as if he changed teams" helps movers no more than stayers.
+- **Age, as the owner suspected.**  Experiments 26 and 27 rate older players higher and younger players lower
+  than the incumbent (34 and over +0.20 per 100, under 25 -0.08 to -0.09).  That is right looking back -- a year
+  earlier the veterans were better and the young players worse -- and wrong looking forward.  The loss looking
+  forward is biggest for players 33 and over (+0.93 per unit of share, z +2.7; experiment 26 z +3.4), and over
+  both directions they are the one group experiments 26 and 27 do worse on (z +1.7 and +2.6).  The gain looking
+  back is biggest, per unit of share, for players 23 and under.  Stint level says the same (under 24, looking
+  back: z -5.7; 30 and over, looking forward: z +2.4).
+- **Quality:** the top 150 are a wash over both directions; what little experiment 27 gains comes from players
+  ranked 151st and below.
+- **The trade loss by tier disagrees about the lower tiers**: experiment 27 ties the incumbent on the top 30
+  (z +0.5 / +0.9) and is worse in every tier below it -- 31-90 z +2.7 / +1.0, 91-150 +2.6 / +2.1, 151-300
+  +3.4 / +3.5, 301+ +2.9 / +2.4 (offence / defence).
+
+**Reading.**  The direction split is an age tilt the new labels brought in, and it is not neutral: it costs the
+veterans' forward predictions.  Aging is the lead the owner named, and it is a candidate for its own experiment.
+
+### Experiment 28: experiment 27 with every chunk's label moved to the chunk's own age (2026-09-30)
+
+**The change** (the owner's go, 2026-09-30).  An outside label is fit on the player's other seasons, which are at
+other ages, so it describes him at those ages.  Each chunk's label now gains `k x (curve at the chunk's ages -
+curve over the label's seasons)`, both possession-weighted, where the curve is an aging curve and `k` puts it on
+the label's own scale (a ridge label moves by n / (n + penalty) of it; the un-shrunk defensive label by all of it
+above its floor).  Career rows never move.  Everything else is experiment 27.  `--age_adjust_labels=1`,
+`singleyear.AgingCurve`, `chunk_rows(age_curve=...)`.
+- **The curve**: the delta method on single-season RAPM at penalty 100 (`outputs/piece_panel.parquet`), pairs of
+  consecutive seasons weighted by harmonic possessions, the change regressed on age with a quadratic and
+  integrated from 27; fit per rated season without the seasons it is scored on (10,575 pairs for 1997).
+- For 1997, against age 27, in points per 100: offence 20 -2.2, 23 -0.4, 25 0.0, 30 -0.9, 33 -2.5, 36 -4.7;
+  defence (points allowed) 20 +1.2, 23 +0.3, 30 +0.3, 33 +0.8, 36 +1.4.
+- The labels moved as intended: chunks at 33 and over lost 1.1 on offence and 0.6 on defence on average, chunks
+  at 24-29 gained about 0.2; median move 0.16-0.22 per 100.
+
+**Results** (`outputs/yoy_age_adjusted.log`, `_vs27.log`, `outputs/tradeloss*_age_adjusted*.log`,
+`outputs/yoy_by_player_age_adjusted.log`):
+
+| test | against the incumbent | against experiment 27 |
+|---|---|---|
+| year-over-year error | **8.721** against 8.682: +1.09, z +4.1, 17 of 56 | +1.16, z +4.0 |
+| -- each side rescaled (order only) | +0.27, z +1.0 | +0.33, z +1.0 |
+| -- looking back (a season's ratings predicting the one before) | +1.58, z +4.0, 6 of 28 | |
+| -- looking forward | +0.60, z +1.8, 11 of 28 | |
+| trade loss, offence / defence | +0.0093 z +5.1 / +0.0060 z +4.1 | z +3.0 / +0.8 |
+| consensus (offence / defence / total) | **0.814 / 0.778 / 0.818** against 0.785 / 0.803 / 0.794; top five 3 | |
+
+- Worse in every quality tier (year-over-year, both directions: z +3.0 to +4.6) and in every age group (z +3.4 to
+  +4.6); the trade loss is worse in every tier as well.
+- Wider: the scored seasons want offence x0.76 and defence x0.85 (incumbent x0.79 / x0.90).
+- Players moved a median of 0.72 per 100 in total against the incumbent.
+- The one test it improves is agreement with the public metrics, the best in this series (offence 0.814, total
+  0.818).  The consensus is a sanity check and never a target.
+
+**2026 top 20** (`outputs/compare_incumbent_team_intercept_age_adjusted_2026.html`, emailed): the veterans collapse
+-- Curry 11th to 92nd, Durant 15th to 136th, LeBron James 19th to 80th, Harden 13th to 35th, Butler 36th to 85th,
+Giannis Antetokounmpo 4th to 58th (on 2,129 possessions) -- and young players rise: Ausar Thompson 4th, Cunningham
+5th, Dyson Daniels 6th, Evan Mobley 15th, VJ Edgecombe (20) 16th, Amen Thompson 18th.
+
+**Reading.**
+- The adjustment over-corrects.  Experiments 26-27 tilted veterans up; this tilts them far down.  It applies the
+  AVERAGE decline to every veteran, but a player still in the league at 37 is one who has aged better than average
+  (the pairs behind the curve do not include the ones who fell out), and the booster, which has no age input of
+  its own, carries the correction through years of experience -- so every long career is marked down.
+- It hurts looking back most (z +4.0): a year earlier the veterans were better than their new ratings say.
+- Ratings that match each player's current age better (the consensus agrees more) predict the neighbouring
+  seasons worse.  The year-over-year test rewards a player's level around the season more than his level on the
+  day.
+
+**Verdict: rejected** -- clearly worse on the test that decides, on the trade loss and on the eye test.  With it,
+the line that began at experiment 25 ends: every version built on outside labels ties or loses to the incumbent.
+
+### Experiment 29: the owner's team-movement weight, with a floor and rebalanced within career bands (2026-09-30)
+
+**The change** (the owner, 2026-09-30: *"I just can't abide that there's no way to trade weight"*).  The
+incumbent, with every training row's weight multiplied by the player's team movement (`1 - sum(share^2)`, the
+chance two of his possessions came from different teams, franchises mapped) **plus a floor of 0.5**, and then
+**rebalanced within career-length bands** (label possessions 0 / 2,000 / 5,000 / 15,000 / 40,000+), each band
+keeping the total weight it had.  The one earlier run (floor 0, no bands) dropped every one-team player and let
+the weight drift toward long careers.  Weight factors: Curry and Jokic 0.50, LeBron James, Harden and Durant 1.08,
+Chris Paul 1.25.  In 1997 nobody sits at zero weight, one-team players' share of the weight goes 10.4% to 5.6%,
+and every band's share is unchanged.  `--trade_weight=0.5 --trade_bands=1`, `reweight_by_movement(bands=)`.
+
+**Results** (`outputs/yoy_trade_weight.log`, `outputs/tradeloss*_trade_weight.log`,
+`outputs/yoy_by_player_trade_weight.log`, `outputs/consensus_trade_weight.log`):
+
+| test | against the incumbent |
+|---|---|
+| year-over-year error | **8.6694 against 8.6819: -0.343, z -4.1, 39 of 56** |
+| -- stint level | -0.287, z -2.8, 36 of 56 |
+| -- each side rescaled (order only) | -0.144, z -1.7, 32 of 56 |
+| -- looking back (a season's ratings predicting the one before) | -0.590, z -5.1, 22 of 28 |
+| -- looking forward | -0.095, z -0.9, 17 of 28 |
+| trade loss, offence / defence | -0.0006 z -0.9 / -0.0004 z -0.5 (ties) |
+| consensus (offence / defence / total) | 0.782 / 0.809 / 0.792 against 0.785 / 0.803 / 0.794; top five 4 (same) |
+
+- **Better in every group over both directions**: every quality tier (z -3.2 to -4.2), every age group (-3.1 to
+  -4.8), players who stayed (-4.1) and players who moved (-3.6).  Looking back it is better in every group at
+  z -4 to -6; looking forward every group is a slight, insignificant gain.
+- The trade loss by tier is a wash: defence 31-90 worse (z +2.1), defence 91-150 and 301+ better (z -2.3, -2.5),
+  offence 151-300 better (z -2.0), the rest ties.
+- Movement against the incumbent: median 0.15 per 100 on offence, 0.26 on defence, 0.32 total.
+- **2026 top 20** (`outputs/compare_incumbent_trade_weight_2026.html`, emailed): the top 13 are the incumbent's
+  players in a slightly different order (Wembanyama, Leonard, Gilgeous-Alexander, Jokic, Antetokounmpo, Towns,
+  Ausar Thompson, Curry, Ajay Mitchell, Durant, Harden, Doncic, Holmgren); in: Butler 36th to 14th, Adebayo,
+  Anunoby, Tobias Harris, Hartenstein, Jarrett Allen; out: Jamal Murray to 22nd, Cunningham 29th, Champagnie,
+  Diabaté, LeBron James 36th, Clingan 42nd.  Wembanyama's defence 5.9 to 5.0.
+
+**Reading.**  The first candidate since 2026-09-18 to clear the decision rule: z -4.1 on the test that decides, no
+consensus miss, the trade loss a tie, and the 2026 list not worse to the eye.  The gain sits almost entirely in
+predicting the season before; why a movement weight should help that direction and not the other is not known.
+**It down-weights one-team players, which the owner said the same day they do not want** (they want them to count
+equally and the model to adapt at rating time; experiment 30 is that design).
+
+**Verdict: meets the adoption rule.  Awaiting the owner.**
+
+### Experiment 30: every stretch labelled by the seasons right next to it, rated as if traded (2026-10-01)
+
+**The change** (the owner, 2026-09-30: one-team players should count equally, and at rating time the model should
+adapt to being traded; their idea of chunks with trades in the middle).  The chunks are replaced by windows of two,
+four or six consecutive seasons split in the middle, each half predicting the other: its box score is the
+features, its label a RAPM fit on the other half's seasons alone (penalty 3,000, the defensive side un-shrunk as
+the career label is).  The career row stays.  Weights are the incumbent's (a player's window rows together weigh
+his career row's weight), so one-team players count in full.  The same-team measure is an input; everyone is rated
+with it at 0, "as if traded".  `--chunk_label=adjacent --features=boruta_same_team`, `singleyear.adjacent_rows`.
+- In 2026's training rows: 241 window labels a side, 44,122 window rows, **42% of them traded examples** (same
+  team under 0.5).  The window labels are far wider than the career labels on offence (sd 1.56 against 0.59: the
+  career label on offence is fit at penalty 40,000) and about as wide on defence (1.92 against 1.76).
+- The same-team measure does move one-team players.  For players whose rated season's teams overlap their other
+  seasons' teams by 0.8 or more (20% of possessions), rating them at that real value instead of 0 raises the prior
+  by +0.26 on offence and +0.17 on defence on average (possession-weighted; median move 0.2-0.3 a side).  For the
+  40% of possessions whose real value is 0.2 or less it moves nothing (median 0.000).
+  (`outputs/season_ratings_adjacent_labels_same_team_diag.parquet`.)
+
+**Results** (`outputs/yoy_adjacent_labels.log`, `outputs/tradeloss*_adjacent_labels.log`,
+`outputs/yoy_by_player_adjacent_labels.log`):
+
+| test | against the incumbent |
+|---|---|
+| year-over-year error | 8.7055 against 8.6819: +0.650, z +3.4, 16 of 56 |
+| -- stint level | -0.001, z 0.0 |
+| -- each side rescaled (order only) | **-0.333, z -1.6, 34 of 56** |
+| -- looking back / looking forward | +1.04, z +4.1 / +0.26, z +0.9 |
+| trade loss, offence / defence | +0.0034 z +2.8 / **+0.0086 z +7.6** |
+| consensus (offence / defence / total) | **0.834 / 0.788 / 0.829**, the best yet; top five 4 |
+
+- The ratings are too wide for the neighbouring seasons (they want offence x0.77 and defence x0.85, the
+  incumbent x0.79 / x0.90): the team-game loss is spread, while the order alone leans better (z -1.6).
+- Worse in every quality tier, and **equally for players who changed teams and players who stayed** (per unit
+  of possession share +0.67 and +0.66): it loses as much on the players who changed teams, for whom "as if
+  traded" was the right setting, as on those who stayed.  That compares it with the incumbent, not with itself
+  rated as if every player stayed, so it does not isolate the same-team measure.
+- 2026: Wembanyama's defence 7.6; Towns 3rd, Doncic 6th, Donovan Mitchell 8th, Jamal Murray 10th, Gobert 15th;
+  LeBron James 126th, Tobias Harris 106th, Ajay Mitchell 55th, Durant 42nd.
+
+**Verdict: rejected** on the test that decides and the trade loss, though it agrees with the public metrics best of
+any version.  The owner asked the same morning whether the trade flag is tested by switching it on only for players
+who were actually traded: it is not -- everyone gets it -- and that is the right test of whether the flag works.
+Experiment 30b runs it.
+
+### Experiment 30b: the trade flag switched on only for the players who moved (2026-10-01)
+
+**The question** (the owner, 2026-10-01): "are you testing the trade flag by turning it on for players who are
+traded?"  No: experiment 30 rated every player as if traded, and the year-over-year test scored that one rating for
+everyone, the 64% of possessions whose player kept his main team included.
+
+**The test.**  Experiment 30 rebuilt with `--rate_same_team=both`: the same models write two lists, every player
+rated as if traded (same_team 0; bit-identical to experiment 30's table in all 30 seasons) and as if he stayed
+(same_team 1, `outputs/season_ratings_flagtest_stayed.parquet`).  `scripts/89_stitch_by_move.py` then gives each
+player the "traded" rating if his main team in the scored season differs from the rated season's and the "stayed"
+one if not (62% of possessions take "stayed"), one list per direction, which `63_yoy.py` and `88_yoy_by_player.py`
+read as `name=<forward>|<backward>`.  This matched list reads the neighbouring season's teams, so it tests the
+flag and can never be a ranking.  Switching a player from "traded" to "stayed" moves his 2026 total by a median
+0.55 per 100 (one player in ten 1.4 or more), and the season's own games stretch the stayed prior less (offence
+about x2.1 against x3.0).
+
+**Results** (`outputs/yoy_flagtest.log`, `outputs/yoy_flagtest_vs_incumbent.log`, `outputs/yoy_by_player_flagtest*.log`,
+`outputs/tradeloss_flagtest*.log`, `outputs/consensus_flagtest.log`; the first row is paired from
+`outputs/yoy_flagtest.parquet`):
+
+| comparison | team-game (decides) | stint | order only (each side rescaled) |
+|---|---|---|---|
+| matched against all "stayed": only the movers differ, so this is the flag | +0.048, z +0.8, 30 of 56 | -0.009, z -0.1 | -0.176, z -2.9, 38 of 56 |
+| all "stayed" against all "traded" | **-0.697, z -5.7, 45 of 56** | -0.998, z -6.0 | -0.540, z -3.7 |
+| all "stayed" against the incumbent | -0.046, z -0.3, 28 of 56 | **-0.999, z -5.1, 43 of 56** | -0.873, z -5.3 |
+| matched against the incumbent | +0.002, z 0.0 | -1.008, z -5.4 | -1.049, z -6.8 |
+
+- **The flag does not help the players it describes.**  Giving the players who changed teams their "traded" rating
+  instead of their "stayed" one is a tie on the test that decides (looking forward, the case a trade is about:
+  +0.085, z +1.0, 15 of 28), and a small gain only once each side's spread is matched.
+- **Rating everyone as if traded is what sank experiment 30.**  The same models rating everyone as if they stayed
+  go from clearly worse than the incumbent to a tie on the test that decides, and clearly better at stint level:
+  in every quality tier, most in 151-300 (z -5.3) and 301+ (z -6.3), i.e. mostly the bench, which the team-game
+  level cannot see.  At team-game level every tier, mover group and age group is a tie.
+- Trade loss, stayed against the incumbent: offence -0.0036, z -4.4 (24 of 30), better; defence +0.0044, z +4.1
+  (5 of 30), worse -- worse in 31-90 and 151-300, a tie in the top 30.  Against "traded": better on both ends
+  (z -6.4 / -5.1).
+- Consensus, stayed: **0.855 / 0.843 / 0.864**, the best of any version (incumbent 0.785 / 0.803 / 0.794); top
+  five 4.
+- 2026, stayed: Wembanyama 9.3, Kawhi Leonard 8.3, Jokic 7.9, Giannis 6.4, Gilgeous-Alexander 6.3.  Durant 72nd
+  (the incumbent 15th), LeBron James 65th (19th), Cade Cunningham 41st (14th), Clingan 44th (20th); Gobert 20th
+  (47th), Hartenstein 11th (26th).
+
+**Verdict.**  The flag: no help, measured where it applies.  The stayed list: a tie on the test that decides, so
+not adopted under the rule; its stint-level and consensus gains against a worse defensive trade loss are the
+owner's call.
+
+### Every list split by traded and not-traded players (2026-10-01)
+
+The owner: "can you split all our results into traded/not traded and get the accuracy?"  `88_yoy_by_player.py`
+now also shares each team-game's own squared error among the players on the court (`tg_abs`), so a group gets its
+own typical miss; `73_tradeloss.py --movers=1` splits the trade loss by whether the player's main team changed the
+season before or after.  Logs: `outputs/yoy_by_player_split_by_trade.log`, `outputs/tradeloss_split_by_trade.log`.
+
+- No list does better on traded players in particular.  The one clear winner, 29 (trade weight), wins by the same
+  amount on both groups (-0.013 each; 37 and 41 of 56).  Rating as if traded (30) loses as much on traded players
+  as on the rest (+0.024 each); stayed and matched tie the incumbent on both.
+- Trade loss: the stayed list is clearly better than the incumbent on offence for traded players (0.322 against
+  0.329, 24 of 30) and worse on defence; 29 ties everywhere; every other list is worse.
+- Traded players are barely harder to predict than the rest: the incumbent misses by 8.672 with them on the court
+  and 8.655 without a team change.
+
+### What drives the gap between the traded and stayed ratings: a lasso (2026-10-01)
+
+The owner read the gap (traded minus stayed total) player by player in 2026 and asked for its causes, "lasso
+first".  Lasso on the standardised inputs the prior models read, plus age, teams that season and the team's
+ratings with him off the court; the penalty is the sparsest within one standard error of the cross-validated best
+(`scratch/2026-10-01_experiments_25_to_30b/why_traded_differs.py`; every coefficient in
+`outputs/lasso_traded_minus_stayed.csv`).
+
+- It explains about half: R2 0.53 cross-validated, in 2026 (582 players) and over all 30 seasons (14,579).
+- Toward "better off traded", per standard deviation (2026 / all seasons): on-court possessions +0.42 / +0.33,
+  team points allowed with him on the court +0.35 / +0.26, steals plus blocks +0.10 / +0.12; over all seasons
+  also three-point rate +0.27 and points +0.20.
+- Toward "worse off traded": team points scored with him on the court -0.27 / -0.33, seasons in the league
+  -0.20 / -0.27, seasons with his current team -0.15 / -0.21.
+- Reading: the traded rating gives less credit for the team's results with him on the court and more for heavy
+  minutes and box-score production; veterans and long-tenured players lose most.  For the veterans, one tilt is
+  mechanical -- window rows weigh by the feature half's possessions, so for players 33 and older who changed teams
+  57% of the weight is on "season 1 predicts season 2" rows (47-49% for 23 and under) -- but the larger suspect is
+  selection: the veterans who did move were often declining.
+
 ## What was tried and rejected
 
 **The LRBoost branch (a boosted correction on a frozen linear prior).** Five things had to be right before it
