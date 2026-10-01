@@ -103,12 +103,12 @@ def test_replacing_the_current_season_with_noise_does_not_move_the_training_rows
 # ------------------------------------------------------- 3. every fit from the panel is gated
 # Scripts that FIT something from the season or block panel.  Each must pass its read through
 # `drop_untrainable`; a new one belongs here the day it is written.
-FITS_FROM_PANEL = ["50_boruta.py", "62_single_year_board.py", "67_blend_apm.py",
+FITS_FROM_PANEL = ["50_boruta.py", "62_single_year_board.py", "67_blend_apm.py", "88_yoy_by_player.py",
                    "71_tradeset_features.py", "72_tradeset_shap.py"]
 
 # Scripts that read the panel to WRITE columns back into it.  These must NOT gate: they rewrite the
 # file in place, so dropping the current season would delete it from the only copy.
-WRITES_THE_PANEL = {"49_role_panel.py", "65_offcourt_panel.py", "69_closeness_panel.py"}
+WRITES_THE_PANEL = {"49_role_panel.py", "65_offcourt_panel.py", "69_closeness_panel.py", "86_context_panel.py"}
 
 
 def _calls(path: Path, name: str) -> bool:

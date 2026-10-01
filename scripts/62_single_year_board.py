@@ -5,7 +5,11 @@
                                            [--free_scale=1] [--buckets=low_poss:2] [--boards=2015,2024]
                                            [--features=boruta_noonc|boruta|sy_noonc|sy]
                                            [--exclude_neighbours=0] [--rows=chunks|player|season|season_capped]
-                                           [--chunk_sizes=1,2,3|all] [--crossfit=scale|0|1]
+                                           [--chunk_sizes=1,2,3|all] [--chunk_label=career|outside|adjacent] [--chunk_weight=career|label]
+                                           [--label_threads=12] [--rate_same_team=0|1|real|both] [--same_team_diag=0|1]
+                                           [--dump_rows=<name>] [--team_season_intercept=0|1] [--age_adjust_labels=0|1]
+                                           [--trade_weight=<floor>] [--trade_bands=0|1] [--adjacent_penalty=3000]
+                                           [--crossfit=scale|0|1]
                                            [--params_mult=l2_leaf_reg:5,min_child_weight:5] [--params_set=depth:3]
                                            [--player_folds=0|5] [--unshrink_label=def|1|off|0] [--lambda_player=13037|cv|<value>]
                                            [--lambda_off=<value>] [--lambda_def=<value>]
@@ -117,8 +121,10 @@ os.environ.setdefault("NUMBA_NUM_THREADS", os.environ.get("OPENRAPM_NUMBA_THREAD
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from chimeraboost import ChimeraBoostRegressor  # noqa: E402
+from threadpoolctl import threadpool_limits  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from eracoef import pieces  # noqa: E402
 from eracoef import singleyear as sy  # noqa: E402
 from eracoef.config import load_config
 from eracoef.seasons import drop_untrainable  # noqa: E402
@@ -218,25 +224,80 @@ def unshrink_label(target: pd.DataFrame, lam_o: float, lam_d: float, n_floor: fl
     return out
 
 
+def fit_with_team_season(make, X, y, w, codes, n_groups, normalise: bool = True):
+    """A booster plus one random intercept per team-season, around ANY booster (experiment 27, the owner's plan).
+
+    chimeraboost 0.34's own `random_effects=True` refuses a bagged model, and the offensive booster is a bag of
+    five, so the algorithm is run by hand with chimeraboost's own solver: fit F on y; take its residuals;
+    `estimate_ratio_reml` for the noise-to-group variance ratio; `solve_intercepts`; refit F from scratch on
+    y - b[group].  The ratio and intercepts are then solved once more against the refit, for the log only.
+
+    The weights are normalised to mean 1 for the solve and only there: the solver reads weights as ROW COUNTS,
+    so possession weights would tell it there are millions of rows and switch the shrinkage off, while the
+    booster keeps the weights it always had (its leaf penalty is not scale-free).  A ratio of infinity means no
+    team-season signal: then b is exactly 0 and the refit is skipped, since it would be the same fit.
+
+    The caller rates with the trees alone: the rated season is never a training season, so none of its
+    team-seasons has an intercept -- he is rated as if on an average team.  Returns (booster, log).
+    """
+    from chimeraboost.random_effects import estimate_ratio_reml, solve_intercepts
+
+    first = make().fit(X, y, sample_weight=w)
+    normal = w / w.mean() if normalise else w          # `normalise=False` only to compare with chimeraboost's own
+    resid = y - first.predict(X)
+    ratio = float(estimate_ratio_reml(resid, codes, n_groups, normal))
+    if not np.isfinite(ratio):
+        return first, dict(ratio=ratio, ratio_refit=ratio, intercept_sd=0.0)
+    b = solve_intercepts(resid, codes, n_groups, ratio, normal)
+    second = make().fit(X, y - b[codes], sample_weight=w)
+    resid = y - second.predict(X)
+    ratio_refit = float(estimate_ratio_reml(resid, codes, n_groups, normal))
+    b_refit = solve_intercepts(resid, codes, n_groups, ratio_refit, normal) if np.isfinite(ratio_refit) else b * 0
+    per_row = b_refit[codes]
+    sd = float(np.sqrt(np.average((per_row - np.average(per_row, weights=w)) ** 2, weights=w)))
+    return second, dict(ratio=ratio, ratio_refit=ratio_refit, intercept_sd=sd)
+
+
+def team_season_codes(train: pd.DataFrame) -> tuple:
+    """0..G-1 group codes from `singleyear.TEAM_SEASON`; a row without a team-season is a group of its own."""
+    labels = train[sy.TEAM_SEASON].to_numpy(np.int64).copy()
+    missing = labels < 0
+    labels[missing] = -1 - np.arange(int(missing.sum()))
+    codes, uniques = pd.factorize(labels)
+    return codes.astype(np.int64), len(uniques)
+
+
 class OutOfPlayerSPM:
     """The SPM fitted once on everything and once per player fold; `predict` gives each player the fit
-    that never saw his rows (`--player_folds=N`; 0 = the plain single fit)."""
+    that never saw his rows (`--player_folds=N`; 0 = the plain single fit).  `intercept=True` fits every one
+    of those boosters with a team-season random intercept (`fit_with_team_season`) and predicts with the
+    trees alone."""
 
-    def __init__(self, params: dict, n_folds: int):
-        self.params, self.n_folds = dict(params), int(n_folds)
+    def __init__(self, params: dict, n_folds: int, intercept: bool = False):
+        self.params, self.n_folds, self.intercept = dict(params), int(n_folds), bool(intercept)
+
+    def _fit_one(self, X, y, w, codes, n_groups):
+        def make():
+            return ChimeraBoostRegressor(random_state=0, **self.params)
+        if not self.intercept:
+            return make().fit(X, y, sample_weight=w), None
+        return fit_with_team_season(make, X, y, w, codes, n_groups)
 
     def fit(self, train: pd.DataFrame, model_feats: list) -> "OutOfPlayerSPM":
         X, y, w = train[model_feats].to_numpy(float), train.target.to_numpy(float), train.weight.to_numpy(float)
-        self.full_ = ChimeraBoostRegressor(random_state=0, **self.params).fit(X, y, sample_weight=w)
-        self.fold_models_, self.excluded_ = [], []
+        codes, n_groups = team_season_codes(train) if self.intercept else (None, 0)
+        self.full_, self.log_ = self._fit_one(X, y, w, codes, n_groups)
+        self.fold_models_, self.excluded_, self.fold_logs_ = [], [], []
         self.shift_ = np.zeros(0)
         if self.n_folds > 1:
             fold = sy.stratified_player_folds(train, self.n_folds)
             self.shift_ = sy.fold_mean_shift(train, fold)
             for f in range(self.n_folds):
                 keep = fold != f
-                self.fold_models_.append(ChimeraBoostRegressor(random_state=0, **self.params).fit(
-                    X[keep], y[keep], sample_weight=w[keep]))
+                model, log = self._fit_one(X[keep], y[keep], w[keep], None if codes is None else codes[keep],
+                                           n_groups)
+                self.fold_models_.append(model)
+                self.fold_logs_.append(log)
                 self.excluded_.append(set(train.index[~keep].tolist()))
         return self
 
@@ -299,7 +360,7 @@ def _saved_fold_prior(folds: list, design):
     return fold_prior
 
 
-def _fold_prior_builder(wd_o, wd_d, models, held_frames, model_feats):
+def _fold_prior_builder(wd_o, wd_d, models, held_frames, model_feats, teams=None):
     """A prior for a CV fold that has NOT seen the fold's games: the season's on-court columns (`onc_*`)
     rebuilt from the training rows alone, the fitted boosters re-asked.  `--crossfit=1`.
 
@@ -309,13 +370,25 @@ def _fold_prior_builder(wd_o, wd_d, models, held_frames, model_feats):
     designs on the two targets the panel built `onc_*` from (`xpts_ft`, `x3def`), so the rebuilt columns
     differ from the panel's in the games used and nothing else (`scratch/onc_leak.py` checked that the
     full-season rebuild reproduces the panel to four decimals).
+
+    The RAPM pieces (experiment 26) are the same kind of column -- the season's own games -- so when a model
+    reads any of them they are rebuilt per fold too, through `pieces.season_pieces`, the code the panel was
+    built with (scripts/86_context_panel.py checked that a fold of every row reproduces the panel's pieces to
+    1e-12); `teams` is the season's (game_id, player_id) -> team lookup that needs.  `same_team` is whatever
+    the held frames carry: 0, "he changed teams", unless the diagnostic asked otherwise.  Both ridges (one
+    per target) ask for the same five folds, so each fold is built once.
     """
     ids_of_ps = wd_o.spec.ps_table["player_id"].to_numpy()
     # the off-court family too, when the panel carries it (scripts/65_offcourt_panel.py)
     with_offc = all(c in held_frames["O"].columns for c in sy.OFFC + sy.NET)
-    rebuilt = sy.ONC + (sy.OFFC + sy.NET if with_offc else [])
+    with_pieces = teams is not None and any(c in model_feats[s] for s in ("O", "D") for c in sy.PIECES)
+    rebuilt = sy.ONC + (sy.OFFC + sy.NET if with_offc else []) + (sy.PIECES if with_pieces else [])
+    built: dict = {}
 
     def fold_prior(train_mask):
+        key = np.packbits(np.asarray(train_mask, dtype=bool)).tobytes()
+        if key in built:
+            return built[key]
         fo, fd = wd_o.subset(train_mask), wd_d.subset(train_mask)
         got = oncourt_rates(fo, fd)
         onc = pd.DataFrame({"player_id": ids_of_ps, **{c: got[c].to_numpy(dtype=float) for c in sy.ONC}})
@@ -324,12 +397,16 @@ def _fold_prior_builder(wd_o, wd_d, models, held_frames, model_feats):
             for c in sy.OFFC:
                 onc[c] = off[c].to_numpy(dtype=float)
             onc["net_o"], onc["net_d"] = onc.onc_o - onc.offc_o, onc.onc_d - onc.offc_d
+        if with_pieces:
+            got_pieces, _ = pieces.season_pieces(fo, fd, teams)
+            onc = onc.merge(got_pieces, on="player_id", how="left")
         out = {}
         for side in ("O", "D"):
             h = held_frames[side].drop(columns=rebuilt).merge(onc, on="player_id", how="left")
             h[rebuilt] = h[rebuilt].fillna(0.0)
             out[side] = dict(zip(h.player_id.to_numpy(), models[side].predict(h, model_feats[side])))
-        return out["O"], out["D"]
+        built[key] = (out["O"], out["D"])
+        return built[key]
 
     return fold_prior
 
@@ -402,9 +479,13 @@ def main():
     roles_played = None
     if _flag("trade_weight") is not None:
         _roles = pd.read_parquet(ROOT / "data/cache/roles_RSPO.parquet")
-        roles_played = _roles[_roles.poss_on > 0][["player_id", "season", "team_id", "poss_on"]]
+        roles_played = _roles[_roles.poss_on > 0][["player_id", "season", "team_id", "poss_on"]].copy()
+        # franchises (2026-09-30): Charlotte's 1997-2002 id is New Orleans's, or the players who moved with
+        # the team read as movers
+        roles_played["team_id"] = sy.franchise(roles_played.team_id.to_numpy(), roles_played.season.to_numpy())
     first, last = int(_flag("first", 1997)), int(_flag("last", 2026))
     out = ROOT / "outputs" / f"{_flag('out', 'season_ratings_sy')}.parquet"
+    out_stayed = out.with_name(out.stem + "_stayed.parquet")   # `--rate_same_team=both`
     do_score = _flag("score", "1") not in ("0", "no", "false")
     global FREE_PRIOR_SCALE, LAM_BUCKETS
     FREE_PRIOR_SCALE = _flag("free_scale", "1") not in ("0", "no", "false")
@@ -422,6 +503,64 @@ def main():
     assert row_shape in ("player", "season", "season_capped", "chunks"), "--rows=player|season|season_capped|chunks"
     chunk_flag = _flag("chunk_sizes", "1,2,3")        # "all" = every contiguous window of a career
     chunk_sizes = "all" if chunk_flag == "all" else tuple(int(x) for x in chunk_flag.split(",") if x)
+    # experiment 25 (the owner, 2026-09-28): what a chunk row is labelled with.  `career` (the incumbent)
+    # gives every chunk row his career label, the chunk's own seasons included, so the label is constant
+    # across his rows and nothing that differs between his chunks can be learned from it (experiment 15).
+    # `outside` labels each chunk with his RAPM over the seasons OUTSIDE it -- one solve per distinct set
+    # of chunk seasons, about 0.7 s each, built per rated season -- and keeps the career row's label.
+    chunk_label = _flag("chunk_label", "career")
+    assert chunk_label in ("career", "outside", "adjacent"), "--chunk_label=career|outside|adjacent"
+    # experiment 30 (the owner, 2026-09-30): `adjacent` replaces the chunks by windows of two, four or six
+    # seasons split in the middle, each half labelled by a RAPM fit on the other half alone
+    # (`singleyear.adjacent_rows`), at a lighter penalty so one season of label is not shrunk to nothing
+    adjacent_penalty = float(_flag("adjacent_penalty", 3000))
+    # the BLAS threads the outside labels may use while they are solved (the rest of the run stays at one)
+    label_threads = int(_flag("label_threads", os.cpu_count() or 1))
+    # the owner, 2026-09-29, after experiment 25: what a chunk row's weight is built on.  `career` (the
+    # incumbent) uses the career label's possessions; `label` uses the possessions its OWN label rests on,
+    # which for an outside label is the career minus the chunk -- noisier labels, less weight.
+    chunk_weight = _flag("chunk_weight", "career")
+    assert chunk_weight in ("career", "label"), "--chunk_weight=career|label"
+    # experiment 26 (the owner, 2026-09-28): the soft same-team measure on every training row
+    # (`singleyear.chunk_rows(shares=...)`), and the value it takes at rating time: 0, "he changed teams".  That is
+    # also the only legal value -- the real one needs his other seasons' teams, which ruling 2 forbids --
+    # so `--rate_same_team=real` exists for measurement only, and `--same_team_diag=1` writes both priors side
+    # by side (outputs/<out>_same_team_diag.parquet) to say how far the choice moves each player.
+    rate_same_team = _flag("rate_same_team", "0")
+    # `both` (the owner, 2026-10-01: "are you testing the trade flag by turning it on for players who are
+    # traded?"): the same models rate every player twice, as if he changed teams (the table this run
+    # writes) and as if he stayed (same_team 1, outputs/<out>_stayed.parquet), so the year-over-year test
+    # can hand each player the one that matches what he did next (scripts/89_stitch_by_move.py).  That
+    # stitched list reads the next season's teams and is a test of the flag only, never a ranking.
+    # `1` writes the stayed list as the table.
+    assert rate_same_team in ("0", "1", "real", "both"), "--rate_same_team=0|1|real|both"
+    same_team_diag = _flag("same_team_diag", "0") not in ("0", "no", "false")
+    diag_rows: list = []
+    # --dump_rows=NAME writes each side's actual training rows, every column, for every rated season:
+    # outputs/prior_rows_NAME_<season>_<side>.parquet (what the Boruta run of experiment 26 reads)
+    dump_rows = _flag("dump_rows")
+    # experiment 27 (the owner, 2026-09-28): one random intercept per team-season around every booster fit
+    # (`fit_with_team_season`), the rating from the trees alone
+    team_intercept = _flag("team_season_intercept", "0") not in ("0", "no", "false")
+    assert not team_intercept or row_shape == "chunks", "--team_season_intercept needs --rows=chunks"
+    # the owner, 2026-09-30, after the split by player showed experiments 26-27 carried an age tilt: move each
+    # chunk's label to the chunk's own age with an aging curve (`singleyear.AgingCurve`), fit per rated season on
+    # the season-to-season changes of single-season RAPM at penalty 100 (outputs/piece_panel.parquet, raw
+    # points), never on the seasons the table will be scored on
+    age_adjust = _flag("age_adjust_labels", "0") not in ("0", "no", "false")
+    assert not age_adjust or row_shape == "chunks", "--age_adjust_labels needs --rows=chunks"
+    aging = None
+    if age_adjust:
+        _pieces = pd.read_parquet(ROOT / "outputs/piece_panel.parquet",
+                                  columns=["player_id", "season", "rapm100_off", "rapm100_def", "poss_off", "poss_def"])
+        # each side in the sign its label uses: defence as points allowed, so the curve moves the label directly
+        _pieces["raw_def"] = -_pieces.rapm100_def
+    team_shares = None
+    if chunk_label in ("outside", "adjacent") or dump_rows or team_intercept:
+        # franchises, not team ids, or everyone who stayed through Charlotte's move looks like a mover
+        _roles = pd.read_parquet(ROOT / "data/cache/roles_RSPO.parquet")
+        team_shares = _roles[_roles.poss_on > 0][["player_id", "season", "team_id", "poss_on"]].copy()
+        team_shares["team_id"] = sy.franchise(team_shares.team_id.to_numpy(), team_shares.season.to_numpy())
     crossfit = _flag("crossfit", "scale")            # 0 | 1 (scale and penalty) | scale (the scale only)
     # adopted 2026-09-14 (the owner: "adopt"): every player's prior from the fit without his rows
     player_folds = int(_flag("player_folds", 5))     # 0 or 1: the plain single fit
@@ -448,6 +587,9 @@ def main():
     # is a FLOOR added to the movement: 0 is the rule exactly and drops one-team players, 0.25 keeps them
     # at a quarter weight.  Absent = off, the shipped behaviour.  `--rows=chunks` only.
     trade_weight = None if _flag("trade_weight") is None else float(_flag("trade_weight"))
+    # the owner, 2026-09-30: `--trade_bands=1` rebalances the movement weight within career-length bands, so it
+    # moves weight only between players of similar career length (`singleyear.reweight_by_movement(bands=)`)
+    trade_bands = _flag("trade_bands", "0") not in ("0", "no", "false")
     # --dump_shap=<name> writes outputs/prior_shap_<name>.parquet: per feature, how far one
     # standard deviation moves the prior, signed, out of player fold.  Comparable with
     # scripts/72_tradeset_shap.py, which reports the same quantity for the correction.
@@ -494,6 +636,10 @@ def main():
     panel, _ = drop_untrainable(pd.read_parquet(ROOT / "outputs/role_panel_season.parquet"),
                                 cfg, what="the season panel")
     panel = panel[panel.poss > 0].reset_index(drop=True)
+    if age_adjust:
+        # the gated panel's ages (its offensive rows; both sides carry the same age) beside the RAPMs
+        _ages = panel[panel.side == "O"][["player_id", "season", "age"]]
+        aging = _pieces.merge(_ages, on=["player_id", "season"], how="inner")
     feature_set = _flag("features", "boruta")
     features = sy.feature_set(feature_set)
     for side, names_ in features.items():
@@ -501,7 +647,8 @@ def main():
     print(f"targets: offense {names['O']}, defense {names['D']}; features {feature_set} "
           f"(O {len(features['O'])}, D {len(features['D'])}); "
           f"free_prior_scale {FREE_PRIOR_SCALE}; lam_buckets {LAM_BUCKETS or '{}'}; "
-          f"exclude_neighbours {exclude_neighbours}; rows {row_shape} (sizes {chunk_sizes}); crossfit {crossfit}; "
+          f"exclude_neighbours {exclude_neighbours}; rows {row_shape} (sizes {chunk_sizes}, "
+          f"chunk label {chunk_label}, chunk weight {chunk_weight}); crossfit {crossfit}; "
           f"params_mult {params_mult or '{}'}; params_set {params_set or '{}'}; "
           f"player_folds {player_folds}; unshrink_label {'+'.join(unshrink_sides) or 0}; lambda_player {lambda_player or 'CV'}; "
           f"priors_from {priors_from or '-'}; save_priors {save_priors or '-'}; "
@@ -536,6 +683,7 @@ def main():
               f"{len(rapm[name].player_ids)} players ({time.time() - t0:.0f}s)", flush=True)
 
     rows, diagnostics = [], []
+    rows_of = {"": rows, "stayed": []}          # `--rate_same_team=both`: the second list's rows
     for season in boards:
         prior, table, lam = {}, {}, {}
         # the seasons nothing population-level may be fit on: the rated one, plus its neighbours when
@@ -543,18 +691,26 @@ def main():
         unseen = [s for s in range(season - exclude_neighbours, season + exclude_neighbours + 1)]
         labels_by_target: dict = {}
         models, held_frames, model_feats_of = {}, {}, {}
+        prior_stayed, stayed_frames = {}, {}       # `--rate_same_team=both`: the second list
         for side, params in (("O", tuned(cfg["gbdt"]["params"])), ("D", tuned(cfg["gbdt"]["params_def"]))):
             column = "offense" if side == "O" else "defense"
-            feats = features[side]
+            # `same_team` belongs to a (row, label) pair, not to the panel: it is built by `chunk_rows` and
+            # appended to the model's inputs the way the chunk features are
+            use_same_team = sy.SAME_TEAM in features[side]
+            feats = [f for f in features[side] if f != sy.SAME_TEAM]
+            assert not use_same_team or (row_shape == "chunks" and chunk_label in ("outside", "adjacent")), \
+                "same_team needs --rows=chunks --chunk_label=outside: a career label cannot vary with the team"
+            assert rate_same_team in ("0", "real") or use_same_team, \
+                "--rate_same_team=1|both needs same_team among the features"
             if saved is not None:
                 prior[side] = saved[season][side]
                 continue
             training = panel[(panel.side == side) & ~panel.season.isin(unseen)]
 
-            def label(exclude):
+            def label(exclude, method="solve"):
                 out = rapm[names[side]].ratings(
                     held_out_season=exclude, offense_lambda=RAPM_OFFENSE_LAMBDA,
-                    defense_lambda=RAPM_DEFENSE_LAMBDA, context_lambda=RAPM_CONTEXT_LAMBDA)
+                    defense_lambda=RAPM_DEFENSE_LAMBDA, context_lambda=RAPM_CONTEXT_LAMBDA, method=method)
                 if column in unshrink_sides:
                     out = unshrink_label(out, RAPM_OFFENSE_LAMBDA, RAPM_DEFENSE_LAMBDA, unshrink_floor,
                                          sides=(column,))
@@ -573,8 +729,100 @@ def main():
                 # features saying how much evidence each row rests on
                 sizes = (range(1, int(training.groupby("player_id").season.nunique().max()) + 1)
                          if chunk_sizes == "all" else chunk_sizes)
-                train = sy.chunk_rows(label(unseen), training, column, feats, sizes=sizes)
-                model_feats = feats + sy.CHUNK_FEATURES
+                outside = None
+                if chunk_label == "outside":
+                    # one label per distinct set of chunk seasons, the rated season(s) left out as well;
+                    # the same RAPM --rows=season fits for a season, so a 1-season chunk of season s carries
+                    # that shape's label for s.  Per side: the defensive label is un-shrunk.  About 300 of
+                    # them a season and side, not the 84 first guessed: a player who skipped seasons makes
+                    # chunk sets nobody else has.  So they are solved by Cholesky with BLAS allowed
+                    # `--label_threads` cores for the duration (0.6 s a solve, against 5.0 s on the one
+                    # pinned thread); nothing else runs meanwhile, and the limit is restored before the
+                    # booster.  The career label above is untouched: same solver, one thread, as shipped.
+                    t_label = time.time()
+                    keys = list(dict.fromkeys(tuple(sorted(set(unseen) | set(chunk)))
+                                              for chunk in sy.chunk_season_sets(training, sizes)))
+                    with threadpool_limits(limits=label_threads, user_api="blas"):
+                        outside = {key: label(list(key), method="cholesky") for key in keys}
+                    if season == boards[0] or season == boards[-1]:
+                        print(f"  prior {side}: {len(outside)} outside labels, one per set of chunk seasons "
+                              f"({time.time() - t_label:.0f}s on {label_threads} BLAS threads)", flush=True)
+                    if season == boards[0]:
+                        # the fast solver against the shipped one, on one of these very labels
+                        slow = label(list(keys[0])).set_index("player_id")[column]
+                        fast = outside[keys[0]].set_index("player_id")[column]
+                        print(f"  prior {side}: outside label by Cholesky vs the shipped solver, largest "
+                              f"difference {float((fast - slow.reindex(fast.index)).abs().max()):.1e} per 100",
+                              flush=True)
+                # the seasons the career label is fit on, and no others: what `same_team` compares against
+                shares = None if team_shares is None else team_shares[~team_shares.season.isin(unseen)]
+                curve = scale_of = None
+                if age_adjust:
+                    value, poss_col = ("rapm100_off", "poss_off") if side == "O" else ("raw_def", "poss_def")
+                    curve = sy.AgingCurve(aging, value, poss=poss_col, exclude=unseen, degree=2)
+                    lam_side = RAPM_OFFENSE_LAMBDA if side == "O" else RAPM_DEFENSE_LAMBDA
+                    floor_s = unshrink_floor / (unshrink_floor + lam_side)
+
+                    def scale_of(n, _lam=lam_side, _floor=floor_s, _un=column in unshrink_sides):
+                        # the label's own scale: a ridge label is his impact x n / (n + penalty); an un-shrunk
+                        # one is that divided back out, down to the floor it is capped at
+                        s = np.asarray(n, dtype=float) / (np.asarray(n, dtype=float) + _lam)
+                        return np.minimum(1.0, s / _floor) if _un else s
+                    if season == boards[0] or season == boards[-1]:
+                        at = [20, 23, 25, 27, 30, 33, 36]
+                        print(f"  prior {side}: aging curve from {curve.pairs:,} season-to-season pairs, points per 100 "
+                              f"against age 27 in the label's sign: "
+                              + ", ".join(f"{a} {float(curve(a)):+.2f}" for a in at), flush=True)
+                if chunk_label == "adjacent":
+                    # experiment 30: each half of a window labelled by a RAPM fit on the other half's seasons
+                    # alone, at `--adjacent_penalty`; the defensive side un-shrunk as the career label is
+                    def window_label(half, _side=side, _column=column):
+                        out = rapm[names[_side]].ratings(
+                            held_out_season=[s for s in seasons if s not in half], offense_lambda=adjacent_penalty,
+                            defense_lambda=adjacent_penalty, context_lambda=RAPM_CONTEXT_LAMBDA, method="cholesky")
+                        if _column in unshrink_sides:
+                            out = unshrink_label(out, adjacent_penalty, adjacent_penalty, unshrink_floor,
+                                                 sides=(_column,))
+                        return out
+                    t_label = time.time()
+                    halves = sy.adjacent_season_sets(training, sizes)
+                    with threadpool_limits(limits=label_threads, user_api="blas"):
+                        beside = {half: window_label(half) for half in halves}
+                    train = sy.adjacent_rows(label(unseen), training, column, beside, feats, sizes=sizes,
+                                             unseen=unseen, shares=shares)
+                    if season == boards[0] or season == boards[-1]:
+                        win = train[train.row_kind == "window"]
+                        traded = float((win[sy.SAME_TEAM] < 0.5).mean()) if sy.SAME_TEAM in win else float("nan")
+                        print(f"  prior {side}: {len(beside)} labels fit on one half of a window each, penalty "
+                              f"{adjacent_penalty:,.0f} ({time.time() - t_label:.0f}s); {len(win):,} window rows, "
+                              f"{traded:.1%} of them traded examples (same team under 0.5); label sd "
+                              f"{win.target.std():.3f} against the career rows' "
+                              f"{train[train.row_kind == 'career'].target.std():.3f}", flush=True)
+                else:
+                    train = sy.chunk_rows(label(unseen), training, column, feats, sizes=sizes,
+                                          labels=outside, unseen=unseen, weight_by=chunk_weight, shares=shares,
+                                          age_curve=curve, label_scale=scale_of)
+                if age_adjust and season == boards[0]:
+                    moved = train[train.label_key != sy._key_text(sy._season_key(unseen))]
+                    bins = pd.cut(moved.age, [0, 24, 27, 30, 33, 99], right=False,
+                                  labels=["under 24", "24-26", "27-29", "30-32", "33+"])
+                    by_age = moved.groupby(bins, observed=True).age_shift.mean().round(3).to_dict()
+                    print(f"  prior {side}: mean move of a chunk's label by the chunk's age {by_age}; "
+                          f"median size {moved.age_shift.abs().median():.3f} per 100", flush=True)
+                model_feats = feats + sy.CHUNK_FEATURES + ([sy.SAME_TEAM] if use_same_team else [])
+                if season == boards[0]:
+                    whole = train.label_key.to_numpy() == sy._key_text(sy._season_key(unseen))
+                    print(f"  prior {side}: training weight on career rows {train.weight[whole].sum():,.0f}, "
+                          f"on chunk rows {train.weight[~whole].sum():,.0f} (chunk weight: {chunk_weight}); "
+                          f"median label possessions, career rows {np.median(train.label_possessions[whole]):,.0f}, "
+                          f"chunk rows {np.median(train.label_possessions[~whole]):,.0f}", flush=True)
+                    if sy.SAME_TEAM in train.columns:
+                        st = train[sy.SAME_TEAM].to_numpy()[~whole]
+                        print(f"  prior {side}: same_team on the {st.size:,} chunk rows: exactly 0 {np.mean(st == 0):.1%}, "
+                              f"exactly 1 {np.mean(st == 1):.1%}, quartiles "
+                              f"{np.round(np.quantile(st, [0.25, 0.5, 0.75]), 3).tolist()}; "
+                              f"career rows all 1: {bool((train[sy.SAME_TEAM].to_numpy()[whole] == 1).all())}",
+                              flush=True)
                 if trade_weight is not None:
                     # the owner's rule (2026-09-16): weight a player's rows by the chance that two
                     # possessions of his career came from different teams, over the seasons his label was
@@ -583,13 +831,23 @@ def main():
                     played = roles_played[~roles_played.season.isin(unseen)]
                     per_team = played.groupby(["player_id", "team_id"], as_index=False).poss_on.sum()
                     moved = sy.team_movement(per_team, min_poss=MIN_POSSESSIONS)
-                    train = sy.reweight_by_movement(train, moved, floor=trade_weight)
+                    before = train.weight.to_numpy(float).copy()
+                    train = sy.reweight_by_movement(train, moved, floor=trade_weight,
+                                                    bands=True if trade_bands else None)
                     if season == boards[0]:
                         kept = (moved.reindex(train.index.unique()).fillna(0.0) + trade_weight) > 0
-                        print(f"  prior {side}: weighted by team movement, floor {trade_weight:g}; "
-                              f"mean movement {moved.mean():.3f}, "
-                              f"{int((~kept).sum())} of {len(kept)} players left at zero weight",
-                              flush=True)
+                        m_row = moved.reindex(train.index).fillna(0.0).to_numpy()
+                        band = np.digitize(train.possessions.to_numpy(float), sy.CAREER_BANDS[1:-1])
+                        shares = [f"{a:,.0f}+: {before[band == b].sum() / before.sum():.3f} -> "
+                                  f"{train.weight.to_numpy()[band == b].sum() / before.sum():.3f}"
+                                  for b, a in enumerate(sy.CAREER_BANDS[:-1])]
+                        print(f"  prior {side}: weighted by team movement, floor {trade_weight:g}"
+                              f"{', rebalanced within career-length bands' if trade_bands else ''}; "
+                              f"mean movement {moved.mean():.3f}; {int((~kept).sum())} of {len(kept)} players "
+                              f"left at zero weight; one-team players' share of the weight "
+                              f"{before[m_row == 0].sum() / before.sum():.3f} -> "
+                              f"{train.weight.to_numpy()[m_row == 0].sum() / before.sum():.3f}; "
+                              f"by label possessions {shares}", flush=True)
             else:
                 # one label per TRAINING season: the RAPM with the rated season(s) and that season out, so
                 # a row's box score and its label share no game.  One solve each, ~0.7 s, cached per target
@@ -600,7 +858,17 @@ def main():
                                        cap_per_player=(row_shape == "season_capped"))
             if season == boards[0]:
                 print(f"  prior {side}: {len(train):,} training rows ({row_shape})", flush=True)
-            model = OutOfPlayerSPM(params, player_folds).fit(train, model_feats)
+            if dump_rows:
+                path = ROOT / "outputs" / f"prior_rows_{dump_rows}_{season}_{side}.parquet"
+                train.reset_index().to_parquet(path, index=False)
+                print(f"  prior {side}: wrote {path.name} ({len(train):,} rows, {train.shape[1]} columns)", flush=True)
+            model = OutOfPlayerSPM(params, player_folds, intercept=team_intercept).fit(train, model_feats)
+            if team_intercept and (season == boards[0] or season == boards[-1]):
+                log = model.log_
+                print(f"  prior {side}: team-season intercept over {len(np.unique(train[sy.TEAM_SEASON]))} "
+                      f"team-seasons: variance ratio {log['ratio']:.3g} (after the refit {log['ratio_refit']:.3g}; "
+                      f"infinity = no team-season signal), intercepts' sd {log['intercept_sd']:.3f} per 100; "
+                      f"the fold fits' ratios {[round(g['ratio'], 3) for g in model.fold_logs_]}", flush=True)
             if dump_shap:
                 shap_rows.append(prior_shap_slopes(model, train, model_feats, side, season))
             if player_folds > 1 and season == boards[0]:
@@ -609,70 +877,112 @@ def main():
                       f"(label sd {train.target.std():.3f})", flush=True)
             held = sy.season_frame(panel[(panel.side == side) & (panel.season == season)], feats)
             held = held.assign(chunk_poss=held.poss.to_numpy(float), chunk_seasons=1.0)
+            if use_same_team:
+                # "rate him as if he changed teams": 0 for everyone.  The real value -- his rated season's
+                # teams against those of the seasons his career label is fit on -- is ruled out for the rating
+                # (ruling 2) and computed only to measure what the choice does
+                real = None
+                if rate_same_team == "real" or same_team_diag:
+                    his = team_shares[team_shares.season == season].rename(columns={"player_id": "key"})
+                    rest = team_shares[~team_shares.season.isin(unseen)].rename(columns={"player_id": "key"})
+                    real = (sy.harmonic_overlap(his, rest).reindex(held.player_id.to_numpy())
+                            .fillna(0.0).to_numpy(float))
+                held[sy.SAME_TEAM] = (real if rate_same_team == "real" else
+                                     1.0 if rate_same_team == "1" else 0.0)
+                if rate_same_team == "both":
+                    stayed_frames[side] = held.assign(**{sy.SAME_TEAM: 1.0})
+                if same_team_diag:
+                    as_zero = model.predict(held.assign(**{sy.SAME_TEAM: 0.0}), model_feats)
+                    as_real = model.predict(held.assign(**{sy.SAME_TEAM: real}), model_feats)
+                    diag_rows.append(pd.DataFrame({"season": season, "side": side,
+                                                   "player_id": held.player_id.to_numpy(),
+                                                   "poss": held.poss.to_numpy(float), "same_team_real": real,
+                                                   "prior_changed_teams": as_zero, "prior_real_teams": as_real}))
             prior[side] = dict(zip(held.player_id.to_numpy(), model.predict(held, model_feats)))
             models[side], held_frames[side], model_feats_of[side] = model, held, model_feats
+            if side in stayed_frames:
+                frame = stayed_frames[side]
+                prior_stayed[side] = dict(zip(frame.player_id.to_numpy(), model.predict(frame, model_feats)))
 
-        # the blend, before anything downstream sees the prior.  The cross-fitted fold priors get the
-        # SAME transform below: the free scale is priced on those columns, so a fold prior that skipped
-        # the blend would price the scale on a different prior from the one that ships.
-        # Always, not only when a blend asks: the board carries a defensive possession count and it
-        # has to be the defensive one.  The design is already built and cached, so this is a groupby.
-        off_poss, def_poss = side_possessions(design_for(names["O"], season))
-        poss_side = {"O": off_poss, "D": def_poss}
-        if any(blend.values()):
+        # one ridge per list of priors: the table this run writes and, with `--rate_same_team=both`, the same
+        # models' priors at same_team 1 ("he stayed") ridged on the same games into the second list
+        variants = {"": (prior, held_frames)}
+        if rate_same_team == "both":
+            assert saved is None, "--rate_same_team=both needs the boosters, not --priors_from"
+            variants["stayed"] = (prior_stayed, stayed_frames)
+        for variant, (prior_v, frames_v) in variants.items():
+            # the blend, before anything downstream sees the prior.  The cross-fitted fold priors get the
+            # SAME transform below: the free scale is priced on those columns, so a fold prior that skipped
+            # the blend would price the scale on a different prior from the one that ships.
+            # Always, not only when a blend asks: the board carries a defensive possession count and it
+            # has to be the defensive one.  The design is already built and cached, so this is a groupby.
+            off_poss, def_poss = side_possessions(design_for(names["O"], season))
+            poss_side = {"O": off_poss, "D": def_poss}
+            if any(blend.values()):
+                for side in ("O", "D"):
+                    if blend[side]:
+                        prior_v[side] = blend_prior(prior_v[side], poss_side[side], *blend[side])
+
+            fold_prior = None
+            if saved is not None and crossfit != "0":
+                fold_prior = _saved_fold_prior(saved[season]["folds"], design_for(names["O"], season))
+            elif crossfit != "0":
+                wd_o, wd_d = design_for("xpts_ft", season), design_for("x3def", season)
+                # the pieces are rebuilt per fold when a model reads them, which needs each row's two teams
+                reads_pieces = any(c in model_feats_of[s] for s in model_feats_of for c in sy.PIECES)
+                fold_prior = _fold_prior_builder(wd_o, wd_d, models, frames_v, model_feats_of,
+                                                 teams=_box_teams(season) if reads_pieces else None)
+            if fold_prior is not None and any(blend.values()):
+                inner = fold_prior
+
+                def fold_prior(train_mask, _inner=inner, _poss=poss_side):
+                    po, pd_ = _inner(train_mask)
+                    if blend["O"]:
+                        po = blend_prior(po, _poss["O"], *blend["O"])
+                    if blend["D"]:
+                        pd_ = blend_prior(pd_, _poss["D"], *blend["D"])
+                    return po, pd_
+
+            if save_priors and not variant:
+                # the full priors and, per game fold the ridge will use, the priors rebuilt without that fold
+                fold = game_folds(design_for(names["O"], season), 5, 0)
+                folds = [] if fold is None or fold_prior is None else [fold_prior(fold != f) for f in range(5)]
+                to_save[season] = {"O": prior_v["O"], "D": prior_v["D"], "folds": folds}
+                pd.to_pickle(to_save, ROOT / "outputs" / f"priors_{save_priors}.pkl")
+
+            # one ridge per side's target; each contributes only its own half of the board
+            scale = {}
+            # one fit per DISTINCT target: when both sides explain the same thing (--target_off=pts
+            # --target_def=pts) the second fit would be the first one over again
+            fits = {name: _ridge(design_for(name, season), prior_v, fold_prior=fold_prior,
+                                 crossfit_penalty=(crossfit == "1"))
+                    for name in dict.fromkeys(names.values())}
             for side in ("O", "D"):
-                if blend[side]:
-                    prior[side] = blend_prior(prior[side], poss_side[side], *blend[side])
-
-        fold_prior = None
-        if saved is not None and crossfit != "0":
-            fold_prior = _saved_fold_prior(saved[season]["folds"], design_for(names["O"], season))
-        elif crossfit != "0":
-            wd_o, wd_d = design_for("xpts_ft", season), design_for("x3def", season)
-            fold_prior = _fold_prior_builder(wd_o, wd_d, models, held_frames, model_feats_of)
-        if fold_prior is not None and any(blend.values()):
-            inner = fold_prior
-
-            def fold_prior(train_mask, _inner=inner, _poss=poss_side):
-                po, pd_ = _inner(train_mask)
-                if blend["O"]:
-                    po = blend_prior(po, _poss["O"], *blend["O"])
-                if blend["D"]:
-                    pd_ = blend_prior(pd_, _poss["D"], *blend["D"])
-                return po, pd_
-
-        if save_priors:
-            # the full priors and, per game fold the ridge will use, the priors rebuilt without that fold
-            fold = game_folds(design_for(names["O"], season), 5, 0)
-            folds = [] if fold is None or fold_prior is None else [fold_prior(fold != f) for f in range(5)]
-            to_save[season] = {"O": prior["O"], "D": prior["D"], "folds": folds}
-            pd.to_pickle(to_save, ROOT / "outputs" / f"priors_{save_priors}.pkl")
-
-        # one ridge per side's target; each contributes only its own half of the board
-        scale = {}
-        # one fit per DISTINCT target: when both sides explain the same thing (--target_off=pts
-        # --target_def=pts) the second fit would be the first one over again
-        fits = {name: _ridge(design_for(name, season), prior, fold_prior=fold_prior,
-                             crossfit_penalty=(crossfit == "1"))
-                for name in dict.fromkeys(names.values())}
-        for side in ("O", "D"):
-            ridge = fits[names[side]]
-            table[side] = ridge.ratings_
-            lam[side] = (ridge.offense_lambda_, ridge.defense_lambda_, ridge.context_lambda_)
-            # how far the season's own games decided to trust the prior on this side.  Above 1 means the
-            # prior was compressed and the games stretched it; 1.0 exactly means the lever is off.
-            scale[side] = (ridge.prior_scale_[0 if side == "O" else 1]
-                           if ridge.prior_scale_ is not None else 1.0)
-        merged = (table["O"][["player_id", "offense", "prior_offense", "possessions"]]
-                  .merge(table["D"][["player_id", "defense", "prior_defense"]], on="player_id"))
-        # the DEFENSIVE possession count, not a copy of the offensive one (side_possessions)
-        merged["poss_def"] = merged.player_id.map(def_poss).fillna(0.0).to_numpy(float)
-        rows.append(merged.assign(season=season, offense_lambda=lam["O"][0],
-                                  defense_lambda=lam["D"][1], context_lambda=lam["O"][2],
-                                  prior_scale_off=scale["O"], prior_scale_def=scale["D"]))
-        print(f"  {season}: {len(merged)} players, lambdas O {lam['O'][0]:,.0f} / "
-              f"D {lam['D'][1]:,.0f} / ctx {lam['O'][2]:,.0f},  prior_scale "
-              f"{scale['O']:.2f} / {scale['D']:.2f}  ({time.time() - t0:.0f}s)", flush=True)
+                ridge = fits[names[side]]
+                table[side] = ridge.ratings_
+                lam[side] = (ridge.offense_lambda_, ridge.defense_lambda_, ridge.context_lambda_)
+                # how far the season's own games decided to trust the prior on this side.  Above 1 means the
+                # prior was compressed and the games stretched it; 1.0 exactly means the lever is off.
+                scale[side] = (ridge.prior_scale_[0 if side == "O" else 1]
+                               if ridge.prior_scale_ is not None else 1.0)
+            merged = (table["O"][["player_id", "offense", "prior_offense", "possessions"]]
+                      .merge(table["D"][["player_id", "defense", "prior_defense"]], on="player_id"))
+            # the DEFENSIVE possession count, not a copy of the offensive one (side_possessions)
+            merged["poss_def"] = merged.player_id.map(def_poss).fillna(0.0).to_numpy(float)
+            # the team-season intercept's own numbers, per season and side, when it is on (experiment 27)
+            logs = {side: getattr(models.get(side), "log_", None) for side in ("O", "D")}
+            extra = {}
+            if logs["O"] is not None and logs["D"] is not None:
+                extra = dict(group_ratio_off=logs["O"]["ratio"], group_ratio_def=logs["D"]["ratio"],
+                             intercept_sd_off=logs["O"]["intercept_sd"], intercept_sd_def=logs["D"]["intercept_sd"])
+            rows_of[variant].append(merged.assign(season=season, offense_lambda=lam["O"][0],
+                                      defense_lambda=lam["D"][1], context_lambda=lam["O"][2],
+                                      prior_scale_off=scale["O"], prior_scale_def=scale["D"], **extra))
+            print(f"  {season}{f' ({variant})' if variant else ''}: {len(merged)} players, lambdas O {lam['O'][0]:,.0f} / "
+                  f"D {lam['D'][1]:,.0f} / ctx {lam['O'][2]:,.0f},  prior_scale "
+                  f"{scale['O']:.2f} / {scale['D']:.2f}"
+                  + (f",  team-season ratio {extra['group_ratio_off']:.3g} / {extra['group_ratio_def']:.3g}" if extra else "")
+                  + f"  ({time.time() - t0:.0f}s)", flush=True)
 
         if do_score:
             diagnostics.append(_diagnose(season, design_for, names, prior))
@@ -680,45 +990,66 @@ def main():
             print(f"      75/25 on points: game_armse {d['game_armse']:.4f} (base {d['base_armse']:.4f})"
                   f"  scale {d['scale_off']:.2f} / {d['scale_def']:.2f}  miss {d['miss']:.3f}", flush=True)
         pd.concat(rows, ignore_index=True).to_parquet(out, index=False)
+        if rows_of["stayed"]:
+            pd.concat(rows_of["stayed"], ignore_index=True).to_parquet(out_stayed, index=False)
 
     if dump_shap and shap_rows:
         out_shap = ROOT / "outputs" / f"prior_shap_{dump_shap}.parquet"
         pd.concat(shap_rows, ignore_index=True).to_parquet(out_shap, index=False)
         print(f"wrote {out_shap.name}: prior feature slopes, {len(shap_rows)} fits")
+    if diag_rows:
+        diag = pd.concat(diag_rows, ignore_index=True)
+        out_diag = out.with_name(out.stem + "_same_team_diag.parquet")
+        diag.to_parquet(out_diag, index=False)
+        moved = (diag.prior_real_teams - diag.prior_changed_teams).abs()
+        print(f"wrote {out_diag.name}: the SPM prior rated as if every player changed teams against the same "
+              f"prior at his real same-team value, before the ridge: median move {moved.median():.3f} per 100, "
+              f"ninth decile {moved.quantile(0.9):.3f}, {np.mean(moved > 0.1):.1%} past 0.1")
 
-    board = pd.concat(rows, ignore_index=True)
-    # The owner, 2026-09-14: "players' values are not centered well ... guys are positive that should be
-    # pushed down".  The SPM prior's possession-weighted mean is not zero (the label's mean is positive for
-    # the heavy-minute players who dominate a season's possessions, and the free scale multiplies it:
-    # +1.47 on offence in 2026), and nothing downstream re-centres it.  So: per season and side, the
-    # possession-weighted mean of the rating is zero -- the average possession is played by a zero
-    # player, the RAPM convention.  A level shift only: the year-over-year test refits the level and the
-    # consensus checks are rank- and spread-based, so neither moves.  --centre=0 keeps the raw level.
-    if _flag("centre", "1") not in ("0", "no", "false"):
-        for side in ("offense", "defense"):
-            level = (board.groupby("season").apply(
-                lambda g, c=side: np.average(g[c], weights=g.possessions), include_groups=False)
-                     .reindex(board.season).to_numpy())
-            board[side] = board[side] - level
-            board[f"prior_{side}"] = board[f"prior_{side}"] - level
-    # 52_site.py's schema: raw sign in, positive-good out, one row per player-season
-    board = board.rename(columns={"possessions": "poss_off"})
-    board["poss_season"] = board.poss_off
-    board["rating_off"] = board.offense
-    board["rating_def"] = -board.defense                 # positive good on both ends
-    board["rating_total"] = board.rating_off + board.rating_def
-    board["prior_off"] = board.prior_offense
-    board["prior_def"] = -board.prior_defense
-    board["prior_total"] = board.prior_off + board.prior_def
-    board["u_off"] = board.rating_off - board.prior_off
-    board["u_def"] = board.rating_def - board.prior_def
-    board["u_total"] = board.u_off + board.u_def
-    # `player_name`, because both scripts/52_site.py and tests/test_vs_consensus.py key on it and a board
-    # of bare player_ids silently fails them both
-    board = board.merge(_names(), on="player_id", how="left")
-    board.to_parquet(out, index=False)
-    print(f"\nwrote {out}: {len(board)} rows, {board.season.nunique()} seasons "
-          f"({time.time() - t0:.0f}s)")
+    def finish(rows_, out_):
+        """One list of ridge rows to the published table: centred, positive-good, named, written."""
+        board = pd.concat(rows_, ignore_index=True)
+        # The owner, 2026-09-14: "players' values are not centered well ... guys are positive that should be
+        # pushed down".  The SPM prior's possession-weighted mean is not zero (the label's mean is positive for
+        # the heavy-minute players who dominate a season's possessions, and the free scale multiplies it:
+        # +1.47 on offence in 2026), and nothing downstream re-centres it.  So: per season and side, the
+        # possession-weighted mean of the rating is zero -- the average possession is played by a zero
+        # player, the RAPM convention.  A level shift only: the year-over-year test refits the level and the
+        # consensus checks are rank- and spread-based, so neither moves.  --centre=0 keeps the raw level.
+        if _flag("centre", "1") not in ("0", "no", "false"):
+            for side in ("offense", "defense"):
+                level = (board.groupby("season").apply(
+                    lambda g, c=side: np.average(g[c], weights=g.possessions), include_groups=False)
+                         .reindex(board.season).to_numpy())
+                board[side] = board[side] - level
+                board[f"prior_{side}"] = board[f"prior_{side}"] - level
+        # 52_site.py's schema: raw sign in, positive-good out, one row per player-season
+        board = board.rename(columns={"possessions": "poss_off"})
+        board["poss_season"] = board.poss_off
+        board["rating_off"] = board.offense
+        board["rating_def"] = -board.defense                 # positive good on both ends
+        board["rating_total"] = board.rating_off + board.rating_def
+        board["prior_off"] = board.prior_offense
+        board["prior_def"] = -board.prior_defense
+        board["prior_total"] = board.prior_off + board.prior_def
+        board["u_off"] = board.rating_off - board.prior_off
+        board["u_def"] = board.rating_def - board.prior_def
+        board["u_total"] = board.u_off + board.u_def
+        # `player_name`, because both scripts/52_site.py and tests/test_vs_consensus.py key on it and a board
+        # of bare player_ids silently fails them both
+        board = board.merge(_names(), on="player_id", how="left")
+        board.to_parquet(out_, index=False)
+        print(f"\nwrote {out_}: {len(board)} rows, {board.season.nunique()} seasons "
+              f"({time.time() - t0:.0f}s)")
+        return board
+
+    board = finish(rows, out)
+    if rows_of["stayed"]:
+        stayed = finish(rows_of["stayed"], out_stayed)
+        top = stayed[stayed.season == boards[-1]].sort_values("rating_total", ascending=False)
+        print(f"\n=== {boards[-1]}, top 20 of the second list, every player rated as if he stayed")
+        print(top[["player_name", "rating_off", "rating_def", "rating_total",
+                   "poss_off"]].head(20).to_string(index=False))
 
     pd.set_option("display.width", 200, "display.max_columns", 20, "display.precision", 3)
     if diagnostics:
@@ -750,6 +1081,21 @@ def main():
         print(f"\n=== {season}, top 20 (points per 100 possessions, positive good on both ends)")
         print(top[["player_name", "rating_off", "rating_def", "rating_total",
                    "poss_off"]].head(20).to_string(index=False))
+
+
+_D83 = None
+
+
+def _box_teams(season: int) -> pd.Series:
+    """(game_id, player_id) -> team id for a season, from the box scores: scripts/83_decompose_site.py's lookup,
+    the one the season panel's pieces were built with (scripts/86_context_panel.py)."""
+    global _D83
+    if _D83 is None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("_borrowed_83", ROOT / "scripts" / "83_decompose_site.py")
+        _D83 = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(_D83)
+    return _D83.box_teams(season)
 
 
 def _names() -> pd.DataFrame:
