@@ -687,8 +687,16 @@ def _import_borutashap():
     return BorutaShap
 
 
-def make_boruta(model, importance_measure: str = "shap"):
-    """A BorutaShap whose SHAP importances come from chimeraboost's exact `shap_values`."""
+def make_boruta(model, importance_measure: str = "shap", explain_rows: int | None = None, seed: int = 0):
+    """A BorutaShap whose SHAP importances come from chimeraboost's exact `shap_values`.
+
+    `explain_rows` (2026-09-29): take each trial's mean |SHAP| over a fresh random sample of that many rows
+    instead of every row.  chimeraboost 0.34's SHAP is exact INTERVENTIONAL TreeSHAP against a 200-row
+    background, about 200 times the work of a tree walk, and BorutaShap explains every row every trial: on
+    33,617 training rows and 96 columns a trial took 30 minutes.  Boruta reads only the per-column mean, which
+    a random sample estimates without bias, and each trial draws its own rows (seeded, so a rerun repeats).
+    None keeps every row, the behaviour before this option.
+    """
     BS = _import_borutashap()
 
     class ChimeraBorutaShap(BS.BorutaShap):
@@ -697,6 +705,10 @@ def make_boruta(model, importance_measure: str = "shap"):
 
         def explain(self):
             X = self.X_boruta
+            if explain_rows is not None and len(X) > explain_rows:
+                self._explained = getattr(self, "_explained", 0) + 1
+                pick = np.random.default_rng(seed + self._explained).choice(len(X), int(explain_rows), replace=False)
+                X = X.iloc[np.sort(pick)] if hasattr(X, "iloc") else X[np.sort(pick)]
             sv = np.asarray(self.model.shap_values(X.to_numpy(dtype=float) if hasattr(X, "to_numpy") else X))
             if sv.ndim == 3:
                 sv = np.abs(sv).sum(axis=0)
@@ -706,15 +718,17 @@ def make_boruta(model, importance_measure: str = "shap"):
 
 
 def run_boruta(rows: pd.DataFrame, features, n_trials: int = 50, seed: int = 0, thread_count=None,
-               verbose: bool = False, **params) -> dict:
-    """BorutaShap on the pooled training rows of one side; returns accepted / tentative / rejected and the history."""
+               verbose: bool = False, explain_rows: int | None = None, **params) -> dict:
+    """BorutaShap on the pooled training rows of one side; returns accepted / tentative / rejected and the history.
+
+    `explain_rows`: see `make_boruta`; None explains every row."""
     from chimeraboost import ChimeraBoostRegressor
 
     kw = dict(random_state=int(seed))
     if thread_count:
         kw["thread_count"] = int(thread_count)
     kw.update(params)
-    fs = make_boruta(ChimeraBoostRegressor(**kw))
+    fs = make_boruta(ChimeraBoostRegressor(**kw), explain_rows=explain_rows, seed=int(seed))
     X = rows[list(features)].reset_index(drop=True)
     y = pd.Series(rows["target"].to_numpy(dtype=float))
     w = pd.Series(rows["weight"].to_numpy(dtype=float))

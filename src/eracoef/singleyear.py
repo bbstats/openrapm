@@ -36,10 +36,11 @@ from .design import FEATURES
 from .rloocv import BalancedGroupKFold
 
 __all__ = ["PRIOR_FEATURES", "INPUT_COLUMNS", "BIO", "ONC", "OFFC", "NET", "ROLE_INPUTS", "CLOSENESS", "LEVEL_COVARIATES", "aggregate", "season_frame",
-           "prior_rows", "season_rows", "chunk_rows", "CHUNK_FEATURES", "stratified_player_folds",
+           "prior_rows", "season_rows", "chunk_rows", "chunk_season_sets", "CHUNK_FEATURES", "stratified_player_folds",
            "fold_mean_shift", "FEATURE_SETS", "feature_set", "OFFENSE_TARGET", "DEFENSE_TARGET",
-           "team_movement", "reweight_by_movement",
-           "RAPM_OFFENSE_LAMBDA",
+           "team_movement", "reweight_by_movement", "CAREER_BANDS", "PIECE_NAMES", "PIECES", "PO_SHARE", "SAME_TEAM",
+           "FRANCHISE_MOVES", "franchise", "harmonic_overlap", "TEAM_SEASON", "AgingCurve", "adjacent_rows",
+           "adjacent_season_sets", "RAPM_OFFENSE_LAMBDA",
            "RAPM_DEFENSE_LAMBDA", "RAPM_CONTEXT_LAMBDA", "MIN_POSSESSIONS"]
 
 # The pipeline's settings, here rather than in the board script so the Boruta run selects features
@@ -72,6 +73,43 @@ ROLE_INPUTS = ["poss_pct", "gs_pct", "age"]
 # uses on the ratings objective, so "close" means one thing in both halves of the pipeline.
 CLOSENESS = ["gt_share", "closeness", "abs_margin"]
 
+# The pieces of his season's vanilla RAPM, per side (experiment 26, the owner 2026-09-28): the Decomposition
+# page's two splits -- by player (on_rtg, teammates, opponents, context, ridge) and by possession (on_signal,
+# off_adj_gp, off_adj_dnp, team_sos) -- plus the actual off-court rating, `_o` from a fit on the offensive
+# design and `_d` from one on the defensive design, each padded toward 0 over its possessions.  Positive =
+# good on both sides.  scripts/86_context_panel.py writes them; `pieces.COLUMNS` is the same list, repeated
+# here because `pieces` imports this module (tests/test_singleyear.py asserts the two stay equal).
+PIECE_NAMES = ["on_rtg", "teammates", "opponents", "context", "ridge",
+               "on_signal", "off_adj_gp", "off_adj_dnp", "team_sos", "off_rtg"]
+PIECES = [f"pc_{k}_{tag}" for tag in ("o", "d") for k in PIECE_NAMES]
+# the share of his possessions that came in the playoffs (86_context_panel.py): a share, not padded
+PO_SHARE = ["po_share"]
+# How much of a training row's team context its label shares (`chunk_rows(shares=...)`): 1 on every career
+# row, 0 for a chunk on a team he never played for otherwise, and 0 for everyone at rating time -- "rate him
+# as if he changed teams".  Not a panel column: it belongs to a (row, label) pair, so the caller appends it
+# to the model's inputs the way `CHUNK_FEATURES` are.
+SAME_TEAM = "same_team"
+# Each training row's main team-season (experiment 27): the (franchise, season) holding most of the row's
+# possessions, as season * 10**10 + team id, or -1 where the team table has none.  The GROUP of the
+# team-season random intercept; not an input.  The rated season is never a training season, so its
+# team-seasons carry no intercept and the rating is made as if on an average team.
+TEAM_SEASON = "team_season"
+
+# One franchise, two team ids: the Charlotte Hornets moved to New Orleans after 2001-02 and took a new id
+# with them (1610612740 from 2003); from 2005 1610612766 is the Bobcats, now the Hornets, and is itself.
+# Unmapped, a player who stayed through the move looks like he changed teams -- 12 of Charlotte's 15 in
+# 2002.  Every other team id in 1997-2026 covers all thirty seasons.  (old id, first, last season) -> id.
+FRANCHISE_MOVES = {(1610612766, 1997, 2002): 1610612740}
+
+
+def franchise(team_id, season) -> np.ndarray:
+    """Team ids as franchises: `FRANCHISE_MOVES` applied, everything else unchanged."""
+    team = np.array(team_id, dtype=np.int64)
+    season = np.asarray(season)
+    for (old, first, last), new in FRANCHISE_MOVES.items():
+        team[(team == old) & (season >= first) & (season <= last)] = new
+    return team
+
 # What a REPLACEMENT LEVEL may be modelled on (experiment 13, the owner 2026-09-15).  Every one of these
 # is measured EXACTLY however few minutes a man played -- his age and height do not get noisy at 40
 # possessions, his box-score RATES do -- which is the whole point: the blend hands a player with few possessions over to
@@ -97,7 +135,7 @@ PRIOR_FEATURES = [f for f in SHOT_FEATURES if f != "season"] + CAREER + BIO + ON
 # What the panel must carry for `add_derived` to build the rest.  The raw (uncentred) rates are the
 # RATIOS' inputs; the shot totals and the block league levels are the SHOTQ inputs.
 INPUT_COLUMNS = (list(FEATURES) + ROLE_INPUTS + CLOSENESS + [f"raw_{c}" for c in FEATURES]
-                 + list(SHOT_TOTALS) + list(SHOT_LEAGUE) + CAREER + BIO + ONC + OFFC + NET)
+                 + list(SHOT_TOTALS) + list(SHOT_LEAGUE) + CAREER + BIO + ONC + OFFC + NET + PIECES + PO_SHARE)
 
 
 # ---------------------------------------------------------------------------------- named feature sets
@@ -163,6 +201,19 @@ FEATURE_SETS = {
     # game.  `scripts/69_closeness_panel.py` writes the three columns.  The owner's call was to hand the
     # prior the exposure and let the booster learn the discount, rather than reweighting the statistics.
     "boruta_close": {"O": BORUTA_O + CLOSENESS, "D": BORUTA_D + CLOSENESS},
+    # experiment 26 (the owner, 2026-09-28): team and game context.  scripts/87_context_boruta.py, 50 trials,
+    # on the rows 62 trained on for 2026 with outside labels (outputs/csv/boruta_context_table.csv), from
+    # the shipped lists plus every piece, same_team, the closeness columns and po_share.  Accepted + tentative:
+    # offence drops only `onc_d`; defence drops pc_on_rtg_d, pc_on_signal_o, pc_on_rtg_o, pc_teammates_o.
+    # `same_team` is accepted on both sides.  Needs --rows=chunks --chunk_label=outside.
+    # experiment 30 (the owner, 2026-09-30): the incumbent's lists plus the same-team measure alone, for
+    # `adjacent_rows` -- rated as if every player had been traded.  Needs --chunk_label=adjacent (or outside).
+    "boruta_same_team": {"O": BORUTA_O + [SAME_TEAM], "D": BORUTA_D + [SAME_TEAM]},
+    "boruta_context": {
+        "O": [f for f in BORUTA_O if f != "onc_d"] + PIECES + [SAME_TEAM] + CLOSENESS + PO_SHARE,
+        "D": BORUTA_D + [p for p in PIECES if p not in ("pc_on_rtg_d", "pc_on_signal_o", "pc_on_rtg_o",
+                                                           "pc_teammates_o")] + [SAME_TEAM] + CLOSENESS + PO_SHARE,
+    },
 }
 
 
@@ -297,32 +348,14 @@ def fold_mean_shift(train: pd.DataFrame, fold: np.ndarray) -> np.ndarray:
     return np.asarray(out)
 
 
-def chunk_rows(target: pd.DataFrame, rows: pd.DataFrame, column: str, features=None,
-               sizes=(1, 2, 3)) -> pd.DataFrame:
-    """The owner's design (2026-09-13): the career row per player, PLUS rows built from chunks of his seasons.
+def _chunk_members(rows: pd.DataFrame, sizes=(1, 2, 3)) -> pd.DataFrame:
+    """`rows` repeated once per chunk each row belongs to, with the chunk's key in a `chunk` column.
 
-    `prior_rows` is kept exactly -- one row per player, his box score averaged over every season in `rows`
-    -- and to it are added, for the same player, one row per CONTIGUOUS run of `size` of his seasons (in
-    the order he played them) for each size in `sizes`: his inputs averaged over that chunk, then derived,
-    carrying the SAME label as his career row.  The point is an artificial increase of the sample that shows
-    the booster the same player at several noise levels, with `CHUNK_FEATURES` saying which level.  Rows of
-    one player are not independent, so this is not more players; it is information about how the map
-    degrades with less evidence, which is the padding question learned from data instead of set per stat.
-
-    Weights: the career row keeps the weight `prior_rows` gives it (the possessions behind the label); a
-    player's chunk rows TOGETHER weigh the same, split among them by chunk possessions.  So every player's
-    total weight is twice his career row's, whatever his career length, and half of it sits on the row that
-    matches the inference row least and half on the ones that match it more.
-
-    Contiguous only: a chunk of 2004 and 2024 averaged together is nobody's season.
+    A chunk is a run of `size` CONSECUTIVE seasons among the ones `rows` holds for the player, in the
+    order he played them, for each size in `sizes`.  Consecutive in `rows`, not on the calendar: when the
+    caller has already taken the rated season and its neighbours out, a chunk can straddle the gap (a
+    2013 + 2017 chunk around a rated 2015), and a season he missed is simply skipped.
     """
-    features = list(PRIOR_FEATURES if features is None else features)
-    label = target.set_index("player_id")[[column, "possessions"]]
-    per_player = rows.groupby("player_id")
-    base = prior_rows(target, rows, column, features)
-    base = base.assign(chunk_poss=per_player.poss.sum().reindex(base.index).to_numpy(float),
-                       chunk_seasons=per_player.season.nunique().reindex(base.index).to_numpy(float))
-
     ordered = rows.sort_values(["player_id", "season"]).reset_index(drop=True)
     ordered["k"] = ordered.groupby("player_id").cumcount()
     n_seasons = ordered.groupby("player_id").k.transform("max") + 1
@@ -334,18 +367,345 @@ def chunk_rows(target: pd.DataFrame, rows: pd.DataFrame, column: str, features=N
             part = ordered[fits]
             key = part.player_id.astype(str) + ":" + str(size) + ":" + start[fits].astype(str)
             parts.append(part.assign(chunk=key.to_numpy()))
-    dup = pd.concat(parts, ignore_index=True)
+    return pd.concat(parts, ignore_index=True)
+
+
+def _season_key(seasons) -> tuple:
+    """A set of seasons as the one hashable form every label lookup uses: sorted ints, no repeats."""
+    return tuple(sorted({int(s) for s in seasons}))
+
+
+def harmonic_overlap(left: pd.DataFrame, right: pd.DataFrame, key: str = "key") -> pd.Series:
+    """Per key: the sum over teams of HM(left's possession share with the team, right's), HM(a, b) = 2ab / (a + b).
+
+    The owner's soft same-team measure (2026-09-28).  `left` and `right` are rows of (`key`, `team_id`,
+    `poss_on`); shares are taken within each key.  1 when the two spreads over teams are identical, 0 when they
+    have no team in common; a shared team counts by a softened smaller share -- 50/50 against 100/0 is
+    HM(0.5, 1) = 0.67.  Indexed by `left`'s keys; a key with nothing in `right` is 0.
+    """
+    def shares(frame):
+        f = frame.groupby([key, "team_id"], as_index=False).poss_on.sum()
+        f = f[f.poss_on > 0]
+        return f.assign(share=f.poss_on / f.groupby(key).poss_on.transform("sum"))
+
+    a, b = shares(left), shares(right)
+    both = a.merge(b, on=[key, "team_id"], suffixes=("_a", "_b"))
+    hm = 2.0 * both.share_a * both.share_b / (both.share_a + both.share_b)
+    return hm.groupby(both[key]).sum().reindex(pd.unique(left[key])).fillna(0.0)
+
+
+def _chunk_same_team(members: pd.DataFrame, shares: pd.DataFrame, outside: bool) -> pd.Series:
+    """Per chunk key: `harmonic_overlap` of the chunk's teams against the teams of the seasons its label is fit on.
+
+    `shares` is one row per (player_id, season, team_id) with `poss_on`, teams as franchises, restricted by the
+    caller to the seasons the career label is fit on.  Outside labels are fit on those seasons minus the chunk's,
+    so the chunk's own possessions come off each team; a career label covers all of them.
+    """
+    per = shares.groupby(["player_id", "season", "team_id"], as_index=False).poss_on.sum()
+    career = per.groupby(["player_id", "team_id"], as_index=False).poss_on.sum()
+    inside = (members[["chunk", "player_id", "season"]].merge(per, on=["player_id", "season"])
+              .groupby(["chunk", "player_id", "team_id"], as_index=False).poss_on.sum())
+    label = members[["chunk", "player_id"]].drop_duplicates().merge(career, on="player_id")
+    if outside:
+        label = label.merge(inside[["chunk", "team_id", "poss_on"]], on=["chunk", "team_id"], how="left",
+                            suffixes=("", "_in"))
+        label["poss_on"] = (label.poss_on - label.poss_on_in.fillna(0.0)).clip(lower=0.0)
+    got = harmonic_overlap(inside.rename(columns={"chunk": "key"}), label.rename(columns={"chunk": "key"}))
+    return got.reindex(pd.unique(members.chunk)).fillna(0.0)
+
+
+def _top_team_season(frame: pd.DataFrame, key: str) -> pd.Series:
+    """Per `key`: season * 10**10 + team of the (season, team) with the most `poss_on`; ties to the earlier."""
+    top = (frame.sort_values([key, "poss_on", "season", "team_id"], ascending=[True, False, True, True])
+           .drop_duplicates(key))
+    return pd.Series(top.season.to_numpy(np.int64) * 10**10 + top.team_id.to_numpy(np.int64),
+                     index=top[key].to_numpy())
+
+
+class AgingCurve:
+    """A player's expected level by age, relative to `reference` years old, from season-to-season changes.
+
+    The owner's call (2026-09-30), after experiments 26-27 turned out to carry an age tilt.  The delta method:
+    every pair of CONSECUTIVE seasons a player has outside `exclude`, the change in his single-season rating,
+    weighted by the harmonic mean of the two seasons' possessions, regressed on his age with a polynomial of
+    `degree` (evaluated half a year on, since the change runs from age a to a + 1); the curve is that increment
+    integrated from `reference`.  Ages are clamped to [19, 40].  Players who fall out of the league do not
+    make a pair, so the decline at the old end is if anything understated (the usual survivor bias).
+
+    `ratings` rows: player_id, season, age, the rating column `value` (in the sign the label uses) and `poss`.
+    """
+
+    def __init__(self, ratings: pd.DataFrame, value: str, poss: str = "poss", exclude=(), degree: int = 2,
+                 reference: float = 27.0):
+        r = ratings[~ratings.season.isin(list(exclude))][["player_id", "season", "age", value, poss]]
+        pairs = r.merge(r, on="player_id", suffixes=("", "_next"))
+        pairs = pairs[(pairs.season_next == pairs.season + 1) & (pairs[poss] > 0) & (pairs[f"{poss}_next"] > 0)]
+        x = np.clip(pairs.age.to_numpy(float), 19, 40) + 0.5 - reference
+        change = (pairs[f"{value}_next"] - pairs[value]).to_numpy(float)
+        w = 2.0 / (1.0 / pairs[poss].to_numpy(float) + 1.0 / pairs[f"{poss}_next"].to_numpy(float))
+        A = np.column_stack([x ** k for k in range(degree + 1)])
+        self.reference, self.pairs = float(reference), int(len(pairs))
+        # too few pairs to fit a curve: a flat one, which moves no label
+        self.coef = (np.linalg.solve((A * w[:, None]).T @ A, (A * w[:, None]).T @ change)
+                     if self.pairs > 5 * (degree + 1) else np.zeros(degree + 1))
+
+    def __call__(self, age) -> np.ndarray:
+        d = np.clip(np.asarray(age, dtype=float), 19, 40) - self.reference
+        return sum(c * d ** (k + 1) / (k + 1) for k, c in enumerate(self.coef))
+
+
+def _age_shift(members: pd.DataFrame, rows: pd.DataFrame, curve, outside: bool) -> pd.Series:
+    """Per chunk key: the curve at the chunk's own ages minus the curve over the seasons its label is fit on,
+    both possession-weighted.  Outside labels are fit on his seasons in `rows` minus the chunk's; a career label
+    on all of them."""
+    r = rows[["player_id", "season", "poss", "age"]].copy()
+    r["pc"] = r.poss.to_numpy(float) * curve(r.age.to_numpy(float))
+    career = r.groupby("player_id")[["poss", "pc"]].sum()
+    inside = members[["chunk", "player_id", "season"]].merge(r, on=["player_id", "season"])
+    per = inside.groupby("chunk").agg(player_id=("player_id", "first"), poss=("poss", "sum"), pc=("pc", "sum"))
+    own = per.pc / per.poss.where(per.poss > 0)
+    tot = career.reindex(per.player_id.to_numpy())
+    rest_poss = tot.poss.to_numpy() - (per.poss.to_numpy() if outside else 0.0)
+    rest_pc = tot.pc.to_numpy() - (per.pc.to_numpy() if outside else 0.0)
+    label = np.where(rest_poss > 0, rest_pc / np.where(rest_poss > 0, rest_poss, 1.0), np.nan)
+    return (own - label).fillna(0.0)
+
+
+def _adjacent_windows(rows: pd.DataFrame, sizes=(1, 2, 3)) -> pd.DataFrame:
+    """Every window of 2k CONSECUTIVE seasons a player has in `rows`, for k in `sizes`, split in the middle, both
+    ways round: one row per (window, direction) with the feature half's and the label half's seasons.
+
+    Consecutive in `rows`, as the chunks are: a window can straddle seasons the caller left out."""
+    seasons = rows.groupby("player_id").season.apply(lambda s: sorted(set(int(x) for x in s)))
+    out = []
+    for pid, have in seasons.items():
+        for k in sizes:
+            for i in range(len(have) - 2 * int(k) + 1):
+                first, second = tuple(have[i:i + k]), tuple(have[i + k:i + 2 * k])
+                out.append((f"{pid}:{k}:{i}:f", pid, first, second))
+                out.append((f"{pid}:{k}:{i}:b", pid, second, first))
+    return pd.DataFrame(out, columns=["key", "player_id", "feature_seasons", "label_seasons"])
+
+
+def adjacent_season_sets(rows: pd.DataFrame, sizes=(1, 2, 3)) -> list:
+    """Every distinct set of seasons a window row's label is fit ON (`adjacent_rows`), as sorted tuples."""
+    return sorted(set(_adjacent_windows(rows, sizes).label_seasons))
+
+
+def adjacent_rows(target: pd.DataFrame, rows: pd.DataFrame, column: str, labels: dict, features=None,
+                  sizes=(1, 2, 3), unseen=(), shares: pd.DataFrame | None = None) -> pd.DataFrame:
+    """The career row plus rows labelled by the seasons right NEXT to them (the owner, 2026-09-30, experiment 30).
+
+    For every window of 2k consecutive seasons a player has in `rows` (k in `sizes`: two, four or six seasons),
+    split in the middle, each half predicts the other: its box score is the features, and the label is his RAPM
+    fit on the other half's seasons alone, `labels[<those seasons>]`.  So a label always sits right beside its
+    features in time -- at nearly the same age, where experiment 25's outside labels reached across his whole
+    career -- and when he changed teams between the two halves the row is a traded example: `SAME_TEAM` (from
+    `shares`, as in `chunk_rows`) is near 0 there and near 1 for a player who stayed.  One-team players count in
+    full; they are the same-team examples, and the traded players teach the model what a trade does.
+
+    The career row is `prior_rows`' with `target`, same team 1.  A player's window rows together weigh what his
+    career row weighs, split by the feature half's possessions -- the `chunk_rows` rule, so no player's weight
+    grows with career length or follows how much his labels rest on (experiment 25b).  A window whose label has
+    no row for him (fewer than `MIN_POSSESSIONS` in that half) is dropped.  Columns beside the features:
+    `row_kind` ("career" / "window"), `feature_half` and `label_half` (the seasons, as text),
+    `label_possessions`, and `CHUNK_FEATURES` for the feature half.
+    """
+    features = list(PRIOR_FEATURES if features is None else features)
+    per_player = rows.groupby("player_id")
+    base = prior_rows(target, rows, column, features)
+    base = base.assign(chunk_poss=per_player.poss.sum().reindex(base.index).to_numpy(float),
+                       chunk_seasons=per_player.season.nunique().reindex(base.index).to_numpy(float),
+                       label_possessions=base.possessions.to_numpy(float),
+                       label_key=_key_text(_season_key(unseen)), row_kind="career", feature_half="", label_half="")
+    windows = _adjacent_windows(rows, sizes)
+    members = (windows[["key", "player_id", "feature_seasons"]].explode("feature_seasons")
+               .rename(columns={"feature_seasons": "season"}))
+    members["season"] = members.season.astype(int)
+    members = members.merge(rows, on=["player_id", "season"], how="inner")
+    chunks = aggregate(members, features, by=members.key)
+    grouped = members.groupby("key")
+    chunks["chunk_poss"] = grouped.poss.sum().reindex(chunks.index).to_numpy(float)
+    chunks["chunk_seasons"] = grouped.season.nunique().reindex(chunks.index).to_numpy(float)
+    win = windows.set_index("key").reindex(chunks.index)
+    chunks["player_id"] = win.player_id.to_numpy()
+    chunks["feature_half"] = win.feature_seasons.map(_key_text).to_numpy()
+    chunks["label_half"] = win.label_seasons.map(_key_text).to_numpy()
+    by_half = {_key_text(_season_key(k)): v for k, v in labels.items()}
+    missing = sorted(set(chunks.label_half) - set(by_half))
+    if missing:
+        raise KeyError(f"no label fit on the seasons {missing[:3]}{'...' if len(missing) > 3 else ''}; "
+                       f"build one per `adjacent_season_sets(rows)` set")
+    long = pd.concat([by_half[h][["player_id", column, "possessions"]]
+                      .rename(columns={"possessions": "label_possessions"}).assign(label_half=h)
+                      for h in dict.fromkeys(chunks.label_half)], ignore_index=True)
+    chunks = chunks.join(long.set_index(["player_id", "label_half"]), on=["player_id", "label_half"], how="inner")
+    chunks = chunks.join(target.set_index("player_id")[["possessions"]], on="player_id", how="inner")
+    if shares is not None:
+        per = shares.groupby(["player_id", "season", "team_id"], as_index=False).poss_on.sum()
+
+        def half_shares(col):
+            h = (win.loc[chunks.index, ["player_id", col]].explode(col).rename(columns={col: "season"})
+                 .reset_index().rename(columns={"index": "key"}))
+            h["season"] = h.season.astype(int)
+            return h.merge(per, on=["player_id", "season"])
+        feat, lab = half_shares("feature_seasons"), half_shares("label_seasons")
+        chunks[SAME_TEAM] = harmonic_overlap(feat, lab).reindex(chunks.index).fillna(0.0).to_numpy(float)
+        chunks[TEAM_SEASON] = _top_team_season(feat, "key").reindex(chunks.index).fillna(-1).to_numpy(np.int64)
+        base[SAME_TEAM] = 1.0
+        base[TEAM_SEASON] = _top_team_season(per, "player_id").reindex(base.index).fillna(-1).to_numpy(np.int64)
+    chunks["row_kind"], chunks["label_key"] = "window", ""
+    chunks = chunks.dropna(subset=features + [column]).set_index("player_id")
+    share = chunks.chunk_poss / chunks.groupby(level=0).chunk_poss.transform("sum")
+    chunks = chunks.assign(target=chunks[column].to_numpy(float),
+                           weight=(share * chunks.possessions).to_numpy(float))
+    return pd.concat([base, chunks])
+
+
+def _key_text(key) -> str:
+    """A season key as plain text ("2014,2015,2016"): tuples make awkward index levels."""
+    return ",".join(str(s) for s in key)
+
+
+def chunk_season_sets(rows: pd.DataFrame, sizes=(1, 2, 3)) -> list:
+    """Every distinct set of seasons a chunk of `rows` covers, as sorted tuples.
+
+    What the caller needs to build `chunk_rows(labels=...)`: one label per set, each a RAPM with that
+    set left out (on top of whatever the caller already leaves out).
+    """
+    members = _chunk_members(rows, sizes)
+    return sorted(set(members.groupby("chunk").season.agg(_season_key)))
+
+
+def chunk_rows(target: pd.DataFrame, rows: pd.DataFrame, column: str, features=None,
+               sizes=(1, 2, 3), labels: dict | None = None, unseen=(), weight_by: str = "career",
+               shares: pd.DataFrame | None = None, age_curve=None, label_scale=None) -> pd.DataFrame:
+    """The owner's design (2026-09-13): the career row per player, PLUS rows built from chunks of his seasons.
+
+    `prior_rows` is kept exactly -- one row per player, his box score averaged over every season in `rows`
+    -- and to it are added, for the same player, one row per CONTIGUOUS run of `size` of his seasons (in
+    the order he played them) for each size in `sizes`: his inputs averaged over that chunk, then derived.
+    The point is an artificial increase of the sample that shows the booster the same player at several
+    noise levels, with `CHUNK_FEATURES` saying which level.  Rows of one player are not independent, so
+    this is not more players; it is information about how the map degrades with less evidence, which is
+    the padding question learned from data instead of set per stat.
+
+    **The label of a chunk row.**  With `labels=None` (the incumbent) every chunk row carries the SAME
+    label as his career row -- his RAPM over every season in `rows`, the chunk's own seasons included.
+    That label is constant across a player's rows, so nothing that varies BETWEEN his chunks can be
+    learned from it: a feature that differs chunk to chunk can only teach how players differ from one
+    another (DECISIONS.md, experiment 15).
+
+    `labels` switches to OUTSIDE labels (the owner, 2026-09-28, experiment 25): a chunk row is labelled
+    with his RAPM over the seasons OUTSIDE the chunk, so its box score and its label share no game --
+    the same relationship `season_rows` has, and the one the rated season's row has to its unseen truth.
+    `labels` maps an excluded set of seasons to a target frame fit without them; the chunk row looks up
+    `unseen` plus the chunk's own seasons, where `unseen` is what the caller already left out of `rows`
+    (the rated season and its neighbours) and what `target` was fit without.  `chunk_season_sets` lists
+    the sets needed.  A 1-season chunk of season s therefore carries exactly `season_rows`'s label for s.
+    The career row keeps `target`.  A chunk whose player has no evidence outside it -- no row for him in
+    its label, which needs `MIN_POSSESSIONS` there -- is dropped.  Keys may be any iterable of seasons;
+    they are compared as sets.
+
+    Weights: the career row keeps the weight `prior_rows` gives it (the possessions behind the label); a
+    player's chunk rows TOGETHER weigh the same, split among them by chunk possessions.  So every player's
+    total weight is twice his career row's, whatever his career length, and half of it sits on the row that
+    matches the inference row least and half on the ones that match it more.  Unchanged by the outside
+    labels: `possessions` stays the career label's, `label_possessions` says what the row's own label
+    rests on, and `label_key` names the seasons that label was fit without ("2014,2015,2016").
+
+    `weight_by="label"` (the owner, 2026-09-29, after experiment 25) puts each chunk row's OWN label
+    possessions where the career label's were: `share x label_possessions`.  An outside label rests on his
+    career minus the chunk, so it is noisier than the career label, and a label's noise variance falls as
+    1 / possessions; with `"career"` those noisier labels kept the career label's weight.  The career row is
+    untouched, a player's chunk rows together now weigh less than it, and a chunk whose label rests on
+    little weighs little.  With career labels the two settings are identical.  (Rejected, experiment 25b:
+    weighting by a label's possessions is weighting by career length, which is quality.)
+
+    `shares` (experiment 26, the owner 2026-09-28) adds `SAME_TEAM` to every row: `harmonic_overlap` of the
+    row's possessions by franchise against those of the seasons its label is fit on.  The career row is
+    exactly 1 (the same seasons); a chunk on a team he never played for otherwise is 0.  `shares` is one row
+    per (player_id, season, team_id) with `poss_on`, teams as `franchise`s, and must cover the seasons the
+    career label is fit on and no others.  Only outside labels make this vary within a player's label.
+
+    `age_curve` (an `AgingCurve`, the owner 2026-09-30) moves each chunk's label to the chunk's own age: a label
+    fit on his other seasons describes him at THEIR ages, so it gains `label_scale(label_possessions) x (curve at
+    the chunk's ages - curve over the label's seasons)`, both possession-weighted over `rows` (which must carry
+    `age`).  `label_scale` puts the curve on the label's own scale: a label shrunk by its penalty moves by the same
+    fraction.  The career row's seasons are its label's seasons, so it never moves; `age_shift` records the move.
+
+    Contiguous only: a chunk of 2004 and 2024 averaged together is nobody's season.
+    """
+    if weight_by not in ("career", "label"):
+        raise ValueError(f"weight_by={weight_by!r}: write career or label")
+    features = list(PRIOR_FEATURES if features is None else features)
+    label = target.set_index("player_id")[[column, "possessions"]]
+    per_player = rows.groupby("player_id")
+    base = prior_rows(target, rows, column, features)
+    base = base.assign(chunk_poss=per_player.poss.sum().reindex(base.index).to_numpy(float),
+                       chunk_seasons=per_player.season.nunique().reindex(base.index).to_numpy(float),
+                       label_possessions=base.possessions.to_numpy(float),
+                       label_key=_key_text(_season_key(unseen)))
+
+    dup = _chunk_members(rows, sizes)
     chunks = aggregate(dup, features, by=dup.chunk)
     grouped = dup.groupby("chunk")
     chunks["chunk_poss"] = grouped.poss.sum().reindex(chunks.index).to_numpy(float)
     chunks["chunk_seasons"] = grouped.season.nunique().reindex(chunks.index).to_numpy(float)
     chunks["player_id"] = grouped.player_id.first().reindex(chunks.index).to_numpy()
-    chunks = (chunks.join(label, on="player_id", how="inner")
-              .dropna(subset=features + [column]).set_index("player_id"))
+    if labels is None:
+        chunks = chunks.join(label, on="player_id", how="inner")
+        chunks["label_possessions"] = chunks.possessions.to_numpy(float)
+        chunks["label_key"] = _key_text(_season_key(unseen))
+    else:
+        chunks = _join_outside_labels(chunks, grouped.season.agg(_season_key), labels, unseen, label, column)
+    if shares is not None:
+        chunks[SAME_TEAM] = (_chunk_same_team(dup, shares, outside=labels is not None)
+                             .reindex(chunks.index).fillna(0.0).to_numpy(float))
+        base[SAME_TEAM] = 1.0
+        # the team-season intercept's group (experiment 27): the chunk's biggest team-season, and for the
+        # career row the biggest of his whole label span
+        per = shares.groupby(["player_id", "season", "team_id"], as_index=False).poss_on.sum()
+        inside = dup[["chunk", "player_id", "season"]].merge(per, on=["player_id", "season"])
+        chunks[TEAM_SEASON] = (_top_team_season(inside, "chunk").reindex(chunks.index).fillna(-1)
+                               .to_numpy(np.int64))
+        base[TEAM_SEASON] = (_top_team_season(per, "player_id").reindex(base.index).fillna(-1)
+                             .to_numpy(np.int64))
+    if age_curve is not None:
+        # each chunk's label moved to the chunk's own age; the career row is its label's own seasons
+        gap = _age_shift(dup, rows, age_curve, outside=labels is not None).reindex(chunks.index).fillna(0.0)
+        scale = (np.ones(len(chunks)) if label_scale is None
+                 else np.asarray(label_scale(chunks.label_possessions.to_numpy(float)), dtype=float))
+        chunks["age_shift"] = scale * gap.to_numpy(float)
+        chunks[column] = chunks[column].to_numpy(float) + chunks.age_shift.to_numpy(float)
+        base["age_shift"] = 0.0
+    chunks = chunks.dropna(subset=features + [column]).set_index("player_id")
     share = chunks.chunk_poss / chunks.groupby(level=0).chunk_poss.transform("sum")
+    behind = chunks.possessions if weight_by == "career" else chunks.label_possessions
     chunks = chunks.assign(target=chunks[column].to_numpy(float),
-                           weight=(share * chunks.possessions).to_numpy(float))
+                           weight=(share * behind).to_numpy(float))
     return pd.concat([base, chunks])
+
+
+def _join_outside_labels(chunks: pd.DataFrame, chunk_seasons: pd.Series, labels: dict, unseen,
+                         career: pd.DataFrame, column: str) -> pd.DataFrame:
+    """Each chunk row's label from `labels[unseen + its own seasons]`; the weight's possessions stay the
+    career label's.  Inner joins on both, so a chunk with no outside label, or a player with no career
+    label, is dropped.  `label_key` names the excluded set each row's label was fit without."""
+    by_key = {_key_text(_season_key(k)): v for k, v in labels.items()}
+    left = _season_key(unseen)
+    wanted = chunk_seasons.reindex(chunks.index).map(lambda s: _key_text(_season_key(left + tuple(s))))
+    missing = sorted(set(wanted) - set(by_key))
+    if missing:
+        raise KeyError(f"no label for the excluded season sets {missing[:3]}{'...' if len(missing) > 3 else ''}; "
+                       f"build one per `chunk_season_sets(rows)` set, plus `unseen`")
+    frames = [by_key[k][["player_id", column, "possessions"]]
+              .rename(columns={"possessions": "label_possessions"}).assign(_key=k)
+              for k in dict.fromkeys(wanted)]
+    long = pd.concat(frames, ignore_index=True).set_index(["player_id", "_key"])
+    out = chunks.assign(_key=wanted.to_numpy())
+    out = out.join(long, on=["player_id", "_key"], how="inner").rename(columns={"_key": "label_key"})
+    return out.join(career[["possessions"]], on="player_id", how="inner")
 
 
 def team_movement(per_team: pd.DataFrame, min_poss: float = 100.0) -> pd.Series:
@@ -389,7 +749,11 @@ def team_movement(per_team: pd.DataFrame, min_poss: float = 100.0) -> pd.Series:
     return movement[totals >= float(min_poss)]
 
 
-def reweight_by_movement(train: pd.DataFrame, movement: pd.Series, floor: float = 0.0) -> pd.DataFrame:
+CAREER_BANDS = [0.0, 2000.0, 5000.0, 15000.0, 40000.0, np.inf]     # label possessions
+
+
+def reweight_by_movement(train: pd.DataFrame, movement: pd.Series, floor: float = 0.0,
+                         bands=None) -> pd.DataFrame:
     """Multiply every training row's weight by its player's `team_movement`, plus `floor`.
 
     The total weight is preserved, so the booster's own regularisation means the same thing before and
@@ -403,10 +767,27 @@ def reweight_by_movement(train: pd.DataFrame, movement: pd.Series, floor: float 
     toward journeymen.  Movement RISES with career length (mean 0.11 under 2,000 possessions against
     0.41 over 30,000), so the weight moves toward long careers -- the same rows the memorisation work
     already found are the easiest targets to predict.  The criterion is the only arbiter of that.
+
+    `bands` (the owner, 2026-09-30) removes exactly that: edges on the label's possessions (`possessions`,
+    his career over the training seasons; `CAREER_BANDS` by default), and each band keeps the total weight
+    it had, so the weighting moves weight only between players of similar career length -- from one-team
+    players to players who moved -- and never from short careers to long ones.  Experiment 25b showed where
+    a weight that follows career length goes: long careers belong to good players.
     """
     factor = movement.reindex(train.index).fillna(0.0).to_numpy(float) + float(floor)
-    weight = train.weight.to_numpy(float) * factor
-    total = weight.sum()
-    if total <= 0:
+    before = train.weight.to_numpy(float)
+    weight = before * factor
+    if weight.sum() <= 0:
         raise ValueError("the movement weighting left no training weight at all")
-    return train.assign(weight=weight * (train.weight.to_numpy(float).sum() / total))
+    if bands is None:
+        return train.assign(weight=weight * (before.sum() / weight.sum()))
+    edges = CAREER_BANDS if bands is True else list(bands)
+    band = np.digitize(train.possessions.to_numpy(float), edges[1:-1])
+    out = weight.copy()
+    for b in np.unique(band):
+        k = band == b
+        if weight[k].sum() > 0:
+            out[k] = weight[k] * (before[k].sum() / weight[k].sum())
+        else:                                  # a band of one-team players only, at floor 0: left as it was
+            out[k] = before[k]
+    return train.assign(weight=out)

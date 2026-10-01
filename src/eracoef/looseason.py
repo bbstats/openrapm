@@ -35,10 +35,31 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import scipy.linalg as sla
 
 from .priorridge import armse, penalty_grid, solve_penalised, team_game_mse, team_game_weights
 
 __all__ = ["LeaveSeasonOutRAPM"]
+
+
+def _solve_cholesky(gram, rhs, sizes, triple):
+    """`solve_penalised`'s system by Cholesky, for when hundreds of labels are needed (experiment 25's outside labels).
+
+    The system is symmetric positive definite once every UNPENALISED column that no kept season touches gets a
+    token 1.0 on its diagonal -- the 2020 bubble's playoff home court is the one there is; its coefficient is then
+    exactly 0 and nothing else moves.  Half the arithmetic of the general solve, and it spreads across cores where
+    the general one does not: on 5,902 columns, 1.5 s on one BLAS thread and 0.62 s on twelve, against 5.0 s and
+    1.9 s.  It agrees with `solve_penalised` to 1e-13 per 100, and to 1e-7 where that solver has to jitter the
+    empty column instead.  Falls back to it if the factorisation still fails.
+    """
+    penalty = np.concatenate([np.full(n, lam) for n, lam in zip(sizes, triple)])
+    matrix = gram + np.diag(penalty)
+    empty = np.flatnonzero((np.diagonal(gram) <= 0) & (penalty == 0))
+    matrix[empty, empty] += 1.0
+    try:
+        return sla.cho_solve(sla.cho_factor(matrix, check_finite=False), rhs, check_finite=False)
+    except np.linalg.LinAlgError:
+        return solve_penalised(gram, rhs, sizes, triple)
 
 
 class LeaveSeasonOutRAPM:
@@ -121,10 +142,13 @@ class LeaveSeasonOutRAPM:
         return gram, rhs, possessions, total - 2 * n
 
     def ratings(self, held_out_season=None, offense_lambda: float = 43089.0,
-                defense_lambda: float | None = None, context_lambda: float = 0.0) -> pd.DataFrame:
+                defense_lambda: float | None = None, context_lambda: float = 0.0,
+                method: str = "solve") -> pd.DataFrame:
         """One row per player with at least `min_possessions` over the seasons used.
 
         `held_out_season=None` uses every accumulated season.  `defense_lambda=None` matches offense.
+        `method="cholesky"` solves the same system by `_solve_cholesky`; the default is the solver every
+        shipped label was built with.
         """
         exclude = () if held_out_season is None else np.atleast_1d(held_out_season)
         gram, rhs, possessions, n_context = self._assemble(exclude)
@@ -132,7 +156,10 @@ class LeaveSeasonOutRAPM:
         triple = (float(offense_lambda),
                   float(offense_lambda if defense_lambda is None else defense_lambda),
                   float(context_lambda))
-        coefficients = solve_penalised(gram, rhs, (n, n, n_context), triple)
+        if method not in ("solve", "cholesky"):
+            raise ValueError(f"method={method!r}: write solve or cholesky")
+        solver = solve_penalised if method == "solve" else _solve_cholesky
+        coefficients = solver(gram, rhs, (n, n, n_context), triple)
         keep = possessions >= self.min_possessions
         return pd.DataFrame({"player_id": self.player_ids[keep],
                              "offense": coefficients[:n][keep],
