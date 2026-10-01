@@ -2,7 +2,8 @@
 
     python scripts/73_tradeloss.py --alphas=incumbent=outputs/tradeset_team_alpha.parquet,
                                            noonc_d=outputs/tradeset_noonc_d_alpha.parquet
-                                   [--ref=incumbent] [--tier=all] [--min_without=1]
+                                   [--ref=incumbent] [--tier=all|each|<tier>] [--min_without=1]
+                                   [--quality=outputs/season_ratings_unshrinkdef.parquet] [--movers=1]
 
 Each `--alphas` entry is one `scripts/70_tradeset.py` run's `<out>_alpha.parquet`, which carries a
 correction per player, season and side: what that player's comings and goings say his rating did not
@@ -47,11 +48,65 @@ def missed(alpha: np.ndarray) -> float:
     return MAE_SCALE * float(np.sqrt(np.mean(np.square(alpha)))) if len(alpha) else np.nan
 
 
-def load(path: Path, min_without: float) -> pd.DataFrame:
-    """One run's eligible corrections, tiered by the rated season's possessions."""
+QUALITY_EDGES = [0, 30, 90, 150, 300, 10**9]
+QUALITY_LABELS = ["top 30", "31-90", "91-150", "151-300", "301+"]
+
+
+def quality_tiers(path: Path) -> pd.Series:
+    """(player_id, season) -> quality tier: his rank by total rating in that season of the rankings at `path`.
+
+    The owner's player-quality clusters (2026-09-30): top 30, 31-90, 91-150, 151-300, 301+.  One table fixes the
+    tiers for every arm, so all of them are cut the same way; name the reference's rankings."""
+    t = pd.read_parquet(path, columns=["player_id", "season", "rating_total"])
+    rank = t.groupby("season").rating_total.rank(ascending=False, method="first").to_numpy()
+    labels = np.asarray(QUALITY_LABELS, dtype=object)[np.digitize(rank, QUALITY_EDGES[1:-1], right=True)]
+    return pd.Series(labels, index=pd.MultiIndex.from_arrays([t.player_id.to_numpy(), t.season.to_numpy()]))
+
+
+MOVER_LABELS = ["changed teams", "same team", "no neighbour season"]
+
+
+def mover_tiers(seasons) -> pd.Series:
+    """(player_id, season) -> whether he changed teams around the rated season: "changed teams" if his main team
+    (most minutes, as a franchise) in the season before or after differs from the rated season's, "same team" if
+    every neighbouring season he played has the same main team, "no neighbour season" if he played neither.  The
+    trade set's correction reads exactly those three seasons' games (the owner, 2026-10-01: split every result
+    into traded and not traded)."""
+    from eracoef import singleyear as sy
+    from eracoef.config import load_config
+    from eracoef.holdout import Context
+    ctx = Context.load(load_config(ROOT / "config.yaml"))
+    have = sorted(set(int(s) for s in seasons))
+    span = sorted(set(have) | {s - 1 for s in have} | {s + 1 for s in have})
+    teams = {}
+    for s in span:
+        try:
+            m = ctx.main_team(s)
+        except Exception:                       # a season outside the data
+            m = {}
+        ids = np.fromiter(m.keys(), dtype=np.int64, count=len(m))
+        fr = sy.franchise(np.fromiter(m.values(), dtype=np.int64, count=len(m)), np.full(len(m), s))
+        teams[s] = dict(zip(ids.tolist(), fr.tolist()))
+    keys, labels = [], []
+    for s in have:
+        for p, t in teams[s].items():
+            near = [teams[n][p] for n in (s - 1, s + 1) if p in teams.get(n, {})]
+            keys.append((p, s))
+            labels.append(MOVER_LABELS[2] if not near else MOVER_LABELS[0] if any(x != t for x in near)
+                          else MOVER_LABELS[1])
+    return pd.Series(labels, index=pd.MultiIndex.from_tuples(keys))
+
+
+def load(path: Path, min_without: float, quality: pd.Series | None = None) -> pd.DataFrame:
+    """One run's eligible corrections, tiered by the rated season's possessions -- or, given `quality`, by
+    the player-quality clusters of `quality_tiers`."""
     table = pd.read_parquet(path)
     rows = table[(table.eligible) & (table.without_poss >= min_without)].copy()
-    rows["tier"] = possession_tier(rows.poss_on.to_numpy())
+    if quality is None:
+        rows["tier"] = possession_tier(rows.poss_on.to_numpy())
+    else:
+        key = pd.MultiIndex.from_arrays([rows.player_id.to_numpy(), rows.season.to_numpy()])
+        rows["tier"] = quality.reindex(key).fillna("no rating").to_numpy()
     return rows.set_index(["player_id", "season", "side"]).sort_index()
 
 
@@ -91,7 +146,13 @@ def main() -> None:
     if not spec:
         raise SystemExit(__doc__)
     min_without = float(flag("min_without", "1"))
-    tier = flag("tier", "all")
+    tier = flag("tier", "all")          # a tier's name, "all", or "each" for every tier in turn
+    quality_path = flag("quality")      # rankings whose per-season rank sets the quality tiers
+    movers = flag("movers", "0") not in ("0", "no", "false")      # tiers = changed teams / same team instead
+    assert not (movers and quality_path), "--movers=1 and --quality= each set the tiers; pick one"
+    quality = quality_tiers(ROOT / quality_path) if quality_path else None
+    if movers:
+        quality = mover_tiers(range(1997, 2027))
     arms = {}
     for part in spec.replace("\n", "").split(","):
         if not part.strip():
@@ -99,7 +160,7 @@ def main() -> None:
         name, _, path = part.strip().partition("=")
         if not path:
             raise SystemExit(f"--alphas wants name=path pairs; got {part!r}")
-        arms[name] = load(ROOT / path if not Path(path).is_absolute() else Path(path), min_without)
+        arms[name] = load(ROOT / path if not Path(path).is_absolute() else Path(path), min_without, quality)
     ref_name = flag("ref", next(iter(arms)))
     if ref_name not in arms:
         raise SystemExit(f"--ref={ref_name} is not one of {', '.join(arms)}")
@@ -121,8 +182,13 @@ def main() -> None:
         print(f"\n=== {name} against {ref_name} ===")
         print(f"  {len(shared):,} player-season-sides in both; dropped {len(rows) - len(shared):,} "
               f"from {name} and {len(ref) - len(shared):,} from {ref_name}")
-        table = paired(rows.loc[shared], ref.loc[shared], tier)
-        print(table.to_string(index=False, float_format=lambda v: f"{v:.4f}"))
+        order = (MOVER_LABELS + ["no rating"] if movers else QUALITY_LABELS + ["no rating"] if quality is not None
+                 else sorted(set(rows.tier)))
+        for t in ([x for x in order if x in set(rows.tier)] if tier == "each" else [tier]):
+            table = paired(rows.loc[shared], ref.loc[shared], t)
+            if tier == "each":
+                print(f"  -- tier {t}")
+            print(table.to_string(index=False, float_format=lambda v: f"{v:.4f}"))
         print("  mean_diff below zero means the rating leaves a SMALLER correction, so it is better; "
               "z is that difference over its own standard error, wins is out of `seasons`")
 

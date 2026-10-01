@@ -38,6 +38,9 @@ incumbent and the fill can be paired in one run by handing the same parquet in t
 at the default offset would be scoring a fit on the very rows it used; at 2 the scored games are outside
 its window.  Both arms of any comparison must use the same offset, and the absolute numbers move with it.
 
+`--rankings=name=a.parquet|b.parquet` scores the first file in the "prev" direction and the second in the "next":
+the trade-flag test's stitched list (scripts/89_stitch_by_move.py) depends on which neighbour it is scored on.
+
 Each table needs `player_id`, `season`, `rating_off`, `rating_def` (both positive-good) and `poss_off`.
 Writes outputs/yoy_<tag>.parquet with one row per scored season x direction x table x split x group.
 """
@@ -134,10 +137,16 @@ def main():
     if not spec:
         raise SystemExit("--rankings=name=path[,name=path...] is required")
     columns = _flag("columns", "rating")
+    # `name=a.parquet|b.parquet` gives a table one file per direction: the first for "prev" (the rated season is
+    # the one BEFORE the scored one, so its rankings look forward), the second for "next".  The trade-flag test's
+    # stitched list depends on which neighbour it is scored on (scripts/89_stitch_by_move.py).
     tables = {}
     for part in spec.split(","):
         name, path = part.split("=", 1)
-        tables[name] = load_table(ROOT / path, columns)
+        paths = path.split("|")
+        assert len(paths) in (1, 2), f"--rankings {name}: one path, or two joined by |"
+        loaded = [load_table(ROOT / p, columns) for p in paths]
+        tables[name] = {"prev": loaded[0], "next": loaded[-1]}
     ref = _flag("ref", next(iter(tables)))
     split_names = [s for s in _flag("splits", "movers").split(",") if s]
     tag = _flag("tag", "yoy")
@@ -154,8 +163,9 @@ def main():
     offset = int(_flag("offset", "1"))
     if offset != 1:
         print(f"offset {offset}: each season is predicted by the rankings {offset} seasons before and after it")
-    for name, t in tables.items():
+    for name, by_direction in tables.items():
         for d, off in directions(offset).items():
+            t = by_direction[d]
             sysm = NeighbourTable(f"{name}:{d}", t, off, frozenset(t.season.unique()))
             systems.append(_filled(sysm, fills.get(name)))
     for name, spec in fills.items():
