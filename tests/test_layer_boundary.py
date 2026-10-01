@@ -53,6 +53,8 @@ MODEL_LAYER = [
     "rloocv.py",        # rebalanced leave-one-out: the splitter and the partner rule, numpy only
     "simulate.py",      # the synthetic fixture the tests fit against
     "singleyear.py",    # the single-year prior's feature list and its per-player aggregation
+    "swapadjust.py",    # the swap adjustment: type model and per-player swaps, team totals held fixed
+    "swaptest.py",      # the swap test: same-four lineup pairs, scored against a neighbouring season's ranking
     "tradeset.py",      # the team-game with-and-without-you ridge and its losses
 ]
 
