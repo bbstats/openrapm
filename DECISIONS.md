@@ -3246,6 +3246,188 @@ ratings with him off the court; the penalty is the sparsest within one standard 
   57% of the weight is on "season 1 predicts season 2" rows (47-49% for 23 and under) -- but the larger suspect is
   selection: the veterans who did move were often declining.
 
+### The swap test: does a ranking order teammates the way the games do? (2026-10-01)
+
+**The owner's goal** (2026-10-01): rank players among their own team, as an adjustment on top of PI-RAPM, judged
+by "player vs replacement in lineups" -- *"every 5-man group that Brandin Podziemski is in, find the times those 4
+players played with someone else, and find his delta vs that player, adjusting for game context."*  This first
+step builds the test; the adjustment comes next.
+
+`src/eracoef/swaptest.py`, `scripts/90_swap_test.py`, `tests/test_swaptest.py` (seven tests on a synthetic league
+whose ratings are known).  For every pair of lineups on the same team that share four players, the difference in
+their results in the scored season is set against what a NEIGHBOURING season's ranking says about the two swapped
+players -- never its own season, which the rating was fitted on.  1998-2025, scored by the season before and the
+season after: 56 observations.  Only pairs where both swapped players carry a rating.  A pair's weight is its
+information, `n_a * n_b / (n_a + n_b)` possessions.  Two scores:
+
+- **order** (the owner's pick of the five questions): the swap difference with the opponents faced and the context
+  taken out -- once per scored season, by that season's own plain RAPM, identically for every ranking -- signed by
+  the ranking's gap between the two swapped players.  Higher is better, 0 is no idea, and it ignores spread.
+- **gaps**: the squared error of each ranking's own prediction of the swap difference.  Lower is better.
+
+The context refit on the scored season: intercept, home, playoffs, garbage time, margin, margin x time left,
+minutes into the period, its last two minutes, minutes each five had been on the court, and the clutch.
+
+**Size.**  Per observation about 70,000 swap pairs and 970,000 possessions of information (net).  95% of a
+regular's possessions have a same-four match, but one player's pooled swap difference is noisy (median regular
++/-4.3 per 100; Podziemski 2026 -2.9 +/-3.6 against a rating gap of -1.3 for the same comparisons): large samples
+for a test, small for one player.
+
+**Results** (net, full context, against the incumbent; "better in" counts observations of 56):
+
+| ranking | order | order vs incumbent | gaps vs incumbent |
+|---|---|---|---|
+| the incumbent (PI-RAPM) | 1.685 | -- | -- |
+| the box prior alone (`prior_off` / `prior_def`) | 1.577 | -0.108, z -6.4, incumbent better in 44 | +1.70, z +6.7 |
+| plain single-season RAPM, penalty 3,000 | 1.580 | -0.105, z -2.3, incumbent better in 32 | -0.76, z -1.3 (a tie) |
+| the incumbent shuffled inside each team | 0.098 | -1.587, z -20.7 | +31.0, z +22.6 |
+
+- **Pairs who were teammates in the rated season too** (44% of the information): the prior loses (-0.127, z -5.2);
+  plain RAPM ties on order (-0.033, z -0.5) and predicts the gaps slightly better (-1.46, z -2.5, 35 of 56).
+- **Pairs who were not** (56%): the prior loses (-0.089, z -3.5), and so does plain RAPM (-0.164, z -2.8).
+- Offense and defense apart, plain RAPM loses clearly (-0.262, z -8.4; -0.220, z -6.9): its net is better than its
+  split.  Home-and-intercept context instead of the full one changes no conclusion (prior -0.100, z -6.1; plain
+  RAPM -0.163, z -3.6).
+
+**The checks.**  Shuffled inside each team: loses at z -20.7, so the test sees the order inside a team.  A random
+constant per team of the SCORED season: -0.056 (z -3.5), and -0.014 (z -0.9) on pairs who were teammates then --
+what is left is players on two teams that season.  The same per team of the RATED season: exactly 0 on pairs who
+were teammates then and -0.531 (z -7.0) on the rest, so more than half the test is whether a player's credit
+travels with him to new teammates.
+
+**Spread inside a team.**  The slope the swaps ask of the incumbent's within-team gaps is 0.69 net -- 0.76 on
+offense and 0.97 on defense.  A third reading, after the trade set (offense at 0.73 of defense, 29 of 30 seasons)
+and the year-over-year sweep (x0.65 / x0.85), that offensive gaps are too wide against defensive ones.  All three
+are across seasons, so they mix "too wide" with "players change".
+
+**The context terms.**  The minutes a five had been on the court came out the opposite of tiredness, with the
+time into the period controlled: +1.75 points per 100 per minute for the offense, -0.79 for the defense (a five
+that has been on longer allows less).  It behaves like an artifact of how stretches begin at substitutions, or of
+coaches leaving a lineup in while it goes well, not like fatigue.  The clutch term averages -0.06.  Neither changes
+a conclusion.
+
+**Verdict.**  PI-RAPM orders teammates better than either of its parts alone.  For pairs who were already teammates,
+plain RAPM orders them as well and sizes their gaps slightly better -- that is the room the within-team adjustment
+has to work in.  Logs: `outputs/swaptest_first.log`, `outputs/swaptest_first.parquet`.
+
+### The swap adjustment: re-split each team's credit by its lineup swaps (2026-10-01)
+
+**The owner's plan** (all four recommendations, "go"): an adjustment on top of PI-RAPM, by player type first and each
+player's own swaps on top, each team's total held fixed, judged on the swap test.  `src/eracoef/swapadjust.py`,
+`scripts/91_swap_adjust.py`, `tests/test_swapadjust.py` (four tests on the synthetic league: team totals stay put, a
+planted split between two teammates is found and undone, a planted feature is recovered, a fold's model is exactly
+the model of the other folds' pairs).
+
+- Every swap of the rated season leaves a residual: the swap difference PI-RAPM's own prediction (context without the
+  time-on-court term) did not account for.
+- **By type**: a linear model of each swap's residual on the two swapped players' feature difference -- the season
+  panel's padded box rates, share of team possessions, starts share, garbage-time share, age, experience, height,
+  weight, and PI-RAPM's box prior.  Five player folds (a player's correction from the fold that never saw his swaps)
+  and seasons at least two away from the rated one, so neither scored season reaches it (ruling 2).
+- **By player**: his own swaps, pulled toward the type prediction by a penalty.
+- **Each team's total fixed exactly**: corrections sum to zero weighted by each player's possession share of that
+  team (a constrained least squares, so players on two teams are handled).
+
+**A trap, caught on the first run.**  With PI-RAPM's own residual (`u_off` / `u_def`) among the features, the type
+model put +2.0 and +1.9 on it: the swap residuals are read in the same season, so the evidence the ridge held back is
+still in them, and the model learned to multiply it.  That is a lighter ridge penalty labelled as a player type --
+median move 0.9 per 100 -- and the penalty is the year-over-year test's to choose.  Removed.
+
+**The grid** (net order score against the incumbent, swap test, 56 observations):
+
+| arm | order | gaps | within-team slope (incumbent 0.72) |
+|---|---|---|---|
+| type x0.5 | **+0.162, z +5.5, 42 of 56** | +0.23, z +0.7 (a tie) | 0.67 |
+| type x1 | +0.191, z +4.9 | +5.16, z +7.9 (worse) | 0.56 |
+| type x1.5 / x2 / x3 | +0.147 / +0.062 / -0.023 | worse | 0.46 / 0.38 / 0.27 |
+| own swaps, penalty 30,000 | +0.059, z +2.7 | a tie | 0.70 |
+| own swaps, penalty 1,000 | -0.205, z -3.6 | worse | 0.28 |
+| type x1 + own, penalty 30,000 (best order) | +0.210, z +5.0 | +5.47, z +8.4 (worse) | 0.56 |
+
+The type strength peaks inside the grid; a player's own swaps add almost nothing on top of the type model and hurt
+when lightly shrunk.  **Type x0.5 is the candidate**: most of the order gain and no worse on gaps -- better on
+offense (order z +7.8, gaps z -3.7) and on defense (order z +9.7, gaps z -6.7), a tie on net gaps.
+
+**What the type model says** (fitted on every season; per standard deviation of the difference from the teammate he
+swaps with, points per 100 beyond what PI-RAPM credited; `outputs/swapadj_types.csv`).  Offense: made threes +1.62,
+made twos +1.31, missed twos -1.05, missed threes -0.99, assists +0.77, turnovers -0.74, made free throws +0.66,
+offensive rebounds +0.62.  Defense: defensive rebounds +0.54, garbage-time share -0.52, fouls +0.42, steals +0.31,
+offensive rebounds -0.31, made threes -0.29, the box prior's defense +0.35.
+
+**The battery on type x0.5** (`outputs/season_ratings_swapadj_x05.parquet`, "type_half" on the comparison page):
+
+| test | result |
+|---|---|
+| year-over-year, team-game level | **+0.429, z +3.5, 16 of 56: worse** (8.698 against 8.682) |
+| year-over-year, stint level | -0.194, z -1.3: a tie |
+| year-over-year, each side rescaled to the scored season (order only) | **-1.021, z -10.0, 52 of 56: much better** |
+| what the scored season wants each side multiplied by | offense 0.760 (incumbent 0.795), defense 0.796 (0.898) |
+| consensus, 1,000+ possessions | rank agreement 0.849 / 0.808 / 0.832 (incumbent 0.785 / 0.803 / 0.794), top five 5 of 5; spread 1.155 / 1.279 (1.029 / 1.007) |
+| trade loss | offense -0.0043, z -5.3, 24 of 30, better in every quality tier; defense a tie |
+| year-over-year by quality tier | worse in every tier, team-game level (z +2.4 to +4.6) |
+
+- **2026 top 20** (`outputs/compare_incumbent_type_half_type_plus_own_2026.html`, emailed): the top five stay, with
+  Giannis 4th to 2nd.  In: Clingan 20th to 11th, Butler 36th to 14th, Hartenstein 26th to 16th, Allen 35th to 17th,
+  Ighodaro 37th to 18th, Anunoby, Harper.  Out: Harden 13th to 21st, Cade 14th to 23rd, Murray, Champagnie, Durant
+  15th to 36th, LeBron 19th to 47th.  Type x1 + own swaps is far more extreme (LeBron 158th, Durant 88th).
+- **Movement**: median 0.54 per 100 in 2026, 90th percentile 1.43, largest 2.97; mostly players with few possessions
+  going down and the stars of their teams going up, since each team's total is fixed.
+
+**Verdict: not adoptable under the rule** (team-game z +3.5).  Every test that reads ORDER says it is better -- the
+swap test, the year-over-year order-only row (z -10.0), the consensus and the offensive trade loss -- and the test that
+also reads SPREAD says worse: the adjusted list is about 12% wider on offense and 27% wider on defense, and the ratings
+were already too wide.  Proposed next, not started: the same adjustment with each season's spread on each side held to
+the incumbent's, which keeps the new order and nothing else.  Logs: `outputs/swapadj.log` (the grid),
+`outputs/swapadj_x05.log`, `outputs/yoy_swapadj.log`, `outputs/consensus_swapadj.log`,
+`outputs/yoy_by_player_swapadj.log`, `outputs/tradeloss_swapadj.log`, `outputs/tradeloss_quality_swapadj.log`.
+
+### The swap adjustment with the spread held: it passes (2026-10-01)
+
+The owner said go.  The same type model at half strength, then one factor per season and side gives back the width
+it added (`swapadjust.hold_spread`, `91_swap_adjust.py --hold_spread=within|whole`, two more tests):
+
+- **teams_fixed** (`within`): each player's distance from his team's possession-weighted mean is shrunk until the
+  spread INSIDE teams equals the incumbent's.  Team means -- team totals -- do not move, and the order inside every
+  team is the adjustment's.  Factors: offense 0.88 (0.83-0.92 over seasons), defense 0.73 (0.69-0.77).
+- **list_scaled** (`whole`): each side's whole list scaled back to the incumbent's spread.  The order on each side is
+  the adjustment's; team totals shrink with everything else.  Factors 0.90 and 0.77.
+
+| test | teams_fixed | list_scaled |
+|---|---|---|
+| year-over-year, team-game level | **-0.432, z -5.2, 39 of 56** (8.666) | **-0.814, z -7.7, 48 of 56** (8.652) |
+| year-over-year, stint level | -1.078, z -9.1, 49 of 56 | -1.513, z -11.1, 53 of 56 |
+| year-over-year, each side rescaled | -0.823, z -9.1 | -1.021, z -10.0 |
+| what the scored season wants each side multiplied by (incumbent 0.795 / 0.898) | 0.814 / 0.960 | 0.846 / 1.040 |
+| year-over-year by quality tier | better in every tier, z -3.5 to -5.1 | better in every tier, z -3.8 to -8.7 |
+| swap test, net order / gaps | +0.123, z +4.3 / -1.71, z -6.9 | +0.125, z +4.6 / -2.25, z -8.6 |
+| consensus agreement, off / def / total (incumbent 0.785 / 0.803 / 0.794) | 0.848 / 0.813 / 0.836; spread 1.035 / 1.018; top five 4 | 0.850 / 0.808 / 0.834; spread 1.033 / 1.019; top five 4 |
+| trade loss, offense / defense | -0.0046, z -5.7 / +0.0015, z +2.0 (151-300: z +3.6) | -0.0043, z -5.3 / a tie |
+| 2026 movement, median | 0.42 per 100 | 0.44 per 100 |
+
+The trade loss for list_scaled is exactly the unheld version's, as it must be: the trade set frees one multiplier
+per side and season, and list_scaled differs from it by exactly that.
+
+**2026 top 20, teams_fixed** (`outputs/compare_incumbent_teams_fixed_list_scaled_2026.html`, emailed): the top five
+stay, Giannis 4th to 2nd.  In: Clingan 20th to 13th (+0.6), Butler 36th to 14th (+1.0), Hartenstein 26th to 16th
+(+0.4), Anunoby 24th to 17th, Harper 30th to 18th, Allen 35th to 20th.  Out: Cade 14th to 21st (-0.7), Murray 17th
+to 23rd (-0.3), Champagnie 18th to 24th (-0.4), Durant 15th to 25th (-0.6), LeBron 19th to 49th (-1.2).  list_scaled
+is close to it.
+
+**Verdict: both meet the adoption rule** (z -2 or below, the consensus up, not down).  list_scaled is the best legal
+score in the record (8.652; experiment 29 was 8.669) and ties the defensive trade loss, but it shrinks team
+strength with the rest of the list.  teams_fixed is the owner's design -- each team's total held exactly -- passes at
+z -5.2, and carries a small defensive trade loss flag.  **ADOPTED by the owner, 2026-10-01: "Team version."**  The
+published table is `91_swap_adjust.py --base=<the pre-swap product table> --kappas=0.5 --taus= --hold_spread=within
+--exclude_near=0 --score=0`: every other season trains the type model (ruling 2), the player folds keep a player's
+own swaps out.  Spread factors 0.886 / 0.744; 2026 median move 0.43 per 100; team totals move a median 0.007 per
+100 of the team's possessions (largest 0.12, from players on two teams).  Consensus on the published table 0.848 /
+0.813 / 0.833 (from 0.787 / 0.803 / 0.795).  The old table is kept as `season_ratings_product_pre_swap.parquet`; the
+site was rebuilt (`52_site.py`, `76_bias_groups.py`) and its footer names the step.  To ship either, the adjustment must also
+be run on the product table (`season_ratings_product.parquet`), with the type model trained on every season, which
+ruling 2 allows.  Logs: `outputs/swapadj_within.log`, `outputs/swapadj_whole.log`, `outputs/yoy_swapheld.log`,
+`outputs/consensus_swapheld.log`, `outputs/yoy_by_player_swapheld.log`, `outputs/tradeloss_swapheld.log`,
+`outputs/tradeloss_quality_swapheld.log`.
+
 ## What was tried and rejected
 
 **The LRBoost branch (a boosted correction on a frozen linear prior).** Five things had to be right before it

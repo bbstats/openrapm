@@ -62,7 +62,9 @@
   </table>
   <footer>
     A multi-stage prior-informed RAPM: a role-and-age prior, then a gradient-boosted box-score prior, then a ridge on the
-    on-court result, chosen by out-of-season prediction of held-out games. One rating per player per season, from that
+    on-court result, chosen by out-of-season prediction of held-out games. Last, credit within each team is re-split using
+    lineup swaps (the same four teammates with one player changed), keeping each team's total and the spread of the
+    ratings unchanged. One rating per player per season, from that
     season's games. Nothing that is fitted has seen a season still being played. Source, method and every measurement:
     <a href="https://github.com/bbstats/openrapm">github.com/bbstats/openrapm</a>. Architecture changes are welcome; the test that
     decides is <code>scripts/45_holdout.py</code>. <span id="built"></span>
