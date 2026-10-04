@@ -179,7 +179,17 @@ BORUTA_D = ["blk", "drb", "exp_poss", "exp_yrs", "fga", "gs_pct", "height", "onc
 # without.  `boruta_noonc` is kept so the comparison can be re-run, and an honest 75/25 diagnostic would
 # need a panel rebuilt from a 75% design, which is not built.
 
+# The booster half of the stacked prior (`stackprior.StackedSPM`, the owner 2026-10-02): scripts/92_stack_boruta.py,
+# 50 trials on 2026's training rows, candidates every `PRIOR_FEATURES` name but the plus-minus columns (`ONC`, which
+# go to the elastic net).  It kept ALL 50 on both sides (outputs/csv/boruta_stack_table.csv): 35,000 rows, a
+# career row and its chunks per player, give it the power to call almost any real signal "not noise".
+STACK_BOOSTER_O = [f for f in PRIOR_FEATURES if f not in ONC]
+STACK_BOOSTER_D = [f for f in PRIOR_FEATURES if f not in ONC]
+
 FEATURE_SETS = {
+    # the stacked prior: the plus-minus columns for the elastic net, the Boruta list for the booster
+    # (on-court and off-court, the owner 2026-10-02; `stackprior.PLUS_MINUS`)
+    "stack": {"O": ONC + OFFC + STACK_BOOSTER_O, "D": ONC + OFFC + STACK_BOOSTER_D},
     "sy": {"O": PRIOR_FEATURES, "D": PRIOR_FEATURES},
     "sy_noonc": {side: [f for f in PRIOR_FEATURES if f not in ONC] for side in ("O", "D")},
     "boruta": {"O": BORUTA_O, "D": BORUTA_D or PRIOR_FEATURES},
@@ -192,6 +202,15 @@ FEATURE_SETS = {
     # the owner's idea (2026-09-14): the off-court record and the on/off net beside the on-court record,
     # both sides.  `scripts/65_offcourt_panel.py` writes the columns into the season panel.
     "boruta_offc": {"O": BORUTA_O + OFFC + NET, "D": BORUTA_D + OFFC + NET},
+    # the owner, 2026-10-01: "let's put them all in" -- the four ratings (on-court and off-court, offence and
+    # defence) in BOTH priors.  The on-court pair was already in both; this adds the off-court pair and nothing
+    # else (no possession counts, no net), on the current pipeline rather than the 2026-09-14 one.
+    "boruta_onoff": {"O": BORUTA_O + ["offc_o", "offc_d"], "D": BORUTA_D + ["offc_o", "offc_d"]},
+    # the owner, 2026-10-01 ("try it"): on/off ALONE -- `net_o` / `net_d` (on-court minus off-court) in place of the
+    # raw on-court pair in both priors, so the prior never sees how good the team is, only the difference the player
+    # makes.  The possession counts stay.
+    "boruta_net": {side: [{"onc_o": "net_o", "onc_d": "net_d"}.get(f, f) for f in feats]
+                   for side, feats in (("O", BORUTA_O), ("D", BORUTA_D))},
     # experiment 15 (the owner, 2026-09-15): tell the prior what SCORE STATE a player's statistics were
     # compiled in.  The ratings side already knows -- the design carries a garbage-time column and a
     # margin slope -- but nothing in the prior's inputs does, and that asymmetry is the leading

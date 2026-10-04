@@ -11,6 +11,7 @@
                                            [--trade_weight=<floor>] [--trade_bands=0|1] [--adjacent_penalty=3000]
                                            [--crossfit=scale|0|1]
                                            [--params_mult=l2_leaf_reg:5,min_child_weight:5] [--params_set=depth:3]
+                                           [--booster_params=<name>] [--save_models=<name>]
                                            [--player_folds=0|5] [--unshrink_label=def|1|off|0] [--lambda_player=13037|cv|<value>]
                                            [--lambda_off=<value>] [--lambda_def=<value>]
                                            [--save_priors=<name>] [--priors_from=<name>] [--centre=1]
@@ -104,6 +105,7 @@ quarter wants each side multiplied by.  A team-game total is linear in a per-pla
 Writes outputs/<out>.parquet with one row per player-season, which scripts/52_site.py reads, and
 outputs/<out>_score.parquet with the per-season diagnostic.
 """
+import json
 import os
 import sys
 import time
@@ -133,6 +135,7 @@ from eracoef.inseason import season_frac  # noqa: E402
 from eracoef.investigate import offcourt_rates, oncourt_rates  # noqa: E402
 from eracoef.looseason import LeaveSeasonOutRAPM  # noqa: E402
 from eracoef.priorridge import PriorRidgeCV, armse, calibration_miss, game_folds  # noqa: E402
+from eracoef.stackprior import StackedSPM  # noqa: E402
 from eracoef.xshoot import DEFENSE_TARGETS  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -271,22 +274,31 @@ class OutOfPlayerSPM:
     """The SPM fitted once on everything and once per player fold; `predict` gives each player the fit
     that never saw his rows (`--player_folds=N`; 0 = the plain single fit).  `intercept=True` fits every one
     of those boosters with a team-season random intercept (`fit_with_team_season`) and predicts with the
-    trees alone."""
+    trees alone.
 
-    def __init__(self, params: dict, n_folds: int, intercept: bool = False):
+    `by_player=True` (experiment 32, 2026-10-03) hands chimeraboost the player ids as `groups`, so the 20% it
+    holds out to choose its tree count -- and to run its linear-leaf and cross-feature races -- is whole
+    players, not random rows.  A player's career row and chunks carry one label, so a row split puts him on
+    both sides and the held-out error rewards remembering him; the prior is only ever asked about players
+    its fit never saw.  Off, `groups=None` is chimeraboost's own default: the shipped fit, unchanged."""
+
+    def __init__(self, params: dict, n_folds: int, intercept: bool = False, by_player: bool = False):
         self.params, self.n_folds, self.intercept = dict(params), int(n_folds), bool(intercept)
+        self.by_player = bool(by_player)
+        assert not (self.intercept and self.by_player), "the team-season intercept fit takes no groups"
 
-    def _fit_one(self, X, y, w, codes, n_groups):
+    def _fit_one(self, X, y, w, codes, n_groups, players=None):
         def make():
             return ChimeraBoostRegressor(random_state=0, **self.params)
         if not self.intercept:
-            return make().fit(X, y, sample_weight=w), None
+            return make().fit(X, y, sample_weight=w, groups=players if self.by_player else None), None
         return fit_with_team_season(make, X, y, w, codes, n_groups)
 
     def fit(self, train: pd.DataFrame, model_feats: list) -> "OutOfPlayerSPM":
         X, y, w = train[model_feats].to_numpy(float), train.target.to_numpy(float), train.weight.to_numpy(float)
+        players = train.index.to_numpy()
         codes, n_groups = team_season_codes(train) if self.intercept else (None, 0)
-        self.full_, self.log_ = self._fit_one(X, y, w, codes, n_groups)
+        self.full_, self.log_ = self._fit_one(X, y, w, codes, n_groups, players)
         self.fold_models_, self.excluded_, self.fold_logs_ = [], [], []
         self.shift_ = np.zeros(0)
         if self.n_folds > 1:
@@ -295,7 +307,7 @@ class OutOfPlayerSPM:
             for f in range(self.n_folds):
                 keep = fold != f
                 model, log = self._fit_one(X[keep], y[keep], w[keep], None if codes is None else codes[keep],
-                                           n_groups)
+                                           n_groups, players[keep])
                 self.fold_models_.append(model)
                 self.fold_logs_.append(log)
                 self.excluded_.append(set(train.index[~keep].tolist()))
@@ -539,10 +551,24 @@ def main():
     # --dump_rows=NAME writes each side's actual training rows, every column, for every rated season:
     # outputs/prior_rows_NAME_<season>_<side>.parquet (what the Boruta run of experiment 26 reads)
     dump_rows = _flag("dump_rows")
+    # --save_models=NAME (the owner, 2026-10-03: the within-season calibrator) pickles each rated season's two
+    # fitted priors to outputs/prior_models_NAME.pkl, rewritten after every season, so scripts/97_within_season.py
+    # can ask the SAME boosters about a season's box score rebuilt from part of its games.  Plain dicts of the
+    # boosters, not the `OutOfPlayerSPM` objects: those are defined in this script, which runs as __main__, and a
+    # pickled __main__ class cannot be read back by another script.  Changes no number.
+    save_models = _flag("save_models")
+    saved_models: dict = {}
     # experiment 27 (the owner, 2026-09-28): one random intercept per team-season around every booster fit
     # (`fit_with_team_season`), the rating from the trees alone
     team_intercept = _flag("team_season_intercept", "0") not in ("0", "no", "false")
     assert not team_intercept or row_shape == "chunks", "--team_season_intercept needs --rows=chunks"
+    # the owner, 2026-10-02: the prior as a STACK (`stackprior.StackedSPM`) -- the plus-minus columns
+    # (`singleyear.ONC`) into an elastic net, every other column into chimeraboost at `--stack_quality` (5 = a bag
+    # of eight), blended on their out-of-player-fold predictions.  Pair with `--features=stack`.
+    stack = _flag("stack", "0") not in ("0", "no", "false")
+    stack_quality = int(_flag("stack_quality", 5))
+    assert not (stack and team_intercept), "--stack and --team_season_intercept do not combine"
+    assert not (stack and _flag("dump_shap")), "--dump_shap reads one booster; the stack has two models"
     # the owner, 2026-09-30, after the split by player showed experiments 26-27 carried an age tilt: move each
     # chunk's label to the chunk's own age with an aging curve (`singleyear.AgingCurve`), fit per rated season on
     # the season-to-season changes of single-season RAPM at penalty 100 (outputs/piece_panel.parquet, raw
@@ -629,6 +655,22 @@ def main():
             out[k] = type(params[k])(v)
         return out
     assert crossfit in ("0", "1", "scale"), "--crossfit=0|1|scale"
+    # experiment 32 (the owner, 2026-10-03: chimeraboost tuning, item 2 of their list): each side's booster
+    # settings from outputs/booster_params_<name>.json -- `{"O": {"params": {...}, "early_stop_split": "rows" or
+    # "players"}, "D": ...}`, which scripts/94_tune_booster.py writes -- in place of config.yaml's, and whether
+    # its early-stopping split holds out whole players (`OutOfPlayerSPM(by_player=)`).  A side the file does not
+    # name keeps the shipped settings.  `--params_mult` / `--params_set` still apply on top.
+    booster_name = _flag("booster_params")
+    booster = (json.loads((ROOT / "outputs" / f"booster_params_{booster_name}.json").read_text())
+               if booster_name else {})
+    side_params = {"O": booster.get("O", {}).get("params", cfg["gbdt"]["params"]),
+                   "D": booster.get("D", {}).get("params", cfg["gbdt"]["params_def"])}
+    by_player = {s: booster.get(s, {}).get("early_stop_split", "rows") == "players" for s in ("O", "D")}
+    assert not (booster_name and stack), "--booster_params sets the single booster; the stack has its own"
+    if booster_name:
+        for s in ("O", "D"):
+            print(f"booster {s} from booster_params_{booster_name}.json: {side_params[s]}; early-stopping split "
+                  f"by {'players' if by_player[s] else 'rows'}", flush=True)
 
     # The trust boundary (src/eracoef/seasons.py): rows whose unit reaches into a season still
     # being played may not reach a fit.  Gating at the read is what keeps every fit below honest;
@@ -692,7 +734,7 @@ def main():
         labels_by_target: dict = {}
         models, held_frames, model_feats_of = {}, {}, {}
         prior_stayed, stayed_frames = {}, {}       # `--rate_same_team=both`: the second list
-        for side, params in (("O", tuned(cfg["gbdt"]["params"])), ("D", tuned(cfg["gbdt"]["params_def"]))):
+        for side, params in (("O", tuned(side_params["O"])), ("D", tuned(side_params["D"]))):
             column = "offense" if side == "O" else "defense"
             # `same_team` belongs to a (row, label) pair, not to the panel: it is built by `chunk_rows` and
             # appended to the model's inputs the way the chunk features are
@@ -816,7 +858,9 @@ def main():
                           f"on chunk rows {train.weight[~whole].sum():,.0f} (chunk weight: {chunk_weight}); "
                           f"median label possessions, career rows {np.median(train.label_possessions[whole]):,.0f}, "
                           f"chunk rows {np.median(train.label_possessions[~whole]):,.0f}", flush=True)
-                    if sy.SAME_TEAM in train.columns:
+                    # career labels make every row's label key the career one, so `whole` is every row and
+                    # there is nothing to describe (`--dump_rows` with career labels crashed here)
+                    if sy.SAME_TEAM in train.columns and (~whole).any():
                         st = train[sy.SAME_TEAM].to_numpy()[~whole]
                         print(f"  prior {side}: same_team on the {st.size:,} chunk rows: exactly 0 {np.mean(st == 0):.1%}, "
                               f"exactly 1 {np.mean(st == 1):.1%}, quartiles "
@@ -862,7 +906,12 @@ def main():
                 path = ROOT / "outputs" / f"prior_rows_{dump_rows}_{season}_{side}.parquet"
                 train.reset_index().to_parquet(path, index=False)
                 print(f"  prior {side}: wrote {path.name} ({len(train):,} rows, {train.shape[1]} columns)", flush=True)
-            model = OutOfPlayerSPM(params, player_folds, intercept=team_intercept).fit(train, model_feats)
+            if stack:
+                model = StackedSPM(params, player_folds, quality=stack_quality).fit(train, model_feats)
+                print(f"  prior {side} {season}: {model.describe()}", flush=True)
+            else:
+                model = OutOfPlayerSPM(params, player_folds, intercept=team_intercept,
+                                       by_player=by_player[side]).fit(train, model_feats)
             if team_intercept and (season == boards[0] or season == boards[-1]):
                 log = model.log_
                 print(f"  prior {side}: team-season intercept over {len(np.unique(train[sy.TEAM_SEASON]))} "
@@ -900,6 +949,14 @@ def main():
                                                    "prior_changed_teams": as_zero, "prior_real_teams": as_real}))
             prior[side] = dict(zip(held.player_id.to_numpy(), model.predict(held, model_feats)))
             models[side], held_frames[side], model_feats_of[side] = model, held, model_feats
+            if save_models:
+                assert isinstance(model, OutOfPlayerSPM), "--save_models saves the single booster, not the stack"
+                saved_models.setdefault(season, {})[side] = dict(
+                    full=model.full_, folds=model.fold_models_, excluded=model.excluded_, params=model.params,
+                    n_folds=model.n_folds, intercept=model.intercept, by_player=model.by_player,
+                    feats=list(feats), model_feats=list(model_feats), unseen=list(unseen),
+                    # the prior this run handed the ridge, for the reader to check its rebuild against
+                    prior=dict(prior[side]))
             if side in stayed_frames:
                 frame = stayed_frames[side]
                 prior_stayed[side] = dict(zip(frame.player_id.to_numpy(), model.predict(frame, model_feats)))
@@ -992,6 +1049,12 @@ def main():
         pd.concat(rows, ignore_index=True).to_parquet(out, index=False)
         if rows_of["stayed"]:
             pd.concat(rows_of["stayed"], ignore_index=True).to_parquet(out_stayed, index=False)
+        if save_models:
+            saved_models["meta"] = dict(argv=list(sys.argv), exclude_neighbours=exclude_neighbours,
+                                        features=feature_set, rows=row_shape, chunk_label=chunk_label,
+                                        unshrink=list(unshrink_sides), player_folds=player_folds,
+                                        booster_params=booster_name, crossfit=crossfit, out=out.name)
+            pd.to_pickle(saved_models, ROOT / "outputs" / f"prior_models_{save_models}.pkl")
 
     if dump_shap and shap_rows:
         out_shap = ROOT / "outputs" / f"prior_shap_{dump_shap}.parquet"

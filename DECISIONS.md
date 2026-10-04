@@ -3428,6 +3428,388 @@ ruling 2 allows.  Logs: `outputs/swapadj_within.log`, `outputs/swapadj_whole.log
 `outputs/consensus_swapheld.log`, `outputs/yoy_by_player_swapheld.log`, `outputs/tradeloss_swapheld.log`,
 `outputs/tradeloss_quality_swapheld.log`.
 
+### All four on- and off-court ratings in both priors (2026-10-01)
+
+**The question** (the owner): "anything we can do to tame the Ajay Mitchells of the world? High on court rtg in his
+prior, not a ton else."  Ajay Mitchell, 2026: OKC +16.8 per 100 with him on the court and +11.7 with him off it
+(on/off +5.1); the largest gap between on-court net and box score of any regular with 2,000+ possessions, ahead of
+Caruso, Hugo González, Dort, Champagnie, Cason Wallace and McBride.  The 2026-09-13 Boruta list predates the
+off-court columns (65_offcourt_panel.py, 2026-09-14), so they were never its candidates; the 2026-09-14 run that
+added them beside on-court (with their possessions and the net) tied and was dropped.  **The owner: "let's put
+them all in."**  `--features=boruta_onoff`: `offc_o` and `offc_d` added to both priors beside `onc_o` / `onc_d`,
+nothing else, on the current pipeline; then the swap adjustment; scored against the incumbent.
+
+| test | result |
+|---|---|
+| year-over-year, team-game level | +0.026, z +0.4, 24 of 56: a tie (8.667 against 8.666) |
+| year-over-year, stint level | +0.196, z +2.4: worse |
+| each side rescaled (order only) | +0.168, z +2.6: worse |
+| by quality tier | a tie in every tier (z -0.2 to +0.7) |
+| swap test, order: net / offense / defense | +0.039, z +2.0 / -0.017, z -1.4 / -0.032, z -1.9 |
+| consensus | 0.840 / 0.800 / 0.814 (incumbent 0.848 / 0.813 / 0.836); top five 5 of 5 |
+| trade loss | offense +0.0012, z +1.9; defense a tie |
+
+**2026:** Ajay Mitchell 9th to 7th (-0.19).  Role players on great teams go UP: Caruso 52nd to 30th (+0.95), Hugo
+González 30th to 17th (+0.81); LeBron 49th to 108th (-1.17), McBride 54th to 101st (-0.81).  The same mechanism as
+2026-09-14: a raw off-court rating is the teammates' quality, and the booster reads "the team stays good without
+him" as a plus.  **Not adopted**: a tie on the test that decides, the order and the consensus worse, and the case it
+was for moves the wrong way.  (On/off alone, tried next, below.)  Logs: `outputs/onoff_chain.log`,
+`outputs/yoy_onoff.log`, `outputs/swaptest_onoff.log`, `outputs/consensus_onoff.log`, `outputs/tradeloss_onoff.log`,
+`outputs/yoy_by_player_onoff.log`; page `outputs/compare_incumbent_all_four_2026.html`.
+
+**A wrong explanation, corrected by the owner and then by the data.**  I said the prior reads "team good without
+him" as a plus because its label (the player's RAPM over his other seasons) over-credits role players on good
+teams.  The owner: "That makes no sense."  The 2026 training rows say so too: with the on-court net held fixed, the
+off-court net pushes the label DOWN, -0.20 per standard deviation on offence and -0.23 on defence (-0.06 and -0.10
+with the box and role inputs beside it) -- on/off logic.  The jumps in the all-four build came from the prior itself
+(2026: Caruso's prior +1.18, Hugo González's +0.80, Ajay Mitchell's -0.34), not from the games or the swap step;
+the unverified guess is extrapolation by the booster's sloped leaves (`linear_leaves_selected_` is True on both
+sides) at the edge of the off-court range.
+
+### On/off alone in both priors (2026-10-01)
+
+The owner: "try it."  `--features=boruta_net`: `net_o` / `net_d` (on-court minus off-court) in place of `onc_o` /
+`onc_d` in both priors, possession counts kept; then the swap adjustment; scored against the incumbent.
+
+| test | result |
+|---|---|
+| year-over-year, team-game level | **+1.074, z +6.9, 12 of 56: worse** (8.704 against 8.666) |
+| year-over-year, stint level | +0.739, z +4.4: worse |
+| each side rescaled (order only) | -0.092, z -0.7: a tie -- the loss is spread (`scale_off` 0.761 against 0.814) |
+| swap test, net order / gaps | -0.017, z -0.8 / +1.78, z +6.7 |
+| consensus | 0.856 / 0.798 / 0.827 (incumbent 0.848 / 0.813 / 0.836); how much of a rating the team alone predicts falls to 0.085 / 0.109 (from 0.128 / 0.161; the consensus itself 0.081 / 0.160) |
+| trade loss | offence +0.0042, z +5.6: worse |
+
+**2026:** Ajay Mitchell 9th to 6th (+1.10) -- his on/off is itself +5.1 per 100; Butler 14th to 7th (+1.90), SGA 5th
+to 4th; McBride 54th to 141st (-1.71), LeBron 49th to 75th; median move 0.66.  **Not adopted.**  Neither on/off-court
+version tames him: every reading -- raw on-court, on/off, the swaps -- says Oklahoma City played better with him than
+its own level.  Logs `outputs/net_chain.log`, `outputs/yoy_net.log`, `outputs/swaptest_net.log`,
+`outputs/consensus_net.log`, `outputs/tradeloss_net.log`; page `outputs/compare_incumbent_on_off_2026.html`.
+
+### Experiment 31: the prior as a stack, and why it lost (2026-10-02, measured 2026-10-03)
+
+**The owner** (2026-10-02): "let's focus on improving the prior, this time the model algorithm", and first a
+stacking regressor -- the plus-minus columns into an elastic net, everything else through Boruta into chimeraboost.
+`stackprior.StackedSPM`: `ElasticNetCV` on on- and off-court plus-minus and their possessions (`PLUS_MINUS`, eight
+columns), chimeraboost `quality=3` on the other 50 `PRIOR_FEATURES` plus the chunk features (`scripts/92_stack_boruta.py`
+kept all 50), and a non-negative linear blend fitted on the out-of-player-fold predictions.  `62 --features=stack
+--stack=1 --stack_quality=3`.  Against the incumbent it changed four things at once: the stack, the booster's list
+(17-21 columns to 50), the offence bag of five (dropped whenever `quality` is set) and the off-court columns.
+
+| test | result |
+|---|---|
+| year-over-year, team-game level | 8.677 against 8.666, z +1.8, 23 of 56: worse |
+| year-over-year, stint level / each side rescaled (order only) | z +8.4 / z +12.7: worse |
+| by quality tier | only the top 30 better (z -2.7) |
+| swap test, order | offence z -6.8, defence z -4.8: worse |
+| consensus | 0.876 total / 0.859 defence (incumbent 0.836 / 0.813) |
+| trade loss | offence z +5.0, defence z +7.8: worse in every tier but the top 30 |
+
+**2026:** Zach Edey (590 possessions) 8th, Keshad Johnson (621) 12th, Caruso 5th; Queta, Clingan and Harden out of
+the top 20.  Fitted on 2026: elastic net offence `onc_o` +0.247, `offc_o` -0.072 per point; defence (points
+allowed) `onc_d` +0.692, `offc_d` -0.213; blend offence -0.064 + 0.571 linear + 0.655 booster, defence +0.019 +
+0.834 + 0.378; out-of-fold error offence linear 0.637 / booster 0.636 / stack 0.545, defence 1.035 / 1.407 / 0.953.
+**Not adopted.**  Log `outputs/stack_q3_chain.log`.
+
+**Why it lost (2026-10-03, `scripts/93_prior_oof.py`).**  Those out-of-fold errors were measured on career labels,
+where a row's plus-minus and its label come from the same games, and never against the shipped booster.  So
+2026's training rows were dumped with outside labels (`62 --chunk_label=outside --features=stack
+--exclude_neighbours=1 --boards=2026 --dump_rows=oofcheck`, 33,617 rows) and the four priors refitted on the same
+five player folds, every row predicted by the fit that never saw its player, on two training sets cut from that one
+dump: **as built** (every row on its career label, as the build trains; it reproduces the logged numbers to 0.006)
+and **clean** (the chunk rows alone on their outside labels -- the career row keeps the career label even under
+`--chunk_label=outside`, so it goes).  The score that matters is on the one-season rows, the shape of the rated
+season's own row, against their OUTSIDE label, which shares no game with the row's inputs.  Weighted rmse per 100,
+offence / defence:
+
+| prior | trained as built | trained clean |
+|---|---|---|
+| elastic net on plus-minus | 0.938 / 1.872 | 0.779 / 1.589 |
+| booster, 50 columns, no plus-minus | 0.668 / 1.556 | 0.679 / 1.563 |
+| the stack | **0.754 / 1.696** | 0.662 / **1.443** |
+| the shipped booster | 0.667 / 1.509 | 0.661 / 1.512 |
+| everyone at the average | 0.923 / 1.793 | 0.923 / 1.793 |
+
+z against the shipped booster as built, player by player: the stack as built +11.7 / +12.3; the stack trained clean
+-0.4 / **-5.1**; the 50-column booster as built +0.1 / +2.6.
+
+- **The logged 0.545 never beat the shipped prior.**  On the same rows and career labels the shipped booster scored
+  0.506 on offence (the stack 0.551, z +3.5) and tied on defence (0.943 against 0.958, z +1.0).
+- **Trained as built, the elastic net's one-season predictions are about twice too wide**: the slope of the outside
+  label on its prediction is 0.49 / 0.46 (1 is right; the shipped booster 0.85 / 0.74, the stack 0.67 / 0.55), and
+  the blend gives it 0.57 / 0.83 of the weight.  At that width it does worse than predicting everyone at the average
+  (0.938 against 0.923, 1.872 against 1.793).  It sees only the eight plus-minus columns, so one slope serves a career
+  row and a one-season row alike; the booster sees the chunk features.  Trained clean, its slope is 0.86 / 0.80.
+- **Rescaled, which is the reading that counts** -- the build fits the prior's scale on the season's games, so the
+  order is what the prior must get right.  Each prior mapped onto the outside label by its own best line (weighted
+  least squares, intercept and slope), one-season rows: the shipped booster 0.657 / 1.464; the stack as built 0.688 /
+  1.495, **z +3.2 / +3.2, still worse**; its elastic net 0.787 / 1.578 (z +5.5 / +10.0: signal, correlation 0.52 /
+  0.47, but less than the booster's 0.70 / 0.58); the stack trained clean 0.660 / **1.438** (z +0.4 / **-2.3**).
+  So most of the raw gap was width, and what is left is order -- the build's order-only reading lost at z +12.7.
+  (I first told the owner the elastic net "did worse than predicting the average"; that holds only at its own width.)
+- **Trained on outside labels the same elastic net helps**, and the stack ties the shipped booster on offence and
+  beats it on defence: by 0.066 raw (z -5.1), by 0.026 rescaled (z -2.3).
+- **The 50-column booster without plus-minus ties the shipped booster on offence** and is slightly worse on defence.
+- **A screen, not the test.**  By this score training on outside labels costs the shipped booster nothing (0.667 /
+  0.661, 1.509 / 1.512), yet experiment 25 -- outside labels with the career row kept -- lost the year-over-year
+  test at z +5.0.  The shipped booster's own slopes (0.85 / 0.74) are not a width reading either: an outside label
+  rests on fewer possessions than the career label it was trained on and is shrunk harder, which lowers a slope by
+  itself.
+
+Outputs: `outputs/oofcheck_chain.log`, `outputs/csv/prior_oof_oofcheck_2026.csv`, every out-of-fold prediction in
+`outputs/prior_oof_oofcheck_2026_preds.parquet`.
+
+### Experiment 32: the shipped booster's settings tuned on the screen (2026-10-03)
+
+**The owner** ("a", 2026-10-03): item 2 of their list, chimeraboost hyperparameter tuning, then item 4, bagging --
+every setting screened first, and only what beats the shipped booster built.  `scripts/94_tune_booster.py`: the
+booster on the SHIPPED lists, trained as the build trains it (career labels), five player folds, scored on 2026's
+one-season rows against their outside labels (experiment 31's dump), the score the error after each prediction is
+rescaled by its own best line (the build fits the prior's scale, so the order is what counts).  Optuna TPE, 60
+trials a side, the shipped settings enqueued first.  Searched: depth 3-8, learning rate 0.02-0.2, `l2_leaf_reg` and
+`min_child_weight` 0.3-100 (chimeraboost normalises the weights to mean 1, so these are in rows), subsample 0.5-1,
+colsample 0.3-1, bins 32/64/128, linear leaves and their penalty 0.1-100, cross features, and the early-stopping
+split: random ROWS (the shipped fit passes no `groups`, so a player's career row and chunks -- one label -- sit on
+both sides of the 20% chimeraboost holds out to pick its tree count) or whole PLAYERS (`groups=player_id`).
+
+Then each candidate on two player splits -- the search's, and a second one balanced the same way but dealt
+differently -- against the shipped booster as shipped (offence a bag of five, defence single, rows split).
+Rescaled error per 100, z per player against the shipped booster:
+
+| candidate | offence, search / second split | defence, search / second split |
+|---|---|---|
+| shipped | 0.6568 / 0.6537 | 1.4641 / 1.4510 |
+| shipped, players split (one change) | 0.6577 / 0.6568, z +0.2 / +0.7 | 1.4335 / 1.4289, **z -4.5 / -4.0** |
+| tuned, single | 0.6424 / 0.6432, **z -2.8 / -2.9** | 1.4213 / 1.4172, **z -7.3 / -6.0** |
+| tuned, bag of 5 | 0.6434 / 0.6387, z -3.1 / -3.8 | 1.4214 / 1.4172, z -6.8 / -6.3 |
+| tuned, bag of 8 | 0.6425 / 0.6383, z -3.2 / -3.9 | 1.4207 / 1.4159, z -6.9 / -6.4 |
+
+Correlation with the outside label: offence 0.702 shipped to 0.718 tuned, defence 0.577 to 0.609.  The tuned
+settings: offence (trial 44) depth 7, learning rate 0.021, `l2_leaf_reg` 6.4, `min_child_weight` 99, subsample 0.59,
+colsample 0.82, 128 bins, linear leaves (penalty 1.7), cross features, rows split; defence (trial 47) depth 6,
+learning rate 0.038, `l2_leaf_reg` 1.75, `min_child_weight` 3.5, subsample 0.83, colsample 0.35, 128 bins, linear
+leaves (penalty 6.1), no cross features, PLAYERS split.  What moved the score (fANOVA): offence the learning rate
+0.31, the bins 0.28, the split 0.20; defence the split 0.70, the learning rate 0.15.  The ten best offensive trials
+sit within 0.003 of each other with `min_child_weight` anywhere from 53 to 100, so the edge of the range is a plateau,
+not a cut-off optimum.
+
+- **Defence's early-stopping split is a real fix**: the shipped settings with only the split changed already gain
+  z -4.5 / -4.0.  On offence the same change does nothing (z +0.2 / +0.7).
+- **Bagging (item 4) adds little on top**: offence 0.001-0.005, defence under 0.002.  The build keeps the shipped
+  bag structure, offence five and defence single (`outputs/booster_params_tune1b.json`).
+- **Caveat**: the ten settings were chosen on 2026's training rows, which hold every season but 2025-2027 -- the
+  seasons the year-over-year test scores on included.  Population-level settings chosen on the same data have
+  precedent (the penalty 13,037 was chosen on the test itself), and the test still decides.
+
+**The owner's ruling (2026-10-03), and the build stopped for it:** "we are not going to use different holdout
+methods for statistical reasons that are 100% identical."  tune1's offence came out on the row split and its
+defence on the player split; the reason for holding out whole players is the same on both sides, so both hold out
+whole players, whatever a screen says.  The tune1 build (`tuned_chain.sh`, offence rows / defence players) was
+stopped in its last ten seasons and is not a candidate.  **tune2** re-tunes both sides with the split fixed to
+players (`94 --split=players`, the patience `early_stopping_rounds` 50-400 added to the search and the learning
+rate down to 0.01, since a whole-player holdout is noisier and may stop the fit early), gates on the screen
+(`scratch/2026-10-03_tune/gate_tune2.py`: both splits, z -2 or below, offence bag of five / defence single), and
+builds on a pass: chain `scratch/2026-10-03_tune/tuned2_chain.sh`, log `outputs/tuned2_chain.log`, NAME=tuned2.
+
+**tune2 result (2026-10-03 11:42 AM): the gate failed on offence, nothing was built.**  Rescaled error, search /
+second split, z against the shipped booster as shipped:
+
+| candidate | offence | defence |
+|---|---|---|
+| shipped | 0.6568 / 0.6537 | 1.4641 / 1.4510 |
+| shipped settings, players split | 0.6577 / 0.6568, z +0.2 / +0.7 | 1.4335 / 1.4289, z -4.5 / -4.0 |
+| tuned, single | 0.6461 / 0.6490, z -2.1 / -1.1 | 1.4229 / 1.4174, **z -7.1 / -6.5** |
+| tuned, bag of 5 | 0.6520 / 0.6493, **z -1.0 / -1.0** | 1.4199 / 1.4178, z -7.0 / -6.2 |
+| tuned, bag of 8 | 0.6514 / 0.6504, z -1.2 / -0.8 | 1.4198 / 1.4165, z -7.0 / -6.3 |
+
+With whole players held out, the best offence (trial 51: depth 8, learning rate 0.034, patience 100, `l2_leaf_reg`
+3.2, `min_child_weight` 73, subsample 0.57, colsample 0.85, 128 bins, linear leaves with penalty 37, cross features)
+gains only about a third of tune1's row-split offence (0.6493 against tune1's 0.6387 on the second split, both bags
+of five); defence is as good as tune1 (trial 31: depth 7, learning rate 0.010, patience 100, `l2_leaf_reg` 9.9,
+`min_child_weight` 1.7, subsample 0.88, colsample 0.36, 64 bins, linear leaves with penalty 5.9, no cross features).
+Every one of the ten best trials on both sides took patience 100.  Awaiting the owner.
+
+### Where the ratings miss most, against expectation (2026-10-03)
+
+**The owner:** "find the players for whom we struggle with the most ... not bias like the bias chart, this is like
+variance ... Something like Ajay Mitchell (+/- God) ... or height might over or under shoot lots on avg", with the
+miss adjusted for magnitude.  `scripts/95_miss_by_group.py`, on the incumbent: a player's miss is the trade set's
+correction (alpha, `outputs/tradeset_swapadj_within_alpha.parquet`, the trade loss's own rows: one-team players
+whose team played neighbouring games without them, 12,103 player-seasons a side); each squared miss is divided by
+its expectation from the rating level, his on-floor possessions over the three seasons, his team's neighbouring
+games without him and the season (cross-fitted gradient-boosted Poisson model); groups are fifths of every
+GLOSSARY.md statistic within each season; z with each player's seasons as one cluster.
+
+- **Magnitude, the owner's guess, holds on offence**: the typical correction grows from 0.30 per 100 for the
+  worst-rated sixth to 0.44 for the best (defence flatter, 0.26 to 0.33).  It grows faster with the evidence
+  behind the correction (0.21 to 0.52), because the correction is a ridge estimate and shrinks where it sees little.
+- **Height and the plus-minus extremes do not stand out**: both ends of height, on-court points scored and allowed,
+  and on/off on both sides all read within -4% to +7% of expectation, no |z| above 2.1.
+- **What does stand out, modestly**: offence, players whose team scores poorly with them OFF the court (+18%, z
+  4.9, leaning rated too high; 5 of the 18 points are the lean) and the top draft picks (+11%, z 3.0); defence,
+  players whose team rarely played without them in the rated season (+15%, z 4.0, no lean) -- the classic case of
+  a player the season's games cannot separate from his teammates -- and players with little garbage time (+13%,
+  z 3.2).  +18% in squared miss is about 9% in the typical size of a miss.
+- **A first pass misled** (see `adjusted_misses`): with one combined evidence number, starters and heavy-minute
+  players read 15-40% above expectation; with the two possession counts separate they vanish.
+- **Ajay Mitchell** is among the largest DEFENSIVE misses since 2022, in the other direction from the owner's
+  worry: the neighbouring games say his defence is under-rated, +0.94 (2025) and +0.73 (2026) per 100, 3.3 times
+  the expected miss.  The largest offensive misses since 2022: Ty Jerome 2025 (+1.40 better than rated), Anfernee
+  Simons 2023 (+1.90), Deni Avdija 2024 (+1.57), Paul George 2024 (-1.62 worse).
+
+**Then every cut** (the owner: "did you test a whole bunch of cuts and stats?? We should do the latter"): 371 a
+side -- fifths of all 64 statistics, eight player types (a Bayesian mixture on the 13 box rates standardised within
+season, fitted on 500+ possession seasons), context (age, years in the league, era, team quality, team changes
+before and after), how the rating was built (prior, how far the games moved him, the swap move, the other side's
+rating) -- plus a three-level tree fitted on half the players and measured on the other half.
+
+- **Few cuts pass, and none is large**: 4 of 371 on offence and 9 of 371 on defence pass |z| 3, against 1.0
+  expected by chance on each side.
+- **Nothing in player types** (16 cuts, largest |z| 2.5), **age, experience, era or team changes** (largest |z|
+  1.6), or **how the rating was built** (50 cuts, largest |z| 2.5).
+- **What passes is team context**: bad teams (bottom fifth of team quality, +12% offence, +14% defence); on
+  offence, players whose team scores poorly WITHOUT them (+18%, z 4.9, rated too high) -- and the tree's held-out
+  subset, team off-court offence of -5.8 per 100 or worse, reads +36% (z 4.1, 521 player-seasons, rated too
+  high); on defence, players whose team rarely played without them (+15%), and the tree's held-out subset -- few
+  possessions without him, little garbage time, his team scoring poorly with him on -- reads +33% (z 3.8, 538
+  player-seasons, rated too LOW on defence).
+- **The misses are close to unpredictable**: a gradient-boosted model on every variable above predicts 0.0% of
+  the adjusted miss on offence and 0.8% on defence for players it never saw.
+- Page with every cut: `outputs/miss_by_group_incumbent.html`; tree leaves `outputs/csv/miss_subsets_incumbent.csv`.
+
+**The universe of overrated players, by magnitude** (the owner: "there will be outliers ... more prominently seen in
+players with a higher magnitude ... see the whole universe of players that we are overrating").  Measured against the
+FINAL rating (prior + his own games + swap step, which add up exactly).  By quality tier (rank by total rating that
+season), share of player-seasons the neighbouring games say are overrated by 0.5+ per 100 against underrated by 0.5+:
+offence top 30 **17% against 8%** (average correction -0.13), 31-90 11% / 8%, 91-150 7% / 11%, 151-300 7% / 11%,
+301+ 5% / 6%; defence top 30 **10% against 5%** (-0.09), falling to 3% / 4% at 301+.  So the best-ranked are
+overrated twice as often as underrated, on top of the season-wide rescale (offence x0.755 median).  Among the
+top-30 overrated the rating is almost all prior: offence 2.62 = prior 2.58 + own games 0.10 + swap -0.06 (games say
+-0.74); defence 1.05 = 1.07 + 0.04 - 0.06 (-0.69).  1,542 player-seasons overrated by 0.5+; 368 player-sides
+overrated in two or more seasons (Lowry and Duncan 10 of 18 on offence, Durant 9 of 16 on defence) -- neighbouring
+seasons share games, so one stretch can count twice.  All of it is in the owner's Google Sheet "Where OpenRAPM
+misses most (Oct 3, 2026)" (`scratch/2026-10-03_tune/overrated_payload.py`).
+
+**It is mostly regression to the mean** (the owner: "I think this might just be regression to the mean ... Lets test
+it"; `scripts/96_rtm_test.py`).  Rank the top 30 by a season that shares no games with the three-season window (H-2
+or H+2) instead of by the tested season H, on the same rows: offence mean miss -0.157 -> -0.056 (z -2.0; over/under
+20%/7% -> 15%/10%) and -0.128 -> -0.041 (z -1.4; 18%/7% -> 14%/11%); defence -0.092 -> -0.001 (z 0.0) and -0.093 ->
+-0.027 (z -1.3).  So most of the top-30 overrating comes from picking the top by the season being tested -- a season
+ranked near the top is partly a peak year or a lucky rating.  What remains on offence (about 0.05 per 100) is under
+the owner's 0.1 bar.  Not separable with this window: a real peak in H from a lucky H rating; that needs a
+within-season test (rate on part of the season, score on the rest), which needs half-season box-score inputs.
+
+**The team-context patterns are not luck** (the owner: "Team context next").  Each group split at the median of the
+possessions behind the number that defines it; luck would live in the noisy half.
+- Offence, team scores badly WITH HIM OFF (bottom fifth): few off-court possessions -0.008 (z -0.6; over/under 8%/9%);
+  many off-court possessions **-0.075 (z -5.7; 14%/7%)**.  Everyone else +0.026.
+- Defence, heavy minutes and little garbage time with his team scoring badly WITH HIM ON (the held-out tree's subset):
+  noisy half +0.117 (z 7.6; 3%/13%), precise half **+0.160 (z 8.6; 5%/19%)** -- defence rated too LOW.
+Both are largest where the number is most precise, so both are structural.  Defence matches the mechanism named on
+2026-09-18 (the defensive prior reads team offence: `onc_o` is on `BORUTA_D`); offence fits the owner's
+bad-replacements hypothesis but is not yet separated from "bad team overall" (bottom-fifth team quality also leans
+too high, +12%).
+
+Outputs: `outputs/csv/miss_by_group_incumbent.csv`, `outputs/csv/miss_players_incumbent.csv`.
+
+### Experiment 33: a calibrator trained on each season's own held-out games (2026-10-03)
+
+The owner: "build some sort of calibrator, that takes lots of our inputs and tries to solve for the calibration misses
+that we are seeing", then "how to not shrink peak seasons ... bootstrapping the heck out of the single seasons to get
+lots of holdout data?", then "let's do the 10 most recent for now" and "keep really special good tabs on it".  The
+trade set measures misses on the neighbouring seasons, so a calibrator trained on it would learn that peaks come
+back down; this one is trained on the season's OWN games, held out.
+
+**The machinery** (`scripts/97_within_season.py`, `WITHIN_SEASON_LEDGER.md`).  Each season 2017-2026, three random
+deals of its games into four folds: the rating is built from three folds by the rankings' own code (steps 1-3: the
+saved prior models of `62 --save_models`, the ridge, the centring), with every input the prior reads rebuilt from
+those games -- box rates, on-court numbers, playing time, starts, tenure, the defensive target's three-point
+repricing -- and the fourth fold is held out.  One leak was found and closed on the way: `WindowData.subset` keeps the
+whole season's box-score and possession tables, so a subset fit still read every game's box score.  Accepted, as in
+FINDINGS 31: the free-throw adjustment's season percentages (stored in the stints), about 0.03 per 100.  Checks: the
+rebuilt 62 table equals `season_ratings_unshrinkdef.parquet` exactly; the whole season through the part-season code
+equals the rankings exactly (rating difference 0.0, inputs within 2e-11); 120 folds, 2,640 leak checks, 0 failed.
+
+**Before any calibrator**, the held-out games say the offence is too wide: what they want each side multiplied by
+averages 0.89 / 1.00 (part-season ratings, stint scoring).
+
+**The calibrator** (`scripts/98_calibrator.py`): per season, trained on the other seasons outside the season and its
+neighbours; two arms.  (a) One multiplier per side, weighted least squares on the held-out team-games: offence 0.735
+to 0.756, defence 0.954 to 0.999, every season.  (b) The multiplier plus boosted trees on 78 inputs per player and side,
+fitted to the held-out team-games through the possession shares (leaf values by exact team-game least squares),
+corrections centred per fold and season.  The first run of (b) let a common level drift to +1.4 to +2.1 on both
+sides -- adding one number to every player's offence AND defence moves no prediction; it was read off the players who
+appear only in the held-out games -- and put every regular in the 2026 top 20 up 3 to 4.7; centring fixed it.
+
+| within-season test (120 folds, the year-over-year scoring on each fold's held-out games) | error per team-game |
+|---|---|
+| the rating | 8.636 |
+| one multiplier per side | 8.587 (better in 10 of 10 seasons, z -15.4) |
+| the multiplier + trees | 8.527 (better than the multiplier in 10 of 10, z -9.5) |
+
+| year-over-year test (the incumbent's swap adjustment applied; 2017-2026 replaced) | error | vs incumbent | order (each side rescaled) |
+|---|---|---|---|
+| incumbent | 8.666 | -- | -- |
+| one multiplier per side | **8.648** | z -4.1, 40 of 56; on the 18 pairs whose rating changed, 17 of 18 (z -6.3) | unchanged (z +0.9) |
+| the multiplier + trees | 8.645 | z -3.5, 28 of 56 | **worse (z +3.3)** |
+
+Paired, trees against the multiplier: team-game a tie (z -1.2, 21 of 56), order worse (z +3.3, 12 of 56).  **The trees'
+per-player corrections fit their own season's held-out games and do not carry to the neighbouring seasons.**  What
+they lean on says why: team quality with him on and off the court, playoff share, garbage-time share -- the
+team-season's context, real inside the season, not the player's to take with him.
+
+The multiplier alone: better at team-game level in every quality tier (top 30 z -4.3, 31-90 -4.2, 91-150 -4.1,
+151-300 -4.0, 301+ -3.6), for players who stayed (z -4.2) and who moved (z -3.7); consensus 0.832 / 0.847 / 0.814
+total / off / def (incumbent 0.836 / 0.848 / 0.813), top five 5 of 5 (from 4); offensive spread 1.66 -> 1.24.  2026:
+the top four unchanged; Curry 12th -> 21st, Harden 19th -> 42nd, Doncic 8th -> 12th, Javonte Green 31st -> 18th, Paul
+Reed 29th -> 19th.  It meets the adoption rule on the numbers; the 2026 top 20 is the owner's call (experiment 21's
+offensive collapse, 1.60 -> 1.14, was rejected on the eye test).  Caveat: the multiplier was fitted on three-quarter-
+season ratings, which are noisier than whole-season ones, so 0.75 likely over-shrinks a whole season somewhat.
+
+**33b: which part comes back to the mean** (the owner: "Are you sure that offense just doesn't regress to the mean
+more", then "Sure try it").  Split each rating into the box-score prior part (the ridge's scale times the prior) and
+the games' own adjustment, and score each on the held-out games (1 = holds up; 10 seasons, standard error from
+season to season): offence prior part **0.70 (+-0.02)**, games' part 1.21 (+-0.08); defence 0.91 / 1.30.  By the
+player's possessions: offence 2,500+ **0.64**, 1,000-2,500 0.83, under 1,000 1.44 (defence 0.90 / 0.99 / 1.49).  So it
+is regression to the mean, but not the small-sample kind (that would hit the bench and the games' part hardest): it
+is the stretched box-score prior of heavy-minute players that the season's other games do not back up.  Two shapes,
+fitted per season outside the season and its neighbours (`scratch/2026-10-03_within/two_part_arms.py`): (a) the
+prior part alone, offence x0.70-0.73, defence x0.92-0.97; (b) both parts, offence prior x0.70-0.72 and games
+x1.11-1.25, defence x0.88-0.94 and x1.19-1.35.
+
+| | year-over-year | vs incumbent | order | within-season |
+|---|---|---|---|---|
+| one multiplier | 8.648 | z -4.1, 40 of 56 | tie | 8.587 |
+| (a) prior part only | **8.648** | z -4.1, 40 of 56 | tie (z +0.6) | **8.582** (vs one multiplier z -3.4, 9 of 10) |
+| (b) both parts | 8.648 | z -4.0, 40 of 56 | tie | 8.580 (vs (a) z -1.1) |
+
+Across seasons the three tie (every pairing within 0.01, |z| under 1): the gain is the offensive amplitude, whatever
+its shape.  Within the season, shrinking only the prior part is the better shape; boosting the games' part adds
+nothing further.  (a): consensus 0.840 / 0.857 / 0.816 total / off / def (incumbent 0.836 / 0.848 / 0.813), top five 5
+of 5.  2026 (swap adjustment applied): top four unchanged; Curry 12th -> 24th (4.35 -> 2.78), Harden 19th -> 50th
+(3.35 -> 1.90), Doncic 8th -> 12th, Dylan Harper 18th -> 25th; Javonte Green 31st -> 17th, Paul Reed 29th -> 18th, Hugo
+Gonzalez 30th -> 21st, Jarrett Allen 20th -> 15th.
+
+**Adopted 2026-10-03 (the owner: "Good, adopt for now"), for all thirty seasons** (`scripts/99_prior_shrink.py`).
+The within-season folds cover 2017-2026, so 1997-2016 borrow the multipliers fitted on all ten (offence 0.718, defence
+0.949; 2016 drops 2017).  The thirty-season table against the previous incumbent: year-over-year **8.600 against
+8.666, z -12.2, 53 of 56**, every era better (1998-2006 18 of 18, 2007-2016 19 of 20, 2017-2025 16 of 18 -- the older
+seasons gain most, their offensive prior was stretched hardest, 2.0-2.95x against 1.7-2.1x lately); stint level z -4.1;
+stint level with each side rescaled z +2.1 (the order inside a side slightly worse); swap test net order z +3.1 (40 of
+56), gaps z -6.2, the within-team slope 0.79 -> 0.99; trade loss offence z -3.1, defence z +5.5 (0.0007 on a 0.248
+scale, 3 of 30 seasons better); consensus 0.834 / 0.851 / 0.816 (from 0.836 / 0.848 / 0.813), top five 5 of 5.  The
+year-over-year stint-level scale on offence moves 0.81 -> 1.11 (the stint/team-game disagreement of 2026-09-05).  The
+new incumbent is `outputs/season_ratings_priorshrink.parquet`; the product (`--rule=product`, a season's multiplier
+fitted on every fold season but itself) is `outputs/season_ratings_product.parquet` (previous kept as
+`season_ratings_product_before_priorshrink.parquet`).  Product 2026: Wembanyama, Kawhi, Giannis, Jokic, Gilgeous-
+Alexander; Curry 13th -> 21st, Murray 14th -> 27th, Harden 15th -> 31st, Durant 20th -> 41st; Hugo Gonzalez 21st -> 15th,
+Caruso 23rd -> 16th, Paul Reed 25th -> 19th, Javonte Green 29th -> 20th.  Open: the defensive trade loss; multipliers
+for 1997-2016 from their own folds; a candidate that changes the prior needs its own folds.
+
+Outputs: `outputs/within/within/` (folds), `outputs/calibc_within.parquet`, `outputs/calibc_corrections.parquet`,
+`outputs/season_ratings_calib{c,res}_full.parquet` (swap-adjusted), `outputs/yoy_calibc.parquet`,
+`outputs/yoy_by_player_calibres.parquet`; chains and logs in `scratch/2026-10-03_within/`.
+
 ## What was tried and rejected
 
 **The LRBoost branch (a boosted correction on a frozen linear prior).** Five things had to be right before it

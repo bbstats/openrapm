@@ -51,6 +51,8 @@ MODEL_LAYER = [
     "looseason.py",     # one rating per player from every season but one; additive season grams
     "priorridge.py",    # the ratings ridge: prior as the centre, penalty by game-grouped CV
     "rloocv.py",        # rebalanced leave-one-out: the splitter and the partner rule, numpy only
+    "glossary.py",      # plain names for the feature codes, a table and nothing else
+    "stackprior.py",    # the stacked prior (experiment 31): fitted on the rows it is handed
     "simulate.py",      # the synthetic fixture the tests fit against
     "singleyear.py",    # the single-year prior's feature list and its per-player aggregation
     "swapadjust.py",    # the swap adjustment: type model and per-player swaps, team totals held fixed

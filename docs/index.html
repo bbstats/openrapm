@@ -62,7 +62,9 @@
   </table>
   <footer>
     A multi-stage prior-informed RAPM: a role-and-age prior, then a gradient-boosted box-score prior, then a ridge on the
-    on-court result, chosen by out-of-season prediction of held-out games. Last, credit within each team is re-split using
+    on-court result, chosen by out-of-season prediction of held-out games. The box-score part of each rating is then
+    scaled to how far it holds up on games of the same season that the rating never saw (about 0.72 on offense, 0.95 on
+    defense; the season's own on-court part is kept whole). Last, credit within each team is re-split using
     lineup swaps (the same four teammates with one player changed), keeping each team's total and the spread of the
     ratings unchanged. One rating per player per season, from that
     season's games. Nothing that is fitted has seen a season still being played. Source, method and every measurement:
