@@ -22,8 +22,12 @@ input rebuilt from those games; `WITHIN_SEASON_LEDGER.md` lists what is held out
   games' part holds up, 1.21).  Shrinking the prior part only (offence x0.71, defence x0.95): year-over-year 8.648
   (ties the one multiplier, z -4.1 vs incumbent), better within season (z -3.4, 9 of 10), consensus 0.840 (from
   0.836); 2026 Curry 24th, Harden 50th.  **ADOPTED for all thirty seasons (the owner: "Good, adopt for now"):
-  the new incumbent `outputs/season_ratings_priorshrink.parquet`, 8.600 (z -12.2, 53 of 56); product and site data
-  rebuilt locally (`docs/data/ratings.json`), NOT committed or pushed.**
+  the new incumbent `outputs/season_ratings_priorshrink.parquet`, 8.600 (z -12.2, 53 of 56); the product and the
+  site are LIVE (commit 7e5bdcc, pushed to cleanup and main 2026-10-03, the owner: "Yes go live").**
+- `tests/test_vs_consensus.py::test_star_guards_are_not_buried` fails on the product: LaMelo Ball 187th against
+  a ceiling of 160.  It ALREADY failed on the 2026-10-01 product (162); the shrink moves him further, as it
+  moves every offence-first guard (Trae Young 205th, Booker 85th, Curry 43rd, all inside their ceilings).
+  CI reads the frozen artifact and passes.  Re-basing the ceiling is the owner's call.
 - Not run yet on the candidate: trade loss (70 + 73), swap test (90).  Open: the multiplier for a WHOLE season
   (fitted on 3/4-season ratings; half-season folds would show how it moves with evidence).
 - Rerun: `62 --exclude_neighbours=1 --score=0 --boards=2017,...,2026 --out=season_ratings_within_base
