@@ -126,6 +126,14 @@ def regulation_remaining(period: int, clock: float) -> float:
     return (4 - period) * 720.0 + clock if period <= 4 else 0.0
 
 
+def _elapsed(period: int, clock: float) -> float:
+    """Game seconds played before this moment (regulation quarters of 720 s, overtimes of 300 s)."""
+    period = int(period)
+    if period <= 4:
+        return (period - 1) * 720.0 + (720.0 - float(clock))
+    return 2880.0 + (period - 5) * 300.0 + (300.0 - float(clock))
+
+
 # A description token that ends the player's name: a number, a parenthesis, or one of these whole words.
 STOP_TOKEN = re.compile(r"^(\d|\(|3PT|[A-Z](\.[A-Z])*\.FOUL$|T\.Foul$|OFF\.|FLAGRANT|"
                         r"(REBOUND|Free|Turnover|STEAL|BLOCK|Bad|Lost|Traveling|Offensive|Out|Step|Shot|Jump|Layup|Dunk|Hook|Tip|"
@@ -161,10 +169,19 @@ class GameParser:
     """Turn one game's V3 play-by-play into possessions with lineups."""
 
     def __init__(self, pbp: pd.DataFrame, box: pd.DataFrame, home_id: int, away_id: int, game_id: str,
-                 period_box_fetcher=None, gt_rule=None, ft_rates=None, curve=None):
+                 period_box_fetcher=None, gt_rule=None, ft_rates=None, curve=None, log_shots=False):
         self.game_id = game_id
         self.curve = curve               # shotcurve.ShotCurve for the season; None -> flat fallback rates
         self.shots = {}                  # pid -> per-game shooter totals (SHOT_TABLE), every attempt
+        # The shot logger (shotframe.py): one dict per field-goal attempt with its possession context.  It
+        # only appends to `shot_log`; nothing the stints are built from reads it, so the stints are the
+        # same with it on or off (tests/test_shotframe.py, scripts/114_shot_frame.py --check).
+        self.log_shots = bool(log_shots)
+        self.shot_log: list = []
+        self.aux_log: list = []          # turnovers and free-throw trips, with the same possession context
+        self._poss_no = 0
+        self._entered: dict = {}         # pid -> game seconds elapsed when he last came on (logger only)
+        self._last_on: set = set()
         self.home, self.away = int(home_id), int(away_id)
         self.teams = (self.home, self.away)
         self.fetch_period_box = period_box_fetcher
@@ -205,6 +222,19 @@ class GameParser:
         for c in ("scoreHome", "scoreAway"):
             ev[c] = pd.to_numeric(ev[c], errors="coerce").fillna(0).astype(int)
         self.ev = ev.reset_index(drop=True)
+        # Steals and blocks are their own rows with a blank actionType, sharing the actionNumber of the
+        # turnover or the missed shot they belong to.  The logger reads them; the possessions do not.
+        self._steal_at: set = set()
+        self._block_at: set = set()
+        if self.log_shots and "actionNumber" in self.ev.columns:
+            blank = self.ev[self.ev["actionType"] == ""]
+            for an, d in zip(pd.to_numeric(blank["actionNumber"], errors="coerce"), blank["description"]):
+                if pd.isna(an):
+                    continue
+                if "STEAL" in d:
+                    self._steal_at.add(int(an))
+                elif "BLOCK" in d:
+                    self._block_at.add(int(an))
         # leave-one-game-out free-throw percentage per shooter: season totals minus this game's, so a
         # player's own makes never price the possessions he is being scored on
         self._ft = None
@@ -376,6 +406,80 @@ class GameParser:
         a -= att_g.get(int(pid), 0)
         return (max(m, 0.0) + k * league) / (max(a, 0.0) + k)
 
+    # ---------------------------------------------------------------- the shot logger
+    def _log_event(self, lg: dict, r, offense) -> None:
+        """Note a clock event of the possession in progress, and the clock of the row before the next one.
+
+        Kinds: `oreb` / `oreb_team` (the offence's own rebound), `foul:<off|def>:<type>`,
+        `viol:<off|def>:<type>`, `timeout`, `jump`.  The side is relative to the offence at that moment;
+        `nil` when no possession is in progress.  Rows only; nothing here decides anything."""
+        lg["prev_clock"] = lg["last_clock"]
+        lg["last_clock"] = r.clock_s
+        at = r.actionType
+        if at in ("Timeout", "Foul", "Violation", "Jump Ball", "Rebound"):
+            team = self._row_team(r)
+            side = "nil" if offense is None or team not in self.teams else ("off" if team == offense else "def")
+            if at == "Timeout":
+                kind = "timeout"
+            elif at == "Jump Ball":
+                kind = "jump"
+            elif at == "Rebound":
+                if side != "off":
+                    return
+                kind = "oreb_team" if int(r.teamId) == 0 else "oreb"
+            else:
+                kind = f"{'foul' if at == 'Foul' else 'viol'}:{side}:{r.subType}"
+            lg["events"].append((kind.replace(";", ",").replace("@", " "), float(r.clock_s)))
+
+    def _log_shot(self, lg, r, team, pid, made, three, lp, first, ct, score, on, valid, period, start_clock, at):
+        """One row per field-goal attempt: what play-by-play saw, and the possession around it.
+
+        The `post_*` fields exist only BECAUSE of the result (an assist only on a make, a block only on a
+        miss, an and-one only on a make).  They are kept for checks and are never a model input."""
+        other = self._other(team)
+        an = getattr(r, "actionNumber", np.nan)
+        an = int(an) if pd.notna(an) else -1
+        off = sorted(on[team]) + [0] * 5
+        dfn = sorted(on[other]) + [0] * 5
+        x, y = getattr(r, "xLegacy", np.nan), getattr(r, "yLegacy", np.nan)
+        rec = dict(action_number=an, period=int(period), clock=float(r.clock_s), team=int(team), opp=int(other),
+                   shooter=int(pid), home=int(team == self.home), made=int(made), value=3 if three else 2,
+                   at_heave=int(at == "Heave"),
+                   x=float(x) if pd.notna(x) else np.nan, y=float(y) if pd.notna(y) else np.nan,
+                   dist=float(r.shot_dist), lp=float(lp),
+                   poss_no=int(self._poss_no), poss_start=str(lg["start"]), poss_start_clock=float(start_clock),
+                   att_no=int(ct["att"]), fga_no=int(ct["fga"]), first=int(first),
+                   margin=int(score[team] - score[other]), prev_event_clock=float(lg["prev_clock"]),
+                   events=";".join(f"{k}@{c:g}" for k, c in lg["events"]),
+                   lineups_ok=int(valid[self.home] and valid[self.away] and len(on[self.home]) == 5
+                                  and len(on[self.away]) == 5),
+                   shooter_on=int(pid in on[team]),
+                   post_assisted=int("AST" in str(r.description)) if made else 0,
+                   post_blocked=int(an in self._block_at) if not made else 0, post_and1=0)
+        # the shot that handed this possession over (a miss the defence rebounded, or a make), if it did
+        sp = lg["start_prev"]
+        rec.update(start_prev_value=sp[0] if sp else 0, start_prev_dist=sp[1] if sp else np.nan,
+                   start_prev_x=sp[2] if sp else np.nan, start_prev_y=sp[3] if sp else np.nan,
+                   start_prev_made=sp[4] if sp else -1, start_prev_blocked=sp[5] if sp else -1,
+                   start_prev_clock=sp[6] if sp else np.nan)
+        now = _elapsed(period, r.clock_s)
+        rec["shooter_secs_on"] = float(now - self._entered[pid]) if pid in self._entered else np.nan
+        for k in range(5):
+            rec[f"off{k + 1}"] = int(off[k])
+            rec[f"def{k + 1}"] = int(dfn[k])
+        self.shot_log.append(rec)
+        lg["last_shot"] = (rec["value"], rec["dist"], rec["x"], rec["y"], rec["made"],
+                           int(an in self._block_at), rec["clock"])
+
+    def _log_aux(self, lg, r, kind, sub, team, period, start_clock, ct):
+        """A turnover or a free-throw trip, with its possession's context: the shot-clock check needs every
+        shot-clock violation, and the trips are the attempts that are not field goals."""
+        self.aux_log.append(dict(kind=kind, sub=sub, period=int(period), clock=float(r.clock_s), team=int(team),
+                                 opp=int(self._other(team)), poss_no=int(self._poss_no), poss_start=str(lg["start"]),
+                                 poss_start_clock=float(start_clock), att_no=int(ct["att"]),
+                                 prev_event_clock=float(lg["prev_clock"]),
+                                 events=";".join(f"{k}@{c:g}" for k, c in lg["events"])))
+
     # ---------------------------------------------------------------- main loop
     def possessions(self) -> pd.DataFrame:
         recs = []
@@ -409,9 +513,25 @@ class GameParser:
                       att_since_cont=0,      # attempts since that continuation
                       retain_pending=0,      # a flagrant/clear-path/away-from-play gave the ball back
                       last_foul_shooting=False)
+            # the shot logger's possession context: how the possession started, and the clock events
+            # since then (offensive rebounds, fouls, violations, timeouts, jump balls) that a shot-clock
+            # rebuild needs.  Untouched, and never read, unless log_shots.
+            lg = dict(start="period_start", nxt=None, events=[], last_clock=start_clock, prev_clock=start_clock,
+                      last_shot=None, start_prev=None)
+            if self.log_shots:
+                t0 = _elapsed(period, start_clock)
+                for pid in on[self.home] | on[self.away]:
+                    if pid not in self._last_on or pid not in self._entered:
+                        self._entered[pid] = t0
 
             def close(reason, end_clock, next_offense):
                 nonlocal offense, active, pts, and1, start_clock, start_score
+                if self.log_shots:
+                    lg["start"] = lg["nxt"] or reason
+                    lg["nxt"] = None
+                    lg["events"] = []
+                    lg["start_prev"] = lg["last_shot"] if lg["start"] in ("dreb", "dreb_team", "made_fg") else None
+                    self._poss_no += 1
                 # A team offensive rebound with the period expiring before any further attempt did
                 # not continue anything, so it is neither a continuation nor a contested chance.
                 # About 5% of all continuations; dropping it is what takes the possession
@@ -494,6 +614,8 @@ class GameParser:
 
             for i, r in enumerate(rows):
                 at = r.actionType
+                if self.log_shots and at != "period":
+                    self._log_event(lg, r, offense)
                 if at in IGNORED:
                     continue
                 if at == "period":
@@ -529,6 +651,8 @@ class GameParser:
                         valid[t] = False
                     else:
                         on[t].add(pid_in)
+                        if self.log_shots:
+                            self._entered[pid_in] = _elapsed(period, r.clock_s)
                         if len(on[t]) != 5:
                             valid[t] = False
                         elif not valid[t] and starters[t] is not None:
@@ -569,6 +693,9 @@ class GameParser:
                     pid = int(r.personId)
                     first = ct["att"] == 1
                     lp = self.shot_p(three, r.shot_dist, str(r.description))
+                    if self.log_shots:
+                        self._log_shot(lg, r, team, pid, made, three, lp, first, ct, score, on, valid,
+                                       period, start_clock, at)
                     s = sh.setdefault(pid, dict.fromkeys(SHOOTER_COUNTERS, 0.0))
                     kind = "3" if three else "2"
                     s[f"fg{kind}a"] += 1
@@ -601,6 +728,8 @@ class GameParser:
                                 break
                         if deferred:
                             and1 = True
+                            if self.log_shots:
+                                self.shot_log[-1]["post_and1"] = 1
                         else:
                             close("made_fg", r.clock_s, self._other(team))
                     continue
@@ -609,6 +738,11 @@ class GameParser:
                         continue
                     ensure_offense(team, i)
                     ct["tov"] += 1
+                    if self.log_shots:      # after ensure_offense, whose own close() would consume it
+                        an = getattr(r, "actionNumber", None)
+                        live = an is not None and pd.notna(an) and int(an) in self._steal_at
+                        lg["nxt"] = "steal" if live else "dead_tov"
+                        self._log_aux(lg, r, "tov", str(r.subType), team, period, start_clock, ct)
                     close("turnover", r.clock_s, self._other(team))
                     continue
                 if at == "Rebound":
@@ -637,6 +771,8 @@ class GameParser:
                         if ct["att"] == 1:
                             ct["chance1"] += 1
                         sc["pending_chance"] = 0
+                    if self.log_shots:      # a team rebound is a dead ball: the ball went out of bounds
+                        lg["nxt"] = "dreb_team" if int(r.teamId) == 0 else "dreb"
                     close("dreb", r.clock_s, team)
                     active = True     # the rebounding team now has the ball
                     continue
@@ -685,14 +821,21 @@ class GameParser:
                         if and1 and not sc["and1_used"]:
                             sc["and1_used"] = True
                             ct["and1"] += 1
+                            trip_kind = "and1"
                         elif double:
                             sc["pending_chance"] = 0     # the whistle killed the rebound chance
                             ct["fga_fouled"] += 1
+                            trip_kind = "fouled_fga"
                         elif not retained:
                             ct["trip_shoot" if sc["last_foul_shooting"] else "trip_ns"] += 1
                             note_attempt("ft")
+                            trip_kind = "shooting" if sc["last_foul_shooting"] else "bonus"
+                        else:
+                            trip_kind = "retained"
                         if retained:
                             sc["retain_pending"] = 1
+                        if self.log_shots:
+                            self._log_aux(lg, r, "trip", f"{trip_kind}:{n}", team, period, start_clock, ct)
                     ct["fta"] += 1
                     ct["ftm"] += made
                     ct["xftm"] += self.ft_prob(r.personId)
@@ -722,6 +865,8 @@ class GameParser:
                     continue
                 # anything else: no possession effect
             prev_offense = None
+            if self.log_shots:
+                self._last_on = set(on[self.home]) | set(on[self.away])
         df = pd.DataFrame(recs)
         return df
 
@@ -804,12 +949,15 @@ class GameParser:
 
 
 # ----------------------------------------------------------------------------- season driver
-def build_game(game_id: str, home_id: int, away_id: int, cfg, gt_rule=None, ft_rates=None, curve=None):
+def build_game(game_id: str, home_id: int, away_id: int, cfg, gt_rule=None, ft_rates=None, curve=None,
+               log_shots=False):
+    """One game's stints, diagnostics, play-by-play names and shooter table.  With `log_shots` two more: the
+    shot log (one row per field-goal attempt) and the turnover / free-throw-trip log (shotframe.py)."""
     pbp = fetch_pbp(game_id, cfg)
     box = fetch_boxscore(game_id, cfg)
     fetcher = lambda gid, p: fetch_period_box(gid, p, cfg)  # noqa: E731
     gp = GameParser(pbp, box, home_id, away_id, game_id, period_box_fetcher=fetcher, gt_rule=gt_rule,
-                    ft_rates=ft_rates, curve=curve)
+                    ft_rates=ft_rates, curve=curve, log_shots=log_shots)
     poss = gp.possessions()
     st = gp.stints(poss)
     shots = pd.DataFrame([dict(player_id=pid, **v) for pid, v in gp.shots.items()],
@@ -824,6 +972,8 @@ def build_game(game_id: str, home_id: int, away_id: int, cfg, gt_rule=None, ft_r
              box_pts_home=gp.box_pts.get(gp.home, np.nan), box_pts_away=gp.box_pts.get(gp.away, np.nan),
              n_stints=len(st))
     names = pd.DataFrame({"player_id": list(gp.day_names), "pbp_name": list(gp.day_names.values())})
+    if log_shots:
+        return st, d, names, shots, pd.DataFrame(gp.shot_log), pd.DataFrame(gp.aux_log)
     return st, d, names, shots
 
 

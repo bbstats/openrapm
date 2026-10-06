@@ -52,6 +52,9 @@ MODEL_LAYER = [
     "priorridge.py",    # the ratings ridge: prior as the centre, penalty by game-grouped CV
     "rloocv.py",        # rebalanced leave-one-out: the splitter and the partner rule, numpy only
     "scorecard.py",     # experiment 35: error and slope on held-out team-games, the controls
+    "shotclock.py",     # the shot clock rebuilt from a possession's start and clock events
+    "shotmodel.py",     # the shot-quality models: a league-average shooter's make probability, offsets zeroed
+    "shottest.py",      # the direct shot test: log loss, calibration, arena checks, other-half shooting
     "boxspm.py",        # experiment 35, B1: the linear box-score-only SPM
     "vanilla.py",       # experiment 35, B2/B3: vanilla RAPM and RAPM on B1, one factorization per penalty
     "heldoutprior.py",  # experiment 37: the prior fit on held-out games, an exact quadratic in its weights
@@ -82,6 +85,9 @@ DATA_LAYER = {
     "__init__.py", "config.py", "seasons.py", "ingest.py", "stints.py", "roles.py", "bio.py",
     "shotcurve.py", "designcache.py", "turnover.py", "xshoot.py", "windows.py", "holdout.py",
     "context.py", "checks.py", "factors.py", "xpts.py", "teamloo.py",
+    "shotframe.py",     # one row per field-goal attempt: runs the stint parser's shot logger over cached games
+    "tracking.py",      # the public SportVU shot log, read and joined to the shot frame
+    "movement.py",      # the 2015-16 SportVU movement archives, unpacked and turned into one row per attempt
 }
 
 # The verbs that reach the disk or the network.  `.get` and `.exists` are deliberately absent:

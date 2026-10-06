@@ -4461,3 +4461,126 @@ every test (swap test z +4.3, year over year every tier, in-season t -4.4); per 
   rank 89th to 72nd against consensus 10th.  Boston's net offensive type is +0.75 per possession and has to come back
   from Boston's players under either rule (flat: 0.75 from each; minutes: about 8.3 x his share, 1.11 for White), while
   White's own type is small (+0.30 offense, -0.64 defense), so the charge survives any give-back rule.
+
+## The shot-quality build (2026-10-06, the owner's request; in progress)
+
+**The owner:** a VERY GOOD shot-quality model to replace the per-season distance curve, because noisy data in the
+targets and priors is the biggest gap: far more from the play-by-play (a rebuilt shot clock, the possession around the
+shot, the make or miss itself), and the public SportVU tracking data to teach it.  Rulings the same day: the quality is
+**the shot alone** (a league-average shooter on this exact shot; the shooter's skill stays a separate padded term; no
+defender ids or traits for now); "did it go in" means **update the estimate** (quality given the result: a made 18-footer
+was probably more open); **no scorer shot-type tag is ever an input, not even dunk or putback**; defender distance from
+STATS (2013-17) and from Second Spectrum (2017-18 on) are **different measurements** ("split eras"); KOBE is inspiration
+only ("build our own"); the direct shot test first, then the year-over-year chain decides; the defensive target first.
+Plan: `~/.claude/plans/read-handoff-md-what-i-dreamy-stonebraker.md` (ten gated stages, then experiment 42).
+
+**Data built so far.**  `data/shotframe/<season>_<phase>.parquet`, one row per field-goal attempt 1997-2026
+(`shotframe.py`, `scripts/114_shot_frame.py`): the stint parser's own shot logger (`stints.GameParser(log_shots=True)`)
+records each attempt's x/y, the ten players on the floor, how its possession began (after a make, a made free throw, a
+defensive rebound, a team rebound, a steal, a dead-ball turnover, a period start), the clock events since (offensive
+rebounds, fouls, violations, timeouts) and the shot that handed the ball over; beside it `_aux`, every turnover and
+free-throw trip.  The logger only appends: rebuilding every season with it on reproduces the cached stints exactly on all
+252 parser columns (`--check=1`), and per shooter-game makes and attempts equal the stints' shooter table in 100% of rows.
+Tracking: the 2014-15 shot log (OpenML 42806, 128,069 attempts of ~280 selected shooters to 2015-03-04), the 2015-16
+movement archives (636, MIT licence), the 2015-16 per-date dashboards; all under `data/tracking/`.
+
+**The direct shot test, registered before any model is scored** (`shottest.py`, `scripts/117_shot_test.py`,
+`scripts/118_forward_test.py`).  Every arm is scored on seasons or games it never saw, paired by season.
+
+| test | a new arm passes when |
+|---|---|
+| 1. held-out makes | lower log loss than the reference arm on twos and on threes in 24+ of 30 seasons at z <= -2; no era block worse at z >= +2; calibration slope 0.95-1.05 in every era block |
+| arena veto | the arena's signal sd of expected points per 100 attempts no more than the reference's + 0.5, and the arena residual's correlation with it >= -0.5 (a scorer artefact reads near -0.9) |
+| 2. tracking agreement | on 2015-16 movement labels or the 2013-14 to 2016-17 dashboards' per player-game defender bins, closer than its twin at z <= -2 |
+| 3. other-half shooting | shooters with 100+ attempts a half, team offence, team defence on threes: lower error at z <= -2 for shooters and for defensive threes, nothing worse at z >= +2; the padding constant chosen on the other seasons for every arm |
+| 4. forward test | first half of a team's games predicts its second half: lower at z <= -2 on one side, z < +2 on the other |
+
+The tracking-taught model replaces the play-by-play make model only if it wins test 3 and test 2 and is no worse than
+0.1% on test 1 in any era block, like for like (before against before; after against the make model plus the same
+update).  Ties go to the make model.
+
+**Reproduced first** (the stage-2 gate): the forward test of FINDINGS 35 to the third decimal -- raw 8.9066 / 8.2929,
+every rate shrunk 8.4662 / 7.6607, outcomes only 8.4485 / 7.7106, and outcomes only with raw beside it 8.3157 / 7.4332
+(z -2.76 / -2.65, 23 and 21 of 30).  The arena check already reads the shipped curve as partly the arena in 1997-99
+(arena signal 2.0-2.4 points per 100 attempts against the offences' 1.2-1.9, residual correlation -0.55 to -0.75): the
+arenas that recorded no coordinates for rim shots.
+
+**Stages 1-4, 2026-10-06.**
+- *Stage 1 (one row per attempt):* 6,328,669 attempts over 60 season-phases, no game failed, the stints identical on
+  every season, 744,964 of 744,964 shooter-games equal to the stints' table.  The coordinate fix was changed after its
+  gate failed: translating each arena-season to its densest near-rim point left the arena spread of the 0-3 ft share at
+  8-9 points in 2021-26 (bar 4).  The three-point arc sits at the same distance in every arena (sd 0.23 ft), so the
+  origin is not the problem; scorers place close shots 0.8-2.6 ft deep by arena.  `shotframe.rim_map` instead maps each
+  arena-season's near-rim depth onto the league's, fitted on the VISITING teams' twos inside 10 ft (29 offences, so the
+  league's mix): the arena spread falls to 1.9-2.7 points in 2021-26 and from 12-16 to 3-6 before 2011, while home
+  teams keep a 4-6 point spread (their own style).  Coordinates only, no tags.
+- *Stage 3 (join and shot clock):* the 2014-15 log joins 127,522 of 128,069 attempts by shot order (99.6%; the clock
+  of the play-by-play runs 2.0 s behind tracking at the median).  The rebuilt shot clock against the log's, lags fitted
+  on the other half of the games: median error 0.8 s, 62% within 1 s, 92% within 3 s, 77% in the same dashboard bin;
+  arena bias sd 0.15 s; 79.4% of the log's 24.0 resets (tips and putbacks) rebuilt as an offensive-rebound reset within
+  2 s (bar 80%).  Shot-clock violations, every season 1997-2026, after dropping the team rebound the feed logs at the
+  whistle on a shot that never reached the rim: median 1-2 s, 68-74% within 2 s of zero, the same in 1997 as in 2015 --
+  the rules carry across eras, but the bar as written (90% within 1 s) fails, because the feed's clock is in whole
+  seconds and each kind of event is logged with its own delay.  So, the plan's fallback: the clock enters the model in
+  four bands.  The 2018-19 rule is confirmed by the data: from 2019 the 14-second offensive-rebound reset rebuilds the
+  violations tighter than the old 24 in all eight seasons (80-84% against 68-73% within 2 s of the median).
+- *Stage 4 (the information-gap pilot, `scripts/119_info_gap.py`):* on the 127,152 tracked 2014-15 attempts, held out
+  by game, every arm shooter-neutral.  Log loss: play-by-play 0.6484, the tracking teacher 0.6413 (-0.0072 a shot,
+  game-paired z -20.8, better in 683 of 904 games), spot plus tracking alone 0.6421.  Learning curve (10 / 30 / 100% of
+  the training games): teacher 0.6497 / 0.6434 / 0.6413, play-by-play 0.6544 / 0.6499 / 0.6484.  How much tracking
+  quality varies among attempts the play-by-play cannot tell apart (the covariance of two teachers fitted on different
+  games): sd 0.07-0.09 at the rim, 0.03-0.04 on other twos, 0.02-0.05 on threes (largest late in the clock), so the
+  owner's update gives a shot's own result a weight of about 3% at the rim and 0.3-1% elsewhere.  Kill gate passed.
+
+**Stages 5-9, 2026-10-06 (the owner's "go" after the pilot).**  The ablation table is `outputs/shottest/ablation.csv`
+(`scripts/125_shot_ablation.py`) and the Google Sheet's "Shot quality" tab.  Every version prices a league-average
+shooter, is trained on other seasons (never the rated season or either neighbour, never 2026) and is scored on
+seasons or games it never saw; differences against the shipped distance curve unless named.
+- *Two fixes found by the tests.*  (1) The rim map first left out the (0, 0) twos; arenas that logged their rim
+  shots there had their located non-rim twos pulled toward the rim (+0.84 between an arena's (0, 0) share and its
+  overpricing, 2005).  Counting (0, 0) twos at depth 0 fixed it: the arena spread of the 0-3 ft share is 1.8-3.4
+  points in every season 1998-2026; 1997 stays at 8.4 (its coordinates are patchy game by game).  (2) The level set
+  from the other half moved from four coarse bands to one-foot cells (padded 150 shots, like the curve's own bins).
+- *Spot only* (distance and angle from x/y): ties the shipped curve on twos, slightly worse on threes (0.0003 a shot:
+  the curve fits each season's deep threes in season); arena signal from 2011 cut from 2.0-3.6 to 0.5-1.0 points per
+  100 attempts, the same as the curve before 2011.
+- *The play-by-play model* (spot, possession start, putbacks, shot clock in four bands, game situation, time on court,
+  the shot that handed the ball over; shooter-season and arena-season terms fitted and set to zero): held-out log loss
+  -0.0056 on twos (29 of 30 seasons) and -0.0020 on threes (30 of 30) against the curve; 2018 log loss 0.6484 against
+  Blackport's published 0.652 and the curve's 0.6532.  The possession start carries most of it, the shot clock a good
+  share, game situation some on threes; time on court and the previous shot nothing; a fine clock curve ties the
+  bands.  Gap to the tracking model's quality 40.8 / 47.5 squared points (2014-15 / 2015-16) against 55.0 / 63.5 for
+  spot only and 61.8 / 66.8 for the curve; contest left -0.056 against -0.072 and -0.075 (se 0.006).  Forward test:
+  with the model's team shot quality as the shrink target, -0.130 on defence (z -2.17) and -0.096 on offence (z -1.61)
+  against the shipped luck adjustment.
+- *Other-half shooting, against the flat league rate:* shooters' twos -1.37 (30 of 30), shooters' threes -0.47
+  (z -3.5), team defence twos -0.086 (z -1.75; without the shooter and arena terms -0.104, z -2.13); but team defence
+  threes +0.123 (z +2.0) and team offence twos and threes no better.  The shipped curve also loses to flat on defence
+  threes (+0.068, z +2.0), and shrinking the model's within-spot spread on threes does not help (+0.12 to +0.32).
+  Read: the threes a defence allows differ too little in quality (a corner three is about 3 points better than a wing
+  three) for an estimate of it to beat the flat rate, which is what the shipped defensive target already uses.  **The
+  registered pre-test for experiment 42 as planned (defensive threes) fails; defensive twos pass.**
+- *Shooters' twos* lose ground once the possession start enters (+0.18 for its five early-transition flags alone):
+  how much a fast break helps a shot varies by shooter, which one padded ratio per shooter cannot express.  Matters
+  for the offensive target, not the defensive one.
+- *The shooter and arena terms:* without them the model is slightly better in every other-half row (z -1.6 to -4.2)
+  and slightly further from the tracking quality (+1.2 to +1.3); with them it is closer to "the shot alone".
+- *The owner's update* (quality given the result; weight about 3% at the rim, 0.4-1% elsewhere, from both tracked
+  seasons; table on the sheet): team offence twos -0.038 better (z -4.8), shooters' twos +0.036 worse (z +7.2),
+  everything else within 0.006.
+- *Tracking taught against makes taught* (`scripts/122_tracking_taught.py`, each tracked season held out, same rows in
+  every version; the teacher's labels for this shooter, fixed after the first students were taught with the shooter
+  taken out): the share of the label from tracking changes nothing (0.5, 0.8 and 1.0 identical to 0.003 squared
+  points).  Counting the other tracked season 4x helps (-0.57 / -0.81 gap, z -20 / -23) -- and helps exactly as much
+  with makes as the label, so it is the season next door, not tracking.  As the theory says: both labels have the
+  same expected value, and against 6 million makes the extra precision is nil.  So tracking's value here is the
+  yardstick (the gap and contest tests) and the size of the owner's update, not the training label.  Side finding:
+  the 5-season closeness half-life is too flat.
+- *Movement labels* (2015-16, `scripts/124_movement_labels.py`): 102,444 attempts from 631 games (96.4%).  On games
+  the calibration never saw, defender bins agree with the official per player-game counts on 87.1% of attempts (bar
+  85%), dribbles 88.4%, touch time 88.6%; the shot clock 72.0% (bar 90%) -- but the labels' clock distribution matches
+  the 2014-15 log's true clock (medians 12.4 and 12.3 s, 10th percentiles 4.8 and 4.7), while the dashboards put 20%
+  of all shots in "4-0 Very Late", which fits neither tracking source; the check is what fails.  The teacher does as
+  well on the movement labels (out-of-fold log loss 0.6422) as on the official log (0.6412).
+- Not run: the boosted-trees row of the ablation.  Test 2(c) used the dashboards pulled so far (2015 complete, 2016
+  movement dates, 2017 to 3 March); rerun when the pull finishes.

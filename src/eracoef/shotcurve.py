@@ -65,36 +65,15 @@ def shot_rows(pbp: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame({"three": three, "made": made, "bin": b})
 
 
-def _natural_spline(x: np.ndarray, knots) -> np.ndarray:
-    """Natural cubic spline basis (ESL 5.4): [1, x, N_3 .. N_K]."""
-    k = np.asarray(knots, dtype=float)
-    K = len(k)
-
-    def d(j):
-        return (np.clip(x - k[j], 0, None) ** 3 - np.clip(x - k[-1], 0, None) ** 3) / (k[-1] - k[j])
-
-    cols = [np.ones_like(x), x] + [d(j) - d(K - 2) for j in range(K - 2)]
-    return np.column_stack(cols)
+# The spline basis and the IRLS live in shotmodel (the model layer) since the shot-quality build; the curve
+# imports them unchanged, so every cached curve in data/shotcurve is reproduced exactly.
+from .shotmodel import logistic_irls as _logistic_irls  # noqa: E402
+from .shotmodel import natural_spline as _natural_spline  # noqa: E402,F401
 
 
 def _logistic(X, y, w=None, ridge=RIDGE, iters=25):
     """IRLS for a logistic regression with a small ridge on everything but the intercept."""
-    n, p = X.shape
-    w = np.ones(n) if w is None else w
-    beta = np.zeros(p)
-    P = ridge * np.eye(p)
-    P[0, 0] = 0.0
-    for _ in range(iters):
-        eta = X @ beta
-        mu = 1.0 / (1.0 + np.exp(-eta))
-        s = np.maximum(mu * (1 - mu), 1e-6) * w
-        z = eta + (y - mu) / np.maximum(mu * (1 - mu), 1e-6)
-        new = np.linalg.solve((X * s[:, None]).T @ X + P, (X * s[:, None]).T @ z)
-        if np.max(np.abs(new - beta)) < 1e-8:
-            beta = new
-            break
-        beta = new
-    return beta
+    return _logistic_irls(X, y, w, ridge=ridge, iters=iters)
 
 
 @dataclass

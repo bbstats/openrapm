@@ -18,6 +18,17 @@ or to both once the owner rules on the Portable column.  Commit only when the ow
 in a commit.  A session continued on another machine stashes uncommitted work: `git stash apply` and keep the
 stash (memory "Teleport auto-stash").
 
+### The shot-quality build (2026-10-06, the owner's request; at G3, uncommitted)
+
+Plan `~/.claude/plans/read-handoff-md-what-i-dreamy-stonebraker.md`; record and every number in DECISIONS.md, "The
+shot-quality build"; the ablation on the sheet's "Shot quality" tab.  Built: one row per attempt 1997-2026
+(`data/shotframe`, scripts 114), the rebuilt shot clock (116), the 2014-15 log join and the 2015-16 movement labels
+(`data/tracking`, 124), the play-by-play quality model (`shotmodel.py`, 120 into `data/shotq/<name>`), the direct shot
+test (117, 118, 119, 122, 125).  The owner's rulings: memory "Shot-quality build" and "No scorer shot tags".  **Waiting
+on the owner (G3):** which version, and whether experiment 42 reprices defensive twos (the pre-test passes) rather
+than threes (it fails: no estimate of three-point quality beats the flat rate the shipped target uses).  A detached
+dashboard pull (123, defender bins 2013-14 to 2016-17) may still be running: check `Get-Process python` first.
+
 ### Waiting on the owner (most recent first)
 
 1. **Publish the Portable column?**  Built and checked locally, not committed: `docs/index.html` (a sortable
