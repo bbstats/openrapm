@@ -35,7 +35,7 @@ from .gbdt_prior import CAREER, SHOT_FEATURES, SHOT_LEAGUE, SHOT_TOTALS, add_der
 from .design import FEATURES
 from .rloocv import BalancedGroupKFold
 
-__all__ = ["PRIOR_FEATURES", "INPUT_COLUMNS", "BIO", "ONC", "OFFC", "NET", "ROLE_INPUTS", "CLOSENESS", "LEVEL_COVARIATES", "aggregate", "season_frame",
+__all__ = ["PRIOR_FEATURES", "INPUT_COLUMNS", "BIO", "ONC", "OFFC", "NET", "SHOT_MIX", "ROLE_INPUTS", "CLOSENESS", "LEVEL_COVARIATES", "aggregate", "season_frame",
            "prior_rows", "season_rows", "chunk_rows", "chunk_season_sets", "CHUNK_FEATURES", "stratified_player_folds",
            "fold_mean_shift", "FEATURE_SETS", "feature_set", "OFFENSE_TARGET", "DEFENSE_TARGET",
            "team_movement", "reweight_by_movement", "CAREER_BANDS", "PIECE_NAMES", "PIECES", "PO_SHARE", "SAME_TEAM",
@@ -66,6 +66,8 @@ ONC = ["onc_o", "onc_d", "onc_poss_o", "onc_poss_d"]        # his own season's o
 # and the on/off net.  The owner, 2026-09-14: "usually we also include off-court-rating".
 OFFC = ["offc_o", "offc_d", "offc_poss_o", "offc_poss_d"]
 NET = ["net_o", "net_d"]                                    # onc minus offc, per side
+# his teammates' shot locations with him on the floor against without him, padded (scripts/100_shot_mix_panel.py)
+SHOT_MIX = ["mix_lift"]
 ROLE_INPUTS = ["poss_pct", "gs_pct", "age"]
 
 # What score state a player's statistics were compiled in (scripts/69_closeness_panel.py).  `closeness` is
@@ -135,7 +137,7 @@ PRIOR_FEATURES = [f for f in SHOT_FEATURES if f != "season"] + CAREER + BIO + ON
 # What the panel must carry for `add_derived` to build the rest.  The raw (uncentred) rates are the
 # RATIOS' inputs; the shot totals and the block league levels are the SHOTQ inputs.
 INPUT_COLUMNS = (list(FEATURES) + ROLE_INPUTS + CLOSENESS + [f"raw_{c}" for c in FEATURES]
-                 + list(SHOT_TOTALS) + list(SHOT_LEAGUE) + CAREER + BIO + ONC + OFFC + NET + PIECES + PO_SHARE)
+                 + list(SHOT_TOTALS) + list(SHOT_LEAGUE) + CAREER + BIO + ONC + OFFC + NET + PIECES + PO_SHARE + SHOT_MIX)
 
 
 # ---------------------------------------------------------------------------------- named feature sets
@@ -227,6 +229,9 @@ FEATURE_SETS = {
     # `same_team` is accepted on both sides.  Needs --rows=chunks --chunk_label=outside.
     # experiment 30 (the owner, 2026-09-30): the incumbent's lists plus the same-team measure alone, for
     # `adjacent_rows` -- rated as if every player had been traded.  Needs --chunk_label=adjacent (or outside).
+    # experiment 34 (the owner, 2026-10-04): teammates' shot mix with him on the floor, on the OFFENSIVE list only.
+    # `scripts/100_shot_mix_panel.py` writes the column into the season panel.
+    "boruta_mix": {"O": BORUTA_O + SHOT_MIX, "D": BORUTA_D},
     "boruta_same_team": {"O": BORUTA_O + [SAME_TEAM], "D": BORUTA_D + [SAME_TEAM]},
     "boruta_context": {
         "O": [f for f in BORUTA_O if f != "onc_d"] + PIECES + [SAME_TEAM] + CLOSENESS + PO_SHARE,

@@ -2,7 +2,7 @@
 the games it never saw to measure the rating on.
 
     python scripts/97_within_season.py --models=<name> --base=<table> [--seasons=2017-2026] [--repeats=3]
-                                       [--folds=4] [--tag=within] [--check_only=0]
+                                       [--folds=4] [--rate_from=rest|one] [--tag=within] [--check_only=0]
 
 Why (the owner, 2026-10-03).  A calibrator for the ratings' misses needs a target.  The trade set's misses are
 measured on the NEIGHBOURING seasons' games, so a calibrator trained on them would learn that a peak season comes
@@ -99,6 +99,17 @@ CLOSE_SLOTS = ([(f"h{i}", "poss_h", "poss_a") for i in range(1, 6)]
 
 
 # ------------------------------------------------------------------------------------------------ the folds
+def deadline_folds(games: pd.DataFrame, cut: float) -> pd.Series:
+    """game_id -> fold for the trade-deadline split: 1 = regular-season games before the date by which `cut` of the
+    regular season had been played, 0 = every later game and the playoffs."""
+    g = games.drop_duplicates("game_id")
+    dates = pd.to_datetime(g.game_date)
+    rs = np.sort(dates[(g.phase == "RS").to_numpy()].to_numpy())
+    cut_date = rs[int(round(cut * (len(rs) - 1)))]
+    late = (g.phase != "RS").to_numpy() | (dates.to_numpy() >= cut_date)
+    return pd.Series(np.where(late, 0, 1), index=g.game_id.astype(str).to_numpy(), name="r0")
+
+
 def deal_folds(game_ids, n_folds: int, season: int, repeat: int) -> pd.Series:
     """game_id -> fold: the season's games dealt at random, every fold the same size to within one game.  Seeded by
     (season, repeat), so a rerun deals the same folds and a new repeat deals new ones."""
@@ -479,6 +490,20 @@ def main() -> None:
         raise SystemExit("--models=<name> (62's --save_models) and --base=<table> (62's --out, the same run)")
     seasons = _seasons(flag("seasons", "2017-2026"))
     repeats, n_folds = int(flag("repeats", 3)), int(flag("folds", 4))
+    # rest: rate from every fold but one and test on that one (3/4 of a season at four folds); one: rate from
+    # ONE fold and test on the rest (1/4 at four folds) -- the owner, 2026-10-04: the split test "at different
+    # sizes".  Ratings from different folds of one deal share no game only under `one` (or at two folds).
+    rate_from = flag("rate_from", "rest")
+    assert rate_from in ("rest", "one"), "--rate_from=rest|one"
+    # `deadline` (experiment 39, the owner 2026-10-05: an in-season check that weighs traded players): fold 1 = the
+    # regular-season games before the date by which `--cut` of them had been played, fold 0 = the rest of the regular
+    # season and the playoffs.  With two folds and `rest`, fold 0 rates from the early games and scores the late ones
+    # (a player traded in between is rated on his old team and scored on his new one); fold 1 is the reverse.
+    split = flag("split", "random")
+    cut_share = float(flag("cut", "0.6"))
+    assert split in ("random", "deadline"), "--split=random|deadline"
+    assert split == "random" or (n_folds == 2 and repeats == 1 and rate_from == "rest"), \
+        "--split=deadline needs --folds=2 --repeats=1 --rate_from=rest"
     tag = flag("tag", "within")
     check_only = flag("check_only", "0") not in ("0", "no", "false")
     out_dir = ROOT / "outputs" / "within" / tag
@@ -546,7 +571,10 @@ def main() -> None:
 
         # -- the folds
         folds_path = out_dir / f"folds_{season}.parquet"
-        dealt = pd.concat([deal_folds(id_of_idx.to_numpy(), n_folds, season, r) for r in range(repeats)], axis=1)
+        if split == "deadline":
+            dealt = deadline_folds(games, cut_share).to_frame("r0")
+        else:
+            dealt = pd.concat([deal_folds(id_of_idx.to_numpy(), n_folds, season, r) for r in range(repeats)], axis=1)
         if folds_path.exists():
             old = pd.read_parquet(folds_path)
             common = [c for c in old.columns if c in dealt.columns]
@@ -556,9 +584,14 @@ def main() -> None:
             for k in range(n_folds):
                 stem = f"{season}_r{r}_f{k}"
                 if (out_dir / f"fold_{stem}.json").exists():
+                    done = json.loads((out_dir / f"fold_{stem}.json").read_text())["summary"]
+                    if done.get("rate_from", "rest") != rate_from:
+                        raise SystemExit(f"{stem} in {out_dir.name} was built with --rate_from="
+                                         f"{done.get('rate_from', 'rest')}; one folder holds one mode")
                     continue
                 t1 = time.time()
-                test_ids = set(dealt.index[dealt[f"r{r}"] == k])
+                fold_ids = set(dealt.index[dealt[f"r{r}"] == k])
+                test_ids = fold_ids if rate_from == "rest" else set(dealt.index) - fold_ids
                 fit_ids = set(dealt.index) - test_ids
                 test_idx = np.sort(games.loc[games["game_id"].astype(str).isin(test_ids), "game_idx"].to_numpy())
                 world = World(season, cfg, full, tables, inputs, roles, fit_ids=fit_ids)
@@ -575,7 +608,9 @@ def main() -> None:
                          .assign(season=season, repeat=r, fold=k))
                 table.to_parquet(out_dir / f"players_{stem}.parquet", index=False)
                 save_test(out_dir / f"test_{stem}.npz", pooled, teams)
-                summary.update(season=season, repeat=r, fold=k, fit_games=len(fit_ids), test_games=len(test_ids),
+                summary.update(season=season, repeat=r, fold=k, rate_from=rate_from, fit_games=len(fit_ids),
+                               split=split, cut=cut_share if split == "deadline" else None,
+                               test_games=len(test_ids),
                                players=int((world.ratings.possessions > 0).sum()),
                                prior_scale_off=float(world.ratings.prior_scale_off.iloc[0]),
                                prior_scale_def=float(world.ratings.prior_scale_def.iloc[0]),

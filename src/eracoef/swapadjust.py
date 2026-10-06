@@ -121,11 +121,13 @@ class SwapSystem:
     """One season-side's swap equations, built once and solved at any penalty and any type prediction.
 
     ids  every player with possessions or a swap; A  (teams x players) each team's possession shares;
-    G, g  sum over pairs of h * e e' and h * r * e, where e is +1 at fifth_a and -1 at fifth_b."""
+    G, g  sum over pairs of h * e e' and h * r * e, where e is +1 at fifth_a and -1 at fifth_b;
+    poss  each player's possessions over all his teams (the flat give-back's weights; 0 for a swap-only player)."""
     ids: np.ndarray
     A: np.ndarray
     G: np.ndarray
     g: np.ndarray
+    poss: np.ndarray
 
 
 def swap_system(pairs: pd.DataFrame, team_poss: pd.DataFrame) -> SwapSystem:
@@ -136,6 +138,7 @@ def swap_system(pairs: pd.DataFrame, team_poss: pd.DataFrame) -> SwapSystem:
     A = np.zeros((len(teams), n))
     np.add.at(A, (np.asarray(team_idx).ravel(), np.searchsorted(ids, team_poss.player_id.to_numpy(dtype=np.int64))),
               team_poss.poss.to_numpy(dtype=float))
+    poss = A.sum(axis=0)                             # possessions over all his teams, before the shares
     A /= A.sum(axis=1, keepdims=True)                # possession shares: the same constraint, better scaled
     a = np.searchsorted(ids, pairs.fifth_a.to_numpy(dtype=np.int64))
     b = np.searchsorted(ids, pairs.fifth_b.to_numpy(dtype=np.int64))
@@ -144,22 +147,44 @@ def swap_system(pairs: pd.DataFrame, team_poss: pd.DataFrame) -> SwapSystem:
     h = pairs.h.to_numpy(dtype=float)
     G = np.asarray((D.T @ sp.diags(h) @ D).todense())
     g = np.asarray(D.T @ (h * pairs.r.to_numpy(dtype=float))).ravel()
-    return SwapSystem(ids=ids, A=A, G=G, g=g)
+    return SwapSystem(ids=ids, A=A, G=G, g=g, poss=poss)
 
 
-def solve(system: SwapSystem, mean: pd.Series, tau: float) -> pd.Series:
-    """`corrections` on equations already built."""
+GIVEBACKS = ("minutes", "flat", "none")
+
+
+def solve(system: SwapSystem, mean: pd.Series, tau: float, giveback: str = "minutes") -> pd.Series:
+    """`corrections` on equations already built.
+
+    At tau = inf, `giveback` is how each team's net type prediction is taken back so its total does not move
+    (experiment 41):
+      "minutes"  the nearest point in plain squared distance: c = m - A'(AA')^-1 A m, so each player gives back in
+                 proportion to his share of the team's possessions (the shipped rule)
+      "flat"     the nearest point in possession-weighted squared distance: c = m - V^-1 A'(A V^-1 A')^-1 A m with V
+                 his possessions, so every player of a team gives back the same amount (a player on two teams, a
+                 possession-weighted blend of theirs)
+      "none"     no give-back: team totals move (a diagnostic; it breaks the team version's design)"""
+    if giveback not in GIVEBACKS:
+        raise ValueError(f"giveback must be one of {GIVEBACKS}, got {giveback!r}")
     ids, A = system.ids, system.A
     m = mean.reindex(ids).fillna(0.0).to_numpy(dtype=float)
     if np.isinf(tau):
+        if giveback == "none":
+            return pd.Series(m, index=ids)
+        if giveback == "flat":
+            vi = 1.0 / np.where(system.poss > 0, system.poss, 1.0)      # a swap-only player is outside every team
+            return pd.Series(m - vi * (A.T @ np.linalg.solve((A * vi) @ A.T, A @ m)), index=ids)
         return pd.Series(m - A.T @ np.linalg.solve(A @ A.T, A @ m), index=ids)
+    if giveback != "minutes":
+        raise ValueError("a finite penalty (his own swaps) is defined only for the minutes give-back")
     n, t = len(ids), A.shape[0]
     kkt = np.block([[system.G + float(tau) * np.eye(n), A.T], [A, np.zeros((t, t))]])
     sol = np.linalg.solve(kkt, np.r_[system.g + float(tau) * m, np.zeros(t)])
     return pd.Series(sol[:n], index=ids)
 
 
-def corrections(pairs: pd.DataFrame, team_poss: pd.DataFrame, mean: pd.Series, tau: float) -> pd.Series:
+def corrections(pairs: pd.DataFrame, team_poss: pd.DataFrame, mean: pd.Series, tau: float,
+                giveback: str = "minutes") -> pd.Series:
     """player_id -> the correction to his rating on this side, raw sign.
 
         argmin  sum over pairs  h * (r - (c_a - c_b))^2  +  tau * sum over players (c - mean)^2
@@ -168,9 +193,9 @@ def corrections(pairs: pd.DataFrame, team_poss: pd.DataFrame, mean: pd.Series, t
     `mean` is the type prediction (missing = 0).  `tau` = inf gives the nearest point to the type prediction
     with every team's total at zero -- each player gives back in proportion to his share of the team's
     possessions; `tau` near 0 lets his own swaps speak almost unshrunk.  Players with possessions in
-    `team_poss` all get a row, with or without a swap.
+    `team_poss` all get a row, with or without a swap.  `giveback` (tau = inf only): see `solve`.
     """
-    return solve(swap_system(pairs, team_poss), mean, tau)
+    return solve(swap_system(pairs, team_poss), mean, tau, giveback)
 
 
 def hold_spread(adjusted: np.ndarray, base: np.ndarray, weight: np.ndarray, team: np.ndarray,

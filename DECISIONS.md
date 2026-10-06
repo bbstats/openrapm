@@ -3806,6 +3806,31 @@ Alexander; Curry 13th -> 21st, Murray 14th -> 27th, Harden 15th -> 31st, Durant 
 Caruso 23rd -> 16th, Paul Reed 25th -> 19th, Javonte Green 29th -> 20th.  Open: the defensive trade loss; multipliers
 for 1997-2016 from their own folds; a candidate that changes the prior needs its own folds.
 
+**33c: the within-season test on all thirty seasons, at five sizes** (2026-10-04; the owner: "I like your split half
+idea ... best done at different sizes", "Ok go ahead").  Every season rated from 1/4, 1/3, 1/2, 2/3 and 3/4 of its
+games and scored on the rest (1,560 ratings, 34,320 leak checks, 0 failed; `scratch/2026-10-03_within/sizes.py`).
+Error per team-game on the games each rating never saw, the published recipe against the Oct 1 one:
+
+| rated from | no ratings | Oct 1 | now | now better |
+|---|---|---|---|---|
+| 1/4 | 8.977 | 8.606 | 8.536 | 30 of 30 seasons, z -19.3 |
+| 1/3 | 8.977 | 8.564 | 8.494 | 30 of 30, z -16.6 |
+| 1/2 | 8.975 | 8.505 | 8.432 | 30 of 30, z -18.2 |
+| 2/3 | 8.972 | 8.466 | 8.396 | 30 of 30, z -16.6 |
+| 3/4 | 8.967 | 8.451 | 8.377 | 30 of 30, z -18.5 |
+
+The multiplier the held-out games ask for on the box-score part, all thirty seasons pooled: offence 0.638 / 0.651 /
+0.666 / 0.684 / 0.684 at 1/4 ... 3/4, a straight line through them 0.712 at a whole season (adopted: 0.704-0.728);
+defence 0.889 / 0.887 / 0.896 / 0.895 / 0.900, the line 0.905 at a whole season (adopted: 0.920-0.968, so defence
+is shrunk less than the evidence asks).  Agreement of two ratings from separate parts of a season (about 370 players
+a season): total 0.768 / 0.784 / 0.810 at 1/4 / 1/3 / 1/2 now, against 0.788 / 0.803 / 0.829 for the Oct 1 recipe;
+offence 0.786 / 0.799 / 0.825, defence 0.665 / 0.697 / 0.743.  The shrink lowers agreement by about 0.02 at every
+size and lowers the error on unseen games at every size: the box-score part repeats from one part of a season to
+another partly because its career and body inputs are the same in both parts, which does not make it right.  The
+full-season reliability these imply falls as the parts grow (0.930 from quarters, 0.916 from thirds, 0.895 from
+halves): agreement grows more slowly with games than the Spearman-Brown formula assumes, for the same reason, so the
+half-season figure, 0.895, is the least extrapolated.
+
 Outputs: `outputs/within/within/` (folds), `outputs/calibc_within.parquet`, `outputs/calibc_corrections.parquet`,
 `outputs/season_ratings_calib{c,res}_full.parquet` (swap-adjusted), `outputs/yoy_calibc.parquet`,
 `outputs/yoy_by_player_calibres.parquet`; chains and logs in `scratch/2026-10-03_within/`.
@@ -4053,3 +4078,386 @@ overturn a z -3.02 result. **A gross miss still is**, because that is what the c
 on the archetype gap is exactly what the consensus exists to catch. A floor is re-based once, deliberately,
 with the reason written into the test, and the model constant is not touched. The criterion decides; the
 consensus sanity-checks.
+
+## Experiment 34: teammates' shot mix with him on the floor (2026-10-04, the owner's idea; awaiting the owner's call)
+
+**The owner:** "what about 'teammate shot quality while on court' for dudes?"  For every pair of teammates who
+shared the floor in a season, the teammate's expected points per shot -- the league's make rate at that distance
+that season times the shot's value, so the shot's location and nothing about who took it -- with the player on
+the floor minus without him, averaged over his teammates weighted 1 / (1/on + 1/off) in attempts, padded toward the
+season mean with k = 404 (chosen so his first-half number best predicts his second half and the reverse, pooled
+over all thirty seasons).  `scripts/100_shot_mix_panel.py` writes `mix_lift` into the season panel; feature set
+`boruta_mix` adds it to the OFFENSIVE list only.  Half-season agreement 0.22 over everyone, 0.60 for the heavier
+half; padding keeps 0.78 of a regular's own season.  2025 top: Jokic, Trae Young, Morant, Wembanyama, Vucevic,
+Towns.  Its "makes" twin (teammates' makes over their own season rates, him on) read -0.37 between halves on 2025
+and was not built.  Earlier, assists priced by the league value of their zone put Haliburton 106th of 144 in 2025:
+location cannot see how open a shot was.
+
+**Result** (`scratch/2026-10-04_shotmix/mix_chain.sh`, through 99 `--rule=test` and 91 like the incumbent):
+year-over-year **8.597 vs 8.600** per team-game (-0.070, z -2.56, 32 of 56), predicting the season after z -0.61, the season before z -2.81;
+better in every quality tier (top 30 z -5.5).  But stint level is worse (z +4.9) and the order-only row (each side
+rescaled) is a tie (+0.005, z +0.14); the offence comes out narrower (consensus spread 0.725 vs 0.764; scale_off
+1.17 vs 1.11).  Swap test: net order +0.011, z +1.2 (tie).  Consensus rank agreement 0.838 vs 0.834.  Trade loss:
+offence tie, defence +0.0002 (z +4.3, tiny).  2026 top 20 nearly unchanged; offensive movers among 2,000+
+possession players: Brunson -0.57, Edwards -0.53, Murray -0.53, Doncic -0.37; Draymond Green +0.46, Paul George
++0.44.  ~~Caveat: the shrink multipliers are the incumbent's own~~ -- wrong, see the correction below.
+
+**Correction (2026-10-05): the result above is confounded, and the corrected result is a tie.**  `99_prior_shrink.py`
+read every fold in `outputs/within/within`, which grew from 2017-2026 to 1997-2026 on 2026-10-04 (experiment 33c).  So
+the shot-mix table was shrunk with multipliers fitted on 27-28 fold seasons (offense 0.677-0.690, defense
+0.888-0.910) while the incumbent's were fitted on 2017-2026 (0.704-0.728 / 0.920-0.968).  99 now pins
+`--fold_seasons=2017-2026` by default and has `--check=<table>`; the pinned rerun rebuilds both shipped tables
+(`season_ratings_priorshrink_raw`, `season_ratings_product_priorshrink_pre_swap`) with largest difference 0.0
+(`tests/test_prior_shrink.py`).  Re-scored on the same 62 build with the pinned shrink (tag `shotmix_pin`,
+`scratch/2026-10-05_scorecard/mix_repin.sh`): year-over-year **8.5993 vs 8.5995** (-0.006, z -0.22, 29 of 56;
+predicting the season after z +1.96, the season before z -1.46); order only z -0.21; top 30 z -0.70; swap test net
+order +0.015, z +1.6; consensus 0.837 vs 0.834, offensive spread 0.753 vs 0.764; trade loss offense z -0.24, defense
+z +1.34.  A tie on every test.  The 2026 movement is the same as before (Edwards -0.50, Brunson -0.46, Murray -0.40,
+Paul George and Draymond Green +0.49, Jokic +0.33).  So the first run's "win" was the stronger shrink, not shot mix
+-- which itself says the 1997-2026 multipliers may beat the adopted ones (an open question, not tested).
+
+## Experiment 35: slope vs. error, a within-season scorecard, and three vanilla baselines (2026-10-05)
+
+**The owner's questions.**  "When should we care about slope vs error?  Lots of these tests must by design be small
+sample size."  Score carefully non-leaked OpenRAPM ratings built from part of a season on the games left out, and
+compare with (1) a linear, box-score-only SPM and (2) a vanilla tuned RAPM; also a middle rung (RAPM with the linear
+SPM as its prior), both tests, a 9/10 fold size, the swap adjustment rebuilt per fold.  Plan:
+`~/.claude/plans/one-thing-i-want-joyful-book.md`.
+
+**What was built.**
+- `src/eracoef/scorecard.py` (model layer): per scored block, the six sums that give the error at any per-side
+  multiplier (raw error, slope, error after a cross-fitted rescale), full-level side and part/tier equations, blend
+  weights, jackknife SEs by season, the controls.  `scripts/104_scorecard.py` reproduces every stored fold error
+  (1,860 folds, largest difference 6e-14) and the year-over-year file (56 season-directions, 6e-14) before scoring.
+- `src/eracoef/boxspm.py` + `scripts/102_box_spm.py`, **B1**: 13 box counts per 100 box-estimated possessions plus
+  minutes share, padded, weighted least squares onto the shipped prior's label family (leave-season-out RAPM, {H-1,
+  H, H+1} out, defense un-shrunk).  3,750 leak checks, 0 failed.
+- `src/eracoef/vanilla.py` + `scripts/103_vanilla_rapm.py`, **B2** (vanilla RAPM) and **B3** (RAPM on B1's prior with a
+  multiplier per side): one factorization per penalty pair, the held-out error an exact quadratic in the
+  multipliers, penalties and multipliers chosen per rated season on blocks that touch no season in {H-1, H, H+1}.
+  Chosen: B2 penalty 4,420 both sides at EVERY fold size (7,620 year over year); B3 7,620-13,130 (defense 0.5-0.75 of
+  offense) with B1 multiplied 1.5-1.7 on offense and about 1.1 on defense (22,640 / x1.78 / x1.01 year over year).
+  The non-nested B2 picked the same penalties: tuning on the test does not flatter it here.
+- `scripts/106_fold_swapadj.py`: OpenRAPM as shipped on every fold (pinned prior shrink, then the swap adjustment at
+  0.25/0.5/0.75/1).  The whole-season version reproduces the shipped test table: shrink exactly (0.0), swap
+  adjustment within 0.006 pts/100 (median 0.0015; the type model's standardizing now excludes the rated season).
+- 9/10 fold size: `97 --folds=10 --repeats=1 --tag=within10`, 300 folds, 6,600 checks, 0 failed.
+- `scripts/105_held_out_swaps.py`: the lineup-swap test on each fold's HELD-OUT games.
+- `scratch/2026-10-05_scorecard/semisynth.py`: power check on the real held-out designs with a known truth.
+
+**Results** (error = typical team-game miss, pts/100; within season at 3/4 unless stated; full tables in the sheet
+"OpenRAPM experiments", tab Scorecard; `outputs/scorecard/`):
+
+| system | within 3/4 | slope O / D | year over year | slope O / D | held-out teammate order (net) |
+|---|---|---|---|---|---|
+| no ratings | 8.970 | | 8.962 | | |
+| B1 linear box SPM | 8.692 | 2.50 / 1.45 | 8.735 | 2.18 / 1.19 | 2.016 |
+| B2 vanilla RAPM | 8.426 | 0.93 / 0.92 | 8.677 | 0.99 / 0.96 | 1.677 |
+| B3 RAPM on B1 | 8.384 | 1.00 / 0.95 | **8.587** | 0.99 / 0.97 | **2.128** |
+| OpenRAPM steps 1-3 | 8.455 | **0.70** / 0.97 | 8.682 | 0.62 / 0.89 | 1.840 |
+| OpenRAPM + prior shrink | 8.381 | 0.96 / 1.01 | 8.608 | 0.86 / 0.93 | 1.900 |
+| OpenRAPM as shipped | **8.370** | 0.97 / 1.03 | 8.600 | 0.88 / 0.97 | 2.085 |
+
+1. **OpenRAPM as shipped and B3 are close, and B3 wins where attribution matters.**  Year over year B3 beats the
+   shipped ratings: 8.587 vs 8.600, z -2.54, 20 of 28 seasons, and in each era (z -1.3 to -1.6).  Within season the
+   shipped ratings beat B3 (z +3.8 at 3/4) -- but almost all of it is 2017-2026 (z +4.6, 0 of 10), the seasons whose
+   folds the prior shrink was fitted on; 1997-2006 and 2007-2016 read z +1.4 and +1.3.  On held-out lineup swaps B3
+   orders teammates better than OpenRAPM before its swap adjustment (+0.23, z +4.8) and slightly higher than after
+   it (2.128 vs 2.085, not tested).  Blend weights: OpenRAPM's offensive differences from B3 are mostly noise (0.25 year over year, 0.34-0.41
+   within), its defensive ones a coin flip (0.52-0.58).  Consensus: B3 0.831 vs 0.834 total (offense 0.820 vs 0.851,
+   defense 0.852 vs 0.816); its ratings depend less on the team (team R-squared 0.10 / 0.07 vs 0.16 / 0.13).
+   Swap test across seasons: order a tie (z -0.2), gaps better (z -2.7).  2026: rank correlation with OpenRAPM 0.81;
+   top 10 Wembanyama, Jokic, Gilgeous-Alexander, Doncic (OpenRAPM 12th), Leonard, Holmgren, Antetokounmpo, Towns,
+   Queta, Tatum (85th); Robert Williams 18th (OpenRAPM 183rd).
+2. **OpenRAPM's boosted prior knows more about lineup sums and less about the split.**  Its prior alone beats B1 on
+   error (blend weight 0.72-0.95) but orders teammates worse on held-out swaps (1.807 vs 2.016 at 3/4); B1, with no
+   plus-minus input at all, orders teammates better than OpenRAPM before the swap adjustment.  The prior's on-court
+   plus-minus inputs are the leading suspect (they carry team information into each player's prior) -- not tested.
+   The swap adjustment, a linear model of box-score types, moves OpenRAPM toward that split: error z -7, teammate
+   order z +6 vs the shrunk ratings.  Strength 0.5 vs 0.75: a tie on error, 0.75 slightly ahead on held-out swaps.
+3. **Slopes.**  Before the shrink, OpenRAPM's offense is about 30% too wide at every fold size (0.67-0.70); the part
+   that overreaches is the box prior (part slope 0.62-0.69) while the games' part is too timid (1.25-1.57).  The
+   shrink brings it to 0.92-0.97 (rising with evidence).  B3 sits at 0.96-1.00 everywhere; B2 drifts from 1.05 (1/4)
+   to 0.92 (9/10) at its one penalty.  Year over year the shipped offense still reads 0.88 (mixing "too wide" with
+   "players change", experiment 20).
+4. **What the tests can see.**  Setting every player to his team's average costs 16% of OpenRAPM's error gain within
+   season and 41% year over year: team-game error sees the split partly, more across seasons.  Held-out lineup swaps
+   see only the split (the team-average control scores 0.08, about nothing).
+5. **Power and sample size.**  Truth-known check on the real designs: a calibrated rating's slope is 1.003; a rating
+   10% too wide on offense is flagged by its slope (|z| > 2) in 66% of replications and by paired error in 32% --
+   slope is about twice as sensitive to scale.  More deals do not help: SE of OpenRAPM minus B2 0.140 now vs 0.138
+   with unlimited deals; seasons are the unit.  OpenRAPM rated from 1/2 of a season predicts about as well as
+   vanilla RAPM from 9/10.
+
+**The rule (also in the sheet's Definitions tab).**  Error ranks systems (paired, same games, SE by season).  Slope
+sets scale: shrinkage, prior weight, published magnitudes; slope 1 is necessary, never sufficient.  Read slopes
+pooled at team-game level as a profile over fold sizes.  The split among teammates needs the held-out lineup swaps.
+
+**Not done / open:** none of this changes what ships.  Candidates the results point at, for the owner: (a) the
+prior without its on-court plus-minus inputs; (b) B3's recipe (linear box prior + tuned RAPM) as the base, with the
+luck-adjusted targets and the swap adjustment on top; (c) swap strength 0.75.
+
+## Experiment 36: RAPM on OpenRAPM's own box prior, tuned like B3 -- the penalty and the prior's weight by sample size (2026-10-05)
+
+**The owner:** "the best penalty for RAPM (and especially the penalty used on the PI RAPM) will change as the sample size
+of the season changes."  The reasoning given back: for vanilla RAPM the ridge penalty is noise variance over talent
+variance, both per possession, so it should not move with games (the data term grows with possessions instead), and it
+did not -- 4,420 at every fold size; for prior-informed RAPM it should, because the prior is built from the same games.
+**B4** puts OpenRAPM's own boosted prior (`prior_raw_*`, the booster's prediction before its free scale, from the same
+saved models and rating-game inputs as the fold's OpenRAPM rating) through exactly B3's tuning (`103 --prior=openrapm`):
+penalty pair and prior multipliers per fold size and per rated season, from blocks touching no season in {H-1, H, H+1}.
+
+**How the tuning moves with sample size** (median over rated seasons; `outputs/csv/baseline_penalties{,_b4}.csv`):
+
+| fold size | B3 (linear box prior): penalty, D/O, multiplier O / D | B4 (OpenRAPM's prior): penalty, D/O, multiplier O / D |
+|---|---|---|
+| 1/4 | 7,620, 0.75, 1.50 / 1.06 | 7,620, 1.5, 1.08 / 0.67 |
+| 1/2 | 7,620, 0.75, 1.46 / 1.13 | 7,620, 1.5, 0.91 / 0.68 |
+| 3/4 | 13,130, 0.5, 1.73 / 1.16 | 7,620, 1.5, 0.79 / 0.72 |
+| 9/10 | 13,130, 0.5, 1.70 / 1.18 | 13,130, 1.0, 0.96 / 0.76 |
+| year over year | 22,640, 0.5, 1.78 / 1.01 | 22,640, 0.75, 1.05 / 0.73 |
+
+The linear box prior earns MORE weight as games accumulate (its inputs get less noisy); OpenRAPM's prior earns LESS on
+offense up to 3/4 of a season (1.08 to 0.79) -- consistent with a prior that already carries the same games'
+plus-minus (`onc_*`), so more games means more double counting.  The grid steps about 70% per penalty value and the
+penalty and multiplier trade off (the 9/10 row jumps), so read the direction, not the decimals.
+
+**Which prior is better under identical tuning: the linear box prior.**  B4 minus B3: within season z +2.1 (3/4), +2.6
+(9/10), -0.5 (1/4, a tie); year over year +0.597 squared, z +3.6, B4 better in 8 of 28.  Blend weights B4 vs B3: offense
+0.15-0.40 (OpenRAPM's offensive prior differences are mostly noise), defense 0.58-0.61 within season (slightly better),
+0.47 year over year.  Held-out teammate order: B4 1.975 vs B3 2.128 at 3/4.  Battery: consensus 0.801 (offense 0.783)
+vs the incumbent's 0.834 and B3's 0.831; swap test order z -3.6 (worse), trade loss offense z +6.1 (worse).  OpenRAPM's
+own pipeline (fixed penalty, free prior scale, shrink, swap adjustment) gets more out of the same prior than plain
+tuning does (year over year the shipped ratings beat B4, z +2.7 for B4) and still loses to B3 (z -2.5).
+Year over year: B3 8.587 < shipped 8.600 < B4 8.609 < vanilla 8.677.
+
+**Reading.**  The prior, not the ridge tuning, is where OpenRAPM gives up ground to the plain recipe, and it is the
+offensive prior.  The falling weight with more games points at the on-court plus-minus inputs -- option (a) of
+experiment 35 (the prior without them) is the direct test.  Nothing here changes what ships.
+
+## Experiment 37: a box-score prior fit directly on held-out games (2026-10-05, in progress)
+
+**The owner:** "build a model that will crush this testing ... a wide array of experiments to see what's actually going
+on ... is there some sort of feature selection/model selection we can do with this as a target?  Be super honest" --
+and then: "by crush I just mean like robustly look at."  Plan: `~/.claude/plans/one-thing-i-want-joyful-book.md`.
+
+**Stage 0: a stray column in the baselines' ridge, fixed.**  A cached design (`designcache.make_X`) carries the game
+index as its last column; `vanilla.Ridge` left it in the unpenalized block, so B2/B3/B4 each had a free within-season
+time trend the shipped ridge does not.  `Ridge(..., n_fixed=)` now keeps only the named fixed effects (asserted in
+103's `ridge_for`; `tests/test_baselines.py`).  Re-run: within season the baselines get slightly better (B3 8.384 ->
+8.377 at 3/4, B2 8.426 -> 8.414), year over year they barely move (B3 8.5874 -> 8.5868).  **B3 still beats the shipped
+ratings year over year: -0.348 squared, z -2.75, 20 of 28 seasons**; within season the shipped ratings lead at z +1.8
+(was +3.8).  B4 vs B3: year over year z +3.7, within z +2.3 (unchanged in substance).  Vanilla RAPM's best penalty is
+now 2,560 at 1/4 of a season and 4,420 from 1/3 up (not exactly constant).  The trend versions are kept as `*_trend`.
+
+**Stages 1-3 (2026-10-05 evening).**  `src/eracoef/heldoutprior.py` (tests/test_heldoutprior.py: the quadratic in the
+weights equals a direct solve to 1e-8 at both levels; one input per side is B3's six numbers; constants move
+nothing; drifting weights need no new solve), `scripts/107_heldout_prior_build.py` (65 inputs per side; every
+season's first fold reproduces the rerun B3 grid exactly), `scripts/108_heldout_prior_select.py`.  Grids widened twice
+until no choice sat on an edge (penalty 2,560-67,290 x defense ratio 0.5-1.5; corrections' penalty 1e-4 to 100).
+Development seasons only (20; the lockbox 1999, 2002, ..., 2026 untouched); everything nested by season.
+
+Each input group added to B3 (change in typical miss, pts/100; negative = better; `outputs/heldout/ablation_table.csv`):
+
+| added to B3 | within season (2/3, 3/4, 9/10) | z | year over year | z | eras agree |
+|---|---|---|---|---|---|
+| B1's 14 inputs refit on held-out games | -0.024 | -7.7 | +0.005 | +0.7 | yes |
+| box rates per play-by-play possession | -0.020 | -8.2 | +0.012 | +1.3 | yes |
+| shooting efficiency | -0.008 | -4.9 | +0.007 | +1.5 | yes |
+| shot location | -0.006 | -4.1 | +0.009 | +1.8 | yes |
+| role (possession share, starts) | -0.015 | -4.7 | +0.019 | +2.3 | yes |
+| age, body, career | -0.017 | -5.4 | -0.011 | -1.4 | no |
+| score context | -0.007 | -2.8 | +0.001 | +0.1 | no |
+| on-court plus-minus | -0.007 | -3.8 | +0.007 | +2.1 | yes |
+| off-court plus-minus | -0.010 | -5.7 | +0.002 | +0.4 | yes |
+| same-season plain RAPM | -0.009 | -4.6 | +0.014 | +2.7 | yes |
+| OpenRAPM's boosted prior | -0.006 | -3.2 | -0.002 | -0.6 | yes |
+| ALL inputs | -0.085 | -13.6 | -0.004 | -0.4 | no |
+| all but every plus-minus input | -0.055 | -10.8 | +0.010 | +1.0 | no |
+| all inputs, shape fit year over year (diagnostic) | -0.014 | -3.9 | **-0.035** | **-3.4** | yes |
+
+**Reading.**  Every input group improves within-season prediction; none improves the next season's.  The groups that
+carry the same season's context -- role, on-court plus-minus, same-season RAPM -- make the next season WORSE (z +2.1
+to +2.7).  The year-over-year scale the shapes get (offense x0.65, defense x0.75 for all inputs) says a prior fit on
+same-season held-out games has to be shrunk about a third to predict next season.  The only thing that helps year
+over year is fitting the shape to year over year itself (z -3.4, both eras): a forecast, which learns what carries
+across seasons (and which the owner has not wanted as the rating, experiment 33).  Probability of backtest
+overfitting over the 29 configurations: 0.00 -- the year-over-year-fit diagnostic wins consistently, and nothing else
+does.  Not run yet: stage 4 (by fold size; era drift), stage 5 (targets), the lockbox.
+
+## Experiment 38: what makes a rating better in-season vs for other seasons (2026-10-05)
+
+**The owner:** "I would like to find out what stats / model decisions make one model better at in-season vs better at
+'outside seasons'."  `scripts/110_in_vs_out.py`; development seasons only (lockbox untouched); paired t over seasons
+(in-season n = 20, out of season n = 19).  Full per-stat table: sheet "OpenRAPM experiments", tab "In vs out of season".
+
+**Model decisions.**
+- **Shrinkage strength is the main lever.**  Out-of-season error wants a larger penalty: vanilla RAPM 7,620 vs
+  4,420 in-season; RAPM on the linear box prior 22,640 (defense half of it) vs 7,620 (defense 0.75 of it).  At a
+  fixed penalty the best prior multipliers are close (e.g. 13,130/0.5: offense 1.74 in-season, 1.60 out); the
+  difference is how far the same season's games are trusted against the box prior.  Using one target's choice on the
+  other costs 0.011-0.027 pts/100.
+- **Help both:** adding a linear box prior to vanilla RAPM (t -9.7 in, -7.9 out), OpenRAPM's prior shrink (-14.7 /
+  -8.9), the swap adjustment (-4.4 / -2.9).
+- **Splits them:** OpenRAPM's boosted prior instead of the linear one, in-season t +1.4 (tie), out of season t +3.3.
+
+**Stats (each added alone to RAPM on the linear box prior).**
+- **Help in-season, hurt out of season (out-of-season t >= +2.4):** share of team possessions played (in -3.7, out
+  +4.4), shot-making above expectation (two-point m2 +3.3, points per shot above expected +3.1, three-point +2.8),
+  same-season plain RAPM (+2.7), team points scored with him on court (+2.6), assists (+2.6 to +3.2).
+- **Help out of season more than in-season:** age (in -5.2, out -2.5), seasons played before (-2.6 / -3.0), career
+  possessions before (-1.8 / -3.1) -- aging, which a forecast uses and a description of the season does not need.
+- **Help in-season, neutral out of season:** most box rates (threes made and missed, blocks, steals, rebounds), body
+  size, score context, off-court numbers.
+- **Stability does not explain it.**  Across the 64 stats, the transfer gap (out-of-season minus in-season change) is
+  nearly unrelated to within-season split-half reliability minus year-to-year correlation (correlation +0.10).
+  Possession share fits the story (reliability 0.97 within a season, 0.62 across seasons); assists do not (0.95 and
+  0.92) yet still hurt out of season -- the in-season fit gives them a weight that does not hold across seasons.
+- 64 stats x 2 targets: about 3 per column cross |t| = 2 by chance; the coherent pattern (role, same-season
+  plus-minus, shot-making luck) is the finding, not any single row.
+
+## Experiment 39: what travels with a traded player -- player, team, or regression to the mean (2026-10-05)
+
+**The owner:** "an in-season check that boosts the weight of traded players in the scoring ... I want to know which
+pieces are regression to the mean, and which pieces are 'real things about a player'."  `scripts/111_traded_check.py`
+(folds: `97 --split=deadline`; split quadratics: `107 --tags=deadline --traded=1`); development seasons only; sheet
+"OpenRAPM experiments", tab "Traded players".
+
+**The test.**  Each season is rated on its games before the date by which 60% of the regular season was played and
+scored on the rest (playoffs included), and the reverse.  On the scored games a player is TRADED when he plays for a
+team other than his team in the rating games (8.1% of scored player-possessions, 2.8-12.9% by season; 53 of 454 players
+per fold), STAYED otherwise.  Every prediction splits exactly into the two groups' parts (`scorecard.split_traded`), so
+a change is given to one group at a time with the other held at the reference.  Up-weighting team-game rows that
+contain a traded player was the first design and was dropped: in those rows he is about 1 of 10 players, so the score
+mostly measured the other nine.  Statistics: the calibration slope per group; the paired t over seasons of the change
+in team-game MSE; the blend weight (forecast encompassing, season-clustered jackknife).
+
+**Rating systems (calibration slope, stayed vs traded; 1 = calibrated, 0 = no signal).**
+- **The box score travels.**  Linear box SPM alone: offense 2.31 vs 2.62, defense 1.23 vs 1.36.  The box-prior part
+  of every RAPM keeps (or raises) its slope on a new team: RAPM on the linear box prior, offense 0.87 vs 1.36,
+  defense 0.83 vs 1.00.
+- **Defense beyond the box score stays with the team.**  The games part of RAPM on the linear box prior (the rating
+  minus its prior): defense 1.08 for players who stayed vs 0.18 for traded players (difference -0.90, SE 0.36);
+  plain RAPM's defense 0.97 vs 0.34 (SE 0.22).  Low in both directions (rated before the cut 0.33, after 0.03 -- so not
+  selection on the trade) and both eras (1997-2011 0.02, 2012-2025 0.41).
+- **Offense beyond the box score: era-dependent.**  Games part 1.27 vs 0.73 (SE 0.55) overall; 1997-2011 it travels
+  (2.34), 2012-2025 it does not (-0.57).  Plain RAPM's offense: 1.73 traded in 1997-2011, 0.36 in 2012-2025 (stayed
+  about 1.0 in both).
+- **OpenRAPM as shipped is portable in the modern era:** 2012-2025 traded vs stayed, offense 0.97 vs 0.95, defense
+  1.08 vs 0.99.  1997-2011: offense too narrow for traded players (1.46 vs 0.86), defense too wide (0.69 vs 0.97).
+- Controls (every player at his team's average rating): stayed 0.91-0.95, traded -0.26 to 0.24 -- the traded test
+  sees the split inside a team that the same-team team-game test cannot.
+
+**Model decisions (given to one group at a time; t paired over 20 seasons; next season from experiment 38).**
+- Adding a linear box prior to plain RAPM: same team t -5.9, traded -4.5, next season -7.9; blend weight 1.28 for
+  traded vs 0.88 for players who stayed (the box prior is worth more on a new team).  Holds in every direction/era split.
+- Boosted prior instead of the linear one: worse for both (+2.4 / +2.1) and next season (+3.3).
+- OpenRAPM's prior shrink: same team -13.1, traded -1.6 (blend weight 0.28, SE 0.35; -3.0 in 2012-2025, -0.1 in
+  1997-2011), next season -8.9.  Fit on, and mostly a correction for, players who stayed.
+- Swap adjustment (x0.5): same team -3.7, traded -0.1 (+1.8 / -1.5 by direction), next season -2.9.  Same team only.
+
+**Inputs (each added alone to RAPM on the linear box prior; 77 rows per column, about 4 cross |t| = 2 by chance).**
+- **Travel with the player:** coach's usage -- share of games started (traded t -2.9), share of available minutes
+  (-3.1), garbage-time share (-3.4), how close his games were (-3.1), average score gap (-2.8); age, body and career
+  as a group (blend weight 0.91 traded vs 0.80 stayed).
+- **Team context:** on-court plus-minus (traded t +2.8; next season +2.1), off-court plus-minus (+2.3), same-season
+  plain RAPM (+2.4; blend weight 0.02 traded vs 0.59 stayed; next season +2.7).
+- **Regression to the mean:** effective FG %, true shooting % and two-point % hurt the same team's later games (t
+  +2.0 to +2.4) and traded players (+2.4 to +2.8): the first 60% of a season's shooting overstates the rest.
+  Shot-making above expectation and assists have no in-season signal across the cut and hurt next season (+2.6 to
+  +3.3).
+- **Real at the moment, drifts:** share of team possessions played helps when rating and scored games are interleaved
+  (random folds, experiment 38, t -3.7), not across the cut (+0.8), and hurts next season (+4.4) -- a role that
+  changes over time.
+- Single-row hits with no basketball reason (made free throws +2.6 / +3.0, age entering the league) are read as chance.
+
+**Caveats.**  Traded players are not a random sample (often role players moving from sellers to buyers); their role
+on the new team can change, which this test counts as "did not travel".  Power is set by 8% of possessions: system
+slopes carry SE 0.1-0.3, games-part slopes 0.4-0.6.
+
+## Experiment 40: a portable rating next to the team rating (2026-10-05, awaiting the owner's call on the site)
+
+**The owner:** "Yes portable rating. It would be good to deal w/ hey these are often role players as well and ideally
+openrapm can surface a traded rating and non (provided we adjust for the fact that traded players are worse often)."
+`scripts/112_portable.py`, `src/eracoef/portable.py` (tests/test_portable.py); development seasons only; sheet
+"OpenRAPM experiments", tab "Portable rating"; `outputs/season_ratings_portable.parquet`, `outputs/portable/`.
+
+**The model.**  OpenRAPM as shipped = box-prior part + the part beyond the box score (games part + swap adjustment).
+On held-out games each part's contribution is split by new team / same team and by playing-time tier
+(season-equivalent possessions <1,000 / 1,000-2,500 / 2,500+).  Same-team players set each tier's slope; players on a
+new team get the same tier's slope times a ratio, with tier and new-team level terms -- traded players are compared
+with same-tier players who stayed.  Two samples: mid-season trades (experiment 39's deadline folds) and off-season moves
+(season rated, previous and next season scored; a player on a team other than his rated-season team).
+
+**Traded players are worse, and their ratings already know it.**  Players on a new team rate 0.83 pts/100 below
+same-team players at the deadline (paired t -19.1) and 0.97 below in the off-season (t -20.7), on fewer possessions
+(median 1,764 vs 2,826; 2,096 vs 3,350).  Matched on playing time, they play to their rating on the new team: the
+new-team level is -0.07 (SE 0.12) on offense and +0.23 more allowed (SE 0.13) on defense, mid-season.
+
+**About half of the plus-minus part travels.**  One ratio for the part beyond the box score, both sides: 0.49 (SE
+0.12) from mid-season trades, 0.56 (SE 0.17) from off-season moves; pooled by inverse variance 0.51 (SE 0.10).  The
+box part's ratio is not stable (offense 1.32 mid-season, 0.92 off-season), so it is held at 1.  By playing time the
+plus-minus part travels about 0.6-0.8 for 2,500+ possession players and not at all below 1,000 (mid-season -0.26 to
+-1.0, large SEs) -- the owner's role-player point, and the reason the comparison is made inside tiers.
+
+**Held-out error does not separate them.**  Each version cross-fitted (season H's ratios without H-1, H, H+1) and given
+to players on a new team only: no version lowers the error measurably.  Best, one ratio fit on off-season moves:
+mid-season t -0.4, off-season t -0.9, blend weights 0.56 (SE 0.36) and 0.80 (SE 0.34).  The four-ratio and per-tier
+versions overfit (off-season t +1.9).  Given to same-team players the portable rating is worse (t +5 to +8): it is a
+second number, not a replacement.
+
+**2026.**  The portable rating (box part + 0.51 x the part beyond it, re-centered) keeps Wembanyama, Giannis, Kawhi,
+Jokic and SGA on top; the top falls 0.2-0.8 because stars' plus-minus parts are positive.  Rises: Draymond Green +1.32,
+Westbrook +1.21, LeBron +1.01 (70th to 25th), Harden +0.95 (46th to 15th), Durant +0.71.  Falls: Paul Reed -1.13, Luka
+Garza -1.09, Alex Caruso -0.93, Neemias Queta -0.80, Ajay Mitchell -0.77.  224 of 293 players with 2,000+ possessions
+move 0.1 pts/100 or more.
+
+**The site column (built locally, not published).**  `scripts/52_site.py` applies the published ratio
+(`outputs/portable/production.json`, 0.508) to the PRODUCT table with `portable.portable_table`, so the column cannot
+fall out of step with the ratings beside it; `docs/index.html` gains a sortable Portable column and portable
+offense / defense / total in the CSV.  No explanatory text on the page (the owner: the drafted footer was "AI slop,
+do not include").  The team ratings in `docs/data/ratings.json` are unchanged
+(max difference 0.0 over 14,578 rows).  2026 on the product table: Wembanyama 7.57 -> 6.75 stays 1st; Jokic 4th -> 2nd;
+Harden 31st -> 10th (+1.03); Jamal Murray 27th -> 16th; Curry 21st -> 17th; Queta 6th -> 11th (-0.84).
+
+## Experiment 41: the swap adjustment's give-back rule (2026-10-06, awaiting the owner's call)
+
+**The owner:** "Yes, run it" -- after experiment 40's read of Derrick White (2026: 2.60 before the swap step, 1.25 after,
+the league's largest swap charge, -1.35, of which -0.99 is give-back; consensus 10th-11th).  Each team's total is held
+fixed, so the team's net type prediction must be taken back from its players.  Shipped ("minutes"): the nearest point in
+plain squared distance, so each player gives back in proportion to his share of the team's possessions.  Candidate
+("flat"): the nearest point in possession-weighted squared distance, so every player of the team gives back the same
+amount.  Diagnostic ("none"): no give-back, team totals move.  `swapadjust.solve(..., giveback=)`,
+`91_swap_adjust.py --giveback=`; tests/test_swapadjust.py (+2).  Everything else as shipped; the minutes rule rebuilds
+the incumbent exactly (difference 0.0 over 14,579 rows).  Chain: `scratch/2026-10-06_giveback/giveback_chain.sh`.
+
+**What prompted it** (the owner: "how confident are we in the swaps in general re: being robust across all players
+etc? white is #11 in consensus").  `scripts/113_swap_explain.py` rebuilds the shipped swap adjustment of every player
+step by step (type x0.5, give-back, centering, spread hold) and matches the shipped table to 3e-14 (2024-2026).
+Against the consensus (2024-26 pooled, 475 players with 1,000+ possessions; a sanity check, never a target): Spearman
+0.809 before the swap step, 0.836 after the type, 0.827 after the give-back, 0.832 as shipped.  Each piece moves a
+player toward the consensus 53-54% of the time, the whole adjustment 63%; for the 48 largest give-backs, 50%.  White:
+consensus 10th, 51st before the swap step, 89th after (pooled give-back -0.95).  On average the adjustment holds up in
+every test (swap test z +4.3, year over year every tier, in-season t -4.4); per player it is close to a coin flip.
+
+| test (against the incumbent) | flat | none |
+|---|---|---|
+| year-over-year, team-game level | **+0.038, z +2.2, 18 of 56: worse** (8.6009 vs 8.5995) | +1.98, z +13.2: much worse |
+| by quality tier, team-game | top 30 z +4.1, 31-90 +2.4, 91-150 +2.4, 151-300 +1.5, 301+ +1.0 | |
+| year-over-year, stint level | **-0.213, z -7.9, 45 of 56: better** | z +11.7 |
+| by quality tier, stint | better in every tier: top 30 z -1.8, 31-90 -4.8, 91-150 -6.7, 151-300 -7.0, 301+ -9.0 | |
+| stint level, each side rescaled | -0.208, z -7.1, 42 of 56 | z +14.5 |
+| swap test, order / gaps | -0.002, z -0.2 / -0.07, z -1.2: a tie | z -1.8 / z +8.3 |
+| trade loss, offense / defense | +0.0006, z +1.9 / +0.0007, z +4.3: worse (top 30 offense z +3.9) | |
+| consensus, 1,000+ possessions | 0.839 (from 0.834) | 0.824 |
+
+- **The team constraint is essential**: with no give-back the type predictions move team totals and every test gets
+  much worse.
+- **Flat vs minutes splits by level**: the stint level (which sees bench lineups) prefers flat, most of all for low-tier
+  players; the team-game level and the per-player trade loss prefer the shipped rule, most of all for the top 30.  By the
+  decision rule (team-game z -2 or below) flat is not adoptable.
+- **It is not White's fix.**  Site table, 2026: median move 0.06 per 100 for players with 2,000+ possessions (94 of 293
+  move 0.1 or more; largest +0.38 Podziemski, -0.40 Jalen Williams).  White 1.25 to 1.47 (88th to 66th); pooled 2024-26
+  rank 89th to 72nd against consensus 10th.  Boston's net offensive type is +0.75 per possession and has to come back
+  from Boston's players under either rule (flat: 0.75 from each; minutes: about 8.3 x his share, 1.11 for White), while
+  White's own type is small (+0.30 offense, -0.64 defense), so the charge survives any give-back rule.

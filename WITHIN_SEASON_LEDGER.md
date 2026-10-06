@@ -85,6 +85,27 @@ rebuild bites: the defensive target's response on the rating games moves by up t
 possession when the shooters' three-point percentages come from the rating games alone; possessions come out at
 three quarters of the season's; on-court numbers move by a median 0.8 points per 100.
 
+## Run of 2026-10-04: all thirty seasons, five sizes
+
+The owner: split tests "at different sizes", and "think about ways to make it bigger".  Box-score models for
+1997-2016 saved the same way (`62 --save_models=within_e1` for 1997-2006, `within_e2` for 2007-2016, both at
+`--exclude_neighbours=1`); their tables equal the incumbent's steps 1-3 exactly (largest difference 0.0).  Then every
+season rated at five sizes, the rest of its games held out (`97 --rate_from=one` rates from ONE fold and tests on the
+rest; the default rates from every fold but one):
+
+| folder | share of games rated from | held out | deals x folds | ratings | pass/fail checks | failed |
+|---|---|---|---|---|---|---|
+| `q1of4` | 1/4 (one fold of four) | 3/4 | 3 x 4 | 360 | 7,920 | 0 |
+| `q1of3` | 1/3 (one fold of three) | 2/3 | 3 x 3 | 270 | 5,940 | 0 |
+| `within2` | 1/2 | 1/2 | 5 x 2 | 300 | 6,600 | 0 |
+| `q2of3` | 2/3 | 1/3 | 3 x 3 | 270 | 5,940 | 0 |
+| `within` | 3/4 | 1/4 | 3 x 4 | 360 | 7,920 | 0 |
+
+The whole-season reproduction check runs once per season (in `within`; the other folders reuse its result, since
+they read the same models and the same base tables).  A folder holds one `--rate_from` mode; 97 refuses to mix them.
+Two ratings of one deal share no game only at 1/4, 1/3 and 1/2, so agreement is measured at those sizes only.
+Results: DECISIONS.md, experiment 33c.
+
 ## The calibrator (scripts/98_calibrator.py): what IT sees
 
 | what | rule | check |
@@ -122,3 +143,16 @@ each fold and each season by the rankings' own possession weights, in training a
   saved settings and refuses others)
 - folds: four per deal, three deals per season, seeded by season and deal
 - held-out scoring: points as scored, the year-over-year test's scoring and replacement level
+
+## Experiment 35 (2026-10-05): the 9/10 size, the baselines, OpenRAPM as shipped per fold
+
+`within10`: every season rated from 9/10 of its games, one deal of ten folds (300 folds, 6,600 checks, 0 failed).
+
+| rating | what it is built from | what it never sees | checks |
+|---|---|---|---|
+| B1, linear box-score SPM (`102`) | the rating games' LeagueGameLog box rows (13 counts, minutes; never PLUS_MINUS); league rates and box-estimated possessions from the same games; padding constants averaged over the training seasons; coefficients fitted on player-seasons outside {H-1, H, H+1} against the leave-season-out RAPM with those seasons left out | the held-out games; season H and its neighbors in the label and the training rows | `baseline_b1_checks.parquet`: box rows only from fit games, fit games found in the game log (> 99%), label exclusion set; 3,750 checks, 0 failed |
+| B2 vanilla RAPM, B3 RAPM on B1 (`103`) | the rating games' stints (actual points, context unpenalized); B3's prior is the fold's own B1 (asserted) | penalties and multipliers are chosen on blocks touching no season in {H-1, H, H+1} | test games never among the fit games (asserted per fold) |
+| OpenRAPM as shipped (`106`) | the saved steps 1-3 fold rating; the pinned prior-shrink multipliers (2017-2026 folds outside {H-1, H, H+1}); the swap adjustment's type model from seasons more than one away, standardized on them; team possessions from the rating games' stints | the held-out games | whole-season version vs the shipped test table: shrink exact, swap adjustment within 0.006 pts/100 |
+
+Scoring (`104`, `105`): the held-out team-games as 97 stored them, reproduced to 6e-14 on all 1,860 folds before any
+new number was read; the held-out lineup swaps from the held-out games' stints only.

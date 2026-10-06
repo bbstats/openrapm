@@ -2,7 +2,8 @@
 multiplier per side, the games' part unchanged.
 
     python scripts/99_prior_shrink.py --base=season_ratings_product_pre_swap --out=season_ratings_product_priorshrink_pre_swap
-                                      [--rule=product|test] [--tag=within]
+                                      [--rule=product|test] [--tag=within] [--fold_seasons=2017-2026|all]
+                                      [--check=<existing table to reproduce>]
 
 Why.  Rated from three quarters of a season and scored on the other quarter (scripts/97_within_season.py, the
 within-season folds of 2017-2026), the two parts of a rating hold up differently: the games' own adjustment holds up
@@ -21,8 +22,15 @@ folds used are:
   --rule=test      every fold season outside the rated season and its two neighbours, so the year-over-year test,
                    which scores a season's rating on its neighbours' games, stays clean
 
-Seasons before the folds start borrow the multipliers fitted on all of them (they moved within +-0.015 across 2017-
-2026).  The table is re-centred per side as the rankings are (possession-weighted mean zero), and the prior and
+`--fold_seasons` pins WHICH seasons' folds are read, 2017-2026 by default: the adopted multipliers were fitted when the
+`within` folder held only those seasons, and on 2026-10-04 it grew to 1997-2026 (experiment 33c).  Without the pin
+every rerun silently fitted on 27-28 fold seasons and shrank harder (offence 0.68-0.69 against 0.70-0.73) -- which is
+what experiment 34's first run did.  `all` reads every season in the folder; only the 3/4-season folds (`rate_from`
+rest, four folds a deal) are accepted, the size the adopted recipe was fitted at.  `--check=<table>` asserts the output
+equals an existing table, so a rerun can prove it reproduces what ships.
+
+Seasons outside the fold seasons borrow the multipliers fitted on all of them (they moved within +-0.015 across
+2017-2026).  The table is re-centred per side as the rankings are (possession-weighted mean zero), and the prior and
 games' columns are kept consistent (rating = prior part + games' part).  Writes outputs/<out>.parquet in the base
 table's schema and outputs/csv/<out>_multipliers.csv.
 """
@@ -43,6 +51,52 @@ from _cli import check_flags, flag  # noqa: E402
 _spec = importlib.util.spec_from_file_location("_calib98", ROOT / "scripts" / "98_calibrator.py")
 C98 = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(C98)
+
+
+def parse_seasons(spec: str) -> tuple | None:
+    """`2017-2026` -> (2017, 2026); `all` -> None."""
+    if spec == "all":
+        return None
+    first, last = (int(x) for x in spec.split("-"))
+    assert first <= last, f"--fold_seasons={spec}"
+    return first, last
+
+
+def load_folds(directory: Path, seasons: tuple | None) -> list:
+    """The 3/4-season folds of `directory` whose season is inside `seasons` (both ends included; None = all),
+    after asserting their leak checks passed and every deal has its four folds."""
+    stems = sorted(p.stem[len("fold_"):] for p in directory.glob("fold_*.json"))
+    if seasons is not None:
+        stems = [s for s in stems if seasons[0] <= int(s[:4]) <= seasons[1]]
+    assert stems, f"no folds in {directory} for seasons {seasons}"
+    deals = {}
+    for s in stems:
+        info = json.loads((directory / f"fold_{s}.json").read_text())
+        mode = info["summary"].get("rate_from")
+        if mode is None or (isinstance(mode, float) and np.isnan(mode)):
+            mode = "rest"                                    # folds dealt before the flag existed are `rest`
+        assert mode == "rest", f"fold {s} rates from {mode!r}, not the 3/4-season `rest` size"
+        failed = [k for k, v in info["checks"].items() if isinstance(v, bool) and not v]
+        assert not failed, f"fold {s}: leak checks failed {failed}"
+        key = (int(info["summary"]["season"]), int(info["summary"]["repeat"]))
+        deals.setdefault(key, set()).add(int(info["summary"]["fold"]))
+    short = {k: v for k, v in deals.items() if v != {0, 1, 2, 3}}
+    assert not short, f"deals without exactly four folds: {sorted(short)[:5]}"
+    return [C98.Fold(directory, s) for s in stems]
+
+
+def multipliers_for(seasons, folds: list, rule: str) -> pd.DataFrame:
+    """One row per rated season: its prior-part multipliers, fitted on the folds outside the excluded seasons."""
+    fold_seasons = sorted({f.season for f in folds})
+    cache, rows = {}, []
+    for season in sorted(seasons):
+        excluded = frozenset({season} if rule == "product" else {season - 1, season, season + 1})
+        if excluded not in cache:
+            cache[excluded] = fit_prior_multipliers([f for f in folds if f.season not in excluded])
+        m_off, m_def = cache[excluded]
+        rows.append(dict(season=int(season), prior_off=m_off, prior_def=m_def,
+                         fold_seasons=len([s for s in fold_seasons if s not in excluded])))
+    return pd.DataFrame(rows)
 
 
 def fit_prior_multipliers(folds: list) -> tuple:
@@ -94,27 +148,27 @@ def main() -> None:
         raise SystemExit("--base=<steps 1-3 table> --out=<name>")
     rule = flag("rule", "product")
     assert rule in ("product", "test"), "--rule=product|test"
-    directory = ROOT / "outputs" / "within" / flag("tag", "within")
-    stems = sorted(p.stem[len("fold_"):] for p in directory.glob("fold_*.json"))
-    folds = [C98.Fold(directory, s) for s in stems]
+    tag = flag("tag", "within")
+    pinned = parse_seasons(flag("fold_seasons", "2017-2026"))
+    check_name = flag("check", "")
+    directory = ROOT / "outputs" / "within" / tag
+    folds = load_folds(directory, pinned)
     fold_seasons = sorted({f.season for f in folds})
-    checks = [json.loads(p.read_text())["checks"] for p in directory.glob("fold_*.json")]
-    failed = sum(1 for c in checks for v in c.values() if isinstance(v, bool) and not v)
-    assert failed == 0, f"{failed} leak checks failed in {directory}"
 
     base = pd.read_parquet(ROOT / "outputs" / f"{base_name}.parquet")
     missing = [c for c in ("prior_off", "prior_def", "u_off", "u_def", "poss_off") if c not in base.columns]
     assert not missing, f"{base_name} lacks {missing}"
-    cache, rows = {}, []
-    for season in sorted(base.season.unique()):
-        excluded = frozenset({season} if rule == "product" else {season - 1, season, season + 1})
-        if excluded not in cache:
-            cache[excluded] = fit_prior_multipliers([f for f in folds if f.season not in excluded])
-        m_off, m_def = cache[excluded]
-        rows.append(dict(season=int(season), prior_off=m_off, prior_def=m_def,
-                         fold_seasons=len([s for s in fold_seasons if s not in excluded])))
-    multipliers = pd.DataFrame(rows)
+    multipliers = multipliers_for(base.season.unique(), folds, rule)
+    multipliers["fold_tag"], multipliers["fold_first"], multipliers["fold_last"] = tag, fold_seasons[0], fold_seasons[-1]
     table = shrink(base, multipliers)
+    if check_name:
+        ref = pd.read_parquet(ROOT / "outputs" / f"{check_name}.parquet").set_index(["player_id", "season"])
+        got = table.set_index(["player_id", "season"])
+        assert got.index.sort_values().equals(ref.index.sort_values()), f"rows differ from {check_name}"
+        cols = ["rating_off", "rating_def", "prior_off", "prior_def", "u_off", "u_def"]
+        gap = float((got[cols] - ref.loc[got.index, cols]).abs().to_numpy().max())
+        print(f"check against {check_name}: largest difference {gap:.2e}")
+        assert gap <= 1e-10, f"does not reproduce {check_name}: largest difference {gap:.3e}"
     out = ROOT / "outputs" / f"{out_name}.parquet"
     table.to_parquet(out, index=False)
     (ROOT / "outputs" / "csv").mkdir(exist_ok=True)

@@ -4,101 +4,68 @@
 is the permanent record and carries every number quoted here.  Do not let this grow into a lab notebook.
 
 Branch `cleanup`; `main` is fast-forwarded to it at each publish, and the live site is served from `docs/`
-on `main`.  `pytest -q`: **382 passed, 1 failed, 1 xfailed, ~120 s** with the scraped data.  The failure is
+on `main`.  `pytest -q`: **441 passed, 1 failed, 1 xfailed, ~170 s** with the scraped data.  The failure is
 accepted and named at the bottom of this file; nothing else is red.
 
-## START HERE (2026-10-03 evening): the within-season calibrator, experiment 33
+## START HERE (2026-10-06): experiments 34-41 done and committed; the shot-quality build is next
 
-The owner asked for a calibrator of the ratings' misses that does not shrink peak seasons, trained on each season's
-own held-out games (2017-2026).  Built and run: `scripts/97_within_season.py` (rate from 3/4 of a season, every
-input rebuilt from those games; `WITHIN_SEASON_LEDGER.md` lists what is held out and how it is checked) and
-`scripts/98_calibrator.py`.  Full record: DECISIONS.md "Experiment 33".
-- **One multiplier per side** (offence x0.75, defence x0.97-0.99, fitted on held-out games of other seasons):
-  year-over-year **8.648** vs 8.666 (z -4.1), order unchanged, better in every quality tier; consensus unchanged;
-  2026 offence-first stars drop (Curry 21st, Harden 42nd, Doncic 12th).  Superseded by 33b.
-- **The trees on 78 inputs**: win within season (z -9.5 over the multiplier) but the order on neighbouring seasons is
-  worse (z +3.3): they learn the team-season's context.  Not a candidate.
-- **33b**: the part that comes back to the mean is the box-score PRIOR part (offence 0.70 on held-out games; the
-  games' part holds up, 1.21).  Shrinking the prior part only (offence x0.71, defence x0.95): year-over-year 8.648
-  (ties the one multiplier, z -4.1 vs incumbent), better within season (z -3.4, 9 of 10), consensus 0.840 (from
-  0.836); 2026 Curry 24th, Harden 50th.  **ADOPTED for all thirty seasons (the owner: "Good, adopt for now"):
-  the new incumbent `outputs/season_ratings_priorshrink.parquet`, 8.600 (z -12.2, 53 of 56); the product and the
-  site are LIVE (commit 7e5bdcc, pushed to cleanup and main 2026-10-03, the owner: "Yes go live").**
-- `tests/test_vs_consensus.py::test_star_guards_are_not_buried` fails on the product: LaMelo Ball 187th against
-  a ceiling of 160.  It ALREADY failed on the 2026-10-01 product (162); the shrink moves him further, as it
-  moves every offence-first guard (Trae Young 205th, Booker 85th, Curry 43rd, all inside their ceilings).
-  CI reads the frozen artifact and passes.  Re-basing the ceiling is the owner's call.
-- Not run yet on the candidate: trade loss (70 + 73), swap test (90).  Open: the multiplier for a WHOLE season
-  (fitted on 3/4-season ratings; half-season folds would show how it moves with evidence).
-- Rerun: `62 --exclude_neighbours=1 --score=0 --boards=2017,...,2026 --out=season_ratings_within_base
-  --save_models=within`, then `97 --models=within --base=season_ratings_within_base`, then `98 --out=calibc`;
-  splice + 91 + 63 as in `scratch/2026-10-03_within/` (`splice.py`).
+**Experiments 34-41 are committed on `cleanup` (the owner's ask, 2026-10-06), in two commits:** the code, tests and
+record (scripts 100-113; `src/eracoef/{scorecard,boxspm,vanilla,heldoutprior,portable}.py`; changes to
+`swapadjust.py`, `singleyear.py` and scripts 52, 91, 97, 99; `experiments/runs.csv`, `DECISIONS.md`, this file,
+`WITHIN_SEASON_LEDGER.md`), then the site build alone (`docs/index.html`, `docs/data/ratings.json`: the Portable
+column).  **`main` has not moved and the site is not published**: fast-forward `main` to the first commit only,
+or to both once the owner rules on the Portable column.  Commit only when the owner asks, and never name a model
+in a commit.  A session continued on another machine stashes uncommitted work: `git stash apply` and keep the
+stash (memory "Teleport auto-stash").
 
-## Earlier thread: the prior's model algorithm (2026-10-02, updated 2026-10-03)
+### Waiting on the owner (most recent first)
 
-The owner: *"let's focus on improving the prior, this time the model algorithm"*.  Their list, in order:
-1. linear / elastic net, 2. chimeraboost hyperparameter tune, 3. an ensemble of models, 4. bagging
-(chimeraboost `quality=4` = `n_ensembles=5`, `quality=5` = 8; `quality=3` = the default, no bag).
-They said do FIRST: a stacking regressor, plus-minus -> elastic net, everything else -> Boruta -> chimeraboost.
+1. **Publish the Portable column?**  Built and checked locally, not committed: `docs/index.html` (a sortable
+   Portable column, portable offence / defence / total in the CSV download) and `docs/data/ratings.json` (team
+   ratings unchanged, max difference 0.0 over 14,578 rows).  **No explanatory text on the page**: the owner called
+   the drafted footer "AI slop, do not include" (memory "No drafted prose on the site").  To publish: commit,
+   fast-forward `main`, push.
+2. **Experiment 41, the swap adjustment's give-back rule**: recommend keeping the shipped (minutes) rule; flat is
+   not adoptable (below).
+3. **Experiment 40, the portable rating**: the owner on the ranks: "Portable rank looks great"; the verdict rides
+   on item 1.
+4. **Experiment 34, teammates' shot mix**: a tie (8.5993 vs 8.5995); recommend not adopting.
+5. **From experiments 35-38**: (a) the prior without on-court plus-minus -- the strongest open candidate now:
+   experiment 39 finds on-court numbers are team context, and experiment 38 that they hurt out of season;
+   (b) RAPM on the linear box prior (B3) as the base, with the luck-adjusted targets and the swap adjustment on top
+   (B3 beats OpenRAPM year over year, 8.587 vs 8.600); (c) the swap adjustment at x0.75.  Experiment 37's stages 4-6
+   (era drift, targets, lockbox freeze) not run.
+6. **Proposed, not started**: the swap adjustment's TYPE model for White-type cases (its strength, now 0.5, or its
+   features).  Boston's +0.75 net offensive type is what charges Derrick White, whatever the give-back rule.
+7. Older and still open: experiment 32's tuned booster (options a/b/c, DECISIONS.md "Experiment 32"); experiment 29,
+   the team-movement weight (the owner does not want one-team players halved); the stayed list (30b).
+8. Back pocket: https://vorp.app/nba/about (JavaScript-rendered; a plain fetch returns only "vorp").
 
-**Experiment 31, the stack: DONE, NOT ADOPTED** (row in the record table below; the owner has the emailed summary).
+### What experiments 34-41 found (DECISIONS.md has every number)
 
-```python
-prior = StackingRegressor(                       # src/eracoef/stackprior.py: StackedSPM
-  estimators=[("linear", ElasticNetCV(l1_ratio=[.1,.5,.9,1], cv=GroupKFold(5) by player) on PLUS_MINUS),
-              ("booster", ChimeraBoostRegressor(quality=3, **cfg params) on the other 50 + chunk features)],
-  final_estimator=LinearRegression(positive=True),   # intercept, sample_weight = row weight
-  cv=the 5 player folds the prior already uses)      # fold fits = the out-of-fold preds; blend fit once
-PLUS_MINUS = ONC + OFFC   # on- AND off-court (the owner insisted on off-court; net = on - off is implied)
-```
-- Run: `62 --features=stack --stack=1 --stack_quality=3`; chain `scratch/2026-10-02_stack/stack_chain.sh`
-  (NAME=stack_q3); log `outputs/stack_q3_chain.log`; tables `outputs/season_ratings_stack_q3{_raw,}.parquet`.
-- Booster list: `scripts/92_stack_boruta.py` (50 trials on `outputs/prior_rows_stackpool_2026_{O,D}.parquet`,
-  dumped with `62 --features=sy --dump_rows=stackpool`) kept ALL 50 (`outputs/csv/boruta_stack_table.csv`) ->
-  `singleyear.STACK_BOOSTER_O/D` = PRIOR_FEATURES minus ONC.
-- Fitted (2026; same to 2 decimals every season): elastic net O `onc_o .247, offc_o -.072`; D `onc_d .692,
-  offc_d -.213` (defence label = points allowed); blend O `-.064 + .571 lin + .655 boost`, D `.019 + .834 lin +
-  .378 boost` (weights sum 1.22); out-of-fold rmse O lin .637 / boost .636 / stack .545, D 1.035 / 1.407 / .953.
-  The ridge's prior_scale medians: incumbent O 2.09 / D 0.91, stack O 1.67 / D 0.48.
-- Results vs incumbent: year-over-year 8.677 (z +1.8, 23/56); stint z +8.4, order-only z +12.7; swap test
-  order worse (off z -6.8, def z -4.8); trade loss off z +5.0 / def z +7.8, worse in every tier but the top 30;
-  top 30 better on year-over-year (z -2.7); consensus .876 / .859 total / def (from .836 / .813).  2026: Edey
-  (590 poss) 8th, Keshad Johnson (621) 12th, Caruso 5th; Queta, Clingan, Harden out of the top 20.
-- Timing: quality=3 2.2 min a season (~70 min for 30); quality=5 10 min a season (5 hours).
+| exp | the owner's question | answer |
+|---|---|---|
+| 34 | teammates' shot quality with him on the court | a tie once the shrink's folds are pinned (trap 22) |
+| 35 | slope vs error; part-season OpenRAPM against vanilla baselines | slope reads scale (about twice as sensitive), error ranks systems; seasons are the unit (more deals add nothing); **B3, RAPM on a linear box-only SPM prior tuned on other seasons, beats OpenRAPM year over year (8.587 vs 8.600)** and orders teammates better; OpenRAPM leads within season, mostly 2017-2026 where its shrink was fitted |
+| 36 | does the best penalty change with sample size? | vanilla RAPM's does not (Bayes); OpenRAPM's prior weight falls with more games while a linear box prior's rises; under identical tuning the linear prior wins (B4, RAPM on our prior, 8.609) |
+| 37 | a box prior fit directly on held-out games | every input group helps within season, none year over year; only fitting the shape year over year helps (t -3.4); probability of backtest overfitting 0.00 |
+| 38 | what helps in-season vs other seasons | out of season wants 2-3x the penalty; role, same-season RAPM, on-court numbers, shot-making and assists help in-season and hurt out of season; age and career help out of season |
+| 39 | traded players: real or regression to the mean? | the box score travels; defensive RAPM beyond the box score and on/off-court numbers stay with the team; eFG / TS / 2P% regress; the prior shrink and the swap adjustment are same-team corrections |
+| 40 | a portable rating beside the team rating | half the plus-minus part travels (0.49 mid-season trades, 0.56 off-season moves, pooled 0.51); movers rate 0.8-1.0 worse but play to their rating once matched on minutes; not better on held-out error, so a second number, not a replacement |
+| -- | how robust is the swap adjustment per player? | on average it holds up in every test; per player each piece is close to a coin flip (53-54% toward consensus, the whole 63%); the give-back is the weakest piece |
+| 41 | the give-back rule (prompted by Derrick White) | flat give-back worse at the team-game level (z +2.2) and on the trade loss, better at the stint level (z -7.9); no give-back much worse (z +13); White 88th to 66th only |
 
-**Why it lost, measured 2026-10-03** (the owner picked option a; `scripts/93_prior_oof.py`; full table in
-DECISIONS.md, "Experiment 31").  2026's training rows with outside labels, every prior out of player fold, scored
-on the one-season rows (the rated row's shape) against a label that shares no game with them:
-- the stack as built is far worse than the shipped booster: offence 0.754 vs 0.667 (z +11.7), defence 1.696 vs
-  1.509 (z +12.3).  Most of that is width -- its elastic net's one-season predictions are twice too wide (slope
-  0.49 / 0.46) and the blend gives it 57% / 83% -- but not all: with every prior rescaled by its own best line
-  (the build fits the prior's scale, so order is what counts) the stack is still worse, 0.688 vs 0.657 and 1.495
-  vs 1.464, z +3.2 / +3.2.  The logged 0.545 was on career labels, where the shipped booster had 0.506 anyway.
-- trained on outside labels (chunk rows only), the stack ties the shipped booster on offence and beats it on
-  defence: 1.443 vs 1.509 raw (z -5.1), 1.438 vs 1.464 rescaled (z -2.3).
-- the screen's score from now on is the RESCALED error (`94_tune_booster.py`); raw rmse rewards a narrow prior.
-- a screen, not the test: experiment 25 used outside labels in a build and lost the year-over-year test.
+### Where the pieces are
 
-**The owner picked (a), chimeraboost tuning then bagging, screened before any build -- experiment 32** (DECISIONS.md
-"Experiment 32").  `scripts/94_tune_booster.py` (60 Optuna trials a side on the rescaled screen) found settings that
-beat the shipped booster on both sides and both player splits: offence 0.6568 -> 0.6424 (z -2.8 / -2.9), defence
-1.4641 -> 1.4213 (z -7.3 / -6.0).  On defence most of it is one change: chimeraboost's early-stopping split holding
-out whole players (`groups=`) instead of random rows (z -4.5 / -4.0 alone).  Bags add little.  **The owner then ruled one
-holdout method on both sides -- whole players** ("we are not going to use different holdout methods for statistical
-reasons that are 100% identical"); tune1's offence had come out on rows, so its build was stopped.  **tune2**
-(`94 --split=players`, both sides; log `outputs/tuned2_chain.log`) **failed my gate on offence**: defence z -7.1 /
--6.5, offence only z -1.0 / -1.0 (bag of five), so nothing was built.  Asked the owner: (a) build both sides tuned
-anyway, the test decides (recommended); (b) defence tuned, offence on its shipped settings with whole players held
-out; (c) stop.  To build (a): write `booster_params_tune2b.json` as `gate_tune2.py` would and run
-`tuned2_chain.sh` from its build loop.  Not chosen: (b) the
-defence-only stack on outside labels (~5.5 h build).
-
-**Uncommitted** (nothing committed since 2026-10-01): `src/eracoef/stackprior.py`, `tests/test_stackprior.py` (4
-pass), `scripts/92_stack_boruta.py`, `scripts/93_prior_oof.py`, `62` (`--stack`, `--stack_quality`, and a fix:
-`--dump_rows` with career labels crashed in a same-team print), `singleyear.py` (`STACK_BOOSTER_*`, `"stack"` set),
-this file, `DECISIONS.md` (now with experiment 31), `scripts/77-82`, and `singleyear.py`'s `boruta_onoff` /
-`boruta_net`.
-The owner wants clock times in 12-hour American format.
+- Sheet "OpenRAPM experiments", https://docs.google.com/spreadsheets/d/1gPeRCFUtJNPtsBq_j2CNiTTdrarb98Yf3zXYx974jfI:
+  tabs Definitions, Experiments (rows through 41), Scorecard, In vs out of season, Traded players, Portable rating.
+- Chains and logs: `scratch/2026-10-05_scorecard/` (experiments 35-40) and `scratch/2026-10-06_giveback/` (41).
+  Outputs: `outputs/within/<tag>/` (folds, incl. `deadline`), `outputs/scorecard/`, `outputs/heldout/`,
+  `outputs/portable/`.
+- `scripts/113_swap_explain.py --team=BOS --player="Derrick White" --also=2024,2025` rebuilds a team's swap
+  adjustment step by step (type, give-back, centring, spread hold) and asserts it equals the shipped table.
+- Emailed to the owner 2026-10-06, "OpenRAPM 2026: team vs portable ratings": a Drive CSV of all 582 players
+  (team and portable rating, box part and plus-minus part per side).
 
 ## How we work (the owner, 2026-09-13/14)
 
@@ -180,6 +147,9 @@ predicted twice, 56 observations.  The prior must not have seen the two scored s
          the three parquets; ~3 min a season, so ~95 min for thirty.  With --chunk_label=outside, ~11 min a
          season: 280-310 extra RAPM solves each)
     .venv/Scripts/python scripts/99_prior_shrink.py --base=season_ratings_<name>_raw --out=season_ratings_<name>_shrunk_raw --rule=test
+        (the fold seasons are PINNED to 2017-2026 by default, the folds the adopted multipliers were fitted on; the
+         `within` folder holds 1997-2026 since 2026-10-04, and an unpinned rerun shrank harder -- experiment 34's
+         first run.  `--check=<table>` asserts a rerun reproduces a shipped table)
     .venv/Scripts/python scripts/91_swap_adjust.py --base=outputs/season_ratings_<name>_shrunk_raw.parquet --kappas=0.5 --taus= --hold_spread=within --tag=<name>
         (the swap adjustment the incumbent carries; writes outputs/season_ratings_<name>.parquet, ~2 min)
     .venv/Scripts/python scripts/63_yoy.py --rankings=<name>=outputs/season_ratings_<name>.parquet,incumbent=outputs/season_ratings_priorshrink.parquet --ref=incumbent --tag=<name> --splits=
@@ -187,6 +157,11 @@ predicted twice, 56 observations.  The prior must not have seen the two scored s
     .venv/Scripts/python scripts/66_compare.py incumbent=outputs/season_ratings_priorshrink.parquet <name>=outputs/season_ratings_<name>.parquet --season=2026 --top=20 --yoy=outputs/yoy_<name>.parquet --ref=incumbent
     .venv/Scripts/python scripts/90_swap_test.py --rankings=incumbent=outputs/season_ratings_priorshrink.parquet,<name>=outputs/season_ratings_<name>.parquet --contexts=nofatigue --checks=0 --tag=<name>
         (the swap test: does it order teammates better; 40 s)
+    .venv/Scripts/python scripts/101_log_run.py --name=<name> --exp=<number> --idea=owner --verdict=pending --changed="<one plain sentence>"
+        (the experiment table, the owner's 2026-10-04 ask: one row per experiment in experiments/runs.csv, every number read
+         from the outputs above; then mirror the row into the Google Sheet "OpenRAPM experiments",
+         https://docs.google.com/spreadsheets/d/1gPeRCFUtJNPtsBq_j2CNiTTdrarb98Yf3zXYx974jfI, tab Experiments.  Re-run with
+         --verdict=adopted|rejected|"not adopted" once the owner rules; the same --exp replaces its row)
 
 **Decision rule:** adopt only if `z` is -2 or below with no gross consensus miss and the 2026 top 20 not
 worse; ties go to the simpler version.  Read the row "each side rescaled to the scored season" to see
@@ -244,30 +219,10 @@ is a rating looking FORWARD at the season after it; "next" is a rating looking B
 | on/off alone in both priors, in place of the raw on-court ratings (2026-10-01) | 8.704 | z +6.9, 12 of 56: worse (order a tie, the offensive spread wider); trade loss offence z +5.6; Ajay Mitchell 9th to 6th.  Not adopted.  `--features=boruta_net` |
 | the prior as a stack (2026-10-02): on- and off-court plus-minus into an elastic net, the other 50 columns (Boruta kept all, `92_stack_boruta.py`) into chimeraboost quality=3, blended on out-of-player-fold predictions | 8.677 | z +1.8, 23 of 56: worse; stint level z +8.4, order-only z +12.7; trade loss offence z +5.0 / defence z +7.8, worse in every tier but the top 30; swap test order worse (offence z -6.8, defence z -4.8); consensus 0.876 total / 0.859 defence (from 0.836 / 0.813); only the top 30 better (z -2.7).  2026: Zach Edey (590 poss) 8th, Keshad Johnson (621) 12th, Caruso 5th; Queta, Clingan, Harden out of the top 20.  Not adopted.  `62 --features=stack --stack=1 --stack_quality=3` (`stackprior.StackedSPM`).  Why (2026-10-03, `93_prior_oof.py`): trained on career labels its elastic net's one-season predictions are twice too wide, and even rescaled the stack orders players worse than the shipped booster (z +3.2 / +3.2) |
 | 33b: the box-score prior part times a held-out multiplier per side (offence x0.72, defence x0.95), fitted on each season's own held-out games (within-season folds 2017-2026; 1997-2016 borrow the pooled value) (2026-10-03) | **8.600** | **z -12.2, 53 of 56**; every era better (1998-2006 18 of 18, 2007-2016 19 of 20, 2017-2025 16 of 18); swap test order z +3.1 (40 of 56), gaps z -6.2; trade loss offence z -3.1, defence z +5.5 (0.0007 on 0.248); stint level with each side rescaled z +2.1; consensus 0.834 (from 0.836), top five 5 of 5.  2026: Curry 21st, Harden 31st, Durant 41st (product).  **ADOPTED 2026-10-03 (the owner: "Good, adopt for now") -- the incumbent**, `outputs/season_ratings_priorshrink.parquet`.  `99_prior_shrink.py`; the trees of experiment 33 not a candidate |
+| 34: teammates' shot mix with him on the court (2026-10-04) | 8.599 | a tie (z -0.2) once the shrink's folds are pinned; the owner's call pending, recommend not adopting |
+| 35 / 36: baselines -- B3, RAPM on a linear box-only SPM prior; B4, RAPM on OpenRAPM's own prior; both tuned on other seasons (2026-10-05) | **8.587** / 8.609 | B3 z -2.6 (better, every era) and orders teammates better; B4 z +2.7.  Reference rows; B3's recipe as the base is an open option |
+| 41: the swap adjustment's give-back taken flat instead of by minutes (2026-10-06) | 8.601 | z +2.2, 18 of 56: worse; stint level z -7.9 (mostly the bench); trade loss worse (defence z +4.3, top 30 offence z +3.9); consensus 0.839.  Not adoptable.  No give-back at all: z +13.2 |
 | rejected | | every chunk size; booster settings; off-court features; one row per player-season; cross-fitting the penalty; the un-shrunk label on BOTH sides (the 2026 offensive spread collapses 1.60 to 1.14, Curry falls to 61st); `onc_d` off the defensive list (the trade loss finds nothing) |
-
-## Open with the owner (2026-10-01)
-
-0. **Shipped 2026-10-01: the swap adjustment, team version** -- the owner's goal is ranking players among their
-   own team, judged by "player vs replacement in lineups".  The new instruments are the swap test
-   (`90_swap_test.py`) and the adjustment (`91_swap_adjust.py`); every later candidate goes through 91 before it
-   is scored (see "What ships").  Open from it: the time-on-court term measured an artifact, not fatigue; each
-   player's own swaps added nothing on top of the type model; the defensive trade loss of the shipped version is
-   slightly worse (z +2.0, players ranked 151-300).
-1. **Experiment 29, the team-movement weight** (`--trade_weight=0.5 --trade_bands=1`): the only change that
-   passes the rule (z -4.1), and it wins equally for traded and not-traded players.  It only reweights the box
-   prior's training rows -- one career-wide number per player (`1 - sum(share ** 2)` + 0.5, so a one-team
-   player counts half), nothing at rating time.  The owner does not want one-team players halved; not adopted.
-2. **The stayed list** (experiment 30b): a tie on the test, better at stint level and on consensus, defensive
-   trade loss worse, Durant 72nd and LeBron 65th in 2026.  The owner's call.
-3. **Proposed next, none started:** experiment 31, experiment 30 rated as if traded plus `age` as an input (the
-   owner's idea; years of experience is already in, `age` never has been); weighting each label by its own
-   precision instead of team count (the non-blind version of 29); and a one-season check of whether the
-   veteran penalty in the traded list comes from the window weights (rows weigh by the feature half's
-   possessions, so traded veterans' windows lean 57% toward "season 1 predicts season 2").
-
-The chains and one-off scripts behind experiments 25-30b are in `scratch/2026-10-01_experiments_25_to_30b/`
-(gitignored; they still point at the session's old temp folder for `movement.py`).
 
 ## THE FINDING to carry forward: OpenRAPM is about a sixth too wide, and three sources agree
 
@@ -308,6 +263,10 @@ whose team scored while he was on the floor has his defensive correction pushed 
   furthest against the luck-adjusted ones, so it was not the `def3` pattern that excuses a drop.  Ruled:
   keep `onc_d`.  Note the 2026 top 20 was NOT the reason -- to the eye it was arguably better.
 - **The amplitude as a rescale** (experiment 20).  See above.
+- **The swap adjustment's give-back rule** (experiment 41): flat loses at the team-game level and on the trade
+  loss; no give-back loses everything.  The minutes rule stays.
+- **The portable rating as a replacement** (experiment 40): given to same-team players it is worse (t +5 to +8).
+  It is a second number beside the team rating.
 - **The trade flag as a rating-time switch** (experiments 26, 30, 30b).  Rating everyone as if traded loses;
   switching it on only for the players who really changed teams ties switching it off for everyone (z +0.8).
   The flag learns who gets traded (veterans, often declining), not what a trade does.
@@ -328,6 +287,12 @@ whose team scored while he was on the floor has his defensive correction pushed 
 | `90_swap_test.py` | the swap test: does a ranking order teammates the way the games of the seasons either side do -- every pair of lineups that share four players, the two swapped players' rating gap against their swap difference (DECISIONS.md, "The swap test") |
 | `91_swap_adjust.py` | the swap adjustment: re-split each team's credit by its lineup swaps (a type model, then each player's own swaps), team totals fixed; scores a grid on the swap test and writes the chosen arm (DECISIONS.md, "The swap adjustment") |
 | `95_miss_by_group.py` | where the ratings miss most against expectation: each player's trade-set correction, adjusted for his rating level and the evidence behind it, by fifths of every statistic (plain names, `eracoef.glossary`); the owner's variance question, DECISIONS.md "Where the ratings miss most" |
+| `97_within_season.py` | within-season folds, every input rebuilt from the rating games (`WITHIN_SEASON_LEDGER.md`); `--split=deadline` rates before the date 60% of the regular season was played and scores after, and the reverse |
+| `101_log_run.py` | the experiment table (`experiments/runs.csv`, mirrored to the sheet's Experiments tab); `--sheet` prints the rows |
+| `102`-`106` | the scorecard baselines (B1 linear box SPM, B2 vanilla RAPM, B3/B4 RAPM on a prior), the scorecard itself (`104`, error and slope kept apart), held-out swaps (`105`), OpenRAPM as shipped on every fold (`106`) |
+| `107` / `108` | the box prior fit on held-out games: exact quadratics per penalty pair (`107`; `--traded=1` splits traded players' contributions) and the selection (`108`) |
+| `110` / `111` / `112` | in-season vs other seasons; the traded-player check; the portable rating (fit, cross-fitted tests, production ratio in `outputs/portable/production.json`) |
+| `113_swap_explain.py` | one team's swap adjustment step by step, checked against the shipped table |
 | `93_prior_oof.py` | a prior's out-of-player-fold error on one season's training rows (dumped by `62 --chunk_label=outside --dump_rows=`), scored on the one-season rows against labels that share no games with them; ~6 min for four priors.  A screen, not the test |
 
 `outputs/bgmm_proba.parquet` carries `player_id`, `season`, the winning player type and **all eight mixture
@@ -351,6 +316,9 @@ tabs at the top and the dark-mode button are `docs/site.css` and `docs/site.js`,
 writes them into bias.html); a new page needs the same `<nav class="site">` block and its colours given again
 under `:root[data-theme="dark"]`.  The
 bias page is deliberately a title, one table and two short paragraphs; the owner has trimmed it twice.
+**Built, not published (2026-10-06):** a sortable Portable column on the rankings page, from
+`outputs/portable/production.json` applied by `52_site.py` to the product table (`portable.portable_table`).  **Never
+add explanatory prose to a page** -- the owner rejected the drafted footer as "AI slop"; ask the owner for the wording.
 
 ## Traps that cost a day
 
@@ -376,32 +344,35 @@ bias page is deliberately a title, one table and two short paragraphs; the owner
     a Boruta trial on 33,000 rows took 30 minutes.  `gbdt_prior.run_boruta(explain_rows=1000)` fixes it.
 12. Script 62 pins BLAS to one thread, so a 6,000-column label solve takes 5 s; outside labels need ~300 a
     season and are solved by Cholesky on `--label_threads` cores (0.6 s each) for that reason.
+13. Twenty-three traps now: 22, a re-fitted constant read from a folder that later grew (pin it; 99's
+    `--fold_seasons`), and 23, scoring traded players by weighting team-game rows (it scores the other nine;
+    split the prediction by player).  Memory "era-coefs measurement traps".
 
 ## The one failing test, accepted by the owner (2026-09-18)
 
-`tests/test_vs_consensus.py::test_star_guards_are_not_buried` puts LaMelo Ball at rank 162 against a
-hand-set ceiling of 160 on the rebuilt published table.  **In points that is 0.016 per 100** -- he sits
+`tests/test_vs_consensus.py::test_star_guards_are_not_buried` puts LaMelo Ball at rank 187 against a
+hand-set ceiling of 160 on the published table (162 before the prior shrink of 2026-10-03, which moves every
+offence-first guard down).  The numbers below are from the 2026-09-18 ruling.  **In points that is 0.016 per 100** -- he sits
 0.168, the player at rank 160 sits 0.184 -- six times smaller than the owner's threshold for nothing, and
 the check is a rank ceiling, the instrument the owner has ruled does not measure size.  The owner: *"that
 test can fail, no worries."*  The honest fix, not done, is to replace the rank ceiling with a points check.
 
 ## Where to start next
 
-1. **Credit shot creation properly in the prior.**  The one live lead with two independent measurements
-   behind it (the creator gap above, and the trade set's under-credited statistics).  A feature change,
-   then the test and the trade loss like anything else.  One build.
-2. **Split on-court plus-minus into its offensive and defensive halves** so the defensive fit cannot read
-   team scoring as defensive credit.  Named mechanism, one build.
-3. **The eight mixture probability columns into the prior**, which the owner has asked for.  The input is
-   written; nothing is wired.
-4. **A standard error per player for alpha**, from the inverse of the trade set's own matrix, so a
-   correction can be read against its own noise.  Half a day.
+1. **Get the owner's calls** on the list in START HERE; commit and publish only when the owner says so.
+2. **If the owner says go: the prior without on-court plus-minus** (item 5a).  Experiments 37-39 point the same way: the
+   on-court inputs carry team context, help in-season and hurt out of season.  One build, then the standard chain.
+3. **The swap adjustment's type model** for White-type cases (item 6): its strength or its features, scored on the
+   standard battery plus the per-player consensus pieces (`113_swap_explain.py`).
+4. Older leads, unchanged: credit shot creation in the prior; split on-court plus-minus into offensive and
+   defensive halves; the eight mixture probability columns into the prior; a standard error per player for alpha.
 
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest tests -q                                  # 382 passed, 1 failed (LaMelo, accepted), 1 xfailed
-    .venv/Scripts/python scripts/63_yoy.py --rankings=incumbent=outputs/season_ratings_swapadj_within.parquet,ship=artifacts/season_ratings.parquet --ref=incumbent --tag=verify --splits=
-                                                                             # incumbent 8.666
+    .venv/Scripts/python -m pytest tests -q                                  # 441 passed, 1 failed (LaMelo, accepted), 1 xfailed
+    .venv/Scripts/python scripts/63_yoy.py --rankings=incumbent=outputs/season_ratings_priorshrink.parquet,ship=artifacts/season_ratings.parquet --ref=incumbent --tag=verify --splits=
+                                                                             # incumbent 8.600 (8.5995)
     .venv/Scripts/python scripts/64_consensus_report.py outputs/season_ratings_product.parquet
-                                                                             # 0.848 / 0.813 / 0.833, spreads 1.04 / 1.05, top5 4
-                                                                             # (before the swap adjustment: 0.787 / 0.803 / 0.795)
+                                                                             # 0.851 / 0.816 / 0.832, spreads 0.77 / 1.00, top5 4
+    .venv/Scripts/python scripts/113_swap_explain.py                         # "reproduces the shipped swap adjustment ... 2.13e-14"
+    .venv/Scripts/python scripts/52_site.py                                  # 14,578 rows; ratings.json with po / pd / pt fields

@@ -51,6 +51,11 @@ MODEL_LAYER = [
     "looseason.py",     # one rating per player from every season but one; additive season grams
     "priorridge.py",    # the ratings ridge: prior as the centre, penalty by game-grouped CV
     "rloocv.py",        # rebalanced leave-one-out: the splitter and the partner rule, numpy only
+    "scorecard.py",     # experiment 35: error and slope on held-out team-games, the controls
+    "boxspm.py",        # experiment 35, B1: the linear box-score-only SPM
+    "vanilla.py",       # experiment 35, B2/B3: vanilla RAPM and RAPM on B1, one factorization per penalty
+    "heldoutprior.py",  # experiment 37: the prior fit on held-out games, an exact quadratic in its weights
+    "portable.py",  # experiment 40: the portable rating, traded players against same-tier players who stayed
     "glossary.py",      # plain names for the feature codes, a table and nothing else
     "stackprior.py",    # the stacked prior (experiment 31): fitted on the rows it is handed
     "simulate.py",      # the synthetic fixture the tests fit against

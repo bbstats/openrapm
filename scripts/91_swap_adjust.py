@@ -4,12 +4,16 @@
                                      [--kappas=0.5,1] [--taus=1000,3000,10000,30000,100000]
                                      [--folds=5] [--ridge=1e-4] [--first=1998] [--last=2025] [--tag=swapadj]
                                      [--choose="type x0.5"] [--hold_spread=0|within|whole]
-                                     [--exclude_near=1] [--score=1]
+                                     [--exclude_near=1] [--score=1] [--giveback=minutes|flat|none]
 
 What ships (adopted 2026-10-01, the owner's "team version"):
 
     python scripts/91_swap_adjust.py --base=outputs/season_ratings_product.parquet --kappas=0.5 --taus=
                                      --hold_spread=within --exclude_near=0 --score=0 --tag=product_swapadj
+
+`--giveback` (experiment 41) is how each team's net type prediction is taken back so its total stays put:
+`minutes` (shipped) in proportion to each player's share of the team's possessions, `flat` the same amount from every
+player of the team, `none` not at all (a diagnostic: team totals move).  Only the type arms (no --taus) take it.
 
 `--exclude_near=0` lets every other season train the type model (ruling 2); the tests need the default 1, which
 keeps the two scored seasons out.  `--score=0` skips the swap test, which is only honest at `--exclude_near=1`.
@@ -104,6 +108,9 @@ def main():
     first, last = int(flag("first", "1998")), int(flag("last", "2025"))
     tag = flag("tag", "swapadj")
     hold = flag("hold_spread", "0")            # "within" | "whole" | "0": give back the width (swapadjust.hold_spread)
+    giveback = flag("giveback", "minutes")     # experiment 41: how a team's net type prediction is taken back
+    assert giveback in sa.GIVEBACKS, f"--giveback={giveback}: one of {sa.GIVEBACKS}"
+    assert giveback == "minutes" or not taus, "--giveback other than minutes is defined for the type arms only (--taus=)"
     assert hold in ("0", "within", "whole"), f"--hold_spread={hold}: 0, within or whole"
     # Seasons within this distance of the rated one stay out of its type model.  1 (the default) keeps both scored
     # seasons out, which the swap and year-over-year tests need; 0 is the published table's setting: every other
@@ -164,7 +171,7 @@ def main():
     for name, kappa, tau in arms:
         parts = []
         for s in pairs:
-            c = {side: sa.solve(systems[(s, side)], kappa * type_pred[(s, side)], tau) for side in sa.SIDES}
+            c = {side: sa.solve(systems[(s, side)], kappa * type_pred[(s, side)], tau, giveback) for side in sa.SIDES}
             t = raw[raw.season == s].copy()
             t["c_o"] = t.player_id.map(c["offense"]).fillna(0.0).to_numpy()
             t["c_d"] = t.player_id.map(c["defense"]).fillna(0.0).to_numpy()

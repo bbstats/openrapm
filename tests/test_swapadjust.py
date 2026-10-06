@@ -104,3 +104,37 @@ def test_holding_the_whole_spread_keeps_the_order_and_the_centre():
     assert np.isclose(np.average(held, weights=weight), np.average(adjusted, weights=weight))
     var = lambda x: np.average((x - np.average(x, weights=weight)) ** 2, weights=weight)  # noqa: E731
     assert np.isclose(var(held), var(base))
+
+
+def test_the_flat_giveback_keeps_team_totals_and_takes_the_same_amount_from_every_single_team_player():
+    season, truth, _ = _season(1)
+    pairs = sa.residual_pairs(season, truth, context="none")
+    poss = sa.team_possessions(season)
+    rng = np.random.default_rng(5)
+    mean = pd.Series(rng.normal(0, 2, len(truth)), index=truth.player_id)
+    for side in sa.SIDES:
+        c = sa.corrections(pairs[side], poss[side], mean, np.inf, giveback="flat")
+        assert np.allclose(_team_totals(c, poss[side]).to_numpy(), 0.0, atol=1e-6), side
+        p = poss[side]
+        single = p.groupby("player_id").team.nunique()
+        single = single[single == 1].index
+        took = (mean.reindex(c.index) - c).reindex(single)
+        team = p.drop_duplicates("player_id").set_index("player_id").team.reindex(single)
+        for t, g in took.groupby(team):
+            assert np.ptp(g.to_numpy()) < 1e-9, (side, t)          # one amount per team
+        # the shipped rule is still the default, and it takes more from the players with more possessions
+        c_min = sa.corrections(pairs[side], poss[side], mean, np.inf)
+        took_min = (mean.reindex(c_min.index) - c_min).reindex(single)
+        share = p.set_index("player_id").poss.reindex(single) / p.groupby("team").poss.sum().reindex(team).to_numpy()
+        for t, g in took_min.groupby(team):
+            s = share[g.index]
+            assert np.allclose(g / s, (g / s).iloc[0], rtol=1e-6), (side, t)   # in proportion to his share
+
+
+def test_no_giveback_is_the_type_prediction_itself():
+    season, truth, _ = _season(2)
+    pairs = sa.residual_pairs(season, truth, context="none")
+    poss = sa.team_possessions(season)
+    mean = pd.Series(np.linspace(-1, 1, len(truth)), index=truth.player_id)
+    c = sa.corrections(pairs["offense"], poss["offense"], mean, np.inf, giveback="none")
+    assert np.allclose(c.reindex(mean.index).to_numpy(), mean.to_numpy())
