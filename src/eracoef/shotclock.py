@@ -68,7 +68,9 @@ def rebuild(frame: pd.DataFrame, rules: ClockRules | None = None) -> pd.DataFram
     last reset, the seconds since it, whether the clock was off, and `sc_eff` = what the offence really had
     (the shot clock, or the game clock when that is shorter).
 
-    Needs season, clock, poss_start, poss_start_clock, events (shotframe's columns)."""
+    Needs season, clock, poss_start, poss_start_clock, events (shotframe's columns).  With `anchor_nev` (frames from
+    FRAME_VERSION 4, the clock set to the anchor by shotframe.anchored) only the events logged up to and including the
+    anchor row count, whatever their clock reading; without it, the same-second rule below."""
     rules = rules or ClockRules()
     n = len(frame)
     sc = np.empty(n)
@@ -80,15 +82,24 @@ def rebuild(frame: pd.DataFrame, rules: ClockRules | None = None) -> pd.DataFram
     starts = frame["poss_start"].to_numpy()
     t0s = frame["poss_start_clock"].to_numpy(float)
     evs = frame["events"].fillna("").to_numpy()
+    nev = frame["anchor_nev"].to_numpy() if "anchor_nev" in frame.columns else None
     lag = rules.lag
     for i in range(n):
         season, t = int(seasons[i]), clocks[i]
         k0 = str(starts[i])
         t_reset, value, rk = t0s[i], 24.0, k0
         clock_off = t_reset < value
-        for ek, ec in _parse(evs[i]):
-            if ec < t:                      # an event after the shot (same-second ties stay in)
+        toks = _parse(evs[i])
+        if nev is not None:
+            toks = toks[:int(nev[i])]
+        for ek, ec in toks:
+            if ec < t:                      # an event after the shot
                 break
+            # The same-second rule (2026-10-06, the search's review): an event logged at the shot's own clock reading
+            # may belong to the shot itself (shots after the 15 such non-shooting fouls of 2016 went in 20%, against
+            # 45%), so it never resets the clock -- except an offensive rebound, which a tip-in follows in the same second.
+            if nev is None and ec == t and ek not in ("oreb", "oreb_team"):
+                continue
             rem = value - (t_reset - ec) + lag.get(rk, 0.0)
             if ek in ("oreb", "oreb_team"):
                 t_reset, value, rk = ec, rules.oreb_value(season, rem), "oreb"

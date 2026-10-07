@@ -122,3 +122,108 @@ def test_rim_map_puts_a_deep_scorer_back_on_the_league_scale_and_keeps_the_home_
     lg = raw[raw.team != raw.arena].dist_xy.lt(3.0).mean()      # the league the map targets: every visitor
     assert abs(share(raw) - lg) > 0.1 and abs(share(mapped) - lg) < 0.03
     assert np.allclose(np.arctan2(mapped.y, mapped.x), np.arctan2(raw.y, raw.x))     # only the depth moves
+
+
+def test_the_anchor_is_the_last_row_that_cannot_belong_to_the_shot():
+    gp, _, _ = _parsed(True)
+    f = pd.DataFrame(gp.shot_log)
+    got = list(zip(f["anchor_clock"], f["anchor_kind"]))
+    assert got[0] == (720.0, "jump")                     # the opening tip
+    assert got[2] == (678.0, "reb")[:1] + ("oreb",)       # the offensive rebound before the putback three
+    assert got[4] == (630.0, "tov")                       # the turnover, never the blank STEAL row
+    assert got[5] == (585.0, "ft")                        # the technical free throw, never the technical foul
+    # and the shot's own stamp is never the anchor
+    assert (f["anchor_clock"] >= f["clock"]).all()
+
+
+def test_anchored_timing_never_reads_the_shots_own_stamp():
+    from eracoef.shotframe import anchored
+    f = pd.DataFrame({"clock": [500.0, 480.0, 300.0], "anchor_clock": [505.0, 486.0, 300.0],
+                      "poss_start_clock": [510.0, 500.0, 320.0], "secs_into_poss": [10.0, 20.0, 20.0],
+                      "secs_since_oreb": [3.0, np.nan, 0.0], "secs_since_timeout": [np.nan, 30.0, 1.0],
+                      "shooter_secs_on": [2.0, 100.0, 50.0]})
+    g = anchored(f)
+    assert g["clock"].tolist() == [505.0, 486.0, 300.0]
+    assert g["secs_into_poss"].tolist() == [5.0, 14.0, 20.0]
+    assert g["secs_since_oreb"].iloc[2] == 0.0 and np.isnan(g["secs_since_oreb"].iloc[1])
+    assert g["secs_since_timeout"].iloc[1] == 24.0
+    assert g["shooter_secs_on"].tolist() == [0.0, 94.0, 50.0]          # entered between the anchor and the shot: 0
+    # moving the shot's stamp (the leak) moves nothing that a model reads
+    h = anchored(f.assign(clock=f["clock"] - 2.0, secs_into_poss=f["secs_into_poss"] + 2.0,
+                          secs_since_oreb=f["secs_since_oreb"] + 2.0, secs_since_timeout=f["secs_since_timeout"] + 2.0,
+                          shooter_secs_on=f["shooter_secs_on"] + 2.0))
+    for c in ("clock", "secs_into_poss", "secs_since_oreb", "secs_since_timeout", "shooter_secs_on"):
+        assert np.allclose(g[c], h[c], equal_nan=True), c
+
+
+def test_events_after_the_anchor_are_only_fouls_and_violations():
+    gp, _, _ = _parsed(True)
+    f = pd.DataFrame(gp.shot_log)
+    for ev, n in zip(f["events"].fillna(""), f["anchor_nev"]):
+        toks = [t.rpartition("@")[0] for t in ev.split(";")] if ev else []
+        assert 0 <= n <= len(toks)
+        assert all(k.startswith(("foul:", "viol:")) for k in toks[n:]), (ev, n)
+
+
+def test_the_spot_inside_ten_feet_is_coded_to_two_zones_and_the_logged_one_kept():
+    from eracoef.shotframe import code_location
+    f = pd.DataFrame({"dist_xy": [0.0, 1.2, 5.9, 6.1, 9.9, 10.0, 24.0], "xc": [0.0, 5.0, -40.0, 30.0, 90.0, 0.0, 220.0],
+                      "yc": [0.0, 11.0, 45.0, 53.0, 40.0, 100.0, 80.0], "angle": [0.0, 24.0, 41.0, 29.0, 66.0, 0.0, 70.0],
+                      "noloc": [True, False, False, False, False, False, False]})
+    g = code_location(f)
+    assert g["dist_xy"].tolist() == [0.0, 3.0, 3.0, 8.0, 8.0, 10.0, 24.0]     # unlocated and 10+ ft untouched
+    assert g["xc"].tolist()[1:5] == [0.0] * 4 and g["angle"].tolist()[1:5] == [0.0] * 4
+    assert np.allclose(np.hypot(g["xc"], g["yc"])[1:5] / 10.0, g["dist_xy"][1:5])   # a spot rebuilt from x, y agrees
+    assert g["dist_xy_logged"].tolist() == f["dist_xy"].tolist() and g["xc_logged"].tolist() == f["xc"].tolist()
+    # a made 4.3 ft shot logged at 3.5 ft no longer moves: both are the 0-6 zone
+    assert code_location(f.iloc[[2]].assign(dist_xy=4.3))["dist_xy"].iloc[0] == code_location(f.iloc[[2]].assign(dist_xy=3.5))["dist_xy"].iloc[0]
+
+
+def test_every_logged_attempt_lands_in_its_stint_slot():
+    from eracoef.stints import stint_slots
+    gp, p, st = _parsed(True)
+    log = stint_slots(gp, p, pd.DataFrame(gp.shot_log))
+    placed = log[log["stint_no"] >= 0]
+    assert len(placed) > 0 and (log["stint_no"] < len(st)).all()
+    for kind, v in (("2", 2), ("3", 3)):
+        got = placed[placed["value"] == v].groupby(["stint_no", "stint_side", "stint_slot"]).size()
+        for (no, side, slot), n in got.items():
+            assert st[f"fg{kind}a_s{slot}_{side}"].iat[no] == n, (kind, no, side, slot)
+        # and every attempt the stints counted is in the log
+        total = sum(st[f"fg{kind}a_s{s}_{side}"].sum() for s in ("1", "2", "3", "4", "5", "x") for side in ("h", "a"))
+        assert total == got.sum()
+
+
+def test_an_attempt_whose_possession_never_closes_is_in_no_stint():
+    # the feed has no end row for period 1, and the away team's last miss is still open when period 2 starts: the
+    # parser drops that possession (no record), so the attempt must not be filed under period 2's first stint
+    from eracoef.stints import stint_slots
+    from test_stints import _ev
+    g = synthetic_game()
+    g = g[~((g.actionType == "period") & (g.subType == "end"))]
+    extra = pd.DataFrame([
+        _ev(1, 3, AWAY, 12, "Missed Shot", "Jump Shot", "MISS Atwo 24' 3PT Jump Shot", 3),
+        _ev(2, 720, 0, 0, "period", "start", "Start of 2nd Period"),
+        _ev(2, 700, HOME, 6, "Made Shot", "Jump Shot", "Hsix 15' Jump Shot (2 PTS)", 2, 9, 5),
+        _ev(2, 680, AWAY, 12, "Missed Shot", "Jump Shot", "MISS Atwo 20' Jump Shot", 2),
+        _ev(2, 678, HOME, 6, "Rebound", "Unknown", "Hsix REBOUND (Off:0 Def:1)"),
+        _ev(2, 0, 0, 0, "period", "end", "End of 2nd Period")])
+    g = pd.concat([g, extra], ignore_index=True)
+    g["actionNumber"] = np.arange(1, len(g) + 1)
+    gp = GameParser(g, _box(), HOME, AWAY, "0020000001", log_shots=True)
+    p = gp.possessions()
+    st = gp.stints(p)
+    log = stint_slots(gp, p, pd.DataFrame(gp.shot_log))
+    late = log[(log["period"] == 1) & (log["value"] == 3) & (log["shooter"] == 12) & (log["made"] == 0)]
+    # the dropped possession appended no record, so the attempt has none (the old rule, len(recs) at the shot,
+    # pointed it at period 2's first record) and sits in no stint
+    assert len(late) == 1 and late["rec_idx"].iat[0] == -1 and late["stint_no"].iat[0] == -1
+    assert (log.loc[log["rec_idx"] >= 0, "rec_idx"].map(p["period"]) == log.loc[log["rec_idx"] >= 0, "period"]).all()
+    # whatever the parser does, the placed attempts rebuild every slot count exactly
+    placed = log[log["stint_no"] >= 0]
+    for kind, v in (("2", 2), ("3", 3)):
+        got = placed[placed["value"] == v].groupby(["stint_no", "stint_side", "stint_slot"]).size()
+        total = sum(st[f"fg{kind}a_s{s}_{side}"].sum() for s in ("1", "2", "3", "4", "5", "x") for side in ("h", "a"))
+        assert total == got.sum(), kind
+        for (no, side, slot), n in got.items():
+            assert st[f"fg{kind}a_s{slot}_{side}"].iat[no] == n

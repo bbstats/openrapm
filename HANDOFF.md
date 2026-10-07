@@ -4,33 +4,64 @@
 is the permanent record and carries every number quoted here.  Do not let this grow into a lab notebook.
 
 Branch `cleanup`; `main` is fast-forwarded to it at each publish, and the live site is served from `docs/`
-on `main`.  `pytest -q`: **441 passed, 1 failed, 1 xfailed, ~170 s** with the scraped data.  The failure is
+on `main`.  `pytest -q`: **543 passed, 1 failed, 1 xfailed, ~175 s** with the scraped data.  The failure is
 accepted and named at the bottom of this file; nothing else is red.
 
-## START HERE (2026-10-06): experiments 34-41 done and committed; the shot-quality build is next
+## START HERE (2026-10-07): next is averaging the box-score prior over several training groupings
 
-**Experiments 34-41 are committed on `cleanup` (the owner's ask, 2026-10-06), in two commits:** the code, tests and
-record (scripts 100-113; `src/eracoef/{scorecard,boxspm,vanilla,heldoutprior,portable}.py`; changes to
-`swapadjust.py`, `singleyear.py` and scripts 52, 91, 97, 99; `experiments/runs.csv`, `DECISIONS.md`, this file,
-`WITHIN_SEASON_LEDGER.md`), then the site build alone (`docs/index.html`, `docs/data/ratings.json`: the Portable
-column).  **`main` has not moved and the site is not published**: fast-forward `main` to the first commit only,
-or to both once the owner rules on the Portable column.  Commit only when the owner asks, and never name a model
-in a commit.  A session continued on another machine stashes uncommitted work: `git stash apply` and keep the
-stash (memory "Teleport auto-stash").
+**Everything through experiment 42 is committed on `cleanup`; `main` has not moved and the site is not published**
+(the Portable column is still the owner's call, below).  Commit only when the owner asks, and never name a model in
+a commit.  A session continued on another machine stashes uncommitted work: `git stash apply` and keep the stash
+(memory "Teleport auto-stash").
 
-### The shot-quality build (2026-10-06, the owner's request; at G3, uncommitted)
+### The next job (the owner, 2026-10-07: "handoff.md will handle the avging box score prior thingie")
 
-Plan `~/.claude/plans/read-handoff-md-what-i-dreamy-stonebraker.md`; record and every number in DECISIONS.md, "The
-shot-quality build"; the ablation on the sheet's "Shot quality" tab.  Built: one row per attempt 1997-2026
-(`data/shotframe`, scripts 114), the rebuilt shot clock (116), the 2014-15 log join and the 2015-16 movement labels
-(`data/tracking`, 124), the play-by-play quality model (`shotmodel.py`, 120 into `data/shotq/<name>`), the direct shot
-test (117, 118, 119, 122, 125).  The owner's rulings: memory "Shot-quality build" and "No scorer shot tags".  **Waiting
-on the owner (G3):** which version, and whether experiment 42 reprices defensive twos (the pre-test passes) rather
-than threes (it fails: no estimate of three-point quality beats the flat rate the shipped target uses).  A detached
-dashboard pull (123, defender bins 2013-14 to 2016-17) may still be running: check `Get-Process python` first.
+**Why.**  Each player's box-score prior comes from a model that never saw him: the prior is fit five times, each
+time leaving out a fifth of the players, and which fifth a player is left out with is set by sorting everyone by his
+label (`singleyear.stratified_player_folds`, `rloocv.BalancedGroupKFold`).  Any change to the labels therefore changes
+which players each player's prior is trained alongside, and that alone moves the ratings: control C1 (nothing changed
+but the defensive groupings, `62 --deal_seed=1`, 80% of players in another group) costs +0.056 on 63's team-game
+criterion (z +1.2), moves a typical defensive prior by about 0.5 per 100 and Caruso 42nd to 14th in 2026.  The
+current ratings carry one draw of that noise.  DECISIONS.md, "Experiment 42", the last part.
+
+**What to build.**  A 62 option, e.g. `--prior_groupings=K` (default 1 = the shipped snake grouping, unchanged):
+in `OutOfPlayerSPM.fit` (62, around line 300) fit the out-of-player boosters under K different, equally balanced
+groupings -- grouping 0 the shipped one, groupings 1..K-1 from `BalancedGroupKFold(seed=k)` -- and give each player
+the MEAN of his K out-of-player predictions (each from a booster that never saw him); the full-data model stays as it
+is.  Both sides.  Cost: K times the fold fits (5K boosters per side per rated season); time one decade first.
+
+**How to test.**  The standard chain with the incumbent's targets: `bash scripts/experiment_chain.sh
+prior_avg5 x3def_w0.25 --prior_groupings=5` (the script takes extra 62 flags as its third argument).  Read 63
+against the incumbent (adopt at z <= -2) AND its stability: a second run with other seeds (groupings 5..8) should
+differ from the first by far less than C1's 0.056.  Caveat: 99's prior-shrink multipliers were fitted on the
+incumbent's single-grouping priors; keep them for the first test (as every experiment has) and refit only on adoption
+(97 then 99, trap 22).  If the incumbent's single grouping was a lucky draw (it was picked across many runs), the
+average may read neutral against it on 63 while still being the more honest number; say so in the report.
+
+**The standard for target experiments from now on:** run 62 with `--deal_target_def=<the incumbent's defensive
+target>` (today `x3def_w0.25`) so every player's prior is trained alongside the same players as in the current
+ratings and only the idea moves (experiment 42f; trap 27 in memory).  Label experiments decided earlier by less than
+about 0.06 may have been decided by this noise (e.g. outside labels 25, age-adjusted labels 28, adjacent labels 30).
+
+### What the shot-quality build and experiment 42 found (2026-10-06/07; DECISIONS.md has every number)
+
+- **Two leaks in the play-by-play, fixed:** a shot's own timestamp knows its result (makes and misses are logged with
+  different delays; timing is now measured from the row before the shot), and inside 10 ft the scorer logs a made
+  shot about 1 ft nearer the rim than a miss (the spot is coded as 0-6 / 6-10 ft zones there).  A third, unlocated
+  (0, 0) twos in 1997-2010, is result-coded too and still in every model's twos (not fixed; threes are clean).
+- **The shot model:** boosted trees on the current logistic predict makes clearly better (shooter-adjusted -0.64 per
+  1000, z -12.8) and lose no team test; the tuned logistic's score-margin terms are what failed the team tests.
+- **Experiment 42** (opponent threes priced at shot quality x the shooter's other-half skill): rejected.  As first
+  run +0.128 (z +2.8), but two thirds of that was the training-group noise above; held fixed (42f) +0.043 (z +1.3),
+  no gain.  It drops Ighodaro 18th to 46th in 2026 (the owner thinks he was too high).
+- Pieces: scripts 114-134, `src/eracoef/{shotframe,shotclock,shotmodel,shotfeatures,shotlearners,shotsearch,tracking,
+  movement,shottest}.py`, `data/shotq/` (tables `_table`, priced arms `c_*`, per-attempt qualities `q42_*` with their
+  stint side tables), the sheet's "Shot quality" tab (rows 77-99) and Experiments rows 42, 42x, 42f, C1.  Memory
+  "Shot-quality build", traps 24-27.
 
 ### Waiting on the owner (most recent first)
 
+0. **Experiments 42 / 42x / 42f: rejected** (the owner, 2026-10-07: "Sounds good").
 1. **Publish the Portable column?**  Built and checked locally, not committed: `docs/index.html` (a sortable
    Portable column, portable offence / defence / total in the CSV download) and `docs/data/ratings.json` (team
    ratings unchanged, max difference 0.0 over 14,578 rows).  **No explanatory text on the page**: the owner called
@@ -173,6 +204,11 @@ predicted twice, 56 observations.  The prior must not have seen the two scored s
          from the outputs above; then mirror the row into the Google Sheet "OpenRAPM experiments",
          https://docs.google.com/spreadsheets/d/1gPeRCFUtJNPtsBq_j2CNiTTdrarb98Yf3zXYx974jfI, tab Experiments.  Re-run with
          --verdict=adopted|rejected|"not adopted" once the owner rules; the same --exp replaces its row)
+
+**A target experiment** (a new defensive or offensive target) adds `--deal_target_def=x3def_w0.25` to 62 so the box-score
+prior is trained on the same groupings of players as the incumbent's; without it the experiment also pays a random
+regrouping worth about 0.05 on this test (control C1, 2026-10-07).  `scripts/experiment_chain.sh NAME TARGET
+"EXTRA 62 FLAGS"` runs this whole chain.
 
 **Decision rule:** adopt only if `z` is -2 or below with no gross consensus miss and the 2026 top 20 not
 worse; ties go to the simpler version.  Read the row "each side rescaled to the scored season" to see

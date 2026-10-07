@@ -36,6 +36,9 @@ FT_RE = re.compile(r"Free Throw(?: (\w[\w ]*?))? (\d) of (\d)")
 OFFENSIVE_ACTIONS = {"Made Shot", "Missed Shot", "Turnover", "Heave"}
 IGNORED = {"", "Timeout", "Instant Replay", "Violation", "Ejection"}
 SHOT_ACTIONS = ("Made Shot", "Missed Shot", "Heave")
+# the rows that can anchor a shot's timing (stints.GameParser._log_event): never a foul, a violation or a blank row
+ANCHOR_KINDS = {"Made Shot": "fg", "Missed Shot": "fg", "Heave": "fg", "Free Throw": "ft", "Rebound": "reb",
+                "Turnover": "tov", "Substitution": "sub", "Timeout": "timeout", "Jump Ball": "jump"}
 RIM_FT = 3.0          # feet; at or inside this is the "rim" bucket
 
 # Bumped whenever the stint schema changes.  It is written into the per-season diag frame and
@@ -416,6 +419,22 @@ class GameParser:
         lg["prev_clock"] = lg["last_clock"]
         lg["last_clock"] = r.clock_s
         at = r.actionType
+        # The ANCHOR: the last row before this one that cannot belong to a later shot.  A shot's own timestamp knows
+        # its result (makes and misses are stamped with different delays: DECISIONS.md, "The timing leak"), so the
+        # shot models time a shot from the anchor, never from its own stamp.  Fouls, violations and the blank
+        # steal/block rows are never anchors: the feed can list an and-one foul, a goaltend or a block before the
+        # shot it belongs to.
+        # anchor_nev: how many of the possession's clock events (below) were logged up to and including the anchor
+        # row.  The events after it sit between the anchor and the shot (a foul there may be the shot's own), so the
+        # shot models read only the first anchor_nev; no clock comparison with the shot's stamp is needed.
+        lg["anchor_before"] = (lg["anchor_clock"], lg["anchor_kind"], lg["anchor_nev"])
+        if at in ANCHOR_KINDS:
+            team = self._row_team(r)
+            kind = ANCHOR_KINDS[at]
+            if at == "Rebound":
+                kind = "oreb" if (offense is not None and team == offense) else "dreb"
+            lg["anchor_clock"], lg["anchor_kind"] = float(r.clock_s), kind
+            lg["anchor_nev"] = len(lg["events"])
         if at in ("Timeout", "Foul", "Violation", "Jump Ball", "Rebound"):
             team = self._row_team(r)
             side = "nil" if offense is None or team not in self.teams else ("off" if team == offense else "def")
@@ -430,6 +449,8 @@ class GameParser:
             else:
                 kind = f"{'foul' if at == 'Foul' else 'viol'}:{side}:{r.subType}"
             lg["events"].append((kind.replace(";", ",").replace("@", " "), float(r.clock_s)))
+            if at in ANCHOR_KINDS:
+                lg["anchor_nev"] = len(lg["events"])          # the anchor row's own event is before the shot too
 
     def _log_shot(self, lg, r, team, pid, made, three, lp, first, ct, score, on, valid, period, start_clock, at):
         """One row per field-goal attempt: what play-by-play saw, and the possession around it.
@@ -450,6 +471,8 @@ class GameParser:
                    poss_no=int(self._poss_no), poss_start=str(lg["start"]), poss_start_clock=float(start_clock),
                    att_no=int(ct["att"]), fga_no=int(ct["fga"]), first=int(first),
                    margin=int(score[team] - score[other]), prev_event_clock=float(lg["prev_clock"]),
+                   anchor_clock=float(lg["anchor_before"][0]), anchor_kind=str(lg["anchor_before"][1]),
+                   anchor_nev=int(lg["anchor_before"][2]),
                    events=";".join(f"{k}@{c:g}" for k, c in lg["events"]),
                    lineups_ok=int(valid[self.home] and valid[self.away] and len(on[self.home]) == 5
                                   and len(on[self.away]) == 5),
@@ -517,7 +540,8 @@ class GameParser:
             # since then (offensive rebounds, fouls, violations, timeouts, jump balls) that a shot-clock
             # rebuild needs.  Untouched, and never read, unless log_shots.
             lg = dict(start="period_start", nxt=None, events=[], last_clock=start_clock, prev_clock=start_clock,
-                      last_shot=None, start_prev=None)
+                      last_shot=None, start_prev=None, anchor_clock=float(start_clock), anchor_kind="period_start",
+                      anchor_nev=0, anchor_before=(float(start_clock), "period_start", 0), poss_shots=[])
             if self.log_shots:
                 t0 = _elapsed(period, start_clock)
                 for pid in on[self.home] | on[self.away]:
@@ -530,6 +554,7 @@ class GameParser:
                     lg["start"] = lg["nxt"] or reason
                     lg["nxt"] = None
                     lg["events"] = []
+                    lg["anchor_nev"] = 0                     # every event of the new possession is after the anchor
                     lg["start_prev"] = lg["last_shot"] if lg["start"] in ("dreb", "dreb_team", "made_fg") else None
                     self._poss_no += 1
                 # A team offensive rebound with the period expiring before any further attempt did
@@ -563,6 +588,11 @@ class GameParser:
                                      score_home=start_score[self.home], score_away=start_score[self.away],
                                      home_lineup=tuple(sorted(on[self.home])), away_lineup=tuple(sorted(on[self.away])),
                                      valid=ok, reason=reason, shooters=dict(sh), **ct))
+                    if self.log_shots:
+                        for i in lg["poss_shots"]:
+                            self.shot_log[i]["rec_idx"] = len(recs) - 1
+                if self.log_shots:
+                    lg["poss_shots"] = []
                 offense = next_offense
                 active = False
                 pts = 0
@@ -696,6 +726,10 @@ class GameParser:
                     if self.log_shots:
                         self._log_shot(lg, r, team, pid, made, three, lp, first, ct, score, on, valid,
                                        period, start_clock, at)
+                        # the possession record this attempt's counters close into, set when close() appends it;
+                        # a possession dropped without a record (inactive at a period's end) leaves -1
+                        self.shot_log[-1]["rec_idx"] = -1
+                        lg["poss_shots"].append(len(self.shot_log) - 1)
                     s = sh.setdefault(pid, dict.fromkeys(SHOOTER_COUNTERS, 0.0))
                     kind = "3" if three else "2"
                     s[f"fg{kind}a"] += 1
@@ -881,6 +915,8 @@ class GameParser:
         new = (key != key.shift()) | (~poss["valid"]) | (~poss["valid"].shift(fill_value=True))
         sid = new.cumsum()
         p = poss[poss["valid"]]
+        if self.log_shots:                                  # the stint of every possession record (-1: invalid)
+            self._stint_of_rec = np.full(len(poss), -1, dtype=np.int64)
         if len(p) == 0:
             return pd.DataFrame()
         s = sid[poss["valid"]].to_numpy()
@@ -927,6 +963,8 @@ class GameParser:
         # shooter no longer on the floor when the possession closed goes to slot `x`.
         long = []
         stint_pos = {sid: i for i, sid in enumerate(agg.index)}
+        if self.log_shots:
+            self._stint_of_rec[np.flatnonzero(poss["valid"].to_numpy())] = [stint_pos[x] for x in s]
         for sid, off, hl, al, shooters in zip(s, p["offense"].to_numpy(), p["home_lineup"], p["away_lineup"],
                                               p["shooters"]):
             if not shooters:
@@ -973,8 +1011,32 @@ def build_game(game_id: str, home_id: int, away_id: int, cfg, gt_rule=None, ft_r
              n_stints=len(st))
     names = pd.DataFrame({"player_id": list(gp.day_names), "pbp_name": list(gp.day_names.values())})
     if log_shots:
-        return st, d, names, shots, pd.DataFrame(gp.shot_log), pd.DataFrame(gp.aux_log)
+        return st, d, names, shots, stint_slots(gp, poss, pd.DataFrame(gp.shot_log)), pd.DataFrame(gp.aux_log)
     return st, d, names, shots
+
+
+def stint_slots(gp, poss: pd.DataFrame, log: pd.DataFrame) -> pd.DataFrame:
+    """The shot log with each attempt's place in the game's stints: `stint_no` (the row of `gp.stints(poss)`, -1
+    when its possession is invalid and so in no stint), `stint_side` ('h' / 'a', the offence) and `stint_slot`
+    ('1'-'5', the shooter's place in the sorted offensive lineup of the possession at its close, or 'x') -- the
+    same slot stints() files the shooter's counters under.  Exact: the attempt's possession record is `rec_idx`."""
+    if not len(log):
+        return log
+    rec = log["rec_idx"].to_numpy(np.int64)
+    som = getattr(gp, "_stint_of_rec", np.full(len(poss), -1, dtype=np.int64))
+    no, side, slot = np.full(len(log), -1, dtype=np.int64), np.full(len(log), "", dtype=object), \
+        np.full(len(log), "", dtype=object)
+    pid = log["shooter"].to_numpy(np.int64)
+    for i, r in enumerate(rec):
+        if r < 0 or r >= len(poss):
+            continue
+        no[i] = som[r]
+        off = poss["offense"].iat[r]
+        side[i] = "h" if off == gp.home else "a"
+        lineup = poss["home_lineup"].iat[r] if off == gp.home else poss["away_lineup"].iat[r]
+        pos = {p: str(k + 1) for k, p in enumerate(lineup)}
+        slot[i] = pos.get(int(pid[i]), "x")
+    return log.assign(stint_no=no, stint_side=side, stint_slot=slot)
 
 
 def assign_halves(games: pd.DataFrame) -> pd.Series:

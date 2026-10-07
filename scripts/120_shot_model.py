@@ -44,23 +44,38 @@ from _cli import check_flags, flag  # noqa: E402
 from eracoef import shotmodel as sm  # noqa: E402
 from eracoef.config import load_config  # noqa: E402
 from eracoef.shotclock import ClockRules, rebuild  # noqa: E402
-from eracoef.shotframe import derive, frame_dir, load_frame  # noqa: E402
+from eracoef.shotframe import LOGGED, anchored, code_location, derive, frame_dir, load_frame  # noqa: E402
 
 TABLE_COLS = ["season", "phase", "game_id", "action_number", "half", "arena", "neutral", "team", "opp", "home",
               "shooter", "period", "clock", "value", "made", "dist", "x", "y", "lp", "margin", "poss_start",
               "secs_into_poss", "secs_since_oreb", "shooter_secs_on", "start_prev_value", "start_prev_dist",
               "start_prev_made", "start_prev_blocked", "noloc", "xc", "yc", "dist_xy", "angle", "corner3", "heave",
-              "sc", "sc_eff", "reset_kind", "since_reset", "clock_off"]
+              "sc", "sc_eff", "reset_kind", "since_reset", "clock_off",
+              # the search's extra possession fields (2026-10-06): inputs to shotfeatures, never raw model inputs
+              "n_oreb", "att_no", "fga_no", "poss_no", "secs_since_timeout", "poss_start_clock", "start_prev_x",
+              "start_prev_y", "start_prev_clock", "events",
+              # whether THIS attempt was blocked: never an input for this attempt (shotfeatures.FORBIDDEN bans post_*),
+              # only the 'previous attempt was blocked' fact of the NEXT attempt in the possession
+              "post_blocked", "anchor_clock", "anchor_kind", "anchor_nev"]
 
 
 def table_path(cfg, season: int) -> Path:
     return Path(cfg["_root"]) / "data" / "shotq" / "_table" / f"{season}.parquet"
 
 
+STAMP_COLS = ("clock", "secs_into_poss", "secs_since_oreb", "shooter_secs_on", "secs_since_timeout", "sc", "sc_eff",
+              "reset_kind", "since_reset", "clock_off")
+
+
 def build_table(cfg, season: int, rmap: pd.DataFrame, rules: ClockRules) -> pd.DataFrame:
     f = derive(load_frame([season], cfg, phases=("RS", "PO")), rmap=rmap)
-    r = rebuild(f, rules)
-    t = pd.concat([f, r], axis=1)[TABLE_COLS]
+    stamp = pd.concat([f, rebuild(f, rules)], axis=1)
+    g = code_location(anchored(f))
+    r = rebuild(g, rules)
+    t = pd.concat([g, r], axis=1)[TABLE_COLS + [f"{c}_logged" for c in LOGGED]]
+    # the stamp-based timing, kept for diagnostics only (shotfeatures.FORBIDDEN bans *_stamp as an input)
+    for c in STAMP_COLS:
+        t[f"{c}_stamp"] = stamp[c].to_numpy()
     p = table_path(cfg, season)
     p.parent.mkdir(parents=True, exist_ok=True)
     t.to_parquet(p, index=False)
@@ -71,16 +86,7 @@ def load_table(cfg, seasons) -> pd.DataFrame:
     return pd.concat([pd.read_parquet(table_path(cfg, s)) for s in seasons], ignore_index=True)
 
 
-def after_of(f: pd.DataFrame, q: np.ndarray, vtab: pd.DataFrame) -> np.ndarray:
-    """The owner's update, quality given the result, with v looked up by shot class (sub-model, distance band,
-    clock band) as scripts/119 measured it; classes it did not measure, and heaves, keep q."""
-    sc = f["sc_eff"].to_numpy(float)
-    key = pd.DataFrame(dict(sub=sm.submodel_of(f), band=sm.update_band_of(f),
-                            clock=np.where(sc < 4, "0-4", np.where(sc < 10, "4-10", "10+"))))
-    v = key.merge(vtab[["sub", "band", "clock", "v"]], on=["sub", "band", "clock"], how="left")["v"]
-    v = v.fillna(0.0).clip(lower=0.0).to_numpy().copy()
-    v[f["heave"].to_numpy()] = 0.0
-    return sm.update_after(q, f["made"].to_numpy(float), v)
+after_of = sm.after_of          # moved to shotmodel (scripts/133 uses it too)
 
 
 def main():
@@ -93,7 +99,8 @@ def main():
         rmap = pd.read_parquet(frame_dir(cfg) / "rim_map.parquet")
         lags = json.loads((root / "clock_lags.json").read_text(encoding="utf-8"))
         rules = ClockRules(**lags["rules"], lag=lags["lags"])
-        for s in all_seasons:
+        only = [int(x) for x in flag("seasons", "").split(",") if x]
+        for s in (only or all_seasons):
             t0 = time.time()
             t = build_table(cfg, s, rmap, rules)
             print(f"  table {s}: {len(t):,} attempts, {time.time() - t0:.0f}s", flush=True)

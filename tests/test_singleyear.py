@@ -477,3 +477,18 @@ def test_team_movement_is_never_below_the_form_it_replaced():
     assert (new >= old - 1e-12).all()
     equal_shares = {pid for pid, s in spreads.items() if np.allclose(s, s[0])}
     assert {pid for pid in new.index if abs(new[pid] - old[pid]) < 1e-12} == equal_shares
+
+
+def test_a_deal_target_column_keeps_another_targets_deal():
+    import pandas as pd
+    from eracoef import singleyear as sy
+    rng = np.random.default_rng(5)
+    ids = np.repeat(np.arange(300), 2)
+    a = np.repeat(rng.normal(0, 1, 300), 2)
+    b = a + rng.normal(0, 0.05, a.size)                    # a slightly different target: the snake re-deals
+    train_a = pd.DataFrame({"target": a, "weight": 1.0}, index=pd.Index(ids, name="player_id"))
+    train_b = train_a.assign(target=b)
+    fa, fb = sy.stratified_player_folds(train_a), sy.stratified_player_folds(train_b)
+    assert (fa != fb).mean() > 0.2                         # a small label change moves many players
+    pinned = sy.stratified_player_folds(train_b.assign(deal_target=a))
+    assert np.array_equal(pinned, fa)                      # dealt on target a's labels: target a's folds exactly

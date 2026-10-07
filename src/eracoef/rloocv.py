@@ -59,8 +59,12 @@ class BalancedGroupKFold:
     on the 2015 SPM rows: shifts of 0.005 per 100 against a label sd of 0.82.
     """
 
-    def __init__(self, n_splits: int = 5):
+    def __init__(self, n_splits: int = 5, seed: int | None = None):
         self.n_splits = int(n_splits)
+        # seed: every block of n_splits consecutive groups (in label order) goes to the folds in a seeded random
+        # order instead of the snake -- as balanced, a different make-up (2026-10-07: how much a re-deal alone
+        # costs).  None, the default, is the snake deal, unchanged.
+        self.seed = seed
 
     def get_n_splits(self, X=None, y=None, groups=None) -> int:
         return self.n_splits
@@ -74,9 +78,15 @@ class BalancedGroupKFold:
         W = np.bincount(inv, weights=w, minlength=keys.size)
         mean = S / np.maximum(W, 1e-12)
         order = np.argsort(mean, kind="stable")
-        cycle = np.concatenate([np.arange(self.n_splits), np.arange(self.n_splits)[::-1]])
         fold_of_group = np.empty(keys.size, dtype=int)
-        fold_of_group[order] = cycle[np.arange(keys.size) % cycle.size]
+        if self.seed is None:
+            cycle = np.concatenate([np.arange(self.n_splits), np.arange(self.n_splits)[::-1]])
+            fold_of_group[order] = cycle[np.arange(keys.size) % cycle.size]
+        else:
+            rng = np.random.default_rng(int(self.seed))
+            for start in range(0, keys.size, self.n_splits):
+                block = order[start:start + self.n_splits]
+                fold_of_group[block] = rng.permutation(self.n_splits)[:len(block)]
         return fold_of_group[inv]
 
     def split(self, X, y=None, groups=None, sample_weight=None):

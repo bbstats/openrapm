@@ -4584,3 +4584,462 @@ seasons or games it never saw; differences against the shipped distance curve un
   well on the movement labels (out-of-fold log loss 0.6422) as on the official log (0.6412).
 - Not run: the boosted-trees row of the ablation.  Test 2(c) used the dashboards pulled so far (2015 complete, 2016
   movement dates, 2017 to 3 March); rerun when the pull finishes.
+- *Can the features learn true shot quality?* (the owner's challenge to the nested test; `scripts/126_quality_ceiling.py`,
+  held-out tracked season 2014-15, 2015-16 in brackets, squared points of gap to the tracking quality, whose own spread
+  is 235 (228)): distance alone 56.5 (63.9), 76% (72%) of true quality; the current model 38.7 (44.8), 84% (80%);
+  boosted trees taught by the other tracked season's tracking labels 38.6 (43.8); the same trees taught by that
+  season's makes 55.7 (58.0), and by 1.7 million makes of every other season 48.6 (56.6); the ceiling, boosted trees
+  on the same season's tracking quality held out by game, 33.8 (39.2), 86% (83%).  So play-by-play can see at most
+  83-86% of true quality, the current model already has 80-84%, and tracking labels ARE the better teacher for a
+  flexible model (38.6 against 55.7 on the same shots) -- the simple shooter-neutral model just does not need them.
+  Headroom for a tracking-taught correction on top: about 1-5 squared points (about 2% of true quality).  The owner:
+  "Ok fair enough".
+- *The level, and what happened with threes* (the owner asked, 2026-10-06).  The defensive-threes failure above was
+  my design, not the shot quality: each half of a season took its level from the OTHER half's makes, and the league's
+  make rate moves between the halves of a season by 0.40 points on threes (median 0.41, up to 0.85; 0.16 on twos) --
+  as much as the whole spread in the quality of threes defences allow (sd 0.42 points; it repeats from half to half,
+  r 0.69, against 1.72 points of pure chance per half in a defence's 3P% allowed).  With the level from the whole
+  season, as the shipped curve and the flat rate already had, the play-by-play model beats the flat rate on every
+  team row (`scratch` re-level of the saved raw logits, `data/shotq/pbp_full_seasonlevel`): defence threes -0.122
+  (z -3.1, 23 of 30), defence twos -0.156 (z -3.2), offence threes -0.302 (z -6.8), offence twos a tie (-0.021),
+  shooters' threes -0.827 (z -6.9), twos -1.457.  `shotmodel.relevel` now sets the season's level by default
+  (`mode="half"` kept to rerun the record).  The leakage this admits is the curve's: one team's shots are about 1/30
+  of a cell, and xshoot.align already sets each season's level from the season.  **The defensive-threes pre-test for
+  experiment 42 now passes**; the ablation table above was built with the half levels and is superseded on this point.
+
+### The shot-quality search: the protocol, registered before any trial (2026-10-06)
+
+**The owner:** "let's go bananas on making the model as good as possible! random search, different models,
+stacking, you name it. this is the most important thing we'll do!"  Spec: the design round's merged plan (saved with
+the session; the protocol below is the binding part).  Code: `shotsearch.py` (split, rows, fast relevel, SALL),
+`shotlearners.py`, `shotfeatures.py`, the regression's new options in `shotmodel.py`, scripts 127-132.
+
+- **Split.**  SEARCH blocks 1997-99, 2003-05, 2009-11, 2018-20, 2021-23 (15 seasons): every trial is scored here and
+  only here.  CONFIRM blocks 2000-02, 2006-08, 2012-14, 2015-17, 2024-26: read once, after the shortlist is registered
+  below; they hold every tracked season and the live block.  Models for a search block train on its allowed other
+  seasons as always (shotmodel.train_seasons), confirm seasons' attempts included; no confirm season is ever SCORED, and
+  no choice is made on a confirm season's makes or on a tracking label.  `shotsearch.assert_phase` enforces it.
+- **Objective: SALL**, shooter-adjusted held-out log loss: each scored regular-season attempt (heaves out) gets the
+  arm's logit relevelled from the whole season, plus a ridge offset (25 Hessian units, never tuned) for its
+  shooter-season and shot value fitted on the other half of the season's games under the same arm.  Raw makes reward
+  knowing who takes which shots; SALL does not (unit test on a planted league).  Validated on the stored arms, search
+  seasons only: the play-by-play model minus the version without shooter terms -0.062 per 1000 (z -1.0), minus spot
+  only -4.27 (z -12.1, 15 of 15), minus the four-block model -0.215 (z -15.7); the same order at ridge 10 and 100.
+- **Rows.**  One fixed permutation per season; the search uses the first 750,000 training rows of each block (nested in
+  the 1.5M of a final build); penalties are entered per 1.5M rows and scaled.
+- **Logged, never optimised:** raw log loss, calibration slope, arena signal, fit time.  Optuna (QMC then TPE, seed 0),
+  studies resumable; trial 0 is the current model; a placebo family (the current model on other row samples) gives the
+  noise floor.  Every trial's logits on the search seasons are kept for stacking.
+- **Shortlist:** per family the plateau within one season-paired standard error of the best; at most two per family and
+  six overall, stacks included; written here before the confirm read.  **Decision rule:** the current model enters
+  experiment 42 by default; a challenger replaces it only if, on the CONFIRM seasons, it is better on SALL at
+  Holm-corrected z in at least 4 of 5 blocks, closer to tracking quality (2015, 2016) at z <= -2 and worse on no
+  tracking row, and passes the arena check, the other-half rows and the forward test; ties go to the simpler model.
+- **Expected:** a gain of 0.0002-0.0005 log loss per shot over the current model, at most about 0.001: on the tracked
+  seasons the current model already captures 80-84% of true quality against a ceiling of 83-86%.
+
+### The timing leak: every clock input is now read from the row before the shot (2026-10-06)
+
+**Found by** the first boosted search trial: the game clock was its top input, and it beat the regression by 1.21 per
+1000 attempts, twice the regression's whole gain.  **Cause:** the play-by-play stamps makes and misses with different
+delays, so any time measured to the shot's own stamp (seconds into the possession, the shot clock, time since the
+offensive rebound, time on court, the game clock) carries the result.
+
+**Measured on the 2015-16 movement data** (the true release frame of each tracked attempt), log loss per 1000:
+
+| Timing measured from | Gain over no timing | Of which the result leaking |
+|---|---|---|
+| the shot's stamp, fine | -2.93 | -1.59 (z -6.6) |
+| the true release (the real signal) | -1.35 | 0 |
+| the stamp, in the model's four clock bands | -0.71 | -0.26 |
+| the last row before the shot that cannot belong to it | -1.18 | none from the shot's stamp |
+
+- **The fix:** `stints` logs each attempt's **anchor**, the last made or missed shot, free throw,
+  rebound, turnover, substitution, timeout or jump ball before it.  Fouls, violations and blank steal or block rows are
+  skipped: in 3-3.6% of attempts the previous row has the shot's own clock reading, and those rows are mostly the
+  shot's own foul (make rate 0.59 against 0.43-0.47).  `shotframe.anchored` re-measures every clock input from the
+  anchor, and the shot clock is rebuilt at the anchor.  The logger also counts the possession's clock events up to and
+  including the anchor row (`anchor_nev`, FRAME_VERSION 4): the clock rebuild and the timeout and foul fields read only
+  those, by feed order, so no clock reading is ever compared with the shot's stamp.  (The first version kept the
+  same-second rule against the anchor's clock instead; it dropped the anchor's own timeout and every foul logged at
+  the second of a substitution that followed it.)  The stamp-based columns stay in the table as `*_stamp`, banned
+  as inputs (`shotfeatures.FORBIDDEN`).  The previous attempt of the possession keeps its own stamp: it is an anchor
+  row, at or before this shot's anchor.
+- **What it voids:** every search trial so far, the stage 6-8 ablation, the tracking teacher's play-by-play side, the
+  update size, and the other-half test wins (their models read the stamp).  The forward test never reads a stamp.  All
+  are rerun on the anchored table before the shortlist; the studies restart from trial 0.
+- **The anchor's own stamp does not leak** (2026-10-06, the same 97,865 tracked attempts, `xgboost` five game folds,
+  tracking inputs in every arm; log loss per 1000):
+
+  | Comparison | Change | z |
+  |---|---|---|
+  | timing from the shot's stamp, minus timing from the true release (the leak, re-measured) | -1.41 | -6.3 |
+  | timing from the true release, minus no timing (the real signal) | -1.50 | -5.8 |
+  | timing from the anchor, minus no timing | -1.35 | -6.1 |
+  | the anchor's timing added on top of the true release (real or leaking) | -0.02 | -0.1 |
+  | anchor attempts within 1 s of the shot's stamp (4.3%), the same | +1.47 per 1000 of them | +1.0 |
+
+  The anchor keeps 90% of the real timing signal and adds nothing the true release does not already know.  Across
+  all 6.3M attempts the anchor shares the shot's second in 3.2%, almost all offensive rebounds (tip-ins), which make
+  LESS than their spot (-2.7 to -11.2 points), the opposite of a leak.  Two tiny tied groups make more than their spot:
+  a defensive rebound (0.06% of 2016-26 attempts, +11 points) and a turnover (0.03%, +12 points), both breakaways;
+  left in.
+
+### The feature step on the anchored table (2026-10-06)
+
+The registered rule: a new input joins the regression search as a toggle only if it improves SALL in at least 4 of the
+5 search era blocks on the attempts it targets.  Add-one arms on the current model, 750,000 rows, the same rows as
+trial 0 (log loss per 1000, by search block 1997-99 / 2003-05 / 2009-11 / 2018-20 / 2021-23):
+
+| Input | Target | Blocks better | Verdict |
+|---|---|---|---|
+| end of period (`late`) | all | 5 of 5 (-0.031 / -0.024 / -0.035 / -0.028 / -0.004) | in |
+| scramble after a missed or blocked shot | rim | 4 of 5 (+0.050 / -0.065 / -0.020 / -0.536 / -0.448) | in |
+| distance to the three-point line | long twos | 4 of 5; threes 2 of 5 (all of it 1997-99, -0.577) | in |
+| previous attempt's location | all | 3 of 5 | out (passed on the stamp table) |
+| after a timeout | all | 4 of 5, mean +0.002 | out |
+| earlier defensive fouls | all | 2 of 5 | out |
+| court side | all | 2 of 5 | out |
+
+Placebo (the current model on row samples 1-3): all-attempts +0.017 / -0.020 / +0.011, rim +0.17 to +0.23 (seed 0
+is a lucky rim draw), threes -0.28 to -0.37 (an unlucky one), so per-shot-type gains under about 0.3 are within row
+noise.  The audits (same-second, arena, tag proxy) ran on the stamp table; the same-second audit is now replaced by
+construction (`anchor_nev`), and 128 reruns in the final battery.  The regression search restarted from trial 0 with
+toggles late, scramble, line.
+
+### The shortlist, registered before the confirm read (2026-10-06)
+
+The search half on the anchored table (750,000 rows, the 15 search seasons; SALL per 1000 attempts against the current
+model on the same rows; every arm better in 15 of 15 seasons):
+
+| Arm | All | z | Rim | Mid-range | Threes | Trials (complete) | Overfitting probability |
+|---|---|---|---|---|---|---|---|
+| best regression (`glm:48`) | -0.728 | -7.6 | -1.830 | -0.203 | -0.144 | 60 (39) | 0.00 |
+| + XGBoost (`xgb:13`) | -1.110 | -8.8 | -2.665 | -0.388 | -0.283 | 40 (28) | 0.04 |
+| + LightGBM (`lgbm:25`) | -1.098 | -9.6 | -2.711 | -0.347 | -0.243 | 40 (31) | 0.02 |
+| + chimeraboost (`chimera:26`) | -1.106 | -9.0 | -2.756 | -0.326 | -0.271 | 30 (22) | 0.02 |
+| + chimeraboost, quality 3 | -1.106 | -9.0 | | | | fixed row | |
+| + chimeraboost, quality 5 (8-model bag) | -1.082 | -8.8 | -2.692 | -0.329 | -0.252 | fixed row | |
+| + CatBoost (`cat:12`) | -1.016 | -9.4 | -2.537 | -0.311 | -0.217 | 30 (18) | 0.14 |
+| equal stack of XGBoost, LightGBM, chimeraboost | -1.150 | -9.2 | -2.790 | -0.383 | -0.294 | | |
+| fitted stack of the same | -1.152 | -9.1 | | | | | |
+| fitted stack of all five | -1.154 | -9.2 | | | | | |
+
+- Boosters sit on the best regression (offsets kept, zeroed when pricing).  XGBoost's gain ranking: the regression's
+  own margin first, then the spot (x, y, distance, line distance, angle), then the anchor's game clock, time on court
+  and time since the previous attempt.  The earlier coordinate test (exact x/y removed, distance to whole feet) moved
+  the booster gain little, so the spot detail is not the scorer's words in disguise.
+- **Stacks:** fitted weights move by up to 0.28 between search blocks (the regression gets 0 everywhere, CatBoost
+  almost 0), so by the rule the EQUAL stack is the candidate.  The stack optimiser first stopped at its start (scipy's
+  default 0.00025 first step from zero logits); it now starts with unit steps and fits on season-relevelled log loss
+  (SALL refits the shooter ridge per call), scoring still by SALL.  Overfitting probability: best trial picked on 7
+  random search seasons, share of 2000 splits where it ranks below the median on the other 8.
+- **Shortlist (5):** `glm:48`, `xgb:13`, `lgbm:25`, `chimera:26`, the equal stack `eq:xgb:13+lgbm:25+chimera:26`.
+  CatBoost is dominated and left out; the neural net was cut (first to cut in the spec).  The decision rule is the one
+  registered above (protocol and spec section 5); ties go to the simpler model.
+- **Confirm read:** `scripts/131_shot_confirm.py`, the current model and each candidate at 1.5M rows on the five
+  confirm blocks, row samples 0, 1, 2; read once.
+
+### The confirm read (2026-10-07)
+
+`131_shot_confirm.py`: each candidate and the current model at 1.5M rows on the five confirm blocks (15 seasons no
+choice had read), row samples 0, 1, 2; SALL per 1000 attempts against the current model on the same rows, sample 0
+(season-paired z over 15 seasons; Holm across the shortlist; retention = confirm gain over search gain):
+
+| Candidate | All | z | Rim | Mid-range | Threes | Blocks better | Retention | Sample sd |
+|---|---|---|---|---|---|---|---|---|
+| best regression | -0.509 | -6.1 | -1.237 | -0.239 | -0.116 | 5 (rim 4) | 0.70 | 0.040 |
+| + XGBoost | -1.166 | -9.2 | -2.920 | -0.443 | -0.234 | 5 | 1.05 | 0.059 |
+| + LightGBM | -1.200 | -8.7 | -3.097 | -0.401 | -0.209 | 5 | 1.09 | 0.067 |
+| + chimeraboost | -1.175 | -9.7 | -3.119 | -0.380 | -0.138 | 5 | 1.06 (threes 0.51) | 0.051 |
+| equal stack of the three | -1.259 | -10.0 | -3.199 | -0.452 | -0.238 | 5 | 1.09 | 0.058 |
+
+Head to head (sample 0; the three-sample means agree): the stack minus LightGBM -0.059 (z -4.1), minus XGBoost
+-0.092 (z -7.7), minus chimeraboost -0.084 (z -5.1); LightGBM minus the regression -0.690 (z -6.9); the regression
+minus the current model -0.509 (z -6.1).  Every Holm p is below 1e-4.  Rule 1 (confirm SALL) passes for every
+candidate; rule 7 (overfitting probability at most 0.25) passes for every family.  The remaining rules need the
+battery on all 30 seasons: finalists the regression, LightGBM and the equal stack, priced by `132_shot_price.py`.
+
+### The location leak: the scorer logs a made close shot nearer the rim (2026-10-07)
+
+**Found by** the battery: the boosted models fit makes far better than the current model (confirm SALL -1.2 per 1000)
+yet sat FARTHER from tracking quality (2015 +1.99 squared points, z +16; 2016 +2.41, z +16), and their departure from
+the current model predicted makes beyond the tracking teacher and this shooter (coefficient 0.69-0.78, se 0.06).
+
+**Cause:** at the same true distance, the play-by-play places made shots closer to the rim than missed ones.
+- Against the NBA shot log's own tracking distance (2014-15, 127,152 attempts): made minus missed, logged minus true,
+  -0.68 ft at 0-2.5 ft, -0.85 at 2.5-4.5, -0.90 at 4.5-6.5 (se 0.02-0.04), -0.17 at 6.5-10.5, none beyond.
+- Against the movement data's release distance (2015-16, 97,865): -0.77 / -1.01 / -1.31 / -0.70 / -1.07 ft in the
+  0-2 / 2-4 / 4-6 / 6-10 / 10-16 ft bands, none beyond 16 ft; the same within every release height (so not dunks).
+- Two independent tracking pipelines agree; the play-by-play spot is the common factor.
+
+**Measured** (xgboost, five game folds, possession facts, anchored timing and tracking contest inputs in every arm;
+log loss per 1000 attempts; info = true coded distance vs none; leak = logged coded vs true coded, negative leaks):
+
+| Distance coding | Info 2015 | Info 2016 | Leak 2015 | Leak 2016 |
+|---|---|---|---|---|
+| exact | -17.54 | -13.45 | -7.93 (z -14.5) | -8.07 (z -13.5) |
+| whole feet | -17.20 | -13.07 | -6.29 | -6.24 |
+| 2-ft bands | -16.74 | -12.81 | -4.73 | -4.30 |
+| zones 0-4 / 4-10 ft, exact beyond | -15.35 | -10.74 | +0.77 | -1.95 (z -5.1) |
+| zones 0-6 / 6-10 ft, exact beyond | -15.41 | -12.21 | +3.46 | +1.47 |
+| one 0-10 ft zone, exact beyond | -10.78 | -9.93 | +2.09 | +1.52 |
+
+The logged location (distance, angle, x, y) beats the true release distance by 8.0 per 1000 (z -12.9), 16.3 inside
+16 ft; with the ball's release height added, still 5.9 (z -9.0).  Beyond 16 ft the logged spot is worse than the truth.
+
+**What it touches:** every play-by-play shot model, the current one and the shipped curve included (all read the exact
+spot); the boosters most (fine x/y near the rim); the rim / mid-range split (made at 4.3 ft logged at 3.5 moves
+sub-model); the per-band level; and every test that prices a shot with its own leaky spot (other-half, forward).  The
+shipped ratings are untouched: the defensive target reprices threes only, and threes show no bias.
+
+**The fix:** inside 10 ft the spot is coded as two zones, 0-6 and 6-10 ft (the rim sub-model becomes 0-6 ft), with no
+x, y, angle or side; exact beyond 10 ft.  The exact logged spot is kept as `*_logged` columns, banned as inputs.  The
+tracking teacher gets the TRUE distance.  The search reruns on the coded table.
+
+**The rebuild on the coded spot (2026-10-07).**  The tracking teacher with the TRUE distance and the coded logged spot:
+out-of-fold log loss 0.6503 (2015) and 0.6504 (2016), against 0.6419 / 0.6428 with the exact logged spot -- about the
+8 per 1000 the leak was worth.  The current model's search SALL rose from 0.65542 to 0.66469 (+9.3 per 1000): the leak
+was that much of its apparent accuracy.  Placebo: all-attempts -0.03 to -0.06, rim +0.06 to +0.09, threes -0.28 to
+-0.38 (row noise as before).  Feature step, the same rule (4 of 5 search blocks on the target):
+
+| Input | Target | Blocks better (mean per 1000) | Verdict |
+|---|---|---|---|
+| end of period | all | 5 of 5 (-0.035); rim 5, mid 5 | in |
+| distance to the three-point line | long twos | 5 of 5 (-0.013); threes 2 of 5 | in |
+| scramble after a missed or blocked shot | rim | 3 of 5 (-0.066); mid 5 of 5, all 4 of 5 | out (passed only on the leaky spot) |
+| previous attempt's location | all | 3 of 5 | out |
+| after a timeout | all | 2 of 5 | out |
+| earlier defensive fouls | all | 3 of 5 | out |
+| court side | all | 1 of 5 | out |
+
+The regression search restarted from trial 0 with toggles end of period and line distance; CatBoost is not rerun (it
+was dominated on the leaky spot and costs an hour); XGBoost, LightGBM and chimeraboost are.
+
+**The search on the coded spot (2026-10-07), search half, SALL per 1000 against the current model:** best regression
+(`glm:58`, blocks + end of period, interactions spot2d / start x time / putback x distance / context) -0.217 (z -3.4,
+14/15; rim -0.284, mid -0.101, threes -0.327 at z -1.3, inside row noise); + XGBoost (`xgb:38`) -0.594 (z -4.9; rim
+-1.043); + LightGBM (`lgbm:32`) -0.571 (z -5.1; rim -1.026).  On the leaky spot the same families read -0.73 / -1.11 /
+-1.10: most of the regression's gain was the leak, the trees' added part (-0.38) survives.  XGBoost's inputs by gain
+(2018-20): the anchor's game clock 0.12, time on court 0.10, the regression's margin 0.09, score margin 0.07, time
+since the previous attempt 0.06 -- game context, no fine spot.  The margin is the score BEFORE the shot (stints adds the
+points after logging it).
+
+**Against the clean teacher** (true distance; the 2015-17 block priced alone by 132 --block=2015):
+- Gap to the teacher, minus the current model: regression +0.16 (z +2.5) / +0.47 (z +6.6); LightGBM +0.57 (z +5.8) /
+  +1.21 (z +10.0) in 2015 / 2016 -- both FARTHER, so both fail registered rule 2 as written.
+- Yet each one's departure from the current model predicts makes beyond the teacher and this shooter's season level:
+  coefficient 0.53 / 0.47 (se 0.14-0.15) for the regression, 0.73 / 0.79 (se 0.09-0.10) for LightGBM.
+- Reading: the teacher has the CURRENT model's play-by-play form plus tracking, so any added play-by-play structure
+  (nonlinear game context) is something it cannot express; the gap test then penalises a change of form whether or
+  not the extra is real.  The coefficient test says the extra is real make signal that tracking does not explain.
+  Whether game-context make effects belong in "shot quality" is the owner's call (asked 2026-10-07).
+
+### The shortlist on the coded spot, registered before its confirm read (2026-10-07)
+
+Search half, SALL per 1000 against the current model (overfitting probability per family in brackets):
+best regression `glm:58` -0.217 (z -3.4) [0.007]; + XGBoost `xgb:38` -0.594 (z -4.9) [0.000]; + LightGBM `lgbm:32`
+-0.571 (z -5.1) [0.000]; + chimeraboost `chimera:13` -0.598 (z -4.8) [0.000]; equal stack of the three -0.627
+(z -5.1; fitted weights move up to 0.36 between blocks, so equal).  **Shortlist (5):** `glm:58`, `xgb:38`,
+`lgbm:32`, `chimera:13`, `eq:xgb:38+lgbm:32+chimera:13`.  The confirm read runs while the owner rules on whether game
+context belongs in shot quality; with "tracking-visible only" the current model stays whatever the read says.
+
+**The confirm read on the coded spot (2026-10-07)**, 1.5M rows, confirm seasons, SALL per 1000 against the current
+model (sample 0; sample sd under 0.04 throughout; every block better unless noted):
+
+| Candidate | All | z | Rim | Mid-range | Threes | Retention all / threes |
+|---|---|---|---|---|---|---|
+| best regression | -0.187 | -7.8 | -0.312 | -0.153 | -0.066 (4 blocks) | 0.86 / 0.20 |
+| + XGBoost | -0.648 | -9.0 | -1.256 | -0.364 | -0.204 | 1.09 / 0.45 |
+| + LightGBM | -0.636 | -10.1 | -1.256 | -0.344 | -0.193 (4 blocks) | 1.11 / 0.47 |
+| + chimeraboost | -0.660 | -8.5 | -1.261 | -0.377 | -0.228 | 1.10 / 0.51 |
+| equal stack | -0.692 | -9.5 | -1.307 | -0.398 | -0.255 | 1.10 / 0.54 |
+
+Rule 1 (better on every sub-model at Holm z in 4+ blocks, retention at least 0.5, gain above 2 sample sd) passes for
+the equal stack and chimeraboost only; the others miss on threes retention (the search-half three gains sat inside row
+noise).  Finalists for the battery: the regression and the equal stack, priced on all 30 seasons by 132.
+
+### The battery on the coded spot and the decision (2026-10-07)
+
+All 30 seasons priced by `132_shot_price.py` (each block's model fitted exactly as in the confirm read); arms the
+current model (`c_L7`), the best regression (`c_G58`), the equal stack (`c_stack3`); against the current model:
+
+| Test | Regression | Equal stack | Registered bar |
+|---|---|---|---|
+| held-out makes, twos (30 seasons) | -0.00021 (z -10.3, 30/30) | -0.00087 (z -13.3, 30/30) | |
+| held-out makes, threes | -0.00017 (z -1.9, 24/30) | -0.00038 (z -3.7, 28/30) | |
+| threes calibration slope 2017-22 / 2023-26 | 0.942 / 0.927 | 0.914 / 0.911 | 0.95-1.05 (current 0.958 / 0.948) |
+| gap to the clean teacher 2015 / 2016 | +0.16 (z +2.5) / +0.47 (z +6.6) | +0.37 (z +3.8) / +1.08 (z +9.0) | none worse at z >= +2 |
+| contest left 2014-17 | about equal | slightly nearer zero, all 4 | not worse |
+| other-half, team defence twos | +0.011 (z +3.5) | +0.008 (z +2.0) | none worse at z >= +2 |
+| other-half, team defence threes | +0.000 | +0.004 (z +0.5) | |
+| other-half, shooters' threes | -0.020 (z -1.4) | -0.054 (z -3.0) | |
+| forward test, offence / defence (MSE; current 8.323 / 7.677) | 8.338 / 7.711 | 8.337 / 7.704 | not worse at z >= +2 |
+
+**Decision (the registered rule): the current model, on the clean table (anchored timing, coded spot), enters
+experiment 42; no challenger replaces it.**  The challengers win on makes through game context (the anchor's game
+clock, time on court, score margin, time since the previous attempt), which is real pre-shot make signal (the
+coefficient test) but does not carry to the team-level tests the ratings use: worse other-half team defence on twos,
+slightly worse forward test on both sides, and the stack's three-point spread too wide in recent seasons.  So the
+owner's question (does game context belong in shot quality) does not change the outcome under the registered rule.
+Experiment 42's pre-test now passes: on the clean table the current model beats the flat rate on other-half team
+defence threes (flat +0.088, z +2.2, flat better in 7/30 seasons); on the leaky table no estimate did.  The curve
+(`lp`, which reads the exact logged spot) still "wins" defence twos and the forward defence -- the leak again.
+
+**The update on the clean table (2026-10-07)**, `119 --base=c_L7` (the current model priced from other seasons as the
+play-by-play quality; v from two teachers on different games, both with the true distance): the teacher beats the
+play-by-play model by 17.7 per 1000 (z -45) -- the coded spot gave up the near-rim detail tracking has.  The weight a
+shot's own result gets: rim 0.073-0.098 (was about 0.03), mid-range 0.009-0.022, threes 0.004-0.016 (corner 0.008).
+Written to outputs/shottest/info_gap_v_clean_L7.csv.  Nearly every attempt sits in the 10+ s shot-clock class now
+(the clock is read at the anchor, mostly the possession's start), so the clock classes of the update carry little.
+
+### The verdict, corrected (2026-10-07; the owner: "So the logistic beats everything? Really?")
+
+The decision above ("the current model stays; no challenger replaces it") was wrong as stated.  A verification run
+(seven agents; scripts and outputs under scratch/2026-10-07_verify/, outputs/shottest/ctxfree_*) found:
+
+1. **The trees fitted on the CURRENT logistic beat it on makes and are no worse on any team test.**  Arm LX = XGBoost
+   (the parameters of `xgb:38`) as a correction on the current model's margin (`132 --spec`, data/shotq/c_L7_xgb38):
+
+   | Test (arm minus current model) | LX | z | Stack (on the tuned logistic) |
+   |---|---|---|---|
+   | SALL x1000, all 30 seasons / 15 confirm seasons | -0.644 / -0.623 | -12.8 / -10.0 (30/30, 15/15) | -0.747 / -0.690 |
+   | makes x1000, twos / threes | -0.79 / -0.25 | -15.7 / -7.8 | -0.87 / -0.38 |
+   | other half: shooters 2s / 3s | -0.026 / -0.070 | -3.3 / -4.5 | -0.011 / -0.054 |
+   | other half: offence 2s / 3s | -0.008 / -0.017 | -2.2 / -3.7 | -0.005 / +0.005 |
+   | other half: defence 2s / 3s | -0.002 / -0.001 | -0.6 / -0.2 | +0.008 (z +2.0) / +0.004 |
+   | forward test offence / defence (sel) | +0.0003 / -0.0041 | +0.1 / -0.4 | +0.013 / +0.027 (z +2.1) |
+   | threes calibration 2017-22 / 2023-26 (current 0.958 / 0.948) | 0.925 / 0.915 | | 0.914 / 0.911 |
+
+2. **The stack's team-test losses came from its base, not its trees.**  The tuned logistic's signed score-margin terms
+   raise the make chance of trailing teams' shots, so a strong defence's "quality allowed" takes on its lead
+   (defence-season shift r +0.51 with team strength; margin terms carry ~100% of it).  Removing the team-level shift
+   halves the defence-twos loss (G58 z +3.47 -> +1.53; stack z +2.00 -> +1.15).  Against their own base the trees never
+   lose a team test (stack minus tuned logistic: other-half cells z -3.1 to +0.9).
+3. **The borderline failures were borderline.**  Forward test, paired z against the current model: offence noise for
+   every challenger (z 0.6-1.1); defence the tuned logistic reliably worse (season z 3.0, block z 2.5), the trees
+   borderline (season z 1.95-2.2, block z 1.5-1.7, under 1.7 without 1997-2001); every forecast moves by 0.03-0.07
+   points per 100.  Other-half defence twos for the stack: z +2.00 on the battery split, +1.5 averaged over 200 random
+   game splits, z +1.49 at half the padding constant.  Threes calibration: 95% intervals +-0.045, the current model
+   itself 0.915 in 1997-2001 and 0.948 in 2023-26, so the 0.95-1.05 bar separates nothing; paired, the trees ARE
+   over-spread on recent threes (stack minus current -0.044, z -6.3, surviving shooter fixed effects), costing about
+   0.02 per 1000 -- a recalibration, not a mispricing.
+4. **The tracking yardstick was biased toward the incumbent.**  With teachers that can express the challengers' form
+   (T3 = LightGBM on the tuned form plus tracking, the best teacher out of fold), every challenger is CLOSER to tracking
+   quality in 2015 (stack -1.04, z -9.6) and closer or tied in 2016 (-0.55, z -4.2; tie under the unscaled teacher).
+   The tracking-specific part (teacher with tracking minus the same form without) endorses 18-41% of the trees'
+   departures, all positive (z 5-17).
+5. **The skeptic found no leak behind the trees' edge**, but found a third leak shared by every model: **unlocated (0, 0)
+   twos are result-coded in older seasons** (1997-2004: 39.4% of made twos unlocated against 22.9% of misses; one arena
+   in 2000: 46.3% against 1.4%; 2016-26: 2.9% against 2.0%).  Also a residual leak at the 6-ft zone edge (made shots
+   logged inside 6 ft 85% vs 75% of misses at true 3-9 ft; worth -0.76 / -1.93 per 1000 of tracked attempts), and a
+   minor stamp leak through `since_reset` on forced possession starts (0.044% of rows).  All three touch twos only;
+   threes are clean.  The trees' edge does not grow with these gaps.
+
+**Corrected reading:** the trees on the current logistic are the better shot model by every test that is not biased
+toward the incumbent, except an over-spread on recent threes that a recalibration can fix.  LX was not on the
+registered shortlist (it was built during the verification, after the confirm seasons had been read for related
+arms), so the confirm half no longer counts as untouched for it; the decider is experiment 42's ratings chain, run on
+both qualities.  The unlocated-shot leak must be fixed before any use of twos.
+
+## Experiment 42: opponent threes priced at shot quality (registered 2026-10-07, before any result)
+
+**The owner:** "go" (2026-10-07), on running experiment 42 on both the current logistic and the trees on top of it.
+**What changes:** the defensive target `x3def_w0.25` prices each opponent three at the shooter's flat padded
+other-half 3P%.  The candidates price each three at its shot quality AFTER its own result (`q_after`, the owner's
+update, weight about 0.8% on threes) times the shooter's padded other-half ratio on quality BEFORE the result
+(p_pad / p_mix, k 450).  Everything else is the incumbent's: offence `xpts_ft`, the kept share 0.25, the prior,
+`onc_*`, every setting of 62, 99, 91.
+- **42** `quality_logistic`, target `x3def_qL7_w0.25`: quality from the current logistic on the clean table
+  (data/shotq/q42_L7).  **The primary arm.**
+- **42x** `quality_trees`, target `x3def_qLX_w0.25`: XGBoost on the current logistic, threes recalibrated (alpha 0.87,
+  fitted on the 15 search seasons' threes) (data/shotq/q42_LXr).  Adopted only if it passes the bar on its own AND
+  beats 42 head to head on 63 at z <= -2; otherwise 42 is the reading (ties go to the simpler).
+- **Bar (HANDOFF):** 63 both-directions team-game `game_armse` at z <= -2 against the incumbent's 8.5995 (a fresh 62
+  reproduced the incumbent's 2015 and 2024 ratings exactly, max difference 0.0); no gross consensus miss (64); the 2026
+  top 20 not worse (66); read 90, 88 by tier, 73 (on the incumbent's trade-loss target, and on the candidate's own as a
+  sensitivity), scale_def (trap 17) and the absorbed share (trap 12).
+- **Plumbing:** scripts 133 (quality per attempt), 134 (stint side tables and shooter tables; gates: every stint slot's
+  attempts and every game x shooter's attempts and makes equal the cached stints; the frame and the quality agree on
+  every attempt's value and result), `xshoot.expected_threes_q`; stints' shot logger places each attempt in the stint
+  its possession record lands in (`rec_idx` set when the record is appended; FRAME_VERSION 5).  Checks passed on 1997:
+  the incumbent target equals the committed code exactly; every quality at the league 3P% reproduces today's expected
+  threes to 4.4e-16; an independent attempt-by-attempt recomputation matches to 8.9e-16.  An adversarial review found
+  one blocking defect (attempts of a possession dropped at a period's end were placed in the next period's first stint;
+  fixed, test added) and the small ones below (fixed where marked).
+- **Accepted exceptions, recorded before the result:** (1) the update's size v comes from the 2015 and 2016 tracked
+  attempts and is used in every season, rated 2014-2017 included (24 class-level variances; a +-30% change moves the
+  target's own-result share by about 0.002); (2) alpha 0.87 and the trees' hyperparameters were fitted on the search
+  seasons' makes, some of which are scored neighbours (one league-wide scalar); (3) a second-order channel: the prior
+  for season s trains on labels of other seasons whose quality models may have trained on s's scored neighbours (league-
+  wide, shooter- and arena-neutral pricing; far below 63's resolution); (4) the current logistic's quality has score-
+  margin and end-of-period terms, so a leading defence's opponent threes are priced slightly lower (per defence-season
+  0.02-0.05 points per 100; the owner's open question whether game context belongs in quality); (5) fixed: the threes'
+  level is now fitted on located threes only (1997's unlocated misses had pulled located threes 1.3 points low).
+
+**Result (2026-10-07): both arms are WORSE than the incumbent; neither passes the registered bar.**
+
+| 63, both directions (56 season-pairs) | 42 (current logistic's quality) | 42x (trees' quality) |
+|---|---|---|
+| team-game `game_armse` (incumbent 8.5995) | 8.6043, +0.128, z +2.83, 23 of 56 better | 8.6026, +0.080, z +1.77, 24 of 56 |
+| stint level / each side rescaled | z +4.70 / +4.61 | z +3.03 / +2.95 |
+| scale_def (incumbent 1.0051) | 1.0186 | 1.0223 |
+| every quality tier (top 30 ... 301+) | worse, z +2.3 to +2.8 | worse, z +1.0 to +2.3 |
+| 90 swap test, defence order / gaps | -0.031 (z -1.8) / +0.17 (z +4.2) | |
+| 73 trade loss, defence (incumbent's target / own target) | +0.0026 (z +3.7) / +0.0061 (z +8.4) | z +2.8 (incumbent's target) |
+| 64 consensus rho_def / spread_def / top5 (incumbent 0.816 / 0.982 / 5) | 0.825 / 0.966 / 4 | 0.823 / 0.957 / 4 |
+
+The loss is in the ranking (the rescaled rows match the raw ones), on defence, in every tier.  2026 top 20 (42): in
+Curry (22 -> 12), Caruso (42 -> 14), Anunoby (21 -> 18); out Diabate (14 -> 27), Ighodaro (18 -> 51), Gonzalez (20
+-> 21); defence moves sd 0.43 points among 1,000+ possession players.  Logged as experiments 42 and 42x (pending the
+owner's call).  A diagnosis (target components, where the loss sits, run artefacts) is running.
+
+**Diagnosis (2026-10-07, three independent angles; scratch/2026-10-07_exp42/diag_*):**
+- **The target change itself is small and, at team level, better.**  Per defence-season it moves the target by sd 0.16
+  points per 100; 83% of it is shot shape (spot, shot clock, possession start), which persists like something a
+  defence controls (half to half r 0.77, next season 0.73) and is barely tied to team strength (r -0.09).  Game
+  context is only 6% of it (sd 0.034 points; r -0.71 with team strength; prices strong defences slightly BETTER here,
+  the opposite of the tuned logistic's problem) and has no detectable link to the rating changes.  At team level the
+  quality piece predicts the other half's points allowed with weight 1.015 (se 0.167; the incumbent's mix gives it
+  0.25) and the candidate's target predicts the other half (0.7280 against 0.7259) and the next season (0.5865
+  against 0.5829) slightly better at every kept share; the best kept share is about 0.4 under both pricings.
+- **The ratings loss is in the box-score prior's refit, not in the target's own games.**  96% of the loss is on
+  defence and it is already in 62's raw output (99 and 91 do not cause it).  The candidate moves each player's
+  defensive prior by sd 0.52 per 100 (players with 1,000+ possessions) but his own-games part by only 0.13; the
+  change is 95% within team, does not carry to the same player's next season (r +0.03), and tracks no team context.
+  The two candidates, whose targets are nearly identical (r 0.993), have priors that differ by sd 0.50 and ratings by
+  0.43 -- as much as either differs from the incumbent.
+- **Likely mechanism (in the code, not yet tested by a run):** `singleyear.stratified_player_folds` sorts players by
+  LABEL and deals them in snake order into the five out-of-player folds, so any change to the labels re-deals the
+  players among the boosters; each player's prior then comes from a booster trained on a different set of players.
+  That makes every target experiment pay a re-deal noise the incumbent (fixed deal) does not.  One measured sample of
+  that noise: L7 against LX, two re-deals on nearly the same target, differ by 0.048 on 63 (z -0.97), against the
+  candidate's loss of 0.128 -- so the re-deal explains part of the loss, perhaps not all; the rest may be real or the
+  incumbent's winner's-curse advantage from having been picked across earlier runs.
+- **Tests proposed (one build each, about 95 min):** (1) the L7 arm with the player folds pinned to the incumbent's
+  deal; (2) the incumbent target with a different, equally balanced deal (measures the re-deal noise and the
+  incumbent's selection advantage, which bears on every target experiment so far).
+
+**The two checks and the verdict (2026-10-07; the owner: "Sounds good" to rejecting 42 and holding the prior's
+training groups fixed in target experiments).**  `62 --deal_seed=K` trains each defensive box-score prior alongside a
+different, equally balanced set of players (seeded); `62 --deal_target_def=<name>` keeps the groups the named target's
+labels make (both new 2026-10-07, default off; a default build still reproduces the incumbent exactly, 2015 max
+difference 0.0).  63, both directions, against the incumbent's 8.5995:
+
+| Run | What changed | Team-game | z | Seasons better | Stint z |
+|---|---|---|---|---|---|
+| 42 | quality pricing, training groups follow the new labels | +0.128 | +2.83 | 23 of 56 | +4.70 |
+| C1 | nothing but the defensive training groups (seed 1; 80% of players move) | +0.056 | +1.15 | 25 of 56 | +1.32 |
+| 42f | quality pricing, training groups held to the incumbent's (79% would have moved) | +0.043 | +1.29 | 23 of 56 | +2.22 |
+
+- **Verdict: 42, 42x and 42f rejected.**  With the noise taken out the quality pricing of opponent threes is no gain
+  (+0.043, z +1.3, no quality tier better).  It does move Ighodaro 18th to 46th in 2026 (the owner thinks he was too
+  high); Caruso's rise to 14th in 42 was the training-group noise (C1 alone moves him 42nd to 14th; 42f leaves him
+  50th).
+- **The training-group noise is real and large:** one equally good regrouping of the incumbent costs 0.056 on the
+  team-game criterion, and every experiment that changed the labels paid a draw of it while the incumbent kept its
+  own.  **Standard from now on:** a target experiment runs 62 with `--deal_target_def=<the incumbent's defensive
+  target>` (and the offence's equivalent if the offence target changes), so only the idea moves.  Earlier label
+  experiments decided by less than about 0.06 may have been decided by this noise.
+- **Next (HANDOFF):** average the box-score prior over several training groupings, which should remove this noise
+  from the ratings themselves.

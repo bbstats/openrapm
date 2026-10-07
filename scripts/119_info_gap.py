@@ -1,6 +1,6 @@
 """The information-gap pilot (stage 4): on the tracked 2014-15 attempts, does tracking say more than play-by-play?
 
-    python scripts/119_info_gap.py [--folds=5] [--fractions=0.1,0.3,1.0] [--seasons=2015,2016] [--tag=]
+    python scripts/119_info_gap.py [--folds=5] [--fractions=0.1,0.3,1.0] [--seasons=2015,2016] [--tag=] [--base=<dir>]
 
 Uses the 2014-15 model table (scripts/120 --table=1) joined to the shot log (outputs/shotclock/joined_2015.parquet,
 scripts/116).  Held out by GAME, five folds:
@@ -108,12 +108,21 @@ def main():
     z = float(d.mean() / (d.std(ddof=1) / np.sqrt(len(d))))
     print(f"\nteacher minus pbp: {d.mean():+.5f} per attempt, game-paired z {z:+.2f}, better in {int((d < 0).sum())}/{len(d)} games")
 
-    # v: two teachers on different games, both scored on a third set
+    # v: two teachers on different games, both scored on a third set.  --base=<dir>: the play-by-play quality is a
+    # priced candidate's (data/shotq/<dir>, fitted on other seasons), so v is what tracking still knows beyond IT
+    base = flag("base", "")
+    qb = None
+    if base:
+        P_ = pd.concat([pd.read_parquet(Path(cfg["_root"]) / "data" / "shotq" / base / f"{s}.parquet",
+                                        columns=["game_id", "action_number", "q"]) for s in seasons])
+        qb = f[["game_id", "action_number"]].merge(P_, on=["game_id", "action_number"], how="left")["q"].to_numpy(float)
+        if np.isnan(qb).any():
+            raise SystemExit(f"{base}: {int(np.isnan(qb).sum())} tracked attempts unpriced")
     third = fold_of(f["game_id"], 3)
     gaps = []
     for k in range(3):
         a_, b_, c_ = (third == k), (third == (k + 1) % 3), (third == (k + 2) % 3)
-        m_pbp = score_arm(f, PBP, a_ | b_, c_)
+        m_pbp = qb[c_] if qb is not None else score_arm(f, PBP, a_ | b_, c_)
         t1 = score_arm(f, ARMS["teacher"], a_, c_)
         t2 = score_arm(f, ARMS["teacher"], b_, c_)
         gaps.append(pd.DataFrame(dict(idx=np.flatnonzero(c_), m=m_pbp, g1=t1 - m_pbp, g2=t2 - m_pbp)))

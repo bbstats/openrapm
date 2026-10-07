@@ -54,6 +54,9 @@ MODEL_LAYER = [
     "scorecard.py",     # experiment 35: error and slope on held-out team-games, the controls
     "shotclock.py",     # the shot clock rebuilt from a possession's start and clock events
     "shotmodel.py",     # the shot-quality models: a league-average shooter's make probability, offsets zeroed
+    "shotsearch.py",    # the search harness: the registered split, fixed row samples, the fast relevel, SALL
+    "shotfeatures.py",  # the search's new play-by-play feature blocks and the boosters' whitelisted inputs
+    "shotlearners.py",  # the search's learners: the regression and boosted corrections on its shooter-held margin
     "shottest.py",      # the direct shot test: log loss, calibration, arena checks, other-half shooting
     "boxspm.py",        # experiment 35, B1: the linear box-score-only SPM
     "vanilla.py",       # experiment 35, B2/B3: vanilla RAPM and RAPM on B1, one factorization per penalty

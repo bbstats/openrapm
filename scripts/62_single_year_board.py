@@ -282,9 +282,11 @@ class OutOfPlayerSPM:
     both sides and the held-out error rewards remembering him; the prior is only ever asked about players
     its fit never saw.  Off, `groups=None` is chimeraboost's own default: the shipped fit, unchanged."""
 
-    def __init__(self, params: dict, n_folds: int, intercept: bool = False, by_player: bool = False):
+    def __init__(self, params: dict, n_folds: int, intercept: bool = False, by_player: bool = False,
+                 deal_seed: int | None = None):
         self.params, self.n_folds, self.intercept = dict(params), int(n_folds), bool(intercept)
         self.by_player = bool(by_player)
+        self.deal_seed = deal_seed
         assert not (self.intercept and self.by_player), "the team-season intercept fit takes no groups"
 
     def _fit_one(self, X, y, w, codes, n_groups, players=None):
@@ -302,8 +304,13 @@ class OutOfPlayerSPM:
         self.fold_models_, self.excluded_, self.fold_logs_ = [], [], []
         self.shift_ = np.zeros(0)
         if self.n_folds > 1:
-            fold = sy.stratified_player_folds(train, self.n_folds)
+            fold = sy.stratified_player_folds(train, self.n_folds, seed=self.deal_seed)
             self.shift_ = sy.fold_mean_shift(train, fold)
+            if self.deal_seed is not None or "deal_target" in train.columns:
+                # how far this deal is from the one the run's own labels would have made (players, not rows)
+                own = sy.stratified_player_folds(train.drop(columns="deal_target", errors="ignore"), self.n_folds)
+                first = ~pd.Index(train.index).duplicated()
+                self.moved_ = float((own[first] != fold[first]).mean())
             for f in range(self.n_folds):
                 keep = fold != f
                 model, log = self._fit_one(X[keep], y[keep], w[keep], None if codes is None else codes[keep],
@@ -504,6 +511,11 @@ def main():
     LAM_BUCKETS = {k: float(v) for k, v in
                    (part.split(":") for part in _flag("buckets", "").split(",") if part)}
     names = {"O": _flag("target_off", sy.OFFENSE_TARGET), "D": _flag("target_def", sy.DEFENSE_TARGET)}
+    # the prior's player folds (2026-10-07): --deal_seed=K deals them in a seeded random order (a re-deal control);
+    # --deal_target_def=<name> deals the defence's folds on that target's labels (a target experiment that keeps
+    # the incumbent's deal).  Neither given: the shipped snake deal on the run's own labels.
+    deal_seed = int(_flag("deal_seed")) if _flag("deal_seed", "") else None
+    deal_target = {"D": _flag("deal_target_def", "") or None, "O": None}
     seasons = list(range(first, last + 1))
     boards = [int(x) for x in _flag("boards", "").split(",") if x] or seasons
     assert set(boards) <= set(seasons), f"--boards outside [{first}, {last}]"
@@ -715,7 +727,7 @@ def main():
         return ctx.design([season], _target(name))
 
     rapm = {}
-    for name in dict.fromkeys(names.values()):
+    for name in dict.fromkeys([*names.values(), *(t for t in deal_target.values() if t)]):
         if saved is not None:
             break                                    # the priors are on disk; no labels, no boosters
         rapm[name] = LeaveSeasonOutRAPM(min_possessions=MIN_POSSESSIONS)
@@ -749,8 +761,8 @@ def main():
                 continue
             training = panel[(panel.side == side) & ~panel.season.isin(unseen)]
 
-            def label(exclude, method="solve"):
-                out = rapm[names[side]].ratings(
+            def label(exclude, method="solve", target=None):
+                out = rapm[target or names[side]].ratings(
                     held_out_season=exclude, offense_lambda=RAPM_OFFENSE_LAMBDA,
                     defense_lambda=RAPM_DEFENSE_LAMBDA, context_lambda=RAPM_CONTEXT_LAMBDA, method=method)
                 if column in unshrink_sides:
@@ -844,6 +856,15 @@ def main():
                     train = sy.chunk_rows(label(unseen), training, column, feats, sizes=sizes,
                                           labels=outside, unseen=unseen, weight_by=chunk_weight, shares=shares,
                                           age_curve=curve, label_scale=scale_of)
+                    if deal_target[side]:
+                        if outside is not None:
+                            raise SystemExit("--deal_target_def needs the career chunk label (no outside labels)")
+                        dt = sy.chunk_rows(label(unseen, target=deal_target[side]), training, column, feats,
+                                           sizes=sizes, labels=outside, unseen=unseen, weight_by=chunk_weight,
+                                           shares=shares, age_curve=curve, label_scale=scale_of)
+                        if not (dt.index.equals(train.index) and len(dt) == len(train)):
+                            raise SystemExit("--deal_target_def: the two targets' training rows differ")
+                        train = train.assign(deal_target=dt["target"].to_numpy())
                 if age_adjust and season == boards[0]:
                     moved = train[train.label_key != sy._key_text(sy._season_key(unseen))]
                     bins = pd.cut(moved.age, [0, 24, 27, 30, 33, 99], right=False,
@@ -910,8 +931,12 @@ def main():
                 model = StackedSPM(params, player_folds, quality=stack_quality).fit(train, model_feats)
                 print(f"  prior {side} {season}: {model.describe()}", flush=True)
             else:
-                model = OutOfPlayerSPM(params, player_folds, intercept=team_intercept,
-                                       by_player=by_player[side]).fit(train, model_feats)
+                model = OutOfPlayerSPM(params, player_folds, intercept=team_intercept, by_player=by_player[side],
+                                       deal_seed=deal_seed if side == "D" else None).fit(train, model_feats)
+                if getattr(model, "moved_", None) is not None:
+                    print(f"  prior {side} {season}: deal {'seed ' + str(deal_seed) if deal_seed is not None else ''}"
+                          f"{'on ' + str(deal_target[side]) if deal_target[side] else ''}: {model.moved_:.1%} of "
+                          "players in another fold than the run's own labels would put them", flush=True)
             if team_intercept and (season == boards[0] or season == boards[-1]):
                 log = model.log_
                 print(f"  prior {side}: team-season intercept over {len(np.unique(train[sy.TEAM_SEASON]))} "

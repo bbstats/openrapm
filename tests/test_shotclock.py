@@ -47,3 +47,14 @@ def test_lags_are_added_by_reset_kind_and_fitted_as_medians():
     again = rebuild(rows, ClockRules(lag=lags))
     acc = accuracy(again["sc_eff"].to_numpy(), truth)
     assert acc["median_abs"] == 0.0 and acc["within_1"] == 1.0
+
+
+def test_only_the_events_up_to_the_anchor_count_whatever_their_clock():
+    # the anchor is a substitution at 680 logged AFTER a defensive foul at the same second: the foul counts
+    tie = _rows((2015, 680.0, "dreb", 700.0, "foul:def:Personal@680"))
+    assert rebuild(tie).loc[0, "reset_kind"] == "dreb"                             # the old same-second rule drops it
+    assert rebuild(tie.assign(anchor_nev=1)).loc[0, "reset_kind"] == "dfoul"       # logged before the anchor row
+    # a foul logged after the anchor row never counts, even a second earlier on the clock
+    later = _rows((2015, 670.0, "dreb", 700.0, "oreb@690;foul:def:Personal@680"))
+    r = rebuild(later.assign(anchor_nev=1))
+    assert r.loc[0, "reset_kind"] == "oreb" and r.loc[0, "sc"] == 4.0             # 24 - 20 from the rebound

@@ -340,7 +340,7 @@ def season_rows(labels: dict, rows: pd.DataFrame, column: str, features=None,
 CHUNK_FEATURES = ["chunk_poss", "chunk_seasons"]
 
 
-def stratified_player_folds(train: pd.DataFrame, n_folds: int = 5) -> np.ndarray:
+def stratified_player_folds(train: pd.DataFrame, n_folds: int = 5, seed: int | None = None) -> np.ndarray:
     """A fold id per training row, all of a player's rows in one fold, folds balanced on the LABEL.
 
     The out-of-player prior (2026-09-14): every player's prior comes from a booster that never saw any of
@@ -356,9 +356,15 @@ def stratified_player_folds(train: pd.DataFrame, n_folds: int = 5) -> np.ndarray
 
     `train` is `chunk_rows` / `prior_rows` output: indexed by player_id, with `target` and `weight`.
     The splitter itself is `rloocv.BalancedGroupKFold`, reusable wherever groups need balanced folds.
+
+    Because the deal follows the label, ANY change to the labels re-deals the players among the folds (2026-10-07,
+    experiment 42's diagnosis).  Two controls: `seed` deals each block of n_folds players in a seeded random order
+    (as balanced, a different make-up); a `deal_target` column, when `train` has one, is the label the deal is struck
+    on instead of `target` -- another target's labels, so a target experiment can keep the incumbent's deal.
     """
-    return BalancedGroupKFold(n_folds).fold_ids(train.target.to_numpy(float), train.index.to_numpy(),
-                                                train.weight.to_numpy(float))
+    deal = train["deal_target"] if "deal_target" in train.columns else train.target
+    return BalancedGroupKFold(n_folds, seed=seed).fold_ids(deal.to_numpy(float), train.index.to_numpy(),
+                                                           train.weight.to_numpy(float))
 
 
 def fold_mean_shift(train: pd.DataFrame, fold: np.ndarray) -> np.ndarray:

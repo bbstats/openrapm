@@ -159,3 +159,24 @@ def test_tilting_refuses_a_correction_that_would_eat_the_sample():
     # a ratio cap could not have caught it -- with the total held fixed no weight can grow by more than n
     out = tilt_weights(y, np.ones(5), target_mean=2.5)
     assert out.sum() == pytest.approx(5.0) and np.average(y, weights=out) == pytest.approx(2.5)
+
+
+def test_a_seeded_deal_is_as_balanced_and_a_different_make_up():
+    from eracoef.rloocv import BalancedGroupKFold
+    rng = np.random.default_rng(3)
+    groups = np.repeat(np.arange(400), 3)
+    y = np.repeat(rng.normal(0, 1, 400), 3)
+    w = rng.uniform(1, 5, groups.size)
+    snake = BalancedGroupKFold(5).fold_ids(y, groups, w)
+    seeded = BalancedGroupKFold(5, seed=1).fold_ids(y, groups, w)
+    again = BalancedGroupKFold(5, seed=1).fold_ids(y, groups, w)
+    assert np.array_equal(seeded, again)                                   # reproducible
+    assert (snake != seeded).mean() > 0.5                                   # a different make-up
+    spread = {}
+    for name, fold in (("snake", snake), ("seeded", seeded)):               # every group whole, five folds of ~80
+        assert all(len(set(fold[groups == g])) == 1 for g in range(0, 400, 37))
+        counts = np.bincount(fold[::3], minlength=5)
+        assert counts.min() >= 79 and counts.max() <= 81
+        means = [np.average(y[fold == f], weights=w[fold == f]) for f in range(5)]
+        spread[name] = max(means) - min(means)
+    assert spread["seeded"] < 1.5 * spread["snake"]                         # as balanced on the label (0.10 / 0.10)

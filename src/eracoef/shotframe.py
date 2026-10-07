@@ -41,7 +41,7 @@ import pandas as pd
 from .ingest import game_table, load_gamelog
 from .stints import build_game, build_season
 
-FRAME_VERSION = 2           # bumped whenever a column changes meaning; written into every file
+FRAME_VERSION = 5           # bumped whenever a column changes meaning; written into every file
 META = ("season", "phase", "game_id", "game_date", "arena", "neutral", "half")
 
 
@@ -275,6 +275,51 @@ def derive(frame: pd.DataFrame, offsets: pd.DataFrame | None = None, rmap: pd.Da
     f["corner3"] = (f["value"] == 3) & (np.abs(x) >= 220) & (y <= 92.5)
     f["heave"] = (f["dist_xy"] >= 36.0) & (f["clock"] <= 2.0)
     return f
+
+
+ZONE_FT = 10.0              # inside this the logged spot knows the result: coded as two zones (DECISIONS.md, the location leak)
+ZONE_EDGE = 6.0
+LOGGED = ("dist_xy", "xc", "yc", "angle")
+
+
+def code_location(f: pd.DataFrame) -> pd.DataFrame:
+    """The spot as the shot models may read it.  At the same true (tracking) distance the scorer logs a made close
+    shot 0.7-1.3 ft nearer the rim than a missed one, so the exact logged spot inside ZONE_FT carries the result
+    (DECISIONS.md, "The location leak").  A located attempt inside ZONE_FT gets its zone's distance -- 3 ft (0-6) or
+    8 ft (6-10) -- straight on (x 0, y the zone, angle 0); unlocated attempts (0, 0) and everything beyond are
+    unchanged.  The exact logged values are kept as `<col>_logged`, which shotfeatures.FORBIDDEN bans as inputs."""
+    g = f.copy()
+    for c in LOGGED:
+        g[f"{c}_logged"] = g[c].to_numpy(float)
+    d = g["dist_xy"].to_numpy(float)
+    near = (d < ZONE_FT) & ~g["noloc"].to_numpy(bool)
+    zone = np.where(d < ZONE_EDGE, ZONE_EDGE / 2.0, (ZONE_EDGE + ZONE_FT) / 2.0)
+    g["dist_xy"] = np.where(near, zone, d)
+    g["xc"] = np.where(near, 0.0, g["xc"].to_numpy(float))
+    g["yc"] = np.where(near, 10.0 * zone, g["yc"].to_numpy(float))
+    g["angle"] = np.where(near, 0.0, g["angle"].to_numpy(float))
+    return g
+
+
+def anchored(f: pd.DataFrame) -> pd.DataFrame:
+    """The frame with every timing field measured from the shot's ANCHOR (the last row before it that cannot belong
+    to it: stints.GameParser._log_event), never from its own timestamp.
+
+    The timing leak (DECISIONS.md): the feed stamps makes and misses with different delays, so on the 2015-16
+    tracked attempts timing measured from the stamp beat the same timing measured from the true release by 1.59 log
+    loss per 1000 attempts (z -6.6): the result, leaking.  Anchored timing never reads the stamp.  The game clock of
+    the anchor stands in for the shot's; the shot clock is rebuilt at the anchor (shotclock.rebuild with t = the
+    anchor, so later events never count); seconds since the offensive rebound / timeout run to the anchor; time on
+    court is the shooter's at the anchor."""
+    g = f.copy()
+    a = g["anchor_clock"].to_numpy(float)
+    shot = g["clock"].to_numpy(float)
+    g["clock"] = a
+    g["secs_into_poss"] = np.clip(g["poss_start_clock"].to_numpy(float) - a, 0.0, None)
+    g["secs_since_oreb"] = np.clip(g["secs_since_oreb"].to_numpy(float) - (a - shot), 0.0, None)
+    g["secs_since_timeout"] = np.clip(g["secs_since_timeout"].to_numpy(float) - (a - shot), 0.0, None)
+    g["shooter_secs_on"] = np.clip(g["shooter_secs_on"].to_numpy(float) - (a - shot), 0.0, None)
+    return g
 
 
 def player_game_totals(frame: pd.DataFrame) -> pd.DataFrame:

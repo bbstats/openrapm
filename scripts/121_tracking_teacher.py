@@ -44,18 +44,22 @@ def tracked_season(cfg, season: int) -> pd.DataFrame | None:
     t = t[(t.phase == "RS") & ~t.heave]
     if season == 2015:
         j = pd.read_parquet(root / "outputs" / "shotclock" / "joined_2015.parquet",
-                            columns=["game_id", "action_number", "shot_clock", "dribbles", "touch_time", "def_dist"])
-        j = j.rename(columns={"shot_clock": "true_sc"})
+                            columns=["game_id", "action_number", "shot_clock", "dribbles", "touch_time", "def_dist",
+                                     "log_dist"])
+        j = j.rename(columns={"shot_clock": "true_sc", "log_dist": "true_dist"})
     elif season == 2016:
         p = root / "data" / "tracking" / "movement_shots_2016.parquet"
         if not p.exists():
             return None
-        j = pd.read_parquet(p, columns=["game_id", "action_number", "mv_shot_clock", "dribbles", "touch_time", "def_dist"])
-        j = j.rename(columns={"mv_shot_clock": "true_sc"})
+        j = pd.read_parquet(p, columns=["game_id", "action_number", "mv_shot_clock", "dribbles", "touch_time", "def_dist",
+                                        "mv_dist"])
+        j = j.rename(columns={"mv_shot_clock": "true_sc", "mv_dist": "true_dist"})
     else:
         raise ValueError(f"no tracked attempts for {season} (the owner's split: STATS era only)")
     f = t.merge(j, on=["game_id", "action_number"], how="inner")
     f = f[f["def_dist"].notna() & f["touch_time"].notna() & f["dribbles"].notna()].reset_index(drop=True)
+    # an attempt without a true distance keeps the coded logged one (shotmodel's tracking block reads true_dist)
+    f["true_dist"] = f["true_dist"].fillna(f["dist_xy"])
     f["touch_time"] = f["touch_time"].clip(lower=0.0)
     return f
 
