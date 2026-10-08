@@ -364,7 +364,9 @@ categories: across the eight types, `vs consensus` against `vs 2026 observed` is
 ridge penalty; by possession, on court signal + off court adjustment (GP) + off court adjustment (DNP) + team SOS adjustment,
 with the actual on and off court ratings beside them; single seasons
 and the ten three-season windows, penalty 3,000).  Rebuild with `scripts/52_site.py`,
-`scripts/76_bias_groups.py` and `scripts/83_decompose_site.py`, commit, and fast-forward `main` to publish.  The
+`scripts/76_bias_groups.py` and `scripts/83_decompose_site.py`, commit, and fast-forward `main` to publish.
+**Check the Pages build after pushing** (`gh api repos/bbstats/openrapm/pages/builds/latest`): on 2026-10-08 the push
+to `main` did not start one, and `gh api -X POST repos/bbstats/openrapm/pages/builds` had to request it.  The
 tabs at the top and the dark-mode button are `docs/site.css` and `docs/site.js`, shared by all three pages (76
 writes them into bias.html); a new page needs the same `<nav class="site">` block and its colours given again
 under `:root[data-theme="dark"]`.  The
