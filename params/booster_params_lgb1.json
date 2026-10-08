@@ -1,0 +1,44 @@
+{
+  "O": {
+    "learner": "lightgbm",
+    "params": {
+      "learning_rate": 0.0236783003149664,
+      "n_estimators": 672,
+      "num_leaves": 27,
+      "max_depth": 8,
+      "min_child_samples": 253,
+      "reg_lambda": 73.80040754717699,
+      "reg_alpha": 0.002344569628316993,
+      "max_bin": 31,
+      "path_smooth": 0.1212217541990016,
+      "linear_tree": true,
+      "linear_lambda": 67.0869921593503
+    },
+    "screen_value": 0.9850284280054895,
+    "screen_seasons": [
+      2026,
+      2015
+    ]
+  },
+  "D": {
+    "learner": "lightgbm",
+    "params": {
+      "learning_rate": 0.037011660676987745,
+      "n_estimators": 309,
+      "num_leaves": 30,
+      "max_depth": 5,
+      "min_child_samples": 299,
+      "reg_lambda": 3.9870259963134536,
+      "reg_alpha": 1.9312373364510007,
+      "max_bin": 31,
+      "path_smooth": 0.023990628949665596,
+      "linear_tree": true,
+      "linear_lambda": 35.08329087845008
+    },
+    "screen_value": 0.9780542780648098,
+    "screen_seasons": [
+      2026,
+      2015
+    ]
+  }
+}

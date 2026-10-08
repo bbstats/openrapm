@@ -13,6 +13,7 @@
                                            [--params_mult=l2_leaf_reg:5,min_child_weight:5] [--params_set=depth:3]
                                            [--booster_params=<name>] [--save_models=<name>]
                                            [--player_folds=0|5] [--unshrink_label=def|1|off|0] [--lambda_player=13037|cv|<value>]
+                                           [--prior_groupings=1] [--prior_grouping_first=0] [--lopo=0] [--prior_jobs=12]
                                            [--lambda_off=<value>] [--lambda_def=<value>]
                                            [--save_priors=<name>] [--priors_from=<name>] [--centre=1]
                                            [--blend_off=<x>/<k>/<a|lin>] [--blend_def=<x>/<k>/<a|lin>]
@@ -22,6 +23,17 @@ per player fold and every player's prior comes from the fit that never saw any o
 return his career number from his fingerprint.  The folds are balanced on the label (`singleyear.
 stratified_player_folds`), which is the condition under which the leave-out mean shift of Austin, Pe'er
 and Korem (2025) is zero; the residual shift is printed.  Five fits per season instead of one.
+
+`--prior_groupings=K` (2026-10-07, after experiment 42's control C1): which players share a fold follows the labels'
+order, so any label change re-deals them and moves the ratings by itself (one re-deal: +0.056 on the year-over-year
+test).  With K the folds are dealt K times, each as balanced (the shipped deal, then `BalancedGroupKFold(seed=g)`),
+and every player's prior is the mean of his K out-of-player predictions.  5K + 1 booster fits per side a season;
+`--prior_grouping_first=5` deals groupings 5..4+K, a disjoint set, for the stability check.
+
+LightGBM mode (the owner, 2026-10-08): `--booster_params=<name>` whose file says `"learner": "lightgbm"` (scripts/136
+writes one) fits `eracoef.lgbprior`'s deterministic LightGBM -- no subsampling, a fixed tree count, so the same rows
+always give the same model.  `--lopo=1` then drops the player folds: each rated player's prior comes from a model
+trained on every other player's rows, fitted in `--prior_jobs` processes (about 500 a side a season).
 
 `--crossfit=1` (2026-09-13, the amplitude run): the free prior scale is a least-squares coefficient on the
 prior summed over the five on the floor, and the prior carries the season's own on-court columns, so the
@@ -135,6 +147,7 @@ from eracoef.inseason import season_frac  # noqa: E402
 from eracoef.investigate import offcourt_rates, oncourt_rates  # noqa: E402
 from eracoef.looseason import LeaveSeasonOutRAPM  # noqa: E402
 from eracoef.priorridge import PriorRidgeCV, armse, calibration_miss, game_folds  # noqa: E402
+from eracoef import lgbprior  # noqa: E402
 from eracoef.stackprior import StackedSPM  # noqa: E402
 from eracoef.xshoot import DEFENSE_TARGETS  # noqa: E402
 
@@ -283,51 +296,105 @@ class OutOfPlayerSPM:
     its fit never saw.  Off, `groups=None` is chimeraboost's own default: the shipped fit, unchanged."""
 
     def __init__(self, params: dict, n_folds: int, intercept: bool = False, by_player: bool = False,
-                 deal_seed: int | None = None):
+                 deal_seed: int | None = None, groupings: int = 1, grouping_first: int = 0,
+                 learner: str = "chimeraboost", lopo: bool = False, n_jobs: int = 1):
+        # `learner="lightgbm"` (the owner, 2026-10-08): every booster here is `lgbprior`'s deterministic LightGBM
+        # instead of chimeraboost.  `lopo=True`: no player folds at all -- `fit(query=)` asks, for every query row,
+        # the model trained on every OTHER player's rows (`lgbprior.predict_leave_one_out`, `n_jobs` processes; the
+        # models are dropped in the workers) and keeps the answers in `query_pred_`; a player with no training rows
+        # is answered by the full fit.  `predict` refuses: the query rows are the only questions.  LightGBM only.
+        self.learner, self.lopo, self.n_jobs = learner, bool(lopo), int(n_jobs)
+        assert learner in ("chimeraboost", "lightgbm"), learner
+        assert not self.lopo or learner == "lightgbm", "leave one player out is built for the LightGBM learner"
+        assert not (intercept and learner == "lightgbm"), "the team-season intercept fit is chimeraboost's"
         self.params, self.n_folds, self.intercept = dict(params), int(n_folds), bool(intercept)
         self.by_player = bool(by_player)
         self.deal_seed = deal_seed
+        # `--prior_groupings=K` (2026-10-07, after experiment 42's control C1): the player folds are dealt K times,
+        # grouping 0 the shipped deal (the snake, or `deal_seed`'s) and grouping g >= 1 `BalancedGroupKFold(seed=g)`,
+        # each as balanced; `predict` gives a player the MEAN of his K out-of-player predictions, every one from a
+        # booster that never saw him.  `grouping_first` starts the run of K at another index (5 gives groupings
+        # 5..9, none shared with 0..4), for the stability check.  K = 1 from 0 is the shipped fit, unchanged.
+        self.groupings, self.grouping_first = int(groupings), int(grouping_first)
+        assert self.groupings >= 1 and self.grouping_first >= 0
         assert not (self.intercept and self.by_player), "the team-season intercept fit takes no groups"
 
     def _fit_one(self, X, y, w, codes, n_groups, players=None):
         def make():
             return ChimeraBoostRegressor(random_state=0, **self.params)
+        if self.learner == "lightgbm":
+            return lgbprior.fit(self.params, X, y, w), None
         if not self.intercept:
             return make().fit(X, y, sample_weight=w, groups=players if self.by_player else None), None
         return fit_with_team_season(make, X, y, w, codes, n_groups)
 
-    def fit(self, train: pd.DataFrame, model_feats: list) -> "OutOfPlayerSPM":
+    def fit(self, train: pd.DataFrame, model_feats: list, query: pd.DataFrame | None = None) -> "OutOfPlayerSPM":
         X, y, w = train[model_feats].to_numpy(float), train.target.to_numpy(float), train.weight.to_numpy(float)
         players = train.index.to_numpy()
         codes, n_groups = team_season_codes(train) if self.intercept else (None, 0)
         self.full_, self.log_ = self._fit_one(X, y, w, codes, n_groups, players)
-        self.fold_models_, self.excluded_, self.fold_logs_ = [], [], []
-        self.shift_ = np.zeros(0)
+        self.fold_models_, self.excluded_, self.fold_logs_, self.fold_grouping_ = [], [], [], []
+        self.shift_, self.shifts_ = np.zeros(0), []
+        if self.lopo:
+            assert query is not None, "leave one player out answers query rows: fit(query=...)"
+            Xq, q_players = query[model_feats].to_numpy(float), query.player_id.to_numpy()
+            pred = lgbprior.predict_leave_one_out(self.params, X, y, w, players, Xq, q_players, self.n_jobs)
+            own = ~np.isnan(pred)
+            self.n_own_ = int(pd.unique(q_players[own]).size)
+            pred[~own] = self.full_.predict(Xq[~own]) if (~own).any() else pred[~own]
+            self.query_pred_ = pred
+            return self
         if self.n_folds > 1:
-            fold = sy.stratified_player_folds(train, self.n_folds, seed=self.deal_seed)
-            self.shift_ = sy.fold_mean_shift(train, fold)
-            if self.deal_seed is not None or "deal_target" in train.columns:
-                # how far this deal is from the one the run's own labels would have made (players, not rows)
-                own = sy.stratified_player_folds(train.drop(columns="deal_target", errors="ignore"), self.n_folds)
-                first = ~pd.Index(train.index).duplicated()
-                self.moved_ = float((own[first] != fold[first]).mean())
-            for f in range(self.n_folds):
-                keep = fold != f
-                model, log = self._fit_one(X[keep], y[keep], w[keep], None if codes is None else codes[keep],
-                                           n_groups, players[keep])
-                self.fold_models_.append(model)
-                self.fold_logs_.append(log)
-                self.excluded_.append(set(train.index[~keep].tolist()))
+            for g in range(self.grouping_first, self.grouping_first + self.groupings):
+                fold = sy.stratified_player_folds(train, self.n_folds, seed=self.deal_seed if g == 0 else g)
+                self.shifts_.append(sy.fold_mean_shift(train, fold))
+                if g == self.grouping_first:
+                    self.shift_ = self.shifts_[0]
+                    if self.deal_seed is not None or "deal_target" in train.columns:
+                        # how far this deal is from the one the run's own labels would have made (players, not rows)
+                        own = sy.stratified_player_folds(train.drop(columns="deal_target", errors="ignore"),
+                                                         self.n_folds)
+                        first = ~pd.Index(train.index).duplicated()
+                        self.moved_ = float((own[first] != fold[first]).mean())
+                for f in range(self.n_folds):
+                    keep = fold != f
+                    model, log = self._fit_one(X[keep], y[keep], w[keep], None if codes is None else codes[keep],
+                                               n_groups, players[keep])
+                    self.fold_models_.append(model)
+                    self.fold_logs_.append(log)
+                    self.excluded_.append(set(train.index[~keep].tolist()))
+                    self.fold_grouping_.append(g - self.grouping_first)
         return self
 
     def predict(self, frame: pd.DataFrame, model_feats: list) -> np.ndarray:
+        """The full fit for a player with no training rows; otherwise the mean of the fold fits that held him out,
+        one per grouping (with one grouping, exactly that fit's prediction: x / 1 is x).  Counted per player rather
+        than by grouping, so a saved model rebuilt from its flat fold lists (scripts/97) predicts the same."""
+        if self.lopo:
+            raise RuntimeError("a leave-one-player-out prior keeps no models: read query_pred_")
         X = frame[model_feats].to_numpy(float)
         out = self.full_.predict(X)
         ids = frame.player_id.to_numpy()
+        total, count = np.zeros(len(ids)), np.zeros(len(ids))
         for model, excluded in zip(self.fold_models_, self.excluded_):
             idx = np.fromiter((p in excluded for p in ids), dtype=bool, count=len(ids))
             if idx.any():
-                out[idx] = model.predict(X[idx])
+                total[idx] += model.predict(X[idx])
+                count[idx] += 1
+        held = count > 0
+        out[held] = total[held] / count[held]
+        return out
+
+    def predict_groupings(self, frame: pd.DataFrame, model_feats: list) -> np.ndarray:
+        """One column per grouping: each player's prediction from that grouping's fold fit that never saw him;
+        NaN for a player with no training rows (he gets the full fit in `predict`).  `predict` is the row mean."""
+        X = frame[model_feats].to_numpy(float)
+        ids = frame.player_id.to_numpy()
+        out = np.full((len(ids), self.groupings), np.nan)
+        for model, excluded, g in zip(self.fold_models_, self.excluded_, self.fold_grouping_):
+            idx = np.fromiter((p in excluded for p in ids), dtype=bool, count=len(ids))
+            if idx.any():
+                out[idx, g] = model.predict(X[idx])
         return out
 
 
@@ -341,15 +408,19 @@ def prior_shap_slopes(model, train: pd.DataFrame, feats: list, side: str, season
     (contributions are deviations from the model's own mean), so it is reported only to show that.
 
     Out of fold: each player's contributions come from the fit that never saw a row of his, matching
-    how his prior is actually produced.
+    how his prior is actually produced (with several groupings, the mean over them, as the prior is).
     """
     X = train[feats].to_numpy(float)
     contribution = model.full_.shap_values(X)
     ids = train.index.to_numpy()
+    total, count = np.zeros_like(contribution), np.zeros(len(ids))
     for fold, excluded in zip(model.fold_models_, model.excluded_):
         index = np.fromiter((p in excluded for p in ids), dtype=bool, count=len(ids))
         if index.any():
-            contribution[index] = fold.shap_values(X[index])
+            total[index] += fold.shap_values(X[index])
+            count[index] += 1
+    held = count > 0
+    contribution[held] = total[held] / count[held][:, None]
     weight = train.weight.to_numpy(float)
     out = []
     for j, name in enumerate(feats):
@@ -397,17 +468,33 @@ def _fold_prior_builder(wd_o, wd_d, models, held_frames, model_feats, teams=None
     the held frames carry: 0, "he changed teams", unless the diagnostic asked otherwise.  Both ridges (one
     per target) ask for the same five folds, so each fold is built once.
     """
-    ids_of_ps = wd_o.spec.ps_table["player_id"].to_numpy()
-    # the off-court family too, when the panel carries it (scripts/65_offcourt_panel.py)
-    with_offc = all(c in held_frames["O"].columns for c in sy.OFFC + sy.NET)
-    with_pieces = teams is not None and any(c in model_feats[s] for s in ("O", "D") for c in sy.PIECES)
-    rebuilt = sy.ONC + (sy.OFFC + sy.NET if with_offc else []) + (sy.PIECES if with_pieces else [])
+    frames = _fold_frames_builder(wd_o, wd_d, held_frames, model_feats, teams)
     built: dict = {}
 
     def fold_prior(train_mask):
         key = np.packbits(np.asarray(train_mask, dtype=bool)).tobytes()
         if key in built:
             return built[key]
+        h = frames(train_mask)
+        out = {side: dict(zip(h[side].player_id.to_numpy(), models[side].predict(h[side], model_feats[side])))
+               for side in ("O", "D")}
+        built[key] = (out["O"], out["D"])
+        return built[key]
+
+    return fold_prior
+
+
+def _fold_frames_builder(wd_o, wd_d, held_frames, model_feats, teams=None):
+    """`frames(train_mask)` -> {side: the held frame with its season columns rebuilt from the training games}: the
+    rows `_fold_prior_builder` asks the boosters about.  Split out (2026-10-08) so a leave-one-player-out prior can
+    ask each player's own model about all of them inside its worker (`--lopo=1`)."""
+    ids_of_ps = wd_o.spec.ps_table["player_id"].to_numpy()
+    # the off-court family too, when the panel carries it (scripts/65_offcourt_panel.py)
+    with_offc = all(c in held_frames["O"].columns for c in sy.OFFC + sy.NET)
+    with_pieces = teams is not None and any(c in model_feats[s] for s in ("O", "D") for c in sy.PIECES)
+    rebuilt = sy.ONC + (sy.OFFC + sy.NET if with_offc else []) + (sy.PIECES if with_pieces else [])
+
+    def frames(train_mask):
         fo, fd = wd_o.subset(train_mask), wd_d.subset(train_mask)
         got = oncourt_rates(fo, fd)
         onc = pd.DataFrame({"player_id": ids_of_ps, **{c: got[c].to_numpy(dtype=float) for c in sy.ONC}})
@@ -423,11 +510,10 @@ def _fold_prior_builder(wd_o, wd_d, models, held_frames, model_feats, teams=None
         for side in ("O", "D"):
             h = held_frames[side].drop(columns=rebuilt).merge(onc, on="player_id", how="left")
             h[rebuilt] = h[rebuilt].fillna(0.0)
-            out[side] = dict(zip(h.player_id.to_numpy(), models[side].predict(h, model_feats[side])))
-        built[key] = (out["O"], out["D"])
-        return built[key]
+            out[side] = h
+        return out
 
-    return fold_prior
+    return frames
 
 
 def blend_prior(prior: dict, poss: dict, x: float, k: float, a: float) -> dict:
@@ -516,6 +602,17 @@ def main():
     # the incumbent's deal).  Neither given: the shipped snake deal on the run's own labels.
     deal_seed = int(_flag("deal_seed")) if _flag("deal_seed", "") else None
     deal_target = {"D": _flag("deal_target_def", "") or None, "O": None}
+    # --prior_groupings=K (2026-10-07): every player's prior is the mean over K dealings of the player folds, both
+    # sides (`OutOfPlayerSPM(groupings=)`); --prior_grouping_first=5 deals groupings 5..4+K instead of 0..K-1.
+    # Writes outputs/<out>_prior_groupings.parquet, each grouping's prior per player, when K > 1.
+    prior_groupings = int(_flag("prior_groupings", 1))
+    prior_grouping_first = int(_flag("prior_grouping_first", 0))
+    if (prior_groupings > 1 or prior_grouping_first > 0) and deal_seed is not None:
+        raise SystemExit("--deal_seed sets grouping 0's deal; with --prior_groupings the groupings carry their own seeds")
+    # --lopo=1 (the owner, 2026-10-08): leave one player out -- every rated player's prior from a model trained on
+    # every other player's rows, no folds and no groupings; LightGBM only.  --prior_jobs: the processes it fits in.
+    lopo = _flag("lopo", "0") not in ("0", "no", "false")
+    prior_jobs = int(_flag("prior_jobs", os.cpu_count() or 1))
     seasons = list(range(first, last + 1))
     boards = [int(x) for x in _flag("boards", "").split(",") if x] or seasons
     assert set(boards) <= set(seasons), f"--boards outside [{first}, {last}]"
@@ -560,6 +657,7 @@ def main():
     assert rate_same_team in ("0", "1", "real", "both"), "--rate_same_team=0|1|real|both"
     same_team_diag = _flag("same_team_diag", "0") not in ("0", "no", "false")
     diag_rows: list = []
+    grouping_rows: list = []                   # `--prior_groupings`: each grouping's prior per player
     # --dump_rows=NAME writes each side's actual training rows, every column, for every rated season:
     # outputs/prior_rows_NAME_<season>_<side>.parquet (what the Boruta run of experiment 26 reads)
     dump_rows = _flag("dump_rows")
@@ -673,12 +771,33 @@ def main():
     # its early-stopping split holds out whole players (`OutOfPlayerSPM(by_player=)`).  A side the file does not
     # name keeps the shipped settings.  `--params_mult` / `--params_set` still apply on top.
     booster_name = _flag("booster_params")
-    booster = (json.loads((ROOT / "outputs" / f"booster_params_{booster_name}.json").read_text())
-               if booster_name else {})
+    # outputs/ first (where scripts 94 and 136 write), then params/ -- the tracked copies of shipped settings
+    # (params/booster_params_lgb1.json, the LightGBM settings of experiment 45, adopted 2026-10-08)
+    booster_file = ROOT / "outputs" / f"booster_params_{booster_name}.json"
+    if booster_name and not booster_file.exists():
+        booster_file = ROOT / "params" / f"booster_params_{booster_name}.json"
+    booster = json.loads(booster_file.read_text()) if booster_name else {}
     side_params = {"O": booster.get("O", {}).get("params", cfg["gbdt"]["params"]),
                    "D": booster.get("D", {}).get("params", cfg["gbdt"]["params_def"])}
     by_player = {s: booster.get(s, {}).get("early_stop_split", "rows") == "players" for s in ("O", "D")}
+    # the owner, 2026-10-08 ("go! (lightgbm mode)"): a side whose file says `"learner": "lightgbm"` fits
+    # `lgbprior`'s deterministic LightGBM with the file's settings (scripts/136_tune_lightgbm.py writes them)
+    learner = {s: booster.get(s, {}).get("learner", "chimeraboost") for s in ("O", "D")}
+    for s in ("O", "D"):
+        assert learner[s] == "chimeraboost" or "params" in booster.get(s, {}), \
+            f"--booster_params: side {s} names LightGBM but gives no settings"
     assert not (booster_name and stack), "--booster_params sets the single booster; the stack has its own"
+    uses_lgb = "lightgbm" in learner.values()
+    assert not (uses_lgb and (stack or team_intercept or dump_shap)), \
+        "the LightGBM learner takes no --stack, --team_season_intercept or --dump_shap"
+    assert not lopo or all(v == "lightgbm" for v in learner.values()), \
+        "--lopo=1 needs the LightGBM learner on both sides (--booster_params=<a LightGBM file>)"
+    assert not (lopo and (prior_groupings > 1 or save_models or stack)), \
+        "--lopo=1 takes no --prior_groupings, --save_models or --stack"
+    assert not (lopo and (rate_same_team != "0" or same_team_diag or priors_from)), \
+        "--lopo=1 rates the season's rows only: no same-team variants, no --priors_from"
+    assert not (stack and (prior_groupings > 1 or prior_grouping_first > 0)), "--prior_groupings averages the single booster"
+    assert player_folds > 1 or prior_groupings == 1, "--prior_groupings needs --player_folds above 1"
     if booster_name:
         for s in ("O", "D"):
             print(f"booster {s} from booster_params_{booster_name}.json: {side_params[s]}; early-stopping split "
@@ -696,6 +815,7 @@ def main():
         aging = _pieces.merge(_ages, on=["player_id", "season"], how="inner")
     feature_set = _flag("features", "boruta")
     features = sy.feature_set(feature_set)
+    assert not (lopo and any(sy.SAME_TEAM in features[s] for s in ("O", "D"))), "--lopo=1 takes no same_team feature"
     for side, names_ in features.items():
         assert not any(c.startswith("past_") for c in names_), "single year or bust"
     print(f"targets: offense {names['O']}, defense {names['D']}; features {feature_set} "
@@ -704,7 +824,10 @@ def main():
           f"exclude_neighbours {exclude_neighbours}; rows {row_shape} (sizes {chunk_sizes}, "
           f"chunk label {chunk_label}, chunk weight {chunk_weight}); crossfit {crossfit}; "
           f"params_mult {params_mult or '{}'}; params_set {params_set or '{}'}; "
-          f"player_folds {player_folds}; unshrink_label {'+'.join(unshrink_sides) or 0}; lambda_player {lambda_player or 'CV'}; "
+          f"player_folds {'none, leave one player out' if lopo else player_folds}; prior_groupings {prior_groupings}"
+          f"{f' from {prior_grouping_first}' if prior_grouping_first else ''}; "
+          f"learner O {learner['O']} / D {learner['D']}; "
+          f"unshrink_label {'+'.join(unshrink_sides) or 0}; lambda_player {lambda_player or 'CV'}; "
           f"priors_from {priors_from or '-'}; save_priors {save_priors or '-'}; "
           f"blend_off {blend['O'] or '-'}; blend_def {blend['D'] or '-'}", flush=True)
     if lambda_player is not None:
@@ -746,6 +869,26 @@ def main():
         labels_by_target: dict = {}
         models, held_frames, model_feats_of = {}, {}, {}
         prior_stayed, stayed_frames = {}, {}       # `--rate_same_team=both`: the second list
+        lopo_query, lopo_fold_priors = {}, {}
+        if lopo:
+            # leave one player out: each player's own model is asked, inside its worker, about every row his prior is
+            # ever asked about -- his rated-season row (variant 0) and, for the cross-fitted scale, the same row with
+            # its season columns rebuilt without each of the ridge's five game folds (variants 1-5, the rows
+            # `_fold_prior_builder` would ask) -- so no model has to be kept
+            lopo_held, lopo_feats = {}, {}
+            for s in ("O", "D"):
+                fs = [f for f in features[s] if f != sy.SAME_TEAM]
+                h = sy.season_frame(panel[(panel.side == s) & (panel.season == season)], fs)
+                lopo_held[s] = h.assign(chunk_poss=h.poss.to_numpy(float), chunk_seasons=1.0)
+                lopo_feats[s] = fs + sy.CHUNK_FEATURES
+            variants = [lopo_held]
+            if crossfit != "0":
+                game_fold = game_folds(design_for(names["O"], season), 5, 0)
+                frames_of = _fold_frames_builder(design_for("xpts_ft", season), design_for("x3def", season),
+                                                 lopo_held, lopo_feats)
+                variants += [frames_of(game_fold != f) for f in range(5)]
+            lopo_query = {s: pd.concat([v[s].assign(variant=k) for k, v in enumerate(variants)], ignore_index=True)
+                          for s in ("O", "D")}
         for side, params in (("O", tuned(side_params["O"])), ("D", tuned(side_params["D"]))):
             column = "offense" if side == "O" else "defense"
             # `same_team` belongs to a (row, label) pair, not to the panel: it is built by `chunk_rows` and
@@ -931,8 +1074,24 @@ def main():
                 model = StackedSPM(params, player_folds, quality=stack_quality).fit(train, model_feats)
                 print(f"  prior {side} {season}: {model.describe()}", flush=True)
             else:
+                t_fit = time.time()
+                if lopo:
+                    assert model_feats == lopo_feats[side], "leave one player out: the query rows' columns differ"
                 model = OutOfPlayerSPM(params, player_folds, intercept=team_intercept, by_player=by_player[side],
-                                       deal_seed=deal_seed if side == "D" else None).fit(train, model_feats)
+                                       deal_seed=deal_seed if side == "D" else None, groupings=prior_groupings,
+                                       grouping_first=prior_grouping_first, learner=learner[side], lopo=lopo,
+                                       n_jobs=prior_jobs).fit(train, model_feats,
+                                                              query=lopo_query[side] if lopo else None)
+                if lopo:
+                    n_rated = lopo_query[side].player_id[lopo_query[side].variant == 0].nunique()
+                    print(f"  prior {side} {season}: leave one player out, {model.n_own_} of {n_rated} rated players "
+                          f"have training rows and their own model, each asked {len(variants)} rows "
+                          f"({time.time() - t_fit:.0f}s, {prior_jobs} processes)", flush=True)
+                if prior_groupings > 1:
+                    print(f"  prior {side} {season}: {prior_groupings} groupings of the player folds "
+                          f"({1 + len(model.fold_models_)} booster fits, {time.time() - t_fit:.0f}s); largest "
+                          f"training-mean shift per held-out fold "
+                          f"{max(float(np.abs(s).max()) for s in model.shifts_):.4f} per 100", flush=True)
                 if getattr(model, "moved_", None) is not None:
                     print(f"  prior {side} {season}: deal {'seed ' + str(deal_seed) if deal_seed is not None else ''}"
                           f"{'on ' + str(deal_target[side]) if deal_target[side] else ''}: {model.moved_:.1%} of "
@@ -945,7 +1104,7 @@ def main():
                       f"the fold fits' ratios {[round(g['ratio'], 3) for g in model.fold_logs_]}", flush=True)
             if dump_shap:
                 shap_rows.append(prior_shap_slopes(model, train, model_feats, side, season))
-            if player_folds > 1 and season == boards[0]:
+            if player_folds > 1 and not lopo and season == boards[0]:
                 print(f"  prior {side}: {player_folds} player folds balanced on the label; training-mean "
                       f"shift per held-out fold {np.round(model.shift_, 4).tolist()} per 100 "
                       f"(label sd {train.target.std():.3f})", flush=True)
@@ -972,13 +1131,39 @@ def main():
                                                    "player_id": held.player_id.to_numpy(),
                                                    "poss": held.poss.to_numpy(float), "same_team_real": real,
                                                    "prior_changed_teams": as_zero, "prior_real_teams": as_real}))
-            prior[side] = dict(zip(held.player_id.to_numpy(), model.predict(held, model_feats)))
+            if lopo:
+                q, answer = lopo_query[side], model.query_pred_
+                assert q.loc[q.variant == 0, "player_id"].to_numpy().tolist() == held.player_id.to_numpy().tolist()
+                prior[side] = dict(zip(q.player_id[q.variant == 0].to_numpy(), answer[(q.variant == 0).to_numpy()]))
+                lopo_fold_priors[side] = [dict(zip(q.player_id[q.variant == k].to_numpy(),
+                                                   answer[(q.variant == k).to_numpy()]))
+                                          for k in range(1, len(variants))]
+            else:
+                prior[side] = dict(zip(held.player_id.to_numpy(), model.predict(held, model_feats)))
+            if prior_groupings > 1 and not stack:
+                each = model.predict_groupings(held, model_feats)
+                poss = held.poss.to_numpy(float)
+                full = ~np.isnan(each).any(axis=1)
+                sd = each[full].std(axis=1, ddof=1)
+                big = poss[full] >= 1000
+                print(f"  prior {side} {season}: a player's prior varies across the {prior_groupings} groupings by sd "
+                      f"{np.sqrt(np.mean(sd ** 2)):.3f} per 100 (root mean square over {full.sum()} players; 1,000+ "
+                      f"possessions {np.sqrt(np.mean(sd[big] ** 2)) if big.any() else float('nan'):.3f}; largest "
+                      f"{sd.max():.3f})", flush=True)
+                grouping_rows.append(pd.DataFrame({
+                    "season": season, "side": side,
+                    "player_id": np.repeat(held.player_id.to_numpy(), prior_groupings),
+                    "poss": np.repeat(poss, prior_groupings),
+                    "grouping": np.tile(np.arange(prior_grouping_first, prior_grouping_first + prior_groupings),
+                                        len(held)),
+                    "prior": each.ravel()}))
             models[side], held_frames[side], model_feats_of[side] = model, held, model_feats
             if save_models:
                 assert isinstance(model, OutOfPlayerSPM), "--save_models saves the single booster, not the stack"
                 saved_models.setdefault(season, {})[side] = dict(
                     full=model.full_, folds=model.fold_models_, excluded=model.excluded_, params=model.params,
-                    n_folds=model.n_folds, intercept=model.intercept, by_player=model.by_player,
+                    n_folds=model.n_folds, groupings=model.groupings, intercept=model.intercept,
+                    by_player=model.by_player,
                     feats=list(feats), model_feats=list(model_feats), unseen=list(unseen),
                     # the prior this run handed the ridge, for the reader to check its rebuild against
                     prior=dict(prior[side]))
@@ -1006,7 +1191,11 @@ def main():
                         prior_v[side] = blend_prior(prior_v[side], poss_side[side], *blend[side])
 
             fold_prior = None
-            if saved is not None and crossfit != "0":
+            if lopo and crossfit != "0":
+                # the per-fold priors were answered inside the workers (variants 1-5); served like saved ones
+                fold_prior = _saved_fold_prior([(lopo_fold_priors["O"][f], lopo_fold_priors["D"][f])
+                                                for f in range(5)], design_for(names["O"], season))
+            elif saved is not None and crossfit != "0":
                 fold_prior = _saved_fold_prior(saved[season]["folds"], design_for(names["O"], season))
             elif crossfit != "0":
                 wd_o, wd_d = design_for("xpts_ft", season), design_for("x3def", season)
@@ -1074,6 +1263,9 @@ def main():
         pd.concat(rows, ignore_index=True).to_parquet(out, index=False)
         if rows_of["stayed"]:
             pd.concat(rows_of["stayed"], ignore_index=True).to_parquet(out_stayed, index=False)
+        if grouping_rows:
+            pd.concat(grouping_rows, ignore_index=True).to_parquet(
+                out.with_name(out.stem + "_prior_groupings.parquet"), index=False)
         if save_models:
             saved_models["meta"] = dict(argv=list(sys.argv), exclude_neighbours=exclude_neighbours,
                                         features=feature_set, rows=row_shape, chunk_label=chunk_label,

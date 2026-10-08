@@ -4,44 +4,42 @@
 is the permanent record and carries every number quoted here.  Do not let this grow into a lab notebook.
 
 Branch `cleanup`; `main` is fast-forwarded to it at each publish, and the live site is served from `docs/`
-on `main`.  `pytest -q`: **543 passed, 1 failed, 1 xfailed, ~175 s** with the scraped data.  The failure is
-accepted and named at the bottom of this file; nothing else is red.
+on `main`.  `pytest -q`: **555 passed, 1 xfailed, ~177 s** with the scraped data (2026-10-08; the LaMelo test at
+the bottom of this file passes on the new ratings).
 
-## START HERE (2026-10-07): next is averaging the box-score prior over several training groupings
+## START HERE (2026-10-08): the LightGBM prior without the on-court inputs is live
 
-**Everything through experiment 42 is committed on `cleanup`; `main` has not moved and the site is not published**
-(the Portable column is still the owner's call, below).  Commit only when the owner asks, and never name a model in
-a commit.  A session continued on another machine stashes uncommitted work: `git stash apply` and keep the stash
-(memory "Teleport auto-stash").
+**Published 2026-10-08 (the owner: "Publish").**  The site's ratings are experiment 45: the box-score prior fit by a
+deterministic LightGBM (`params/booster_params_lgb1.json`, `src/eracoef/lgbprior.py`) on the box-score inputs WITHOUT
+the on-court plus-minus and on-court possessions (`--features=boruta_noonc`), five player folds, the prior shrink
+refitted on its own within-season folds (`outputs/within/lgb_noonc_within`).  Year over year 8.5894 against
+chimeraboost's 8.5995 (z -2.5), stint z -8.9, 36 of 47 prediction slices better, lineup-swap test 11 of 12; offence
+with/without and defensive consensus agreement worse.  The owner kept it on the 2026 top 20 ("keep the one that likes
+butler/jokic/edey and drops hugo/ajay/oso down").  DECISIONS.md, experiments 43-45 (and 44's rematch).
+**The Portable column is NOT on the site** (`52_site.py --portable=0`; `docs/index.html` restored from main): its
+ratio was fitted on the chimeraboost ratings and the owner has not approved it.
 
-### The next job (the owner, 2026-10-07: "handoff.md will handle the avging box score prior thingie")
+**The incumbent for scoring** is `outputs/season_ratings_lgb_noonc_rs.parquet` (trade-loss alphas
+`tradeset_lgb_noonc_rs_alpha.parquet`).  `scripts/experiment_chain.sh` defaults to it (`INC_NAME`), appends the
+incumbent's 62 settings after an experiment's own flags (`BASE_FLAGS`, so the experiment's win), reads its multipliers
+(`SHRINK_TAG=lgb_noonc_within`) and can start at the shrink (`SKIP_BUILD=1`).  `scripts/135_robust_review.py` (the
+owner's not-brittle review: every test cut into slices, counted beside a noise control and a replicate) defaults to it.
+A LightGBM test build takes ~20 minutes for thirty seasons; leave one player out (`--lopo=1`) ~70.
 
-**Why.**  Each player's box-score prior comes from a model that never saw him: the prior is fit five times, each
-time leaving out a fifth of the players, and which fifth a player is left out with is set by sorting everyone by his
-label (`singleyear.stratified_player_folds`, `rloocv.BalancedGroupKFold`).  Any change to the labels therefore changes
-which players each player's prior is trained alongside, and that alone moves the ratings: control C1 (nothing changed
-but the defensive groupings, `62 --deal_seed=1`, 80% of players in another group) costs +0.056 on 63's team-game
-criterion (z +1.2), moves a typical defensive prior by about 0.5 per 100 and Caruso 42nd to 14th in 2026.  The
-current ratings carry one draw of that noise.  DECISIONS.md, "Experiment 42", the last part.
+**Open, the owner's call:**
+1. The attribution control: chimeraboost on the same inputs -- experiment 45's gain is not yet split between the
+   learner and the inputs.
+2. Leave one player out on experiment 45 (removes the remaining which-players-are-left-out noise; LightGBM has no
+   seed noise).
+3. The Portable column: refit `112_portable.py` on the new ratings (it needs 97 `--split=deadline` on the
+   `lgb_noonc_within` models), then publish if approved.
+4. Experiment 43 (the prior averaged over five groupings) was not adopted; with LightGBM, leave one out does its job.
+5. The owner has a chimeraboost issue to file: "decide once, bag after" for bagged fits (the text is in the session).
 
-**What to build.**  A 62 option, e.g. `--prior_groupings=K` (default 1 = the shipped snake grouping, unchanged):
-in `OutOfPlayerSPM.fit` (62, around line 300) fit the out-of-player boosters under K different, equally balanced
-groupings -- grouping 0 the shipped one, groupings 1..K-1 from `BalancedGroupKFold(seed=k)` -- and give each player
-the MEAN of his K out-of-player predictions (each from a booster that never saw him); the full-data model stays as it
-is.  Both sides.  Cost: K times the fold fits (5K boosters per side per rated season); time one decade first.
-
-**How to test.**  The standard chain with the incumbent's targets: `bash scripts/experiment_chain.sh
-prior_avg5 x3def_w0.25 --prior_groupings=5` (the script takes extra 62 flags as its third argument).  Read 63
-against the incumbent (adopt at z <= -2) AND its stability: a second run with other seeds (groupings 5..8) should
-differ from the first by far less than C1's 0.056.  Caveat: 99's prior-shrink multipliers were fitted on the
-incumbent's single-grouping priors; keep them for the first test (as every experiment has) and refit only on adoption
-(97 then 99, trap 22).  If the incumbent's single grouping was a lucky draw (it was picked across many runs), the
-average may read neutral against it on 63 while still being the more honest number; say so in the report.
-
-**The standard for target experiments from now on:** run 62 with `--deal_target_def=<the incumbent's defensive
-target>` (today `x3def_w0.25`) so every player's prior is trained alongside the same players as in the current
-ratings and only the idea moves (experiment 42f; trap 27 in memory).  Label experiments decided earlier by less than
-about 0.06 may have been decided by this noise (e.g. outside labels 25, age-adjusted labels 28, adjacent labels 30).
+**Built 2026-10-07/08:** `62 --prior_groupings` (43); `--booster_params=<file with "learner": "lightgbm">`, `--lopo=1
+--prior_jobs`; `src/eracoef/lgbprior.py`; `scripts/135_robust_review.py`, `136_tune_lightgbm.py`; 97 `--booster_params
+--features`; tests `test_prior_groupings.py`, `test_lgbprior.py`.  Drivers and diagnostics:
+`scratch/2026-10-07_prior_groupings/`, `scratch/2026-10-08_lightgbm/`.
 
 ### What the shot-quality build and experiment 42 found (2026-10-06/07; DECISIONS.md has every number)
 
@@ -131,18 +129,22 @@ about 0.06 may have been decided by this noise (e.g. outside labels 25, age-adju
 3. **Never train on the current season until its Finals are over.**  Loading is always allowed.
 4. **The SPM is trained on one row per player** (his career average with the rated season out) PLUS chunk
    rows of his seasons; not one row per player-season.
-5. **Keep chimeraboost.  The consensus is a sanity check, never a fitting target**; a gross miss vetoes.
+5. **The consensus is a sanity check, never a fitting target**; a gross miss vetoes.  ("Keep chimeraboost" was
+   lifted 2026-10-08: the owner chose LightGBM for speed, experiments 44-45.)
 6. Each season is centred at possession-weighted zero per side (the RAPM convention), 2026-09-14.
 
-## What ships (the incumbent, `scripts/62_single_year_board.py` defaults)
+## What ships (the incumbent: `scripts/62_single_year_board.py` defaults plus `--booster_params=lgb1 --features=boruta_noonc`)
 
 1. **Target**: `looseason.LeaveSeasonOutRAPM`, one RAPM per player over every season except the rated one
    (penalties 40,000 / 40,000 / 0, closed).
-2. **SPM**: chimeraboost on `singleyear.chunk_rows` (the career row plus contiguous 1-, 2-, 3-season
-   chunks, two features saying how much evidence a row rests on), features `boruta` (21 offence /
-   17 defence, on-court columns in).  **Out-of-player**: five player folds balanced on the label, every
-   player's prior from the fit that never saw his rows.  **The DEFENSIVE label is un-shrunk and the
-   offensive one is not** (`--unshrink_label=def`, the default, adopted 2026-09-18).
+2. **SPM** (since 2026-10-08, experiment 45): a deterministic LightGBM (`eracoef.lgbprior`, settings
+   `params/booster_params_lgb1.json`: linear leaves, 250-300 rows a leaf, 31 bins, no subsampling) on
+   `singleyear.chunk_rows` (the career row plus contiguous 1-, 2-, 3-season chunks, two features saying how much
+   evidence a row rests on), features `boruta_noonc` (17 offence / 14 defence: the on-court plus-minus and on-court
+   possessions OUT).  Until 2026-10-08 it was chimeraboost on `boruta` (21 / 17, on-court columns in).
+   **Out-of-player**: five player folds balanced on the label, every player's prior from the fit that never saw his
+   rows.  **The DEFENSIVE label is un-shrunk and the offensive one is not** (`--unshrink_label=def`, the default,
+   adopted 2026-09-18).
 3. **Rating**: `priorridge.PriorRidgeCV`, `scale x prior + residual`, the scale priced on cross-fitted
    prior columns (`--crossfit=scale`), the residual penalty fixed at **13,037** on both sides.  Then centred.
 3b. **The prior shrink** (adopted by the owner 2026-10-03, "Good, adopt for now"; DECISIONS.md, experiment 33b): the
@@ -155,17 +157,21 @@ about 0.06 may have been decided by this noise (e.g. outside labels 25, age-adju
    to step 3's.  A post-hoc step on the finished table, `scripts/91_swap_adjust.py`, not part of script 62.
 
 `outputs/season_ratings_product.parquet` (every other season allowed in the prior) is what
-`docs/data/ratings.json` and the site are built from.  Since 2026-10-03 it is the prior-shrunk, swap-adjusted table:
+`docs/data/ratings.json` and the site are built from.  Since 2026-10-08 it is experiment 45's product table, built by
+`scratch/2026-10-08_lightgbm/adopt45.sh` steps 4-5:
 
-    .venv/Scripts/python scripts/99_prior_shrink.py --base=season_ratings_product_pre_swap --out=season_ratings_product_priorshrink_pre_swap --rule=product
-    .venv/Scripts/python scripts/91_swap_adjust.py --base=outputs/season_ratings_product_priorshrink_pre_swap.parquet --kappas=0.5 --taus= --hold_spread=within --exclude_near=0 --score=0 --tag=product_priorshrink_swapadj
-    copy outputs/season_ratings_product_priorshrink_swapadj.parquet over outputs/season_ratings_product.parquet
-    .venv/Scripts/python scripts/52_site.py
+    .venv/Scripts/python scripts/62_single_year_board.py --score=0 --booster_params=lgb1 --features=boruta_noonc --boards=<ten seasons> --out=season_ratings_product_lgb_noonc_pre_swap_<first>   (x3, stitched)
+    .venv/Scripts/python scripts/99_prior_shrink.py --base=season_ratings_product_lgb_noonc_pre_swap --out=season_ratings_product_lgb_noonc_priorshrink_pre_swap --rule=product --tag=lgb_noonc_within
+    .venv/Scripts/python scripts/91_swap_adjust.py --base=outputs/season_ratings_product_lgb_noonc_priorshrink_pre_swap.parquet --kappas=0.5 --taus= --hold_spread=within --exclude_near=0 --score=0 --tag=product_lgb_noonc
+    copy outputs/season_ratings_product_lgb_noonc.parquet over outputs/season_ratings_product.parquet
+    .venv/Scripts/python scripts/52_site.py --portable=0      (and 76_bias_groups.py)
 
-where `season_ratings_product_pre_swap.parquet` is steps 1-3 (the table as built on 2026-09-18).  The table before
-the shrink is kept as `outputs/season_ratings_product_before_priorshrink.parquet`.
-**The incumbent every candidate is scored against is now `outputs/season_ratings_priorshrink.parquet`** (8.600 on
-the year-over-year test; adopted 2026-10-03): `season_ratings_unshrinkdef.parquet` (steps 1-3 at
+The previous product table is kept as `outputs/season_ratings_product_before_lgb_noonc.parquet`.  The prior shrink's
+multipliers come from 97 run on the experiment-45 models (`62 --save_models=lgb_noonc_within`, `97 --tag=lgb_noonc_within
+--booster_params=lgb1 --features=boruta_noonc`): product rule offence 0.706-0.719, defence 0.927-0.970.
+**The incumbent every candidate is scored against is now `outputs/season_ratings_lgb_noonc_rs.parquet`** (8.5894 on
+the year-over-year test; adopted 2026-10-08).  Before that, `outputs/season_ratings_priorshrink.parquet` (8.600;
+adopted 2026-10-03): `season_ratings_unshrinkdef.parquet` (steps 1-3 at
 `--exclude_neighbours=1`) through `99_prior_shrink.py --rule=test` (each season's multiplier fitted outside it and its
 neighbours) into `season_ratings_priorshrink_raw.parquet`, then 91 with `--kappas=0.5 --taus= --hold_spread=within`
 and the default `--exclude_near=1`, which keeps both scored seasons out of the type model.  The previous incumbent,

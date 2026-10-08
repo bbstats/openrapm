@@ -5043,3 +5043,137 @@ difference 0.0).  63, both directions, against the incumbent's 8.5995:
   experiments decided by less than about 0.06 may have been decided by this noise.
 - **Next (HANDOFF):** average the box-score prior over several training groupings, which should remove this noise
   from the ratings themselves.
+
+## Experiment 43: the box-score prior averaged over five training groupings (2026-10-07/08, awaiting the owner's call)
+
+**What changed.**  `62 --prior_groupings=K` deals the out-of-player folds K times (grouping 0 the shipped snake deal,
+grouping g `BalancedGroupKFold(seed=g)`) and gives each player the mean of his K out-of-player predictions, both sides;
+the full-data booster is unchanged.  One grouping is bit-identical to before (`tests/test_prior_groupings.py`; a default
+build reproduced the incumbent's 2015 rows to 0.0).  Run 43 = groupings 0-4; replicate 43b = groupings 5-9, none
+shared.  Both through the standard chain (99 with the incumbent's multipliers, 91, the battery).  5K + 1 booster fits a
+side: about 12-17 minutes a season, 6.5 hours for thirty.
+
+**The noise it removes.**  One grouping moves a player's PRIOR by sd 0.13 per 100 on offence and 0.38 on defence (all
+30 seasons; the offensive booster is already a bag of five, the defensive one is not).  In the finished ratings, players
+with 1,000+ possessions: one grouping's draw is about sd 0.33 in total; 43 and 43b each move a player by sd 0.29 / 0.37
+from the incumbent, and those two moves correlate 0.78 (theory for a shared grouping-0 draw: 0.82), so both averages
+step away from the incumbent's own draw in the same direction.  The two averages still differ from each other by sd
+0.23 in total (0.11 offence, 0.18 defence); one regrouping (C1) differs from the incumbent by 0.39.  2026 top 20: 18 of
+20 the same in 43 and 43b, typical gap 0.18, largest Caruso 0.86.
+
+**63, both directions (incumbent 8.5995):** 43 8.5970, -0.067, z -1.72, 31 of 56 (forward -0.100 z -1.99, back -0.034
+z -0.56); 43b 8.5990, -0.015, z -0.33, 32 of 56; 43b against 43 +0.052, z +1.7 (C1 against the incumbent: +0.056).
+
+**The robust review (the owner, 2026-10-08: "review our results in a not-brittle fashion ... systemic improvements
+should be seen positive"; `scripts/135_robust_review.py`, outputs/robust_prior_avg5.csv, sheet tab "Robust review").**
+Every instrument split into slices and the slices counted, beside the noise control C1:
+
+| slices better than the incumbent | 43 | 43b | C1 (one regrouping) |
+|---|---|---|---|
+| prediction tests (63 team-game and stint, 88 groups, trade loss): 47 slices | 42 | 34 | 8 |
+| 63 team-game, six era x direction cells sharing no games | 5 | 4 | 2 |
+| trade loss defence, three decades | 3 | 3 | 0 |
+| lineup-swap test, 12 slices | 5 | 3 | 8 |
+| consensus rho (offence, defence, total) | 0 | 0 | 0 |
+
+- Both replicates improve the prediction tests in most slices, every player-quality tier leaning better in 43 and four
+  of six in 43b; the gain sits on defence (63 with only the defence swapped in: -0.049 / -0.022; offence only -0.018 /
+  +0.008).  The 2007-2016 forward-looking cell is better in both (z -2.4, -2.0); 2007-2016 backward worse in both.
+- The lineup-swap test is slightly worse in both: net order +0.019 / +0.021 (z +1.3 / +1.2), from defensive order (z
+  +1.7 / +0.9); offensive order better in both (z -1.2 / -1.2).  Its 2017-2025 backward cell is worse in all three runs,
+  C1 included, so the incumbent's own draw is unusually good there.
+- Consensus total rho 0.822 / 0.824 against 0.834: the same drop as C1 (0.822), so it is the incumbent's draw that
+  agrees unusually well, not the averaging (bootstrap z +3.1 / +2.5 / +2.6).
+- Caveat as registered: 99's multipliers were fitted on single-grouping priors (2017-2026 folds); refit (97, then 99)
+  only on adoption.  scale_def is 0.984 for both averages (the incumbent 1.005): the free prior scale grows on a less
+  noisy prior, so defence is about 2% wider.
+
+**Where the grouping noise comes from (2026-10-08, `scratch/2026-10-07_prior_groupings/seed_noise.py`, 2015).**  The
+full-data booster refitted on IDENTICAL rows with random seeds 0-4 moves a player's prior by sd 0.068 (offence) and
+0.271 (defence); five groupings at a fixed seed move it 0.131 and 0.401.  So about a quarter (offence) and half
+(defence) of the grouping variance is the booster's own randomness (row and column subsampling, its early-stopping
+split), which any single fit carries, leave-one-player-out included; the rest (sd about 0.11 / 0.30) is which players
+are left out.  Averaging groupings redraws both parts at once, which is why it is the cheapest of the options compared
+for the owner (one model; one grouping; averaged groupings; leave one player out, with and without a bag; twenty
+folds; a bagged defensive booster; folds fixed by player id).
+
+## Experiment 44: LightGBM as the prior's learner, then leave one player out (2026-10-08, awaiting the owner's call)
+
+The owner, 2026-10-08: "go! (lightgbm mode)" -- ruling 5 ("keep chimeraboost") lifted for this experiment.
+`eracoef.lgbprior`: deterministic LightGBM (no subsampling, a fixed tree count, one thread, weights normalised to
+mean one); five refits on identical rows give identical predictions (chimeraboost's defensive prior moves sd 0.27).
+`62 --booster_params=lgb1` (44, today's five player folds) and `--lopo=1` (44b, every rated player's prior from a
+fit on every other player's rows; the six rows each player is asked about are answered inside the workers, since one
+model can be 14 MB).  Settings from `scripts/136_tune_lightgbm.py`: 94's screen on 2026 and 2015, 150 trials a side;
+both sides chose linear leaves, 250-300 rows a leaf (the top of the range), 31 bins (the bottom).
+
+**The screen.**  Tuned LightGBM against the SHIPPED chimeraboost, every season and split: offence rescaled error
+-1.5% (z -1.9 to -2.6), defence -2.0 to -2.6% (z -4.9 to -6.0).  But experiment 32's TUNED chimeraboost scores as
+well or slightly better on the same 2026 folds (defence 1.423 / 1.417 against LightGBM's 1.426 / 1.425; offence 0.646
+/ 0.649 against 0.647 / 0.644): the screen gain is tuning, not the learner.
+
+**The test, both directions against the incumbent (8.5995), and each stage against the incumbent's same stage:**
+
+| stage | 44, five folds | 44b, leave one out |
+|---|---|---|
+| prior alone (`63 --columns=prior`, raw tables) | -0.222, z -1.3 | -0.360, z -1.9 |
+| raw ratings (steps 1-3) | -0.114, z -1.1 | -0.143, z -1.2 |
+| after the prior shrink (99, the incumbent's multipliers) | +0.036, z +0.5 | -0.006, z -0.1 |
+| final, after the swap adjustment (91) | **+0.169, z +2.2** (8.6055) | **+0.136, z +1.6** (8.6044) |
+| stint level, final (rescaled) | z +7.2 (+7.0) | z +5.8 (+5.1) |
+
+44b against 44: -0.033, z -0.5 (leave one out a little better at every stage).  Robust review (135, `robust_lgb`):
+prediction slices better 4 of 47 (44) and 10 of 47 (44b), against 8 for one regrouping (C1) and 42 for experiment 43;
+defensive with/without the one bright spot for 44b (8 of 9 slices, z -1.6); consensus 0.838 / 0.830 (from 0.834).
+Ratings move sd 0.57 in total (1,000+ possessions).  2026 (44b): Zach Edey 39th -> 4th on 590 possessions, Caruso
+42nd -> 6th, SGA 6th -> 17th, Jarrett Allen 16th -> 48th.  The defensive prior is far more extreme for some players:
+Edey 2.17 (chimeraboost) -> 4.14 / 4.39, Caruso 0.77 -> 1.73 / 3.38.
+
+**Reading.**  The LightGBM prior predicts the neighbouring seasons better than chimeraboost's, and leave one out is
+better still, but the two later steps were fitted on chimeraboost's priors (99's multipliers on its within-season
+folds; 91's strength and spread hold with the incumbent) and turn the gain into a loss; at the stint level the loss
+is there from the raw stage on.  Untested, the likely reason for the extreme priors: linear leaves extrapolating on
+unusual box scores, which the possession-weighted screen barely sees (a 590-possession row weighs little there).
+Not adoptable as built.
+
+**The rematch (2026-10-08; the owner: "fair rematch", "i like the lightgbm numbers better").**  Same raw tables; the
+prior shrink refitted on LightGBM's own priors (62 `--booster_params=lgb1 --save_models=lgb1_within`, which rebuilt
+44's 2017-2026 exactly, 0.0; 97 `--tag=lgb1_within --booster_params=lgb1`; 99 `--tag=lgb1_within`; leave one out
+borrows the five-fold models' multipliers).  First, a default chimeraboost build still reproduces the incumbent's 2015
+rows after the fold-prior refactor (0.0).  LightGBM's multipliers: offence 0.704-0.726 (chimeraboost's 0.704-0.728),
+defence 0.882-0.922 (chimeraboost's 0.920-0.968) -- its defensive prior part holds up slightly WORSE in held-out games.
+After the shrink: a tie (+0.009 / -0.038, z +0.1 / -0.4).  Final: 8.6052 (z +2.2) and 8.6039 (z +1.5), barely moved;
+robust review (`robust_lgb_rs`) still worse in nearly every year-over-year slice.  Where it loses is WITHIN teams:
+stint level worse from the raw stage on (rescaled z +5.0 / +2.6 raw, +4.7 / +2.4 after the shrink), the lineup-swap
+test worse, the swap adjustment gains a quarter of what it gains on chimeraboost (-0.002 against -0.008), and the
+ratings lean more on the team (one-way team share of the defensive rating 0.176-0.180 against 0.162).  Across teams
+its prior is better (prior alone z -1.9).  Untested reading: the on-court plus-minus inputs (team context, experiment
+39) carry more weight in LightGBM's prior.
+
+## Experiment 45: the LightGBM prior without the on-court inputs (2026-10-08, awaiting the owner's call)
+
+The owner: "try without the on court plus minus stuff for lightgbm".  Experiment 44's LightGBM (settings `lgb1`, five
+player folds, the incumbent's prior-shrink multipliers) on `--features=boruta_noonc`: on-court plus-minus and on-court
+possessions out (offence 21 -> 17 inputs, defence 17 -> 14).  `bash scripts/experiment_chain.sh lgb_noonc x3def_w0.25
+"--booster_params=lgb1 --features=boruta_noonc"`.
+
+- **63, both directions: 8.5897 against 8.5995, -0.245, z -2.38, 37 of 56 -- passes the rule.**  Stint level -1.14,
+  z -9.1 (48 of 56); each side rescaled z -9.0 (the order, not the spread).
+- Robust review (`robust_lgb_noonc`): prediction slices better 36 of 47 (15 past z -2), against 8 for one regrouping
+  (C1), 42 for experiment 43 and 4 for experiment 44; year-over-year cells sharing no games 5 of 6; lineup-swap test 11
+  of 12 better (6 past z -2), so the within-team split that sank 44 is fixed; ratings far less team-driven (one-way
+  team share of the defensive rating 0.079, offence 0.094; incumbent 0.162 / 0.132).
+- Weak spots: with/without on offence worse (8 of 9 slices, z +1.4 overall); consensus 0.865 / 0.788 / 0.818 (from
+  0.851 / 0.816 / 0.834), top five 4 of 5 -- the same defensive-consensus drop experiment 19 saw when `onc_d` alone left
+  the defensive list (then ruled: keep `onc_d`).
+- Ratings move a lot: sd 0.81 in total (1,000+ possessions).  2026: Ajay Mitchell 9th -> 28th (-1.74), Hugo Gonzalez
+  20th -> 113th (-2.07), Ighodaro 18th -> 69th, Giannis 2nd -> 5th; Cason Wallace 29th -> 11th (+1.69), Butler 15th ->
+  8th, Jokic 4th -> 2nd, Gobert 43rd -> 20th, Edey 39th -> 17th; outside the top 20 Robert Williams 183rd -> 33rd,
+  Jakucionis 33rd -> 202nd, McBride 49th -> 223rd.
+- **Not yet attributed:** the learner and the inputs both differ from the incumbent.  Chimeraboost on the same inputs
+  is the control (the old open item 5a, never run).
+- **ADOPTED 2026-10-08** -- the owner, on the 2026 top 20: "oh hell yeah. this looks right. keep the one that likes
+  butler/jokic/edey and drops hugo/ajay/oso down".  This reverses experiment 19's ruling to keep `onc_d`.  The adoption
+  build (`scratch/2026-10-08_lightgbm/adopt45.sh`): models saved for 2017-2026, 97 on them (`--tag=lgb_noonc_within`),
+  the test table with its own multipliers (`lgb_noonc_rs`), the product table (`season_ratings_product_lgb_noonc`).
+  Publishing waits for the owner.

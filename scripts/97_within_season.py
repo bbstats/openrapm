@@ -512,8 +512,11 @@ def main() -> None:
     saved_all = pd.read_pickle(ROOT / "outputs" / f"prior_models_{models_name}.pkl")
     meta = saved_all.get("meta", {})
     # the settings the incumbent's steps 1-3 were built at (HANDOFF: the year-over-year build)
-    expect = dict(exclude_neighbours=1, features="boruta", rows="chunks", chunk_label="career",
-                  unshrink=["defense"], player_folds=5, booster_params=None, crossfit="scale")
+    # --booster_params=<name> (the LightGBM rematch, 2026-10-08): models saved from a build that named this settings
+    # file, so the prior shrink can be refitted on the candidate's own priors; absent = the incumbent's boosters
+    # --features=<set> (experiment 45, adopted 2026-10-08: the prior without the on-court inputs, boruta_noonc)
+    expect = dict(exclude_neighbours=1, features=flag("features", "boruta"), rows="chunks", chunk_label="career",
+                  unshrink=["defense"], player_folds=5, booster_params=flag("booster_params"), crossfit="scale")
     wrong = {k: (meta.get(k), v) for k, v in expect.items() if meta.get(k) != v}
     if wrong:
         raise SystemExit(f"the saved models were not built at the incumbent's settings: {wrong}")

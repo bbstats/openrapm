@@ -50,7 +50,10 @@ if missing:
 # to the table being published, so the column cannot fall out of step with the ratings beside it.
 portable_json = root / "outputs" / "portable" / "production.json"
 has_parts = {"prior_off", "u_off", "c_off", "prior_def", "u_def", "c_def"} <= set(rat.columns)
-if portable_json.exists() and has_parts:
+# --portable=0 (2026-10-08): leave the column out.  The LightGBM ratings of experiment 45 were published without it:
+# the owner had not approved it for the site, and its ratio was fitted on the earlier ratings.
+with_portable = "--portable=0" not in sys.argv[1:]
+if with_portable and portable_json.exists() and has_parts:
     from eracoef.portable import portable_table  # noqa: E402
     ratio_beyond = float(json.loads(portable_json.read_text(encoding="utf-8"))["ratio_beyond"])
     port = portable_table(rat, ratio_beyond)

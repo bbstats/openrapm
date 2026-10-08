@@ -62,6 +62,7 @@ MODEL_LAYER = [
     "vanilla.py",       # experiment 35, B2/B3: vanilla RAPM and RAPM on B1, one factorization per penalty
     "heldoutprior.py",  # experiment 37: the prior fit on held-out games, an exact quadratic in its weights
     "portable.py",  # experiment 40: the portable rating, traded players against same-tier players who stayed
+    "lgbprior.py",      # experiments 44-45: the deterministic LightGBM prior and leave one player out, on given arrays
     "glossary.py",      # plain names for the feature codes, a table and nothing else
     "stackprior.py",    # the stacked prior (experiment 31): fitted on the rows it is handed
     "simulate.py",      # the synthetic fixture the tests fit against
