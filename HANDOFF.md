@@ -36,10 +36,58 @@ A LightGBM test build takes ~20 minutes for thirty seasons; leave one player out
 4. Experiment 43 (the prior averaged over five groupings) was not adopted; with LightGBM, leave one out does its job.
 5. The owner has a chimeraboost issue to file: "decide once, bag after" for bagged fits (the text is in the session).
 
+### Next: the owner's stat-variance idea (2026-10-08 evening; not started)
+
+The owner: "certain stats, archetypes, or +/- gotchas tend to have more variance ... a LOT of blocks + steals causing
+issues ... it does look like we're overrating steals by some amount ... even just knowing what the variance of each
+stat is might help us to an even more robust, bayesian, probabilistic input version", then: "I'm more confident that
+steals are being at least slightly overvalued."
+
+**First evidence, already measured** (`95_miss_by_group.py` on the new incumbent, `--tag=lgb_noonc_rs`; the lean is the
+mean with/without correction, positive = the games say he is better than rated):
+
+| defensive rating, fifths of the rated season's... | bottom | second | middle | fourth | top |
+|---|---|---|---|---|---|
+| steals | **+0.117 (z +4.3)** | +0.067 (z +2.7) | -0.017 | -0.018 | **-0.069 (z -2.3)** |
+| blocks | +0.015 | -0.007 | -0.002 | +0.023 | +0.050 (z +1.6) |
+| steals plus blocks | +0.042 | +0.039 | -0.002 | +0.006 | -0.006 |
+
+So steals are overvalued on defense (a monotone 0.19 points per 100 from the bottom fifth to the top), blocks are not
+(if anything slightly undervalued); the two cancel in `stocks`, which the defensive prior also reads.  The extra miss
+(variance) by steals is unremarkable (top fifth 1.04 of expected, z +1.1): this is a lean, not noise.  Offence leans the
+same way on steals (bottom fifth +0.069, z +2.6; `stl` is an offensive input too).  Player types: "most blocks and
+personal fouls" lean -0.096 on defense (z -2.4), "most offensive rebounds and blocks" +0.096 (z +3.0).  The largest
+leans anywhere are team context (team points with him off the court, z up to 11.5), not examined yet.  Full table:
+`outputs/csv/miss_by_group_lgb_noonc_rs.csv` (and `.html`).
+
+**Proposed plan** (each step is one fast LightGBM chain, ~30 minutes, then 135 and a 95 rerun to see the steal lean):
+1. The variance of each stat: for every box input, how many possessions until a player's rate is half signal (the
+   method-of-moments padding constant, `pad.mom_k`, on per-possession counts) -- steals and blocks are rare events, so
+   expect large constants.  Check what padding the panel's rates already carry (`raw_` columns, `scratch/add_raw_rates.py`)
+   against what each stat's own noise asks for.
+2. Inputs as posterior means with each stat's own constant (and, as a second arm, the posterior spread as an extra
+   input), so a 900-possession steal spike is pulled toward the league before the booster sees it.
+3. Direct tests of the owner's read: steals out of the defensive inputs (blocks kept), and `stocks` out.
+4. Read: the year-over-year test, the robust review, and whether the steal lean above flattens.
+
 **Built 2026-10-07/08:** `62 --prior_groupings` (43); `--booster_params=<file with "learner": "lightgbm">`, `--lopo=1
 --prior_jobs`; `src/eracoef/lgbprior.py`; `scripts/135_robust_review.py`, `136_tune_lightgbm.py`; 97 `--booster_params
 --features`; tests `test_prior_groupings.py`, `test_lgbprior.py`.  Drivers and diagnostics:
 `scratch/2026-10-07_prior_groupings/`, `scratch/2026-10-08_lightgbm/`.
+
+### What experiments 43-45 found (2026-10-07/08; DECISIONS.md has every number)
+
+| finding | evidence |
+|---|---|
+| The prior's training groups add real noise, and with chimeraboost about half is the booster's own randomness | 2015: one grouping moves a defensive prior sd 0.40 per 100; the same rows refit with five seeds, 0.27; offence 0.13 / 0.07 (`scratch/2026-10-07_prior_groupings/seed_noise.py`) |
+| Averaging chimeraboost over five groupings helps a little, broadly (experiment 43, not adopted) | 8.5970 (z -1.7), replicate 8.5990 (z -0.3); better in 42 / 34 of 47 prediction slices against 8 for one random regrouping |
+| Judge a change by its pattern across slices, beside a noise control and a replicate (the owner's ask) | `135_robust_review.py`; a z between two noise draws is about N(0, 1) whatever their size, so compare sizes, not z |
+| LightGBM: deterministic and 9-40x faster, but its screen win over chimeraboost was tuning | experiment 32's tuned chimeraboost scores as well on the same screen |
+| With the on-court inputs, LightGBM loses inside teams | 44/44b: prior alone better (z -1.9), final worse (z +1.6 to +2.2); stint level, lineup swaps and team share of the rating all worse; refitting the prior shrink changes nothing (44r/44br) |
+| Without them it wins, and the ratings stop tracking the team | experiment 45: z -2.5, stint z -8.9, team share of the defensive rating 0.08 (was 0.16); adopted and published |
+| Linear leaves push low-possession players to the extremes | Edey's defensive prior 2.2 (chimeraboost) -> 4.1 (LightGBM, linear leaves) -> 2.7 (without); the owner preferred the linear-leaves numbers |
+| The tuning screen cannot see the bench | it weights rows by possessions, so a 590-possession player barely counts there while the prior decides most of his rating |
+| Steals are overvalued on defense; blocks are not | the table above |
 
 ### What the shot-quality build and experiment 42 found (2026-10-06/07; DECISIONS.md has every number)
 
@@ -403,7 +451,7 @@ add explanatory prose to a page** -- the owner rejected the drafted footer as "A
     `--fold_seasons`), and 23, scoring traded players by weighting team-game rows (it scores the other nine;
     split the prediction by player).  Memory "era-coefs measurement traps".
 
-## The one failing test, accepted by the owner (2026-09-18)
+## The LaMelo star-guard test: accepted as failing on 2026-09-18, passing since 2026-10-08 (experiment 45)
 
 `tests/test_vs_consensus.py::test_star_guards_are_not_buried` puts LaMelo Ball at rank 187 against a
 hand-set ceiling of 160 on the published table (162 before the prior shrink of 2026-10-03, which moves every
@@ -414,20 +462,21 @@ test can fail, no worries."*  The honest fix, not done, is to replace the rank c
 
 ## Where to start next
 
-1. **Get the owner's calls** on the list in START HERE; commit and publish only when the owner says so.
-2. **If the owner says go: the prior without on-court plus-minus** (item 5a).  Experiments 37-39 point the same way: the
-   on-court inputs carry team context, help in-season and hurt out of season.  One build, then the standard chain.
-3. **The swap adjustment's type model** for White-type cases (item 6): its strength or its features, scored on the
+1. **Get the owner's calls** on the open list in START HERE; commit and publish only when the owner says so.
+2. **If the owner says go: the stat-variance plan** (START HERE, "Next"): each input's noise constant, posterior-mean
+   inputs, and steals out of the defensive inputs; read the 95 steal lean after each.
+3. **The attribution control** (chimeraboost on `boruta_noonc`) and **leave one out on experiment 45** (`--lopo=1`).
+4. **The swap adjustment's type model** for White-type cases (item 6): its strength or its features, scored on the
    standard battery plus the per-player consensus pieces (`113_swap_explain.py`).
-4. Older leads, unchanged: credit shot creation in the prior; split on-court plus-minus into offensive and
-   defensive halves; the eight mixture probability columns into the prior; a standard error per player for alpha.
+5. Older leads, unchanged: credit shot creation in the prior; the eight mixture probability columns into the prior; a
+   standard error per player for alpha.
 
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest tests -q                                  # 441 passed, 1 failed (LaMelo, accepted), 1 xfailed
-    .venv/Scripts/python scripts/63_yoy.py --rankings=incumbent=outputs/season_ratings_priorshrink.parquet,ship=artifacts/season_ratings.parquet --ref=incumbent --tag=verify --splits=
-                                                                             # incumbent 8.600 (8.5995)
+    .venv/Scripts/python -m pytest tests -q                                  # 555 passed, 1 xfailed (~3 min)
+    .venv/Scripts/python scripts/63_yoy.py --rankings=incumbent=outputs/season_ratings_lgb_noonc_rs.parquet,ship=artifacts/season_ratings.parquet --ref=incumbent --tag=verify --splits=
+                                                                             # incumbent 8.5894
     .venv/Scripts/python scripts/64_consensus_report.py outputs/season_ratings_product.parquet
-                                                                             # 0.851 / 0.816 / 0.832, spreads 0.77 / 1.00, top5 4
-    .venv/Scripts/python scripts/113_swap_explain.py                         # "reproduces the shipped swap adjustment ... 2.13e-14"
-    .venv/Scripts/python scripts/52_site.py                                  # 14,578 rows; ratings.json with po / pd / pt fields
+                                                                             # 0.863 / 0.788 / 0.820, spreads 0.83 / 1.13, top5 4
+    .venv/Scripts/python scripts/113_swap_explain.py                         # "reproduces the shipped swap adjustment ... 1.60e-14"
+    .venv/Scripts/python scripts/52_site.py --portable=0                     # 14,578 rows; ratings.json WITHOUT po / pd / pt

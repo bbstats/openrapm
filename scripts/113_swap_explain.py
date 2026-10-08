@@ -4,7 +4,7 @@
 
 The owner (2026-10-05): "Explain the swap adjustment very clearly for every BOS player in this example."  This re-runs
 the shipped arm of scripts/91_swap_adjust.py ("type x0.5, team version": --kappas=0.5 --taus= --hold_spread=within
---exclude_near=0 on season_ratings_product_priorshrink_pre_swap) and keeps every intermediate number:
+--exclude_near=0 on the shipped pre-swap table, `--base=`) and keeps every intermediate number:
 
   type        the type model's prediction for the player (what players with his box-score rates, role, age, size
               and box prior beat or missed their ratings by in other seasons' lineup swaps), and its largest terms
@@ -54,7 +54,8 @@ def main():
     sa, sw, t90 = S91.sa, S91.sw, S91._t90
     cfg = load_config(ROOT / "config.yaml")
     kappa, folds, ridge = 0.5, 5, 1e-4
-    base_path = ROOT / "outputs" / "season_ratings_product_priorshrink_pre_swap.parquet"
+    # the shipped table's input to 91: experiment 45's since 2026-10-08 (before, season_ratings_product_priorshrink_pre_swap)
+    base_path = ROOT / "outputs" / f"{flag('base', 'season_ratings_product_lgb_noonc_priorshrink_pre_swap')}.parquet"
     base = pd.read_parquet(base_path)
     raw = t90.load_table(base_path)
     feats, trainable = S91.features(base, cfg)
