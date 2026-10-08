@@ -9,6 +9,21 @@ the bottom of this file passes on the new ratings).
 
 ## START HERE (2026-10-08): the LightGBM prior without the on-court inputs is live
 
+> **QUESTION FOR THE OWNER -- answer here before the next build.**  The next build is a calibration step: correct each
+> rating by one tree curve per input stat, so that no stat (steals first) is over- or underrated as a whole (the
+> curves and the plan are under "Next" below).  **What should those curves be fitted to?**
+>
+> - **(a) Each season's own held-out games** -- the target your 2026-10-03 rule sets for any calibrator.  The folds
+>   already exist for the current ratings (`outputs/within/lgb_noonc_within`, 2017-2026; earlier seasons would borrow
+>   the pooled curves, as the prior shrink does).  First step: redraw the 137 curves on these misses (about 20
+>   minutes), so you see whether steals still slope before anything is built.  **Recommended.**
+> - **(b) The with/without correction** the 137 curves use now.  Simpler, but it reads the neighbouring seasons, so
+>   it would also teach "peak seasons regress" -- the reason for the 2026-10-03 rule.
+> - **(c) No calibration step:** fix it inside the prior instead (each stat's own noise, inputs as posterior means;
+>   steals out of the defensive inputs).
+>
+> **Answer:**
+
 **Published 2026-10-08 (the owner: "Publish").**  The site's ratings are experiment 45: the box-score prior fit by a
 deterministic LightGBM (`params/booster_params_lgb1.json`, `src/eracoef/lgbprior.py`) on the box-score inputs WITHOUT
 the on-court plus-minus and on-court possessions (`--features=boruta_noonc`), five player folds, the prior shrink
