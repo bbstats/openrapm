@@ -60,15 +60,33 @@ personal fouls" lean -0.096 on defense (z -2.4), "most offensive rebounds and bl
 leans anywhere are team context (team points with him off the court, z up to 11.5), not examined yet.  Full table:
 `outputs/csv/miss_by_group_lgb_noonc_rs.csv` (and `.html`).
 
-**Proposed plan** (each step is one fast LightGBM chain, ~30 minutes, then 135 and a 95 rerun to see the steal lean):
-1. The variance of each stat: for every box input, how many possessions until a player's rate is half signal (the
-   method-of-moments padding constant, `pad.mom_k`, on per-possession counts) -- steals and blocks are rare events, so
-   expect large constants.  Check what padding the panel's rates already carry (`raw_` columns, `scratch/add_raw_rates.py`)
-   against what each stat's own noise asks for.
-2. Inputs as posterior means with each stat's own constant (and, as a second arm, the posterior spread as an extra
-   input), so a 900-possession steal spike is pulled toward the league before the booster sees it.
-3. Direct tests of the owner's read: steals out of the defensive inputs (blocks kept), and `stocks` out.
-4. Read: the year-over-year test, the robust review, and whether the steal lean above flattens.
+**Calibration curves, the owner's preferred view** ("a calibration plot style rather than binning ... we should see
+y = 0 ... more like kbins or tree based model to get any non-monotonicity"): `scripts/137_stat_calibration.py`.  For
+each input and side, the same with/without miss against the input: 20 equal-count bins (95% bars, clustered by player)
+and a one-input LightGBM curve, its size measured out of player fold and its z against the input shuffled within
+season.  `outputs/csv/stat_calibration_lgb_noonc_rs.csv`, `_bins.csv`, `outputs/stat_calibration_lgb_noonc_rs.png`.
+
+| side | most mis-priced inputs (z; bottom-bin and top-bin miss, + = underrated) |
+|---|---|
+| defense | weight z +16.9 (heaviest +0.05); **steals z +12.8 (+0.06 -> -0.05)**; career possessions z +12.4 and seasons played z +11.3 (a hump mid-career, underrated); height z +7.0 (tallest +0.07); true shooting z +6.2.  Blocks z -0.2 (calibrated); steals plus blocks z +1.5 |
+| offense | weight z +12.1 (heaviest -0.04); share of team possessions z +10.7 (a hump at 30-50%, underrated); career possessions z +7.0; true shooting z +5.9 (highest overrated); three-point rate z +5.6; **blocks per 100 z +5.3 and steals per 100 z +5.0 (high values overrated on offense)** |
+
+The curves are small in points (spread 0.02-0.03 per 100, ends +-0.05 to 0.07) but the with/without correction is a
+ridge estimate, so the true misses run larger.  Several bend in the middle (career, minutes, true shooting): a
+straight-line fix would miss them.
+
+**Proposed plan** (the owner's call; each build is one fast LightGBM chain, ~30 minutes):
+1. **A calibration step** -- rating correction = the sum over inputs of one shallow-tree curve each (non-monotone
+   allowed), per side, fitted on other seasons and shrunk by its out-of-fold fit; box score and body only, no team
+   context (experiment 33's 78-input trees learned team context and hurt year over year).  **Its target needs the
+   owner's ruling:** on 2026-10-03 the owner ruled a calibrator's target must be the season's OWN held-out games (97's
+   folds; for the incumbent `outputs/within/lgb_noonc_within`, 2017-2026), not the with/without correction, which reads
+   the neighbouring seasons and would teach "peaks regress".  So first redraw 137's curves on within-season misses
+   (each player's held-out miss: a ridge of 97's test-game residuals on players' shares).
+2. **Or fix it inside the fit:** each input's noise (`pad.mom_k` on per-possession counts: how many possessions until a
+   rate is half signal; steals and blocks are rare events) and inputs as posterior means with their own constants;
+   steals out of the defensive inputs (blocks kept).
+3. Read: the year-over-year test, the robust review, and whether the 137 curves flatten.
 
 **Built 2026-10-07/08:** `62 --prior_groupings` (43); `--booster_params=<file with "learner": "lightgbm">`, `--lopo=1
 --prior_jobs`; `src/eracoef/lgbprior.py`; `scripts/135_robust_review.py`, `136_tune_lightgbm.py`; 97 `--booster_params
