@@ -9,7 +9,7 @@ in artifacts/ so that a fresh clone can build the page without refitting anythin
 overrides both -- the same convention tests/test_vs_consensus.py uses -- so a candidate board can be
 published without overwriting the shipped artifact the rest of the scripts read.
 
-usage: python scripts/52_site.py
+usage: python scripts/52_site.py [--portable=0]
        OPENRAPM_BOARD=outputs/season_ratings_sy.parquet python scripts/52_site.py
 """
 import json
@@ -20,7 +20,11 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _cli import check_flags, flag  # noqa: E402
 from eracoef.config import load_config  # noqa: E402
+
+check_flags()
 
 cfg = load_config()
 root = Path(cfg["_root"])
@@ -52,7 +56,7 @@ portable_json = root / "outputs" / "portable" / "production.json"
 has_parts = {"prior_off", "u_off", "c_off", "prior_def", "u_def", "c_def"} <= set(rat.columns)
 # --portable=0 (2026-10-08): leave the column out.  The LightGBM ratings of experiment 45 were published without it:
 # the owner had not approved it for the site, and its ratio was fitted on the earlier ratings.
-with_portable = "--portable=0" not in sys.argv[1:]
+with_portable = flag("portable", "1") not in ("0", "no", "false")
 if with_portable and portable_json.exists() and has_parts:
     from eracoef.portable import portable_table  # noqa: E402
     ratio_beyond = float(json.loads(portable_json.read_text(encoding="utf-8"))["ratio_beyond"])
