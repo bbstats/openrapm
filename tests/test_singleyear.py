@@ -516,3 +516,98 @@ def test_a_bookkeeping_column_named_like_an_input_is_refused():
     assert sy._guard(frame, ["pts", "weight"]) is frame
     with pytest.raises(ValueError, match="bookkeeping"):
         sy._guard(frame, ["pts", "target"])
+
+
+def _with_counts(panel, seed=11):
+    """`panel` with consistent padding columns: each row's 13 rates rebuilt as the panel stores them,
+    (100 * count + k * target) / (poss + k), centred on a level of its own season (139's columns, invented)."""
+    rng = np.random.default_rng(seed)
+    out = panel.copy()
+    n = out.poss.to_numpy(float)[:, None]
+    shape = (len(out), len(sy.PAD_COUNTS))
+    counts = rng.uniform(0.0, 0.15, shape) * n
+    k = np.repeat(rng.uniform(40.0, 450.0, (1, shape[1])), len(out), axis=0) * rng.uniform(0.9, 1.1, (len(out), 1))
+    target = rng.uniform(1.0, 12.0, shape)
+    level = rng.uniform(2.0, 8.0, shape)
+    raw = (100.0 * counts + k * target) / (n + k)
+    from eracoef.design import FEATURES
+    out[[f"raw_{c}" for c in FEATURES]] = raw
+    out[list(FEATURES)] = raw - level
+    out[sy.PAD_COUNTS], out[sy.PAD_K], out[sy.PAD_TARGET] = counts, k, target
+    return out
+
+
+def test_pad_once_gives_back_a_one_season_row():
+    """The rated row and every one-season chunk must not move: a group of one season is its panel row."""
+    from eracoef.design import FEATURES
+    panel = _with_counts(_panel())
+    one = panel[panel.season == 2014]
+    got = sy.aggregate(one, pad_once=True)
+    plain = sy.aggregate(one)
+    cols = [f"raw_{c}" for c in FEATURES] + list(FEATURES)
+    assert np.allclose(got[cols].to_numpy(), one.set_index("player_id")[cols].reindex(got.index).to_numpy(),
+                       rtol=0, atol=1e-12)
+    assert np.allclose(got[sy.PRIOR_FEATURES].to_numpy(), plain[sy.PRIOR_FEATURES].to_numpy(), rtol=0, atol=1e-12)
+
+
+def test_pad_once_pads_a_multi_season_row_on_its_summed_counts():
+    """Two seasons: (100 * summed counts + k * target) / (summed possessions + k), k and target blended by
+    possessions -- and wider than the mean of the two padded rates, which shrinks the pair like one season."""
+    from eracoef.design import FEATURES
+    panel = _with_counts(_panel())
+    got = sy.aggregate(panel, pad_once=True)
+    plain = sy.aggregate(panel)
+    for pid in (0, 7, 23):
+        r = panel[panel.player_id == pid]
+        n = r.poss.to_numpy(float)
+        for j, c in enumerate(FEATURES[:4]):
+            k = np.average(r[sy.PAD_K[j]], weights=n)
+            t = np.average(r[sy.PAD_TARGET[j]], weights=n)
+            want = (100.0 * r[sy.PAD_COUNTS[j]].sum() + k * t) / (n.sum() + k)
+            assert np.isclose(got.loc[pid, f"raw_{c}"], want, rtol=0, atol=1e-10)
+            level = np.average(r[f"raw_{c}"] - r[c], weights=n)
+            assert np.isclose(got.loc[pid, c], want - level, rtol=0, atol=1e-10)
+    assert not np.allclose(got["raw_stl"].to_numpy(), plain["raw_stl"].to_numpy())
+    # the summed evidence is padded less: two identical seasons are one season's evidence twice, so the pair sits
+    # farther from the target than either season -- where the mean of the two padded rates leaves it exactly there
+    one = panel[panel.season == 2014]
+    twice = pd.concat([one, one.assign(season=2015)], ignore_index=True)
+    got2, plain2 = sy.aggregate(twice, pad_once=True), sy.aggregate(twice)
+    single = one.set_index("player_id").reindex(got2.index)
+    for j, c in enumerate(FEATURES):
+        n, k, t = single.poss.to_numpy(float), single[sy.PAD_K[j]].to_numpy(float), single[sy.PAD_TARGET[j]].to_numpy(float)
+        assert np.allclose(plain2[f"raw_{c}"].to_numpy(), single[f"raw_{c}"].to_numpy(), rtol=0, atol=1e-12)
+        dev_once = got2[f"raw_{c}"].to_numpy() - t
+        dev_one = single[f"raw_{c}"].to_numpy() - t
+        assert np.allclose(dev_once, dev_one * (2 * n / (2 * n + k)) * ((n + k) / n), rtol=1e-10, atol=1e-12)
+
+
+def test_pad_once_needs_the_count_columns():
+    panel = _panel()
+    with pytest.raises(KeyError, match="139_count_panel"):
+        sy.aggregate(panel, pad_once=True)
+
+
+def test_pad_once_moves_the_career_row_and_no_one_season_chunk():
+    """chunk_rows with pad_once: the one-season chunks are the plain ones; the career row is padded once."""
+    panel = _with_counts(_career_panel())
+    unseen = (2020,)
+    career = _labels_for(panel, [()], unseen)[(2020,)]
+    plain = sy.chunk_rows(career, panel, "offense", unseen=unseen)
+    once = sy.chunk_rows(career, panel, "offense", unseen=unseen, pad_once=True)
+    assert plain.index.equals(once.index) and np.allclose(plain.row_weight, once.row_weight)
+    single = (plain.chunk_seasons == 1).to_numpy()
+    assert np.allclose(plain[sy.PRIOR_FEATURES].to_numpy()[single], once[sy.PRIOR_FEATURES].to_numpy()[single],
+                       rtol=0, atol=1e-12)
+    many = (plain.chunk_seasons > 1).to_numpy()
+    assert not np.allclose(plain["stl"].to_numpy()[many], once["stl"].to_numpy()[many])
+
+
+def test_the_own_side_lists_drop_exactly_the_other_sides_box_score():
+    """Experiment 49: the defensive prior without the scoring inputs, the offensive without steals -- and each
+    dropped name was on the list it is dropped from, so the set is not quietly the shipped one."""
+    base, own = sy.feature_set("boruta_noonc"), sy.feature_set("boruta_noonc_ownside")
+    for side in ("O", "D"):
+        assert set(sy.CROSS_SIDE[side]) <= set(base[side])
+        assert own[side] == [f for f in base[side] if f not in sy.CROSS_SIDE[side]]
+    assert "stocks" in own["D"] and "stl" in own["D"] and "pts" in own["O"]

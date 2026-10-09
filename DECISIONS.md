@@ -5449,3 +5449,109 @@ the published ratings: the prior shrink (99) is fitted on truly held-out games a
 back, and pricing the scale honestly at the source loses on both yardsticks once the shrink is refitted.  The honest
 mode stays in the code (`62 --crossfit=honest`, `seasoninputs.honest_fold_prior`, 97 prices its folds the same way
 when the saved models say so); the shipped default is unchanged (`--crossfit=scale`).  Logged as experiment 47.
+
+## Experiment 48: pad each multi-season training row once (the Robustness pass, experiment 3; registered 2026-10-09, before any result)
+
+The owner: "Go for it".  Each season's 13 box rates are padded toward his possession bin's mean, (n * rate + k *
+target) / (n + k), with k the stat's within-player noise over its between-player spread.  A career row or a 2-3 season
+chunk averages those padded rates, so it is shrunk as hard as one season although it rests on several: narrower than
+its evidence, steals most (k = 517 possessions, the median over seasons, against 49-338 for the others).  The booster
+learns the steal price on those narrow rows and applies it to one noisy season.  The fix pads a multi-season row once,
+on its summed counts, with k and the target the possession-weighted blends of each season's own (each season's target
+from his possession bin that season) -- `BoxExposure`'s rule for a multi-season unit.  `scripts/139_count_panel.py`
+writes each season's counts, k and target beside the panel (`outputs/role_panel_counts.parquet`; rebuilding every
+panel rate from them reproduces `raw_*` exactly, all 30 seasons, both sides); `singleyear.aggregate(pad_once=True)`;
+`62 --pad_once=1`.  The rated row, every one-season chunk, the labels, the weights and the player folds are unchanged.
+Run: `FIRST_PASS=1 OWN_FOLDS=1 CONTROL_TAG=noise_regroup2_within bash scripts/experiment_chain.sh padonce x3def_w0.25
+"--pad_once=1"`, then the full chain if the first pass moves anything beyond the noise control.
+**Expected:** high-steal players lower on both sides (the counted lean: steals overrated, -0.95 on the total over 30
+seasons, -0.61 on defence); smaller moves where k is smaller (turnovers 338, missed free throws 255, fouls 213, blocks
+126).  **Read:** in season and the biases (the audit paired with experiment 46's folds and noise_regroup2), year over
+year, the robust review, the swap test, the trade loss, the consensus and the 2026 top 20; adopted on a tie if it
+removes a counted lean (the owner's rule, 2026-10-08).
+
+**First pass (2017-2026, 2026-10-09): stopped -- it moves nothing beyond the noise control.**  The preview (2005, 2015,
+2026; `--pad_once=0` reproduces the incumbent exactly) put high-steal players lower on defence in all three seasons.
+The first pass: 97 reproduces the build exactly (2,640 checks, 0 failed); the scale is unchanged (mean ratio 0.996 /
+1.017) and so is 99 (0.7037 / 0.9575 against 0.7064 / 0.9553).  In season a tie: +0.039 (z +0.9, 5 of 10 better; the
+noise control +0.070).  On each season's own held-out games no targeted lean moves: defensive steals -0.32 -> -0.31,
+defensive blocks +0.61 -> +0.61, defensive rebounds +1.39 -> +1.33, offensive steals -0.40 -> -0.41; no lean moves by
+0.1 or more (largest 0.06) and none the baseline counts is pushed further.  The ratings do move (sd 0.23 per side in the
+raw table, half the noise control's 0.46 / 0.37), but along no axis: the steal tail moves season by season run from
+-0.14 to +0.07 on defence, mean -0.02; the preview's three seasons happened to agree.  **What it settles:** the padding
+of the multi-season training rows is not what makes steals lean -- the booster already reads each row's evidence
+(`chunk_poss`, `chunk_seasons`) and the one-season chunks carry the rated row's own noise level, so the narrower
+multi-season rows do not set the price it applies to one season.  Not adopted; the code stays (`scripts/139_count_panel.py`,
+`singleyear.aggregate(pad_once=True)`, `62 --pad_once=1`, default off).  Logged as experiment 48.
+
+## The checkpoint (the Robustness pass, step 9, 2026-10-09)
+
+The base (experiment 46) on thirty seasons: its own folds for 1997-2016 (`weightfix_early`) and the deadline folds
+(`weightfix_deadline`), every one reproducing the build exactly (50 seasons of folds, 0 failed checks); the audit
+(`audit_weightfix`) on the 30-season baseline's frozen threshold (3.63) and null spreads.  **35 leans count, against
+39 for experiment 45.**  Stopped counting: defensive body weight (+0.91 -> +0.60), and on defence made free throws,
+personal fouls, shot attempts, possessions he finishes, age entering the league; offensive defensive rebounds.
+Started, each just past the threshold: defensive missed threes (-0.62), defensive true shooting (-0.40), offensive teams
+played for (+0.69).  What still counts, bottom tenth to top, points per 100, the prior alone / before the shrink /
+after it:
+- **Defence, all starting in the prior:** big men underrated (rebounds +3.35 / +1.64 / +1.72, height +0.94 / +0.73 /
+  +0.75) -- the games halve it; scorers and shooters overrated (made threes -0.95 / -0.81 / -0.86, points -0.62 /
+  -0.42 / -0.71); steals overrated (-0.54 / -0.66 / -0.58) -- the games leave both.
+- **Offence:** big men overrated (the size group -0.49 / -1.47 / -0.85, blocks -0.44 / -0.82 / -0.61), mostly from the
+  games step; three-point volume underrated (+0.61 to +0.70 after the shrink); free-throw % (+0.81) and two-point %
+  (+0.59) underrated; turnovers overrated (-0.56).
+- **By era** (line per sd, 1997-2006 / 2007-2016 / 2017-2026): the defensive scorer and steal leans live mostly before
+  2017 (made threes -0.27 / -0.23 / -0.05, steals -0.19 / -0.24 / -0.07); size on defence holds in all three (+0.28 /
+  +0.62 / +0.46); free-throw % is steady (+0.24 / +0.17 / +0.21), so the shooting lean is not the league's drift.
+**Which later steps are called for.**  10, the swap step's type model: not measured on this base; on experiment 45's
+the swap step halved the scorer lean -- not called for.  11, split-half chunk labels: no career-count lean counts --
+not called for.  8, shooting percentages against their own season: its leans count, but free-throw % is steady across
+eras while the league's percentages drifted -- weak.  12(a), the offensive scoring inputs off the defensive list and
+steals off the offensive list (one build, both sides): matches the defensive scorer leans, which start in the prior --
+called for.  13, the group correction: eligible and counting -- size (both sides), blocks and steals (offence),
+three-point volume (offence), turnovers (offence).
+
+## Experiment 49: each prior reads only its own side's box score (the Robustness pass, step 12(a); registered 2026-10-09, before any result)
+
+The owner: "sure go ahead w/ 49 (step 12(a))".  The checkpoint found scorers and shooters overrated on defence (made
+threes -0.86, points -0.71, missed threes -0.62, true shooting -0.40, two-point % -0.38, bottom tenth to top), a lean
+that starts in the defensive prior (made threes -0.95 on the prior alone).  The defensive list reads four scoring
+inputs (points, true shooting %, shot attempts, possessions he finishes); the offensive list reads steals.  The
+experiment takes them off (`--features=boruta_noonc_ownside`; `singleyear.CROSS_SIDE`): defence keeps blocks,
+defensive rebounds, steals, steals plus blocks, height, weight, career, games started and possession share (10 of
+14); offence keeps everything but steals (16 of 17).  Labels, rows, weights and player folds unchanged.  Run:
+`FIRST_PASS=1 OWN_FOLDS=1 CONTROL_TAG=noise_regroup2_within bash scripts/experiment_chain.sh ownside x3def_w0.25
+"--features=boruta_noonc_ownside"`, then the full chain if the first pass moves anything beyond the noise control.
+**Expected:** the defensive scorer and shooter leans toward zero; the prior a little less accurate (Boruta accepted the
+four as predictive of defensive RAPM).  **Read:** in season and the biases (paired with experiment 46's folds and
+noise_regroup2), year over year, the robust review, the swap test, the trade loss, the consensus and the 2026 top 20;
+adopted on a tie if it removes a counted lean.
+
+**First pass (2017-2026, 2026-10-09).**  97 reproduces the build exactly (2,640 checks, 0 failed); 99 refitted 0.7134 /
+0.9885 (incumbent 0.7064 / 0.9553).  In season worse: +0.178 (z +1.6, 4 of 10 better; the noise control +0.070).  The
+two halves part ways:
+- **Defence:** without the scoring inputs the defensive prior stops marking high-usage players down -- their defensive
+  ratings rise by about 1.1 per 100, top tenth to bottom (possessions he finishes +1.13, shot attempts +1.15, points
+  +1.05) -- and the held-out games say that was signal: possessions he finishes -0.58 -> -1.48 (z -27), shot attempts
+  -0.30 -> -1.14, points -0.18 -> -0.69.  The scorer leans the checkpoint counted do not move (made threes -0.60 ->
+  -0.58; on 2017-2026 they were small to begin with -- the checkpoint's are mostly older seasons).  Defensive ratings
+  move by sd 0.52.
+- **Offence:** without steals, the offensive steal lean shrinks, -0.40 -> -0.30 (z +7.0; high-steal players' offensive
+  ratings down 0.20, top tenth to bottom).
+Run on: the plan stops a first pass only when nothing moves beyond the noise control, so the full chain runs for the
+year-over-year reading.
+
+**Full chain and verdict (2026-10-09): not adopted.**  Year over year, both directions: 8.5876 against 8.5857, +0.054
+(z +1.3, 23 of 56) -- short of the standing rule, and the tie rule does not apply: no counted lean moves toward zero,
+and it opens large new defensive usage leans.  Looking forward a tie (+0.001, z +0.0), looking back +0.107 (z +1.9);
+per stint +0.137 (z +2.6).  On the incumbent's multipliers +0.025 (z +0.5).  Lineup-swap test worse (net order -0.044,
+z -2.3); defensive consensus agreement 0.765 against 0.780; the trade loss better on offence (-0.0006, z -2.6) and a tie
+on defence.  Robust review against noise_regroup2: year over year by team-game slice 4 better and 7 worse (the noise
+control 7 and 4), by quality tier 0 of 6, lineup-swap slices 1 better and 11 worse; the offensive trade loss 9 of 9
+better, as is the noise control's.  2026 top 20: high-usage stars gain on defence (Gilgeous-Alexander +0.38 to 2nd,
+Butler +0.36, Barnes +0.41 in at 19th), defensive specialists lose (Edey -0.47 to 12th, Clingan -0.41, Reed -0.40;
+Thybulle, Robinson and Diabate leave).  **What it settles:** the defensive prior's scoring inputs are signal, not a
+leak -- they mark high-usage players down on defence and the held-out games agree; the checkpoint's defensive scorer
+leans (mostly before 2017) have another cause.  The offensive half alone (steals off the offensive list) moved the
+offensive steal lean (-0.40 -> -0.30) and the offensive trade loss; under the owner's same-method rule it is not
+proposed on its own.  The feature set stays (`boruta_noonc_ownside`).  Logged as experiment 49.

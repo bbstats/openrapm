@@ -108,9 +108,11 @@ FITS_FROM_PANEL = ["50_boruta.py", "62_single_year_board.py", "67_blend_apm.py",
                    "97_within_season.py", "106_fold_swapadj.py", "137_stat_calibration.py", "138_heldout_audit.py"]
 
 # Scripts that read the panel to WRITE columns back into it.  These must NOT gate: they rewrite the
-# file in place, so dropping the current season would delete it from the only copy.
+# file in place, so dropping the current season would delete it from the only copy.  139 writes its
+# columns BESIDE the panel (outputs/role_panel_counts.parquet, one row per panel row) and fits nothing;
+# its reader, 62, merges them onto the panel after its own gated read.
 WRITES_THE_PANEL = {"49_role_panel.py", "65_offcourt_panel.py", "69_closeness_panel.py", "86_context_panel.py",
-                    "100_shot_mix_panel.py"}
+                    "100_shot_mix_panel.py", "139_count_panel.py"}
 
 
 def _calls(path: Path, name: str) -> bool:

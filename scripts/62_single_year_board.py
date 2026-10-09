@@ -9,7 +9,7 @@
                                            [--label_threads=12] [--rate_same_team=0|1|real|both] [--same_team_diag=0|1]
                                            [--dump_rows=<name>] [--team_season_intercept=0|1] [--age_adjust_labels=0|1]
                                            [--trade_weight=<floor>] [--trade_bands=0|1] [--adjacent_penalty=3000]
-                                           [--crossfit=scale|0|1]
+                                           [--crossfit=scale|0|1|honest] [--pad_once=0|1]
                                            [--params_mult=l2_leaf_reg:5,min_child_weight:5] [--params_set=depth:3]
                                            [--booster_params=<name>] [--save_models=<name>]
                                            [--player_folds=0|5] [--unshrink_label=def|1|off|0] [--lambda_player=13037|cv|<value>]
@@ -645,6 +645,12 @@ def main():
     # which for an outside label is the career minus the chunk -- noisier labels, less weight.
     chunk_weight = _flag("chunk_weight", "career")
     assert chunk_weight in ("career", "label"), "--chunk_weight=career|label"
+    # the Robustness pass, experiment 48 (the owner, 2026-10-09: "go for it"): pad the career row's and every chunk's
+    # 13 box rates ONCE on their summed counts instead of averaging each season's padded rates, which leaves a
+    # multi-season row as shrunk as one season (`singleyear.aggregate(pad_once=True)`; the counts and each season's
+    # padding constants come from scripts/139_count_panel.py).  The rated row and one-season chunks are unchanged.
+    pad_once = _flag("pad_once", "0") not in ("0", "no", "false")
+    assert not pad_once or row_shape in ("chunks", "player"), "--pad_once=1 needs --rows=chunks or --rows=player"
     # experiment 26 (the owner, 2026-09-28): the soft same-team measure on every training row
     # (`singleyear.chunk_rows(shares=...)`), and the value it takes at rating time: 0, "he changed teams".  That is
     # also the only legal value -- the real one needs his other seasons' teams, which ruling 2 forbids --
@@ -822,6 +828,11 @@ def main():
     panel, _ = drop_untrainable(pd.read_parquet(ROOT / "outputs/role_panel_season.parquet"),
                                 cfg, what="the season panel")
     panel = panel[panel.poss > 0].reset_index(drop=True)
+    if pad_once:
+        keys = ["season", "side", "player_id"]
+        counts = pd.read_parquet(ROOT / "outputs/role_panel_counts.parquet", columns=keys + sy.PAD_COLUMNS)
+        panel = panel.merge(counts, on=keys, how="left", validate="one_to_one")
+        assert panel[sy.PAD_COLUMNS].notna().all().all(), "panel rows without counts: rerun scripts/139_count_panel.py"
     if age_adjust:
         # the gated panel's ages (its offensive rows; both sides carry the same age) beside the RAPMs
         _ages = panel[panel.side == "O"][["player_id", "season", "age"]]
@@ -835,7 +846,7 @@ def main():
           f"(O {len(features['O'])}, D {len(features['D'])}); "
           f"free_prior_scale {FREE_PRIOR_SCALE}; lam_buckets {LAM_BUCKETS or '{}'}; "
           f"exclude_neighbours {exclude_neighbours}; rows {row_shape} (sizes {chunk_sizes}, "
-          f"chunk label {chunk_label}, chunk weight {chunk_weight}); crossfit {crossfit}; "
+          f"chunk label {chunk_label}, chunk weight {chunk_weight}, pad once {int(pad_once)}); crossfit {crossfit}; "
           f"params_mult {params_mult or '{}'}; params_set {params_set or '{}'}; "
           f"player_folds {'none, leave one player out' if lopo else player_folds}; prior_groupings {prior_groupings}"
           f"{f' from {prior_grouping_first}' if prior_grouping_first else ''}; "
@@ -933,7 +944,7 @@ def main():
                       f"per 100 for tiers {TIER_EDGES[:-1]}+ label possessions; label sd {lab[column].std():.3f}",
                       flush=True)
             if row_shape == "player":
-                train = sy.prior_rows(label(unseen), training, column, feats)
+                train = sy.prior_rows(label(unseen), training, column, feats, pad_once=pad_once)
             elif row_shape == "chunks":
                 # the owner's design: the career row plus contiguous chunks of his seasons, with two
                 # features saying how much evidence each row rests on
@@ -999,7 +1010,7 @@ def main():
                     with threadpool_limits(limits=label_threads, user_api="blas"):
                         beside = {half: window_label(half) for half in halves}
                     train = sy.adjacent_rows(label(unseen), training, column, beside, feats, sizes=sizes,
-                                             unseen=unseen, shares=shares)
+                                             unseen=unseen, shares=shares, pad_once=pad_once)
                     if season == boards[0] or season == boards[-1]:
                         win = train[train.row_kind == "window"]
                         traded = float((win[sy.SAME_TEAM] < 0.5).mean()) if sy.SAME_TEAM in win else float("nan")
@@ -1011,13 +1022,13 @@ def main():
                 else:
                     train = sy.chunk_rows(label(unseen), training, column, feats, sizes=sizes,
                                           labels=outside, unseen=unseen, weight_by=chunk_weight, shares=shares,
-                                          age_curve=curve, label_scale=scale_of)
+                                          age_curve=curve, label_scale=scale_of, pad_once=pad_once)
                     if deal_target[side]:
                         if outside is not None:
                             raise SystemExit("--deal_target_def needs the career chunk label (no outside labels)")
                         dt = sy.chunk_rows(label(unseen, target=deal_target[side]), training, column, feats,
                                            sizes=sizes, labels=outside, unseen=unseen, weight_by=chunk_weight,
-                                           shares=shares, age_curve=curve, label_scale=scale_of)
+                                           shares=shares, age_curve=curve, label_scale=scale_of, pad_once=pad_once)
                         if not (dt.index.equals(train.index) and len(dt) == len(train)):
                             raise SystemExit("--deal_target_def: the two targets' training rows differ")
                         train = train.assign(deal_target=dt["target"].to_numpy())
@@ -1297,7 +1308,8 @@ def main():
             saved_models["meta"] = dict(argv=list(sys.argv), exclude_neighbours=exclude_neighbours,
                                         features=feature_set, rows=row_shape, chunk_label=chunk_label,
                                         unshrink=list(unshrink_sides), player_folds=player_folds,
-                                        booster_params=booster_name, crossfit=crossfit, out=out.name)
+                                        booster_params=booster_name, crossfit=crossfit, pad_once=pad_once,
+                                        out=out.name)
             pd.to_pickle(saved_models, ROOT / "outputs" / f"prior_models_{save_models}.pkl")
 
     if dump_shap and shap_rows:

@@ -25,6 +25,18 @@ of "his career", but the `SHOTQ` columns pad in attempts (`SHOTQ_K`: 50 for diff
 shot-making), so a summed twelve-season row is barely padded while the single season it has to predict is
 padded hard -- the same column would mean two different things on the two sides of the model.  A
 possession-weighted mean makes a training row read as "his typical season", on the prediction row's scale.
+
+**Pad once** (`aggregate(pad_once=True)`, the Robustness pass, experiment 48).  The 13 box rates are different: each
+season's is an empirical-Bayes estimate, (n * rate + k * target) / (n + k) with k the stat's within-player noise over
+its between-player spread (`exposure.split_half_k`), so a season's rate is already on the scale of what it can
+say.  Their possession-weighted mean is not: it pulls a ten-season row toward the target as hard as one season, so a
+multi-season row is narrower than its evidence -- steals most, whose k is 440 possessions against 46-269 for the
+other stats -- and a booster trained on it prices the stat too steeply for the one noisy season it is then asked
+about.  Padded once on the row's summed counts, every row is the estimate its own evidence supports, the rule the
+measurement-error literature gives for training and rating rows of different precision.  k and the target are the
+possession-weighted blends of each season's own (each season's target from his possession bin that season), which is
+`BoxExposure`'s rule for a multi-season unit; one season reproduces its panel row exactly, so the rated row and every
+one-season chunk are untouched.  Needs `scripts/139_count_panel.py`'s columns (`PAD_COLUMNS`) on the rows.
 """
 from __future__ import annotations
 
@@ -35,7 +47,7 @@ from .gbdt_prior import CAREER, SHOT_FEATURES, SHOT_LEAGUE, SHOT_TOTALS, add_der
 from .design import FEATURES
 from .rloocv import BalancedGroupKFold
 
-__all__ = ["PRIOR_FEATURES", "INPUT_COLUMNS", "BIO", "ONC", "OFFC", "NET", "SHOT_MIX", "ROLE_INPUTS", "CLOSENESS", "LEVEL_COVARIATES", "aggregate", "season_frame",
+__all__ = ["PRIOR_FEATURES", "INPUT_COLUMNS", "PAD_COUNTS", "PAD_K", "PAD_TARGET", "PAD_COLUMNS", "BIO", "ONC", "OFFC", "NET", "SHOT_MIX", "ROLE_INPUTS", "CLOSENESS", "LEVEL_COVARIATES", "aggregate", "season_frame",
            "prior_rows", "season_rows", "chunk_rows", "chunk_season_sets", "CHUNK_FEATURES", "stratified_player_folds",
            "fold_mean_shift", "FEATURE_SETS", "feature_set", "OFFENSE_TARGET", "DEFENSE_TARGET",
            "team_movement", "reweight_by_movement", "CAREER_BANDS", "PIECE_NAMES", "PIECES", "PO_SHARE", "SAME_TEAM",
@@ -139,6 +151,14 @@ PRIOR_FEATURES = [f for f in SHOT_FEATURES if f != "season"] + CAREER + BIO + ON
 INPUT_COLUMNS = (list(FEATURES) + ROLE_INPUTS + CLOSENESS + [f"raw_{c}" for c in FEATURES]
                  + list(SHOT_TOTALS) + list(SHOT_LEAGUE) + CAREER + BIO + ONC + OFFC + NET + PIECES + PO_SHARE + SHOT_MIX)
 
+# What `aggregate(pad_once=True)` reads beside each panel row (scripts/139_count_panel.py writes them, keyed like the
+# panel): the season's count of each of the 13 stats, and the padding constant and target his rate on this side was
+# padded with.  Bookkeeping, never inputs.
+PAD_COUNTS = [f"cnt_{c}" for c in FEATURES]
+PAD_K = [f"padk_{c}" for c in FEATURES]
+PAD_TARGET = [f"padt_{c}" for c in FEATURES]
+PAD_COLUMNS = [*PAD_COUNTS, *PAD_K, *PAD_TARGET]
+
 
 # ---------------------------------------------------------------------------------- named feature sets
 # `scripts/50_boruta.py --modes=single_year` selects against this pipeline's own target.  BORUTA PRUNES,
@@ -150,6 +170,9 @@ BORUTA_O = ["ast", "creation", "efg", "exp_poss", "exp_yrs", "fg3p", "fga", "fta
             "weight"]
 BORUTA_D = ["blk", "drb", "exp_poss", "exp_yrs", "fga", "gs_pct", "height", "onc_d", "onc_o",
             "onc_poss_d", "poss_pct", "pts", "stl", "stocks", "ts", "usage", "weight"]
+# The other side's box score on each list (experiment 49): the defensive list's scoring inputs, the offensive list's
+# steals.  Steals plus blocks (`stocks`) is defence's own and stays.
+CROSS_SIDE = {"O": ["stl"], "D": ["pts", "ts", "fga", "usage"]}
 
 # `onc_*` STAYS IN, and the reasoning is worth the paragraph because it went the other way first.
 #
@@ -197,6 +220,12 @@ FEATURE_SETS = {
     "boruta": {"O": BORUTA_O, "D": BORUTA_D or PRIOR_FEATURES},
     "boruta_noonc": {"O": [f for f in BORUTA_O if f not in ONC],
                      "D": [f for f in (BORUTA_D or PRIOR_FEATURES) if f not in ONC]},
+    # the Robustness pass, experiment 49 (the owner, 2026-10-09: "go ahead w/ 49"): each prior reads only its own
+    # side's box score.  The defensive list loses the scoring inputs (points, true shooting, shot attempts,
+    # possessions he finishes) and the offensive list loses steals: the checkpoint found scorers and shooters
+    # overrated on defence, a lean that starts in the defensive prior (DECISIONS.md, "The checkpoint").
+    "boruta_noonc_ownside": {"O": [f for f in BORUTA_O if f not in ONC and f not in CROSS_SIDE["O"]],
+                             "D": [f for f in BORUTA_D if f not in ONC and f not in CROSS_SIDE["D"]]},
     # experiment 6 (2026-09-14): the on-court columns off the DEFENSIVE list only.  `onc_d` is points
     # allowed while he is on the floor, a lineup quantity; the shipped defensive prior has no on-court
     # column and beats the single-year one on the year-over-year test (DECISIONS.md, experiment 1).
@@ -261,18 +290,51 @@ def _check(frame: pd.DataFrame, features) -> pd.DataFrame:
     return frame
 
 
-def aggregate(rows: pd.DataFrame, features=None, by=None) -> pd.DataFrame:
+def _padded_once(rows: pd.DataFrame, key, weight: pd.Series) -> pd.DataFrame:
+    """Per group of `rows`: the 13 box rates padded ONCE on the summed counts, uncentred (`raw_*`) and centred.
+
+    (100 * sum of counts + k * target) / (sum of possessions + k), with k and the target the possession-weighted
+    blends of each season's own; centred on the same blend of each season's centring level (a row's `raw_` minus its
+    centred rate).  A group of one season gives back its row (module docstring, "Pad once")."""
+    missing = [c for c in PAD_COLUMNS if c not in rows.columns]
+    if missing:
+        raise KeyError(f"pad_once needs scripts/139_count_panel.py's columns beside the panel; missing {missing[:3]}"
+                       f"{' ...' if len(missing) > 3 else ''}")
+    raw_cols = [f"raw_{c}" for c in FEATURES]
+    poss = rows.poss.astype(float)
+
+    def blend(frame):
+        return frame.mul(poss, axis=0).groupby(key).sum().div(weight, axis=0).to_numpy(float)
+
+    counts = rows[PAD_COUNTS].groupby(key).sum()
+    k = blend(rows[PAD_K])
+    target = blend(rows[PAD_TARGET])
+    level = blend(pd.DataFrame(rows[raw_cols].to_numpy(float) - rows[FEATURES].to_numpy(float), index=rows.index))
+    n = weight.reindex(counts.index).to_numpy(float)[:, None]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        raw = np.where(n > 0, (100.0 * counts.to_numpy(float) + k * target) / (n + k), np.nan)
+    out = pd.DataFrame(raw, index=counts.index, columns=raw_cols)
+    out[list(FEATURES)] = raw - level
+    return out
+
+
+def aggregate(rows: pd.DataFrame, features=None, by=None, pad_once: bool = False) -> pd.DataFrame:
     """One row per player: his `INPUT_COLUMNS` averaged over `rows` by possessions, then derived.
 
     `rows` is already the side and the seasons the caller wants (typically every season but the held-out
     one, one side).  Indexed by `player_id`, so it joins straight onto a target frame.  `by` is an
     alternative grouping key aligned with `rows` (`chunk_rows` uses one per chunk of a player's seasons).
+    `pad_once=True` replaces the averaged 13 box rates by the rates padded once on the summed counts
+    (`_padded_once`), before anything is derived from them.
     """
     features = list(PRIOR_FEATURES if features is None else features)
     cols = [c for c in INPUT_COLUMNS if c in rows.columns]
     key = rows.player_id if by is None else by
     weight = rows.poss.groupby(key).sum()
     mean = rows[cols].mul(rows.poss, axis=0).groupby(key).sum().div(weight, axis=0)
+    if pad_once:
+        once = _padded_once(rows, key, weight)
+        mean[list(once.columns)] = once.reindex(mean.index)
     return _check(add_derived(mean, features), features)
 
 
@@ -282,7 +344,8 @@ def season_frame(rows: pd.DataFrame, features=None) -> pd.DataFrame:
     return _check(add_derived(rows.copy(), features), features)
 
 
-def prior_rows(target: pd.DataFrame, rows: pd.DataFrame, column: str, features=None) -> pd.DataFrame:
+def prior_rows(target: pd.DataFrame, rows: pd.DataFrame, column: str, features=None,
+               pad_once: bool = False) -> pd.DataFrame:
     """Training rows for the single-year prior: aggregated features joined to an EXTERNAL target.
 
     `gbdt_prior.training_rows` manufactures its target by pooling the player's other windows.  That is
@@ -291,7 +354,7 @@ def prior_rows(target: pd.DataFrame, rows: pd.DataFrame, column: str, features=N
     row weight (`ROW_WEIGHT`) from the possessions behind it.
     """
     features = list(PRIOR_FEATURES if features is None else features)
-    out = (aggregate(rows, features)
+    out = (aggregate(rows, features, pad_once=pad_once)
            .join(target.set_index("player_id")[[column, "possessions"]], how="inner").dropna())
     return _guard(out.assign(target=out[column].to_numpy(float), row_weight=out.possessions.to_numpy(float)),
                   features)
@@ -540,7 +603,8 @@ def adjacent_season_sets(rows: pd.DataFrame, sizes=(1, 2, 3)) -> list:
 
 
 def adjacent_rows(target: pd.DataFrame, rows: pd.DataFrame, column: str, labels: dict, features=None,
-                  sizes=(1, 2, 3), unseen=(), shares: pd.DataFrame | None = None) -> pd.DataFrame:
+                  sizes=(1, 2, 3), unseen=(), shares: pd.DataFrame | None = None,
+                  pad_once: bool = False) -> pd.DataFrame:
     """The career row plus rows labelled by the seasons right NEXT to them (the owner, 2026-09-30, experiment 30).
 
     For every window of 2k consecutive seasons a player has in `rows` (k in `sizes`: two, four or six seasons),
@@ -560,7 +624,7 @@ def adjacent_rows(target: pd.DataFrame, rows: pd.DataFrame, column: str, labels:
     """
     features = list(PRIOR_FEATURES if features is None else features)
     per_player = rows.groupby("player_id")
-    base = prior_rows(target, rows, column, features)
+    base = prior_rows(target, rows, column, features, pad_once=pad_once)
     base = base.assign(chunk_poss=per_player.poss.sum().reindex(base.index).to_numpy(float),
                        chunk_seasons=per_player.season.nunique().reindex(base.index).to_numpy(float),
                        label_possessions=base.possessions.to_numpy(float),
@@ -570,7 +634,7 @@ def adjacent_rows(target: pd.DataFrame, rows: pd.DataFrame, column: str, labels:
                .rename(columns={"feature_seasons": "season"}))
     members["season"] = members.season.astype(int)
     members = members.merge(rows, on=["player_id", "season"], how="inner")
-    chunks = aggregate(members, features, by=members.key)
+    chunks = aggregate(members, features, by=members.key, pad_once=pad_once)
     grouped = members.groupby("key")
     chunks["chunk_poss"] = grouped.poss.sum().reindex(chunks.index).to_numpy(float)
     chunks["chunk_seasons"] = grouped.season.nunique().reindex(chunks.index).to_numpy(float)
@@ -626,7 +690,8 @@ def chunk_season_sets(rows: pd.DataFrame, sizes=(1, 2, 3)) -> list:
 
 def chunk_rows(target: pd.DataFrame, rows: pd.DataFrame, column: str, features=None,
                sizes=(1, 2, 3), labels: dict | None = None, unseen=(), weight_by: str = "career",
-               shares: pd.DataFrame | None = None, age_curve=None, label_scale=None) -> pd.DataFrame:
+               shares: pd.DataFrame | None = None, age_curve=None, label_scale=None,
+               pad_once: bool = False) -> pd.DataFrame:
     """The owner's design (2026-09-13): the career row per player, PLUS rows built from chunks of his seasons.
 
     `prior_rows` is kept exactly -- one row per player, his box score averaged over every season in `rows`
@@ -682,20 +747,23 @@ def chunk_rows(target: pd.DataFrame, rows: pd.DataFrame, column: str, features=N
     fraction.  The career row's seasons are its label's seasons, so it never moves; `age_shift` records the move.
 
     Contiguous only: a chunk of 2004 and 2024 averaged together is nobody's season.
+
+    `pad_once=True` pads the career row's and every chunk's 13 box rates once on their summed counts (`aggregate`);
+    a one-season chunk is its panel row either way.
     """
     if weight_by not in ("career", "label"):
         raise ValueError(f"weight_by={weight_by!r}: write career or label")
     features = list(PRIOR_FEATURES if features is None else features)
     label = target.set_index("player_id")[[column, "possessions"]]
     per_player = rows.groupby("player_id")
-    base = prior_rows(target, rows, column, features)
+    base = prior_rows(target, rows, column, features, pad_once=pad_once)
     base = base.assign(chunk_poss=per_player.poss.sum().reindex(base.index).to_numpy(float),
                        chunk_seasons=per_player.season.nunique().reindex(base.index).to_numpy(float),
                        label_possessions=base.possessions.to_numpy(float),
                        label_key=_key_text(_season_key(unseen)))
 
     dup = _chunk_members(rows, sizes)
-    chunks = aggregate(dup, features, by=dup.chunk)
+    chunks = aggregate(dup, features, by=dup.chunk, pad_once=pad_once)
     grouped = dup.groupby("chunk")
     chunks["chunk_poss"] = grouped.poss.sum().reindex(chunks.index).to_numpy(float)
     chunks["chunk_seasons"] = grouped.season.nunique().reindex(chunks.index).to_numpy(float)

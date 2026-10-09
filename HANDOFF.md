@@ -7,7 +7,7 @@ Branch `cleanup`; `main` is fast-forwarded to it at each publish, and the live s
 on `main`.  `pytest -q`: **556 passed, 1 xfailed, ~185 s** with the scraped data (2026-10-08, before the Robustness
 pass's code; the LaMelo test at the bottom of this file passes on the current ratings).
 
-## START HERE (2026-10-09): the Robustness pass -- steps 1-4 done, experiment 46 (the body-weight fix) adopted as the base, experiment 47 (the honest scale) not adopted, experiment 3 (pad once) next on the owner's go
+## START HERE (2026-10-09): the Robustness pass -- steps 1-4 done, experiment 46 (the body-weight fix) adopted as the base, 47 (honest scale) not adopted, 48 (pad once) stopped, checkpoint done, 49 (own-side inputs) not adopted; next: step 13 on the owner's go
 
 The plan (`~/.claude/plans/read-handoff-md-here-s-the-atomic-frost.md`; DECISIONS.md "The Robustness pass" has every
 number): measure every input's lean on each season's own held-out games, remove the causes inside the fit one build at
@@ -40,9 +40,25 @@ fixes) are adopted on a tie; career counts allowed as they are; height/weight li
   year +0.123 (z +3.4); better than the incumbent before the prior shrink, worse after it, in all 10 seasons: the
   shrink, fitted on truly held-out games, already corrects the in-sample scale.  The noise control for the new base
   is `noise_regroup2` (folds `noise_regroup2_within`).  Its code is uncommitted until the owner says.
-- **Next, experiment 3 (step 7), on the owner's go: pad each multi-season training row once** on its summed counts
-  (`scripts/139_count_panel.py`, `singleyear.aggregate` pad-once mode, `62 --pad_once=1`; in-memory check on 2005,
-  2015 and 2026 first).  Targets the steals lean: career and chunk rows are 13-21% too narrow on steals.
+- **Experiment 48 (step 7), pad once: STOPPED AT THE FIRST PASS 2026-10-09** (DECISIONS.md "Experiment 48").  Career
+  and chunk rows padded once on their summed counts (`scripts/139_count_panel.py` -> `outputs/role_panel_counts.parquet`,
+  `singleyear.aggregate(pad_once=True)`, `62 --pad_once=1`, default off).  In season a tie; no targeted lean moved
+  (defensive steals -0.32 -> -0.31); the ratings reshuffle by half the noise control's amount, along no axis.  Its code
+  is uncommitted until the owner says.
+- **Step 9, the checkpoint: DONE 2026-10-09** (DECISIONS.md "The checkpoint").  Thirty seasons on the base: 35 leans
+  count (experiment 45: 39).  The three big defensive leans -- big men underrated, scorers and steals overrated -- all
+  start in the box-score prior (rebounds +3.35 per 100 on the prior alone, +1.72 after the shrink).  Folds:
+  `weightfix_early` (1997-2016), `weightfix_deadline`; audit `audit_weightfix`.  Called for: 12(a) (offensive scoring
+  inputs off the defensive list, steals off the offensive list), then 13 (the group correction); 8 weak; 10, 11 not.
+- **Experiment 49 (step 12(a)), each prior on its own side's box score: NOT ADOPTED 2026-10-09** (DECISIONS.md
+  "Experiment 49"; `--features=boruta_noonc_ownside`).  Year over year +0.054 (z +1.3), lineup-swap test worse: the
+  defensive prior's scoring inputs are real signal (without them high-usage players are overrated on defence by ~1 per
+  100 more, z -27).  Only the offensive half helped (offensive steal lean -0.40 -> -0.30); not proposed alone (the
+  same-method rule).  Its code (one feature set + a test) and experiment 48's are uncommitted.
+- **Next, on the owner's go:** step 13, the group correction (`scripts/140_group_correction.py`, between 99 and 91):
+  one line per eligible counting group (size on both sides, blocks and steals on offence, three-point volume on
+  offence, turnovers on offence), fitted on other seasons' own held-out games, refitted with the shrink, centred per
+  season and side.
 
 ## Previously (2026-10-08): the LightGBM prior without the on-court inputs is live
 
