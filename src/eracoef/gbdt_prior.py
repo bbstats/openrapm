@@ -129,6 +129,9 @@ def add_shotq(df: pd.DataFrame) -> pd.DataFrame:
 # the offensive line it buys 0.27 of the prior's own fit and the bins keep 0.03 of it (FINDINGS 26) -- so the
 # binned form is the one that carries physiology and not identity.   name -> (base column, bin width)
 BIO_BINS = {"height2": ("height", 2.0), "weight15": ("weight", 15.0)}
+# Each training row's sample weight.  Not `weight`: that is the body-weight input (BIO), and a training frame that
+# carries both would overwrite one with the other (DECISIONS.md, "The Robustness pass", 2026-10-08).
+ROW_WEIGHT = "row_weight"
 
 
 # Plus-minus as an input (FINDINGS 28; the owner: "like DRIP and DARKO do, but extremely smart about how").
@@ -350,7 +353,7 @@ def training_rows(panel: pd.DataFrame, side: str, exclude=(), features=None, tar
     out = p.loc[keep, ["player_id", "window", *feats]].copy()
     out["target"] = other_wv[keep] / other_w[keep]
     n = other_w[keep]
-    out["weight"] = n if sat_poss is None else n / (1.0 + n / float(sat_poss))
+    out[ROW_WEIGHT] = n if sat_poss is None else n / (1.0 + n / float(sat_poss))
     return out.reset_index(drop=True)
 
 
@@ -398,12 +401,12 @@ def pair_rows(panel: pd.DataFrame, side: str, exclude=(), features=None, target_
     w = out["_poss_to"].to_numpy(dtype=float) * float(win_decay) ** np.abs(d)
     if float(win_past) != 1.0:
         w = w * np.where(d < 0, float(win_past), 1.0)
-    out["weight"] = w
+    out[ROW_WEIGHT] = w
     if turn is not None:
         out = out.merge(turn[["player_id", "window", "window_to", "turnover"]].rename(columns={"turnover": TURN_FEATURE}),
                         on=["player_id", "window", "window_to"], how="inner")
         out = out[out[TURN_FEATURE].notna()]
-    out = out[out.weight > 0].drop(columns="_poss_to").reset_index(drop=True)
+    out = out[out[ROW_WEIGHT] > 0].drop(columns="_poss_to").reset_index(drop=True)
     if past:
         # his record before w, the pair's target window w' left out of it as well as the exclusion set
         pf = past_all(panel, side, wins, out[["player_id", "window", "window_to"]], exclude=ex)
@@ -449,18 +452,18 @@ def _pooled_by_distance(p: pd.DataFrame, w: np.ndarray, v: np.ndarray, decay: fl
 def reference_mean(panel: pd.DataFrame, side: str, **kw) -> float:
     """The full-panel weighted target mean the leave-window-out training sets are compared against."""
     r = training_rows(panel, side, exclude=(), **kw)
-    return float(np.average(r["target"], weights=r["weight"])) if len(r) else 0.0
+    return float(np.average(r["target"], weights=r[ROW_WEIGHT])) if len(r) else 0.0
 
 
 def _weighted_mean(rows: pd.DataFrame) -> float:
-    return float(np.average(rows["target"], weights=rows["weight"])) if len(rows) else 0.0
+    return float(np.average(rows["target"], weights=rows[ROW_WEIGHT])) if len(rows) else 0.0
 
 
 def drag(rows: pd.DataFrame, full_mean: float) -> float:
     """Weighted training-target mean minus the full-panel mean (the distributional bias of this exclusion set)."""
     if len(rows) == 0:
         return 0.0
-    return float(np.average(rows["target"], weights=rows["weight"]) - full_mean)
+    return float(np.average(rows["target"], weights=rows[ROW_WEIGHT]) - full_mean)
 
 
 def counterbalance(rows: pd.DataFrame, full_mean: float, tol: float = 0.02) -> tuple[pd.DataFrame, dict]:
@@ -471,7 +474,7 @@ def counterbalance(rows: pd.DataFrame, full_mean: float, tol: float = 0.02) -> t
     if len(rows) == 0 or abs(d) <= tol:
         return rows, rep
     t = rows["target"].to_numpy(dtype=float)
-    w = rows["weight"].to_numpy(dtype=float)
+    w = rows[ROW_WEIGHT].to_numpy(dtype=float)
     side = t > full_mean if d > 0 else t < full_mean
     S_side, W_side = float((w[side] * t[side]).sum()), float(w[side].sum())
     S_other, W_other = float((w[~side] * t[~side]).sum()), float(w[~side].sum())
@@ -479,14 +482,14 @@ def counterbalance(rows: pd.DataFrame, full_mean: float, tol: float = 0.02) -> t
     f = (full_mean * W_other - S_other) / denom if denom != 0 else 1.0
     f = float(np.clip(f, 0.0, 1.0))
     out = rows.copy()
-    out.loc[side, "weight"] = w[side] * f
+    out.loc[side, ROW_WEIGHT] = w[side] * f
     rep.update(drag_after=drag(out, full_mean), factor=f, n_side=int(side.sum()), applied=True)
     return out, rep
 
 
 # ------------------------------------------------------------------------------------ the model
 def fit_gbdt(rows: pd.DataFrame, features, seed: int = 0, thread_count=None, **params):
-    """chimeraboost at its defaults (early stopping on), weighted by `rows.weight`, with the player as the
+    """chimeraboost at its defaults (early stopping on), weighted by `rows.row_weight`, with the player as the
     group so his rows never straddle the early-stopping split."""
     from chimeraboost import ChimeraBoostRegressor
 
@@ -497,7 +500,7 @@ def fit_gbdt(rows: pd.DataFrame, features, seed: int = 0, thread_count=None, **p
     m = ChimeraBoostRegressor(**kw)
     X = rows[list(features)].to_numpy(dtype=float)
     y = rows["target"].to_numpy(dtype=float)
-    w = rows["weight"].to_numpy(dtype=float)
+    w = rows[ROW_WEIGHT].to_numpy(dtype=float)
     m.fit(X, y, sample_weight=w, groups=rows["player_id"].to_numpy())
     return m
 
@@ -731,7 +734,7 @@ def run_boruta(rows: pd.DataFrame, features, n_trials: int = 50, seed: int = 0, 
     fs = make_boruta(ChimeraBoostRegressor(**kw), explain_rows=explain_rows, seed=int(seed))
     X = rows[list(features)].reset_index(drop=True)
     y = pd.Series(rows["target"].to_numpy(dtype=float))
-    w = pd.Series(rows["weight"].to_numpy(dtype=float))
+    w = pd.Series(rows[ROW_WEIGHT].to_numpy(dtype=float))
     fs.fit(X=X, y=y, sample_weight=w, n_trials=int(n_trials), random_state=int(seed), sample=False,
            train_or_test="test", normalize=True, verbose=verbose)
     hist = getattr(fs, "history_x", None)

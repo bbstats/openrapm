@@ -68,6 +68,13 @@ MODELS = ["linear", "booster", "stack", "incumbent"]
 INSAMPLE = "stack, blend in sample"
 
 
+def _row_weight(frame: pd.DataFrame) -> np.ndarray:
+    """Each training row's sample weight.  Dumps written before 2026-10-08 carry it in `weight`, over the body-weight
+    input (DECISIONS.md, "The Robustness pass"): in them that column IS the sample weight, and body weight is lost."""
+    column = sy.ROW_WEIGHT if sy.ROW_WEIGHT in frame.columns else "weight"
+    return frame[column].to_numpy(float)
+
+
 def training_sets(frame: pd.DataFrame) -> dict:
     """{"as built": ..., "clean": ...}, each indexed by player_id with `target`, `weight` and `career_row`.
 
@@ -100,7 +107,7 @@ def fit_out_of_fold(train: pd.DataFrame, side: str, cfg: dict, quality: int) -> 
             "booster": (sy.STACK_BOOSTER_O if side == "O" else sy.STACK_BOOSTER_D) + sy.CHUNK_FEATURES,
             "incumbent": (sy.BORUTA_O if side == "O" else sy.BORUTA_D) + sy.CHUNK_FEATURES}
     X = {k: train[v].to_numpy(float) for k, v in cols.items()}
-    y, w, groups = train.target.to_numpy(float), train.weight.to_numpy(float), train.index.to_numpy()
+    y, w, groups = train.target.to_numpy(float), _row_weight(train), train.index.to_numpy()
     fold = sy.stratified_player_folds(train, N_FOLDS)
     pred = {k: np.full(len(train), np.nan) for k in MODELS}
     for f in range(N_FOLDS):
@@ -129,7 +136,7 @@ def score(train: pd.DataFrame, pred: dict) -> list:
 
     On "as built" the chunk rows are scored twice: against the career label they were trained on, and against
     their outside label ("vs outside label"), which shares no game with the row's inputs."""
-    y, w = train.target.to_numpy(float), train.weight.to_numpy(float)
+    y, w = train.target.to_numpy(float), _row_weight(train)
     career = train.career_row.to_numpy(bool)
     one = ~career & (train.chunk_seasons.to_numpy(float) == 1)
     subsets = {"all rows": (y, np.ones(len(train), bool))} if career.any() else {}

@@ -288,12 +288,13 @@ def prior_rows(target: pd.DataFrame, rows: pd.DataFrame, column: str, features=N
     `gbdt_prior.training_rows` manufactures its target by pooling the player's other windows.  That is
     exactly what `LeaveSeasonOutRAPM` has already done here, so pooling again would count it twice --
     the target IS the leave-one-out quantity.  This joins it instead, on `player_id`, and takes the
-    weight from the possessions behind it.
+    row weight (`ROW_WEIGHT`) from the possessions behind it.
     """
     features = list(PRIOR_FEATURES if features is None else features)
     out = (aggregate(rows, features)
            .join(target.set_index("player_id")[[column, "possessions"]], how="inner").dropna())
-    return out.assign(target=out[column].to_numpy(float), weight=out.possessions.to_numpy(float))
+    return _guard(out.assign(target=out[column].to_numpy(float), row_weight=out.possessions.to_numpy(float)),
+                  features)
 
 
 def season_rows(labels: dict, rows: pd.DataFrame, column: str, features=None,
@@ -331,13 +332,29 @@ def season_rows(labels: dict, rows: pd.DataFrame, column: str, features=None,
     weight = out.possessions.to_numpy(float)
     if cap_per_player:
         weight = weight / out.groupby(level=0).possessions.transform("count").to_numpy(float)
-    return out.assign(target=out[column].to_numpy(float), weight=weight)
+    return _guard(out.assign(target=out[column].to_numpy(float), row_weight=weight), features)
 
 
 # How much evidence a training row's box score rests on.  Two extra features the booster sees under
 # `chunk_rows`, so it can learn that a one-season row is to be trusted less than a career row; the rated
 # season's own row reads its possessions and 1.
 CHUNK_FEATURES = ["chunk_poss", "chunk_seasons"]
+
+# Each training row's sample weight (the possessions behind its label, split among a player's chunk rows).  Until
+# 2026-10-08 it was written into the column `weight` -- over the body-weight input both shipped feature lists carry --
+# so every prior since body weight joined the lists trained on label possessions under that name and was then asked
+# about pounds on the rated row (DECISIONS.md, "The Robustness pass").  `_guard` refuses any bookkeeping column that
+# shares a name with an input.
+ROW_WEIGHT = "row_weight"
+BOOKKEEPING = ("target", ROW_WEIGHT, "possessions", "label_possessions", "label_key", "age_shift")
+
+
+def _guard(out: pd.DataFrame, features) -> pd.DataFrame:
+    """Training rows, after checking that no bookkeeping column is also an input the booster reads."""
+    clash = sorted(set(BOOKKEEPING) & set(features or ()))
+    if clash:
+        raise ValueError(f"bookkeeping columns {clash} share a name with the prior's inputs; rename one")
+    return out
 
 
 def stratified_player_folds(train: pd.DataFrame, n_folds: int = 5, seed: int | None = None) -> np.ndarray:
@@ -354,7 +371,7 @@ def stratified_player_folds(train: pd.DataFrame, n_folds: int = 5, seed: int | N
     sorted by label, dealt in snake order into the folds, weights carried -- no partner fold dropped, no
     rows lost, and `fold_mean_shift` prints the residual shift so it can be seen to be ~0.
 
-    `train` is `chunk_rows` / `prior_rows` output: indexed by player_id, with `target` and `weight`.
+    `train` is `chunk_rows` / `prior_rows` output: indexed by player_id, with `target` and `row_weight`.
     The splitter itself is `rloocv.BalancedGroupKFold`, reusable wherever groups need balanced folds.
 
     Because the deal follows the label, ANY change to the labels re-deals the players among the folds (2026-10-07,
@@ -364,12 +381,12 @@ def stratified_player_folds(train: pd.DataFrame, n_folds: int = 5, seed: int | N
     """
     deal = train["deal_target"] if "deal_target" in train.columns else train.target
     return BalancedGroupKFold(n_folds, seed=seed).fold_ids(deal.to_numpy(float), train.index.to_numpy(),
-                                                           train.weight.to_numpy(float))
+                                                           train[ROW_WEIGHT].to_numpy(float))
 
 
 def fold_mean_shift(train: pd.DataFrame, fold: np.ndarray) -> np.ndarray:
     """Per fold: the training mean label with that fold held out, minus the full mean (weighted)."""
-    label, w = train.target.to_numpy(float), train.weight.to_numpy(float)
+    label, w = train.target.to_numpy(float), train[ROW_WEIGHT].to_numpy(float)
     S, W = float((w * label).sum()), float(w.sum())
     out = []
     for f in np.unique(fold):
@@ -588,7 +605,7 @@ def adjacent_rows(target: pd.DataFrame, rows: pd.DataFrame, column: str, labels:
     chunks = chunks.dropna(subset=features + [column]).set_index("player_id")
     share = chunks.chunk_poss / chunks.groupby(level=0).chunk_poss.transform("sum")
     chunks = chunks.assign(target=chunks[column].to_numpy(float),
-                           weight=(share * chunks.possessions).to_numpy(float))
+                           row_weight=(share * chunks.possessions).to_numpy(float))
     return pd.concat([base, chunks])
 
 
@@ -713,8 +730,8 @@ def chunk_rows(target: pd.DataFrame, rows: pd.DataFrame, column: str, features=N
     share = chunks.chunk_poss / chunks.groupby(level=0).chunk_poss.transform("sum")
     behind = chunks.possessions if weight_by == "career" else chunks.label_possessions
     chunks = chunks.assign(target=chunks[column].to_numpy(float),
-                           weight=(share * behind).to_numpy(float))
-    return pd.concat([base, chunks])
+                           row_weight=(share * behind).to_numpy(float))
+    return _guard(pd.concat([base, chunks]), features)
 
 
 def _join_outside_labels(chunks: pd.DataFrame, chunk_seasons: pd.Series, labels: dict, unseen,
@@ -805,12 +822,12 @@ def reweight_by_movement(train: pd.DataFrame, movement: pd.Series, floor: float 
     a weight that follows career length goes: long careers belong to good players.
     """
     factor = movement.reindex(train.index).fillna(0.0).to_numpy(float) + float(floor)
-    before = train.weight.to_numpy(float)
+    before = train[ROW_WEIGHT].to_numpy(float)
     weight = before * factor
     if weight.sum() <= 0:
         raise ValueError("the movement weighting left no training weight at all")
     if bands is None:
-        return train.assign(weight=weight * (before.sum() / weight.sum()))
+        return train.assign(row_weight=weight * (before.sum() / weight.sum()))
     edges = CAREER_BANDS if bands is True else list(bands)
     band = np.digitize(train.possessions.to_numpy(float), edges[1:-1])
     out = weight.copy()
@@ -820,4 +837,4 @@ def reweight_by_movement(train: pd.DataFrame, movement: pd.Series, floor: float 
             out[k] = weight[k] * (before[k].sum() / weight[k].sum())
         else:                                  # a band of one-team players only, at floor 0: left as it was
             out[k] = before[k]
-    return train.assign(weight=out)
+    return train.assign(row_weight=out)

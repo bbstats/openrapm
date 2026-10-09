@@ -1,8 +1,9 @@
 # What the prior's features mean
 
 The prior is the model that turns a player's stats into his starting estimate, before his own games adjust it.
-These are its inputs, by the names the code uses.  Rates are per 100 possessions he played, pulled toward the
-league average when he played little.  Reports to the owner use the plain names, never the codes.
+These are its inputs, by the names the code uses.  Rates are per 100 possessions he played, pulled toward that
+season's average for players with similar playing time (one of six possession bins, `config.yaml` `pad_target:
+poss_conditional`) when he played little.  Reports to the owner use the plain names, never the codes.
 
 ## Box-score rates (per 100 possessions)
 

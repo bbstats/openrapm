@@ -13,7 +13,7 @@ def _rows(n_players=300, rows_each=3, seed=0):
     box = rng.normal(size=pid.size)
     target = 0.8 * onc_o + np.sin(2 * box) + rng.normal(scale=0.3, size=pid.size)
     return pd.DataFrame({"onc_o": onc_o, "box": box, "target": target,
-                         "weight": rng.uniform(100, 3000, pid.size)}, index=pd.Index(pid, name="player_id"))
+                         "row_weight": rng.uniform(100, 3000, pid.size)}, index=pd.Index(pid, name="player_id"))
 
 
 def test_weighted_standardise_matches_numpy():

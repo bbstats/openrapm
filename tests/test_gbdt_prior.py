@@ -42,8 +42,8 @@ def test_pooled_target_by_hand():
     for f in FEATURES:
         p[f] = 0.0
     r = training_rows(p, "O", target_col="rapm1").set_index(["player_id", "window"])
-    assert r.loc[(1, "W0"), "target"] == 3.0 and r.loc[(1, "W0"), "weight"] == 300.0
-    assert r.loc[(1, "W1"), "target"] == 1.0 and r.loc[(1, "W1"), "weight"] == 100.0
+    assert r.loc[(1, "W0"), "target"] == 3.0 and r.loc[(1, "W0"), "row_weight"] == 300.0
+    assert r.loc[(1, "W1"), "target"] == 1.0 and r.loc[(1, "W1"), "row_weight"] == 100.0
     assert (2, "W0") not in r.index                                     # one window only: scored, not trained
     assert len(training_rows(p, "O", exclude={"W1"}, target_col="rapm1")) == 0   # player 1 has nothing left to pool
 
@@ -64,12 +64,12 @@ def test_pair_rows_pool_back_to_the_training_rows_and_carry_turnover():
         assert not (set(pr.window) | set(pr.window_to)) & exclude
         assert TURN_FEATURE in pr.columns and pr[TURN_FEATURE].between(0, 1).all()
         # the weighted mean of a player-window's pair targets is the pooled target, and the weights add up
-        pr["_wt"] = pr.weight * pr.target
-        g = pr.groupby(["player_id", "window"]).agg(w=("weight", "sum"), wt=("_wt", "sum"))
+        pr["_wt"] = pr.row_weight * pr.target
+        g = pr.groupby(["player_id", "window"]).agg(w=("row_weight", "sum"), wt=("_wt", "sum"))
         g["target"] = g.wt / g.w
         j = tr.set_index(["player_id", "window"]).join(g, rsuffix="_pair", how="inner")
         assert len(j) == len(tr)
-        assert np.allclose(j.target, j.target_pair) and np.allclose(j.weight, j.w)
+        assert np.allclose(j.target, j.target_pair) and np.allclose(j.row_weight, j.w)
     # a pair the turnover table does not cover is dropped; without a table there is no turn column
     short = turn[~((turn.player_id == 0) & (turn.window == "W0"))]
     pr2 = pair_rows(p, "O", target_col="rapm1", turn=short)
@@ -110,13 +110,13 @@ def test_excluded_window_never_reaches_rows_or_targets():
 
 def test_counterbalance_restores_the_mean():
     rng = np.random.default_rng(1)
-    rows = pd.DataFrame({"target": rng.normal(1.0, 2.0, 500), "weight": rng.uniform(1, 10, 500)})
-    full = float(np.average(rows.target, weights=rows.weight)) - 0.8    # the "full" mean sits below the training mean
+    rows = pd.DataFrame({"target": rng.normal(1.0, 2.0, 500), "row_weight": rng.uniform(1, 10, 500)})
+    full = float(np.average(rows.target, weights=rows.row_weight)) - 0.8    # the "full" mean sits below the training mean
     assert drag(rows, full) > 0.02
     out, rep = counterbalance(rows, full, tol=0.02)
     assert rep["applied"] and 0.0 <= rep["factor"] < 1.0 and abs(rep["drag_after"]) < 1e-9
-    assert abs(drag(out, full)) < 1e-9 and (out.weight <= rows.weight + 1e-12).all()
-    same, rep2 = counterbalance(rows, float(np.average(rows.target, weights=rows.weight)) + 0.01, tol=0.02)
+    assert abs(drag(out, full)) < 1e-9 and (out.row_weight <= rows.row_weight + 1e-12).all()
+    same, rep2 = counterbalance(rows, float(np.average(rows.target, weights=rows.row_weight)) + 0.01, tol=0.02)
     assert not rep2["applied"] and same is rows
 
 

@@ -437,7 +437,7 @@ def boruta_table(p, q, cfg, trials: int, threads: int, path: Path) -> pd.DataFra
         for run in ("with RAPM", "without RAPM"):
             feats = [c for c in inputs("pieces_gbdt", side) if run == "with RAPM" or not c.startswith("rapm_")]
             rows = p.iloc[q.row.to_numpy()][feats].reset_index(drop=True)
-            rows["target"], rows["weight"] = q[f"y_{side}"].to_numpy(), q[f"w_{side}"].to_numpy()
+            rows["target"], rows["row_weight"] = q[f"y_{side}"].to_numpy(), q[f"w_{side}"].to_numpy()
             t0 = time.time()
             res = run_boruta(rows, feats, n_trials=trials, seed=0, thread_count=threads, verbose=False,
                              **dict(cfg["gbdt"]["params_def"]))

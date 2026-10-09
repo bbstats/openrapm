@@ -76,7 +76,7 @@ SEARCHED = ["depth", "learning_rate", "l2_leaf_reg", "min_child_weight", "subsam
 def second_folds(train: pd.DataFrame, n_folds: int, seed: int) -> np.ndarray:
     """A second player split, balanced on the label like `stratified_player_folds`: players sorted by their weighted
     mean label and each run of `n_folds` neighbours dealt to the folds in a random order, not the snake."""
-    y, w, g = train.target.to_numpy(float), train.weight.to_numpy(float), train.index.to_numpy()
+    y, w, g = train.target.to_numpy(float), screen93._row_weight(train), train.index.to_numpy()
     keys, inv = np.unique(g, return_inverse=True)
     mean = np.bincount(inv, w * y, keys.size) / np.maximum(np.bincount(inv, w, keys.size), 1e-12)
     order = np.argsort(mean, kind="stable")
@@ -94,7 +94,7 @@ class Screen:
     def __init__(self, train: pd.DataFrame, feats: list):
         self.X = train[feats].to_numpy(float)
         self.y = train.target.to_numpy(float)                 # career labels: what the build trains on
-        self.w = train.weight.to_numpy(float)
+        self.w = screen93._row_weight(train)
         self.players = train.index.to_numpy()
         self.rows = ~train.career_row.to_numpy(bool) & (train.chunk_seasons.to_numpy(float) == 1)
         self.label = train.outside_target.to_numpy(float)[self.rows]

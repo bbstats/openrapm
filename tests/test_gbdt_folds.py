@@ -74,7 +74,7 @@ def test_a_raw_player_id_is_worth_nothing_once_his_rows_are_out():
             X = held[features].astype(float).reset_index(drop=True)
             pr = g.predict("O", X, {lab}, player_ids=held.player_id.to_numpy())
             err.append((held.target.to_numpy() - pr) ** 2)
-            wt.append(held.weight.to_numpy())
+            wt.append(held.row_weight.to_numpy())
         return float(np.average(np.concatenate(err), weights=np.concatenate(wt)))
 
     base_in, id_in = mse(FEATS, 0), mse([*FEATS, "pid"], 0)

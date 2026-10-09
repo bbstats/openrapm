@@ -249,7 +249,7 @@ def main() -> None:
     check_flags()
     cands = [c for c in flag("cands", "").split(",") if c]
     controls = [c for c in flag("controls", "redeal_incumbent").split(",") if c]
-    ref = flag("ref", "lgb_noonc_rs")             # the incumbent since 2026-10-08 (experiment 45)
+    ref = flag("ref", "weightfix")                # the incumbent since 2026-10-09 (experiment 46; 45 was lgb_noonc_rs)
     refresh = flag("refresh", "0") not in ("0", "no", "false")
     out = ROOT / "outputs" / f"{flag('out', 'robust_' + (cands[0] if cands else 'review'))}.csv"
     if not cands:

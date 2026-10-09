@@ -74,7 +74,7 @@ def test_pair_rows_on_a_season_panel_are_season_pairs():
     assert set(r.window) == {f"{s}-{s}" for s in range(2000, 2004)}
     # the pair 2000 -> 2001 is one season apart, so its weight is the target's possessions x win_decay
     one = r[(r.window == "2000-2000") & (r.window_to == "2001-2001")]
-    assert float(one.weight.iloc[0]) == pytest.approx(1000.0 * 0.8)
+    assert float(one.row_weight.iloc[0]) == pytest.approx(1000.0 * 0.8)
     assert float(one.target.iloc[0]) == 4.0
 
 

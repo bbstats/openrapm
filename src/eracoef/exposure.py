@@ -145,10 +145,10 @@ class BoxExposure(BaseEstimator, TransformerMixin):
     def _table(self, feats):
         """Merged per-(game, player-season) counts and possessions for the phases this exposure counts.
 
-        Regular season only by default, which is what every box rate in this project has always meant: a
-        player's exposure profile is his season's play, and eighty playoff games would only add noise to
-        it.  A fit whose ROWS are playoff possessions has to count those instead, or every total here is
-        zero and the ridge sees a design with no exposure at all (`phases`, playoffs.py)."""
+        Regular season and playoffs by default (`phases=("RS", "PO")`, the owner's ruling that the two are one
+        entity): the season panel's box rates count playoff games too, and a rebuild matches the panel only with
+        them in.  A fit whose ROWS are playoff possessions only has to count those, or every total here is zero
+        and the ridge sees a design with no exposure at all (`phases`, playoffs.py)."""
         gp = self.game_poss[["game_idx", "psx_idx", "poss_off", "poss_def"]]
         gb = self.game_box[["game_idx", "psx_idx", "phase"] + feats]
         keep = gb["phase"].isin(tuple(self.phases))

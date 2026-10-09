@@ -86,7 +86,7 @@ def standardised_ridge(frame: pd.DataFrame, features: list, penalty: float = 1.0
     penalised lightly because several of these statistics are near-duplicates of each other.
     """
     X = frame[features].to_numpy(float)
-    weight = frame.weight.to_numpy(float)
+    weight = frame.row_weight.to_numpy(float)
     mean = np.average(X, axis=0, weights=weight)
     sd = np.sqrt(np.average((X - mean) ** 2, axis=0, weights=weight))
     sd = np.where(sd > 0, sd, 1.0)
@@ -137,9 +137,9 @@ def main():
         frame["target"] = frame.alpha_good
         # a with-and-without contrast knows as much as its smaller half: a player who missed two games
         # carries almost no information however many he played, and the reverse
-        frame["weight"] = (frame.with_poss * frame.without_poss
+        frame["row_weight"] = (frame.with_poss * frame.without_poss
                            / (frame.with_poss + frame.without_poss)).fillna(0.0)
-        frame = frame[frame.weight > 0].set_index("player_id", drop=False)
+        frame = frame[frame.row_weight > 0].set_index("player_id", drop=False)
 
         model_feats = features + EXTRA
         params = cfg["gbdt"]["params" if code == "O" else "params_def"]
@@ -151,10 +151,10 @@ def main():
         without = OutOfPlayerSPM(params, folds).fit(frame, no_exposure)
         scores.append(dict(
             side=side, players=len(frame), seasons=frame.season.nunique(),
-            alpha_sd=float(np.sqrt(np.average(frame.target ** 2, weights=frame.weight))),
-            r2_everything=weighted_r2(frame.target, out_of_fold, frame.weight),
-            r2_no_exposure=weighted_r2(frame.target, without.predict(frame, no_exposure), frame.weight),
-            r2_rating_only=weighted_r2(frame.target, rating_only.predict(frame, EXTRA), frame.weight)))
+            alpha_sd=float(np.sqrt(np.average(frame.target ** 2, weights=frame.row_weight))),
+            r2_everything=weighted_r2(frame.target, out_of_fold, frame.row_weight),
+            r2_no_exposure=weighted_r2(frame.target, without.predict(frame, no_exposure), frame.row_weight),
+            r2_rating_only=weighted_r2(frame.target, rating_only.predict(frame, EXTRA), frame.row_weight)))
 
         per_fold = (np.mean([m.feature_importances_ for m in model.fold_models_], axis=0)
                     if model.fold_models_ else model.full_.feature_importances_)

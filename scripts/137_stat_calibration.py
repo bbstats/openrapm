@@ -1,5 +1,10 @@
 """Calibration curves: is the rating over- or underrated as a function of each input stat?
 
+**Superseded for decisions by scripts/138_heldout_audit.py (2026-10-08, the Robustness pass).**  The miss here comes
+from the neighbouring seasons (which teaches "peak seasons regress"), on luck-adjusted targets, and the permutation z
+below shuffles inputs within a season, which inflates the z of anything a player carries from season to season 3-4x
+(body weight 16.9 -> about 4 once whole players are shuffled).  Kept as a picture of the neighbouring-season reading.
+
     python scripts/137_stat_calibration.py [--alpha=outputs/tradeset_lgb_noonc_rs_alpha.parquet] [--tag=lgb_noonc_rs]
                                            [--perms=20] [--bins=20]
 

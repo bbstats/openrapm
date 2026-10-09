@@ -83,9 +83,9 @@ def frame_for(side: str, code: str, alpha: pd.DataFrame, panel: pd.DataFrame,
         raise SystemExit("the panel has no `rapm1` column; rebuild it with scripts/49_role_panel.py")
     frame["rapm1_feature"] = frame["rapm1"]
     frame["target"] = frame.alpha_good
-    frame["weight"] = (frame.with_poss * frame.without_poss
+    frame["row_weight"] = (frame.with_poss * frame.without_poss
                        / (frame.with_poss + frame.without_poss)).fillna(0.0)
-    return frame[frame.weight > 0].set_index("player_id", drop=False)
+    return frame[frame.row_weight > 0].set_index("player_id", drop=False)
 
 
 def out_of_fold_shap(model, frame: pd.DataFrame, feats: list) -> np.ndarray:
@@ -143,7 +143,7 @@ def main():
         model = OutOfPlayerSPM(params, folds).fit(frame, feats)
         shap = out_of_fold_shap(model, frame, feats)
 
-        weight = frame.weight.to_numpy(float)
+        weight = frame.row_weight.to_numpy(float)
         X = frame[feats].to_numpy(float)
         record = []
         for j, name in enumerate(feats):

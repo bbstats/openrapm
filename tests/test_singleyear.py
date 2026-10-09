@@ -86,7 +86,7 @@ def test_prior_rows_joins_an_external_target_instead_of_pooling_one():
     rows = sy.prior_rows(target, panel, "offense")
     assert len(rows) == 20
     assert np.allclose(rows.target.to_numpy(), rows.offense.to_numpy())
-    assert np.allclose(rows.weight.to_numpy(), rows.possessions.to_numpy())
+    assert np.allclose(rows.row_weight.to_numpy(), rows.possessions.to_numpy())
 
 
 def _career_panel(seed=3):
@@ -148,8 +148,8 @@ def test_outside_labels_give_each_chunk_the_rapm_of_the_seasons_outside_it():
     assert "2011,2013,2020" in set(chunks.loc[1].label_key)
     # weights: every player's chunk rows together still weigh what his career row weighs
     for pid in chunks.index.unique():
-        total = chunks.loc[[pid]].weight.sum()
-        assert total == pytest.approx(whole.loc[pid].weight)
+        total = chunks.loc[[pid]].row_weight.sum()
+        assert total == pytest.approx(whole.loc[pid].row_weight)
 
 
 def test_a_one_season_chunk_carries_exactly_the_per_season_label():
@@ -179,12 +179,12 @@ def test_label_weights_give_each_chunk_the_possessions_its_own_label_rests_on():
     by_career = sy.chunk_rows(career, panel, "offense", labels=labels, unseen=unseen)
     by_label = sy.chunk_rows(career, panel, "offense", labels=labels, unseen=unseen, weight_by="label")
     whole = by_label.label_key == "2020"
-    assert np.array_equal(by_label.weight[whole].to_numpy(), by_career.weight[whole].to_numpy())
+    assert np.array_equal(by_label.row_weight[whole].to_numpy(), by_career.row_weight[whole].to_numpy())
     chunks_c, chunks_l = by_career[~whole], by_label[~whole]
-    assert np.allclose(chunks_l.weight.to_numpy(),
-                       (chunks_c.weight * chunks_c.label_possessions / chunks_c.possessions).to_numpy())
+    assert np.allclose(chunks_l.row_weight.to_numpy(),
+                       (chunks_c.row_weight * chunks_c.label_possessions / chunks_c.possessions).to_numpy())
     assert (chunks_l.label_possessions < chunks_l.possessions).all(), "an outside label rests on less than the career"
-    assert (chunks_l.weight < chunks_c.weight).all()
+    assert (chunks_l.row_weight < chunks_c.row_weight).all()
     with pytest.raises(ValueError, match="weight_by"):
         sy.chunk_rows(career, panel, "offense", weight_by="possessions")
 
@@ -358,7 +358,7 @@ def test_adjacent_rows_pair_each_stretch_with_the_seasons_next_to_it():
     assert back[sy.SAME_TEAM].iloc[0] == 0.0, "2012 on team 2 labelled by 2011 on team 1"
     # every player's window rows together weigh his career row's weight
     for pid in rows[~whole].index.unique():
-        assert rows[~whole].loc[[pid]].weight.sum() == pytest.approx(rows[whole].loc[pid].weight)
+        assert rows[~whole].loc[[pid]].row_weight.sum() == pytest.approx(rows[whole].loc[pid].row_weight)
 
 
 def _per_team(shares: dict, total=1000.0) -> pd.DataFrame:
@@ -412,47 +412,47 @@ def test_team_movement_drops_a_player_with_too_little_evidence():
 
 def test_reweight_by_movement_keeps_the_total_and_moves_only_its_distribution():
     """The booster's regularisation has to mean the same thing before and after the reweighting."""
-    train = pd.DataFrame({"target": [1.0, 2.0, 3.0, 4.0], "weight": [100.0, 200.0, 300.0, 400.0]},
+    train = pd.DataFrame({"target": [1.0, 2.0, 3.0, 4.0], "row_weight": [100.0, 200.0, 300.0, 400.0]},
                          index=pd.Index([0, 0, 1, 2], name="player_id"))
     movement = pd.Series({0: 0.5, 1: 0.0, 2: 0.25})
     out = sy.reweight_by_movement(train, movement, floor=0.0)
 
-    assert out.weight.sum() == pytest.approx(train.weight.sum())
-    assert out.loc[1, "weight"] == pytest.approx(0.0), "floor 0 drops a one-team player outright"
-    assert out.loc[2, "weight"] > 0
+    assert out.row_weight.sum() == pytest.approx(train.row_weight.sum())
+    assert out.loc[1, "row_weight"] == pytest.approx(0.0), "floor 0 drops a one-team player outright"
+    assert out.loc[2, "row_weight"] > 0
     # the two rows of player 0 keep their ratio to each other: only players are reweighted, not rows
-    first, second = out.loc[0, "weight"].to_numpy()
+    first, second = out.loc[0, "row_weight"].to_numpy()
     assert second / first == pytest.approx(2.0)
 
 
 def test_reweight_by_movement_with_a_floor_keeps_every_player():
     """The one run of this rule lost by zeroing 29% of the players, stars included; the floor is the fix."""
-    train = pd.DataFrame({"target": [1.0, 2.0], "weight": [100.0, 100.0]},
+    train = pd.DataFrame({"target": [1.0, 2.0], "row_weight": [100.0, 100.0]},
                          index=pd.Index([0, 1], name="player_id"))
     out = sy.reweight_by_movement(train, pd.Series({0: 0.0, 1: 0.5}), floor=0.25)
-    assert (out.weight > 0).all()
-    assert out.weight.sum() == pytest.approx(200.0)
+    assert (out.row_weight > 0).all()
+    assert out.row_weight.sum() == pytest.approx(200.0)
 
 
 def test_career_bands_keep_each_bands_weight_and_move_it_only_toward_movers():
     """The owner's fix (2026-09-30): the movement weight may not shift weight from short careers to long ones."""
-    train = pd.DataFrame({"target": [0.0] * 6, "weight": [100.0, 100.0, 50.0, 50.0, 900.0, 900.0],
+    train = pd.DataFrame({"target": [0.0] * 6, "row_weight": [100.0, 100.0, 50.0, 50.0, 900.0, 900.0],
                           "possessions": [1000.0, 1000.0, 1500.0, 1500.0, 30000.0, 30000.0]},
                          index=pd.Index([0, 1, 2, 2, 3, 4], name="player_id"))
     movement = pd.Series({0: 0.0, 1: 0.6, 2: 0.2, 3: 0.0, 4: 0.5})
     out = sy.reweight_by_movement(train, movement, floor=0.5, bands=True)
     short, long = train.possessions < 2000, train.possessions >= 15000
-    assert out.weight[short].sum() == pytest.approx(train.weight[short].sum())
-    assert out.weight[long].sum() == pytest.approx(train.weight[long].sum())
+    assert out.row_weight[short].sum() == pytest.approx(train.row_weight[short].sum())
+    assert out.row_weight[long].sum() == pytest.approx(train.row_weight[long].sum())
     # inside a band the weights follow movement + floor
-    assert out.loc[4, "weight"] / out.loc[3, "weight"] == pytest.approx((0.5 + 0.5) / (0.0 + 0.5))
-    assert out.loc[1, "weight"] / out.loc[0, "weight"] == pytest.approx((0.6 + 0.5) / 0.5)
-    assert (out.weight > 0).all(), "the floor keeps every one-team player"
+    assert out.loc[4, "row_weight"] / out.loc[3, "row_weight"] == pytest.approx((0.5 + 0.5) / (0.0 + 0.5))
+    assert out.loc[1, "row_weight"] / out.loc[0, "row_weight"] == pytest.approx((0.6 + 0.5) / 0.5)
+    assert (out.row_weight > 0).all(), "the floor keeps every one-team player"
 
 
 def test_reweight_by_movement_refuses_to_leave_no_weight_at_all():
     """Silently returning an all-zero training set would fit a constant and look like a bad idea."""
-    train = pd.DataFrame({"target": [1.0], "weight": [100.0]},
+    train = pd.DataFrame({"target": [1.0], "row_weight": [100.0]},
                          index=pd.Index([0], name="player_id"))
     with pytest.raises(ValueError, match="no training weight"):
         sy.reweight_by_movement(train, pd.Series({0: 0.0}), floor=0.0)
@@ -486,9 +486,33 @@ def test_a_deal_target_column_keeps_another_targets_deal():
     ids = np.repeat(np.arange(300), 2)
     a = np.repeat(rng.normal(0, 1, 300), 2)
     b = a + rng.normal(0, 0.05, a.size)                    # a slightly different target: the snake re-deals
-    train_a = pd.DataFrame({"target": a, "weight": 1.0}, index=pd.Index(ids, name="player_id"))
+    train_a = pd.DataFrame({"target": a, "row_weight": 1.0}, index=pd.Index(ids, name="player_id"))
     train_b = train_a.assign(target=b)
     fa, fb = sy.stratified_player_folds(train_a), sy.stratified_player_folds(train_b)
     assert (fa != fb).mean() > 0.2                         # a small label change moves many players
     pinned = sy.stratified_player_folds(train_b.assign(deal_target=a))
     assert np.array_equal(pinned, fa)                      # dealt on target a's labels: target a's folds exactly
+
+
+def test_training_rows_keep_body_weight_and_carry_the_sample_weight_apart():
+    """The Robustness pass (2026-10-08): the sample weight was written over the body-weight input, so every prior
+    trained on label possessions under the name `weight` and was then asked about pounds on the rated row."""
+    panel = _career_panel()
+    panel["weight"] = 150.0 + 10.0 * panel.player_id.to_numpy(float)       # pounds, fixed per player
+    unseen = (2020,)
+    career = _labels_for(panel, [()], unseen)[(2020,)]
+    rows = sy.chunk_rows(career, panel, "offense", unseen=unseen)
+    assert np.allclose(rows["weight"].to_numpy(), 150.0 + 10.0 * rows.index.to_numpy(float)), \
+        "the input `weight` is body weight on every training row"
+    assert sy.ROW_WEIGHT in rows.columns and (rows[sy.ROW_WEIGHT] > 0).all()
+    # the sample weight is where it always was: a player's chunk rows together weigh what his career row weighs
+    per_player = rows.groupby(level=0)
+    assert np.allclose(per_player[sy.ROW_WEIGHT].sum().to_numpy(), 2.0 * per_player.possessions.first().to_numpy())
+
+
+def test_a_bookkeeping_column_named_like_an_input_is_refused():
+    """No column the training rows add for their own bookkeeping may share a name with an input."""
+    frame = pd.DataFrame({"target": [1.0], sy.ROW_WEIGHT: [2.0]})
+    assert sy._guard(frame, ["pts", "weight"]) is frame
+    with pytest.raises(ValueError, match="bookkeeping"):
+        sy._guard(frame, ["pts", "target"])

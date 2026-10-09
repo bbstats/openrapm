@@ -19,12 +19,12 @@ def _rows(n_players=120, rows_each=2, seed=0):
     pid = np.repeat(np.arange(n_players), rows_each)
     a, b = rng.normal(size=pid.size), rng.normal(size=pid.size)
     target = 0.8 * a + np.sin(2 * b) + rng.normal(scale=0.3, size=pid.size)
-    return pd.DataFrame({"a": a, "b": b, "target": target, "weight": rng.uniform(100, 3000, pid.size)},
+    return pd.DataFrame({"a": a, "b": b, "target": target, "row_weight": rng.uniform(100, 3000, pid.size)},
                         index=pd.Index(pid, name="player_id"))
 
 
 def _arrays(train):
-    return (train[FEATS].to_numpy(float), train.target.to_numpy(float), train.weight.to_numpy(float),
+    return (train[FEATS].to_numpy(float), train.target.to_numpy(float), train.row_weight.to_numpy(float),
             train.index.to_numpy())
 
 

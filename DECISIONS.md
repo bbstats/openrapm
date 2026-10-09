@@ -5177,3 +5177,227 @@ possessions out (offence 21 -> 17 inputs, defence 17 -> 14).  `bash scripts/expe
   build (`scratch/2026-10-08_lightgbm/adopt45.sh`): models saved for 2017-2026, 97 on them (`--tag=lgb_noonc_within`),
   the test table with its own multipliers (`lgb_noonc_rs`), the product table (`season_ratings_product_lgb_noonc`).
   Publishing waits for the owner.
+
+## The Robustness pass (2026-10-08, the owner's request)
+
+The owner, on the calibration-step question at the top of HANDOFF.md: "research the most robust way to deal w/ these
+biases.  we could do even more fanciful held-out stuff, and it's ok if that's where we land.  but ideally these biases
+don't even exist in the first place."  Fourteen read-only agents researched it (code and data audits, the literature,
+three designs, three adversarial reviews); the approved plan is to measure every input's lean on each season's own
+held-out games, remove the causes inside the fit one build at a time, and correct after the fact only what survives.
+
+**Rulings this session:**
+- **Scope:** every input on both sides, the same method on offence and defence, and in groups of correlated inputs
+  (average linkage on 1 - |rank correlation|), not single statistics -- "i dont think those chosen there are
+  necessarily best. we should either do all or if too slow just find the ones with highest sum SHAP impact".  Group
+  shares of the prior come from Owen values (shap's Partition masker); LightGBM 4.7.0 refuses SHAP on linear leaves.
+- **A bug fix, or a fix that removes a lean the held-out audit counts, is adopted on a tie** (year-over-year z
+  between -2 and +2), unless the robust review is systematically worse than the noise control, the consensus misses
+  grossly, or the 2026 top 20 is worse.  Every other change keeps the standing rule.
+- **Career counts are allowed as they are.**  Seasons played, career possessions and seasons with his team count
+  every season before the rated one (`roles.career_inputs` at `roles.py:224`, called with the rated season at
+  `scripts/49_role_panel.py:207`; its docstring was written for three-season blocks, where the count stopped three
+  seasons back).  So in the year-over-year test a rating that looks back knows how much the player played in the
+  season it is scored on: taking last season out of the counts moves the raw prior by sd 0.09-0.12 per 100 (2021,
+  2026, saved models), on offence following last season's possessions (r -0.27 to -0.49).  A known look-back leak in
+  the test, accepted.
+- **Height and weight stay the middle value of all of a player's season listings** (`bio.py:42-57`, later seasons
+  included; 5% of player-seasons differ from it by more than 10 lb).  The owner: "shouldn't matter much.  Your call";
+  kept, because changing it costs a full build for a small effect.
+
+**Two defects found, both checked in the code:**
+1. **The prior never sees body weight.**  `prior_rows`, `season_rows`, `adjacent_rows` and `chunk_rows` write each
+   training row's sample weight (the possessions behind its label) into the column `weight`
+   (`singleyear.py:296, 334, 591, 716`), over the body-weight input that both `boruta_noonc` lists carry.  62 trains on
+   it (`62:332`; values 0.4-133,082) and rates on the panel's body weight in pounds (`62:1111`; 133-360).  Feature
+   selection kept `weight` through the same overwrite (`50_boruta.py:119`).  The fix is the Robustness pass's first
+   experiment.
+2. **The prior's scale is not cross-fitted for the shipped inputs.**  `--crossfit=scale` rebuilds only the on-court,
+   off-court and RAPM-piece columns per fold (`62:495`); since experiment 45 the prior reads none of them, so the free
+   scale is priced on box-score columns built from every game of the season, the held-out fold's included.  How much
+   that inflates the scale is the subject of a check before any change.
+
+### The held-out audit (138): the definition, frozen before any build (2026-10-08)
+
+`scripts/138_heldout_audit.py` is the yardstick every Robustness-pass build is judged by.  **What it measures:** for
+every held-out team-game of the within-season folds (97: a season rated from three quarters of its games, scored on the
+fourth), the points per 100 as scored minus what the ratings predict -- each rated player's share of the possessions
+times his rating as it ships (the prior part times 99's product-rule multiplier for that season, plus the games' part,
+re-centred), stand-ins at their own values, the level and home edge free per fold -- is regressed on a correction per
+player that depends on one input or one group's axis, entering the team-game the way a rating does.  The correction's
+slope is how far the season's own games say players high on that input are underrated (+) or overrated (-).
+
+- **Axis:** each fold's rebuilt input as a within-fold possession-weighted percentile and its normal score.  **Groups**
+  (`params/audit_groups.json`, frozen): average linkage on 1 - |rank correlation| over the incumbent's whole-season rows
+  with 500+ possessions (2017-2026), cut at 0.4, 0.5 and 0.6; 18 groups, the same on both sides (size: rebounds,
+  defensive rebounds, height, weight, blocks, steals plus blocks; three-point shooting profile; scoring volume; free
+  throws; playmaking; turnovers; shooting efficiency; three-point shooting; career length; draft and entry age; playing
+  time with score state).  Steals group with nothing.  A group's axis is the first principal component of its members.
+- **Statistics, per side:** a straight line per standard deviation of the axis; a bend (the square's coefficient); and the
+  top tenth minus the bottom tenth (possession-weighted tenths), in points per 100.  Offence plus defence is read too.
+- **The null and the threshold:** whole careers reassigned -- each player takes another player's inputs, all of them,
+  season by season along the donor's career -- 400 times; each test's z is its estimate over its spread under that
+  null, and the threshold is the 95th percentile of the largest |z| over all 64 decision tests' line and bend
+  statistics on both sides (studentized max-T).  On 2017-2026: **3.64**.  The season jackknife would have needed 7.58,
+  because a player's misfit carries over between seasons; it is printed but never decides.
+- **Stages:** the prior part alone, before the prior shrink, after it (the decision stage); after the swap step once
+  106 runs on the folds.  **Versions:** the scale pinned (primary), the two prior multipliers refitted with the lean, one
+  free scale per side on the whole rating, and the pinned version plus playing-time terms (log possessions, the bench's
+  share of the team-game) as information.
+- **A lean counts** only if, after the shrink, its line or bend z passes the threshold, its tenths reading is at least
+  0.1 per 100 bottom to top, its line keeps its sign and size (within a factor of two) under all three scale versions,
+  and (with thirty seasons and the deadline folds) it keeps its sign in all three eras and the deadline folds do not
+  contradict it at |z| 2.  Team context, playing time and score state are measured and never count.  A fix is credited
+  with a lean only through its paired movement beyond the noise control; a lean that merely stops passing is never
+  called removed.
+- **Checks passed:** with only the two multipliers free the fit gives 99's 0.7130 / 0.9515; the readings match the design
+  reviewers' independent re-measurement (defensive weight +1.26 against their +1.30, defensive rebounds +1.41 / +1.40,
+  height +0.88 / +0.86, steals -0.37 / -0.36; offensive true shooting +0.68 / +0.69).
+
+**The baseline, 2017-2026** (`outputs/csv/audit_lgb_noonc_2017_summary.csv`; points per 100 from the bottom tenth to the
+top, + = underrated; z against the threshold 3.64):
+
+| lean | offence | defence | offence + defence |
+|---|---|---|---|
+| size (rebounds, defensive rebounds, height, weight) | -0.51 (z -3.5) | **+1.83 (z +8.6)** | **+1.53 (z +6.4)** |
+| body weight | -0.43 | **+1.26 (z +5.2)** | **+0.83 (z +3.8)** |
+| height | -0.48 (z -3.4) | **+0.88 (z +4.7)** | +0.40 |
+| steals | -0.43 (z -2.9) | -0.37 (z -1.8) | **-0.81 (z -3.8)** |
+| blocks | -0.34 | +0.58 | +0.24 |
+| turnovers per possession used | **-0.52 (z -3.8)** | -0.22 | -- |
+| free-throw %, two-point %, effective FG % | **+0.75 / +0.64 / +0.58** | -- | -- |
+| teams played for | -0.21 | **-0.53 (z -4.1)** | -- |
+
+Read with care: the offensive shooting leans mostly vanish once playing time is held (true shooting +0.13 per standard
+deviation -> -0.02), and before the prior shrink they point the other way (true shooting -0.70 raw, +0.68 shrunk): they
+are the closed playing-time topic, not a price.  Steals do not count on either side alone, but on the total the
+high-steal players are overrated by 0.81 per 100.  Big men are underrated on defence and, less, overrated on offence;
+on the total they are still underrated.
+
+### The prior's scale, priced in sample: measured (2026-10-09, `scratch/2026-10-08_robustness/scale_check.py`)
+
+For 2017, 2021 and 2026 the scale was refitted with each of the ridge's five game folds' priors rebuilt honestly -- every
+input (box rates and their padding, playing time, starts, shot totals, on- and off-court numbers) rebuilt from the
+fold's training games through 97's World and asked of the same saved boosters -- against the shipped pricing (62's
+fold builder, which rebuilds nothing the prior reads).  The as-shipped refit equals the shipped table's scales exactly.
+
+| season | offence: shipped -> honest | defence: shipped -> honest | at penalty 3,000 (offence / defence) |
+|---|---|---|---|
+| 2017 | 2.673 -> 2.405 (-10%) | 1.090 -> 0.959 (-12%) | 2.791 -> 2.236 / 1.196 -> 0.980 |
+| 2021 | 2.500 -> 2.408 (-4%) | 1.098 -> 0.986 (-10%) | 2.546 -> 2.172 / 1.099 -> 0.923 |
+| 2026 | 2.008 -> 1.869 (-7%) | 1.358 -> 1.226 (-10%) | 2.057 -> 1.699 / 1.388 -> 1.144 |
+
+The box score of the games a scale is regressed on reads part of their outcome back (a player's own points are part of
+his team's points), so the shipped scale is 4-12% too large, about 10% on defence in every season, and the gap doubles
+at a lighter residual penalty.  The plan's gate (more than 5% on either side in at least two of three seasons) passes in
+three of three: the honest-scale build (the Robustness pass's step 6) is called for.  The prior shrink (x0.72 offence,
+x0.95 defence) was fitted on folds that carry the same in-sample pricing, so part of what it corrects may be this.
+
+### The held-out audit on thirty seasons (2026-10-09; `outputs/csv/audit_lgb_noonc_summary.csv`)
+
+The same frozen audit on the incumbent's within-season folds for all thirty seasons (360 folds: 2017-2026 from the
+adoption build, 1997-2016 built for this pass with the models saved and every rebuild equal to experiment 45's chunks,
+maximum difference 0.0), with the trade-deadline folds (60) and the trade set on actual points as vetoes.  Threshold
+3.63 (the season jackknife would have needed 6.95).  **39 leans count.**  Points per 100 from the bottom tenth to the
+top, + = underrated:
+
+| lean | offence | defence | offence + defence | eras (line per sd, 1997-2006 / 2007-2016 / 2017-2026) |
+|---|---|---|---|---|
+| size: rebounds, defensive rebounds, height, weight | **-0.59** | **+1.79 (z +11.6)** | **+1.20 (z +7.9)** | defence +0.31 / +0.59 / +0.54 |
+| steals | -0.33 (z -3.5) | **-0.61 (z -5.4)** | **-0.95 (z -8.6)** | defence -0.20 / -0.25 / -0.08 |
+| possessions he finishes, points (scoring volume) | +0.55 (playing time) | **-0.85 / -0.72** | -0.88 | defence -0.38 / -0.20 / -0.10 |
+| three-point volume (attempts, makes, share of shots) | **+0.74 (z +5.9)** | -0.80 (made threes) | -- | offence +0.19 / +0.24 / +0.15 |
+| blocks | **-0.64** | +0.45 | -- | offence -0.23 / -0.22 / -0.09 |
+| turnovers per possession used | **-0.54** | -0.29 | -0.75 (turnovers) | offence -0.18 / -0.10 / -0.16 |
+| free-throw % | **+0.78** | -- | -- | offence +0.24 / +0.17 / +0.18 |
+| personal fouls | -0.28 | **+0.51** | -- | defence +0.30 / +0.05 / +0.09 |
+| age entering the league | -- | **+0.49** | +0.79 | -- |
+
+Not counting: true shooting (offence +0.59, but its size changes more than twofold across the scale versions and
+playing time removes it), seasons played and career possessions (no straight-line lean once whole careers are
+reassigned; the bend is modest and the offence eras disagree), assists.  Team context remains the largest lean and is
+measured only: players with more playoff possessions are underrated (offence +0.96, defence +0.51), and the team's
+results with him on and off the court lean up to z -13.9 on the season jackknife.  The three eras agree in sign on every
+counting lean; the steal lean is weakest in 2017-2026.
+
+### The noise control, the swap step on every fold, and the body-weight preview (2026-10-09)
+
+- **The noise control** (`noise_regroup1`: the incumbent rebuilt with its training players regrouped on both sides,
+  `62 --prior_grouping_first=1`, through the whole chain with its own folds): year over year 8.5902 against 8.5884
+  (+0.04, z +0.6); held-out team-game error on each season's own games +0.013 (z +0.3, 5 of 10 seasons better).  The
+  leans move by a median 0.023 per 100 from regrouping alone (90th percentile 0.051, largest 0.105, defensive body
+  weight); the ratings move along an axis by a median 0.022 (90th percentile 0.057).  This is the yardstick: a fix is
+  credited with a lean only through a paired movement beyond it.
+- **The swap step on every fold** (106 with the LightGBM folders and tables): the shrunk table reproduces exactly and the
+  swap to 0.005-0.013 per 100 (106's documented standardising change).  Its own lean, swapped minus shrunk with the
+  same multipliers: it halves the scorers-on-defence lean (possessions he finishes -0.85 -> -0.37), trims size (defence
+  +1.79 -> +1.57, offence -0.59 -> -0.31), leaves steals (defence -0.61 -> -0.61, offence -0.33 -> -0.42) and adds a
+  playing-time lean on defence (+0.32).  The audit reads it as the stages `shrunk106` and `swap`.
+- **The body-weight preview** (`scratch/2026-10-08_robustness/weight_check.py` on the noise control's dumped rows -- the
+  incumbent's exact rows; the as-shipped refits reproduce the saved 2015, 2021 and 2026 priors exactly once the rows are
+  indexed by player): restoring body weight moves the raw prior by sd 0.25 on offence and 0.38-0.48 on defence (the
+  booster's scale, before the scale and shrink are refitted); heavy players' defensive priors improve by 0.22-0.41
+  (heaviest tenth against lightest); and players with 2,500+ possessions fall against the bench by about 0.2-0.3 on
+  offence and 0.3-0.4 on defence -- the overwritten column worked as a "how well measured is this label" input (trap 8),
+  and the free scale (offence x2.0-2.7) may have been stretching back a prior it compressed.  Only the build can say how
+  much survives the refitted scale and shrink.
+- **The fix is in the code, not built:** `row_weight` everywhere the training weight was written or read (singleyear,
+  62, stackprior, gbdt_prior, 93, 94, 71, 72, 85, tests); `singleyear._guard` refuses a bookkeeping column named like an
+  input; `pytest`: 559 passed, 1 xfailed (2026-10-09).
+
+### Each group's share of the prior (2026-10-09; `outputs/csv/audit_lgb_noonc_shares.csv`)
+
+Shapley values with every group of correlated inputs as one player (the audit's 0.5-cut groups), against a background of
+the season's rated rows, on the incumbent's saved prior models (`138 --shares=`; LightGBM gives no SHAP values for linear
+leaves and shap's Partition explainer took 35 minutes a season and side).  A group's share is its mean |value| over the
+rated rows over the sum; the mean of 2017, 2021 and 2026 (each season within a few points of it):
+
+| offence | share | defence | share |
+|---|---|---|---|
+| scoring volume (possessions he finishes, shot attempts, points, missed twos) | 0.20 | the rated season's possessions | 0.21 |
+| career length (seasons played, career possessions, age) | 0.18 | size (rebounds, defensive rebounds, height, blocks, weight, steals plus blocks) | 0.21 |
+| playmaking (assists, assists minus turnovers, assists per possession used) | 0.13 | scoring volume | 0.19 |
+| playing time and score state | 0.10 | playing time and score state | 0.16 |
+| shot difficulty and offensive rebounding | 0.09 | career length | 0.11 |
+| the rated season's possessions | 0.07 | steals | 0.09 |
+| three-point volume | 0.05 | shooting efficiency | 0.03 |
+| shooting efficiency | 0.05 | | |
+| free throws, seasons with current team, steals, three-point % | 0.03 each | | |
+| size (body weight is the only size input on offence, and it is broken) | 0.004 | | |
+
+Scoring volume carries a fifth of the DEFENSIVE prior, which is the channel the audit's scorers-overrated-on-defence lean
+(possessions he finishes -0.85) points at; steals carry 9% of it.
+
+## Experiment 46: the body-weight fix (the Robustness pass, experiment 1; 2026-10-09, ADOPTED as the base, not published)
+
+The owner: "Go".  The training weight moved from the column `weight` (where it overwrote the body-weight input) to
+`row_weight`; the prior trains on body weight in pounds; everything else as the incumbent.  `FIRST_PASS=1 OWN_FOLDS=1
+CONTROL_TAG=noise_regroup1_within bash scripts/experiment_chain.sh weightfix x3def_w0.25`, then the same without
+FIRST_PASS; the robust review against the noise control.
+
+- **First pass (2017-2026, its own folds, paired with the incumbent's on identical test games):** the defensive
+  body-weight lean +1.26 -> +1.02 per 100 bottom to top (-0.24, z -5.2; noise control -0.11); the other size leans
+  move within noise; held-out team-game error +0.056 (z +0.9; control +0.013).  Players under 1,000 possessions rise
+  by about 0.3 per 100 on each side (root mean square of the move 0.83); the offensive possession-share lean grows
+  +0.78 -> +1.00.  The overwritten column had been holding the bench down.
+- **63, both directions: 8.5857 against 8.5894, -0.0997, z -2.15, 39 of 56** -- all of it in the rating looking back
+  (-0.231, z -3.56, 23 of 28); the rating looking forward ties (+0.032, z +0.56).  On the incumbent's multipliers
+  -0.089 (z -1.95).  Stint level -0.09 (z -1.2).  Every quality tier better on both directions together (z -1.9 to
+  -2.6; top 30 a tie).
+- Lineup-swap test: net order +0.033 (z +1.9), gaps -0.67 (z -5.2).  Trade loss: a tie (offence z -0.4, defence
+  z +1.1).  Consensus 0.851 / 0.780 / 0.805 against 0.865 / 0.789 / 0.820 (noise control 0.864 / 0.790 / 0.819).
+- Robust review against the noise control: year over year 8 slices better and 3 worse (control 2 and 9); quality
+  tiers 6 and 0; lineup-swap test 10 and 2; consensus 0 and 3 (two clearly worse); trade loss as the control.
+- 2026: Jokic 2nd -> 5th (-0.95), Wembanyama 1st -> 1st (-0.68), Giannis 5th -> 3rd (+0.60), Edey 17th -> 9th
+  (+1.13), Jarrett Allen 19th -> 26th (-0.47); outside the top 20 Tyrese Maxey 31st -> 91st (-1.16).
+- **Not the look-back leak:** with last season taken out of the career counts the fixed prior moves less than the
+  incumbent's on offence (sd 0.07 against 0.09) and about as much on defence
+  (`scratch/2026-10-08_robustness/leak_check.py`).  Why the gain is one-directional is not known.
+- Under the owner's rule for bug fixes (adopt on a tie unless 63 is +2 or worse, the robust review is worse than the
+  noise control, the consensus misses grossly or the 2026 top 20 is worse) it qualifies; the top 20 is the owner's call.
+- **ADOPTED 2026-10-09 as the base of the Robustness pass, NOT published** (the owner: "go for it", after asking about
+  the in-season reading and the biases).  The incumbent for scoring is now `outputs/season_ratings_weightfix.parquet`
+  (8.5857), its multipliers from its own folds (`outputs/within/weightfix_within`, 2017-2026), its trade-loss alphas
+  `tradeset_weightfix_alpha`; `experiment_chain.sh` defaults to it (`INC_NAME=weightfix`, `INC_FOLDS=weightfix_within`)
+  and so does 135.  The site still shows experiment 45; publishing waits until the pass as a whole is better year over
+  year AND in season with the counted biases smaller.

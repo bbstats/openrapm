@@ -329,7 +329,8 @@ class OutOfPlayerSPM:
         return fit_with_team_season(make, X, y, w, codes, n_groups)
 
     def fit(self, train: pd.DataFrame, model_feats: list, query: pd.DataFrame | None = None) -> "OutOfPlayerSPM":
-        X, y, w = train[model_feats].to_numpy(float), train.target.to_numpy(float), train.weight.to_numpy(float)
+        X, y, w = (train[model_feats].to_numpy(float), train.target.to_numpy(float),
+                   train[sy.ROW_WEIGHT].to_numpy(float))
         players = train.index.to_numpy()
         codes, n_groups = team_season_codes(train) if self.intercept else (None, 0)
         self.full_, self.log_ = self._fit_one(X, y, w, codes, n_groups, players)
@@ -421,7 +422,7 @@ def prior_shap_slopes(model, train: pd.DataFrame, feats: list, side: str, season
             count[index] += 1
     held = count > 0
     contribution[held] = total[held] / count[held][:, None]
-    weight = train.weight.to_numpy(float)
+    weight = train[sy.ROW_WEIGHT].to_numpy(float)
     out = []
     for j, name in enumerate(feats):
         column, part = X[:, j], contribution[:, j]
@@ -668,6 +669,7 @@ def main():
     # pickled __main__ class cannot be read back by another script.  Changes no number.
     save_models = _flag("save_models")
     saved_models: dict = {}
+    _warned_crossfit = False                   # the cross-fitted scale's in-sample warning, printed once per run
     # experiment 27 (the owner, 2026-09-28): one random intercept per team-season around every booster fit
     # (`fit_with_team_season`), the rating from the trees alone
     team_intercept = _flag("team_season_intercept", "0") not in ("0", "no", "false")
@@ -1018,8 +1020,8 @@ def main():
                 model_feats = feats + sy.CHUNK_FEATURES + ([sy.SAME_TEAM] if use_same_team else [])
                 if season == boards[0]:
                     whole = train.label_key.to_numpy() == sy._key_text(sy._season_key(unseen))
-                    print(f"  prior {side}: training weight on career rows {train.weight[whole].sum():,.0f}, "
-                          f"on chunk rows {train.weight[~whole].sum():,.0f} (chunk weight: {chunk_weight}); "
+                    print(f"  prior {side}: training weight on career rows {train[sy.ROW_WEIGHT][whole].sum():,.0f}, "
+                          f"on chunk rows {train[sy.ROW_WEIGHT][~whole].sum():,.0f} (chunk weight: {chunk_weight}); "
                           f"median label possessions, career rows {np.median(train.label_possessions[whole]):,.0f}, "
                           f"chunk rows {np.median(train.label_possessions[~whole]):,.0f}", flush=True)
                     # career labels make every row's label key the career one, so `whole` is every row and
@@ -1039,7 +1041,7 @@ def main():
                     played = roles_played[~roles_played.season.isin(unseen)]
                     per_team = played.groupby(["player_id", "team_id"], as_index=False).poss_on.sum()
                     moved = sy.team_movement(per_team, min_poss=MIN_POSSESSIONS)
-                    before = train.weight.to_numpy(float).copy()
+                    before = train[sy.ROW_WEIGHT].to_numpy(float).copy()
                     train = sy.reweight_by_movement(train, moved, floor=trade_weight,
                                                     bands=True if trade_bands else None)
                     if season == boards[0]:
@@ -1047,14 +1049,14 @@ def main():
                         m_row = moved.reindex(train.index).fillna(0.0).to_numpy()
                         band = np.digitize(train.possessions.to_numpy(float), sy.CAREER_BANDS[1:-1])
                         shares = [f"{a:,.0f}+: {before[band == b].sum() / before.sum():.3f} -> "
-                                  f"{train.weight.to_numpy()[band == b].sum() / before.sum():.3f}"
+                                  f"{train[sy.ROW_WEIGHT].to_numpy()[band == b].sum() / before.sum():.3f}"
                                   for b, a in enumerate(sy.CAREER_BANDS[:-1])]
                         print(f"  prior {side}: weighted by team movement, floor {trade_weight:g}"
                               f"{', rebalanced within career-length bands' if trade_bands else ''}; "
                               f"mean movement {moved.mean():.3f}; {int((~kept).sum())} of {len(kept)} players "
                               f"left at zero weight; one-team players' share of the weight "
                               f"{before[m_row == 0].sum() / before.sum():.3f} -> "
-                              f"{train.weight.to_numpy()[m_row == 0].sum() / before.sum():.3f}; "
+                              f"{train[sy.ROW_WEIGHT].to_numpy()[m_row == 0].sum() / before.sum():.3f}; "
                               f"by label possessions {shares}", flush=True)
             else:
                 # one label per TRAINING season: the RAPM with the rated season(s) and that season out, so
@@ -1201,6 +1203,14 @@ def main():
                 wd_o, wd_d = design_for("xpts_ft", season), design_for("x3def", season)
                 # the pieces are rebuilt per fold when a model reads them, which needs each row's two teams
                 reads_pieces = any(c in model_feats_of[s] for s in model_feats_of for c in sy.PIECES)
+                # the Robustness pass (2026-10-08): the fold builder rebuilds only the on-court, off-court and RAPM-piece
+                # columns; a prior that reads none of them is asked the same full-season box score in every fold, so the
+                # scale is NOT priced on games the prior never saw.  Changes no number; says so once per run.
+                rebuilt = set(sy.ONC + sy.OFFC + sy.NET + sy.PIECES)
+                if not any(c in rebuilt for s in model_feats_of for c in model_feats_of[s]) and not _warned_crossfit:
+                    print("  warning: --crossfit=scale rebuilds no column these priors read (the box-score inputs "
+                          "keep every game of the season), so the free prior scale is priced in sample", flush=True)
+                    _warned_crossfit = True
                 fold_prior = _fold_prior_builder(wd_o, wd_d, models, frames_v, model_feats_of,
                                                  teams=_box_teams(season) if reads_pieces else None)
             if fold_prior is not None and any(blend.values()):

@@ -113,7 +113,7 @@ class StackedSPM:
         self.lin_names_, self.boost_names_ = self._split(model_feats)
         X_lin = train[self.lin_names_].to_numpy(float)
         X_boost = train[self.boost_names_].to_numpy(float)
-        y, w = train.target.to_numpy(float), train.weight.to_numpy(float)
+        y, w = train.target.to_numpy(float), train[sy.ROW_WEIGHT].to_numpy(float)
         groups = train.index.to_numpy()
         self.full_ = self._fit_pair(X_lin, X_boost, y, w, groups)
         fold = sy.stratified_player_folds(train, self.n_folds)

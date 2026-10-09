@@ -2,7 +2,16 @@
 prior shrink, then the swap adjustment -- built from the fold's rating games only.
 
     python scripts/106_fold_swapadj.py [--tags=q1of4,q1of3,within2,q2of3,within,within10] [--kappas=0.25,0.5,0.75,1]
-                                       [--check_seasons=2017,2024]
+                                       [--check_seasons=2017,2024] [--mult_tag=within] [--whole_tag=within]
+                                       [--base=season_ratings_priorshrink_raw] [--shipped=season_ratings_priorshrink]
+                                       [--out=openrapm_shipped]
+
+The defaults reproduce the chimeraboost run of experiment 35.  For another incumbent name its folders and tables
+(2026-10-08, the Robustness pass): `--mult_tag` the folds 99's multipliers are fitted on, `--whole_tag` the folder
+holding the whole-season rows of the check, `--base` the full-season test table before the swap step (the type
+model's residuals), `--shipped` the finished test table the check compares with, `--out` the file written into each
+fold folder.  For the LightGBM incumbent: --mult_tag=lgb_noonc_within --whole_tag=lgb_noonc_within
+--base=season_ratings_lgb_noonc_rs_shrunk_raw --shipped=season_ratings_lgb_noonc_rs.
 
   prior shrink   the fold's prior part times its season's pinned multipliers (99's `--rule=test`: fitted on the
                  2017-2026 folds outside {H-1, H, H+1}), the rating re-centred on the rating games' possessions
@@ -20,7 +29,7 @@ prior shrink, then the swap adjustment -- built from the fold's rating games onl
   check          the whole-season version of the same code against the shipped test table
                  (`season_ratings_priorshrink`): how much the standardising fix and the main-team source move it.
 
-Writes outputs/within/<tag>/openrapm_shipped.parquet: key, season, player_id, poss, variant (`shrunk`, `swap0.25`,
+Writes outputs/within/<tag>/<out>.parquet (default openrapm_shipped): key, season, player_id, poss, variant (`shrunk`, `swap0.25`,
 ...), o, d (raw sign: d adds points allowed).
 """
 import importlib.util
@@ -131,6 +140,10 @@ def main():
     tags = [t for t in flag("tags", "q1of4,q1of3,within2,q2of3,within,within10").split(",") if t]
     kappas = [float(x) for x in flag("kappas", "0.25,0.5,0.75,1").split(",") if x]
     check_seasons = [int(x) for x in flag("check_seasons", "2017,2024").split(",") if x]
+    mult_tag, whole_tag = flag("mult_tag", "within"), flag("whole_tag", "within")
+    base_name = flag("base", "season_ratings_priorshrink_raw")
+    shipped_name = flag("shipped", "season_ratings_priorshrink")
+    out_name = flag("out", "openrapm_shipped")
     cfg = load_config(ROOT / "config.yaml")
     s0, s1 = int(cfg["first_season"]), int(cfg["last_season"])
     margin_clip = float(cfg.get("margin_clip", 25))
@@ -138,11 +151,11 @@ def main():
 
     # the multipliers the shipped test table used, per rated season (pinned 2017-2026 folds, rule test)
     seasons = list(range(s0, s1 + 1))
-    mult = S99.multipliers_for(seasons, S99.load_folds(ROOT / "outputs" / "within" / "within", (2017, 2026)), "test")
+    mult = S99.multipliers_for(seasons, S99.load_folds(ROOT / "outputs" / "within" / mult_tag, (2017, 2026)), "test")
     mult = mult.set_index("season")
 
     # every season's swap residuals against the full-season test table, and the raw (unstandardised) features
-    base_path = ROOT / "outputs" / "season_ratings_priorshrink_raw.parquet"
+    base_path = ROOT / "outputs" / f"{base_name}.parquet"
     base = pd.read_parquet(base_path)
     raw = T90.load_table(base_path)
     # the trust boundary (src/eracoef/seasons.py): a season still being played never trains the type model (91's rule)
@@ -179,10 +192,10 @@ def main():
 
         # the whole-season check: the same code on all of H against the shipped test table
         if H in check_seasons:
-            whole = pd.read_parquet(ROOT / "outputs" / "within" / "within" / f"players_{H}_all.parquet")
+            whole = pd.read_parquet(ROOT / "outputs" / "within" / whole_tag / f"players_{H}_all.parquet")
             t = shrink_fold(whole, m_off, m_def)
             got = adjust(t, fold_features(whole, t, standardised), betas, team_poss_from_rows(rows_of[H]), [0.5])
-            shipped = pd.read_parquet(ROOT / "outputs" / "season_ratings_priorshrink.parquet")
+            shipped = pd.read_parquet(ROOT / "outputs" / f"{shipped_name}.parquet")
             shipped = shipped[shipped.season == H].set_index("player_id")
             o, d = got["swap0.5"]
             ids = t.player_id.to_numpy()
@@ -215,7 +228,7 @@ def main():
 
     for tag, parts in out_rows.items():
         if parts:
-            pd.concat(parts, ignore_index=True).to_parquet(ROOT / "outputs" / "within" / tag / "openrapm_shipped.parquet",
+            pd.concat(parts, ignore_index=True).to_parquet(ROOT / "outputs" / "within" / tag / f"{out_name}.parquet",
                                                            index=False)
     if checks:
         pd.DataFrame(checks).to_csv(ROOT / "outputs" / "csv" / "fold_swapadj_check.csv", index=False)

@@ -4,10 +4,40 @@
 is the permanent record and carries every number quoted here.  Do not let this grow into a lab notebook.
 
 Branch `cleanup`; `main` is fast-forwarded to it at each publish, and the live site is served from `docs/`
-on `main`.  `pytest -q`: **555 passed, 1 xfailed, ~177 s** with the scraped data (2026-10-08; the LaMelo test at
-the bottom of this file passes on the new ratings).
+on `main`.  `pytest -q`: **556 passed, 1 xfailed, ~185 s** with the scraped data (2026-10-08, before the Robustness
+pass's code; the LaMelo test at the bottom of this file passes on the current ratings).
 
-## START HERE (2026-10-08): the LightGBM prior without the on-court inputs is live
+## START HERE (2026-10-09): the Robustness pass -- steps 1-4 done, experiment 46 (the body-weight fix) adopted as the base, experiment 2 next
+
+The plan (`~/.claude/plans/read-handoff-md-here-s-the-atomic-frost.md`; DECISIONS.md "The Robustness pass" has every
+number): measure every input's lean on each season's own held-out games, remove the causes inside the fit one build at
+a time on the owner's go, correct after the fact only what survives.  Rulings: fixes that remove a counted lean (and bug
+fixes) are adopted on a tie; career counts allowed as they are; height/weight listings kept.
+
+- **Step 1, the audit -- built and frozen:** `scripts/138_heldout_audit.py` + `params/audit_groups.json`.  Baselines
+  `audit_lgb_noonc_2017` (2017-2026, threshold 3.64, 15 leans count) and `audit_lgb_noonc` (thirty seasons, threshold
+  3.63, 39 count: big men underrated on defence +1.79 and overrated on offence -0.88; steals overrated, -0.95 on the
+  total; scorers overrated on defence; three-point volume underrated on offence).  A candidate is read with
+  `--random=<its folds> --mult_tag=<its folds> --draws=0 --threshold_from=audit_lgb_noonc_2017
+  --reference=lgb_noonc_within --control=noise_regroup1_within`.
+- **Step 2:** docs corrected; 106 takes `--mult_tag/--whole_tag/--base/--shipped/--out`; 62 warns when the cross-fitted
+  scale rebuilds nothing; `experiment_chain.sh` takes `OWN_FOLDS=1`, `FIRST_PASS=1`, `CONTROL_TAG=`.
+- **Step 3:** folds for 1997-2016 (`outputs/within/lgb_noonc_early`, models `prior_models_lgb_noonc_early_{1997,2007}`),
+  deadline folds (`lgb_noonc_deadline`), the trade set on actual points (`tradeset_lgb_noonc_rs_pts`), the noise control
+  (`noise_regroup1`, both sides regrouped, its own folds `noise_regroup1_within`, dumps `prior_rows_noise_regroup1_*`).
+  Driver logs: `outputs/robustness_instruments*.log`; drivers in `scratch/2026-10-08_robustness/`.
+- **Step 4:** the honest scale is 4-12% below the shipped one (about 10% on defence, every season) -- step 6 is called
+  for.  The body-weight preview: `scratch/2026-10-08_robustness/weight_check.py` on the noise control's exact dumps.
+- **Experiment 46 (step 5), the body-weight fix: ADOPTED 2026-10-09 as the base, NOT published** (DECISIONS.md
+  "Experiment 46").  The training weight lives in `row_weight` (singleyear, 62, stackprior, gbdt_prior, 93, 94, 71,
+  72, 85 and tests; `singleyear._guard` refuses bookkeeping columns named like inputs; `pytest` 559 passed, 1
+  xfailed).  Year over year 8.5857 (z -2.15, all of it looking back); in season a tie.  **The incumbent for scoring is
+  now `outputs/season_ratings_weightfix.parquet`**, its folds `outputs/within/weightfix_within`;
+  `experiment_chain.sh` (`INC_NAME`, `INC_FOLDS`) and 135 default to it.  The site still shows experiment 45.
+- **Next, experiment 2 (step 6): the honest scale** -- the prior's scale priced on cross-fitting folds whose every input
+  is rebuilt from the fold's training games (62 and 97; the noise control for the new base is `noise_regroup2`).
+
+## Previously (2026-10-08): the LightGBM prior without the on-court inputs is live
 
 > **QUESTION FOR THE OWNER -- answer here before the next build.**  The next build is a calibration step: correct each
 > rating by one tree curve per input stat, so that no stat (steals first) is over- or underrated as a whole (the
@@ -22,7 +52,12 @@ the bottom of this file passes on the new ratings).
 > - **(c) No calibration step:** fix it inside the prior instead (each stat's own noise, inputs as posterior means;
 >   steals out of the defensive inputs).
 >
-> **Answer:**
+> **Answer (2026-10-08):** none of the three alone -- **the Robustness pass**: "research the most robust way to deal w/
+> these biases ... ideally these biases don't even exist in the first place."  Plan approved: measure every input's
+> lean (and every group of correlated inputs) on each season's own held-out games, remove the causes inside the fit one
+> build at a time, and correct after the fact only what survives.  Rulings, the two defects found (body weight
+> overwritten by the training weight; the prior's scale not cross-fitted) and the plan: DECISIONS.md, "The Robustness
+> pass"; the step-by-step plan is `~/.claude/plans/read-handoff-md-here-s-the-atomic-frost.md`.
 
 **Published 2026-10-08 (the owner: "Publish").**  The site's ratings are experiment 45: the box-score prior fit by a
 deterministic LightGBM (`params/booster_params_lgb1.json`, `src/eracoef/lgbprior.py`) on the box-score inputs WITHOUT
@@ -67,7 +102,8 @@ mean with/without correction, positive = the games say he is better than rated):
 | blocks | +0.015 | -0.007 | -0.002 | +0.023 | +0.050 (z +1.6) |
 | steals plus blocks | +0.042 | +0.039 | -0.002 | +0.006 | -0.006 |
 
-So steals are overvalued on defense (a monotone 0.19 points per 100 from the bottom fifth to the top), blocks are not
+So steals are overvalued on defense (monotone from the bottom fifth to the top: 0.19 in 95's units -- the lean is
+alpha over the expected miss, `95:127` -- which is about **0.07 points per 100**, corrected 2026-10-08), blocks are not
 (if anything slightly undervalued); the two cancel in `stocks`, which the defensive prior also reads.  The extra miss
 (variance) by steals is unremarkable (top fifth 1.04 of expected, z +1.1): this is a lean, not noise.  Offence leans the
 same way on steals (bottom fifth +0.069, z +2.6; `stl` is an offensive input too).  Player types: "most blocks and
