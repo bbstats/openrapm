@@ -5,7 +5,7 @@ group of correlated inputs (the Robustness pass, step 1; DECISIONS.md, "The Robu
                                         [--tradeset=outputs/tradeset_lgb_noonc_rs_pts_alpha.parquet]
                                         [--out=audit_lgb_noonc] [--draws=400] [--threshold_from=]
                                         [--reference=<tag>[:<mult tag>]] [--control=<tag>[:<mult tag>]]
-                                        [--freeze=0] [--shares=2017,2021,2026]
+                                        [--freeze=0] [--shares=2017,2021,2026] [--correction=<140 output>]
 
 A candidate (the Robustness pass's builds) is read with its own folds and multipliers (`--random=<its tag>
 --mult_tag=<its tag>`), on the frozen null (`--draws=0 --threshold_from=<the baseline's --out>`), and PAIRED with the
@@ -244,7 +244,8 @@ class AuditFold:
     correction basis B (one row per rated player of a side, centred) has X'X = B'HB, X'r = sign B'g and X'N = sign
     B'M for any pooled free columns N, so every regression is read off these small matrices."""
 
-    def __init__(self, fold, m_o: float, m_d: float, setting: str, swap: pd.DataFrame | None = None):
+    def __init__(self, fold, m_o: float, m_d: float, setting: str, swap: pd.DataFrame | None = None,
+                 lines: list | None = None):
         self.season, self.setting, self.stem = fold.season, setting, fold.stem
         self.repeat, self.fold = fold.repeat, fold.fold
         self.rows = fold.rows
@@ -264,10 +265,20 @@ class AuditFold:
         prior_o, games_o = Zo @ po, Zo @ uo
         prior_d, games_d = Zd @ (-pdf), Zd @ (-ud)
         stand_in = fold.base - prior_o - games_o - prior_d - games_d
+        # `--correction` (140, the group correction): each line times the player's axis score on this fold's own
+        # inputs, folded into the prior part as 140 folds it into the table's
+        add = {s_: np.zeros(len(fold.rows[s_])) for s_ in SIDES}
+        if lines:
+            for s_ in SIDES:
+                axes = [(t, b) for t, side, b in lines if side == s_]
+                if axes:
+                    w_s = np.maximum(poss_of(fold.rows[s_], s_), 1e-9)
+                    z = normal_score(axis_scores(fold.rows[s_], w_s, [t for t, _ in axes]))
+                    add[s_] = centre_columns(z, w_s) @ np.array([b for _, b in axes], dtype=float)
         # 99's shrink on this fold: the prior part times its season's multiplier, re-centred per side by possessions
-        lo = np.average(m_o * po + uo, weights=o.poss_off.to_numpy(float))
-        ld = np.average(m_d * pdf + ud, weights=d.poss_off.to_numpy(float))
-        sp_o, sp_d = m_o * po - lo, m_d * pdf - ld
+        lo = np.average(m_o * po + add["O"] + uo, weights=o.poss_off.to_numpy(float))
+        ld = np.average(m_d * pdf + add["D"] + ud, weights=d.poss_off.to_numpy(float))
+        sp_o, sp_d = m_o * po + add["O"] - lo, m_d * pdf + add["D"] - ld
         self.shrunk_rating = {"O": sp_o + uo, "D": sp_d + ud}            # positive = good on both sides
         self.game_idx = np.asarray(fold.game_idx)
         self.total_w = float(fold.w.sum())
@@ -311,8 +322,9 @@ class AuditFold:
             self.M[side] = {k: Zt.T @ v for k, v in Nv.items()}
 
 
-def load_setting(tags: list, setting: str, multipliers: pd.DataFrame) -> list:
-    """Every fold of the named folders (any size or split), with its season's shipped multipliers."""
+def load_setting(tags: list, setting: str, multipliers: pd.DataFrame, lines_of=None) -> list:
+    """Every fold of the named folders (any size or split), with its season's shipped multipliers (and with
+    `lines_of(season)`, 140's group correction)."""
     m = multipliers.set_index("season")
     folds = []
     for tag in tags:
@@ -330,7 +342,8 @@ def load_setting(tags: list, setting: str, multipliers: pd.DataFrame) -> list:
             fold = C98.Fold(directory, stem)
             folds.append(AuditFold(fold, float(m.at[fold.season, "prior_off"]),
                                    float(m.at[fold.season, "prior_def"]), setting,
-                                   swap.get(stem) if swap is not None else None))
+                                   swap.get(stem) if swap is not None else None,
+                                   lines_of(fold.season) if lines_of is not None else None))
     return folds
 
 
@@ -704,13 +717,24 @@ def tradeset_leans(tests: list, alpha_path: Path) -> pd.DataFrame:
 
 
 # ------------------------------------------------------------------------------------------------ the paired mode
-def audit_setting(tags: list, mult_tag: str, setting: str, tests: list, seasons=None) -> dict:
-    """Load a fold folder set with its own multipliers and read every test on it."""
+def audit_setting(tags: list, mult_tag: str, setting: str, tests: list, seasons=None, correction: str = "") -> dict:
+    """Load a fold folder set with its own multipliers and read every test on it.  `correction` = a 140 output: its
+    multipliers and lines, fitted outside each fold's season (the product rule), replace 99's."""
     if seasons is None:
         seasons = sorted({int(p.stem.split("_")[1]) for tag in tags
                           for p in (ROOT / "outputs" / "within" / tag).glob("fold_*.json")})
     multipliers, mult_folds = shipped_multipliers(seasons, mult_tag)
-    folds = load_setting(tags, setting, multipliers)
+    lines_of = None
+    if correction:
+        coefs = pd.read_csv(ROOT / "outputs" / "csv" / f"{correction}_coefficients_product.csv").set_index("season")
+        assert set(seasons) <= set(coefs.index), f"{correction} has no coefficients for {sorted(set(seasons) - set(coefs.index))}"
+        by_id = {t["id"]: t for t in tests}
+        axes = [(by_id[tid], side) for tid, side in json.loads(coefs["axes"].iloc[0])]
+        multipliers = coefs.loc[sorted(seasons), ["prior_off", "prior_def"]].reset_index()
+
+        def lines_of(season, _c=coefs, _axes=axes):
+            return [(t, side, float(_c.at[season, "line_" + side + "_" + t["id"]])) for t, side in _axes]
+    folds = load_setting(tags, setting, multipliers, lines_of)
     by_era = len({era_of(f.season) for f in folds}) > 1
     readings, tenths, dropped = run_tests(folds, tests, by_era)
     est = {(r.test, r.side, r.stage, r.version, r.statistic, r.era): r.estimate for r in readings.itertuples()}
@@ -822,7 +846,11 @@ def main() -> None:
     groups = json.loads(GROUPS_FILE.read_text())
     tests = build_tests(groups)
 
-    main_set = audit_setting(random_tags, mult_tag, "random", tests)
+    correction = flag("correction", "")
+    main_set = audit_setting(random_tags, mult_tag, "random", tests, correction=correction)
+    if correction:
+        print(f"the random folds carry the group correction {correction} (its multipliers and lines, fitted outside "
+              f"each fold's season)", flush=True)
     folds, by_era = main_set["folds"], main_set["by_era"]
     print(f"99's multipliers on {mult_tag} 2017-2026, all folds pooled: offence {main_set['pooled'][0]:.4f}, defence "
           f"{main_set['pooled'][1]:.4f}", flush=True)
@@ -831,7 +859,7 @@ def main() -> None:
           f"({time.time() - t0:.0f}s)", flush=True)
     parts = [main_set["readings"].assign(setting="random"), run_joint(folds, tests).assign(setting="random")]
     if deadline_tags:
-        dl = audit_setting(deadline_tags, mult_tag, "deadline", tests)
+        dl = audit_setting(deadline_tags, mult_tag, "deadline", tests, correction=correction)
         r = dl["readings"]
         parts.append(r[(r.stage == "shrunk") & (r.version == "pinned")].assign(setting="deadline"))
         print(f"{len(dl['folds'])} deadline folds read ({time.time() - t0:.0f}s)", flush=True)

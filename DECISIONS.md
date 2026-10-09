@@ -5555,3 +5555,83 @@ leak -- they mark high-usage players down on defence and the held-out games agre
 leans (mostly before 2017) have another cause.  The offensive half alone (steals off the offensive list) moved the
 offensive steal lean (-0.40 -> -0.30) and the offensive trade loss; under the owner's same-method rule it is not
 proposed on its own.  The feature set stays (`boruta_noonc_ownside`).  Logged as experiment 49.
+
+## Experiment 50: the group correction (the Robustness pass, step 13, the last resort; registered 2026-10-09, after the in-season preview, before the full chain)
+
+The owner: "ok go ahead".  `scripts/140_group_correction.py`, in the prior shrink's place: 99's weighted least squares on
+the held-out team-games of the within-season folds (the base's `weightfix_within`, 2017-2026, 99's own pin), refitted
+together with one straight line per eligible axis -- the audit's partition at the cut of 0.5 that counts on thirty
+seasons at the checkpoint, never a shooting percentage, shot quality, age or career, playing time, score state or team
+context.  Six lines: on defence size (rebounds, defensive rebounds, height, blocks, weight, steals plus blocks) and
+steals; on offence size, three-point volume, turnovers and personal fouls.  Per rated season, fitted on the folds
+outside it and its neighbours (99's test rule); each line times the player's axis score from his season's own inputs,
+folded into the prior part, every rating re-centred.  `--from_audit=none` reproduces the shipped shrink exactly.
+Pooled fit: defensive size +0.506 per standard deviation of its axis (about 1.75 per 100 bottom tenth to top), the
+others -0.068 to +0.119; refitted with them, the multipliers move to 0.678 / 0.881 (from 0.706 / 0.955); each player's
+correction has sd 0.30 on offence, 0.50 on defence.  The base's raw table is the candidate's (`season_ratings_groupfix_raw`
+= `season_ratings_weightfix_raw`); the only change is the shrink step.
+**In-season preview** (138 `--correction`, each season's lines fitted outside it alone, 2017-2026, paired with the
+base's folds): held-out error -0.255 (z -3.2, 8 of 10 seasons better; the noise control +0.070); 4 leans count
+against 17, all offensive shooting and scoring (points, effective FG %, two-point %, free-throw %), which the plan never
+corrects; defensive size +1.47 -> +0.16, defensive steals -0.32 -> -0.12, offensive three-point volume +0.55 -> +0.03,
+offensive turnovers -0.50 -> +0.11; single inputs inside a group can overshoot (offensive turnovers alone -0.33 ->
++0.32, offensive rebounds +0.10 -> +0.55, defensive height +0.72 -> -0.22).  That preview is on the yardstick the lines
+are fitted to (other seasons of it); the decisive reading is year over year.
+Run: `SKIP_BUILD=1 SHRINK_SCRIPT=scripts/140_group_correction.py SHRINK_TAG=weightfix_within bash
+scripts/experiment_chain.sh groupfix x3def_w0.25`.  **Read:** year over year, the robust review, the swap test, the trade
+loss, the consensus, the 2026 top 20, and the audit on thirty seasons with the correction; adopted on a tie if it
+removes counted leans (the owner's rule), which it is built to do.
+
+**Full chain (2026-10-09).**  Year over year, both directions: 8.5875 against 8.5857, +0.051 (z +1.1, 21 of 56) -- a
+tie by the standing rule; looking forward +0.006 (z +0.1), looking back +0.095 (z +1.6); per stint +0.078 (z +1.5),
+rescaled +0.038 (z +0.8).  The scored seasons ask the corrected defence to be narrowed to 0.90 of itself (the base
+0.98).  Lineup-swap test better on defence (order +0.027, z +2.6; gaps -0.20, z -4.1; net order +0.008, z +0.7); trade
+loss better on offence (-0.0007, z -2.7), a tie on defence; consensus agreement lower but every floor passes (defence
+0.759 against 0.780, total 0.791 against 0.805; spread on defence 1.30 against 1.13; team share of defence 0.068
+against 0.085).  Robust review against noise_regroup2: year over year by team-game slice 2 better and 9 worse (the
+noise control 7 and 4; none clearly worse), by quality tier 0 of 6, by movers 0 of 3, by age 0 of 5; lineup-swap 8
+better and 4 worse (3 clearly better); offensive trade loss 8 and 1 (4 clearly better); consensus 0 and 3.  Thirty
+seasons with the correction (`audit_groupfix`): 10 leans count against 35 -- 31 removed (size on both sides, defensive
+steals, offensive three-point volume, turnovers, blocks, fouls, defensive made threes); four remain (defensive points
+-0.70, defensive two-point % -0.37, offensive two-point % +0.63, offensive free-throw % +0.62); six cross the threshold
+from just below it (defensive made free throws -0.55, free-throw attempts -0.52, possessions he finishes -0.79, age
+entering the league +0.53 and its group +0.65, offensive made free throws +0.61).  2026 top 20: big men up on defence
+(Wembanyama +0.76, Edey +0.67 to 7th, Clingan +0.66 to 6th, Queta +0.56, Gobert +0.55 in at 19th), guards a little down
+(Gilgeous-Alexander -0.17, Wallace -0.18); Thybulle (19th) leaves.
+
+**Attribution (experiment 50b, 2026-10-09).**  The same six lines fitted on what the shipped shrink leaves, the
+multipliers held at their shipped values (`140 --hold_multipliers=1`): year over year +0.145 (z +3.0, 18 of 56) -- worse
+than the joint refit's +0.051.  So the year-over-year cost is in the lines themselves: they widen the ratings beyond
+what the neighbouring seasons support (the scored seasons ask for defence x0.87 held, x0.90 joint, x0.98 for the base),
+and refitting the multipliers with them gives part of it back.  **The two yardsticks disagree:** the season's own
+held-out games say big men are underrated on defence (and the rest of the six), and correcting it predicts them better
+(-0.255, z -3.2); the neighbouring seasons do not reward the correction (+0.051, every year-over-year slice family
+leaning worse).  **Verdict pending the owner** (recommended: not adopted -- the tie rule's veto, the robust review
+systematically worse than the noise control, holds on the decisive test's slices, though the lineup-swap test and the
+offensive trade loss improve).  `scripts/140_group_correction.py`, `138 --correction` and the chain's `SHRINK_SCRIPT` /
+`SHRINK_FLAGS` stay either way.  Logged as experiments 50 and 50b.
+
+**Verdict (the owner, 2026-10-09: "Sounds good"): not adopted.**  The robust review's year-over-year slices are
+systematically worse than the noise control's, the tie rule's veto.  The side split (135, each side's correction alone
+with the other side as now): offence +0.003 (z +0.1, 27 of 56), defence +0.046 (z +1.3, 23 of 56) -- the cost sits in
+the defensive lines (size and steals); the offensive ones are free on the decisive test.  The Robustness pass closes
+with experiment 46 as its one adoption.
+
+## Experiment 51: the group correction's order with the base's spread (the owner's idea, 2026-10-09)
+
+The owner: "as long as they are ranked correctly that is best.  Feature corrections to improve rank and then correct
+scaling on top?"  Experiment 50's final table, every season and side stretched about its possession-weighted mean to
+the base's possession-weighted spread for the same players (`scratch/2026-10-08_robustness/spread_restore.py`;
+offence x0.988, defence x0.865 -- the correction had widened defence by about 16%), the order exactly experiment 50's.
+(A first run rebuilt each rating from prior + games' part and lost the swap step's adjustment; it was caught by the
+script's own order check and discarded.)  Year over year, both directions: +0.031 (z +0.7, 23 of 56) -- experiment 50
+was +0.051; looking forward -0.064 (z -1.1, 16 of 28), looking back +0.126 (z +2.4, 7 of 28); the order alone (each
+side rescaled to the scored season) +0.038 (z +0.8), as experiment 50.  Lineup-swap test: defence order +0.027 (z +2.6),
+gaps -0.18 (z -4.6, 44 of 56); offence order +0.009 (z +1.1); the total's order -0.011 (z -0.9).  Trade loss better on
+offence (z -2.7), a tie on defence.  Consensus: defence 0.758 against 0.780, total 0.803 against 0.805.  Robust review
+against noise_regroup2: year over year by team-game slice 3 better and 8 worse (the noise control 7 and 4), by quality
+tier 2 and 4, by movers 0 and 3, by age 0 and 5; lineup-swap 6 and 6 (the control 3 and 9).  **Reading:** restoring
+the spread takes about 40% off the year-over-year cost and keeps the within-team gain on each side, but the corrected
+order is not better at predicting other seasons (order alone z +0.8) and the total's within-team order ties.  Verdict
+pending the owner.
+**Verdict (the owner, 2026-10-09: "Ok sounds good! Publish away"): not adopted.**  Experiment 46 is published instead.

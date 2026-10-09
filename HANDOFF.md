@@ -7,7 +7,7 @@ Branch `cleanup`; `main` is fast-forwarded to it at each publish, and the live s
 on `main`.  `pytest -q`: **556 passed, 1 xfailed, ~185 s** with the scraped data (2026-10-08, before the Robustness
 pass's code; the LaMelo test at the bottom of this file passes on the current ratings).
 
-## START HERE (2026-10-09): the Robustness pass -- steps 1-4 done, experiment 46 (the body-weight fix) adopted as the base, 47 (honest scale) not adopted, 48 (pad once) stopped, checkpoint done, 49 (own-side inputs) not adopted; next: step 13 on the owner's go
+## START HERE (2026-10-09): the Robustness pass -- steps 1-4 done, experiment 46 (the body-weight fix) adopted as the base, 47 (honest scale) not adopted, 48 (pad once) stopped, checkpoint done, 49 (own-side inputs) not adopted, 50 (group correction) not adopted -- the pass is closed
 
 The plan (`~/.claude/plans/read-handoff-md-here-s-the-atomic-frost.md`; DECISIONS.md "The Robustness pass" has every
 number): measure every input's lean on each season's own held-out games, remove the causes inside the fit one build at
@@ -55,10 +55,20 @@ fixes) are adopted on a tie; career counts allowed as they are; height/weight li
   defensive prior's scoring inputs are real signal (without them high-usage players are overrated on defence by ~1 per
   100 more, z -27).  Only the offensive half helped (offensive steal lean -0.40 -> -0.30); not proposed alone (the
   same-method rule).  Its code (one feature set + a test) and experiment 48's are uncommitted.
-- **Next, on the owner's go:** step 13, the group correction (`scripts/140_group_correction.py`, between 99 and 91):
-  one line per eligible counting group (size on both sides, blocks and steals on offence, three-point volume on
-  offence, turnovers on offence), fitted on other seasons' own held-out games, refitted with the shrink, centred per
-  season and side.
+- **Experiment 50 (step 13), the group correction: NOT ADOPTED 2026-10-09** (the owner: "Sounds good") (DECISIONS.md "Experiment 50").
+  `scripts/140_group_correction.py` in 99's place (`SKIP_BUILD=1 SHRINK_SCRIPT=scripts/140_group_correction.py
+  SHRINK_TAG=weightfix_within bash scripts/experiment_chain.sh groupfix x3def_w0.25`): the shrink refitted with six
+  lines (defence size and steals; offence size, three-point volume, turnovers, fouls) fitted on other seasons' held-out
+  games.  Biases on thirty seasons 35 -> 10; in season -0.255 (z -3.2); lineup-swap better on defence; but year over
+  year +0.051 (z +1.1) with every year-over-year slice family leaning worse than the noise control, and defensive
+  consensus 0.759 vs 0.780.  Attribution (50b, multipliers held): +0.145 (z +3.0) -- the cost is in the lines.
+  Side split: offence alone +0.003 (z +0.1), defence alone +0.046 (z +1.3).  Audit a correction with `138 --correction=season_ratings_groupfix_shrunk_raw`.
+- **Experiment 51 (the owner's idea: "feature corrections to improve rank and then correct scaling on top"): NOT
+  ADOPTED 2026-10-09** (the owner: "Ok sounds good! Publish away") (DECISIONS.md "Experiment 51").  Experiment 50's order with the base's spread
+  (`scratch/2026-10-08_robustness/spread_restore.py`): year over year +0.031 (z +0.7; forward -0.064, back +0.126), the
+  order alone z +0.8; within-team order better on each side (defence z +2.6, offence z +1.1) but the total's ties (z
+  -0.9); defensive consensus 0.758; robust review's year-over-year slices 3 better / 8 worse (noise 7 / 4).
+- **Then, on the owner's word:** publish experiment 46 (the site still shows 45); commit 140 and the 138/chain changes.
 
 ## Previously (2026-10-08): the LightGBM prior without the on-court inputs is live
 

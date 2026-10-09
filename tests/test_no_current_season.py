@@ -105,7 +105,8 @@ def test_replacing_the_current_season_with_noise_does_not_move_the_training_rows
 # `drop_untrainable`; a new one belongs here the day it is written.
 FITS_FROM_PANEL = ["50_boruta.py", "62_single_year_board.py", "67_blend_apm.py", "88_yoy_by_player.py",
                    "71_tradeset_features.py", "72_tradeset_shap.py", "91_swap_adjust.py", "95_miss_by_group.py",
-                   "97_within_season.py", "106_fold_swapadj.py", "137_stat_calibration.py", "138_heldout_audit.py"]
+                   "97_within_season.py", "106_fold_swapadj.py", "137_stat_calibration.py", "138_heldout_audit.py",
+                   "140_group_correction.py"]
 
 # Scripts that read the panel to WRITE columns back into it.  These must NOT gate: they rewrite the
 # file in place, so dropping the current season would delete it from the only copy.  139 writes its
