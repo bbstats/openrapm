@@ -7,7 +7,7 @@ Branch `cleanup`; `main` is fast-forwarded to it at each publish, and the live s
 on `main`.  `pytest -q`: **556 passed, 1 xfailed, ~185 s** with the scraped data (2026-10-08, before the Robustness
 pass's code; the LaMelo test at the bottom of this file passes on the current ratings).
 
-## START HERE (2026-10-09): the Robustness pass -- steps 1-4 done, experiment 46 (the body-weight fix) adopted as the base, experiment 2 next
+## START HERE (2026-10-09): the Robustness pass -- steps 1-4 done, experiment 46 (the body-weight fix) adopted as the base, experiment 47 (the honest scale) not adopted, experiment 3 (pad once) next on the owner's go
 
 The plan (`~/.claude/plans/read-handoff-md-here-s-the-atomic-frost.md`; DECISIONS.md "The Robustness pass" has every
 number): measure every input's lean on each season's own held-out games, remove the causes inside the fit one build at
@@ -34,8 +34,15 @@ fixes) are adopted on a tie; career counts allowed as they are; height/weight li
   xfailed).  Year over year 8.5857 (z -2.15, all of it looking back); in season a tie.  **The incumbent for scoring is
   now `outputs/season_ratings_weightfix.parquet`**, its folds `outputs/within/weightfix_within`;
   `experiment_chain.sh` (`INC_NAME`, `INC_FOLDS`) and 135 default to it.  The site still shows experiment 45.
-- **Next, experiment 2 (step 6): the honest scale** -- the prior's scale priced on cross-fitting folds whose every input
-  is rebuilt from the fold's training games (62 and 97; the noise control for the new base is `noise_regroup2`).
+- **Experiment 47 (step 6), the honest scale: NOT ADOPTED 2026-10-09** (DECISIONS.md "Experiment 47").  The prior's
+  scale priced on cross-fitting folds whose every input is rebuilt from the fold's training games (`62
+  --crossfit=honest`; 97's season rebuild moved to `src/eracoef/seasoninputs.py`, reproducing exactly).  Year over
+  year +0.123 (z +3.4); better than the incumbent before the prior shrink, worse after it, in all 10 seasons: the
+  shrink, fitted on truly held-out games, already corrects the in-sample scale.  The noise control for the new base
+  is `noise_regroup2` (folds `noise_regroup2_within`).  Its code is uncommitted until the owner says.
+- **Next, experiment 3 (step 7), on the owner's go: pad each multi-season training row once** on its summed counts
+  (`scripts/139_count_panel.py`, `singleyear.aggregate` pad-once mode, `62 --pad_once=1`; in-memory check on 2005,
+  2015 and 2026 first).  Targets the steals lean: career and chunk rows are 13-21% too narrow on steals.
 
 ## Previously (2026-10-08): the LightGBM prior without the on-court inputs is live
 

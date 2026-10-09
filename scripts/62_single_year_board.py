@@ -147,6 +147,8 @@ from eracoef.inseason import season_frac  # noqa: E402
 from eracoef.investigate import offcourt_rates, oncourt_rates  # noqa: E402
 from eracoef.looseason import LeaveSeasonOutRAPM  # noqa: E402
 from eracoef.priorridge import PriorRidgeCV, armse, calibration_miss, game_folds  # noqa: E402
+from eracoef.roles import player_season_inputs  # noqa: E402
+from eracoef.seasoninputs import SeasonTables, honest_fold_prior  # noqa: E402
 from eracoef import lgbprior  # noqa: E402
 from eracoef.stackprior import StackedSPM  # noqa: E402
 from eracoef.xshoot import DEFENSE_TARGETS  # noqa: E402
@@ -699,7 +701,17 @@ def main():
         _roles = pd.read_parquet(ROOT / "data/cache/roles_RSPO.parquet")
         team_shares = _roles[_roles.poss_on > 0][["player_id", "season", "team_id", "poss_on"]].copy()
         team_shares["team_id"] = sy.franchise(team_shares.team_id.to_numpy(), team_shares.season.to_numpy())
-    crossfit = _flag("crossfit", "scale")            # 0 | 1 (scale and penalty) | scale (the scale only)
+    crossfit = _flag("crossfit", "scale")            # 0 | 1 (scale and penalty) | scale (the scale only) | honest
+    # `honest` (the Robustness pass, 2026-10-09): like `scale`, but each cross-fitting fold's prior is asked about the
+    # season rebuilt from the fold's training games -- EVERY input, not only the on-court columns the `scale` builder
+    # rebuilds (none of which the shipped prior reads) -- through seasoninputs.SeasonWorld, the code whose whole-season
+    # version reproduces this board exactly in 97.  Measured before building: the shipped scale is 4-12% too large.
+    assert crossfit in ("0", "1", "scale", "honest"), "--crossfit=0|1|scale|honest"
+    assert not (crossfit == "honest" and lopo), "--crossfit=honest is built for the player-fold prior, not --lopo"
+    honest_data = None
+    if crossfit == "honest":
+        _hroles = pd.read_parquet(ROOT / "data/cache/roles_RSPO.parquet")
+        honest_data = (_hroles, player_season_inputs(_hroles, cap=float(cfg.get("roles", {}).get("share_cap", 0.9))))
     # adopted 2026-09-14 (the owner: "adopt"): every player's prior from the fit without his rows
     player_folds = int(_flag("player_folds", 5))     # 0 or 1: the plain single fit
     # experiment 1 (2026-09-14): un-shrink the label.  A ridge shrinks a player by n / (n + lambda), so the
@@ -766,7 +778,6 @@ def main():
         for k, v in params_set.items():
             out[k] = type(params[k])(v)
         return out
-    assert crossfit in ("0", "1", "scale"), "--crossfit=0|1|scale"
     # experiment 32 (the owner, 2026-10-03: chimeraboost tuning, item 2 of their list): each side's booster
     # settings from outputs/booster_params_<name>.json -- `{"O": {"params": {...}, "early_stop_split": "rows" or
     # "players"}, "D": ...}`, which scripts/94_tune_booster.py writes -- in place of config.yaml's, and whether
@@ -1199,6 +1210,12 @@ def main():
                                                 for f in range(5)], design_for(names["O"], season))
             elif saved is not None and crossfit != "0":
                 fold_prior = _saved_fold_prior(saved[season]["folds"], design_for(names["O"], season))
+            elif crossfit == "honest":
+                # every input the prior reads, rebuilt from each cross-fitting fold's training games
+                full = {n: design_for(n, season) for n in ("pts", "xpts_ft", "x3def", "x3def_w0.25")}
+                world_args = (season, cfg, full, SeasonTables(season, cfg), honest_data[1], honest_data[0])
+                fold_prior = honest_fold_prior(world_args, full["pts"].rows["game_idx"].to_numpy(), models,
+                                               model_feats_of, prior_v)
             elif crossfit != "0":
                 wd_o, wd_d = design_for("xpts_ft", season), design_for("x3def", season)
                 # the pieces are rebuilt per fold when a model reads them, which needs each row's two teams

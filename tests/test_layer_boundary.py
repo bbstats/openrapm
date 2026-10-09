@@ -89,6 +89,7 @@ DATA_LAYER = {
     "__init__.py", "config.py", "seasons.py", "ingest.py", "stints.py", "roles.py", "bio.py",
     "shotcurve.py", "designcache.py", "turnover.py", "xshoot.py", "windows.py", "holdout.py",
     "context.py", "checks.py", "factors.py", "xpts.py", "teamloo.py",
+    "seasoninputs.py",  # one season rebuilt from any subset of its games (box scores, stints, roles): 97 and 62
     "shotframe.py",     # one row per field-goal attempt: runs the stint parser's shot logger over cached games
     "tracking.py",      # the public SportVU shot log, read and joined to the shot frame
     "movement.py",      # the 2015-16 SportVU movement archives, unpacked and turned into one row per attempt

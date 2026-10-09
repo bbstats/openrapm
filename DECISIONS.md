@@ -5401,3 +5401,51 @@ FIRST_PASS; the robust review against the noise control.
   `tradeset_weightfix_alpha`; `experiment_chain.sh` defaults to it (`INC_NAME=weightfix`, `INC_FOLDS=weightfix_within`)
   and so does 135.  The site still shows experiment 45; publishing waits until the pass as a whole is better year over
   year AND in season with the counted biases smaller.
+
+## Experiment 47: the honest scale (the Robustness pass, experiment 2; registered 2026-10-09, before any result)
+
+The owner: "go for it".  `62 --crossfit=honest`: each of the ridge's five cross-fitting folds asks the boosters about
+the season rebuilt from the fold's training games -- every input the prior reads, through `seasoninputs.SeasonWorld`
+(97's season rebuild, moved to `src/eracoef/seasoninputs.py` unchanged; the 2017 shipped scale 2.673 / 1.090 and the
+honest one 2.405 / 0.959 reproduce through it exactly) -- instead of 62's fold builder, which rebuilt only on-court
+columns the prior no longer reads.  97 prices the scale the same way inside each of its folds when the saved models
+say `crossfit: honest`.  Everything else as experiment 46 (the prior models refit identically: deterministic
+LightGBM, the same rows).  Run: `FIRST_PASS=1 OWN_FOLDS=1 CONTROL_TAG=noise_regroup2_within bash
+scripts/experiment_chain.sh honestscale x3def_w0.25 "--crossfit=honest"`, then the full chain on the first pass's gate.
+**Expected:** the free scale 4-12% smaller, about 10% on defence; the refitted prior shrink nearer 1.  **Read:** in
+season (the paired held-out error) and the biases (the audit, paired with experiment 46's folds and the new noise
+control `noise_regroup2`, the incumbent regrouped on the fixed code), then year over year, the robust review, the
+swap test, the trade loss, the consensus and the 2026 top 20.
+
+**First pass (2017-2026, 2026-10-09).**  The honest path reproduces itself in 97 exactly (every season, maximum
+difference 0.0; 2,640 checks, 0 failed), and the boosters are the incumbent's (the raw priors differ by a per-season
+constant only).  The scale fell as expected: offence 14% (mean 2.22 against 2.58), defence 9% (1.00 against 1.11).
+99 refitted on the candidate's own folds: offence 0.7064 -> 0.7535, defence 0.9553 -> 1.0257 -- so after the shrink
+the prior carries 8% less weight on offence and 2% less on defence.  On each season's own held-out games:
+- **before the shrink** the honest scale is better in all 10 seasons (team-game error -0.59; the noise control
+  +0.11), and the scale the held-out games ask for is nearly 1 (offence 0.98, defence 1.07; the incumbent 0.89, 0.99);
+- **after the shrink** (the decision stage) it is worse in all 10 seasons, by +0.097 (z +4.1; the noise control
+  +0.070, z +1.5, 3 of 10 better).  The shrink, fitted on truly held-out games, already corrects the in-sample scale,
+  and does it slightly better than pricing honestly at the source.
+- The leans it moves beyond twice the noise control are all on offence and all one way: high-volume scorers more
+  underrated (possessions he finishes +0.26 -> +0.45, shot attempts +0.55 -> +0.73, points +0.71 -> +0.85, bottom
+  tenth to top); no lean the 2017 baseline counts is pushed further by 0.1 or more.  Players under 1,000 possessions
+  move up (offence +0.16, defence +0.11 on average; root mean square 0.31, largest 0.75): a smaller scale lifts
+  priors that sit below the mean.
+Not stopped: the plan stops a first pass only when it moves nothing beyond the noise control, and a bug fix is judged
+on the full chain (the tie rule), so the full chain runs.
+
+**Full chain and verdict (2026-10-09): not adopted.**  Year over year, both directions: 8.5901 against 8.5857, +0.123
+(z +3.4, 21 of 56 better) -- past the tie rule's veto of +2.  Looking forward +0.163 (z +3.2, 9 of 28), looking back
++0.084 (z +1.6, 12 of 28); per stint +0.296 (z +7.0).  On the incumbent's multipliers: +0.021 (z +0.5), per stint
++0.433 (z +8.3).  The scored seasons ask the offence to be widened by 1.13 (the incumbent 1.12): the honest scale
+narrows it further, the wrong way.  Robust review (135, against noise_regroup2): worse in every year-over-year family
+(team-game 1 better and 10 worse, 5 past z 2; the noise control 7 and 4, 1 past z 2), by quality tier 0 and 6, and in
+the defensive trade loss 0 and 9; the lineup-swap test ties (net order +0.002, z +0.2); the consensus is unchanged
+(total 0.807 against 0.805).  2026 top 20: the same players in nearly the same order, the stars a little lower
+(Antetokounmpo -0.33, Edey -0.24, Jokic -0.20); Moussa Diabate (20th) leaves, Alex Caruso (21st) enters.
+**What it settles:** the scale's in-sample pricing is real (defect 2 stands as measured), but it is not a defect of
+the published ratings: the prior shrink (99) is fitted on truly held-out games and already pulls the oversized scale
+back, and pricing the scale honestly at the source loses on both yardsticks once the shrink is refitted.  The honest
+mode stays in the code (`62 --crossfit=honest`, `seasoninputs.honest_fold_prior`, 97 prices its folds the same way
+when the saved models say so); the shipped default is unchanged (`--crossfit=scale`).  Logged as experiment 47.
