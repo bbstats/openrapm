@@ -5635,3 +5635,15 @@ the spread takes about 40% off the year-over-year cost and keeps the within-team
 order is not better at predicting other seasons (order alone z +0.8) and the total's within-team order ties.  Verdict
 pending the owner.
 **Verdict (the owner, 2026-10-09: "Ok sounds good! Publish away"): not adopted.**  Experiment 46 is published instead.
+
+## Published 2026-10-09: experiment 46 (the body-weight fix)
+
+The owner: "Ok sounds good! Publish away".  The product table at the product setting (every other season in the
+prior): `scratch/2026-10-08_robustness/publish46.sh` -- 62 with the fixed code, `--booster_params=lgb1
+--features=boruta_noonc`, three chunks; 99 `--rule=product` on `weightfix_within` (offence 0.699-0.715, defence
+0.929-0.976); 91 at half strength with the spread held.  Against experiment 45's product (kept as
+`season_ratings_product_before_weightfix.parquet`): consensus agreement 0.850 / 0.781 / 0.806 against 0.863 / 0.788 /
+0.820; the 2026 totals move by sd 0.41 (largest 1.69).  2026 top 20: Wembanyama first (-0.81), Jokic 4th -> 2nd, Edey
+40th -> 12th (+1.63, defence +1.10), Holmgren 6th -> 13th (-0.63), Clingan 8th -> 6th, Butler 11th -> 8th; Diabate and
+Barnes leave.  The site's ratings (`docs/data/ratings.json`, 14,578 rows, no Portable column) and the bias page
+rebuilt; `pytest` 566 passed, 1 xfailed.

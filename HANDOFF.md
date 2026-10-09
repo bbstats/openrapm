@@ -7,7 +7,7 @@ Branch `cleanup`; `main` is fast-forwarded to it at each publish, and the live s
 on `main`.  `pytest -q`: **556 passed, 1 xfailed, ~185 s** with the scraped data (2026-10-08, before the Robustness
 pass's code; the LaMelo test at the bottom of this file passes on the current ratings).
 
-## START HERE (2026-10-09): the Robustness pass -- steps 1-4 done, experiment 46 (the body-weight fix) adopted as the base, 47 (honest scale) not adopted, 48 (pad once) stopped, checkpoint done, 49 (own-side inputs) not adopted, 50 (group correction) not adopted -- the pass is closed
+## START HERE (2026-10-09): the Robustness pass -- steps 1-4 done, experiment 46 (the body-weight fix) adopted as the base, 47 (honest scale) not adopted, 48 (pad once) stopped, checkpoint done, 49 (own-side inputs) not adopted, 50 and 51 not adopted -- the pass is closed; experiment 46 published
 
 The plan (`~/.claude/plans/read-handoff-md-here-s-the-atomic-frost.md`; DECISIONS.md "The Robustness pass" has every
 number): measure every input's lean on each season's own held-out games, remove the causes inside the fit one build at
@@ -68,7 +68,9 @@ fixes) are adopted on a tie; career counts allowed as they are; height/weight li
   (`scratch/2026-10-08_robustness/spread_restore.py`): year over year +0.031 (z +0.7; forward -0.064, back +0.126), the
   order alone z +0.8; within-team order better on each side (defence z +2.6, offence z +1.1) but the total's ties (z
   -0.9); defensive consensus 0.758; robust review's year-over-year slices 3 better / 8 worse (noise 7 / 4).
-- **Then, on the owner's word:** publish experiment 46 (the site still shows 45); commit 140 and the 138/chain changes.
+- **PUBLISHED 2026-10-09 (the owner: "Ok sounds good! Publish away"): experiment 46's product table** (the site's ratings
+  and bias page; see "The pipeline" below for the build).  2026: Edey 40th -> 12th, Holmgren 6th -> 13th, Wembanyama
+  -0.81 and still first; consensus 0.806 against 0.820 for experiment 45's product.
 
 ## Previously (2026-10-08): the LightGBM prior without the on-court inputs is live
 
@@ -307,20 +309,22 @@ straight-line fix would miss them.
    to step 3's.  A post-hoc step on the finished table, `scripts/91_swap_adjust.py`, not part of script 62.
 
 `outputs/season_ratings_product.parquet` (every other season allowed in the prior) is what
-`docs/data/ratings.json` and the site are built from.  Since 2026-10-08 it is experiment 45's product table, built by
-`scratch/2026-10-08_lightgbm/adopt45.sh` steps 4-5:
+`docs/data/ratings.json` and the site are built from.  Since 2026-10-09 it is experiment 46's product table (the
+body-weight fix on experiment 45's prior), built by `scratch/2026-10-08_robustness/publish46.sh`:
 
-    .venv/Scripts/python scripts/62_single_year_board.py --score=0 --booster_params=lgb1 --features=boruta_noonc --boards=<ten seasons> --out=season_ratings_product_lgb_noonc_pre_swap_<first>   (x3, stitched)
-    .venv/Scripts/python scripts/99_prior_shrink.py --base=season_ratings_product_lgb_noonc_pre_swap --out=season_ratings_product_lgb_noonc_priorshrink_pre_swap --rule=product --tag=lgb_noonc_within
-    .venv/Scripts/python scripts/91_swap_adjust.py --base=outputs/season_ratings_product_lgb_noonc_priorshrink_pre_swap.parquet --kappas=0.5 --taus= --hold_spread=within --exclude_near=0 --score=0 --tag=product_lgb_noonc
-    copy outputs/season_ratings_product_lgb_noonc.parquet over outputs/season_ratings_product.parquet
+    .venv/Scripts/python scripts/62_single_year_board.py --score=0 --booster_params=lgb1 --features=boruta_noonc --boards=<ten seasons> --out=season_ratings_product_weightfix_pre_swap_<first>   (x3, stitched)
+    .venv/Scripts/python scripts/99_prior_shrink.py --base=season_ratings_product_weightfix_pre_swap --out=season_ratings_product_weightfix_priorshrink_pre_swap --rule=product --tag=weightfix_within
+    .venv/Scripts/python scripts/91_swap_adjust.py --base=outputs/season_ratings_product_weightfix_priorshrink_pre_swap.parquet --kappas=0.5 --taus= --hold_spread=within --exclude_near=0 --score=0 --tag=product_weightfix
+    copy outputs/season_ratings_product_weightfix.parquet over outputs/season_ratings_product.parquet
     .venv/Scripts/python scripts/52_site.py --portable=0      (and 76_bias_groups.py)
 
-The previous product table is kept as `outputs/season_ratings_product_before_lgb_noonc.parquet`.  The prior shrink's
+The previous product tables are kept as `outputs/season_ratings_product_before_weightfix.parquet` (experiment 45) and
+`outputs/season_ratings_product_before_lgb_noonc.parquet` (chimeraboost).  The prior shrink's
 multipliers come from 97 run on the experiment-45 models (`62 --save_models=lgb_noonc_within`, `97 --tag=lgb_noonc_within
 --booster_params=lgb1 --features=boruta_noonc`): product rule offence 0.706-0.719, defence 0.927-0.970.
-**The incumbent every candidate is scored against is now `outputs/season_ratings_lgb_noonc_rs.parquet`** (8.5894 on
-the year-over-year test; adopted 2026-10-08).  Before that, `outputs/season_ratings_priorshrink.parquet` (8.600;
+**The incumbent every candidate is scored against is now `outputs/season_ratings_weightfix.parquet`** (8.5857 on the
+year-over-year test; experiment 46, adopted 2026-10-09); before it `outputs/season_ratings_lgb_noonc_rs.parquet`
+(8.5894, experiment 45).  Before that, `outputs/season_ratings_priorshrink.parquet` (8.600;
 adopted 2026-10-03): `season_ratings_unshrinkdef.parquet` (steps 1-3 at
 `--exclude_neighbours=1`) through `99_prior_shrink.py --rule=test` (each season's multiplier fitted outside it and its
 neighbours) into `season_ratings_priorshrink_raw.parquet`, then 91 with `--kappas=0.5 --taus= --hold_spread=within`
@@ -579,6 +583,6 @@ test can fail, no worries."*  The honest fix, not done, is to replace the rank c
     .venv/Scripts/python scripts/63_yoy.py --rankings=incumbent=outputs/season_ratings_lgb_noonc_rs.parquet,ship=artifacts/season_ratings.parquet --ref=incumbent --tag=verify --splits=
                                                                              # incumbent 8.5894
     .venv/Scripts/python scripts/64_consensus_report.py outputs/season_ratings_product.parquet
-                                                                             # 0.863 / 0.788 / 0.820, spreads 0.83 / 1.13, top5 4
+                                                                             # 0.850 / 0.781 / 0.806, spreads 0.82 / 1.16, top5 4
     .venv/Scripts/python scripts/113_swap_explain.py                         # "reproduces the shipped swap adjustment ... 1.60e-14"
     .venv/Scripts/python scripts/52_site.py --portable=0                     # 14,578 rows; ratings.json WITHOUT po / pd / pt
