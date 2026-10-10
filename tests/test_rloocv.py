@@ -124,14 +124,6 @@ def test_it_shrinks_the_spurious_correlation_on_data_with_no_signal():
     assert abs(r_reb) < abs(r_plain)
 
 
-def test_teamloo_still_gets_the_same_partners_it_always_did():
-    """`teamloo.rebalance_partners` is now an import from here; one game per fold must be unchanged."""
-    from eracoef.teamloo import rebalance_partners as tl
-    rng = np.random.default_rng(11)
-    label, w = rng.normal(110, 9, 41), rng.uniform(90, 110, 41)
-    assert np.array_equal(tl(label, w), rebalance_partners(label, w))
-
-
 # ------------------------------------------------------------------ reweighting instead of deleting
 def test_tilting_hits_the_target_mean_and_keeps_every_row():
     """The alternative to deleting a partner: nudge the weights instead.  Exponential tilting is the

@@ -44,24 +44,13 @@ MODEL_LAYER = [
     "cv.py",            # pipelines, cross-fitted beta, the plug-in fit
     "estimator.py",     # the mixed model (Henderson), the eigen lambda path
     "exposure.py",      # cross-fitted, empirical-Bayes padded per-100 rates
+    "inseason.py",      # a game's position in its own season
     "investigate.py",   # the attribution instrument
     "pad.py",           # the padding helper
-    "pbo.py",           # the probability of backtest overfitting
     "pieces.py",        # the pieces of one season's vanilla RAPM, per side
     "looseason.py",     # one rating per player from every season but one; additive season grams
     "priorridge.py",    # the ratings ridge: prior as the centre, penalty by game-grouped CV
     "rloocv.py",        # rebalanced leave-one-out: the splitter and the partner rule, numpy only
-    "scorecard.py",     # experiment 35: error and slope on held-out team-games, the controls
-    "shotclock.py",     # the shot clock rebuilt from a possession's start and clock events
-    "shotmodel.py",     # the shot-quality models: a league-average shooter's make probability, offsets zeroed
-    "shotsearch.py",    # the search harness: the registered split, fixed row samples, the fast relevel, SALL
-    "shotfeatures.py",  # the search's new play-by-play feature blocks and the boosters' whitelisted inputs
-    "shotlearners.py",  # the search's learners: the regression and boosted corrections on its shooter-held margin
-    "shottest.py",      # the direct shot test: log loss, calibration, arena checks, other-half shooting
-    "boxspm.py",        # experiment 35, B1: the linear box-score-only SPM
-    "vanilla.py",       # experiment 35, B2/B3: vanilla RAPM and RAPM on B1, one factorization per penalty
-    "heldoutprior.py",  # experiment 37: the prior fit on held-out games, an exact quadratic in its weights
-    "portable.py",  # experiment 40: the portable rating, traded players against same-tier players who stayed
     "lgbprior.py",      # experiments 44-45: the deterministic LightGBM prior and leave one player out, on given arrays
     "glossary.py",      # plain names for the feature codes, a table and nothing else
     "stackprior.py",    # the stacked prior (experiment 31): fitted on the rows it is handed
@@ -76,23 +65,15 @@ MODEL_LAYER = [
 NEEDS_SPLIT = {
     "boxtable.py": "season_box -> ingest.load_gamelog, which SCRAPES when the cache is cold",
     "design.py": "imports stints to load them; should take the frame",
-    "fastfit.py": "imports holdout for Context, which owns every loader",
-    "gbdt_prior.py": "imports context, roles, windows for prediction-time features",
-    "inseason.py": "imports windows for the block list",
-    "spm.py": "imports bio, context, roles, turnover, xshoot to rebuild features at predict time",
-    "calmap.py": "loads its own parameter table; fitting and applying should take a frame",
-    "systems.py": "the `panel=` override reads a parquet instead of taking one",
+    "gbdt_prior.py": "imports roles for the career input names",
+    "spm.py": "imports roles for the role inputs (design7)",
 }
 
 # Modules whose job IS to reach the disk or the network.
 DATA_LAYER = {
     "__init__.py", "config.py", "seasons.py", "ingest.py", "stints.py", "roles.py", "bio.py",
-    "shotcurve.py", "designcache.py", "turnover.py", "xshoot.py", "windows.py", "holdout.py",
-    "context.py", "checks.py", "factors.py", "xpts.py", "teamloo.py",
+    "shotcurve.py", "designcache.py", "xshoot.py", "windows.py", "holdout.py",
     "seasoninputs.py",  # one season rebuilt from any subset of its games (box scores, stints, roles): 97 and 62
-    "shotframe.py",     # one row per field-goal attempt: runs the stint parser's shot logger over cached games
-    "tracking.py",      # the public SportVU shot log, read and joined to the shot frame
-    "movement.py",      # the 2015-16 SportVU movement archives, unpacked and turned into one row per attempt
 }
 
 # The verbs that reach the disk or the network.  `.get` and `.exists` are deliberately absent:

@@ -24,12 +24,13 @@ The stints carry the counts by lineup slot (stints.SLOT_COUNTERS); this module t
 expectations at window-build time, because the block (and therefore the other half) is a property
 of the training block, not of a season.  Each target is a callable `(seasons, cfg, wd_pts) ->
 (WindowData, report)` that holdout.Context.design accepts.
+
+What is used: the two defensive targets in `DEFENSE_TARGETS` (`def_three_design`) and the block shot
+totals of `player_shot_frame`.
 """
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -353,98 +354,11 @@ def align(y: np.ndarray, y_pts: np.ndarray, w: np.ndarray, season: np.ndarray, p
     return y, pd.DataFrame(rows)
 
 
-def gates(cnt: pd.DataFrame, xm: pd.DataFrame, y: np.ndarray, season: np.ndarray) -> pd.DataFrame:
-    """Per season: expected against realised makes by kind, points, and the first-attempt pieces."""
-    rows = []
-    poss = cnt["poss"].to_numpy(dtype=float)
-    for s in np.unique(season):
-        m = season == s
-        c, x = cnt[m], xm[m]
-        rows.append(dict(season=int(s),
-                         r2=float(x.x2pm.sum() / max((c.fgm - c.fg3m).sum(), 1.0)),
-                         r3=float(x.x3pm.sum() / max(c.fg3m.sum(), 1.0)),
-                         rft=float(x.xftm.sum() / max(c.ftm.sum(), 1.0)),
-                         pts=float((y[m] * poss[m] / 100.0).sum() / max(c.pts.sum(), 1.0)),
-                         pts1=float(x.xpts1.sum() / max(c.pts1.sum(), 1.0)),
-                         chance1=float(x.xchance1.sum() / max(c.chance1.sum(), 1.0))))
-    g = pd.DataFrame(rows)
-    for col in ("r2", "r3", "rft", "pts1", "chance1"):
-        g[f"{col}_ok"] = g[col].between(0.98, 1.02)
-    g["pts_ok"] = g.pts.between(*CALIB_BAND)
-    return g
-
-
 def _check(wd, col: str = "fg2a_s1"):
     """The slot counters this target needs are on the design (a design built with a `counter_cols`
     whitelist carries only the ones its own targets asked for)."""
     if wd.counters is None or col not in wd.counters.columns:
         raise RuntimeError(f"the design carries no {col}; rebuild the stints (STINT_SCHEMA 4) or widen counter_cols")
-
-
-def _rates_for(seasons, cfg, x):
-    """Block rates (x None) or each season's own (x == 1), keyed by the row's season."""
-    seasons = [int(s) for s in seasons]
-    if x is None or x >= len(seasons):
-        r = shooter_rates(seasons, cfg)
-        return {s: r for s in seasons}
-    if x == 1:
-        return {s: shooter_rates([s], cfg) for s in seasons}
-    raise ValueError("x must be None (the block) or 1 (each season's own); other pools are not built")
-
-
-def _priced(wd, seasons, cfg, x, location):
-    cnt, season = wd.counters, wd.rows["season"].to_numpy()
-    rates = _rates_for(seasons, cfg, x)
-    parts = []
-    for s in np.unique(season):
-        m = season == s
-        parts.append(expected_makes(cnt[m], rates[int(s)], location=location).set_index(np.flatnonzero(m)))
-    return pd.concat(parts).sort_index().reset_index(drop=True), cnt, season
-
-
-def shooter_design(seasons, cfg, wd_pts, x=None, location=True, calibrate=True):
-    """y = expected points with every make replaced by the shooter's expectation; realised rebounds kept."""
-    _check(wd_pts)
-    xm, cnt, season = _priced(wd_pts, seasons, cfg, x, location)
-    poss = cnt["poss"].to_numpy(dtype=float)
-    y = 100.0 * (2.0 * xm.x2pm + 3.0 * xm.x3pm + xm.xftm + cnt["xftm_tech"].to_numpy(dtype=float)) / poss
-    y = y.to_numpy()
-    g = gates(cnt, xm, y, season)
-    cal = pd.DataFrame()
-    if calibrate:
-        y, cal = align(y, wd_pts.y, wd_pts.w, season, poss)
-    return wd_pts.with_target(y), dict(target="xshoot" + ("" if location else "_flat"), x=x, gates=g, calibration=cal)
-
-
-def continuation_design(seasons, cfg, wd_pts, x=None, location=True, r="league", calibrate=True):
-    """y = the first attempt's expectation plus its expected continuation: shot luck AND rebound luck out.
-
-    The continuation uses the validated geometric closure (xpts.league_constants) with the season's
-    league offensive-rebound rate, or the lineup's fitted OREB% (r="lineup", cached in data/xpts/).
-    """
-    from .xpts import league_constants, lineup_rates
-    from .windows import window_label
-    _check(wd_pts)
-    xm, cnt, season = _priced(wd_pts, seasons, cfg, x, location)
-    poss = cnt["poss"].to_numpy(dtype=float)
-    consts = league_constants(cnt, season)
-    V = np.zeros(len(cnt))
-    rr = np.zeros(len(cnt))
-    for s, k in consts.items():
-        m = season == s
-        rr[m] = k.oreb / 100.0
-    if r == "lineup":
-        lab = window_label(sorted(int(s) for s in seasons))
-        rr = lineup_rates(wd_pts, seasons, cfg, cache_dir=Path(cfg["_root"]) / "data" / "xpts", label=lab)["oreb"].to_numpy() / 100.0
-    for s, k in consts.items():
-        m = season == s
-        V[m] = (1.0 - k.t2) * (k.x_fg + k.x_ft) / (1.0 - (1.0 - k.t2) * k.m_att * rr[m])
-    y = 100.0 * (xm.xpts1.to_numpy() + xm.xchance1.to_numpy() * rr * V + cnt["xftm_tech"].to_numpy(dtype=float)) / poss
-    g = gates(cnt, xm, y, season)
-    cal = pd.DataFrame()
-    if calibrate:
-        y, cal = align(y, wd_pts.y, wd_pts.w, season, poss)
-    return wd_pts.with_target(y), dict(target=f"xcont_{r}", x=x, gates=g, calibration=cal)
 
 
 def expected_threes(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, keep=None):
@@ -466,121 +380,8 @@ def expected_threes(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, keep
     return x3, rates
 
 
-# ------------------------------------------------------------------------------------ shot quality (experiment 42)
-# A per-attempt shot quality (scripts/133: q_before / q_after, the chance a league-average shooter makes the shot, before
-# and after its own result) reaches the stint designs through side tables (scripts/134): per stints row, each lineup
-# slot's sum of q_after over its threes; per game x shooter, his sums of q_before.  A target tag names its quality set.
-QUALITY_ARMS = {"L7": "q42_L7", "LX": "q42_LXr"}
-_QSIDE_CACHE: dict = {}
-_QTOTALS_CACHE: dict = {}
-_SLOTS6 = (*SLOTS, "x")
-
-
-def _qdir(cfg, arm: str) -> Path:
-    return Path(cfg["_root"]) / "data" / "shotq" / arm
-
-
-def _check_stamp(cfg, arm: str, season: int, phase: str) -> None:
-    """Refuse side and shooter tables built from a stints file or a quality set that has changed since (scripts/134
-    stamps both)."""
-    d = _qdir(cfg, arm)
-    stamp = json.loads((d / "sidecar" / f"{int(season)}_{phase}.stamp.json").read_text(encoding="utf-8"))
-    st = (resolve(cfg, "stints") / f"{int(season)}_{phase}.parquet").stat()
-    qs = (d / f"{int(season)}.parquet").stat()
-    if (st.st_mtime_ns, st.st_size) != (stamp["mtime_ns"], stamp["size"]) or \
-            (qs.st_mtime_ns, qs.st_size) != (stamp.get("q_mtime_ns"), stamp.get("q_size")):
-        raise RuntimeError(f"{d}: the stints file or the quality set for {int(season)} {phase} changed after the side "
-                           f"tables were built; rerun scripts/134_shot_sidecar.py --q={arm}")
-
-
-def quality_side(season: int, phase: str, cfg, arm: str) -> np.ndarray:
-    """One season-phase's side table, (n_stints, 24): the q_after sums xq3a_s{1-5,x} for the home offence, then the
-    away offence, then the matching three-point attempts fg3a_s{1-5,x} (home, away).  Refuses a stale table."""
-    key = (int(season), str(phase), arm)
-    if key not in _QSIDE_CACHE:
-        d = _qdir(cfg, arm) / "sidecar"
-        _check_stamp(cfg, arm, season, phase)
-        names = ([f"xq3a_s{s}_{side}" for side in ("h", "a") for s in _SLOTS6]
-                 + [f"fg3a_s{s}_{side}" for side in ("h", "a") for s in _SLOTS6])
-        _QSIDE_CACHE[key] = pd.read_parquet(d / f"{int(season)}_{phase}.parquet", columns=names).to_numpy(float)
-    return _QSIDE_CACHE[key]
-
-
-def quality_slots(seasons, cfg, wd_pts, arm: str, phases: tuple = SHOT_PHASES) -> np.ndarray:
-    """Each design row's sums of q_after over its offence's threes by lineup slot, (n_rows, 6): s1..s5, sx.  The side
-    tables are stacked in the design's own piece order ([season x phase], designcache.build_window_cached) and read at
-    rows.stint; raises unless their three-point attempts equal the design's counters on every row and slot."""
-    M = np.vstack([quality_side(s, ph, cfg, arm) for s in seasons for ph in phases])
-    i = wd_pts.rows["stint"].to_numpy(np.int64)
-    home = wd_pts.rows["is_home_off"].to_numpy(bool)[:, None]
-    X = np.where(home, M[i, 0:6], M[i, 6:12])
-    A = np.where(home, M[i, 12:18], M[i, 18:24])
-    want = np.column_stack([wd_pts.counters[f"fg3a_s{s}"].to_numpy(float) for s in _SLOTS6])
-    if not np.array_equal(A, want):
-        raise RuntimeError(f"quality side table {arm}: {int((A != want).any(axis=1).sum())} of {len(A)} design rows' "
-                           "three-point attempts differ from the design's counters (a wrong season order or phases?)")
-    return X
-
-
-def quality_totals(season: int, cfg, arm: str, keep=None, phases: tuple = SHOT_PHASES) -> tuple[dict, dict]:
-    """season_totals with each shooter's xl2 / xl3 (his attempts' league expectation) replaced by his sums of q_before,
-    so the padded ratio p_pad / p_mix measures his making against the quality of the shots he took."""
-    key = (int(season), tuple(phases), arm)
-    if keep is None and key in _QTOTALS_CACHE:
-        return _QTOTALS_CACHE[key]
-    for ph in phases:
-        _check_stamp(cfg, arm, season, ph)
-    shots = load_shots([int(season)], cfg, phases)
-    qs = pd.concat([pd.read_parquet(_qdir(cfg, arm) / "shooters" / f"{int(season)}_{ph}.parquet",
-                                    columns=["game_id", "player_id", "xq2", "xq3"]) for ph in phases], ignore_index=True)
-    shots = shots.merge(qs, on=["game_id", "player_id"], how="left")
-    miss = shots["xq3"].isna() & ((shots["fg2a"] + shots["fg3a"]) > 0)
-    if miss.any():
-        raise RuntimeError(f"{arm} {season}: {int(miss.sum())} game x shooter rows with attempts but no quality")
-    shots = shots.assign(xl2=shots["xq2"].fillna(0.0), xl3=shots["xq3"].fillna(0.0))
-    if keep is not None:
-        shots = shots[shots.game_id.isin(set(keep))]
-    halves = shots.drop_duplicates("game_id").set_index("game_id")["half"]
-    ft = load_ft([int(season)], cfg, halves, phases)
-    if keep is not None and "game_id" in ft.columns:
-        ft = ft[ft.game_id.isin(set(keep))]
-    T = {h: shots[shots.half == h].groupby("player_id")[SHOT_COLS].sum() for h in ("A", "B")}
-    T["ALL"] = shots.groupby("player_id")[SHOT_COLS].sum()
-    F = {h: ft[ft.half == h].groupby("player_id")[FT_COLS].sum() for h in ("A", "B")}
-    F["ALL"] = ft.groupby("player_id")[FT_COLS].sum()
-    if keep is None:
-        _QTOTALS_CACHE[key] = (T, F)
-    return T, F
-
-
-def expected_threes_q(seasons, cfg, wd_pts, arm: str, prev: int = 0, k3: float = 450.0, keep=None):
-    """expected_threes with every opponent three at its quality AFTER the result times the shooter's padded other-half
-    ratio (p_pad / p_mix with p_mix his mean quality BEFORE the result, padded with k = k3), in place of his flat
-    padded 3P%.  With every quality equal to the block's league 3P% this is expected_threes exactly (p_mix is then
-    the league rate and quality x ratio is the flat padded rate).  Returns (x3, rates)."""
-    if prev:
-        raise NotImplementedError("a quality target uses the block's own seasons only (prev=0)")
-    cnt = wd_pts.counters
-    parts = [quality_totals(s, cfg, arm, keep=None if keep is None else keep.get(int(s)))
-             for s in sorted(int(s) for s in seasons)]
-    T = {h: pd.concat([t[h] for t, _ in parts]).groupby(level=0).sum() for h in ("A", "B", "ALL")}
-    F = {h: pd.concat([f[h] for _, f in parts]).groupby(level=0).sum() for h in ("A", "B", "ALL")}
-    rates = rates_from_totals(T, F, k_fixed={"fg3": k3})
-    X = quality_slots([int(s) for s in seasons], cfg, wd_pts, arm)
-    which = rates.for_rows("fg3", cnt["half"].to_numpy())
-    masks = [(h, m) for h in ("A", "B", "ALL") if (m := which == h).any()]
-    x3 = X[:, 5].copy()                                   # off the floor at the close: no shooter ratio
-    for j, s in enumerate(SLOTS):
-        pid = cnt[f"pid_s{s}"].to_numpy()
-        r = np.ones(len(cnt))
-        for h, m in masks:
-            r[m] = rates.take("ratio3", h, pid[m], 1.0)
-        x3 += X[:, j] * r
-    return x3, rates
-
-
 def def_three_design(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, calibrate: bool = True,
-                     keep=None, w3: float = 0.0, wft: float = 0.0, quality: str | None = None):
+                     keep=None, w3: float = 0.0, wft: float = 0.0):
     """The DEFENSIVE target: actual points with every opponent three-point make replaced by
     3 x the shooter's padded 3P%, free throws adjusted as shipped, everything else as it happened.
 
@@ -593,11 +394,7 @@ def def_three_design(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, cal
     """
     _check(wd_pts, "fg3a_s1")
     cnt, season = wd_pts.counters, wd_pts.rows["season"].to_numpy()
-    if quality is None:
-        x3, rates = expected_threes(seasons, cfg, wd_pts, prev=prev, k3=k3, keep=keep)
-    else:                       # experiment 42: each three at its shot quality x the shooter's ratio
-        x3, rates = expected_threes_q(seasons, cfg, wd_pts, QUALITY_ARMS.get(quality, quality), prev=prev, k3=k3,
-                                      keep=keep)
+    x3, rates = expected_threes(seasons, cfg, wd_pts, prev=prev, k3=k3, keep=keep)
     poss = cnt["poss"].to_numpy(dtype=float)
     c = cnt
     # `w3` / `wft` are how much of the REALISED deviation the defense keeps, 0 being the original full
@@ -623,10 +420,9 @@ def def_three_design(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, cal
     cal = pd.DataFrame()
     if calibrate:
         y, cal = align(y, wd_pts.y, wd_pts.w, season, poss)
-    name = f"x3def_p{prev}" + (f"_w{w3:g}" if w3 else "") + (f"_f{wft:g}" if wft else "") + \
-        (f"_q{quality}" if quality else "")
+    name = f"x3def_p{prev}" + (f"_w{w3:g}" if w3 else "") + (f"_f{wft:g}" if wft else "")
     return wd_pts.with_target(y), dict(target=name, x=None, gates=g, calibration=cal, k3=rates.k["fg3"],
-                                       w3=float(w3), wft=float(wft), **({"quality": quality} if quality else {}))
+                                       w3=float(w3), wft=float(wft))
 
 
 def _named(fn, name, **kw):
@@ -636,41 +432,9 @@ def _named(fn, name, **kw):
     return target
 
 
-# the targets the holdout CLI registers as systems (scripts/45_holdout.py: hybrid_<name>, split_<name>)
-TARGET_REGISTRY = {
-    "xshoot": _named(shooter_design, "xshoot"),
-    "xshoot_flat": _named(shooter_design, "xshoot_flat", location=False),
-    "xshoot_x1": _named(shooter_design, "xshoot_x1", x=1),
-    "xcont": _named(continuation_design, "xcont"),
-    "xcont_lineup": _named(continuation_design, "xcont_lineup", r="lineup"),
-}
-
-# the counters each defensive target reads (designcache's `counter_cols`; the slot ids and `half` are
-# always kept).  x3def: actual points with the opponents' threes repriced, free throws as shipped.
-DEFENSE_TARGET_COLUMNS = {
-    "x3def": {"pts", "fg3m", "ftm", "ftm_tech", "xftm", "xftm_tech", "poss", "fg3a_sx",
-              *(f"fg3a_s{s}" for s in SLOTS)},
-}
-for _w in (0.15, 0.25, 0.4, 0.6, 1.0):
-    for _p in ("w", "f", "b"):
-        DEFENSE_TARGET_COLUMNS[f"x3def_{_p}{_w:g}"] = DEFENSE_TARGET_COLUMNS["x3def"]
-DEFENSE_TARGET_COLUMNS["x3def_p1"] = DEFENSE_TARGET_COLUMNS["x3def"]
-DEFENSE_TARGET_COLUMNS["x3def_p2"] = DEFENSE_TARGET_COLUMNS["x3def"]
-
-# targets meant for the DEFENSIVE coefficients only (scripts/45_holdout.py: def3_<name> = offense from
-# hybrid_xft, defense from a fit on this target); pN = N seasons before the block added to the rate
-# how much of the realised three-point (and free-throw) deviation the DEFENSE keeps: 0 is the shipped
-# full replacement, 1 is raw points.  FINDINGS 35.1 says the honest answer is neither.
-DEF_W = (0.15, 0.25, 0.4, 0.6, 1.0)
+# the two defensive targets: x3def (every opponent three-point make replaced by 3 x the shooter's padded
+# other-half 3P%) and x3def_w0.25 (a quarter of the realised deviation kept: what ships, sy.DEFENSE_TARGET)
 DEFENSE_TARGETS = {
     "x3def": _named(def_three_design, "x3def"),
-    **{f"x3def_w{w:g}": _named(def_three_design, f"x3def_w{w:g}", w3=w) for w in DEF_W},
-    **{f"x3def_f{w:g}": _named(def_three_design, f"x3def_f{w:g}", wft=w) for w in DEF_W},
-    **{f"x3def_b{w:g}": _named(def_three_design, f"x3def_b{w:g}", w3=w, wft=w) for w in DEF_W},
-    "x3def_p1": _named(def_three_design, "x3def_p1", prev=1),
-    "x3def_p2": _named(def_three_design, "x3def_p2", prev=2),
+    "x3def_w0.25": _named(def_three_design, "x3def_w0.25", w3=0.25),
 }
-# experiment 42: the shipped x3def_w0.25 with each opponent three priced at a shot quality (QUALITY_ARMS)
-for _tag in QUALITY_ARMS:
-    DEFENSE_TARGETS[f"x3def_q{_tag}_w0.25"] = _named(def_three_design, f"x3def_q{_tag}_w0.25", w3=0.25, quality=_tag)
-    DEFENSE_TARGET_COLUMNS[f"x3def_q{_tag}_w0.25"] = DEFENSE_TARGET_COLUMNS["x3def"]

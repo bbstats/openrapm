@@ -3,7 +3,6 @@
 # seasons (stitched), 99, 91, then the readings 63, 64, 66 (2026 top 20), 90, 88, 70 + 73 (on the incumbent's trade-loss
 # target, and on the candidate's own as a sensitivity).  Everything not named is the incumbent's.
 #   bash scripts/experiment_chain.sh NAME DEFENSIVE_TARGET ["EXTRA 62 FLAGS"]   (INC_NAME, BASE_FLAGS, SHRINK_TAG, SKIP_BUILD: see below)
-#   bash scripts/experiment_chain.sh quality_logistic_pinned x3def_qL7_w0.25 --deal_target_def=x3def_w0.25   (42f)
 #   bash scripts/experiment_chain.sh redeal_incumbent x3def_w0.25 --deal_seed=1                              (C1)
 # A target experiment keeps the incumbent's training groupings with --deal_target_def=x3def_w0.25 (DECISIONS.md, 42).
 # Log: outputs/NAME_chain.log.  One build at a time.
@@ -34,10 +33,6 @@ BASE_FLAGS=${BASE_FLAGS:---booster_params=lgb1 --features=boruta_noonc}
 OWN_FOLDS=${OWN_FOLDS:-0}
 FIRST_PASS=${FIRST_PASS:-0}
 CONTROL_TAG=${CONTROL_TAG:-}
-# SHRINK_SCRIPT=scripts/140_group_correction.py (the Robustness pass, step 13): the prior shrink refitted together with
-# the group correction's lines, same flags as 99 (--base --out --rule --tag); default 99 itself.
-SHRINK_SCRIPT=${SHRINK_SCRIPT:-scripts/99_prior_shrink.py}
-SHRINK_FLAGS=${SHRINK_FLAGS:-}          # extra flags for the shrink script, e.g. --hold_multipliers=1 for 140
 if [ "$OWN_FOLDS" = "1" ]; then SHRINK_TAG=${SHRINK_TAG:-${NAME}_within}; else SHRINK_TAG=${SHRINK_TAG:-$INC_FOLDS}; fi
 # 97 must be told the settings the models were saved at: the first --features / --booster_params 62 read
 FEATS97=$(echo "$EXTRA $BASE_FLAGS" | grep -o -- '--features=[^ ]*' | head -1)
@@ -78,8 +73,8 @@ out.to_parquet('outputs/season_ratings_${NAME}_raw.parquet', index=False)
 print(f'stitched outputs/season_ratings_${NAME}_raw.parquet: {len(out)} rows, {out.season.nunique()} seasons')
 " >> $LOG 2>&1 || exit 1
 fi
-echo "=== $(date) prior shrink (multipliers from outputs/within/$SHRINK_TAG, $SHRINK_SCRIPT)" >> $LOG
-$PY -u $SHRINK_SCRIPT --base=season_ratings_${NAME}_raw --out=season_ratings_${NAME}_shrunk_raw --rule=test --tag=$SHRINK_TAG $SHRINK_FLAGS >> $LOG 2>&1 || exit 1
+echo "=== $(date) prior shrink (multipliers from outputs/within/$SHRINK_TAG)" >> $LOG
+$PY -u scripts/99_prior_shrink.py --base=season_ratings_${NAME}_raw --out=season_ratings_${NAME}_shrunk_raw --rule=test --tag=$SHRINK_TAG >> $LOG 2>&1 || exit 1
 echo "=== $(date) swap adjustment" >> $LOG
 $PY -u scripts/91_swap_adjust.py --base=outputs/season_ratings_${NAME}_shrunk_raw.parquet --kappas=0.5 --taus= --hold_spread=within --tag=${NAME} >> $LOG 2>&1 || exit 1
 echo "=== $(date) year-over-year" >> $LOG

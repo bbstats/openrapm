@@ -101,7 +101,7 @@ refitted on its own within-season folds (`outputs/within/lgb_noonc_within`).  Ye
 chimeraboost's 8.5995 (z -2.5), stint z -8.9, 36 of 47 prediction slices better, lineup-swap test 11 of 12; offence
 with/without and defensive consensus agreement worse.  The owner kept it on the 2026 top 20 ("keep the one that likes
 butler/jokic/edey and drops hugo/ajay/oso down").  DECISIONS.md, experiments 43-45 (and 44's rematch).
-**The Portable column is NOT on the site** (`52_site.py --portable=0`; `docs/index.html` restored from main): its
+**The Portable column is NOT on the site** (52's portable branch and `--portable` flag were deleted in the cleanup pass; `docs/index.html` restored from main): its
 ratio was fitted on the chimeraboost ratings and the owner has not approved it.
 
 **The incumbent for scoring** is `outputs/season_ratings_lgb_noonc_rs.parquet` (trade-loss alphas
@@ -316,7 +316,7 @@ body-weight fix on experiment 45's prior), built by `scratch/2026-10-08_robustne
     .venv/Scripts/python scripts/99_prior_shrink.py --base=season_ratings_product_weightfix_pre_swap --out=season_ratings_product_weightfix_priorshrink_pre_swap --rule=product --tag=weightfix_within
     .venv/Scripts/python scripts/91_swap_adjust.py --base=outputs/season_ratings_product_weightfix_priorshrink_pre_swap.parquet --kappas=0.5 --taus= --hold_spread=within --exclude_near=0 --score=0 --tag=product_weightfix
     copy outputs/season_ratings_product_weightfix.parquet over outputs/season_ratings_product.parquet
-    .venv/Scripts/python scripts/52_site.py --portable=0      (and 76_bias_groups.py)
+    .venv/Scripts/python scripts/52_site.py      (and 76_bias_groups.py)
 
 The previous product tables are kept as `outputs/season_ratings_product_before_weightfix.parquet` (experiment 45) and
 `outputs/season_ratings_product_before_lgb_noonc.parquet` (chimeraboost).  The prior shrink's
@@ -526,7 +526,8 @@ writes them into bias.html); a new page needs the same `<nav class="site">` bloc
 under `:root[data-theme="dark"]`.  The
 bias page is deliberately a title, one table and two short paragraphs; the owner has trimmed it twice.
 **Built, not published (2026-10-06):** a sortable Portable column on the rankings page, from
-`outputs/portable/production.json` applied by `52_site.py` to the product table (`portable.portable_table`).  **Never
+`outputs/portable/production.json` applied by `52_site.py` to the product table (`portable.portable_table`; both
+deleted in the cleanup pass, kept at tag `archive/research-2026-10`).  **Never
 add explanatory prose to a page** -- the owner rejected the drafted footer as "AI slop"; ask the owner for the wording.
 
 ## Traps that cost a day
@@ -585,4 +586,4 @@ test can fail, no worries."*  The honest fix, not done, is to replace the rank c
     .venv/Scripts/python scripts/64_consensus_report.py outputs/season_ratings_product.parquet
                                                                              # 0.850 / 0.781 / 0.806, spreads 0.82 / 1.16, top5 4
     .venv/Scripts/python scripts/113_swap_explain.py                         # "reproduces the shipped swap adjustment ... 1.60e-14"
-    .venv/Scripts/python scripts/52_site.py --portable=0                     # 14,578 rows; ratings.json WITHOUT po / pd / pt
+    .venv/Scripts/python scripts/52_site.py                                  # 14,578 rows; ratings.json WITHOUT po / pd / pt

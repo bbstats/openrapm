@@ -29,7 +29,6 @@ from eracoef import design as design_mod  # noqa: E402
 from eracoef.config import load_config  # noqa: E402
 from eracoef.design import SEASON_PHASES  # noqa: E402
 from eracoef.exposure import BoxExposure  # noqa: E402
-from eracoef.fastfit import MspiFast  # noqa: E402
 from eracoef.holdout import Context, default_loader  # noqa: E402
 from eracoef.roles import ROLE_PHASES  # noqa: E402
 from eracoef.windows import build_window  # noqa: E402
@@ -54,7 +53,6 @@ def test_every_phase_default_is_the_whole_season():
                     (default_loader, "phases"), (Context.design, "phases"),
                     (BoxExposure.__init__, "phases")):
         assert _default(fn, arg) == SEASON_PHASES, f"{fn.__qualname__} still defaults to regular season only"
-    assert tuple(MspiFast("probe").phases) == SEASON_PHASES
     assert ROLE_PHASES == SEASON_PHASES      # minutes, starts and possessions behind the role prior
     assert SHOT_PHASES == SEASON_PHASES      # the shooter totals that price the luck-adjusted targets
 
@@ -96,17 +94,16 @@ def test_role_inputs_count_playoff_minutes():
 
 
 @needs_data
-def test_the_cut_trains_on_no_playoff_game_and_scores_every_one():
+def test_the_cut_puts_every_playoff_game_on_the_scored_side():
     """The two halves of "one entity", on the same real season.
 
-    A cut q splits the anchor season into what the fit may see and what it is scored on.  Its playoff
-    games belong on the scored side: they happen after every regular-season game, so a fit that saw the
-    first q of the season has not seen them.  Until 2026-09-10 `season_frac` gave them -1, which put them
-    below every cut -- excluded from training by a special case AND excluded from scoring by the same
+    A cut q splits the season into what the fit may see and what it is scored on.  Its playoff games
+    belong on the scored side: they happen after every regular-season game, so a fit that saw the first q
+    of the season has not seen them.  Until 2026-09-10 `season_frac` gave them -1, which put them below
+    every cut -- excluded from training by a special case AND excluded from scoring by the same
     comparison, so they were in neither half.
     """
-    from eracoef.holdout import cut_season
-    from eracoef.inseason import kernel_game_mult, season_frac
+    from eracoef.inseason import season_frac
     season = max(int(p.stem.split("_")[0]) for p in _STINTS.glob("*_PO.parquet"))
     wd = build_window([season], CFG)
     po_idx = wd.games.loc[wd.games["phase"] == "PO", "game_idx"].to_numpy()
@@ -114,11 +111,3 @@ def test_the_cut_trains_on_no_playoff_game_and_scores_every_one():
 
     frac = season_frac(wd.games)
     assert (frac[po_idx] == 1.0).all()
-
-    for q in (0.0, 0.25, 0.75):
-        gm = kernel_game_mult(wd, season, {0: 1.0}, q)
-        assert (gm[po_idx] == 0.0).all(), f"a playoff game carried training weight at q={q}"
-        sub = cut_season(wd, season, q)
-        assert (sub.rows["phase"] == "PO").sum() > 0, f"no playoff row survived the cut at q={q}"
-    # and with no cut the playoffs train like any other game
-    assert (kernel_game_mult(wd, season, {0: 1.0}, None)[po_idx] == 1.0).all()

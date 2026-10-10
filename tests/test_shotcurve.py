@@ -1,8 +1,10 @@
 """The per-season shot-distance curve (src/eracoef/shotcurve.py) on shots simulated from a known one."""
 import numpy as np
 import pandas as pd
+import pytest
 
-from eracoef.shotcurve import MAX_DIST, UNLOCATED, ShotCurve, calibration, fit_curve, shot_bin, shot_rows
+from eracoef.shotcurve import (MAX_DIST, UNLOCATED, ShotCurve, calibration, fit_curve, logistic_irls, natural_spline,
+                               shot_bin, shot_rows)
 
 
 def _true_p(dist, three):
@@ -55,3 +57,30 @@ def test_constant_curve_and_roundtrip():
     assert c.prob(7.0, False) == 0.5 and c.prob(24.0, True) == 0.35 and c.prob(-1.0, False) == 0.5
     again = ShotCurve(c.season, c.table.copy())
     assert again.prob(7.0, False) == 0.5
+
+
+def test_the_ridge_takes_one_value_or_one_per_column():
+    """`logistic_irls`, moved here from the retired shot-quality model with its test."""
+    rng = np.random.default_rng(3)
+    X = np.column_stack([np.ones(4000), rng.standard_normal((4000, 5))])
+    y = (rng.random(4000) < 1 / (1 + np.exp(-(X @ np.array([0.2, 1.0, -0.5, 0.3, 0.8, -1.0]))))).astype(float)
+    assert np.array_equal(logistic_irls(X, y, ridge=2.0), logistic_irls(X, y, ridge=np.full(6, 2.0)))
+    r = np.full(6, 1e-6)
+    r[4] = 1e9                                          # one column held at zero, the rest all but free
+    b = logistic_irls(X, y, ridge=r)
+    free = logistic_irls(np.delete(X, 4, axis=1), y, ridge=1e-6)
+    assert abs(b[4]) < 1e-5 and np.allclose(np.delete(b, 4), free, atol=1e-4)
+    with pytest.raises(ValueError):
+        logistic_irls(X, y, ridge=np.ones(5))
+
+
+def test_the_natural_spline_is_linear_beyond_its_last_knot():
+    """`natural_spline`: [1, x, K - 2 cubic terms], and natural means straight outside the boundary knots."""
+    knots = (1.0, 3.0, 5.0, 8.0, 12.0)
+    x = np.linspace(-5.0, 30.0, 141)
+    B = natural_spline(x, knots)
+    assert B.shape == (len(x), len(knots))
+    assert np.allclose(B[:, 0], 1.0) and np.allclose(B[:, 1], x)
+    out = x >= knots[-1]
+    assert np.allclose(np.diff(B[out], n=2, axis=0), 0.0, atol=1e-6)     # zero second difference: linear
+    assert np.allclose(B[x <= knots[0], 2:], 0.0)                         # and flat zero below the first knot

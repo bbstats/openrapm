@@ -1,9 +1,11 @@
 """Shooter-level expected points (src/eracoef/xshoot.py): the pricing, the padding and the alignment."""
+import inspect
+
 import numpy as np
 import pandas as pd
 
 from eracoef.stints import SHOOTER_COUNTERS, SLOTS
-from eracoef.xshoot import ShooterRates, align, expected_makes, rates_from_tables
+from eracoef.xshoot import DEFENSE_TARGETS, ShooterRates, align, def_three_design, expected_makes, rates_from_tables
 
 
 def _tables():
@@ -100,3 +102,17 @@ def test_align_only_outside_the_band():
         assert abs((ya[m] * poss[m]).sum() / (y_pts[m] * poss[m]).sum() - 1.0) < 1e-6
     m = season == 2002
     assert np.allclose(ya[m] / y[m], 1 / 1.05)                   # a scalar, not an affine: shape untouched
+
+
+def test_the_two_defensive_targets_keep_their_names_and_settings():
+    """62, 70, 97 and seasoninputs look the defensive targets up by name; x3def_w0.25 (what ships) keeps a quarter
+    of the realised three-point deviation, x3def none, and both use def_three_design's other defaults."""
+    assert set(DEFENSE_TARGETS) == {"x3def", "x3def_w0.25"}
+    for name, target in DEFENSE_TARGETS.items():
+        assert target.__name__ == name
+        bound = inspect.getclosurevars(target).nonlocals
+        assert bound["fn"] is def_three_design
+        assert bound["kw"] == ({"w3": 0.25} if name == "x3def_w0.25" else {})
+    defaults = {k: p.default for k, p in inspect.signature(def_three_design).parameters.items()
+                if p.default is not inspect.Parameter.empty}
+    assert defaults == {"prev": 0, "k3": 450.0, "calibrate": True, "keep": None, "w3": 0.0, "wft": 0.0}

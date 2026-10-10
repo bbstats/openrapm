@@ -9,9 +9,9 @@ import pandas as pd
 import pytest
 
 from eracoef.design import FEATURES, build_design
-from eracoef.holdout import (RESULT_COLUMNS, SPLITS, Context, Holdout, PluginSystem, Ratings, SplitSystem,
-                             ReplacementSystem, TableSystem, beta_none, fit_rank_map, paired, pooled, pooled_rank, predict_season,
-                             rank_calibration, ratings_from_fit, replacement_quality, report, score, team_residual)
+from eracoef.holdout import (RESULT_COLUMNS, SPLITS, Context, Holdout, ReplacementSystem, TableSystem, fit_rank_map,
+                             paired, pooled, pooled_rank, predict_season, replacement_quality, report, score,
+                             team_residual)
 from eracoef.simulate import simulate
 
 CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "features": FEATURES,
@@ -50,8 +50,7 @@ def results(world):
     rng = np.random.default_rng(3)
     noisy = table.assign(o=table.o + rng.normal(0, 3.0, len(table)), d=table.d + rng.normal(0, 3.0, len(table)))
     systems = [TableSystem("true", table), TableSystem("noisy", noisy), TableSystem("zero", table.assign(o=0.0, d=0.0)),
-               TableSystem("double", table.assign(o=2 * table.o, d=2 * table.d)),
-               PluginSystem("rapm", beta=beta_none)]
+               TableSystem("double", table.assign(o=2 * table.o, d=2 * table.d))]
     ho = Holdout.from_config(CFG)
     res = ho.run(systems, ctx, splits=SPLITS, rank=True, verbose=False)
     return ho, res
@@ -80,7 +79,6 @@ def test_true_beats_noisy_beats_zero(results):
     P = pooled(res[res.split == "all"]).set_index("system")
     assert P.loc["true", "mse"] < P.loc["noisy", "mse"] < P.loc["zero", "mse"]
     assert P.loc["true", "game"] < P.loc["zero", "game"]
-    assert P.loc["rapm", "mse"] < P.loc["zero", "mse"]            # the real fit carries information across seasons
     z = paired(res[res.split == "all"], ref="zero").set_index("system")
     assert z.loc["true", "z"] < -2 and z.loc["true", "wins"] == 3
     assert "true" in report(res, ref="zero")
@@ -119,22 +117,6 @@ def test_rank_calibration_sees_amplitude(results):
     assert abs(f(4.0) - 2.0) < 1.0                                # roughly halves
 
 
-def test_rank_map_corrects_a_doubled_system(results, world):
-    """RankMappedSystem with the doubled ratings' own rank table brings them back to the truth's scale,
-    with the map for each held-out season fitted on the other seasons."""
-    from eracoef.holdout import RankMappedSystem
-    ho, res = results
-    _, ctx, table = world
-    inner = TableSystem("double", table.assign(o=2 * table.o, d=2 * table.d))
-    mapped = RankMappedSystem("mapped", inner, ho.rank_)
-    res2 = Holdout.from_config(CFG).run([inner, mapped], ctx, verbose=False)
-    P = pooled(res2).set_index("system")
-    assert P.loc["mapped", "mse"] < P.loc["double", "mse"]
-    assert abs(P.loc["mapped", "scale_off"] - 1.0) < abs(P.loc["double", "scale_off"] - 1.0)
-    z = paired(res2, ref="double").set_index("system")
-    assert z.loc["mapped", "wins"] == 3
-
-
 def test_diagnostics_run(world):
     sim, ctx, table = world
     ctx.current_h = 2003
@@ -149,35 +131,6 @@ def test_diagnostics_run(world):
     rq = replacement_quality(p, wd_h, ctx.main_team(2003), min_poss=1)   # a TableSystem's poss is seasons, not possessions
     assert len(rq) > 0 and "corr" in rq.attrs
     ctx.current_h = None
-
-
-def test_offset_system_equals_plugin_fit(world):
-    """A PluginSystem with a per-player offset is the plug-in fit with that prior_offset, and its rating splits
-    into the prior part and the ridge residual exactly; a SplitSystem carries both priors through."""
-    from eracoef.cv import plugin_fit
-    sim, ctx, table = world
-    train = [2002, 2004]
-    wd = ctx.design(train, "pts")
-    m = wd.spec.n_ps
-    rng = np.random.default_rng(5)
-    v = rng.normal(0, 1.0, 2 * m)
-    sys_off = PluginSystem("off", beta=beta_none, offset=lambda t, c, w: v)
-    r = sys_off.fit(train, ctx).df
-    pipe = plugin_fit(wd, np.zeros(2 * len(FEATURES)), lam=CFG["lam_plugin"], lam_ratio=CFG["lam_ratio_plugin"],
-                      pad_target=CFG["pad_target"], prior_offset=v)
-    ref = ratings_from_fit(wd, pipe, np.zeros(2 * len(FEATURES)), offset=v).df
-    assert np.allclose(r.o, ref.o, atol=1e-12) and np.allclose(r.d, ref.d, atol=1e-12)
-    assert np.allclose(r.prior_o, ref.prior_o) and np.allclose(r.prior_d, ref.prior_d)
-    # the simulator's units are player-seasons, pooled to one row per player; before pooling the split is exact
-    raw = pd.DataFrame({"o": v[:m] + pipe["mm"].u_[:m], "prior_o": v[:m], "d": v[m:] + pipe["mm"].u_[m:], "prior_d": v[m:]})
-    assert np.allclose(raw.o - raw.prior_o, pipe["mm"].u_[:m]) and np.allclose(raw.d - raw.prior_d, pipe["mm"].u_[m:])
-    assert abs(r.prior_o.std()) > 0 and abs(r.prior_d.std()) > 0
-    plain = PluginSystem("plain", beta=beta_none).fit(train, ctx).df
-    assert not np.allclose(plain.o, r.o)                                   # the offset changed the fit
-    assert np.allclose(plain.prior_o, 0.0)
-    split = SplitSystem("split", offense=sys_off, defense=PluginSystem("plain", beta=beta_none)).fit(train, ctx).df
-    assert np.allclose(split.prior_o, r.prior_o) and np.allclose(split.prior_d, 0.0)
-    assert np.allclose(split.o, r.o) and np.allclose(split.d, plain.d)
 
 
 def test_ratings_table_prior_parts(world):

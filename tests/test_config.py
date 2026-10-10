@@ -18,20 +18,10 @@ ROOT = Path(__file__).resolve().parents[1]
 CODE = "\n".join(p.read_text(encoding="utf-8", errors="replace")
                  for d in ("src", "scripts") for p in sorted((ROOT / d).rglob("*.py")))
 
-# Read by nothing in src/ or scripts/ as of 2026-09-17.  Each is left named rather than deleted
-# because it records a decision (see the comments beside it in config.yaml); what is NOT allowed is
-# one of these carrying an instruction to change it, because changing it does nothing.
-UNREAD = {
-    "lam_buckets", "lam_delta", "lam_ratio_grid", "lam_delta_grid",
-    "boost_min_poss", "boost_quality", "boost_nuisance",
-    "pad_scale_grid", "min_half_poss", "gt_weight_robustness", "run_tags",
-    "ratings_prior.role_prior", "ratings_prior.boost", "ratings_prior.defense_target",
-    "ratings_prior.rank_map", "ratings_prior.gbdt_panel", "ratings_prior.lam_scale",
-    "ratings_prior.gbdt_turn",
-    "cv.n_folds", "cv.lambda_windows", "cv.validation_window", "cv.poss_buckets",
-    "gbdt.features_O", "gbdt.features_D", "gbdt.features_full_O", "gbdt.features_full_D",
-    "paths.figs", "paths.lambda_file",
-}
+# Read by nothing in src/ or scripts/.  Empty since the 2026-10 cleanup deleted every dead key; a key
+# that goes dead is deleted from config.yaml, or listed here with a comment beside it there saying so.
+# What is NOT allowed is one of these carrying an instruction to change it, because changing it does nothing.
+UNREAD: set = set()
 
 # Docs and config that a stranger follows literally.  HANDOFF.md and DECISIONS.md are deliberately
 # excluded: they are a record of what was done, and they cite retired scripts on purpose.
@@ -52,7 +42,7 @@ def _leaves(node, path=()):
 
 # Blocks handed to something else whole -- the booster, mostly -- so their leaves are consumed by
 # name somewhere other than this repo and must not be reported as unread.
-FORWARDED = ("gbdt.params", "gbdt.params_def", "ratings_prior.season_board", "ratings_prior.cal_map")
+FORWARDED = ("gbdt.params", "gbdt.params_def")
 
 
 def _unread_keys() -> set:

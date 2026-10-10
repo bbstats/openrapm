@@ -13,20 +13,17 @@ Three stages, per side (O and D), per window:
              A player with no possessions gets exactly his role level; a 10th man sits almost on it.
 
 Sign convention: everything here is in the model's RAW sign on both sides (defense positive = points
-allowed), like `xrapm_panel.u`.  Offsets built here go straight into `plugin_fit(prior_offset=...)`
-without negation; the flip to positive-is-good happens only in `windows.player_ratings_table` and
-scripts/60_season_board.py.
+allowed).  scripts/49_role_panel.py builds the role panel from these pieces.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
 
 import numpy as np
 import pandas as pd
 
-from .cv import make_exposure, plugin_fit
-from .roles import CAREER_INPUTS, INPUTS, RAW_INPUTS, career_inputs, design7, window_inputs
+from .cv import plugin_fit
+from .roles import INPUTS, RAW_INPUTS, design7
 
 SIDES = ("O", "D")
 
@@ -104,19 +101,6 @@ def spm_predict(fit: SPMFit, poss_pct, gs_pct, age) -> np.ndarray:
     return fit.intercept + ((X - fit.mean) / fit.sd) @ fit.coef
 
 
-def spm_offset(fit_o: SPMFit, fit_d: SPMFit, inputs: pd.DataFrame, poss_o, poss_d, centre: bool = True) -> np.ndarray:
-    """The (2m,) raw-sign offset [O | D] from the window's role inputs (aligned to ps_idx), possession-centred
-    per side so the level of the board does not move against the fixed block."""
-    parts = []
-    for fit, poss in ((fit_o, poss_o), (fit_d, poss_d)):
-        g = spm_predict(fit, inputs["poss_pct"].to_numpy(), inputs["gs_pct"].to_numpy(), inputs["age"].to_numpy())
-        w = np.maximum(np.asarray(poss, dtype=float), 0.0)
-        if centre and w.sum() > 0:
-            g = g - np.average(g, weights=w)
-        parts.append(g)
-    return np.concatenate(parts)
-
-
 def apm_lambda_check(panels: dict, side: str, **kw) -> pd.DataFrame:
     """SPM coefficients (per unit of the raw input) at each APM penalty side by side, with the largest
     difference relative to the coefficient's own scale.  `panels`: lam -> panel with an `apm` column."""
@@ -151,195 +135,6 @@ def season_of_units(wd, weights=None) -> np.ndarray:
         if w[k] >= best[i]:
             best[i], out[i] = w[k], int(season_of_psx[k])
     return years[out]
-
-
-def cut_inputs_cached(ctx, keep: dict) -> pd.DataFrame:
-    """`roles.cut_role_inputs` for every season in `keep` (inseason.keep_games), cached on the Context: the
-    same (season, cut) is asked for once per fit and the fits repeat across systems."""
-    from .roles import cut_role_inputs
-    cache = getattr(ctx, "_cut_inputs", None)
-    if cache is None:
-        cache = ctx._cut_inputs = {}
-    key = tuple(sorted((int(s), len(g), str(min(map(str, g))) if len(g) else "") for s, g in keep.items()))
-    if key not in cache:
-        ri = ctx.role_inputs
-        for season, gids in keep.items():
-            ri = cut_role_inputs(ri, int(season), gids, ctx.cfg,
-                                 cap=float(ctx.cfg.get("roles", {}).get("share_cap", 0.9)))
-        cache[key] = ri
-    return cache[key]
-
-
-TURN_REF = 0.35     # a typical stayer's teammate turnover, season to season (median 0.36; FINDINGS 24)
-
-
-def chain_offset(gbdt_sides=(), mode: str = "residual", scale: float = 1.0, target: str = "rapm1",
-                 params: dict | None = None, panel: str | None = None, target_d: str | None = None,
-                 features: dict | None = None, win_decay: float = 1.0,
-                 params_d: dict | None = None, win_decay_d: float | None = None,
-                 turn: str | None = None, turn_ref: float = TURN_REF, turn_sides=("O", "D"),
-                 folds: int = 0) -> Callable:
-    """The per-player offset builder for a PluginSystem.  Signature `offset(train, ctx, wd) -> (2 * n_ps,)`,
-    raw sign, possession-centred per side.
-
-      mode "residual"  Simple SPM on both sides, plus the GBDT trained on the residual beyond it (`u`) on
-                       `gbdt_sides`.
-      mode "full"      the GBDT trained on RAPM_1 itself with the role inputs among its features, alone, on
-                       `gbdt_sides`; the Simple SPM on any side not in `gbdt_sides`.
-
-    Everything is kept off the window labels in `ctx.labels(train)`: the SPM is refit without them, and the
-    GBDT model for that exclusion set is fetched from `ctx.gbdt` / `ctx.mspi` (cached per set).
-
-    `turn`: the TURNOVER-AWARE prior (GBDTPrior `turn`, trained on window pairs with the teammate turnover as a
-    feature).  "ref" evaluates it at `turn_ref` for everyone -- the box line's worth in a settled context, the
-    offset the ridge should shrink toward, since the block's possessions were played in the block's context;
-    "h" evaluates it at each player's turnover of the held-out season with respect to the block
-    (turnover.familiar_share; `turn_ref` for a player H never sees, and for the shipped board, which has no H).
-    The difference of the two is the trade delta, applied AFTER the ridge (fastfit.MspiFast)."""
-    sides = tuple(gbdt_sides)
-    if mode not in ("residual", "full"):
-        raise ValueError(f"mode must be 'residual' or 'full', got {mode!r}")
-    if turn not in (None, "ref", "h", "pairs"):
-        raise ValueError(f"turn must be None, 'ref', 'h' or 'pairs', got {turn!r}")
-    # `scale` multiplies the GBDT's prediction before it becomes the offset (the criterion said the prior
-    # trained on the shrunk RAPM_1 is too timid: starters want 1.2, deep bench 2.0); `target` = "apm" uses
-    # the chain trained on unshrunk APM instead (ctx.mspi_apm)
-
-    def offset(train, ctx, wd, exp=None, keep=None) -> np.ndarray:
-        if ctx.rpanel is None or ctx.role_inputs is None:
-            raise RuntimeError("outputs/role_panel.parquet or data/cache/roles.parquet is missing; "
-                               "run scripts/49_role_panel.py")
-        cfg = ctx.cfg
-        s = cfg.get("spm", {})
-        # the panel this system's prior is trained on (`panel`, else the configured one).  Its OWN labels are
-        # what the exclusion set must name: a per-season panel excludes the block's seasons themselves, a block
-        # panel their windows, and on the block panel the two are the same set.
-        rpanel = ctx.panel_frame(panel)
-        exclude = ctx.labels(train, rpanel)
-        if exp is None:
-            exp = make_exposure(wd, mode="full", pad_target=cfg["pad_target"]).fit(wd.X, sample_weight=wd.w)
-        # the in-season cut (inseason.py): the role inputs of a season the fit only partly saw are rebuilt from
-        # the games it saw, and every player-season is weighted by the exposure's own (kernel-weighted)
-        # possessions, so a down-weighted season does not count for its full length here either
-        role_inputs = ctx.role_inputs if not keep else cut_inputs_cached(ctx, keep)
-        inputs = window_inputs(wd, role_inputs, cap=float(cfg.get("roles", {}).get("share_cap", 0.9)),
-                               psx_weights=np.asarray(exp.psx_poss_off_, dtype=float))
-        poss_o = np.asarray(exp.season_poss_off_, dtype=float)
-        poss_d = np.asarray(exp.season_poss_def_, dtype=float)
-        m = wd.spec.n_ps
-        if mode == "full" and set(sides) >= {"O", "D"}:
-            off = np.zeros(2 * m)              # the GBDT replaces the SPM on both sides: no SPM fit needed
-        else:
-            fo = fit_spm(rpanel, "O", exclude, pen=float(s.get("pen", 1.0)), min_poss=float(s.get("min_poss", 500)))
-            fd = fit_spm(rpanel, "D", exclude, pen=float(s.get("pen", 1.0)), min_poss=float(s.get("min_poss", 500)))
-            off = spm_offset(fo, fd, inputs, poss_o, poss_d)
-        if sides:
-            t_d = target_d or target
-            def col(t):
-                return t if (t == "apm" or t.startswith("blend")) else None
-
-            # the two sides may want different priors: the criterion likes a rich feature set and a bagged,
-            # searched booster on OFFENSE, and the consensus floors do not tolerate either on DEFENSE
-            # (FINDINGS 21.26).  `params_d` / `win_decay_d` default to the offensive settings.
-            p_d = params if params_d is None else params_d
-            wd_d = win_decay if win_decay_d is None else float(win_decay_d)
-            if (params or p_d or panel or target_d or features or target.startswith("blend")
-                    or win_decay != 1.0 or wd_d != 1.0 or turn or folds):
-                tkey = "pairs" if turn == "pairs" else bool(turn)
-                prior_o = ctx.prior(mode, col(target), params, panel, features, win_decay,
-                                    turn=tkey if "O" in turn_sides else False, folds=int(folds or 0))
-                prior_d = ctx.prior(mode, col(t_d), p_d, panel, features, wd_d,
-                                    turn=tkey if "D" in turn_sides else False, folds=int(folds or 0))
-            else:
-                prior_o = ctx.gbdt if mode == "residual" else getattr(ctx, "mspi_apm" if target == "apm" else "mspi", None)
-                prior_d = prior_o
-            if prior_o is None or prior_d is None:
-                raise RuntimeError(f"Context has no GBDT prior for mode {mode!r} (outputs/role_panel.parquet)")
-            from .gbdt_prior import SHOTQ, gbdt_offset, interaction_inputs
-            ro, rd = centred_rates(exp)
-            wants = set(prior_o.features["O"]) | set(prior_d.features["D"])
-            # a `gs_pct_x_` / `poss_pct_x_` interaction wants its BASE and its MULTIPLIER on the prediction frame, and
-            # every block below is gated on `wants`.  Without this, `gs_pct_x_entry_age` asks for the career block
-            # by a name no gate recognises and the column the training rows had is simply absent at prediction.
-            wants |= interaction_inputs(wants)
-            shots = None
-            if wants & set(SHOTQ):
-                # the shot totals of the TRAINING block only, the way the panel row's came from its window's
-                # three seasons -- the held-out season is not among `train`, so nothing here has seen it
-                from .xshoot import player_shot_frame
-                shots = player_shot_frame(train, cfg, wd.spec.ps_table["player_id"].to_numpy(), keep=keep)
-            extra = inputs[list(RAW_INPUTS)].reset_index(drop=True)
-            if wants & set(CAREER_INPUTS):
-                # seasons played, career possessions and entry age BEFORE the block's first season, so the
-                # count stops two seasons short of H and cannot have seen it
-                ci = career_inputs(ctx.role_inputs, min(int(s_) for s_ in train),
-                                   wd.spec.ps_table["player_id"].to_numpy(), age=inputs["age"].to_numpy())
-                extra = pd.concat([extra, ci[list(CAREER_INPUTS)]], axis=1)
-            from .bio import PLAYER_INPUTS
-            from .gbdt_prior import BIO_BINS
-            want_bio = (wants & set(PLAYER_INPUTS)) | {BIO_BINS[f][0] for f in wants if f in BIO_BINS}
-            if want_bio:
-                # height, weight, draft slot (a constant per player) and tenure with his team over the training
-                # block; the held-out season's rosters are skipped so the tenure chain never reads H.  A binned
-                # name (height2, weight15) needs its base column, which add_derived bins in both paths alike
-                from .bio import player_inputs
-                from .roles import build_roles
-                pi = player_inputs(cfg, build_roles(cfg, verbose=False), [int(s_) for s_ in train],
-                                   wd.spec.ps_table["player_id"].to_numpy(),
-                                   exclude_seasons=() if ctx.current_h is None else (int(ctx.current_h),))
-                extra = pd.concat([extra, pi[[c for c in PLAYER_INPUTS if c in want_bio]]], axis=1)
-            if turn in ("ref", "h"):
-                from .gbdt_prior import TURN_FEATURE
-                extra = extra.assign(**{TURN_FEATURE: float(turn_ref)})
-                if turn == "h" and ctx.current_h is not None:
-                    from .turnover import cached_table, familiar_share
-                    tm = cached_table(ctx)
-                    if tm is None:
-                        raise RuntimeError("data/cache/teammates.parquet is missing (turnover.build_teammates)")
-                    f = familiar_share(tm, list(train), [int(ctx.current_h)], player_ids=wd.spec.ps_table["player_id"].to_numpy())
-                    extra[TURN_FEATURE] = f.turnover.fillna(float(turn_ref)).to_numpy()
-            from .gbdt_prior import PAST, PAST_ONC, PAST_ONC_CROSS, past_inputs
-            if wants & (set(PAST) | set(PAST_ONC) | set(PAST_ONC_CROSS)):
-                # his on-court record before the block, per side: every panel window before the excluded ones
-                ids = wd.spec.ps_table["player_id"].to_numpy()
-                extra = {s_: pd.concat([extra, past_inputs(rpanel, s_, exclude, ids)], axis=1) for s_ in ("O", "D")}
-            from .context import DEST_ALL, block_usage_apm, destination_inputs
-            if wants & set(DEST_ALL):
-                # the destination: the target seasons' rosters (H for the criterion, the block's own for the board),
-                # every teammate measured on the BLOCK; ctx.dest_override asks the trade-to question instead
-                from .turnover import cached_table
-                tm = cached_table(ctx)
-                if tm is None:
-                    raise RuntimeError("data/cache/teammates.parquet is missing (turnover.build_teammates)")
-                blk = block_usage_apm(wd, exp, inputs, cfg)
-                tgt = [int(ctx.current_h)] if ctx.current_h is not None else [int(s_) for s_ in train]
-                di = destination_inputs(blk, tm, tgt, wd.spec.ps_table["player_id"].to_numpy(),
-                                        override=getattr(ctx, "dest_override", None))
-                if isinstance(extra, dict):
-                    extra = {k: pd.concat([v, di], axis=1) for k, v in extra.items()}
-                else:
-                    extra = pd.concat([extra, di], axis=1)
-            seasons_ps = season_of_units(wd, weights=np.asarray(exp.psx_poss_off_, dtype=float))
-            common = dict(features=list(wd.spec.features), extra=extra,
-                          raw=(exp.season_rates_, exp.season_rates_d_), shots=shots,
-                          player_ids=wd.spec.ps_table["player_id"].to_numpy())
-            g = np.zeros(2 * m)
-            if "O" in sides:
-                g += gbdt_offset(prior_o, ro, rd, seasons_ps, poss_o, poss_d, exclude, sides=("O",), **common)
-            if "D" in sides:
-                g += gbdt_offset(prior_d, ro, rd, seasons_ps, poss_o, poss_d, exclude, sides=("D",), **common)
-            g = g * float(scale)
-            if mode == "residual":
-                off = off + g
-            else:                                   # the GBDT replaces the SPM on the sides it covers
-                for side, sl in (("O", slice(0, m)), ("D", slice(m, 2 * m))):
-                    if side in sides:
-                        off[sl] = g[sl]
-        return off
-
-    offset.__name__ = (f"chain_offset_{mode}_{target}{'_' + target_d if target_d else ''}_x{scale:g}_" + ("".join(sides) or "spm")
-                       + (f"_turn{turn}" if turn else ""))
-    return offset
 
 
 def panel_inputs_report(panel: pd.DataFrame) -> pd.DataFrame:

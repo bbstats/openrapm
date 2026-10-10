@@ -4,7 +4,7 @@ import pandas as pd
 
 from eracoef.bio import (BIO_INPUTS, PLAYER_INPUTS, TENURE_INPUTS, UNDRAFTED, bio_inputs, season_tenure,
                          tenure_inputs)
-from eracoef.gbdt_prior import BIO_BINS, _wants_derived, add_derived
+from eracoef.gbdt_prior import BIO_BINS, add_derived
 
 
 def _roles():
@@ -53,5 +53,4 @@ def test_bio_bins_are_built_from_the_base_columns_in_both_paths():
     df = pd.DataFrame({"height": [78.9, 80.2, 83.0], "weight": [207.0, 214.0, 251.0]})
     add_derived(df)
     assert df.height2.tolist() == [78.0, 80.0, 84.0] and df.weight15.tolist() == [210.0, 210.0, 255.0]
-    assert _wants_derived(["blk", "height2"]) and not _wants_derived(["blk", "height"])
     assert set(BIO_BINS) <= {"height2", "weight15"} and set(PLAYER_INPUTS) >= set(BIO_INPUTS)

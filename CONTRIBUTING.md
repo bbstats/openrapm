@@ -43,12 +43,12 @@ where a new source of data (tracking, a different feed) belongs.
 
 ## Making a change
 
-Most model changes are a new entry in `src/eracoef/systems.py`. A system is anything with a name and
+Model changes used to be a new entry in `src/eracoef/systems.py` (retired, with the runner below). A system is anything with a name and
 `fit(train_seasons, ctx) -> Ratings`.
 
 ```bash
-python scripts/45_holdout.py --systems=ks52_lam05,my_idea --k=2,4 --workers=4 --tag=mine
-python scripts/48_ladder.py outputs/holdout_mine.parquet --ref=ks52_lam05
+python scripts/45_holdout.py --systems=ks52_lam05,my_idea --k=2,4 --workers=4 --tag=mine   # retired (tag archive/research-2026-10)
+python scripts/48_ladder.py outputs/holdout_mine.parquet --ref=ks52_lam05                     # retired (tag archive/research-2026-10)
 ```
 
 ## What a pull request has to clear
@@ -112,4 +112,4 @@ them survived review at the time. They will cost you a day each if you meet them
 
 If a number looks wrong, say which number, what you expected and what command produced it. If it is
 a rating that looks wrong, name the player and the season — that is usually faster to chase than a
-summary statistic, and `scripts/57_investigate.py` exists for exactly that.
+summary statistic, and `scripts/57_investigate.py` (retired; tag archive/research-2026-10) existed for exactly that.

@@ -1,9 +1,9 @@
 # How the model works
 
 Two builds live in this repo. **What the site publishes is the single-year rankings** of
-`scripts/62_single_year_board.py` — section 1 below. The three-season-window board of
-`scripts/60_season_board.py` — section 3 — is still built, still scored and still read by several
-tests, but nothing on `docs/` comes from it. The two share the stints, the design, the padded
+`scripts/62_single_year_board.py` — section 1 below. The three-season-window board of the retired
+`scripts/60_season_board.py` — section 3 — is no longer built but is still read by several
+tests, and nothing on `docs/` comes from it. The two share the stints, the design, the padded
 exposures and the idea of a box prior; they differ in the label, the prior's training rows, the
 ridge and the criterion.
 
@@ -119,7 +119,7 @@ it; the trade loss is what can see him. The incumbent reads **8.682** points per
 
 ## 3. The older three-season-window board
 
-`scripts/60_season_board.py` → `outputs/season_ratings.parquet`. Not published since 2026-09; kept
+`scripts/60_season_board.py` (retired) → `outputs/season_ratings.parquet`. Not published since 2026-09; kept
 because several tests read `artifacts/season_ratings.parquet`, and because the criterion in 3.2 is
 what selected the stints, the design, the targets and the exposures that section 1 inherited.
 
@@ -169,7 +169,7 @@ flowchart TD
     MAP["<b>Calibration map</b> — fitted leave-one-season-out on the criterion<br/>offense: a·x + level in log exposure + b·x·log exposure + c·prior + d·role<br/>defense: the same without the prior and role terms<br/>then re-centred per window<br/><code>calmap.py</code>, table in <code>artifacts/calmap_ship.parquet</code>"]
     RIDGE --> MAP
 
-    OUT["<b>outputs/season_ratings.parquet</b> — ten 3-season windows, 1997-2026<br/>offense and defense per 100 possessions, positive is good on both sides<br/><code>scripts/60_season_board.py</code> → <code>scripts/52_site.py</code> → <code>docs/</code>"]
+    OUT["<b>outputs/season_ratings.parquet</b> — ten 3-season windows, 1997-2026<br/>offense and defense per 100 possessions, positive is good on both sides<br/><code>scripts/60_season_board.py</code> (retired) → <code>scripts/52_site.py</code> → <code>docs/</code>"]
     MAP --> OUT
 ```
 
@@ -191,7 +191,7 @@ flowchart LR
     SC --> N["<b>109.85</b> for the criterion's best<br/><b>110.71</b> for what ships<br/><b>125.6</b> with no ratings at all"]
 ```
 
-`holdout.py` is the runner, `scripts/54_track.py` the tracker that logs a row to `docs/progress.csv` and
+`holdout.py` is the runner, `scripts/54_track.py` (retired) the tracker that logs a row to `docs/progress.csv` and
 redraws `docs/progress.png`. It is the one test in the project that is both external to the model (it scores
 actual points in a season the ratings never saw) and legal to select on (it uses no outside data).
 

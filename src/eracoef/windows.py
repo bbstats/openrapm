@@ -1,29 +1,15 @@
-"""Loop the windows: two half-fits -> beta, plug-in u fit, robustness runs -> coefs.parquet.
+"""Windows of seasons: build a window's design, name it, and the per-player ratings table of a plug-in fit.
 
-Runs (column `run` in outputs/coefs.parquet):
-  base        the ten non-overlapping 3-season windows at the fixed lambda
-  lam_x3      same design, lambda x 3 (set_lam on the stored eigen path, no refit)
-  lam_div3    same design, lambda / 3
-  rolling     3-season windows stepping 1 year
-  gt_half     gt_weight 0.5
-  gt_zero     gt_weight 0
-  margin_bins 7 margin bins x 2 time halves instead of the linear rubber band
-Also outputs/feature_corr.parquet (possession-weighted correlation of the 13 rates per window)
-and outputs/variance.parquet (tau2 per side, zero-prior vs plug-in, per window).
+A window is a run of seasons (the configured 3-season windows, or one season); its label is "first-last".
 """
 from __future__ import annotations
-
-import time
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from .boxtable import season_box
-from .checks import beta_table
-from .config import resolve
-from .cv import crossfit_beta, lambda_ratio_grid, plugin_fit
-from .design import FEATURES, SEASON_PHASES, build_design
+from .cv import plugin_fit
+from .design import SEASON_PHASES, build_design
 from .stints import build_season
 
 _STINT_CACHE: dict = {}
@@ -67,13 +53,6 @@ def label_seasons(label: str) -> list:
     return list(range(int(a), int(b) + 1))
 
 
-def label_step(labels) -> float:
-    """Seasons per window in a panel's labels: 3 for the configured windows, 1 for a per-season panel.
-    The median span, so a short last window does not move it."""
-    spans = [len(label_seasons(lab)) for lab in sorted(set(labels))]
-    return float(np.median(spans)) if spans else 1.0
-
-
 def labels_covering(labels, seasons) -> set:
     """Every window label whose seasons intersect `seasons`.  On the configured windows this is the label of
     each season's own window; on a per-season panel it is the seasons themselves."""
@@ -83,113 +62,6 @@ def labels_covering(labels, seasons) -> set:
 
 def window_mid(seasons) -> float:
     return float(np.mean(seasons))
-
-
-def total_rows(est) -> pd.DataFrame:
-    """Combined coefficient: what one unit per 100 is worth to a player overall, offense plus defense.
-
-    In flipped space (positive = good on both sides) that is beta_O - beta_D_raw, so the standard
-    error needs the cross-term: Var = Var(O) + Var(D) - 2 Cov(O, D).
-    """
-    nf = est.n_feat_
-    cov = est.cov_beta_
-    rows = []
-    for j, f in enumerate(est.spec.features):
-        c = np.zeros(2 * nf)
-        c[j], c[nf + j] = 1.0, -1.0
-        rows.append(dict(side="Total", feature=f, beta=est.beta_[j] - est.beta_[nf + j],
-                         se=float(np.sqrt(max(c @ cov @ c, 0.0)))))
-    return pd.DataFrame(rows)
-
-
-def _rows(est, run, seasons, extra=None) -> pd.DataFrame:
-    tb = est.coef_table(flip_defense=True)[["side", "feature", "beta", "se"]].copy()
-    tb = pd.concat([tb, total_rows(est)], ignore_index=True)
-    tb["run"] = run
-    tb["window"] = window_label(seasons)
-    tb["window_mid"] = window_mid(seasons)
-    tb["first_season"] = seasons[0]
-    tb["last_season"] = seasons[-1]
-    for k, v in (extra or {}).items():
-        tb[k] = v
-    return tb
-
-
-def fit_beta(wd, cfg, lam=None, lam_ratio=None, lam_scale=(1.0,), lam_buckets=None, features=None,
-             include_po=False, lam_delta=None, mask=None):
-    """Cross-fitted beta at one or more lambda multiples (one moment build, set_lam per multiple)."""
-    lam = float(cfg["lam_beta"]) if lam is None else float(lam)
-    ratio = float(cfg["lam_ratio_beta"]) if lam_ratio is None else float(lam_ratio)
-    lams = sorted({lam * s for s in lam_scale})
-    cf = crossfit_beta(wd, lams=lams, cv=2, lam_ratio=ratio, lam_buckets=lam_buckets, features=features,
-                       include_po=include_po, lam_delta=lam_delta, mask=mask, pad_target=cfg["pad_target"])
-    out = {}
-    for s in lam_scale:
-        for h in ("A", "B"):
-            cf.fits[h]["mm"].set_lam(lam * s)
-        a, b = cf.fits["A"]["mm"], cf.fits["B"]["mm"]
-        r = type(cf)(beta_=0.5 * (a.beta_ + b.beta_), beta_se_=None, cov_beta_=0.25 * (a.cov_beta_ + b.cov_beta_),
-                     delta_=0.5 * (a.delta_ + b.delta_) if len(a.delta_) else np.zeros(0),
-                     delta_se_=0.5 * np.sqrt(a.delta_se_ ** 2 + b.delta_se_ ** 2) if len(a.delta_) else np.zeros(0),
-                     n_feat_=a.n_feat_, spec=cf.spec, fits=cf.fits, lam={"A": a.lam_, "B": b.lam_})
-        r.beta_se_ = np.sqrt(np.maximum(np.diag(r.cov_beta_), 0.0))
-        out[s] = r
-    return out
-
-
-def player_priced_beta(panel, features, exclude=(), min_poss=2000, pen=5.0) -> np.ndarray:
-    """The box prior priced to predict a PLAYER, not a team.
-
-    The published beta is fit by regressing stint margin on LINEUP SUMS, which prices the box score
-    for the team.  This one regresses a player's own padded rates on his own NEXT-window pure
-    on-court impact (`u / a`, the de-shrunk residual, weighted by the shrinkage `a`), so it prices
-    the box score for the player.  Returns the model's raw 26-vector, offense then defense.
-
-    `panel` is outputs/xrapm_panel.parquet from scripts/49_role_panel.py (scripts/27_xrapm_prior.py was
-    retired in 73f0ab9): one row per player per
-    window per side, with the 13 rates, `poss`, `u` and `a`.  `exclude` drops windows from the FIT
-    (not the panel), which is how a window's prior is kept off its own data.
-
-    No consensus is involved: the target is the model's own next-window on-court estimate.
-    """
-    windows = sorted(panel["window"].unique())
-    nxt = {windows[i]: windows[i + 1] for i in range(len(windows) - 1)}
-    exclude = set(exclude)
-    out = []
-    for side in ("O", "D"):
-        a = panel[(panel.side == side) & (panel.poss >= min_poss)].copy()
-        b = a[["window", "player_id", "u", "a"]].rename(
-            columns={"window": "next", "u": "u_next", "a": "a_next"})
-        a["next"] = a.window.map(nxt)
-        d = a.merge(b, on=["next", "player_id"], how="inner")
-        d = d[~d["next"].isin(exclude) & ~d.window.isin(exclude)]
-        X = np.column_stack([np.ones(len(d)), d[features].to_numpy()])
-        y = (d.u_next / np.maximum(d.a_next, 1e-9)).to_numpy()
-        w = d.a_next.to_numpy()
-        p = pen * np.eye(X.shape[1])
-        p[0, 0] = 0.0                                     # the intercept is not penalised
-        out.append(np.linalg.solve((X * w[:, None]).T @ X + p, (X * w[:, None]).T @ y)[1:])
-    return np.concatenate(out)
-
-
-def hybrid_beta(panel, features, window_label_, min_poss=2000, pen=5.0) -> np.ndarray:
-    """The shipped prior: player-priced on offense, ZERO on defense, leave-one-window-out.
-
-    Defense gets no box prior at all because the box score has no defensive vocabulary -- the
-    weighted R^2 of a player's 13 rates on his own defensive on-court impact is 0.26, and pure RAPM
-    beats the box-primed defensive rating 0.877 to 0.755 (FINDINGS.md, and the retired scripts/30_ladder.py).  The
-    box term enters the model as an offset `Xbox @ beta` with separate offensive and defensive
-    columns, so zeroing the defensive half IS "no defensive prior", in one fit at one penalty.
-
-    `window_label_` is excluded from the beta fit; it may be one label or a collection of them (a
-    training block can straddle more than one window).  The fit's rows are (window X rates -> window
-    Y impact) pairs, and `player_priced_beta` drops a pair if EITHER end is excluded, so listing a
-    window once keeps it off both sides of its own prior.
-    """
-    labs = [window_label_] if isinstance(window_label_, str) else list(window_label_)
-    beta = player_priced_beta(panel, features, exclude=labs, min_poss=min_poss, pen=pen)
-    nf = len(features)
-    return np.concatenate([beta[:nf], np.zeros(nf)])
 
 
 def player_ratings_table(wd, beta, cfg, seasons, beta_po=None, names=None,
@@ -257,114 +129,3 @@ def player_ratings_table(wd, beta, cfg, seasons, beta_po=None, names=None,
             df = df.merge(nm, on="player_id", how="left")
     df["shrinkage"] = np.where(df.poss_off > 0, df.poss_off / (df.poss_off + float(cfg["lam_plugin"])), 0.0)
     return df.drop(columns=["ps_idx", "psx_idx"], errors="ignore")
-
-
-def feature_correlations(wd, cfg, seasons) -> pd.DataFrame:
-    """Possession-weighted correlation of the 13 padded season rates across player-seasons."""
-    from .cv import make_exposure
-    exp = make_exposure(wd, mode="full", pad_target=cfg["pad_target"]).fit(wd.X, sample_weight=wd.w)
-    R, w = exp.season_rates_, exp.season_poss_off_
-    ok = w > 0
-    R, w = R[ok], w[ok]
-    mu = np.average(R, axis=0, weights=w)
-    C = ((R - mu) * w[:, None]).T @ (R - mu) / w.sum()
-    d = np.sqrt(np.diag(C))
-    corr = C / np.outer(d, d)
-    feats = cfg["features"]
-    df = pd.DataFrame([{"window": window_label(seasons), "window_mid": window_mid(seasons),
-                        "feature_i": feats[i], "feature_j": feats[j], "corr": corr[i, j], "sd_i": d[i]}
-                       for i in range(len(feats)) for j in range(len(feats))])
-    return df
-
-
-def share_explained(wd, beta, cfg, lams, ratios_zero=(0.5, 0.75, 1.0, 1.5, 2.0), ratios_plug=(0.12, 0.18, 0.25, 0.33, 0.5),
-                    seasons=None) -> pd.DataFrame:
-    """tau2 per side for the zero-prior and plug-in fits (REML per window) and 1 - tau2_1/tau2_0."""
-    from .cv import make_pipeline
-    out = {}
-    for name, ratios in (("zero_prior", ratios_zero), ("plugin", ratios_plug)):
-        fits = {}
-
-        def fit_fn(r, name=name, fits=fits):
-            if name == "zero_prior":
-                p = make_pipeline(wd, lams=lams, cv=2, lam_ratio=r, features=[], mode="full", pad_target=cfg["pad_target"])
-                p.fit(wd.X, wd.y, sample_weight=wd.w, groups=wd.groups)
-            else:
-                p = plugin_fit(wd, beta, lams=lams, cv=2, lam_ratio=r, pad_target=cfg["pad_target"])
-            fits[r] = p
-            return p["mm"]
-
-        tab, lam, ratio, how = lambda_ratio_grid(fit_fn, list(ratios), lams, selection="reml")
-        mm = fits[ratio]["mm"]
-        mm.set_lam(lam)
-        out[name] = dict(lam=lam, ratio=ratio, sigma2=float(mm.sigma2_), tau2_O=mm.sigma2_ / lam,
-                         tau2_D=mm.sigma2_ / (lam * ratio))
-    z, p = out["zero_prior"], out["plugin"]
-    return pd.DataFrame([dict(window=window_label(seasons), window_mid=window_mid(seasons),
-                              tau2_O_zero=z["tau2_O"], tau2_D_zero=z["tau2_D"], lam_zero=z["lam"], ratio_zero=z["ratio"],
-                              tau2_O_plugin=p["tau2_O"], tau2_D_plugin=p["tau2_D"], lam_plugin=p["lam"], ratio_plugin=p["ratio"],
-                              share_O=1 - p["tau2_O"] / z["tau2_O"], share_D=1 - p["tau2_D"] / z["tau2_D"])])
-
-
-def run_all(cfg, runs=None, lams_var=None, verbose=True) -> dict:
-    """Every run in `runs` (default: all seven) -> coefs / feature_corr / variance frames."""
-    runs = runs or ["base", "lam_x3", "lam_div3", "rolling", "gt_half", "gt_zero", "margin_bins"]
-    lams_var = np.geomspace(500, 60000, 20) if lams_var is None else lams_var
-    coefs, corrs, var = [], [], []
-    t0 = time.time()
-
-    base_windows = window_seasons(cfg)
-    need_base = {"base", "lam_x3", "lam_div3"} & set(runs)
-    for w in base_windows:
-        seasons = list(range(w[0], w[1] + 1))
-        lab = window_label(seasons)
-        if need_base or "gt_half" in runs or "gt_zero" in runs or "margin_bins" in runs:
-            wd = build_window(seasons, cfg)
-        if need_base:
-            scales = [s for s, r in ((1.0, "base"), (3.0, "lam_x3"), (1 / 3, "lam_div3")) if r in runs]
-            fits = fit_beta(wd, cfg, lam_scale=tuple(scales))
-            for s, r in ((1.0, "base"), (3.0, "lam_x3"), (1 / 3, "lam_div3")):
-                if r in runs:
-                    coefs.append(_rows(fits[s], r, seasons, {"lam": float(cfg["lam_beta"]) * s}))
-            corrs.append(feature_correlations(wd, cfg, seasons))
-            var.append(share_explained(wd, fits[1.0].beta_ if 1.0 in fits else list(fits.values())[0].beta_,
-                                       cfg, lams_var, seasons=seasons))
-            if verbose:
-                print(f"  {lab} base done ({time.time() - t0:.0f}s)", flush=True)
-        for r, kw in (("gt_half", dict(gt_weight=0.5)), ("gt_zero", dict(gt_weight=0.0)), ("margin_bins", dict(margin_bins=True))):
-            if r not in runs:
-                continue
-            wd2 = build_window(seasons, cfg, **kw)
-            coefs.append(_rows(fit_beta(wd2, cfg)[1.0], r, seasons, {"lam": float(cfg["lam_beta"])}))
-            if verbose:
-                print(f"  {lab} {r} done ({time.time() - t0:.0f}s)", flush=True)
-
-    if "rolling" in runs:
-        for w in window_seasons(cfg, rolling=True):
-            seasons = list(range(w[0], w[1] + 1))
-            wd = build_window(seasons, cfg)
-            coefs.append(_rows(fit_beta(wd, cfg)[1.0], "rolling", seasons, {"lam": float(cfg["lam_beta"])}))
-            if verbose:
-                print(f"  rolling {window_label(seasons)} done ({time.time() - t0:.0f}s)", flush=True)
-
-    return dict(coefs=pd.concat(coefs, ignore_index=True) if coefs else pd.DataFrame(),
-                feature_corr=pd.concat(corrs, ignore_index=True) if corrs else pd.DataFrame(),
-                variance=pd.concat(var, ignore_index=True) if var else pd.DataFrame())
-
-
-def write_outputs(res: dict, cfg, tag=""):
-    out = resolve(cfg, "outputs")
-    out.mkdir(parents=True, exist_ok=True)
-    paths = {}
-    for name, df in res.items():
-        if df is None or not len(df):
-            continue
-        p = out / (f"{name}{tag}.parquet" if name != "coefs" else f"coefs{tag}.parquet")
-        if p.exists():
-            old = pd.read_parquet(p)
-            if "run" in df.columns and "run" in old.columns:
-                old = old[~old["run"].isin(df["run"].unique())]
-                df = pd.concat([old, df], ignore_index=True)
-        df.to_parquet(p, index=False)
-        paths[name] = p
-    return paths

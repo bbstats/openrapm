@@ -65,15 +65,56 @@ def shot_rows(pbp: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame({"three": three, "made": made, "bin": b})
 
 
-# The spline basis and the IRLS live in shotmodel (the model layer) since the shot-quality build; the curve
-# imports them unchanged, so every cached curve in data/shotcurve is reproduced exactly.
-from .shotmodel import logistic_irls as _logistic_irls  # noqa: E402
-from .shotmodel import natural_spline as _natural_spline  # noqa: E402,F401
+# The spline basis and the IRLS, copied verbatim from the retired shot-quality model (shotmodel.py), so every
+# cached curve in data/shotcurve is reproduced exactly.
+def natural_spline(x: np.ndarray, knots) -> np.ndarray:
+    """Natural cubic spline basis (ESL 5.4): [1, x, N_3 .. N_K]."""
+    k = np.asarray(knots, dtype=float)
+    K = len(k)
+
+    def d(j):
+        return (np.clip(x - k[j], 0, None) ** 3 - np.clip(x - k[-1], 0, None) ** 3) / (k[-1] - k[j])
+
+    cols = [np.ones_like(x), x] + [d(j) - d(K - 2) for j in range(K - 2)]
+    return np.column_stack(cols)
+
+
+def logistic_irls(X, y, w=None, ridge=1e-3, iters=25, offset=None, beta0=None, penalise_first=False):
+    """IRLS for a logistic regression with a ridge on every coefficient but the first (the intercept).
+
+    `ridge` is one value for every column, or a vector with one per column (the search penalises main, interaction
+    and era columns apart); the first entry is ignored unless `penalise_first`."""
+    n, p = X.shape
+    w = np.ones(n) if w is None else np.asarray(w, dtype=float)
+    off = np.zeros(n) if offset is None else np.asarray(offset, dtype=float)
+    beta = np.zeros(p) if beta0 is None else np.asarray(beta0, dtype=float).copy()
+    if np.ndim(ridge) == 0:
+        P = ridge * np.eye(p)
+    else:
+        r = np.asarray(ridge, dtype=float)
+        if r.shape != (p,):
+            raise ValueError(f"ridge has {r.shape} entries for {p} columns")
+        P = np.diag(r)
+    if not penalise_first:
+        P[0, 0] = 0.0
+    for _ in range(iters):
+        xb = X @ beta
+        eta = xb + off
+        mu = 1.0 / (1.0 + np.exp(-eta))
+        s = np.maximum(mu * (1 - mu), 1e-6) * w
+        z = xb + (y - mu) / np.maximum(mu * (1 - mu), 1e-6)
+        Xs = X * s[:, None]                                      # once per step: it is the n x p temporary
+        new = np.linalg.solve(Xs.T @ X + P, Xs.T @ z)
+        if np.max(np.abs(new - beta)) < 1e-8:
+            beta = new
+            break
+        beta = new
+    return beta
 
 
 def _logistic(X, y, w=None, ridge=RIDGE, iters=25):
     """IRLS for a logistic regression with a small ridge on everything but the intercept."""
-    return _logistic_irls(X, y, w, ridge=ridge, iters=iters)
+    return logistic_irls(X, y, w, ridge=ridge, iters=iters)
 
 
 @dataclass
@@ -110,10 +151,10 @@ def fit_curve(rows: pd.DataFrame, season: int) -> ShotCurve:
         lo, hi = RANGE[three]
         if len(located) >= 500:
             x = np.clip(located.bin.to_numpy(dtype=float), lo, hi)
-            X = _natural_spline(x, KNOTS[three])
+            X = natural_spline(x, KNOTS[three])
             beta = _logistic(X, located.made.to_numpy(dtype=float))
             grid = np.clip(np.arange(0, MAX_DIST + 1, dtype=float), lo, hi)
-            fitted = 1.0 / (1.0 + np.exp(-(_natural_spline(grid, KNOTS[three]) @ beta)))
+            fitted = 1.0 / (1.0 + np.exp(-(natural_spline(grid, KNOTS[three]) @ beta)))
         else:
             fitted = np.full(MAX_DIST + 1, league)
         cnt = located.groupby("bin").made.agg(["size", "sum"]).reindex(range(MAX_DIST + 1)).fillna(0)

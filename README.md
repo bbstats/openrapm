@@ -51,12 +51,13 @@ possession-weighted squared error in points per 100, summed to team-games so pos
 cancels. Twenty-eight held-out seasons, every system paired by season.
 
 ```bash
-python scripts/45_holdout.py --systems=ks52_lam05,mspi --k=2,4 --workers=4 --tag=x
-python scripts/48_ladder.py outputs/holdout_x.parquet --ref=ks52_lam05
+python scripts/45_holdout.py --systems=ks52_lam05,mspi --k=2,4 --workers=4 --tag=x   # retired (tag archive/research-2026-10)
+python scripts/48_ladder.py outputs/holdout_x.parquet --ref=ks52_lam05                  # retired (tag archive/research-2026-10)
 ```
 
 A system is anything with a name and `fit(train_seasons, ctx) -> Ratings`
-(`src/eracoef/holdout.py`); `src/eracoef/systems.py` names the ones built so far.
+(`src/eracoef/holdout.py`); the registry of named systems, `src/eracoef/systems.py`, was retired in the 2026-10
+cleanup with the runner scripts above.
 
 Winning that test is necessary and not sufficient. A gain that only shows up once, in one search,
 against the same seasons everyone has been tuning against, is not a gain — see `CONTRIBUTING.md` for
@@ -77,8 +78,8 @@ never his rating. `scripts/62_single_year_board.py` is the whole chain:
    (`priorridge.py`): `scale x prior + residual`, the scale priced on cross-fitted prior columns,
    the residual penalty fixed at 13,037 on both sides. Then centred at possession-weighted zero.
 
-Positive is good on both ends. `PIPELINE.md` draws the older three-season-window board, which
-`scripts/60_season_board.py` still builds and several tests still read.
+Positive is good on both ends. `PIPELINE.md` draws the older three-season-window board, which the
+retired `scripts/60_season_board.py` built and several tests still read.
 
 Against an external consensus of public metrics, pooled over 2024-2026 and 475 matched players, rank
 agreement is 0.772 total, 0.782 offense, 0.765 defense. That consensus is a **sanity check, read
@@ -100,12 +101,12 @@ idempotent, so stopping and restarting it is fine. Everything under `data/` is r
 and 2 and none of it is in git.
 
 Step 4 is the one that decides what ships: `outputs/season_ratings_product.parquet` is what step 5
-publishes and what `tests/test_vs_consensus.py` scores. `scripts/60_season_board.py` builds the
+publishes and what `tests/test_vs_consensus.py` scores. The retired `scripts/60_season_board.py` built the
 older three-season-window board into `outputs/season_ratings.parquet`; its committed copy lives at
 `artifacts/season_ratings.parquet` and several tests still read it, so do not overwrite that one.
 
-The two artifacts that ship — the role panel and the calibration table — are committed under
-`artifacts/`, so steps 3 onward work from a clone without refitting.
+The role panel and the calibration table once committed under `artifacts/` were retired in the 2026-10
+cleanup (tag archive/research-2026-10).
 
 ## Layout
 
@@ -116,17 +117,13 @@ The two artifacts that ship — the role panel and the calibration table — are
       design.py      the sparse design: players, fixed effects, box exposures
       exposure.py    cross-fitted, empirical-Bayes padded per-100 rates
       estimator.py   the mixed model (Henderson), eigen lambda path
-      fastfit.py     the shipped one-pass fit
       roles.py       playing-time share, starts, age per player-season
-      spm.py         APM, the role prior, the chain's offset
-      gbdt_prior.py  the boosted box prior, leave-one-out
+      spm.py         APM and the role prior
+      gbdt_prior.py  the box-score feature definitions the prior reads
       looseason.py   the label: one RAPM per player from every season but the rated one
       singleyear.py  the single-year prior's features and its per-player aggregation
       priorridge.py  the ratings ridge: the prior as the centre, the season's possessions as evidence
-      calmap.py      the calibration map
-      holdout.py     the out-of-season test: systems, runner, splits
-      pbo.py         the probability that a search's winner is a fluke
-      systems.py     every named system
+      holdout.py     the out-of-season test: runner, splits, scores
 
 `DECISIONS.md` is what the test has settled, what it rejected, and the measurement traps that have
 produced confident wrong numbers here before. Read the traps before trusting a number.

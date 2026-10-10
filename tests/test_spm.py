@@ -1,9 +1,9 @@
 """The Simple SPM (src/eracoef/spm.py): recovers a known role-and-age function from noisy APM, leaves the
-excluded window out, centres its offset, and reads the same at different APM penalties."""
+excluded window out, and reads the same at different APM penalties."""
 import numpy as np
 import pandas as pd
 
-from eracoef.spm import apm_lambda_check, fit_spm, spm_offset, spm_predict
+from eracoef.spm import apm_lambda_check, fit_spm, spm_predict
 
 
 def _truth(poss_pct, gs, age):
@@ -37,18 +37,6 @@ def test_spm_recovers_the_function_leaving_the_window_out():
     assert d.coef[0] < 0 < fit.coef[0]                     # raw sign on defense: more poss_pct = more points allowed? No: better players allow fewer
     t = fit.table()
     assert list(t.columns) == ["side", "input", "coef_std", "coef_raw"] and len(t) == 7
-
-
-def test_offset_is_centred_and_ordered():
-    p = _panel()
-    fo, fd = fit_spm(p, "O"), fit_spm(p, "D")
-    inputs = pd.DataFrame({"poss_pct": [0.8, 0.3, 0.05], "gs_pct": [1.0, 0.2, 0.0], "age": [27.0, 27.0, 27.0]})
-    poss = np.array([12000.0, 4500.0, 700.0])
-    off = spm_offset(fo, fd, inputs, poss, poss)
-    assert off.shape == (6,)
-    assert abs(np.average(off[:3], weights=poss)) < 1e-9 and abs(np.average(off[3:], weights=poss)) < 1e-9
-    assert off[0] > off[1] > off[2]                        # offense: the starter is best
-    assert off[3] < off[4] < off[5]                        # defense raw sign: the starter allows fewest
 
 
 def test_lambda_check_reads_zero_on_identical_panels():
