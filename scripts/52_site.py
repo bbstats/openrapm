@@ -22,7 +22,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags  # noqa: E402
-from openrapm.config import load_config  # noqa: E402
+from openrapm.data.config import load_config  # noqa: E402
 
 check_flags()
 

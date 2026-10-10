@@ -13,9 +13,9 @@ player-season, on both side rows (like `onc_*`):
                  measure what the prior's labels and its on-court columns measure.  Penalty 3,000 per side, the
                  page's own.  Positive = good on both sides (`onc_d` is the other way round).  Each is padded toward
                  0 over the possessions behind it with the same constant (`pieces.season_pieces`).
-  po_share       the share of his possessions that came in the playoffs: `data/cache/roles.parquet` (regular
-                 season) against `roles_RSPO.parquet` (both), on `poss_on`.  A share, like the closeness columns,
-                 and like them not padded.
+  po_share       the share of his possessions that came in the playoffs: `roles.parquet` (regular season)
+                 against `roles_RSPO.parquet` (both), both in paths.cache, on `poss_on`.  A share, like the
+                 closeness columns, and like them not padded.
 
 Game difficulty is also in `pc_opponents_*`, `pc_context_*`, `pc_team_sos_*` and the panel's closeness columns.
 
@@ -50,10 +50,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
 from openrapm import pieces  # noqa: E402
 from openrapm import singleyear as sy  # noqa: E402
-from openrapm.config import load_config  # noqa: E402
+from openrapm.data.config import load_config  # noqa: E402
+from openrapm.data.roles import roles_path  # noqa: E402
 from openrapm.holdout import Context  # noqa: E402
 from openrapm.investigate import oncourt_rates  # noqa: E402
-from openrapm.xshoot import DEFENSE_TARGETS  # noqa: E402
+from openrapm.data.shots import DEFENSE_TARGETS  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("_borrowed_83", ROOT / "scripts" / "83_decompose_site.py")
 d83 = importlib.util.module_from_spec(_spec)
@@ -66,10 +67,15 @@ PO_SHARE = "po_share"
 
 def playoff_share() -> pd.DataFrame:
     """player_id, season, po_share: 1 - regular-season possessions / all possessions, summed over his teams."""
-    def total(name):
-        r = pd.read_parquet(ROOT / "data" / "cache" / name, columns=["player_id", "season", "poss_on"])
+    both_path = roles_path(load_config())
+    # The regular-season table is the unsuffixed roles.parquet an older build wrote beside the pooled one, before
+    # the phases went into the file name; nothing rebuilds it today.
+    regular_path = both_path.with_name("roles.parquet")
+
+    def total(path):
+        r = pd.read_parquet(path, columns=["player_id", "season", "poss_on"])
         return r[r.poss_on > 0].groupby(["player_id", "season"]).poss_on.sum()
-    both, regular = total("roles_RSPO.parquet"), total("roles.parquet")
+    both, regular = total(both_path), total(regular_path)
     share = (1.0 - regular.reindex(both.index).fillna(0.0) / both).clip(0.0, 1.0)
     return share.rename(PO_SHARE).reset_index()
 
@@ -93,7 +99,7 @@ def main() -> None:
     check_flags()
     path = ROOT / flag("panel", "outputs/role_panel_season.parquet")
     lam = float(flag("penalty", pieces.PENALTY))
-    cfg = load_config(ROOT / "config.yaml")
+    cfg = load_config()
     ctx = Context.load(cfg)
     panel = pd.read_parquet(path)
     seasons = sorted(panel.season.unique())

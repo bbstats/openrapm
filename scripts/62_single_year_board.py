@@ -140,18 +140,18 @@ from threadpoolctl import threadpool_limits  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from openrapm import pieces  # noqa: E402
 from openrapm import singleyear as sy  # noqa: E402
-from openrapm.config import load_config
-from openrapm.seasons import drop_untrainable  # noqa: E402
+from openrapm.data.config import load_config
+from openrapm.data.seasons import drop_untrainable  # noqa: E402
 from openrapm.holdout import Context, Ratings, predict_season, score  # noqa: E402
 from openrapm.inseason import season_frac  # noqa: E402
 from openrapm.investigate import offcourt_rates, oncourt_rates  # noqa: E402
 from openrapm.looseason import LeaveSeasonOutRAPM  # noqa: E402
 from openrapm.priorridge import PriorRidgeCV, armse, calibration_miss, game_folds  # noqa: E402
-from openrapm.roles import player_season_inputs  # noqa: E402
+from openrapm.data.roles import player_season_inputs, roles_path  # noqa: E402
 from openrapm.seasoninputs import SeasonTables, honest_fold_prior  # noqa: E402
 from openrapm import lgbprior  # noqa: E402
 from openrapm.stackprior import StackedSPM  # noqa: E402
-from openrapm.xshoot import DEFENSE_TARGETS  # noqa: E402
+from openrapm.data.shots import DEFENSE_TARGETS  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -177,7 +177,7 @@ from _cli import check_flags, flag as _flag, switch   # noqa: E402
 
 
 def _target(name):
-    """A `design.TARGETS` key, or the `xshoot.DEFENSE_TARGETS` callable of that name."""
+    """A `design.TARGETS` key, or the `data.shots.DEFENSE_TARGETS` callable of that name."""
     return DEFENSE_TARGETS[name] if name in DEFENSE_TARGETS else name
 
 
@@ -580,13 +580,13 @@ def _first_75(design):
 
 def main():
     check_flags()      # refuse a flag this script does not understand (scripts/_cli.py)
-    cfg = load_config(ROOT / "config.yaml")
+    cfg = load_config()
     ctx = Context.load(cfg)
     # one row per player, season and team, for the movement weighting; loaded here because the model
     # layer may not open a file
     roles_played = None
     if _flag("trade_weight") is not None:
-        _roles = pd.read_parquet(ROOT / "data/cache/roles_RSPO.parquet")
+        _roles = pd.read_parquet(roles_path(cfg))
         roles_played = _roles[_roles.poss_on > 0][["player_id", "season", "team_id", "poss_on"]].copy()
         # franchises (2026-09-30): Charlotte's 1997-2002 id is New Orleans's, or the players who moved with
         # the team read as movers
@@ -704,7 +704,7 @@ def main():
     team_shares = None
     if chunk_label in ("outside", "adjacent") or dump_rows or team_intercept:
         # franchises, not team ids, or everyone who stayed through Charlotte's move looks like a mover
-        _roles = pd.read_parquet(ROOT / "data/cache/roles_RSPO.parquet")
+        _roles = pd.read_parquet(roles_path(cfg))
         team_shares = _roles[_roles.poss_on > 0][["player_id", "season", "team_id", "poss_on"]].copy()
         team_shares["team_id"] = sy.franchise(team_shares.team_id.to_numpy(), team_shares.season.to_numpy())
     crossfit = _flag("crossfit", "scale")            # 0 | 1 (scale and penalty) | scale (the scale only) | honest
@@ -716,7 +716,7 @@ def main():
     assert not (crossfit == "honest" and lopo), "--crossfit=honest is built for the player-fold prior, not --lopo"
     honest_data = None
     if crossfit == "honest":
-        _hroles = pd.read_parquet(ROOT / "data/cache/roles_RSPO.parquet")
+        _hroles = pd.read_parquet(roles_path(cfg))
         honest_data = (_hroles, player_season_inputs(_hroles, cap=float(cfg.get("roles", {}).get("share_cap", 0.9))))
     # adopted 2026-09-14 (the owner: "adopt"): every player's prior from the fit without his rows
     player_folds = int(_flag("player_folds", 5))     # 0 or 1: the plain single fit
@@ -822,7 +822,7 @@ def main():
             print(f"booster {s} from booster_params_{booster_name}.json: {side_params[s]}; early-stopping split "
                   f"by {'players' if by_player[s] else 'rows'}", flush=True)
 
-    # The trust boundary (src/openrapm/seasons.py): rows whose unit reaches into a season still
+    # The trust boundary (src/openrapm/data/seasons.py): rows whose unit reaches into a season still
     # being played may not reach a fit.  Gating at the read is what keeps every fit below honest;
     # it drops nothing while no season is in progress, and says so when it does.
     panel, _ = drop_untrainable(pd.read_parquet(ROOT / "outputs/role_panel_season.parquet"),

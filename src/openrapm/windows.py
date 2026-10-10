@@ -1,25 +1,14 @@
-"""Windows of seasons: build a window's design, name it, and the per-player ratings table of a plug-in fit.
+"""Windows of seasons: name a window, and the per-player ratings table of a plug-in fit.
 
 A window is a run of seasons (the configured 3-season windows, or one season); its label is "first-last".
+A window's design is built by `data.designs.build_window`.
 """
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 
-from .boxtable import season_box
 from .cv import plugin_fit
-from .design import SEASON_PHASES, build_design
-from .stints import build_season
-
-_STINT_CACHE: dict = {}
-
-
-def load_stints(season: int, phase: str, cfg) -> pd.DataFrame:
-    key = (season, phase)
-    if key not in _STINT_CACHE:
-        _STINT_CACHE[key] = build_season(season, phase, cfg)[0]
-    return _STINT_CACHE[key]
 
 
 def window_seasons(cfg, rolling=False):
@@ -29,18 +18,6 @@ def window_seasons(cfg, rolling=False):
     first, last = cfg["first_season"], cfg["last_season"]
     step = int(cfg.get("rolling_step", 1))
     return [(s, s + 2) for s in range(first, last - 1, step)]
-
-
-def build_window(seasons, cfg, phases=SEASON_PHASES, gt_weight=None, margin_bins=False, target="pts",
-                 counter_cols=None, min_den=0.0):
-    if not margin_bins:                        # the same design from cached per-season pieces (designcache.py)
-        from .designcache import build_window_cached
-        return build_window_cached(seasons, cfg, phases=phases, gt_weight=gt_weight, target=target,
-                                   counter_cols=counter_cols, min_den=min_den)
-    stints = pd.concat([load_stints(s, p, cfg) for s in seasons for p in phases], ignore_index=True)
-    box = season_box(seasons, list(phases), cfg)
-    return build_design(stints, box, cfg["features"], cfg, gt_weight=gt_weight, margin_bins=margin_bins,
-                        target=target)
 
 
 def window_label(seasons) -> str:

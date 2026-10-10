@@ -53,7 +53,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from openrapm import singleyear as sy  # noqa: E402
-from openrapm.config import load_config  # noqa: E402
+from openrapm.data.config import load_config  # noqa: E402
 from openrapm.design import FEATURES  # noqa: E402
 from openrapm.gbdt_prior import DERIVED, RATIOS, SHOTQ  # noqa: E402
 from openrapm.holdout import Context, Ratings, predict_season, score  # noqa: E402
@@ -316,7 +316,7 @@ def main() -> None:
     directory = ROOT / "outputs" / "within" / tag
     cache = directory / f"calib_{name}"
     cache.mkdir(exist_ok=True)
-    cfg = load_config(ROOT / "config.yaml")
+    cfg = load_config()
     ctx = Context.load(cfg)
     ctx.cache_size = 2
 

@@ -28,7 +28,7 @@ keeps returning it until the 2027 Finals end.
 
 Using it
 --------
-    from .seasons import trainable, scoreable
+    from openrapm.data.seasons import trainable, scoreable
 
     tr = trainable(cfg)                 # Trainable(seasons=(1997, ..., 2026), cutoff=2026)
     prior.fit(tr)                       # takes a Trainable and nothing else
@@ -57,6 +57,8 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+from .config import DEFAULT_PATHS
+
 
 class LeakageError(RuntimeError):
     """A fit was handed a season whose Finals are not over."""
@@ -79,7 +81,7 @@ class Trainable:
         if late:
             raise LeakageError(
                 f"seasons {late} are past the cutoff {self.cutoff}: their Finals are not over, so "
-                f"nothing may be fit on them.  Rate them instead -- see src/openrapm/seasons.py.")
+                f"nothing may be fit on them.  Rate them instead -- see src/openrapm/data/seasons.py.")
 
     def __iter__(self):
         return iter(self.seasons)
@@ -136,7 +138,7 @@ def _cutoff(first: int, last: int, root: str, raw: str) -> int:
 def trainable_through(cfg) -> int:
     """The latest season whose Finals are over.  Read from the data, not from config."""
     return _cutoff(int(cfg["first_season"]), int(cfg["last_season"]), str(cfg["_root"]),
-                   str(cfg.get("paths", {}).get("raw", "data/raw")))
+                   str(cfg.get("paths", {}).get("raw", DEFAULT_PATHS["raw"])))
 
 
 def trainable(cfg) -> Trainable:
@@ -169,7 +171,7 @@ def check_trainable(seasons, cfg, what: str = "this fit") -> Trainable:
     if late:
         raise LeakageError(
             f"{what} was given season(s) {late}, whose Finals are not over (the cutoff is {cut}).  "
-            f"Only the ridge may see a season in progress; see src/openrapm/seasons.py.")
+            f"Only the ridge may see a season in progress; see src/openrapm/data/seasons.py.")
     return Trainable(tuple(int(s) for s in seasons), cut)
 
 
@@ -197,5 +199,5 @@ def drop_untrainable(panel: "pd.DataFrame", cfg, label_col: str = "window", what
     dropped = tuple(sorted(set(panel.loc[~keep, label_col].astype(str))))
     if dropped:
         print(f"  {what}: {int((~keep).sum())} rows dropped from {list(dropped)} -- past the "
-              f"trainable cutoff {cut} (src/openrapm/seasons.py)", flush=True)
+              f"trainable cutoff {cut} (src/openrapm/data/seasons.py)", flush=True)
     return panel.loc[keep].reset_index(drop=True), dropped

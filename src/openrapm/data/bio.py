@@ -17,10 +17,10 @@ a covariate (the standing rule from HANDOFF Part 2's traps).
 """
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
+
+from .config import resolve
 
 BIO_INPUTS = ["height", "weight", "draft_pick"]
 TENURE_INPUTS = ["tenure", "n_teams"]
@@ -31,17 +31,17 @@ _CACHE: dict = {}
 
 
 def player_bio(cfg, force: bool = False) -> pd.DataFrame:
-    """One row per player: height, weight, draft_pick.  Cached at data/cache/bio.parquet."""
-    root = Path(cfg["_root"])
-    path = root / "data" / "cache" / "bio.parquet"
+    """One row per player: height, weight, draft_pick.  Cached at bio.parquet under paths.cache (data/cache)."""
+    path = resolve(cfg, "cache") / "bio.parquet"
     if "bio" in _CACHE and not force:
         return _CACHE["bio"]
     if path.exists() and not force:
         _CACHE["bio"] = pd.read_parquet(path)
         return _CACHE["bio"]
-    files = sorted((root / "data" / "raw" / "bio").glob("*_RS.parquet"))
+    raw_bio = resolve(cfg, "raw") / "bio"
+    files = sorted(raw_bio.glob("*_RS.parquet"))
     if not files:
-        raise FileNotFoundError("data/raw/bio has no *_RS.parquet; run scripts/01_ingest.py")
+        raise FileNotFoundError(f"{raw_bio} has no *_RS.parquet; run scripts/01_ingest.py")
     parts = []
     for f in files:
         d = pd.read_parquet(f, columns=["PLAYER_ID", "PLAYER_HEIGHT_INCHES", "PLAYER_WEIGHT", "DRAFT_NUMBER"])

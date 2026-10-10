@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 
 from openrapm import singleyear as sy
-from openrapm.bio import PLAYER_INPUTS
+from openrapm.data.bio import PLAYER_INPUTS
 from openrapm.gbdt_prior import DERIVED, RATIOS, SHOTQ
 
 

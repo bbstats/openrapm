@@ -8,7 +8,7 @@ paid.  A field-goal attempt is priced as
 
     x = curve(distance, season) * ratio(shooter)
 
-where `curve` is the league's make probability at that distance this season (shotcurve.py) and
+where `curve` is the league's make probability at that distance this season (data/shot_curves.py) and
 `ratio` is how much the shooter beats a league-average shooter FROM HIS OWN SPOTS, measured on the
 other half of the block's games and padded toward 1:
 
@@ -20,7 +20,7 @@ The rate comes from the OTHER half of the block: a possession in a half-A game i
 shooter's half-B totals, so his own makes never price the possessions he is scored on.  Playoff
 rows use the whole regular season.  Everything is padded through pad.py, per the owner's rule.
 
-The stints carry the counts by lineup slot (stints.SLOT_COUNTERS); this module turns them into
+The stints carry the counts by lineup slot (design.SLOT_COUNTERS); this module turns them into
 expectations at window-build time, because the block (and therefore the other half) is a property
 of the training block, not of a season.  Each target is a callable `(seasons, cfg, wd_pts) ->
 (WindowData, report)` that holdout.Context.design accepts.
@@ -35,8 +35,8 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from ..pad import mom_k, shrink
 from .config import resolve
-from .pad import mom_k, shrink
 
 OTHER = {"A": "B", "B": "A"}                     # a row in half A is priced with half-B totals
 CALIB_BAND = (0.995, 1.005)
@@ -45,7 +45,7 @@ SLOTS = ("1", "2", "3", "4", "5")
 
 # ---------------------------------------------------------------------------------------- the tables
 # The phases a shooter's totals are summed over; ("RS",) until the playoffs joined the fit.
-from .design import SEASON_PHASES as SHOT_PHASES  # noqa: E402
+from ..design import SEASON_PHASES as SHOT_PHASES  # noqa: E402
 
 _SHOTS_CACHE: dict = {}
 
@@ -73,7 +73,7 @@ def load_shots(seasons, cfg, phases: tuple = SHOT_PHASES) -> pd.DataFrame:
 
 def load_ft(seasons, cfg, halves: pd.Series, phases: tuple = SHOT_PHASES) -> pd.DataFrame:
     """Per game x shooter free-throw totals from the box score, with the game's half."""
-    from .boxtable import season_box
+    from .box_scores import season_box
     b = season_box([int(s) for s in seasons], list(phases), cfg)[["game_id", "player_id", "ftm", "ft_miss"]].copy()
     b["fta"] = b.ftm + b.ft_miss
     b["half"] = b.game_id.map(halves)

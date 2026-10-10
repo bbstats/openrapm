@@ -2,7 +2,7 @@
 
 This exists because of a bug it would have caught.  The README claims `pytest -q` passes on a fresh
 clone with no data, and it did -- by silently scraping stats.nba.com mid-run and writing three game
-logs into the clone.  `boxtable.season_box` calls `ingest.load_gamelog`, which downloads when the
+logs into the clone.  `data.box_scores.season_box` calls `data.ingest.load_gamelog`, which downloads when the
 cache is cold, so a test that was meant to skip for want of data quietly fetched it instead.
 
 That is bad three ways.  It makes the suite slow and flaky, it hits a third party on every CI run

@@ -69,6 +69,83 @@ def test_no_config_key_is_unread_without_being_listed():
         f"beside them tells a reader to change a value that has no effect.")
 
 
+# ------------------------------------------------------------- the data paths and the box counts
+BOX_COUNTS = ["fg3m", "fg3_miss", "fg2m", "fg2_miss", "ftm", "ft_miss", "orb", "drb", "ast", "tov", "stl", "blk", "pf"]
+
+
+def test_box_counts_replaced_features_with_the_same_value_in_the_same_order():
+    """`features` was renamed `box_counts` in the 2026-10 cleanup.  The value and its order are load-bearing:
+    the design's box columns follow it and every cached design piece records it."""
+    from openrapm.design import FEATURES
+    cfg = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
+    assert "features" not in cfg, "the old key name is back; the code reads cfg['box_counts']"
+    assert cfg["box_counts"] == BOX_COUNTS == list(FEATURES)
+    assert _named("box_counts")
+    assert not re.search(r"""cfg\[["']features["']\]""", CODE), "a reader of the old `features` key survives"
+
+
+def test_every_data_path_is_configured_and_read():
+    """Every folder the data layer reads or writes is named in config.yaml paths, read by name, and by default
+    points where it always has, so nothing moves on disk."""
+    from openrapm.data.config import DEFAULT_PATHS
+    cfg = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
+    expected = {"raw": "data/raw", "stints": "data/stints", "cache": "data/cache", "shot_curves": "data/shotcurve"}
+    for key, value in expected.items():
+        assert cfg["paths"][key] == value == DEFAULT_PATHS[key], key
+        assert _named(key), f"paths.{key} is configured but nothing resolves it"
+    assert cfg["roles"]["cache"] == "roles.parquet", "the roles table is a file name inside paths.cache"
+
+
+def test_the_roles_table_sits_where_it_always_has_and_moves_with_the_cache(tmp_path):
+    """roles.cache is a file name inside paths.cache: under the repository's config the table is still
+    data/cache/roles_RSPO.parquet, and a config that moves paths.cache moves the table with it."""
+    from openrapm.data.config import load_config
+    from openrapm.data.roles import roles_path
+    assert roles_path(load_config(ROOT / "config.yaml")) == ROOT / "data" / "cache" / "roles_RSPO.parquet"
+    assert roles_path(load_config(ROOT / "config.yaml"), ("RS",)) == ROOT / "data" / "cache" / "roles_RS.parquet"
+    moved = {"_root": str(tmp_path / "repo"), "paths": {"cache": str(tmp_path / "verify" / "cache")},
+             "roles": {"cache": "roles.parquet"}}
+    assert roles_path(moved) == tmp_path / "verify" / "cache" / "roles_RSPO.parquet"
+    assert roles_path({"_root": str(tmp_path / "repo")}) == tmp_path / "repo" / "data" / "cache" / "roles_RSPO.parquet"
+
+
+def test_resolve_takes_relative_paths_from_the_root_and_absolute_ones_as_they_are(tmp_path):
+    from openrapm.data.config import resolve
+    from openrapm.data.roles import roles_path
+    cfg = {"_root": str(tmp_path / "repo"), "paths": {"raw": "data/raw", "cache": str(tmp_path / "elsewhere")},
+           "roles": {"cache": str(tmp_path / "elsewhere" / "roles.parquet")}}
+    assert resolve(cfg, "raw") == tmp_path / "repo" / "data" / "raw"
+    assert resolve(cfg, "cache") == tmp_path / "elsewhere"
+    assert resolve(cfg, "shot_curves") == tmp_path / "repo" / "data" / "shotcurve"      # not configured: the default
+    assert roles_path(cfg) == tmp_path / "elsewhere" / "roles_RSPO.parquet"
+    with pytest.raises(KeyError):
+        resolve(cfg, "no_such_path")
+
+
+def test_load_config_honours_OPENRAPM_CONFIG(tmp_path, monkeypatch):
+    """A verification run points every data path at another folder by naming another config.yaml."""
+    from openrapm.data.config import CONFIG_ENV, ROOT as CODE_ROOT, load_config, resolve
+    assert CONFIG_ENV == "OPENRAPM_CONFIG"
+    cfg = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
+    other = tmp_path / "verify"
+    cfg["paths"] = {key: str(other / key) for key in ("raw", "stints", "cache", "shot_curves")}
+    alt = tmp_path / "alt_config.yaml"
+    with open(alt, "w", encoding="utf-8") as fh:
+        yaml.safe_dump(cfg, fh)
+
+    monkeypatch.delenv(CONFIG_ENV, raising=False)
+    assert resolve(load_config(), "cache") == ROOT / "data" / "cache"          # unset: the repository's own
+
+    monkeypatch.setenv(CONFIG_ENV, str(alt))
+    got = load_config()
+    assert got["_root"] == str(CODE_ROOT) == str(ROOT)
+    for key in ("raw", "stints", "cache", "shot_curves"):
+        assert resolve(got, key) == other / key
+    from openrapm.data.roles import roles_path
+    assert roles_path(got) == other / "cache" / "roles_RSPO.parquet", "the roles table must follow paths.cache"
+    assert resolve(load_config(ROOT / "config.yaml"), "cache") == ROOT / "data" / "cache"   # an explicit path wins
+
+
 def test_no_listed_key_has_quietly_come_back_to_life():
     revived = sorted(UNREAD - _unread_keys())
     assert not revived, (f"{revived} are read by code again; take them off UNREAD.")

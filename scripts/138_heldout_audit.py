@@ -87,9 +87,9 @@ from scipy.stats import norm  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from openrapm.config import load_config  # noqa: E402
+from openrapm.data.config import load_config  # noqa: E402
 from openrapm.glossary import plain  # noqa: E402
-from openrapm.seasons import drop_untrainable  # noqa: E402
+from openrapm.data.seasons import drop_untrainable  # noqa: E402
 from _cli import check_flags, flag  # noqa: E402
 
 
@@ -624,7 +624,7 @@ def group_shapley_shares(seasons: list, groups: dict, out: Path, orderings: int 
     so `threads` cores; run it only when no build is running)."""
     from openrapm import singleyear as sy
     panel, _ = drop_untrainable(pd.read_parquet(ROOT / "outputs" / "role_panel_season.parquet"),
-                                load_config(ROOT / "config.yaml"), what="the season panel")
+                                load_config(), what="the season panel")
     loaded, rows_out = {}, []
     rng = np.random.default_rng(seed)
     for season in seasons:
@@ -678,7 +678,7 @@ def tradeset_leans(tests: list, alpha_path: Path) -> pd.DataFrame:
     alpha = alpha[alpha.eligible]
     # gated like every reader of the panel: a season still being played never enters a reading
     panel, _ = drop_untrainable(pd.read_parquet(ROOT / "outputs" / "role_panel_season.parquet"),
-                                load_config(ROOT / "config.yaml"), what="the season panel")
+                                load_config(), what="the season panel")
     codes = sorted({c for t in tests if decision_test(t)
                     for c in ([t["code"]] if t["kind"] == "input" else t["members"])})
     rows = []

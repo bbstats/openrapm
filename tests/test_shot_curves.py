@@ -1,10 +1,10 @@
-"""The per-season shot-distance curve (src/openrapm/shotcurve.py) on shots simulated from a known one."""
+"""The per-season shot-distance curve (src/openrapm/data/shot_curves.py) on shots simulated from a known one."""
 import numpy as np
 import pandas as pd
 import pytest
 
-from openrapm.shotcurve import (MAX_DIST, UNLOCATED, ShotCurve, calibration, fit_curve, logistic_irls, natural_spline,
-                               shot_bin, shot_rows)
+from openrapm.data.shot_curves import (MAX_DIST, UNLOCATED, ShotCurve, calibration, fit_curve, logistic_irls,
+                                       natural_spline, shot_bin, shot_rows)
 
 
 def _true_p(dist, three):

@@ -2,7 +2,7 @@
 import numpy as np
 import pandas as pd
 
-from openrapm.stints import GameParser, parse_clock, regulation_remaining
+from openrapm.data.stints import GameParser, parse_clock, regulation_remaining
 
 HOME, AWAY = 1610612700, 1610612800
 H = [1, 2, 3, 4, 5, 6, 7]
@@ -138,7 +138,7 @@ def test_exactly_one_first_attempt_bucket_per_possession_with_an_attempt():
 
 def test_counters_survive_the_stint_collapse():
     """Every counter is emitted per side and sums to the possession-level total."""
-    from openrapm.stints import POSS_COUNTERS
+    from openrapm.design import POSS_COUNTERS
     gp, p = _poss()
     st = gp.stints(p)
     for c in POSS_COUNTERS:
@@ -152,8 +152,8 @@ def test_counters_survive_the_stint_collapse():
 
 def test_shooter_counters_by_slot():
     """The per-shooter counters sum to the side totals, and the first-attempt pieces are consistent."""
-    from openrapm.shotcurve import ShotCurve
-    from openrapm.stints import SHOOTER_COUNTERS, SLOTS
+    from openrapm.data.shot_curves import ShotCurve
+    from openrapm.design import SHOOTER_COUNTERS, SLOTS
     gp = GameParser(synthetic_game(), _box(), HOME, AWAY, "0020000001", curve=ShotCurve.constant(p2=0.5, p3=0.4))
     p = gp.possessions()
     st = gp.stints(p)

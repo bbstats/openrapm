@@ -26,16 +26,16 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from openrapm import design as design_mod  # noqa: E402
-from openrapm.config import load_config  # noqa: E402
+from openrapm.data.config import load_config, resolve  # noqa: E402
+from openrapm.data.designs import build_window, build_window_cached  # noqa: E402
+from openrapm.data.roles import ROLE_PHASES  # noqa: E402
+from openrapm.data.shots import SHOT_PHASES  # noqa: E402
 from openrapm.design import SEASON_PHASES  # noqa: E402
 from openrapm.exposure import BoxExposure  # noqa: E402
 from openrapm.holdout import Context, default_loader  # noqa: E402
-from openrapm.roles import ROLE_PHASES  # noqa: E402
-from openrapm.windows import build_window  # noqa: E402
-from openrapm.xshoot import SHOT_PHASES  # noqa: E402
 
 CFG = load_config()
-_STINTS = Path(CFG["_root"]) / CFG.get("paths", {}).get("stints", "data/stints")
+_STINTS = resolve(CFG, "stints")
 HAVE_DATA = _STINTS.is_dir() and any(_STINTS.glob("*_PO.parquet"))
 needs_data = pytest.mark.skipif(not HAVE_DATA, reason="no stints; run scripts/02_stints.py")
 
@@ -47,7 +47,6 @@ def _default(fn, name):
 
 
 def test_every_phase_default_is_the_whole_season():
-    from openrapm.designcache import build_window_cached
     assert SEASON_PHASES == ("RS", "PO")
     for fn, arg in ((build_window, "phases"), (build_window_cached, "phases"),
                     (default_loader, "phases"), (Context.design, "phases"),
@@ -81,7 +80,7 @@ def test_a_window_actually_contains_playoff_rows():
 @needs_data
 def test_role_inputs_count_playoff_minutes():
     """A rotation player on a team that went deep played more games than his regular season says."""
-    from openrapm.roles import season_roles
+    from openrapm.data.roles import season_roles
     season = max(int(p.stem.split("_")[0]) for p in _STINTS.glob("*_PO.parquet"))
     both = season_roles(season, CFG)
     rs = season_roles(season, CFG, phases=("RS",))

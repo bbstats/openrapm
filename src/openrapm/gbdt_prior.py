@@ -11,7 +11,6 @@ import numpy as np
 import pandas as pd
 
 from .design import FEATURES
-from .roles import CAREER_INPUTS
 
 SIDES = ("O", "D")
 ROLE_INPUTS = ["poss_pct", "gs_pct", "age"]
@@ -57,8 +56,8 @@ RATIOS = {
 }
 # Shot quality: WHERE his attempts came from, which no box rate can say.  `data/stints/{season}_RS_shots.parquet`
 # carries, per shooter per game, fg2a / fg2m / xl2 and fg3a / fg3m / xl3, where xl2 and xl3 are the LEAGUE's
-# expected makes from HIS locations (shotcurve.py, and calibrated per season: sum(xl2) == sum(fg2m) to four
-# figures).  Summed over a block (xshoot.player_shot_frame) they split what the rates give as one number:
+# expected makes from HIS locations (data/shot_curves.py, and calibrated per season: sum(xl2) == sum(fg2m) to four
+# figures).  Summed over a block (data.shots.player_shot_frame) they split what the rates give as one number:
 #
 #   difficulty    xl / a         the league make probability of his average attempt -- a rim-runner and a
 #                                mid-range shooter at the same FG% sit at opposite ends of it
@@ -81,11 +80,12 @@ SHOTQ = ["q2", "q3", "m2", "m3", "xps", "mpts"]
 DERIVED_FEATURES = [*FULL_FEATURES, *DERIVED]
 RATIO_FEATURES = [*DERIVED_FEATURES, *RATIOS]
 SHOT_FEATURES = [*RATIO_FEATURES, *SHOTQ]
-# Experience (roles.career_inputs, stored in the panel and rebuilt from the training block at prediction
+# Experience (data.roles.career_inputs, stored in the panel and rebuilt from the training block at prediction
 # time): seasons played, career possessions in thousands and the age he entered at, all counted BEFORE the
 # block's first season.  Age is in the prior already and is not the same thing -- a 25-year-old rookie and a
 # 25-year-old in year seven are different players, and the panel had no way to say which was which.
-CAREER = list(CAREER_INPUTS)                          # defined in roles.py, where they are built
+CAREER_INPUTS = ["exp_yrs", "exp_poss", "entry_age"]  # data/roles.py builds them (career_inputs) and imports this
+CAREER = list(CAREER_INPUTS)
 PRIOR_FEATURES = [*SHOT_FEATURES, *CAREER]           # everything: the accuracy-first prior of FINDINGS 22
 
 

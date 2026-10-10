@@ -25,9 +25,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from ..design import AWAY_SLOTS, HOME_SLOTS, POSS_COUNTERS, SHOOTER_COUNTERS, SLOT_COUNTERS
 from .config import resolve
-from .design import AWAY_SLOTS, HOME_SLOTS
-from .ingest import fetch_boxscore, fetch_pbp, fetch_period_box, game_table, load_gamelog, pbpstats_games
+from .ingest import OfflineFetch, fetch_boxscore, fetch_pbp, fetch_period_box, game_table, load_gamelog, pbpstats_games
 
 CLOCK_RE = re.compile(r"PT(\d+)M(\d+(?:\.\d+)?)S")
 SUB_RE = re.compile(r"SUB:\s*(.+?)\s+FOR\s+(.+)$")
@@ -45,66 +45,19 @@ RIM_FT = 3.0          # feet; at or inside this is the "rim" bucket
 # checked on load, because the cache is keyed on path existence alone: without this, adding a column
 # leaves every stale file loading happily with the new columns silently absent.
 #   1  the original schema: poss/pts/margin/lineups
-#   2  per-possession counters (POSS_COUNTERS below), for the luck-adjusted target
+#   2  per-possession counters (design.POSS_COUNTERS), for the luck-adjusted target
 #   3  xftm / xftm_tech: expected free-throw makes, the first luck-adjusted term
-#   4  per-shooter attempt counters by lineup slot (SLOT_COUNTERS), the first attempt's realised
+#   4  per-shooter attempt counters by lineup slot (design.SLOT_COUNTERS), the first attempt's realised
 #      points and rebound chance (pts1, chance1), the cross-fitting half per game, and the per-game
-#      shooter table -- the inputs of the shooter-level expected points (xshoot.py)
+#      shooter table -- the inputs of the shooter-level expected points (data/shots.py)
 STINT_SCHEMA = 4
 
 
 class StaleStintCache(RuntimeError):
     """A cached stint file predates the current schema and must be rebuilt."""
 
-# Per-possession counters, carried alongside `points` and summed per side into the stints.
-#
-# `att` is an ATTEMPT EVENT, and it is the unit the rebound chain is built on: every field-goal
-# attempt, plus every free-throw trip that is not an and-1.  A shot that draws a shooting foul
-# records no FGA at all, so counting only FGA misses 9% of possessions -- see FINDINGS.md section 14,
-# where this definition reconciles the possession count to 0.25% across 1998, 2005 and 2024 while
-# the box-score convention (FGA only) is out by 9%.
-#
-# Two identities hold exactly, per possession, and are tested in tests/test_stints.py:
-#     points - pts_tech == 2*(fgm - fg3m) + 3*fg3m + ftm
-#     reb_cont - cont_dead + att_retained == att - 1     (whenever the possession reaches an attempt)
-# There are exactly three ways a possession gets an attempt after its first, and the identity names
-# all of them:
-#   reb_cont      it rebounded its own miss (including `oreb_unattr`, where the feed recorded no
-#                 rebound row -- a block or a tip -- but play plainly continued)
-#   att_retained  a flagrant, clear-path or away-from-play foul handed the ball back
-#   cont_dead     subtracts a continuation that led to NO further attempt: rebound your own miss and
-#                 then turn it over, or have the period expire.  Only the last continuation can be
-#                 dead, since between any two rebounds there is necessarily a shot.
-POSS_COUNTERS = (
-    "pts_tech",                                             # technical/deferred FT points
-    "fga", "fgm", "fg3a", "fg3m", "fta", "ftm",             # box-score shooting
-    "fta_tech", "ftm_tech", "fta1", "tov",
-    "att", "and1", "trip_shoot", "trip_ns", "fga_fouled", "att_retained",
-    "reb_chance", "reb_cont", "reb_drop", "cont_dead",      # the rebound chain
-    "oreb_p", "oreb_t", "oreb_unattr",
-    "fga_rim", "fgm_rim", "fga_mid", "fgm_mid", "fga_thr", "fgm_thr",
-    "att1_rim", "att1_mid", "att1_thr", "att1_ft",          # the possession's FIRST attempt only
-    "xftm", "xftm_tech",                                    # EXPECTED free-throw makes (see below)
-    "pts1", "chance1",                                      # the first attempt's realised points (incl. its
-                                                            # free throws) and whether it produced a rebound chance
-)
-
-# Per-SHOOTER counters, kept by lineup slot so the shooter's own padded rate can price them at
-# window-build time (xshoot.py).  The rate depends on which seasons are pooled and on which half of
-# them is the other half, so it cannot be baked into the stints; the counts can.
-#   fg2a, fg3a, fta   his two-point, three-point and (non-technical) free-throw attempts
-#   xl2, xl3          the sum over those attempts of the LEAGUE make probability at that distance this
-#                     season (shotcurve.py); xv2, xv3 the sum of l(1-l), for the logit variant
-#   *1                the same restricted to the possession's first attempt (fg2a1/xl2_1/fg3a1/xl3_1),
-#                     the free throws that belong to it (fta1), and its trip's last free throw (ftlast1),
-#                     the one whose miss creates a rebound chance
-# Slots are positions in the stint's SORTED lineup (h1..h5 / a1..a5); `x` is a shooter who was no
-# longer on the floor when the possession closed (subbed out after his free throws), priced at the
-# league rate.
-SHOOTER_COUNTERS = ("fg2a", "xl2", "xv2", "fg3a", "xl3", "xv3", "fta",
-                    "fg2a1", "xl2_1", "fg3a1", "xl3_1", "fta1", "ftlast1")
-SLOTS = ("1", "2", "3", "4", "5", "x")
-SLOT_COUNTERS = tuple(f"{c}_s{s}" for c in SHOOTER_COUNTERS for s in SLOTS)
+# The per-possession counters (POSS_COUNTERS) and the per-shooter counters by lineup slot
+# (SHOOTER_COUNTERS, SLOT_COUNTERS) are defined in design.py, which reads them, and imported above.
 SHOT_TABLE = ("fg2a", "fg2m", "xl2", "fg3a", "fg3m", "xl3")     # the per-game shooter table
 
 # Expected free throws replace the ones that actually went in, which is the first and cleanest piece
@@ -174,7 +127,7 @@ class GameParser:
     def __init__(self, pbp: pd.DataFrame, box: pd.DataFrame, home_id: int, away_id: int, game_id: str,
                  period_box_fetcher=None, gt_rule=None, ft_rates=None, curve=None, log_shots=False):
         self.game_id = game_id
-        self.curve = curve               # shotcurve.ShotCurve for the season; None -> flat fallback rates
+        self.curve = curve               # shot_curves.ShotCurve for the season; None -> flat fallback rates
         self.shots = {}                  # pid -> per-game shooter totals (SHOT_TABLE), every attempt
         # The shot logger (shotframe.py): one dict per field-goal attempt with its possession context.  It
         # only appends to `shot_log`; nothing the stints are built from reads it, so the stints are the
@@ -393,9 +346,9 @@ class GameParser:
         return out
 
     def shot_p(self, three: bool, dist: float, desc: str) -> float:
-        """The LEAGUE make probability of this attempt at this distance this season (shotcurve)."""
+        """The LEAGUE make probability of this attempt at this distance this season (shot_curves)."""
         if self.curve is None:
-            from .shotcurve import FALLBACK
+            from .shot_curves import FALLBACK
             return FALLBACK[bool(three)]
         return self.curve.prob(dist, three, desc)
 
@@ -1076,12 +1029,12 @@ def build_season(season: int, phase: str, cfg, force=False, verbose=True):
     games = game_table(gl)
     gt_rule = cfg.get("garbage_time", {})
     # the shooters' season free-throw totals, for the leave-one-game-out expected-makes term
-    from .boxtable import box_from_gamelog, ft_padding, ft_totals
+    from .box_scores import box_from_gamelog, ft_padding, ft_totals
     sb = box_from_gamelog(gl)
     ft_rates = (ft_totals(sb), *ft_padding(sb))
     # the league's make probability by distance this season (the regular season's curve, for the
     # playoffs too), so every attempt carries the league's view of it into the shooter counters
-    from .shotcurve import curve_for
+    from .shot_curves import curve_for
     # `force` reaches here too: a curve cached from an incomplete scrape used to survive every
     # later `02_stints.py --force`, because only the stints were rebuilt and the curve was not.
     curve = curve_for(season, cfg, force=force, verbose=verbose)
@@ -1091,6 +1044,8 @@ def build_season(season: int, phase: str, cfg, force=False, verbose=True):
     for k, g in enumerate(games.itertuples(index=False)):
         try:
             st, d, nm, shots = build_game(g.game_id, g.home_team_id, g.away_team_id, cfg, gt_rule, ft_rates, curve)
+        except OfflineFetch:
+            raise                    # offline, a missing raw file is a copying mistake, not a game to drop
         except Exception as e:  # noqa: BLE001
             diags.append(dict(game_id=g.game_id, error=repr(e)[:300]))
             continue
@@ -1166,6 +1121,8 @@ def season_diagnostics(season: int, phase: str, cfg) -> dict:
             out["pbpstats_games_matched"] = len(m)
             out["poss_abs_diff_per_game_vs_pbpstats"] = float(diff.mean() / 2)
             out["poss_within_2_frac"] = float((diff <= 4).mean())
+    except OfflineFetch:
+        raise
     except Exception as e:  # noqa: BLE001
         out["pbpstats_error"] = repr(e)[:100]
     # sum of player possessions = 5 x team possessions holds by construction; check five distinct players

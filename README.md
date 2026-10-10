@@ -33,7 +33,7 @@ the gradient booster the box prior uses; it is first-party and Apache-2.0.
 ## The two rules
 
 **1. The current season is never trained on.** Every season may be loaded and rated. A season may be
-*fit* on only once its Finals are over — which `src/openrapm/seasons.py` reads from the data rather
+*fit* on only once its Finals are over — which `src/openrapm/data/seasons.py` reads from the data rather
 than from a constant, by asking whether any team has won the sixteen playoff games that win a title.
 That covers the box prior, the role prior, the calibration map and every hyper-parameter. The ridge
 is exempt, because a rating *is* a ridge coefficient and solving it on the season in progress is the
@@ -111,13 +111,15 @@ cleanup (tag archive/research-2026-10).
 ## Layout
 
     src/openrapm/
-      seasons.py     which seasons may be trained on -- the trust boundary
-      ingest.py      play-by-play and box scores from stats.nba.com
-      stints.py      play-by-play to stints
+      data/          the data layer: everything that reads or writes the disk or the network
+        seasons.py   which seasons may be trained on -- the trust boundary
+        ingest.py    play-by-play and box scores from stats.nba.com
+        stints.py    play-by-play to stints
+        roles.py     playing-time share, starts, age per player-season
+        designs.py   a window's design, from cached per-season pieces
       design.py      the sparse design: players, fixed effects, box exposures
       exposure.py    cross-fitted, empirical-Bayes padded per-100 rates
       estimator.py   the mixed model (Henderson), eigen lambda path
-      roles.py       playing-time share, starts, age per player-season
       spm.py         APM and the role prior
       gbdt_prior.py  the box-score feature definitions the prior reads
       looseason.py   the label: one RAPM per player from every season but the rated one

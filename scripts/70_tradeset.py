@@ -58,10 +58,11 @@ import pandas as pd  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 from openrapm import tradeset as ts_mod  # noqa: E402
-from openrapm.config import load_config  # noqa: E402
+from openrapm.data.config import load_config, resolve  # noqa: E402
+from openrapm.data.roles import roles_path  # noqa: E402
 from openrapm.holdout import Context, Ratings, predict_season, score  # noqa: E402
 from openrapm.priorridge import armse  # noqa: E402
-from openrapm.xshoot import DEFENSE_TARGETS  # noqa: E402
+from openrapm.data.shots import DEFENSE_TARGETS  # noqa: E402
 
 # `load_table` is the one place the positive-good rating columns are turned into the model's raw sign
 # (defence = points allowed).  Importing it rather than copying it keeps a single definition of the flip:
@@ -81,7 +82,7 @@ from _cli import check_flags, flag as _flag, switch   # noqa: E402
 
 
 def _target(name):
-    """A `design.TARGETS` key, or the `xshoot.DEFENSE_TARGETS` callable of that name."""
+    """A `design.TARGETS` key, or the `data.shots.DEFENSE_TARGETS` callable of that name."""
     return DEFENSE_TARGETS[name] if name in DEFENSE_TARGETS else name
 
 
@@ -91,8 +92,7 @@ def team_of_rows(keys: pd.DataFrame, cfg) -> pd.DataFrame:
     The stints carry no team id -- home and away are implied by the slot columns -- so it comes from the
     per-game diagnostic frame written beside them, one row per game.
     """
-    root = Path(cfg["_root"])
-    stints = root / cfg.get("paths", {}).get("stints", "data/stints")
+    stints = resolve(cfg, "stints")
     frames = []
     for (season, phase), _ in keys.groupby(["season", "phase"], sort=True):
         path = stints / f"{season}_{phase}_diag.parquet"
@@ -143,7 +143,7 @@ def corrected(ratings_h: pd.DataFrame, player_ids, alpha_off, alpha_def, scale=(
 
 def main():
     check_flags()      # refuse a flag this script does not understand (scripts/_cli.py)
-    cfg = load_config(ROOT / "config.yaml")
+    cfg = load_config()
     first, last = int(cfg["first_season"]), int(cfg["last_season"])
     rankings_path = ROOT / _flag("rankings", "outputs/season_ratings_sy_lam13037.parquet")
     lambdas = [float(x) for x in _flag("lambdas", "1000,3000,10000,30000,100000,300000").split(",")]
@@ -163,7 +163,7 @@ def main():
     raw = pd.read_parquet(rankings_path)
     names = raw[["player_id", "player_name"]].drop_duplicates("player_id")
     table = load_table(rankings_path, "rating")
-    roles = pd.read_parquet(ROOT / "data/cache/roles_RSPO.parquet")
+    roles = pd.read_parquet(roles_path(cfg))
 
     ctx = Context.load(cfg)
     ctx.cache_size = 2

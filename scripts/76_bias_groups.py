@@ -41,8 +41,8 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
 from openrapm.archetype import RATES, cluster_proba, fit_mixture, per36  # noqa: E402
-from openrapm.boxtable import season_box  # noqa: E402
-from openrapm.config import load_config  # noqa: E402
+from openrapm.data.box_scores import season_box  # noqa: E402
+from openrapm.data.config import load_config  # noqa: E402
 
 MIN_POSS = 1000
 SUFFIX = re.compile(r"\b(jr|sr|ii|iii|iv|v)\b")

@@ -46,9 +46,9 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
 from openrapm import singleyear as sy  # noqa: E402
-from openrapm.config import load_config  # noqa: E402
+from openrapm.data.config import load_config  # noqa: E402
 from openrapm.glossary import plain  # noqa: E402
-from openrapm.seasons import drop_untrainable  # noqa: E402
+from openrapm.data.seasons import drop_untrainable  # noqa: E402
 
 CURVE = dict(n_estimators=150, learning_rate=0.05, num_leaves=6, min_child_samples=400, reg_lambda=10.0,
              subsample=1.0, colsample_bytree=1.0, n_jobs=1, verbose=-1, random_state=0)
@@ -95,7 +95,7 @@ def main() -> None:
     check_flags()
     alpha_path = ROOT / flag("alpha", "outputs/tradeset_lgb_noonc_rs_alpha.parquet")
     tag, n_perms, n_bins = flag("tag", "lgb_noonc_rs"), int(flag("perms", 20)), int(flag("bins", 20))
-    cfg = load_config(ROOT / "config.yaml")
+    cfg = load_config()
     alpha = pd.read_parquet(alpha_path)
     alpha = alpha[alpha.eligible & (alpha.without_poss >= 1)]
     panel, _ = drop_untrainable(pd.read_parquet(ROOT / "outputs/role_panel_season.parquet"), cfg, what="the season panel")

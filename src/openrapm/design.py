@@ -31,6 +31,59 @@ AWAY_SLOTS = [f"a{i}" for i in range(1, 6)]
 STINT_COLUMNS = ["game_id", "season", "phase", "series_id", "period", *HOME_SLOTS, *AWAY_SLOTS,
                  "poss_h", "poss_a", "pts_h", "pts_a", "margin_h", "frac_rem", "is_gt", "neutral"]
 
+# The stints' counter columns.  They are defined here, beside the other stint columns, because the design
+# reads them; the stint parser (data/stints.py) imports them from here and fills them.
+#
+# Per-possession counters, carried alongside `points` and summed per side into the stints.
+#
+# `att` is an ATTEMPT EVENT, and it is the unit the rebound chain is built on: every field-goal
+# attempt, plus every free-throw trip that is not an and-1.  A shot that draws a shooting foul
+# records no FGA at all, so counting only FGA misses 9% of possessions -- see FINDINGS.md section 14,
+# where this definition reconciles the possession count to 0.25% across 1998, 2005 and 2024 while
+# the box-score convention (FGA only) is out by 9%.
+#
+# Two identities hold exactly, per possession, and are tested in tests/test_stints.py:
+#     points - pts_tech == 2*(fgm - fg3m) + 3*fg3m + ftm
+#     reb_cont - cont_dead + att_retained == att - 1     (whenever the possession reaches an attempt)
+# There are exactly three ways a possession gets an attempt after its first, and the identity names
+# all of them:
+#   reb_cont      it rebounded its own miss (including `oreb_unattr`, where the feed recorded no
+#                 rebound row -- a block or a tip -- but play plainly continued)
+#   att_retained  a flagrant, clear-path or away-from-play foul handed the ball back
+#   cont_dead     subtracts a continuation that led to NO further attempt: rebound your own miss and
+#                 then turn it over, or have the period expire.  Only the last continuation can be
+#                 dead, since between any two rebounds there is necessarily a shot.
+POSS_COUNTERS = (
+    "pts_tech",                                             # technical/deferred FT points
+    "fga", "fgm", "fg3a", "fg3m", "fta", "ftm",             # box-score shooting
+    "fta_tech", "ftm_tech", "fta1", "tov",
+    "att", "and1", "trip_shoot", "trip_ns", "fga_fouled", "att_retained",
+    "reb_chance", "reb_cont", "reb_drop", "cont_dead",      # the rebound chain
+    "oreb_p", "oreb_t", "oreb_unattr",
+    "fga_rim", "fgm_rim", "fga_mid", "fgm_mid", "fga_thr", "fgm_thr",
+    "att1_rim", "att1_mid", "att1_thr", "att1_ft",          # the possession's FIRST attempt only
+    "xftm", "xftm_tech",                                    # EXPECTED free-throw makes (data/stints.py)
+    "pts1", "chance1",                                      # the first attempt's realised points (incl. its
+                                                            # free throws) and whether it produced a rebound chance
+)
+
+# Per-SHOOTER counters, kept by lineup slot so the shooter's own padded rate can price them at
+# window-build time (data/shots.py).  The rate depends on which seasons are pooled and on which half of
+# them is the other half, so it cannot be baked into the stints; the counts can.
+#   fg2a, fg3a, fta   his two-point, three-point and (non-technical) free-throw attempts
+#   xl2, xl3          the sum over those attempts of the LEAGUE make probability at that distance this
+#                     season (data/shot_curves.py); xv2, xv3 the sum of l(1-l), for the logit variant
+#   *1                the same restricted to the possession's first attempt (fg2a1/xl2_1/fg3a1/xl3_1),
+#                     the free throws that belong to it (fta1), and its trip's last free throw (ftlast1),
+#                     the one whose miss creates a rebound chance
+# Slots are positions in the stint's SORTED lineup (h1..h5 / a1..a5); `x` is a shooter who was no
+# longer on the floor when the possession closed (subbed out after his free throws), priced at the
+# league rate.
+SHOOTER_COUNTERS = ("fg2a", "xl2", "xv2", "fg3a", "xl3", "xv3", "fta",
+                    "fg2a1", "xl2_1", "fg3a1", "xl3_1", "fta1", "ftlast1")
+SLOTS = ("1", "2", "3", "4", "5", "x")
+SLOT_COUNTERS = tuple(f"{c}_s{s}" for c in SHOOTER_COUNTERS for s in SLOTS)
+
 # What the model is asked to explain.  `num` is a weighted sum of stint counters, `den` the exposure
 # that is both the rate's denominator and the row's weight.
 #
@@ -55,7 +108,7 @@ TARGETS = {
 
 
 def target_counter_columns(target) -> set:
-    """The per-possession counters a `TARGETS` response reads (designcache's `counter_cols`)."""
+    """The per-possession counters a `TARGETS` response reads (data.designs' `counter_cols`)."""
     tg = TARGETS[target] if isinstance(target, str) else dict(target)
     return set(tg["num"]) | {tg["den"]}
 
@@ -162,10 +215,10 @@ class WindowData:
     game_poss: pd.DataFrame    # game_idx, psx_idx, poss_off, poss_def
     rows: pd.DataFrame         # per-row metadata: game_idx, season, phase, poss, is_home_off, is_gt, half
     games: pd.DataFrame        # game_idx, game_id, season, phase, series_id, half
-    # the offense's per-possession counters (stints.POSS_COUNTERS) summed over the row, when the
+    # the offense's per-possession counters (POSS_COUNTERS above) summed over the row, when the
     # stints carry them; the luck-adjusted target (xpts.py) is built from these at window-build time
     counters: pd.DataFrame | None = None
-    # the design's own building blocks, kept so a fit need not slice X back apart (designcache sets them):
+    # the design's own building blocks, kept so a fit need not slice X back apart (data.designs sets them):
     # Z (n x 2 n_ps, csr, sorted), F (n x n_fixed dense), lineup_o / lineup_d (n x 5 Z-unit indices, sorted per
     # row), game_idx (n,)
     parts: dict | None = None
@@ -424,7 +477,6 @@ def build_design(stints: pd.DataFrame, box: pd.DataFrame, features: list, cfg: d
                          "poss": poss, "den": den, "is_home_off": is_home_off, "is_gt": r_gt > 0,
                          "stint": stint_i, "half": game_half[r_game]})
     # the offense's counters per row, in the same row order (home-offense rows, then away-offense)
-    from .stints import POSS_COUNTERS, SLOT_COUNTERS
     have = [c for c in POSS_COUNTERS + SLOT_COUNTERS if f"{c}_h" in st.columns and f"{c}_a" in st.columns]
     counters = None
     if have:

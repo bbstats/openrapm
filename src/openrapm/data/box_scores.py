@@ -105,7 +105,7 @@ def ft_padding(box: pd.DataFrame, min_fta: float = 20.0) -> tuple[float, float]:
     k is in ATTEMPTS, which is the unit free-throw percentage is measured in.  The estimator lives in
     `pad.mom_k`, the one padding helper; this is the free-throw call to it.
     """
-    from .pad import mom_k
+    from ..pad import mom_k
     g = box.groupby(["player_id", "season"], as_index=False)[["ftm", "ft_miss"]].sum()
     return mom_k(g.ftm.to_numpy(), (g.ftm + g.ft_miss).to_numpy(), min_att=min_fta, fallback_rate=0.75)
 

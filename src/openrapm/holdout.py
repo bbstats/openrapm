@@ -44,8 +44,9 @@ from typing import Callable, Protocol
 import numpy as np
 import pandas as pd
 
+from .data.designs import build_window
 from .design import SEASON_PHASES, WindowData
-from .windows import build_window, window_label, window_seasons
+from .windows import window_label, window_seasons
 
 RESULT_COLUMNS = ["held_out", "k", "train", "system", "lam", "cut", "split", "group", "n", "mse", "base", "calib",
                   "calib_side", "scale", "scale_off", "scale_def", "covered", "tg", "tg_base", "tg_n", "seconds"]
@@ -104,7 +105,7 @@ class Context:
     @classmethod
     def load(cls, cfg, loader=None) -> "Context":
         ctx = cls(cfg=cfg, loader=loader or default_loader)
-        from .roles import player_season_inputs, roles_path
+        from .data.roles import player_season_inputs, roles_path
         rp = roles_path(cfg)
         if rp.exists():
             ctx.roles = pd.read_parquet(rp)
@@ -115,7 +116,7 @@ class Context:
         """player_id -> True if in the top tercile of the big-man score (orb + blk + 0.3 drb - 0.5 ast - 0.4 fg3m
         per 36, the definition of the retired scripts/22_vs_consensus.py) among players with `min_minutes`."""
         if season not in self._bigness:
-            from .boxtable import season_box
+            from .data.box_scores import season_box
             b = season_box([season], list(SEASON_PHASES), self.cfg)
             g = b.groupby("player_id")[["orb", "blk", "drb", "ast", "fg3m", "minutes"]].sum()
             g = g[g.minutes >= min_minutes]
@@ -138,7 +139,7 @@ class Context:
 
     @property
     def features(self) -> list:
-        return list(self.cfg["features"])
+        return list(self.cfg["box_counts"])
 
     @property
     def win_of(self) -> dict:
@@ -173,7 +174,7 @@ class Context:
         (seasons, cfg, wd_pts) -> WindowData | (WindowData, report) for a derived target.  `phases` names the
         phases whose rows enter the design and defaults to `design.SEASON_PHASES`, both of them -- for the
         fit AND for the rows the criterion scores, because a season is one entity.
-        `counter_cols` keeps only those per-possession counters (designcache.build_window_cached); it is
+        `counter_cols` keeps only those per-possession counters (data.designs.build_window_cached); it is
         honoured by the default loader only, and it is part of the cache key."""
         phases = tuple(phases)
         own = self.loader is default_loader
@@ -204,7 +205,7 @@ class Context:
     def main_team(self, season: int) -> dict:
         """player_id -> the team he played the most minutes for that season (box scores)."""
         if season not in self._teams:
-            from .boxtable import season_box
+            from .data.box_scores import season_box
             b = season_box([season], list(SEASON_PHASES), self.cfg).groupby(
                 ["player_id", "team_id"], as_index=False)["minutes"].sum()
             b = b.sort_values("minutes").drop_duplicates("player_id", keep="last")

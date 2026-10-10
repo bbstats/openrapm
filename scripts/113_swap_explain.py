@@ -29,7 +29,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
-from openrapm.config import load_config  # noqa: E402
+from openrapm.data.config import load_config  # noqa: E402
+from openrapm.data.ingest import raw_dir  # noqa: E402
 
 NAMES = {"fg3m": "made threes", "fg3_miss": "missed threes", "fg2m": "made twos", "fg2_miss": "missed twos",
          "ftm": "made free throws", "ft_miss": "missed free throws", "orb": "offensive rebounds",
@@ -52,7 +53,7 @@ def main():
     H = int(flag("season", "2026"))
     S91 = _borrow("_swap91_for_113", "91_swap_adjust.py")
     sa, sw, t90 = S91.sa, S91.sw, S91._t90
-    cfg = load_config(ROOT / "config.yaml")
+    cfg = load_config()
     kappa, folds, ridge = 0.5, 5, 1e-4
     # the shipped table's input to 91: experiment 45's since 2026-10-08 (before, season_ratings_product_priorshrink_pre_swap)
     base_path = ROOT / "outputs" / f"{flag('base', 'season_ratings_product_lgb_noonc_priorshrink_pre_swap')}.parquet"
@@ -170,8 +171,8 @@ def main():
                 print(f"  own swaps pulled toward the half-strength type, tau {tau:g}, {side}: {sign * c.get(pid, np.nan):+.2f}"
                       f" (before centering and the spread hold)")
 
-    g = pd.read_parquet(ROOT / "data" / "raw" / "gamelog" / f"{H}_RS.parquet", columns=["PLAYER_ID", "TEAM_ID",
-                                                                                         "TEAM_ABBREVIATION"])
+    g = pd.read_parquet(raw_dir(cfg) / "gamelog" / f"{H}_RS.parquet", columns=["PLAYER_ID", "TEAM_ID",
+                                                                                "TEAM_ABBREVIATION"])
     team_id = int(g[g.TEAM_ABBREVIATION == team_code].TEAM_ID.iloc[0])
     tp = pd.concat([tposs[H][s].assign(side=s) for s in sa.SIDES])
     share = (tp[tp.team == team_id].groupby("player_id").poss.sum() / tp[tp.team == team_id].poss.sum())

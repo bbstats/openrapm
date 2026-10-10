@@ -20,13 +20,13 @@ reach his rating's coefficients; they may never reach his rating ("single year o
 
 ```mermaid
 flowchart TD
-    RAW["Play-by-play and box scores, 1997-2026<br/><code>ingest.py</code>, <code>scripts/01_ingest.py</code>"]
-    ST["<b>Stints</b> — one row per span with the same ten on the floor<br/>possessions, points, 118 per-possession and per-slot counters<br/><code>stints.py</code>, <code>scripts/02_stints.py</code>"]
-    DES["<b>Design</b> — one row per stint per side<br/>10 player columns, plus home, playoff, garbage time,<br/>score margin, margin x time<br/>y = points per 100, weight = possessions<br/><code>design.py</code>, <code>designcache.py</code>"]
+    RAW["Play-by-play and box scores, 1997-2026<br/><code>data/ingest.py</code>, <code>scripts/01_ingest.py</code>"]
+    ST["<b>Stints</b> — one row per span with the same ten on the floor<br/>possessions, points, 118 per-possession and per-slot counters<br/><code>data/stints.py</code>, <code>scripts/02_stints.py</code>"]
+    DES["<b>Design</b> — one row per stint per side<br/>10 player columns, plus home, playoff, garbage time,<br/>score margin, margin x time<br/>y = points per 100, weight = possessions<br/><code>design.py</code>, <code>data/designs.py</code>"]
     PAN["<b>Season panel</b> — one row per player-season-side:<br/>13 per-100 rates padded toward the league by method of moments,<br/>ten derived combinations, ten ratios, six shot-quality columns,<br/>role, age, bio, his own on-court record<br/><code>scripts/49_role_panel.py --season</code>, <code>exposure.py</code>, <code>pad.py</code>"]
 
     TGO["<b>Offensive target</b> <code>xpts_ft</code><br/>made free throws replaced by the shooter's padded expectation"]
-    TGD["<b>Defensive target</b> <code>x3def_w0.25</code><br/>three quarters of every opponent three-point make replaced by<br/>3 x that shooter's own padded 3P%, k = 450 attempts<br/><code>xshoot.def_three_design</code>"]
+    TGD["<b>Defensive target</b> <code>x3def_w0.25</code><br/>three quarters of every opponent three-point make replaced by<br/>3 x that shooter's own padded 3P%, k = 450 attempts<br/><code>data.shots.def_three_design</code>"]
 
     RAW --> ST --> DES
     ST --> PAN
@@ -128,10 +128,10 @@ what selected the stints, the design, the targets and the exposures that section
 ```mermaid
 flowchart TD
     RAW["Play-by-play, box scores, game logs<br/>1997-2026, data/raw/"]
-    ST["<b>Stints</b> — one row per span with the same ten on the floor<br/>possessions, points, 118 per-possession and per-slot counters<br/><code>stints.py</code>, <code>scripts/02_stints.py</code>"]
-    DES["<b>Design</b> — one row per stint per side, 195k rows for a 3-season window<br/>y = points per 100, weight = possessions<br/>columns: 5 offensive players, 5 defensive players, home, era,<br/>playoff, garbage time, score margin, margin x time<br/><code>designcache.py</code>, <code>design.py</code>"]
+    ST["<b>Stints</b> — one row per span with the same ten on the floor<br/>possessions, points, 118 per-possession and per-slot counters<br/><code>data/stints.py</code>, <code>scripts/02_stints.py</code>"]
+    DES["<b>Design</b> — one row per stint per side, 195k rows for a 3-season window<br/>y = points per 100, weight = possessions<br/>columns: 5 offensive players, 5 defensive players, home, era,<br/>playoff, garbage time, score margin, margin x time<br/><code>data/designs.py</code>, <code>design.py</code>"]
     TGO["<b>Offensive target</b> — made free throws replaced by expected ones<br/>xpts_ft = pts - ftm + xftm  ·  <code>design.TARGETS</code>"]
-    TGD["<b>Defensive target</b> — every opponent three replaced by<br/>3 x that shooter's padded 3P%, from the other half of the block, k = 450<br/><code>xshoot.def_three_design</code>"]
+    TGD["<b>Defensive target</b> — every opponent three replaced by<br/>3 x that shooter's padded 3P%, from the other half of the block, k = 450<br/><code>data.shots.def_three_design</code>"]
     EXP["<b>Box exposure</b> — 13 per-100 rates per player-season,<br/>padded toward the league by method of moments, centred<br/><code>exposure.py</code>, <code>pad.py</code>"]
 
     RAW --> ST --> DES

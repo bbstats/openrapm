@@ -19,7 +19,7 @@ from openrapm.priorridge import MAE_SCALE
 from openrapm.design import FEATURES, build_design
 from openrapm.simulate import simulate
 
-CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "features": FEATURES,
+CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "box_counts": FEATURES,
        "first_season": 2001, "last_season": 2003, "player_unit": "window"}
 
 

@@ -45,6 +45,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
+from openrapm.data.config import load_config, resolve  # noqa: E402
 
 NEW = ["gt_share", "closeness", "abs_margin"]
 # lineup slot -> (his team's possessions, the opponent's possessions)
@@ -61,10 +62,11 @@ from _cli import check_flags, flag as _flag, switch   # noqa: E402
 def exposure(seasons) -> pd.DataFrame:
     """One row per (player_id, season, side) with the three exposure columns."""
     out = []
+    stints_dir = resolve(load_config(), "stints")
     for season in seasons:
         frames = []
         for phase in ("RS", "PO"):
-            path = ROOT / f"data/stints/{season}_{phase}.parquet"
+            path = stints_dir / f"{season}_{phase}.parquet"
             if path.exists():
                 frames.append(pd.read_parquet(path))
         if not frames:

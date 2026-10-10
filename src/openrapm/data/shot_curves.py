@@ -4,8 +4,8 @@ Shot validity by distance is not a constant: the mid-range two of 1998 and of 20
 shots, and the corner three moved the three-point curve.  So the expected value of an attempt is
 read off a per-season curve, fitted on every field-goal attempt of that regular season -- a
 logistic regression on a natural cubic spline of distance, separately for twos and threes -- and
-cached as a one-foot lookup table in data/shotcurve/.  A single shot's own contribution to a curve
-fitted on ~200,000 is 1e-5 and is not leakage.
+cached as a one-foot lookup table under paths.shot_curves (data/shotcurve/).  A single shot's own
+contribution to a curve fitted on ~200,000 is 1e-5 and is not leakage.
 
 What the feed does and does not carry.  Coordinates are present for 70-76% of attempts in 1998-2008
 and ~100% from 2013 on, but about 15% of THREES have distance 0 in every era including 2024, and a
@@ -15,7 +15,7 @@ distance 0 is at the rim only if the description names an at-rim shot (dunk, lay
 alley-oop, finger roll), else unlocated.  `shot_bin` is the ONE place that rule lives, used by the
 fit and by the stint parser alike, so the two can never disagree.
 
-The shooter's own skill enters elsewhere (xshoot.py): this module is the league's view of the shot.
+The shooter's own skill enters elsewhere (data/shots.py): this module is the league's view of the shot.
 """
 from __future__ import annotations
 
@@ -24,6 +24,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+from .config import resolve
 
 UNLOCATED = -1
 MAX_DIST = 40                                       # feet; longer shots share the last bin
@@ -142,7 +144,7 @@ class ShotCurve:
 
 def fit_curve(rows: pd.DataFrame, season: int) -> ShotCurve:
     """Fit the two curves and the two unlocated cells from a season's shot rows."""
-    from .pad import shrink
+    from ..pad import shrink
     out = []
     for three in (False, True):
         r = rows[rows.three == three]
@@ -180,7 +182,7 @@ def calibration(curve: ShotCurve, rows: pd.DataFrame, min_n: int = 200) -> pd.Da
 
 
 def curve_path(season: int, cfg) -> Path:
-    return Path(cfg["_root"]) / "data" / "shotcurve" / f"{season}_RS.parquet"
+    return resolve(cfg, "shot_curves") / f"{season}_RS.parquet"
 
 
 # How much of a season's game log has to be readable before its curve is worth fitting.  One game
@@ -196,12 +198,14 @@ def season_shot_rows(season: int, cfg, phase: str = "RS", min_share: float = MIN
     Raises when too little of the season parses: the caller's alternative is a curve built from a
     partial scrape, which is the same shape as a correct one and cannot be told apart afterwards.
     """
-    from .ingest import fetch_pbp, game_table, load_gamelog
+    from .ingest import OfflineFetch, fetch_pbp, game_table, load_gamelog
     games = game_table(load_gamelog(season, phase, cfg))
     parts, unreadable = [], []
     for g in games.itertuples(index=False):
         try:
             parts.append(shot_rows(fetch_pbp(g.game_id, cfg)))
+        except OfflineFetch:
+            raise                    # offline, a missing play-by-play file is a copying mistake, not a bad game
         except Exception as e:  # noqa: BLE001  one game that cannot be read is not a curve's problem
             unreadable.append((g.game_id, repr(e)[:120]))
     if len(games) and len(parts) < float(min_share) * len(games):

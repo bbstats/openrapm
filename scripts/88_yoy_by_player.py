@@ -48,9 +48,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
-from openrapm.config import load_config  # noqa: E402
+from openrapm.data.config import load_config  # noqa: E402
 from openrapm.holdout import Context, Ratings, predict_season  # noqa: E402
-from openrapm.seasons import drop_untrainable  # noqa: E402
+from openrapm.data.seasons import drop_untrainable  # noqa: E402
 
 QUALITY_EDGES = [0, 30, 90, 150, 300, 10**9]
 QUALITY_LABELS = ["top 30", "31-90", "91-150", "151-300", "301+"]
@@ -125,7 +125,7 @@ def summarise(frame: pd.DataFrame, value: str) -> pd.DataFrame:
 
 def main() -> None:
     check_flags()
-    cfg = load_config(ROOT / "config.yaml")
+    cfg = load_config()
     ref_name, ref_path = flag("ref", "incumbent=outputs/season_ratings_unshrinkdef.parquet").split("=", 1)
     cands = [part.split("=", 1) for part in flag("cands", "").split(",") if part]
     if not cands:

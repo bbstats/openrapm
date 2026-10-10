@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 
 # The per-36 profile the mixture clusters on: volume, shot diet, playmaking, the glass, defensive events.
-# Every column is in boxtable.season_box's schema, so the caller hands that frame straight in.
+# Every column is in data.box_scores.season_box's schema, so the caller hands that frame straight in.
 RATES = ["pts", "fg3m", "fg3_miss", "ftm", "ast", "orb", "drb", "stl", "blk", "tov", "pf"]
 
 

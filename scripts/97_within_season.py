@@ -59,20 +59,20 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from openrapm import singleyear as sy  # noqa: E402
 from openrapm import tradeset as ts_mod  # noqa: E402
-from openrapm.bio import PLAYER_INPUTS, player_inputs  # noqa: E402
-from openrapm.config import load_config, resolve  # noqa: E402
+from openrapm.data.bio import PLAYER_INPUTS, player_inputs  # noqa: E402
+from openrapm.data.config import load_config, resolve  # noqa: E402
 from openrapm.design import AWAY_SLOTS, FEATURES, HOME_SLOTS, WindowData  # noqa: E402
 from openrapm.holdout import Context, Ratings, predict_season, score  # noqa: E402
-from openrapm.ingest import GAME_PREFIX, game_table, load_gamelog, raw_dir  # noqa: E402
+from openrapm.data.ingest import GAME_PREFIX, game_table, load_gamelog, raw_dir  # noqa: E402
 from openrapm.investigate import offcourt_rates, oncourt_rates  # noqa: E402
 from openrapm.priorridge import armse  # noqa: E402
-from openrapm.seasons import drop_untrainable  # noqa: E402
-from openrapm.roles import (CAREER_INPUTS, RAW_INPUTS, ROLE_PHASES, career_inputs,  # noqa: E402
-                           player_season_inputs, roles_from_boxes, season_ages, shares_from_stints,
-                           window_inputs)
+from openrapm.data.seasons import drop_untrainable  # noqa: E402
+from openrapm.data.roles import (CAREER_INPUTS, RAW_INPUTS, ROLE_PHASES, career_inputs,  # noqa: E402
+                                player_season_inputs, roles_from_boxes, roles_path, season_ages,
+                                shares_from_stints, window_inputs)
 from openrapm.spm import apm_fit, season_of_units  # noqa: E402
 from openrapm.windows import window_label  # noqa: E402
-from openrapm.xshoot import DEFENSE_TARGETS, SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS, player_shot_frame  # noqa: E402
+from openrapm.data.shots import DEFENSE_TARGETS, SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS, player_shot_frame  # noqa: E402
 from _cli import check_flags, flag  # noqa: E402
 from openrapm.seasoninputs import (CLOSE_SLOTS, SHOT_COLS_ALL, SeasonTables, SeasonWorld,  # noqa: E402,F401
                                     closeness_rows, cut_design, honest_fold_prior, playoff_share,
@@ -287,7 +287,7 @@ def _seasons(text: str) -> list:
 
 def main() -> None:
     check_flags()
-    cfg = load_config(ROOT / "config.yaml")
+    cfg = load_config()
     models_name = flag("models")
     base_name = flag("base")
     if not models_name or not base_name:
@@ -333,7 +333,7 @@ def main() -> None:
     # gated like every reader that fits from the panel: a season still being played is never rated here
     panel, _ = drop_untrainable(pd.read_parquet(ROOT / "outputs" / "role_panel_season.parquet"), cfg,
                                 what="the season panel")
-    roles = pd.read_parquet(ROOT / "data" / "cache" / "roles_RSPO.parquet")
+    roles = pd.read_parquet(roles_path(cfg))
     inputs = player_season_inputs(roles, cap=float(cfg.get("roles", {}).get("share_cap", 0.9)))
     # the ridge at the board's shipped settings (62's main sets these from its defaults)
     B62.FREE_PRIOR_SCALE, B62.LAM_BUCKETS = True, {}

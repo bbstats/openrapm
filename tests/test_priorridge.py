@@ -17,7 +17,7 @@ from openrapm.priorridge import (DEFAULT_CONTEXT_LAMBDAS, MAE_SCALE, PriorRidgeC
                                 calibration_miss, penalty_grid, team_game_mse, team_game_weights)
 from openrapm.simulate import simulate
 
-CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "features": FEATURES,
+CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "box_counts": FEATURES,
        "first_season": 2001, "last_season": 2005, "windows": [[2001, 2003], [2004, 2006]],
        "lam_plugin": 4000.0, "lam_ratio_plugin": 1.0, "pad_target": "league", "holdout": {}}
 

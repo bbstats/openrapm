@@ -32,18 +32,19 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from openrapm.config import load_config  # noqa: E402
+from openrapm.data.config import load_config  # noqa: E402
 from openrapm.cv import plugin_fit  # noqa: E402
 from openrapm.design import FEATURES  # noqa: E402
-from openrapm.bio import PLAYER_INPUTS, player_inputs  # noqa: E402
-from openrapm.roles import (CAREER_INPUTS, RAW_INPUTS, build_roles, career_inputs,  # noqa: E402
-                           player_season_inputs, window_inputs)
+from openrapm.data.bio import PLAYER_INPUTS, player_inputs  # noqa: E402
+from openrapm.data.roles import (CAREER_INPUTS, RAW_INPUTS, build_roles, career_inputs,  # noqa: E402
+                                player_season_inputs, window_inputs)
 from openrapm.spm import (apm_fit, apm_lambda_check, fit_spm, panel_inputs_report, season_of_units,  # noqa: E402
                          spm_predict)
 from openrapm.investigate import oncourt_rates
-from openrapm.windows import build_window, window_label, window_seasons  # noqa: E402
-from openrapm.xshoot import (DEFENSE_TARGETS, SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS,  # noqa: E402
-                            player_shot_frame)
+from openrapm.data.designs import build_window  # noqa: E402
+from openrapm.windows import window_label, window_seasons  # noqa: E402
+from openrapm.data.shots import (DEFENSE_TARGETS, SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS,  # noqa: E402
+                                 player_shot_frame)
 
 SHOT_COLS_ALL = [*SHOT_TOTAL_COLS, *SHOT_LEAGUE_COLS]
 pd.set_option("display.width", 250, "display.max_columns", 60, "display.precision", 3)

@@ -19,7 +19,7 @@ model, run the unit tests or open a draft PR — only to run the criterion itsel
 **1. Nothing that is fitted may see a season still being played.**
 
 Every season may be loaded and rated. A season may be *fit* on only once its Finals are over.
-`src/openrapm/seasons.py` decides which is which, by reading the game log and asking whether any team
+`src/openrapm/data/seasons.py` decides which is which, by reading the game log and asking whether any team
 has won the sixteen playoff games that win a title — so there is no year to bump and no flag to set.
 
 This binds the box prior, the role prior, the calibration map, the padding constants, the feature

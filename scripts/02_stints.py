@@ -8,8 +8,8 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from openrapm.config import load_config  # noqa: E402
-from openrapm.stints import build_season, season_diagnostics  # noqa: E402
+from openrapm.data.config import load_config, resolve  # noqa: E402
+from openrapm.data.stints import build_season, season_diagnostics  # noqa: E402
 
 pd.set_option("display.width", 250, "display.max_columns", 40, "display.precision", 3)
 cfg = load_config()
@@ -29,7 +29,7 @@ for season in range(first, last + 1):
         print(pd.Series(d).to_string())
         print()
 out = pd.DataFrame(rows)
-out_path = Path(cfg["_root"]) / cfg["paths"]["stints"] / "diagnostics_summary.parquet"
+out_path = resolve(cfg, "stints") / "diagnostics_summary.parquet"
 if out_path.exists():
     old = pd.read_parquet(out_path)
     old = old[~(old.season.astype(str) + old.phase).isin(out.season.astype(str) + out.phase)]

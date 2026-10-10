@@ -17,14 +17,14 @@ from openrapm import pieces
 from openrapm.design import FEATURES, build_design
 from openrapm.simulate import simulate
 
-CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "features": FEATURES,
+CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "box_counts": FEATURES,
        "first_season": 2001, "last_season": 2001, "windows": [[2001, 2001]],
        "lam_plugin": 4000.0, "lam_ratio_plugin": 1.0, "pad_target": "league", "holdout": {}}
 TOL = 1e-9
 
 
 def _with_parts(wd):
-    """The design as the cache hands it over (`designcache` stores its blocks; `build_design` does not)."""
+    """The design as the cache hands it over (`data.designs` stores its blocks; `build_design` does not)."""
     n, n_f = wd.spec.n_ps, len(wd.spec.f_names)
     X = sp.csr_matrix(wd.X)
     X.sort_indices()

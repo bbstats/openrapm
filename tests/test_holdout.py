@@ -14,7 +14,7 @@ from openrapm.holdout import (RESULT_COLUMNS, SPLITS, Context, Holdout, Replacem
                              team_residual)
 from openrapm.simulate import simulate
 
-CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "features": FEATURES,
+CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "box_counts": FEATURES,
        "first_season": 2001, "last_season": 2005, "windows": [[2001, 2003], [2004, 2006]],
        "lam_plugin": 4000.0, "lam_ratio_plugin": 1.0, "pad_target": "league",
        "holdout": {"first": 2002, "last": 2004, "ks": [2], "rank_bins": 5, "rank_min_poss": 1,   # a TableSystem's poss is seasons

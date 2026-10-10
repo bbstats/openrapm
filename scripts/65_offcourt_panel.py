@@ -18,10 +18,10 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from openrapm import singleyear as sy  # noqa: E402
-from openrapm.config import load_config  # noqa: E402
+from openrapm.data.config import load_config  # noqa: E402
 from openrapm.holdout import Context  # noqa: E402
 from openrapm.investigate import offcourt_rates, oncourt_rates  # noqa: E402
-from openrapm.xshoot import DEFENSE_TARGETS  # noqa: E402
+from openrapm.data.shots import DEFENSE_TARGETS  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -35,7 +35,7 @@ from _cli import check_flags, flag as _flag, switch   # noqa: E402
 def main():
     check_flags()      # refuse a flag this script does not understand (scripts/_cli.py)
     path = ROOT / _flag("panel", "outputs/role_panel_season.parquet")
-    cfg = load_config(ROOT / "config.yaml")
+    cfg = load_config()
     ctx = Context.load(cfg)
     panel = pd.read_parquet(path)
     seasons = sorted(panel.season.unique())

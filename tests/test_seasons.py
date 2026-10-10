@@ -11,15 +11,15 @@ import pandas as pd
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from openrapm import seasons as S  # noqa: E402
-from openrapm.config import load_config  # noqa: E402
+from openrapm.data import seasons as S  # noqa: E402
+from openrapm.data.config import load_config, resolve  # noqa: E402
 
 CFG = load_config()
 
 # Five tests below ask the REAL data which seasons are finished.  A fresh clone has no game logs, so
 # they skip rather than fail -- `pytest -q` passing without the scrape is a claim the README makes
 # and CI checks.  Everything else here runs against a synthetic tree and always executes.
-_GAMELOG = Path(CFG["_root"]) / CFG.get("paths", {}).get("raw", "data/raw") / "gamelog"
+_GAMELOG = resolve(CFG, "raw") / "gamelog"
 HAVE_DATA = _GAMELOG.is_dir() and any(_GAMELOG.glob("*_PO.parquet"))
 needs_data = pytest.mark.skipif(not HAVE_DATA, reason="no game logs; run scripts/01_ingest.py")
 

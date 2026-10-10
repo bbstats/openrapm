@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 
 from .cv import plugin_fit
-from .roles import INPUTS, RAW_INPUTS, design7
+from .data.roles import INPUTS, RAW_INPUTS, design7
 
 SIDES = ("O", "D")
 

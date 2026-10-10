@@ -4,30 +4,35 @@ The project has two layers and one rule between them.
 
     DATA   reads the disk and the network.  Scraping, stints, box tables, caches, loaders.
            A contributor may add a source here -- tracking data, a different feed, anything.
-           This is where a maintainer looks.
+           This is where a maintainer looks.  It lives in src/openrapm/data/: every module in that
+           folder is data layer by where it sits.
 
     MODEL  gets handed data and returns numbers.  The ridge, the box prior, the role prior,
            the padding, the design assembly, the calibration.  This is where a pull request
            that improves the model belongs, and it may not open a file.
 
-The rule exists because the season boundary (src/openrapm/seasons.py) is only as good as the
+The rule exists because the season boundary (src/openrapm/data/seasons.py) is only as good as the
 narrowest channel through which data can reach a fit.  If a model module may call `read_parquet`,
 it can reach past every guard and read the season in progress directly, and no amount of care in
 the loaders would stop it.  Keeping the model layer I/O-free makes the loaders the only way in.
 
 Two rules, because the first alone is not enough
 ------------------------------------------------
-Checking for `read_parquet` in the module itself misses the interesting case.  `boxtable.py` calls
-no I/O verb at all, and `boxtable.season_box` still reaches stats.nba.com -- it calls
-`ingest.load_gamelog`, which SCRAPES when the cache is cold.  That is how the test suite was
-quietly downloading three game logs on a "fresh clone with no data" run.  So a model module must
-also not IMPORT a data-layer module.  That is rule two here; the network itself is blocked in
-conftest.py so no test can silently fetch what it is missing.
+Checking for `read_parquet` in the module itself misses the interesting case.
+`data/box_scores.py` calls no I/O verb at all, and `box_scores.season_box` still reaches
+stats.nba.com -- it calls `ingest.load_gamelog`, which SCRAPES when the cache is cold.  That is how
+the test suite was quietly downloading three game logs on a "fresh clone with no data" run.  So a
+model module must also not IMPORT a data-layer module.  That is rule two here; the network itself is
+blocked in conftest.py so no test can silently fetch what it is missing.
 
 `MODEL_LAYER` is the list of modules that pass both rules today and must keep passing.  It is a
 ratchet: a module joins it when it is clean and never leaves.  `NEEDS_SPLIT` is the honest
 remainder -- model code that still reaches its own data, with what it reaches through.  Shrinking
-that list is the work.
+that list is the work.  `DATA_LAYER` names the top-level modules that still load data and have not
+yet moved into data/.  Both of those lists may only shrink (`test_the_exception_lists_only_shrink`),
+and a model module may not import a `NEEDS_SPLIT` module either, since that reaches the same data one
+step removed.  `PACKAGE_FILES` (`__init__.py`, and `__main__.py` once it exists) belong to neither
+layer: `__init__.py` imports nothing from the package, `__main__.py` only the command line.
 """
 import ast
 import sys
@@ -37,13 +42,16 @@ import pytest
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "openrapm"
 sys.path.insert(0, str(SRC.parents[1]))
+DATA_DIR = "data"            # src/openrapm/data/: the data layer, by location
 
 # Clean on both rules: no I/O verb, no data-layer import.
 MODEL_LAYER = [
     "archetype.py",     # the box-profile mixture and the per-cluster gap
     "cv.py",            # pipelines, cross-fitted beta, the plug-in fit
+    "design.py",        # the design matrix from the frames it is handed; the stint column and counter names
     "estimator.py",     # the mixed model (Henderson), the eigen lambda path
     "exposure.py",      # cross-fitted, empirical-Bayes padded per-100 rates
+    "gbdt_prior.py",    # the box-score feature definitions and the career input names
     "inseason.py",      # a game's position in its own season
     "investigate.py",   # the attribution instrument
     "pad.py",           # the padding helper
@@ -59,29 +67,47 @@ MODEL_LAYER = [
     "swapadjust.py",    # the swap adjustment: type model and per-player swaps, team totals held fixed
     "swaptest.py",      # the swap test: same-four lineup pairs, scored against a neighbouring season's ranking
     "tradeset.py",      # the team-game with-and-without-you ridge and its losses
+    "windows.py",       # window labels and seasons, and the plug-in ratings table
 ]
 
 # Model code that still reaches its own data, and what through.  Nothing may be added here.
 NEEDS_SPLIT = {
-    "boxtable.py": "season_box -> ingest.load_gamelog, which SCRAPES when the cache is cold",
-    "design.py": "imports stints to load them; should take the frame",
-    "gbdt_prior.py": "imports roles for the career input names",
-    "spm.py": "imports roles for the role inputs (design7)",
+    "spm.py": "imports data.roles for the role inputs (design7)",
 }
 
-# Modules whose job IS to reach the disk or the network.
+# Top-level modules whose job IS to reach the disk or the network, not yet moved into data/.
 DATA_LAYER = {
-    "__init__.py", "config.py", "seasons.py", "ingest.py", "stints.py", "roles.py", "bio.py",
-    "shotcurve.py", "designcache.py", "xshoot.py", "windows.py", "holdout.py",
+    "holdout.py",       # the criterion runner: its Context loads the roles table, box scores and designs
     "seasoninputs.py",  # one season rebuilt from any subset of its games (box scores, stints, roles): 97 and 62
 }
+
+# What the two exception lists held when the data layer moved into data/ (2026-10 cleanup, phase 3).  They
+# may lose entries (holdout.py and seasoninputs.py split in phases 7 and 9a, spm.py goes in 9a), never gain one.
+NEEDS_SPLIT_AT_MOST = {"spm.py"}
+DATA_LAYER_AT_MOST = {"holdout.py", "seasoninputs.py"}
+
+# The package's own entry files: neither layer (see test_the_package_files_import_nothing_from_the_package).
+PACKAGE_FILES = {"__init__.py", "__main__.py"}
 
 # The verbs that reach the disk or the network.  `.get` and `.exists` are deliberately absent:
 # they are overwhelmingly `dict.get` and would drown the rule in false positives.
 IO_CALLS = {"read_parquet", "read_csv", "read_json", "to_parquet", "to_csv", "to_json",
+            "read_pickle", "to_pickle", "read_feather", "to_feather", "read_excel", "to_excel",
+            "read_hdf", "to_hdf", "read_table", "read_fwf",
+            "load", "save", "savez", "savez_compressed", "loadtxt", "savetxt", "genfromtxt", "fromfile",
+            "tofile", "memmap", "dump", "savefig",
             "open", "glob", "rglob", "iterdir", "read_text", "write_text", "read_bytes",
             "write_bytes", "urlopen", "urlretrieve", "request"}
 IO_MODULES = {"requests", "urllib", "nba_api", "httpx", "socket"}
+
+
+def _modules() -> set:
+    """Every module of the package, as a path relative to src/openrapm ("design.py", "data/roles.py")."""
+    return {p.relative_to(SRC).as_posix() for p in SRC.rglob("*.py") if "__pycache__" not in p.parts}
+
+
+def _is_data(module: str) -> bool:
+    return module.startswith(DATA_DIR + "/") or module in DATA_LAYER
 
 
 def _parse(path: Path):
@@ -106,21 +132,61 @@ def _io_in(path: Path):
     return out
 
 
+def _module_file(parts: list, name: str | None = None) -> str:
+    """The package module that `parts` (+ an imported `name`) names, relative to src/openrapm."""
+    if (SRC.joinpath(*parts)).is_dir():                     # a package: the imported name may be a module in it
+        if name and (SRC.joinpath(*parts) / f"{name}.py").exists():
+            return "/".join([*parts, f"{name}.py"])
+        if name and (SRC.joinpath(*parts) / name).is_dir():  # or a subpackage: `from . import data`
+            return "/".join([*parts, name, "__init__.py"])
+        return "/".join([*parts, "__init__.py"])
+    return "/".join(parts) + ".py"
+
+
 def _sibling_imports(path: Path):
-    """(line, module) for every import of another module in this package."""
+    """(line, module) for every import of another module in this package, the module named by its path
+    relative to src/openrapm, so `from .data.roles import x`, `from .data import roles`, `from ..design
+    import y` and `import openrapm.data.roles` all resolve to the file they load."""
+    return _imports_of(_parse(path), list(path.relative_to(SRC).parent.parts))
+
+
+def _imports_of(tree, package: list):
+    """`_sibling_imports` on a parsed module that sits in `package` ([] at the top level, ["data"] in data/)."""
     out = []
-    for n in ast.walk(_parse(path)):
+    for n in ast.walk(tree):
         if isinstance(n, ast.ImportFrom):
-            if n.level and n.module:                       # from .roles import ...
-                out.append((n.lineno, n.module.split(".")[0]))
-            elif n.level and not n.module:                 # from . import roles
-                out.extend((n.lineno, a.name) for a in n.names)
-            elif n.module and n.module.startswith("openrapm"):
-                out.append((n.lineno, n.module.split(".")[-1]))
+            if n.level:
+                up = n.level - 1
+                if up > len(package):
+                    continue
+                parts = package[:len(package) - up] + (n.module.split(".") if n.module else [])
+            elif n.module and (n.module == "openrapm" or n.module.startswith("openrapm.")):
+                parts = n.module.split(".")[1:]
+            else:
+                continue
+            for a in n.names:
+                out.append((n.lineno, _module_file(parts, a.name)))
         elif isinstance(n, ast.Import):
-            out.extend((n.lineno, a.name.split(".")[-1]) for a in n.names
+            out.extend((n.lineno, _module_file(a.name.split(".")[1:])) for a in n.names
                        if a.name.startswith("openrapm."))
     return out
+
+
+def test_the_import_resolver_reads_every_form():
+    """The rule is only as good as the resolver: each import form must name the file it loads."""
+    top = ast.parse("from .data.roles import a\nfrom .data import roles\nfrom . import pad\n"
+                    "import openrapm.data.stints\nfrom openrapm.data.bio import b\nfrom .design import c\n")
+    assert sorted(m for _, m in _imports_of(top, [])) == sorted(
+        ["data/roles.py", "data/roles.py", "pad.py", "data/stints.py", "data/bio.py", "design.py"])
+    inner = ast.parse("from .config import resolve\nfrom ..design import HOME_SLOTS\nfrom .. import pad\n")
+    assert sorted(m for _, m in _imports_of(inner, [DATA_DIR])) == ["data/config.py", "design.py", "pad.py"]
+    # the subpackage itself, imported by name: data/__init__.py, not the package's own __init__.py
+    whole = ast.parse("from . import data\nfrom openrapm import data\nimport openrapm.data\n"
+                      "from openrapm import __version__\n")
+    assert sorted(m for _, m in _imports_of(whole, [])) == sorted(
+        ["data/__init__.py", "data/__init__.py", "data/__init__.py", "__init__.py"])
+    assert all(_is_data(m) for m in ("data/roles.py", "data/stints.py", "data/__init__.py", "holdout.py"))
+    assert not any(_is_data(m) for m in ("design.py", "pad.py", "__init__.py"))
 
 
 @pytest.mark.parametrize("module", MODEL_LAYER)
@@ -136,27 +202,62 @@ def test_a_model_module_does_no_io(module):
 
 @pytest.mark.parametrize("module", MODEL_LAYER)
 def test_a_model_module_does_not_import_the_data_layer(module):
-    """The rule that catches the interesting case.  boxtable.py calls no I/O verb and still scrapes,
+    """The rule that catches the interesting case.  box_scores.py calls no I/O verb and still scrapes,
     because it calls ingest.load_gamelog.  Reaching data through a sibling is still reaching data."""
-    bad = [(ln, m) for ln, m in _sibling_imports(SRC / module) if f"{m}.py" in DATA_LAYER]
+    bad = [(ln, m) for ln, m in _sibling_imports(SRC / module) if _is_data(m) or m in NEEDS_SPLIT]
     assert not bad, (
         f"src/openrapm/{module} imports data-layer module(s) {sorted({m for _, m in bad})} at lines "
-        f"{[ln for ln, _ in bad]}.  Whatever it needs from them should be passed in.")
+        f"{[ln for ln, _ in bad]} (a NEEDS_SPLIT module counts: it reaches data one step removed).  "
+        f"Whatever it needs from them should be passed in.")
+
+
+def test_the_exception_lists_only_shrink():
+    """Adding a module to NEEDS_SPLIT or DATA_LAYER would excuse it from both rules; neither list may grow."""
+    grew = sorted(set(NEEDS_SPLIT) - NEEDS_SPLIT_AT_MOST)
+    assert not grew, f"NEEDS_SPLIT grew: {grew}"
+    assert DATA_LAYER <= DATA_LAYER_AT_MOST, f"DATA_LAYER grew: {sorted(DATA_LAYER - DATA_LAYER_AT_MOST)}"
+
+
+@pytest.mark.parametrize("module", sorted(m for m in PACKAGE_FILES if (SRC / m).exists()))
+def test_the_package_files_import_nothing_from_the_package(module):
+    """`import openrapm` must stay cheap and must not load data: __init__.py holds the version and nothing else.
+    __main__.py may reach the command line (commands/) and nothing else."""
+    path = SRC / module
+    allowed = "commands/" if module == "__main__.py" else None
+    imports = [m for _, m in _sibling_imports(path) if not (allowed and m.startswith(allowed))]
+    assert not _io_in(path), f"src/openrapm/{module} reaches the disk or the network"
+    assert not imports, f"src/openrapm/{module} imports {sorted(set(imports))} from the package"
 
 
 def test_the_lists_do_not_overlap():
     assert not set(MODEL_LAYER) & set(NEEDS_SPLIT), "a module cannot be both clean and needing a split"
     assert not set(MODEL_LAYER) & DATA_LAYER, "a module cannot be both model-layer and data-layer"
+    assert not PACKAGE_FILES & (set(MODEL_LAYER) | set(NEEDS_SPLIT) | DATA_LAYER), \
+        "a package entry file belongs to neither layer"
+    assert not any(m.startswith(DATA_DIR + "/") for m in [*MODEL_LAYER, *NEEDS_SPLIT]), \
+        "a module in data/ is data layer by location; it cannot be listed as model code"
 
 
 def test_every_module_is_classified():
-    """A new module must be placed in one layer or the other, so nothing lands here unnoticed."""
-    known = set(MODEL_LAYER) | set(NEEDS_SPLIT) | DATA_LAYER
-    unclassified = {p.name for p in SRC.glob("*.py")} - known
+    """A new module must be placed in one layer or the other, so nothing lands here unnoticed.  A module
+    in data/ is placed by being there."""
+    known = set(MODEL_LAYER) | set(NEEDS_SPLIT) | DATA_LAYER | PACKAGE_FILES
+    unclassified = {m for m in _modules() if m not in known and not m.startswith(DATA_DIR + "/")}
     assert not unclassified, (
         f"new module(s) {sorted(unclassified)}: add each to MODEL_LAYER (if it takes its data as an "
         f"argument and imports no loader), to NEEDS_SPLIT (if it is model code that still loads), or "
-        f"to DATA_LAYER (if loading is its job).  See the docstring.")
+        f"move it into src/openrapm/data/ (if loading is its job).  See the docstring.")
+
+
+def test_the_data_layer_is_the_data_folder():
+    """The modules that moved into data/ in the 2026-10 cleanup are there and nowhere else."""
+    moved = {"config.py", "ingest.py", "stints.py", "shot_curves.py", "box_scores.py", "roles.py", "bio.py",
+             "seasons.py", "shots.py", "designs.py"}
+    have = {m.split("/", 1)[1] for m in _modules() if m.startswith(DATA_DIR + "/")}
+    assert moved <= have, f"data/ is missing {sorted(moved - have)}"
+    stale = {"config.py", "ingest.py", "stints.py", "shotcurve.py", "boxtable.py", "roles.py", "bio.py",
+             "seasons.py", "xshoot.py", "designcache.py"} & {m for m in _modules() if "/" not in m}
+    assert not stale, f"{sorted(stale)} still sit at the top level of src/openrapm"
 
 
 def test_the_split_list_is_accurate():
@@ -166,7 +267,7 @@ def test_the_split_list_is_accurate():
         path = SRC / module
         if not path.exists():
             continue
-        reaches = _io_in(path) or [(ln, m) for ln, m in _sibling_imports(path) if f"{m}.py" in DATA_LAYER]
+        reaches = _io_in(path) or [(ln, m) for ln, m in _sibling_imports(path) if _is_data(m)]
         assert reaches, (
             f"src/openrapm/{module} is in NEEDS_SPLIT but no longer reaches data -- move it to "
             f"MODEL_LAYER.")

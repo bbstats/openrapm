@@ -56,9 +56,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
 from openrapm import singleyear as sy  # noqa: E402
 from openrapm.archetype import cluster_proba, fit_mixture  # noqa: E402
-from openrapm.config import load_config  # noqa: E402
+from openrapm.data.config import load_config  # noqa: E402
+from openrapm.data.roles import roles_path  # noqa: E402
 from openrapm.glossary import plain  # noqa: E402
-from openrapm.seasons import drop_untrainable  # noqa: E402
+from openrapm.data.seasons import drop_untrainable  # noqa: E402
 
 N_CELLS = 6                        # levels for the adjustment's own check
 N_GROUPS = 5                       # fifths
@@ -152,7 +153,7 @@ def player_types(stats: pd.DataFrame, k: int = 8) -> tuple:
 
 def team_moves() -> pd.DataFrame:
     """Per player-season: whether he was on the same franchise the season before and the season after."""
-    roles = pd.read_parquet(ROOT / "data" / "cache" / "roles_RSPO.parquet")
+    roles = pd.read_parquet(roles_path(load_config()))
     played = roles[roles.poss_on > 0][["player_id", "season", "team_id", "poss_on"]].copy()
     played["team_id"] = sy.franchise(played.team_id.to_numpy(), played.season.to_numpy())
     main = (played.groupby(["player_id", "season", "team_id"], as_index=False).poss_on.sum()
@@ -292,9 +293,9 @@ def main() -> None:
     alpha = pd.read_parquet(ROOT / flag("alpha", "outputs/tradeset_swapadj_within_alpha.parquet"))
     alpha = alpha[alpha.eligible & (alpha.without_poss >= 1.0)]
     ratings = pd.read_parquet(ROOT / flag("ratings", "outputs/season_ratings_swapadj_within.parquet"))
-    # the trust boundary (src/openrapm/seasons.py): a season still being played reaches no fit
+    # the trust boundary (src/openrapm/data/seasons.py): a season still being played reaches no fit
     panel, _ = drop_untrainable(pd.read_parquet(ROOT / "outputs" / "role_panel_season.parquet"),
-                                load_config(ROOT / "config.yaml"), what="the season panel")
+                                load_config(), what="the season panel")
     panel = panel[panel.poss > 0]
     moves = team_moves()
     stats_o = sy.season_frame(panel[panel.side == "O"], sy.PRIOR_FEATURES).drop_duplicates(["player_id", "season"])

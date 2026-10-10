@@ -47,12 +47,13 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
 from openrapm import swaptest as sw  # noqa: E402
-from openrapm.config import load_config  # noqa: E402
+from openrapm.data.config import load_config, resolve  # noqa: E402
+from openrapm.data.roles import roles_path  # noqa: E402
 
 
 def load_stints(season: int, cfg: dict, phases=("RS", "PO")) -> pd.DataFrame:
     """A season's stints, regular season then playoffs, with the two teams' ids from the diagnostics."""
-    folder = ROOT / cfg.get("paths", {}).get("stints", "data/stints")
+    folder = resolve(cfg, "stints")
     frames = []
     for phase in phases:
         path = folder / f"{season}_{phase}.parquet"
@@ -83,7 +84,7 @@ def load_table(path: Path, columns: str = "rating") -> pd.DataFrame:
 
 def main_teams() -> pd.DataFrame:
     """player_id, season, team_id: the team he played the most possessions for that season."""
-    roles = pd.read_parquet(ROOT / "data/cache/roles_RSPO.parquet", columns=["player_id", "season", "team_id", "poss_on"])
+    roles = pd.read_parquet(roles_path(load_config()), columns=["player_id", "season", "team_id", "poss_on"])
     return (roles[roles.poss_on > 0].groupby(["player_id", "season", "team_id"], as_index=False).poss_on.sum()
             .sort_values("poss_on").drop_duplicates(["player_id", "season"], keep="last")
             [["player_id", "season", "team_id"]].astype(np.int64))
@@ -162,7 +163,7 @@ def report(res: pd.DataFrame, levels: pd.DataFrame, ref: str) -> None:
 
 def main():
     check_flags()
-    cfg = load_config(ROOT / "config.yaml")
+    cfg = load_config()
     spec = flag("rankings", "")
     if not spec:
         raise SystemExit(__doc__)

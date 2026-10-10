@@ -17,7 +17,8 @@ windows:              # ten non-overlapping 3-season windows
 rolling_step: 1       # rolling 3-year windows for the robustness overlay
 neutral_site_seasons_po: [2020]   # 2020 bubble playoffs: home = 0
 
-features: [fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss, orb, drb, ast, tov, stl, blk, pf]
+# The raw per-game box counts every design carries, in this order (the per-season design pieces record it).
+box_counts: [fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss, orb, drb, ast, tov, stl, blk, pf]
 
 # Regularization. lam / lam_ratio were chosen once (by the retired scripts/03_cv.py, deleted in
 # 73f0ab9; the numbers and how they were picked are in DECISIONS.md) and are used in every window.
@@ -73,9 +74,11 @@ holdout:
   consensus:
     min_poss: 1000
 
-# The role prior (src/openrapm/roles.py, spm.py; FINDINGS 19).
+# The role prior (src/openrapm/data/roles.py, spm.py; FINDINGS 19).
 roles:
-  cache: data/cache/roles.parquet   # per player-season-team: games, starts, minutes, on-floor and team possessions, age
+  cache: roles.parquet              # inside paths.cache (or an absolute path); the phases are added to the name:
+                                    # roles_RSPO.parquet, per player-season-team: games, starts, minutes,
+                                    # on-court and team possessions, age
   share_cap: 0.9                    # poss_pct is capped here: one full team-season of possessions
 spm:
   apm_lam: 100            # the APM penalty: under 1% of lam_plugin, so nobody is pulled toward zero by much
@@ -95,7 +98,11 @@ gbdt:
     # feature set gives the search something to find).  ensemble_n_jobs 1 so the bag does not fork
     # inside the holdout runner's own workers.
 
+# Data paths: relative to the repository root, or absolute.  OPENRAPM_CONFIG=<file> makes every command read
+# another config.yaml instead of this one, so a verification run can point all of them at another folder.
 paths:
   raw: data/raw
   stints: data/stints
+  cache: data/cache              # rebuildable caches: the roles table, bio.parquet, the per-season design pieces
+  shot_curves: data/shotcurve    # the league's make probability by distance, one parquet per season
   role_panel: artifacts/role_panel.parquet

@@ -1,4 +1,7 @@
-"""The window design assembled from cached per-season pieces.
+"""The window design assembled from cached per-season pieces, and `build_window`, the one entry point.
+
+`build_window(seasons, cfg)` is how every caller gets a design: from the cached pieces below, or, for the
+binned-margin robustness design only, from `design.build_design` on the season's stints.
 
 `design.build_design` rebuilds everything from the raw stints every time a block is fitted: the game order,
 the player-season keys, the slot indices, the per-game possession and box tables, the counters.  Every one of
@@ -19,14 +22,35 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 
+from ..design import (AWAY_SLOTS, HOME_SLOTS, POSS_COUNTERS, SEASON_PHASES, SLOT_COUNTERS, TARGETS, DesignSpec,
+                      WindowData, _order_games, build_design, ps_key)
+from .box_scores import season_box
 from .config import resolve
-from .design import AWAY_SLOTS, HOME_SLOTS, SEASON_PHASES, TARGETS, DesignSpec, WindowData, _order_games, ps_key
-from .stints import POSS_COUNTERS, SLOT_COUNTERS
+from .stints import build_season
 
+_STINT_CACHE: dict = {}
 _PIECES: "OrderedDict[tuple, dict]" = OrderedDict()
 MAX_PIECES = 8
 PIECES_VERSION = 1
 ARRAY_KEYS = ("counters_h", "counters_a", "pids_h", "pids_a")     # memory-mapped from .npy on disk
+
+
+def load_stints(season: int, phase: str, cfg) -> pd.DataFrame:
+    key = (season, phase)
+    if key not in _STINT_CACHE:
+        _STINT_CACHE[key] = build_season(season, phase, cfg)[0]
+    return _STINT_CACHE[key]
+
+
+def build_window(seasons, cfg, phases=SEASON_PHASES, gt_weight=None, margin_bins=False, target="pts",
+                 counter_cols=None, min_den=0.0):
+    if not margin_bins:                        # the same design from cached per-season pieces (below)
+        return build_window_cached(seasons, cfg, phases=phases, gt_weight=gt_weight, target=target,
+                                   counter_cols=counter_cols, min_den=min_den)
+    stints = pd.concat([load_stints(s, p, cfg) for s in seasons for p in phases], ignore_index=True)
+    box = season_box(seasons, list(phases), cfg)
+    return build_design(stints, box, cfg["box_counts"], cfg, gt_weight=gt_weight, margin_bins=margin_bins,
+                        target=target)
 
 
 def _target_columns() -> list:
@@ -39,10 +63,13 @@ def _target_columns() -> list:
 
 
 def _stamp(season: int, phase: str, cfg: dict) -> dict:
-    """What the cached piece must have been built from: the stints and the game log files, the features."""
+    """What the cached piece must have been built from: the stints and the game log files, the box counts.
+
+    The box counts are stored under the key `features`, their name before config.yaml called them
+    `box_counts`: the stamp is compared whole, so keeping the key keeps every piece already on disk valid."""
     st = resolve(cfg, "stints") / f"{season}_{phase}.parquet"
     gl = resolve(cfg, "raw") / "gamelog" / f"{season}_{phase}.parquet"
-    out = dict(version=PIECES_VERSION, features=tuple(cfg["features"]))
+    out = dict(version=PIECES_VERSION, features=tuple(cfg["box_counts"]))
     for name, path in (("stints", st), ("gamelog", gl)):
         if path.exists():
             info = path.stat()
@@ -51,7 +78,7 @@ def _stamp(season: int, phase: str, cfg: dict) -> dict:
 
 
 def _pieces_dir(cfg: dict) -> Path:
-    return Path(cfg["_root"]) / "data" / "cache" / "pieces"
+    return resolve(cfg, "cache") / "pieces"
 
 
 def _load_piece(season: int, phase: str, cfg: dict) -> dict | None:
@@ -87,7 +114,8 @@ def _save_piece(piece: dict, season: int, phase: str, cfg: dict) -> None:
 
 def season_pieces(season: int, phase: str, cfg: dict) -> dict:
     """Everything about one season-phase that a block design needs, keyed by the player-season key.  Built once
-    and kept on disk (data/cache/pieces, stamped with the source files' mtimes), and in a small in-process LRU."""
+    and kept on disk (pieces/ under paths.cache, data/cache/pieces, stamped with the source files' mtimes), and
+    in a small in-process LRU."""
     key = (int(season), str(phase))
     if key in _PIECES:
         _PIECES.move_to_end(key)
@@ -106,8 +134,6 @@ def season_pieces(season: int, phase: str, cfg: dict) -> dict:
 
 
 def _build_piece(season: int, phase: str, cfg: dict) -> dict:
-    from .boxtable import season_box
-    from .windows import load_stints
     st = load_stints(int(season), phase, cfg).reset_index(drop=True).copy()
     for c in HOME_SLOTS + AWAY_SLOTS:
         st[c] = st[c].astype(np.int64)
@@ -132,7 +158,7 @@ def _build_piece(season: int, phase: str, cfg: dict) -> dict:
                        "poss_off": np.concatenate(po_all), "poss_def": np.concatenate(pd_all)})
     gp = gp.groupby(["game_idx", "psx_idx"], as_index=False)[["poss_off", "poss_def"]].sum()
     # the box table, local indices
-    features = list(cfg["features"])
+    features = list(cfg["box_counts"])
     bx = box.merge(games[["game_id", "game_idx"]], on="game_id", how="inner")
     bx["psx_idx"] = np.searchsorted(keys_u, ps_key(bx["player_id"].to_numpy(), bx["season"].to_numpy()))
     game_box = bx[["game_idx", "psx_idx", "phase"] + features].copy()
@@ -165,7 +191,7 @@ def _build_piece(season: int, phase: str, cfg: dict) -> dict:
 
 def build_window_cached(seasons, cfg, phases=SEASON_PHASES, gt_weight=None, target="pts",
                         counter_cols=None, min_den=0.0) -> WindowData:
-    """`windows.build_window` from cached per-season pieces (no `margin_bins`).
+    """`build_window` from cached per-season pieces (no `margin_bins`).
 
     `counter_cols`: keep only these of the 118 per-possession counters (the slot ids and `half` always).
     The whole table is 195,000 x 118 doubles for a 3-season block and copying it is a fifth of the build;
@@ -181,7 +207,7 @@ def build_window_cached(seasons, cfg, phases=SEASON_PHASES, gt_weight=None, targ
     if gt_weight is None:
         gt_weight = float(cfg.get("gt_weight", 1.0))
     margin_clip = float(cfg.get("margin_clip", 25))
-    features = list(cfg["features"])
+    features = list(cfg["box_counts"])
 
     # the block's player-season table: the union of the pieces' keys, sorted (= season-major)
     keys = np.unique(np.concatenate([p["keys_u"] for p in pieces]))

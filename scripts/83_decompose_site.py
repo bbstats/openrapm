@@ -62,9 +62,12 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
 from openrapm import singleyear as sy  # noqa: E402
-from openrapm.config import load_config  # noqa: E402
+from openrapm.data.config import load_config  # noqa: E402
+from openrapm.data.designs import build_window  # noqa: E402
+from openrapm.data.ingest import raw_dir  # noqa: E402
 from openrapm.looseason import LeaveSeasonOutRAPM  # noqa: E402
-from openrapm.windows import build_window  # noqa: E402
+
+RAW = raw_dir(load_config())   # the scraped box scores and bio files (config paths.raw)
 
 FIELDS = ["n", "p", "m", "t", "o", "x", "r", "a", "h", "w", "g", "e", "f", "id"]   # name, possessions, the five
 PIECES = ["margin", "teammates", "opponents", "context", "ridge"]         # pieces by player, RAPM, the four by
@@ -99,7 +102,7 @@ def box_teams(season: int) -> pd.Series:
     """Every player's team in every game of a season, from the box scores: (game_id, player_id) -> team id."""
     if season not in _BOX_TEAMS:
         frames = []
-        for f in sorted((ROOT / "data" / "raw" / "box" / str(season)).glob("*.parquet")):
+        for f in sorted((RAW / "box" / str(season)).glob("*.parquet")):
             b = pd.read_parquet(f, columns=["personId", "teamId"])
             frames.append(pd.DataFrame({"game_id": f.stem, "player_id": b.personId.to_numpy(np.int64),
                                         "team_id": b.teamId.to_numpy(np.int64)}))
@@ -254,7 +257,7 @@ def name_table() -> pd.DataFrame:
         raise SystemExit(f"no rankings table to take names from: {', '.join(NAME_SOURCES)}")
     t = pd.read_parquet(src, columns=["player_id", "season", "player_name"]).dropna(subset=["player_name"])
     bio = [pd.read_parquet(f, columns=["PLAYER_ID", "PLAYER_NAME"]).assign(season=int(f.stem[:4]))
-           for f in sorted((ROOT / "data" / "raw" / "bio").glob("*_RS.parquet"))]
+           for f in sorted((RAW / "bio").glob("*_RS.parquet"))]
     if bio:
         bio = pd.concat(bio).rename(columns={"PLAYER_ID": "player_id", "PLAYER_NAME": "player_name"}).dropna()
         t = pd.concat([t, bio[~bio.player_id.isin(t.player_id)]], ignore_index=True)
@@ -266,7 +269,7 @@ def box_names(ids, seasons) -> pd.Series:
     the 2022 playoffs): his name as the span's box scores print it."""
     want, got = {int(i) for i in ids}, {}
     for season in seasons:
-        for f in sorted((ROOT / "data" / "raw" / "box" / str(season)).glob("*.parquet")):
+        for f in sorted((RAW / "box" / str(season)).glob("*.parquet")):
             d = pd.read_parquet(f, columns=["personId", "firstName", "familyName"])
             for r in d[d.personId.isin(want - set(got))].itertuples(index=False):
                 got[int(r.personId)] = f"{r.firstName} {r.familyName}".strip()

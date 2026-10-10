@@ -1,8 +1,9 @@
-"""Role inputs (src/openrapm/roles.py) on synthetic V3 boxes and stints."""
+"""Role inputs (src/openrapm/data/roles.py) on synthetic V3 boxes and stints."""
 import numpy as np
 import pandas as pd
 
-from openrapm.roles import INPUTS, design7, parse_minutes, player_season_inputs, roles_from_boxes, shares_from_stints
+from openrapm.data.roles import (INPUTS, design7, parse_minutes, player_season_inputs, roles_from_boxes,
+                                 shares_from_stints)
 
 HOME, AWAY = 1610612700, 1610612800
 

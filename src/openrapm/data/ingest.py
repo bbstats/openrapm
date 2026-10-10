@@ -13,10 +13,17 @@ Layout under cfg paths.raw:
   box/{season}/{game_id}.parquet
   periodbox/{season}/{game_id}_{period}.parquet
   pbpstats_games/{season}_{phase}.parquet
+
+Offline: with the environment variable OPENRAPM_OFFLINE=1, every fetch raises `OfflineFetch` (a
+RuntimeError naming the file it would have written) instead of reaching the network, so a rebuild from
+a copied raw folder fails loudly on the first missing file rather than quietly downloading it.  The loops
+that forgive one failed game (here, in stints.py and in shot_curves.py) let `OfflineFetch` through: offline,
+a missing file is a copying mistake, not a game to skip.
 """
 from __future__ import annotations
 
 import json
+import os
 import time
 import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -34,6 +41,24 @@ SEASON_TYPES = {"RS": "Regular Season", "PO": "Playoffs"}
 GAME_PREFIX = {"RS": "002", "PO": "004"}
 TIMEOUT = 60
 HEADERS_PBPSTATS = {"User-Agent": "Mozilla/5.0"}
+OFFLINE_ENV = "OPENRAPM_OFFLINE"
+
+
+class OfflineFetch(RuntimeError):
+    """A fetch was needed while OPENRAPM_OFFLINE=1."""
+
+
+def offline() -> bool:
+    """True when OPENRAPM_OFFLINE asks that nothing be fetched from the network."""
+    return os.environ.get(OFFLINE_ENV, "").strip().lower() in ("1", "true", "yes")
+
+
+def refuse_if_offline(path, what: str) -> None:
+    """Raise instead of fetching `what` (to be cached at `path`) when the offline switch is on."""
+    if offline():
+        raise OfflineFetch(
+            f"{OFFLINE_ENV}=1 and {what} would have to be fetched from the network: {path} is missing "
+            f"(or a refetch was forced).  Copy the file in, or unset {OFFLINE_ENV} to download it.")
 
 
 def season_str(season: int) -> str:
@@ -69,6 +94,7 @@ def load_gamelog(season: int, phase: str, cfg, force=False) -> pd.DataFrame:
     path = raw_dir(cfg) / "gamelog" / f"{season}_{phase}.parquet"
     if path.exists() and not force:
         return pd.read_parquet(path)
+    refuse_if_offline(path, f"the game log {season} {phase}")
     from nba_api.stats.endpoints import leaguegamelog
     def pull():
         return leaguegamelog.LeagueGameLog(season=season_str(season), season_type_all_star=SEASON_TYPES[phase],
@@ -118,6 +144,7 @@ def fetch_pbp(game_id: str, cfg, force=False) -> pd.DataFrame:
     path = _pbp_path(game_id, cfg)
     if path.exists() and not force:
         return pd.read_parquet(path)
+    refuse_if_offline(path, f"the play-by-play of {game_id}")
     from nba_api.stats.endpoints import playbyplayv3
     def pull():
         df = playbyplayv3.PlayByPlayV3(game_id=game_id, timeout=TIMEOUT).get_data_frames()[0]
@@ -135,6 +162,7 @@ def fetch_boxscore(game_id: str, cfg, force=False) -> pd.DataFrame:
     path = _box_path(game_id, cfg)
     if path.exists() and not force:
         return pd.read_parquet(path)
+    refuse_if_offline(path, f"the box score of {game_id}")
     from nba_api.stats.endpoints import boxscoretraditionalv3
     def pull():
         df = boxscoretraditionalv3.BoxScoreTraditionalV3(game_id=game_id, timeout=TIMEOUT).get_data_frames()[0]
@@ -160,6 +188,7 @@ def fetch_period_box(game_id: str, period: int, cfg, force=False) -> pd.DataFram
     path = _pbox_path(game_id, period, cfg)
     if path.exists() and not force:
         return pd.read_parquet(path)
+    refuse_if_offline(path, f"the period {period} box score of {game_id}")
     from nba_api.stats.endpoints import boxscoretraditionalv3
     s, e = period_range(period)
     def pull():
@@ -178,6 +207,7 @@ def pbpstats_games(season: int, phase: str, cfg, force=False) -> pd.DataFrame:
     path = raw_dir(cfg) / "pbpstats_games" / f"{season}_{phase}.parquet"
     if path.exists() and not force:
         return pd.read_parquet(path)
+    refuse_if_offline(path, f"the pbpstats games {season} {phase}")
     def pull():
         r = requests.get("https://api.pbpstats.com/get-games/nba",
                          params={"Season": season_str(season), "SeasonType": SEASON_TYPES[phase]},
@@ -202,6 +232,8 @@ def ingest_season(season: int, phases=("RS", "PO"), cfg=None, workers=2, delay=0
         games = game_table(gl)
         try:
             pbpstats_games(season, phase, cfg)
+        except OfflineFetch:
+            raise                                  # offline, a missing file stops the run; it is not a failed pull
         except Exception as e:  # noqa: BLE001
             if verbose:
                 print(f"  pbpstats games {season} {phase}: {e!r}")
@@ -225,6 +257,8 @@ def ingest_season(season: int, phases=("RS", "PO"), cfg=None, workers=2, delay=0
                 done += 1
                 try:
                     f.result()
+                except OfflineFetch:
+                    raise
                 except Exception as e:  # noqa: BLE001
                     failed.append((futs[f], repr(e)[:200]))
                 if verbose and done % log_every == 0:

@@ -67,10 +67,10 @@ def _box():
     missing, and in a fresh clone that means four retries with exponential backoff before it gives up --
     65 seconds of a test suite doing nothing.  Look first.
     """
-    from openrapm.boxtable import season_box
-    from openrapm.config import load_config
+    from openrapm.data.box_scores import season_box
+    from openrapm.data.config import load_config, resolve
     cfg = load_config()
-    gl = Path(cfg["_root"]) / cfg.get("paths", {}).get("raw", "data/raw") / "gamelog"
+    gl = resolve(cfg, "raw") / "gamelog"
     if not all((gl / f"{s}_RS.parquet").exists() for s in SEASONS):
         pytest.skip("box scores not built; run scripts/01_ingest.py")
     try:

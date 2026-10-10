@@ -18,16 +18,16 @@ import numpy as np
 import pandas as pd
 
 from . import singleyear as sy
-from .bio import PLAYER_INPUTS, player_inputs
-from .config import resolve
+from .data.bio import PLAYER_INPUTS, player_inputs
+from .data.config import resolve
+from .data.ingest import GAME_PREFIX, game_table, load_gamelog, raw_dir
+from .data.roles import (CAREER_INPUTS, RAW_INPUTS, ROLE_PHASES, career_inputs, player_season_inputs,  # noqa: F401
+                         roles_from_boxes, season_ages, shares_from_stints, window_inputs)
+from .data.shots import DEFENSE_TARGETS, SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS, player_shot_frame
 from .design import AWAY_SLOTS, FEATURES, HOME_SLOTS, WindowData
-from .ingest import GAME_PREFIX, game_table, load_gamelog, raw_dir
 from .investigate import offcourt_rates, oncourt_rates
-from .roles import (CAREER_INPUTS, RAW_INPUTS, ROLE_PHASES, career_inputs, player_season_inputs,  # noqa: F401
-                    roles_from_boxes, season_ages, shares_from_stints, window_inputs)
 from .spm import apm_fit, season_of_units
 from .windows import window_label
-from .xshoot import DEFENSE_TARGETS, SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS, player_shot_frame
 
 __all__ = ["SHOT_COLS_ALL", "CLOSE_SLOTS", "cut_design", "SeasonTables", "roles_from_games", "closeness_rows",
            "playoff_share", "SeasonWorld", "honest_fold_prior"]

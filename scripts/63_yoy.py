@@ -53,7 +53,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from openrapm.config import load_config  # noqa: E402
+from openrapm.data.config import load_config  # noqa: E402
 from openrapm.holdout import (SPLITS, Context, Holdout, Ratings, ReplacementSystem,  # noqa: E402
                              paired, pooled)
 
@@ -132,7 +132,7 @@ class _FixedFill:
 
 def main():
     check_flags()      # refuse a flag this script does not understand (scripts/_cli.py)
-    cfg = load_config(ROOT / "config.yaml")
+    cfg = load_config()
     spec = _flag("rankings")
     if not spec:
         raise SystemExit("--rankings=name=path[,name=path...] is required")

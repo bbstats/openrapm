@@ -26,14 +26,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .config import resolve
-from .design import AWAY_SLOTS, HOME_SLOTS
-from .ingest import GAME_PREFIX, TIMEOUT, _retry, game_table, load_gamelog, raw_dir, season_str
+from ..design import AWAY_SLOTS, HOME_SLOTS
+from ..gbdt_prior import CAREER_INPUTS
+from .config import DEFAULT_PATHS, resolve
+from .ingest import GAME_PREFIX, TIMEOUT, _retry, game_table, load_gamelog, raw_dir, refuse_if_offline, season_str
 
 # The phases a player's role is measured over: `design.SEASON_PHASES`, imported by name so there is one
 # place the answer lives.  Owner's ruling, 2026-09-10: one rating per player per season from that season's
 # games, "regular season and playoffs together, nothing else".
-from .design import SEASON_PHASES as ROLE_PHASES  # noqa: E402
+from ..design import SEASON_PHASES as ROLE_PHASES  # noqa: E402
 
 INPUTS = ["poss_pct", "poss_pct2", "gs_pct", "gs_pct2", "age", "age2", "age3"]
 RAW_INPUTS = ["poss_pct", "gs_pct", "age"]
@@ -141,6 +142,7 @@ def season_ages(season: int, cfg, force: bool = False) -> pd.DataFrame:
     if path.exists() and not force:
         df = pd.read_parquet(path)
     else:
+        refuse_if_offline(path, f"the bio stats {season}")
         from nba_api.stats.endpoints import leaguedashplayerbiostats
 
         def pull():
@@ -182,11 +184,16 @@ def build_roles(cfg, seasons=None, force: bool = False, verbose: bool = True,
 
 
 def roles_path(cfg, phases: tuple = ROLE_PHASES) -> Path:
-    """The cache carries its phases in its name, so an RS-only table built before the playoffs joined the
+    """The roles table: `roles.cache` (a file name) inside `paths.cache`, or `roles.cache` itself when it is an
+    absolute path, so a config that moves the cache folder moves this table with it.
+
+    The cache carries its phases in its name, so an RS-only table built before the playoffs joined the
     fit cannot be read back as an RS+PO one -- it would be a silent, plausible-looking undercount."""
-    p = Path(cfg.get("roles", {}).get("cache", "data/cache/roles.parquet"))
+    p = Path(cfg.get("roles", {}).get("cache", "roles.parquet"))
     p = p.with_name(f"{p.stem}_{''.join(phases)}{p.suffix}")
-    return Path(cfg["_root"]) / p if "_root" in cfg else p
+    if p.is_absolute():
+        return p
+    return resolve(cfg, "cache") / p if "_root" in cfg else Path(DEFAULT_PATHS["cache"]) / p
 
 
 def player_season_inputs(roles: pd.DataFrame, cap: float = 0.9) -> pd.DataFrame:
@@ -203,9 +210,8 @@ def player_season_inputs(roles: pd.DataFrame, cap: float = 0.9) -> pd.DataFrame:
     return g[["player_id", "season", "games", "starts", "minutes", "poss_on", "team_poss", "poss_pct", "gs_pct", "age", "age_imputed"]]
 
 
-CAREER_INPUTS = ["exp_yrs", "exp_poss", "entry_age"]
-
-
+# CAREER_INPUTS (exp_yrs, exp_poss, entry_age) are defined in gbdt_prior.py, the model code that reads
+# them; `career_inputs` below builds them.
 def career_inputs(inputs: pd.DataFrame, before_season: int, player_ids=None, age=None) -> pd.DataFrame:
     """Per player, what he had behind him BEFORE `before_season`: seasons played, possessions (thousands) and
     the age he entered at.

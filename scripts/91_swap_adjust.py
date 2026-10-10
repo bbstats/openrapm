@@ -61,8 +61,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
 from openrapm import swapadjust as sa  # noqa: E402
 from openrapm import swaptest as sw  # noqa: E402
-from openrapm.config import load_config  # noqa: E402
-from openrapm.seasons import drop_untrainable  # noqa: E402
+from openrapm.data.config import load_config  # noqa: E402
+from openrapm.data.seasons import drop_untrainable  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("_swap90", ROOT / "scripts" / "90_swap_test.py")
 _t90 = importlib.util.module_from_spec(_spec)
@@ -86,7 +86,7 @@ FEATURES = PANEL + OWN
 
 def features(base: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, set]:
     """(player_id, season) -> FEATURES, each standardised over every player-season; and the seasons the type model
-    may TRAIN on.  The trust boundary (src/openrapm/seasons.py): a season still being played may be loaded -- its
+    may TRAIN on.  The trust boundary (src/openrapm/data/seasons.py): a season still being played may be loaded -- its
     players get a type prediction -- but never trained on, so its swaps stay out of every type model."""
     raw_panel = pd.read_parquet(ROOT / "outputs/role_panel_season.parquet")
     trainable, _ = drop_untrainable(raw_panel, cfg, what="the season panel (type model training)")
@@ -99,7 +99,7 @@ def features(base: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, set]:
 
 def main():
     check_flags()
-    cfg = load_config(ROOT / "config.yaml")
+    cfg = load_config()
     base_path = ROOT / flag("base", "outputs/season_ratings_unshrinkdef.parquet")
     kappas = [float(x) for x in flag("kappas", "0.5,1").split(",") if x]
     taus = [float(x) for x in flag("taus", "1000,3000,10000,30000,100000").split(",") if x]
