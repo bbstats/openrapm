@@ -1,4 +1,4 @@
-"""The trade set (src/eracoef/tradeset.py) against simulated seasons with a known truth.
+"""The trade set (src/openrapm/tradeset.py) against simulated seasons with a known truth.
 
 Four things have to hold before any number this module produces means anything:
 
@@ -14,10 +14,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from eracoef import tradeset as ts_mod
-from eracoef.priorridge import MAE_SCALE
-from eracoef.design import FEATURES, build_design
-from eracoef.simulate import simulate
+from openrapm import tradeset as ts_mod
+from openrapm.priorridge import MAE_SCALE
+from openrapm.design import FEATURES, build_design
+from openrapm.simulate import simulate
 
 CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "features": FEATURES,
        "first_season": 2001, "last_season": 2003, "player_unit": "window"}

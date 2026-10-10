@@ -40,7 +40,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
-from eracoef.tradeset import MAE_SCALE, possession_tier  # noqa: E402
+from openrapm.tradeset import MAE_SCALE, possession_tier  # noqa: E402
 
 
 def missed(alpha: np.ndarray) -> float:
@@ -72,9 +72,9 @@ def mover_tiers(seasons) -> pd.Series:
     every neighbouring season he played has the same main team, "no neighbour season" if he played neither.  The
     trade set's correction reads exactly those three seasons' games (the owner, 2026-10-01: split every result
     into traded and not traded)."""
-    from eracoef import singleyear as sy
-    from eracoef.config import load_config
-    from eracoef.holdout import Context
+    from openrapm import singleyear as sy
+    from openrapm.config import load_config
+    from openrapm.holdout import Context
     ctx = Context.load(load_config(ROOT / "config.yaml"))
     have = sorted(set(int(s) for s in seasons))
     span = sorted(set(have) | {s - 1 for s in have} | {s + 1 for s in have})

@@ -1,4 +1,4 @@
-"""PriorRidgeCV (src/eracoef/priorridge.py) against the simulator and against the fit it replaces.
+"""PriorRidgeCV (src/openrapm/priorridge.py) against the simulator and against the fit it replaces.
 
 The class exists to turn four magic constants into a tested choice or a cross-validated one, so the tests
 are: does it agree with the plain two-step fit when the context penalty is zero (it must, or it is a
@@ -11,11 +11,11 @@ import pandas as pd
 import pytest
 from sklearn.linear_model import Ridge
 
-from eracoef.design import FEATURES, build_design
-from eracoef.holdout import Context, Ratings, predict_season, score
-from eracoef.priorridge import (DEFAULT_CONTEXT_LAMBDAS, MAE_SCALE, PriorRidgeCV, armse,
+from openrapm.design import FEATURES, build_design
+from openrapm.holdout import Context, Ratings, predict_season, score
+from openrapm.priorridge import (DEFAULT_CONTEXT_LAMBDAS, MAE_SCALE, PriorRidgeCV, armse,
                                 calibration_miss, penalty_grid, team_game_mse, team_game_weights)
-from eracoef.simulate import simulate
+from openrapm.simulate import simulate
 
 CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "features": FEATURES,
        "first_season": 2001, "last_season": 2005, "windows": [[2001, 2003], [2004, 2006]],

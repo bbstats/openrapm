@@ -67,8 +67,8 @@ def _box():
     missing, and in a fresh clone that means four retries with exponential backoff before it gives up --
     65 seconds of a test suite doing nothing.  Look first.
     """
-    from eracoef.boxtable import season_box
-    from eracoef.config import load_config
+    from openrapm.boxtable import season_box
+    from openrapm.config import load_config
     cfg = load_config()
     gl = Path(cfg["_root"]) / cfg.get("paths", {}).get("raw", "data/raw") / "gamelog"
     if not all((gl / f"{s}_RS.parquet").exists() for s in SEASONS):
@@ -198,7 +198,7 @@ def test_no_archetype_bias_by_cluster(board):
     0.95.  Seeds are averaged because the mixture is refit per run: over ten seeds at k = 8 the statistic
     moves with sd 0.02, and it is pooled over the three seasons the consensus covers because per single
     season the ranges overlap (`python scripts/58_archetype.py stability`)."""
-    from eracoef.archetype import RATES, cluster_gaps, fit_clusters, gap_columns, per36, spread
+    from openrapm.archetype import RATES, cluster_gaps, fit_clusters, gap_columns, per36, spread
     box = _box()
     prof = per36(box[box.phase == "RS"])
     m = board.merge(prof[["player_id", *RATES]], on="player_id", how="inner")

@@ -61,10 +61,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
-from eracoef import singleyear as sy  # noqa: E402
-from eracoef.config import load_config  # noqa: E402
-from eracoef.looseason import LeaveSeasonOutRAPM  # noqa: E402
-from eracoef.windows import build_window  # noqa: E402
+from openrapm import singleyear as sy  # noqa: E402
+from openrapm.config import load_config  # noqa: E402
+from openrapm.looseason import LeaveSeasonOutRAPM  # noqa: E402
+from openrapm.windows import build_window  # noqa: E402
 
 FIELDS = ["n", "p", "m", "t", "o", "x", "r", "a", "h", "w", "g", "e", "f", "id"]   # name, possessions, the five
 PIECES = ["margin", "teammates", "opponents", "context", "ridge"]         # pieces by player, RAPM, the four by

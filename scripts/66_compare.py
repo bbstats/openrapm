@@ -50,7 +50,7 @@ def load(path: Path, season: int) -> pd.DataFrame:
 
 def summary(yoy_path: Path, names: list, ref: str) -> list:
     """Per table: pooled year-over-year numbers and the paired test against `ref`, from a 63_yoy.py parquet."""
-    from eracoef.holdout import paired, pooled
+    from openrapm.holdout import paired, pooled
     res = pd.read_parquet(yoy_path)
     res = res[res.split == "all"].copy()
     # direction BEFORE the name is stripped, or both directions collapse onto one held-out key and the

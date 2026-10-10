@@ -1,4 +1,4 @@
-"""Build the role panel: APM -> Simple SPM -> RAPM_1, per player-window-side (src/eracoef/spm.py).
+"""Build the role panel: APM -> Simple SPM -> RAPM_1, per player-window-side (src/openrapm/spm.py).
 
 Per window, per side (offense on the free-throw target, defense on the opponent-3PM-replaced one,
 like the board):
@@ -32,17 +32,17 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from eracoef.config import load_config  # noqa: E402
-from eracoef.cv import plugin_fit  # noqa: E402
-from eracoef.design import FEATURES  # noqa: E402
-from eracoef.bio import PLAYER_INPUTS, player_inputs  # noqa: E402
-from eracoef.roles import (CAREER_INPUTS, RAW_INPUTS, build_roles, career_inputs,  # noqa: E402
+from openrapm.config import load_config  # noqa: E402
+from openrapm.cv import plugin_fit  # noqa: E402
+from openrapm.design import FEATURES  # noqa: E402
+from openrapm.bio import PLAYER_INPUTS, player_inputs  # noqa: E402
+from openrapm.roles import (CAREER_INPUTS, RAW_INPUTS, build_roles, career_inputs,  # noqa: E402
                            player_season_inputs, window_inputs)
-from eracoef.spm import (apm_fit, apm_lambda_check, fit_spm, panel_inputs_report, season_of_units,  # noqa: E402
+from openrapm.spm import (apm_fit, apm_lambda_check, fit_spm, panel_inputs_report, season_of_units,  # noqa: E402
                          spm_predict)
-from eracoef.investigate import oncourt_rates
-from eracoef.windows import build_window, window_label, window_seasons  # noqa: E402
-from eracoef.xshoot import (DEFENSE_TARGETS, SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS,  # noqa: E402
+from openrapm.investigate import oncourt_rates
+from openrapm.windows import build_window, window_label, window_seasons  # noqa: E402
+from openrapm.xshoot import (DEFENSE_TARGETS, SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS,  # noqa: E402
                             player_shot_frame)
 
 SHOT_COLS_ALL = [*SHOT_TOTAL_COLS, *SHOT_LEAGUE_COLS]

@@ -17,11 +17,11 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from eracoef import singleyear as sy  # noqa: E402
-from eracoef.config import load_config  # noqa: E402
-from eracoef.holdout import Context  # noqa: E402
-from eracoef.investigate import offcourt_rates, oncourt_rates  # noqa: E402
-from eracoef.xshoot import DEFENSE_TARGETS  # noqa: E402
+from openrapm import singleyear as sy  # noqa: E402
+from openrapm.config import load_config  # noqa: E402
+from openrapm.holdout import Context  # noqa: E402
+from openrapm.investigate import offcourt_rates, oncourt_rates  # noqa: E402
+from openrapm.xshoot import DEFENSE_TARGETS  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 

@@ -1,4 +1,4 @@
-"""LeaveSeasonOutRAPM (src/eracoef/looseason.py).
+"""LeaveSeasonOutRAPM (src/openrapm/looseason.py).
 
 The design rests on one claim: with player units the normal equations are additive over seasons, so the
 fit that leaves season H out is the total gram minus H's.  If that is wrong everything downstream is wrong
@@ -8,10 +8,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from eracoef.design import FEATURES, build_design
-from eracoef.holdout import Context
-from eracoef.looseason import LeaveSeasonOutRAPM
-from eracoef.simulate import simulate
+from openrapm.design import FEATURES, build_design
+from openrapm.holdout import Context
+from openrapm.looseason import LeaveSeasonOutRAPM
+from openrapm.simulate import simulate
 
 CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "features": FEATURES,
        "first_season": 2001, "last_season": 2004, "windows": [[2001, 2003], [2004, 2006]],
@@ -161,7 +161,7 @@ def test_the_sweep_never_scores_a_season_it_trained_on(world):
     honest = model.sweep(lambda s: designs[s], offense_lambdas=[2000.0], defense_lambdas=[2000.0],
                          context_lambdas=[0.0], scoring_seasons=[2002], verbose=False)
     leaky_rating = model.ratings(offense_lambda=2000.0)
-    from eracoef.priorridge import team_game_mse, team_game_weights
+    from openrapm.priorridge import team_game_mse, team_game_weights
     key, poss, weight, _ = team_game_weights(designs[2002])
     leaky, _ = team_game_mse(key, poss, weight, model.predict_error(designs[2002], leaky_rating))
     assert leaky < float(honest.mse.iloc[0]), "training on the scored season should look better; it is not honest"

@@ -48,12 +48,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
-from eracoef import pieces  # noqa: E402
-from eracoef import singleyear as sy  # noqa: E402
-from eracoef.config import load_config  # noqa: E402
-from eracoef.holdout import Context  # noqa: E402
-from eracoef.investigate import oncourt_rates  # noqa: E402
-from eracoef.xshoot import DEFENSE_TARGETS  # noqa: E402
+from openrapm import pieces  # noqa: E402
+from openrapm import singleyear as sy  # noqa: E402
+from openrapm.config import load_config  # noqa: E402
+from openrapm.holdout import Context  # noqa: E402
+from openrapm.investigate import oncourt_rates  # noqa: E402
+from openrapm.xshoot import DEFENSE_TARGETS  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("_borrowed_83", ROOT / "scripts" / "83_decompose_site.py")
 d83 = importlib.util.module_from_spec(_spec)

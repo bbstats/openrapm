@@ -48,7 +48,7 @@ margin_clip: 25
 margin_bins: [-25, -15, -8, -3, 3, 8, 15, 25]   # 7 bins for the binned-margin robustness run
 time_halves: 2
 
-# The out-of-season criterion (src/eracoef/holdout.py; scripts/63_yoy.py runs it, and the retired
+# The out-of-season criterion (src/openrapm/holdout.py; scripts/63_yoy.py runs it, and the retired
 # scripts/45_holdout.py did): hold out one season, train on the K nearest seasons either side of it,
 # predict its stints, score against actual points.
 # The one test in this project that is both external to the model and legal to select on.
@@ -73,7 +73,7 @@ holdout:
   consensus:
     min_poss: 1000
 
-# The role prior (src/eracoef/roles.py, spm.py; FINDINGS 19).
+# The role prior (src/openrapm/roles.py, spm.py; FINDINGS 19).
 roles:
   cache: data/cache/roles.parquet   # per player-season-team: games, starts, minutes, on-floor and team possessions, age
   share_cap: 0.9                    # poss_pct is capped here: one full team-season of possessions

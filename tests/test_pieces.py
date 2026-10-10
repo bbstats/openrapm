@@ -1,4 +1,4 @@
-"""The pieces of one season's vanilla RAPM (src/eracoef/pieces.py), on the simulated league.
+"""The pieces of one season's vanilla RAPM (src/openrapm/pieces.py), on the simulated league.
 
 The decomposition's two splits are identities, not estimates: each side's five by-player pieces and its four
 possession groups must add up to that side's RAPM to rounding.  A failure there means a piece is mislabelled, and
@@ -13,9 +13,9 @@ import pandas as pd
 import pytest
 import scipy.sparse as sp
 
-from eracoef import pieces
-from eracoef.design import FEATURES, build_design
-from eracoef.simulate import simulate
+from openrapm import pieces
+from openrapm.design import FEATURES, build_design
+from openrapm.simulate import simulate
 
 CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "features": FEATURES,
        "first_season": 2001, "last_season": 2001, "windows": [[2001, 2001]],

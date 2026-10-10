@@ -87,9 +87,9 @@ from scipy.stats import norm  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from eracoef.config import load_config  # noqa: E402
-from eracoef.glossary import plain  # noqa: E402
-from eracoef.seasons import drop_untrainable  # noqa: E402
+from openrapm.config import load_config  # noqa: E402
+from openrapm.glossary import plain  # noqa: E402
+from openrapm.seasons import drop_untrainable  # noqa: E402
 from _cli import check_flags, flag  # noqa: E402
 
 
@@ -622,7 +622,7 @@ def group_shapley_shares(seasons: list, groups: dict, out: Path, orderings: int 
     leaves (4.7.0: "not implemented for linear trees"), and shap's own model-agnostic Partition explainer took 35
     minutes a season and side; this is the same group-level quantity in a few minutes (linear leaves predict slowly,
     so `threads` cores; run it only when no build is running)."""
-    from eracoef import singleyear as sy
+    from openrapm import singleyear as sy
     panel, _ = drop_untrainable(pd.read_parquet(ROOT / "outputs" / "role_panel_season.parquet"),
                                 load_config(ROOT / "config.yaml"), what="the season panel")
     loaded, rows_out = {}, []
@@ -673,7 +673,7 @@ def tradeset_leans(tests: list, alpha_path: Path) -> pd.DataFrame:
     """Each decision test's straight-line lean of the neighbouring-season miss (the trade set's alpha on actual points,
     eligible rows) on the input's within-season normal score, standard errors clustered by player.  It never fits
     anything: a lean the season's own games find and this contradicts at |z| 2 does not count."""
-    from eracoef import singleyear as sy
+    from openrapm import singleyear as sy
     alpha = pd.read_parquet(alpha_path)
     alpha = alpha[alpha.eligible]
     # gated like every reader of the panel: a season still being played never enters a reading

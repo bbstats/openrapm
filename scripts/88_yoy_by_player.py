@@ -48,9 +48,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
-from eracoef.config import load_config  # noqa: E402
-from eracoef.holdout import Context, Ratings, predict_season  # noqa: E402
-from eracoef.seasons import drop_untrainable  # noqa: E402
+from openrapm.config import load_config  # noqa: E402
+from openrapm.holdout import Context, Ratings, predict_season  # noqa: E402
+from openrapm.seasons import drop_untrainable  # noqa: E402
 
 QUALITY_EDGES = [0, 30, 90, 150, 300, 10**9]
 QUALITY_LABELS = ["top 30", "31-90", "91-150", "151-300", "301+"]

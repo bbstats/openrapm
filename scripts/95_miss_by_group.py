@@ -54,11 +54,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
-from eracoef import singleyear as sy  # noqa: E402
-from eracoef.archetype import cluster_proba, fit_mixture  # noqa: E402
-from eracoef.config import load_config  # noqa: E402
-from eracoef.glossary import plain  # noqa: E402
-from eracoef.seasons import drop_untrainable  # noqa: E402
+from openrapm import singleyear as sy  # noqa: E402
+from openrapm.archetype import cluster_proba, fit_mixture  # noqa: E402
+from openrapm.config import load_config  # noqa: E402
+from openrapm.glossary import plain  # noqa: E402
+from openrapm.seasons import drop_untrainable  # noqa: E402
 
 N_CELLS = 6                        # levels for the adjustment's own check
 N_GROUPS = 5                       # fifths
@@ -292,7 +292,7 @@ def main() -> None:
     alpha = pd.read_parquet(ROOT / flag("alpha", "outputs/tradeset_swapadj_within_alpha.parquet"))
     alpha = alpha[alpha.eligible & (alpha.without_poss >= 1.0)]
     ratings = pd.read_parquet(ROOT / flag("ratings", "outputs/season_ratings_swapadj_within.parquet"))
-    # the trust boundary (src/eracoef/seasons.py): a season still being played reaches no fit
+    # the trust boundary (src/openrapm/seasons.py): a season still being played reaches no fit
     panel, _ = drop_untrainable(pd.read_parquet(ROOT / "outputs" / "role_panel_season.parquet"),
                                 load_config(ROOT / "config.yaml"), what="the season panel")
     panel = panel[panel.poss > 0]

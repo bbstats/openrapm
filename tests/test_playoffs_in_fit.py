@@ -25,14 +25,14 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from eracoef import design as design_mod  # noqa: E402
-from eracoef.config import load_config  # noqa: E402
-from eracoef.design import SEASON_PHASES  # noqa: E402
-from eracoef.exposure import BoxExposure  # noqa: E402
-from eracoef.holdout import Context, default_loader  # noqa: E402
-from eracoef.roles import ROLE_PHASES  # noqa: E402
-from eracoef.windows import build_window  # noqa: E402
-from eracoef.xshoot import SHOT_PHASES  # noqa: E402
+from openrapm import design as design_mod  # noqa: E402
+from openrapm.config import load_config  # noqa: E402
+from openrapm.design import SEASON_PHASES  # noqa: E402
+from openrapm.exposure import BoxExposure  # noqa: E402
+from openrapm.holdout import Context, default_loader  # noqa: E402
+from openrapm.roles import ROLE_PHASES  # noqa: E402
+from openrapm.windows import build_window  # noqa: E402
+from openrapm.xshoot import SHOT_PHASES  # noqa: E402
 
 CFG = load_config()
 _STINTS = Path(CFG["_root"]) / CFG.get("paths", {}).get("stints", "data/stints")
@@ -47,7 +47,7 @@ def _default(fn, name):
 
 
 def test_every_phase_default_is_the_whole_season():
-    from eracoef.designcache import build_window_cached
+    from openrapm.designcache import build_window_cached
     assert SEASON_PHASES == ("RS", "PO")
     for fn, arg in ((build_window, "phases"), (build_window_cached, "phases"),
                     (default_loader, "phases"), (Context.design, "phases"),
@@ -81,7 +81,7 @@ def test_a_window_actually_contains_playoff_rows():
 @needs_data
 def test_role_inputs_count_playoff_minutes():
     """A rotation player on a team that went deep played more games than his regular season says."""
-    from eracoef.roles import season_roles
+    from openrapm.roles import season_roles
     season = max(int(p.stem.split("_")[0]) for p in _STINTS.glob("*_PO.parquet"))
     both = season_roles(season, CFG)
     rs = season_roles(season, CFG, phases=("RS",))
@@ -103,7 +103,7 @@ def test_the_cut_puts_every_playoff_game_on_the_scored_side():
     every cut -- excluded from training by a special case AND excluded from scoring by the same
     comparison, so they were in neither half.
     """
-    from eracoef.inseason import season_frac
+    from openrapm.inseason import season_frac
     season = max(int(p.stem.split("_")[0]) for p in _STINTS.glob("*_PO.parquet"))
     wd = build_window([season], CFG)
     po_idx = wd.games.loc[wd.games["phase"] == "PO", "game_idx"].to_numpy()

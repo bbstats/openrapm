@@ -1,9 +1,9 @@
-"""The per-season shot-distance curve (src/eracoef/shotcurve.py) on shots simulated from a known one."""
+"""The per-season shot-distance curve (src/openrapm/shotcurve.py) on shots simulated from a known one."""
 import numpy as np
 import pandas as pd
 import pytest
 
-from eracoef.shotcurve import (MAX_DIST, UNLOCATED, ShotCurve, calibration, fit_curve, logistic_irls, natural_spline,
+from openrapm.shotcurve import (MAX_DIST, UNLOCATED, ShotCurve, calibration, fit_curve, logistic_irls, natural_spline,
                                shot_bin, shot_rows)
 
 

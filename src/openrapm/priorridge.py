@@ -20,7 +20,7 @@ Four things make this different from `sklearn.linear_model.RidgeCV`, and each on
 The number reported is **ARMSE**: the root of the weighted mean square, scaled by sqrt(2 / pi) so it reads
 on the mean-absolute scale -- what a typical team-game actually misses by, in points per 100.
 
-    from eracoef.priorridge import PriorRidgeCV
+    from openrapm.priorridge import PriorRidgeCV
 
     model = PriorRidgeCV().fit(design, prior_offense, prior_defense)
     print(model.offense_lambda_, model.defense_lambda_, model.context_lambda_)

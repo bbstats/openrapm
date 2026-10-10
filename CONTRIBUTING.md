@@ -19,7 +19,7 @@ model, run the unit tests or open a draft PR — only to run the criterion itsel
 **1. Nothing that is fitted may see a season still being played.**
 
 Every season may be loaded and rated. A season may be *fit* on only once its Finals are over.
-`src/eracoef/seasons.py` decides which is which, by reading the game log and asking whether any team
+`src/openrapm/seasons.py` decides which is which, by reading the game log and asking whether any team
 has won the sixteen playoff games that win a title — so there is no year to bump and no flag to set.
 
 This binds the box prior, the role prior, the calibration map, the padding constants, the feature
@@ -43,7 +43,7 @@ where a new source of data (tracking, a different feed) belongs.
 
 ## Making a change
 
-Model changes used to be a new entry in `src/eracoef/systems.py` (retired, with the runner below). A system is anything with a name and
+Model changes used to be a new entry in `src/openrapm/systems.py` (retired, with the runner below). A system is anything with a name and
 `fit(train_seasons, ctx) -> Ratings`.
 
 ```bash
@@ -65,7 +65,7 @@ Four numbers. All four.
 **PBO is the one people have not met before.** It asks how likely it is that the winner of your
 search is a fluke. Split the held-out seasons into halves every balanced way there is, find what won
 each first half, see where it ranks on the second. If your idea is real it keeps winning; if it was
-noise it lands near the middle. `src/eracoef/pbo.py` has the measured thresholds.
+noise it lands near the middle. `src/openrapm/pbo.py` has the measured thresholds.
 
 **PBO only works if it sees everything you tried.** So:
 

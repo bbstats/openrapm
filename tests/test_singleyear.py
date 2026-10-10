@@ -9,9 +9,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from eracoef import singleyear as sy
-from eracoef.bio import PLAYER_INPUTS
-from eracoef.gbdt_prior import DERIVED, RATIOS, SHOTQ
+from openrapm import singleyear as sy
+from openrapm.bio import PLAYER_INPUTS
+from openrapm.gbdt_prior import DERIVED, RATIOS, SHOTQ
 
 
 def _panel(n=40, seed=0):
@@ -209,7 +209,7 @@ def test_a_missing_outside_label_raises_rather_than_dropping_rows():
 
 def test_the_piece_names_have_not_drifted():
     """`singleyear` repeats `pieces.COLUMNS` because `pieces` imports it."""
-    from eracoef import pieces
+    from openrapm import pieces
     assert sy.PIECES == pieces.COLUMNS
     assert set(sy.PIECES + sy.PO_SHARE) <= set(sy.INPUT_COLUMNS)
 
@@ -481,7 +481,7 @@ def test_team_movement_is_never_below_the_form_it_replaced():
 
 def test_a_deal_target_column_keeps_another_targets_deal():
     import pandas as pd
-    from eracoef import singleyear as sy
+    from openrapm import singleyear as sy
     rng = np.random.default_rng(5)
     ids = np.repeat(np.arange(300), 2)
     a = np.repeat(rng.normal(0, 1, 300), 2)
@@ -530,7 +530,7 @@ def _with_counts(panel, seed=11):
     target = rng.uniform(1.0, 12.0, shape)
     level = rng.uniform(2.0, 8.0, shape)
     raw = (100.0 * counts + k * target) / (n + k)
-    from eracoef.design import FEATURES
+    from openrapm.design import FEATURES
     out[[f"raw_{c}" for c in FEATURES]] = raw
     out[list(FEATURES)] = raw - level
     out[sy.PAD_COUNTS], out[sy.PAD_K], out[sy.PAD_TARGET] = counts, k, target
@@ -539,7 +539,7 @@ def _with_counts(panel, seed=11):
 
 def test_pad_once_gives_back_a_one_season_row():
     """The rated row and every one-season chunk must not move: a group of one season is its panel row."""
-    from eracoef.design import FEATURES
+    from openrapm.design import FEATURES
     panel = _with_counts(_panel())
     one = panel[panel.season == 2014]
     got = sy.aggregate(one, pad_once=True)
@@ -553,7 +553,7 @@ def test_pad_once_gives_back_a_one_season_row():
 def test_pad_once_pads_a_multi_season_row_on_its_summed_counts():
     """Two seasons: (100 * summed counts + k * target) / (summed possessions + k), k and target blended by
     possessions -- and wider than the mean of the two padded rates, which shrinks the pair like one season."""
-    from eracoef.design import FEATURES
+    from openrapm.design import FEATURES
     panel = _with_counts(_panel())
     got = sy.aggregate(panel, pad_once=True)
     plain = sy.aggregate(panel)

@@ -1,9 +1,9 @@
-"""The Simple SPM (src/eracoef/spm.py): recovers a known role-and-age function from noisy APM, leaves the
+"""The Simple SPM (src/openrapm/spm.py): recovers a known role-and-age function from noisy APM, leaves the
 excluded window out, and reads the same at different APM penalties."""
 import numpy as np
 import pandas as pd
 
-from eracoef.spm import apm_lambda_check, fit_spm, spm_predict
+from openrapm.spm import apm_lambda_check, fit_spm, spm_predict
 
 
 def _truth(poss_pct, gs, age):

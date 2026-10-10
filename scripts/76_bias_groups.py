@@ -4,7 +4,7 @@
                                      [--seasons=2026] [--out=docs/bias.html]
 
 The types are not hand-made: a Bayesian Gaussian mixture over each player's per-36 box profile
-(`eracoef.archetype`, the same fit `scripts/58_archetype.py` uses), which prunes the components the data
+(`openrapm.archetype`, the same fit `scripts/58_archetype.py` uses), which prunes the components the data
 does not support instead of splitting a real group in two.  What is new here is the quantity reported.
 
 **One number per group: the possession-weighted bias on the OVERALL rating.**  Offence and defence are
@@ -40,9 +40,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
-from eracoef.archetype import RATES, cluster_proba, fit_mixture, per36  # noqa: E402
-from eracoef.boxtable import season_box  # noqa: E402
-from eracoef.config import load_config  # noqa: E402
+from openrapm.archetype import RATES, cluster_proba, fit_mixture, per36  # noqa: E402
+from openrapm.boxtable import season_box  # noqa: E402
+from openrapm.config import load_config  # noqa: E402
 
 MIN_POSS = 1000
 SUFFIX = re.compile(r"\b(jr|sr|ii|iii|iv|v)\b")

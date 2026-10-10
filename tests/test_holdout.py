@@ -1,4 +1,4 @@
-"""The out-of-season runner (src/eracoef/holdout.py) against simulated seasons with a known truth.
+"""The out-of-season runner (src/openrapm/holdout.py) against simulated seasons with a known truth.
 
 The simulator is run with persistent talent (rho) and roster turnover, so a rating fit on the
 seasons around H genuinely carries information about H and players appear with new teammates --
@@ -8,11 +8,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from eracoef.design import FEATURES, build_design
-from eracoef.holdout import (RESULT_COLUMNS, SPLITS, Context, Holdout, ReplacementSystem, TableSystem, fit_rank_map,
+from openrapm.design import FEATURES, build_design
+from openrapm.holdout import (RESULT_COLUMNS, SPLITS, Context, Holdout, ReplacementSystem, TableSystem, fit_rank_map,
                              paired, pooled, pooled_rank, predict_season, replacement_quality, report, score,
                              team_residual)
-from eracoef.simulate import simulate
+from openrapm.simulate import simulate
 
 CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "features": FEATURES,
        "first_season": 2001, "last_season": 2005, "windows": [[2001, 2003], [2004, 2006]],
@@ -136,7 +136,7 @@ def test_diagnostics_run(world):
 def test_ratings_table_prior_parts(world):
     """windows.player_ratings_table with the chain offset: prior_* carry the offset (defense flipped), and
     rating = prior + u holds with no linear box term."""
-    from eracoef.windows import player_ratings_table
+    from openrapm.windows import player_ratings_table
     sim, ctx, table = world
     seasons = [2002, 2004]
     wd = ctx.design(seasons, "pts")
@@ -159,7 +159,7 @@ def test_team_game_score_is_nan_when_the_mask_cuts_a_team_game():
     Whole team-games kept: `tg` is the real number and the groups recombine.  Cut: NaN, read `mse` instead.
     """
     import numpy as np
-    from eracoef.holdout import Prediction, _keeps_whole_team_games, score
+    from openrapm.holdout import Prediction, _keeps_whole_team_games, score
 
     n = 12
     rng = np.random.default_rng(0)

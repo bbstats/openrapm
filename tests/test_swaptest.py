@@ -1,10 +1,10 @@
-"""The swap test (src/eracoef/swaptest.py) on a synthetic league whose true ratings are known."""
+"""The swap test (src/openrapm/swaptest.py) on a synthetic league whose true ratings are known."""
 import itertools
 
 import numpy as np
 import pandas as pd
 
-from eracoef import swaptest as sw
+from openrapm import swaptest as sw
 
 
 def _league(seed=0, teams=4, players=8, games=240, per_period=6, poss=5, noise=1.2):

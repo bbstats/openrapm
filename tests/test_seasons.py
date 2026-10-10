@@ -11,8 +11,8 @@ import pandas as pd
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from eracoef import seasons as S  # noqa: E402
-from eracoef.config import load_config  # noqa: E402
+from openrapm import seasons as S  # noqa: E402
+from openrapm.config import load_config  # noqa: E402
 
 CFG = load_config()
 

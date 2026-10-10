@@ -33,7 +33,7 @@ the gradient booster the box prior uses; it is first-party and Apache-2.0.
 ## The two rules
 
 **1. The current season is never trained on.** Every season may be loaded and rated. A season may be
-*fit* on only once its Finals are over — which `src/eracoef/seasons.py` reads from the data rather
+*fit* on only once its Finals are over — which `src/openrapm/seasons.py` reads from the data rather
 than from a constant, by asking whether any team has won the sixteen playoff games that win a title.
 That covers the box prior, the role prior, the calibration map and every hyper-parameter. The ridge
 is exempt, because a rating *is* a ridge coefficient and solving it on the season in progress is the
@@ -56,12 +56,12 @@ python scripts/48_ladder.py outputs/holdout_x.parquet --ref=ks52_lam05          
 ```
 
 A system is anything with a name and `fit(train_seasons, ctx) -> Ratings`
-(`src/eracoef/holdout.py`); the registry of named systems, `src/eracoef/systems.py`, was retired in the 2026-10
+(`src/openrapm/holdout.py`); the registry of named systems, `src/openrapm/systems.py`, was retired in the 2026-10
 cleanup with the runner scripts above.
 
 Winning that test is necessary and not sufficient. A gain that only shows up once, in one search,
 against the same seasons everyone has been tuning against, is not a gain — see `CONTRIBUTING.md` for
-what a pull request has to clear, and `src/eracoef/pbo.py` for the number that measures it.
+what a pull request has to clear, and `src/openrapm/pbo.py` for the number that measures it.
 
 ## What ships
 
@@ -110,7 +110,7 @@ cleanup (tag archive/research-2026-10).
 
 ## Layout
 
-    src/eracoef/
+    src/openrapm/
       seasons.py     which seasons may be trained on -- the trust boundary
       ingest.py      play-by-play and box scores from stats.nba.com
       stints.py      play-by-play to stints

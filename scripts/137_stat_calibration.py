@@ -45,10 +45,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
-from eracoef import singleyear as sy  # noqa: E402
-from eracoef.config import load_config  # noqa: E402
-from eracoef.glossary import plain  # noqa: E402
-from eracoef.seasons import drop_untrainable  # noqa: E402
+from openrapm import singleyear as sy  # noqa: E402
+from openrapm.config import load_config  # noqa: E402
+from openrapm.glossary import plain  # noqa: E402
+from openrapm.seasons import drop_untrainable  # noqa: E402
 
 CURVE = dict(n_estimators=150, learning_rate=0.05, num_leaves=6, min_child_samples=400, reg_lambda=10.0,
              subsample=1.0, colsample_bytree=1.0, n_jobs=1, verbose=-1, random_state=0)

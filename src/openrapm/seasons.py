@@ -79,7 +79,7 @@ class Trainable:
         if late:
             raise LeakageError(
                 f"seasons {late} are past the cutoff {self.cutoff}: their Finals are not over, so "
-                f"nothing may be fit on them.  Rate them instead -- see src/eracoef/seasons.py.")
+                f"nothing may be fit on them.  Rate them instead -- see src/openrapm/seasons.py.")
 
     def __iter__(self):
         return iter(self.seasons)
@@ -169,7 +169,7 @@ def check_trainable(seasons, cfg, what: str = "this fit") -> Trainable:
     if late:
         raise LeakageError(
             f"{what} was given season(s) {late}, whose Finals are not over (the cutoff is {cut}).  "
-            f"Only the ridge may see a season in progress; see src/eracoef/seasons.py.")
+            f"Only the ridge may see a season in progress; see src/openrapm/seasons.py.")
     return Trainable(tuple(int(s) for s in seasons), cut)
 
 
@@ -197,5 +197,5 @@ def drop_untrainable(panel: "pd.DataFrame", cfg, label_col: str = "window", what
     dropped = tuple(sorted(set(panel.loc[~keep, label_col].astype(str))))
     if dropped:
         print(f"  {what}: {int((~keep).sum())} rows dropped from {list(dropped)} -- past the "
-              f"trainable cutoff {cut} (src/eracoef/seasons.py)", flush=True)
+              f"trainable cutoff {cut} (src/openrapm/seasons.py)", flush=True)
     return panel.loc[keep].reset_index(drop=True), dropped

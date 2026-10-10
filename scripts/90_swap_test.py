@@ -5,7 +5,7 @@
                                    [--ref=incumbent] [--plain_rapm=3000] [--checks=1] [--shift_sd=2]
                                    [--first=1998] [--last=2025] [--contexts=full,home] [--seed=0] [--tag=swap]
 
-The test is `src/eracoef/swaptest.py`: for every pair of lineups on the same team that share four players
+The test is `src/openrapm/swaptest.py`: for every pair of lineups on the same team that share four players
 -- Podziemski in one, Spencer in the other, the same four teammates in both -- compare the two lineups'
 results in the scored season with what a NEIGHBOURING season's ranking says about the two swapped players.
 Each scored season is scored twice, by the ranking of the season before it ("forward": a rating looking
@@ -46,8 +46,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
-from eracoef import swaptest as sw  # noqa: E402
-from eracoef.config import load_config  # noqa: E402
+from openrapm import swaptest as sw  # noqa: E402
+from openrapm.config import load_config  # noqa: E402
 
 
 def load_stints(season: int, cfg: dict, phases=("RS", "PO")) -> pd.DataFrame:

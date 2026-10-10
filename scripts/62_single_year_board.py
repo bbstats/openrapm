@@ -31,7 +31,7 @@ and every player's prior is the mean of his K out-of-player predictions.  5K + 1
 `--prior_grouping_first=5` deals groupings 5..4+K, a disjoint set, for the stability check.
 
 LightGBM mode (the owner, 2026-10-08): `--booster_params=<name>` whose file says `"learner": "lightgbm"` (scripts/136
-writes one) fits `eracoef.lgbprior`'s deterministic LightGBM -- no subsampling, a fixed tree count, so the same rows
+writes one) fits `openrapm.lgbprior`'s deterministic LightGBM -- no subsampling, a fixed tree count, so the same rows
 always give the same model.  `--lopo=1` then drops the player folds: each rated player's prior comes from a model
 trained on every other player's rows, fitted in `--prior_jobs` processes (about 500 a side a season).
 
@@ -138,20 +138,20 @@ from chimeraboost import ChimeraBoostRegressor  # noqa: E402
 from threadpoolctl import threadpool_limits  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from eracoef import pieces  # noqa: E402
-from eracoef import singleyear as sy  # noqa: E402
-from eracoef.config import load_config
-from eracoef.seasons import drop_untrainable  # noqa: E402
-from eracoef.holdout import Context, Ratings, predict_season, score  # noqa: E402
-from eracoef.inseason import season_frac  # noqa: E402
-from eracoef.investigate import offcourt_rates, oncourt_rates  # noqa: E402
-from eracoef.looseason import LeaveSeasonOutRAPM  # noqa: E402
-from eracoef.priorridge import PriorRidgeCV, armse, calibration_miss, game_folds  # noqa: E402
-from eracoef.roles import player_season_inputs  # noqa: E402
-from eracoef.seasoninputs import SeasonTables, honest_fold_prior  # noqa: E402
-from eracoef import lgbprior  # noqa: E402
-from eracoef.stackprior import StackedSPM  # noqa: E402
-from eracoef.xshoot import DEFENSE_TARGETS  # noqa: E402
+from openrapm import pieces  # noqa: E402
+from openrapm import singleyear as sy  # noqa: E402
+from openrapm.config import load_config
+from openrapm.seasons import drop_untrainable  # noqa: E402
+from openrapm.holdout import Context, Ratings, predict_season, score  # noqa: E402
+from openrapm.inseason import season_frac  # noqa: E402
+from openrapm.investigate import offcourt_rates, oncourt_rates  # noqa: E402
+from openrapm.looseason import LeaveSeasonOutRAPM  # noqa: E402
+from openrapm.priorridge import PriorRidgeCV, armse, calibration_miss, game_folds  # noqa: E402
+from openrapm.roles import player_season_inputs  # noqa: E402
+from openrapm.seasoninputs import SeasonTables, honest_fold_prior  # noqa: E402
+from openrapm import lgbprior  # noqa: E402
+from openrapm.stackprior import StackedSPM  # noqa: E402
+from openrapm.xshoot import DEFENSE_TARGETS  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -822,7 +822,7 @@ def main():
             print(f"booster {s} from booster_params_{booster_name}.json: {side_params[s]}; early-stopping split "
                   f"by {'players' if by_player[s] else 'rows'}", flush=True)
 
-    # The trust boundary (src/eracoef/seasons.py): rows whose unit reaches into a season still
+    # The trust boundary (src/openrapm/seasons.py): rows whose unit reaches into a season still
     # being played may not reach a fit.  Gating at the read is what keeps every fit below honest;
     # it drops nothing while no season is in progress, and says so when it does.
     panel, _ = drop_untrainable(pd.read_parquet(ROOT / "outputs/role_panel_season.parquet"),

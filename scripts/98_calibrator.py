@@ -52,12 +52,12 @@ from sklearn.tree import DecisionTreeRegressor  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from eracoef import singleyear as sy  # noqa: E402
-from eracoef.config import load_config  # noqa: E402
-from eracoef.design import FEATURES  # noqa: E402
-from eracoef.gbdt_prior import DERIVED, RATIOS, SHOTQ  # noqa: E402
-from eracoef.holdout import Context, Ratings, predict_season, score  # noqa: E402
-from eracoef.priorridge import armse  # noqa: E402
+from openrapm import singleyear as sy  # noqa: E402
+from openrapm.config import load_config  # noqa: E402
+from openrapm.design import FEATURES  # noqa: E402
+from openrapm.gbdt_prior import DERIVED, RATIOS, SHOTQ  # noqa: E402
+from openrapm.holdout import Context, Ratings, predict_season, score  # noqa: E402
+from openrapm.priorridge import armse  # noqa: E402
 from _cli import check_flags, flag  # noqa: E402
 
 # what a correction may read, grouped by meaning (GLOSSARY.md has the plain names)

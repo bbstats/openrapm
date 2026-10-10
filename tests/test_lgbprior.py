@@ -1,4 +1,4 @@
-"""The LightGBM prior (`eracoef.lgbprior`) and the leave-one-player-out mode of scripts/62's `OutOfPlayerSPM`."""
+"""The LightGBM prior (`openrapm.lgbprior`) and the leave-one-player-out mode of scripts/62's `OutOfPlayerSPM`."""
 import importlib.util
 import sys
 from pathlib import Path
@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from eracoef import lgbprior
+from openrapm import lgbprior
 
 ROOT = Path(__file__).resolve().parents[1]
 PARAMS = {"n_estimators": 60, "num_leaves": 7, "learning_rate": 0.1, "min_child_samples": 5}

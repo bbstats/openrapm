@@ -2,9 +2,9 @@
 import numpy as np
 import pandas as pd
 
-from eracoef.bio import (BIO_INPUTS, PLAYER_INPUTS, TENURE_INPUTS, UNDRAFTED, bio_inputs, season_tenure,
+from openrapm.bio import (BIO_INPUTS, PLAYER_INPUTS, TENURE_INPUTS, UNDRAFTED, bio_inputs, season_tenure,
                          tenure_inputs)
-from eracoef.gbdt_prior import BIO_BINS, add_derived
+from openrapm.gbdt_prior import BIO_BINS, add_derived
 
 
 def _roles():

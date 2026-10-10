@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 
-from eracoef.investigate import lineups, on_court, pooled, residual_ridge, season_table
+from openrapm.investigate import lineups, on_court, pooled, residual_ridge, season_table
 
 
 def _world(seed=0, m=40, n=6000):
@@ -55,7 +55,7 @@ def test_lineups_find_the_unit_and_pooled_is_inverse_variance_weighted():
 
 
 def test_attributable_finds_a_planted_miss_and_nothing_in_pure_noise():
-    from eracoef.investigate import attributable
+    from openrapm.investigate import attributable
     Zo, Zd, r, w, mo, md = _world()
     a = attributable(Zo, Zd, r, w, lam=200.0)
     assert a["total"] > a["player"] > 0 and a["ss_o"] > 0 and a["ss_d"] > 0

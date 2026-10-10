@@ -1,4 +1,4 @@
-"""Rebalanced leave-one-out (src/eracoef/rloocv.py).
+"""Rebalanced leave-one-out (src/openrapm/rloocv.py).
 
 The claim under test is arithmetic before it is statistical: holding fold j out moves the remaining
 weighted mean AWAY from fold j's own label, by an amount identity (A) gives exactly, and the partner
@@ -10,7 +10,7 @@ smaller on data built with no real signal in it at all.
 import numpy as np
 import pytest
 
-from eracoef.rloocv import (RebalancedLeaveOneGroupOut, loo_mean_shift, rebalance_partners,
+from openrapm.rloocv import (RebalancedLeaveOneGroupOut, loo_mean_shift, rebalance_partners,
                             rebalanced_splits)
 
 
@@ -128,7 +128,7 @@ def test_it_shrinks_the_spurious_correlation_on_data_with_no_signal():
 def test_tilting_hits_the_target_mean_and_keeps_every_row():
     """The alternative to deleting a partner: nudge the weights instead.  Exponential tilting is the
     smallest change to the sample that satisfies the constraint, and it throws nothing away."""
-    from eracoef.rloocv import balanced_weights, tilt_weights
+    from openrapm.rloocv import balanced_weights, tilt_weights
     rng = np.random.default_rng(13)
     y, w = rng.normal(0, 1, 4000), rng.uniform(1, 3, 4000)
     groups = np.repeat(np.arange(8), 500)
@@ -143,7 +143,7 @@ def test_tilting_hits_the_target_mean_and_keeps_every_row():
 
 
 def test_tilting_refuses_a_correction_that_would_eat_the_sample():
-    from eracoef.rloocv import tilt_weights
+    from openrapm.rloocv import tilt_weights
     y = np.array([0.0, 0.0, 0.0, 0.0, 10.0])
     # a target that only the single extreme row can reach: the tilt would BE that row
     with pytest.raises(ValueError, match="effective sample size"):
@@ -154,7 +154,7 @@ def test_tilting_refuses_a_correction_that_would_eat_the_sample():
 
 
 def test_a_seeded_deal_is_as_balanced_and_a_different_make_up():
-    from eracoef.rloocv import BalancedGroupKFold
+    from openrapm.rloocv import BalancedGroupKFold
     rng = np.random.default_rng(3)
     groups = np.repeat(np.arange(400), 3)
     y = np.repeat(rng.normal(0, 1, 400), 3)

@@ -1,11 +1,11 @@
-"""Shooter-level expected points (src/eracoef/xshoot.py): the pricing, the padding and the alignment."""
+"""Shooter-level expected points (src/openrapm/xshoot.py): the pricing, the padding and the alignment."""
 import inspect
 
 import numpy as np
 import pandas as pd
 
-from eracoef.stints import SHOOTER_COUNTERS, SLOTS
-from eracoef.xshoot import DEFENSE_TARGETS, ShooterRates, align, def_three_design, expected_makes, rates_from_tables
+from openrapm.stints import SHOOTER_COUNTERS, SLOTS
+from openrapm.xshoot import DEFENSE_TARGETS, ShooterRates, align, def_three_design, expected_makes, rates_from_tables
 
 
 def _tables():

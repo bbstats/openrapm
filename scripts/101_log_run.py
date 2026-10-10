@@ -31,7 +31,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from eracoef.holdout import paired, pooled  # noqa: E402
+from openrapm.holdout import paired, pooled  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 TABLE = ROOT / "experiments" / "runs.csv"

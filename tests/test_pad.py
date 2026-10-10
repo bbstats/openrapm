@@ -1,7 +1,7 @@
-"""The one padding helper (src/eracoef/pad.py)."""
+"""The one padding helper (src/openrapm/pad.py)."""
 import numpy as np
 
-from eracoef.pad import K_FALLBACK, mom_k, pad_rate, shrink
+from openrapm.pad import K_FALLBACK, mom_k, pad_rate, shrink
 
 
 def test_shrink_limits():

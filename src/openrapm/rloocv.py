@@ -16,7 +16,7 @@ back on the full mean without crossing it.  `rebalance_partners` picks it, `Reba
 is the sklearn-shaped splitter that uses it, so it drops into `cross_val_predict`, `cross_val_score`,
 `GridSearchCV` or a plain `for train, test in cv.split(...)` loop.
 
-    from eracoef.rloocv import RebalancedLeaveOneGroupOut
+    from openrapm.rloocv import RebalancedLeaveOneGroupOut
     cv = RebalancedLeaveOneGroupOut()
     for train, test in cv.split(X, y, groups=panel.season):
         ...                                   # `train` is missing BOTH the test season and its partner

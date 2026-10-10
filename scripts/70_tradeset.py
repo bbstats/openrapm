@@ -11,7 +11,7 @@ For every rated season the games of that season and the two either side are pool
 each player's entry is his share of that team's possessions in that game, the rated season's rating is
 subtracted from every row, and the remainder is ridged back onto the player columns.  That coefficient
 is `alpha`: what a player's comings and goings say that his rating did not already know.  The reasoning
-and the conventions are in `src/eracoef/tradeset.py`.
+and the conventions are in `src/openrapm/tradeset.py`.
 
 **Alpha never becomes a published rating.**  It reads the neighbouring seasons' games, and ruling 1 is
 that a season's rating comes from that season's games alone.  What it is for is a loss that counts every
@@ -57,11 +57,11 @@ import pandas as pd  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from eracoef import tradeset as ts_mod  # noqa: E402
-from eracoef.config import load_config  # noqa: E402
-from eracoef.holdout import Context, Ratings, predict_season, score  # noqa: E402
-from eracoef.priorridge import armse  # noqa: E402
-from eracoef.xshoot import DEFENSE_TARGETS  # noqa: E402
+from openrapm import tradeset as ts_mod  # noqa: E402
+from openrapm.config import load_config  # noqa: E402
+from openrapm.holdout import Context, Ratings, predict_season, score  # noqa: E402
+from openrapm.priorridge import armse  # noqa: E402
+from openrapm.xshoot import DEFENSE_TARGETS  # noqa: E402
 
 # `load_table` is the one place the positive-good rating columns are turned into the model's raw sign
 # (defence = points allowed).  Importing it rather than copying it keeps a single definition of the flip:

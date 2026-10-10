@@ -3,7 +3,7 @@
 `tests/test_seasons.py` pins the guard itself: a title is sixteen playoff wins, a season whose Finals
 are unfinished is not complete, `Trainable` refuses a season past its cutoff.  That is necessary and
 it is not the claim.  The claim is about the artifacts -- that no fit in this project has a season in
-progress anywhere in it -- and for a long time `src/eracoef/seasons.py` named this file as the thing
+progress anywhere in it -- and for a long time `src/openrapm/seasons.py` named this file as the thing
 that established it.  The file did not exist.
 
 What it establishes now, in three parts:
@@ -29,8 +29,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from eracoef import seasons as S  # noqa: E402
-from eracoef.config import load_config  # noqa: E402
+from openrapm import seasons as S  # noqa: E402
+from openrapm.config import load_config  # noqa: E402
 
 CFG = load_config()
 

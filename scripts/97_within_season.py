@@ -57,24 +57,24 @@ import pandas as pd  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from eracoef import singleyear as sy  # noqa: E402
-from eracoef import tradeset as ts_mod  # noqa: E402
-from eracoef.bio import PLAYER_INPUTS, player_inputs  # noqa: E402
-from eracoef.config import load_config, resolve  # noqa: E402
-from eracoef.design import AWAY_SLOTS, FEATURES, HOME_SLOTS, WindowData  # noqa: E402
-from eracoef.holdout import Context, Ratings, predict_season, score  # noqa: E402
-from eracoef.ingest import GAME_PREFIX, game_table, load_gamelog, raw_dir  # noqa: E402
-from eracoef.investigate import offcourt_rates, oncourt_rates  # noqa: E402
-from eracoef.priorridge import armse  # noqa: E402
-from eracoef.seasons import drop_untrainable  # noqa: E402
-from eracoef.roles import (CAREER_INPUTS, RAW_INPUTS, ROLE_PHASES, career_inputs,  # noqa: E402
+from openrapm import singleyear as sy  # noqa: E402
+from openrapm import tradeset as ts_mod  # noqa: E402
+from openrapm.bio import PLAYER_INPUTS, player_inputs  # noqa: E402
+from openrapm.config import load_config, resolve  # noqa: E402
+from openrapm.design import AWAY_SLOTS, FEATURES, HOME_SLOTS, WindowData  # noqa: E402
+from openrapm.holdout import Context, Ratings, predict_season, score  # noqa: E402
+from openrapm.ingest import GAME_PREFIX, game_table, load_gamelog, raw_dir  # noqa: E402
+from openrapm.investigate import offcourt_rates, oncourt_rates  # noqa: E402
+from openrapm.priorridge import armse  # noqa: E402
+from openrapm.seasons import drop_untrainable  # noqa: E402
+from openrapm.roles import (CAREER_INPUTS, RAW_INPUTS, ROLE_PHASES, career_inputs,  # noqa: E402
                            player_season_inputs, roles_from_boxes, season_ages, shares_from_stints,
                            window_inputs)
-from eracoef.spm import apm_fit, season_of_units  # noqa: E402
-from eracoef.windows import window_label  # noqa: E402
-from eracoef.xshoot import DEFENSE_TARGETS, SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS, player_shot_frame  # noqa: E402
+from openrapm.spm import apm_fit, season_of_units  # noqa: E402
+from openrapm.windows import window_label  # noqa: E402
+from openrapm.xshoot import DEFENSE_TARGETS, SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS, player_shot_frame  # noqa: E402
 from _cli import check_flags, flag  # noqa: E402
-from eracoef.seasoninputs import (CLOSE_SLOTS, SHOT_COLS_ALL, SeasonTables, SeasonWorld,  # noqa: E402,F401
+from openrapm.seasoninputs import (CLOSE_SLOTS, SHOT_COLS_ALL, SeasonTables, SeasonWorld,  # noqa: E402,F401
                                     closeness_rows, cut_design, honest_fold_prior, playoff_share,
                                     roles_from_games)
 

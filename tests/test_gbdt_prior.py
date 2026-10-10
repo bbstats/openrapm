@@ -1,9 +1,9 @@
-"""The box-score feature definitions (src/eracoef/gbdt_prior.py): the playing-time interactions `add_derived`
+"""The box-score feature definitions (src/openrapm/gbdt_prior.py): the playing-time interactions `add_derived`
 builds from a feature list."""
 import numpy as np
 import pandas as pd
 
-from eracoef.gbdt_prior import add_derived, interaction_parts
+from openrapm.gbdt_prior import add_derived, interaction_parts
 
 
 def test_interaction_features_are_the_products_asked_for():

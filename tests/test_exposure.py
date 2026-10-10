@@ -1,4 +1,4 @@
-"""The padded per-100 box rates (src/eracoef/exposure.py) on the path that ships: spm.apm_fit -> cv.plugin_fit ->
+"""The padded per-100 box rates (src/openrapm/exposure.py) on the path that ships: spm.apm_fit -> cv.plugin_fit ->
 BoxExposure in full mode with the possession-conditional padding target, whose season_rates_ become the panel's
 13 rates (49_role_panel.py, seasoninputs.py).  The first four tests are test_core's padding tests, moved unchanged
 when test_core was deleted in the cleanup's phase 1 (they move into test_box_rates in phase 9a)."""
@@ -6,11 +6,11 @@ import numpy as np
 
 import pytest
 
-from eracoef.cv import crossfit_beta
-from eracoef.design import FEATURES, build_design
-from eracoef.exposure import BoxExposure, split_half_k
-from eracoef.simulate import simulate
-from eracoef.spm import apm_fit
+from openrapm.cv import crossfit_beta
+from openrapm.design import FEATURES, build_design
+from openrapm.exposure import BoxExposure, split_half_k
+from openrapm.simulate import simulate
+from openrapm.spm import apm_fit
 
 CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500}
 

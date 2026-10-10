@@ -1,9 +1,9 @@
-"""The swap adjustment (src/eracoef/swapadjust.py) on the synthetic league of tests/test_swaptest.py."""
+"""The swap adjustment (src/openrapm/swapadjust.py) on the synthetic league of tests/test_swaptest.py."""
 import numpy as np
 import pandas as pd
 
-from eracoef import swapadjust as sa
-from eracoef import swaptest as sw
+from openrapm import swapadjust as sa
+from openrapm import swaptest as sw
 from test_swaptest import _league
 
 

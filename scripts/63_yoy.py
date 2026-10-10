@@ -53,8 +53,8 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from eracoef.config import load_config  # noqa: E402
-from eracoef.holdout import (SPLITS, Context, Holdout, Ratings, ReplacementSystem,  # noqa: E402
+from openrapm.config import load_config  # noqa: E402
+from openrapm.holdout import (SPLITS, Context, Holdout, Ratings, ReplacementSystem,  # noqa: E402
                              paired, pooled)
 
 ROOT = Path(__file__).resolve().parents[1]

@@ -8,8 +8,8 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from eracoef.config import load_config  # noqa: E402
-from eracoef.stints import build_season, season_diagnostics  # noqa: E402
+from openrapm.config import load_config  # noqa: E402
+from openrapm.stints import build_season, season_diagnostics  # noqa: E402
 
 pd.set_option("display.width", 250, "display.max_columns", 40, "display.precision", 3)
 cfg = load_config()

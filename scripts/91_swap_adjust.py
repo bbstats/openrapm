@@ -22,7 +22,7 @@ keeps the two scored seasons out.  `--score=0` skips the swap test, which is onl
 shrunk by one factor per season and side until the spread inside teams equals the base's, so team totals and the
 order inside every team stay the adjustment's.  `whole` scales each side's whole list back to the base's spread.
 
-The adjustment is `src/eracoef/swapadjust.py`; the test is `src/eracoef/swaptest.py` through
+The adjustment is `src/openrapm/swapadjust.py`; the test is `src/openrapm/swaptest.py` through
 `scripts/90_swap_test.py`'s `run`.  For every rated season 1997-2026:
 
   1. the base ranking's own prediction of the season (context "nofatigue": the full context without the
@@ -59,10 +59,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
-from eracoef import swapadjust as sa  # noqa: E402
-from eracoef import swaptest as sw  # noqa: E402
-from eracoef.config import load_config  # noqa: E402
-from eracoef.seasons import drop_untrainable  # noqa: E402
+from openrapm import swapadjust as sa  # noqa: E402
+from openrapm import swaptest as sw  # noqa: E402
+from openrapm.config import load_config  # noqa: E402
+from openrapm.seasons import drop_untrainable  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("_swap90", ROOT / "scripts" / "90_swap_test.py")
 _t90 = importlib.util.module_from_spec(_spec)
@@ -86,7 +86,7 @@ FEATURES = PANEL + OWN
 
 def features(base: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, set]:
     """(player_id, season) -> FEATURES, each standardised over every player-season; and the seasons the type model
-    may TRAIN on.  The trust boundary (src/eracoef/seasons.py): a season still being played may be loaded -- its
+    may TRAIN on.  The trust boundary (src/openrapm/seasons.py): a season still being played may be loaded -- its
     players get a type prediction -- but never trained on, so its swaps stay out of every type model."""
     raw_panel = pd.read_parquet(ROOT / "outputs/role_panel_season.parquet")
     trainable, _ = drop_untrainable(raw_panel, cfg, what="the season panel (type model training)")

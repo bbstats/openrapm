@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from eracoef.stackprior import StackedSPM, weighted_standardise
+from openrapm.stackprior import StackedSPM, weighted_standardise
 
 
 def _rows(n_players=300, rows_each=3, seed=0):

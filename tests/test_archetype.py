@@ -1,4 +1,4 @@
-"""The archetype mixture (src/eracoef/archetype.py) on data whose clusters are known by construction.
+"""The archetype mixture (src/openrapm/archetype.py) on data whose clusters are known by construction.
 
 The statistic these tests pin is `spread`: the sd, across clusters, of the mean board-minus-blend gap on the
 TOTAL rating. It replaced a hand-made bigness axis in tests/test_vs_consensus.py, so it needs its own
@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from eracoef.archetype import RATES, cluster_gaps, fit_clusters, gap_columns, per36, spread
+from openrapm.archetype import RATES, cluster_gaps, fit_clusters, gap_columns, per36, spread
 
 
 @pytest.fixture(scope="module")

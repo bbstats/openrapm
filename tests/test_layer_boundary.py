@@ -10,7 +10,7 @@ The project has two layers and one rule between them.
            the padding, the design assembly, the calibration.  This is where a pull request
            that improves the model belongs, and it may not open a file.
 
-The rule exists because the season boundary (src/eracoef/seasons.py) is only as good as the
+The rule exists because the season boundary (src/openrapm/seasons.py) is only as good as the
 narrowest channel through which data can reach a fit.  If a model module may call `read_parquet`,
 it can reach past every guard and read the season in progress directly, and no amount of care in
 the loaders would stop it.  Keeping the model layer I/O-free makes the loaders the only way in.
@@ -35,7 +35,7 @@ from pathlib import Path
 
 import pytest
 
-SRC = Path(__file__).resolve().parents[1] / "src" / "eracoef"
+SRC = Path(__file__).resolve().parents[1] / "src" / "openrapm"
 sys.path.insert(0, str(SRC.parents[1]))
 
 # Clean on both rules: no I/O verb, no data-layer import.
@@ -115,11 +115,11 @@ def _sibling_imports(path: Path):
                 out.append((n.lineno, n.module.split(".")[0]))
             elif n.level and not n.module:                 # from . import roles
                 out.extend((n.lineno, a.name) for a in n.names)
-            elif n.module and n.module.startswith("eracoef"):
+            elif n.module and n.module.startswith("openrapm"):
                 out.append((n.lineno, n.module.split(".")[-1]))
         elif isinstance(n, ast.Import):
             out.extend((n.lineno, a.name.split(".")[-1]) for a in n.names
-                       if a.name.startswith("eracoef."))
+                       if a.name.startswith("openrapm."))
     return out
 
 
@@ -129,7 +129,7 @@ def test_a_model_module_does_no_io(module):
     assert path.exists(), f"{module} is in MODEL_LAYER but does not exist -- update the list"
     found = _io_in(path)
     assert not found, (
-        f"src/eracoef/{module} is model-layer code and may not reach the disk or the network, but "
+        f"src/openrapm/{module} is model-layer code and may not reach the disk or the network, but "
         f"it does at {found}.  Take the data as an argument instead; the loader belongs in the data "
         f"layer.  See the docstring of this file.")
 
@@ -140,7 +140,7 @@ def test_a_model_module_does_not_import_the_data_layer(module):
     because it calls ingest.load_gamelog.  Reaching data through a sibling is still reaching data."""
     bad = [(ln, m) for ln, m in _sibling_imports(SRC / module) if f"{m}.py" in DATA_LAYER]
     assert not bad, (
-        f"src/eracoef/{module} imports data-layer module(s) {sorted({m for _, m in bad})} at lines "
+        f"src/openrapm/{module} imports data-layer module(s) {sorted({m for _, m in bad})} at lines "
         f"{[ln for ln, _ in bad]}.  Whatever it needs from them should be passed in.")
 
 
@@ -168,5 +168,5 @@ def test_the_split_list_is_accurate():
             continue
         reaches = _io_in(path) or [(ln, m) for ln, m in _sibling_imports(path) if f"{m}.py" in DATA_LAYER]
         assert reaches, (
-            f"src/eracoef/{module} is in NEEDS_SPLIT but no longer reaches data -- move it to "
+            f"src/openrapm/{module} is in NEEDS_SPLIT but no longer reaches data -- move it to "
             f"MODEL_LAYER.")
