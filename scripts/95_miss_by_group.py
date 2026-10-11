@@ -26,7 +26,7 @@ page's question -- so the lean is printed beside the extra miss, with the share 
 **The cuts**, every one reported (outputs/miss_by_group_<tag>.html and .csv):
   1. statistics: fifths of every statistic in GLOSSARY.md, cut within each season, plus the off-court and on/off
      ratings, score state and playoff share;
-  2. player types: a Bayesian Gaussian mixture (`archetype.fit_mixture`, up to eight types) on the thirteen box
+  2. player types: a Bayesian Gaussian mixture (`player_types.fit_mixture`, up to eight types) on the thirteen box
      rates per 100, standardised within each season so a type is a role relative to its era, fitted on
      player-seasons with 500+ possessions and used to place every one;
   3. context: age, years in the league, era, his team's quality that season, and whether he changed teams the
@@ -54,7 +54,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
-from openrapm.archetype import cluster_proba, fit_mixture  # noqa: E402
+from openrapm.player_types import cluster_proba, fit_mixture  # noqa: E402
 from openrapm.data.config import load_config  # noqa: E402
 from openrapm.data.roles import franchise, roles_path  # noqa: E402
 from openrapm.features import CLOSENESS, NET, OFFC, PO_SHARE, PRIOR_FEATURES, add_features  # noqa: E402

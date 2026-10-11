@@ -20,7 +20,7 @@ htmlcov/
 !/data/external/*.csv
 
 # Run output.  Nothing here is an input to anything: every file is rebuilt by the
-# command that wrote it.  The artifacts that DO ship live in artifacts/ and are tracked.
+# command that wrote it.  What ships is the site, docs/ (`openrapm site`), which is tracked.
 /outputs/
 
 # Local research scratch, not part of the project.

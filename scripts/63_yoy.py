@@ -1,6 +1,6 @@
 """The year-over-year test: one season's player rankings predict the games of the seasons either side of it.
 
-    python scripts/63_yoy.py --rankings=sy=outputs/season_ratings_sy_yoy.parquet,ship=artifacts/season_ratings.parquet
+    python scripts/63_yoy.py --rankings=sy=outputs/season_ratings_sy.parquet,ship=outputs/season_ratings_product.parquet
                              [--ref=sy] [--splits=movers] [--tag=yoy] [--first=1998] [--last=2025]
                              [--columns=rating|prior] [--fill=name:500x0.5,name2:-1.6/-0.5]
                              [--offset=1]

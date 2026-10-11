@@ -69,8 +69,8 @@ flowchart TD
 
     OUT["<b>outputs/season_ratings_product.parquet</b><br/>one row per player-season, offense and defense per 100 possessions,<br/>positive good on both ends"]
     CEN --> OUT
-    OUT --> SITE["<code>scripts/52_site.py</code> → <code>docs/data/ratings.json</code> → <code>docs/index.html</code>"]
-    OUT --> BIAS["<code>scripts/76_bias_groups.py</code> → <code>docs/bias.html</code><br/>bias by player type, against the consensus and against 2026 observed"]
+    OUT --> SITE["<code>openrapm site</code> → <code>docs/data/ratings.json</code> → <code>docs/index.html</code>"]
+    OUT --> BIAS["<code>openrapm site --bias</code> → <code>docs/bias.html</code><br/>bias by player type, against the consensus and against 2026 observed"]
 
     classDef wrinkle fill:#fde6cc,stroke:#c2702a,color:#000
     class TGO,TGD,LOO,UNS,ROWS,FOLD,XF,CEN wrinkle
@@ -120,8 +120,7 @@ it; the trade loss is what can see him. The incumbent reads **8.682** points per
 ## 3. The older three-season-window board
 
 `scripts/60_season_board.py` (retired) → `outputs/season_ratings.parquet`. Not published since 2026-09; kept
-because several tests read `artifacts/season_ratings.parquet`, and because the criterion in 3.2 is
-what selected the stints, the design, the targets and the exposures that section 1 inherited.
+here because the criterion in 3.2 is what selected the stints, the design, the targets and the exposures that section 1 inherited.
 
 ### 3.1 The build
 
@@ -169,7 +168,7 @@ flowchart TD
     MAP["<b>Calibration map</b> — fitted leave-one-season-out on the criterion<br/>offense: a·x + level in log exposure + b·x·log exposure + c·prior + d·role<br/>defense: the same without the prior and role terms<br/>then re-centred per window<br/><code>calmap.py</code>, table in <code>artifacts/calmap_ship.parquet</code>"]
     RIDGE --> MAP
 
-    OUT["<b>outputs/season_ratings.parquet</b> — ten 3-season windows, 1997-2026<br/>offense and defense per 100 possessions, positive is good on both sides<br/><code>scripts/60_season_board.py</code> (retired) → <code>scripts/52_site.py</code> → <code>docs/</code>"]
+    OUT["<b>outputs/season_ratings.parquet</b> — ten 3-season windows, 1997-2026<br/>offense and defense per 100 possessions, positive is good on both sides<br/><code>scripts/60_season_board.py</code> (retired) → <code>docs/</code>"]
     MAP --> OUT
 ```
 

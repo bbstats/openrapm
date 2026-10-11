@@ -1,9 +1,9 @@
-"""Sanity tests for the shipped board against an external consensus of modern all-in-one metrics
+"""Sanity tests for the shipped ratings against an external consensus of modern all-in-one metrics
 (data/external/consensus.csv).
 
 Why these exist.  The ratings were previously validated against our OWN next-window on-court RAPM.
 That benchmark is built from the same margin data and shares the same blind spots, so it certified
-a board that puts Robert Williams 25th and Jusuf Nurkic 21st while every modern metric combined has
+ratings that put Robert Williams 25th and Jusuf Nurkic 21st while every modern metric combined has
 them 134th and 166th.  An external benchmark is the only thing that catches a shared error, so it
 belongs in the test suite rather than in a one-off script.
 
@@ -15,20 +15,23 @@ Five of the original six targets flipped when the ratings moved to the hybrid pr
 now.  One is left: pure on-court defensive RAPM still rates backup bigs above the consensus, which
 is an attribution question the box prior was never going to answer.
 
-The board these score is the one that SHIPS -- `outputs/season_ratings_product.parquet`, built by
-`openrapm build` (steps 1-5; or `openrapm rate`, `shrink` and `swap` one after another), which
-is also what `docs/data/ratings.json` is built from --
-pooled over the three seasons the consensus covers and weighted by possessions.  `artifacts/
-season_ratings.parquet` (the older `scripts/60_season_board.py` system) is the fallback, so a clone
-with no `outputs/` still runs these; it is a frozen copy and a pass on it says nothing about the
-board you just built.
+The ratings these score, the first that exists:
+  1. the table the environment variable OPENRAPM_RATINGS names (parquet, or a ratings.json): a candidate's
+     finished table (all five steps, `openrapm build --name <stem>`), scored without overwriting anything.
+     The step-3 table alone is not like for like: the minimums below were set on the five-step table
+  2. `outputs/season_ratings_product.parquet`, the shipped table (`openrapm build`)
+  3. `docs/data/ratings.json`, the published ratings themselves at two decimals (`openrapm site`), so a fresh
+     clone with no `outputs/` tests the real shipped ratings: the same 10 passes and 1 expected failure as the
+     parquet (checked 2026-10-09)
+Each player is pooled over the three seasons the consensus covers, weighted by possessions.
 
-That pooling is deliberate: the floors below were calibrated against a three-season board, and
-scoring a single season against a three-season consensus would move the estimand and quietly make
-every floor mean something else.  Pool first, compare like with like, and the numbers stay readable.
+That pooling is deliberate: the minimums below were calibrated against three-season ratings, and scoring a
+single season against a three-season consensus would move the estimand and quietly make every minimum mean
+something else.  Pool first, compare like with like, and the numbers stay readable.
 
-Everything skips cleanly if the ratings or the consensus file are not built yet.
+Everything skips cleanly if the ratings or the consensus file are not there.
 """
+import json
 import os
 import re
 import unicodedata
@@ -40,14 +43,13 @@ import pytest
 from scipy.stats import spearmanr
 
 ROOT = Path(__file__).resolve().parents[1]
-# A candidate's finished table (all five steps: `openrapm build --name <stem>`) is scored by
-# pointing OPENRAPM_BOARD at it, without overwriting anything the rest of them read.  The step-3 table alone
-# is not like for like: the minimums below were set on the shipped five-step table.  Order matters: the first
-# path that exists wins.
-RATINGS = [Path(p) for p in [os.environ.get("OPENRAPM_BOARD")] if p] or [
-    ROOT / "outputs" / "season_ratings_product.parquet",     # what ships
-    ROOT / "outputs" / "season_ratings.parquet",             # a local scripts/60 build
-    ROOT / "artifacts" / "season_ratings.parquet"]           # the committed fallback, for CI
+RATINGS_ENV = "OPENRAPM_RATINGS"
+SHIPPED_TABLE = ROOT / "outputs" / "season_ratings_product.parquet"
+SHIPPED_JSON = ROOT / "docs" / "data" / "ratings.json"
+# ratings.json's one-letter fields as the table's columns (`openrapm site` writes poss_season as p; the pooling
+# below weights by poss_off)
+JSON_COLUMNS = {"s": "season", "n": "player_name", "o": "rating_off", "d": "rating_def", "t": "rating_total",
+                "p": "poss_off", "id": "player_id"}
 CONSENSUS = ROOT / "data" / "external" / "consensus.csv"
 SEASONS = [2024, 2025, 2026]        # what the consensus snapshot covers
 MIN_POSS = 1000
@@ -113,17 +115,41 @@ def _pooled(rat):
     return g.reset_index()
 
 
+def _from_site_json(path) -> pd.DataFrame:
+    """A ratings.json read back as a ratings table: the table's column names, an empty name missing again."""
+    rows = pd.DataFrame(json.loads(Path(path).read_text(encoding="utf-8"))["rows"]).rename(columns=JSON_COLUMNS)
+    return rows.assign(player_name=rows.player_name.mask(rows.player_name == ""))
+
+
+def _read_ratings(path) -> pd.DataFrame:
+    return _from_site_json(path) if Path(path).suffix == ".json" else pd.read_parquet(path)
+
+
+def _ratings_table():
+    """The ratings to score (see the module docstring for the order), or a skip when there are none."""
+    named = os.environ.get(RATINGS_ENV)
+    if named:
+        if not Path(named).exists():
+            pytest.fail(f"{RATINGS_ENV} names {named}, which does not exist")
+        return _read_ratings(named)
+    source = next((path for path in (SHIPPED_TABLE, SHIPPED_JSON) if path.exists()), None)
+    if source is None:
+        pytest.skip(f"no ratings to test: neither outputs/{SHIPPED_TABLE.name} (`openrapm build`) nor "
+                    "docs/data/ratings.json (`openrapm site`) is there")
+    return _read_ratings(source)
+
+
 @pytest.fixture(scope="module")
 def board():
-    src = next((p for p in RATINGS if p.exists()), None)
-    if src is None or not CONSENSUS.exists():
-        pytest.skip("run scripts/60_season_board.py first (or restore artifacts/season_ratings.parquet)")
+    if not CONSENSUS.exists():
+        pytest.skip("data/external/consensus.csv is missing; it is tracked, so restore it from git")
+    ratings = _ratings_table()
     con = pd.read_csv(CONSENSUS)[["player_name", "team", "adj_offense", "adj_defense", "adj_overall"]]
     con = con.dropna(subset=["player_name", "adj_overall"])
     con["key"] = con.player_name.map(_norm)
     con = con.drop_duplicates("key")
 
-    ours = _pooled(pd.read_parquet(src))
+    ours = _pooled(ratings)
     ours["key"] = ours.player_name.map(_norm)
     ours = ours.sort_values("poss_off").drop_duplicates("key", keep="last")
 
@@ -200,7 +226,7 @@ def test_no_archetype_bias_by_cluster(board):
     0.95.  Seeds are averaged because the mixture is refit per run: over ten seeds at k = 8 the statistic
     moves with sd 0.02, and it is pooled over the three seasons the consensus covers because per single
     season the ranges overlap (`python scripts/58_archetype.py stability`)."""
-    from openrapm.archetype import RATES, cluster_gaps, fit_clusters, gap_columns, per36, spread
+    from openrapm.player_types import RATES, cluster_gaps, fit_clusters, gap_columns, per36, spread
     box = _box()
     prof = per36(box[box.phase == "RS"])
     m = board.merge(prof[["player_id", *RATES]], on="player_id", how="inner")
@@ -243,7 +269,7 @@ def test_defense_agrees_with_the_consensus(board):
 def test_no_archetype_bias_overall(board):
     # `_bigness` needs the scraped box scores and skips without them.  It is called HERE rather than in
     # the `board` fixture so that it skips this test alone: every other check in this file runs off the
-    # two committed files (artifacts/season_ratings.parquet and data/external/consensus.csv), and when
+    # two committed files (docs/data/ratings.json and data/external/consensus.csv), and when
     # the call sat in the fixture it took all eleven of them down on any machine without data/raw --
     # which is every CI run, by design (.github/workflows/test.yml asserts data/ is empty).
     r = board.gap_total.corr(pd.Series(_bigness(board.player_id), index=board.index))

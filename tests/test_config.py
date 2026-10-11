@@ -120,7 +120,8 @@ def test_resolve_takes_relative_paths_from_the_root_and_absolute_ones_as_they_ar
 
 def test_load_config_honours_OPENRAPM_CONFIG(tmp_path, monkeypatch):
     """A verification run points every data path at another folder by naming another config.yaml."""
-    from openrapm.data.config import CONFIG_ENV, ROOT as CODE_ROOT, load_config, resolve
+    from openrapm.data.config import CONFIG_ENV, load_config, resolve
+    from openrapm.data.config import ROOT as CODE_ROOT
     assert CONFIG_ENV == "OPENRAPM_CONFIG"
     cfg = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
     other = tmp_path / "verify"
@@ -206,7 +207,7 @@ def test_the_booster_settings_are_never_read_from_config_yaml():
 
 
 # --------------------------------------------------------------- the openrapm command lines
-OPENRAPM = re.compile(r"(?:-m openrapm|\bopenrapm)\s+(rate|folds|compare)\b([^\n`]*)")
+OPENRAPM = re.compile(r"(?:-m openrapm|\bopenrapm)\s+(rate|folds|site|compare)\b([^\n`]*)")
 
 
 def _openrapm_flags() -> dict:

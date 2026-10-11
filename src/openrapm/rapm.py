@@ -185,7 +185,7 @@ class SeasonSums:
     def player_columns(self, season: int) -> np.ndarray:
         """The column of each of a season's players, in the order of that season's design.
 
-        scripts/83_decompose_site.py reads this and `context_size` to place each season inside `assemble`'s G.
+        `openrapm site --decomposition` reads this and `context_size` to place each season inside `assemble`'s G.
         """
         return self._seasons[int(season)]["columns"]
 

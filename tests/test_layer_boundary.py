@@ -52,7 +52,7 @@ COMMANDS_DIR = "commands"    # src/openrapm/commands/: the commands, by location
 
 # Clean on both rules: no I/O verb, no data-layer import.
 MODEL_LAYER = [
-    "archetype.py",     # the box-profile mixture and the per-cluster gap
+    "player_types.py",  # the box-profile mixture, the per-type gap and bias, each type's signature
     "cv.py",            # pipelines, cross-fitted beta, the plug-in fit
     "design.py",        # the design matrix from the frames it is handed; the stint column and counter names
     "estimator.py",     # the mixed model (Henderson), the eigen lambda path

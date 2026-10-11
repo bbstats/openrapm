@@ -5,6 +5,7 @@
     openrapm shrink    step 4 on a step-3 table: the prior part multiplied down
     openrapm swap      step 5 on a step-4 table: each team's credit re-split by its lineup swaps
     openrapm folds     the within-season folds: each season rated from three quarters of its games
+    openrapm site      the site's data: docs/data/ratings.json, and the bias and decomposition pages when asked
     openrapm compare   two parquet tables, value by value
 
 `--config FILE`, given before the command, reads another config.yaml; without it the file named by the
@@ -22,6 +23,7 @@ import os
 import re
 import sys
 from dataclasses import replace
+from datetime import datetime
 from pathlib import Path
 
 from ..settings import PRODUCT, TEST, Settings
@@ -128,6 +130,12 @@ def _run_swap(args: argparse.Namespace, cfg: dict) -> int:
 def _run_folds(args: argparse.Namespace, cfg: dict) -> int:
     from .within_season import run_folds
     return run_folds(cfg, args.models, args.base, args.seasons, args.tag, args.reproduce_only)
+
+
+def _run_site(args: argparse.Namespace, cfg: dict) -> int:
+    from .site import run_site
+    return run_site(cfg, ratings=args.ratings, out_dir=args.out_dir, built=args.built, bias=args.bias,
+                    decomposition=args.decomposition, bias_tables=args.bias_tables)
 
 
 def _run_compare(args: argparse.Namespace, cfg: dict) -> int:
@@ -253,6 +261,36 @@ def _add_folds(commands) -> None:
     folds.set_defaults(run=_run_folds)
 
 
+def parse_date(text: str) -> str:
+    """A date typed as 2026-10-09, returned in that form; anything else is refused."""
+    try:
+        return datetime.strptime(text, "%Y-%m-%d").strftime("%Y-%m-%d")
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r}: write the date as 2026-10-09") from None
+
+
+def _add_site(commands) -> None:
+    site = commands.add_parser(
+        "site", help="the site's data: docs/data/ratings.json, and the bias and decomposition pages when asked",
+        description="Writes docs/data/ratings.json from the ratings table: one row per player-season with "
+                    "possessions, ratings at two decimals.  --bias also writes docs/bias.html (bias by player "
+                    "type, against the consensus and against 2026 observed) with outputs/bias_groups.json and "
+                    "outputs/bgmm_proba.parquet; --decomposition also writes docs/data/decompose_1y.json and "
+                    "decompose_3y.json (vanilla RAPM split by player and by possession; every season and every "
+                    "three-season window is fitted, about three minutes).  The pages' wording is not changed.")
+    site.add_argument("--ratings", metavar="FILE",
+                      help="the ratings table (default outputs/season_ratings_product.parquet)")
+    site.add_argument("--out-dir", metavar="DIR", help="the site folder written into (default the repository's docs/)")
+    site.add_argument("--built", type=parse_date, metavar="YYYY-MM-DD",
+                      help="the date every written file's meta.built shows (default: ratings.json the ratings "
+                           "table's modification date, the decomposition files today)")
+    site.add_argument("--bias", action="store_true", help="also the bias page and its two tables")
+    site.add_argument("--bias-tables", metavar="DIR",
+                      help="where --bias writes bias_groups.json and bgmm_proba.parquet (default outputs/)")
+    site.add_argument("--decomposition", action="store_true", help="also the decomposition page's two files")
+    site.set_defaults(run=_run_site)
+
+
 def _add_compare(commands) -> None:
     compare = commands.add_parser(
         "compare", help="two parquet tables, value by value",
@@ -278,6 +316,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_shrink(commands)
     _add_swap(commands)
     _add_folds(commands)
+    _add_site(commands)
     _add_compare(commands)
     return parser
 

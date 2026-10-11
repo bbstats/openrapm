@@ -102,7 +102,7 @@ def test_the_threads_are_pinned_before_numpy_loads():
 
 def test_python_dash_m_openrapm_answers_help():
     out = subprocess.run([sys.executable, "-m", "openrapm", "--help"], capture_output=True, text=True, check=True)
-    assert all(command in out.stdout for command in ("build", "rate", "shrink", "swap", "folds", "compare"))
+    assert all(command in out.stdout for command in ("build", "rate", "shrink", "swap", "folds", "site", "compare"))
 
 
 @pytest.mark.parametrize("base, step, name", [("season_ratings_trial_step3", "_step3", "trial"),
@@ -158,3 +158,21 @@ def test_swap_reads_its_base_and_setting(monkeypatch):
                      "test")
     assert seen["settings"].swap == TEST.swap
     assert seen["args"] == ("season_ratings_trial_step4", "trial") and seen["kwargs"]["with_types"] is False
+
+
+def test_site_writes_ratings_json_alone_by_default(monkeypatch):
+    from openrapm.commands import site
+    seen = {}
+    monkeypatch.setattr(site, "run_site", lambda cfg, **kwargs: seen.update(kwargs) or 0)
+    assert cli.main(["site"]) == 0
+    assert seen == dict(ratings=None, out_dir=None, built=None, bias=False, decomposition=False, bias_tables=None)
+    assert cli.main(["site", "--ratings", "r.parquet", "--out-dir", "out", "--built", "2026-10-09", "--bias",
+                     "--bias-tables", "tables", "--decomposition"]) == 0
+    assert seen == dict(ratings="r.parquet", out_dir="out", built="2026-10-09", bias=True, decomposition=True,
+                        bias_tables="tables")
+
+
+@pytest.mark.parametrize("text", ["2026-13-01", "09/10/2026", "yesterday"])
+def test_site_refuses_a_date_it_cannot_read(text):
+    with pytest.raises(SystemExit):
+        _parse("site", "--built", text)

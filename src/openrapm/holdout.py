@@ -763,11 +763,11 @@ def consensus_table_missing(out) -> str:
     The script that built it, `scripts/22_vs_consensus.py`, was deleted in 73f0ab9 and nothing
     replaced it, so this path has been dead on every machine since.  The live external check is
     `tests/test_vs_consensus.py`, which joins `data/external/consensus.csv` (tracked) to a board
-    by name; point `OPENRAPM_BOARD` at a candidate to score it without touching the shipped one.
+    by name; point `OPENRAPM_RATINGS` at a candidate to score it without touching the shipped one.
     """
     return (f"{out} is not built, and nothing in the tree builds it any more: "
             "scripts/22_vs_consensus.py was deleted in 73f0ab9.  The external check that survived it "
-            "is the test suite -- `OPENRAPM_BOARD=<your board>.parquet pytest "
+            "is the test suite -- `OPENRAPM_RATINGS=<your ratings table>.parquet pytest "
             "tests/test_vs_consensus.py -q` -- which reads data/external/consensus.csv directly.  "
             "This mode needs a per-player table with a `bigness` column and no longer has one.")
 

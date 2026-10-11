@@ -77,8 +77,8 @@ never his rating. `openrapm rate` (`src/openrapm/commands/build.py`) is the whol
    (`prior_rapm.py`): `scale x prior + residual`, the scale unpenalised,
    the residual penalty fixed at 13,037 on both sides. Then centred at possession-weighted zero.
 
-Positive is good on both ends. `PIPELINE.md` draws the older three-season-window board, which the
-retired `scripts/60_season_board.py` built and several tests still read.
+Positive is good on both ends. `PIPELINE.md` draws the older three-season-window ratings, which the
+retired `scripts/60_season_board.py` built.
 
 Against an external consensus of public metrics, pooled over 2024-2026 and 475 matched players, rank
 agreement is 0.772 total, 0.782 offense, 0.765 defense. That consensus is a **sanity check, read
@@ -91,8 +91,7 @@ python scripts/01_ingest.py 1997 2026 RS,PO   # play-by-play and box scores. DAY
 python scripts/02_stints.py 1997 2026 RS,PO   # possessions with the same ten on the floor
 python scripts/49_role_panel.py --season      # APM, role prior, prior-informed RAPM, one row per season
 python -m openrapm rate --name product        # steps 1-3 -> outputs/season_ratings_product_step3.parquet
-python scripts/52_site.py                     # -> docs/data/ratings.json for the page
-python scripts/83_decompose_site.py           # -> docs/data/decompose_*.json for docs/decompose.html
+python -m openrapm site --bias --decomposition   # -> docs/data/ratings.json, decompose_*.json, docs/bias.html
 ```
 
 Step 1 hits stats.nba.com once per game for about 40,000 games and takes days. It is cached and
@@ -100,12 +99,12 @@ idempotent, so stopping and restarting it is fine. Everything under `data/` is r
 and 2 and none of it is in git.
 
 Step 4 is the one that decides what ships: `outputs/season_ratings_product.parquet` is what step 5
-publishes and what `tests/test_vs_consensus.py` scores. The retired `scripts/60_season_board.py` built the
-older three-season-window board into `outputs/season_ratings.parquet`; its committed copy lives at
-`artifacts/season_ratings.parquet` and several tests still read it, so do not overwrite that one.
+publishes and what `tests/test_vs_consensus.py` scores; a clone without `outputs/` scores the published
+`docs/data/ratings.json` instead.
 
-The role panel and the calibration table once committed under `artifacts/` were retired in the 2026-10
-cleanup (tag archive/research-2026-10).
+The role panel, the calibration table and the older three-season-window ratings (from the retired
+`scripts/60_season_board.py`) once committed under `artifacts/` were retired in the 2026-10 cleanup (tag
+archive/research-2026-10).
 
 ## Layout
 

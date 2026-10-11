@@ -173,7 +173,7 @@ def rate_season(designs: dict, priors: dict, settings, season: int) -> pd.DataFr
     return centre(season_table(fits[targets.offence], fits[targets.defence], defence, season))
 
 
-# the published schema, positive good on both ends (scripts/52_site.py and the checks read it)
+# the published schema, positive good on both ends (`openrapm site` and the checks read it)
 PUBLISHED_COLUMNS = ["player_id", "offense", "prior_offense", "poss_off", "defense", "prior_defense", "poss_def",
                      "season", "offense_lambda", "defense_lambda", "context_lambda", "prior_scale_off",
                      "prior_scale_def", "poss_season", "rating_off", "rating_def", "rating_total", "prior_off",
