@@ -14,14 +14,16 @@ Words used below
                 (diagnostic `invalid_possessions`) but never reach a stint.
     stint       consecutive valid possessions of one game, in one period, with the same ten players on
                 the court.  A substitution or the end of a period starts a new one.
-    attempt     an attempt event: a field-goal attempt, or a free-throw trip that is not an and-one
-                (design.POSS_COUNTERS says why a trip counts)
+    attempt     an attempt event: a field-goal attempt, or a free-throw trip.  Three kinds of trip are not
+                attempts: an and-one; a shooting-foul trip after a missed field goal the feed also recorded;
+                a flagrant, clear-path or away-from-play trip (GameParser._start_trip says why).
+                design.POSS_COUNTERS says why a trip counts.
     trip        the free throws awarded for one foul ("Free Throw 1 of 2", "Free Throw 2 of 2")
     and-one     a made field goal plus the single free throw for the foul on it
 
 How a possession ends
     made field goal       unless the shooting team's free throw follows at the same clock (an and-one):
-                          then that free throw ends it
+                          then it ends on that free throw if it is made; a missed one is a live rebound
     defensive rebound     the rebounding team has the ball
     turnover
     made last free throw  of a trip ("2 of 2" made).  A missed last free throw is a live rebound.
@@ -32,16 +34,20 @@ How a possession ends
     jump ball             won by the team without the ball, after the team with it has acted
                           (diagnostic `jump_switches`)
 An offensive rebound continues the possession.  Technical free throws neither end nor start one: their
-points go to the shooting team's possession in progress, or, when it does not have the ball, are held and
-added to its next possession (or, if the period ends first, its last one).  After a flagrant or clear-path
-trip the shooting team keeps the ball, so those trips do not end the possession either.
+points go to the shooting team's possession in progress when it has the ball and has acted; otherwise
+they are held and added to its next recorded possession (or, if the period ends first, its last one).
+After a flagrant or clear-path trip the shooting team keeps the ball, so those trips do not end the
+possession either.
 
 How the parser decides who is on the court
     Period starters: the players who act in the period before being substituted in.  When that does not
-    give exactly five for a team, period 1 takes the box score's first five rows (V3 lists the starters
-    first); later periods ask the period box score (BoxScoreTraditionalV3, range_type=2) who played in the
-    period and take those who played minus those who came on by substitution.  If that still does not
-    give five, the team's lineup is unknown for the whole period.
+    give exactly five for a team, in this order:
+      1. period 1 only: when every player found is among the box score's first five rows (V3 lists the
+         starters first), those five;
+      2. any period: the period box score (BoxScoreTraditionalV3, range_type=2) says who played in the
+         period.  When more than five were found and exactly five of them played, those five; else those
+         who played, minus those who came on by substitution, plus those found, when that makes five.
+    If that still does not give five, the team's lineup is unknown for the whole period.
     Substitutions: a V3 substitution row carries only the outgoing player's id.  The incoming player is
     found by name ("SUB: Jones FOR Smith") among the team's players not on the court: first by the name as
     written in this game's play-by-play, then by the box score's family name, then by the closest
@@ -81,6 +87,7 @@ import re
 import unicodedata
 from collections import Counter
 from dataclasses import dataclass, field
+from types import MappingProxyType
 
 import numpy as np
 import pandas as pd
@@ -93,7 +100,7 @@ SUB_RE = re.compile(r"SUB:\s*(.+?)\s+FOR\s+(.+)$")
 TIP_RE = re.compile(r"Tip to\s+(.+)$")
 FT_RE = re.compile(r"Free Throw(?: (\w[\w ]*?))? (\d) of (\d)")
 # action types that say nothing about who started a period on the court
-IGNORED = {"", "Timeout", "Instant Replay", "Violation", "Ejection"}
+IGNORED = frozenset({"", "Timeout", "Instant Replay", "Violation", "Ejection"})
 # the action types whose description starts with the acting player's name as written that day
 NAMED_ACTIONS = ("Made Shot", "Missed Shot", "Rebound", "Turnover", "Foul", "Free Throw", "")
 # rows that end the search for a made shot's and-one free throw
@@ -214,7 +221,7 @@ class Possession:
     and1_used: bool = False        # the possession's and-one free throw has been seen
     cont_team: bool = False        # the last continuation was a TEAM offensive rebound (teamId 0)
     att_since_cont: int = 0        # attempts since that continuation
-    retain_pending: int = 0        # a flagrant, clear-path or away-from-play trip gave the ball back
+    retain_pending: int = 0        # a flagrant, clear-path or away-from-play trip: the next attempt is att_retained
 
 
 @dataclass
@@ -254,17 +261,15 @@ class GameParser:
 
     # ---------------------------------------------------------------- reading the game
     def _read_box(self, box: pd.DataFrame) -> None:
-        """Roster, names, minutes, starters and points from the box score."""
+        """Roster, names, starters and points from the box score."""
         self.roster = {}                 # player id -> team
         self.names = {team: {} for team in self.teams}   # team -> family-name key -> [player id]
         self.name_i = {}                 # player id -> key of "F. Family"
-        self.box_minutes = {}
         for row in box.itertuples(index=False):
             player, team = int(row.personId), int(row.teamId)
             self.roster[player] = team
             self.names.setdefault(team, {}).setdefault(_name_key(row.familyName), []).append(player)
             self.name_i[player] = _name_key(row.nameI)
-            self.box_minutes[player] = str(row.minutes)
         # V3 lists each team's starters as its first five rows (the position field is not a starter flag)
         team_of_row = box.teamId.astype(int)
         self.box_starters = {team: set(box[team_of_row == team]["personId"].astype(int).head(5).tolist())
@@ -440,12 +445,13 @@ class GameParser:
         return None
 
     def _starters_from_period_box(self, team, period, rows, found):
-        """Players with minutes in the period: those of `found` who played when that is five, else those who
-        played minus those who came on by substitution, plus `found`, when that is five."""
+        """From the players with minutes in the period: when more than five were found and exactly five of
+        them played, those five; else those who played, minus those who came on by substitution, plus
+        `found`, when that makes five."""
         self.diag["periods_from_box"] += 1
         box = self.fetch_period_box(self.game_id, period)
-        played = set(int(player) for player, player_team, minutes in zip(box.personId, box.teamId, box.minutes)
-                     if int(player_team) == team and str(minutes) not in ("", "0:00", "None", "nan"))
+        played = {int(player) for player, player_team, minutes in zip(box.personId, box.teamId, box.minutes)
+                  if int(player_team) == team and str(minutes) not in ("", "0:00", "None", "nan")}
         if len(found) > 5 and len(set(found) & played) == 5:
             return set(found) & played
         candidates = (played - self._came_on(team, rows)) | set(found)
@@ -706,6 +712,8 @@ class GameParser:
         game[f"fg{kind}m"] += made
 
     def _score_made_shot(self, state: PeriodState, index: int, row, team: int, first: bool) -> None:
+        """The shot's points (its shotValue, 2 when that is neither 2 nor 3), then the possession ends, unless
+        an and-one free throw follows: then it waits for the free throw."""
         points = int(row.shotValue) if int(row.shotValue) in (2, 3) else 2
         state.tally.score[team] += points
         possession = state.possession
@@ -731,6 +739,7 @@ class GameParser:
         return False
 
     def _on_turnover(self, state: PeriodState, index: int, row) -> None:
+        """A turnover ends the possession; the other team has the ball."""
         team = self._row_team(row)
         if team not in self.teams:
             return
@@ -838,8 +847,10 @@ class GameParser:
                          a shooting foul on a miss records no field-goal attempt at all, which is why trips count
                          as attempts; when both appear they are one attempt, and the whistle means that miss was
                          never a live rebound either
-            retained     a flagrant, clear-path or away-from-play trip (`ball_returned`): the shooting team gets
-                         the ball back, so its next attempt is counted as `att_retained`, not as a continuation
+            retained     a flagrant, clear-path or away-from-play trip (`ball_returned`): the possession's next
+                         attempt, if it has one, is counted as `att_retained`, not as a continuation.  Flagrant
+                         and clear-path trips never end the possession; an away-from-play trip ends it like any
+                         other trip, on a made last free throw
         """
         counters = possession.counters
         double = state.last_foul_shooting and possession.pending_chance == 1
@@ -880,9 +891,10 @@ class GameParser:
 
     # The dispatch table.  Every other action type ("Timeout", "Violation", "Instant Replay", "Ejection", the
     # blank steal and block rows) has no effect on the possession.
-    HANDLERS = {"period": _on_period, "Substitution": _on_substitution, "Jump Ball": _on_jump_ball,
-                "Made Shot": _on_shot, "Missed Shot": _on_shot, "Heave": _on_shot, "Turnover": _on_turnover,
-                "Rebound": _on_rebound, "Free Throw": _on_free_throw, "Foul": _on_foul}
+    HANDLERS = MappingProxyType({
+        "period": _on_period, "Substitution": _on_substitution, "Jump Ball": _on_jump_ball,
+        "Made Shot": _on_shot, "Missed Shot": _on_shot, "Heave": _on_shot, "Turnover": _on_turnover,
+        "Rebound": _on_rebound, "Free Throw": _on_free_throw, "Foul": _on_foul})
 
     # ---------------------------------------------------------------- stints
     def stints(self, poss: pd.DataFrame | None = None) -> pd.DataFrame:

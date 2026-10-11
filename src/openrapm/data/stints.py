@@ -128,7 +128,7 @@ def build_season(season: int, phase: str, cfg, force=False, verbose=True):
     neutral_seasons = set(cfg.get("neutral_site_seasons_po", []))
     parts, diags, name_parts, shot_parts = [], [], [], []
     t0 = time.time()
-    for k, game in enumerate(games.itertuples(index=False)):
+    for games_done, game in enumerate(games.itertuples(index=False), start=1):
         try:
             game_stints, diag, names, shots = build_game(game.game_id, game.home_team_id, game.away_team_id, cfg,
                                                          gt_rule, ft_rates, curve)
@@ -144,8 +144,8 @@ def build_season(season: int, phase: str, cfg, force=False, verbose=True):
         diag["home_team_id"] = game.home_team_id
         diag["away_team_id"] = game.away_team_id
         diags.append(diag)
-        if verbose and (k + 1) % 100 == 0:
-            print(f"  {season} {phase}: {k + 1}/{len(games)} games  {time.time() - t0:.0f}s")
+        if verbose and games_done % 100 == 0:
+            print(f"  {season} {phase}: {games_done}/{len(games)} games  {time.time() - t0:.0f}s")
     stints = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
     # the cross-fitting half of every game that produced stints, stored so the design and the shooter
     # tables use the same one
@@ -207,17 +207,22 @@ def _write_names(name_parts: list, season: int, phase: str, out_dir) -> None:
     if not name_parts:
         return
     names = pd.concat(name_parts, ignore_index=True)
-    names = names.groupby("player_id")["pbp_name"].agg(lambda s: s.value_counts().index[0]).reset_index()
+    names = names.groupby("player_id")["pbp_name"].agg(_most_common).reset_index()
     names["season"] = season
     names.to_parquet(out_dir / f"{season}_{phase}_names.parquet", index=False)
 
 
+def _most_common(spellings: pd.Series) -> str:
+    """The most frequent value; a tie goes to the one value_counts lists first."""
+    return spellings.value_counts().index[0]
+
+
 def season_names(season: int, phase: str, cfg) -> pd.DataFrame:
     """player_id, season, pbp_name: the player's name as written in that season's play-by-play."""
-    p = resolve(cfg, "stints") / f"{season}_{phase}_names.parquet"
-    if not p.exists():
+    path = resolve(cfg, "stints") / f"{season}_{phase}_names.parquet"
+    if not path.exists():
         build_season(season, phase, cfg)
-    return pd.read_parquet(p)
+    return pd.read_parquet(path)
 
 
 def season_diagnostics(season: int, phase: str, cfg) -> dict:
@@ -241,8 +246,8 @@ def season_diagnostics(season: int, phase: str, cfg) -> dict:
     # sum of player possessions = 5 x team possessions holds by construction; check five distinct players
     if len(stints):
         home, away = stints[HOME_SLOTS].to_numpy(), stints[AWAY_SLOTS].to_numpy()
-        out["five_distinct_frac"] = float(np.mean([(len(set(h)) == 5) and (len(set(a)) == 5)
-                                                   for h, a in zip(home, away)]))
+        out["five_distinct_frac"] = float(np.mean([(len(set(home_five)) == 5) and (len(set(away_five)) == 5)
+                                                   for home_five, away_five in zip(home, away)]))
     return out
 
 
