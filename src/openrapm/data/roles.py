@@ -9,7 +9,7 @@ before the box score says anything.  Three inputs, all from data already on disk
            traded mid-season keeps his full-season figure because the numerator is summed, not
            averaged.  Capped at `share_cap` (0.9).
   gs_pct   games started / games played.  Starters are each team's first five rows in the V3 box
-           file (the rule stints.GameParser already relies on); played = minutes > 0.
+           file (the rule stint_parser.GameParser already relies on); played = minutes > 0.
   age      from nba_api LeagueDashPlayerBioStats, one request per season, cached under
            data/raw/bio/.  A missing age gets the season median and `age_imputed` = 1.
 

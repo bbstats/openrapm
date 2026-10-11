@@ -32,7 +32,7 @@ STINT_COLUMNS = ["game_id", "season", "phase", "series_id", "period", *HOME_SLOT
                  "poss_h", "poss_a", "pts_h", "pts_a", "margin_h", "frac_rem", "is_gt", "neutral"]
 
 # The stints' counter columns.  They are defined here, beside the other stint columns, because the design
-# reads them; the stint parser (data/stints.py) imports them from here and fills them.
+# reads them; the stint parser (data/stint_parser.py) imports them from here and fills them.
 #
 # Per-possession counters, carried alongside `points` and summed per side into the stints.
 #
@@ -62,7 +62,7 @@ POSS_COUNTERS = (
     "oreb_p", "oreb_t", "oreb_unattr",
     "fga_rim", "fgm_rim", "fga_mid", "fgm_mid", "fga_thr", "fgm_thr",
     "att1_rim", "att1_mid", "att1_thr", "att1_ft",          # the possession's FIRST attempt only
-    "xftm", "xftm_tech",                                    # EXPECTED free-throw makes (data/stints.py)
+    "xftm", "xftm_tech",                                    # EXPECTED free-throw makes (data/stint_parser.py)
     "pts1", "chance1",                                      # the first attempt's realised points (incl. its
                                                             # free throws) and whether it produced a rebound chance
 )

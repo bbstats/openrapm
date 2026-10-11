@@ -279,8 +279,8 @@ def test_every_module_is_classified():
 
 def test_the_data_layer_is_the_data_folder():
     """The modules that moved into data/ in the 2026-10 cleanup are there and nowhere else."""
-    moved = {"config.py", "ingest.py", "stints.py", "shot_curves.py", "box_scores.py", "roles.py", "bio.py",
-             "seasons.py", "shots.py", "designs.py"}
+    moved = {"config.py", "ingest.py", "stints.py", "stint_parser.py", "shot_curves.py", "box_scores.py",
+             "roles.py", "bio.py", "seasons.py", "shots.py", "designs.py"}
     have = {m.split("/", 1)[1] for m in _modules() if m.startswith(DATA_DIR + "/")}
     assert moved <= have, f"data/ is missing {sorted(moved - have)}"
     stale = {"config.py", "ingest.py", "stints.py", "shotcurve.py", "boxtable.py", "roles.py", "bio.py",
