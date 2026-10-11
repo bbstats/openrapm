@@ -27,6 +27,7 @@ from datetime import datetime
 from pathlib import Path
 
 from ..settings import PRODUCT, TEST, Settings
+from .console import use_utf8
 
 THREAD_VARIABLES = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS")
 BOOSTER_FILE = "params/booster_params_{}.json"
@@ -43,15 +44,6 @@ def pin_threads() -> None:
 
 
 pin_threads()
-
-
-def utf8_output() -> None:
-    """Write UTF-8: player names carry accents (Schröder, Ginóbili), and a Windows console defaults to cp1252."""
-    for stream in (sys.stdout, sys.stderr):
-        try:
-            stream.reconfigure(encoding="utf-8")
-        except (AttributeError, ValueError):
-            pass
 
 
 def parse_seasons(text: str) -> list[int]:
@@ -323,7 +315,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     """Parse the command line, read the config and run the command; returns the exit status."""
-    utf8_output()
+    use_utf8()
     args = build_parser().parse_args(argv)
     args.argv = ["openrapm", *(sys.argv[1:] if argv is None else argv)]
     from ..data.config import load_config

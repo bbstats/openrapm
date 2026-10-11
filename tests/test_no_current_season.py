@@ -25,17 +25,16 @@ What it establishes now, in four parts:
 """
 import ast
 import re
-import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
+from openrapm.data import seasons as S
+from openrapm.data.config import load_config
+
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
-from openrapm.data import seasons as S  # noqa: E402
-from openrapm.data.config import load_config  # noqa: E402
 
 CFG = load_config()
 
@@ -115,6 +114,12 @@ FITS_FROM_PANEL = ["88_yoy_by_player.py", "95_miss_by_group.py", "137_stat_calib
 WRITES_THE_PANEL = {"49_role_panel.py", "65_offcourt_panel.py", "69_closeness_panel.py", "86_context_panel.py"}
 
 
+def _script(name: str) -> Path:
+    """A numbered script by file name: scripts/checks/ holds the experiment checks, scripts/ the rest."""
+    return next((p for p in (ROOT / "scripts" / "checks" / name, ROOT / "scripts" / name) if p.exists()),
+                ROOT / "scripts" / name)
+
+
 def _calls(path: Path, name: str) -> bool:
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     return any(isinstance(n, ast.Call)
@@ -124,7 +129,7 @@ def _calls(path: Path, name: str) -> bool:
 
 @pytest.mark.parametrize("script", FITS_FROM_PANEL)
 def test_a_script_that_fits_from_the_panel_gates_its_read(script):
-    path = ROOT / "scripts" / script
+    path = _script(script)
     assert path.exists(), f"{script} is on FITS_FROM_PANEL but does not exist -- update the list"
     assert _calls(path, "drop_untrainable"), (
         f"scripts/{script} reads the panel and fits from it without calling seasons.drop_untrainable.  "
@@ -136,7 +141,7 @@ def test_a_script_that_fits_from_the_panel_gates_its_read(script):
 @pytest.mark.parametrize("script", sorted(WRITES_THE_PANEL))
 def test_a_script_that_writes_the_panel_does_not_gate(script):
     """The opposite mistake, and the worse one: these rewrite the panel in place."""
-    path = ROOT / "scripts" / script
+    path = _script(script)
     assert not _calls(path, "drop_untrainable"), (
         f"scripts/{script} writes the panel back in place; gating its read would drop the season in "
         f"progress out of the only copy of the file.  Gate the fits, not the writers.")
@@ -145,7 +150,7 @@ def test_a_script_that_writes_the_panel_does_not_gate(script):
 def test_no_script_reads_a_panel_unclassified():
     """A new reader must be put on one list or the other, so nothing lands here unnoticed."""
     known = set(FITS_FROM_PANEL) | WRITES_THE_PANEL
-    readers = {p.name for p in sorted((ROOT / "scripts").glob("[0-9]*.py"))
+    readers = {p.name for p in sorted((ROOT / "scripts").rglob("[0-9]*.py"))
                if "role_panel" in p.read_text(encoding="utf-8")
                and "read_parquet" in p.read_text(encoding="utf-8")}
     assert not readers - known, (

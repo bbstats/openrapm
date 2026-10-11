@@ -2,7 +2,7 @@
 
 The lineup swaps are also what step 5 (swap_adjust.py) reads: `season_rows`, `prepare`, `aligned`, `predict` and
 `side_rates` build them and their residuals for both.  The scoring (`side_scores`, `score_season`) is the test's
-alone, run by scripts/90_swap_test.py.
+alone, run by scripts/checks/90_swap_test.py.
 
 Any four of a lineup's five players are one of its CORES.  Two lineups that share a core differ by
 exactly one player -- Podziemski in one, Spencer in the other, the same four teammates in both -- and

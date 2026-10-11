@@ -15,7 +15,7 @@ Words used below
                 his group, so it cannot simply return his own label (step 2)
     within-season fold   one season's games split into a fitted three quarters and a held-back quarter;
                 step 4's factors are fitted on the held-back quarters
-    year-over-year test   the deciding score (scripts/63_yoy.py): each season's ratings predict the games of
+    year-over-year test   the deciding score (scripts/checks/63_yoy.py): each season's ratings predict the games of
                 the season before and the season after from the ten players' ratings alone (only the scored
                 season's intercept and home edge are refitted), scored against the points actually scored
 

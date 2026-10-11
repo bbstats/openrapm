@@ -9,6 +9,7 @@ dependencies = [
   "pandas>=2.2",          # groupby().apply(include_groups=) lands in 2.2; used in six places
   "pyarrow>=14",
   "scikit-learn>=1.4",
+  "threadpoolctl>=3",     # one linear-algebra thread in the checks (openrapm.commands.console.one_thread)
   "lightgbm>=4.7",        # the shipped box-score prior since 2026-10-08 (openrapm.box_prior)
   "matplotlib>=3.8",
   "nba_api>=1.4",

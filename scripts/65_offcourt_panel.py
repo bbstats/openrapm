@@ -8,42 +8,43 @@ defence).  Also recomputes `onc_*` the same way and reports the largest gap agai
 carries, which must be ~0 -- if it is not, the two families were built from different games and the net
 is meaningless.  The panel is backed up to `<panel>_pre_offc.parquet` before it is overwritten.
 """
+import argparse
 import shutil
-import sys
 import time
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from openrapm.features import NET, OFFC, ONC  # noqa: E402
-from openrapm.data.config import load_config  # noqa: E402
-from openrapm.holdout import Context  # noqa: E402
-from openrapm.investigate import offcourt_rates, oncourt_rates  # noqa: E402
-from openrapm.data.shots import DEFENSE_TARGETS  # noqa: E402
+from openrapm.commands.console import use_utf8
+from openrapm.data.config import load_config
+from openrapm.data.designs import DesignCache
+from openrapm.features import NET, OFFC, ONC
+from openrapm.investigate import offcourt_rates, oncourt_rates
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-# The shared command line (scripts/_cli.py): `flag` records every name it is asked for so
-# `check_flags` below can refuse one that was never asked for.  A misspelled flag used to be
-# ignored silently, which is how a run looks right and is wrong.
-from _cli import check_flags, flag as _flag, switch   # noqa: E402
+def parse_args(argv=None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Write each player-season's off-court record into the season "
+                                                 "panel.", allow_abbrev=False)
+    parser.add_argument("--panel", default="outputs/role_panel_season.parquet",
+                        help="the panel, relative to the repository (default %(default)s)")
+    return parser.parse_args(argv)
 
 
 def main():
-    check_flags()      # refuse a flag this script does not understand (scripts/_cli.py)
-    path = ROOT / _flag("panel", "outputs/role_panel_season.parquet")
+    use_utf8()
+    path = ROOT / parse_args().panel
     cfg = load_config()
-    ctx = Context.load(cfg)
+    designs = DesignCache(cfg)
     panel = pd.read_parquet(path)
     seasons = sorted(panel.season.unique())
     t0 = time.time()
     parts = []
     for season in seasons:
-        wd_o = ctx.design([season], "xpts_ft")
-        wd_d = ctx.design([season], DEFENSE_TARGETS["x3def"])
+        wd_o = designs.season(season, "xpts_ft")
+        wd_d = designs.season(season, "x3def")
         ids = wd_o.spec.ps_table["player_id"].to_numpy()
         onc = oncourt_rates(wd_o, wd_d)
         offc = offcourt_rates(wd_o, wd_d)

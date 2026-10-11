@@ -1,4 +1,5 @@
-"""Two things that rot silently: a config key nobody reads, and a citation of a deleted script.
+"""Three things that rot silently: a config key nobody reads, a citation of a deleted script, and a documented flag
+no script understands.
 
 Neither breaks anything, which is exactly why both survive.  A key with a comment telling you to
 change it, that nothing reads, costs a day; so does a command line in a doc naming a file that was
@@ -8,6 +9,7 @@ deleted a release ago.  Both are cheap to check and nobody checks them by hand.
 goes dead, and the test fails both when a NEW key goes unread and when one on the list comes back to
 life, so the list cannot quietly stop being true.
 """
+import ast
 import re
 from pathlib import Path
 
@@ -26,7 +28,7 @@ UNREAD: set = set()
 # Docs and config that a stranger follows literally.  HANDOFF.md and DECISIONS.md are deliberately
 # excluded: they are a record of what was done, and they cite retired scripts on purpose.
 FOLLOWED = ["config.yaml", "README.md", "PIPELINE.md", "CONTRIBUTING.md"]
-SCRIPT = re.compile(r"scripts/\d+_[A-Za-z0-9_]+\.py")
+SCRIPT = re.compile(r"scripts/(?:checks/)?\d+_[A-Za-z0-9_]+\.py")
 
 
 def _named(key) -> bool:
@@ -165,18 +167,41 @@ def test_every_script_a_followed_doc_names_exists_or_says_it_is_retired(doc):
 
 
 # --------------------------------------------------------------- the documented command lines
-# scripts/_cli.py made a misspelled flag an error instead of a silent default.  That only helps if
-# the flags the docs tell you to type are the ones the scripts answer to, so check the docs against
-# the source.  Every .md here, including HANDOFF.md, because its commands are meant to be run.
-def _declared_in(path):
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("_cli_for_tests", ROOT / "scripts" / "_cli.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod.declared_in(path)
+# Every script reads its command line with argparse, which stops a run on a flag it was not told about (and,
+# with allow_abbrev=False, on an abbreviation of one) instead of ignoring it.  That only helps if the flags the
+# docs tell you to type are the ones the scripts answer to, so check the docs against the source.  Every .md
+# here, including HANDOFF.md, because its commands are meant to be run.
+def declared_options(path) -> set:
+    """Every option a script's argparse parser declares, without the dashes: the literal "--name" arguments of
+    each `add_argument` call in its source."""
+    tree = ast.parse(Path(path).read_text(encoding="utf-8"), filename=str(path))
+    return {arg.value[2:] for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and getattr(node.func, "attr", None) == "add_argument"
+            for arg in node.args if isinstance(arg, ast.Constant) and isinstance(arg.value, str)
+            and arg.value.startswith("--")}
 
 
-COMMAND = re.compile(r"(?:python|\S*python(?:\.exe)?)\s+(scripts/[0-9]\w*\.py)((?:\s+-[^\s`]+)*)")
+def script_file(named: str) -> Path | None:
+    """The script a doc names: the path as written, else the file of that name in scripts/checks/ or scripts/ (a
+    check that moved keeps its number and name), else None."""
+    path = ROOT / named
+    if path.exists():
+        return path
+    name = Path(named).name
+    return next((p for p in (ROOT / "scripts" / "checks" / name, ROOT / "scripts" / name) if p.exists()), None)
+
+
+COMMAND = re.compile(r"(?:python|\S*python(?:\.exe)?)\s+(scripts/(?:checks/)?[0-9]\w*\.py)((?:\s+-[^\s`]+)*)")
+
+
+def test_the_option_scan_reads_every_form(tmp_path):
+    source = ('import argparse\np = argparse.ArgumentParser()\np.add_argument("--tag", default="x")\n'
+              'p.add_argument("--team_effects")\np.add_argument("--dry", action="store_true")\n'
+              'p.add_argument("tables", nargs="*")\nsub = p.add_subparsers().add_parser("x")\n'
+              'sub.add_argument("-q", "--quiet")\n')
+    path = tmp_path / "sample.py"
+    path.write_text(source, encoding="utf-8")
+    assert declared_options(path) == {"tag", "team_effects", "dry", "quiet"}
 
 
 def test_every_flag_a_doc_tells_you_to_type_is_one_the_script_understands():
@@ -184,18 +209,63 @@ def test_every_flag_a_doc_tells_you_to_type_is_one_the_script_understands():
     for md in sorted(ROOT.glob("*.md")):
         for line in md.read_text(encoding="utf-8", errors="replace").splitlines():
             for m in COMMAND.finditer(line):
-                script = ROOT / m.group(1)
-                if not script.exists():
+                script = script_file(m.group(1))
+                if script is None:
                     continue                      # the retired-script rule above covers this
-                known = _declared_in(script)
+                known = declared_options(script)
                 for tok in re.findall(r"--([A-Za-z_][\w-]*)", m.group(2)):
                     checked += 1
                     if tok not in known:
                         bad.append(f"{md.name}: {m.group(1)} --{tok}")
     assert checked > 20, f"only {checked} documented flags found; the command regex has stopped matching"
     assert not bad, (
-        f"documented flag(s) no script understands: {sorted(set(bad))}.  Since scripts/_cli.py these "
-        f"stop the run instead of being ignored, so a doc that names one is a command nobody can run.")
+        f"documented flag(s) no script understands: {sorted(set(bad))}.  argparse stops the run on these "
+        f"instead of ignoring them, so a doc that names one is a command nobody can run.")
+
+
+# The experiment chain builds for hours before its first reading, and a reading that fails does not stop it, so a
+# moved check or a renamed flag would show up only as "No such file" or "unrecognized arguments" in the log at the
+# end.  No allowance for retired scripts here: the chain is run, not read.
+CHAIN = ROOT / "scripts" / "experiment_chain.sh"
+CHAIN_CALL = re.compile(r"(scripts/checks/\d+_\w+\.py)((?:[ \t]+[^\s>]+)*)")
+
+
+def _chain_call_problems(script: str, arguments: str) -> list:
+    """What is wrong with one call of a check in the chain: a missing script, or flags its parser does not declare."""
+    if not (ROOT / script).exists():
+        return [f"{script} does not exist"]
+    known = declared_options(ROOT / script)
+    return [f"{script} --{flag}" for flag in re.findall(r"(?<![\w-])--([A-Za-z_][\w-]*)", arguments)
+            if flag not in known]
+
+
+def test_every_check_the_experiment_chain_calls_exists_and_declares_its_flags():
+    calls, bad = 0, []
+    for line in CHAIN.read_text(encoding="utf-8").splitlines():
+        for match in CHAIN_CALL.finditer(line):
+            calls += 1
+            bad += _chain_call_problems(match.group(1), match.group(2))
+    assert calls >= 10, f"only {calls} check calls found in the chain; the pattern has stopped matching"
+    assert not bad, f"the experiment chain would fail at these readings: {sorted(set(bad))}"
+
+
+def test_the_chain_looks_for_every_check_it_calls_before_it_builds():
+    """READINGS is the list the chain checks for before the build starts; a call missing from it is a check whose
+    absence would be found only after the build."""
+    text = CHAIN.read_text(encoding="utf-8")
+    listed = re.search(r'^READINGS="([^"]*)"', text, re.M)
+    assert listed, "the chain no longer lists its readings in READINGS"
+    called = set(re.findall(r"scripts/checks/(\d+_\w+)\.py", text))
+    assert called == set(listed.group(1).split())
+
+
+def test_no_script_reads_its_own_command_line():
+    """argparse is the one reader: a script that also scans sys.argv for "--x=" accepts what the parser does not
+    know about, which is how a misspelled flag used to be ignored silently."""
+    scanners = sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / "scripts").rglob("*.py")
+                      if re.search(r"sys\.argv\[1:\]|\b_cli\b", p.read_text(encoding="utf-8")))
+    assert not scanners, f"scripts reading sys.argv or scripts/_cli.py themselves: {scanners}"
+    assert not (ROOT / "scripts" / "_cli.py").exists(), "scripts/_cli.py was retired for argparse"
 
 
 def test_the_booster_settings_are_never_read_from_config_yaml():

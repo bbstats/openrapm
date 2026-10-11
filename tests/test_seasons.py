@@ -4,15 +4,11 @@ These tests do not need the scraped data.  `playoffs_complete` is exercised agai
 game log, so the behaviour that matters -- a season in progress is refused -- is checked even in the
 usual case where every season on disk is already finished.
 """
-import sys
-from pathlib import Path
-
 import pandas as pd
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from openrapm.data import seasons as S  # noqa: E402
-from openrapm.data.config import load_config, resolve  # noqa: E402
+from openrapm.data import seasons as S
+from openrapm.data.config import load_config, resolve
 
 CFG = load_config()
 

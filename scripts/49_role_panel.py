@@ -17,38 +17,47 @@ reference systems' input, is asserted unchanged.
           (outputs/csv/spm_lambda_check.csv); the coefficients must not depend on the APM penalty.
 --season  one row per player per SEASON instead of per 3-season window (HANDOFF 3.5): every window is
           [s, s], the labels are "2004-2004", and the panel is written to outputs/role_panel_season.parquet
-          (--out= overrides).  Everything downstream reads the granularity off the labels themselves --
-          the exclusion set (holdout.Context.labels), the pair rows' turnover table (Context.turn_table)
-          and the PAST discount (the retired gbdt_prior.past_decay_for) -- so a system takes it with panel=.
+          (--out= overrides).  Everything downstream read the granularity off the labels themselves --
+          the exclusion set, the pair rows' turnover table and the PAST discount (all retired with
+          holdout.Context and gbdt_prior) -- so a system took it with panel=.
 --out=P   write the panel to P instead of the configured/default path.
 usage: python scripts/49_role_panel.py [--check] [--season] [--out=outputs/role_panel_x.parquet]
 """
+import argparse
 import hashlib
-import sys
 import time
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from openrapm.data.config import load_config  # noqa: E402
-from openrapm.cv import plugin_fit  # noqa: E402
-from openrapm.design import FEATURES  # noqa: E402
-from openrapm.data.bio import PLAYER_INPUTS, player_inputs  # noqa: E402
-from openrapm.data.roles import (CAREER_INPUTS, RAW_INPUTS, build_roles, career_inputs,  # noqa: E402
+from openrapm.commands.console import use_utf8
+from openrapm.data.config import load_config
+from openrapm.cv import plugin_fit
+from openrapm.design import FEATURES
+from openrapm.data.bio import PLAYER_INPUTS, player_inputs
+from openrapm.data.roles import (CAREER_INPUTS, RAW_INPUTS, build_roles, career_inputs,
                                 player_season_inputs, window_inputs)
-from openrapm.spm import (apm_fit, apm_lambda_check, fit_spm, panel_inputs_report, season_of_units,  # noqa: E402
+from openrapm.spm import (apm_fit, apm_lambda_check, fit_spm, panel_inputs_report, season_of_units,
                          spm_predict)
 from openrapm.investigate import oncourt_rates
-from openrapm.data.designs import build_window  # noqa: E402
-from openrapm.windows import window_label, window_seasons  # noqa: E402
-from openrapm.data.shots import (DEFENSE_TARGETS, SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS,  # noqa: E402
+from openrapm.data.designs import build_window
+from openrapm.windows import window_label, window_seasons
+from openrapm.data.shots import (DEFENSE_TARGETS, SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS,
                                  player_shot_frame)
 
 SHOT_COLS_ALL = [*SHOT_TOTAL_COLS, *SHOT_LEAGUE_COLS]
 pd.set_option("display.width", 250, "display.max_columns", 60, "display.precision", 3)
-from _cli import check_flags, flag, switch   # noqa: E402
+use_utf8()
+_parser = argparse.ArgumentParser(description="Build the role panel.", allow_abbrev=False)
+_parser.add_argument("--check", action="store_true", help="also fit APM at config spm.apm_check_lams")
+# `--season` is a bare switch: one window per season instead of the blocks.  It used to be matched by
+# `"--season" in sys.argv`, so the natural-looking `--season=2026` matched nothing, the run silently
+# rebuilt the BLOCK panel instead, and it wrote it over the tracked artifacts/role_panel.parquet.  argparse
+# refuses `--season=2026` for a switch.
+_parser.add_argument("--season", action="store_true", help="one row per player per season")
+_parser.add_argument("--out", help="write the panel to this path instead")
+ARGS = _parser.parse_args()
 
 cfg = load_config()
 OUT = Path(cfg["_root"]) / "outputs"
@@ -56,19 +65,15 @@ OUT = Path(cfg["_root"]) / "outputs"
 S = cfg.get("spm", {})
 LAM_P, RAT_P = float(cfg["lam_plugin"]), float(cfg["lam_ratio_plugin"])
 CAP = float(cfg.get("roles", {}).get("share_cap", 0.9))
-CHECK = switch("check")
+CHECK = ARGS.check
 CHECK_LAMS = [float(x) for x in S.get("apm_check_lams", [30, 100, 300])] if CHECK else []
-# `--season` is a bare switch: one window per season instead of the blocks.  It used to be matched by
-# `"--season" in sys.argv`, so the natural-looking `--season=2026` matched nothing, the run silently
-# rebuilt the BLOCK panel instead, and it wrote it over the tracked artifacts/role_panel.parquet.
-SEASON = switch("season")
+SEASON = ARGS.season
 WINDOWS = ([(s_, s_) for s_ in range(int(cfg["first_season"]), int(cfg["last_season"]) + 1)] if SEASON
            else window_seasons(cfg))
-_out = flag("out")
+_out = ARGS.out
 PANEL_PATH = Path(cfg["_root"]) / (_out if _out else
                                    ("outputs/role_panel_season.parquet" if SEASON else
                                     cfg.get("paths", {}).get("role_panel", "outputs/role_panel.parquet")))
-check_flags()      # refuse a flag this script does not understand (scripts/_cli.py)
 # a panel other than the shipped one names its own reports, so a --season build does not overwrite the
 # block panel's spm_coefs.csv / role_panel_report.csv
 TAG = "" if PANEL_PATH.stem == "role_panel" else "_" + PANEL_PATH.stem.replace("role_panel_", "")

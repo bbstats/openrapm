@@ -116,7 +116,7 @@ SHOTQ_PADS = {"q2": 50.0, "q3": 50.0, "m2": 250.0, "m3": 450.0, "xps": 100.0, "m
 SHOTQ = ["q2", "q3", "m2", "m3", "xps", "mpts"]
 
 # Every input the prior could read (54): the rates, the role, every derived column, career, body, on-court.
-# scripts/95_miss_by_group.py and commands/within_season.py (its PLAYER_COLUMNS) report on all of them.
+# scripts/checks/95_miss_by_group.py and commands/within_season.py (its PLAYER_COLUMNS) report on all of them.
 PRIOR_FEATURES = [*BOX_RATES, *ROLE, *DERIVED, *RATIOS, *SHOTQ, *CAREER, *BIO, *ONC]
 # The panel columns averaged into a multi-season training row, before anything is derived from them.
 PANEL_INPUTS = [*BOX_RATES, *ROLE, *CLOSENESS, *RAW_RATES, *SHOT_TOTALS, *SHOT_LEAGUE, *CAREER, *BIO, *ONC, *OFFC,

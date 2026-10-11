@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 from pathlib import Path
 
 import yaml
@@ -28,13 +27,6 @@ DEFAULT_PATHS = {
     "panel": "outputs/role_panel_season.parquet",   # the season panel: one row per player, season and side
     "within": "outputs/within",       # the within-season folds, one folder per tag
 }
-
-# Windows consoles default to cp1252; player names are UTF-8 (Schröder, Ginóbili).
-for _stream in ("stdout", "stderr"):
-    try:
-        getattr(sys, _stream).reconfigure(encoding="utf-8")
-    except (AttributeError, ValueError):
-        pass
 
 
 def config_path(path: str | Path | None = None) -> Path:

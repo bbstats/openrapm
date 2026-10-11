@@ -40,13 +40,11 @@ step removed.  `PACKAGE_FILES` (`__init__.py`, and `__main__.py` once it exists)
 layer: `__init__.py` imports nothing from the package, `__main__.py` only the command line.
 """
 import ast
-import sys
 from pathlib import Path
 
 import pytest
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "openrapm"
-sys.path.insert(0, str(SRC.parents[1]))
 DATA_DIR = "data"            # src/openrapm/data/: the data layer, by location
 COMMANDS_DIR = "commands"    # src/openrapm/commands/: the commands, by location; they may import anything
 
@@ -63,7 +61,8 @@ MODEL_LAYER = [
     "simulate.py",      # the synthetic fixture the tests fit against
     "swap_adjust.py",   # step 5: the swap type model, the give-back, team totals held, the spread held
     "swap_test.py",     # the swap test: same-four lineup pairs, scored against a neighbouring season's ranking
-    "tradeset.py",      # the team-game with-and-without-you ridge and its losses
+    "trade_set.py",     # the team-game with-and-without-you ridge and its losses
+    "consensus.py",     # the consensus check: the name join, the pooling, rank agreement and spreads
     "windows.py",       # window labels and seasons, and the plug-in ratings table
     "settings.py",      # the shipped settings, each with the experiment that set it
     "features.py",      # the prior's input catalogue, the derived columns, the shipped lists
@@ -71,7 +70,7 @@ MODEL_LAYER = [
     "box_prior.py",     # step 2: training rows, balanced player folds, the out-of-player LightGBM prior
     "prior_rapm.py",    # step 3: the ridge around the prior, the season's table, centring, the schema
     "prior_shrink.py",  # step 4: the prior part's multipliers from the within-season folds, the shrink
-    "scoring.py",       # how a miss is reported: a mean square on the mean-absolute scale
+    "scoring.py",       # ratings scored on unseen games, the splits, the pooled and paired summaries
 ]
 
 # Model code that still reaches its own data, and what through.  Nothing may be added here.
@@ -81,14 +80,14 @@ NEEDS_SPLIT = {
 
 # Top-level modules whose job IS to reach the disk or the network, not yet moved into data/.
 DATA_LAYER = {
-    "holdout.py",       # the criterion runner: its Context loads the roles table, box scores and designs
     "seasoninputs.py",  # one season rebuilt from any subset of its games (box scores, stints, roles): `folds`
 }
 
-# What the two exception lists held when the data layer moved into data/ (2026-10 cleanup, phase 3).  They
-# may lose entries (holdout.py and seasoninputs.py split in phases 7 and 9a, spm.py goes in 9a), never gain one.
+# What the two exception lists may hold at most (2026-10 cleanup).  They may lose entries (seasoninputs.py splits
+# in phase 9a, spm.py goes in 9a), never gain one; holdout.py left in phase 7, split into scoring.py and
+# commands/year_over_year.py.
 NEEDS_SPLIT_AT_MOST = {"spm.py"}
-DATA_LAYER_AT_MOST = {"holdout.py", "seasoninputs.py"}
+DATA_LAYER_AT_MOST = {"seasoninputs.py"}
 
 # The package's own entry files: neither layer (see test_the_package_files_import_nothing_from_the_package).
 PACKAGE_FILES = {"__init__.py", "__main__.py"}
@@ -193,7 +192,7 @@ def test_the_import_resolver_reads_every_form():
                       "from openrapm import __version__\n")
     assert sorted(m for _, m in _imports_of(whole, [])) == sorted(
         ["data/__init__.py", "data/__init__.py", "data/__init__.py", "__init__.py"])
-    assert all(_is_data(m) for m in ("data/roles.py", "data/stints.py", "data/__init__.py", "holdout.py"))
+    assert all(_is_data(m) for m in ("data/roles.py", "data/stints.py", "data/__init__.py", "seasoninputs.py"))
     assert not any(_is_data(m) for m in ("design.py", "pad.py", "__init__.py"))
 
 
@@ -220,7 +219,7 @@ def test_a_model_module_does_not_import_the_data_layer(module):
 
 
 def test_only_the_commands_and_the_entry_file_import_the_commands():
-    """A loader (data/, holdout.py, seasoninputs.py) or a model module that imported a command would reach
+    """A loader (data/, seasoninputs.py) or a model module that imported a command would reach
     everything the command reaches.  commands/ itself may import anything."""
     bad = {}
     for module in sorted(_modules()):

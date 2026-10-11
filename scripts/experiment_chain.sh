@@ -1,11 +1,13 @@
 #!/bin/bash
 # One experiment's whole ratings chain, as HANDOFF.md "The test: year-over-year" describes it: steps 1-3 in one run
 # (`openrapm rate --setting test`), step 4 (`openrapm shrink --setting test`), step 5 (`openrapm swap --setting test`),
-# then the readings 63, 64, 66 (2026 top 20), 90, 88, 70 + 73 (on the
+# then the readings, each a check in scripts/checks/: 63, 64, 66 (2026 top 20), 90, 88, 70 + 73 (on the
 # incumbent's trade-loss target, and on the candidate's own as a sensitivity).  Everything not named is the incumbent's.
 #   bash scripts/experiment_chain.sh NAME DEFENSIVE_TARGET ["EXTRA RATE FLAGS"]   (INC_NAME, BASE_FLAGS, SHRINK_TAG, SKIP_BUILD: see below)
 #   bash scripts/experiment_chain.sh noise_control x3def_w0.25 "--fold-assignment 1"
 # Log: outputs/NAME_chain.log.  One build at a time.
+# A reading that fails is logged and the chain goes on to the next (each reading stands alone); the last line of the
+# log then names every reading that failed, and the chain exits with status 1.
 cd "$(dirname "$0")/.."
 PY=.venv/Scripts/python
 NAME=$1
@@ -22,6 +24,16 @@ INC_FOLDS=${INC_FOLDS:-weightfix_within}
 INC=outputs/season_ratings_${INC_NAME}.parquet
 BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1 --features boruta_noonc}
 [ -n "$NAME" ] && [ -n "$TARGET" ] || { echo "usage: scripts/experiment_chain.sh NAME TARGET [EXTRA RATE FLAGS]"; exit 1; }
+# Every check the chain calls, looked for BEFORE the build: a missing one would otherwise surface only hours later.
+READINGS="63_yoy 64_consensus_report 66_compare 70_tradeset 73_tradeloss 88_yoy_by_player 90_swap_test 138_heldout_audit"
+for check in $READINGS; do
+  [ -f scripts/checks/$check.py ] || { echo "scripts/checks/$check.py is missing; nothing was run"; exit 1; }
+done
+FAILED=""
+reading() {            # reading LABEL SCRIPT [FLAGS...]: run one check into the log; a failure is noted, not fatal
+  local label=$1; shift
+  $PY -u "$@" >> $LOG 2>&1 || { echo "=== $(date) $label FAILED" >> $LOG; FAILED="$FAILED, $label"; }
+}
 # SKIP_BUILD=1: outputs/season_ratings_NAME_step3.parquet already exists -- start at the prior shrink.
 # SHRINK_TAG=<tag>: the within-season folds step 4's multipliers are read from (default the incumbent's, INC_FOLDS; experiment
 # 45's were `lgb_noonc_within`, chimeraboost's `within`); the LightGBM rematch (2026-10-08) refits them on the
@@ -50,7 +62,7 @@ if [ "$OWN_FOLDS" = "1" ]; then
   COMPARE="--reference=$INC_FOLDS"
   [ -n "$CONTROL_TAG" ] && COMPARE="$COMPARE --control=$CONTROL_TAG"
   echo "=== $(date) held-out audit against the incumbent's folds" >> $LOG
-  $PY -u scripts/138_heldout_audit.py --random=${NAME}_within --mult_tag=${NAME}_within $COMPARE --draws=0 --threshold_from=audit_lgb_noonc_2017 --out=audit_${NAME} >> $LOG 2>&1 || exit 1
+  $PY -u scripts/checks/138_heldout_audit.py --random=${NAME}_within --mult_tag=${NAME}_within $COMPARE --draws=0 --threshold_from=audit_lgb_noonc_2017 --out=audit_${NAME} >> $LOG 2>&1 || exit 1
 fi
 if [ "$FIRST_PASS" = "1" ]; then
   echo "=== $(date) first pass done" >> $LOG
@@ -61,26 +73,30 @@ $PY -u -m openrapm shrink --base season_ratings_${NAME}_step3 --setting test --f
 echo "=== $(date) swap adjustment" >> $LOG
 $PY -u -m openrapm swap --base season_ratings_${NAME}_step4 --setting test --name ${NAME} --types >> $LOG 2>&1 || exit 1
 echo "=== $(date) year-over-year" >> $LOG
-$PY -u scripts/63_yoy.py --rankings=${NAME}=outputs/season_ratings_${NAME}.parquet,incumbent=$INC --ref=incumbent --tag=${NAME} --splits= >> $LOG 2>&1
+reading "year-over-year" scripts/checks/63_yoy.py --rankings=${NAME}=outputs/season_ratings_${NAME}.parquet,incumbent=$INC --ref=incumbent --tag=${NAME} --splits=
 if [ "$OWN_FOLDS" = "1" ]; then
   echo "=== $(date) the second arm: the incumbent's multipliers ($INC_FOLDS)" >> $LOG
   $PY -u -m openrapm shrink --base season_ratings_${NAME}_step3 --setting test --folds $INC_FOLDS --name ${NAME}_incmult >> $LOG 2>&1 || exit 1
   $PY -u -m openrapm swap --base season_ratings_${NAME}_incmult_step4 --setting test --name ${NAME}_incmult --types >> $LOG 2>&1 || exit 1
-  $PY -u scripts/63_yoy.py --rankings=${NAME}_incmult=outputs/season_ratings_${NAME}_incmult.parquet,incumbent=$INC --ref=incumbent --tag=${NAME}_incmult --splits= >> $LOG 2>&1
+  reading "year-over-year, second arm" scripts/checks/63_yoy.py --rankings=${NAME}_incmult=outputs/season_ratings_${NAME}_incmult.parquet,incumbent=$INC --ref=incumbent --tag=${NAME}_incmult --splits=
 fi
 echo "=== $(date) consensus" >> $LOG
-$PY -u scripts/64_consensus_report.py outputs/season_ratings_${NAME}.parquet $INC >> $LOG 2>&1
+reading "consensus" scripts/checks/64_consensus_report.py outputs/season_ratings_${NAME}.parquet $INC
 echo "=== $(date) top 20" >> $LOG
-$PY -u scripts/66_compare.py incumbent=$INC ${NAME}=outputs/season_ratings_${NAME}.parquet --season=2026 --top=20 --yoy=outputs/yoy_${NAME}.parquet --ref=incumbent --open=0 >> $LOG 2>&1
+reading "top 20" scripts/checks/66_compare.py incumbent=$INC ${NAME}=outputs/season_ratings_${NAME}.parquet --season=2026 --top=20 --yoy=outputs/yoy_${NAME}.parquet --ref=incumbent --open=0
 echo "=== $(date) swap test" >> $LOG
-$PY -u scripts/90_swap_test.py --rankings=incumbent=$INC,${NAME}=outputs/season_ratings_${NAME}.parquet --contexts=nofatigue --checks=0 --tag=${NAME} >> $LOG 2>&1
+reading "swap test" scripts/checks/90_swap_test.py --rankings=incumbent=$INC,${NAME}=outputs/season_ratings_${NAME}.parquet --contexts=nofatigue --checks=0 --tag=${NAME}
 echo "=== $(date) quality tiers, year-over-year" >> $LOG
-$PY -u scripts/88_yoy_by_player.py --cands=${NAME}=outputs/season_ratings_${NAME}.parquet --ref=incumbent=$INC --tag=${NAME} >> $LOG 2>&1
+reading "quality tiers" scripts/checks/88_yoy_by_player.py --cands=${NAME}=outputs/season_ratings_${NAME}.parquet --ref=incumbent=$INC --tag=${NAME}
 echo "=== $(date) trade loss" >> $LOG
-$PY -u scripts/70_tradeset.py --rankings=outputs/season_ratings_${NAME}.parquet --team_effects=team --out=tradeset_${NAME} >> $LOG 2>&1
-$PY -u scripts/73_tradeloss.py --alphas=incumbent=outputs/tradeset_${INC_NAME}_alpha.parquet,${NAME}=outputs/tradeset_${NAME}_alpha.parquet --ref=incumbent >> $LOG 2>&1
-$PY -u scripts/73_tradeloss.py --alphas=incumbent=outputs/tradeset_${INC_NAME}_alpha.parquet,${NAME}=outputs/tradeset_${NAME}_alpha.parquet --ref=incumbent --quality=$INC --tier=each >> $LOG 2>&1
+reading "trade set" scripts/checks/70_tradeset.py --rankings=outputs/season_ratings_${NAME}.parquet --team_effects=team --out=tradeset_${NAME}
+reading "trade loss" scripts/checks/73_tradeloss.py --alphas=incumbent=outputs/tradeset_${INC_NAME}_alpha.parquet,${NAME}=outputs/tradeset_${NAME}_alpha.parquet --ref=incumbent
+reading "trade loss by quality tier" scripts/checks/73_tradeloss.py --alphas=incumbent=outputs/tradeset_${INC_NAME}_alpha.parquet,${NAME}=outputs/tradeset_${NAME}_alpha.parquet --ref=incumbent --quality=$INC --tier=each
 echo "=== $(date) trade loss, the candidate's alphas on its own defensive target (sensitivity)" >> $LOG
-$PY -u scripts/70_tradeset.py --rankings=outputs/season_ratings_${NAME}.parquet --team_effects=team --target_def=$TARGET --out=tradeset_${NAME}_owntarget >> $LOG 2>&1
-$PY -u scripts/73_tradeloss.py --alphas=incumbent=outputs/tradeset_${INC_NAME}_alpha.parquet,${NAME}=outputs/tradeset_${NAME}_owntarget_alpha.parquet --ref=incumbent >> $LOG 2>&1
+reading "trade set, own target" scripts/checks/70_tradeset.py --rankings=outputs/season_ratings_${NAME}.parquet --team_effects=team --target_def=$TARGET --out=tradeset_${NAME}_owntarget
+reading "trade loss, own target" scripts/checks/73_tradeloss.py --alphas=incumbent=outputs/tradeset_${INC_NAME}_alpha.parquet,${NAME}=outputs/tradeset_${NAME}_owntarget_alpha.parquet --ref=incumbent
+if [ -n "$FAILED" ]; then
+  echo "=== $(date) chain done; these readings FAILED: ${FAILED#, }" >> $LOG
+  exit 1
+fi
 echo "=== $(date) chain done" >> $LOG

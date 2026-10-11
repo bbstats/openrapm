@@ -1,4 +1,4 @@
-"""The trade set (src/openrapm/tradeset.py) against simulated seasons with a known truth.
+"""The trade set (src/openrapm/trade_set.py) against simulated seasons with a known truth.
 
 Four things have to hold before any number this module produces means anything:
 
@@ -14,9 +14,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from openrapm import tradeset as ts_mod
-from openrapm.scoring import MAE_SCALE
+from openrapm import trade_set
 from openrapm.design import FEATURES, build_design
+from openrapm.scoring import MAE_SCALE
 from openrapm.simulate import simulate
 
 CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "box_counts": FEATURES,
@@ -32,7 +32,7 @@ def world():
                    stints_per_game=(20, 30), rho=0.9, turnover=0.35, seed=17, eps_var=0.2, leak=False)
     st, box = sim["stints"], sim["box"]
     wd = build_design(st, box, FEATURES, CFG)
-    return sim, wd, ts_mod.team_game_design(wd)
+    return sim, wd, trade_set.team_game_design(wd)
 
 
 def test_shares_sum_to_five_on_every_row(world):
@@ -88,27 +88,45 @@ def test_offset_takes_the_raw_sign(world):
     ids = ts.player_ids[:3]
     ratings = pd.DataFrame({"player_id": ids, "o": [1.0, 2.0, 3.0], "d": [-1.0, -2.0, -3.0],
                             "poss": [100.0, 200.0, 300.0]})
-    offset = ts_mod.offset_vector(ids, ratings)
+    offset = trade_set.offset_vector(ids, ratings)
     assert np.allclose(offset[:3], [1.0, 2.0, 3.0])
     assert np.allclose(offset[3:], [-1.0, -2.0, -3.0])
     # a player the table has no row for takes the fill, on both sides
-    filled = ts_mod.offset_vector(np.append(ids, -99), ratings, fill_o=0.5, fill_d=0.25)
+    filled = trade_set.offset_vector(np.append(ids, -99), ratings, fill_o=0.5, fill_d=0.25)
     assert filled[3] == 0.5 and filled[-1] == 0.25
 
 
-def test_replacement_fill_matches_the_holdout_rule(world):
+def test_replacement_fill_matches_the_year_over_year_rule(world):
     ratings = pd.DataFrame({"player_id": [1, 2, 3], "o": [-2.0, -4.0, 8.0], "d": [1.0, 3.0, -9.0],
                             "poss": [100.0, 300.0, 5000.0]})
-    fill_o, fill_d = ts_mod.replacement_fill(ratings, max_poss=500.0, shrink=0.25)
+    fill_o, fill_d = trade_set.replacement_fill(ratings, max_poss=500.0, shrink=0.25)
     assert fill_o == pytest.approx(0.25 * np.average([-2.0, -4.0], weights=[100.0, 300.0]))
     assert fill_d == pytest.approx(0.25 * np.average([1.0, 3.0], weights=[100.0, 300.0]))
+
+
+def test_missed_is_the_root_mean_square_correction_on_the_mean_absolute_scale():
+    assert trade_set.missed(np.array([1.0, -3.0])) == pytest.approx(MAE_SCALE * np.sqrt(5.0))
+    assert np.isnan(trade_set.missed(np.array([])))
+
+
+def test_eligible_corrections_keep_the_players_with_evidence_and_tier_them():
+    table = pd.DataFrame({"player_id": [1, 1, 2, 3], "season": 2024, "side": ["offense", "defense", "offense",
+                                                                              "offense"],
+                          "eligible": [True, True, True, False], "without_poss": [5.0, 5.0, 0.0, 9.0],
+                          "poss_on": [2000.0, 2000.0, 300.0, 800.0], "alpha_good": [0.5, -0.2, 1.0, 2.0]})
+    rows = trade_set.eligible_corrections(table)
+    assert list(rows.index) == [(1, 2024, "defense"), (1, 2024, "offense")]
+    assert set(rows.tier) == {"over 1,500 possessions"}
+    quality = pd.Series(["top 30"], index=pd.MultiIndex.from_tuples([(1, 2024)]))
+    assert set(trade_set.eligible_corrections(table, quality=quality).tier) == {"top 30"}
+    assert set(trade_set.eligible_corrections(table, quality=quality.iloc[:0]).tier) == {"no rating"}
 
 
 def _truth_offset(sim, ts):
     """The simulator's own player impacts, in the design's column order and the model's raw sign."""
     truth = (sim["truth"]["ps"].groupby("player_id")[["impact_O", "impact_D"]].mean().reset_index()
              .rename(columns={"impact_O": "o", "impact_D": "d"}))
-    return ts_mod.offset_vector(ts.player_ids, truth)
+    return trade_set.offset_vector(ts.player_ids, truth)
 
 
 def test_a_deliberately_wrong_rating_is_corrected_in_the_right_direction(world):
@@ -124,7 +142,7 @@ def test_a_deliberately_wrong_rating_is_corrected_in_the_right_direction(world):
     n = ts.n_players
     rng = np.random.default_rng(4)
     error = rng.normal(0.0, 1.5, 2 * n)
-    alpha, _ = ts_mod.fit_alpha(ts, truth + error, lam=500.0, free_scale=False)
+    alpha, _ = trade_set.fit_alpha(ts, truth + error, lam=500.0, free_scale=False)
 
     for side, block in (("offense", slice(0, n)), ("defense", slice(n, 2 * n))):
         wanted, got = -error[block], alpha[block]
@@ -142,8 +160,8 @@ def test_a_rating_that_is_too_wide_is_read_as_a_scale_not_as_alphas(world):
     sim, _, ts = world
     truth = _truth_offset(sim, ts)
     wide = 1.5 * truth
-    alpha_free, free = ts_mod.fit_alpha(ts, wide, lam=2000.0, free_scale=True)
-    alpha_pinned, _ = ts_mod.fit_alpha(ts, wide, lam=2000.0, free_scale=False)
+    alpha_free, free = trade_set.fit_alpha(ts, wide, lam=2000.0, free_scale=True)
+    alpha_pinned, _ = trade_set.fit_alpha(ts, wide, lam=2000.0, free_scale=False)
     scale_off = 1.0 + free[0]
     assert 0.5 < scale_off < 0.95, f"the offensive scale did not come back below one: {scale_off:.3f}"
     # pinned, the tilt has to go somewhere, and where it goes is a correlation with the rating itself
@@ -170,9 +188,9 @@ def test_exposure_counts_games_the_team_played_without_him(world):
                                       if (team_of[r > 0] >= 0).any() else -1 for r in dense_off],
                          "team_def": [np.bincount(team_of[r > 0][team_of[r > 0] >= 0]).argmax()
                                       if (team_of[r > 0] >= 0).any() else -1 for r in dense_def]})
-    exposure = ts_mod.exposure_table(ts, rows, team_of_player, rated)
+    exposure = trade_set.exposure_table(ts, rows, team_of_player, rated)
 
-    assert set(exposure.side) == set(ts_mod.SIDES)
+    assert set(exposure.side) == set(trade_set.SIDES)
     assert (exposure.without_poss >= 0).all()
     assert (exposure.with_poss >= 0).all()
     offense = exposure[exposure.side == "offense"].set_index("player_id")
@@ -189,7 +207,7 @@ def test_eligibility_ignores_players_who_dressed_and_never_played():
         "team_id":   [10, 11, 10, 10, 11],
         "poss_on":   [900.0, 0.0, 400.0, 50.0, 2000.0],
     })
-    out = ts_mod.eligibility(roles, 2024, min_poss=100.0)
+    out = trade_set.eligibility(roles, 2024, min_poss=100.0)
     assert sorted(out.player_id) == [1, 2, 4], "a zero-possession roster row changed who is eligible"
     assert int(out[out.player_id == 1].team_id.iloc[0]) == 10
     assert 3 not in set(out.player_id), "a player under the possession threshold stayed eligible"
@@ -198,7 +216,7 @@ def test_eligibility_ignores_players_who_dressed_and_never_played():
 def test_a_mid_season_trade_is_not_eligible():
     roles = pd.DataFrame({"player_id": [1, 1], "season": [2024, 2024], "team_id": [10, 11],
                           "poss_on": [800.0, 700.0]})
-    assert len(ts_mod.eligibility(roles, 2024)) == 0
+    assert len(trade_set.eligibility(roles, 2024)) == 0
 
 
 def test_trade_loss_reads_only_players_with_evidence():
@@ -208,7 +226,7 @@ def test_trade_loss_reads_only_players_with_evidence():
         "with_poss": [2000.0, 600.0, 300.0, 1000.0], "without_poss": [1000.0, 500.0, 0.0, 400.0],
         "eligible": [True, True, True, False],
     })
-    loss = ts_mod.trade_loss(table)
+    loss = trade_set.trade_loss(table)
     pooled = loss[loss.tier == "all"].iloc[0]
     assert pooled.players == 2, "a player with no without-games or no eligibility was counted"
     assert pooled.missed == pytest.approx(MAE_SCALE * 1.0)
@@ -240,8 +258,8 @@ def _team_of_rows(sim, ts):
 def test_team_columns_name_one_team_per_side_per_row(world):
     sim, _, ts = world
     rows = _team_of_rows(sim, ts)
-    per_season, names = ts_mod.team_columns(ts, rows, per_season=True)
-    pooled, pooled_names = ts_mod.team_columns(ts, rows, per_season=False)
+    per_season, names = trade_set.team_columns(ts, rows, per_season=True)
+    pooled, pooled_names = trade_set.team_columns(ts, rows, per_season=False)
     # exactly two entries per row: the team on offence and the team defending
     assert np.allclose(np.asarray(per_season.sum(axis=1)).ravel(), 2.0)
     assert np.allclose(np.asarray(pooled.sum(axis=1)).ravel(), 2.0)
@@ -264,11 +282,11 @@ def test_team_terms_take_the_team_level_away_from_the_players(world):
     truth = _truth_offset(sim, ts)
     rng = np.random.default_rng(7)
     error = rng.normal(0.0, 1.5, 2 * ts.n_players)
-    extra, _ = ts_mod.team_columns(ts, rows, per_season=True)
+    extra, _ = trade_set.team_columns(ts, rows, per_season=True)
 
-    gram, rhs, n_free = ts_mod.normal_equations(ts, truth + error, free_scale=False, extra=extra)
-    with_teams, _ = ts_mod.solve_alpha(gram, rhs, ts.n_players, n_free, lam=500.0)
-    without_teams, _ = ts_mod.fit_alpha(ts, truth + error, lam=500.0, free_scale=False)
+    gram, rhs, n_free = trade_set.normal_equations(ts, truth + error, free_scale=False, extra=extra)
+    with_teams, _ = trade_set.solve_alpha(gram, rhs, ts.n_players, n_free, lam=500.0)
+    without_teams, _ = trade_set.fit_alpha(ts, truth + error, lam=500.0, free_scale=False)
     assert not np.allclose(with_teams, without_teams, atol=1e-6), "the team terms did not bind"
 
     n = ts.n_players
@@ -279,19 +297,20 @@ def test_team_terms_take_the_team_level_away_from_the_players(world):
         pooled = pd.Series(lineup * ts.w).groupby(label).sum() / pd.Series(ts.w).groupby(label).sum()
         return float(pooled.std())
 
-    assert team_level_spread(with_teams) < team_level_spread(without_teams),         "the team-level part of alpha did not move to the team columns"
+    assert team_level_spread(with_teams) < team_level_spread(without_teams), (
+        "the team-level part of alpha did not move to the team columns")
 
 
 def test_trade_loss_with_no_evidence_returns_the_schema_not_an_empty_frame():
     """`--block=0` fits one season alone, so nobody's team plays a neighbouring game without him.
     That is an empty answer, not a failure -- but a frame with no COLUMNS reaches the caller as
-    `KeyError: 'side'`, which reads like a broken fit.  scripts/70_tradeset.py groups this by side."""
+    `KeyError: 'side'`, which reads like a broken fit.  scripts/checks/70_tradeset.py groups this by side."""
     empty = pd.DataFrame({"eligible": pd.Series(dtype=bool), "without_poss": pd.Series(dtype=float),
                           "poss_on": pd.Series(dtype=float), "with_poss": pd.Series(dtype=float),
                           "alpha_good": pd.Series(dtype=float), "season": pd.Series(dtype="int64"),
                           "side": pd.Series(dtype=object)})
-    loss = ts_mod.trade_loss(empty)
+    loss = trade_set.trade_loss(empty)
     assert loss.empty
-    assert list(loss.columns) == list(ts_mod.LOSS_COLUMNS)
+    assert list(loss.columns) == list(trade_set.LOSS_COLUMNS)
     # the shape the caller actually asks of it
     assert loss.groupby(["side", "tier"], as_index=False).agg(seasons=("season", "nunique")).empty

@@ -49,11 +49,12 @@ import pandas as pd
 import scipy.sparse as sp
 
 from .rapm import solve_ridge
-from .scoring import MAE_SCALE      # a mean square on the typical-miss scale
+from .scoring import MAE_SCALE, replacement_level  # a mean square on the typical-miss scale; the fill rule
 
 __all__ = ["TradeSet", "team_game_design", "replacement_fill", "offset_vector", "fit_alpha",
            "normal_equations", "solve_alpha", "rating_columns", "team_columns", "exposure_table",
-           "eligibility", "trade_loss", "CONTROL_PREFIXES", "SIDES", "LOSS_COLUMNS"]
+           "eligibility", "possession_tier", "trade_loss", "missed", "eligible_corrections", "CONTROL_PREFIXES",
+           "SIDES", "LOSS_COLUMNS"]
 
 # The fixed columns kept when the stints are pooled into team-games.  Each is constant within a
 # team-game, so its possession-weighted mean over the team-game is the value itself and nothing is
@@ -152,17 +153,12 @@ def team_game_design(wd, control_prefixes=CONTROL_PREFIXES) -> TradeSet:
 def replacement_fill(ratings, max_poss: float = 500.0, shrink: float = 0.25) -> tuple:
     """What a player the rated season's table has no row for is worth, per side, in raw sign.
 
-    The same rule as `holdout.ReplacementSystem`: the possession-weighted mean rating of the table's
-    own players under `max_poss` possessions, times `shrink`.  The year-over-year test settled on a
-    quarter of that level, the only depth better in both directions.  `ratings` is one season, with
-    columns `o`, `d` (raw sign: `d` is points allowed) and `poss`.
+    The year-over-year test's rule (`scoring.replacement_level`): the possession-weighted mean rating of the
+    table's own players under `max_poss` possessions, times `shrink`, here a quarter by default, the only depth
+    better in both directions.  `ratings` is one season, with columns `o`, `d` (raw sign: `d` is points allowed)
+    and `poss`.
     """
-    low = ratings[(ratings.poss > 0) & (ratings.poss < float(max_poss))]
-    if len(low) == 0:
-        return 0.0, 0.0
-    weight = low.poss.to_numpy(dtype=float)
-    return (float(shrink) * float(np.average(low.o, weights=weight)),
-            float(shrink) * float(np.average(low.d, weights=weight)))
+    return replacement_level(ratings, max_poss=max_poss, shrink=shrink)
 
 
 def offset_vector(player_ids, ratings, fill_o: float = 0.0, fill_d: float = 0.0) -> np.ndarray:
@@ -170,7 +166,7 @@ def offset_vector(player_ids, ratings, fill_o: float = 0.0, fill_d: float = 0.0)
 
     Raw sign throughout: `o` adds points scored and `d` adds points ALLOWED, which is the sign the
     design's defensive columns carry.  A rating table stored positive-good has already had its
-    defensive column negated on the way in (`scripts/63_yoy.py: load_table`); negating it a second
+    defensive column negated on the way in (`data.tables.load_ratings`); negating it a second
     time here would double the defensive signal and look like a result.
     """
     aligned = (pd.DataFrame({"player_id": np.asarray(player_ids, dtype=np.int64)})
@@ -214,7 +210,7 @@ def team_columns(ts: TradeSet, team_of_row: pd.DataFrame, per_season: bool = Tru
     facts and a single column per team would force them to share one number.
     """
     # The same guard `exposure_table` has.  `team_of_row` is built from ONE side's design and reused
-    # for the other in scripts/70_tradeset.py; if the two ever stop agreeing row for row, every team
+    # for the other in scripts/checks/70_tradeset.py; if the two ever stop agreeing row for row, every team
     # column here is assembled against the wrong rows and the fit still returns numbers.
     if len(team_of_row) != len(ts.keys):
         raise ValueError("team_of_row must have one row per team-game, in the design's order")
@@ -413,3 +409,30 @@ def trade_loss(alpha_table: pd.DataFrame, min_without: float = 1.0) -> pd.DataFr
     pooled["tier"] = "all"
     by_tier = rows.groupby(["season", "side", "tier"], as_index=False).apply(one, include_groups=False)
     return pd.concat([pooled, by_tier], ignore_index=True)
+
+
+def missed(alpha: np.ndarray) -> float:
+    """The trade loss of one group of players: the root mean square correction on the mean-absolute scale,
+    MAE_SCALE x sqrt(mean(alpha^2)); NaN for an empty group.
+
+    Example: corrections of +1.0 and -3.0 points per 100 give 0.798 x sqrt((1 + 9) / 2) = 1.78.
+    """
+    return MAE_SCALE * float(np.sqrt(np.mean(np.square(alpha)))) if len(alpha) else np.nan
+
+
+def eligible_corrections(alpha_table: pd.DataFrame, min_without: float = 1.0,
+                         quality: pd.Series | None = None) -> pd.DataFrame:
+    """The corrections the trade loss reads, indexed (player_id, season, side) and sorted, each with a `tier`.
+
+    Eligible players with at least `min_without` possessions of their team playing without them.  `tier` is the
+    rated season's possession tier (`possession_tier`), or, given `quality` ((player_id, season) -> tier, as
+    `scoring.quality_tiers` returns), the player's quality tier, "no rating" for a player it does not name.
+    `alpha_table` is one scripts/checks/70_tradeset.py run's <out>_alpha.parquet.
+    """
+    rows = alpha_table[(alpha_table.eligible) & (alpha_table.without_poss >= min_without)].copy()
+    if quality is None:
+        rows["tier"] = possession_tier(rows.poss_on.to_numpy())
+    else:
+        key = pd.MultiIndex.from_arrays([rows.player_id.to_numpy(), rows.season.to_numpy()])
+        rows["tier"] = quality.reindex(key).fillna("no rating").to_numpy()
+    return rows.set_index(["player_id", "season", "side"]).sort_index()

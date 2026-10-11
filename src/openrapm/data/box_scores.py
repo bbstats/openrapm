@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+from ..design import SEASON_PHASES
 from .ingest import load_gamelog
 
 
@@ -24,7 +25,8 @@ def box_from_gamelog(gl: pd.DataFrame) -> pd.DataFrame:
         "fg3m": g["FG3M"].fillna(0).astype(float),
         "fg3_miss": (g["FG3A"].fillna(0) - g["FG3M"].fillna(0)).astype(float),
         "fg2m": (g["FGM"].fillna(0) - g["FG3M"].fillna(0)).astype(float),
-        "fg2_miss": ((g["FGA"].fillna(0) - g["FG3A"].fillna(0)) - (g["FGM"].fillna(0) - g["FG3M"].fillna(0))).astype(float),
+        "fg2_miss": ((g["FGA"].fillna(0) - g["FG3A"].fillna(0))
+                     - (g["FGM"].fillna(0) - g["FG3M"].fillna(0))).astype(float),
         "ftm": g["FTM"].fillna(0).astype(float),
         "ft_miss": (g["FTA"].fillna(0) - g["FTM"].fillna(0)).astype(float),
         "orb": g["OREB"].fillna(0).astype(float),
@@ -52,6 +54,19 @@ def season_box(seasons, phases, cfg) -> pd.DataFrame:
                 _BOX_CACHE[key] = box_from_gamelog(load_gamelog(s, p, cfg))
             parts.append(_BOX_CACHE[key])
     return pd.concat(parts, ignore_index=True)
+
+
+def main_team_by_minutes(season: int, cfg) -> dict:
+    """player_id -> the team he played the most minutes for in `season`, regular season and playoffs together.
+
+    The rule the year-over-year test's `movers` split and the checks' mover groups use: box-score minutes, where
+    `roles.main_teams` uses on-court possessions.  The two disagree on a handful of traded players, so each
+    check keeps the rule its numbers were made with.
+    """
+    box = season_box([season], list(SEASON_PHASES), cfg)
+    minutes = box.groupby(["player_id", "team_id"], as_index=False)["minutes"].sum()
+    most = minutes.sort_values("minutes").drop_duplicates("player_id", keep="last")
+    return dict(zip(most.player_id.astype(int), most.team_id.astype(int)))
 
 
 def player_names(box: pd.DataFrame, pbp_names: pd.DataFrame | None = None) -> pd.DataFrame:
@@ -84,7 +99,7 @@ def player_names(box: pd.DataFrame, pbp_names: pd.DataFrame | None = None) -> pd
             ptoks = ptoks[1:]
         p = " ".join(ptoks)
         if norm(fam) == norm(p) or norm(fam).startswith(norm(p)) or norm(p).startswith(norm(fam)):
-            out.append(name)                      # same family name (suffix / accent differences): keep the current name
+            out.append(name)                      # same family name (suffix or accent differs): keep the current one
         elif norm(p) == norm(first):
             out.append(p)                         # "Nene"
         else:

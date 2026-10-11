@@ -49,30 +49,9 @@ margin_clip: 25
 margin_bins: [-25, -15, -8, -3, 3, 8, 15, 25]   # 7 bins for the binned-margin robustness run
 time_halves: 2
 
-# The out-of-season criterion (src/openrapm/holdout.py; scripts/63_yoy.py runs it, and the retired
-# scripts/45_holdout.py did): hold out one season, train on the K nearest seasons either side of it,
-# predict its stints, score against actual points.
-# The one test in this project that is both external to the model and legal to select on.
-holdout:
-  first: 1998            # held-out seasons; 1997 and 2026 have neighbours on one side only
-  last: 2025
-  ks: [2, 4]             # training seasons around the held-out one: K=2 is {H-1, H+1}
-  lam: null              # null = lam_plugin; a list sweeps
-  level: home            # refit on the held-out season: "home" = intercept + home (what every earlier
-                         # script used); "full" = the whole fixed block (margin, garbage time, playoffs)
-  rank_bins: 10          # rank-calibration deciles
-  rank_min_poss: 1000    # a player needs this many training possessions to be ranked
-  bigs_edges: [0, 3, 4, 5, 11]      # --splits=bigs: number of top-tercile-bigness players among the ten
-  bench_edges: [0, 3, 5, 7, 11]     # --splits=bench: number of bench players (gs_pct below bench_gs_pct) among the ten
-  bench_gs_pct: 0.5
-  low_exposure: 500                 # --splits=tgexp: training possessions below which a player is "barely seen"
-  # --splits=tgexp: share of a TEAM-GAME's possessions played by those players.  Unlike `exposure_edges` this
-  # one is constant within a team-game, so the groups partition the criterion's own unit and their scores add
-  # up to the pooled score -- which is what makes it readable as "where did the pooled gain come from".
-  game_bench_share_edges: [0.0, 0.05, 0.15, 0.30, 1.01]
-  exposure_edges: [0, 1, 500, 1500, 4000, 1000000000]   # the --splits=exposure bins (smallest exposure on the floor)
-  consensus:
-    min_poss: 1000
+# The year-over-year test (scripts/checks/63_yoy.py) scores every season with a season on both sides of it,
+# 1998-2025 for the seasons above; it has no settings here (src/openrapm/commands/year_over_year.py,
+# src/openrapm/scoring.py).
 
 # The role prior (src/openrapm/data/roles.py, spm.py; FINDINGS 19).
 roles:

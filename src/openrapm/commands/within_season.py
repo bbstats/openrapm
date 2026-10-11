@@ -41,16 +41,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .. import box_prior, prior_rapm
-from .. import tradeset as trade_set
+from .. import box_prior, prior_rapm, trade_set
 from ..data.config import resolve
 from ..data.designs import DesignCache
 from ..data.panel import trainable_panel
 from ..data.roles import player_season_inputs, roles_path
 from ..data.tables import team_of_rows
 from ..features import CLOSENESS, NET, OFFC, PRIOR_FEATURES, add_features
-from ..holdout import Ratings, predict_season, score
-from ..scoring import armse
+from ..scoring import Ratings, armse, predict_season, score
 from ..seasoninputs import SeasonTables, SeasonWorld
 from ..settings import TEST
 
@@ -202,7 +200,7 @@ def score_test_games(rated: RatedWorld, full_points, test_idx: np.ndarray, cfg: 
                             "poss": table.possessions})
     ratings = ratings[ratings.poss > 0].reset_index(drop=True)
     fill_o, fill_d = trade_set.replacement_fill(ratings, max_poss=FILL[0], shrink=FILL[1])
-    result = score(predict_season(Ratings(ratings, fill_o=fill_o, fill_d=fill_d), design, level="home"))
+    result = score(predict_season(Ratings(ratings, fill_o=fill_o, fill_d=fill_d), design))
     pooled = trade_set.team_game_design(design)
     teams = team_of_rows(pooled.keys, cfg)
     n_players = pooled.n_players

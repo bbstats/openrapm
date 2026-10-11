@@ -96,7 +96,7 @@ Two more that are not in the chart:
   200-possession player's per-100 rates are otherwise mostly noise (`pad.py`, `exposure.py`).
 - **The consensus of public metrics is validation only.** It is read after every experiment and can
   veto one, and it is never a fitting target (`tests/test_vs_consensus.py`,
-  `scripts/64_consensus_report.py`).
+  `scripts/checks/64_consensus_report.py`).
 
 ---
 
@@ -106,8 +106,8 @@ Everything above has a knob, and two tests are allowed to turn one. Neither uses
 
 ```mermaid
 flowchart LR
-    R["Rate season H<br/>from H's own games"] --> YOY["<b>Year-over-year</b> — predict every stint of<br/>H-1 and H+1 from the ten ratings alone,<br/>refitting only the intercept and home edge.<br/>28 seasons x 2 directions = 56 observations.<br/>The prior may not have seen H-1 or H+1<br/>(<code>--exclude_neighbours=1</code>)<br/><code>scripts/63_yoy.py</code>"]
-    R --> TR["<b>The trade loss</b> — every player counted ONCE,<br/>as dollars misallocated in a trade,<br/>paired by season on the eligible intersection<br/><code>scripts/70_tradeset.py</code> + <code>73_tradeloss.py</code>"]
+    R["Rate season H<br/>from H's own games"] --> YOY["<b>Year-over-year</b> — predict every stint of<br/>H-1 and H+1 from the ten ratings alone,<br/>refitting only the intercept and home edge.<br/>28 seasons x 2 directions = 56 observations.<br/>The prior may not have seen H-1 or H+1<br/>(<code>--exclude_neighbours=1</code>)<br/><code>scripts/checks/63_yoy.py</code>"]
+    R --> TR["<b>The trade loss</b> — every player counted ONCE,<br/>as dollars misallocated in a trade,<br/>paired by season on the eligible intersection<br/><code>scripts/checks/70_tradeset.py</code> + <code>73_tradeloss.py</code>"]
     YOY --> D["<b>Adopt</b> only at z of -2 or below,<br/>with no gross consensus miss and<br/>the latest season's top 20 not worse.<br/>Ties go to the simpler version."]
     TR --> D
 ```

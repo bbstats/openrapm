@@ -22,8 +22,19 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 
-from ..design import (AWAY_SLOTS, HOME_SLOTS, POSS_COUNTERS, SEASON_PHASES, SLOT_COUNTERS, TARGETS, DesignSpec,
-                      WindowData, _order_games, build_design, ps_key)
+from ..design import (
+    AWAY_SLOTS,
+    HOME_SLOTS,
+    POSS_COUNTERS,
+    SEASON_PHASES,
+    SLOT_COUNTERS,
+    TARGETS,
+    DesignSpec,
+    WindowData,
+    _order_games,
+    build_design,
+    ps_key,
+)
 from .box_scores import season_box
 from .config import resolve
 from .shots import DEFENSE_TARGETS
@@ -154,7 +165,10 @@ def _build_piece(season: int, phase: str, cfg: dict) -> dict:
     for cols, own, opp in ((slice(0, 5), "poss_h", "poss_a"), (slice(5, 10), "poss_a", "poss_h")):
         po, pdd = st[own].to_numpy(), st[opp].to_numpy()
         for j in range(cols.start, cols.stop):
-            g_all.append(gi); x_all.append(slot_loc[:, j]); po_all.append(po); pd_all.append(pdd)
+            g_all.append(gi)
+            x_all.append(slot_loc[:, j])
+            po_all.append(po)
+            pd_all.append(pdd)
     gp = pd.DataFrame({"game_idx": np.concatenate(g_all), "psx_idx": np.concatenate(x_all),
                        "poss_off": np.concatenate(po_all), "poss_def": np.concatenate(pd_all)})
     gp = gp.groupby(["game_idx", "psx_idx"], as_index=False)[["poss_off", "poss_def"]].sum()
@@ -166,7 +180,8 @@ def _build_piece(season: int, phase: str, cfg: dict) -> dict:
     game_box = game_box.groupby(["game_idx", "psx_idx", "phase"], as_index=False)[features].sum()
     # possessions per local psx over regular-season games
     if phase == "RS":
-        psx_poss = np.bincount(gp["psx_idx"].to_numpy(), weights=gp["poss_off"].to_numpy(dtype=float), minlength=len(keys_u))
+        psx_poss = np.bincount(gp["psx_idx"].to_numpy(), weights=gp["poss_off"].to_numpy(dtype=float),
+                               minlength=len(keys_u))
     else:
         psx_poss = np.zeros(len(keys_u))
     # the counters, per side, as one matrix in the column order build_design uses
@@ -188,6 +203,65 @@ def _build_piece(season: int, phase: str, cfg: dict) -> dict:
                  counters_h=counters["h"], counters_a=counters["a"], pids_h=pids["h"], pids_a=pids["a"],
                  counters=counters, pids=pids)
     return piece
+
+
+def _player_units(psx_table: pd.DataFrame, player_unit: str) -> tuple[pd.DataFrame, np.ndarray]:
+    """(ps_table, ps_of_psx): the design's player columns and each player-season's column.
+
+    `player_unit` "window" gives one column per player over the whole block, "season" one per player-season.
+    """
+    if player_unit not in ("window", "season"):
+        raise ValueError(f"player_unit must be 'window' or 'season', got {player_unit!r}")
+    if player_unit == "window":
+        players = np.unique(psx_table["player_id"].to_numpy())
+        ps_table = pd.DataFrame({"player_id": players, "ps_idx": np.arange(len(players), dtype=np.int64)})
+        return ps_table, pd.Index(players).get_indexer(psx_table["player_id"].to_numpy())
+    ps_table = psx_table[["psx_idx", "player_id", "season"]].rename(columns={"psx_idx": "ps_idx"}).copy()
+    return ps_table, psx_table["psx_idx"].to_numpy()
+
+
+def _season_of_units(psx_poss: np.ndarray, ps_of_psx: np.ndarray, season_of_psx: np.ndarray, n_ps: int,
+                     player_unit: str) -> np.ndarray:
+    """Each player column's season index: its own season, or under "window" units the season of the block in
+    which the player had the most regular-season possessions."""
+    if player_unit != "window":
+        return season_of_psx
+    season_of_ps = np.zeros(n_ps, dtype=np.int64)
+    best = np.full(n_ps, -1.0)
+    for k in np.argsort(psx_poss):
+        i = ps_of_psx[k]
+        if psx_poss[k] >= best[i]:
+            best[i], season_of_ps[i] = psx_poss[k], season_of_psx[k]
+    return season_of_ps
+
+
+def _counters_frame(pieces: list, sides: list, half: np.ndarray, counter_cols) -> pd.DataFrame | None:
+    """The offence's per-possession counters of every kept row (home-offence rows, then away), with the offensive
+    five's ids (pid_s1..pid_s5) and the game's half; None when the stints carry no counters.  `counter_cols`
+    keeps only those counters."""
+    if not pieces[0]["have"]:
+        return None
+    ccols = pieces[0]["ccols"]
+    take = None
+    if counter_cols is not None:
+        want = set(counter_cols)
+        take = np.array([j for j, c in enumerate(ccols) if c in want], dtype=np.int64)
+        ccols = [ccols[j] for j in take]
+    n_off = np.cumsum([0] + [p["n_st"] for p in pieces])
+    blocks = []
+    for s, side in zip(sides, ("h", "a")):
+        keep = np.zeros(n_off[-1], dtype=bool)
+        keep[s["stint"]] = True
+        for p, a, b in zip(pieces, n_off[:-1], n_off[1:]):
+            rows_i = np.flatnonzero(keep[a:b])
+            blocks.append(p["counters"][side][rows_i] if take is None
+                          else p["counters"][side][np.ix_(rows_i, take)])
+    counters = pd.DataFrame(np.vstack(blocks), columns=ccols)
+    P = np.vstack([np.vstack([p["pids"][side] for p in pieces])[s["stint"]] for s, side in zip(sides, ("h", "a"))])
+    for k in range(5):
+        counters[f"pid_s{k + 1}"] = P[:, k]
+    counters["half"] = pd.Series(half, dtype=object)
+    return counters
 
 
 def build_window_cached(seasons, cfg, phases=SEASON_PHASES, gt_weight=None, target="pts",
@@ -217,15 +291,7 @@ def build_window_cached(seasons, cfg, phases=SEASON_PHASES, gt_weight=None, targ
     ssn = sorted(psx_table["season"].unique().tolist())
     season_of_psx = np.searchsorted(np.asarray(ssn), psx_table["season"].to_numpy())
     player_unit = str(cfg.get("player_unit", "season"))
-    if player_unit not in ("window", "season"):
-        raise ValueError(f"player_unit must be 'window' or 'season', got {player_unit!r}")
-    if player_unit == "window":
-        players = np.unique(psx_table["player_id"].to_numpy())
-        ps_table = pd.DataFrame({"player_id": players, "ps_idx": np.arange(len(players), dtype=np.int64)})
-        ps_of_psx = pd.Index(players).get_indexer(psx_table["player_id"].to_numpy())
-    else:
-        ps_table = psx_table[["psx_idx", "player_id", "season"]].rename(columns={"psx_idx": "ps_idx"}).copy()
-        ps_of_psx = psx_table["psx_idx"].to_numpy()
+    ps_table, ps_of_psx = _player_units(psx_table, player_unit)
     psx_table["ps_idx"] = ps_of_psx
     n_ps = len(ps_table)
 
@@ -233,7 +299,8 @@ def build_window_cached(seasons, cfg, phases=SEASON_PHASES, gt_weight=None, targ
     loc2blk = [np.searchsorted(keys, p["keys_u"]) for p in pieces]
     g_off = np.cumsum([0] + [p["n_games"] for p in pieces])[:-1]
     ps_slots = [ps_of_psx[m[p["slot_loc"]]] for p, m in zip(pieces, loc2blk)]        # (n_st, 10) Z units
-    home_ps = np.concatenate([s[:, :5] for s in ps_slots]); away_ps = np.concatenate([s[:, 5:] for s in ps_slots])
+    home_ps = np.concatenate([s[:, :5] for s in ps_slots])
+    away_ps = np.concatenate([s[:, 5:] for s in ps_slots])
     is_po = np.concatenate([p["is_po"] for p in pieces])
     neutral = np.concatenate([p["neutral"] for p in pieces])
     is_gt = np.concatenate([p["is_gt"] for p in pieces])
@@ -257,10 +324,13 @@ def build_window_cached(seasons, cfg, phases=SEASON_PHASES, gt_weight=None, targ
         sides.append(dict(off=off_ps[keep], de=def_ps[keep], poss=poss[keep], den=den[keep], num=num[keep],
                           home=np.where(neutral[keep], 0.0, sign), margin=sign * margin_h[keep],
                           stint=np.flatnonzero(keep), is_home_off=sign > 0))
-    off = np.concatenate([s["off"] for s in sides]); de = np.concatenate([s["de"] for s in sides])
-    poss = np.concatenate([s["poss"] for s in sides]); den = np.concatenate([s["den"] for s in sides])
+    off = np.concatenate([s["off"] for s in sides])
+    de = np.concatenate([s["de"] for s in sides])
+    poss = np.concatenate([s["poss"] for s in sides])
+    den = np.concatenate([s["den"] for s in sides])
     num = np.concatenate([s["num"] for s in sides])
-    home = np.concatenate([s["home"] for s in sides]); margin = np.concatenate([s["margin"] for s in sides])
+    home = np.concatenate([s["home"] for s in sides])
+    margin = np.concatenate([s["margin"] for s in sides])
     stint_i = np.concatenate([s["stint"] for s in sides])
     is_home_off = np.concatenate([np.full(len(s["stint"]), s["is_home_off"]) for s in sides])
     n = len(den)
@@ -275,7 +345,8 @@ def build_window_cached(seasons, cfg, phases=SEASON_PHASES, gt_weight=None, targ
     r_game = r_game_st[stint_i]
 
     f_names = ["home"] + [f"int_{s}" for s in ssn] + ["is_po", "po_home", "is_gt", "margin", "margin_frem"]
-    f_cols = [home] + [(r_season == k).astype(float) for k in range(len(ssn))] + [r_po, r_po * home, r_gt, r_margin, r_margin * r_frem]
+    f_cols = ([home] + [(r_season == k).astype(float) for k in range(len(ssn))]
+              + [r_po, r_po * home, r_gt, r_margin, r_margin * r_frem])
     Fd = np.column_stack(f_cols)
     n_f = Fd.shape[1]
     # X = [Z_O | Z_D | F | G] written straight in CSR form: every row has the same pattern -- its five offensive
@@ -293,8 +364,8 @@ def build_window_cached(seasons, cfg, phases=SEASON_PHASES, gt_weight=None, targ
         Xm.has_sorted_indices = True
         return Xm
 
-    Z = sp.csr_matrix((np.ones(n * 10), np.hstack([lo, ld + n_ps]).ravel(), np.arange(0, n * 10 + 1, 10, dtype=np.int64)),
-                      shape=(n, 2 * n_ps))
+    Z = sp.csr_matrix((np.ones(n * 10), np.hstack([lo, ld + n_ps]).ravel(),
+                       np.arange(0, n * 10 + 1, 10, dtype=np.int64)), shape=(n, 2 * n_ps))
     Z.has_sorted_indices = True
     groups = groups_st[stint_i]
 
@@ -311,15 +382,7 @@ def build_window_cached(seasons, cfg, phases=SEASON_PHASES, gt_weight=None, targ
     for p, m in zip(pieces, loc2blk):
         psx_poss[m] += p["psx_poss"]
     ps_poss = np.bincount(ps_of_psx, weights=psx_poss, minlength=n_ps)
-    if player_unit == "window":
-        season_of_ps = np.zeros(n_ps, dtype=np.int64)
-        best = np.full(n_ps, -1.0)
-        for k in np.argsort(psx_poss):
-            i = ps_of_psx[k]
-            if psx_poss[k] >= best[i]:
-                best[i], season_of_ps[i] = psx_poss[k], season_of_psx[k]
-    else:
-        season_of_ps = season_of_psx
+    season_of_ps = _season_of_units(psx_poss, ps_of_psx, season_of_psx, n_ps, player_unit)
     thr = float(cfg.get("low_poss_threshold", 500))
     thr_hi = float(cfg.get("starter_poss_threshold", 1500))
     low = np.flatnonzero(ps_poss < thr)
@@ -336,38 +399,18 @@ def build_window_cached(seasons, cfg, phases=SEASON_PHASES, gt_weight=None, targ
                          "phase": pd.Series(np.where(r_po > 0, "PO", "RS").astype(object), dtype=object),
                          "poss": poss, "den": den, "is_home_off": is_home_off, "is_gt": r_gt > 0,
                          "stint": stint_i, "half": pd.Series(game_half[r_game], dtype=object)})
-    counters = None
-    if pieces[0]["have"]:
-        ccols = pieces[0]["ccols"]
-        take = None
-        if counter_cols is not None:
-            want = set(counter_cols)
-            take = np.array([j for j, c in enumerate(ccols) if c in want], dtype=np.int64)
-            ccols = [ccols[j] for j in take]
-        n_off = np.cumsum([0] + [p["n_st"] for p in pieces])
-        blocks = []
-        for s, side in zip(sides, ("h", "a")):
-            keep = np.zeros(n_off[-1], dtype=bool)
-            keep[s["stint"]] = True
-            for p, a, b in zip(pieces, n_off[:-1], n_off[1:]):
-                rows_i = np.flatnonzero(keep[a:b])
-                blocks.append(p["counters"][side][rows_i] if take is None
-                              else p["counters"][side][np.ix_(rows_i, take)])
-        counters = pd.DataFrame(np.vstack(blocks), columns=ccols)
-        P = np.vstack([np.vstack([p["pids"][side] for p in pieces])[s["stint"]] for s, side in zip(sides, ("h", "a"))])
-        for k in range(5):
-            counters[f"pid_s{k + 1}"] = P[:, k]
-        counters["half"] = pd.Series(rows["half"].to_numpy(), dtype=object)
+    counters = _counters_frame(pieces, sides, rows["half"].to_numpy(), counter_cols)
     parts = dict(Z=Z, F=Fd, lineup_o=lo, lineup_d=ld, game_idx=r_game.astype(np.int64))
-    return WindowData(X_src=make_X, y=y, w=w, groups=groups, spec=spec, game_box=game_box, game_poss=game_poss, rows=rows,
-                      games=games, counters=counters, parts=parts)
+    return WindowData(X_src=make_X, y=y, w=w, groups=groups, spec=spec, game_box=game_box, game_poss=game_poss,
+                      rows=rows, games=games, counters=counters, parts=parts)
 
 
 class DesignCache:
-    """One season's design on one target, built from the cached pieces and kept for the next few requests.
+    """One season's design (or a run of seasons') on one target, built from the cached pieces and kept for the
+    next few requests.
 
     `target` is a `design.TARGETS` key ("pts", "xpts_ft") or a `data.shots.DEFENSE_TARGETS` key ("x3def",
-    "x3def_w0.25"), which reprices the same season's points design.  Once `keep` designs are held the cache
+    "x3def_w0.25"), which reprices the same seasons' points design.  Once `keep` designs are held the cache
     empties: a season's design is hundreds of megabytes, and a build asks for them in season order.
     """
 
@@ -377,9 +420,15 @@ class DesignCache:
 
     def season(self, season: int, target: str) -> WindowData:
         """The design of `season` on `target`, built on first request."""
-        key = (int(season), target)
+        return self.block([season], target)
+
+    def block(self, seasons, target: str) -> WindowData:
+        """One design over several seasons on `target` (rows of every season, one column per player), built on
+        first request.  The trade set (scripts/checks/70_tradeset.py) fits a season and its two neighbours
+        together."""
+        key = (tuple(int(season) for season in seasons), target)
         if key not in self._designs:
-            design = self._build(int(season), target)
+            design = self._build(list(key[0]), target)
             if len(self._designs) >= self.keep:
                 self._designs.clear()
             self._designs[key] = design
@@ -389,10 +438,10 @@ class DesignCache:
         """Forget every held design."""
         self._designs.clear()
 
-    def _build(self, season: int, target: str) -> WindowData:
+    def _build(self, seasons: list, target: str) -> WindowData:
         if target in DEFENSE_TARGETS:
-            design = DEFENSE_TARGETS[target]([season], self.cfg, self.season(season, "pts"))
+            design = DEFENSE_TARGETS[target](seasons, self.cfg, self.block(seasons, "pts"))
             return design[0] if isinstance(design, tuple) else design
         if target not in TARGETS:
             raise KeyError(f"unknown target {target!r}; have {sorted(TARGETS)} and {sorted(DEFENSE_TARGETS)}")
-        return build_window([season], self.cfg, target=target)
+        return build_window(seasons, self.cfg, target=target)

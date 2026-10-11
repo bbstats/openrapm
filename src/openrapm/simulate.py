@@ -36,7 +36,7 @@ def simulate(n_seasons=2, n_teams=10, players_per_team=12, games_per_season=150,
              po_series_per_season=0, delta_O=None, delta_D=None, first_season=2001, rho=None, turnover=0.0):
     """Return dict(stints=DataFrame, box=DataFrame, truth=dict).
 
-    `rho` and `turnover` exist for the out-of-season holdout test (holdout.py), which needs a player's
+    `rho` and `turnover` exist for the year-over-year test (openrapm.scoring), which needs a player's
     talent to PERSIST across seasons and rosters to CHANGE:
       rho       None (default) redraws every player's rates and impacts independently each season, the
                 original behaviour, which leaves the fixtures in tests/test_core.py byte-identical.  A

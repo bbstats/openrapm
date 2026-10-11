@@ -23,7 +23,7 @@ rows use the whole regular season.  Everything is padded through pad.py, per the
 The stints carry the counts by lineup slot (design.SLOT_COUNTERS); this module turns them into
 expectations at window-build time, because the block (and therefore the other half) is a property
 of the training block, not of a season.  Each target is a callable `(seasons, cfg, wd_pts) ->
-(WindowData, report)` that holdout.Context.design accepts.
+(WindowData, report)`, called by `data.designs.DesignCache.block` with the block's points design.
 
 What is used: the two defensive targets in `DEFENSE_TARGETS` (`def_three_design`) and the block shot
 totals of `player_shot_frame`.

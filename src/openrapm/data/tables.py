@@ -9,8 +9,11 @@ fills them.
 
 `team_of_rows` names the two teams of every team-game row from the per-game stint diagnostics.
 
-`load_ratings` reads a ratings table as player_id, season, o, d in raw sign, the form the swap test and step 5
-compare lineups in.
+`load_ratings` reads a ratings table as player_id, season, o, d in raw sign, the form the swap test, step 5 and
+the year-over-year test compare lineups in.
+
+`load_consensus` reads data/external/consensus.csv, the consensus of modern all-in-one metrics the ratings are
+checked against (openrapm.consensus) and never fitted to.
 """
 from __future__ import annotations
 
@@ -21,6 +24,7 @@ from ..swap_test import ratings_in_raw_sign
 from .config import resolve, resolve_path
 
 PLAYER_NAMES = "params/player_names.csv"
+CONSENSUS_FILE = "data/external/consensus.csv"
 
 
 def player_names(cfg: dict) -> pd.DataFrame:
@@ -52,10 +56,25 @@ def team_of_rows(keys: pd.DataFrame, cfg: dict) -> pd.DataFrame:
                          "team_def": np.where(is_home_off, away, home)})
 
 
-def load_ratings(path, columns: str = "rating") -> pd.DataFrame:
+def load_ratings(path, columns: str = "rating", possessions: bool = False) -> pd.DataFrame:
     """player_id, season, o, d in raw sign (d = points allowed) from a ratings table stored positive-good.
 
     `columns` "rating" reads rating_off / rating_def, "prior" reads prior_off / prior_def
-    (`swap_test.ratings_in_raw_sign`).
+    (`swap_test.ratings_in_raw_sign`).  `possessions` adds `poss`, the table's offensive possessions
+    (`poss_off`), which a fill (scoring.replacement_level) and the year-over-year test's coverage read.
+
+    Example: a row with rating_off +2.0, rating_def +1.5 and poss_off 1,800 reads o = +2.0, d = -1.5 and, with
+    `possessions`, poss = 1,800.
     """
-    return ratings_in_raw_sign(pd.read_parquet(path), columns)
+    table = pd.read_parquet(path)
+    ratings = ratings_in_raw_sign(table, columns)
+    if not possessions:
+        return ratings
+    if "poss_off" not in table.columns:
+        raise ValueError(f"{path}: the ratings table lacks poss_off")
+    return ratings.assign(poss=table.poss_off.astype(float))
+
+
+def load_consensus(cfg: dict) -> pd.DataFrame:
+    """data/external/consensus.csv as it is: one row per player of 2024-26, the consensus's ratings by name."""
+    return pd.read_csv(resolve_path(cfg, CONSENSUS_FILE))

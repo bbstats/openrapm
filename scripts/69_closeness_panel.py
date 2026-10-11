@@ -38,26 +38,30 @@ evidence.  They are context, not quality: they say what conditions his statistic
 Adds the three columns to outputs/<panel>.parquet in place (additive; every existing feature list is
 explicit, so nothing else changes).  `--dry_run=1` reports and writes nothing.
 """
-import sys
+import argparse
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
-from openrapm.data.config import load_config, resolve  # noqa: E402
+from openrapm.commands.console import use_utf8
+from openrapm.data.config import load_config, resolve
 
+ROOT = Path(__file__).resolve().parents[1]
 NEW = ["gt_share", "closeness", "abs_margin"]
 # lineup slot -> (his team's possessions, the opponent's possessions)
 SLOTS = ([(f"h{i}", "poss_h", "poss_a") for i in range(1, 6)]
          + [(f"a{i}", "poss_a", "poss_h") for i in range(1, 6)])
 
 
-# The shared command line (scripts/_cli.py): `flag` records every name it is asked for so
-# `check_flags` below can refuse one that was never asked for.  A misspelled flag used to be
-# ignored silently, which is how a run looks right and is wrong.
-from _cli import check_flags, flag as _flag, switch   # noqa: E402
+def parse_args(argv=None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Add each player-season's score-state exposure to the season "
+                                                 "panel.", allow_abbrev=False)
+    parser.add_argument("--first", default=1997, help="default %(default)s")
+    parser.add_argument("--last", default=2026, help="default %(default)s")
+    parser.add_argument("--panel", default="role_panel_season", help="outputs/<PANEL>.parquet (default %(default)s)")
+    parser.add_argument("--dry_run", default="0", help="1: report and write nothing (default %(default)s)")
+    return parser.parse_args(argv)
 
 
 def exposure(seasons) -> pd.DataFrame:
@@ -102,10 +106,11 @@ def exposure(seasons) -> pd.DataFrame:
 
 
 def main():
-    check_flags()      # refuse a flag this script does not understand (scripts/_cli.py)
-    first, last = int(_flag("first", 1997)), int(_flag("last", 2026))
-    name = _flag("panel", "role_panel_season")
-    dry = _flag("dry_run", "0") not in ("0", "no", "false")
+    use_utf8()
+    args = parse_args()
+    first, last = int(args.first), int(args.last)
+    name = args.panel
+    dry = args.dry_run not in ("0", "no", "false")
     path = ROOT / "outputs" / f"{name}.parquet"
 
     panel = pd.read_parquet(path)

@@ -33,14 +33,22 @@ Everything skips cleanly if the ratings or the consensus file are not there.
 """
 import json
 import os
-import re
-import unicodedata
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 from scipy.stats import spearmanr
+
+from openrapm.consensus import (
+    MAX_DEFENCE_SPREAD,
+    MIN_RANK_AGREEMENT,
+    MIN_TOP_FIVE_SHARED,
+    OFFENCE_SPREAD,
+    SEASONS,
+    matched,
+    with_ranks,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 RATINGS_ENV = "OPENRAPM_RATINGS"
@@ -51,16 +59,6 @@ SHIPPED_JSON = ROOT / "docs" / "data" / "ratings.json"
 JSON_COLUMNS = {"s": "season", "n": "player_name", "o": "rating_off", "d": "rating_def", "t": "rating_total",
                 "p": "poss_off", "id": "player_id"}
 CONSENSUS = ROOT / "data" / "external" / "consensus.csv"
-SEASONS = [2024, 2025, 2026]        # what the consensus snapshot covers
-MIN_POSS = 1000
-SUFFIX = re.compile(r"\b(jr|sr|ii|iii|iv|v)\b")
-
-
-def _norm(s: str) -> str:
-    s = unicodedata.normalize("NFKD", str(s))
-    s = "".join(c for c in s if not unicodedata.combining(c)).lower()
-    s = s.replace("&", " ").replace("-", " ").replace("'", "").replace(".", " ")
-    return re.sub(r"\s+", " ", SUFFIX.sub(" ", s)).strip()
 
 
 def _box():
@@ -95,26 +93,6 @@ def _bigness(player_ids):
     return pd.Series(player_ids).map(g.set_index("player_id").bigness).to_numpy()
 
 
-def _pooled(rat):
-    """The season board pooled over SEASONS, each player weighted by the possessions behind him.
-
-    A possession-weighted mean of his season ratings, which is what a multi-season rating of the
-    same player is: the seasons he played more of count for more.
-    """
-    d = rat[rat.season.isin(SEASONS) & rat.player_name.notna()].copy()
-    w = d["poss_off"].to_numpy(dtype=float)
-    out = {}
-    for c in ("rating_total", "rating_off", "rating_def"):
-        d["_wv"] = d[c].to_numpy(dtype=float) * w
-        out[c] = d.groupby("player_id")["_wv"].sum() / d.groupby("player_id")["poss_off"].sum()
-    g = pd.DataFrame(out)
-    g["poss_off"] = d.groupby("player_id")["poss_off"].sum()
-    # the name he went by in the latest of those seasons
-    nm = d.sort_values("season").drop_duplicates("player_id", keep="last").set_index("player_id")["player_name"]
-    g["player_name"] = nm
-    return g.reset_index()
-
-
 def _from_site_json(path) -> pd.DataFrame:
     """A ratings.json read back as a ratings table: the table's column names, an empty name missing again."""
     rows = pd.DataFrame(json.loads(Path(path).read_text(encoding="utf-8"))["rows"]).rename(columns=JSON_COLUMNS)
@@ -143,27 +121,12 @@ def _ratings_table():
 def board():
     if not CONSENSUS.exists():
         pytest.skip("data/external/consensus.csv is missing; it is tracked, so restore it from git")
-    ratings = _ratings_table()
-    con = pd.read_csv(CONSENSUS)[["player_name", "team", "adj_offense", "adj_defense", "adj_overall"]]
-    con = con.dropna(subset=["player_name", "adj_overall"])
-    con["key"] = con.player_name.map(_norm)
-    con = con.drop_duplicates("key")
-
-    ours = _pooled(ratings)
-    ours["key"] = ours.player_name.map(_norm)
-    ours = ours.sort_values("poss_off").drop_duplicates("key", keep="last")
-
-    m = ours.merge(con, on="key", how="inner")
-    m = m[m.poss_off >= MIN_POSS].copy()
+    # each player pooled over the consensus's three seasons, weighted by his possessions, joined by name, and
+    # kept at 1,000 pooled possessions or more (openrapm.consensus)
+    m = matched(_ratings_table(), pd.read_csv(CONSENSUS))
     if len(m) < 300:
         pytest.skip(f"only {len(m)} players matched; the join or the season set is wrong")
-    for side, con_col in (("total", "adj_overall"), ("off", "adj_offense"), ("def", "adj_defense")):
-        m[f"rk_ours_{side}"] = m[f"rating_{side}"].rank(ascending=False)
-        m[f"rk_con_{side}"] = m[con_col].rank(ascending=False)
-        z_o = (m[f"rating_{side}"] - m[f"rating_{side}"].mean()) / m[f"rating_{side}"].std()
-        z_c = (m[con_col] - m[con_col].mean()) / m[con_col].std()
-        m[f"gap_{side}"] = z_o - z_c
-    return m
+    return with_ranks(m)
 
 
 def _rank(board, key, side="total"):
@@ -183,7 +146,7 @@ def test_the_very_top_of_the_board_is_right(board):
     ours = set(board.nsmallest(5, "rk_ours_total").key)
     theirs = set(board.nsmallest(5, "rk_con_total").key)
     # the multi-stage board has Kawhi Leonard and Chet Holmgren where the consensus has Giannis and Luka
-    assert len(ours & theirs) >= 3, f"ours {sorted(ours)} vs theirs {sorted(theirs)}"
+    assert len(ours & theirs) >= MIN_TOP_FIVE_SHARED, f"ours {sorted(ours)} vs theirs {sorted(theirs)}"
 
 
 def test_offense_agrees_with_the_consensus(board):
@@ -191,14 +154,14 @@ def test_offense_agrees_with_the_consensus(board):
     linear-prior board; its offensive agreement with the consensus is 0.778 against 0.879 before, read
     once and reported, not selected on. The floor guards against a further fall, not the old level."""
     rho = spearmanr(board.rating_off, board.adj_offense).statistic
-    assert rho >= 0.75, f"offensive rank agreement fell to {rho:.3f}"
+    assert rho >= MIN_RANK_AGREEMENT, f"offensive rank agreement fell to {rho:.3f}"
 
 
 def test_offensive_spread_is_calibrated(board):
     """The boosted prior is a third narrower than the linear one (FINDINGS 19: the held-out seasons want
     starters x1.2); the offensive spread is 0.62 of the consensus's. Guarded against getting narrower."""
     ratio = board.rating_off.std() / board.adj_offense.std()
-    assert 0.55 <= ratio <= 1.3, f"offensive spread ratio {ratio:.2f} is off"
+    assert OFFENCE_SPREAD[0] <= ratio <= OFFENCE_SPREAD[1], f"offensive spread ratio {ratio:.2f} is off"
 
 
 def test_no_archetype_bias_by_cluster(board):
@@ -246,7 +209,7 @@ def test_no_archetype_bias_by_cluster(board):
 # +0.63 -> +0.20, overall agreement 0.784 -> 0.896, and the star guards came back up the board.
 def test_defensive_spread_is_calibrated(board):
     ratio = board.rating_def.std() / board.adj_defense.std()
-    assert ratio <= 1.4, f"defensive spread ratio is {ratio:.2f}"
+    assert ratio <= MAX_DEFENCE_SPREAD, f"defensive spread ratio is {ratio:.2f}"
 
 
 def test_defense_agrees_with_the_consensus(board):
@@ -263,7 +226,7 @@ def test_defense_agrees_with_the_consensus(board):
     gross-wrong, not to arbitrate a 0.1% rank-correlation difference against a metric blend that is 90%
     raw-points on defense; 0.75 still catches a real fall and matches the offensive and overall floors."""
     rho = spearmanr(board.rating_def, board.adj_defense).statistic
-    assert rho >= 0.75, f"defensive rank agreement is {rho:.3f}"    # 0.759 on tune501_b7, 0.768 before it
+    assert rho >= MIN_RANK_AGREEMENT, f"defensive rank agreement is {rho:.3f}"    # 0.759 on tune501_b7
 
 
 def test_no_archetype_bias_overall(board):
@@ -289,7 +252,7 @@ def test_star_guards_are_not_buried(board):
 def test_overall_agrees_with_the_consensus(board):
     """0.772 on the multi-stage board against 0.883 before; the criterion chose it (FINDINGS 19)."""
     rho = spearmanr(board.rating_total, board.adj_overall).statistic
-    assert rho >= 0.75, f"overall rank agreement is {rho:.3f}"
+    assert rho >= MIN_RANK_AGREEMENT, f"overall rank agreement is {rho:.3f}"
 
 
 # --------------------------------------------------------------------------------- targets

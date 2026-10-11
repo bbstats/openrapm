@@ -19,20 +19,16 @@ them would make the playoffs' scoring level something the fit has to explain wit
 floor -- who in the playoffs are disproportionately the good ones.
 """
 import inspect
-import sys
-from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from openrapm import design as design_mod  # noqa: E402
-from openrapm.data.config import load_config, resolve  # noqa: E402
-from openrapm.data.designs import build_window, build_window_cached  # noqa: E402
-from openrapm.data.roles import ROLE_PHASES  # noqa: E402
-from openrapm.data.shots import SHOT_PHASES  # noqa: E402
-from openrapm.design import SEASON_PHASES  # noqa: E402
-from openrapm.exposure import BoxExposure  # noqa: E402
-from openrapm.holdout import Context, default_loader  # noqa: E402
+from openrapm import design as design_mod
+from openrapm.data.config import load_config, resolve
+from openrapm.data.designs import build_window, build_window_cached
+from openrapm.data.roles import ROLE_PHASES
+from openrapm.data.shots import SHOT_PHASES
+from openrapm.design import SEASON_PHASES
+from openrapm.exposure import BoxExposure
 
 CFG = load_config()
 _STINTS = resolve(CFG, "stints")
@@ -48,9 +44,7 @@ def _default(fn, name):
 
 def test_every_phase_default_is_the_whole_season():
     assert SEASON_PHASES == ("RS", "PO")
-    for fn, arg in ((build_window, "phases"), (build_window_cached, "phases"),
-                    (default_loader, "phases"), (Context.design, "phases"),
-                    (BoxExposure.__init__, "phases")):
+    for fn, arg in ((build_window, "phases"), (build_window_cached, "phases"), (BoxExposure.__init__, "phases")):
         assert _default(fn, arg) == SEASON_PHASES, f"{fn.__qualname__} still defaults to regular season only"
     assert ROLE_PHASES == SEASON_PHASES      # minutes, starts and possessions behind the role prior
     assert SHOT_PHASES == SEASON_PHASES      # the shooter totals that price the luck-adjusted targets

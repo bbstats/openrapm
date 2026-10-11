@@ -11,20 +11,26 @@ research code that built them (phase 4): no shipped input reads them, and a pane
 
 The panel is backed up to `<panel>_pre_context.parquet` before it is overwritten.
 """
+import argparse
 import shutil
-import sys
 from pathlib import Path
 
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _cli import check_flags, flag  # noqa: E402
-from openrapm.data.config import load_config  # noqa: E402
-from openrapm.data.roles import roles_path  # noqa: E402
+from openrapm.commands.console import use_utf8
+from openrapm.data.config import load_config
+from openrapm.data.roles import roles_path
 
+ROOT = Path(__file__).resolve().parents[1]
 PO_SHARE = "po_share"
+
+
+def parse_args(argv=None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Write each player-season's playoff share into the season panel.",
+                                     allow_abbrev=False)
+    parser.add_argument("--panel", default="outputs/role_panel_season.parquet",
+                        help="the panel, relative to the repository (default %(default)s)")
+    return parser.parse_args(argv)
 
 
 def playoff_share() -> pd.DataFrame:
@@ -43,8 +49,8 @@ def playoff_share() -> pd.DataFrame:
 
 
 def main() -> None:
-    check_flags()
-    path = ROOT / flag("panel", "outputs/role_panel_season.parquet")
+    use_utf8()
+    path = ROOT / parse_args().panel
     panel = pd.read_parquet(path)
     share = playoff_share()
     backup = path.with_name(path.stem + "_pre_context.parquet")
