@@ -61,8 +61,8 @@ MODEL_LAYER = [
     "pad.py",           # the padding helper
     "glossary.py",      # plain names for the feature codes, a table and nothing else
     "simulate.py",      # the synthetic fixture the tests fit against
-    "swapadjust.py",    # the swap adjustment: type model and per-player swaps, team totals held fixed
-    "swaptest.py",      # the swap test: same-four lineup pairs, scored against a neighbouring season's ranking
+    "swap_adjust.py",   # step 5: the swap type model, the give-back, team totals held, the spread held
+    "swap_test.py",     # the swap test: same-four lineup pairs, scored against a neighbouring season's ranking
     "tradeset.py",      # the team-game with-and-without-you ridge and its losses
     "windows.py",       # window labels and seasons, and the plug-in ratings table
     "settings.py",      # the shipped settings, each with the experiment that set it
@@ -70,6 +70,7 @@ MODEL_LAYER = [
     "rapm.py",          # step 1: the season sums, the leave-season-out RAPM, the un-shrunk label
     "box_prior.py",     # step 2: training rows, balanced player folds, the out-of-player LightGBM prior
     "prior_rapm.py",    # step 3: the ridge around the prior, the season's table, centring, the schema
+    "prior_shrink.py",  # step 4: the prior part's multipliers from the within-season folds, the shrink
     "scoring.py",       # how a miss is reported: a mean square on the mean-absolute scale
 ]
 

@@ -19,7 +19,9 @@ What it establishes now, in four parts:
      today, so the guard drops nothing -- but it is the shape of thing that is only ever noticed in
      the year it starts lying;
   4. `openrapm rate` and `openrapm folds` read the panel through one function, `data.panel.trainable_panel`,
-     which gates it, and the labels of `rate` sum only seasons whose Finals are over.
+     which gates it, and the labels of `rate` sum only seasons whose Finals are over; step 5 (`openrapm swap`)
+     reads it through `data.panel.panel_and_trainable_seasons`, so its type model trains only on finished
+     seasons while still describing the players of a season in progress.
 """
 import ast
 import re
@@ -106,8 +108,7 @@ def test_replacing_the_current_season_with_noise_does_not_move_the_training_rows
 # ------------------------------------------------------- 3. every fit from the panel is gated
 # Scripts that FIT something from the season or block panel.  Each must pass its read through
 # `drop_untrainable`; a new one belongs here the day it is written.
-FITS_FROM_PANEL = ["88_yoy_by_player.py", "91_swap_adjust.py", "95_miss_by_group.py", "137_stat_calibration.py",
-                   "138_heldout_audit.py"]
+FITS_FROM_PANEL = ["88_yoy_by_player.py", "95_miss_by_group.py", "137_stat_calibration.py", "138_heldout_audit.py"]
 
 # Scripts that read the panel to WRITE columns back into it.  These must NOT gate: they rewrite the
 # file in place, so dropping the current season would delete it from the only copy.
@@ -200,3 +201,27 @@ def test_rate_sums_only_finished_seasons_for_its_labels(tmp_path, monkeypatch):
     with pytest.raises(Stop):
         build.run_rate(cfg, PRODUCT, [2024], "never_written")
     assert seen["seasons"] == [2020, 2021, 2022, 2023]
+
+
+def test_the_swap_step_reads_the_panel_through_its_gate():
+    path = SRC / "commands" / "build.py"
+    assert _calls(path, "panel_and_trainable_seasons"), "step 5 must read the panel through its gate"
+    assert _calls(SRC / "data" / "panel.py", "drop_untrainable")
+
+
+def test_the_swap_step_describes_a_season_in_progress_but_never_trains_on_it(tmp_path):
+    from openrapm.data.panel import panel_and_trainable_seasons
+    cfg = _tree(tmp_path, finished_through=2023)
+    stored = tmp_path / "panel.parquet"
+    panel = _panel(["2022", "2023", "2024"])
+    panel.assign(season=panel.window.astype(int)).to_parquet(stored, index=False)
+    cfg["paths"] = {**cfg["paths"], "panel": str(stored)}
+    whole, trainable = panel_and_trainable_seasons(cfg)
+    assert sorted(set(whole.window)) == ["2022", "2023", "2024"]
+    assert trainable == {2022, 2023}
+
+
+def test_the_swap_type_model_never_trains_on_a_season_outside_the_trainable_set():
+    from openrapm.swap_adjust import training_seasons
+    assert training_seasons(2023, [2020, 2021, 2022, 2023, 2024], {2020, 2021, 2022, 2023}, 0) == [2020, 2021, 2022]
+    assert training_seasons(2022, [2020, 2021, 2022, 2023, 2024], {2020, 2021, 2022, 2023}, 1) == [2020]

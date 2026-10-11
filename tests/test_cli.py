@@ -102,4 +102,59 @@ def test_the_threads_are_pinned_before_numpy_loads():
 
 def test_python_dash_m_openrapm_answers_help():
     out = subprocess.run([sys.executable, "-m", "openrapm", "--help"], capture_output=True, text=True, check=True)
-    assert "rate" in out.stdout and "folds" in out.stdout and "compare" in out.stdout
+    assert all(command in out.stdout for command in ("build", "rate", "shrink", "swap", "folds", "compare"))
+
+
+@pytest.mark.parametrize("base, step, name", [("season_ratings_trial_step3", "_step3", "trial"),
+                                               ("season_ratings_trial_step3.parquet", "_step3", "trial"),
+                                               ("season_ratings_trial_step4", "_step4", "trial"),
+                                               ("other_table", "_step3", "other_table")])
+def test_a_step_names_its_output_after_the_table_it_reads(base, step, name):
+    assert cli.output_name(base, step) == name
+
+
+def _recorded(monkeypatch, function: str, *argv):
+    """Run `openrapm *argv` with commands.build.<function> replaced by a recorder; what it was handed."""
+    from openrapm.commands import build
+    seen = {}
+
+    def record(cfg, settings, *args, **kwargs):
+        seen.update(settings=settings, args=args, kwargs=kwargs)
+        return 0
+
+    monkeypatch.setattr(build, function, record)
+    assert cli.main(list(argv)) == 0
+    return seen
+
+
+def test_build_defaults_to_the_product_setting_and_the_published_name(monkeypatch):
+    seen = _recorded(monkeypatch, "run_build", "build")
+    assert seen["settings"] == PRODUCT
+    assert seen["args"][:2] == (None, "product") and seen["kwargs"]["with_types"] is False
+
+
+def test_build_takes_the_test_setting_and_another_fold_folder(monkeypatch):
+    seen = _recorded(monkeypatch, "run_build", "build", "--setting", "test", "--folds", "other_within",
+                     "--seasons", "2026", "--types")
+    assert seen["settings"].exclude_neighbours == 1 and seen["settings"].shrink.rule == "test"
+    assert seen["settings"].shrink.folds_tag == "other_within" and seen["settings"].swap.exclude_near == 1
+    assert seen["args"][:2] == ([2026], "test") and seen["kwargs"]["with_types"] is True
+
+
+def test_shrink_reads_its_base_and_setting(monkeypatch):
+    seen = _recorded(monkeypatch, "run_shrink", "shrink", "--base", "season_ratings_trial_step3", "--setting",
+                     "test")
+    assert seen["settings"].shrink == TEST.shrink
+    assert seen["args"] == ("season_ratings_trial_step3", "trial")
+    seen = _recorded(monkeypatch, "run_shrink", "shrink", "--base", "x", "--folds", "f", "--name", "y")
+    assert seen["settings"].shrink.rule == "product" and seen["settings"].shrink.folds_tag == "f"
+    assert seen["args"] == ("x", "y")
+    with pytest.raises(SystemExit):
+        _parse("shrink")
+
+
+def test_swap_reads_its_base_and_setting(monkeypatch):
+    seen = _recorded(monkeypatch, "run_swap", "swap", "--base", "season_ratings_trial_step4.parquet", "--setting",
+                     "test")
+    assert seen["settings"].swap == TEST.swap
+    assert seen["args"] == ("season_ratings_trial_step4", "trial") and seen["kwargs"]["with_types"] is False

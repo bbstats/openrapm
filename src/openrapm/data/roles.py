@@ -211,6 +211,18 @@ def roles_path(cfg, phases: tuple = ROLE_PHASES) -> Path:
     return resolve(cfg, "cache") / p if "_root" in cfg else Path(DEFAULT_PATHS["cache"]) / p
 
 
+def main_teams(cfg) -> pd.DataFrame:
+    """player_id, season, team_id: the team each player played the most possessions for that season.
+
+    Read from the roles table (`roles_path`), one row per player, season and team: his possessions on the court
+    for each team are summed and the largest kept.
+    """
+    roles = pd.read_parquet(roles_path(cfg), columns=["player_id", "season", "team_id", "poss_on"])
+    return (roles[roles.poss_on > 0].groupby(["player_id", "season", "team_id"], as_index=False).poss_on.sum()
+            .sort_values("poss_on").drop_duplicates(["player_id", "season"], keep="last")
+            [["player_id", "season", "team_id"]].astype(np.int64))
+
+
 def player_season_inputs(roles: pd.DataFrame, cap: float = 0.9) -> pd.DataFrame:
     """Per player-season: poss_pct (summed over teams / one team-season, capped), gs_pct, age (+ age_imputed)."""
     r = roles.copy()

@@ -1,22 +1,33 @@
-"""`openrapm rate`: steps 1-3 for every season asked for, in one run, the table written once at the end.
+"""`openrapm rate`, `shrink`, `swap` and `build`: the five steps, each table written once at the end of its command.
+
+    openrapm rate     steps 1-3   ->  outputs/season_ratings_<name>_step3.parquet
+    openrapm shrink   step 4      ->  outputs/season_ratings_<name>_step4.parquet, and its multipliers in
+                                      outputs/csv/season_ratings_<name>_step4_multipliers.csv
+    openrapm swap     step 5      ->  outputs/season_ratings_<name>.parquet
+    openrapm build    all five in one process, writing the three tables and the multipliers above
 
 Step 1 adds each trainable season's normal equations to one `rapm.SeasonSums` per target.  Then, season by
 season: the labels leave the rated season out (`rapm.career_labels`), the box-score prior learns them and answers
 for the rated season's own box score (`box_prior.season_priors`), and the ridge pulls the season's RAPM toward
-that answer (`prior_rapm.rate_season`).  The table is outputs/season_ratings_<name>_step3.parquet, in the
-published schema (`prior_rapm.published_table`).
+that answer (`prior_rapm.rate_season`).  The step-3 table is in the published schema
+(`prior_rapm.published_table`).  Step 4 multiplies each season's prior part by the multipliers its within-season
+folds give (`prior_shrink`); step 5 re-splits each team's credit by its lineup swaps (`swap_adjust`).
 
 Words used below
-    trainable season   a season whose Finals are over (data/seasons.py).  Only those reach the labels, and the
-                       season panel the prior trains on is read through `data.panel.trainable_panel`
+    trainable season   a season whose Finals are over (data/seasons.py).  Only those reach the labels and the swap
+                       type model, and the season panel the prior trains on is read through
+                       `data.panel.trainable_panel`
     unseen seasons     the rated season, plus the seasons either side of it in the test setting: no label and
                        no training row may come from them
 
 Each season is rated on its own, so one run over thirty seasons writes the same bytes as three runs of ten
-seasons stitched together (checked when the cleanup began, 2026-10-09).
+seasons stitched together (checked when the cleanup began, 2026-10-09).  Step 5 is not like that: a season's type
+model trains on the other seasons of the same table, so a table of one season gets no swap adjustment, and a
+season's final row equals the published one only when the table holds all thirty seasons.
 
-Example: `openrapm rate --seasons 2026 --name check` writes the 2026 rows alone to
-outputs/season_ratings_check_step3.parquet; their values equal the 2026 rows of a thirty-season run.
+Example: `openrapm build` writes outputs/season_ratings_product.parquet, the published table, with its step-3 and
+step-4 tables beside it; `openrapm rate --seasons 2026 --name check` writes the 2026 rows alone to
+outputs/season_ratings_check_step3.parquet, whose values equal the 2026 rows of a thirty-season run.
 """
 from __future__ import annotations
 
@@ -26,12 +37,15 @@ from pathlib import Path
 
 import pandas as pd
 
-from .. import box_prior, prior_rapm, rapm
+from .. import box_prior, prior_rapm, prior_shrink, rapm, swap_adjust, swap_test
 from ..data.config import booster_params, resolve
 from ..data.designs import DesignCache
-from ..data.panel import trainable_panel
+from ..data.panel import panel_and_trainable_seasons, trainable_panel
+from ..data.roles import main_teams
 from ..data.seasons import all_seasons, trainable
+from ..data.stints import load_season_stints
 from ..data.tables import player_names
+from ..data.within_folds import load_folds
 
 SIDES = ("O", "D")
 
@@ -141,6 +155,19 @@ def models_meta(settings, name: str, argv) -> dict:
                 pad_once=False, out=f"season_ratings_{name}_step3.parquet")
 
 
+def spread_lines(regulars: pd.DataFrame) -> list:
+    """The standard deviation of each part of the rating, offence and defence, one line per part.
+
+    After step 5 a rating is prior + u + c, so the swap adjustment c gets a line of its own.
+    """
+    parts = [("rating", ""), ("prior", ""),
+             ("u", "   (u: how far the season's own games moved the rating from the prior part)")]
+    if "c_off" in regulars.columns:
+        parts.append(("c", "   (c: step 5's swap adjustment; rating = prior + u + c)"))
+    return [f"  {part:<8} offence {regulars[f'{part}_off'].std():.3f}   defence {regulars[f'{part}_def'].std():.3f}"
+            f"{note}" for part, note in parts]
+
+
 def summary(table: pd.DataFrame) -> str:
     """Rows and seasons, the spread among players with 1,000+ possessions, and the latest season's top 20."""
     regulars = table[table.poss_off >= 1000]
@@ -149,10 +176,7 @@ def summary(table: pd.DataFrame) -> str:
     top = table[table.season == latest].sort_values("rating_total", ascending=False).head(20)
     lines = [f"{len(table)} rows, {table.season.nunique()} seasons",
              "standard deviation among players with 1,000+ possessions, points per 100:",
-             f"  rating   offence {regulars.rating_off.std():.3f}   defence {regulars.rating_def.std():.3f}",
-             f"  prior    offence {regulars.prior_off.std():.3f}   defence {regulars.prior_def.std():.3f}",
-             f"  u        offence {regulars.u_off.std():.3f}   defence {regulars.u_def.std():.3f}"
-             "   (u = rating - prior: what the season's own games added)",
+             *spread_lines(regulars),
              f"prior scale, mean over seasons: offence {scale.prior_scale_off.mean():.2f} "
              f"(from {scale.prior_scale_off.min():.2f} to {scale.prior_scale_off.max():.2f}), defence "
              f"{scale.prior_scale_def.mean():.2f} (from {scale.prior_scale_def.min():.2f} to "
@@ -164,26 +188,168 @@ def summary(table: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
-def run_rate(cfg: dict, settings, seasons, name: str, save_models: str | None = None, argv=()) -> int:
-    """`openrapm rate`: rate `seasons`, write the step-3 table (and the boosters when asked), print a summary."""
-    started = time.time()
-    seasons = check_seasons(seasons, cfg)
+def rate_table(cfg: dict, settings, seasons, keep_models: bool = False) -> tuple[pd.DataFrame, dict]:
+    """Steps 1-3 for `seasons`: (the step-3 table in the published schema, {season: saved boosters} or {})."""
     print(describe(settings, seasons), flush=True)
     designs = DesignCache(cfg)
     sums = accumulate_rapm(designs, trainable(cfg).seasons, settings)
     panel = trainable_panel(cfg)
     panel = panel[panel.poss > 0].reset_index(drop=True)
     params = booster_params(cfg, settings.prior.booster_file)
-    tables, models = rate_seasons(seasons, sums, panel, designs, settings, params, keep_models=bool(save_models))
-    table = prior_rapm.published_table(pd.concat(tables, ignore_index=True), player_names(cfg))
-    folder = resolve(cfg, "outputs")
-    folder.mkdir(parents=True, exist_ok=True)
-    path = folder / f"season_ratings_{name}_step3.parquet"
+    tables, models = rate_seasons(seasons, sums, panel, designs, settings, params, keep_models=keep_models)
+    return prior_rapm.published_table(pd.concat(tables, ignore_index=True), player_names(cfg)), models
+
+
+def write_table(table: pd.DataFrame, path: Path, started: float) -> None:
+    """Write one table and say where."""
+    path.parent.mkdir(parents=True, exist_ok=True)
     table.to_parquet(path, index=False)
-    print(f"\nwrote {path} ({time.time() - started:.0f}s)", flush=True)
+    print(f"wrote {path} ({len(table)} rows, {time.time() - started:.0f}s)", flush=True)
+
+
+def write_models(models: dict, settings, name: str, save_models: str, argv, cfg: dict) -> None:
+    """outputs/prior_models_<save_models>.pkl: every rated season's boosters and what built them."""
+    models["meta"] = models_meta(settings, name, argv)
+    path = resolve(cfg, "outputs") / f"prior_models_{save_models}.pkl"
+    pd.to_pickle(models, path)
+    print(f"wrote {path}: {len(models) - 1} seasons of boosters", flush=True)
+
+
+def run_rate(cfg: dict, settings, seasons, name: str, save_models: str | None = None, argv=()) -> int:
+    """`openrapm rate`: rate `seasons`, write the step-3 table (and the boosters when asked), print a summary."""
+    started = time.time()
+    seasons = check_seasons(seasons, cfg)
+    table, models = rate_table(cfg, settings, seasons, keep_models=bool(save_models))
+    print()
+    write_table(table, resolve(cfg, "outputs") / f"season_ratings_{name}_step3.parquet", started)
     if save_models:
-        models["meta"] = models_meta(settings, name, argv)
-        pd.to_pickle(models, folder / f"prior_models_{save_models}.pkl")
-        print(f"wrote {folder / f'prior_models_{save_models}.pkl'}: {len(models) - 1} seasons of boosters", flush=True)
+        write_models(models, settings, name, save_models, argv, cfg)
     print(summary(table), flush=True)
+    return 0
+
+
+# ------------------------------------------------------------------------------------------- step 4
+def shrink_seasons(cfg: dict, table: pd.DataFrame, settings) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Step 4 on a step-3 table: (the shrunk table, the multipliers of every season).
+
+    The folds are paths.within/<settings.shrink.folds_tag>, their seasons pinned to settings.shrink.fold_seasons.
+    The multipliers table also names the fold folder and the first and last fold season read, so a step-4 table
+    can be traced to the folds that shrank it.
+    """
+    shrink = settings.shrink
+    folds = load_folds(resolve(cfg, "within") / shrink.folds_tag, shrink.fold_seasons)
+    fold_seasons = sorted({fold.season for fold in folds})
+    multipliers = prior_shrink.multipliers_by_season(table.season.unique(), folds, shrink.rule).assign(
+        fold_tag=shrink.folds_tag, fold_first=fold_seasons[0], fold_last=fold_seasons[-1])
+    print(f"  step 4: {len(folds)} folds of {shrink.folds_tag} ({shrink.fold_seasons[0]}-{shrink.fold_seasons[1]}), "
+          f"{shrink.rule} rule; the prior part multiplied by {multipliers.multiplier_off.min():.3f} to "
+          f"{multipliers.multiplier_off.max():.3f} on offence, {multipliers.multiplier_def.min():.3f} to "
+          f"{multipliers.multiplier_def.max():.3f} on defence", flush=True)
+    return prior_shrink.shrink(table, multipliers), multipliers
+
+
+def write_multipliers(multipliers: pd.DataFrame, cfg: dict, name: str) -> None:
+    """outputs/csv/season_ratings_<name>_step4_multipliers.csv: each season's two multipliers and their folds."""
+    path = resolve(cfg, "outputs") / "csv" / f"season_ratings_{name}_step4_multipliers.csv"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    multipliers.to_csv(path, index=False)
+    print(f"wrote {path}", flush=True)
+
+
+def run_shrink(cfg: dict, settings, base: str, name: str) -> int:
+    """`openrapm shrink`: step 4 on outputs/<base>.parquet, written as outputs/season_ratings_<name>_step4.parquet,
+    with its multipliers beside it (`write_multipliers`)."""
+    started = time.time()
+    outputs = resolve(cfg, "outputs")
+    shrunk, multipliers = shrink_seasons(cfg, pd.read_parquet(outputs / f"{base}.parquet"), settings)
+    write_table(shrunk, outputs / f"season_ratings_{name}_step4.parquet", started)
+    write_multipliers(multipliers, cfg, name)
+    return 0
+
+
+# ------------------------------------------------------------------------------------------- step 5
+def collect_swaps(cfg: dict, raw: pd.DataFrame, features: pd.DataFrame, fold_of: pd.Series, n_folds: int) -> dict:
+    """{season: swap_adjust.SeasonSwaps} for every season of `raw` (the table in raw sign), ascending."""
+    started = time.time()
+    margin_clip = float(cfg.get("margin_clip", 25))
+    swaps = {}
+    for season in sorted(int(season) for season in raw.season.unique()):
+        stints = load_season_stints(season, cfg, swap_test.STINT_COLUMNS)
+        lineups = swap_test.prepare(swap_test.season_rows(stints, margin_clip=margin_clip), season)
+        swaps[season] = swap_adjust.season_swaps(lineups, raw[raw.season == season],
+                                                 swap_adjust.season_features(features, season), fold_of, n_folds)
+    pairs = sum(len(kept.pairs["offense"]) for kept in swaps.values())
+    print(f"  step 5: {pairs:,} offensive lineup swaps over {len(swaps)} seasons ({time.time() - started:.0f}s)",
+          flush=True)
+    return swaps
+
+
+def swap_seasons(cfg: dict, table: pd.DataFrame, settings) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Step 5 on a step-4 table: (the adjusted table, the spread factors, the type model fitted on every season)."""
+    panel, trainable_seasons = panel_and_trainable_seasons(cfg)
+    raw = swap_test.ratings_in_raw_sign(table)
+    features = swap_adjust.type_features(panel, table)
+    fold_of = swap_adjust.player_folds(raw.player_id, settings.swap.n_folds)
+    swaps = collect_swaps(cfg, raw, features, fold_of, settings.swap.n_folds)
+    predictions = swap_adjust.type_predictions(features, swaps, fold_of, trainable_seasons, settings.swap)
+    main_team = main_teams(cfg).set_index(["player_id", "season"]).team_id
+    adjusted, factors = swap_adjust.adjust(table, raw, swaps, predictions, main_team, settings.swap)
+    types = swap_adjust.type_model_table(swaps, trainable_seasons, settings.swap.type_model_penalty)
+    spread = factors.groupby("side").factor.agg(["mean", "min", "max"])
+    print("  step 5: the spread inside teams held, factor per season " + "; ".join(
+        f"{side} {row['mean']:.3f} ({row['min']:.3f} to {row['max']:.3f})" for side, row in spread.iterrows()),
+        flush=True)
+    return adjusted, factors, types
+
+
+def swap_movement(table: pd.DataFrame) -> str:
+    """How far step 5 moved each player's total in the latest season, points per 100."""
+    latest = table[table.season == table.season.max()]
+    move = (latest.c_off + latest.c_def).abs()
+    return (f"{int(latest.season.iloc[0])}: step 5 moved a player's total a median {move.median():.3f} per 100, "
+            f"the 90th percentile {move.quantile(0.9):.3f}, the largest {move.max():.3f}")
+
+
+def write_types(types: pd.DataFrame, cfg: dict, name: str) -> None:
+    """outputs/<name>_types.csv: the type model fitted on every trainable season, for reading."""
+    path = resolve(cfg, "outputs") / f"{name}_types.csv"
+    types.to_csv(path, index=False)
+    print(f"wrote {path}", flush=True)
+
+
+def run_swap(cfg: dict, settings, base: str, name: str, with_types: bool = False) -> int:
+    """`openrapm swap`: step 5 on outputs/<base>.parquet, written as outputs/season_ratings_<name>.parquet."""
+    started = time.time()
+    outputs = resolve(cfg, "outputs")
+    source, path = outputs / f"{base}.parquet", outputs / f"season_ratings_{name}.parquet"
+    if source.resolve() == path.resolve():
+        raise SystemExit(f"--name {name} would overwrite the table it reads; give another --name")
+    adjusted, _, types = swap_seasons(cfg, pd.read_parquet(source), settings)
+    write_table(adjusted, path, started)
+    if with_types:
+        write_types(types, cfg, name)
+    print(swap_movement(adjusted), flush=True)
+    return 0
+
+
+# ------------------------------------------------------------------------------------------- all five
+def run_build(cfg: dict, settings, seasons, name: str, save_models: str | None = None, argv=(),
+              with_types: bool = False) -> int:
+    """`openrapm build`: steps 1-5 in one process, the three tables and step 4's multipliers written at the end."""
+    started = time.time()
+    seasons = check_seasons(seasons, cfg)
+    step3, models = rate_table(cfg, settings, seasons, keep_models=bool(save_models))
+    step4, multipliers = shrink_seasons(cfg, step3, settings)
+    final, _, types = swap_seasons(cfg, step4, settings)
+    outputs = resolve(cfg, "outputs")
+    print()
+    for table, suffix in ((step3, "_step3"), (step4, "_step4"), (final, "")):
+        write_table(table, outputs / f"season_ratings_{name}{suffix}.parquet", started)
+    write_multipliers(multipliers, cfg, name)
+    if save_models:
+        write_models(models, settings, name, save_models, argv, cfg)
+    if with_types:
+        write_types(types, cfg, name)
+    print(summary(final), flush=True)
+    print(swap_movement(final), flush=True)
     return 0

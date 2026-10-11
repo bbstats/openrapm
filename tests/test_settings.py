@@ -41,7 +41,6 @@ def test_the_shrink_and_swap_settings():
     assert PRODUCT.shrink.fold_seasons == (2017, 2026) and PRODUCT.shrink.folds_tag == "weightfix_within"
     swap = PRODUCT.swap
     assert (swap.applied_share, swap.type_model_penalty, swap.n_folds) == (0.5, 1e-4, 5)
-    assert (swap.hold_spread, swap.give_back) == ("within", "minutes")
 
 
 def test_the_test_setting_differs_in_three_places_only():

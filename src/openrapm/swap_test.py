@@ -1,5 +1,9 @@
 """The swap test: does a season's ranking order TEAMMATES the way the games do?
 
+The lineup swaps are also what step 5 (swap_adjust.py) reads: `season_rows`, `prepare`, `aligned`, `predict` and
+`side_rates` build them and their residuals for both.  The scoring (`side_scores`, `score_season`) is the test's
+alone, run by scripts/90_swap_test.py.
+
 Any four of a lineup's five players are one of its CORES.  Two lineups that share a core differ by
 exactly one player -- Podziemski in one, Spencer in the other, the same four teammates in both -- and
 the difference between their results is the cleanest evidence the play-by-play holds about Podziemski
@@ -68,8 +72,8 @@ import scipy.sparse as sp
 from .rapm import solve_ridge
 
 __all__ = ["HOME", "AWAY", "OFF", "DEF", "SIDES", "CONTEXTS", "RAPM_CONTROLS", "PAIR_GROUPS", "STINT_COLUMNS",
-           "order_stints", "fatigue", "season_rows", "swap_pairs", "Season", "prepare", "aligned", "predict",
-           "side_scores", "score_season", "plain_rapm"]
+           "ratings_in_raw_sign", "order_stints", "fatigue", "season_rows", "swap_pairs", "Season", "prepare",
+           "aligned", "predict", "side_rates", "side_scores", "score_season", "plain_rapm"]
 
 HOME = [f"h{i}" for i in range(1, 6)]
 AWAY = [f"a{i}" for i in range(1, 6)]
@@ -102,6 +106,21 @@ PERIOD_END_SECONDS = 120.0   # the last two minutes of any period: the foul bonu
 # what `season_rows` reads from a season's stints, plus `home_team_id` / `away_team_id` from the diagnostics
 STINT_COLUMNS = ["game_id", "phase", "period", "start_clock", "frac_rem", "margin_h", "is_gt", "neutral",
                  "poss_h", "poss_a", "pts_h", "pts_a", *HOME, *AWAY]
+
+
+def ratings_in_raw_sign(table: pd.DataFrame, columns: str = "rating") -> pd.DataFrame:
+    """player_id, season, o, d in RAW sign (d = points allowed) from a table stored positive-good.
+
+    `columns` "rating" reads rating_off / rating_def, "prior" reads prior_off / prior_def.
+
+    Example: a row with rating_off +2.0 and rating_def +1.5 becomes o = +2.0, d = -1.5.
+    """
+    need = ["player_id", "season", f"{columns}_off", f"{columns}_def"]
+    missing = [column for column in need if column not in table.columns]
+    if missing:
+        raise ValueError(f"the ratings table lacks {missing}")
+    return pd.DataFrame({"player_id": table.player_id.astype(np.int64), "season": table.season.astype(int),
+                         "o": table[f"{columns}_off"].astype(float), "d": -table[f"{columns}_def"].astype(float)})
 
 
 # ------------------------------------------------------------------------------------------- the rows
@@ -255,6 +274,7 @@ class Season:
 
 
 def _lineup_table(team: np.ndarray, five: np.ndarray, poss: np.ndarray, pts: np.ndarray):
+    """(one row per distinct team and five: team, p1..p5, poss, pts summed over its rows; each row's lineup)."""
     key = np.column_stack([team, five])
     uniq, inverse = np.unique(key, axis=0, return_inverse=True)
     inverse = np.asarray(inverse).ravel()
@@ -266,6 +286,10 @@ def _lineup_table(team: np.ndarray, five: np.ndarray, poss: np.ndarray, pts: np.
 
 
 def prepare(rows: pd.DataFrame, season: int = 0) -> Season:
+    """A season's `season_rows` made into a `Season`: its lineups on each end, and every swap pair on each.
+
+    The "net" lineups are the fives seen on both ends, their possessions the two ends' summed.
+    """
     off = rows[OFF].to_numpy(dtype=np.int64)
     de = rows[DEF].to_numpy(dtype=np.int64)
     ids = np.unique(np.concatenate([off.ravel(), de.ravel()]))
@@ -307,7 +331,7 @@ def predict(season: Season, o: np.ndarray, d: np.ndarray, context: str = "full")
     return A @ gamma + contrib, gamma
 
 
-def _side_rates(season: Season, pred: np.ndarray, o: np.ndarray, d: np.ndarray) -> dict:
+def side_rates(season: Season, pred: np.ndarray, o: np.ndarray, d: np.ndarray) -> dict:
     """side -> (observed rate, predicted rate, possessions, the five's own ratings) per lineup of that side.
 
     The last is the part of the prediction that is the lineup's own players -- the sum of the five's
@@ -354,6 +378,74 @@ def side_scores(adjusted: np.ndarray, call: np.ndarray, observed: np.ndarray, pr
 PAIR_GROUPS = ("all", "teammates then", "not teammates then")
 
 
+def _scored_pairs(season: Season, rated: set, team_then: dict | None) -> tuple[dict, dict]:
+    """({side: the pairs whose two swapped players are both in `rated`}, {side: each pair's group}).
+
+    The groups (PAIR_GROUPS[1:]) are read only when `team_then` is given.
+    """
+    rated_arr = np.fromiter(rated, dtype=np.int64, count=len(rated))
+    pairs, group_of = {}, {}
+    for side, pr in season.pairs.items():
+        pr = pr[np.isin(pr.fifth_a.to_numpy(), rated_arr) & np.isin(pr.fifth_b.to_numpy(), rated_arr)]
+        pairs[side] = pr
+        if team_then is not None:
+            ta = pr.fifth_a.map(team_then).to_numpy()
+            tb = pr.fifth_b.map(team_then).to_numpy()
+            same = pd.notna(ta) & pd.notna(tb) & (ta == tb)
+            group_of[side] = np.where(same, PAIR_GROUPS[1], PAIR_GROUPS[2])
+    return pairs, group_of
+
+
+def _pair_arrays(pairs: pd.DataFrame, rates: tuple) -> tuple:
+    """Per pair: (observed difference, predicted difference, the ranking's call, the weight h)."""
+    obs, prd, P, own = rates
+    a, b = pairs.lineup_a.to_numpy(), pairs.lineup_b.to_numpy()
+    return obs[a] - obs[b], prd[a] - prd[b], own[a] - own[b], P[a] * P[b] / (P[a] + P[b])
+
+
+def _adjusted_differences(season: Season, pairs: dict, common: pd.DataFrame, contexts) -> dict:
+    """{(context, side): each pair's observed difference with the opponents and context taken out}, from the
+    scored season's own ratings `common`, the same for every ranking."""
+    co, cd = aligned(season.ids, common)
+    adjusted = {}
+    for context in contexts:
+        pred, _ = predict(season, co, cd, context)
+        rates = side_rates(season, pred, co, cd)
+        for side in SIDES:
+            observed, predicted, own, _ = _pair_arrays(pairs[side], rates[side])
+            adjusted[(context, side)] = observed - (predicted - own)      # what is left once all but the swap is out
+    return adjusted
+
+
+def _group_masks(n_pairs: int, groups) -> list:
+    """[(group name, mask)]: every pair, then each pair group when the groups are known."""
+    masks = [("all", np.ones(n_pairs, dtype=bool))]
+    if groups is not None:
+        masks += [(group, groups == group) for group in PAIR_GROUPS[1:]]
+    return masks
+
+
+def _ranking_rows(name: str, table: pd.DataFrame, season: Season, scored: tuple, contexts) -> tuple[list, list]:
+    """One ranking's score rows and level rows; `scored` is (pairs, group_of, adjusted differences)."""
+    pairs, group_of, adjusted = scored
+    o, d = aligned(season.ids, table)
+    rows, levels = [], []
+    for context in contexts:
+        pred, gamma = predict(season, o, d, context)
+        levels.append(dict(ranking=name, context=context, **dict(zip(CONTEXTS[context], gamma))))
+        rates = side_rates(season, pred, o, d)
+        for side in SIDES:
+            observed, predicted, call, h = _pair_arrays(pairs[side], rates[side])
+            adj = adjusted[(context, side)]
+            for group, m in _group_masks(len(h), group_of.get(side)):
+                if not m.any():
+                    continue
+                rows.append(dict(ranking=name, context=context, side=side, group=group, pairs=int(m.sum()),
+                                 information=float(h[m].sum()),
+                                 **side_scores(adj[m], call[m], observed[m], predicted[m], h[m])))
+    return rows, levels
+
+
 def score_season(season: Season, rankings: dict, rated: set, common: pd.DataFrame, contexts=("full",),
                  team_then: dict | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Score every ranking on one scored season's swaps.
@@ -370,50 +462,13 @@ def score_season(season: Season, rankings: dict, rated: set, common: pd.DataFram
     Returns (scores, levels): one row per ranking x context x side x pair group, and the level
     coefficients each ranking's refit chose.
     """
-    rated_arr = np.fromiter(rated, dtype=np.int64, count=len(rated))
-    pairs, group_of = {}, {}
-    for side, pr in season.pairs.items():
-        pr = pr[np.isin(pr.fifth_a.to_numpy(), rated_arr) & np.isin(pr.fifth_b.to_numpy(), rated_arr)]
-        pairs[side] = pr
-        if team_then is not None:
-            ta = pr.fifth_a.map(team_then).to_numpy()
-            tb = pr.fifth_b.map(team_then).to_numpy()
-            same = pd.notna(ta) & pd.notna(tb) & (ta == tb)
-            group_of[side] = np.where(same, PAIR_GROUPS[1], PAIR_GROUPS[2])
-
-    def pair_arrays(side, rates):
-        obs, prd, P, own = rates[side]
-        a, b = pairs[side].lineup_a.to_numpy(), pairs[side].lineup_b.to_numpy()
-        return obs[a] - obs[b], prd[a] - prd[b], own[a] - own[b], P[a] * P[b] / (P[a] + P[b])
-
-    co, cd = aligned(season.ids, common)
-    adjusted = {}
-    for context in contexts:
-        pred, _ = predict(season, co, cd, context)
-        rates = _side_rates(season, pred, co, cd)
-        for side in SIDES:
-            observed, predicted, own, _ = pair_arrays(side, rates)
-            adjusted[(context, side)] = observed - (predicted - own)      # what is left once all but the swap is out
-
+    pairs, group_of = _scored_pairs(season, rated, team_then)
+    scored = (pairs, group_of, _adjusted_differences(season, pairs, common, contexts))
     rows, levels = [], []
     for name, table in rankings.items():
-        o, d = aligned(season.ids, table)
-        for context in contexts:
-            pred, gamma = predict(season, o, d, context)
-            levels.append(dict(ranking=name, context=context, **dict(zip(CONTEXTS[context], gamma))))
-            rates = _side_rates(season, pred, o, d)
-            for side in SIDES:
-                observed, predicted, call, h = pair_arrays(side, rates)
-                adj = adjusted[(context, side)]
-                groups = [("all", np.ones(len(h), dtype=bool))]
-                if side in group_of:
-                    groups += [(g, group_of[side] == g) for g in PAIR_GROUPS[1:]]
-                for g, m in groups:
-                    if not m.any():
-                        continue
-                    rows.append(dict(ranking=name, context=context, side=side, group=g, pairs=int(m.sum()),
-                                     information=float(h[m].sum()),
-                                     **side_scores(adj[m], call[m], observed[m], predicted[m], h[m])))
+        ranking_rows, ranking_levels = _ranking_rows(name, table, season, scored, contexts)
+        rows += ranking_rows
+        levels += ranking_levels
     return pd.DataFrame(rows), pd.DataFrame(levels)
 
 

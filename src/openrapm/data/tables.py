@@ -8,12 +8,16 @@ player is missing from it, which leaves five rows of the published table without
 fills them.
 
 `team_of_rows` names the two teams of every team-game row from the per-game stint diagnostics.
+
+`load_ratings` reads a ratings table as player_id, season, o, d in raw sign, the form the swap test and step 5
+compare lineups in.
 """
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 
+from ..swap_test import ratings_in_raw_sign
 from .config import resolve, resolve_path
 
 PLAYER_NAMES = "params/player_names.csv"
@@ -46,3 +50,12 @@ def team_of_rows(keys: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     is_home_off = merged.is_home_off.to_numpy(bool)
     return pd.DataFrame({"team_off": np.where(is_home_off, home, away),
                          "team_def": np.where(is_home_off, away, home)})
+
+
+def load_ratings(path, columns: str = "rating") -> pd.DataFrame:
+    """player_id, season, o, d in raw sign (d = points allowed) from a ratings table stored positive-good.
+
+    `columns` "rating" reads rating_off / rating_def, "prior" reads prior_off / prior_def
+    (`swap_test.ratings_in_raw_sign`).
+    """
+    return ratings_in_raw_sign(pd.read_parquet(path), columns)

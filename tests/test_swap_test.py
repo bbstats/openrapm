@@ -1,45 +1,15 @@
-"""The swap test (src/openrapm/swaptest.py) on a synthetic league whose true ratings are known."""
+"""The swap test (src/openrapm/swap_test.py) on a synthetic league whose true ratings are known (conftest.py)."""
 import itertools
 
 import numpy as np
 import pandas as pd
+import pytest
 
-from openrapm import swaptest as sw
-
-
-def _league(seed=0, teams=4, players=8, games=240, per_period=6, poss=5, noise=1.2):
-    """Stints of a league with known ratings: random lineups, five possessions a side per stint, points
-    drawn around 1.1 a possession plus the ten players' ratings (offense adds, defense = points allowed)."""
-    rng = np.random.default_rng(seed)
-    roster = {t: np.arange(t * 100 + 1, t * 100 + 1 + players) for t in range(1, teams + 1)}
-    every = np.concatenate(list(roster.values()))
-    truth = pd.DataFrame({"player_id": every, "o": rng.normal(0, 3, len(every)), "d": rng.normal(0, 2, len(every))})
-    o, d = dict(zip(truth.player_id, truth.o)), dict(zip(truth.player_id, truth.d))
-    rows = []
-    for g in range(games):
-        h, a = rng.choice(np.arange(1, teams + 1), 2, replace=False)
-        margin = 0
-        for period in range(1, 5):
-            for k in range(per_period):
-                five_h = rng.choice(roster[h], 5, replace=False)
-                five_a = rng.choice(roster[a], 5, replace=False)
-                mu_h = 1.1 + (sum(o[p] for p in five_h) + sum(d[p] for p in five_a)) / 100.0
-                mu_a = 1.1 + (sum(o[p] for p in five_a) + sum(d[p] for p in five_h)) / 100.0
-                pts_h = poss * mu_h + rng.normal(0, noise * np.sqrt(poss))
-                pts_a = poss * mu_a + rng.normal(0, noise * np.sqrt(poss))
-                start = 720.0 - k * 720.0 / per_period
-                rows.append(dict(game_id=f"g{g:04d}", phase="RS", period=period, start_clock=start,
-                                 frac_rem=((4 - period) * 720.0 + start) / 2880.0, margin_h=margin, is_gt=False,
-                                 neutral=False, poss_h=poss, poss_a=poss, pts_h=pts_h, pts_a=pts_a,
-                                 home_team_id=h, away_team_id=a,
-                                 **{f"h{i + 1}": int(p) for i, p in enumerate(five_h)},
-                                 **{f"a{i + 1}": int(p) for i, p in enumerate(five_a)}))
-                margin += int(round(pts_h - pts_a))
-    return pd.DataFrame(rows), truth, roster
+from openrapm import swap_test as sw
 
 
-def _season(seed=0):
-    stints, truth, roster = _league(seed)
+def _season(league, seed=0):
+    stints, truth, roster = league(seed)
     return sw.prepare(sw.season_rows(stints)), truth, roster
 
 
@@ -76,8 +46,8 @@ def test_pairs_are_one_swap_on_one_team_each_once():
         assert r.fifth_b in five[r.lineup_b] and r.fifth_b not in five[r.lineup_a]
 
 
-def test_a_team_wide_constant_cannot_move_that_teams_swaps():
-    season, truth, roster = _season()
+def test_a_team_wide_constant_cannot_move_that_teams_swaps(lineup_league):
+    season, truth, roster = _season(lineup_league)
     shifted = truth.copy()
     mine = shifted.player_id.isin(roster[1])
     shifted.loc[mine, "o"] += 3.0
@@ -90,14 +60,14 @@ def test_a_team_wide_constant_cannot_move_that_teams_swaps():
         for table in (truth, shifted):
             o, d = sw.aligned(season.ids, table)
             pred, _ = sw.predict(season, o, d, context="none")
-            _, prd, _, own = sw._side_rates(season, pred, o, d)[side]
+            _, prd, _, own = sw.side_rates(season, pred, o, d)[side]
             gaps.append(prd[a] - prd[b])
             calls.append(own[a] - own[b])
         assert len(pr) > 50 and np.allclose(gaps[0], gaps[1]) and np.allclose(calls[0], calls[1])
 
 
-def test_order_ignores_spread_and_gaps_does_not():
-    season, truth, _ = _season()
+def test_order_ignores_spread_and_gaps_does_not(lineup_league):
+    season, truth, _ = _season(lineup_league)
     common = sw.plain_rapm(season, lam=50.0)
     wide = truth.assign(o=2 * truth.o, d=2 * truth.d)
     rated = set(truth.player_id)
@@ -108,8 +78,8 @@ def test_order_ignores_spread_and_gaps_does_not():
     assert np.allclose(two.slope.to_numpy() * 2, one.slope.to_numpy(), rtol=1e-9)
 
 
-def test_the_truth_beats_the_same_ratings_shuffled_inside_each_team():
-    season, truth, roster = _season()
+def test_the_truth_beats_the_same_ratings_shuffled_inside_each_team(lineup_league):
+    season, truth, roster = _season(lineup_league)
     rng = np.random.default_rng(7)
     shuffled = truth.copy()
     for players in roster.values():
@@ -123,8 +93,8 @@ def test_the_truth_beats_the_same_ratings_shuffled_inside_each_team():
         assert s.gaps["truth"] < s.gaps["shuffled"], (side, context)
 
 
-def test_pair_groups_split_the_pairs_by_the_rated_seasons_teams():
-    season, truth, roster = _season()
+def test_pair_groups_split_the_pairs_by_the_rated_seasons_teams(lineup_league):
+    season, truth, roster = _season(lineup_league)
     team_then = {int(p): t for t, players in roster.items() for p in players}
     team_then[101] = 99                                    # one player of team 1 was elsewhere the year before
     scores, _ = sw.score_season(season, {"truth": truth}, set(truth.player_id), sw.plain_rapm(season, lam=50.0),
@@ -138,8 +108,18 @@ def test_pair_groups_split_the_pairs_by_the_rated_seasons_teams():
     assert scores[(scores.side == "net") & (scores.group == "not teammates then")].pairs.iloc[0] == moved
 
 
-def test_plain_rapm_recovers_the_truth_with_the_right_signs():
-    season, truth, _ = _season()
+def test_plain_rapm_recovers_the_truth_with_the_right_signs(lineup_league):
+    season, truth, _ = _season(lineup_league)
     fit = sw.plain_rapm(season, lam=50.0).merge(truth, on="player_id", suffixes=("", "_true"))
     assert np.corrcoef(fit.o, fit.o_true)[0, 1] > 0.8
     assert np.corrcoef(fit.d, fit.d_true)[0, 1] > 0.6
+
+
+def test_a_positive_good_table_is_read_in_raw_sign():
+    table = pd.DataFrame({"player_id": [1, 2], "season": [2026, 2026], "rating_off": [2.0, -1.0],
+                          "rating_def": [1.5, -0.5], "prior_off": [1.0, 0.0], "prior_def": [0.5, 0.0]})
+    raw = sw.ratings_in_raw_sign(table)
+    assert raw.o.tolist() == [2.0, -1.0] and raw.d.tolist() == [-1.5, 0.5]
+    assert sw.ratings_in_raw_sign(table, "prior").d.tolist() == [-0.5, -0.0]
+    with pytest.raises(ValueError, match="lacks"):
+        sw.ratings_in_raw_sign(table.drop(columns="rating_def"))

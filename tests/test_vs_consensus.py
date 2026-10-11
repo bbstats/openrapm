@@ -16,7 +16,7 @@ now.  One is left: pure on-court defensive RAPM still rates backup bigs above th
 is an attribution question the box prior was never going to answer.
 
 The board these score is the one that SHIPS -- `outputs/season_ratings_product.parquet`, built by
-`openrapm rate` (steps 1-3), then scripts/99_prior_shrink.py and scripts/91_swap_adjust.py (steps 4-5), which
+`openrapm build` (steps 1-5; or `openrapm rate`, `shrink` and `swap` one after another), which
 is also what `docs/data/ratings.json` is built from --
 pooled over the three seasons the consensus covers and weighted by possessions.  `artifacts/
 season_ratings.parquet` (the older `scripts/60_season_board.py` system) is the fallback, so a clone
@@ -40,7 +40,7 @@ import pytest
 from scipy.stats import spearmanr
 
 ROOT = Path(__file__).resolve().parents[1]
-# A candidate's finished table (all five steps: `openrapm rate --name <stem>`, then 99 and 91) is scored by
+# A candidate's finished table (all five steps: `openrapm build --name <stem>`) is scored by
 # pointing OPENRAPM_BOARD at it, without overwriting anything the rest of them read.  The step-3 table alone
 # is not like for like: the minimums below were set on the shipped five-step table.  Order matters: the first
 # path that exists wins.

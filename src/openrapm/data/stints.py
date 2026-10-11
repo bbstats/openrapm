@@ -25,7 +25,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from ..design import AWAY_SLOTS, HOME_SLOTS, POSS_COUNTERS, SHOOTER_COUNTERS, SLOT_COUNTERS
+from ..design import AWAY_SLOTS, HOME_SLOTS, POSS_COUNTERS, SEASON_PHASES, SHOOTER_COUNTERS, SLOT_COUNTERS
 from .config import resolve
 from .ingest import OfflineFetch, fetch_boxscore, fetch_pbp, fetch_period_box, game_table, load_gamelog, pbpstats_games
 
@@ -1130,3 +1130,33 @@ def season_diagnostics(season: int, phase: str, cfg) -> dict:
         hl = st[HOME_SLOTS].to_numpy(); al = st[AWAY_SLOTS].to_numpy()
         out["five_distinct_frac"] = float(np.mean([(len(set(h)) == 5) and (len(set(a)) == 5) for h, a in zip(hl, al)]))
     return out
+
+
+def load_season_stints(season: int, cfg, columns, phases=SEASON_PHASES, with_teams: bool = True) -> pd.DataFrame:
+    """A season's stints, regular season then playoffs, with `columns` (and, `with_teams`, each game's teams).
+
+    The stints carry no team ids; `with_teams` joins home_team_id and away_team_id from the per-game diagnostics
+    written beside them.  A phase with no file (no playoffs yet) is skipped; no stints at all is an error.
+    """
+    folder = resolve(cfg, "stints")
+    frames = []
+    for phase in phases:
+        path = folder / f"{season}_{phase}.parquet"
+        if not path.exists():
+            continue
+        stints = pd.read_parquet(path, columns=list(columns))
+        if with_teams:
+            stints = _with_teams(stints, folder / f"{season}_{phase}_diag.parquet", path.name)
+        frames.append(stints)
+    if not frames:
+        raise FileNotFoundError(f"no stints on disk for {season} in {folder}")
+    return pd.concat(frames, ignore_index=True)
+
+
+def _with_teams(stints: pd.DataFrame, diagnostics: Path, name: str) -> pd.DataFrame:
+    """The stints with home_team_id and away_team_id joined on game_id from the diagnostics."""
+    teams = pd.read_parquet(diagnostics, columns=["game_id", "home_team_id", "away_team_id"]).drop_duplicates("game_id")
+    stints = stints.merge(teams, on="game_id", how="left", sort=False)
+    if stints.home_team_id.isna().any():
+        raise ValueError(f"{name}: a stint's game has no row in the diagnostics; rebuild the stints")
+    return stints

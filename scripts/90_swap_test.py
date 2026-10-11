@@ -5,7 +5,7 @@
                                    [--ref=incumbent] [--plain_rapm=3000] [--checks=1] [--shift_sd=2]
                                    [--first=1998] [--last=2025] [--contexts=full,home] [--seed=0] [--tag=swap]
 
-The test is `src/openrapm/swaptest.py`: for every pair of lineups on the same team that share four players
+The test is `src/openrapm/swap_test.py`: for every pair of lineups on the same team that share four players
 -- Podziemski in one, Spencer in the other, the same four teammates in both -- compare the two lineups'
 results in the scored season with what a NEIGHBOURING season's ranking says about the two swapped players.
 Each scored season is scored twice, by the ranking of the season before it ("forward": a rating looking
@@ -46,48 +46,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
-from openrapm import swaptest as sw  # noqa: E402
-from openrapm.data.config import load_config, resolve  # noqa: E402
-from openrapm.data.roles import roles_path  # noqa: E402
-
-
-def load_stints(season: int, cfg: dict, phases=("RS", "PO")) -> pd.DataFrame:
-    """A season's stints, regular season then playoffs, with the two teams' ids from the diagnostics."""
-    folder = resolve(cfg, "stints")
-    frames = []
-    for phase in phases:
-        path = folder / f"{season}_{phase}.parquet"
-        if not path.exists():
-            continue
-        st = pd.read_parquet(path, columns=sw.STINT_COLUMNS)
-        diag = pd.read_parquet(folder / f"{season}_{phase}_diag.parquet",
-                               columns=["game_id", "home_team_id", "away_team_id"]).drop_duplicates("game_id")
-        st = st.merge(diag, on="game_id", how="left", sort=False)
-        if st.home_team_id.isna().any():
-            raise SystemExit(f"{path.name}: a stint's game has no row in the diagnostics; rebuild the stints")
-        frames.append(st)
-    if not frames:
-        raise SystemExit(f"no stints on disk for {season}")
-    return pd.concat(frames, ignore_index=True)
-
-
-def load_table(path: Path, columns: str = "rating") -> pd.DataFrame:
-    """player_id, season, o, d in RAW sign (d = points allowed), from a table stored positive-good."""
-    t = pd.read_parquet(path)
-    need = ["player_id", "season", f"{columns}_off", f"{columns}_def"]
-    missing = [c for c in need if c not in t.columns]
-    if missing:
-        raise SystemExit(f"{path}: missing {missing}")
-    return pd.DataFrame({"player_id": t.player_id.astype(np.int64), "season": t.season.astype(int),
-                         "o": t[f"{columns}_off"].astype(float), "d": -t[f"{columns}_def"].astype(float)})
-
-
-def main_teams() -> pd.DataFrame:
-    """player_id, season, team_id: the team he played the most possessions for that season."""
-    roles = pd.read_parquet(roles_path(load_config()), columns=["player_id", "season", "team_id", "poss_on"])
-    return (roles[roles.poss_on > 0].groupby(["player_id", "season", "team_id"], as_index=False).poss_on.sum()
-            .sort_values("poss_on").drop_duplicates(["player_id", "season"], keep="last")
-            [["player_id", "season", "team_id"]].astype(np.int64))
+from openrapm import swap_test as sw  # noqa: E402
+from openrapm.data.config import load_config  # noqa: E402
+from openrapm.data.roles import main_teams  # noqa: E402
+from openrapm.data.stints import load_season_stints  # noqa: E402
+from openrapm.data.tables import load_ratings  # noqa: E402
 
 
 def shuffled_within_team(table: pd.DataFrame, teams: pd.DataFrame, seed: int) -> pd.DataFrame:
@@ -175,7 +138,7 @@ def main():
         columns = "rating"
         if rest.endswith(":prior") or rest.endswith(":rating"):
             rest, columns = rest.rsplit(":", 1)
-        tables[name] = load_table(ROOT / rest if not Path(rest).is_absolute() else Path(rest), columns)
+        tables[name] = load_ratings(ROOT / rest if not Path(rest).is_absolute() else Path(rest), columns)
     ref = flag("ref", next(iter(tables)))
     assert ref in tables, f"--ref={ref} is not one of {list(tables)}"
     lam = float(flag("plain_rapm", "3000"))
@@ -209,12 +172,12 @@ def run(tables: dict, ref: str, cfg: dict, contexts, first: int, last: int, lam:
     tables = dict(tables)
     s0, s1 = int(cfg["first_season"]), int(cfg["last_season"])
     margin_clip = float(cfg.get("margin_clip", 25))
-    teams = main_teams()
+    teams = main_teams(cfg)
     team_of = {s: dict(zip(g.player_id, g.team_id)) for s, g in teams.groupby("season")}
     if checks:
         tables["shuffled"] = shuffled_within_team(tables[ref], teams, seed)
     rapm_path = ROOT / "outputs" / f"season_ratings_plainrapm{lam:.0f}.parquet"
-    rapm_cached = load_table(rapm_path) if rapm_path.exists() else None
+    rapm_cached = load_ratings(rapm_path) if rapm_path.exists() else None
     cached_seasons = set() if rapm_cached is None else set(rapm_cached.season.unique())
     rapm_rows, rapm_fits = [], []
 
@@ -222,7 +185,7 @@ def run(tables: dict, ref: str, cfg: dict, contexts, first: int, last: int, lam:
     held: dict = {}                 # season -> prepared Season, kept until both its neighbours are rated
     res, lev = [], []
     for s in range(max(s0, first - 1), min(s1, last + 1) + 1):
-        season = sw.prepare(sw.season_rows(load_stints(s, cfg), margin_clip=margin_clip), s)
+        season = sw.prepare(sw.season_rows(load_season_stints(s, cfg, sw.STINT_COLUMNS), margin_clip=margin_clip), s)
         if s in cached_seasons:
             fit = rapm_cached[rapm_cached.season == s]
         else:

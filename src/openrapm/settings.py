@@ -125,21 +125,21 @@ class SwapSettings:
 
     A same-four swap is a pair of lineups of one team that share four players; the type model is a ridge that
     predicts what a swap says about the two swapped players from the difference of their box-score profiles.
+    Two rules have no setting, because only one of each ever shipped: the give-back takes a team's total back
+    from its players in proportion to their share of its possessions (DECISIONS.md, experiment 41), and the
+    spread is held inside teams, one factor per season and side (DECISIONS.md, "The swap adjustment with the
+    spread held: it passes").
     """
-    # the share of the type model's prediction applied: half (kappa in scripts/91 and DECISIONS.md, "The swap
-    # adjustment with the spread held: it passes", adopted 2026-10-01: "Team version.")
+    # the share of the type model's prediction applied: half (kappa in DECISIONS.md, "The swap adjustment with
+    # the spread held: it passes", adopted 2026-10-01: "Team version.")
     applied_share: float = 0.5
-    # the type model's ridge penalty, and the number of player folds it is fitted on
+    # the type model's ridge penalty, relative to the mean diagonal of its Gram matrix, and the number of player
+    # folds it is fitted on (the swap adjustment's first run, 2026-10-01)
     type_model_penalty: float = 1e-4
     n_folds: int = 5
-    # "within": each player's distance from his team's mean is scaled back, one factor per season and side,
-    # until the spread inside teams equals the step-4 table's (the same 2026-10-01 section)
-    hold_spread: str = "within"
-    # the give-back rule: a team's adjustments must sum to zero (team totals held), so the team's total is taken
-    # back from its players in proportion to their share of its possessions; "minutes" is the rule's historical
-    # name (DECISIONS.md, experiment 41)
-    give_back: str = "minutes"
-    # the type model trains on seasons more than this far from the rated one
+    # the type model trains on seasons more than this far from the rated one: 0 in the product setting (every
+    # other season: model coefficients may be learned from other seasons, the owner's second ruling in
+    # HANDOFF.md, "The rulings that bind"), 1 in the test setting, so neither season the test scores trains it
     exclude_near: int = 0
 
 

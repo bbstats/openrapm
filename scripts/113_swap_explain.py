@@ -3,8 +3,9 @@
     python scripts/113_swap_explain.py [--team=BOS] [--season=2026] [--player="Derrick White"] [--also=2024,2025]
 
 The owner (2026-10-05): "Explain the swap adjustment very clearly for every BOS player in this example."  This re-runs
-the shipped arm of scripts/91_swap_adjust.py ("type x0.5, team version": --kappas=0.5 --taus= --hold_spread=within
---exclude_near=0 on the shipped pre-swap table, `--base=`) and keeps every intermediate number:
+step 5 as `openrapm swap` ships it (src/openrapm/swap_adjust.py, product setting: the type prediction at half
+strength, the team give-back, the spread held within teams, on the shipped step-4 table, `--base=`) and keeps every
+intermediate number:
 
   type        the type model's prediction for the player (what players with his box-score rates, role, age, size
               and box prior beat or missed their ratings by in other seasons' lineup swaps), and its largest terms
@@ -13,12 +14,11 @@ the shipped arm of scripts/91_swap_adjust.py ("type x0.5, team version": --kappa
               prediction is taken back from its players in proportion to their share of its possessions
   centering   the season's possession-weighted mean set back to the base's (one constant per side)
   spread      the width the adjustment added given back: each player's distance from his team's mean times one
-              factor per season and side (swapadjust.hold_spread "within")
+              factor per season and side (swap_adjust.hold_spread_within)
   final       the sum, checked against the shipped table (outputs/season_ratings_product.parquet)
 
 Positive = good on both ends.  Writes outputs/swap_explain_<team>_<season>.csv.
 """
-import importlib.util
 import sys
 from pathlib import Path
 
@@ -29,8 +29,14 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
+from openrapm import swap_adjust as sa  # noqa: E402
+from openrapm import swap_test as sw  # noqa: E402
 from openrapm.data.config import load_config  # noqa: E402
 from openrapm.data.ingest import raw_dir  # noqa: E402
+from openrapm.data.panel import panel_and_trainable_seasons  # noqa: E402
+from openrapm.data.roles import main_teams  # noqa: E402
+from openrapm.data.stints import load_season_stints  # noqa: E402
+from openrapm.data.tables import load_ratings  # noqa: E402
 
 NAMES = {"fg3m": "made threes", "fg3_miss": "missed threes", "fg2m": "made twos", "fg2_miss": "missed twos",
          "ftm": "made free throws", "ft_miss": "missed free throws", "orb": "offensive rebounds",
@@ -40,32 +46,25 @@ NAMES = {"fg3m": "made threes", "fg3_miss": "missed threes", "fg2m": "made twos"
          "weight": "weight", "prior_off": "box prior (offense)", "prior_def": "box prior (defense)"}
 
 
-def _borrow(name: str, file: str):
-    spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / file)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 def main():
     check_flags()
     team_code = flag("team", "BOS")
     H = int(flag("season", "2026"))
-    S91 = _borrow("_swap91_for_113", "91_swap_adjust.py")
-    sa, sw, t90 = S91.sa, S91.sw, S91._t90
     cfg = load_config()
     kappa, folds, ridge = 0.5, 5, 1e-4
-    # the shipped table's input to 91: experiment 45's since 2026-10-08 (before, season_ratings_product_priorshrink_pre_swap)
-    base_path = ROOT / "outputs" / f"{flag('base', 'season_ratings_product_lgb_noonc_priorshrink_pre_swap')}.parquet"
+    # the shipped table's step-4 input: experiment 46's since 2026-10-09 (`openrapm build` writes it as
+    # season_ratings_product_step4; before, experiment 45's season_ratings_product_lgb_noonc_priorshrink_pre_swap)
+    base_path = ROOT / "outputs" / f"{flag('base', 'season_ratings_product_weightfix_priorshrink_pre_swap')}.parquet"
     base = pd.read_parquet(base_path)
-    raw = t90.load_table(base_path)
-    feats, trainable = S91.features(base, cfg)
+    raw = load_ratings(base_path)
+    panel, trainable = panel_and_trainable_seasons(cfg)
+    feats = sa.type_features(panel, base)
     fold_of = pd.Series(np.unique(raw.player_id) % folds, index=np.unique(raw.player_id))
     s0, s1 = int(cfg["first_season"]), int(cfg["last_season"])
     margin_clip = float(cfg.get("margin_clip", 25))
     pairs, tposs, grams = {}, {}, {}
     for s in range(s0, s1 + 1):
-        season = sw.prepare(sw.season_rows(t90.load_stints(s, cfg), margin_clip=margin_clip), s)
+        season = sw.prepare(sw.season_rows(load_season_stints(s, cfg, sw.STINT_COLUMNS), margin_clip=margin_clip), s)
         pairs[s] = sa.residual_pairs(season, raw[raw.season == s], context="nofatigue")
         tposs[s] = sa.team_possessions(season)
         fs = feats.xs(s, level="season") if s in feats.index.get_level_values("season") else feats.iloc[:0]
@@ -87,22 +86,21 @@ def main():
                 cmat[mine] = fs[mine].to_numpy() * beta
             pred[side], contrib[side] = p, cmat
 
-        # the shipped arm, every intermediate kept (91's order: solve, centre the season, hold the spread)
+        # the shipped step, every intermediate kept (swap_adjust's order: give back, centre the season, hold the spread)
         t = raw[raw.season == H].copy().reset_index(drop=True)
         key = pd.MultiIndex.from_arrays([t.player_id, t.season])
         w = {"offense": base.set_index(["player_id", "season"]).poss_off.reindex(key).fillna(0).to_numpy(),
              "defense": base.set_index(["player_id", "season"]).poss_def.reindex(key).fillna(0).to_numpy()}
-        main_team = t90.main_teams().set_index(["player_id", "season"]).team_id.reindex(key).to_numpy(dtype=float)
+        main_team = main_teams(cfg).set_index(["player_id", "season"]).team_id.reindex(key).to_numpy(dtype=float)
         out = pd.DataFrame({"player_id": t.player_id})
         for side, bcol in (("offense", "o"), ("defense", "d")):
-            system = sa.swap_system(pairs[H][side], tposs[H][side])
             m = kappa * pred[side]
-            c1 = sa.solve(system, m, np.inf)
+            c1 = sa.give_back(*sa.possession_shares(pairs[H][side], tposs[H][side]), m)
             typ = t.player_id.map(m).fillna(0.0).to_numpy()
             solved = t.player_id.map(c1).fillna(0.0).to_numpy()
             mean = float(np.sum(solved * w[side]) / np.sum(w[side]))
             centred = solved - mean
-            held, k = sa.hold_spread(t[bcol].to_numpy() + centred, t[bcol].to_numpy(), w[side], main_team, "within")
+            held, k = sa.hold_spread_within(t[bcol].to_numpy() + centred, t[bcol].to_numpy(), w[side], main_team)
             final = held - t[bcol].to_numpy()
             sign = 1.0 if side == "offense" else -1.0                       # positive = good on both ends
             tag = side[:3]
@@ -162,14 +160,6 @@ def main():
             n_eff = float(np.sum(h) ** 2 / np.sum(h ** 2))
             print(f"  {side}: {mine.sum():,} pairs, information {np.sum(h):,.0f} possessions, mean residual "
                   f"{mean:+.2f} per 100 (naive se {sd / np.sqrt(n_eff):.2f}, effective pairs {n_eff:.0f})")
-        # the own-swaps arm the shipped one is not: his own swaps pulled toward the type prediction ("both t30000")
-        for tau in (30000.0, 3000.0):
-            for side in sa.SIDES:
-                system = sa.swap_system(pairs[H][side], tposs[H][side])
-                c = sa.solve(system, kappa * pred[side], tau)
-                sign = 1.0 if side == "offense" else -1.0
-                print(f"  own swaps pulled toward the half-strength type, tau {tau:g}, {side}: {sign * c.get(pid, np.nan):+.2f}"
-                      f" (before centering and the spread hold)")
 
     g = pd.read_parquet(raw_dir(cfg) / "gamelog" / f"{H}_RS.parquet", columns=["PLAYER_ID", "TEAM_ID",
                                                                                 "TEAM_ABBREVIATION"])

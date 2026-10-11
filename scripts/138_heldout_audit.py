@@ -16,8 +16,8 @@ and the paired held-out error per fold (outputs/csv/<out>_paired.csv, outputs/<o
 What is measured, in one sentence.  For every held-out team-game of the within-season folds (`openrapm folds`: a season
 rated from three quarters of its games, scored on the fourth), the points per 100 as scored minus what the ratings
 predict -- each rated player's share of the possessions times his rating as it ships (the box-score prior part
-times the multiplier scripts/99 fits without that fold's season, plus the games' part, re-centred), the stand-in
-ratings of unrated players held at their own values, the level and home edge free per fold -- is regressed on a
+times the multiplier step 4, openrapm.prior_shrink, fits without that fold's season, plus the games' part,
+re-centred), the stand-in ratings of unrated players held at their own values, the level and home edge free per fold -- is regressed on a
 correction per player that depends on one input (or one group's combined axis), entering the team-game the way a
 rating does; the correction's slope says how far the games say players high on that input are underrated (+) or
 overrated (-), in points per 100.
@@ -68,7 +68,6 @@ Writes outputs/csv/<out>.csv (every reading), outputs/csv/<out>_tenths.csv (each
 outputs/csv/<out>_summary.csv (one line per test and side at the decision stage), outputs/<out>_thresholds.json, and
 with --shares outputs/csv/<out>_shares.csv.
 """
-import importlib.util
 import json
 import os
 import sys
@@ -90,19 +89,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from openrapm.data.config import load_config  # noqa: E402
 from openrapm.glossary import plain  # noqa: E402
 from openrapm.data.seasons import drop_untrainable  # noqa: E402
+from openrapm.data.within_folds import load_folds, read_fold  # noqa: E402
+from openrapm.prior_shrink import fit_multipliers, multipliers_by_season  # noqa: E402
 from _cli import check_flags, flag  # noqa: E402
-
-
-def _borrow(name: str, file: str):
-    """Another script's functions, loaded the way 99 loads 98's: one definition, never a copy."""
-    spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / file)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-C98 = _borrow("_calib98", "98_calibrator.py")      # Fold
-C99 = _borrow("_shrink99", "99_prior_shrink.py")   # load_folds, multipliers_for, fit_prior_multipliers
 
 # ------------------------------------------------------------------------------------------- what is audited
 # Every input a fold's player rows carry that a prior could read, by meaning (GLOSSARY.md has the plain names).
@@ -239,6 +228,24 @@ def decision_test(t: dict) -> bool:
 
 
 # ---------------------------------------------------------------------------------------------- the folds
+def add_team_net(rows: pd.DataFrame) -> pd.DataFrame:
+    """The team's net points per 100 over the games he played, from his on-court and off-court numbers (the
+    feasibility check's `team_net`; the fold reader, openrapm.data.within_folds, does not add it)."""
+    on_o, off_o = rows.onc_poss_o.to_numpy(float), rows.offc_poss_o.to_numpy(float)
+    on_d, off_d = rows.onc_poss_d.to_numpy(float), rows.offc_poss_d.to_numpy(float)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        scored = (rows.onc_o * on_o + rows.offc_o * off_o) / (on_o + off_o)
+        allowed = (rows.onc_d * on_d + rows.offc_d * off_d) / (on_d + off_d)
+    return rows.assign(team_net=(scored - allowed).fillna(0.0))
+
+
+def read_audit_fold(directory: Path, stem: str):
+    """One fold (openrapm.data.within_folds.read_fold) with `team_net` on its rated rows."""
+    fold = read_fold(directory, stem)
+    fold.rows = {side: add_team_net(rows) for side, rows in fold.rows.items()}
+    return fold
+
+
 class AuditFold:
     """One fold, reduced to what the audit needs.  With the level and home edge projected out (weighted), a
     correction basis B (one row per rated player of a side, centred) has X'X = B'HB, X'r = sign B'g and X'N = sign
@@ -275,7 +282,7 @@ class AuditFold:
                     w_s = np.maximum(poss_of(fold.rows[s_], s_), 1e-9)
                     z = normal_score(axis_scores(fold.rows[s_], w_s, [t for t, _ in axes]))
                     add[s_] = centre_columns(z, w_s) @ np.array([b for _, b in axes], dtype=float)
-        # 99's shrink on this fold: the prior part times its season's multiplier, re-centred per side by possessions
+        # step 4's shrink on this fold: the prior part times its season's multiplier, re-centred per side by possessions
         lo = np.average(m_o * po + add["O"] + uo, weights=o.poss_off.to_numpy(float))
         ld = np.average(m_d * pdf + add["D"] + ud, weights=d.poss_off.to_numpy(float))
         sp_o, sp_d = m_o * po + add["O"] - lo, m_d * pdf + add["D"] - ld
@@ -286,7 +293,7 @@ class AuditFold:
                 "raw": fold.y - fold.base,
                 "shrunk": fold.y - stand_in - Zo @ (sp_o + uo) - Zd @ (-(sp_d + ud))}
         if swap is not None:
-            # 106's ratings on this fold: its own shrink (99's test rule) and the swap step on top of it, read as two
+            # 106's ratings on this fold: its own shrink (step 4's test rule) and the swap step on top of it, read as two
             # more stages so the swap step's own lean is the difference between them, multipliers held equal
             for stage, variant in (("shrunk106", "shrunk"), ("swap", "swap0.5")):
                 v = swap[swap.variant == variant].set_index("player_id")
@@ -339,7 +346,7 @@ def load_setting(tags: list, setting: str, multipliers: pd.DataFrame, lines_of=N
             info = json.loads(path.read_text())
             failed = [k for k, v in info["checks"].items() if isinstance(v, bool) and not v]
             assert not failed, f"{tag} fold {stem}: leak checks failed {failed}"
-            fold = C98.Fold(directory, stem)
+            fold = read_audit_fold(directory, stem)
             folds.append(AuditFold(fold, float(m.at[fold.season, "prior_off"]),
                                    float(m.at[fold.season, "prior_def"]), setting,
                                    swap.get(stem) if swap is not None else None,
@@ -348,11 +355,12 @@ def load_setting(tags: list, setting: str, multipliers: pd.DataFrame, lines_of=N
 
 
 def shipped_multipliers(seasons, mult_tag: str = "lgb_noonc_within"):
-    """The product rule's multipliers for every season (99 as it ships: the folds of `mult_tag` pinned to 2017-2026,
+    """The product rule's multipliers for every season (step 4 as it ships: the folds of `mult_tag` pinned to 2017-2026,
     the rated season's own folds left out; other seasons borrow the pooled value).  A candidate is audited on its own
     multipliers, fitted on its own folds -- what would ship with it."""
-    folds = C99.load_folds(ROOT / "outputs" / "within" / mult_tag, (2017, 2026))
-    return C99.multipliers_for(seasons, folds, "product"), folds
+    folds = load_folds(ROOT / "outputs" / "within" / mult_tag, (2017, 2026))
+    multipliers = multipliers_by_season(seasons, folds, "product")
+    return multipliers.rename(columns={"multiplier_off": "prior_off", "multiplier_def": "prior_def"}), folds
 
 
 # ------------------------------------------------------------------------------------------------- the axes
@@ -719,7 +727,7 @@ def tradeset_leans(tests: list, alpha_path: Path) -> pd.DataFrame:
 # ------------------------------------------------------------------------------------------------ the paired mode
 def audit_setting(tags: list, mult_tag: str, setting: str, tests: list, seasons=None, correction: str = "") -> dict:
     """Load a fold folder set with its own multipliers and read every test on it.  `correction` = a 140 output: its
-    multipliers and lines, fitted outside each fold's season (the product rule), replace 99's."""
+    multipliers and lines, fitted outside each fold's season (the product rule), replace step 4's."""
     if seasons is None:
         seasons = sorted({int(p.stem.split("_")[1]) for tag in tags
                           for p in (ROOT / "outputs" / "within" / tag).glob("fold_*.json")})
@@ -739,7 +747,7 @@ def audit_setting(tags: list, mult_tag: str, setting: str, tests: list, seasons=
     readings, tenths, dropped = run_tests(folds, tests, by_era)
     est = {(r.test, r.side, r.stage, r.version, r.statistic, r.era): r.estimate for r in readings.itertuples()}
     return dict(folds=folds, readings=readings, tenths=tenths, drops=dropped, est=est, by_era=by_era,
-                pooled=C99.fit_prior_multipliers(mult_folds), mult_tag=mult_tag, tags=tags)
+                pooled=fit_multipliers(mult_folds), mult_tag=mult_tag, tags=tags)
 
 
 def paired(cand: dict, ref: dict, tests: list) -> tuple:
@@ -852,7 +860,7 @@ def main() -> None:
         print(f"the random folds carry the group correction {correction} (its multipliers and lines, fitted outside "
               f"each fold's season)", flush=True)
     folds, by_era = main_set["folds"], main_set["by_era"]
-    print(f"99's multipliers on {mult_tag} 2017-2026, all folds pooled: offence {main_set['pooled'][0]:.4f}, defence "
+    print(f"step 4's multipliers on {mult_tag} 2017-2026, all folds pooled: offence {main_set['pooled'][0]:.4f}, defence "
           f"{main_set['pooled'][1]:.4f}", flush=True)
     print(f"{len(folds)} random folds from {random_tags}, seasons {min(f.season for f in folds)}-"
           f"{max(f.season for f in folds)}; {len(tests)} tests ({sum(t['kind'] == 'group' for t in tests)} groups) "
