@@ -8,7 +8,7 @@ Every script here used to carry its own copy of
 
 nineteen copies of it, and not one of them looked at the flags it was NOT given.  So
 
-    python scripts/62_single_year_board.py --exclude_neighbors=1 ...
+    python scripts/62_single_year_board.py --exclude_neighbors=1 ...      (retired; tag archive/research-2026-10)
 
 ran happily with the American spelling, the prior saw the two seasons it was about to be scored on,
 and the number that came out looked exactly like a number that had not.  That is the shape of defect

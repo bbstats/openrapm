@@ -56,7 +56,7 @@ def player_ratings_table(wd, beta, cfg, seasons, beta_po=None, names=None,
     residual refit *given* the correction, which is what the retired scripts/10_boost.py shipped.  Adding a
     correction on top of a residual that was fit without it double-counts whatever it explains.
     `prior_parts` = (offense, defense) halves of an offset that IS the prior (the role-prior chain of
-    spm.py / gbdt_prior.py, raw sign): they are added into `prior_off` / `prior_def` so that
+    spm.py / the retired gbdt_prior.py, raw sign): they are added into `prior_off` / `prior_def` so that
     `rating = prior + u` holds with no linear box term at all.
     """
     kw = dict(lam=float(cfg["lam_plugin"]), lam_ratio=float(cfg["lam_ratio_plugin"]),

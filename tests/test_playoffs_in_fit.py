@@ -90,23 +90,3 @@ def test_role_inputs_count_playoff_minutes():
     assert (j.poss_on_all >= j.poss_on_rs - 1e-6).all()
     # the share is a share: pooling both phases moves the league's mean poss_pct very little
     assert abs(both.poss_on.sum() / both.team_poss.sum() - rs.poss_on.sum() / rs.team_poss.sum()) < 0.02
-
-
-@needs_data
-def test_the_cut_puts_every_playoff_game_on_the_scored_side():
-    """The two halves of "one entity", on the same real season.
-
-    A cut q splits the season into what the fit may see and what it is scored on.  Its playoff games
-    belong on the scored side: they happen after every regular-season game, so a fit that saw the first q
-    of the season has not seen them.  Until 2026-09-10 `season_frac` gave them -1, which put them below
-    every cut -- excluded from training by a special case AND excluded from scoring by the same
-    comparison, so they were in neither half.
-    """
-    from openrapm.inseason import season_frac
-    season = max(int(p.stem.split("_")[0]) for p in _STINTS.glob("*_PO.parquet"))
-    wd = build_window([season], CFG)
-    po_idx = wd.games.loc[wd.games["phase"] == "PO", "game_idx"].to_numpy()
-    assert len(po_idx) > 0
-
-    frac = season_frac(wd.games)
-    assert (frac[po_idx] == 1.0).all()

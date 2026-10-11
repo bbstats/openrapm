@@ -118,8 +118,9 @@ def season_of_units(wd, weights=None) -> np.ndarray:
     """The season (year) each Z unit played most, from the design.
 
     `weights`: per player-season possessions to decide "most" with, instead of the design's own unweighted
-    ones -- the exposure's `psx_poss_off_`, which carries the in-season kernel and cut (inseason.py).  Without
-    it a player whose current season is cut away would still be labelled with it.
+    ones -- the exposure's `psx_poss_off_`, which carries the in-season kernel and cut (retired; tag
+    archive/research-2026-10).  Without it a player whose current season is cut away would still be labelled
+    with it.
     """
     years = np.asarray(wd.spec.seasons, dtype=np.int64)
     if weights is None:

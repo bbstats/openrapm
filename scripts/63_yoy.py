@@ -20,8 +20,8 @@ is really his old team's credit stops predicting -- the `movers` split reads tha
 
 **What the rankings must satisfy to be tested honestly.**  A season's ratings may use that season's games
 and may use model coefficients learned from OTHER seasons -- but not from the two seasons being scored.
-`scripts/62_single_year_board.py --exclude_neighbours=1` builds a table that way.  A table whose prior was
-trained on every other season (the shipped `--exclude_neighbours=0` default) has seen the scored season's
+`openrapm rate --setting test` builds a table that way.  A table whose prior was
+trained on every other season (the shipped product setting) has seen the scored season's
 outcomes through the prior's coefficients and reads optimistically here.
 
 **`--fill=` gives a table a replacement level for the players it has no row for.**  A season's rankings

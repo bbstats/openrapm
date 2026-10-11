@@ -46,7 +46,7 @@ import sys
 import time
 from pathlib import Path
 
-# Thread pinning BEFORE numpy, exactly as scripts/62_single_year_board.py does it: a BLAS that spins up
+# Thread pinning BEFORE numpy, exactly as src/openrapm/commands/cli.py does it: a BLAS that spins up
 # twelve threads per small solve thrashes, and two builds at once can livelock.
 for _var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
     os.environ.setdefault(_var, "1")
@@ -58,11 +58,12 @@ import pandas as pd  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 from openrapm import tradeset as ts_mod  # noqa: E402
-from openrapm.data.config import load_config, resolve  # noqa: E402
+from openrapm.data.config import load_config  # noqa: E402
 from openrapm.data.roles import roles_path  # noqa: E402
 from openrapm.holdout import Context, Ratings, predict_season, score  # noqa: E402
-from openrapm.priorridge import armse  # noqa: E402
+from openrapm.scoring import armse  # noqa: E402
 from openrapm.data.shots import DEFENSE_TARGETS  # noqa: E402
+from openrapm.data.tables import team_of_rows  # noqa: E402
 
 # `load_table` is the one place the positive-good rating columns are turned into the model's raw sign
 # (defence = points allowed).  Importing it rather than copying it keeps a single definition of the flip:
@@ -84,28 +85,6 @@ from _cli import check_flags, flag as _flag, switch   # noqa: E402
 def _target(name):
     """A `design.TARGETS` key, or the `data.shots.DEFENSE_TARGETS` callable of that name."""
     return DEFENSE_TARGETS[name] if name in DEFENSE_TARGETS else name
-
-
-def team_of_rows(keys: pd.DataFrame, cfg) -> pd.DataFrame:
-    """The team whose points each team-game row counts, and the team defending it.
-
-    The stints carry no team id -- home and away are implied by the slot columns -- so it comes from the
-    per-game diagnostic frame written beside them, one row per game.
-    """
-    stints = resolve(cfg, "stints")
-    frames = []
-    for (season, phase), _ in keys.groupby(["season", "phase"], sort=True):
-        path = stints / f"{season}_{phase}_diag.parquet"
-        frames.append(pd.read_parquet(path, columns=["game_id", "home_team_id", "away_team_id"]))
-    diag = pd.concat(frames, ignore_index=True).drop_duplicates("game_id")
-    diag["game_id"] = diag.game_id.astype(str)
-    merged = keys.assign(game_id=keys.game_id.astype(str)).merge(diag, on="game_id", how="left")
-    if merged.home_team_id.isna().any():
-        raise SystemExit("a team-game has no row in the stint diagnostics; rebuild the stints")
-    home, away = merged.home_team_id.to_numpy(np.int64), merged.away_team_id.to_numpy(np.int64)
-    is_home_off = merged.is_home_off.to_numpy(bool)
-    return pd.DataFrame({"team_off": np.where(is_home_off, home, away),
-                         "team_def": np.where(is_home_off, away, home)})
 
 
 def block_of(season: int, first: int, last: int, width: int = 1) -> list:

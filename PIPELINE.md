@@ -1,7 +1,7 @@
 # How the model works
 
 Two builds live in this repo. **What the site publishes is the single-year rankings** of
-`scripts/62_single_year_board.py` — section 1 below. The three-season-window board of the retired
+`openrapm rate` (it replaced `scripts/62_single_year_board.py`, retired in the cleanup) — section 1 below. The three-season-window board of the retired
 `scripts/60_season_board.py` — section 3 — is no longer built but is still read by several
 tests, and nothing on `docs/` comes from it. The two share the stints, the design, the padded
 exposures and the idea of a box prior; they differ in the label, the prior's training rows, the
@@ -34,8 +34,8 @@ flowchart TD
     DES --> TGD
 
     subgraph LAB["The label — what the box prior is taught to predict"]
-        LOO["<b>Leave-season-out RAPM</b> — one rating per PLAYER over every<br/>season EXCEPT the one being rated, penalties 40,000 / 40,000 / 0<br/>each season's context columns kept separately<br/>normal equations added up once, so each held-out season is one solve<br/><code>looseason.LeaveSeasonOutRAPM</code>"]
-        UNS["<b>Un-shrink the DEFENSIVE label</b> — divide out the ridge's own<br/>n / (n + lambda), capped at a 4,444-possession floor; what the cap<br/>leaves is filled from the player's possession tier's mean level<br/>so a 200-possession man sits at his kind's replacement level, not 0<br/><code>62_single_year_board.unshrink_label</code>"]
+        LOO["<b>Leave-season-out RAPM</b> — one rating per PLAYER over every<br/>season EXCEPT the one being rated, penalties 40,000 / 40,000 / 0<br/>each season's context columns kept separately<br/>normal equations added up once, so each held-out season is one solve<br/><code>rapm.SeasonSums</code>"]
+        UNS["<b>Un-shrink the DEFENSIVE label</b> — divide out the ridge's own<br/>n / (n + lambda), capped at a 4,444-possession floor; what the cap<br/>leaves is filled from the player's possession tier's mean level<br/>so a 200-possession man sits at his kind's replacement level, not 0<br/><code>rapm.unshrink</code>"]
         LOO --> UNS
     end
 
@@ -43,9 +43,9 @@ flowchart TD
     TGD --> LOO
 
     subgraph PRI["The box prior — a gradient-boosted SPM, one per side"]
-        ROWS["<b>Chunk rows</b> — his career row PLUS every contiguous 1-, 2- and<br/>3-season run of it, all carrying the same label, with<br/><code>chunk_poss</code> and <code>chunk_seasons</code> saying how much evidence each rests on<br/><code>singleyear.chunk_rows</code>"]
-        FOLD["<b>Five player folds, balanced on the label</b><br/>every player's prior comes from the fit that never saw a row of his<br/><code>OutOfPlayerSPM</code>, <code>singleyear.stratified_player_folds</code>"]
-        BOOST["<b>chimeraboost</b> — 21 offensive / 17 defensive features,<br/>BorutaShap-selected<br/>then asked about the rated season's OWN box line<br/><code>singleyear.feature_set</code>, <code>gbdt_prior.py</code>"]
+        ROWS["<b>Chunk rows</b> — his career row PLUS every contiguous 1-, 2- and<br/>3-season run of it, all carrying the same label, with<br/><code>chunk_poss</code> and <code>chunk_seasons</code> saying how much evidence each rests on<br/><code>box_prior.training_rows</code>"]
+        FOLD["<b>Five player folds, balanced on the label</b><br/>every player's prior comes from the fit that never saw a row of his<br/><code>box_prior.fit_out_of_player</code>, <code>box_prior.balanced_player_folds</code>"]
+        BOOST["<b>LightGBM</b> — 17 offensive / 14 defensive features,<br/>BorutaShap-selected, without the on-court columns<br/>then asked about the rated season's OWN box line<br/><code>features.SHIPPED</code>, <code>box_prior.season_priors</code>"]
         ROWS --> FOLD --> BOOST
     end
 
@@ -54,8 +54,8 @@ flowchart TD
     PAN --> BOOST
 
     subgraph RID["The rating — the season's own possessions"]
-        RIDGE["<b>PriorRidgeCV</b> — shrink toward the PRIOR, not toward zero<br/>rating = scale x prior + residual<br/>residual penalty fixed at 13,037 on both sides, context penalty 0<br/>folds are whole GAMES; the objective is team-game error<br/>weighted toward close games<br/><code>priorridge.PriorRidgeCV</code>"]
-        XF["<b>The scale is priced on cross-fitted prior columns</b><br/>for each game fold the on-court columns are rebuilt from the<br/>training games alone and the boosters re-asked, so the free scale<br/>never reads back the outcomes of the games it is scored on<br/><code>_fold_prior_builder</code>, <code>--crossfit=scale</code>"]
+        RIDGE["<b>The prior-informed ridge</b> — shrink toward the PRIOR, not toward zero<br/>rating = scale x prior + residual<br/>residual penalty fixed at 13,037 on both sides, context penalty 0<br/><code>prior_rapm.fit</code>"]
+        XF["<b>The scale is fitted on the full-season prior</b><br/>the cross-fitted prior columns it was once priced on equalled it<br/>value for value (they rebuilt only the on-court columns, which the prior<br/>no longer reads), so the cleanup removed them<br/><code>prior_rapm.fit</code>"]
         XF --> RIDGE
     end
 

@@ -1,6 +1,6 @@
 """The layer boundary: model code may not load its own data.
 
-The project has two layers and one rule between them.
+The project has two layers, one rule between them, and a third folder that joins them.
 
     DATA   reads the disk and the network.  Scraping, stints, box tables, caches, loaders.
            A contributor may add a source here -- tracking data, a different feed, anything.
@@ -10,6 +10,11 @@ The project has two layers and one rule between them.
     MODEL  gets handed data and returns numbers.  The ridge, the box prior, the role prior,
            the padding, the design assembly, the calibration.  This is where a pull request
            that improves the model belongs, and it may not open a file.
+
+    COMMANDS  src/openrapm/commands/: `openrapm rate`, `openrapm folds`, ...  Each reads its inputs
+           through the data layer, runs the model steps and writes its outputs, so it may import
+           anything.  Nothing else may import it: a model module or a loader that reached a command
+           would reach everything the command reaches.
 
 The rule exists because the season boundary (src/openrapm/data/seasons.py) is only as good as the
 narrowest channel through which data can reach a fit.  If a model module may call `read_parquet`,
@@ -43,6 +48,7 @@ import pytest
 SRC = Path(__file__).resolve().parents[1] / "src" / "openrapm"
 sys.path.insert(0, str(SRC.parents[1]))
 DATA_DIR = "data"            # src/openrapm/data/: the data layer, by location
+COMMANDS_DIR = "commands"    # src/openrapm/commands/: the commands, by location; they may import anything
 
 # Clean on both rules: no I/O verb, no data-layer import.
 MODEL_LAYER = [
@@ -51,23 +57,20 @@ MODEL_LAYER = [
     "design.py",        # the design matrix from the frames it is handed; the stint column and counter names
     "estimator.py",     # the mixed model (Henderson), the eigen lambda path
     "exposure.py",      # cross-fitted, empirical-Bayes padded per-100 rates
-    "gbdt_prior.py",    # the box-score feature definitions and the career input names
-    "inseason.py",      # a game's position in its own season
     "investigate.py",   # the attribution instrument
     "pad.py",           # the padding helper
-    "pieces.py",        # the pieces of one season's vanilla RAPM, per side
-    "looseason.py",     # one rating per player from every season but one; additive season grams
-    "priorridge.py",    # the ratings ridge: prior as the centre, penalty by game-grouped CV
-    "rloocv.py",        # rebalanced leave-one-out: the splitter and the partner rule, numpy only
-    "lgbprior.py",      # experiments 44-45: the deterministic LightGBM prior and leave one player out, on given arrays
     "glossary.py",      # plain names for the feature codes, a table and nothing else
-    "stackprior.py",    # the stacked prior (experiment 31): fitted on the rows it is handed
     "simulate.py",      # the synthetic fixture the tests fit against
-    "singleyear.py",    # the single-year prior's feature list and its per-player aggregation
     "swapadjust.py",    # the swap adjustment: type model and per-player swaps, team totals held fixed
     "swaptest.py",      # the swap test: same-four lineup pairs, scored against a neighbouring season's ranking
     "tradeset.py",      # the team-game with-and-without-you ridge and its losses
     "windows.py",       # window labels and seasons, and the plug-in ratings table
+    "settings.py",      # the shipped settings, each with the experiment that set it
+    "features.py",      # the prior's input catalogue, the derived columns, the shipped lists
+    "rapm.py",          # step 1: the season sums, the leave-season-out RAPM, the un-shrunk label
+    "box_prior.py",     # step 2: training rows, balanced player folds, the out-of-player LightGBM prior
+    "prior_rapm.py",    # step 3: the ridge around the prior, the season's table, centring, the schema
+    "scoring.py",       # how a miss is reported: a mean square on the mean-absolute scale
 ]
 
 # Model code that still reaches its own data, and what through.  Nothing may be added here.
@@ -78,7 +81,7 @@ NEEDS_SPLIT = {
 # Top-level modules whose job IS to reach the disk or the network, not yet moved into data/.
 DATA_LAYER = {
     "holdout.py",       # the criterion runner: its Context loads the roles table, box scores and designs
-    "seasoninputs.py",  # one season rebuilt from any subset of its games (box scores, stints, roles): 97 and 62
+    "seasoninputs.py",  # one season rebuilt from any subset of its games (box scores, stints, roles): `folds`
 }
 
 # What the two exception lists held when the data layer moved into data/ (2026-10 cleanup, phase 3).  They
@@ -108,6 +111,10 @@ def _modules() -> set:
 
 def _is_data(module: str) -> bool:
     return module.startswith(DATA_DIR + "/") or module in DATA_LAYER
+
+
+def _is_command(module: str) -> bool:
+    return module.startswith(COMMANDS_DIR + "/")
 
 
 def _parse(path: Path):
@@ -204,11 +211,28 @@ def test_a_model_module_does_no_io(module):
 def test_a_model_module_does_not_import_the_data_layer(module):
     """The rule that catches the interesting case.  box_scores.py calls no I/O verb and still scrapes,
     because it calls ingest.load_gamelog.  Reaching data through a sibling is still reaching data."""
-    bad = [(ln, m) for ln, m in _sibling_imports(SRC / module) if _is_data(m) or m in NEEDS_SPLIT]
+    bad = [(ln, m) for ln, m in _sibling_imports(SRC / module) if _is_data(m) or m in NEEDS_SPLIT or _is_command(m)]
     assert not bad, (
-        f"src/openrapm/{module} imports data-layer module(s) {sorted({m for _, m in bad})} at lines "
+        f"src/openrapm/{module} imports data-layer or command module(s) {sorted({m for _, m in bad})} at lines "
         f"{[ln for ln, _ in bad]} (a NEEDS_SPLIT module counts: it reaches data one step removed).  "
         f"Whatever it needs from them should be passed in.")
+
+
+def test_only_the_commands_and_the_entry_file_import_the_commands():
+    """A loader (data/, holdout.py, seasoninputs.py) or a model module that imported a command would reach
+    everything the command reaches.  commands/ itself may import anything."""
+    bad = {}
+    for module in sorted(_modules()):
+        if _is_command(module) or module == "__main__.py":
+            continue
+        reached = sorted({m for _, m in _sibling_imports(SRC / module) if _is_command(m)})
+        if reached:
+            bad[module] = reached
+    assert not bad, f"modules outside commands/ import a command: {bad}"
+
+
+def test_the_entry_file_calls_the_command_line():
+    assert [m for _, m in _sibling_imports(SRC / "__main__.py")] == [COMMANDS_DIR + "/cli.py"]
 
 
 def test_the_exception_lists_only_shrink():
@@ -236,13 +260,16 @@ def test_the_lists_do_not_overlap():
         "a package entry file belongs to neither layer"
     assert not any(m.startswith(DATA_DIR + "/") for m in [*MODEL_LAYER, *NEEDS_SPLIT]), \
         "a module in data/ is data layer by location; it cannot be listed as model code"
+    assert not any(_is_command(m) for m in [*MODEL_LAYER, *NEEDS_SPLIT, *DATA_LAYER]), \
+        "a module in commands/ is placed by location; it cannot be listed in a layer"
 
 
 def test_every_module_is_classified():
     """A new module must be placed in one layer or the other, so nothing lands here unnoticed.  A module
-    in data/ is placed by being there."""
+    in data/ or commands/ is placed by being there."""
     known = set(MODEL_LAYER) | set(NEEDS_SPLIT) | DATA_LAYER | PACKAGE_FILES
-    unclassified = {m for m in _modules() if m not in known and not m.startswith(DATA_DIR + "/")}
+    unclassified = {m for m in _modules() if m not in known and not m.startswith(DATA_DIR + "/")
+                    and not _is_command(m)}
     assert not unclassified, (
         f"new module(s) {sorted(unclassified)}: add each to MODEL_LAYER (if it takes its data as an "
         f"argument and imports no loader), to NEEDS_SPLIT (if it is model code that still loads), or "

@@ -2,7 +2,7 @@
 import numpy as np
 import pandas as pd
 
-from openrapm.data.roles import (INPUTS, design7, parse_minutes, player_season_inputs, roles_from_boxes,
+from openrapm.data.roles import (INPUTS, design7, franchise, parse_minutes, player_season_inputs, roles_from_boxes,
                                  shares_from_stints)
 
 HOME, AWAY = 1610612700, 1610612800
@@ -82,3 +82,9 @@ def test_design7():
     X = design7([0.5, 0.2], [1.0, 0.0], [25.0, 33.0])
     assert X.shape == (2, 7) and len(INPUTS) == 7
     assert X[0, 1] == 0.25 and X[1, 6] == 33.0 ** 3
+
+
+def test_the_charlotte_move_is_one_franchise():
+    """1610612766 is New Orleans's franchise through 2002 and the Bobcats' from 2005; nothing else moves."""
+    got = franchise([1610612766, 1610612766, 1610612766, 1610612740, 1610612747], [2002, 2005, 1997, 2003, 2002])
+    assert got.tolist() == [1610612740, 1610612766, 1610612740, 1610612740, 1610612747]

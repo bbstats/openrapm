@@ -26,6 +26,7 @@ from ..design import (AWAY_SLOTS, HOME_SLOTS, POSS_COUNTERS, SEASON_PHASES, SLOT
                       WindowData, _order_games, build_design, ps_key)
 from .box_scores import season_box
 from .config import resolve
+from .shots import DEFENSE_TARGETS
 from .stints import build_season
 
 _STINT_CACHE: dict = {}
@@ -360,3 +361,38 @@ def build_window_cached(seasons, cfg, phases=SEASON_PHASES, gt_weight=None, targ
     parts = dict(Z=Z, F=Fd, lineup_o=lo, lineup_d=ld, game_idx=r_game.astype(np.int64))
     return WindowData(X_src=make_X, y=y, w=w, groups=groups, spec=spec, game_box=game_box, game_poss=game_poss, rows=rows,
                       games=games, counters=counters, parts=parts)
+
+
+class DesignCache:
+    """One season's design on one target, built from the cached pieces and kept for the next few requests.
+
+    `target` is a `design.TARGETS` key ("pts", "xpts_ft") or a `data.shots.DEFENSE_TARGETS` key ("x3def",
+    "x3def_w0.25"), which reprices the same season's points design.  Once `keep` designs are held the cache
+    empties: a season's design is hundreds of megabytes, and a build asks for them in season order.
+    """
+
+    def __init__(self, cfg: dict, keep: int = 4):
+        self.cfg, self.keep = cfg, int(keep)
+        self._designs: dict = {}
+
+    def season(self, season: int, target: str) -> WindowData:
+        """The design of `season` on `target`, built on first request."""
+        key = (int(season), target)
+        if key not in self._designs:
+            design = self._build(int(season), target)
+            if len(self._designs) >= self.keep:
+                self._designs.clear()
+            self._designs[key] = design
+        return self._designs[key]
+
+    def clear(self) -> None:
+        """Forget every held design."""
+        self._designs.clear()
+
+    def _build(self, season: int, target: str) -> WindowData:
+        if target in DEFENSE_TARGETS:
+            design = DEFENSE_TARGETS[target]([season], self.cfg, self.season(season, "pts"))
+            return design[0] if isinstance(design, tuple) else design
+        if target not in TARGETS:
+            raise KeyError(f"unknown target {target!r}; have {sorted(TARGETS)} and {sorted(DEFENSE_TARGETS)}")
+        return build_window([season], self.cfg, target=target)

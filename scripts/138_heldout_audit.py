@@ -13,7 +13,7 @@ incumbent's folds (`--reference=lgb_noonc_within`) and the noise control's (`--c
 every lean's change with a jackknife of the paired difference, how far the ratings themselves moved along each axis,
 and the paired held-out error per fold (outputs/csv/<out>_paired.csv, outputs/<out>_paired_error.json).
 
-What is measured, in one sentence.  For every held-out team-game of the within-season folds (scripts/97: a season
+What is measured, in one sentence.  For every held-out team-game of the within-season folds (`openrapm folds`: a season
 rated from three quarters of its games, scored on the fourth), the points per 100 as scored minus what the ratings
 predict -- each rated player's share of the possessions times his rating as it ships (the box-score prior part
 times the multiplier scripts/99 fits without that fold's season, plus the games' part, re-centred), the stand-in
@@ -622,7 +622,7 @@ def group_shapley_shares(seasons: list, groups: dict, out: Path, orderings: int 
     leaves (4.7.0: "not implemented for linear trees"), and shap's own model-agnostic Partition explainer took 35
     minutes a season and side; this is the same group-level quantity in a few minutes (linear leaves predict slowly,
     so `threads` cores; run it only when no build is running)."""
-    from openrapm import singleyear as sy
+    from openrapm.features import add_features
     panel, _ = drop_untrainable(pd.read_parquet(ROOT / "outputs" / "role_panel_season.parquet"),
                                 load_config(), what="the season panel")
     loaded, rows_out = {}, []
@@ -634,7 +634,7 @@ def group_shapley_shares(seasons: list, groups: dict, out: Path, orderings: int 
         for side in SIDES:
             s = loaded[name][season][side]
             feats, model_feats = s["feats"], s["model_feats"]
-            held = sy.season_frame(panel[(panel.side == side) & (panel.season == season)], feats)
+            held = add_features(panel[(panel.side == side) & (panel.season == season)].copy(), feats)
             held = held.assign(chunk_poss=held.poss.to_numpy(float), chunk_seasons=1.0)
             X = held[model_feats].to_numpy(float)
             n, p = X.shape
@@ -673,7 +673,7 @@ def tradeset_leans(tests: list, alpha_path: Path) -> pd.DataFrame:
     """Each decision test's straight-line lean of the neighbouring-season miss (the trade set's alpha on actual points,
     eligible rows) on the input's within-season normal score, standard errors clustered by player.  It never fits
     anything: a lean the season's own games find and this contradicts at |z| 2 does not count."""
-    from openrapm import singleyear as sy
+    from openrapm.features import add_features
     alpha = pd.read_parquet(alpha_path)
     alpha = alpha[alpha.eligible]
     # gated like every reader of the panel: a season still being played never enters a reading
@@ -683,7 +683,7 @@ def tradeset_leans(tests: list, alpha_path: Path) -> pd.DataFrame:
                     for c in ([t["code"]] if t["kind"] == "input" else t["members"])})
     rows = []
     for side, name in (("O", "offense"), ("D", "defense")):
-        frame = sy.season_frame(panel[panel.side == side], codes)
+        frame = add_features(panel[panel.side == side].copy(), codes)
         frame = frame.merge(alpha[alpha.side == name][["player_id", "season", "alpha_good"]],
                             on=["player_id", "season"], how="inner").reset_index(drop=True)
         w = np.maximum(frame["poss"].to_numpy(float), 1e-9)          # the panel's possessions on this side

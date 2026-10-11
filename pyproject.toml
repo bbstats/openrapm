@@ -9,14 +9,15 @@ dependencies = [
   "pandas>=2.2",          # groupby().apply(include_groups=) lands in 2.2; used in six places
   "pyarrow>=14",
   "scikit-learn>=1.4",
-  "chimeraboost>=0.34",   # imported by scripts/62_single_year_board.py and openrapm.stackprior until 62 is replaced
-  "lightgbm>=4.7",        # the shipped box-score prior since 2026-10-08 (openrapm.lgbprior)
-  "joblib>=1.3",          # leave-one-player-out fits in parallel processes (openrapm.lgbprior)
+  "lightgbm>=4.7",        # the shipped box-score prior since 2026-10-08 (openrapm.box_prior)
   "matplotlib>=3.8",
   "nba_api>=1.4",
   "pyyaml>=6",
   "requests>=2.31",
 ]
+
+[project.scripts]
+openrapm = "openrapm.commands.cli:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-xdist>=3"]

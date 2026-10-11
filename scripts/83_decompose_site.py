@@ -61,11 +61,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
-from openrapm import singleyear as sy  # noqa: E402
 from openrapm.data.config import load_config  # noqa: E402
 from openrapm.data.designs import build_window  # noqa: E402
 from openrapm.data.ingest import raw_dir  # noqa: E402
-from openrapm.looseason import LeaveSeasonOutRAPM  # noqa: E402
+from openrapm.rapm import SeasonSums  # noqa: E402
+from openrapm.settings import PRODUCT  # noqa: E402
 
 RAW = raw_dir(load_config())   # the scraped box scores and bio files (config paths.raw)
 
@@ -126,22 +126,22 @@ def side_team(teams: pd.Series, game_ids: np.ndarray, players: np.ndarray) -> np
 
 def span_fit(seasons, cfg, lam: float) -> dict:
     """One span's vanilla RAPM: its rows in global columns, every row's ten players, the fit, the published ratings."""
-    rapm, designs = LeaveSeasonOutRAPM(min_possessions=0.0), {}
+    rapm, designs = SeasonSums(min_possessions=0.0), {}
     for season in seasons:
         designs[season] = build_window([season], cfg, target="pts")
-        rapm.add_season(season, designs[season])
-    gram, rhs, poss, n_context = rapm._assemble(())
+        rapm.add(season, designs[season])
+    gram, rhs, poss, n_context = rapm.assemble(())
     n = poss.size
     p = 2 * n + n_context
     parts, lineup_o, lineup_d, w, y, column = [], [], [], [], [], 2 * n
     game_ids, team_att, team_def, season_row = [], [], [], []
-    for season in rapm.seasons:                  # _assemble's order, so its context offsets are ours
-        wd, stored = designs[season], rapm._season[season]
+    for season in rapm.seasons:                  # assemble's order, so its context offsets are ours
+        wd, slot = designs[season], rapm.player_columns(season)
         F = np.asarray(wd.parts["F"], dtype=float)
         rows, n_f = F.shape
-        if n_f != stored["n_context"]:
-            raise SystemExit(f"{season}: {n_f} context columns in the design, {stored['n_context']} in the fit")
-        lo, ld = stored["slot"][np.asarray(wd.parts["lineup_o"])], stored["slot"][np.asarray(wd.parts["lineup_d"])]
+        if n_f != rapm.context_size(season):
+            raise SystemExit(f"{season}: {n_f} context columns in the design, {rapm.context_size(season)} in the fit")
+        lo, ld = slot[np.asarray(wd.parts["lineup_o"])], slot[np.asarray(wd.parts["lineup_d"])]
         indices = np.hstack([lo, ld + n, np.broadcast_to(column + np.arange(n_f), (rows, n_f))])
         data = np.hstack([np.ones((rows, 10)), F])
         parts.append(sp.csr_matrix((data.ravel(), indices.ravel(),
@@ -164,7 +164,7 @@ def span_fit(seasons, cfg, lam: float) -> dict:
     penalty[(diag <= 0) & (penalty == 0)] = 1.0
     factor = sla.cho_factor(gram + np.diag(penalty))
     beta = sla.cho_solve(factor, rhs)
-    keep = poss >= sy.MIN_POSSESSIONS            # the published zero point, as the rankings pages set it
+    keep = poss >= PRODUCT.labels.min_possessions     # the published zero point, as the rankings pages set it
     w_off, w_def = np.where(keep, poss, 0.0), np.where(keep, diag[n:2 * n], 0.0)
     off = beta[:n] - w_off @ beta[:n] / w_off.sum()
     dfn = -(beta[n:2 * n] - w_def @ beta[n:2 * n] / w_def.sum())

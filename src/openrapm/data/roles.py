@@ -27,7 +27,7 @@ import numpy as np
 import pandas as pd
 
 from ..design import AWAY_SLOTS, HOME_SLOTS
-from ..gbdt_prior import CAREER_INPUTS
+from ..features import CAREER as CAREER_INPUTS
 from .config import DEFAULT_PATHS, resolve
 from .ingest import GAME_PREFIX, TIMEOUT, _retry, game_table, load_gamelog, raw_dir, refuse_if_offline, season_str
 
@@ -38,6 +38,21 @@ from ..design import SEASON_PHASES as ROLE_PHASES  # noqa: E402
 
 INPUTS = ["poss_pct", "poss_pct2", "gs_pct", "gs_pct2", "age", "age2", "age3"]
 RAW_INPUTS = ["poss_pct", "gs_pct", "age"]
+
+# One franchise, two team ids: the Charlotte Hornets moved to New Orleans after 2001-02 and took a new id
+# with them (1610612740 from 2003); from 2005 1610612766 is the Bobcats, now the Hornets, and is itself.
+# Unmapped, a player who stayed through the move looks like he changed teams: 12 of Charlotte's 15 in
+# 2002.  Every other team id in 1997-2026 covers all thirty seasons.  (old id, first, last season) -> id.
+FRANCHISE_MOVES = {(1610612766, 1997, 2002): 1610612740}
+
+
+def franchise(team_id, season) -> np.ndarray:
+    """Team ids as franchises: `FRANCHISE_MOVES` applied, everything else unchanged."""
+    team = np.array(team_id, dtype=np.int64)
+    season = np.asarray(season)
+    for (old, first, last), new in FRANCHISE_MOVES.items():
+        team[(team == old) & (season >= first) & (season <= last)] = new
+    return team
 
 
 def parse_minutes(s) -> float:
@@ -210,8 +225,8 @@ def player_season_inputs(roles: pd.DataFrame, cap: float = 0.9) -> pd.DataFrame:
     return g[["player_id", "season", "games", "starts", "minutes", "poss_on", "team_poss", "poss_pct", "gs_pct", "age", "age_imputed"]]
 
 
-# CAREER_INPUTS (exp_yrs, exp_poss, entry_age) are defined in gbdt_prior.py, the model code that reads
-# them; `career_inputs` below builds them.
+# CAREER_INPUTS (exp_yrs, exp_poss, entry_age) are features.CAREER, named in the model code that reads them;
+# `career_inputs` below builds them.
 def career_inputs(inputs: pd.DataFrame, before_season: int, player_ids=None, age=None) -> pd.DataFrame:
     """Per player, what he had behind him BEFORE `before_season`: seasons played, possessions (thousands) and
     the age he entered at.
@@ -247,7 +262,8 @@ def career_inputs(inputs: pd.DataFrame, before_season: int, player_ids=None, age
 
 
 def cut_role_inputs(inputs: pd.DataFrame, season: int, keep_game_ids, cfg, cap: float = 0.9) -> pd.DataFrame:
-    """`player_season_inputs` with one season rebuilt from part of its games (the in-season cut, inseason.py).
+    """`player_season_inputs` with one season rebuilt from part of its games (the in-season cut, retired; tag
+    archive/research-2026-10).
 
     A rating fit on the first q of a season must not see the role the player ended it in: `poss_pct` and
     `gs_pct` are the share of possessions and of starts SO FAR, from the kept games only, and the team's
@@ -299,8 +315,8 @@ def window_inputs(wd, inputs: pd.DataFrame, cap: float = 0.9, psx_weights=None) 
     season's possession-weighted league mean and is counted in .attrs["n_missing"].
 
     `psx_weights`: per player-season weights to use instead, one per psx unit -- the exposure's own
-    `psx_poss_off_`, which carries the in-season kernel and cut (inseason.py).  Without it a
-    down-weighted season would still count for its full possessions here.
+    `psx_poss_off_`, which carries the in-season kernel and cut (retired; tag archive/research-2026-10).
+    Without it a down-weighted season would still count for its full possessions here.
     """
     spec = wd.spec
     psx = spec.psx_table[["psx_idx", "player_id", "season", "ps_idx"]].copy()

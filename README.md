@@ -27,8 +27,7 @@ because one fixture reached for box scores that only one of them needed.
 
 You can read, change and test the model without downloading anything.
 
-Python 3.11+. The one unfamiliar dependency is [`chimeraboost`](https://github.com/bbstats/chimeraboost),
-the gradient booster the box prior uses; it is first-party and Apache-2.0.
+Python 3.11+. The box prior is LightGBM's gradient-boosted trees (`lightgbm`), installed with the rest.
 
 ## The two rules
 
@@ -67,15 +66,15 @@ what a pull request has to clear, and `src/openrapm/pbo.py` for the number that 
 
 A box prior pulled toward what one season's possessions say. **One rating per player per season,
 from that season's games only** — a player's other seasons may reach his rating's coefficients but
-never his rating. `scripts/62_single_year_board.py` is the whole chain:
+never his rating. `openrapm rate` (`src/openrapm/commands/build.py`) is the whole chain:
 
 1. **The label** — one RAPM per player over every season *except* the one being rated
-   (`looseason.py`). It is what the box prior is taught to predict, and it cannot contain the answer.
-2. **The box prior** — chimeraboost on the player's padded box rates, his role and his size
-   (`singleyear.py`, `gbdt_prior.py`). Trained on his career row plus contiguous 1-3 season chunks,
+   (`rapm.py`). It is what the box prior is taught to predict, and it cannot contain the answer.
+2. **The box prior** — LightGBM on the player's padded box rates, his role and his size
+   (`box_prior.py`, `features.py`). Trained on his career row plus contiguous 1-3 season chunks,
    and fitted in five player folds so no player's prior comes from a fit that saw his own rows.
 3. **The rating** — a ridge of the season's own possessions with that prior as its centre
-   (`priorridge.py`): `scale x prior + residual`, the scale priced on cross-fitted prior columns,
+   (`prior_rapm.py`): `scale x prior + residual`, the scale unpenalised,
    the residual penalty fixed at 13,037 on both sides. Then centred at possession-weighted zero.
 
 Positive is good on both ends. `PIPELINE.md` draws the older three-season-window board, which the
@@ -91,7 +90,7 @@ once, never a fitting target** — it exists to catch a board that has gone gros
 python scripts/01_ingest.py 1997 2026 RS,PO   # play-by-play and box scores. DAYS, but resumable.
 python scripts/02_stints.py 1997 2026 RS,PO   # possessions with the same ten on the floor
 python scripts/49_role_panel.py --season      # APM, role prior, prior-informed RAPM, one row per season
-python scripts/62_single_year_board.py --out=season_ratings_product    # the ratings, ~3 min a season
+python -m openrapm rate --name product        # steps 1-3 -> outputs/season_ratings_product_step3.parquet
 python scripts/52_site.py                     # -> docs/data/ratings.json for the page
 python scripts/83_decompose_site.py           # -> docs/data/decompose_*.json for docs/decompose.html
 ```
@@ -121,10 +120,11 @@ cleanup (tag archive/research-2026-10).
       exposure.py    cross-fitted, empirical-Bayes padded per-100 rates
       estimator.py   the mixed model (Henderson), eigen lambda path
       spm.py         APM and the role prior
-      gbdt_prior.py  the box-score feature definitions the prior reads
-      looseason.py   the label: one RAPM per player from every season but the rated one
-      singleyear.py  the single-year prior's features and its per-player aggregation
-      priorridge.py  the ratings ridge: the prior as the centre, the season's possessions as evidence
+      features.py    the box-score inputs the prior reads, and the shipped lists
+      rapm.py        step 1, the label: one RAPM per player from every season but the rated one
+      box_prior.py   step 2, the box prior: training rows, player folds, LightGBM
+      prior_rapm.py  step 3, the ratings ridge: the prior as the centre, the season's possessions as evidence
+      commands/      `openrapm rate`, `openrapm folds`, `openrapm compare`
       holdout.py     the out-of-season test: runner, splits, scores
 
 `DECISIONS.md` is what the test has settled, what it rejected, and the measurement traps that have

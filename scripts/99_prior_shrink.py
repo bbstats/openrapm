@@ -5,7 +5,7 @@ multiplier per side, the games' part unchanged.
                                       [--rule=product|test] [--tag=within] [--fold_seasons=2017-2026|all]
                                       [--check=<existing table to reproduce>]
 
-Why.  Rated from three quarters of a season and scored on the other quarter (scripts/97_within_season.py, the
+Why.  Rated from three quarters of a season and scored on the other quarter (`openrapm folds`, the
 within-season folds of 2017-2026), the two parts of a rating hold up differently: the games' own adjustment holds up
 (held-out coefficient 1.21 on offence) and the box-score prior part, which the ridge stretches about 1.9x on offence,
 does not (0.70; 0.64 for players with 2,500+ possessions).  Multiplying the prior part by the held-out coefficient --

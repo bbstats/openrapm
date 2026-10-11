@@ -7,6 +7,7 @@ root; an absolute one is used as it is.
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -23,6 +24,9 @@ DEFAULT_PATHS = {
     "stints": "data/stints",          # stints, their diagnostics and the per-game shooter tables
     "cache": "data/cache",            # rebuildable caches: roles, bio, the per-season design pieces
     "shot_curves": "data/shotcurve",  # the league's make probability by distance, one file per season
+    "outputs": "outputs",             # the ratings tables, the saved prior models, the run logs
+    "panel": "outputs/role_panel_season.parquet",   # the season panel: one row per player, season and side
+    "within": "outputs/within",       # the within-season folds, one folder per tag
 }
 
 # Windows consoles default to cp1252; player names are UTF-8 (Schröder, Ginóbili).
@@ -60,3 +64,16 @@ def resolve(cfg: dict, key: str) -> Path:
     if key not in paths and key not in DEFAULT_PATHS:
         raise KeyError(f"config.yaml paths has no {key!r}")
     return resolve_path(cfg, paths.get(key, DEFAULT_PATHS.get(key)))
+
+
+def booster_params(cfg: dict, path: str | Path) -> dict:
+    """{"O": LightGBM settings, "D": LightGBM settings} from a tracked params/ file.
+
+    `path` is `settings.PriorSettings.booster_file`, relative to the repository root.  Only the tracked copy is
+    read: an untracked file of the same name elsewhere can never shadow it.
+    """
+    spec = json.loads(resolve_path(cfg, path).read_text(encoding="utf-8"))
+    for side in ("O", "D"):
+        if spec.get(side, {}).get("learner") != "lightgbm" or "params" not in spec[side]:
+            raise ValueError(f"{path}: side {side} must name the LightGBM learner and its params")
+    return {side: dict(spec[side]["params"]) for side in ("O", "D")}

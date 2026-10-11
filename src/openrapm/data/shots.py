@@ -156,10 +156,10 @@ def season_totals(season: int, cfg, keep=None, phases: tuple = SHOT_PHASES) -> t
     """Per shooter per half ("A", "B", "ALL") totals of one season over `phases`, shots and free throws, read
     once per process.  A block's totals are the sum over its seasons (`block_totals`).
 
-    `keep`: the game_ids of that season the caller may see (inseason.keep_games).  A cut season is read
-    fresh and NOT cached, because the totals then depend on the cut and not only on the season.  A cut names
-    regular-season games only, so filtering by it drops the playoffs whatever `phases` says -- which is what
-    a fit that has seen only the first q of a season should see.
+    `keep`: the game_ids of that season the caller may see (the retired in-season cut; tag
+    archive/research-2026-10).  A cut season is read fresh and NOT cached, because the totals then depend on
+    the cut and not only on the season.  A cut names regular-season games only, so filtering by it drops the
+    playoffs whatever `phases` says -- which is what a fit that has seen only the first q of a season should see.
     """
     key = (int(season), tuple(phases))
     if keep is not None:
@@ -189,7 +189,8 @@ def block_totals(seasons, cfg, extra_seasons=(), keep=None,
                  phases: tuple = SHOT_PHASES) -> tuple[dict, dict]:
     """The per-half totals of a block of seasons: each half summed over the seasons; `extra_seasons` (earlier
     ones, `prev`) added whole to every half.  `keep` is {season: game_ids} for any season the caller may only
-    see part of (inseason.keep_games); a season it does not name is read whole."""
+    see part of (the retired in-season cut; tag archive/research-2026-10); a season it does not name is read
+    whole."""
     parts = [season_totals(s, cfg, keep=None if keep is None else keep.get(int(s)), phases=phases)
              for s in seasons]
     T, F = {}, {}
@@ -216,7 +217,7 @@ def player_shot_frame(seasons, cfg, player_ids=None, keep=None) -> pd.DataFrame:
     `shot_fg2a ... shot_xl3` are the sums of `SHOT_COLS` over the block's games; `shot_lg2` / `shot_lg3` are
     the league's make rate on twos and threes over the same games and `shot_lgpps` its points per field-goal
     attempt, constant down the frame.  Those three are the pad targets of the shot-quality features
-    (`gbdt_prior.add_shotq`): padding toward the BLOCK's own level rather than a constant leaves a 40-attempt
+    (`features.add_shotq`): padding toward the BLOCK's own level rather than a constant leaves a 40-attempt
     player at his era's average instead of 1997's, and the league make rate on twos moved 0.468 -> 0.550
     across the 28 seasons.
 

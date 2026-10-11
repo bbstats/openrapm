@@ -54,16 +54,16 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
-from openrapm import singleyear as sy  # noqa: E402
 from openrapm.archetype import cluster_proba, fit_mixture  # noqa: E402
 from openrapm.data.config import load_config  # noqa: E402
-from openrapm.data.roles import roles_path  # noqa: E402
+from openrapm.data.roles import franchise, roles_path  # noqa: E402
+from openrapm.features import CLOSENESS, NET, OFFC, PO_SHARE, PRIOR_FEATURES, add_features  # noqa: E402
 from openrapm.glossary import plain  # noqa: E402
 from openrapm.data.seasons import drop_untrainable  # noqa: E402
 
 N_CELLS = 6                        # levels for the adjustment's own check
 N_GROUPS = 5                       # fifths
-STATS = list(dict.fromkeys(sy.PRIOR_FEATURES + sy.OFFC + sy.NET + sy.CLOSENESS + sy.PO_SHARE))
+STATS = list(dict.fromkeys(PRIOR_FEATURES + OFFC + NET + CLOSENESS + PO_SHARE))
 TYPE_RATES = ["fg2m", "fg2_miss", "fg3m", "fg3_miss", "ftm", "ft_miss", "orb", "drb", "ast", "tov", "stl", "blk",
               "pf"]
 SIDES = {"offense": ("O", "off", "def"), "defense": ("D", "def", "off")}
@@ -155,7 +155,7 @@ def team_moves() -> pd.DataFrame:
     """Per player-season: whether he was on the same franchise the season before and the season after."""
     roles = pd.read_parquet(roles_path(load_config()))
     played = roles[roles.poss_on > 0][["player_id", "season", "team_id", "poss_on"]].copy()
-    played["team_id"] = sy.franchise(played.team_id.to_numpy(), played.season.to_numpy())
+    played["team_id"] = franchise(played.team_id.to_numpy(), played.season.to_numpy())
     main = (played.groupby(["player_id", "season", "team_id"], as_index=False).poss_on.sum()
             .sort_values("poss_on").drop_duplicates(["player_id", "season"], keep="last")
             [["player_id", "season", "team_id"]])
@@ -298,7 +298,7 @@ def main() -> None:
                                 load_config(), what="the season panel")
     panel = panel[panel.poss > 0]
     moves = team_moves()
-    stats_o = sy.season_frame(panel[panel.side == "O"], sy.PRIOR_FEATURES).drop_duplicates(["player_id", "season"])
+    stats_o = add_features(panel[panel.side == "O"].copy(), PRIOR_FEATURES).drop_duplicates(["player_id", "season"])
     stats_o["player_type"], type_names = player_types(stats_o)
     print("player types (fitted on player-seasons with 500+ possessions, rates standardised within each season):")
     counts = stats_o.player_type.value_counts()
@@ -306,7 +306,7 @@ def main() -> None:
         print(f"  {label} ({counts.get(label, 0):,} player-seasons)")
     groups, people, subsets, html = [], [], [], []
     for side, (short, own, other) in SIDES.items():
-        stats = sy.season_frame(panel[panel.side == short], sy.PRIOR_FEATURES).drop_duplicates(["player_id", "season"])
+        stats = add_features(panel[panel.side == short].copy(), PRIOR_FEATURES).drop_duplicates(["player_id", "season"])
         keep = ["player_id", "season", "poss"] + [c for c in STATS + [f"raw_{c}" for c in TYPE_RATES]
                                                   if c in stats.columns and c not in ("poss",)]
         stats = stats[list(dict.fromkeys(keep))]

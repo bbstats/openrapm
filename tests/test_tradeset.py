@@ -15,7 +15,7 @@ import pandas as pd
 import pytest
 
 from openrapm import tradeset as ts_mod
-from openrapm.priorridge import MAE_SCALE
+from openrapm.scoring import MAE_SCALE
 from openrapm.design import FEATURES, build_design
 from openrapm.simulate import simulate
 

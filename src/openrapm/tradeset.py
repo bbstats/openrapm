@@ -48,7 +48,8 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 
-from .priorridge import MAE_SCALE, solve_diag      # MAE_SCALE: a mean square on the typical-miss scale
+from .rapm import solve_ridge
+from .scoring import MAE_SCALE      # a mean square on the typical-miss scale
 
 __all__ = ["TradeSet", "team_game_design", "replacement_fill", "offset_vector", "fit_alpha",
            "normal_equations", "solve_alpha", "rating_columns", "team_columns", "exposure_table",
@@ -268,7 +269,7 @@ def solve_alpha(gram, rhs, n_players: int, n_free: int, lam: float) -> tuple:
     """
     n = 2 * int(n_players)
     penalty = np.concatenate([np.full(n, float(lam)), np.zeros(int(n_free))])
-    solution = solve_diag(gram, rhs, penalty)
+    solution = solve_ridge(gram, rhs, penalty)
     return solution[:n], solution[n:]
 
 

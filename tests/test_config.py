@@ -40,18 +40,13 @@ def _leaves(node, path=()):
             yield from _leaves(v, path + (str(k),))
 
 
-# Blocks handed to something else whole -- the booster, mostly -- so their leaves are consumed by
-# name somewhere other than this repo and must not be reported as unread.
-FORWARDED = ("gbdt.params", "gbdt.params_def")
-
-
 def _unread_keys() -> set:
     """Config paths whose own name appears in no source file, with dead subtrees reported once."""
     cfg = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
     out, covered = set(), set()
     for path, _ in _leaves(cfg):
         dotted = ".".join(path)
-        if dotted.startswith(FORWARDED) or _named(path[-1]):
+        if _named(path[-1]):
             continue
         if any(dotted.startswith(c + ".") for c in covered):
             continue
@@ -89,7 +84,8 @@ def test_every_data_path_is_configured_and_read():
     points where it always has, so nothing moves on disk."""
     from openrapm.data.config import DEFAULT_PATHS
     cfg = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
-    expected = {"raw": "data/raw", "stints": "data/stints", "cache": "data/cache", "shot_curves": "data/shotcurve"}
+    expected = {"raw": "data/raw", "stints": "data/stints", "cache": "data/cache", "shot_curves": "data/shotcurve",
+                "outputs": "outputs", "panel": "outputs/role_panel_season.parquet", "within": "outputs/within"}
     for key, value in expected.items():
         assert cfg["paths"][key] == value == DEFAULT_PATHS[key], key
         assert _named(key), f"paths.{key} is configured but nothing resolves it"
@@ -199,3 +195,41 @@ def test_every_flag_a_doc_tells_you_to_type_is_one_the_script_understands():
     assert not bad, (
         f"documented flag(s) no script understands: {sorted(set(bad))}.  Since scripts/_cli.py these "
         f"stop the run instead of being ignored, so a doc that names one is a command nobody can run.")
+
+
+def test_the_booster_settings_are_never_read_from_config_yaml():
+    """They live in params/booster_params_<name>.json alone; the chimeraboost block config.yaml once carried
+    was a fallback only the retired scripts/62_single_year_board.py read."""
+    cfg = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
+    assert "gbdt" not in cfg
+    assert not re.search(r"""cfg\[["']gbdt["']\]""", CODE)
+
+
+# --------------------------------------------------------------- the openrapm command lines
+OPENRAPM = re.compile(r"(?:-m openrapm|\bopenrapm)\s+(rate|folds|compare)\b([^\n`]*)")
+
+
+def _openrapm_flags() -> dict:
+    """{command: every option string its parser accepts}."""
+    import argparse
+
+    from openrapm.commands.cli import build_parser
+    commands = next(action for action in build_parser()._actions if isinstance(action, argparse._SubParsersAction))
+    return {name: {option for action in sub._actions for option in action.option_strings}
+            for name, sub in commands.choices.items()}
+
+
+def test_every_openrapm_flag_the_docs_and_the_chain_use_exists():
+    """argparse stops a run on an unknown flag, so a documented one that does not exist is a command nobody can run."""
+    known = _openrapm_flags()
+    files = sorted(ROOT.glob("*.md")) + [ROOT / "scripts" / "experiment_chain.sh"]
+    checked, bad = 0, []
+    for path in files:
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            for match in OPENRAPM.finditer(line):
+                for flag in re.findall(r"(?<![\w-])(--[a-z][\w-]*)", match.group(2)):
+                    checked += 1
+                    if flag not in known[match.group(1)]:
+                        bad.append(f"{path.name}: openrapm {match.group(1)} {flag}")
+    assert checked >= 8, f"only {checked} openrapm flags found; the pattern has stopped matching"
+    assert not bad, f"flags `openrapm` does not understand: {sorted(set(bad))}"

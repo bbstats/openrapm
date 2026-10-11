@@ -72,8 +72,8 @@ def mover_tiers(seasons) -> pd.Series:
     every neighbouring season he played has the same main team, "no neighbour season" if he played neither.  The
     trade set's correction reads exactly those three seasons' games (the owner, 2026-10-01: split every result
     into traded and not traded)."""
-    from openrapm import singleyear as sy
     from openrapm.data.config import load_config
+    from openrapm.data.roles import franchise
     from openrapm.holdout import Context
     ctx = Context.load(load_config())
     have = sorted(set(int(s) for s in seasons))
@@ -85,7 +85,7 @@ def mover_tiers(seasons) -> pd.Series:
         except Exception:                       # a season outside the data
             m = {}
         ids = np.fromiter(m.keys(), dtype=np.int64, count=len(m))
-        fr = sy.franchise(np.fromiter(m.values(), dtype=np.int64, count=len(m)), np.full(len(m), s))
+        fr = franchise(np.fromiter(m.values(), dtype=np.int64, count=len(m)), np.full(len(m), s))
         teams[s] = dict(zip(ids.tolist(), fr.tolist()))
     keys, labels = [], []
     for s in have:

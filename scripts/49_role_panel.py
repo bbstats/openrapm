@@ -19,7 +19,7 @@ reference systems' input, is asserted unchanged.
           [s, s], the labels are "2004-2004", and the panel is written to outputs/role_panel_season.parquet
           (--out= overrides).  Everything downstream reads the granularity off the labels themselves --
           the exclusion set (holdout.Context.labels), the pair rows' turnover table (Context.turn_table)
-          and the PAST discount (gbdt_prior.past_decay_for) -- so a system takes it with panel=.
+          and the PAST discount (the retired gbdt_prior.past_decay_for) -- so a system takes it with panel=.
 --out=P   write the panel to P instead of the configured/default path.
 usage: python scripts/49_role_panel.py [--check] [--season] [--out=outputs/role_panel_x.parquet]
 """
@@ -104,7 +104,7 @@ for w in WINDOWS:
         a = apm_fit(wd, cfg)
         R = a["ro"] if side == "O" else a["rd"]
         d = pd.DataFrame(R, columns=FEATURES)
-        # the same rates UNCENTRED: what an efficiency ratio needs (gbdt_prior.RATIOS), since a ratio of
+        # the same rates UNCENTRED: what an efficiency ratio needs (features.RATIOS), since a ratio of
         # rates centred on the average player is meaningless
         R_raw = a["pipe"]["exposure"].season_rates_ if side == "O" else a["pipe"]["exposure"].season_rates_d_
         for j, c in enumerate(FEATURES):
@@ -115,7 +115,7 @@ for w in WINDOWS:
         d.insert(3, "ps_idx", np.arange(wd.spec.n_ps))
         d.insert(4, "season", season)
         # where his shots came from: the block's per-shooter totals with the league's expected makes from
-        # his own locations, which gbdt_prior.add_shotq turns into shot difficulty and shot-making
+        # his own locations, which features.add_shotq turns into shot difficulty and shot-making
         for c in SHOT_COLS_ALL:
             d[c] = sf[c].to_numpy(dtype=float)
         # his LUCK-ADJUSTED on-court ratings (the owner, 2026-09-09), both sides on every row like
@@ -213,7 +213,7 @@ print(f"  pass 4: career and bio columns joined, mean {P.exp_yrs.mean():.2f} sea
       f"height {P.loc[P.side == 'O', 'height'].mean():.1f} in ({time.time() - t0:.0f}s)", flush=True)
 
 # `onc_o` / `onc_d` are computed in pass 1 and were being dropped here, which is worse than it looks:
-# gbdt_prior takes them with `if c in p.columns`, so a panel without them trains a prior that is
+# features.add_features builds from them only when present, so a panel without them trains a prior that is
 # quietly missing the luck-adjusted on-court features AND the whole past_onc_* family, and nothing
 # fails.  The assert below is what stops that happening again.
 ONC_COLS = ["onc_o", "onc_d", "onc_poss_o", "onc_poss_d"]

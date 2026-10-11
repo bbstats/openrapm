@@ -6,7 +6,7 @@ it is not the claim.  The claim is about the artifacts -- that no fit in this pr
 progress anywhere in it -- and for a long time `src/openrapm/data/seasons.py` named this file as the thing
 that established it.  The file did not exist.
 
-What it establishes now, in three parts:
+What it establishes now, in four parts:
 
   1. the guard drops the right rows, including a multi-season block that only REACHES INTO a season
      in progress, which is the case a per-season filter would get wrong;
@@ -17,9 +17,12 @@ What it establishes now, in three parts:
      gone wrong: `holdout.Context.load` gated the block panel, and five scripts read the season panel
      straight off the disk with no gate at all.  Latent rather than live -- no season is in progress
      today, so the guard drops nothing -- but it is the shape of thing that is only ever noticed in
-     the year it starts lying.
+     the year it starts lying;
+  4. `openrapm rate` and `openrapm folds` read the panel through one function, `data.panel.trainable_panel`,
+     which gates it, and the labels of `rate` sum only seasons whose Finals are over.
 """
 import ast
+import re
 import sys
 from pathlib import Path
 
@@ -103,8 +106,8 @@ def test_replacing_the_current_season_with_noise_does_not_move_the_training_rows
 # ------------------------------------------------------- 3. every fit from the panel is gated
 # Scripts that FIT something from the season or block panel.  Each must pass its read through
 # `drop_untrainable`; a new one belongs here the day it is written.
-FITS_FROM_PANEL = ["62_single_year_board.py", "88_yoy_by_player.py", "91_swap_adjust.py", "95_miss_by_group.py",
-                   "97_within_season.py", "137_stat_calibration.py", "138_heldout_audit.py"]
+FITS_FROM_PANEL = ["88_yoy_by_player.py", "91_swap_adjust.py", "95_miss_by_group.py", "137_stat_calibration.py",
+                   "138_heldout_audit.py"]
 
 # Scripts that read the panel to WRITE columns back into it.  These must NOT gate: they rewrite the
 # file in place, so dropping the current season would delete it from the only copy.
@@ -147,3 +150,53 @@ def test_no_script_reads_a_panel_unclassified():
     assert not readers - known, (
         f"scripts {sorted(readers - known)} read a role panel and are on neither list.  Add each to "
         f"FITS_FROM_PANEL (and gate its read) or to WRITES_THE_PANEL (and do not).")
+
+
+# ------------------------------------------- 4. the commands read the panel through one gate
+SRC = ROOT / "src" / "openrapm"
+READS_PANEL_PATH = re.compile(r"""resolve\(\s*cfg\s*,\s*["']panel["']\s*\)""")
+
+
+def test_the_panel_file_is_opened_in_one_place_and_gated_there():
+    """Only data/panel.py resolves paths.panel, and it passes what it reads through drop_untrainable."""
+    openers = sorted(p.relative_to(SRC).as_posix() for p in SRC.rglob("*.py")
+                     if READS_PANEL_PATH.search(p.read_text(encoding="utf-8")))
+    assert openers == ["data/panel.py"]
+    assert _calls(SRC / "data" / "panel.py", "drop_untrainable")
+
+
+@pytest.mark.parametrize("command", ["build.py", "within_season.py"])
+def test_a_command_that_fits_reads_the_gated_panel(command):
+    path = SRC / "commands" / command
+    assert _calls(path, "trainable_panel"), f"commands/{command} must read the panel through trainable_panel"
+    assert "role_panel" not in path.read_text(encoding="utf-8"), f"commands/{command} names the panel file itself"
+
+
+def test_the_gated_panel_drops_the_season_in_progress(tmp_path):
+    from openrapm.data.panel import trainable_panel
+    cfg = _tree(tmp_path, finished_through=2023)
+    stored = tmp_path / "panel.parquet"
+    _panel(["2022", "2023", "2024"]).to_parquet(stored, index=False)
+    cfg["paths"] = {**cfg["paths"], "panel": str(stored)}
+    assert sorted(set(trainable_panel(cfg).window)) == ["2022", "2023"]
+
+
+def test_rate_sums_only_finished_seasons_for_its_labels(tmp_path, monkeypatch):
+    """A season in progress may be rated, but its games never reach the labels the prior learns."""
+    from openrapm.commands import build
+    from openrapm.settings import PRODUCT
+    cfg = _tree(tmp_path, finished_through=2023)            # seasons 2020-2024, 2024 still being played
+
+    class Stop(Exception):
+        pass
+
+    seen = {}
+
+    def record(designs, seasons, settings):
+        seen["seasons"] = list(seasons)
+        raise Stop
+
+    monkeypatch.setattr(build, "accumulate_rapm", record)
+    with pytest.raises(Stop):
+        build.run_rate(cfg, PRODUCT, [2024], "never_written")
+    assert seen["seasons"] == [2020, 2021, 2022, 2023]

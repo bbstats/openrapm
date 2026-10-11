@@ -1,4 +1,4 @@
-"""A calibrator for the ratings' misses, trained on each season's own held-out games (scripts/97_within_season.py).
+"""A calibrator for the ratings' misses, trained on each season's own held-out games (`openrapm folds`).
 
     python scripts/98_calibrator.py [--tag=within] [--out=calib] [--depth=3] [--rate=0.1] [--rounds=300]
                                     [--min_leaf=300] [--seasons=2017-2026]
@@ -52,20 +52,19 @@ from sklearn.tree import DecisionTreeRegressor  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from openrapm import singleyear as sy  # noqa: E402
 from openrapm.data.config import load_config  # noqa: E402
 from openrapm.design import FEATURES  # noqa: E402
-from openrapm.gbdt_prior import DERIVED, RATIOS, SHOTQ  # noqa: E402
+from openrapm.features import CLOSENESS, DERIVED, NET, OFFC, ONC, PO_SHARE, RATIOS, SHOTQ  # noqa: E402
 from openrapm.holdout import Context, Ratings, predict_season, score  # noqa: E402
-from openrapm.priorridge import armse  # noqa: E402
+from openrapm.scoring import armse  # noqa: E402
 from _cli import check_flags, flag  # noqa: E402
 
 # what a correction may read, grouped by meaning (GLOSSARY.md has the plain names)
 BOX = list(FEATURES) + list(DERIVED) + list(RATIOS) + list(SHOTQ)
 ROLE = ["poss_pct", "gs_pct", "age", "exp_yrs", "exp_poss", "entry_age", "height", "weight", "draft_pick",
         "tenure", "n_teams"]
-ON_OFF = sy.ONC + sy.OFFC + sy.NET + ["team_net"]
-CONTEXT = sy.CLOSENESS + sy.PO_SHARE
+ON_OFF = ONC + OFFC + NET + ["team_net"]
+CONTEXT = CLOSENESS + PO_SHARE
 BUILT = ["rating_off", "rating_def", "prior_off", "prior_def", "u_off", "u_def", "prior_raw_off", "prior_raw_def",
          "prior_scale_off", "prior_scale_def", "poss_off", "poss_def", "poss"]
 INPUTS = BOX + ROLE + ON_OFF + CONTEXT + BUILT
@@ -89,7 +88,7 @@ class Fold:
         self.y, self.w, self.F = t["y"].astype(float), t["w"].astype(float), np.asarray(t["F"], dtype=float)
         self.game_idx = t["game_idx"]
         # the rating every player column carries: his rating where he has one, the fill where he does not --
-        # exactly what the fold's own score used (scripts/97 `test_games`)
+        # exactly what the fold's own score used (`openrapm folds`, `score_test_games`)
         rated = players.drop_duplicates("player_id").set_index("player_id")
         rated = rated[rated.poss_off > 0]
         o = pd.Series(ids).map(rated.rating_off).to_numpy(float)
@@ -263,7 +262,7 @@ def corrected_table(players: pd.DataFrame, model: Calibrator, scale: tuple = (1.
 
 def score_fold(ctx, season: int, test_ids: set, table: pd.DataFrame, column_off: str, column_def: str,
                fill: tuple) -> dict:
-    """The year-over-year test's scoring on a fold's held-out games (scripts/97 `test_games`)."""
+    """The year-over-year test's scoring on a fold's held-out games (`openrapm folds`, `score_test_games`)."""
     full = ctx.design([season], "pts")
     games = full.games
     test_idx = games.loc[games.game_id.astype(str).isin(test_ids), "game_idx"].to_numpy()

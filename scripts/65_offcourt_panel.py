@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from openrapm import singleyear as sy  # noqa: E402
+from openrapm.features import NET, OFFC, ONC  # noqa: E402
 from openrapm.data.config import load_config  # noqa: E402
 from openrapm.holdout import Context  # noqa: E402
 from openrapm.investigate import offcourt_rates, oncourt_rates  # noqa: E402
@@ -48,8 +48,8 @@ def main():
         onc = oncourt_rates(wd_o, wd_d)
         offc = offcourt_rates(wd_o, wd_d)
         frame = pd.DataFrame({"player_id": ids, "season": season,
-                              **{c: onc[c].to_numpy(dtype=float) for c in sy.ONC},
-                              **{c: offc[c].to_numpy(dtype=float) for c in sy.OFFC}})
+                              **{c: onc[c].to_numpy(dtype=float) for c in ONC},
+                              **{c: offc[c].to_numpy(dtype=float) for c in OFFC}})
         frame["net_o"] = frame.onc_o - frame.offc_o
         frame["net_d"] = frame.onc_d - frame.offc_d
         parts.append(frame)
@@ -58,18 +58,18 @@ def main():
     new = pd.concat(parts, ignore_index=True)
 
     # the on-court columns recomputed here must be the panel's own, or the net mixes two windows
-    check = panel.merge(new[["player_id", "season"] + sy.ONC], on=["player_id", "season"],
+    check = panel.merge(new[["player_id", "season"] + ONC], on=["player_id", "season"],
                         how="inner", suffixes=("", "_re"))
-    gap = max(float((check[c] - check[f"{c}_re"]).abs().max()) for c in sy.ONC)
+    gap = max(float((check[c] - check[f"{c}_re"]).abs().max()) for c in ONC)
     print(f"largest gap between the panel's onc_* and the recomputation: {gap:.6f}")
     assert gap < 1e-6, "the panel's on-court columns were not built from these designs"
 
     backup = path.with_name(path.stem + "_pre_offc.parquet")
     if not backup.exists():
         shutil.copy(path, backup)
-    panel = panel.drop(columns=[c for c in sy.OFFC + sy.NET if c in panel.columns])
-    panel = panel.merge(new[["player_id", "season"] + sy.OFFC + sy.NET], on=["player_id", "season"], how="left")
-    for c in sy.OFFC + sy.NET:
+    panel = panel.drop(columns=[c for c in OFFC + NET if c in panel.columns])
+    panel = panel.merge(new[["player_id", "season"] + OFFC + NET], on=["player_id", "season"], how="left")
+    for c in OFFC + NET:
         panel[c] = panel[c].fillna(0.0)
     panel.to_parquet(path, index=False)
     wide = panel[(panel.side == "O") & (panel.poss >= 1000)]

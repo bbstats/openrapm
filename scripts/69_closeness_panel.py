@@ -25,7 +25,8 @@ learn the discount itself, rather than imposing one by reweighting the stats):
 
   `gt_share`     his possessions' share flagged by the garbage-time rule (config.yaml `garbage_time`)
   `closeness`    possession-weighted mean of 1 / max(|margin|, 1) -- the same form the ratings step's own
-                 objective uses (`priorridge.team_game_weights`), so "close" means the same thing in both
+                 objective used (`priorridge.team_game_weights`, retired in the cleanup), so "close" meant the
+                 same thing in both
   `abs_margin`   possession-weighted mean absolute score margin while he was on the floor
 
 Per SIDE, because a player's offensive possessions and his defensive ones need not sit at the same score

@@ -1,12 +1,9 @@
 """One season rebuilt from any subset of its games: every input the rating reads, from those games alone.
 
-Moved here from scripts/97_within_season.py (the Robustness pass, 2026-10-09) so the board itself can use it:
-`honest_fold_prior` gives `priorridge.PriorRidgeCV` a prior for each of its cross-fitting folds whose EVERY input --
-the padded box rates and their padding constants, playing time and starts, shot totals, on- and off-court numbers --
-comes from the fold's training games.  62's own fold builder rebuilds only the on-court, off-court and RAPM-piece
-columns, and since experiment 45 the prior reads none of them, so its "cross-fitted" scale was priced on box-score
-columns that had seen the games it was regressed on (4-12% too large; DECISIONS.md, "The prior's scale, priced in
-sample: measured").  97 keeps using the same class: its whole-season version reproduces the shipped ratings exactly.
+The within-season folds (`openrapm folds`, src/openrapm/commands/within_season.py) rate a season from three
+quarters of its games; every input of that rating -- the padded box rates and their padding constants, playing
+time and starts, shot totals, on- and off-court numbers -- is rebuilt here from those games alone.  Handed every
+game of the season, `SeasonWorld` reproduces the season panel the published ratings were built from.
 
 Data layer: it reads the season's box scores and stints (`SeasonTables`).
 """
@@ -17,7 +14,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from . import singleyear as sy
 from .data.bio import PLAYER_INPUTS, player_inputs
 from .data.config import resolve
 from .data.ingest import GAME_PREFIX, game_table, load_gamelog, raw_dir
@@ -25,12 +21,13 @@ from .data.roles import (CAREER_INPUTS, RAW_INPUTS, ROLE_PHASES, career_inputs, 
                          roles_from_boxes, season_ages, shares_from_stints, window_inputs)
 from .data.shots import DEFENSE_TARGETS, SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS, player_shot_frame
 from .design import AWAY_SLOTS, FEATURES, HOME_SLOTS, WindowData
+from .features import CLOSENESS, OFFC, ONC, PO_SHARE
 from .investigate import offcourt_rates, oncourt_rates
 from .spm import apm_fit, season_of_units
 from .windows import window_label
 
 __all__ = ["SHOT_COLS_ALL", "CLOSE_SLOTS", "cut_design", "SeasonTables", "roles_from_games", "closeness_rows",
-           "playoff_share", "SeasonWorld", "honest_fold_prior"]
+           "playoff_share", "SeasonWorld"]
 
 SHOT_COLS_ALL = [*SHOT_TOTAL_COLS, *SHOT_LEAGUE_COLS]
 CLOSE_SLOTS = ([(f"h{i}", "poss_h", "poss_a") for i in range(1, 6)]
@@ -123,7 +120,7 @@ def closeness_rows(stints: pd.DataFrame, season: int) -> pd.DataFrame:
     g["gt_share"] = g["w_gt"] / g["poss"]
     g["abs_margin"] = g["w_margin"] / g["poss"]
     g["closeness"] = g["w_close"] / g["poss"]
-    return g[["player_id", "season", "side", *sy.CLOSENESS]]
+    return g[["player_id", "season", "side", *CLOSENESS]]
 
 
 def playoff_share(tables: SeasonTables, keep_ids: set) -> pd.Series:
@@ -134,19 +131,18 @@ def playoff_share(tables: SeasonTables, keep_ids: set) -> pd.Series:
     regular = shares_from_stints(stints[stints["phase"] == "RS"], tables.games)
     both = both[both.poss_on > 0].groupby("player_id").poss_on.sum()
     regular = regular[regular.poss_on > 0].groupby("player_id").poss_on.sum()
-    return (1.0 - regular.reindex(both.index).fillna(0.0) / both).clip(0.0, 1.0).rename(sy.PO_SHARE[0])
+    return (1.0 - regular.reindex(both.index).fillna(0.0) / both).clip(0.0, 1.0).rename(PO_SHARE[0])
 
 
 class SeasonWorld:
-    """Season H rated from the games `fit_ids`, with every input the rating reads rebuilt from those games.
+    """One season rated from the games `fit_ids`, with every input the rating reads rebuilt from those games.
 
-    There is ONE path.  The whole season is this same class handed every game, and the reproduction check holds it
-    to the board's own table -- so a passing check is a check on the part-season code, not on a second copy."""
+    There is one path.  The whole season is this same class handed every game, and the reproduction check holds it
+    to the published ratings table, so a passing check is a check on the part-season code, not on a second copy."""
 
     def __init__(self, season: int, cfg, full: dict, tables: SeasonTables, inputs: pd.DataFrame,
                  roles: pd.DataFrame, fit_ids):
         self.season, self.cfg = int(season), cfg
-        # kept so a world can rebuild a smaller world inside its own games (the honest cross-fitted scale)
         self.full, self.tables, self.inputs, self.roles = full, tables, inputs, roles
         games = full["pts"].games
         all_ids = set(games["game_id"].astype(str))
@@ -175,8 +171,8 @@ class SeasonWorld:
                 np.array_equal(wd.rows["game_idx"].to_numpy(), reference["game_idx"].to_numpy())
                 and np.array_equal(wd.rows["is_home_off"].to_numpy(), reference["is_home_off"].to_numpy()))
         for name in ("x3def", "x3def_w0.25"):
-            # against the board's whole-season design on the same rows: 0 for the whole season (the rebuild is the
-            # board's design), above 0 for a part season (evidence the shooters were repriced from the fit games)
+            # against the whole-season design on the same rows: 0 for the whole season (the rebuild is that
+            # design), above 0 for a part season (evidence the shooters were repriced from the fit games)
             whole_y = full[name].y[np.isin(full[name].rows["game_idx"].to_numpy(), self.fit_idx)]
             self.checks[f"design {name}: response against the whole-season design (max change)"] = float(
                 np.max(np.abs(self.d[name].y - whole_y)))
@@ -224,9 +220,9 @@ class SeasonWorld:
             d.insert(4, "season", season_col)
             for c in SHOT_COLS_ALL:
                 d[c] = shots[c].to_numpy(dtype=float)
-            for c in sy.ONC:
+            for c in ONC:
                 d[c] = onc[c].to_numpy(dtype=float)
-            for c in sy.OFFC:
+            for c in OFFC:
                 d[c] = offc[c].to_numpy(dtype=float)
             d["poss"] = a["poss_o"] if side == "O" else a["poss_d"]
             for c in RAW_INPUTS:
@@ -244,42 +240,5 @@ class SeasonWorld:
         self.checks["context: stints read only from fit games"] = set(stints["game_id"].unique()) <= self.fit_ids
         close = closeness_rows(stints, self.season)
         panel = panel.merge(close, on=["player_id", "season", "side"], how="left")
-        panel[sy.PO_SHARE[0]] = panel["player_id"].map(playoff_share(tables, self.fit_ids)).fillna(0.0)
+        panel[PO_SHARE[0]] = panel["player_id"].map(playoff_share(tables, self.fit_ids)).fillna(0.0)
         self.panel = panel
-
-
-# ------------------------------------------------------------------------------------- the honest fold prior
-def honest_fold_prior(world_args: tuple, rows_game_idx: np.ndarray, models: dict, model_feats: dict,
-                      prior_full: dict):
-    """`fold_prior(train_mask) -> (offence priors, defence priors)` for `PriorRidgeCV.fit`: the season rebuilt from the
-    games of the rows where `train_mask` is True (a `SeasonWorld` on them), the same fitted boosters asked about every
-    rebuilt row, each player answered by the fold model that never saw him.  A player with no game in those games keeps
-    his full-season prior.  `world_args` = (season, cfg, full designs, SeasonTables, role inputs, roles);
-    `rows_game_idx` is the game_idx of each row of the design the ridge is fitted on.  Folds are cached, so the two
-    ridges of a season (one per target, the same rows and folds) build each fold once."""
-    season, cfg, full, tables, inputs, roles = world_args
-    id_of_idx = pd.Series(full["pts"].games["game_id"].astype(str).to_numpy(),
-                          index=full["pts"].games["game_idx"].to_numpy())
-    for side in ("O", "D"):
-        reads = [c for c in model_feats[side] if c in sy.PIECES or c == sy.SAME_TEAM]
-        assert not reads, f"the honest fold prior does not rebuild {reads}"
-    built: dict = {}
-
-    def fold_prior(train_mask):
-        mask = np.asarray(train_mask, dtype=bool)
-        key = np.packbits(mask).tobytes()
-        if key not in built:
-            fit_ids = set(id_of_idx.loc[np.unique(rows_game_idx[mask])])
-            world = SeasonWorld(season, cfg, full, tables, inputs, roles, fit_ids=fit_ids)
-            out = []
-            for side in ("O", "D"):
-                feats = [f for f in model_feats[side] if f not in sy.CHUNK_FEATURES]
-                rows = world.panel[(world.panel.side == side) & (world.panel.poss > 0)]
-                held = sy.season_frame(rows, feats)
-                held = held.assign(chunk_poss=held.poss.to_numpy(float), chunk_seasons=1.0)
-                got = dict(zip(held.player_id.to_numpy(), models[side].predict(held, model_feats[side])))
-                out.append({p: got.get(p, v) for p, v in prior_full[side].items()})
-            built[key] = tuple(out)
-        return built[key]
-
-    return fold_prior

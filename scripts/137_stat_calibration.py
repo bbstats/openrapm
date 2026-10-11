@@ -18,7 +18,7 @@ loss reads (one-team players whose team played neighbouring games without them).
 curve flat at zero against every input: no stat whose high values are systematically over- or underrated.
 
 **Per input and side**, against the input exactly as the prior reads it (the season panel through
-`singleyear.season_frame`; steals and blocks also on their uncentred padded rates per 100 for the axis):
+`features.add_features`; steals and blocks also on their uncentred padded rates per 100 for the axis):
   * twenty equal-count bins: the mean miss and its standard error, clustered by player (a player's seasons share his
     errors);
   * a one-input LightGBM curve (shallow, many rows a leaf, so it bends where the data do and nowhere else), its
@@ -45,7 +45,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _cli import check_flags, flag  # noqa: E402
-from openrapm import singleyear as sy  # noqa: E402
+from openrapm.features import FEATURE_SETS, add_features  # noqa: E402
 from openrapm.data.config import load_config  # noqa: E402
 from openrapm.glossary import plain  # noqa: E402
 from openrapm.data.seasons import drop_untrainable  # noqa: E402
@@ -100,11 +100,11 @@ def main() -> None:
     alpha = alpha[alpha.eligible & (alpha.without_poss >= 1)]
     panel, _ = drop_untrainable(pd.read_parquet(ROOT / "outputs/role_panel_season.parquet"), cfg, what="the season panel")
     panel = panel[panel.poss > 0]
-    feats = sy.feature_set("boruta_noonc")
+    feats = FEATURE_SETS["boruta_noonc"]
     rows, bins_out, keep_curves = [], [], {}
     for side_name, side in SIDE.items():
-        inputs = [f for f in feats[side] if f != sy.SAME_TEAM]
-        frame = sy.season_frame(panel[panel.side == side], inputs)
+        inputs = list(feats[side])
+        frame = add_features(panel[panel.side == side].copy(), inputs)
         frame = frame.assign(stl_per100=panel.loc[panel.side == side, "raw_stl"].to_numpy(float),
                              blk_per100=panel.loc[panel.side == side, "raw_blk"].to_numpy(float))
         a = alpha[alpha.side == side_name][["player_id", "season", "alpha_good"]]

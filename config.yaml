@@ -86,17 +86,6 @@ spm:
   apm_check_lams: [30, 100, 300]    # 49_role_panel.py --check: SPM coefficients must agree across these
   pen: 1.0                # ridge on the seven standardised role inputs
   min_poss: 500           # a player-window needs this many possessions to train the SPM
-# The chimeraboost booster settings: scripts/62_single_year_board.py reads them as the fallback when the
-# booster file it is given (params/booster_params_lgb1.json, which ships) does not name a side's params.
-gbdt:
-  params_def: {depth: 4, learning_rate: 0.0872486, l2_leaf_reg: 18.8061, max_bins: 128, subsample: 0.654803, colsample: 0.83231, min_child_weight: 3.26392, linear_leaves: true, cross_features: false}
-    # the consensus's defensive-agreement floor does not tolerate the bagged, searched one
-    # (FINDINGS 21.26).  The two sides' priors are separate objects; only the map couples them.
-  params: {depth: 5, learning_rate: 0.0882469, l2_leaf_reg: 2.35039, max_bins: 64, subsample: 0.681911, colsample: 0.604113, min_child_weight: 2.10825, linear_leaves: true, cross_features: true, n_ensembles: 5, ensemble_n_jobs: 1}
-    # features.  On the plain feature list the search was worth +0.004 and the bag +0.004; on the
-    # list below they are -0.037 and -0.027 (FINDINGS 21.25: the parts interact, and a richer
-    # feature set gives the search something to find).  ensemble_n_jobs 1 so the bag does not fork
-    # inside the holdout runner's own workers.
 
 # Data paths: relative to the repository root, or absolute.  OPENRAPM_CONFIG=<file> makes every command read
 # another config.yaml instead of this one, so a verification run can point all of them at another folder.
@@ -106,3 +95,6 @@ paths:
   cache: data/cache              # rebuildable caches: the roles table, bio.parquet, the per-season design pieces
   shot_curves: data/shotcurve    # the league's make probability by distance, one parquet per season
   role_panel: artifacts/role_panel.parquet
+  outputs: outputs                 # the ratings tables, the saved prior models, the run logs
+  panel: outputs/role_panel_season.parquet   # the season panel: one row per player, season and side
+  within: outputs/within           # the within-season folds, one folder per tag

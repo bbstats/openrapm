@@ -65,7 +65,7 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 
-from .priorridge import solve_diag
+from .rapm import solve_ridge
 
 __all__ = ["HOME", "AWAY", "OFF", "DEF", "SIDES", "CONTEXTS", "RAPM_CONTROLS", "PAIR_GROUPS", "STINT_COLUMNS",
            "order_stints", "fatigue", "season_rows", "swap_pairs", "Season", "prepare", "aligned", "predict",
@@ -435,6 +435,6 @@ def plain_rapm(season: Season, lam: float) -> pd.DataFrame:
     gram = np.asarray((X.T @ (sp.diags(w) @ X)).todense(), dtype=float)
     rhs = np.asarray(X.T @ (w * rows.y.to_numpy(dtype=float))).ravel()
     penalty = np.concatenate([np.full(2 * m, float(lam)), np.zeros(F.shape[1])])
-    sol = solve_diag(gram, rhs, penalty)
+    sol = solve_ridge(gram, rhs, penalty)
     return pd.DataFrame({"player_id": season.ids, "o": sol[:m], "d": sol[m:2 * m],
                          "poss": np.asarray(Zo.T @ w).ravel()})

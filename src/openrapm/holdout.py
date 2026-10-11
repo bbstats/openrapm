@@ -570,7 +570,7 @@ class Holdout:
 # normal with that standard deviation.  A root mean square reads bigger than the typical miss because
 # squaring pays extra attention to the tail; ARMSE is the number to say out loud -- "a typical team-game
 # misses by this much, in points per 100".
-from .priorridge import MAE_SCALE, armse  # noqa: E402,F401
+from .scoring import MAE_SCALE, armse  # noqa: E402,F401
 
 POOL_BY = ("k", "lam", "system", "split", "group")
 
