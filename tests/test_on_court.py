@@ -44,7 +44,7 @@ def test_on_court_finds_the_planted_players_and_credits_their_teammates_too():
 def test_the_on_court_ratings_are_centred_and_padded_toward_the_level(season):
     on = oncourt_rates(season, season)
     assert list(on.columns) == ON_COURT
-    n_players = season.spec.n_ps
+    n_players = season.spec.n_players
     raw, weight, raw_d, weight_d = on_court(season.X[:, :n_players], season.X[:, n_players:2 * n_players],
                                             season.y, season.w)
     np.testing.assert_allclose(on.on_court_off_possessions, weight)
@@ -62,8 +62,8 @@ def test_the_off_court_possessions_are_his_team_in_his_games_without_him(season)
     on_offence, on_defence = lineups(season)
     game = season.rows["game_idx"].to_numpy()
     home_offence = season.rows["is_home_off"].to_numpy(dtype=bool)
-    expected = np.zeros(season.spec.n_ps)
-    for player in range(season.spec.n_ps):
+    expected = np.zeros(season.spec.n_players)
+    for player in range(season.spec.n_players):
         attacking, defending = (on_offence == player).any(axis=1), (on_defence == player).any(axis=1)
         home_games = np.union1d(game[attacking & home_offence], game[defending & ~home_offence])
         away_games = np.union1d(game[attacking & ~home_offence], game[defending & home_offence])

@@ -20,8 +20,9 @@ neutral_site_seasons_po: [2020]   # playoffs played at a neutral site (the 2020 
 # The raw per-game box counts every design carries, in this order (the stored design pieces record it).
 box_counts: [fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss, orb, drb, ast, tov, stl, blk, pf]
 
-# a design's player columns: one per player over the design's seasons ("window"), or one per player-season ("season")
-player_unit: window
+# a design's player columns: one per player over the design's seasons ("player"), or one per player-season
+# ("player_season"); the two give the same matrix for one season, the design every step fits
+player_unit: player
 low_poss_threshold: 500       # the design's diagnostic player groups: under this many possessions is "low_poss"
 starter_poss_threshold: 1500  # and this many or more is "high_poss"; neither moves a rating
 pad_target: poss_conditional  # what the season panel's box rates are padded toward (box_rates.py): the rate of players

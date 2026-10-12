@@ -78,5 +78,5 @@ def test_role_inputs_count_playoff_minutes():
     assert (j.games_all >= j.games_rs).all()
     assert (j.games_all > j.games_rs).any()
     assert (j.poss_on_all >= j.poss_on_rs - 1e-6).all()
-    # the share is a share: pooling both phases moves the league's mean poss_pct very little
+    # the share is a share: pooling both phases moves the league's mean team possession share very little
     assert abs(both.poss_on.sum() / both.team_poss.sum() - rs.poss_on.sum() / rs.team_poss.sum()) < 0.02

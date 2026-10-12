@@ -83,8 +83,8 @@ def fit(design, prior_offense: dict, prior_defense: dict, penalty: float = 13037
     The lineup priors join the context as two more unpenalised columns, so the solve is a plain ridge on
     [players | context | P_O | P_D] with penalty lambda on the players and 0 on everything else.
     """
-    n_players = design.spec.n_ps
-    player_ids = design.spec.ps_table["player_id"].to_numpy()
+    n_players = design.spec.n_players
+    player_ids = design.spec.players["player_id"].to_numpy()
     players, context = design_blocks(design)
     prior = np.concatenate([aligned_prior(prior_offense, player_ids), aligned_prior(prior_defense, player_ids)])
     context = np.column_stack([context, *lineup_prior_sums(players, prior, n_players)])
@@ -117,14 +117,14 @@ def defence_possessions(design) -> dict:
     possession table (`design.game_poss`).  The two counts differ by about nine possessions in 2,500 (2026: a
     mean gap of 9.5 among players with 2,000 to 3,000), and the owner asked for the right count on each side
     (2026-09-18; before then `poss_def` was a copy of `poss_off`).  The game table holds one row per player-season
-    and game (`psx`, design.py's `ps_key`: a player traded mid-season still has one player-season); the rows are
+    and game (design.py's `player_season`: a player traded mid-season still has one player-season); the rows are
     summed over games here, and over seasons when a design spans several.
     """
-    per_entry = (design.game_poss.groupby("psx_idx")["poss_def"].sum()
-                 .reindex(range(design.spec.n_psx)).fillna(0.0))
-    psx = design.spec.psx_table
-    defence = per_entry.to_numpy()[psx["psx_idx"].to_numpy()]
-    return pd.Series(defence).groupby(psx["player_id"].to_numpy()).sum().to_dict()
+    per_entry = (design.game_poss.groupby("player_season")["poss_def"].sum()
+                 .reindex(range(design.spec.n_player_seasons)).fillna(0.0))
+    player_seasons = design.spec.player_seasons
+    defence = per_entry.to_numpy()[player_seasons["player_season"].to_numpy()]
+    return pd.Series(defence).groupby(player_seasons["player_id"].to_numpy()).sum().to_dict()
 
 
 def season_table(offence_fit: PriorRapmFit, defence_fit: PriorRapmFit, poss_def: dict,

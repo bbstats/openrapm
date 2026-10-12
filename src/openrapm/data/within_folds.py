@@ -36,7 +36,7 @@ import scipy.sparse as sp
 
 from .legacy_names import translate_frame
 
-__all__ = ["Fold", "read_fold", "fold_stems", "check_fold_record", "check_repeats", "load_folds"]
+__all__ = ["Fold", "read_fold", "fold_stems", "check_fold_record", "check_repeats", "check_fold_files", "load_folds"]
 
 FOLDS_PER_REPEAT = frozenset({0, 1, 2, 3})
 
@@ -154,16 +154,32 @@ def check_repeats(records: dict) -> None:
         raise ValueError(f"(season, repeat) without exactly four folds: {sorted(short)[:5]}")
 
 
-def load_folds(directory: Path, seasons: tuple[int, int]) -> list[Fold]:
-    """Every fold in `directory` whose season is in [first, last], after checking each fold and every repeat.
+def check_fold_files(directory: Path, seasons: tuple[int, int]) -> list[str]:
+    """The stems of the folds in `directory` whose season is in [first, last], after checking that each fold has
+    its three files, each passed its leak checks and every repeat has its four folds.  Reads only the small json
+    files, so a command can call it before the minutes of work that end in `load_folds`; raises ValueError naming
+    the first problem.
 
-    Example: `load_folds(paths.within / "weightfix_within", (2017, 2026))` reads 120 folds: ten seasons, three
-    repeats each, four folds a repeat.
+    Example: on a fresh clone `check_fold_files(paths.within / "weightfix_within", (2017, 2026))` raises
+    "no folds in .../outputs/within/weightfix_within for seasons 2017-2026".
     """
     directory = Path(directory)
     stems = fold_stems(directory, seasons)
+    missing = [name for stem in stems for name in (f"players_{stem}.parquet", f"test_{stem}.npz")
+               if not (directory / name).exists()]
+    if missing:
+        raise ValueError(f"{directory} lacks {len(missing)} fold files, among them {missing[0]}")
     records = {stem: json.loads((directory / f"fold_{stem}.json").read_text()) for stem in stems}
     for stem, record in records.items():
         check_fold_record(record, stem)
     check_repeats(records)
-    return [read_fold(directory, stem) for stem in stems]
+    return stems
+
+
+def load_folds(directory: Path, seasons: tuple[int, int]) -> list[Fold]:
+    """Every fold in `directory` whose season is in [first, last], after `check_fold_files`.
+
+    Example: `load_folds(paths.within / "weightfix_within", (2017, 2026))` reads 120 folds: ten seasons, three
+    repeats each, four folds a repeat.
+    """
+    return [read_fold(Path(directory), stem) for stem in check_fold_files(directory, seasons)]

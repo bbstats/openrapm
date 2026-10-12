@@ -74,9 +74,10 @@ NEEDS_SPLIT: dict = {}
 # Top-level modules whose job IS to reach the disk or the network, not yet moved into data/.
 DATA_LAYER: set = set()
 
-# What the two exception lists may hold at most (2026-10 cleanup): nothing, since phase 9a.  holdout.py left in
-# phase 7 (split into scoring.py and commands/year_over_year.py); in phase 9a spm.py was deleted and seasoninputs.py
-# was merged into data/panel.py (the rows) and commands/within_season.py (the leak checks).
+# What the two exception lists may hold at most: nothing.  The model modules that once reached their own data were
+# split, merged or deleted in the 2026-10 cleanup (their code is at the tag archive/research-2026-10): the scoring
+# went to scoring.py and commands/year_over_year.py, the season rows to data/panel.py and the leak checks to
+# commands/within_season.py.
 NEEDS_SPLIT_AT_MOST: set = set()
 DATA_LAYER_AT_MOST: set = set()
 

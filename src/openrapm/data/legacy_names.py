@@ -15,6 +15,8 @@ translated as it is read, through the one table below.
                              data/within_folds.py)
     a name typed by hand     an old target or input-list name on the command line (`target_name`,
                              `feature_set_name`)
+    a config file            config.yaml's player_unit "window" or "season", on load (`player_unit_name`, in
+                             data/config.py): today "player" and "player_season"
 
 Raw per-game box counts keep their NBA abbreviations (the box table, the stint counters, config.yaml's
 box_counts): `fg3m` is still the number of threes a player made in a game.  Only the per-100 rate built from it,
@@ -26,8 +28,8 @@ Example: the old panel's `exp_poss` is read as `career_possessions_before_k`, an
 """
 from __future__ import annotations
 
-__all__ = ["COLUMNS", "DELETED", "FEATURE_SETS", "TARGETS", "column_name", "is_deleted", "translate_frame",
-           "saved_models", "target_name", "feature_set_name"]
+__all__ = ["COLUMNS", "DELETED", "FEATURE_SETS", "TARGETS", "PLAYER_UNITS", "column_name", "is_deleted",
+           "translate_frame", "saved_models", "target_name", "feature_set_name", "player_unit_name"]
 
 # The thirteen padded box-score rates per 100 possessions, in config.yaml's box_counts order.  Each had an
 # uncentred twin, raw_<old> -> <new>_uncentred.
@@ -88,6 +90,9 @@ TARGETS = {
     "x3def_w0.25": "points_with_expected_opponent_threes",
     "x3def": "points_with_expected_opponent_threes_all",
 }
+# config.yaml's player_unit (design.PLAYER_UNITS): one player column per player over the design's seasons, or one per
+# player-season
+PLAYER_UNITS = {"window": "player", "season": "player_season"}
 
 
 def column_name(name: str) -> str:
@@ -116,6 +121,11 @@ def target_name(name: str) -> str:
 def feature_set_name(name: str) -> str:
     """The plain name of an input list: "boruta_noonc" -> "box_score_and_bio"."""
     return FEATURE_SETS.get(name, name)
+
+
+def player_unit_name(name: str) -> str:
+    """The plain name of a config player_unit: "window" -> "player", "season" -> "player_season"."""
+    return PLAYER_UNITS.get(name, name)
 
 
 def _side(boosters: dict) -> dict:

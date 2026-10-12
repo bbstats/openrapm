@@ -186,17 +186,17 @@ def game_totals(design) -> GameTotals:
     line counts zeros, one with a box line and no possessions has zero possessions.  A game counts when the design has
     rows from it and a box score for it, so a design cut to part of a season counts that part only.
     """
-    counts = list(design.spec.features)
-    possessions = design.game_poss[["game_idx", "psx_idx", "poss_off", "poss_def"]]
-    box = design.game_box[["game_idx", "psx_idx", "phase", *counts]]
+    counts = list(design.spec.box_counts)
+    possessions = design.game_poss[["game_idx", "player_season", "poss_off", "poss_def"]]
+    box = design.game_box[["game_idx", "player_season", "phase", *counts]]
     box_games = np.unique(box["game_idx"].to_numpy())
-    table = possessions.merge(box.drop(columns="phase"), on=["game_idx", "psx_idx"], how="outer")
+    table = possessions.merge(box.drop(columns="phase"), on=["game_idx", "player_season"], how="outer")
     table[counts] = table[counts].fillna(0.0)
     table[["poss_off", "poss_def"]] = table[["poss_off", "poss_def"]].fillna(0.0)
     played = np.intersect1d(np.unique(design.rows["game_idx"].to_numpy()), box_games)
     table = table[np.isin(table["game_idx"].to_numpy().astype(np.int64), played)]
     return GameTotals(game=table["game_idx"].to_numpy().astype(np.int64),
-                      player_season=table["psx_idx"].to_numpy().astype(np.int64),
+                      player_season=table["player_season"].to_numpy().astype(np.int64),
                       counts=table[counts].to_numpy(dtype=float),
                       offensive_possessions=table["poss_off"].to_numpy(dtype=float),
                       defensive_possessions=table["poss_def"].to_numpy(dtype=float))
@@ -319,7 +319,7 @@ def lineups(design) -> tuple[np.ndarray, np.ndarray]:
     if design.parts is not None:
         return design.parts["lineup_o"], design.parts["lineup_d"]
     out = []
-    for columns in (design.spec.zo, design.spec.zd):
+    for columns in (design.spec.offense_columns, design.spec.defense_columns):
         block = design.X[:, columns].tocsr()
         block.sort_indices()
         if not np.all(np.diff(block.indptr) == LINEUP):
@@ -347,7 +347,7 @@ class SideRates:
 
 @dataclass(frozen=True)
 class BoxRates:
-    """The padded rates of every player of a design (one row per design column, `spec.ps_table` order)."""
+    """The padded rates of every player of a design (one row per player column, `spec.players` order)."""
     offence: SideRates
     defence: SideRates
     counts: np.ndarray                 # (players x counts): his box counts over the counted games
@@ -379,14 +379,16 @@ def box_rates(design, pad_target: str = "poss_conditional") -> BoxRates:
     if pad_target not in PAD_TARGETS:
         raise ValueError(f"unknown pad_target {pad_target!r}; use one of {PAD_TARGETS}")
     spec = design.spec
-    player_of = spec.ps_of_psx if spec.ps_of_psx is not None else np.arange(spec.n_psx)
-    season_of = spec.season_of_psx if spec.season_of_psx is not None else spec.season_of_ps
+    player_of = (spec.player_of_player_season if spec.player_of_player_season is not None
+                 else np.arange(spec.n_player_seasons))
+    season_of = (spec.season_of_player_season if spec.season_of_player_season is not None
+                 else spec.season_of_player)
     totals = game_totals(design)
-    per_season = _sum_matrix(totals.player_season, spec.n_psx)
+    per_season = _sum_matrix(totals.player_season, spec.n_player_seasons)
     counts = np.asarray(per_season @ totals.counts)
     possessions = {"O": np.asarray(per_season @ totals.offensive_possessions).ravel(),
                    "D": np.asarray(per_season @ totals.defensive_possessions).ravel()}
-    per_player = _sum_matrix(player_of, spec.n_ps)
+    per_player = _sum_matrix(player_of, spec.n_players)
     player_counts = np.asarray(per_player @ counts)
     player_possessions = {side: np.asarray(per_player @ values).ravel() for side, values in possessions.items()}
     league = league_rates(counts, possessions["O"], season_of, spec.n_seasons)
@@ -397,9 +399,9 @@ def box_rates(design, pad_target: str = "poss_conditional") -> BoxRates:
                                                      bin_of(edges, player_possessions["O"][player_of]), league)
     sides = {}
     for side, lineup in zip(("O", "D"), lineups(design)):
-        player_k = _blend(k[season_of], possessions[side], player_of, spec.n_ps)
+        player_k = _blend(k[season_of], possessions[side], player_of, spec.n_players)
         target = _blend(_targets(league, edges, targets, player_possessions[side], season_of, player_of),
-                        possessions[side], player_of, spec.n_ps)
+                        possessions[side], player_of, spec.n_players)
         rates = pad_rates(player_counts, player_possessions[side], player_k, target)
         centred = rates - _lineup_mean(rates, lineup, np.asarray(design.w, dtype=float)) / LINEUP
         sides[side] = SideRates(rates=rates, centred=centred, possessions=player_possessions[side])

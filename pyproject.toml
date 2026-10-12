@@ -21,7 +21,8 @@ dependencies = [
 openrapm = "openrapm.commands.cli:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-xdist>=3", "ruff>=0.5"]
+# ruff pinned to the version CI runs (.github/workflows/test.yml), so a local `ruff check .` agrees with CI
+dev = ["pytest>=8", "pytest-xdist>=3", "ruff==0.17.0"]
 
 [build-system]
 requires = ["setuptools>=68"]

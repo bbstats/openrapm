@@ -72,12 +72,13 @@ def test_shares_and_inputs():
     roles["season"] = 2001
     roles["age"] = np.where(roles.player_id == 11, 30.0, np.nan)                  # only one age known
     i = player_season_inputs(roles, cap=0.9).set_index("player_id")
-    assert abs(i.loc[11, "poss_pct"] - 0.9) < 1e-12                                  # 80 / 80 capped
-    assert abs(i.loc[1, "poss_pct"] - 60 / 80) < 1e-12                               # summed over both teams
-    assert abs(i.loc[2, "poss_pct"] - 60 / 80) < 1e-12                       # on the floor for 3 of the 4 stints
-    assert i.loc[6, "gs_pct"] == 0.5 and i.loc[7, "gs_pct"] == 0.0 and i.loc[1, "gs_pct"] == 1.0
+    share, starts = i["team_possession_share"], i["games_started_share"]
+    assert abs(share[11] - 0.9) < 1e-12                                              # 80 / 80 capped
+    assert abs(share[1] - 60 / 80) < 1e-12                                           # summed over both teams
+    assert abs(share[2] - 60 / 80) < 1e-12                                   # on the floor for 3 of the 4 stints
+    assert starts[6] == 0.5 and starts[7] == 0.0 and starts[1] == 1.0
     assert i.loc[11, "age_imputed"] == 0 and i.loc[1, "age_imputed"] == 1 and i.loc[1, "age"] == 30.0
-    assert list(i.columns[-4:]) == ["poss_pct", "gs_pct", "age", "age_imputed"]
+    assert list(i.columns[-4:]) == ["team_possession_share", "games_started_share", "age", "age_imputed"]
 
 
 def test_the_charlotte_move_is_one_franchise():

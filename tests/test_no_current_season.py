@@ -15,8 +15,9 @@ What it establishes now, in four parts:
      That is the "not one byte moves" property the docstring promised, stated where it can be checked
      exactly: a deterministic fit on identical rows is identical, so the rows are the thing to pin;
   3. every script that FITS from the season panel gates its read.  This is the part that had actually
-     gone wrong: `holdout.Context.load` gated the block panel, and five scripts read the season panel
-     straight off the disk with no gate at all.  Latent rather than live -- no season is in progress
+     gone wrong before the 2026-10 cleanup: the old year-over-year loader gated the three-season panel, and
+     five scripts read the season panel straight off the disk with no gate at all (the code is at the tag
+     archive/research-2026-10).  Latent rather than live -- no season is in progress
      today, so the guard drops nothing -- but it is the shape of thing that is only ever noticed in
      the year it starts lying;
   4. `openrapm rate` and `openrapm folds` read the panel through one function, `data.panel.trainable_panel`,

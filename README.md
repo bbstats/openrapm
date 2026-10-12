@@ -25,8 +25,8 @@ later.
 The install also puts an `openrapm` command on your path; `python -m openrapm` is the same command, and
 it is what this file types.
 
-**On a fresh clone with no data**, `pytest` gives 446 passed, 10 skipped and 1 expected failure, in
-about 40 seconds (run on 2026-10-11, Python 3.12, Windows). The 6 slow tests rebuild real seasons and
+**On a fresh clone with no data**, `pytest` gives 454 passed, 10 skipped and 1 expected failure, in
+about 50 seconds (run on 2026-10-12, Python 3.12, Windows). The 6 slow tests rebuild real seasons and
 are left out unless you ask for them (`pytest -m slow`). The 10 skips need the scraped data (game logs,
 stints, box scores), and each skip message names the file or the command it is missing. The expected
 failure is
@@ -48,8 +48,7 @@ Each step is one module in `src/openrapm/`. Each opens with the question it answ
 the equation it implements and an example with numbers.
 
 0. `design.py`, its docstring first: the regression design that steps 1 and 3 read (rows, player columns,
-   context columns, target, weight), with a one-stint example. Its short field names: `spec.n_ps` is the
-   number of player columns, `spec.f_names` the context columns, `ps_table` the player behind each column.
+   context columns, target, weight), with a one-stint example.
 1. `rapm.py`, step 1: given the ten players on the court, who was responsible for the points? Plain
    RAPM, and the label step 2 learns: each player's RAPM over every season except the rated one.
 2. `box_prior.py`, step 2: what does a player's box score say his RAPM is? LightGBM (gradient-boosted

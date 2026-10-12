@@ -124,7 +124,7 @@ PERSISTENT_LEAGUE = dict(n_teams=8, players_per_team=10, games_per_season=60, st
 @pytest.fixture(scope="session")
 def small_cfg():
     """The design settings of the simulated tests as a function of the keys a test adds:
-    `small_cfg(player_unit="window")` is a new dict each call."""
+    `small_cfg(player_unit="player")` is a new dict each call."""
     def config(**extra) -> dict:
         return {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "box_counts": FEATURES, **extra}
     return config
@@ -142,7 +142,7 @@ def synthetic_league():
 @pytest.fixture(scope="session")
 def synthetic_design(small_cfg):
     """The design of a simulated league's `seasons` (every season when None) through the one assembly:
-    `synthetic_design(sim, [2002])`, `synthetic_design(sim, cfg=small_cfg(player_unit="window"))`."""
+    `synthetic_design(sim, [2002])`, `synthetic_design(sim, cfg=small_cfg(player_unit="player"))`."""
     def design(sim: dict, seasons=None, cfg=None, target: str = "pts"):
         stints, box = sim["stints"], sim["box"]
         if seasons is not None:

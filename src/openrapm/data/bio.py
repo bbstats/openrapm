@@ -1,20 +1,23 @@
 """Player-level inputs for the prior that are not box-score rates: who he is and where he has been.
 
-Two blocks, both aligned to a window's players the way `roles.career_inputs` is:
+Two blocks, both one row per player in the order of the player ids asked for, as `roles.career_inputs` gives
+them; the season panel (data/panel.py) asks for one season's players.
 
   BIO      height (inches), weight (pounds), draft_pick (1..60; undrafted and unknown = 61) -- one number per
            player for his whole career, the median over the seasons the bio feed (data/raw/bio) lists him.
            None of it is a rate, so none of it needs padding, and the tree can learn that a block from a
            7-footer and a block from a 6-5 wing are different events without a play-by-play counter.
   TENURE   tenure (seasons with his current main team, counting this one, possession-weighted over the
-           window's seasons) and n_teams (distinct teams he played for in the window).  What the turnover
-           work (FINDINGS 24) measured for the target window, measured here for the FEATURE window: a box
-           line beside people he knows against one beside strangers, without a one-hot of the team.
+           seasons asked for) and n_teams (distinct teams he played for in those seasons): a box line beside
+           teammates he has played with for years against one beside new teammates, without a one-hot of the
+           team.  Why: a box line is worth less beside new teammates, by about 0.85 points per 100 on offence
+           and 0.55 on defence when every teammate is new (FINDINGS.md section 24, `git show
+           archive/research-2026-09:FINDINGS.md`).
 
-A held-out season is never a training season, but the roles table knows its rosters; `exclude_seasons`
-skips those rows so the tenure chain steps over H as if H were unknown, and nothing measured on H reaches
-a covariate (notes/DECISIONS.md, "The measurement traps": a covariate measured on the held-out season needs a
-control from data the outcome could not have touched).
+`exclude_seasons` drops those seasons from the roles table first, so the tenure chain steps over them as if
+they were unknown: a season a fit must not see reaches no input through a roster (notes/DECISIONS.md, "The
+measurement traps": an input measured on the held-out season needs a control from data the outcome could not
+have touched).  The season panel excludes none.
 """
 from __future__ import annotations
 

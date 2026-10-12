@@ -41,7 +41,7 @@ def design_of(stint_rows: list, cfg: dict, target: str = "pts"):
 
 def context(design, name: str) -> list:
     """One context column of the design matrix, one value per row."""
-    return design.X[:, design.spec.f_col(name)].toarray().ravel().tolist()
+    return design.X[:, design.spec.context_column(name)].toarray().ravel().tolist()
 
 
 # ------------------------------------------------------------------------------------------------ one stint, two rows
@@ -58,8 +58,9 @@ def test_the_docstring_example(small_cfg):
 
 def test_each_row_holds_its_five_on_offence_and_its_five_on_defence(small_cfg):
     design = design_of([stint()], small_cfg())
-    column = dict(zip(design.spec.ps_table.player_id, design.spec.ps_table.ps_idx))
-    offence, defence = design.X[:, design.spec.zo].toarray(), design.X[:, design.spec.zd].toarray()
+    column = dict(zip(design.spec.players.player_id, design.spec.players.player_column))
+    offence = design.X[:, design.spec.offense_columns].toarray()
+    defence = design.X[:, design.spec.defense_columns].toarray()
     assert np.flatnonzero(offence[0]).tolist() == [column[player] for player in HOME_FIVE]
     assert np.flatnonzero(defence[0]).tolist() == [column[player] for player in AWAY_FIVE]
     assert np.flatnonzero(offence[1]).tolist() == [column[player] for player in AWAY_FIVE]
@@ -70,7 +71,7 @@ def test_the_matrix_is_its_parts_side_by_side(small_cfg):
     """X = [Z_O | Z_D | C | game]: the blocks a fit reads (`parts`) are the matrix's, and the last column is the
     game number."""
     design = design_of([stint(), stint(game_id="g2"), stint(game_id="g2", pts_h=0)], small_cfg())
-    matrix, n_players, n_context = design.X.toarray(), design.spec.n_ps, len(design.spec.f_names)
+    matrix, n_players, n_context = design.X.toarray(), design.spec.n_players, len(design.spec.context_names)
     assert np.array_equal(matrix[:, :2 * n_players], design.parts["Z"].toarray())
     assert np.array_equal(matrix[:, 2 * n_players:2 * n_players + n_context], design.parts["F"])
     assert matrix[:, -1].tolist() == design.parts["game_idx"].tolist() == [0, 1, 1, 0, 1, 1]
@@ -111,7 +112,7 @@ def test_a_row_whose_denominator_is_0_is_dropped(small_cfg, target, response, we
     assert design.counters.fga.tolist() == [4.0, 5.0, 2.0]          # one line per kept row, the offence's counts
     points = design_of(stints, small_cfg())
     assert len(points.y) == 4
-    assert design.spec.ps_table.equals(points.spec.ps_table) and design.spec.f_names == points.spec.f_names
+    assert design.spec.players.equals(points.spec.players) and design.spec.context_names == points.spec.context_names
 
 
 def test_the_margin_is_the_offences_clipped_and_times_the_share_of_the_game_left(small_cfg):
@@ -186,16 +187,16 @@ def test_the_order_the_pieces_arrive_in_does_not_matter(small_cfg):
 
 
 # ------------------------------------------------------------------------------------------------ player columns
-def test_window_units_give_a_player_one_column_over_the_seasons(small_cfg):
+def test_one_column_per_player_spans_the_seasons(small_cfg):
     """Two 2025 stints (12 regular-season possessions each player), one 2026 regular-season stint (6) and two 2026
-    playoff stints (12, which do not count): under player_unit "window" each player's column takes 2025, the season
-    of his most regular-season possessions; under "season" each player-season is its own column."""
+    playoff stints (12, which do not count): under player_unit "player" each player's column takes 2025, the season
+    of his most regular-season possessions; under "player_season" each player-season is its own column."""
     stints = [stint(game_id="a1", season=2025), stint(game_id="a2", season=2025), stint(game_id="b1"),
               stint(game_id="c1", phase="PO", series_id="s1"), stint(game_id="c2", phase="PO", series_id="s1")]
-    window = design_of(stints, small_cfg(player_unit="window"))
-    assert window.spec.seasons == [2025, 2026] and window.spec.n_ps == 10
-    assert window.spec.season_of_ps.tolist() == [0] * 10
-    assert (window.spec.psx_table.groupby("player_id").ps_idx.nunique() == 1).all()
-    by_season = design_of(stints, small_cfg(player_unit="season"))
-    assert by_season.spec.n_ps == 20
-    assert by_season.spec.season_of_ps.tolist() == [0] * 10 + [1] * 10
+    by_player = design_of(stints, small_cfg(player_unit="player"))
+    assert by_player.spec.seasons == [2025, 2026] and by_player.spec.n_players == 10
+    assert by_player.spec.season_of_player.tolist() == [0] * 10
+    assert (by_player.spec.player_seasons.groupby("player_id").player_column.nunique() == 1).all()
+    by_season = design_of(stints, small_cfg(player_unit="player_season"))
+    assert by_season.spec.n_players == 20
+    assert by_season.spec.season_of_player.tolist() == [0] * 10 + [1] * 10

@@ -127,12 +127,12 @@ class ScoredSeason:
 def scored_season(designs: DesignCache, season: int) -> ScoredSeason:
     """The scored season's points design, its on-court matrix and its team-game index."""
     design = designs.season(season, "pts")
-    m = design.spec.n_ps
+    m = design.spec.n_players
     players = sp.csr_matrix(design.X[:, :2 * m])
     on_court = (players[:, :m] + players[:, m:]).T.tocsr()
     game_key = design.rows.game_idx.to_numpy() * 2 + design.rows.is_home_off.to_numpy().astype(int)
     game, games = pd.factorize(game_key)
-    return ScoredSeason(season, design, on_court, design.spec.ps_table["player_id"].to_numpy(np.int64), game,
+    return ScoredSeason(season, design, on_court, design.spec.players["player_id"].to_numpy(np.int64), game,
                         len(games))
 
 

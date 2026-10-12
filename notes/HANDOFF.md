@@ -34,12 +34,12 @@
 >
 > `README.md` and `PIPELINE.md` describe the code as it is now; `CONTRIBUTING.md` has the writing rules.
 
-**This file is transient.**  It starts the next session and is deleted when Phase 1 ships.  `DECISIONS.md`
-is the permanent record and carries every number quoted here.  Do not let this grow into a lab notebook.
+**This file is transient.**  It starts the next session.  `DECISIONS.md` is the permanent record and carries
+every number quoted here.  Do not let this grow into a lab notebook.
 
-Branch `cleanup`; `main` is fast-forwarded to it at each publish, and the live site is served from `docs/`
-on `main`.  `pytest -q`: **556 passed, 1 xfailed, ~185 s** with the scraped data (2026-10-08, before the Robustness
-pass's code; the LaMelo test at the bottom of this file passes on the current ratings).
+The work happens on feature branches off `main`; the live site is served from `docs/` on `main`.  `pytest -q`:
+**464 passed, 6 deselected (the slow tests, `pytest -m slow`), 1 xfailed, ~60 s** with the scraped data
+(2026-10-12; the LaMelo test at the bottom of this file passes on the current ratings).
 
 ## START HERE (2026-10-09): the Robustness pass -- steps 1-4 done, experiment 46 (the body-weight fix) adopted as the base, 47 (honest scale) not adopted, 48 (pad once) stopped, checkpoint done, 49 (own-side inputs) not adopted, 50 and 51 not adopted -- the pass is closed; experiment 46 published
 
@@ -617,7 +617,10 @@ test can fail, no worries."*  The honest fix, not done, is to replace the rank c
 1. **Get the owner's calls** on the open list in START HERE; commit and publish only when the owner says so.
 2. **If the owner says go: the stat-variance plan** (START HERE, "Next"): each input's noise constant, posterior-mean
    inputs, and steals out of the defensive inputs; read the 95 steal lean after each.
-3. **The attribution control** (chimeraboost on `boruta_noonc`) and **leave one out on experiment 45** (`--lopo=1`).
+3. **Closed by the 2026-10 cleanup:** the attribution control (chimeraboost on `boruta_noonc`) and leave one player
+   out on experiment 45 (`--lopo=1`).  `openrapm` fits only the shipped LightGBM prior (`params/booster_params_*.json`
+   must name the LightGBM learner) and has no leave-one-player-out option; either needs the research code at the tag
+   `archive/research-2026-10`, and only on the owner's go.
 4. **The swap adjustment's type model** for White-type cases (item 6): its strength or its features, scored on the
    standard battery plus the per-player consensus pieces (`113_swap_explain.py`).
 5. Older leads, unchanged: credit shot creation in the prior; the eight mixture probability columns into the prior; a
@@ -625,7 +628,7 @@ test can fail, no worries."*  The honest fix, not done, is to replace the rank c
 
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest -q                                        # 456 passed, 1 xfailed, 6 slow deselected (~1 min)
+    .venv/Scripts/python -m pytest -q                                        # 464 passed, 1 xfailed, 6 slow deselected (~1 min)
     .venv/Scripts/python scripts/checks/63_yoy.py --rankings=incumbent=outputs/season_ratings_weightfix.parquet --tag=verify --splits=
                                                                              # game_armse 8.5857, both directions together
     .venv/Scripts/python scripts/checks/64_consensus_report.py outputs/season_ratings_product.parquet

@@ -74,12 +74,12 @@ __all__ = ["design_blocks", "NormalEquations", "normal_equations", "player_posse
 def design_blocks(design):
     """Split a season's design matrix into (Z as CSR sparse, C as a dense array).
 
-    Z = [Z_O | Z_D] has 2 x n columns, n = the season's players (`design.spec.n_ps`); C is the next
-    `len(design.spec.f_names)` columns.  The matrix's last column holds each row's game number, used to group
+    Z = [Z_O | Z_D] has 2 x n columns, n = the season's players (`design.spec.n_players`); C is the next
+    `len(design.spec.context_names)` columns.  The matrix's last column holds each row's game number, used to group
     rows by game, and is not a regressor.
     """
-    n_players = design.spec.n_ps
-    n_context = len(design.spec.f_names)
+    n_players = design.spec.n_players
+    n_context = len(design.spec.context_names)
     players = design.X[:, :2 * n_players].tocsr()
     context = np.asarray(design.X[:, 2 * n_players:2 * n_players + n_context].todense())
     return players, context
@@ -100,8 +100,8 @@ class NormalEquations(NamedTuple):
 def normal_equations(players, context, target, weights) -> NormalEquations:
     """The weighted least-squares sums of one design: G = B'WB, b = B'Wy, block by block.
 
-    The arithmetic is the one every published rating was built with, so the bits match (looseason.py:94-105 and
-    priorridge.py:242-246 at the tag archive/research-2026-10).
+    The arithmetic, and the order of every sum, is the one every published rating was built with, so the bits
+    match: change the order and the published ratings move in their last digits.
     """
     weighted = players.T.multiply(weights)
     weighted_context = (context * weights[:, None]).T
@@ -183,10 +183,10 @@ class SeasonSums:
         """Store one season's normal equations and each player's possessions in it."""
         players, context = design_blocks(design)
         self._seasons[int(season)] = dict(
-            columns=self._columns_for(design.spec.ps_table["player_id"].to_numpy()),
+            columns=self._columns_for(design.spec.players["player_id"].to_numpy()),
             n_context=context.shape[1],
             sums=normal_equations(players, context, design.y, design.w),
-            possessions=player_possessions(players, design.rows["poss"].to_numpy(), design.spec.n_ps))
+            possessions=player_possessions(players, design.rows["poss"].to_numpy(), design.spec.n_players))
         return self
 
     def player_columns(self, season: int) -> np.ndarray:

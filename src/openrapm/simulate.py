@@ -374,7 +374,7 @@ def simulated_panel(designs: dict, profiles: pd.DataFrame, pad_target: str = "po
     rows = []
     for season in sorted(designs):
         rates = box_rates(designs[season], pad_target=pad_target)
-        players = designs[season].spec.ps_table["player_id"].to_numpy()
+        players = designs[season].spec.players["player_id"].to_numpy()
         for side, chosen in (("O", rates.offence), ("D", rates.defence)):
             keys = pd.DataFrame({"side": side, "player_id": players, "season": season,
                                  "possessions": chosen.possessions})
@@ -384,13 +384,13 @@ def simulated_panel(designs: dict, profiles: pd.DataFrame, pad_target: str = "po
 
 
 def truth_aligned(truth: dict, spec) -> pd.DataFrame:
-    """Truth table aligned to spec.ps_table (one row per Z column of the O block).
+    """Truth table aligned to spec.players (one row per player column, the order of Z_O).
 
-    With player-window units a player has one Z column but several seasons of truth, so the
-    truth is averaged over his seasons before the join.
+    With one column per player (player_unit "player") a player has one column but several seasons of truth, so
+    the truth is averaged over his seasons before the join.
     """
     ps = truth["ps"]
-    if getattr(spec, "player_unit", "season") == "window":
+    if spec.player_unit == "player":
         ps = ps.groupby("player_id", as_index=False).mean(numeric_only=True).drop(columns="season", errors="ignore")
-        return spec.ps_table.merge(ps, on="player_id", how="left")
-    return spec.ps_table.merge(ps, on=["player_id", "season"], how="left")
+        return spec.players.merge(ps, on="player_id", how="left")
+    return spec.players.merge(ps, on=["player_id", "season"], how="left")

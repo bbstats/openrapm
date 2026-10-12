@@ -94,7 +94,7 @@ def _fixed_block(wd) -> np.ndarray:
     """The design's dense fixed block, from `parts` when it is there and from X when it is not."""
     if wd.parts is not None and "F" in wd.parts:
         return np.asarray(wd.parts["F"], dtype=float)
-    m, n_f = wd.spec.n_ps, len(wd.spec.f_names)
+    m, n_f = wd.spec.n_players, len(wd.spec.context_names)
     return np.asarray(wd.X[:, 2 * m:2 * m + n_f].todense(), dtype=float)
 
 
@@ -102,7 +102,7 @@ def _player_block(wd) -> sp.csr_matrix:
     """The design's Z block (ones), from `parts` when it is there and from X when it is not."""
     if wd.parts is not None and "Z" in wd.parts:
         return sp.csr_matrix(wd.parts["Z"])
-    return sp.csr_matrix(wd.X[:, :2 * wd.spec.n_ps])
+    return sp.csr_matrix(wd.X[:, :2 * wd.spec.n_players])
 
 
 def team_game_design(wd, control_prefixes=CONTROL_PREFIXES) -> TradeSet:
@@ -131,7 +131,7 @@ def team_game_design(wd, control_prefixes=CONTROL_PREFIXES) -> TradeSet:
     Z.eliminate_zeros()
     y = np.asarray(pool @ wd.y) / weight
 
-    names = list(wd.spec.f_names)
+    names = list(wd.spec.context_names)
     keep = [j for j, name in enumerate(names)
             if any(name == p or name.startswith(p) for p in control_prefixes)]
     F = (np.asarray(pool @ _fixed_block(wd)[:, keep]) / weight[:, None]) if keep else np.zeros((n_groups, 0))
@@ -146,7 +146,7 @@ def team_game_design(wd, control_prefixes=CONTROL_PREFIXES) -> TradeSet:
         "game_id": games["game_id"].reindex(game_of_group).to_numpy(),
     })
     return TradeSet(Z=Z, F=F, y=y, w=weight, keys=keys,
-                    player_ids=wd.spec.ps_table["player_id"].to_numpy(dtype=np.int64),
+                    player_ids=wd.spec.players["player_id"].to_numpy(dtype=np.int64),
                     control_names=[names[j] for j in keep])
 
 

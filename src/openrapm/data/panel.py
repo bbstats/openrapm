@@ -36,7 +36,8 @@ Every fit reads the panel through `trainable_panel`, which first drops every row
 `panel_and_trainable_seasons`.  `build_panel` itself reads and writes every season, the one in progress included.
 
 `migrate_panel` wrote the panel once, on 2026-10-11, from the one the retired scripts/49_role_panel.py (with 65, 69
-and 86) wrote under the names used before then, outputs/role_panel_season.parquet: every column renamed
+and 86; at the tag archive/research-2026-10) wrote under the names used before then,
+outputs/role_panel_season.parquet: every column renamed
 (data/legacy_names.py), the columns no reader uses dropped, the rest in `SEASON_PANEL_COLUMNS` order, the rows in
 theirs (`openrapm data panel --migrate-from outputs/role_panel_season.parquet`).
 """
@@ -73,16 +74,14 @@ from .designs import DesignCache
 from .ingest import GAME_PREFIX, game_table, load_gamelog, raw_dir
 from .legacy_names import is_deleted, translate_frame
 from .roles import (
-    CAREER_INPUTS,
-    RAW_INPUTS,
     ROLE_PHASES,
     build_roles,
     career_inputs,
     player_season_inputs,
+    role_inputs_by_column,
     roles_from_boxes,
     season_ages,
     shares_from_stints,
-    window_inputs,
 )
 from .seasons import drop_untrainable
 from .shots import DEFENSE_TARGETS, SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS, player_shot_frame
@@ -98,10 +97,9 @@ PANEL_TARGETS = (OFFENCE, DEFENCE_ALL)            # the designs one season's row
 SIDES = ("O", "D")
 OLD_PANEL = "role_panel_season.parquet"          # the old-named panel's file name, beside the new one
 STINT_COLUMNS = ["game_id", "period", *HOME_SLOTS, *AWAY_SLOTS, "poss_h", "poss_a", "margin_h", "is_gt"]
-# The data layer's names for the role, career, body and shot columns, against the panel's (the pairs are pinned in
-# tests/test_features.py and tests/test_panel.py).
-ROLE_NAMES = dict(zip(RAW_INPUTS, ROLE))
-CAREER_NAMES = dict(zip(CAREER_INPUTS, CAREER))
+# The data layer's names for the body and shot columns, against the panel's (the pairs are pinned in
+# tests/test_features.py and tests/test_panel.py); data/roles.py builds the role and career columns under the panel's
+# own names.
 BIO_NAMES = dict(zip(PLAYER_INPUTS, BIO))
 SHOT_NAMES = dict(zip([*SHOT_TOTAL_COLS, *SHOT_LEAGUE_COLS], [*SHOT_TOTALS, *SHOT_LEAGUE]))
 # lineup slot -> (his team's possessions, the opponent's possessions)
@@ -289,11 +287,11 @@ def _role_history(season: int, sources: SeasonSources, fit: set | None, cap: flo
 
 
 def _player_columns(season: int, cfg: dict, designs: dict, history: _RoleHistory, fit: set | None) -> pd.DataFrame:
-    """The columns that are the same on both of a player's rows, one row per design column: role, shot totals, on and
+    """The columns that are the same on both of a player's rows, one row per player column: role, shot totals, on and
     off court, career, body and team."""
     offence, defence = designs[OFFENCE], designs[DEFENCE_ALL]
-    players = offence.spec.ps_table["player_id"].to_numpy()
-    role = window_inputs(offence, history.inputs, cap=share_cap(cfg)).rename(columns=ROLE_NAMES)
+    players = offence.spec.players["player_id"].to_numpy()
+    role = role_inputs_by_column(offence, history.inputs, cap=share_cap(cfg))
     shots = player_shot_frame([season], cfg, players, keep=None if fit is None else {season: sorted(fit)})
     frame = pd.DataFrame({"player_id": players})
     for name in ROLE:
@@ -305,8 +303,10 @@ def _player_columns(season: int, cfg: dict, designs: dict, history: _RoleHistory
     frame[ON_MINUS_OFF[1]] = frame[ON_COURT[1]] - frame[OFF_COURT[1]]
     career = career_inputs(history.inputs, season, players, age=frame["age"].to_numpy())
     body = player_inputs(cfg, history.roles, [season], players)
-    for old, name in {**CAREER_NAMES, **BIO_NAMES}.items():
-        frame[name] = (career if old in CAREER_NAMES else body)[old].to_numpy(dtype=float)
+    for name in CAREER:
+        frame[name] = career[name].to_numpy(dtype=float)
+    for old, name in BIO_NAMES.items():
+        frame[name] = body[old].to_numpy(dtype=float)
     return frame
 
 

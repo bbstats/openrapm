@@ -141,12 +141,12 @@ def weighted_least_squares(columns: np.ndarray, y: np.ndarray, w: np.ndarray) ->
 
 def predict_season(ratings: Ratings, design) -> Prediction:
     """Predict every row of the scored season's `design` from `ratings`; only the level [1, home] is refitted."""
-    m = design.spec.n_ps
-    r = ratings.aligned(design.spec.ps_table["player_id"].to_numpy())
+    m = design.spec.n_players
+    r = ratings.aligned(design.spec.players["player_id"].to_numpy())
     c_off = design.X[:, :m] @ r["o"].to_numpy()
     c_def = design.X[:, m:2 * m] @ r["d"].to_numpy()
     y, w = design.y, design.w
-    home = np.asarray(design.X[:, design.spec.f_col("home")].todense()).ravel()
+    home = np.asarray(design.X[:, design.spec.context_column("home")].todense()).ravel()
     level = np.column_stack([np.ones(design.X.shape[0]), home])
     contribution = c_off + c_def
     pred = level @ weighted_least_squares(level, y - contribution, w) + contribution
@@ -219,8 +219,8 @@ def movers_split(design, main_team_now: dict, main_team_before: dict) -> np.ndar
     traded-to-a-new-team test: a rating that is really his old teammates' credit stops predicting once he plays
     with new ones.  It labels stints, so its groups are read on `mse`.
     """
-    m = design.spec.n_ps
-    ids = design.spec.ps_table["player_id"].to_numpy()
+    m = design.spec.n_players
+    ids = design.spec.players["player_id"].to_numpy()
     moved = np.array([1.0 if (q in main_team_now and q in main_team_before
                               and main_team_now[q] != main_team_before[q]) else 0.0 for q in ids])
     n_movers = design.X[:, :2 * m] @ np.tile(moved, 2)
@@ -238,7 +238,7 @@ def game_bench_share_split(p: Prediction, design, low_exposure: float = BARELY_S
     Example: a team-game of 100 possessions in which two barely-seen players shared the court for 30 of them has
     a share of (2 x 30 / 10) / 100 = 6%, in the 5%-15% group.
     """
-    m = design.spec.n_ps
+    m = design.spec.n_players
     edges = [float(e) for e in edges]
     low = (p.rat.poss.to_numpy(dtype=float) < float(low_exposure)).astype(float)
     n_low = design.X[:, :2 * m] @ np.tile(low, 2)

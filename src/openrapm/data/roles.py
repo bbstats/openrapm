@@ -1,23 +1,24 @@
 """Role inputs of the season panel: the share of team possessions played, starts, and age.
 
-Three inputs per player-season, all from data already on disk or one request away (the season panel calls them
-team_possession_share, games_started_share and age; data/panel.py):
+Three inputs per player-season, all from data already on disk or one request away, under the season panel's names
+(features.ROLE; data/panel.py):
 
-  poss_pct the player's on-floor possessions (both ends) summed over every team he played for,
-           divided by ONE full team-season of possessions (the mean of his teams' season totals).
-           The denominator counts the games he did not play, so injury lowers it; a player
-           traded mid-season keeps his full-season figure because the numerator is summed, not
-           averaged.  Capped at `share_cap` (0.9).
-  gs_pct   games started / games played.  Starters are each team's first five rows in the V3 box
-           file (the rule stint_parser.GameParser already relies on); played = minutes > 0.
-  age      from nba_api LeagueDashPlayerBioStats, one request per season, cached under
-           data/raw/bio/.  A missing age gets the season median and `age_imputed` = 1.
+  team_possession_share  the player's on-floor possessions (both ends) summed over every team he played for,
+                         divided by ONE full team-season of possessions (the mean of his teams' season totals).
+                         The denominator counts the games he did not play, so injury lowers it; a player
+                         traded mid-season keeps his full-season figure because the numerator is summed, not
+                         averaged.  Capped at `share_cap` (0.9).
+  games_started_share    games started / games played.  Starters are each team's first five rows in the V3 box
+                         file (the rule stint_parser.GameParser already relies on); played = minutes > 0.
+  age                    from nba_api LeagueDashPlayerBioStats, one request per season, cached under
+                         data/raw/bio/.  A missing age gets the season median and `age_imputed` = 1.
 
-`build_roles` writes data/cache/roles_RSPO.parquet (one row per player-season-team, regular
-season and playoffs pooled -- the name carries the phases so an older RS-only table cannot be read
-back as this one); `window_inputs` blends the per-season inputs down to the design's player columns
-the way box_rates.py blends its padding constants (possession-weighted over the player's seasons in
-the design); `career_inputs` counts what a player had behind him before a season.
+`build_roles` writes data/cache/roles_RSPO.parquet (one row per player-season-team, regular season and playoffs
+pooled -- the name carries the phases so an older RS-only table cannot be read back as this one).  The table keeps the
+raw counts (games, starts, minutes, poss_on, team_poss, age); `player_season_inputs` turns them into the three inputs,
+`role_inputs_by_column` blends those down to the design's player columns the way box_rates.py blends its padding
+constants (possession-weighted over the player's seasons in the design), and `career_inputs` counts what a player had
+behind him before a season (features.CAREER: seasons_before, career_possessions_before_k, age_at_first_season).
 """
 from __future__ import annotations
 
@@ -32,14 +33,14 @@ from ..design import AWAY_SLOTS, HOME_SLOTS
 # place the answer lives.  Owner's ruling, 2026-09-10: one rating per player per season from that season's
 # games, "regular season and playoffs together, nothing else".
 from ..design import SEASON_PHASES as ROLE_PHASES
+from ..features import CAREER, ROLE
 from .config import DEFAULT_PATHS, resolve
 from .ingest import GAME_PREFIX, TIMEOUT, _retry, game_table, load_gamelog, raw_dir, refuse_if_offline, season_str
 
-# The role and career inputs as this module names them.  The season panel calls them team_possession_share,
-# games_started_share, age, and seasons_before, career_possessions_before_k, age_at_first_season
-# (features.ROLE and features.CAREER; data/legacy_names.py maps one onto the other).
-RAW_INPUTS = ["poss_pct", "gs_pct", "age"]
-CAREER_INPUTS = ["exp_yrs", "exp_poss", "entry_age"]
+# The inputs this module builds, under the season panel's names: features.ROLE (team_possession_share,
+# games_started_share, age) and features.CAREER (seasons_before, career_possessions_before_k, age_at_first_season).
+TEAM_SHARE, STARTS_SHARE = ROLE[:2]
+SEASONS_BEFORE, CAREER_POSSESSIONS, FIRST_AGE = CAREER
 
 # One franchise, two team ids: the Charlotte Hornets moved to New Orleans after 2001-02 and took a new id
 # with them (1610612740 from 2003); from 2005 1610612766 is the Bobcats, now the Hornets, and is itself.
@@ -128,8 +129,8 @@ def season_roles(season: int, cfg, phases: tuple = ROLE_PHASES) -> pd.DataFrame:
     """One season: player_id, season, team_id, games, starts, minutes, poss_on, team_poss.
 
     Pooled over `phases`.  A playoff game is a game: it is a start, minutes, and possessions on the floor
-    for both the player and his team, so `poss_pct` and `gs_pct` stay shares and a deep run does not
-    inflate them.  This was `("RS",)` while the playoffs were a separate delta block.
+    for both the player and his team, so the team possession share and the games started share stay shares and a
+    deep run does not inflate them.  This was `("RS",)` while the playoffs were a separate delta block.
     """
     bdir = _box_dir(season, cfg)
     boxes, st_parts, gm_parts = {}, [], []
@@ -227,85 +228,86 @@ def main_teams(cfg) -> pd.DataFrame:
 
 
 def player_season_inputs(roles: pd.DataFrame, cap: float = 0.9) -> pd.DataFrame:
-    """Per player-season: poss_pct (summed over teams / one team-season, capped), gs_pct, age (+ age_imputed)."""
+    """Per player-season: team_possession_share (his possessions summed over his teams / one team-season, capped at
+    `cap`), games_started_share and age (+ age_imputed), after the raw counts they come from."""
     r = roles.copy()
     g = r.groupby(["player_id", "season"], as_index=False).agg(
         games=("games", "sum"), starts=("starts", "sum"), minutes=("minutes", "sum"), poss_on=("poss_on", "sum"),
         team_poss=("team_poss", "mean"), age=("age", "first"))
-    g["poss_pct"] = np.where(g.team_poss > 0, g.poss_on / np.where(g.team_poss > 0, g.team_poss, 1.0),
+    g[TEAM_SHARE] = np.where(g.team_poss > 0, g.poss_on / np.where(g.team_poss > 0, g.team_poss, 1.0),
                              0.0).clip(0.0, cap)
-    g["gs_pct"] = np.where(g.games > 0, g.starts / np.where(g.games > 0, g.games, 1.0), 0.0).clip(0.0, 1.0)
+    g[STARTS_SHARE] = np.where(g.games > 0, g.starts / np.where(g.games > 0, g.games, 1.0), 0.0).clip(0.0, 1.0)
     med = g.groupby("season")["age"].transform("median")
     g["age_imputed"] = g.age.isna().astype(int)
     g["age"] = g.age.fillna(med).fillna(float(g.age.median()) if g.age.notna().any() else 27.0)
-    return g[["player_id", "season", "games", "starts", "minutes", "poss_on", "team_poss", "poss_pct", "gs_pct", "age",
-              "age_imputed"]]
+    return g[["player_id", "season", "games", "starts", "minutes", "poss_on", "team_poss", *ROLE, "age_imputed"]]
 
 
 def career_inputs(inputs: pd.DataFrame, before_season: int, player_ids=None, age=None) -> pd.DataFrame:
-    """Per player, what he had behind him BEFORE `before_season`: seasons played, possessions (thousands) and
-    the age he entered at.
+    """Per player, what he had behind him BEFORE `before_season`: seasons played (seasons_before), possessions in
+    thousands (career_possessions_before_k) and the age he entered at (age_at_first_season).
 
-    `before_season` is the BLOCK's first season, not the row's, so the quantity is a property of the training
-    block alone -- for a held-out season H at K = 3 the block is (H-2, H-1, H+1) and this counts only seasons
-    up to H-3, which no covariate measured on H can reach.  A season with no games played does not count.
+    The season panel passes the row's own season, so nothing measured in that season or later reaches the count.
+    A season with no games played does not count.
 
-    The roles table starts in 1997, so everyone in the first window is left-censored to zero years: `entry_age`
+    The roles table starts in 1997, so everyone in 1997 is left-censored to zero years: `age_at_first_season`
     (the age in his first season SEEN, which for a censored veteran is his 1997 age, not 19) is what lets the
     tree tell a real rookie from a censored one, and `season` is a feature beside it.
 
     `player_ids` returns one row per id in that order; a player the past never saw has zero years, zero
-    possessions and `entry_age` = his age now (`age`, aligned to the same ids), because he is entering now.
+    possessions and `age_at_first_season` = his age now (`age`, aligned to the same ids), because he is entering now.
     """
     d = inputs[(inputs.season < int(before_season)) & (inputs.games > 0)]
     if len(d):
-        g = d.groupby("player_id").agg(exp_yrs=("season", "nunique"), exp_poss=("poss_on", "sum"))
-        g["entry_age"] = d.sort_values("season").groupby("player_id")["age"].first()
-        g["exp_poss"] = g.exp_poss / 1000.0
-        g = g[CAREER_INPUTS]
+        g = d.groupby("player_id").agg(**{SEASONS_BEFORE: ("season", "nunique"),
+                                          CAREER_POSSESSIONS: ("poss_on", "sum")})
+        g[FIRST_AGE] = d.sort_values("season").groupby("player_id")["age"].first()
+        g[CAREER_POSSESSIONS] = g[CAREER_POSSESSIONS] / 1000.0
+        g = g[CAREER]
     else:
-        g = pd.DataFrame(columns=CAREER_INPUTS, dtype=float)
+        g = pd.DataFrame(columns=CAREER, dtype=float)
     if player_ids is None:
         return g.rename_axis("player_id").reset_index()
     out = g.reindex(np.asarray(player_ids)).reset_index(drop=True)
-    out["exp_yrs"] = out.exp_yrs.fillna(0.0).astype(float)
-    out["exp_poss"] = out.exp_poss.fillna(0.0).astype(float)
+    out[SEASONS_BEFORE] = out[SEASONS_BEFORE].fillna(0.0).astype(float)
+    out[CAREER_POSSESSIONS] = out[CAREER_POSSESSIONS].fillna(0.0).astype(float)
     fill = (float(inputs.age.median()) if age is None else
             pd.Series(np.asarray(age, dtype=float), index=out.index))
-    out["entry_age"] = out.entry_age.fillna(fill).astype(float)
+    out[FIRST_AGE] = out[FIRST_AGE].fillna(fill).astype(float)
     return out
 
 
-def window_inputs(wd, inputs: pd.DataFrame, cap: float = 0.9) -> pd.DataFrame:
-    """The per-season inputs blended to the design's Z unit, aligned to wd.spec.ps_table.
+def role_inputs_by_column(wd, inputs: pd.DataFrame, cap: float = 0.9) -> pd.DataFrame:
+    """The per-season inputs (`player_season_inputs`) blended to the design's player columns: one row per column, in
+    `wd.spec.players` order, with player_column, player_id and features.ROLE.
 
-    Possession-weighted over the player's seasons in the window (RS offensive possessions from
+    Possession-weighted over the player's seasons in the design (RS offensive possessions from
     wd.game_poss, the weights the design itself uses); a player-season with no roles row takes the
     season's possession-weighted league mean and is counted in .attrs["n_missing"].
     """
     spec = wd.spec
-    psx = spec.psx_table[["psx_idx", "player_id", "season", "ps_idx"]].copy()
+    player_seasons = spec.player_seasons[["player_season", "player_id", "season", "player_column"]].copy()
     gp = wd.game_poss
     rs = wd.games.loc[wd.games["phase"] == "RS", "game_idx"].to_numpy()
     gp = gp[np.isin(gp["game_idx"], rs)]
-    w_psx = np.zeros(len(psx))
-    np.add.at(w_psx, gp["psx_idx"].to_numpy(), gp["poss_off"].to_numpy(dtype=float))
-    psx["w"] = w_psx
-    m = psx.merge(inputs[["player_id", "season", *RAW_INPUTS]], on=["player_id", "season"], how="left")
-    missing = m["poss_pct"].isna()
-    for c in RAW_INPUTS:
+    weights = np.zeros(len(player_seasons))
+    np.add.at(weights, gp["player_season"].to_numpy(), gp["poss_off"].to_numpy(dtype=float))
+    player_seasons["w"] = weights
+    m = player_seasons.merge(inputs[["player_id", "season", *ROLE]], on=["player_id", "season"], how="left")
+    missing = m[TEAM_SHARE].isna()
+    for c in ROLE:
         lm = m.groupby("season").apply(
             lambda d: np.average(d[c].fillna(0.0), weights=np.where(d[c].notna(), d.w, 0.0))
             if (d[c].notna() & (d.w > 0)).any() else d[c].mean(), include_groups=False)
         m[c] = m[c].fillna(m["season"].map(lm)).fillna(float(m[c].mean()) if m[c].notna().any() else 0.0)
-    m["poss_pct"] = m["poss_pct"].clip(0.0, cap)
-    n_ps = spec.n_ps
-    out = np.zeros((n_ps, len(RAW_INPUTS)))
-    den = np.zeros(n_ps)
-    cnt = np.zeros((n_ps, len(RAW_INPUTS)))
-    n = np.zeros(n_ps)
-    vals = m[RAW_INPUTS].to_numpy(dtype=float)
-    idx = m["ps_idx"].to_numpy()
+    m[TEAM_SHARE] = m[TEAM_SHARE].clip(0.0, cap)
+    n_players = spec.n_players
+    out = np.zeros((n_players, len(ROLE)))
+    den = np.zeros(n_players)
+    cnt = np.zeros((n_players, len(ROLE)))
+    n = np.zeros(n_players)
+    vals = m[ROLE].to_numpy(dtype=float)
+    idx = m["player_column"].to_numpy()
     ww = m["w"].to_numpy(dtype=float)
     np.add.at(out, idx, vals * ww[:, None])
     np.add.at(den, idx, ww)
@@ -314,9 +316,9 @@ def window_inputs(wd, inputs: pd.DataFrame, cap: float = 0.9) -> pd.DataFrame:
     with np.errstate(divide="ignore", invalid="ignore"):
         blend = np.where(den[:, None] > 0, out / np.where(den > 0, den, 1.0)[:, None],
                          cnt / np.maximum(n, 1.0)[:, None])
-    res = pd.DataFrame(blend, columns=RAW_INPUTS)
-    res.insert(0, "ps_idx", np.arange(n_ps))
-    res.insert(1, "player_id", spec.ps_table["player_id"].to_numpy())
+    res = pd.DataFrame(blend, columns=ROLE)
+    res.insert(0, "player_column", np.arange(n_players))
+    res.insert(1, "player_id", spec.players["player_id"].to_numpy())
     res.attrs["n_missing"] = int(missing.sum())
-    res.attrs["n_psx"] = int(len(m))
+    res.attrs["n_player_seasons"] = int(len(m))
     return res

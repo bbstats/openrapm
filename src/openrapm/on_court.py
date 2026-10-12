@@ -63,7 +63,7 @@ def on_court(Zo, Zd, r, w) -> tuple:
 
 def _court_columns(design) -> tuple:
     """(offence, defence): the design's two (rows x players) indicator blocks."""
-    n_players = design.spec.n_ps
+    n_players = design.spec.n_players
     players = sp.csr_matrix(design.parts["Z"] if design.parts is not None else design.X[:, :2 * n_players])
     return players[:, :n_players], players[:, n_players:]
 
@@ -84,7 +84,7 @@ def _centre_and_pad(rating: np.ndarray, possessions: np.ndarray, response, weigh
 
 
 def _same_players(offence_design, defence_design) -> None:
-    if offence_design.spec.n_ps != defence_design.spec.n_ps:
+    if offence_design.spec.n_players != defence_design.spec.n_players:
         raise ValueError("the two designs must share a player layout; build them from the same season")
 
 

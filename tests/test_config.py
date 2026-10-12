@@ -149,6 +149,20 @@ def test_load_config_honours_OPENRAPM_CONFIG(tmp_path, monkeypatch):
     assert resolve(load_config(ROOT / "config.yaml"), "cache") == ROOT / "data" / "cache"   # an explicit path wins
 
 
+@pytest.mark.parametrize("written, read", [("window", "player"), ("season", "player_season"),
+                                           ("player", "player"), ("player_season", "player_season")])
+def test_a_player_unit_written_before_the_rename_is_read_as_its_plain_name(tmp_path, written, read):
+    """The verification configs written before 2026-10-11 say player_unit "window"; they must build the same
+    designs, so the old value is read as "player" (and "season" as "player_season")."""
+    from openrapm.data.config import load_config
+    from openrapm.design import PLAYER_UNITS
+    cfg = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
+    cfg["player_unit"] = written
+    path = tmp_path / "config.yaml"
+    path.write_text(yaml.safe_dump(cfg), encoding="utf-8")
+    assert load_config(path)["player_unit"] == read and read in PLAYER_UNITS
+
+
 def test_no_listed_key_has_quietly_come_back_to_life():
     revived = sorted(UNREAD - _unread_keys())
     assert not revived, (f"{revived} are read by code again; take them off UNREAD.")
@@ -274,7 +288,7 @@ def test_no_script_reads_its_own_command_line():
 
 def test_the_booster_settings_are_never_read_from_config_yaml():
     """They live in params/booster_params_<name>.json alone; the chimeraboost block config.yaml once carried
-    was a fallback only the retired scripts/62_single_year_board.py read."""
+    was a fallback only the retired scripts/62_single_year_board.py read (at the tag archive/research-2026-10)."""
     cfg = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
     assert "gbdt" not in cfg
     assert not re.search(r"""cfg\[["']gbdt["']\]""", CODE)

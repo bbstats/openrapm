@@ -77,7 +77,7 @@ def test_a_design_cut_to_some_games_counts_only_their_box_scores(design):
     rates = box_rates(part)
     box = design.game_box[~design.game_box.game_idx.isin(held)]
     totals = np.zeros_like(rates.counts)
-    np.add.at(totals, box.psx_idx.to_numpy(), box[FEATURES].to_numpy())
+    np.add.at(totals, box.player_season.to_numpy(), box[FEATURES].to_numpy())
     np.testing.assert_allclose(rates.counts, totals)
     assert not np.isin(held, game_totals(part).game).any()
     assert (rates.offence.possessions < box_rates(design).offence.possessions + 1e-9).all()
@@ -86,7 +86,7 @@ def test_a_design_cut_to_some_games_counts_only_their_box_scores(design):
 def test_each_rate_is_padded_toward_its_bin_by_its_season_k(design):
     """(n x rate + k x target) / (n + k) with rate = 100 x count / n: here 100 x count + k x target over n + k."""
     rates = box_rates(design)
-    season = design.spec.season_of_ps
+    season = design.spec.season_of_player
     for side in (rates.offence, rates.defence):
         k = rates.pad_k[season]
         target = rates.bin_targets[season, bin_of(rates.bin_edges, side.possessions)]
@@ -97,7 +97,7 @@ def test_each_rate_is_padded_toward_its_bin_by_its_season_k(design):
 
 def test_defence_rates_are_per_defensive_possession(design):
     rates = box_rates(design)
-    defensive = design.game_poss.groupby("psx_idx").poss_def.sum()
+    defensive = design.game_poss.groupby("player_season").poss_def.sum()
     np.testing.assert_allclose(rates.defence.possessions[defensive.index.to_numpy()], defensive.to_numpy())
     assert not np.allclose(rates.defence.rates, rates.offence.rates)
 
@@ -120,7 +120,7 @@ def test_the_bins_give_each_size_of_player_his_own_target_and_the_league_target_
     assert not np.allclose(by_bin.bin_targets[0, 0], by_bin.bin_targets[0, -1])
     league = box_rates(design, pad_target="league")
     assert league.bin_edges is None and league.bin_targets is None
-    season = design.spec.season_of_ps
+    season = design.spec.season_of_player
     k, n = league.pad_k[season], league.offence.possessions[:, None]
     np.testing.assert_allclose(league.offence.rates, (100.0 * league.counts + k * league.league[season]) / (n + k),
                                rtol=1e-12)

@@ -30,8 +30,8 @@ def test_the_deviation_is_the_frisch_waugh_ridge(design):
     prior_o, prior_d = _shrunk_prior(design)
     got = prior_rapm.fit(design, prior_o, prior_d, penalty=3000.0)
     players, context = rapm.design_blocks(design)
-    n = design.spec.n_ps
-    ids = design.spec.ps_table["player_id"].to_numpy()
+    n = design.spec.n_players
+    ids = design.spec.players["player_id"].to_numpy()
     prior = np.concatenate([prior_rapm.aligned_prior(prior_o, ids), prior_rapm.aligned_prior(prior_d, ids)])
     free = np.column_stack([context, *prior_rapm.lineup_prior_sums(players, prior, n)])
     w = design.w
@@ -49,8 +49,8 @@ def test_the_free_scale_is_the_fixed_centre_fit_at_the_scale_it_chose(design):
     got = prior_rapm.fit(design, prior_o, prior_d, penalty=3000.0)
     s_o, s_d = got.prior_scale
     players, context = rapm.design_blocks(design)
-    n = design.spec.n_ps
-    ids = design.spec.ps_table["player_id"].to_numpy()
+    n = design.spec.n_players
+    ids = design.spec.players["player_id"].to_numpy()
     prior = np.concatenate([prior_rapm.aligned_prior(prior_o, ids), prior_rapm.aligned_prior(prior_d, ids)])
     sum_o, sum_d = prior_rapm.lineup_prior_sums(players, prior, n)
     sums = rapm.normal_equations(players, context, design.y - s_o * sum_o - s_d * sum_d, design.w)
@@ -82,7 +82,7 @@ def test_with_a_huge_penalty_the_rating_is_the_scaled_prior(design):
 
 def test_a_player_without_a_prior_is_centred_on_zero(design):
     prior_o, prior_d = _shrunk_prior(design)
-    first = design.spec.ps_table.player_id.iloc[0]
+    first = design.spec.players.player_id.iloc[0]
     prior_o.pop(first)
     got = prior_rapm.fit(design, prior_o, prior_d, penalty=3000.0)
     assert got.ratings.set_index("player_id").prior_offense.loc[first] == 0.0

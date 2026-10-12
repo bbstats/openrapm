@@ -1,9 +1,9 @@
 """Tracked and on-disk tables the ratings are joined with.
 
-`player_names` reads params/player_names.csv: a frozen copy of the names the published ratings were built
-with (the retired scripts/62's `_names()` at the tag archive/research-2026-10, from
-artifacts/season_ratings.parquet), because no data source reproduces them
-(gamelog, bio and stint names disagree on 16-22 players).  Two players carry no name there and one rated
+`player_names` reads params/player_names.csv: a frozen copy of the names the published ratings used, made on
+2026-10-11 from the older system's ratings table (artifacts/season_ratings.parquet, removed then and recoverable
+with `git show archive/research-2026-10:artifacts/season_ratings.parquet`), because no data source reproduces
+them (gamelog, bio and stint names disagree on 16-22 players).  Two players carry no name there and one rated
 player is missing from it, which leaves five rows of the published table without a name until the owner
 fills them.
 

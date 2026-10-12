@@ -188,15 +188,21 @@ def test_the_panel_inputs_are_averaged_columns_only():
     assert np.all([c in feat.PANEL_INPUTS for c in feat.UNCENTRED_RATES])
 
 
-def test_the_body_and_career_inputs_are_the_data_layers_renamed():
-    """The data layer builds the body and career inputs under its own short names (data.bio, data.roles); the
-    season panel carries them under the catalogue's, the same columns in the same order."""
+def test_the_body_inputs_are_the_data_layers_renamed_and_the_role_inputs_are_built_plain():
+    """The data layer builds the body inputs under its own short names (data.bio) and the season panel carries
+    them under the catalogue's, the same columns in the same order; data.roles builds the role and career inputs
+    under the catalogue's names directly."""
+    from openrapm.data import roles
     from openrapm.data.bio import PLAYER_INPUTS
     from openrapm.data.legacy_names import column_name
-    from openrapm.data.roles import CAREER_INPUTS, RAW_INPUTS
     assert [column_name(name) for name in PLAYER_INPUTS] == feat.BIO
-    assert [column_name(name) for name in CAREER_INPUTS] == feat.CAREER
-    assert [column_name(name) for name in RAW_INPUTS] == feat.ROLE
+    counts = pd.DataFrame({"player_id": [1, 1, 2], "season": [2001, 2002, 2002], "games": [10.0, 20.0, 5.0],
+                           "starts": [5.0, 20.0, 0.0], "minutes": [100.0, 600.0, 20.0],
+                           "poss_on": [400.0, 1600.0, 50.0], "team_poss": [8000.0, 8000.0, 8000.0],
+                           "age": [24.0, 25.0, 21.0]})
+    inputs = roles.player_season_inputs(counts)
+    assert list(inputs.columns[-4:-1]) == feat.ROLE                    # then age_imputed
+    assert list(roles.career_inputs(inputs, 2003, [1, 2]).columns) == feat.CAREER
 
 
 def test_the_prior_can_read_what_a_tree_cannot_build():

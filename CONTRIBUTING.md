@@ -10,9 +10,12 @@ The job of this document is to make that claim cheap for you to make and cheap f
 python -m venv .venv && source .venv/bin/activate     # .venv\Scripts\activate on Windows
 pip install -e ".[dev]"
 pytest
+ruff check .
 ```
 
-That passes on a fresh clone with no data (`README.md` gives the counts). You do not need the scraped
+That passes on a fresh clone with no data (`README.md` gives the counts). The dev extra installs ruff 0.17.0,
+the version CI pins, so `ruff check .` reads the code the way CI does; without the dev extra,
+`uvx ruff@0.17.0 check .` runs the same version (uv's `uvx` fetches it once and keeps it). You do not need the scraped
 play-by-play to change the model, run the unit tests or open a draft pull request; only to run the test that
 decides. `README.md`, "Building the ratings from scratch", builds the data.
 

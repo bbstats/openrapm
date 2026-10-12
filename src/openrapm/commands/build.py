@@ -45,7 +45,7 @@ from ..data.roles import main_teams
 from ..data.seasons import all_seasons, trainable
 from ..data.stints import load_season_stints
 from ..data.tables import player_names
-from ..data.within_folds import load_folds
+from ..data.within_folds import check_fold_files, load_folds
 
 SIDES = ("O", "D")
 SIDE_WORDS = {"offense": "offence", "defense": "defence"}     # the tables' side keys as printed, offence first
@@ -96,8 +96,8 @@ def unseen_seasons(season: int, settings) -> list:
 
 
 def saved_side(prior: box_prior.SidePrior, params: dict, settings, unseen) -> dict:
-    """One side's boosters in the layout the published build wrote (scripts/62_single_year_board.py --save_models
-    at the tag archive/research-2026-10), so `openrapm folds` reads either file."""
+    """One side's boosters in the layout of the saved-booster files written before the 2026-10 cleanup (the code that
+    wrote them is at the tag archive/research-2026-10), so `openrapm folds` reads a file of either age."""
     model = prior.model
     return dict(full=model.full, folds=model.fold_models, excluded=model.held_out_players, params=dict(params),
                 n_folds=settings.prior.n_folds, groupings=1, intercept=False, by_player=False,
@@ -146,9 +146,9 @@ def models_meta(settings, name: str, argv) -> dict:
 
     schema 2 adds the settings themselves; schema 3 names every input, input list and target by its plain name
     (2026-10-11; `openrapm folds` reads the older files through data/legacy_names.py).  The other keys are the
-    ones scripts/62 wrote, with the values it wrote for these settings.  `crossfit` "scale" was its shipped
-    cross-fitted scale: the cross-fitted fold priors equalled the full prior value for value, so dropping the
-    cross-fit changed no number (checked 2026-10-09), and the earlier within-season script reads these files too.
+    ones the files written before the 2026-10 cleanup carry, with the values those files hold for these settings.
+    `crossfit` "scale" was the shipped cross-fitted scale then: the cross-fitted fold priors equalled the full
+    prior value for value, so dropping the cross-fit changed no number (checked 2026-10-09).
     """
     return dict(schema=3, settings=asdict(settings), argv=list(argv),
                 exclude_neighbours=settings.exclude_neighbours, features=settings.prior.feature_set,
@@ -231,6 +231,35 @@ def run_rate(cfg: dict, settings, seasons, name: str, save_models: str | None = 
 
 
 # ------------------------------------------------------------------------------------------- step 4
+def require_folds(cfg: dict, shrink) -> None:
+    """Stop at once, naming the folder and the two commands that make it, when step 4's within-season folds are
+    missing or incomplete.
+
+    `openrapm build` and `openrapm shrink` call this first: on fresh data `build` would otherwise run steps 1-3,
+    about fifteen minutes, before step 4 found no folds.  Only the folds' small json files are read.
+    """
+    directory = resolve(cfg, "within") / shrink.folds_tag
+    try:
+        check_fold_files(directory, shrink.fold_seasons)
+    except (OSError, ValueError) as problem:
+        raise SystemExit(folds_missing_message(directory, shrink, problem)) from None
+
+
+def folds_missing_message(directory: Path, shrink, problem: Exception) -> str:
+    """What `require_folds` prints: the problem, the folds folder, and the two commands that make the folds.
+
+    Example, on a fresh clone with the shipped settings: "step 4 needs the within-season folds in
+    .../outputs/within/weightfix_within for 2017-2026, so nothing was run: no folds in ..."
+    """
+    span = f"{shrink.fold_seasons[0]}-{shrink.fold_seasons[1]}"
+    return (f"step 4 needs the within-season folds in {directory} for {span}, so nothing was run: {problem}.\n"
+            f"Make the folds with these two commands (NAME is any name), then run this again:\n"
+            f"    openrapm rate --setting test --seasons {span} --save-models NAME\n"
+            f"    openrapm folds --models NAME --base season_ratings_test_step3 --seasons {span} "
+            f"--tag {shrink.folds_tag}\n"
+            f"or name a folder that holds them with --folds TAG (a folder under {directory.parent}).")
+
+
 def shrink_seasons(cfg: dict, table: pd.DataFrame, settings) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Step 4 on a step-3 table: (the shrunk table, the multipliers of every season).
 
@@ -262,6 +291,7 @@ def run_shrink(cfg: dict, settings, base: str, name: str) -> int:
     """`openrapm shrink`: step 4 on outputs/<base>.parquet, written as outputs/season_ratings_<name>_step4.parquet,
     with its multipliers beside it (`write_multipliers`)."""
     started = time.time()
+    require_folds(cfg, settings.shrink)
     outputs = resolve(cfg, "outputs")
     shrunk, multipliers = shrink_seasons(cfg, pd.read_parquet(outputs / f"{base}.parquet"), settings)
     write_table(shrunk, outputs / f"season_ratings_{name}_step4.parquet", started)
@@ -337,9 +367,11 @@ def run_swap(cfg: dict, settings, base: str, name: str, with_types: bool = False
 # ------------------------------------------------------------------------------------------- all five
 def run_build(cfg: dict, settings, seasons, name: str, save_models: str | None = None, argv=(),
               with_types: bool = False) -> int:
-    """`openrapm build`: steps 1-5 in one process, the three tables and step 4's multipliers written at the end."""
+    """`openrapm build`: steps 1-5 in one process, the three tables and step 4's multipliers written at the end.
+    Step 4's folds are checked first (`require_folds`), so missing folds stop the run in seconds."""
     started = time.time()
     seasons = check_seasons(seasons, cfg)
+    require_folds(cfg, settings.shrink)
     step3, models = rate_table(cfg, settings, seasons, keep_models=bool(save_models))
     step4, multipliers = shrink_seasons(cfg, step3, settings)
     final, _, types = swap_seasons(cfg, step4, settings)

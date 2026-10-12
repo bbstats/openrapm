@@ -13,6 +13,8 @@ from pathlib import Path
 
 import yaml
 
+from .legacy_names import player_unit_name
+
 ROOT = Path(__file__).resolve().parents[3]
 CONFIG_ENV = "OPENRAPM_CONFIG"
 
@@ -38,9 +40,13 @@ def config_path(path: str | Path | None = None) -> Path:
 
 
 def load_config(path: str | Path | None = None) -> dict:
+    """The config file (`config_path`) as a dict, with the repository root under "_root".  A player_unit written
+    before 2026-10-11 ("window", "season") is read as its plain name (data/legacy_names.py)."""
     with open(config_path(path), encoding="utf-8") as fh:
         cfg = yaml.safe_load(fh)
     cfg["_root"] = str(ROOT)
+    if "player_unit" in cfg:
+        cfg["player_unit"] = player_unit_name(cfg["player_unit"])
     return cfg
 
 

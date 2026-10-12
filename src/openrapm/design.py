@@ -15,9 +15,10 @@ Words used below
     row            one stint seen from one side: five players on offence, five on defence.  A stint gives two rows;
                    every home-offence row of the design comes first, then every away-offence row
     player-season  one player in one season, the unit the possession and box-score tables are kept in.  Its key is
-                   season x 100,000,000 + player id (`ps_key`)
-    player column  the unit a coefficient belongs to: one per player-season (config player_unit "season"), or one
-                   per player over all the design's seasons ("window", the shipped setting)
+                   season x 100,000,000 + player id (`player_season_key`)
+    player column  the unit a coefficient belongs to: one per player over all the design's seasons (config
+                   player_unit "player", the shipped setting), or one per player-season ("player_season").  In a
+                   design of one season, which is what the five steps fit, the two give the same matrix
     context        the columns every row carries besides its players: home court, one intercept per season,
                    playoffs, playoff home court, garbage time, score margin (clipped at +-25), margin x share of the
                    game left
@@ -73,6 +74,13 @@ AWAY_SLOTS = [f"a{place}" for place in range(1, 6)]
 STINT_COLUMNS = ["game_id", "season", "phase", "series_id", "period", *HOME_SLOTS, *AWAY_SLOTS,
                  "poss_h", "poss_a", "pts_h", "pts_a", "margin_h", "frac_rem", "is_gt", "neutral"]
 SEASON_KEY = 100_000_000          # a player-season key is season x SEASON_KEY + player id
+# config player_unit: one player column per player over the design's seasons, or one per player-season (the words in
+# the module docstring).  Before 2026-10-11 these were "window" and "season"; data/config.py still reads those.
+PLAYER_UNITS = ("player", "player_season")
+# A piece's per-game tables (game_poss, game_box) number its player-seasons by position in the piece's keys_u, in a
+# column named `psx_idx`: the name the sixty pieces stored in data/cache/pieces carry, kept so they are read without a
+# rebuild and a piece written now is the same bytes.  `assemble` renumbers them across the design as `player_season`.
+PIECE_PLAYER_SEASON = "psx_idx"
 
 # The stints' counter columns.  They are defined here, beside the other stint columns, because the design
 # reads them; the stint parser (data/stint_parser.py) imports them from here and fills them.
@@ -149,7 +157,7 @@ TARGETS = {
 }
 
 
-def ps_key(player_id, season) -> np.ndarray:
+def player_season_key(player_id, season) -> np.ndarray:
     """The integer key of a player-season: season x 100,000,000 + player id.
 
     Example: player 2544 in 2026 has key 202,600,002,544.  Sorting the keys sorts by season, then player."""
@@ -169,40 +177,54 @@ def target_stint_columns() -> list:
 class DesignSpec:
     """Column layout of the design matrix and the player behind each player column.
 
-    Two indices, because the coefficients and the padded rates want different units:
+    Two numberings, because the coefficients and the padded rates want different units:
 
-    ``ps``  the player column: one per player per design (``player_unit="window"``) or per player-season
-            (``player_unit="season"``).  ``n_ps`` of them, so Z has ``2*n_ps`` columns.
-    ``psx`` the player-season, always.  ``game_box`` and ``game_poss`` are keyed on it, so the padding constants
-            and the league means stay per season even when a player column spans three of them.  ``ps_of_psx``
-            maps one to the other.
+    player column   what a coefficient belongs to: one per player over the design's seasons (player_unit
+                    "player") or one per player-season (player_unit "player_season").  There are `n_players` of
+                    them, numbered 0, 1, 2, ... (the `player_column` of a table), so Z = [Z_O | Z_D] has
+                    2 x n_players columns: player column j is Z column j on offence and n_players + j on defence.
+    player-season   one player in one season, always.  There are `n_player_seasons` of them, numbered 0, 1, 2, ...
+                    in key order (the `player_season` of a table).  `game_box` and `game_poss` are kept per
+                    player-season, so the padding constants and the league means stay per season even when a
+                    player column spans three seasons.  `player_of_player_season` maps one numbering to the other.
+
+    Example: a design of 2025 and 2026 in which 400 players play both seasons and 100 only one has 900
+    player-seasons; under player_unit "player" it has n_players = 500 and Z has 1,000 columns, under
+    "player_season" n_players = 900 and Z has 1,800.
     """
-    n_ps: int
-    seasons: list
-    season_of_ps: np.ndarray          # (n_ps,) index into `seasons`; under "window" the season he played most
-    ps_table: pd.DataFrame            # ps_idx, player_id (+ season under "season")
-    f_names: list                     # the context columns' names
-    features: list                    # the box-score counts of game_box (config box_counts)
-    col_groups: dict = field(default_factory=dict)   # name -> Z column indices (0..2*n_ps)
-    psx_table: pd.DataFrame = None    # psx_idx, player_id, season, ps_idx
-    season_of_psx: np.ndarray = None  # (n_psx,) index into `seasons`
-    ps_of_psx: np.ndarray = None      # (n_psx,) the player column of each player-season
-    player_unit: str = "season"
+    n_players: int                    # the number of player columns
+    seasons: list                     # the design's seasons, ascending
+    season_of_player: np.ndarray      # (n_players,) each player column's index into `seasons`; under player_unit
+                                      # "player", the season in which he had the most regular-season possessions
+    players: pd.DataFrame             # one row per player column: player_column, player_id (+ season under
+                                      # player_unit "player_season")
+    context_names: list               # the context columns' names, in the matrix's order
+    box_counts: list                  # the box-score counts of game_box (config box_counts)
+    # diagnostic groups of Z columns (0 .. 2 x n_players - 1), by regular-season possessions (`design_spec`)
+    possession_groups: dict = field(default_factory=dict)
+    player_seasons: pd.DataFrame = None            # player_season, player_id, season, player_column
+    season_of_player_season: np.ndarray = None     # (n_player_seasons,) each player-season's index into `seasons`
+    player_of_player_season: np.ndarray = None     # (n_player_seasons,) each player-season's player column
+    player_unit: str = "player_season"             # "player" or "player_season" (config player_unit)
 
     @property
-    def n_psx(self) -> int:
-        return self.n_ps if self.psx_table is None else len(self.psx_table)
+    def n_player_seasons(self) -> int:
+        """The number of player-seasons."""
+        return self.n_players if self.player_seasons is None else len(self.player_seasons)
 
     @property
-    def zo(self) -> slice:
-        return slice(0, self.n_ps)
+    def offense_columns(self) -> slice:
+        """Z_O's columns in the matrix: 0 .. n_players - 1."""
+        return slice(0, self.n_players)
 
     @property
-    def zd(self) -> slice:
-        return slice(self.n_ps, 2 * self.n_ps)
+    def defense_columns(self) -> slice:
+        """Z_D's columns in the matrix: n_players .. 2 x n_players - 1."""
+        return slice(self.n_players, 2 * self.n_players)
 
-    def f_col(self, name: str) -> int:
-        return 2 * self.n_ps + self.f_names.index(name)
+    def context_column(self, name: str) -> int:
+        """The matrix column of the context column `name`: the context columns follow Z_O and Z_D."""
+        return 2 * self.n_players + self.context_names.index(name)
 
     @property
     def n_seasons(self) -> int:
@@ -218,14 +240,14 @@ class Design:
     w: np.ndarray
     groups: np.ndarray         # "G:<game id>" for a regular-season row, "S:<series id>" for a playoff row
     spec: DesignSpec
-    game_box: pd.DataFrame     # game_idx, psx_idx, phase, <box counts>
-    game_poss: pd.DataFrame    # game_idx, psx_idx, poss_off, poss_def
+    game_box: pd.DataFrame     # game_idx, player_season, phase, <box counts>
+    game_poss: pd.DataFrame    # game_idx, player_season, poss_off, poss_def
     rows: pd.DataFrame         # per row: game_idx, season, phase, poss, den, is_home_off, is_gt, stint, half
     games: pd.DataFrame        # game_idx, game_id, season, phase, series_id, half (+ game_date)
     # the offence's per-possession counters (POSS_COUNTERS, SLOT_COUNTERS) summed over the row, the five's ids
     # (pid_s1..pid_s5) and the half, when the stints carry counters; the luck-adjusted targets are priced from them
     counters: pd.DataFrame | None = None
-    # the matrix's blocks, so a fit need not slice X back apart: Z (rows x 2 n_ps, CSR), F (rows x context, dense),
+    # the matrix's blocks, so a fit need not slice X back apart: Z (rows x 2 n_players, CSR), F (rows x context, dense),
     # lineup_o / lineup_d (rows x 5 player columns, increasing), game_idx (rows,)
     parts: dict | None = None
 
@@ -298,7 +320,8 @@ def piece_from_frames(stints: pd.DataFrame, box: pd.DataFrame, season: int, phas
         slot_loc                               (stints x 10) each lineup slot's player-season, home five first
         is_po, neutral, is_gt, margin_h, frac_rem, game_idx, groups     one value per stint
         tcols                                  the stint columns of every target (`target_stint_columns`)
-        game_poss, game_box                    per (game, player-season): possessions; box-score counts
+        game_poss, game_box                    per (game, player-season): possessions; box-score counts, the
+                                               player-season as its position in keys_u (`PIECE_PLAYER_SEASON`)
         psx_poss                               each player-season's regular-season offensive possessions
         have, ccols, counters, pids            the counters present, the counter matrix's columns (have + pts,
                                                poss), per side the (stints x columns) counters and the five ids
@@ -324,8 +347,9 @@ def _player_season_keys(stints: pd.DataFrame, box: pd.DataFrame) -> tuple[np.nda
     """(keys, slot_loc): the sorted keys of every player-season in a lineup or the box score, and each lineup
     slot's position among them."""
     season = stints["season"].to_numpy()
-    slot_keys = np.stack([ps_key(stints[slot].to_numpy(), season) for slot in HOME_SLOTS + AWAY_SLOTS], axis=1)
-    box_keys = ps_key(box["player_id"].to_numpy(), box["season"].to_numpy())
+    slot_keys = np.stack([player_season_key(stints[slot].to_numpy(), season) for slot in HOME_SLOTS + AWAY_SLOTS],
+                         axis=1)
+    box_keys = player_season_key(box["player_id"].to_numpy(), box["season"].to_numpy())
     keys = np.unique(np.concatenate([slot_keys.ravel(), box_keys]))
     return keys, np.searchsorted(keys, slot_keys)
 
@@ -341,25 +365,26 @@ def _game_possessions(stints: pd.DataFrame, slot_loc: np.ndarray) -> pd.DataFram
             players.append(slot_loc[:, slot])
             offence.append(own_possessions)
             defence.append(other_possessions)
-    table = pd.DataFrame({"game_idx": np.concatenate(games), "psx_idx": np.concatenate(players),
+    table = pd.DataFrame({"game_idx": np.concatenate(games), PIECE_PLAYER_SEASON: np.concatenate(players),
                           "poss_off": np.concatenate(offence), "poss_def": np.concatenate(defence)})
-    return table.groupby(["game_idx", "psx_idx"], as_index=False)[["poss_off", "poss_def"]].sum()
+    return table.groupby(["game_idx", PIECE_PLAYER_SEASON], as_index=False)[["poss_off", "poss_def"]].sum()
 
 
 def _game_box(box: pd.DataFrame, games: pd.DataFrame, keys: np.ndarray, box_counts) -> pd.DataFrame:
     """Per (game, player-season, phase): the box-score counts, for the games that have stints."""
     counts = list(box_counts)
     merged = box.merge(games[["game_id", "game_idx"]], on="game_id", how="inner")
-    merged["psx_idx"] = np.searchsorted(keys, ps_key(merged["player_id"].to_numpy(), merged["season"].to_numpy()))
-    table = merged[["game_idx", "psx_idx", "phase"] + counts].copy()
-    return table.groupby(["game_idx", "psx_idx", "phase"], as_index=False)[counts].sum()
+    merged[PIECE_PLAYER_SEASON] = np.searchsorted(keys, player_season_key(merged["player_id"].to_numpy(),
+                                                                          merged["season"].to_numpy()))
+    table = merged[["game_idx", PIECE_PLAYER_SEASON, "phase"] + counts].copy()
+    return table.groupby(["game_idx", PIECE_PLAYER_SEASON, "phase"], as_index=False)[counts].sum()
 
 
 def _regular_season_possessions(game_poss: pd.DataFrame, n_keys: int, phase: str) -> np.ndarray:
     """Each player-season's offensive possessions in a regular-season piece; zeros in a playoff piece."""
     if phase != "RS":
         return np.zeros(n_keys)
-    return np.bincount(game_poss["psx_idx"].to_numpy(), weights=game_poss["poss_off"].to_numpy(dtype=float),
+    return np.bincount(game_poss[PIECE_PLAYER_SEASON].to_numpy(), weights=game_poss["poss_off"].to_numpy(dtype=float),
                        minlength=n_keys)
 
 
@@ -405,31 +430,33 @@ def pieces_from_frames(stints: pd.DataFrame, box: pd.DataFrame, box_counts) -> l
 
 # ------------------------------------------------------------------------------------------ assembling pieces
 class Players(NamedTuple):
-    """The design's player-seasons and player columns."""
-    keys: np.ndarray             # every player-season key in the pieces, sorted
-    psx_table: pd.DataFrame      # key, season, player_id, psx_idx, ps_idx
-    seasons: list                # the design's seasons, ascending
-    season_of_psx: np.ndarray    # each player-season's index into `seasons`
-    ps_table: pd.DataFrame       # the player columns: ps_idx, player_id (+ season under "season" units)
-    ps_of_psx: np.ndarray        # each player-season's player column
-    unit: str                    # "window" or "season"
+    """The design's player-seasons and player columns (DesignSpec's two numberings)."""
+    keys: np.ndarray                         # every player-season key in the pieces, sorted
+    player_seasons: pd.DataFrame             # key, season, player_id, player_season, player_column
+    seasons: list                            # the design's seasons, ascending
+    season_of_player_season: np.ndarray      # each player-season's index into `seasons`
+    columns: pd.DataFrame                    # the player columns: player_column, player_id (+ season under
+                                             # player_unit "player_season")
+    player_of_player_season: np.ndarray      # each player-season's player column
+    unit: str                                # "player" or "player_season"
 
 
 def assemble(pieces: list, cfg: dict, target: str = "pts") -> Design:
     """The design of `pieces` (one or more seasons, each regular season before its playoffs) on `target`.
 
-    Reads from `cfg`: player_unit ("season" by default), gt_weight (1.0), margin_clip (25), and the possession
-    thresholds of the diagnostic column groups, low_poss_threshold (500) and starter_poss_threshold (1500).
+    Reads from `cfg`: player_unit ("player_season" by default), gt_weight (1.0), margin_clip (25), and the
+    possession thresholds of the diagnostic column groups, low_poss_threshold (500) and starter_poss_threshold
+    (1500).
 
     The rows are every piece's home-offence rows, then every piece's away-offence rows; a design built from the
     same stints on another target has the same players, the same context columns and, where both keep a row, the
     same row, so their fits compare directly."""
-    players = player_columns(pieces, str(cfg.get("player_unit", "season")))
+    players = player_columns(pieces, str(cfg.get("player_unit", "player_season")))
     stints, to_block, game_offset = block_stints(pieces, players)
     rows = kept_rows(pieces, stints, target)
     context_names, context = context_columns(rows, players.seasons, float(cfg.get("margin_clip", 25)))
     lineup_o, lineup_d = sorted_lineups(rows["offence"], rows["defence"])
-    n_players = len(players.ps_table)
+    n_players = len(players.columns)
     games = pd.concat([piece["games"].assign(game_idx=piece["games"]["game_idx"].to_numpy() + offset)
                        for piece, offset in zip(pieces, game_offset)], ignore_index=True)
     table = row_table(rows, games, players.seasons)
@@ -448,27 +475,28 @@ def assemble(pieces: list, cfg: dict, target: str = "pts") -> Design:
 def player_columns(pieces: list, unit: str) -> Players:
     """Every player-season of the pieces, numbered in key order (season, then player), and the player columns."""
     keys = np.unique(np.concatenate([piece["keys_u"] for piece in pieces]))
-    psx_table = pd.DataFrame({"key": keys, "season": keys // SEASON_KEY, "player_id": keys % SEASON_KEY})
-    psx_table["psx_idx"] = np.arange(len(psx_table), dtype=np.int64)
-    seasons = sorted(psx_table["season"].unique().tolist())
-    season_of_psx = np.searchsorted(np.asarray(seasons), psx_table["season"].to_numpy())
-    ps_table, ps_of_psx = _player_units(psx_table, unit)
-    psx_table["ps_idx"] = ps_of_psx
-    return Players(keys, psx_table, seasons, season_of_psx, ps_table, ps_of_psx, unit)
+    player_seasons = pd.DataFrame({"key": keys, "season": keys // SEASON_KEY, "player_id": keys % SEASON_KEY})
+    player_seasons["player_season"] = np.arange(len(player_seasons), dtype=np.int64)
+    seasons = sorted(player_seasons["season"].unique().tolist())
+    season_of_player_season = np.searchsorted(np.asarray(seasons), player_seasons["season"].to_numpy())
+    columns, player_of_player_season = _player_units(player_seasons, unit)
+    player_seasons["player_column"] = player_of_player_season
+    return Players(keys, player_seasons, seasons, season_of_player_season, columns, player_of_player_season, unit)
 
 
-def _player_units(psx_table: pd.DataFrame, unit: str) -> tuple[pd.DataFrame, np.ndarray]:
-    """(ps_table, ps_of_psx): the design's player columns and each player-season's column.
+def _player_units(player_seasons: pd.DataFrame, unit: str) -> tuple[pd.DataFrame, np.ndarray]:
+    """(the player columns, each player-season's column).
 
-    `unit` "window" gives one column per player over the whole design, "season" one per player-season."""
-    if unit not in ("window", "season"):
-        raise ValueError(f"player_unit must be 'window' or 'season', got {unit!r}")
-    if unit == "window":
-        players = np.unique(psx_table["player_id"].to_numpy())
-        ps_table = pd.DataFrame({"player_id": players, "ps_idx": np.arange(len(players), dtype=np.int64)})
-        return ps_table, pd.Index(players).get_indexer(psx_table["player_id"].to_numpy())
-    ps_table = psx_table[["psx_idx", "player_id", "season"]].rename(columns={"psx_idx": "ps_idx"}).copy()
-    return ps_table, psx_table["psx_idx"].to_numpy()
+    `unit` "player" gives one column per player over the whole design, "player_season" one per player-season."""
+    if unit not in PLAYER_UNITS:
+        raise ValueError(f"player_unit must be one of {PLAYER_UNITS}, got {unit!r}")
+    if unit == "player":
+        players = np.unique(player_seasons["player_id"].to_numpy())
+        columns = pd.DataFrame({"player_id": players, "player_column": np.arange(len(players), dtype=np.int64)})
+        return columns, pd.Index(players).get_indexer(player_seasons["player_id"].to_numpy())
+    columns = player_seasons[["player_season", "player_id", "season"]].rename(
+        columns={"player_season": "player_column"}).copy()
+    return columns, player_seasons["player_season"].to_numpy()
 
 
 def block_stints(pieces: list, players: Players) -> tuple[dict, list, np.ndarray]:
@@ -477,7 +505,7 @@ def block_stints(pieces: list, players: Players) -> tuple[dict, list, np.ndarray
     from its local player-season positions to the design's; each piece's first game number."""
     to_block = [np.searchsorted(players.keys, piece["keys_u"]) for piece in pieces]
     game_offset = np.cumsum([0] + [piece["n_games"] for piece in pieces])[:-1]
-    slots = [players.ps_of_psx[local[piece["slot_loc"]]] for piece, local in zip(pieces, to_block)]
+    slots = [players.player_of_player_season[local[piece["slot_loc"]]] for piece, local in zip(pieces, to_block)]
     season = np.concatenate([np.full(piece["n_st"], piece["season"]) for piece in pieces])
     stints = {name: np.concatenate([piece[name] for piece in pieces])
               for name in ("is_po", "neutral", "is_gt", "margin_h", "frac_rem", "groups")}
@@ -579,46 +607,51 @@ def player_matrix(lineup_o, lineup_d, n_players: int) -> sp.csr_matrix:
 
 
 def _block_table(pieces: list, name: str, game_offset: np.ndarray, to_block: list) -> pd.DataFrame:
-    """A per-game, per-player-season table of every piece, renumbered to the design's games and player-seasons."""
-    return pd.concat([piece[name].assign(game_idx=piece[name]["game_idx"].to_numpy() + offset,
-                                         psx_idx=local[piece[name]["psx_idx"].to_numpy()])
-                      for piece, offset, local in zip(pieces, game_offset, to_block)], ignore_index=True)
+    """A per-game, per-player-season table of every piece, renumbered to the design's games and player-seasons (the
+    piece's `PIECE_PLAYER_SEASON` column becomes the design's `player_season`, in the same place)."""
+    tables = [piece[name].rename(columns={PIECE_PLAYER_SEASON: "player_season"}) for piece in pieces]
+    return pd.concat([table.assign(game_idx=table["game_idx"].to_numpy() + offset,
+                                   player_season=local[table["player_season"].to_numpy()])
+                      for table, offset, local in zip(tables, game_offset, to_block)], ignore_index=True)
 
 
 def design_spec(pieces: list, players: Players, to_block: list, context_names: list, cfg: dict) -> DesignSpec:
     """The column layout, with each player column's season and the diagnostic column groups: player columns with
     under low_poss_threshold regular-season possessions ("low_poss") and with starter_poss_threshold or more
     ("high_poss"; "high_poss_O" and "high_poss_D" its offence and defence columns)."""
-    n_players = len(players.ps_table)
-    possessions = np.zeros(len(players.psx_table))
+    n_players = len(players.columns)
+    possessions = np.zeros(len(players.player_seasons))
     for piece, local in zip(pieces, to_block):
         possessions[local] += piece["psx_poss"]
-    column_possessions = np.bincount(players.ps_of_psx, weights=possessions, minlength=n_players)
+    column_possessions = np.bincount(players.player_of_player_season, weights=possessions, minlength=n_players)
     low = np.flatnonzero(column_possessions < float(cfg.get("low_poss_threshold", 500)))
     high = np.flatnonzero(column_possessions >= float(cfg.get("starter_poss_threshold", 1500)))
-    col_groups = {"low_poss": np.concatenate([low, low + n_players]),
-                  "high_poss": np.concatenate([high, high + n_players]),
-                  "high_poss_O": high, "high_poss_D": high + n_players}
-    return DesignSpec(n_ps=n_players, seasons=players.seasons,
-                      season_of_ps=_season_of_units(possessions, players, n_players),
-                      ps_table=players.ps_table.copy(), f_names=context_names,
-                      features=list(pieces[0]["game_box"].columns[3:]), col_groups=col_groups,
-                      psx_table=players.psx_table[["psx_idx", "player_id", "season", "ps_idx"]].copy(),
-                      season_of_psx=players.season_of_psx, ps_of_psx=players.ps_of_psx, player_unit=players.unit)
+    possession_groups = {"low_poss": np.concatenate([low, low + n_players]),
+                         "high_poss": np.concatenate([high, high + n_players]),
+                         "high_poss_O": high, "high_poss_D": high + n_players}
+    return DesignSpec(n_players=n_players, seasons=players.seasons,
+                      season_of_player=_season_of_columns(possessions, players, n_players),
+                      players=players.columns.copy(), context_names=context_names,
+                      box_counts=list(pieces[0]["game_box"].columns[3:]), possession_groups=possession_groups,
+                      player_seasons=players.player_seasons[["player_season", "player_id", "season",
+                                                             "player_column"]].copy(),
+                      season_of_player_season=players.season_of_player_season,
+                      player_of_player_season=players.player_of_player_season, player_unit=players.unit)
 
 
-def _season_of_units(possessions: np.ndarray, players: Players, n_players: int) -> np.ndarray:
-    """Each player column's season index: its own season, or under "window" units the season in which the player
-    had the most regular-season possessions (the later season on a tie)."""
-    if players.unit != "window":
-        return players.season_of_psx
-    season_of_ps = np.zeros(n_players, dtype=np.int64)
+def _season_of_columns(possessions: np.ndarray, players: Players, n_players: int) -> np.ndarray:
+    """Each player column's season index: its own season, or under player_unit "player" the season in which the
+    player had the most regular-season possessions (the later season on a tie)."""
+    if players.unit != "player":
+        return players.season_of_player_season
+    season_of_player = np.zeros(n_players, dtype=np.int64)
     best = np.full(n_players, -1.0)
     for player_season in np.argsort(possessions):
-        column = players.ps_of_psx[player_season]
+        column = players.player_of_player_season[player_season]
         if possessions[player_season] >= best[column]:
-            best[column], season_of_ps[column] = possessions[player_season], players.season_of_psx[player_season]
-    return season_of_ps
+            best[column] = possessions[player_season]
+            season_of_player[column] = players.season_of_player_season[player_season]
+    return season_of_player
 
 
 def row_table(rows: dict, games: pd.DataFrame, seasons: list) -> pd.DataFrame:

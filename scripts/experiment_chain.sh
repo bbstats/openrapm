@@ -36,13 +36,16 @@ reading() {            # reading LABEL SCRIPT [FLAGS...]: run one check into the
   $PY -u "$@" >> $LOG 2>&1 || { echo "=== $(date) $label FAILED" >> $LOG; FAILED="$FAILED, $label"; }
 }
 # SKIP_BUILD=1: outputs/season_ratings_NAME_step3.parquet already exists -- start at the prior shrink.
-# SHRINK_TAG=<tag>: the within-season folds step 4's multipliers are read from (default the incumbent's, INC_FOLDS; experiment
-# 45's were `lgb_noonc_within`, chimeraboost's `within`; experiment 44's second run, 2026-10-08, refitted them on the
-# candidate's own priors as `lgb1_within`, with `openrapm folds --tag=<tag>`).
+# SHRINK_TAG=<tag>: the within-season folds step 4's multipliers are read from, outputs/within/<tag>/ (default the
+# incumbent's, INC_FOLDS; with OWN_FOLDS=1 the candidate's own, NAME_within).  `openrapm folds --tag <tag>` makes them.
 # OWN_FOLDS=1 (the Robustness pass, 2026-10-08): save the candidate's boosters (--save-models NAME, every rated season),
 # build its own within-season folds for 2017-2026 (`openrapm folds --tag NAME_within`), fit the prior shrink on them,
 # and keep the table on the INCUMBENT's multipliers beside it (season_ratings_NAME_incmult) -- both are scored.  Then the
 # held-out audit (138) compares the candidate's folds with the incumbent's (and with CONTROL_TAG's, the noise control's).
+# The audit draws no null of its own: --threshold_from=audit_lgb_noonc_2017 reads the threshold (3.64) and each test's
+# null spread from outputs/audit_lgb_noonc_2017_thresholds.json and outputs/csv/audit_lgb_noonc_2017_null.csv, the
+# 400-draw career null of the 2017-2026 audit of experiment 45 (2026-10-08), so every candidate is judged on the same
+# frozen yardstick.  Both files must exist in outputs/.
 # FIRST_PASS=1: rate 2017-2026 only, its folds and the audit, and stop.  A later full run rates all
 # thirty seasons in one run and keeps the boosters the first pass saved (outputs/prior_models_NAME.pkl).
 OWN_FOLDS=${OWN_FOLDS:-0}

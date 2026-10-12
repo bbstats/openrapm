@@ -25,7 +25,7 @@ def world(synthetic_league, synthetic_design, small_cfg):
     # runs at.  At the simulator's defaults it is two-to-one and nothing is recoverable.
     sim = synthetic_league(n_seasons=3, n_teams=10, players_per_team=12, games_per_season=200, rho=0.9,
                            turnover=0.35, seed=17)
-    wd = synthetic_design(sim, cfg=small_cfg(player_unit="window"))
+    wd = synthetic_design(sim, cfg=small_cfg(player_unit="player"))
     return sim, wd, trade_set.team_game_design(wd)
 
 
@@ -56,7 +56,7 @@ def test_a_lineup_sum_of_ratings_survives_pooling(world):
     _, wd, ts = world
     rng = np.random.default_rng(0)
     rating = rng.normal(0, 2.0, 2 * ts.n_players)
-    stint_contribution = np.asarray(wd.X[:, :2 * wd.spec.n_ps] @ rating).ravel()
+    stint_contribution = np.asarray(wd.X[:, :2 * wd.spec.n_players] @ rating).ravel()
     den = wd.rows.den.to_numpy(float)
     pooled = (pd.DataFrame({"g": wd.rows.game_idx, "h": wd.rows.is_home_off,
                             "num": stint_contribution * den, "den": den})
@@ -69,10 +69,10 @@ def test_only_controls_constant_within_a_team_game_are_kept(world):
     _, wd, ts = world
     assert "home" in ts.control_names and any(c.startswith("int_") for c in ts.control_names)
     assert "is_gt" not in ts.control_names and "margin" not in ts.control_names
-    fixed = np.asarray(wd.X[:, 2 * wd.spec.n_ps:2 * wd.spec.n_ps + len(wd.spec.f_names)].todense())
+    fixed = np.asarray(wd.X[:, 2 * wd.spec.n_players:2 * wd.spec.n_players + len(wd.spec.context_names)].todense())
     group = pd.DataFrame({"g": wd.rows.game_idx, "h": wd.rows.is_home_off})
     for name in ts.control_names:
-        column = fixed[:, wd.spec.f_names.index(name)]
+        column = fixed[:, wd.spec.context_names.index(name)]
         spread = pd.Series(column).groupby([group.g, group.h]).nunique()
         assert spread.max() == 1, f"{name} varies inside a team-game"
 
