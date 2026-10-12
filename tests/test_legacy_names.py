@@ -11,8 +11,8 @@ import pandas as pd
 import pytest
 
 from openrapm.data import legacy_names as legacy
-from openrapm.data.panel import migrate_panel, panel_from_old_names, trainable_panel
-from openrapm.features import CATALOGUE, SEASON_PANEL_COLUMNS
+from openrapm.data.panel import MIGRATED_PANEL_COLUMNS, migrate_panel, panel_from_old_names, trainable_panel
+from openrapm.features import CATALOGUE
 
 ROOT = Path(__file__).resolve().parents[1]
 OLD_NAME = {new: old for old, new in legacy.COLUMNS.items()}
@@ -23,7 +23,7 @@ def _old_panel(rows: int = 6, seed: int = 0) -> pd.DataFrame:
     """A panel as scripts/49 (+ 65, 69, 86) wrote it: every season-panel column under its old name, the dead
     columns among them, in an order of its own."""
     rng = np.random.default_rng(seed)
-    frame = pd.DataFrame({OLD_NAME.get(name, name): rng.normal(size=rows) for name in SEASON_PANEL_COLUMNS})
+    frame = pd.DataFrame({OLD_NAME.get(name, name): rng.normal(size=rows) for name in MIGRATED_PANEL_COLUMNS})
     frame["side"], frame["player_id"], frame["season"] = "O", np.arange(rows), 2020 + np.arange(rows) % 3
     for column in DEAD:
         frame[column] = 1.0
@@ -39,7 +39,7 @@ def test_every_plain_name_is_a_catalogue_name():
 def test_the_panel_is_renamed_the_dead_columns_dropped_and_the_rows_kept():
     old = _old_panel()
     panel = panel_from_old_names(old)
-    assert list(panel.columns) == SEASON_PANEL_COLUMNS
+    assert list(panel.columns) == MIGRATED_PANEL_COLUMNS
     assert panel.possessions.tolist() == old.poss.tolist() and panel.weight_lb.tolist() == old.weight.tolist()
     assert panel.threes_made_per100_uncentred.tolist() == old.raw_fg3m.tolist()
     assert panel.player_id.tolist() == list(range(6))
@@ -120,6 +120,6 @@ OLD_PANEL = ROOT / "outputs" / "role_panel_season.parquet"
 def test_the_real_old_panel_maps_onto_the_season_panel():
     old = pd.read_parquet(OLD_PANEL)
     panel = panel_from_old_names(old)
-    assert len(panel) == len(old) and list(panel.columns) == SEASON_PANEL_COLUMNS
-    for name in SEASON_PANEL_COLUMNS:
+    assert len(panel) == len(old) and list(panel.columns) == MIGRATED_PANEL_COLUMNS
+    for name in MIGRATED_PANEL_COLUMNS:
         assert panel[name].equals(old[OLD_NAME.get(name, name)].rename(name)), name

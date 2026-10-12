@@ -1,6 +1,6 @@
 """The command line: `python -m openrapm <command>`, or `openrapm <command>` once the package is installed.
 
-    openrapm data      the data the steps read: `data ingest` (raw files), `data stints`, `data panel`
+    openrapm data      the data the steps read: `data ingest` (raw files), `data stints`, `data events`, `data panel`
     openrapm build     all five steps in one run: the ratings tables after steps 3, 4 and 5
     openrapm rate      steps 1-3 for the seasons asked for: the ratings table before the prior shrink
     openrapm shrink    step 4 on a step-3 table: the prior part multiplied down
@@ -113,7 +113,7 @@ def output_name(base: str, step: str) -> str:
 def _run_build(args: argparse.Namespace, cfg: dict) -> int:
     from .build import run_build
     settings = chosen_settings(args)
-    settings = replace(settings, shrink=replace(settings.shrink, folds_tag=args.folds))
+    settings = replace(settings, shrink=shrink_options(settings.shrink, args))
     return run_build(cfg, settings, args.seasons, args.name or args.setting, args.save_models, argv=args.argv,
                      with_types=args.types)
 
@@ -127,7 +127,7 @@ def _run_rate(args: argparse.Namespace, cfg: dict) -> int:
 def _run_shrink(args: argparse.Namespace, cfg: dict) -> int:
     from .build import run_shrink
     base = SETTINGS[args.setting]
-    settings = replace(base, shrink=replace(base.shrink, folds_tag=args.folds))
+    settings = replace(base, shrink=shrink_options(base.shrink, args))
     return run_shrink(cfg, settings, table_stem(args.base), args.name or output_name(args.base, "_step3"))
 
 
@@ -192,8 +192,29 @@ def _add_setting_options(parser) -> None:
 
 def _add_folds_tag(parser) -> None:
     parser.add_argument("--folds", metavar="TAG", default=PRODUCT.shrink.folds_tag,
-                        help="the within-season folds the multipliers are fitted on, outputs/within/<TAG>/ "
-                             "(default %(default)s)")
+                        help="the within-season folds the multipliers are fitted on, outputs/within/<TAG>/; several "
+                             "folders comma-separated (default %(default)s)")
+    parser.add_argument("--fold-seasons", type=parse_span, default=PRODUCT.shrink.fold_seasons, metavar="FIRST-LAST",
+                        help="the fold seasons read (default %(default)s)")
+    parser.add_argument("--nearest", type=int, default=PRODUCT.shrink.nearest, metavar="K",
+                        help="fit each season's multipliers on only the K fold seasons nearest it (default 0: every "
+                             "fold season the rule allows)")
+
+
+def parse_span(text) -> tuple:
+    """"1997-2026" -> (1997, 2026); a tuple passes through."""
+    if isinstance(text, tuple):
+        return text
+    try:
+        first, last = (int(part) for part in str(text).split("-"))
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r}: write the fold seasons as 1997-2026") from None
+    return first, last
+
+
+def shrink_options(shrink, args: argparse.Namespace):
+    """settings.shrink with the command line's fold folders, fold seasons and nearest count."""
+    return replace(shrink, folds_tag=args.folds, fold_seasons=args.fold_seasons, nearest=args.nearest)
 
 
 def _add_types(parser) -> None:

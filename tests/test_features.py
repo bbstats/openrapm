@@ -31,8 +31,35 @@ OLD_SHIPPED_D = ["blk", "drb", "exp_poss", "exp_yrs", "fga", "gs_pct", "height",
 
 def test_the_shipped_lists_are_pinned_in_order():
     assert feat.SHIPPED == {"O": SHIPPED_O, "D": SHIPPED_D}
-    assert feat.FEATURE_SETS == {"box_score_and_bio": feat.SHIPPED}
+    assert feat.FEATURE_SETS["box_score_and_bio"] == feat.SHIPPED
     assert feat.ROW_FEATURES == ["row_possessions", "row_seasons"]
+
+
+def test_the_stat_splits_lists_append_their_parts_where_the_box_count_is_read():
+    """Experiments 52-55: every shipped input keeps its position; a part goes on each list that reads its count."""
+    rebounds = ["def_rebounds_of_free_throws_per100", "def_rebounds_of_threes_per100",
+                "def_rebounds_of_rim_twos_per100", "def_rebounds_of_outside_twos_per100"]
+    steals = ["bad_pass_steals_per100", "lost_ball_steals_per100"]
+    points = ["assisted_points_per100", "unassisted_points_per100", "free_throws_made_per100"]
+    threes = ["corner_threes_attempted_per100", "above_break_threes_attempted_per100", "assisted_threes_made_per100",
+              "unassisted_threes_made_per100", "free_throw_pct"]
+    assert feat.FEATURE_SETS == {
+        "box_score_and_bio": feat.SHIPPED,
+        "rebound_parts": {"O": SHIPPED_O, "D": SHIPPED_D + rebounds},
+        "steal_parts": {"O": SHIPPED_O + steals, "D": SHIPPED_D + steals},
+        "points_parts": {"O": SHIPPED_O + points, "D": SHIPPED_D + points},
+        "three_point_parts": {"O": SHIPPED_O + threes, "D": SHIPPED_D},
+        "stepwise_early": {"O": SHIPPED_O + ["def_rebounds_of_threes_per100"],
+                           "D": SHIPPED_D + ["assists_to_mid_range_per100"]},
+        "stepwise_late": {"O": SHIPPED_O + ["corner_threes_attempted_per100"],
+                          "D": SHIPPED_D + ["free_throws_made_per100"]}}
+    wider = ["russell_blocks_per100", "rim_blocks_per100", "mid_range_blocks_per100", "three_point_blocks_per100",
+             "offensive_fouls_per100", "stolen_turnovers_per100", "assists_to_rim_per100",
+             "assists_to_mid_range_per100", "assists_to_corner_threes_per100", "assists_to_above_break_threes_per100"]
+    assert feat.EVENT_RATES == rebounds + steals + points[:2] + threes[:4] + wider
+    assert "def_rebounds_per100" in SHIPPED_D and "def_rebounds_per100" not in SHIPPED_O
+    assert all("steals_per100" in side and "points_per100" in side for side in (SHIPPED_O, SHIPPED_D))
+    assert "three_point_attempt_share" in SHIPPED_O and "three_point_attempt_share" not in SHIPPED_D
 
 
 def test_the_shipped_lists_are_the_old_ones_renamed_position_by_position():
@@ -116,14 +143,15 @@ def test_every_name_the_prior_can_read_is_in_the_catalogue():
     assert not wanted - set(names)
     assert {f.scale for f in feat.CATALOGUE} <= {"centred", "level"}
     assert all(f.meaning and f.formula and f.unit and f.group for f in feat.CATALOGUE)
-    assert len(feat.PRIOR_FEATURES) == len(set(feat.PRIOR_FEATURES)) == 53
+    assert len(feat.PRIOR_FEATURES) == len(set(feat.PRIOR_FEATURES)) == 75
 
 
 def test_every_season_panel_column_but_the_keys_is_in_the_catalogue():
     names = {f.name for f in feat.CATALOGUE}
     assert feat.SEASON_PANEL_COLUMNS[:3] == feat.PANEL_KEYS == ["side", "player_id", "season"]
     assert not set(feat.SEASON_PANEL_COLUMNS[3:]) - names
-    assert len(feat.SEASON_PANEL_COLUMNS) == len(set(feat.SEASON_PANEL_COLUMNS)) == 64
+    assert len(feat.SEASON_PANEL_COLUMNS) == len(set(feat.SEASON_PANEL_COLUMNS)) == 86
+    assert feat.SEASON_PANEL_COLUMNS[-22:] == feat.EVENT_RATES, "the play-by-play parts come after every older column"
 
 
 def test_the_audit_groups_and_the_swap_features_are_catalogue_names():

@@ -241,6 +241,28 @@ and `row_seasons`; the rest are candidates an experiment may try (the on-court c
 | `steals_per100_uncentred` | steals, league level kept | padded rate | per 100 possessions | level |
 | `blocks_per100_uncentred` | blocks, league level kept | padded rate | per 100 possessions | level |
 | `fouls_per100_uncentred` | personal fouls, league level kept | padded rate | per 100 possessions | level |
+| `def_rebounds_of_free_throws_per100` | defensive rebounds of missed free throws | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
+| `def_rebounds_of_threes_per100` | defensive rebounds of missed threes | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
+| `def_rebounds_of_rim_twos_per100` | defensive rebounds of missed twos within 6 ft of the rim, or logged without a location | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
+| `def_rebounds_of_outside_twos_per100` | defensive rebounds of missed twos from beyond 6 ft | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
+| `bad_pass_steals_per100` | steals of a pass (a bad-pass turnover) | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
+| `lost_ball_steals_per100` | steals of the ball from a dribbler (a lost-ball turnover) | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
+| `assisted_points_per100` | points from assisted field goals | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
+| `unassisted_points_per100` | points from unassisted field goals | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
+| `corner_threes_attempted_per100` | corner threes attempted | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
+| `above_break_threes_attempted_per100` | above-the-break threes attempted | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
+| `assisted_threes_made_per100` | assisted made threes | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
+| `unassisted_threes_made_per100` | unassisted made threes | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
+| `russell_blocks_per100` | blocks his team recovered (Russell blocks) | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
+| `rim_blocks_per100` | blocks of twos within 6 ft of the rim, or logged without a location | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
+| `mid_range_blocks_per100` | blocks of twos from beyond 6 ft | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
+| `three_point_blocks_per100` | blocks of threes | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
+| `offensive_fouls_per100` | offensive fouls committed | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
+| `stolen_turnovers_per100` | turnovers stolen by the defence (live-ball turnovers) | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
+| `assists_to_rim_per100` | assists on makes at the rim (within 6 ft, or logged without a location) | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
+| `assists_to_mid_range_per100` | assists on made twos from beyond 6 ft | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
+| `assists_to_corner_threes_per100` | assists on made corner threes | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
+| `assists_to_above_break_threes_per100` | assists on made above-the-break threes | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
 | `points_per100` | points | 2 twos_made_per100 + 3 threes_made_per100 + free_throws_made_per100 | per 100 possessions | centred |
 | `shots_per100` | shot attempts | twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 | per 100 possessions | centred |
 | `free_throw_attempts_per100` | free-throw attempts | free_throws_made_per100 + free_throws_missed_per100 | per 100 possessions | centred |

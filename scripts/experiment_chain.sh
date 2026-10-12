@@ -19,9 +19,15 @@ LOG=outputs/${NAME}_chain.log
 # without the on-court inputs), with its own prior-shrink multipliers fitted on its own within-season folds
 # (weightfix_within).  Its rate settings ride in BASE_FLAGS, BEFORE the experiment's own EXTRA flags, because the
 # command line keeps the LAST occurrence of a flag: an experiment's --features or --booster-params wins.
-# INC_FOLDS: the incumbent's folds.
-INC_NAME=${INC_NAME:-weightfix}
-INC_FOLDS=${INC_FOLDS:-weightfix_within}
+# INC_FOLDS: the incumbent's folds.  Since 2026-10-12 the incumbent is experiment 55 (nearshrink): experiment 46's
+# ratings with step 4's multipliers from the 8 fold seasons nearest each season, over its folds for all thirty
+# seasons (the shipped default of `openrapm shrink`).  The held-out audit pairs a candidate with experiment 46's
+# 2017-2026 folds (AUDIT_REF): the fold ratings come before step 4, so they are the same.  A candidate with
+# OWN_FOLDS=1 has folds for 2017-2026 only; its step 4 then reads the 8 nearest of those (pass SHRINK_FLAGS, or
+# build its 1997-2016 folds too, to match the incumbent's rule).
+INC_NAME=${INC_NAME:-nearshrink}
+INC_FOLDS=${INC_FOLDS:-weightfix_early,weightfix_within}
+AUDIT_REF=${AUDIT_REF:-weightfix_within}
 INC=outputs/season_ratings_${INC_NAME}.parquet
 BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1 --features box_score_and_bio}
 [ -n "$NAME" ] && [ -n "$TARGET" ] || { echo "usage: scripts/experiment_chain.sh NAME TARGET [EXTRA RATE FLAGS]"; exit 1; }
@@ -36,6 +42,7 @@ reading() {            # reading LABEL SCRIPT [FLAGS...]: run one check into the
   $PY -u "$@" >> $LOG 2>&1 || { echo "=== $(date) $label FAILED" >> $LOG; FAILED="$FAILED, $label"; }
 }
 # SKIP_BUILD=1: outputs/season_ratings_NAME_step3.parquet already exists -- start at the prior shrink.
+# SHRINK_FLAGS: extra flags for `openrapm shrink`, e.g. "--fold-seasons 1997-2026 --nearest 8" (experiment 55).
 # SHRINK_TAG=<tag>: the within-season folds step 4's multipliers are read from, outputs/within/<tag>/ (default the
 # incumbent's, INC_FOLDS; with OWN_FOLDS=1 the candidate's own, NAME_within).  `openrapm folds --tag <tag>` makes them.
 # OWN_FOLDS=1 (the Robustness pass, 2026-10-08): save the candidate's boosters (--save-models NAME, every rated season),
@@ -63,7 +70,7 @@ fi
 if [ "$OWN_FOLDS" = "1" ]; then
   echo "=== $(date) the candidate's own within-season folds, 2017-2026 (tag ${NAME}_within)" >> $LOG
   $PY -u -m openrapm folds --models ${NAME} --base season_ratings_${NAME}_step3 --seasons 2017-2026 --tag ${NAME}_within >> $LOG 2>&1 || exit 1
-  COMPARE="--reference=$INC_FOLDS"
+  COMPARE="--reference=$AUDIT_REF"
   [ -n "$CONTROL_TAG" ] && COMPARE="$COMPARE --control=$CONTROL_TAG"
   echo "=== $(date) held-out audit against the incumbent's folds" >> $LOG
   $PY -u scripts/checks/138_heldout_audit.py --random=${NAME}_within --mult_tag=${NAME}_within $COMPARE --draws=0 --threshold_from=audit_lgb_noonc_2017 --out=audit_${NAME} >> $LOG 2>&1 || exit 1
@@ -73,7 +80,7 @@ if [ "$FIRST_PASS" = "1" ]; then
   exit 0
 fi
 echo "=== $(date) prior shrink (multipliers from outputs/within/$SHRINK_TAG)" >> $LOG
-$PY -u -m openrapm shrink --base season_ratings_${NAME}_step3 --setting test --folds $SHRINK_TAG --name ${NAME} >> $LOG 2>&1 || exit 1
+$PY -u -m openrapm shrink --base season_ratings_${NAME}_step3 --setting test --folds $SHRINK_TAG $SHRINK_FLAGS --name ${NAME} >> $LOG 2>&1 || exit 1
 echo "=== $(date) swap adjustment" >> $LOG
 $PY -u -m openrapm swap --base season_ratings_${NAME}_step4 --setting test --name ${NAME} --types >> $LOG 2>&1 || exit 1
 echo "=== $(date) year-over-year" >> $LOG

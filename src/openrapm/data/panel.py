@@ -26,6 +26,8 @@ Where each column comes from:
     on court, off court, on minus off                          on_court.py, on the offence design (scored) and the
                                                                DEFENCE_ALL design (allowed)
     playoff_share                                              `playoff_share`, from the stints
+    the play-by-play parts (features.EVENT_RATES)              data/event_counts.py's counts, padded by
+                                                               box_rates.box_rates on the offence design's games
 
 Example: Stephen Curry's 2016 offence row reads possessions 6,994 (his team's offensive possessions with him on the
 court), assists_per100 4.25 above the average player (8.84 uncentred), team_possession_share 0.66 and playoff_share
@@ -58,6 +60,7 @@ from ..features import (
     BOX_RATES,
     CAREER,
     CLOSENESS,
+    EVENT_RATES,
     OFF_COURT,
     ON_COURT,
     ON_MINUS_OFF,
@@ -71,6 +74,7 @@ from ..on_court import offcourt_rates, oncourt_rates
 from .bio import PLAYER_INPUTS, player_inputs
 from .config import resolve
 from .designs import DesignCache
+from .event_counts import event_design, load_event_counts
 from .ingest import GAME_PREFIX, game_table, load_gamelog, raw_dir
 from .legacy_names import is_deleted, translate_frame
 from .roles import (
@@ -96,6 +100,8 @@ DEFENCE_ALL = "points_with_expected_opponent_threes_all"
 PANEL_TARGETS = (OFFENCE, DEFENCE_ALL)            # the designs one season's rows are built from
 SIDES = ("O", "D")
 OLD_PANEL = "role_panel_season.parquet"          # the old-named panel's file name, beside the new one
+# the columns the old-named panel carried: every column but the play-by-play parts, added 2026-10-12
+MIGRATED_PANEL_COLUMNS = [column for column in SEASON_PANEL_COLUMNS if column not in EVENT_RATES]
 STINT_COLUMNS = ["game_id", "period", *HOME_SLOTS, *AWAY_SLOTS, "poss_h", "poss_a", "margin_h", "is_gt"]
 # The data layer's names for the body and shot columns, against the panel's (the pairs are pinned in
 # tests/test_features.py and tests/test_panel.py); data/roles.py builds the role and career columns under the panel's
@@ -142,6 +148,12 @@ class SeasonTables:
     def ages(self) -> pd.DataFrame:
         """player_id, season, age from the bio feed (data/roles.py, season_ages)."""
         return season_ages(self.season, self.cfg)
+
+    @cached_property
+    def event_counts(self) -> pd.DataFrame:
+        """The season's play-by-play counts per game, phase and player (data/event_counts.py), as cached by
+        `openrapm data events`."""
+        return load_event_counts(self.season, self.cfg)
 
 
 def roles_from_games(tables: SeasonTables, keep_ids: set) -> tuple:
@@ -310,12 +322,14 @@ def _player_columns(season: int, cfg: dict, designs: dict, history: _RoleHistory
     return frame
 
 
-def _side_rows(side: str, season: int, rates, players: pd.DataFrame) -> pd.DataFrame:
-    """A side's rows: the keys, his possessions and padded rates on that side, then the columns both sides share."""
+def _side_rows(side: str, season: int, rates, parts, players: pd.DataFrame) -> pd.DataFrame:
+    """A side's rows: the keys, his possessions and padded rates on that side, the columns both sides share, then
+    the play-by-play parts on that side (centred)."""
     possessions = (rates.offence if side == "O" else rates.defence).possessions
     keys = pd.DataFrame({"side": side, "player_id": players["player_id"].to_numpy(), "season": season,
                          "possessions": possessions})
-    return pd.concat([keys, rate_table(rates, side, BOX_RATES), players.drop(columns="player_id")], axis=1)
+    events = pd.DataFrame((parts.offence if side == "O" else parts.defence).centred, columns=EVENT_RATES)
+    return pd.concat([keys, rate_table(rates, side, BOX_RATES), players.drop(columns="player_id"), events], axis=1)
 
 
 def season_panel(season: int, cfg: dict, designs: dict, sources: SeasonSources, fit_game_ids=None) -> SeasonPanel:
@@ -328,14 +342,17 @@ def season_panel(season: int, cfg: dict, designs: dict, sources: SeasonSources, 
     fit = None if fit_game_ids is None else {str(game) for game in fit_game_ids}
     history = _role_history(season, sources, fit, share_cap(cfg))
     rates = box_rates(designs[OFFENCE], pad_target=cfg["pad_target"])
+    # after the 13 rates, so the event design shares the matrix box_rates built (data/event_counts.py)
+    event_counts, event_games = event_design(designs[OFFENCE], sources.tables.event_counts)
+    parts = box_rates(event_counts, pad_target=cfg["pad_target"])
     players = _player_columns(season, cfg, designs, history, fit)
-    rows = pd.concat([_side_rows(side, season, rates, players) for side in SIDES], ignore_index=True)
+    rows = pd.concat([_side_rows(side, season, rates, parts, players) for side in SIDES], ignore_index=True)
     stints = sources.tables.stints
     if fit is not None:
         stints = stints[stints["game_id"].isin(fit)]
     rows = rows.merge(score_state(stints, season), on=["player_id", "season", "side"], how="left")
     rows[PLAYOFF_SHARE[0]] = rows["player_id"].map(playoff_share(stints, sources.tables.games)).fillna(0.0)
-    read = {**history.games_read, "score-state stints": set(stints["game_id"].unique())}
+    read = {**history.games_read, "score-state stints": set(stints["game_id"].unique()), "event counts": event_games}
     return SeasonPanel(season, rows[SEASON_PANEL_COLUMNS], history.season_roles, read)
 
 
@@ -412,17 +429,18 @@ def panel_and_trainable_seasons(cfg: dict) -> tuple[pd.DataFrame, set]:
 # ------------------------------------------------------------------------------------ the one-off migration
 def panel_from_old_names(old: pd.DataFrame) -> pd.DataFrame:
     """A panel built under the old names, under the plain ones: renamed, the unread columns dropped, the columns in
-    `SEASON_PANEL_COLUMNS` order, the rows and every value as they were.
+    `MIGRATED_PANEL_COLUMNS` order (the season panel before the play-by-play parts), the rows and every value as
+    they were.
 
-    Raises if a column of `SEASON_PANEL_COLUMNS` is missing or a column is left that the table does not know, so
+    Raises if a column of `MIGRATED_PANEL_COLUMNS` is missing or a column is left that the table does not know, so
     a migrated panel never silently lacks an input or carries one under an old name.
     """
     renamed = translate_frame(old)
-    missing = [column for column in SEASON_PANEL_COLUMNS if column not in renamed.columns]
-    unknown = [column for column in renamed.columns if column not in SEASON_PANEL_COLUMNS]
+    missing = [column for column in MIGRATED_PANEL_COLUMNS if column not in renamed.columns]
+    unknown = [column for column in renamed.columns if column not in MIGRATED_PANEL_COLUMNS]
     if missing or unknown:
         raise ValueError(f"the old panel does not map onto the season panel: missing {missing}, unknown {unknown}")
-    return renamed[SEASON_PANEL_COLUMNS]
+    return renamed[MIGRATED_PANEL_COLUMNS]
 
 
 def migrate_panel(source: Path, cfg: dict) -> tuple[Path, pd.DataFrame, list]:

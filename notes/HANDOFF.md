@@ -41,6 +41,26 @@ The work happens on feature branches off `main`; the live site is served from `d
 **464 passed, 6 deselected (the slow tests, `pytest -m slow`), 1 xfailed, ~60 s** with the scraped data
 (2026-10-12; the LaMelo test at the bottom of this file passes on the current ratings).
 
+## START HERE (2026-10-12): stat splits tried, era drift found, experiment 55 adopted (not published, not committed)
+
+All of it is on the local branch `stat-splits` (off `cleanup-pass`), uncommitted: commit only on the owner's word.
+DECISIONS.md has every number: "The stat-splits screen", "Experiment 52", "Experiments 53-54", "Era drift",
+"Experiment 55".
+- **Play-by-play splits** (`openrapm data events`, `src/openrapm/data/event_counts.py`; 22 parts of box counts in the
+  season panel, `features.EVENT_RATES`; check 141, forward stepwise selection; check 138 `--parts=1`): rebounds by the
+  miss (52), and the cuts stepwise selection kept on each half of the seasons (53, 54), all tie year over year;
+  verdicts pending the owner (recommended: not adopted).
+- **Era drift:** the defensive prior part holds up less in older seasons (0.79 in 1997-2006 against 0.95 in
+  2017-2026); offence and the games' penalty do not drift.  **Experiment 55 ADOPTED** (the owner: "yes. build."):
+  step 4's multipliers from the 8 nearest fold seasons (folds `weightfix_early,weightfix_within`, now the defaults
+  in `settings.ShrinkSettings`); year over year 8.5827 against 8.5857 (z -2.9).  The scoring incumbent is
+  `outputs/season_ratings_nearshrink.parquet`; `experiment_chain.sh` and 135 default to it.
+- **The product table is rebuilt** (`openrapm build`; the previous one is
+  `outputs/season_ratings_product_before_nearshrink.parquet`): 2026 top 20 nearly unchanged; 1997-2006 defence moves
+  a median 0.18 per 100.  **Not published**: `openrapm site --bias --decomposition`, commit, push, on the owner's
+  word.
+- Next proposed: a prior whose training rows are weighted toward the rated season (the prices drift on defence too).
+
 ## START HERE (2026-10-09): the Robustness pass -- steps 1-4 done, experiment 46 (the body-weight fix) adopted as the base, 47 (honest scale) not adopted, 48 (pad once) stopped, checkpoint done, 49 (own-side inputs) not adopted, 50 and 51 not adopted -- the pass is closed; experiment 46 published
 
 The plan (`~/.claude/plans/read-handoff-md-here-s-the-atomic-frost.md`; DECISIONS.md "The Robustness pass" has every

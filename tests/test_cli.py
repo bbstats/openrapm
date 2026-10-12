@@ -83,6 +83,29 @@ def test_data_panel_builds_by_default_and_migrates_when_asked():
         _parse("data")
 
 
+def test_data_events_reads_seasons_and_holds_the_parts_to_the_box_score():
+    """`openrapm data events 1997 2026`; the check is the parts' sum over the box score's count, minus 1."""
+    import numpy as np
+    import pandas as pd
+
+    from openrapm.commands import data
+    from openrapm.data.event_counts import EVENT_COUNTS
+    args = _parse("data", "events", "1997", "2026", "--force")
+    assert (args.first_season, args.last_season, args.force, args.run) == (1997, 2026, True, data.run_events)
+    assert (_parse("data", "events").first_season, _parse("data", "events").force) == (None, False)
+    totals = pd.DataFrame([dict.fromkeys(EVENT_COUNTS, 1.0)], index=[2026])
+    totals[EVENT_COUNTS[0]] = 9.0                                  # 9 + 1 + 1 + 1 = 12 defensive rebounds
+    box = pd.DataFrame({"season": [2026, 2026], "drb": [6.0, 6.0], "stl": [1.0, 1.0], "fg2m": [0.0, 0.5],
+                        "fg3m": [0.0, 0.0], "fg3_miss": [1.0, 1.0], "blk": [1.5, 1.5], "ast": [2.0, 2.0],
+                        "tov": [2.0, 2.0], "pf": [5.0, 5.0]})
+    check = data.event_check(totals, box).loc[2026]
+    assert check["defensive rebounds"] == 0.0 and check["steals"] == 0.0 and check["points"] == 1.0
+    assert check["threes attempted"] == 0.0 and np.isinf(check["threes made"])
+    assert check["blocks"] == 0.0 and check["assists"] == 0.0              # 3 of 3 blocks, 4 of 4 assists
+    assert (check["Russell share of blocks"], check["stolen share of turnovers"]) == (1 / 3, 1 / 4)
+    assert check["offensive share of fouls"] == 0.1
+
+
 @pytest.mark.parametrize("command", ["ingest", "stints"])
 def test_data_ingest_and_stints_read_seasons_and_phases_as_the_old_scripts_did(command):
     """`openrapm data ingest 1997 2026 RS,PO` is what scripts/01_ingest.py 1997 2026 RS,PO was (02 for stints)."""

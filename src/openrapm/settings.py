@@ -117,11 +117,17 @@ class ShrinkSettings:
     # "product" fits the factors without the rated season; "test" also without its two neighbours
     rule: str = "product"
     # the first and last season whose within-season folds are read; pinned, because the folds on disk grew
-    # once and silently changed the factors (notes/DECISIONS.md, experiment 34's correction, 2026-10-05)
-    fold_seasons: tuple = (2017, 2026)
-    # the within-season folds the shipped factors were fitted on: experiment 46's own folds (notes/DECISIONS.md,
-    # "Experiment 46", 2026-10-09); the method is experiment 33b's, adopted 2026-10-03
-    folds_tag: str = "weightfix_within"
+    # once and silently changed the factors (notes/DECISIONS.md, experiment 34's correction, 2026-10-05).  Every
+    # season since experiment 55 (adopted 2026-10-12); 2017-2026 before
+    fold_seasons: tuple = (1997, 2026)
+    # the within-season folds the factors are fitted on, comma-separated folders: experiment 46's own folds,
+    # 1997-2016 and 2017-2026 (notes/DECISIONS.md, "Experiment 46" and the checkpoint, 2026-10-09); the method is
+    # experiment 33b's, adopted 2026-10-03
+    folds_tag: str = "weightfix_early,weightfix_within"
+    # each season's factors from only the K fold seasons nearest it (prior_shrink.fold_seasons_used): the defensive
+    # prior part holds up less in older seasons, 0.79 in 1997-2006 against 0.95 in 2017-2026 (notes/DECISIONS.md,
+    # "Era drift" and experiment 55, adopted 2026-10-12: "yes. build."); 0 would use every fold season the rule allows
+    nearest: int = 8
 
 
 @dataclass(frozen=True)

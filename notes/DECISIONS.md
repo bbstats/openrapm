@@ -5672,3 +5672,163 @@ prior): `scratch/2026-10-08_robustness/publish46.sh` -- 62 with the fixed code, 
 40th -> 12th (+1.63, defence +1.10), Holmgren 6th -> 13th (-0.63), Clingan 8th -> 6th, Butler 11th -> 8th; Diabate and
 Barnes leave.  The site's ratings (`docs/data/ratings.json`, 14,578 rows, no Portable column) and the bias page
 rebuilt; `pytest` 566 passed, 1 xfailed.
+
+## The stat-splits screen (the owner's idea, 2026-10-12; experiments 52-55 registered, none built)
+
+The owner: split the box stats the ratings mis-price into more causal parts and give the box-score prior the stat
+AND its parts ("if just trees all 3 is fine"), on every list that reads the stat; rebounds first.  The owner un-banned
+the turnover type for steals ("Bad pass and lost ball should not be banned") and allowed the assist on a make.
+`openrapm data events` (`src/openrapm/data/event_counts.py`) counts twelve parts per game, player and phase from the
+play-by-play; every season's parts add up to the box score within 0.25% (defensive rebounds -0.24% at worst, 1998:
+rebounds with no miss right before them; 1997 has 26 more steal rows than the box score).  The season panel carries
+them padded and centred after every older column (`features.EVENT_RATES`); every older column is unchanged (off-court
+1.8e-13), the published 2026 table rebuilds exactly (`test_shipped_golden`).  The base's folds rebuilt with the parts
+(`weightfix_parts_within`, `weightfix_parts_early`; 360 folds, 0 of 8,280 checks failed) carry the base's ratings to
+0.0.  `138 --parts=1` (a 400-draw null for the parts, the frozen 30-season threshold 3.63) reads every older test as the
+checkpoint did (to 2e-8; its z values move up to 1.1 with the redrawn null).  Reliability: possession-weighted
+correlation of a player's padded rate with his next season's (500+ possessions in both; `scratch/2026-10-12_stat_splits/`).
+
+The gate, registered before any reading: build only if two parts' leans on a list the experiment changes differ by 0.1
+per 100 or more, bottom tenth to top, and one of the two has reliability 0.30 or more.  Leans after the prior shrink,
+bottom tenth to top, points per 100, + = underrated (the prior alone in brackets); every part's reliability 0.71-0.91
+(the Russell share was 0.126):
+
+| exp | side | the box count | its parts | gate |
+|---|---|---|---|---|
+| 52 | defence | defensive rebounds +1.54 (+3.42) | of missed twos beyond 6 ft +1.12 (+2.79), of missed free throws +0.68 (+0.41), of missed twos within 6 ft +0.57 (+1.20), of missed threes 0.00 (-0.04) | passes |
+| 53 | defence | steals -0.58 (-0.54) | bad-pass steals -0.54, z -5.8 (-0.65); lost-ball steals -0.26, z -1.6 (-0.08) | passes |
+| 53 | offence | steals -0.33 | bad-pass -0.23, lost-ball -0.26 | fails (alike) |
+| 54 | defence | points -0.71, mostly before 2017 | unassisted field-goal points -0.82, z -4.8 (-1.27), steady in every era (-0.20 / -0.22 / -0.19 per sd); assisted +0.19, z +0.7; made free throws -0.51 | passes |
+| 54 | offence | points +0.67 | unassisted +0.51 (+1.31); assisted +0.07; made free throws +0.34 | passes |
+| 55 | offence | three-point attempts +0.61 | above the break +0.56, corner +0.28; assisted made threes +0.48, unassisted +0.52; free-throw % +0.81 | passes |
+
+Read with care: the parts of one count are correlated, so each lean is a marginal reading; only a build says whether
+the prior prices the parts better.  Every experiment passes its gate (53 on defence only, which under the owner's
+same-method rule still puts the steal parts on both lists).  Experiment 52 waits for the owner's go.
+
+## Experiment 52: defensive rebounds by the miss they ended (the stat splits, the first; 2026-10-12)
+
+The owner: "yes".  `--features rebound_parts`: the defensive prior reads the four rebound parts beside defensive
+rebounds (offence unchanged).  `OWN_FOLDS=1 CONTROL_TAG=noise_regroup2_within bash scripts/experiment_chain.sh
+rebound_parts points_with_expected_opponent_threes "--features rebound_parts"`, first pass then full; 135 against
+noise_regroup2.
+- **In season (2017-2026, its own folds, paired):** a tie, +0.044 (z +0.9, 4 of 10; the noise control +0.070).  The
+  targeted lean moved the WRONG way: defensive rebounds +1.39 -> +1.48, rebounds +1.60 -> +1.71 (z +2.8): with the
+  parts the prior lowered high rebounders' defence by 0.18 per 100, top tenth against bottom (the control 0.02).  The
+  defensive steal lean shrank, -0.32 -> -0.18 (z +5.7).
+- **Year over year:** 8.5853 against 8.5857, -0.009 (z -0.2, 30 of 56), a tie; looking forward +0.018 (z +0.4),
+  looking back -0.035 (z -0.7); stint -0.034 (z -0.8).  On the base's multipliers +0.026 (z +0.7).  Shrink refitted
+  0.685-0.717 / 0.889-0.962.
+- Lineup-swap test a tie (net order -0.004, z -0.3; defence +0.014, z +1.2).  Trade loss a tie (offence z -0.1,
+  defence z -0.3).  Consensus 0.851 / 0.788 / 0.807 against 0.851 / 0.780 / 0.805.  Robust review against
+  noise_regroup2: year-over-year team-game slices 8 better / 3 worse (the control 7 / 4), quality tiers 5 / 1 (3 / 3),
+  nothing clearly better.
+- 2026 (test setting): Edey 9th -> 19th (defence -1.22; 590 possessions, the prior decides most of his rating),
+  Jokic 5th -> 2nd (+0.64), Antetokounmpo -0.49, Clingan -0.51; ratings move a median 0.16 per 100 (90th percentile
+  0.42).
+- **Reading:** a tie everywhere, and not adoptable on the tie rule (its target lean did not move toward zero).  Kept as
+  the rebound split's reading alone; the owner's worry about serial testing (2026-10-12) is open: the proposal is each
+  split alone, then all four together, adopting nothing until the set is read.  Logged as experiment 52 (sheet row 41).
+
+## Experiments 53-54: the play-by-play cuts chosen by forward stepwise selection, each half tested on the other (2026-10-12)
+
+The owner, on testing the splits one at a time: "serially testing this stuff will cause brittleness, e.g. it could be
+feature *combos*", then "hard boruta ... and see what sticks", then "we can use different feature selection
+algorithm"; forward stepwise was agreed ("ok sure").  The pool grew to 22 play-by-play cuts (the 12 parts plus, from
+the retired counter block: Russell blocks, rim, mid-range and three-point blocks, offensive fouls, stolen turnovers,
+assists by the zone of the make; `openrapm data events` again, every season within 0.25% of the box score except
+assists, whose passer is found by name for 98.1-99.9%) plus made free throws and free-throw %.
+`scripts/checks/141_stepwise_inputs.py`: on one half of the seasons (labels, training rows and four screen seasons all
+from that half), each round adds the cut that lowers the held-out-player error most (the shipped LightGBM, players
+held out by fold, the error after the best line through the priors, possession-weighted) if its paired t-statistic
+over 12 cells (4 screen seasons x 3 fold assignments) is -3 or below.
+
+| half | offence adds | defence adds | stopped at |
+|---|---|---|---|
+| 1997-2011 | defensive rebounds of missed threes (-0.011 on 0.491, t -4.2, 12 of 12) | assists on made twos beyond 6 ft (-0.035 on 2.860, t -3.5) | round 2 (best t -1.2 / -1.7) |
+| 2012-2026 | corner threes attempted (-0.0065 on 0.428, t -3.9) | made free throws (-0.034 on 2.581, t -4.7, 12 of 12) | round 2 (best t -3.0 / -2.5) |
+
+No cut was chosen by both halves, and none of the cuts aimed at the counted leans (bad-pass steals, unassisted points)
+entered.  Each half's lists were built in full (`--features stepwise_early` / `stepwise_late`, own folds) and scored
+year over year on the half its selection never read (`63 --first/--last`; scratch/2026-10-12_stat_splits/
+stepwise_builds.sh):
+- **53, stepwise_early:** on 2012-2025 +0.006 (z +0.2, 12 of 28), a tie (stint +0.10, z +2.3); all seasons -0.010
+  (z -0.3); in season +0.054 (z +1.3; noise control +0.070); lineup-swap net order -0.019 (z -2.0), worse; consensus
+  0.855 / 0.778 / 0.807.  2026: Edey 9th -> 6th (+0.46), Wembanyama -0.75 (still 1st).
+- **54, stepwise_late:** on 1998-2011 +0.001 (z 0.0, 15 of 28), a tie; all seasons +0.001 (z 0.0); in season +0.034
+  (z +1.6); lineup-swap net order -0.024 (z -2.2), worse; consensus 0.853 / 0.782 / 0.807.  2026: Jokic 5th -> 2nd
+  (+0.42), Clingan -0.39.
+- **Reading:** the small held-out-player gains each half found do not carry to the other half's seasons, and both
+  order teammates slightly worse.  With experiment 52, the play-by-play splits have not improved the ratings in any
+  form tried; the counted leans remain.  Logged as experiments 53 and 54 (sheet rows 42-43); verdicts pending the
+  owner.
+
+## Era drift: two read-only tests (the owner, 2026-10-12: "is there seasonal drift? ... even like penalty drift possible?")
+
+The shipped prior learns one price per input from all thirty seasons pooled (no season input); step 3's penalty
+(13,037) and the labels' (40,000) are the same every season; step 4's multipliers are fitted on 2017-2026 and every
+season takes them.  The original coefficient study had already found prices drifting (made threes 1.25 points each
+in 2012-14, 1.50 in 2024-26; offensive rebounds and blocks drifting beyond their noise; FINDINGS 4 at the tag
+archive/research-2026-09).  Drivers: `scratch/2026-10-12_stat_splits/drift_multipliers.py`, `drift_prices.py`.
+
+**Test 1, the weights, season by season** (each season's own twelve folds of the base, experiment 46; step 4's fit,
+then with the games' part free too; seasons as the unit):
+
+| multiplier | 1997-2006 | 2007-2016 | 2017-2026 | line per decade |
+|---|---|---|---|---|
+| defensive prior part | 0.79 +- 0.03 | 0.87 +- 0.03 | 0.95 +- 0.05 | +0.075 (t +3.4) |
+| offensive prior part | 0.70 +- 0.02 | 0.64 +- 0.02 | 0.70 +- 0.02 | 0.000 (t 0.0) |
+| defensive games' part (both free) | 1.47 | 1.47 | 1.41 | -0.018 (t -0.6) |
+| offensive games' part (both free) | 1.37 | 1.30 | 1.29 | -0.033 (t -1.1) |
+
+The defensive prior part holds up less in older seasons; the shipped step gives them the 2017-2026 value (0.93-0.98),
+so 1997-2016 defence leans on the box score about 10-20% more than its own games support.  The games' part wants x1.3
+to x1.5 in every era: step 3's penalty under-weights it by about the same everywhere, no drift.
+
+**Test 2, the prices** (the prior trained on one era's labels and rows, or on all seasons pooled; scored on three
+screen seasons per era against labels from the screen season's own era, players held out by fold in all fits; the
+error is check 141's; nine cells per era):
+- Defence: in 2017-2026 the 1997-2006 prior is clearly worse than the era's own (+0.136, t +4.9, 9 of 9 cells), the
+  2007-2016 prior worse too (+0.078, t +2.6): defensive prices drift.  The pooled prior beats or ties each era's own
+  everywhere (1997-2006 -0.113, t -2.2; 2007-2016 -0.075, t -2.1; 2017-2026 -0.019, t -1.0): more seasons outweigh
+  the drift.
+- Offence: no era's own prior beats the others (in 1997-2006 the 2017-2026 prior is better, -0.021, t -4.4); the
+  pooled prior is best everywhere (t -1.5, -3.1, -2.4).  No detectable drift.
+- Prices per standard deviation of an input, each era's prior on every season's rated rows, the other inputs as they
+  are (defence in points allowed: negative is better defence): height -0.18 in 1997-2006, +0.08 and +0.01 after;
+  defensive rebounds -0.05, -0.12, -0.18; possessions he finishes +0.13, +0.29, +0.38; steals -0.30, -0.27, -0.17.
+  Offence: true shooting +0.03, +0.13, +0.10; points steady (+0.21, +0.22, +0.20).  One input moved with its
+  correlated neighbours held still is a rough reading (blocks change sign between eras).
+
+**Reading:** the drift that matters sits on defence, in both its weight (step 4) and its prices (step 2); offence
+shows none.  Pooling every season still beats a prior of one era, so the candidates keep all the data: step 4's
+defensive multiplier fitted on nearby seasons, or the prior's training rows weighted toward the rated season.
+
+## Experiment 55: step 4's multipliers fitted on nearby seasons (the era-drift fix; the owner, 2026-10-12: "yes run fix 1")
+
+`openrapm shrink --folds weightfix_early,weightfix_within --fold-seasons 1997-2026 --nearest 8`: each season's two
+multipliers fitted, as before, on within-season held-out games, but only on the folds of the 8 fold seasons nearest
+it (its own and its neighbours out, the test rule), from the base's folds for all thirty seasons, instead of
+2017-2026 for every season.  Same method on both sides.  Steps 1-3 are the base's (`season_ratings_weightfix_raw`);
+the default settings rebuild the base's step 4 to 1.2e-12.  Multipliers: defence 0.78-0.85 in 1997-2016, 0.89-0.97
+after (the base: 0.92-1.0 for every season); offence 0.65-0.71 (the base 0.69-0.72).
+- **Year over year: 8.5827 against 8.5857, -0.085 (z -2.9, 32 of 56)** -- past the standing rule.  Looking forward
+  -0.14 (z -2.9), looking back -0.03 (z -1.0).  By era: 1998-2006 -0.19 (z -3.1, 14 of 18), 2007-2016 -0.06 (z -1.1),
+  2017-2025 -0.01 (a tie) -- where test 1 put the drift.  Stint level +0.06 (z +1.6) as scaled, -0.076 (z -3.0) with
+  each side rescaled: the order improves, the defensive spread narrows.
+- Every quality tier better (top 30 -0.024, z -5.4; 31-90 z -3.8; 91-150 z -3.9; 151-300 z -2.6; 301+ a tie).  Trade
+  loss: offence better (z -3.2), defence a tie.  Lineup-swap test: net order a tie (z -0.1); defence order better
+  (+0.012, z +2.6) but its gaps worse (+0.070, z +2.7).  Consensus 0.850 / 0.780 / 0.802 against 0.851 / 0.780 / 0.805.
+  Robust review against noise_regroup2: year-over-year team-game slices 10 better / 1 worse (4 clearly better; the
+  control 7 / 4), quality tiers 5 / 1, age 5 / 0, offensive trade loss 9 / 0, lineup-swap 7 / 5 (the control 3 / 9),
+  consensus 0 / 3.
+- 2026 top 20 unchanged, same order, every move under 0.1 (2026's multipliers barely change).  Over all seasons
+  ratings move a median 0.11 per 100 (90th percentile 0.34); 1997-2006 defence a median 0.16.
+- **Reading:** meets the standing adoption rule (z -2.9, no gross consensus miss, the top 20 as it was).  Verdict
+  pending the owner.  To publish it, the product table's step 4 needs the same rule (`openrapm build --folds
+  weightfix_early,weightfix_within --fold-seasons 1997-2026 --nearest 8`, product rule) on the owner's word.
+- **ADOPTED 2026-10-12 (the owner: "yes. build.").**  The shipped defaults are now step 4's rule of experiment 55
+  (`settings.ShrinkSettings`: folds `weightfix_early,weightfix_within`, fold seasons 1997-2026, nearest 8); the
+  incumbent for scoring is `outputs/season_ratings_nearshrink.parquet` (8.5827; `experiment_chain.sh` INC_NAME, 135's
+  --ref).  The product table was rebuilt with `openrapm build` (the previous one kept as
+  `season_ratings_product_before_nearshrink.parquet`); not published.

@@ -90,6 +90,7 @@ the project's machine, every linear-algebra library on one thread.
 ```bash
 python -m openrapm data ingest 1997 2026 RS,PO
 python -m openrapm data stints 1997 2026 RS,PO
+python -m openrapm data events 1997 2026
 python -m openrapm data panel
 python -m openrapm rate --setting test --seasons 2017-2026 --name for_folds --save-models mine
 python -m openrapm folds --models mine --base season_ratings_for_folds_step3 --tag mine_within
@@ -104,8 +105,11 @@ python -m openrapm site --bias --decomposition
    same ten players on the court) and fits each season's shot curve (the league's make probability by
    distance). About 46 minutes: the 60 season-phases (30 seasons, regular season and playoffs each) took
    2,749 seconds in total.
-3. **`data panel`** writes the season panel, `outputs/season_panel.parquet`: one row per player, season
-   and side, with his padded box-score rates, role, career and body. 37 seconds in the last fresh build.
+3. **`data events`** counts, from the play-by-play, the parts of four box counts (defensive rebounds by
+   the miss they ended, steals by the turnover they took, points and threes by the assist and the spot),
+   about 12 seconds a season. **`data panel`** then writes the season panel,
+   `outputs/season_panel.parquet`: one row per player, season and side, with his padded box-score rates and
+   their play-by-play parts, role, career and body. 37 seconds in the last fresh build.
    Its first run also builds the roles table and fetches the bio feed, one request per season.
 4. **The within-season folds**, which step 4 is fitted on. `rate --setting test --save-models` rates
    2017-2026 and saves every season's boosters (the fitted LightGBM models): about 5 minutes. `folds`

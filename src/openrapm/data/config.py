@@ -28,6 +28,7 @@ DEFAULT_PATHS = {
     "outputs": "outputs",             # the ratings tables, the saved prior models, the run logs
     "panel": "outputs/season_panel.parquet",   # the season panel: one row per player, season and side
     "within": "outputs/within",       # the within-season folds, one folder per tag
+    "event_counts": "data/event_counts",   # the play-by-play counts per game, player and phase
 }
 
 

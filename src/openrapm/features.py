@@ -42,9 +42,10 @@ from dataclasses import dataclass
 import pandas as pd
 
 __all__ = ["Feature", "BOX_RATES", "UNCENTRED_RATES", "ROLE", "CLOSENESS", "SHOT_TOTALS", "SHOT_LEAGUE", "CAREER",
-           "BIO", "ON_COURT", "OFF_COURT", "ON_MINUS_OFF", "PLAYOFF_SHARE", "DERIVED", "RATIOS", "SHOTQ",
-           "SHOTQ_PADS", "PRIOR_FEATURES", "PANEL_INPUTS", "PANEL_KEYS", "SEASON_PANEL_COLUMNS", "ROW_FEATURES",
-           "SHIPPED", "FEATURE_SETS", "CATALOGUE", "add_features", "add_shotq", "meaning", "glossary_markdown"]
+           "BIO", "ON_COURT", "OFF_COURT", "ON_MINUS_OFF", "PLAYOFF_SHARE", "EVENT_RATES", "DERIVED", "RATIOS",
+           "SHOTQ", "SHOTQ_PADS", "PRIOR_FEATURES", "PANEL_INPUTS", "PANEL_KEYS", "SEASON_PANEL_COLUMNS",
+           "ROW_FEATURES", "SHIPPED", "REBOUND_PARTS", "STEAL_PARTS", "POINTS_PARTS", "THREE_POINT_PARTS",
+           "FEATURE_SETS", "CATALOGUE", "add_features", "add_shotq", "meaning", "glossary_markdown"]
 
 
 @dataclass(frozen=True)
@@ -84,6 +85,28 @@ OFF_COURT = ["off_court_scored_per100", "off_court_allowed_per100", "off_court_o
              "off_court_def_possessions"]
 ON_MINUS_OFF = ["on_minus_off_scored_per100", "on_minus_off_allowed_per100"]
 PLAYOFF_SHARE = ["playoff_share"]
+# Parts of four box counts, read from the play-by-play (data/event_counts.py says how each is read) and padded per
+# 100 possessions like the thirteen rates (box_rates.py), centred; no `_uncentred` twins, since no ratio is built from
+# them.  The owner's stat-splits plan (2026-10-12, experiments 52-55): each part sits beside its box count, so the
+# prior can price two kinds of the same count differently.  Each part is padded with its own k, so the parts' rates
+# need not add up to the box count's rate.  Example: 9 defensive rebounds per 100 might be 1 of missed free throws,
+# 2.5 of missed threes, 4.5 of missed twos at the rim and 1 of missed twos from farther out.
+EVENT_RATES = ["def_rebounds_of_free_throws_per100", "def_rebounds_of_threes_per100",
+               "def_rebounds_of_rim_twos_per100", "def_rebounds_of_outside_twos_per100",
+               "bad_pass_steals_per100", "lost_ball_steals_per100",
+               "assisted_points_per100", "unassisted_points_per100",
+               "corner_threes_attempted_per100", "above_break_threes_attempted_per100",
+               "assisted_threes_made_per100", "unassisted_threes_made_per100",
+               # the stepwise selection's wider pool (the owner, 2026-10-12): the old counter block's cuts
+               "russell_blocks_per100", "rim_blocks_per100", "mid_range_blocks_per100", "three_point_blocks_per100",
+               "offensive_fouls_per100", "stolen_turnovers_per100",
+               "assists_to_rim_per100", "assists_to_mid_range_per100", "assists_to_corner_threes_per100",
+               "assists_to_above_break_threes_per100"]
+(DEF_REBOUNDS_OF_FREE_THROWS, DEF_REBOUNDS_OF_THREES, DEF_REBOUNDS_OF_RIM_TWOS, DEF_REBOUNDS_OF_OUTSIDE_TWOS,
+ BAD_PASS_STEALS, LOST_BALL_STEALS, ASSISTED_POINTS, UNASSISTED_POINTS, CORNER_THREES, ABOVE_BREAK_THREES,
+ ASSISTED_THREES, UNASSISTED_THREES, RUSSELL_BLOCKS, RIM_BLOCKS, MID_RANGE_BLOCKS, THREE_POINT_BLOCKS,
+ OFFENSIVE_FOULS, STOLEN_TURNOVERS, ASSISTS_TO_RIM, ASSISTS_TO_MID_RANGE, ASSISTS_TO_CORNER_THREES,
+ ASSISTS_TO_ABOVE_BREAK_THREES) = EVENT_RATES
 
 # ------------------------------------------------------------------------------ the derived columns
 # Linear sums of the centred rates.  A tree splits on one column at a time (x_j < c), so it can only approximate
@@ -129,12 +152,14 @@ SHOTQ_PADS = {"two_point_expected_pct": 50.0, "three_point_expected_pct": 50.0, 
               "points_per_shot_over_expected": 300.0}
 SHOTQ = list(SHOTQ_PADS)
 
-# Every input the prior could read (53): the rates, the role, every derived column, career, body, on-court.
-# scripts/checks/95_miss_by_group.py and commands/within_season.py (its PLAYER_COLUMNS) report on all of them.
-PRIOR_FEATURES = [*BOX_RATES, *ROLE, *DERIVED, *RATIOS, *SHOTQ, *CAREER, *BIO, *ON_COURT]
-# The panel columns averaged into a multi-season training row, before anything is derived from them.
+# Every input the prior could read (75): the rates, the role, every derived column, career, body, on-court, and the
+# play-by-play parts.  scripts/checks/95_miss_by_group.py and commands/within_season.py (its PLAYER_COLUMNS) report on
+# all of them.
+PRIOR_FEATURES = [*BOX_RATES, *ROLE, *DERIVED, *RATIOS, *SHOTQ, *CAREER, *BIO, *ON_COURT, *EVENT_RATES]
+# The panel columns averaged into a multi-season training row, before anything is derived from them; the play-by-play
+# parts came last (2026-10-12), after every column the published ratings were built from.
 PANEL_INPUTS = [*BOX_RATES, *ROLE, *CLOSENESS, *UNCENTRED_RATES, *SHOT_TOTALS, *SHOT_LEAGUE, *CAREER, *BIO,
-                *ON_COURT, *OFF_COURT, *ON_MINUS_OFF, *PLAYOFF_SHARE]
+                *ON_COURT, *OFF_COURT, *ON_MINUS_OFF, *PLAYOFF_SHARE, *EVENT_RATES]
 # The season panel's columns, in order: who and when, the possessions behind the row (his offensive possessions
 # on an offence row, defensive on a defence row), then the inputs.
 PANEL_KEYS = ["side", "player_id", "season"]
@@ -156,9 +181,30 @@ SHIPPED = {
           "games_started_share", "height_in", "team_possession_share", "points_per100", "steals_per100",
           "steals_plus_blocks_per100", "true_shooting_pct", "used_possessions_per100", "weight_lb"],
 }
-# "box_score_and_bio": the box score, the role, the career and the body, no on-court record (experiment 45's
-# boruta_noonc)
-FEATURE_SETS = {"box_score_and_bio": SHIPPED}
+# The stat-splits experiments' lists (the owner, 2026-10-12): the shipped lists with each experiment's parts appended,
+# so every shipped input keeps its position, and a part goes on every list that reads its box count (the owner's
+# same-method rule: the reason to split a count is the same on both sides).
+REBOUND_PARTS = [DEF_REBOUNDS_OF_FREE_THROWS, DEF_REBOUNDS_OF_THREES, DEF_REBOUNDS_OF_RIM_TWOS,
+                 DEF_REBOUNDS_OF_OUTSIDE_TWOS]
+STEAL_PARTS = [BAD_PASS_STEALS, LOST_BALL_STEALS]
+POINTS_PARTS = [ASSISTED_POINTS, UNASSISTED_POINTS, FREE_THROWS_MADE]
+THREE_POINT_PARTS = [CORNER_THREES, ABOVE_BREAK_THREES, ASSISTED_THREES, UNASSISTED_THREES, "free_throw_pct"]
+FEATURE_SETS = {
+    # the box score, the role, the career and the body, no on-court record (experiment 45's boruta_noonc)
+    "box_score_and_bio": SHIPPED,
+    # experiment 52: defensive rebounds by the miss they ended (only the defensive list reads defensive rebounds)
+    "rebound_parts": {"O": list(SHIPPED["O"]), "D": SHIPPED["D"] + REBOUND_PARTS},
+    # experiment 53: steals by the turnover they took (both lists read steals)
+    "steal_parts": {"O": SHIPPED["O"] + STEAL_PARTS, "D": SHIPPED["D"] + STEAL_PARTS},
+    # experiment 54: points by whether an assist set them up, and the free throws (both lists read points)
+    "points_parts": {"O": SHIPPED["O"] + POINTS_PARTS, "D": SHIPPED["D"] + POINTS_PARTS},
+    # experiment 55: threes by where and how they came, and free-throw % (only the offensive list reads threes)
+    "three_point_parts": {"O": SHIPPED["O"] + THREE_POINT_PARTS, "D": list(SHIPPED["D"])},
+    # what forward stepwise selection (scripts/checks/141_stepwise_inputs.py) added on each half of the seasons
+    # (2026-10-12): 1997-2011 ("early") and 2012-2026 ("late"); each is tested on the other half
+    "stepwise_early": {"O": SHIPPED["O"] + [DEF_REBOUNDS_OF_THREES], "D": SHIPPED["D"] + [ASSISTS_TO_MID_RANGE]},
+    "stepwise_late": {"O": SHIPPED["O"] + [CORNER_THREES], "D": SHIPPED["D"] + [FREE_THROWS_MADE]},
+}
 
 
 # ------------------------------------------------------------------------------ building them
@@ -265,6 +311,18 @@ def _family(names, meanings, formula, unit, scale, group) -> list:
 _RATE_MEANINGS = ["made threes", "missed threes", "made twos", "missed twos", "made free throws",
                   "missed free throws", "offensive rebounds", "defensive rebounds", "assists", "turnovers", "steals",
                   "blocks", "personal fouls"]
+_EVENT_MEANINGS = ["defensive rebounds of missed free throws", "defensive rebounds of missed threes",
+                   "defensive rebounds of missed twos within 6 ft of the rim, or logged without a location",
+                   "defensive rebounds of missed twos from beyond 6 ft", "steals of a pass (a bad-pass turnover)",
+                   "steals of the ball from a dribbler (a lost-ball turnover)", "points from assisted field goals",
+                   "points from unassisted field goals", "corner threes attempted", "above-the-break threes attempted",
+                   "assisted made threes", "unassisted made threes",
+                   "blocks his team recovered (Russell blocks)", "blocks of twos within 6 ft of the rim, or logged "
+                   "without a location", "blocks of twos from beyond 6 ft", "blocks of threes",
+                   "offensive fouls committed", "turnovers stolen by the defence (live-ball turnovers)",
+                   "assists on makes at the rim (within 6 ft, or logged without a location)",
+                   "assists on made twos from beyond 6 ft", "assists on made corner threes",
+                   "assists on made above-the-break threes"]
 _DERIVED_MEANINGS = {"points_per100": "points", "shots_per100": "shot attempts",
                      "free_throw_attempts_per100": "free-throw attempts",
                      "three_point_attempts_per100": "three-point attempts",
@@ -359,6 +417,8 @@ def _catalogue() -> tuple:
                    "centred", "box rate")
     rows += _family(UNCENTRED_RATES, [f"{text}, league level kept" for text in _RATE_MEANINGS], "padded rate",
                     "per 100 possessions", "level", "box rate, uncentred")
+    rows += _family(EVENT_RATES, _EVENT_MEANINGS, "padded play-by-play count per 100 minus the league level",
+                    "per 100 possessions", "centred", "play-by-play rate")
     rows += [Feature(name, _DERIVED_MEANINGS[name], _linear(weights), "per 100 possessions", "centred",
                      "combination") for name, weights in DERIVED.items()]
     rows += [Feature(name, _RATIO_MEANINGS[name], _ratio_formula(*spec), "fraction", "level", "ratio")

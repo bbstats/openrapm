@@ -63,6 +63,18 @@ five in one process (`src/openrapm/commands/build.py`). Each command writes its 
 - **Code:** `src/openrapm/data/stints.py` (a season), `data/stint_parser.py` (one game: how a possession
   ends and who is on the court), `data/shot_curves.py`.
 
+### The play-by-play parts
+
+- **For:** the season panel's twelve play-by-play columns (`features.EVENT_RATES`), the parts of four box
+  counts the stat-splits experiments (52-55) hand the prior beside the counts themselves.
+- **Reads:** `data/raw/pbp/`. **Writes:** `data/event_counts/{season}.parquet`, one row per game, player
+  and phase: defensive rebounds by the miss they ended (a free throw, a three, a two within 6 ft or logged
+  without a location, a two from farther out), steals by the turnover they took (a pass or a lost ball),
+  field-goal points and made threes with and without an assist, threes from the corner and above the break.
+- **Command:** `python -m openrapm data events 1997 2026`; a cached season is read unless `--force`. About
+  12 seconds a season. It prints each season's parts against its box score.
+- **Code:** `src/openrapm/data/event_counts.py` (how each part is read).
+
 ### The season panel
 
 - **For:** the box-score prior (step 2) and the swap adjustment's type model (step 5) read it.
@@ -72,7 +84,8 @@ five in one process (`src/openrapm/commands/build.py`). Each command writes its 
   request per season.
 - **Writes:** `outputs/season_panel.parquet`, one row per player, season and side (offence "O", defence
   "D"): his possessions, 13 padded box-score rates per 100 possessions, role, score state, shot totals,
-  career, body, team, and his team's record with him on and off the court. It also stores each season's
+  career, body, team, his team's record with him on and off the court, and the twelve play-by-play parts
+  (padded the same way, centred). It also stores each season's
   design pieces (what a regression design needs from that season's stints) in `data/cache/pieces/`, which
   every later step reuses.
 - **Command:** `python -m openrapm data panel`; an existing panel is kept unless `--force`. 37 seconds in

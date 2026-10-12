@@ -91,7 +91,8 @@ def test_every_data_path_is_configured_and_read():
     from openrapm.data.config import DEFAULT_PATHS
     cfg = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
     expected = {"raw": "data/raw", "stints": "data/stints", "cache": "data/cache", "shot_curves": "data/shotcurve",
-                "outputs": "outputs", "panel": "outputs/season_panel.parquet", "within": "outputs/within"}
+                "outputs": "outputs", "panel": "outputs/season_panel.parquet", "within": "outputs/within",
+                "event_counts": "data/event_counts"}
     for key, value in expected.items():
         assert cfg["paths"][key] == value == DEFAULT_PATHS[key], key
         assert _named(key), f"paths.{key} is configured but nothing resolves it"

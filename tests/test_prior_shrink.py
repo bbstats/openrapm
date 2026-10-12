@@ -65,6 +65,11 @@ def test_the_product_rule_leaves_out_the_rated_season_only():
     assert ps.unseen_fold_seasons(2020, "test") == {2019, 2020, 2021}
     assert ps.fold_seasons_used(2016, range(2017, 2027), "test") == tuple(range(2018, 2027))
     assert ps.fold_seasons_used(2010, range(2017, 2027), "product") == tuple(range(2017, 2027))
+    # experiment 55: the 8 nearest allowed fold seasons, the nearer first, an equal distance the earlier
+    assert ps.fold_seasons_used(2010, range(1997, 2027), "test", nearest=8) == (2005, 2006, 2007, 2008, 2012, 2013,
+                                                                               2014, 2015)
+    assert ps.fold_seasons_used(1998, range(1997, 2027), "test", nearest=8) == tuple(range(2000, 2008))
+    assert ps.fold_seasons_used(2026, range(1997, 2027), "product", nearest=8) == tuple(range(2018, 2026))
     with pytest.raises(ValueError):
         ps.unseen_fold_seasons(2020, "neither")
 

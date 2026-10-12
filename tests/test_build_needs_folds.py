@@ -12,9 +12,11 @@ import pytest
 from openrapm.commands import build
 from openrapm.settings import PRODUCT
 
-TAG = PRODUCT.shrink.folds_tag
-MAKE_RATE = "openrapm rate --setting test --seasons 2017-2026 --save-models NAME"
-MAKE_FOLDS = f"openrapm folds --models NAME --base season_ratings_test_step3 --seasons 2017-2026 --tag {TAG}"
+TAG = build.fold_tags(PRODUCT.shrink)[0]          # the first folder checked
+SPAN = "{}-{}".format(*PRODUCT.shrink.fold_seasons)
+MAKE_RATE = f"openrapm rate --setting test --seasons {SPAN} --save-models NAME"
+MAKE_FOLDS = f"openrapm folds --models NAME --base season_ratings_test_step3 --seasons {SPAN} --tag {TAG}"
+ONE_FOLDER = replace(PRODUCT.shrink, folds_tag=TAG, fold_seasons=(2026, 2026))
 
 
 def _cfg(tmp_path) -> dict:
@@ -61,7 +63,7 @@ def test_shrink_stops_before_reading_its_table(tmp_path, monkeypatch):
 
 def test_an_incomplete_folder_is_refused_with_its_problem(tmp_path):
     """Three folds of a repeat's four, or a fold whose data files are gone, stop the run too."""
-    settings = replace(PRODUCT, shrink=replace(PRODUCT.shrink, fold_seasons=(2026, 2026)))
+    settings = replace(PRODUCT, shrink=ONE_FOLDER)
     directory = tmp_path / "within" / TAG
     _write_folds(directory, folds=range(3))
     with pytest.raises(SystemExit) as stop:
@@ -75,6 +77,18 @@ def test_an_incomplete_folder_is_refused_with_its_problem(tmp_path):
 
 
 def test_a_complete_folder_passes(tmp_path):
-    settings = replace(PRODUCT, shrink=replace(PRODUCT.shrink, fold_seasons=(2026, 2026)))
+    settings = replace(PRODUCT, shrink=ONE_FOLDER)
     _write_folds(tmp_path / "within" / TAG)
     build.require_folds(_cfg(tmp_path), settings.shrink)
+
+
+def test_every_folder_named_is_checked(tmp_path):
+    """Several folders, comma-separated: each must hold complete folds, and the message names the one that does
+    not."""
+    shrink = replace(PRODUCT.shrink, folds_tag="early_within,late_within", fold_seasons=(2016, 2026))
+    _write_folds(tmp_path / "within" / "early_within", season=2016)
+    with pytest.raises(SystemExit) as stop:
+        build.require_folds(_cfg(tmp_path), shrink)
+    assert str(tmp_path / "within" / "late_within") in _message(stop) and "--tag late_within" in _message(stop)
+    _write_folds(tmp_path / "within" / "late_within", season=2026)
+    build.require_folds(_cfg(tmp_path), shrink)

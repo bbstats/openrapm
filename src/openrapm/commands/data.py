@@ -2,13 +2,16 @@
 
     openrapm data ingest FIRST [LAST] [PHASES]    game logs, play-by-play and box scores from stats.nba.com, cached
     openrapm data stints FIRST [LAST] [PHASES]    the stints from the cached play-by-play, and each season's checks
-    openrapm data panel                           the season panel (paths.panel) from the stints, box scores, roles
-                                                  and bio feed
+    openrapm data events [FIRST] [LAST]           the play-by-play parts of four box counts, per game, player and
+                                                  phase (paths.event_counts), each season held against its box score
+    openrapm data panel                           the season panel (paths.panel) from the stints, box scores, roles,
+                                                  bio feed and event counts
     openrapm data panel --migrate-from FILE       the season panel from one written under the names used before
                                                   2026-10-11 (done once, on 2026-10-11)
 
 Example, from nothing: `openrapm data ingest 1997 2026 RS,PO` (days, resumable: every file is cached), then
-`openrapm data stints 1997 2026 RS,PO`, then `openrapm data panel` (about half a minute).
+`openrapm data stints 1997 2026 RS,PO`, then `openrapm data events 1997 2026` (minutes), then `openrapm data panel`
+(about a minute).
 
 Seasons are named by the year they end (2026 = 2025-26); phases are RS (regular season) and PO (playoffs).  numpy
 and the data layer are imported inside each command, after the command line has pinned the threads (cli.py).
@@ -75,6 +78,60 @@ def run_stints(args: argparse.Namespace, cfg: dict) -> int:
     return 0
 
 
+def event_check(totals, box):
+    """Each season's parts against its box score (regular season and playoffs), one row per season: what the parts
+    add up to minus the box score's count, as a share of the box score's count.
+
+        defensive rebounds   the four rebound parts against the box score's defensive rebounds (a rebound whose row
+                             before is not a miss is in no part, so a little below 0 is expected)
+        steals               bad-pass plus lost-ball steals against steals
+        points               assisted plus unassisted field-goal points against 2 x made twos + 3 x made threes
+        threes attempted     corner plus above-the-break against threes attempted
+        threes made          assisted plus unassisted against made threes
+        blocks               rim, mid-range and three-point blocks against blocks
+        assists              the four assist zones against assists (an assist whose passer matches no single name
+                             is in no zone, so a little below 0 is expected)
+
+    and three shares, which have no box-score total to meet: Russell blocks of blocks, stolen turnovers of turnovers,
+    offensive fouls of personal fouls.
+    """
+    import pandas as pd
+
+    from ..data.event_counts import EVENT_COUNTS
+    box = box.groupby("season")[["drb", "stl", "fg2m", "fg3m", "fg3_miss", "blk", "ast", "tov", "pf"]].sum()
+    parts = {"defensive rebounds": (EVENT_COUNTS[0:4], box.drb), "steals": (EVENT_COUNTS[4:6], box.stl),
+             "points": (EVENT_COUNTS[6:8], 2 * box.fg2m + 3 * box.fg3m),
+             "threes attempted": (EVENT_COUNTS[8:10], box.fg3m + box.fg3_miss),
+             "threes made": (EVENT_COUNTS[10:12], box.fg3m), "blocks": (EVENT_COUNTS[13:16], box.blk),
+             "assists": (EVENT_COUNTS[18:22], box.ast)}
+    out = pd.DataFrame({name: totals[columns].sum(axis=1) / count.reindex(totals.index) - 1.0
+                        for name, (columns, count) in parts.items()})
+    for name, column, count in (("Russell share of blocks", EVENT_COUNTS[12], box.blk),
+                                ("stolen share of turnovers", EVENT_COUNTS[17], box.tov),
+                                ("offensive share of fouls", EVENT_COUNTS[16], box.pf)):
+        out[name] = totals[column] / count.reindex(totals.index)
+    return out
+
+
+def run_events(args: argparse.Namespace, cfg: dict) -> int:
+    """Every season asked for: the play-by-play counts cached (a cached season is read, unless --force), then each
+    season's parts against its box score (`event_check`)."""
+    import pandas as pd
+
+    from ..data.box_scores import season_box
+    from ..data.event_counts import build_event_counts
+    if args.first_season is None:                 # no season typed: every season config.yaml names
+        seasons = range(int(cfg["first_season"]), int(cfg["last_season"]) + 1)
+    else:
+        seasons = season_range(args, cfg)
+    totals = build_event_counts(cfg, seasons, force=args.force)
+    check = event_check(totals, season_box(list(seasons), ["RS", "PO"], cfg))
+    pd.set_option("display.width", 200)
+    print("\nparts minus the box score, as a share of the box score (0.001 = 0.1%):")
+    print(check.round(4).to_string())
+    return 0
+
+
 def _migrate(args: argparse.Namespace, cfg: dict) -> None:
     from ..data.panel import migrate_panel
     target, panel, dropped = migrate_panel(Path(args.migrate_from), cfg)
@@ -131,6 +188,24 @@ def _add_stints(steps) -> None:
     stints.set_defaults(run=run_stints)
 
 
+def _add_events(steps) -> None:
+    events = steps.add_parser(
+        "events", help="the play-by-play parts of box counts (paths.event_counts)",
+        description="Counts, per game, player and phase, the parts the season panel pads beside four box counts "
+                    "(src/openrapm/data/event_counts.py): defensive rebounds by the miss they ended, steals by the "
+                    "turnover they took, field-goal points and made threes by whether an assist is written beside "
+                    "them, threes attempted from the corner or above the break, blocks by the shot and by who got "
+                    "the ball back, stolen turnovers, offensive fouls, and assists by the zone of the make they set "
+                    "up.  Caches one file per season in "
+                    "paths.event_counts (data/event_counts) and prints each season's parts against its box score.")
+    events.add_argument("first_season", nargs="?", type=int, metavar="FIRST",
+                        help="the first season (default config.yaml's first_season)")
+    events.add_argument("last_season", nargs="?", type=int, metavar="LAST",
+                        help="the last season (default FIRST when FIRST is given, else config.yaml's last_season)")
+    events.add_argument("--force", action="store_true", help="count again seasons that are already cached")
+    events.set_defaults(run=run_events)
+
+
 def _add_panel(steps) -> None:
     panel = steps.add_parser(
         "panel", help="the season panel (paths.panel, outputs/season_panel.parquet)",
@@ -146,11 +221,12 @@ def _add_panel(steps) -> None:
 
 
 def add_data(commands) -> None:
-    """`openrapm data` and its three steps."""
+    """`openrapm data` and its four steps."""
     data = commands.add_parser("data", help="the data the ratings are built from: raw files, stints, season panel",
                                description="Builds the data the five steps read: `ingest`, then `stints`, then "
-                                           "`panel`.")
+                                           "`events`, then `panel`.")
     steps = data.add_subparsers(dest="data_command", required=True, metavar="DATA")
     _add_ingest(steps)
     _add_stints(steps)
+    _add_events(steps)
     _add_panel(steps)

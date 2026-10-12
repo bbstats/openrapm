@@ -113,6 +113,12 @@ candidate predicts better) and the 20 largest changes in a lean.
     python scripts/checks/138_heldout_audit.py --random=weightfix_within --mult_tag=weightfix_within \\
         --reference=weightfix_within --control=noise_regroup2_within --draws=0 \\
         --threshold_from=audit_lgb_noonc_2017 --out=audit_weightfix
+
+The stat-splits screen (2026-10-12) reads the play-by-play parts too, on folds rebuilt with them, a null drawn for
+them and the frozen threshold:
+
+    python scripts/checks/138_heldout_audit.py --random=weightfix_parts_within --mult_tag=weightfix_within \\
+        --parts=1 --draws=400 --threshold_from=audit_lgb_noonc --out=audit_weightfix_parts
 """
 from __future__ import annotations
 
@@ -135,7 +141,7 @@ from openrapm.data.config import load_config, resolve
 from openrapm.data.legacy_names import column_name, saved_models, translate_frame
 from openrapm.data.seasons import drop_untrainable
 from openrapm.data.within_folds import load_folds, read_fold
-from openrapm.features import BOX_RATES, add_features, meaning
+from openrapm.features import BOX_RATES, EVENT_RATES, add_features, meaning
 from openrapm.prior_shrink import fit_multipliers, multipliers_by_season
 
 # ------------------------------------------------------------------------------------------- what is audited
@@ -160,6 +166,10 @@ CLASSES = {
                      "team_net_per100"),
 }
 MEASURED_ONLY = frozenset({"team context", "playing time", "score state"})   # measured, never counted
+# `--parts=1`: the play-by-play parts of four box counts (features.EVENT_RATES; the stat-splits screen, 2026-10-12),
+# audited as inputs after every frozen test.  They need folds whose player tables carry them and a null of their
+# own (--draws above 0); with --threshold_from the threshold stays the frozen one.
+PARTS = "play-by-play parts"
 GROUPED = tuple(code for name, codes in CLASSES.items() if name != "team context" for code in codes)
 CLASS_OF = {code: name for name, codes in CLASSES.items() for code in codes}
 SIDES = ("O", "D")
@@ -372,8 +382,9 @@ def audit_groups(freeze: str, random_tags: list, paths: Paths) -> dict:
     return json.loads(groups_file.read_text())
 
 
-def build_tests(groups: dict) -> list:
-    """One test per input, then one per group (a group found on both sides is one test)."""
+def build_tests(groups: dict, parts: bool = False) -> list:
+    """One test per input, then one per group (a group found on both sides is one test), then, with `parts`, one
+    per play-by-play part."""
     tests = [dict(id=code, kind="input", code=code, cls=CLASS_OF[code], name=meaning(code))
              for codes in CLASSES.values() for code in codes]
     for side in SIDES:
@@ -381,6 +392,8 @@ def build_tests(groups: dict) -> list:
             test_id = "group:" + "+".join(sorted(group["members"]))
             if not any(test["id"] == test_id for test in tests):
                 tests.append(group_test(test_id, group))
+    if parts:
+        tests += [dict(id=code, kind="input", code=code, cls=PARTS, name=meaning(code)) for code in EVENT_RATES]
     return tests
 
 
@@ -1015,6 +1028,10 @@ def yardstick(draws: int, threshold_from: str, folds: list, tests: list, paths: 
         print(f"the career null ({draws} draws)", flush=True)
         null = career_null(folds, tests, draws)
         threshold, centre, spread, maxima = studentized_threshold(null)
+        if threshold_from:                    # each test's spread drawn now, the threshold the frozen one
+            threshold = null_from_file(threshold_from, paths).threshold
+            print(f"threshold {threshold:.2f} read from {threshold_from}; each test's null spread drawn now",
+                  flush=True)
         return Yardstick(threshold, centre, spread, null["ids"], null, maxima)
     assert threshold_from, "--draws=0 needs --threshold_from=<an earlier audit's --out>"
     frozen = null_from_file(threshold_from, paths)
@@ -1516,6 +1533,7 @@ class Options:
     shares: list
     freeze: str
     correction: str
+    parts: bool
 
     @classmethod
     def of(cls, args: argparse.Namespace, root: Path) -> Options:
@@ -1526,7 +1544,7 @@ class Options:
                    reference=args.reference, control=args.control, out=args.out, draws=args.draws,
                    threshold_from=args.threshold_from, tradeset=tradeset,
                    shares=[int(season) for season in tag_list(args.shares)], freeze=args.freeze,
-                   correction=args.correction)
+                   correction=args.correction, parts=args.parts == "1")
 
 
 def tag_list(text: str) -> list:
@@ -1601,7 +1619,10 @@ def run_audit(args: argparse.Namespace, cfg: dict) -> None:
     options = Options.of(args, paths.root)
     started = time.time()
     groups = audit_groups(options.freeze, options.random, paths)
-    tests = build_tests(groups)
+    if options.parts and (options.reference or options.draws == 0):
+        raise SystemExit("--parts=1 reads the parts on one set of folds with a null of their own: drop --reference "
+                         "and set --draws above 0")
+    tests = build_tests(groups, parts=options.parts)
     audit, readings = random_readings(options, tests, paths, started)
     stick = yardstick(options.draws, options.threshold_from, audit.folds, tests, paths)
     tradeset = (tradeset_leans(tests, paths.root / options.tradeset, paths, cfg).set_index(["test", "side"])
@@ -1638,6 +1659,7 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--shares", default="", help="seasons for the group Shapley shares, comma-separated")
     parser.add_argument("--freeze", default="0", help="1: freeze the groups (default %(default)s)")
     parser.add_argument("--correction", default="", help="a group correction the random folds carry")
+    parser.add_argument("--parts", default="0", help="1: also audit the play-by-play parts (default %(default)s)")
     return parser.parse_args(argv)
 
 

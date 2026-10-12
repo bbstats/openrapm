@@ -87,14 +87,22 @@ def unseen_fold_seasons(season: int, rule: str) -> set:
     return {season} if rule == "product" else {season - 1, season, season + 1}
 
 
-def fold_seasons_used(season: int, fold_seasons, rule: str) -> tuple:
-    """The fold seasons that fit `season`'s multipliers, ascending.
+def fold_seasons_used(season: int, fold_seasons, rule: str, nearest: int = 0) -> tuple:
+    """The fold seasons that fit `season`'s multipliers, ascending: every fold season the rule allows, or with
+    `nearest` = K only the K of them closest to the rated season (the nearer first; an equal distance, the earlier).
+
+    `nearest` is the era-drift candidate (notes/DECISIONS.md, "Era drift" and experiment 55): the defensive prior part
+    holds up less in older seasons (0.79 in 1997-2006, 0.95 in 2017-2026), so a season's multipliers come from the
+    seasons around it rather than from 2017-2026 for all.
 
     Example: with fold seasons 2017-2026, 2010 uses all ten under either rule, and 2016 under the test rule
-    uses 2018-2026.
+    uses 2018-2026.  With fold seasons 1997-2026, the test rule and nearest = 8, 2010 uses 2005-2008 and 2012-2015.
     """
     unseen = unseen_fold_seasons(int(season), rule)
-    return tuple(fold_season for fold_season in sorted(fold_seasons) if fold_season not in unseen)
+    allowed = [fold_season for fold_season in sorted(fold_seasons) if fold_season not in unseen]
+    if nearest:
+        allowed = sorted(allowed, key=lambda fold_season: (abs(fold_season - int(season)), fold_season))[:nearest]
+    return tuple(sorted(allowed))
 
 
 def fold_terms(fold) -> tuple[np.ndarray, np.ndarray]:
@@ -128,7 +136,7 @@ def fit_multipliers(folds: list) -> tuple[float, float]:
     return float(multipliers[0]), float(multipliers[1])
 
 
-def multipliers_by_season(seasons, folds: list, rule: str) -> pd.DataFrame:
+def multipliers_by_season(seasons, folds: list, rule: str, nearest: int = 0) -> pd.DataFrame:
     """One row per season: season, multiplier_off, multiplier_def, fold_seasons (how many fold seasons fitted it).
 
     A fit depends only on the folds it is handed, so it runs once per distinct set of fold seasons and is reused:
@@ -139,7 +147,7 @@ def multipliers_by_season(seasons, folds: list, rule: str) -> pd.DataFrame:
     fits: dict = {}
     rows = []
     for season in sorted(seasons):
-        used = fold_seasons_used(season, fold_seasons, rule)
+        used = fold_seasons_used(season, fold_seasons, rule, nearest)
         if used not in fits:
             fits[used] = fit_multipliers([fold for fold in folds if fold.season in used])
         multiplier_off, multiplier_def = fits[used]

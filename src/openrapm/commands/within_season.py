@@ -225,6 +225,7 @@ def leak_checks(inputs: SeasonPanel, designs: dict, full: dict, fit_ids: set, fi
     if whole:
         checks.update(role_checks(stored_roles, inputs.roles, inputs.season))
     checks["context: stints read only from fit games"] = inputs.games_read["score-state stints"] <= fit_ids
+    checks["play-by-play parts: counts read only from fit games"] = inputs.games_read["event counts"] <= fit_ids
     return checks
 
 

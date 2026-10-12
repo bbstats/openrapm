@@ -238,11 +238,17 @@ def require_folds(cfg: dict, shrink) -> None:
     `openrapm build` and `openrapm shrink` call this first: on fresh data `build` would otherwise run steps 1-3,
     about fifteen minutes, before step 4 found no folds.  Only the folds' small json files are read.
     """
-    directory = resolve(cfg, "within") / shrink.folds_tag
-    try:
-        check_fold_files(directory, shrink.fold_seasons)
-    except (OSError, ValueError) as problem:
-        raise SystemExit(folds_missing_message(directory, shrink, problem)) from None
+    for tag in fold_tags(shrink):
+        directory = resolve(cfg, "within") / tag
+        try:
+            check_fold_files(directory, shrink.fold_seasons)
+        except (OSError, ValueError) as problem:
+            raise SystemExit(folds_missing_message(directory, shrink, problem)) from None
+
+
+def fold_tags(shrink) -> list:
+    """The fold folders step 4 reads: settings.shrink.folds_tag, split at commas."""
+    return [tag for tag in shrink.folds_tag.split(",") if tag]
 
 
 def folds_missing_message(directory: Path, shrink, problem: Exception) -> str:
@@ -256,7 +262,7 @@ def folds_missing_message(directory: Path, shrink, problem: Exception) -> str:
             f"Make the folds with these two commands (NAME is any name), then run this again:\n"
             f"    openrapm rate --setting test --seasons {span} --save-models NAME\n"
             f"    openrapm folds --models NAME --base season_ratings_test_step3 --seasons {span} "
-            f"--tag {shrink.folds_tag}\n"
+            f"--tag {directory.name}\n"
             f"or name a folder that holds them with --folds TAG (a folder under {directory.parent}).")
 
 
@@ -268,12 +274,15 @@ def shrink_seasons(cfg: dict, table: pd.DataFrame, settings) -> tuple[pd.DataFra
     can be traced to the folds that shrank it.
     """
     shrink = settings.shrink
-    folds = load_folds(resolve(cfg, "within") / shrink.folds_tag, shrink.fold_seasons)
+    folds = [fold for tag in fold_tags(shrink) for fold in load_folds(resolve(cfg, "within") / tag,
+                                                                       shrink.fold_seasons)]
     fold_seasons = sorted({fold.season for fold in folds})
-    multipliers = prior_shrink.multipliers_by_season(table.season.unique(), folds, shrink.rule).assign(
+    multipliers = prior_shrink.multipliers_by_season(table.season.unique(), folds, shrink.rule,
+                                                     shrink.nearest).assign(
         fold_tag=shrink.folds_tag, fold_first=fold_seasons[0], fold_last=fold_seasons[-1])
+    nearest = f", the {shrink.nearest} nearest fold seasons" if shrink.nearest else ""
     print(f"  step 4: {len(folds)} folds of {shrink.folds_tag} ({shrink.fold_seasons[0]}-{shrink.fold_seasons[1]}), "
-          f"{shrink.rule} rule; the prior part multiplied by {multipliers.multiplier_off.min():.3f} to "
+          f"{shrink.rule} rule{nearest}; the prior part multiplied by {multipliers.multiplier_off.min():.3f} to "
           f"{multipliers.multiplier_off.max():.3f} on offence, {multipliers.multiplier_def.min():.3f} to "
           f"{multipliers.multiplier_def.max():.3f} on defence", flush=True)
     return prior_shrink.shrink(table, multipliers), multipliers
