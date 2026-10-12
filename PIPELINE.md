@@ -20,13 +20,13 @@ reach his rating's coefficients; they may never reach his rating ("single year o
 
 ```mermaid
 flowchart TD
-    RAW["Play-by-play and box scores, 1997-2026<br/><code>data/ingest.py</code>, <code>scripts/01_ingest.py</code>"]
-    ST["<b>Stints</b> — one row per span with the same ten on the floor<br/>possessions, points, 118 per-possession and per-slot counters<br/><code>data/stints.py</code>, <code>scripts/02_stints.py</code>"]
+    RAW["Play-by-play and box scores, 1997-2026<br/><code>data/ingest.py</code>, <code>openrapm data ingest</code>"]
+    ST["<b>Stints</b> — one row per span with the same ten on the floor<br/>possessions, points, 118 per-possession and per-slot counters<br/><code>data/stints.py</code>, <code>openrapm data stints</code>"]
     DES["<b>Design</b> — one row per stint per side<br/>10 player columns, plus home, playoff, garbage time,<br/>score margin, margin x time<br/>y = points per 100, weight = possessions<br/><code>design.py</code>, <code>data/designs.py</code>"]
-    PAN["<b>Season panel</b> — one row per player-season-side:<br/>13 per-100 rates padded toward the league by method of moments,<br/>ten derived combinations, ten ratios, six shot-quality columns,<br/>role, age, bio, his own on-court record<br/><code>scripts/49_role_panel.py --season</code>, <code>exposure.py</code>, <code>pad.py</code>"]
+    PAN["<b>Season panel</b> — one row per player-season-side:<br/>13 per-100 rates padded toward the league by method of moments,<br/>ten derived combinations, ten ratios, six shot-quality columns,<br/>role, age, bio, his own on-court record<br/><code>outputs/season_panel.parquet</code>: <code>openrapm data panel</code>; <code>data/panel.py</code>, <code>box_rates.py</code>, <code>on_court.py</code>"]
 
-    TGO["<b>Offensive target</b> <code>xpts_ft</code><br/>made free throws replaced by the shooter's padded expectation"]
-    TGD["<b>Defensive target</b> <code>x3def_w0.25</code><br/>three quarters of every opponent three-point make replaced by<br/>3 x that shooter's own padded 3P%, k = 450 attempts<br/><code>data.shots.def_three_design</code>"]
+    TGO["<b>Offensive target</b> <code>points_with_expected_free_throws</code><br/>made free throws replaced by the shooter's padded expectation"]
+    TGD["<b>Defensive target</b> <code>points_with_expected_opponent_threes</code><br/>three quarters of every opponent three-point make replaced by<br/>3 x that shooter's own padded 3P%, k = 450 attempts<br/><code>data.shots.def_three_design</code>"]
 
     RAW --> ST --> DES
     ST --> PAN
@@ -43,7 +43,7 @@ flowchart TD
     TGD --> LOO
 
     subgraph PRI["The box prior — a gradient-boosted SPM, one per side"]
-        ROWS["<b>Chunk rows</b> — his career row PLUS every contiguous 1-, 2- and<br/>3-season run of it, all carrying the same label, with<br/><code>chunk_poss</code> and <code>chunk_seasons</code> saying how much evidence each rests on<br/><code>box_prior.training_rows</code>"]
+        ROWS["<b>Chunk rows</b> — his career row PLUS every contiguous 1-, 2- and<br/>3-season run of it, all carrying the same label, with<br/><code>row_possessions</code> and <code>row_seasons</code> saying how much evidence each rests on<br/><code>box_prior.training_rows</code>"]
         FOLD["<b>Five player folds, balanced on the label</b><br/>every player's prior comes from the fit that never saw a row of his<br/><code>box_prior.fit_out_of_player</code>, <code>box_prior.balanced_player_folds</code>"]
         BOOST["<b>LightGBM</b> — 17 offensive / 14 defensive features,<br/>BorutaShap-selected, without the on-court columns<br/>then asked about the rated season's OWN box line<br/><code>features.SHIPPED</code>, <code>box_prior.season_priors</code>"]
         ROWS --> FOLD --> BOOST
@@ -93,7 +93,7 @@ flowchart TD
 Two more that are not in the chart:
 
 - **The rates the prior sees are padded**, per statistic, by method of moments toward the league — a
-  200-possession player's per-100 rates are otherwise mostly noise (`pad.py`, `exposure.py`).
+  200-possession player's per-100 rates are otherwise mostly noise (`box_rates.py`).
 - **The consensus of public metrics is validation only.** It is read after every experiment and can
   veto one, and it is never a fitting target (`tests/test_vs_consensus.py`,
   `scripts/checks/64_consensus_report.py`).
@@ -127,18 +127,18 @@ here because the criterion in 3.2 is what selected the stints, the design, the t
 ```mermaid
 flowchart TD
     RAW["Play-by-play, box scores, game logs<br/>1997-2026, data/raw/"]
-    ST["<b>Stints</b> — one row per span with the same ten on the floor<br/>possessions, points, 118 per-possession and per-slot counters<br/><code>data/stints.py</code>, <code>scripts/02_stints.py</code>"]
+    ST["<b>Stints</b> — one row per span with the same ten on the floor<br/>possessions, points, 118 per-possession and per-slot counters<br/><code>data/stints.py</code>, <code>openrapm data stints</code>"]
     DES["<b>Design</b> — one row per stint per side, 195k rows for a 3-season window<br/>y = points per 100, weight = possessions<br/>columns: 5 offensive players, 5 defensive players, home, era,<br/>playoff, garbage time, score margin, margin x time<br/><code>data/designs.py</code>, <code>design.py</code>"]
-    TGO["<b>Offensive target</b> — made free throws replaced by expected ones<br/>xpts_ft = pts - ftm + xftm  ·  <code>design.TARGETS</code>"]
+    TGO["<b>Offensive target</b> — made free throws replaced by expected ones<br/>points_with_expected_free_throws = pts - ftm + xftm  ·  <code>design.TARGETS</code>"]
     TGD["<b>Defensive target</b> — every opponent three replaced by<br/>3 x that shooter's padded 3P%, from the other half of the block, k = 450<br/><code>data.shots.def_three_design</code>"]
-    EXP["<b>Box exposure</b> — 13 per-100 rates per player-season,<br/>padded toward the league by method of moments, centred<br/><code>exposure.py</code>, <code>pad.py</code>"]
+    EXP["<b>Box exposure</b> — 13 per-100 rates per player-season,<br/>padded toward the league by method of moments, centred<br/><code>exposure.py</code>, <code>pad.py</code> (retired; now <code>box_rates.py</code>)"]
 
     RAW --> ST --> DES
     DES --> TGO
     DES --> TGD
     DES --> EXP
 
-    subgraph PANEL["Role panel — built once, scripts/49_role_panel.py"]
+    subgraph PANEL["Role panel — built once, scripts/49_role_panel.py (retired)"]
         APM["<b>APM</b> — ridge at penalty 100 (lam_plugin is 18,352)<br/>what a player is worth on his own possessions, barely shrunk"]
         SPM["<b>Simple SPM</b> — ridge of APM on share of team possessions,<br/>its square, games-started share, its square, age, age², age³<br/>fitted leave-window-out"]
         R1["<b>RAPM_1</b> — the shipped ridge with SPM as its offset<br/>a player with no possessions gets exactly his role level"]

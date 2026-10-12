@@ -1,4 +1,4 @@
-"""Per-game player box counts (from LeagueGameLog) in the 13-feature layout used by BoxExposure.
+"""Per-game player box counts (from LeagueGameLog) in the 13-count layout the padded rates read (box_rates.py).
 
 game_box columns: game_id, player_id, season, phase, fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss,
                   orb, drb, ast, tov, stl, blk, pf
@@ -118,9 +118,9 @@ def ft_padding(box: pd.DataFrame, min_fta: float = 20.0) -> tuple[float, float]:
         k    = E[p_hat (1 - p_hat)] / tau2
 
     k is in ATTEMPTS, which is the unit free-throw percentage is measured in.  The estimator lives in
-    `pad.mom_k`, the one padding helper; this is the free-throw call to it.
+    `box_rates.mom_k`, the one padding helper; this is the free-throw call to it.
     """
-    from ..pad import mom_k
+    from ..box_rates import mom_k
     g = box.groupby(["player_id", "season"], as_index=False)[["ftm", "ft_miss"]].sum()
     return mom_k(g.ftm.to_numpy(), (g.ftm + g.ft_miss).to_numpy(), min_att=min_fta, fallback_rate=0.75)
 

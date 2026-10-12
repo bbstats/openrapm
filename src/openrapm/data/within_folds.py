@@ -34,6 +34,8 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 
+from .legacy_names import translate_frame
+
 __all__ = ["Fold", "read_fold", "fold_stems", "check_fold_record", "check_repeats", "load_folds"]
 
 FOLDS_PER_REPEAT = frozenset({0, 1, 2, 3})
@@ -104,7 +106,8 @@ def read_fold(directory: Path, stem: str) -> Fold:
     """One fold's three files, as a `Fold`."""
     directory = Path(directory)
     summary = json.loads((directory / f"fold_{stem}.json").read_text())["summary"]
-    players = pd.read_parquet(directory / f"players_{stem}.parquet")
+    # a fold written before 2026-10-11 names its input columns the old way (data/legacy_names.py)
+    players = translate_frame(pd.read_parquet(directory / f"players_{stem}.parquet"))
     shares, player_ids, y, w, controls, game_idx = _test_games(directory, stem)
     rated = _rated(players)
     fill_o, fill_d = float(summary["fill_o"]), float(summary["fill_d"])

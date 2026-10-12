@@ -43,22 +43,74 @@ def test_the_test_setting_is_the_shipped_test_setting():
     assert cli.chosen_settings(_parse("rate", "--setting", "test")) == TEST
 
 
-def test_each_rate_option_reaches_its_setting():
-    args = _parse("rate", "--setting", "test", "--defensive-target", "x3def", "--features", "boruta_noonc",
-                  "--booster-params", "other", "--fold-assignment", "1", "--seasons", "2025-2026",
-                  "--name", "trial", "--save-models", "trial")
+def test_each_rate_option_reaches_its_setting(capsys):
+    args = _parse("rate", "--setting", "test", "--defensive-target", "points_with_expected_opponent_threes_all",
+                  "--features", "box_score_and_bio", "--booster-params", "other", "--fold-assignment", "1",
+                  "--seasons", "2025-2026", "--name", "trial", "--save-models", "trial")
     chosen = cli.chosen_settings(args)
-    assert chosen.exclude_neighbours == 1 and chosen.targets.defence == "x3def"
+    assert chosen.exclude_neighbours == 1 and chosen.targets.defence == "points_with_expected_opponent_threes_all"
     assert chosen.targets.offence == TEST.targets.offence
     assert chosen.prior.booster_file == "params/booster_params_other.json"
-    assert chosen.prior.fold_assignment == 1 and chosen.prior.feature_set == "boruta_noonc"
+    assert chosen.prior.fold_assignment == 1 and chosen.prior.feature_set == "box_score_and_bio"
     assert (args.seasons, args.name, args.save_models) == ([2025, 2026], "trial", "trial")
+    assert capsys.readouterr().out == ""                      # plain names: nothing to say
+
+
+def test_the_names_used_before_the_rename_still_work_and_say_so(capsys):
+    """x3def and boruta_noonc, typed as before 2026-10-11, run their plain-named settings, one line each."""
+    chosen = cli.chosen_settings(_parse("rate", "--defensive-target", "x3def", "--features", "boruta_noonc"))
+    assert chosen.targets.defence == "points_with_expected_opponent_threes_all"
+    assert chosen.prior.feature_set == "box_score_and_bio"
+    said = capsys.readouterr().out.splitlines()
+    assert len(said) == 2 and "x3def" in said[0] and "boruta_noonc" in said[1]
+    assert cli.chosen_settings(_parse("rate", "--defensive-target", "x3def_w0.25")) == PRODUCT
 
 
 def test_the_last_occurrence_of_a_flag_wins():
     """scripts/experiment_chain.sh puts the incumbent's flags first so an experiment's own can override them."""
-    args = _parse("rate", "--features", "boruta_noonc", "--booster-params", "lgb1", "--booster-params", "other")
+    args = _parse("rate", "--features", "box_score_and_bio", "--booster-params", "lgb1", "--booster-params", "other")
     assert args.booster_params == "other"
+
+
+def test_data_panel_builds_by_default_and_migrates_when_asked():
+    from openrapm.commands import data
+    built = _parse("data", "panel")
+    assert (built.migrate_from, built.force) == (None, False) and built.run is data.run_panel
+    assert _parse("data", "panel", "--force").force
+    migrated = _parse("data", "panel", "--migrate-from", "outputs/role_panel_season.parquet")
+    assert migrated.migrate_from == "outputs/role_panel_season.parquet" and migrated.run is data.run_panel
+    with pytest.raises(SystemExit):
+        _parse("data")
+
+
+@pytest.mark.parametrize("command", ["ingest", "stints"])
+def test_data_ingest_and_stints_read_seasons_and_phases_as_the_old_scripts_did(command):
+    """`openrapm data ingest 1997 2026 RS,PO` is what scripts/01_ingest.py 1997 2026 RS,PO was (02 for stints)."""
+    from openrapm.commands import data
+    args = _parse("data", command, "1997", "2026", "RS,PO")
+    cfg = {"first_season": 1997}
+    assert list(data.season_range(args, cfg)) == list(range(1997, 2027)) and data.phases(args) == ("RS", "PO")
+    alone = _parse("data", command, "2026")
+    assert list(data.season_range(alone, cfg)) == [2026] and data.phases(alone) == ("RS", "PO")
+    assert list(data.season_range(_parse("data", command), cfg)) == [1997]
+    assert args.run is (data.run_ingest if command == "ingest" else data.run_stints)
+
+
+def test_data_stints_force_and_ingest_pacing():
+    assert _parse("data", "stints", "2026", "--force").force
+    args = _parse("data", "ingest", "2026", "2026", "PO", "--workers", "4", "--delay", "1.5")
+    assert (args.workers, args.delay, args.phases) == (4, 1.5, "PO")
+
+
+def test_data_panel_checks_for_an_existing_panel_before_building(tmp_path, monkeypatch):
+    """The build takes minutes; an existing panel is refused first, without --force, and nothing is built."""
+    from openrapm.data import panel as panel_module
+    stored = tmp_path / "season_panel.parquet"
+    stored.write_bytes(b"kept")
+    monkeypatch.setattr(panel_module, "build_panel", lambda *a, **k: pytest.fail("built before checking"))
+    with pytest.raises(FileExistsError, match="--force"):
+        panel_module.write_panel({"_root": str(tmp_path), "paths": {"panel": str(stored)}})
+    assert stored.read_bytes() == b"kept"
 
 
 def test_a_negative_fold_assignment_is_refused():
@@ -102,7 +154,8 @@ def test_the_threads_are_pinned_before_numpy_loads():
 
 def test_python_dash_m_openrapm_answers_help():
     out = subprocess.run([sys.executable, "-m", "openrapm", "--help"], capture_output=True, text=True, check=True)
-    assert all(command in out.stdout for command in ("build", "rate", "shrink", "swap", "folds", "site", "compare"))
+    assert all(command in out.stdout for command in ("data", "build", "rate", "shrink", "swap", "folds", "site",
+                                                     "compare"))
 
 
 @pytest.mark.parametrize("base, step, name", [("season_ratings_trial_step3", "_step3", "trial"),

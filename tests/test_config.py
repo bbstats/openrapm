@@ -83,11 +83,12 @@ def test_box_counts_replaced_features_with_the_same_value_in_the_same_order():
 
 def test_every_data_path_is_configured_and_read():
     """Every folder the data layer reads or writes is named in config.yaml paths, read by name, and by default
-    points where it always has, so nothing moves on disk."""
+    points where it always has, so nothing moves on disk (the season panel moved once, on 2026-10-11, when its
+    columns got their plain names: outputs/role_panel_season.parquet became outputs/season_panel.parquet)."""
     from openrapm.data.config import DEFAULT_PATHS
     cfg = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
     expected = {"raw": "data/raw", "stints": "data/stints", "cache": "data/cache", "shot_curves": "data/shotcurve",
-                "outputs": "outputs", "panel": "outputs/role_panel_season.parquet", "within": "outputs/within"}
+                "outputs": "outputs", "panel": "outputs/season_panel.parquet", "within": "outputs/within"}
     for key, value in expected.items():
         assert cfg["paths"][key] == value == DEFAULT_PATHS[key], key
         assert _named(key), f"paths.{key} is configured but nothing resolves it"

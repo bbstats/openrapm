@@ -10,13 +10,15 @@ Words used below
     row         one stint seen from one side: five players on offence, five on defence
     target      what the ridge explains for each row, y = 100 x adjusted points / possessions; the row's weight
                 w is its possessions.  One adjustment per side ships (settings.Targets):
-                  offence, "xpts_ft": points - made free throws + expected free throws, each free throw
-                      counted at the shooter's padded free-throw %, that game's own attempts left out
-                  defence, "x3def_w0.25": the same free-throw adjustment, and three quarters of the shooters'
-                      three-point luck taken off: points - 3 x 0.75 x (threes made - threes expected), threes
-                      expected = attempts x the shooter's three-point % from the other half of the season's
-                      games, padded toward the league by 450 attempts; then one number per season rescales
-                      the target so the season's total equals the points actually scored (data/shots.align)
+                  offence, "points_with_expected_free_throws": points - made free throws + expected free
+                      throws, each free throw counted at the shooter's padded free-throw %, that game's own
+                      attempts left out
+                  defence, "points_with_expected_opponent_threes": the same free-throw adjustment, and three
+                      quarters of the shooters' three-point luck taken off: points - 3 x 0.75 x (threes made -
+                      threes expected), threes expected = attempts x the shooter's three-point % from the other
+                      half of the season's games, padded toward the league by 450 attempts; then one number per
+                      season rescales the target so the season's total equals the points actually scored
+                      (data/shots.align)
     design      one column per player per side (offence, defence) plus the context columns
     context     per-season intercepts, home court, playoffs, playoff home court, garbage time, score margin
                 (clipped at +-25), margin x share of the game left

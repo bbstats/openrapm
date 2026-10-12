@@ -13,12 +13,12 @@ where `curve` is the league's make probability at that distance this season (dat
 other half of the block's games and padded toward 1:
 
     p_mix  = sum over his other-half attempts of curve(distance) / attempts
-    p_pad  = pad.shrink(makes / attempts, attempts, k, target = p_mix)
+    p_pad  = box_rates.shrink(makes / attempts, attempts, k, target = p_mix)
     ratio  = p_pad / p_mix
 
 The rate comes from the OTHER half of the block: a possession in a half-A game is priced with the
 shooter's half-B totals, so his own makes never price the possessions he is scored on.  Playoff
-rows use the whole regular season.  Everything is padded through pad.py, per the owner's rule.
+rows use the whole regular season.  Everything is padded through box_rates.py, per the owner's rule.
 
 The stints carry the counts by lineup slot (design.SLOT_COUNTERS); this module turns them into
 expectations at window-build time, because the block (and therefore the other half) is a property
@@ -35,7 +35,10 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from ..pad import mom_k, shrink
+from ..box_rates import mom_k, shrink
+
+# The phases a shooter's totals are summed over; ("RS",) until the playoffs joined the fit.
+from ..design import SEASON_PHASES as SHOT_PHASES
 from .config import resolve
 
 OTHER = {"A": "B", "B": "A"}                     # a row in half A is priced with half-B totals
@@ -44,9 +47,6 @@ SLOTS = ("1", "2", "3", "4", "5")
 
 
 # ---------------------------------------------------------------------------------------- the tables
-# The phases a shooter's totals are summed over; ("RS",) until the playoffs joined the fit.
-from ..design import SEASON_PHASES as SHOT_PHASES  # noqa: E402
-
 _SHOTS_CACHE: dict = {}
 
 
@@ -65,7 +65,7 @@ def load_shots(seasons, cfg, phases: tuple = SHOT_PHASES) -> pd.DataFrame:
             if p not in _SHOTS_CACHE:
                 if not p.exists():
                     raise FileNotFoundError(
-                        f"{p} is missing; rebuild the stints (scripts/02_stints.py {s} {s} {ph} --force)")
+                        f"{p} is missing; rebuild the stints (openrapm data stints {s} {s} {ph} --force)")
                 _SHOTS_CACHE[p] = pd.read_parquet(p)
             parts.append(_SHOTS_CACHE[p])
     return pd.concat(parts, ignore_index=True)
@@ -297,7 +297,8 @@ def expected_makes(cnt: pd.DataFrame, rates: ShooterRates, location: bool = True
     xp1, xc1 = np.zeros(n), np.zeros(n)
     for s in SLOTS:
         pid = cnt[f"pid_s{s}"].to_numpy()
-        r2 = np.ones(n); r3 = np.ones(n); f2 = np.full(n, rates.league["fg2"]); f3 = np.full(n, rates.league["fg3"])
+        r2, r3 = np.ones(n), np.ones(n)
+        f2, f3 = np.full(n, rates.league["fg2"]), np.full(n, rates.league["fg3"])
         q = np.full(n, rates.league["ft"])
         for h, m in masks:
             p = pid[m]
@@ -364,7 +365,7 @@ def _check(wd, col: str = "fg2a_s1"):
 
 def expected_threes(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, keep=None):
     """Each row's EXPECTED opponent three-point makes: every attempt at the shooter's padded other-half 3P%
-    (x3def's repricing, the one piece of it the four-factor eFG% needs too).  Returns (x3, rates)."""
+    (the defensive target's repricing, the one piece of it the four-factor eFG% needs too).  Returns (x3, rates)."""
     cnt = wd_pts.counters
     seasons = sorted(int(s) for s in seasons)
     rates = shooter_rates(seasons, cfg, prev=prev, k_fixed={"fg3": k3}, keep=keep)
@@ -421,7 +422,7 @@ def def_three_design(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, cal
     cal = pd.DataFrame()
     if calibrate:
         y, cal = align(y, wd_pts.y, wd_pts.w, season, poss)
-    name = f"x3def_p{prev}" + (f"_w{w3:g}" if w3 else "") + (f"_f{wft:g}" if wft else "")
+    name = f"points_with_expected_opponent_threes_p{prev}" + (f"_w{w3:g}" if w3 else "") + (f"_f{wft:g}" if wft else "")
     return wd_pts.with_target(y), dict(target=name, x=None, gates=g, calibration=cal, k3=rates.k["fg3"],
                                        w3=float(w3), wft=float(wft))
 
@@ -433,9 +434,16 @@ def _named(fn, name, **kw):
     return target
 
 
-# the two defensive targets: x3def (every opponent three-point make replaced by 3 x the shooter's padded
-# other-half 3P%) and x3def_w0.25 (a quarter of the realised deviation kept: what ships, sy.DEFENSE_TARGET)
+# The share of the shooters' realised three-point luck the shipped defensive target keeps: a quarter.  Keeping
+# it rather than none moved the year-over-year score by -0.007 per 100 at z = -0.34, nothing measurable
+# (DECISIONS.md, "What was settled": x3def; settings.Targets).
+OPPONENT_THREE_LUCK_KEPT = 0.25
+
+# The two defensive targets: points_with_expected_opponent_threes (what ships: every opponent three-point make
+# replaced by 3 x the shooter's padded other-half 3P%, with OPPONENT_THREE_LUCK_KEPT of the realised deviation
+# kept) and points_with_expected_opponent_threes_all (none of it kept).  Before 2026-10-11: x3def_w0.25, x3def.
 DEFENSE_TARGETS = {
-    "x3def": _named(def_three_design, "x3def"),
-    "x3def_w0.25": _named(def_three_design, "x3def_w0.25", w3=0.25),
+    "points_with_expected_opponent_threes_all": _named(def_three_design, "points_with_expected_opponent_threes_all"),
+    "points_with_expected_opponent_threes": _named(def_three_design, "points_with_expected_opponent_threes",
+                                                   w3=OPPONENT_THREE_LUCK_KEPT),
 }

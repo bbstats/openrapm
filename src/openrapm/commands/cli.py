@@ -1,5 +1,6 @@
 """The command line: `python -m openrapm <command>`, or `openrapm <command>` once the package is installed.
 
+    openrapm data      the data the steps read: `data ingest` (raw files), `data stints`, `data panel`
     openrapm build     all five steps in one run: the ratings tables after steps 3, 4 and 5
     openrapm rate      steps 1-3 for the seasons asked for: the ratings table before the prior shrink
     openrapm shrink    step 4 on a step-3 table: the prior part multiplied down
@@ -26,8 +27,10 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
+from ..data.legacy_names import feature_set_name, target_name
 from ..settings import PRODUCT, TEST, Settings
 from .console import use_utf8
+from .data import add_data
 
 THREAD_VARIABLES = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS")
 BOOSTER_FILE = "params/booster_params_{}.json"
@@ -65,15 +68,28 @@ def parse_seasons(text: str) -> list[int]:
     return sorted(seasons)
 
 
+def plain_name(flag: str, given: str, translate) -> str:
+    """The name typed after `flag`, or its plain name when it is one used before 2026-10-11 (said in one line).
+
+    Example: --defensive-target x3def_w0.25 runs points_with_expected_opponent_threes.
+    """
+    name = translate(given)
+    if name != given:
+        print(f"{flag} {given}: the name used before 2026-10-11; running {name}", flush=True)
+    return name
+
+
 def chosen_settings(args: argparse.Namespace) -> Settings:
     """The setting named by --setting, with the defensive target, input list, booster file and fold assignment
-    given on the command line (each defaults to the shipped value, so a plain run is the setting itself)."""
+    given on the command line (each defaults to the shipped value, so a plain run is the setting itself).  An old
+    target or input-list name is read as its plain one (data/legacy_names.py)."""
     base = SETTINGS[args.setting]
     if args.fold_assignment < 0:
         raise SystemExit("--fold-assignment is 0 (the shipped order) or a positive seed")
     return replace(base,
-                   targets=replace(base.targets, defence=args.defensive_target),
-                   prior=replace(base.prior, feature_set=args.features,
+                   targets=replace(base.targets,
+                                   defence=plain_name("--defensive-target", args.defensive_target, target_name)),
+                   prior=replace(base.prior, feature_set=plain_name("--features", args.features, feature_set_name),
                                  booster_file=BOOSTER_FILE.format(args.booster_params),
                                  fold_assignment=args.fold_assignment))
 
@@ -152,9 +168,13 @@ def _add_setting_options(parser) -> None:
                         help="also write every rated season's boosters to outputs/prior_models_<NAME>.pkl, which "
                              "`openrapm folds` reads")
     parser.add_argument("--defensive-target", default=PRODUCT.targets.defence,
-                        help="what the defence ridge explains, per 100 possessions (default %(default)s)")
+                        help="what the defence ridge explains, per 100 possessions: "
+                             "points_with_expected_opponent_threes or points_with_expected_opponent_threes_all "
+                             "(the names x3def_w0.25 and x3def from before 2026-10-11 still work) "
+                             "(default %(default)s)")
     parser.add_argument("--features", default=PRODUCT.prior.feature_set,
-                        help="the prior's input list, a key of features.FEATURE_SETS (default %(default)s)")
+                        help="the prior's input list, a key of features.FEATURE_SETS (the old name boruta_noonc "
+                             "still works) (default %(default)s)")
     parser.add_argument("--booster-params", metavar="NAME", default=SHIPPED_BOOSTER,
                         help="LightGBM settings from params/booster_params_<NAME>.json (default %(default)s)")
     parser.add_argument("--fold-assignment", type=int, default=PRODUCT.prior.fold_assignment,
@@ -303,6 +323,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="openrapm", description="OpenRAPM: one rating per NBA player per season.")
     parser.add_argument("--config", help="the config.yaml to read (default $OPENRAPM_CONFIG, else the repository's)")
     commands = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
+    add_data(commands)
     _add_build(commands)
     _add_rate(commands)
     _add_shrink(commands)

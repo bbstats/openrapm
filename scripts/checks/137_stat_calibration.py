@@ -15,7 +15,7 @@ Words used below
                     his team's games with and without him say he is better than rated, i.e. underrated.  Read on the
                     rows the trade loss reads: one-team players whose team played neighbouring games without them
     input           a box-prior input exactly as the prior reads it: the season panel through `features.add_features`,
-                    the feature set "boruta_noonc"; steals and blocks also on their uncentred padded rates per 100,
+                    the feature set "box_score_and_bio"; steals and blocks also on their uncentred padded rates per 100,
                     for a readable axis
     bin             one of --bins equal-count groups of player-seasons by the input (at least 30 rows each): its mean
                     miss, with the standard error of that mean clustered by player (a player's seasons share errors)
@@ -51,15 +51,16 @@ from matplotlib.figure import Figure
 from openrapm.commands.console import one_thread, use_utf8
 from openrapm.data.config import load_config, resolve, resolve_path
 from openrapm.data.seasons import drop_untrainable
-from openrapm.features import FEATURE_SETS, add_features
-from openrapm.glossary import plain
+from openrapm.features import FEATURE_SETS, add_features, meaning
 
 CURVE = dict(n_estimators=150, learning_rate=0.05, num_leaves=6, min_child_samples=400, reg_lambda=10.0,
              subsample=1.0, colsample_bytree=1.0, n_jobs=1, verbose=-1, random_state=0)
-FEATURE_SET = "boruta_noonc"
+FEATURE_SET = "box_score_and_bio"
 SIDE = {"offense": "O", "defense": "D"}
-# The axis inputs: (the panel column, the label).  Steals and blocks are always drawn.
-AXIS = {"stl_per100": ("raw_stl", "steals per 100 (axis)"), "blk_per100": ("raw_blk", "blocks per 100 (axis)")}
+# The axis inputs: (the panel column, the label).  Steals and blocks are always drawn.  Their own names, so they
+# never overwrite the centred steals_per100 and blocks_per100 a prior reads.
+AXIS = {"steals_axis": ("steals_per100_uncentred", "steals per 100 (axis)"),
+        "blocks_axis": ("blocks_per100_uncentred", "blocks per 100 (axis)")}
 MIN_BIN_ROWS = 30
 FOLDS = 5
 SHOWN_PER_SIDE = 4
@@ -88,7 +89,7 @@ def read_misses(path: Path) -> pd.DataFrame:
 def read_panel(cfg: dict) -> pd.DataFrame:
     """The season panel's player-seasons with possessions, without any season still being played."""
     panel, _ = drop_untrainable(pd.read_parquet(resolve(cfg, "panel")), cfg, what="the season panel")
-    return panel[panel.poss > 0]
+    return panel[panel.possessions > 0]
 
 
 def side_rows(panel: pd.DataFrame, alpha: pd.DataFrame, side_name: str, inputs: list) -> pd.DataFrame:
@@ -164,7 +165,7 @@ def calibrate_input(name: str, x, y, players, seasons, fold, rng, n_perms: int, 
     z = float((size - null.mean()) / null.std(ddof=1)) if null.std(ddof=1) > 0 else np.nan
     bins = clustered_bins(x, y, players, n_bins)
     bottom, top = bins.iloc[0], bins.iloc[-1]
-    label = AXIS[name][1] if name in AXIS else plain(name)
+    label = AXIS[name][1] if name in AXIS else meaning(name)
     summary = dict(plain=label, curve_size=size, null_size=float(null.mean()), z=z, bottom_bin_miss=bottom.mean_miss,
                    bottom_bin_se=bottom.se, top_bin_miss=top.mean_miss, top_bin_se=top.se)
     # for the picture: one fit on every row, read on a grid (the out-of-fold curve above sets the size and z)

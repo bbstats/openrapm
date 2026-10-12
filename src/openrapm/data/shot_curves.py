@@ -144,7 +144,7 @@ class ShotCurve:
 
 def fit_curve(rows: pd.DataFrame, season: int) -> ShotCurve:
     """Fit the two curves and the two unlocated cells from a season's shot rows."""
-    from ..pad import shrink
+    from ..box_rates import shrink
     out = []
     for three in (False, True):
         r = rows[rows.three == three]
@@ -212,7 +212,7 @@ def season_shot_rows(season: int, cfg, phase: str = "RS", min_share: float = MIN
         raise RuntimeError(
             f"{season} {phase}: only {len(parts)} of {len(games)} games could be read "
             f"({100 * len(parts) / len(games):.1f}%, floor {100 * float(min_share):.0f}%).  The "
-            f"play-by-play cache is incomplete -- rerun scripts/01_ingest.py for this season.  First "
+            f"play-by-play cache is incomplete -- rerun `openrapm data ingest` for this season.  First "
             f"failure: {unreadable[0] if unreadable else None}")
     return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=["three", "made", "bin"])
 

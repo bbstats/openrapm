@@ -48,12 +48,15 @@ from openrapm.data.stints import load_season_stints
 from openrapm.data.tables import load_ratings
 from openrapm.settings import PRODUCT
 
-NAMES = {"fg3m": "made threes", "fg3_miss": "missed threes", "fg2m": "made twos", "fg2_miss": "missed twos",
-         "ftm": "made free throws", "ft_miss": "missed free throws", "orb": "offensive rebounds",
-         "drb": "defensive rebounds", "ast": "assists", "tov": "turnovers", "stl": "steals", "blk": "blocks",
-         "pf": "fouls", "poss_pct": "share of team possessions", "gs_pct": "share of games started",
-         "gt_share": "garbage-time share", "age": "age", "exp_yrs": "seasons played", "height": "height",
-         "weight": "weight", "prior_off": "box prior (offense)", "prior_def": "box prior (defense)"}
+NAMES = {"threes_made_per100": "made threes", "threes_missed_per100": "missed threes",
+         "twos_made_per100": "made twos", "twos_missed_per100": "missed twos",
+         "free_throws_made_per100": "made free throws", "free_throws_missed_per100": "missed free throws",
+         "off_rebounds_per100": "offensive rebounds", "def_rebounds_per100": "defensive rebounds",
+         "assists_per100": "assists", "turnovers_per100": "turnovers", "steals_per100": "steals",
+         "blocks_per100": "blocks", "fouls_per100": "fouls", "team_possession_share": "share of team possessions",
+         "games_started_share": "share of games started", "garbage_time_share": "garbage-time share", "age": "age",
+         "seasons_before": "seasons played", "height_in": "height", "weight_lb": "weight",
+         "prior_off": "box prior (offense)", "prior_def": "box prior (defense)"}
 SHIPPED_TABLE = "season_ratings_product.parquet"
 MAX_GAP = 1e-9                     # the rebuilt adjustment must match the shipped table's c_off / c_def this closely
 TEAM_COLUMNS = ("player_name", "team_share", "off_type", "off_giveback", "off_centering", "off_spread", "off_final",

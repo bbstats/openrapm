@@ -98,8 +98,8 @@ TARGETS = {
     # rather than stored, because it is a fixed linear combination of counters -- no fitted quantity
     # enters, so there is nothing circular about computing it at design time.  The stage 4 shot term
     # WILL depend on fitted lineup rates and therefore cannot live in the stints at all.
-    "xpts_ft": dict(num={"pts": 1.0, "ftm": -1.0, "ftm_tech": -1.0, "xftm": 1.0, "xftm_tech": 1.0},
-                    den="poss", scale=100.0),
+    "points_with_expected_free_throws": dict(num={"pts": 1.0, "ftm": -1.0, "ftm_tech": -1.0, "xftm": 1.0,
+                                                  "xftm_tech": 1.0}, den="poss", scale=100.0),
     "efg":  dict(num={"fgm": 1.0, "fg3m": 0.5}, den="fga", scale=100.0),        # effective FG%
     "tov":  dict(num={"tov": 1.0}, den="poss", scale=100.0),                    # turnovers per 100
     "oreb": dict(num={"reb_cont": 1.0}, den="reb_chance", scale=100.0),         # offensive rebound %
@@ -376,7 +376,7 @@ def build_design(stints: pd.DataFrame, box: pd.DataFrame, features: list, cfg: d
     missing = [f"{c}_h" for c in list(tg["num"]) + [tg["den"]] if f"{c}_h" not in st.columns]
     if missing:
         raise KeyError(f"target {target!r} needs stint columns {missing}; rebuild the stints "
-                       f"(python scripts/02_stints.py <first> <last> RS --force)")
+                       f"(openrapm data stints <first> <last> RS --force)")
     sides = []
     for off_ps, def_ps, side, sign in ((home_ps, away_ps, "h", 1.0), (away_ps, home_ps, "a", -1.0)):
         poss = st[f"poss_{side}"].to_numpy().astype(float)      # always true possessions: the padding
@@ -387,10 +387,13 @@ def build_design(stints: pd.DataFrame, box: pd.DataFrame, features: list, cfg: d
         sides.append(dict(off=off_ps[keep], de=def_ps[keep], poss=poss[keep], den=den[keep], num=num[keep],
                           home=np.where(neutral[keep], 0.0, sign), margin=sign * margin_h[keep],
                           stint=np.flatnonzero(keep), is_home_off=sign > 0))
-    off = np.concatenate([s["off"] for s in sides]); de = np.concatenate([s["de"] for s in sides])
-    poss = np.concatenate([s["poss"] for s in sides]); den = np.concatenate([s["den"] for s in sides])
+    off = np.concatenate([s["off"] for s in sides])
+    de = np.concatenate([s["de"] for s in sides])
+    poss = np.concatenate([s["poss"] for s in sides])
+    den = np.concatenate([s["den"] for s in sides])
     num = np.concatenate([s["num"] for s in sides])
-    home = np.concatenate([s["home"] for s in sides]); margin = np.concatenate([s["margin"] for s in sides])
+    home = np.concatenate([s["home"] for s in sides])
+    margin = np.concatenate([s["margin"] for s in sides])
     stint_i = np.concatenate([s["stint"] for s in sides])
     is_home_off = np.concatenate([np.full(len(s["stint"]), s["is_home_off"]) for s in sides])
     n = len(den)
@@ -447,7 +450,8 @@ def build_design(stints: pd.DataFrame, box: pd.DataFrame, features: list, cfg: d
     # possessions per Z unit, for the lam_buckets column groups and the dominant-season label
     rs_games = games.loc[games["phase"] == "RS", "game_idx"].to_numpy()
     gp_rs = game_poss[np.isin(game_poss["game_idx"], rs_games)]
-    psx_poss = np.bincount(gp_rs["psx_idx"].to_numpy(), weights=gp_rs["poss_off"].to_numpy(dtype=float), minlength=len(psx_table))
+    psx_poss = np.bincount(gp_rs["psx_idx"].to_numpy(), weights=gp_rs["poss_off"].to_numpy(dtype=float),
+                           minlength=len(psx_table))
     ps_poss = np.bincount(ps_of_psx, weights=psx_poss, minlength=n_ps)
     if player_unit == "window":
         # label each Z unit with the season it played most, used only for reporting
@@ -473,7 +477,8 @@ def build_design(stints: pd.DataFrame, box: pd.DataFrame, features: list, cfg: d
                       season_of_psx=season_of_psx, ps_of_psx=ps_of_psx, player_unit=player_unit)
     game_half = np.empty(len(games), dtype=object)
     game_half[games["game_idx"].to_numpy()] = games["half"].to_numpy()
-    rows = pd.DataFrame({"game_idx": r_game, "season": np.asarray(seasons)[r_season], "phase": np.where(r_po > 0, "PO", "RS"),
+    rows = pd.DataFrame({"game_idx": r_game, "season": np.asarray(seasons)[r_season],
+                         "phase": np.where(r_po > 0, "PO", "RS"),
                          "poss": poss, "den": den, "is_home_off": is_home_off, "is_gt": r_gt > 0,
                          "stint": stint_i, "half": game_half[r_game]})
     # the offense's counters per row, in the same row order (home-offense rows, then away-offense)
@@ -491,5 +496,6 @@ def build_design(stints: pd.DataFrame, box: pd.DataFrame, features: list, cfg: d
             counters[f"pid_s{k + 1}"] = np.concatenate([st[slots[k]].to_numpy(dtype=np.int64)[s["stint"]]
                                                         for s, slots in zip(sides, (HOME_SLOTS, AWAY_SLOTS))])
         counters["half"] = rows["half"].to_numpy()
-    return WindowData(X_src=X, y=y, w=w, groups=groups, spec=spec, game_box=game_box, game_poss=game_poss, rows=rows, games=games,
+    return WindowData(X_src=X, y=y, w=w, groups=groups, spec=spec, game_box=game_box, game_poss=game_poss, rows=rows,
+                      games=games,
                       counters=counters)

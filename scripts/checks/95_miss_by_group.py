@@ -72,20 +72,22 @@ from openrapm.commands.console import use_utf8
 from openrapm.data.config import load_config, resolve, resolve_path
 from openrapm.data.roles import franchise, roles_path
 from openrapm.data.seasons import drop_untrainable
-from openrapm.features import CLOSENESS, NET, OFFC, PO_SHARE, PRIOR_FEATURES, add_features
-from openrapm.glossary import plain
+from openrapm.features import (CLOSENESS, OFF_COURT, ON_MINUS_OFF, PLAYOFF_SHARE, PRIOR_FEATURES, add_features,
+                               meaning)
 from openrapm.player_types import cluster_proba, fit_mixture
 
 N_CELLS = 6                        # levels for the adjustment's own check
 N_GROUPS = 5                       # fifths
 MIN_ROWS = 50                      # a cut with fewer player-seasons is not reported
 TYPE_POSSESSIONS = 500             # the player types are fitted on player-seasons with this many possessions or more
-STATS = tuple(dict.fromkeys(PRIOR_FEATURES + OFFC + NET + CLOSENESS + PO_SHARE))
-TYPE_RATES = ("fg2m", "fg2_miss", "fg3m", "fg3_miss", "ftm", "ft_miss", "orb", "drb", "ast", "tov", "stl", "blk",
-              "pf")
+STATS = tuple(dict.fromkeys(PRIOR_FEATURES + OFF_COURT + ON_MINUS_OFF + CLOSENESS + PLAYOFF_SHARE))
+# the player types' rates, uncentred (the order is the mixture's column order)
+TYPE_RATES = ("twos_made_per100", "twos_missed_per100", "threes_made_per100", "threes_missed_per100",
+              "free_throws_made_per100", "free_throws_missed_per100", "off_rebounds_per100", "def_rebounds_per100",
+              "assists_per100", "turnovers_per100", "steals_per100", "blocks_per100", "fouls_per100")
 SIDES = {"offense": ("O", "off", "def"), "defense": ("D", "def", "off")}
 FIFTH = {1: "bottom fifth", 2: "second fifth", 3: "middle fifth", 4: "fourth fifth", 5: "top fifth"}
-BUILT = {"team_net": "his team's quality that season (net points per 100)",
+BUILT = {"team_net_per100": "his team's quality that season (net points per 100)",
          "prior": "his prior (the box-score estimate)",
          "games": "how far his own games moved him from the prior (signed)",
          "games_size": "how far his own games moved him from the prior (size)",
@@ -119,8 +121,8 @@ def parse_args(argv=None) -> argparse.Namespace:
 
 # ------------------------------------------------------------------------------------------- small helpers
 def name(code: str) -> str:
-    """A column's plain name."""
-    return BUILT.get(code) or plain(code)
+    """What a column means, in plain words."""
+    return BUILT.get(code) or meaning(code)
 
 
 def levels(x: pd.Series, n: int) -> np.ndarray:
@@ -152,20 +154,23 @@ def season_stats(panel: pd.DataFrame, short: str) -> pd.DataFrame:
 
 
 def side_stats(panel: pd.DataFrame, short: str) -> pd.DataFrame:
-    """The statistics the cuts read for one side, and his team's quality that season (`team_net`).
+    """The statistics the cuts read for one side, and his team's quality that season (`team_net_per100`).
 
-    team_net = (on-court and off-court points scored per 100, possession-weighted together) minus the same for
-    points allowed.
+    team_net_per100 = (on-court and off-court points scored per 100, possession-weighted together) minus the same
+    for points allowed.
     """
     stats = season_stats(panel, short)
-    wanted = [*STATS, *(f"raw_{rate}" for rate in TYPE_RATES)]
-    keep = ["player_id", "season", "poss"] + [c for c in wanted if c in stats.columns and c not in ("poss",)]
+    wanted = [*STATS, *(f"{rate}_uncentred" for rate in TYPE_RATES)]
+    keep = ["player_id", "season", "possessions"] + [c for c in wanted if c in stats.columns
+                                                     and c not in ("possessions",)]
     stats = stats[list(dict.fromkeys(keep))]
-    team_o = ((stats.onc_o * stats.onc_poss_o + stats.offc_o * stats.offc_poss_o)
-              / (stats.onc_poss_o + stats.offc_poss_o))
-    team_d = ((stats.onc_d * stats.onc_poss_d + stats.offc_d * stats.offc_poss_d)
-              / (stats.onc_poss_d + stats.offc_poss_d))
-    stats["team_net"] = team_o - team_d
+    team_o = ((stats.on_court_scored_per100 * stats.on_court_off_possessions
+               + stats.off_court_scored_per100 * stats.off_court_off_possessions)
+              / (stats.on_court_off_possessions + stats.off_court_off_possessions))
+    team_d = ((stats.on_court_allowed_per100 * stats.on_court_def_possessions
+               + stats.off_court_allowed_per100 * stats.off_court_def_possessions)
+              / (stats.on_court_def_possessions + stats.off_court_def_possessions))
+    stats["team_net_per100"] = team_o - team_d
     return stats
 
 
@@ -185,10 +190,10 @@ def player_types(stats: pd.DataFrame, k: int = 8) -> tuple:
     500+ possessions (a 100-possession profile is mostly noise) and used to place every player-season.  A type is
     described by the two rates it has most of and the two it has least of.
     """
-    columns = [f"raw_{rate}" for rate in TYPE_RATES]
+    columns = [f"{rate}_uncentred" for rate in TYPE_RATES]
     standardised = (stats[columns].groupby(stats.season.to_numpy())
                     .transform(lambda column: (column - column.mean()) / column.std(ddof=0)).to_numpy(float))
-    fitted = stats.poss.to_numpy(float) >= TYPE_POSSESSIONS
+    fitted = stats.possessions.to_numpy(float) >= TYPE_POSSESSIONS
     model, mean, sd = fit_mixture(standardised[fitted], k=k, seed=0, n_init=3)
     label = cluster_proba(model, mean, sd, standardised).argmax(1)
     names = {}
@@ -196,8 +201,8 @@ def player_types(stats: pd.DataFrame, k: int = 8) -> tuple:
         profile = pd.Series(standardised[label == kind].mean(0), index=list(TYPE_RATES))
         high = profile.sort_values(ascending=False).index[:2]
         low = profile.sort_values().index[:2]
-        names[kind] = (f"type {rank}: most {plain(high[0])} and {plain(high[1])}, "
-                       f"least {plain(low[0])} and {plain(low[1])}")
+        names[kind] = (f"type {rank}: most {meaning(high[0])} and {meaning(high[1])}, "
+                       f"least {meaning(low[0])} and {meaning(low[1])}")
     return pd.Series(label, index=stats.index).map(names), names
 
 
@@ -236,7 +241,7 @@ def load_inputs(args: argparse.Namespace, cfg: dict) -> tuple:
     ratings = pd.read_parquet(resolve_path(cfg, args.ratings))
     # the trust boundary (src/openrapm/data/seasons.py): a season still being played reaches no fit
     panel, _ = drop_untrainable(pd.read_parquet(resolve(cfg, "panel")), cfg, what="the season panel")
-    return alpha, ratings, panel[panel.poss > 0]
+    return alpha, ratings, panel[panel.possessions > 0]
 
 
 def side_rows(alpha: pd.DataFrame, stats: pd.DataFrame, types: pd.DataFrame, built: pd.DataFrame,
@@ -298,7 +303,7 @@ def statistic_cuts(rows: pd.DataFrame, players: np.ndarray, side: str) -> list:
     for code, kind in continuous:
         if rows[code].nunique() < N_GROUPS:
             continue
-        kind = "context" if code == "team_net" else kind
+        kind = "context" if code == "team_net_per100" else kind
         share = rows.groupby("season")[code].rank(pct=True, method="average")
         fifth = np.clip(np.ceil(share * N_GROUPS), 1, N_GROUPS).astype(int).to_numpy()
         for group in range(1, N_GROUPS + 1):
@@ -323,7 +328,7 @@ def context_values(rows: pd.DataFrame) -> list:
     return [
         pd.cut(rows.age, [0, 23, 27, 31, 99], right=False,
                labels=["age under 23", "age 23-26", "age 27-30", "age 31 and over"]),
-        pd.cut(rows.exp_yrs, [-1, 0.5, 3.5, 8.5, 99],
+        pd.cut(rows.seasons_before, [-1, 0.5, 3.5, 8.5, 99],
                labels=["rookie", "1-3 years in the league", "4-8 years in the league", "9+ years in the league"]),
         pd.cut(rows.season, [1996, 2005, 2015, 2026], labels=["1997-2005", "2006-2015", "2016-2026"]),
         rows.next_season,
@@ -465,7 +470,7 @@ def print_adjustment_check(rows: pd.DataFrame, side: str) -> None:
     print("  typical miss (points per 100) by rating level, worst sixth to best: "
           + ", ".join(f"{v:.2f}" for v in typical))
     for label, level in (("rating level", rows.rating_level), ("evidence level", rows.evidence_level),
-                         ("share of team possessions played", levels(rows.poss_pct, N_CELLS))):
+                         ("share of team possessions played", levels(rows.team_possession_share, N_CELLS))):
         print(f"  after the adjustment, miss against expected by {label}: "
               + ", ".join(f"{v:.2f}" for v in rows.miss_ratio.groupby(level).mean()))
 
@@ -512,7 +517,7 @@ def analyse_side(rows: pd.DataFrame, side: str) -> tuple:
     print_adjustment_check(rows, side)
     table = all_cuts(rows, side)
     passes = print_passes(table)
-    features = [c for c in STATS if c in rows.columns] + list(BUILT) + ["age", "exp_yrs"]
+    features = [c for c in STATS if c in rows.columns] + list(BUILT) + ["age", "seasons_before"]
     leaves, share = subset_search(rows, list(dict.fromkeys(features)))
     leaves["side"] = side
     print_findings(table, leaves, share)

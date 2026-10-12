@@ -133,23 +133,31 @@ from scipy.stats import norm
 from openrapm.commands.console import one_thread, use_utf8
 from openrapm.data.config import load_config, resolve
 from openrapm.data.seasons import drop_untrainable
+from openrapm.data.legacy_names import column_name, saved_models, translate_frame
 from openrapm.data.within_folds import load_folds, read_fold
-from openrapm.features import add_features
-from openrapm.glossary import plain
+from openrapm.features import BOX_RATES, add_features, meaning
 from openrapm.prior_shrink import fit_multipliers, multipliers_by_season
 
 # ------------------------------------------------------------------------------------------- what is audited
-# Every input a fold's player rows carry that a prior could read, by meaning (GLOSSARY.md has the plain names).
+# Every input a fold's player rows carry that a prior could read, by meaning (features.py says what each is).  The
+# order is the frozen groups' order (params/audit_groups.json lists the codes in it).
 CLASSES = {
-    "box score": ("fg3m", "fg3_miss", "fg2m", "fg2_miss", "ftm", "ft_miss", "orb", "drb", "ast", "tov", "stl",
-                  "blk", "pf", "pts", "fga", "fta", "fg3a", "usage", "reb", "stocks", "creation", "shotmix"),
-    "shooting and shares": ("efg", "ts", "fg3p", "fg2p", "ftp", "p3r", "ftr", "astr", "tovr", "orbsh"),
-    "shot quality": ("q2", "q3", "m2", "m3", "xps", "mpts"),
-    "body": ("height", "weight"),
-    "age and career": ("age", "exp_yrs", "exp_poss", "entry_age", "tenure", "n_teams", "draft_pick"),
-    "playing time": ("poss_pct", "gs_pct"),
-    "score state": ("gt_share", "closeness", "abs_margin", "po_share"),
-    "team context": ("onc_o", "onc_d", "offc_o", "offc_d", "net_o", "net_d", "team_net"),
+    "box score": (*BOX_RATES, "points_per100", "shots_per100", "free_throw_attempts_per100",
+                  "three_point_attempts_per100", "used_possessions_per100", "rebounds_per100",
+                  "steals_plus_blocks_per100", "assists_minus_turnovers_per100", "threes_minus_twos_attempted_per100"),
+    "shooting and shares": ("effective_fg_pct", "true_shooting_pct", "three_point_pct", "two_point_pct",
+                            "free_throw_pct", "three_point_attempt_share", "free_throws_per_shot",
+                            "assists_per_used_possession", "turnovers_per_used_possession", "off_rebound_share"),
+    "shot quality": ("two_point_expected_pct", "three_point_expected_pct", "two_point_pct_over_expected",
+                     "three_point_pct_over_expected", "expected_points_per_shot", "points_per_shot_over_expected"),
+    "body": ("height_in", "weight_lb"),
+    "age and career": ("age", "seasons_before", "career_possessions_before_k", "age_at_first_season",
+                       "seasons_with_team", "teams_this_season", "draft_pick"),
+    "playing time": ("team_possession_share", "games_started_share"),
+    "score state": ("garbage_time_share", "closeness", "mean_abs_margin", "playoff_share"),
+    "team context": ("on_court_scored_per100", "on_court_allowed_per100", "off_court_scored_per100",
+                     "off_court_allowed_per100", "on_minus_off_scored_per100", "on_minus_off_allowed_per100",
+                     "team_net_per100"),
 }
 MEASURED_ONLY = frozenset({"team context", "playing time", "score state"})   # measured, never counted
 GROUPED = tuple(code for name, codes in CLASSES.items() if name != "team context" for code in codes)
@@ -294,7 +302,7 @@ def freeze_groups(directory: Path, root: Path) -> dict:
     possessions: the clusters at each cut with two or more members, and their axis loadings."""
     files = sorted(directory.glob("players_*_all.parquet"))
     assert files, f"no whole-season rows in {directory}"
-    frame = pd.concat([pd.read_parquet(path) for path in files], ignore_index=True)
+    frame = pd.concat([translate_frame(pd.read_parquet(path)) for path in files], ignore_index=True)
     return {"source": str(directory.relative_to(root)).replace("\\", "/"),
             "seasons": sorted(int(season) for season in frame.season.unique()), "min_possessions": GROUP_MIN_POSS,
             "cuts": list(CUTS), "codes": list(GROUPED), "sides": {side: side_groups(frame, side) for side in SIDES}}
@@ -346,7 +354,7 @@ def principal_axis(scores: np.ndarray, members: np.ndarray, cut: float) -> dict:
 
 def group_name(members: list) -> str:
     """A group's name on the console: its first three members' plain names, then "(+N more)"."""
-    head = ", ".join(plain(member) for member in members[:3])
+    head = ", ".join(meaning(member) for member in members[:3])
     return head + (f" (+{len(members) - 3} more)" if len(members) > 3 else "")
 
 
@@ -366,7 +374,7 @@ def audit_groups(freeze: str, random_tags: list, paths: Paths) -> dict:
 
 def build_tests(groups: dict) -> list:
     """One test per input, then one per group (a group found on both sides is one test)."""
-    tests = [dict(id=code, kind="input", code=code, cls=CLASS_OF[code], name=plain(code))
+    tests = [dict(id=code, kind="input", code=code, cls=CLASS_OF[code], name=meaning(code))
              for codes in CLASSES.values() for code in codes]
     for side in SIDES:
         for group in groups["sides"][side]["groups"]:
@@ -388,17 +396,17 @@ def group_test(test_id: str, group: dict) -> dict:
 # ---------------------------------------------------------------------------------------------- the folds
 def add_team_net(rows: pd.DataFrame) -> pd.DataFrame:
     """The team's net points per 100 over the games he played, from his on-court and off-court numbers (the
-    feasibility check's `team_net`; the fold reader, openrapm.data.within_folds, does not add it)."""
-    on_o, off_o = rows.onc_poss_o.to_numpy(float), rows.offc_poss_o.to_numpy(float)
-    on_d, off_d = rows.onc_poss_d.to_numpy(float), rows.offc_poss_d.to_numpy(float)
+    feasibility check's `team_net_per100`; the fold reader, openrapm.data.within_folds, does not add it)."""
+    on_o, off_o = rows.on_court_off_possessions.to_numpy(float), rows.off_court_off_possessions.to_numpy(float)
+    on_d, off_d = rows.on_court_def_possessions.to_numpy(float), rows.off_court_def_possessions.to_numpy(float)
     with np.errstate(divide="ignore", invalid="ignore"):
-        scored = (rows.onc_o * on_o + rows.offc_o * off_o) / (on_o + off_o)
-        allowed = (rows.onc_d * on_d + rows.offc_d * off_d) / (on_d + off_d)
-    return rows.assign(team_net=(scored - allowed).fillna(0.0))
+        scored = (rows.on_court_scored_per100 * on_o + rows.off_court_scored_per100 * off_o) / (on_o + off_o)
+        allowed = (rows.on_court_allowed_per100 * on_d + rows.off_court_allowed_per100 * off_d) / (on_d + off_d)
+    return rows.assign(team_net_per100=(scored - allowed).fillna(0.0))
 
 
 def read_audit_fold(directory: Path, stem: str):
-    """One fold (openrapm.data.within_folds.read_fold) with `team_net` on its rated rows."""
+    """One fold (openrapm.data.within_folds.read_fold) with `team_net_per100` on its rated rows."""
     fold = read_fold(directory, stem)
     fold.rows = {side: add_team_net(rows) for side, rows in fold.rows.items()}
     return fold
@@ -976,11 +984,21 @@ class Yardstick:
         return {test_id: place for place, test_id in enumerate(self.ids)}
 
 
+def plain_test_id(test_id: str) -> str:
+    """A test id written before 2026-10-11 under the plain names: "ts" -> "true_shooting_pct", and a group's
+    "group:ast+astr+creation" -> its members renamed and sorted again, the way `build_tests` names a group."""
+    if not test_id.startswith("group:"):
+        return column_name(test_id)
+    return "group:" + "+".join(sorted(column_name(member) for member in test_id[len("group:"):].split("+")))
+
+
 def null_from_file(name: str, paths: Paths) -> Yardstick:
     """An earlier audit's threshold and each test's null mean and standard deviation (a candidate is judged on the
-    frozen yardstick, not on a null drawn again)."""
+    frozen yardstick, not on a null drawn again).  An audit written before 2026-10-11 names its tests the old way;
+    each id is read under the plain names (`plain_test_id`)."""
     saved = json.loads((paths.outputs / f"{name}_thresholds.json").read_text())
     table = pd.read_csv(paths.csv / f"{name}_null.csv")
+    table["test"] = table.test.map(plain_test_id)
     ids = list(dict.fromkeys(table.test))
     position = {test_id: place for place, test_id in enumerate(ids)}
     centre = {kind: np.full((len(SIDES), len(ids)), np.nan) for kind in ("line", "bend")}
@@ -1026,7 +1044,7 @@ def share_groups(groups: dict, side: str, model_feats: list) -> tuple:
         if 0.5 in group["cuts"]:
             for member in group["members"]:
                 member_of.setdefault(member, group_name(group["members"]))
-    labels = [member_of.get(feature, plain(feature)) for feature in model_feats]
+    labels = [member_of.get(feature, meaning(feature)) for feature in model_feats]
     names = list(dict.fromkeys(labels))
     return names, [np.array([place for place, label in enumerate(labels) if label == name]) for name in names]
 
@@ -1059,7 +1077,7 @@ def side_shares(models: dict, panel: pd.DataFrame, season: int, side: str, group
     """One season and side's group shares: a group's mean |Shapley value| over the rated rows over the sum of all
     groups'."""
     held = add_features(panel[(panel.side == side) & (panel.season == season)].copy(), models["feats"])
-    held = held.assign(chunk_poss=held.poss.to_numpy(float), chunk_seasons=1.0)
+    held = held.assign(row_possessions=held.possessions.to_numpy(float), row_seasons=1.0)
     inputs = held[models["model_feats"]].to_numpy(float)
     names, columns = share_groups(groups, side, models["model_feats"])
     size = np.abs(shapley_values(models["full"], inputs, columns, rng, **settings)).mean(axis=0)
@@ -1086,7 +1104,8 @@ def group_shapley_shares(seasons: list, groups: dict, out: Path, paths: Paths, c
     for season in seasons:
         name = models_for(season)
         if name not in loaded:
-            loaded[name] = pd.read_pickle(paths.outputs / f"prior_models_{name}.pkl")
+            # boosters saved before 2026-10-11 name their inputs the old way (openrapm.data.legacy_names)
+            loaded[name] = saved_models(pd.read_pickle(paths.outputs / f"prior_models_{name}.pkl"))[0]
         for side in SIDES:
             rows.extend(side_shares(loaded[name][season][side], panel, season, side, groups, rng, settings))
     shares = pd.DataFrame(rows)
@@ -1139,7 +1158,7 @@ def tradeset_leans(tests: list, alpha_path: Path, paths: Paths, cfg: dict) -> pd
         frame = add_features(panel[panel.side == side].copy(), codes)
         frame = frame.merge(alpha[alpha.side == name][["player_id", "season", "alpha_good"]],
                             on=["player_id", "season"], how="inner").reset_index(drop=True)
-        weights = np.maximum(frame["poss"].to_numpy(float), 1e-9)          # the panel's possessions on this side
+        weights = np.maximum(frame["possessions"].to_numpy(float), 1e-9)   # the panel's possessions on this side
         per_season = list(frame.groupby("season").indices.values())
         member_scores = {}
         for test in decision:

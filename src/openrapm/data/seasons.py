@@ -41,11 +41,12 @@ Finals are unfinished, and `Trainable` raises on a season past its cutoff), and
 `tests/test_layer_boundary.py`, which keeps the loaders the only channel through which data can
 reach a fit at all.
 
-`tests/test_no_current_season.py` carries the claim end to end: a block that only REACHES INTO a
-season in progress is dropped whole, replacing that season's rows with noise does not move the
-training rows by one byte, and every script that fits from the panel gates its read while the
-three that write the panel back do not.  That last part is the one that had gone wrong -- five
-scripts read the season panel straight off the disk with no gate until 2026-09-18.
+`tests/test_no_current_season.py` carries the claim end to end: the rows of a season in progress are
+dropped, replacing them with noise does not move the training rows by one byte, a panel that has
+lost its `season` column is refused rather than passed through, and every script that fits from
+the panel gates its read while the ones that write the panel back do not.  That last part is the
+one that had gone wrong -- five scripts read the season panel straight off the disk with no gate
+until 2026-09-18.
 
 What none of it can prove is that a fitted artifact already on disk was built after the guard
 existed.  For that, rebuild it.
@@ -175,28 +176,23 @@ def check_trainable(seasons, cfg, what: str = "this fit") -> Trainable:
     return Trainable(tuple(int(s) for s in seasons), cut)
 
 
-def unit_last_season(labels) -> "pd.Series":
-    """The last season a panel unit covers, from its label.  "2024-2026" -> 2026, "2026" -> 2026."""
-    lab = pd.Series(labels, dtype="object").astype(str)
-    return lab.str.rsplit("-", n=1).str[-1].astype(int)
+def drop_untrainable(panel: pd.DataFrame, cfg, what: str = "the panel"):
+    """Panel rows a fit may use: those of seasons whose Finals are over (`season` at or before the cutoff).
 
+    The gate reads the `season` column, and a panel without one is refused.  Until 2026-10-11 it read the
+    block label `window` and handed back unchanged any panel that lacked it, so a panel that had lost the
+    column would have passed every row, the season in progress included.
 
-def drop_untrainable(panel: "pd.DataFrame", cfg, label_col: str = "window", what: str = "the panel"):
-    """Panel rows a fit may use: those whose unit ENDS at or before the cutoff.
-
-    A unit that reaches into a season in progress is dropped whole.  A three-season block ending in
-    the current season carries that season's evidence in every one of its rows, so there is no
-    honest way to keep part of it; a one-season row is simply that season.
-
-    Returns (kept, dropped_labels).  The caller is expected to say what it dropped -- silence here
+    Returns (kept, dropped seasons).  The caller is expected to say what it dropped -- silence here
     is how a leak guard stops being noticed.
     """
-    if panel is None or label_col not in getattr(panel, "columns", ()):
-        return panel, ()
+    if "season" not in getattr(panel, "columns", ()):
+        raise KeyError(f"{what} has no `season` column, so the rows of a season still being played cannot be "
+                       "told apart; nothing may be fitted on it (src/openrapm/data/seasons.py)")
     cut = trainable_through(cfg)
-    last = unit_last_season(panel[label_col])
-    keep = last <= cut
-    dropped = tuple(sorted(set(panel.loc[~keep, label_col].astype(str))))
+    season = panel["season"].astype(int)
+    keep = season <= cut
+    dropped = tuple(sorted(set(season[~keep].tolist())))
     if dropped:
         print(f"  {what}: {int((~keep).sum())} rows dropped from {list(dropped)} -- past the "
               f"trainable cutoff {cut} (src/openrapm/data/seasons.py)", flush=True)

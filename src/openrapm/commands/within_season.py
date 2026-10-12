@@ -11,9 +11,10 @@ How.  A season's games (regular season and playoffs) are assigned to four folds 
 repeats), each assignment drawn with the seed (season, repeat).  For each fold:
 
     fit games    every game not in the fold.  Every input the rating reads (box score, playing time, starts,
-                 tenure, on-court record) is rebuilt from these games alone (`seasoninputs.SeasonWorld`); the
-                 saved boosters of `--models` answer for the rebuilt rows (step 2), and the ridge pulls the fit
-                 games' RAPM toward them (step 3), as `openrapm rate` does for a whole season.
+                 tenure, on-court record) is rebuilt from these games alone (`data.panel.season_panel`, the function
+                 `openrapm data panel` builds whole seasons with); the saved boosters of `--models` answer for the
+                 rebuilt rows (step 2), and the ridge pulls the fit games' RAPM toward them (step 3), as
+                 `openrapm rate` does for a whole season.  `leak_checks` proves nothing else was read.
     test games   the fold.  Nothing about them reaches the rating.  Stored: the test team-games (points per 100
                  as scored, each player's share of the possessions) and the rating's error on them.
 
@@ -42,34 +43,59 @@ import numpy as np
 import pandas as pd
 
 from .. import box_prior, prior_rapm, trade_set
+from ..data import legacy_names
 from ..data.config import resolve
 from ..data.designs import DesignCache
-from ..data.panel import trainable_panel
+from ..data.panel import (
+    DEFENCE_ALL,
+    OFFENCE,
+    SeasonPanel,
+    SeasonSources,
+    SeasonTables,
+    fit_designs,
+    season_panel,
+    share_cap,
+    trainable_panel,
+)
 from ..data.roles import player_season_inputs, roles_path
+from ..data.shots import DEFENSE_TARGETS
 from ..data.tables import team_of_rows
-from ..features import CLOSENESS, NET, OFFC, PRIOR_FEATURES, add_features
+from ..features import CLOSENESS, OFF_COURT, ON_MINUS_OFF, PANEL_KEYS, PRIOR_FEATURES, add_features
 from ..scoring import Ratings, armse, predict_season, score
-from ..seasoninputs import SeasonTables, SeasonWorld
 from ..settings import TEST
 
 SIDES = ("O", "D")
 REPEATS = 3
 N_FOLDS = 4
 SCORE_TARGET = "pts"                                        # the test games are scored on the points as scored
-WORLD_TARGETS = ("pts", "xpts_ft", "x3def", "x3def_w0.25")  # every design a season world rebuilds
 # a player the rating never saw: the year-over-year test's fill, 0.25 of the mean rating of players under 500
 # possessions
 FILL = (500.0, 0.25)
 REPRODUCE_TOLERANCE = 1e-6
 # the boosters were saved by a test-setting build; the ridge and the targets are the same in both settings
 SETTINGS = TEST
+# every design a season world rebuilds from its fit games: the points as scored, the panel's two (data/panel.py) and
+# the ratings' two (settings.Targets), in the order the leak checks list them
+WORLD_TARGETS = tuple(dict.fromkeys((SCORE_TARGET, OFFENCE, DEFENCE_ALL, SETTINGS.targets.offence,
+                                     SETTINGS.targets.defence)))
 # what a saved file's meta must say: the test setting's labels and training rows, the shipped rows and folds
 EXPECTED_META = dict(exclude_neighbours=1, rows="chunks", chunk_label="career", unshrink=["defense"], player_folds=5)
 # every column of the player tables: the prior's possible inputs, the off-court record, the score state
-PLAYER_COLUMNS = list(dict.fromkeys(PRIOR_FEATURES + OFFC + NET + CLOSENESS))
+PLAYER_COLUMNS = list(dict.fromkeys(PRIOR_FEATURES + OFF_COURT + ON_MINUS_OFF + CLOSENESS))
 
 
 # ------------------------------------------------------------------------------------------- the saved models
+def load_models(outputs: Path, models: str) -> dict:
+    """outputs/prior_models_<models>.pkl under the plain names: a file saved before 2026-10-11 names its inputs,
+    input list and targets the old way, and is translated as it is read (data/legacy_names.py), with one line
+    saying so."""
+    saved, renamed = legacy_names.saved_models(pd.read_pickle(outputs / f"prior_models_{models}.pkl"))
+    if renamed:
+        print(f"prior_models_{models}.pkl uses the names from before 2026-10-11; read under the plain names "
+              "(each booster's inputs keep their order)", flush=True)
+    return saved
+
+
 def _step3_mismatches(meta: dict) -> dict:
     """{name: (saved, expected)} for the step-3 settings a schema-2 file records and this command does not use.
 
@@ -116,7 +142,7 @@ def season_models(saved_all: dict, season: int) -> dict:
 
 def saved_prior(panel: pd.DataFrame, side: str, saved: dict) -> dict:
     """{player_id: prior} from the saved boosters, each player answered by the fold model that never saw him."""
-    rows = box_prior.rated_rows(panel[(panel.side == side) & (panel.poss > 0)], saved["feats"])
+    rows = box_prior.rated_rows(panel[(panel.side == side) & (panel.possessions > 0)], saved["feats"])
     model = box_prior.OutOfPlayerPrior(full=saved["full"], fold_models=list(saved["folds"]),
                                        held_out_players=list(saved["excluded"]), inputs=list(saved["model_feats"]))
     return dict(zip(rows.player_id.to_numpy(), box_prior.predict(model, rows)))
@@ -134,6 +160,74 @@ def assign_folds(game_ids, n_folds: int, season: int, repeat: int) -> pd.Series:
     return pd.Series(rng.permutation(len(ids)) % int(n_folds), index=ids, name=f"r{repeat}")
 
 
+# --------------------------------------------------------------------------------------- one season world
+@dataclass
+class SeasonWorld:
+    """A season rebuilt from its fit games: their designs, the panel rows and role rows built from them, and the
+    leak checks that prove nothing else was read."""
+    season: int
+    fit_idx: np.ndarray          # the fit games' game_idx values, sorted
+    designs: dict                # {target: the fit games' design}, WORLD_TARGETS
+    inputs: SeasonPanel          # data.panel.season_panel on those designs
+    checks: dict
+
+    @property
+    def panel(self) -> pd.DataFrame:
+        """The rebuilt panel rows (features.SEASON_PANEL_COLUMNS)."""
+        return self.inputs.rows
+
+    @property
+    def roles(self) -> pd.DataFrame:
+        """The season's role rows rebuilt from the fit games, one per player and team."""
+        return self.inputs.roles
+
+
+def design_checks(designs: dict, full: dict, fit_idx: np.ndarray) -> dict:
+    """Every rebuilt design reads only the fit games and has the points design's rows; each defensive target also
+    records how far its response moved from the whole-season design's on the same rows: 0 for the whole season (the
+    rebuild is that design), above 0 for part of one (the shooters were repriced from the fit games)."""
+    checks, reference, fit = {}, designs[SCORE_TARGET].rows, set(fit_idx)
+    for name, design in designs.items():
+        checks[f"design {name}: rows only from fit games"] = set(design.rows["game_idx"].unique()) <= fit
+        checks[f"design {name}: box and possession tables only from fit games"] = (
+            set(design.game_box["game_idx"].unique()) <= fit and set(design.game_poss["game_idx"].unique()) <= fit)
+        checks[f"design {name}: same rows as the points design"] = (
+            np.array_equal(design.rows["game_idx"].to_numpy(), reference["game_idx"].to_numpy())
+            and np.array_equal(design.rows["is_home_off"].to_numpy(), reference["is_home_off"].to_numpy()))
+    for name in (target for target in designs if target in DEFENSE_TARGETS):
+        whole_y = full[name].y[np.isin(full[name].rows["game_idx"].to_numpy(), fit_idx)]
+        checks[f"design {name}: response against the whole-season design (max change)"] = float(
+            np.max(np.abs(designs[name].y - whole_y)))
+    return checks
+
+
+def role_checks(stored_roles: pd.DataFrame, rebuilt: pd.DataFrame, season: int) -> dict:
+    """The whole season's rebuilt role rows against the stored roles table's rows for the season."""
+    stored = stored_roles[stored_roles.season == season].sort_values(["player_id", "team_id"]).reset_index(drop=True)
+    mine = rebuilt[list(stored_roles.columns)].sort_values(["player_id", "team_id"]).reset_index(drop=True)
+    same_rows = len(stored) == len(mine) and np.array_equal(stored[["player_id", "team_id"]].to_numpy(),
+                                                             mine[["player_id", "team_id"]].to_numpy())
+    checks = {"roles: whole-season rebuild has the cached rows": bool(same_rows)}
+    if same_rows:
+        for column in ("games", "starts", "minutes", "poss_on", "team_poss", "age"):
+            checks[f"roles: whole-season rebuild, max difference in {column}"] = float(
+                np.nanmax(np.abs(mine[column].to_numpy(float) - stored[column].to_numpy(float))))
+    return checks
+
+
+def leak_checks(inputs: SeasonPanel, designs: dict, full: dict, fit_ids: set, fit_idx: np.ndarray,
+                stored_roles: pd.DataFrame, whole: bool) -> dict:
+    """Every check of a rebuilt season, in the order the fold files list them: the designs, the games the role rows
+    read, the role rows themselves against the stored table (whole season only), the games the score state read."""
+    checks = design_checks(designs, full, fit_idx)
+    checks["roles: box scores read only from fit games"] = inputs.games_read["role box scores"] <= fit_ids
+    checks["roles: stints read only from fit games"] = inputs.games_read["role stints"] <= fit_ids
+    if whole:
+        checks.update(role_checks(stored_roles, inputs.roles, inputs.season))
+    checks["context: stints read only from fit games"] = inputs.games_read["score-state stints"] <= fit_ids
+    return checks
+
+
 # ---------------------------------------------------------------------------------------- one rated world
 @dataclass
 class RatedWorld:
@@ -149,28 +243,18 @@ def rate_world(world: SeasonWorld, saved: dict) -> RatedWorld:
     Adds one check to the world's: the ridge's possessions are the fit games' (five players on every row).
     """
     prior = {side: saved_prior(world.panel, side, saved[side]) for side in SIDES}
-    designs = {target: world.d[target] for target in SETTINGS.targets.distinct()}
+    designs = {target: world.designs[target] for target in SETTINGS.targets.distinct()}
     table = prior_rapm.rate_season(designs, prior, SETTINGS, world.season)
     world.checks["ridge: possessions are the fit games' possessions"] = bool(np.isclose(
-        table.possessions.sum(), float(world.d[SETTINGS.targets.offence].rows["poss"].sum()) * 5.0, rtol=1e-9))
+        table.possessions.sum(), float(world.designs[SETTINGS.targets.offence].rows["poss"].sum()) * 5.0, rtol=1e-9))
     return RatedWorld(world=world, table=table, prior=prior)
-
-
-def _with_binned_body(rows: pd.DataFrame) -> pd.DataFrame:
-    """Height to the nearest 2 inches and weight to the nearest 15 pounds, after the panel's own columns.
-
-    No reader uses them; they keep the player tables column for column the files the earlier script wrote.
-    """
-    rows["height2"] = np.round(rows["height"].to_numpy(dtype=float) / 2.0) * 2.0
-    rows["weight15"] = np.round(rows["weight"].to_numpy(dtype=float) / 15.0) * 15.0
-    return rows
 
 
 def player_table(rated: RatedWorld) -> pd.DataFrame:
     """One row per player and side with possessions: every rebuilt input (derived columns built), the rating in
     the published positive-good schema, the boosters' answer before the scale, and his main team."""
     world, table = rated.world, rated.table
-    frame = add_features(_with_binned_body(world.panel[world.panel.poss > 0].copy()), PLAYER_COLUMNS)
+    frame = add_features(world.panel[world.panel.possessions > 0].copy(), PLAYER_COLUMNS)
     ratings = pd.DataFrame({
         "player_id": table.player_id, "rating_off": table.offense, "rating_def": -table.defense,
         "prior_off": table.prior_offense, "prior_def": -table.prior_defense,
@@ -181,7 +265,7 @@ def player_table(rated: RatedWorld) -> pd.DataFrame:
     ratings["prior_raw_off"] = ratings.player_id.map(rated.prior["O"])
     ratings["prior_raw_def"] = -ratings.player_id.map(rated.prior["D"])
     # his main team in these games (most possessions on the court), for the team-level inputs of step 4's readers
-    played = world.roles_h[world.roles_h.poss_on > 0]
+    played = world.roles[world.roles.poss_on > 0]
     main = (played.sort_values(["player_id", "poss_on"], ascending=[True, False])
             .drop_duplicates("player_id").set_index("player_id").team_id)
     ratings["team_id"] = ratings.player_id.map(main).fillna(-1).astype(np.int64)
@@ -240,7 +324,7 @@ def _panel_differences(world: SeasonWorld, panel: pd.DataFrame) -> tuple[dict, i
     """({column: largest absolute difference}, stored rows) of the rebuilt panel rows against the stored ones."""
     stored = panel[panel.season == world.season]
     columns = [column for column in world.panel.columns if column in stored.columns
-               and column not in ("window", "side", "player_id", "ps_idx", "season")]
+               and column not in PANEL_KEYS]
     both = world.panel.merge(stored, on=["player_id", "side"], suffixes=("", "_panel"))
     return ({column: float(np.nanmax(np.abs(both[column].to_numpy(float) - both[f"{column}_panel"].to_numpy(float))))
              for column in columns if pd.api.types.is_numeric_dtype(both[column])}, int(len(stored)))
@@ -279,10 +363,8 @@ class SeasonRun:
     """What every fold of one season shares."""
     season: int
     cfg: dict
-    full: dict                   # {target: the whole season's design}
-    tables: SeasonTables
-    inputs: pd.DataFrame         # the role inputs of every season (data.roles.player_season_inputs)
-    roles: pd.DataFrame
+    full: dict                   # {target: the whole season's design}, WORLD_TARGETS
+    sources: SeasonSources       # the season's stints and box scores, the roles table of every season
     saved: dict                  # {"O", "D"}: the season's saved boosters
     out_dir: Path
 
@@ -292,9 +374,21 @@ class SeasonRun:
         games = self.full[SCORE_TARGET].games
         return pd.Series(games["game_id"].astype(str).to_numpy(), index=games["game_idx"].to_numpy())
 
+    def world(self, fit_ids) -> SeasonWorld:
+        """The season rebuilt from the games `fit_ids`, with its leak checks.  Handed every game, it is the whole
+        season through the same code."""
+        fit = {str(game) for game in fit_ids}
+        every_game = set(self.game_ids)
+        if not fit <= every_game:
+            raise ValueError(f"{self.season}: fit games that are not this season's")
+        fit_idx = np.sort(self.game_ids.index[self.game_ids.isin(fit)].to_numpy())
+        designs = fit_designs(self.season, self.cfg, self.full, fit)
+        inputs = season_panel(self.season, self.cfg, designs, self.sources, fit)
+        checks = leak_checks(inputs, designs, self.full, fit, fit_idx, self.sources.roles, fit == every_game)
+        return SeasonWorld(self.season, fit_idx, designs, inputs, checks)
+
     def rate(self, fit_ids) -> RatedWorld:
-        world = SeasonWorld(self.season, self.cfg, self.full, self.tables, self.inputs, self.roles, fit_ids=fit_ids)
-        return rate_world(world, self.saved)
+        return rate_world(self.world(fit_ids), self.saved)
 
 
 def run_reproduction(run: SeasonRun, base: pd.DataFrame, panel: pd.DataFrame, started: float) -> None:
@@ -417,13 +511,13 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
     outputs = resolve(cfg, "outputs")
     out_dir = resolve(cfg, "within") / tag
     out_dir.mkdir(parents=True, exist_ok=True)
-    saved_all = pd.read_pickle(outputs / f"prior_models_{models}.pkl")
+    saved_all = load_models(outputs, models)
     meta = saved_all.get("meta", {})
     check_models(meta)
     base_table = pd.read_parquet(outputs / f"{base}.parquet")
     panel = trainable_panel(cfg)
     roles = pd.read_parquet(roles_path(cfg))
-    inputs = player_season_inputs(roles, cap=float(cfg.get("roles", {}).get("share_cap", 0.9)))
+    inputs = player_season_inputs(roles, cap=share_cap(cfg))
     designs = DesignCache(cfg)
     print(f"models {models} ({meta.get('argv')}); seasons {seasons[0]}-{seasons[-1]}; {REPEATS} repeats of "
           f"{N_FOLDS} folds; writing {out_dir}", flush=True)
@@ -431,7 +525,7 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
     for season in seasons:
         saved = season_models(saved_all, season)
         full = {target: designs.season(season, target) for target in WORLD_TARGETS}
-        run = SeasonRun(season, cfg, full, SeasonTables(season, cfg), inputs, roles, saved, out_dir)
+        run = SeasonRun(season, cfg, full, SeasonSources(SeasonTables(season, cfg), roles, inputs), saved, out_dir)
         run_season(run, base_table, panel, reproduce_only, started)
         designs.clear()
     gather(out_dir)

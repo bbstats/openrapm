@@ -74,11 +74,11 @@ def _box():
     cfg = load_config()
     gl = resolve(cfg, "raw") / "gamelog"
     if not all((gl / f"{s}_RS.parquet").exists() for s in SEASONS):
-        pytest.skip("box scores not built; run scripts/01_ingest.py")
+        pytest.skip("box scores not built; run openrapm data ingest")
     try:
         return season_box(SEASONS, ["RS"], cfg)
     except Exception:
-        pytest.skip("box scores not built; run scripts/01_ingest.py")
+        pytest.skip("box scores not built; run openrapm data ingest")
 
 
 def _bigness(player_ids):

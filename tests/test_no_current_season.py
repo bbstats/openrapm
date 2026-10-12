@@ -8,8 +8,9 @@ that established it.  The file did not exist.
 
 What it establishes now, in four parts:
 
-  1. the guard drops the right rows, including a multi-season block that only REACHES INTO a season
-     in progress, which is the case a per-season filter would get wrong;
+  1. the guard drops the rows of the season in progress, reading each row's `season`; a panel without
+     the old block label `window` is still gated (the guard once passed such a panel through whole),
+     and a panel without `season` is refused;
   2. the rows a fit receives are byte-identical when the in-progress season is replaced by noise.
      That is the "not one byte moves" property the docstring promised, stated where it can be checked
      exactly: a deterministic fit on identical rows is identical, so the rows are the thing to pin;
@@ -21,7 +22,9 @@ What it establishes now, in four parts:
   4. `openrapm rate` and `openrapm folds` read the panel through one function, `data.panel.trainable_panel`,
      which gates it, and the labels of `rate` sum only seasons whose Finals are over; step 5 (`openrapm swap`)
      reads it through `data.panel.panel_and_trainable_seasons`, so its type model trains only on finished
-     seasons while still describing the players of a season in progress.
+     seasons while still describing the players of a season in progress.  The one writer, `openrapm data panel`
+     (`data.panel.build_panel`), builds every season, the one in progress included, and does not gate: it fits
+     nothing, and the panel it writes must carry the season the ratings table shows.
 """
 import ast
 import re
@@ -54,30 +57,38 @@ def _tree(tmp_path, finished_through: int, first: int = 2020, last: int = 2024):
             "paths": {**CFG.get("paths", {}), "raw": "data/raw"}}
 
 
-def _panel(windows, rows_each: int = 4, seed: int = 0) -> pd.DataFrame:
+def _panel(seasons, rows_each: int = 4, seed: int = 0) -> pd.DataFrame:
+    """A season panel's shape: `season`, `player_id`, a value; no `window` column, as the panel has none."""
     rng = np.random.default_rng(seed)
     return pd.DataFrame({
-        "window": np.repeat(list(windows), rows_each),
-        "player_id": np.tile(np.arange(rows_each), len(windows)),
-        "x": rng.normal(size=rows_each * len(windows)),
+        "season": np.repeat(list(seasons), rows_each),
+        "player_id": np.tile(np.arange(rows_each), len(seasons)),
+        "x": rng.normal(size=rows_each * len(seasons)),
     })
 
 
 # --------------------------------------------------------------- 1. the guard drops the right rows
-def test_a_block_that_only_reaches_into_the_current_season_is_dropped_whole(tmp_path):
-    """The case a per-season filter gets wrong.  A 2022-2024 block carries 2024's evidence in every
-    one of its rows, so there is no honest way to keep part of it."""
+def test_the_season_in_progress_is_dropped_from_a_panel_without_a_window_column(tmp_path):
+    """The guard reads `season`.  Until 2026-10-11 it read `window` and returned a panel without that column
+    unchanged, season in progress included; the season panel has no `window` column at all."""
     cfg = _tree(tmp_path, finished_through=2023)
     assert S.trainable_through(cfg) == 2023
-    panel = _panel(["2021-2021", "2021-2023", "2022-2024", "2024-2024"])
+    panel = _panel([2021, 2022, 2023, 2024])
+    assert "window" not in panel.columns
     kept, dropped = S.drop_untrainable(panel, cfg)
-    assert set(dropped) == {"2022-2024", "2024-2024"}
-    assert set(kept.window) == {"2021-2021", "2021-2023"}
+    assert dropped == (2024,)
+    assert set(kept.season) == {2021, 2022, 2023}
+
+
+def test_a_panel_without_a_season_column_is_refused(tmp_path):
+    cfg = _tree(tmp_path, finished_through=2023)
+    with pytest.raises(KeyError, match="season"):
+        S.drop_untrainable(_panel([2023, 2024]).drop(columns=["season"]), cfg)
 
 
 def test_nothing_is_dropped_when_every_season_has_finished(tmp_path):
     cfg = _tree(tmp_path, finished_through=2024)
-    panel = _panel(["2022-2024", "2024-2024"])
+    panel = _panel([2023, 2024])
     kept, dropped = S.drop_untrainable(panel, cfg)
     assert not dropped and len(kept) == len(panel)
 
@@ -90,10 +101,10 @@ def test_replacing_the_current_season_with_noise_does_not_move_the_training_rows
     identical -- so if the rows do not move, nothing built from them can.
     """
     cfg = _tree(tmp_path, finished_through=2023)
-    clean = _panel(["2021-2021", "2022-2022", "2022-2024", "2024-2024"], seed=1)
+    clean = _panel([2021, 2022, 2023, 2024], seed=1)
 
     corrupted = clean.copy()
-    in_progress = S.unit_last_season(corrupted.window) > S.trainable_through(cfg)
+    in_progress = corrupted.season > S.trainable_through(cfg)
     assert in_progress.any(), "the fixture must actually contain a season in progress"
     rng = np.random.default_rng(99)
     corrupted.loc[in_progress, "x"] = rng.normal(loc=1e6, scale=1e6, size=int(in_progress.sum()))
@@ -109,9 +120,8 @@ def test_replacing_the_current_season_with_noise_does_not_move_the_training_rows
 # `drop_untrainable`; a new one belongs here the day it is written.
 FITS_FROM_PANEL = ["88_yoy_by_player.py", "95_miss_by_group.py", "137_stat_calibration.py", "138_heldout_audit.py"]
 
-# Scripts that read the panel to WRITE columns back into it.  These must NOT gate: they rewrite the
-# file in place, so dropping the current season would delete it from the only copy.
-WRITES_THE_PANEL = {"49_role_panel.py", "65_offcourt_panel.py", "69_closeness_panel.py", "86_context_panel.py"}
+# A script that reads the panel names it one of these ways: paths.panel, or the file by name.
+NAMES_THE_PANEL = re.compile(r"""role_panel|season_panel|resolve\(\s*cfg\s*,\s*["']panel["']\s*\)""")
 
 
 def _script(name: str) -> Path:
@@ -138,24 +148,28 @@ def test_a_script_that_fits_from_the_panel_gates_its_read(script):
         f"on it and say nothing.")
 
 
-@pytest.mark.parametrize("script", sorted(WRITES_THE_PANEL))
-def test_a_script_that_writes_the_panel_does_not_gate(script):
-    """The opposite mistake, and the worse one: these rewrite the panel in place."""
-    path = _script(script)
-    assert not _calls(path, "drop_untrainable"), (
-        f"scripts/{script} writes the panel back in place; gating its read would drop the season in "
-        f"progress out of the only copy of the file.  Gate the fits, not the writers.")
+def test_the_panel_writer_does_not_gate():
+    """The opposite mistake: `openrapm data panel` builds every season, the one in progress included (the ratings
+    table shows it), so neither the builder nor the season-row function may drop a season; scripts no longer write
+    the panel at all (scripts/49_role_panel.py, 65, 69 and 86 were retired into data/panel.py)."""
+    tree = ast.parse((SRC / "data" / "panel.py").read_text(encoding="utf-8"))
+    writers = {n.name: n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+               and n.name in ("build_panel", "season_panel", "write_panel")}
+    assert set(writers) == {"build_panel", "season_panel", "write_panel"}
+    for name, function in writers.items():
+        assert not any(isinstance(n, ast.Call) and getattr(n.func, "id", None) == "drop_untrainable"
+                       for n in ast.walk(function)), f"data/panel.py {name} gates the panel it writes"
 
 
 def test_no_script_reads_a_panel_unclassified():
-    """A new reader must be put on one list or the other, so nothing lands here unnoticed."""
-    known = set(FITS_FROM_PANEL) | WRITES_THE_PANEL
+    """A new reader must be put on the list, so nothing lands here unnoticed."""
     readers = {p.name for p in sorted((ROOT / "scripts").rglob("[0-9]*.py"))
-               if "role_panel" in p.read_text(encoding="utf-8")
+               if NAMES_THE_PANEL.search(p.read_text(encoding="utf-8"))
                and "read_parquet" in p.read_text(encoding="utf-8")}
-    assert not readers - known, (
-        f"scripts {sorted(readers - known)} read a role panel and are on neither list.  Add each to "
-        f"FITS_FROM_PANEL (and gate its read) or to WRITES_THE_PANEL (and do not).")
+    assert readers, "no script reads the panel; the pattern has stopped matching"
+    assert not readers - set(FITS_FROM_PANEL), (
+        f"scripts {sorted(readers - set(FITS_FROM_PANEL))} read the season panel and are not on FITS_FROM_PANEL.  "
+        f"Add each (and gate its read).")
 
 
 # ------------------------------------------- 4. the commands read the panel through one gate
@@ -182,9 +196,9 @@ def test_the_gated_panel_drops_the_season_in_progress(tmp_path):
     from openrapm.data.panel import trainable_panel
     cfg = _tree(tmp_path, finished_through=2023)
     stored = tmp_path / "panel.parquet"
-    _panel(["2022", "2023", "2024"]).to_parquet(stored, index=False)
+    _panel([2022, 2023, 2024]).to_parquet(stored, index=False)
     cfg["paths"] = {**cfg["paths"], "panel": str(stored)}
-    assert sorted(set(trainable_panel(cfg).window)) == ["2022", "2023"]
+    assert sorted(set(trainable_panel(cfg).season)) == [2022, 2023]
 
 
 def test_rate_sums_only_finished_seasons_for_its_labels(tmp_path, monkeypatch):
@@ -218,11 +232,10 @@ def test_the_swap_step_describes_a_season_in_progress_but_never_trains_on_it(tmp
     from openrapm.data.panel import panel_and_trainable_seasons
     cfg = _tree(tmp_path, finished_through=2023)
     stored = tmp_path / "panel.parquet"
-    panel = _panel(["2022", "2023", "2024"])
-    panel.assign(season=panel.window.astype(int)).to_parquet(stored, index=False)
+    _panel([2022, 2023, 2024]).to_parquet(stored, index=False)
     cfg["paths"] = {**cfg["paths"], "panel": str(stored)}
     whole, trainable = panel_and_trainable_seasons(cfg)
-    assert sorted(set(whole.window)) == ["2022", "2023", "2024"]
+    assert sorted(set(whole.season)) == [2022, 2023, 2024]
     assert trainable == {2022, 2023}
 
 

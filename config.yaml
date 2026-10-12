@@ -14,18 +14,11 @@ windows:              # ten non-overlapping 3-season windows
   - [2018, 2020]
   - [2021, 2023]
   - [2024, 2026]
-rolling_step: 1       # rolling 3-year windows for the robustness overlay
 neutral_site_seasons_po: [2020]   # 2020 bubble playoffs: home = 0
 
 # The raw per-game box counts every design carries, in this order (the per-season design pieces record it).
 box_counts: [fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss, orb, drb, ast, tov, stl, blk, pf]
 
-# Regularization. lam / lam_ratio were chosen once (by the retired scripts/03_cv.py, deleted in
-# 73f0ab9; the numbers and how they were picked are in DECISIONS.md) and are used in every window.
-# chosen on 2000-02 and 2012-14 (RS rows) by the retired scripts/03_cv.py (deleted in 73f0ab9).
-# Re-tuned under player_unit: window (possessions per unit roughly triple).
-lam_plugin: 18351.8      # ridge on the plug-in ratings fit (u given beta)
-lam_ratio_plugin: 0.624519
 # The random effect unit: "window" gives one player effect per 3-season window, "season" one per
 # player-season (the original spec).  Possession thresholds below are in the unit's own scale.
 player_unit: window
@@ -36,8 +29,8 @@ player_unit: window
 # fit is bit-identical either way); they name the diagnostic groups and the bucket penalties if one is used.
 low_poss_threshold: 500   # player-seasons under this many possessions form the "low_poss" group
 starter_poss_threshold: 1500  # and at or above this many form "high_poss" (the rotation bucket)
-lam_grid: {start: 100, stop: 60000, num: 28, log: true}
-pad_target: poss_conditional   # chosen at checkpoint 4 (bench prior calibration); league | poss_conditional (padding target for the EB shrinkage of the rates)
+pad_target: poss_conditional   # what the season panel's box rates are padded toward (src/openrapm/box_rates.py):
+                               # league | poss_conditional; chosen at checkpoint 4 (bench prior calibration)
 
 # Garbage time and rubber band.
 garbage_time:
@@ -53,18 +46,12 @@ time_halves: 2
 # 1998-2025 for the seasons above; it has no settings here (src/openrapm/commands/year_over_year.py,
 # src/openrapm/scoring.py).
 
-# The role prior (src/openrapm/data/roles.py, spm.py; FINDINGS 19).
+# The role inputs of the season panel (src/openrapm/data/roles.py; FINDINGS 19).
 roles:
   cache: roles.parquet              # inside paths.cache (or an absolute path); the phases are added to the name:
                                     # roles_RSPO.parquet, per player-season-team: games, starts, minutes,
                                     # on-court and team possessions, age
   share_cap: 0.9                    # poss_pct is capped here: one full team-season of possessions
-spm:
-  apm_lam: 100            # the APM penalty: under 1% of lam_plugin, so nobody is pulled toward zero by much
-  apm_lam_ratio: 1.0
-  apm_check_lams: [30, 100, 300]    # 49_role_panel.py --check: SPM coefficients must agree across these
-  pen: 1.0                # ridge on the seven standardised role inputs
-  min_poss: 500           # a player-window needs this many possessions to train the SPM
 
 # Data paths: relative to the repository root, or absolute.  OPENRAPM_CONFIG=<file> makes every command read
 # another config.yaml instead of this one, so a verification run can point all of them at another folder.
@@ -73,7 +60,6 @@ paths:
   stints: data/stints
   cache: data/cache              # rebuildable caches: the roles table, bio.parquet, the per-season design pieces
   shot_curves: data/shotcurve    # the league's make probability by distance, one parquet per season
-  role_panel: artifacts/role_panel.parquet
   outputs: outputs                 # the ratings tables, the saved prior models, the run logs
-  panel: outputs/role_panel_season.parquet   # the season panel: one row per player, season and side
+  panel: outputs/season_panel.parquet   # the season panel: one row per player, season and side
   within: outputs/within           # the within-season folds, one folder per tag

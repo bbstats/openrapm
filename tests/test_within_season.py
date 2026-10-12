@@ -38,9 +38,11 @@ def test_models_from_other_settings_are_refused(change):
         ws.check_models({**LEGACY_META, **change})
 
 
-@pytest.mark.parametrize("settings", [{"targets": {"offence": "xpts_ft", "defence": "x3def"},
+@pytest.mark.parametrize("settings", [{"targets": {"offence": "points_with_expected_free_throws",
+                                                   "defence": "points_with_expected_opponent_threes_all"},
                                        "ridge": {"penalty": 13037.0}},
-                                      {"targets": {"offence": "xpts_ft", "defence": "x3def_w0.25"},
+                                      {"targets": {"offence": "points_with_expected_free_throws",
+                                                   "defence": "points_with_expected_opponent_threes"},
                                        "ridge": {"penalty": 10000.0}}])
 def test_models_saved_with_another_target_or_ridge_penalty_are_refused(settings):
     """The folds rate with the shipped targets and penalty; a file that records others is refused, not rerated."""
@@ -76,11 +78,11 @@ def test_the_saved_prior_is_the_out_of_player_prediction():
     ids = np.repeat(np.arange(60), 2)
     train = pd.DataFrame({"a": rng.normal(size=ids.size), "b": rng.normal(size=ids.size)},
                          index=pd.Index(ids, name="player_id"))
-    train = train.assign(target=train.a - train.b + rng.normal(scale=0.2, size=ids.size),
+    train = train.assign(label=train.a - train.b + rng.normal(scale=0.2, size=ids.size),
                          row_weight=rng.uniform(1, 3, ids.size))
     params = {"n_estimators": 30, "num_leaves": 5, "learning_rate": 0.1, "min_child_samples": 3}
     model = box_prior.fit_out_of_player(train, ["a", "b"], params, n_folds=5)
-    panel = pd.DataFrame({"player_id": [3, 17, 999], "side": "O", "poss": [800.0, 1200.0, 50.0],
+    panel = pd.DataFrame({"player_id": [3, 17, 999], "side": "O", "possessions": [800.0, 1200.0, 50.0],
                           "a": [0.1, -1.0, 2.0], "b": [0.5, 0.0, -0.3]})
     saved = dict(full=model.full, folds=model.fold_models, excluded=model.held_out_players, feats=[],
                  model_feats=["a", "b"])
@@ -89,8 +91,17 @@ def test_the_saved_prior_is_the_out_of_player_prediction():
     assert np.array_equal(np.array(list(got.values())), box_prior.predict(model, panel))
 
 
-def test_the_binned_body_columns_keep_the_earlier_files_layout():
-    rows = pd.DataFrame({"height": [78.9, 80.2, 83.0], "weight": [207.0, 214.0, 251.0]})
-    ws._with_binned_body(rows)
-    assert rows.height2.tolist() == [78.0, 80.0, 84.0] and rows.weight15.tolist() == [210.0, 210.0, 255.0]
-    assert list(rows.columns) == ["height", "weight", "height2", "weight15"]
+def test_boosters_saved_before_the_rename_are_read_under_the_plain_names(tmp_path, capsys):
+    """A pickle of 2026-10-09 (old names, earlier meta) loads with its inputs renamed in order, passes the check,
+    and says so in one line; its targets, saved in schema 2, compare equal to the shipped ones."""
+    side = dict(full=None, folds=[], excluded=[], feats=["ast", "weight"],
+                model_feats=["ast", "weight", "chunk_poss", "chunk_seasons"], prior={})
+    settings = {"targets": {"offence": "xpts_ft", "defence": "x3def_w0.25"}, "ridge": asdict(TEST.ridge),
+                "prior": {"feature_set": "boruta_noonc"}}
+    pd.to_pickle({2026: {"O": side, "D": side}, "meta": {**LEGACY_META, "schema": 2, "settings": settings}},
+                 tmp_path / "prior_models_old.pkl")
+    saved = ws.load_models(tmp_path, "old")
+    assert saved[2026]["O"]["model_feats"] == ["assists_per100", "weight_lb", "row_possessions", "row_seasons"]
+    assert saved["meta"]["features"] == "box_score_and_bio"
+    ws.check_models(saved["meta"])
+    assert "before 2026-10-11" in capsys.readouterr().out

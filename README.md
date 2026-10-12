@@ -87,16 +87,16 @@ once, never a fitting target** — it exists to catch a board that has gone gros
 ## Building it
 
 ```bash
-python scripts/01_ingest.py 1997 2026 RS,PO   # play-by-play and box scores. DAYS, but resumable.
-python scripts/02_stints.py 1997 2026 RS,PO   # possessions with the same ten on the floor
-python scripts/49_role_panel.py --season      # APM, role prior, prior-informed RAPM, one row per season
+python -m openrapm data ingest 1997 2026 RS,PO   # play-by-play and box scores. DAYS, but resumable.
+python -m openrapm data stints 1997 2026 RS,PO   # possessions with the same ten on the floor
+python -m openrapm data panel                    # the season panel the box prior reads, one row per player-season-side
 python -m openrapm rate --name product        # steps 1-3 -> outputs/season_ratings_product_step3.parquet
 python -m openrapm site --bias --decomposition   # -> docs/data/ratings.json, decompose_*.json, docs/bias.html
 ```
 
 Step 1 hits stats.nba.com once per game for about 40,000 games and takes days. It is cached and
-idempotent, so stopping and restarting it is fine. Everything under `data/` is rebuilt by steps 1
-and 2 and none of it is in git.
+idempotent, so stopping and restarting it is fine. Everything under `data/` is rebuilt by steps 1-3
+and none of it is in git.
 
 Step 4 is the one that decides what ships: `outputs/season_ratings_product.parquet` is what step 5
 publishes and what `tests/test_vs_consensus.py` scores; a clone without `outputs/` scores the published
@@ -115,10 +115,10 @@ archive/research-2026-10).
         stints.py    play-by-play to stints
         roles.py     playing-time share, starts, age per player-season
         designs.py   a window's design, from cached per-season pieces
+        panel.py     the season panel: one row per player, season and side
       design.py      the sparse design: players, fixed effects, box exposures
-      exposure.py    cross-fitted, empirical-Bayes padded per-100 rates
-      estimator.py   the mixed model (Henderson), eigen lambda path
-      spm.py         APM and the role prior
+      box_rates.py   the padded per-100 box rates of the season panel
+      on_court.py    his team's record with him on the court and off it
       features.py    the box-score inputs the prior reads, and the shipped lists
       rapm.py        step 1, the label: one RAPM per player from every season but the rated one
       box_prior.py   step 2, the box prior: training rows, player folds, LightGBM

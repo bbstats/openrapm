@@ -17,7 +17,7 @@ CFG = load_config()
 # and CI checks.  Everything else here runs against a synthetic tree and always executes.
 _GAMELOG = resolve(CFG, "raw") / "gamelog"
 HAVE_DATA = _GAMELOG.is_dir() and any(_GAMELOG.glob("*_PO.parquet"))
-needs_data = pytest.mark.skipif(not HAVE_DATA, reason="no game logs; run scripts/01_ingest.py")
+needs_data = pytest.mark.skipif(not HAVE_DATA, reason="no game logs; run openrapm data ingest")
 
 
 def _gamelog(champion_wins: int, teams: int = 16) -> pd.DataFrame:
@@ -129,43 +129,31 @@ def test_the_cutoff_follows_the_tree_it_is_pointed_at(tmp_path):
 
 
 # ------------------------------------------------------------------ the panel filter
-def _panel(labels):
-    return pd.DataFrame({"window": labels, "side": "O", "player_id": range(len(labels)),
-                         "rapm1": 1.0, "poss": 100.0})
+def _panel(seasons):
+    return pd.DataFrame({"season": seasons, "side": "O", "player_id": range(len(seasons)), "possessions": 100.0})
 
 
-def test_unit_last_season_reads_both_label_shapes():
-    assert S.unit_last_season(["2024-2026", "1997-1999", "2026"]).tolist() == [2026, 1999, 2026]
-
-
-def test_a_block_reaching_into_a_season_in_progress_is_dropped_whole(tmp_path):
-    """A three-season block ending in the current season carries that season's evidence in every one
-    of its rows, so there is no honest way to keep part of it."""
-    cfg = _write(tmp_path, 2024, _gamelog(16))
-    _write(tmp_path, 2025, _gamelog(15))
-    cfg = {**cfg, "first_season": 2018, "last_season": 2025}
-    kept, dropped = S.drop_untrainable(_panel(["2018-2020", "2021-2023", "2023-2025"]), cfg)
-    assert dropped == ("2023-2025",)
-    assert kept.window.tolist() == ["2018-2020", "2021-2023"]
-
-
-def test_a_single_season_row_is_dropped_only_for_its_own_season(tmp_path):
+def test_a_row_is_dropped_only_for_its_own_season(tmp_path):
     cfg = _write(tmp_path, 2024, _gamelog(16))
     _write(tmp_path, 2025, _gamelog(15))
     cfg = {**cfg, "first_season": 2022, "last_season": 2025}
-    kept, dropped = S.drop_untrainable(_panel(["2023", "2024", "2025"]), cfg)
-    assert dropped == ("2025",) and kept.window.tolist() == ["2023", "2024"]
+    kept, dropped = S.drop_untrainable(_panel([2023, 2024, 2025, 2025]), cfg)
+    assert dropped == (2025,) and kept.season.tolist() == [2023, 2024]
+    assert kept.index.tolist() == [0, 1]
 
 
 @needs_data
 def test_the_filter_is_a_no_op_when_nothing_is_in_progress():
     """Today's case: every season on disk is finished, so the guard must not touch the panel."""
-    p = _panel(["1997-1999", f"{S.trainable_through(CFG)}"])
+    p = _panel([1997, S.trainable_through(CFG)])
     kept, dropped = S.drop_untrainable(p, CFG)
-    assert dropped == () and len(kept) == len(p)
+    assert dropped == () and kept.equals(p)
 
 
-def test_the_filter_tolerates_a_frame_with_no_label_column():
-    p = pd.DataFrame({"player_id": [1, 2]})
-    kept, dropped = S.drop_untrainable(p, CFG)
-    assert dropped == () and kept is p
+def test_a_frame_with_no_season_column_is_refused():
+    """The gate once read the block label `window` and passed a frame without it through untouched; a frame that
+    cannot say which season each row belongs to is refused instead."""
+    with pytest.raises(KeyError, match="season"):
+        S.drop_untrainable(pd.DataFrame({"player_id": [1, 2]}), CFG)
+    with pytest.raises(KeyError, match="season"):
+        S.drop_untrainable(pd.DataFrame({"window": ["2023", "2025"], "player_id": [1, 2]}), CFG)

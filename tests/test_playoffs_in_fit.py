@@ -28,12 +28,11 @@ from openrapm.data.designs import build_window, build_window_cached
 from openrapm.data.roles import ROLE_PHASES
 from openrapm.data.shots import SHOT_PHASES
 from openrapm.design import SEASON_PHASES
-from openrapm.exposure import BoxExposure
 
 CFG = load_config()
 _STINTS = resolve(CFG, "stints")
 HAVE_DATA = _STINTS.is_dir() and any(_STINTS.glob("*_PO.parquet"))
-needs_data = pytest.mark.skipif(not HAVE_DATA, reason="no stints; run scripts/02_stints.py")
+needs_data = pytest.mark.skipif(not HAVE_DATA, reason="no stints; run openrapm data stints")
 
 
 def _default(fn, name):
@@ -44,7 +43,7 @@ def _default(fn, name):
 
 def test_every_phase_default_is_the_whole_season():
     assert SEASON_PHASES == ("RS", "PO")
-    for fn, arg in ((build_window, "phases"), (build_window_cached, "phases"), (BoxExposure.__init__, "phases")):
+    for fn, arg in ((build_window, "phases"), (build_window_cached, "phases")):
         assert _default(fn, arg) == SEASON_PHASES, f"{fn.__qualname__} still defaults to regular season only"
     assert ROLE_PHASES == SEASON_PHASES      # minutes, starts and possessions behind the role prior
     assert SHOT_PHASES == SEASON_PHASES      # the shooter totals that price the luck-adjusted targets

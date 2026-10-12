@@ -78,6 +78,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from .features import BOX_RATES
 from .swap_test import Season, aligned, predict, side_rates
 
 __all__ = ["SIDES", "RESIDUAL_CONTEXT", "PANEL_FEATURES", "PRIOR_FEATURES", "TYPE_FEATURES", "residual_pairs",
@@ -94,8 +95,8 @@ RESIDUAL_CONTEXT = "nofatigue"
 # season, so the part of a player's record the ridge held back is still in them, and a model given u learned to
 # multiply it by about 2 -- a lighter ridge penalty wearing a "player type" label (DECISIONS.md, the swap
 # adjustment).  Order is load-bearing: it is the order of the coefficients.
-PANEL_FEATURES = ["fg3m", "fg3_miss", "fg2m", "fg2_miss", "ftm", "ft_miss", "orb", "drb", "ast", "tov", "stl",
-                  "blk", "pf", "poss_pct", "gs_pct", "gt_share", "age", "exp_yrs", "height", "weight"]
+PANEL_FEATURES = [*BOX_RATES, "team_possession_share", "games_started_share", "garbage_time_share", "age",
+                  "seasons_before", "height_in", "weight_lb"]
 # the box prior, so the model can say "the prior is too high for this kind of player" if the swaps do
 PRIOR_FEATURES = ["prior_off", "prior_def"]
 TYPE_FEATURES = PANEL_FEATURES + PRIOR_FEATURES

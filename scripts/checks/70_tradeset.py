@@ -81,6 +81,7 @@ from openrapm import trade_set
 from openrapm.commands.console import one_thread, use_utf8
 from openrapm.data.config import load_config, resolve, resolve_path
 from openrapm.data.designs import DesignCache
+from openrapm.data.legacy_names import target_name
 from openrapm.data.roles import roles_path
 from openrapm.data.tables import load_ratings, team_of_rows
 from openrapm.scoring import Ratings, armse, predict_season, score
@@ -105,8 +106,11 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--lambdas", default="1000,3000,10000,30000,100000,300000",
                         help="the penalties swept (default %(default)s)")
     parser.add_argument("--fill", default="500x0.25", help="the replacement level (default %(default)s)")
-    parser.add_argument("--target_off", default="xpts_ft", help="the offence's target (default %(default)s)")
-    parser.add_argument("--target_def", default="x3def_w0.25", help="the defence's target (default %(default)s)")
+    # an old target name (xpts_ft, x3def_w0.25, x3def) is read as its plain one (openrapm.data.legacy_names)
+    parser.add_argument("--target_off", default="points_with_expected_free_throws", type=target_name,
+                        help="the offence's target (default %(default)s)")
+    parser.add_argument("--target_def", default="points_with_expected_opponent_threes", type=target_name,
+                        help="the defence's target (default %(default)s)")
     parser.add_argument("--out", default="tradeset", help="outputs/<OUT>_*.parquet (default %(default)s)")
     parser.add_argument("--score", default="1", type=on_off, help="0: skip scoring the penalties (default %(default)s)")
     parser.add_argument("--block", default=1, type=int,

@@ -143,12 +143,13 @@ def booster_name(settings) -> str:
 def models_meta(settings, name: str, argv) -> dict:
     """What the saved boosters were built with.
 
-    schema 2 adds the settings themselves; the other keys are the ones scripts/62 wrote, with the values it wrote
-    for these settings.  `crossfit` "scale" was its shipped cross-fitted scale: the cross-fitted fold priors
-    equalled the full prior value for value, so dropping the cross-fit changed no number (checked 2026-10-09),
-    and the earlier within-season script reads these files too.
+    schema 2 adds the settings themselves; schema 3 names every input, input list and target by its plain name
+    (2026-10-11; `openrapm folds` reads the older files through data/legacy_names.py).  The other keys are the
+    ones scripts/62 wrote, with the values it wrote for these settings.  `crossfit` "scale" was its shipped
+    cross-fitted scale: the cross-fitted fold priors equalled the full prior value for value, so dropping the
+    cross-fit changed no number (checked 2026-10-09), and the earlier within-season script reads these files too.
     """
-    return dict(schema=2, settings=asdict(settings), argv=list(argv),
+    return dict(schema=3, settings=asdict(settings), argv=list(argv),
                 exclude_neighbours=settings.exclude_neighbours, features=settings.prior.feature_set,
                 rows="chunks", chunk_label="career", unshrink=list(settings.labels.unshrink_columns),
                 player_folds=settings.prior.n_folds, booster_params=booster_name(settings), crossfit="scale",
@@ -194,7 +195,7 @@ def rate_table(cfg: dict, settings, seasons, keep_models: bool = False) -> tuple
     designs = DesignCache(cfg)
     sums = accumulate_rapm(designs, trainable(cfg).seasons, settings)
     panel = trainable_panel(cfg)
-    panel = panel[panel.poss > 0].reset_index(drop=True)
+    panel = panel[panel.possessions > 0].reset_index(drop=True)
     params = booster_params(cfg, settings.prior.booster_file)
     tables, models = rate_seasons(seasons, sums, panel, designs, settings, params, keep_models=keep_models)
     return prior_rapm.published_table(pd.concat(tables, ignore_index=True), player_names(cfg)), models

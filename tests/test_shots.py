@@ -4,8 +4,14 @@ import inspect
 import numpy as np
 import pandas as pd
 
-from openrapm.data.shots import (DEFENSE_TARGETS, ShooterRates, align, def_three_design, expected_makes,
-                                 rates_from_tables)
+from openrapm.data.shots import (
+    DEFENSE_TARGETS,
+    ShooterRates,
+    align,
+    def_three_design,
+    expected_makes,
+    rates_from_tables,
+)
 from openrapm.design import SHOOTER_COUNTERS, SLOTS
 
 
@@ -18,7 +24,8 @@ def _tables():
     for pid in range(3, 60):                           # a population so mom_k has something to estimate
         for h, gid in (("A", "g1"), ("B", "g2")):
             m = 40 + (pid % 7) * 3
-            rows.append(dict(game_id=gid, player_id=pid, half=h, fg2a=100, fg2m=m, xl2=50.0, fg3a=60, fg3m=18 + pid % 5, xl3=21.0))
+            rows.append(dict(game_id=gid, player_id=pid, half=h, fg2a=100, fg2m=m, xl2=50.0, fg3a=60, fg3m=18 + pid % 5,
+                             xl3=21.0))
     shots = pd.DataFrame(rows)
     ft = pd.DataFrame([dict(game_id="g1", player_id=1, half="A", ftm=90, ft_miss=10, fta=100),
                        dict(game_id="g2", player_id=1, half="B", ftm=90, ft_miss=10, fta=100)] +
@@ -48,7 +55,8 @@ def test_extra_seasons_and_fixed_k():
     base = rates_from_tables(shots, ft, k_fixed={"fg3": 450.0})
     assert base.k["fg3"] == 450.0
     # player 1: 50 threes at 40% per half; an extra season of 200 more at 40% moves him nearer 0.40
-    extra = pd.DataFrame([dict(game_id="g0", player_id=1, half="A", fg2a=0, fg2m=0, xl2=0.0, fg3a=200, fg3m=80, xl3=72.0)])
+    extra = pd.DataFrame([dict(game_id="g0", player_id=1, half="A", fg2a=0, fg2m=0, xl2=0.0, fg3a=200, fg3m=80,
+                               xl3=72.0)])
     more = rates_from_tables(shots, ft, extra=extra, k_fixed={"fg3": 450.0})
     assert more.p3["B"][1] > base.p3["B"][1]                    # more evidence of a 40% shooter than the league ~0.33
     assert more.p3["A"][1] > base.p3["A"][1] and more.p3["ALL"][1] > base.p3["ALL"][1]
@@ -106,14 +114,16 @@ def test_align_only_outside_the_band():
 
 
 def test_the_two_defensive_targets_keep_their_names_and_settings():
-    """62, 70, 97 and seasoninputs look the defensive targets up by name; x3def_w0.25 (what ships) keeps a quarter
-    of the realised three-point deviation, x3def none, and both use def_three_design's other defaults."""
-    assert set(DEFENSE_TARGETS) == {"x3def", "x3def_w0.25"}
+    """The build, 70, the folds and the season panel (data/panel.py) look the defensive targets up by name;
+    points_with_expected_opponent_threes (what ships; x3def_w0.25 before 2026-10-11) keeps a quarter of the
+    realised three-point deviation, points_with_expected_opponent_threes_all (x3def) none, and both use
+    def_three_design's other defaults."""
+    assert set(DEFENSE_TARGETS) == {"points_with_expected_opponent_threes_all", "points_with_expected_opponent_threes"}
     for name, target in DEFENSE_TARGETS.items():
         assert target.__name__ == name
         bound = inspect.getclosurevars(target).nonlocals
         assert bound["fn"] is def_three_design
-        assert bound["kw"] == ({"w3": 0.25} if name == "x3def_w0.25" else {})
+        assert bound["kw"] == ({"w3": 0.25} if name == "points_with_expected_opponent_threes" else {})
     defaults = {k: p.default for k, p in inspect.signature(def_three_design).parameters.items()
                 if p.default is not inspect.Parameter.empty}
     assert defaults == {"prev": 0, "k3": 450.0, "calibrate": True, "keep": None, "w3": 0.0, "wft": 0.0}

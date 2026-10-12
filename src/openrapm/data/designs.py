@@ -409,8 +409,9 @@ class DesignCache:
     """One season's design (or a run of seasons') on one target, built from the cached pieces and kept for the
     next few requests.
 
-    `target` is a `design.TARGETS` key ("pts", "xpts_ft") or a `data.shots.DEFENSE_TARGETS` key ("x3def",
-    "x3def_w0.25"), which reprices the same seasons' points design.  Once `keep` designs are held the cache
+    `target` is a `design.TARGETS` key ("pts", "points_with_expected_free_throws") or a `data.shots.DEFENSE_TARGETS`
+    key ("points_with_expected_opponent_threes" and its "_all" variant), which reprices the same seasons' points
+    design.  Once `keep` designs are held the cache
     empties: a season's design is hundreds of megabytes, and a build asks for them in season order.
     """
 

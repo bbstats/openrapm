@@ -106,7 +106,7 @@ def read_ages(cfg: dict) -> pd.DataFrame:
     """player_id, season, age from the season panel's offence rows, read through the season gate like every other
     reader of the panel."""
     panel, _ = drop_untrainable(pd.read_parquet(resolve(cfg, "panel"),
-                                                columns=["window", "player_id", "season", "side", "age"]),
+                                                columns=["player_id", "season", "side", "age"]),
                                 cfg, what="the season panel")
     return panel[panel.side == "O"]
 

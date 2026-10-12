@@ -36,16 +36,19 @@ __all__ = ["Targets", "LabelSettings", "PriorSettings", "RidgeSettings", "Shrink
 
 @dataclass(frozen=True)
 class Targets:
-    """What each side's ridge explains, per stint, in points per 100 possessions (rapm.py defines both)."""
+    """What each side's ridge explains, per stint, in points per 100 possessions (rapm.py defines both).
+
+    Before 2026-10-11 the two were called xpts_ft and x3def_w0.25 (data/legacy_names.py still reads those).
+    """
     # 100 x (points - made free throws + expected free throws) / possessions: each free throw counted at the
     # shooter's padded free-throw %.  The only luck adjustment that has improved the ratings: 0.26 per 100 on
     # the year-over-year test against plain points (DECISIONS.md, "What was settled": the free-throw adjustment)
-    offence: str = "xpts_ft"
+    offence: str = "points_with_expected_free_throws"
     # the offence target with 3 x 0.75 x (threes made - threes expected) also taken off: three quarters of the
-    # shooters' three-point luck removed.  Keeping the other quarter moved the score by -0.007 per 100 at
-    # z = -0.34 (z: the paired t-statistic over the scored seasons), nothing measurable (DECISIONS.md, "What was
-    # settled": x3def)
-    defence: str = "x3def_w0.25"
+    # shooters' three-point luck removed, a quarter kept (data/shots.py, OPPONENT_THREE_LUCK_KEPT).  Keeping the
+    # quarter moved the score by -0.007 per 100 at z = -0.34 (z: the paired t-statistic over the scored seasons),
+    # nothing measurable (DECISIONS.md, "What was settled": x3def)
+    defence: str = "points_with_expected_opponent_threes"
 
     def distinct(self) -> list:
         """The targets to fit, each once: [offence, defence], or one name when both sides share a target."""
@@ -75,9 +78,9 @@ class LabelSettings:
 @dataclass(frozen=True)
 class PriorSettings:
     """Step 2: the box-score prior."""
-    # "boruta_noonc": the inputs Boruta selected, without the on-court columns (features.SHIPPED; DECISIONS.md,
-    # experiment 45, adopted 2026-10-08)
-    feature_set: str = "boruta_noonc"
+    # "box_score_and_bio": the inputs Boruta selected, without the on-court columns (features.SHIPPED; DECISIONS.md,
+    # experiment 45, adopted 2026-10-08, where it is called boruta_noonc)
+    feature_set: str = "box_score_and_bio"
     # the career row plus every run of 1, 2 and 3 consecutive seasons (DECISIONS.md, experiment 3)
     chunk_sizes: tuple = (1, 2, 3)
     # each player's prior from the booster fitted without his fold (DECISIONS.md, "The SPM memorises

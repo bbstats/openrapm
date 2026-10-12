@@ -22,6 +22,8 @@ import pandas as pd
 
 from .config import resolve
 
+# As this module (and the bio.parquet cache) names them; the season panel calls them height_in, weight_lb,
+# draft_pick, seasons_with_team and teams_this_season (features.BIO; data/legacy_names.py maps one onto the other).
 BIO_INPUTS = ["height", "weight", "draft_pick"]
 TENURE_INPUTS = ["tenure", "n_teams"]
 PLAYER_INPUTS = [*BIO_INPUTS, *TENURE_INPUTS]
@@ -41,7 +43,8 @@ def player_bio(cfg, force: bool = False) -> pd.DataFrame:
     raw_bio = resolve(cfg, "raw") / "bio"
     files = sorted(raw_bio.glob("*_RS.parquet"))
     if not files:
-        raise FileNotFoundError(f"{raw_bio} has no *_RS.parquet; run scripts/01_ingest.py")
+        raise FileNotFoundError(f"{raw_bio} has no *_RS.parquet; the roles table fetches them "
+                                f"(data/roles.py, season_ages), so run `openrapm data panel`")
     parts = []
     for f in files:
         d = pd.read_parquet(f, columns=["PLAYER_ID", "PLAYER_HEIGHT_INCHES", "PLAYER_WEIGHT", "DRAFT_NUMBER"])

@@ -4,7 +4,7 @@
 # then the readings, each a check in scripts/checks/: 63, 64, 66 (2026 top 20), 90, 88, 70 + 73 (on the
 # incumbent's trade-loss target, and on the candidate's own as a sensitivity).  Everything not named is the incumbent's.
 #   bash scripts/experiment_chain.sh NAME DEFENSIVE_TARGET ["EXTRA RATE FLAGS"]   (INC_NAME, BASE_FLAGS, SHRINK_TAG, SKIP_BUILD: see below)
-#   bash scripts/experiment_chain.sh noise_control x3def_w0.25 "--fold-assignment 1"
+#   bash scripts/experiment_chain.sh noise_control points_with_expected_opponent_threes "--fold-assignment 1"
 # Log: outputs/NAME_chain.log.  One build at a time.
 # A reading that fails is logged and the chain goes on to the next (each reading stands alone); the last line of the
 # log then names every reading that failed, and the chain exits with status 1.
@@ -22,7 +22,7 @@ LOG=outputs/${NAME}_chain.log
 INC_NAME=${INC_NAME:-weightfix}
 INC_FOLDS=${INC_FOLDS:-weightfix_within}
 INC=outputs/season_ratings_${INC_NAME}.parquet
-BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1 --features boruta_noonc}
+BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1 --features box_score_and_bio}
 [ -n "$NAME" ] && [ -n "$TARGET" ] || { echo "usage: scripts/experiment_chain.sh NAME TARGET [EXTRA RATE FLAGS]"; exit 1; }
 # Every check the chain calls, looked for BEFORE the build: a missing one would otherwise surface only hours later.
 READINGS="63_yoy 64_consensus_report 66_compare 70_tradeset 73_tradeloss 88_yoy_by_player 90_swap_test 138_heldout_audit"

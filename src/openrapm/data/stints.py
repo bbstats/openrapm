@@ -123,7 +123,7 @@ def build_season(season: int, phase: str, cfg, force=False, verbose=True):
     ft_rates = (box_scores.ft_totals(season_box), *box_scores.ft_padding(season_box))
     # the league's make probability by distance this season (the regular season's curve, for the playoffs
     # too).  `force` reaches the curve as well: a curve cached from an incomplete scrape used to survive
-    # every later `02_stints.py --force`, because only the stints were rebuilt.
+    # every later `openrapm data stints --force`, because only the stints were rebuilt.
     curve = shot_curves.curve_for(season, cfg, force=force, verbose=verbose)
     neutral_seasons = set(cfg.get("neutral_site_seasons_po", []))
     parts, diags, name_parts, shot_parts = [], [], [], []
@@ -174,7 +174,7 @@ def _load_cached(path, diag_path, season: int, phase: str):
         return stints, diag
     raise StaleStintCache(
         f"{path.name} was built at schema {have}, this code needs {STINT_SCHEMA}. "
-        f"Rebuild with: python scripts/02_stints.py {season} {season} {phase} --force")
+        f"Rebuild with: openrapm data stints {season} {season} {phase} --force")
 
 
 def _label_stints(game_stints: pd.DataFrame, game, season: int, phase: str, neutral_seasons: set) -> pd.DataFrame:

@@ -23,18 +23,20 @@ def test_the_label_settings():
 
 
 def test_the_targets_prior_and_ridge():
-    assert (PRODUCT.targets.offence, PRODUCT.targets.defence) == ("xpts_ft", "x3def_w0.25")
+    assert (PRODUCT.targets.offence, PRODUCT.targets.defence) == ("points_with_expected_free_throws",
+                                                                  "points_with_expected_opponent_threes")
     assert PRODUCT.prior.chunk_sizes == (1, 2, 3)
     assert PRODUCT.prior.n_folds == 5 and PRODUCT.prior.fold_assignment == 0
-    assert PRODUCT.prior.feature_set == "boruta_noonc"
+    assert PRODUCT.prior.feature_set == "box_score_and_bio"
     assert PRODUCT.prior.booster_file == "params/booster_params_lgb1.json"
     assert PRODUCT.ridge.penalty == 13037.0
     assert PRODUCT.exclude_neighbours == 0
 
 
 def test_each_distinct_target_is_fitted_once():
-    assert PRODUCT.targets.distinct() == ["xpts_ft", "x3def_w0.25"]
-    assert replace(PRODUCT.targets, defence="xpts_ft").distinct() == ["xpts_ft"]
+    assert PRODUCT.targets.distinct() == ["points_with_expected_free_throws", "points_with_expected_opponent_threes"]
+    assert replace(PRODUCT.targets, defence="points_with_expected_free_throws").distinct() == [
+        "points_with_expected_free_throws"]
 
 
 def test_the_shrink_and_swap_settings():

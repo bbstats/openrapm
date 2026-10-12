@@ -20,8 +20,8 @@ Words used below
                   his fold, so it cannot have learned "this box score is LeBron" and returned his label
 
 Every row carries the player's career label, so what differs between his rows is only how much evidence the
-box score rests on; two inputs say how much (`chunk_poss`, the possessions behind the row, and
-`chunk_seasons`, the seasons it covers).  The weights:
+box score rests on; two inputs say how much (`row_possessions`, the possessions behind the row, and
+`row_seasons`, the seasons it covers).  The weights:
 
     career row      weight = L
     chunk row c     weight = L x poss_c / (sum of poss over his chunk rows)
@@ -41,7 +41,7 @@ the settings in params/booster_params_lgb1.json) solves:
 
     minimise over f   sum over training rows  v (label - f(x))^2  +  LightGBM's penalties on the leaves
 
-    x      the row's inputs: the side's shipped list (features.SHIPPED), then chunk_poss and chunk_seasons
+    x      the row's inputs: the side's shipped list (features.SHIPPED), then row_possessions and row_seasons
     v      the row weight divided by the mean row weight (`fit_lightgbm`)
     f(x)   a sum of trees, each scaled by the learning rate; a tree splits on one input at a time (x_j < c)
            and fits, in each leaf, a linear model on the inputs its branch split on, ridge penalty
@@ -64,9 +64,10 @@ __all__ = ["average_over_seasons", "career_rows", "season_runs", "training_rows"
            "LIGHTGBM_FIXED", "fit_lightgbm", "OutOfPlayerPrior", "fit_out_of_player", "rated_rows", "predict",
            "SidePrior", "season_priors"]
 
-# columns a training row adds for its own bookkeeping; none may share a name with an input (DECISIONS.md,
-# experiment 46: the row weight once overwrote the body-weight input `weight`)
-BOOKKEEPING = ("target", "row_weight", "possessions")
+# columns a training row adds for its own bookkeeping: the label it carries, its weight in the fit and the
+# possessions behind the label.  None may share a name with an input (DECISIONS.md, experiment 46: the row weight
+# once overwrote the body-weight input, then called `weight`)
+BOOKKEEPING = ("label", "row_weight", "label_possessions")
 
 
 def _refuse_clashes(feature_names) -> None:
@@ -89,17 +90,23 @@ def average_over_seasons(rows: pd.DataFrame, feature_names, by=None, panel_colum
     """
     columns = [name for name in panel_columns if name in rows.columns]
     key = rows.player_id if by is None else by
-    weight = rows.poss.groupby(key).sum()
-    mean = rows[columns].mul(rows.poss, axis=0).groupby(key).sum().div(weight, axis=0)
+    weight = rows.possessions.groupby(key).sum()
+    mean = rows[columns].mul(rows.possessions, axis=0).groupby(key).sum().div(weight, axis=0)
     return add_features(mean, feature_names)
+
+
+def _labels(label: pd.DataFrame, column: str) -> pd.DataFrame:
+    """Step 1's table for one side, indexed by player_id: his label (`column`) and the possessions behind it
+    (`label_possessions`)."""
+    return label.set_index("player_id")[[column, "possessions"]].rename(columns={"possessions": "label_possessions"})
 
 
 def career_rows(label: pd.DataFrame, rows: pd.DataFrame, column: str, feature_names,
                 panel_columns=PANEL_INPUTS) -> pd.DataFrame:
     """One career row per labelled player, indexed by player_id; weight = the possessions behind his label."""
     out = (average_over_seasons(rows, feature_names, panel_columns=panel_columns)
-           .join(label.set_index("player_id")[[column, "possessions"]], how="inner").dropna())
-    return out.assign(target=out[column].to_numpy(float), row_weight=out.possessions.to_numpy(float))
+           .join(_labels(label, column), how="inner").dropna())
+    return out.assign(label=out[column].to_numpy(float), row_weight=out.label_possessions.to_numpy(float))
 
 
 def season_runs(rows: pd.DataFrame, chunk_sizes=(1, 2, 3)) -> pd.DataFrame:
@@ -130,26 +137,25 @@ def training_rows(label: pd.DataFrame, rows: pd.DataFrame, column: str, feature_
 
     `label` is step 1's table for this side (player_id, `column`, possessions); `rows` the side's panel rows for
     the training seasons.  The row order (career rows by player, then chunk rows by run key) is what LightGBM
-    is handed, so it is kept exactly.  Columns beside the averaged inputs: `column`, possessions (behind the
-    label), target, row_weight, chunk_poss, chunk_seasons.
+    is handed, so it is kept exactly.  Columns beside the averaged inputs: `column`, label_possessions, label,
+    row_weight, row_possessions, row_seasons.
     """
     _refuse_clashes(feature_names)
-    labels = label.set_index("player_id")[[column, "possessions"]]
     per_player = rows.groupby("player_id")
     career = career_rows(label, rows, column, feature_names, panel_columns)
-    career = career.assign(chunk_poss=per_player.poss.sum().reindex(career.index).to_numpy(float),
-                           chunk_seasons=per_player.season.nunique().reindex(career.index).to_numpy(float))
+    career = career.assign(row_possessions=per_player.possessions.sum().reindex(career.index).to_numpy(float),
+                           row_seasons=per_player.season.nunique().reindex(career.index).to_numpy(float))
     members = season_runs(rows, chunk_sizes)
     chunks = average_over_seasons(members, feature_names, by=members.chunk, panel_columns=panel_columns)
     grouped = members.groupby("chunk")
-    chunks["chunk_poss"] = grouped.poss.sum().reindex(chunks.index).to_numpy(float)
-    chunks["chunk_seasons"] = grouped.season.nunique().reindex(chunks.index).to_numpy(float)
+    chunks["row_possessions"] = grouped.possessions.sum().reindex(chunks.index).to_numpy(float)
+    chunks["row_seasons"] = grouped.season.nunique().reindex(chunks.index).to_numpy(float)
     chunks["player_id"] = grouped.player_id.first().reindex(chunks.index).to_numpy()
-    chunks = chunks.join(labels, on="player_id", how="inner")
+    chunks = chunks.join(_labels(label, column), on="player_id", how="inner")
     chunks = chunks.dropna(subset=list(feature_names) + [column]).set_index("player_id")
-    share = chunks.chunk_poss / chunks.groupby(level=0).chunk_poss.transform("sum")
-    chunks = chunks.assign(target=chunks[column].to_numpy(float),
-                           row_weight=(share * chunks.possessions).to_numpy(float))
+    share = chunks.row_possessions / chunks.groupby(level=0).row_possessions.transform("sum")
+    chunks = chunks.assign(label=chunks[column].to_numpy(float),
+                           row_weight=(share * chunks.label_possessions).to_numpy(float))
     return pd.concat([career, chunks])
 
 
@@ -171,7 +177,7 @@ def balanced_player_folds(train: pd.DataFrame, n_folds: int = 5, fold_assignment
     default_rng(k), so every fold still gets one player from each group.  k = 1 reproduces DECISIONS.md's run
     noise_regroup2.
     """
-    inverse, mean = _player_means(train.target.to_numpy(float), train.index.to_numpy(),
+    inverse, mean = _player_means(train.label.to_numpy(float), train.index.to_numpy(),
                                   train.row_weight.to_numpy(float))
     order = np.argsort(mean, kind="stable")
     fold_of_player = np.empty(mean.size, dtype=int)
@@ -213,7 +219,7 @@ def fit_out_of_player(train: pd.DataFrame, inputs, params: dict, n_folds: int = 
                       fold_assignment: int = 0) -> OutOfPlayerPrior:
     """1 + `n_folds` LightGBM fits on the training rows: the full fit, then one without each fold."""
     matrix = train[inputs].to_numpy(float)
-    label = train.target.to_numpy(float)
+    label = train.label.to_numpy(float)
     weight = train.row_weight.to_numpy(float)
     prior = OutOfPlayerPrior(full=fit_lightgbm(params, matrix, label, weight), fold_models=[],
                              held_out_players=[], inputs=list(inputs))
@@ -227,9 +233,9 @@ def fit_out_of_player(train: pd.DataFrame, inputs, params: dict, n_folds: int = 
 
 
 def rated_rows(season_rows: pd.DataFrame, feature_names) -> pd.DataFrame:
-    """The rated season's own panel rows, derived, with chunk_poss = his possessions and chunk_seasons = 1."""
+    """The rated season's own panel rows, derived, with row_possessions = his possessions and row_seasons = 1."""
     rows = add_features(season_rows.copy(), feature_names)
-    return rows.assign(chunk_poss=rows.poss.to_numpy(float), chunk_seasons=1.0)
+    return rows.assign(row_possessions=rows.possessions.to_numpy(float), row_seasons=1.0)
 
 
 def predict(prior: OutOfPlayerPrior, rows: pd.DataFrame) -> np.ndarray:
@@ -265,7 +271,7 @@ def season_priors(labels: dict, panel: pd.DataFrame, season: int, unseen, settin
     `labels` is step 1's {"O", "D"} tables; `panel` the season panel with the seasons a build may not train on
     removed (`data.seasons.drop_untrainable`) and only rows with possessions;
     `unseen` the seasons no training row may come from (the rated one, plus its neighbours in the test
-    setting); `params` each side's LightGBM settings.  Inputs: the shipped list, then chunk_poss, chunk_seasons.
+    setting); `params` each side's LightGBM settings.  Inputs: the shipped list, then row_possessions, row_seasons.
     """
     out = {}
     for side, column in (("O", "offense"), ("D", "defense")):

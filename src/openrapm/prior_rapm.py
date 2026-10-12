@@ -28,7 +28,8 @@ The fit, for one season and one target:
     rating = s x prior + r,   reported prior = s x prior,   u = rating - reported prior = r   (per side)
 
 Two fits run per season: the offence half of the table comes from the fit on the offence target, the defence
-half from the fit on the defence target (step 1 defines both, "xpts_ft" and "x3def_w0.25").
+half from the fit on the defence target (step 1 defines both, "points_with_expected_free_throws" and
+"points_with_expected_opponent_threes").
 
 Example: 2026's offensive prior scale is 2.35 (product setting).  A player whose booster prior is +0.5 per 100
 starts at 2.35 x 0.5 = +1.18.  If his 2,500 possessions say he was 2.5 per 100 better than that, he keeps about
