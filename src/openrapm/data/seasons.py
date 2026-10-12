@@ -96,18 +96,6 @@ class Trainable:
         return Trainable(tuple(s for s in self.seasons if int(s) not in drop), self.cutoff)
 
 
-@dataclass(frozen=True)
-class Scoreable:
-    """Seasons a fitted model may be applied to: all of them, including one in progress."""
-    seasons: tuple[int, ...]
-
-    def __iter__(self):
-        return iter(self.seasons)
-
-    def __len__(self):
-        return len(self.seasons)
-
-
 def playoffs_complete(season: int, cfg) -> bool:
     """Has any team won the number of playoff games that wins a title?"""
     from .ingest import raw_dir
@@ -146,11 +134,6 @@ def trainable(cfg) -> Trainable:
     """Every season a model may be fit on."""
     cut = trainable_through(cfg)
     return Trainable(tuple(s for s in all_seasons(cfg) if s <= cut), cut)
-
-
-def scoreable(cfg) -> Scoreable:
-    """Every season, including one in progress."""
-    return Scoreable(all_seasons(cfg))
 
 
 def in_progress(cfg) -> tuple[int, ...]:
