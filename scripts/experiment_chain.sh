@@ -1,108 +1,106 @@
 #!/bin/bash
-# One experiment's whole ratings chain, as HANDOFF.md "The test: year-over-year" describes it: 62 in three chunks of ten
-# seasons (stitched), 99, 91, then the readings 63, 64, 66 (2026 top 20), 90, 88, 70 + 73 (on the incumbent's trade-loss
-# target, and on the candidate's own as a sensitivity).  Everything not named is the incumbent's.
-#   bash scripts/experiment_chain.sh NAME DEFENSIVE_TARGET ["EXTRA 62 FLAGS"]   (INC_NAME, BASE_FLAGS, SHRINK_TAG, SKIP_BUILD: see below)
-#   bash scripts/experiment_chain.sh quality_logistic_pinned x3def_qL7_w0.25 --deal_target_def=x3def_w0.25   (42f)
-#   bash scripts/experiment_chain.sh redeal_incumbent x3def_w0.25 --deal_seed=1                              (C1)
-# A target experiment keeps the incumbent's training groupings with --deal_target_def=x3def_w0.25 (DECISIONS.md, 42).
+# One experiment's whole ratings chain, as notes/HANDOFF.md "The test: year-over-year" describes it: steps 1-3 in one run
+# (`openrapm rate --setting test`), step 4 (`openrapm shrink --setting test`), step 5 (`openrapm swap --setting test`),
+# then the readings, each a check in scripts/checks/: 63, 64, 66 (2026 top 20), 90, 88, 70 + 73 (on the
+# incumbent's trade-loss target, and on the candidate's own as a sensitivity).  Everything not named is the incumbent's.
+#   bash scripts/experiment_chain.sh NAME DEFENSIVE_TARGET ["EXTRA RATE FLAGS"]   (INC_NAME, BASE_FLAGS, SHRINK_TAG, SKIP_BUILD: see below)
+#   bash scripts/experiment_chain.sh noise_control points_with_expected_opponent_threes "--fold-assignment 1"
 # Log: outputs/NAME_chain.log.  One build at a time.
+# A reading that fails is logged and the chain goes on to the next (each reading stands alone); the last line of the
+# log then names every reading that failed, and the chain exits with status 1.
 cd "$(dirname "$0")/.."
-PY=.venv/Scripts/python
+# the environment's python: .venv/Scripts/python on Windows, .venv/bin/python on macOS and Linux; PY=... overrides
+if [ -z "$PY" ]; then PY=.venv/bin/python; [ -x .venv/Scripts/python ] && PY=.venv/Scripts/python; fi
 NAME=$1
 TARGET=$2
-EXTRA=${3:-}          # extra flags for 62, e.g. --deal_seed=1 or --deal_target_def=x3def_w0.25
+EXTRA=${3:-}          # extra flags for `openrapm rate`, e.g. --fold-assignment 1 or --features <set>
 LOG=outputs/${NAME}_chain.log
 # The incumbent since 2026-10-09: experiment 46 (the Robustness pass's body-weight fix on experiment 45's LightGBM prior
 # without the on-court inputs), with its own prior-shrink multipliers fitted on its own within-season folds
-# (weightfix_within).  Its 62 settings ride in BASE_FLAGS, AFTER the experiment's own EXTRA flags, because 62 reads the
-# first occurrence of a flag: an experiment's --features or --booster_params wins.  INC_FOLDS: the incumbent's folds.
+# (weightfix_within).  Its rate settings ride in BASE_FLAGS, BEFORE the experiment's own EXTRA flags, because the
+# command line keeps the LAST occurrence of a flag: an experiment's --features or --booster-params wins.
+# INC_FOLDS: the incumbent's folds.
 INC_NAME=${INC_NAME:-weightfix}
 INC_FOLDS=${INC_FOLDS:-weightfix_within}
 INC=outputs/season_ratings_${INC_NAME}.parquet
-BASE_FLAGS=${BASE_FLAGS:---booster_params=lgb1 --features=boruta_noonc}
-[ -n "$NAME" ] && [ -n "$TARGET" ] || { echo "usage: scripts/experiment_chain.sh NAME TARGET [EXTRA 62 FLAGS]"; exit 1; }
-# SKIP_BUILD=1: outputs/season_ratings_NAME_raw.parquet already exists -- start at the prior shrink.
-# SHRINK_TAG=<tag>: the within-season folds 99's multipliers are read from (default the incumbent's, INC_FOLDS; experiment 45's were `lgb_noonc_within`, chimeraboost's `within`); the
-# LightGBM rematch (2026-10-08) refits them on the candidate's own priors (97 --tag=<tag>).
-# OWN_FOLDS=1 (the Robustness pass, 2026-10-08): save the prior models per chunk (--save_models=NAME_<first>), build the
-# candidate's own within-season folds for 2017-2026 (97 --tag=NAME_within), fit the prior shrink on them, and keep the
-# table on the INCUMBENT's multipliers beside it (season_ratings_NAME_incmult) -- both are scored.  Then the held-out
-# audit (138) compares the candidate's folds with the incumbent's (and with CONTROL_TAG's, the noise control's).
-# FIRST_PASS=1: build 2017-2026 only, its folds and the audit, and stop (about 18 minutes); a later full run reuses that
-# chunk.  A chunk is reused only when its table and its saved models both exist.
+BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1 --features box_score_and_bio}
+[ -n "$NAME" ] && [ -n "$TARGET" ] || { echo "usage: scripts/experiment_chain.sh NAME TARGET [EXTRA RATE FLAGS]"; exit 1; }
+# Every check the chain calls, looked for BEFORE the build: a missing one would otherwise surface only hours later.
+READINGS="63_yoy 64_consensus_report 66_compare 70_tradeset 73_tradeloss 88_yoy_by_player 90_swap_test 138_heldout_audit"
+for check in $READINGS; do
+  [ -f scripts/checks/$check.py ] || { echo "scripts/checks/$check.py is missing; nothing was run"; exit 1; }
+done
+FAILED=""
+reading() {            # reading LABEL SCRIPT [FLAGS...]: run one check into the log; a failure is noted, not fatal
+  local label=$1; shift
+  $PY -u "$@" >> $LOG 2>&1 || { echo "=== $(date) $label FAILED" >> $LOG; FAILED="$FAILED, $label"; }
+}
+# SKIP_BUILD=1: outputs/season_ratings_NAME_step3.parquet already exists -- start at the prior shrink.
+# SHRINK_TAG=<tag>: the within-season folds step 4's multipliers are read from, outputs/within/<tag>/ (default the
+# incumbent's, INC_FOLDS; with OWN_FOLDS=1 the candidate's own, NAME_within).  `openrapm folds --tag <tag>` makes them.
+# OWN_FOLDS=1 (the Robustness pass, 2026-10-08): save the candidate's boosters (--save-models NAME, every rated season),
+# build its own within-season folds for 2017-2026 (`openrapm folds --tag NAME_within`), fit the prior shrink on them,
+# and keep the table on the INCUMBENT's multipliers beside it (season_ratings_NAME_incmult) -- both are scored.  Then the
+# held-out audit (138) compares the candidate's folds with the incumbent's (and with CONTROL_TAG's, the noise control's).
+# The audit draws no null of its own: --threshold_from=audit_lgb_noonc_2017 reads the threshold (3.64) and each test's
+# null spread from outputs/audit_lgb_noonc_2017_thresholds.json and outputs/csv/audit_lgb_noonc_2017_null.csv, the
+# 400-draw career null of the 2017-2026 audit of experiment 45 (2026-10-08), so every candidate is judged on the same
+# frozen yardstick.  Both files must exist in outputs/.
+# FIRST_PASS=1: rate 2017-2026 only, its folds and the audit, and stop.  A later full run rates all
+# thirty seasons in one run and keeps the boosters the first pass saved (outputs/prior_models_NAME.pkl).
 OWN_FOLDS=${OWN_FOLDS:-0}
 FIRST_PASS=${FIRST_PASS:-0}
 CONTROL_TAG=${CONTROL_TAG:-}
-# SHRINK_SCRIPT=scripts/140_group_correction.py (the Robustness pass, step 13): the prior shrink refitted together with
-# the group correction's lines, same flags as 99 (--base --out --rule --tag); default 99 itself.
-SHRINK_SCRIPT=${SHRINK_SCRIPT:-scripts/99_prior_shrink.py}
-SHRINK_FLAGS=${SHRINK_FLAGS:-}          # extra flags for the shrink script, e.g. --hold_multipliers=1 for 140
 if [ "$OWN_FOLDS" = "1" ]; then SHRINK_TAG=${SHRINK_TAG:-${NAME}_within}; else SHRINK_TAG=${SHRINK_TAG:-$INC_FOLDS}; fi
-# 97 must be told the settings the models were saved at: the first --features / --booster_params 62 read
-FEATS97=$(echo "$EXTRA $BASE_FLAGS" | grep -o -- '--features=[^ ]*' | head -1)
-BOOSTER97=$(echo "$EXTRA $BASE_FLAGS" | grep -o -- '--booster_params=[^ ]*' | head -1)
-CHUNKS="1997 2007 2017"
-[ "$FIRST_PASS" = "1" ] && CHUNKS="2017"
+SEASONS=1997-2026
+[ "$FIRST_PASS" = "1" ] && SEASONS=2017-2026
 if [ "${SKIP_BUILD:-0}" != "1" ]; then
-for FIRST in $CHUNKS; do
-  LAST=$((FIRST + 9))
-  BOARDS=$(seq -s, $FIRST $LAST)
   SAVE=""
-  [ "$OWN_FOLDS" = "1" ] && SAVE="--save_models=${NAME}_$FIRST"
-  if [ "$OWN_FOLDS" = "1" ] && [ -f outputs/season_ratings_${NAME}_$FIRST.parquet ] && [ -f outputs/prior_models_${NAME}_$FIRST.pkl ]; then
-    echo "=== $(date) reusing build $FIRST-$LAST (table and models exist)" >> $LOG
-    continue
-  fi
-  echo "=== $(date) build $FIRST-$LAST ($TARGET $EXTRA)" >> $LOG
-  $PY -u scripts/62_single_year_board.py --exclude_neighbours=1 --score=0 --target_def=$TARGET $EXTRA $BASE_FLAGS --boards=$BOARDS $SAVE --out=season_ratings_${NAME}_$FIRST >> $LOG 2>&1 || exit 1
-done
+  [ "$OWN_FOLDS" = "1" ] && [ ! -f outputs/prior_models_${NAME}.pkl ] && SAVE="--save-models ${NAME}"
+  echo "=== $(date) rate $SEASONS ($TARGET $EXTRA)" >> $LOG
+  $PY -u -m openrapm rate --setting test --defensive-target $TARGET $BASE_FLAGS $EXTRA --seasons $SEASONS --name $NAME $SAVE >> $LOG 2>&1 || exit 1
+fi
 if [ "$OWN_FOLDS" = "1" ]; then
   echo "=== $(date) the candidate's own within-season folds, 2017-2026 (tag ${NAME}_within)" >> $LOG
-  $PY -u scripts/97_within_season.py --models=${NAME}_2017 --base=season_ratings_${NAME}_2017 --seasons=2017-2026 --tag=${NAME}_within $FEATS97 $BOOSTER97 >> $LOG 2>&1 || exit 1
+  $PY -u -m openrapm folds --models ${NAME} --base season_ratings_${NAME}_step3 --seasons 2017-2026 --tag ${NAME}_within >> $LOG 2>&1 || exit 1
   COMPARE="--reference=$INC_FOLDS"
   [ -n "$CONTROL_TAG" ] && COMPARE="$COMPARE --control=$CONTROL_TAG"
   echo "=== $(date) held-out audit against the incumbent's folds" >> $LOG
-  $PY -u scripts/138_heldout_audit.py --random=${NAME}_within --mult_tag=${NAME}_within $COMPARE --draws=0 --threshold_from=audit_lgb_noonc_2017 --out=audit_${NAME} >> $LOG 2>&1 || exit 1
+  $PY -u scripts/checks/138_heldout_audit.py --random=${NAME}_within --mult_tag=${NAME}_within $COMPARE --draws=0 --threshold_from=audit_lgb_noonc_2017 --out=audit_${NAME} >> $LOG 2>&1 || exit 1
 fi
 if [ "$FIRST_PASS" = "1" ]; then
   echo "=== $(date) first pass done" >> $LOG
   exit 0
 fi
-$PY -u -c "
-import pandas as pd
-parts = [pd.read_parquet(f'outputs/season_ratings_${NAME}_{f}.parquet') for f in (1997, 2007, 2017)]
-out = pd.concat(parts, ignore_index=True)
-assert out.season.nunique() == 30 and not out.duplicated(['player_id', 'season']).any()
-out.to_parquet('outputs/season_ratings_${NAME}_raw.parquet', index=False)
-print(f'stitched outputs/season_ratings_${NAME}_raw.parquet: {len(out)} rows, {out.season.nunique()} seasons')
-" >> $LOG 2>&1 || exit 1
-fi
-echo "=== $(date) prior shrink (multipliers from outputs/within/$SHRINK_TAG, $SHRINK_SCRIPT)" >> $LOG
-$PY -u $SHRINK_SCRIPT --base=season_ratings_${NAME}_raw --out=season_ratings_${NAME}_shrunk_raw --rule=test --tag=$SHRINK_TAG $SHRINK_FLAGS >> $LOG 2>&1 || exit 1
+echo "=== $(date) prior shrink (multipliers from outputs/within/$SHRINK_TAG)" >> $LOG
+$PY -u -m openrapm shrink --base season_ratings_${NAME}_step3 --setting test --folds $SHRINK_TAG --name ${NAME} >> $LOG 2>&1 || exit 1
 echo "=== $(date) swap adjustment" >> $LOG
-$PY -u scripts/91_swap_adjust.py --base=outputs/season_ratings_${NAME}_shrunk_raw.parquet --kappas=0.5 --taus= --hold_spread=within --tag=${NAME} >> $LOG 2>&1 || exit 1
+$PY -u -m openrapm swap --base season_ratings_${NAME}_step4 --setting test --name ${NAME} --types >> $LOG 2>&1 || exit 1
 echo "=== $(date) year-over-year" >> $LOG
-$PY -u scripts/63_yoy.py --rankings=${NAME}=outputs/season_ratings_${NAME}.parquet,incumbent=$INC --ref=incumbent --tag=${NAME} --splits= >> $LOG 2>&1
+reading "year-over-year" scripts/checks/63_yoy.py --rankings=${NAME}=outputs/season_ratings_${NAME}.parquet,incumbent=$INC --ref=incumbent --tag=${NAME} --splits=
 if [ "$OWN_FOLDS" = "1" ]; then
   echo "=== $(date) the second arm: the incumbent's multipliers ($INC_FOLDS)" >> $LOG
-  $PY -u scripts/99_prior_shrink.py --base=season_ratings_${NAME}_raw --out=season_ratings_${NAME}_incmult_shrunk_raw --rule=test --tag=$INC_FOLDS >> $LOG 2>&1 || exit 1
-  $PY -u scripts/91_swap_adjust.py --base=outputs/season_ratings_${NAME}_incmult_shrunk_raw.parquet --kappas=0.5 --taus= --hold_spread=within --tag=${NAME}_incmult >> $LOG 2>&1 || exit 1
-  $PY -u scripts/63_yoy.py --rankings=${NAME}_incmult=outputs/season_ratings_${NAME}_incmult.parquet,incumbent=$INC --ref=incumbent --tag=${NAME}_incmult --splits= >> $LOG 2>&1
+  $PY -u -m openrapm shrink --base season_ratings_${NAME}_step3 --setting test --folds $INC_FOLDS --name ${NAME}_incmult >> $LOG 2>&1 || exit 1
+  $PY -u -m openrapm swap --base season_ratings_${NAME}_incmult_step4 --setting test --name ${NAME}_incmult --types >> $LOG 2>&1 || exit 1
+  reading "year-over-year, second arm" scripts/checks/63_yoy.py --rankings=${NAME}_incmult=outputs/season_ratings_${NAME}_incmult.parquet,incumbent=$INC --ref=incumbent --tag=${NAME}_incmult --splits=
 fi
 echo "=== $(date) consensus" >> $LOG
-$PY -u scripts/64_consensus_report.py outputs/season_ratings_${NAME}.parquet $INC >> $LOG 2>&1
+reading "consensus" scripts/checks/64_consensus_report.py outputs/season_ratings_${NAME}.parquet $INC
 echo "=== $(date) top 20" >> $LOG
-$PY -u scripts/66_compare.py incumbent=$INC ${NAME}=outputs/season_ratings_${NAME}.parquet --season=2026 --top=20 --yoy=outputs/yoy_${NAME}.parquet --ref=incumbent --open=0 >> $LOG 2>&1
+reading "top 20" scripts/checks/66_compare.py incumbent=$INC ${NAME}=outputs/season_ratings_${NAME}.parquet --season=2026 --top=20 --yoy=outputs/yoy_${NAME}.parquet --ref=incumbent --open=0
 echo "=== $(date) swap test" >> $LOG
-$PY -u scripts/90_swap_test.py --rankings=incumbent=$INC,${NAME}=outputs/season_ratings_${NAME}.parquet --contexts=nofatigue --checks=0 --tag=${NAME} >> $LOG 2>&1
+reading "swap test" scripts/checks/90_swap_test.py --rankings=incumbent=$INC,${NAME}=outputs/season_ratings_${NAME}.parquet --contexts=nofatigue --checks=0 --tag=${NAME}
 echo "=== $(date) quality tiers, year-over-year" >> $LOG
-$PY -u scripts/88_yoy_by_player.py --cands=${NAME}=outputs/season_ratings_${NAME}.parquet --ref=incumbent=$INC --tag=${NAME} >> $LOG 2>&1
+reading "quality tiers" scripts/checks/88_yoy_by_player.py --cands=${NAME}=outputs/season_ratings_${NAME}.parquet --ref=incumbent=$INC --tag=${NAME}
 echo "=== $(date) trade loss" >> $LOG
-$PY -u scripts/70_tradeset.py --rankings=outputs/season_ratings_${NAME}.parquet --team_effects=team --out=tradeset_${NAME} >> $LOG 2>&1
-$PY -u scripts/73_tradeloss.py --alphas=incumbent=outputs/tradeset_${INC_NAME}_alpha.parquet,${NAME}=outputs/tradeset_${NAME}_alpha.parquet --ref=incumbent >> $LOG 2>&1
-$PY -u scripts/73_tradeloss.py --alphas=incumbent=outputs/tradeset_${INC_NAME}_alpha.parquet,${NAME}=outputs/tradeset_${NAME}_alpha.parquet --ref=incumbent --quality=$INC --tier=each >> $LOG 2>&1
+reading "trade set" scripts/checks/70_tradeset.py --rankings=outputs/season_ratings_${NAME}.parquet --team_effects=team --out=tradeset_${NAME}
+reading "trade loss" scripts/checks/73_tradeloss.py --alphas=incumbent=outputs/tradeset_${INC_NAME}_alpha.parquet,${NAME}=outputs/tradeset_${NAME}_alpha.parquet --ref=incumbent
+reading "trade loss by quality tier" scripts/checks/73_tradeloss.py --alphas=incumbent=outputs/tradeset_${INC_NAME}_alpha.parquet,${NAME}=outputs/tradeset_${NAME}_alpha.parquet --ref=incumbent --quality=$INC --tier=each
 echo "=== $(date) trade loss, the candidate's alphas on its own defensive target (sensitivity)" >> $LOG
-$PY -u scripts/70_tradeset.py --rankings=outputs/season_ratings_${NAME}.parquet --team_effects=team --target_def=$TARGET --out=tradeset_${NAME}_owntarget >> $LOG 2>&1
-$PY -u scripts/73_tradeloss.py --alphas=incumbent=outputs/tradeset_${INC_NAME}_alpha.parquet,${NAME}=outputs/tradeset_${NAME}_owntarget_alpha.parquet --ref=incumbent >> $LOG 2>&1
+reading "trade set, own target" scripts/checks/70_tradeset.py --rankings=outputs/season_ratings_${NAME}.parquet --team_effects=team --target_def=$TARGET --out=tradeset_${NAME}_owntarget
+reading "trade loss, own target" scripts/checks/73_tradeloss.py --alphas=incumbent=outputs/tradeset_${INC_NAME}_alpha.parquet,${NAME}=outputs/tradeset_${NAME}_owntarget_alpha.parquet --ref=incumbent
+if [ -n "$FAILED" ]; then
+  echo "=== $(date) chain done; these readings FAILED: ${FAILED#, }" >> $LOG
+  exit 1
+fi
 echo "=== $(date) chain done" >> $LOG

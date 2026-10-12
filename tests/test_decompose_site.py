@@ -1,8 +1,8 @@
 """The published pages' data: both splits of every row add up to its RAPM, and every row carries an NBA id.
 
-docs/data/decompose_1y.json and decompose_3y.json are written by scripts/83_decompose_site.py, which checks both
+docs/data/decompose_1y.json and decompose_3y.json are written by `openrapm site --decomposition`, which checks both
 identities to 1e-9 before it writes; this checks what was actually committed, at the two decimals the page shows.
-docs/data/ratings.json is written by scripts/52_site.py.  The ids are in the files and the CSV downloads only.
+docs/data/ratings.json is written by `openrapm site`.  The ids are in the files and the CSV downloads only.
 """
 import json
 from pathlib import Path

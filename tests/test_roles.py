@@ -1,8 +1,8 @@
-"""Role inputs (src/eracoef/roles.py) on synthetic V3 boxes and stints."""
+"""Role inputs (src/openrapm/data/roles.py) on synthetic V3 boxes and stints."""
 import numpy as np
 import pandas as pd
 
-from eracoef.roles import INPUTS, design7, parse_minutes, player_season_inputs, roles_from_boxes, shares_from_stints
+from openrapm.data.roles import franchise, parse_minutes, player_season_inputs, roles_from_boxes, shares_from_stints
 
 HOME, AWAY = 1610612700, 1610612800
 
@@ -31,9 +31,11 @@ def test_parse_minutes():
 def _world():
     # game 1: HOME (1..7: 1-5 start, 6 plays 10 min, 7 does not play) vs AWAY (11..17 likewise)
     b1 = _box({HOME: [(1, "30:00"), (2, "30:00"), (3, "30:00"), (4, "30:00"), (5, "30:00"), (6, "10:00"), (7, "")],
-               AWAY: [(11, "30:00"), (12, "30:00"), (13, "30:00"), (14, "30:00"), (15, "30:00"), (16, "10:00"), (17, "")]})
+               AWAY: [(11, "30:00"), (12, "30:00"), (13, "30:00"), (14, "30:00"), (15, "30:00"), (16, "10:00"),
+                      (17, "")]})
     # game 2: player 1 has been traded to AWAY and starts there; AWAY is now the home side
-    b2 = _box({AWAY: [(11, "30:00"), (12, "30:00"), (13, "30:00"), (14, "30:00"), (1, "30:00"), (15, "10:00"), (16, "")],
+    b2 = _box({AWAY: [(11, "30:00"), (12, "30:00"), (13, "30:00"), (14, "30:00"), (1, "30:00"), (15, "10:00"),
+                      (16, "")],
                HOME: [(2, "30:00"), (3, "30:00"), (4, "30:00"), (5, "30:00"), (6, "30:00"), (7, "10:00")]})
     boxes = {"G1": b1, "G2": b2}
     games = pd.DataFrame({"game_id": ["G1", "G2"], "home_team_id": [HOME, AWAY], "away_team_id": [AWAY, HOME]})
@@ -51,7 +53,8 @@ def test_roles_from_boxes_first_five_start():
     r = roles_from_boxes(boxes).set_index(["player_id", "team_id"])
     assert r.loc[(1, HOME), "games"] == 1 and r.loc[(1, HOME), "starts"] == 1
     assert r.loc[(1, AWAY), "games"] == 1 and r.loc[(1, AWAY), "starts"] == 1      # the traded player has two rows
-    assert r.loc[(6, HOME), "games"] == 2 and r.loc[(6, HOME), "starts"] == 1      # bench in G1, sixth row = starter in G2? no: 6th row
+    # off the bench in game 1 (sixth row), a starter in game 2 (fifth row once player 1 was traded)
+    assert r.loc[(6, HOME), "games"] == 2 and r.loc[(6, HOME), "starts"] == 1
     assert r.loc[(7, HOME), "games"] == 1 and r.loc[(7, HOME), "starts"] == 0      # DNP in G1, played in G2
     assert (r.starts <= r.games).all()
 
@@ -69,15 +72,16 @@ def test_shares_and_inputs():
     roles["season"] = 2001
     roles["age"] = np.where(roles.player_id == 11, 30.0, np.nan)                  # only one age known
     i = player_season_inputs(roles, cap=0.9).set_index("player_id")
-    assert abs(i.loc[11, "poss_pct"] - 0.9) < 1e-12                                  # 80 / 80 capped
-    assert abs(i.loc[1, "poss_pct"] - 60 / 80) < 1e-12                               # summed over both teams
-    assert abs(i.loc[2, "poss_pct"] - 60 / 80) < 1e-12                               # on the floor for 3 of the 4 stints
-    assert i.loc[6, "gs_pct"] == 0.5 and i.loc[7, "gs_pct"] == 0.0 and i.loc[1, "gs_pct"] == 1.0
+    share, starts = i["team_possession_share"], i["games_started_share"]
+    assert abs(share[11] - 0.9) < 1e-12                                              # 80 / 80 capped
+    assert abs(share[1] - 60 / 80) < 1e-12                                           # summed over both teams
+    assert abs(share[2] - 60 / 80) < 1e-12                                   # on the floor for 3 of the 4 stints
+    assert starts[6] == 0.5 and starts[7] == 0.0 and starts[1] == 1.0
     assert i.loc[11, "age_imputed"] == 0 and i.loc[1, "age_imputed"] == 1 and i.loc[1, "age"] == 30.0
-    assert list(i.columns[-4:]) == ["poss_pct", "gs_pct", "age", "age_imputed"]
+    assert list(i.columns[-4:]) == ["team_possession_share", "games_started_share", "age", "age_imputed"]
 
 
-def test_design7():
-    X = design7([0.5, 0.2], [1.0, 0.0], [25.0, 33.0])
-    assert X.shape == (2, 7) and len(INPUTS) == 7
-    assert X[0, 1] == 0.25 and X[1, 6] == 33.0 ** 3
+def test_the_charlotte_move_is_one_franchise():
+    """1610612766 is New Orleans's franchise through 2002 and the Bobcats' from 2005; nothing else moves."""
+    got = franchise([1610612766, 1610612766, 1610612766, 1610612740, 1610612747], [2002, 2005, 1997, 2003, 2002])
+    assert got.tolist() == [1610612740, 1610612766, 1610612740, 1610612740, 1610612747]

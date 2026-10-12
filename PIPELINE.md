@@ -1,220 +1,310 @@
-# How the model works
+# How the ratings are built
 
-Two builds live in this repo. **What the site publishes is the single-year rankings** of
-`scripts/62_single_year_board.py` — section 1 below. The three-season-window board of
-`scripts/60_season_board.py` — section 3 — is still built, still scored and still read by several
-tests, but nothing on `docs/` comes from it. The two share the stints, the design, the padded
-exposures and the idea of a box prior; they differ in the label, the prior's training rows, the
-ridge and the criterion.
+Three data steps turn the NBA's play-by-play into a season panel, then five model steps turn the panel and
+the stints into one rating per player per season. This file gives, for each step, what it is for, what it
+reads, what it writes, the command, the settings (with the experiment in `notes/DECISIONS.md` that chose
+them) and the code. Terms are defined in `GLOSSARY.md`.
 
-Nothing here is a preference — each box is in the code at the file named beside it, and every choice
-was made on the criterion in section 2. Boxes drawn in **orange are the wrinkles**: the places this
-departs from a textbook RAPM, listed with their reasons under the chart.
+Two words used throughout:
 
----
-
-## 1. What ships: one rating per player per season
-
-One rating per player per season, from **that season's games only**. A player's other seasons may
-reach his rating's coefficients; they may never reach his rating ("single year or bust").
+- **stint**: a stretch of play with the same ten players on the court. A row of every regression here is
+  one stint seen from one side: five players on offence, five on defence, the points per 100 possessions
+  the offence scored, weighted by the stint's possessions.
+- **rated season**: the season whose ratings are being built. Each season is rated from its own games
+  only; other seasons may teach the models' coefficients, never a player's rating directly.
 
 ```mermaid
 flowchart TD
-    RAW["Play-by-play and box scores, 1997-2026<br/><code>ingest.py</code>, <code>scripts/01_ingest.py</code>"]
-    ST["<b>Stints</b> — one row per span with the same ten on the floor<br/>possessions, points, 118 per-possession and per-slot counters<br/><code>stints.py</code>, <code>scripts/02_stints.py</code>"]
-    DES["<b>Design</b> — one row per stint per side<br/>10 player columns, plus home, playoff, garbage time,<br/>score margin, margin x time<br/>y = points per 100, weight = possessions<br/><code>design.py</code>, <code>designcache.py</code>"]
-    PAN["<b>Season panel</b> — one row per player-season-side:<br/>13 per-100 rates padded toward the league by method of moments,<br/>ten derived combinations, ten ratios, six shot-quality columns,<br/>role, age, bio, his own on-court record<br/><code>scripts/49_role_panel.py --season</code>, <code>exposure.py</code>, <code>pad.py</code>"]
-
-    TGO["<b>Offensive target</b> <code>xpts_ft</code><br/>made free throws replaced by the shooter's padded expectation"]
-    TGD["<b>Defensive target</b> <code>x3def_w0.25</code><br/>three quarters of every opponent three-point make replaced by<br/>3 x that shooter's own padded 3P%, k = 450 attempts<br/><code>xshoot.def_three_design</code>"]
-
-    RAW --> ST --> DES
-    ST --> PAN
-    DES --> TGO
-    DES --> TGD
-
-    subgraph LAB["The label — what the box prior is taught to predict"]
-        LOO["<b>Leave-season-out RAPM</b> — one rating per PLAYER over every<br/>season EXCEPT the one being rated, penalties 40,000 / 40,000 / 0<br/>each season's context columns kept separately<br/>normal equations added up once, so each held-out season is one solve<br/><code>looseason.LeaveSeasonOutRAPM</code>"]
-        UNS["<b>Un-shrink the DEFENSIVE label</b> — divide out the ridge's own<br/>n / (n + lambda), capped at a 4,444-possession floor; what the cap<br/>leaves is filled from the player's possession tier's mean level<br/>so a 200-possession man sits at his kind's replacement level, not 0<br/><code>62_single_year_board.unshrink_label</code>"]
-        LOO --> UNS
-    end
-
-    TGO --> LOO
-    TGD --> LOO
-
-    subgraph PRI["The box prior — a gradient-boosted SPM, one per side"]
-        ROWS["<b>Chunk rows</b> — his career row PLUS every contiguous 1-, 2- and<br/>3-season run of it, all carrying the same label, with<br/><code>chunk_poss</code> and <code>chunk_seasons</code> saying how much evidence each rests on<br/><code>singleyear.chunk_rows</code>"]
-        FOLD["<b>Five player folds, balanced on the label</b><br/>every player's prior comes from the fit that never saw a row of his<br/><code>OutOfPlayerSPM</code>, <code>singleyear.stratified_player_folds</code>"]
-        BOOST["<b>chimeraboost</b> — 21 offensive / 17 defensive features,<br/>BorutaShap-selected<br/>then asked about the rated season's OWN box line<br/><code>singleyear.feature_set</code>, <code>gbdt_prior.py</code>"]
-        ROWS --> FOLD --> BOOST
-    end
-
-    UNS --> ROWS
-    PAN --> ROWS
-    PAN --> BOOST
-
-    subgraph RID["The rating — the season's own possessions"]
-        RIDGE["<b>PriorRidgeCV</b> — shrink toward the PRIOR, not toward zero<br/>rating = scale x prior + residual<br/>residual penalty fixed at 13,037 on both sides, context penalty 0<br/>folds are whole GAMES; the objective is team-game error<br/>weighted toward close games<br/><code>priorridge.PriorRidgeCV</code>"]
-        XF["<b>The scale is priced on cross-fitted prior columns</b><br/>for each game fold the on-court columns are rebuilt from the<br/>training games alone and the boosters re-asked, so the free scale<br/>never reads back the outcomes of the games it is scored on<br/><code>_fold_prior_builder</code>, <code>--crossfit=scale</code>"]
-        XF --> RIDGE
-    end
-
-    BOOST --> RIDGE
-    BOOST --> XF
-    TGO --> RIDGE
-    TGD --> RIDGE
-
-    CEN["<b>Centre</b> — per season and side, the possession-weighted mean<br/>of the rating is zero: the average possession is played by a zero player"]
-    RIDGE --> CEN
-
-    OUT["<b>outputs/season_ratings_product.parquet</b><br/>one row per player-season, offense and defense per 100 possessions,<br/>positive good on both ends"]
-    CEN --> OUT
-    OUT --> SITE["<code>scripts/52_site.py</code> → <code>docs/data/ratings.json</code> → <code>docs/index.html</code>"]
-    OUT --> BIAS["<code>scripts/76_bias_groups.py</code> → <code>docs/bias.html</code><br/>bias by player type, against the consensus and against 2026 observed"]
-
-    classDef wrinkle fill:#fde6cc,stroke:#c2702a,color:#000
-    class TGO,TGD,LOO,UNS,ROWS,FOLD,XF,CEN wrinkle
+    RAW["data/raw/<br/>game logs, play-by-play, box scores<br/>openrapm data ingest"] --> ST["data/stints/, data/shotcurve/<br/>openrapm data stints"]
+    ST --> PAN["outputs/season_panel.parquet<br/>openrapm data panel"]
+    ST --> S1["Step 1: label<br/>RAPM over every season but the rated one"]
+    S1 --> S2["Step 2: box-score prior<br/>LightGBM on the season panel"]
+    PAN --> S2
+    S2 --> S3["Step 3: prior-informed RAPM<br/>season_ratings_NAME_step3.parquet"]
+    ST --> S3
+    S3 --> S4["Step 4: prior shrink<br/>season_ratings_NAME_step4.parquet"]
+    FO["outputs/within/TAG/<br/>openrapm folds"] --> S4
+    S4 --> S5["Step 5: swap adjustment<br/>season_ratings_NAME.parquet"]
+    ST --> S5
+    S5 --> SITE["docs/data/ratings.json, docs/bias.html<br/>openrapm site"]
 ```
 
-### What a textbook RAPM does, and what this does instead
+`openrapm rate` runs steps 1-3, `openrapm shrink` step 4, `openrapm swap` step 5, and `openrapm build` all
+five in one process (`src/openrapm/commands/build.py`). Each command writes its tables once, at the end.
 
-| | a normal RAPM | here | why |
-|---|---|---|---|
-| **the target** | actual points per 100 | two targets, one per side: expected free throws on offense, three quarters of every opponent three replaced by the shooter's own padded 3P% on defense — **two designs, two ridges, one side taken from each** | whether an opponent's three drops needs 4,000-7,000 attempts to stabilise, so the defenders' coefficients were being fit to noise. Both adjustments are measured variance reductions on the criterion. The adjustment is a *fitting* target only — scoring is always against points actually scored |
-| **the prior** | none, or a linear box-score SPM | a gradient-boosted SPM whose **label is a leave-season-out RAPM: one rating per player over every season but the rated one** | the old label (one season, heavily shrunk toward a linear fit) was 97.6% correlated with that fit, so the prior was learning to predict its own input |
-| **the label's scale** | — | the **defensive** label is divided by its own shrinkage factor, capped at a possession floor, the remainder filled from the player's tier mean | a ridge keeps 57% of a 54,000-possession player's impact and 6% of a 2,600-possession one's, so the raw label's spread grows fifteen-fold with career length and the prior learns "long career = big number". Offense is deliberately left shrunk — un-shrinking both collapses the 2026 offensive spread from 1.60 to 1.14 |
-| **the prior's training rows** | one row per player-season | the career row **plus every contiguous 1-, 2- and 3-season chunk**, all carrying the career label, with two features saying how much evidence each row rests on | it shows the booster the same player at several noise levels, which is the padding question learned from data instead of set per statistic. A player's chunk rows together weigh what his career row weighs |
-| **who fits the prior** | one fit for everyone | **five player folds**, balanced on the label; a player's prior comes from the fit that never saw a row of his | otherwise the booster can recognise a player's box fingerprint and hand back his career number, which would be his other seasons reaching his rating |
-| **the shrinkage centre** | zero | the prior, at a **freely fitted scale**: `scale x prior + residual` | a player with no minutes should come out at what the box score says he is, not at league average |
-| **how the scale is priced** | — | on **cross-fitted** prior columns: per game fold, the prior's on-court columns are rebuilt without that fold's games | the on-court columns average the whole season, so an uncross-fitted scale reads back the outcome of the very games it is scored on, and comes out too big |
-| **choosing the penalty** | CV on random stint folds | folds are **whole games**; the objective is a **team-game error weighted toward close games**; and in the shipped run the player penalty is not cross-validated at all — fixed at **13,037**, chosen once on the year-over-year test | the ten on the floor repeat across a game's stints, so splitting inside a game leaks the answer across the fold. A stint MSE is mostly binomial noise. A 30-point blowout says less about who is good than a game decided by two |
-| **the level** | implicit | **centred per season and side** at possession-weighted zero | the prior's mean is not zero and the free scale multiplies it: +1.47 on offense in 2026 before centring |
+## The data steps
 
-Two more that are not in the chart:
+### Ingest: the raw files
 
-- **The rates the prior sees are padded**, per statistic, by method of moments toward the league — a
-  200-possession player's per-100 rates are otherwise mostly noise (`pad.py`, `exposure.py`).
-- **The consensus of public metrics is validation only.** It is read after every experiment and can
-  veto one, and it is never a fitting target (`tests/test_vs_consensus.py`,
-  `scripts/64_consensus_report.py`).
+- **For:** everything else is built from these files.
+- **Reads:** stats.nba.com through `nba_api`: each season's game log (LeagueGameLog), every game's
+  play-by-play (PlayByPlayV3) and box score (BoxScoreTraditionalV3, and per period when the
+  play-by-play cannot say who started a period); api.pbpstats.com's possessions per team-game as a
+  cross-check from 2000-01.
+- **Writes:** `data/raw/gamelog/`, `pbp/`, `box/`, `periodbox/`, `pbpstats_games/`.
+- **Command:** `python -m openrapm data ingest 1997 2026 RS,PO` (RS regular season, PO playoffs). Days for
+  all 37,986 games. A file already on disk is not fetched again, so a stopped run resumes. With
+  `OPENRAPM_OFFLINE=1` a missing file stops the run instead of being fetched.
+- **Code:** `src/openrapm/data/ingest.py`.
 
----
+### Stints
 
-## 2. The criterion
+- **For:** RAPM needs the ten players on the court for every possession (one team's turn with the ball,
+  from when it gains the ball until the other team does or the period ends).
+- **Reads:** `data/raw/`.
+- **Writes:** per season and phase, `data/stints/{season}_{phase}.parquet` (the stints: lineups,
+  possessions, points and the per-possession counters), `_diag.parquet` (one row of diagnostics per
+  game), `_shots.parquet` (each game's shots per shooter) and `_names.parquet`;
+  `data/stints/diagnostics_summary.parquet` (one row per season and phase); `data/shotcurve/` (each
+  season's make probability by shot distance, fitted on every field-goal attempt of its regular season).
+- **Command:** `python -m openrapm data stints 1997 2026 RS,PO`; `--force` rebuilds stints already on
+  disk. About 46 minutes: the 60 season-phases (30 seasons, regular season and playoffs each) took 2,749
+  seconds in total.
+- **Code:** `src/openrapm/data/stints.py` (a season), `data/stint_parser.py` (one game: how a possession
+  ends and who is on the court), `data/shot_curves.py`.
 
-Everything above has a knob, and two tests are allowed to turn one. Neither uses outside data.
+### The season panel
 
-```mermaid
-flowchart LR
-    R["Rate season H<br/>from H's own games"] --> YOY["<b>Year-over-year</b> — predict every stint of<br/>H-1 and H+1 from the ten ratings alone,<br/>refitting only the intercept and home edge.<br/>28 seasons x 2 directions = 56 observations.<br/>The prior may not have seen H-1 or H+1<br/>(<code>--exclude_neighbours=1</code>)<br/><code>scripts/63_yoy.py</code>"]
-    R --> TR["<b>The trade loss</b> — every player counted ONCE,<br/>as dollars misallocated in a trade,<br/>paired by season on the eligible intersection<br/><code>scripts/70_tradeset.py</code> + <code>73_tradeloss.py</code>"]
-    YOY --> D["<b>Adopt</b> only at z of -2 or below,<br/>with no gross consensus miss and<br/>the latest season's top 20 not worse.<br/>Ties go to the simpler version."]
-    TR --> D
-```
+- **For:** the box-score prior (step 2) and the swap adjustment's type model (step 5) read it.
+- **Reads:** the stints, the box scores, the roles table (`data/cache/roles_RSPO.parquet`: share of team
+  possessions, starts, age, per player-season) and the bio table (`data/cache/bio.parquet`: height,
+  weight, draft pick). Its first run builds both tables, fetching the bio feed (`data/raw/bio/`), one
+  request per season.
+- **Writes:** `outputs/season_panel.parquet`, one row per player, season and side (offence "O", defence
+  "D"): his possessions, 13 padded box-score rates per 100 possessions, role, score state, shot totals,
+  career, body, team, and his team's record with him on and off the court. It also stores each season's
+  design pieces (what a regression design needs from that season's stints) in `data/cache/pieces/`, which
+  every later step reuses.
+- **Command:** `python -m openrapm data panel`; an existing panel is kept unless `--force`. 37 seconds in
+  the last fresh build.
+- **Settings:** each rate is padded toward the bin rate, the rate of players with about as many
+  possessions (config.yaml `pad_target: poss_conditional`; padding toward the league rate instead, or with
+  k halved or doubled, did no better: `git show archive/research-2026-09:FINDINGS.md`, section 21, "14.
+  Flat: the padding behind the box rates"): padded = (n x rate + k x bin rate) / (n + k), with n his
+  possessions and k measured per count and season from every player's odd- against even-numbered games. A
+  200-possession player with 2.1 steals per 100, k = 450 and a bin rate of 1.4 is padded to
+  (200 x 2.1 + 450 x 1.4) / 650 = 1.6.
+- **Code:** `src/openrapm/data/panel.py`, `box_rates.py`, `on_court.py`, `data/roles.py`, `data/bio.py`,
+  `data/designs.py`; `features.py` says what every column means.
 
-The year-over-year test is an error per team-game, so a 200-possession player is a rounding error in
-it; the trade loss is what can see him. The incumbent reads **8.682** points per 100 per team-game.
+## The five steps
 
----
+### Step 1: the label (`rapm.py`)
 
-## 3. The older three-season-window board
+- **For:** the box-score prior needs something to learn: each player's RAPM over every season except the
+  rated one, one number per player per side for those seasons together.
+- **Reads:** the designs of every season whose Finals are over, one design per target (below).
+- **Writes:** nothing on disk; the labels go straight to step 2.
+- **How:** each season's weighted least-squares normal equations are added up once (`SeasonSums`), so
+  leaving a season out is one ridge solve on the other seasons' sums, not thirty refits. A player needs
+  100 possessions to get a label.
+- **Settings:**
+  - the targets, one per side: offence `points_with_expected_free_throws` (made free throws replaced by
+    the shooter's padded expectation), defence `points_with_expected_opponent_threes` (the same, with three
+    quarters of the shooters' three-point luck taken off). `notes/DECISIONS.md`, "What was settled".
+  - penalties 40,000 on offence and defence, 0 on the context columns ("Choose a training target's
+    penalty on the end-to-end score", 2026-09-12). With 40,000, a player with 54,000 possessions keeps
+    57% of his raw impact and one with 2,600 keeps 6%.
+  - the defensive label is un-shrunk, the offensive one is not (experiment 22): label = beta / max(s,
+    s_cap) + (1 - s / max(s, s_cap)) x m(tier), with s = n / (n + 40,000), s_cap the same at 4,444
+    possessions, and m(tier) the un-shrunk level of his possession tier (0-500, 500-1,500, 1,500-4,444,
+    4,444 and more). Experiment 1 of 2026-09-14 evening set the 4,444 and the tiers. Un-shrinking both
+    sides helped the year-over-year test but made the order within each side worse and cut the consensus
+    agreement from 0.771 to 0.680; un-shrinking defence alone passed every check (experiment 22).
+- **Code:** `src/openrapm/rapm.py`; the design in `design.py` and `data/designs.py`; the targets'
+  shooting adjustments in `data/shots.py`.
 
-`scripts/60_season_board.py` → `outputs/season_ratings.parquet`. Not published since 2026-09; kept
-because several tests read `artifacts/season_ratings.parquet`, and because the criterion in 3.2 is
-what selected the stints, the design, the targets and the exposures that section 1 inherited.
+### Step 2: the box-score prior (`box_prior.py`)
 
-### 3.1 The build
+- **For:** a player with few possessions has little evidence of his own; his box score says most of
+  what is known about him.
+- **Reads:** step 1's labels; the season panel, through `data.panel.trainable_panel`, which drops any
+  season still being played; `params/booster_params_lgb1.json`.
+- **Writes:** each player's prior per side for the rated season, handed to step 3. With
+  `--save-models NAME`, every rated season's boosters (the fitted LightGBM models) to
+  `outputs/prior_models_NAME.pkl`.
+- **How:** each player's training rows are his career row (his box score averaged over every season he
+  has outside the unseen ones) and a chunk row for every run of 1, 2 and 3 consecutive seasons, all
+  carrying his career label; two inputs say how much evidence a row rests on (`row_possessions`,
+  `row_seasons`). Players are sorted by label and assigned to five folds 0,1,2,3,4,4,3,2,1,0,..., and each
+  player's prior comes from the booster fitted without his fold, so it cannot have learned his box score
+  and returned his own label. The booster is then asked about the rated season's own box score.
+- **Settings:**
+  - the inputs: `box_score_and_bio`, 17 on offence and 14 on defence (`features.SHIPPED`), without the
+    on-court plus-minus (experiment 45);
+  - chunk sizes 1, 2 and 3 (experiment 3);
+  - five player folds ("The SPM memorises long-career stars, and the out-of-player prior removes it",
+    2026-09-14);
+  - LightGBM's settings in `params/booster_params_lgb1.json` (experiments 32 and 44);
+  - the training weight in its own column, `row_weight`, so it no longer overwrites body weight
+    (experiment 46).
+- **Code:** `src/openrapm/box_prior.py`, `features.py`.
 
-```mermaid
-flowchart TD
-    RAW["Play-by-play, box scores, game logs<br/>1997-2026, data/raw/"]
-    ST["<b>Stints</b> — one row per span with the same ten on the floor<br/>possessions, points, 118 per-possession and per-slot counters<br/><code>stints.py</code>, <code>scripts/02_stints.py</code>"]
-    DES["<b>Design</b> — one row per stint per side, 195k rows for a 3-season window<br/>y = points per 100, weight = possessions<br/>columns: 5 offensive players, 5 defensive players, home, era,<br/>playoff, garbage time, score margin, margin x time<br/><code>designcache.py</code>, <code>design.py</code>"]
-    TGO["<b>Offensive target</b> — made free throws replaced by expected ones<br/>xpts_ft = pts - ftm + xftm  ·  <code>design.TARGETS</code>"]
-    TGD["<b>Defensive target</b> — every opponent three replaced by<br/>3 x that shooter's padded 3P%, from the other half of the block, k = 450<br/><code>xshoot.def_three_design</code>"]
-    EXP["<b>Box exposure</b> — 13 per-100 rates per player-season,<br/>padded toward the league by method of moments, centred<br/><code>exposure.py</code>, <code>pad.py</code>"]
+### Step 3: prior-informed RAPM (`prior_rapm.py`)
 
-    RAW --> ST --> DES
-    DES --> TGO
-    DES --> TGD
-    DES --> EXP
+- **For:** the season's own games decide how far each player moves from his prior.
+- **Reads:** the rated season's designs (both targets) and step 2's priors.
+- **Writes:** `outputs/season_ratings_NAME_step3.parquet`.
+- **How:** minimise the sum over rows of w (y - Z r - C gamma - s_O P_O - s_D P_D)^2 + 13,037 (|r_O|^2 +
+  |r_D|^2), with w the row's possessions, y its points per 100, Z the players' columns, r their
+  coefficients, C the context columns and gamma their coefficients, and P_O and P_D the five offensive and
+  five defensive priors on the court, summed; the prior scales s_O, s_D and gamma are not penalised. A rating is s x prior + r.
+  The offence half of the table comes from the fit on the offence target, the defence half from the fit
+  on the defence target. Then each season and side is centred: the possession-weighted mean rating is 0.
+  2026's offensive prior scale is 2.35, so a player whose booster prior is +0.5 per 100 starts at +1.18.
+- **Settings:** penalty 13,037 on both sides, one value for every season (experiment 2 of 2026-09-14
+  evening).
+- **Command:** `python -m openrapm rate` (steps 1-3); `--seasons 2026` rates one season, whose values
+  equal the 2026 rows of a thirty-season run.
+- **Code:** `src/openrapm/prior_rapm.py`, `commands/build.py`.
 
-    subgraph PANEL["Role panel — built once, scripts/49_role_panel.py"]
-        APM["<b>APM</b> — ridge at penalty 100 (lam_plugin is 18,352)<br/>what a player is worth on his own possessions, barely shrunk"]
-        SPM["<b>Simple SPM</b> — ridge of APM on share of team possessions,<br/>its square, games-started share, its square, age, age², age³<br/>fitted leave-window-out"]
-        R1["<b>RAPM_1</b> — the shipped ridge with SPM as its offset<br/>a player with no possessions gets exactly his role level"]
-        APM --> SPM --> R1
-    end
+### Step 4: the prior shrink (`prior_shrink.py`)
 
-    EXP --> APM
-    TGO --> APM
-    TGD --> APM
+- **For:** scored on games the rating never saw, the prior's part of a rating holds up less well than the
+  games' part. Fitting those games' points on the ten players' summed parts, both coefficients free, gives
+  0.70 for the prior's part on offence and 0.91 on defence, against 1.21 and 1.30 for the games' part
+  (experiment 33b). The shipped step multiplies the prior's part only, fitted with the games' part held at
+  1, which gives the published multipliers below; multiplying the games' part as well tied on the
+  year-over-year test (8.648 either way) and added nothing within the season (z -1.1).
+- **Reads:** a step-3 table; the within-season folds in `outputs/within/TAG/` (below).
+- **Writes:** `outputs/season_ratings_NAME_step4.parquet`, and every season's multipliers in
+  `outputs/csv/season_ratings_NAME_step4_multipliers.csv`.
+- **How:** two multipliers per season (offence, defence) from one weighted least-squares fit on the
+  folds' held-back team-games; the prior's part is multiplied by them, the games' part is left as it is,
+  and each season is centred again. The published multipliers run from 0.699 to 0.715 on offence and
+  from 0.929 to 0.976 on defence.
+- **Settings:**
+  - the method (experiment 33b, adopted 2026-10-03);
+  - the folds `weightfix_within` (experiment 46's own folds), seasons 2017-2026 pinned, because the fold
+    folder grew once and an unpinned rerun shrank harder (experiment 34's correction). Seasons 1997-2016
+    have no folds and borrow the fit on all ten fold seasons.
+- **Command:** `python -m openrapm shrink --base season_ratings_NAME_step3`.
+- **Code:** `src/openrapm/prior_shrink.py`, `data/within_folds.py`.
 
-    subgraph PRIOR["Box prior — one gradient-boosted model per side, leave-window-out"]
-        PO["<b>Offense</b> — chimeraboost quality=4 (5 bagged members, auditions, cross features)<br/>37 features: 13 rates + season + role + 10 aggregations + 10 efficiency ratios<br/>target: 0.6 APM + 0.4 RAPM_1 over his OTHER windows, 0.3 discount per window away"]
-        PD["<b>Defense</b> — chimeraboost, no auditions<br/>15 features: rates + season + role<br/>target: RAPM_1 over his other windows, every window alike"]
-    end
+### Step 5: the swap adjustment (`swap_adjust.py`)
 
-    R1 --> PO
-    R1 --> PD
-    EXP --> PO
-    EXP --> PD
+- **For:** inside a team, the same five keep playing together, so how a lineup's credit is split among them
+  is barely identified. Lineup swaps (two lineups of one team that share four players) say which kinds of
+  player the ratings give too much or too little credit.
+- **Reads:** a step-4 table with every season, the stints (for the lineup swaps), the season panel (for
+  the type features).
+- **Writes:** `outputs/season_ratings_NAME.parquet`; with `--types`, `outputs/NAME_types.csv`.
+- **How:** a type model (a ridge regression of each swap's unexplained result on the difference of the two
+  swapped players' type features: 20 season-panel inputs and step 4's two prior parts, standardised)
+  predicts each player's miss; half of it is applied; each team's total is given back by its own players
+  in proportion to their share of its possessions; the spread inside teams is then held to step 4's. Team
+  totals stay.
+- **Settings:** half strength, the spread held within teams ("The swap adjustment with the spread held: it
+  passes", adopted 2026-10-01); the give-back by share of possessions (experiment 41); the type model's
+  ridge penalty 1e-4 x the mean diagonal of its Gram matrix, five player folds (player_id % 5). Half,
+  because on the swap test half the type prediction kept most of full strength's gain in ordering
+  teammates and tied on the gaps between them, where full strength made the gaps worse; the spread held,
+  because without it the ratings came out about 12% wider on offence and 27% wider on defence and failed
+  the year-over-year test (z +3.5), and with it they passed (z -5.2, 39 of 56).
+- **Command:** `python -m openrapm swap --base season_ratings_NAME_step4`. A table of one season gets no
+  swap adjustment, because the type model trains on the other seasons of the same table.
+- **Code:** `src/openrapm/swap_adjust.py`, `swap_test.py` (the lineup swaps).
 
-    RIDGE["<b>The ridge</b> — one design, one exposure, one offset, two solves<br/>mixed model, per-season random effect, lambda 18,352, lambda_D/lambda_O 0.287<br/>rating = prior + what the possessions move it<br/><code>fastfit.MspiFast</code>, <code>estimator.py</code>"]
-    PO --> RIDGE
-    PD --> RIDGE
-    TGO --> RIDGE
-    TGD --> RIDGE
+## The product setting and the test setting
 
-    MAP["<b>Calibration map</b> — fitted leave-one-season-out on the criterion<br/>offense: a·x + level in log exposure + b·x·log exposure + c·prior + d·role<br/>defense: the same without the prior and role terms<br/>then re-centred per window<br/><code>calmap.py</code>, table in <code>artifacts/calmap_ship.parquet</code>"]
-    RIDGE --> MAP
+`--setting product` (the default) builds the published ratings. `--setting test` builds the table the
+year-over-year test scores: that test predicts the seasons either side of the rated one, so nothing fitted
+for a season may have seen them.
 
-    OUT["<b>outputs/season_ratings.parquet</b> — ten 3-season windows, 1997-2026<br/>offense and defense per 100 possessions, positive is good on both sides<br/><code>scripts/60_season_board.py</code> → <code>scripts/52_site.py</code> → <code>docs/</code>"]
-    MAP --> OUT
-```
+| | product | test |
+|---|---|---|
+| step 1's labels and step 2's training rows leave out | the rated season | the rated season and the seasons either side |
+| step 4's multipliers are fitted without | the rated season's folds | the rated season's folds and its neighbours' |
+| step 5's type model trains on | every other season | seasons more than one away |
+| default table | `outputs/season_ratings_product.parquet` | `outputs/season_ratings_test.parquet` |
+| used by | the site | the year-over-year test |
 
-The two sides take **different priors on purpose**: the criterion wants the bagged, searched booster and the
-richer feature set, and the consensus floors do not tolerate either on defense (FINDINGS 21.26). Only the
-calibration map couples them, because its parameters are fitted jointly on the team-game residual.
+Both settings live in `src/openrapm/settings.py` (`PRODUCT`, `TEST`). A thirty-season `build` takes
+about 15 minutes in either.
 
----
+## The within-season folds
 
-### 3.2 The criterion it was selected on
+Step 4 needs the ratings' misses on games they never saw. Misses on the neighbouring seasons would teach
+it that a peak season comes back down the year after, so the misses come from the season's own games,
+held back.
 
-```mermaid
-flowchart LR
-    H["Hold out season H"] --> TR["Train on the K = 3 seasons<br/>nearest H, never including it"]
-    TR --> FIT["The whole build above,<br/>on those seasons only"]
-    FIT --> PRED["Predict every stint of H from<br/>the ten names on the floor.<br/>Only an intercept and a home term<br/>are refit on H"]
-    PRED --> AGG["Sum each team's predicted and actual<br/>points within a game"]
-    AGG --> SC["Possession-weighted squared error,<br/>pooled over 28 held-out seasons"]
-    SC --> N["<b>109.85</b> for the criterion's best<br/><b>110.71</b> for what ships<br/><b>125.6</b> with no ratings at all"]
-```
+- **What:** each season's games (regular season and playoffs) are assigned at random to four folds,
+  three times over: twelve folds a season. For each fold the season is rated from the other three
+  quarters (the fit games), with every input rebuilt from those games alone and the saved boosters
+  answering for the rebuilt rows, and scored on the fold (the test games).
+- **Commands:** the boosters of 2017-2026 first (about 5 minutes), then the folds (about 8 minutes); a
+  build then fits step 4 on them:
 
-`holdout.py` is the runner, `scripts/54_track.py` the tracker that logs a row to `docs/progress.csv` and
-redraws `docs/progress.png`. It is the one test in the project that is both external to the model (it scores
-actual points in a season the ratings never saw) and legal to select on (it uses no outside data).
+  ```bash
+  python -m openrapm rate --setting test --seasons 2017-2026 --name for_folds --save-models mine
+  python -m openrapm folds --models mine --base season_ratings_for_folds_step3 --tag mine_within
+  python -m openrapm build --folds mine_within
+  ```
+- **Checks:** each season rebuilt from all of its games must equal its row of the base table before any
+  fold is rated (`--reproduce-only` runs only this), and every fold's leak checks are written beside it
+  and stop the run when one fails. `notes/WITHIN_SEASON_LEDGER.md` lists every input, what it is built
+  from, and its check.
+- **Writes:** `outputs/within/TAG/`: `folds_<season>.parquet` (game to fold), `players_*.parquet` (each
+  player's rating and its parts, whole season and per fold), `test_*.npz` (the held-back team-games) and
+  `fold_*.json` (each fold's error and leak checks).
+- **Code:** `src/openrapm/commands/within_season.py`, `data/within_folds.py`.
 
-**Two terms live only here and cannot ship**, because a rating is a number attached to one player:
+## Where the numbered scripts went
 
-- the player's **age in H**, quadratic — a window has no single "age at H";
-- a **cubic in the team-game total** and **the same cubic at stint level**, worth 0.28 per 100 together — a
-  rating carries no team, and the criterion's prediction is the sum of the five on the floor.
+Until the 2026-10 cleanup each stage was a numbered script; the notes in `notes/` still cite them. They
+are kept at the tag `archive/research-2026-10`, for example
+`git show archive/research-2026-10:scripts/62_single_year_board.py` (retired).
 
-The consensus (`data/external/consensus.csv`, the owner's blend of public metrics) is **validation only**: read
-once, never selected on. Ten floors in `tests/test_vs_consensus.py` decide whether a board may ship at all.
+| old script | what it did | now |
+|---|---|---|
+| 01 `ingest` | game logs, play-by-play, box scores | `openrapm data ingest` |
+| 02 `stints` | stints and their diagnostics | `openrapm data stints` |
+| 49 `role_panel` (with 65, 69, 86) | the season panel (65, 69 and 86 added the off-court, closeness and playoff-share columns) | `openrapm data panel` |
+| 62 `single_year_board` | steps 1-3 | `openrapm rate`; all five steps are `openrapm build` |
+| 97 `within_season` | the within-season folds | `openrapm folds` |
+| 98 `calibrator` | a calibrator on the folds (not adopted) and the reader of a fold | the reader is `data/within_folds.py`; the calibrator is retired |
+| 99 `prior_shrink` | step 4 | `openrapm shrink` |
+| 91 `swap_adjust` | step 5 | `openrapm swap` |
+| 52 `site` | `docs/data/ratings.json` | `openrapm site` |
+| 76 `bias_groups` | `docs/bias.html` | `openrapm site --bias` |
+| 83 `decompose_site` | the decomposition page's data | `openrapm site --decomposition` |
+| 63, 64, 66, 70, 73, 88, 90, 95, 101, 113, 135, 137, 138 | the checks | `scripts/checks/`, same number and name |
+| every other number | research | retired |
 
----
+Old flags and names that the notes use, and what they are now:
 
-## 4. What each stage is for
-
-| stage | the problem it solves |
+| in the notes | now |
 |---|---|
-| stints | five players share every possession; the only unit that identifies them is the lineup change |
-| luck adjustment | whether an opponent's three drops is almost pure noise, and free-throw shooting is one identified player with no defense |
-| box exposure | the 13 rates are the only per-player description the box score gives, and a 200-possession player's rates need padding |
-| APM → SPM → RAPM_1 | a target for the prior that is not itself the thing being predicted, with a role level for players the possessions cannot see |
-| the boosted prior | what a player's box line is worth on court, learned from his *other* windows so it can never memorise the one being fitted |
-| the ridge | ten collinear players per row; the penalty is what makes the system solvable, and the prior is where a low-minute player starts |
-| the calibration map | the ridge over-shrinks, and by an amount that depends on how many possessions it saw |
-| the criterion | everything above has a knob, and this is the only thing allowed to turn one |
+| 62 `--exclude_neighbours=1` | `--setting test` |
+| 62 `--booster_params=lgb1`, `--save_models=X` | `--booster-params lgb1`, `--save-models X` |
+| 62 `--features=boruta_noonc` | `--features box_score_and_bio` (the old name still works) |
+| target `xpts_ft` | `points_with_expected_free_throws` |
+| target `x3def_w0.25` (and `x3def`) | `points_with_expected_opponent_threes` (and `points_with_expected_opponent_threes_all`) |
+| the noise control `noise_regroup2` | `--fold-assignment 1` |
+| 99 `--rule=test`, `--tag=X` | `openrapm shrink --setting test --folds X` |
+| 97 `--check_only` | `openrapm folds --reproduce-only` |
+| `outputs/role_panel_season.parquet` | `outputs/season_panel.parquet`, every column renamed (`src/openrapm/data/legacy_names.py` maps each old name) |
+
+## The checks
+
+`scripts/checks/` holds the thirteen checks; each prints what it measures and reads the tables it is
+handed without changing them.
+
+| check | what it answers |
+|---|---|
+| `63_yoy.py` | the year-over-year test: how well a season's ratings predict the games of the seasons either side |
+| `64_consensus_report.py` | rank agreement and spread against the consensus of public metrics |
+| `66_compare.py` | two or more tables side by side for one season, as an HTML page (the 2026 top 20) |
+| `70_tradeset.py` | the trade set: what a player's comings and goings say his rating did not know |
+| `73_tradeloss.py` | the trade loss: which table leaves smaller trade-set corrections, same players |
+| `88_yoy_by_player.py` | which players a year-over-year difference comes from, by quality tier, team change and age |
+| `90_swap_test.py` | the swap test: does a table order teammates the way their lineup swaps do |
+| `95_miss_by_group.py` | where the ratings miss most, by fifths of every statistic and by player type |
+| `101_log_run.py` | one experiment's row in `experiments/runs.csv` |
+| `113_swap_explain.py` | one team's swap adjustment, player by player, checked against the shipped table |
+| `135_robust_review.py` | every test cut into slices, counted beside a noise control and a replicate (the same change built twice) |
+| `137_stat_calibration.py` | calibration curves of the miss against each input (superseded for decisions by 138) |
+| `138_heldout_audit.py` | on held-back games, are players high on some input rated too high or too low |
+
+`scripts/experiment_chain.sh` runs the build and the standard readings for one experiment; `README.md`
+and `CONTRIBUTING.md` say how.

@@ -1,9 +1,10 @@
-# era-coefs configuration. Every script reads this; nothing is hard-coded elsewhere.
+# OpenRAPM's data constants and paths, read by every command through src/openrapm/data/config.py.  The model's
+# settings (penalties, inputs, folds) live in src/openrapm/settings.py, each beside the experiment that set it.
 
 # Seasons are named by the year they end (1997 = 1996-97).
-first_season: 1997
-last_season: 2026
-windows:              # ten non-overlapping 3-season windows
+first_season: 1997    # the first season ingested, built and rated
+last_season: 2026     # the last; it may still be in progress (data/seasons.py decides what may be trained on)
+windows:              # the decomposition page's ten three-season windows (openrapm site --decomposition)
   - [1997, 1999]
   - [2000, 2002]
   - [2003, 2005]
@@ -14,245 +15,40 @@ windows:              # ten non-overlapping 3-season windows
   - [2018, 2020]
   - [2021, 2023]
   - [2024, 2026]
-rolling_step: 1       # rolling 3-year windows for the robustness overlay
-neutral_site_seasons_po: [2020]   # 2020 bubble playoffs: home = 0
+neutral_site_seasons_po: [2020]   # playoffs played at a neutral site (the 2020 bubble): home court is 0 there
 
-features: [fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss, orb, drb, ast, tov, stl, blk, pf]
+# The raw per-game box counts every design carries, in this order (the stored design pieces record it).
+box_counts: [fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss, orb, drb, ast, tov, stl, blk, pf]
 
-# Regularization. lam / lam_ratio were chosen once (by the retired scripts/03_cv.py, deleted in
-# 73f0ab9; the numbers and how they were picked are in DECISIONS.md) and are used in every window.
-# chosen on 2000-02 and 2012-14 (RS rows) by the retired scripts/03_cv.py (deleted in 73f0ab9).
-# Re-tuned under player_unit: window (possessions per unit roughly triple).
-lam_beta: 10149.5        # ridge on the two cross-fitted half-fits (beta)
-lam_ratio_beta: 0.5      # lambda_D / lambda_O there
-lam_plugin: 18351.8      # ridge on the plug-in ratings fit (u given beta)
-lam_ratio_plugin: 0.624519
-lam_buckets: {}       # e.g. {low_poss: 2.0}; only add after the calibration-by-bucket test says so
-# Which box prior the shipped ratings shrink toward, per side.
-#   offense: player  the prior priced to predict a PLAYER (windows.player_priced_beta), not a team.
-#   defense: none    no box prior at all -- the box score has no defensive vocabulary (R^2 0.26 of a
-#                    player's rates on his own defensive on-court impact), and pure RAPM beats the
-#                    box-primed defensive rating 0.877 to 0.755.  See DECISIONS.md; scripts/30_ladder.py was retired in 73f0ab9.
-# Both sides use lam_plugin / lam_ratio_plugin above; the defensive knob is NOT re-tuned here.  The
-# ladder's internal criterion (next-window on-court impact) cannot select it: it is flat across the
-# weakest four penalties and then declines, so it has no interior optimum and just runs to the weak
-# end, because the benchmark shares the estimate's blind spot.  See DECISIONS.md; scripts/33_hybrid.py was retired in 73f0ab9.
-ratings_prior:
-  offense: gbdt
-  defense: gbdt
-  # DEAD, 2026-09-17: nothing in src/ or scripts/ reads either of these two.  The instruction that used
-  # to sit here -- "flip only when scripts/48_ladder.py says WINS" -- described an effect that flipping
-  # them has not had for some time: the chain is chosen in code, not from config.  tests/test_config.py
-  # keeps the list of unread keys honest.  Left named rather than deleted because they record what the
-  # shipped prior IS: the role-and-age chain of src/eracoef/spm.py, and no boosted correction.
-  role_prior: spm    # the APM -> Simple SPM -> ridge chain (src/eracoef/spm.py)
-  boost: false       # the boosted correction was worth 0 on total and -0.020 on offense (30_ladder)
-  target: x3def_w0.25 # free throws replaced by the shooter's padded expectation, AND three quarters of
-                      # every made three replaced by 3 x that SHOOTER's other-half-of-block 3P%
-                      # (xshoot.DEFENSE_TARGETS; `w3` is the fraction of the realised deviation KEPT, so
-                      # 1.0 is the old `xpts_ft` and 0 is full replacement).  Shipped for ATTRIBUTION, not
-                      # prediction: in season it is -0.163 on the investigator at z -3.12 over 12 of 14
-                      # seasons while the criterion reads -0.024 at z -0.63 (the calibration map already
-                      # delivers the amplitude half of it -- FINDINGS 36.5).  Owner's ruling, 2026-09-09,
-                      # under the 26.5 standing rule.  FINDINGS 35-36.
-  # The DEFENSIVE coefficients come from a second fit on this target (xshoot.DEFENSE_TARGETS):
-  # every opponent three-point make replaced by 3 x the shooter's other-half-of-block 3P% padded
-  # toward the league with k = 450 attempts.  Opponent 3P% needs 4,000-7,000 attempts to stabilise,
-  # so what it removes is almost all noise; out of season it is worth -0.4 per 100 at team-game level
-  # and it moves the board toward the luck-adjusted public metrics (LA-RAPM, LEBRON) and away from
-  # the raw-points ones (xRAPM, EPM).  FINDINGS section 18.
-  defense_target: x3def
-  # The rank-calibration map (FINDINGS section 18): a monotone per-side curve from the pooled
-  # out-of-season decile slopes, applied to the finished ratings.  Good players are calibrated,
-  # bad ones exaggerated (worst offensive decile wants x0.77); the map fixes that and won the
-  # leave-one-season-out test by 0.4 points per 100 at team-game level.  Rank-preserving per side.
-  # The rank map is OFF for the multi-stage board (FINDINGS 19: it costs 0.3 per 100 on this prior).
-  rank_map: null
-  # The calibration map (FINDINGS section 20; calmap.py, scripts/53_calmap.py): per side a scalar on the rating
-  # plus a level in the player's block exposure, c * poss / (poss + 1000), fitted leave-one-season-out on the
-  # criterion at TEAM-GAME level.  The rating alone is already calibrated at game level (every smooth map of
-  # the rating alone is the identity within noise); the exposure term is the replacement gap and is worth
-  # -0.8 / -0.9 / -1.0 per 100 at K = 2 / 3 / 4 (z -6 to -7, 24-25 of 28).  K = 3 matches the 3-season block.
-  # the board script re-centres each side per window after it (scripts/60_season_board.py; the
-  # `08_ratings.py` that used to do it was retired in 73f0ab9).  Set to null to ship the unmapped chain.
-  # FINDINGS 21 (iterate mode).  The criterion's best trains the GBDT prior on the panel's unshrunk APM on
-  # both sides, but that board fails the consensus floors (defensive agreement under 0.76; the offensive rank
-  # gap against bigness over 0.30 whenever the pure APM target is on offense).  21.26 therefore shipped the
-  # offensive target at 0.6 APM + 0.4 RAPM_1: `blend0.7` scored 0.02 per 100 better and failed the bigness
-  # floor at -0.303.
-  # FINDINGS 22 (the prior pass).  The shot-quality features (gbdt_prior.SHOTQ, the six built from each
-  # shooter's own locations) move that bigness gap to -0.270, so `blend0.7` is shippable again -- and with
-  # them on DEFENSE too the defensive agreement goes 0.766 -> 0.768 and the defensive spread 1.33 -> 1.30,
-  # the narrowest any candidate has measured, on the floor that has blocked the most boards.  What ships
-  # (`ship_shot7d`, 22.4): the offensive target 0.7 APM + 0.3 RAPM_1 (`gbdt_target: blend0.7`, the column is
-  # made in holdout.Context.prior), RAPM_1 on defense (`gbdt_target_def`), the shot-quality features in both
-  # `features_full_O` and `features_full_D`, the bagged/searched booster on offense and the cheap one on
-  # defense, and the map with a log-exposure level, a rating-by-exposure slope and -- on offense only -- the
-  # prior part of the rating as its own term.  110.707 on the criterion, ten of ten floors.  `gbdt_panel`
-  # (another role panel for the prior) is wired and off.
-  gbdt_target: blend0.7
-  gbdt_target_def: rapm1
-  gbdt_panel: null
-  # the prior's training target pooled over the player's OTHER windows with this discount per
-  # window of distance (1.0 = every other window alike, the original pooling)
-  gbdt_win_decay: 0.514318
-  gbdt_win_decay_def: 0.280024
-  lam_scale: 0.624047
-  # FINDINGS 24 (trade calibration).  The turnover-aware prior: trained on ordered window pairs with the
-  # teammate turnover of the target window as a feature (gbdt_prior.pair_rows, turnover.py) and evaluated at a
-  # SETTLED context for everyone -- `ref` 0.35 is the season-to-season stayer median, fixed a priori.  On
-  # offense only it is -0.054 against the shipped board at z -3.39 over 22 of 28 seasons with the consensus
-  # screen unchanged (system `tune501_b7_turnref_o`); on defense it is flat and costs the defensive agreement.
-  # Needs data/cache/teammates.parquet (scratch/trade_turnover.py).  null = the pooled prior, what ships;
-  # {sides: [O], ref: 0.35} SHIPPED 2026-09-07 (FINDINGS 24.9): 110.569 on the criterion, nine floors and the
-  # bigness floor re-based 0.30 -> 0.32 once, with the reason in tests/test_vs_consensus.py.
-  # 2026-09-07 later: height2 and weight15 (bio.py, FINDINGS 26) on both feature lists, system
-  # tune501_b7_turnref_o_hwb, 110.5635, ten of ten floors; the owner: "just ship".
-  # 2026-09-07 latest: past_apm, past_poss, past_rapm on the OFFENSIVE list (gbdt_prior.PAST, FINDINGS 28), system
-  # tune501_b7_turnref_o_hwb_pasto, 110.4785 (z -2.5 on the criterion, z -4.3 on the investigator); the bigness
-  # floor re-based 0.32 -> 0.35 with the reason in the test.
-  # 2026-09-08: both lists pruned of the kitchen-sink Boruta's rejects (FINDINGS 29), system tune501_b7_pasto_pOD,
-  # 110.4547, ten of ten floors, 31 offensive names and 11 defensive.
-  gbdt_turn: {sides: [O], ref: 0.35}
-  cal_map: {table: artifacts/calmap_ship.parquet, system: tune501_b7_pasto_pOD_ow_w0.25_linear+log2&xlog&prior&tshare_linear+log2&xlog, base: tune501_b7_pasto_pOD_ow_w0.25, k: 3}
-  # THE BOARD (scripts/60_season_board.py, src/eracoef/inseason.py).  One rating per player per season, from
-  # that season's games only -- regular season and playoffs together, nothing else.  The owner's ruling 1,
-  # 2026-09-10.  `ks00` is the kernel that gives the anchor season weight 1 and every earlier season 0.
-  #
-  # It costs 0.606 per 100 on the out-of-season criterion against the three-season kernel it replaced
-  # (z +2.91, 9 of 28 seasons) and it is better against the external consensus everywhere: 0.839 total
-  # against 0.809, and 0.675 against 0.643 among players with under 5,000 of their own possessions.  All ten
-  # floors in tests/test_vs_consensus.py pass on it, including the archetype guard, which reads 0.14 against
-  # the old board's 0.21.  DECISIONS.md has both numbers and the reason the ruling outranks the criterion.
-  season_board:
-    # The same estimator on the luck-adjusted OFFENSIVE target (`ratings_prior.target` above): in season it
-    # splits credit better by -0.163 on the investigator at z -3.12 over 12 of 14 seasons, with prediction
-    # flat.  Shipped on the owner's ruling, 2026-09-09.
-    system: ks00_lam05_ow_w0.25
-    # Fitted on THIS kernel's own dump (scripts/53_calmap.py, K = 3, scored after the q75 cut).  `linear+sat`
-    # -- the rating plus poss/(poss + 1000) per side -- because the shipped four-term family ties it at
-    # z -0.12 on the moved estimand and the standing rule takes the simpler and faster.
-    cal_map: {table: artifacts/calmap_insea_ks00_q75.parquet, system: "ks00_lam05_ow_w0.25_q75_linear+sat", base: ks00_lam05_ow_w0.25_q75, k: 3}
-# The random effect unit: "window" gives one player effect per 3-season window, "season" one per
-# player-season (the original spec).  Possession thresholds below are in the unit's own scale.
-player_unit: window
-# Re-scaled 2026-09-10 with the board: these are per-player possessions IN THE DESIGN, and the design is
-# now one season, so the three-season numbers (1500 / 4500) named 160 of 582 players "low" and left only
-# 270 "high".  Divided by three they keep their meaning -- under 500 in a season is deep bench, 1500 or
-# more is a rotation regular.  They do not touch a rating while `lam_buckets` is empty (verified: the 2026
-# fit is bit-identical either way); they name the diagnostic groups and the bucket penalties if one is used.
-low_poss_threshold: 500   # player-seasons under this many possessions form the "low_poss" group
-starter_poss_threshold: 1500  # and at or above this many form "high_poss" (the rotation bucket)
-lam_delta: null       # playoff block ridge; null = no delta block.  Chosen by step 7 of the retired
-                      # scripts/03_cv.py (73f0ab9).
-lam_grid: {start: 100, stop: 60000, num: 28, log: true}
-lam_ratio_grid: [0.25, 0.33, 0.5, 0.75, 1.0, 1.5, 2.0]
-lam_delta_grid: [1e2, 3e2, 1e3, 3e3, 1e4, 3e4, 1e5, 1e6]
-pad_k: auto           # or a per-feature dict override, e.g. {stl: 400, blk: 600}
-# DEAD, 2026-09-10: nothing in src/ or scripts/ reads this.  It configured the boosted correction, which
-# `ratings_prior.boost: false` turned off (worth 0 on total, -0.020 on offense).  Left named rather than
-# deleted only because Phase 1 item 3 lists it; delete it with the booster.
-boost_min_poss: 4500     # the booster trained only above this; it scored everyone
-boost_quality: null      # ChimeraBoost quality 1-5; null = library default (3)
-# Playing time as a booster feature, per side.  It is frozen at the training reference when
-# scoring, so it only ever absorbs role effects; it never reaches a rating.  Against five
-# stratified permutation nulls, defence gains from it (margin 0.57 over a null of 0.015, against
-# 0.48 over 0.097 without) and offence loses (0.61 over 0.037 with, against 0.80 over 0.069).
-boost_nuisance:
-  O: []
-  D: [poss_rank]
-pad_target: poss_conditional   # chosen at checkpoint 4 (bench prior calibration); league | poss_conditional (padding target for the EB shrinkage of the rates)
-pad_scale_grid: [0.5, 1.0, 2.0]
-min_half_poss: 20     # a split half needs at least this many possessions to enter the k estimate
+# a design's player columns: one per player over the design's seasons ("player"), or one per player-season
+# ("player_season"); the two give the same matrix for one season, the design every step fits
+player_unit: player
+low_poss_threshold: 500       # the design's diagnostic player groups: under this many possessions is "low_poss"
+starter_poss_threshold: 1500  # and this many or more is "high_poss"; neither moves a rating
+pad_target: poss_conditional  # what the season panel's box rates are padded toward (box_rates.py): the rate of players
+                              # with about as many possessions; the league rate did no better (FINDINGS 21.14,
+                              # git show archive/research-2026-09:FINDINGS.md)
 
-# Garbage time and rubber band.
+# Garbage time (data/stint_parser.py): a stint in it is flagged, and the design carries the flag as a context column.
 garbage_time:
-  q4_margin_late: 15    # 4th quarter, margin >= 15 with under `late_minutes` left
-  late_minutes: 6
-  q4_margin_any: 20     # or margin >= 20 at any point in the 4th
-gt_weight: 1.0
-gt_weight_robustness: [0.5, 0.0]
-margin_clip: 25
-margin_bins: [-25, -15, -8, -3, 3, 8, 15, 25]   # 7 bins for the binned-margin robustness run
-time_halves: 2
+  q4_margin_late: 15    # 4th quarter, margin of 15 or more with under `late_minutes` left
+  late_minutes: 6       # the minutes left in the 4th that q4_margin_late applies to
+  q4_margin_any: 20     # or a margin of 20 or more at any point in the 4th
+gt_weight: 1.0          # a garbage-time row's weight relative to any other row's (1.0: the same)
+margin_clip: 25         # the score-margin context columns are clipped at plus or minus this many points
 
-# DEAD, 2026-09-17: nothing in src/ or scripts/ reads this block.  Its chooser, scripts/03_cv.py,
-# was retired in 73f0ab9; the penalties it picked are the lam / lam_ratio above and the reasoning
-# is in DECISIONS.md.  Kept as the record of how they were chosen.  tests/test_config.py.
-cv:
-  n_folds: 5
-  seed: 0
-  lambda_windows: [[2000, 2002], [2012, 2014]]   # MixedModelRAPMCV on these two, RS only
-  validation_window: [2012, 2014]
-  poss_buckets: [0, 1500, 4500, 1000000]
-
-# The out-of-season criterion (src/eracoef/holdout.py, scripts/45_holdout.py): hold out one season,
-# train on the K nearest seasons either side of it, predict its stints, score against actual points.
-# The one test in this project that is both external to the model and legal to select on.
-holdout:
-  first: 1998            # held-out seasons; 1997 and 2026 have neighbours on one side only
-  last: 2025
-  ks: [2, 4]             # training seasons around the held-out one: K=2 is {H-1, H+1}
-  lam: null              # null = lam_plugin; a list sweeps
-  level: home            # refit on the held-out season: "home" = intercept + home (what every earlier
-                         # script used); "full" = the whole fixed block (margin, garbage time, playoffs)
-  rank_bins: 10          # rank-calibration deciles
-  rank_min_poss: 1000    # a player needs this many training possessions to be ranked
-  workers: 4             # held-out seasons run across this many processes (threads pinned to 12 // workers)
-  bigs_edges: [0, 3, 4, 5, 11]      # --splits=bigs: number of top-tercile-bigness players among the ten
-  bench_edges: [0, 3, 5, 7, 11]     # --splits=bench: number of bench players (gs_pct below bench_gs_pct) among the ten
-  bench_gs_pct: 0.5
-  low_exposure: 500                 # --splits=tgexp: training possessions below which a player is "barely seen"
-  # --splits=tgexp: share of a TEAM-GAME's possessions played by those players.  Unlike `exposure_edges` this
-  # one is constant within a team-game, so the groups partition the criterion's own unit and their scores add
-  # up to the pooled score -- which is what makes it readable as "where did the pooled gain come from".
-  game_bench_share_edges: [0.0, 0.05, 0.15, 0.30, 1.01]
-  exposure_edges: [0, 1, 500, 1500, 4000, 1000000000]   # the --splits=exposure bins (smallest exposure on the floor)
-  consensus:
-    window: [2024, 2026]
-    min_poss: 1000
-
-# The role prior and the boosted box prior (src/eracoef/roles.py, spm.py, gbdt_prior.py; FINDINGS 19).
+# The role inputs of the season panel (src/openrapm/data/roles.py).
 roles:
-  cache: data/cache/roles.parquet   # per player-season-team: games, starts, minutes, on-floor and team possessions, age
-  share_cap: 0.9                    # poss_pct is capped here: one full team-season of possessions
-spm:
-  apm_lam: 100            # the APM penalty: under 1% of lam_plugin, so nobody is pulled toward zero by much
-  apm_lam_ratio: 1.0
-  apm_check_lams: [30, 100, 300]    # 49_role_panel.py --check: SPM coefficients must agree across these
-  pen: 1.0                # ridge on the seven standardised role inputs
-  min_poss: 500           # a player-window needs this many possessions to train the SPM
-gbdt:
-  mode: full              # what the board ships (scripts/60_season_board.py; 08_ratings.py was
-                          # retired in 73f0ab9): "residual" = Simple SPM + a GBDT trained on
-                          # the residual beyond it (u); "full" = a GBDT trained on RAPM_1 with the role inputs, alone
-  # scripts/50_boruta.py, 25 trials, 2026-09-05: accepted + tentative + season (rejected dropped; season kept by design)
-  features_O: [ast, blk, drb, fg2_miss, fg2m, fg3_miss, fg3m, ft_miss, ftm, orb, pf, stl, tov, season]   # rejected: season; tentative: drb, fg3_miss, pf, tov
-  features_D: [ast, blk, drb, fg2_miss, fg2m, fg3_miss, fg3m, ftm, pf, stl, tov, season]   # rejected: ft_miss, orb, season; tentative: fg3m, ftm, pf
-  features_full_O: [fg3m, fg3_miss, ftm, orb, ast, stl, pf, season, poss_pct, gs_pct, age, pts, fga, fta, fg3a, usage, bigness, reb, stocks, creation, shotmix, efg, ts, ftp, tovr, orbsh, mpts, weight15, past_apm, past_poss, past_rapm]
-  # the last six on each line are FINDINGS 22.1's shot quality (gbdt_prior.SHOTQ)
-  features_full_D: [fg3_miss, fg2m, fg2_miss, orb, drb, stl, blk, pf, season, gs_pct, age]
-  drag_tol: 0.02          # counterbalance a leave-window-out training set whose weighted mean drifts more than this
-  boruta_trials: 50
-  seed: 0
-  thread_count: 3
-  params_def: {depth: 4, learning_rate: 0.0872486, l2_leaf_reg: 18.8061, max_bins: 128, subsample: 0.654803, colsample: 0.83231, min_child_weight: 3.26392, linear_leaves: true, cross_features: false}
-    # the consensus's defensive-agreement floor does not tolerate the bagged, searched one
-    # (FINDINGS 21.26).  The two sides' priors are separate objects; only the map couples them.
-  params: {depth: 5, learning_rate: 0.0882469, l2_leaf_reg: 2.35039, max_bins: 64, subsample: 0.681911, colsample: 0.604113, min_child_weight: 2.10825, linear_leaves: true, cross_features: true, n_ensembles: 5, ensemble_n_jobs: 1}
-    # features.  On the plain feature list the search was worth +0.004 and the bag +0.004; on the
-    # list below they are -0.037 and -0.027 (FINDINGS 21.25: the parts interact, and a richer
-    # feature set gives the search something to find).  ensemble_n_jobs 1 so the bag does not fork
-    # inside the holdout runner's own workers.
+  cache: roles.parquet  # the roles table's file in paths.cache; the phases join the name: roles_RSPO.parquet
+  share_cap: 0.9        # the share of team possessions played is capped here
 
+# Data paths: relative to the repository root, or absolute.  `openrapm --config FILE` or OPENRAPM_CONFIG=FILE makes
+# every command read another config.yaml instead of this one, so a check can point all of them at another folder.
 paths:
-  raw: data/raw
-  stints: data/stints
-  box: data/box
-  outputs: outputs
-  figs: outputs/figs
-  lambda_file: outputs/lambda.yaml
-  coefs: outputs/coefs.parquet
-  role_panel: artifacts/role_panel.parquet
-
-run_tags: [base, lam_x3, lam_div3, rolling, gt_half, gt_zero, margin_bins]
+  raw: data/raw                         # openrapm data ingest: game logs, play-by-play, box scores, bio feed
+  stints: data/stints                   # openrapm data stints: the stints, their diagnostics, names and shots
+  cache: data/cache                     # rebuildable caches: the roles table, bio.parquet, the per-season design pieces
+  shot_curves: data/shotcurve           # the league's make probability by distance, one file per season
+  outputs: outputs                      # the ratings tables, the saved boosters, the checks' outputs
+  panel: outputs/season_panel.parquet   # openrapm data panel: one row per player, season and side
+  within: outputs/within                # openrapm folds: the within-season folds, one folder per tag

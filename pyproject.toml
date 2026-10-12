@@ -1,7 +1,7 @@
 [project]
-name = "eracoef"
+name = "openrapm"
 version = "0.1.0"
-description = "era-coefs: how NBA box-score coefficients drift across eras (mixed-model RAPM)"
+description = "OpenRAPM: open NBA player-impact ratings, RAPM with a box-score prior, one rating per player per season"
 requires-python = ">=3.11"
 dependencies = [
   "numpy>=1.26",
@@ -9,24 +9,20 @@ dependencies = [
   "pandas>=2.2",          # groupby().apply(include_groups=) lands in 2.2; used in six places
   "pyarrow>=14",
   "scikit-learn>=1.4",
-  "chimeraboost>=0.34",
-  "lightgbm>=4.7",        # the shipped box-score prior since 2026-10-08 (eracoef.lgbprior), and the shot models
-  "xgboost>=3.0",         # the shot-quality learners (eracoef.shotlearners)
-  "catboost>=1.2",        # the shot-quality learners (eracoef.shotlearners)
-  "optuna>=4.0",          # the shot-quality search and the booster tuning (scripts 94, 136)
-  "joblib>=1.3",          # leave-one-player-out fits in parallel processes (eracoef.lgbprior)
-  "shap>=0.44",
-  "BorutaShap>=1.0.17",
-  "plotly>=5.18",
-  "matplotlib>=3.8",
+  "threadpoolctl>=3",     # one linear-algebra thread in the checks (openrapm.commands.console.one_thread)
+  "lightgbm>=4.7",        # the shipped box-score prior since 2026-10-08 (openrapm.box_prior)
+  "matplotlib>=3.8",      # the calibration figure of scripts/checks/137_stat_calibration.py
   "nba_api>=1.4",
   "pyyaml>=6",
-  "kaleido>=0.2.1",
   "requests>=2.31",
 ]
 
+[project.scripts]
+openrapm = "openrapm.commands.cli:main"
+
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-xdist>=3"]
+# ruff pinned to the version CI runs (.github/workflows/test.yml), so a local `ruff check .` agrees with CI
+dev = ["pytest>=8", "pytest-xdist>=3", "ruff==0.17.0"]
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -35,9 +31,25 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+# pycodestyle errors and warnings, pyflakes, import order, and McCabe complexity
+select = ["E", "F", "W", "I", "C90"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+# a test may be one long story of assertions; every other rule still holds there
+"tests/**" = ["C901"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not slow'"
 markers = [
-  "slow: recomputes a calibration table; a few seconds, not milliseconds",
+  "slow: rebuilds real seasons from the data on disk, up to a minute each (run with `pytest -m slow`)",
   "network: genuinely needs the network; exempt from the block in tests/conftest.py",
+  "needs_data(*paths): skipped unless each configured data path exists, e.g. needs_data('stints/*_PO.parquet')",
 ]

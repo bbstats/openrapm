@@ -5,7 +5,7 @@ other games", then "RS + playoffs should be considered a single entity in our ne
 
 Before this, `phases=("RS",)` was the default in six places and each one was somewhere the playoffs
 were silently dropped -- the training design, the box exposure's padded rates, the role inputs, the
-shooter totals, and the rows the criterion scores.  DECISIONS.md records that two of the three fixes
+shooter totals, and the rows the criterion scores.  notes/DECISIONS.md records that two of the three fixes
 needed to make the old playoff delta work were bugs of exactly that shape in shared code.
 
 The defaults are the thing worth pinning.  A caller who wants regular-season rows can always ask for
@@ -19,26 +19,18 @@ them would make the playoffs' scoring level something the fit has to explain wit
 floor -- who in the playoffs are disproportionately the good ones.
 """
 import inspect
-import sys
-from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from eracoef import design as design_mod  # noqa: E402
-from eracoef.config import load_config  # noqa: E402
-from eracoef.design import SEASON_PHASES  # noqa: E402
-from eracoef.exposure import BoxExposure  # noqa: E402
-from eracoef.fastfit import MspiFast  # noqa: E402
-from eracoef.holdout import Context, default_loader  # noqa: E402
-from eracoef.roles import ROLE_PHASES  # noqa: E402
-from eracoef.windows import build_window  # noqa: E402
-from eracoef.xshoot import SHOT_PHASES  # noqa: E402
+from openrapm import design as design_mod
+from openrapm.data.config import load_config, resolve
+from openrapm.data.designs import block_design
+from openrapm.data.roles import ROLE_PHASES
+from openrapm.data.shots import SHOT_PHASES
+from openrapm.design import SEASON_PHASES
 
 CFG = load_config()
-_STINTS = Path(CFG["_root"]) / CFG.get("paths", {}).get("stints", "data/stints")
-HAVE_DATA = _STINTS.is_dir() and any(_STINTS.glob("*_PO.parquet"))
-needs_data = pytest.mark.skipif(not HAVE_DATA, reason="no stints; run scripts/02_stints.py")
+_STINTS = resolve(CFG, "stints")
 
 
 def _default(fn, name):
@@ -48,13 +40,8 @@ def _default(fn, name):
 
 
 def test_every_phase_default_is_the_whole_season():
-    from eracoef.designcache import build_window_cached
     assert SEASON_PHASES == ("RS", "PO")
-    for fn, arg in ((build_window, "phases"), (build_window_cached, "phases"),
-                    (default_loader, "phases"), (Context.design, "phases"),
-                    (BoxExposure.__init__, "phases")):
-        assert _default(fn, arg) == SEASON_PHASES, f"{fn.__qualname__} still defaults to regular season only"
-    assert tuple(MspiFast("probe").phases) == SEASON_PHASES
+    assert _default(block_design, "phases") == SEASON_PHASES, "block_design still defaults to regular season only"
     assert ROLE_PHASES == SEASON_PHASES      # minutes, starts and possessions behind the role prior
     assert SHOT_PHASES == SEASON_PHASES      # the shooter totals that price the luck-adjusted targets
 
@@ -66,24 +53,24 @@ def test_there_is_only_one_phase_constant():
     assert not extra, f"a second phase constant appeared: {extra}"
 
 
-@needs_data
+@pytest.mark.needs_data("stints/*_PO.parquet")
 def test_a_window_actually_contains_playoff_rows():
     season = max(int(p.stem.split("_")[0]) for p in _STINTS.glob("*_PO.parquet"))
-    wd = build_window([season], CFG)
+    wd = block_design([season], CFG)
     phases = set(wd.games["phase"].unique())
     assert phases == {"RS", "PO"}, f"{season} built {phases}"
     n_po = int((wd.rows["phase"] == "PO").sum())
     assert n_po > 0, "playoff games are in the game table but no design row came from them"
     # asking for one phase is still possible; it is just never the default
-    rs = build_window([season], CFG, phases=("RS",))
+    rs = block_design([season], CFG, phases=("RS",))
     assert set(rs.games["phase"].unique()) == {"RS"}
     assert len(rs.rows) < len(wd.rows)
 
 
-@needs_data
+@pytest.mark.needs_data("stints/*_PO.parquet")
 def test_role_inputs_count_playoff_minutes():
     """A rotation player on a team that went deep played more games than his regular season says."""
-    from eracoef.roles import season_roles
+    from openrapm.data.roles import season_roles
     season = max(int(p.stem.split("_")[0]) for p in _STINTS.glob("*_PO.parquet"))
     both = season_roles(season, CFG)
     rs = season_roles(season, CFG, phases=("RS",))
@@ -91,34 +78,5 @@ def test_role_inputs_count_playoff_minutes():
     assert (j.games_all >= j.games_rs).all()
     assert (j.games_all > j.games_rs).any()
     assert (j.poss_on_all >= j.poss_on_rs - 1e-6).all()
-    # the share is a share: pooling both phases moves the league's mean poss_pct very little
+    # the share is a share: pooling both phases moves the league's mean team possession share very little
     assert abs(both.poss_on.sum() / both.team_poss.sum() - rs.poss_on.sum() / rs.team_poss.sum()) < 0.02
-
-
-@needs_data
-def test_the_cut_trains_on_no_playoff_game_and_scores_every_one():
-    """The two halves of "one entity", on the same real season.
-
-    A cut q splits the anchor season into what the fit may see and what it is scored on.  Its playoff
-    games belong on the scored side: they happen after every regular-season game, so a fit that saw the
-    first q of the season has not seen them.  Until 2026-09-10 `season_frac` gave them -1, which put them
-    below every cut -- excluded from training by a special case AND excluded from scoring by the same
-    comparison, so they were in neither half.
-    """
-    from eracoef.holdout import cut_season
-    from eracoef.inseason import kernel_game_mult, season_frac
-    season = max(int(p.stem.split("_")[0]) for p in _STINTS.glob("*_PO.parquet"))
-    wd = build_window([season], CFG)
-    po_idx = wd.games.loc[wd.games["phase"] == "PO", "game_idx"].to_numpy()
-    assert len(po_idx) > 0
-
-    frac = season_frac(wd.games)
-    assert (frac[po_idx] == 1.0).all()
-
-    for q in (0.0, 0.25, 0.75):
-        gm = kernel_game_mult(wd, season, {0: 1.0}, q)
-        assert (gm[po_idx] == 0.0).all(), f"a playoff game carried training weight at q={q}"
-        sub = cut_season(wd, season, q)
-        assert (sub.rows["phase"] == "PO").sum() > 0, f"no playoff row survived the cut at q={q}"
-    # and with no cut the playoffs train like any other game
-    assert (kernel_game_mult(wd, season, {0: 1.0}, None)[po_idx] == 1.0).all()
