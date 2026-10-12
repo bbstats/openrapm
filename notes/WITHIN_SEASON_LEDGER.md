@@ -1,5 +1,32 @@
 # Within-season ledger: what each rating sees, and what it never sees
 
+> **What this file is (header added 2026-10-11).** The ledger of the within-season folds: for every input a
+> part-season rating reads, what it is built from, whether it is rebuilt from the fit games alone, and the check
+> that proves it. The folds are built today by `openrapm folds` (`src/openrapm/commands/within_season.py`, the
+> leak checks in `leak_checks`), and step 4 (`openrapm shrink`, `src/openrapm/prior_shrink.py`) is fitted on them.
+> The calibrator this file was first written for (experiment 33) was not adopted; the prior shrink (experiment 33b)
+> was.
+>
+> Numbered-script paths in it (`scripts/97_within_season.py` and so on) refer to the code at the tag
+> `archive/research-2026-10`: `git show archive/research-2026-10:scripts/97_within_season.py`. Check and column names
+> written before 2026-10-11 use the old target names (`design x3def*`); the table below maps them.
+>
+> | in this file | today |
+> |---|---|
+> | `scripts/01_ingest.py`, `02_stints.py` | `openrapm data ingest`, `openrapm data stints` |
+> | `scripts/49_role_panel.py` (with 65, 69, 86) | `openrapm data panel` |
+> | `scripts/62_single_year_board.py` | `openrapm rate` (steps 1-3); `openrapm build` runs all five steps |
+> | `scripts/97_within_season.py` | `openrapm folds` |
+> | `scripts/98_calibrator.py` | retired; its fold reader is `src/openrapm/data/within_folds.py` |
+> | `scripts/99_prior_shrink.py` | `openrapm shrink` |
+> | `scripts/91_swap_adjust.py` | `openrapm swap` |
+> | `scripts/52_site.py`, `76_bias_groups.py`, `83_decompose_site.py` | `openrapm site`, with `--bias`, `--decomposition` |
+> | `scripts/63_yoy.py` and the other twelve checks | `scripts/checks/`, same number and name |
+> | 62 `--exclude_neighbours=1` | `--setting test` |
+> | 62 `--features=boruta_noonc` | `--features box_score_and_bio` |
+> | targets `xpts_ft`, `x3def_w0.25` | `points_with_expected_free_throws`, `points_with_expected_opponent_threes` |
+> | every other numbered script | retired |
+
 The owner, 2026-10-03: "the leaving stuff out approach here is getting quite complicated but it's okay.  Just keep
 really special good tabs on it."  This file is those tabs.  `scripts/97_within_season.py` is the code; every check
 named below runs on every fold and is written to `outputs/within/<tag>/checks.parquet`, and a failed one stops the
@@ -12,9 +39,9 @@ run.
   alone.
 - **Held-out games**: the other quarter.  Nothing about them reaches the rating.  The rating's misses are measured
   on them.
-- **Fold**: one way of picking the held-out quarter.  Each season is dealt into four folds, so every game is held out
-  exactly once per deal.  **Repeat**: a fresh deal of the same season (three by default), seeded so a rerun deals the
-  same games.
+- **Fold**: one way of picking the held-out quarter.  Each season's games are assigned at random to four folds, so
+  every game is held out exactly once per assignment.  **Repeat**: a fresh random assignment of the same season
+  (three by default), seeded so a rerun assigns the same games.
 - **The rating** here is steps 1-3 of the rankings (the box-score prior, the plus-minus ridge, the centring), the
   table the swap adjustment starts from.  The swap adjustment is not applied (open item 1).
 
@@ -39,7 +66,7 @@ cannot learn "a peak season comes back down next year" and shrink peak seasons.
 | age, height, weight, draft pick | the prior, the calibrator | the biography table | not game data | -- |
 | career before the rated season: seasons played, possessions, age at entry | the prior, the calibrator | earlier seasons only | not this season's games | -- |
 | the prior models themselves (the boosted trees) and their labels | the rating | every season except the rated one and the one either side of it (`--exclude_neighbours=1`, the incumbent's year-over-year setting) | never trained on the rated season at all | `prior models: never trained on this season or its neighbours` |
-| the prior's free scale, priced on cross-fitted columns | the rating | five folds of the rating games, the on-court numbers rebuilt without each fold | **yes**: the cross-fitting runs inside the rating games.  **But** only the on-court, off-court and RAPM-piece columns are rebuilt per cross-fitting fold (`62:495`); the box-score inputs keep every rating game, the cross-fitting fold's included, and since experiment 45 the prior reads no rebuilt column -- so the scale is priced on box-score columns that saw the games it is regressed on (found 2026-10-08, DECISIONS.md "The Robustness pass").  Nothing from the HELD-OUT games reaches it. | as above |
+| the prior's free scale | the rating | fitted unpenalised with the ridge on the rating games | **yes**: from the rating games only.  Its inputs, the box-score priors, also saw every rating game, so the scale is priced in sample (found 2026-10-08, DECISIONS.md "The Robustness pass").  The cross-fitting the old code ran rebuilt only columns the prior no longer reads, so its fold priors equalled the full prior value for value; it changed no number and was removed in the 2026-10 cleanup.  Nothing from the HELD-OUT games reaches the scale. | as above |
 | the centring (the average possession is played by a zero player) | the rating | the rating games' possessions | **yes** | `ridge: possessions are the fit games' possessions` |
 | the season's game list (ids, dates, regular season or playoffs) | bookkeeping | the schedule | no outcomes in it | -- |
 
@@ -80,7 +107,7 @@ The largest input difference is always the season's plain adjusted plus-minus, w
 input the prior reads is identical to the last digit.  The cached role table (games, starts, minutes, possessions,
 team possessions, age) is rebuilt with difference 0.
 
-**Folds: 120 (10 seasons x 3 deals x 4 folds), 2,640 pass/fail checks, 0 failed.**  Evidence the part-season
+**Folds: 120 (10 seasons x 3 repeats x 4 folds), 2,640 pass/fail checks, 0 failed.**  Evidence the part-season
 rebuild bites: the defensive target's response on the rating games moves by up to 5.6 to 15.5 points per 100 on a
 possession when the shooters' three-point percentages come from the rating games alone; possessions come out at
 three quarters of the season's; on-court numbers move by a median 0.8 points per 100.
@@ -93,7 +120,7 @@ The owner: split tests "at different sizes", and "think about ways to make it bi
 season rated at five sizes, the rest of its games held out (`97 --rate_from=one` rates from ONE fold and tests on the
 rest; the default rates from every fold but one):
 
-| folder | share of games rated from | held out | deals x folds | ratings | pass/fail checks | failed |
+| folder | share of games rated from | held out | repeats x folds | ratings | pass/fail checks | failed |
 |---|---|---|---|---|---|---|
 | `q1of4` | 1/4 (one fold of four) | 3/4 | 3 x 4 | 360 | 7,920 | 0 |
 | `q1of3` | 1/3 (one fold of three) | 2/3 | 3 x 3 | 270 | 5,940 | 0 |
@@ -103,7 +130,7 @@ rest; the default rates from every fold but one):
 
 The whole-season reproduction check runs once per season (in `within`; the other folders reuse its result, since
 they read the same models and the same base tables).  A folder holds one `--rate_from` mode; 97 refuses to mix them.
-Two ratings of one deal share no game only at 1/4, 1/3 and 1/2, so agreement is measured at those sizes only.
+Two ratings of one repeat share no game only at 1/4, 1/3 and 1/2, so agreement is measured at those sizes only.
 Results: DECISIONS.md, experiment 33c.
 
 ## The calibrator (scripts/98_calibrator.py): what IT sees
@@ -141,18 +168,18 @@ each fold and each season by the rankings' own possession weights, in training a
 - prior models: `scripts/62_single_year_board.py --exclude_neighbours=1 --score=0 --boards=2017,...,2026
   --out=season_ratings_within_base --save_models=within` (the incumbent's steps 1-3 settings; the build checks the
   saved settings and refuses others)
-- folds: four per deal, three deals per season, seeded by season and deal
+- folds: four per repeat, three repeats per season, seeded by season and repeat
 - held-out scoring: points as scored, the year-over-year test's scoring and replacement level
 
 ## Experiment 35 (2026-10-05): the 9/10 size, the baselines, OpenRAPM as shipped per fold
 
-`within10`: every season rated from 9/10 of its games, one deal of ten folds (300 folds, 6,600 checks, 0 failed).
+`within10`: every season rated from 9/10 of its games, one repeat of ten folds (300 folds, 6,600 checks, 0 failed).
 
 | rating | what it is built from | what it never sees | checks |
 |---|---|---|---|
-| B1, linear box-score SPM (`102`) | the rating games' LeagueGameLog box rows (13 counts, minutes; never PLUS_MINUS); league rates and box-estimated possessions from the same games; padding constants averaged over the training seasons; coefficients fitted on player-seasons outside {H-1, H, H+1} against the leave-season-out RAPM with those seasons left out | the held-out games; season H and its neighbors in the label and the training rows | `baseline_b1_checks.parquet`: box rows only from fit games, fit games found in the game log (> 99%), label exclusion set; 3,750 checks, 0 failed |
-| B2 vanilla RAPM, B3 RAPM on B1 (`103`) | the rating games' stints (actual points, context unpenalized); B3's prior is the fold's own B1 (asserted) | penalties and multipliers are chosen on blocks touching no season in {H-1, H, H+1} | test games never among the fit games (asserted per fold) |
-| OpenRAPM as shipped (`106`) | the saved steps 1-3 fold rating; the pinned prior-shrink multipliers (2017-2026 folds outside {H-1, H, H+1}); the swap adjustment's type model from seasons more than one away, standardized on them; team possessions from the rating games' stints | the held-out games | whole-season version vs the shipped test table: shrink exact, swap adjustment within 0.006 pts/100 |
+| B1, linear box-score SPM (`102`) | the rating games' LeagueGameLog box rows (13 counts, minutes; never PLUS_MINUS); league rates and box-estimated possessions from the same games; padding constants averaged over the training seasons; coefficients fitted on player-seasons outside {H-1, H, H+1} against the leave-season-out RAPM with those seasons left out | the held-out games; season H and its neighbours in the label and the training rows | `baseline_b1_checks.parquet`: box rows only from fit games, fit games found in the game log (> 99%), label exclusion set; 3,750 checks, 0 failed |
+| B2 vanilla RAPM, B3 RAPM on B1 (`103`) | the rating games' stints (actual points, context unpenalised); B3's prior is the fold's own B1 (asserted) | penalties and multipliers are chosen on blocks touching no season in {H-1, H, H+1} | test games never among the fit games (asserted per fold) |
+| OpenRAPM as shipped (`106`) | the saved steps 1-3 fold rating; the pinned prior-shrink multipliers (2017-2026 folds outside {H-1, H, H+1}); the swap adjustment's type model from seasons more than one away, standardised on them; team possessions from the rating games' stints | the held-out games | whole-season version vs the shipped test table: shrink exact, swap adjustment within 0.006 pts/100 |
 
 Scoring (`104`, `105`): the held-out team-games as 97 stored them, reproduced to 6e-14 on all 1,860 folds before any
 new number was read; the held-out lineup swaps from the held-out games' stints only.

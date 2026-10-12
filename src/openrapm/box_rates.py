@@ -10,7 +10,7 @@ Words used below
     possessions    n, the possessions he was on the court for: his team's on offence, the opponent's on defence
     rate           100 x count / n
     pad k          how many possessions' worth of the typical value is blended in, one per count and season,
-                   measured from his odd- against his even-numbered games (`split_half_k`)
+                   measured from every player's odd- against even-numbered games (`split_half_k`)
     bin            one of six ranges of possessions, equally wide on a log scale
     target         the typical value a rate is padded toward: that season's rate among the players of his bin (the
                    possession-conditional target, config.yaml's pad_target), or the season's league rate

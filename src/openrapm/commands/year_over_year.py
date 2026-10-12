@@ -93,7 +93,7 @@ def fill_rule(spec: str | None) -> Callable[[pd.DataFrame], tuple[float, float]]
 
         ""            no fill: 0, the average player
         "500"         the replacement level of the table's own players under 500 possessions (scoring.replacement_level)
-        "500x0.25"    a quarter of that level, the depth the test settled on (DECISIONS.md)
+        "500x0.25"    a quarter of that level, the depth the test settled on (notes/DECISIONS.md)
         "-1.6/-0.5"   set by hand, positive-good, offence first: a defensive rating is stored points-allowed,
                       so its sign flips going in
 

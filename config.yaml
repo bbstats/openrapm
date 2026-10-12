@@ -1,9 +1,10 @@
-# era-coefs configuration. Every script reads this; nothing is hard-coded elsewhere.
+# OpenRAPM's data constants and paths, read by every command through src/openrapm/data/config.py.  The model's
+# settings (penalties, inputs, folds) live in src/openrapm/settings.py, each beside the experiment that set it.
 
 # Seasons are named by the year they end (1997 = 1996-97).
-first_season: 1997
-last_season: 2026
-windows:              # ten non-overlapping 3-season windows
+first_season: 1997    # the first season ingested, built and rated
+last_season: 2026     # the last; it may still be in progress (data/seasons.py decides what may be trained on)
+windows:              # the decomposition page's ten three-season windows (openrapm site --decomposition)
   - [1997, 1999]
   - [2000, 2002]
   - [2003, 2005]
@@ -14,50 +15,39 @@ windows:              # ten non-overlapping 3-season windows
   - [2018, 2020]
   - [2021, 2023]
   - [2024, 2026]
-neutral_site_seasons_po: [2020]   # 2020 bubble playoffs: home = 0
+neutral_site_seasons_po: [2020]   # playoffs played at a neutral site (the 2020 bubble): home court is 0 there
 
-# The raw per-game box counts every design carries, in this order (the per-season design pieces record it).
+# The raw per-game box counts every design carries, in this order (the stored design pieces record it).
 box_counts: [fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss, orb, drb, ast, tov, stl, blk, pf]
 
-# The random effect unit: "window" gives one player effect per 3-season window, "season" one per
-# player-season (the original spec).  Possession thresholds below are in the unit's own scale.
+# a design's player columns: one per player over the design's seasons ("window"), or one per player-season ("season")
 player_unit: window
-# Re-scaled 2026-09-10 with the board: these are per-player possessions IN THE DESIGN, and the design is
-# now one season, so the three-season numbers (1500 / 4500) named 160 of 582 players "low" and left only
-# 270 "high".  Divided by three they keep their meaning -- under 500 in a season is deep bench, 1500 or
-# more is a rotation regular.  They do not touch a rating while `lam_buckets` is empty (verified: the 2026
-# fit is bit-identical either way); they name the diagnostic groups and the bucket penalties if one is used.
-low_poss_threshold: 500   # player-seasons under this many possessions form the "low_poss" group
-starter_poss_threshold: 1500  # and at or above this many form "high_poss" (the rotation bucket)
-pad_target: poss_conditional   # what the season panel's box rates are padded toward (src/openrapm/box_rates.py):
-                               # league | poss_conditional; chosen at checkpoint 4 (bench prior calibration)
+low_poss_threshold: 500       # the design's diagnostic player groups: under this many possessions is "low_poss"
+starter_poss_threshold: 1500  # and this many or more is "high_poss"; neither moves a rating
+pad_target: poss_conditional  # what the season panel's box rates are padded toward (box_rates.py): the rate of players
+                              # with about as many possessions; the league rate did no better (FINDINGS 21.14,
+                              # git show archive/research-2026-09:FINDINGS.md)
 
-# Garbage time and rubber band.
+# Garbage time (data/stint_parser.py): a stint in it is flagged, and the design carries the flag as a context column.
 garbage_time:
-  q4_margin_late: 15    # 4th quarter, margin >= 15 with under `late_minutes` left
-  late_minutes: 6
-  q4_margin_any: 20     # or margin >= 20 at any point in the 4th
-gt_weight: 1.0
-margin_clip: 25
+  q4_margin_late: 15    # 4th quarter, margin of 15 or more with under `late_minutes` left
+  late_minutes: 6       # the minutes left in the 4th that q4_margin_late applies to
+  q4_margin_any: 20     # or a margin of 20 or more at any point in the 4th
+gt_weight: 1.0          # a garbage-time row's weight relative to any other row's (1.0: the same)
+margin_clip: 25         # the score-margin context columns are clipped at plus or minus this many points
 
-# The year-over-year test (scripts/checks/63_yoy.py) scores every season with a season on both sides of it,
-# 1998-2025 for the seasons above; it has no settings here (src/openrapm/commands/year_over_year.py,
-# src/openrapm/scoring.py).
-
-# The role inputs of the season panel (src/openrapm/data/roles.py; FINDINGS 19).
+# The role inputs of the season panel (src/openrapm/data/roles.py).
 roles:
-  cache: roles.parquet              # inside paths.cache (or an absolute path); the phases are added to the name:
-                                    # roles_RSPO.parquet, per player-season-team: games, starts, minutes,
-                                    # on-court and team possessions, age
-  share_cap: 0.9                    # poss_pct is capped here: one full team-season of possessions
+  cache: roles.parquet  # the roles table's file in paths.cache; the phases join the name: roles_RSPO.parquet
+  share_cap: 0.9        # the share of team possessions played is capped here
 
-# Data paths: relative to the repository root, or absolute.  OPENRAPM_CONFIG=<file> makes every command read
-# another config.yaml instead of this one, so a verification run can point all of them at another folder.
+# Data paths: relative to the repository root, or absolute.  `openrapm --config FILE` or OPENRAPM_CONFIG=FILE makes
+# every command read another config.yaml instead of this one, so a check can point all of them at another folder.
 paths:
-  raw: data/raw
-  stints: data/stints
-  cache: data/cache              # rebuildable caches: the roles table, bio.parquet, the per-season design pieces
-  shot_curves: data/shotcurve    # the league's make probability by distance, one parquet per season
-  outputs: outputs                 # the ratings tables, the saved prior models, the run logs
-  panel: outputs/season_panel.parquet   # the season panel: one row per player, season and side
-  within: outputs/within           # the within-season folds, one folder per tag
+  raw: data/raw                         # openrapm data ingest: game logs, play-by-play, box scores, bio feed
+  stints: data/stints                   # openrapm data stints: the stints, their diagnostics, names and shots
+  cache: data/cache                     # rebuildable caches: the roles table, bio.parquet, the per-season design pieces
+  shot_curves: data/shotcurve           # the league's make probability by distance, one file per season
+  outputs: outputs                      # the ratings tables, the saved boosters, the checks' outputs
+  panel: outputs/season_panel.parquet   # openrapm data panel: one row per player, season and side
+  within: outputs/within                # openrapm folds: the within-season folds, one folder per tag

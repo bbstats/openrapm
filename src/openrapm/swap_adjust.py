@@ -3,7 +3,7 @@
 After step 4, each player's rating says how good he was.  Lineup swaps in other seasons say which kinds of player
 such ratings give too much or too little credit, compared with the teammates they swap with.  This step moves half
 of that predicted miss onto each player and takes it back inside his own team, so only the split inside a team
-changes (the owner's "team version", adopted 2026-10-01; DECISIONS.md, "The swap adjustment with the spread held:
+changes (the owner's "team version", adopted 2026-10-01; notes/DECISIONS.md, "The swap adjustment with the spread held:
 it passes": on the year-over-year test a paired t-statistic of -5.2, better in 39 of its 56 predictions, each
 season 1998-2025 predicted from the season before and from the season after).
 
@@ -59,11 +59,18 @@ Then, per season and side:
     w        the step-4 table's possessions on that end (poss_off, poss_def)
 
 c is the nearest point to kappa m, in squared distance, with every team's total zero: each player gives back in
-proportion to his share of his team's possessions (DECISIONS.md, experiment 41).  The adjustment widens the
+proportion to his share of his team's possessions (notes/DECISIONS.md, experiment 41).  The adjustment widens the
 ratings inside teams; holding the spread scales each player's distance from his main team's mean back, one factor
 per season and side, until the spread inside teams equals the step-4 table's.  Team means stay, and so does the
 order inside each team.  Team totals move only through players on two teams (a median 0.007 per 100 of the team's
 possessions when adopted).
+
+Why half, and why the spread is held (notes/DECISIONS.md, "The swap adjustment" and "The swap adjustment with the
+spread held: it passes").  On the swap test, half of the type prediction kept most of the gain in ordering
+teammates (net order +0.162, z +5.5; full strength +0.191) and tied on the gaps between them (z +0.7), where full
+strength made the gaps worse (z +7.9).  Without the spread held, the ratings came out about 12% wider on offence
+and 27% wider on defence, when they were already too wide, and failed the year-over-year test (team-game z +3.5).
+With the spread held inside teams they passed (z -5.2, better in 39 of 56).
 
 Example: 2026, product setting.  The type model predicts that step 4 gives Wembanyama's offence 2.45 per 100 too
 little credit; half of it is +1.23; the Spurs' give-back leaves +0.54; holding the spread (2026's offensive factor
@@ -88,12 +95,12 @@ __all__ = ["SIDES", "RESIDUAL_CONTEXT", "PANEL_FEATURES", "PRIOR_FEATURES", "TYP
            "hold_spread_within_teams", "adjusted_table", "adjust", "type_model_table"]
 
 SIDES = ("offense", "defense")
-# the full context without the time-on-court clocks, which came out as tired fives playing BETTER, an artifact
-# (DECISIONS.md, the swap test)
+# the full context without the time-on-court clocks, which came out as tired fives playing BETTER, an artefact
+# (notes/DECISIONS.md, the swap test)
 RESIDUAL_CONTEXT = "nofatigue"
 # the season panel's inputs, all from the rated season.  NOT the games' part u: the swaps are read in the same
 # season, so the part of a player's record the ridge held back is still in them, and a model given u learned to
-# multiply it by about 2 -- a lighter ridge penalty wearing a "player type" label (DECISIONS.md, the swap
+# multiply it by about 2 -- a lighter ridge penalty wearing a "player type" label (notes/DECISIONS.md, the swap
 # adjustment).  Order is load-bearing: it is the order of the coefficients.
 PANEL_FEATURES = [*BOX_RATES, "team_possession_share", "games_started_share", "garbage_time_share", "age",
                   "seasons_before", "height_in", "weight_lb"]

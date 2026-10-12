@@ -4,9 +4,10 @@ This module is the trust boundary of the project.  The rule it enforces, in one 
 
     Every season may be loaded and rated.  A season may be FIT on only once its Finals are over.
 
-That covers every fitted quantity except the ridge itself -- the box prior, the role prior, the
-calibration map, the padding constants, the feature lists, every hyper-parameter.  Those are the
-things a contributor's pull request changes, and none of them may have seen a season in progress.
+That covers every fitted quantity except the ridge itself -- the labels, the box-score prior, step 5's
+type model, the feature lists, every setting.  Those are the things a contributor's pull request
+changes, and none of them may have seen a season in progress.  (Step 4's multipliers are not gated
+here: they read only the within-season folds of 2017-2026, a pinned setting, settings.ShrinkSettings.)
 The ridge is exempt because a rating IS a ridge coefficient: solving it on the current season is the
 product, not a fit.
 
@@ -28,11 +29,10 @@ keeps returning it until the 2027 Finals end.
 
 Using it
 --------
-    from openrapm.data.seasons import trainable, scoreable
+    from openrapm.data.seasons import drop_untrainable, trainable
 
-    tr = trainable(cfg)                 # Trainable(seasons=(1997, ..., 2026), cutoff=2026)
-    prior.fit(tr)                       # takes a Trainable and nothing else
-    ratings = prior.rate(scoreable(cfg))    # every season, including the one in progress
+    seasons = trainable(cfg).seasons              # (1997, ..., 2026): what commands/build.py's labels use
+    panel, dropped = drop_untrainable(panel, cfg) # what data.panel.trainable_panel does to the season panel
 
 `Trainable` refuses to hold a season past its own cutoff, so a fit cannot be handed one by accident.
 What enforces the rule today is that check plus two tests: `tests/test_seasons.py`, which pins the
@@ -48,7 +48,7 @@ the panel gates its read while the ones that write the panel back do not.  That 
 one that had gone wrong -- five scripts read the season panel straight off the disk with no gate
 until 2026-09-18.
 
-What none of it can prove is that a fitted artifact already on disk was built after the guard
+What none of it can prove is that a fitted artefact already on disk was built after the guard
 existed.  For that, rebuild it.
 """
 from __future__ import annotations

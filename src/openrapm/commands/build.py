@@ -48,6 +48,7 @@ from ..data.tables import player_names
 from ..data.within_folds import load_folds
 
 SIDES = ("O", "D")
+SIDE_WORDS = {"offense": "offence", "defense": "defence"}     # the tables' side keys as printed, offence first
 
 
 def check_seasons(seasons, cfg: dict) -> list:
@@ -296,10 +297,10 @@ def swap_seasons(cfg: dict, table: pd.DataFrame, settings) -> tuple[pd.DataFrame
     main_team = main_teams(cfg).set_index(["player_id", "season"]).team_id
     adjusted, factors = swap_adjust.adjust(table, raw, swaps, predictions, main_team, settings.swap)
     types = swap_adjust.type_model_table(swaps, trainable_seasons, settings.swap.type_model_penalty)
-    spread = factors.groupby("side").factor.agg(["mean", "min", "max"])
+    spread = factors.groupby("side").factor.agg(["mean", "min", "max"]).reindex(list(SIDE_WORDS))
     print("  step 5: the spread inside teams held, factor per season " + "; ".join(
-        f"{side} {row['mean']:.3f} ({row['min']:.3f} to {row['max']:.3f})" for side, row in spread.iterrows()),
-        flush=True)
+        f"{SIDE_WORDS[side]} {row['mean']:.3f} ({row['min']:.3f} to {row['max']:.3f})"
+        for side, row in spread.iterrows()), flush=True)
     return adjusted, factors, types
 
 

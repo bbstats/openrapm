@@ -61,7 +61,7 @@ __all__ = ["MAE_SCALE", "armse", "Ratings", "replacement_level", "Prediction", "
 
 MAE_SCALE = 0.7978845608028654          # sqrt(2 / pi)
 
-# The share-of-the-team-game edges and the barely-seen minimum of `game_bench_share_split` (DECISIONS.md,
+# The share-of-the-team-game edges and the barely-seen minimum of `game_bench_share_split` (notes/DECISIONS.md,
 # 2026-09-10: the split that partitions the team-games, so its groups add up to the pooled score).
 GAME_BENCH_SHARE_EDGES = (0.0, 0.05, 0.15, 0.30, 1.01)
 BARELY_SEEN_POSSESSIONS = 500.0
@@ -100,7 +100,7 @@ def replacement_level(table: pd.DataFrame, max_poss: float = 500.0, shrink: floa
     """(offence, defence) in raw sign for a player the table has no row for: the possession-weighted mean rating
     of the table's own players under `max_poss` possessions, times `shrink`; (0, 0) when it has none.
 
-    The year-over-year test settled on a quarter of that level (DECISIONS.md: the only depth better in both
+    The year-over-year test settled on a quarter of that level (notes/DECISIONS.md: the only depth better in both
     directions).  `table` is one season with columns `o`, `d` and `poss`.
 
     Example: players at -2.0 (100 possessions) and -4.0 (300) and a starter at +8.0 (5,000): with max_poss 500
@@ -186,7 +186,7 @@ def score(p: Prediction, mask=None) -> dict:
     game; on a mask that takes some of a team-game's rows and not others the sum is a partial point total
     scored against a level fitted on complete ones, which is not the test restricted to those rows.  Measured
     on the 2026-09 ratings, a stint-level split's groups recombined to 337.6 where the pooled score was 113.6
-    (DECISIONS.md).  So a mask that labels STINTS is read on `mse`; `game_bench_share_split` labels team-games
+    (notes/DECISIONS.md).  So a mask that labels STINTS is read on `mse`; `game_bench_share_split` labels team-games
     and recombines to the pooled score exactly.
     """
     idx = np.arange(len(p.y)) if mask is None else np.flatnonzero(mask)

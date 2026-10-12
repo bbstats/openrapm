@@ -211,7 +211,7 @@ def season_shot_rows(season: int, cfg, phase: str = "RS", min_share: float = MIN
     if len(games) and len(parts) < float(min_share) * len(games):
         raise RuntimeError(
             f"{season} {phase}: only {len(parts)} of {len(games)} games could be read "
-            f"({100 * len(parts) / len(games):.1f}%, floor {100 * float(min_share):.0f}%).  The "
+            f"({100 * len(parts) / len(games):.1f}%, minimum {100 * float(min_share):.0f}%).  The "
             f"play-by-play cache is incomplete -- rerun `openrapm data ingest` for this season.  First "
             f"failure: {unreadable[0] if unreadable else None}")
     return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=["three", "made", "bin"])
@@ -222,7 +222,7 @@ def curve_for(season: int, cfg, force: bool = False, verbose: bool = False) -> S
     path = curve_path(season, cfg)
     if path.exists() and not force:
         return ShotCurve(season, pd.read_parquet(path))
-    # `season_shot_rows` raises rather than returning a thin sample: nothing downstream could tell a
+    # `season_shot_rows` raises rather than returning a small sample: nothing downstream could tell a
     # curve fitted on 40% of a season from one fitted on all of it, and the cache would keep it.
     rows = season_shot_rows(season, cfg, "RS")
     curve = fit_curve(rows, season)

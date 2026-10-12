@@ -3,7 +3,8 @@ r"""The swap test: does a season's ranking order TEAMMATES the way the games of 
 Take two lineups of one team in one season that share four players: Podziemski in one, Spencer in the other, the
 same four teammates in both.  Everything about the team that stays the same cancels, so the difference between the
 two lineups' results is evidence about Podziemski against Spencer.  This check asks whether a ranking, fitted on
-OTHER seasons, orders such pairs the way their games did (src/openrapm/swap_test.py; DECISIONS.md, "The swap test").
+OTHER seasons, orders such pairs the way their games did (src/openrapm/swap_test.py; notes/DECISIONS.md, "The swap
+test").
 
 Words used below
     swap pair       two lineups of one team in one season that share four players

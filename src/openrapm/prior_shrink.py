@@ -3,13 +3,16 @@
 Step 3 splits each rating into two parts: the prior part, s x prior (the box-score prior times the season's prior
 scale), and the games' part, u (how far the season's own games moved the player from it).  Scored on games the
 rating never saw, the two parts hold up differently.  Fit those games' points per 100 by weighted least squares on
-the ten players' summed prior parts and summed games' parts, and each part's coefficient (1 = it holds up exactly)
-is 1.21 for the games' part on offence and 1.30 on defence, 0.70 for the prior part on offence (0.64 for players
-with 2,500+ possessions) and 0.91 on defence.  So the prior part is multiplied by such a held-out coefficient,
-one per side and season, and the games' part is left as it is (DECISIONS.md, experiment 33b, adopted by the
-owner 2026-10-03: the year-over-year test's error 8.600 points per 100 against 8.666, lower in 53 of its 56
-predictions, each season 1998-2025 predicted from the season before and from the season after).  The published
-multipliers run from 0.699 to 0.715 on offence and from 0.929 to 0.976 on defence.
+the ten players' summed prior parts and summed games' parts, both coefficients free (1 = the part holds up
+exactly): the prior part gets 0.70 on offence (0.64 for players with 2,500+ possessions) and 0.91 on defence, the
+games' part 1.21 and 1.30 (notes/DECISIONS.md, experiment 33b).
+
+The shipped step multiplies the prior part only, one multiplier per side and season, fitted the same way with the
+games' part held at 1.  That gives the published multipliers, 0.699 to 0.715 on offence and 0.929 to 0.976 on
+defence.  Multiplying the games' part as well tied on the year-over-year test (8.648 either way) and added nothing
+within the season (z -1.1), so the simpler version ships.  The owner adopted it on 2026-10-03: the year-over-year
+test's error fell from 8.666 to 8.600 points per 100, lower in 53 of its 56 predictions (each season 1998-2025
+predicted from the season before and from the season after).
 
 Words used below
     within-season fold
@@ -26,7 +29,7 @@ Words used below
     games' part     u from the fold's own rating (`u_off`, `u_def`)
     fold seasons    the seasons whose folds may be used: 2017-2026, pinned (settings.ShrinkSettings), because
                     the fold folder grew to 1997-2026 on 2026-10-04 and an unpinned rerun shrank harder than
-                    what ships (DECISIONS.md, experiment 34's correction)
+                    what ships (notes/DECISIONS.md, experiment 34's correction)
     multiplier      m_O, m_D: what the prior part is multiplied by, offence and defence
 
 The multipliers are one weighted least-squares fit over the test team-games of every fold used:
@@ -58,8 +61,8 @@ Then, for each season and side (`shrink`):
 The weight is the offensive possession count on both sides, as in step 3's centring (prior_rapm.centre).  The
 re-centring keeps the possession-weighted mean rating at zero, and it moves the prior part only: u is untouched.
 
-Example: rating 2026 in the product setting, m_O = 0.704 and m_D = 0.929.  Jokic's offensive prior part of 5.39
-becomes 0.704 x 5.39 = 3.80, less the season's shift of 0.02 = 3.78; his games' part stays 0.97, so his
+Example: rating 2026 in the product setting, m_O = 0.704 and m_D = 0.929.  Jokic's offensive prior part of 5.394
+becomes 0.704 x 5.394 = 3.80, less the season's shift of 0.02 = 3.78; his games' part stays 0.97, so his
 offensive rating goes from 6.37 to 4.75.
 """
 from __future__ import annotations

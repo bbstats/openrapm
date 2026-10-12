@@ -18,6 +18,8 @@ Words used below
     rating scale   with --free_scale=1 each side's summed rating is one more free column, so a rating that is too
                    wide for the neighbouring seasons is read as one multiplier per side, not written into every alpha
     penalty        the ridge's lambda on the alphas, chosen from --lambdas
+    H              the rated season; H-2 and H+2 are the seasons two before and two after it
+    arm            one way of scoring a penalty: the rating alone, rescale only, or rescale + alpha (below)
     fill           what a player the rated season's table has no row for is worth: --fill=500x0.25 is a quarter of
                    the possession-weighted mean rating of the table's players under 500 possessions
 
@@ -101,7 +103,7 @@ def on_off(text: str) -> bool:
 def parse_args(argv=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="The trade set: each season's with-and-without-you correction.",
                                      allow_abbrev=False)
-    parser.add_argument("--rankings", default="outputs/season_ratings_sy_lam13037.parquet",
+    parser.add_argument("--rankings", default="outputs/season_ratings_weightfix.parquet",
                         help="the ratings table, relative to the repository (default %(default)s)")
     parser.add_argument("--lambdas", default="1000,3000,10000,30000,100000,300000",
                         help="the penalties swept (default %(default)s)")

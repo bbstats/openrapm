@@ -2,7 +2,7 @@
 
 The consensus (data/external/consensus.csv, read by `data.tables.load_consensus`) blends several public metrics
 for 2024-26.  It shares none of the ratings' margin data, so it catches an error the ratings' own year-over-year
-test cannot: a defect both seasons of a pair share.  The owner's standing rule (DECISIONS.md): the consensus is a
+test cannot: a defect both seasons of a pair share.  The owner's standing rule (notes/DECISIONS.md): the consensus is a
 sanity check, never a fitting target; a marginal miss is not a veto, a gross one still is.
 tests/test_vs_consensus.py holds the ratings to the minimums below; scripts/checks/64_consensus_report.py prints the
 same numbers for several tables side by side, and scripts/checks/135_robust_review.py bootstraps their change.

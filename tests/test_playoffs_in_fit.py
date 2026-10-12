@@ -5,7 +5,7 @@ other games", then "RS + playoffs should be considered a single entity in our ne
 
 Before this, `phases=("RS",)` was the default in six places and each one was somewhere the playoffs
 were silently dropped -- the training design, the box exposure's padded rates, the role inputs, the
-shooter totals, and the rows the criterion scores.  DECISIONS.md records that two of the three fixes
+shooter totals, and the rows the criterion scores.  notes/DECISIONS.md records that two of the three fixes
 needed to make the old playoff delta work were bugs of exactly that shape in shared code.
 
 The defaults are the thing worth pinning.  A caller who wants regular-season rows can always ask for

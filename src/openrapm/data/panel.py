@@ -164,7 +164,7 @@ def roles_from_games(tables: SeasonTables, keep_ids: set) -> tuple:
 
 
 def score_state(stints: pd.DataFrame, season: int) -> pd.DataFrame:
-    """Per player and side, the score state his possessions came in (DECISIONS.md, experiment 14):
+    """Per player and side, the score state his possessions came in (notes/DECISIONS.md, experiment 14):
 
         garbage_time_share  share of his possessions in garbage time (config.yaml garbage_time)
         closeness           possession-weighted mean of 1 / max(|margin|, 1)

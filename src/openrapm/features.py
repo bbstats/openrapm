@@ -145,7 +145,7 @@ ROW_FEATURES = ["row_possessions", "row_seasons"]
 # The shipped inputs, each side, in the order the booster reads them: the columns Boruta (a feature-selection
 # method that keeps a column only when its importance beats that of randomly shuffled copies of every column)
 # accepted or left undecided, sorted alphabetically by their codes of the time (ast, creation, efg, ...), on-court
-# columns removed (DECISIONS.md, experiment 45).  The booster reads its inputs by position, so the positions are
+# columns removed (notes/DECISIONS.md, experiment 45).  The booster reads its inputs by position, so the positions are
 # load-bearing: the plain names keep the old order, which is no longer alphabetical.
 SHIPPED = {
     "O": ["assists_per100", "assists_minus_turnovers_per100", "effective_fg_pct", "career_possessions_before_k",
@@ -280,8 +280,7 @@ _RATIO_MEANINGS = {"effective_fg_pct": "effective field-goal %", "true_shooting_
                    "turnovers_per_used_possession": "turnovers per possession used",
                    "off_rebound_share": "offensive-rebound share of his rebounds"}
 _SHOTQ_ROWS = [
-    # name, meaning, formula ("attempts" = shot_twos_attempted + shot_threes_attempted; {pad} is the name's
-    # SHOTQ_PADS entry), unit
+    # name, meaning, formula ({pad} is the name's SHOTQ_PADS entry), unit
     ("two_point_expected_pct", "difficulty of his twos",
      "(shot_twos_expected_made + {pad} league_two_point_pct) / (shot_twos_attempted + {pad})", "fraction"),
     ("three_point_expected_pct", "difficulty of his threes",
@@ -291,11 +290,11 @@ _SHOTQ_ROWS = [
     ("three_point_pct_over_expected", "three-point shot-making",
      "(shot_threes_made - shot_threes_expected_made) / (shot_threes_attempted + {pad})", "makes per attempt"),
     ("expected_points_per_shot", "expected points per shot",
-     "(2 shot_twos_expected_made + 3 shot_threes_expected_made + {pad} league_points_per_shot) / (attempts + {pad})",
-     "points"),
+     "(2 shot_twos_expected_made + 3 shot_threes_expected_made + {pad} league_points_per_shot) "
+     "/ (shot_twos_attempted + shot_threes_attempted + {pad})", "points"),
     ("points_per_shot_over_expected", "points per shot above expected",
      "(2 (shot_twos_made - shot_twos_expected_made) + 3 (shot_threes_made - shot_threes_expected_made)) "
-     "/ (attempts + {pad})", "points"),
+     "/ (shot_twos_attempted + shot_threes_attempted + {pad})", "points"),
 ]
 _PANEL_ROWS = [
     # name, meaning, unit, scale, group

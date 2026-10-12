@@ -19,7 +19,7 @@ table (`--base`) and keeps every intermediate number, so each player's move read
 Every number is in points per 100 possessions, positive = good on both ends.  `team_share` is the player's share of
 his team's possessions on both ends together, the weight of his give-back.
 
-Example: 2026, Derrick White (DECISIONS.md, experiment 41): 2.60 before the swap step, 1.25 after, the league's
+Example: 2026, Derrick White (notes/DECISIONS.md, experiment 41): 2.60 before the swap step, 1.25 after, the league's
 largest swap charge, -1.35, of which -0.99 is give-back.
 
 Reads   the step-4 table (outputs/<base>.parquet), the shipped table (outputs/season_ratings_product.parquet), the
@@ -56,7 +56,7 @@ NAMES = {"threes_made_per100": "made threes", "threes_missed_per100": "missed th
          "blocks_per100": "blocks", "fouls_per100": "fouls", "team_possession_share": "share of team possessions",
          "games_started_share": "share of games started", "garbage_time_share": "garbage-time share", "age": "age",
          "seasons_before": "seasons played", "height_in": "height", "weight_lb": "weight",
-         "prior_off": "box prior (offense)", "prior_def": "box prior (defense)"}
+         "prior_off": "box prior (offence)", "prior_def": "box prior (defence)"}
 SHIPPED_TABLE = "season_ratings_product.parquet"
 MAX_GAP = 1e-9                     # the rebuilt adjustment must match the shipped table's c_off / c_def this closely
 TEAM_COLUMNS = ("player_name", "team_share", "off_type", "off_giveback", "off_centering", "off_spread", "off_final",
@@ -90,9 +90,9 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="One team's swap adjustment, step by step.", allow_abbrev=False)
     parser.add_argument("--team", default="BOS", help="the team's abbreviation (default %(default)s)")
     parser.add_argument("--season", type=int, default=2026, help="default %(default)s")
-    # the shipped table's step-4 input: experiment 46's since 2026-10-09 (`openrapm build` writes it as
-    # season_ratings_product_step4; before, experiment 45's season_ratings_product_lgb_noonc_priorshrink_pre_swap)
-    parser.add_argument("--base", default="season_ratings_product_weightfix_priorshrink_pre_swap",
+    # the shipped table's step-4 input, as `openrapm build` writes it.  Experiment 46's, published 2026-10-09, was
+    # built before the cleanup as season_ratings_product_weightfix_priorshrink_pre_swap
+    parser.add_argument("--base", default="season_ratings_product_step4",
                         help="outputs/<BASE>.parquet, the step-4 table (default %(default)s)")
     parser.add_argument("--also", default="", help="more seasons to rebuild, comma-separated")
     parser.add_argument("--player", default="", help="one player's every term, by name")

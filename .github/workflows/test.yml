@@ -21,7 +21,7 @@ jobs:
   test:
     # The point of this job is the claim the README makes: a fresh clone with NO scraped data
     # installs and passes. It runs with data/ empty, so if a test quietly depends on a local
-    # artifact rather than skipping cleanly, this is what catches it.  The tests marked slow
+    # artefact rather than skipping cleanly, this is what catches it.  The tests marked slow
     # rebuild real seasons and are left out by pyproject.toml's addopts.
     runs-on: ubuntu-latest
     strategy:

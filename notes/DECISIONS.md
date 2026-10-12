@@ -1,5 +1,30 @@
 # OpenRAPM: what the out-of-season test decided, and what it could not
 
+> **What this file is (header added 2026-10-11).** The permanent record: every experiment, what the year-over-year
+> test and its predecessors settled, what they rejected, the measurement traps and the standing rules. It is
+> history and is not rewritten; the newest entries are at the end.
+>
+> Numbered-script paths in it (`scripts/62_single_year_board.py` and so on) and `src/eracoef/` module paths refer to
+> the code at the tag `archive/research-2026-10`: `git show archive/research-2026-10:scripts/62_single_year_board.py`.
+> Column and target names are those before 2026-10-11; `src/openrapm/data/legacy_names.py` maps each to today's.
+> `README.md` and `PIPELINE.md` describe the code as it is now.
+>
+> | in this file | today |
+> |---|---|
+> | `scripts/01_ingest.py`, `02_stints.py` | `openrapm data ingest`, `openrapm data stints` |
+> | `scripts/49_role_panel.py` (with 65, 69, 86) | `openrapm data panel` |
+> | `scripts/62_single_year_board.py` | `openrapm rate` (steps 1-3); `openrapm build` runs all five steps |
+> | `scripts/97_within_season.py` | `openrapm folds` |
+> | `scripts/98_calibrator.py` | retired; its fold reader is `src/openrapm/data/within_folds.py` |
+> | `scripts/99_prior_shrink.py` | `openrapm shrink` |
+> | `scripts/91_swap_adjust.py` | `openrapm swap` |
+> | `scripts/52_site.py`, `76_bias_groups.py`, `83_decompose_site.py` | `openrapm site`, with `--bias`, `--decomposition` |
+> | `scripts/63_yoy.py` and the other twelve checks | `scripts/checks/`, same number and name |
+> | 62 `--exclude_neighbours=1` | `--setting test` |
+> | 62 `--features=boruta_noonc` | `--features box_score_and_bio` |
+> | targets `xpts_ft`, `x3def_w0.25` | `points_with_expected_free_throws`, `points_with_expected_opponent_threes` |
+> | every other numbered script | retired |
+
 > **Where `FINDINGS N.N` points.**  Sixty-one comments in `src/` and a handful here cite section
 > numbers in `FINDINGS.md`, the 5,292-line research log that was removed from the tree in the
 > open-source cleanup (commit `0f7c0b2`).  It is preserved whole under the annotated tag

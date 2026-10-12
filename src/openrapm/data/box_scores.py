@@ -6,9 +6,12 @@ Per-game player possessions come from the stints (design.piece_from_frames), not
 """
 from __future__ import annotations
 
+import functools
+
 import pandas as pd
 
 from ..design import SEASON_PHASES
+from .config import resolve
 from .ingest import load_gamelog
 
 
@@ -41,19 +44,21 @@ def box_from_gamelog(gl: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-_BOX_CACHE: dict = {}
+@functools.lru_cache(maxsize=None)
+def _season_phase_box(season: int, phase: str, raw: str) -> pd.DataFrame:
+    """One season and phase's box rows, from the game log under `raw` (the resolved paths.raw folder).
+
+    Read once per process.  The cache is keyed on the folder as well as the season, so a test that points paths.raw
+    at a temporary tree never gets the real tree's rows.  No size limit: a 30-season build asks for all 60 season
+    and phase tables, and a regular season's is about 5 MB in memory (4.6 for 1997, 5.2 for 2026)."""
+    return box_from_gamelog(load_gamelog(season, phase, {"paths": {"raw": raw}}))
 
 
 def season_box(seasons, phases, cfg) -> pd.DataFrame:
     """Per game x player box rows for the seasons and phases; each (season, phase) is read once per process."""
-    parts = []
-    for s in seasons:
-        for p in phases:
-            key = (int(s), str(p))
-            if key not in _BOX_CACHE:
-                _BOX_CACHE[key] = box_from_gamelog(load_gamelog(s, p, cfg))
-            parts.append(_BOX_CACHE[key])
-    return pd.concat(parts, ignore_index=True)
+    raw = str(resolve(cfg, "raw").absolute())
+    return pd.concat([_season_phase_box(int(season), str(phase), raw) for season in seasons for phase in phases],
+                     ignore_index=True)
 
 
 def main_team_by_minutes(season: int, cfg) -> dict:

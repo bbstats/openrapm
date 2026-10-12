@@ -52,8 +52,13 @@ that leaves the rated season out is then one solve on the sums of the other seas
 season keeps its own context columns, so leaving a season out drops its rows and its context together.
 
 Example: with lambda = 40,000, a player with 54,000 career possessions keeps 57% of his raw impact
-(54,000 / 94,000) and a player with 2,600 keeps 6%.  That is why the defensive label is "un-shrunk" (`unshrink`)
-before the prior learns from it.
+(54,000 / 94,000) and a player with 2,600 keeps 6%.
+
+The defensive label is "un-shrunk" (`unshrink`) before the prior learns from it, so long and short careers sit on
+one scale; the offensive label is not.  Un-shrinking both sides helped the year-over-year test (paired difference
+in team-game mean squared error -0.84, z -3.77) but made the order within each side worse (each side rescaled:
++1.79, z +7.75, better in 8 of 56) and cut the consensus agreement from 0.771 to 0.680.  Un-shrinking defence alone
+passed every check (-0.42, z -5.24, better in 43 of 56; notes/DECISIONS.md, experiment 22).
 """
 from __future__ import annotations
 
@@ -288,7 +293,7 @@ def career_labels(sums: dict, unseen, label_settings, targets) -> dict:
     `sums` maps a target name to its `SeasonSums`; `label_settings` is `settings.LabelSettings` and `targets`
     `settings.Targets`.  The offence label is the `offense` column of the fit on the offence target, the defence
     label the `defense` column of the fit on the defence target.  A column named in
-    `label_settings.unshrink_columns` (shipped: defence only; DECISIONS.md, experiment 22) is un-shrunk.
+    `label_settings.unshrink_columns` (shipped: defence only; notes/DECISIONS.md, experiment 22) is un-shrunk.
 
     Example: rating 2026 in the product setting, unseen = [2026]; each table holds player_id, offense, defense
     and possessions for every player with 100+ possessions in 1997-2025.

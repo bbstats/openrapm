@@ -4,7 +4,7 @@
 
 Why (the owner, 2026-10-03).  The prior shrink (step 4) needs the ratings' misses on games they never saw.  Misses
 on the neighbouring seasons' games would teach it that a peak season comes back down the year after, and it would
-shrink every peak season; so the misses come from the season's own games, held out.  WITHIN_SEASON_LEDGER.md lists
+shrink every peak season; so the misses come from the season's own games, held out.  notes/WITHIN_SEASON_LEDGER.md lists
 every input, what it is built from and the check that proves it.
 
 How.  A season's games (regular season and playoffs) are assigned to four folds at random, three times over (three

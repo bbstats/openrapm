@@ -34,6 +34,12 @@ half from the fit on the defence target (step 1 defines both, "points_with_expec
 Example: 2026's offensive prior scale is 2.35 (product setting).  A player whose booster prior is +0.5 per 100
 starts at 2.35 x 0.5 = +1.18.  If his 2,500 possessions say he was 2.5 per 100 better than that, he keeps about
 16% of it, r = +0.4, for a rating of +1.58 before centring.
+
+Why s is well above 1 on offence: the offensive label is a ridge coefficient that is not un-shrunk (step 1), so it
+keeps only n / (n + 40,000) of a player's raw impact, and the prior learned from it is on that shrunk scale; s puts
+it back on the season's scale.  The defensive label is un-shrunk, and its scale stays near 1.  Over the thirty
+published seasons s runs from 2.32 to 4.47 on offence and from 0.93 to 1.39 on defence; with both labels un-shrunk
+(notes/DECISIONS.md, experiment 1 of 2026-09-14 evening) the scales read 0.84 and 0.92.
 """
 from __future__ import annotations
 
@@ -110,8 +116,9 @@ def defence_possessions(design) -> dict:
     `poss_off` comes from the stint rows (`rapm.player_possessions`), `poss_def` from the design's per-game
     possession table (`design.game_poss`).  The two counts differ by about nine possessions in 2,500 (2026: a
     mean gap of 9.5 among players with 2,000 to 3,000), and the owner asked for the right count on each side
-    (2026-09-18; before then `poss_def` was a copy of `poss_off`).  The game table counts per player, season
-    and team (`psx`: a player traded mid-season has one entry per team); his entries are summed here.
+    (2026-09-18; before then `poss_def` was a copy of `poss_off`).  The game table holds one row per player-season
+    and game (`psx`, design.py's `ps_key`: a player traded mid-season still has one player-season); the rows are
+    summed over games here, and over seasons when a design spans several.
     """
     per_entry = (design.game_poss.groupby("psx_idx")["poss_def"].sum()
                  .reindex(range(design.spec.n_psx)).fillna(0.0))

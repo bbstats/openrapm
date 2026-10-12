@@ -14,7 +14,7 @@ Words used below
     z-score     (value - mean) / standard deviation, with the mean and standard deviation of the seasons the
                 mixture was fitted on
     signature   the four rates a type's average z-score is furthest from zero on, strongest first
-    gap         a player's z-score on our rating minus his z-score on the other source's
+    gap         a player's z-score on the OpenRAPM rating minus his z-score on the other source's
     spread      the standard deviation, across types with at least ten players, of the mean gap on the total
                 rating.  The total and not each side: a type whose offensive and defensive gaps are large and
                 opposite is a disagreement about which end a player's value comes from, and only the total says

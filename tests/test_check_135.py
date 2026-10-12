@@ -1,5 +1,5 @@
-"""scripts/checks/135_robust_review.py starts, answers to the flags HANDOFF.md and its docstring use, and refuses to
-run without a candidate."""
+"""scripts/checks/135_robust_review.py starts, answers to the flags notes/HANDOFF.md and its docstring use, and refuses
+to run without a candidate."""
 import subprocess
 import sys
 from pathlib import Path

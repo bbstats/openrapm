@@ -36,7 +36,7 @@ Example (one command; the incumbent is named second and paired against):
         --rankings=new=outputs/season_ratings_new.parquet,incumbent=outputs/season_ratings_weightfix.parquet
 
 Why this test and not the within-season 75/25 split.  The 75/25 split holds a quarter of a season's games out of
-the ridge but not out of the prior's on-court inputs, which are averaged over the whole season (DECISIONS.md,
+the ridge but not out of the prior's on-court inputs, which are averaged over the whole season (notes/DECISIONS.md,
 2026-09-13: the within-season split leaks).  Here the scored games are a different season from the rated one,
 so nothing in the rated season's prior or evidence has seen them.  And a player who changed teams carries his
 rating to new teammates, which is where a rating that is really his old team's credit stops predicting: the
@@ -52,7 +52,7 @@ players who played that season, so a rookie of the scored season (10% of its pos
 back) is scored as the average player, 0, which is the one thing he is not.  `--fill=name:500` gives that table
 the possession-weighted mean rating of its own players under 500 possessions, read off the rated season alone
 (`openrapm.scoring.replacement_level`); `500x0.25` takes a quarter of that level, the depth the test settled on
-(DECISIONS.md, experiment 11); `name:-1.6/-0.5` sets the two levels by hand, positive-good, offence first.  A
+(notes/DECISIONS.md, experiment 11); `name:-1.6/-0.5` sets the two levels by hand, positive-good, offence first.  A
 table not listed keeps the 0 fill, so the same parquet can be handed in twice under two names and paired.
 
 `--offset=N` asks the ratings N seasons away instead of the adjacent one.  The trade set

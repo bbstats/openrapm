@@ -12,8 +12,8 @@ model is exercising the network.
 Why this is session-scoped
 --------------------------
 The first version of this block was `scope="function"` and did not work.  pytest instantiates
-higher-scoped fixtures first, so a `scope="module"` fixture -- `test_vs_consensus.board`, the one
-that actually scrapes -- was set up BEFORE the function-scoped block was installed.  The suite went
+higher-scoped fixtures first, so a `scope="module"` fixture -- `test_vs_consensus.ratings`, which
+scraped at the time -- was set up BEFORE the function-scoped block was installed.  The suite went
 on downloading and the block looked like it was passing.  `tests/test_network_block.py` is
 there so that never goes unnoticed again.  It lives in its own file because pytest does not collect
 tests out of `conftest.py` -- the guard sat here for weeks and was never once run.

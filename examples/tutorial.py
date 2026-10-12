@@ -228,7 +228,7 @@ def say_step1(results: dict, players: pd.DataFrame) -> None:
     print(f"\nStep 1: plain RAPM (rapm.py), penalty {penalty:,.0f}", flush=True)
     say(f"On {results['league']['rated']} alone, the correlation with the true impact is "
         f"{step['one_season']['offence']['correlation']:.2f} on offence and "
-        f"{step['one_season']['defence']['correlation']:.2f} on defence; the error is "
+        f"{step['one_season']['defence']['correlation']:.2f} on defence; the root mean square error is "
         f"{step['one_season']['offence']['error']:.1f} and {step['one_season']['defence']['error']:.1f} points per "
         f"100.")
     n_bench, n_starter = players.possessions[bench].median(), players.possessions[starters].median()
@@ -264,11 +264,14 @@ def prior_agreement(priors: dict, players: pd.DataFrame) -> dict:
 
 def impact_parts(league: League) -> dict:
     """Per side, the standard deviation over the rated season's players of the two parts of the true impact: the
-    box score's part (his true rates times the fixed weights) and the part no box count explains."""
+    box score's part (his true rates times the fixed weights) and the part no box count explains; and the
+    ceiling, the correlation of the box score's part with the whole true impact: what a model that knew every
+    player's true rates and the weights would reach."""
     truth = league.truth[league.truth.season == league.rated]
     rates = truth[[f"rate_{count}" for count in FEATURES]].to_numpy()
     return {side.name: {"box_score": float(np.std(rates @ league.weights[side.key])),
-                        "unexplained": float(np.std(truth[side.unexplained]))}
+                        "unexplained": float(np.std(truth[side.unexplained])),
+                        "ceiling": float(np.corrcoef(rates @ league.weights[side.key], truth[side.impact])[0, 1])}
             for side in SIDES}
 
 
@@ -282,11 +285,15 @@ def say_step2(results: dict, priors: dict, league: League) -> None:
         f"{len(priors['O'].feature_names)} inputs on offence and {len(priors['D'].feature_names)} on defence.  "
         f"Asked about {results['league']['rated']}'s box scores alone, it predicts the true impact with correlation "
         f"{step['offence']['correlation']:.2f} on offence and {step['defence']['correlation']:.2f} on defence.")
-    say(f"Defence is the weaker side because the box score sees less of it.  In this league most of the defensive "
-        f"weight sits on steals, blocks, defensive rebounds and fouls (simulate.BETA_D).  The box score's part of a "
-        f"player's true defensive impact spreads by a standard deviation of {parts['defence']['box_score']:.1f} "
-        f"points per 100 and the part no box count explains by {parts['defence']['unexplained']:.1f}; on offence "
-        f"the two are {parts['offence']['box_score']:.1f} and {parts['offence']['unexplained']:.1f}.")
+    say(f"Defence is the weaker side, partly because the box score sees less of it.  In this league most of the "
+        f"defensive weight sits on steals, blocks, defensive rebounds and fouls (simulate.BETA_D).  The box score's "
+        f"part of a player's true defensive impact spreads by a standard deviation of "
+        f"{parts['defence']['box_score']:.1f} points per 100 and the part no box count explains by "
+        f"{parts['defence']['unexplained']:.1f}; on offence the two are {parts['offence']['box_score']:.1f} and "
+        f"{parts['offence']['unexplained']:.1f}.  So a model that knew every player's true rates would reach a "
+        f"correlation of {parts['defence']['ceiling']:.2f} on defence and {parts['offence']['ceiling']:.2f} on "
+        f"offence; what the prior falls short of that is the booster's own: it learns the weights from the labels "
+        f"and reads one season's counts, not the true rates.")
 
 
 # ------------------------------------------------------------------------------------------------- step 3
@@ -341,7 +348,8 @@ def say_step3(results: dict) -> None:
     say_negative_scale(results)
     say(f"The correlation with the true impact is {step['offence']['correlation']:.2f} on offence and "
         f"{step['defence']['correlation']:.2f} on defence (step 1 on the same season: "
-        f"{before['offence']['correlation']:.2f} and {before['defence']['correlation']:.2f}); the error is "
+        f"{before['offence']['correlation']:.2f} and {before['defence']['correlation']:.2f}); the root mean square "
+        f"error is "
         f"{step['offence']['error']:.1f} and {step['defence']['error']:.1f} points per 100 (step 1: "
         f"{before['offence']['error']:.1f} and {before['defence']['error']:.1f}).")
     say(f"A bench player's rating is mostly his prior: on offence its prior part averages "
@@ -350,7 +358,7 @@ def say_step3(results: dict) -> None:
         f"prior part of {starters['offence']['prior_part']:.1f}.  A player with few possessions has little evidence "
         f"of his own, so the box score says most of what is known about him; a starter's games can move him away "
         f"from it.")
-    say(f"The offensive error fell from {bench['offence']['error_step1']:.1f} to "
+    say(f"The offensive root mean square error fell from {bench['offence']['error_step1']:.1f} to "
         f"{bench['offence']['error_step3']:.1f} for the bench players and from "
         f"{starters['offence']['error_step1']:.1f} to {starters['offence']['error_step3']:.1f} for the starters; on "
         f"defence from {bench['defence']['error_step1']:.1f} to {bench['defence']['error_step3']:.1f} and from "

@@ -4,7 +4,7 @@ low or too high?
 A rating system can lean on an input: give big men too little credit on defence, say, or steals too much.  If it
 does, the games those players play miss the ratings' prediction in one direction.  This check measures that for
 every input a box-score prior could read, and for every group of inputs that move together, on each season's own
-held-back games.  Every Robustness-pass build was judged by it (DECISIONS.md, "The Robustness pass").
+held-back games.  Every Robustness-pass build was judged by it (notes/DECISIONS.md, "The Robustness pass").
 
 Words used below
     fold          one season rated from three quarters of its games, the other quarter held back
@@ -26,7 +26,7 @@ Words used below
                   whole-season rated rows with 500 or more possessions, cut at 0.4, 0.5 and 0.6.  A group's axis
                   is the first principal component of its members' normal scores, ranked again.  The groups and
                   their loadings are frozen in params/audit_groups.json (`--freeze=1` writes it, once, before the
-                  first build; DECISIONS.md, measurement trap 22)
+                  first build; notes/DECISIONS.md, measurement trap 22)
 
 The fit, per side, pooled over every fold (weighted least squares, weight = possessions):
 
@@ -51,7 +51,7 @@ player's inputs (all of them, so the inputs keep their correlations), season by 
 a player's inputs persist across his seasons as much as real ones do).  Each test's line and bend are recomputed for
 every reassignment.  A test's z is its estimate minus its null mean over its null standard deviation, and the
 threshold is the 95th percentile, over reassignments, of the largest |z| among the tests that can count (the
-studentized max-T of Westfall and Young).  A season jackknife is printed beside it but does not decide: a player's
+studentised max-T of Westfall and Young).  A season jackknife is printed beside it but does not decide: a player's
 misfit carries over between seasons, so the jackknife's standard error is too small for anything a player carries
 with him.  Every summary row carries the smallest line it could have detected: the threshold times the line's null
 standard deviation.  `--draws=0 --threshold_from=<an earlier --out>` reads the threshold and each test's null from
@@ -932,7 +932,7 @@ def career_null(folds: list, tests: list, draws: int, seed: int = NULL_SEED) -> 
 
     The season jackknife treats seasons as independent, but a player's misfit carries over from season to season,
     so an input fixed per player reaches |z| near 4 by chance in one test of twenty: each test is therefore scaled
-    by its own spread under this null (the studentized max-T of Westfall and Young), not by its jackknife."""
+    by its own spread under this null (the studentised max-T of Westfall and Young), not by its jackknife."""
     tests = [test for test in tests if decision_test(test)]
     n_tests = len(tests)
     index = career_index(folds, tests)
@@ -955,7 +955,7 @@ def career_null(folds: list, tests: list, draws: int, seed: int = NULL_SEED) -> 
 
 
 def studentized_threshold(null: dict, level: float = 0.95) -> tuple:
-    """Each test's null mean and standard deviation, and the `level` quantile of the largest standardized
+    """Each test's null mean and standard deviation, and the `level` quantile of the largest standardised
     |estimate| over all tests, sides and both statistics in each draw."""
     centre, spread, standardized = {}, {}, []
     for kind in ("line", "bend"):
@@ -1578,7 +1578,7 @@ def print_leans(summary: pd.DataFrame, stick: Yardstick, tests: list, draws: int
     source = (f" ({draws} draws; the season jackknife's own z would have needed "
               f"{np.quantile(stick.null['jack_max'], 0.95):.2f})" if stick.null is not None
               else f" (from {stick.source})")
-    print(f"\nthreshold |z| {stick.threshold:.2f}: the 95th percentile of the largest standardized estimate over "
+    print(f"\nthreshold |z| {stick.threshold:.2f}: the 95th percentile of the largest standardised estimate over "
           f"{2 * 2 * sum(decision_test(test) for test in tests)} line and bend tests, whole careers reassigned"
           + source + f"; {int(summary.counts.sum())} leans count", flush=True)
     show = summary.reindex(summary.tenths_bottom_to_top.abs().sort_values(ascending=False).index)

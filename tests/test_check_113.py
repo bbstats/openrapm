@@ -1,4 +1,4 @@
-"""scripts/checks/113_swap_explain.py starts and answers to the flags HANDOFF.md uses
+"""scripts/checks/113_swap_explain.py starts and answers to the flags notes/HANDOFF.md uses
 (`--team=BOS --player="Derrick White" --also=2024,2025`): a renamed step-5 function would otherwise surface only
 the next time someone asks why a player's swap adjustment is what it is."""
 import subprocess

@@ -16,7 +16,8 @@ command's options.
 
 Every linear-algebra library (OpenMP, MKL, OpenBLAS) is held to one thread before numpy loads, so the same inputs
 give the same bits on any machine: a multi-threaded library adds in another order and moves the last digits
-(DECISIONS.md, the cleanup's thread rule, 2026-10-09).  numpy is imported only inside the commands, after that.
+(notes/HANDOFF.md, header: rebuilt on one thread, the published final table agrees to within 1.2e-12 per 100).
+numpy is imported only inside the commands, after that.
 """
 from __future__ import annotations
 
@@ -295,7 +296,8 @@ def _add_site(commands) -> None:
                     "type, against the consensus and against 2026 observed) with outputs/bias_groups.json and "
                     "outputs/bgmm_proba.parquet; --decomposition also writes docs/data/decompose_1y.json and "
                     "decompose_3y.json (vanilla RAPM split by player and by possession; every season and every "
-                    "three-season window is fitted, about three minutes).  The pages' wording is not changed.")
+                    "three-season window is fitted, 319 seconds in the last run).  The pages' wording is not "
+                    "changed.")
     site.add_argument("--ratings", metavar="FILE",
                       help="the ratings table (default outputs/season_ratings_product.parquet)")
     site.add_argument("--out-dir", metavar="DIR", help="the site folder written into (default the repository's docs/)")

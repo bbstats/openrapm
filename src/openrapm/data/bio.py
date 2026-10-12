@@ -13,9 +13,13 @@ Two blocks, both aligned to a window's players the way `roles.career_inputs` is:
 
 A held-out season is never a training season, but the roles table knows its rosters; `exclude_seasons`
 skips those rows so the tenure chain steps over H as if H were unknown, and nothing measured on H reaches
-a covariate (the standing rule from HANDOFF Part 2's traps).
+a covariate (notes/DECISIONS.md, "The measurement traps": a covariate measured on the held-out season needs a
+control from data the outcome could not have touched).
 """
 from __future__ import annotations
+
+import functools
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -29,18 +33,29 @@ TENURE_INPUTS = ["tenure", "n_teams"]
 PLAYER_INPUTS = [*BIO_INPUTS, *TENURE_INPUTS]
 UNDRAFTED = 61.0
 
-_CACHE: dict = {}
-
 
 def player_bio(cfg, force: bool = False) -> pd.DataFrame:
-    """One row per player: height, weight, draft_pick.  Cached at bio.parquet under paths.cache (data/cache)."""
+    """One row per player: height, weight, draft_pick.  Stored at bio.parquet under paths.cache (data/cache), built
+    there from the bio feed when it is missing or `force` is set, and read once per process."""
     path = resolve(cfg, "cache") / "bio.parquet"
-    if "bio" in _CACHE and not force:
-        return _CACHE["bio"]
-    if path.exists() and not force:
-        _CACHE["bio"] = pd.read_parquet(path)
-        return _CACHE["bio"]
-    raw_bio = resolve(cfg, "raw") / "bio"
+    if force or not path.exists():
+        table = bio_from_feed(resolve(cfg, "raw") / "bio")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        table.to_parquet(path, index=False)
+        _stored_bio.cache_clear()           # the file just changed, so a copy read before it is out of date
+    return _stored_bio(path)
+
+
+@functools.lru_cache(maxsize=None)
+def _stored_bio(path: Path) -> pd.DataFrame:
+    """bio.parquet as stored at `path`, read once per process; keyed on the path, so a test that points paths.cache
+    at a temporary tree never gets the real tree's table."""
+    return pd.read_parquet(path)
+
+
+def bio_from_feed(raw_bio: Path) -> pd.DataFrame:
+    """The bio table from the bio feed's files (data/raw/bio/*_RS.parquet): each player's median height, weight and
+    draft pick over the seasons the feed lists him, the undrafted and unknown at pick 61."""
     files = sorted(raw_bio.glob("*_RS.parquet"))
     if not files:
         raise FileNotFoundError(f"{raw_bio} has no *_RS.parquet; the roles table fetches them "
@@ -59,9 +74,6 @@ def player_bio(cfg, force: bool = False) -> pd.DataFrame:
     g = d.groupby("player_id").agg(height=("height", "median"), weight=("weight", "median"),
                                    draft_pick=("draft_pick", "median")).reset_index()
     g["draft_pick"] = g.draft_pick.fillna(UNDRAFTED)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    g.to_parquet(path, index=False)
-    _CACHE["bio"] = g
     return g
 
 

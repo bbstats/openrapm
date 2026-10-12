@@ -394,7 +394,7 @@ def bias_result(inputs: dict, ratings_name: str) -> tuple[dict, pd.DataFrame]:
 
 
 def tint_cell(value) -> str:
-    """A diverging tint: red = OpenRAPM rates the type ABOVE that source, blue = below, gray at zero.
+    """A diverging tint: red = OpenRAPM rates the type ABOVE that source, blue = below, grey at zero.
 
     The depth is `min(|bias| / 0.9, 1)`, so the largest bias on the page is the full tint and the
     owner's 0.1 threshold for "nothing" is a tenth of it -- barely visible, which is the point.
@@ -422,14 +422,15 @@ def bias_page(result: dict) -> str:
 def bias_summary(result: dict) -> list[str]:
     """The console report: coverage, any unnamed type, and both tables."""
     lines = [f"  {len(result['groups'])} groups over {result['players']} players, {result['components_used']} of "
-             f"{result['k']} components used, our overall stretched x{result['global_stretch']:.3f} to the "
-             f"consensus's spread; the residual RAPM covers {result['residual_players']} of them"]
+             f"{result['k']} components used, OpenRAPM's overall rating stretched "
+             f"x{result['global_stretch']:.3f} to the consensus's spread; the residual RAPM covers "
+             f"{result['residual_players']} of them"]
     unnamed = [row["signature"] for row in result["groups"] if row["name"] == "UNNAMED"]
     if unnamed:
         lines.append(f"  WARNING: no name for {unnamed} -- the fit moved and `NAMES` needs the new signature")
     for key, label in (("groups", "against the consensus"), ("groups_vs_games", "against the games")):
         lines.append(f"\n=== {label}, ordered by |bias| x possessions")
-        lines.extend(f"  {row['name']:<30} bias {row['bias']:+.3f}  ours {row['ours']:+.2f}  "
+        lines.extend(f"  {row['name']:<30} bias {row['bias']:+.3f}  OpenRAPM {row['ours']:+.2f}  "
                      f"theirs {row['theirs']:+.2f}  {row['players']:>3} players, "
                      f"{row['possessions'] / 1000:>5.0f}k possessions  {row['signature']}" for row in result[key])
     return lines

@@ -1,8 +1,8 @@
 """Shooter-level expected points: the shooter's own padded rate, from the other half of the block.
 
-The stage 4 shot term (xpts.py) priced a shot with the LINEUP's fitted eFG% and lost the
-out-of-season test, because a shrunk lineup expectation replaced real shot-making signal
-(FINDINGS.md section 17).  This module prices the shot with the SHOOTER's own rate instead --
+An earlier shot term (the retired src/eracoef/xpts.py, tag archive/research-2026-10) priced a shot with the
+LINEUP's fitted eFG% and lost the out-of-season test, because a shrunk lineup expectation replaced real
+shot-making signal (FINDINGS.md section 17).  This module prices the shot with the SHOOTER's own rate instead --
 the thing the free-throw term already does, and the free-throw term is the one luck adjustment that
 paid.  A field-goal attempt is priced as
 
@@ -32,7 +32,9 @@ totals of `player_shot_frame`.
 """
 from __future__ import annotations
 
+import functools
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -49,7 +51,14 @@ SLOTS = ("1", "2", "3", "4", "5")
 
 
 # ---------------------------------------------------------------------------------------- the tables
-_SHOTS_CACHE: dict = {}
+@functools.lru_cache(maxsize=None)
+def _shots_table(path: Path, season: int, phase: str) -> pd.DataFrame:
+    """One season and phase's shots table (`path`, under paths.stints), read once per process; keyed on the path, so
+    a test that points paths.stints at a temporary tree never gets the real tree's table."""
+    if not path.exists():
+        raise FileNotFoundError(
+            f"{path} is missing; rebuild the stints (openrapm data stints {season} {season} {phase} --force)")
+    return pd.read_parquet(path)
 
 
 def load_shots(seasons, cfg, phases: tuple = SHOT_PHASES) -> pd.DataFrame:
@@ -59,18 +68,9 @@ def load_shots(seasons, cfg, phases: tuple = SHOT_PHASES) -> pd.DataFrame:
     A playoff game prices a shooter's attempts like any other (owner's ruling, 2026-09-10).  The PO
     shots tables carry their own A/B split, so the halves stay balanced within each phase.
     """
-    d = resolve(cfg, "stints")
-    parts = []
-    for s in seasons:
-        for ph in phases:
-            p = d / f"{int(s)}_{ph}_shots.parquet"
-            if p not in _SHOTS_CACHE:
-                if not p.exists():
-                    raise FileNotFoundError(
-                        f"{p} is missing; rebuild the stints (openrapm data stints {s} {s} {ph} --force)")
-                _SHOTS_CACHE[p] = pd.read_parquet(p)
-            parts.append(_SHOTS_CACHE[p])
-    return pd.concat(parts, ignore_index=True)
+    folder = resolve(cfg, "stints")
+    return pd.concat([_shots_table(folder / f"{int(season)}_{phase}_shots.parquet", int(season), phase)
+                      for season in seasons for phase in phases], ignore_index=True)
 
 
 def load_ft(seasons, cfg, halves: pd.Series, phases: tuple = SHOT_PHASES) -> pd.DataFrame:
@@ -151,7 +151,27 @@ def rates_from_tables(shots: pd.DataFrame, ft: pd.DataFrame, extra: pd.DataFrame
 
 SHOT_COLS = ["fg2a", "fg2m", "xl2", "fg3a", "fg3m", "xl3"]
 FT_COLS = ["ftm", "fta"]
-_TOTALS_CACHE: dict = {}
+
+
+def half_totals(shots: pd.DataFrame, ft: pd.DataFrame) -> tuple[dict, dict]:
+    """Per shooter, the sums of SHOT_COLS over the shots table and of FT_COLS over the free-throw table, for each
+    half ("A", "B") and for both together ("ALL")."""
+    shot_totals = {half: shots[shots.half == half].groupby("player_id")[SHOT_COLS].sum() for half in ("A", "B")}
+    shot_totals["ALL"] = shots.groupby("player_id")[SHOT_COLS].sum()
+    ft_totals = {half: ft[ft.half == half].groupby("player_id")[FT_COLS].sum() for half in ("A", "B")}
+    ft_totals["ALL"] = ft.groupby("player_id")[FT_COLS].sum()
+    return shot_totals, ft_totals
+
+
+@functools.lru_cache(maxsize=None)
+def _whole_season_totals(season: int, phases: tuple, stints: str, raw: str) -> tuple[dict, dict]:
+    """`half_totals` of every game of one season, read once per process.  Keyed on the two folders it reads (the
+    resolved paths.stints and paths.raw) as well as the season, so a test that points them at a temporary tree never
+    gets the real tree's totals."""
+    folders = {"paths": {"stints": stints, "raw": raw}}
+    shots = load_shots([season], folders, phases)
+    halves = shots.drop_duplicates("game_id").set_index("game_id")["half"]
+    return half_totals(shots, load_ft([season], folders, halves, phases))
 
 
 def season_totals(season: int, cfg, keep=None, phases: tuple = SHOT_PHASES) -> tuple[dict, dict]:
@@ -163,28 +183,15 @@ def season_totals(season: int, cfg, keep=None, phases: tuple = SHOT_PHASES) -> t
     the cut and not only on the season.  A cut names regular-season games only, so filtering by it drops the
     playoffs whatever `phases` says -- which is what a fit that has seen only the first q of a season should see.
     """
-    key = (int(season), tuple(phases))
-    if keep is not None:
-        shots = load_shots([int(season)], cfg, phases)
-        shots = shots[shots.game_id.isin(set(keep))]
-        halves = shots.drop_duplicates("game_id").set_index("game_id")["half"]
-        ft = load_ft([int(season)], cfg, halves, phases)
-        ft = ft[ft.game_id.isin(set(keep))] if "game_id" in ft.columns else ft
-        T = {h: shots[shots.half == h].groupby("player_id")[SHOT_COLS].sum() for h in ("A", "B")}
-        T["ALL"] = shots.groupby("player_id")[SHOT_COLS].sum()
-        F = {h: ft[ft.half == h].groupby("player_id")[FT_COLS].sum() for h in ("A", "B")}
-        F["ALL"] = ft.groupby("player_id")[FT_COLS].sum()
-        return T, F
-    if key not in _TOTALS_CACHE:
-        shots = load_shots([int(season)], cfg, phases)
-        halves = shots.drop_duplicates("game_id").set_index("game_id")["half"]
-        ft = load_ft([int(season)], cfg, halves, phases)
-        T = {h: shots[shots.half == h].groupby("player_id")[SHOT_COLS].sum() for h in ("A", "B")}
-        T["ALL"] = shots.groupby("player_id")[SHOT_COLS].sum()
-        F = {h: ft[ft.half == h].groupby("player_id")[FT_COLS].sum() for h in ("A", "B")}
-        F["ALL"] = ft.groupby("player_id")[FT_COLS].sum()
-        _TOTALS_CACHE[key] = (T, F)
-    return _TOTALS_CACHE[key]
+    if keep is None:
+        return _whole_season_totals(int(season), tuple(phases), str(resolve(cfg, "stints").absolute()),
+                                    str(resolve(cfg, "raw").absolute()))
+    shots = load_shots([int(season)], cfg, phases)
+    shots = shots[shots.game_id.isin(set(keep))]
+    halves = shots.drop_duplicates("game_id").set_index("game_id")["half"]
+    ft = load_ft([int(season)], cfg, halves, phases)
+    ft = ft[ft.game_id.isin(set(keep))] if "game_id" in ft.columns else ft
+    return half_totals(shots, ft)
 
 
 def block_totals(seasons, cfg, extra_seasons=(), keep=None,
@@ -393,19 +400,19 @@ def def_three_design(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, cal
     variable their coefficients are fit to.  The shooter's rate is his other-half-of-block 3P%, plus
     the `prev` seasons before the block, padded toward the league with k = `k3` attempts (450: the
     split-half reliability of high-volume shooters, FINDINGS.md section 18).  No location curve.
-    Meant to supply the DEFENSIVE coefficients only; offense comes from the free-throw target.
+    Meant to supply the DEFENSIVE coefficients only; offence comes from the free-throw target.
     """
     _check(wd_pts, "fg3a_s1")
     cnt, season = wd_pts.counters, wd_pts.rows["season"].to_numpy()
     x3, rates = expected_threes(seasons, cfg, wd_pts, prev=prev, k3=k3, keep=keep)
     poss = cnt["poss"].to_numpy(dtype=float)
     c = cnt
-    # `w3` / `wft` are how much of the REALISED deviation the defense keeps, 0 being the original full
-    # replacement.  Full replacement assumes a defense has no effect at all on whether a three or a free
+    # `w3` / `wft` are how much of the REALISED deviation the defence keeps, 0 being the original full
+    # replacement.  Full replacement assumes a defence has no effect at all on whether a three or a free
     # throw drops, and FINDINGS 35.1 measures that as false: the true between-team spread is 0.59 points
-    # on opponent 3P% and 0.52 on opponent FT%, against 1.31 and 2.47 for the offenses.  Weighting a
+    # on opponent 3P% and 0.52 on opponent FT%, against 1.31 and 2.47 for the offences.  Weighting a
     # channel does not change its signal-to-noise ratio -- it changes how much that channel counts in the
-    # composite target relative to the channels a defense really does control, which is the thing worth
+    # composite target relative to the channels a defence really does control, which is the thing worth
     # choosing.  The criterion picks it; nothing here is set from the measurement directly.
     pts_adj = (c["pts"] - 3.0 * (1.0 - float(w3)) * (c["fg3m"] - x3)
                - (1.0 - float(wft)) * (c["ftm"] + c["ftm_tech"] - c["xftm"] - c["xftm_tech"])).to_numpy(dtype=float)
@@ -437,7 +444,7 @@ def _named(fn, name, **kw):
 
 # The share of the shooters' realised three-point luck the shipped defensive target keeps: a quarter.  Keeping
 # it rather than none moved the year-over-year score by -0.007 per 100 at z = -0.34, nothing measurable
-# (DECISIONS.md, "What was settled": x3def; settings.Targets).
+# (notes/DECISIONS.md, "What was settled": x3def; settings.Targets).
 OPPONENT_THREE_LUCK_KEPT = 0.25
 
 # The two defensive targets: points_with_expected_opponent_threes (what ships: every opponent three-point make

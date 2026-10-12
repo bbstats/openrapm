@@ -1,8 +1,8 @@
 """Which players does a change move?  Two or more ratings tables side by side for one season, as an interactive,
 self-contained HTML page.
 
-Every experiment ends with the 2026 top 20 (HANDOFF.md), and this is the page it is read on.  The first table named
-is the reference: name the incumbent first.
+Every experiment ends with the 2026 top 20 (notes/HANDOFF.md), and this is the page it is read on.  The first table
+named is the reference: name the incumbent first.
 
 Reads
     each NAME=PATH table: player_id, player_name, season, rating_off, rating_def, rating_total, poss_off

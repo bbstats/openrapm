@@ -1,4 +1,4 @@
-"""scripts/checks/95_miss_by_group.py starts and answers to the flags its docstring and HANDOFF.md use: a renamed
+"""scripts/checks/95_miss_by_group.py starts and answers to the flags its docstring and notes/HANDOFF.md use: a renamed
 import (the glossary, the feature lists) would otherwise surface only the next time someone asks where the ratings
 miss."""
 import subprocess

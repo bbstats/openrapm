@@ -90,7 +90,8 @@ CONTEXTS = {
     "full": ["one", "home", "is_po", "po_home", "is_gt", "margin", "margin_frem",
              "period_elapsed", "period_end", "fatigue_off", "fatigue_def", "clutch"],
     # the full context without the time-on-court clocks: on 1998-2025 they came out as "a five that has been on
-    # longer plays BETTER" (+1.75 a minute on offense), an artifact and not tiredness (DECISIONS.md, the swap test)
+    # longer plays BETTER" (+1.75 a minute on offence), an artefact and not tiredness (notes/DECISIONS.md, the swap
+    # test)
     "nofatigue": ["one", "home", "is_po", "po_home", "is_gt", "margin", "margin_frem",
                   "period_elapsed", "period_end", "clutch"],
 }
@@ -183,7 +184,7 @@ def season_rows(stints: pd.DataFrame, margin_clip: float = 25.0) -> pd.DataFrame
     them from the diagnostics); each game's stints in time order, as they are stored.
     Columns: team_off, team_def, o1..o5 (the offensive five, sorted ids), d1..d5, poss, pts, y (points
     per 100), and every column of CONTEXTS["full"], in the offense's point of view: `home` is +1 when the
-    offense is at home, -1 away, 0 at a neutral site; `margin` is the offense's lead at the stint's start.
+    offence is at home, -1 away, 0 at a neutral site; `margin` is the offence's lead at the stint's start.
     """
     stints = order_stints(stints)
     fat_h, fat_a = fatigue(stints)
@@ -257,10 +258,10 @@ class Season:
 
     rows      season_rows(...)
     ids       every player id in the rows, sorted
-    off_idx   (rows x 5) positions of the offensive five in `ids`; def_idx the same for the defense
+    off_idx   (rows x 5) positions of the offensive five in `ids`; def_idx the same for the defence
     lineup    side -> (rows,) the lineup number of that side's five, into `tables[side]`
-    tables    "offense" / "defense": team, p1..p5, poss, pts (scored by the five on offense, allowed on
-              defense); "net": the lineups seen on both ends, with their row in each of the other two
+    tables    "offense" / "defense": team, p1..p5, poss, pts (scored by the five on offence, allowed on
+              defence); "net": the lineups seen on both ends, with their row in each of the other two
     pairs     side -> swap_pairs(...) on that side's table
     """
     season: int
@@ -335,8 +336,8 @@ def side_rates(season: Season, pred: np.ndarray, o: np.ndarray, d: np.ndarray) -
     """side -> (observed rate, predicted rate, possessions, the five's own ratings) per lineup of that side.
 
     The last is the part of the prediction that is the lineup's own players -- the sum of the five's
-    offensive ratings on offense, of their defensive ratings (points allowed) on defense, and offense minus
-    defense for net -- so a pair's difference in it is exactly the ranking's gap between the two swapped
+    offensive ratings on offence, of their defensive ratings (points allowed) on defence, and offence minus
+    defence for net -- so a pair's difference in it is exactly the ranking's gap between the two swapped
     players: the other four are in both lineups and cancel."""
     w = season.rows.poss.to_numpy(dtype=float)
     out = {}

@@ -3,7 +3,7 @@
 The owner, 2026-10-03: "find the players for whom we struggle with the most ... not bias like the bias chart, this
 is like variance ... there are specific types and subsets of players and maybe even stats that cause us to
 struggle", and then, on the first version: "did you test a whole bunch of cuts and stats?? We should do the latter."
-DECISIONS.md, "Where the ratings miss most", has the first results.
+notes/DECISIONS.md, "Where the ratings miss most", has the first results.
 
 Words used below
     miss            the trade set's correction for a player-season (scripts/checks/70_tradeset.py, the alpha behind
@@ -487,9 +487,9 @@ def print_findings(table: pd.DataFrame, leaves: pd.DataFrame, share: float) -> N
     worst = table[table.z >= CHANCE_Z].sort_values("miss_vs_expected", ascending=False)
     best = table[table.z <= -CHANCE_Z].sort_values("miss_vs_expected")
     with pd.option_context("display.width", 250, "display.max_colwidth", 120):
-        print("\n  where we miss MORE than players rated the same with the same evidence (|z| 3 or more):")
+        print("\n  where the ratings miss MORE than for players rated the same with the same evidence (|z| 3 or more):")
         print(describe(worst).to_string(index=False) if len(worst) else "  none")
-        print("\n  where we miss LESS:")
+        print("\n  where the ratings miss LESS:")
         print(describe(best).to_string(index=False) if len(best) else "  none")
         print("\n  combinations: a three-level tree fitted on half the players, measured on the other half:")
         print(describe(leaves.sort_values("miss_vs_expected", ascending=False)).to_string(index=False))
@@ -500,7 +500,7 @@ def print_findings(table: pd.DataFrame, leaves: pd.DataFrame, share: float) -> N
 def print_recent(rows: pd.DataFrame) -> None:
     """The twelve player-seasons since RECENT_SEASON with the largest miss ratio."""
     recent = rows[rows.season >= RECENT_SEASON].sort_values("miss_ratio", ascending=False).head(12)
-    print(f"\n  the player-seasons we miss most since {RECENT_SEASON}, against expectation:")
+    print(f"\n  the player-seasons the ratings miss most since {RECENT_SEASON}, against expectation:")
     print(pd.DataFrame({
         "player": recent.player_name, "season": recent.season, "rated": recent.rated.round(2),
         "games say": [f"{v:+.2f} {'better' if v > 0 else 'worse'}" for v in recent.alpha_good],

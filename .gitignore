@@ -11,7 +11,7 @@ dist/
 htmlcov/
 
 # Data.  Everything under data/ is scraped or derived and is rebuilt by
-#   openrapm ingest && openrapm stints
+#   openrapm data ingest && openrapm data stints   (and data/cache/ by the commands that read it)
 # The one exception is data/external/, the snapshot of public metrics used as a
 # sanity check, which cannot be regenerated (it is a live spreadsheet).
 /data/*
@@ -19,8 +19,10 @@ htmlcov/
 /data/external/*
 !/data/external/*.csv
 
-# Run output.  Nothing here is an input to anything: every file is rebuilt by the
-# command that wrote it.  What ships is the site, docs/ (`openrapm site`), which is tracked.
+# Run output.  Every file is rebuilt by the command that wrote it, but some are inputs to later steps:
+# the season panel (`openrapm data panel`), the saved boosters (`openrapm rate --save-models`), the
+# within-season folds in outputs/within/ (`openrapm folds`) and the ratings tables each step reads.
+# What ships is the site, docs/ (`openrapm site`), which is tracked.
 /outputs/
 
 # Local research scratch, not part of the project.

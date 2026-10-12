@@ -79,7 +79,9 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="A robust review of an experiment, every test cut into slices.",
                                      allow_abbrev=False)
     parser.add_argument("--cands", default="", help="the chain's run names: <name>[,<replicate>]")
-    parser.add_argument("--controls", default="redeal_incumbent", help="noise controls (default %(default)s)")
+    # the name README.md's noise-control chain gives it; on the project's machine the incumbent's noise control is
+    # noise_regroup2 (settings.PriorSettings.fold_assignment)
+    parser.add_argument("--controls", default="noise_control", help="noise controls (default %(default)s)")
     # the incumbent since 2026-10-09 (experiment 46; 45 was lgb_noonc_rs)
     parser.add_argument("--ref", default="weightfix", help="the reference run (default %(default)s)")
     parser.add_argument("--refresh", default="0", type=on_off, help="1: rerun the side split (default %(default)s)")

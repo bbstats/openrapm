@@ -1,5 +1,39 @@
 # Handoff: the single-year player rankings, one experiment at a time
 
+> **What this file is (header added 2026-10-11).** Where the work stands, what is waiting on the owner, and the
+> commands a next session runs. Below this header the text stands as it did on 2026-10-09, at the end of the
+> Robustness pass, except "What ships" (now in today's module names) and the command blocks (the year-over-year
+> test, the trade loss, the site and "Verify you are where this file says"), which name today's commands, and a
+> few words changed to follow the writing rules.
+>
+> Since then the 2026-10 cleanup (branch `cleanup-pass`) rewrote the code as five step modules
+> (`src/openrapm/rapm.py`, `box_prior.py`, `prior_rapm.py`, `prior_shrink.py`, `swap_adjust.py`) behind one
+> command, `openrapm`. Rebuilt with it, the published step-3 table is byte-identical and the published final
+> table agrees to within 1.2e-12 per 100 (one linear-algebra thread instead of several); the year-over-year test
+> still reads 8.5857 for the incumbent.
+>
+> Numbered-script paths below (`scripts/62_single_year_board.py` and so on) and `src/eracoef/` module paths refer
+> to the code at the tag `archive/research-2026-10`: `git show archive/research-2026-10:scripts/62_single_year_board.py`.
+> Column and target names are those before 2026-10-11; `src/openrapm/data/legacy_names.py` maps each to today's.
+>
+> | in this file | today |
+> |---|---|
+> | `scripts/01_ingest.py`, `02_stints.py` | `openrapm data ingest`, `openrapm data stints` |
+> | `scripts/49_role_panel.py` (with 65, 69, 86) | `openrapm data panel` |
+> | `scripts/62_single_year_board.py` | `openrapm rate` (steps 1-3); `openrapm build` runs all five steps |
+> | `scripts/97_within_season.py` | `openrapm folds` |
+> | `scripts/99_prior_shrink.py` | `openrapm shrink` |
+> | `scripts/91_swap_adjust.py` | `openrapm swap` |
+> | `scripts/52_site.py`, `76_bias_groups.py`, `83_decompose_site.py` | `openrapm site`, with `--bias`, `--decomposition` |
+> | `scripts/63_yoy.py` and the other twelve checks | `scripts/checks/`, same number and name |
+> | 62 `--exclude_neighbours=1` | `--setting test` |
+> | 62 `--features=boruta_noonc` | `--features box_score_and_bio` |
+> | targets `xpts_ft`, `x3def_w0.25` | `points_with_expected_free_throws`, `points_with_expected_opponent_threes` |
+> | the noise control `noise_regroup2` | `--fold-assignment 1` |
+> | every other numbered script | retired |
+>
+> `README.md` and `PIPELINE.md` describe the code as it is now; `CONTRIBUTING.md` has the writing rules.
+
 **This file is transient.**  It starts the next session and is deleted when Phase 1 ships.  `DECISIONS.md`
 is the permanent record and carries every number quoted here.  Do not let this grow into a lab notebook.
 
@@ -137,12 +171,12 @@ mean with/without correction, positive = the games say he is better than rated):
 | blocks | +0.015 | -0.007 | -0.002 | +0.023 | +0.050 (z +1.6) |
 | steals plus blocks | +0.042 | +0.039 | -0.002 | +0.006 | -0.006 |
 
-So steals are overvalued on defense (monotone from the bottom fifth to the top: 0.19 in 95's units -- the lean is
+So steals are overvalued on defence (monotone from the bottom fifth to the top: 0.19 in 95's units -- the lean is
 alpha over the expected miss, `95:127` -- which is about **0.07 points per 100**, corrected 2026-10-08), blocks are not
 (if anything slightly undervalued); the two cancel in `stocks`, which the defensive prior also reads.  The extra miss
 (variance) by steals is unremarkable (top fifth 1.04 of expected, z +1.1): this is a lean, not noise.  Offence leans the
 same way on steals (bottom fifth +0.069, z +2.6; `stl` is an offensive input too).  Player types: "most blocks and
-personal fouls" lean -0.096 on defense (z -2.4), "most offensive rebounds and blocks" +0.096 (z +3.0).  The largest
+personal fouls" lean -0.096 on defence (z -2.4), "most offensive rebounds and blocks" +0.096 (z +3.0).  The largest
 leans anywhere are team context (team points with him off the court, z up to 11.5), not examined yet.  Full table:
 `outputs/csv/miss_by_group_lgb_noonc_rs.csv` (and `.html`).
 
@@ -154,8 +188,8 @@ season.  `outputs/csv/stat_calibration_lgb_noonc_rs.csv`, `_bins.csv`, `outputs/
 
 | side | most mis-priced inputs (z; bottom-bin and top-bin miss, + = underrated) |
 |---|---|
-| defense | weight z +16.9 (heaviest +0.05); **steals z +12.8 (+0.06 -> -0.05)**; career possessions z +12.4 and seasons played z +11.3 (a hump mid-career, underrated); height z +7.0 (tallest +0.07); true shooting z +6.2.  Blocks z -0.2 (calibrated); steals plus blocks z +1.5 |
-| offense | weight z +12.1 (heaviest -0.04); share of team possessions z +10.7 (a hump at 30-50%, underrated); career possessions z +7.0; true shooting z +5.9 (highest overrated); three-point rate z +5.6; **blocks per 100 z +5.3 and steals per 100 z +5.0 (high values overrated on offense)** |
+| defence | weight z +16.9 (heaviest +0.05); **steals z +12.8 (+0.06 -> -0.05)**; career possessions z +12.4 and seasons played z +11.3 (a hump mid-career, underrated); height z +7.0 (tallest +0.07); true shooting z +6.2.  Blocks z -0.2 (calibrated); steals plus blocks z +1.5 |
+| offence | weight z +12.1 (heaviest -0.04); share of team possessions z +10.7 (a hump at 30-50%, underrated); career possessions z +7.0; true shooting z +5.9 (highest overrated); three-point rate z +5.6; **blocks per 100 z +5.3 and steals per 100 z +5.0 (high values overrated on offence)** |
 
 The curves are small in points (spread 0.02-0.03 per 100, ends +-0.05 to 0.07) but the with/without correction is a
 ridge estimate, so the true misses run larger.  Several bend in the middle (career, minutes, true shooting): a
@@ -191,7 +225,7 @@ straight-line fix would miss them.
 | Without them it wins, and the ratings stop tracking the team | experiment 45: z -2.5, stint z -8.9, team share of the defensive rating 0.08 (was 0.16); adopted and published |
 | Linear leaves push low-possession players to the extremes | Edey's defensive prior 2.2 (chimeraboost) -> 4.1 (LightGBM, linear leaves) -> 2.7 (without); the owner preferred the linear-leaves numbers |
 | The tuning screen cannot see the bench | it weights rows by possessions, so a 590-possession player barely counts there while the prior decides most of his rating |
-| Steals are overvalued on defense; blocks are not | the table above |
+| Steals are overvalued on defence; blocks are not | the table above |
 
 ### What the shot-quality build and experiment 42 found (2026-10-06/07; DECISIONS.md has every number)
 
@@ -239,7 +273,7 @@ straight-line fix would miss them.
 |---|---|---|
 | 34 | teammates' shot quality with him on the court | a tie once the shrink's folds are pinned (trap 22) |
 | 35 | slope vs error; part-season OpenRAPM against vanilla baselines | slope reads scale (about twice as sensitive), error ranks systems; seasons are the unit (more deals add nothing); **B3, RAPM on a linear box-only SPM prior tuned on other seasons, beats OpenRAPM year over year (8.587 vs 8.600)** and orders teammates better; OpenRAPM leads within season, mostly 2017-2026 where its shrink was fitted |
-| 36 | does the best penalty change with sample size? | vanilla RAPM's does not (Bayes); OpenRAPM's prior weight falls with more games while a linear box prior's rises; under identical tuning the linear prior wins (B4, RAPM on our prior, 8.609) |
+| 36 | does the best penalty change with sample size? | vanilla RAPM's does not (Bayes); OpenRAPM's prior weight falls with more games while a linear box prior's rises; under identical tuning the linear prior wins (B4, RAPM on OpenRAPM's prior, 8.609) |
 | 37 | a box prior fit directly on held-out games | every input group helps within season, none year over year; only fitting the shape year over year helps (t -3.4); probability of backtest overfitting 0.00 |
 | 38 | what helps in-season vs other seasons | out of season wants 2-3x the penalty; role, same-season RAPM, on-court numbers, shot-making and assists help in-season and hurt out of season; age and career help out of season |
 | 39 | traded players: real or regression to the mean? | the box score travels; defensive RAPM beyond the box score and on/off-court numbers stay with the team; eFG / TS / 2P% regress; the prior shrink and the swap adjustment are same-team corrections |
@@ -259,13 +293,13 @@ straight-line fix would miss them.
 - Emailed to the owner 2026-10-06, "OpenRAPM 2026: team vs portable ratings": a Drive CSV of all 582 players
   (team and portable rating, box part and plus-minus part per side).
 
-## How we work (the owner, 2026-09-13/14)
+## How the work is done (the owner, 2026-09-13/14)
 
 - **Two jobs only: implement the owner's ideas, or propose new ones.**  Never run an idea the owner has
   not said "go" to.  One experiment at a time; never a queue of several overnight.
 - **One test decides**: the year-over-year test below.  The consensus checks, the trade loss and the 2026
   top 20 (the eye test) are read every time and can veto; they are never fitted to.
-- **Every experiment ends with the 2026 top 20** (`/experiment-comparison`; `scripts/66_compare.py`).
+- **Every experiment ends with the 2026 top 20** (`/experiment-comparison`; `scripts/checks/66_compare.py`).
 - **Plain words.**  No invented labels, no single-letter names, no "board" (say the player rankings), no
   "floor" (say the check).  Define a term the first time it is used.  End every message with a
   one-sentence TL;DR unless the message is itself one sentence.  **Movement is reported in points per 100,
@@ -285,43 +319,49 @@ straight-line fix would miss them.
    lifted 2026-10-08: the owner chose LightGBM for speed, experiments 44-45.)
 6. Each season is centred at possession-weighted zero per side (the RAPM convention), 2026-09-14.
 
-## What ships (the incumbent: `scripts/62_single_year_board.py` defaults plus `--booster_params=lgb1 --features=boruta_noonc`)
+## What ships (`openrapm build`; before the cleanup, `scripts/62_single_year_board.py` defaults plus `--booster_params=lgb1 --features=boruta_noonc`)
 
-1. **Target**: `looseason.LeaveSeasonOutRAPM`, one RAPM per player over every season except the rated one
+1. **Target** (step 1, `rapm.career_labels`): one RAPM per player over every season except the rated one
    (penalties 40,000 / 40,000 / 0, closed).
-2. **SPM** (since 2026-10-08, experiment 45): a deterministic LightGBM (`eracoef.lgbprior`, settings
+2. **SPM** (step 2, `box_prior.season_priors`; since 2026-10-08, experiment 45): a deterministic LightGBM (settings
    `params/booster_params_lgb1.json`: linear leaves, 250-300 rows a leaf, 31 bins, no subsampling) on
-   `singleyear.chunk_rows` (the career row plus contiguous 1-, 2-, 3-season chunks, two features saying how much
-   evidence a row rests on), features `boruta_noonc` (17 offence / 14 defence: the on-court plus-minus and on-court
-   possessions OUT).  Until 2026-10-08 it was chimeraboost on `boruta` (21 / 17, on-court columns in).
+   `box_prior.training_rows` (the career row plus contiguous 1-, 2-, 3-season chunks, two features saying how much
+   evidence a row rests on), features `box_score_and_bio` (called `boruta_noonc` until 2026-10-11; 17 offence / 14
+   defence: the on-court plus-minus and on-court possessions OUT).  Until 2026-10-08 it was chimeraboost on
+   `boruta` (21 / 17, on-court columns in).
    **Out-of-player**: five player folds balanced on the label, every player's prior from the fit that never saw his
-   rows.  **The DEFENSIVE label is un-shrunk and the offensive one is not** (`--unshrink_label=def`, the default,
-   adopted 2026-09-18).
-3. **Rating**: `priorridge.PriorRidgeCV`, `scale x prior + residual`, the scale priced on cross-fitted
-   prior columns (`--crossfit=scale`), the residual penalty fixed at **13,037** on both sides.  Then centred.
-3b. **The prior shrink** (adopted by the owner 2026-10-03, "Good, adopt for now"; DECISIONS.md, experiment 33b): the
-   box-score prior part of each rating times a held-out multiplier per side (about 0.72 offence, 0.95 defence),
-   the games' part unchanged, re-centred -- `scripts/99_prior_shrink.py`, fitted on the within-season folds of
-   2017-2026 (`scripts/97_within_season.py`, `WITHIN_SEASON_LEDGER.md`); earlier seasons borrow the pooled value.
+   rows.  **The DEFENSIVE label is un-shrunk and the offensive one is not** (`settings.LabelSettings`,
+   `unshrink_columns`, adopted 2026-09-18).
+3. **Rating** (step 3, `prior_rapm.fit`): `scale x prior + residual`, the scale unpenalised on the full prior (the
+   cross-fitting the old code ran gave identical values and was removed), the residual penalty fixed at
+   **13,037** on both sides.  Then centred.
+3b. **The prior shrink** (step 4; adopted by the owner 2026-10-03, "Good, adopt for now"; DECISIONS.md, experiment
+   33b): the box-score prior part of each rating times a held-out multiplier per side (published: offence
+   0.699-0.715, defence 0.929-0.976), the games' part unchanged, re-centred -- `openrapm shrink`, fitted on the
+   within-season folds of 2017-2026 (`openrapm folds`, `WITHIN_SEASON_LEDGER.md`); earlier seasons borrow the
+   pooled value.
 4. **The swap adjustment, team version** (adopted by the owner 2026-10-01; DECISIONS.md, "The swap adjustment
    with the spread held"): credit inside each team is re-split by lineup swaps -- a type model at half strength,
    learned from other players and other seasons -- with each team's total fixed and the spread inside teams held
-   to step 3's.  A post-hoc step on the finished table, `scripts/91_swap_adjust.py`, not part of script 62.
+   to step 4's.  Step 5, `openrapm swap`; `openrapm build` runs it after steps 1-4.
 
 `outputs/season_ratings_product.parquet` (every other season allowed in the prior) is what
 `docs/data/ratings.json` and the site are built from.  Since 2026-10-09 it is experiment 46's product table (the
-body-weight fix on experiment 45's prior), built by `scratch/2026-10-08_robustness/publish46.sh`:
+body-weight fix on experiment 45's prior), built then by `scratch/2026-10-08_robustness/publish46.sh` (62 in three
+chunks, 99, 91).  Today the same table, and the site from it, are two commands; publish only on the owner's word:
 
-    .venv/Scripts/python scripts/62_single_year_board.py --score=0 --booster_params=lgb1 --features=boruta_noonc --boards=<ten seasons> --out=season_ratings_product_weightfix_pre_swap_<first>   (x3, stitched)
-    .venv/Scripts/python scripts/99_prior_shrink.py --base=season_ratings_product_weightfix_pre_swap --out=season_ratings_product_weightfix_priorshrink_pre_swap --rule=product --tag=weightfix_within
-    .venv/Scripts/python scripts/91_swap_adjust.py --base=outputs/season_ratings_product_weightfix_priorshrink_pre_swap.parquet --kappas=0.5 --taus= --hold_spread=within --exclude_near=0 --score=0 --tag=product_weightfix
-    copy outputs/season_ratings_product_weightfix.parquet over outputs/season_ratings_product.parquet
-    .venv/Scripts/python scripts/52_site.py      (and 76_bias_groups.py)
+    .venv/Scripts/python -m openrapm build
+        (steps 1-5 at the product setting for all thirty seasons, ~15 min: writes outputs/season_ratings_product.parquet,
+         the published table, with outputs/season_ratings_product_step3.parquet and _step4.parquet beside it; step 4
+         reads the multipliers off outputs/within/weightfix_within, the default of --folds)
+    .venv/Scripts/python -m openrapm site --bias --decomposition
+        (docs/data/ratings.json, docs/bias.html with outputs/bias_groups.json and outputs/bgmm_proba.parquet, and
+         docs/data/decompose_1y.json and decompose_3y.json, ~5 min; then commit and fast-forward main)
 
 The previous product tables are kept as `outputs/season_ratings_product_before_weightfix.parquet` (experiment 45) and
 `outputs/season_ratings_product_before_lgb_noonc.parquet` (chimeraboost).  The prior shrink's
-multipliers come from 97 run on the experiment-45 models (`62 --save_models=lgb_noonc_within`, `97 --tag=lgb_noonc_within
---booster_params=lgb1 --features=boruta_noonc`): product rule offence 0.706-0.719, defence 0.927-0.970.
+multipliers come from `openrapm folds` on experiment 46's models (`weightfix_within`): product rule offence
+0.699-0.715, defence 0.929-0.976 (experiment 45's, on `lgb_noonc_within`, were 0.706-0.719 and 0.927-0.970).
 **The incumbent every candidate is scored against is now `outputs/season_ratings_weightfix.parquet`** (8.5857 on the
 year-over-year test; experiment 46, adopted 2026-10-09); before it `outputs/season_ratings_lgb_noonc_rs.parquet`
 (8.5894, experiment 45).  Before that, `outputs/season_ratings_priorshrink.parquet` (8.600;
@@ -332,10 +372,13 @@ and the default `--exclude_near=1`, which keeps both scored seasons out of the t
 `outputs/season_ratings_swapadj_within.parquet` (8.666), is kept.  **A candidate that changes steps 1-3 must go
 through the same 99 and 91 commands before it is scored**, or it is compared without the steps the incumbent has.
 Caveat: 99 reads the multipliers off the incumbent's own within-season folds; a candidate that changes the prior
-changes how far its prior part holds up, so a serious one needs its own folds (62 `--save_models`, then 97).
-`artifacts/season_ratings.parquet` is the older system, kept for the tests; do not overwrite it.
+changes how far its prior part holds up, so a serious one needs its own folds (62 `--save_models`, then 97; today
+`OWN_FOLDS=1` in `scripts/experiment_chain.sh`, which runs `openrapm rate --save-models` and `openrapm folds`).
+The older system's `artifacts/season_ratings.parquet` was removed in the 2026-10 cleanup; player names now live
+in `params/player_names.csv`.
 
-Threads: the script pins BLAS to one thread and numba to four before importing anything.  **Never run two
+Threads: every `openrapm` command pins the linear-algebra libraries to one thread before numpy loads (numba is no
+longer used).  **Never run two
 builds at once**, and kill a chain's python children when you stop it.
 
 ## The test: year-over-year
@@ -344,47 +387,46 @@ Rate a season from its own games.  Predict every stint of the season before and 
 ratings alone, refitting only the intercept and home edge on the scored season.  28 scored seasons, each
 predicted twice, 56 observations.  The prior must not have seen the two scored seasons:
 
-    .venv/Scripts/python scripts/62_single_year_board.py --exclude_neighbours=1 --score=0 --boards=<ten seasons> --out=season_ratings_<name>_<first>
-        (three chunks of ten seasons, stitched BY HAND into outputs/season_ratings_<name>_raw.parquet: concatenate
-         the three parquets; ~3 min a season, so ~95 min for thirty.  With --chunk_label=outside, ~11 min a
-         season: 280-310 extra RAPM solves each)
-    .venv/Scripts/python scripts/99_prior_shrink.py --base=season_ratings_<name>_raw --out=season_ratings_<name>_shrunk_raw --rule=test
-        (the fold seasons are PINNED to 2017-2026 by default, the folds the adopted multipliers were fitted on; the
-         `within` folder holds 1997-2026 since 2026-10-04, and an unpinned rerun shrank harder -- experiment 34's
-         first run.  `--check=<table>` asserts a rerun reproduces a shipped table)
-    .venv/Scripts/python scripts/91_swap_adjust.py --base=outputs/season_ratings_<name>_shrunk_raw.parquet --kappas=0.5 --taus= --hold_spread=within --tag=<name>
-        (the swap adjustment the incumbent carries; writes outputs/season_ratings_<name>.parquet, ~2 min)
-    .venv/Scripts/python scripts/63_yoy.py --rankings=<name>=outputs/season_ratings_<name>.parquet,incumbent=outputs/season_ratings_priorshrink.parquet --ref=incumbent --tag=<name> --splits=
-    .venv/Scripts/python scripts/64_consensus_report.py outputs/season_ratings_<name>.parquet outputs/season_ratings_priorshrink.parquet
-    .venv/Scripts/python scripts/66_compare.py incumbent=outputs/season_ratings_priorshrink.parquet <name>=outputs/season_ratings_<name>.parquet --season=2026 --top=20 --yoy=outputs/yoy_<name>.parquet --ref=incumbent
-    .venv/Scripts/python scripts/90_swap_test.py --rankings=incumbent=outputs/season_ratings_priorshrink.parquet,<name>=outputs/season_ratings_<name>.parquet --contexts=nofatigue --checks=0 --tag=<name>
+    .venv/Scripts/python -m openrapm build --setting test --name <name> <the experiment's rate flags>
+        (steps 1-5 at the test setting for all thirty seasons in one run, ~15 min, no stitching: the labels and the
+         prior's training rows leave out both scored seasons, step 4 uses the test rule on outputs/within/weightfix_within
+         with the fold seasons PINNED to 2017-2026 (settings.ShrinkSettings; an unpinned rerun shrank harder --
+         experiment 34's first run), and step 5's type model trains only on seasons more than one away.  Writes
+         outputs/season_ratings_<name>_step3.parquet, _step4.parquet and outputs/season_ratings_<name>.parquet)
+    .venv/Scripts/python scripts/checks/63_yoy.py --rankings=<name>=outputs/season_ratings_<name>.parquet,incumbent=outputs/season_ratings_weightfix.parquet --ref=incumbent --tag=<name> --splits=
+    .venv/Scripts/python scripts/checks/64_consensus_report.py outputs/season_ratings_<name>.parquet outputs/season_ratings_weightfix.parquet
+    .venv/Scripts/python scripts/checks/66_compare.py incumbent=outputs/season_ratings_weightfix.parquet <name>=outputs/season_ratings_<name>.parquet --season=2026 --top=20 --yoy=outputs/yoy_<name>.parquet --ref=incumbent
+    .venv/Scripts/python scripts/checks/90_swap_test.py --rankings=incumbent=outputs/season_ratings_weightfix.parquet,<name>=outputs/season_ratings_<name>.parquet --contexts=nofatigue --checks=0 --tag=<name>
         (the swap test: does it order teammates better; 40 s)
-    .venv/Scripts/python scripts/101_log_run.py --name=<name> --exp=<number> --idea=owner --verdict=pending --changed="<one plain sentence>"
+    .venv/Scripts/python scripts/checks/101_log_run.py --name=<name> --exp=<number> --idea=owner --verdict=pending --changed="<one plain sentence>"
         (the experiment table, the owner's 2026-10-04 ask: one row per experiment in experiments/runs.csv, every number read
          from the outputs above; then mirror the row into the Google Sheet "OpenRAPM experiments",
          https://docs.google.com/spreadsheets/d/1gPeRCFUtJNPtsBq_j2CNiTTdrarb98Yf3zXYx974jfI, tab Experiments.  Re-run with
          --verdict=adopted|rejected|"not adopted" once the owner rules; the same --exp replaces its row)
 
-**A target experiment** (a new defensive or offensive target) adds `--deal_target_def=x3def_w0.25` to 62 so the box-score
-prior is trained on the same groupings of players as the incumbent's; without it the experiment also pays a random
-regrouping worth about 0.05 on this test (control C1, 2026-10-07).  `scripts/experiment_chain.sh NAME TARGET
-"EXTRA 62 FLAGS"` runs this whole chain.
+**A target experiment** (a new defensive or offensive target) once added `--deal_target_def=x3def_w0.25` to 62 so the
+box-score prior was trained on the same groupings of players as the incumbent's; without it the experiment also pays a
+random regrouping worth about 0.05 on this test (control C1, 2026-10-07).  That flag did not survive the cleanup:
+`openrapm rate` assigns each side's player folds from that side's own labels, so read a target experiment beside the
+noise control (`--fold-assignment 1`).  `bash scripts/experiment_chain.sh NAME TARGET "EXTRA RATE FLAGS"` runs this
+whole chain and the trade loss below.
 
 **Decision rule:** adopt only if `z` is -2 or below with no gross consensus miss and the 2026 top 20 not
 worse; ties go to the simpler version.  Read the row "each side rescaled to the scored season" to see
 whether the ORDER improved or only the spread.  `scale_*` below 1 on a neighbouring season is expected
 (players change year to year) and is not a target.
 
-**Saved priors**: `--save_priors=<name>` then `--priors_from=<name>` reruns the ridge alone in a second a
-season, which is how the penalty was swept.
+**Saved priors**: `--save_priors=<name>` then `--priors_from=<name>` reran the ridge alone in a second a
+season, which is how the penalty was swept.  Neither survived the cleanup (`openrapm rate --save-models` saves the
+boosters, which `openrapm folds` reads).
 
 ## The second criterion: the trade loss (new, 2026-09-18)
 
 The year-over-year test is an error per team-game, so a 200-possession man is a rounding error in it.  The
 trade loss counts every player once.  **It has already overturned one reading and confirmed six others.**
 
-    .venv/Scripts/python scripts/70_tradeset.py --rankings=outputs/season_ratings_<name>.parquet --team_effects=team --out=tradeset_<name>   (85 s)
-    .venv/Scripts/python scripts/73_tradeloss.py --alphas=incumbent=outputs/tradeset_priorshrink_alpha.parquet,<name>=outputs/tradeset_<name>_alpha.parquet --ref=incumbent
+    .venv/Scripts/python scripts/checks/70_tradeset.py --rankings=outputs/season_ratings_<name>.parquet --team_effects=team --out=tradeset_<name>   (85 s)
+    .venv/Scripts/python scripts/checks/73_tradeloss.py --alphas=incumbent=outputs/tradeset_weightfix_alpha.parquet,<name>=outputs/tradeset_<name>_alpha.parquet --ref=incumbent
 
 Paired by season on the exact intersection of eligible players; `--tier=` splits by exposure.  Read
 `mean_diff` below zero as better and `z` against its own standard error.  It detects a defensive change of
@@ -393,11 +435,10 @@ Paired by season on the exact intersection of eligible players; `--tier=` splits
 **Every experiment is also split by player-quality tier: top 30, 31-90, 91-150, 151-300, 301+** (the owner,
 2026-09-30: "in general we should do this").  Both tests, tiers set by the incumbent's rank in the rated season:
 
-    .venv/Scripts/python scripts/88_yoy_by_player.py --cands=<name>=outputs/season_ratings_<name>.parquet --tag=<name>
+    .venv/Scripts/python scripts/checks/88_yoy_by_player.py --cands=<name>=outputs/season_ratings_<name>.parquet --ref=incumbent=outputs/season_ratings_weightfix.parquet --tag=<name>
         (the year-over-year difference shared among the players on the floor and summed by quality tier, by team
          change and by age; the groups add up to 63_yoy.py's number exactly; ~3 min)
-    .venv/Scripts/python scripts/73_tradeloss.py --alphas=<as above> --ref=incumbent --quality=outputs/season_ratings_priorshrink.parquet --tier=each
-    (88 takes the incumbent with --ref=incumbent=outputs/season_ratings_priorshrink.parquet)
+    .venv/Scripts/python scripts/checks/73_tradeloss.py --alphas=<as above> --ref=incumbent --quality=outputs/season_ratings_weightfix.parquet --tier=each
 
 Direction names in both year-over-year scripts: "prev" / "the PREVIOUS season's rankings predict this season"
 is a rating looking FORWARD at the season after it; "next" is a rating looking BACK at the season before it.
@@ -416,12 +457,12 @@ is a rating looking FORWARD at the season after it; "next" is a rating looking B
 | 25: chunk rows labelled from the seasons OUTSIDE the chunk | 8.700 | z +5.0; trade loss z +4.5 / +5.0; rejected 2026-09-29 (25b, weighting those rows by their label's possessions: much worse) |
 | 26: + RAPM pieces, same-team measure, game difficulty, rated as if every player changed teams | 8.682 | a tie (z +0.1); trade loss z +3.5 / +5.4; not adopted |
 | 27: + a team-season random intercept | 8.679 | a tie (z -0.4); trade loss z +3.8 / +3.9; not adopted.  26 and 27 predict the season BEFORE better (z -2.5, -2.8) and the season after worse: an age tilt (veterans up, young players down), not a team-change effect |
-| 28: + every chunk's label moved to its own age (aging curve) | 8.721 | z +4.1; trade loss z +5.1 / +4.1; rejected: over-corrects (Curry 92nd, Durant 136th), though consensus agreement rises to 0.818 |
-| 29: the incumbent + the team-movement weight, floor 0.5, rebalanced within career bands | **8.669** | **z -4.1, 39 of 56**; trade loss a tie; consensus unchanged; 2026 top 20 close to the incumbent's.  Meets the adoption rule; awaiting the owner (it halves one-team players' weight, which they said they do not want) |
+| 28: + every chunk's label moved to its own age (ageing curve) | 8.721 | z +4.1; trade loss z +5.1 / +4.1; rejected: over-corrects (Curry 92nd, Durant 136th), though consensus agreement rises to 0.818 |
+| 29: the incumbent + the team-movement weight, minimum 0.5, rebalanced within career bands | **8.669** | **z -4.1, 39 of 56**; trade loss a tie; consensus unchanged; 2026 top 20 close to the incumbent's.  Meets the adoption rule; awaiting the owner (it halves one-team players' weight, which they said they do not want) |
 | 30: windows of two, four or six seasons split in the middle, each half labelled by the other; same-team measure as an input; rated as if every player changed teams | 8.706 | z +3.4, 16 of 56; trade loss z +2.8 / +7.6; rejected 2026-10-01.  Order alone leans better (z -1.6) but the ratings are too wide; best consensus agreement yet (0.829 total); loses as much on players who changed teams as on those who stayed.  LeBron James 126th in 2026 |
 | 30b: experiment 30's models with the trade flag switched on only for the players who changed teams; and every player rated as if he stayed | 8.682 (matched) / **8.680** (stayed) | the flag does not help movers: matched against all-stayed a tie (z +0.8).  All-stayed against the incumbent: a tie (z -0.3) but stint level z -5.1 (mostly the bench), trade loss offence z -4.4 / defence z +4.1, best consensus yet (0.864).  Not adopted under the rule; owner's call.  Durant 72nd, LeBron 65th in 2026.  `62 --rate_same_team=both`, `89_stitch_by_move.py` |
-| the swap adjustment, by player type at half strength (2026-10-01) | 8.698 | z +3.5, 16 of 56: worse at native scale; each side rescaled -1.02, z -10.0, 52 of 56 (the order is much better, the spread ~12% / 27% wider); swap test order +0.16, z +5.5; consensus 0.832 (from 0.794), top five 5 of 5; trade loss offense z -5.3.  Not adopted under the rule; next proposed: the same with each side's spread held to the incumbent's |
-| the swap adjustment with the spread held to the incumbent's: teams_fixed / list_scaled (2026-10-01) | **8.666 / 8.652** | **z -5.2, 39 of 56 / z -7.7, 48 of 56**; better in every quality tier; consensus 0.836 / 0.834 (from 0.794); swap test order z +4.3 / +4.6 and gaps better; trade loss offense z -5.7 / -5.3, defense z +2.0 / a tie.  Both meet the rule.  **teams_fixed ADOPTED 2026-10-01 (the owner: "team version") -- the incumbent**, `outputs/season_ratings_swapadj_within.parquet`.  `91_swap_adjust.py --kappas=0.5 --taus= --hold_spread=within|whole` |
+| the swap adjustment, by player type at half strength (2026-10-01) | 8.698 | z +3.5, 16 of 56: worse at native scale; each side rescaled -1.02, z -10.0, 52 of 56 (the order is much better, the spread ~12% / 27% wider); swap test order +0.16, z +5.5; consensus 0.832 (from 0.794), top five 5 of 5; trade loss offence z -5.3.  Not adopted under the rule; next proposed: the same with each side's spread held to the incumbent's |
+| the swap adjustment with the spread held to the incumbent's: teams_fixed / list_scaled (2026-10-01) | **8.666 / 8.652** | **z -5.2, 39 of 56 / z -7.7, 48 of 56**; better in every quality tier; consensus 0.836 / 0.834 (from 0.794); swap test order z +4.3 / +4.6 and gaps better; trade loss offence z -5.7 / -5.3, defence z +2.0 / a tie.  Both meet the rule.  **teams_fixed ADOPTED 2026-10-01 (the owner: "team version") -- the incumbent**, `outputs/season_ratings_swapadj_within.parquet`.  `91_swap_adjust.py --kappas=0.5 --taus= --hold_spread=within|whole` |
 | all four on- and off-court ratings in both priors, on top of the incumbent (2026-10-01) | 8.667 | a tie (z +0.4); order-only worse (z +2.6); consensus 0.814 (from 0.836); Ajay Mitchell 9th to 7th, Caruso and Hugo González up ~0.9.  Not adopted.  `--features=boruta_onoff` |
 | on/off alone in both priors, in place of the raw on-court ratings (2026-10-01) | 8.704 | z +6.9, 12 of 56: worse (order a tie, the offensive spread wider); trade loss offence z +5.6; Ajay Mitchell 9th to 6th.  Not adopted.  `--features=boruta_net` |
 | the prior as a stack (2026-10-02): on- and off-court plus-minus into an elastic net, the other 50 columns (Boruta kept all, `92_stack_boruta.py`) into chimeraboost quality=3, blended on out-of-player-fold predictions | 8.677 | z +1.8, 23 of 56: worse; stint level z +8.4, order-only z +12.7; trade loss offence z +5.0 / defence z +7.8, worse in every tier but the top 30; swap test order worse (offence z -6.8, defence z -4.8); consensus 0.876 total / 0.859 defence (from 0.836 / 0.813); only the top 30 better (z -2.7).  2026: Zach Edey (590 poss) 8th, Keshad Johnson (621) 12th, Caruso 5th; Queta, Clingan, Harden out of the top 20.  Not adopted.  `62 --features=stack --stack=1 --stack_quality=3` (`stackprior.StackedSPM`).  Why (2026-10-03, `93_prior_oof.py`): trained on career labels its elastic net's one-season predictions are twice too wide, and even rescaled the stack orders players worse than the shipped booster (z +3.2 / +3.2) |
@@ -480,6 +521,10 @@ whose team scored while he was on the floor has his defensive correction pushed 
 
 ## The instruments, all read-only
 
+Since the cleanup, 63, 64, 66, 70, 73, 88, 90, 95, 101, 113, 135, 137 and 138 live in `scripts/checks/` under the
+same names; 91 is `openrapm swap`, 97 is `openrapm folds`, 76 is `openrapm site --bias`; the others in this table
+are retired (tag `archive/research-2026-10`).
+
 | script | what it answers |
 |---|---|
 | `63_yoy.py` | the criterion: team-game error, both directions, paired by season |
@@ -493,7 +538,7 @@ whose team scored while he was on the floor has his defensive correction pushed 
 | `73_tradeloss.py --movers=1 --tier=each` | the trade loss for players who changed teams the season before or after, and for those who did not |
 | `90_swap_test.py` | the swap test: does a ranking order teammates the way the games of the seasons either side do -- every pair of lineups that share four players, the two swapped players' rating gap against their swap difference (DECISIONS.md, "The swap test") |
 | `91_swap_adjust.py` | the swap adjustment: re-split each team's credit by its lineup swaps (a type model, then each player's own swaps), team totals fixed; scores a grid on the swap test and writes the chosen arm (DECISIONS.md, "The swap adjustment") |
-| `95_miss_by_group.py` | where the ratings miss most against expectation: each player's trade-set correction, adjusted for his rating level and the evidence behind it, by fifths of every statistic (plain names, `eracoef.glossary`); the owner's variance question, DECISIONS.md "Where the ratings miss most" |
+| `95_miss_by_group.py` | where the ratings miss most against expectation: each player's trade-set correction, adjusted for his rating level and the evidence behind it, by fifths of every statistic (plain names, `features.meaning`); the owner's variance question, DECISIONS.md "Where the ratings miss most" |
 | `97_within_season.py` | within-season folds, every input rebuilt from the rating games (`WITHIN_SEASON_LEDGER.md`); `--split=deadline` rates before the date 60% of the regular season was played and scores after, and the reverse |
 | `101_log_run.py` | the experiment table (`experiments/runs.csv`, mirrored to the sheet's Experiments tab); `--sheet` prints the rows |
 | `102`-`106` | the scorecard baselines (B1 linear box SPM, B2 vanilla RAPM, B3/B4 RAPM on a prior), the scorecard itself (`104`, error and slope kept apart), held-out swaps (`105`), OpenRAPM as shipped on every fold (`106`) |
@@ -517,12 +562,12 @@ categories: across the eight types, `vs consensus` against `vs 2026 observed` is
 `docs/decompose.html`, the "Decomposition" tab (vanilla RAPM split two exact ways: by player, on-court rtg + teammates + opponents + context +
 ridge penalty; by possession, on court signal + off court adjustment (GP) + off court adjustment (DNP) + team SOS adjustment,
 with the actual on and off court ratings beside them; single seasons
-and the ten three-season windows, penalty 3,000).  Rebuild with `scripts/52_site.py`,
-`scripts/76_bias_groups.py` and `scripts/83_decompose_site.py`, commit, and fast-forward `main` to publish.
+and the ten three-season windows, penalty 3,000).  Rebuild with `.venv/Scripts/python -m openrapm site --bias
+--decomposition` (once scripts 52, 76 and 83), commit, and fast-forward `main` to publish, on the owner's word.
 **Check the Pages build after pushing** (`gh api repos/bbstats/openrapm/pages/builds/latest`): on 2026-10-08 the push
 to `main` did not start one, and `gh api -X POST repos/bbstats/openrapm/pages/builds` had to request it.  The
-tabs at the top and the dark-mode button are `docs/site.css` and `docs/site.js`, shared by all three pages (76
-writes them into bias.html); a new page needs the same `<nav class="site">` block and its colours given again
+tabs at the top and the dark-mode button are `docs/site.css` and `docs/site.js`, shared by all three pages (`openrapm site
+--bias` writes them into bias.html); a new page needs the same `<nav class="site">` block and its colours given again
 under `:root[data-theme="dark"]`.  The
 bias page is deliberately a title, one table and two short paragraphs; the owner has trimmed it twice.
 **Built, not published (2026-10-06):** a sortable Portable column on the rankings page, from
@@ -580,10 +625,13 @@ test can fail, no worries."*  The honest fix, not done, is to replace the rank c
 
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest tests -q                                  # 555 passed, 1 xfailed (~3 min)
-    .venv/Scripts/python scripts/63_yoy.py --rankings=incumbent=outputs/season_ratings_lgb_noonc_rs.parquet,ship=artifacts/season_ratings.parquet --ref=incumbent --tag=verify --splits=
-                                                                             # incumbent 8.5894
-    .venv/Scripts/python scripts/64_consensus_report.py outputs/season_ratings_product.parquet
-                                                                             # 0.850 / 0.781 / 0.806, spreads 0.82 / 1.16, top5 4
-    .venv/Scripts/python scripts/113_swap_explain.py                         # "reproduces the shipped swap adjustment ... 1.60e-14"
-    .venv/Scripts/python scripts/52_site.py                                  # 14,578 rows; ratings.json WITHOUT po / pd / pt
+    .venv/Scripts/python -m pytest -q                                        # 456 passed, 1 xfailed, 6 slow deselected (~1 min)
+    .venv/Scripts/python scripts/checks/63_yoy.py --rankings=incumbent=outputs/season_ratings_weightfix.parquet --tag=verify --splits=
+                                                                             # game_armse 8.5857, both directions together
+    .venv/Scripts/python scripts/checks/64_consensus_report.py outputs/season_ratings_product.parquet
+                                                                             # n 475; rho 0.85 / 0.781 / 0.806; spreads 0.816 / 1.155; top5 4
+    .venv/Scripts/python scripts/checks/113_swap_explain.py --base=season_ratings_product_weightfix_priorshrink_pre_swap
+                                                                             # "reproduces the shipped swap adjustment for every 2026 player: max difference 2.93e-14" (the default base, season_ratings_product_step4, is what
+                                                                             # `openrapm build` writes)
+    .venv/Scripts/python -m openrapm site --out-dir <scratch>/docs --built 2026-10-09
+    cmp docs/data/ratings.json <scratch>/docs/data/ratings.json             # no output: byte-identical (14,578 rows over 30 seasons)

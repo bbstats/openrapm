@@ -1,5 +1,5 @@
-"""scripts/checks/137_stat_calibration.py starts and answers to the flags its docstring and HANDOFF.md use: a renamed
-import (the glossary, the feature lists) would otherwise surface only the next time someone draws the curves."""
+"""scripts/checks/137_stat_calibration.py starts and answers to the flags its docstring and notes/HANDOFF.md use: a
+renamed import (the glossary, the feature lists) would otherwise surface only the next time someone draws the curves."""
 import subprocess
 import sys
 from pathlib import Path

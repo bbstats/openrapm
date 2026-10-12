@@ -25,9 +25,12 @@ CODE = "\n".join(p.read_text(encoding="utf-8", errors="replace")
 # What is NOT allowed is one of these carrying an instruction to change it, because changing it does nothing.
 UNREAD: set = set()
 
-# Docs and config that a stranger follows literally.  HANDOFF.md and DECISIONS.md are deliberately
-# excluded: they are a record of what was done, and they cite retired scripts on purpose.
-FOLLOWED = ["config.yaml", "README.md", "PIPELINE.md", "CONTRIBUTING.md"]
+# Docs and config that a stranger follows literally.  The files in notes/ (HANDOFF.md, DECISIONS.md,
+# WITHIN_SEASON_LEDGER.md) are deliberately excluded from the script check: they are a record of what was done,
+# they cite retired scripts on purpose, and each opens with a header that maps those scripts to today's commands.
+# Their command lines are still checked for flags below.
+FOLLOWED = ["config.yaml", "README.md", "PIPELINE.md", "CONTRIBUTING.md", "GLOSSARY.md"]
+DOCS = sorted(ROOT.glob("*.md")) + sorted((ROOT / "notes").glob("*.md"))
 SCRIPT = re.compile(r"scripts/(?:checks/)?\d+_[A-Za-z0-9_]+\.py")
 
 
@@ -171,7 +174,7 @@ def test_every_script_a_followed_doc_names_exists_or_says_it_is_retired(doc):
 # Every script reads its command line with argparse, which stops a run on a flag it was not told about (and,
 # with allow_abbrev=False, on an abbreviation of one) instead of ignoring it.  That only helps if the flags the
 # docs tell you to type are the ones the scripts answer to, so check the docs against the source.  Every .md
-# here, including HANDOFF.md, because its commands are meant to be run.
+# at the top and in notes/, including notes/HANDOFF.md, because its commands are meant to be run.
 def declared_options(path) -> set:
     """Every option a script's argparse parser declares, without the dashes: the literal "--name" arguments of
     each `add_argument` call in its source."""
@@ -207,7 +210,7 @@ def test_the_option_scan_reads_every_form(tmp_path):
 
 def test_every_flag_a_doc_tells_you_to_type_is_one_the_script_understands():
     checked, bad = 0, []
-    for md in sorted(ROOT.glob("*.md")):
+    for md in DOCS:
         for line in md.read_text(encoding="utf-8", errors="replace").splitlines():
             for m in COMMAND.finditer(line):
                 script = script_file(m.group(1))
@@ -278,30 +281,65 @@ def test_the_booster_settings_are_never_read_from_config_yaml():
 
 
 # --------------------------------------------------------------- the openrapm command lines
-OPENRAPM = re.compile(r"(?:-m openrapm|\bopenrapm)\s+(rate|folds|site|compare|glossary)\b([^\n`]*)")
+OPENRAPM = re.compile(r"(?:-m openrapm|\bopenrapm)\s+(data\s+(?:ingest|stints|panel)|build|rate|shrink|swap|folds|"
+                      r"site|compare|glossary)\b([^\n`]*)")
+# A command as a doc types it: in a code block (`python -m openrapm data panel`) or a code span (`openrapm build`).
+NAMED_COMMAND = re.compile(r"(?:-m openrapm|`openrapm)\s+([a-z]+)(?:\s+([a-z]+))?")
+
+
+def _subcommands(parser) -> dict:
+    """{name: its parser} for a parser's subcommands, or {} when it has none."""
+    import argparse
+    actions = [action for action in parser._actions if isinstance(action, argparse._SubParsersAction)]
+    return dict(actions[0].choices) if actions else {}
+
+
+def _openrapm_parsers() -> dict:
+    """{command: its parser}, with each `data` subcommand under its two words ("data ingest", ...)."""
+    from openrapm.commands.cli import build_parser
+    parsers = {}
+    for name, sub in _subcommands(build_parser()).items():
+        parsers[name] = sub
+        parsers.update({f"{name} {inner}": parser for inner, parser in _subcommands(sub).items()})
+    return parsers
 
 
 def _openrapm_flags() -> dict:
     """{command: every option string its parser accepts}."""
-    import argparse
-
-    from openrapm.commands.cli import build_parser
-    commands = next(action for action in build_parser()._actions if isinstance(action, argparse._SubParsersAction))
     return {name: {option for action in sub._actions for option in action.option_strings}
-            for name, sub in commands.choices.items()}
+            for name, sub in _openrapm_parsers().items()}
 
 
 def test_every_openrapm_flag_the_docs_and_the_chain_use_exists():
     """argparse stops a run on an unknown flag, so a documented one that does not exist is a command nobody can run."""
     known = _openrapm_flags()
-    files = sorted(ROOT.glob("*.md")) + [ROOT / "scripts" / "experiment_chain.sh"]
+    files = DOCS + [ROOT / "scripts" / "experiment_chain.sh"]
     checked, bad = 0, []
     for path in files:
         for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
             for match in OPENRAPM.finditer(line):
+                command = " ".join(match.group(1).split())
                 for flag in re.findall(r"(?<![\w-])(--[a-z][\w-]*)", match.group(2)):
                     checked += 1
-                    if flag not in known[match.group(1)]:
-                        bad.append(f"{path.name}: openrapm {match.group(1)} {flag}")
-    assert checked >= 8, f"only {checked} openrapm flags found; the pattern has stopped matching"
+                    if flag not in known[command]:
+                        bad.append(f"{path.name}: openrapm {command} {flag}")
+    assert checked >= 20, f"only {checked} openrapm flags found; the pattern has stopped matching"
     assert not bad, f"flags `openrapm` does not understand: {sorted(set(bad))}"
+
+
+def test_every_openrapm_command_the_docs_name_exists():
+    """`python -m openrapm NAME` in a code block or `openrapm NAME` in a code span must name a real command, and
+    `openrapm data NAME` a real data step: a renamed command would otherwise live on in the docs."""
+    parsers = _openrapm_parsers()
+    checked, bad = 0, []
+    for path in DOCS:
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            for match in NAMED_COMMAND.finditer(line):
+                checked += 1
+                name, inner = match.group(1), match.group(2)
+                if name not in parsers:
+                    bad.append(f"{path.name}: openrapm {name}")
+                elif _subcommands(parsers[name]) and inner and f"{name} {inner}" not in parsers:
+                    bad.append(f"{path.name}: openrapm {name} {inner}")
+    assert checked >= 30, f"only {checked} openrapm commands found; the pattern has stopped matching"
+    assert not bad, f"commands `openrapm` does not have: {sorted(set(bad))}"

@@ -1,7 +1,7 @@
 """Add (or replace) one experiment's row in the experiment table, experiments/runs.csv.
 
 One row per experiment: who asked, what changed, the headline test numbers, the verdict.  Every number is read
-from what the standard chain (HANDOFF.md, "The test"; scripts/experiment_chain.sh) already wrote, and nothing is
+from what the standard chain (notes/HANDOFF.md, "The test"; scripts/experiment_chain.sh) already wrote, and nothing is
 typed in by hand.  A number whose source is missing is left blank rather than guessed.  Rows are keyed by `exp`;
 logging the same `exp` again replaces its row, so a corrected run does not leave a stale one behind.  The table is
 mirrored to the "OpenRAPM experiments" Google Sheet, whose header row is HEADERS below; `--sheet` prints the whole
@@ -29,7 +29,7 @@ replacement level of experiment 11: -0.144, z -5.24, 42 of 56.
 
     python scripts/checks/101_log_run.py --name=shotmix --exp=34 --idea=owner --verdict=pending
             --changed="one sentence, plain words" [--notes="..."] [--date=2026-10-04]
-            [--incumbent=priorshrink] [--log=outputs/<name>_chain.log] [--command="..."] [--dry]
+            [--incumbent=weightfix] [--log=outputs/<name>_chain.log] [--command="..."] [--dry]
             [--tag=<name>] [--system=<name>] [--compared=outputs/season_ratings_<incumbent>.parquet]
     python scripts/checks/101_log_run.py --sheet      (print the table as rows for the Google Sheet)
 
@@ -83,7 +83,8 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--sheet", action="store_true", help="print the table as rows for the Google Sheet")
     parser.add_argument("--name", help="the run's name (required unless --sheet)")
     parser.add_argument("--exp", help="the experiment number, the row's key (required unless --sheet)")
-    parser.add_argument("--incumbent", default="priorshrink", help="default %(default)s")
+    # the incumbent since 2026-10-09 (experiment 46); before it lgb_noonc_rs (45), before that priorshrink (33b)
+    parser.add_argument("--incumbent", default="weightfix", help="default %(default)s")
     parser.add_argument("--compared", help="the incumbent's table (default outputs/season_ratings_<incumbent>.parquet)")
     parser.add_argument("--tag", help="the output files' name (default --name)")
     parser.add_argument("--system", help="the candidate's name inside them (default --name)")

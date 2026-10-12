@@ -2,7 +2,7 @@
 
 `tests/test_seasons.py` pins the guard itself: a title is sixteen playoff wins, a season whose Finals
 are unfinished is not complete, `Trainable` refuses a season past its cutoff.  That is necessary and
-it is not the claim.  The claim is about the artifacts -- that no fit in this project has a season in
+it is not the claim.  The claim is about the artefacts -- that no fit in this project has a season in
 progress anywhere in it -- and for a long time `src/openrapm/data/seasons.py` named this file as the thing
 that established it.  The file did not exist.
 

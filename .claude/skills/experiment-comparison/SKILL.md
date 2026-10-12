@@ -11,12 +11,12 @@ This skill turns the parquet tables the rankings script writes into one interact
 ## Run it
 
 ```
-.venv/Scripts/python scripts/66_compare.py incumbent=outputs/season_ratings_sy_chunks_cfs.parquet <name>=outputs/season_ratings_<name>.parquet --season=2026 --top=20 --yoy=outputs/yoy_<name>.parquet --ref=incumbent
+.venv/Scripts/python scripts/checks/66_compare.py incumbent=outputs/season_ratings_weightfix.parquet <name>=outputs/season_ratings_<name>.parquet --season=2026 --top=20 --yoy=outputs/yoy_<name>.parquet --ref=incumbent
 ```
 
 - Name the **incumbent first**; rank changes are measured against the first table named.
 - Use plain names on the page (`incumbent`, `off_court`); when they differ from the names the
-  year-over-year run used (`--rankings=<name>=...` in `63_yoy.py`), map them with
+  year-over-year run used (`--rankings=<name>=...` in `scripts/checks/63_yoy.py`), map them with
   `--alias=off_court:sy_offc` so the summary block can find them.
 - The page is written to `outputs/compare_<names>_<season>.html` and opened in the browser
   (`--open=0` to skip).  It is self-contained: no network, safe to attach or keep.
@@ -48,5 +48,5 @@ End with one question: adopt, keep, or the next idea.
 ## Conventions this relies on
 
 - A rankings table has `player_id`, `player_name`, `season`, `rating_off`, `rating_def`, `rating_total`,
-  `poss_off` (positive good on both ends), as `scripts/62_single_year_board.py` writes it.
-- A year-over-year parquet comes from `scripts/63_yoy.py`, systems named `<name>:prev` / `<name>:next`.
+  `poss_off` (positive good on both ends), as `python -m openrapm build` writes it.
+- A year-over-year parquet comes from `scripts/checks/63_yoy.py`, systems named `<name>:prev` / `<name>:next`.

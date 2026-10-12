@@ -1,5 +1,5 @@
 #!/bin/bash
-# One experiment's whole ratings chain, as HANDOFF.md "The test: year-over-year" describes it: steps 1-3 in one run
+# One experiment's whole ratings chain, as notes/HANDOFF.md "The test: year-over-year" describes it: steps 1-3 in one run
 # (`openrapm rate --setting test`), step 4 (`openrapm shrink --setting test`), step 5 (`openrapm swap --setting test`),
 # then the readings, each a check in scripts/checks/: 63, 64, 66 (2026 top 20), 90, 88, 70 + 73 (on the
 # incumbent's trade-loss target, and on the candidate's own as a sensitivity).  Everything not named is the incumbent's.
@@ -9,7 +9,8 @@
 # A reading that fails is logged and the chain goes on to the next (each reading stands alone); the last line of the
 # log then names every reading that failed, and the chain exits with status 1.
 cd "$(dirname "$0")/.."
-PY=.venv/Scripts/python
+# the environment's python: .venv/Scripts/python on Windows, .venv/bin/python on macOS and Linux; PY=... overrides
+if [ -z "$PY" ]; then PY=.venv/bin/python; [ -x .venv/Scripts/python ] && PY=.venv/Scripts/python; fi
 NAME=$1
 TARGET=$2
 EXTRA=${3:-}          # extra flags for `openrapm rate`, e.g. --fold-assignment 1 or --features <set>
@@ -36,13 +37,13 @@ reading() {            # reading LABEL SCRIPT [FLAGS...]: run one check into the
 }
 # SKIP_BUILD=1: outputs/season_ratings_NAME_step3.parquet already exists -- start at the prior shrink.
 # SHRINK_TAG=<tag>: the within-season folds step 4's multipliers are read from (default the incumbent's, INC_FOLDS; experiment
-# 45's were `lgb_noonc_within`, chimeraboost's `within`); the LightGBM rematch (2026-10-08) refits them on the
-# candidate's own priors (`openrapm folds --tag=<tag>`).
+# 45's were `lgb_noonc_within`, chimeraboost's `within`; experiment 44's second run, 2026-10-08, refitted them on the
+# candidate's own priors as `lgb1_within`, with `openrapm folds --tag=<tag>`).
 # OWN_FOLDS=1 (the Robustness pass, 2026-10-08): save the candidate's boosters (--save-models NAME, every rated season),
 # build its own within-season folds for 2017-2026 (`openrapm folds --tag NAME_within`), fit the prior shrink on them,
 # and keep the table on the INCUMBENT's multipliers beside it (season_ratings_NAME_incmult) -- both are scored.  Then the
 # held-out audit (138) compares the candidate's folds with the incumbent's (and with CONTROL_TAG's, the noise control's).
-# FIRST_PASS=1: rate 2017-2026 only, its folds and the audit, and stop (about 18 minutes).  A later full run rates all
+# FIRST_PASS=1: rate 2017-2026 only, its folds and the audit, and stop.  A later full run rates all
 # thirty seasons in one run and keeps the boosters the first pass saved (outputs/prior_models_NAME.pkl).
 OWN_FOLDS=${OWN_FOLDS:-0}
 FIRST_PASS=${FIRST_PASS:-0}

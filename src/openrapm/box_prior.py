@@ -48,7 +48,7 @@ the settings in params/booster_params_lgb1.json) solves:
            linear_lambda (LightGBM's linear_tree)
 
 Player folds: players are sorted by label and assigned to folds 0,1,2,3,4,4,3,2,1,0,0,1,..., so every fold gets the
-same mix of good and bad players and leaving one out does not move the training mean (DECISIONS.md, "The SPM
+same mix of good and bad players and leaving one out does not move the training mean (notes/DECISIONS.md, "The SPM
 memorises long-career stars", 2026-09-14; SPM was the box-score prior's earlier name).
 """
 from __future__ import annotations
@@ -65,7 +65,7 @@ __all__ = ["average_over_seasons", "career_rows", "season_runs", "training_rows"
            "SidePrior", "season_priors"]
 
 # columns a training row adds for its own bookkeeping: the label it carries, its weight in the fit and the
-# possessions behind the label.  None may share a name with an input (DECISIONS.md, experiment 46: the row weight
+# possessions behind the label.  None may share a name with an input (notes/DECISIONS.md, experiment 46: the row weight
 # once overwrote the body-weight input, then called `weight`)
 BOOKKEEPING = ("label", "row_weight", "label_possessions")
 
@@ -174,7 +174,7 @@ def balanced_player_folds(train: pd.DataFrame, n_folds: int = 5, fold_assignment
     order (`fold_assignment=0`, shipped).  `fold_assignment=k` with k >= 1 is the noise control: it measures
     how much the ratings move when nothing changes but which players share a fold.  Players are taken five at a
     time in label order and each group of five gets the folds 0-4 in a random order from numpy's
-    default_rng(k), so every fold still gets one player from each group.  k = 1 reproduces DECISIONS.md's run
+    default_rng(k), so every fold still gets one player from each group.  k = 1 reproduces notes/DECISIONS.md's run
     noise_regroup2.
     """
     inverse, mean = _player_means(train.label.to_numpy(float), train.index.to_numpy(),
@@ -193,7 +193,7 @@ def balanced_player_folds(train: pd.DataFrame, n_folds: int = 5, fold_assignment
 
 
 # No row or column subsampling, one thread, deterministic: the same rows always give the same booster
-# (DECISIONS.md, experiment 44).  These win over anything in the settings file.
+# (notes/DECISIONS.md, experiment 44).  These win over anything in the settings file.
 LIGHTGBM_FIXED = dict(subsample=1.0, subsample_freq=0, colsample_bytree=1.0, n_jobs=1, deterministic=True,
                       force_row_wise=True, verbose=-1, random_state=0)
 

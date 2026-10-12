@@ -40,7 +40,7 @@ from .features import BOX_RATES, SEASON_PANEL_COLUMNS
 LEAGUE_MEAN = np.array([2.4, 4.2, 5.6, 5.2, 3.6, 1.0, 2.0, 6.6, 4.8, 2.8, 1.6, 1.0, 4.0])
 BETA_O = np.array([1.6, -0.7, 0.9, -0.6, 0.5, -0.4, 0.5, 0.1, 0.4, -1.0, 0.1, 0.0, -0.1])
 BETA_D = np.array([-0.1, 0.1, -0.1, 0.2, 0.0, 0.1, 0.0, -0.3, -0.1, 0.1, -0.8, -0.6, 0.3])
-# Same-game mechanical slopes: realized counts enter the stint's points with these values
+# Same-game mechanical slopes: realised counts enter the stint's points with these values
 # (a make scores; a miss forfeits the possession's ~1 point unless an ORB follows; an ORB
 # restores it; a turnover forfeits it).  The player's TRUE rate enters with beta, so the
 # true coefficient is beta while the game's box count leaks with slope m.
