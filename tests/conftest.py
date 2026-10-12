@@ -31,6 +31,7 @@ Shared fixtures live here too, so no test module imports another and no test rep
 and one marker: `@pytest.mark.needs_data("stints/*_PO.parquet", ...)` skips a test unless every configured data path
 it names exists (see `data_present`), so a fresh clone with no scraped data skips it instead of failing.
 """
+import importlib
 import socket
 
 import numpy as np
@@ -57,6 +58,11 @@ def _blocked(*a, **kw):
 
 
 def _block():
+    # ssl subclasses socket.socket when it is first imported.  Load it now, while socket.socket is still the real
+    # class: otherwise a test whose first `import requests` (through data/ingest) comes after the block fails with
+    # "function() argument 'code' must be code" -- which is what CI's boundaries job, running two test files on
+    # their own, hit on 2026-10-12.
+    importlib.import_module("ssl")
     socket.socket = _blocked
     socket.create_connection = _blocked
     socket.getaddrinfo = _blocked
