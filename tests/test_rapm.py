@@ -9,22 +9,16 @@ import pandas as pd
 import pytest
 
 from openrapm import rapm
-from openrapm.design import FEATURES, build_design
 from openrapm.settings import PRODUCT
-from openrapm.simulate import simulate
 
-CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "box_counts": FEATURES,
-       "first_season": 2001, "last_season": 2004}
 SEASONS = [2001, 2002, 2003, 2004]
 
 
 @pytest.fixture(scope="module")
-def world():
-    sim = simulate(n_seasons=4, n_teams=8, players_per_team=10, games_per_season=60,
-                   stints_per_game=(20, 30), rho=0.9, turnover=0.25, seed=6, eps_var=0.2, leak=False)
-    stints, box = sim["stints"], sim["box"]
-    designs = {s: build_design(stints[stints.season == s], box[box.season == s], FEATURES, CFG) for s in SEASONS}
-    return sim, designs
+def world(synthetic_league, synthetic_design):
+    """Four seasons of a league whose talent persists, and each season's own design."""
+    sim = synthetic_league(n_seasons=4, rho=0.9, turnover=0.25, seed=6)
+    return sim, {season: synthetic_design(sim, [season]) for season in SEASONS}
 
 
 def _sums(designs, seasons, min_possessions=0.0):

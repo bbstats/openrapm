@@ -14,16 +14,15 @@ from openrapm.box_rates import (
     shrink,
     split_half_k,
 )
-from openrapm.design import FEATURES, build_design
+from openrapm.design import FEATURES
 from openrapm.simulate import simulate
-
-CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500}
 
 
 @pytest.fixture(scope="module")
-def design():
+def design(synthetic_design):
+    """Two seasons of a league whose talent is redrawn every season (simulate's defaults)."""
     sim = simulate(n_seasons=2, n_teams=6, players_per_team=10, games_per_season=40, stints_per_game=(20, 30), seed=1)
-    return build_design(sim["stints"], sim["box"], FEATURES, CFG)
+    return synthetic_design(sim)
 
 
 def test_shrink_limits():
@@ -70,7 +69,7 @@ def test_split_half_k_recovers_the_true_k():
 
 
 def test_a_design_cut_to_some_games_counts_only_their_box_scores(design):
-    """`WindowData.subset` cuts the rows and keeps the whole box table; the rates still count only the games the
+    """`Design.subset` cuts the rows and keeps the whole box table; the rates still count only the games the
     rows come from."""
     game = design.rows["game_idx"].to_numpy()
     held = np.unique(game)[:5]

@@ -1,8 +1,6 @@
 """The season panel's builder (src/openrapm/data/panel.py): the data layer's names mapped onto the panel's, the score
 state and the playoff share counted by hand on two tiny games, the panel-wide fill of a row with no possessions, and,
 with the data on disk, one season rebuilt and held to the stored panel."""
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -12,8 +10,6 @@ from openrapm.data.legacy_names import column_name
 from openrapm.data.shots import SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS
 from openrapm.design import AWAY_SLOTS, HOME_SLOTS
 from openrapm.features import CLOSENESS, OFF_COURT, ON_MINUS_OFF, SEASON_PANEL_COLUMNS, SHOT_LEAGUE, SHOT_TOTALS
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_the_shot_columns_are_the_data_layers_renamed():
@@ -64,18 +60,14 @@ def test_a_row_without_possessions_takes_the_whole_panels_score_state():
     assert filled.iloc[0].tolist() == [0.1, 0.2, 8.0]
 
 
-STORED = ROOT / "outputs" / "season_panel.parquet"
-HAVE_DATA = STORED.exists() and (ROOT / "data" / "stints" / "2026_RS.parquet").exists()
-
-
 @pytest.mark.slow
-@pytest.mark.skipif(not HAVE_DATA, reason="no season panel or stints on disk")
+@pytest.mark.needs_data("panel", "stints/2026_RS.parquet")
 def test_a_season_rebuilt_from_all_its_games_is_the_stored_panel():
-    """2026 from all of its games, every column against outputs/season_panel.parquet.  Exact, except the off-court
-    columns: they sum through a dense matrix product (on_court.py), whose last digits depend on how many threads the
-    linear-algebra library uses; the stored panel was built with the machine's twelve, the commands pin one
-    (a few rows differ by under 1e-13)."""
-    from openrapm.data.config import load_config
+    """2026 from all of its games, every column against the stored panel (config paths.panel, by default
+    outputs/season_panel.parquet).  Exact, except the off-court columns: they sum through a dense matrix product
+    (on_court.py), whose last digits depend on how many threads the linear-algebra library uses; the stored panel
+    was built with the machine's twelve, the commands pin one (a few rows differ by under 1e-13)."""
+    from openrapm.data.config import load_config, resolve
     from openrapm.data.designs import DesignCache
     from openrapm.data.roles import build_roles, player_season_inputs
     cfg = load_config()
@@ -85,7 +77,7 @@ def test_a_season_rebuilt_from_all_its_games_is_the_stored_panel():
     designs = DesignCache(cfg)
     whole = {target: designs.season(2026, target) for target in panel_module.PANEL_TARGETS}
     rows = panel_module.season_panel(2026, cfg, whole, sources).rows
-    stored = pd.read_parquet(STORED)
+    stored = pd.read_parquet(resolve(cfg, "panel"))
     stored = stored[stored.season == 2026].reset_index(drop=True)
     assert list(rows.columns) == SEASON_PANEL_COLUMNS and rows.dtypes.equals(stored.dtypes)
     assert rows[["side", "player_id", "season"]].equals(stored[["side", "player_id", "season"]])

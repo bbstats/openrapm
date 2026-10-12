@@ -1,9 +1,15 @@
 """data/bio.py: who he is (height, weight, draft slot) and where he has been (tenure, teams), for the prior."""
-import numpy as np
 import pandas as pd
 
-from openrapm.data.bio import (BIO_INPUTS, PLAYER_INPUTS, TENURE_INPUTS, UNDRAFTED, bio_inputs, season_tenure,
-                              tenure_inputs)
+from openrapm.data.bio import (
+    BIO_INPUTS,
+    PLAYER_INPUTS,
+    TENURE_INPUTS,
+    UNDRAFTED,
+    bio_inputs,
+    season_tenure,
+    tenure_inputs,
+)
 
 
 def _roles():

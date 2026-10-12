@@ -13,29 +13,25 @@ from openrapm.commands.year_over_year import (
     run,
     scored_seasons,
 )
-from openrapm.design import FEATURES, build_design
-from openrapm.simulate import simulate
 
-CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "box_counts": FEATURES,
-       "first_season": 2001, "last_season": 2005}
+CFG = {"first_season": 2001, "last_season": 2005}        # the seasons `scored_seasons` reads
 
 
 class SimulatedDesigns:
-    """What the runner asks of `data.designs.DesignCache`, from simulated stints (regular season only)."""
+    """What the runner asks of `data.designs.DesignCache`, from simulated stints (regular season only): `design` is
+    the `synthetic_design` fixture."""
 
-    def __init__(self, sim):
-        self.stints, self.box, self.cfg = sim["stints"], sim["box"], CFG
+    def __init__(self, sim, design, cfg):
+        self.sim, self.design, self.cfg = sim, design, cfg
 
     def season(self, season, target):
         assert target == "pts"
-        return build_design(self.stints[self.stints.season == season], self.box[self.box.season == season],
-                            FEATURES, self.cfg)
+        return self.design(self.sim, [season], self.cfg)
 
 
 @pytest.fixture(scope="module")
-def results():
-    sim = simulate(n_seasons=5, n_teams=8, players_per_team=10, games_per_season=60, stints_per_game=(20, 30),
-                   rho=0.85, turnover=0.3, seed=11, eps_var=0.2, leak=False)
+def results(synthetic_league, synthetic_design, small_cfg):
+    sim = synthetic_league(n_seasons=5, seed=11)
     truth = sim["truth"]["ps"].rename(columns={"impact_O": "o", "impact_D": "d"})
     true = truth.assign(poss=np.where(truth.player_id % 1000 > 7, 100.0, 1000.0))[["player_id", "season", "o", "d",
                                                                                     "poss"]]
@@ -44,7 +40,8 @@ def results():
     zero = true.assign(o=0.0, d=0.0)
     tables = {name: {"prev": t, "next": t} for name, t in (("true", true), ("noisy", noisy), ("zero", zero))}
     systems = neighbour_tables(tables)
-    res = run(systems, SimulatedDesigns(sim), scored_seasons(CFG), splits=("game_bench_share",), verbose=False)
+    designs = SimulatedDesigns(sim, synthetic_design, small_cfg(**CFG))
+    res = run(systems, designs, scored_seasons(CFG), splits=("game_bench_share",), verbose=False)
     return systems, res
 
 

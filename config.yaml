@@ -39,8 +39,6 @@ garbage_time:
   q4_margin_any: 20     # or margin >= 20 at any point in the 4th
 gt_weight: 1.0
 margin_clip: 25
-margin_bins: [-25, -15, -8, -3, 3, 8, 15, 25]   # 7 bins for the binned-margin robustness run
-time_halves: 2
 
 # The year-over-year test (scripts/checks/63_yoy.py) scores every season with a season on both sides of it,
 # 1998-2025 for the seasons above; it has no settings here (src/openrapm/commands/year_over_year.py,

@@ -15,23 +15,17 @@ import pandas as pd
 import pytest
 
 from openrapm import trade_set
-from openrapm.design import FEATURES, build_design
 from openrapm.scoring import MAE_SCALE
-from openrapm.simulate import simulate
-
-CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "box_counts": FEATURES,
-       "first_season": 2001, "last_season": 2003, "player_unit": "window"}
 
 
 @pytest.fixture(scope="module")
-def world():
+def world(synthetic_league, synthetic_design, small_cfg):
     # big enough that the regression is over-determined the way the real one is: three seasons of
     # 200 games is 1,200 team-games against 240 player columns, about the five-to-one the real block
     # runs at.  At the simulator's defaults it is two-to-one and nothing is recoverable.
-    sim = simulate(n_seasons=3, n_teams=10, players_per_team=12, games_per_season=200,
-                   stints_per_game=(20, 30), rho=0.9, turnover=0.35, seed=17, eps_var=0.2, leak=False)
-    st, box = sim["stints"], sim["box"]
-    wd = build_design(st, box, FEATURES, CFG)
+    sim = synthetic_league(n_seasons=3, n_teams=10, players_per_team=12, games_per_season=200, rho=0.9,
+                           turnover=0.35, seed=17)
+    wd = synthetic_design(sim, cfg=small_cfg(player_unit="window"))
     return sim, wd, trade_set.team_game_design(wd)
 
 

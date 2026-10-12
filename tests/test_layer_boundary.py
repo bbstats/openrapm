@@ -54,7 +54,7 @@ MODEL_LAYER = [
     "design.py",        # the design matrix from the frames it is handed; the stint column and counter names
     "box_rates.py",     # the season panel's padded per-100 box rates, and the padding helpers
     "on_court.py",      # his team's record with him on the court and off it
-    "simulate.py",     # the synthetic fixture the tests fit against
+    "simulate.py",      # the simulated league, and its season panel, that the tests and the tutorial fit
     "swap_adjust.py",   # step 5: the swap type model, the give-back, team totals held, the spread held
     "swap_test.py",     # the swap test: same-four lineup pairs, scored against a neighbouring season's ranking
     "trade_set.py",     # the team-game with-and-without-you ridge and its losses

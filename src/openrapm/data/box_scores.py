@@ -2,7 +2,7 @@
 
 game_box columns: game_id, player_id, season, phase, fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss,
                   orb, drb, ast, tov, stl, blk, pf
-Per-game player possessions come from the stints (design.build_game_poss), not from here.
+Per-game player possessions come from the stints (design.piece_from_frames), not from here.
 """
 from __future__ import annotations
 

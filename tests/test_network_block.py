@@ -9,15 +9,13 @@ import socket
 
 import pytest
 
-from conftest import NetworkBlocked, _blocked
 
-
-def test_the_network_block_works():
-    with pytest.raises(NetworkBlocked):
+def test_the_network_block_works(network_blocked):
+    with pytest.raises(network_blocked):
         socket.create_connection(("stats.nba.com", 443), timeout=1)
-    with pytest.raises(NetworkBlocked):
+    with pytest.raises(network_blocked):
         socket.getaddrinfo("stats.nba.com", 443)
-    with pytest.raises(NetworkBlocked):
+    with pytest.raises(network_blocked):
         socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 
@@ -26,7 +24,5 @@ def test_allow_network_hands_back_the_real_socket(allow_network):
     """The escape hatch has to work, or the next test that genuinely needs the network will be told
     to use a fixture that does nothing.  Nothing is dialled here: holding the real function is the
     whole claim, and opening a connection would make the suite depend on a third party again."""
-    assert socket.socket is not _blocked
-    assert socket.create_connection is not _blocked
     assert socket.socket.__module__ == "socket"
     assert socket.create_connection.__module__ == "socket"

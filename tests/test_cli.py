@@ -155,7 +155,7 @@ def test_the_threads_are_pinned_before_numpy_loads():
 def test_python_dash_m_openrapm_answers_help():
     out = subprocess.run([sys.executable, "-m", "openrapm", "--help"], capture_output=True, text=True, check=True)
     assert all(command in out.stdout for command in ("data", "build", "rate", "shrink", "swap", "folds", "site",
-                                                     "compare"))
+                                                     "compare", "glossary"))
 
 
 @pytest.mark.parametrize("base, step, name", [("season_ratings_trial_step3", "_step3", "trial"),

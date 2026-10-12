@@ -278,7 +278,7 @@ def test_the_booster_settings_are_never_read_from_config_yaml():
 
 
 # --------------------------------------------------------------- the openrapm command lines
-OPENRAPM = re.compile(r"(?:-m openrapm|\bopenrapm)\s+(rate|folds|site|compare)\b([^\n`]*)")
+OPENRAPM = re.compile(r"(?:-m openrapm|\bopenrapm)\s+(rate|folds|site|compare|glossary)\b([^\n`]*)")
 
 
 def _openrapm_flags() -> dict:

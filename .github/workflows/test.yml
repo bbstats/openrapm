@@ -6,10 +6,23 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    # pyproject.toml's [tool.ruff]: pycodestyle, pyflakes, import order, and every function at McCabe
+    # complexity 10 or less (tests exempt from the complexity rule only).  The version is pinned so a
+    # new ruff release cannot fail this job with no change to the code.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install "ruff==0.17.0"
+      - run: ruff check .
+
   test:
     # The point of this job is the claim the README makes: a fresh clone with NO scraped data
     # installs and passes. It runs with data/ empty, so if a test quietly depends on a local
-    # artifact rather than skipping cleanly, this is what catches it.
+    # artifact rather than skipping cleanly, this is what catches it.  The tests marked slow
+    # rebuild real seasons and are left out by pyproject.toml's addopts.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -25,10 +38,12 @@ jobs:
       - name: No data is present
         run: test ! -d data/raw && test ! -d data/stints && echo "clean clone confirmed"
       - run: pytest -q --durations=10
+      - name: The tutorial runs
+        run: python examples/tutorial.py --small
 
   boundaries:
-    # The two rules, on their own so a failure names itself in the checks list rather than being
-    # one line inside a 200-test run.
+    # The rules about how the code hangs together, on their own so a failure names itself in the
+    # checks list rather than being one line inside a 400-test run.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,3 +54,5 @@ jobs:
         run: pytest tests/test_layer_boundary.py -q
       - name: Nothing fitted sees a season in progress
         run: pytest tests/test_seasons.py tests/test_no_current_season.py -q
+      - name: Every module is reached from a command, a check or the tutorial
+        run: pytest tests/test_no_orphan_modules.py -q

@@ -94,7 +94,7 @@ CONTEXTS = {
     "nofatigue": ["one", "home", "is_po", "po_home", "is_gt", "margin", "margin_frem",
                   "period_elapsed", "period_end", "clutch"],
 }
-# what a plain single-season RAPM is fitted with: the design's own fixed block (design.build_design)
+# what a plain single-season RAPM is fitted with: the design's own context columns (design.context_columns)
 RAPM_CONTROLS = ["one", "home", "is_po", "po_home", "is_gt", "margin", "margin_frem"]
 
 CLUTCH_SECONDS = 300.0       # the last five minutes of a period ...

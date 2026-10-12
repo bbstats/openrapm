@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from openrapm.design import FEATURES, build_design
 from openrapm.scoring import (
     MAE_SCALE,
     QUALITY_LABELS,
@@ -26,9 +25,6 @@ from openrapm.scoring import (
     replacement_level,
     score,
 )
-from openrapm.simulate import simulate
-
-CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "box_counts": FEATURES}
 
 
 def test_armse_is_the_root_mean_square_on_the_mean_absolute_scale():
@@ -39,12 +35,11 @@ def test_armse_is_the_root_mean_square_on_the_mean_absolute_scale():
 
 
 @pytest.fixture(scope="module")
-def season():
+def season(synthetic_league, synthetic_design):
     """One simulated season's design, the true impacts of its players and their main teams."""
-    sim = simulate(n_seasons=2, n_teams=8, players_per_team=10, games_per_season=60, stints_per_game=(20, 30),
-                   rho=0.85, turnover=0.3, seed=11, eps_var=0.2, leak=False)
-    st, box, truth = sim["stints"], sim["box"], sim["truth"]["ps"]
-    design = build_design(st[st.season == 2002], box[box.season == 2002], FEATURES, CFG)
+    sim = synthetic_league(n_seasons=2, seed=11)
+    truth = sim["truth"]["ps"]
+    design = synthetic_design(sim, [2002])
     table = truth.rename(columns={"impact_O": "o", "impact_D": "d"})
     # the three deepest players of each team are barely seen (100 possessions), so team-games differ in how
     # much of them the bench played

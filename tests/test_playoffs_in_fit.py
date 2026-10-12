@@ -24,15 +24,13 @@ import pytest
 
 from openrapm import design as design_mod
 from openrapm.data.config import load_config, resolve
-from openrapm.data.designs import build_window, build_window_cached
+from openrapm.data.designs import block_design
 from openrapm.data.roles import ROLE_PHASES
 from openrapm.data.shots import SHOT_PHASES
 from openrapm.design import SEASON_PHASES
 
 CFG = load_config()
 _STINTS = resolve(CFG, "stints")
-HAVE_DATA = _STINTS.is_dir() and any(_STINTS.glob("*_PO.parquet"))
-needs_data = pytest.mark.skipif(not HAVE_DATA, reason="no stints; run openrapm data stints")
 
 
 def _default(fn, name):
@@ -43,8 +41,7 @@ def _default(fn, name):
 
 def test_every_phase_default_is_the_whole_season():
     assert SEASON_PHASES == ("RS", "PO")
-    for fn, arg in ((build_window, "phases"), (build_window_cached, "phases")):
-        assert _default(fn, arg) == SEASON_PHASES, f"{fn.__qualname__} still defaults to regular season only"
+    assert _default(block_design, "phases") == SEASON_PHASES, "block_design still defaults to regular season only"
     assert ROLE_PHASES == SEASON_PHASES      # minutes, starts and possessions behind the role prior
     assert SHOT_PHASES == SEASON_PHASES      # the shooter totals that price the luck-adjusted targets
 
@@ -56,21 +53,21 @@ def test_there_is_only_one_phase_constant():
     assert not extra, f"a second phase constant appeared: {extra}"
 
 
-@needs_data
+@pytest.mark.needs_data("stints/*_PO.parquet")
 def test_a_window_actually_contains_playoff_rows():
     season = max(int(p.stem.split("_")[0]) for p in _STINTS.glob("*_PO.parquet"))
-    wd = build_window([season], CFG)
+    wd = block_design([season], CFG)
     phases = set(wd.games["phase"].unique())
     assert phases == {"RS", "PO"}, f"{season} built {phases}"
     n_po = int((wd.rows["phase"] == "PO").sum())
     assert n_po > 0, "playoff games are in the game table but no design row came from them"
     # asking for one phase is still possible; it is just never the default
-    rs = build_window([season], CFG, phases=("RS",))
+    rs = block_design([season], CFG, phases=("RS",))
     assert set(rs.games["phase"].unique()) == {"RS"}
     assert len(rs.rows) < len(wd.rows)
 
 
-@needs_data
+@pytest.mark.needs_data("stints/*_PO.parquet")
 def test_role_inputs_count_playoff_minutes():
     """A rotation player on a team that went deep played more games than his regular season says."""
     from openrapm.data.roles import season_roles

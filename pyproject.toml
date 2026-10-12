@@ -11,7 +11,7 @@ dependencies = [
   "scikit-learn>=1.4",
   "threadpoolctl>=3",     # one linear-algebra thread in the checks (openrapm.commands.console.one_thread)
   "lightgbm>=4.7",        # the shipped box-score prior since 2026-10-08 (openrapm.box_prior)
-  "matplotlib>=3.8",
+  "matplotlib>=3.8",      # the calibration figure of scripts/checks/137_stat_calibration.py
   "nba_api>=1.4",
   "pyyaml>=6",
   "requests>=2.31",
@@ -21,7 +21,7 @@ dependencies = [
 openrapm = "openrapm.commands.cli:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-xdist>=3"]
+dev = ["pytest>=8", "pytest-xdist>=3", "ruff>=0.5"]
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -30,9 +30,25 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+# pycodestyle errors and warnings, pyflakes, import order, and McCabe complexity
+select = ["E", "F", "W", "I", "C90"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+# a test may be one long story of assertions; every other rule still holds there
+"tests/**" = ["C901"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not slow'"
 markers = [
-  "slow: recomputes a calibration table; a few seconds, not milliseconds",
+  "slow: rebuilds real seasons from the data on disk, up to a minute each (run with `pytest -m slow`)",
   "network: genuinely needs the network; exempt from the block in tests/conftest.py",
+  "needs_data(*paths): skipped unless each configured data path exists, e.g. needs_data('stints/*_PO.parquet')",
 ]

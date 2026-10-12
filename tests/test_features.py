@@ -11,6 +11,7 @@ import pandas as pd
 import pytest
 
 from openrapm import features as feat
+from openrapm.commands.glossary import END, START, generated_block, run_glossary
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -154,6 +155,30 @@ def test_the_glossary_has_one_row_per_name_and_escapes_bars():
     assert len(rows) == len(feat.CATALOGUE)
     closeness = next(line for line in rows if line.startswith("| `closeness`"))
     assert "\\|margin\\|" in closeness and closeness.count(" | ") == 4
+
+
+def test_the_glossary_file_holds_the_catalogue():
+    """GLOSSARY.md's generated block is the catalogue's table: `openrapm glossary` rewrites it after a change here."""
+    assert generated_block((ROOT / "GLOSSARY.md").read_text(encoding="utf-8")) == feat.glossary_markdown()
+
+
+def test_the_glossary_command_rewrites_only_the_block(tmp_path):
+    path = tmp_path / "GLOSSARY.md"
+    path.write_text(f"# Prose\n\nkept\n\n{START}\n| stale |\n{END}\nafter\n", encoding="utf-8")
+    assert run_glossary(check=True, path=path) == 1
+    assert "| stale |" in path.read_text(encoding="utf-8"), "--check never writes"
+    assert run_glossary(path=path) == 0
+    text = path.read_text(encoding="utf-8")
+    assert text.startswith(f"# Prose\n\nkept\n\n{START}\n") and text.endswith(f"{END}\nafter\n")
+    assert generated_block(text) == feat.glossary_markdown()
+    assert run_glossary(check=True, path=path) == 0
+
+
+def test_a_glossary_without_its_markers_is_refused(tmp_path):
+    path = tmp_path / "GLOSSARY.md"
+    path.write_text(f"# Prose\n{END}\n{START}\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="generated: features"):
+        run_glossary(path=path)
 
 
 def test_the_panel_inputs_are_averaged_columns_only():

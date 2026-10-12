@@ -51,7 +51,7 @@ import numpy as np
 import pandas as pd
 
 from ..box_rates import box_rates, rate_table
-from ..design import AWAY_SLOTS, HOME_SLOTS, WindowData
+from ..design import AWAY_SLOTS, HOME_SLOTS, Design
 from ..features import (
     BIO,
     BOX_RATES,
@@ -213,20 +213,20 @@ def playoff_share(stints: pd.DataFrame, games: pd.DataFrame) -> pd.Series:
 
 
 # ---------------------------------------------------------------------------------- the designs of the fit games
-def cut_design(design: WindowData, keep_idx: np.ndarray) -> WindowData:
+def cut_design(design: Design, keep_idx: np.ndarray) -> Design:
     """The design restricted to the games `keep_idx` (game_idx values): its rows AND its per-game box-score and
     possession tables.
 
-    `WindowData.subset` keeps the whole season's box and possession tables, and those are what the padded rates and
+    `Design.subset` keeps the whole season's box and possession tables, and those are what the padded rates and
     the possessions are built from, so a fit on part of the season would still read every game's box score (the leak
     FINDINGS 31 found, closed the same way: the tables are cut with the rows).  `games` (ids, dates, phases: no
     outcomes) is kept whole so game_idx still indexes it."""
     keep = np.isin(design.rows["game_idx"].to_numpy(), keep_idx)
     sub = design.subset(keep)
-    return WindowData(sub.X_src, sub.y, sub.w, sub.groups, sub.spec,
-                      design.game_box[design.game_box["game_idx"].isin(keep_idx)].reset_index(drop=True),
-                      design.game_poss[design.game_poss["game_idx"].isin(keep_idx)].reset_index(drop=True),
-                      sub.rows, design.games, sub.counters)
+    return Design(sub.X_src, sub.y, sub.w, sub.groups, sub.spec,
+                  design.game_box[design.game_box["game_idx"].isin(keep_idx)].reset_index(drop=True),
+                  design.game_poss[design.game_poss["game_idx"].isin(keep_idx)].reset_index(drop=True),
+                  sub.rows, design.games, sub.counters)
 
 
 def fit_designs(season: int, cfg: dict, whole: dict, fit_game_ids) -> dict:

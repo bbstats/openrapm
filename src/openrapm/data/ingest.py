@@ -22,14 +22,12 @@ a missing file is a copying mistake, not a game to skip.
 """
 from __future__ import annotations
 
-import json
 import os
 import time
 import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import requests
 
@@ -80,7 +78,7 @@ def _retry(fn, tries=4, base_sleep=5.0, what=""):
     for t in range(tries):
         try:
             return fn()
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:            # any failure of a pull (timeout, HTTP error, bad JSON) is retried
             last = e
             if t == tries - 1:            # do not sleep after the final attempt and then give up
                 break
@@ -120,7 +118,8 @@ def game_table(gl: pd.DataFrame) -> pd.DataFrame:
     home = g[g.is_home].set_index("GAME_ID")["TEAM_ID"]
     away = g[~g.is_home].set_index("GAME_ID")["TEAM_ID"]
     meta = g.drop_duplicates("GAME_ID").set_index("GAME_ID")[["GAME_DATE", "season", "phase"]]
-    neutral = g.groupby("GAME_ID").apply(lambda d: bool((d["MATCHUP"].str.contains(" vs. ").sum()) != 1)).rename("neutral")
+    neutral = g.groupby("GAME_ID").apply(lambda d: bool((d["MATCHUP"].str.contains(" vs. ").sum()) != 1))
+    neutral = neutral.rename("neutral")
     out = meta.join(home.rename("home_team_id")).join(away.rename("away_team_id")).join(neutral).reset_index()
     out = out.rename(columns={"GAME_ID": "game_id", "GAME_DATE": "game_date"})
     out["game_date"] = pd.to_datetime(out["game_date"])
@@ -224,47 +223,68 @@ def pbpstats_games(season: int, phase: str, cfg, force=False) -> pd.DataFrame:
 
 
 # ----------------------------------------------------------------------------- season driver
-def ingest_season(season: int, phases=("RS", "PO"), cfg=None, workers=2, delay=0.6, log_every=100, verbose=True) -> dict:
+def ingest_season(season: int, phases=("RS", "PO"), cfg=None, workers=2, delay=0.6, log_every=100,
+                  verbose=True) -> dict:
     """Pull game logs, then PBP + boxscore for every game not yet cached. Idempotent."""
     summary = {}
     for phase in phases:
-        gl = load_gamelog(season, phase, cfg)
-        games = game_table(gl)
-        try:
-            pbpstats_games(season, phase, cfg)
-        except OfflineFetch:
-            raise                                  # offline, a missing file stops the run; it is not a failed pull
-        except Exception as e:  # noqa: BLE001
-            if verbose:
-                print(f"  pbpstats games {season} {phase}: {e!r}")
-        todo = [g for g in games["game_id"] if not (_pbp_path(g, cfg).exists() and _box_path(g, cfg).exists())]
+        games = game_table(load_gamelog(season, phase, cfg))
+        _pbpstats_cross_check(season, phase, cfg, verbose)
+        todo = [game_id for game_id in games["game_id"]
+                if not (_pbp_path(game_id, cfg).exists() and _box_path(game_id, cfg).exists())]
         if verbose:
             print(f"{season} {phase}: {len(games)} games, {len(todo)} to fetch")
-        t0 = time.time()
-        failed = []
-
-        def work(gid):
-            fetch_pbp(gid, cfg)
-            time.sleep(delay)
-            fetch_boxscore(gid, cfg)
-            time.sleep(delay)
-            return gid
-
-        done = 0
-        with ThreadPoolExecutor(max_workers=workers) as ex:
-            futs = {ex.submit(work, g): g for g in todo}
-            for f in as_completed(futs):
-                done += 1
-                try:
-                    f.result()
-                except OfflineFetch:
-                    raise
-                except Exception as e:  # noqa: BLE001
-                    failed.append((futs[f], repr(e)[:200]))
-                if verbose and done % log_every == 0:
-                    el = time.time() - t0
-                    print(f"  {done}/{len(todo)}  {el:.0f}s  ({el / done:.2f}s/game)")
-        summary[phase] = dict(n_games=len(games), fetched=len(todo), failed=failed, seconds=time.time() - t0)
+        started = time.time()
+        failed = _fetch_games(todo, cfg, workers, delay, log_every if verbose else 0)
+        summary[phase] = dict(n_games=len(games), fetched=len(todo), failed=failed, seconds=time.time() - started)
         if verbose:
-            print(f"  done {phase}: {len(todo)} fetched in {time.time() - t0:.0f}s, {len(failed)} failed")
+            print(f"  done {phase}: {len(todo)} fetched in {time.time() - started:.0f}s, {len(failed)} failed")
     return summary
+
+
+def _pbpstats_cross_check(season: int, phase: str, cfg, verbose: bool) -> None:
+    """Cache the pbpstats possessions of the season (a cross-check only, so a failed pull is printed, not raised)."""
+    try:
+        pbpstats_games(season, phase, cfg)
+    except OfflineFetch:
+        raise                                  # offline, a missing file stops the run; it is not a failed pull
+    except Exception as error:
+        if verbose:
+            print(f"  pbpstats games {season} {phase}: {error!r}")
+
+
+def _fetch_games(todo: list, cfg, workers: int, delay: float, log_every: int) -> list:
+    """Fetch the play-by-play and the box score of every game in `todo` on `workers` threads, each thread waiting
+    `delay` seconds after every request; progress is printed every `log_every` games (never when 0).  Returns
+    (game_id, error) for every game that failed: one bad game does not stop a season."""
+    def work(game_id):
+        fetch_pbp(game_id, cfg)
+        time.sleep(delay)
+        fetch_boxscore(game_id, cfg)
+        time.sleep(delay)
+        return game_id
+
+    started = time.time()
+    failed, done = [], 0
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(work, game_id): game_id for game_id in todo}
+        for future in as_completed(futures):
+            done += 1
+            error = _fetch_error(future)
+            if error is not None:
+                failed.append((futures[future], error))
+            if log_every and done % log_every == 0:
+                elapsed = time.time() - started
+                print(f"  {done}/{len(todo)}  {elapsed:.0f}s  ({elapsed / done:.2f}s/game)")
+    return failed
+
+
+def _fetch_error(future) -> str | None:
+    """The error of a finished fetch, shortened, or None; offline, a missing file is raised, not recorded."""
+    try:
+        future.result()
+    except OfflineFetch:
+        raise
+    except Exception as error:
+        return repr(error)[:200]
+    return None

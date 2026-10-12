@@ -9,19 +9,13 @@ import pandas as pd
 import pytest
 
 from openrapm import prior_rapm, rapm
-from openrapm.design import FEATURES, build_design
 from openrapm.settings import PRODUCT
-from openrapm.simulate import simulate
-
-CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "box_counts": FEATURES}
 
 
 @pytest.fixture(scope="module")
-def design():
-    sim = simulate(n_seasons=3, n_teams=8, players_per_team=10, games_per_season=60,
-                   stints_per_game=(20, 30), rho=0.85, turnover=0.3, seed=4, eps_var=0.2, leak=False)
-    stints, box = sim["stints"], sim["box"]
-    return build_design(stints[stints.season == 2002], box[box.season == 2002], FEATURES, CFG)
+def design(synthetic_league, synthetic_design):
+    """2002, the middle of three seasons of a league whose talent persists."""
+    return synthetic_design(synthetic_league(n_seasons=3, seed=4), [2002])
 
 
 def _shrunk_prior(wd, penalty=3000.0):

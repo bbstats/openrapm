@@ -116,7 +116,7 @@ def test_the_target_and_input_list_names():
 OLD_PANEL = ROOT / "outputs" / "role_panel_season.parquet"
 
 
-@pytest.mark.skipif(not OLD_PANEL.exists(), reason="no outputs/role_panel_season.parquet")
+@pytest.mark.needs_data("outputs/role_panel_season.parquet")
 def test_the_real_old_panel_maps_onto_the_season_panel():
     old = pd.read_parquet(OLD_PANEL)
     panel = panel_from_old_names(old)

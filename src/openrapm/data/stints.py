@@ -91,7 +91,7 @@ def _possession_totals(poss: pd.DataFrame, home: int, away: int) -> dict:
 def assign_halves(games: pd.DataFrame) -> pd.Series:
     """The cross-fitting half of every game, by game_id: regular-season games alternate A/B in
     chronological order within a season, playoff games within a series.  The SAME rule as
-    design._order_games, applied at stint-build time so the shooter tables and the design agree."""
+    design.order_games, applied at stint-build time so the shooter tables and the design agree."""
     ordered = games.copy()
     ordered["_ph"] = (ordered["phase"] == "PO").astype(int)
     ordered = ordered.sort_values(["season", "_ph", "game_date", "game_id"]).reset_index(drop=True)

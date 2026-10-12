@@ -72,8 +72,7 @@ from openrapm.commands.console import use_utf8
 from openrapm.data.config import load_config, resolve, resolve_path
 from openrapm.data.roles import franchise, roles_path
 from openrapm.data.seasons import drop_untrainable
-from openrapm.features import (CLOSENESS, OFF_COURT, ON_MINUS_OFF, PLAYOFF_SHARE, PRIOR_FEATURES, add_features,
-                               meaning)
+from openrapm.features import CLOSENESS, OFF_COURT, ON_MINUS_OFF, PLAYOFF_SHARE, PRIOR_FEATURES, add_features, meaning
 from openrapm.player_types import cluster_proba, fit_mixture
 
 N_CELLS = 6                        # levels for the adjustment's own check

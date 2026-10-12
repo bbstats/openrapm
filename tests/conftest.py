@@ -21,14 +21,25 @@ tests out of `conftest.py` -- the guard sat here for weeks and was never once ru
 A test that genuinely needs the network -- and it should be very rare -- takes the `allow_network`
 fixture.
 
-Shared fixtures live here too, so no test module imports another: `lineup_league` is the synthetic league the swap
-test (test_swap_test.py) and step 5 (test_swap_adjust.py) are checked on.
+Shared fixtures live here too, so no test module imports another and no test repeats another's set-up:
+    small_cfg          the design settings every simulated test uses, as a function of the keys a test adds
+    synthetic_league   a simulated league (openrapm.simulate) with persistent talent, as a function of what differs
+    synthetic_design   the design of some of a simulated league's seasons, through the one assembly (design.assemble)
+    lineup_league      the league of random lineups the swap test (test_swap_test.py) and step 5
+                       (test_swap_adjust.py) are checked on
+    network_blocked    the error a blocked connection raises (test_network_block.py)
+and one marker: `@pytest.mark.needs_data("stints/*_PO.parquet", ...)` skips a test unless every configured data path
+it names exists (see `data_present`), so a fresh clone with no scraped data skips it instead of failing.
 """
 import socket
 
 import numpy as np
 import pandas as pd
 import pytest
+
+from openrapm.data.config import load_config, resolve
+from openrapm.design import FEATURES, assemble, pieces_from_frames
+from openrapm.simulate import simulate
 
 _REAL = {"socket": socket.socket, "create_connection": socket.create_connection,
          "getaddrinfo": socket.getaddrinfo}
@@ -75,6 +86,69 @@ def allow_network():
     finally:
         _block()
 
+
+@pytest.fixture
+def network_blocked():
+    """The error a blocked connection raises."""
+    return NetworkBlocked
+
+
+# ------------------------------------------------------------------------------ tests that need the scraped data
+def data_present(spec: str) -> bool:
+    """Whether a configured data path exists: "<key>" or "<key>/<pattern>", the key one of config.yaml's paths.
+
+    Example: "stints/*_PO.parquet" is true when paths.stints holds a playoff stint file; "panel" when the season panel
+    exists.  Read through config.yaml (or $OPENRAPM_CONFIG), so a verification config points it elsewhere.
+    """
+    key, _, pattern = spec.partition("/")
+    base = resolve(load_config(), key)
+    return any(base.glob(pattern)) if pattern else base.exists()
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_setup(item):
+    """Skip a test marked needs_data(...) before its fixtures are built, when any path it names is missing."""
+    for marker in item.iter_markers("needs_data"):
+        missing = [spec for spec in marker.args if not data_present(spec)]
+        if missing:
+            pytest.skip(f"needs {', '.join(missing)} on disk (a key of config.yaml's paths, then a file pattern)")
+
+
+# ------------------------------------------------------------------------------ simulated leagues and their designs
+# What most simulated tests share: talent that persists from season to season and players who change teams, so a
+# season's ratings say something about the next; a stint's points from the ten impacts, the context and noise alone
+PERSISTENT_LEAGUE = dict(n_teams=8, players_per_team=10, games_per_season=60, stints_per_game=(20, 30), rho=0.85,
+                         turnover=0.3, eps_var=0.2, leak=False)
+
+
+@pytest.fixture(scope="session")
+def small_cfg():
+    """The design settings of the simulated tests as a function of the keys a test adds:
+    `small_cfg(player_unit="window")` is a new dict each call."""
+    def config(**extra) -> dict:
+        return {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500, "box_counts": FEATURES, **extra}
+    return config
+
+
+@pytest.fixture(scope="session")
+def synthetic_league():
+    """`simulate` with PERSISTENT_LEAGUE's settings, as a function of the keywords that differ:
+    `synthetic_league(n_seasons=3, seed=4)`.  Any keyword of `simulate` may be changed."""
+    def league(**changes) -> dict:
+        return simulate(**{**PERSISTENT_LEAGUE, **changes})
+    return league
+
+
+@pytest.fixture(scope="session")
+def synthetic_design(small_cfg):
+    """The design of a simulated league's `seasons` (every season when None) through the one assembly:
+    `synthetic_design(sim, [2002])`, `synthetic_design(sim, cfg=small_cfg(player_unit="window"))`."""
+    def design(sim: dict, seasons=None, cfg=None, target: str = "pts"):
+        stints, box = sim["stints"], sim["box"]
+        if seasons is not None:
+            stints, box = stints[stints.season.isin(seasons)], box[box.season.isin(seasons)]
+        return assemble(pieces_from_frames(stints, box, FEATURES), small_cfg() if cfg is None else cfg, target)
+    return design
 
 
 def _lineup_league(seed=0, teams=4, players=8, games=240, per_period=6, poss=5, noise=1.2):

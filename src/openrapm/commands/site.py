@@ -35,7 +35,7 @@ import scipy.sparse as sp
 
 from ..data.box_scores import season_box
 from ..data.config import resolve, resolve_path
-from ..data.designs import build_window
+from ..data.designs import block_design
 from ..data.ingest import raw_dir
 from ..player_types import RATES, bias_by_type, cluster_proba, describe_types, fit_mixture, per36
 from ..rapm import SeasonSums
@@ -554,7 +554,7 @@ def span_sums(seasons, cfg: dict) -> tuple[SeasonSums, dict]:
     """Each season's points design, and the normal equations of all of them in one rapm.SeasonSums."""
     sums, designs = SeasonSums(min_possessions=0.0), {}
     for season in seasons:
-        designs[season] = build_window([season], cfg, target="pts")
+        designs[season] = block_design([season], cfg, target="pts")
         sums.add(season, designs[season])
     return sums, designs
 

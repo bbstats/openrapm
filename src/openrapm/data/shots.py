@@ -18,12 +18,14 @@ other half of the block's games and padded toward 1:
 
 The rate comes from the OTHER half of the block: a possession in a half-A game is priced with the
 shooter's half-B totals, so his own makes never price the possessions he is scored on.  Playoff
-rows use the whole regular season.  Everything is padded through box_rates.py, per the owner's rule.
+games alternate A, B within a series and are priced the same way, and each half's totals count both
+phases (SHOT_PHASES; owner's ruling, 2026-09-10).  Everything is padded through box_rates.py, per the
+owner's rule.
 
 The stints carry the counts by lineup slot (design.SLOT_COUNTERS); this module turns them into
-expectations at window-build time, because the block (and therefore the other half) is a property
+expectations when the design is built, because the block (and therefore the other half) is a property
 of the training block, not of a season.  Each target is a callable `(seasons, cfg, wd_pts) ->
-(WindowData, report)`, called by `data.designs.DesignCache.block` with the block's points design.
+(Design, report)`, called by `data.designs.DesignCache.block` with the block's points design.
 
 What is used: the two defensive targets in `DEFENSE_TARGETS` (`def_three_design`) and the block shot
 totals of `player_shot_frame`.
@@ -286,7 +288,7 @@ def shooter_rates(seasons, cfg, prev: int = 0, k_fixed: dict | None = None, keep
 def expected_makes(cnt: pd.DataFrame, rates: ShooterRates, location: bool = True) -> pd.DataFrame:
     """Per row: x2pm, x3pm, xftm, and the first attempt's xpts1 and xchance1, from the slot counters.
 
-    `cnt` is WindowData.counters (the offense's slot counters, the five player ids, the row's half).
+    `cnt` is Design.counters (the offense's slot counters, the five player ids, the row's half).
     A shooter absent from the pricing half is the average shooter from his spots (ratio 1) or the
     league (flat); slot `x` (subbed out before the possession closed) is priced at the league.
     """
@@ -357,10 +359,9 @@ def align(y: np.ndarray, y_pts: np.ndarray, w: np.ndarray, season: np.ndarray, p
 
 
 def _check(wd, col: str = "fg2a_s1"):
-    """The slot counters this target needs are on the design (a design built with a `counter_cols`
-    whitelist carries only the ones its own targets asked for)."""
+    """The slot counters this target needs are on the design (stints built before the slot counters carry none)."""
     if wd.counters is None or col not in wd.counters.columns:
-        raise RuntimeError(f"the design carries no {col}; rebuild the stints (STINT_SCHEMA 4) or widen counter_cols")
+        raise RuntimeError(f"the design carries no {col}; rebuild the stints (STINT_SCHEMA 4)")
 
 
 def expected_threes(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, keep=None):

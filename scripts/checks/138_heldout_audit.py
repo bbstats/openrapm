@@ -132,8 +132,8 @@ from scipy.stats import norm
 
 from openrapm.commands.console import one_thread, use_utf8
 from openrapm.data.config import load_config, resolve
-from openrapm.data.seasons import drop_untrainable
 from openrapm.data.legacy_names import column_name, saved_models, translate_frame
+from openrapm.data.seasons import drop_untrainable
 from openrapm.data.within_folds import load_folds, read_fold
 from openrapm.features import BOX_RATES, add_features, meaning
 from openrapm.prior_shrink import fit_multipliers, multipliers_by_season

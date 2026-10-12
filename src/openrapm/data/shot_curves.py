@@ -206,7 +206,7 @@ def season_shot_rows(season: int, cfg, phase: str = "RS", min_share: float = MIN
             parts.append(shot_rows(fetch_pbp(g.game_id, cfg)))
         except OfflineFetch:
             raise                    # offline, a missing play-by-play file is a copying mistake, not a bad game
-        except Exception as e:  # noqa: BLE001  one game that cannot be read is not a curve's problem
+        except Exception as e:       # one game that cannot be read is not a curve's problem
             unreadable.append((g.game_id, repr(e)[:120]))
     if len(games) and len(parts) < float(min_share) * len(games):
         raise RuntimeError(

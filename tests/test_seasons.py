@@ -8,16 +8,14 @@ import pandas as pd
 import pytest
 
 from openrapm.data import seasons as S
-from openrapm.data.config import load_config, resolve
+from openrapm.data.config import load_config
 
 CFG = load_config()
 
 # Five tests below ask the REAL data which seasons are finished.  A fresh clone has no game logs, so
 # they skip rather than fail -- `pytest -q` passing without the scrape is a claim the README makes
 # and CI checks.  Everything else here runs against a synthetic tree and always executes.
-_GAMELOG = resolve(CFG, "raw") / "gamelog"
-HAVE_DATA = _GAMELOG.is_dir() and any(_GAMELOG.glob("*_PO.parquet"))
-needs_data = pytest.mark.skipif(not HAVE_DATA, reason="no game logs; run openrapm data ingest")
+needs_game_logs = pytest.mark.needs_data("raw/gamelog/*_PO.parquet")
 
 
 def _gamelog(champion_wins: int, teams: int = 16) -> pd.DataFrame:
@@ -88,27 +86,27 @@ def test_check_trainable_passes_a_trainable_through_unchanged():
     assert S.check_trainable(tr, CFG) is tr
 
 
-@needs_data
+@needs_game_logs
 def test_check_trainable_names_the_caller_in_its_error():
     with pytest.raises(S.LeakageError, match="the box prior"):
         S.check_trainable([S.trainable_through(CFG) + 1], CFG, "the box prior")
 
 
 # ------------------------------------------------------------------ against the real data
-@needs_data
+@needs_game_logs
 def test_the_real_cutoff_is_a_season_we_have():
     cut = S.trainable_through(CFG)
     assert int(CFG["first_season"]) <= cut <= int(CFG["last_season"])
 
 
-@needs_data
+@needs_game_logs
 def test_trainable_and_in_progress_partition_every_season():
     tr, ip = S.trainable(CFG), S.in_progress(CFG)
     assert tuple(sorted([*tr.seasons, *ip])) == S.all_seasons(CFG)
     assert not set(tr.seasons) & set(ip)
 
 
-@needs_data
+@needs_game_logs
 def test_nothing_in_progress_is_ever_trainable():
     assert all(s > S.trainable_through(CFG) for s in S.in_progress(CFG))
 
@@ -142,7 +140,7 @@ def test_a_row_is_dropped_only_for_its_own_season(tmp_path):
     assert kept.index.tolist() == [0, 1]
 
 
-@needs_data
+@needs_game_logs
 def test_the_filter_is_a_no_op_when_nothing_is_in_progress():
     """Today's case: every season on disk is finished, so the guard must not touch the panel."""
     p = _panel([1997, S.trainable_through(CFG)])

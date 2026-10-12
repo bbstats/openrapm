@@ -8,6 +8,7 @@
     openrapm folds     the within-season folds: each season rated from three quarters of its games
     openrapm site      the site's data: docs/data/ratings.json, and the bias and decomposition pages when asked
     openrapm compare   two parquet tables, value by value
+    openrapm glossary  GLOSSARY.md's table of the prior's columns, written from features.py (--check only compares)
 
 `--config FILE`, given before the command, reads another config.yaml; without it the file named by the
 environment variable OPENRAPM_CONFIG is read, else the repository's own.  `openrapm <command> --help` lists each
@@ -149,6 +150,11 @@ def _run_site(args: argparse.Namespace, cfg: dict) -> int:
 def _run_compare(args: argparse.Namespace, cfg: dict) -> int:
     from .compare import run_compare
     return run_compare(args.a, args.b, season=args.season, ignore=args.ignore, key=args.key)
+
+
+def _run_glossary(args: argparse.Namespace, cfg: dict) -> int:
+    from .glossary import run_glossary
+    return run_glossary(check=args.check)
 
 
 def _add_setting_options(parser) -> None:
@@ -318,6 +324,16 @@ def _add_compare(commands) -> None:
     compare.set_defaults(run=_run_compare)
 
 
+def _add_glossary(commands) -> None:
+    glossary = commands.add_parser(
+        "glossary", help="GLOSSARY.md's table of the prior's columns, written from features.py",
+        description="Rewrites the table between GLOSSARY.md's lines <!-- generated: features --> and <!-- end "
+                    "generated --> from features.py's catalogue; nothing else in the file changes.")
+    glossary.add_argument("--check", action="store_true",
+                          help="only compare: exit 1 when the table and features.py differ")
+    glossary.set_defaults(run=_run_glossary)
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The `openrapm` parser: the global --config, then one subcommand."""
     parser = argparse.ArgumentParser(prog="openrapm", description="OpenRAPM: one rating per NBA player per season.")
@@ -331,6 +347,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_folds(commands)
     _add_site(commands)
     _add_compare(commands)
+    _add_glossary(commands)
     return parser
 
 

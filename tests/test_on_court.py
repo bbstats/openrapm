@@ -6,12 +6,9 @@ import pytest
 import scipy.sparse as sp
 
 from openrapm.box_rates import lineups
-from openrapm.design import FEATURES, build_design
 from openrapm.features import OFF_COURT, ON_COURT
 from openrapm.on_court import offcourt_rates, on_court, oncourt_rates
 from openrapm.simulate import simulate
-
-CFG = {"gt_weight": 1.0, "margin_clip": 25, "low_poss_threshold": 500}
 
 
 def _planted(seed=0, players=40, rows=6000):
@@ -30,9 +27,9 @@ def _planted(seed=0, players=40, rows=6000):
 
 
 @pytest.fixture(scope="module")
-def season():
+def season(synthetic_design):
     sim = simulate(n_seasons=1, n_teams=6, players_per_team=10, games_per_season=40, stints_per_game=(20, 30), seed=3)
-    return build_design(sim["stints"], sim["box"], FEATURES, CFG)
+    return synthetic_design(sim)
 
 
 def test_on_court_finds_the_planted_players_and_credits_their_teammates_too():
@@ -76,9 +73,9 @@ def test_the_off_court_possessions_are_his_team_in_his_games_without_him(season)
     assert (off.off_court_def_possessions > 0).any()
 
 
-def test_two_designs_of_different_players_are_refused(season):
+def test_two_designs_of_different_players_are_refused(season, synthetic_design):
     sim = simulate(n_seasons=1, n_teams=4, players_per_team=9, games_per_season=10, stints_per_game=(10, 12), seed=4)
-    other = build_design(sim["stints"], sim["box"], FEATURES, CFG)
+    other = synthetic_design(sim)
     with pytest.raises(ValueError, match="player layout"):
         oncourt_rates(season, other)
     with pytest.raises(ValueError, match="player layout"):
