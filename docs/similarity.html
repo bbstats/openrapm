@@ -16,7 +16,15 @@
   select, input { font: inherit; padding: 4px 7px; border: 1px solid var(--line); border-radius: 5px;
                   background: transparent; color: inherit; }
   select option { background: Canvas; color: CanvasText; }
-  input[type=search] { width: 150px; } #player { max-width: 230px; }
+  .field { display: flex; align-items: center; gap: 6px; }
+  .field label { display: inline; }
+  .combo { position: relative; }
+  #player { width: 220px; }
+  #player-list { position: absolute; z-index: 10; top: 100%; left: 0; min-width: 100%; max-height: 320px;
+                 overflow-y: auto; margin: 3px 0 0; padding: 4px 0; list-style: none; background: Canvas;
+                 border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 18px rgb(0 0 0 / 0.14); }
+  #player-list li { padding: 5px 10px; white-space: nowrap; cursor: pointer; }
+  #player-list li[aria-selected="true"] { background: var(--accent); color: #fff; }
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
   .seg button { font: inherit; font-size: 13px; padding: 5px 12px; border: 0; background: transparent;
                 color: var(--muted); cursor: pointer; }
@@ -53,8 +61,13 @@
   </nav>
   <h1>Similarity</h1>
   <div class="controls">
-    <label>Find <input id="find" type="search" placeholder="player name" autocomplete="off"></label>
-    <label>Player <select id="player"></select></label>
+    <div class="field"><label for="player">Player</label>
+      <div class="combo">
+        <input id="player" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false"
+               aria-controls="player-list" placeholder="player name" autocomplete="off" spellcheck="false">
+        <ul id="player-list" role="listbox" hidden></ul>
+      </div>
+    </div>
     <label>Season <select id="season"></select></label>
     <div class="seg" role="group" aria-label="List">
       <button type="button" data-list="seasons" aria-pressed="true">Seasons</button>
@@ -84,7 +97,8 @@
   const $ = id => document.getElementById(id);
   const fold = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   const fmt = v => (v > 0 ? "+" : "") + v.toFixed(1);
-  const find = $("find"), playerSelect = $("player"), seasonSelect = $("season"), tbody = $("table").querySelector("tbody");
+  const playerInput = $("player"), playerList = $("player-list"), seasonSelect = $("season");
+  const tbody = $("table").querySelector("tbody");
   // nearest first; any other column starts high to low, and a second click on the same column flips it
   const state = { id: null, season: null, list: "seasons", sortKey: "dist", sortDir: 1 };
   const files = {};
@@ -106,8 +120,8 @@
     const count = new Map();
     named.forEach(p => count.set(p.n, (count.get(p.n) || 0) + 1));
     players = named.map(p => {
-      const s = seasonsOf.get(p.id);
-      return { id: p.id, label: count.get(p.n) > 1 ? `${p.n} (${s[0]}-${s[s.length - 1]})` : p.n };
+      const s = seasonsOf.get(p.id), label = count.get(p.n) > 1 ? `${p.n} (${s[0]}-${s[s.length - 1]})` : p.n;
+      return { id: p.id, label, key: fold(label) };
     }).sort((a, b) => a.label.localeCompare(b.label));
   }
 
@@ -117,15 +131,53 @@
   }
 
   const option = (value, text) => { const o = document.createElement("option"); o.value = value; o.textContent = text; return o; };
-  function fillPlayers() {
-    const q = fold(find.value.trim());
-    const list = q ? players.filter(p => fold(p.label).includes(q)) : players;
-    const opts = list.map(p => option(p.id, p.label));
-    const here = list.some(p => p.id === state.id);
-    if (!here) opts.unshift(option("", "—"));
-    playerSelect.replaceChildren(...opts);
-    playerSelect.value = here ? String(state.id) : "";
+
+  // the player box: typing lists the matching players under it, names that start with the text first, then names
+  // with a word that does, then names that contain it; accents ignored, so "jokic" finds Jokić
+  const MATCHES = 12;
+  let offered = [], active = -1;
+  function matching(text) {
+    const q = fold(text.trim());
+    if (!q) return [];
+    const starts = [], words = [], inside = [];
+    for (const p of players) {
+      if (p.key.startsWith(q)) starts.push(p);
+      else if (p.key.includes(" " + q)) words.push(p);
+      else if (p.key.includes(q)) inside.push(p);
+    }
+    return [...starts, ...words, ...inside].slice(0, MATCHES);
   }
+  function highlight(n) {
+    active = n;
+    [...playerList.children].forEach((li, j) => li.setAttribute("aria-selected", j === n));
+    if (n >= 0) {
+      playerInput.setAttribute("aria-activedescendant", playerList.children[n].id);
+      playerList.children[n].scrollIntoView({ block: "nearest" });
+    } else playerInput.removeAttribute("aria-activedescendant");
+  }
+  function offer(list) {
+    offered = list;
+    playerList.replaceChildren(...list.map((p, j) => {
+      const li = document.createElement("li");
+      li.id = "player-option-" + j; li.setAttribute("role", "option"); li.textContent = p.label;
+      // mousedown, not click: picking must happen before the box loses focus and closes the list
+      li.addEventListener("mousedown", e => { e.preventDefault(); choose(p); });
+      return li;
+    }));
+    playerList.hidden = !list.length;
+    playerInput.setAttribute("aria-expanded", list.length > 0);
+    highlight(list.length ? 0 : -1);
+  }
+  const close = () => offer([]);
+  const labelOf = id => (players.find(p => p.id === id) || { label: "" }).label;
+  const showPick = () => { if (document.activeElement !== playerInput) playerInput.value = labelOf(state.id); };
+  function choose(p) {
+    close();
+    playerInput.blur();
+    const seasons = seasonsOf.get(p.id);
+    pick_(p.id, seasons[seasons.length - 1]);
+  }
+
   function fillSeasons() {
     seasonSelect.replaceChildren(...[...seasonsOf.get(state.id)].reverse().map(s => option(s, s)));
     seasonSelect.value = String(state.season);
@@ -175,7 +227,7 @@
     tbody.replaceChildren(row(pool[i], "", "", true), ...rows.map(r => row(r, r.rank, r.dist.toFixed(2), false)));
     document.querySelectorAll("[data-list]").forEach(b => b.setAttribute("aria-pressed", b.dataset.list === state.list));
     $("count").textContent = rows.length + (state.list === "players" ? " players" : " player-seasons");
-    fillPlayers();
+    showPick();
     fillSeasons();
   }
 
@@ -210,12 +262,24 @@
   document.querySelectorAll("[data-list]").forEach(b => b.addEventListener("click", () => {
     if (b.dataset.list !== state.list) { state.list = b.dataset.list; writeAddress(false); render(); }
   }));
-  find.addEventListener("input", fillPlayers);
-  playerSelect.addEventListener("change", () => {
-    if (playerSelect.value === "") return;
-    const id = +playerSelect.value, seasons = seasonsOf.get(id);
-    pick_(id, seasons[seasons.length - 1]);
+  playerInput.addEventListener("focus", () => playerInput.select());
+  playerInput.addEventListener("input", () => offer(matching(playerInput.value)));
+  playerInput.addEventListener("keydown", e => {
+    if (e.key === "ArrowDown" && playerList.hidden) { offer(matching(playerInput.value)); e.preventDefault(); return; }
+    if (playerList.hidden) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      highlight((active + (e.key === "ArrowDown" ? 1 : offered.length - 1)) % offered.length);
+      e.preventDefault();
+    } else if (e.key === "Enter" && active >= 0) {
+      e.preventDefault();
+      choose(offered[active]);
+    } else if (e.key === "Escape") {
+      close();
+      playerInput.value = labelOf(state.id);
+    }
   });
+  // leaving the box without picking puts the picked player's name back
+  playerInput.addEventListener("blur", () => { close(); playerInput.value = labelOf(state.id); });
   seasonSelect.addEventListener("change", () => pick_(state.id, +seasonSelect.value));
   $("csv-view").addEventListener("click", e => { e.preventDefault(); downloadCSV(); });
   addEventListener("popstate", () => { readAddress(); render(); });
