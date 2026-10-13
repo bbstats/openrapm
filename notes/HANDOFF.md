@@ -58,7 +58,13 @@ The owner's pick after experiment 56; **adopted** (the owner: "Adopt (your data-
   `noise_fromdebut_early` + `noise_fromdebut_within`).  Against `fromdebut`: year over year 8.5819 against 8.5825,
   -0.018 (z -0.5); lineup swaps within 0.01 (defensive order +0.007, z +0.6); trade loss within noise; consensus
   0.811.  Use it as `135 --controls=noise_fromdebut` and as the size of noise for any later experiment.
-- **Experiment 57's lineup-swap cost, traced (DECISIONS.md, "Where experiment 57's lineup-swap cost comes from"):**
+- **UPDATE, same day: that cost is noise.**  Five builds of the OLD setup that differ only in fold assignment score
+  1.2287 / 1.2253 / 1.1784 / 1.2163 / 1.2301 on the prior's defensive teammate order (a standard deviation of 0.022);
+  experiment 57's 1.1974 and 1.2109 are inside that (z about -0.6).  Everything below on its attribution is retracted
+  (DECISIONS.md, "How much the prior's teammate order moves when only its training folds are regrouped").  What
+  stands: the career inputs matter for the prior's year-over-year accuracy (8.848 without them against 8.826), and
+  one build's swap-test order is not evidence at a 0.03 difference.
+- **Experiment 57's lineup-swap cost, traced (DECISIONS.md, "Where experiment 57's lineup-swap cost comes from"; RETRACTED, see above):**
   defensive order about -0.03 against the old incumbent, already in the prior (step 2); real (the old base's
   regrouping loses 0.003); not the estimated pre-1997 possessions (the season counts alone reproduce it); the
   defensive booster leans a quarter more on the career inputs (0.068 -> 0.084 of its split gain).  Left as adopted.

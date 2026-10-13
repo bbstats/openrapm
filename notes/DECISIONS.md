@@ -6053,6 +6053,47 @@ parts; no full build.**  Prior stage, the order of teammates (check 90, the old 
 - **Closed.**  Experiment 58 is not built.  Experiment 57 stays as adopted.  The two screen builds are not logged in
   the experiment table (no chain was run).
 
+## How much the prior's teammate order moves when only its training folds are regrouped (the owner, 2026-10-13: "ok go ahead"; registered before any result)
+
+Open after experiment 58's screen: experiment 57's defensive teammate order is 0.018-0.046 below the old incumbent's
+in every build on the new base, against -0.003 for the one regrouped build on the old base.  Whether that is real or
+the old incumbent's score is a favourable draw needs more than one old-base regrouping.  Three prior-only builds of the
+OLD setup (`--features box_score_and_bio`, test setting, `rate` only) with fold assignments 2, 3 and 4 (assignment 0 is
+the incumbent, 1 is `noise_regroup2`), each scored at the prior stage by check 90 against the incumbent's step-3 prior.
+**Rule, before the result:** the loss is noise-sized if at least two of the four old-setup regroupings (1 to 4) score
+-0.018 or lower on defence (-0.018 is the better of the two new-base builds' losses, fold assignments 0 and 1); it is
+real if all four are above -0.010; anything between is undecided.  A reproduction check comes first: the current code
+on the old setup must give the published step-3 prior to the last digit for a few seasons.
+
+**Result (2026-10-13, 3:50 PM).**  Reproduction: three seasons (2019-2021, 1,600 rows) rebuilt with the current code,
+difference 0.0 on the prior and the rating of both sides.  The prior's defensive teammate order (check 90 on `:prior`)
+for five builds of the old setup, differing only in fold assignment, against the incumbent's 1.2287 (assignment 0):
+
+| old setup, fold assignment | 0 (the incumbent) | 1 | 2 | 3 | 4 |
+|---|---|---|---|---|---|
+| defensive order | 1.2287 | 1.2253 (-0.003) | 1.1784 (-0.050, z -2.9) | 1.2163 (-0.012) | 1.2301 (+0.001) |
+
+- **By the registered rule: undecided** (one of the four, assignment 2, is at or below -0.018; assignment 3 at -0.012
+  is below -0.010, so not "all four above -0.010").
+- **What the spread says:** regrouping alone moves this score with a standard deviation of 0.022 (five builds, a range
+  of 0.052).  Experiment 57's two builds, 1.1974 and 1.2109 (mean 1.2042), are 0.012 below the old setup's mean
+  (1.2158), against a standard error of the difference of about 0.018 (z about -0.6).  **There is no detectable cost of
+  experiment 57 on the defensive teammate order: it is within regrouping noise.**  The incumbent is a mildly high draw
+  (second of five), not an extreme one.
+- **RETRACTED: "the loss is real", and "regrouping moves the defensive swap order by under 0.01"** (in the noise
+  control entry and in "Where experiment 57's lineup-swap cost comes from", written from one regrouped build on each
+  base).  The attributions in that entry (the season counts alone reproduce it, the possessions alone two thirds, the
+  career inputs' share of gain) each rest on one build against noise of 0.022, so they attribute nothing; the share of
+  gain (0.068 against 0.084) is a measurement of the boosters, not of a cost.  Experiment 58's screen failed anyway on
+  the other test (below).
+- **What does stand:** the prior alone, year over year, is stable under regrouping (game error 8.8252 to 8.8315 over the
+  five old-setup builds; experiment 57's 8.8258 and 8.8263), and the screen's builds without the career inputs are far
+  outside that range (8.8480, 8.8503): the career inputs carry real signal for the prior's accuracy, so experiment 58's
+  failure on that test stands.
+- **The yardstick's size:** a single build's prior-stage teammate order has noise of about 0.02 on defence (offence:
+  0.03; its five old-setup builds range from -0.052 to +0.003).  A difference of 0.03 between two single builds is
+  not evidence; compare the mean of several regroupings.
+
 ## Experiment 57: the career counted from each player's debut, not from 1997 (the owner, 2026-10-13; registered before the build)
 
 The owner's pick (question asker, 2026-10-13: "Fix 1997 career cut-off").  **The defect:** seasons played before this
@@ -6126,7 +6167,9 @@ A.C. Green 1997: seasons played before 0 -> 11, career possessions 0 -> 116,800,
   about 0.02 and, on this base, the defensive lineup-swap order by under 0.01 (against experiment 57 itself); the
   year-over-year -0.014 of experiment 57 is noise-sized.  Logged as C2 (sheet row 47).  Where its defensive swap cost
   comes from: the next entry.
-- **Where experiment 57's lineup-swap cost comes from (2026-10-13, read-only scoring plus two prior-only builds).**
+- **Where experiment 57's lineup-swap cost comes from (2026-10-13, read-only scoring plus two prior-only builds).
+  RETRACTED the same day: the cost is within regrouping noise (see "How much the prior's teammate order moves when
+  only its training folds are regrouped").**
   Scored at every stage (check 90 `name=table:prior|rating`, the order of teammates, defence, minus the old incumbent
   `nearshrink`): the prior alone -0.031 (z -2.3), step 3 -0.025, step 4 -0.017, final -0.031: **the cost is already
   in step 2**, steps 3 to 5 neither add nor remove it.  Two builds at the test setting (`scratch/2026-10-13_debut_ablation/
