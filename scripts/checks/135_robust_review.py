@@ -83,7 +83,7 @@ def parse_args(argv=None) -> argparse.Namespace:
     # noise_regroup2 (settings.PriorSettings.fold_assignment)
     parser.add_argument("--controls", default="noise_control", help="noise controls (default %(default)s)")
     # the incumbent since 2026-10-09 (experiment 46; 45 was lgb_noonc_rs)
-    parser.add_argument("--ref", default="nearshrink", help="the reference run (default %(default)s)")
+    parser.add_argument("--ref", default="fromdebut", help="the reference run (default %(default)s)")
     parser.add_argument("--refresh", default="0", type=on_off, help="1: rerun the side split (default %(default)s)")
     parser.add_argument("--out", help="outputs/<OUT>.csv (default robust_<first candidate>)")
     return parser.parse_args(argv)

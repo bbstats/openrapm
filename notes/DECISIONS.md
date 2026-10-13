@@ -6014,3 +6014,69 @@ not worse), read beside the noise control.
   untouched; its next candidate is the warm start above.
 - **NOT ADOPTED (the owner, 2026-10-13).**  The code stays, switched off (`--era-halflife 0`, the shipped feature set);
   committed on the branch `era-prior`.  Next, the owner's pick: the career counts' 1997 cut-off (experiment 57).
+
+## Experiment 57: the career counted from each player's debut, not from 1997 (the owner, 2026-10-13; registered before the build)
+
+The owner's pick (question asker, 2026-10-13: "Fix 1997 career cut-off").  **The defect:** seasons played before this
+one, career possessions before this season, age entering the league and seasons with his current team are counted
+from the roles table, which starts in 1997 (`data/roles.py`, `career_inputs`; `data/bio.py`, `season_tenure`), so every
+veteran in 1997 reads as a rookie and the counts stay short for years: A.C. Green, in the league since 1985-86 with
+eleven seasons and about 26,000 minutes behind him, reads 0 seasons played before 1996-97.  The shipped lists read
+seasons played before and career possessions before on both sides, and seasons with his current team on offence.
+
+**The fix, a data fix** (adopted on a tie by the owner's ruling for bug fixes, unless the test is worse at z +2 or
+there is a gross consensus miss):
+- `openrapm data careers` (`src/openrapm/data/careers.py`): the season totals (nba_api PlayerCareerStats, regular
+  season and playoffs) of every player the roles table first sees by 2002 who was drafted by 1995, or undrafted and
+  first seen in 1997 or at 24 or older; 490 players, cached in `data/raw/careers/`.  Their seasons before 1997 become
+  roles-table rows: regular season and playoffs added, one row per team, possessions = minutes x 1997's on-court
+  possessions per minute (3.79, both ends; the league played faster earlier, so those counts read somewhat low).
+- The season panel gains four columns counted from the debut (`features.CAREER_FROM_DEBUT`), equal to the 1997-counted
+  ones for every player who debuted in 1997 or later; `openrapm folds` rebuilds them the same way.  The feature set
+  `career_from_debut` puts each in the place of the column it replaces, so nothing else moves.
+
+**The build:** `NAME=fromdebut bash scratch/2026-10-12_era_prior/era56.sh "--features career_from_debut"`: the
+chain with its own folds for all thirty seasons and step 4 by the shipped rule on them, the incumbent's multipliers
+as a second arm, then the year-over-year test by era and at every stage, and the robust review against
+`noise_regroup2_near`.
+
+**Expected, before the build:** the ratings of 1997 to about 2005 move most (the veterans' rated rows), the rest a
+little through the prior's training rows; the 2026 top 20 barely moves (no 2026 player debuted before 1997).
+
+**The data (2026-10-13).**  The pull took 7 minutes; 407 of the 490 played before 1997: 2,182 seasons, 3.98 million
+minutes, up to 20 seasons.  The panel was rebuilt (36 s; the previous one kept as
+`outputs/season_panel_before_career_from_debut.parquet`) with every old column identical.  The players whose counts
+change play 92% of 1997's possessions, 65% of 2000's, 34% of 2003's, 11% of 2006's, 3% of 2010's and none of 2026's.
+A.C. Green 1997: seasons played before 0 -> 11, career possessions 0 -> 116,800, age entering 33 -> 22.  `pytest`
+525 passed, slow 7 (a 1998 rebuild against the stored panel added).
+
+**The build (10:23-11:14 AM; `outputs/fromdebut_driver.log`, `outputs/fromdebut_chain.log`).**
+- **Year over year: 8.5825 against 8.5827, -0.014 (z -0.4, 29 of 56): a tie.**  Looking forward +0.036 (z +0.9),
+  back -0.062 (z -1.3).  By era: 1998-2002 -0.182 (z -1.6, 7 of 10), 2003-2006 +0.027 (z +0.3), 2007-2016 +0.051
+  (z +1.2), 2017-2025 -0.009.  Stint level +0.081 (z +1.5); with each side rescaled +0.112 (z +2.1), and by era
+  2003-2006 +0.32 (z +2.1), 2007-2016 +0.13 (z +2.1).  On the incumbent's multipliers -0.012 (z -0.4).  Every stage
+  a tie: the prior alone -0.005, step 3 +0.040, step 4 +0.009.
+- **Lineup swaps: the defensive order of teammates is worse, -0.031 (z -3.1, 17 of 56), by about the same in every
+  era** (rated 1997-2002 -0.031, 2003-2006 -0.039, 2007-2016 -0.029, 2017-2026 -0.030), so through what the prior
+  learned from the corrected training rows, not the veterans' own rows; the noise control loses -0.010 (z -0.8).
+  Net order a tie (-0.009, z -0.6); offence a tie.  The robust review: year-over-year team-game slices 7 better / 4
+  worse (the control 7 / 4); lineup-swap slices 5 clearly worse (the control 2).
+- Trade loss a tie (offence -0.0007 z -1.6, defence +0.0003 z +0.8); consensus 0.850 / 0.783 / 0.809 against 0.850 /
+  0.780 / 0.802; the held-out audit's error +0.047 (z +1.0; the noise control +0.070).
+- 2026 top 20: the same twenty players.  Jokic 5th -> 2nd (+0.33), Antetokounmpo 2nd -> 5th (-0.18), Edey 9th -> 12th
+  (-0.67, defence -0.64), Paul Reed -0.46, Clingan -0.38; a median move of 0.14 per 100 in 2026 (1997-2002: 0.20).
+- The old veterans rise: Hakeem Olajuwon 2000 +2.57, Patrick Ewing 1999 +2.28, Mark Jackson 2000 +1.62, Terry Porter
+  2000 +1.48; players the 1997 count read as newer than they were fall: Grant Hill 1999 -1.63 (in his fifth season,
+  read as his third), Mitch Richmond 1998 -1.51.
+- **Reading:** by the rule registered for it (a data fix, adopted on a tie unless worse at z +2 or a gross consensus
+  miss) it is adopted.  Against it: two ordering checks lean worse -- the lineup-swap test's defensive order in every
+  era (three times the noise control) and the stint-level order with each side rescaled.  Verdict pending the owner.
+- **ADOPTED 2026-10-13 (the owner: "Adopt (your data-fix rule)"; recommended against for the lineup-swap test).**  The
+  shipped settings: `PriorSettings.feature_set` `career_from_debut`; step 4's folds `fromdebut_early,fromdebut_within`
+  (`ShrinkSettings.folds_tag`, the rule unchanged).  The incumbent for scoring is
+  `outputs/season_ratings_fromdebut.parquet` (8.5825): `experiment_chain.sh` INC_NAME, INC_FOLDS, AUDIT_REF and
+  BASE_FLAGS, 135's --ref.  `openrapm data careers` is a step before `openrapm data panel`.  The simulated league of
+  the tutorial carries the debut columns as copies (every simulated career begins inside it); its golden numbers are
+  unchanged.  No noise control on this base yet: `noise_regroup2_near` was built on experiment 46's prior.  The
+  product table was rebuilt (`openrapm build`; the previous ones kept as `season_ratings_product*_before_fromdebut`);
+  not published.

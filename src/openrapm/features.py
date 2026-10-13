@@ -44,7 +44,8 @@ from dataclasses import dataclass
 import pandas as pd
 
 __all__ = ["Feature", "BOX_RATES", "UNCENTRED_RATES", "ROLE", "CLOSENESS", "SHOT_TOTALS", "SHOT_LEAGUE", "CAREER",
-           "BIO", "ON_COURT", "OFF_COURT", "ON_MINUS_OFF", "PLAYOFF_SHARE", "EVENT_RATES", "DERIVED", "RATIOS",
+           "BIO", "ON_COURT", "OFF_COURT", "ON_MINUS_OFF", "PLAYOFF_SHARE", "EVENT_RATES", "CAREER_FROM_DEBUT",
+           "FROM_DEBUT", "DERIVED", "RATIOS",
            "VS_LEAGUE", "SHOTQ", "SHOTQ_PADS", "PRIOR_FEATURES", "PANEL_INPUTS", "PANEL_KEYS", "SEASON_PANEL_COLUMNS",
            "ROW_FEATURES", "SHIPPED", "REBOUND_PARTS", "STEAL_PARTS", "POINTS_PARTS", "THREE_POINT_PARTS",
            "FEATURE_SETS", "CATALOGUE", "add_features", "add_shotq", "meaning", "glossary_markdown"]
@@ -104,6 +105,14 @@ EVENT_RATES = ["def_rebounds_of_free_throws_per100", "def_rebounds_of_threes_per
                "offensive_fouls_per100", "stolen_turnovers_per100",
                "assists_to_rim_per100", "assists_to_mid_range_per100", "assists_to_corner_threes_per100",
                "assists_to_above_break_threes_per100"]
+# The career columns counted from each player's debut (experiment 57): CAREER's three and seasons_with_team with his
+# seasons before 1997 added from his career totals (data/careers.py), where the columns above start counting in 1997.
+# For a player who debuted in 1997 or later they equal the 1997-counted ones.  Example: A.C. Green's 1997 row reads
+# seasons_before 0 and seasons_before_from_debut 11.
+CAREER_FROM_DEBUT = ["seasons_before_from_debut", "career_possessions_before_from_debut_k", "age_at_debut",
+                     "seasons_with_team_from_debut"]
+# {the column counted from 1997: the same counted from the debut}
+FROM_DEBUT = dict(zip([*CAREER, "seasons_with_team"], CAREER_FROM_DEBUT))
 (DEF_REBOUNDS_OF_FREE_THROWS, DEF_REBOUNDS_OF_THREES, DEF_REBOUNDS_OF_RIM_TWOS, DEF_REBOUNDS_OF_OUTSIDE_TWOS,
  BAD_PASS_STEALS, LOST_BALL_STEALS, ASSISTED_POINTS, UNASSISTED_POINTS, CORNER_THREES, ABOVE_BREAK_THREES,
  ASSISTED_THREES, UNASSISTED_THREES, RUSSELL_BLOCKS, RIM_BLOCKS, MID_RANGE_BLOCKS, THREE_POINT_BLOCKS,
@@ -162,14 +171,16 @@ SHOTQ_PADS = {"two_point_expected_pct": 50.0, "three_point_expected_pct": 50.0, 
               "points_per_shot_over_expected": 300.0}
 SHOTQ = list(SHOTQ_PADS)
 
-# Every input the prior could read (85): the rates, the role, every derived column, career, body, on-court, the
-# play-by-play parts, and the ratios against the league.  scripts/checks/95_miss_by_group.py and commands/within_season.py (its PLAYER_COLUMNS) report on
-# all of them.
-PRIOR_FEATURES = [*BOX_RATES, *ROLE, *DERIVED, *RATIOS, *SHOTQ, *CAREER, *BIO, *ON_COURT, *EVENT_RATES, *VS_LEAGUE]
+# Every input the prior could read (89): the rates, the role, every derived column, career, body, on-court, the
+# play-by-play parts, the ratios against the league, and the career counted from the debut.
+# scripts/checks/95_miss_by_group.py and commands/within_season.py (its PLAYER_COLUMNS) report on all of them.
+PRIOR_FEATURES = [*BOX_RATES, *ROLE, *DERIVED, *RATIOS, *SHOTQ, *CAREER, *BIO, *ON_COURT, *EVENT_RATES, *VS_LEAGUE,
+                  *CAREER_FROM_DEBUT]
 # The panel columns averaged into a multi-season training row, before anything is derived from them; the play-by-play
-# parts came last (2026-10-12), after every column the published ratings were built from.
+# parts came after every column the published ratings were built from (2026-10-12), the career counted from the debut
+# after them (2026-10-13).
 PANEL_INPUTS = [*BOX_RATES, *ROLE, *CLOSENESS, *UNCENTRED_RATES, *SHOT_TOTALS, *SHOT_LEAGUE, *CAREER, *BIO,
-                *ON_COURT, *OFF_COURT, *ON_MINUS_OFF, *PLAYOFF_SHARE, *EVENT_RATES]
+                *ON_COURT, *OFF_COURT, *ON_MINUS_OFF, *PLAYOFF_SHARE, *EVENT_RATES, *CAREER_FROM_DEBUT]
 # The season panel's columns, in order: who and when, the possessions behind the row (his offensive possessions
 # on an offence row, defensive on a defence row), then the inputs.
 PANEL_KEYS = ["side", "player_id", "season"]
@@ -217,6 +228,8 @@ FEATURE_SETS = {
     # experiment 56: every shipped ratio against the league's value of it, in the ratio's place
     "ratios_vs_league": {side: [f"{name}_vs_league" if name in RATIOS else name for name in SHIPPED[side]]
                          for side in ("O", "D")},
+    # experiment 57: every shipped career count counted from the debut, in its place
+    "career_from_debut": {side: [FROM_DEBUT.get(name, name) for name in SHIPPED[side]] for side in ("O", "D")},
 }
 
 
@@ -254,7 +267,8 @@ def _add_ratios_vs_league(frame: pd.DataFrame) -> None:
     """Each `VS_LEAGUE` column, from the uncentred rates and the league's (`<rate>_uncentred - <rate>`):
 
         L          = (numerator of the league's rates) / (denominator of the league's rates)
-        vs league  = (numerator + pad x L) / (denominator + pad) - L  =  (numerator - L x denominator) / (denominator + pad)
+        vs league  = (numerator + pad x L) / (denominator + pad) - L
+                   = (numerator - L x denominator) / (denominator + pad)
 
     Example: offensive-rebound share with 3.0 offensive and 9.0 defensive rebounds per 100 in a league at 2.5 and 7.5:
     L = 2.5 / 10.0 = 0.25 and (3.0 - 0.25 x 12.0) / (12.0 + 3) = 0.0, his share being the league's.
@@ -421,6 +435,13 @@ _PANEL_ROWS = [
     ("draft_pick", "draft position", "pick", "level", "body"),
     ("seasons_with_team", "seasons with his current team", "seasons", "level", "career"),
     ("teams_this_season", "teams he played for this season", "teams", "level", "career"),
+    ("seasons_before_from_debut", "seasons played before this one, counted from his debut (before 1997 too)",
+     "seasons", "level", "career"),
+    ("career_possessions_before_from_debut_k", "career possessions before this season, counted from his debut "
+     "(before 1997 from his minutes)", "thousands", "level", "career"),
+    ("age_at_debut", "age in his first NBA season (before 1997 too)", "years", "level", "career"),
+    ("seasons_with_team_from_debut", "seasons with his current team, counted from his debut (before 1997 too)",
+     "seasons", "level", "career"),
     ("on_court_scored_per100", "team points scored per 100, him on court", "per 100 possessions", "centred",
      "on court"),
     ("on_court_allowed_per100", "team points allowed per 100, him on court", "per 100 possessions", "centred",

@@ -41,6 +41,26 @@ The work happens on feature branches off `main`; the live site is served from `d
 **464 passed, 6 deselected (the slow tests, `pytest -m slow`), 1 xfailed, ~60 s** with the scraped data
 (2026-10-12; the LaMelo test at the bottom of this file passes on the current ratings).
 
+## START HERE (2026-10-13): experiment 57, the career counted from each player's debut -- ADOPTED, not published
+
+The owner's pick after experiment 56; **adopted** (the owner: "Adopt (your data-fix rule)").  Uncommitted on the branch
+`era-prior` (after e2a351b); DECISIONS.md "Experiment 57" has every number.
+- **Now shipped (settings):** the feature set `career_from_debut`; step 4's folds `fromdebut_early,fromdebut_within`.
+  **The incumbent for scoring is `outputs/season_ratings_fromdebut.parquet` (8.5825)**; `experiment_chain.sh` and
+  135 default to it.  The data order is now ingest, stints, events, **careers**, panel.
+- **Product table rebuilt** with `openrapm build` (previous: `outputs/season_ratings_product*_before_fromdebut`);
+  **not published**: `openrapm site --bias --decomposition`, commit, push, on the owner's word.
+- **No noise control on this base yet:** the next experiment's robust review needs one (`--fold-assignment 1` with
+  its own folds, as `noise_regroup2_near` was for experiment 46's prior).
+- **Built:** `openrapm data careers` (`src/openrapm/data/careers.py`; 490 careers cached in `data/raw/careers/`, the
+  rows before 1997 in `data/cache/careers_before.parquet`); four panel columns counted from the debut
+  (`features.CAREER_FROM_DEBUT`), the feature set `career_from_debut`; the panel rebuilt with every old column
+  identical (the previous one is `outputs/season_panel_before_career_from_debut.parquet`).  `pytest` 525, slow 7.
+- **Build (`fromdebut`):** year over year 8.5825 against 8.5827, z -0.4: a tie (1998-2002 -0.18, z -1.6); consensus
+  0.809 against 0.802; the 2026 top 20 the same players.  Against it: the lineup-swap test's defensive order is worse
+  in every era (z -3.1; the noise control z -0.8).  Old veterans rise (Olajuwon 2000 +2.57).
+- **The owner's call (2026-10-13): adopted** on the data-fix rule, over the swap test (recommended against).
+
 ## START HERE (2026-10-13): the Similarity tab -- nearest neighbours, published
 
 The owner's tab: each player-season's nearest player-seasons of other players, by the distance between their 34

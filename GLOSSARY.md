@@ -322,6 +322,10 @@ and `row_seasons`; the rest are candidates an experiment may try (the on-court c
 | `draft_pick` | draft position | panel column | pick | level |
 | `seasons_with_team` | seasons with his current team | panel column | seasons | level |
 | `teams_this_season` | teams he played for this season | panel column | teams | level |
+| `seasons_before_from_debut` | seasons played before this one, counted from his debut (before 1997 too) | panel column | seasons | level |
+| `career_possessions_before_from_debut_k` | career possessions before this season, counted from his debut (before 1997 from his minutes) | panel column | thousands | level |
+| `age_at_debut` | age in his first NBA season (before 1997 too) | panel column | years | level |
+| `seasons_with_team_from_debut` | seasons with his current team, counted from his debut (before 1997 too) | panel column | seasons | level |
 | `on_court_scored_per100` | team points scored per 100, him on court | panel column | per 100 possessions | centred |
 | `on_court_allowed_per100` | team points allowed per 100, him on court | panel column | per 100 possessions | centred |
 | `on_court_off_possessions` | offensive possessions on court | panel column | possessions | level |

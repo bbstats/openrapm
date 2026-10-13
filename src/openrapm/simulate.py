@@ -292,7 +292,8 @@ def _box_rows(rng, league: _League, state: _Season, game: _Game) -> list:
 HEIGHT_MEAN, HEIGHT_SD = 79.0, 3.3
 WEIGHT_AT_MEAN_HEIGHT, POUNDS_PER_INCH, WEIGHT_SD = 215.0, 6.5, 12.0
 PROFILE_COLUMNS = ["team_possession_share", "games_started_share", "seasons_before", "career_possessions_before_k",
-                   "seasons_with_team", "height_in", "weight_lb"]
+                   "seasons_with_team", "height_in", "weight_lb", "seasons_before_from_debut",
+                   "career_possessions_before_from_debut_k", "seasons_with_team_from_debut"]
 
 
 def player_profiles(sim: dict, seed: int = 0) -> pd.DataFrame:
@@ -307,6 +308,9 @@ def player_profiles(sim: dict, seed: int = 0) -> pd.DataFrame:
                                      first simulated season, so everyone is a rookie in it)
         career_possessions_before_k  his offensive possessions in those seasons, in thousands
         seasons_with_team            the seasons in a row he has been with this season's team, this one included
+
+    and the same three counted from his debut (features.CAREER_FROM_DEBUT), which the shipped prior reads in their
+    places: every simulated career begins inside the league, so they are copies.
 
     Drawn once per player from a generator of their own, numpy's default_rng([seed, 1]), so `simulate`'s draws are
     untouched, and unrelated to his impact:
@@ -327,6 +331,10 @@ def player_profiles(sim: dict, seed: int = 0) -> pd.DataFrame:
     seasons["seasons_before"] = per_player.cumcount().astype(float)
     seasons["career_possessions_before_k"] = (per_player.possessions.cumsum() - seasons.possessions) / 1000.0
     seasons["seasons_with_team"] = _seasons_in_a_row(seasons)
+    for counted, from_debut in (("seasons_before", "seasons_before_from_debut"),
+                                ("career_possessions_before_k", "career_possessions_before_from_debut_k"),
+                                ("seasons_with_team", "seasons_with_team_from_debut")):
+        seasons[from_debut] = seasons[counted]
     return seasons.merge(_bodies(seasons.player_id.unique(), seed), on="player_id")[
         ["player_id", "season", *PROFILE_COLUMNS]]
 

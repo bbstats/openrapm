@@ -54,7 +54,9 @@ def test_the_stat_splits_lists_append_their_parts_where_the_box_count_is_read():
         "stepwise_late": {"O": SHIPPED_O + ["corner_threes_attempted_per100"],
                           "D": SHIPPED_D + ["free_throws_made_per100"]},
         "ratios_vs_league": {"O": [f"{name}_vs_league" if name in feat.RATIOS else name for name in SHIPPED_O],
-                             "D": [f"{name}_vs_league" if name in feat.RATIOS else name for name in SHIPPED_D]}}
+                             "D": [f"{name}_vs_league" if name in feat.RATIOS else name for name in SHIPPED_D]},
+        "career_from_debut": {"O": [feat.FROM_DEBUT.get(name, name) for name in SHIPPED_O],
+                              "D": [feat.FROM_DEBUT.get(name, name) for name in SHIPPED_D]}}
     wider = ["russell_blocks_per100", "rim_blocks_per100", "mid_range_blocks_per100", "three_point_blocks_per100",
              "offensive_fouls_per100", "stolen_turnovers_per100", "assists_to_rim_per100",
              "assists_to_mid_range_per100", "assists_to_corner_threes_per100", "assists_to_above_break_threes_per100"]
@@ -181,15 +183,28 @@ def test_every_name_the_prior_can_read_is_in_the_catalogue():
     assert not wanted - set(names)
     assert {f.scale for f in feat.CATALOGUE} <= {"centred", "level"}
     assert all(f.meaning and f.formula and f.unit and f.group for f in feat.CATALOGUE)
-    assert len(feat.PRIOR_FEATURES) == len(set(feat.PRIOR_FEATURES)) == 85
+    assert len(feat.PRIOR_FEATURES) == len(set(feat.PRIOR_FEATURES)) == 89
 
 
 def test_every_season_panel_column_but_the_keys_is_in_the_catalogue():
     names = {f.name for f in feat.CATALOGUE}
     assert feat.SEASON_PANEL_COLUMNS[:3] == feat.PANEL_KEYS == ["side", "player_id", "season"]
     assert not set(feat.SEASON_PANEL_COLUMNS[3:]) - names
-    assert len(feat.SEASON_PANEL_COLUMNS) == len(set(feat.SEASON_PANEL_COLUMNS)) == 86
-    assert feat.SEASON_PANEL_COLUMNS[-22:] == feat.EVENT_RATES, "the play-by-play parts come after every older column"
+    assert len(feat.SEASON_PANEL_COLUMNS) == len(set(feat.SEASON_PANEL_COLUMNS)) == 90
+    assert feat.SEASON_PANEL_COLUMNS[-26:-4] == feat.EVENT_RATES, "the play-by-play parts come after every older column"
+    assert feat.SEASON_PANEL_COLUMNS[-4:] == feat.CAREER_FROM_DEBUT, "and the career from the debut after them"
+
+
+def test_the_career_from_the_debut_replaces_each_shipped_career_count_in_its_place():
+    """Experiment 57: the three career counts the shipped lists read, each counted from the debut instead."""
+    assert feat.FROM_DEBUT == {"seasons_before": "seasons_before_from_debut",
+                               "career_possessions_before_k": "career_possessions_before_from_debut_k",
+                               "age_at_first_season": "age_at_debut",
+                               "seasons_with_team": "seasons_with_team_from_debut"}
+    for side in ("O", "D"):
+        changed = [(old, new) for old, new in zip(feat.SHIPPED[side], feat.FEATURE_SETS["career_from_debut"][side])
+                   if old != new]
+        assert changed and all(feat.FROM_DEBUT[old] == new for old, new in changed)
 
 
 def test_the_audit_groups_and_the_swap_features_are_catalogue_names():

@@ -143,8 +143,10 @@ five in one process (`src/openrapm/commands/build.py`). Each command writes its 
   player's prior comes from the booster fitted without his fold, so it cannot have learned his box score
   and returned his own label. The booster is then asked about the rated season's own box score.
 - **Settings:**
-  - the inputs: `box_score_and_bio`, 17 on offence and 14 on defence (`features.SHIPPED`), without the
-    on-court plus-minus (experiment 45);
+  - the inputs: `career_from_debut`, 17 on offence and 14 on defence: `box_score_and_bio` (`features.SHIPPED`,
+    without the on-court plus-minus, experiment 45) with seasons played before, career possessions before and
+    seasons with his current team counted from each player's debut, his seasons before 1997 included
+    (`data/careers.py`, `openrapm data careers`; experiment 57);
   - chunk sizes 1, 2 and 3 (experiment 3);
   - five player folds ("The SPM memorises long-career stars, and the out-of-player prior removes it",
     2026-09-14);

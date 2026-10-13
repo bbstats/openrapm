@@ -61,24 +61,28 @@ def test_a_row_without_possessions_takes_the_whole_panels_score_state():
 
 
 @pytest.mark.slow
-@pytest.mark.needs_data("panel", "stints/2026_RS.parquet")
-def test_a_season_rebuilt_from_all_its_games_is_the_stored_panel():
-    """2026 from all of its games, every column against the stored panel (config paths.panel, by default
-    outputs/season_panel.parquet).  Exact, except the off-court columns: they sum through a dense matrix product
-    (on_court.py), whose last digits depend on how many threads the linear-algebra library uses; the stored panel
-    was built with the machine's twelve, the commands pin one (a few rows differ by under 1e-13)."""
+@pytest.mark.parametrize("season", [2026, 1998])
+@pytest.mark.needs_data("panel", "stints/2026_RS.parquet", "stints/1998_RS.parquet")
+def test_a_season_rebuilt_from_all_its_games_is_the_stored_panel(season):
+    """A season from all of its games, every column against the stored panel (config paths.panel, by default
+    outputs/season_panel.parquet); 1998 reads veterans' seasons before 1997 (data/careers.py).  Exact, except the
+    off-court columns: they sum through a dense matrix product (on_court.py), whose last digits depend on how many
+    threads the linear-algebra library uses; the stored panel was built with the machine's twelve, the commands pin
+    one (a few rows differ by under 1e-13)."""
+    from openrapm.data.careers import careers_before
     from openrapm.data.config import load_config, resolve
     from openrapm.data.designs import DesignCache
     from openrapm.data.roles import build_roles, player_season_inputs
     cfg = load_config()
     roles = build_roles(cfg)
-    sources = panel_module.SeasonSources(panel_module.SeasonTables(2026, cfg), roles,
-                                         player_season_inputs(roles, cap=panel_module.share_cap(cfg)))
+    sources = panel_module.SeasonSources(panel_module.SeasonTables(season, cfg), roles,
+                                         player_season_inputs(roles, cap=panel_module.share_cap(cfg)),
+                                         careers_before(cfg, roles))
     designs = DesignCache(cfg)
-    whole = {target: designs.season(2026, target) for target in panel_module.PANEL_TARGETS}
-    rows = panel_module.season_panel(2026, cfg, whole, sources).rows
+    whole = {target: designs.season(season, target) for target in panel_module.PANEL_TARGETS}
+    rows = panel_module.season_panel(season, cfg, whole, sources).rows
     stored = pd.read_parquet(resolve(cfg, "panel"))
-    stored = stored[stored.season == 2026].reset_index(drop=True)
+    stored = stored[stored.season == season].reset_index(drop=True)
     assert list(rows.columns) == SEASON_PANEL_COLUMNS and rows.dtypes.equals(stored.dtypes)
     assert rows[["side", "player_id", "season"]].equals(stored[["side", "player_id", "season"]])
     for column in SEASON_PANEL_COLUMNS[3:]:

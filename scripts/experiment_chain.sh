@@ -19,18 +19,19 @@ LOG=outputs/${NAME}_chain.log
 # without the on-court inputs), with its own prior-shrink multipliers fitted on its own within-season folds
 # (weightfix_within).  Its rate settings ride in BASE_FLAGS, BEFORE the experiment's own EXTRA flags, because the
 # command line keeps the LAST occurrence of a flag: an experiment's --features or --booster-params wins.
-# INC_FOLDS: the incumbent's folds.  Since 2026-10-12 the incumbent is experiment 55 (nearshrink): experiment 46's
+# INC_FOLDS: the incumbent's folds.  From 2026-10-12 the incumbent was experiment 55 (nearshrink): experiment 46's
 # ratings with step 4's multipliers from the 8 fold seasons nearest each season, over its folds for all thirty
-# seasons (the shipped default of `openrapm shrink`).  The held-out audit pairs a candidate with experiment 46's
-# 2017-2026 folds (AUDIT_REF): the fold ratings come before step 4, so they are the same.  A candidate with
-# OWN_FOLDS=1 has folds for 2017-2026 only; its step 4 then reads the 8 nearest of those.  EARLY_FOLDS=1 (with
-# OWN_FOLDS=1; experiment 56) also builds its 1997-2016 folds (NAME_early), so its step 4 is the incumbent's rule on
-# its own folds for all thirty seasons.
-INC_NAME=${INC_NAME:-nearshrink}
-INC_FOLDS=${INC_FOLDS:-weightfix_early,weightfix_within}
-AUDIT_REF=${AUDIT_REF:-weightfix_within}
+# seasons (the shipped default of `openrapm shrink`).  Since 2026-10-13 it is experiment 57 (fromdebut): the career
+# inputs counted from each player's debut (--features career_from_debut), its own folds for all thirty seasons and
+# step 4 by the same rule on them.  The held-out audit pairs a candidate with the incumbent's 2017-2026 folds
+# (AUDIT_REF).  A candidate with OWN_FOLDS=1 has folds for 2017-2026 only; its step 4 then reads the 8 nearest of
+# those.  EARLY_FOLDS=1 (with OWN_FOLDS=1; experiment 56) also builds its 1997-2016 folds (NAME_early), so its step 4
+# is the incumbent's rule on its own folds for all thirty seasons.
+INC_NAME=${INC_NAME:-fromdebut}
+INC_FOLDS=${INC_FOLDS:-fromdebut_early,fromdebut_within}
+AUDIT_REF=${AUDIT_REF:-fromdebut_within}
 INC=outputs/season_ratings_${INC_NAME}.parquet
-BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1 --features box_score_and_bio}
+BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1 --features career_from_debut}
 [ -n "$NAME" ] && [ -n "$TARGET" ] || { echo "usage: scripts/experiment_chain.sh NAME TARGET [EXTRA RATE FLAGS]"; exit 1; }
 # Every check the chain calls, looked for BEFORE the build: a missing one would otherwise surface only hours later.
 READINGS="63_yoy 64_consensus_report 66_compare 70_tradeset 73_tradeloss 88_yoy_by_player 90_swap_test 138_heldout_audit"

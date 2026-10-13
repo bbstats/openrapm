@@ -115,6 +115,14 @@ def test_data_events_reads_seasons_and_holds_the_parts_to_the_box_score():
     assert check["offensive share of fouls"] == 0.1
 
 
+def test_data_careers_reads_its_pacing_and_force():
+    """`openrapm data careers` (experiment 57): one request at a time, --delay seconds apart."""
+    from openrapm.commands import data
+    args = _parse("data", "careers")
+    assert (args.delay, args.force, args.run) == (0.6, False, data.run_careers)
+    assert _parse("data", "careers", "--delay", "1.5", "--force").delay == 1.5
+
+
 @pytest.mark.parametrize("command", ["ingest", "stints"])
 def test_data_ingest_and_stints_read_seasons_and_phases_as_the_old_scripts_did(command):
     """`openrapm data ingest 1997 2026 RS,PO` is what scripts/01_ingest.py 1997 2026 RS,PO was (02 for stints)."""

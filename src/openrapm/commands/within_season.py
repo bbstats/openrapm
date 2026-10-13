@@ -44,6 +44,7 @@ import pandas as pd
 
 from .. import box_prior, prior_rapm, trade_set
 from ..data import legacy_names
+from ..data.careers import careers_before
 from ..data.config import resolve
 from ..data.designs import DesignCache
 from ..data.panel import (
@@ -519,6 +520,7 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
     panel = trainable_panel(cfg)
     roles = pd.read_parquet(roles_path(cfg))
     inputs = player_season_inputs(roles, cap=share_cap(cfg))
+    debut = careers_before(cfg, roles)            # the seasons before 1997, as the season panel read them
     designs = DesignCache(cfg)
     print(f"models {models} ({meta.get('argv')}); seasons {seasons[0]}-{seasons[-1]}; {REPEATS} repeats of "
           f"{N_FOLDS} folds; writing {out_dir}", flush=True)
@@ -526,7 +528,8 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
     for season in seasons:
         saved = season_models(saved_all, season)
         full = {target: designs.season(season, target) for target in WORLD_TARGETS}
-        run = SeasonRun(season, cfg, full, SeasonSources(SeasonTables(season, cfg), roles, inputs), saved, out_dir)
+        run = SeasonRun(season, cfg, full, SeasonSources(SeasonTables(season, cfg), roles, inputs, debut), saved,
+                        out_dir)
         run_season(run, base_table, panel, reproduce_only, started)
         designs.clear()
     gather(out_dir)

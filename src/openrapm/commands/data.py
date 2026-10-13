@@ -4,14 +4,16 @@
     openrapm data stints FIRST [LAST] [PHASES]    the stints from the cached play-by-play, and each season's checks
     openrapm data events [FIRST] [LAST]           the play-by-play parts of four box counts, per game, player and
                                                   phase (paths.event_counts), each season held against its box score
+    openrapm data careers                         the seasons before the first one of every veteran the roles table
+                                                  sees (data/careers.py), from stats.nba.com, cached
     openrapm data panel                           the season panel (paths.panel) from the stints, box scores, roles,
-                                                  bio feed and event counts
+                                                  bio feed, event counts and careers
     openrapm data panel --migrate-from FILE       the season panel from one written under the names used before
                                                   2026-10-11 (done once, on 2026-10-11)
 
 Example, from nothing: `openrapm data ingest 1997 2026 RS,PO` (days, resumable: every file is cached), then
-`openrapm data stints 1997 2026 RS,PO`, then `openrapm data events 1997 2026` (minutes), then `openrapm data panel`
-(about a minute).
+`openrapm data stints 1997 2026 RS,PO`, then `openrapm data events 1997 2026` (minutes), then `openrapm data careers`
+(about 13 minutes, resumable), then `openrapm data panel` (about a minute).
 
 Seasons are named by the year they end (2026 = 2025-26); phases are RS (regular season) and PO (playoffs).  numpy
 and the data layer are imported inside each command, after the command line has pinned the threads (cli.py).
@@ -132,6 +134,24 @@ def run_events(args: argparse.Namespace, cfg: dict) -> int:
     return 0
 
 
+def run_careers(args: argparse.Namespace, cfg: dict) -> int:
+    """The careers before the first season: every career data/careers.py names fetched (a cached one is read), then
+    the rows before the first season built again and cached, and what they add."""
+    from ..data.careers import careers_before, draft_years, players_to_pull, pull_careers
+    from ..data.ingest import raw_dir
+    from ..data.roles import build_roles
+    first = int(cfg["first_season"])
+    roles = build_roles(cfg)
+    players = players_to_pull(roles, draft_years(raw_dir(cfg) / "bio"), first)
+    fetched = pull_careers(cfg, players, delay=args.delay, force=args.force)
+    rows = careers_before(cfg, roles, force=True)
+    seasons = rows.groupby("player_id").season.nunique()
+    print(f"{len(players)} players may have played before {first} ({fetched} careers fetched now); {len(seasons)} did: "
+          f"{int(seasons.sum())} seasons, {rows.minutes.sum() / 1e6:.2f} million minutes, the most "
+          f"{int(seasons.max())} seasons", flush=True)
+    return 0
+
+
 def _migrate(args: argparse.Namespace, cfg: dict) -> None:
     from ..data.panel import migrate_panel
     target, panel, dropped = migrate_panel(Path(args.migrate_from), cfg)
@@ -206,11 +226,25 @@ def _add_events(steps) -> None:
     events.set_defaults(run=run_events)
 
 
+def _add_careers(steps) -> None:
+    careers = steps.add_parser(
+        "careers", help="the seasons before the first one of every veteran, from stats.nba.com, cached",
+        description="Fetches the season totals of every player the roles table first sees by 2002 who was drafted by "
+                    "1995 or not drafted (src/openrapm/data/careers.py) into paths.raw/careers, one file per player "
+                    "(a file already there is not fetched again), then writes the seasons before the first one as "
+                    "roles-table rows to paths.cache/careers_before.parquet, which `openrapm data panel` reads for "
+                    "the career columns counted from the debut.  With OPENRAPM_OFFLINE=1 a missing file stops the run.")
+    careers.add_argument("--delay", type=float, default=0.6, help="seconds between requests (default %(default)s)")
+    careers.add_argument("--force", action="store_true", help="fetch every career again")
+    careers.set_defaults(run=run_careers)
+
+
 def _add_panel(steps) -> None:
     panel = steps.add_parser(
         "panel", help="the season panel (paths.panel, outputs/season_panel.parquet)",
         description="Builds the season panel, one row per player, season and side, from the stints, box scores, "
-                    "roles table and bio feed (src/openrapm/data/panel.py), every season from all of its games, and "
+                    "roles table, bio feed and careers (src/openrapm/data/panel.py), every season from all of its "
+                    "games, and "
                     "writes it to paths.panel.  An existing panel is kept unless --force.  With --migrate-from it "
                     "writes the panel instead from one built under the names used before 2026-10-11: every column "
                     "renamed, the columns no reader uses dropped, the rows in their order, every value unchanged.")
@@ -221,12 +255,13 @@ def _add_panel(steps) -> None:
 
 
 def add_data(commands) -> None:
-    """`openrapm data` and its four steps."""
+    """`openrapm data` and its five steps."""
     data = commands.add_parser("data", help="the data the ratings are built from: raw files, stints, season panel",
                                description="Builds the data the five steps read: `ingest`, then `stints`, then "
-                                           "`events`, then `panel`.")
+                                           "`events`, then `careers`, then `panel`.")
     steps = data.add_subparsers(dest="data_command", required=True, metavar="DATA")
     _add_ingest(steps)
     _add_stints(steps)
     _add_events(steps)
+    _add_careers(steps)
     _add_panel(steps)

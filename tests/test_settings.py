@@ -27,7 +27,7 @@ def test_the_targets_prior_and_ridge():
                                                                   "points_with_expected_opponent_threes")
     assert PRODUCT.prior.chunk_sizes == (1, 2, 3)
     assert PRODUCT.prior.n_folds == 5 and PRODUCT.prior.fold_assignment == 0
-    assert PRODUCT.prior.feature_set == "box_score_and_bio"
+    assert PRODUCT.prior.feature_set == "career_from_debut"       # experiment 57, adopted 2026-10-13
     assert PRODUCT.prior.booster_file == "params/booster_params_lgb1.json"
     assert PRODUCT.prior.era_halflife == 0.0                 # every training season counts the same
     assert PRODUCT.ridge.penalty == 13037.0
@@ -42,7 +42,7 @@ def test_each_distinct_target_is_fitted_once():
 
 def test_the_shrink_and_swap_settings():
     assert PRODUCT.shrink.fold_seasons == (1997, 2026) and PRODUCT.shrink.nearest == 8
-    assert PRODUCT.shrink.folds_tag == "weightfix_early,weightfix_within"
+    assert PRODUCT.shrink.folds_tag == "fromdebut_early,fromdebut_within"
     swap = PRODUCT.swap
     assert (swap.applied_share, swap.type_model_penalty, swap.n_folds) == (0.5, 1e-4, 5)
 

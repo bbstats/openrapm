@@ -11,8 +11,12 @@ import pandas as pd
 import pytest
 
 from openrapm import box_prior
-from openrapm.features import PANEL_INPUTS, PRIOR_FEATURES, RATIOS, ROW_FEATURES, SHIPPED
+from openrapm.features import FEATURE_SETS, PANEL_INPUTS, PRIOR_FEATURES, RATIOS, ROW_FEATURES, SHIPPED
 from openrapm.settings import PRODUCT
+
+# the input lists the product setting's prior reads (experiment 57's since 2026-10-13: features.SHIPPED with the career
+# counted from the debut in place)
+PRODUCT_LISTS = FEATURE_SETS[PRODUCT.prior.feature_set]
 
 PARAMS = {"n_estimators": 60, "num_leaves": 7, "learning_rate": 0.1, "min_child_samples": 5}
 FEATS = ["a", "b"]
@@ -226,15 +230,15 @@ def test_the_season_priors_rate_every_rated_player_and_train_on_no_unseen_season
     for side in ("O", "D"):
         assert list(priors[side].values) == list(range(60))
         assert np.isfinite(list(priors[side].values.values())).all()
-        assert priors[side].model.inputs == SHIPPED[side] + ROW_FEATURES
+        assert priors[side].model.inputs == PRODUCT_LISTS[side] + ROW_FEATURES
         assert len(priors[side].model.fold_models) == PRODUCT.prior.n_folds
     # the full booster is the one fitted on 2010-2012 alone (LightGBM is deterministic here), not on 2010-2013
-    column, inputs = "offense", SHIPPED["O"] + ROW_FEATURES
-    rated = box_prior.rated_rows(panel[(panel.side == "O") & (panel.season == 2013)], SHIPPED["O"])
+    column, inputs = "offense", PRODUCT_LISTS["O"] + ROW_FEATURES
+    rated = box_prior.rated_rows(panel[(panel.side == "O") & (panel.season == 2013)], PRODUCT_LISTS["O"])
 
     def full_fit(seasons):
         rows = panel[(panel.side == "O") & panel.season.isin(seasons)]
-        train = box_prior.training_rows(labels["O"], rows, column, SHIPPED["O"])
+        train = box_prior.training_rows(labels["O"], rows, column, PRODUCT_LISTS["O"])
         model = box_prior.fit_lightgbm(PARAMS, train[inputs].to_numpy(float), train.label.to_numpy(float),
                                        train.row_weight.to_numpy(float))
         return model.predict(rated[inputs].to_numpy(float))
@@ -318,13 +322,13 @@ def test_the_season_priors_weigh_each_row_by_its_kernel_and_keep_the_folds():
     priors = box_prior.season_priors(labels, panel, 2013, [2013], era, params)
     shipped = box_prior.season_priors(labels, panel, 2013, [2013], PRODUCT, params)
     assert "era_kernel" not in panel.columns, "the kernel goes on a copy, never on the shared panel"
-    inputs = SHIPPED["O"] + ROW_FEATURES
+    inputs = PRODUCT_LISTS["O"] + ROW_FEATURES
     rows = panel[(panel.side == "O") & (panel.season < 2013)]
     rows = rows.assign(era_kernel=box_prior.era_kernel(rows.season, 2013, 2.0, start=1))
-    train = box_prior.training_rows(labels["O"], rows, "offense", SHIPPED["O"], panel_columns=KERNEL_COLUMNS)
+    train = box_prior.training_rows(labels["O"], rows, "offense", PRODUCT_LISTS["O"], panel_columns=KERNEL_COLUMNS)
     by_hand = box_prior.fit_lightgbm(PARAMS, train[inputs].to_numpy(float), train.label.to_numpy(float),
                                      train.row_weight.to_numpy(float), train.era_kernel.to_numpy(float))
-    rated = box_prior.rated_rows(panel[(panel.side == "O") & (panel.season == 2013)], SHIPPED["O"])
+    rated = box_prior.rated_rows(panel[(panel.side == "O") & (panel.season == 2013)], PRODUCT_LISTS["O"])
     x = rated[inputs].to_numpy(float)
     assert np.array_equal(priors["O"].model.full.predict(x), by_hand.predict(x))
     assert not np.array_equal(priors["O"].model.full.predict(x), shipped["O"].model.full.predict(x))
