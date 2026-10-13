@@ -26,7 +26,7 @@ flowchart TD
     FO["outputs/within/TAG/<br/>openrapm folds"] --> S4
     S4 --> S5["Step 5: swap adjustment<br/>season_ratings_NAME.parquet"]
     ST --> S5
-    S5 --> SITE["docs/data/ratings.json, docs/bias.html<br/>openrapm site"]
+    S5 --> SITE["docs/data/ratings.json, docs/bias.html, docs/data/similarity/<br/>openrapm site"]
 ```
 
 `openrapm rate` runs steps 1-3, `openrapm shrink` step 4, `openrapm swap` step 5, and `openrapm build` all
@@ -262,6 +262,26 @@ held back.
   `fold_*.json` (each fold's error and leak checks).
 - **Code:** `src/openrapm/commands/within_season.py`, `data/within_folds.py`.
 
+## The similarity page (`similarity.py`)
+
+- **For:** the site's Similarity tab: for each player-season, the most similar player-seasons of other players
+  (the owner's design, 2026-10-12).
+- **Reads:** the ratings table (each player-season's final rating and the season's games' part, `u_off` and
+  `u_def`) and the season panel through `data.panel.trainable_panel` (every input the box-score prior reads for a
+  rated season, both sides).
+- **Writes:** `docs/data/similarity/player_seasons.json` and one file per season, each player-season's two lists.
+- **How:** the pool is every player-season with 1,000 or more offensive possessions in a season whose Finals are
+  over.  Each of the 34 inputs is standardised on the pool (minus its mean, over its standard deviation), and two
+  player-seasons are as similar as the straight-line distance between their standardised inputs is small.  Every
+  season of the picked player is left out of his lists: the 50 nearest player-seasons, and the 50 nearest
+  players, each at his nearest season.  A classifier with one class per player-season, read for a Shepard-Luce
+  similarity, was tried first and found a player's own seasons less well (`notes/DECISIONS.md`).
+- **Settings:** in `commands/site.py`: the 1,000-possession minimum (the ratings page's), 50 matches and the
+  opening view (Gary Payton II, 2022).
+- **Command:** `python -m openrapm site --similarity` (33 seconds).  The inputs include the final ratings, so the
+  page is rebuilt after every ratings build (`tests/test_similarity_site.py` fails otherwise).
+- **Code:** `src/openrapm/similarity.py`, `commands/site.py`, `docs/similarity.html`.
+
 ## Where the numbered scripts went
 
 Until the 2026-10 cleanup each stage was a numbered script; the notes in `notes/` still cite them. They
@@ -300,7 +320,7 @@ Old flags and names that the notes use, and what they are now:
 
 ## The checks
 
-`scripts/checks/` holds the thirteen checks; each prints what it measures and reads the tables it is
+`scripts/checks/` holds the fourteen checks; each prints what it measures and reads the tables it is
 handed without changing them.
 
 | check | what it answers |
@@ -318,6 +338,7 @@ handed without changing them.
 | `135_robust_review.py` | every test cut into slices, counted beside a noise control and a replicate (the same change built twice) |
 | `137_stat_calibration.py` | calibration curves of the miss against each input (superseded for decisions by 138) |
 | `138_heldout_audit.py` | on held-back games, are players high on some input rated too high or too low |
+| `141_stepwise_inputs.py` | forward stepwise selection of the box-score prior's inputs, on one half of the seasons |
 
 `scripts/experiment_chain.sh` runs the build and the standard readings for one experiment; `README.md`
 and `CONTRIBUTING.md` say how.

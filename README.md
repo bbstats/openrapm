@@ -25,8 +25,8 @@ later.
 The install also puts an `openrapm` command on your path; `python -m openrapm` is the same command, and
 it is what this file types.
 
-**On a fresh clone with no data**, `pytest` gives 454 passed, 10 skipped and 1 expected failure, in
-about 50 seconds (run on 2026-10-12, Python 3.12, Windows). The 6 slow tests rebuild real seasons and
+**On a fresh clone with no data**, `pytest` gives 489 passed, 10 skipped and 1 expected failure, in
+about 45 seconds (run on 2026-10-12, Python 3.12, Windows). The 6 slow tests rebuild real seasons and
 are left out unless you ask for them (`pytest -m slow`). The 10 skips need the scraped data (game logs,
 stints, box scores), and each skip message names the file or the command it is missing. The expected
 failure is
@@ -95,7 +95,7 @@ python -m openrapm data panel
 python -m openrapm rate --setting test --seasons 2017-2026 --name for_folds --save-models mine
 python -m openrapm folds --models mine --base season_ratings_for_folds_step3 --tag mine_within
 python -m openrapm build --folds mine_within
-python -m openrapm site --bias --decomposition
+python -m openrapm site --bias --decomposition --similarity
 ```
 
 1. **`data ingest`** fetches each season's game log and every game's play-by-play and box score from
@@ -125,7 +125,8 @@ python -m openrapm site --bias --decomposition
    does not have; they stop at step 4 with "no folds in ...", after steps 1-3 have run.
 6. **`site`** writes `docs/data/ratings.json` (under a second); `--bias` adds `docs/bias.html`;
    `--decomposition` fits plain RAPM for every season and every three-season window for
-   `docs/data/decompose_1y.json` and `decompose_3y.json` (319 seconds in the last run).
+   `docs/data/decompose_1y.json` and `decompose_3y.json` (319 seconds in the last run); `--similarity` writes
+   `docs/data/similarity/`, each player-season's nearest player-seasons of other players (33 seconds).
 
 `python -m openrapm <command> --help` lists every option. `--config FILE`, given before the command (or
 the environment variable `OPENRAPM_CONFIG`), points every command at another `config.yaml`, so a check
@@ -232,10 +233,11 @@ the last line names every reading that failed. The chain does not log the experi
       box_rates.py      padded per-100 box-score rates
       on_court.py       a team's record with a player on and off the court
       scoring.py        how ratings are scored on games they never saw
+      similarity.py     the similarity page: each player-season's nearest player-seasons
       swap_test.py trade_set.py consensus.py player_types.py simulate.py
       data/             the data layer: everything that reads or writes the disk or the network
       commands/         the openrapm command line
-    scripts/checks/     the 13 checks: the year-over-year test, the consensus, the trade loss, ...
+    scripts/checks/     the 14 checks: the year-over-year test, the consensus, the trade loss, ...
     scripts/experiment_chain.sh
     examples/tutorial.py
     tests/

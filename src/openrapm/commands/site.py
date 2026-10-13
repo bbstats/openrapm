@@ -4,6 +4,8 @@
     openrapm site --bias             also docs/bias.html, the bias by player type, with its two tables
                                      outputs/bias_groups.json and outputs/bgmm_proba.parquet
     openrapm site --decomposition    also docs/data/decompose_1y.json and decompose_3y.json, the decomposition page
+    openrapm site --similarity       also docs/data/similarity/, the similarity page: each player-season's nearest
+                                     player-seasons of other players
 
 The pages' wording and look are not this command's to change: it writes data, and the bias page's text is
 copied unchanged.
@@ -26,6 +28,7 @@ import json
 import re
 import time
 import unicodedata
+from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -37,9 +40,12 @@ from ..data.box_scores import season_box
 from ..data.config import resolve, resolve_path
 from ..data.designs import block_design
 from ..data.ingest import raw_dir
+from ..data.panel import trainable_panel
+from ..features import FEATURE_SETS
 from ..player_types import RATES, bias_by_type, cluster_proba, describe_types, fit_mixture, per36
 from ..rapm import SeasonSums
 from ..settings import PRODUCT
+from ..similarity import closest, distances, own_season_ranks, player_seasons, similarity_inputs, standardise
 
 RATINGS_TABLE = "season_ratings_product.parquet"
 SITE_FOLDER = "docs"
@@ -56,8 +62,9 @@ def today() -> str:
 
 
 def run_site(cfg: dict, ratings=None, out_dir=None, built: str | None = None, bias: bool = False,
-             decomposition: bool = False, bias_tables=None) -> int:
-    """`openrapm site`: ratings.json always; the bias page and the decomposition files when asked.
+             decomposition: bool = False, bias_tables=None, similarity: bool = False) -> int:
+    """`openrapm site`: ratings.json always; the bias page, the decomposition files and the similarity files when
+    asked.
 
     `ratings` defaults to the ratings table under config paths.outputs, `out_dir` to the repository's docs/, and
     `bias_tables` (where --bias writes bias_groups.json and bgmm_proba.parquet) to config paths.outputs.
@@ -72,6 +79,8 @@ def run_site(cfg: dict, ratings=None, out_dir=None, built: str | None = None, bi
         write_bias_page(cfg, ratings_path, out_dir / "bias.html", tables_dir)
     if decomposition:
         write_decomposition(cfg, ratings_path, out_dir / "data", built or today())
+    if similarity:
+        write_similarity(cfg, ratings_path, out_dir / "data" / SIMILARITY_FOLDER, built or today())
     return 0
 
 
@@ -230,6 +239,7 @@ PAGE_HEAD = """<!doctype html>
   <a href="./">Ratings</a>
   <a href="decompose.html">Decomposition</a>
   <a href="bias.html" aria-current="page">Bias</a>
+  <a href="similarity.html">Similarity</a>
   """
 # the dark-mode button, one line on the page
 THEME_BUTTON = ('<button class="theme" type="button" aria-label="Dark mode" title="Dark mode">'
@@ -862,3 +872,136 @@ def write_decomposition(cfg: dict, ratings_path: Path, data_dir: Path, built: st
         write_span_file(path, span_words, rows, built)
         print(f"wrote {path}: {sum(len(v) for v in rows.values()):,} rows over {len(rows)} periods, "
               f"{path.stat().st_size / 1e6:.2f} MB ({time.time() - started:.0f}s)", flush=True)
+
+
+# ===================================================================================== the similarity page
+# Which other player-seasons a player-season is most like: the nearest player-seasons of other players, by the
+# distance between their standardised inputs (similarity.py says how).  The owner's design, 2026-10-12.
+#
+# The files, in docs/data/similarity/; the page loads the first once, and a season's file when one of its
+# player-seasons is picked:
+#     player_seasons.json   {"meta": ..., "rows": [[id, name, season, possessions, offense, defense, total], ...]}:
+#                           the pool in its order (season, then id), so a row's position is how the lists name it
+#     <season>.json         {"meta": {"season", "first", "fields"}, "rows": one entry per row of that season, in pool
+#                           order from row `first`: [its seasons list, their distances, its players list, their
+#                           distances]}; distances at two decimals
+SIMILARITY_MIN_POSSESSIONS = 1000         # the ratings page's default minimum (docs/index.html)
+SIMILARITY_MATCHES = 50                   # each list's length (the owner, 2026-10-12)
+SIMILARITY_DEFAULT = (1627780, 2022)      # Gary Payton II, 2021-22: the page's opening view (the owner, 2026-10-12)
+SIMILARITY_FOLDER = "similarity"
+SIMILARITY_FIELDS = ["id", "n", "s", "p", "o", "d", "t"]
+SIMILARITY_LIST_FIELDS = ["k", "d", "pk", "pd"]
+SIMILARITY_SHOWN = 20                     # the console report's list length
+
+
+def _named(rows: pd.DataFrame, ratings_path: Path, cfg: dict) -> pd.DataFrame:
+    """The pool with every name filled: the ratings table's, else the bio files' (`name_table`)."""
+    missing = rows.player_name.isna() | (rows.player_name.astype(str).str.strip() == "")
+    if missing.any():
+        latest = name_table(ratings_path, cfg).drop_duplicates("player_id", keep="last").set_index("player_id")
+        rows = rows.copy()
+        rows.loc[missing, "player_name"] = rows.loc[missing, "player_id"].map(latest.player_name)
+    if rows.player_name.isna().any():
+        raise SystemExit(f"no name for players {sorted(rows.player_id[rows.player_name.isna()].unique())}")
+    return rows
+
+
+def similarity_frames(cfg: dict, ratings_path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """(the pool, its inputs).
+
+    The inputs are standardised on the pool, so the pool holds only seasons a fit may train on (`trainable_panel`): a
+    season in progress waits for its Finals.  Stops when the panel's possessions differ from the ratings table's (one
+    of them rebuilt since the other) or when the opening player-season is not in the pool.
+    """
+    table = pd.read_parquet(ratings_path)
+    panel = trainable_panel(cfg)
+    seasons = sorted(set(panel.season.astype(int)))
+    waiting = sorted(set(table.season.astype(int)) - set(seasons))
+    if waiting:
+        print(f"  left out until their Finals are over: {waiting}", flush=True)
+    rows = _named(player_seasons(table, SIMILARITY_MIN_POSSESSIONS, seasons), ratings_path, cfg)
+    inputs = similarity_inputs(rows, panel, FEATURE_SETS[PRODUCT.prior.feature_set])
+    for side in ("off", "def"):
+        if not np.array_equal(inputs[f"poss_{side}"].to_numpy(), rows[f"poss_{side}"].to_numpy(float)):
+            raise SystemExit(f"the season panel's possessions differ from {ratings_path.name}'s (poss_{side}): "
+                             f"rebuild the older of the two")
+    if not ((rows.player_id == SIMILARITY_DEFAULT[0]) & (rows.season == SIMILARITY_DEFAULT[1])).any():
+        raise SystemExit(f"the opening player-season {SIMILARITY_DEFAULT} is not in the pool")
+    return rows, inputs
+
+
+def similarity_documents(rows: pd.DataFrame, lists: dict, built: str) -> tuple[dict, dict]:
+    """player_seasons.json's document, and {season: its file's document} (the shapes are above)."""
+    meta = dict(built=built, seasons=sorted(int(s) for s in rows.season.unique()),
+                min_possessions=SIMILARITY_MIN_POSSESSIONS, matches=SIMILARITY_MATCHES,
+                default=list(SIMILARITY_DEFAULT), fields=SIMILARITY_FIELDS)
+    pool = [[int(r.player_id), str(r.player_name), int(r.season), int(round(r.poss_off)),
+             round(float(r.rating_off), 2), round(float(r.rating_def), 2), round(float(r.rating_total), 2)]
+            for r in rows.itertuples(index=False)]
+    seasons = {}
+    for season, positions in rows.groupby("season").indices.items():
+        if not np.array_equal(positions, np.arange(positions[0], positions[0] + len(positions))):
+            raise ValueError(f"the pool's {season} rows are not together; the pool must be in season order")
+        entries = [[lists["seasons"][i].tolist(), np.round(lists["season_distances"][i], 2).tolist(),
+                    lists["players"][i].tolist(), np.round(lists["player_distances"][i], 2).tolist()]
+                   for i in positions]
+        seasons[int(season)] = dict(meta=dict(season=int(season), first=int(positions[0]),
+                                              fields=SIMILARITY_LIST_FIELDS), rows=entries)
+    return dict(meta=meta, rows=pool), seasons
+
+
+def _write_compact(path: Path, document: dict) -> None:
+    """Compact JSON (no spaces), letters as they are, no newline at the end."""
+    path.write_text(json.dumps(document, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+
+
+def write_similarity_files(data_dir: Path, documents: tuple) -> None:
+    """player_seasons.json and one file per season in `data_dir`; a season file left from an earlier pool is
+    removed."""
+    pool, seasons = documents
+    data_dir.mkdir(parents=True, exist_ok=True)
+    for stale in data_dir.glob("[0-9][0-9][0-9][0-9].json"):
+        if int(stale.stem) not in seasons:
+            stale.unlink()
+    _write_compact(data_dir / "player_seasons.json", pool)
+    for season, document in seasons.items():
+        _write_compact(data_dir / f"{season}.json", document)
+
+
+def _shown_lists(rows: pd.DataFrame, lists: dict) -> list[str]:
+    """The opening player-season's two lists, the first SIMILARITY_SHOWN of each."""
+    at = int(np.flatnonzero((rows.player_id == SIMILARITY_DEFAULT[0]) & (rows.season == SIMILARITY_DEFAULT[1]))[0])
+    lines = []
+    for key, label in (("seasons", "player-seasons"), ("players", "players")):
+        lines.append(f"\n=== {rows.player_name[at]} {rows.season[at]}: the {SIMILARITY_SHOWN} nearest {label}")
+        pairs = zip(lists[key][at][:SIMILARITY_SHOWN], lists[f"{key[:-1]}_distances"][at][:SIMILARITY_SHOWN])
+        lines.extend(f"  {rank:>2}. {rows.player_name[row]:<26} {rows.season[row]}  distance {distance:.2f}  "
+                     f"offense {rows.rating_off[row]:+.2f}  defense {rows.rating_def[row]:+.2f}"
+                     for rank, (row, distance) in enumerate(pairs, start=1))
+    return lines
+
+
+def similarity_summary(rows: pd.DataFrame, inputs: pd.DataFrame, lists: dict, ranks: np.ndarray) -> list[str]:
+    """The console report: the inputs, how high each player's own other seasons rank, and the opening
+    player-season's two lists."""
+    ranked = ranks[~np.isnan(ranks)]
+    lines = [f"  inputs: {', '.join(inputs.columns)}",
+             f"  his nearest other season among every row: mean 1/rank {np.mean(1.0 / ranked):.3f}, median rank "
+             f"{np.median(ranked):.0f}, first in {np.mean(ranked == 1):.0%} of {len(ranked):,} player-seasons"]
+    return lines + _shown_lists(rows, lists)
+
+
+def write_similarity(cfg: dict, ratings_path: Path, data_dir: Path, built: str) -> None:
+    """The similarity page's files in `data_dir`."""
+    started = time.time()
+    rows, inputs = similarity_frames(cfg, ratings_path)
+    print(f"similarity: {len(rows):,} player-seasons of {rows.player_id.nunique():,} players, "
+          f"{len(inputs.columns)} inputs", flush=True)
+    distance, players = partial(distances, standardise(inputs)), rows.player_id.to_numpy()
+    lists = closest(distance, players, SIMILARITY_MATCHES)
+    ranks = own_season_ranks(distance, players)
+    write_similarity_files(data_dir, similarity_documents(rows, lists, built))
+    print("\n".join(similarity_summary(rows, inputs, lists, ranks)))
+    size = sum(path.stat().st_size for path in data_dir.glob("*.json"))
+    print(f"wrote {data_dir}: player_seasons.json and {rows.season.nunique()} season files, {size / 1e6:.1f} MB "
+          f"({time.time() - started:.0f}s)", flush=True)

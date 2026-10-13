@@ -105,3 +105,88 @@ def test_team_codes_give_an_unplaced_side_a_code_of_its_own():
     assert codes["ts_att"][0] == codes["ts_att"][1] != codes["ts_att"][2]       # one team-season, one unknown
     assert codes["gt_att"][0] != codes["gt_att"][1]                             # two team-games
     assert codes["unplaced"] == pytest.approx(1 / 3)
+
+
+# ------------------------------------------------------------------------------ the similarity page
+def _similarity_world(tmp_path, seed=3):
+    """A made-up season panel and ratings table: four players over three seasons, every possession count above the
+    minimum; the role, career and body columns equal on a player's two panel rows, as in the real panel."""
+    from openrapm.features import BIO, CAREER, PANEL_INPUTS, ROLE
+    rng = np.random.default_rng(seed)
+    shared, panel, table = set(ROLE) | set(CAREER) | set(BIO), [], []
+    for player in (101, 102, 103, 104):
+        for season in (2024, 2025, 2026):
+            same = {name: rng.uniform(1.0, 3.0) for name in shared}
+            possessions = {side: float(rng.integers(1000, 3000)) for side in "OD"}
+            for side in "OD":
+                panel.append({"side": side, "player_id": player, "season": season, "possessions": possessions[side],
+                              **{name: rng.uniform(1.0, 3.0) for name in PANEL_INPUTS if name not in shared}, **same})
+            off, deff = rng.normal(), rng.normal()
+            table.append({"player_id": player, "season": season, "player_name": f"Player {player}",
+                          "poss_off": possessions["O"], "poss_def": possessions["D"], "poss_season": possessions["O"],
+                          "u_off": rng.normal(), "u_def": rng.normal(), "rating_off": off, "rating_def": deff,
+                          "rating_total": off + deff})
+    ratings = tmp_path / "outputs" / "season_ratings_product.parquet"
+    ratings.parent.mkdir()
+    pd.DataFrame(table).to_parquet(ratings)
+    cfg = {"_root": str(tmp_path), "paths": {"outputs": str(tmp_path / "outputs")}}
+    return cfg, pd.DataFrame(panel)
+
+
+@pytest.fixture
+def small_similarity(tmp_path, monkeypatch):
+    cfg, panel = _similarity_world(tmp_path)
+    monkeypatch.setattr(site, "trainable_panel", lambda cfg: panel)
+    monkeypatch.setattr(site, "SIMILARITY_MATCHES", 3)
+    monkeypatch.setattr(site, "SIMILARITY_SHOWN", 3)
+    monkeypatch.setattr(site, "SIMILARITY_DEFAULT", (102, 2025))
+    return cfg, tmp_path / "site" / "data" / "similarity"
+
+
+def _files(folder):
+    return {path.name: path.read_bytes() for path in sorted(folder.glob("*.json"))}
+
+
+def test_the_similarity_files_hold_the_pool_and_lists_without_the_players_own_seasons(small_similarity):
+    cfg, folder = small_similarity
+    assert site.run_site(cfg, out_dir=folder.parents[1], built="2026-10-12", similarity=True) == 0
+    assert sorted(_files(folder)) == ["2024.json", "2025.json", "2026.json", "player_seasons.json"]
+    pool = json.loads((folder / "player_seasons.json").read_text(encoding="utf-8"))
+    assert pool["meta"]["default"] == [102, 2025] and pool["meta"]["fields"] == site.SIMILARITY_FIELDS
+    assert [row[2] for row in pool["rows"]] == [2024] * 4 + [2025] * 4 + [2026] * 4          # season, then id
+    players = [row[0] for row in pool["rows"]]
+    for season in (2024, 2025, 2026):
+        document = json.loads((folder / f"{season}.json").read_text(encoding="utf-8"))
+        first = document["meta"]["first"]
+        assert pool["rows"][first][2] == season and len(document["rows"]) == 4
+        for offset, (seasons, near, others, other_near) in enumerate(document["rows"]):
+            own = players[first + offset]
+            assert len(seasons) == len(others) == 3 and own not in [players[i] for i in seasons + others]
+            assert near == sorted(near) and len({players[i] for i in others}) == 3
+    assert pool["meta"]["built"] == "2026-10-12"
+
+
+def test_a_rebuild_writes_the_same_bytes_and_drops_a_season_no_longer_in_the_pool(small_similarity):
+    cfg, folder = small_similarity
+    site.run_site(cfg, out_dir=folder.parents[1], built="2026-10-12", similarity=True)
+    fresh = _files(folder)
+    (folder / "1999.json").write_text("{}", encoding="utf-8")
+    site.run_site(cfg, out_dir=folder.parents[1], built="2026-10-12", similarity=True)
+    assert _files(folder) == fresh
+
+
+def test_every_page_carries_the_same_four_tabs_with_its_own_marked():
+    import re
+    from pathlib import Path
+    docs = Path(__file__).resolve().parents[1] / "docs"
+    tabs = ["./", "decompose.html", "bias.html", "similarity.html"]
+    navs = {page: (docs / page).read_text(encoding="utf-8") for page in ("index.html", "decompose.html",
+                                                                         "bias.html", "similarity.html")}
+    navs["PAGE_HEAD"] = site.PAGE_HEAD + "</nav>"
+    for page, text in navs.items():
+        nav = re.search(r'<nav class="site">(.*?)</nav>', text, re.S).group(1)
+        links = re.findall(r'<a href="([^"]+)"( aria-current="page")?>', nav)
+        assert [href for href, _ in links] == tabs, page
+        own = "./" if page == "index.html" else "bias.html" if page == "PAGE_HEAD" else page
+        assert [href for href, current in links if current] == [own], page
+

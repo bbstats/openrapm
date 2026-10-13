@@ -41,6 +41,21 @@ The work happens on feature branches off `main`; the live site is served from `d
 **464 passed, 6 deselected (the slow tests, `pytest -m slow`), 1 xfailed, ~60 s** with the scraped data
 (2026-10-12; the LaMelo test at the bottom of this file passes on the current ratings).
 
+## START HERE (2026-10-13): the Similarity tab -- nearest neighbours, published
+
+The owner's tab: each player-season's nearest player-seasons of other players, by the distance between their 34
+standardised inputs (everything the prior reads, the season's games' part, the final rating); opens on Gary Payton II
+2022.  A classifier with one class per player-season (the owner's first design, Shepard-Luce on its scores) found a
+player's own seasons less well (0.409 against 0.437) and took 21 minutes; the owner chose nearest neighbours ("Sounds
+like nearest neighbors is way better!"; DECISIONS.md, "The similarity page: nearest neighbours, after a classifier").
+Branch `similarity` (off 39553a3, experiment 56's edits riding uncommitted beside it); plan
+`~/.claude/plans/build-another-tab-called-curried-boot.md`.
+- **Built:** `src/openrapm/similarity.py`, `openrapm site --similarity` (33 seconds), `docs/similarity.html` with a
+  Distance column (the owner's choice) and the tab on every page, tests; `docs/data/similarity/` (10.6 MB, 31 files).
+- **Published 2026-10-13** (the owner: "yes please commit/publish"): committed on `similarity` with only the similarity
+  hunks of `cli.py`, `tests/test_cli.py`, this file and DECISIONS.md (experiment 56 edits them too and stays
+  uncommitted), `main` fast-forwarded and pushed.
+
 ## START HERE (2026-10-12): stat splits tried, era drift found, experiment 55 adopted (not published, not committed)
 
 All of it is on the local branch `stat-splits` (off `cleanup-pass`), uncommitted: commit only on the owner's word.
@@ -374,9 +389,10 @@ chunks, 99, 91).  Today the same table, and the site from it, are two commands; 
         (steps 1-5 at the product setting for all thirty seasons, ~15 min: writes outputs/season_ratings_product.parquet,
          the published table, with outputs/season_ratings_product_step3.parquet and _step4.parquet beside it; step 4
          reads the multipliers off outputs/within/weightfix_within, the default of --folds)
-    .venv/Scripts/python -m openrapm site --bias --decomposition
-        (docs/data/ratings.json, docs/bias.html with outputs/bias_groups.json and outputs/bgmm_proba.parquet, and
-         docs/data/decompose_1y.json and decompose_3y.json, ~5 min; then commit and fast-forward main)
+    .venv/Scripts/python -m openrapm site --bias --decomposition --similarity
+        (docs/data/ratings.json, docs/bias.html with outputs/bias_groups.json and outputs/bgmm_proba.parquet,
+         docs/data/decompose_1y.json and decompose_3y.json, ~5 min, and docs/data/similarity/, ~30 s; then commit and
+         fast-forward main)
 
 The previous product tables are kept as `outputs/season_ratings_product_before_weightfix.parquet` (experiment 45) and
 `outputs/season_ratings_product_before_lgb_noonc.parquet` (chimeraboost).  The prior shrink's
@@ -582,13 +598,18 @@ categories: across the eight types, `vs consensus` against `vs 2026 observed` is
 `docs/decompose.html`, the "Decomposition" tab (vanilla RAPM split two exact ways: by player, on-court rtg + teammates + opponents + context +
 ridge penalty; by possession, on court signal + off court adjustment (GP) + off court adjustment (DNP) + team SOS adjustment,
 with the actual on and off court ratings beside them; single seasons
-and the ten three-season windows, penalty 3,000).  Rebuild with `.venv/Scripts/python -m openrapm site --bias
---decomposition` (once scripts 52, 76 and 83), commit, and fast-forward `main` to publish, on the owner's word.
+and the ten three-season windows, penalty 3,000), and `docs/similarity.html`, the "Similarity" tab (2026-10-12: each
+player-season's nearest player-seasons of other players, by the distance between their standardised inputs; opens on
+Gary Payton II 2022; PIPELINE.md, "The similarity page").  Rebuild with `.venv/Scripts/python -m openrapm site --bias
+--decomposition --similarity` (once scripts 52, 76 and 83), commit, and fast-forward `main` to publish, on the owner's
+word.  The similarity page reads the final ratings, so it is rebuilt after every ratings build.
 **Check the Pages build after pushing** (`gh api repos/bbstats/openrapm/pages/builds/latest`): on 2026-10-08 the push
 to `main` did not start one, and `gh api -X POST repos/bbstats/openrapm/pages/builds` had to request it.  The
-tabs at the top and the dark-mode button are `docs/site.css` and `docs/site.js`, shared by all three pages (`openrapm site
---bias` writes them into bias.html); a new page needs the same `<nav class="site">` block and its colours given again
-under `:root[data-theme="dark"]`.  The
+tabs at the top and the dark-mode button are `docs/site.css` and `docs/site.js`, shared by all four pages (`openrapm site
+--bias` writes them into bias.html); a new page needs the same `<nav class="site">` block on every page
+(`tests/test_site.py` checks they match) and its colours given again under `:root[data-theme="dark"]`.  bias.html's
+nav can be rewritten without refitting the mixture: `site.bias_page(json.loads(outputs/bias_groups.json))` rebuilds
+the page byte for byte.  The
 bias page is deliberately a title, one table and two short paragraphs; the owner has trimmed it twice.
 **Built, not published (2026-10-06):** a sortable Portable column on the rankings page, from
 `outputs/portable/production.json` applied by `52_site.py` to the product table (`portable.portable_table`; both

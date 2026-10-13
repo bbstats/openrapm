@@ -15,3 +15,5 @@ nav.site a[aria-current="page"] { color: CanvasText; font-weight: 600; border-bo
 nav.site .theme { margin-left: auto; display: inline-flex; padding: 5px; border: 1px solid var(--line);
                   border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
 nav.site .theme:hover { color: CanvasText; }
+/* four tabs and the switch need about 343 px; a 360 px phone has 328 */
+@media (max-width: 380px) { nav.site a { padding-left: 8px; padding-right: 8px; } nav.site a:first-child { padding-left: 0; } }

@@ -20,7 +20,8 @@ What it establishes now, in four parts:
      archive/research-2026-10).  Latent rather than live -- no season is in progress
      today, so the guard drops nothing -- but it is the shape of thing that is only ever noticed in
      the year it starts lying;
-  4. `openrapm rate` and `openrapm folds` read the panel through one function, `data.panel.trainable_panel`,
+  4. `openrapm rate`, `openrapm folds` and `openrapm site --similarity` (which standardises its inputs on the
+     player-seasons it ranks) read the panel through one function, `data.panel.trainable_panel`,
      which gates it, and the labels of `rate` sum only seasons whose Finals are over; step 5 (`openrapm swap`)
      reads it through `data.panel.panel_and_trainable_seasons`, so its type model trains only on finished
      seasons while still describing the players of a season in progress.  The one writer, `openrapm data panel`
@@ -186,7 +187,7 @@ def test_the_panel_file_is_opened_in_one_place_and_gated_there():
     assert _calls(SRC / "data" / "panel.py", "drop_untrainable")
 
 
-@pytest.mark.parametrize("command", ["build.py", "within_season.py"])
+@pytest.mark.parametrize("command", ["build.py", "within_season.py", "site.py"])
 def test_a_command_that_fits_reads_the_gated_panel(command):
     path = SRC / "commands" / command
     assert _calls(path, "trainable_panel"), f"commands/{command} must read the panel through trainable_panel"

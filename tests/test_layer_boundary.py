@@ -66,6 +66,7 @@ MODEL_LAYER = [
     "prior_rapm.py",    # step 3: the ridge around the prior, the season's table, centring, the schema
     "prior_shrink.py",  # step 4: the prior part's multipliers from the within-season folds, the shrink
     "scoring.py",       # ratings scored on unseen games, the splits, the pooled and paired summaries
+    "similarity.py",    # the similarity page: player-seasons' inputs, standardised, and the nearest of other players
 ]
 
 # Model code that still reaches its own data, and what through.  Nothing may be added here.

@@ -6,7 +6,8 @@
     openrapm shrink    step 4 on a step-3 table: the prior part multiplied down
     openrapm swap      step 5 on a step-4 table: each team's credit re-split by its lineup swaps
     openrapm folds     the within-season folds: each season rated from three quarters of its games
-    openrapm site      the site's data: docs/data/ratings.json, and the bias and decomposition pages when asked
+    openrapm site      the site's data: docs/data/ratings.json, and the bias, decomposition and similarity pages when
+                       asked
     openrapm compare   two parquet tables, value by value
     openrapm glossary  GLOSSARY.md's table of the prior's columns, written from features.py (--check only compares)
 
@@ -145,7 +146,7 @@ def _run_folds(args: argparse.Namespace, cfg: dict) -> int:
 def _run_site(args: argparse.Namespace, cfg: dict) -> int:
     from .site import run_site
     return run_site(cfg, ratings=args.ratings, out_dir=args.out_dir, built=args.built, bias=args.bias,
-                    decomposition=args.decomposition, bias_tables=args.bias_tables)
+                    decomposition=args.decomposition, bias_tables=args.bias_tables, similarity=args.similarity)
 
 
 def _run_compare(args: argparse.Namespace, cfg: dict) -> int:
@@ -311,14 +312,16 @@ def parse_date(text: str) -> str:
 
 def _add_site(commands) -> None:
     site = commands.add_parser(
-        "site", help="the site's data: docs/data/ratings.json, and the bias and decomposition pages when asked",
+        "site", help="the site's data: docs/data/ratings.json, and the bias, decomposition and similarity pages "
+                     "when asked",
         description="Writes docs/data/ratings.json from the ratings table: one row per player-season with "
                     "possessions, ratings at two decimals.  --bias also writes docs/bias.html (bias by player "
                     "type, against the consensus and against 2026 observed) with outputs/bias_groups.json and "
                     "outputs/bgmm_proba.parquet; --decomposition also writes docs/data/decompose_1y.json and "
                     "decompose_3y.json (vanilla RAPM split by player and by possession; every season and every "
-                    "three-season window is fitted, 319 seconds in the last run).  The pages' wording is not "
-                    "changed.")
+                    "three-season window is fitted, 319 seconds in the last run); --similarity also writes "
+                    "docs/data/similarity/ (each player-season's nearest player-seasons of other players, by the "
+                    "distance between their standardised inputs).  The pages' wording is not changed.")
     site.add_argument("--ratings", metavar="FILE",
                       help="the ratings table (default outputs/season_ratings_product.parquet)")
     site.add_argument("--out-dir", metavar="DIR", help="the site folder written into (default the repository's docs/)")
@@ -329,6 +332,8 @@ def _add_site(commands) -> None:
     site.add_argument("--bias-tables", metavar="DIR",
                       help="where --bias writes bias_groups.json and bgmm_proba.parquet (default outputs/)")
     site.add_argument("--decomposition", action="store_true", help="also the decomposition page's two files")
+    site.add_argument("--similarity", action="store_true",
+                      help="also the similarity page's files: each player-season's nearest player-seasons")
     site.set_defaults(run=_run_site)
 
 

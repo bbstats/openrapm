@@ -5832,3 +5832,67 @@ after (the base: 0.92-1.0 for every season); offence 0.65-0.71 (the base 0.69-0.
   incumbent for scoring is `outputs/season_ratings_nearshrink.parquet` (8.5827; `experiment_chain.sh` INC_NAME, 135's
   --ref).  The product table was rebuilt with `openrapm build` (the previous one kept as
   `season_ratings_product_before_nearshrink.parquet`); not published.
+
+## The similarity page: nearest neighbours, after a classifier (the owner's Similarity tab, 2026-10-12)
+
+The owner asked for a site tab, "Similarity": every input the box-score prior reads (both sides), the season's games'
+part on each side and the final rating go into a chimeraboost classifier whose target is the player-season (NBA id x
+season), and each pair of player-seasons gets the bias-corrected Shepard-Luce similarity of its raw scores; every
+season of the picked player is left out of his list; it opens on Gary Payton II 2022.  The owner's rulings: no
+categorical inputs ("Just NBA id x season as target"); the RAPM part is step 3's games' part (`u_off`, `u_def`); a
+Seasons | Players toggle; the pool is 1,000+ offensive possessions (10,197 player-seasons, 1,823 players).  The page
+ships with nearest neighbours instead (the decision at the end); the classifier and its check, 143, were removed
+before any commit, and this section keeps their numbers.
+
+Each class has one row, so nothing can be held out and early stopping cannot work: how long the classifier is fitted
+(rounds x learning rate) is the one setting, and it decides how sharp the similarity is.  Check 143 fitted once at
+learning rate 0.1 for 800 rounds and read the fit at 25, 50, 100, 200, 400 and 800 rounds (at a fixed learning rate
+the first m trees are an m-round fit; the check confirmed it on the real data).  The score: for each player-season whose player has another pool
+season, 1 / the rank of his closest other season among every row, averaged.  **The rule, registered before any
+result:** take the length with the best score; adopt the shortest length the best does not beat at a paired
+t-statistic of 2 or more over players; a best on the edge of the grid adopts nothing until the grid is extended, and a
+best of 100 rounds or fewer asks for a run at learning rate 0.02 first.
+
+**Result (2026-10-12, 23 minutes, 1.50 s a round, peak memory 11.2 GB).**  The first 25 trees of the 800-round fit
+equal a 25-round fit exactly (largest difference 0).  9,835 player-seasons have another season of theirs in the pool.
+
+| rounds | score | median rank | ranked first | typical S, 1st / 50th | players in a list of 50 | t against the next shorter |
+|---|---|---|---|---|---|---|
+| 25 | 0.233 | 20 | 14.8% | 0.43 / 0.28 | 41.9 | |
+| 50 | 0.317 | 10 | 22.3% | 0.16 / 0.080 | 40.9 | +20.1 |
+| 100 | 0.362 | 7 | 25.9% | 0.022 / 0.0064 | 40.2 | +13.3 |
+| 200 | 0.390 | 6 | 29.0% | 0.0024 / 0.0004 | 39.3 | +13.1 |
+| 400 | 0.401 | 5 | 30.0% | 0.0008 / 0.0001 | 39.2 | +9.8 |
+| 800 | 0.409 | 5 | 30.7% | 0.0004 / 0.00003 | 39.1 | +10.2 |
+
+- **Verdict under the rule: nothing adopted** -- the best is the longest length.  Each doubling still helps, by less
+  each time (+0.029, +0.011, +0.008).  Extending is limited by memory: every round keeps 5.2 MB of leaf values and
+  predicting packs a second copy, so 1,600 rounds would need about 15-18 GB against about 17 GB free.  A first page
+  was built at 800 rounds (21 minutes).
+- **Reference:** plain nearest neighbours on the 34 standardised inputs score 0.437, above the classifier at every
+  length tried.
+- Every input carries between 1% and 6% of the split gain (largest: the offensive games' part 0.058, free-throw
+  attempts 0.053, offensive-rebound share 0.047, the defensive games' part 0.046); height 0.023, weight 0.021.
+- Gary Payton II 2022's list is steady from 200 rounds on; at 800: Kawhi Leonard 2012, Keon Ellis 2025, Mikal Bridges
+  2020, Jordan Walsh 2026, Keon Ellis 2024, Javonte Green 2026, Josh Minott 2026, Caleb Martin 2022, Javonte Green
+  2022, Aaron Wiggins 2024.
+
+**Nearest neighbours against the classifier at 800 rounds**, same pool, same 34 inputs (nearest neighbours: each input
+standardised on the pool, distance = the straight-line distance between two player-seasons' standardised inputs):
+
+| | nearest neighbours | classifier, 800 rounds |
+|---|---|---|
+| score | 0.437 | 0.409 |
+| median own-season rank | 4 | 5 |
+| own season ranked first | 34% | 31% |
+| players in a list of 50 seasons | 38.1 | 39.1 |
+| build | 33 seconds | 21 minutes, 11 GB |
+
+Gary Payton II 2022's nearest: Keon Ellis 2025 (distance 4.13), Javonte Green 2026, Alex Caruso 2025, Josh Minott
+2026, Nerlens Noel 2017, Keon Ellis 2024, Mikal Bridges 2020, Delon Wright 2023, Aaron Wiggins 2024, Javonte Green
+2023; eleven of the classifier's top 20 seasons are in its top 20.
+
+- **DECIDED 2026-10-12 (the owner: "Sounds like nearest neighbors is way better!"; then "Switch, drop the classifier"
+  and "Distance"):** the page ships with nearest neighbours and shows the distance.  The classifier, check 143, the
+  cached-scores flag and the chimeraboost dependency were removed.  **Published 2026-10-13** (the owner: "yes please
+  commit/publish").
