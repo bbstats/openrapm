@@ -97,6 +97,10 @@ class PriorSettings:
     # labels from the other seasons (notes/DECISIONS.md, experiments 32 and 44); read from params/ only, so an
     # untracked copy in outputs/ can never stand in for it
     booster_file: str = "params/booster_params_lgb1.json"
+    # 0: every training season counts the same.  A positive H: a training row counts half as much for every H
+    # seasons between its seasons and the rated one, beyond the nearest season the fit may use (box_prior.era_kernel;
+    # notes/DECISIONS.md, "Era drift" and experiment 56: the defensive prices drift between eras)
+    era_halflife: float = 0.0
 
 
 @dataclass(frozen=True)

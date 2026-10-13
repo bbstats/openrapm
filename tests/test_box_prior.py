@@ -4,6 +4,8 @@ Two things here have bitten already.  A possession-weighted mean of a ratio is n
 order of averaging and deriving is a real choice.  And the sample weight was once written over the body-weight
 input, so a bookkeeping column may never share a name with an input.
 """
+from dataclasses import replace
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -240,3 +242,97 @@ def test_the_season_priors_rate_every_rated_player_and_train_on_no_unseen_season
     shipped = priors["O"].model.full.predict(rated[inputs].to_numpy(float))
     assert np.array_equal(shipped, full_fit([2010, 2011, 2012]))
     assert not np.array_equal(shipped, full_fit([2010, 2011, 2012, 2013]))
+
+
+# ------------------------------------------------------------------ the era kernel (experiment 56)
+KERNEL_COLUMNS = [*PANEL_INPUTS, "era_kernel"]
+
+
+def test_the_era_kernel_is_one_up_to_the_nearest_usable_season_then_halves_every_half_life():
+    got = box_prior.era_kernel([2013, 2014, 2015, 2017, 2005, 2025], 2015, 8, start=2)
+    assert np.allclose(got, [1.0, 1.0, 1.0, 1.0, 0.5, 0.5])
+    assert np.allclose(box_prior.era_kernel([2014, 2006], 2015, 4, start=1), [1.0, 0.25])
+    with pytest.raises(ValueError, match="positive"):
+        box_prior.era_kernel([2015], 2015, 0)
+
+
+def test_a_rows_kernel_is_the_possession_weighted_kernel_of_its_seasons():
+    panel = _career_panel()
+    panel = panel.assign(era_kernel=box_prior.era_kernel(panel.season, 2013, 1.0, start=1))
+    rows = box_prior.training_rows(_label(panel), panel, "offense", SHIPPED["O"], panel_columns=KERNEL_COLUMNS)
+    mine = panel[panel.player_id == 0]
+    career = rows.loc[[0]].iloc[0]
+    assert career.era_kernel == pytest.approx(np.average(mine.era_kernel, weights=mine.possessions))
+    pair = panel[(panel.player_id == 2)]                                   # 2012 and 2013, his one pair
+    chunk = rows.loc[[2]].iloc[1:].query("row_seasons == 2.0").iloc[0]
+    assert chunk.era_kernel == pytest.approx(np.average(pair.era_kernel, weights=pair.possessions))
+
+
+def test_the_kernel_leaves_the_row_weights_and_the_folds_alone():
+    panel = _career_panel()
+    plain = box_prior.training_rows(_label(panel), panel, "offense", SHIPPED["O"])
+    weighted = box_prior.training_rows(
+        _label(panel), panel.assign(era_kernel=box_prior.era_kernel(panel.season, 2013, 1.0)), "offense",
+        SHIPPED["O"], panel_columns=KERNEL_COLUMNS)
+    assert np.array_equal(plain.row_weight.to_numpy(), weighted.row_weight.to_numpy())
+    assert np.array_equal(box_prior.balanced_player_folds(plain), box_prior.balanced_player_folds(weighted))
+    assert np.array_equal(plain[SHIPPED["O"]].to_numpy(), weighted[SHIPPED["O"]].to_numpy())
+
+
+def test_no_kernel_and_a_kernel_of_ones_are_the_shipped_fit_and_a_smaller_one_is_less_data():
+    """The kernel multiplies the weights after they are rescaled, so a kernel of one half everywhere is half the
+    data under the same leaf penalty, not the same fit."""
+    train = _rows()
+    x, y, w = train[FEATS].to_numpy(float), train.label.to_numpy(float), train.row_weight.to_numpy(float)
+    penalised = {**PARAMS, "reg_lambda": 50.0}
+    shipped = box_prior.fit_lightgbm(penalised, x, y, w).predict(x)
+    assert np.array_equal(shipped, box_prior.fit_lightgbm(penalised, x, y, w, np.ones(y.size)).predict(x))
+    assert not np.array_equal(shipped, box_prior.fit_lightgbm(penalised, x, y, w, np.full(y.size, 0.5)).predict(x))
+
+
+def test_a_short_half_life_follows_the_rated_eras_price():
+    """Two eras with opposite prices: the pooled fit learns neither, a fit weighted toward one era learns its price."""
+    rng = np.random.default_rng(11)
+    season = np.repeat([2000, 2020], 400)
+    a = rng.normal(size=season.size)
+    label = np.where(season == 2000, 1.0, -1.0) * a + rng.normal(scale=0.2, size=season.size)
+    x, w = np.column_stack([a, rng.normal(size=season.size)]), np.ones(season.size)
+    grid = np.column_stack([np.linspace(-1.5, 1.5, 7), np.zeros(7)])
+
+    def price(kernel):
+        return np.polyfit(grid[:, 0], box_prior.fit_lightgbm(PARAMS, x, label, w, kernel).predict(grid), 1)[0]
+
+    assert price(box_prior.era_kernel(season, 2000, 2.0)) > 0.5
+    assert price(box_prior.era_kernel(season, 2020, 2.0)) < -0.5
+    assert abs(price(None)) < 0.3
+
+
+def test_the_season_priors_weigh_each_row_by_its_kernel_and_keep_the_folds():
+    rng = np.random.default_rng(5)
+    panel = pd.DataFrame([_panel_row(rng, pid, s, side) for side in ("O", "D") for pid in range(60)
+                          for s in (2008, 2009, 2010, 2011, 2012, 2013)])
+    labels = {"O": _label(panel[panel.side == "O"]),
+              "D": _label(panel[panel.side == "D"]).rename(columns={"offense": "defense"})}
+    params = {"O": PARAMS, "D": PARAMS}
+    era = replace(PRODUCT, prior=replace(PRODUCT.prior, era_halflife=2.0))
+    priors = box_prior.season_priors(labels, panel, 2013, [2013], era, params)
+    shipped = box_prior.season_priors(labels, panel, 2013, [2013], PRODUCT, params)
+    assert "era_kernel" not in panel.columns, "the kernel goes on a copy, never on the shared panel"
+    inputs = SHIPPED["O"] + ROW_FEATURES
+    rows = panel[(panel.side == "O") & (panel.season < 2013)]
+    rows = rows.assign(era_kernel=box_prior.era_kernel(rows.season, 2013, 2.0, start=1))
+    train = box_prior.training_rows(labels["O"], rows, "offense", SHIPPED["O"], panel_columns=KERNEL_COLUMNS)
+    by_hand = box_prior.fit_lightgbm(PARAMS, train[inputs].to_numpy(float), train.label.to_numpy(float),
+                                     train.row_weight.to_numpy(float), train.era_kernel.to_numpy(float))
+    rated = box_prior.rated_rows(panel[(panel.side == "O") & (panel.season == 2013)], SHIPPED["O"])
+    x = rated[inputs].to_numpy(float)
+    assert np.array_equal(priors["O"].model.full.predict(x), by_hand.predict(x))
+    assert not np.array_equal(priors["O"].model.full.predict(x), shipped["O"].model.full.predict(x))
+    assert priors["O"].model.held_out_players == shipped["O"].model.held_out_players
+    assert priors["O"].model.inputs == inputs, "the kernel is never an input"
+
+
+def test_the_era_kernel_is_refused_as_an_input():
+    panel = _career_panel()
+    with pytest.raises(ValueError, match="bookkeeping"):
+        box_prior.training_rows(_label(panel), panel, "offense", ["points_per100", "era_kernel"])

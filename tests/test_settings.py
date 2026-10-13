@@ -29,6 +29,7 @@ def test_the_targets_prior_and_ridge():
     assert PRODUCT.prior.n_folds == 5 and PRODUCT.prior.fold_assignment == 0
     assert PRODUCT.prior.feature_set == "box_score_and_bio"
     assert PRODUCT.prior.booster_file == "params/booster_params_lgb1.json"
+    assert PRODUCT.prior.era_halflife == 0.0                 # every training season counts the same
     assert PRODUCT.ridge.penalty == 13037.0
     assert PRODUCT.exclude_neighbours == 0
 

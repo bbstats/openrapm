@@ -52,8 +52,17 @@ def test_each_rate_option_reaches_its_setting(capsys):
     assert chosen.targets.offence == TEST.targets.offence
     assert chosen.prior.booster_file == "params/booster_params_other.json"
     assert chosen.prior.fold_assignment == 1 and chosen.prior.feature_set == "box_score_and_bio"
+    assert chosen.prior.era_halflife == 0.0                   # every season alike unless asked
     assert (args.seasons, args.name, args.save_models) == ([2025, 2026], "trial", "trial")
     assert capsys.readouterr().out == ""                      # plain names: nothing to say
+
+
+def test_the_era_half_life_reaches_the_prior_and_a_negative_one_is_refused():
+    """Experiment 56: on rate and build alike."""
+    for command in ("rate", "build"):
+        assert cli.chosen_settings(_parse(command, "--era-halflife", "8")).prior.era_halflife == 8.0
+    with pytest.raises(SystemExit):
+        cli.chosen_settings(_parse("rate", "--era-halflife", "-1"))
 
 
 def test_the_names_used_before_the_rename_still_work_and_say_so(capsys):

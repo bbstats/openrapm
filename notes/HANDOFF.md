@@ -56,6 +56,32 @@ Branch `similarity` (off 39553a3, experiment 56's edits riding uncommitted besid
   hunks of `cli.py`, `tests/test_cli.py`, this file and DECISIONS.md (experiment 56 edits them too and stays
   uncommitted), `main` fast-forwarded and pushed.
 
+## START HERE (2026-10-12, evening): experiment 56, era-level prior adjustments -- a tie, NOT ADOPTED (2026-10-13)
+
+**The owner's rulings, 2026-10-13:** experiment 56 not adopted; experiments 52-54 closed, not adopted (55 marked
+adopted in the experiment table, as it was); this work committed and pushed on the branch `era-prior` (moved up to
+`main` 4a75027), `main` untouched; **next: experiment 57, the career counts' 1997 cut-off** (seasons played from each
+player's draft year, pre-1997 minutes pulled from the NBA's stats site; a data fix, so adopted on a tie).
+
+The owner asked for era-level prior adjustments ("'vs league average' ... only solves ... the 'bias', not the
+'slope'").  DECISIONS.md "Experiment 56" has every number; plan `~/.claude/plans/any-way-to-get-keen-lagoon.md`.
+- **Found:** the counting rates were already measured from their season's league level; only the six ratios (true
+  shooting %, effective field-goal %, three-point %, share of shots that are threes, offensive-rebound share; true
+  shooting % on defence) were not.  A season-wide constant on the prior cancels in step 3.
+- **Built:** `--era-halflife H` (training rows weighted toward the rated season; 0 shipped), the `_vs_league` ratios
+  (feature set `ratios_vs_league`), check 142 (the screen, `scripts/checks/142_era_screen.py`), the chain's
+  `EARLY_FOLDS=1`, the driver `scratch/2026-10-12_era_prior/era56.sh`, `prices_by_era.py`, `drift_multipliers.py
+  --folders`.  `pytest` 495 passed, slow 6 passed.
+- **Screen:** weighting toward the rated season lost at every half-life (pooling stays best); the ratios against the
+  league won on offence (-0.018, t -4.0) and flattened the offensive prices across eras.  Sheet tab "Era screen".
+- **Build (`vsleague`):** year over year 8.5821 against 8.5827, z -0.5: a tie; robust review like the noise control;
+  the offensive lean moves from three-point shooters to two-point scorers (Brunson -0.92 in 2026).  Not adopted.
+  Experiment table row 45.
+- **Noise control rebuilt on experiment 55's rule:** `noise_regroup2_near` (its folds `noise_regroup2_early` +
+  `noise_regroup2_within`); use it, not `noise_regroup2`, against `nearshrink` (135 `--controls=noise_regroup2_near`).
+- **Kept for later:** the next try at the defensive slope (a warm start: the pooled booster, then a few trees on rows
+  near the rated season).
+
 ## START HERE (2026-10-12): stat splits tried, era drift found, experiment 55 adopted (not published, not committed)
 
 All of it is on the local branch `stat-splits` (off `cleanup-pass`), uncommitted: commit only on the owner's word.

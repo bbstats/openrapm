@@ -52,7 +52,9 @@ def test_the_stat_splits_lists_append_their_parts_where_the_box_count_is_read():
         "stepwise_early": {"O": SHIPPED_O + ["def_rebounds_of_threes_per100"],
                            "D": SHIPPED_D + ["assists_to_mid_range_per100"]},
         "stepwise_late": {"O": SHIPPED_O + ["corner_threes_attempted_per100"],
-                          "D": SHIPPED_D + ["free_throws_made_per100"]}}
+                          "D": SHIPPED_D + ["free_throws_made_per100"]},
+        "ratios_vs_league": {"O": [f"{name}_vs_league" if name in feat.RATIOS else name for name in SHIPPED_O],
+                             "D": [f"{name}_vs_league" if name in feat.RATIOS else name for name in SHIPPED_D]}}
     wider = ["russell_blocks_per100", "rim_blocks_per100", "mid_range_blocks_per100", "three_point_blocks_per100",
              "offensive_fouls_per100", "stolen_turnovers_per100", "assists_to_rim_per100",
              "assists_to_mid_range_per100", "assists_to_corner_threes_per100", "assists_to_above_break_threes_per100"]
@@ -125,6 +127,42 @@ def test_the_formulas_on_one_row():
     assert out.points_per_shot_over_expected[0] == pytest.approx((2 * 10.0 + 3 * 6.0) / (700.0 + 300))
 
 
+def test_the_ratios_against_the_league_on_one_row():
+    """Experiment 56: (numerator - L x denominator) / (denominator + pad), L from the league's rates (uncentred minus
+    centred); the same as padding toward L and subtracting it."""
+    row = _one_row()                       # league offensive rebounds 3.0 - 1.0 = 2.0, defensive 9.0 - 1.0 = 8.0
+    out = feat.add_features(row, ["off_rebound_share_vs_league", "true_shooting_pct_vs_league"])
+    level = 2.0 / (2.0 + 8.0)
+    assert out.off_rebound_share_vs_league[0] == pytest.approx((3.0 - level * 12.0) / (12.0 + 3.0))
+    assert out.off_rebound_share_vs_league[0] == pytest.approx((3.0 + 3.0 * level) / (12.0 + 3.0) - level)
+    num, den, pad, _ = feat.RATIOS["true_shooting_pct"]
+    own = {rate: float(row[f"{rate}_uncentred"][0]) for rate in set(num) | set(den)}
+    league = {rate: own[rate] - float(row[rate][0]) for rate in own}
+    top, bottom = (sum(k * own[r] for r, k in num.items()), sum(k * own[r] for r, k in den.items()))
+    level = sum(k * league[r] for r, k in num.items()) / sum(k * league[r] for r, k in den.items())
+    assert out.true_shooting_pct_vs_league[0] == pytest.approx((top - level * bottom) / (bottom + pad))
+
+
+def test_a_league_average_player_and_a_player_without_attempts_read_zero():
+    row = _one_row()
+    for rate in feat.BOX_RATES:            # his rates are the league's: every centred rate 0
+        row[rate] = 0.0
+    average = feat.add_features(row.copy(), list(feat.VS_LEAGUE))
+    assert np.allclose(average[list(feat.VS_LEAGUE)].to_numpy(), 0.0)
+    silent = _one_row()
+    for rate in feat.BOX_RATES:            # no counts at all, the league's rates kept
+        silent[rate] = -silent[f"{rate}_uncentred"]
+        silent[f"{rate}_uncentred"] = 0.0
+    assert np.allclose(feat.add_features(silent, list(feat.VS_LEAGUE))[list(feat.VS_LEAGUE)].to_numpy(), 0.0)
+
+
+def test_each_ratio_has_one_twin_against_the_league():
+    assert list(feat.VS_LEAGUE) == [f"{name}_vs_league" for name in feat.RATIOS]
+    by_name = {f.name: f for f in feat.CATALOGUE}
+    assert by_name["true_shooting_pct_vs_league"].meaning == "true shooting % above the league's"
+    assert {by_name[name].scale for name in feat.VS_LEAGUE} == {"centred"}
+
+
 def test_a_column_already_present_is_left_alone():
     frame = _one_row().assign(points_per100=99.0)
     assert feat.add_features(frame, ["points_per100"]).points_per100[0] == 99.0
@@ -143,7 +181,7 @@ def test_every_name_the_prior_can_read_is_in_the_catalogue():
     assert not wanted - set(names)
     assert {f.scale for f in feat.CATALOGUE} <= {"centred", "level"}
     assert all(f.meaning and f.formula and f.unit and f.group for f in feat.CATALOGUE)
-    assert len(feat.PRIOR_FEATURES) == len(set(feat.PRIOR_FEATURES)) == 75
+    assert len(feat.PRIOR_FEATURES) == len(set(feat.PRIOR_FEATURES)) == 85
 
 
 def test_every_season_panel_column_but_the_keys_is_in_the_catalogue():
@@ -236,5 +274,5 @@ def test_the_body_inputs_are_the_data_layers_renamed_and_the_role_inputs_are_bui
 def test_the_prior_can_read_what_a_tree_cannot_build():
     """A tree cannot form a ratio or a sum of two columns; every derived family is among the prior's inputs."""
     assert "season" not in feat.PRIOR_FEATURES, "a row pooled over twelve seasons has no season"
-    for family in (feat.DERIVED, feat.RATIOS, feat.SHOTQ):
+    for family in (feat.DERIVED, feat.RATIOS, feat.VS_LEAGUE, feat.SHOTQ):
         assert set(family) <= set(feat.PRIOR_FEATURES)

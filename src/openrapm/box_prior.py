@@ -36,6 +36,16 @@ are the three single seasons, the two two-season runs (3,000 and 5,000) and the 
 possessions sum to 20,000, so they weigh 300, 600, 900, 900, 1,500 and 1,800, together 6,000, the career row's
 weight.  All seven rows carry the same label.
 
+With an era half-life (settings.PriorSettings.era_halflife; 0, every season alike, is shipped; notes/DECISIONS.md,
+experiment 56) each row also counts its seasons' kernel, applied after the weights are rescaled to mean 1:
+
+    kernel of season s    0.5 ^ (max(|s - rated| - start, 0) / half-life)
+    kernel of a row       the possession-weighted mean of its seasons' kernels
+    start                 the nearest season a fit may train on: 1 in the product setting, 2 in the test setting
+
+so a row near the rated season counts fully and one half-life further away counts half, and a narrow kernel is
+less data under the same leaf penalties.
+
 Each booster (per side, one on every training row and one without each player fold; LightGBM regression with
 the settings in params/booster_params_lgb1.json) solves:
 
@@ -62,12 +72,12 @@ from .features import FEATURE_SETS, PANEL_INPUTS, ROW_FEATURES, add_features
 
 __all__ = ["average_over_seasons", "career_rows", "season_runs", "training_rows", "balanced_player_folds",
            "LIGHTGBM_FIXED", "fit_lightgbm", "OutOfPlayerPrior", "fit_out_of_player", "rated_rows", "predict",
-           "SidePrior", "season_priors"]
+           "SidePrior", "era_kernel", "season_priors"]
 
-# columns a training row adds for its own bookkeeping: the label it carries, its weight in the fit and the
-# possessions behind the label.  None may share a name with an input (notes/DECISIONS.md, experiment 46: the row weight
-# once overwrote the body-weight input, then called `weight`)
-BOOKKEEPING = ("label", "row_weight", "label_possessions")
+# columns a training row adds for its own bookkeeping: the label it carries, its weight in the fit, the
+# possessions behind the label and its era kernel.  None may share a name with an input (notes/DECISIONS.md,
+# experiment 46: the row weight once overwrote the body-weight input, then called `weight`)
+BOOKKEEPING = ("label", "row_weight", "label_possessions", "era_kernel")
 
 
 def _refuse_clashes(feature_names) -> None:
@@ -198,12 +208,20 @@ LIGHTGBM_FIXED = dict(subsample=1.0, subsample_freq=0, colsample_bytree=1.0, n_j
                       force_row_wise=True, verbose=-1, random_state=0)
 
 
-def fit_lightgbm(params: dict, inputs: np.ndarray, label: np.ndarray, weights: np.ndarray):
-    """One LightGBM fit with the weights rescaled to mean 1, so the leaf penalties mean the same at any scale."""
+def fit_lightgbm(params: dict, inputs: np.ndarray, label: np.ndarray, weights: np.ndarray,
+                 kernel: np.ndarray | None = None):
+    """One LightGBM fit with the weights rescaled to mean 1, so the leaf penalties mean the same at any scale.
+
+    `kernel` (each row's era kernel, at most 1) multiplies the rescaled weights, so a row far from the rated season
+    counts a share of a full row: a narrow kernel is less data, not the same data under lighter penalties.
+    """
     import lightgbm
     weights = np.asarray(weights, dtype=float)
+    weights = weights / weights.mean()
+    if kernel is not None:
+        weights = weights * np.asarray(kernel, dtype=float)
     model = lightgbm.LGBMRegressor(**{**params, **LIGHTGBM_FIXED})
-    return model.fit(inputs, label, sample_weight=weights / weights.mean())
+    return model.fit(inputs, label, sample_weight=weights)
 
 
 @dataclass
@@ -216,18 +234,24 @@ class OutOfPlayerPrior:
 
 
 def fit_out_of_player(train: pd.DataFrame, inputs, params: dict, n_folds: int = 5,
-                      fold_assignment: int = 0) -> OutOfPlayerPrior:
-    """1 + `n_folds` LightGBM fits on the training rows: the full fit, then one without each fold."""
+                      fold_assignment: int = 0, kernel: np.ndarray | None = None) -> OutOfPlayerPrior:
+    """1 + `n_folds` LightGBM fits on the training rows: the full fit, then one without each fold.
+
+    `kernel` is each row's era kernel (`fit_lightgbm`); the folds are drawn from the row weights alone, so they do
+    not depend on it.
+    """
     matrix = train[inputs].to_numpy(float)
     label = train.label.to_numpy(float)
     weight = train.row_weight.to_numpy(float)
-    prior = OutOfPlayerPrior(full=fit_lightgbm(params, matrix, label, weight), fold_models=[],
+    kernel = None if kernel is None else np.asarray(kernel, dtype=float)
+    prior = OutOfPlayerPrior(full=fit_lightgbm(params, matrix, label, weight, kernel), fold_models=[],
                              held_out_players=[], inputs=list(inputs))
     if n_folds > 1:
         fold = balanced_player_folds(train, n_folds, fold_assignment)
         for left_out in range(n_folds):
             keep = fold != left_out
-            prior.fold_models.append(fit_lightgbm(params, matrix[keep], label[keep], weight[keep]))
+            prior.fold_models.append(fit_lightgbm(params, matrix[keep], label[keep], weight[keep],
+                                                  None if kernel is None else kernel[keep]))
             prior.held_out_players.append(set(train.index[~keep].tolist()))
     return prior
 
@@ -265,6 +289,22 @@ class SidePrior:
     feature_names: list
 
 
+def era_kernel(seasons, rated: int, half_life: float, start: int = 1) -> np.ndarray:
+    """How much each training season counts when `rated` is rated (experiment 56):
+
+        kernel = 0.5 ^ (max(|season - rated| - start, 0) / half_life)
+
+    `start` is the nearest season a fit may train on (1 in the product setting, 2 in the test setting, which also
+    leaves out the seasons either side), so the nearest seasons count 1 in both.
+
+    Example: half-life 8, start 2, rating 2015: 2013 and 2017 count 1, 2005 counts 0.5 ^ (8 / 8) = 0.5.
+    """
+    if half_life <= 0:
+        raise ValueError(f"an era half-life must be positive, not {half_life}")
+    distance = np.maximum(np.abs(np.asarray(seasons, dtype=float) - float(rated)) - float(start), 0.0)
+    return 0.5 ** (distance / float(half_life))
+
+
 def season_priors(labels: dict, panel: pd.DataFrame, season: int, unseen, settings, params: dict) -> dict:
     """{"O": SidePrior, "D": SidePrior} for one rated season.
 
@@ -272,14 +312,24 @@ def season_priors(labels: dict, panel: pd.DataFrame, season: int, unseen, settin
     removed (`data.seasons.drop_untrainable`) and only rows with possessions;
     `unseen` the seasons no training row may come from (the rated one, plus its neighbours in the test
     setting); `params` each side's LightGBM settings.  Inputs: the shipped list, then row_possessions, row_seasons.
+    With an era half-life every training row also counts its era kernel (`era_kernel`), averaged over its seasons
+    by possessions like an input.
     """
+    half_life = float(settings.prior.era_halflife)
     out = {}
     for side, column in (("O", "offense"), ("D", "defense")):
         names = list(FEATURE_SETS[settings.prior.feature_set][side])
         training = panel[(panel.side == side) & ~panel.season.isin(unseen)]
-        train = training_rows(labels[side], training, column, names, settings.prior.chunk_sizes)
+        columns = PANEL_INPUTS
+        if half_life > 0:
+            # on this side's copy, never on the panel every rated season shares
+            training = training.assign(era_kernel=era_kernel(training.season, season, half_life,
+                                                             settings.exclude_neighbours + 1))
+            columns = [*PANEL_INPUTS, "era_kernel"]
+        train = training_rows(labels[side], training, column, names, settings.prior.chunk_sizes, columns)
+        kernel = train.era_kernel.to_numpy(float) if half_life > 0 else None
         model = fit_out_of_player(train, names + ROW_FEATURES, params[side], settings.prior.n_folds,
-                                  settings.prior.fold_assignment)
+                                  settings.prior.fold_assignment, kernel)
         rated = rated_rows(panel[(panel.side == side) & (panel.season == season)], names)
         out[side] = SidePrior(values=dict(zip(rated.player_id.to_numpy(), predict(model, rated))), model=model,
                               feature_names=names)

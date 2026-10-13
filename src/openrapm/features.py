@@ -17,15 +17,17 @@ Words used below
     combination a fixed linear sum of the centred rates
     ratio       an efficiency built from the uncentred rates, its denominator padded
 
-The two derived families:
+The derived families:
 
     combination   = sum over its rates of  weight x centred rate
     ratio         = (numerator + pad x typical value) / (denominator + pad)
+    vs league     = (numerator - L x denominator) / (denominator + pad)
 
     numerator, denominator   weighted sums of the uncentred rates (`RATIOS` lists the weights)
     pad                      how many denominator units of the typical value are added, so a bench player's
                              ratio is not a ratio of two roundings
     typical value            roughly the league's value of the ratio (0.54 for true shooting)
+    L                        the league's value of the ratio in his seasons, from the league's rates (`VS_LEAGUE`)
 
 Example: a player with 6.0 made twos, 2.0 made threes and 3.0 made free throws per 100 (uncentred) and the league
 at 5.0, 1.5 and 2.5 has `points_per100` = 2 x 1.0 + 3 x 0.5 + 0.5 = 4.0 points per 100 above the league.
@@ -43,7 +45,7 @@ import pandas as pd
 
 __all__ = ["Feature", "BOX_RATES", "UNCENTRED_RATES", "ROLE", "CLOSENESS", "SHOT_TOTALS", "SHOT_LEAGUE", "CAREER",
            "BIO", "ON_COURT", "OFF_COURT", "ON_MINUS_OFF", "PLAYOFF_SHARE", "EVENT_RATES", "DERIVED", "RATIOS",
-           "SHOTQ", "SHOTQ_PADS", "PRIOR_FEATURES", "PANEL_INPUTS", "PANEL_KEYS", "SEASON_PANEL_COLUMNS",
+           "VS_LEAGUE", "SHOTQ", "SHOTQ_PADS", "PRIOR_FEATURES", "PANEL_INPUTS", "PANEL_KEYS", "SEASON_PANEL_COLUMNS",
            "ROW_FEATURES", "SHIPPED", "REBOUND_PARTS", "STEAL_PARTS", "POINTS_PARTS", "THREE_POINT_PARTS",
            "FEATURE_SETS", "CATALOGUE", "add_features", "add_shotq", "meaning", "glossary_markdown"]
 
@@ -144,6 +146,14 @@ RATIOS = {
     "turnovers_per_used_possession": ({TURNOVERS: 1}, _USED, 3.0, 0.13),
     "off_rebound_share": ({OFF_REBOUNDS: 1}, {OFF_REBOUNDS: 1, DEF_REBOUNDS: 1}, 3.0, 0.22),
 }
+# Each ratio against the league's value of it in the player's seasons (the owner, 2026-10-12: "vs league average";
+# notes/DECISIONS.md, experiment 56).  A ratio keeps its era's level, so a share of shots that are threes of 0.35 is
+# high in 1999 and average in 2024, while the centred rates are already measured from their season's league level.
+# The league's rates are each `<rate>_uncentred - <rate>`: the season's possession-weighted level, the same on every
+# row of a season and side, and on a row averaged over seasons the possession-weighted level of his seasons.  The
+# ratio is padded toward L instead of the typical value, then L is subtracted, so a league-average player and a
+# player with no attempts both read 0.  {name: the ratio it is built from}.
+VS_LEAGUE = {f"{name}_vs_league": name for name in RATIOS}
 # Shot quality from where his attempts came from: difficulty (the league's make probability from his spots) and
 # shot-making (how far he beats a league shooter from those spots), padded in attempts toward the season's own
 # league level.  The pads are attempts: threes need about 450 before a shooter's own rate is trusted.
@@ -152,10 +162,10 @@ SHOTQ_PADS = {"two_point_expected_pct": 50.0, "three_point_expected_pct": 50.0, 
               "points_per_shot_over_expected": 300.0}
 SHOTQ = list(SHOTQ_PADS)
 
-# Every input the prior could read (75): the rates, the role, every derived column, career, body, on-court, and the
-# play-by-play parts.  scripts/checks/95_miss_by_group.py and commands/within_season.py (its PLAYER_COLUMNS) report on
+# Every input the prior could read (85): the rates, the role, every derived column, career, body, on-court, the
+# play-by-play parts, and the ratios against the league.  scripts/checks/95_miss_by_group.py and commands/within_season.py (its PLAYER_COLUMNS) report on
 # all of them.
-PRIOR_FEATURES = [*BOX_RATES, *ROLE, *DERIVED, *RATIOS, *SHOTQ, *CAREER, *BIO, *ON_COURT, *EVENT_RATES]
+PRIOR_FEATURES = [*BOX_RATES, *ROLE, *DERIVED, *RATIOS, *SHOTQ, *CAREER, *BIO, *ON_COURT, *EVENT_RATES, *VS_LEAGUE]
 # The panel columns averaged into a multi-season training row, before anything is derived from them; the play-by-play
 # parts came last (2026-10-12), after every column the published ratings were built from.
 PANEL_INPUTS = [*BOX_RATES, *ROLE, *CLOSENESS, *UNCENTRED_RATES, *SHOT_TOTALS, *SHOT_LEAGUE, *CAREER, *BIO,
@@ -204,6 +214,9 @@ FEATURE_SETS = {
     # (2026-10-12): 1997-2011 ("early") and 2012-2026 ("late"); each is tested on the other half
     "stepwise_early": {"O": SHIPPED["O"] + [DEF_REBOUNDS_OF_THREES], "D": SHIPPED["D"] + [ASSISTS_TO_MID_RANGE]},
     "stepwise_late": {"O": SHIPPED["O"] + [CORNER_THREES], "D": SHIPPED["D"] + [FREE_THROWS_MADE]},
+    # experiment 56: every shipped ratio against the league's value of it, in the ratio's place
+    "ratios_vs_league": {side: [f"{name}_vs_league" if name in RATIOS else name for name in SHIPPED[side]]
+                         for side in ("O", "D")},
 }
 
 
@@ -235,6 +248,30 @@ def _add_ratios(frame: pd.DataFrame) -> None:
         top = sum(weight * frame[f"{rate}_uncentred"].to_numpy(dtype=float) for rate, weight in numerator.items())
         bottom = sum(weight * frame[f"{rate}_uncentred"].to_numpy(dtype=float) for rate, weight in denominator.items())
         frame[name] = (top + pad * typical) / (bottom + pad)
+
+
+def _add_ratios_vs_league(frame: pd.DataFrame) -> None:
+    """Each `VS_LEAGUE` column, from the uncentred rates and the league's (`<rate>_uncentred - <rate>`):
+
+        L          = (numerator of the league's rates) / (denominator of the league's rates)
+        vs league  = (numerator + pad x L) / (denominator + pad) - L  =  (numerator - L x denominator) / (denominator + pad)
+
+    Example: offensive-rebound share with 3.0 offensive and 9.0 defensive rebounds per 100 in a league at 2.5 and 7.5:
+    L = 2.5 / 10.0 = 0.25 and (3.0 - 0.25 x 12.0) / (12.0 + 3) = 0.0, his share being the league's.
+    """
+    for name, ratio in VS_LEAGUE.items():
+        numerator, denominator, pad, _ = RATIOS[ratio]
+        rates = set(numerator) | set(denominator)
+        if name in frame.columns or not all(f"{rate}_uncentred" in frame.columns and rate in frame.columns
+                                            for rate in rates):
+            continue
+        own = {rate: frame[f"{rate}_uncentred"].to_numpy(dtype=float) for rate in rates}
+        league = {rate: own[rate] - frame[rate].to_numpy(dtype=float) for rate in rates}
+        top = sum(weight * own[rate] for rate, weight in numerator.items())
+        bottom = sum(weight * own[rate] for rate, weight in denominator.items())
+        level = (sum(weight * league[rate] for rate, weight in numerator.items())
+                 / sum(weight * league[rate] for rate, weight in denominator.items()))
+        frame[name] = (top - level * bottom) / (bottom + pad)
 
 
 def add_shotq(frame: pd.DataFrame) -> pd.DataFrame:
@@ -285,6 +322,7 @@ def add_features(frame: pd.DataFrame, names) -> pd.DataFrame:
     """
     _add_combinations(frame)
     _add_ratios(frame)
+    _add_ratios_vs_league(frame)
     add_shotq(frame)
     missing = [name for name in names if name not in frame.columns]
     if missing:
@@ -411,6 +449,13 @@ def _ratio_formula(numerator: dict, denominator: dict, pad: float, typical: floa
     return f"({_linear(numerator)} + {pad:g} x {typical:g}) / ({_linear(denominator)} + {pad:g}), uncentred rates"
 
 
+def _vs_league_formula(numerator: dict, denominator: dict, pad: float, typical: float) -> str:
+    """A `VS_LEAGUE` entry written out: "(threes_made_per100 - L x (threes_made_per100 + threes_missed_per100)) /
+    (threes_made_per100 + threes_missed_per100 + 3), uncentred rates; L the same ratio of the league's rates"."""
+    return (f"({_linear(numerator)} - L x ({_linear(denominator)})) / ({_linear(denominator)} + {pad:g}), "
+            f"uncentred rates; L the same ratio of the league's rates (each uncentred minus centred)")
+
+
 def _catalogue() -> tuple:
     """Every column the prior can read, family by family, in the order the panel and the derivations list them."""
     rows = _family(BOX_RATES, _RATE_MEANINGS, "padded rate minus the league level", "per 100 possessions",
@@ -423,6 +468,8 @@ def _catalogue() -> tuple:
                      "combination") for name, weights in DERIVED.items()]
     rows += [Feature(name, _RATIO_MEANINGS[name], _ratio_formula(*spec), "fraction", "level", "ratio")
              for name, spec in RATIOS.items()]
+    rows += [Feature(name, f"{_RATIO_MEANINGS[ratio]} above the league's", _vs_league_formula(*RATIOS[ratio]),
+                     "fraction", "centred", "ratio vs league") for name, ratio in VS_LEAGUE.items()]
     rows += [Feature(name, text, formula.format(pad=f"{SHOTQ_PADS[name]:g}"), unit, "level", "shot quality")
              for name, text, formula, unit in _SHOTQ_ROWS]
     rows += [Feature(name, text, "panel column", unit, scale, group)

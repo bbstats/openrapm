@@ -83,18 +83,20 @@ def plain_name(flag: str, given: str, translate) -> str:
 
 
 def chosen_settings(args: argparse.Namespace) -> Settings:
-    """The setting named by --setting, with the defensive target, input list, booster file and fold assignment
-    given on the command line (each defaults to the shipped value, so a plain run is the setting itself).  An old
-    target or input-list name is read as its plain one (data/legacy_names.py)."""
+    """The setting named by --setting, with the defensive target, input list, booster file, fold assignment and era
+    half-life given on the command line (each defaults to the shipped value, so a plain run is the setting itself).
+    An old target or input-list name is read as its plain one (data/legacy_names.py)."""
     base = SETTINGS[args.setting]
     if args.fold_assignment < 0:
         raise SystemExit("--fold-assignment is 0 (the shipped order) or a positive seed")
+    if args.era_halflife < 0:
+        raise SystemExit("--era-halflife is 0 (every season counts the same, shipped) or a positive number of seasons")
     return replace(base,
                    targets=replace(base.targets,
                                    defence=plain_name("--defensive-target", args.defensive_target, target_name)),
                    prior=replace(base.prior, feature_set=plain_name("--features", args.features, feature_set_name),
                                  booster_file=BOOSTER_FILE.format(args.booster_params),
-                                 fold_assignment=args.fold_assignment))
+                                 fold_assignment=args.fold_assignment, era_halflife=float(args.era_halflife)))
 
 
 def table_stem(text: str) -> str:
@@ -189,6 +191,10 @@ def _add_setting_options(parser) -> None:
                         help="0: players sorted by label and assigned to folds 0,1,2,3,4,4,3,2,1,0,...  A positive "
                              "number assigns each block of five in an order drawn with that seed; 1 is the noise "
                              "control (default %(default)s)")
+    parser.add_argument("--era-halflife", type=float, default=PRODUCT.prior.era_halflife, metavar="H",
+                        help="0: the prior's training rows count the same from every season.  A positive H: a row "
+                             "counts half as much for every H seasons between its seasons and the rated one, beyond "
+                             "the nearest season the fit may use (default %(default)s)")
 
 
 def _add_folds_tag(parser) -> None:

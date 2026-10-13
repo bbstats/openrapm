@@ -91,6 +91,32 @@ def test_the_saved_prior_is_the_out_of_player_prediction():
     assert np.array_equal(np.array(list(got.values())), box_prior.predict(model, panel))
 
 
+def test_the_saved_prior_builds_the_ratios_against_the_league_and_era_boosters_pass_the_check():
+    """Experiment 56: a booster reading a `_vs_league` ratio is answered from the panel's own rates, as the build
+    answered it; boosters fitted with an era half-life pass the check (it changes the training weights only)."""
+    rng = np.random.default_rng(4)
+    names = ["off_rebound_share_vs_league", "row_possessions", "row_seasons"]
+    ids = np.repeat(np.arange(50), 2)
+    train = pd.DataFrame({"off_rebound_share_vs_league": rng.normal(0, 0.05, ids.size),
+                          "row_possessions": rng.uniform(200, 3000, ids.size), "row_seasons": 1.0},
+                         index=pd.Index(ids, name="player_id"))
+    train = train.assign(label=10 * train.off_rebound_share_vs_league, row_weight=1.0)
+    params = {"n_estimators": 20, "num_leaves": 4, "learning_rate": 0.2, "min_child_samples": 3}
+    model = box_prior.fit_out_of_player(train, names, params, n_folds=5)
+    panel = pd.DataFrame({"player_id": [3, 8], "side": "O", "possessions": [900.0, 2400.0],
+                          "off_rebounds_per100": [0.5, -1.0], "def_rebounds_per100": [-1.0, 2.0],
+                          "off_rebounds_per100_uncentred": [3.0, 1.5], "def_rebounds_per100_uncentred": [6.0, 9.0]})
+    saved = dict(full=model.full, folds=model.fold_models, excluded=model.held_out_players,
+                 feats=["off_rebound_share_vs_league"], model_feats=names)
+    got = ws.saved_prior(panel, "O", saved)
+    rated = box_prior.rated_rows(panel, ["off_rebound_share_vs_league"])
+    assert rated.off_rebound_share_vs_league.notna().all()
+    assert np.array_equal(np.array(list(got.values())), box_prior.predict(model, rated))
+    era = {"targets": asdict(TEST.targets), "ridge": asdict(TEST.ridge),
+           "prior": {**asdict(TEST.prior), "era_halflife": 8.0}}
+    ws.check_models({**LEGACY_META, "schema": 3, "settings": era})
+
+
 def test_boosters_saved_before_the_rename_are_read_under_the_plain_names(tmp_path, capsys):
     """A pickle of 2026-10-09 (old names, earlier meta) loads with its inputs renamed in order, passes the check,
     and says so in one line; its targets, saved in schema 2, compare equal to the shipped ones."""

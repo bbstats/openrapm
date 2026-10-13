@@ -64,9 +64,11 @@ def check_seasons(seasons, cfg: dict) -> list:
 def describe(settings, seasons) -> str:
     """One line naming what this run uses."""
     targets, prior = settings.targets, settings.prior
+    era = (f"; era half-life {prior.era_halflife:g} seasons" if prior.era_halflife > 0 else "")
     return (f"rate {seasons[0]}-{seasons[-1]} ({len(seasons)} seasons): offence target {targets.offence}, defence "
             f"target {targets.defence}; inputs {prior.feature_set}; booster {prior.booster_file}; {prior.n_folds} "
-            f"player folds, assignment {prior.fold_assignment}; neighbours left out {settings.exclude_neighbours}")
+            f"player folds, assignment {prior.fold_assignment}; neighbours left out {settings.exclude_neighbours}"
+            f"{era}")
 
 
 def accumulate_rapm(designs: DesignCache, seasons, settings) -> dict:

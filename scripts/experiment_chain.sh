@@ -23,8 +23,9 @@ LOG=outputs/${NAME}_chain.log
 # ratings with step 4's multipliers from the 8 fold seasons nearest each season, over its folds for all thirty
 # seasons (the shipped default of `openrapm shrink`).  The held-out audit pairs a candidate with experiment 46's
 # 2017-2026 folds (AUDIT_REF): the fold ratings come before step 4, so they are the same.  A candidate with
-# OWN_FOLDS=1 has folds for 2017-2026 only; its step 4 then reads the 8 nearest of those (pass SHRINK_FLAGS, or
-# build its 1997-2016 folds too, to match the incumbent's rule).
+# OWN_FOLDS=1 has folds for 2017-2026 only; its step 4 then reads the 8 nearest of those.  EARLY_FOLDS=1 (with
+# OWN_FOLDS=1; experiment 56) also builds its 1997-2016 folds (NAME_early), so its step 4 is the incumbent's rule on
+# its own folds for all thirty seasons.
 INC_NAME=${INC_NAME:-nearshrink}
 INC_FOLDS=${INC_FOLDS:-weightfix_early,weightfix_within}
 AUDIT_REF=${AUDIT_REF:-weightfix_within}
@@ -55,10 +56,17 @@ reading() {            # reading LABEL SCRIPT [FLAGS...]: run one check into the
 # frozen yardstick.  Both files must exist in outputs/.
 # FIRST_PASS=1: rate 2017-2026 only, its folds and the audit, and stop.  A later full run rates all
 # thirty seasons in one run and keeps the boosters the first pass saved (outputs/prior_models_NAME.pkl).
+# EARLY_FOLDS=1 (needs OWN_FOLDS=1, refuses FIRST_PASS=1): after the 2017-2026 folds and the audit, also the 1997-2016
+# folds (`openrapm folds --seasons 1997-2016 --tag NAME_early`, about 22 minutes), and step 4 reads both folders
+# (SHRINK_TAG NAME_early,NAME_within) by the shipped rule: each season's multipliers from its 8 nearest fold seasons.
 OWN_FOLDS=${OWN_FOLDS:-0}
 FIRST_PASS=${FIRST_PASS:-0}
+EARLY_FOLDS=${EARLY_FOLDS:-0}
 CONTROL_TAG=${CONTROL_TAG:-}
-if [ "$OWN_FOLDS" = "1" ]; then SHRINK_TAG=${SHRINK_TAG:-${NAME}_within}; else SHRINK_TAG=${SHRINK_TAG:-$INC_FOLDS}; fi
+if [ "$EARLY_FOLDS" = "1" ] && [ "$OWN_FOLDS" != "1" ]; then echo "EARLY_FOLDS=1 needs OWN_FOLDS=1"; exit 1; fi
+if [ "$EARLY_FOLDS" = "1" ] && [ "$FIRST_PASS" = "1" ]; then echo "EARLY_FOLDS=1 rates all thirty seasons; FIRST_PASS=1 rates ten"; exit 1; fi
+if [ "$EARLY_FOLDS" = "1" ]; then SHRINK_TAG=${SHRINK_TAG:-${NAME}_early,${NAME}_within}
+elif [ "$OWN_FOLDS" = "1" ]; then SHRINK_TAG=${SHRINK_TAG:-${NAME}_within}; else SHRINK_TAG=${SHRINK_TAG:-$INC_FOLDS}; fi
 SEASONS=1997-2026
 [ "$FIRST_PASS" = "1" ] && SEASONS=2017-2026
 if [ "${SKIP_BUILD:-0}" != "1" ]; then
@@ -74,6 +82,10 @@ if [ "$OWN_FOLDS" = "1" ]; then
   [ -n "$CONTROL_TAG" ] && COMPARE="$COMPARE --control=$CONTROL_TAG"
   echo "=== $(date) held-out audit against the incumbent's folds" >> $LOG
   $PY -u scripts/checks/138_heldout_audit.py --random=${NAME}_within --mult_tag=${NAME}_within $COMPARE --draws=0 --threshold_from=audit_lgb_noonc_2017 --out=audit_${NAME} >> $LOG 2>&1 || exit 1
+fi
+if [ "$EARLY_FOLDS" = "1" ]; then
+  echo "=== $(date) the candidate's own within-season folds, 1997-2016 (tag ${NAME}_early)" >> $LOG
+  $PY -u -m openrapm folds --models ${NAME} --base season_ratings_${NAME}_step3 --seasons 1997-2016 --tag ${NAME}_early >> $LOG 2>&1 || exit 1
 fi
 if [ "$FIRST_PASS" = "1" ]; then
   echo "=== $(date) first pass done" >> $LOG

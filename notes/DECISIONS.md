@@ -5729,6 +5729,7 @@ noise_regroup2.
 - **Reading:** a tie everywhere, and not adoptable on the tie rule (its target lean did not move toward zero).  Kept as
   the rebound split's reading alone; the owner's worry about serial testing (2026-10-12) is open: the proposal is each
   split alone, then all four together, adopting nothing until the set is read.  Logged as experiment 52 (sheet row 41).
+- **NOT ADOPTED (the owner, 2026-10-13).**
 
 ## Experiments 53-54: the play-by-play cuts chosen by forward stepwise selection, each half tested on the other (2026-10-12)
 
@@ -5762,6 +5763,7 @@ stepwise_builds.sh):
   order teammates slightly worse.  With experiment 52, the play-by-play splits have not improved the ratings in any
   form tried; the counted leans remain.  Logged as experiments 53 and 54 (sheet rows 42-43); verdicts pending the
   owner.
+- **NOT ADOPTED, both (the owner, 2026-10-13).**
 
 ## Era drift: two read-only tests (the owner, 2026-10-12: "is there seasonal drift? ... even like penalty drift possible?")
 
@@ -5896,3 +5898,119 @@ Gary Payton II 2022's nearest: Keon Ellis 2025 (distance 4.13), Javonte Green 20
   and "Distance"):** the page ships with nearest neighbours and shows the distance.  The classifier, check 143, the
   cached-scores flag and the chimeraboost dependency were removed.  **Published 2026-10-13** (the owner: "yes please
   commit/publish").
+
+## Experiment 56: the ratios against their season's league, after a screen of priors weighted toward the rated season (the owner, 2026-10-12; registered before the build)
+
+The owner: "any way to get era-level prior adjustments? one thought is moving the statistical stuff to 'vs league
+average' but that only solves part of the equation - the 'bias', not the 'slope'."  Plan:
+`~/.claude/plans/any-way-to-get-keen-lagoon.md`.
+
+**Where the code stood.**  The thirteen counting rates the prior reads (made threes, rebounds, steals, blocks, assists
+and the rest) and their sums are already padded toward their season's rate and measured from its league level
+(`box_rates.py`).  The ratios are not: true shooting %, effective field-goal %, three-point %, share of shots that are
+threes and offensive-rebound share on offence, true shooting % on defence, are padded toward fixed constants (share of
+shots that are threes toward 0.25 in 1997 and in 2026).  A constant added to every player's prior in one season changes
+nothing: every stint has five players a side, so step 3's unpenalised season intercept takes it and the centring
+removes the rest.  The inputs' level matters only through what the prior learns from thirty seasons pooled.
+
+**Built (uncommitted, branch `era-prior`).**
+- The slope: `PriorSettings.era_halflife`, `--era-halflife H`.  Each training row also counts
+  0.5 ^ (max(|season - rated| - start, 0) / H), averaged over its seasons by possessions; start is the nearest season
+  a fit may use (1 in the product setting, 2 in the test setting).  It multiplies the weights after their rescale to
+  mean 1, so a short half-life is less data under the same leaf penalties; the player folds do not change.  0, shipped,
+  runs today's code (`pytest -m slow` rebuilds 2026's published step 3).
+- The level: `features.VS_LEAGUE`, each ratio against the league's value of it in the player's seasons,
+  (numerator - L x denominator) / (denominator + pad), L from the league-level rates (`<rate>_uncentred - <rate>`); a
+  league-average player and a player with no attempts both read 0.  Feature set `ratios_vs_league`: the shipped lists
+  with each ratio replaced in its own place.
+- Check 142 (`scripts/checks/142_era_screen.py`), its gate registered in its docstring before any result: ten screen
+  seasons (1999, 2002, 2005, 2009, 2012, 2015, 2019, 2022, 2025, 2026) at the test setting, three player-fold
+  assignments each; each prior's held-out error after its best straight line, on two yardsticks (the career label;
+  the RAPM of the two neighbouring seasons alone, what the year-over-year test scores); seasons as the unit (paired t,
+  9 degrees of freedom).
+
+**The screen** (18 minutes; `outputs/era_screen.log`, `outputs/csv/era_screen*.csv`).  Held-out error minus today's,
+every rated player, below 0 is better:
+
+| arm | offence, career | offence, neighbours | defence, career | defence, neighbours |
+|---|---|---|---|---|
+| the ratios against the league | **-0.0183 (t -4.0, 9 of 10)** | **-0.0035 (t -2.4)** | -0.0036 (t -0.7) | -0.0007 (t -0.1) |
+| half-life 2 | +0.0018 (t +0.3) | +0.0030 (t +5.0) | +0.0764 (t +5.8) | +0.0859 (t +4.2) |
+| half-life 4 | +0.0018 (t +0.4) | +0.0013 (t +2.0) | +0.0362 (t +3.2) | +0.0464 (t +3.1) |
+| half-life 8 | +0.0025 (t +1.0) | +0.0014 (t +4.2) | +0.0153 (t +1.4) | +0.0305 (t +2.2) |
+| half-life 16 | +0.0030 (t +1.1) | +0.0015 (t +3.7) | +0.0046 (t +0.8) | +0.0126 (t +1.5) |
+| without the rows of careers begun before 1997 (a diagnostic) | +0.0078 (t +1.8) | +0.0030 (t +4.2) | +0.0162 (t +1.4) | +0.0040 (t +0.4) |
+
+- **Weighting toward the rated season loses at every half-life, more the shorter.**  It does turn the defensive prices
+  toward each era (possessions he finishes 0.18 / 0.25 / 0.36 per standard deviation in 1997-2006 / 2007-2016 /
+  2017-2026 at half-life 4, against 0.29 / 0.29 / 0.28 today; the era-drift test's era priors read 0.13 / 0.29 /
+  0.38), but the rows it gives up cost more than the drift it follows: pooling stays best, as in the era-drift test.
+- **The ratios against the league help offence in every era** (-0.016 / -0.032 / -0.010; seasons worse 0 of 3, 0 of 3,
+  1 of 4), and as much for players whose careers began in 1997 or later (-0.017, t -3.9): not the 1997 cut-off of the
+  career counts.  Defence a tie; its neighbours yardstick is worse in all four 2017-2026 screen seasons (+0.011), not
+  gated, read again on the build.
+- **They also flatten the offensive prices across eras**: points 0.29 / 0.35 / 0.40 per standard deviation today
+  against 0.17 / 0.18 / 0.17; true shooting 0.11 / 0.10 / 0.05 against 0.14 / 0.14 / 0.15; share of shots that are
+  threes 0.05 / 0.06 / 0.04 against 0.09 / 0.11 / 0.12.  A pooled prior reading the raw ratios (the league's true
+  shooting 0.518 in 2001 and 0.580 in 2026; its share of shots that are threes 0.16 in 1998 and 0.42 in 2025, both
+  from the panel's league-level rates) priced the same number differently by era; with every ratio at its season's
+  level the prices hold still, so on offence most of what looked like slope was the level.
+- Without the rows of careers begun before 1997 the prior is worse on both sides: their cut-off career counts cost it
+  less than their rows give it.
+- The ratios with half-life 16 pass as well (offence -0.0198, t -4.0), carried by the ratios; with half-life 8 they
+  fail (defence worse in all three 1997-2006 screen seasons), with 4 and 2 they fail on defence.
+- **The gate:** the ratios against the league pass; no half-life passes (rule (a) fails at each).  By the registered
+  rule the build is **the ratios against the league alone**.  The slope's next candidate, kept for the owner: a warm
+  start (the pooled booster first, then a few trees fitted on rows near the rated season), which follows an era only
+  as far as the pooled prices leave something to follow.
+
+**The build:** `NAME=vsleague bash scratch/2026-10-12_era_prior/era56.sh "--features ratios_vs_league"`.
+1. The noise control rebuilt on experiment 55's step 4 (`noise_regroup2_near`: its folds for 1997-2016, step 4 by the
+   shipped rule on all thirty seasons' folds), because the control built before experiment 55 took 2017-2026's
+   multipliers for every season.
+2. `OWN_FOLDS=1 EARLY_FOLDS=1 bash scripts/experiment_chain.sh vsleague points_with_expected_opponent_threes
+   "--features ratios_vs_league"`: its own folds for all thirty seasons, step 4 by the shipped rule on them, the
+   incumbent's multipliers as a second arm.
+3. The year-over-year test by era (1998-2002, 2003-2006, 2007-2016, 2017-2025) and at every stage (the prior alone,
+   step 3, step 4), the robust review against `noise_regroup2_near`, step 4's multipliers season by season on its own
+   folds, and the prices by era.
+
+**Expected, before the build:** better on offence in every era, defence a tie; the 2026 top 20 moved mostly on
+offence.  **Decision:** the standing rule (year over year z -2 or better, no gross consensus miss, the 2026 top 20
+not worse), read beside the noise control.
+
+**The build (2026-10-12, 3:31-4:37 PM; `outputs/vsleague_driver.log`, `outputs/vsleague_chain.log`).**
+- The noise control on experiment 55's rule (`noise_regroup2_near`) against the incumbent: -0.004 (z -0.1, 29 of 56),
+  so it is a valid control for `nearshrink`.  Its step 4: offence 0.657-0.705, defence 0.790-0.978.
+- **Year over year: 8.5821 against 8.5827, -0.017 (z -0.5, 29 of 56): a tie.**  Looking forward +0.008 (z +0.2),
+  looking back -0.041 (z -0.7).  By era: 1998-2002 -0.107 (z -1.5, 7 of 10), 2003-2006 +0.085 (z +0.6, 3 of 8),
+  2007-2016 -0.017 (z -0.4), 2017-2025 -0.011 (z -0.2).  On the incumbent's multipliers -0.012 (z -0.3).  At every
+  stage: the prior alone +0.127 (z +0.7), step 3 +0.094 (z +0.9), step 4 -0.025 (z -0.4), final -0.017.  Its own step
+  4: offence 0.657-0.703, defence 0.785-0.975.
+- The robust review against `noise_regroup2_near`: the same pattern as the control (year-over-year team-game slices 7
+  better / 4 worse, the control 7 / 4; lineup swaps 8 / 4 against 3 / 9; offensive trade loss 5 / 4 against 8 / 1);
+  nothing past z 2 either way.  Quality tiers: no tier past z 2 at team-game level.
+- Trade loss a tie (offence z -0.3, defence z +0.5); lineup-swap net order +0.009 (z +0.6; offence +0.009 z +1.0,
+  defence -0.008 z -1.1); consensus 0.852 / 0.780 / 0.798 against 0.850 / 0.780 / 0.802.
+- The held-out audit on its own 2017-2026 folds (paired with `weightfix_within`): held-out error -0.005 (z -0.1).  The
+  offensive three-point leans shrink (share of shots that are threes +0.35 -> +0.17, z -6.3; three-point attempts
+  +0.66 -> +0.45, z -6.8; threes minus twos taken +0.49 -> +0.24, z -9.6), and the two-point and usage leans grow
+  (made twos +0.06 -> +0.25, z +12.2; share of team possessions played +1.00 -> +1.16, z +8.6; possessions he
+  finishes with shot attempts and points +0.24 -> +0.43, z +6.0).  It moves the lean from three-point shooters to
+  two-point scorers rather than removing it.
+- Step 4's defensive multiplier on its own folds still drifts +0.077 per decade (t +3.6; the incumbent's +0.075): the
+  ratios leave the defensive drift where it was.
+- The prices on the build's boosters (all thirty seasons): offence points 0.31 / 0.36 / 0.41 per standard deviation
+  against 0.17 / 0.18 / 0.17; true shooting 0.12 / 0.11 / 0.06 against 0.14 / 0.13 / 0.16; share of shots that are
+  threes 0.05 / 0.06 / 0.04 against 0.09 / 0.11 / 0.12.  Defence moves little.
+- 2026 top 20 (the test tables): Rudy Gobert in (24th -> 20th, +0.48, defence +0.39), Moussa Diabate out (20th -> 21st,
+  +0.10).  Inside it: Jokic +0.85 (5th -> 3rd, offence +0.64), Thybulle +0.58, Kawhi Leonard +0.56, Ausar Thompson
+  -0.50 (6th -> 8th).  Elsewhere guards who score inside the arc fall on offence: Jalen Brunson -0.92 (96th -> 170th),
+  T.J. McConnell -0.75, Darius Garland -0.68, Jamal Murray -0.48.  Every 2026 player: a median move of 0.14 per 100.
+- **Reading:** a tie on the test that decides.  The screen's offensive gain (-0.018 held out, t -4.0) did not reach
+  the year-over-year test, as with experiments 53-54's selected splits.  What it does change: the offensive prices
+  stop moving between eras, and the offensive lean moves from three-point shooters to two-point scorers.  Verdict
+  pending the owner; recommended not adopted under the standing rule.  The defensive drift (steps 2 and 4) is
+  untouched; its next candidate is the warm start above.
+- **NOT ADOPTED (the owner, 2026-10-13).**  The code stays, switched off (`--era-halflife 0`, the shipped feature set);
+  committed on the branch `era-prior`.  Next, the owner's pick: the career counts' 1997 cut-off (experiment 57).
