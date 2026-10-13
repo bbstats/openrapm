@@ -41,15 +41,18 @@ The work happens on feature branches off `main`; the live site is served from `d
 **464 passed, 6 deselected (the slow tests, `pytest -m slow`), 1 xfailed, ~60 s** with the scraped data
 (2026-10-12; the LaMelo test at the bottom of this file passes on the current ratings).
 
-## START HERE (2026-10-13): experiment 57, the career counted from each player's debut -- ADOPTED, not published
+## START HERE (2026-10-13): experiment 57, the career counted from each player's debut -- ADOPTED and PUBLISHED
 
 The owner's pick after experiment 56; **adopted** (the owner: "Adopt (your data-fix rule)").  Uncommitted on the branch
 `era-prior` (after e2a351b); DECISIONS.md "Experiment 57" has every number.
 - **Now shipped (settings):** the feature set `career_from_debut`; step 4's folds `fromdebut_early,fromdebut_within`.
   **The incumbent for scoring is `outputs/season_ratings_fromdebut.parquet` (8.5825)**; `experiment_chain.sh` and
   135 default to it.  The data order is now ingest, stints, events, **careers**, panel.
-- **Product table rebuilt** with `openrapm build` (previous: `outputs/season_ratings_product*_before_fromdebut`);
-  **not published**: `openrapm site --bias --decomposition`, commit, push, on the owner's word.
+- **Product table rebuilt** with `openrapm build` (previous: `outputs/season_ratings_product*_before_fromdebut`) and
+  **PUBLISHED 2026-10-13** (the owner: "Publish now"): `openrapm site --bias --similarity` (the decomposition page is
+  plain RAPM and was left as it was), commit 67b6441 on `era-prior`, `main` fast-forwarded and pushed, Pages built,
+  the live ratings.json equal to the committed one.  The 2026 rebuild test now reads the frozen copy
+  `outputs/season_ratings_product_fromdebut_step3.parquet`.
 - **No noise control on this base yet:** the next experiment's robust review needs one (`--fold-assignment 1` with
   its own folds, as `noise_regroup2_near` was for experiment 46's prior).
 - **Built:** `openrapm data careers` (`src/openrapm/data/careers.py`; 490 careers cached in `data/raw/careers/`, the

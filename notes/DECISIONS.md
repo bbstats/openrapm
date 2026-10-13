@@ -6078,5 +6078,9 @@ A.C. Green 1997: seasons played before 0 -> 11, career possessions 0 -> 116,800,
   BASE_FLAGS, 135's --ref.  `openrapm data careers` is a step before `openrapm data panel`.  The simulated league of
   the tutorial carries the debut columns as copies (every simulated career begins inside it); its golden numbers are
   unchanged.  No noise control on this base yet: `noise_regroup2_near` was built on experiment 46's prior.  The
-  product table was rebuilt (`openrapm build`; the previous ones kept as `season_ratings_product*_before_fromdebut`);
-  not published.
+  product table was rebuilt (`openrapm build`; the previous ones kept as `season_ratings_product*_before_fromdebut`):
+  consensus 0.848 / 0.784 / 0.811 against 0.849 / 0.781 / 0.803; 2026 Karl-Anthony Towns into the top 20 (22nd ->
+  16th, +0.31), Jarrett Allen out (20th -> 22nd), Wembanyama first (-0.35); a median move of 0.13 per 100.
+- **PUBLISHED 2026-10-13 (the owner: "Publish now"):** commit 67b6441 (code, notes, docs/data/ratings.json, the bias
+  page, the similarity data), `main` fast-forwarded and pushed; Pages built; the live ratings.json equals the
+  committed one.
