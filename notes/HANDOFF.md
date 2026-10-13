@@ -53,8 +53,20 @@ The owner's pick after experiment 56; **adopted** (the owner: "Adopt (your data-
   plain RAPM and was left as it was), commit 67b6441 on `era-prior`, `main` fast-forwarded and pushed, Pages built,
   the live ratings.json equal to the committed one.  The 2026 rebuild test now reads the frozen copy
   `outputs/season_ratings_product_fromdebut_step3.parquet`.
-- **No noise control on this base yet:** the next experiment's robust review needs one (`--fold-assignment 1` with
-  its own folds, as `noise_regroup2_near` was for experiment 46's prior).
+- **Noise control on this base: `noise_fromdebut`** (2026-10-13, 43 minutes; `OWN_FOLDS=1 EARLY_FOLDS=1 bash
+  scripts/experiment_chain.sh noise_fromdebut points_with_expected_opponent_threes "--fold-assignment 1"`; its folds
+  `noise_fromdebut_early` + `noise_fromdebut_within`).  Against `fromdebut`: year over year 8.5819 against 8.5825,
+  -0.018 (z -0.5); lineup swaps within 0.01 (defensive order +0.007, z +0.6); trade loss within noise; consensus
+  0.811.  Use it as `135 --controls=noise_fromdebut` and as the size of noise for any later experiment.
+- **Experiment 57's lineup-swap cost, traced (DECISIONS.md, "Where experiment 57's lineup-swap cost comes from"):**
+  defensive order about -0.03 against the old incumbent, already in the prior (step 2); real (the old base's
+  regrouping loses 0.003); not the estimated pre-1997 possessions (the season counts alone reproduce it); the
+  defensive booster leans a quarter more on the career inputs (0.068 -> 0.084 of its split gain).  Left as adopted.
+  **The screen of taking the career inputs off the prior (experiment 58) FAILED**: defence order -0.046 (worse than
+  57's -0.031) and the prior alone worse year over year (z +6.9 off defence, +2.7 off both), so the "leans on career
+  length" mechanism is refuted and the cause stays unexplained (it may be that the old incumbent is a favourable draw
+  on this measure).  Diagnostic builds: `abl_seasons`, `abl_possessions`, `scr_nocareer_d`, `scr_nocareer_both`
+  (`scratch/2026-10-13_debut_ablation/ablate.py`), not logged as experiments.
 - **Built:** `openrapm data careers` (`src/openrapm/data/careers.py`; 490 careers cached in `data/raw/careers/`, the
   rows before 1997 in `data/cache/careers_before.parquet`); four panel columns counted from the debut
   (`features.CAREER_FROM_DEBUT`), the feature set `career_from_debut`; the panel rebuilt with every old column

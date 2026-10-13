@@ -6015,6 +6015,44 @@ not worse), read beside the noise control.
 - **NOT ADOPTED (the owner, 2026-10-13).**  The code stays, switched off (`--era-halflife 0`, the shipped feature set);
   committed on the branch `era-prior`.  Next, the owner's pick: the career counts' 1997 cut-off (experiment 57).
 
+## Experiment 58 (screen): the career-length inputs off the prior (the owner, 2026-10-13: "ok go for #1"; registered before any result)
+
+Experiment 57's defensive teammate order is about 0.03 worse than the old incumbent's, already in the prior; the
+defensive booster puts a quarter more of its split gain on the career inputs (see "Where experiment 57's lineup-swap
+cost comes from").  The screen takes the career-length inputs (seasons played before, career possessions before; each
+counted from the debut as shipped) off the prior and reads whether the loss comes back.  Two prior-only builds at the
+test setting (`scratch/2026-10-13_debut_ablation/ablate.py`, `rate` only, the incumbent's fold assignment):
+- `scr_nocareer_d`: off the defensive list only (the evidence is on defence);
+- `scr_nocareer_both`: off both lists (the same-method rule: the reason to drop a count is the same on both sides).
+Seasons with his current team (offence) and the two row-evidence inputs stay.
+**Pass rule, before the result:** a full build (its own folds, steps 4 and 5, the chain's readings, a noise control
+only if it passes) follows only if the variant's prior-stage defensive swap order (check 90 on `:prior`) is within 0.010
+of the old incumbent's (`nearshrink`'s: 1.2287; experiment 57's is 1.1974, -0.031), and its prior alone is not worse
+than experiment 57's prior year over year (63 `--columns=prior`, paired z below +2).  If both variants pass, the one
+that is better on the swap order is built, unless they are within 0.005, when the one that drops fewer inputs is.
+
+**Result (2026-10-13, 2:45 PM; `outputs/season_ratings_scr_nocareer_{d,both}_step3.parquet`): the screen FAILS both
+parts; no full build.**  Prior stage, the order of teammates (check 90, the old incumbent's score in brackets):
+
+| | defence (1.2287) | offence (1.3923) | prior alone, year over year (game error) |
+|---|---|---|---|
+| experiment 57 | 1.1974 (-0.031, z -2.3) | 1.3605 (-0.032) | 8.8258 |
+| career inputs off the defensive list | 1.1829 (-0.046, z -2.5) | 1.3605 (as 57: same offensive list) | 8.8480 (+0.61 in squared error, z +6.9) |
+| career inputs off both lists | 1.1829 (the same defensive list and folds) | 1.3978 (+0.006) | 8.8503 (+0.66, z +2.7) |
+
+- **Defence got worse, not better** (-0.046 against 57's -0.031): the rule asked for within 0.010 of the incumbent.
+- **The prior alone is worse year over year** without the career inputs (z +6.9 and +2.7 at team-game level; the rule
+  asked for below +2): the career inputs carry real signal for the prior's accuracy.
+- **So the mechanism proposed above is refuted:** the defensive booster's larger share of gain on the career inputs is
+  not what costs the swap order, since taking them off costs more.  What does cost it stays unexplained: every build
+  whose inputs differ from the old incumbent's has a defensive prior order 0.018-0.046 below its 1.2287 (seven builds,
+  the old base's one regrouped build -0.003), which is also what an incumbent that is a favourable draw on this
+  measure would look like; one regrouped old-base build cannot tell the two apart.  Offence is similar: dropping the
+  career inputs recovers its order (+0.006), but the old base's own regrouped build loses 0.028 there, so that is
+  within what regrouping does.
+- **Closed.**  Experiment 58 is not built.  Experiment 57 stays as adopted.  The two screen builds are not logged in
+  the experiment table (no chain was run).
+
 ## Experiment 57: the career counted from each player's debut, not from 1997 (the owner, 2026-10-13; registered before the build)
 
 The owner's pick (question asker, 2026-10-13: "Fix 1997 career cut-off").  **The defect:** seasons played before this
@@ -6081,6 +6119,32 @@ A.C. Green 1997: seasons played before 0 -> 11, career possessions 0 -> 116,800,
   product table was rebuilt (`openrapm build`; the previous ones kept as `season_ratings_product*_before_fromdebut`):
   consensus 0.848 / 0.784 / 0.811 against 0.849 / 0.781 / 0.803; 2026 Karl-Anthony Towns into the top 20 (22nd ->
   16th, +0.31), Jarrett Allen out (20th -> 22nd), Wembanyama first (-0.35); a median move of 0.13 per 100.
+- **The noise control on this base, `noise_fromdebut` (2026-10-13; fold assignment 1, its own folds for all thirty
+  seasons, step 4 by the shipped rule; 43 minutes):** year over year 8.5819 against 8.5825, -0.018 (z -0.5, 30 of
+  56); lineup-swap net order -0.009 (z -0.6), offence +0.006, defence +0.007 (z +0.6); trade loss offence -0.0009
+  (z -1.9), defence +0.0002; consensus 0.851 / 0.782 / 0.811.  Regrouping alone moves the year-over-year test by
+  about 0.02 and, on this base, the defensive lineup-swap order by under 0.01 (against experiment 57 itself); the
+  year-over-year -0.014 of experiment 57 is noise-sized.  Logged as C2 (sheet row 47).  Where its defensive swap cost
+  comes from: the next entry.
+- **Where experiment 57's lineup-swap cost comes from (2026-10-13, read-only scoring plus two prior-only builds).**
+  Scored at every stage (check 90 `name=table:prior|rating`, the order of teammates, defence, minus the old incumbent
+  `nearshrink`): the prior alone -0.031 (z -2.3), step 3 -0.025, step 4 -0.017, final -0.031: **the cost is already
+  in step 2**, steps 3 to 5 neither add nor remove it.  Two builds at the test setting (`scratch/2026-10-13_debut_ablation/
+  ablate.py`, the same fold assignment as the incumbent, `rate` only) change one half each: season counts from the
+  debut with career possessions still from 1997 (`debut_seasons_only`) -0.033 (z -2.5); career possessions from the
+  debut with season counts from 1997 (`debut_possessions_only`) -0.022 (z -1.8).  Controls on the prior's defensive
+  order: the regrouped build on the new base -0.018 (z -0.8), the regrouped build on the OLD base -0.003 (z -0.1).
+  So: **(1)** the cost is real (four builds on the new base lose 0.018-0.033, the old base's regrouping 0.003);
+  **(2)** it is not the estimated pre-1997 possessions (minutes x 1997's rate): the season counts, which need no
+  estimate, reproduce all of it, and the possessions alone about two thirds; **(3)** it comes from counting careers
+  correctly in either way.  A mechanism that fits and is not proven: the defensive booster puts 0.084 of its split gain
+  on the career inputs against 0.068 for the old base (2017-2026: 0.088 against 0.068; seasons 2007-2026, full
+  boosters), so the prior orders teammates more by experience, which the games of neighbouring seasons do not
+  confirm (trap 8's pattern: experience predicts how well a label is measured more than how good a defender is).
+  Offence is not attributable: its prior-stage order loses 0.02-0.04 in every new-base build and 0.028 in the old
+  base's regrouped build, and the career inputs' share of its gain fell (0.121 to 0.095).  Not fixed by changing how
+  the possessions are estimated.  The owner's ruling stands (a data fix, adopted on a tie); a change that would
+  address it, not tried: the career inputs off the defensive list.
 - **PUBLISHED 2026-10-13 (the owner: "Publish now"):** commit 67b6441 (code, notes, docs/data/ratings.json, the bias
   page, the similarity data), `main` fast-forwarded and pushed; Pages built; the live ratings.json equals the
   committed one.
