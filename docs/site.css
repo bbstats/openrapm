@@ -17,3 +17,9 @@ nav.site .theme { margin-left: auto; display: inline-flex; padding: 5px; border:
 nav.site .theme:hover { color: CanvasText; }
 /* four tabs and the switch need about 343 px; a 360 px phone has 328 */
 @media (max-width: 380px) { nav.site a { padding-left: 8px; padding-right: 8px; } nav.site a:first-child { padding-left: 0; } }
+
+/* the switch between the OpenRAPM and vanilla RAPM decomposition pages: drawn like each page's .seg buttons */
+nav.toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin: 0 0 14px; }
+nav.toggle a { font-size: 13px; padding: 5px 12px; color: var(--muted); text-decoration: none; }
+nav.toggle a + a { border-left: 1px solid var(--line); }
+nav.toggle a[aria-current="page"] { background: var(--accent); color: #fff; }

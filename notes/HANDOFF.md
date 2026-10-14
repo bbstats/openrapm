@@ -41,6 +41,34 @@ The work happens on feature branches off `main`; the live site is served from `d
 **464 passed, 6 deselected (the slow tests, `pytest -m slow`), 1 xfailed, ~60 s** with the scraped data
 (2026-10-12; the LaMelo test at the bottom of this file passes on the current ratings).
 
+## START HERE (2026-10-13): the OpenRAPM decomposition tab -- built, NOT committed
+
+The owner's request: "another tab for OpenRAPM decomposition".  Their choices: split each published rating, offense and
+defense separately, into **box score + on court + off court + team SOS + swap adjustment** (off court is the vanilla
+page's two off-court pieces summed; the swap adjustment its own column; no split of the box score by stat); a side
+toggle Offense | Defense | Total; the nav stays four tabs, and the Decomposition tab opens on OpenRAPM with a toggle
+[ OpenRAPM | Vanilla RAPM ] at the top of both pages.  Plan: `~/.claude/plans/vanilla-rapm-decomposition-is-precious-firefly.md`.
+- **Built (uncommitted, branch `era-prior`):** `src/openrapm/decomposition.py` (the vanilla page's team and row-group
+  helpers moved there, plus the refit and the split), `rapm.solved_ridge` and `prior_rapm.ridge_system` (the old code
+  split out, bit for bit), `openrapm site --openrapm-decomposition` (132 seconds), `docs/decompose_openrapm.html`,
+  `docs/data/decompose_openrapm.json` (14,578 rows, 1.9 MB), the toggle on `docs/decompose.html`, the nav link on every
+  page, tests (564 pass, 1 expected failure; `pytest -m slow` as below).
+- **How the three games' pieces are exact:** step 3's games' part is a weighted sum of row outcomes, so solving step 3
+  again on the table's own priors and grouping the rows splits it (`decomposition.py` has the equation).  The run stops
+  before writing unless the pieces add up to every rating, the refit reproduces every games' part and prior scale in the
+  table (about 1e-12; 3e-8 in 2020, whose solve needs a jitter that follows the prior columns' scale), and the rows are
+  `ratings.json`'s.  Vanilla files rebuilt after the move: byte-identical to the committed ones.
+- **Example:** Victor Wembanyama 2026, offense 2.07 = 0.69 + 1.41 - 0.27 + 0.06 + 0.18; total 7.16 = 3.98 + 2.65 - 0.21
+  + 0.14 + 0.61.  Gary Payton II 2022, total 3.62 = 1.53 + 0.49 - 0.01 + 0.08 + 1.53.
+- **Waiting on the owner:** the piece names (provisional: Box score, On court signal, Off court adjustment, Team SOS
+  adjustment, Swap adjustment, OpenRAPM), any wording for the page (it has labels and the equation only), and
+  commit / publish.  `docs/decompose.html`'s footer still names the retired `scripts/83_decompose_site.py`: the owner's
+  wording, left alone.
+- **After any ratings build:** `openrapm site --openrapm-decomposition`, or `tests/test_decompose_openrapm_site.py` fails
+  (the file's ratings must be `ratings.json`'s).  The vanilla files do not depend on the ratings.
+- **To commit:** this tab's hunks only.  `tests/test_cli.py` and the notes are shared with other uncommitted work (the
+  warm-start screen, check 143), so stage by explicit path and hunk, never `git add -A`.
+
 ## START HERE (2026-10-13): experiment 57, the career counted from each player's debut -- ADOPTED and PUBLISHED
 
 The owner's pick after experiment 56; **adopted** (the owner: "Adopt (your data-fix rule)").  Uncommitted on the branch
@@ -456,10 +484,10 @@ chunks, 99, 91).  Today the same table, and the site from it, are two commands; 
         (steps 1-5 at the product setting for all thirty seasons, ~15 min: writes outputs/season_ratings_product.parquet,
          the published table, with outputs/season_ratings_product_step3.parquet and _step4.parquet beside it; step 4
          reads the multipliers off outputs/within/weightfix_within, the default of --folds)
-    .venv/Scripts/python -m openrapm site --bias --decomposition --similarity
+    .venv/Scripts/python -m openrapm site --bias --decomposition --openrapm-decomposition --similarity
         (docs/data/ratings.json, docs/bias.html with outputs/bias_groups.json and outputs/bgmm_proba.parquet,
-         docs/data/decompose_1y.json and decompose_3y.json, ~5 min, and docs/data/similarity/, ~30 s; then commit and
-         fast-forward main)
+         docs/data/decompose_1y.json and decompose_3y.json, ~5 min, docs/data/decompose_openrapm.json, ~2 min, and
+         docs/data/similarity/, ~30 s; then commit and fast-forward main)
 
 The previous product tables are kept as `outputs/season_ratings_product_before_weightfix.parquet` (experiment 45) and
 `outputs/season_ratings_product_before_lgb_noonc.parquet` (chimeraboost).  The prior shrink's
@@ -662,14 +690,17 @@ categories: across the eight types, `vs consensus` against `vs 2026 observed` is
 ## The site
 
 `docs/index.html` (rankings, newest season first), `docs/bias.html` (bias by player type) and
-`docs/decompose.html`, the "Decomposition" tab (vanilla RAPM split two exact ways: by player, on-court rtg + teammates + opponents + context +
+`docs/decompose_openrapm.html`, the "Decomposition" tab (2026-10-13: every published rating split, offense and defense,
+into box score + on court + off court + team SOS + swap adjustment; PIPELINE.md, "The OpenRAPM decomposition page"; a
+toggle at the top of both decomposition pages switches to `docs/decompose.html`, the vanilla page: vanilla RAPM split two exact ways: by player, on-court rtg + teammates + opponents + context +
 ridge penalty; by possession, on court signal + off court adjustment (GP) + off court adjustment (DNP) + team SOS adjustment,
 with the actual on and off court ratings beside them; single seasons
 and the ten three-season windows, penalty 3,000), and `docs/similarity.html`, the "Similarity" tab (2026-10-12: each
 player-season's nearest player-seasons of other players, by the distance between their standardised inputs; opens on
 Gary Payton II 2022; PIPELINE.md, "The similarity page").  Rebuild with `.venv/Scripts/python -m openrapm site --bias
---decomposition --similarity` (once scripts 52, 76 and 83), commit, and fast-forward `main` to publish, on the owner's
-word.  The similarity page reads the final ratings, so it is rebuilt after every ratings build.
+--decomposition --openrapm-decomposition --similarity` (once scripts 52, 76 and 83), commit, and fast-forward `main` to
+publish, on the owner's word.  The similarity and OpenRAPM decomposition pages read the final ratings, so they are
+rebuilt after every ratings build.
 **Check the Pages build after pushing** (`gh api repos/bbstats/openrapm/pages/builds/latest`): on 2026-10-08 the push
 to `main` did not start one, and `gh api -X POST repos/bbstats/openrapm/pages/builds` had to request it.  The
 tabs at the top and the dark-mode button are `docs/site.css` and `docs/site.js`, shared by all four pages (`openrapm site

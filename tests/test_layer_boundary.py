@@ -67,6 +67,7 @@ MODEL_LAYER = [
     "prior_shrink.py",  # step 4: the prior part's multipliers from the within-season folds, the shrink
     "scoring.py",       # ratings scored on unseen games, the splits, the pooled and paired summaries
     "similarity.py",    # the similarity page: player-seasons' inputs, standardised, and the nearest of other players
+    "decomposition.py",  # the decomposition pages: which rows of a ridge fit a coefficient comes from
 ]
 
 # Model code that still reaches its own data, and what through.  Nothing may be added here.

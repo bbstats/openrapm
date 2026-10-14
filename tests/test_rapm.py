@@ -58,6 +58,26 @@ def test_the_solve_survives_an_empty_unpenalised_column():
     assert rapm.block_penalty((2, 1, 2), (5.0, 7.0, 0.0)).tolist() == [5.0, 5.0, 7.0, 0.0, 0.0]
 
 
+def test_solved_ridge_returns_the_matrix_it_solved_jitter_included():
+    """The plain solve's matrix is G + the penalties; after a retry the unpenalised diagonal carries the jitter."""
+    rng = np.random.default_rng(0)
+    b = rng.normal(size=(50, 3))
+    gram = np.zeros((4, 4))
+    gram[:3, :3] = b.T @ b
+    rhs = np.concatenate([b.T @ rng.normal(size=50), [0.0]])
+    penalty = np.array([1.0, 1.0, 0.0, 0.0])
+    theta, matrix = rapm.solved_ridge(gram, rhs, penalty)
+    assert np.array_equal(theta, rapm.solve_ridge(gram, rhs, penalty))
+    plain = gram + np.diag(penalty)
+    assert np.array_equal(matrix[:2, :2], plain[:2, :2])                             # the penalised block is untouched
+    assert matrix[2, 2] > plain[2, 2] and matrix[3, 3] > plain[3, 3]                 # the two unpenalised columns
+    assert np.allclose(matrix @ theta, rhs)                                          # theta solves what came back
+    full = rng.normal(size=(50, 2))
+    solvable = full.T @ full
+    theta, matrix = rapm.solved_ridge(solvable, full.T @ rng.normal(size=50), [0.5, 0.0])
+    assert np.array_equal(matrix, solvable + np.diag([0.5, 0.0]))                    # no retry, no jitter
+
+
 # ------------------------------------------------------------ the claim the whole design rests on
 def test_leaving_a_season_out_equals_fitting_without_it(world):
     """Leaving 2003 out of the sums must equal summing the other three seasons, or the shortcut is wrong."""

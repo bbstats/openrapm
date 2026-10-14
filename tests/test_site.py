@@ -91,22 +91,6 @@ def test_span_labels():
     assert site.span_label([2024, 2025, 2026]) == "2024-26"
 
 
-def test_a_side_takes_the_team_of_its_first_player_the_box_score_lists():
-    teams = pd.Series([10, 20, 20], index=pd.MultiIndex.from_tuples([("g1", 1), ("g1", 2), ("g2", 3)]))
-    game_ids = np.array(["g1", "g1", "g2"])
-    players = np.array([[9, 1], [2, 1], [7, 8]])         # row 1: first player unknown; row 3: nobody known
-    assert site.side_team(teams, game_ids, players).tolist() == [10, 20, -1]
-
-
-def test_team_codes_give_an_unplaced_side_a_code_of_its_own():
-    rows = {"team_att": np.array([10, 10, -1]), "team_def": np.array([20, 20, 20]),
-            "season": np.array([2026, 2026, 2026]), "game_ids": np.array(["g1", "g2", "g2"])}
-    codes = site.team_codes(rows)
-    assert codes["ts_att"][0] == codes["ts_att"][1] != codes["ts_att"][2]       # one team-season, one unknown
-    assert codes["gt_att"][0] != codes["gt_att"][1]                             # two team-games
-    assert codes["unplaced"] == pytest.approx(1 / 3)
-
-
 # ------------------------------------------------------------------------------ the similarity page
 def _similarity_world(tmp_path, seed=3):
     """A made-up season panel and ratings table: four players over three seasons, every possession count above the
@@ -179,14 +163,158 @@ def test_every_page_carries_the_same_four_tabs_with_its_own_marked():
     import re
     from pathlib import Path
     docs = Path(__file__).resolve().parents[1] / "docs"
-    tabs = ["./", "decompose.html", "bias.html", "similarity.html"]
-    navs = {page: (docs / page).read_text(encoding="utf-8") for page in ("index.html", "decompose.html",
-                                                                         "bias.html", "similarity.html")}
+    tabs = ["./", "decompose_openrapm.html", "bias.html", "similarity.html"]
+    pages = ("index.html", "decompose_openrapm.html", "decompose.html", "bias.html", "similarity.html")
+    navs = {page: (docs / page).read_text(encoding="utf-8") for page in pages}
     navs["PAGE_HEAD"] = site.PAGE_HEAD + "</nav>"
     for page, text in navs.items():
         nav = re.search(r'<nav class="site">(.*?)</nav>', text, re.S).group(1)
         links = re.findall(r'<a href="([^"]+)"( aria-current="page")?>', nav)
         assert [href for href, _ in links] == tabs, page
-        own = "./" if page == "index.html" else "bias.html" if page == "PAGE_HEAD" else page
+        # both decomposition pages are the one Decomposition tab
+        own = ("./" if page == "index.html" else "bias.html" if page == "PAGE_HEAD" else
+               "decompose_openrapm.html" if page.startswith("decompose") else page)
         assert [href for href, current in links if current] == [own], page
 
+
+def test_both_decomposition_pages_carry_the_same_toggle_with_their_own_marked():
+    import re
+    from pathlib import Path
+    docs = Path(__file__).resolve().parents[1] / "docs"
+    seen = {}
+    for page in ("decompose_openrapm.html", "decompose.html"):
+        text = (docs / page).read_text(encoding="utf-8")
+        toggle = re.search(r'<nav class="toggle"[^>]*>(.*?)</nav>', text, re.S).group(1)
+        seen[page] = re.findall(r'<a href="([^"]+)"( aria-current="page")?>([^<]+)</a>', toggle)
+    links = {page: [(href, label) for href, _, label in found] for page, found in seen.items()}
+    assert links["decompose_openrapm.html"] == [("decompose_openrapm.html", "OpenRAPM"),
+                                                ("decompose.html", "Vanilla RAPM")]
+    assert links["decompose.html"] == links["decompose_openrapm.html"]
+    assert [href for href, current, _ in seen["decompose_openrapm.html"] if current] == ["decompose_openrapm.html"]
+    assert [href for href, current, _ in seen["decompose.html"] if current] == ["decompose.html"]
+
+
+
+# ------------------------------------------------------------------------------ the OpenRAPM decomposition page
+@pytest.fixture(scope="module")
+def rated_season(synthetic_league, synthetic_design):
+    """2002 of a simulated league rated through step 3 as the build does (both sides on the one design): (the
+    design, the step-3 table in the published schema, (game id, player id) -> team id)."""
+    from openrapm import prior_rapm, rapm
+    sim = synthetic_league(n_seasons=3, seed=4, po_series_per_season=2)
+    design = synthetic_design(sim, [2002])
+    base = rapm.SeasonSums(0.0).add(2002, design).ratings((), (3000.0, 3000.0, 0.0))
+    fit = prior_rapm.fit(design, dict(zip(base.player_id, base.offense)), dict(zip(base.player_id, base.defense)),
+                         penalty=13037.0)
+    table = prior_rapm.centre(prior_rapm.season_table(fit, fit, prior_rapm.defence_possessions(design), 2002))
+    ids = design.spec.players["player_id"]
+    names = pd.DataFrame({"player_id": ids, "player_name": [f"Player {i}" for i in ids]})
+    ps, box = sim["truth"]["ps"], sim["box"]
+    box = box[box.season == 2002].merge(ps[ps.season == 2002][["player_id", "team"]], on="player_id")
+    return design, prior_rapm.published_table(table, names), box.set_index(["game_id", "player_id"]).team
+
+
+@pytest.fixture
+def openrapm_site(rated_season, tmp_path, monkeypatch):
+    """The ratings table (the step-3 table plus a swap adjustment) and the step-3 table on disk, and the three
+    readers of real files (designs, box scores, names) replaced by the simulated season."""
+    design, step3, teams = rated_season
+    rng = np.random.default_rng(1)
+    final = step3.copy()
+    final["c_off"], final["c_def"] = rng.normal(0, 0.3, len(final)), rng.normal(0, 0.3, len(final))
+    final["rating_off"], final["rating_def"] = step3.rating_off + final.c_off, step3.rating_def + final.c_def
+    final["rating_total"] = final.rating_off + final.rating_def
+    folder = tmp_path / "outputs"
+    folder.mkdir()
+    ratings = folder / "season_ratings_product.parquet"
+    final.to_parquet(ratings)
+    step3.to_parquet(site.step3_path(ratings))
+
+    class Designs:
+        def __init__(self, cfg):
+            pass
+
+        def season(self, season, target):
+            return design
+
+        def clear(self):
+            pass
+
+    class Boxes:
+        def __init__(self, cfg):
+            pass
+
+        def teams(self, season):
+            return teams
+
+        def names(self, ids, seasons):
+            return pd.Series(dtype=object)
+
+    monkeypatch.setattr(site, "DesignCache", Designs)
+    monkeypatch.setattr(site, "BoxScoreFiles", Boxes)
+    monkeypatch.setattr(site, "name_table",
+                        lambda path, cfg: pd.read_parquet(path, columns=["player_id", "season", "player_name"]))
+    return ratings, final, step3, tmp_path / "site" / "data"
+
+
+def test_the_openrapm_file_adds_up_and_carries_ratings_jsons_ratings(openrapm_site):
+    ratings, final, _, data = openrapm_site
+    assert site.run_site({}, ratings=ratings, out_dir=data.parent, built="2026-10-13", openrapm_decomposition=True) == 0
+    document = json.loads((data / site.OPENRAPM_FILE).read_text(encoding="utf-8"))
+    meta, rows = document["meta"], document["rows"]["2002"]
+    assert meta["fields"] == site.OPENRAPM_FIELDS and meta["pieces"] == site.OPENRAPM_PIECES
+    assert meta["built"] == "2026-10-13" and meta["penalty"] == 13037.0
+    assert meta["seasons"] == [2002] and list(document["rows"]) == ["2002"]
+    published = {row["id"]: row for row in json.loads((data / "ratings.json").read_text(encoding="utf-8"))["rows"]}
+    assert sorted(row[1] for row in rows) == sorted(published)
+    assert [row[5][-1] for row in rows] == sorted((row[5][-1] for row in rows), reverse=True)
+    for name, player_id, possessions, off, deff, total in rows:
+        assert name == f"Player {player_id}" and possessions == published[player_id]["p"]
+        for pieces, rating in ((off, "o"), (deff, "d"), (total, "t")):
+            assert len(pieces) == 6 and pieces[-1] == published[player_id][rating]
+            assert abs(sum(pieces[:-1]) - pieces[-1]) < 0.031           # five pieces at two decimals each
+        assert all(abs(t - (a + b)) < 0.0101 for t, a, b in zip(total, off, deff))      # a total is the two sides
+
+
+def test_the_pieces_are_the_tables_columns_and_a_split_of_the_games_part(openrapm_site):
+    """Box score and swap adjustment are prior_* and c_* as the table has them; the other three add up to u."""
+    ratings, final, _, data = openrapm_site
+    site.run_site({}, ratings=ratings, out_dir=data.parent, built="2026-10-13", openrapm_decomposition=True)
+    rows = json.loads((data / site.OPENRAPM_FILE).read_text(encoding="utf-8"))["rows"]["2002"]
+    table = final.set_index("player_id")
+    for _, player_id, _, off, deff, _ in rows[:25]:
+        for pieces, side in ((off, "off"), (deff, "def")):
+            assert pieces[0] == round(table.loc[player_id, f"prior_{side}"], 2)
+            assert pieces[4] == round(table.loc[player_id, f"c_{side}"], 2)
+            assert abs(sum(pieces[1:4]) - table.loc[player_id, f"u_{side}"]) < 0.0151     # three pieces at two decimals
+
+
+def test_the_run_stops_when_solving_step_3_again_does_not_give_the_tables_games_part(openrapm_site):
+    ratings, final, step3, data = openrapm_site
+    for table, path in ((final, ratings), (step3, site.step3_path(ratings))):
+        table.assign(u_off=table.u_off + 0.01 * (table.index == 0)).to_parquet(path)
+    with pytest.raises(SystemExit, match="check failed"):
+        site.write_openrapm_decomposition({}, ratings, data, "2026-10-13")
+    assert not (data / site.OPENRAPM_FILE).exists()
+
+
+def test_a_ratings_table_and_step_3_table_of_different_builds_are_refused(openrapm_site):
+    ratings, _, step3, _ = openrapm_site
+    step3.assign(u_off=step3.u_off + 0.01).to_parquet(site.step3_path(ratings))
+    with pytest.raises(SystemExit, match="same games' part"):
+        site.published_parts(ratings)
+    site.step3_path(ratings).unlink()
+    with pytest.raises(SystemExit, match="does not exist"):
+        site.published_parts(ratings)
+
+
+def test_openrapm_rows_drop_players_without_possessions_and_sort_by_total():
+    rows = pd.DataFrame({"poss_season": [1000.7, 0.0, 500.2]})
+    columns = {f"{side}_{piece}": [0.111, 0.222, 0.333] for side in site.OPENRAPM_SIDES
+               for piece in site.OPENRAPM_PIECES}
+    columns["total_rating"] = [1.234, 9.0, 3.456]
+    pieces = pd.DataFrame({"player_id": [1, 2, 3], **columns})
+    got = site.openrapm_rows(rows, pieces, np.array(["A", "B", "C"], dtype=object))
+    assert [(row[0], row[1], row[2]) for row in got] == [("C", 3, 500), ("A", 1, 1000)]       # whole possessions
+    assert got[0][3] == [0.33] * 6 and got[0][5] == [0.33] * 5 + [3.46]
+    assert got[1][4] == [0.11] * 6 and got[1][5] == [0.11] * 5 + [1.23]

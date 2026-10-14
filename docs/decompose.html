@@ -73,11 +73,12 @@
 <main>
   <nav class="site">
     <a href="./">Ratings</a>
-    <a href="decompose.html" aria-current="page">Decomposition</a>
+    <a href="decompose_openrapm.html" aria-current="page">Decomposition</a>
     <a href="bias.html">Bias</a>
     <a href="similarity.html">Similarity</a>
     <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
   </nav>
+  <nav class="toggle" aria-label="Decomposition"><a href="decompose_openrapm.html">OpenRAPM</a><a href="decompose.html" aria-current="page">Vanilla RAPM</a></nav>
   <h1>Vanilla RAPM decomposition</h1>
   <p class="eq" data-view="poss"><span class="term" style="--c: var(--c-blue)">On court signal</span>
     + <span class="term" style="--c: var(--c-teal)">Off court adjustment (GP)</span>
@@ -254,6 +255,17 @@
     if (state.min !== null) h.set("min", state.min);
     if (state.open) h.set("player", state.open);
     history.replaceState(null, "", "#" + h.toString());
+    syncToggle();
+  }
+
+  // the same season and player on the OpenRAPM page: a window's last season, and the open player's NBA id
+  function syncToggle() {
+    const link = document.querySelector("nav.toggle a:not([aria-current])");
+    if (!link) return;
+    const v = new URLSearchParams({ season: years(state.period)[1] });
+    const open = ((cache[state.span] || { rows: {} }).rows[state.period] || []).find(r => r.n === state.open);
+    if (open) v.set("player", open.id);
+    link.href = "decompose_openrapm.html#" + v.toString();
   }
 
   // a waterfall: each piece starts where the last one ended, and the last bar is the total.  Drawn at the width

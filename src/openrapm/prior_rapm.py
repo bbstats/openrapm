@@ -47,11 +47,12 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+import scipy.sparse as sp
 
 from .rapm import design_blocks, normal_equations, player_possessions, solve_ridge
 
-__all__ = ["aligned_prior", "lineup_prior_sums", "PriorRapmFit", "fit", "defence_possessions", "season_table",
-           "centre", "rate_season", "PUBLISHED_COLUMNS", "published_table"]
+__all__ = ["aligned_prior", "lineup_prior_sums", "PriorRapmFit", "RidgeSystem", "ridge_system", "fit",
+           "defence_possessions", "season_table", "centre", "rate_season", "PUBLISHED_COLUMNS", "published_table"]
 
 
 def aligned_prior(prior: dict, player_ids) -> np.ndarray:
@@ -77,12 +78,25 @@ class PriorRapmFit:
     penalty: float
 
 
-def fit(design, prior_offense: dict, prior_defense: dict, penalty: float = 13037.0) -> PriorRapmFit:
-    """The prior-informed ridge on one season's design (the equation in the module docstring).
+@dataclass
+class RidgeSystem:
+    """One season's step-3 ridge as a linear system, before it is solved.
 
-    The lineup priors join the context as two more unpenalised columns, so the solve is a plain ridge on
-    [players | context | P_O | P_D] with penalty lambda on the players and 0 on everything else.
+    The columns are [players | context | P_O | P_D]; `players` is Z (rows x 2 n_players, sparse) and `unpenalised`
+    holds the rest, [C | P_O | P_D] (rows x (context + 2)).  The solve is (gram + diag(penalties)) theta = rhs.
     """
+    players: sp.csr_matrix
+    unpenalised: np.ndarray
+    prior: np.ndarray            # [offence priors | defence priors], in the design's player order
+    gram: np.ndarray
+    rhs: np.ndarray
+    penalties: np.ndarray
+
+
+def ridge_system(design, prior_offense: dict, prior_defense: dict, penalty: float = 13037.0) -> RidgeSystem:
+    """The linear system of the fit below: the lineup priors join the context as two more unpenalised columns, so
+    the solve is a plain ridge on [players | context | P_O | P_D] with penalty lambda on the players and 0 on
+    everything else."""
     n_players = design.spec.n_players
     player_ids = design.spec.players["player_id"].to_numpy()
     players, context = design_blocks(design)
@@ -94,7 +108,17 @@ def fit(design, prior_offense: dict, prior_defense: dict, penalty: float = 13037
     rhs = np.concatenate([sums.rhs_players, sums.rhs_context])
     penalties = np.concatenate([np.full(n_players, penalty), np.full(n_players, penalty),
                                 np.full(context.shape[1] - 2, 0.0), np.zeros(2)])
-    coefficients = solve_ridge(gram, rhs, penalties)
+    return RidgeSystem(players=players, unpenalised=context, prior=prior, gram=gram, rhs=rhs, penalties=penalties)
+
+
+def fit(design, prior_offense: dict, prior_defense: dict, penalty: float = 13037.0) -> PriorRapmFit:
+    """The prior-informed ridge on one season's design (the equation in the module docstring), the system of
+    `ridge_system` solved."""
+    n_players = design.spec.n_players
+    player_ids = design.spec.players["player_id"].to_numpy()
+    system = ridge_system(design, prior_offense, prior_defense, penalty)
+    players, prior = system.players, system.prior
+    coefficients = solve_ridge(system.gram, system.rhs, system.penalties)
     deviation, unpenalised = coefficients[:2 * n_players], coefficients[2 * n_players:]
     scale = unpenalised[-2:].copy()
     scaled_prior = np.concatenate([scale[0] * prior[:n_players], scale[1] * prior[n_players:]])

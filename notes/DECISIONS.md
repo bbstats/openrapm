@@ -6191,3 +6191,56 @@ A.C. Green 1997: seasons played before 0 -> 11, career possessions 0 -> 116,800,
 - **PUBLISHED 2026-10-13 (the owner: "Publish now"):** commit 67b6441 (code, notes, docs/data/ratings.json, the bias
   page, the similarity data), `main` fast-forwarded and pushed; Pages built; the live ratings.json equals the
   committed one.
+
+## The OpenRAPM decomposition page (the owner's Decomposition tab, 2026-10-13)
+
+The owner, after the vanilla RAPM decomposition page: "would love another tab for OpenRAPM decomposition".  Their
+rulings (answers to the questions asked before building):
+- **The pieces, offense and defense separately:** box score + on court + off court + team SOS (what is left of the
+  games' part) + swap adjustment = the published rating.  "Games not played + off-court GP can be summed into 1 off
+  court": off court is the vanilla page's two off-court pieces added.  The swap adjustment is its own column (chosen
+  over folding it into "what is left").  No split of the box score by stat.
+- **Sides:** a toggle Offense | Defense | Total; a total is the two sides' pieces added.
+- **Tabs:** the nav stays four tabs; the Decomposition tab opens on OpenRAPM, and a toggle [ OpenRAPM | Vanilla RAPM ]
+  at the top of both pages switches (chosen over a fifth tab, which does not fit a 360 px phone).  The piece names are
+  provisional (the vanilla page's, where a piece is the same); the page has labels and the equation, no prose.
+
+**What each piece is.**  The table has `rating = prior + u + c` on each side, exactly (difference 0.0 over 14,579
+rows): `prior` is the box-score prior after step 4's multiplier, `u` is step 3's games' part, `c` is step 5's swap
+adjustment.  `u` is split by possession.  Step 3 is a ridge on [players | context | P_O | P_D] with the two summed
+priors unpenalised; a player's coefficient is a weighted sum of the rows' outcomes, `u_j = sum_r h_r y_r` with
+`h = W B M^-1 e_j` (M the matrix solved), and `h` is orthogonal to every unpenalised column, so
+`u_j = sum_r h_r z_r` with `z` the outcome less its context and prior predictions.  Grouped as the vanilla page groups
+rows: on court (the ten players of the row), off court (his team's rows without him, in games he played and in games he
+missed in a season he was there), team SOS (every other row).  Offense uses the fit on the offensive target and his
+offensive column; defense the fit on the defensive target and his defensive column, sign flipped.  Step 3 is solved
+again from the table's own priors (`prior / prior_scale`: the scale is a free coefficient and the season intercept
+absorbs a constant, so the deviations do not change).  Example, Victor Wembanyama 2026: offense 2.07 = 0.69 + 1.41 -
+0.27 + 0.06 + 0.18; total 7.16 = 3.98 + 2.65 - 0.21 + 0.14 + 0.61.
+
+**Checked on the real tables (`openrapm site --openrapm-decomposition`, 132 seconds, 14,578 rows).**  The five pieces
+add up to every rating, each side and the total, to 3.2e-12; the refit gives every games' part to 3.1e-12 and every
+prior scale to 2.0e-12; every coefficient is the sum of weight x outcome to 1.2e-12; the box scores leave under 0.005%
+of rows without a team; the file's rows and ratings are `ratings.json`'s.  Moving the vanilla page's team and row-group helpers into
+`decomposition.py` changed nothing: the vanilla files rebuilt before and after are byte-identical to the committed ones;
+`pytest -m slow` rebuilds 2026's step 3 bit for bit through the refactored `ridge_system`.
+- **A trap found.**  2020 is the one season whose solve needs `rapm.solved_ridge`'s jitter (the bubble's playoff home
+  court is an empty column).  The jitter is 1e-9 x the mean diagonal, which follows the prior columns' scale; the refit's
+  prior columns are the table's (scaled and centred), not the build's, so its matrix differs in the last digits and the
+  games' part by 2.5e-8 (prior scale 3.3e-8).  The first full run stopped on its own 1e-9 check.  The checks now hold
+  2020 to 1e-6 and every other season to 1e-9.
+- **Alternatives not built.**  Splitting the box score by stat group with exact Shapley values (offered; not wanted):
+  LightGBM's `pred_contrib` raises "not implemented for linear trees" and the shipped boosters are linear-leaf, shap's
+  tree explainer has no linear-leaf support, the product setting's boosters were never saved (re-saving costs about 15
+  minutes and 1.2 GB), and the held-out audit's sampled group Shapley (check 138) is additive per row but costs about 76
+  seconds per season and side.
+
+**What the pieces show** (players with 1,000 or more possessions, possession-weighted standard deviation per 100; all
+30 seasons, total): box score 2.03, on court 0.78, off court 0.25, team SOS 0.05, swap adjustment 0.61, rating 1.91.
+2026: 1.91, 1.01, 0.33, 0.07, 0.60, 1.95.  The team SOS piece is small everywhere (at most 0.28 in 2026: Mobley); the
+largest off-court pieces in 2026 are Jaylen Brown -1.08, Luguentz Dort -0.97 and Cason Wallace -0.90 (his team did
+better without them).
+
+Built, not committed.  The page reads the final ratings, so `openrapm site --openrapm-decomposition` is rerun after every
+ratings build (`tests/test_decompose_openrapm_site.py` fails otherwise).  `docs/decompose.html`'s footer still names the
+retired `scripts/83_decompose_site.py`: the owner's wording, left alone.

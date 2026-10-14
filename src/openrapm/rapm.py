@@ -68,7 +68,7 @@ import numpy as np
 import pandas as pd
 
 __all__ = ["design_blocks", "NormalEquations", "normal_equations", "player_possessions", "block_penalty",
-           "solve_ridge", "SeasonSums", "unshrink", "career_labels"]
+           "solved_ridge", "solve_ridge", "SeasonSums", "unshrink", "career_labels"]
 
 
 def design_blocks(design):
@@ -130,24 +130,31 @@ def block_penalty(sizes, penalties) -> np.ndarray:
     return np.concatenate([np.full(size, penalty) for size, penalty in zip(sizes, penalties)])
 
 
-def solve_ridge(gram, rhs, penalty) -> np.ndarray:
-    """Solve (G + diag(penalty)) theta = b, one penalty per column.
+def solved_ridge(gram, rhs, penalty) -> tuple[np.ndarray, np.ndarray]:
+    """(theta, the matrix that was solved): theta solves (G + diag(penalty)) theta = b, one penalty per column.
 
     An unpenalised context column can be all zeros (the 2020 bubble's playoff home court) and then the plain
     solve raises.  The retry adds a jitter of 1e-9 x the mean diagonal to the UNPENALISED diagonal only, which
-    leaves the player block untouched; least squares is the last resort.
+    leaves the player block untouched; least squares is the last resort.  The matrix returned has the jitter in
+    it, so a caller who needs theta's rows as sums over the data rows (decomposition.py) solves the system that
+    was solved, not the one that was meant.
     """
     penalty = np.asarray(penalty, dtype=float)
     matrix = gram + np.diag(penalty)
     try:
-        return np.linalg.solve(matrix, rhs)
+        return np.linalg.solve(matrix, rhs), matrix
     except np.linalg.LinAlgError:
         jitter = 1e-9 * max(float(np.mean(np.abs(np.diag(matrix)))), 1.0)
         matrix[np.diag_indices_from(matrix)] += np.where(penalty == 0.0, jitter, 0.0)
         try:
-            return np.linalg.solve(matrix, rhs)
+            return np.linalg.solve(matrix, rhs), matrix
         except np.linalg.LinAlgError:
-            return np.linalg.lstsq(matrix, rhs, rcond=None)[0]
+            return np.linalg.lstsq(matrix, rhs, rcond=None)[0], matrix
+
+
+def solve_ridge(gram, rhs, penalty) -> np.ndarray:
+    """Solve (G + diag(penalty)) theta = b, one penalty per column: `solved_ridge`'s theta."""
+    return solved_ridge(gram, rhs, penalty)[0]
 
 
 class SeasonSums:

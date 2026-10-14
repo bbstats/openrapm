@@ -26,7 +26,7 @@ flowchart TD
     FO["outputs/within/TAG/<br/>openrapm folds"] --> S4
     S4 --> S5["Step 5: swap adjustment<br/>season_ratings_NAME.parquet"]
     ST --> S5
-    S5 --> SITE["docs/data/ratings.json, docs/bias.html, docs/data/similarity/<br/>openrapm site"]
+    S5 --> SITE["docs/data/ratings.json, docs/bias.html, docs/data/similarity/,<br/>docs/data/decompose_openrapm.json<br/>openrapm site"]
 ```
 
 `openrapm rate` runs steps 1-3, `openrapm shrink` step 4, `openrapm swap` step 5, and `openrapm build` all
@@ -283,6 +283,31 @@ held back.
 - **Command:** `python -m openrapm site --similarity` (33 seconds).  The inputs include the final ratings, so the
   page is rebuilt after every ratings build (`tests/test_similarity_site.py` fails otherwise).
 - **Code:** `src/openrapm/similarity.py`, `commands/site.py`, `docs/similarity.html`.
+
+## The OpenRAPM decomposition page (`decomposition.py`)
+
+- **For:** the site's Decomposition tab, opened on OpenRAPM (a toggle at the top of the page switches to the vanilla
+  RAPM page): every published rating split, offense and defense separately, into box score + on court + off court +
+  team SOS + swap adjustment, which add up to the rating (the owner's design, 2026-10-13).  Total is the two sides'
+  pieces added.
+- **Reads:** the ratings table and its step-3 table (`outputs/season_ratings_product.parquet` and `_step3`), each
+  season's two designs (step 1's targets for offense and defense, `data.designs.DesignCache`) and the box scores'
+  teams (`data/raw/box`).
+- **Writes:** `docs/data/decompose_openrapm.json`, one row per player-season of `ratings.json`.
+- **How:** box score and swap adjustment are the table's `prior_off` / `prior_def` and `c_off` / `c_def`.  The
+  games' part `u` (step 3's coefficient beyond the prior) is a weighted sum of the season's row outcomes, so
+  grouping the rows splits it: the rows he is on the court for (on court), his team's rows without him, in games he
+  played and games he missed (off court), and every other row (team SOS).  Step 3 is solved again for each season
+  and target on the table's own priors to get the weights; `decomposition.py` has the equation.
+- **Checks:** the run stops before writing unless the pieces add up to every rating, the refit reproduces every
+  `u` and every prior scale in the table (1e-9; 1e-6 in 2020, whose solve needs a jitter), every coefficient is the
+  sum of weight x outcome, the box scores name both teams of nearly every row, every player has a name, and the
+  file's rows and ratings are `ratings.json`'s.  `tests/test_decompose_openrapm_site.py` checks the committed file
+  against `ratings.json`.
+- **Command:** `python -m openrapm site --openrapm-decomposition` (132 seconds).  It reads the ratings table, so it
+  is rerun after every ratings build.
+- **Code:** `src/openrapm/decomposition.py` (shared with the vanilla page: the rows' teams and the groups of rows),
+  `commands/site.py`, `docs/decompose_openrapm.html`.
 
 ## Where the numbered scripts went
 

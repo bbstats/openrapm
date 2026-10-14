@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenRAPM: decomposition</title>
+<link rel="stylesheet" href="site.css">
+<script src="site.js"></script>
+<style>
+  /* one colour per term of the equation, cool for the pieces and hot for OpenRAPM; its table column is shaded in
+     it, light for low values and dark for high ones */
+  :root { --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6;
+          --c-green: 22 163 74; --c-blue: 37 99 235; --c-teal: 13 148 136; --c-purple: 124 58 237;
+          --c-slate: 71 85 105; --c-rapm: 234 88 12; }
+  :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5;
+          --c-green: 74 205 120; --c-blue: 96 145 255; --c-teal: 45 196 180; --c-purple: 167 139 250;
+          --c-slate: 148 163 184; --c-rapm: 251 146 60; }
+  body { color: var(--ink); font: 15px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  h1 { font-size: 26px; margin: 0 0 10px; }
+  .eq { margin: 0 0 14px; font-size: 16px; line-height: 2.1; }
+  .term { display: inline-block; padding: 0 9px; border-radius: 999px; line-height: 1.75; white-space: nowrap;
+          background: rgb(var(--c) / 0.14); box-shadow: inset 0 0 0 1.5px rgb(var(--c) / 0.6); }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-bottom: 12px; }
+  label { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
+  select, input { font: inherit; padding: 4px 7px; border: 1px solid var(--line); border-radius: 5px;
+                  background: transparent; color: inherit; }
+  input[type=number] { width: 84px; } input[type=search] { width: 170px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg button { font: inherit; font-size: 13px; padding: 5px 12px; border: 0; background: transparent;
+                color: var(--muted); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  .count { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+  .meta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0 16px; }
+  .dl { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+  .dl a { color: inherit; }
+  .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { border-collapse: separate; border-spacing: 0; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; cursor: pointer; user-select: none;
+       vertical-align: bottom; white-space: normal; min-width: 58px; }
+  th.rank, th.name { white-space: nowrap; min-width: 0; }
+  th.rank, td.rank { color: var(--muted); cursor: default; }
+  th.name, td.name { text-align: left; position: sticky; left: 0; background: Canvas; }
+  th.name { cursor: default; }
+  th[aria-sort="descending"], th[aria-sort="ascending"] { color: var(--accent); }
+  th[aria-sort="descending"]::after { content: " \2193"; }
+  th[aria-sort="ascending"]::after { content: " \2191"; }
+  td.total { font-weight: 700; }
+  tr.player { cursor: pointer; }
+  tr.player:hover td.name, tr.player:focus-visible td.name { color: var(--accent); }
+  tr.player:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  tr.open td { border-bottom-color: transparent; }
+  tr.detail td { text-align: left; white-space: normal; padding: 10px 8px 16px; }
+  .inner { position: sticky; left: 8px; max-width: min(640px, calc(100vw - 48px)); }
+  svg.wf { display: block; }
+  svg.wf text { font: 12.5px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--ink); }
+  svg.wf text.lab { fill: var(--muted); }
+  svg.wf text.tot { font-weight: 700; }
+  svg.wf line.zero { stroke: var(--line); } svg.wf line.link { stroke: var(--muted); stroke-width: 1.3; stroke-dasharray: 2 2; }
+  footer { margin-top: 24px; color: var(--muted); font-size: 13px; }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <nav class="site">
+    <a href="./">Ratings</a>
+    <a href="decompose_openrapm.html" aria-current="page">Decomposition</a>
+    <a href="bias.html">Bias</a>
+    <a href="similarity.html">Similarity</a>
+    <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
+  </nav>
+  <nav class="toggle" aria-label="Decomposition"><a href="decompose_openrapm.html" aria-current="page">OpenRAPM</a><a href="decompose.html">Vanilla RAPM</a></nav>
+  <h1>OpenRAPM decomposition</h1>
+  <p class="eq"><span class="term" style="--c: var(--c-green)">Box score</span>
+    + <span class="term" style="--c: var(--c-blue)">On court signal</span>
+    + <span class="term" style="--c: var(--c-teal)">Off court adjustment</span>
+    + <span class="term" style="--c: var(--c-purple)">Team SOS adjustment</span>
+    + <span class="term" style="--c: var(--c-slate)">Swap adjustment</span>
+    = <span class="term" style="--c: var(--c-rapm)"><b>OpenRAPM</b></span></p>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Side">
+      <button type="button" data-side="off" aria-pressed="false">Offense</button>
+      <button type="button" data-side="def" aria-pressed="false">Defense</button>
+      <button type="button" data-side="total" aria-pressed="true">Total</button>
+    </div>
+    <label>Season <select id="season"></select></label>
+    <label>Min possessions <input id="minp" type="number" min="0" step="250"></label>
+    <label>Find <input id="find" type="search" placeholder="player name" autocomplete="off"></label>
+  </div>
+  <div class="meta">
+    <p class="count" id="count">Loading&hellip;</p>
+    <p class="dl">Download CSV: <a href="#" id="csv-view">this view</a> &middot; <a href="#" id="csv-all">all seasons</a></p>
+  </div>
+  <div class="scroll">
+    <table id="table"><thead></thead><tbody></tbody></table>
+  </div>
+  <footer>
+    <a href="https://github.com/bbstats/openrapm">Source</a>. <span id="built"></span>
+  </footer>
+</main>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const DEFAULT_MIN = 1000;
+  const abs2 = v => Math.abs(v).toFixed(2);
+  const fmt = v => (v > 0 ? "+" : v < 0 ? "−" : "") + abs2(v);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const fold = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+  // the data file's three sides, and the pieces in the order each side's list holds them
+  const SIDE_FIELD = { off: "o", def: "d", total: "t" };
+  const SIDE_WORD = { off: "offense", def: "defense", total: "offense plus defense" };
+  // a piece: [row key, name, chart label, colour]; the same colour as its term in the equation
+  const PIECES = [["box", "Box score", "Box score", "--c-green"],
+                  ["on", "On court signal", "On court signal", "--c-blue"],
+                  ["off", "Off court adjustment", "Off court adj.", "--c-teal"],
+                  ["sos", "Team SOS adjustment", "Team SOS adj.", "--c-purple"],
+                  ["swap", "Swap adjustment", "Swap adj.", "--c-slate"]];
+  const RATING_COLOR = "--c-rapm";
+  const colorOf = k => k === "a" ? RATING_COLOR : (PIECES.find(([p]) => p === k) || [])[3];
+
+  const state = { side: "total", season: null, min: null, q: "", open: null, sortKey: "a", sortDir: -1 };
+  const table = $("table"), thead = table.querySelector("thead"), tbody = table.querySelector("tbody");
+  const season = $("season"), minp = $("minp"), find = $("find");
+  let data = null, shown = [];
+
+  async function load() {
+    const doc = await (await fetch("data/decompose_openrapm.json")).json();
+    const f = doc.meta.fields, rows = {};
+    for (const [k, list] of Object.entries(doc.rows))
+      rows[k] = list.map(r => Object.fromEntries(f.map((name, j) => [name, r[j]])));
+    return { meta: doc.meta, rows };
+  }
+
+  // one player's row on one side: the five pieces, the rating and the possessions
+  function onSide(r, side) {
+    const v = r[SIDE_FIELD[side]];
+    return { n: r.n, id: r.id, p: r.p, box: v[0], on: v[1], off: v[2], sos: v[3], swap: v[4], a: v[5] };
+  }
+
+  function writeAddress() {
+    const h = new URLSearchParams();
+    h.set("season", state.season);
+    if (state.side !== "total") h.set("side", state.side);
+    if (state.min !== null) h.set("min", state.min);
+    if (state.open !== null) h.set("player", state.open);
+    history.replaceState(null, "", "#" + h.toString());
+    // the same season and player on the vanilla page
+    const v = new URLSearchParams({ period: state.season });
+    const open = shown.find(r => r.id === state.open);
+    if (open) v.set("player", open.n);
+    const link = document.querySelector("nav.toggle a:not([aria-current])");
+    if (link) link.href = "decompose.html#" + v.toString();
+  }
+
+  // a waterfall: each piece starts where the last one ended, and the last bar is the total.  Drawn at the width
+  // there is, one unit to a pixel, so its labels stay readable on a phone instead of shrinking with it.
+  function waterfall(p) {
+    let run = 0;
+    const bars = PIECES.map(([k, , label, color]) => { const a = run; run += p[k];
+                                                       return { name: label, v: p[k], a, b: run, color }; });
+    bars.push({ name: "OpenRAPM", v: p.a, a: 0, b: p.a, total: true, color: RATING_COLOR });
+    let lo = Math.min(0, ...bars.map(b => Math.min(b.a, b.b))), hi = Math.max(0, ...bars.map(b => Math.max(b.a, b.b)));
+    const pad = (hi - lo || 1) * 0.04; lo -= pad; hi += pad;
+    const W = Math.round(Math.min(620, Math.max(300, document.querySelector(".scroll").clientWidth - 24)));
+    const L = Math.min(170, Math.round(16 + 6.9 * Math.max(...bars.map(b => b.name.length))));
+    const R = 58, rowH = 33, top = 4, barH = 16, H = top * 2 + bars.length * rowH;   // 17px between bars
+    const X = v => L + (v - lo) / (hi - lo) * (W - L - R);
+    const label = bars.map(b => `${b.name} ${fmt(b.v)}`).join(", ");
+    let s = `<svg class="wf" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">`;
+    s += `<line class="zero" x1="${X(0)}" x2="${X(0)}" y1="0" y2="${H}"/>`;
+    bars.forEach((b, i) => {
+      const y = top + i * rowH, x0 = X(Math.min(b.a, b.b)), x1 = X(Math.max(b.a, b.b));
+      if (i > 0) s += `<line class="link" x1="${X(b.total ? b.b : b.a)}" x2="${X(b.total ? b.b : b.a)}" y1="${y - rowH + (rowH + barH) / 2}" y2="${y + (rowH - barH) / 2}"/>`;
+      s += `<text class="lab${b.total ? " tot" : ""}" x="${L - 8}" y="${y + rowH / 2 + 4}" text-anchor="end">${b.name}</text>`;
+      s += `<rect style="fill: rgb(var(${b.color}))" x="${x0}" y="${y + (rowH - barH) / 2}" width="${Math.max(1.5, x1 - x0)}" height="${barH}" rx="3"/>`;
+      const room = W - x1 > 58;
+      s += `<text class="${b.total ? "tot" : ""}" x="${room ? x1 + 6 : x0 - 6}" y="${y + rowH / 2 + 4}" text-anchor="${room ? "start" : "end"}">${fmt(b.v)}</text>`;
+    });
+    return s + "</svg>";
+  }
+
+  function head() {
+    const cols = [...PIECES.map(([k, name]) => [k, name]), ["a", "OpenRAPM"], ["p", "Poss."]];
+    const mark = k => colorOf(k) ? ` style="box-shadow: inset 0 -3px 0 rgb(var(${colorOf(k)}))"` : "";
+    thead.innerHTML = `<tr><th class="rank">#</th><th class="name">Player</th>` + cols.map(([k, name]) =>
+      `<th data-k="${k}"${mark(k)} aria-sort="${k === state.sortKey
+        ? (state.sortDir < 0 ? "descending" : "ascending") : "none"}">${name}</th>`).join("") + `</tr>`;
+    thead.querySelectorAll("th[data-k]").forEach(th => th.addEventListener("click", () => {
+      state.sortDir = state.sortKey === th.dataset.k ? -state.sortDir : -1;
+      state.sortKey = th.dataset.k;
+      head();
+      render();
+    }));
+  }
+
+  // the CSV: every side's pieces and the NBA player id, which the table leaves out; UTF-8 with a byte-order mark
+  // so a spreadsheet opens names like Jokić as written
+  const CSV_PIECES = ["box_score", "on_court_signal", "off_court_adjustment", "team_sos_adjustment",
+                      "swap_adjustment", "openrapm"];
+  const CSV_HEAD = ["season", "player_id", "player", "possessions",
+                    ...["offense", "defense", "total"].flatMap(s => CSV_PIECES.map(k => s + "_" + k))];
+  function downloadCSV(filename, pairs) {
+    const q = v => { if (v === null || v === undefined) return "";
+                     const s = String(v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    const body = pairs.map(([per, x]) => [per, x.id, x.n, x.p, ...x.o, ...x.d, ...x.t]);
+    const text = "﻿" + [CSV_HEAD, ...body].map(r => r.map(q).join(",")).join("\r\n") + "\r\n";
+    const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+    const a = Object.assign(document.createElement("a"), { href: url, download: filename });
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  $("csv-view").addEventListener("click", e => {
+    e.preventDefault();
+    const ids = new Set(shown.map(r => r.id));
+    downloadCSV(`openrapm_decomposition_${state.season}.csv`,
+                data.rows[state.season].filter(x => ids.has(x.id)).map(x => [state.season, x]));
+  });
+  $("csv-all").addEventListener("click", e => {
+    e.preventDefault();
+    downloadCSV("openrapm_decomposition_all.csv",
+                data.meta.seasons.flatMap(per => data.rows[per].map(x => [per, x])));
+  });
+
+  function cell(tr, text, cls, style) {
+    const td = document.createElement("td");
+    td.textContent = text;
+    if (cls) td.className = cls;
+    if (style) td.style.background = style;
+    tr.appendChild(td);
+  }
+
+  function render() {
+    const min = state.min === null ? DEFAULT_MIN : state.min, q = fold(state.q);
+    minp.value = min;
+    const rows = (data.rows[state.season] || []).map(r => onSide(r, state.side))
+      .filter(r => r.p >= min && (!q || fold(r.n).includes(q)));
+    rows.sort((a, b) => (a[state.sortKey] - b[state.sortKey]) * state.sortDir);
+    shown = rows;
+    // each term's column is shaded in its colour, light for its lowest values and dark for its highest, over the
+    // players shown (5th to 95th percentile, so one outlier does not wash the rest out)
+    const ranges = {};
+    for (const k of [...PIECES.map(([key]) => key), "a"]) {
+      const v = rows.map(r => r[k]).sort((x, y) => x - y);
+      ranges[k] = v.length ? [v[Math.floor(0.05 * (v.length - 1))], v[Math.ceil(0.95 * (v.length - 1))]] : [0, 1];
+    }
+    const tint = (k, x) => {
+      const [lo, hi] = ranges[k], t = hi > lo ? Math.min(1, Math.max(0, (x - lo) / (hi - lo))) : 0.5;
+      return `rgb(var(${colorOf(k)}) / ${(0.05 + 0.5 * t).toFixed(3)})`;
+    };
+    tbody.replaceChildren();
+    rows.forEach((p, i) => {
+      const tr = document.createElement("tr");
+      tr.className = "player" + (state.open === p.id ? " open" : "");
+      tr.tabIndex = 0;
+      tr.setAttribute("aria-expanded", state.open === p.id);
+      cell(tr, i + 1, "rank");
+      cell(tr, p.n, "name");
+      PIECES.forEach(([k]) => cell(tr, fmt(p[k]), "", tint(k, p[k])));
+      cell(tr, fmt(p.a), "total", tint("a", p.a));
+      cell(tr, p.p.toLocaleString(), "");
+      const toggle = () => { state.open = state.open === p.id ? null : p.id; render(); };
+      tr.addEventListener("click", toggle);
+      tr.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+      tbody.appendChild(tr);
+      if (state.open === p.id) {
+        const d = document.createElement("tr"), td = document.createElement("td");
+        d.className = "detail"; td.colSpan = PIECES.length + 4;
+        td.innerHTML = `<div class="inner">${waterfall(p)}</div>`;
+        d.appendChild(td); tbody.appendChild(d);
+      }
+    });
+    $("count").textContent = `${rows.length} players, ${state.season}, ${SIDE_WORD[state.side]}, at least ` +
+                             `${min.toLocaleString()} possessions`;
+    writeAddress();
+  }
+
+  document.querySelectorAll("[data-side]").forEach(b => b.addEventListener("click", () => {
+    if (b.dataset.side === state.side) return;
+    state.side = b.dataset.side;
+    document.querySelectorAll("[data-side]").forEach(x => x.setAttribute("aria-pressed", x.dataset.side === state.side));
+    render();
+  }));
+  season.addEventListener("change", () => { state.season = season.value; render(); });
+  minp.addEventListener("change", () => { state.min = minp.value === "" ? null : Math.max(0, +minp.value); render(); });
+  find.addEventListener("input", () => { state.q = find.value; render(); });
+  let resized;                           // an open breakdown is redrawn for the new width
+  addEventListener("resize", () => {
+    clearTimeout(resized);
+    resized = setTimeout(() => { if (state.open !== null && data) render(); }, 150);
+  });
+
+  // the address carries the view, so a player's breakdown can be linked:
+  // #season=2026&side=off&min=500&player=1641705  (no side: total)
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (SIDE_FIELD[h.get("side")]) state.side = h.get("side");
+  if (h.get("min") !== null && h.get("min") !== "") state.min = Math.max(0, +h.get("min"));
+  if (h.get("player") !== null && h.get("player") !== "") state.open = +h.get("player");
+  document.querySelectorAll("[data-side]").forEach(x => x.setAttribute("aria-pressed", x.dataset.side === state.side));
+  head();
+  load().then(d => {
+    data = d;
+    const seasons = d.meta.seasons.map(String);
+    state.season = seasons.includes(h.get("season")) ? h.get("season") : seasons[0];
+    season.replaceChildren(...seasons.map(s => { const o = document.createElement("option");
+                                                 o.value = o.textContent = s; return o; }));
+    season.value = state.season;
+    $("built").textContent = "Built " + d.meta.built + ".";
+    render();
+    const open = tbody.querySelector("tr.open");
+    if (open) open.scrollIntoView({ block: "center" });
+  }).catch(() => { $("count").textContent = "Could not load the data."; });
+})();
+</script>
+</body>
+</html>
