@@ -4,8 +4,8 @@
 trained on them, the ridge around it.  Each season is rated on its own, so its rows must equal the 2026 rows of the
 thirty-season run that built the published table (outputs/season_ratings_product_nocareer_step3.parquet, a frozen
 copy of the step-3 table `openrapm build` wrote on 2026-10-14 without the career counts, experiment 59; before
-then season_ratings_product_fromdebut_step3.parquet and season_ratings_product_weightfix_pre_swap.parquet).  The run writes into a temporary folder: a copy of config.yaml
-whose paths.outputs points there, every other path the real one.
+then season_ratings_product_fromdebut_step3.parquet and season_ratings_product_weightfix_pre_swap.parquet).  The run
+writes into a temporary folder: a copy of config.yaml whose paths.outputs points there, every other path the real one.
 
 Slow (a few minutes) and local: it needs the stints, the design pieces, the season panel and the published table, so
 `pytest -m slow` runs it and a fresh clone skips it.
