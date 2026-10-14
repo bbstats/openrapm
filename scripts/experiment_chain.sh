@@ -23,15 +23,16 @@ LOG=outputs/${NAME}_chain.log
 # ratings with step 4's multipliers from the 8 fold seasons nearest each season, over its folds for all thirty
 # seasons (the shipped default of `openrapm shrink`).  Since 2026-10-13 it is experiment 57 (fromdebut): the career
 # inputs counted from each player's debut (--features career_from_debut), its own folds for all thirty seasons and
-# step 4 by the same rule on them.  The held-out audit pairs a candidate with the incumbent's 2017-2026 folds
+# step 4 by the same rule on them.  Since 2026-10-14 it is experiment 59 (nocareer): those career counts off the prior
+# (--features no_career_counts), its own folds for all thirty seasons, step 4 by the same rule.  The held-out audit pairs a candidate with the incumbent's 2017-2026 folds
 # (AUDIT_REF).  A candidate with OWN_FOLDS=1 has folds for 2017-2026 only; its step 4 then reads the 8 nearest of
 # those.  EARLY_FOLDS=1 (with OWN_FOLDS=1; experiment 56) also builds its 1997-2016 folds (NAME_early), so its step 4
 # is the incumbent's rule on its own folds for all thirty seasons.
-INC_NAME=${INC_NAME:-fromdebut}
-INC_FOLDS=${INC_FOLDS:-fromdebut_early,fromdebut_within}
-AUDIT_REF=${AUDIT_REF:-fromdebut_within}
+INC_NAME=${INC_NAME:-nocareer}
+INC_FOLDS=${INC_FOLDS:-nocareer_early,nocareer_within}
+AUDIT_REF=${AUDIT_REF:-nocareer_within}
 INC=outputs/season_ratings_${INC_NAME}.parquet
-BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1 --features career_from_debut}
+BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1 --features no_career_counts}
 [ -n "$NAME" ] && [ -n "$TARGET" ] || { echo "usage: scripts/experiment_chain.sh NAME TARGET [EXTRA RATE FLAGS]"; exit 1; }
 # Every check the chain calls, looked for BEFORE the build: a missing one would otherwise surface only hours later.
 READINGS="63_yoy 64_consensus_report 66_compare 70_tradeset 73_tradeloss 88_yoy_by_player 90_swap_test 138_heldout_audit"

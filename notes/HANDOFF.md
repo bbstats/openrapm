@@ -41,6 +41,27 @@ The work happens on feature branches off `main`; the live site is served from `d
 **464 passed, 6 deselected (the slow tests, `pytest -m slow`), 1 xfailed, ~60 s** with the scraped data
 (2026-10-12; the LaMelo test at the bottom of this file passes on the current ratings).
 
+## START HERE (2026-10-14): experiment 59, the career counts off both priors -- ADOPTED and PUBLISHED
+
+The owner, on the decomposition page: the box prior looked over-stuffed with career possessions and the swap
+adjustment knocked it back down (LeBron 2026 offence: +3.88 of his +6.77 box score from career counts, swap -2.33).
+Experiment 59 took the career counts off both priors (feature set `no_career_counts`; DECISIONS.md "Experiment 59").
+- **Result:** year over year 8.5951 against 8.5825 (z +5.3), all of it predicting the season BEFORE (z +7.9); the
+  season after a tie (z +0.8, stint level better z -3.1).  Within-season held-out worse too (+0.258, z +3.3, 0 of 10
+  seasons): veterans come out underrated in their own season.  Consensus 0.836 against 0.809.
+- **ADOPTED anyway (the owner):** "single year purity wins. i want it to truly be 'single season' data."  New rule
+  for later work: a player's other seasons may not reach his rating as inputs, even when they would describe this
+  season better.  The owner will bring the next ideas ("no need to propose fixes, i'll do that in a later sesh").
+- **Now shipped (settings):** `no_career_counts`; step 4's folds `nocareer_early,nocareer_within`.  The incumbent for
+  scoring is `outputs/season_ratings_nocareer.parquet` (8.5951); `experiment_chain.sh` and 135 default to it; the
+  noise control is `noise_nocareer` (`135 --controls=noise_nocareer`; 8.5939 against 8.5951, z -0.7: a tie).
+- **PUBLISHED 2026-10-14** (the owner: "publish it when it's done, please"): the product table rebuilt with
+  `openrapm build` (backups `outputs/season_ratings_product*_before_nocareer.parquet`), then `openrapm site --bias
+  --openrapm-decomposition --similarity` (the vanilla decomposition does not read the ratings), committed on
+  `era-prior`, `main` fast-forwarded.  The Similarity tab reads the prior's inputs, so it lost the career inputs.
+- **Left, by the new rule:** step 5's type model still reads seasons played before (counted from 1997).
+- The other session's check-143 work (the check, its test, the 142 edit, its notes hunks) stays uncommitted.
+
 ## START HERE (2026-10-13): the OpenRAPM decomposition tab -- built, NOT committed
 
 The owner's request: "another tab for OpenRAPM decomposition".  Their choices: split each published rating, offense and

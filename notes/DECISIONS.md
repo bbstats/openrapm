@@ -6244,3 +6244,114 @@ better without them).
 Built, not committed.  The page reads the final ratings, so `openrapm site --openrapm-decomposition` is rerun after every
 ratings build (`tests/test_decompose_openrapm_site.py` fails otherwise).  `docs/decompose.html`'s footer still names the
 retired `scripts/83_decompose_site.py`: the owner's wording, left alone.
+
+## Experiment 59: the career counts off both priors, through all five steps (the owner, 2026-10-14: "Experiment: career off"; registered before any result)
+
+**The question** (the owner, on the OpenRAPM decomposition page): "it looks like the box prior is way over-stuffed w/
+'# of career possessions', and then the 'swap adjustment' ... tries to knock it down ... the 'swap adjustment' really
+looks like 'fixing how our box score inputs are overrated lebron/ad'?"
+
+**Measured first (read-only, 2026-10-14).**  The career part of a box-score prior is a Shapley value with two groups:
+the career counts (career possessions before, seasons played before, seasons with his current team on offence; the
+first two on defence) against every other input.  It is computed against 100 of the season's players drawn by
+possessions, on `outputs/prior_models_fromdebut.pkl`.  Those are the boosters of the incumbent's test build: same
+settings, trained without the rated season's neighbours.  The published build saved none; LeBron's 2026 offensive
+booster prior is 3.90 there against 4.23 published.  It is converted to published points per 100 by the season's
+prior scale times step 4's multiplier.
+- LeBron James 2026, offence: box score +6.77 (the largest in 2026, 2.5 above the next), of which the career part is
+  +3.88; games' part -1.95; swap adjustment -2.33; rating 2.49.  His booster prior rises in a straight line with career
+  possessions (50,000: 1.16; 150,000: 2.48; 229,000: 3.36; his 276,752: 3.90); the stretch past Karl Malone's 229,015,
+  the most any other player had, is +0.86 in published points.  The booster has linear leaves, which extend a straight
+  line past the data.
+- The swap step's type model reads the prior itself (`swap_adjust.PRIOR_FEATURES`).  Fitted on every season of the
+  incumbent (`outputs/fromdebut_types.csv`): -0.57 per standard deviation of the offensive prior, -0.72 on defence
+  (positive good).  LeBron's 2026 offensive terms before the half strength, the give-back and the spread hold: prior
+  level -3.49, the thirteen box-score rates +1.61, age and seasons played -1.10, height and weight -0.17, role +0.28.
+  The swaps credit his box score slightly MORE than the prior does and take back the prior's level above it.
+- 2026, the 293 players with 2,000+ possessions.  Offence: the career part has a standard deviation of 0.59 and a
+  correlation of 0.75 with the box score piece; the swap piece = -0.39 x career part + 0.05.  Curry +3.28 of +4.24
+  (swap -0.30), Durant +2.21 of +2.80, Westbrook +2.18 of +2.49, Giannis +2.16 of +3.61.  Defence is the mirror: a long
+  career lowers the defensive prior (LeBron -1.66, Batum -1.21, George -1.13) and the swap piece moves with it (+0.45 x
+  career part).
+- All thirty seasons of the product table, 7,811 player-seasons with 2,000+ possessions: the offensive swap piece
+  against career possessions -0.44 (possession-weighted correlation), against the box score piece -0.28.  With the
+  box score piece, seasons played and age held fixed, one standard deviation more career possessions moves it -0.38.
+- Anthony Davis 2026 is the other case: defensive box score +3.96 with a career part of -0.92, swap -1.06 (1,299
+  possessions).  His excess is the prior's reading of his box score, not his career.
+- Cause: every training row carries the player's career-average label (`box_prior.py`), so a long career reads as the
+  career-average level of long-career players, even at 41 ("The SPM memorises long-career stars", 2026-09-14; the
+  out-of-player folds removed his own label, not the pattern).
+
+**The change: one feature set, `no_career_counts`** (`features.FEATURE_SETS`): the shipped lists with the career
+counts removed.  Offence drops 3 of 17 inputs (career possessions before, seasons played before, seasons with his
+current team), defence 2 of 14 (career possessions before, seasons played before).  The two row-evidence inputs, the
+folds, the booster settings, steps 3-5 and the swap step's own inputs stay.  Experiment 58 (above) dropped career
+possessions and seasons played only and scored the prior alone (year over year 8.8503 against 8.8258, z +2.7); it
+was never scored through steps 3-5, where the swap step may stop having to take the credit back.
+
+**Decision rule, before the result.**  The year-over-year test against `fromdebut` (8.5825), team-game level, decides:
+z of -2 or below is better, adopt; between -2 and +2 is a tie, adopt as the simpler version; +2 or above, not
+adopted.  Vetoes: a gross consensus miss; the robust review (135) worse than the noise control's pattern across most
+slices; the 2026 top 20 worse to the owner's eye.  Read, not deciding: the stage and era splits, the swap test, the
+trade loss by quality tier, the held-out audit.  Expected from experiment 58: the prior alone worse.  The reading
+the owner asked for: the decomposition of LeBron, Davis, Curry, Durant, Westbrook, Harden and Giannis before and
+after, and the swap piece's correlation with career possessions.
+
+Run: `bash scratch/2026-10-14_career_off/exp59.sh` (the chain `OWN_FOLDS=1 EARLY_FOLDS=1
+CONTROL_TAG=noise_fromdebut_within bash scripts/experiment_chain.sh nocareer points_with_expected_opponent_threes
+"--features no_career_counts"`, then the year over year by era and by stage, 135 against `noise_fromdebut`, and
+`scratch/2026-10-14_career_off/readout.py`); log `outputs/nocareer_driver.log`.
+
+**Result (2026-10-14, 9:10 AM; `outputs/season_ratings_nocareer*.parquet`, `outputs/nocareer_driver.log`): worse year
+over year, z +5.3, so NOT adopted under the registered rule; the verdict is the owner's.**  Experiment table row 59.
+
+| reading | result |
+|---|---|
+| year over year, team-game, both directions | 8.5951 against 8.5825: +0.343, z +5.3, 14 of 56 |
+| the rating predicting the season after it | +0.055, z +0.8, 12 of 28: a tie; stint level -0.287, z -3.1, 17 of 28: better |
+| the rating predicting the season before it | +0.630, z +7.9, 2 of 28: worse |
+| by era | predicting the season before: worse in every era (z +3.5 to +5.7); the season after: a tie except 2007-2016 (+0.222, z +3.4) |
+| by stage, both directions | the prior alone +0.783, z +3.1 (experiment 58: +2.7); step 3 z +4.7; step 4 z +4.2 |
+| the incumbent's step-4 multipliers instead | 8.5954, z +5.3: the same |
+| by quality tier, age, team change | worse in every group at team-game level (z +3.2 to +5.5); at stint level the season after is better in every group |
+| consensus, 2024-2026, 1,000+ possessions | 0.860 / 0.798 / 0.836 against 0.850 / 0.783 / 0.809; top five 4 of 5 |
+| lineup-swap test | order a tie (net +0.0075, z +0.4); gaps worse (z +2.4) |
+| trade loss | offence worse (+0.0020, z +2.6; top 30 z +2.4), defence a tie (z +1.7) |
+| robust review against `noise_fromdebut` | clearly worse in 27 slices (the control: 1), clearly better in 2 (the consensus; the control: 2) |
+
+**What the career counts carry.**  Almost all of their worth on this test is in the backward direction: a rating that
+credits career length predicts the player's PREVIOUS season better, the mirror of experiments 26-27's age tilt (a
+veteran's earlier seasons were better than this one).  Predicting the season after, the direction a team acts on, the
+ratings without them tie at team-game level and do better at stint level.
+
+**The decomposition, the owner's reason** (test-setting tables, 2026; box score / games / swap):
+- LeBron total: +7.35 / -2.35 / -2.47 = 2.54 becomes +2.75 / -1.28 / -0.88 = 0.59.
+- Curry total: +3.61 / -0.54 / -1.01 = 2.06 becomes -0.68 / +0.80 / +0.22 = 0.35.  The games and the swaps now push him
+  up: the career credit was not all excess.
+- Doncic offence: box score +4.59 becomes +7.79 (27 years old, 73,000 career possessions), swap +0.37 becomes -0.62.
+  The career counts were holding young stars' priors DOWN as well as veterans' up.
+- Every season, 2,000+ possessions: the swap piece's correlation with career possessions -0.43 becomes -0.25 on
+  offence and -0.28 becomes -0.09 on defence; the box score piece's +0.52 becomes +0.32 on offence.
+- 2026 top 20: Doncic 8th to 2nd (+1.93), Javonte Green 25th to 14th (+1.00), Paul Reed 16th to 11th (+1.04); Towns
+  15th to 28th (-0.53), Cason Wallace 13th to 20th (-0.31).  Players with 1,000+ possessions move a median 0.22 per
+  100 (90th percentile 0.63); the largest falls are Horford -2.31, LeBron -1.95, Curry -1.71, Conley -1.48 and Love
+  -1.36.
+
+**The within-season check, missing from the first report** (the held-out audit, 138: each 2017-2026 season rated from
+three quarters of its games, scored on the other quarter, 120 folds).  Without the career counts the held-out
+team-game error is worse by +0.258 (z +3.3, 0 of 10 seasons better; the noise control +0.055, z +0.9), and veterans
+come out underrated in their own season: from the bottom tenth of seasons played to the top, the defensive lean grows
+from +0.38 to +0.88 per 100 (z +20.9 against the incumbent's folds); by age the offensive lean grows from +0.13 to
++0.60.  The career counts are information from other seasons that describes this season's own games better.
+
+**ADOPTED (the owner, 2026-10-14), over the registered rule and after the within-season check:** "single year purity
+wins. i want it to truly be 'single season' data."  A ruling, not a test result: inputs from a player's other
+seasons stay out of his rating even where they would describe this season better.  Shipped defaults:
+`PriorSettings.feature_set` `no_career_counts`, `ShrinkSettings.folds_tag` `nocareer_early,nocareer_within`;
+`experiment_chain.sh` and 135 default to `nocareer` (8.5951 on the year-over-year test); the golden test reads the
+frozen `outputs/season_ratings_product_nocareer_step3.parquet`.  The product table was rebuilt with `openrapm build`
+(the previous one kept as `season_ratings_product*_before_nocareer.parquet`) and the noise control on the new base is
+`noise_nocareer` (`scratch/2026-10-14_career_off/adopt59.sh`; 8.5939 against 8.5951, z -0.7: a tie).  PUBLISHED
+2026-10-14 (the owner: "publish it when it's done, please").
+Still reading another season after this ruling: step 5's type model has seasons played before (counted from 1997)
+among its inputs (`swap_adjust.PANEL_FEATURES`).

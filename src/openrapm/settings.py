@@ -78,13 +78,16 @@ class LabelSettings:
 @dataclass(frozen=True)
 class PriorSettings:
     """Step 2: the box-score prior."""
+    # "no_career_counts" (notes/DECISIONS.md, experiment 59, adopted 2026-10-14: "adopt anyway"): box_score_and_bio
+    # without the career counts (career possessions before, seasons played before, seasons with his current team), so
+    # the prior reads only the rated season's box score, role and body.  Before it:
     # "career_from_debut" (notes/DECISIONS.md, experiment 57, adopted 2026-10-13): box_score_and_bio with seasons played
     # before, career possessions before and seasons with his current team counted from each player's debut, his
     # seasons before 1997 included (data/careers.py), each in the place of the 1997-counted column.
     # "box_score_and_bio": the inputs Boruta selected (a feature-selection method: an input is kept when its importance
     # beats that of shuffled copies of the inputs), without the on-court columns (features.SHIPPED; experiment 45,
     # adopted 2026-10-08, where it is called boruta_noonc)
-    feature_set: str = "career_from_debut"
+    feature_set: str = "no_career_counts"
     # the career row plus every run of 1, 2 and 3 consecutive seasons (notes/DECISIONS.md, experiment 3)
     chunk_sizes: tuple = (1, 2, 3)
     # each player's prior from the booster fitted without his fold (notes/DECISIONS.md, "The SPM memorises
@@ -127,10 +130,10 @@ class ShrinkSettings:
     # once and silently changed the factors (notes/DECISIONS.md, experiment 34's correction, 2026-10-05).  Every
     # season since experiment 55 (adopted 2026-10-12); 2017-2026 before
     fold_seasons: tuple = (1997, 2026)
-    # the within-season folds the factors are fitted on, comma-separated folders: experiment 57's own folds, 1997-2016
-    # and 2017-2026 (notes/DECISIONS.md, "Experiment 57", adopted 2026-10-13; before it experiment 46's,
-    # weightfix_early,weightfix_within); the method is experiment 33b's, adopted 2026-10-03
-    folds_tag: str = "fromdebut_early,fromdebut_within"
+    # the within-season folds the factors are fitted on, comma-separated folders: experiment 59's own folds, 1997-2016
+    # and 2017-2026 (notes/DECISIONS.md, "Experiment 59", adopted 2026-10-14; before it experiment 57's,
+    # fromdebut_early,fromdebut_within); the method is experiment 33b's, adopted 2026-10-03
+    folds_tag: str = "nocareer_early,nocareer_within"
     # each season's factors from only the K fold seasons nearest it (prior_shrink.fold_seasons_used): the defensive
     # prior part holds up less in older seasons, 0.79 in 1997-2006 against 0.95 in 2017-2026 (notes/DECISIONS.md,
     # "Era drift" and experiment 55, adopted 2026-10-12: "yes. build."); 0 would use every fold season the rule allows

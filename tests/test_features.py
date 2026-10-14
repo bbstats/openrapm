@@ -56,7 +56,9 @@ def test_the_stat_splits_lists_append_their_parts_where_the_box_count_is_read():
         "ratios_vs_league": {"O": [f"{name}_vs_league" if name in feat.RATIOS else name for name in SHIPPED_O],
                              "D": [f"{name}_vs_league" if name in feat.RATIOS else name for name in SHIPPED_D]},
         "career_from_debut": {"O": [feat.FROM_DEBUT.get(name, name) for name in SHIPPED_O],
-                              "D": [feat.FROM_DEBUT.get(name, name) for name in SHIPPED_D]}}
+                              "D": [feat.FROM_DEBUT.get(name, name) for name in SHIPPED_D]},
+        "no_career_counts": {"O": [name for name in SHIPPED_O if name not in feat.FROM_DEBUT],
+                             "D": [name for name in SHIPPED_D if name not in feat.FROM_DEBUT]}}
     wider = ["russell_blocks_per100", "rim_blocks_per100", "mid_range_blocks_per100", "three_point_blocks_per100",
              "offensive_fouls_per100", "stolen_turnovers_per100", "assists_to_rim_per100",
              "assists_to_mid_range_per100", "assists_to_corner_threes_per100", "assists_to_above_break_threes_per100"]
@@ -205,6 +207,15 @@ def test_the_career_from_the_debut_replaces_each_shipped_career_count_in_its_pla
         changed = [(old, new) for old, new in zip(feat.SHIPPED[side], feat.FEATURE_SETS["career_from_debut"][side])
                    if old != new]
         assert changed and all(feat.FROM_DEBUT[old] == new for old, new in changed)
+
+
+def test_no_career_counts_drops_the_career_counts_and_keeps_the_rest_in_order():
+    """Experiment 59: three career counts off the offensive list, two off the defensive one, nothing else."""
+    dropped = {side: [name for name in feat.SHIPPED[side] if name not in feat.FEATURE_SETS["no_career_counts"][side]]
+               for side in ("O", "D")}
+    assert dropped == {"O": ["career_possessions_before_k", "seasons_before", "seasons_with_team"],
+                       "D": ["career_possessions_before_k", "seasons_before"]}
+    assert [len(feat.FEATURE_SETS["no_career_counts"][side]) for side in ("O", "D")] == [14, 12]
 
 
 def test_the_audit_groups_and_the_swap_features_are_catalogue_names():

@@ -230,6 +230,9 @@ FEATURE_SETS = {
                          for side in ("O", "D")},
     # experiment 57: every shipped career count counted from the debut, in its place
     "career_from_debut": {side: [FROM_DEBUT.get(name, name) for name in SHIPPED[side]] for side in ("O", "D")},
+    # experiment 59 (the owner, 2026-10-14): the career counts off both lists -- career possessions before, seasons
+    # played before and seasons with his current team; every other shipped input keeps its order
+    "no_career_counts": {side: [name for name in SHIPPED[side] if name not in FROM_DEBUT] for side in ("O", "D")},
 }
 
 
