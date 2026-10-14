@@ -56,6 +56,16 @@ def team_of_rows(keys: pd.DataFrame, cfg: dict) -> pd.DataFrame:
                          "team_def": np.where(is_home_off, away, home)})
 
 
+def design_row_teams(design, cfg: dict) -> tuple[np.ndarray, np.ndarray]:
+    """(team_off, team_def): each row of a design, the team on offence and the team on defence (`team_of_rows`, the
+    row's game id read off the design's game table)."""
+    game_ids = design.games.set_index("game_idx").game_id.reindex(design.rows.game_idx.to_numpy()).to_numpy()
+    keys = pd.DataFrame({"season": design.rows.season.to_numpy(), "phase": design.rows.phase.to_numpy(),
+                         "game_id": game_ids, "is_home_off": design.rows.is_home_off.to_numpy()})
+    teams = team_of_rows(keys, cfg)
+    return teams.team_off.to_numpy(), teams.team_def.to_numpy()
+
+
 def load_ratings(path, columns: str = "rating", possessions: bool = False) -> pd.DataFrame:
     """player_id, season, o, d in raw sign (d = points allowed) from a ratings table stored positive-good.
 

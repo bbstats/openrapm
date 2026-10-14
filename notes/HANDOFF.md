@@ -41,6 +41,28 @@ The work happens on feature branches off `main`; the live site is served from `d
 **464 passed, 6 deselected (the slow tests, `pytest -m slow`), 1 xfailed, ~60 s** with the scraped data
 (2026-10-12; the LaMelo test at the bottom of this file passes on the current ratings).
 
+## START HERE (2026-10-14, afternoon): experiment 60, team-season flags in step 1's labels -- STOPPED, left off
+
+**Closed by the owner after check 144:** "This is kind of the opposite of what I was aiming for. So sounds like we
+should leave it off."  The build was stopped (no python left running); the within-season audit it finished was a tie
+(-0.167, z -1.5).  The code stays, off by default and bit-identical when off.  The rest of this entry is as it stood.
+
+
+The owner's thread after experiment 59: "team-season level flags for offense & defense (in RAPM fits?)"; placed in
+step 1 (the owner's pick), where players changing teams between seasons tell a flag from its players.  DECISIONS.md
+"Experiment 60" has the rule (registered before the result) and every number; plan
+`~/.claude/plans/now-that-we-ve-made-virtual-starfish.md`.
+- **Built (uncommitted, branch `era-prior`):** `rapm.team_flags`, `SeasonSums.add(..., teams)`, `.penalty`,
+  `.flag_columns`, `.solve`; `LabelSettings.team_offense_penalty / team_defense_penalty` (0 = off, shipped);
+  `--team-season-penalties` on `rate` and `build`; `data/tables.design_row_teams`; check 144 (the penalties by EM,
+  the label moves); tests in `test_rapm.py`, `test_settings.py`, `test_cli.py`.  Off = bit-identical.
+- **Check 144:** EM with the players held at 40,000 gives flags of sd 2.5 / 2.2 per 100 (penalties 1,530 / 1,360) that
+  take the stars' credit (Nash -4.5, one-team stars -1 to -2); EM on players and flags together, scaled back to
+  40,000, gives 45,900 / 56,500 and labels that barely move (a certain tie, not built).
+- **Was running, stopped:** `bash scratch/2026-10-14_team_season/exp60.sh` (name `teamseason`, penalties 1530,1360),
+  after `pytest -m slow` (7 passed); logs `outputs/teamseason_slowtests.log`, `outputs/teamseason_chain.log`.
+- The other session's check-143 work stays uncommitted; stage by explicit path and hunk.
+
 ## START HERE (2026-10-14): experiment 59, the career counts off both priors -- ADOPTED and PUBLISHED
 
 The owner, on the decomposition page: the box prior looked over-stuffed with career possessions and the swap

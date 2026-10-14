@@ -6355,3 +6355,61 @@ frozen `outputs/season_ratings_product_nocareer_step3.parquet`.  The product tab
 2026-10-14 (the owner: "publish it when it's done, please").
 Still reading another season after this ruling: step 5's type model has seasons played before (counted from 1997)
 among its inputs (`swap_adjust.PANEL_FEATURES`).
+
+## Experiment 60: team-season flags in step 1's labels (the owner, 2026-10-14: "team-season level flags for offense & defense (in RAPM fits?)", then "Step 1 labels"; registered before any result)
+
+**The question.**  After experiment 59, other threads that keep a rating single-season.  The first: one flag per
+team-season, offence and defence, in the RAPM fits.  Inside one season a flag is the same as "every player on that
+team +x" (each possession has exactly five of the team's players), so only the penalty would split the two; a flag in
+step 3 would either credit a team's play beyond its box scores to nobody or share it out evenly, a second within-team
+split beside step 5's.  In step 1 the label's ~29 seasons move players between teams, so a flag is told apart from
+its players there.  The owner chose step 1.  Before this, team-season terms were tried in the trade set (18b) and
+inside the booster (27: a tie, the trade loss worse), never inside a RAPM fit.
+
+**The change** (`rapm.py`, "team-season flags"; `LabelSettings.team_offense_penalty`, `team_defense_penalty`;
+`openrapm rate/build --team-season-penalties ATTACKING,DEFENDING`, default 0,0 = off, every label and rating
+bit-identical; each row's teams from the stint diagnostics, `data/tables.design_row_teams`).  Step 1's fit gains, per
+season, an attacking flag per team (1 on the rows it is on offence) and a defending flag per team (1 on the rows it is
+on defence), in both targets' fits, each block with its own penalty; the season intercept stays unpenalised.  The
+label is still the player's coefficient; the flags' values go nowhere.  Steps 2-5 unchanged in code; the prior is
+retrained on the new labels and step 4 gets its own folds.
+
+**The penalties, check 144** (`scripts/checks/144_team_season_labels.py`; empirical Bayes by EM on all thirty seasons,
+never tuned on the year-over-year test; logs `outputs/team_season_labels_144_{flags,joint}.log`).
+- **Rule "flags" (the plan's): EM on the flags alone, the players held at 40,000.**  Attacking 1,530 (offence fit),
+  defending 1,360 (defence fit): flags with an sd of 2.5 per 100 on offence and 2.2 on defence.  The biggest are the
+  seasons a star arrived or peaked: 2005 Phoenix offence +7.4 (Nash's first season), 2025 Cleveland +7.4, 1997 Chicago
+  +6.7, 2016 Golden State +6.3; 2000 Chicago -9.4; 2026 Oklahoma City defence +6.8, 2020 Milwaukee +6.4.  The 2026
+  labels (product setting) correlate 0.940 / 0.911 with today's; 90% / 94% of 5,000+ possession players move 0.1+ in
+  rating points (the label move times 2026's prior scale).  One-team careers all fall: Duncan -1.7 / -2.3, Nowitzki
+  -2.1 / -0.5, Kobe -1.9 / -0.1, Curry -0.9 / -0.6, Gobert -1.4 / -1.5; Nash -4.5 on offence.
+- **Why so large:** 40,000 lets a player's career level spread only 0.55 per 100 (s2 12,247), far below the players'
+  real spread, so against them the flags are cheap.  EM on all four blocks together (rule "joint") puts the players
+  at 2,610 / 3,135 (sd 2.2 / 2.0) and the flags at 3,000 / 3,420 (sd 2.0 / 1.9) in the offence fit, about the same
+  spread as the players.  Scaled to the shipped player penalty (each flag estimate x 40,000 / its side's player
+  estimate): attacking 45,900, defending 56,500, flags sd 0.34 / 0.24, labels correlating 0.9993 / 0.9994 with
+  today's, one-team stars -0.1.  Under the plan's check (labels moving under 0.1 per 100 means a certain tie) that
+  version is not built.
+- **Built: rule "flags", 1,530 / 1,360**, the plan's rule; its labels move enough to test.  The risk, already visible
+  above: the flags take credit from the stars who made their teams good, 18b's strict bound.
+
+**Decision rule, before the result.**  The year-over-year test against `nocareer` (8.5951), team-game level, decides:
+z of -2 or below is better, adopt; between -2 and +2 is a tie, NOT adopted (the candidate adds columns: the incumbent
+is the simpler version); +2 or above, not adopted.  Vetoes: a gross consensus miss; the robust review (135) worse than
+`noise_nocareer`'s pattern across most slices; the 2026 top 20 worse to the owner's eye.  Read, not deciding: the
+stage and era splits, the lineup-swap test, the trade loss by quality tier, the within-season held-out audit (138).
+
+Run: `bash scratch/2026-10-14_team_season/exp60.sh` (the chain `OWN_FOLDS=1 EARLY_FOLDS=1
+CONTROL_TAG=noise_nocareer_within bash scripts/experiment_chain.sh teamseason points_with_expected_opponent_threes
+"--team-season-penalties 1530,1360"`, then the year over year by era and by stage and 135 against `noise_nocareer`);
+log `outputs/teamseason_driver.log`.
+
+**Stopped, not adopted (2026-10-14).**  After check 144 the owner: "This is kind of the opposite of what I was aiming
+for. So sounds like we should leave it off."  The build was stopped in step 4's early folds (the chain and its python
+children killed); the one reading it finished, the within-season held-out audit (138, 2017-2026 folds, 120 folds):
+-0.167 per team-game (z -1.5, 7 of 10 seasons better; the noise control -0.040, z -0.6), a tie.  The defensive leans
+it moved most: team points scored with him on the court +0.06 -> +0.27 (z +10.6), offensive rebounds +0.65 -> +0.45
+(z -7.7).  Kept: the code, off by default (bit-identical when off: `pytest -m slow` 7 passed, the 2026 golden
+included), check 144, `outputs/season_ratings_teamseason_step3.parquet`, `outputs/within/teamseason_within`, the
+logs; removed `outputs/prior_models_teamseason.pkl` (1.1 GB; a rerun under the same name would reuse it silently)
+and the unfinished `outputs/within/teamseason_early`.

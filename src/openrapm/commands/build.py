@@ -44,7 +44,7 @@ from ..data.panel import panel_and_trainable_seasons, trainable_panel
 from ..data.roles import main_teams
 from ..data.seasons import all_seasons, trainable
 from ..data.stints import load_season_stints
-from ..data.tables import player_names
+from ..data.tables import design_row_teams, player_names
 from ..data.within_folds import check_fold_files, load_folds
 
 SIDES = ("O", "D")
@@ -65,26 +65,32 @@ def describe(settings, seasons) -> str:
     """One line naming what this run uses."""
     targets, prior = settings.targets, settings.prior
     era = (f"; era half-life {prior.era_halflife:g} seasons" if prior.era_halflife > 0 else "")
+    labels = settings.labels
+    flags = (f"; team-season flags {labels.team_offense_penalty:g} / {labels.team_defense_penalty:g}"
+             if labels.team_flags else "")
     return (f"rate {seasons[0]}-{seasons[-1]} ({len(seasons)} seasons): offence target {targets.offence}, defence "
             f"target {targets.defence}; inputs {prior.feature_set}; booster {prior.booster_file}; {prior.n_folds} "
             f"player folds, assignment {prior.fold_assignment}; neighbours left out {settings.exclude_neighbours}"
-            f"{era}")
+            f"{era}{flags}")
 
 
 def accumulate_rapm(designs: DesignCache, seasons, settings) -> dict:
     """Step 1: {target: rapm.SeasonSums} over `seasons`, one per distinct target of the two sides.
 
     The seasons are added in ascending order: a player's column is fixed by the first season that brings him,
-    and the published ratings were built with that column order.
+    and the published ratings were built with that column order.  With the team-season flags on
+    (`settings.labels.team_flags`), each season is added with its rows' teams.
     """
     started = time.time()
+    flags = settings.labels.team_flags
     sums = {}
     for target in settings.targets.distinct():
         sums[target] = rapm.SeasonSums(settings.labels.min_possessions)
         for season in sorted(seasons):
-            sums[target].add(season, designs.season(season, target))
-        print(f"  step 1: {len(seasons)} seasons on {target}, {len(sums[target].player_ids)} players "
-              f"({time.time() - started:.0f}s)", flush=True)
+            design = designs.season(season, target)
+            sums[target].add(season, design, design_row_teams(design, designs.cfg) if flags else None)
+        print(f"  step 1: {len(seasons)} seasons on {target}, {len(sums[target].player_ids)} players"
+              f"{', team-season flags' if flags else ''} ({time.time() - started:.0f}s)", flush=True)
     return sums
 
 

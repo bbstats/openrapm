@@ -71,6 +71,23 @@ def parse_seasons(text: str) -> list[int]:
     return sorted(seasons)
 
 
+def parse_penalty_pair(text: str) -> tuple[float, float]:
+    """Two penalties as typed, attacking then defending: both 0 (off) or both above 0.
+
+    Example: "9000,6000" gives (9000.0, 6000.0); "0,0" gives (0.0, 0.0).
+    """
+    parts = [piece.strip() for piece in str(text).split(",")]
+    try:
+        pair = tuple(float(piece) for piece in parts)
+    except ValueError:
+        pair = ()
+    if len(pair) != 2:
+        raise argparse.ArgumentTypeError(f"{text!r}: write two penalties, attacking then defending, as 9000,6000")
+    if pair != (0.0, 0.0) and min(pair) <= 0.0:
+        raise argparse.ArgumentTypeError(f"{text!r}: both penalties 0 (no flags) or both above 0")
+    return pair
+
+
 def plain_name(flag: str, given: str, translate) -> str:
     """The name typed after `flag`, or its plain name when it is one used before 2026-10-11 (said in one line).
 
@@ -83,17 +100,21 @@ def plain_name(flag: str, given: str, translate) -> str:
 
 
 def chosen_settings(args: argparse.Namespace) -> Settings:
-    """The setting named by --setting, with the defensive target, input list, booster file, fold assignment and era
-    half-life given on the command line (each defaults to the shipped value, so a plain run is the setting itself).
-    An old target or input-list name is read as its plain one (data/legacy_names.py)."""
+    """The setting named by --setting, with the defensive target, input list, booster file, fold assignment, era
+    half-life and team-season flag penalties given on the command line (each defaults to the shipped value, so a
+    plain run is the setting itself).  An old target or input-list name is read as its plain one
+    (data/legacy_names.py)."""
     base = SETTINGS[args.setting]
     if args.fold_assignment < 0:
         raise SystemExit("--fold-assignment is 0 (the shipped order) or a positive seed")
     if args.era_halflife < 0:
         raise SystemExit("--era-halflife is 0 (every season counts the same, shipped) or a positive number of seasons")
+    attacking, defending = args.team_season_penalties
     return replace(base,
                    targets=replace(base.targets,
                                    defence=plain_name("--defensive-target", args.defensive_target, target_name)),
+                   labels=replace(base.labels, team_offense_penalty=float(attacking),
+                                  team_defense_penalty=float(defending)),
                    prior=replace(base.prior, feature_set=plain_name("--features", args.features, feature_set_name),
                                  booster_file=BOOSTER_FILE.format(args.booster_params),
                                  fold_assignment=args.fold_assignment, era_halflife=float(args.era_halflife)))
@@ -196,6 +217,10 @@ def _add_setting_options(parser) -> None:
                         help="0: the prior's training rows count the same from every season.  A positive H: a row "
                              "counts half as much for every H seasons between its seasons and the rated one, beyond "
                              "the nearest season the fit may use (default %(default)s)")
+    parser.add_argument("--team-season-penalties", type=parse_penalty_pair, metavar="ATTACKING,DEFENDING",
+                        default=(PRODUCT.labels.team_offense_penalty, PRODUCT.labels.team_defense_penalty),
+                        help="step 1's team-season flags: one column per team-season on offence and one on defence, "
+                             "penalised at these two values.  0,0: no flags (default 0,0)")
 
 
 def _add_folds_tag(parser) -> None:

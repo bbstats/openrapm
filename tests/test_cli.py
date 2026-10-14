@@ -65,6 +65,18 @@ def test_the_era_half_life_reaches_the_prior_and_a_negative_one_is_refused():
         cli.chosen_settings(_parse("rate", "--era-halflife", "-1"))
 
 
+def test_the_team_season_penalties_reach_the_labels_and_a_half_pair_is_refused():
+    """Experiment 60: on rate and build alike; 0,0 (the default) is the shipped setting."""
+    for command in ("rate", "build"):
+        labels = cli.chosen_settings(_parse(command, "--team-season-penalties", "9000,6000")).labels
+        assert (labels.team_offense_penalty, labels.team_defense_penalty) == (9000.0, 6000.0)
+        assert labels.team_flags
+    assert cli.chosen_settings(_parse("rate", "--team-season-penalties", "0,0")) == PRODUCT
+    for text in ("9000", "9000,0", "a,b", "1,2,3", "-1,5"):
+        with pytest.raises(argparse.ArgumentTypeError):
+            cli.parse_penalty_pair(text)
+
+
 def test_the_names_used_before_the_rename_still_work_and_say_so(capsys):
     """x3def and boruta_noonc, typed as before 2026-10-11, run their plain-named settings, one line each."""
     chosen = cli.chosen_settings(_parse("rate", "--defensive-target", "x3def", "--features", "boruta_noonc"))

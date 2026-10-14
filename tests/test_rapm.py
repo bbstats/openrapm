@@ -21,11 +21,44 @@ def world(synthetic_league, synthetic_design):
     return sim, {season: synthetic_design(sim, [season]) for season in SEASONS}
 
 
-def _sums(designs, seasons, min_possessions=0.0):
+def _sums(designs, seasons, min_possessions=0.0, teams=None):
     sums = rapm.SeasonSums(min_possessions=min_possessions)
     for s in seasons:
-        sums.add(s, designs[s])
+        sums.add(s, designs[s], None if teams is None else teams[s])
     return sums
+
+
+@pytest.fixture(scope="module")
+def teams(world):
+    """{season: (team_off, team_def)} per row: the simulated league moves players only between seasons, so a row's
+    team is its first player's team that season."""
+    sim, designs = world
+    team = sim["truth"]["ps"].set_index(["season", "player_id"]).team
+    out = {}
+    for season, design in designs.items():
+        player_ids = design.spec.players.player_id.to_numpy()
+        out[season] = tuple(team.reindex(pd.MultiIndex.from_arrays(
+            [np.full(len(design.y), season), player_ids[design.parts[five][:, 0]]])).to_numpy(np.int64)
+            for five in ("lineup_o", "lineup_d"))
+    return out
+
+
+@pytest.fixture(scope="module")
+def planted(world, teams):
+    """The world's designs with a team-season effect added to every row, sd 4 per 100 on each side, and the effects:
+    {(season, team): (attacking, defending)}."""
+    from dataclasses import replace
+    _, designs = world
+    rng = np.random.default_rng(1)
+    effects = {(season, team): tuple(rng.normal(0.0, 4.0, 2)) for season in SEASONS
+               for team in np.unique(np.concatenate(teams[season]))}
+    shifted = {}
+    for season, design in designs.items():
+        team_off, team_def = teams[season]
+        bump = (np.array([effects[(season, t)][0] for t in team_off])
+                + np.array([effects[(season, t)][1] for t in team_def]))
+        shifted[season] = replace(design, y=design.y + bump)
+    return shifted, effects
 
 
 def _pen(offense, defense=None, context=0.0):
@@ -158,6 +191,88 @@ def test_each_season_keeps_its_own_level(world):
     moved = _sums(shifted, SEASONS).ratings((), _pen(2000.0)).set_index("player_id")
     shared = base.index.intersection(moved.index)
     assert np.allclose(base.loc[shared, "offense"], moved.loc[shared, "offense"], atol=1e-6)
+
+
+# ------------------------------------------------------------ the team-season flags (experiment 60)
+def test_team_flags_on_a_hand_example():
+    flags, teams = rapm.team_flags([20, 10, 30], [30, 20, 10])
+    assert teams.tolist() == [10, 20, 30]
+    assert flags.tolist() == [[0, 1, 0, 0, 0, 1], [1, 0, 0, 0, 1, 0], [0, 0, 1, 1, 0, 0]]
+
+
+def test_without_flags_the_penalties_are_the_old_blocks_bit_for_bit(world):
+    _, designs = world
+    sums = _sums(designs, SEASONS)
+    gram, _, possessions, n_context = sums.assemble([2003])
+    old = rapm.block_penalty((possessions.size, possessions.size, n_context), [2000.0, 3000.0, 0.0])
+    assert np.array_equal(sums.penalty([2003], (2000.0, 3000.0, 0.0)), old)
+    assert np.array_equal(sums.penalty([2003], (2000.0, 3000.0, 0.0), (500.0, 700.0)), old)  # no flags: unread
+    assert not sums.has_team_flags and sums.flag_columns().empty
+
+
+def test_flags_sit_at_the_end_of_each_season_and_carry_their_own_penalty(world, teams):
+    _, designs = world
+    sums = _sums(designs, SEASONS, teams=teams)
+    assert sums.has_team_flags
+    penalty = sums.penalty((), (2000.0, 3000.0, 0.0), (500.0, 700.0))
+    columns = sums.flag_columns()
+    assert len(columns) == 8 * len(SEASONS)
+    assert (penalty[columns.attacking] == 500.0).all() and (penalty[columns.defending] == 700.0).all()
+    assert (penalty == 0.0).sum() == len(SEASONS) * len(designs[2001].spec.context_names)
+    with pytest.raises(ValueError, match="above 0"):
+        sums.penalty((), (2000.0, 3000.0, 0.0))
+
+
+def test_a_left_out_season_drops_its_flags_and_still_equals_fitting_without_it(world, teams):
+    _, designs = world
+    pair = (500.0, 500.0)
+    sums = _sums(designs, SEASONS, teams=teams)
+    assert 2003 not in set(sums.flag_columns([2003]).season)
+    held = sums.ratings([2003], _pen(2000.0), pair).set_index("player_id")
+    others = [s for s in SEASONS if s != 2003]
+    direct = _sums(designs, others, teams=teams).ratings((), _pen(2000.0), pair).set_index("player_id")
+    shared = held.index.intersection(direct.index)
+    assert len(shared) > 50
+    assert np.allclose(held.loc[shared, "offense"], direct.loc[shared, "offense"], atol=1e-8)
+    assert np.allclose(held.loc[shared, "defense"], direct.loc[shared, "defense"], atol=1e-8)
+
+
+def test_flags_take_a_planted_team_season_effect_off_the_players(world, teams, planted):
+    """Plant a team-season effect (sd 4 per 100 a side): without flags the players absorb it; with them the flags
+    recover it and the players' ratings track their simulated talent better."""
+    sim, _ = world
+    shifted, effects = planted
+    truth = sim["truth"]["ps"].groupby("player_id")[["impact_O", "impact_D"]].mean().reset_index()
+
+    def agreement(ratings):
+        joined = ratings.merge(truth, on="player_id")
+        return (np.corrcoef(joined.offense, joined.impact_O)[0, 1], np.corrcoef(joined.defense, joined.impact_D)[0, 1])
+
+    plain = agreement(_sums(shifted, SEASONS).ratings((), _pen(1000.0)))
+    sums = _sums(shifted, SEASONS, teams=teams)
+    flagged = agreement(sums.ratings((), _pen(1000.0), (200.0, 200.0)))
+    assert flagged[0] > plain[0] + 0.03 and flagged[1] > plain[1] + 0.03
+    theta, _ = sums.solve((), _pen(1000.0), (200.0, 200.0))
+    columns = sums.flag_columns()
+    for side, column in ((0, "attacking"), (1, "defending")):
+        want = [effects[(season, team)][side] for season, team in zip(columns.season, columns.team_id)]
+        assert np.corrcoef(theta[columns[column]], want)[0, 1] > 0.6
+
+
+def test_career_labels_refuse_sums_built_the_other_way(world, teams):
+    from dataclasses import replace
+    _, designs = world
+    plain = {PRODUCT.targets.offence: _sums(designs, SEASONS, 100.0),
+             PRODUCT.targets.defence: _sums(designs, SEASONS, 100.0)}
+    flagged = {target: _sums(designs, SEASONS, 100.0, teams) for target in plain}
+    on = replace(PRODUCT.labels, team_offense_penalty=500.0, team_defense_penalty=500.0)
+    with pytest.raises(ValueError, match="without each row's teams"):
+        rapm.career_labels(plain, [2004], on, PRODUCT.targets)
+    with pytest.raises(ValueError, match="with each row's teams"):
+        rapm.career_labels(flagged, [2004], PRODUCT.labels, PRODUCT.targets)
+    labels = rapm.career_labels(flagged, [2004], on, PRODUCT.targets)
+    assert labels["O"].equals(flagged[PRODUCT.targets.offence].ratings([2004], (40000.0, 40000.0, 0.0),
+                                                                        (500.0, 500.0)))
 
 
 # ------------------------------------------------------------ the un-shrunk label

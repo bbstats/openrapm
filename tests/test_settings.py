@@ -20,6 +20,9 @@ def test_the_label_settings():
     assert labels.tier_edges == (0.0, 500.0, 1500.0, 4444.0)
     assert labels.full_trust_possessions == 4444.0
     assert labels.unshrink_columns == ("defense",)
+    assert (labels.team_offense_penalty, labels.team_defense_penalty) == (0.0, 0.0)   # no team-season flags
+    assert not labels.team_flags
+    assert replace(labels, team_defense_penalty=500.0).team_flags
 
 
 def test_the_targets_prior_and_ridge():

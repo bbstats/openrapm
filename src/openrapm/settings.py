@@ -73,6 +73,15 @@ class LabelSettings:
     # its possession tier's level (notes/DECISIONS.md, "Experiments 1 and 2 of 2026-09-14 evening": experiment 1)
     full_trust_possessions: float = 4444.0
     tier_edges: tuple = (0.0, 500.0, 1500.0, 4444.0)
+    # the team-season flags' penalties, attacking and defending (rapm.py, "team-season flags"); 0 and 0 = no flags,
+    # the shipped setting.  Experiment 60 (notes/DECISIONS.md) sets them on the command line
+    team_offense_penalty: float = 0.0
+    team_defense_penalty: float = 0.0
+
+    @property
+    def team_flags(self) -> bool:
+        """Whether step 1's fit carries the team-season flags."""
+        return max(self.team_offense_penalty, self.team_defense_penalty) > 0.0
 
 
 @dataclass(frozen=True)
