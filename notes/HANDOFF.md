@@ -42,19 +42,20 @@ The work happens on feature branches off `main`; the live site is served from `d
 data (2026-10-15).  The one failure is the star-guard rank ceiling on Curry, 100th against a ceiling of 80, failing
 since experiment 59 and waiting on the owner.
 
-## START HERE (2026-10-15, evening): the retry plan under the new decider; experiment 65 ADOPTED, not published
+## START HERE (2026-10-15, evening): the retry plan under the new decider; experiment 65 ADOPTED and PUBLISHED
 
 The owner: "now that we have simplified our testing, plan out tests we should try (or retry)".  Plan
 `~/.claude/plans/now-that-we-have-sprightly-ripple.md`: five ranked retries of ideas the old year-over-year test was blind
-to, run one at a time on the owner's go.  All of it is on the local branch `exp64-ratios-vs-league`, uncommitted.
+to, run one at a time on the owner's go.  Committed and pushed on `main` as 9d98448 (the branch
+`exp64-ratios-vs-league` merged and deleted).
 
-**What ships now (adopted, not published).**  The incumbent is `gamesfree`: `cols06`'s steps 1-3 and folds, with step 4
+**What ships now (adopted and published 2026-10-15, the owner: "Publish").**  The incumbent is `gamesfree`: `cols06`'s steps 1-3 and folds, with step 4
 multiplying the games' part too (`ShrinkSettings.free_games_part = True`; `openrapm shrink --no-free-games-part` holds it
 at 1).  The product table is rebuilt (`openrapm build`, 16 minutes; step 3 bit-identical; the previous tables are
 `outputs/season_ratings_product*_before_gamesfree.parquet`): the prior part 0.662-0.751 on offence, 0.779-0.953 on
 defence; the games' part 1.269-1.375 and 1.397-1.567.  2026 top 5: Wembanyama, Gilgeous-Alexander, Dončić, Jokić,
-Kawhi.  **The site is not rebuilt**: `openrapm site --bias --openrapm-decomposition --similarity`, commit, push, on the
-owner's word.
+Kawhi.  The site rebuilt with `openrapm site --bias --openrapm-decomposition --similarity --built 2026-10-15`, every
+decomposition check passed; Pages built, the live ratings.json equal to the committed one.
 
 | rank | retry | result | state |
 |---|---|---|---|
@@ -80,12 +81,11 @@ for every system.  The chain reads the incumbent's folds under `INC_SYSTEM=cols0
   multiplied (`site.published_parts` returns each season's factor).
 
 **Waiting on the owner.**
-1. Publish experiment 65.
-2. Experiment 64's verdict, recommended not adopted.
-3. The `source` split on top of experiment 65: -0.088, z -2.59, 20 of 30; DNP games z -1.89.  It needs each whole
+1. Experiment 64's verdict, recommended not adopted.
+2. The `source` split on top of experiment 65: -0.088, z -2.59, 20 of 30; DNP games z -1.89.  It needs each whole
    season's games' part split into pieces, about 2 hours of code.
-4. The dashboards once the per-game hustle download finishes.
-5. The decider's bar, z -2, still to confirm.
+3. The dashboards once the per-game hustle download finishes.
+4. The decider's bar, z -2, still to confirm.
 
 `pytest -q`: 657 passed, 1 failed, the Curry star-guard ceiling.
 

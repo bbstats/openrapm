@@ -7116,7 +7116,7 @@ with its own folds: the games' part multiplied by 1.269-1.416 on offence, 1.399-
 - Waiting on the owner: adopt `gamesfree`, or build `source` too, which needs each whole season's games' part split
   into pieces.
 
-## Experiment 65 ADOPTED (2026-10-15, not published)
+## Experiment 65 ADOPTED and PUBLISHED (2026-10-15)
 
 The owner: "Adopt one multiplier as the new incumbent - sounds good!"  Step 4 now multiplies the games' part too.
 
@@ -7130,5 +7130,7 @@ The owner: "Adopt one multiplier as the new incumbent - sounds good!"  Step 4 no
   Ausar Thompson, Queta +0.75, Clingan, Giannis, Cason Wallace, Caruso +0.62, Edey, Holmgren +0.63, Butler, Diabaté
   +0.62, Hartenstein, Anunoby, Paul Reed, Karl-Anthony Towns, Mitchell Robinson; out: Scottie Barnes, Dru Smith.
 - The noise control on the new base, `noise_cols06` on the decider: +0.077, z +1.05, 11 of 30 seasons.
-- Previous product tables: `outputs/season_ratings_product*_before_gamesfree.parquet`.  The site still shows
-  experiment 63; publishing waits for the owner.
+- Previous product tables: `outputs/season_ratings_product*_before_gamesfree.parquet`.
+- Published (the owner: "Publish"): the site's ratings, bias page, OpenRAPM decomposition and similarity files rebuilt,
+  every decomposition check passed, commit 9d98448 on `main`, Pages built, the live ratings.json equal to the committed
+  one.
