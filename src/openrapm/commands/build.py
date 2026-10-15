@@ -286,13 +286,17 @@ def shrink_seasons(cfg: dict, table: pd.DataFrame, settings) -> tuple[pd.DataFra
                                                                        shrink.fold_seasons)]
     fold_seasons = sorted({fold.season for fold in folds})
     multipliers = prior_shrink.multipliers_by_season(table.season.unique(), folds, shrink.rule,
-                                                     shrink.nearest).assign(
+                                                     shrink.nearest, shrink.free_games_part).assign(
         fold_tag=shrink.folds_tag, fold_first=fold_seasons[0], fold_last=fold_seasons[-1])
     nearest = f", the {shrink.nearest} nearest fold seasons" if shrink.nearest else ""
     print(f"  step 4: {len(folds)} folds of {shrink.folds_tag} ({shrink.fold_seasons[0]}-{shrink.fold_seasons[1]}), "
           f"{shrink.rule} rule{nearest}; the prior part multiplied by {multipliers.multiplier_off.min():.3f} to "
           f"{multipliers.multiplier_off.max():.3f} on offence, {multipliers.multiplier_def.min():.3f} to "
           f"{multipliers.multiplier_def.max():.3f} on defence", flush=True)
+    if shrink.free_games_part:
+        print(f"  step 4: the games' part multiplied by {multipliers.games_multiplier_off.min():.3f} to "
+              f"{multipliers.games_multiplier_off.max():.3f} on offence, {multipliers.games_multiplier_def.min():.3f} "
+              f"to {multipliers.games_multiplier_def.max():.3f} on defence", flush=True)
     return prior_shrink.shrink(table, multipliers), multipliers
 
 

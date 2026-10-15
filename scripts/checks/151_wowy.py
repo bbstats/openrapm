@@ -39,11 +39,22 @@ Read against a reference (the incumbent) season by season: the mean of the per-s
 across seasons, the z, and the seasons better.  The noise control (the incumbent rebuilt with its box-score prior's
 players assigned to other folds) shows what chance alone does.  Below 0 is better.
 
+Step 4 split into pieces (`--pieces source,certainty`, the retry plan's rank 3, 2026-10-15).  For a system whose
+folds were built with `openrapm folds --pieces`, one more stage per family of check 145: the box-score part and each
+piece of the games' part get their own multiplier, fitted as check 145 fits them on the 8 nearest fold seasons under
+the test rule, never the season or its neighbours, then applied to the season's folds and re-centred.  The stage
+The shipped step through the same code, `pieces_u_whole` since experiment 65 (`pieces_step4` before), must equal
+`step4` to the last digits; the check stops if not.
+
+Step 4 here is the shipped one, settings.ShrinkSettings: since experiment 65 (adopted 2026-10-15) it multiplies the
+games' part too, so `step4` is m x prior + g x u, both factors fitted on the 8 nearest fold seasons.
+
 Writes outputs/csv/wowy_<tag>_seasons.csv (every system, season, stage and slice) and wowy_<tag>.csv (the paired
 summary).
 
     python scripts/checks/151_wowy.py --systems=nocareer,noise_nocareer,cols06 --ref=nocareer --tag=exp63
         (each name reads outputs/within/<name>_early and <name>_within; about 10 minutes)
+    python scripts/checks/151_wowy.py --systems=cols06pieces --ref=cols06 --pieces=source,certainty --tag=pieces
 """
 from __future__ import annotations
 
@@ -58,19 +69,30 @@ import pandas as pd
 import scipy.sparse as sp
 
 from openrapm.commands.console import use_utf8
+from openrapm.settings import PRODUCT
 
 REGULAR_SHARE = 0.40            # a regular's share of his team's fit-game possessions on that side
 NEAREST = 8                     # step 4's fold seasons, as shipped
-STAGES = ("step3", "step4")
 SLICES = ("all", "dnp")
+PIECES_TOLERANCE = 1e-8         # the shipped step through check 145's code against `step4`, per player (145's own)
+FREE_GAMES = PRODUCT.shrink.free_games_part     # step 4 multiplies the games' part too (experiment 65)
+SHIPPED_FAMILY = "u_whole" if FREE_GAMES else "step4"      # check 145's family that is the shipped step 4
 
 
-def _audit():
-    spec = importlib.util.spec_from_file_location("heldout_audit", Path(__file__).with_name("138_heldout_audit.py"))
+def _load(name: str, file: str):
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name(file))
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module          # its dataclasses look their module up while being defined
     spec.loader.exec_module(module)
     return module
+
+
+def _audit():
+    return _load("heldout_audit", "138_heldout_audit.py")
+
+
+def _pieces():
+    return _load("piece_multipliers", "145_piece_multipliers.py")
 
 
 # ------------------------------------------------------------------------------------------------ one fold
@@ -128,15 +150,24 @@ def wowy_miss(miss: np.ndarray, levels: sp.csr_matrix, w: np.ndarray) -> np.ndar
     return miss - levels @ coef
 
 
-def fold_errors(audit, fold, teams: dict, multiplier_off: float, multiplier_def: float) -> dict:
+def step4_parts(audit, fold, parts, step4: tuple) -> dict:
+    """{"O", "D"}: (the prior part, the games' part) after step 4 on this fold, re-centred as step 4 re-centres.
+    `step4` is (m_O, m_D, g_O, g_D): the prior part's factors and the games' part's, 1 when step 4 holds it."""
+    out = {}
+    for side, prior, games, m, g in (("O", parts.prior_off, parts.u_off, step4[0], step4[2]),
+                                     ("D", parts.prior_def, parts.u_def, step4[1], step4[3])):
+        games = g * games
+        out[side] = (audit.shrunk_prior(prior, games, m, np.zeros(len(games)),
+                                        fold.rows[side].poss_off.to_numpy(float)), games)
+    return out
+
+
+def fold_errors(audit, fold, teams: dict, step4: tuple) -> dict:
     """{(stage, slice): (sum of w x WOWY miss squared, sum of w)} for one fold."""
     parts = audit.RatingParts.of(fold)
-    prior_off = audit.shrunk_prior(parts.prior_off, parts.u_off, multiplier_off, np.zeros(len(parts.u_off)),
-                                   fold.rows["O"].poss_off.to_numpy(float))
-    prior_def = audit.shrunk_prior(parts.prior_def, parts.u_def, multiplier_def, np.zeros(len(parts.u_def)),
-                                   fold.rows["D"].poss_off.to_numpy(float))
-    misses = audit.stage_misses(fold, parts, prior_off, prior_def,
-                                {"O": prior_off + parts.u_off, "D": prior_def + parts.u_def})
+    shrunk = step4_parts(audit, fold, parts, step4)
+    misses = audit.stage_misses(fold, parts, shrunk["O"][0], shrunk["D"][0],
+                                {side: prior + games for side, (prior, games) in shrunk.items()})
     levels = team_levels(fold, teams)
     absent = regulars_absent(fold, teams)
     out = {}
@@ -148,20 +179,27 @@ def fold_errors(audit, fold, teams: dict, multiplier_off: float, multiplier_def:
     return out
 
 
-def stage_ratings(audit, fold, multiplier_off: float, multiplier_def: float) -> dict:
-    """{stage: ({player_id: rating_off}, {player_id: points allowed})} for the fold's rated players."""
+def stage_ratings(audit, fold, step4: tuple, extra: dict | None = None) -> dict:
+    """{stage: ({player_id: rating_off}, {player_id: points allowed})} for the fold's rated players; `extra` adds
+    stages given as {stage: {"O": rating_off, "D": rating_def}}, positive good, in the fold's row order."""
     parts = audit.RatingParts.of(fold)
-    prior_off = audit.shrunk_prior(parts.prior_off, parts.u_off, multiplier_off, np.zeros(len(parts.u_off)),
-                                   fold.rows["O"].poss_off.to_numpy(float))
-    prior_def = audit.shrunk_prior(parts.prior_def, parts.u_def, multiplier_def, np.zeros(len(parts.u_def)),
-                                   fold.rows["D"].poss_off.to_numpy(float))
+    shrunk = step4_parts(audit, fold, parts, step4)
     ids_o, ids_d = fold.rows["O"].player_id.to_numpy(), fold.rows["D"].player_id.to_numpy()
-    return {"step3": (dict(zip(ids_o, parts.prior_off + parts.u_off)),
-                      dict(zip(ids_d, -(parts.prior_def + parts.u_def)))),
-            "step4": (dict(zip(ids_o, prior_off + parts.u_off)), dict(zip(ids_d, -(prior_def + parts.u_def))))}
+    out = {"step3": (dict(zip(ids_o, parts.prior_off + parts.u_off)),
+                     dict(zip(ids_d, -(parts.prior_def + parts.u_def)))),
+           "step4": (dict(zip(ids_o, sum(shrunk["O"]))), dict(zip(ids_d, -sum(shrunk["D"]))))}
+    for stage, ratings in (extra or {}).items():
+        out[stage] = (dict(zip(ids_o, ratings["O"])), dict(zip(ids_d, -ratings["D"])))
+    if f"pieces_{SHIPPED_FAMILY}" in out:
+        for side in (0, 1):
+            shipped, mine = out["step4"][side], out[f"pieces_{SHIPPED_FAMILY}"][side]
+            worst = max(abs(shipped[key] - mine[key]) for key in shipped)
+            if worst > PIECES_TOLERANCE:
+                raise SystemExit(f"{fold.stem}: step 4 through the pieces code misses the shipped step by {worst:.1e}")
+    return out
 
 
-def stint_fold_errors(audit, fold, teams: dict, design, multiplier_off: float, multiplier_def: float) -> dict:
+def stint_fold_errors(audit, fold, teams: dict, design, step4: tuple, extra: dict | None = None) -> dict:
     """{(stage, slice): (sum of w x WOWY miss squared, sum of w)} for one fold, scored stint by stint: every stint of
     the held-back games, predicted from the ten players on the court, the team levels fitted out as in `fold_errors`."""
     absent = regulars_absent(fold, teams)
@@ -185,7 +223,7 @@ def stint_fold_errors(audit, fold, teams: dict, design, multiplier_off: float, m
         sp.csr_matrix((rows.phase == "PO").to_numpy(float)[:, None])]).tocsr()
     keep = w > 0
     out = {}
-    for stage, (rating_off, allowed) in stage_ratings(audit, fold, multiplier_off, multiplier_def).items():
+    for stage, (rating_off, allowed) in stage_ratings(audit, fold, step4, extra).items():
         pred = (pd.DataFrame(lineup_o).apply(lambda c: c.map(rating_off)).fillna(fold.fill_o).to_numpy().sum(axis=1)
                 + pd.DataFrame(lineup_d).apply(lambda c: c.map(allowed)).fillna(fold.fill_d).to_numpy().sum(axis=1))
         left = np.zeros(n)
@@ -196,23 +234,95 @@ def stint_fold_errors(audit, fold, teams: dict, design, multiplier_off: float, m
     return out
 
 
+# ------------------------------------------------------------------------------------------- step 4 in pieces
+class PieceStages:
+    """Check 145's families on every fold season of a system: each fold's normal equations, then for a scored season
+    each family's multipliers from its 8 nearest fold seasons (the test rule) and the ratings they give."""
+
+    def __init__(self, pieces_module, families: list, folds: list, where: dict):
+        from openrapm.prior_shrink import fold_seasons_used
+        self.module, self.where = pieces_module, where
+        self.families = list(dict.fromkeys([SHIPPED_FAMILY, *families]))
+        unknown = set(families) - set(pieces_module.FAMILIES)
+        if unknown:
+            raise SystemExit(f"unknown piece families {sorted(unknown)}; choose from {list(pieces_module.FAMILIES)}")
+        self.sums: dict = {}
+        for fold in folds:
+            self.sums.setdefault(fold.season, pieces_module.Season()).add(fold, self.read(fold))
+        fold_seasons = sorted(self.sums)
+        self.multipliers = {}
+        for season in fold_seasons:
+            used = fold_seasons_used(season, fold_seasons, "test", NEAREST)
+            self.multipliers[season] = {
+                family: pieces_module.solve(sum(self.sums[s].sums[family]["gram"] for s in used),
+                                            sum(self.sums[s].sums[family]["rhs"] for s in used))
+                for family in self.families} if used else None
+
+    def read(self, fold) -> pd.DataFrame:
+        path = self.where[fold.stem] / f"pieces_{fold.stem}.parquet"
+        if not path.exists():
+            raise SystemExit(f"{path} is missing: build the folds with `openrapm folds --pieces`")
+        return pd.read_parquet(path)
+
+    def stages(self, fold) -> dict:
+        """{"pieces_<family>": {"O", "D"}} for one fold, from its season's multipliers."""
+        multipliers, pieces = self.multipliers[fold.season], self.read(fold)
+        return {f"pieces_{family}": self.module.family_ratings(fold, pieces, family, multipliers[family])
+                for family in self.families}
+
+    def table(self, name: str) -> pd.DataFrame:
+        """Every fold season's multipliers, one row per family, side and piece."""
+        rows = []
+        for season, by_family in self.multipliers.items():
+            for family, values in (by_family or {}).items():
+                columns = self.module.FAMILIES[family]["columns"]
+                for side_index, side in enumerate(("O", "D")):
+                    for k, piece in enumerate(columns):
+                        rows.append(dict(system=name, season=season, family=family, side=side, piece=piece,
+                                         multiplier=float(values[side_index * len(columns) + k])))
+        return pd.DataFrame(rows)
+
+
 # --------------------------------------------------------------------------------------------- one system
-def system_errors(audit, within, name: str, seasons: tuple, unit: str = "stint") -> pd.DataFrame:
-    """One row per season, stage and slice: the system's WOWY error over the season's folds."""
+def system_folds(within, name: str) -> tuple[list, dict]:
+    """(every fold on disk of the system, {stem: its folder}): step 4's multipliers for a scored season come from the
+    seasons around it."""
     from openrapm.data.within_folds import load_folds
-    from openrapm.prior_shrink import multipliers_by_season
-    folders = [within / f"{name}_early", within / f"{name}_within"]
     folds, where = [], {}
-    for folder in folders:
+    for folder in (within / f"{name}_early", within / f"{name}_within"):
         if not folder.exists():
             continue
-        # every fold season on disk: step 4's multipliers for a scored season come from the seasons around it
         for fold in load_folds(folder, (1997, 2026)):
             folds.append(fold)
             where[fold.stem] = folder
+    return folds, where
+
+
+def piece_stages(name: str, folds: list, where: dict, unit: str, families: list | None,
+                 multiplier_tables: list | None) -> PieceStages | None:
+    """The system's step-4-in-pieces stages, when families are asked and every fold carries pieces; else None."""
+    if not families or not all((where[fold.stem] / f"pieces_{fold.stem}.parquet").exists() for fold in folds):
+        return None
+    if unit != "stint":
+        raise SystemExit("--pieces scores stint by stint only")
+    pieces = PieceStages(_pieces(), families, folds, where)
+    if multiplier_tables is not None:
+        multiplier_tables.append(pieces.table(name))
+    return pieces
+
+
+def system_errors(audit, within, name: str, seasons: tuple, unit: str = "stint", families: list | None = None,
+                  multiplier_tables: list | None = None) -> pd.DataFrame:
+    """One row per season, stage and slice: the system's WOWY error over the season's folds.  With `families` (check
+    145's), a system whose folds carry pieces also gets a stage per family; its multipliers go to
+    `multiplier_tables`."""
+    from openrapm.prior_shrink import multipliers_by_season
+    folds, where = system_folds(within, name)
     scored = [fold for fold in folds if seasons[0] <= fold.season <= seasons[1]]
-    multipliers = multipliers_by_season(sorted({fold.season for fold in scored}), folds, "test", NEAREST)
+    multipliers = multipliers_by_season(sorted({fold.season for fold in scored}), folds, "test", NEAREST,
+                                        free_games=FREE_GAMES)
     multipliers = multipliers.set_index("season")
+    pieces = piece_stages(name, folds, where, unit, families, multiplier_tables)
     sums: dict = {}
     cache = None
     if unit == "stint":
@@ -221,12 +331,14 @@ def system_errors(audit, within, name: str, seasons: tuple, unit: str = "stint")
         cache = DesignCache(load_config(), keep=1)
     for fold in scored:
         row = multipliers.loc[fold.season]
+        step4 = (float(row.multiplier_off), float(row.multiplier_def), float(row.get("games_multiplier_off", 1.0)),
+                 float(row.get("games_multiplier_def", 1.0)))
         teams = team_arrays(where[fold.stem], fold.stem)
         if unit == "stint":
-            errors = stint_fold_errors(audit, fold, teams, cache.season(fold.season, "pts"),
-                                       float(row.multiplier_off), float(row.multiplier_def))
+            errors = stint_fold_errors(audit, fold, teams, cache.season(fold.season, "pts"), step4,
+                                       pieces.stages(fold) if pieces is not None else None)
         else:
-            errors = fold_errors(audit, fold, teams, float(row.multiplier_off), float(row.multiplier_def))
+            errors = fold_errors(audit, fold, teams, step4)
         for key, (top, bottom) in errors.items():
             acc = sums.setdefault((fold.season, *key), [0.0, 0.0])
             acc[0] += top
@@ -236,13 +348,21 @@ def system_errors(audit, within, name: str, seasons: tuple, unit: str = "stint")
 
 
 def paired(seasons_table: pd.DataFrame, system: str, reference: str) -> list:
+    """Each of the system's stages and slices against the reference season by season.  A `pieces_<family>` stage,
+    which only a system built with pieces has, is read against the reference's `step4`: the shipped step it would
+    replace."""
     rows = []
-    for (stage, slice_), group in seasons_table[seasons_table.stage.isin(STAGES)].groupby(["stage", "slice"]):
-        wide = group.pivot(index="season", columns="system", values="error").dropna(subset=[system, reference])
-        diff = wide[system] - wide[reference]
+    table = seasons_table[seasons_table.stage != "share"]
+    for (stage, slice_), group in table[table.system == system].groupby(["stage", "slice"]):
+        against = "step4" if stage.startswith("pieces_") else stage
+        mine = group.set_index("season").error
+        theirs = table[(table.system == reference) & (table.stage == against) & (table.slice == slice_)]
+        diff = (mine - theirs.set_index("season").error).dropna()
+        if len(diff) < 2:
+            continue
         se = float(diff.std(ddof=1) / np.sqrt(len(diff)))
-        rows.append(dict(system=system, reference=reference, stage=stage, slice=slice_,
-                         error=float(wide[system].mean()), mean_change=float(diff.mean()), se=se,
+        rows.append(dict(system=system, reference=reference, stage=stage, against=against, slice=slice_,
+                         error=float(mine.reindex(diff.index).mean()), mean_change=float(diff.mean()), se=se,
                          z=float(diff.mean() / se) if se > 0 else np.nan, seasons_better=int((diff < 0).sum()),
                          seasons=len(diff)))
     return rows
@@ -256,6 +376,9 @@ def main(argv=None) -> int:
     parser.add_argument("--tag", default="wowy", help="names the output files (default %(default)s)")
     parser.add_argument("--unit", default="stint", choices=("stint", "game"),
                         help="score stint by stint (the decider) or team-game by team-game (default %(default)s)")
+    parser.add_argument("--pieces", default="",
+                        help="check 145's families, comma-separated (source, certainty, ...): a stage each for the "
+                             "systems whose folds carry pieces (`openrapm folds --pieces`)")
     parser.add_argument("--first", type=int, default=1997)
     parser.add_argument("--last", type=int, default=2026)
     args = parser.parse_args(argv)
@@ -268,9 +391,11 @@ def main(argv=None) -> int:
     names = list(dict.fromkeys(name.strip() for name in args.systems.split(",") if name.strip()))
     if args.ref not in names:
         names.insert(0, args.ref)
-    tables = []
+    tables, multiplier_tables = [], []
+    families = [family for family in args.pieces.split(",") if family]
     for name in names:
-        tables.append(system_errors(audit, within, name, (args.first, args.last), args.unit))
+        tables.append(system_errors(audit, within, name, (args.first, args.last), args.unit, families,
+                                    multiplier_tables))
         print(f"  {name}: {tables[-1].season.nunique()} seasons ({time.time() - started:.0f}s)", flush=True)
     seasons_table = pd.concat(tables, ignore_index=True)
     (outputs / "csv").mkdir(exist_ok=True)
@@ -278,6 +403,8 @@ def main(argv=None) -> int:
     share = seasons_table[(seasons_table.stage == "share") & (seasons_table.system == args.ref)].error.mean()
     summary = pd.DataFrame([row for name in names if name != args.ref for row in paired(seasons_table, name, args.ref)])
     summary.to_csv(outputs / "csv" / f"wowy_{args.tag}.csv", index=False)
+    if multiplier_tables:
+        pd.concat(multiplier_tables).to_csv(outputs / "csv" / f"wowy_{args.tag}_piece_multipliers.csv", index=False)
     pd.set_option("display.width", 200)
     print(f"\nDNP team-games: {share:.1%} of the held-back possessions")
     print("each system minus the reference, season by season; below 0 is better")

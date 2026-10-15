@@ -148,6 +148,9 @@ class ShrinkSettings:
     # prior part holds up less in older seasons, 0.79 in 1997-2006 against 0.95 in 2017-2026 (notes/DECISIONS.md,
     # "Era drift" and experiment 55, adopted 2026-10-12: "yes. build."); 0 would use every fold season the rule allows
     nearest: int = 8
+    # a multiplier on the games' part too, fitted beside the prior's (prior_shrink, "The games' part freed";
+    # notes/DECISIONS.md, experiment 65, adopted 2026-10-15: "Adopt one multiplier as the new incumbent")
+    free_games_part: bool = True
 
 
 @dataclass(frozen=True)

@@ -1,6 +1,7 @@
 """`openrapm folds`: each season rated from three quarters of its games and scored on the quarter it never saw.
 
     openrapm folds --models NAME --base NAME [--seasons 2017-2026] [--tag TAG] [--reproduce-only] [--pieces]
+                   [--whole-season-inputs]
 
 Why (the owner, 2026-10-03).  The prior shrink (step 4) needs the ratings' misses on games they never saw.  Misses
 on the neighbouring seasons' games would teach it that a peak season comes back down the year after, and it would
@@ -36,6 +37,13 @@ and, with --pieces (experiment 61's screen, check 145):
                                            free throws), with its posterior standard deviation; one row per player
                                            and side
 A finished fold is skipped on a rerun, so a stopped run resumes where it stopped; a failed check stops the run.
+
+The leak control, --whole-season-inputs (2026-10-15).  An input that exists only as a season total, such as the
+tracking and hustle dashboards, cannot be rebuilt from the fit games, so a fold's prior would read the held-back games
+too.  With this flag every input the boosters read comes from the whole season, held-back games included; the ridge
+still reads the fit games only.  The decider (scripts/checks/151_wowy.py) on these folds against the honest ones gives
+how much such a leak is worth.  Every box-score input leaks here, so it bounds a few leaked columns from above.  Folds
+built this way are never step 4's: each fold's summary says `prior_inputs` "whole season".
 """
 from __future__ import annotations
 
@@ -249,12 +257,15 @@ class RatedWorld:
     prior: dict                  # {"O", "D"}: {player_id: the boosters' answer, before the prior scale}
 
 
-def rate_world(world: SeasonWorld, saved: dict) -> RatedWorld:
+def rate_world(world: SeasonWorld, saved: dict, prior_panel: pd.DataFrame | None = None) -> RatedWorld:
     """Steps 2-3 on the world's rebuilt inputs: the saved boosters' priors, both ridges, the centred table.
 
+    `prior_panel`, when given, is what the boosters read instead of the world's own rows (the leak control, the
+    module docstring); the ridge reads the world's designs either way.
     Adds one check to the world's: the ridge's possessions are the fit games' (five players on every row).
     """
-    prior = {side: saved_prior(world.panel, side, saved[side]) for side in SIDES}
+    panel = world.panel if prior_panel is None else prior_panel
+    prior = {side: saved_prior(panel, side, saved[side]) for side in SIDES}
     designs = {target: world.designs[target] for target in SETTINGS.targets.distinct()}
     table = prior_rapm.rate_season(designs, prior, SETTINGS, world.season)
     world.checks["ridge: possessions are the fit games' possessions"] = bool(np.isclose(
@@ -380,6 +391,7 @@ class SeasonRun:
     saved: dict                  # {"O", "D"}: the season's saved boosters
     out_dir: Path
     box_files: object = None     # commands.site.BoxScoreFiles when `--pieces` is on (the rows' teams), else None
+    prior_panel: pd.DataFrame | None = None   # the whole season's panel rows with --whole-season-inputs, else None
 
     @property
     def game_ids(self) -> pd.Series:
@@ -401,7 +413,12 @@ class SeasonRun:
         return SeasonWorld(self.season, fit_idx, designs, inputs, checks)
 
     def rate(self, fit_ids) -> RatedWorld:
-        return rate_world(self.world(fit_ids), self.saved)
+        return rate_world(self.world(fit_ids), self.saved, self.prior_panel)
+
+    @property
+    def prior_inputs(self) -> str:
+        """Where the boosters' inputs come from: "fit games", or "whole season" for the leak control."""
+        return "fit games" if self.prior_panel is None else "whole season"
 
 
 def run_reproduction(run: SeasonRun, base: pd.DataFrame, panel: pd.DataFrame, started: float) -> None:
@@ -521,7 +538,7 @@ def run_fold(run: SeasonRun, folds: pd.DataFrame, repeat: int, fold: int, starte
     save_test(run.out_dir / f"test_{stem}.npz", pooled, teams)
     # rate_from, split and cut name the fold shape, the only one left: kept so the files read as before
     summary.update(season=run.season, repeat=repeat, fold=fold, rate_from="rest", fit_games=len(fit_ids),
-                   split="random", cut=None, test_games=len(test_ids),
+                   split="random", cut=None, test_games=len(test_ids), prior_inputs=run.prior_inputs,
                    players=int((rated.table.possessions > 0).sum()),
                    prior_scale_off=float(rated.table.prior_scale_off.iloc[0]),
                    prior_scale_def=float(rated.table.prior_scale_def.iloc[0]),
@@ -572,9 +589,10 @@ def gather(out_dir: Path) -> None:
 
 
 def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_only: bool = False,
-              pieces: bool = False) -> int:
+              pieces: bool = False, whole_season_inputs: bool = False) -> int:
     """`openrapm folds`: the reproduction check and the folds of every season, then the gathered files.  With
-    `pieces`, each fold also writes its pieces_<stem>.parquet (`fold_pieces`)."""
+    `pieces`, each fold also writes its pieces_<stem>.parquet (`fold_pieces`); with `whole_season_inputs`, every
+    fold's boosters read the whole season's inputs (the leak control, the module docstring)."""
     box_files = None
     if pieces:
         from .site import BoxScoreFiles
@@ -593,12 +611,17 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
     designs = DesignCache(cfg)
     print(f"models {models} ({meta.get('argv')}); seasons {seasons[0]}-{seasons[-1]}; {REPEATS} repeats of "
           f"{N_FOLDS} folds; writing {out_dir}", flush=True)
+    if whole_season_inputs:
+        print("the leak control: every fold's boosters read the WHOLE season's inputs, held-back games included",
+              flush=True)
     started = time.time()
     for season in seasons:
         saved = season_models(saved_all, season)
         full = {target: designs.season(season, target) for target in WORLD_TARGETS}
         run = SeasonRun(season, cfg, full, SeasonSources(SeasonTables(season, cfg), roles, inputs, debut), saved,
                         out_dir, box_files)
+        if whole_season_inputs:
+            run.prior_panel = run.world(set(run.game_ids)).panel
         run_season(run, base_table, panel, reproduce_only, started)
         designs.clear()
     gather(out_dir)

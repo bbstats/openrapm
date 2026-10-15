@@ -183,6 +183,11 @@ def test_folds_split_the_games_part_into_pieces_only_when_asked():
     assert _parse("folds", "--models", "m", "--base", "b", "--pieces").pieces is True
 
 
+def test_folds_read_whole_season_inputs_only_when_asked():
+    assert _parse("folds", "--models", "m", "--base", "b").whole_season_inputs is False
+    assert _parse("folds", "--models", "m", "--base", "b", "--whole-season-inputs").whole_season_inputs is True
+
+
 def test_main_reads_the_config_given_before_the_command(monkeypatch, tmp_path):
     seen = {}
 

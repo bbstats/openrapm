@@ -163,7 +163,8 @@ def _run_swap(args: argparse.Namespace, cfg: dict) -> int:
 
 def _run_folds(args: argparse.Namespace, cfg: dict) -> int:
     from .within_season import run_folds
-    return run_folds(cfg, args.models, args.base, args.seasons, args.tag, args.reproduce_only, args.pieces)
+    return run_folds(cfg, args.models, args.base, args.seasons, args.tag, args.reproduce_only, args.pieces,
+                     args.whole_season_inputs)
 
 
 def _run_site(args: argparse.Namespace, cfg: dict) -> int:
@@ -232,6 +233,10 @@ def _add_folds_tag(parser) -> None:
     parser.add_argument("--nearest", type=int, default=PRODUCT.shrink.nearest, metavar="K",
                         help="fit each season's multipliers on only the K fold seasons nearest it (default 0: every "
                              "fold season the rule allows)")
+    parser.add_argument("--free-games-part", action=argparse.BooleanOptionalAction,
+                        default=PRODUCT.shrink.free_games_part,
+                        help="also multiply the games' part by a factor fitted beside the prior's (shipped since "
+                             "experiment 65; --no-free-games-part holds it at 1)")
 
 
 def parse_span(text) -> tuple:
@@ -247,7 +252,8 @@ def parse_span(text) -> tuple:
 
 def shrink_options(shrink, args: argparse.Namespace):
     """settings.shrink with the command line's fold folders, fold seasons and nearest count."""
-    return replace(shrink, folds_tag=args.folds, fold_seasons=args.fold_seasons, nearest=args.nearest)
+    return replace(shrink, folds_tag=args.folds, fold_seasons=args.fold_seasons, nearest=args.nearest,
+                   free_games_part=args.free_games_part)
 
 
 def _add_types(parser) -> None:
@@ -334,6 +340,10 @@ def _add_folds(commands) -> None:
     folds.add_argument("--pieces", action="store_true",
                        help="also split each fold's games' part into pieces (on court, sat, missed, team SOS; twos, "
                             "threes, free throws), for check 145; writes pieces_<season>_r<r>_f<k>.parquet")
+    folds.add_argument("--whole-season-inputs", action="store_true",
+                       help="the leak control: the boosters read every input from the whole season, held-back games "
+                            "included, while the ridge reads the fit games only; sizes the leak of an input that "
+                            "exists only as a season total.  Never for step 4")
     folds.set_defaults(run=_run_folds)
 
 

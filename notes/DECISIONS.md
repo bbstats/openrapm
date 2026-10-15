@@ -7022,3 +7022,113 @@ The owner: "adopt 63, push all code / everything to live, clean up branches, wri
   every branch but `main` deleted locally and on GitHub, all merged; the worktree `A:/code/spmm_9c` removed after its
   junctions were unlinked.
 
+
+## Experiment 64: experiment 56's ratios against the league, on today's inputs (the owner approved the retry plan, 2026-10-15)
+
+The first of the retries under the new decider (plan `~/.claude/plans/now-that-we-have-sprightly-ripple.md`).  Experiment
+56 was a tie on the year-over-year test, which cannot see who on a team gets the credit.  Feature set
+`no_career_ratios_vs_league`: `no_career_counts` with each ratio in `features.RATIOS` replaced by its `_vs_league`
+version, five on offence and true shooting % on defence.  Run: `bash scripts/experiment_chain.sh vsleague2
+points_with_expected_opponent_threes "--features no_career_ratios_vs_league"`, 45 minutes, own folds for all thirty
+seasons, log `outputs/vsleague2_chain.log`.
+
+**Result: a tie on the decider, not adopted unless the owner says otherwise.**  Each system minus `cols06`, 30 seasons:
+
+| system | stage | slice | ΔMSE | standard error | paired z | seasons improved |
+|---|---|---|---|---|---|---|
+| noise control `noise_cols06` | step 4 | all | +0.080 | 0.082 | +0.97 | 13 of 30 |
+| `vsleague2` | step 3 | all | -0.204 | 0.072 | -2.82 | 22 of 30 |
+| `vsleague2` | step 3 | DNP | -0.213 | 0.082 | -2.60 | 20 of 30 |
+| `vsleague2` | step 4, the decider | all | -0.049 | 0.054 | -0.91 | 17 of 30 |
+| `vsleague2` | step 4 | DNP | -0.055 | 0.062 | -0.90 | 14 of 30 |
+
+- The guard: year over year +0.003 at team-game level, z +0.08; stint level -0.062, z -1.48.
+- To pass, a change needed about -0.108 at step 4.  The gain is real at step 3, at z -2.8, and step 4 takes three quarters
+  of it back.  Step 4's multipliers barely moved, offence 0.647-0.705 against 0.647-0.723, so why it is lost there is
+  not yet known.
+- 2026 movement against `cols06`, mean absolute change in the total: top 30 0.35, 31-150 0.27, 151-300 0.22, 301+ 0.18
+  points per 100; the noise control moves them 0.43 / 0.24 / 0.19 / 0.17.  Largest: Brunson -1.09, Maxey -0.72, Fox
+  -0.69, all offence; Jokić +0.89, Durant +0.84, Curry +0.82.  The offensive lean moves from high-volume two-point
+  scorers to efficient shooters, as in experiment 56.
+
+## The leak control for season-total inputs (rank 2 of the retry plan, 2026-10-15; the owner: "Go ahead")
+
+The dashboards exist only as season totals, so a fold's prior would read the held-back games the decider scores.  To
+size that, `openrapm folds --whole-season-inputs` (new) builds folds whose boosters read every input from the whole
+season, held-back games included, while the ridge reads the fit games only.  Built on `cols06`'s boosters, all thirty
+seasons, tags `leak_cols06_early` and `leak_cols06_within`, 31 minutes, every leak check of the designs passed; log
+`outputs/leak_cols06_chain.log`.  These folds must never feed step 4.
+
+| system | stage | slice | ΔMSE | standard error | paired z | seasons improved |
+|---|---|---|---|---|---|---|
+| noise control `noise_cols06` | step 4 | all | +0.080 | 0.082 | +0.97 | 13 of 30 |
+| leak control `leak_cols06` | step 3 | all | -3.180 | 0.113 | -28.2 | 30 of 30 |
+| leak control `leak_cols06` | step 4, the decider | all | -2.837 | 0.090 | -31.4 | 30 of 30 |
+| leak control `leak_cols06` | step 4 | DNP | -2.994 | 0.130 | -23.0 | 30 of 30 |
+
+- Peeking is worth about eleven times experiment 63's real gain of -0.248, and 26 times the bar of about -0.108.
+- Every box-score input leaks here, so it is an upper bound for a few leaked columns; but a dashboard set would need to
+  leak under 4% as much as this to stay below the bar, and nothing says it would.
+- **Verdict: a season-total input cannot be read on the decider.**  The dashboards wait for per-game data, which the
+  folds can rebuild from the fit games, or are left out.
+
+## Experiment 65: step 4 split into pieces, and the games' part freed (rank 3 of the retry plan, 2026-10-15)
+
+The owner: "yes go ahead".  Check 145's families scored on the decider for the first time: `openrapm folds --pieces` on
+`cols06`'s boosters for all thirty seasons (tags `cols06pieces_early`, `cols06pieces_within`, 38 minutes; their ratings
+equal `cols06`'s folds bit for bit), then `151_wowy.py --pieces=u_whole,source,certainty`.  Each family's multipliers
+are fitted as check 145 fits them, on the 8 nearest fold seasons under the test rule, and applied to the season's
+folds, re-centred.  The shipped step through the same code, `pieces_step4`, equals `step4` to the last digit.
+
+| arm | what is free | ΔMSE vs `cols06` step 4 | standard error | paired z | seasons improved |
+|---|---|---|---|---|---|
+| noise control `noise_cols06` | -- | +0.080 | 0.082 | +0.97 | 13 of 30 |
+| `u_whole` | prior part, games' part | **-0.648** | 0.037 | **-17.5** | 30 of 30 |
+| `source` | prior part; on court, sat, missed, team SOS | -0.736 | 0.065 | -11.2 | 29 of 30 |
+| `certainty` | prior part; the games' part in thirds by its sd, experiment 61 | -0.597 | 0.060 | -10.0 | 28 of 30 |
+
+- Against `u_whole`: `source` -0.088, z -2.59, 20 of 30; DNP games -0.074, z -1.89.  `certainty` +0.051, z +1.34:
+  experiment 61's split does worse than one factor.
+- The fitted factors, mean over seasons: `u_whole` games' part 1.33 on offence, 1.48 on defence; prior 0.69 and 0.85.
+  `source`: on court 1.50 / 1.72, sat 1.78 / 2.02, missed 3.76 / 4.15, team SOS 2.85 / 2.42, offence / defence.
+- **Reading:** step 3's ridge holds the games' part back more than the season's own held-back games support.  Experiment
+  33 freed it on the old tests, a tie on year over year and z -1.1 on the team-game held-out test; the
+  within-team scoring sees it at z -17.5.
+
+**The full build of `u_whole`, `gamesfree`:** `prior_shrink` takes `free_games=True`, settings
+`ShrinkSettings.free_games_part`, flag `openrapm shrink --free-games-part`, off as shipped.  On `cols06`'s step-3 table
+with its own folds: the games' part multiplied by 1.269-1.416 on offence, 1.399-1.574 on defence; the prior part
+0.653-0.744 and 0.774-0.953.  Then step 5.  Log `outputs/gamesfree_chain.log`.
+
+| reading | ΔMSE | standard error | paired z | seasons improved |
+|---|---|---|---|---|
+| guard: year over year, team-game | +0.021 | 0.069 | +0.31 | 24 of 56 |
+| year over year, stint | -0.206 | 0.074 | -2.78 | 36 of 56 |
+
+- 2026 against `cols06`, mean absolute change in the total: top 30 0.29, 31-150 0.19, 151-300 0.15, 301+ 0.12; the noise
+  control moves them 0.43 / 0.24 / 0.19 / 0.17.  19 players move 0.5 or more, against 56 for the noise control.  The
+  possession-weighted spread of the total: 2.21 before, 2.33 after.
+- Top 20 out: Mitchell Robinson, Scottie Barnes; in: Alex Caruso +0.65, Ty Jerome.  Wembanyama +0.78, Ajay Mitchell
+  +0.78, Bam Adebayo +0.67; Bub Carrington -0.58, Reed Sheppard -0.53, Alperen Şengün -0.52.
+- Caveat: the factors are fitted on ratings from three quarters of a season, whose games' part the ridge holds back
+  more than a full season's, so a full season may want a smaller factor.  The guard reads full-season ratings and is
+  not worse.
+- Waiting on the owner: adopt `gamesfree`, or build `source` too, which needs each whole season's games' part split
+  into pieces.
+
+## Experiment 65 ADOPTED (2026-10-15, not published)
+
+The owner: "Adopt one multiplier as the new incumbent - sounds good!"  Step 4 now multiplies the games' part too.
+
+- Shipped: `settings.ShrinkSettings.free_games_part = True`, `openrapm shrink --free-games-part/--no-free-games-part`.
+  The decider's step 4 follows the setting for every system.  The experiment chain's incumbent is `gamesfree`, its
+  tables, with `INC_SYSTEM=cols06`, its folds.  135's reference is `gamesfree`, and its trade set is built.  The
+  decomposition page splits a games' part that step 4 multiplied.
+- The product build, `openrapm build`, 16 minutes: step 3 bit-identical to before; the prior part 0.662-0.751 on offence,
+  0.779-0.953 on defence; the games' part 1.269-1.375 and 1.397-1.567.  2026 against the previous product table: median
+  move 0.12 per 100, top 30 mean 0.31.  Top 20: Wembanyama +0.84, Gilgeous-Alexander, Dončić -0.53, Jokić, Kawhi,
+  Ausar Thompson, Queta +0.75, Clingan, Giannis, Cason Wallace, Caruso +0.62, Edey, Holmgren +0.63, Butler, Diabaté
+  +0.62, Hartenstein, Anunoby, Paul Reed, Karl-Anthony Towns, Mitchell Robinson; out: Scottie Barnes, Dru Smith.
+- The noise control on the new base, `noise_cols06` on the decider: +0.077, z +1.05, 11 of 30 seasons.
+- Previous product tables: `outputs/season_ratings_product*_before_gamesfree.parquet`.  The site still shows
+  experiment 63; publishing waits for the owner.

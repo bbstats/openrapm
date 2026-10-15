@@ -150,3 +150,24 @@ def test_the_golden_step3_tables_rebuild_the_one_thread_golden_step4_tables_exac
     pd.testing.assert_frame_equal(got, pd.read_parquet(VERIFY / "golden" / step4), check_exact=True)
     got.to_parquet(tmp_path / "step4.parquet", index=False)
     assert (tmp_path / "step4.parquet").read_bytes() == (VERIFY / "golden" / step4).read_bytes()
+
+
+def test_the_games_part_freed_recovers_both_planted_multipliers_and_is_applied():
+    rng = np.random.default_rng(5)
+    folds = [_Fold(rng, season, 0.7, 0.95) for season in (2017, 2018, 2019)]
+    for fold in folds:                                   # the games' parts hold up 1.3 and 1.5 times
+        games_o = fold.Z["O"] @ fold.rows["O"].u_off.to_numpy()
+        games_d = fold.Z["D"] @ (-fold.rows["D"].u_def.to_numpy())
+        fold.y = fold.y + 0.3 * games_o + 0.5 * games_d
+    m_off, m_def, g_off, g_def = ps.fit_multipliers(folds, free_games=True)
+    assert np.allclose([m_off, m_def, g_off, g_def], [0.7, 0.95, 1.3, 1.5], atol=1e-9)
+    table = ps.multipliers_by_season([2022], folds, "test", free_games=True)
+    assert np.allclose(table[["games_multiplier_off", "games_multiplier_def"]].to_numpy(), [[1.3, 1.5]])
+    rows = pd.DataFrame({"player_id": [1, 2], "season": [2022, 2022], "prior_off": [1.0, -1.0], "u_off": [0.5, -0.5],
+                         "prior_def": [0.5, -0.5], "u_def": [0.2, -0.2], "poss_off": [1000.0, 1000.0]})
+    for column in ("rating_off", "rating_def", "rating_total", "prior_total", "u_total", "offense", "defense",
+                   "prior_offense", "prior_defense"):
+        rows[column] = 0.0
+    out = ps.shrink(rows, table)
+    assert np.allclose(out.u_off, [0.65, -0.65]) and np.allclose(out.u_def, [0.3, -0.3])
+    assert np.allclose(out.rating_off, out.prior_off + out.u_off)

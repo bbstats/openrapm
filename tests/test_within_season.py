@@ -131,3 +131,35 @@ def test_boosters_saved_before_the_rename_are_read_under_the_plain_names(tmp_pat
     assert saved["meta"]["features"] == "box_score_and_bio"
     ws.check_models(saved["meta"])
     assert "before 2026-10-11" in capsys.readouterr().out
+
+
+def test_the_leak_control_feeds_the_boosters_the_whole_season_and_the_ridge_the_fit_games(monkeypatch):
+    """--whole-season-inputs: the boosters read the panel handed in, the ridge still the world's own designs."""
+    read, rated = [], {}
+    monkeypatch.setattr(ws, "saved_prior", lambda panel, side, saved: read.append(panel) or {1: 0.0})
+
+    def rate_season(designs, prior, settings, season):
+        rated.update(designs)
+        return pd.DataFrame({"possessions": [5.0]})
+
+    monkeypatch.setattr(ws.prior_rapm, "rate_season", rate_season)
+    fit_rows, whole_rows = pd.DataFrame({"x": [1]}), pd.DataFrame({"x": [2]})
+
+    class Design:
+        rows = pd.DataFrame({"poss": [1.0]})
+
+    designs = {target: Design() for target in ws.WORLD_TARGETS}
+    world = ws.SeasonWorld(2026, np.array([1]), designs, type("Inputs", (), {"rows": fit_rows})(), {})
+    ws.rate_world(world, {"O": {}, "D": {}})
+    assert all(panel is fit_rows for panel in read)
+    read.clear()
+    ws.rate_world(world, {"O": {}, "D": {}}, prior_panel=whole_rows)
+    assert len(read) == 2 and all(panel is whole_rows for panel in read)
+    assert all(rated[target] is designs[target] for target in TEST.targets.distinct())
+
+
+def test_a_fold_says_where_its_boosters_inputs_came_from():
+    run = ws.SeasonRun(2026, {}, {}, None, {}, None)
+    assert run.prior_inputs == "fit games"
+    run.prior_panel = pd.DataFrame()
+    assert run.prior_inputs == "whole season"

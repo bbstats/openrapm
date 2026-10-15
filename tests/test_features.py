@@ -59,6 +59,11 @@ def test_the_stat_splits_lists_append_their_parts_where_the_box_count_is_read():
                               "D": [feat.FROM_DEBUT.get(name, name) for name in SHIPPED_D]},
         "no_career_counts": {"O": [name for name in SHIPPED_O if name not in feat.FROM_DEBUT],
                              "D": [name for name in SHIPPED_D if name not in feat.FROM_DEBUT]},
+        "no_career_ratios_vs_league": {
+            "O": [f"{name}_vs_league" if name in feat.RATIOS else name for name in SHIPPED_O
+                  if name not in feat.FROM_DEBUT],
+            "D": [f"{name}_vs_league" if name in feat.RATIOS else name for name in SHIPPED_D
+                  if name not in feat.FROM_DEBUT]},
         **{name: feat.FEATURE_SETS[name] for name in ("tracking", "hustle", "tracking_and_hustle", "matchups")}}
     wider = ["russell_blocks_per100", "rim_blocks_per100", "mid_range_blocks_per100", "three_point_blocks_per100",
              "offensive_fouls_per100", "stolen_turnovers_per100", "assists_to_rim_per100",

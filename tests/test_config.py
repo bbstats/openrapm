@@ -299,7 +299,7 @@ def test_the_booster_settings_are_never_read_from_config_yaml():
 OPENRAPM = re.compile(r"(?:-m openrapm|\bopenrapm)\s+(data\s+(?:ingest|stints|panel)|build|rate|shrink|swap|folds|"
                       r"site|compare|glossary)\b([^\n`]*)")
 # A command as a doc types it: in a code block (`python -m openrapm data panel`) or a code span (`openrapm build`).
-NAMED_COMMAND = re.compile(r"(?:-m openrapm|`openrapm)\s+([a-z]+)(?:\s+([a-z]+))?")
+NAMED_COMMAND = re.compile(r"(?:-m openrapm|`openrapm)\s+([a-z]+)(?:\s+([a-z][a-z-]*))?")
 
 
 def _subcommands(parser) -> dict:

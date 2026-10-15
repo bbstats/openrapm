@@ -54,8 +54,8 @@ the equation it implements and an example with numbers.
 2. `box_prior.py`, step 2: what does a player's box score say his RAPM is? LightGBM (gradient-boosted
    trees), fitted so that no player's prior comes from a model that saw his own rows.
 3. `prior_rapm.py`, step 3: how far do the season's own games move each player from that prior?
-4. `prior_shrink.py`, step 4: how much of the prior's part of a rating holds up on games the rating
-   never saw?
+4. `prior_shrink.py`, step 4: how much of each part of a rating, the prior's and the games', holds up on
+   games the rating never saw?
 5. `swap_adjust.py`, step 5: inside each team, which players do the lineup swaps say get too much or too
    little credit?
 
@@ -72,7 +72,7 @@ flowchart TD
     S1 --> S2["Step 2: box-score prior, LightGBM<br/>box_prior.py"]
     PAN --> S2
     S2 --> S3["Step 3: the season's RAPM pulled toward the prior<br/>prior_rapm.py"]
-    S3 --> S4["Step 4: the prior's part multiplied down<br/>prior_shrink.py"]
+    S3 --> S4["Step 4: both parts multiplied by how well they hold up<br/>prior_shrink.py"]
     FOLDS["Within-season folds: each season rated<br/>from three quarters of its games<br/>openrapm folds"] --> S4
     S4 --> S5["Step 5: credit re-split inside each team<br/>swap_adjust.py"]
     S5 --> OUT["outputs/season_ratings_product.parquet<br/>openrapm build"]

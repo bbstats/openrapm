@@ -169,3 +169,27 @@ def test_the_held_out_error_of_a_family_that_is_true_is_zero(check):
     assert errors["step4"].min() > 0.1                                  # the shipped step cannot make them
     against = heldout[(heldout.family == "source") & (heldout.against == "step4")].iloc[0]
     assert against.mean_change < -0.1 and against.seasons_better == len(seasons)
+
+
+def test_family_ratings_are_the_pieces_times_their_multipliers_re_centred(check):
+    fold, pieces = make_fold(2)
+    fold.rows["D"] = fold.rows["D"].assign(poss_off=fold.rows["D"].poss_def)    # real folds carry both columns
+    columns = check.FAMILIES["source"]["columns"]
+    multipliers = np.array([TRUE[piece][side] for side in "OD" for piece in columns])
+    got = check.family_ratings(fold, pieces, "source", multipliers)
+    for side in "OD":
+        values = check.side_values(fold, pieces, side)
+        raw = sum(TRUE[piece][side] * values[piece] for piece in columns)
+        weight = fold.rows[side].poss_off.to_numpy(float)
+        assert got[side] == pytest.approx(raw - np.average(raw, weights=weight))
+        assert np.average(got[side], weights=weight) == pytest.approx(0.0, abs=1e-12)
+
+
+def test_the_held_family_keeps_the_games_part_at_one(check):
+    fold, pieces = make_fold(3)
+    fold.rows["D"] = fold.rows["D"].assign(poss_off=fold.rows["D"].poss_def)
+    got = check.family_ratings(fold, pieces, "step4", np.array([0.5, 0.8]))
+    for side, prior, u, scale in (("O", "prior_off", "u_off", 0.5), ("D", "prior_def", "u_def", 0.8)):
+        raw = scale * fold.rows[side][prior].to_numpy() + fold.rows[side][u].to_numpy()
+        weight = fold.rows[side].poss_off.to_numpy(float)
+        assert got[side] == pytest.approx(raw - np.average(raw, weights=weight))

@@ -286,6 +286,9 @@ FEATURE_SETS = {
     # experiment 59 (the owner, 2026-10-14): the career counts off both lists -- career possessions before, seasons
     # played before and seasons with his current team; every other shipped input keeps its order
     "no_career_counts": _NO_CAREER,
+    # experiment 64 (2026-10-15): experiment 56 again on today's inputs, the ratios against the league in their place
+    "no_career_ratios_vs_league": {side: [f"{name}_vs_league" if name in RATIOS else name for name in _NO_CAREER[side]]
+                                   for side in ("O", "D")},
     # the dashboard arms (screen: scripts/checks/146_dashboard_screen.py): tracking, hustle, and both, appended
     "tracking": {"O": _NO_CAREER["O"] + TRACKING_OFFENCE, "D": _NO_CAREER["D"] + TRACKING_DEFENCE},
     "hustle": {"O": _NO_CAREER["O"] + HUSTLE_OFFENCE, "D": _NO_CAREER["D"] + HUSTLE_DEFENCE},

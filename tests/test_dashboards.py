@@ -140,3 +140,47 @@ def test_the_command_probes_writes_the_coverage_and_rejects_an_unknown_source(cf
     args.sources = "hustle,bogus"
     with pytest.raises(SystemExit, match="bogus"):
         data_command.run_dashboards(args, cfg)
+
+
+class GameEndpoint:
+    """A made-up BoxScoreHustleV2: answers `answers[game_id]`, raises for 'broken', remembers the games asked."""
+    answers: dict = {}
+    calls: list = []
+
+    def __init__(self, game_id, timeout):
+        type(self).calls.append(game_id)
+        answer = type(self).answers.get(game_id)
+        if isinstance(answer, str):
+            raise KeyError("resultSet")
+        self.frame = answer
+
+    def get_data_frames(self):
+        return [self.frame, pd.DataFrame()]
+
+
+def test_hustle_games_are_fetched_once_each_and_a_broken_game_is_listed_not_cached(cfg, monkeypatch):
+    GameEndpoint.calls = []
+    GameEndpoint.answers = {"0022500001": pd.DataFrame({"personId": [1, 2], "deflections": [3, 0]}),
+                            "0022500002": pd.DataFrame({"personId": [], "deflections": []}),
+                            "0042500101": "broken"}
+    monkeypatch.setattr(dashboards, "_endpoint_class", lambda name: GameEndpoint)
+    monkeypatch.setattr("time.sleep", lambda seconds: None)
+    monkeypatch.setattr(dashboards, "season_game_ids",
+                        lambda cfg, season, phases: ["0022500001", "0022500002", "0042500101"])
+    out = dashboards.fetch_hustle_games(cfg, [2026], log_every=0)
+    assert (out["games"], out["fetched"], out["empty"]) == (3, 2, 1)
+    assert [game for game, _ in out["failed"]] == ["0042500101"]
+    path = dashboards.hustle_game_path(cfg, "0022500001")
+    assert path.parts[-2:] == ("2026", "0022500001.parquet")
+    assert pd.read_parquet(path).deflections.tolist() == [3, 0]
+    assert not dashboards.hustle_game_path(cfg, "0042500101").exists()
+    GameEndpoint.calls = []
+    again = dashboards.fetch_hustle_games(cfg, [2026], log_every=0)
+    assert again["fetched"] == 0 and GameEndpoint.calls == ["0042500101"] * 4      # only the missing game, retried
+
+
+def test_offline_a_missing_hustle_game_stops_the_run(cfg, monkeypatch):
+    monkeypatch.setenv("OPENRAPM_OFFLINE", "1")
+    monkeypatch.setattr(dashboards, "season_game_ids", lambda cfg, season, phases: ["0022500001"])
+    with pytest.raises(OfflineFetch):
+        dashboards.fetch_hustle_games(cfg, [2026], log_every=0)

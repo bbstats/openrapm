@@ -140,6 +140,25 @@ def side_values(fold, pieces: pd.DataFrame, side: str) -> dict:
     return values
 
 
+def family_ratings(fold, pieces: pd.DataFrame, family: str, multipliers: np.ndarray) -> dict:
+    """{"O", "D"}: each rated player's rating with the family's pieces times their multipliers, positive good, in the
+    fold's row order, re-centred so its possession-weighted mean is zero as step 4 re-centres (check 151 scores it).
+
+    `multipliers` is one family's solved vector, offence's pieces then defence's (`FAMILIES[family]["columns"]`); a
+    family whose games' part is held (`step4`) adds u at 1.  NaN multipliers, pieces nobody had, count as 0.
+    """
+    spec, out = FAMILIES[family], {}
+    columns, multipliers = spec["columns"], np.nan_to_num(np.asarray(multipliers, dtype=float))
+    for side_index, side in enumerate(SIDES):
+        values = side_values(fold, pieces, side)
+        rating = sum(multipliers[side_index * len(columns) + k] * values[piece] for k, piece in enumerate(columns))
+        if spec.get("held"):
+            rating = rating + values["u"]
+        weight = fold.rows[side].poss_off.to_numpy(float)
+        out[side] = rating - np.average(rating, weights=weight)
+    return out
+
+
 def fold_columns(fold, pieces: pd.DataFrame) -> tuple[np.ndarray, list, np.ndarray]:
     """(the matrix of every piece's team-game sums, its column names "<piece>|<side>", the response before u).
 

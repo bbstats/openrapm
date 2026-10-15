@@ -846,8 +846,8 @@ def write_decomposition(cfg: dict, ratings_path: Path, data_dir: Path, built: st
 #     rating = box score + on court + off court + team SOS + swap adjustment
 #
 #   box score        what the box score says: step 2's prior after step 4's multiplier (prior_off, prior_def)
-#   on court         the part of the season's games' part (u, how far step 3 moved him from his prior) that comes from
-#                    the possessions he was on the court for
+#   on court         the part of the season's games' part (u, how far step 3 moved him from his prior, times step 4's
+#                    factor on it since experiment 65) that comes from the possessions he was on the court for
 #   off court        the part from his team's possessions without him: in games he played and in games he missed
 #   team SOS         the part from every other possession
 #   swap adjustment  step 5's adjustment inside his team (the table's c_off, c_def)
@@ -880,9 +880,14 @@ def step3_path(ratings_path: Path) -> Path:
     return ratings_path.with_name(f"{ratings_path.stem}_step3.parquet")
 
 
-def published_parts(ratings_path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """(the ratings table, its step-3 table), after checking they are one build's: the same player-seasons, with
-    the same games' part (steps 4 and 5 leave it alone), and the penalty the shipped settings name."""
+GAMES_FACTOR_TOLERANCE = 1e-12   # the table's games' part against its step-3 table's times one factor
+
+
+def published_parts(ratings_path: Path) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """(the ratings table, its step-3 table, {season: {"off", "def"}: step 4's factor on the games' part}), after
+    checking they are one build's: the same player-seasons, the same games' part up to one factor per season and side
+    (step 4 multiplies it since experiment 65, 1 before; step 5 leaves it alone), and the penalty the shipped settings
+    name."""
     step3_file = step3_path(ratings_path)
     if not step3_file.exists():
         raise SystemExit(f"{step3_file} does not exist; `openrapm build` writes it beside the ratings table")
@@ -897,11 +902,19 @@ def published_parts(ratings_path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     if not len(both) == len(table) == len(step3):
         raise SystemExit("the ratings table and its step-3 table hold different player-seasons: they are not one "
                          "build's")
-    miss = max(float((both.u_off - both.u_off_step3).abs().max()), float((both.u_def - both.u_def_step3).abs().max()))
-    check(miss < 1e-12, f"the ratings table and its step-3 table have the same games' part (max miss {miss:.1e})")
+    factors, miss = {}, 0.0
+    for season, rows in both.groupby("season"):
+        factors[int(season)] = {}
+        for side in ("off", "def"):
+            mine, theirs = rows[f"u_{side}"].to_numpy(float), rows[f"u_{side}_step3"].to_numpy(float)
+            factor = float(mine @ theirs / (theirs @ theirs)) if theirs @ theirs > 0 else 1.0
+            factors[int(season)][side] = factor
+            miss = max(miss, float(np.abs(mine - factor * theirs).max()))
+    check(miss < GAMES_FACTOR_TOLERANCE, f"the ratings table and its step-3 table have the same games' part, up to "
+                                         f"step 4's factor per season and side (max miss {miss:.1e})")
     check(set(table.offense_lambda.unique()) == {float(PRODUCT.ridge.penalty)},
           f"the ratings table was built at the shipped penalty, {PRODUCT.ridge.penalty:,.0f}")
-    return table, step3
+    return table, step3, factors
 
 
 def season_games_parts(designs: DesignCache, box_files: BoxScoreFiles, season: int, step3: pd.DataFrame,
@@ -933,17 +946,19 @@ def season_games_parts(designs: DesignCache, box_files: BoxScoreFiles, season: i
     return parts, misses
 
 
-def season_pieces(rows: pd.DataFrame, parts: dict) -> pd.DataFrame:
+def season_pieces(rows: pd.DataFrame, parts: dict, factors: dict | None = None) -> pd.DataFrame:
     """One season's pieces: a row per ratings-table row, and per side (off, def, total) a column for each of
-    OPENRAPM_PIECES, named `<side>_<piece>`.  Positive is good on both sides; a total is the two sides added."""
+    OPENRAPM_PIECES, named `<side>_<piece>`.  Positive is good on both sides; a total is the two sides added.  The
+    games' part's pieces are the refit's times step 4's factor on it (`factors`, {"off", "def"}; 1 when None)."""
     pieces = pd.DataFrame({"player_id": rows.player_id.to_numpy()})
     for side in ("off", "def"):
         games = parts[side].set_index("player_id").reindex(rows.player_id)
         if games.u.isna().any():
             raise SystemExit(f"{int(rows.season.iloc[0])}: the refit has no row for some players of the ratings table")
         pieces[f"{side}_box_score"] = rows[f"prior_{side}"].to_numpy()
+        factor = 1.0 if factors is None else factors[side]
         for piece in ("on_court", "off_court", "team_sos"):
-            pieces[f"{side}_{piece}"] = games[piece].to_numpy()
+            pieces[f"{side}_{piece}"] = factor * games[piece].to_numpy()
         pieces[f"{side}_swap"] = rows[f"c_{side}"].to_numpy()
         pieces[f"{side}_rating"] = rows[f"rating_{side}"].to_numpy()
     for piece in OPENRAPM_PIECES[:-1]:
@@ -961,8 +976,10 @@ def new_openrapm_worst() -> dict:
                 unplaced=0.0, unnamed=0)
 
 
-def update_openrapm_worst(worst: dict, rows: pd.DataFrame, pieces: pd.DataFrame, parts: dict, misses: dict) -> None:
-    """Fold one season's misses into the worst over every season.
+def update_openrapm_worst(worst: dict, rows: pd.DataFrame, pieces: pd.DataFrame, parts: dict, misses: dict,
+                          factors: dict | None = None) -> None:
+    """Fold one season's misses into the worst over every season; the refit's games' part is held to the table's
+    after step 4's factor on it (`factors`, {"off", "def"}; 1 when None).
 
     A season whose solve needed rapm.solved_ridge's jitter (2020) is kept apart: the jitter is 1e-9 x the mean
     diagonal, and the prior columns here are the table's (scaled and centred) rather than the build's own, so the
@@ -973,7 +990,8 @@ def update_openrapm_worst(worst: dict, rows: pd.DataFrame, pieces: pd.DataFrame,
         added = sum(pieces[f"{side}_{piece}"] for piece in OPENRAPM_PIECES[:-1])
         season["identity"] = max(season["identity"], float((added - pieces[f"{side}_rating"]).abs().max()))
     for side in ("off", "def"):
-        refit_u = parts[side].set_index("player_id").u.reindex(rows.player_id).to_numpy()
+        refit_u = (1.0 if factors is None else factors[side]) * parts[side].set_index("player_id").u.reindex(
+            rows.player_id).to_numpy()
         season["games_part"] = max(season["games_part"], float(np.abs(refit_u - rows[f"u_{side}"].to_numpy()).max()))
         season["scale"] = max(season["scale"], misses[side]["scale"])
         season["sum_hy"] = max(season["sum_hy"], misses[side]["sum_hy"])
@@ -1033,7 +1051,7 @@ def write_openrapm_file(path: Path, rows: dict, built: str, penalty: float) -> N
 def write_openrapm_decomposition(cfg: dict, ratings_path: Path, data_dir: Path, built: str) -> None:
     """decompose_openrapm.json in `data_dir`, after its checks pass.  Solves step 3 again for every season and both
     sides, so it must run after `openrapm build`, whenever the ratings table changes."""
-    table, step3 = published_parts(ratings_path)
+    table, step3, factors = published_parts(ratings_path)
     names, box_files, designs = name_table(ratings_path, cfg), BoxScoreFiles(cfg), DesignCache(cfg)
     penalty = float(PRODUCT.ridge.penalty)
     started, rows, worst = time.time(), {}, new_openrapm_worst()
@@ -1041,8 +1059,8 @@ def write_openrapm_decomposition(cfg: dict, ratings_path: Path, data_dir: Path, 
         season_rows = table[table.season == season].reset_index(drop=True)
         parts, misses = season_games_parts(designs, box_files, season, step3, penalty)
         designs.clear()
-        pieces = season_pieces(season_rows, parts)
-        update_openrapm_worst(worst, season_rows, pieces, parts, misses)
+        pieces = season_pieces(season_rows, parts, factors[season])
+        update_openrapm_worst(worst, season_rows, pieces, parts, misses, factors[season])
         named = span_names(names, season_rows.player_id.to_numpy(), [season], box_files)
         worst["unnamed"] += int(sum(1 for name in named if pd.isna(name) or not str(name).strip()))
         rows[season] = openrapm_rows(season_rows, pieces, named)

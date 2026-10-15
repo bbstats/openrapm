@@ -24,6 +24,12 @@ failed request is not, and is reported.  With OPENRAPM_OFFLINE=1 a missing file 
 
 Example: `pulls()` holds 34 pulls; the hustle pull for 2026 regular season is written to
 data/raw/dashboards/hustle/players/2026_RS.parquet.
+
+Per game (2026-10-15).  A season total includes the games a within-season fold holds back, and the with-or-without-you
+test scores exactly those games: a fold whose prior read whole-season inputs scored z -31 better than an honest one
+(notes/DECISIONS.md, "The leak control for season-total inputs").  So the hustle numbers are also fetched game by game
+(`BoxScoreHustleV2`, one request a game, 2016-17 on), which a fold can sum over its fit games alone:
+data/raw/dashboards/hustle/games/<season>/<game_id>.parquet, the endpoint's player table as it answers.
 """
 from __future__ import annotations
 
@@ -34,7 +40,18 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .ingest import SEASON_TYPES, TIMEOUT, OfflineFetch, _retry, raw_dir, refuse_if_offline, season_str
+from .ingest import (
+    SEASON_TYPES,
+    TIMEOUT,
+    OfflineFetch,
+    _retry,
+    game_table,
+    load_gamelog,
+    raw_dir,
+    refuse_if_offline,
+    season_of_game,
+    season_str,
+)
 
 SOURCES = ("hustle", "tracking", "synergy", "matchups")
 MEASURES = ("Defense", "Rebounding", "Drives", "Passing", "Possessions", "SpeedDistance")        # LeagueDashPtStats
@@ -205,3 +222,56 @@ def panel_rows(cfg: dict) -> pd.DataFrame:
     """The season panel's keys and possessions (what `coverage` reads), through the panel module's own reader."""
     from .panel import panel_keys
     return panel_keys(cfg)
+
+
+# ------------------------------------------------------------------------------------------ hustle, game by game
+HUSTLE_GAMES_FIRST = 2017       # BoxScoreHustleV2 holds every player from 2016-17; a 2015-16 game answers two rows
+
+
+def hustle_game_path(cfg: dict, game_id: str) -> Path:
+    return raw_dir(cfg) / "dashboards" / "hustle" / "games" / str(season_of_game(game_id)) / f"{game_id}.parquet"
+
+
+def fetch_hustle_game(game_id: str, cfg: dict, force: bool = False, tries: int = 4) -> tuple:
+    """(one game's hustle numbers, one row per player, whether it was read from the cache), cached at
+    `hustle_game_path`.  A game answered with no rows is cached as it is."""
+    path = hustle_game_path(cfg, game_id)
+    if path.exists() and not force:
+        return pd.read_parquet(path), True
+    refuse_if_offline(path, f"the hustle box score of {game_id}")
+
+    def ask():
+        return _endpoint_class("BoxScoreHustleV2")(game_id=game_id, timeout=TIMEOUT).get_data_frames()[0]
+    frame = _retry(ask, tries=tries, base_sleep=3.0, what=f"hustle {game_id}")
+    frame = frame.astype({column: str for column in frame.columns if frame[column].dtype == object})
+    path.parent.mkdir(parents=True, exist_ok=True)
+    frame.to_parquet(path, index=False)
+    return frame, False
+
+
+def season_game_ids(cfg: dict, season: int, phases=("RS", "PO")) -> list[str]:
+    """Every game of the season's phases, from the cached game logs, in game-id order."""
+    return sorted(str(game) for phase in phases for game in game_table(load_gamelog(season, phase, cfg))["game_id"])
+
+
+def fetch_hustle_games(cfg: dict, seasons, phases=("RS", "PO"), delay: float = 0.6, log_every: int = 250) -> dict:
+    """Every game's hustle numbers for the seasons and phases, one request at a time, `delay` seconds apart (none
+    after a cached file).  Returns {"games", "fetched", "empty", "failed": [(game_id, error)]}; one bad game does not
+    stop the run, and a rerun fetches only what is missing.  OfflineFetch is not forgiven."""
+    games = [game for season in seasons for game in season_game_ids(cfg, int(season), phases)]
+    out, started = dict(games=len(games), fetched=0, empty=0, failed=[]), time.time()
+    for done, game_id in enumerate(games, start=1):
+        try:
+            frame, cached = fetch_hustle_game(game_id, cfg)
+            if not cached:
+                out["fetched"] += 1
+                out["empty"] += int(len(frame) == 0)
+                time.sleep(delay)
+        except OfflineFetch:
+            raise
+        except RuntimeError as error:
+            out["failed"].append((game_id, str(error)[:300]))
+        if log_every and (done % log_every == 0 or done == len(games)):
+            print(f"  hustle games: {done} of {len(games)}, {out['fetched']} fetched, {len(out['failed'])} failed "
+                  f"({time.time() - started:.0f}s)", flush=True)
+    return out

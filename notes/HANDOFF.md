@@ -38,9 +38,56 @@
 every number quoted here.  Do not let this grow into a lab notebook.
 
 The work happens on feature branches off `main`; the live site is served from `docs/` on `main`.  `pytest -q`:
-**648 passed, 1 failed, 7 deselected (the slow tests, `pytest -m slow`, 7 passed), 1 xfailed, ~75 s** with the scraped
+**657 passed, 1 failed, 7 deselected (the slow tests, `pytest -m slow`, 7 passed), 1 xfailed, ~75 s** with the scraped
 data (2026-10-15).  The one failure is the star-guard rank ceiling on Curry, 100th against a ceiling of 80, failing
 since experiment 59 and waiting on the owner.
+
+## START HERE (2026-10-15, evening): the retry plan under the new decider; experiment 65 ADOPTED, not published
+
+The owner: "now that we have simplified our testing, plan out tests we should try (or retry)".  Plan
+`~/.claude/plans/now-that-we-have-sprightly-ripple.md`: five ranked retries of ideas the old year-over-year test was blind
+to, run one at a time on the owner's go.  All of it is on the local branch `exp64-ratios-vs-league`, uncommitted.
+
+**What ships now (adopted, not published).**  The incumbent is `gamesfree`: `cols06`'s steps 1-3 and folds, with step 4
+multiplying the games' part too (`ShrinkSettings.free_games_part = True`; `openrapm shrink --no-free-games-part` holds it
+at 1).  The product table is rebuilt (`openrapm build`, 16 minutes; step 3 bit-identical; the previous tables are
+`outputs/season_ratings_product*_before_gamesfree.parquet`): the prior part 0.662-0.751 on offence, 0.779-0.953 on
+defence; the games' part 1.269-1.375 and 1.397-1.567.  2026 top 5: Wembanyama, Gilgeous-Alexander, Dončić, Jokić,
+Kawhi.  **The site is not rebuilt**: `openrapm site --bias --openrapm-decomposition --similarity`, commit, push, on the
+owner's word.
+
+| rank | retry | result | state |
+|---|---|---|---|
+| 1 | exp 64 `vsleague2`: experiment 56's ratios against the league on today's inputs | decider -0.049, z -0.91; step 3 z -2.82, step 4 gives it back | tie, verdict pending |
+| 2 | the dashboards, after a leak control | season-total inputs leak: whole-season inputs in the folds read -2.84, z -31 | per-game hustle downloading |
+| 3 | exp 65: step 4 in pieces | one factor on the games' part -0.648, z -17.5, 30 of 30; guard +0.021, z +0.31 | **ADOPTED** |
+| 4 | step 5 in the folds, then the swap-step variants | -- | waiting |
+| 5 | experiment 50's group correction | -- | waiting |
+
+**The decider on the new base.**  `151_wowy.py`'s step 4 follows the shipped setting, so `step4` is now m x prior + g x u
+for every system.  The chain reads the incumbent's folds under `INC_SYSTEM=cols06` and its tables under
+`INC_NAME=gamesfree`.  The noise control `noise_cols06` against it: +0.077, z +1.05, 11 of 30 seasons.
+
+**New code, all off by default unless named.**
+- `openrapm folds --whole-season-inputs`: the leak control.  Never for step 4.
+- `openrapm data hustle-games`: `BoxScoreHustleV2` per game, 2017 on, into `data/raw/dashboards/hustle/games/<season>/`.
+  It hangs every few minutes, so it runs under `scratch/2026-10-15_hustle/hustle_watchdog.ps1`, which restarts it every 10 minutes and
+  resumes.  Log `outputs/hustle_games_fetch.log`.  Nothing reads these files yet: the next step is a folds-aware
+  hustle input summed over a fold's fit games.
+- `151_wowy.py --pieces=FAMILIES`: check 145's families as stages, multipliers from the 8 nearest fold seasons;
+  `145_piece_multipliers.family_ratings`.  Piece folds: `cols06pieces_early`, `cols06pieces_within`.
+- `prior_shrink.fit_multipliers(..., free_games=True)`; the decomposition page splits a games' part that step 4
+  multiplied (`site.published_parts` returns each season's factor).
+
+**Waiting on the owner.**
+1. Publish experiment 65.
+2. Experiment 64's verdict, recommended not adopted.
+3. The `source` split on top of experiment 65: -0.088, z -2.59, 20 of 30; DNP games z -1.89.  It needs each whole
+   season's games' part split into pieces, about 2 hours of code.
+4. The dashboards once the per-game hustle download finishes.
+5. The decider's bar, z -2, still to confirm.
+
+`pytest -q`: 657 passed, 1 failed, the Curry star-guard ceiling.
 
 ## START HERE (2026-10-15): experiment 63 ADOPTED and PUBLISHED; the tests cleaned up to three readings
 

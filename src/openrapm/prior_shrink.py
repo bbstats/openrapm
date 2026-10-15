@@ -1,4 +1,4 @@
-"""Step 4 of 5: the box-score prior part of every rating multiplied down, by how much it holds up on unseen games.
+"""Step 4 of 5: the two parts of every rating multiplied by how much each holds up on unseen games.
 
 Step 3 splits each rating into two parts: the prior part, s x prior (the box-score prior times the season's prior
 scale), and the games' part, u (how far the season's own games moved the player from it).  Scored on games the
@@ -7,12 +7,21 @@ the ten players' summed prior parts and summed games' parts, both coefficients f
 exactly): the prior part gets 0.70 on offence (0.64 for players with 2,500+ possessions) and 0.91 on defence, the
 games' part 1.21 and 1.30 (notes/DECISIONS.md, experiment 33b).
 
-The shipped step multiplies the prior part only, one multiplier per side and season, fitted the same way with the
-games' part held at 1.  That gives the published multipliers, 0.699 to 0.715 on offence and 0.929 to 0.976 on
-defence.  Multiplying the games' part as well tied on the year-over-year test (8.648 either way) and added nothing
-within the season (z -1.1), so the simpler version ships.  The owner adopted it on 2026-10-03: the year-over-year
-test's error fell from 8.666 to 8.600 points per 100, lower in 53 of its 56 predictions (each season 1998-2025
-predicted from the season before and from the season after).
+From 2026-10-03 the shipped step multiplied the prior part only, one multiplier per side and season, fitted the same
+way with the games' part held at 1: multiplying the games' part as well tied on the year-over-year test (8.648 either
+way) and added nothing on the team-game held-out test (z -1.1), so the simpler version shipped.
+
+Since experiment 65 (adopted 2026-10-15, the owner: "Adopt one multiplier as the new incumbent") both parts are
+multiplied (`free_games=True`, settings.ShrinkSettings.free_games_part): the games' part's multipliers g_O and g_D
+are fitted in the same least squares with U_O and U_D as free columns and t_g = y_g - S_g.  The with-or-without-you
+test (scripts/checks/151_wowy.py), which scores how a team's results move as its lineup changes, read it at -0.648,
+z -17.5, better in 30 of 30 seasons, with g about 1.33 on offence and 1.48 on defence; the year-over-year test a tie.
+Then u <- g x u before the re-centring, which still moves the prior part only.  `free_games=False` is the step as it
+was, and the module's defaults keep it so.
+
+Example, from before experiment 65: rating 2026 in the product setting, m_O = 0.704 and m_D = 0.929.  Jokic's
+offensive prior part of 5.394 becomes 0.704 x 5.394 = 3.80, less the season's shift of 0.02 = 3.78; his games' part
+stays 0.97, so his offensive rating goes from 6.37 to 4.75.  With g_O = 1.33 his games' part would be 1.29.
 
 Words used below
     within-season fold
@@ -55,11 +64,11 @@ Which folds a season's multipliers are fitted on:
 
 Then, for each season and side (`shrink`):
 
-    prior <- m x prior
+    prior <- m x prior,   u <- g x u   (g = 1 when the games' part is held)
     shift  = sum(poss_off x (prior + u)) / sum(poss_off),   prior <- prior - shift,   rating = prior + u
 
 The weight is the offensive possession count on both sides, as in step 3's centring (prior_rapm.centre).  The
-re-centring keeps the possession-weighted mean rating at zero, and it moves the prior part only: u is untouched.
+re-centring keeps the possession-weighted mean rating at zero, and it moves the prior part only.
 
 Example: rating 2026 in the product setting, m_O = 0.704 and m_D = 0.929.  Jokic's offensive prior part of 5.394
 becomes 0.704 x 5.394 = 3.80, less the season's shift of 0.02 = 3.78; his games' part stays 0.97, so his
@@ -105,8 +114,9 @@ def fold_seasons_used(season: int, fold_seasons, rule: str, nearest: int = 0) ->
     return tuple(sorted(allowed))
 
 
-def fold_terms(fold) -> tuple[np.ndarray, np.ndarray]:
-    """One fold's (t, [P_O | P_D]): the points left for the prior parts to explain, and the two prior sums.
+def fold_terms(fold, free_games: bool = False) -> tuple[np.ndarray, np.ndarray]:
+    """One fold's (t, [P_O | P_D]): the points left for the prior parts to explain, and the two prior sums.  With
+    `free_games`, (t, [P_O | P_D | U_O | U_D]): the games' parts are columns of their own, not taken off t.
 
     `fold` is a `data.within_folds.Fold`.  The defence's parts enter in points allowed, so they are negated.
     """
@@ -116,16 +126,19 @@ def fold_terms(fold) -> tuple[np.ndarray, np.ndarray]:
     prior_defence = fold.Z["D"] @ (-defence.prior_def.to_numpy(float))
     games_defence = fold.Z["D"] @ (-defence.u_def.to_numpy(float))
     stand_in = fold.base - (prior_offence + games_offence) - (prior_defence + games_defence)
+    if free_games:
+        return fold.y - stand_in, np.column_stack([prior_offence, prior_defence, games_offence, games_defence])
     return fold.y - stand_in - games_offence - games_defence, np.column_stack([prior_offence, prior_defence])
 
 
-def fit_multipliers(folds: list) -> tuple[float, float]:
-    """(m_O, m_D): the weighted least squares in the module docstring over the test team-games of `folds`.
+def fit_multipliers(folds: list, free_games: bool = False) -> tuple:
+    """(m_O, m_D): the weighted least squares in the module docstring over the test team-games of `folds`; with
+    `free_games`, (m_O, m_D, g_O, g_D), the games' parts' multipliers fitted beside them.
 
     The design is [one block of controls per fold, block diagonal | P_O | P_D]; the normal equations are solved
     by least squares, because a fold without playoff games has an empty playoff column.
     """
-    targets, prior_parts = zip(*(fold_terms(fold) for fold in folds))
+    targets, prior_parts = zip(*(fold_terms(fold, free_games) for fold in folds))
     controls = sp.block_diag([sp.csr_matrix(fold.F) for fold in folds], format="csr")
     design = sp.hstack([controls, sp.csr_matrix(np.vstack(prior_parts))], format="csr")
     target = np.concatenate(targets)
@@ -133,11 +146,12 @@ def fit_multipliers(folds: list) -> tuple[float, float]:
     gram = np.asarray((design.T @ design.multiply(weight[:, None])).todense())
     right_hand_side = np.asarray(design.T @ (weight * target)).ravel()
     multipliers = np.linalg.lstsq(gram, right_hand_side, rcond=None)[0][controls.shape[1]:]
-    return float(multipliers[0]), float(multipliers[1])
+    return tuple(float(value) for value in multipliers)
 
 
-def multipliers_by_season(seasons, folds: list, rule: str, nearest: int = 0) -> pd.DataFrame:
-    """One row per season: season, multiplier_off, multiplier_def, fold_seasons (how many fold seasons fitted it).
+def multipliers_by_season(seasons, folds: list, rule: str, nearest: int = 0, free_games: bool = False) -> pd.DataFrame:
+    """One row per season: season, multiplier_off, multiplier_def, fold_seasons (how many fold seasons fitted it);
+    with `free_games` also games_multiplier_off and games_multiplier_def.
 
     A fit depends only on the folds it is handed, so it runs once per distinct set of fold seasons and is reused:
     under the product rule the twenty seasons 1997-2016 share one fit.  Reusing it gives the same bits as twenty
@@ -149,18 +163,25 @@ def multipliers_by_season(seasons, folds: list, rule: str, nearest: int = 0) -> 
     for season in sorted(seasons):
         used = fold_seasons_used(season, fold_seasons, rule, nearest)
         if used not in fits:
-            fits[used] = fit_multipliers([fold for fold in folds if fold.season in used])
-        multiplier_off, multiplier_def = fits[used]
-        rows.append(dict(season=int(season), multiplier_off=multiplier_off, multiplier_def=multiplier_def,
-                         fold_seasons=len(used)))
+            chosen = [fold for fold in folds if fold.season in used]
+            fits[used] = fit_multipliers(chosen, free_games=True) if free_games else fit_multipliers(chosen)
+        row = dict(season=int(season), multiplier_off=fits[used][0], multiplier_def=fits[used][1])
+        if free_games:
+            row.update(games_multiplier_off=fits[used][2], games_multiplier_def=fits[used][3])
+        rows.append(dict(row, fold_seasons=len(used)))
     return pd.DataFrame(rows)
 
 
-def _shrink_season(rows: pd.DataFrame, multiplier_off: float, multiplier_def: float) -> pd.DataFrame:
-    """One season's rows with the prior parts multiplied and the ratings re-centred (the module docstring)."""
+def _shrink_season(rows: pd.DataFrame, multiplier_off: float, multiplier_def: float, games_off: float = 1.0,
+                   games_def: float = 1.0) -> pd.DataFrame:
+    """One season's rows with the prior parts multiplied (and the games' parts, when freed) and the ratings
+    re-centred (the module docstring)."""
     rows = rows.copy()
     rows["prior_off"] = multiplier_off * rows.prior_off
     rows["prior_def"] = multiplier_def * rows.prior_def
+    if games_off != 1.0 or games_def != 1.0:
+        rows["u_off"] = games_off * rows.u_off
+        rows["u_def"] = games_def * rows.u_def
     weight = rows.poss_off.to_numpy(float)
     for side in ("off", "def"):
         shift = np.average(rows[f"prior_{side}"] + rows[f"u_{side}"], weights=weight)
@@ -174,13 +195,19 @@ def _shrink_season(rows: pd.DataFrame, multiplier_off: float, multiplier_def: fl
 
 
 def shrink(table: pd.DataFrame, multipliers: pd.DataFrame) -> pd.DataFrame:
-    """Step 4 on a step-3 table: each season's prior parts times its multipliers, re-centred; u unchanged.
+    """Step 4 on a step-3 table: each season's prior parts times its multipliers, re-centred; u unchanged unless
+    `multipliers` carries games_multiplier_off and games_multiplier_def (the games' part freed).
 
     `table` is in the published schema (prior_rapm.PUBLISHED_COLUMNS); `multipliers` is `multipliers_by_season`.
     The raw-sign columns (offense, defense, prior_offense, prior_defense) follow the published ones, and the
     columns keep the table's order.  Rows come out sorted by season, each season's rows in their own order.
     """
     by_season = multipliers.set_index("season")
-    seasons = [_shrink_season(rows, by_season.at[season, "multiplier_off"], by_season.at[season, "multiplier_def"])
+    freed = "games_multiplier_off" in by_season.columns
+
+    def games(season, side):
+        return by_season.at[season, f"games_multiplier_{side}"] if freed else 1.0
+    seasons = [_shrink_season(rows, by_season.at[season, "multiplier_off"], by_season.at[season, "multiplier_def"],
+                              games(season, "off"), games(season, "def"))
                for season, rows in table.groupby("season", sort=True)]
     return pd.concat(seasons, ignore_index=True)[list(table.columns)]

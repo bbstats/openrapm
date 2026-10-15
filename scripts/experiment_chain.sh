@@ -29,11 +29,15 @@ LOG=outputs/${NAME}_chain.log
 # step 4 by the same rule on them.  Since 2026-10-14 it is experiment 59 (nocareer): those career counts off the prior
 # (--features no_career_counts), its own folds for all thirty seasons, step 4 by the same rule.  Since 2026-10-15
 # it is experiment 63 (cols06): the same with each tree of the prior shown 60% of its inputs (--booster-params
-# lgb1_cols06), its own folds for all thirty seasons; its noise control is noise_cols06.  The held-out audit pairs a candidate with the incumbent's 2017-2026 folds
+# lgb1_cols06), its own folds for all thirty seasons; its noise control is noise_cols06.  Since 2026-10-15, later the
+# same day, it is experiment 65 (gamesfree): cols06's steps 1-3 and folds, with step 4 multiplying the games' part too
+# (settings.ShrinkSettings.free_games_part, the default of `openrapm shrink`).  Its folds are cols06's, so the decider
+# reads them under INC_SYSTEM; the decider's step 4 follows the shipped setting for every system.  The held-out audit pairs a candidate with the incumbent's 2017-2026 folds
 # (AUDIT_REF).  A candidate with OWN_FOLDS=1 has folds for 2017-2026 only; its step 4 then reads the 8 nearest of
 # those.  EARLY_FOLDS=1 (with OWN_FOLDS=1; experiment 56) also builds its 1997-2016 folds (NAME_early), so its step 4
 # is the incumbent's rule on its own folds for all thirty seasons.
-INC_NAME=${INC_NAME:-cols06}
+INC_NAME=${INC_NAME:-gamesfree}
+INC_SYSTEM=${INC_SYSTEM:-cols06}                 # the incumbent's folds (<name>_early, <name>_within) for 151
 CONTROL_NAME=${CONTROL_NAME:-noise_cols06}       # the noise control's folds (<name>_early, <name>_within) for 151
 INC_FOLDS=${INC_FOLDS:-cols06_early,cols06_within}
 AUDIT_REF=${AUDIT_REF:-cols06_within}
@@ -109,7 +113,7 @@ echo "=== $(date) swap adjustment" >> $LOG
 $PY -u -m openrapm swap --base season_ratings_${NAME}_step4 --setting test --name ${NAME} --types >> $LOG 2>&1 || exit 1
 if [ "$EARLY_FOLDS" = "1" ]; then
   echo "=== $(date) the decider: with or without you, stint by stint, on the held-back games (151)" >> $LOG
-  reading "with or without you" scripts/checks/151_wowy.py --systems=${INC_NAME},${CONTROL_NAME},${NAME} --ref=${INC_NAME} --tag=${NAME}
+  reading "with or without you" scripts/checks/151_wowy.py --systems=${INC_SYSTEM},${CONTROL_NAME},${NAME} --ref=${INC_SYSTEM} --tag=${NAME}
 fi
 echo "=== $(date) the guard: year-over-year" >> $LOG
 reading "year-over-year" scripts/checks/63_yoy.py --rankings=${NAME}=outputs/season_ratings_${NAME}.parquet,incumbent=$INC --ref=incumbent --tag=${NAME} --splits=

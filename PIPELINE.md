@@ -22,7 +22,7 @@ flowchart TD
     PAN --> S2
     S2 --> S3["Step 3: prior-informed RAPM<br/>season_ratings_NAME_step3.parquet"]
     ST --> S3
-    S3 --> S4["Step 4: prior shrink<br/>season_ratings_NAME_step4.parquet"]
+    S3 --> S4["Step 4: both parts multiplied<br/>season_ratings_NAME_step4.parquet"]
     FO["outputs/within/TAG/<br/>openrapm folds"] --> S4
     S4 --> S5["Step 5: swap adjustment<br/>season_ratings_NAME.parquet"]
     ST --> S5
@@ -181,18 +181,21 @@ five in one process (`src/openrapm/commands/build.py`). Each command writes its 
 - **For:** scored on games the rating never saw, the prior's part of a rating holds up less well than the
   games' part. Fitting those games' points on the ten players' summed parts, both coefficients free, gives
   0.70 for the prior's part on offence and 0.91 on defence, against 1.21 and 1.30 for the games' part
-  (experiment 33b). The shipped step multiplies the prior's part only, fitted with the games' part held at
-  1, which gives the published multipliers below; multiplying the games' part as well tied on the
-  year-over-year test (8.648 either way) and added nothing within the season (z -1.1).
+  (experiment 33b). From 2026-10-03 the step multiplied the prior's part only: multiplying the games' part as
+  well tied on the year-over-year test (8.648 either way) and on the team-game held-out test (z -1.1). Since
+  experiment 65 (adopted 2026-10-15) it multiplies both: the with-or-without-you test, which scores how a team's
+  results move as its lineup changes, reads the games' part freed at -0.648, z -17.5, better in 30 of 30
+  seasons, the year-over-year test a tie.
 - **Reads:** a step-3 table; the within-season folds in `outputs/within/TAG/` (below).
 - **Writes:** `outputs/season_ratings_NAME_step4.parquet`, and every season's multipliers in
   `outputs/csv/season_ratings_NAME_step4_multipliers.csv`.
-- **How:** two multipliers per season (offence, defence) from one weighted least-squares fit on the
-  folds' held-back team-games; the prior's part is multiplied by them, the games' part is left as it is,
-  and each season is centred again. The published multipliers run from 0.647 to 0.723 on offence and
-  from 0.760 to 0.955 on defence.
+- **How:** four multipliers per season, the prior's part and the games' part on offence and defence, from
+  one weighted least-squares fit on the folds' held-back team-games; each part is multiplied by its own, and
+  each season is centred again. The published multipliers: the prior's part 0.662 to 0.751 on offence and 0.779 to 0.953 on
+  defence; the games' part 1.269 to 1.375 on offence and 1.397 to 1.567 on defence.
 - **Settings:**
-  - the method (experiment 33b, adopted 2026-10-03);
+  - the method (experiment 33b, adopted 2026-10-03), with the games' part freed (experiment 65, adopted
+    2026-10-15; `ShrinkSettings.free_games_part`, `--no-free-games-part` holds it at 1);
   - the folds `cols06_early,cols06_within` (experiment 63's own folds), seasons 1997-2026 pinned, because the
     fold folder grew once and an unpinned rerun shrank harder (experiment 34's correction);
   - each season's multipliers from the 8 fold seasons nearest it (experiment 55, adopted 2026-10-12).
@@ -298,8 +301,8 @@ held back.
   teams (`data/raw/box`).
 - **Writes:** `docs/data/decompose_openrapm.json`, one row per player-season of `ratings.json`.
 - **How:** box score and swap adjustment are the table's `prior_off` / `prior_def` and `c_off` / `c_def`.  The
-  games' part `u` (step 3's coefficient beyond the prior) is a weighted sum of the season's row outcomes, so
-  grouping the rows splits it: the rows he is on the court for (on court), his team's rows without him, in games he
+  games' part `u` (step 3's coefficient beyond the prior, times step 4's factor on it since experiment 65) is a
+  weighted sum of the season's row outcomes, so grouping the rows splits it: the rows he is on the court for (on court), his team's rows without him, in games he
   played and games he missed (off court), and every other row (team SOS).  Step 3 is solved again for each season
   and target on the table's own priors to get the weights; `decomposition.py` has the equation.
 - **Checks:** the run stops before writing unless the pieces add up to every rating, the refit reproduces every

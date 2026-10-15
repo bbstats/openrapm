@@ -318,3 +318,21 @@ def test_openrapm_rows_drop_players_without_possessions_and_sort_by_total():
     assert [(row[0], row[1], row[2]) for row in got] == [("C", 3, 500), ("A", 1, 1000)]       # whole possessions
     assert got[0][3] == [0.33] * 6 and got[0][5] == [0.33] * 5 + [3.46]
     assert got[1][4] == [0.11] * 6 and got[1][5] == [0.11] * 5 + [1.23]
+
+
+def test_a_games_part_multiplied_by_step_4_is_split_with_its_factor(openrapm_site):
+    """Experiment 65: step 4 multiplies u by one factor per season and side; the three pieces carry that factor."""
+    ratings, final, step3, data = openrapm_site
+    scaled = final.assign(u_off=1.3 * final.u_off, u_def=1.5 * final.u_def)
+    scaled["rating_off"] = scaled.prior_off + scaled.u_off + scaled.c_off
+    scaled["rating_def"] = scaled.prior_def + scaled.u_def + scaled.c_def
+    scaled["rating_total"] = scaled.rating_off + scaled.rating_def
+    scaled.to_parquet(ratings)
+    _, _, factors = site.published_parts(ratings)
+    assert factors[2002]["off"] == pytest.approx(1.3) and factors[2002]["def"] == pytest.approx(1.5)
+    assert site.run_site({}, ratings=ratings, out_dir=data.parent, built="2026-10-15", openrapm_decomposition=True) == 0
+    rows = json.loads((data / site.OPENRAPM_FILE).read_text(encoding="utf-8"))["rows"]["2002"]
+    table = scaled.set_index("player_id")
+    for _, player_id, _, off, deff, _ in rows[:25]:
+        for pieces, side in ((off, "off"), (deff, "def")):
+            assert abs(sum(pieces[1:4]) - table.loc[player_id, f"u_{side}"]) < 0.0151
