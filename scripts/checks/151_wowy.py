@@ -264,7 +264,8 @@ def main(argv=None) -> int:
     started, outputs = time.time(), resolve(cfg, "outputs")
     within = resolve(cfg, "within") if "within" in cfg.get("paths", {}) else outputs / "within"
     audit = _audit()
-    names = [name.strip() for name in args.systems.split(",") if name.strip()]
+    # each name once, in order: the chain names the noise control beside the candidate, which may be the control itself
+    names = list(dict.fromkeys(name.strip() for name in args.systems.split(",") if name.strip()))
     if args.ref not in names:
         names.insert(0, args.ref)
     tables = []

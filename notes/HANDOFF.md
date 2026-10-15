@@ -77,9 +77,11 @@ level out and scores only lineup changes: substitutions and missed games.
 
 **Waiting on the owner.**
 1. The decider's bar: z -2, kept from the old rule; confirm or change.
-2. The noise control on the new base, `noise_cols06`, is not built yet: run
-   `bash scripts/experiment_chain.sh noise_cols06 points_with_expected_opponent_threes "--fold-assignment 1"`
-   (about 50 minutes, one build at a time) before the next experiment, so the decider has its control beside it.
+2. Done: the noise control on the new base, `noise_cols06`, built 2026-10-15 through the chain with
+   `--fold-assignment 1`, its own folds for all thirty seasons.  Against `cols06`: WOWY ΔMSE +0.080, paired z +0.97,
+   13 of 30 seasons improved; year over year ΔMSE -0.031, paired z -0.92.  The chain prints it beside every candidate.
+   CI is red on one test only: the star-guard ceiling on Curry, whose 2026 rating fell 0.78 per 100 under experiment 63,
+   1.61 to 0.83.
 3. The swap step, step 5, is not in the within-season folds, so the decider scores steps 1-4 only.
 4. Re-read the dashboard inputs and experiment 61 on the decider: the dashboards were a tie on the old test with a
    real defensive gain, and they need their own folds, which leak, because dashboards are season totals; experiment 61

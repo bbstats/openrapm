@@ -7015,4 +7015,10 @@ The owner: "adopt 63, push all code / everything to live, clean up branches, wri
   --openrapm-decomposition --similarity`); every decomposition check passed.
 - Tests: 648 passed; `pytest -m slow` 7 passed (2026 rated again equals the published step 3); the star-guard rank
   ceiling still fails on Curry, now 100th against a ceiling of 80 (94th before).
+- **The noise control on the new base (`noise_cols06`, 2026-10-15).**  The chain with `--fold-assignment 1`, own folds
+  for all thirty seasons, about 43 minutes.  Against `cols06`: the decider +0.080, z +0.97, 13 of 30 seasons better;
+  year over year -0.031, z -0.92.  The chain's decider reading failed on its first run because the control was named
+  twice when the candidate was the control itself; check 151 now keeps each name once.  Branches cleaned the same day:
+  every branch but `main` deleted locally and on GitHub, all merged; the worktree `A:/code/spmm_9c` removed after its
+  junctions were unlinked.
 
