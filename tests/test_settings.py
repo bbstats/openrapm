@@ -10,7 +10,8 @@ from openrapm.settings import PRODUCT, TEST
 
 ROOT = Path(__file__).resolve().parents[1]
 BOOSTER_KEYS = {"learning_rate", "n_estimators", "num_leaves", "max_depth", "min_child_samples", "reg_lambda",
-                "reg_alpha", "max_bin", "path_smooth", "linear_tree", "linear_lambda"}
+                "reg_alpha", "max_bin", "path_smooth", "linear_tree", "linear_lambda",
+                "colsample_bytree"}            # each tree's share of the inputs, since experiment 63
 
 
 def test_the_label_settings():
@@ -31,7 +32,7 @@ def test_the_targets_prior_and_ridge():
     assert PRODUCT.prior.chunk_sizes == (1, 2, 3)
     assert PRODUCT.prior.n_folds == 5 and PRODUCT.prior.fold_assignment == 0
     assert PRODUCT.prior.feature_set == "no_career_counts"        # experiment 59, adopted 2026-10-14
-    assert PRODUCT.prior.booster_file == "params/booster_params_lgb1.json"
+    assert PRODUCT.prior.booster_file == "params/booster_params_lgb1_cols06.json"
     assert PRODUCT.prior.era_halflife == 0.0                 # every training season counts the same
     assert PRODUCT.ridge.penalty == 13037.0
     assert PRODUCT.exclude_neighbours == 0
@@ -45,7 +46,7 @@ def test_each_distinct_target_is_fitted_once():
 
 def test_the_shrink_and_swap_settings():
     assert PRODUCT.shrink.fold_seasons == (1997, 2026) and PRODUCT.shrink.nearest == 8
-    assert PRODUCT.shrink.folds_tag == "nocareer_early,nocareer_within"
+    assert PRODUCT.shrink.folds_tag == "cols06_early,cols06_within"
     swap = PRODUCT.swap
     assert (swap.applied_share, swap.type_model_penalty, swap.n_folds) == (0.5, 1e-4, 5)
 

@@ -23,7 +23,7 @@ Example: with the label penalty of 40,000, a player with 2,600 possessions keeps
 raw impact, which is why the defensive label is un-shrunk before the prior learns from it.
 
 Every value names the experiment that set it.  "notes/DECISIONS.md, experiment 2" means the section of that name in
-notes/DECISIONS.md.  The booster's own settings are a file, params/booster_params_lgb1.json, read by
+notes/DECISIONS.md.  The booster's own settings are a file, params/booster_params_lgb1_cols06.json, read by
 `openrapm.data.config.booster_params` (this module does no I/O).
 """
 from __future__ import annotations
@@ -109,9 +109,10 @@ class PriorSettings:
     # the body-weight preview")
     fold_assignment: int = 0
     # LightGBM's settings, tuned by scoring each candidate prior on 2026's and 2015's one-season rows against
-    # labels from the other seasons (notes/DECISIONS.md, experiments 32 and 44); read from params/ only, so an
-    # untracked copy in outputs/ can never stand in for it
-    booster_file: str = "params/booster_params_lgb1.json"
+    # labels from the other seasons (notes/DECISIONS.md, experiments 32 and 44), with each tree shown a random 60% of
+    # its inputs since experiment 63 (adopted 2026-10-15; lgb1 before it); read from params/ only, so an untracked
+    # copy in outputs/ can never stand in for it
+    booster_file: str = "params/booster_params_lgb1_cols06.json"
     # 0: every training season counts the same.  A positive H: a training row counts half as much for every H
     # seasons between its seasons and the rated one, beyond the nearest season the fit may use (box_prior.era_kernel;
     # notes/DECISIONS.md, "Era drift" and experiment 56: the defensive prices drift between eras)
@@ -139,10 +140,10 @@ class ShrinkSettings:
     # once and silently changed the factors (notes/DECISIONS.md, experiment 34's correction, 2026-10-05).  Every
     # season since experiment 55 (adopted 2026-10-12); 2017-2026 before
     fold_seasons: tuple = (1997, 2026)
-    # the within-season folds the factors are fitted on, comma-separated folders: experiment 59's own folds, 1997-2016
-    # and 2017-2026 (notes/DECISIONS.md, "Experiment 59", adopted 2026-10-14; before it experiment 57's,
-    # fromdebut_early,fromdebut_within); the method is experiment 33b's, adopted 2026-10-03
-    folds_tag: str = "nocareer_early,nocareer_within"
+    # the within-season folds the factors are fitted on, comma-separated folders: experiment 63's own folds, 1997-2016
+    # and 2017-2026 (notes/DECISIONS.md, "Experiment 63", adopted 2026-10-15; before it experiment 59's,
+    # nocareer_early,nocareer_within); the method is experiment 33b's, adopted 2026-10-03
+    folds_tag: str = "cols06_early,cols06_within"
     # each season's factors from only the K fold seasons nearest it (prior_shrink.fold_seasons_used): the defensive
     # prior part holds up less in older seasons, 0.79 in 1997-2006 against 0.95 in 2017-2026 (notes/DECISIONS.md,
     # "Era drift" and experiment 55, adopted 2026-10-12: "yes. build."); 0 would use every fold season the rule allows

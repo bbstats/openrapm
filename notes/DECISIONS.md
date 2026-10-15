@@ -6094,6 +6094,44 @@ for five builds of the old setup, differing only in fold assignment, against the
   0.03; its five old-setup builds range from -0.052 to +0.003).  A difference of 0.03 between two single builds is
   not evidence; compare the mean of several regroupings.
 
+## The warm-start screen: the pooled prior, then a few trees on rows near the rated season (the owner, 2026-10-13: "sure, go ahead"; registered before any result)
+
+The defensive prices drift between eras (see "Era drift"), and weighting the training rows toward the rated season lost
+at every half-life (check 142), because the rows it gives up cost more than the drift it follows.  A warm start keeps
+every row: the booster is fitted as shipped on all rows, then a few more trees are fitted on rows weighted toward the
+rated season, starting from the pooled booster's own predictions (LightGBM `init_score`; the same linear-leaf settings
+and learning rate), and the prior is the sum of the two.  Two dials, one setting for both sides (the same-method
+rule): the half-life of the rows' weights, 4 or 8 seasons (`box_prior.era_kernel`, anchored at the nearest usable
+season), and the number of extra trees, 25 or 75.  Four arms against today's shipped prior (`career_from_debut`).
+Check 143 (`scripts/checks/143_warm_start_screen.py`, built on check 142's cells, yardsticks, paired statistics and
+gate): ten screen seasons, three fold assignments each, the shared base fit computed once per cell.
+**Pass rule, the gate of check 142, before the result:** an arm passes when it beats today on the career label at t -2
+or below on at least one side, is worse at t +2 or beyond on neither side on either yardstick, is not worse on the
+neighbouring-seasons yardstick on a side that passed, and no era loses in every one of its screen seasons.  If none
+passes: nothing is built and the pooled prior stands for the era drift of the prices.  If several pass: the one with
+the largest defensive gain on the career label, within one standard error preferring fewer extra trees; its full build
+follows with its own folds.  The expected result, from experiment 56's screen: no arm passes.
+
+**Result (2026-10-13, 6 minutes; `outputs/csv/warm_screen*.csv`, `outputs/warm_screen.log`): no arm passes; nothing is
+built.**  Held-out error minus today's (below 0 is better), every rated player, ten screen seasons:
+
+| arm | offence, career label | offence, neighbours | defence, career label | defence, neighbours |
+|---|---|---|---|---|
+| half-life 8, 25 extra trees | -0.0010 (t -1.4) | +0.0004 (t +2.8) | +0.0089 (t +3.3, 1 of 10 better) | +0.0071 (t +2.1) |
+| half-life 8, 75 extra trees | -0.0001 (t -0.1) | +0.0009 (t +3.2) | +0.0252 (t +4.1) | +0.0200 (t +3.2) |
+| half-life 4, 25 extra trees | -0.0015 (t -1.2) | +0.0004 (t +2.2) | +0.0195 (t +3.9, 0 of 10 better) | +0.0160 (t +3.3) |
+| half-life 4, 75 extra trees | -0.0011 (t -0.5) | +0.0011 (t +2.6) | +0.0394 (t +4.4, 0 of 10 better) | +0.0288 (t +3.8) |
+
+- **Defence is worse in every arm, and in every era** (1997-2006 +0.017 to +0.067, 2017-2026 +0.008 to +0.029), more
+  the shorter the half-life and the more extra trees: the same direction as experiment 56's weighting screen, which
+  the gentlest warm start (half-life 8, 25 trees: +0.009) comes closest to matching today.
+- **Offence is a tie on the career label** (t -0.1 to -1.4) and slightly worse on the neighbouring seasons' RAPM
+  (t +2.2 to +3.2).
+- **Reading:** a booster that follows the rated era's rows does not predict that era's players better than the pooled
+  one, in the weighting form (check 142) or the warm-start form (check 143).  Three ways of letting the prior's prices
+  follow the era have now failed (weighting the rows, the ratios against the league, the warm start); the pooled
+  prior stands for the prices.  The era drift in step 4's weights is fixed (experiment 55).  Closed.
+
 ## Experiment 57: the career counted from each player's debut, not from 1997 (the owner, 2026-10-13; registered before the build)
 
 The owner's pick (question asker, 2026-10-13: "Fix 1997 career cut-off").  **The defect:** seasons played before this
@@ -6413,3 +6451,568 @@ it moved most: team points scored with him on the court +0.06 -> +0.27 (z +10.6)
 included), check 144, `outputs/season_ratings_teamseason_step3.parquet`, `outputs/within/teamseason_within`, the
 logs; removed `outputs/prior_models_teamseason.pkl` (1.1 GB; a rerun under the same name would reuse it silently)
 and the unfinished `outputs/within/teamseason_early`.
+
+## How much each piece of a rating holds up (check 145; the owner, 2026-10-14: "think through some possible post-hoc adjustments ... as creative as humanly possible"; registered before any result)
+
+**The question.**  RAPM from one season is noisy.  The steps after the fit that have worked share one shape: a number
+or two per side, fitted on the season's own held-out games, acting on a piece the pipeline already has (step 4: the box
+score's part times 0.70 / 0.93, z -12.2; the same from the 8 nearest seasons, z -2.9; step 5 with the spread held,
+z -5.2).  The ones that failed learned a correction from box-score inputs (experiments 33, 50, 51), rescaled a whole
+side (20), or added an exposure term (12-17).  One thing of the first shape has not been tried: step 4 holds the games'
+part, u (how far the season's games moved a player from his box-score prior), at 1, and the one time it was freed as a
+whole it tied (33b).  This asks whether u's pieces hold up differently.
+
+**The pieces** (`decomposition.split_pieces`, `openrapm folds --pieces`; every one adds up to u to 1e-12, and each
+fold's refit reproduces the rating's own u, the fold's ratings equal the shipped folds' to the last bit):
+- by the rows u came from: **on court**; **sat** (his team's rows without him, in games he played); **missed** (his
+  team's rows in games he missed); **team SOS** (every other row);
+- by the points the rows are made of: **twos**, **threes**, **free throws** (the two targets' own parts: the offence's
+  expected free throws, the defence's opponent threes priced at the shooters' expected makes with a quarter of the luck
+  kept);
+- by how sure u is: |u| over its posterior standard deviation (sigma^2 [M^-1]_jj of the ridge), and the standard
+  deviation itself;
+- the box-score part by the player's height and by his share of team possessions.
+
+**The fit** (check 145): step 4's weighted least squares on the folds' held-out team-games, each fold's own level, home
+edge and playoff columns free, every piece's multiplier free in one fit per season over its twelve folds.  The
+shipped step is one of the families and must reproduce `prior_shrink.fit_multipliers` season by season (it does, to
+3e-14 on 2026).  The season is the unit.
+
+**The gate, registered before the run.**  A family passes on a side when some pair of its pieces has multipliers that
+differ by at least 0.2 (mean over the 30 seasons) at |t| >= 3 over the seasons, with the same sign at |t| >= 2 in each
+half (1997-2011, 2012-2026).  A family passes when it passes on both sides (same reason, same method); one side only
+goes to the owner.  Beside it, not in it: each family's held-out error, multipliers fitted on the 8 nearest other
+seasons (the test rule) and scored on the season's own held-out games, against the shipped step and against u with one
+multiplier.  Nothing is built unless a family passes; then the owner decides.
+
+**One change to the plan, made on coverage and not on a result.**  The size groups were to be |u| / sd under 1, 1 to 2
+and over 2.  On 2026's twelve folds |u| / sd is under 1 for 97-98% of players and never over 2 (the ridge's penalty
+holds u inside its own error), so the groups are cut by possessions instead: the lower half, the next 40% and the top
+10% of |u| / sd in each fold and side.
+
+**Not tried here, and why.**  Corrections learned from box-score inputs (33, 50, 51); one rescale per side (20); an
+exposure term (closed); team-season flags (60); rest days and back-to-backs (the owner: "evens out really well").
+Other ideas from the same discussion, not started: the prior averaged over five player groupings (43, never rerun on
+LightGBM); a simulated league with known truth to find who the five steps mis-credit; hustle, tracking, play-type and
+matchup data from stats.nba.com (the owner picked these four; combine wingspan and reach "not now").
+
+Run: `openrapm folds --models nocareer --base season_ratings_nocareer_step3 --seasons 1997-2026 --tag nocareer_pieces
+--pieces` (about 30 minutes), then `python scripts/checks/145_piece_multipliers.py --folds nocareer_pieces`.
+
+**Result (2026-10-14).**  360 folds (30 seasons) in 31 minutes, 8,280 leak and sum checks, none failed; the fold ratings
+equal the shipped folds' to the last bit; the shipped step 4 is reproduced in every season to 1e-13.  Multipliers are
+the mean over the 30 seasons, offence / defence, 1 = holds up exactly (`outputs/csv/piece_multipliers_nocareer_pieces*.csv`):
+- **The shipped fit:** prior part 0.67 / 0.85, u held at 1.  **u freed as a whole:** prior 0.69 / 0.86, u **1.34 / 1.48**
+  (the drift test's 1.3 to 1.5 again).  Scored on each season's own held-out games with multipliers from the 8 nearest
+  other seasons, that is -0.0236 game_armse against the shipped step (t -10.0, 29 of 30 seasons).  This sits oddly
+  beside 33b, which found nothing within the season for freeing u (z -1.1); the base then was the chimeraboost prior
+  with other multipliers, and the two have not been reconciled here.  It is the in-season against out-of-season gap of
+  experiment 38 (a season's own games want a lighter penalty than the neighbouring seasons do), not a new finding.
+- **The gate: `source` passes on both sides, `certainty` passes on both sides; `outcome`, `size`, `height`, `role` fail.**
+- **source** (on court / sat / missed / team SOS): offence 1.50 / 1.76 / **3.69** / 2.84, defence 1.72 / 2.04 / **4.27** /
+  2.56.  The pairs that pass: on court against missed (-2.2 / -2.6, t -6.6 / -5.7), sat against missed (-1.9 / -2.2),
+  and on offence on court against team SOS (-1.3); the same sign in both halves.  What his team did in games he missed
+  holds up about 2.5 times as well as what it did with him on court.
+- **certainty** (u in thirds by its own standard deviation): offence 1.12 / 1.18 / **2.04**, defence 1.27 / 1.26 / **2.32**
+  for the most-possessions, middle and fewest-possessions thirds (differences -0.9 to -1.1, t -5.5 to -7.7).  The
+  games' part of a player with few possessions holds up about twice as well as the penalty gives it credit for.
+- **outcome:** twos 1.25 / 1.43, threes 1.34 / 1.54, free throws 1.43 / 1.47; every difference under the 0.2 size.  Threes
+  hold up as well as twos, so there is no luck discount to take off the three-point part.
+- **size:** the groups with the largest |u| / sd hold up least (offence 1.59 / 1.34 / 1.28 from the lower half to the top
+  10%, defence 1.85 / 1.57 / 1.32; t 2.3 and 2.1, short of 3).  The heavy-tail idea (a big signal holds up more) is not
+  supported; if anything it runs the other way.
+- **height:** no difference (0.85 to 0.87 on defence, 0.67 to 0.69 on offence); the box score holds up equally for tall
+  and short.  **role:** the offensive prior of mid-share players holds up 0.58 against 0.75 and 0.70 (differences 0.17
+  and -0.12, t up to -5.7, both halves): consistent, and under the registered size.
+- **Held-out error beyond one multiplier on u** (t over seasons): source -0.0036 (t -3.5, 23 of 30 seasons), certainty
+  -0.0049 (t -3.4, 22 of 30), outcome -0.0012 (t -2.5), size 0.0000, height +0.0007 (worse), role -0.0005.  For scale,
+  experiment 55 gained -0.085 on the year-over-year test.
+- **2026 preview** (a scratch script, `outputs/csv/piece_preview_2026.csv`; multipliers from 2018-2025, the product
+  rule, each side's spread held to step 4's, before the swap step).  Mean |move| of the total, top 30 / 91-150 / 301+:
+  u whole 0.29 / 0.21 / 0.12, source 0.57 / 0.46 / 0.24, certainty 0.34 / 0.32 / 0.31 per 100.  Source: Dončić -1.91,
+  Reed Sheppard -1.53, Maxey -1.31, Harden -1.28; Jalen Smith +1.88, RJ Barrett +1.61, McCollum +1.52.  Certainty: Jalen
+  Smith +2.93, Hugo González +2.23, Caruso +2.12, Josh Green +1.99; Rupert -2.11, Powell -1.84; Edey +0.89 (590
+  possessions).  The moves are small pieces times large multipliers (Dončić's offence: missed -0.19 x 4.8, team SOS
+  -0.16 x 3.05).
+- **Reading.**  The pieces do hold up differently, but the held-out error gain beyond u as a whole is 0.004 to 0.005
+  while the moves it makes to single players are 1 to 3 per 100: the held-out games barely tell the two ratings apart,
+  so the multipliers on the smallest pieces are weakly identified.  Every number above is in-season, and in-season gains
+  have not carried to the next season here (experiments 50 and 59).  Not built.  The reading that would decide is the
+  year-over-year test: both families applied to every season at the test setting (multipliers by the test rule), the
+  swap step after, scored with 63 against `nocareer`, with the quality tiers and the trade loss.  Held for the owner's
+  go.
+
+## Experiment 61: the games' part reweighted by how sure it is (the owner, 2026-10-14: "Go ahead" to the year-over-year read of the certainty split; registered before any result)
+
+**The change.**  Check 145 found that the games' part u of the players with the fewest possessions holds up about twice
+as well as the penalty credits (2.0 offence, 2.3 defence against 1.1 to 1.3 for the most-possessions third).  This
+puts that between steps 4 and 5, nothing else changed:
+- each season and side, the players are cut into thirds by the posterior standard deviation of u (`decomposition.posterior_sd`
+  on step 3's own refit), by possessions (offensive possessions on both sides, as step 4 weights);
+- the multipliers of the three thirds come from the `certainty` family of check 145 fitted on the 8 fold seasons nearest
+  the season, the season and its neighbours left out (the test rule, `nocareer_pieces` folds, all thirty seasons);
+- the games' part becomes g = k x (m_low u_low + m_mid u_mid + m_high u_high), with k set so that g has the
+  possession-weighted spread u has, each season and side, and g's possessions-weighted mean put back to u's;
+  step 4's prior part is exactly as shipped.  So only the relative weights of the thirds change, not the amplitude (the
+  whole-u multiplier of 1.3 to 1.5 is the known in-season against out-of-season gap and is left out on purpose);
+- step 5 (the swap adjustment, type model) then runs on that table as it does on step 4's.
+Scratch driver `scratch/2026-10-14_pieces/` (not code in the package: a preview in the way of experiment 51; if it
+passes it is built as a step with settings and a flag).  Name `pcert`; table `outputs/season_ratings_pcert_step4.parquet`.
+
+**Amendment, 2026-10-14, after building the table and before any year-over-year number.**  The spread hold does not do
+what it was written to do: the factor k comes out 0.62 to 0.77 in every season and side, because the bench's u carries
+almost no possessions and so cannot raise the possession-weighted spread, while every multiplier is above 1.  Holding
+the spread therefore takes 20 to 30% off the most-possessions players' u (k times their multiplier of 1.0 to 1.4 is 0.7
+to 0.9), which is the opposite of "only the relative weights change".  Two arms, both registered here:
+- **`pcert` (the primary): anchored.**  The three multipliers divided by the most-possessions third's own, so that third's
+  u is unchanged and the middle and fewest-possessions thirds are weighted relative to it (2026 offence 1.0 / 1.1 / 2.4,
+  defence 1.0 / 0.8 / 2.0); no spread hold, no re-centring beyond putting g's mean back to u's.
+- **`pcert_spread`: as first registered**, the spread held to u's.  Read only on the year over year and the quality tiers,
+  to show what the hold costs.
+The decision rule below applies to the primary.
+
+**Decision rule, before the result.**  The year-over-year test against `nocareer` (8.5951), team-game level: z of -2 or
+below is better and adoptable; between -2 and +2 is a tie and NOT adopted (the candidate adds a step; the incumbent is the
+simpler version); +2 or above, not adopted.  Vetoes: a gross consensus miss; the robust review (135) against
+`noise_nocareer` worse than the control's pattern; the 2026 top 20 worse to the owner's eye.  Read, not deciding: the year
+over year with each side rescaled to the scored season (the order alone), at step 4 and step 5, by era, by quality tier
+(the bench is the point, so the tiers 151-300 and 301+ are read with the rest), the lineup-swap test, the trade loss.
+Expectation, written down: a tie.  The in-season gain over one multiplier on u is 0.0049; the year-over-year test counts
+possessions and so barely sees the players this moves.
+
+**Result (2026-10-14; `scratch/2026-10-14_pieces/make_table.py` and `exp61.sh`, log `outputs/pcert_driver.log`, experiment
+table row 61, sheet row 49): a tie, NOT adopted under the rule.**
+- **Year over year, `pcert` against `nocareer`:** 8.5955 against 8.5951, +0.0035 (z +0.09, 29 of 56); predicting the
+  season after z -0.87, the season before z +0.97.  By era a tie in each.  At step 4, before the swap step, -0.016 (z -0.35).
+  With each side rescaled to the scored season (the order alone, stint level) +0.157 (z +2.78, 22 of 56): the order is
+  a little worse, not better.  The quality tiers at team-game level are all ties (z -0.0 to +0.7; unrated players -0.0077,
+  z -1.75); at stint level the 301+ tier is worse (+0.0245, z +2.2, 24 of 56 better).
+- **The two sides cancel.**  Applied to defence alone: -0.106 (z -4.9); to offence alone: +0.110 (z +3.2) (the robust
+  review's side split).  The reason for the step is the same on both sides, so it is not picked per side (the owner's
+  rule: same reason, same method) unless the owner waives that.
+- **The trade loss, which counts every player once, is better on both sides:** offence -0.0015 (z -3.7, 24 of 30
+  seasons), defence -0.0026 (z -5.3, 27 of 30), concentrated where the step acts: tiers 151-300 and 301+ z -3.6 to -4.8,
+  the top 30 a tie.  For scale, experiment 33b shipped with its defensive trade loss worse by 0.0007.
+- **Consensus** 0.846 against 0.836 (defence 0.814 against 0.798; the offensive spread 0.895 against 0.832, inside its
+  0.55 to 1.3 limits).  **Lineup-swap test:** net order -0.012 (z -0.9, a tie); offence order -0.032 (z -3.3, worse),
+  defence order a tie.  **Robust review** against `noise_nocareer`: year over year team-game 6 better / 5 worse slices
+  (control 7 / 4), quality tiers 1 / 5 (control 6 / 0), trade loss 8 / 1 on each side (control 6 / 3 and 7 / 2),
+  lineup swap 1 / 11 (control 3 / 9), consensus 3 / 0.
+- **2026 top 20 (test setting, the final tables, `pcert` against `nocareer`; points per 100):** of the incumbent's top 20,
+  14 move under 0.1 (Wembanyama -0.03, Dončić -0.07, Leonard +0.08, Gilgeous-Alexander +0.02, Antetokounmpo -0.07,
+  Ausar Thompson -0.05, Clingan +0.01, Holmgren +0.01 among them) and six move more: Jokić +0.15, Butler +0.40, Queta
+  -0.19, Reed +0.33, Hartenstein +0.36, Edey +0.63 (590 possessions).  Mean |move| the top 30 0.19, tiers 151-300 0.19, 301+ 0.25; 311 of
+  582 players move 0.1 or more, 73 move 0.5 or more.  Biggest: Jalen Smith +2.08, Josh Green +1.56, Hugo González +1.53,
+  Coby White +1.10, Grant Williams +1.08, Alex Caruso +1.03; Drake Powell -1.66, Rayan Rupert -1.55, Kyle Anderson -1.07,
+  John Konchar -1.01.
+- **The as-first-registered arm `pcert_spread` lost:** +0.117 (z +3.4, 16 of 56), worse in every quality tier at team-game
+  level (z +2.4 to +4.1) and at stint level (z +3.1 to +5.9).  Taking 20 to 30% off the most-possessions players' games'
+  part costs; the amendment was right.
+- **Reading.**  The bench reweighting does what it was built for on the instrument that sees the bench (the trade loss)
+  and does nothing on the one that does not (the year-over-year team-game error, where the bench is a rounding error),
+  while the order at stint level and the offensive lineup-swap order lean worse.  By the registered rule it is a tie and
+  stays out.  The split by side is the one thing that might be worth a second look: defence alone gains at z -4.9.  Held
+  for the owner.
+
+## Experiment 62: the tracking and hustle dashboards as prior inputs (the owner, 2026-10-14: "look for hustle, tracking, synergy play types, and matchups", then "go for it - don't stop! just pick your next steps"; screen registered before any result)
+
+**The idea.**  The box-score prior's defensive side is its weakest (the checkpoint: big men underrated, steals
+overrated; the game's part u of a defender still lines up with how many rebounds he had a chance at and how many shots
+he contested).  stats.nba.com's tracking and hustle dashboards count what the box score cannot: rim shots defended,
+shots made against him above what the league's shooters make, rebound chances, contested shots, box-outs, deflections,
+charges drawn, drives, potential assists, touches.  All are this-season facts about a player.  Picked from the four
+sources the owner named: tracking first and hustle second; Synergy play types (coverage 40-97% by type, low-volume
+players missing) and matchups (relational, nine seasons) wait.
+
+**What exists** (all uncommitted): `openrapm data dashboards` fetched 984 files (tracking 2014-2026, hustle 2016-2026, Synergy
+2013-2026, matchups 2017-2026); `data/dashboard_rates.py` pads each season's totals per 100 possessions (method-of-moments
+pad k, a fixed light pad for distance and time with the ball, the possession-bin target), reads them against the
+season's league average (a fraction above it: the definitions moved between seasons, box-outs fell by four fifths from
+2018 to 2026) and pads makes-over-expected toward 0 in shots; 30 new panel columns (`features.TRACKING_RATES`, 21, and
+`HUSTLE_RATES`, 9), NaN before a dashboard starts and for a player it does not list; the prior averages them over
+the seasons that have them and keeps a row that lacks them (`features.MISSING_OK`, box_prior.py); the 90 old panel
+columns are bit-identical to the panel before (`outputs/season_panel_before_dashboards.parquet`), and `pytest -m slow`
+rebuilds 2026's step 3 to the same bits.  Feature sets `tracking`, `hustle`, `tracking_and_hustle`: the incumbent's
+(`no_career_counts`) lists with each side's own inputs appended (offence: drives, drive points, potential assists, passes,
+touches by zone, minutes with the ball, miles, offensive rebound chances, screen assists, offensive box-outs; defence: rim,
+two- and three-point shots defended, rebound chances and contests, miles, makes over expected, deflections, contests,
+charges, box-outs, loose balls).
+
+**First look, read-only** (`scratch/2026-10-14_pieces/explore_dashboards.py`, 2018-2026, players with 1,500+ possessions,
+each stat per 100 possessions against the games' part u): on offence nothing lines up (every |r| under 0.08); on defence the
+big-man activity stats do, with the same sign in 9 of 9 seasons: defensive box-outs +0.18, contested shots +0.18, defensive
+rebound chances +0.17, blocks +0.14, screen assists +0.13, charges drawn +0.10.  They also line up with the prior itself
+(0.3 to 0.5), so this says only that the prior still underrates the same big men, which height and weight already
+partly capture.  The screen decides whether the dashboards add anything.
+
+**The screen** (check 146, `scripts/checks/146_dashboard_screen.py`), registered before the first run.  Check 142's
+machinery on the nine seasons 2018-2026 (the rated season and its neighbours left out of the labels and of the training
+rows, as at the test setting; every screen season and its neighbours have both dashboards), three assignments of
+players to the prior's five folds, each rated player's prior from the booster fitted without his fold, scored against
+his career label and his neighbours' RAPM after the best straight line, possession-weighted; per season the three
+assignments averaged, then paired over the nine seasons.  Arms: `today` (no_career_counts); `tracking`; `hustle`;
+`tracking_and_hustle`; and a placebo, `tracking_and_hustle` with every dashboard column shuffled among the players of
+its season and side (the missing ones kept where they are), which should gain nothing: if it does, the gate is reading
+noise or the missing-value handling.  Training rows from 1997-2013 have the columns missing (hustle 1997-2015), as they
+would in a build.
+- **Gate** (check 142's): an arm passes when (a) on the career yardstick it beats today at t -2 or below on at least one
+  side, (b) neither side is worse at t +2 or beyond on either yardstick, (c) its change on the neighbours yardstick is not
+  above 0 on a side that passed (a), (d) no era is worse in every screen season on either side.  The placebo must fail (a).
+  Of the passing arms the best is the one with the largest gain on the side that passed (defence first); the chosen one is
+  the arm with the fewest added inputs whose change is within one standard error of the best's.  Nothing passing: nothing is
+  built.  Read, not gated: the bench (under 1,000 rated possessions), the career counts of players whose careers began
+  before 1997, both against today.
+- **Known blind spots and caveats.**  The error weights players by possessions (the bench barely counts, trap 29).  The
+  dashboards are season totals, so a within-season fold cannot rebuild them from its fit games alone: it scales each count
+  by the fit share, and the test games' part of every count still enters (notes/WITHIN_SEASON_LEDGER.md); a build would
+  therefore keep the incumbent's step-4 multipliers (the chain's default), not refit them on folds that leak.
+- **If it passes:** one build (experiment 62) by the chain at the test setting, the usual readings; the decision rule then
+  is the standing one (z -2 or below on the year-over-year test, no gross consensus miss, the trade loss not clearly worse,
+  the 2026 top 20 not worse), with the robust review against `noise_nocareer`.  One refinement, written before any result:
+  the inputs exist only from 2014 (tracking) and 2016 (hustle), so most of the 28 scored seasons cannot gain by
+  construction.  The year-over-year test is read twice, over all 28 scored seasons (the standing number, which must not be
+  worse than a tie) and over the scored seasons whose rating season has the inputs (2015-2025 for tracking, 2017-2025 for
+  hustle, both directions: `63_yoy.py --first --last`), and the adoption z is the second.  The owner may rule otherwise.
+
+**The screen's result (2026-10-14, 631 seconds, `outputs/dashboard_screen.log`, `outputs/csv/dashboard_screen*.csv`).**  Today's
+mean error: defence 2.386 against the career label and 3.246 against the neighbours' RAPM, offence 0.578 and 0.117.  Each arm
+minus today, then minus the placebo, nine screen seasons, change in that error (below 0 is better), t, seasons better:
+| arm | offence career | defence career | defence neighbours |
+|---|---|---|---|
+| tracking, against today | -0.011 (t -1.7, 6/9) | +0.015 (t +0.6, 5/9) | -0.150 (t -5.6, 9/9) |
+| hustle, against today | -0.017 (t -3.3, 8/9) | **-0.033 (t -2.7, 8/9)** | **-0.107 (t -6.0, 9/9)** |
+| tracking and hustle, against today | -0.023 (t -2.9, 7/9) | **-0.039 (t -2.3, 7/9)** | **-0.226 (t -8.9, 9/9)** |
+| placebo, against today | -0.015 (t -2.6, 7/9) | +0.032 (t +3.3, 1/9) | +0.020 (t +2.0, 1/9) |
+| tracking, against the placebo | +0.004 (t +0.8) | -0.018 (t -0.8, 6/9) | -0.170 (t -6.0, 9/9) |
+| hustle, against the placebo | -0.002 (t -0.4) | **-0.065 (t -4.0, 8/9)** | **-0.126 (t -7.2, 9/9)** |
+| tracking and hustle, against the placebo | -0.008 (t -1.2) | **-0.071 (t -4.2, 9/9)** | **-0.246 (t -9.8, 9/9)** |
+- **The gate as registered:** hustle passes on both sides, tracking and hustle passes on both, tracking alone fails (a);
+  chosen by the registered rule (fewest inputs within one standard error of the best, on the career yardstick): `hustle`.
+- **The placebo is not clean, and why (the first reading, RETRACTED below).**  Registered: the placebo must fail (a); it passes it
+  on offence (-0.015, t -2.6).  The shuffled columns keep their missing values where they were, so the placebo still tells the
+  booster which rows predate the dashboards (before 2014 or 2016).  I read that as an indicator of the modern era; check 147 then
+  put the era in by name (a flag from 2005, from 2014, both) and it gained nothing, so that reading is wrong: see "The era flag".
+  What is certain is that the placebo gained on offence and that against it the real arms gain nothing on offence (t -0.4 to
+  -1.2), as the first look said.  On
+  defence the placebo is worse than today (+0.032, t +3.3): 21 to 30 uninformative columns cost; the real arms gain over and
+  above that.  Read against the placebo (a tightening, decided after seeing the table and conservative: an arm must beat both
+  references), hustle and tracking-and-hustle pass on defence (career t -4.0 and -4.2, neighbours t -7.2 and -9.8), and
+  nothing passes on offence.  So the dashboards help the defensive prior; the offensive one gains only the era flag, a lead
+  (a modern-era split on offence -2.6% on the career yardstick, no information in it) kept for the owner.
+- **Size:** the neighbours yardstick (the closer analogue of the year-over-year test) improves 3.3% of its error for hustle
+  and 7.0% for both, every one of nine seasons; the career yardstick 1.4% and 1.6%.  Tracking alone helps only the neighbours
+  yardstick.  Not gated, read: the bench (under 1,000 rated possessions) shows no gain from hustle and a worse defence from
+  tracking (neighbours +0.11, t +1.7).
+- **Builds, registered before either result.**  `dashhustle` first (the registered choice, feature set `hustle`), then
+  `dashboth` (`tracking_and_hustle`): the neighbours yardstick favours the combination clearly (-0.226 against -0.107; the
+  combination against hustle -0.120, t -4.2), and the career yardstick cannot tell them apart (-0.006, t -0.3).  Each by
+  the chain at the test setting on the incumbent's step-4 multipliers, `63_yoy.py` read over the covered scored seasons
+  (hustle 2017-2025, both 2015-2025) beside all 28; the decision rule above applies to each.  Two arms of one experiment, not
+  two experiments: if both pass, the one with the better covered-seasons z is the candidate and the other is read as its
+  attribution.
+
+**The builds' result (2026-10-14; `scratch/2026-10-14_dashboards/exp62.sh`, logs `outputs/dash{hustle,both}_{chain,driver}.log`, experiment
+table rows 62 and 62b, sheet rows 50-51): both arms are ties on the year-over-year test, NOT adopted under the rule.**
+| | `dashhustle` (10 inputs) | `dashboth` (30 inputs) |
+|---|---|---|
+| year over year, all 28 scored seasons | 8.5940 against 8.5951: -0.032 (z -0.89, 30 of 56) | 8.5922: -0.078 (z -1.45, 33 of 56) |
+| the adoption number: the covered scored seasons | 2017-2025: -0.092 (z -1.22, 12 of 18) | 2015-2025: -0.159 (z -1.55, 14 of 22) |
+| the noise control (regrouping alone), all 28 | -0.030 (z -0.68) | -0.030 |
+| the prior alone (`63 --columns=prior`) | -0.248 (z -1.62, 31 of 56) | **-0.736 (z -3.57, 39 of 56)** |
+| step 3 | +0.015 (z +0.15) | -0.124 (z -0.94) |
+| step 4 | -0.083 (z -1.52) | **-0.172 (z -2.23, 32 of 56)** |
+| at stint level, final | -0.193 (z -4.38, 42 of 56) | -0.236 (z -3.52, 42 of 56) |
+| stint level with each side rescaled | z -3.85 | z -3.82 |
+| trade loss, offence / defence | -0.0001 (z -0.4) / -0.0001 (z -0.2) | -0.0007 (z -1.6) / -0.0004 (z -0.5) |
+| consensus (total, defence) | 0.844 (0.810) against 0.836 (0.798) | 0.839 (0.811); defensive spread 1.231 (limit 1.4) |
+| lineup-swap test, net order / gaps | -0.002 (z -0.1) / -0.317 (z -2.5) | +0.002 (z +0.1) / -0.454 (z -3.1) |
+| robust review, team-game slices better / worse (control 7 / 4) | 8 / 3 | 10 / 1 |
+| defence alone / offence alone (control -0.036 / +0.006) | -0.041 (z -1.56) / +0.008 (z +0.35) | -0.047 (z -1.14) / -0.030 (z -1.00) |
+- **Reading.**  The inputs carry real information about a player's defence: the prior alone predicts the neighbouring seasons
+  better (the combined arm z -3.6) and so does step 4's rating (z -2.2).  The gain is not carried through to the final
+  rating at the team-game level: step 3 and the swap step give most of it back (z -0.94 at step 3, -1.45 at the end), and the
+  team-game error counts the bench almost nothing, where the inputs move ratings most.  By the registered rule (z -2 or below
+  on the covered scored seasons) it is a tie, and a tie adds 30 inputs and a data pull for nothing: not adopted.
+- **Where the stint-level gain comes from, in part not from the dashboards.**  The stint-level improvement appears in 1998-2006
+  (-0.23, z -2.9 for hustle; -0.29, z -2.6 for both), where no dashboard exists and every input is missing.  Something about
+  the added columns that is not their information reaches the old seasons; I first called it an era flag (the missing
+  pattern separates the rows before 2014 or 2016), which check 147 did not bear out (below).  Unexplained.
+- **How far the ratings move.**  2026, the final tables against the incumbent's: regrouping the prior's folds alone moves the top
+  30 by 0.53 on average, ranks 151-300 by 0.23 and 301+ by 0.15 (70 of 582 players by 0.5 or more).  `dashhustle`: 0.34, 0.33,
+  0.35 (139 players by 0.5 or more).  `dashboth`: 0.50, 0.48, 0.49 (247 by 0.5 or more).  The stars move by about what noise
+  moves them; the bench moves two to three times as much, which is what a prior that reads the bench's own dashboards should do.
+  `dashboth`'s biggest: Jalen Green -2.05, De'Anthony Melton -1.70, Tristan Vukcevic -1.62, Cam Thomas -1.62, Mark Williams -1.34;
+  Moritz Wagner +1.96, Alex Antetokounmpo +1.59, T.J. McConnell +1.51, Trey Alexander +1.41, AJ Green +1.38.  Of the incumbent's
+  top 20: Giannis +1.12, Mitchell Robinson +1.27, Dončić -1.09, Butler -1.03, Kawhi -0.87, Jokić -0.85.
+- **Next, chosen by me under "pick your next steps" (screen only, no ratings change): the era flag, check 147.**  Registered
+  before any result: arms `today`; `era_from_2005` (the season is 2005 or later: the hand-check rule change); `era_from_2014`
+  (the three-point era, and where the tracking data start); `both_flags`; and a placebo, `odd_seasons` (the flag is 1 for an
+  odd-numbered season: a split with no meaning).  Each flag is a panel column in memory only, a training row averaging it
+  over its seasons like any input, a rated row carrying 0 or 1; added to both sides' lists after today's.  Check 142's ten
+  screen seasons (1999-2026) and its gate: an arm passes when (a) it beats today on the career yardstick at t -2 or below on a
+  side, (b) neither side is worse at t +2 on either yardstick, (c) the neighbours yardstick is not worse on a side that
+  passed, (d) no era is worse in every screen season; the placebo must fail (a) and a real arm must also beat the placebo
+  at t -2 on a side that passed.  Nothing passing: nothing is built.
+- **The era flag (check 147, 572 s, `outputs/csv/era_flag_screen*.csv`): nothing passes, and the explanation above was wrong.**
+  Ten screen seasons (1999-2026), each arm minus today on the career yardstick, offence / defence: `era_from_2005` +0.002 (t
+  +1.3) / +0.009 (t +1.2); `era_from_2014` -0.003 (t -0.7) / **+0.013 (t +3.7, worse, 0 of 10 seasons)**; both flags -0.0004 /
+  +0.014; the nonsense split `odd_seasons` -0.0006 / -0.0006 (clean).  The neighbours yardstick: `era_from_2014` offence -0.0014
+  (t -2.2, 7 of 10; 9 of 10 against the placebo, t -3.2), a gain of about 1% of that yardstick's 0.117, the one number that
+  moves.  So an explicit modern-era flag does not give the offensive prior the 2.6% the dashboards' placebo gained, and the
+  placebo's gain (missing values left where they were in shuffled columns) came from something else about adding those
+  columns.  Not built.  Retracted: the HANDOFF's and the memory's "era flag" lead.
+- **What the placebo gained from: extra columns of any kind (check 148, 435 s, `outputs/csv/noise_column_screen*.csv`).**  The
+  nine screen seasons of check 146.  The shuffled-dashboard placebo reproduces check 146's exactly (offence career -0.0151,
+  t -2.6; defence +0.0321, t +3.3).  Thirty columns of plain standard-normal noise with nothing missing (15 a side) do about
+  the same: offence career **-0.0089 (t -2.9, 8 of 9 seasons)**, defence **+0.0246 (t +2.7, 1 of 9)**; the two noise arms
+  differ by t +1.3 (offence) and -0.5 (defence).  So it is not the missing pattern and not an era: appending uninformative
+  columns makes the offensive prior a little better (about 0.9 to 1.5% of its career-yardstick error) and the defensive one
+  worse (1.0 to 1.3%).  The likely reading: the offensive booster is under-regularised and the defensive one is not (extra
+  noise splits regularise a high-variance fit and spoil a well-tuned one).  The shipped LightGBM settings
+  (`params/booster_params_lgb1.json`) were searched over the learning rate, leaves, depth, leaf size, L1 and L2 penalties,
+  bins, path smoothing and the linear-leaf penalty, and set no column or row subsampling, so a lead for the owner: a column
+  fraction below 1 (with a fixed seed) on the offensive side, screened before any build.  Not run.
+- **Synergy play types, read-only look** (`scratch/2026-10-14_pieces/explore_synergy.py`, 2016-2026, players with 1,500+
+  possessions; each play type's frequency and its points above the league's, per 100 of the player's possessions, against the
+  games' part u): the frequencies show nothing (offence |r| under 0.05, shot-creation plays included, so the "creators are
+  underrated" lead finds no support here); the efficiency measures line up with u at 0.05 to 0.12 on offence and 0.06 to 0.15
+  on defence, with the same sign in 9 to 11 seasons, which is what they would do with nothing but the team's own results in
+  them: the points scored or allowed on those possessions are part of the games u is made from.  Outcome measures of that
+  kind are what the on-court inputs were (experiment 45 took them off the prior and the ratings became far less
+  team-driven), so they are not
+  built.
+- **Matchups, read-only look** (`scratch/2026-10-14_pieces/explore_matchups.py`, `matchups_partial*.py`, `matchups_box_only.py`,
+  `matchups_loo.py`; 2018-2026, defenders and attackers with 1,500+ possessions; the 2017 file holds 3,515 pairs, a
+  fragment, so the first whole season is 2018): the points a matchup produced are outcome data (not looked at); WHO a
+  player was assigned to is not.  Defence: the scoring of the attackers a defender guarded (points per matchup possession
+  of each attacker, computed without the rows against that defender, padded 50 possessions toward the league's)
+  correlates +0.115 with the games' part u and +0.119 after taking out his own box-score prior, height and possessions,
+  same sign in 9 of 9 seasons.  The same measure built from box-score points per 100 alone gives +0.117, so it is not a
+  quirk of the matchups file.  Offence, the mirror (how stingy the defenders were who guarded him): +0.018 raw, -0.044
+  after the controls, nothing.  The share of his matchup possessions against big men is +0.110 raw and +0.064 after the
+  controls.  Reading: a coach puts the defenders he trusts on the best scorers, which is information the box score lacks;
+  offences cannot choose their matchups, so the mirror is empty.  Size: a correlation of 0.12 is about 1.4% of the games'
+  part, the size the hustle first look had before it faded.
+- **Matchups screen, registered before the run (check 149, `scripts/checks/149_matchup_screen.py`).**  One assignment
+  per side (`features.MATCHUP_RATES`: the scoring of the attackers a defender guarded; the stinginess of the defenders who
+  guarded an attacker), built for both sides because the reason (a coach assigns by trust) is the same method on both and
+  the screen must not pick a side (same reason, same method).  Arms `today`, `matchups`, `placebo` (the two columns
+  shuffled among the players of a season and side, missing kept); the nine screen seasons 2018-2026 and check 146's
+  statistics and gate: (a) on the career yardstick it beats today at t -2 or below on at least one side, (b) neither
+  side is worse at t +2 or beyond on either yardstick, (c) the neighbours yardstick's mean change is not above 0 on a
+  side that passed (a), (d) no era is worse in every one of its screen seasons; the placebo must fail (a).  The playoff
+  matchup tables come back empty for every season, so the inputs are regular season only.  Passing means a build
+  through experiment 62's driver (`FEATURES=matchups`, covered seasons 2019-2025 for year over year); failing closes it.
+- **Matchups screen result (check 149, 388 s, 162 cells, 9 screen seasons 2018-2026): CLOSED, nothing built.**  Held-out
+  error against today's list, every rated player, below 0 is better:
+
+  | | offence career | offence neighbours | defence career | defence neighbours |
+  |---|---|---|---|---|
+  | matchups | -0.0121 (t -2.40, 8 of 9) | -0.0012 (t -1.94) | +0.0103 (t +1.35, 3 of 9) | -0.0057 (t -0.49) |
+  | placebo | -0.0120 (t -2.07, 6 of 9) | -0.0019 (t -2.63) | +0.0318 (t +3.05, 2 of 9) | +0.0004 (t +0.04) |
+  | matchups minus placebo | -0.0001 (t -0.03) | +0.0008 (t +2.40) | -0.0214 (t -2.71, 6 of 9) | -0.0061 (t -0.58) |
+
+  Offence: the real column gains exactly what the shuffled one does, so the gain is the offensive booster moving when any
+  column is added (check 148), not the assignment; the mirror was expected to hold nothing and holds nothing.  Defence: the
+  assignment does not beat today's list (+0.0103, t +1.35).  It beats its own shuffled copy by 0.0214 (t -2.71), so it
+  carries real information, but the shuffled copy hurts the defensive prior by 0.0318 (t +3.05), as check 148's noise
+  columns did, and the information only cancels that harm.  On the bench (under 1,000 rated possessions) the defensive
+  neighbours yardstick is worse by 0.0613 (t +3.40, 1 of 9).  The pre-1997 career group is empty in 2018-2026.
+  **The gate:** the script's first printout read "matchups passes (sides O)", because `decide` did not yet apply the
+  registered rule that the placebo must fail (a); the placebo's offence career t is -2.07, so it does not fail (a).
+  `decide` was changed to apply the rule as registered (no other change; the result was read before the edit, so this
+  is a correction of the script to its registration, said plainly), and the decision recomputed from the saved errors:
+  `placebo_clean` false, `blocked_by_placebo` true, `chosen` none.  Closed.  Across the three dashboard families the
+  defensive prior shows real information against a placebo each time; hustle and tracking beat today's list in their
+  screen and lost the gain at steps 3 to 5, and matchups did not beat today's list in the screen.
+- **Leads, not run (for the owner).**  (1) The gain is lost where step 3 and step 4's multipliers (fitted on the old prior's
+  folds) meet the new prior; refitting step 4 on the candidate's own folds needs folds that rebuild the dashboards from their
+  fit games, which needs per-game tracking (`BoxScorePlayerTrackV3`, about 17,000 requests).  (2) Why the placebo (shuffled
+  dashboard columns with their missing values in place) gained 2.6% on the offensive career yardstick, which an explicit
+  era flag does not reproduce.  (3) Synergy play types and matchups, not tried.
+
+## Check 150: showing the box-score prior's booster part of its inputs (2026-10-14, registered before the run)
+
+The owner, after check 149: "you may do the booster column subsampling first since it should be fast".  Checks 148 and
+149 found that any added column, even a shuffled or random one, lowered the offensive prior's held-out error (-0.009 to
+-0.012) and raised the defensive one's; a booster helped by a useless column leans too hard on the inputs it has.  The
+shipped settings show every tree every input (`box_prior.LIGHTGBM_FIXED`, `colsample_bytree` 1.0).
+`scripts/checks/150_column_subsampling_screen.py`: today's inputs, check 142's ten screen seasons and three player-fold
+assignments, five arms the same on both sides (same reason, same method): `today`, `tree_0.8`, `tree_0.6`, `tree_0.4`
+(that share of the inputs drawn per tree) and `split_0.6` (per split), seeded so a cell repeats exactly.
+**Gate:** check 142's (a)-(d) for each arm against today; of the passing arms the best has the largest summed
+career-yardstick gain over the two sides, and the chosen one is the mildest whose summed gain is within one standard error
+of the best's.  Nothing passing, nothing built.  A pass is tuning against today's settings (trap 30), so it is built and
+read year over year, against the noise control, before anything is adopted.
+
+**Result (540 s, 300 cells, `outputs/csv/column_subsampling_screen*.csv`): three arms pass, on defence; chosen
+`tree_0.6`.**  Each arm minus today, every rated player (today's error: offence career 0.592, neighbours 0.136; defence
+career 2.478, neighbours 3.927):
+
+| arm | offence career | offence neighbours | defence career | defence neighbours | gate |
+|---|---|---|---|---|---|
+| `tree_0.8` | -0.0037 (t -1.87, 8 of 10) | -0.0005 (t -2.05) | -0.0118 (t -1.91, 8 of 10) | -0.0127 (t -2.26, 9 of 10) | fails (a) |
+| `tree_0.6` | -0.0048 (t -1.97, 8 of 10) | -0.0010 (t -2.51) | **-0.0202 (t -3.59, 9 of 10)** | -0.0186 (t -2.65) | passes, D |
+| `tree_0.4` | -0.0069 (t -1.67) | -0.0011 (t -1.63) | -0.0259 (t -2.26) | -0.0226 (t -2.51) | passes, D (best) |
+| `split_0.6` | -0.0040 (t -1.79) | **-0.0014 (t -4.00, 10 of 10)** | -0.0170 (t -2.05) | **-0.0160 (t -3.70, 9 of 10)** | passes, D |
+
+`tree_0.6` is chosen by the registered rule: `tree_0.4` has the largest summed gain (-0.033) and `tree_0.6`'s (-0.025) is
+within its standard error (0.012).  Every arm is better on all four columns; the size is 0.8% of the defensive career error
+and 0.8% of the offensive one, the same on both sides, not the offence-only lean checks 148-149 suggested.  The bench
+(under 1,000 rated possessions) is not gated: defence neighbours +0.016 to +0.019 for the tree arms (t +0.8), -0.001 for
+`tree_0.4`.  The priors' spread barely moves (defence 1.123 -> 1.110, offence 0.497 -> 0.487 points per 100).
+
+## Experiment 63: each tree of the box-score prior shown 60% of its inputs (registered before the build)
+
+Check 150's chosen arm, built: `params/booster_params_lgb1_cols06.json` (lgb1 with `colsample_bytree` 0.6 on both sides,
+nothing else changed); `box_prior.fit_lightgbm` now honours a column share a settings file names (`COLUMN_SHARES`; the
+shipped file names none, so the incumbent is unchanged).  Run: `bash scratch/2026-10-14_colsample/exp63.sh` (the chain
+`OWN_FOLDS=1 EARLY_FOLDS=1 CONTROL_TAG=noise_nocareer_within bash scripts/experiment_chain.sh cols06
+points_with_expected_opponent_threes "--booster-params lgb1_cols06"`, then the year over year by era and stage, and 135
+against `noise_nocareer`); its step 4 reads its own folds for all thirty seasons (no leak: the inputs are today's).
+
+**Decision rule, before the result.**  The year-over-year test against `nocareer` (8.5951), team-game level, decides:
+z of -2 or below is better, adopt; between -2 and +2 a tie, NOT adopted (every input in every tree is the simpler
+setting); +2 or above, not adopted.  Vetoes: a gross consensus miss; the robust review (135) worse than
+`noise_nocareer`'s pattern across most slices; the 2026 top 20 worse to the owner's eye.  Read, not deciding: the stage
+and era splits, the lineup-swap test, the trade loss by quality tier, the within-season held-out audit (138).
+
+**Result (2026-10-14, 49 minutes; logs `outputs/cols06_{chain,driver}.log`; experiment table row 63, sheet row 52): a TIE
+on the year-over-year test, NOT adopted under the rule.**
+
+| | `cols06` | the noise control (`noise_nocareer`) |
+|---|---|---|
+| year over year, team-game, both directions | 8.5942 against 8.5951: -0.026 (z -1.15, 30 of 56) | -0.030 (z -0.68) |
+| stint level | **-0.141 (z -4.79, 43 of 56)**; each side rescaled z -3.95 | -0.048 (z -0.88) |
+| stint level by era: 1998-2006 / 2007-2016 / 2017-2025 | z -3.46 / -2.30 / -2.49 | z -0.92 / -0.46 / -0.29 |
+| the prior alone / step 3 / step 4 | -0.125 (z -1.54) / +0.003 (z +0.05) / **-0.082 (z -2.45)** | |
+| defence alone / offence alone | **-0.042 (z -2.77)** / +0.016 (z +0.87) | -0.036 (z -1.36) / +0.006 |
+| on the incumbent's step-4 multipliers | -0.023 (z -1.07) | |
+| trade loss, offence / defence | +0.0001 (z +0.5) / -0.0004 (z -2.1; 2017-2026 z -3.6) | z -1.7 / -1.6 |
+| lineup-swap test, net order / gaps | -0.003 (z -0.3) / -0.071 (z -1.1) | +0.024 (z +1.6) / +0.040 |
+| consensus total / defence / offence | 0.833 / 0.798 / 0.862 against 0.836 / 0.798 / 0.860 | |
+| robust review, slices better / worse (team-game) | 8 / 3, 1 clearly better | 7 / 4 |
+
+- **Reading.**  Every reading leans the same way and none is worse at z +2, which noise does not do: the stint-level
+  error is better in all three eras (z -4.8 overall against the control's -0.9), and step 4 (z -2.45) and the defence
+  alone (z -2.77) clear z -2.  The headline team-game number is -0.026, about the noise control's -0.030, but with a
+  third of its spread across seasons (z -1.15 against -0.68).  The gain is the screen's, on defence; the step 3 ridge
+  gives most of it back (as it did for the dashboards), step 4 takes some of it back again.  Not adopted under the
+  registered rule; kept for the owner (the settings file and `COLUMN_SHARES` change nothing unless named).
+- **How far the ratings move.**  2026 against the incumbent: top 30 by 0.30 on average, ranks 31-150 by 0.17, 151-300 by
+  0.16, 301+ by 0.16; 20 of 582 players by 0.5 or more.  Regrouping noise moves them 0.53 / 0.25 / 0.23 / 0.15 (70 by 0.5
+  or more), so this is a smaller change than noise for the stars.  Of the top 20: Zach Edey +1.52 (defence +1.41, 590
+  possessions), Wembanyama +0.68 (defence), Butler -0.59 (offence), Thybulle -0.57, Paul Reed -0.49, Gilgeous-Alexander
+  +0.44.  Largest overall: Porziņģis -1.07, Trae Young -0.86, Cam Thomas -0.81; Edey +1.52, Wembanyama +0.68, Alex Sarr +0.64.
+- **The owner, 2026-10-14: "leave it off. and find out why step 3 gives prior gains back".**  Left off.
+
+## Why step 3 gives a better prior's gain back (read-only, 2026-10-14)
+
+`scratch/2026-10-14_colsample/step3_giveback.py`, `step3_team_split.py`; hybrids in `outputs/giveback/`; experiment 63
+(`cols06`) and 62b (`dashboth`) against `nocareer`, at step 3.
+
+1. **The games' part does not simply cancel the prior.**  Per point a player's prior moves, step 3's games' part u moves
+   back 0.16-0.22 (0.18-0.22 for players with 3,000+ possessions, 0.03 under 1,000).  Most of every prior change reaches
+   the rating.
+2. **What it takes back is the team's total.**  Split each prior change into his team's possession-weighted mean change
+   (team part, the team being the one he played most games for) and the rest (within-team part): u takes back 57-60% of
+   the team part and 12-14% of the within-team part, in both builds and on both sides.  A team's games pin down its total
+   far better than any box-score prior can, so a prior that guesses team strength better is overruled by the team's
+   own results; that is the ridge doing its job, not a fault.
+3. **The prior-alone gain was the team part; the lasting gain is within teams, where the team-game test is nearly
+   blind.**  The year-over-year test on the prior alone, the incumbent's prior plus one part of the change:
+
+   | | `cols06` team-game | `cols06` stint | `dashboth` team-game | `dashboth` stint |
+   |---|---|---|---|---|
+   | the whole change | -0.125 (z -1.54) | -0.405 (z -4.19) | -0.736 (z -3.57) | -1.210 (z -5.43) |
+   | the team part only | -0.121 (z -2.37) | -0.115 (z -2.16) | -0.442 (z -2.93) | -0.458 (z -2.92) |
+   | the within-team part only | -0.034 (z -0.49) | -0.313 (z -3.59) | -0.349 (z -2.34) | -0.780 (z -4.40) |
+
+   For `cols06` the whole team-game gain of the prior alone is its team part, which step 3 then removes; the within-team
+   part, which survives step 3, is worth -0.313 at stint level (z -3.6) and -0.034 at team-game level.  A team-game
+   margin is the sum of the team's ratings, so moving credit between teammates leaves it unchanged unless the players
+   change teams or minutes the next season; stints, with different teammates on the court, see the split.  That is why
+   the final `cols06` is z -4.8 at stint level and z -1.15 at team-game level.
+4. **Mixing the parts is worse both ways**: the new prior with the old u +0.216 (z +2.6), the old prior with the new u
+   +0.225 (z +6.1) for `cols06` (team-game): each u is fitted to its own prior's team totals and does not travel.
+5. **Reading.**  Nothing in step 3 is losing information it should keep.  The decisive test weighs what step 3 is
+   right to overrule (team totals) and is close to blind to what survives (who on a team gets the credit), which the
+   stint-level reading and the lineup-swap test see.  The same holds for any prior improvement (trap 29, and the memory
+   "criterion must see the bench"): judged on the team-game test alone, a better box-score prior can only pass by
+   improving team totals, which step 3 then overrules.  How a prior change is judged is the owner's call.
+
+## Check 151: the with-or-without-you test (registered before any result, 2026-10-15)
+
+The owner: "too many tests, impossible to scrutinize. we need to clean up the tests. 'within-season' is truly the best
+metric, particularly WOWY (eg deltas in the DNPs)."  `scripts/checks/151_wowy.py` scores the within-season folds'
+held-back games after fitting out a free level for every attacking and every defending team in each fold (with home and
+playoffs), so only how a team's results move from game to game as its lineup changes is scored, never a team's overall
+level.  Two slices: every held-back team-game, and the DNP team-games (a regular, 40%+ of his team's fit-game
+possessions, sat out between two held-back games he played for that team).  Two stages: step 3 as the fold built it, and
+step 4 (the prior part times the multiplier from the 8 nearest fold seasons under the test rule).  Each system is read
+against the incumbent season by season (30 seasons), with the noise control beside it.  First read on what is on disk:
+`nocareer` (reference), `noise_nocareer` and `cols06`.  The swap step (5) is not in the folds, so it is not scored yet.
+
+**First read (85 s, 30 seasons, `outputs/csv/wowy_first*.csv`).**  The DNP team-games are 52% of the held-back
+possessions (on most nights some regular of one of the two teams sits).  Each system minus `nocareer`, below 0 better:
+
+| system | step 3, all | step 4, all | step 4, DNP games |
+|---|---|---|---|
+| noise control (`noise_nocareer`) | +0.051 (z +1.33, 13 of 30) | +0.036 (z +1.50, 12 of 30) | +0.041 (z +1.09) |
+| experiment 63 (`cols06`) | +0.015 (z +0.53) | -0.020 (z -1.08, 17 of 30) | -0.020 (z -0.78) |
+| the career counts back on (`fromdebut`, the incumbent before experiment 59) | **-0.228 (z -3.16, 22 of 30)** | -0.082 (z -1.83) | -0.067 (z -1.16) |
+
+The error is about 97 per team-game (a team's points per 100 on one night miss by about 10 after the team levels are
+out); the paired standard error at step 4 is 0.019-0.045, so a change must move it by about 0.04-0.09 to clear z 2.
+The test does see a real difference (the career counts, which experiment 59 removed on purity although the year-over-year
+test called them worth z +5.3), and the noise control stays inside z 1.5.  Experiment 63 is a tie here too, leaning
+the right way.
+
+**The stint unit (the owner, 2026-10-15, "that's fine" to scoring stint by stint and to three readings).**  The same
+held-back games and team levels, scored stint by stint from the ten players on the court (`--unit stint`, the default).
+Check first: on 2024's first four folds today's ratings leave 13.6 less error than ratings of zero once the team levels
+are out, so the test measures players.  30 seasons (167 s, `outputs/csv/wowy_stint_first*.csv`), each minus `nocareer`:
+
+| system | step 3, all | step 4, all (the decider) | step 4, DNP games |
+|---|---|---|---|
+| noise control (`noise_nocareer`) | +0.102 (z +0.99, 13 of 30) | +0.066 (z +0.72, 12 of 30) | -0.042 (z -0.37) |
+| experiment 63 (`cols06`) | -0.256 (z -6.23, 25 of 30) | **-0.248 (z -7.53, 28 of 30)** | -0.248 (z -5.20, 26 of 30) |
+| the career counts back on (`fromdebut`) | +0.865 (z +5.14, 6 of 30) | **+0.875 (z +6.41, 5 of 30)** | +0.999 (z +5.31) |
+
+- Experiment 63, a tie on the year-over-year team-game test (z -1.15), is clearly better at splitting credit inside a
+  team on games the ratings never saw (z -7.5, 28 of 30 seasons), and the noise control stays inside z 1.
+- The career counts, which the year-over-year test valued (taking them off cost z +5.3 in experiment 59), make the
+  within-team split clearly WORSE (z +6.4): they bought next season's team totals at the price of who on a team gets the
+  credit.  The owner removed them on single-season purity; this test agrees on its own grounds.
+- The game unit (above) sees the career counts the other way at step 3 (z -3.2): team-game misses still hold some of a
+  team's level that the fold's free levels do not fully remove, and a career count predicts it.  Stints do not have
+  that problem as much, which is why the stint unit decides.
+
+**The readings, from 2026-10-15 (the owner: "too many tests, impossible to scrutinize").**  `scripts/experiment_chain.sh`
+now builds every candidate's own folds for all thirty seasons and reads three things: (1) the decider, check 151 at
+step 4, stint unit, against the incumbent with the noise control beside it; (2) the guard, the year-over-year test,
+which must not be worse at z +2; (3) the 2026 top 20.  `FULL_READINGS=1` brings back the older readings.  What the
+decider's threshold is (z -2, as before) is the owner's to confirm.  Experiment 63, read this way, would pass (z -7.5,
+guard -1.15, top 20 moves less than noise); the owner left it off before this test existed, so it waits for the owner.
+
+## Experiment 63 ADOPTED and PUBLISHED (2026-10-15)
+
+The owner: "adopt 63, push all code / everything to live, clean up branches, write handoff."  Adopted on the new decider
+(check 151, stint unit, step 4: -0.248, z -7.53, 28 of 30 seasons; noise control +0.066, z +0.72) with the guard passing
+(year over year -0.026, z -1.15, not worse) and the 2026 top 20 moving less than regrouping noise.
+
+- Shipped: `settings.PriorSettings.booster_file` = `params/booster_params_lgb1_cols06.json`; step 4's folds
+  `cols06_early,cols06_within`; the experiment chain's incumbent `cols06` (`INC_FOLDS`, `AUDIT_REF`, `BASE_FLAGS`), its
+  noise control `noise_cols06`; 135's reference `cols06`; the golden step-3 table
+  `outputs/season_ratings_product_cols06_step3.parquet`; the tutorial's golden file rewritten.  The previous product
+  tables are kept as `*_before_cols06`.
+- The product build (`openrapm build`, about 16 minutes): step 4's multipliers 0.647-0.723 on offence, 0.760-0.955 on
+  defence.  2026 against the previous product table: median move 0.14 per 100, top 30 mean 0.25.  Top 20: Wembanyama,
+  Dončić, Gilgeous-Alexander, Jokić (+0.70, 5th to 4th), Kawhi, Clingan, Ausar Thompson (+0.53), Giannis, Queta, Cason
+  Wallace, Zach Edey (+0.70, 20th to 11th), Butler, Caruso, Holmgren, Scottie Barnes (21st to 15th), Hartenstein, Paul
+  Reed (11th to 17th), Mitchell Robinson (+0.67, 30th to 18th), Anunoby, Dru Smith.
+- The site's ratings, bias page, OpenRAPM decomposition and similarity files rebuilt (`openrapm site --bias
+  --openrapm-decomposition --similarity`); every decomposition check passed.
+- Tests: 648 passed; `pytest -m slow` 7 passed (2026 rated again equals the published step 3); the star-guard rank
+  ceiling still fails on Curry, now 100th against a ceiling of 80 (94th before).
+

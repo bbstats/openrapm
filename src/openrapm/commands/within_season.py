@@ -1,6 +1,6 @@
 """`openrapm folds`: each season rated from three quarters of its games and scored on the quarter it never saw.
 
-    openrapm folds --models NAME --base NAME [--seasons 2017-2026] [--tag TAG] [--reproduce-only]
+    openrapm folds --models NAME --base NAME [--seasons 2017-2026] [--tag TAG] [--reproduce-only] [--pieces]
 
 Why (the owner, 2026-10-03).  The prior shrink (step 4) needs the ratings' misses on games they never saw.  Misses
 on the neighbouring seasons' games would teach it that a peak season comes back down the year after, and it would
@@ -30,6 +30,11 @@ Writes, under outputs/within/<tag>/ (paths.within):
     fold_<season>_r<r>_f<k>.json           the fold's error on its test games and every leak check
     reproduce_<season>.json                the reproduction check
     summary.parquet, checks.parquet        all folds, gathered at the end
+and, with --pieces (experiment 61's screen, check 145):
+    pieces_<season>_r<r>_f<k>.parquet      each rated player's games' part u split over the rows it came from (on court,
+                                           sat, missed, team SOS) and over the points it is made of (twos, threes,
+                                           free throws), with its posterior standard deviation; one row per player
+                                           and side
 A finished fold is skipped on a rerun, so a stopped run resumes where it stopped; a failed check stops the run.
 """
 from __future__ import annotations
@@ -42,7 +47,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .. import box_prior, prior_rapm, trade_set
+from .. import box_prior, decomposition, prior_rapm, trade_set
 from ..data import legacy_names
 from ..data.careers import careers_before
 from ..data.config import resolve
@@ -59,7 +64,7 @@ from ..data.panel import (
     trainable_panel,
 )
 from ..data.roles import player_season_inputs, roles_path
-from ..data.shots import DEFENSE_TARGETS
+from ..data.shots import DEFENSE_TARGETS, OPPONENT_THREE_LUCK_KEPT, expected_threes
 from ..data.tables import team_of_rows
 from ..features import CLOSENESS, OFF_COURT, ON_MINUS_OFF, PANEL_KEYS, PRIOR_FEATURES, add_features
 from ..scoring import Ratings, armse, predict_season, score
@@ -83,6 +88,11 @@ WORLD_TARGETS = tuple(dict.fromkeys((SCORE_TARGET, OFFENCE, DEFENCE_ALL, SETTING
 EXPECTED_META = dict(exclude_neighbours=1, rows="chunks", chunk_label="career", unshrink=["defense"], player_folds=5)
 # every column of the player tables: the prior's possible inputs, the off-court record, the score state
 PLAYER_COLUMNS = list(dict.fromkeys(PRIOR_FEATURES + OFF_COURT + ON_MINUS_OFF + CLOSENESS))
+# the share of the opponents' three-point luck each defensive target keeps (data/shots.py), for the outcome pieces
+LUCK_KEPT = {"points_with_expected_opponent_threes": OPPONENT_THREE_LUCK_KEPT,
+             "points_with_expected_opponent_threes_all": 0.0}
+PIECES_TOLERANCE = 1e-9         # the pieces add up to the games' part, and the refit reproduces it, to this
+PIECES_JITTER_TOLERANCE = 1e-6  # the same in a season whose solve needed rapm.solved_ridge's jitter (2020)
 
 
 # ------------------------------------------------------------------------------------------- the saved models
@@ -369,6 +379,7 @@ class SeasonRun:
     sources: SeasonSources       # the season's stints and box scores, the roles table of every season
     saved: dict                  # {"O", "D"}: the season's saved boosters
     out_dir: Path
+    box_files: object = None     # commands.site.BoxScoreFiles when `--pieces` is on (the rows' teams), else None
 
     @property
     def game_ids(self) -> pd.Series:
@@ -438,8 +449,55 @@ def fold_checks(run: SeasonRun, rated: RatedWorld, test_checks: dict, fit_ids: s
     return checks
 
 
+def fold_pieces(run: SeasonRun, rated: RatedWorld, fit_ids: set) -> tuple[pd.DataFrame, dict]:
+    """One fold's games' part split into pieces on both sides (decomposition.split_pieces): (one row per player and
+    side, the checks).
+
+    Step 3 is solved again on each target's fit-games design with the same boosters' priors, through the code the
+    rating used, so the refit's games' part is the fold's own; the checks say by how much (they must be 0, up to the
+    solver's last digits).  The defence's outcome pieces price the opponents' threes at the shooters' expected makes
+    from the fit games alone, as the fold's defensive target did (data/panel.fit_designs).
+    """
+    world, table, season = rated.world, rated.table, run.season
+    teams = run.box_files.teams(season)
+    points = world.designs[SCORE_TARGET]
+    keep = {int(season): sorted(fit_ids)}
+    by_side, checks, retried = [], {}, False
+    for side, key, target, sign in (("O", "off", SETTINGS.targets.offence, 1.0),
+                                    ("D", "def", SETTINGS.targets.defence, -1.0)):
+        design = world.designs[target]
+        fit = decomposition.refit(design, rated.prior["O"], rated.prior["D"], SETTINGS.ridge.penalty)
+        lineup_o, lineup_d = decomposition.lineups(fit.players, fit.n_players)
+        keys = decomposition.row_keys(design, lineup_o, lineup_d, teams)
+        x3, luck_kept = None, 0.0
+        if side == "D":
+            x3 = expected_threes([int(season)], run.cfg, points, prev=0, k3=450.0, keep=keep)[0]
+            luck_kept = LUCK_KEPT[target]
+        outcomes, _ = decomposition.outcome_responses(design.counters, points.y, x3, luck_kept)
+        frame, misses = decomposition.split_pieces(fit, keys, key, outcomes)
+        rating = table.set_index("player_id")
+        own, prior = ("offense", "prior_offense") if side == "O" else ("defense", "prior_defense")
+        deviation = sign * (rating[own] - rating[prior])
+        retried = retried or misses["retried"]
+        checks[f"pieces {key}: refit games' part against the rating's (max change)"] = float(
+            np.abs(frame.u.to_numpy() - deviation.reindex(frame.player_id).to_numpy()).max())
+        checks[f"pieces {key}: outcome pieces against the response (max change)"] = float(
+            np.abs(sum(outcomes.values()) - design.y).max())
+        checks[f"pieces {key}: outcome pieces against the games' part (max change)"] = misses["outcomes"]
+        checks[f"pieces {key}: row pieces against the games' part (max change)"] = float(
+            np.abs(frame[list(decomposition.ROW_PIECES)].sum(axis=1) - frame.u).max())
+        checks[f"pieces {key}: games' part is the sum of weight x response (max change)"] = misses["sum_hy"]
+        by_side.append(frame.assign(side=side))
+    tolerance = PIECES_JITTER_TOLERANCE if retried else PIECES_TOLERANCE
+    worst = {name: value for name, value in checks.items() if value >= tolerance}
+    if worst:
+        raise SystemExit(f"{season}: the pieces do not add up (tolerance {tolerance:g}): {worst}")
+    return pd.concat(by_side, ignore_index=True), checks
+
+
 def run_fold(run: SeasonRun, folds: pd.DataFrame, repeat: int, fold: int, started: float) -> None:
-    """Rate the season from every game outside the fold, score the fold, write the fold's three files."""
+    """Rate the season from every game outside the fold, score the fold, write the fold's three files (and its pieces,
+    with --pieces)."""
     stem = f"{run.season}_r{repeat}_f{fold}"
     fold_started = time.time()
     test_ids = set(folds.index[folds[f"r{repeat}"] == fold])
@@ -450,6 +508,11 @@ def run_fold(run: SeasonRun, folds: pd.DataFrame, repeat: int, fold: int, starte
     pooled, teams, test_poss, summary, test_checks = score_test_games(rated, run.full[SCORE_TARGET], test_idx,
                                                                       run.cfg)
     checks = fold_checks(run, rated, test_checks, fit_ids, test_ids)
+    if run.box_files is not None:
+        pieces, piece_checks = fold_pieces(run, rated, fit_ids)
+        checks.update(piece_checks)
+        pieces.assign(season=run.season, repeat=repeat, fold=fold).to_parquet(
+            run.out_dir / f"pieces_{stem}.parquet", index=False)
     failed = failed_checks(checks)
     table = (player_table(rated).merge(test_poss, on="player_id", how="left")
              .fillna({"test_poss_off": 0.0, "test_poss_def": 0.0})
@@ -508,8 +571,14 @@ def gather(out_dir: Path) -> None:
     print(f"\nwrote {out_dir}/summary.parquet and checks.parquet: {len(loaded)} folds")
 
 
-def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_only: bool = False) -> int:
-    """`openrapm folds`: the reproduction check and the folds of every season, then the gathered files."""
+def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_only: bool = False,
+              pieces: bool = False) -> int:
+    """`openrapm folds`: the reproduction check and the folds of every season, then the gathered files.  With
+    `pieces`, each fold also writes its pieces_<stem>.parquet (`fold_pieces`)."""
+    box_files = None
+    if pieces:
+        from .site import BoxScoreFiles
+        box_files = BoxScoreFiles(cfg)
     outputs = resolve(cfg, "outputs")
     out_dir = resolve(cfg, "within") / tag
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -529,7 +598,7 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
         saved = season_models(saved_all, season)
         full = {target: designs.season(season, target) for target in WORLD_TARGETS}
         run = SeasonRun(season, cfg, full, SeasonSources(SeasonTables(season, cfg), roles, inputs, debut), saved,
-                        out_dir)
+                        out_dir, box_files)
         run_season(run, base_table, panel, reproduce_only, started)
         designs.clear()
     gather(out_dir)

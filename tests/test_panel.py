@@ -89,4 +89,5 @@ def test_a_season_rebuilt_from_all_its_games_is_the_stored_panel(season):
         if column in OFF_COURT + ON_MINUS_OFF:
             np.testing.assert_allclose(rows[column], stored[column], rtol=0, atol=1e-12, err_msg=column)
         else:
-            assert np.array_equal(rows[column].to_numpy(), stored[column].to_numpy()), column
+            # a dashboard column is missing (NaN) before its dashboard starts: the same place in both, not a difference
+            assert np.array_equal(rows[column].to_numpy(), stored[column].to_numpy(), equal_nan=True), column

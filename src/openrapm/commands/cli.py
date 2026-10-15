@@ -163,7 +163,7 @@ def _run_swap(args: argparse.Namespace, cfg: dict) -> int:
 
 def _run_folds(args: argparse.Namespace, cfg: dict) -> int:
     from .within_season import run_folds
-    return run_folds(cfg, args.models, args.base, args.seasons, args.tag, args.reproduce_only)
+    return run_folds(cfg, args.models, args.base, args.seasons, args.tag, args.reproduce_only, args.pieces)
 
 
 def _run_site(args: argparse.Namespace, cfg: dict) -> int:
@@ -331,6 +331,9 @@ def _add_folds(commands) -> None:
     folds.add_argument("--tag", default="within", help="the folder under outputs/within/ (default %(default)s)")
     folds.add_argument("--reproduce-only", action="store_true",
                        help="only rebuild each season from all of its games and check it equals the base table")
+    folds.add_argument("--pieces", action="store_true",
+                       help="also split each fold's games' part into pieces (on court, sat, missed, team SOS; twos, "
+                            "threes, free throws), for check 145; writes pieces_<season>_r<r>_f<k>.parquet")
     folds.set_defaults(run=_run_folds)
 
 

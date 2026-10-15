@@ -2,9 +2,10 @@
 
 `openrapm rate --seasons 2026` runs steps 1-3 for one season: the labels from every other season, the box-score prior
 trained on them, the ridge around it.  Each season is rated on its own, so its rows must equal the 2026 rows of the
-thirty-season run that built the published table (outputs/season_ratings_product_nocareer_step3.parquet, a frozen
-copy of the step-3 table `openrapm build` wrote on 2026-10-14 without the career counts, experiment 59; before
-then season_ratings_product_fromdebut_step3.parquet and season_ratings_product_weightfix_pre_swap.parquet).  The run
+thirty-season run that built the published table (outputs/season_ratings_product_cols06_step3.parquet, a frozen
+copy of the step-3 table `openrapm build` wrote on 2026-10-15 with each tree of the prior shown 60% of its inputs,
+experiment 63; before then season_ratings_product_nocareer_step3.parquet, season_ratings_product_fromdebut_step3.parquet
+and season_ratings_product_weightfix_pre_swap.parquet).  The run
 writes into a temporary folder: a copy of config.yaml whose paths.outputs points there, every other path the real one.
 
 Slow (a few minutes) and local: it needs the stints, the design pieces, the season panel and the published table, so
@@ -21,7 +22,7 @@ from openrapm.commands.cli import THREAD_VARIABLES
 from openrapm.commands.compare import compare
 from openrapm.data.config import DEFAULT_PATHS, ROOT, load_config, resolve
 
-PUBLISHED = "season_ratings_product_nocareer_step3.parquet"
+PUBLISHED = "season_ratings_product_cols06_step3.parquet"
 
 
 def _config_writing_into(folder) -> str:

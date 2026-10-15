@@ -139,6 +139,105 @@ def test_a_refit_with_a_groups_outcomes_made_average_moves_the_coefficient_by_it
                 (name, j)
 
 
+# ------------------------------------------------------------------------------------- the finer pieces (check 145)
+def _outcomes(fit, seed=0):
+    """Three made-up pieces of the response that add up to it exactly (the first two random, the third the rest)."""
+    rng = np.random.default_rng(seed)
+    first, second = fit.y * rng.uniform(0.2, 0.5, len(fit.y)), rng.normal(0.0, 5.0, len(fit.y))
+    return dict(twos=first, threes=second, free_throws=fit.y - first - second)
+
+
+@pytest.mark.parametrize("side", ["off", "def"])
+def test_the_four_row_pieces_and_the_outcome_pieces_each_add_up_to_the_games_part(world, side):
+    _, fit, keys, regular_season_only = world
+    frame, misses = decomposition.split_pieces(fit, keys, side, _outcomes(fit))
+    tolerance = 1e-6 if regular_season_only else 1e-9
+    assert np.abs(frame[list(decomposition.ROW_PIECES)].sum(axis=1) - frame.u).max() < tolerance
+    assert np.abs(frame[list(decomposition.OUTCOME_PIECES)].sum(axis=1) - frame.u).max() < tolerance
+    assert misses["outcomes"] < tolerance and misses["sum_hy"] < 1e-9
+    assert frame[list(decomposition.ROW_PIECES)].abs().to_numpy().max() > 0.01
+
+
+@pytest.mark.parametrize("side", ["off", "def"])
+def test_off_court_is_cut_in_two_without_changing_the_other_pieces(world, side):
+    _, fit, keys, _ = world
+    three, _ = decomposition.split_games_part(fit, keys, side)
+    four, _ = decomposition.split_pieces(fit, keys, side)
+    assert np.allclose(four.on_court, three.on_court, atol=1e-12)
+    assert np.allclose(four.sat + four.missed, three.off_court, atol=1e-12)
+    assert np.allclose(four.team_sos, three.team_sos, atol=1e-12)
+    assert np.array_equal(four.player_id, three.player_id) and "twos" not in four.columns
+
+
+def test_a_piece_is_what_a_refit_on_that_response_gives(world):
+    """The outcome pieces' meaning: a ridge fitted to one piece of the response alone, with the same matrix and the
+    same unpenalised fit part taken out, returns that piece as the coefficient."""
+    _, fit, keys, _ = world
+    n = fit.n_players
+    outcomes = _outcomes(fit, seed=3)
+    frame, _ = decomposition.split_pieces(fit, keys, "off", outcomes)
+    for name, response in outcomes.items():
+        weighted = fit.w * response
+        rhs = np.concatenate([fit.players.T @ weighted, fit.unpenalised.T @ weighted])
+        assert np.allclose(np.linalg.solve(fit.matrix, rhs)[:n], frame[name], atol=1e-9), name
+
+
+@pytest.mark.parametrize("side", ["off", "def"])
+def test_the_posterior_sd_is_the_square_root_of_sigma_squared_times_the_inverse_diagonal(world, side):
+    _, fit, keys, _ = world
+    n = fit.n_players
+    frame, _ = decomposition.split_pieces(fit, keys, side)
+    first = 0 if side == "off" else n
+    residual = fit.y - fit.players @ fit.theta[:2 * n] - fit.unpenalised @ fit.theta[2 * n:]
+    sigma2 = np.sum(fit.w * residual ** 2) / len(fit.w)
+    assert decomposition.residual_scale(fit) == pytest.approx(sigma2)
+    inverse = np.linalg.inv(fit.matrix)
+    assert np.allclose(frame.sd_u, np.sqrt(sigma2 * np.diag(inverse)[first:first + n]), rtol=1e-9)
+    assert (frame.sd_u > 0).all()
+
+
+def test_the_posterior_sd_of_both_sides_is_what_split_pieces_gives_one_side_at_a_time(world):
+    _, fit, keys, _ = world
+    sd_off, sd_def = decomposition.posterior_sd(fit)
+    assert len(sd_off) == len(sd_def) == fit.n_players
+    assert np.allclose(sd_off, decomposition.split_pieces(fit, keys, "off")[0].sd_u, rtol=1e-9)
+    assert np.allclose(sd_def, decomposition.split_pieces(fit, keys, "def")[0].sd_u, rtol=1e-9)
+
+
+def _counters():
+    """Four rows: poss, pts, fg3m, ftm, ftm_tech, xftm, xftm_tech.  Row 0 is the docstring's example."""
+    return pd.DataFrame(dict(poss=[4.0, 5.0, 2.0, 3.0], pts=[8.0, 4.0, 3.0, 2.0], fg3m=[1.0, 0.0, 1.0, 0.0],
+                             ftm=[1.0, 0.0, 0.0, 2.0], ftm_tech=[0.0, 0.0, 0.0, 0.0],
+                             xftm=[1.6, 0.0, 0.0, 1.6], xftm_tech=[0.8, 0.0, 0.0, 0.0]))
+
+
+def test_the_outcome_pieces_of_the_offensive_target_add_up_to_it():
+    counters = _counters()
+    pieces, ratio = decomposition.outcome_responses(counters, y_points=np.zeros(4))
+    assert ratio == 1.0
+    target = 100.0 * (counters.pts - counters.ftm - counters.ftm_tech
+                      + counters.xftm + counters.xftm_tech) / counters.poss
+    assert np.allclose(sum(pieces.values()), target)
+    assert pieces["twos"][0] == pytest.approx(100.0 * 4.0 / 4.0)         # 8 points - 1 free throw - 3 for the three
+    assert pieces["threes"][0] == pytest.approx(75.0) and pieces["free_throws"][0] == pytest.approx(60.0)
+
+
+def test_the_defensive_target_keeps_a_share_of_the_threes_and_is_scaled_to_the_points_scored():
+    counters = _counters()
+    x3 = np.array([0.5, 0.2, 0.3, 0.1])
+    y_points = 100.0 * counters.pts.to_numpy() / counters.poss.to_numpy()
+    pieces, ratio = decomposition.outcome_responses(counters, y_points, x3, luck_kept=0.25)
+    unscaled = 100.0 * (counters.pts - 3.0 * 0.75 * (counters.fg3m - x3) - counters.ftm - counters.ftm_tech
+                        + counters.xftm + counters.xftm_tech) / counters.poss
+    assert np.allclose(sum(pieces.values()) * ratio, unscaled)
+    # after the one scalar, the target's total is the points scored: the weighted sums agree
+    assert np.sum(sum(pieces.values()) * counters.poss) == pytest.approx(np.sum(y_points * counters.poss))
+    nothing_kept, _ = decomposition.outcome_responses(counters, y_points, x3, luck_kept=0.0)
+    assert np.sum(sum(nothing_kept.values()) * counters.poss) == pytest.approx(np.sum(y_points * counters.poss))
+    # row 1 made no threes, so its threes piece is the repriced share alone: 3 x 0.75 x3 of the 5 possessions
+    assert pieces["threes"][1] * ratio == pytest.approx(100.0 * 3.0 * 0.75 * x3[1] / 5.0)
+
+
 def test_the_weights_are_orthogonal_to_the_unpenalised_columns(world):
     _, fit, _, regular_season_only = world
     unit = np.zeros(fit.matrix.shape[0])

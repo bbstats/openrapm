@@ -38,8 +38,178 @@
 every number quoted here.  Do not let this grow into a lab notebook.
 
 The work happens on feature branches off `main`; the live site is served from `docs/` on `main`.  `pytest -q`:
-**464 passed, 6 deselected (the slow tests, `pytest -m slow`), 1 xfailed, ~60 s** with the scraped data
-(2026-10-12; the LaMelo test at the bottom of this file passes on the current ratings).
+**648 passed, 1 failed, 7 deselected (the slow tests, `pytest -m slow`, 7 passed), 1 xfailed, ~75 s** with the scraped
+data (2026-10-15).  The one failure is the star-guard rank ceiling on Curry, 100th against a ceiling of 80, failing
+since experiment 59 and waiting on the owner.
+
+## START HERE (2026-10-15): experiment 63 ADOPTED and PUBLISHED; the tests cleaned up to three readings
+
+**What ships.**  The incumbent is `cols06`: experiment 59's prior with each tree of the LightGBM booster shown a random
+60% of its inputs, the same on both sides (`params/booster_params_lgb1_cols06.json`, `box_prior.COLUMN_SHARES`), and
+step 4 on its own folds `cols06_early,cols06_within`.  The product table, the site's ratings, bias page, OpenRAPM
+decomposition and similarity files are rebuilt and live on `main`.  2026 top 5: Wembanyama, Dončić, Gilgeous-Alexander,
+Jokić, Kawhi.  Previous product tables: `outputs/season_ratings_product*_before_cols06.parquet`.
+
+**How experiments are judged now (the owner, 2026-10-15).**  Three readings, nothing else ("The test", below):
+
+| reading | script | rule |
+|---|---|---|
+| decider | `scripts/checks/151_wowy.py`, stint unit, step 4 | paired z -2 or below against the incumbent; noise control printed beside it |
+| guard | `scripts/checks/63_yoy.py` | year over year not worse at z +2 |
+| eye check | `scripts/checks/66_compare.py` | the 2026 top 20 |
+
+`bash scripts/experiment_chain.sh NAME TARGET "EXTRA RATE FLAGS"` builds a candidate with its own folds for all thirty
+seasons and runs exactly these three; `FULL_READINGS=1` brings back the older readings.  Report every result as
+columns, one quantity per column, in data-science names, never in parentheses.
+
+**Results on the decider, against `nocareer`, 30 seasons:**
+
+| model | WOWY ΔMSE | WOWY paired z | WOWY seasons improved | YoY ΔMSE | YoY paired z |
+|---|---|---|---|---|---|
+| noise control | +0.066 | +0.72 | 12 of 30 | -0.030 | -0.68 |
+| exp 63 column subsampling | -0.248 | -7.53 | 28 of 30 | -0.026 | -1.15 |
+| career features restored | +0.875 | +6.41 | 5 of 30 | -0.343 | -5.35 |
+
+**Why the old test missed these.**  Step 3 overrules about 60% of the team-level part of any prior change, since a
+team's own games pin its total, and keeps about 87% of the within-team part; a team-game margin is the sum of the team's
+ratings, so the year-over-year team-game test barely sees who on a team gets the credit.  The decider fits each team's
+level out and scores only lineup changes: substitutions and missed games.
+
+**Waiting on the owner.**
+1. The decider's bar: z -2, kept from the old rule; confirm or change.
+2. The noise control on the new base, `noise_cols06`, is not built yet: run
+   `bash scripts/experiment_chain.sh noise_cols06 points_with_expected_opponent_threes "--fold-assignment 1"`
+   (about 50 minutes, one build at a time) before the next experiment, so the decider has its control beside it.
+3. The swap step, step 5, is not in the within-season folds, so the decider scores steps 1-4 only.
+4. Re-read the dashboard inputs and experiment 61 on the decider: the dashboards were a tie on the old test with a
+   real defensive gain, and they need their own folds, which leak, because dashboards are season totals; experiment 61
+   changed only the bench's weighting.
+5. The Curry star-guard test, failing since experiment 59.
+
+**Branches (cleaned 2026-10-15).**  Only `main` remains, locally and on GitHub.  Merged branches were deleted:
+`cleanup`, `cleanup-pass`, `hybrid-and-xpts`, `similarity`, `stat-splits`, `era-prior`, and `cleanup-9c`, whose two
+commits were already in `main` under other hashes.  The worktree `A:/code/spmm_9c` was removed after its `data` and
+`outputs` junctions were unlinked.  The detached worktrees `A:/code/spmm_gate` and `A:/code/spmm_old` are left in place:
+they hold no branch, and their junctions point at the real `data/` and `outputs/`, so remove them only with
+`cmd /c rmdir` on each junction first.
+
+## START HERE (2026-10-14, night): experiment 62, the tracking and hustle dashboards as prior inputs -- screen passed on defence, both builds a TIE, NOT adopted
+
+The owner, after experiment 61: "go for it - don't stop! just pick your next steps."  I chose the dashboards (tracking
+first, hustle second; Synergy and matchups wait).  DECISIONS.md "Experiment 62" has the idea, the first look and the screen's
+gate, registered before any result.
+- **Built (uncommitted, branch `era-prior`):** `openrapm data dashboards` (984 files fetched: tracking 2014-2026, hustle
+  2016-2026, Synergy 2013-2026, matchups 2017-2026; `data/dashboards.py`); `data/dashboard_rates.py` (30 panel columns,
+  league-relative, NaN before a dashboard starts); `features.TRACKING_RATES` / `HUSTLE_RATES` / `MISSING_OK`, feature sets
+  `tracking`, `hustle`, `tracking_and_hustle`; `box_prior` averages a missing-OK column over the seasons that have it and keeps
+  a row that lacks it; the season panel rebuilt (`openrapm data panel --force`, 35 s; the 90 old columns bit-identical to
+  `outputs/season_panel_before_dashboards.parquet`); GLOSSARY regenerated; check 146 (`scripts/checks/146_dashboard_screen.py`)
+  with a placebo arm (the same columns shuffled among the players of a season); tests `test_dashboard_rates.py`,
+  `test_check_146.py`, additions to `test_features.py`, `test_box_prior.py`, `test_panel.py`.
+- **Verified:** `pytest` 621+ passed, the known Curry failure; `pytest -m slow` 7 passed (2026's step 3 rebuilds bit for bit).
+- **Read-only first look** (`scratch/2026-10-14_pieces/explore_dashboards.py`): nothing lines up with the offensive games'
+  part; the big-man activity stats (box-outs, contested shots, rebound chances, blocks) line up with the defensive one, same
+  sign in 9 of 9 seasons, r about 0.15 to 0.18.
+- **The leak to remember:** the dashboards are season totals, so within-season folds cannot rebuild them from the fit games
+  (WITHIN_SEASON_LEDGER.md, the second accepted leak); a build keeps the incumbent's step-4 multipliers.
+- **The screen (check 146, 631 s; DECISIONS.md has the table):** hustle and tracking-and-hustle pass the gate on both sides,
+  tracking alone fails.  **The placebo (the same columns shuffled among players, missing values kept) gained on offence**:
+  its missing pattern is a modern-era flag, which is all the offensive gain is (against the placebo, offence t -0.4 to
+  -1.2).  **On defence the real arms beat both today and the placebo:** career yardstick hustle -0.033 (t -2.7), both -0.039
+  (t -2.3); against the placebo t -4.0 and -4.2; the neighbours yardstick -3.3% (hustle) and -7.0% (both) of its error, 9
+  of 9 seasons.  (First read as an era flag; check 147 put the era in by name and it gained nothing: RETRACTED, the cause of
+  the placebo's offensive gain is unknown.)
+- **Builds (registered before either result), 21 and 24 minutes:** `dashhustle` (the registered choice) then `dashboth`, each by
+  the chain at the test setting on the incumbent's step-4 multipliers (`NAME=dashhustle FEATURES=hustle FIRST=2017 bash
+  scratch/2026-10-14_dashboards/exp62.sh`; logs `outputs/<name>_driver.log`, `outputs/<name>_chain.log`).  **Both are ties on
+  the adoption number, NOT adopted** (experiment table rows 62 and 62b, sheet rows 50-51): the covered-seasons year over year
+  hustle -0.092 (z -1.22), both -0.159 (z -1.55); all 28 seasons -0.032 (z -0.89) and -0.078 (z -1.45), the noise control
+  -0.030.  The inputs do carry information: the prior alone z -3.6 for the combination, step 4 z -2.2, then step 3 and the swap
+  step take most of it back; the trade loss is a tie (offence z -1.6 for both).  The stars move by about what the noise
+  control moves them (0.5 on average, 2026 top 30), the bench by two to three times as much; part of the stint-level gain
+  appears in 1998-2006 (no dashboards there), cause unknown.  DECISIONS.md "The builds' result" has the table.
+- **Check 147, the era flag (572 s): nothing passes.**  A flag from 2005, from 2014, both, against the nonsense odd/even split:
+  no gain on the career yardstick (the 2014 flag is worse on defence, t +3.7); only the neighbours yardstick on offence moves
+  (-0.0014, t -2.2, about 1%).  The placebo's offensive gain is therefore not an era flag.
+- **Check 148, what the placebo gained from (435 s):** plain random noise columns (nothing missing) gain on offence (-0.9% of
+  the career-yardstick error, t -2.9) and hurt defence (+1.0%, t +2.7), as the shuffled dashboard columns do: extra columns of
+  any kind move the prior, so the offensive booster looks under-regularised and the defensive one does not (the shipped
+  LightGBM settings have no column subsampling).  A tuning lead, not data.
+- **Synergy play types, read-only:** frequencies show nothing against the offensive games' part; the efficiency measures
+  correlate 0.05-0.15 only because they are the team's own results on those possessions (outcome data, like the on-court
+  inputs, off the prior since experiment 45).  Not built.
+- **Matchups, read-only:** the scoring of the attackers a defender guarded (assignment, not results) correlates +0.12 with
+  the defensive games' part after his own prior, height and possessions, 9 of 9 seasons (2018-2026; the 2017 file is a
+  fragment); the mirror on offence is empty (-0.04).  A coach's trust, not an outcome.
+- **Check 149, the matchup screen (388 s): closed, nothing built.**  Offence gains what its shuffled placebo gains (-0.0121
+  against -0.0120: any added column moves the offensive booster, check 148); defence does not beat today's list (+0.0103,
+  t +1.35) though it beats its own shuffled copy (-0.0214, t -2.71).  Panel is now 122 columns (`outputs/season_panel_before_matchups.parquet`
+  is the 120-column one); `features.MATCHUP_RATES` and the feature set `matchups` stay in, off by default.  Playoff matchup
+  tables are empty for every season and the 2017 file is a fragment, so the matchups cover 2018 on, regular season only.
+- **Check 150 and experiment 63, column subsampling (2026-10-14):** each tree of the prior shown 60% of its inputs passed
+  the screen on defence (-0.020, t -3.6) and built as `cols06` is a year-over-year TIE (-0.026, z -1.15; noise control
+  -0.030, z -0.68), stint level z -4.8 in every era, step 4 z -2.45, defence alone z -2.77.  Not adopted under the rule;
+  `params/booster_params_lgb1_cols06.json` and `box_prior.COLUMN_SHARES` change nothing unless named.
+- **Why step 3 gives prior gains back (read-only, DECISIONS.md):** step 3 overrules about 60% of the part of a prior
+  change that shifts a team's total (the team's games pin it) and keeps about 87% of the part that moves credit between
+  teammates; the team-game year-over-year test is nearly blind to the second (`cols06` within-team part: team-game z
+  -0.5, stint z -3.6).  The owner left experiment 63 off.
+- **The tests cleaned up (2026-10-15):** the decider is now the with-or-without-you test (check 151, stint by stint on
+  held-back games); year over year is a guard; the 2026 top 20 the eye check ("The test", below).  On it experiment 63 reads
+  z -7.5 (28 of 30 seasons; noise control z +0.7) and the career counts back on z +6.4 worse.
+- **Open, for the owner:** (0) experiment 63 under the new test; (1) per-game tracking (`BoxScorePlayerTrackV3`, about 17,000 requests) would let folds rebuild the
+  inputs from their fit games and so refit step 4 for the new prior, where the gain is lost; (2) a column-subsampling screen for
+  the offensive booster (the noise-column lead); (3) experiment 61's defence-only look (needs the same-method waiver).  All the dashboard code is off by default
+  (`features.FEATURE_SETS` keeps `no_career_counts`), the shipped ratings unchanged and bit-identical.
+- **pytest:** 628 passed, the one Curry failure; `pytest -m slow` 7 passed.  Uncommitted: `src/openrapm/{box_prior,decomposition,
+  features}.py`, `commands/{cli,data,within_season}.py`, `data/{panel,dashboards,dashboard_rates}.py`, checks 145 and 146, tests,
+  GLOSSARY, the notes, `experiments/runs.csv`; `scratch/` is ignored.  Commit and publish only on the owner's word.
+
+## START HERE (2026-10-14, evening): check 145, how much each piece of a rating holds up -- DONE, two families pass the gate, nothing built
+
+The owner: "RAPM is inherently noisy, has issues w/ single season. I think some of our post-hoc ideas have been good.
+think through some possible post-hoc adjustments ... also any true REAL good data we may be missing", then "let's think
+outside the box ... as creative as humanly possible", then: look for hustle, tracking, Synergy play types and matchups
+data ("wingspan/standing reach I don't love right now").  Plan: `~/.claude/plans/rapm-is-inherently-noisy-lucky-floyd.md`;
+DECISIONS.md, "How much each piece of a rating holds up" has the rule, registered before any result.
+- **The idea:** step 4 holds the games' part u at 1 and has only ever freed it whole (33b, a tie).  Split u into pieces
+  (on court / sat / missed / team SOS; twos / threes / free throws; by how sure u is; the box-score part by height
+  and role) and fit each piece's multiplier on the folds' held-out games.  Changes no rating.
+- **Built (uncommitted, branch `era-prior`):** `decomposition.split_pieces`, `outcome_responses`, `residual_scale`;
+  `openrapm folds --pieces` (writes `pieces_<stem>.parquet` per fold; off by default, bit-identical when off; the
+  fold ratings equal the shipped folds' to the last bit); `scripts/checks/145_piece_multipliers.py`; tests in
+  `test_decomposition.py`, `test_check_145.py`, `test_cli.py`.
+- **Run:** `openrapm folds --models nocareer --base season_ratings_nocareer_step3 --seasons 1997-2026 --tag
+  nocareer_pieces --pieces` (360 folds, 31 minutes, log `outputs/nocareer_pieces_folds.log`), then
+  `python scripts/checks/145_piece_multipliers.py --folds nocareer_pieces` (13 seconds; log
+  `outputs/piece_multipliers_run.log`; csv `outputs/csv/piece_multipliers_nocareer_pieces*.csv`).
+- **Result (DECISIONS.md has every number):** `source` (on court / sat / missed / team SOS) and `certainty` (u in thirds
+  by its own sd) pass the registered gate on both sides; `outcome`, `size`, `height`, `role` fail.  `missed` holds up
+  about 4x (on court 1.5-1.7); bench players' u about 2.0-2.3x (most-minutes third 1.1-1.3x).  u as a whole holds up
+  1.34 / 1.48 (in-season gain -0.0236, t -10).  The gain beyond that is only -0.0036 (source) and -0.0049 (certainty),
+  while the 2026 preview moves players 1-3 per 100 (Dončić -1.9 on source; Jalen Smith +2.9, Hugo González +2.2 on
+  certainty), so weakly identified; all in-season.  The preview is a scratch script (`outputs/csv/piece_preview_2026.csv`).
+- **Experiment 61 (the owner: "Go ahead"): the certainty split, year over year -- a TIE, NOT adopted** (DECISIONS.md
+  "Experiment 61"; table row 61, sheet row 49; `scratch/2026-10-14_pieces/make_table.py` + `exp61.sh`, 4 minutes).
+  `pcert` 8.5955 against 8.5951 (z +0.09); the trade loss better on both sides (offence z -3.7, defence z -5.3, bench
+  tiers z -3.6 to -4.8); consensus 0.846 against 0.836; lineup-swap offence order worse (z -3.3); **defence alone z -4.9,
+  offence alone z +3.2, so the sides cancel** (the same-reason-same-method rule keeps me from picking a side; the
+  owner may waive it).  The as-first-registered spread-held arm lost (z +3.4); the amendment (anchor on the
+  most-possessions third) was made before any result.  Code for a proper step does not exist (a scratch preview only).
+- **Waiting on the owner:** whether to leave experiment 61 closed, or look at defence alone (or a lighter version);
+  and which dashboard source to build into the prior first (my proposal: tracking, then hustle).
+- **The dashboards are fetched in full** (`openrapm data dashboards`, about 25 minutes, log `outputs/dashboards_full.log`):
+  tracking 2014-2026, hustle 2016-2026, Synergy 2013-2026, matchups 2017-2026, regular season and playoffs, under
+  `data/raw/dashboards/`.
+- **The data probe (also uncommitted):** `openrapm data dashboards --probe` (`src/openrapm/data/dashboards.py`, tests
+  `test_dashboards.py`; `panel.panel_keys`): a few seasons of 34 pulls of the four sources, cached under
+  `data/raw/dashboards/`, coverage of the rated players in `outputs/csv/dashboard_probe.csv`.  Tracking from 2014
+  (about 100% of possessions), hustle from 2017 (2016 covers 31% of players), matchups from 2018 (2017 partial;
+  regular season only), Synergy from 2013 (18 of 22 pulls; 40-97% by play type).  Nothing reads them yet; no input is
+  added until the owner has seen the coverage and chosen.  Proposed order: tracking, then hustle.
+- **pytest:** 606 passed, 1 expected failure, 1 failed (`test_star_guards_are_not_buried`: Curry 94th against 80, the
+  experiment 59 item still waiting on the owner).
+- The other session's check-143 work stays uncommitted; stage by explicit path and hunk.
 
 ## START HERE (2026-10-14, afternoon): experiment 60, team-season flags in step 1's labels -- STOPPED, left off
 
@@ -129,6 +299,9 @@ The owner's pick after experiment 56; **adopted** (the owner: "Adopt (your data-
   `noise_fromdebut_early` + `noise_fromdebut_within`).  Against `fromdebut`: year over year 8.5819 against 8.5825,
   -0.018 (z -0.5); lineup swaps within 0.01 (defensive order +0.007, z +0.6); trade loss within noise; consensus
   0.811.  Use it as `135 --controls=noise_fromdebut` and as the size of noise for any later experiment.
+- **The warm-start screen (check 143, 2026-10-13): no arm passes** (defence worse in all four, t +3.3 to +4.4; offence
+  a tie).  With experiment 56's weighting screen and ratios, the prior's prices following the era is closed: the pooled
+  prior stands (DECISIONS.md, "The warm-start screen").
 - **UPDATE, same day: that cost is noise.**  Five builds of the OLD setup that differ only in fold assignment score
   1.2287 / 1.2253 / 1.1784 / 1.2163 / 1.2301 on the prior's defensive teammate order (a standard deviation of 0.022);
   experiment 57's 1.1974 and 1.2109 are inside that (z about -0.6).  Everything below on its attribution is retracted
@@ -555,7 +728,22 @@ Threads: every `openrapm` command pins the linear-algebra libraries to one threa
 longer used).  **Never run two
 builds at once**, and kill a chain's python children when you stop it.
 
-## The test: year-over-year
+## The test (since 2026-10-15): with or without you, within the season
+
+The owner: "too many tests, impossible to scrutinize ... 'within-season' is truly the best metric, particularly WOWY".
+`bash scripts/experiment_chain.sh NAME TARGET "EXTRA RATE FLAGS"` builds the candidate, its own folds for all thirty
+seasons (about 40 minutes), steps 4 and 5, and reads three things:
+
+1. **The decider:** `scripts/checks/151_wowy.py` (stint unit, step 4): every stint of the held-back games predicted from
+   the ten players on the court, each team's attacking and defending level fitted out, so only how a team's results move
+   as its lineup changes is scored (substitutions and missed games).  Against the incumbent season by season, the noise
+   control (`noise_nocareer`) beside it.  Below 0 is better; z -2 or below is better (the threshold is the owner's to confirm).
+2. **The guard:** the year-over-year team-game test (63) must not be worse at z +2.
+3. **The 2026 top 20** (66).
+
+`FULL_READINGS=1` adds the older readings below.  The swap step (5) is not in the folds, so the decider scores steps 1-4.
+
+## The older test: year-over-year
 
 Rate a season from its own games.  Predict every stint of the season before and after from the ten players'
 ratings alone, refitting only the intercept and home edge on the scored season.  28 scored seasons, each

@@ -6,6 +6,9 @@
                                                   phase (paths.event_counts), each season held against its box score
     openrapm data careers                         the seasons before the first one of every veteran the roles table
                                                   sees (data/careers.py), from stats.nba.com, cached
+    openrapm data dashboards --probe              a few seasons of the hustle, tracking, play-type and matchup
+                                                  dashboards (data/dashboards.py), and how many rated players each
+                                                  covers; nothing reads them yet
     openrapm data panel                           the season panel (paths.panel) from the stints, box scores, roles,
                                                   bio feed, event counts and careers
     openrapm data panel --migrate-from FILE       the season panel from one written under the names used before
@@ -152,6 +155,44 @@ def run_careers(args: argparse.Namespace, cfg: dict) -> int:
     return 0
 
 
+def run_dashboards(args: argparse.Namespace, cfg: dict) -> int:
+    """The hustle, tracking, play-type and matchup dashboards: a probe (a few seasons of every pull) or the full
+    fetch, then the coverage of the season panel's rated players, printed and written to outputs/csv."""
+    import pandas as pd
+
+    from ..data import dashboards
+    from ..data.config import resolve
+    wanted_sources = tuple(args.sources.split(","))
+    unknown = set(wanted_sources) - set(dashboards.SOURCES)
+    if unknown:
+        raise SystemExit(f"unknown sources {sorted(unknown)}; choose from {list(dashboards.SOURCES)}")
+    last_season = args.last_season if args.last_season is not None else int(cfg["last_season"])
+    wanted = []
+    for pull in dashboards.pulls(wanted_sources):
+        if args.probe:
+            seasons = dashboards.probe_seasons(pull, last_season)
+        else:
+            first = args.first_season if args.first_season is not None else pull.first_guess
+            seasons = list(range(first, last_season + 1))
+        wanted.append((pull, seasons))
+    records = dashboards.pull_all(cfg, wanted, phases(args), delay=args.delay, force=args.force)
+    table = dashboards.coverage(records, dashboards.panel_rows(cfg))
+    csv = resolve(cfg, "outputs") / "csv"
+    csv.mkdir(parents=True, exist_ok=True)
+    stem = "dashboard_probe" if args.probe else "dashboard_coverage"
+    table.to_csv(csv / f"{stem}.csv", index=False)
+    dashboards.fields(records).to_csv(csv / f"{stem}_fields.csv", index=False)
+    summary = (table.assign(has_rows=table.rows > 0, failed=table.status == "failed")
+               .groupby(["source", "season", "phase"], as_index=False)
+               .agg(pulls=("kind", "size"), with_rows=("has_rows", "sum"), failed=("failed", "sum"),
+                    share_players=("share_players", "median"), share_possessions=("share_possessions", "median")))
+    pd.set_option("display.width", 200)
+    failed = int((table.status == "failed").sum())
+    print(f"\n{len(table)} files ({failed} failed); wrote {csv / (stem + '.csv')}", flush=True)
+    print(summary.round(3).to_string(index=False), flush=True)
+    return 0
+
+
 def _migrate(args: argparse.Namespace, cfg: dict) -> None:
     from ..data.panel import migrate_panel
     target, panel, dropped = migrate_panel(Path(args.migrate_from), cfg)
@@ -239,6 +280,28 @@ def _add_careers(steps) -> None:
     careers.set_defaults(run=run_careers)
 
 
+def _add_dashboards(steps) -> None:
+    dashboards = steps.add_parser(
+        "dashboards", help="hustle, tracking, play-type and matchup dashboards from stats.nba.com, cached",
+        description="Fetches the league dashboards the ratings do not read yet (src/openrapm/data/dashboards.py) into "
+                    "paths.raw/dashboards, one file per pull, season and phase (a file already there is not fetched "
+                    "again), and prints how many of the season panel's rated players each covers.  --probe asks only "
+                    "a few seasons of every pull, to learn which fields exist and from which season.  With "
+                    "OPENRAPM_OFFLINE=1 a missing file stops the run.")
+    dashboards.add_argument("first_season", nargs="?", type=int, metavar="FIRST",
+                            help="the first season of a full fetch (default: each pull's first season with data)")
+    dashboards.add_argument("last_season", nargs="?", type=int, metavar="LAST",
+                            help="the last season (default config.yaml's last_season)")
+    dashboards.add_argument("--probe", action="store_true",
+                            help="only the season before each pull should start, its first, 2018 and the latest")
+    dashboards.add_argument("--sources", default=",".join(("hustle", "tracking", "synergy", "matchups")),
+                            help="hustle, tracking, synergy, matchups, comma-separated (default all four)")
+    dashboards.add_argument("--phases", default=DEFAULT_PHASES, help="RS, PO or both (default %(default)s)")
+    dashboards.add_argument("--delay", type=float, default=0.6, help="seconds between requests (default %(default)s)")
+    dashboards.add_argument("--force", action="store_true", help="fetch files that are already on disk again")
+    dashboards.set_defaults(run=run_dashboards)
+
+
 def _add_panel(steps) -> None:
     panel = steps.add_parser(
         "panel", help="the season panel (paths.panel, outputs/season_panel.parquet)",
@@ -264,4 +327,5 @@ def add_data(commands) -> None:
     _add_stints(steps)
     _add_events(steps)
     _add_careers(steps)
+    _add_dashboards(steps)
     _add_panel(steps)

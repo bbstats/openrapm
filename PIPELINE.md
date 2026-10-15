@@ -132,7 +132,7 @@ five in one process (`src/openrapm/commands/build.py`). Each command writes its 
 - **For:** a player with few possessions has little evidence of his own; his box score says most of
   what is known about him.
 - **Reads:** step 1's labels; the season panel, through `data.panel.trainable_panel`, which drops any
-  season still being played; `params/booster_params_lgb1.json`.
+  season still being played; `params/booster_params_lgb1_cols06.json`.
 - **Writes:** each player's prior per side for the rated season, handed to step 3. With
   `--save-models NAME`, every rated season's boosters (the fitted LightGBM models) to
   `outputs/prior_models_NAME.pkl`.
@@ -151,7 +151,9 @@ five in one process (`src/openrapm/commands/build.py`). Each command writes its 
   - chunk sizes 1, 2 and 3 (experiment 3);
   - five player folds ("The SPM memorises long-career stars, and the out-of-player prior removes it",
     2026-09-14);
-  - LightGBM's settings in `params/booster_params_lgb1.json` (experiments 32 and 44);
+  - LightGBM's settings in `params/booster_params_lgb1_cols06.json`: experiments 32 and 44's, with each tree
+    shown a random 60% of its inputs, the same on both sides (experiment 63, adopted 2026-10-15; the draw is
+    seeded, so the same rows give the same booster);
   - the training weight in its own column, `row_weight`, so it no longer overwrites body weight
     (experiment 46).
 - **Code:** `src/openrapm/box_prior.py`, `features.py`.
@@ -187,13 +189,13 @@ five in one process (`src/openrapm/commands/build.py`). Each command writes its 
   `outputs/csv/season_ratings_NAME_step4_multipliers.csv`.
 - **How:** two multipliers per season (offence, defence) from one weighted least-squares fit on the
   folds' held-back team-games; the prior's part is multiplied by them, the games' part is left as it is,
-  and each season is centred again. The published multipliers run from 0.699 to 0.715 on offence and
-  from 0.929 to 0.976 on defence.
+  and each season is centred again. The published multipliers run from 0.647 to 0.723 on offence and
+  from 0.760 to 0.955 on defence.
 - **Settings:**
   - the method (experiment 33b, adopted 2026-10-03);
-  - the folds `weightfix_within` (experiment 46's own folds), seasons 2017-2026 pinned, because the fold
-    folder grew once and an unpinned rerun shrank harder (experiment 34's correction). Seasons 1997-2016
-    have no folds and borrow the fit on all ten fold seasons.
+  - the folds `cols06_early,cols06_within` (experiment 63's own folds), seasons 1997-2026 pinned, because the
+    fold folder grew once and an unpinned rerun shrank harder (experiment 34's correction);
+  - each season's multipliers from the 8 fold seasons nearest it (experiment 55, adopted 2026-10-12).
 - **Command:** `python -m openrapm shrink --base season_ratings_NAME_step3`.
 - **Code:** `src/openrapm/prior_shrink.py`, `data/within_folds.py`.
 

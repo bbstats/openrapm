@@ -45,10 +45,11 @@ import pandas as pd
 
 __all__ = ["Feature", "BOX_RATES", "UNCENTRED_RATES", "ROLE", "CLOSENESS", "SHOT_TOTALS", "SHOT_LEAGUE", "CAREER",
            "BIO", "ON_COURT", "OFF_COURT", "ON_MINUS_OFF", "PLAYOFF_SHARE", "EVENT_RATES", "CAREER_FROM_DEBUT",
-           "FROM_DEBUT", "DERIVED", "RATIOS",
-           "VS_LEAGUE", "SHOTQ", "SHOTQ_PADS", "PRIOR_FEATURES", "PANEL_INPUTS", "PANEL_KEYS", "SEASON_PANEL_COLUMNS",
-           "ROW_FEATURES", "SHIPPED", "REBOUND_PARTS", "STEAL_PARTS", "POINTS_PARTS", "THREE_POINT_PARTS",
-           "FEATURE_SETS", "CATALOGUE", "add_features", "add_shotq", "meaning", "glossary_markdown"]
+           "FROM_DEBUT", "TRACKING_RATES", "HUSTLE_RATES", "MATCHUP_RATES", "DASHBOARD_RATES", "MISSING_OK", "DERIVED",
+           "RATIOS", "VS_LEAGUE", "SHOTQ", "SHOTQ_PADS", "PRIOR_FEATURES", "PANEL_INPUTS", "PANEL_KEYS",
+           "SEASON_PANEL_COLUMNS", "ROW_FEATURES", "SHIPPED", "REBOUND_PARTS", "STEAL_PARTS", "POINTS_PARTS",
+           "THREE_POINT_PARTS", "FEATURE_SETS", "CATALOGUE", "add_features", "add_shotq", "meaning",
+           "glossary_markdown"]
 
 
 @dataclass(frozen=True)
@@ -113,6 +114,37 @@ CAREER_FROM_DEBUT = ["seasons_before_from_debut", "career_possessions_before_fro
                      "seasons_with_team_from_debut"]
 # {the column counted from 1997: the same counted from the debut}
 FROM_DEBUT = dict(zip([*CAREER, "seasons_with_team"], CAREER_FROM_DEBUT))
+# The dashboard inputs (the owner, 2026-10-14: "let's look for hustle, tracking, synergy play types, and matchups"):
+# season totals from stats.nba.com's tracking and hustle dashboards (data/dashboards.py fetches them,
+# data/dashboard_rates.py pads them), the regular season and playoffs added.  The tracking dashboards start in 2014 and
+# the hustle ones in 2016 (2017 for nearly every player), so every column is missing (NaN) for the seasons before
+# and for a player a file does not list.  Most are a count per 100 possessions, padded like the box rates, then read
+# against the season's league average: a fraction above it (0.2 is 20% above), because their definitions moved
+# between seasons (box-outs per player fell by four fifths between 2018 and 2026) and a level difference would not
+# follow.  The three "over expected" columns are makes minus the makes the league's shooters would have had against the
+# shots he was the closest defender on, per shot faced, padded toward 0 in shots (the SHOTQ way).  Example: 8.4
+# deflections per 100 possessions in a league at 7.0 is 0.2.
+TRACKING_RATES = [
+    "drives_vs_league_avg", "drive_points_vs_league_avg", "potential_assists_vs_league_avg",
+    "passes_made_vs_league_avg", "touches_vs_league_avg", "paint_touches_vs_league_avg", "post_touches_vs_league_avg",
+    "elbow_touches_vs_league_avg", "minutes_with_ball_vs_league_avg", "miles_on_offense_vs_league_avg",
+    "off_reb_chances_vs_league_avg", "off_reb_contested_vs_league_avg", "def_reb_chances_vs_league_avg",
+    "def_reb_contested_vs_league_avg", "rim_shots_defended_vs_league_avg", "twos_defended_vs_league_avg",
+    "threes_defended_vs_league_avg", "miles_on_defense_vs_league_avg",
+    "rim_makes_over_expected_per_shot", "twos_makes_over_expected_per_shot", "threes_makes_over_expected_per_shot"]
+HUSTLE_RATES = ["deflections_vs_league_avg", "contested_twos_vs_league_avg", "contested_threes_vs_league_avg",
+                "charges_drawn_vs_league_avg", "loose_balls_recovered_vs_league_avg", "def_box_outs_vs_league_avg",
+                "off_box_outs_vs_league_avg", "screen_assists_vs_league_avg", "screen_assist_points_vs_league_avg"]
+# The matchup assignments, from the matchups dashboard (2017 on): who a player was matched with, never how the matchup
+# went.  The first is the scoring of the attackers he guarded, the second how stingy the defenders were who guarded him
+# (above 0 is better defenders).  Each is a rate against the league's (0.05 is 5% above), computed without the rows
+# against the player himself and padded toward the league's (data/dashboard_rates.py).  The mirror of a defender's
+# assignment is not an offence's choice, so the second is built to test that.
+MATCHUP_RATES = ["attackers_guarded_scoring_vs_league_avg", "defenders_faced_stinginess_vs_league_avg"]
+DASHBOARD_RATES = [*TRACKING_RATES, *HUSTLE_RATES, *MATCHUP_RATES]
+# the columns a prior row may lack: a training row averages them over the seasons that have them (box_prior.py) and is
+# kept when they are missing, where a missing value in any other input drops the row
+MISSING_OK = list(DASHBOARD_RATES)
 (DEF_REBOUNDS_OF_FREE_THROWS, DEF_REBOUNDS_OF_THREES, DEF_REBOUNDS_OF_RIM_TWOS, DEF_REBOUNDS_OF_OUTSIDE_TWOS,
  BAD_PASS_STEALS, LOST_BALL_STEALS, ASSISTED_POINTS, UNASSISTED_POINTS, CORNER_THREES, ABOVE_BREAK_THREES,
  ASSISTED_THREES, UNASSISTED_THREES, RUSSELL_BLOCKS, RIM_BLOCKS, MID_RANGE_BLOCKS, THREE_POINT_BLOCKS,
@@ -171,16 +203,17 @@ SHOTQ_PADS = {"two_point_expected_pct": 50.0, "three_point_expected_pct": 50.0, 
               "points_per_shot_over_expected": 300.0}
 SHOTQ = list(SHOTQ_PADS)
 
-# Every input the prior could read (89): the rates, the role, every derived column, career, body, on-court, the
-# play-by-play parts, the ratios against the league, and the career counted from the debut.
+# Every input the prior could read (121): the rates, the role, every derived column, career, body, on-court, the
+# play-by-play parts, the ratios against the league, the career counted from the debut, and the dashboard inputs.
 # scripts/checks/95_miss_by_group.py and commands/within_season.py (its PLAYER_COLUMNS) report on all of them.
 PRIOR_FEATURES = [*BOX_RATES, *ROLE, *DERIVED, *RATIOS, *SHOTQ, *CAREER, *BIO, *ON_COURT, *EVENT_RATES, *VS_LEAGUE,
-                  *CAREER_FROM_DEBUT]
+                  *CAREER_FROM_DEBUT, *DASHBOARD_RATES]
 # The panel columns averaged into a multi-season training row, before anything is derived from them; the play-by-play
 # parts came after every column the published ratings were built from (2026-10-12), the career counted from the debut
-# after them (2026-10-13).
+# after them (2026-10-13), the dashboard inputs last (2026-10-14).
 PANEL_INPUTS = [*BOX_RATES, *ROLE, *CLOSENESS, *UNCENTRED_RATES, *SHOT_TOTALS, *SHOT_LEAGUE, *CAREER, *BIO,
-                *ON_COURT, *OFF_COURT, *ON_MINUS_OFF, *PLAYOFF_SHARE, *EVENT_RATES, *CAREER_FROM_DEBUT]
+                *ON_COURT, *OFF_COURT, *ON_MINUS_OFF, *PLAYOFF_SHARE, *EVENT_RATES, *CAREER_FROM_DEBUT,
+                *DASHBOARD_RATES]
 # The season panel's columns, in order: who and when, the possessions behind the row (his offensive possessions
 # on an offence row, defensive on a defence row), then the inputs.
 PANEL_KEYS = ["side", "player_id", "season"]
@@ -210,6 +243,26 @@ REBOUND_PARTS = [DEF_REBOUNDS_OF_FREE_THROWS, DEF_REBOUNDS_OF_THREES, DEF_REBOUN
 STEAL_PARTS = [BAD_PASS_STEALS, LOST_BALL_STEALS]
 POINTS_PARTS = [ASSISTED_POINTS, UNASSISTED_POINTS, FREE_THROWS_MADE]
 THREE_POINT_PARTS = [CORNER_THREES, ABOVE_BREAK_THREES, ASSISTED_THREES, UNASSISTED_THREES, "free_throw_pct"]
+# The incumbent's lists since experiment 59: the shipped ones without the career counts.
+_NO_CAREER = {side: [name for name in SHIPPED[side] if name not in FROM_DEBUT] for side in ("O", "D")}
+# The dashboard arms (the owner, 2026-10-14): each side reads the inputs that describe what it does on that side of
+# the ball, appended to the incumbent's list so every shipped input keeps its position.
+TRACKING_OFFENCE = ["drives_vs_league_avg", "drive_points_vs_league_avg", "potential_assists_vs_league_avg",
+                    "passes_made_vs_league_avg", "touches_vs_league_avg", "paint_touches_vs_league_avg",
+                    "post_touches_vs_league_avg", "elbow_touches_vs_league_avg", "minutes_with_ball_vs_league_avg",
+                    "miles_on_offense_vs_league_avg", "off_reb_chances_vs_league_avg"]
+TRACKING_DEFENCE = ["rim_shots_defended_vs_league_avg", "twos_defended_vs_league_avg", "threes_defended_vs_league_avg",
+                    "def_reb_chances_vs_league_avg", "def_reb_contested_vs_league_avg",
+                    "miles_on_defense_vs_league_avg", "rim_makes_over_expected_per_shot",
+                    "twos_makes_over_expected_per_shot", "threes_makes_over_expected_per_shot"]
+HUSTLE_OFFENCE = ["screen_assists_vs_league_avg", "screen_assist_points_vs_league_avg", "off_box_outs_vs_league_avg",
+                  "loose_balls_recovered_vs_league_avg"]
+HUSTLE_DEFENCE = ["deflections_vs_league_avg", "contested_twos_vs_league_avg", "contested_threes_vs_league_avg",
+                  "charges_drawn_vs_league_avg", "def_box_outs_vs_league_avg", "loose_balls_recovered_vs_league_avg"]
+# The matchup arm (the owner, 2026-10-14): each side reads the assignment that describes it, appended to the incumbent's
+# list.  A defender's is the scoring of the attackers he guarded; an attacker's the stinginess of his defenders.
+MATCHUP_OFFENCE = ["defenders_faced_stinginess_vs_league_avg"]
+MATCHUP_DEFENCE = ["attackers_guarded_scoring_vs_league_avg"]
 FEATURE_SETS = {
     # the box score, the role, the career and the body, no on-court record (experiment 45's boruta_noonc)
     "box_score_and_bio": SHIPPED,
@@ -232,7 +285,14 @@ FEATURE_SETS = {
     "career_from_debut": {side: [FROM_DEBUT.get(name, name) for name in SHIPPED[side]] for side in ("O", "D")},
     # experiment 59 (the owner, 2026-10-14): the career counts off both lists -- career possessions before, seasons
     # played before and seasons with his current team; every other shipped input keeps its order
-    "no_career_counts": {side: [name for name in SHIPPED[side] if name not in FROM_DEBUT] for side in ("O", "D")},
+    "no_career_counts": _NO_CAREER,
+    # the dashboard arms (screen: scripts/checks/146_dashboard_screen.py): tracking, hustle, and both, appended
+    "tracking": {"O": _NO_CAREER["O"] + TRACKING_OFFENCE, "D": _NO_CAREER["D"] + TRACKING_DEFENCE},
+    "hustle": {"O": _NO_CAREER["O"] + HUSTLE_OFFENCE, "D": _NO_CAREER["D"] + HUSTLE_DEFENCE},
+    "tracking_and_hustle": {"O": _NO_CAREER["O"] + TRACKING_OFFENCE + HUSTLE_OFFENCE,
+                            "D": _NO_CAREER["D"] + TRACKING_DEFENCE + HUSTLE_DEFENCE},
+    # the matchup arm (screen: scripts/checks/149_matchup_screen.py): one assignment per side
+    "matchups": {"O": _NO_CAREER["O"] + MATCHUP_OFFENCE, "D": _NO_CAREER["D"] + MATCHUP_DEFENCE},
 }
 
 
@@ -378,6 +438,29 @@ _EVENT_MEANINGS = ["defensive rebounds of missed free throws", "defensive reboun
                    "assists on makes at the rim (within 6 ft, or logged without a location)",
                    "assists on made twos from beyond 6 ft", "assists on made corner threes",
                    "assists on made above-the-break threes"]
+# the first 18 of TRACKING_RATES: counts per 100 possessions; the last three are makes over expected (below)
+_TRACKING_MEANINGS = ["drives to the basket", "points scored on drives",
+                      "potential assists (passes that led to a shot)", "passes made", "touches of the ball",
+                      "touches in the paint", "post touches", "elbow touches",
+                      "minutes with the ball in his hands", "miles run on offence",
+                      "offensive rebound chances (a rebound within his reach)", "contested offensive rebounds",
+                      "defensive rebound chances (a rebound within his reach)", "contested defensive rebounds",
+                      "shots at the rim he was the closest defender on",
+                      "two-point shots he was the closest defender on",
+                      "three-point shots he was the closest defender on", "miles run on defence"]
+_OVER_EXPECTED_ROWS = [
+    ("rim_makes_over_expected_per_shot", "shots made within 6 ft against him, above what the league's shooters make "
+     "against those defenders, per shot faced"),
+    ("twos_makes_over_expected_per_shot", "two-point shots made against him above expected, per shot faced"),
+    ("threes_makes_over_expected_per_shot", "three-point shots made against him above expected, per shot faced")]
+_HUSTLE_MEANINGS = ["deflections", "contested two-point shots", "contested three-point shots", "charges drawn",
+                    "loose balls recovered", "defensive box-outs", "offensive box-outs", "screen assists",
+                    "points from his screen assists"]
+_MATCHUP_ROWS = [
+    ("attackers_guarded_scoring_vs_league_avg", "the scoring of the attackers he guarded (points per matchup "
+     "possession without the rows against him), against the league's"),
+    ("defenders_faced_stinginess_vs_league_avg", "how stingy the defenders were who guarded him (points allowed per "
+     "matchup possession without the rows against him, sign-flipped), against the league's")]
 _DERIVED_MEANINGS = {"points_per100": "points", "shots_per100": "shot attempts",
                      "free_throw_attempts_per100": "free-throw attempts",
                      "three_point_attempts_per100": "three-point attempts",
@@ -488,6 +571,19 @@ def _catalogue() -> tuple:
                     "per 100 possessions", "level", "box rate, uncentred")
     rows += _family(EVENT_RATES, _EVENT_MEANINGS, "padded play-by-play count per 100 minus the league level",
                     "per 100 possessions", "centred", "play-by-play rate")
+    rows += _family(TRACKING_RATES[:18], _TRACKING_MEANINGS,
+                    "tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate",
+                    "fraction above the league average", "centred", "tracking rate")
+    rows += [Feature(name, text, "(makes - expected makes) / (shots faced + pad); the pad is the shots in "
+                     "data/dashboard_rates.py", "makes per shot", "centred", "tracking rate")
+             for name, text in _OVER_EXPECTED_ROWS]
+    rows += _family(HUSTLE_RATES, _HUSTLE_MEANINGS,
+                    "hustle-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate",
+                    "fraction above the league average", "centred", "hustle rate")
+    rows += [Feature(name, text, "(attackers' points per matchup possession, each without his rows against the player, "
+                     "padded 50 possessions toward the league's, mean weighted by possessions - league rate) / league "
+                     "rate; the second sign-flipped", "fraction above the league average", "centred", "matchup")
+             for name, text in _MATCHUP_ROWS]
     rows += [Feature(name, _DERIVED_MEANINGS[name], _linear(weights), "per 100 possessions", "centred",
                      "combination") for name, weights in DERIVED.items()]
     rows += [Feature(name, _RATIO_MEANINGS[name], _ratio_formula(*spec), "fraction", "level", "ratio")

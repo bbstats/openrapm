@@ -31,6 +31,8 @@ Where each column comes from:
     playoff_share                                              `playoff_share`, from the stints
     the play-by-play parts (features.EVENT_RATES)              data/event_counts.py's counts, padded by
                                                                box_rates.box_rates on the offence design's games
+    the dashboard inputs (features.DASHBOARD_RATES)            data/dashboard_rates.py, from the cached tracking and
+                                                               hustle dashboards (NaN before they start)
 
 Example: Stephen Curry's 2016 offence row reads possessions 6,994 (his team's offensive possessions with him on the
 court), assists_per100 4.25 above the average player (8.84 uncentred), team_possession_share 0.66 and playoff_share
@@ -64,6 +66,7 @@ from ..features import (
     CAREER,
     CAREER_FROM_DEBUT,
     CLOSENESS,
+    DASHBOARD_RATES,
     EVENT_RATES,
     OFF_COURT,
     ON_COURT,
@@ -78,6 +81,7 @@ from ..on_court import offcourt_rates, oncourt_rates
 from .bio import PLAYER_INPUTS, player_inputs, tenure_inputs
 from .careers import ROLE_COLUMNS, careers_before
 from .config import resolve
+from .dashboard_rates import dashboard_rates
 from .designs import DesignCache
 from .event_counts import event_design, load_event_counts
 from .ingest import GAME_PREFIX, game_table, load_gamelog, raw_dir
@@ -105,10 +109,11 @@ DEFENCE_ALL = "points_with_expected_opponent_threes_all"
 PANEL_TARGETS = (OFFENCE, DEFENCE_ALL)            # the designs one season's rows are built from
 SIDES = ("O", "D")
 OLD_PANEL = "role_panel_season.parquet"          # the old-named panel's file name, beside the new one
-# the columns the old-named panel carried: every column but the play-by-play parts (added 2026-10-12) and the career
-# counted from the debut (added 2026-10-13)
+# the columns the old-named panel carried: every column but the play-by-play parts (added 2026-10-12), the career
+# counted from the debut (added 2026-10-13) and the dashboard inputs (added 2026-10-14)
 MIGRATED_PANEL_COLUMNS = [column for column in SEASON_PANEL_COLUMNS
-                          if column not in EVENT_RATES and column not in CAREER_FROM_DEBUT]
+                          if column not in EVENT_RATES and column not in CAREER_FROM_DEBUT
+                          and column not in DASHBOARD_RATES]
 STINT_COLUMNS = ["game_id", "period", *HOME_SLOTS, *AWAY_SLOTS, "poss_h", "poss_a", "margin_h", "is_gt"]
 # The data layer's names for the body and shot columns, against the panel's (the pairs are pinned in
 # tests/test_features.py and tests/test_panel.py); data/roles.py builds the role and career columns under the panel's
@@ -352,14 +357,15 @@ def _player_columns(season: int, cfg: dict, designs: dict, history: _RoleHistory
     return frame
 
 
-def _side_rows(side: str, season: int, rates, parts, players: pd.DataFrame) -> pd.DataFrame:
+def _side_rows(side: str, season: int, rates, parts, players: pd.DataFrame, dashboards: dict) -> pd.DataFrame:
     """A side's rows: the keys, his possessions and padded rates on that side, the columns both sides share, then
-    the play-by-play parts on that side (centred)."""
+    the play-by-play parts on that side (centred) and the dashboard inputs (data/dashboard_rates.py)."""
     possessions = (rates.offence if side == "O" else rates.defence).possessions
     keys = pd.DataFrame({"side": side, "player_id": players["player_id"].to_numpy(), "season": season,
                          "possessions": possessions})
     events = pd.DataFrame((parts.offence if side == "O" else parts.defence).centred, columns=EVENT_RATES)
-    return pd.concat([keys, rate_table(rates, side, BOX_RATES), players.drop(columns="player_id"), events], axis=1)
+    return pd.concat([keys, rate_table(rates, side, BOX_RATES), players.drop(columns="player_id"), events,
+                      dashboards[side]], axis=1)
 
 
 def season_panel(season: int, cfg: dict, designs: dict, sources: SeasonSources, fit_game_ids=None) -> SeasonPanel:
@@ -376,7 +382,12 @@ def season_panel(season: int, cfg: dict, designs: dict, sources: SeasonSources, 
     event_counts, event_games = event_design(designs[OFFENCE], sources.tables.event_counts)
     parts = box_rates(event_counts, pad_target=cfg["pad_target"])
     players = _player_columns(season, cfg, designs, history, fit, sources.debut)
-    rows = pd.concat([_side_rows(side, season, rates, parts, players) for side in SIDES], ignore_index=True)
+    # the dashboards are season totals: a fold scales them to the share of the season it fits on (dashboard_rates.py)
+    fit_share = None if fit is None else len(fit) / len(sources.tables.games)
+    dashboards = dashboard_rates(cfg, season, players["player_id"].to_numpy(),
+                                 {"O": rates.offence.possessions, "D": rates.defence.possessions}, fit_share)
+    rows = pd.concat([_side_rows(side, season, rates, parts, players, dashboards) for side in SIDES],
+                     ignore_index=True)
     stints = sources.tables.stints
     if fit is not None:
         stints = stints[stints["game_id"].isin(fit)]
@@ -442,6 +453,12 @@ def _read(cfg: dict) -> pd.DataFrame:
         raise ValueError(f"{path} carries the names used before 2026-10-11; point paths.panel at a new file and "
                          f"run `openrapm data panel --migrate-from {path}`")
     return panel
+
+
+def panel_keys(cfg: dict) -> pd.DataFrame:
+    """The season panel's player, season, side and possessions for every season, the one in progress included: what
+    a count of who a data source covers (`openrapm data dashboards`) needs.  Nothing is fitted on it."""
+    return _read(cfg)[["player_id", "season", "side", "possessions"]]
 
 
 def trainable_panel(cfg: dict) -> pd.DataFrame:

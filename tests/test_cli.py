@@ -178,6 +178,11 @@ def test_folds_needs_its_models_and_base_and_defaults_to_2017_2026():
         _parse("folds", "--models", "m")
 
 
+def test_folds_split_the_games_part_into_pieces_only_when_asked():
+    assert _parse("folds", "--models", "m", "--base", "b").pieces is False
+    assert _parse("folds", "--models", "m", "--base", "b", "--pieces").pieces is True
+
+
 def test_main_reads_the_config_given_before_the_command(monkeypatch, tmp_path):
     seen = {}
 

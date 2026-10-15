@@ -1,8 +1,11 @@
 #!/bin/bash
-# One experiment's whole ratings chain, as notes/HANDOFF.md "The test: year-over-year" describes it: steps 1-3 in one run
-# (`openrapm rate --setting test`), step 4 (`openrapm shrink --setting test`), step 5 (`openrapm swap --setting test`),
-# then the readings, each a check in scripts/checks/: 63, 64, 66 (2026 top 20), 90, 88, 70 + 73 (on the
-# incumbent's trade-loss target, and on the candidate's own as a sensitivity).  Everything not named is the incumbent's.
+# One experiment's whole ratings chain, as notes/HANDOFF.md "The test" describes it: steps 1-3 in one run
+# (`openrapm rate --setting test`), the candidate's own within-season folds for all thirty seasons, step 4 (`openrapm
+# shrink --setting test`), step 5 (`openrapm swap --setting test`), then the three readings the owner judges on
+# (2026-10-15: "too many tests ... within-season is truly the best metric, particularly WOWY"): 151 (the
+# with-or-without-you test on the held-back games, the decider, with the noise control beside it), 63 (year over year,
+# a guard) and 66 (the 2026 top 20).  FULL_READINGS=1 adds the older readings (138, the second arm, 64, 90, 88, 70 + 73).
+# Everything not named is the incumbent's.
 #   bash scripts/experiment_chain.sh NAME DEFENSIVE_TARGET ["EXTRA RATE FLAGS"]   (INC_NAME, BASE_FLAGS, SHRINK_TAG, SKIP_BUILD: see below)
 #   bash scripts/experiment_chain.sh noise_control points_with_expected_opponent_threes "--fold-assignment 1"
 # Log: outputs/NAME_chain.log.  One build at a time.
@@ -24,18 +27,21 @@ LOG=outputs/${NAME}_chain.log
 # seasons (the shipped default of `openrapm shrink`).  Since 2026-10-13 it is experiment 57 (fromdebut): the career
 # inputs counted from each player's debut (--features career_from_debut), its own folds for all thirty seasons and
 # step 4 by the same rule on them.  Since 2026-10-14 it is experiment 59 (nocareer): those career counts off the prior
-# (--features no_career_counts), its own folds for all thirty seasons, step 4 by the same rule.  The held-out audit pairs a candidate with the incumbent's 2017-2026 folds
+# (--features no_career_counts), its own folds for all thirty seasons, step 4 by the same rule.  Since 2026-10-15
+# it is experiment 63 (cols06): the same with each tree of the prior shown 60% of its inputs (--booster-params
+# lgb1_cols06), its own folds for all thirty seasons; its noise control is noise_cols06.  The held-out audit pairs a candidate with the incumbent's 2017-2026 folds
 # (AUDIT_REF).  A candidate with OWN_FOLDS=1 has folds for 2017-2026 only; its step 4 then reads the 8 nearest of
 # those.  EARLY_FOLDS=1 (with OWN_FOLDS=1; experiment 56) also builds its 1997-2016 folds (NAME_early), so its step 4
 # is the incumbent's rule on its own folds for all thirty seasons.
-INC_NAME=${INC_NAME:-nocareer}
-INC_FOLDS=${INC_FOLDS:-nocareer_early,nocareer_within}
-AUDIT_REF=${AUDIT_REF:-nocareer_within}
+INC_NAME=${INC_NAME:-cols06}
+CONTROL_NAME=${CONTROL_NAME:-noise_cols06}       # the noise control's folds (<name>_early, <name>_within) for 151
+INC_FOLDS=${INC_FOLDS:-cols06_early,cols06_within}
+AUDIT_REF=${AUDIT_REF:-cols06_within}
 INC=outputs/season_ratings_${INC_NAME}.parquet
-BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1 --features no_career_counts}
+BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1_cols06 --features no_career_counts}
 [ -n "$NAME" ] && [ -n "$TARGET" ] || { echo "usage: scripts/experiment_chain.sh NAME TARGET [EXTRA RATE FLAGS]"; exit 1; }
 # Every check the chain calls, looked for BEFORE the build: a missing one would otherwise surface only hours later.
-READINGS="63_yoy 64_consensus_report 66_compare 70_tradeset 73_tradeloss 88_yoy_by_player 90_swap_test 138_heldout_audit"
+READINGS="151_wowy 63_yoy 66_compare 64_consensus_report 70_tradeset 73_tradeloss 88_yoy_by_player 90_swap_test 138_heldout_audit"
 for check in $READINGS; do
   [ -f scripts/checks/$check.py ] || { echo "scripts/checks/$check.py is missing; nothing was run"; exit 1; }
 done
@@ -61,9 +67,11 @@ reading() {            # reading LABEL SCRIPT [FLAGS...]: run one check into the
 # EARLY_FOLDS=1 (needs OWN_FOLDS=1, refuses FIRST_PASS=1): after the 2017-2026 folds and the audit, also the 1997-2016
 # folds (`openrapm folds --seasons 1997-2016 --tag NAME_early`, about 22 minutes), and step 4 reads both folders
 # (SHRINK_TAG NAME_early,NAME_within) by the shipped rule: each season's multipliers from its 8 nearest fold seasons.
-OWN_FOLDS=${OWN_FOLDS:-0}
+# since 2026-10-15 every experiment builds its own folds for all thirty seasons: the decider (151) scores them
+OWN_FOLDS=${OWN_FOLDS:-1}
 FIRST_PASS=${FIRST_PASS:-0}
-EARLY_FOLDS=${EARLY_FOLDS:-0}
+EARLY_FOLDS=${EARLY_FOLDS:-1}
+FULL_READINGS=${FULL_READINGS:-0}
 CONTROL_TAG=${CONTROL_TAG:-}
 if [ "$EARLY_FOLDS" = "1" ] && [ "$OWN_FOLDS" != "1" ]; then echo "EARLY_FOLDS=1 needs OWN_FOLDS=1"; exit 1; fi
 if [ "$EARLY_FOLDS" = "1" ] && [ "$FIRST_PASS" = "1" ]; then echo "EARLY_FOLDS=1 rates all thirty seasons; FIRST_PASS=1 rates ten"; exit 1; fi
@@ -80,10 +88,12 @@ fi
 if [ "$OWN_FOLDS" = "1" ]; then
   echo "=== $(date) the candidate's own within-season folds, 2017-2026 (tag ${NAME}_within)" >> $LOG
   $PY -u -m openrapm folds --models ${NAME} --base season_ratings_${NAME}_step3 --seasons 2017-2026 --tag ${NAME}_within >> $LOG 2>&1 || exit 1
-  COMPARE="--reference=$AUDIT_REF"
-  [ -n "$CONTROL_TAG" ] && COMPARE="$COMPARE --control=$CONTROL_TAG"
-  echo "=== $(date) held-out audit against the incumbent's folds" >> $LOG
-  $PY -u scripts/checks/138_heldout_audit.py --random=${NAME}_within --mult_tag=${NAME}_within $COMPARE --draws=0 --threshold_from=audit_lgb_noonc_2017 --out=audit_${NAME} >> $LOG 2>&1 || exit 1
+  if [ "$FULL_READINGS" = "1" ]; then
+    COMPARE="--reference=$AUDIT_REF"
+    [ -n "$CONTROL_TAG" ] && COMPARE="$COMPARE --control=$CONTROL_TAG"
+    echo "=== $(date) held-out audit against the incumbent's folds" >> $LOG
+    $PY -u scripts/checks/138_heldout_audit.py --random=${NAME}_within --mult_tag=${NAME}_within $COMPARE --draws=0 --threshold_from=audit_lgb_noonc_2017 --out=audit_${NAME} >> $LOG 2>&1 || exit 1
+  fi
 fi
 if [ "$EARLY_FOLDS" = "1" ]; then
   echo "=== $(date) the candidate's own within-season folds, 1997-2016 (tag ${NAME}_early)" >> $LOG
@@ -97,8 +107,19 @@ echo "=== $(date) prior shrink (multipliers from outputs/within/$SHRINK_TAG)" >>
 $PY -u -m openrapm shrink --base season_ratings_${NAME}_step3 --setting test --folds $SHRINK_TAG $SHRINK_FLAGS --name ${NAME} >> $LOG 2>&1 || exit 1
 echo "=== $(date) swap adjustment" >> $LOG
 $PY -u -m openrapm swap --base season_ratings_${NAME}_step4 --setting test --name ${NAME} --types >> $LOG 2>&1 || exit 1
-echo "=== $(date) year-over-year" >> $LOG
+if [ "$EARLY_FOLDS" = "1" ]; then
+  echo "=== $(date) the decider: with or without you, stint by stint, on the held-back games (151)" >> $LOG
+  reading "with or without you" scripts/checks/151_wowy.py --systems=${INC_NAME},${CONTROL_NAME},${NAME} --ref=${INC_NAME} --tag=${NAME}
+fi
+echo "=== $(date) the guard: year-over-year" >> $LOG
 reading "year-over-year" scripts/checks/63_yoy.py --rankings=${NAME}=outputs/season_ratings_${NAME}.parquet,incumbent=$INC --ref=incumbent --tag=${NAME} --splits=
+echo "=== $(date) top 20" >> $LOG
+reading "top 20" scripts/checks/66_compare.py incumbent=$INC ${NAME}=outputs/season_ratings_${NAME}.parquet --season=2026 --top=20 --yoy=outputs/yoy_${NAME}.parquet --ref=incumbent --open=0
+if [ "$FULL_READINGS" != "1" ]; then
+  [ -n "$FAILED" ] && { echo "=== $(date) chain done; these readings FAILED: ${FAILED#, }" >> $LOG; exit 1; }
+  echo "=== $(date) chain done" >> $LOG
+  exit 0
+fi
 if [ "$OWN_FOLDS" = "1" ]; then
   echo "=== $(date) the second arm: the incumbent's multipliers ($INC_FOLDS)" >> $LOG
   $PY -u -m openrapm shrink --base season_ratings_${NAME}_step3 --setting test --folds $INC_FOLDS --name ${NAME}_incmult >> $LOG 2>&1 || exit 1
@@ -107,8 +128,6 @@ if [ "$OWN_FOLDS" = "1" ]; then
 fi
 echo "=== $(date) consensus" >> $LOG
 reading "consensus" scripts/checks/64_consensus_report.py outputs/season_ratings_${NAME}.parquet $INC
-echo "=== $(date) top 20" >> $LOG
-reading "top 20" scripts/checks/66_compare.py incumbent=$INC ${NAME}=outputs/season_ratings_${NAME}.parquet --season=2026 --top=20 --yoy=outputs/yoy_${NAME}.parquet --ref=incumbent --open=0
 echo "=== $(date) swap test" >> $LOG
 reading "swap test" scripts/checks/90_swap_test.py --rankings=incumbent=$INC,${NAME}=outputs/season_ratings_${NAME}.parquet --contexts=nofatigue --checks=0 --tag=${NAME}
 echo "=== $(date) quality tiers, year-over-year" >> $LOG

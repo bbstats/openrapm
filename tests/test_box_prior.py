@@ -68,6 +68,43 @@ def test_a_missing_input_raises_instead_of_shortening_the_list():
         box_prior.average_over_seasons(panel, PRIOR_FEATURES)
 
 
+def test_a_column_a_season_may_lack_is_averaged_over_the_seasons_that_have_it():
+    """features.MISSING_OK: a missing season is not an average one, and a row with none of the seasons is missing."""
+    panel = _career_panel()
+    column = "deflections_vs_league_avg"
+    panel.loc[panel.season == 2010, column] = np.nan
+    out = box_prior.average_over_seasons(panel, ["assists_per100", column])
+    has = panel[panel.season != 2010]
+    expected = ((has[column] * has.possessions).groupby(has.player_id).sum()
+                / has.possessions.groupby(has.player_id).sum())
+    assert out.loc[[0, 1, 2, 4], column].to_numpy() == pytest.approx(expected.loc[[0, 1, 2, 4]].to_numpy())
+    assert out.loc[3, column] == pytest.approx(expected.loc[3]) or np.isnan(out.loc[3, column])
+    assert out["assists_per100"].notna().all()                      # an ordinary column is untouched
+
+
+def test_a_player_all_of_whose_seasons_lack_a_dashboard_column_has_it_missing_not_zero():
+    panel = _career_panel()
+    panel.loc[panel.player_id == 3, "deflections_vs_league_avg"] = np.nan             # player 3 has one season
+    out = box_prior.average_over_seasons(panel, ["deflections_vs_league_avg"])
+    assert np.isnan(out.loc[3, "deflections_vs_league_avg"])
+    assert out.loc[[0, 1, 2, 4], "deflections_vs_league_avg"].notna().all()
+
+
+def test_training_rows_keep_a_row_that_lacks_a_dashboard_input():
+    """Players 3 (one season, 2011) and 4 (2010, 2012) have no season with the column before 2012: their career and
+    chunk rows stay, with the column missing, so a tree can use the rows for everything else."""
+    panel = _career_panel()
+    column = "deflections_vs_league_avg"
+    panel.loc[panel.season <= 2011, column] = np.nan
+    names = ["assists_per100", column]
+    rows = box_prior.training_rows(_label(panel), panel, "offense", names)
+    assert rows[column].isna().any() and rows[column].notna().any()
+    assert {0, 1, 2, 3, 4} <= set(rows.index)                                             # every player's career row
+    assert set(box_prior.career_rows(_label(panel), panel, "offense", names).index) == {0, 1, 2, 3, 4}
+    assert np.isnan(box_prior.career_rows(_label(panel), panel, "offense", names).loc[3, column])
+    assert rows["assists_per100"].notna().all()
+
+
 def test_the_ratios_are_built_on_the_average_not_averaged():
     """True shooting of the average season, not the average of each season's true shooting."""
     panel = _panel()
@@ -194,7 +231,8 @@ def test_the_fit_is_deterministic_and_blind_to_the_weight_scale():
     one = box_prior.fit_lightgbm(PARAMS, x, y, w).predict(x)
     assert np.array_equal(one, box_prior.fit_lightgbm(PARAMS, x, y, w).predict(x))
     assert np.array_equal(one, box_prior.fit_lightgbm(PARAMS, x, y, 1000.0 * w).predict(x))
-    noisy = {**PARAMS, "subsample": 0.5, "subsample_freq": 1, "colsample_bytree": 0.5, "random_state": 7}
+    # row subsampling and the seed in a settings file are overridden; the column share no longer is (check 150, below)
+    noisy = {**PARAMS, "subsample": 0.5, "subsample_freq": 1, "random_state": 7}
     assert np.array_equal(one, box_prior.fit_lightgbm(noisy, x, y, w).predict(x))
 
 
@@ -340,3 +378,28 @@ def test_the_era_kernel_is_refused_as_an_input():
     panel = _career_panel()
     with pytest.raises(ValueError, match="bookkeeping"):
         box_prior.training_rows(_label(panel), panel, "offense", ["points_per100", "era_kernel"])
+
+
+def test_a_settings_file_may_name_the_share_of_inputs_each_tree_sees_and_the_shipped_one_does_not():
+    """Check 150: `colsample_bytree` in a settings file reaches LightGBM (the same rows still give the same booster);
+    without it every tree sees every input, as before."""
+    import json
+    from pathlib import Path
+
+    from openrapm.box_prior import COLUMN_SHARES, LIGHTGBM_FIXED, fit_lightgbm
+    root = Path(__file__).resolve().parents[1]
+    shipped = json.loads((root / "params" / "booster_params_lgb1.json").read_text(encoding="utf-8"))
+    assert not any(name in shipped[side]["params"] for side in ("O", "D") for name in COLUMN_SHARES)
+    cols = json.loads((root / "params" / "booster_params_lgb1_cols06.json").read_text(encoding="utf-8"))
+    for side in ("O", "D"):
+        assert cols[side]["params"] == {**shipped[side]["params"], "colsample_bytree": 0.6}
+    rng = np.random.default_rng(0)
+    x = rng.normal(size=(600, 8))
+    y = x[:, 0] + rng.normal(size=600)
+    params = dict(n_estimators=20, num_leaves=7, min_child_samples=20)
+    whole = fit_lightgbm(params, x, y, np.ones(600))
+    part = fit_lightgbm({**params, "colsample_bytree": 0.5}, x, y, np.ones(600))
+    again = fit_lightgbm({**params, "colsample_bytree": 0.5}, x, y, np.ones(600))
+    assert whole.get_params()["colsample_bytree"] == LIGHTGBM_FIXED["colsample_bytree"] == 1.0
+    assert part.get_params()["colsample_bytree"] == 0.5
+    assert np.array_equal(part.predict(x), again.predict(x)) and not np.allclose(part.predict(x), whole.predict(x))

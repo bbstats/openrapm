@@ -68,11 +68,11 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from .features import FEATURE_SETS, PANEL_INPUTS, ROW_FEATURES, add_features
+from .features import FEATURE_SETS, MISSING_OK, PANEL_INPUTS, ROW_FEATURES, add_features
 
 __all__ = ["average_over_seasons", "career_rows", "season_runs", "training_rows", "balanced_player_folds",
-           "LIGHTGBM_FIXED", "fit_lightgbm", "OutOfPlayerPrior", "fit_out_of_player", "rated_rows", "predict",
-           "SidePrior", "era_kernel", "season_priors"]
+           "LIGHTGBM_FIXED", "COLUMN_SHARES", "fit_lightgbm", "OutOfPlayerPrior", "fit_out_of_player", "rated_rows",
+           "predict", "SidePrior", "era_kernel", "season_priors"]
 
 # columns a training row adds for its own bookkeeping: the label it carries, its weight in the fit, the
 # possessions behind the label and its era kernel.  None may share a name with an input (notes/DECISIONS.md,
@@ -102,6 +102,13 @@ def average_over_seasons(rows: pd.DataFrame, feature_names, by=None, panel_colum
     key = rows.player_id if by is None else by
     weight = rows.possessions.groupby(key).sum()
     mean = rows[columns].mul(rows.possessions, axis=0).groupby(key).sum().div(weight, axis=0)
+    optional = [name for name in columns if name in MISSING_OK]
+    if optional:
+        # a column a season may lack (features.MISSING_OK) is averaged over the seasons that have it, and is missing
+        # for a row none of whose seasons has it; the sum above counted a missing season as an average one
+        has = rows[optional].notna().mul(rows.possessions, axis=0).groupby(key).sum()
+        total = rows[optional].mul(rows.possessions, axis=0).groupby(key).sum(min_count=1)
+        mean[optional] = total.div(has.where(has > 0), axis=0)
     return add_features(mean, feature_names)
 
 
@@ -114,8 +121,9 @@ def _labels(label: pd.DataFrame, column: str) -> pd.DataFrame:
 def career_rows(label: pd.DataFrame, rows: pd.DataFrame, column: str, feature_names,
                 panel_columns=PANEL_INPUTS) -> pd.DataFrame:
     """One career row per labelled player, indexed by player_id; weight = the possessions behind his label."""
-    out = (average_over_seasons(rows, feature_names, panel_columns=panel_columns)
-           .join(_labels(label, column), how="inner").dropna())
+    out = average_over_seasons(rows, feature_names, panel_columns=panel_columns).join(_labels(label, column),
+                                                                                      how="inner")
+    out = out.dropna(subset=[name for name in out.columns if name not in MISSING_OK])
     return out.assign(label=out[column].to_numpy(float), row_weight=out.label_possessions.to_numpy(float))
 
 
@@ -162,7 +170,8 @@ def training_rows(label: pd.DataFrame, rows: pd.DataFrame, column: str, feature_
     chunks["row_seasons"] = grouped.season.nunique().reindex(chunks.index).to_numpy(float)
     chunks["player_id"] = grouped.player_id.first().reindex(chunks.index).to_numpy()
     chunks = chunks.join(_labels(label, column), on="player_id", how="inner")
-    chunks = chunks.dropna(subset=list(feature_names) + [column]).set_index("player_id")
+    chunks = chunks.dropna(subset=[name for name in [*feature_names, column] if name not in MISSING_OK])
+    chunks = chunks.set_index("player_id")
     share = chunks.row_possessions / chunks.groupby(level=0).row_possessions.transform("sum")
     chunks = chunks.assign(label=chunks[column].to_numpy(float),
                            row_weight=(share * chunks.label_possessions).to_numpy(float))
@@ -203,9 +212,12 @@ def balanced_player_folds(train: pd.DataFrame, n_folds: int = 5, fold_assignment
 
 
 # No row or column subsampling, one thread, deterministic: the same rows always give the same booster
-# (notes/DECISIONS.md, experiment 44).  These win over anything in the settings file.
+# (notes/DECISIONS.md, experiment 44).  These win over anything in the settings file, except the share of the inputs
+# each tree or each split is shown (`COLUMN_SHARES`), which a settings file may name (check 150); the draw is seeded by
+# random_state, so the same rows still give the same booster.
 LIGHTGBM_FIXED = dict(subsample=1.0, subsample_freq=0, colsample_bytree=1.0, n_jobs=1, deterministic=True,
                       force_row_wise=True, verbose=-1, random_state=0)
+COLUMN_SHARES = ("colsample_bytree", "feature_fraction_bynode")
 
 
 def fit_lightgbm(params: dict, inputs: np.ndarray, label: np.ndarray, weights: np.ndarray,
@@ -220,7 +232,8 @@ def fit_lightgbm(params: dict, inputs: np.ndarray, label: np.ndarray, weights: n
     weights = weights / weights.mean()
     if kernel is not None:
         weights = weights * np.asarray(kernel, dtype=float)
-    model = lightgbm.LGBMRegressor(**{**params, **LIGHTGBM_FIXED})
+    shares = {name: params[name] for name in COLUMN_SHARES if name in params}
+    model = lightgbm.LGBMRegressor(**{**params, **LIGHTGBM_FIXED, **shares})
     return model.fit(inputs, label, sample_weight=weights)
 
 

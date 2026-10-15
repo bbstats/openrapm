@@ -46,10 +46,14 @@ import scipy.sparse as sp
 
 from . import prior_rapm, rapm
 
-__all__ = ["TEAM_CODE", "side_team", "team_codes", "his_teams", "row_groups", "lineups", "row_keys",
-           "GamesPartFit", "refit", "row_weights", "split_games_part"]
+__all__ = ["TEAM_CODE", "ROW_PIECES", "OUTCOME_PIECES", "side_team", "team_codes", "his_teams", "row_groups", "lineups",
+           "row_keys", "GamesPartFit", "refit", "row_weights", "split_games_part", "residual_scale",
+           "posterior_sd", "outcome_responses", "split_pieces"]
 
 TEAM_CODE = 10 ** 10           # season (or game) x TEAM_CODE + team id: one number per team-season or team-game
+# the games' part by the rows it came from, off court cut in two, and by the points it came from (`split_pieces`)
+ROW_PIECES = ("on_court", "sat", "missed", "team_sos")
+OUTCOME_PIECES = ("twos", "threes", "free_throws")
 
 
 def side_team(teams: pd.Series, game_ids: np.ndarray, players: np.ndarray) -> np.ndarray:
@@ -209,3 +213,119 @@ def split_games_part(fit: GamesPartFit, keys: dict, side: str) -> tuple[pd.DataF
                         sign * (coefficient - on_court - off_court)))
     frame = pd.DataFrame(records, columns=["player_id", "u", "on_court", "off_court", "team_sos"])
     return frame, dict(sum_hy=sum_hy, leftover=leftover, retried=fit.retried)
+
+
+# ========================================================================== the pieces of the games' part, more finely
+# `split_games_part` splits u over the rows it came from, three groups.  `split_pieces` cuts the off-court group in two
+# (his team's rows without him in games he played, `sat`, and in games he missed, `missed`), adds the posterior standard
+# deviation of u, and splits u a second way, over the points the rows' outcomes are made of.  Check 145 asks, for each
+# piece, how much of it holds up on games the rating never saw.
+#
+#     u_j = sum over rows r of  h_r y_r         (h as above; y the response, and B'h = 0 on the unpenalised columns)
+#
+# The response is a sum of three kinds of points, y = y_two + y_three + y_free (per 100 possessions, each row), so
+# u_j = u_two + u_three + u_free, each piece solved with the same M: u_k = e_j' M^-1 B'W y_k.
+#
+# Example: Victor Wembanyama's 2026 offence, games' part 1.20 = on court 1.41 + off court -0.27 + team SOS 0.06 (the
+# OpenRAPM decomposition page).  `split_pieces` cuts the -0.27 into the part from his team's possessions without him in
+# games he played (`sat`) and in games he missed (`missed`), and also splits the same 1.20 into twos + threes + free
+# throws.
+def residual_scale(fit: GamesPartFit) -> float:
+    """sigma^2, the fit's weighted mean squared residual: a row's response varies by sigma^2 / its possessions about
+    the fitted line, so sigma^2 M^-1 is the posterior covariance of the coefficients (flat on the unpenalised ones).
+
+    The rows number in the tens of thousands and the fit holds about a thousand coefficients, so the mean divides by
+    the number of rows, not rows minus coefficients.
+    """
+    n = fit.n_players
+    fitted = fit.players @ fit.theta[:2 * n] + fit.unpenalised @ fit.theta[2 * n:]
+    return float(np.sum(fit.w * (fit.y - fitted) ** 2) / len(fit.w))
+
+
+def posterior_sd(fit: GamesPartFit) -> tuple[np.ndarray, np.ndarray]:
+    """(offence, defence): every player's posterior standard deviation of his games' part u, sqrt(sigma^2 [M^-1]_jj)
+    (`residual_scale`), in the design's player order.  `split_pieces` returns the same number for one side as `sd_u`,
+    without splitting the rows.
+
+    Example: a player with 5,000 possessions in a season whose penalty is 13,037 has a defensive sd near 0.70 and an
+    offensive one near 0.90 per 100 (2026); the fewer his possessions, the nearer his sd to the prior's own.
+    """
+    n = fit.n_players
+    spread = residual_scale(fit) * np.diag(np.linalg.inv(fit.matrix))
+    return np.sqrt(spread[:n]), np.sqrt(spread[n:2 * n])
+
+
+def outcome_responses(counters: pd.DataFrame, y_points: np.ndarray, x3: np.ndarray | None = None,
+                      luck_kept: float = 0.25) -> tuple[dict, float]:
+    """The response of a points target split by the points it is made of: ({piece: per-row response}, ratio).
+
+    `counters` are the design's per-row counters (design.Design.counters).  Each piece is per 100 possessions and the
+    three add up to the target's response `design.y`:
+        twos          pts - ftm - ftm_tech - 3 fg3m      the points from field goals other than threes
+        threes        3 fg3m on offence.  On defence 3 (luck_kept fg3m + (1 - luck_kept) x3): the target keeps
+                      `luck_kept` of the opponents' threes and prices the rest at the shooters' expected makes x3
+        free_throws   xftm + xftm_tech                   the expected free-throw makes, both targets
+    The defence's target is also divided by one scalar per season (data/shots.align) so its total equals the points
+    scored: `ratio`, found the same way from `y_points` (the points design's response); 1 for the offence (x3 None).
+
+    Example: a row of 4 possessions with 2 twos made, 1 three made, 2 free throws at an expected 0.8 each and 1
+    technical at an expected 0.8, offence: twos 100 x 4 / 4 = 100, threes 100 x 3 / 4 = 75, free_throws
+    100 x 2.4 / 4 = 60.
+    """
+    poss = counters["poss"].to_numpy(dtype=float)
+    fg3m = counters["fg3m"].to_numpy(dtype=float)
+    parts = dict(twos=(counters["pts"] - counters["ftm"] - counters["ftm_tech"]).to_numpy(dtype=float) - 3.0 * fg3m,
+                 threes=3.0 * fg3m if x3 is None else 3.0 * (luck_kept * fg3m + (1.0 - luck_kept) * x3),
+                 free_throws=(counters["xftm"] + counters["xftm_tech"]).to_numpy(dtype=float))
+    per_100 = {name: 100.0 * part / poss for name, part in parts.items()}
+    ratio = 1.0
+    if x3 is not None:
+        ratio = float((sum(per_100.values()) * poss).sum() / (np.asarray(y_points, dtype=float) * poss).sum())
+    return {name: value / ratio for name, value in per_100.items()}, ratio
+
+
+def split_pieces(fit: GamesPartFit, keys: dict, side: str, outcomes: dict | None = None) -> tuple[pd.DataFrame, dict]:
+    """Every player's games' part on one side split two ways, and its posterior standard deviation: (frame, misses).
+
+    `side` is "off" or "def" (`split_games_part`; the defence's sign is flipped, so positive is good).  The frame has
+    player_id, u, then ROW_PIECES (on_court, sat, missed, team_sos, which add up to u), sd_u (sqrt of sigma^2
+    [M^-1]_jj, `residual_scale`) and, when `outcomes` ({piece: the response's piece, `outcome_responses`}) is given,
+    one column per outcome piece, which also add up to u.  `misses` holds the largest |sum_hy|, |leftover|, and
+    |outcome pieces' sum - u|, and whether the solve was jittered.
+    """
+    n, n_rows = fit.n_players, len(fit.w)
+    first, sign = (0, 1.0) if side == "off" else (n, -1.0)
+    unit = np.zeros((fit.matrix.shape[0], n))
+    unit[first + np.arange(n), np.arange(n)] = 1.0
+    solved = np.linalg.solve(fit.matrix, unit)
+    scale = residual_scale(fit)
+    z = fit.y - fit.unpenalised @ fit.theta[2 * n:]
+    # M is symmetric, so e_j' M^-1 rhs is column j of `solved` dotted with rhs
+    by_outcome = {}
+    for name, response in (outcomes or {}).items():
+        weighted = fit.w * np.asarray(response, dtype=float)
+        rhs = np.concatenate([fit.players.T @ weighted, fit.unpenalised.T @ weighted])
+        by_outcome[name] = sign * (solved.T @ rhs)
+    by_column = fit.players.tocsc()
+    records, sum_hy, leftover = [], 0.0, 0.0
+    for j in range(n):
+        rows_off = by_column.indices[by_column.indptr[j]:by_column.indptr[j + 1]]
+        rows_def = by_column.indices[by_column.indptr[n + j]:by_column.indptr[n + j + 1]]
+        h = row_weights(fit, solved[:, j])
+        hz = h * z
+        groups = row_groups(rows_off, rows_def, keys, n_rows)
+        on_court, sat, missed = hz[groups["on"]].sum(), hz[groups["without"]].sum(), hz[groups["missed"]].sum()
+        rest = hz[~(groups["on"] | groups["without"] | groups["missed"])].sum()
+        coefficient = fit.theta[first + j]
+        sum_hy = max(sum_hy, abs(float(h @ fit.y) - coefficient))
+        leftover = max(leftover, abs(coefficient - (on_court + sat + missed + rest)))
+        records.append((fit.player_ids[j], sign * coefficient, sign * on_court, sign * sat, sign * missed,
+                        sign * (coefficient - on_court - sat - missed),
+                        float(np.sqrt(scale * solved[first + j, j]))))
+    frame = pd.DataFrame(records, columns=["player_id", "u", *ROW_PIECES, "sd_u"])
+    for name, value in by_outcome.items():
+        frame[name] = value
+    misses = dict(sum_hy=sum_hy, leftover=leftover, retried=fit.retried, outcomes=0.0)
+    if by_outcome:
+        misses["outcomes"] = float(np.abs(sum(by_outcome.values()) - frame.u.to_numpy()).max())
+    return frame, misses

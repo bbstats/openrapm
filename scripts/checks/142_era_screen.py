@@ -93,7 +93,8 @@ _ARMS: dict = {}                    # in each worker: arms()
 
 # ------------------------------------------------------------------------------------------------ the arms
 def arms() -> dict:
-    """{name: ({side: input list}, the training rows' column that weighs each row, or None for the row weight alone)}."""
+    """{name: ({side: input list}, the training rows' column that weighs each row, or None for the row weight
+    alone)}."""
     from openrapm.features import FEATURE_SETS
     shipped, versus = FEATURE_SETS["box_score_and_bio"], FEATURE_SETS["ratios_vs_league"]
     out = {"today": (shipped, None), "vs_league": (versus, None), "pre1997_out": (shipped, "pre1997_out")}
@@ -114,8 +115,10 @@ def pre_1997_players(panel: pd.DataFrame) -> set:
     return set(first.index[(first.season == 1997) & (first.age >= PRE_1997_AGE)])
 
 
-def prepare(cfg: dict) -> dict:
+def prepare(cfg: dict, every_arm: dict | None = None) -> dict:
     """{(side, season): (training rows, rated rows)} for every screen season, with every arm's inputs and weights.
+
+    `every_arm` is {name: ({side: input list}, ...)}, `arms()` unless given (check 143 hands over its own lists).
 
     The labels are step 1's RAPM over every trainable season but the screen season and its neighbours (the test
     setting); the neighbours yardstick is the same fit over the two neighbouring seasons alone.  Only the columns the
@@ -134,7 +137,7 @@ def prepare(cfg: dict) -> dict:
     panel = panel[panel.possessions > 0].reset_index(drop=True)
     pre1997 = pre_1997_players(panel)
     print(f"  {len(pre1997)} players first seen in 1997 at {PRE_1997_AGE:g} or older", flush=True)
-    every_arm = arms()
+    every_arm = arms() if every_arm is None else every_arm
     cells = {}
     for season in SCREEN:
         unseen = unseen_seasons(season, TEST)
@@ -296,7 +299,8 @@ def passes(per_season: pd.DataFrame, arm: str, reference: str = "today") -> tupl
     lost = [side for side in won if rows[(side, "neighbours")]["mean_change"] > 0]
     if lost:
         return False, won, f"(c) worse on the neighbours yardstick on {', '.join(lost)}"
-    swept = [f"{side} {era}" for side, _ in SIDES for era in ERAS if rows[(side, "career")][f"{era} worse in every season"]]
+    swept = [f"{side} {era}" for side, _ in SIDES for era in ERAS
+             if rows[(side, "career")][f"{era} worse in every season"]]
     if swept:
         return False, won, f"(d) worse in every screen season of {', '.join(swept)}"
     return True, won, ""
