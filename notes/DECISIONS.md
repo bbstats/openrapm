@@ -7134,3 +7134,261 @@ The owner: "Adopt one multiplier as the new incumbent - sounds good!"  Step 4 no
 - Published (the owner: "Publish"): the site's ratings, bias page, OpenRAPM decomposition and similarity files rebuilt,
   every decomposition check passed, commit 9d98448 on `main`, Pages built, the live ratings.json equal to the committed
   one.
+
+## Home and away assists: the scorekeeper's count, read-only (the owner, 2026-10-15, thinking of Stockton)
+
+The owner: "if FG% doesn't dramatically change but assist rate jumps up @ home, that's a guarantee of some sort of
+bias".  `scratch/2026-10-15_assists/home_away_assists.py` and `arenas_and_stockton.py`, regular seasons 1996-2026 from
+the cached game logs; tables `outputs/csv/assists_*.csv`.  Per season, a quasi-Poisson fit of each team-game's assists
+with its made field goals as exposure, each team's attack and defence, the three-point share of the makes, a league
+home term, and per arena a generosity for both teams and a bias for the home team only, as van Bommel and Bornn (2017,
+arXiv 1602.08754) split them; arena effects shrunk by empirical Bayes.
+
+| era | home edge, assists per make | home edge, FG% | true spread of arena generosity | its season-to-season correlation |
+|---|---|---|---|---|
+| 1996-2003 | about 6% | 2-4% | 6.8% | 0.66 |
+| 2004-2017 | 3-5% | 2-3% | 6.6% | 0.74 |
+| 2018-2026, the league's stats auditor | 1-2% | 1-2% | 0.9% | 0.30 |
+
+- Before 2018 the home edge in assists per make ran two to three points above the home edge in shooting, and arenas
+  differed in generosity to both teams by about 7%, a habit that carried from season to season.  Both vanished when
+  the league added a stats auditor in 2017-18, while the shooting edge stayed.  The home-team-only bias is smaller,
+  true spread about 3%, and carries over weakly, 0.19-0.26.
+- Utah was stingy, not generous: generosity -3% to -8% in 1997-2004 after shrinkage, for example 2001 -7.7%, a 0.4%
+  chance of being above zero; its home team's total boost ranked 14th-26th of 29 arenas.  van Bommel and Bornn found
+  Utah the stingiest scorekeeper in 2015-16.
+- Stockton 1996-2003: assists per teammate make +3.1% at home, standard error 2.7%, against +4.5% for his own FG% and a
+  median of +7.5% for every 300-assist player-season of the era.  The legend is not borne out in these seasons; the
+  game logs start in 1996, so his earlier seasons are not tested.
+- For the ratings: the prior reads assists per used possession.  Before 2018 a generous arena adds about 3-4% to its
+  team's assists over a season, the same for every player of the team; not built, the owner's call.
+
+## Stockton above Jordan in 1997 and 1998, read-only (the owner, 2026-10-15: "can't have MJ below him, LOL - unless we've discovered something")
+
+The published table, each rating split as the decomposition page splits it, points per 100:
+
+| player-season | rank | box-score part | games' part | swap step | total |
+|---|---|---|---|---|---|
+| Stockton 1997 | 1 | 10.01 | -1.35 | -1.19 | 7.47 |
+| Jordan 1997 | 2 | 6.36 | +1.51 | -0.98 | 6.88 |
+| Stockton 1998 | 1 | 7.79 | -0.45 | -0.71 | 6.62 |
+| Jordan 1998 | 3 | 5.38 | +1.36 | -0.98 | 5.76 |
+
+- The whole lead is the box-score prior.  Stockton 1997's offensive box-score part, 9.33, is the largest of any
+  player-season since 1997 with 2,000+ possessions; his inputs sit at the 99.8th percentile for assists per 100 and
+  assists minus turnovers, 97.6th for true shooting, 97.4th for steals.  Jordan's: 99.9th for shots and points per
+  100, but 52nd and 23rd for effective field-goal % in 1997 and 1998, 4th for three-point % in 1998.
+- His own games disagree: the games' part is -1.67 on offence in 1997, -1.21 of it on court; Jordan's is +1.51, +1.40
+  of it on defence.  Experiment 65 counts the games' part more and still leaves Stockton first.
+- It is a pattern, not one player.  Possession-weighted games' part by the offensive box-score part's percentile, every
+  player-season with 1,000+ possessions: 0.80-0.90 +0.00, 0.90-0.95 -0.04, 0.95-0.98 -0.06, 0.98-0.99 -0.09, 0.99-0.995
+  -0.26, top 0.5% -0.32, standard error about 0.1; the top 25 average -0.83, 22 of them negative.  Defence shows no such
+  pattern.  The offensive prior overshoots at its top: Stockton, Deron Williams 2010, Chris Paul 2015, Dončić.
+- Leads, nothing built: the booster's linear leaves extrapolating at extreme inputs, such as assists at the 99.8th
+  percentile; and the older finding that the prior under-credits shot creation, the high-usage scorers.
+
+## Experiment 66: the hustle dashboards, game by game (rank 2 of the retry plan, 2026-10-15; the owner: "yes, go")
+
+The leak control showed that a season-total input cannot be read on the decider.  The hustle numbers were fetched game
+by game (`openrapm data hustle-games`, 12,812 games, 2017-2026, none empty); their per-game sums equal the season
+dashboard's totals, exactly in 2017 and within 0.3% later.  The season panel now sums the nine hustle counts over the
+games a rating is built from (`dashboards.hustle_game_totals`, `dashboard_rates.counts`), so a fold reads only its fit
+games, with a leak check per fold; 2016, whose only source is a season total covering a third of the players, is left
+missing.  The panel rebuilt: every other column bit-identical, the hustle columns correlate 0.9994 or more with the old
+ones from 2017 (`outputs/season_panel_before_hustle_games.parquet` is the old panel).  Build: the chain with
+`--features hustle`, 52 minutes, every fold's leak checks passed; log `outputs/hustlegames_chain.log`.
+
+| reading | seasons | ΔMSE | standard error | paired z | seasons improved |
+|---|---|---|---|---|---|
+| decider, against `cols06`'s folds | all 30 | **-0.196** | 0.066 | **-2.96** | 20 of 30 |
+| decider | 2017-2026, with hustle | -0.297 | 0.170 | -1.75 | 7 of 10 |
+| decider | 1997-2016, without | -0.145 | 0.053 | -2.75 | 13 of 20 |
+| noise control | all 30 | +0.077 | 0.073 | +1.05 | 11 of 30 |
+| noise control | 2017-2026 | +0.201 | 0.109 | +1.84 | 1 of 10 |
+| guard, year over year, team-game | 56 | -0.001 | 0.036 | -0.03 | 31 of 56 |
+| year over year, stint | 56 | -0.131 | 0.041 | -3.19 | 37 of 56 |
+
+- Passes the three readings as registered.  But half the gain is in the seasons without hustle data: as in experiment 62,
+  extra columns change the booster everywhere (checks 148 and 150: any added column moves the prior, and with each
+  tree shown 60% of its inputs, more columns means each tree sees fewer of the old ones).  The hustle information's own
+  share is the covered seasons' -0.297, z -1.75, against a noise control that runs +0.201 there.
+- 2026 against `gamesfree`, mean absolute change in the total: top 30 0.30, 31-150 0.28, 151-300 0.31, 301+ 0.35; 134
+  players move 0.5 or more.  Down: Jalen Green -1.19, Klay Thompson -1.07, De'Aaron Fox -1.05, Dončić -0.83, mostly
+  defence.  Up: Mitchell Robinson +0.76, Diabaté +0.65, Queta +0.41.  Top 20 in: Cade Cunningham; out: Anunoby, Ty Jerome.
+- The control that separates the two: the same build with the hustle columns shuffled among each season's players
+  (check 146's placebo), through the chain.  Waiting on the owner.
+
+### Experiment 66's control: the hustle columns shuffled (2026-10-15, overnight; the owner: "go for it")
+
+`features.HUSTLE_PLACEBO`, feature set `hustle_placebo`: the same nine columns with each season's player profiles moved
+among its players by one seeded permutation, all columns together, missing kept missing
+(`dashboard_rates.shuffled_rows`; the folds rebuild them from their fit games like the real ones).  Panel rebuilt to 131
+columns, the 122 old ones bit-identical (`outputs/season_panel_before_hustle_placebo.parquet`).  Built through the chain,
+`hustleplacebo`, 49 minutes, every leak check passed.  Season by season, step 4, the decider's units:
+
+| comparison | seasons | ΔMSE | standard error | paired z | seasons improved |
+|---|---|---|---|---|---|
+| placebo minus incumbent | all 30 | -0.103 | 0.051 | -2.03 | 22 of 30 |
+| placebo minus incumbent | 1997-2016, no hustle data | -0.164 | 0.045 | -3.67 | 16 of 20 |
+| placebo minus incumbent | 2017-2026 | +0.019 | 0.118 | +0.16 | 6 of 10 |
+| real minus placebo | 2017-2026 | -0.316 | 0.162 | -1.94 | 6 of 10 |
+| real minus placebo, DNP games | 2017-2026 | -0.287 | 0.140 | -2.05 | 9 of 10 |
+| real minus placebo | 1997-2016 | +0.019 | 0.026 | +0.72 | 9 of 20 |
+
+- The split is clean.  The gain in the seasons without hustle data is the extra columns themselves, real or shuffled
+  alike: with each tree shown 60% of its inputs, nine columns that are missing before 2017 thin out what each tree sees
+  in those seasons.  The hustle information is worth about -0.3 in the ten seasons that have it, z about -2, the same
+  size on the DNP games.
+- Two separate questions for the owner: the hustle inputs, worth about -0.3 where they exist; and the thinning of the
+  early seasons' trees, which may be had more simply by showing each tree fewer inputs (column share 0.4, queued
+  tonight).  The placebo's year over year: +0.005, z +0.16.
+
+### Experiment 65b: the source split built whole (2026-10-15, overnight)
+
+`scratch/2026-10-15_overnight/source_split_table.py`: each season rated again from all its games with `cols06`'s
+boosters, held to the step-3 table to 1e-6, its games' part split by `within_season.fold_pieces`, and step 4 applied
+piece by piece with check 145's `source` multipliers from the 8 nearest `cols06pieces` fold seasons; then step 5.  Mean
+multipliers: offence prior 0.69, on court 1.49, sat 1.77, missed 3.56, team SOS 2.78; defence 0.84, 1.72, 1.96, 4.15,
+2.07.
+
+| reading | ΔMSE vs `gamesfree` | standard error | paired z | seasons improved |
+|---|---|---|---|---|
+| decider, on the folds, against experiment 65 | -0.088 | 0.034 | -2.59 | 20 of 30 |
+| guard, year over year, team-game | **+0.144** | 0.041 | **+3.50** | 19 of 56 |
+| year over year, stint | +0.245 | 0.052 | +4.71 | 19 of 56 |
+
+- Fails the guard.  Counting the games a player missed four times over predicts the rest of his own season and not the
+  seasons around it: check 145 called these pieces in-season only, and that is what they are.  One factor on the whole
+  games' part, experiment 65, stays.  2026 movement against `gamesfree`: top 30 0.32, 301+ 0.14; 59 players 0.5 or more.
+
+### Experiments 67 and 68: the Stockton look's two fixes (2026-10-15/16, overnight)
+
+The offensive prior overshoots at its top ("Stockton above Jordan").  Two single changes to the booster, each through
+the chain on its own folds: 67 `clip`, every input clipped to its training rows' 0.5% and 99.5% quantiles in training
+and prediction (`box_prior.INPUT_CLIP`, `params/booster_params_lgb1_cols06_clip.json`); 68 `flat`, plain leaves instead
+of straight-line leaves (`params/booster_params_lgb1_cols06_flat.json`).  Against `gamesfree`, test setting:
+
+| reading | 67 clip | 68 plain leaves |
+|---|---|---|
+| decider ΔMSE | +0.045 | **-0.102** |
+| decider paired z | +2.03 | **-3.19** |
+| decider seasons improved | 10 of 30 | 23 of 30 |
+| guard, year over year, ΔMSE | +0.009 | +0.011 |
+| guard paired z | +0.79 | +0.42 |
+| Stockton 1997 rank, box-score offence | 1st, 9.63 to 9.00 | 1st, 9.63 to 7.60 |
+| Jordan 1997 rank | 2nd | 3rd |
+| Stockton 1998 rank | 2nd | 5th |
+| Jordan 1998 rank | 3rd | 2nd |
+| top 0.5% offensive box-score parts, mean residual from the prior | -0.51 to -0.41 | -0.51 to -0.37 |
+| top 25, mean residual | -0.75 to -0.63 | -0.75 to -0.38 |
+
+- Clipping trims little and costs a little: the overshoot is mostly inside the data's range, not past it.
+- Plain leaves pass the decider and halve the top-25 overshoot.  1998 is Jordan over Stockton; 1997 is not.  2026: the
+  small-sample extreme box scores come down, Edey -1.65 on 590 possessions, Thybulle -1.40; Dončić -1.08; Jokić +0.85,
+  5th to 2nd.  Mean absolute move: top 30 0.37, 31-150 0.16, 151-300 0.19, 301+ 0.15; 19 players 0.5 or more.
+- Age, read-only, product table, players with 1,000+ possessions: the top 5% of offensive box-score parts aged 33+
+  come in at a mean residual of -0.34, standard error 0.09; under 25 -0.10, 25-28 -0.12, 29-32 0.00.  Neither prior reads
+  age.  Queued as experiment 69, age on both lists.
+
+### Experiment 69: age on both priors (2026-10-16, overnight)
+
+The read-only age split above suggested the prior overrates old stars.  Feature set `no_career_plus_age`, age appended to
+both lists, through the chain.  **The decider fails badly: +0.713, z +7.46, 3 of 30 seasons**, while year over year
+improves, -0.226, z -5.22, almost all of it looking back (z -6.68; forward z -1.65).  That is the career counts'
+pattern from experiment 59: an input about where a player is in his career buys next season's team totals and costs
+the split of credit inside a team.  The overshoot does not move: Stockton 1997 still first, his games' part -1.86; the
+top-25 mean residual -0.75 to -1.03.  Age stays off the prior.
+
+### Experiment 70: each tree shown 40% of the inputs (2026-10-16, overnight)
+
+Check 150's arm with the largest summed gain, `params/booster_params_lgb1_cols04.json`, through the chain.  A tie: decider
+-0.013, z -0.47, 16 of 30 seasons, the same in both eras (1997-2016 -0.016, z -0.42); guard -0.010, z -0.43.  So the hustle
+placebo's early-season gain, -0.164 at z -3.67, is not "each tree sees fewer of the old inputs".  The likelier reading:
+columns missing before 2017 let a tree split the early seasons from the late ones, an era marker.  Check 147 put an era
+flag in by name and found nothing on the prior's career yardstick, which cannot see within-team credit; the decider was
+not run on it.
+
+### Experiment 71: plain leaves and the hustle inputs together (2026-10-16, overnight)
+
+Experiments 66 and 68 combined, `--booster-params lgb1_cols06_flat --features hustle`, through the chain.
+
+| comparison | seasons | ΔMSE | standard error | paired z | seasons improved |
+|---|---|---|---|---|---|
+| against `cols06`'s folds, the decider | all 30 | **-0.272** | 0.056 | **-4.87** | 23 of 30 |
+| against `cols06`'s folds | 1997-2016 | -0.230 | 0.058 | -3.96 | 16 of 20 |
+| against `cols06`'s folds | 2017-2026 | -0.357 | 0.122 | -2.93 | 7 of 10 |
+| against plain leaves alone | 2017-2026, hustle seasons | -0.328 | 0.107 | -3.08 | 8 of 10 |
+| against plain leaves alone | 1997-2016 | -0.092 | 0.044 | -2.08 | 13 of 20 |
+| against hustle alone | all 30 | -0.076 | 0.043 | -1.79 | 18 of 30 |
+| guard, year over year, team-game | 56 | +0.012 | 0.039 | +0.30 | 29 of 56 |
+| year over year, stint | 56 | -0.133 | 0.046 | -2.89 | 35 of 56 |
+
+- The two stack.  On plain leaves the hustle information clears the bar by itself in the seasons that have it, z -3.08,
+  8 of 10.
+- The eye check goes the other way: plain leaves lower Jordan's box-score part more than Stockton's, 1997 offence 4.93
+  to 3.05 against 9.63 to 7.70.  Ranks, test setting: 1997 Stockton 1st, Jordan 6th; 1998 Stockton 3rd, Jordan 4th.
+  The prior's under-credit for volume scoring at ordinary efficiency gets worse with plain leaves.
+- 2026 against `gamesfree`: Jokić 2nd, +1.08; Dončić -1.09; Edey -1.39 on 590 possessions; Thybulle -1.73; mean absolute
+  move top 30 0.48, 31-150 0.33, 151-300 0.35, 301+ 0.33; 131 players 0.5 or more.  Top 20 out: Anunoby, Ty Jerome; in:
+  Cade Cunningham, Cason Wallace.
+- Noise control on this base, `noise_flathustle` (`--fold-assignment 1`, its own folds for all thirty seasons, 49
+  minutes): against `flathustle` on the decider +0.043, z +0.71, 11 of 30 seasons; year over year +0.006, z +0.13.
+
+### Experiment 72: the points split on today's inputs (2026-10-16, overnight)
+
+Experiment 54's split, assisted and unassisted points and free throws made on both lists (`no_career_points_parts`),
+aimed at Jordan's under-credited shot creation.  A tie: decider +0.022, z +0.67, 12 of 30; guard -0.008, z -0.31.
+Stockton 1997's box-score offence falls 9.63 to 7.86, still first; Jordan stays below him in both seasons.
+
+### Experiment 73: an era marker on plain leaves (2026-10-16, overnight)
+
+`features.ERA_MARKER`, `season_from_2017`, a panel column (panel rebuilt to 132 columns, the old ones bit-identical;
+`outputs/season_panel_before_era_marker.parquet`), appended to both lists, on plain leaves.
+
+| comparison | seasons | ΔMSE | standard error | paired z | seasons improved |
+|---|---|---|---|---|---|
+| marker on plain leaves minus plain leaves | all 30 | -0.055 | 0.032 | -1.72 | 19 of 30 |
+| the same | 1997-2016 | -0.071 | 0.042 | -1.69 | 12 of 20 |
+| plain leaves with hustle minus marker on plain leaves | 1997-2016 | -0.021 | 0.037 | -0.56 | 11 of 20 |
+| the same | 2017-2026 | **-0.306** | 0.097 | **-3.17** | 8 of 10 |
+
+- The hustle columns' gain before 2017 is an era split: a plain marker gets most of it, and hustle does no better than
+  the marker there.  What hustle adds beyond an era split is its information in the seasons that have it, -0.31 at z
+  -3.2.  Guard +0.011, z +0.33.
+
+### The per-game tracking box scores (2026-10-16, overnight)
+
+`openrapm data tracking-games` (`BoxScorePlayerTrackV3`, `dashboards.GAME_BOXES`): 16,758 games, 2014-2026, none empty,
+under a 10-minute watchdog (`scratch/2026-10-15_hustle/tracking_watchdog.ps1`).  The box score holds five of the
+tracking dashboard's columns, `dashboards.TRACKING_GAME_COLUMNS`: touches, passes, offensive and defensive rebound
+chances, shots defended at the rim.  Their per-game sums correlate 0.998-1.0 with the season totals; 2014's rebound
+chances run about 10% higher per game, a definition difference that the league-relative rate absorbs.  The panel now
+sums those five over the games a rating is built from (`dashboard_rates._per_game`), so a fold rebuilds them; the
+other sixteen tracking columns stay season totals and still leak in a fold.  Panel rebuilt, only those five columns
+changed, each 0.99+ against the old ones (`outputs/season_panel_before_tracking_games.parquet`).  Feature set
+`hustle_and_tracking_games`: the hustle lists plus passes, touches and offensive rebound chances on offence, shots
+defended at the rim and defensive rebound chances on defence.  Experiment 74 builds it on plain leaves.
+
+### Experiment 74: plain leaves, hustle and the per-game tracking columns (2026-10-16, overnight)
+
+`--booster-params lgb1_cols06_flat --features hustle_and_tracking_games`, through the chain.  Against `cols06`'s folds:
+-0.291, z -4.75, 27 of 30.  Against experiment 71, the same without the tracking columns: -0.019, z -0.53, a tie; in the
+tracking seasons 2014-2026 +0.078, z +1.35, 4 of 13; before 2014 -0.093, z -2.55, another era split, now at 2014.  Guard
+-0.013, z -0.28; stint level -0.172, z -2.99.  The five per-game tracking columns carry nothing hustle does not: not
+recommended.  Eye check: 1997 Stockton 1st, Jordan 4th; 1998 Stockton 3rd, Jordan 4th.
+
+### Experiment 71 at the product setting, a preview (2026-10-16, overnight)
+
+`openrapm build --name product_flathustle --booster-params lgb1_cols06_flat --features hustle --folds
+flathustle_early,flathustle_within`, 12 minutes, written beside the live table, which is untouched
+(`outputs/season_ratings_product_flathustle*.parquet`).  Against the live product table: 1997 Stockton 1st 6.55,
+Jordan 2nd 5.92 (live 7.47 and 6.88); 1998 Stockton 2nd, Jordan 5th (live 1st and 3rd).  2026: median move 0.31 per
+100, top 30 0.37, 176 players 0.5 or more; Jokić 2nd +0.66, Dončić 9th -1.23, Giannis 18th -0.90, Edey 7th +0.72,
+Holmgren 10th +0.46; out of the top 20 Mitchell Robinson, in Jarrett Allen.
+
+### Disk clean-up (2026-10-16)
+
+The owner: "clean up everything".  Deleted, about 12.7 GB, every result above already recorded and each rebuildable
+by its chain command: the within-season folds and saved boosters of `leak_cols06`, `clip`, `plusage`, `cols04`,
+`pointsparts`, `vsleague2`, `hustleplacebo`, `flatera`, `flathustletrack` and `cols06pieces`.  Their rating tables and
+csv files stay.  Kept: `cols06`, `noise_cols06`, `flat`, `hustlegames`, `flathustle`, `noise_flathustle`.

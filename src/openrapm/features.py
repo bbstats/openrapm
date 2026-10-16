@@ -141,7 +141,15 @@ HUSTLE_RATES = ["deflections_vs_league_avg", "contested_twos_vs_league_avg", "co
 # against the player himself and padded toward the league's (data/dashboard_rates.py).  The mirror of a defender's
 # assignment is not an offence's choice, so the second is built to test that.
 MATCHUP_RATES = ["attackers_guarded_scoring_vs_league_avg", "defenders_faced_stinginess_vs_league_avg"]
-DASHBOARD_RATES = [*TRACKING_RATES, *HUSTLE_RATES, *MATCHUP_RATES]
+# The placebo for experiment 66 (2026-10-15): the hustle columns with each season's players' profiles shuffled among
+# them, jointly, the missing ones kept missing (data/dashboard_rates.shuffled_rows).  As many columns, the same pattern
+# of missing seasons, no information about the player: what it gains is what any extra columns gain.
+HUSTLE_PLACEBO = [f"{name}_shuffled" for name in HUSTLE_RATES]
+DASHBOARD_RATES = [*TRACKING_RATES, *HUSTLE_RATES, *MATCHUP_RATES, *HUSTLE_PLACEBO]
+# An era marker (2026-10-16, overnight): 1 for a season from 2017 on, 0 before; a training row averaging several seasons
+# averages it.  The hustle placebo gained only in the seasons before 2017, where its columns are missing; this asks
+# whether a plain marker of that split does the same.
+ERA_MARKER = ["season_from_2017"]
 # the columns a prior row may lack: a training row averages them over the seasons that have them (box_prior.py) and is
 # kept when they are missing, where a missing value in any other input drops the row
 MISSING_OK = list(DASHBOARD_RATES)
@@ -203,17 +211,18 @@ SHOTQ_PADS = {"two_point_expected_pct": 50.0, "three_point_expected_pct": 50.0, 
               "points_per_shot_over_expected": 300.0}
 SHOTQ = list(SHOTQ_PADS)
 
-# Every input the prior could read (121): the rates, the role, every derived column, career, body, on-court, the
-# play-by-play parts, the ratios against the league, the career counted from the debut, and the dashboard inputs.
+# Every input the prior could read (131): the rates, the role, every derived column, career, body, on-court, the
+# play-by-play parts, the ratios against the league, the career counted from the debut, and the dashboard inputs with
+# the hustle placebo.
 # scripts/checks/95_miss_by_group.py and commands/within_season.py (its PLAYER_COLUMNS) report on all of them.
 PRIOR_FEATURES = [*BOX_RATES, *ROLE, *DERIVED, *RATIOS, *SHOTQ, *CAREER, *BIO, *ON_COURT, *EVENT_RATES, *VS_LEAGUE,
-                  *CAREER_FROM_DEBUT, *DASHBOARD_RATES]
+                  *CAREER_FROM_DEBUT, *DASHBOARD_RATES, *ERA_MARKER]
 # The panel columns averaged into a multi-season training row, before anything is derived from them; the play-by-play
 # parts came after every column the published ratings were built from (2026-10-12), the career counted from the debut
 # after them (2026-10-13), the dashboard inputs last (2026-10-14).
 PANEL_INPUTS = [*BOX_RATES, *ROLE, *CLOSENESS, *UNCENTRED_RATES, *SHOT_TOTALS, *SHOT_LEAGUE, *CAREER, *BIO,
                 *ON_COURT, *OFF_COURT, *ON_MINUS_OFF, *PLAYOFF_SHARE, *EVENT_RATES, *CAREER_FROM_DEBUT,
-                *DASHBOARD_RATES]
+                *DASHBOARD_RATES, *ERA_MARKER]
 # The season panel's columns, in order: who and when, the possessions behind the row (his offensive possessions
 # on an offence row, defensive on a defence row), then the inputs.
 PANEL_KEYS = ["side", "player_id", "season"]
@@ -286,12 +295,29 @@ FEATURE_SETS = {
     # experiment 59 (the owner, 2026-10-14): the career counts off both lists -- career possessions before, seasons
     # played before and seasons with his current team; every other shipped input keeps its order
     "no_career_counts": _NO_CAREER,
+    # experiment 74 (2026-10-16, overnight): the hustle lists plus the five tracking columns the per-game tracking box
+    # score holds (2014 on), so a fold rebuilds every one from its fit games
+    "hustle_and_tracking_games": {
+        "O": _NO_CAREER["O"] + HUSTLE_OFFENCE + ["passes_made_vs_league_avg", "touches_vs_league_avg",
+                                                 "off_reb_chances_vs_league_avg"],
+        "D": _NO_CAREER["D"] + HUSTLE_DEFENCE + ["rim_shots_defended_vs_league_avg", "def_reb_chances_vs_league_avg"]},
+    # experiment 73 (2026-10-16, overnight): the era marker appended to both lists
+    "no_career_era_marker": {side: [*_NO_CAREER[side], *ERA_MARKER] for side in ("O", "D")},
+    # experiment 72 (2026-10-16, overnight): experiment 54's points split on today's inputs, both lists reading points
+    # by whether an assist set them up, and free throws made: unassisted scoring is shot creation (the Jordan look)
+    "no_career_points_parts": {side: _NO_CAREER[side] + POINTS_PARTS for side in ("O", "D")},
+    # experiment 69 (2026-10-15, overnight): age added to both lists, a this-season fact; the top 5% of offensive
+    # box-score parts aged 33+ came in 0.34 per 100 below the prior, the younger ones 0.00 to 0.12
+    "no_career_plus_age": {side: [*_NO_CAREER[side], "age"] for side in ("O", "D")},
     # experiment 64 (2026-10-15): experiment 56 again on today's inputs, the ratios against the league in their place
     "no_career_ratios_vs_league": {side: [f"{name}_vs_league" if name in RATIOS else name for name in _NO_CAREER[side]]
                                    for side in ("O", "D")},
     # the dashboard arms (screen: scripts/checks/146_dashboard_screen.py): tracking, hustle, and both, appended
     "tracking": {"O": _NO_CAREER["O"] + TRACKING_OFFENCE, "D": _NO_CAREER["D"] + TRACKING_DEFENCE},
     "hustle": {"O": _NO_CAREER["O"] + HUSTLE_OFFENCE, "D": _NO_CAREER["D"] + HUSTLE_DEFENCE},
+    # experiment 66's placebo: the same lists with every hustle column shuffled among the season's players
+    "hustle_placebo": {"O": _NO_CAREER["O"] + [f"{name}_shuffled" for name in HUSTLE_OFFENCE],
+                       "D": _NO_CAREER["D"] + [f"{name}_shuffled" for name in HUSTLE_DEFENCE]},
     "tracking_and_hustle": {"O": _NO_CAREER["O"] + TRACKING_OFFENCE + HUSTLE_OFFENCE,
                             "D": _NO_CAREER["D"] + TRACKING_DEFENCE + HUSTLE_DEFENCE},
     # the matchup arm (screen: scripts/checks/149_matchup_screen.py): one assignment per side
@@ -581,8 +607,12 @@ def _catalogue() -> tuple:
                      "data/dashboard_rates.py", "makes per shot", "centred", "tracking rate")
              for name, text in _OVER_EXPECTED_ROWS]
     rows += _family(HUSTLE_RATES, _HUSTLE_MEANINGS,
-                    "hustle-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate",
-                    "fraction above the league average", "centred", "hustle rate")
+                    "hustle box scores summed over the games, per 100 possessions, padded, (rate - league rate) / "
+                    "league rate", "fraction above the league average", "centred", "hustle rate")
+    rows += _family(HUSTLE_PLACEBO, [f"{text}, shuffled among the season's players (a placebo)"
+                                     for text in _HUSTLE_MEANINGS],
+                    "the hustle column with each season's player profiles shuffled jointly, missing kept missing",
+                    "fraction above the league average", "centred", "hustle placebo")
     rows += [Feature(name, text, "(attackers' points per matchup possession, each without his rows against the player, "
                      "padded 50 possessions toward the league's, mean weighted by possessions - league rate) / league "
                      "rate; the second sign-flipped", "fraction above the league average", "centred", "matchup")
@@ -597,6 +627,8 @@ def _catalogue() -> tuple:
              for name, text, formula, unit in _SHOTQ_ROWS]
     rows += [Feature(name, text, "panel column", unit, scale, group)
              for name, text, unit, scale, group in _PANEL_ROWS]
+    rows += [Feature("season_from_2017", "1 for a season from 2017 on, 0 before (an era marker)", "season >= 2017",
+                     "flag", "level", "era")]
     return tuple(rows)
 
 

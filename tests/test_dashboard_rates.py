@@ -201,3 +201,73 @@ def test_a_fold_scales_the_over_expected_columns_by_its_share_of_the_season(cfg)
     made, shots = (totals[spec.name].reindex(IDS).to_numpy(), totals[f"{spec.name}__shots"].reindex(IDS).to_numpy())
     assert whole[spec.name].to_numpy() == pytest.approx(made / (shots + spec.pad))
     assert fold[spec.name].to_numpy() == pytest.approx(0.75 * made / (0.75 * shots + spec.pad))
+
+
+# ------------------------------------------------------------------------------------------- hustle, game by game
+def write_hustle_games(cfg, season: int, games: dict):
+    """One file per game: `games` maps a game id to {player id: deflections}; every other hustle column is 1."""
+    from openrapm.data.dashboards import HUSTLE_GAME_COLUMNS, hustle_game_path
+    for game_id, players in games.items():
+        frame = pd.DataFrame({"gameId": game_id, "personId": list(players)})
+        for column in HUSTLE_GAME_COLUMNS.values():
+            frame[column] = 1.0
+        frame["deflections"] = list(players.values())
+        path = hustle_game_path(cfg, game_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        frame.to_parquet(path, index=False)
+
+
+def test_the_hustle_counts_are_summed_over_the_games_handed_in_and_never_scaled(cfg):
+    """Three games of 2026: a fold fitting on two of them sees only those two games' deflections, unscaled."""
+    write_dashboards(cfg, 2026)
+    games = {f"00225000{k:02d}": {int(i): float(k + 1) for i in IDS} for k in range(3)}
+    write_hustle_games(cfg, 2026, games)
+    n = {"O": np.full(len(IDS), 2000.0), "D": np.full(len(IDS), 2000.0)}
+    fit = list(games)[:2]
+    totals, exact, read = dr.counts(cfg, 2026, fit)
+    assert totals["deflections_vs_league_avg"].reindex(IDS).to_numpy() == pytest.approx(np.full(len(IDS), 3.0))
+    assert set(features.HUSTLE_RATES) <= exact and read == set(fit)
+    fold = dr.dashboard_rates(cfg, 2026, IDS, n, fit_share=0.5, game_ids=fit)
+    whole_counts = 3.0 * np.ones(len(IDS))
+    assert fold["D"]["deflections_vs_league_avg"].to_numpy() == pytest.approx(
+        dr.padded_relative(whole_counts, n["D"]), nan_ok=True)
+    assert fold["hustle_games"] == set(fit)
+
+
+def test_a_hustle_game_without_its_file_stops_and_a_season_without_per_game_files_leaves_hustle_missing(cfg):
+    write_hustle_games(cfg, 2026, {"0022500001": {int(IDS[0]): 2.0}})
+    with pytest.raises(FileNotFoundError, match="openrapm data hustle-games"):
+        dr.counts(cfg, 2026, ["0022500001", "0022500002"])
+    write_dashboards(cfg, 2016)
+    n = {"O": np.full(len(IDS), 2000.0), "D": np.full(len(IDS), 2000.0)}
+    out = dr.dashboard_rates(cfg, 2016, IDS, n, game_ids=["0021500001"])
+    assert out["O"][features.HUSTLE_RATES].isna().all().all() and out["hustle_games"] == set()
+    assert dr.dashboard_rates(cfg, 2016, IDS, n)["O"][features.HUSTLE_RATES].notna().any().any()
+
+
+def test_the_placebo_moves_whole_profiles_among_the_players_who_have_one():
+    values = np.array([[1.0, 10.0], [2.0, 20.0], [np.nan, np.nan], [3.0, 30.0]])
+    out = dr.shuffled_rows(values, 2024)
+    assert np.isnan(out[2]).all()
+    kept = out[[0, 1, 3]]
+    assert sorted(map(tuple, kept)) == [(1.0, 10.0), (2.0, 20.0), (3.0, 30.0)]          # profiles move whole
+    assert np.array_equal(out, dr.shuffled_rows(values, 2024), equal_nan=True)            # seeded by the season
+
+
+def test_the_tracking_columns_the_per_game_box_score_holds_are_summed_over_the_games(cfg):
+    """Touches from two of three tracking games; a tracking column the box score lacks stays a season total."""
+    from openrapm.data.dashboards import TRACKING_GAME_COLUMNS, game_box_path
+    write_dashboards(cfg, 2026)
+    write_hustle_games(cfg, 2026, {f"00225000{k:02d}": {int(i): 1.0 for i in IDS} for k in range(3)})
+    for k in range(3):
+        game_id = f"00225000{k:02d}"
+        frame = pd.DataFrame({"gameId": game_id, "personId": IDS})
+        for column in TRACKING_GAME_COLUMNS.values():
+            frame[column] = float(k + 1)
+        path = game_box_path(cfg, "tracking", game_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        frame.to_parquet(path, index=False)
+    fit = ["0022500000", "0022500001"]
+    totals, exact, read = dr.counts(cfg, 2026, fit)
+    assert totals["touches_vs_league_avg"].reindex(IDS).to_numpy() == pytest.approx(np.full(len(IDS), 3.0))
+    assert "touches_vs_league_avg" in exact and "drives_vs_league_avg" not in exact and read == set(fit)

@@ -67,6 +67,7 @@ from ..features import (
     CAREER_FROM_DEBUT,
     CLOSENESS,
     DASHBOARD_RATES,
+    ERA_MARKER,
     EVENT_RATES,
     OFF_COURT,
     ON_COURT,
@@ -113,7 +114,7 @@ OLD_PANEL = "role_panel_season.parquet"          # the old-named panel's file na
 # counted from the debut (added 2026-10-13) and the dashboard inputs (added 2026-10-14)
 MIGRATED_PANEL_COLUMNS = [column for column in SEASON_PANEL_COLUMNS
                           if column not in EVENT_RATES and column not in CAREER_FROM_DEBUT
-                          and column not in DASHBOARD_RATES]
+                          and column not in DASHBOARD_RATES and column not in ERA_MARKER]
 STINT_COLUMNS = ["game_id", "period", *HOME_SLOTS, *AWAY_SLOTS, "poss_h", "poss_a", "margin_h", "is_gt"]
 # The data layer's names for the body and shot columns, against the panel's (the pairs are pinned in
 # tests/test_features.py and tests/test_panel.py); data/roles.py builds the role and career columns under the panel's
@@ -382,10 +383,12 @@ def season_panel(season: int, cfg: dict, designs: dict, sources: SeasonSources, 
     event_counts, event_games = event_design(designs[OFFENCE], sources.tables.event_counts)
     parts = box_rates(event_counts, pad_target=cfg["pad_target"])
     players = _player_columns(season, cfg, designs, history, fit, sources.debut)
-    # the dashboards are season totals: a fold scales them to the share of the season it fits on (dashboard_rates.py)
+    # the tracking dashboards are season totals: a fold scales them to the share of the season it fits on; the hustle
+    # counts are summed over the games themselves (dashboard_rates.py)
     fit_share = None if fit is None else len(fit) / len(sources.tables.games)
+    games = set(sources.tables.games["game_id"].astype(str)) if fit is None else fit
     dashboards = dashboard_rates(cfg, season, players["player_id"].to_numpy(),
-                                 {"O": rates.offence.possessions, "D": rates.defence.possessions}, fit_share)
+                                 {"O": rates.offence.possessions, "D": rates.defence.possessions}, fit_share, games)
     rows = pd.concat([_side_rows(side, season, rates, parts, players, dashboards) for side in SIDES],
                      ignore_index=True)
     stints = sources.tables.stints
@@ -393,7 +396,9 @@ def season_panel(season: int, cfg: dict, designs: dict, sources: SeasonSources, 
         stints = stints[stints["game_id"].isin(fit)]
     rows = rows.merge(score_state(stints, season), on=["player_id", "season", "side"], how="left")
     rows[PLAYOFF_SHARE[0]] = rows["player_id"].map(playoff_share(stints, sources.tables.games)).fillna(0.0)
-    read = {**history.games_read, "score-state stints": set(stints["game_id"].unique()), "event counts": event_games}
+    rows[ERA_MARKER[0]] = float(season >= 2017)
+    read = {**history.games_read, "score-state stints": set(stints["game_id"].unique()), "event counts": event_games,
+            "hustle games": dashboards["hustle_games"]}
     return SeasonPanel(season, rows[SEASON_PANEL_COLUMNS], history.season_roles, read)
 
 

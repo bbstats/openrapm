@@ -11,6 +11,8 @@
                                                   covers; nothing reads them yet
     openrapm data hustle-games [FIRST] [LAST]     the hustle numbers game by game (BoxScoreHustleV2, 2017 on), so a
                                                   within-season fold can rebuild them from its fit games
+    openrapm data tracking-games [FIRST] [LAST]   the same for the per-game tracking box score (BoxScorePlayerTrackV3,
+                                                  2014 on)
     openrapm data panel                           the season panel (paths.panel) from the stints, box scores, roles,
                                                   bio feed, event counts and careers
     openrapm data panel --migrate-from FILE       the season panel from one written under the names used before
@@ -196,12 +198,13 @@ def run_dashboards(args: argparse.Namespace, cfg: dict) -> int:
 
 
 def run_hustle_games(args: argparse.Namespace, cfg: dict) -> int:
-    """The hustle numbers of every game of the seasons, one request a game, cached; failed games are listed."""
+    """The per-game box score of `args.source` (hustle or tracking) for every game of the seasons, one request a game,
+    cached; failed games are listed."""
     from ..data import dashboards
-    first = args.first_season if args.first_season is not None else dashboards.HUSTLE_GAMES_FIRST
+    first = args.first_season if args.first_season is not None else dashboards.GAME_BOXES[args.source][1]
     last = args.last_season if args.last_season is not None else int(cfg["last_season"])
     started = time.time()
-    out = dashboards.fetch_hustle_games(cfg, range(first, last + 1), phases(args), delay=args.delay)
+    out = dashboards.fetch_game_boxes(cfg, args.source, range(first, last + 1), phases(args), delay=args.delay)
     print(f"{out['games']} games {first}-{last}: {out['fetched']} fetched now ({out['empty']} with no rows), "
           f"{len(out['failed'])} failed ({time.time() - started:.0f}s)", flush=True)
     for game_id, error in out["failed"][:20]:
@@ -331,7 +334,18 @@ def _add_hustle_games(steps) -> None:
                         help="the last season (default config.yaml's last_season)")
     hustle.add_argument("--phases", default=DEFAULT_PHASES, help="RS, PO or both (default %(default)s)")
     hustle.add_argument("--delay", type=float, default=0.6, help="seconds between requests (default %(default)s)")
-    hustle.set_defaults(run=run_hustle_games)
+    hustle.set_defaults(run=run_hustle_games, source="hustle")
+    tracking = steps.add_parser(
+        "tracking-games", help="the per-game tracking box scores from stats.nba.com, cached",
+        description="Fetches every game's tracking box score (BoxScorePlayerTrackV3: distance, rebound chances, "
+                    "touches, passes, contested shots, shots defended at the rim) into "
+                    "paths.raw/dashboards/tracking/games/<season>/, one file a game, as hustle-games does.")
+    tracking.add_argument("first_season", nargs="?", type=int, metavar="FIRST", help="the first season (default 2014)")
+    tracking.add_argument("last_season", nargs="?", type=int, metavar="LAST",
+                          help="the last season (default config.yaml's last_season)")
+    tracking.add_argument("--phases", default=DEFAULT_PHASES, help="RS, PO or both (default %(default)s)")
+    tracking.add_argument("--delay", type=float, default=0.6, help="seconds between requests (default %(default)s)")
+    tracking.set_defaults(run=run_hustle_games, source="tracking")
 
 
 def _add_panel(steps) -> None:

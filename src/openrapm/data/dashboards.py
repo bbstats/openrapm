@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -226,23 +227,51 @@ def panel_rows(cfg: dict) -> pd.DataFrame:
 
 # ------------------------------------------------------------------------------------------ hustle, game by game
 HUSTLE_GAMES_FIRST = 2017       # BoxScoreHustleV2 holds every player from 2016-17; a 2015-16 game answers two rows
+# the season dashboard's hustle columns (data/dashboard_rates.COUNTS), by the per-game box score's name for each; the
+# per-game sums equal the season totals: exactly in 2017, within 0.3% in later seasons (the league's own revisions)
+HUSTLE_GAME_COLUMNS = {"DEFLECTIONS": "deflections", "CONTESTED_SHOTS_2PT": "contestedShots2pt",
+                       "CONTESTED_SHOTS_3PT": "contestedShots3pt", "CHARGES_DRAWN": "chargesDrawn",
+                       "LOOSE_BALLS_RECOVERED": "looseBallsRecoveredTotal", "DEF_BOXOUTS": "defensiveBoxOuts",
+                       "OFF_BOXOUTS": "offensiveBoxOuts", "SCREEN_ASSISTS": "screenAssists",
+                       "SCREEN_AST_PTS": "screenAssistPoints"}
+
+
+# the tracking dashboard's columns the per-game tracking box score also holds, by its name for each (2026-10-16): the
+# other tracking columns (drives, potential assists, paint, post and elbow touches, time with the ball, miles by end,
+# contested rebounds, defended twos and threes, makes over expected) exist as season totals only
+TRACKING_GAME_COLUMNS = {"TOUCHES": "touches", "PASSES_MADE": "passes", "OREB_CHANCES": "reboundChancesOffensive",
+                         "DREB_CHANCES": "reboundChancesDefensive",
+                         "DEF_RIM_FGA": "defendedAtRimFieldGoalsAttempted"}
+# the per-game box scores fetched game by game: source -> (the nba_api endpoint, its first season with every player).
+# The tracking one (2026-10-15) holds distance, rebound chances, touches, passes, secondary and free-throw assists,
+# contested and uncontested shots, and shots defended at the rim, a part of the tracking dashboards
+GAME_BOXES = {"hustle": ("BoxScoreHustleV2", HUSTLE_GAMES_FIRST), "tracking": ("BoxScorePlayerTrackV3", 2014)}
+
+
+def game_box_path(cfg: dict, source: str, game_id: str) -> Path:
+    return raw_dir(cfg) / "dashboards" / source / "games" / str(season_of_game(game_id)) / f"{game_id}.parquet"
 
 
 def hustle_game_path(cfg: dict, game_id: str) -> Path:
-    return raw_dir(cfg) / "dashboards" / "hustle" / "games" / str(season_of_game(game_id)) / f"{game_id}.parquet"
+    return game_box_path(cfg, "hustle", game_id)
 
 
 def fetch_hustle_game(game_id: str, cfg: dict, force: bool = False, tries: int = 4) -> tuple:
-    """(one game's hustle numbers, one row per player, whether it was read from the cache), cached at
-    `hustle_game_path`.  A game answered with no rows is cached as it is."""
-    path = hustle_game_path(cfg, game_id)
+    """(one game's hustle numbers, one row per player, whether it was read from the cache): `fetch_game_box`."""
+    return fetch_game_box("hustle", game_id, cfg, force, tries)
+
+
+def fetch_game_box(source: str, game_id: str, cfg: dict, force: bool = False, tries: int = 4) -> tuple:
+    """(one game's per-game box score of `source` (`GAME_BOXES`), one row per player, whether it was read from the
+    cache), cached at `game_box_path`.  A game answered with no rows is cached as it is."""
+    path = game_box_path(cfg, source, game_id)
     if path.exists() and not force:
         return pd.read_parquet(path), True
-    refuse_if_offline(path, f"the hustle box score of {game_id}")
+    refuse_if_offline(path, f"the {source} box score of {game_id}")
 
     def ask():
-        return _endpoint_class("BoxScoreHustleV2")(game_id=game_id, timeout=TIMEOUT).get_data_frames()[0]
-    frame = _retry(ask, tries=tries, base_sleep=3.0, what=f"hustle {game_id}")
+        return _endpoint_class(GAME_BOXES[source][0])(game_id=game_id, timeout=TIMEOUT).get_data_frames()[0]
+    frame = _retry(ask, tries=tries, base_sleep=3.0, what=f"{source} {game_id}")
     frame = frame.astype({column: str for column in frame.columns if frame[column].dtype == object})
     path.parent.mkdir(parents=True, exist_ok=True)
     frame.to_parquet(path, index=False)
@@ -255,14 +284,20 @@ def season_game_ids(cfg: dict, season: int, phases=("RS", "PO")) -> list[str]:
 
 
 def fetch_hustle_games(cfg: dict, seasons, phases=("RS", "PO"), delay: float = 0.6, log_every: int = 250) -> dict:
-    """Every game's hustle numbers for the seasons and phases, one request at a time, `delay` seconds apart (none
+    """Every game's hustle numbers for the seasons and phases: `fetch_game_boxes`."""
+    return fetch_game_boxes(cfg, "hustle", seasons, phases, delay, log_every)
+
+
+def fetch_game_boxes(cfg: dict, source: str, seasons, phases=("RS", "PO"), delay: float = 0.6,
+                     log_every: int = 250) -> dict:
+    """Every game's `source` box score for the seasons and phases, one request at a time, `delay` seconds apart (none
     after a cached file).  Returns {"games", "fetched", "empty", "failed": [(game_id, error)]}; one bad game does not
     stop the run, and a rerun fetches only what is missing.  OfflineFetch is not forgiven."""
     games = [game for season in seasons for game in season_game_ids(cfg, int(season), phases)]
     out, started = dict(games=len(games), fetched=0, empty=0, failed=[]), time.time()
     for done, game_id in enumerate(games, start=1):
         try:
-            frame, cached = fetch_hustle_game(game_id, cfg)
+            frame, cached = fetch_game_box(source, game_id, cfg)
             if not cached:
                 out["fetched"] += 1
                 out["empty"] += int(len(frame) == 0)
@@ -272,6 +307,54 @@ def fetch_hustle_games(cfg: dict, seasons, phases=("RS", "PO"), delay: float = 0
         except RuntimeError as error:
             out["failed"].append((game_id, str(error)[:300]))
         if log_every and (done % log_every == 0 or done == len(games)):
-            print(f"  hustle games: {done} of {len(games)}, {out['fetched']} fetched, {len(out['failed'])} failed "
+            print(f"  {source} games: {done} of {len(games)}, {out['fetched']} fetched, {len(out['failed'])} failed "
                   f"({time.time() - started:.0f}s)", flush=True)
     return out
+
+
+GAME_COLUMNS = {"hustle": HUSTLE_GAME_COLUMNS, "tracking": TRACKING_GAME_COLUMNS}
+
+
+@lru_cache(maxsize=4)
+def _season_game_boxes(folder: str, source: str) -> pd.DataFrame:
+    """Every cached game of one season's folder stacked: gameId, personId and the source's GAME_COLUMNS, as numbers.
+    A season's folds read it once."""
+    frames = [pd.read_parquet(path) for path in sorted(Path(folder).glob("*.parquet"))]
+    frame = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["gameId", "personId"])
+    out = pd.DataFrame({"gameId": frame["gameId"].astype(str).to_numpy(),
+                        "personId": pd.to_numeric(frame["personId"], errors="coerce").to_numpy()})
+    for column in GAME_COLUMNS[source].values():
+        out[column] = pd.to_numeric(frame[column], errors="coerce").to_numpy() if column in frame else np.nan
+    return out
+
+
+def hustle_game_totals(cfg: dict, season: int, game_ids) -> tuple:
+    """`game_box_totals` for the hustle box scores."""
+    return game_box_totals(cfg, "hustle", season, game_ids)
+
+
+def game_box_totals(cfg: dict, source: str, season: int, game_ids) -> tuple:
+    """(one row per player, indexed by player id: the season dashboard's columns the `source` box score holds
+    (GAME_COLUMNS) summed over the games `game_ids`, the game ids read), or (None, set()) for a season without
+    per-game files (hustle before 2017, tracking before 2014).
+
+    A within-season fold hands its fit games, so the held-back games never enter (notes/WITHIN_SEASON_LEDGER.md).  A
+    game of `game_ids` with no file stops the run, naming the command that fetches it.
+
+    Example: the 980 fit games of a 2024 fold give each player his deflections, contested shots, charges drawn, loose
+    balls, box-outs and screen assists in those games alone.
+    """
+    folder = raw_dir(cfg) / "dashboards" / source / "games" / str(int(season))
+    if int(season) < GAME_BOXES[source][1] or not folder.exists():
+        return None, set()
+    wanted = {str(game) for game in game_ids}
+    missing = sorted(wanted - {path.stem for path in folder.glob("*.parquet")})
+    if missing:
+        raise FileNotFoundError(f"{len(missing)} games of {season} have no {source} box score (first {missing[0]}); "
+                                f"`openrapm data {source}-games` fetches them")
+    columns = GAME_COLUMNS[source]
+    frame = _season_game_boxes(str(folder), source)
+    frame = frame[frame.gameId.isin(wanted)]
+    totals = frame.groupby("personId")[list(columns.values())].sum(min_count=1)
+    totals.index = totals.index.astype(np.int64)
+    return totals.rename(columns={game: season_name for season_name, game in columns.items()}), wanted

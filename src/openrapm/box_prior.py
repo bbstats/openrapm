@@ -71,8 +71,8 @@ import pandas as pd
 from .features import FEATURE_SETS, MISSING_OK, PANEL_INPUTS, ROW_FEATURES, add_features
 
 __all__ = ["average_over_seasons", "career_rows", "season_runs", "training_rows", "balanced_player_folds",
-           "LIGHTGBM_FIXED", "COLUMN_SHARES", "fit_lightgbm", "OutOfPlayerPrior", "fit_out_of_player", "rated_rows",
-           "predict", "SidePrior", "era_kernel", "season_priors"]
+           "LIGHTGBM_FIXED", "COLUMN_SHARES", "INPUT_CLIP", "ClippedBooster", "fit_lightgbm", "OutOfPlayerPrior",
+           "fit_out_of_player", "rated_rows", "predict", "SidePrior", "era_kernel", "season_priors"]
 
 # columns a training row adds for its own bookkeeping: the label it carries, its weight in the fit, the
 # possessions behind the label and its era kernel.  None may share a name with an input (notes/DECISIONS.md,
@@ -218,6 +218,21 @@ def balanced_player_folds(train: pd.DataFrame, n_folds: int = 5, fold_assignment
 LIGHTGBM_FIXED = dict(subsample=1.0, subsample_freq=0, colsample_bytree=1.0, n_jobs=1, deterministic=True,
                       force_row_wise=True, verbose=-1, random_state=0)
 COLUMN_SHARES = ("colsample_bytree", "feature_fraction_bynode")
+# A settings file may name "input_clip" q (2026-10-15, the Stockton look, notes/DECISIONS.md "Stockton above Jordan"):
+# every input is clipped to the q and 1 - q quantiles of the fit's own training rows, in training and in prediction,
+# so a leaf's straight line is never followed past the range its rows cover.  Not a LightGBM setting; none as shipped.
+INPUT_CLIP = "input_clip"
+
+
+@dataclass
+class ClippedBooster:
+    """A fitted booster that clips each input to the bounds of its training rows before it answers."""
+    model: object
+    lower: np.ndarray
+    upper: np.ndarray
+
+    def predict(self, inputs: np.ndarray) -> np.ndarray:
+        return self.model.predict(np.clip(np.asarray(inputs, dtype=float), self.lower, self.upper))
 
 
 def fit_lightgbm(params: dict, inputs: np.ndarray, label: np.ndarray, weights: np.ndarray,
@@ -225,16 +240,25 @@ def fit_lightgbm(params: dict, inputs: np.ndarray, label: np.ndarray, weights: n
     """One LightGBM fit with the weights rescaled to mean 1, so the leaf penalties mean the same at any scale.
 
     `kernel` (each row's era kernel, at most 1) multiplies the rescaled weights, so a row far from the rated season
-    counts a share of a full row: a narrow kernel is less data, not the same data under lighter penalties.
+    counts a share of a full row: a narrow kernel is less data, not the same data under lighter penalties.  With
+    `params["input_clip"]` the fit is a `ClippedBooster` (`INPUT_CLIP`); missing inputs stay missing.
     """
     import lightgbm
     weights = np.asarray(weights, dtype=float)
     weights = weights / weights.mean()
     if kernel is not None:
         weights = weights * np.asarray(kernel, dtype=float)
+    clip = params.get(INPUT_CLIP)
+    params = {name: value for name, value in params.items() if name != INPUT_CLIP}
     shares = {name: params[name] for name in COLUMN_SHARES if name in params}
     model = lightgbm.LGBMRegressor(**{**params, **LIGHTGBM_FIXED, **shares})
-    return model.fit(inputs, label, sample_weight=weights)
+    if not clip:
+        return model.fit(inputs, label, sample_weight=weights)
+    inputs = np.asarray(inputs, dtype=float)
+    lower = np.nanquantile(inputs, float(clip), axis=0)
+    upper = np.nanquantile(inputs, 1.0 - float(clip), axis=0)
+    model.fit(np.clip(inputs, lower, upper), label, sample_weight=weights)
+    return ClippedBooster(model, lower, upper)
 
 
 @dataclass

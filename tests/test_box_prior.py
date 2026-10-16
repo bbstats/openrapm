@@ -403,3 +403,19 @@ def test_a_settings_file_may_name_the_share_of_inputs_each_tree_sees_and_the_shi
     assert whole.get_params()["colsample_bytree"] == LIGHTGBM_FIXED["colsample_bytree"] == 1.0
     assert part.get_params()["colsample_bytree"] == 0.5
     assert np.array_equal(part.predict(x), again.predict(x)) and not np.allclose(part.predict(x), whole.predict(x))
+
+
+def test_an_input_clip_holds_every_input_to_its_training_rows_range():
+    """input_clip 0.1: a row far beyond the training range is answered as the clipped row is; off, it is not."""
+    rng = np.random.default_rng(4)
+    inputs = rng.normal(size=(400, 2))
+    label = 2.0 * inputs[:, 0] + rng.normal(scale=0.1, size=400)
+    params = {"n_estimators": 20, "num_leaves": 4, "learning_rate": 0.2, "min_child_samples": 20,
+              "linear_tree": True}
+    clipped = box_prior.fit_lightgbm({**params, "input_clip": 0.1}, inputs, label, np.ones(400))
+    assert isinstance(clipped, box_prior.ClippedBooster)
+    far, edge = np.array([[50.0, 0.0]]), np.array([[clipped.upper[0], 0.0]])
+    assert clipped.predict(far) == pytest.approx(clipped.predict(edge))
+    assert np.isnan(clipped.predict(np.array([[np.nan, 0.0]]))).sum() == 0          # missing stays missing, answered
+    plain = box_prior.fit_lightgbm(params, inputs, label, np.ones(400))
+    assert not isinstance(plain, box_prior.ClippedBooster)

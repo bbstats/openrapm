@@ -59,12 +59,20 @@ def test_the_stat_splits_lists_append_their_parts_where_the_box_count_is_read():
                               "D": [feat.FROM_DEBUT.get(name, name) for name in SHIPPED_D]},
         "no_career_counts": {"O": [name for name in SHIPPED_O if name not in feat.FROM_DEBUT],
                              "D": [name for name in SHIPPED_D if name not in feat.FROM_DEBUT]},
+        "no_career_era_marker": {
+            "O": [name for name in SHIPPED_O if name not in feat.FROM_DEBUT] + ["season_from_2017"],
+            "D": [name for name in SHIPPED_D if name not in feat.FROM_DEBUT] + ["season_from_2017"]},
+        "no_career_points_parts": {"O": [name for name in SHIPPED_O if name not in feat.FROM_DEBUT] + points,
+                                   "D": [name for name in SHIPPED_D if name not in feat.FROM_DEBUT] + points},
+        "no_career_plus_age": {"O": [name for name in SHIPPED_O if name not in feat.FROM_DEBUT] + ["age"],
+                               "D": [name for name in SHIPPED_D if name not in feat.FROM_DEBUT] + ["age"]},
         "no_career_ratios_vs_league": {
             "O": [f"{name}_vs_league" if name in feat.RATIOS else name for name in SHIPPED_O
                   if name not in feat.FROM_DEBUT],
             "D": [f"{name}_vs_league" if name in feat.RATIOS else name for name in SHIPPED_D
                   if name not in feat.FROM_DEBUT]},
-        **{name: feat.FEATURE_SETS[name] for name in ("tracking", "hustle", "tracking_and_hustle", "matchups")}}
+        **{name: feat.FEATURE_SETS[name] for name in ("tracking", "hustle", "hustle_placebo", "tracking_and_hustle",
+                                                 "matchups", "hustle_and_tracking_games")}}
     wider = ["russell_blocks_per100", "rim_blocks_per100", "mid_range_blocks_per100", "three_point_blocks_per100",
              "offensive_fouls_per100", "stolen_turnovers_per100", "assists_to_rim_per100",
              "assists_to_mid_range_per100", "assists_to_corner_threes_per100", "assists_to_above_break_threes_per100"]
@@ -191,17 +199,18 @@ def test_every_name_the_prior_can_read_is_in_the_catalogue():
     assert not wanted - set(names)
     assert {f.scale for f in feat.CATALOGUE} <= {"centred", "level"}
     assert all(f.meaning and f.formula and f.unit and f.group for f in feat.CATALOGUE)
-    assert len(feat.PRIOR_FEATURES) == len(set(feat.PRIOR_FEATURES)) == 121
+    assert len(feat.PRIOR_FEATURES) == len(set(feat.PRIOR_FEATURES)) == 131
 
 
 def test_every_season_panel_column_but_the_keys_is_in_the_catalogue():
     names = {f.name for f in feat.CATALOGUE}
     assert feat.SEASON_PANEL_COLUMNS[:3] == feat.PANEL_KEYS == ["side", "player_id", "season"]
     assert not set(feat.SEASON_PANEL_COLUMNS[3:]) - names
-    assert len(feat.SEASON_PANEL_COLUMNS) == len(set(feat.SEASON_PANEL_COLUMNS)) == 122
-    assert feat.SEASON_PANEL_COLUMNS[-58:-36] == feat.EVENT_RATES, "the play-by-play parts follow every older column"
-    assert feat.SEASON_PANEL_COLUMNS[-36:-32] == feat.CAREER_FROM_DEBUT, "and the career from the debut after them"
-    assert feat.SEASON_PANEL_COLUMNS[-32:] == feat.DASHBOARD_RATES, "and the dashboard inputs last"
+    assert len(feat.SEASON_PANEL_COLUMNS) == len(set(feat.SEASON_PANEL_COLUMNS)) == 132
+    assert feat.SEASON_PANEL_COLUMNS[-68:-46] == feat.EVENT_RATES, "the play-by-play parts follow every older column"
+    assert feat.SEASON_PANEL_COLUMNS[-46:-42] == feat.CAREER_FROM_DEBUT, "and the career from the debut after them"
+    assert feat.SEASON_PANEL_COLUMNS[-42:-1] == feat.DASHBOARD_RATES, "then the dashboard inputs"
+    assert feat.SEASON_PANEL_COLUMNS[-1:] == feat.ERA_MARKER, "and the era marker last"
 
 
 def test_the_dashboard_arms_append_to_the_incumbents_lists_and_name_real_columns():
@@ -209,7 +218,9 @@ def test_the_dashboard_arms_append_to_the_incumbents_lists_and_name_real_columns
     incumbent input keeping its position; every name is a panel column that may be missing."""
     incumbent = feat.FEATURE_SETS["no_career_counts"]
     assert len(feat.TRACKING_RATES) == 21 and len(feat.HUSTLE_RATES) == 9 and len(feat.MATCHUP_RATES) == 2
-    assert feat.DASHBOARD_RATES == feat.TRACKING_RATES + feat.HUSTLE_RATES + feat.MATCHUP_RATES == feat.MISSING_OK
+    assert feat.DASHBOARD_RATES == feat.MISSING_OK == (feat.TRACKING_RATES + feat.HUSTLE_RATES + feat.MATCHUP_RATES
+                                                       + feat.HUSTLE_PLACEBO)
+    assert feat.HUSTLE_PLACEBO == [f"{name}_shuffled" for name in feat.HUSTLE_RATES]
     for name, extra in (("tracking", (feat.TRACKING_OFFENCE, feat.TRACKING_DEFENCE)),
                         ("hustle", (feat.HUSTLE_OFFENCE, feat.HUSTLE_DEFENCE)),
                         ("tracking_and_hustle", (feat.TRACKING_OFFENCE + feat.HUSTLE_OFFENCE,
@@ -218,6 +229,9 @@ def test_the_dashboard_arms_append_to_the_incumbents_lists_and_name_real_columns
             assert feat.FEATURE_SETS[name][side] == incumbent[side] + added
             assert set(added) <= set(feat.DASHBOARD_RATES) and len(added) == len(set(added))
     assert not set(incumbent["O"]) & set(feat.DASHBOARD_RATES)
+    assert feat.FEATURE_SETS["hustle_placebo"] == {
+        side: incumbent[side] + [f"{name}_shuffled" for name in added]
+        for side, added in (("O", feat.HUSTLE_OFFENCE), ("D", feat.HUSTLE_DEFENCE))}
     assert feat.FEATURE_SETS["matchups"] == {"O": incumbent["O"] + feat.MATCHUP_OFFENCE,
                                              "D": incumbent["D"] + feat.MATCHUP_DEFENCE}
     assert feat.MATCHUP_OFFENCE == feat.MATCHUP_RATES[1:] and feat.MATCHUP_DEFENCE == feat.MATCHUP_RATES[:1]
