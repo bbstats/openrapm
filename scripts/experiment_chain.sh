@@ -40,11 +40,13 @@ LOG=outputs/${NAME}_chain.log
 # guarded search, with the hustle inputs; its own folds, its noise control noise_tune2.
 # Since 2026-10-17 it is experiment 77 (nothreepct): tune2 with three-point % off the offensive booster, its own folds;
 # no noise control on it yet, so noise_tune2 stands in.
-INC_NAME=${INC_NAME:-nothreepct}
-INC_SYSTEM=${INC_SYSTEM:-nothreepct}             # the incumbent's folds (<name>_early, <name>_within) for 151
+# Since 2026-10-17, later the same day, it is experiment 78 (bags10): nothreepct with the prior averaged over 10
+# bootstraps of the players (--bags 10, the shipped default of `openrapm rate`), its own folds; noise_tune2 stands in.
+INC_NAME=${INC_NAME:-bags10}
+INC_SYSTEM=${INC_SYSTEM:-bags10}                 # the incumbent's folds (<name>_early, <name>_within) for 151
 CONTROL_NAME=${CONTROL_NAME:-noise_tune2}        # the noise control's folds (<name>_early, <name>_within) for 151
-INC_FOLDS=${INC_FOLDS:-nothreepct_early,nothreepct_within}
-AUDIT_REF=${AUDIT_REF:-nothreepct_within}
+INC_FOLDS=${INC_FOLDS:-bags10_early,bags10_within}
+AUDIT_REF=${AUDIT_REF:-bags10_within}
 INC=outputs/season_ratings_${INC_NAME}.parquet
 BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1_tune2 --features hustle_no_three_pct}
 [ -n "$NAME" ] && [ -n "$TARGET" ] || { echo "usage: scripts/experiment_chain.sh NAME TARGET [EXTRA RATE FLAGS]"; exit 1; }

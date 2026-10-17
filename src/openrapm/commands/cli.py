@@ -109,6 +109,8 @@ def chosen_settings(args: argparse.Namespace) -> Settings:
         raise SystemExit("--fold-assignment is 0 (the shipped order) or a positive seed")
     if args.era_halflife < 0:
         raise SystemExit("--era-halflife is 0 (every season counts the same, shipped) or a positive number of seasons")
+    if args.bags < 0:
+        raise SystemExit("--bags is 0 (one booster per side) or a positive number of bags")
     attacking, defending = args.team_season_penalties
     return replace(base,
                    targets=replace(base.targets,
@@ -117,7 +119,8 @@ def chosen_settings(args: argparse.Namespace) -> Settings:
                                   team_defense_penalty=float(defending)),
                    prior=replace(base.prior, feature_set=plain_name("--features", args.features, feature_set_name),
                                  booster_file=BOOSTER_FILE.format(args.booster_params),
-                                 fold_assignment=args.fold_assignment, era_halflife=float(args.era_halflife)))
+                                 fold_assignment=args.fold_assignment, era_halflife=float(args.era_halflife),
+                                 bags=int(args.bags)))
 
 
 def table_stem(text: str) -> str:
@@ -218,6 +221,9 @@ def _add_setting_options(parser) -> None:
                         help="0: the prior's training rows count the same from every season.  A positive H: a row "
                              "counts half as much for every H seasons between its seasons and the rated one, beyond "
                              "the nearest season the fit may use (default %(default)s)")
+    parser.add_argument("--bags", type=int, default=PRODUCT.prior.bags, metavar="K",
+                        help="0: one booster per side.  K: K boosters, each on a bootstrap of the players, averaged "
+                             "(default %(default)s)")
     parser.add_argument("--team-season-penalties", type=parse_penalty_pair, metavar="ATTACKING,DEFENDING",
                         default=(PRODUCT.labels.team_offense_penalty, PRODUCT.labels.team_defense_penalty),
                         help="step 1's team-season flags: one column per team-season on offence and one on defence, "

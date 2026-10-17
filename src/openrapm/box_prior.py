@@ -72,7 +72,8 @@ from .features import FEATURE_SETS, MISSING_OK, PANEL_INPUTS, ROW_FEATURES, add_
 
 __all__ = ["average_over_seasons", "career_rows", "season_runs", "training_rows", "balanced_player_folds",
            "LIGHTGBM_FIXED", "COLUMN_SHARES", "INPUT_CLIP", "ClippedBooster", "fit_lightgbm", "OutOfPlayerPrior",
-           "fit_out_of_player", "rated_rows", "predict", "SidePrior", "era_kernel", "season_priors"]
+           "fit_out_of_player", "BaggedPrior", "player_bootstrap", "fit_prior", "rated_rows", "predict", "SidePrior",
+           "era_kernel", "season_priors"]
 
 # columns a training row adds for its own bookkeeping: the label it carries, its weight in the fit, the
 # possessions behind the label and its era kernel.  None may share a name with an input (notes/DECISIONS.md,
@@ -236,12 +237,14 @@ class ClippedBooster:
 
 
 def fit_lightgbm(params: dict, inputs: np.ndarray, label: np.ndarray, weights: np.ndarray,
-                 kernel: np.ndarray | None = None):
+                 kernel: np.ndarray | None = None, seed: int = 0):
     """One LightGBM fit with the weights rescaled to mean 1, so the leaf penalties mean the same at any scale.
 
     `kernel` (each row's era kernel, at most 1) multiplies the rescaled weights, so a row far from the rated season
     counts a share of a full row: a narrow kernel is less data, not the same data under lighter penalties.  With
-    `params["input_clip"]` the fit is a `ClippedBooster` (`INPUT_CLIP`); missing inputs stay missing.
+    `params["input_clip"]` the fit is a `ClippedBooster` (`INPUT_CLIP`); missing inputs stay missing.  A nonzero
+    `seed` replaces LightGBM's random_state, which draws the inputs each tree is shown (each bag's own draw,
+    `BaggedPrior`).
     """
     import lightgbm
     weights = np.asarray(weights, dtype=float)
@@ -251,7 +254,7 @@ def fit_lightgbm(params: dict, inputs: np.ndarray, label: np.ndarray, weights: n
     clip = params.get(INPUT_CLIP)
     params = {name: value for name, value in params.items() if name != INPUT_CLIP}
     shares = {name: params[name] for name in COLUMN_SHARES if name in params}
-    model = lightgbm.LGBMRegressor(**{**params, **LIGHTGBM_FIXED, **shares})
+    model = lightgbm.LGBMRegressor(**{**params, **LIGHTGBM_FIXED, **shares, **({"random_state": seed} if seed else {})})
     if not clip:
         return model.fit(inputs, label, sample_weight=weights)
     inputs = np.asarray(inputs, dtype=float)
@@ -271,26 +274,64 @@ class OutOfPlayerPrior:
 
 
 def fit_out_of_player(train: pd.DataFrame, inputs, params: dict, n_folds: int = 5,
-                      fold_assignment: int = 0, kernel: np.ndarray | None = None) -> OutOfPlayerPrior:
+                      fold_assignment: int = 0, kernel: np.ndarray | None = None, seed: int = 0) -> OutOfPlayerPrior:
     """1 + `n_folds` LightGBM fits on the training rows: the full fit, then one without each fold.
 
     `kernel` is each row's era kernel (`fit_lightgbm`); the folds are drawn from the row weights alone, so they do
-    not depend on it.
+    not depend on it.  `seed` as in `fit_lightgbm`.
     """
     matrix = train[inputs].to_numpy(float)
     label = train.label.to_numpy(float)
     weight = train.row_weight.to_numpy(float)
     kernel = None if kernel is None else np.asarray(kernel, dtype=float)
-    prior = OutOfPlayerPrior(full=fit_lightgbm(params, matrix, label, weight, kernel), fold_models=[],
+    prior = OutOfPlayerPrior(full=fit_lightgbm(params, matrix, label, weight, kernel, seed), fold_models=[],
                              held_out_players=[], inputs=list(inputs))
     if n_folds > 1:
         fold = balanced_player_folds(train, n_folds, fold_assignment)
         for left_out in range(n_folds):
             keep = fold != left_out
             prior.fold_models.append(fit_lightgbm(params, matrix[keep], label[keep], weight[keep],
-                                                  None if kernel is None else kernel[keep]))
+                                                  None if kernel is None else kernel[keep], seed))
             prior.held_out_players.append(set(train.index[~keep].tolist()))
     return prior
+
+
+# Bagging (notes/DECISIONS.md, experiment 78; the owner, 2026-10-17: "Better to average or to do bagging?"): K
+# out-of-player priors, bag k fitted on a bootstrap of the players at LightGBM seed k, and a player's prior the
+# mean of the K answers.  A bootstrap draws as many players as there are, with replacement; a player drawn n times
+# keeps all his rows at n times their weight, a player not drawn is left out of that bag, so the bag's boosters never
+# saw him and its full fit answers for him.  0 bags is the single booster at seed 0.
+@dataclass
+class BaggedPrior:
+    """K out-of-player priors, each on its own bootstrap of the players; a prediction is their mean."""
+    members: list
+    inputs: list
+
+
+def player_bootstrap(train: pd.DataFrame, bag: int, kernel: np.ndarray | None = None
+                     ) -> tuple[pd.DataFrame, np.ndarray | None]:
+    """(the rows of bag `bag`'s bootstrap of the players, each weight times the times its player was drawn; their era
+    kernel).  Rows are indexed by player_id, as `training_rows` writes them."""
+    players = train.index.unique().to_numpy()
+    rng = np.random.default_rng([int(bag), 1093])
+    drawn = pd.Series(rng.choice(players, size=players.size, replace=True)).value_counts()
+    keep = train.index.isin(drawn.index)
+    rows = train[keep].copy()
+    rows["row_weight"] = rows.row_weight.to_numpy(float) * drawn.reindex(rows.index).to_numpy(float)
+    return rows, None if kernel is None else np.asarray(kernel, dtype=float)[keep]
+
+
+def fit_prior(train: pd.DataFrame, inputs, params: dict, n_folds: int = 5, fold_assignment: int = 0,
+              kernel: np.ndarray | None = None, bags: int = 0) -> OutOfPlayerPrior | BaggedPrior:
+    """`fit_out_of_player` with 0 bags; with K bags a `BaggedPrior`, bag k on `player_bootstrap(train, k)` at seed
+    k."""
+    if not bags:
+        return fit_out_of_player(train, inputs, params, n_folds, fold_assignment, kernel)
+    members = []
+    for bag in range(int(bags)):
+        rows, bag_kernel = player_bootstrap(train, bag, kernel)
+        members.append(fit_out_of_player(rows, inputs, params, n_folds, fold_assignment, bag_kernel, seed=bag))
+    return BaggedPrior(members=members, inputs=list(inputs))
 
 
 def rated_rows(season_rows: pd.DataFrame, feature_names) -> pd.DataFrame:
@@ -299,12 +340,14 @@ def rated_rows(season_rows: pd.DataFrame, feature_names) -> pd.DataFrame:
     return rows.assign(row_possessions=rows.possessions.to_numpy(float), row_seasons=1.0)
 
 
-def predict(prior: OutOfPlayerPrior, rows: pd.DataFrame) -> np.ndarray:
-    """Each player's prediction from the fold model that never saw him.
+def predict(prior: OutOfPlayerPrior | BaggedPrior, rows: pd.DataFrame) -> np.ndarray:
+    """Each player's prediction from the fold model that never saw him; for a `BaggedPrior`, the mean over its bags.
 
     A player with no training rows at all (a rookie, or a player whose other seasons earned no label) is in no
     fold, so the full fit answers for him.
     """
+    if isinstance(prior, BaggedPrior):
+        return np.mean([predict(member, rows) for member in prior.members], axis=0)
     matrix = rows[prior.inputs].to_numpy(float)
     out = prior.full.predict(matrix)
     ids = rows.player_id.to_numpy()
@@ -322,7 +365,7 @@ def predict(prior: OutOfPlayerPrior, rows: pd.DataFrame) -> np.ndarray:
 class SidePrior:
     """One side's prior for the rated season: {player_id: prior} and the boosters that made it."""
     values: dict
-    model: OutOfPlayerPrior
+    model: OutOfPlayerPrior | BaggedPrior
     feature_names: list
 
 
@@ -365,8 +408,8 @@ def season_priors(labels: dict, panel: pd.DataFrame, season: int, unseen, settin
             columns = [*PANEL_INPUTS, "era_kernel"]
         train = training_rows(labels[side], training, column, names, settings.prior.chunk_sizes, columns)
         kernel = train.era_kernel.to_numpy(float) if half_life > 0 else None
-        model = fit_out_of_player(train, names + ROW_FEATURES, params[side], settings.prior.n_folds,
-                                  settings.prior.fold_assignment, kernel)
+        model = fit_prior(train, names + ROW_FEATURES, params[side], settings.prior.n_folds,
+                          settings.prior.fold_assignment, kernel, settings.prior.bags)
         rated = rated_rows(panel[(panel.side == side) & (panel.season == season)], names)
         out[side] = SidePrior(values=dict(zip(rated.player_id.to_numpy(), predict(model, rated))), model=model,
                               feature_names=names)

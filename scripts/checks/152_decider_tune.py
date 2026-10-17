@@ -470,6 +470,22 @@ def changed_matrix(matrix: np.ndarray, inputs: list, changes: list, seed: int, s
     return np.delete(matrix, dropped, axis=1)
 
 
+# Several boosters averaged (the owner, 2026-10-17: "Better to average or to do bagging?"), K of them per side, each
+# answering for a player as one booster does, the K answers averaged:
+#     one       one booster at the trial's seed, as shipped
+#     seeds     boosters at seeds s, s+1, ..., s+K-1 on the same rows: only the inputs each tree is shown differ
+#     bags      the same seeds, each booster on a bootstrap of the players (box_prior.player_bootstrap): with s 0,
+#               the bags `openrapm rate --bags K` fits
+ENSEMBLES = ("one", "seeds", "bags")
+
+
+def parse_ensemble(text: str) -> tuple:
+    kind, size = text.split(":")
+    if kind not in ENSEMBLES or int(size) < 1:
+        raise SystemExit(f"--ensemble {text}: one of {ENSEMBLES} and a size of at least 1")
+    return kind, int(size)
+
+
 def parse_changes(text: str, arm: str) -> tuple:
     """"O:weight_lb,D:height_in" -> (("O", arm, "weight_lb"), ("D", arm, "height_in"))."""
     out = []
@@ -493,25 +509,29 @@ class SeasonWorker:
         self.audit = self.wowy._audit()
         self.folds = None
 
-    def rate(self, params: dict, feature_set: str, changes: tuple = (), seed: int = 0
+    def rate(self, params: dict, feature_set: str, changes: tuple = (), seed: int = 0, ensemble: tuple = ("one", 1)
              ) -> tuple[list, pd.DataFrame | None]:
         """Every fold of the season rated through steps 2-3 on the trial's boosters, and the whole season when it is
         cached: (the `Fold`s, the whole season's centred step-3 table in raw sign, or None).  `changes` and `seed` as
-        in `changed_matrix` and `booster_seed`."""
+        in `changed_matrix` and `booster_seed`; `ensemble` as in `ENSEMBLES`."""
         from openrapm import box_prior, trade_set
         from openrapm.commands import within_season as ws
         from openrapm.data.within_folds import Fold, _base, _rated, _side_blocks
         from openrapm.features import FEATURE_SETS as SETS
         from openrapm.features import ROW_FEATURES
         settings = settings_for(feature_set)
-        booster_seed(seed)
+        kind, size = ensemble
         models, names = {}, {}
         for side in ("O", "D"):
             names[side] = list(SETS[feature_set][side]) + ROW_FEATURES
             train = self.cache["train"][feature_set][side]
             train, inputs = changed_train(train, names[side], side_changes(changes, side), seed, f"{self.season}")
-            models[side] = box_prior.fit_out_of_player(train, inputs, params[side],
-                                                       settings.prior.n_folds, settings.prior.fold_assignment)
+            models[side] = []
+            for member in range(int(size)):
+                booster_seed(seed + member)
+                rows = train if kind != "bags" else box_prior.player_bootstrap(train, seed + member)[0]
+                models[side].append(box_prior.fit_out_of_player(rows, inputs, params[side], settings.prior.n_folds,
+                                                                settings.prior.fold_assignment))
         folds = []
         for cached in self.cache["folds"]:
             table = self.step3(cached, models, feature_set, settings, names, changes, seed, cached["stem"])
@@ -548,7 +568,7 @@ class SeasonWorker:
         for side in ("O", "D"):
             ids, matrix = cached["inputs"][feature_set][side]
             matrix = changed_matrix(matrix, names[side], side_changes(changes, side), seed, stream)
-            prior[side] = dict(zip(ids, _predict(models[side], ids, matrix)))
+            prior[side] = dict(zip(ids, np.mean([_predict(model, ids, matrix) for model in models[side]], axis=0)))
         targets = settings.targets
         fits = {name: prior_rapm.fit(duck_design(cached["ridge"][name]), prior["O"], prior["D"],
                                      settings.ridge.penalty) for name in targets.distinct()}
@@ -643,14 +663,15 @@ class Pool:
         return message
 
     def trial(self, params: dict, feature_set: str, compare: bool = False, def_factor: float = 1.0,
-              guard: Guard | None = None, changes: tuple = (), seed: int = 0) -> tuple[pd.DataFrame, dict]:
+              guard: Guard | None = None, changes: tuple = (), seed: int = 0, ensemble: tuple = ("one", 1)
+              ) -> tuple[pd.DataFrame, dict]:
         """(one row per season, stage and slice: the decider's error; timings, comparisons and, with `guard`, the
         next-season check's rows in extra["guard"]).  `def_factor` multiplies both of step 4's defensive factors;
         `changes` and `seed` as in `SeasonWorker.rate`."""
         from openrapm.prior_shrink import multipliers_by_season
         started = time.time()
         for link, _ in self.links.values():
-            link.send(("rate", params, feature_set, tuple(changes), int(seed)))
+            link.send(("rate", params, feature_set, tuple(changes), int(seed), tuple(ensemble)))
         folds, seconds, wholes = [], {}, []
         for season, (link, _) in self.links.items():
             _, season_folds, whole, took = self._expect(link, "rated")
@@ -758,7 +779,17 @@ def run_trial(args) -> int:
         guard_reference = reference_guard(pool, args.tag, guard) if guard else None
         changes = parse_changes(args.drop, "drop") + parse_changes(args.shadow, "shadow")
         table, extra = pool.trial(params_file(args.params), args.features, compare=bool(args.compare),
-                                  def_factor=args.def_factor, guard=guard, changes=changes, seed=args.seed)
+                                  def_factor=args.def_factor, guard=guard, changes=changes, seed=args.seed,
+                                  ensemble=parse_ensemble(args.ensemble))
+        if args.save:
+            out_dir = tune_dir(args.tag)
+            key = dict(trial=args.save)
+            table.assign(**key).to_csv(out_dir / "trials_saved.csv", mode="a",
+                                       header=not (out_dir / "trials_saved.csv").exists(), index=False)
+            if guard:
+                extra["guard"].assign(**key).to_csv(out_dir / "trials_saved_guard.csv", mode="a",
+                                                    header=not (out_dir / "trials_saved_guard.csv").exists(),
+                                                    index=False)
         if guard:
             print("next-season check against the reference: " + describe_guard(extra["guard"], guard_reference))
         print(f"{args.params}, {args.features}: score {score_of(table).mean():.4f}  ({extra['seconds']:.0f}s, "
@@ -1129,6 +1160,8 @@ def main(argv=None) -> int:
     trial.add_argument("--drop", default="", help="inputs taken off, as O:weight_lb,D:height_in")
     trial.add_argument("--shadow", default="", help="inputs shuffled among the rows that have one, as --drop")
     trial.add_argument("--seed", type=int, default=0, help="the boosters' random_state (default %(default)s)")
+    trial.add_argument("--ensemble", default="one:1", help="seeds:K or bags:K, as ENSEMBLES says (default one:1)")
+    trial.add_argument("--save", default="", help="append the trial's rows to trials_saved.csv under this name")
     for name, text in (("cull", "every input dropped and shadowed in turn, at several seeds; resumes"),
                        ("cull-table", "the cull's full table")):
         cull = commands.add_parser(name, help=text)

@@ -162,8 +162,10 @@ def season_models(saved_all: dict, season: int) -> dict:
 def saved_prior(panel: pd.DataFrame, side: str, saved: dict) -> dict:
     """{player_id: prior} from the saved boosters, each player answered by the fold model that never saw him."""
     rows = box_prior.rated_rows(panel[(panel.side == side) & (panel.possessions > 0)], saved["feats"])
-    model = box_prior.OutOfPlayerPrior(full=saved["full"], fold_models=list(saved["folds"]),
-                                       held_out_players=list(saved["excluded"]), inputs=list(saved["model_feats"]))
+    members = [box_prior.OutOfPlayerPrior(full=bag["full"], fold_models=list(bag["folds"]),
+                                          held_out_players=list(bag["excluded"]), inputs=list(saved["model_feats"]))
+               for bag in saved.get("bags", [saved])]
+    model = members[0] if "bags" not in saved else box_prior.BaggedPrior(members, list(saved["model_feats"]))
     return dict(zip(rows.player_id.to_numpy(), box_prior.predict(model, rows)))
 
 

@@ -161,7 +161,11 @@ five in one process (`src/openrapm/commands/build.py`). Each command writes its 
     small trees and slow learning: the offence's trees are two splits deep, so its prior is close to a straight
     line in the box score.  Before it `lgb1_cols06`, tuned on the prior's error against career labels;
   - the training weight in its own column, `row_weight`, so it no longer overwrites body weight
-    (experiment 46).
+    (experiment 46);
+  - 10 bags (experiment 78, adopted 2026-10-17): ten out-of-player boosters per side, bag k on a bootstrap of the
+    players at LightGBM seed k, and a player's prior the mean of the ten answers; a player drawn n times keeps his
+    rows at n times their weight, one not drawn is answered by that bag's boosters, which never saw him
+    (`box_prior.fit_prior`, `--bags`).  One booster gave a decider about 0.03 apart from seed to seed.
 - **Code:** `src/openrapm/box_prior.py`, `features.py`.
 
 ### Step 3: prior-informed RAPM (`prior_rapm.py`)
@@ -204,7 +208,7 @@ five in one process (`src/openrapm/commands/build.py`). Each command writes its 
     2026-10-15; `ShrinkSettings.free_games_part`, `--no-free-games-part` holds it at 1);
   - both defensive multipliers times 0.866 in every season, chosen with the booster's settings by the same search
     (experiment 76, `ShrinkSettings.defence_factor`, `--defence-factor`);
-  - the folds `nothreepct_early,nothreepct_within` (experiment 77's own folds), seasons 1997-2026 pinned, because the
+  - the folds `bags10_early,bags10_within` (experiment 78's own folds), seasons 1997-2026 pinned, because the
     fold folder grew once and an unpinned rerun shrank harder (experiment 34's correction);
   - each season's multipliers from the 8 fold seasons nearest it (experiment 55, adopted 2026-10-12).
 - **Command:** `python -m openrapm shrink --base season_ratings_NAME_step3`.

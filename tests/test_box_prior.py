@@ -19,6 +19,8 @@ from openrapm.settings import PRODUCT
 PRODUCT_LISTS = FEATURE_SETS[PRODUCT.prior.feature_set]
 
 PARAMS = {"n_estimators": 60, "num_leaves": 7, "learning_rate": 0.1, "min_child_samples": 5}
+# the shipped setting with one booster per side, for the tests that read a single booster's parts (bagging below)
+ONE_BOOSTER = replace(PRODUCT, prior=replace(PRODUCT.prior, bags=0))
 FEATS = ["a", "b"]
 
 
@@ -264,12 +266,17 @@ def test_the_season_priors_rate_every_rated_player_and_train_on_no_unseen_season
     labels = {"O": _label(panel[panel.side == "O"]),
               "D": _label(panel[panel.side == "D"]).rename(columns={"offense": "defense"})}
     params = {"O": PARAMS, "D": PARAMS}
-    priors = box_prior.season_priors(labels, panel, 2013, unseen, PRODUCT, params)
+    priors = box_prior.season_priors(labels, panel, 2013, unseen, ONE_BOOSTER, params)
+    bagged = box_prior.season_priors(labels, panel, 2013, unseen, PRODUCT, params)
     for side in ("O", "D"):
         assert list(priors[side].values) == list(range(60))
         assert np.isfinite(list(priors[side].values.values())).all()
         assert priors[side].model.inputs == PRODUCT_LISTS[side] + ROW_FEATURES
         assert len(priors[side].model.fold_models) == PRODUCT.prior.n_folds
+        # as shipped: PRODUCT.prior.bags boosters, each with its folds, the prior their mean
+        assert list(bagged[side].values) == list(range(60))
+        assert len(bagged[side].model.members) == PRODUCT.prior.bags
+        assert all(len(member.fold_models) == PRODUCT.prior.n_folds for member in bagged[side].model.members)
     # the full booster is the one fitted on 2010-2012 alone (LightGBM is deterministic here), not on 2010-2013
     column, inputs = "offense", PRODUCT_LISTS["O"] + ROW_FEATURES
     rated = box_prior.rated_rows(panel[(panel.side == "O") & (panel.season == 2013)], PRODUCT_LISTS["O"])
@@ -356,9 +363,9 @@ def test_the_season_priors_weigh_each_row_by_its_kernel_and_keep_the_folds():
     labels = {"O": _label(panel[panel.side == "O"]),
               "D": _label(panel[panel.side == "D"]).rename(columns={"offense": "defense"})}
     params = {"O": PARAMS, "D": PARAMS}
-    era = replace(PRODUCT, prior=replace(PRODUCT.prior, era_halflife=2.0))
+    era = replace(ONE_BOOSTER, prior=replace(ONE_BOOSTER.prior, era_halflife=2.0))
     priors = box_prior.season_priors(labels, panel, 2013, [2013], era, params)
-    shipped = box_prior.season_priors(labels, panel, 2013, [2013], PRODUCT, params)
+    shipped = box_prior.season_priors(labels, panel, 2013, [2013], ONE_BOOSTER, params)
     assert "era_kernel" not in panel.columns, "the kernel goes on a copy, never on the shared panel"
     inputs = PRODUCT_LISTS["O"] + ROW_FEATURES
     rows = panel[(panel.side == "O") & (panel.season < 2013)]
@@ -419,3 +426,42 @@ def test_an_input_clip_holds_every_input_to_its_training_rows_range():
     assert np.isnan(clipped.predict(np.array([[np.nan, 0.0]]))).sum() == 0          # missing stays missing, answered
     plain = box_prior.fit_lightgbm(params, inputs, label, np.ones(400))
     assert not isinstance(plain, box_prior.ClippedBooster)
+
+
+# ------------------------------------------------------------------ bagging (experiment 78)
+def test_a_bootstrap_keeps_whole_players_and_weighs_each_by_the_times_he_was_drawn():
+    train = _rows()
+    rows, kernel = box_prior.player_bootstrap(train, bag=3)
+    assert kernel is None
+    players = train.index.unique()
+    drawn = pd.Series(np.random.default_rng([3, 1093]).choice(players.to_numpy(), size=players.size, replace=True))
+    counts = drawn.value_counts()
+    assert set(rows.index) == set(counts.index)
+    for pid in counts.index:
+        mine = train.loc[[pid]]
+        assert len(rows.loc[[pid]]) == len(mine)
+        assert np.allclose(rows.loc[[pid]].row_weight.to_numpy(), counts[pid] * mine.row_weight.to_numpy())
+
+
+def test_no_bags_is_the_single_booster_and_bags_average_their_members():
+    train = _rows()
+    frame = train.reset_index().drop_duplicates("player_id").iloc[:10].copy()
+    single = box_prior.fit_prior(train, FEATS, PARAMS, n_folds=5, bags=0)
+    assert isinstance(single, box_prior.OutOfPlayerPrior)
+    assert np.array_equal(box_prior.predict(single, frame),
+                          box_prior.predict(box_prior.fit_out_of_player(train, FEATS, PARAMS, n_folds=5), frame))
+    bagged = box_prior.fit_prior(train, FEATS, PARAMS, n_folds=5, bags=3)
+    assert len(bagged.members) == 3
+    members = [box_prior.predict(member, frame) for member in bagged.members]
+    assert np.allclose(box_prior.predict(bagged, frame), np.mean(members, axis=0))
+    # bag 0 is the single booster's seed on bootstrap 0
+    rows, _ = box_prior.player_bootstrap(train, 0)
+    assert np.array_equal(members[0], box_prior.predict(box_prior.fit_out_of_player(rows, FEATS, PARAMS, 5), frame))
+
+
+def test_a_player_left_out_of_a_bag_is_answered_by_a_booster_that_never_saw_him():
+    train = _rows()
+    rows, _ = box_prior.player_bootstrap(train, 1)
+    member = box_prior.fit_out_of_player(rows, FEATS, PARAMS, n_folds=5)
+    left_out = set(train.index) - set(rows.index)
+    assert left_out and not left_out & set().union(*member.held_out_players)

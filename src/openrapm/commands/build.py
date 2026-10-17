@@ -107,10 +107,16 @@ def saved_side(prior: box_prior.SidePrior, params: dict, settings, unseen) -> di
     """One side's boosters in the layout of the saved-booster files written before the 2026-10 cleanup (the code that
     wrote them is at the tag archive/research-2026-10), so `openrapm folds` reads a file of either age."""
     model = prior.model
-    return dict(full=model.full, folds=model.fold_models, excluded=model.held_out_players, params=dict(params),
-                n_folds=settings.prior.n_folds, groupings=1, intercept=False, by_player=False,
-                feats=list(prior.feature_names), model_feats=list(model.inputs), unseen=list(unseen),
-                prior=dict(prior.values))
+    members = model.members if isinstance(model, box_prior.BaggedPrior) else [model]
+    out = dict(full=members[0].full, folds=members[0].fold_models, excluded=members[0].held_out_players,
+               params=dict(params), n_folds=settings.prior.n_folds, groupings=1, intercept=False, by_player=False,
+               feats=list(prior.feature_names), model_feats=list(model.inputs), unseen=list(unseen),
+               prior=dict(prior.values))
+    if isinstance(model, box_prior.BaggedPrior):
+        # every bag, the first also in the old layout's keys; `openrapm folds` reads the bags when they are there
+        out["bags"] = [dict(full=member.full, folds=member.fold_models, excluded=member.held_out_players)
+                       for member in members]
+    return out
 
 
 def rate_one_season(season: int, sums: dict, panel: pd.DataFrame, designs: DesignCache, settings, params: dict):

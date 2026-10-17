@@ -7,15 +7,17 @@ OpenRAPM is, `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing ru
 
 ## Where it stands, 2026-10-17
 
-- **Live on the site:** experiment 77, published 2026-10-17: experiment 76's booster settings and defence factor, with
-  three-point % off the offensive booster.  Decider -0.047, z -3.71; guard z -0.04; the 2026 top 20 barely moved.
+- **Live on the site:** experiment 78, published 2026-10-17: experiment 77 (experiment 76's booster settings and
+  defence factor, three-point % off the offensive booster) with the prior averaged over 10 bootstraps of the players.
+  Decider -0.086, z -3.13, the twenty untouched seasons z -2.40; guard z +0.60.  A product build now takes longer: a
+  season's rating about 96 s against 24.
 - **Tests:** `pytest -q` 663 passed, the Curry ceiling passing again, Curry 48th; `pytest -m slow` 7 passed; `ruff
   check .` clean.  Two consensus guards were loosened for experiment 76, the bigs rated above the consensus:
   bigness 0.30 to 0.40, archetype spread 0.25 to 0.30.
 - **The input cull, done 2026-10-17:** check 152 `cull` / `cull-table`, every input shadowed and dropped at three
   seeds on the tune cache (DECISIONS.md "The input cull on the decider").  One cut, three-point % on offence, became
-  experiment 77.  The cull also found the booster's seed alone moves the decider about 0.03, seed 0 the luckiest of
-  five: proposed next, average the boosters over several seeds.  Tracking is on hold ("not yet").
+  experiment 77.  The cull also found the booster's seed alone moves the decider about 0.03; bagging, experiment
+  78, replaced the single booster.  Tracking is on hold ("not yet").
 - **Next, the owner's open threads:** tracking game by game (below); the arena scorekeeper checks; the big-man lean against the consensus.
 
 ## What ships
@@ -23,18 +25,18 @@ OpenRAPM is, `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing ru
 | step | module | as shipped |
 |---|---|---|
 | 1, the label | `rapm.py` | one RAPM per player over every season but the rated one; penalties 40,000 / 40,000 / 0; the defensive label un-shrunk |
-| 2, the box-score prior | `box_prior.py` | LightGBM, `params/booster_params_lgb1_tune2.json`, chosen on the decider by check 152's guarded search; feature set `hustle_no_three_pct`; five player folds, out of player |
+| 2, the box-score prior | `box_prior.py` | LightGBM, `params/booster_params_lgb1_tune2.json`, chosen on the decider by check 152's guarded search; feature set `hustle_no_three_pct`; five player folds, out of player; 10 bags, each on a bootstrap of the players |
 | 3, the rating | `prior_rapm.py` | the season's RAPM pulled toward the prior, residual penalty 13,037, centred |
-| 4, the shrink | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, from the 8 nearest fold seasons, both defensive factors times 0.866: prior part 0.659-0.728 offence, 0.684-0.794 defence; games' part 1.186-1.393 and 1.252-1.351; folds `nothreepct_early,nothreepct_within` |
+| 4, the shrink | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, from the 8 nearest fold seasons, both defensive factors times 0.866: prior part 0.659-0.728 offence, 0.684-0.794 defence; games' part 1.186-1.393 and 1.252-1.351; folds `bags10_early,bags10_within` |
 | 5, the swap step | `swap_adjust.py` | credit re-split inside each team from lineup swaps, team totals fixed, spread inside teams held to step 4's |
 
 - `openrapm build` writes `outputs/season_ratings_product.parquet` with `_step3` and `_step4` beside it.  Previous
-  product tables: `outputs/season_ratings_product*_before_nothreepct.parquet`, `*_before_tune2.parquet`.
+  product tables: `outputs/season_ratings_product*_before_bags10.parquet`, `*_before_nothreepct.parquet`.
 - `openrapm site --bias --openrapm-decomposition --similarity` writes the site's files.  Commit, fast-forward `main`
   and push only on the owner's word, then check the Pages build:
   `gh api repos/bbstats/openrapm/pages/builds/latest`.
-- The incumbent for scoring is `nothreepct`, the test-setting tables `outputs/season_ratings_nothreepct*.parquet`, its
-  folds `nothreepct_early` and `nothreepct_within`; no noise control of its own yet, `noise_tune2` stands in.  The decider applies the shipped defence factor, 0.866, to every system; a system
+- The incumbent for scoring is `bags10`, the test-setting tables `outputs/season_ratings_bags10*.parquet`, its
+  folds `bags10_early` and `bags10_within`; no noise control of its own yet, `noise_tune2` stands in.  The decider applies the shipped defence factor, 0.866, to every system; a system
   built before experiment 76 is read with `--defence-factors=NAME:1`.
 
 ## How an experiment is judged
@@ -48,7 +50,7 @@ The owner, 2026-10-15: "within-season is truly the best metric, particularly WOW
 | the eye check | `scripts/checks/66_compare.py` | the 2026 top 20 |
 
 - One build: `bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes "EXTRA RATE FLAGS"`.  About
-  50 minutes: steps 1-3 at the test setting, the candidate's own folds for all thirty seasons, steps 4 and 5, then the
+  1 hour 40 minutes with 10 bags: steps 1-3 at the test setting, the candidate's own folds for all thirty seasons, steps 4 and 5, then the
   three readings.  `INC_NAME=tune2` names the incumbent's tables and `INC_SYSTEM=tune2` its folds.
 - The noise control on the incumbent, `noise_tune2`, reads -0.034, z -1.17, 17 of 30 seasons.
 - **Scale.**  On the decider, ratings of zero leave 3,648.6 a season and today's ratings 3,633.0: the ratings explain

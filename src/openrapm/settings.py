@@ -122,6 +122,10 @@ class PriorSettings:
     # seasons between its seasons and the rated one, beyond the nearest season the fit may use (box_prior.era_kernel;
     # notes/DECISIONS.md, "Era drift" and experiment 56: the defensive prices drift between eras)
     era_halflife: float = 0.0
+    # 0: one booster per side.  K: K boosters, each on a bootstrap of the players, their answers averaged
+    # (box_prior.BaggedPrior; notes/DECISIONS.md, experiment 78, adopted 2026-10-17: "Adopt and publish"; one
+    # booster before it)
+    bags: int = 10
 
 
 @dataclass(frozen=True)
@@ -145,11 +149,11 @@ class ShrinkSettings:
     # once and silently changed the factors (notes/DECISIONS.md, experiment 34's correction, 2026-10-05).  Every
     # season since experiment 55 (adopted 2026-10-12); 2017-2026 before
     fold_seasons: tuple = (1997, 2026)
-    # the within-season folds the factors are fitted on, comma-separated folders: experiment 77's own folds, 1997-2016
-    # and 2017-2026 (notes/DECISIONS.md, "Experiment 77", adopted 2026-10-17; before it experiment 76's,
-    # tune2_early,tune2_within, and experiment 63's, cols06_early,cols06_within); the method is experiment 33b's,
-    # adopted 2026-10-03
-    folds_tag: str = "nothreepct_early,nothreepct_within"
+    # the within-season folds the factors are fitted on, comma-separated folders: experiment 78's own folds, 1997-2016
+    # and 2017-2026 (notes/DECISIONS.md, "Experiment 78", adopted 2026-10-17; before it experiment 77's,
+    # nothreepct_early,nothreepct_within, experiment 76's, tune2_early,tune2_within, and experiment 63's,
+    # cols06_early,cols06_within); the method is experiment 33b's, adopted 2026-10-03
+    folds_tag: str = "bags10_early,bags10_within"
     # each season's factors from only the K fold seasons nearest it (prior_shrink.fold_seasons_used): the defensive
     # prior part holds up less in older seasons, 0.79 in 1997-2006 against 0.95 in 2017-2026 (notes/DECISIONS.md,
     # "Era drift" and experiment 55, adopted 2026-10-12: "yes. build."); 0 would use every fold season the rule allows

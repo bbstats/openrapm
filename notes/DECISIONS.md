@@ -7536,3 +7536,45 @@ Adopted and published 2026-10-17, the owner: "Adopt and publish".  Shipped: `Pri
 `nothreepct`, with no noise control of its own yet (`noise_tune2` stands in).  Product table rebuilt, the step-3 table
 frozen as `season_ratings_product_nothreepct_step3.parquet`, the previous product kept as
 `season_ratings_product_before_nothreepct.parquet`; the site's files rebuilt.
+
+## Experiment 78: bagging the box-score booster (the owner, 2026-10-17: "Better to average or to do bagging?")
+
+The cull found the booster's seed alone moves the decider about 0.03.  A screen on the tune cache (check 152 `trial
+--ensemble`), against the shipped settings at seed 0:
+
+| arm | change | z | seasons better | change against a typical seed | z |
+|---|---|---|---|---|---|
+| 5 seeds averaged | +0.007 | +0.66 | 4 of 10 | -0.013 | -13.55 |
+| 5 seeds averaged, seeds 5-9 | +0.013 | +1.35 | 1 of 10 | -0.007 | -1.27 |
+| 5 bags | -0.052 | -1.43 | 6 of 10 | -0.072 | -2.27 |
+| 5 bags, bags 5-9 | -0.033 | -0.62 | 6 of 10 | -0.052 | -1.12 |
+| 10 bags | -0.071 | -1.78 | 7 of 10 | -0.091 | -2.64 |
+
+A bag is a bootstrap of the players: as many draws as players, with replacement; a player drawn n times keeps all his
+rows at n times their weight, one not drawn is left out of that bag and answered by boosters that never saw him.  Bag k
+draws with seed k.  `box_prior.fit_prior`, `PriorSettings.bags`, `openrapm rate --bags K`; saved boosters keep every
+bag and `openrapm folds` reads them.  The pipeline's bags reproduce the screen's 10 bags exactly.
+
+The chain, `bash scripts/experiment_chain.sh bags10 points_with_expected_opponent_threes "--bags 10"`, 1 hour 37
+minutes; rating takes about 96 s a season against 24:
+
+| reading | change | z | seasons better |
+|---|---|---|---|
+| decider, step 4, all thirty | -0.086 | -3.13 | 20 of 30 |
+| decider, the ten tune seasons | -0.090 | -1.95 | 6 of 10 |
+| decider, the twenty untouched | -0.084 | -2.40 | 14 of 20 |
+| decider by era: 1997-2006 / 2007-2016 / 2017-2026 | -0.020 / -0.114 / -0.123 | -0.74 / -2.45 / -2.04 | |
+| noise control `noise_tune2` against `nothreepct` | +0.013 | +0.50 | 16 of 30 |
+| guard, team-game, both directions | +0.012 | +0.60 | 26 of 56 |
+| guard, stint, both directions | -0.018 | -0.70 | 29 of 56 |
+
+- The spread is unchanged: sd of the total among players with 1,000+ possessions 2.003 to 2.011.
+- Eye check, 2026: the top 20 keeps its top six in order; Wembanyama 9.59 to 9.16, Jokić 7.47 to 7.07, Queta -0.30,
+  Holmgren 9th to 12th -0.34; Ty Jerome 13th to 10th +0.44, Caruso +0.28, Butler 22nd to 17th +0.37; median move
+  0.10 per 100 among players with 2,000+ possessions, the largest Jaylen Brown +0.58.
+
+Adopted and published 2026-10-17, the owner: "Adopt and publish".  Shipped: `PriorSettings.bags` 10,
+`ShrinkSettings.folds_tag` `bags10_early,bags10_within`; the chain's incumbent is `bags10`, with `noise_tune2`
+standing in as the noise control.  Product table rebuilt, the step-3 table frozen as
+`season_ratings_product_bags10_step3.parquet`, the previous product kept as
+`season_ratings_product_before_bags10.parquet`; the site's files rebuilt.
