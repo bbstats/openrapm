@@ -7485,3 +7485,54 @@ Stockton 5th; 2026 median move 0.29 per 100.  The similarity page keeps its inpu
 Two consensus guards fail on the new table and were loosened on the owner's word ("push"): the total gap's
 correlation with bigness 0.279 to 0.377, limit 0.30 to 0.40; the archetype spread 0.208 to 0.280, limit 0.25 to 0.30.
 The bigs are rated above the consensus more than before.  The Curry ceiling passes again, Curry 83rd to 48th.
+
+## The input cull on the decider (the owner, 2026-10-16: "time to do boruta (on the new test)")
+
+Check 152 `cull` on the tune cache, the shipped settings `lgb1_tune2`, feature set `hustle`, defence factor 0.866.
+Each of the 36 inputs, 18 a side, in two arms, each at booster seeds 0, 1 and 2 against the shipped settings at the same
+seed, the three seeds averaged per season and paired over the ten tune seasons: **shadow**, the input's values shuffled
+among the rows that have one, missing kept missing, Boruta's test with the decider as the yardstick; **drop**, the input
+taken off.  Classic Boruta cannot run: LightGBM gives no SHAP values on straight-line leaves.  221 trials, 1.7 hours.
+Full table `outputs/csv/cull_lgb1_tune2_hustle_table.csv`; rows `outputs/tune/tune1/cull_lgb1_tune2_hustle*.csv`.
+
+- **The noise control.**  The shipped settings at seeds 1-4 against seed 0: +0.034 z +1.73, +0.033 z +2.02, +0.011
+  z +0.71, +0.039 z +2.31.  A seed change alone reads z +2, because a column draw moves every season the same way;
+  seed 0, the seed the tune ran on, is the luckiest of five.
+- **Drop is the noisier arm.**  Dropping any column redraws the columns every tree is shown.  On defence every weak
+  input reads the same +0.03 dropped, at all three seeds, also in 1998-2016 where the hustle columns are empty; two
+  weak inputs dropped together read +0.012.  So on defence a drop reading below about +0.04 is the redraw, not the
+  input.  The shadow arm keeps the column count and the draws, and its seeds agree to about 0.01.
+- **Three-point % on offence is worse than its own shadow**: shadow -0.056 z -2.68, drop -0.060 z -2.89 9 of 10
+  seasons, every seed between -0.050 and -0.066, both eras: 2019-2025 -0.074, 1998-2016 -0.049.  The next-season
+  check on the drop: z +0.25.  The only input both arms say to cut.
+- Loose balls recovered on defence: shadow -0.009 z -2.53, rejected, but small.
+- Accepted by the shadow test: offence share of team possessions played +0.61, true shooting % +0.16, points +0.10,
+  assists minus turnovers +0.09, share of shots that are threes, offensive rebounds, shot attempts; defence shot
+  attempts +0.10, steals +0.10, share of games started +0.10, defensive rebounds +0.08, points +0.03.
+- The hustle values carry nothing on the decider beyond their missing pattern here: every hustle shadow within
+  0.03 of zero; only three of the ten tune seasons, 2019, 2022 and 2025, have them.
+- These ten seasons chose the shipped settings; a cut needs the full chain on all thirty.
+
+## Experiment 77: three-point % off the offensive booster (the owner, 2026-10-17: "ok go ahead")
+
+The cull's one cut.  Feature set `hustle_no_three_pct`;
+`bash scripts/experiment_chain.sh nothreepct points_with_expected_opponent_threes "--features hustle_no_three_pct"`.
+
+| reading | change | z | seasons better |
+|---|---|---|---|
+| decider, step 4, all thirty | -0.047 | -3.71 | 24 of 30 |
+| decider, the ten tune seasons | -0.057 | -2.69 | 9 of 10 |
+| decider, the twenty untouched | -0.042 | -2.62 | 15 of 20 |
+| noise control `noise_tune2` | -0.034 | -1.17 | 17 of 30 |
+| guard, team-game, both directions | -0.0004 | -0.04 | 29 of 56 |
+| guard, stint, both directions | -0.014 | -1.37 | 32 of 56 |
+
+- Eye check, 2026: the top 20 in the same order but for Caruso 17th to 15th and Diabaté 15th to 17th, every move
+  under 0.1 per 100 except Dončić +0.15; median move 0.02 per 100 among players with 2,000+ possessions, the largest
+  0.24, Coby White, all on offence.
+
+Adopted and published 2026-10-17, the owner: "Adopt and publish".  Shipped: `PriorSettings.feature_set`
+`hustle_no_three_pct`, `ShrinkSettings.folds_tag` `nothreepct_early,nothreepct_within`; the chain's incumbent is
+`nothreepct`, with no noise control of its own yet (`noise_tune2` stands in).  Product table rebuilt, the step-3 table
+frozen as `season_ratings_product_nothreepct_step3.parquet`, the previous product kept as
+`season_ratings_product_before_nothreepct.parquet`; the site's files rebuilt.

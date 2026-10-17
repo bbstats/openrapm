@@ -38,13 +38,15 @@ LOG=outputs/${NAME}_chain.log
 # is the incumbent's rule on its own folds for all thirty seasons.
 # Since 2026-10-16 it is experiment 76 (tune2): the booster settings and step 4's defence factor from check 152's
 # guarded search, with the hustle inputs; its own folds, its noise control noise_tune2.
-INC_NAME=${INC_NAME:-tune2}
-INC_SYSTEM=${INC_SYSTEM:-tune2}                  # the incumbent's folds (<name>_early, <name>_within) for 151
+# Since 2026-10-17 it is experiment 77 (nothreepct): tune2 with three-point % off the offensive booster, its own folds;
+# no noise control on it yet, so noise_tune2 stands in.
+INC_NAME=${INC_NAME:-nothreepct}
+INC_SYSTEM=${INC_SYSTEM:-nothreepct}             # the incumbent's folds (<name>_early, <name>_within) for 151
 CONTROL_NAME=${CONTROL_NAME:-noise_tune2}        # the noise control's folds (<name>_early, <name>_within) for 151
-INC_FOLDS=${INC_FOLDS:-tune2_early,tune2_within}
-AUDIT_REF=${AUDIT_REF:-tune2_within}
+INC_FOLDS=${INC_FOLDS:-nothreepct_early,nothreepct_within}
+AUDIT_REF=${AUDIT_REF:-nothreepct_within}
 INC=outputs/season_ratings_${INC_NAME}.parquet
-BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1_tune2 --features hustle}
+BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1_tune2 --features hustle_no_three_pct}
 [ -n "$NAME" ] && [ -n "$TARGET" ] || { echo "usage: scripts/experiment_chain.sh NAME TARGET [EXTRA RATE FLAGS]"; exit 1; }
 # Every check the chain calls, looked for BEFORE the build: a missing one would otherwise surface only hours later.
 READINGS="151_wowy 63_yoy 66_compare 64_consensus_report 70_tradeset 73_tradeloss 88_yoy_by_player 90_swap_test 138_heldout_audit"

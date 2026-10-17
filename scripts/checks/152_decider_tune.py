@@ -34,6 +34,8 @@ incumbent's settings and experiment 71's, both with the hustle inputs.
     python scripts/checks/152_decider_tune.py trial --tag tune1 --params lgb1_cols06_flat --features hustle \
         --compare flathustle                                                       (one trial; checks the cache)
     python scripts/checks/152_decider_tune.py tune --tag tune1 --trials 60         (resumes where it stopped)
+    python scripts/checks/152_decider_tune.py cull --tag tune1                     (the input cull, below; resumes)
+    python scripts/checks/152_decider_tune.py cull-table --tag tune1               (its full table)
 
 Writes under outputs/tune/<tag>/: season_<season>.pkl (the cache), reference.json, study.db (Optuna's), trials.csv
 (one row per trial and season) and best.json (the best trial's settings as a params/ file).
@@ -53,6 +55,7 @@ import multiprocessing as mp  # noqa: E402
 import pickle  # noqa: E402
 import sys  # noqa: E402
 import time  # noqa: E402
+import zlib  # noqa: E402
 from dataclasses import replace  # noqa: E402
 from pathlib import Path  # noqa: E402
 from types import SimpleNamespace  # noqa: E402
@@ -404,6 +407,78 @@ def guard_paired(mine: pd.DataFrame, theirs: pd.DataFrame, value: str = "tg") ->
     return paired(mine.set_index(key)[value], theirs.set_index(key)[value])
 
 
+# ------------------------------------------------------------------------------------------------- an input changed
+# The input cull (the owner, 2026-10-16: "time to do boruta (on the new test)").  Boruta keeps an input when it beats a
+# shuffled copy of itself, its shadow.  Here the decider is the yardstick in place of the booster's own importance: the
+# shipped boosters' straight-line leaves have no SHAP values, and a booster's importance is read on its own training
+# labels, which the decider replaced.  A change is (side, arm, input):
+#     drop      the input taken off that side's booster
+#     shadow    the input's values shuffled among the rows that have one, in training and in rating; missing stays
+#               missing, so what is left of it is its missing pattern (for the hustle counts, a marker of the seasons
+#               before 2017) and noise
+# The booster's seed (LightGBM's random_state) draws the inputs each tree is shown; a trial at another seed, nothing
+# else changed, is the noise control.
+CULL_ARMS = ("drop", "shadow")
+
+
+def side_changes(changes: tuple, side: str) -> list:
+    """[(arm, input)] of the changes on one side."""
+    return [(arm, name) for change_side, arm, name in changes if change_side == side]
+
+
+def booster_seed(seed: int) -> None:
+    """Every LightGBM fit in this process from here on drawn with `seed` (box_prior pins random_state at 0)."""
+    from openrapm import box_prior
+    box_prior.LIGHTGBM_FIXED = {**box_prior.LIGHTGBM_FIXED, "random_state": int(seed)}
+
+
+def shadow(values: np.ndarray, seed: int, name: str, stream: str) -> np.ndarray:
+    """`values` shuffled among the rows that have one; the draw fixed by the seed, the input and the stream."""
+    out = np.asarray(values, dtype=float).copy()
+    present = np.flatnonzero(~np.isnan(out))
+    rng = np.random.default_rng([int(seed), zlib.crc32(f"{name}|{stream}".encode())])
+    out[present] = out[rng.permutation(present)]
+    return out
+
+
+def changed_train(train: pd.DataFrame, inputs: list, changes: list, seed: int, stream: str
+                  ) -> tuple[pd.DataFrame, list]:
+    """(the training rows, the booster's input names) after one side's changes."""
+    inputs = list(inputs)
+    if not changes:
+        return train, inputs
+    train = train.copy()
+    for arm, name in changes:
+        if arm == "drop":
+            inputs.remove(name)
+        else:
+            train[name] = shadow(train[name].to_numpy(float), seed, name, f"{stream}_train")
+    return train, inputs
+
+
+def changed_matrix(matrix: np.ndarray, inputs: list, changes: list, seed: int, stream: str) -> np.ndarray:
+    """A rated input matrix, columns in the order of `inputs`, after one side's changes: dropped columns removed,
+    shadowed ones shuffled."""
+    if not changes:
+        return matrix
+    matrix = np.asarray(matrix, dtype=float).copy()
+    for arm, name in changes:
+        if arm == "shadow":
+            column = inputs.index(name)
+            matrix[:, column] = shadow(matrix[:, column], seed, name, stream)
+    dropped = [inputs.index(name) for arm, name in changes if arm == "drop"]
+    return np.delete(matrix, dropped, axis=1)
+
+
+def parse_changes(text: str, arm: str) -> tuple:
+    """"O:weight_lb,D:height_in" -> (("O", arm, "weight_lb"), ("D", arm, "height_in"))."""
+    out = []
+    for item in filter(None, (part.strip() for part in text.split(","))):
+        side, name = item.split(":", 1)
+        out.append((side, arm, name))
+    return tuple(out)
+
+
 # ------------------------------------------------------------------------------------------------- one trial
 class SeasonWorker:
     """One tune season held in memory: retrains its boosters for a trial, rates its folds, scores them."""
@@ -418,24 +493,28 @@ class SeasonWorker:
         self.audit = self.wowy._audit()
         self.folds = None
 
-    def rate(self, params: dict, feature_set: str) -> tuple[list, pd.DataFrame | None]:
+    def rate(self, params: dict, feature_set: str, changes: tuple = (), seed: int = 0
+             ) -> tuple[list, pd.DataFrame | None]:
         """Every fold of the season rated through steps 2-3 on the trial's boosters, and the whole season when it is
-        cached: (the `Fold`s, the whole season's centred step-3 table in raw sign, or None)."""
+        cached: (the `Fold`s, the whole season's centred step-3 table in raw sign, or None).  `changes` and `seed` as
+        in `changed_matrix` and `booster_seed`."""
         from openrapm import box_prior, trade_set
         from openrapm.commands import within_season as ws
         from openrapm.data.within_folds import Fold, _base, _rated, _side_blocks
         from openrapm.features import FEATURE_SETS as SETS
         from openrapm.features import ROW_FEATURES
         settings = settings_for(feature_set)
-        models = {}
+        booster_seed(seed)
+        models, names = {}, {}
         for side in ("O", "D"):
+            names[side] = list(SETS[feature_set][side]) + ROW_FEATURES
             train = self.cache["train"][feature_set][side]
-            names = list(SETS[feature_set][side])
-            models[side] = box_prior.fit_out_of_player(train, names + ROW_FEATURES, params[side],
+            train, inputs = changed_train(train, names[side], side_changes(changes, side), seed, f"{self.season}")
+            models[side] = box_prior.fit_out_of_player(train, inputs, params[side],
                                                        settings.prior.n_folds, settings.prior.fold_assignment)
         folds = []
         for cached in self.cache["folds"]:
-            table = self.step3(cached, models, feature_set, settings)
+            table = self.step3(cached, models, feature_set, settings, names, changes, seed, cached["stem"])
             ratings = pd.DataFrame({
                 "player_id": table.player_id, "rating_off": table.offense, "rating_def": -table.defense,
                 "prior_off": table.prior_offense, "prior_def": -table.prior_defense,
@@ -457,15 +536,18 @@ class SeasonWorker:
                               base=_base(test["shares"], test["player_ids"], rated, fill_o, fill_d),
                               rows=rows, Z=blocks))
         self.folds = folds
-        whole = None if self.whole is None else self.step3(self.whole, models, feature_set, settings)
+        whole = None if self.whole is None else self.step3(self.whole, models, feature_set, settings, names, changes,
+                                                           seed, f"{self.season}_whole")
         return folds, whole
 
-    def step3(self, cached: dict, models: dict, feature_set: str, settings) -> pd.DataFrame:
+    def step3(self, cached: dict, models: dict, feature_set: str, settings, names: dict, changes: tuple, seed: int,
+              stream: str) -> pd.DataFrame:
         """Steps 2-3 on one set of cached inputs and ridge pieces: the centred table in raw sign."""
         from openrapm import prior_rapm
         prior = {}
         for side in ("O", "D"):
             ids, matrix = cached["inputs"][feature_set][side]
+            matrix = changed_matrix(matrix, names[side], side_changes(changes, side), seed, stream)
             prior[side] = dict(zip(ids, _predict(models[side], ids, matrix)))
         targets = settings.targets
         fits = {name: prior_rapm.fit(duck_design(cached["ridge"][name]), prior["O"], prior["D"],
@@ -525,7 +607,7 @@ def _worker(path: str, connection) -> None:
         try:
             if message[0] == "rate":
                 started = time.time()
-                folds, whole = worker.rate(message[1], message[2])
+                folds, whole = worker.rate(*message[1:])
                 connection.send(("rated", folds, whole, time.time() - started))
             elif message[0] == "compare":
                 connection.send(("compared", worker.compare()))
@@ -561,13 +643,14 @@ class Pool:
         return message
 
     def trial(self, params: dict, feature_set: str, compare: bool = False, def_factor: float = 1.0,
-              guard: Guard | None = None) -> tuple[pd.DataFrame, dict]:
+              guard: Guard | None = None, changes: tuple = (), seed: int = 0) -> tuple[pd.DataFrame, dict]:
         """(one row per season, stage and slice: the decider's error; timings, comparisons and, with `guard`, the
-        next-season check's rows in extra["guard"]).  `def_factor` multiplies both of step 4's defensive factors."""
+        next-season check's rows in extra["guard"]).  `def_factor` multiplies both of step 4's defensive factors;
+        `changes` and `seed` as in `SeasonWorker.rate`."""
         from openrapm.prior_shrink import multipliers_by_season
         started = time.time()
         for link, _ in self.links.values():
-            link.send(("rate", params, feature_set))
+            link.send(("rate", params, feature_set, tuple(changes), int(seed)))
         folds, seconds, wholes = [], {}, []
         for season, (link, _) in self.links.items():
             _, season_folds, whole, took = self._expect(link, "rated")
@@ -673,8 +756,9 @@ def run_trial(args) -> int:
         reference = reference_scores(pool, args.tag)
         guard = Guard(args.tag, TUNE_SEASONS) if args.guard else None
         guard_reference = reference_guard(pool, args.tag, guard) if guard else None
+        changes = parse_changes(args.drop, "drop") + parse_changes(args.shadow, "shadow")
         table, extra = pool.trial(params_file(args.params), args.features, compare=bool(args.compare),
-                                  def_factor=args.def_factor, guard=guard)
+                                  def_factor=args.def_factor, guard=guard, changes=changes, seed=args.seed)
         if guard:
             print("next-season check against the reference: " + describe_guard(extra["guard"], guard_reference))
         print(f"{args.params}, {args.features}: score {score_of(table).mean():.4f}  ({extra['seconds']:.0f}s, "
@@ -695,6 +779,126 @@ def run_trial(args) -> int:
                       f", mean {step3['mean_change']:+.2e}")
     finally:
         pool.close()
+    return 0
+
+
+# ------------------------------------------------------------------------------------------------- the input cull
+def cull_stem(args) -> str:
+    return f"cull_{args.params}_{args.features}"
+
+
+def cull_plan(args) -> list:
+    """[(arm, side, input, seed)]: the shipped settings at every base seed first, then every input's arms one seed at a
+    time, so a run stopped part way has whole seeds."""
+    from openrapm.features import FEATURE_SETS as SETS
+    arms = [arm for arm in args.arms.split(",") if arm]
+    plan = [("base", "-", "-", seed) for seed in range(args.base_seeds)]
+    for seed in range(args.seeds):
+        for side in ("O", "D"):
+            for name in SETS[args.features][side]:
+                plan.extend((arm, side, name, seed) for arm in arms)
+    return plan
+
+
+def run_cull(args) -> int:
+    """Every input's arms at every seed, appended to cull_<params>_<features>.csv and its _guard.csv; resumes."""
+    out_dir = tune_dir(args.tag)
+    path, guard_path = out_dir / f"{cull_stem(args)}.csv", out_dir / f"{cull_stem(args)}_guard.csv"
+    done = set()
+    if path.exists():
+        old = pd.read_csv(path, keep_default_na=False)
+        done = set(zip(old.arm, old.side, old.input, old.seed.astype(int)))
+    todo = [key for key in cull_plan(args) if key not in done]
+    print(f"{len(todo)} trials to run, {len(done)} done", flush=True)
+    if not todo:
+        return 0
+    params = params_file(args.params)
+    base, base_guard = {}, {}
+    if path.exists():
+        old = pd.read_csv(path, keep_default_na=False)
+        old_guard = pd.read_csv(guard_path, keep_default_na=False)
+        for seed in old[old.arm == "base"].seed.unique():
+            base[int(seed)] = score_of(old[(old.arm == "base") & (old.seed == seed)])
+            base_guard[int(seed)] = old_guard[(old_guard.arm == "base") & (old_guard.seed == seed)]
+    pool = Pool(args.tag, TUNE_SEASONS)
+    try:
+        guard = Guard(args.tag, TUNE_SEASONS)
+        for number, (arm, side, name, seed) in enumerate(todo, start=1):
+            changes = () if arm == "base" else ((side, arm, name),)
+            table, extra = pool.trial(params, args.features, def_factor=args.def_factor, guard=guard,
+                                      changes=changes, seed=seed)
+            key = dict(arm=arm, side=side, input=name, seed=seed)
+            table.assign(**key).to_csv(path, mode="a", header=not path.exists(), index=False)
+            extra["guard"].assign(**key).to_csv(guard_path, mode="a", header=not guard_path.exists(), index=False)
+            if arm == "base":
+                base[seed], base_guard[seed] = score_of(table), extra["guard"]
+            reading = f"decider {score_of(table).mean():.4f}"
+            if arm != "base" or seed != 0:
+                theirs = base[seed if arm != "base" else 0]
+                result = paired(score_of(table), theirs)
+                reading += (f", {result['mean_change']:+.4f} z {result['z']:+.2f} {result['seasons_better']}/"
+                            f"{result['seasons']}; " + describe_guard(extra["guard"],
+                                                                      base_guard[seed if arm != "base" else 0]))
+            print(f"[{number}/{len(todo)}] {arm} {side} {name} seed {seed}: {reading}  ({extra['seconds']:.0f}s)",
+                  flush=True)
+    finally:
+        pool.close()
+    return 0
+
+
+def run_cull_table(args) -> int:
+    """The full table: per side and input, each arm against the shipped settings at the same seeds, the seed means
+    paired by season (the decider) and by rated-and-scored season (the next-season check); the noise control rows
+    on top."""
+    from openrapm.data.config import load_config, resolve
+    from openrapm.features import meaning
+    out_dir = tune_dir(args.tag)
+    rows = pd.read_csv(out_dir / f"{cull_stem(args)}.csv", keep_default_na=False)
+    guard = pd.read_csv(out_dir / f"{cull_stem(args)}_guard.csv", keep_default_na=False)
+    rows = rows[(rows.stage == "step4") & (rows.slice == "all")]
+    base = rows[rows.arm == "base"].pivot_table(index="season", columns="seed", values="error")
+    base_guard = guard[guard.arm == "base"].pivot_table(index=["rated", "scored"], columns="seed", values="tg")
+    sides = {"O": "offence", "D": "defence"}
+    records = []
+    for seed in base.columns[1:]:
+        decider, nxt = paired(base[seed], base[0]), paired(base_guard[seed], base_guard[0])
+        records.append(dict(side="both", input=f"seed_{seed}", meaning=f"noise control: the shipped settings at seed "
+                            f"{seed} against seed 0", drop_change=decider["mean_change"], drop_se=decider["se"],
+                            drop_z=decider["z"], drop_seasons_better=decider["seasons_better"],
+                            drop_guard_change=nxt["mean_change"], drop_guard_z=nxt["z"]))
+    for (side, name), group in rows[rows.arm != "base"].groupby(["side", "input"], sort=False):
+        record = dict(side=sides[side], input=name, meaning=meaning(name))
+        for arm in CULL_ARMS:
+            mine = group[group.arm == arm].pivot_table(index="season", columns="seed", values="error")
+            seeds = [seed for seed in mine.columns if seed in base.columns]
+            if not seeds:
+                continue
+            decider = paired(mine[seeds].mean(axis=1), base[seeds].mean(axis=1))
+            theirs = guard[(guard.arm == arm) & (guard.side == side) & (guard.input == name)].pivot_table(
+                index=["rated", "scored"], columns="seed", values="tg")
+            nxt = paired(theirs[seeds].mean(axis=1), base_guard[seeds].mean(axis=1))
+            record.update({f"{arm}_change": decider["mean_change"], f"{arm}_se": decider["se"],
+                           f"{arm}_z": decider["z"], f"{arm}_seasons_better": decider["seasons_better"],
+                           f"{arm}_seeds": len(seeds), f"{arm}_guard_change": nxt["mean_change"],
+                           f"{arm}_guard_z": nxt["z"]})
+            for seed in seeds:
+                record[f"{arm}_change_seed_{seed}"] = float((mine[seed] - base[seed]).mean())
+        if "shadow_z" in record:
+            record["boruta_verdict"] = ("accepted" if record["shadow_z"] >= 2 else
+                                        "rejected" if record["shadow_z"] <= -2 else "tentative")
+        if "drop_z" in record:
+            record["drop_verdict"] = ("better without" if record["drop_z"] <= -2 else
+                                      "needed" if record["drop_z"] >= 2 else "tie")
+        records.append(record)
+    table = pd.DataFrame(records)
+    out = resolve(load_config(), "outputs") / "csv" / f"{cull_stem(args)}_table.csv"
+    table.to_csv(out, index=False)
+    show = [c for c in ("side", "input", "drop_change", "drop_z", "drop_seasons_better", "drop_guard_z",
+                        "shadow_change", "shadow_z", "shadow_guard_z", "boruta_verdict", "drop_verdict")
+            if c in table.columns]
+    with pd.option_context("display.width", 250, "display.max_rows", 200, "display.float_format", "{:+.3f}".format):
+        print(table[show].to_string(index=False))
+    print(f"wrote {out}")
     return 0
 
 
@@ -922,6 +1126,21 @@ def main(argv=None) -> int:
     trial.add_argument("--guard", action="store_true", help="also the next-season check (needs cache-whole)")
     trial.add_argument("--def-factor", type=float, default=1.0, help="multiplies step 4's defensive factors")
     trial.add_argument("--against", default="", help="a check-151 tag whose step3 errors the trial must equal")
+    trial.add_argument("--drop", default="", help="inputs taken off, as O:weight_lb,D:height_in")
+    trial.add_argument("--shadow", default="", help="inputs shuffled among the rows that have one, as --drop")
+    trial.add_argument("--seed", type=int, default=0, help="the boosters' random_state (default %(default)s)")
+    for name, text in (("cull", "every input dropped and shadowed in turn, at several seeds; resumes"),
+                       ("cull-table", "the cull's full table")):
+        cull = commands.add_parser(name, help=text)
+        cull.add_argument("--tag", required=True)
+        cull.add_argument("--params", default="lgb1_tune2")
+        cull.add_argument("--features", default="hustle")
+        cull.add_argument("--def-factor", type=float, default=0.866)
+        cull.add_argument("--seeds", type=int, default=3, help="seeds per input and arm (default %(default)s)")
+        cull.add_argument("--base-seeds", type=int, default=5, help="seeds of the shipped settings (default "
+                                                                    "%(default)s); those past --seeds are the noise "
+                                                                    "control")
+        cull.add_argument("--arms", default=",".join(CULL_ARMS))
     tune = commands.add_parser("tune", help="the Optuna search")
     tune.add_argument("--tag", required=True)
     tune.add_argument("--trials", type=int, default=60, help="finished trials to reach (default %(default)s)")
@@ -939,6 +1158,10 @@ def main(argv=None) -> int:
         return build_whole_cache(args.tag, seasons, args.check_models)
     if args.command == "trial":
         return run_trial(args)
+    if args.command == "cull":
+        return run_cull(args)
+    if args.command == "cull-table":
+        return run_cull_table(args)
     return run_tune_guarded(args) if args.guard else run_tune(args)
 
 

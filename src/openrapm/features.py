@@ -315,6 +315,10 @@ FEATURE_SETS = {
     # the dashboard arms (screen: scripts/checks/146_dashboard_screen.py): tracking, hustle, and both, appended
     "tracking": {"O": _NO_CAREER["O"] + TRACKING_OFFENCE, "D": _NO_CAREER["D"] + TRACKING_DEFENCE},
     "hustle": {"O": _NO_CAREER["O"] + HUSTLE_OFFENCE, "D": _NO_CAREER["D"] + HUSTLE_DEFENCE},
+    # experiment 77 (2026-10-17, the input cull on the decider): three-point % off the offensive booster, the one input
+    # worse than its own shuffled copy on both arms
+    "hustle_no_three_pct": {"O": [name for name in _NO_CAREER["O"] + HUSTLE_OFFENCE if name != "three_point_pct"],
+                            "D": _NO_CAREER["D"] + HUSTLE_DEFENCE},
     # the booster tune on the decider (check 152, 2026-10-16): the hustle lists with the era marker, its switch
     "hustle_era_marker": {"O": _NO_CAREER["O"] + HUSTLE_OFFENCE + ERA_MARKER,
                           "D": _NO_CAREER["D"] + HUSTLE_DEFENCE + ERA_MARKER},

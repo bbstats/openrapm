@@ -143,7 +143,9 @@ five in one process (`src/openrapm/commands/build.py`). Each command writes its 
   player's prior comes from the booster fitted without his fold, so it cannot have learned his box score
   and returned his own label. The booster is then asked about the rated season's own box score.
 - **Settings:**
-  - the inputs: `hustle`, 18 on offence and 18 on defence: `no_career_counts` plus the hustle box score's counts,
+  - the inputs: `hustle_no_three_pct`, 17 on offence and 18 on defence: `hustle` with three-point % off the
+    offensive booster, the one input worse than its own shuffled copy on the with-or-without-you test (check 152
+    `cull`; experiment 77, adopted 2026-10-17); `hustle` is `no_career_counts` plus the hustle box score's counts,
     each summed over the games a rating is built from and missing before 2017 (experiment 76, adopted 2026-10-16);
     `no_career_counts` is `box_score_and_bio` (`features.SHIPPED`,
     without the on-court plus-minus, experiment 45) without the career counts -- career possessions before,
@@ -202,7 +204,7 @@ five in one process (`src/openrapm/commands/build.py`). Each command writes its 
     2026-10-15; `ShrinkSettings.free_games_part`, `--no-free-games-part` holds it at 1);
   - both defensive multipliers times 0.866 in every season, chosen with the booster's settings by the same search
     (experiment 76, `ShrinkSettings.defence_factor`, `--defence-factor`);
-  - the folds `tune2_early,tune2_within` (experiment 76's own folds), seasons 1997-2026 pinned, because the
+  - the folds `nothreepct_early,nothreepct_within` (experiment 77's own folds), seasons 1997-2026 pinned, because the
     fold folder grew once and an unpinned rerun shrank harder (experiment 34's correction);
   - each season's multipliers from the 8 fold seasons nearest it (experiment 55, adopted 2026-10-12).
 - **Command:** `python -m openrapm shrink --base season_ratings_NAME_step3`.
