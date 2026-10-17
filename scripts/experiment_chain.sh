@@ -36,13 +36,15 @@ LOG=outputs/${NAME}_chain.log
 # (AUDIT_REF).  A candidate with OWN_FOLDS=1 has folds for 2017-2026 only; its step 4 then reads the 8 nearest of
 # those.  EARLY_FOLDS=1 (with OWN_FOLDS=1; experiment 56) also builds its 1997-2016 folds (NAME_early), so its step 4
 # is the incumbent's rule on its own folds for all thirty seasons.
-INC_NAME=${INC_NAME:-gamesfree}
-INC_SYSTEM=${INC_SYSTEM:-cols06}                 # the incumbent's folds (<name>_early, <name>_within) for 151
-CONTROL_NAME=${CONTROL_NAME:-noise_cols06}       # the noise control's folds (<name>_early, <name>_within) for 151
-INC_FOLDS=${INC_FOLDS:-cols06_early,cols06_within}
-AUDIT_REF=${AUDIT_REF:-cols06_within}
+# Since 2026-10-16 it is experiment 76 (tune2): the booster settings and step 4's defence factor from check 152's
+# guarded search, with the hustle inputs; its own folds, its noise control noise_tune2.
+INC_NAME=${INC_NAME:-tune2}
+INC_SYSTEM=${INC_SYSTEM:-tune2}                  # the incumbent's folds (<name>_early, <name>_within) for 151
+CONTROL_NAME=${CONTROL_NAME:-noise_tune2}        # the noise control's folds (<name>_early, <name>_within) for 151
+INC_FOLDS=${INC_FOLDS:-tune2_early,tune2_within}
+AUDIT_REF=${AUDIT_REF:-tune2_within}
 INC=outputs/season_ratings_${INC_NAME}.parquet
-BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1_cols06 --features no_career_counts}
+BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1_tune2 --features hustle}
 [ -n "$NAME" ] && [ -n "$TARGET" ] || { echo "usage: scripts/experiment_chain.sh NAME TARGET [EXTRA RATE FLAGS]"; exit 1; }
 # Every check the chain calls, looked for BEFORE the build: a missing one would otherwise surface only hours later.
 READINGS="151_wowy 63_yoy 66_compare 64_consensus_report 70_tradeset 73_tradeloss 88_yoy_by_player 90_swap_test 138_heldout_audit"
@@ -56,6 +58,8 @@ reading() {            # reading LABEL SCRIPT [FLAGS...]: run one check into the
 }
 # SKIP_BUILD=1: outputs/season_ratings_NAME_step3.parquet already exists -- start at the prior shrink.
 # SHRINK_FLAGS: extra flags for `openrapm shrink`, e.g. "--fold-seasons 1997-2026 --nearest 8" (experiment 55).
+# DECIDER_FLAGS: extra flags for the decider (151), e.g. "--defence-factors=NAME:0.9" beside SHRINK_FLAGS'
+# "--defence-factor 0.9", so the decider scores the step 4 that ships.
 # SHRINK_TAG=<tag>: the within-season folds step 4's multipliers are read from, outputs/within/<tag>/ (default the
 # incumbent's, INC_FOLDS; with OWN_FOLDS=1 the candidate's own, NAME_within).  `openrapm folds --tag <tag>` makes them.
 # OWN_FOLDS=1 (the Robustness pass, 2026-10-08): save the candidate's boosters (--save-models NAME, every rated season),
@@ -113,7 +117,7 @@ echo "=== $(date) swap adjustment" >> $LOG
 $PY -u -m openrapm swap --base season_ratings_${NAME}_step4 --setting test --name ${NAME} --types >> $LOG 2>&1 || exit 1
 if [ "$EARLY_FOLDS" = "1" ]; then
   echo "=== $(date) the decider: with or without you, stint by stint, on the held-back games (151)" >> $LOG
-  reading "with or without you" scripts/checks/151_wowy.py --systems=${INC_SYSTEM},${CONTROL_NAME},${NAME} --ref=${INC_SYSTEM} --tag=${NAME}
+  reading "with or without you" scripts/checks/151_wowy.py --systems=${INC_SYSTEM},${CONTROL_NAME},${NAME} --ref=${INC_SYSTEM} --tag=${NAME} $DECIDER_FLAGS
 fi
 echo "=== $(date) the guard: year-over-year" >> $LOG
 reading "year-over-year" scripts/checks/63_yoy.py --rankings=${NAME}=outputs/season_ratings_${NAME}.parquet,incumbent=$INC --ref=incumbent --tag=${NAME} --splits=

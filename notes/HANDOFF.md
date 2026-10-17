@@ -7,22 +7,21 @@ OpenRAPM is, `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing ru
 
 ## Where it stands, 2026-10-16
 
-- **Live on the site:** experiment 65, published 2026-10-15, commits 9d98448 and feeb8e6.
-- **Working tree:** the overnight work of 2026-10-15/16 sits on `main` uncommitted: code, tests, the panel's new
-  columns, params files and notes.  `pytest -q` gives 662 passed and 1 failed, the Curry star-guard ceiling;
-  `pytest -m slow` 7 passed; `ruff check .` clean.
-- **The best candidate:** experiment 71, plain leaves plus the per-game hustle inputs.  Built and scored, not adopted.
-- **The owner's direction for what comes next:** "makes sense so far" to a full hyperparameter tune on the decider, and
-  asked about tracking.  Neither is started.
+- **Live on the site:** experiment 76, published 2026-10-16: the booster settings and a defence factor on step 4
+  chosen by check 152's guarded search on the decider, with the hustle inputs.  Jordan is 1st in 1997 and 1998.
+- **Tests:** `pytest -q` 663 passed, the Curry ceiling passing again, Curry 48th; `pytest -m slow` 7 passed; `ruff
+  check .` clean.  Two consensus guards were loosened for experiment 76, the bigs rated above the consensus:
+  bigness 0.30 to 0.40, archetype spread 0.25 to 0.30.
+- **Next, the owner's open threads:** tracking game by game (below); the arena scorekeeper checks; the big-man lean against the consensus.
 
 ## What ships
 
 | step | module | as shipped |
 |---|---|---|
 | 1, the label | `rapm.py` | one RAPM per player over every season but the rated one; penalties 40,000 / 40,000 / 0; the defensive label un-shrunk |
-| 2, the box-score prior | `box_prior.py` | LightGBM, `params/booster_params_lgb1_cols06.json`: straight-line leaves, each tree shown 60% of its inputs; feature set `no_career_counts`; five player folds, out of player |
+| 2, the box-score prior | `box_prior.py` | LightGBM, `params/booster_params_lgb1_tune2.json`, chosen on the decider by check 152's guarded search; feature set `hustle`; five player folds, out of player |
 | 3, the rating | `prior_rapm.py` | the season's RAPM pulled toward the prior, residual penalty 13,037, centred |
-| 4, the shrink | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, from the 8 nearest fold seasons: prior part 0.662-0.751 offence, 0.779-0.953 defence; games' part 1.269-1.375 and 1.397-1.567; folds `cols06_early,cols06_within` |
+| 4, the shrink | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, from the 8 nearest fold seasons, both defensive factors times 0.866: prior part 0.659-0.728 offence, 0.684-0.794 defence; games' part 1.186-1.393 and 1.252-1.351; folds `tune2_early,tune2_within` |
 | 5, the swap step | `swap_adjust.py` | credit re-split inside each team from lineup swaps, team totals fixed, spread inside teams held to step 4's |
 
 - `openrapm build` writes `outputs/season_ratings_product.parquet` with `_step3` and `_step4` beside it.  Previous
@@ -30,8 +29,9 @@ OpenRAPM is, `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing ru
 - `openrapm site --bias --openrapm-decomposition --similarity` writes the site's files.  Commit, fast-forward `main`
   and push only on the owner's word, then check the Pages build:
   `gh api repos/bbstats/openrapm/pages/builds/latest`.
-- The incumbent for scoring is `gamesfree`, the test-setting tables `outputs/season_ratings_gamesfree*.parquet`.  Its
-  folds are `cols06`'s.
+- The incumbent for scoring is `tune2`, the test-setting tables `outputs/season_ratings_tune2*.parquet`, its folds
+  `tune2_early` and `tune2_within`.  The decider applies the shipped defence factor, 0.866, to every system; a system
+  built before experiment 76 is read with `--defence-factors=NAME:1`.
 
 ## How an experiment is judged
 
@@ -45,9 +45,8 @@ The owner, 2026-10-15: "within-season is truly the best metric, particularly WOW
 
 - One build: `bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes "EXTRA RATE FLAGS"`.  About
   50 minutes: steps 1-3 at the test setting, the candidate's own folds for all thirty seasons, steps 4 and 5, then the
-  three readings.  `INC_NAME=gamesfree` names the incumbent's tables and `INC_SYSTEM=cols06` its folds.
-- The noise control on the incumbent, `noise_cols06`, reads +0.077, z +1.05, 11 of 30 seasons.  On experiment 71's
-  base, `noise_flathustle` reads +0.043, z +0.71.
+  three readings.  `INC_NAME=tune2` names the incumbent's tables and `INC_SYSTEM=tune2` its folds.
+- The noise control on the incumbent, `noise_tune2`, reads -0.034, z -1.17, 17 of 30 seasons.
 - **Scale.**  On the decider, ratings of zero leave 3,648.6 a season and today's ratings 3,633.0: the ratings explain
   15.7, so a gain of 0.27 is 1.7% more of what ratings explain.  `scratch/2026-10-15_overnight/zero_baseline.py`.
 - Every experiment gets a row in `experiments/runs.csv` through `scripts/checks/101_log_run.py`, mirrored to the
@@ -57,20 +56,9 @@ The owner, 2026-10-15: "within-season is truly the best metric, particularly WOW
 
 ## Waiting on the owner
 
-1. **Adopt experiment 71?**  Plain leaves plus per-game hustle, `--booster-params lgb1_cols06_flat --features hustle`.
-   Decider -0.272, z -4.87, 23 of 30 seasons; guard +0.012, z +0.30; stint level year over year -0.133, z -2.89.
-   Cost in the eye check, product setting: Jordan 1998 3rd to 5th, Dončić 2026 3rd to 9th, Giannis 9th to 18th.  A
-   product-setting preview sits beside the live table: `outputs/season_ratings_product_flathustle.parquet`.
-2. **The full hyperparameter tune, on the decider.**  Today's booster settings came from a 2026-10-08 tune on the
-   prior's error against career labels, on 2015 and 2026 only.  Never tuned on the decider.  The design proposed:
-   - Optuna, about 60 trials; linear leaves on or off, tied across the two sides by the same-reason rule; leaves,
-     depth, rows per leaf, learning rate and trees, both penalties, column share, bins, smoothing, linear-leaf penalty.
-   - The hustle inputs on, the era marker as a switch.
-   - Each fold's rebuilt inputs cached once, since they do not depend on the settings; a trial retrains the boosters
-     and solves the folds again, about 7 minutes on ten seasons.
-   - Tune on 1998, 2001, ... 2025; keep the other twenty seasons untouched; confirm the winner through the full chain
-     with its own noise control.
-   - About 3 hours of code, then about 7 hours of trials.
+- **Done 2026-10-16:** experiment 76 adopted and published (the owner: "Hell yeah. Publish").  It supersedes
+  experiment 71 and the tune proposal; experiment 75 is not adopted.  Rerun a trial on the tune cache:
+  `python scripts/checks/152_decider_tune.py trial --tag tune1 --params NAME --features hustle --guard`, about 45 s.
 3. **Tracking, game by game.**  One-day pulls of the tracking dashboards return one game per player: probed
    2026-10-16, drives on 2024-01-15 gave 229 players with one game each.  So all 21 tracking columns can be rebuilt
    per game.  Everything: about 29,000 requests, 13 hours.  Defence first, defended twos, threes and rim shots plus

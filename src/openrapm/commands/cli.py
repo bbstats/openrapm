@@ -237,6 +237,8 @@ def _add_folds_tag(parser) -> None:
                         default=PRODUCT.shrink.free_games_part,
                         help="also multiply the games' part by a factor fitted beside the prior's (shipped since "
                              "experiment 65; --no-free-games-part holds it at 1)")
+    parser.add_argument("--defence-factor", type=float, default=PRODUCT.shrink.defence_factor, metavar="K",
+                        help="multiply both defensive multipliers by K, every season (default %(default)s)")
 
 
 def parse_span(text) -> tuple:
@@ -253,7 +255,7 @@ def parse_span(text) -> tuple:
 def shrink_options(shrink, args: argparse.Namespace):
     """settings.shrink with the command line's fold folders, fold seasons and nearest count."""
     return replace(shrink, folds_tag=args.folds, fold_seasons=args.fold_seasons, nearest=args.nearest,
-                   free_games_part=args.free_games_part)
+                   free_games_part=args.free_games_part, defence_factor=args.defence_factor)
 
 
 def _add_types(parser) -> None:

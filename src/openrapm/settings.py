@@ -23,7 +23,7 @@ Example: with the label penalty of 40,000, a player with 2,600 possessions keeps
 raw impact, which is why the defensive label is un-shrunk before the prior learns from it.
 
 Every value names the experiment that set it.  "notes/DECISIONS.md, experiment 2" means the section of that name in
-notes/DECISIONS.md.  The booster's own settings are a file, params/booster_params_lgb1_cols06.json, read by
+notes/DECISIONS.md.  The booster's own settings are a file, params/booster_params_lgb1_tune2.json, read by
 `openrapm.data.config.booster_params` (this module does no I/O).
 """
 from __future__ import annotations
@@ -87,6 +87,8 @@ class LabelSettings:
 @dataclass(frozen=True)
 class PriorSettings:
     """Step 2: the box-score prior."""
+    # "hustle" (notes/DECISIONS.md, experiment 76, adopted 2026-10-16: "Hell yeah. Publish"): no_career_counts plus the
+    # hustle box score's counts, each summed over the games a rating is built from, missing before 2017.  Before it:
     # "no_career_counts" (notes/DECISIONS.md, experiment 59, adopted 2026-10-14: "adopt anyway"): box_score_and_bio
     # without the career counts (career possessions before, seasons played before, seasons with his current team), so
     # the prior reads only the rated season's box score, role and body.  Before it:
@@ -96,7 +98,7 @@ class PriorSettings:
     # "box_score_and_bio": the inputs Boruta selected (a feature-selection method: an input is kept when its importance
     # beats that of shuffled copies of the inputs), without the on-court columns (features.SHIPPED; experiment 45,
     # adopted 2026-10-08, where it is called boruta_noonc)
-    feature_set: str = "no_career_counts"
+    feature_set: str = "hustle"
     # the career row plus every run of 1, 2 and 3 consecutive seasons (notes/DECISIONS.md, experiment 3)
     chunk_sizes: tuple = (1, 2, 3)
     # each player's prior from the booster fitted without his fold (notes/DECISIONS.md, "The SPM memorises
@@ -108,11 +110,11 @@ class PriorSettings:
     # k = 1 is the run notes/DECISIONS.md calls noise_regroup2 ("The noise control, the swap step on every fold, and
     # the body-weight preview")
     fold_assignment: int = 0
-    # LightGBM's settings, tuned by scoring each candidate prior on 2026's and 2015's one-season rows against
-    # labels from the other seasons (notes/DECISIONS.md, experiments 32 and 44), with each tree shown a random 60% of
-    # its inputs since experiment 63 (adopted 2026-10-15; lgb1 before it); read from params/ only, so an untracked
-    # copy in outputs/ can never stand in for it
-    booster_file: str = "params/booster_params_lgb1_cols06.json"
+    # LightGBM's settings, chosen by the with-or-without-you decider itself: check 152's search with Optuna's
+    # Gaussian-process sampler, the next-season check a hard limit (notes/DECISIONS.md, experiment 76, adopted
+    # 2026-10-16).  Before it lgb1_cols06: tuned on the prior's error against career labels on 2026 and 2015
+    # (experiments 32, 44 and 63).  Read from params/ only, so an untracked copy in outputs/ can never stand in for it
+    booster_file: str = "params/booster_params_lgb1_tune2.json"
     # 0: every training season counts the same.  A positive H: a training row counts half as much for every H
     # seasons between its seasons and the rated one, beyond the nearest season the fit may use (box_prior.era_kernel;
     # notes/DECISIONS.md, "Era drift" and experiment 56: the defensive prices drift between eras)
@@ -140,10 +142,10 @@ class ShrinkSettings:
     # once and silently changed the factors (notes/DECISIONS.md, experiment 34's correction, 2026-10-05).  Every
     # season since experiment 55 (adopted 2026-10-12); 2017-2026 before
     fold_seasons: tuple = (1997, 2026)
-    # the within-season folds the factors are fitted on, comma-separated folders: experiment 63's own folds, 1997-2016
-    # and 2017-2026 (notes/DECISIONS.md, "Experiment 63", adopted 2026-10-15; before it experiment 59's,
-    # nocareer_early,nocareer_within); the method is experiment 33b's, adopted 2026-10-03
-    folds_tag: str = "cols06_early,cols06_within"
+    # the within-season folds the factors are fitted on, comma-separated folders: experiment 76's own folds, 1997-2016
+    # and 2017-2026 (notes/DECISIONS.md, "Experiment 76", adopted 2026-10-16; before it experiment 63's,
+    # cols06_early,cols06_within); the method is experiment 33b's, adopted 2026-10-03
+    folds_tag: str = "tune2_early,tune2_within"
     # each season's factors from only the K fold seasons nearest it (prior_shrink.fold_seasons_used): the defensive
     # prior part holds up less in older seasons, 0.79 in 1997-2006 against 0.95 in 2017-2026 (notes/DECISIONS.md,
     # "Era drift" and experiment 55, adopted 2026-10-12: "yes. build."); 0 would use every fold season the rule allows
@@ -151,6 +153,10 @@ class ShrinkSettings:
     # a multiplier on the games' part too, fitted beside the prior's (prior_shrink, "The games' part freed";
     # notes/DECISIONS.md, experiment 65, adopted 2026-10-15: "Adopt one multiplier as the new incumbent")
     free_games_part: bool = True
+    # one more factor on both defensive multipliers, shared by every season, chosen with the booster's settings by
+    # check 152's guarded search (notes/DECISIONS.md, experiment 76, adopted 2026-10-16): the held-back games set the
+    # defence's width within a season, and the next-season check wants it narrower on the tuned prior; 1 is the old step
+    defence_factor: float = 0.866
 
 
 @dataclass(frozen=True)

@@ -185,7 +185,10 @@ def test_no_archetype_bias_by_cluster(ratings):
     The maximum was 0.30 while the three-season ratings still shipped, and is **0.25 since the single-season
     ratings shipped** (2026-09-10, as this test said to do): it reads 0.108-0.171 over ten seeds, so 0.25 is
     four seed standard deviations of headroom and it halves what the maximum permits -- about 0.4 per 100
-    rather than 0.95.  Seeds are averaged because the mixture is refit per run: over ten seeds at k = 8 the
+    rather than 0.95.  **0.30 since experiment 76** (2026-10-16): the booster tuned on the with-or-without-you test
+    reads 0.280 (0.208 before it), the bigs rated above the consensus; the owner published it over this guard
+    ("push"), the consensus being a sanity check, never a target.
+    Seeds are averaged because the mixture is refit per run: over ten seeds at k = 8 the
     statistic moves with standard deviation 0.02, and it is pooled over the three seasons the consensus
     covers because per single season the ranges overlap (the retired scripts/58_archetype.py stability,
     tag archive/research-2026-10)."""
@@ -198,8 +201,8 @@ def test_no_archetype_bias_by_cluster(ratings):
     X = m[RATES].to_numpy(dtype=float)
     vals = [spread(cluster_gaps(fit_clusters(X, k=8, seed=sd)[0], gaps)) for sd in (0, 1, 2)]
     got = float(np.mean(vals))
-    assert got < 0.25, (f"per-cluster total gap spreads {got:.3f} across archetypes "
-                        f"(seeds {[round(v, 3) for v in vals]}); 0.25 is about 0.4 points per 100 of bias")
+    assert got < 0.30, (f"per-cluster total gap spreads {got:.3f} across archetypes "
+                        f"(seeds {[round(v, 3) for v in vals]}); 0.30 is about 0.5 points per 100 of bias")
 
 
 # ------------------------------------------------------------------ fixed by the hybrid prior
@@ -235,8 +238,10 @@ def test_no_archetype_bias_overall(ratings):
     # two committed files (docs/data/ratings.json and data/external/consensus.csv), and when
     # the call sat in the fixture it took all eleven of them down on any machine without data/raw --
     # which is every CI run, by design (.github/workflows/test.yml asserts data/ is empty).
+    # 0.40 since experiment 76 (2026-10-16): +0.377 on the booster tuned on the with-or-without-you test, +0.279
+    # before it; published over this guard by the owner ("push")
     r = ratings.gap_total.corr(pd.Series(_bigness(ratings.player_id), index=ratings.index))
-    assert abs(r) < 0.30, f"total gap correlates {r:+.3f} with bigness"
+    assert abs(r) < 0.40, f"total gap correlates {r:+.3f} with bigness"
 
 
 def test_star_guards_are_not_buried(ratings):

@@ -97,7 +97,9 @@ LEAGUES = {
 # and noise alone (leak=False: simulate.py's "leak" is off)
 TALENT = dict(rho=0.9, turnover=0.3, leak=False, seed=1)
 # The shipped setting with the plain points target on both sides (the simulated stints carry no free-throw counters)
-SETTINGS = replace(PRODUCT, targets=Targets(offence="pts", defence="pts"))
+# and the inputs before the hustle counts (the simulated league has no hustle box score)
+SETTINGS = replace(PRODUCT, targets=Targets(offence="pts", defence="pts"),
+                   prior=replace(PRODUCT.prior, feature_set="no_career_counts"))
 
 
 class Side(NamedTuple):

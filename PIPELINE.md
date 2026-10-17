@@ -132,7 +132,7 @@ five in one process (`src/openrapm/commands/build.py`). Each command writes its 
 - **For:** a player with few possessions has little evidence of his own; his box score says most of
   what is known about him.
 - **Reads:** step 1's labels; the season panel, through `data.panel.trainable_panel`, which drops any
-  season still being played; `params/booster_params_lgb1_cols06.json`.
+  season still being played; `params/booster_params_lgb1_tune2.json`.
 - **Writes:** each player's prior per side for the rated season, handed to step 3. With
   `--save-models NAME`, every rated season's boosters (the fitted LightGBM models) to
   `outputs/prior_models_NAME.pkl`.
@@ -143,7 +143,9 @@ five in one process (`src/openrapm/commands/build.py`). Each command writes its 
   player's prior comes from the booster fitted without his fold, so it cannot have learned his box score
   and returned his own label. The booster is then asked about the rated season's own box score.
 - **Settings:**
-  - the inputs: `no_career_counts`, 14 on offence and 12 on defence: `box_score_and_bio` (`features.SHIPPED`,
+  - the inputs: `hustle`, 18 on offence and 18 on defence: `no_career_counts` plus the hustle box score's counts,
+    each summed over the games a rating is built from and missing before 2017 (experiment 76, adopted 2026-10-16);
+    `no_career_counts` is `box_score_and_bio` (`features.SHIPPED`,
     without the on-court plus-minus, experiment 45) without the career counts -- career possessions before,
     seasons played before and seasons with his current team -- so the prior reads only the rated season's box
     score, role and body (experiment 59, adopted 2026-10-14; experiment 57 had counted them from each player's
@@ -151,9 +153,11 @@ five in one process (`src/openrapm/commands/build.py`). Each command writes its 
   - chunk sizes 1, 2 and 3 (experiment 3);
   - five player folds ("The SPM memorises long-career stars, and the out-of-player prior removes it",
     2026-09-14);
-  - LightGBM's settings in `params/booster_params_lgb1_cols06.json`: experiments 32 and 44's, with each tree
-    shown a random 60% of its inputs, the same on both sides (experiment 63, adopted 2026-10-15; the draw is
-    seeded, so the same rows give the same booster);
+  - LightGBM's settings in `params/booster_params_lgb1_tune2.json`, chosen by the with-or-without-you test itself:
+    `scripts/checks/152_decider_tune.py`, 100 trials of Optuna's Gaussian-process sampler on ten seasons with the
+    year-over-year test as a hard limit (experiment 76, adopted 2026-10-16).  Straight-line leaves on both sides,
+    small trees and slow learning: the offence's trees are two splits deep, so its prior is close to a straight
+    line in the box score.  Before it `lgb1_cols06`, tuned on the prior's error against career labels;
   - the training weight in its own column, `row_weight`, so it no longer overwrites body weight
     (experiment 46).
 - **Code:** `src/openrapm/box_prior.py`, `features.py`.
@@ -191,12 +195,14 @@ five in one process (`src/openrapm/commands/build.py`). Each command writes its 
   `outputs/csv/season_ratings_NAME_step4_multipliers.csv`.
 - **How:** four multipliers per season, the prior's part and the games' part on offence and defence, from
   one weighted least-squares fit on the folds' held-back team-games; each part is multiplied by its own, and
-  each season is centred again. The published multipliers: the prior's part 0.662 to 0.751 on offence and 0.779 to 0.953 on
-  defence; the games' part 1.269 to 1.375 on offence and 1.397 to 1.567 on defence.
+  each season is centred again. The published multipliers, the defence factor included: the prior's part 0.659 to 0.728 on
+  offence and 0.684 to 0.794 on defence; the games' part 1.186 to 1.393 on offence and 1.252 to 1.351 on defence.
 - **Settings:**
   - the method (experiment 33b, adopted 2026-10-03), with the games' part freed (experiment 65, adopted
     2026-10-15; `ShrinkSettings.free_games_part`, `--no-free-games-part` holds it at 1);
-  - the folds `cols06_early,cols06_within` (experiment 63's own folds), seasons 1997-2026 pinned, because the
+  - both defensive multipliers times 0.866 in every season, chosen with the booster's settings by the same search
+    (experiment 76, `ShrinkSettings.defence_factor`, `--defence-factor`);
+  - the folds `tune2_early,tune2_within` (experiment 76's own folds), seasons 1997-2026 pinned, because the
     fold folder grew once and an unpinned rerun shrank harder (experiment 34's correction);
   - each season's multipliers from the 8 fold seasons nearest it (experiment 55, adopted 2026-10-12).
 - **Command:** `python -m openrapm shrink --base season_ratings_NAME_step3`.

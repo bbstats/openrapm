@@ -7392,3 +7392,96 @@ The owner: "clean up everything".  Deleted, about 12.7 GB, every result above al
 by its chain command: the within-season folds and saved boosters of `leak_cols06`, `clip`, `plusage`, `cols04`,
 `pointsparts`, `vsleague2`, `hustleplacebo`, `flatera`, `flathustletrack` and `cols06pieces`.  Their rating tables and
 csv files stay.  Kept: `cols06`, `noise_cols06`, `flat`, `hustlegames`, `flathustle`, `noise_flathustle`.
+
+## Experiment 75: the booster settings tuned on the decider (the owner, 2026-10-16: "If we haven't done that, we are basically just wasting our time")
+
+Check 152 (`scripts/checks/152_decider_tune.py`).  Today's settings came from a 2026-10-08 tune on the prior's error
+against career labels, on 2015 and 2026 only.  This one tunes on the WOWY decider itself.
+
+- **The cache.**  For the ten tune seasons 1998, 2001, ..., 2025: step 1's labels and the training rows per feature
+  set, and per fold the inputs rebuilt from the fit games, the ridge's design, the held-back team-games and stints.
+  Built once, about 10 minutes, 3.7 GB under `outputs/tune/tune1/`.  A trial retrains the boosters, rates the 120
+  folds through steps 2-3 as `openrapm folds` does, fits step 4 on the ten seasons' folds by the test rule, and scores
+  the decider stint by stint.  One worker per season: a trial takes 22-48 seconds, not the 7 minutes first guessed.
+- **The check.**  A trial on experiment 71's settings gives its fold ratings back with a largest difference of 0.0
+  and check 151's step-3 errors to 5e-13 on every tune season; the incumbent's settings give `cols06`'s to 9e-13.
+- **The search.**  Optuna TPE, 100 trials, seeded; straight-line leaves on or off tied across the sides; per side the
+  learning rate, trees, leaves, depth, rows per leaf, both penalties, bins, smoothing, column share and the
+  straight-line penalty; the hustle inputs on, the era marker a switch (feature set `hustle_era_marker`, new).  The
+  first two trials were the incumbent's settings and experiment 71's, both with hustle: -0.098 and -0.138 on the ten
+  seasons.
+- **The winner**, trial 93, `params/booster_params_lgb1_tune1.json`, hustle, no era marker: straight-line leaves on
+  both sides.  Offence: depth 2, 13 leaves, rows per leaf 31, learning rate 0.0059 x 1,037 trees, straight-line penalty
+  0.066.  Defence: 5 leaves, rows per leaf 832, learning rate 0.0082 x 114 trees, straight-line penalty 15.  Both are
+  far gentler fits than today's; step 3's prior scale puts the size back.  The next four trials land within 0.04 of it,
+  every one with straight-line leaves; the best plain-leaf trial reads -0.78.  The era marker never helped.
+- **The build**, `tune1`, through the chain on all thirty seasons:
+
+  | reading | change | z | seasons better |
+  |---|---|---|---|
+  | decider, step 4, all thirty | -1.493 | -12.61 | 30 of 30 |
+  | decider, the ten tune seasons | -1.492 | -6.99 | 10 of 10 |
+  | decider, the twenty untouched | -1.493 | -10.23 | 20 of 20 |
+  | noise control `noise_tune1` against `tune1` | -0.024 | -0.70 | 21 of 30 |
+  | guard, team-game, both directions | +0.176 | +2.95 | 23 of 56 |
+  | guard, stint, both directions | -0.272 | -3.57 | 38 of 56 |
+
+  The untouched seasons gain as much as the tuned ones: no sign the tune fitted its own seasons.  1.49 is 9.5% of the
+  15.7 the ratings explain on the decider.  The noise build repeats the guard's failure, +0.189, z +3.03.
+- **The guard's failure is the defence.**  Tables spliced side by side: tuned offence with today's defence, guard
+  +0.040, z +0.80, stint -0.185, z -2.86; today's offence with tuned defence, guard +0.136, z +3.04, stint -0.082, z
+  -1.90.  The tuned defence is wider, standard deviation among players with 1,000+ possessions 1.35 to 1.51; the
+  guard's defensive scale reads 0.92 against today's 0.96.  On the decider, ten tune seasons: offence alone -1.11, z
+  -11.2; defence alone -0.52, z -2.3.
+- Eye check, 2026: Wembanyama 1st, Jokić 5th to 2nd +1.44, Gilgeous-Alexander 3rd, Dončić 3rd to 8th -1.23, Towns
+  24th to 12th +1.17, Gobert 29th to 17th +0.89.  1998: Stockton 1st 6.26, Jordan 2nd 6.13.
+
+Verdict pending with the owner.
+
+### Why experiment 75 failed the guard: step 5, not step 4 (2026-10-16)
+
+The guard on the step-4 tables, before the swap step: `tune1` against `gamesfree`, team-game +0.050, z +0.52, a tie;
+stint -0.878, z -7.13.  The swap step improves today's ratings on the guard by 0.208, z -2.66, and `tune1`'s by only
+0.078, so the gap opens at step 5.  Shrinking `tune1`'s defence by 0.893 to today's spread: guard +0.100, z +1.49; the
+decider -1.406 against the incumbent, 0.087 less than unshrunk.  The same shrink on today's ratings changes nothing,
+-0.023, z -0.86.
+
+## Experiment 76: the guarded search (the owner, 2026-10-16: "use the best most modern HPO on distributions")
+
+Check 152 `tune --guard`.  Each trial also rates the ten tune seasons whole, runs step 4 on the folds' multipliers and
+step 5 with the season's lineups cached, and scores each season's ratings on the seasons either side, the guard's
+team-game error with fill 0.  Checked: on the chain's tables the scoring equals `63_yoy.py` to 0.0, and step 5 equals
+`openrapm swap` to 0.0.  Optuna's Gaussian-process sampler, 100 trials, one fixed space: the first search's settings,
+plus a defence factor from 0.7 to 1.2 that multiplies both of step 4's defensive multipliers in every season
+(`ShrinkSettings.defence_factor`, `openrapm shrink --defence-factor`, check 151 `--defence-factors=NAME:K`).  The hard
+limit: the guard's team-game z at most +1 on its 20 neighbour seasons, about +1.7 on the full test's 56.  On the
+tune cache the limit reproduces the full test: `tune1` +0.240, z +2.10, fails; its offence alone -0.041, passes.
+
+- **The winner**, trial 75, `params/booster_params_lgb1_tune2.json`, hustle, defence factor 0.866: offence depth 2, 8
+  leaves, rows per leaf 24, learning rate 0.0030 x 1,091 trees, straight-line penalty 0.014; defence 7 leaves, rows
+  per leaf 2,500, learning rate 0.0091 x 130 trees, straight-line penalty 20.  On the tune seasons: decider -1.570, z
+  -8.94; guard +0.094, z +0.70.  The search put the defence factor between 0.84 and 0.87 in every good trial.
+- **The build**, `tune2`, through the chain with `SHRINK_FLAGS="--defence-factor 0.866"`:
+
+  | reading | change | z | seasons better |
+  |---|---|---|---|
+  | decider, step 4, all thirty | -1.448 | -12.29 | 30 of 30 |
+  | decider, the ten tune seasons | -1.540 | -7.66 | 10 of 10 |
+  | decider, the twenty untouched | -1.402 | -9.48 | 20 of 20 |
+  | noise control `noise_tune2` against `tune2` | -0.034 | -1.17 | 17 of 30 |
+  | guard, team-game, both directions | +0.088 | +1.16 | 27 of 56 |
+  | guard, stint, both directions | -0.277 | -3.15 | 37 of 56 |
+
+  The noise build's guard reads +0.071, z +0.91.  Defence spread among players with 1,000+ possessions 1.35 to 1.34;
+  offence 1.55 to 1.57.
+- Eye check, 2026: Wembanyama 1st 9.60, Jokić 5th to 2nd +1.33, Gilgeous-Alexander 3rd, Dončić 3rd to 6th -1.07, Towns
+  24th to 10th +1.01, Adebayo 31st to 19th; median move 0.31 per 100.  1998: Jordan 1st 6.26, Malone 2nd, O'Neal 3rd,
+  Stockton 1st to 4th -0.63.
+
+Adopted and published 2026-10-16, the owner: "Hell yeah. Publish".  The product build: step 3 with the
+new settings, step 4's defensive multipliers times 0.866; 1997 Jordan 1st 6.44, Stockton 2nd; 1998 Jordan 1st 6.13,
+Stockton 5th; 2026 median move 0.29 per 100.  The similarity page keeps its inputs, `no_career_counts`
+(`site.SIMILARITY_FEATURE_SET`): the hustle counts are missing before 2017.
+Two consensus guards fail on the new table and were loosened on the owner's word ("push"): the total gap's
+correlation with bigness 0.279 to 0.377, limit 0.30 to 0.40; the archetype spread 0.208 to 0.280, limit 0.25 to 0.30.
+The bigs are rated above the consensus more than before.  The Curry ceiling passes again, Curry 83rd to 48th.

@@ -315,6 +315,9 @@ FEATURE_SETS = {
     # the dashboard arms (screen: scripts/checks/146_dashboard_screen.py): tracking, hustle, and both, appended
     "tracking": {"O": _NO_CAREER["O"] + TRACKING_OFFENCE, "D": _NO_CAREER["D"] + TRACKING_DEFENCE},
     "hustle": {"O": _NO_CAREER["O"] + HUSTLE_OFFENCE, "D": _NO_CAREER["D"] + HUSTLE_DEFENCE},
+    # the booster tune on the decider (check 152, 2026-10-16): the hustle lists with the era marker, its switch
+    "hustle_era_marker": {"O": _NO_CAREER["O"] + HUSTLE_OFFENCE + ERA_MARKER,
+                          "D": _NO_CAREER["D"] + HUSTLE_DEFENCE + ERA_MARKER},
     # experiment 66's placebo: the same lists with every hustle column shuffled among the season's players
     "hustle_placebo": {"O": _NO_CAREER["O"] + [f"{name}_shuffled" for name in HUSTLE_OFFENCE],
                        "D": _NO_CAREER["D"] + [f"{name}_shuffled" for name in HUSTLE_DEFENCE]},

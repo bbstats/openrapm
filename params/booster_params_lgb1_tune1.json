@@ -1,0 +1,37 @@
+{
+  "O": {
+    "learner": "lightgbm",
+    "params": {
+      "learning_rate": 0.005905967605873195,
+      "n_estimators": 1037,
+      "num_leaves": 13,
+      "max_depth": 2,
+      "min_child_samples": 31,
+      "reg_lambda": 0.03353823428281848,
+      "reg_alpha": 4.30932773373848,
+      "max_bin": 255,
+      "path_smooth": 0.006152434025963378,
+      "colsample_bytree": 0.5809790574618205,
+      "linear_tree": true,
+      "linear_lambda": 0.06625560217655786
+    }
+  },
+  "D": {
+    "learner": "lightgbm",
+    "params": {
+      "learning_rate": 0.008239358264322035,
+      "n_estimators": 114,
+      "num_leaves": 5,
+      "max_depth": 11,
+      "min_child_samples": 832,
+      "reg_lambda": 0.0012856482304885108,
+      "reg_alpha": 0.006401896280332373,
+      "max_bin": 15,
+      "path_smooth": 10.102635885873836,
+      "colsample_bytree": 0.38838801710932264,
+      "linear_tree": true,
+      "linear_lambda": 14.959913477558247
+    }
+  },
+  "note": "check 152, the booster tune on the decider (2026-10-16): trial 93 of 100 on the ten tune seasons 1998, 2001, ..., 2025, with the hustle inputs; -1.48 against lgb1_cols06 there, z -7.5, 10 of 10 seasons"
+}

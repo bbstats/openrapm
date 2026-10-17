@@ -1089,6 +1089,9 @@ def write_openrapm_decomposition(cfg: dict, ratings_path: Path, data_dir: Path, 
 SIMILARITY_MIN_POSSESSIONS = 1000         # the ratings page's default minimum (docs/index.html)
 SIMILARITY_MATCHES = 50                   # each list's length (the owner, 2026-10-12)
 SIMILARITY_DEFAULT = (1627780, 2022)      # Gary Payton II, 2021-22: the page's opening view (the owner, 2026-10-12)
+# the similarity page's inputs: the box-score prior's lists before experiment 76 added the hustle counts, which are
+# missing before 2017 and so cannot place a 1998 season beside a 2020 one; the page is unchanged by that adoption
+SIMILARITY_FEATURE_SET = "no_career_counts"
 SIMILARITY_FOLDER = "similarity"
 SIMILARITY_FIELDS = ["id", "n", "s", "p", "o", "d", "t"]
 SIMILARITY_LIST_FIELDS = ["k", "d", "pk", "pd"]
@@ -1121,7 +1124,7 @@ def similarity_frames(cfg: dict, ratings_path: Path) -> tuple[pd.DataFrame, pd.D
     if waiting:
         print(f"  left out until their Finals are over: {waiting}", flush=True)
     rows = _named(player_seasons(table, SIMILARITY_MIN_POSSESSIONS, seasons), ratings_path, cfg)
-    inputs = similarity_inputs(rows, panel, FEATURE_SETS[PRODUCT.prior.feature_set])
+    inputs = similarity_inputs(rows, panel, FEATURE_SETS[SIMILARITY_FEATURE_SET])
     for side in ("off", "def"):
         if not np.array_equal(inputs[f"poss_{side}"].to_numpy(), rows[f"poss_{side}"].to_numpy(float)):
             raise SystemExit(f"the season panel's possessions differ from {ratings_path.name}'s (poss_{side}): "

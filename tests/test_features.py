@@ -72,7 +72,8 @@ def test_the_stat_splits_lists_append_their_parts_where_the_box_count_is_read():
             "D": [f"{name}_vs_league" if name in feat.RATIOS else name for name in SHIPPED_D
                   if name not in feat.FROM_DEBUT]},
         **{name: feat.FEATURE_SETS[name] for name in ("tracking", "hustle", "hustle_placebo", "tracking_and_hustle",
-                                                 "matchups", "hustle_and_tracking_games")}}
+                                                 "matchups", "hustle_and_tracking_games")},
+        "hustle_era_marker": {side: feat.FEATURE_SETS["hustle"][side] + ["season_from_2017"] for side in ("O", "D")}}
     wider = ["russell_blocks_per100", "rim_blocks_per100", "mid_range_blocks_per100", "three_point_blocks_per100",
              "offensive_fouls_per100", "stolen_turnovers_per100", "assists_to_rim_per100",
              "assists_to_mid_range_per100", "assists_to_corner_threes_per100", "assists_to_above_break_threes_per100"]

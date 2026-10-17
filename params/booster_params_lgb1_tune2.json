@@ -1,0 +1,37 @@
+{
+  "O": {
+    "learner": "lightgbm",
+    "params": {
+      "learning_rate": 0.0030027193737909193,
+      "n_estimators": 1091,
+      "num_leaves": 8,
+      "max_depth": 2,
+      "min_child_samples": 24,
+      "reg_lambda": 3.05254353994586,
+      "reg_alpha": 2.521699766637966,
+      "max_bin": 255,
+      "path_smooth": 0.007986592707970851,
+      "colsample_bytree": 0.5361093535529958,
+      "linear_tree": true,
+      "linear_lambda": 0.014282231938054198
+    }
+  },
+  "D": {
+    "learner": "lightgbm",
+    "params": {
+      "learning_rate": 0.009063371484317418,
+      "n_estimators": 130,
+      "num_leaves": 7,
+      "max_depth": 8,
+      "min_child_samples": 2500,
+      "reg_lambda": 0.0010000000000000002,
+      "reg_alpha": 0.03564784100612193,
+      "max_bin": 15,
+      "path_smooth": 3.3464883884873577,
+      "colsample_bytree": 0.3671956372541044,
+      "linear_tree": true,
+      "linear_lambda": 19.78289730980892
+    }
+  },
+  "note": "check 152, the guarded search on the decider (2026-10-16): trial 75 of 100, Optuna GP sampler, the next-season check a hard limit; hustle inputs; ships with step 4 defence factor 0.866 (openrapm shrink --defence-factor 0.866)"
+}

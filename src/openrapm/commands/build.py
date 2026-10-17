@@ -288,6 +288,11 @@ def shrink_seasons(cfg: dict, table: pd.DataFrame, settings) -> tuple[pd.DataFra
     multipliers = prior_shrink.multipliers_by_season(table.season.unique(), folds, shrink.rule,
                                                      shrink.nearest, shrink.free_games_part).assign(
         fold_tag=shrink.folds_tag, fold_first=fold_seasons[0], fold_last=fold_seasons[-1])
+    if shrink.defence_factor != 1.0:
+        multipliers["multiplier_def"] *= shrink.defence_factor
+        if shrink.free_games_part:
+            multipliers["games_multiplier_def"] *= shrink.defence_factor
+        print(f"  step 4: both defensive multipliers times {shrink.defence_factor:g}", flush=True)
     nearest = f", the {shrink.nearest} nearest fold seasons" if shrink.nearest else ""
     print(f"  step 4: {len(folds)} folds of {shrink.folds_tag} ({shrink.fold_seasons[0]}-{shrink.fold_seasons[1]}), "
           f"{shrink.rule} rule{nearest}; the prior part multiplied by {multipliers.multiplier_off.min():.3f} to "

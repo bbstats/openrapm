@@ -1,0 +1,42 @@
+{
+  "O": {
+    "learner": "lightgbm",
+    "params": {
+      "learning_rate": 0.005905967605873195,
+      "n_estimators": 1037,
+      "num_leaves": 13,
+      "max_depth": 2,
+      "min_child_samples": 31,
+      "reg_lambda": 0.03353823428281848,
+      "reg_alpha": 4.30932773373848,
+      "max_bin": 255,
+      "path_smooth": 0.006152434025963378,
+      "colsample_bytree": 0.5809790574618205,
+      "linear_tree": true,
+      "linear_lambda": 0.06625560217655786
+    }
+  },
+  "D": {
+    "learner": "lightgbm",
+    "params": {
+      "learning_rate": 0.037011660676987745,
+      "n_estimators": 309,
+      "num_leaves": 30,
+      "max_depth": 5,
+      "min_child_samples": 299,
+      "reg_lambda": 3.9870259963134536,
+      "reg_alpha": 1.9312373364510007,
+      "max_bin": 31,
+      "path_smooth": 0.023990628949665596,
+      "linear_tree": true,
+      "linear_lambda": 35.08329087845008,
+      "colsample_bytree": 0.6
+    },
+    "screen_value": 0.9780542780648098,
+    "screen_seasons": [
+      2026,
+      2015
+    ]
+  },
+  "note": "diagnostic: lgb1_tune1 offence, lgb1_cols06 defence"
+}
