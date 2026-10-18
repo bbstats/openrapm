@@ -34,7 +34,7 @@ def test_the_file_holds_every_season_latest_first_with_the_published_field_names
 def test_on_each_side_and_in_total_the_five_pieces_add_up_to_the_rating(decomposition):
     worst = 0.0
     for season, rows in decomposition["rows"].items():
-        for name, player_id, possessions, *sides in rows:
+        for name, player_id, possessions, *sides, team in rows:
             assert len(sides) == 3 and all(len(pieces) == len(OPENRAPM_PIECES) for pieces in sides)
             for pieces in sides:
                 worst = max(worst, abs(sum(pieces[:-1]) - pieces[-1]))
@@ -44,18 +44,19 @@ def test_on_each_side_and_in_total_the_five_pieces_add_up_to_the_rating(decompos
 def test_a_total_is_the_two_sides_added(decomposition):
     worst = 0.0
     for rows in decomposition["rows"].values():
-        for _, _, _, off, deff, total in rows:
+        for _, _, _, off, deff, total, _ in rows:
             worst = max(worst, *(abs(t - (a + b)) for t, a, b in zip(total, off, deff)))
     assert worst <= 0.0101, f"a total misses its two sides by {worst:.3f}"       # three roundings of half a cent
 
 
-def test_every_row_has_a_name_an_id_and_possessions_and_no_player_appears_twice_in_a_season(decomposition):
+def test_every_row_has_a_name_an_id_possessions_and_a_team_and_no_player_appears_twice_in_a_season(decomposition):
     for season, rows in decomposition["rows"].items():
         assert rows, f"{season} has no players"
         ids = [row[1] for row in rows]
         assert len(set(ids)) == len(ids), f"{season}: a player appears twice"
-        for name, player_id, possessions, *_ in rows:
+        for name, player_id, possessions, *_, team in rows:
             assert name and isinstance(player_id, int) and player_id > 0 and possessions > 0, (season, name)
+            assert team and all(len(code) == 3 for code in team.split("/")), (season, name, team)
 
 
 def test_the_rows_are_ratings_jsons_with_its_ratings_and_possessions(decomposition):

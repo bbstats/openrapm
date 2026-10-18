@@ -313,7 +313,9 @@ held back.
 - **Reads:** the ratings table and its step-3 table (`outputs/season_ratings_product.parquet` and `_step3`), each
   season's two designs (step 1's targets for offense and defense, `data.designs.DesignCache`) and the box scores'
   teams (`data/raw/box`).
-- **Writes:** `docs/data/decompose_openrapm.json`, one row per player-season of `ratings.json`.
+- **Writes:** `docs/data/decompose_openrapm.json`, one row per player-season of `ratings.json`, with the player's
+  teams as that season's box scores abbreviate them, in the order he joined them ("SAC/IND"; only games he played
+  minutes in count), for the Ratings tab's Team column and filter.
 - **How:** box score and swap adjustment are the table's `prior_off` / `prior_def` and `c_off` / `c_def`.  The
   games' part `u` (step 3's coefficient beyond the prior, times step 4's factor on it since experiment 65) is a
   weighted sum of the season's row outcomes, so grouping the rows splits it: the rows he is on the court for (on court), his team's rows without him, in games he

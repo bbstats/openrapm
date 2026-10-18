@@ -44,7 +44,9 @@
   table.pieces th.rank, table.pieces th.name { white-space: nowrap; min-width: 0; }
   th.rank, td.rank { color: var(--muted); cursor: default; }
   th.name, td.name { text-align: left; position: sticky; left: 0; background: Canvas; }
-  th.name { cursor: default; }
+  th.name, th.team { cursor: default; }
+  th.team, td.team { text-align: left; color: var(--muted); }
+  td.name .tm { display: none; }
   th[aria-sort="descending"], th[aria-sort="ascending"] { color: var(--accent); }
   th[aria-sort="descending"]::after { content: " \2193"; }
   th[aria-sort="ascending"]::after { content: " \2191"; }
@@ -71,6 +73,8 @@
     th, td { padding: 4px 5px; }
     table { font-size: 13px; }
     td.name { white-space: normal; min-width: 96px; }   /* a long name takes two lines so every column fits */
+    th.team, td.team { display: none; }                 /* the team goes under the name instead */
+    td.name .tm { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.2; }
     tr.detail td { padding: 4px 5px 10px; }
   }
 </style>
@@ -98,6 +102,7 @@
       <button type="button" data-side="total" aria-pressed="true">Total</button>
     </div>
     <label>Season <select id="season"></select></label>
+    <label>Team <select id="team"></select></label>
     <label>Find <input id="find" type="search" placeholder="player name" autocomplete="off"></label>
   </div>
   <p class="eq" hidden><span class="term" style="--c: var(--c-green)">Box score</span>
@@ -128,7 +133,8 @@
 <script>
 (function () {
   const $ = id => document.getElementById(id);
-  const fmt1 = v => (v > 0 ? "+" : "") + v.toFixed(1);
+  const fmt1 = v => { const r = Math.round(v * 10) / 10 || 0;    // a rating that rounds to zero shows 0.0, not -0.0
+                      return (r > 0 ? "+" : "") + r.toFixed(1); };
   const fmt = v => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(2);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const fold = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -150,9 +156,10 @@
   const COLUMNS = { ratings: [["o", "Offense"], ["d", "Defense"], ["t", "Total"], ["p", "Poss."]],
                     decomposition: [...PIECES.map(([k, name]) => [k, name]), ["a", "OpenRAPM"], ["p", "Poss."]] };
 
-  const state = { view: "ratings", side: "total", season: null, q: "", open: null, sortKey: "t", sortDir: -1 };
+  const state = { view: "ratings", side: "total", season: null, team: "", q: "", open: null, sortKey: "t",
+                  sortDir: -1 };
   const table = $("table"), thead = table.querySelector("thead"), tbody = table.querySelector("tbody");
-  const season = $("season"), find = $("find");
+  const season = $("season"), team = $("team"), find = $("find");
   let data = null, shown = [];
 
   async function load() {
@@ -166,7 +173,7 @@
   // one player's row as the table reads it: each side's rating, and the chosen side's five pieces and rating
   function onSide(r, side) {
     const v = r[SIDE_FIELD[side]];
-    return { n: r.n, id: r.id, p: r.p, o: r.o[5], d: r.d[5], t: r.t[5],
+    return { n: r.n, id: r.id, p: r.p, tm: r.tm, o: r.o[5], d: r.d[5], t: r.t[5],
              box: v[0], on: v[1], off: v[2], sos: v[3], swap: v[4], a: v[5], side: v };
   }
 
@@ -175,6 +182,7 @@
     h.set("season", state.season);
     if (state.view !== "ratings") h.set("view", state.view);
     if (state.side !== "total") h.set("side", state.side);
+    if (state.team) h.set("team", state.team);
     if (state.open !== null) h.set("player", state.open);
     history.replaceState(null, "", "#" + h.toString());
     // the same season and player on the vanilla page
@@ -216,7 +224,7 @@
     const mark = k => state.view === "decomposition" && colorOf(k)
       ? ` style="box-shadow: inset 0 -3px 0 rgb(var(${colorOf(k)}))"` : "";
     table.className = state.view === "decomposition" ? "pieces" : "";
-    thead.innerHTML = `<tr><th class="rank">#</th><th class="name">Player</th>` + COLUMNS[state.view].map(([k, name]) =>
+    thead.innerHTML = `<tr><th class="rank">#</th><th class="name">Player</th><th class="team">Team</th>` + COLUMNS[state.view].map(([k, name]) =>
       `<th data-k="${k}"${mark(k)} aria-sort="${k === state.sortKey
         ? (state.sortDir < 0 ? "descending" : "ascending") : "none"}" title="sort">${name}</th>`).join("") + `</tr>`;
     thead.querySelectorAll("th[data-k]").forEach(th => th.addEventListener("click", () => {
@@ -236,11 +244,11 @@
     const q = v => { if (v === null || v === undefined) return "";
                      const s = String(v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     const rows = state.view === "ratings"
-      ? [["season", "player_id", "player", "offense", "defense", "total", "possessions"],
-         ...pairs.map(([per, x]) => [per, x.id, x.n, x.o[5], x.d[5], x.t[5], x.p])]
-      : [["season", "player_id", "player", "possessions",
+      ? [["season", "player_id", "player", "team", "offense", "defense", "total", "possessions"],
+         ...pairs.map(([per, x]) => [per, x.id, x.n, x.tm, x.o[5], x.d[5], x.t[5], x.p])]
+      : [["season", "player_id", "player", "team", "possessions",
           ...["offense", "defense", "total"].flatMap(s => CSV_PIECES.map(k => s + "_" + k))],
-         ...pairs.map(([per, x]) => [per, x.id, x.n, x.p, ...x.o, ...x.d, ...x.t])];
+         ...pairs.map(([per, x]) => [per, x.id, x.n, x.tm, x.p, ...x.o, ...x.d, ...x.t])];
     const text = "﻿" + rows.map(r => r.map(q).join(",")).join("\r\n") + "\r\n";
     const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
     const a = Object.assign(document.createElement("a"), { href: url, download: filename });
@@ -269,15 +277,15 @@
 
   function render() {
     const q = fold(state.q), pieces = state.view === "decomposition";
-    // every player of the season is ranked first and the name filter comes after, so a player found by name
-    // keeps their rank among all of them
+    // every player of the season is ranked first and the team and name filters come after, so a player found
+    // either way keeps their rank among all of them
     const all = (data.rows[state.season] || []).map(r => onSide(r, state.side));
     all.sort((a, b) => (a[state.sortKey] - b[state.sortKey]) * state.sortDir || b.t - a.t);
     all.forEach((r, i) => { r.rank = i + 1; });
-    const rows = q ? all.filter(r => fold(r.n).includes(q)) : all;
+    const rows = all.filter(r => (!state.team || r.tm.split("/").includes(state.team)) && (!q || fold(r.n).includes(q)));
     shown = rows;
     // each term's column is shaded in its colour, light for its lowest values and dark for its highest, over the
-    // whole season (5th to 95th percentile, so one outlier does not wash the rest out); the name filter leaves the
+    // whole season (5th to 95th percentile, so one outlier does not wash the rest out); the filters leave the
     // shades as they were
     const ranges = {};
     if (pieces) for (const k of [...PIECES.map(([key]) => key), "a"]) {
@@ -298,6 +306,8 @@
       tr.setAttribute("aria-expanded", state.open === p.id);
       cell(tr, p.rank, "rank");
       cell(tr, p.n, "name");
+      tr.lastChild.insertAdjacentHTML("beforeend", `<span class="tm">${esc(p.tm)}</span>`);
+      cell(tr, p.tm, "team");
       cols.forEach(([k]) => {
         if (k === "p") cell(tr, p.p.toLocaleString(), "");
         else if (pieces) cell(tr, fmt(p[k]), k === "a" ? "total" : "", tint(k, p[k]));
@@ -309,12 +319,13 @@
       tbody.appendChild(tr);
       if (state.open === p.id) {
         const d = document.createElement("tr"), td = document.createElement("td");
-        d.className = "detail"; td.colSpan = cols.length + 2;
+        d.className = "detail"; td.colSpan = cols.length + 3;
         td.innerHTML = `<div class="inner">${waterfall(p)}</div>`;
         d.appendChild(td); tbody.appendChild(d);
       }
     });
-    $("count").textContent = (q ? `${rows.length} of ${all.length}` : `${all.length}`) + ` players, ${state.season}` +
+    $("count").textContent = (rows.length < all.length ? `${rows.length} of ${all.length}` : `${all.length}`) +
+                             ` players, ${state.season}` + (state.team ? `, ${state.team}` : "") +
                              (pieces || state.open !== null ? `, ${SIDE_WORD[state.side]}` : "");
     writeAddress();
   }
@@ -343,7 +354,16 @@
     setSide(b.dataset.side);
     if (data) render();
   }));
-  season.addEventListener("change", () => { state.season = season.value; render(); });
+  // the season's teams, as its box scores abbreviate them; a team the new season lacks goes back to every team
+  function fillTeams() {
+    const codes = [...new Set((data.rows[state.season] || []).flatMap(r => r.tm.split("/")))].filter(Boolean).sort();
+    if (!codes.includes(state.team)) state.team = "";
+    team.replaceChildren(...["", ...codes].map(c => { const o = document.createElement("option");
+                                                     o.value = c; o.textContent = c || "All"; return o; }));
+    team.value = state.team;
+  }
+  season.addEventListener("change", () => { state.season = season.value; fillTeams(); render(); });
+  team.addEventListener("change", () => { state.team = team.value; render(); });
   find.addEventListener("input", () => { state.q = find.value; render(); });
   let resized;                           // an open breakdown is redrawn for the new width
   addEventListener("resize", () => {
@@ -352,7 +372,8 @@
   });
 
   // the address carries the view, so a player's breakdown can be linked:
-  // #season=2026&view=decomposition&side=off&player=1641705  (no view: ratings; no side: total)
+  // #season=2026&view=decomposition&side=off&team=SAS&player=1641705  (no view: ratings; no side: total; no team:
+  // every team)
   const h = new URLSearchParams(location.hash.slice(1));
   if (SIDE_FIELD[h.get("side")]) setSide(h.get("side"));
   if (h.get("view") === "decomposition") { const side = state.side; setView("decomposition"); setSide(side); }
@@ -365,6 +386,8 @@
     season.replaceChildren(...seasons.map(s => { const o = document.createElement("option");
                                                  o.value = o.textContent = s; return o; }));
     season.value = state.season;
+    state.team = h.get("team") || "";
+    fillTeams();
     $("built").textContent = "Built " + d.meta.built + ".";
     render();
     const open = tbody.querySelector("tr.open");

@@ -251,6 +251,9 @@ def openrapm_site(rated_season, tmp_path, monkeypatch):
         def teams(self, season):
             return teams
 
+        def season_teams(self, season):
+            return {int(player_id): "BOS" for player_id in final.player_id}
+
         def names(self, ids, seasons):
             return pd.Series(dtype=object)
 
@@ -272,8 +275,8 @@ def test_the_openrapm_file_adds_up_and_carries_ratings_jsons_ratings(openrapm_si
     published = {row["id"]: row for row in json.loads((data / "ratings.json").read_text(encoding="utf-8"))["rows"]}
     assert sorted(row[1] for row in rows) == sorted(published)
     assert [row[5][-1] for row in rows] == sorted((row[5][-1] for row in rows), reverse=True)
-    for name, player_id, possessions, off, deff, total in rows:
-        assert name == f"Player {player_id}" and possessions == published[player_id]["p"]
+    for name, player_id, possessions, off, deff, total, team in rows:
+        assert name == f"Player {player_id}" and possessions == published[player_id]["p"] and team == "BOS"
         for pieces, rating in ((off, "o"), (deff, "d"), (total, "t")):
             assert len(pieces) == 6 and pieces[-1] == published[player_id][rating]
             assert abs(sum(pieces[:-1]) - pieces[-1]) < 0.031           # five pieces at two decimals each
@@ -286,7 +289,7 @@ def test_the_pieces_are_the_tables_columns_and_a_split_of_the_games_part(openrap
     site.run_site({}, ratings=ratings, out_dir=data.parent, built="2026-10-13", openrapm_decomposition=True)
     rows = json.loads((data / site.OPENRAPM_FILE).read_text(encoding="utf-8"))["rows"]["2002"]
     table = final.set_index("player_id")
-    for _, player_id, _, off, deff, _ in rows[:25]:
+    for _, player_id, _, off, deff, _, _ in rows[:25]:
         for pieces, side in ((off, "off"), (deff, "def")):
             assert pieces[0] == round(table.loc[player_id, f"prior_{side}"], 2)
             assert pieces[4] == round(table.loc[player_id, f"c_{side}"], 2)
@@ -318,8 +321,9 @@ def test_openrapm_rows_drop_players_without_possessions_and_sort_by_total():
                for piece in site.OPENRAPM_PIECES}
     columns["total_rating"] = [1.234, 9.0, 3.456]
     pieces = pd.DataFrame({"player_id": [1, 2, 3], **columns})
-    got = site.openrapm_rows(rows, pieces, np.array(["A", "B", "C"], dtype=object))
+    got = site.openrapm_rows(rows, pieces, np.array(["A", "B", "C"], dtype=object), {3: "SAC/IND"})
     assert [(row[0], row[1], row[2]) for row in got] == [("C", 3, 500), ("A", 1, 1000)]       # whole possessions
+    assert [row[6] for row in got] == ["SAC/IND", ""]
     assert got[0][3] == [0.33] * 6 and got[0][5] == [0.33] * 5 + [3.46]
     assert got[1][4] == [0.11] * 6 and got[1][5] == [0.11] * 5 + [1.23]
 
@@ -337,6 +341,6 @@ def test_a_games_part_multiplied_by_step_4_is_split_with_its_factor(openrapm_sit
     assert site.run_site({}, ratings=ratings, out_dir=data.parent, built="2026-10-15", openrapm_decomposition=True) == 0
     rows = json.loads((data / site.OPENRAPM_FILE).read_text(encoding="utf-8"))["rows"]["2002"]
     table = scaled.set_index("player_id")
-    for _, player_id, _, off, deff, _ in rows[:25]:
+    for _, player_id, _, off, deff, _, _ in rows[:25]:
         for pieces, side in ((off, "off"), (deff, "def")):
             assert abs(sum(pieces[1:4]) - table.loc[player_id, f"u_{side}"]) < 0.0151

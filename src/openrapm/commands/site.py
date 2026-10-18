@@ -536,6 +536,21 @@ class BoxScoreFiles:
             self._teams[season] = table.set_index(["game_id", "player_id"]).team_id
         return self._teams[season]
 
+    def season_teams(self, season: int) -> dict:
+        """Every player's teams in a season, as that season's box scores abbreviate them, in the order he joined
+        them: {player_id: "SAC/IND"}.  Only games he played minutes in count, unless he has none."""
+        frames = [pd.read_parquet(path, columns=["personId", "teamTricode", "minutes"]).assign(game=n)
+                  for n, path in enumerate(self.files(season))]
+        if not frames:
+            return {}
+        box = pd.concat(frames)
+        box["played"] = box.minutes.fillna("").astype(str).str.strip().str.strip("0:.").str.len() > 0
+        teams = {}
+        for player_id, games in box.sort_values("game").groupby("personId", sort=False):
+            games = games[games.played] if games.played.any() else games
+            teams[int(player_id)] = "/".join(dict.fromkeys(games.teamTricode.astype(str)))
+        return teams
+
     def names(self, ids, seasons) -> pd.Series:
         """The last resort, for a player the ratings table and the bio files both lack (Luca Vildoza played only
         in the 2022 playoffs): his name as the span's box scores print it."""
@@ -857,13 +872,14 @@ def write_decomposition(cfg: dict, ratings_path: Path, data_dir: Path, built: st
 # prior scale in the table (to 1e-9; to 1e-6 in 2020, whose solve needs a jitter that follows the scale of the
 # prior columns).  The one file, docs/data/decompose_openrapm.json:
 #     {"meta": {built, penalty, seasons, fields, pieces}, "rows": {season: [[name, NBA id, possessions, offence,
-#      defence, total], ...]}}     each side's list holds OPENRAPM_PIECES in order, at two decimals
+#      defence, total, teams], ...]}}     each side's list holds OPENRAPM_PIECES in order, at two decimals; teams
+#      are the box scores' abbreviations in the order he joined them, "SAC/IND"
 # Rows are the ratings.json rows (possessions above 0), best total first.
 #
 # Example (2026): Victor Wembanyama's offence, 2.07 = 0.69 + 1.41 - 0.27 + 0.06 + 0.18; his total, 7.16 = 3.98 + 2.65
 # - 0.21 + 0.14 + 0.61.
 OPENRAPM_FILE = "decompose_openrapm.json"
-OPENRAPM_FIELDS = ["n", "id", "p", "o", "d", "t"]
+OPENRAPM_FIELDS = ["n", "id", "p", "o", "d", "t", "tm"]
 OPENRAPM_PIECES = ["box_score", "on_court", "off_court", "team_sos", "swap", "rating"]
 OPENRAPM_SIDES = ("off", "def", "total")
 OPENRAPM_TOLERANCE = 1e-9         # each identity holds to this, per player and side
@@ -998,14 +1014,16 @@ def update_openrapm_worst(worst: dict, rows: pd.DataFrame, pieces: pd.DataFrame,
         worst["unplaced"] = max(worst["unplaced"], misses[side]["unplaced"])
 
 
-def openrapm_rows(rows: pd.DataFrame, pieces: pd.DataFrame, names: np.ndarray) -> list:
+def openrapm_rows(rows: pd.DataFrame, pieces: pd.DataFrame, names: np.ndarray, teams: dict | None = None) -> list:
     """One season's rows in OPENRAPM_FIELDS order, best total first, players with no possessions left out (as
-    ratings.json leaves them): name, NBA id, possessions (whole, as ratings.json writes them), then each side's
-    pieces at two decimals."""
+    ratings.json leaves them): name, NBA id, possessions (whole, as ratings.json writes them), each side's pieces at
+    two decimals, then his teams ({player_id: "SAC/IND"}; "" for a player it lacks)."""
+    teams = teams or {}
     frame = pieces.assign(n=names, p=rows.poss_season.to_numpy())
     frame = frame[frame.p > 0].sort_values("total_rating", ascending=False)
     return [[r["n"], int(r["player_id"]), int(r["p"]),
-             *([round(float(r[f"{side}_{piece}"]), 2) for piece in OPENRAPM_PIECES] for side in OPENRAPM_SIDES)]
+             *([round(float(r[f"{side}_{piece}"]), 2) for piece in OPENRAPM_PIECES] for side in OPENRAPM_SIDES),
+             teams.get(int(r["player_id"]), "")]
             for r in frame.to_dict("records")]
 
 
@@ -1031,6 +1049,8 @@ def run_openrapm_checks(worst: dict, rows: dict, table: pd.DataFrame) -> None:
           f"the box scores name both teams of nearly every row (largest share without, in one season: "
           f"{worst['unplaced']:.2%})")
     check(worst["unnamed"] == 0, f"every player has a name ({worst['unnamed']} without)")
+    teamless = sum(1 for season_rows in rows.values() for row in season_rows if not row[6])
+    check(teamless == 0, f"every player has a team ({teamless} without)")
     published = {(row["s"], row["id"]): (row["o"], row["d"], row["t"], row["p"]) for row in ratings_rows(table)}
     mine = {(season, row[1]): (row[3][-1], row[4][-1], row[5][-1], row[2])
             for season, season_rows in rows.items() for row in season_rows}
@@ -1062,7 +1082,7 @@ def write_openrapm_decomposition(cfg: dict, ratings_path: Path, data_dir: Path, 
         update_openrapm_worst(worst, season_rows, pieces, parts, misses, factors[season])
         named = span_names(names, season_rows.player_id.to_numpy(), [season], box_files)
         worst["unnamed"] += int(sum(1 for name in named if pd.isna(name) or not str(name).strip()))
-        rows[season] = openrapm_rows(season_rows, pieces, named)
+        rows[season] = openrapm_rows(season_rows, pieces, named, box_files.season_teams(season))
         top = rows[season][0]
         print(f"  {season}: {len(rows[season])} players, top {top[0]} {top[5][-1]:+.2f} "
               f"({time.time() - started:.0f}s)", flush=True)
