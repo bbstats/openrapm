@@ -224,11 +224,11 @@ PAGE_HEAD = """<!doctype html>
           --over: 227 73 72; --under: 42 120 214; --zero: #f0efec; }
   :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5;
           --over: 230 103 103; --under: 57 135 229; --zero: #383835; }
-  body { color: var(--ink); font: 15px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
-  h1 { font-size: 26px; margin: 0 0 14px; }
+  body { color: var(--ink); font: 14px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  h1 { font-size: 21px; margin: 0 0 10px; }
   table { border-collapse: separate; border-spacing: 2px 0; width: 100%;
           font-variant-numeric: tabular-nums; }
-  th, td { padding: 6px 9px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  th, td { padding: 4px 7px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
   th:nth-child(1), td:nth-child(1) { text-align: left; white-space: normal; }
   th { color: var(--muted); font-weight: 600; }
   th:nth-child(2), th:nth-child(3) { color: var(--ink); }
@@ -245,7 +245,6 @@ PAGE_HEAD = """<!doctype html>
 <main>
 <nav class="site">
   <a href="./">Ratings</a>
-  <a href="decompose_openrapm.html">Decomposition</a>
   <a href="bias.html" aria-current="page">Bias</a>
   <a href="similarity.html">Similarity</a>
   """

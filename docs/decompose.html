@@ -15,31 +15,33 @@
   :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5;
           --c-blue: 96 145 255; --c-teal: 45 196 180; --c-green: 74 205 120; --c-purple: 167 139 250;
           --c-slate: 148 163 184; --c-rapm: 251 146 60; }
-  body { color: var(--ink); font: 15px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
-  h1 { font-size: 26px; margin: 0 0 10px; }
-  .eq { margin: 0 0 4px; font-size: 16px; line-height: 2.1; }
-  .term { display: inline-block; padding: 0 9px; border-radius: 999px; line-height: 1.75; white-space: nowrap;
+  body { color: var(--ink); font: 14px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 0 0 10px; }
+  h1 { font-size: 21px; margin: 0; }
+  .title nav.toggle { margin: 0; }
+  .eq { margin: 0 0 2px; font-size: 13.5px; line-height: 1.9; }
+  .term { display: inline-block; padding: 0 8px; border-radius: 999px; line-height: 1.6; white-space: nowrap;
           background: rgb(var(--c) / 0.14); box-shadow: inset 0 0 0 1.5px rgb(var(--c) / 0.6); }
-  .sub { color: var(--muted); font-size: 13.5px; margin: 0 0 16px; max-width: 72ch; }
-  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-bottom: 12px; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 10px; max-width: 72ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-bottom: 8px; }
   label { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
-  select, input { font: inherit; padding: 4px 7px; border: 1px solid var(--line); border-radius: 5px;
+  select, input { font: inherit; padding: 3px 6px; border: 1px solid var(--line); border-radius: 5px;
                   background: transparent; color: inherit; }
-  input[type=number] { width: 84px; } input[type=search] { width: 170px; }
+  input[type=search] { width: 160px; }
   .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
-  .seg button { font: inherit; font-size: 13px; padding: 5px 12px; border: 0; background: transparent;
+  .seg button { font: inherit; font-size: 13px; padding: 4px 10px; border: 0; background: transparent;
                 color: var(--muted); cursor: pointer; }
   .seg button + button { border-left: 1px solid var(--line); }
   .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
-  .count { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+  .count { color: var(--muted); font-size: 12.5px; margin: 0 0 6px; }
   .meta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0 16px; }
-  .dl { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+  .dl { color: var(--muted); font-size: 12.5px; margin: 0 0 6px; }
   .dl a { color: inherit; }
   .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   table { border-collapse: separate; border-spacing: 0; width: 100%; font-variant-numeric: tabular-nums; }
-  th, td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
-  th { color: var(--muted); font-weight: 600; font-size: 13px; cursor: pointer; user-select: none;
-       vertical-align: bottom; white-space: normal; min-width: 58px; }
+  th, td { padding: 4px 7px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 12.5px; cursor: pointer; user-select: none;
+       vertical-align: bottom; white-space: normal; min-width: 54px; }
   th.rank, th.name { white-space: nowrap; min-width: 0; }
   th.sep, td.sep { border-right: 2px solid var(--line); }
   th.rank, td.rank { color: var(--muted); cursor: default; }
@@ -53,7 +55,7 @@
   tr.player:hover td.name, tr.player:focus-visible td.name { color: var(--accent); }
   tr.player:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   tr.open td { border-bottom-color: transparent; }
-  tr.detail td { text-align: left; white-space: normal; padding: 10px 8px 16px; }
+  tr.detail td { text-align: left; white-space: normal; padding: 6px 7px 12px; }
   .inner { position: sticky; left: 8px; max-width: min(640px, calc(100vw - 48px)); }
   svg.wf { display: block; }
   svg.wf text { font: 12.5px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--ink); }
@@ -65,21 +67,33 @@
   dt { font-weight: 600; margin-top: 10px; }
   dd { margin: 2px 0 0; color: var(--muted); }
   dd a { color: inherit; }
-  footer { margin-top: 24px; color: var(--muted); font-size: 13px; max-width: 72ch; }
+  footer { margin-top: 22px; color: var(--muted); font-size: 12.5px; max-width: 72ch; }
+  @media (max-width: 600px) {
+    body { font-size: 13.5px; }
+    h1 { font-size: 19px; }
+    .controls { gap: 6px 10px; }
+    .seg button { padding: 4px 8px; }
+    input[type=search] { width: 120px; }
+    th, td { padding: 4px 5px; }
+    table { font-size: 13px; }
+    td.name { white-space: normal; min-width: 96px; }   /* a long name takes two lines so every column fits */
+    tr.detail td { padding: 4px 5px 10px; }
+  }
   footer a, .sub a { color: inherit; }
 </style>
 </head>
 <body>
 <main>
   <nav class="site">
-    <a href="./">Ratings</a>
-    <a href="decompose_openrapm.html" aria-current="page">Decomposition</a>
+    <a href="./" aria-current="page">Ratings</a>
     <a href="bias.html">Bias</a>
     <a href="similarity.html">Similarity</a>
     <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
   </nav>
-  <nav class="toggle" aria-label="Decomposition"><a href="decompose_openrapm.html">OpenRAPM</a><a href="decompose.html" aria-current="page">Vanilla RAPM</a></nav>
-  <h1>Vanilla RAPM decomposition</h1>
+  <div class="title">
+    <h1>Vanilla RAPM decomposition</h1>
+    <nav class="toggle" aria-label="Rating"><a href="./">OpenRAPM</a><a href="decompose.html" aria-current="page">Vanilla RAPM</a></nav>
+  </div>
   <p class="eq" data-view="poss"><span class="term" style="--c: var(--c-blue)">On court signal</span>
     + <span class="term" style="--c: var(--c-teal)">Off court adjustment (GP)</span>
     + <span class="term" style="--c: var(--c-green)">Off court adjustment (DNP)</span>
@@ -105,7 +119,6 @@
       <button type="button" data-span="3y" aria-pressed="false">3 seasons</button>
     </div>
     <label>Period <select id="period"></select></label>
-    <label>Min possessions <input id="minp" type="number" min="0" step="250"></label>
     <label>Find <input id="find" type="search" placeholder="player name" autocomplete="off"></label>
   </div>
   <div class="meta">
@@ -178,7 +191,6 @@
 <script>
 (function () {
   const $ = id => document.getElementById(id);
-  const DEFAULT_MIN = { "1y": 1000, "3y": 3000 };
   const abs2 = v => Math.abs(v).toFixed(2);
   const fmt = v => (v > 0 ? "+" : v < 0 ? "−" : "") + abs2(v);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -212,11 +224,11 @@
   const colorOf = (v, k) => k === "a" ? RAPM_COLOR : (v.pieces.find(([p]) => p === k) || [])[4] || null;
 
   const cache = {};
-  const state = { view: "poss", span: "1y", period: null, min: null, q: "", open: null, sortKey: "a", sortDir: -1 };
+  const state = { view: "poss", span: "1y", period: null, q: "", open: null, sortKey: "a", sortDir: -1 };
   // the piece columns a view shows after the actual ratings: its pieces minus any already shown among them
   const pieceColumns = v => v.pieces.filter(([k]) => !v.extra.some(([e]) => e === k));
   const table = $("table"), thead = table.querySelector("thead"), tbody = table.querySelector("tbody");
-  const period = $("period"), minp = $("minp"), find = $("find");
+  const period = $("period"), find = $("find");
 
   async function load(span) {
     if (!cache[span]) {
@@ -252,7 +264,6 @@
     if (state.view !== "poss") h.set("view", state.view);
     if (state.span !== "1y") h.set("span", state.span);
     h.set("period", state.period);
-    if (state.min !== null) h.set("min", state.min);
     if (state.open) h.set("player", state.open);
     history.replaceState(null, "", "#" + h.toString());
     syncToggle();
@@ -262,10 +273,10 @@
   function syncToggle() {
     const link = document.querySelector("nav.toggle a:not([aria-current])");
     if (!link) return;
-    const v = new URLSearchParams({ season: years(state.period)[1] });
+    const v = new URLSearchParams({ season: years(state.period)[1], view: "decomposition" });
     const open = ((cache[state.span] || { rows: {} }).rows[state.period] || []).find(r => r.n === state.open);
     if (open) v.set("player", open.id);
-    link.href = "decompose_openrapm.html#" + v.toString();
+    link.href = "./#" + v.toString();
   }
 
   // a waterfall: each piece starts where the last one ended, and the last bar is the total.  Drawn at the width
@@ -352,21 +363,25 @@
 
   function render() {
     const data = cache[state.span], view = VIEWS[state.view];
-    const min = state.min === null ? DEFAULT_MIN[state.span] : state.min, q = fold(state.q);
-    minp.value = min;
-    let rows = (data.rows[state.period] || []).filter(r => r.p >= min && (!q || fold(r.n).includes(q)));
-    rows.sort((a, b) => {                // a missing value (no off-court possessions) sorts last either way
+    const q = fold(state.q);
+    // every player of the period is ranked first and the name filter comes after, so a player found by name
+    // keeps their rank among all of them
+    const all = [...(data.rows[state.period] || [])];
+    all.sort((a, b) => {                 // a missing value (no off-court possessions) sorts last either way
       const x = a[state.sortKey], y = b[state.sortKey];
       if (x === null || x === undefined) return 1;
       if (y === null || y === undefined) return -1;
       return (x - y) * state.sortDir;
     });
+    const rank = new Map(all.map((r, i) => [r, i + 1]));
+    const rows = q ? all.filter(r => fold(r.n).includes(q)) : all;
     shown = rows;
     // each term's column is shaded in its colour, light for its lowest values and dark for its highest, over the
-    // players shown (5th to 95th percentile, so one outlier does not wash the rest out)
+    // whole period (5th to 95th percentile, so one outlier does not wash the rest out); the name filter leaves the
+    // shades as they were
     const ranges = {};
     for (const k of [...view.pieces.map(([key]) => key), "a"]) {
-      const v = rows.map(r => r[k]).filter(x => x !== null && x !== undefined).sort((x, y) => x - y);
+      const v = all.map(r => r[k]).filter(x => x !== null && x !== undefined).sort((x, y) => x - y);
       ranges[k] = v.length ? [v[Math.floor(0.05 * (v.length - 1))], v[Math.ceil(0.95 * (v.length - 1))]] : [0, 1];
     }
     const tint = (k, x) => {
@@ -376,12 +391,12 @@
       return `rgb(var(${c}) / ${(0.05 + 0.5 * t).toFixed(3)})`;
     };
     tbody.replaceChildren();
-    rows.forEach((p, i) => {
+    rows.forEach(p => {
       const tr = document.createElement("tr");
       tr.className = "player" + (state.open === p.n ? " open" : "");
       tr.tabIndex = 0;
       tr.setAttribute("aria-expanded", state.open === p.n);
-      cell(tr, i + 1, "rank");
+      cell(tr, rank.get(p), "rank");
       cell(tr, p.n, "name");
       view.extra.forEach(([k], j) => cell(tr, p[k] === null || p[k] === undefined ? "" : fmt(p[k]),
                                           j === view.extra.length - 1 ? "sep" : "", tint(k, p[k])));
@@ -399,8 +414,8 @@
         d.appendChild(td); tbody.appendChild(d);
       }
     });
-    $("count").textContent = `${rows.length} players, ${state.period} (${data.meta.span}), at least ` +
-                             `${min.toLocaleString()} possessions`;
+    $("count").textContent = (q ? `${rows.length} of ${all.length}` : `${all.length}`) +
+                             ` players, ${state.period}, ${data.meta.span}`;
     writeAddress();
   }
 
@@ -430,10 +445,9 @@
     if (b.dataset.setView !== state.view) { setView(b.dataset.setView); if (cache[state.span]) render(); }
   }));
   document.querySelectorAll("[data-span]").forEach(b => b.addEventListener("click", () => {
-    if (b.dataset.span !== state.span) { state.min = null; show(b.dataset.span); }
+    if (b.dataset.span !== state.span) show(b.dataset.span);
   }));
   period.addEventListener("change", () => { state.period = period.value; render(); });
-  minp.addEventListener("change", () => { state.min = minp.value === "" ? null : Math.max(0, +minp.value); render(); });
   find.addEventListener("input", () => { state.q = find.value; render(); });
   let resized;                           // an open breakdown is redrawn for the new width
   addEventListener("resize", () => {
@@ -446,7 +460,6 @@
   const h = new URLSearchParams(location.hash.slice(1));
   state.period = h.get("period");
   state.open = h.get("player");
-  if (h.get("min") !== null && h.get("min") !== "") state.min = Math.max(0, +h.get("min"));
   setView(h.get("view") === "player" ? "player" : "poss");
   show(h.get("span") === "3y" ? "3y" : "1y").then(() => {
     const open = tbody.querySelector("tr.open");

@@ -304,8 +304,10 @@ held back.
 
 ## The OpenRAPM decomposition page (`decomposition.py`)
 
-- **For:** the site's Decomposition tab, opened on OpenRAPM (a toggle at the top of the page switches to the vanilla
-  RAPM page): every published rating split, offense and defense separately, into box score + on court + off court +
+- **For:** the site's Ratings tab, `docs/index.html`, which reads this file and not `ratings.json`: its
+  Decomposition switch shows the pieces as columns, and a click on a player draws them as a waterfall (a toggle at
+  the top of the page switches to the vanilla RAPM page; the old `docs/decompose_openrapm.html` address forwards
+  here).  Every published rating split, offense and defense separately, into box score + on court + off court +
   team SOS + swap adjustment, which add up to the rating (the owner's design, 2026-10-13).  Total is the two sides'
   pieces added.
 - **Reads:** the ratings table and its step-3 table (`outputs/season_ratings_product.parquet` and `_step3`), each
@@ -323,9 +325,9 @@ held back.
   file's rows and ratings are `ratings.json`'s.  `tests/test_decompose_openrapm_site.py` checks the committed file
   against `ratings.json`.
 - **Command:** `python -m openrapm site --openrapm-decomposition` (132 seconds).  It reads the ratings table, so it
-  is rerun after every ratings build.
+  is rerun after every ratings build; without it the Ratings tab shows the last build's numbers.
 - **Code:** `src/openrapm/decomposition.py` (shared with the vanilla page: the rows' teams and the groups of rows),
-  `commands/site.py`, `docs/decompose_openrapm.html`.
+  `commands/site.py`, `docs/index.html`.
 
 ## Where the numbered scripts went
 
