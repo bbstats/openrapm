@@ -19,6 +19,16 @@ OpenRAPM is, `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing ru
   experiment 77.  The cull also found the booster's seed alone moves the decider about 0.03; bagging, experiment
   78, replaced the single booster.  Tracking is on hold ("not yet").
 - **Next, the owner's open threads:** tracking game by game (below); the arena scorekeeper checks; the big-man lean against the consensus.
+- **Done 2026-10-18: check 153, what step 5 does** (`notes/PLAN_swap_step.md`; DECISIONS.md "Check 153"; sheet tabs
+  "Swap step" and "Swap step types").  Step 5 helps on the decider, -0.361, z -6.0, and ties the guard.  Its gain is
+  type content, not the within-team shrink: the shrink alone is +1.25 on the decider.  On offence its biggest terms,
+  made and missed shots, are same-games luck.  Refitted on the folds' held-back games, `step5_other`, it beats shipped
+  step 5 on the decider by 0.547, z -12.2, 30 of 30, and on the guard by 0.163, z -3.2.
+- **The owner's ruling, 2026-10-19:** "fix step 5 but - yes it must ONLY come from the season in question.  since this
+  is post hoc we should try it on the prior first.  so - commit everything, try fixing the prior, then work on fixes to
+  step 5".  Order: (1) commit; (2) the same-games fix on the prior: each training row's label from games its box score
+  did not come from, experiment 25's idea, judged on the decider; (3) then step 5, cross-fitted, its inputs from the
+  rated season only, so `seasons_before` goes.
 
 ## What ships
 
@@ -36,7 +46,7 @@ OpenRAPM is, `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing ru
   and push only on the owner's word, then check the Pages build:
   `gh api repos/bbstats/openrapm/pages/builds/latest`.
 - The incumbent for scoring is `bags10`, the test-setting tables `outputs/season_ratings_bags10*.parquet`, its
-  folds `bags10_early` and `bags10_within`; no noise control of its own yet, `noise_tune2` stands in.  The decider applies the shipped defence factor, 0.866, to every system; a system
+  folds `bags10_early` and `bags10_within`; its noise control `noise_bags10`.  The decider applies the shipped defence factor, 0.866, to every system; a system
   built before experiment 76 is read with `--defence-factors=NAME:1`.
 
 ## How an experiment is judged
@@ -52,7 +62,8 @@ The owner, 2026-10-15: "within-season is truly the best metric, particularly WOW
 - One build: `bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes "EXTRA RATE FLAGS"`.  About
   1 hour 40 minutes with 10 bags: steps 1-3 at the test setting, the candidate's own folds for all thirty seasons, steps 4 and 5, then the
   three readings.  `INC_NAME=tune2` names the incumbent's tables and `INC_SYSTEM=tune2` its folds.
-- The noise control on the incumbent, `noise_tune2`, reads -0.034, z -1.17, 17 of 30 seasons.
+- The noise control on the incumbent, `noise_bags10`, reads -0.003, se 0.011, z -0.33, 14 of 30 seasons; bagging cut
+  the regrouping noise to about a third of experiment 76's, se 0.029.
 - **Scale.**  On the decider, ratings of zero leave 3,648.6 a season and today's ratings 3,633.0: the ratings explain
   15.7, so a gain of 0.27 is 1.7% more of what ratings explain.  `scratch/2026-10-15_overnight/zero_baseline.py`.
 - Every experiment gets a row in `experiments/runs.csv` through `scripts/checks/101_log_run.py`, mirrored to the
@@ -139,6 +150,10 @@ The owner: "do as many tests as you want".  Against the incumbent; DECISIONS.md 
         a product-setting preview written beside the live table, about 12 minutes
     .venv/Scripts/python -m openrapm data hustle-games 2017 2026
         the per-game hustle box scores; tracking-games for the tracking ones; run long ones under the watchdogs
+    .venv/Scripts/python scripts/checks/153_swap_audit.py folds --system=bags10 --first=1997 --last=2026
+        check 153: every version of step 5 on every fold, cached per season in outputs/swap_audit/bags10/, about 10
+        minutes; then `decider --systems=bags10,noise_bags10`, `whole --system=bags10`, `readings --tag=swap_audit`;
+        the full order is scratch/2026-10-18_swap_audit/chain2.sh
 
 ## The rulings that bind
 

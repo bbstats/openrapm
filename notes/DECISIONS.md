@@ -7578,3 +7578,179 @@ Adopted and published 2026-10-17, the owner: "Adopt and publish".  Shipped: `Pri
 standing in as the noise control.  Product table rebuilt, the step-3 table frozen as
 `season_ratings_product_bags10_step3.parquet`, the previous product kept as
 `season_ratings_product_before_bags10.parquet`; the site's files rebuilt.
+
+### The noise control on experiment 78 (the owner, 2026-10-18: "Go")
+
+`bash scripts/experiment_chain.sh noise_bags10 points_with_expected_opponent_threes "--fold-assignment 1"`: the
+shipped model with each group of five players dealt into the booster's folds in a random order, seed 1.
+
+| reading | change | se | z | seasons better |
+|---|---|---|---|---|
+| decider, step 4, all thirty | -0.003 | 0.011 | -0.33 | 14 of 30 |
+| decider, step 4, games with a regular out | -0.007 | 0.013 | -0.59 | 14 of 30 |
+| guard, team-game, both directions | -0.005 | 0.008 | -0.56 | 30 of 56 |
+
+- Bagging cut the noise from regrouping to about a third: the season-to-season standard error of a regrouping was
+  0.029 on experiment 76 and is 0.011 now.  A change now needs about -0.03 on the decider to reach z -2 if it moves
+  seasons as evenly as a regrouping does.
+- Player moves from regrouping alone, players with 2,000+ possessions, every season: median 0.033 per 100, 90th
+  percentile 0.092, largest 0.60.  2026: median 0.033, largest 0.23 (Kawhi Leonard +0.23, Giannis -0.23, Dončić
+  +0.22, Jokić -0.21); the top 20 the same players.
+- The chain's noise control is now `noise_bags10`.
+
+## Check 153: what the swap step does (the owner, 2026-10-18: "Just write a plan for how to figure out what the heck is actually going on here"; `notes/PLAN_swap_step.md`)
+
+**The question.**  Step 5 moves credit between teammates by what its type model says about each player: a ridge
+regression of every lineup swap's residual on the two swapped players' 22 box-score, role, body and prior numbers,
+fitted on other seasons, half of its prediction applied, each team's total given back, the spread inside teams held to
+step 4's.  The owner asked whether it fixes a real, systematic misrating of certain kinds of players or gains from
+something else.  Five explanations: (1) real type misses; (2) the within-team shrink that holding the spread applies;
+(3) same-games luck, the box counts being counted in the same games as the swaps; (4) coaching context; (5) step 5
+handing back step 4's shrink of the box-score part.  Nothing here changes a shipped table.
+
+**What was built.**  `scripts/checks/153_swap_audit.py`, one subcommand per stage, its tables under
+`outputs/swap_audit/`; `tests/test_check_153.py`, 9 tests, among them that the fold code's step 5, handed a season's
+possessions and type predictions, equals `swap_adjust.adjust` on the synthetic league to the last bit.  Every version of
+step 5 below, an arm, runs on the whole-season test table, for the guard and the swap test, and on all 360 folds of
+`bags10` and of its noise control `noise_bags10`, where check 151 scores it through its `extra` stages.  On a fold every
+input comes from the fit games: the box counts, role and playing time from the fold's players file, which `openrapm
+folds` already rebuilt from the fit games, the two prior features from the fold's step-4 prior part, each player's
+possessions per team and his main team from the fit games' stints; the type model is the one the whole-season step 5
+rates that season with.  No panel had to be rebuilt, so a pass over 360 folds takes about 10 minutes a system, not the
+hours the plan budgeted.
+
+| arm | what it is |
+|---|---|
+| `step5` | as shipped |
+| `step5_nohold` | half strength and the give-back, the spread inside teams not held |
+| `shrink_only` | no type move: each player's distance from his main team's possession-weighted mean times the spread factor step 5 used on the same table, season and side |
+| `step5_leak` | on folds only: the type features of the whole season, held-back games included; the leak control |
+| `placebo_use` | the shipped type model on type features shuffled among the players: a move of the shipped size that knows nothing about them; the mean of 5 seeds |
+| `placebo_train` | the type features shuffled in training too; the mean of 5 seeds |
+| `step5_other` | the type model refitted on the folds of the seasons more than one away: each fold's fit-game features against its held-back games' swaps, each player's own swaps left out |
+| `step5_same` | the same refit on each fold's fit games' own swaps: the shipped situation at the folds' size |
+| `step5_share037` | the shipped type model applied at 0.37 instead of 0.5: about `step5_other`'s typical move |
+
+**Stage 0, the reproduction.**  The build's own step 5, rebuilt on `season_ratings_bags10_step4.parquet`, matches
+`season_ratings_bags10.parquet` exactly, and so does this check's code season by season.  Handed every game of a season
+as its fit games, the fold code rebuilds step 4 exactly in all 30 seasons and step 5 exactly in 29.  In 2010 the other
+440 players move by 7.8e-6: the table keeps player 201191, one defensive possession and no offensive one, and a fold
+rates only players with offensive possessions; with his row, type features and main team put back, 2010 matches
+exactly too.  On every fold, this check's step 4 equals check 151's to the last bit.
+
+**The decider, 30 seasons.**  Each arm minus the other, season by season, over every held-back stint; below 0 is
+better.  The ratings explain about 17 per season on this scale.
+
+| arm | against | ΔMSE | standard error | paired z | seasons better |
+|---|---|---|---|---|---|
+| `step5` | `step4` | -0.361 | 0.060 | -6.02 | 25 of 30 |
+| `step5_nohold` | `step4` | -1.262 | 0.098 | -12.93 | 30 of 30 |
+| `shrink_only` | `step4` | +1.246 | 0.047 | +26.32 | 0 of 30 |
+| `step5_leak` | `step4` | -1.932 | 0.060 | -32.05 | 30 of 30 |
+| `placebo_use` | `step4` | +2.374 | 0.059 | +39.98 | 0 of 30 |
+| `placebo_train` | `step4` | +0.059 | 0.005 | +11.15 | 0 of 30 |
+| `step5_other` | `step4` | -0.908 | 0.047 | -19.25 | 30 of 30 |
+| `step5_same` | `step4` | -0.278 | 0.062 | -4.48 | 24 of 30 |
+| `step5_share037` | `step4` | -0.430 | 0.047 | -9.16 | 30 of 30 |
+| `step5_other` | `step5` | -0.547 | 0.045 | -12.18 | 30 of 30 |
+| `step5_other` | `step5_share037` | -0.477 | 0.038 | -12.71 | 30 of 30 |
+| noise control `step4` | `bags10` `step4` | -0.003 | 0.011 | -0.33 | 14 of 30 |
+| noise control `step5` | `bags10` `step5` | +0.001 | 0.010 | +0.07 | 13 of 30 |
+
+- The DNP slice reads the same way in every row.  The noise control's own `step5` minus `step4` is -0.357, z -5.98.
+- By era, `step5` against `step4`: 1997-2006 -0.519, z -6.0; 2007-2016 -0.436, z -3.7; 2017-2026 -0.128, z -2.1.
+  `step5_other`: -0.946, -1.000 and -0.777, each 10 of 10.
+- The leak control finds the leak, as it must: whole-season type features gain 1.57 more than fit-game ones.
+
+**The guard and the swap test**, whole-season test tables, 56 observations each; guard and net gaps below 0 better, net
+order above 0 better.
+
+| arm | guard ΔMSE | guard z | net order change | net order z | net gaps change | net gaps z |
+|---|---|---|---|---|---|---|
+| `step5` | -0.039 | -0.60 | +0.120 | +5.31 | -0.839 | -4.31 |
+| `step5_nohold` | +0.631 | +6.33 | +0.122 | +4.82 | +0.176 | +0.73 |
+| `shrink_only` | -0.228 | -4.61 | -0.009 | -0.97 | -0.232 | -1.72 |
+| `placebo_use` | +0.958 | +14.97 | -0.141 | -7.92 | +3.094 | +14.67 |
+| `placebo_train` | +0.026 | +3.59 | -0.004 | -0.54 | +0.087 | +3.69 |
+| `step5_other` | -0.202 | -3.55 | +0.121 | +5.90 | -1.084 | -7.70 |
+| `step5_same` | -0.006 | -0.08 | +0.123 | +5.10 | -0.746 | -3.60 |
+| `step5_share037` | -0.086 | -1.70 | +0.105 | +5.45 | -0.836 | -5.61 |
+
+`step5_other` against `step5` on the guard: -0.163, z -3.15; against `step5_share037`: -0.115, z -2.54.  The guard by
+direction, `step5_other` against `step4`: the season before -0.127, z -1.4; the season after -0.276, z -4.0.  On
+2026-10-16 step 5 gained 0.208 on the guard, z -2.66, on `gamesfree`; on `bags10` it gains 0.039, a tie.
+
+**Stage 3, the coefficients** (sheet tab "Swap step types").  17 of the 44 clear a Bonferroni bar of |t| 3.3 on the
+season jackknife, and 16 of those keep their sign in all three eras; the exception is age on offence, +0.01 in
+2017-2026.  The odd-season model's and the even-season model's predictions for the same player-seasons correlate 0.958
+on offence and 0.893 on defence, weighted by possessions, so a player's type prediction is not noise.  Garbage-time
+share on defence, -1.07, becomes -1.58 with the garbage-time stints taken out of the lineups' results: it is not those
+stints.  The time-on-court clocks and capped swap weights move no coefficient by more than 0.11.
+
+**Stage 4, same games against other games**, over the 360 folds, features from the fit games, standard errors from the
+season jackknife.  Offence, same then other: made threes +1.40 then -0.35, missed threes -0.71 then +0.81, made twos
++1.03 then -0.04, missed twos -0.92 then -0.18, assists +0.88 then +0.12, turnovers -0.81 then -0.16, made free throws
++0.64 then +0.35; offensive rebounds +0.74 then +0.75, blocks -0.28 then -0.30, defensive rebounds -0.16 then -0.14.
+Defence: steals +0.50 then +0.36, blocks +0.27 then +0.25, fouls +0.35 then +0.41, garbage-time share -1.04 then -0.99,
+his own made threes -0.47 then -0.67, the defensive prior -0.34 then -0.43; defensive rebounds +0.62 then +0.23.  The
+shooting terms are that season's shooting in the very lineups the swaps score: on other games a player who made his
+threes is credited too much, not too little.
+
+**Stage 5, whose mistake.**  Fitted on each table's misses, the box counts' pattern is about the same against the
+box-score part alone, step 3, step 4 and plain RAPM.  Against step 3 the type model wants the box-score prior lower by
+0.86 per standard deviation on offence and 0.75 on defence; against step 4, by 0.22 and 0.35; against step 5, +0.06
+and -0.06.  The type prediction's spread inside teams, offence then defence: plain RAPM 1.43 and 1.34, the box-score
+part 0.99 and 0.71, step 3 0.87 and 0.66, step 4 1.03 and 0.87, step 5 0.77 and 0.65.  Swap test on the five tables:
+`outputs/swaptest_swap_audit_whose.parquet`.
+
+**Verdicts.**
+
+| explanation | verdict | the reading that decides it |
+|---|---|---|
+| 1, real type misses | real, but smaller than the shipped model says, and on offence mixed with luck | `step5_other` beats `step4` on the decider by 0.91, z -19.3, 30 of 30, and on the guard by 0.20, z -3.6; the same moves dealt to random players lose by 2.37, z +40 |
+| 2, within-team shrink | rejected on the decider; the guard likes it | `shrink_only`: decider +1.25, z +26.3; guard -0.23, z -4.6 |
+| 3, same-games luck | confirmed on offence | made threes +1.40 on the same games, -0.35 on other games; made twos +1.03 and -0.04 |
+| 4, coaching context | not found in what could be tested | garbage-time share grows without the garbage-time stints; the clocks and capped weights change nothing |
+| 5, undoing step 4 | rejected | against step 4's misses the prior is still wanted lower, -0.22 and -0.35 |
+
+**The candidate it leaves, not built: step 5's type model fitted on the folds' held-back games.**  `step5_other`
+against shipped step 5: decider -0.547, z -12.2, 30 of 30, the noise control's se 0.010; guard -0.163, z -3.15; swap-test
+order a tie and gaps -0.245, z -1.8.  It moves a player with 1,000+ possessions a median 0.26 per 100 against shipped
+0.35, and the moves correlate 0.79; the equal-move control, `step5_share037`, takes only 0.07 of the 0.55.  The product
+build would fit the type model on every other season's folds, which `openrapm build` reads already for step 4.  2026
+top 20 of the test table, `step5_other` minus `step5`: Ty Jerome -0.68, Paul Reed -0.67, Cade Cunningham +0.54,
+Giannis -0.52, Bam Adebayo +0.46, Kawhi Leonard -0.38, Jimmy Butler -0.37, Neemias Queta -0.35, Cason Wallace +0.34;
+Donovan Mitchell and Scottie Barnes come in, Butler and Reed go out.
+
+**The mechanism, tested** (the owner, 2026-10-19: "what is the actual mechanism that underlies the issue and our
+solution"; `scratch/2026-10-18_swap_audit/mechanism.py`, `outputs/swap_audit/mechanism_*_bags10.csv`).  A rating is a
+ridge estimate, R = p + λ(y − p), with λ the share of his own results it trusts, nearer 1 with more possessions.  On the
+same games the type model's target is y − R = (1 − λ)(y − p): the part of his own results the ridge held back.  His
+made shots are in y and in his box score, so they predict that part even if shooting carried no skill; on other games
+the target is y' − R, where the old luck is in R but not in y', so the sign turns.  Two tests on the 360 folds:
+- **The games' part as a 23rd and 24th feature.**  Same games: u takes +2.67 per standard deviation on offence and
+  +2.66 on defence, and made threes fall from +1.40 to +0.23, made twos from +1.03 to +0.23, assists from +0.88 to
+  -0.02, turnovers from -0.81 to -0.03.  Other games: u takes -0.13 on offence and +0.23 on defence, and the rest hardly
+  move: made threes -0.29, offensive rebounds +0.79.  This is the October trap, a type model given u multiplying it
+  (DECISIONS, "The swap adjustment"), come back through the made-shot counts after u itself was taken out.
+- **By how much the ridge trusts the pair**, the smaller of the two players' fit-game possessions.  Same-games payment
+  for made threes: +0.88 at 1,500 and over, +1.12 at 750-1,500, +2.28 under 750; made twos +0.48, +0.97, +1.68.  Other
+  games: -0.56, -0.69, -0.07.  The less the ridge trusts a player, the more the same-games fit pays back.
+- **How much of a swap's residual the stats explain** (the owner, 2026-10-19: "is most of the gap ... shotmaking?";
+  `scratch/2026-10-18_swap_audit/mechanism_share.py`): the share of the information-weighted sum of squares a ridge on
+  each group alone explains.  Offence, same games, pairs under about 1,000 / 1,000-2,000 / 2,000+ possessions a
+  season: all 22 stats 0.24% / 0.11% / 0.08%, shooting alone 0.15% / 0.05% / 0.03%.  Other games: all 22 0.07% / 0.03% /
+  0.03%, shooting 0.03% / 0.01% / 0.01%.  Defence, same games: all 22 0.07% / 0.05% / 0.08%, shooting 0.01% / 0.02% /
+  0.03%.  A single swap is almost all lineup noise.  The groups overlap, so no share of the gap can be read off them:
+  for low-possession pairs on offence, shooting alone explains 0.15% and the other stats alone 0.14% of a total 0.24%.
+  This does not measure what a player's results-minus-prior is made of; it says only where the same-games fit finds
+  something to pay for.  Defence shows no possession gradient.
+
+**Flagged, not changed.**
+- `seasons_before`, seasons played before this one, is still a type feature: a career count in step 5, which the
+  single-season ruling of experiment 59 took off both priors.  Its coefficients are -0.00 on offence and -0.06 on
+  defence, t -0.03 and -0.80.
+- The plan's decision rule for stage 5 read a wider spread against step 4 as step 5 undoing step 4.  The coefficients
+  say otherwise: the spread is wider because less of the box counts' credit has to be taken back through the prior.
+- A fold edge case: 2015, repeat 0, fold 2 rates a player with one offensive possession and no defence row; his
+  defence parts come from his offence row, shrunk as the defence rows were, and weigh nothing.

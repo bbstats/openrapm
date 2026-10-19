@@ -41,10 +41,11 @@ LOG=outputs/${NAME}_chain.log
 # Since 2026-10-17 it is experiment 77 (nothreepct): tune2 with three-point % off the offensive booster, its own folds;
 # no noise control on it yet, so noise_tune2 stands in.
 # Since 2026-10-17, later the same day, it is experiment 78 (bags10): nothreepct with the prior averaged over 10
-# bootstraps of the players (--bags 10, the shipped default of `openrapm rate`), its own folds; noise_tune2 stands in.
+# bootstraps of the players (--bags 10, the shipped default of `openrapm rate`), its own folds; its noise control
+# noise_bags10 (--fold-assignment 1).
 INC_NAME=${INC_NAME:-bags10}
 INC_SYSTEM=${INC_SYSTEM:-bags10}                 # the incumbent's folds (<name>_early, <name>_within) for 151
-CONTROL_NAME=${CONTROL_NAME:-noise_tune2}        # the noise control's folds (<name>_early, <name>_within) for 151
+CONTROL_NAME=${CONTROL_NAME:-noise_bags10}       # the noise control's folds (<name>_early, <name>_within) for 151
 INC_FOLDS=${INC_FOLDS:-bags10_early,bags10_within}
 AUDIT_REF=${AUDIT_REF:-bags10_within}
 INC=outputs/season_ratings_${INC_NAME}.parquet
