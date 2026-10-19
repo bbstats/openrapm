@@ -72,9 +72,11 @@ from typing import NamedTuple
 
 import numpy as np
 import pandas as pd
+import scipy.linalg
 
 __all__ = ["design_blocks", "NormalEquations", "normal_equations", "player_possessions", "block_penalty",
-           "solved_ridge", "solve_ridge", "team_flags", "SeasonSums", "unshrink", "career_labels"]
+           "solved_ridge", "solve_ridge", "team_flags", "SeasonSums", "unshrink", "career_labels", "profile",
+           "LeaveOut", "outside_labels"]
 
 
 def design_blocks(design):
@@ -246,6 +248,24 @@ class SeasonSums:
         """How many context columns a season brought."""
         return self._seasons[int(season)]["n_context"]
 
+    def context_penalty(self, season: int, penalties=(40000.0, 40000.0, 0.0), team_penalties=(0.0, 0.0)) -> np.ndarray:
+        """One season's context columns' penalties, laid out as `penalty` lays them out."""
+        block = self._seasons[int(season)]
+        teams = len(block["team_ids"])
+        plain = np.full(block["n_context"] - 2 * teams, float(penalties[2]))
+        if not teams:
+            return plain
+        return np.concatenate([plain, np.full(teams, float(team_penalties[0])),
+                               np.full(teams, float(team_penalties[1]))])
+
+    def profiled(self, season: int, penalties=(40000.0, 40000.0, 0.0), team_penalties=(0.0, 0.0)) -> tuple:
+        """(its player columns on both sides, S, r, its players' columns, their possessions): one season's player
+        block with its context solved out (`profile`)."""
+        block = self._seasons[int(season)]
+        columns = block["columns"]
+        gram, rhs = profile(block["sums"], self.context_penalty(season, penalties, team_penalties))
+        return np.concatenate([columns, columns + len(self._column)]), gram, rhs, columns, block["possessions"]
+
     def _context_starts(self, kept: list) -> tuple[dict, int]:
         """({season: its first context column}, total columns): the context blocks follow the 2 x players."""
         starts, total = {}, 2 * len(self._column)
@@ -405,4 +425,104 @@ def career_labels(sums: dict, unseen, label_settings, targets) -> dict:
             table = unshrink(table, column, penalty, label_settings.full_trust_possessions,
                              label_settings.tier_edges)
         out[side] = table
+    return out
+
+
+# ------------------------------------------------------------------------- labels from outside a row's seasons
+def profile(sums: NormalEquations, context_penalty: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """(S, r): one season's player block with its own context columns solved out,
+
+        S = Z'WZ - Z'WC (C'WC + P)^+ C'WZ,     r = Z'Wy - Z'WC (C'WC + P)^+ C'Wy
+
+    P is the context's penalties.  A season's context columns touch only that season's rows, so the player
+    coefficients of (Lambda + the sum of S) theta = the sum of r are those of the full fit, by block elimination;
+    the pseudo-inverse stands in for the full fit's jitter on a context column with no data (`solved_ridge`).
+    """
+    inverse = np.linalg.pinv(sums.gram_context + np.diag(context_penalty))
+    coupling = sums.gram_players_context @ inverse
+    return sums.gram_players - coupling @ sums.gram_players_context.T, sums.rhs_players - coupling @ sums.rhs_context
+
+
+class LeaveOut:
+    """One target's ridge over the seasons not in `unseen`, made ready to leave more seasons out quickly.
+
+    Over the kept seasons K the player coefficients solve A theta = b, A = Lambda + the sum over K of each season's
+    S and b the sum of its r (`profile`).  Leaving the seasons E out as well takes their S and r away, and their S
+    touches only the columns of E's players, P.  With A's inverse at hand, the Woodbury identity gives the new
+    solve exactly from one system the size of P:
+
+        (A - U S U')^-1 = A^-1 + A^-1 U (I - S U' A^-1 U)^-1 S U' A^-1
+
+    U picks P's columns and S is E's summed S on them.  Example, 2026-10-19: the inverse of 5,720 columns once per
+    rated season and target, then about 1,500 columns for a chunk of three seasons, where a fresh solve factorises
+    all 5,720 (5.9 s).
+    """
+
+    def __init__(self, sums: SeasonSums, unseen, penalties=(40000.0, 40000.0, 0.0), team_penalties=(0.0, 0.0)):
+        n_players = len(sums.player_ids)
+        self.player_ids, self.min_possessions = sums.player_ids, sums.min_possessions
+        self.parts = {season: sums.profiled(season, penalties, team_penalties) for season in sums._kept(unseen)}
+        matrix = np.diag(np.concatenate([np.full(n_players, float(penalties[0])),
+                                         np.full(n_players, float(penalties[1]))]))
+        self.rhs, self.possessions = np.zeros(2 * n_players), np.zeros(n_players)
+        for both_sides, gram, rhs, columns, possessions in self.parts.values():
+            matrix[np.ix_(both_sides, both_sides)] += gram
+            self.rhs[both_sides] += rhs
+            self.possessions[columns] += possessions
+        self.inverse = scipy.linalg.cho_solve(scipy.linalg.cho_factor(matrix), np.eye(len(matrix)))
+        self.theta = self.inverse @ self.rhs
+
+    def solve(self, out) -> tuple[np.ndarray, np.ndarray]:
+        """(theta, possessions): the player coefficients, [offence | defence], and each player's possessions with
+        the seasons `out` left out as well."""
+        removed = [self.parts[season] for season in sorted(out) if season in self.parts]
+        if not removed:
+            return self.theta, self.possessions
+        touched = np.unique(np.concatenate([part[0] for part in removed]))
+        gram = np.zeros((len(touched), len(touched)))
+        rhs, possessions = self.rhs.copy(), self.possessions.copy()
+        for both_sides, season_gram, season_rhs, columns, season_possessions in removed:
+            where = np.searchsorted(touched, both_sides)
+            gram[np.ix_(where, where)] += season_gram
+            rhs[both_sides] -= season_rhs
+            possessions[columns] -= season_possessions
+        base = self.inverse @ rhs
+        middle = np.eye(len(touched)) - gram @ self.inverse[np.ix_(touched, touched)]
+        theta = base + self.inverse[:, touched] @ np.linalg.solve(middle, gram @ base[touched])
+        return theta, possessions
+
+    def ratings(self, out) -> pd.DataFrame:
+        """`SeasonSums.ratings` with the seasons `out` left out as well as the unseen ones."""
+        theta, possessions = self.solve(out)
+        n_players = possessions.size
+        keep = possessions >= self.min_possessions
+        return pd.DataFrame({"player_id": self.player_ids[keep], "offense": theta[:n_players][keep],
+                             "defense": theta[n_players:2 * n_players][keep], "possessions": possessions[keep]})
+
+
+def outside_labels(sums: dict, unseen, season_sets, label_settings, targets) -> dict:
+    """{seasons: {"O": offence labels, "D": defence labels}} for each set of seasons in `season_sets`: what
+    `career_labels` gives with those seasons left out as well as `unseen`, through `LeaveOut`.
+
+    A training row of the prior that averages a player's box score over some seasons is labelled with his RAPM over
+    the other seasons, so the box score and the label it is fitted to share no game (the owner, 2026-10-19: "try it
+    on the prior first"; notes/DECISIONS.md, experiment 79; experiment 25 the first try, 2026-09-29).
+
+    Example: rating 2010 in the test setting, the chunk row of a player's 2003 and 2004 is labelled with his RAPM
+    over every season but 2003, 2004, 2009, 2010 and 2011.
+    """
+    penalties = (label_settings.offense_penalty, label_settings.defense_penalty, label_settings.context_penalty)
+    team_penalties = (label_settings.team_offense_penalty, label_settings.team_defense_penalty)
+    fits = {target: LeaveOut(sums[target], unseen, penalties, team_penalties) for target in targets.distinct()}
+    out = {}
+    for seasons in season_sets:
+        tables = {}
+        for side, column, target, penalty in (("O", "offense", targets.offence, label_settings.offense_penalty),
+                                              ("D", "defense", targets.defence, label_settings.defense_penalty)):
+            table = fits[target].ratings(seasons)
+            if column in label_settings.unshrink_columns:
+                table = unshrink(table, column, penalty, label_settings.full_trust_possessions,
+                                 label_settings.tier_edges)
+            tables[side] = table
+        out[frozenset(int(season) for season in seasons)] = tables
     return out

@@ -32,9 +32,10 @@ outputs/season_ratings_check_step3.parquet, whose values equal the 2026 rows of 
 from __future__ import annotations
 
 import time
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from .. import box_prior, prior_rapm, prior_shrink, rapm, swap_adjust, swap_test
@@ -45,7 +46,7 @@ from ..data.roles import main_teams
 from ..data.seasons import all_seasons, trainable
 from ..data.stints import load_season_stints
 from ..data.tables import design_row_teams, player_names
-from ..data.within_folds import check_fold_files, load_folds
+from ..data.within_folds import check_fold_files, fold_games, load_folds
 
 SIDES = ("O", "D")
 SIDE_WORDS = {"offense": "offence", "defense": "defence"}     # the tables' side keys as printed, offence first
@@ -119,6 +120,14 @@ def saved_side(prior: box_prior.SidePrior, params: dict, settings, unseen) -> di
     return out
 
 
+def outside_row_labels(sums: dict, panel: pd.DataFrame, unseen, settings) -> dict:
+    """rapm.outside_labels for every set of seasons a chunk row of either side averages (experiment 79)."""
+    training = panel[~panel.season.isin(unseen)]
+    season_sets = set().union(*(box_prior.chunk_season_sets(training[training.side == side], settings.prior.chunk_sizes)
+                                for side in SIDES))
+    return rapm.outside_labels(sums, unseen, sorted(season_sets, key=sorted), settings.labels, settings.targets)
+
+
 def rate_one_season(season: int, sums: dict, panel: pd.DataFrame, designs: DesignCache, settings, params: dict):
     """The end of step 1 (labels), step 2 (priors) and step 3 (ridge) for one season.
 
@@ -126,7 +135,8 @@ def rate_one_season(season: int, sums: dict, panel: pd.DataFrame, designs: Desig
     """
     unseen = unseen_seasons(season, settings)
     labels = rapm.career_labels(sums, unseen, settings.labels, settings.targets)
-    priors = box_prior.season_priors(labels, panel, season, unseen, settings, params)
+    outside = outside_row_labels(sums, panel, unseen, settings) if settings.prior.row_labels == "outside" else None
+    priors = box_prior.season_priors(labels, panel, season, unseen, settings, params, outside)
     season_designs = {target: designs.season(season, target) for target in settings.targets.distinct()}
     values = {side: priors[side].values for side in SIDES}
     return prior_rapm.rate_season(season_designs, values, settings, season), priors, unseen
@@ -166,7 +176,7 @@ def models_meta(settings, name: str, argv) -> dict:
     """
     return dict(schema=3, settings=asdict(settings), argv=list(argv),
                 exclude_neighbours=settings.exclude_neighbours, features=settings.prior.feature_set,
-                rows="chunks", chunk_label="career", unshrink=list(settings.labels.unshrink_columns),
+                rows="chunks", chunk_label=settings.prior.row_labels, unshrink=list(settings.labels.unshrink_columns),
                 player_folds=settings.prior.n_folds, booster_params=booster_name(settings), crossfit="scale",
                 pad_once=False, out=f"season_ratings_{name}_step3.parquet")
 
@@ -280,24 +290,40 @@ def folds_missing_message(directory: Path, shrink, problem: Exception) -> str:
             f"or name a folder that holds them with --folds TAG (a folder under {directory.parent}).")
 
 
-def shrink_seasons(cfg: dict, table: pd.DataFrame, settings) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Step 4 on a step-3 table: (the shrunk table, the multipliers of every season).
+def step4_folds(cfg: dict, shrink) -> tuple[list, dict]:
+    """(every fold step 4 reads, {stem: its folder}): paths.within/<settings.shrink.folds_tag>, their seasons pinned to
+    settings.shrink.fold_seasons.  Step 5 reads the same folds (`held_back_type_grams`)."""
+    folds, where = [], {}
+    for tag in fold_tags(shrink):
+        directory = resolve(cfg, "within") / tag
+        for fold in load_folds(directory, shrink.fold_seasons):
+            folds.append(fold)
+            where[fold.stem] = directory
+    return folds, where
 
-    The folds are paths.within/<settings.shrink.folds_tag>, their seasons pinned to settings.shrink.fold_seasons.
-    The multipliers table also names the fold folder and the first and last fold season read, so a step-4 table
-    can be traced to the folds that shrank it.
-    """
-    shrink = settings.shrink
-    folds = [fold for tag in fold_tags(shrink) for fold in load_folds(resolve(cfg, "within") / tag,
-                                                                       shrink.fold_seasons)]
+
+def step4_multipliers(seasons, folds: list, shrink) -> pd.DataFrame:
+    """`prior_shrink.multipliers_by_season` for `seasons`, the defence factor applied, with the fold folder and the
+    first and last fold season read, so a step-4 table can be traced to the folds that shrank it."""
     fold_seasons = sorted({fold.season for fold in folds})
-    multipliers = prior_shrink.multipliers_by_season(table.season.unique(), folds, shrink.rule,
-                                                     shrink.nearest, shrink.free_games_part).assign(
+    multipliers = prior_shrink.multipliers_by_season(seasons, folds, shrink.rule, shrink.nearest,
+                                                     shrink.free_games_part).assign(
         fold_tag=shrink.folds_tag, fold_first=fold_seasons[0], fold_last=fold_seasons[-1])
     if shrink.defence_factor != 1.0:
         multipliers["multiplier_def"] *= shrink.defence_factor
         if shrink.free_games_part:
             multipliers["games_multiplier_def"] *= shrink.defence_factor
+    return multipliers
+
+
+def shrink_seasons(cfg: dict, table: pd.DataFrame, settings,
+                   folds: list | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Step 4 on a step-3 table: (the shrunk table, the multipliers of every season).  `folds` defaults to
+    `step4_folds`'s."""
+    shrink = settings.shrink
+    folds = step4_folds(cfg, shrink)[0] if folds is None else folds
+    multipliers = step4_multipliers(table.season.unique(), folds, shrink)
+    if shrink.defence_factor != 1.0:
         print(f"  step 4: both defensive multipliers times {shrink.defence_factor:g}", flush=True)
     nearest = f", the {shrink.nearest} nearest fold seasons" if shrink.nearest else ""
     print(f"  step 4: {len(folds)} folds of {shrink.folds_tag} ({shrink.fold_seasons[0]}-{shrink.fold_seasons[1]}), "
@@ -332,14 +358,19 @@ def run_shrink(cfg: dict, settings, base: str, name: str) -> int:
 
 
 # ------------------------------------------------------------------------------------------- step 5
+def season_lineup_rows(cfg: dict, season: int) -> pd.DataFrame:
+    """One season's stints as swap_test.season_rows, the rows every lineup of step 5 is built from."""
+    stints = load_season_stints(season, cfg, swap_test.STINT_COLUMNS)
+    return swap_test.season_rows(stints, margin_clip=float(cfg.get("margin_clip", 25)))
+
+
 def collect_swaps(cfg: dict, raw: pd.DataFrame, features: pd.DataFrame, fold_of: pd.Series, n_folds: int) -> dict:
-    """{season: swap_adjust.SeasonSwaps} for every season of `raw` (the table in raw sign), ascending."""
+    """{season: swap_adjust.SeasonSwaps} for every season of `raw` (the table in raw sign), ascending: each season's
+    whole-season swaps and each player's possessions for each team, which the give-back reads."""
     started = time.time()
-    margin_clip = float(cfg.get("margin_clip", 25))
     swaps = {}
     for season in sorted(int(season) for season in raw.season.unique()):
-        stints = load_season_stints(season, cfg, swap_test.STINT_COLUMNS)
-        lineups = swap_test.prepare(swap_test.season_rows(stints, margin_clip=margin_clip), season)
+        lineups = swap_test.prepare(season_lineup_rows(cfg, season), season)
         swaps[season] = swap_adjust.season_swaps(lineups, raw[raw.season == season],
                                                  swap_adjust.season_features(features, season), fold_of, n_folds)
     pairs = sum(len(kept.pairs["offense"]) for kept in swaps.values())
@@ -348,13 +379,65 @@ def collect_swaps(cfg: dict, raw: pd.DataFrame, features: pd.DataFrame, fold_of:
     return swaps
 
 
-def swap_seasons(cfg: dict, table: pd.DataFrame, settings) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Step 5 on a step-4 table: (the adjusted table, the spread factors, the type model fitted on every season)."""
+def season_held_back_grams(cfg: dict, season: int, season_folds: list, where: dict, factors: tuple, scale: tuple,
+                           n_folds: int) -> dict:
+    """{side: PairGrams}: one season's share of the type model, summed over its folds' held-back games."""
+    rows = season_lineup_rows(cfg, season)
+    game = rows.game_id.astype(str)
+    parts = []
+    for fold in season_folds:
+        _, held_ids = fold_games(where[fold.stem], fold)
+        held = swap_test.prepare(rows[game.isin(held_ids).to_numpy()].reset_index(drop=True), season)
+        table = prior_shrink.shrink_fold(fold.rows, season, factors)
+        features = swap_adjust.fold_type_features(fold.rows["O"], table, *scale)
+        parts.append(swap_adjust.held_back_grams(held, table, features, n_folds))
+    return {side: swap_adjust.add_grams([part[side] for part in parts]) for side in swap_adjust.SIDES}
+
+
+def held_back_type_grams(cfg: dict, table: pd.DataFrame, panel: pd.DataFrame, folds: list, where: dict,
+                         multipliers: pd.DataFrame, settings) -> dict:
+    """{season: {side: PairGrams}}: the type model's training equations, each season's from the held-back games of
+    its within-season folds (swap_adjust, "Since experiment 80"), each fold scored at its season's step-4
+    multipliers.  The type features are read on `table`'s scale."""
+    started = time.time()
+    scale = swap_adjust.feature_scale(panel, table)
+    by_season: dict = {}
+    for fold in folds:
+        by_season.setdefault(fold.season, []).append(fold)
+    grams = {season: season_held_back_grams(cfg, season, by_season[season], where,
+                                            prior_shrink.season_factors(multipliers, season), scale,
+                                            settings.swap.n_folds)
+             for season in sorted(by_season)}
+    print(f"  step 5: the type model's swaps from the held-back games of {len(folds)} folds over {len(grams)} "
+          f"seasons ({time.time() - started:.0f}s)", flush=True)
+    return grams
+
+
+def no_grams(n_features: int, n_folds: int) -> dict:
+    """{side: zero PairGrams}: a season without folds trains nothing."""
+    zero = swap_adjust.PairGrams(G=np.zeros((n_features, n_features)), b=np.zeros(n_features),
+                                 G_fold=np.zeros((n_folds, n_features, n_features)),
+                                 b_fold=np.zeros((n_folds, n_features)), n=0)
+    return {side: zero for side in swap_adjust.SIDES}
+
+
+def swap_seasons(cfg: dict, table: pd.DataFrame, settings, folds: list | None = None, where: dict | None = None,
+                 multipliers: pd.DataFrame | None = None) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Step 5 on a step-4 table: (the adjusted table, the spread factors, the type model fitted on every season).
+
+    The type model trains on the within-season folds' held-back games (`held_back_type_grams`); `folds`, `where` and
+    `multipliers` default to step 4's, read again from the folds when not handed in."""
     panel, trainable_seasons = panel_and_trainable_seasons(cfg)
+    if folds is None:
+        folds, where = step4_folds(cfg, settings.shrink)
+        multipliers = step4_multipliers(table.season.unique(), folds, settings.shrink)
     raw = swap_test.ratings_in_raw_sign(table)
     features = swap_adjust.type_features(panel, table)
     fold_of = swap_adjust.player_folds(raw.player_id, settings.swap.n_folds)
     swaps = collect_swaps(cfg, raw, features, fold_of, settings.swap.n_folds)
+    grams = held_back_type_grams(cfg, table, panel, folds, where, multipliers, settings)
+    empty = no_grams(features.shape[1], settings.swap.n_folds)
+    swaps = {season: replace(kept, grams=grams.get(season, empty)) for season, kept in swaps.items()}
     predictions = swap_adjust.type_predictions(features, swaps, fold_of, trainable_seasons, settings.swap)
     main_team = main_teams(cfg).set_index(["player_id", "season"]).team_id
     adjusted, factors = swap_adjust.adjust(table, raw, swaps, predictions, main_team, settings.swap)
@@ -388,6 +471,7 @@ def run_swap(cfg: dict, settings, base: str, name: str, with_types: bool = False
     source, path = outputs / f"{base}.parquet", outputs / f"season_ratings_{name}.parquet"
     if source.resolve() == path.resolve():
         raise SystemExit(f"--name {name} would overwrite the table it reads; give another --name")
+    require_folds(cfg, settings.shrink)
     adjusted, _, types = swap_seasons(cfg, pd.read_parquet(source), settings)
     write_table(adjusted, path, started)
     if with_types:
@@ -405,8 +489,9 @@ def run_build(cfg: dict, settings, seasons, name: str, save_models: str | None =
     seasons = check_seasons(seasons, cfg)
     require_folds(cfg, settings.shrink)
     step3, models = rate_table(cfg, settings, seasons, keep_models=bool(save_models))
-    step4, multipliers = shrink_seasons(cfg, step3, settings)
-    final, _, types = swap_seasons(cfg, step4, settings)
+    folds, where = step4_folds(cfg, settings.shrink)
+    step4, multipliers = shrink_seasons(cfg, step3, settings, folds)
+    final, _, types = swap_seasons(cfg, step4, settings, folds, where, multipliers)
     outputs = resolve(cfg, "outputs")
     print()
     for table, suffix in ((step3, "_step3"), (step4, "_step4"), (final, "")):

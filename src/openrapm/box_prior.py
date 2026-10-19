@@ -21,7 +21,9 @@ Words used below
 
 Every row carries the player's career label, so what differs between his rows is only how much evidence the
 box score rests on; two inputs say how much (`row_possessions`, the possessions behind the row, and
-`row_seasons`, the seasons it covers).  The weights:
+`row_seasons`, the seasons it covers).  With `settings.PriorSettings.row_labels` "outside" (experiment 79) each chunk
+row carries instead his RAPM over the seasons outside its own, and the career row, whose box score covers them all,
+is dropped: no row's label shares a game with its box score.  The weights:
 
     career row      weight = L
     chunk row c     weight = L x poss_c / (sum of poss over his chunk rows)
@@ -70,7 +72,8 @@ import pandas as pd
 
 from .features import FEATURE_SETS, MISSING_OK, PANEL_INPUTS, ROW_FEATURES, add_features
 
-__all__ = ["average_over_seasons", "career_rows", "season_runs", "training_rows", "balanced_player_folds",
+__all__ = ["average_over_seasons", "career_rows", "season_runs", "chunk_seasons", "chunk_season_sets",
+           "training_rows", "balanced_player_folds",
            "LIGHTGBM_FIXED", "COLUMN_SHARES", "INPUT_CLIP", "ClippedBooster", "fit_lightgbm", "OutOfPlayerPrior",
            "fit_out_of_player", "BaggedPrior", "player_bootstrap", "fit_prior", "rated_rows", "predict", "SidePrior",
            "era_kernel", "season_priors"]
@@ -150,14 +153,39 @@ def season_runs(rows: pd.DataFrame, chunk_sizes=(1, 2, 3)) -> pd.DataFrame:
     return pd.concat(parts, ignore_index=True)
 
 
+def chunk_seasons(members: pd.DataFrame) -> pd.Series:
+    """chunk key -> the seasons the chunk row averages, a frozenset; `members` is `season_runs`'s output."""
+    return members.groupby("chunk").season.agg(lambda seasons: frozenset(int(season) for season in seasons))
+
+
+def chunk_season_sets(rows: pd.DataFrame, chunk_sizes=(1, 2, 3)) -> set:
+    """Every distinct set of seasons a chunk row of `rows` averages: the solves outside labels need
+    (rapm.outside_labels)."""
+    return set(chunk_seasons(season_runs(rows, chunk_sizes)))
+
+
+def _outside_values(chunks: pd.DataFrame, members: pd.DataFrame, outside: dict, column: str) -> np.ndarray:
+    """Each chunk row's label from his RAPM over the seasons outside its own: `outside` maps a set of seasons to the
+    label table with those seasons left out; NaN where the player has no label there."""
+    seasons = chunk_seasons(members).reindex(chunks.index)
+    tables = {key: table.set_index("player_id")[column] for key, table in outside.items()}
+    return np.array([tables[key].get(player, np.nan) for key, player in zip(seasons, chunks.player_id)], dtype=float)
+
+
 def training_rows(label: pd.DataFrame, rows: pd.DataFrame, column: str, feature_names, chunk_sizes=(1, 2, 3),
-                  panel_columns=PANEL_INPUTS) -> pd.DataFrame:
+                  panel_columns=PANEL_INPUTS, outside: dict | None = None) -> pd.DataFrame:
     """The career row and every chunk row of each labelled player, indexed by player_id.
 
     `label` is step 1's table for this side (player_id, `column`, possessions); `rows` the side's panel rows for
     the training seasons.  The row order (career rows by player, then chunk rows by run key) is what LightGBM
     is handed, so it is kept exactly.  Columns beside the averaged inputs: `column`, label_possessions, label,
     row_weight, row_possessions, row_seasons.
+
+    With `outside` ({set of seasons: this side's label table with those seasons left out}, rapm.outside_labels),
+    each chunk row is labelled with the player's RAPM over the seasons outside its own, so its box score and its
+    label share no game; a chunk without such a label is dropped, and so is the career row, whose box score covers
+    every season (notes/DECISIONS.md, experiment 79).  The weights stay the career label's: each player's chunk
+    rows together weigh the possessions behind his career label.
     """
     _refuse_clashes(feature_names)
     per_player = rows.groupby("player_id")
@@ -171,12 +199,14 @@ def training_rows(label: pd.DataFrame, rows: pd.DataFrame, column: str, feature_
     chunks["row_seasons"] = grouped.season.nunique().reindex(chunks.index).to_numpy(float)
     chunks["player_id"] = grouped.player_id.first().reindex(chunks.index).to_numpy()
     chunks = chunks.join(_labels(label, column), on="player_id", how="inner")
+    if outside is not None:
+        chunks[column] = _outside_values(chunks, members, outside, column)
     chunks = chunks.dropna(subset=[name for name in [*feature_names, column] if name not in MISSING_OK])
     chunks = chunks.set_index("player_id")
     share = chunks.row_possessions / chunks.groupby(level=0).row_possessions.transform("sum")
     chunks = chunks.assign(label=chunks[column].to_numpy(float),
                            row_weight=(share * chunks.label_possessions).to_numpy(float))
-    return pd.concat([career, chunks])
+    return chunks if outside is not None else pd.concat([career, chunks])
 
 
 def _player_means(label, players, weights):
@@ -385,7 +415,8 @@ def era_kernel(seasons, rated: int, half_life: float, start: int = 1) -> np.ndar
     return 0.5 ** (distance / float(half_life))
 
 
-def season_priors(labels: dict, panel: pd.DataFrame, season: int, unseen, settings, params: dict) -> dict:
+def season_priors(labels: dict, panel: pd.DataFrame, season: int, unseen, settings, params: dict,
+                  outside: dict | None = None) -> dict:
     """{"O": SidePrior, "D": SidePrior} for one rated season.
 
     `labels` is step 1's {"O", "D"} tables; `panel` the season panel with the seasons a build may not train on
@@ -393,7 +424,8 @@ def season_priors(labels: dict, panel: pd.DataFrame, season: int, unseen, settin
     `unseen` the seasons no training row may come from (the rated one, plus its neighbours in the test
     setting); `params` each side's LightGBM settings.  Inputs: the shipped list, then row_possessions, row_seasons.
     With an era half-life every training row also counts its era kernel (`era_kernel`), averaged over its seasons
-    by possessions like an input.
+    by possessions like an input.  With `outside` (rapm.outside_labels), every training row is labelled from the
+    seasons outside its own (`training_rows`).
     """
     half_life = float(settings.prior.era_halflife)
     out = {}
@@ -406,7 +438,9 @@ def season_priors(labels: dict, panel: pd.DataFrame, season: int, unseen, settin
             training = training.assign(era_kernel=era_kernel(training.season, season, half_life,
                                                              settings.exclude_neighbours + 1))
             columns = [*PANEL_INPUTS, "era_kernel"]
-        train = training_rows(labels[side], training, column, names, settings.prior.chunk_sizes, columns)
+        side_outside = None if outside is None else {key: tables[side] for key, tables in outside.items()}
+        train = training_rows(labels[side], training, column, names, settings.prior.chunk_sizes, columns,
+                              side_outside)
         kernel = train.era_kernel.to_numpy(float) if half_life > 0 else None
         model = fit_prior(train, names + ROW_FEATURES, params[side], settings.prior.n_folds,
                           settings.prior.fold_assignment, kernel, settings.prior.bags)

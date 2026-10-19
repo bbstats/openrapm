@@ -171,3 +171,39 @@ def test_the_games_part_freed_recovers_both_planted_multipliers_and_is_applied()
     out = ps.shrink(rows, table)
     assert np.allclose(out.u_off, [0.65, -0.65]) and np.allclose(out.u_def, [0.3, -0.3])
     assert np.allclose(out.rating_off, out.prior_off + out.u_off)
+
+
+# ------------------------------------------------------------------ step 4 on one within-season fold (experiment 80)
+def _fold_rows(n=30, seed=3):
+    rng = np.random.default_rng(seed)
+    table = pd.DataFrame({"player_id": np.arange(n, dtype=np.int64), "season": 2024,
+                          "prior_off": rng.normal(0, 2, n), "prior_def": rng.normal(0, 1, n),
+                          "u_off": rng.normal(0, 1, n), "u_def": rng.normal(0, 1, n),
+                          "poss_off": rng.uniform(10, 3000, n), "poss_def": rng.uniform(10, 3000, n)})
+    for side in ("off", "def"):
+        table[f"rating_{side}"] = table[f"prior_{side}"] + table[f"u_{side}"]
+    return table
+
+
+def test_step_4_on_a_folds_rows_is_step_4_on_a_table():
+    """Both parts multiplied and each side re-centred: prior_shrink.shrink on the same rows."""
+    table = _fold_rows()
+    mine = ps.shrink_fold({"O": table.assign(side="O"), "D": table.assign(side="D")}, 2024, (0.7, 0.8, 1.3, 1.4))
+    multipliers = pd.DataFrame({"season": [2024], "multiplier_off": [0.7], "multiplier_def": [0.8],
+                                "games_multiplier_off": [1.3], "games_multiplier_def": [1.4]})
+    assert ps.season_factors(multipliers, 2024) == (0.7, 0.8, 1.3, 1.4)
+    theirs = ps.shrink(table.assign(rating_total=0.0, offense=0.0, defense=0.0, prior_total=0.0, u_total=0.0,
+                                    prior_offense=0.0, prior_defense=0.0), multipliers)
+    for column in ("rating_off", "rating_def", "prior_off", "prior_def", "u_off", "u_def"):
+        assert np.allclose(mine[column].to_numpy(), theirs[column].to_numpy(), atol=1e-12), column
+
+
+def test_a_player_without_a_defence_row_is_shrunk_as_the_defence_rows_are():
+    table = _fold_rows()
+    defence = table.iloc[1:].assign(side="D")             # player 0: offensive possessions, no defence row
+    mine = ps.shrink_fold({"O": table.assign(side="O"), "D": defence}, 2024, (0.7, 0.8, 1.3, 1.4))
+    rest = ps.shrink_fold({"O": table.iloc[1:].assign(side="O"), "D": defence}, 2024, (0.7, 0.8, 1.3, 1.4))
+    level = 0.8 * defence.prior_def.iloc[0] - rest.prior_def.iloc[0]
+    assert np.isclose(mine.prior_def.iloc[0], 0.8 * table.prior_def.iloc[0] - level)
+    assert np.isclose(mine.u_def.iloc[0], 1.4 * table.u_def.iloc[0])
+    assert np.allclose(mine.rating_def.iloc[1:].to_numpy(), rest.rating_def.to_numpy())

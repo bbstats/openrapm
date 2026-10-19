@@ -220,22 +220,27 @@ five in one process (`src/openrapm/commands/build.py`). Each command writes its 
   is barely identified. Lineup swaps (two lineups of one team that share four players) say which kinds of
   player the ratings give too much or too little credit.
 - **Reads:** a step-4 table with every season, the stints (for the lineup swaps), the season panel (for
-  the type features).
+  the type features), and step 4's within-season folds (`--folds`), which the type model trains on.
 - **Writes:** `outputs/season_ratings_NAME.parquet`; with `--types`, `outputs/NAME_types.csv`.
 - **How:** a type model (a ridge regression of each swap's unexplained result on the difference of the two
-  swapped players' type features: 20 season-panel inputs and step 4's two prior parts, standardised)
-  predicts each player's miss; half of it is applied; each team's total is given back by its own players
-  in proportion to their share of its possessions; the spread inside teams is then held to step 4's. Team
-  totals stay.
+  swapped players' type features: 19 season-panel inputs of the rated season and step 4's two prior parts,
+  standardised) predicts each player's miss; half of it is applied; each team's total is given back by its own
+  players in proportion to their share of its possessions; the spread inside teams is then held to step 4's.
+  Team totals stay. The type model learns from games its inputs were not counted in: each within-season fold's
+  held-back games supply the swaps, scored against the fold's own step-4 ratings, and its fit games supply the
+  type features (experiment 80, adopted 2026-10-19; learned on the same games, it paid players a second time for
+  shots that went in during those games).
 - **Settings:** half strength, the spread held within teams ("The swap adjustment with the spread held: it
   passes", adopted 2026-10-01); the give-back by share of possessions (experiment 41); the type model's
   ridge penalty 1e-4 x the mean diagonal of its Gram matrix, five player folds (player_id % 5). Half,
   because on the swap test half the type prediction kept most of full strength's gain in ordering
   teammates and tied on the gaps between them, where full strength made the gaps worse; the spread held,
   because without it the ratings came out about 12% wider on offence and 27% wider on defence and failed
-  the year-over-year test (z +3.5), and with it they passed (z -5.2, 39 of 56).
-- **Command:** `python -m openrapm swap --base season_ratings_NAME_step4`. A table of one season gets no
-  swap adjustment, because the type model trains on the other seasons of the same table.
+  the year-over-year test (z +3.5), and with it they passed (z -5.2, 39 of 56). Trained on held-back games
+  and without the career count, against step 5 trained on the same games: the with-or-without-you test -0.553,
+  z -12.9, 30 of 30 seasons; year over year -0.156, z -3.1.
+- **Command:** `python -m openrapm swap --base season_ratings_NAME_step4 --folds TAG`, `--folds` step 4's.
+  A table of one season gets no swap adjustment, because the type model trains on the other seasons.
 - **Code:** `src/openrapm/swap_adjust.py`, `swap_test.py` (the lineup swaps).
 
 ## The product setting and the test setting

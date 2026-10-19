@@ -76,7 +76,7 @@ from ..data.shots import DEFENSE_TARGETS, OPPONENT_THREE_LUCK_KEPT, expected_thr
 from ..data.tables import team_of_rows
 from ..features import CLOSENESS, OFF_COURT, ON_MINUS_OFF, PANEL_KEYS, PRIOR_FEATURES, add_features
 from ..scoring import Ratings, armse, predict_season, score
-from ..settings import TEST
+from ..settings import ROW_LABELS, TEST
 
 SIDES = ("O", "D")
 REPEATS = 3
@@ -92,8 +92,9 @@ SETTINGS = TEST
 # the ratings' two (settings.Targets), in the order the leak checks list them
 WORLD_TARGETS = tuple(dict.fromkeys((SCORE_TARGET, OFFENCE, DEFENCE_ALL, SETTINGS.targets.offence,
                                      SETTINGS.targets.defence)))
-# what a saved file's meta must say: the test setting's labels and training rows, the shipped rows and folds
-EXPECTED_META = dict(exclude_neighbours=1, rows="chunks", chunk_label="career", unshrink=["defense"], player_folds=5)
+# what a saved file's meta must say: the test setting's labels and training rows, the shipped rows and folds.  How
+# the training rows were labelled (`chunk_label`, settings.ROW_LABELS) is free: the folds only read the boosters
+EXPECTED_META = dict(exclude_neighbours=1, rows="chunks", unshrink=["defense"], player_folds=5)
 # every column of the player tables: the prior's possible inputs, the off-court record, the score state
 PLAYER_COLUMNS = list(dict.fromkeys(PRIOR_FEATURES + OFF_COURT + ON_MINUS_OFF + CLOSENESS))
 # the share of the opponents' three-point luck each defensive target keeps (data/shots.py), for the outcome pieces
@@ -134,6 +135,8 @@ def check_models(meta: dict) -> None:
     cross-fitting fold, which this command does not.
     """
     wrong = {key: (meta.get(key), value) for key, value in EXPECTED_META.items() if meta.get(key) != value}
+    if meta.get("chunk_label") not in ROW_LABELS:
+        wrong["chunk_label"] = (meta.get("chunk_label"), ROW_LABELS)
     wrong.update(_step3_mismatches(meta))
     if meta.get("crossfit") == "honest":
         raise SystemExit("these boosters priced the prior scale with --crossfit=honest, which `openrapm folds` "

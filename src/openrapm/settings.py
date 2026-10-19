@@ -30,8 +30,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 
-__all__ = ["Targets", "LabelSettings", "PriorSettings", "RidgeSettings", "ShrinkSettings", "SwapSettings",
-           "Settings", "PRODUCT", "TEST"]
+__all__ = ["Targets", "LabelSettings", "PriorSettings", "ROW_LABELS", "RidgeSettings", "ShrinkSettings",
+           "SwapSettings", "Settings", "PRODUCT", "TEST"]
 
 
 @dataclass(frozen=True)
@@ -126,6 +126,14 @@ class PriorSettings:
     # (box_prior.BaggedPrior; notes/DECISIONS.md, experiment 78, adopted 2026-10-17: "Adopt and publish"; one
     # booster before it)
     bags: int = 10
+    # what each training row is labelled with.  "career": every row of a player carries his RAPM over every training
+    # season, its own included (shipped).  "outside": each chunk row carries his RAPM over the seasons outside its
+    # own and the career row is dropped, so no label shares a game with its row's box score (box_prior.training_rows;
+    # notes/DECISIONS.md, experiment 79, the owner, 2026-10-19: "try it on the prior first")
+    row_labels: str = "career"
+
+
+ROW_LABELS = ("career", "outside")
 
 
 @dataclass(frozen=True)
@@ -176,7 +184,9 @@ class SwapSettings:
     Two rules have no setting, because only one of each ever shipped: the give-back takes a team's total back
     from its players in proportion to their share of its possessions (notes/DECISIONS.md, experiment 41), and the
     spread is held inside teams, one factor per season and side (notes/DECISIONS.md, "The swap adjustment with the
-    spread held: it passes").
+    spread held: it passes").  Nor does where the type model learns: since experiment 80 (adopted 2026-10-19) from
+    the within-season folds' held-back games, its inputs from the fit games, so a box count never meets the results
+    it was counted in; the folds are step 4's (`ShrinkSettings.folds_tag`).
     """
     # the share of the type model's prediction applied: half (kappa in notes/DECISIONS.md, "The swap adjustment with
     # the spread held: it passes", adopted 2026-10-01: "Team version.")

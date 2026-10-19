@@ -36,7 +36,8 @@ import scipy.sparse as sp
 
 from .legacy_names import translate_frame
 
-__all__ = ["Fold", "read_fold", "fold_stems", "check_fold_record", "check_repeats", "check_fold_files", "load_folds"]
+__all__ = ["Fold", "read_fold", "fold_stems", "check_fold_record", "check_repeats", "check_fold_files", "load_folds",
+           "fold_games"]
 
 FOLDS_PER_REPEAT = frozenset({0, 1, 2, 3})
 
@@ -183,3 +184,20 @@ def load_folds(directory: Path, seasons: tuple[int, int]) -> list[Fold]:
     repeats each, four folds a repeat.
     """
     return [read_fold(Path(directory), stem) for stem in check_fold_files(directory, seasons)]
+
+
+def fold_games(directory: Path, fold: Fold) -> tuple[set, set]:
+    """(fit games, held-back games) of a fold, as game ids: its season's assignment, folds_<season>.parquet, column
+    r<repeat>.  The held-back games must be the ones its test file stores; a ValueError says so if not.
+
+    Example: 2024, repeat 0, fold 0 holds back 328 of the season's 1,312 games and fits on the other 984.
+    """
+    directory = Path(directory)
+    assignment = pd.read_parquet(directory / f"folds_{fold.season}.parquet")
+    held_mask = assignment[f"r{fold.repeat}"].to_numpy() == fold.fold
+    games = assignment.index.astype(str)
+    held = set(games[held_mask])
+    stored = set(np.load(directory / f"test_{fold.stem}.npz", allow_pickle=True)["game_id"].astype(str))
+    if stored != held:
+        raise ValueError(f"{fold.stem}: the test file holds {len(stored)} games, the assignment {len(held)}")
+    return set(games[~held_mask]), held

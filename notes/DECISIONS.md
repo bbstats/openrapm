@@ -7754,3 +7754,110 @@ the target is y' − R, where the old luck is in R but not in y', so the sign tu
   say otherwise: the spread is wider because less of the box counts' credit has to be taken back through the prior.
 - A fold edge case: 2015, repeat 0, fold 2 rates a player with one offensive possession and no defence row; his
   defence parts come from his offence row, shrunk as the defence rows were, and weigh nothing.
+
+## Experiment 79: the prior's training rows labelled from outside their own seasons (the owner, 2026-10-19: "since this is post hoc we should try it on the prior first"; registered before any result)
+
+**Why.**  Check 153 found step 5 learning same-games luck: its features and its target were counted in the same
+games.  The prior has a milder form of it.  Every training row of a player, his career row and his 1-, 2- and
+3-season chunk rows, carries his RAPM over every training season, so a row's box score and its label share games: a
+lucky three-point stretch sits in both.  Experiment 25 (2026-09-29) labelled the chunk rows from outside the chunk
+and kept the career row; it lost on the year-over-year test, z +5.0, and was never read on the decider, which did not
+exist yet.
+
+**The change.**  `openrapm rate --row-labels outside` (settings.PriorSettings.row_labels; box_prior.training_rows,
+rapm.outside_labels).  Each chunk row is labelled with the player's RAPM over the training seasons outside the chunk;
+a chunk with no labelled season outside it is dropped; the career row, whose box score covers every season, is
+dropped.  The weights stay the career label's, so each player's rows weigh the possessions behind his career label;
+experiment 25b's weighting by each label's own possessions weighted by career length and failed.  Everything else
+is the incumbent's.
+
+**The cost.**  One RAPM per set of seasons left out: 276 sets for 2010 at the test setting.  `rapm.LeaveOut` solves
+each season's normal equations with its context eliminated, inverts the kept seasons' matrix once per rated season
+and target, and takes each set out exactly by the Woodbury identity on that set's players: 0.35 s a set for both
+targets against 11.8 s for two fresh solves; it matches the direct solve to 1.9e-7 on 2010.  Tests:
+tests/test_rapm.py and tests/test_box_prior.py.
+
+**The run.**  `bash scripts/experiment_chain.sh outside79 points_with_expected_opponent_threes "--row-labels outside"`,
+its own folds for all thirty seasons; the decider against `bags10` with `noise_bags10` beside it, the guard, the 2026
+top 20.
+
+**Result, 2026-10-19** (`outputs/outside79_chain.log`, `outputs/csv/wowy_outside79*.csv`).  Each minus the incumbent,
+season by season; below 0 is better.
+
+| reading | change | standard error | paired z | seasons better |
+|---|---|---|---|---|
+| decider, step 4, every held-back stint | +0.063 | 0.053 | +1.20 | 15 of 30 |
+| decider, games with a regular out | +0.118 | 0.055 | +2.17 | 11 of 30 |
+| decider, 1997-2006 | -0.090 | 0.070 | -1.28 | 7 of 10 |
+| decider, 2007-2016 | -0.081 | 0.068 | -1.20 | 8 of 10 |
+| decider, 2017-2026 | +0.360 | 0.050 | +7.23 | 0 of 10 |
+| guard, team-game, both directions | -0.016 | 0.036 | -0.45 | 27 of 56 |
+| noise control on the decider | -0.003 | 0.011 | -0.33 | 14 of 30 |
+
+- A tie overall that is not one thing: before 2017 every era leans better, 15 of 20 seasons; from 2017 every season
+  is worse.  2017 is when the per-game hustle inputs begin; why the change hurts exactly there is not known yet.
+- The prior scale rises, 5.59 / 4.04 in 1997 against 3.90 / 3.69: the ridge stretches the new prior further, as in
+  experiment 25.
+- 2026 top 20, total per 100: Giannis +1.23, 5th to 4th; Dončić +0.56; Ty Jerome +0.54; Moussa Diabaté +0.26; Alex
+  Caruso -0.32; Paul Reed -0.30; Isaiah Hartenstein in, Bam Adebayo 19th to 21st out.  Median move for players with
+  1,000+ possessions 0.12, the 90th percentile 0.30.
+- **Not adopted**, the owner, 2026-10-19: "leave as is for now".  The option stays in the code, off by default.
+
+## Experiment 80: step 5 cross-fitted, its inputs from the rated season only (the owner, 2026-10-19: "fix step 5 but - yes it must ONLY come from the season in question", then "leave as is for now. continue"; registered before any result)
+
+**The change.**  Two parts, both from check 153.  (1) The type model is fitted on the within-season folds of the
+seasons more than one away in the test setting: each fold's type features from its fit games, its swaps from its
+held-back games, scored against the fold's step-4 ratings, each player's own swaps left out; check 153's
+`step5_other`.  (2) Seasons played before this one, a career count, leaves the type features: 21 inputs, all from the
+rated season.  Everything else is shipped step 5: half strength, the give-back, the spread held inside teams.
+
+**How it is read.**  Step 5 is not in the chain's folds, so check 153 scores it: `step5_other_single` on all 360 folds
+of `bags10` and of `noise_bags10` through check 151's decider, and on the whole-season test table for the guard and
+the 2026 top 20, against shipped step 5 (`step5`).  `step5_single`, shipped step 5 without the career count, splits
+the two parts.  The type model's normal equations are the ones check 153 cached; leaving one input out of them is
+exact.  If adopted, the build's step 5 must reproduce check 153's table before anything ships.
+
+**Result, 2026-10-19** (`outputs/swap_audit/chain.log`, `decider_swap_audit*.csv`, `readings_swap_audit.csv`,
+`outputs/yoy_exp80.parquet`).  `step5_other_single` minus shipped step 5, season by season; below 0 is better.
+
+| reading | change | standard error | paired z | seasons better |
+|---|---|---|---|---|
+| decider, every held-back stint | -0.553 | 0.043 | -12.94 | 30 of 30 |
+| decider, games with a regular out | -0.534 | 0.053 | -10.06 | 29 of 30 |
+| decider, 1997-2006 | -0.451 | 0.049 | -9.26 | 10 of 10 |
+| decider, 2007-2016 | -0.564 | 0.086 | -6.55 | 10 of 10 |
+| decider, 2017-2026 | -0.644 | 0.076 | -8.48 | 10 of 10 |
+| noise control, the candidate on `noise_bags10` against `bags10` | +0.001 | 0.010 | | |
+| guard, team-game, both directions | -0.156 | 0.051 | -3.05 | 39 of 56 |
+| swap test, net order | -0.003 | 0.020 | -0.16 | 30 of 56 |
+| swap test, net gaps | -0.273 | 0.140 | -1.95 | 35 of 56 |
+
+- The career count alone, `step5_single` against `step5`: decider -0.007, guard +0.006; it did nothing, as its
+  coefficients said.  The whole gain is the cross-fitting.
+- 2026 top 20, test table, total per 100 against shipped: Ty Jerome -0.68, 10th to 20th; Paul Reed -0.66; Cade
+  Cunningham +0.53; Giannis -0.51; Bam Adebayo +0.49; Kawhi Leonard -0.39; Jimmy Butler -0.36; Neemias Queta -0.35;
+  Cason Wallace +0.35.  Donovan Mitchell and Scottie Barnes come in, Butler and Reed go out.
+- It passes the adoption rule: decider z -12.9 with the noise control's standard error 0.010, the guard better.
+
+## Experiment 80 ADOPTED (2026-10-19, the owner: "ok yeah - this looks much better anecdotally so - adopt")
+
+- **The code.**  `swap_adjust.TYPE_FEATURES` loses seasons played before this one: 21 inputs.  The build trains the
+  type model on each season's within-season folds (`build.held_back_type_grams`): every fold of step 4's folders is
+  shrunk at its season's step-4 multipliers (`prior_shrink.shrink_fold`, `season_factors`), its type features read
+  from its fit games on the table's scale (`swap_adjust.feature_scale`, `fold_type_features`), its held-back games'
+  swaps scored against it (`swap_adjust.held_back_grams`), and the season's folds summed (`add_grams`).  The
+  give-back, the re-centring and the spread hold still read the whole season.  `openrapm swap` takes step 4's fold
+  options (`--folds` and the rest), and the chain hands it the candidate's folds.  Check 153 keeps auditing step 5
+  as it was, with its own 22-input list, and reads the shared fold code; check 113 trains as the build does.
+- **The reproduction.**  `openrapm swap --setting test --base season_ratings_bags10_step4 --name crossfit80` equals
+  check 153's `step5_other_single` table to 4.4e-15 on every rating.
+- **The product.**  `openrapm swap --base season_ratings_product_step4 --name product_crossfit80`, then put in place
+  as `season_ratings_product.parquet`; the old table is `season_ratings_product_before_crossfit80.parquet`.  Spread
+  factors 0.934 on offence, 0.847 on defence.  2026 top 20, total per 100: Ty Jerome -0.82, 16th to 30th; Paul Reed
+  -0.73, 12th to 25th; Giannis -0.55, 5th to 6th; Kawhi Leonard -0.41; Neemias Queta -0.35; Cade Cunningham +0.54,
+  19th to 13th; Bam Adebayo +0.48, 15th to 11th; Cason Wallace +0.34.  In: Scottie Barnes, Donovan Mitchell, Dyson
+  Daniels; out: Ty Jerome, Paul Reed, Mitchell Robinson.  The site's files rebuilt, every check passing.
+- **The incumbent** for scoring is `crossfit80`: `outputs/season_ratings_crossfit80.parquet` beside copies of bags10's
+  `_step3` and `_step4`, its folds bags10's.  The slow golden test of step 5 reads a new pair,
+  `golden/crossfit80/` in the verification copies; the weightfix pair stays beside it.
+- **Tests.**  `pytest -q` 686 passed; `pytest -m slow` the step-5 golden pair byte for byte.

@@ -110,8 +110,10 @@ seasons either side, the two swapped players' rating gap against the swap's resu
 **Main team.** The team a player played the most possessions for that season.
 
 **Swap adjustment.** Step 5 (`swap_adjust.py`): a type model (a ridge regression of each lineup swap's unexplained
-result on the two swapped players' standardised box-score, role, body and prior numbers), fitted on other seasons,
-predicts which players the ratings give too much or too little credit; half of that prediction is applied.
+result on the two swapped players' standardised box-score, role, body and prior numbers, all from the rated season),
+fitted on other seasons' within-season folds, each fold's swaps from its held-back games and its players' numbers
+from its fit games, predicts which players the ratings give too much or too little credit; half of that prediction
+is applied.
 
 **Give-back.** Each team's total adjustment is taken back from its own players in proportion to their share of
 its possessions, so no team's total moves. A starter on the court for 75% of his team's possessions has a

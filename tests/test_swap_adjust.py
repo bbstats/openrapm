@@ -246,14 +246,16 @@ def test_adjust_end_to_end_keeps_each_team_total_and_the_spread_inside_teams(lin
 
 
 _CFG = load_config()
-_REBUILDS = ((PRODUCT, "onethread/gate0_ps.parquet", "onethread/season_ratings_gate0_product.parquet"),
-             (TEST, "onethread/gate0_test_shrunk.parquet", "onethread/season_ratings_gate0_test.parquet"))
+# experiment 80's pair since 2026-10-19 (step 5 trained on the folds' held-back games); the weightfix pair before it,
+# onethread/gate0_*, pinned step 5 as it was
+_REBUILDS = ((PRODUCT, "crossfit80/product_step4.parquet", "crossfit80/product_step5.parquet"),
+             (TEST, "crossfit80/test_step4.parquet", "crossfit80/test_step5.parquet"))
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize("settings, step4, step5", _REBUILDS, ids=("product", "test"))
 def test_the_golden_step4_tables_rebuild_the_one_thread_golden_step5_tables_exactly(settings, step4, step5, tmp_path):
-    """The weightfix pair: the golden step-4 table through step 5 gives the one-thread golden step 5, byte for byte."""
+    """The golden step-4 table through step 5 gives the one-thread golden step 5, byte for byte."""
     threadpoolctl = pytest.importorskip("threadpoolctl")
     needed = [VERIFY / "golden" / step4, VERIFY / "golden" / step5, resolve(_CFG, "panel"), resolve(_CFG, "stints")]
     if not all(path.exists() for path in needed):
@@ -264,3 +266,40 @@ def test_the_golden_step4_tables_rebuild_the_one_thread_golden_step5_tables_exac
     pd.testing.assert_frame_equal(got, pd.read_parquet(VERIFY / "golden" / step5), check_exact=True)
     got.to_parquet(tmp_path / "step5.parquet", index=False)
     assert (tmp_path / "step5.parquet").read_bytes() == (VERIFY / "golden" / step5).read_bytes()
+
+
+# ---------------------------------------------------- the training swaps, from held-back games (experiment 80)
+def test_held_back_grams_are_the_pair_grams_of_the_held_back_swaps(lineup_league):
+    """A fold's share of the type model: its held-back games' swaps scored against its ratings, read on its
+    fit-game features, with player folds; summing folds adds every part."""
+    stints, truth, _ = lineup_league(5, games=200)
+    held = sw.prepare(sw.season_rows(stints[stints.game_id >= "g0150"]), 2022)
+    rng = np.random.default_rng(1)
+    table = pd.DataFrame({"player_id": truth.player_id, "season": 2022, "rating_off": rng.normal(0, 2, len(truth)),
+                          "rating_def": rng.normal(0, 1, len(truth))})
+    features = pd.DataFrame({"x": rng.normal(0, 1, len(truth)), "y": rng.normal(0, 1, len(truth))},
+                            index=truth.player_id.to_numpy())
+    grams = sa.held_back_grams(held, table, features, 5)
+    pairs = sa.residual_pairs(held, sw.ratings_in_raw_sign(table))
+    for side in sa.SIDES:
+        direct = sa.pair_grams(pairs[side], features, sa.player_folds(features.index.to_numpy(), 5), 5)
+        assert np.allclose(grams[side].G, direct.G) and np.allclose(grams[side].b, direct.b)
+        assert grams[side].n == direct.n > 0
+    total = sa.add_grams([grams["offense"], grams["offense"]])
+    assert np.allclose(total.G, 2 * grams["offense"].G) and np.allclose(total.G_fold, 2 * grams["offense"].G_fold)
+    assert total.n == 2 * grams["offense"].n
+
+
+def test_a_folds_features_are_read_on_the_tables_scale():
+    rows = pd.DataFrame({"player_id": [1, 2, 3], "a": [1.0, 2.0, 4.0]})
+    table = pd.DataFrame({"player_id": [1, 2, 3], "prior_off": [0.5, 1.0, 1.5], "prior_def": [0.0, 1.0, 2.0]})
+    centre = pd.Series({"a": 2.0, "prior_off": 1.0, "prior_def": 0.0})
+    scale = pd.Series({"a": 2.0, "prior_off": 0.5, "prior_def": 1.0})
+    out = sa.fold_type_features(rows, table, centre, scale)
+    assert list(out.columns) == ["a", "prior_off", "prior_def"]
+    assert np.allclose(out.loc[3].to_numpy(), [1.0, 1.0, 2.0])
+
+
+def test_the_type_features_are_from_the_rated_season_only():
+    """Experiment 80, the owner, 2026-10-19: "it must ONLY come from the season in question"."""
+    assert "seasons_before" not in sa.TYPE_FEATURES and len(sa.TYPE_FEATURES) == 21

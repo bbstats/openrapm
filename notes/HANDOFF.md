@@ -7,6 +7,9 @@ OpenRAPM is, `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing ru
 
 ## Where it stands, 2026-10-17
 
+- **Adopted 2026-10-19, not yet published:** experiment 80, step 5 cross-fitted and single-season (the owner:
+  "this looks much better anecdotally so - adopt").  The product table and the site's files are rebuilt
+  locally; publishing waits for the owner's word.
 - **Live on the site:** experiment 78, published 2026-10-17: experiment 77 (experiment 76's booster settings and
   defence factor, three-point % off the offensive booster) with the prior averaged over 10 bootstraps of the players.
   Decider -0.086, z -3.13, the twenty untouched seasons z -2.40; guard z +0.60.  A product build now takes longer: a
@@ -29,6 +32,11 @@ OpenRAPM is, `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing ru
   step 5".  Order: (1) commit; (2) the same-games fix on the prior: each training row's label from games its box score
   did not come from, experiment 25's idea, judged on the decider; (3) then step 5, cross-fitted, its inputs from the
   rated season only, so `seasons_before` goes.
+- **Experiment 79 run 2026-10-19** (`--row-labels outside`, DECISIONS.md): decider +0.063, z +1.20, a tie; 1997-2016
+  leans better, 15 of 20 seasons, 2017-2026 worse in all 10, +0.360, z +7.2; guard a tie.  Not adopted, the owner: "leave as is for now".
+- **Experiment 80 run 2026-10-19**, step 5 cross-fitted and single-season, read by check 153 (DECISIONS.md): against
+  shipped step 5, decider -0.553, z -12.9, 30 of 30, every era; guard -0.156, z -3.05.  Verdict pending; if adopted, the
+  build's step 5 must reproduce check 153's table before it ships.
 
 ## What ships
 
@@ -38,13 +46,15 @@ OpenRAPM is, `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing ru
 | 2, the box-score prior | `box_prior.py` | LightGBM, `params/booster_params_lgb1_tune2.json`, chosen on the decider by check 152's guarded search; feature set `hustle_no_three_pct`; five player folds, out of player; 10 bags, each on a bootstrap of the players |
 | 3, the rating | `prior_rapm.py` | the season's RAPM pulled toward the prior, residual penalty 13,037, centred |
 | 4, the shrink | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, from the 8 nearest fold seasons, both defensive factors times 0.866: prior part 0.659-0.728 offence, 0.684-0.794 defence; games' part 1.186-1.393 and 1.252-1.351; folds `bags10_early,bags10_within` |
-| 5, the swap step | `swap_adjust.py` | credit re-split inside each team from lineup swaps, team totals fixed, spread inside teams held to step 4's |
+| 5, the swap step | `swap_adjust.py` | credit re-split inside each team from lineup swaps, team totals fixed, spread inside teams held to step 4's; the type model trained on the within-season folds' held-back games, 21 inputs all from the rated season (experiment 80) |
 
 - `openrapm build` writes `outputs/season_ratings_product.parquet` with `_step3` and `_step4` beside it.  Previous
   product tables: `outputs/season_ratings_product*_before_bags10.parquet`, `*_before_nothreepct.parquet`.
 - `openrapm site --bias --openrapm-decomposition --similarity` writes the site's files.  Commit, fast-forward `main`
   and push only on the owner's word, then check the Pages build:
   `gh api repos/bbstats/openrapm/pages/builds/latest`.
+- Since experiment 80 the incumbent's tables are `crossfit80`, `outputs/season_ratings_crossfit80*.parquet` (steps
+  1-4 bags10's), its folds still `bags10_early` and `bags10_within`; `openrapm swap` now takes `--folds`.
 - The incumbent for scoring is `bags10`, the test-setting tables `outputs/season_ratings_bags10*.parquet`, its
   folds `bags10_early` and `bags10_within`; its noise control `noise_bags10`.  The decider applies the shipped defence factor, 0.866, to every system; a system
   built before experiment 76 is read with `--defence-factors=NAME:1`.
@@ -91,6 +101,37 @@ The owner, 2026-10-15: "within-season is truly the best metric, particularly WOW
 - Stockton above Jordan in 1997 and 1998.  The offensive prior overshoots at its top: the top 25 offensive box-score
   parts carry a mean residual of -0.75 per 100.  Nothing tried put Jordan above Stockton in 1997: input clip, plain
   leaves, age, the points split.
+
+## Future plan: teammate and opponent context in step 5 (the owner, 2026-10-19)
+
+**The request:** "teammate prior, opponent prior x off/def, x on court/ off court".  That is eight numbers per
+player-season: his teammates' and his opponents' box-score priors, on offence and on defence, with him on the court
+and with him off it.  Not started.
+
+**Why it could help.**  The patterns step 5 found point at what a player's own box score cannot see: offensive
+rebounders and active defenders are under-credited, and shooters are over-credited on defence (DECISIONS.md, "Check
+153", stage 4).  What happens to teammates and to opponents, on offence and on defence, while he is on the court would
+carry that: spacing, rim protection, opponents' turnovers or shooting with him on.
+
+**Where leakage comes from.**
+1. Same-games luck, the problem experiment 80 fixed in step 5.  If teammates shoot hot with him on the floor, that heat
+   sits both in the teammate inputs and in his lineups' points; a model fitted on the same games learns it as skill.
+2. Team strength.  Good players have good teammates, so teammate and opponent inputs quietly encode team quality:
+   measurement trap 32, "on-court inputs make a flexible prior team-driven".  Experiment 45 took the on-court inputs
+   off the prior partly for this reason; experiment 34, teammates' shot mix with him on the floor, was never resolved.
+
+**How to control it.**
+- Put it in step 5, not step 2.  Step 5 is cross-fitted since experiment 80: inputs from the fit games, lineup results
+  from the held-back games, so same-games luck cannot get in by construction.
+- Build every input from the fit games only.  The folds already rebuild the on-court record from the fit games; finer
+  splits, such as teammates' three-point % with him on, need the same rebuild, and whether the data supports that is
+  not yet checked.
+- Measure each player against his own team: with him minus without him, or against the team's average, so team
+  strength cancels.  The decider already fits out team levels.
+- Always run the leak arm beside it: the same inputs from the whole season, held-back games included.  If the honest
+  version comes close to the leaky one, something is leaking.
+- Step 5 is not in the chain's folds, so read it the way experiment 80 was read: check 153's fold arms on the decider,
+  the whole-season table on the guard.
 
 ## The overnight run, 2026-10-15/16
 

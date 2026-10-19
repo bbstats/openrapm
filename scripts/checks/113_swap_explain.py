@@ -5,8 +5,9 @@ re-runs step 5 as `openrapm swap` ships it (src/openrapm/swap_adjust.py, the pro
 table (`--base`) and keeps every intermediate number, so each player's move reads as a sum of five parts:
 
     type          the type model's prediction for him: what players with his box-score rates, role, age, size and
-                  box prior beat or missed their ratings by in other seasons' lineup swaps (swap_adjust.py defines
-                  the model), times the applied share, 0.5.  Its three largest terms are listed beside it
+                  box prior beat or missed their ratings by in other seasons' lineup swaps, each swap from a
+                  within-season fold's held-back games and the stats from its fit games (swap_adjust.py defines the
+                  model; experiment 80), times the applied share, 0.5.  Its three largest terms are listed beside it
     give-back     the team constraint: the team's possession-weighted total may not move, so the team's net type
                   prediction is taken back from its players in proportion to their share of its possessions
     centring      the season's possession-weighted mean set back to the step-4 table's, one constant per side (the
@@ -31,7 +32,7 @@ Writes  outputs/swap_explain_<team>_<season>.csv (the team's players) and output
     python scripts/checks/113_swap_explain.py --team=BOS --player="Derrick White" --also=2024,2025
 """
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -39,6 +40,7 @@ import pandas as pd
 
 from openrapm import swap_adjust as sa
 from openrapm import swap_test as sw
+from openrapm.commands.build import held_back_type_grams, no_grams, step4_folds, step4_multipliers
 from openrapm.commands.console import use_utf8
 from openrapm.data.config import load_config, resolve
 from openrapm.data.ingest import raw_dir
@@ -55,7 +57,7 @@ NAMES = {"threes_made_per100": "made threes", "threes_missed_per100": "missed th
          "assists_per100": "assists", "turnovers_per100": "turnovers", "steals_per100": "steals",
          "blocks_per100": "blocks", "fouls_per100": "fouls", "team_possession_share": "share of team possessions",
          "games_started_share": "share of games started", "garbage_time_share": "garbage-time share", "age": "age",
-         "seasons_before": "seasons played", "height_in": "height", "weight_lb": "weight",
+         "height_in": "height", "weight_lb": "weight",
          "prior_off": "box prior (offence)", "prior_def": "box prior (defence)"}
 SHIPPED_TABLE = "season_ratings_product.parquet"
 MAX_GAP = 1e-9                     # the rebuilt adjustment must match the shipped table's c_off / c_def this closely
@@ -125,6 +127,12 @@ def load_inputs(cfg: dict, base_name: str, settings) -> Inputs:
     features = sa.type_features(panel, base)
     fold_of = sa.player_folds(raw.player_id, settings.n_folds)
     swaps = all_season_swaps(cfg, raw, features, fold_of, settings.n_folds)
+    # since experiment 80 the type model trains on the within-season folds' held-back games, as the build does
+    folds, where = step4_folds(cfg, PRODUCT.shrink)
+    multipliers = step4_multipliers(base.season.unique(), folds, PRODUCT.shrink)
+    grams = held_back_type_grams(cfg, base, panel, folds, where, multipliers, PRODUCT)
+    empty = no_grams(features.shape[1], settings.n_folds)
+    swaps = {season: replace(kept, grams=grams.get(season, empty)) for season, kept in swaps.items()}
     return Inputs(base=base, raw=raw, features=features, fold_of=fold_of, trainable=trainable, swaps=swaps,
                   main_team=main_teams(cfg).set_index(["player_id", "season"]).team_id,
                   shipped=pd.read_parquet(outputs / SHIPPED_TABLE))

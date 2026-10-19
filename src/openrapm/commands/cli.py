@@ -31,7 +31,7 @@ from datetime import datetime
 from pathlib import Path
 
 from ..data.legacy_names import feature_set_name, target_name
-from ..settings import PRODUCT, TEST, Settings
+from ..settings import PRODUCT, ROW_LABELS, TEST, Settings
 from .console import use_utf8
 from .data import add_data
 
@@ -120,7 +120,7 @@ def chosen_settings(args: argparse.Namespace) -> Settings:
                    prior=replace(base.prior, feature_set=plain_name("--features", args.features, feature_set_name),
                                  booster_file=BOOSTER_FILE.format(args.booster_params),
                                  fold_assignment=args.fold_assignment, era_halflife=float(args.era_halflife),
-                                 bags=int(args.bags)))
+                                 bags=int(args.bags), row_labels=args.row_labels))
 
 
 def table_stem(text: str) -> str:
@@ -160,7 +160,9 @@ def _run_shrink(args: argparse.Namespace, cfg: dict) -> int:
 
 def _run_swap(args: argparse.Namespace, cfg: dict) -> int:
     from .build import run_swap
-    return run_swap(cfg, SETTINGS[args.setting], table_stem(args.base), args.name or output_name(args.base, "_step4"),
+    base = SETTINGS[args.setting]
+    settings = replace(base, shrink=shrink_options(base.shrink, args))
+    return run_swap(cfg, settings, table_stem(args.base), args.name or output_name(args.base, "_step4"),
                     with_types=args.types)
 
 
@@ -224,6 +226,11 @@ def _add_setting_options(parser) -> None:
     parser.add_argument("--bags", type=int, default=PRODUCT.prior.bags, metavar="K",
                         help="0: one booster per side.  K: K boosters, each on a bootstrap of the players, averaged "
                              "(default %(default)s)")
+    parser.add_argument("--row-labels", choices=ROW_LABELS, default=PRODUCT.prior.row_labels,
+                        help="career: every training row of the prior carries the player's RAPM over every training "
+                             "season.  outside: each chunk row carries his RAPM over the seasons outside its own and "
+                             "the career row is dropped, so no label shares a game with its box score (default "
+                             "%(default)s)")
     parser.add_argument("--team-season-penalties", type=parse_penalty_pair, metavar="ATTACKING,DEFENDING",
                         default=(PRODUCT.labels.team_offense_penalty, PRODUCT.labels.team_defense_penalty),
                         help="step 1's team-season flags: one column per team-season on offence and one on defence, "
@@ -318,7 +325,9 @@ def _add_swap(commands) -> None:
         "swap", help="step 5: each team's credit re-split by its lineup swaps",
         description="Step 5 on a step-4 table: half of what a type model of other seasons' lineup swaps predicts "
                     "each player is under- or over-credited, given back inside his team so no team total moves, "
-                    "and the spread inside teams held.  Writes outputs/season_ratings_<NAME>.parquet.")
+                    "and the spread inside teams held.  The type model trains on the within-season folds' held-back "
+                    "games, scored at step 4's multipliers, so it takes step 4's fold options.  Writes "
+                    "outputs/season_ratings_<NAME>.parquet.")
     swap_parser.add_argument("--base", required=True, metavar="NAME",
                              help="outputs/<NAME>.parquet, a step-4 table (season_ratings_<name>_step4)")
     swap_parser.add_argument("--setting", choices=("product", "test"), default="product",
@@ -326,6 +335,7 @@ def _add_swap(commands) -> None:
                                   "more than one away (default %(default)s)")
     swap_parser.add_argument("--name", help="the table is outputs/season_ratings_<NAME>.parquet (default the "
                                             "base's name: season_ratings_X_step4 gives X)")
+    _add_folds_tag(swap_parser)
     _add_types(swap_parser)
     swap_parser.set_defaults(run=_run_swap)
 

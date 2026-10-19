@@ -300,3 +300,40 @@ def test_career_labels_unshrink_only_the_defence(world):
     assert labels["O"].equals(plain)
     assert labels["D"].equals(rapm.unshrink(plain, "defense", 40000.0))
     assert labels["D"].defense.std() > 3 * plain.defense.std()
+
+
+# ------------------------------------------------------------ labels from outside a row's seasons
+def test_profiling_out_each_seasons_context_gives_the_full_fit(world):
+    """Solving the player block with every season's context eliminated must give the full fit's players.  The
+    simulated seasons have no playoffs, so the full fit's empty playoff columns send it through `solved_ridge`'s
+    jitter, which moves every player by up to about 1e-6: hence the tolerance."""
+    _, designs = world
+    sums = _sums(designs, SEASONS)
+    full = sums.ratings([2004], _pen(2000.0, 3000.0)).set_index("player_id")
+    fast = rapm.LeaveOut(sums, [2004], _pen(2000.0, 3000.0)).ratings(()).set_index("player_id")
+    assert fast.index.equals(full.index)
+    assert np.allclose(fast.offense, full.offense, atol=1e-5) and np.allclose(fast.defense, full.defense, atol=1e-5)
+
+
+@pytest.mark.parametrize("out", [[2001], [2001, 2002], [2002, 2003]])
+def test_leaving_more_seasons_out_quickly_equals_the_direct_solve(world, out):
+    _, designs = world
+    sums = _sums(designs, SEASONS, 50.0)
+    direct = sums.ratings([2004, *out], _pen(2000.0)).set_index("player_id")
+    fast = rapm.LeaveOut(sums, [2004], _pen(2000.0)).ratings(out).set_index("player_id")
+    assert fast.index.equals(direct.index)
+    for column in ("offense", "defense", "possessions"):
+        assert np.allclose(fast[column], direct[column], atol=1e-5), column     # the jitter, as above
+
+
+def test_outside_labels_are_career_labels_with_the_rows_seasons_left_out(world):
+    _, designs = world
+    sums = {PRODUCT.targets.offence: _sums(designs, SEASONS, 100.0),
+            PRODUCT.targets.defence: _sums(designs, SEASONS, 100.0)}
+    outside = rapm.outside_labels(sums, [2004], [frozenset({2002})], PRODUCT.labels, PRODUCT.targets)
+    direct = rapm.career_labels(sums, [2004, 2002], PRODUCT.labels, PRODUCT.targets)
+    for side, column in (("O", "offense"), ("D", "defense")):
+        mine = outside[frozenset({2002})][side].set_index("player_id")
+        theirs = direct[side].set_index("player_id")
+        assert mine.index.equals(theirs.index)
+        assert np.allclose(mine[column], theirs[column], atol=1e-5), side

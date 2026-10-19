@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from openrapm import prior_shrink
 from openrapm import swap_adjust as sa
 from openrapm import swap_test as sw
 from openrapm.settings import TEST
@@ -157,24 +156,3 @@ def test_the_jackknife_standard_error_is_the_leave_one_season_out_formula(audit)
                       for out in parts])
     assert np.allclose(se, np.sqrt(5 / 6 * ((drops - drops.mean(axis=0)) ** 2).sum(axis=0)))
     assert np.allclose(beta, [1.0, -0.5], atol=0.1)
-
-
-def test_step_4_from_a_folds_rows_is_prior_shrinks(audit):
-    """On one season's rows the fold code's step 4 is prior_shrink's, both parts multiplied and re-centred."""
-    rng = np.random.default_rng(3)
-    n = 30
-    table = pd.DataFrame({"player_id": np.arange(n, dtype=np.int64), "season": 2024,
-                          "prior_off": rng.normal(0, 2, n), "prior_def": rng.normal(0, 1, n),
-                          "u_off": rng.normal(0, 1, n), "u_def": rng.normal(0, 1, n),
-                          "poss_off": rng.uniform(10, 3000, n), "poss_def": rng.uniform(10, 3000, n)})
-    for column in ("rating_off", "rating_def"):
-        side = column[-3:]
-        table[column] = table[f"prior_{side}"] + table[f"u_{side}"]
-    rows = {"O": table.assign(side="O"), "D": table.assign(side="D")}
-    mine = audit.fold_step4(rows, 2024, (0.7, 0.8, 1.3, 1.4))
-    multipliers = pd.DataFrame({"season": [2024], "multiplier_off": [0.7], "multiplier_def": [0.8],
-                                "games_multiplier_off": [1.3], "games_multiplier_def": [1.4]})
-    theirs = prior_shrink.shrink(table.assign(rating_total=0.0, offense=0.0, defense=0.0, prior_total=0.0, u_total=0.0,
-                                              prior_offense=0.0, prior_defense=0.0), multipliers)
-    for column in ("rating_off", "rating_def", "prior_off", "prior_def"):
-        assert np.allclose(mine[column].to_numpy(), theirs[column].to_numpy(), atol=1e-12), column

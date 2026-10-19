@@ -81,7 +81,7 @@ import pandas as pd
 import scipy.sparse as sp
 
 __all__ = ["RULES", "unseen_fold_seasons", "fold_seasons_used", "fold_terms", "fit_multipliers",
-           "multipliers_by_season", "shrink"]
+           "multipliers_by_season", "shrink", "season_factors", "shrink_fold"]
 
 RULES = ("product", "test")
 
@@ -211,3 +211,50 @@ def shrink(table: pd.DataFrame, multipliers: pd.DataFrame) -> pd.DataFrame:
                               games(season, "off"), games(season, "def"))
                for season, rows in table.groupby("season", sort=True)]
     return pd.concat(seasons, ignore_index=True)[list(table.columns)]
+
+
+def season_factors(multipliers: pd.DataFrame, season: int) -> tuple:
+    """(m_O, m_D, g_O, g_D): one season's row of `multipliers_by_season`, as the build applies it (the defence factor
+    already in it), 1 for a games' part the table does not free."""
+    row = multipliers.set_index("season").loc[int(season)]
+    return (float(row.multiplier_off), float(row.multiplier_def), float(row.get("games_multiplier_off", 1.0)),
+            float(row.get("games_multiplier_def", 1.0)))
+
+
+def _shrink_side(prior: np.ndarray, games: np.ndarray, multiplier: float, games_multiplier: float,
+                 weight: np.ndarray) -> tuple[np.ndarray, np.ndarray, float]:
+    """(prior part, games' part, the level taken off) after step 4 on one side of a fold."""
+    games = games_multiplier * games
+    level = np.average(multiplier * prior + games, weights=weight)
+    return multiplier * prior - level, games, float(level)
+
+
+def shrink_fold(rows: dict, season: int, factors: tuple) -> pd.DataFrame:
+    """Step 4 on one within-season fold: one row per rated player, positive good, in the published schema's rating
+    columns (player_id, season, prior_off, u_off, prior_def, u_def, rating_off, rating_def, rating_total, offense,
+    defense, poss_off, poss_def).
+
+    `rows` is the fold's {"O", "D"} rated players (data/within_folds.Fold.rows) and `factors` `season_factors`.  Each
+    side is re-centred over its own rows, weighted by offensive possessions, as the with-or-without-you test applies
+    step 4 to a fold (scripts/checks/151_wowy.py).  A player with offensive possessions and none on defence has no
+    defence row (2015, repeat 0, fold 2: one possession); his defence parts come from his offence row, shrunk as
+    the defence rows were, and his defensive possessions are 0, so step 5 weighs him at nothing there.
+    """
+    offence, defence = rows["O"], rows["D"]
+    prior_off, u_off, _ = _shrink_side(offence.prior_off.to_numpy(float), offence.u_off.to_numpy(float), factors[0],
+                                       factors[2], offence.poss_off.to_numpy(float))
+    prior_def, u_def, level = _shrink_side(defence.prior_def.to_numpy(float), defence.u_def.to_numpy(float),
+                                           factors[1], factors[3], defence.poss_off.to_numpy(float))
+    table = pd.DataFrame({"player_id": offence.player_id.to_numpy(np.int64), "season": np.int64(season),
+                          "prior_off": prior_off, "u_off": u_off, "poss_off": offence.poss_off.to_numpy(float),
+                          "poss_def": offence.poss_def.to_numpy(float)})
+    table = table.join(pd.DataFrame({"prior_def": prior_def, "u_def": u_def},
+                                    index=defence.player_id.to_numpy(np.int64)), on="player_id")
+    alone = table.prior_def.isna().to_numpy()
+    table.loc[alone, "prior_def"] = factors[1] * offence.prior_def.to_numpy(float)[alone] - level
+    table.loc[alone, "u_def"] = factors[3] * offence.u_def.to_numpy(float)[alone]
+    table["rating_off"] = table.prior_off + table.u_off
+    table["rating_def"] = table.prior_def + table.u_def
+    table["rating_total"] = table.rating_off + table.rating_def
+    table["offense"], table["defense"] = table.rating_off, -table.rating_def
+    return table

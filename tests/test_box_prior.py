@@ -465,3 +465,33 @@ def test_a_player_left_out_of_a_bag_is_answered_by_a_booster_that_never_saw_him(
     member = box_prior.fit_out_of_player(rows, FEATS, PARAMS, n_folds=5)
     left_out = set(train.index) - set(rows.index)
     assert left_out and not left_out & set().union(*member.held_out_players)
+
+
+# ------------------------------------------------------------------ labels from outside a row's seasons
+def test_outside_labels_give_every_chunk_row_a_label_from_seasons_it_does_not_cover():
+    """Experiment 79: a chunk row's label is the player's RAPM over the seasons outside the chunk; the career row,
+    which covers every season, is dropped, and so is a chunk with no season outside it (player 3's lone 2011)."""
+    panel = _career_panel()
+    sets = box_prior.chunk_season_sets(panel)
+    assert frozenset({2010, 2011, 2013}) in sets and frozenset({2011}) in sets
+    # the label for a set of seasons left out: 1000 x player id + the sum of the seasons kept, so each row's label
+    # says exactly which seasons it came from
+    seasons_of = panel.groupby("player_id").season.apply(set)
+    outside = {}
+    for key in sets:
+        kept = {pid: seasons - key for pid, seasons in seasons_of.items() if seasons - key}
+        outside[key] = pd.DataFrame({"player_id": list(kept), "offense": [1000.0 * pid + sum(s) for pid, s in
+                                                                          kept.items()],
+                                     "possessions": 1000.0})
+    rows = box_prior.training_rows(_label(panel), panel, "offense", SHIPPED["O"], outside=outside)
+    members = box_prior.season_runs(panel)
+    covered = box_prior.chunk_seasons(members)
+    expected = {(int(members[members.chunk == chunk].player_id.iloc[0]), seasons)
+                for chunk, seasons in covered.items() if seasons_of[int(chunk.split(":")[0])] - seasons}
+    assert len(rows) == len(expected)                    # every chunk with a season outside it, no career row
+    for pid, row in rows.iterrows():
+        kept_sum = row.label - 1000.0 * pid
+        assert any(kept_sum == sum(seasons_of[pid] - seasons) for p, seasons in expected if p == pid)
+    assert 3 not in rows.index                           # one season: nothing outside it
+    share = rows.loc[[2]].row_possessions / rows.loc[[2]].row_possessions.sum()
+    assert np.allclose(rows.loc[[2]].row_weight, share * rows.loc[[2]].label_possessions)

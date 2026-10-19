@@ -44,6 +44,10 @@ Words used below
                                         folds' size, the control for step5_other
                        step5_share037   the shipped type model at an applied share of 0.37 instead of 0.5: about
                                         step5_other's typical move, the control for "it only moves players less"
+                       step5_single     the shipped type model without seasons played before this one, a career count
+                                        (experiment 80, the owner, 2026-10-19: "it must ONLY come from the season in
+                                        question")
+                       step5_other_single  step5_other without it: experiment 80's candidate
     on a fold      every input step 5 reads comes from the fold's fit games: the box counts, role and playing time
                    from the fold's players file (rebuilt from the fit games by `openrapm folds`), the two prior
                    features from the fold's step-4 prior part, each player's possessions for each team and his main
@@ -89,6 +93,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from openrapm import prior_shrink
 from openrapm import swap_adjust as sa
 from openrapm import swap_test as sw
 from openrapm.commands.console import one_thread, use_utf8
@@ -97,6 +102,8 @@ from openrapm.data.designs import DesignCache
 from openrapm.data.panel import panel_and_trainable_seasons
 from openrapm.data.roles import main_teams
 from openrapm.data.stints import load_season_stints
+from openrapm.data.within_folds import fold_games
+from openrapm.features import BOX_RATES
 from openrapm.prior_shrink import multipliers_by_season
 from openrapm.settings import TEST
 
@@ -108,6 +115,14 @@ ERAS = ((1997, 2006), (2007, 2016), (2017, 2026))
 WEIGHT_CAP = 0.95            # stage 3: each swap's information capped at this quantile of its season and side
 WHOLE_SEASON_KEY = 1000      # a whole season's shuffle key, beside a fold's (season, repeat, fold)
 SMALLER_SHARE = 0.37         # the arm step5_share037: about step5_other's typical move (smaller_share)
+# experiment 80's type features: the shipped 22 without seasons played before this one, a career count (the owner,
+# 2026-10-19: "it must ONLY come from the season in question")
+# step 5 as it shipped until experiment 80, the version this check audits: 22 type features, seasons played
+# before this one among them (swap_adjust.TYPE_FEATURES has 21 since)
+AUDITED_PANEL = [*BOX_RATES, "team_possession_share", "games_started_share", "garbage_time_share", "age",
+                 "seasons_before", "height_in", "weight_lb"]
+AUDITED_FEATURES = AUDITED_PANEL + sa.PRIOR_FEATURES
+SINGLE_SEASON = [feature for feature in AUDITED_FEATURES if feature != "seasons_before"]
 PLAIN_RAPM = "season_ratings_plainrapm3000"     # 90_swap_test.py's plain single-season RAPM, penalty 3,000
 NOISE = {"bags10": "noise_bags10"}              # each system's noise control: the same build, players regrouped
 PLAIN_NAMES = {"threes_made_per100": "made threes", "threes_missed_per100": "missed threes",
@@ -152,9 +167,9 @@ def season_rows(cfg: dict, season: int) -> pd.DataFrame:
 def feature_scale(panel: pd.DataFrame, table: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
     """(means, population standard deviations) of the type features over every player-season of both the panel and
     the table: what swap_adjust.type_features standardises with."""
-    offence = panel[panel.side == "O"][["player_id", "season", *sa.PANEL_FEATURES]]
+    offence = panel[panel.side == "O"][["player_id", "season", *AUDITED_PANEL]]
     both = offence.merge(table[["player_id", "season", *sa.PRIOR_FEATURES]], on=["player_id", "season"], how="inner")
-    values = both[sa.TYPE_FEATURES].astype(float)
+    values = both[AUDITED_FEATURES].astype(float)
     return values.mean(), values.std(ddof=0)
 
 
@@ -198,7 +213,7 @@ def type_model(cfg: dict, name: str) -> TypeModel:
     final = pd.read_parquet(outputs / f"season_ratings_{name}.parquet")
     panel, trainable = panel_and_trainable_seasons(cfg)
     centre, scale = feature_scale(panel, step4)
-    features = sa.type_features(panel, step4)
+    features = sa.type_features(panel, step4, AUDITED_FEATURES)
     raw = sw.ratings_in_raw_sign(step4)
     fold_of = sa.player_folds(raw.player_id, SWAP.n_folds)
     swaps = {season: sa.season_swaps(sw.prepare(season_rows(cfg, season), season), raw[raw.season == season],
@@ -309,7 +324,7 @@ class SeasonInputs:
 
 def arms(inputs: SeasonInputs, model: TypeModel, placebo: dict, refits: dict | None = None) -> tuple[dict, dict]:
     """({arm: the season's rows after it}, step5's spread factors): every arm of the module docstring.  `placebo` is
-    {seed: placebo_betas}; `refits` {arm: season_betas} for the type models refitted on the folds' swaps."""
+    {seed: placebo_betas}; `refits` {arm: (season_betas, the type features it reads)}, `refit_arms`."""
     season = int(inputs.table.season.iloc[0])
     shipped_betas = {side: model.betas[(season, side)] for side in sa.SIDES}
 
@@ -326,8 +341,8 @@ def arms(inputs: SeasonInputs, model: TypeModel, placebo: dict, refits: dict | N
         noise = shuffled(inputs.features, seed, inputs.key)
         out[f"placebo_use_{seed}"] = step5(noise)[0]
         out[f"placebo_train_{seed}"] = step5(noise, {side: trained[(season, side)] for side in sa.SIDES})[0]
-    for arm, betas in (refits or {}).items():
-        out[arm] = step5(inputs.features, {side: betas[(season, side)] for side in sa.SIDES})[0]
+    for arm, (betas, columns) in (refits or {}).items():
+        out[arm] = step5(inputs.features[columns], {side: betas[(season, side)] for side in sa.SIDES})[0]
     return out, factors
 
 
@@ -364,49 +379,10 @@ def fold_factors(checks: Checks, folds: list) -> dict:
             for season, row in table.iterrows()}
 
 
-def step4_side(prior: np.ndarray, games: np.ndarray, multiplier: float, games_multiplier: float,
-               weight: np.ndarray) -> tuple[np.ndarray, np.ndarray, float]:
-    """(prior part, games' part, the level taken off) after step 4 on one side: m x prior and g x u, the prior part
-    re-centred so the possession-weighted mean rating is zero (check 151's step4_parts, check 138's shrunk_prior)."""
-    games = games_multiplier * games
-    level = np.average(multiplier * prior + games, weights=weight)
-    return multiplier * prior - level, games, float(level)
-
-
-def fold_step4(rows: dict, season: int, factors: tuple) -> pd.DataFrame:
-    """One row per rated player after step 4, positive good: `rows` is a fold's {"O", "D"} player rows (or a whole
-    season's, from players_<season>_all.parquet).
-
-    A player with offensive possessions and no defensive ones has no defence row (2015, repeat 0, fold 2: one
-    offensive possession).  The decider gives him the stand-in rating on defence; here his defence parts come from
-    his offence row, shrunk as the defence rows were, so step 5 reads a number for him.  His defensive possessions
-    are 0, so he weighs nothing in step 5's re-centring or its spread."""
-    offence, defence = rows["O"], rows["D"]
-    prior_off, u_off, _ = step4_side(offence.prior_off.to_numpy(float), offence.u_off.to_numpy(float), factors[0],
-                                     factors[2], offence.poss_off.to_numpy(float))
-    prior_def, u_def, level = step4_side(defence.prior_def.to_numpy(float), defence.u_def.to_numpy(float),
-                                         factors[1], factors[3], defence.poss_off.to_numpy(float))
-    table = pd.DataFrame({"player_id": offence.player_id.to_numpy(np.int64), "season": np.int64(season),
-                          "prior_off": prior_off, "u_off": u_off, "poss_off": offence.poss_off.to_numpy(float),
-                          "poss_def": offence.poss_def.to_numpy(float)})
-    table = table.join(pd.DataFrame({"prior_def": prior_def, "u_def": u_def},
-                                    index=defence.player_id.to_numpy(np.int64)), on="player_id")
-    alone = table.prior_def.isna().to_numpy()
-    table.loc[alone, "prior_def"] = factors[1] * offence.prior_def.to_numpy(float)[alone] - level
-    table.loc[alone, "u_def"] = factors[3] * offence.u_def.to_numpy(float)[alone]
-    table["rating_off"] = table.prior_off + table.u_off
-    table["rating_def"] = table.prior_def + table.u_def
-    table["rating_total"] = table.rating_off + table.rating_def
-    table["offense"], table["defense"] = table.rating_off, -table.rating_def
-    return table
-
-
 def fold_features(model: TypeModel, rows_offence: pd.DataFrame, table: pd.DataFrame) -> pd.DataFrame:
-    """player_id -> the standardised type features of a fold's rated players: the box counts, role and playing time
-    its players file rebuilt from the fit games, and the prior parts of its step 4."""
-    frame = rows_offence.drop_duplicates("player_id").set_index("player_id")[sa.PANEL_FEATURES].astype(float)
-    frame = frame.join(table.set_index("player_id")[sa.PRIOR_FEATURES], how="inner")
-    return (frame[sa.TYPE_FEATURES] - model.centre) / model.scale
+    """player_id -> the standardised type features of a fold's rated players, on the audited list's scale
+    (swap_adjust.fold_type_features)."""
+    return sa.fold_type_features(rows_offence, table, model.centre, model.scale)
 
 
 def fold_main_team(rows_offence: pd.DataFrame, season: int) -> pd.Series:
@@ -415,19 +391,6 @@ def fold_main_team(rows_offence: pd.DataFrame, season: int) -> pd.Series:
     rows = rows_offence[rows_offence.team_id >= 0]
     index = pd.MultiIndex.from_arrays([rows.player_id.to_numpy(np.int64), np.full(len(rows), season, dtype=np.int64)])
     return pd.Series(rows.team_id.to_numpy(float), index=index)
-
-
-def fold_games(directory: Path, fold) -> tuple[set, set]:
-    """(fit games, held-back games) of a fold, from its season's fold assignment; the held-back games must be the
-    games its test file stores."""
-    assignment = pd.read_parquet(directory / f"folds_{fold.season}.parquet")
-    held_mask = assignment[f"r{fold.repeat}"].to_numpy() == fold.fold
-    games = assignment.index.astype(str)
-    held = set(games[held_mask])
-    stored = set(np.load(directory / f"test_{fold.stem}.npz", allow_pickle=True)["game_id"].astype(str))
-    if stored != held:
-        raise SystemExit(f"{fold.stem}: the test file holds {len(stored)} games, the assignment {len(held)}")
-    return set(games[~held_mask]), held
 
 
 @dataclass
@@ -444,7 +407,7 @@ def fold_world(fold, directory: Path, rows: pd.DataFrame, factors: tuple) -> Fol
     game = rows.game_id.astype(str)
     fit = sw.prepare(rows[game.isin(fit_games).to_numpy()].reset_index(drop=True), fold.season)
     held = sw.prepare(rows[game.isin(held_games).to_numpy()].reset_index(drop=True), fold.season)
-    return FoldWorld(fold, fold_step4(fold.rows, fold.season, factors), fit, held)
+    return FoldWorld(fold, prior_shrink.shrink_fold(fold.rows, fold.season, factors), fit, held)
 
 
 def check_step4(checks: Checks, world: FoldWorld, factors: tuple) -> None:
@@ -511,12 +474,6 @@ def luck_grams(world: FoldWorld, features: pd.DataFrame) -> dict:
     return out
 
 
-def summed(parts: list) -> sa.PairGrams:
-    return sa.PairGrams(G=sum(part.G for part in parts), b=sum(part.b for part in parts),
-                        G_fold=sum(part.G_fold for part in parts), b_fold=sum(part.b_fold for part in parts),
-                        n=sum(part.n for part in parts))
-
-
 def save_grams(path: Path, grams: dict) -> None:
     arrays = {}
     for (games, side), gram in grams.items():
@@ -535,16 +492,24 @@ def load_grams(path: Path) -> dict:
             for games in GAMES for side in sa.SIDES}
 
 
-def refit_betas(out_dir: Path, seasons, trainable: set) -> dict:
+def kept_columns(gram: sa.PairGrams, columns) -> sa.PairGrams:
+    """`gram` with only the type features `columns`: the normal equations of a type model fitted on them alone."""
+    index = [AUDITED_FEATURES.index(column) for column in columns]
+    return sa.PairGrams(G=gram.G[np.ix_(index, index)], b=gram.b[index],
+                        G_fold=gram.G_fold[:, index][:, :, index], b_fold=gram.b_fold[:, index], n=gram.n)
+
+
+def refit_betas(out_dir: Path, seasons, trainable: set, columns=tuple(AUDITED_FEATURES)) -> dict:
     """{arm: season_betas}: the type model refitted on the folds' swaps of the seasons more than one away, the
     features from the fit games, each player's own swaps left out: `step5_other` on the held-back games' swaps, so a
     box count meets results it was not counted in; `step5_same` on the fit games' own, the shipped situation at the
-    folds' size.  Empty when a season's equations are missing."""
+    folds' size.  On the type features `columns` alone.  Empty when a season's equations are missing."""
     paths = {season: out_dir / f"grams_{season}.npz" for season in sorted(seasons)}
     if not all(path.exists() for path in paths.values()):
         return {}
     grams = {season: load_grams(path) for season, path in paths.items()}
-    return {f"step5_{games}": season_betas({season: {side: parts[(games, side)] for side in sa.SIDES}
+    return {f"step5_{games}": season_betas({season: {side: kept_columns(parts[(games, side)], columns)
+                                                     for side in sa.SIDES}
                                             for season, parts in grams.items()}, trainable)
             for games in GAMES}
 
@@ -554,6 +519,22 @@ def smaller_share(betas: dict) -> dict:
     player with 1,000+ possessions a median 0.26 per 100 against the shipped 0.35."""
     ratio = SMALLER_SHARE / SWAP.applied_share
     return {key: None if values is None else [ratio * beta for beta in values] for key, values in betas.items()}
+
+
+def refit_arms(model: TypeModel, out_dir: Path, seasons) -> dict:
+    """{arm: (season_betas, the type features it reads)}: the refits on the folds' swaps, the smaller-share control,
+    and experiment 80's single-season versions without `seasons_before` (the owner, 2026-10-19: "it must ONLY come
+    from the season in question"): `step5_single` the shipped model on SINGLE_SEASON, `step5_other_single` the
+    held-back refit on them."""
+    every = list(AUDITED_FEATURES)
+    arms = {"step5_share037": (smaller_share(model.betas), every),
+            "step5_single": (season_betas({season: {side: kept_columns(kept.grams[side], SINGLE_SEASON)
+                                                    for side in sa.SIDES}
+                                           for season, kept in model.swaps.items()}, model.trainable), SINGLE_SEASON)}
+    for columns, suffix in ((every, ""), (SINGLE_SEASON, "_single")):
+        for arm, betas in refit_betas(out_dir, seasons, model.trainable, columns).items():
+            arms[f"{arm}{suffix}"] = (betas, columns)
+    return arms
 
 
 def fold_summary(world: FoldWorld, tables: dict, factors: dict) -> dict:
@@ -594,7 +575,7 @@ def season_grams(run: FoldRun, cfg: dict, season: int) -> dict:
         world = fold_world(fold, run.where[fold.stem], rows, run.factors[season])
         for key, gram in luck_grams(world, fold_features(run.model, fold.rows["O"], world.table)).items():
             parts.setdefault(key, []).append(gram)
-    return {key: summed(grams) for key, grams in parts.items()}
+    return {key: sa.add_grams(grams) for key, grams in parts.items()}
 
 
 def score_fold(run: FoldRun, fold, rows: pd.DataFrame, design) -> tuple[dict, dict]:
@@ -652,8 +633,7 @@ def run_folds(args, cfg: dict) -> int:
         if not path.exists():
             save_grams(path, season_grams(run, cfg, season))
             print(f"  {args.system} {season}: stage 4's equations ({time.time() - started:.0f}s)", flush=True)
-    run.refits = {**refit_betas(run.out_dir, run.folds, run.model.trainable),
-                  "step5_share037": smaller_share(run.model.betas)}
+    run.refits = refit_arms(run.model, run.out_dir, run.folds)
     cache = DesignCache(cfg, keep=1)
     for season in sorted(run.folds):
         if args.first <= season <= args.last and not (run.out_dir / f"decider_{season}.csv").exists():
@@ -684,7 +664,7 @@ def whole_season_world(cfg: dict, model: TypeModel, season: int, factors: tuple)
     players = pd.read_parquet(folder / f"players_{season}_all.parquet")
     rated = players[players.poss_off > 0]          # the rated players, as data/within_folds.read_fold keeps them
     rows = {side: rated[rated.side == side].reset_index(drop=True) for side in ("O", "D")}
-    table = fold_step4(rows, season, factors)
+    table = prior_shrink.shrink_fold(rows, season, factors)
     games = set(pd.read_parquet(folder / f"folds_{season}.parquet").index.astype(str))
     every = season_rows(cfg, season)
     lineups = sw.prepare(every[every.game_id.astype(str).isin(games).to_numpy()].reset_index(drop=True), season)
@@ -736,10 +716,9 @@ def run_whole(args, cfg: dict) -> int:
     """`whole`: every arm on the whole-season step-4 table, one table per arm."""
     model = type_model(cfg, args.system)
     placebo = {seed: placebo_betas(model, seed) for seed in SEEDS}
-    refits = refit_betas(resolve(cfg, "outputs") / "swap_audit" / args.system, model.swaps, model.trainable)
-    if not refits:
+    refits = refit_arms(model, resolve(cfg, "outputs") / "swap_audit" / args.system, model.swaps)
+    if "step5_other" not in refits:
         print("  the folds' equations are not all cached (`folds` writes them): no refitted arms", flush=True)
-    refits["step5_share037"] = smaller_share(model.betas)
     tables: dict = {}
     for season in sorted(model.swaps):
         for arm, rows in arms(whole_inputs(model, season), model, placebo, refits)[0].items():
@@ -791,7 +770,7 @@ def comparisons(systems: list) -> list:
     """[(mine, theirs)]: each arm against step 4 and step 5 against its rivals, on each system; and each stage of a
     noise control against its system's."""
     arms_read = ("step5", "step5_nohold", "shrink_only", "step5_leak", "placebo_use", "placebo_train", "step5_other",
-                 "step5_same", "step5_share037")
+                 "step5_same", "step5_share037", "step5_single", "step5_other_single")
     pairs = []
     for name in systems:
         pairs += [((name, arm), (name, "step4")) for arm in arms_read]
@@ -935,8 +914,8 @@ def side_table(side: str, parts: dict, refits: dict) -> pd.DataFrame:
     player with more of the feature than the teammate he swaps with allowed fewer points than the ratings said."""
     sign = 1.0 if side == "offense" else -1.0
     beta, se = jackknife(parts)
-    table = pd.DataFrame({"side": side, "feature": sa.TYPE_FEATURES,
-                          "name": [PLAIN_NAMES[feature] for feature in sa.TYPE_FEATURES],
+    table = pd.DataFrame({"side": side, "feature": AUDITED_FEATURES,
+                          "name": [PLAIN_NAMES[feature] for feature in AUDITED_FEATURES],
                           "coefficient": sign * beta, "jackknife_se": se, "t": sign * beta / se})
     for column, values in subset_coefficients(parts).items():
         table[column] = sign * values
@@ -1008,7 +987,7 @@ def run_luck(args, cfg: dict) -> int:
         sign = 1.0 if side == "offense" else -1.0
         same, same_se = jackknife(parts[("same", side)])
         other, other_se = jackknife(parts[("other", side)])
-        frames.append(pd.DataFrame({"side": side, "name": [PLAIN_NAMES[feature] for feature in sa.TYPE_FEATURES],
+        frames.append(pd.DataFrame({"side": side, "name": [PLAIN_NAMES[feature] for feature in AUDITED_FEATURES],
                                     "same_games": sign * same, "same_games_se": same_se, "other_games": sign * other,
                                     "other_games_se": other_se, "ratio": other / same,
                                     "swaps_same": sum(part.n for part in parts[("same", side)].values()),
@@ -1061,7 +1040,7 @@ def run_whose(args, cfg: dict) -> int:
     frames, spreads = [], []
     for side in sa.SIDES:
         sign = 1.0 if side == "offense" else -1.0
-        frame = pd.DataFrame({"side": side, "name": [PLAIN_NAMES[feature] for feature in sa.TYPE_FEATURES]})
+        frame = pd.DataFrame({"side": side, "name": [PLAIN_NAMES[feature] for feature in AUDITED_FEATURES]})
         for name in tables:
             beta, se = jackknife(parts[(name, side)])
             frame[name], frame[f"{name}_se"] = sign * beta, se

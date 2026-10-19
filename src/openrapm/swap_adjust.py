@@ -7,6 +7,15 @@ changes (the owner's "team version", adopted 2026-10-01; notes/DECISIONS.md, "Th
 it passes": on the year-over-year test a paired t-statistic of -5.2, better in 39 of its 56 predictions, each
 season 1998-2025 predicted from the season before and from the season after).
 
+Since experiment 80 (adopted 2026-10-19, the owner: "this looks much better anecdotally so - adopt") the type model
+learns from games its inputs were not counted in.  Fitted on a season's own swaps, it read each player's box score
+in the very games whose lineup results it was explaining: a made three is three points of his lineup's score, and
+the part of a hot stretch the ridge had held back came out as "made threes are under-credited", +1.40 per standard
+deviation, where the same swaps on other games say -0.35 (notes/DECISIONS.md, "Check 153: what the swap step does").
+Now each within-season fold supplies its type features from its fit games and its swaps from its held-back games,
+scored against its own step-4 ratings: against step 5 as it was, the with-or-without-you test -0.553, z -12.9,
+better in 30 of 30 seasons, and the year-over-year test -0.156, z -3.1.
+
 Words used below
     lineup swap   two lineups of one team in one season that share four players: the four kept players are
                   held fixed, so the difference between the two lineups' results is evidence about the fifth
@@ -21,12 +30,15 @@ Words used below
                   swap_test.CONTEXTS["nofatigue"]), averaged over the lineup's stints by possessions
     information   each swap's weight, h = P_a P_b / (P_a + P_b), P the two lineups' possessions: a swap seen
                   for 2,000 possessions one way and 20 the other knows about as much as 20 possessions
-    type features 22 numbers per player-season, each standardised over every player-season of the table that
-                  the panel also has (mean 0, standard deviation 1): 20 inputs of the season panel
+    type features 21 numbers per player-season, each standardised over every player-season of the table that
+                  the panel also has (mean 0, standard deviation 1): 19 inputs of the season panel
                   (data/panel.py): 13 padded rates per 100 (threes, twos and free throws made and missed,
                   offensive and defensive rebounds, assists, turnovers, steals, blocks, fouls), share of team
-                  possessions, share of games started, garbage-time share, age, seasons before, height, weight;
-                  then step 4's prior_off and prior_def (TYPE_FEATURES)
+                  possessions, share of games started, garbage-time share, age, height, weight; then step 4's
+                  prior_off and prior_def (TYPE_FEATURES).  All from the rated season: seasons played before it
+                  left with experiment 80 (the owner, 2026-10-19: "it must ONLY come from the season in question")
+    fold          one season rated from three quarters of its games, its fit games, the quarter held back
+                  scored (data/within_folds.py; twelve a season)
     type model    a ridge regression of each swap's residual on the difference of the two swapped players' type
                   features (the equation below), one per side
     player fold   player_id % 5.  A player's type prediction comes from the model fitted without any swap he is
@@ -36,14 +48,15 @@ Words used below
                   possession-weighted total adjustment is zero (A c = 0 below)
     main team     the team a player played the most possessions for that season (data/roles.main_teams)
 
-The type model, for one side, over the pairs of the training seasons of the same table (every season but the rated
-one in the product setting; only seasons more than one away from it in the test setting; never a season still being
-played):
+The type model, for one side, over the swaps of the held-back games of every fold of the training seasons (every
+season but the rated one in the product setting; only seasons more than one away from it in the test setting; never a
+season still being played), each scored against its fold's step-4 ratings:
 
     minimise   sum over pairs  h (r - (x_a - x_b)' beta)^2  +  lambda |beta|^2,   lambda = 1e-4 x mean diag(G)
 
-    x_a, x_b   the type features of fifth_a and fifth_b in the season of the swap
-    beta       the 22 coefficients; G = sum h (x_a - x_b)(x_a - x_b)', so the penalty means the same at any
+    x_a, x_b   the type features of fifth_a and fifth_b from the fold's fit games, standardised with the table's
+               means and standard deviations (`fold_type_features`)
+    beta       the 21 coefficients; G = sum h (x_a - x_b)(x_a - x_b)', so the penalty means the same at any
                number of seasons
     m_i        = x_i' beta, player i's type prediction (raw sign: on defence, points allowed)
 
@@ -72,11 +85,12 @@ strength made the gaps worse (z +7.9).  Without the spread held, the ratings cam
 and 27% wider on defence, when they were already too wide, and failed the year-over-year test (team-game z +3.5).
 With the spread held inside teams they passed (z -5.2, better in 39 of 56).
 
-Example: 2026, product setting.  The type model predicts that step 4 gives Wembanyama's offence 2.45 per 100 too
-little credit; half of it is +1.23; the Spurs' give-back leaves +0.54; holding the spread (2026's offensive factor
-0.80, which also pulls his step-4 rating toward the Spurs' mean) leaves +0.20.  On defence, in points allowed, the
-same steps read -1.68, -0.84, -0.94 and -0.39: his defensive rating rises 0.39.  Over the thirty seasons the
-spread factors average 0.84 on offence and 0.86 on defence.
+Example: 2026, product setting (scripts/checks/113_swap_explain.py --team=SAS).  The type model predicts that step 4
+gives Wembanyama's offence 0.30 per 100 too little credit; half of it is +0.15; the Spurs' give-back takes 0.18 off,
+leaving -0.03; holding the spread (2026's offensive factor 0.97, which also pulls his step-4 rating toward the Spurs'
+mean) takes 0.07 more, so his offence moves -0.11.  On defence, positive good, the same steps read +0.14, -0.03 and
+-0.54: his defensive rating falls 0.43, nearly all of it the spread held.  Over the thirty seasons the spread factors
+average 0.93 on offence and 0.85 on defence.
 """
 from __future__ import annotations
 
@@ -86,11 +100,12 @@ import numpy as np
 import pandas as pd
 
 from .features import BOX_RATES
-from .swap_test import Season, aligned, predict, side_rates
+from .swap_test import Season, aligned, predict, ratings_in_raw_sign, side_rates
 
 __all__ = ["SIDES", "RESIDUAL_CONTEXT", "PANEL_FEATURES", "PRIOR_FEATURES", "TYPE_FEATURES", "residual_pairs",
-           "team_possessions", "type_features", "season_features", "player_folds", "PairGrams", "pair_grams",
-           "SeasonSwaps", "season_swaps", "type_coefficients", "training_seasons", "type_predictions",
+           "team_possessions", "feature_scale", "type_features", "season_features", "player_folds", "PairGrams",
+           "pair_grams", "SeasonSwaps", "season_swaps", "fold_type_features", "held_back_grams", "add_grams",
+           "type_coefficients", "training_seasons", "type_predictions",
            "possession_shares", "give_back", "season_corrections", "recentre", "hold_spread_within",
            "hold_spread_within_teams", "adjusted_table", "adjust", "type_model_table"]
 
@@ -102,8 +117,10 @@ RESIDUAL_CONTEXT = "nofatigue"
 # season, so the part of a player's record the ridge held back is still in them, and a model given u learned to
 # multiply it by about 2 -- a lighter ridge penalty wearing a "player type" label (notes/DECISIONS.md, the swap
 # adjustment).  Order is load-bearing: it is the order of the coefficients.
+# Seasons played before this one left with experiment 80: a career count, which the single-season ruling keeps
+# off the rating (notes/HANDOFF.md, "The rulings that bind"); its coefficient was -0.00 on offence and -0.06 on defence
 PANEL_FEATURES = [*BOX_RATES, "team_possession_share", "games_started_share", "garbage_time_share", "age",
-                  "seasons_before", "height_in", "weight_lb"]
+                  "height_in", "weight_lb"]
 # the box prior, so the model can say "the prior is too high for this kind of player" if the swaps do
 PRIOR_FEATURES = ["prior_off", "prior_def"]
 TYPE_FEATURES = PANEL_FEATURES + PRIOR_FEATURES
@@ -146,19 +163,33 @@ def team_possessions(season: Season) -> dict:
 
 
 # ------------------------------------------------------------------------------------------- the type model
-def type_features(panel: pd.DataFrame, table: pd.DataFrame) -> pd.DataFrame:
-    """TYPE_FEATURES per (player_id, season), each standardised over the player-seasons in both `panel` and `table`.
+def feature_scale(panel: pd.DataFrame, table: pd.DataFrame, columns=None) -> tuple[pd.Series, pd.Series]:
+    """(means, population standard deviations) of the type features over every player-season in both `panel` and
+    `table`: what `type_features` standardises with.  `columns` defaults to TYPE_FEATURES."""
+    columns = list(TYPE_FEATURES if columns is None else columns)
+    panel_columns = [column for column in columns if column not in PRIOR_FEATURES]
+    offence = panel[panel.side == "O"][["player_id", "season", *panel_columns]]
+    both = offence.merge(table[["player_id", "season", *PRIOR_FEATURES]], on=["player_id", "season"], how="inner")
+    values = both[columns].astype(float)
+    return values.mean(), values.std(ddof=0)
+
+
+def type_features(panel: pd.DataFrame, table: pd.DataFrame, columns=None) -> pd.DataFrame:
+    """The type features per (player_id, season), each standardised over the player-seasons in both `panel` and
+    `table`.
 
     `panel` is the whole season panel (offence rows are read: the panel's inputs are the same on both sides);
     `table` the step-4 table, which brings prior_off and prior_def.  Standardised with the population standard
-    deviation (ddof 0).
+    deviation (ddof 0).  `columns` defaults to TYPE_FEATURES; check 153 reads step 5 as it was with its own list.
     """
-    offence = panel[panel.side == "O"][["player_id", "season", *PANEL_FEATURES]]
+    columns = list(TYPE_FEATURES if columns is None else columns)
+    panel_columns = [column for column in columns if column not in PRIOR_FEATURES]
+    offence = panel[panel.side == "O"][["player_id", "season", *panel_columns]]
     features = offence.merge(table[["player_id", "season", *PRIOR_FEATURES]], on=["player_id", "season"],
                              how="inner")
-    values = features[TYPE_FEATURES].astype(float)
-    features[TYPE_FEATURES] = (values - values.mean()) / values.std(ddof=0)
-    return features.set_index(["player_id", "season"])[TYPE_FEATURES]
+    values = features[columns].astype(float)
+    features[columns] = (values - values.mean()) / values.std(ddof=0)
+    return features.set_index(["player_id", "season"])[columns]
 
 
 def season_features(features: pd.DataFrame, season: int) -> pd.DataFrame:
@@ -225,6 +256,35 @@ def season_swaps(season: Season, ratings: pd.DataFrame, features: pd.DataFrame, 
     pairs = residual_pairs(season, ratings, RESIDUAL_CONTEXT)
     return SeasonSwaps(pairs=pairs, team_possessions=team_possessions(season),
                        grams={side: pair_grams(pairs[side], features, fold_of, n_folds) for side in SIDES})
+
+
+# ---------------------------------------------------------------------- the training swaps, from held-back games
+def fold_type_features(rows_offence: pd.DataFrame, table: pd.DataFrame, centre: pd.Series,
+                       scale: pd.Series) -> pd.DataFrame:
+    """player_id -> a fold's standardised type features: the box counts, role and body its players file rebuilt from
+    the fit games (data/within_folds.py), the prior parts of its step 4 (`table`, prior_shrink.shrink_fold), read with
+    the whole table's `centre` and `scale` (`feature_scale`), so a fold's player is on the table's scale."""
+    columns = list(centre.index)
+    panel_columns = [column for column in columns if column not in PRIOR_FEATURES]
+    frame = rows_offence.drop_duplicates("player_id").set_index("player_id")[panel_columns].astype(float)
+    frame = frame.join(table.set_index("player_id")[PRIOR_FEATURES], how="inner")
+    return (frame[columns] - centre) / scale
+
+
+def held_back_grams(held: Season, table: pd.DataFrame, features: pd.DataFrame, n_folds: int) -> dict:
+    """{side: PairGrams}: the type model's normal equations on one fold's held-back games, each swap scored against
+    the fold's step-4 ratings (`table`, positive good), the two players read on their fit-game `features`.  A player's
+    own swaps stay out of his own model through the player folds."""
+    pairs = residual_pairs(held, ratings_in_raw_sign(table), RESIDUAL_CONTEXT)
+    fold_of = player_folds(features.index.to_numpy(), n_folds)
+    return {side: pair_grams(pairs[side], features, fold_of, n_folds) for side in SIDES}
+
+
+def add_grams(parts: list) -> PairGrams:
+    """The PairGrams of several folds summed: one season's share of the type model."""
+    return PairGrams(G=sum(part.G for part in parts), b=sum(part.b for part in parts),
+                     G_fold=sum(part.G_fold for part in parts), b_fold=sum(part.b_fold for part in parts),
+                     n=sum(part.n for part in parts))
 
 
 def type_coefficients(grams: list, fold: int | None = None, penalty: float = 1e-4) -> np.ndarray:
