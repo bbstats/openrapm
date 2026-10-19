@@ -5,18 +5,17 @@ whole on 2026-10-16; the earlier, longer file is in git history at feeb8e6.  `DE
 carries every number quoted here; read its measurement traps before trusting a number.  `README.md` says what
 OpenRAPM is, `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing rules.
 
-## Where it stands, 2026-10-17
+## Where it stands, 2026-10-19
 
 - **Live on the site since 2026-10-19 (8dc207b):** experiment 80, step 5 cross-fitted and single-season (the owner:
   "this looks much better anecdotally so - adopt").  The product table and the site's files are rebuilt
   and published, the owner: "commit and publish".
-- **Live on the site:** experiment 78, published 2026-10-17: experiment 77 (experiment 76's booster settings and
+- **Before it, experiment 78**, published 2026-10-17: experiment 77 (experiment 76's booster settings and
   defence factor, three-point % off the offensive booster) with the prior averaged over 10 bootstraps of the players.
   Decider -0.086, z -3.13, the twenty untouched seasons z -2.40; guard z +0.60.  A product build now takes longer: a
   season's rating about 96 s against 24.
-- **Tests:** `pytest -q` 663 passed, the Curry ceiling passing again, Curry 48th; `pytest -m slow` 7 passed; `ruff
-  check .` clean.  Two consensus guards were loosened for experiment 76, the bigs rated above the consensus:
-  bigness 0.30 to 0.40, archetype spread 0.25 to 0.30.
+- **Tests:** `pytest -q` 686 passed and 1 expected failure, the backup bigs; `pytest -m slow` 7 passed, the step-5
+  golden pair `golden/crossfit80/` byte for byte; `ruff check .` clean.  The Curry ceiling passes.
 - **The input cull, done 2026-10-17:** check 152 `cull` / `cull-table`, every input shadowed and dropped at three
   seeds on the tune cache (DECISIONS.md "The input cull on the decider").  One cut, three-point % on offence, became
   experiment 77.  The cull also found the booster's seed alone moves the decider about 0.03; bagging, experiment
@@ -177,13 +176,13 @@ The owner: "do as many tests as you want".  Against the incumbent; DECISIONS.md 
 
     bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes "--features hustle --booster-params lgb1_cols06_flat"
         one experiment, about 50 minutes; log outputs/NAME_chain.log
-    .venv/Scripts/python scripts/checks/151_wowy.py --systems=cols06,noise_cols06,NAME --ref=cols06 --tag=NAME
+    .venv/Scripts/python scripts/checks/151_wowy.py --systems=bags10,noise_bags10,NAME --ref=bags10 --tag=NAME
         the decider alone on folds already built, about 3 minutes; --pieces=source,certainty adds step 4 in pieces
-    .venv/Scripts/python scripts/checks/63_yoy.py --rankings=NAME=outputs/season_ratings_NAME.parquet,incumbent=outputs/season_ratings_gamesfree.parquet --ref=incumbent --tag=NAME --splits=
+    .venv/Scripts/python scripts/checks/63_yoy.py --rankings=NAME=outputs/season_ratings_NAME.parquet,incumbent=outputs/season_ratings_crossfit80.parquet --ref=incumbent --tag=NAME --splits=
         the guard alone
-    .venv/Scripts/python scripts/checks/66_compare.py incumbent=outputs/season_ratings_gamesfree.parquet NAME=outputs/season_ratings_NAME.parquet --season=2026 --top=20 --ref=incumbent --open=0
+    .venv/Scripts/python scripts/checks/66_compare.py incumbent=outputs/season_ratings_crossfit80.parquet NAME=outputs/season_ratings_NAME.parquet --season=2026 --top=20 --ref=incumbent --open=0
         the 2026 top 20
-    .venv/Scripts/python scripts/checks/101_log_run.py --name=NAME --exp=75 --incumbent=gamesfree --idea=owner --verdict=pending --changed="one plain sentence" --notes="the readings"
+    .venv/Scripts/python scripts/checks/101_log_run.py --name=NAME --exp=81 --incumbent=crossfit80 --idea=owner --verdict=pending --changed="one plain sentence" --notes="the readings"
         the experiment table's row; --sheet prints the rows for the Google Sheet
     .venv/Scripts/python scripts/checks/145_piece_multipliers.py --folds=TAG --first=1997 --last=2026
         how much each piece of a rating holds up, on folds built with openrapm folds --pieces
@@ -228,9 +227,9 @@ The owner: "do as many tests as you want".  Against the incumbent; DECISIONS.md 
 
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest -q                       # 662 passed, 1 failed: the Curry star-guard ceiling
+    .venv/Scripts/python -m pytest -q                       # 686 passed, 1 xfailed: the backup bigs
     .venv/Scripts/python -m pytest -q -m slow               # 7 passed
-    .venv/Scripts/python scripts/checks/63_yoy.py --rankings=incumbent=outputs/season_ratings_gamesfree.parquet --tag=verify --splits=
-                                                            # game_armse 8.5958, both directions together
+    .venv/Scripts/python scripts/checks/63_yoy.py --rankings=incumbent=outputs/season_ratings_crossfit80.parquet --tag=verify --splits=
+                                                            # game_armse 8.5934, both directions together
     .venv/Scripts/python -m openrapm site --out-dir <scratch>/docs --built 2026-10-15
     cmp docs/data/ratings.json <scratch>/docs/data/ratings.json       # no output: byte-identical
