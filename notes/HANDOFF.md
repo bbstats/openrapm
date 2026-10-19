@@ -7,9 +7,9 @@ OpenRAPM is, `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing ru
 
 ## Where it stands, 2026-10-17
 
-- **Adopted 2026-10-19, not yet published:** experiment 80, step 5 cross-fitted and single-season (the owner:
+- **Live on the site since 2026-10-19 (8dc207b):** experiment 80, step 5 cross-fitted and single-season (the owner:
   "this looks much better anecdotally so - adopt").  The product table and the site's files are rebuilt
-  locally; publishing waits for the owner's word.
+  and published, the owner: "commit and publish".
 - **Live on the site:** experiment 78, published 2026-10-17: experiment 77 (experiment 76's booster settings and
   defence factor, three-point % off the offensive booster) with the prior averaged over 10 bootstraps of the players.
   Decider -0.086, z -3.13, the twenty untouched seasons z -2.40; guard z +0.60.  A product build now takes longer: a
