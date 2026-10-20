@@ -18,6 +18,9 @@
           padding: 0 15px 0 17px; border: 1px solid var(--accent); border-radius: 999px; color: inherit;
           text-decoration: none; font-weight: 600; white-space: nowrap; }
   .chip .x { color: var(--muted); font-weight: 400; }
+  h1.titled { margin-bottom: 2px; }
+  .byline { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+  .byline a { color: var(--accent); }
   .chip:hover, .chip:focus-visible { background: rgb(128 128 128 / 0.1); }
   .chip:hover .x, .chip:focus-visible .x { color: var(--accent); }
   .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -77,7 +80,8 @@
     <a href="about.html">About</a>
     <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
   </nav>
-  <h1>OpenRAPM</h1>
+  <h1 class="titled">OpenRAPM</h1>
+  <p class="byline">by <a href="http://twitter.com/bbstats">Nathan Walker</a></p>
   <div class="controls">
     <span class="step" data-list><button type="button" id="older" aria-label="Previous season" title="Previous season">&lsaquo;</button><select id="season" aria-label="Season"></select><button type="button" id="newer" aria-label="Next season" title="Next season">&rsaquo;</button></span>
     <select id="team" aria-label="Team" data-list></select>
