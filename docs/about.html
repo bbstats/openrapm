@@ -10,6 +10,10 @@
   :root { --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6; }
   :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5; }
   body { color: var(--ink); font: 14px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  h2 { font-size: 18px; margin: 8px 0 10px; }
+  p { margin: 0 0 10px; }
+  p a { color: var(--accent); }
+  pre { margin: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 6px; font: 13px/1.5 Consolas, Menlo, monospace; overflow-x: auto; }
 </style>
 </head>
 <body>
@@ -21,7 +25,49 @@
     <a href="about.html" aria-current="page">About</a>
     <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
   </nav>
-  <h1>Coming Soon</h1>
+  <h2>Prior Inputs</h2>
+  <p>All stats use <a href="https://kmedved.com/2020/08/06/nba-stabilization-rates-and-the-padding-approach/">padding method</a> to reduce noise.</p>
+  <pre>{
+  "Offense": [
+    "assists_per100",
+    "assists_minus_turnovers_per100",
+    "effective_fg_pct",
+    "shots_per100",
+    "free_throw_attempts_per100",
+    "off_rebounds_per100",
+    "off_rebound_share",
+    "three_point_attempt_share",
+    "team_possession_share",
+    "points_per100",
+    "steals_per100",
+    "true_shooting_pct",
+    "weight_lb",
+    "screen_assists_vs_league_avg",
+    "screen_assist_points_vs_league_avg",
+    "off_box_outs_vs_league_avg",
+    "loose_balls_recovered_vs_league_avg"
+  ],
+  "Defense": [
+    "blocks_per100",
+    "def_rebounds_per100",
+    "shots_per100",
+    "games_started_share",
+    "height_in",
+    "team_possession_share",
+    "points_per100",
+    "steals_per100",
+    "steals_plus_blocks_per100",
+    "true_shooting_pct",
+    "used_possessions_per100",
+    "weight_lb",
+    "deflections_vs_league_avg",
+    "contested_twos_vs_league_avg",
+    "contested_threes_vs_league_avg",
+    "charges_drawn_vs_league_avg",
+    "def_box_outs_vs_league_avg",
+    "loose_balls_recovered_vs_league_avg"
+  ]
+}</pre>
 </main>
 </body>
 </html>
