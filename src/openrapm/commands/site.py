@@ -225,7 +225,6 @@ PAGE_HEAD = """<!doctype html>
   :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5;
           --over: 230 103 103; --under: 57 135 229; --zero: #383835; }
   body { color: var(--ink); font: 14px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
-  h1 { font-size: 21px; margin: 0 0 10px; }
   table { border-collapse: separate; border-spacing: 2px 0; width: 100%;
           font-variant-numeric: tabular-nums; }
   th, td { padding: 4px 7px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
@@ -245,8 +244,9 @@ PAGE_HEAD = """<!doctype html>
 <main>
 <nav class="site">
   <a href="./">Ratings</a>
+  <a href="similarity.html">~ Similarity</a>
   <a href="bias.html" aria-current="page">Bias</a>
-  <a href="similarity.html">Similarity</a>
+  <a href="about.html">About</a>
   """
 # the dark-mode button, one line on the page
 THEME_BUTTON = ('<button class="theme" type="button" aria-label="Dark mode" title="Dark mode">'

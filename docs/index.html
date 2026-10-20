@@ -7,75 +7,64 @@
 <link rel="stylesheet" href="site.css">
 <script src="site.js"></script>
 <style>
-  /* one colour per term of the equation, cool for the pieces and hot for OpenRAPM; in the decomposition its table
-     column is shaded in it, light for low values and dark for high ones */
-  :root { --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6;
-          --c-green: 22 163 74; --c-blue: 37 99 235; --c-teal: 13 148 136; --c-purple: 124 58 237;
-          --c-slate: 71 85 105; --c-rapm: 234 88 12; }
-  :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5;
-          --c-green: 74 205 120; --c-blue: 96 145 255; --c-teal: 45 196 180; --c-purple: 167 139 250;
-          --c-slate: 148 163 184; --c-rapm: 251 146 60; }
+  :root { --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6; }
+  :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5; }
   body { color: var(--ink); font: 14px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
-  .title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 0 0 10px; }
-  h1 { font-size: 21px; margin: 0; }
-  .title nav.toggle { margin: 0; }
-  .eq { margin: 0 0 8px; font-size: 13.5px; line-height: 1.9; }
-  .term { display: inline-block; padding: 0 8px; border-radius: 999px; line-height: 1.6; white-space: nowrap;
-          background: rgb(var(--c) / 0.14); box-shadow: inset 0 0 0 1.5px rgb(var(--c) / 0.6); }
-  .controls { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-bottom: 8px; }
-  label { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
-  select, input { font: inherit; padding: 3px 6px; border: 1px solid var(--line); border-radius: 5px;
-                  background: transparent; color: inherit; }
-  input[type=search] { width: 160px; }
-  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
-  .seg button { font: inherit; font-size: 13px; padding: 4px 10px; border: 0; background: transparent;
-                color: var(--muted); cursor: pointer; }
-  .seg button + button { border-left: 1px solid var(--line); }
-  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
-  .meta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0 16px; }
-  .count, .dl { color: var(--muted); font-size: 12.5px; margin: 0 0 6px; }
-  .dl a { color: inherit; }
+  #find { width: 210px; }
+  /* the side buttons sit left of Decomposition, so the button stays under the pointer when they appear */
+  .cols { display: inline-flex; gap: 8px; margin-left: auto; }
+  /* one link: the player's name and the cross that goes back to the list */
+  .chip { display: inline-flex; align-items: center; gap: 12px; box-sizing: border-box; height: 40px;
+          padding: 0 15px 0 17px; border: 1px solid var(--accent); border-radius: 999px; color: inherit;
+          text-decoration: none; font-weight: 600; white-space: nowrap; }
+  .chip .x { color: var(--muted); font-weight: 400; }
+  .chip:hover, .chip:focus-visible { background: rgb(128 128 128 / 0.1); }
+  .chip:hover .x, .chip:focus-visible .x { color: var(--accent); }
   .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   table { border-collapse: separate; border-spacing: 0; width: 100%; font-variant-numeric: tabular-nums; }
-  th, td { padding: 4px 7px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
-  th { color: var(--muted); font-weight: 600; font-size: 12.5px; cursor: pointer; user-select: none;
-       vertical-align: bottom; }
-  table.pieces th { white-space: normal; min-width: 54px; }
-  table.pieces th.rank, table.pieces th.name { white-space: nowrap; min-width: 0; }
+  th, td { padding: 9px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; vertical-align: bottom; cursor: pointer;
+       user-select: none; }
+  th:hover { color: var(--ink); }
   th.rank, td.rank { color: var(--muted); cursor: default; }
-  th.name, td.name { text-align: left; position: sticky; left: 0; background: Canvas; }
+  th.name, td.name, th.season, td.season { text-align: left; position: sticky; left: 0; background: Canvas; }
   th.name, th.team { cursor: default; }
   th.team, td.team { text-align: left; color: var(--muted); }
-  td.name .tm { display: none; }
+  /* every header keeps room for the sort arrow, so sorting never shifts the columns */
+  th[data-k]::after { content: "\2193"; margin-left: 3px; visibility: hidden; }
+  th[aria-sort="descending"]::after { visibility: visible; }
+  th[aria-sort="ascending"]::after { content: "\2191"; visibility: visible; }
   th[aria-sort="descending"], th[aria-sort="ascending"] { color: var(--accent); }
-  th[aria-sort="descending"]::after { content: " \2193"; }
-  th[aria-sort="ascending"]::after { content: " \2191"; }
   td.total { font-weight: 700; }
-  tr.player { cursor: pointer; }
-  tr.player:hover td.name, tr.player:focus-visible td.name { color: var(--accent); }
-  tr.player:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-  tr.open td { border-bottom-color: transparent; }
-  tr.detail td { text-align: left; white-space: normal; padding: 6px 7px 12px; }
-  .inner { position: sticky; left: 7px; max-width: min(640px, calc(100vw - 40px)); }
-  svg.wf { display: block; }
-  svg.wf text { font: 12px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--ink); }
-  svg.wf text.lab { fill: var(--muted); }
-  svg.wf text.tot { font-weight: 700; }
-  svg.wf line.zero { stroke: var(--line); } svg.wf line.link { stroke: var(--muted); stroke-width: 1.3; stroke-dasharray: 2 2; }
-  footer { margin-top: 22px; color: var(--muted); font-size: 12.5px; }
+  td.msg { text-align: left; color: var(--muted); }
+  td a { color: inherit; text-decoration: none; }
+  td a:hover, td a:focus-visible { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+  /* a name, or a lone team, is a link the size of its cell; two teams share theirs */
+  td.name > a, td.team a:only-child { display: block; margin: -9px -8px; padding: 9px 8px; }
+  /* each code of SAC/IND reaches the cell's edges and meets the slash, so its letters sit where a lone team's do */
+  td.team a { display: inline-block; margin: -9px -2px; padding: 9px 2px; }
+  td.team a:first-child { margin-left: -8px; padding-left: 8px; }
+  td.team a:last-child { margin-right: -8px; padding-right: 8px; }
+  td.name .tm { display: none; }
+  /* a season's ~ opens the similarity page on that player-season */
+  td.season a.sim { display: inline-block; margin: -9px -8px -9px 2px; padding: 9px 12px 9px 10px; color: var(--ink);
+                    font-size: 17px; line-height: 1; font-weight: 900; }
+  td.season a.sim:hover, td.season a.sim:focus-visible { color: var(--accent); text-decoration: none; }
+  .dl { color: var(--muted); font-size: 12.5px; margin: 12px 0 0; }
+  .dl a { color: inherit; }
+  footer { margin-top: 24px; color: var(--muted); font-size: 12.5px; }
   footer a { color: inherit; }
   @media (max-width: 600px) {
     body { font-size: 13.5px; }
-    h1 { font-size: 19px; }
-    .controls { gap: 6px 10px; }
-    .seg button { padding: 4px 8px; }
-    input[type=search] { width: 120px; }
-    th, td { padding: 4px 5px; }
+    #find { width: 150px; }
+    th, td { padding: 7px 5px; }
     table { font-size: 13px; }
     td.name { white-space: normal; min-width: 96px; }   /* a long name takes two lines so every column fits */
+    td.name > a { margin: 0; padding: 0; }
     th.team, td.team { display: none; }                 /* the team goes under the name instead */
-    td.name .tm { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.2; }
-    tr.detail td { padding: 4px 5px 10px; }
+    td.name .tm { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.3; }
+    td.name .tm a { display: inline; margin: 0; padding: 0; }
+    table.career th.team, table.career td.team { display: table-cell; }   /* a player's seasons have no name cell */
   }
 </style>
 </head>
@@ -83,84 +72,64 @@
 <main>
   <nav class="site">
     <a href="./" aria-current="page">Ratings</a>
+    <a href="similarity.html">~ Similarity</a>
     <a href="bias.html">Bias</a>
-    <a href="similarity.html">Similarity</a>
+    <a href="about.html">About</a>
     <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
   </nav>
-  <div class="title">
-    <h1>OpenRAPM</h1>
-    <nav class="toggle" aria-label="Rating"><a href="./" aria-current="page">OpenRAPM</a><a href="decompose.html">Vanilla RAPM</a></nav>
-  </div>
+  <h1>OpenRAPM</h1>
   <div class="controls">
-    <div class="seg" role="group" aria-label="Columns">
-      <button type="button" data-view="ratings" aria-pressed="true">Ratings</button>
-      <button type="button" data-view="decomposition" aria-pressed="false">Decomposition</button>
-    </div>
-    <div class="seg" role="group" aria-label="Side">
-      <button type="button" data-side="off" aria-pressed="false">Offense</button>
-      <button type="button" data-side="def" aria-pressed="false">Defense</button>
-      <button type="button" data-side="total" aria-pressed="true">Total</button>
-    </div>
-    <label>Season <select id="season"></select></label>
-    <label>Team <select id="team"></select></label>
-    <label>Find <input id="find" type="search" placeholder="player name" autocomplete="off"></label>
-  </div>
-  <p class="eq" hidden><span class="term" style="--c: var(--c-green)">Box score</span>
-    + <span class="term" style="--c: var(--c-blue)">On court signal</span>
-    + <span class="term" style="--c: var(--c-teal)">Off court adjustment</span>
-    + <span class="term" style="--c: var(--c-purple)">Team SOS adjustment</span>
-    + <span class="term" style="--c: var(--c-slate)">Swap adjustment</span>
-    = <span class="term" style="--c: var(--c-rapm)"><b>OpenRAPM</b></span></p>
-  <div class="meta">
-    <p class="count" id="count">Loading&hellip;</p>
-    <p class="dl">Download CSV: <a href="#" id="csv-view">this view</a> &middot; <a href="#" id="csv-all">all seasons</a></p>
+    <span class="step" data-list><button type="button" id="older" aria-label="Previous season" title="Previous season">&lsaquo;</button><select id="season" aria-label="Season"></select><button type="button" id="newer" aria-label="Next season" title="Next season">&rsaquo;</button></span>
+    <select id="team" aria-label="Team" data-list></select>
+    <input id="find" type="search" placeholder="Find player" aria-label="Find player" autocomplete="off" spellcheck="false" data-list>
+    <a class="chip" id="chip" href="#" hidden><span id="chip-name"></span><span class="x" aria-hidden="true">&#x2715;</span></a>
+    <span class="cols">
+      <span class="seg" id="side" role="group" aria-label="Side" hidden><button type="button" data-side="off" aria-pressed="false">Offense</button><button type="button" data-side="def" aria-pressed="false">Defense</button><button type="button" data-side="total" aria-pressed="true">Total</button></span>
+      <button type="button" id="pieces" aria-pressed="false">Decomposition</button>
+    </span>
   </div>
   <div class="scroll">
-    <table id="table"><thead></thead><tbody></tbody></table>
+    <table id="table"><thead></thead><tbody><tr><td class="msg" colspan="99">Loading&hellip;</td></tr></tbody></table>
   </div>
-  <footer>
-    A multi-stage prior-informed RAPM: a role-and-age prior, then a gradient-boosted box-score prior, then a ridge on the
-    on-court result, chosen by out-of-season prediction of held-out games. The box-score part of each rating is then
-    scaled to how far it holds up on games of the same season that the rating never saw (about 0.72 on offense, 0.95 on
-    defense; the season's own on-court part is kept whole). Last, credit within each team is re-split using
-    lineup swaps (the same four teammates with one player changed), keeping each team's total and the spread of the
-    ratings unchanged. One rating per player per season, from that
-    season's games. Nothing that is fitted has seen a season still being played. Source, method and every measurement:
-    <a href="https://github.com/bbstats/openrapm">github.com/bbstats/openrapm</a>. Architecture changes are welcome; the test that
-    decides is <code>scripts/45_holdout.py</code>. <span id="built"></span>
-  </footer>
+  <p class="dl">Download CSV: <a href="#" id="csv-view">this view</a> &middot; <a href="#" id="csv-all">all seasons</a></p>
+  <footer><a href="https://github.com/bbstats/openrapm">github.com/bbstats/openrapm</a></footer>
 </main>
 <script>
 (function () {
   const $ = id => document.getElementById(id);
-  const fmt1 = v => { const r = Math.round(v * 10) / 10 || 0;    // a rating that rounds to zero shows 0.0, not -0.0
-                      return (r > 0 ? "+" : "") + r.toFixed(1); };
-  const fmt = v => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(2);
+  // a true minus sign, and Math.round rather than toFixed, so -1.25 shows as -1.2 on every page
+  const sign = v => v > 0 ? "+" : v < 0 ? "−" : "";
+  const fmt1 = v => { const r = Math.round(v * 10) / 10 || 0; return sign(r) + Math.abs(r).toFixed(1); };
+  const fmt = v => sign(v) + Math.abs(v).toFixed(2);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-  const fold = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const whole = new Intl.NumberFormat("en-US");      // one formatter: toLocaleString builds a new one every call
+  const fold = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const option = (value, text) => Object.assign(document.createElement("option"), { value, textContent: text });
 
   // the data file's three sides; each holds the five pieces and the rating, in the order PIECES lists them
   const SIDE_FIELD = { off: "o", def: "d", total: "t" };
   const FIELD_SIDE = { o: "off", d: "def", t: "total" };
-  const SIDE_WORD = { off: "offense", def: "defense", total: "offense plus defense" };
-  // a piece: [row key, name, chart label, colour]; the same colour as its term in the equation
-  const PIECES = [["box", "Box score", "Box score", "--c-green"],
-                  ["on", "On court signal", "On court signal", "--c-blue"],
-                  ["off", "Off court adjustment", "Off court adj.", "--c-teal"],
-                  ["sos", "Team SOS adjustment", "Team SOS adj.", "--c-purple"],
-                  ["swap", "Swap adjustment", "Swap adj.", "--c-slate"]];
-  const RATING_COLOR = "--c-rapm";
-  const colorOf = k => k === "a" ? RATING_COLOR : (PIECES.find(([p]) => p === k) || [])[3];
-  // the columns of each view: [key, header]; the ratings view shows each side's rating, the decomposition one
+  const PIECES = [["box", "Box score"], ["on", "On court"], ["off", "Off court"], ["sos", "Team SOS"],
+                  ["swap", "Swap adjustment"]];
+  // the columns of each view, [key, header]: the ratings view shows each side's rating, the decomposition one
   // side's pieces
   const COLUMNS = { ratings: [["o", "Offense"], ["d", "Defense"], ["t", "Total"], ["p", "Poss."]],
-                    decomposition: [...PIECES.map(([k, name]) => [k, name]), ["a", "OpenRAPM"], ["p", "Poss."]] };
+                    decomposition: [...PIECES, ["a", "OpenRAPM"], ["p", "Poss."]] };
 
-  const state = { view: "ratings", side: "total", season: null, team: "", q: "", open: null, sortKey: "t",
-                  sortDir: -1 };
+  // the season list and a player's seasons keep a sort each, so the way back finds the list sorted as it was
+  const state = { view: "ratings", side: "total", season: null, team: "", q: "", player: null,
+                  sort: { list: { k: "t", dir: -1 }, player: { k: "s", dir: -1 } } };
+  const sorting = () => state.sort[state.player === null ? "list" : "player"];
   const table = $("table"), thead = table.querySelector("thead"), tbody = table.querySelector("tbody");
-  const season = $("season"), team = $("team"), find = $("find");
-  let data = null, shown = [];
+  const season = $("season"), team = $("team"), find = $("find"), chip = $("chip"), pieces = $("pieces");
+  let data = null, careers = new Map(), shown = [];
+  // on a phone the team column is hidden and each team goes under the name instead; drawn only there, so a redraw on
+  // a wider screen writes less
+  const phone = matchMedia("(max-width: 600px)");
+  phone.addEventListener("change", () => { if (data) render(); });
+  // the similarity page's player-seasons, "id:season": a season's ~ shows only where that page has it (1,000 or more
+  // offensive possessions, Finals over); read after the ratings, so it never holds up the table
+  let similar = new Set();
 
   async function load() {
     const doc = await (await fetch("data/decompose_openrapm.json")).json();
@@ -169,70 +138,132 @@
       rows[k] = list.map(r => Object.fromEntries(f.map((name, j) => [name, r[j]])));
     return { meta: doc.meta, rows };
   }
+  // each player's seasons as [season, row], latest first, so the first carries his latest name; meta.seasons runs
+  // latest first, the rows' keys would not
+  function careersOf(d) {
+    const m = new Map();
+    for (const s of d.meta.seasons.map(String)) for (const x of d.rows[s]) {
+      if (!m.has(x.id)) m.set(x.id, []);
+      m.get(x.id).push([s, x]);
+    }
+    return m;
+  }
 
   // one player's row as the table reads it: each side's rating, and the chosen side's five pieces and rating
   function onSide(r, side) {
     const v = r[SIDE_FIELD[side]];
     return { n: r.n, id: r.id, p: r.p, tm: r.tm, o: r.o[5], d: r.d[5], t: r.t[5],
-             box: v[0], on: v[1], off: v[2], sos: v[3], swap: v[4], a: v[5], side: v };
+             box: v[0], on: v[1], off: v[2], sos: v[3], swap: v[4], a: v[5] };
   }
 
-  function writeAddress() {
-    const h = new URLSearchParams();
-    h.set("season", state.season);
-    if (state.view !== "ratings") h.set("view", state.view);
-    if (state.side !== "total") h.set("side", state.side);
-    if (state.team) h.set("team", state.team);
-    if (state.open !== null) h.set("player", state.open);
-    history.replaceState(null, "", "#" + h.toString());
-    // the same season and player on the vanilla page
-    const v = new URLSearchParams({ period: state.season });
-    const open = shown.find(r => r.id === state.open);
-    if (open) v.set("player", open.n);
-    const link = document.querySelector("nav.toggle a:not([aria-current])");
-    if (link) link.href = "decompose.html#" + v.toString();
+  // an address: a place (season, team, player) and the two buttons as they are now, in the order old links have:
+  // #season=2026&view=decomposition&side=off&team=SAS&player=1641705.  With a player, the season and team are the
+  // list the cross goes back to.  The sort is not in it.  Built as a string: a redraw writes about 2,000 of them
+  const addr = (season, team, player) => "#season=" + season +
+    (state.view !== "ratings" ? "&view=" + state.view : "") + (state.side !== "total" ? "&side=" + state.side : "") +
+    (team ? "&team=" + encodeURIComponent(team) : "") + (player !== null ? "&player=" + player : "");
+  // every entry the page has drawn carries a state: that is how a hashchange tells Back and Forward (a state) from
+  // a link or a typed address (none).  It also keeps the Find text, which the address leaves out
+  const writeAddress = () => history.replaceState(Object.assign({}, history.state, { q: state.q }), "",
+                                                  addr(state.season, state.team, state.player));
+  function place(h) {
+    const seasons = data.meta.seasons.map(String), id = +h.get("player");
+    state.season = seasons.includes(h.get("season")) ? h.get("season") : seasons[0];
+    state.team = h.get("team") || "";
+    state.player = careers.has(id) ? id : null;       // no id, a bad one or one without rows: the season list
+    season.value = state.season;
+    fillTeams();                                      // a team the season lacks becomes every team
   }
-
-  // a waterfall: each piece starts where the last one ended, and the last bar is the total.  Drawn at the width
-  // there is, one unit to a pixel, so its labels stay readable on a phone instead of shrinking with it.
-  function waterfall(p) {
-    let run = 0;
-    const bars = PIECES.map(([k, , label, color]) => { const a = run; run += p[k];
-                                                       return { name: label, v: p[k], a, b: run, color }; });
-    bars.push({ name: "OpenRAPM", v: p.a, a: 0, b: p.a, total: true, color: RATING_COLOR });
-    let lo = Math.min(0, ...bars.map(b => Math.min(b.a, b.b))), hi = Math.max(0, ...bars.map(b => Math.max(b.a, b.b)));
-    const pad = (hi - lo || 1) * 0.04; lo -= pad; hi += pad;
-    const W = Math.round(Math.min(620, Math.max(280, document.querySelector(".scroll").clientWidth - 16)));
-    const L = Math.min(150, Math.round(14 + 6.6 * Math.max(...bars.map(b => b.name.length))));
-    const R = 54, rowH = 26, top = 3, barH = 14, H = top * 2 + bars.length * rowH;
-    const X = v => L + (v - lo) / (hi - lo) * (W - L - R);
-    const label = bars.map(b => `${b.name} ${fmt(b.v)}`).join(", ");
-    let s = `<svg class="wf" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">`;
-    s += `<line class="zero" x1="${X(0)}" x2="${X(0)}" y1="0" y2="${H}"/>`;
-    bars.forEach((b, i) => {
-      const y = top + i * rowH, x0 = X(Math.min(b.a, b.b)), x1 = X(Math.max(b.a, b.b));
-      if (i > 0) s += `<line class="link" x1="${X(b.total ? b.b : b.a)}" x2="${X(b.total ? b.b : b.a)}" y1="${y - rowH + (rowH + barH) / 2}" y2="${y + (rowH - barH) / 2}"/>`;
-      s += `<text class="lab${b.total ? " tot" : ""}" x="${L - 8}" y="${y + rowH / 2 + 4}" text-anchor="end">${b.name}</text>`;
-      s += `<rect style="fill: rgb(var(${b.color}))" x="${x0}" y="${y + (rowH - barH) / 2}" width="${Math.max(1.5, x1 - x0)}" height="${barH}" rx="3"/>`;
-      const room = W - x1 > 54;
-      s += `<text class="${b.total ? "tot" : ""}" x="${room ? x1 + 6 : x0 - 6}" y="${y + rowH / 2 + 4}" text-anchor="${room ? "start" : "end"}">${fmt(b.v)}</text>`;
-    });
-    return s + "</svg>";
+  // a link carries the buttons as they are, so only a typed or pasted address changes them
+  function buttons(h) {
+    const view = h.get("view") === "decomposition" ? "decomposition" : "ratings",
+          side = SIDE_FIELD[h.get("side")] ? h.get("side") : "total";
+    if (view !== state.view || side !== state.side) setView(view, side);
+  }
+  // the two column sets share the sort where they can: a side's rating is that side's OpenRAPM column, and back;
+  // both tables' sorts move.  Turning the pieces on takes the side from the rating the shown table is sorted on
+  function setView(view, side = (view === "decomposition" && FIELD_SIDE[sorting().k]) || state.side) {
+    for (const s of Object.values(state.sort))
+      if (view === "ratings" ? s.k !== "p" && s.k !== "s" : FIELD_SIDE[s.k]) s.k = view === "ratings" ? SIDE_FIELD[side] : "a";
+    state.view = view;
+    state.side = side;
   }
 
   function head() {
-    const mark = k => state.view === "decomposition" && colorOf(k)
-      ? ` style="box-shadow: inset 0 -3px 0 rgb(var(${colorOf(k)}))"` : "";
-    table.className = state.view === "decomposition" ? "pieces" : "";
-    thead.innerHTML = `<tr><th class="rank">#</th><th class="name">Player</th><th class="team">Team</th>` + COLUMNS[state.view].map(([k, name]) =>
-      `<th data-k="${k}"${mark(k)} aria-sort="${k === state.sortKey
-        ? (state.sortDir < 0 ? "descending" : "ascending") : "none"}" title="sort">${name}</th>`).join("") + `</tr>`;
-    thead.querySelectorAll("th[data-k]").forEach(th => th.addEventListener("click", () => {
-      state.sortDir = state.sortKey === th.dataset.k ? -state.sortDir : -1;   // a new column starts high to low
-      state.sortKey = th.dataset.k;
-      head();
-      render();
-    }));
+    const { k, dir } = sorting(), one = state.player !== null;
+    // with the rating columns the side is the rating sorted on, so the bold column is the sorted one (sorted by
+    // possessions or season it stays where it was)
+    if (state.view === "ratings" && FIELD_SIDE[k]) state.side = FIELD_SIDE[k];
+    const th = (key, name, cls) => `<th${cls ? ` class="${cls}"` : ""} data-k="${key}" aria-sort="${key === k
+      ? (dir < 0 ? "descending" : "ascending") : "none"}">${name}</th>`;
+    thead.innerHTML = `<tr><th class="rank">#</th>` + (one ? th("s", "Season", "season") : `<th class="name">Player</th>`) +
+      `<th class="team">Team</th>` + COLUMNS[state.view].map(([key, name]) => th(key, name)).join("") + `</tr>`;
+    table.className = one ? "career" : "";
+  }
+  thead.addEventListener("click", e => {
+    const th = e.target.closest("th[data-k]");
+    if (!th) return;
+    const s = sorting();
+    s.dir = s.k === th.dataset.k ? -s.dir : -1;       // a new column starts high to low, Season newest first
+    s.k = th.dataset.k;
+    render();
+  });
+
+  function render() {
+    head();
+    if (!data) return;
+    const one = state.player !== null, decomposition = state.view === "decomposition", { k, dir } = sorting();
+    let rows;
+    if (!one) {
+      // every player of the season is ranked first and the team and name filters come after, so a player found
+      // either way keeps his rank among all of them
+      const q = fold(state.q);
+      const all = data.rows[state.season].map(r => onSide(r, state.side));
+      all.sort((a, b) => (a[k] - b[k]) * dir || b.t - a.t);
+      all.forEach((r, i) => { r.rank = i + 1; });
+      rows = all.filter(r => (!state.team || r.tm.split("/").includes(state.team)) && (!q || fold(r.n).includes(q)));
+    } else {
+      // his rank each season: that season sorted high to low on the sorted column (on the bold one when sorted by
+      // season) with the list's tie-break; a stable sort numbers ties as the list does
+      const rk = k === "s" ? (decomposition ? "a" : SIDE_FIELD[state.side]) : k;
+      rows = careers.get(state.player).map(([s]) => {
+        const them = data.rows[s].map(r => onSide(r, state.side)).sort((a, b) => b[rk] - a[rk] || b.t - a.t);
+        const i = them.findIndex(r => r.id === state.player);
+        return Object.assign(them[i], { rank: i + 1, s: +s });
+      });
+      rows.sort((a, b) => (a[k] - b[k]) * dir || b.s - a.s);
+    }
+    shown = rows;
+    // a team code opens its season on that team; in the season list the chosen team's code clears it
+    const teams = (tm, at) => tm.split("/").map(c =>
+      `<a href="${esc(addr(at, one || c !== state.team ? c : "", null))}">${esc(c)}</a>`).join("/");
+    const cols = COLUMNS[state.view], bold = decomposition ? "a" : SIDE_FIELD[state.side];
+    tbody.innerHTML = rows.map(p => {
+      const links = teams(p.tm, one ? String(p.s) : state.season);
+      const first = one ? `<td class="season">${p.s}${similar.has(p.id + ":" + p.s) ? ` <a class="sim" href="similarity.html#player=${p.id}&amp;season=${p.s}" title="Similarity" aria-label="Similarity, ${p.s}">~</a>` : ""}</td>`
+        : `<td class="name"><a href="${esc(addr(state.season, state.team, p.id))}">${esc(p.n)}</a>` +
+          (phone.matches ? `<span class="tm">${links}</span>` : "") + `</td>`;
+      return `<tr><td class="rank">${p.rank}</td>${first}<td class="team">${links}</td>` + cols.map(([key]) =>
+        `<td${key === bold ? ' class="total"' : ""}>${key === "p" ? whole.format(p.p)
+          : decomposition ? fmt(p[key]) : fmt1(p[key])}</td>`).join("") + `</tr>`;
+    }).join("");
+
+    // the controls: the season list's, or the player's name with the cross back to the list
+    document.querySelectorAll("[data-list]").forEach(e => { e.hidden = one; });
+    chip.hidden = !one;
+    if (one) {
+      const name = careers.get(state.player)[0][1].n;
+      $("chip-name").textContent = name;
+      chip.href = addr(state.season, state.team, null);
+      document.title = `${name} · OpenRAPM`;
+    } else document.title = "OpenRAPM";
+    const seasons = data.meta.seasons.map(String);
+    $("older").disabled = state.season === seasons[seasons.length - 1];
+    $("newer").disabled = state.season === seasons[0];
+    $("side").hidden = !decomposition;
+    pieces.setAttribute("aria-pressed", decomposition);
+    document.querySelectorAll("[data-side]").forEach(b => b.setAttribute("aria-pressed", b.dataset.side === state.side));
+    writeAddress();
   }
 
   // the CSV: the ratings view gives each side's rating, the decomposition view every side's pieces; both carry
@@ -249,7 +280,7 @@
       : [["season", "player_id", "player", "team", "possessions",
           ...["offense", "defense", "total"].flatMap(s => CSV_PIECES.map(k => s + "_" + k))],
          ...pairs.map(([per, x]) => [per, x.id, x.n, x.tm, x.p, ...x.o, ...x.d, ...x.t])];
-    const text = "﻿" + rows.map(r => r.map(q).join(",")).join("\r\n") + "\r\n";
+    const text = "\ufeff" + rows.map(r => r.map(q).join(",")).join("\r\n") + "\r\n";
     const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
     const a = Object.assign(document.createElement("a"), { href: url, download: filename });
     document.body.appendChild(a); a.click(); a.remove();
@@ -258,141 +289,81 @@
   const csvName = what => `openrapm_${state.view === "ratings" ? "ratings" : "decomposition"}_${what}.csv`;
   $("csv-view").addEventListener("click", e => {
     e.preventDefault();
+    if (!data) return;
+    if (state.player !== null)                        // his seasons, oldest first like the all-seasons file
+      return downloadCSV(csvName("player_" + state.player), [...careers.get(state.player)].reverse());
     const ids = new Set(shown.map(r => r.id));
     downloadCSV(csvName(state.season), data.rows[state.season].filter(x => ids.has(x.id)).map(x => [state.season, x]));
   });
   $("csv-all").addEventListener("click", e => {
     e.preventDefault();
-    downloadCSV(csvName("all_seasons"), [...data.meta.seasons].reverse()
-      .flatMap(per => data.rows[per].map(x => [per, x])));
+    if (!data) return;
+    downloadCSV(csvName("all_seasons"), [...data.meta.seasons].reverse().flatMap(per => data.rows[per].map(x => [per, x])));
   });
 
-  function cell(tr, text, cls, style) {
-    const td = document.createElement("td");
-    td.textContent = text;
-    if (cls) td.className = cls;
-    if (style) td.style.background = style;
-    tr.appendChild(td);
-  }
-
-  function render() {
-    const q = fold(state.q), pieces = state.view === "decomposition";
-    // every player of the season is ranked first and the team and name filters come after, so a player found
-    // either way keeps their rank among all of them
-    const all = (data.rows[state.season] || []).map(r => onSide(r, state.side));
-    all.sort((a, b) => (a[state.sortKey] - b[state.sortKey]) * state.sortDir || b.t - a.t);
-    all.forEach((r, i) => { r.rank = i + 1; });
-    const rows = all.filter(r => (!state.team || r.tm.split("/").includes(state.team)) && (!q || fold(r.n).includes(q)));
-    shown = rows;
-    // each term's column is shaded in its colour, light for its lowest values and dark for its highest, over the
-    // whole season (5th to 95th percentile, so one outlier does not wash the rest out); the filters leave the
-    // shades as they were
-    const ranges = {};
-    if (pieces) for (const k of [...PIECES.map(([key]) => key), "a"]) {
-      const v = all.map(r => r[k]).sort((x, y) => x - y);
-      ranges[k] = v.length ? [v[Math.floor(0.05 * (v.length - 1))], v[Math.ceil(0.95 * (v.length - 1))]] : [0, 1];
-    }
-    const tint = (k, x) => {
-      if (!pieces) return "";
-      const [lo, hi] = ranges[k], t = hi > lo ? Math.min(1, Math.max(0, (x - lo) / (hi - lo))) : 0.5;
-      return `rgb(var(${colorOf(k)}) / ${(0.05 + 0.5 * t).toFixed(3)})`;
-    };
-    const cols = COLUMNS[state.view];
-    tbody.replaceChildren();
-    rows.forEach(p => {
-      const tr = document.createElement("tr");
-      tr.className = "player" + (state.open === p.id ? " open" : "");
-      tr.tabIndex = 0;
-      tr.setAttribute("aria-expanded", state.open === p.id);
-      cell(tr, p.rank, "rank");
-      cell(tr, p.n, "name");
-      tr.lastChild.insertAdjacentHTML("beforeend", `<span class="tm">${esc(p.tm)}</span>`);
-      cell(tr, p.tm, "team");
-      cols.forEach(([k]) => {
-        if (k === "p") cell(tr, p.p.toLocaleString(), "");
-        else if (pieces) cell(tr, fmt(p[k]), k === "a" ? "total" : "", tint(k, p[k]));
-        else cell(tr, fmt1(p[k]), k === SIDE_FIELD[state.side] ? "total" : "");
-      });
-      const toggle = () => { state.open = state.open === p.id ? null : p.id; render(); };
-      tr.addEventListener("click", toggle);
-      tr.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
-      tbody.appendChild(tr);
-      if (state.open === p.id) {
-        const d = document.createElement("tr"), td = document.createElement("td");
-        d.className = "detail"; td.colSpan = cols.length + 3;
-        td.innerHTML = `<div class="inner">${waterfall(p)}</div>`;
-        d.appendChild(td); tbody.appendChild(d);
-      }
-    });
-    $("count").textContent = (rows.length < all.length ? `${rows.length} of ${all.length}` : `${all.length}`) +
-                             ` players, ${state.season}` + (state.team ? `, ${state.team}` : "") +
-                             (pieces || state.open !== null ? `, ${SIDE_WORD[state.side]}` : "");
-    writeAddress();
-  }
-
-  // the two views share the sort where they can: a side's rating is that side's OpenRAPM column, and back
-  function setView(view) {
-    if (view === state.view) return;
-    if (view === "decomposition" && FIELD_SIDE[state.sortKey]) { setSide(FIELD_SIDE[state.sortKey]); state.sortKey = "a"; }
-    else if (view === "ratings" && state.sortKey !== "p") state.sortKey = SIDE_FIELD[state.side];
-    state.view = view;
-    document.querySelectorAll("[data-view]").forEach(x => x.setAttribute("aria-pressed", x.dataset.view === view));
-    document.querySelector(".eq").hidden = view !== "decomposition";
-    head();
-  }
-  function setSide(side) {
-    state.side = side;
-    document.querySelectorAll("[data-side]").forEach(x => x.setAttribute("aria-pressed", x.dataset.side === side));
-  }
-
-  document.querySelectorAll("[data-view]").forEach(b => b.addEventListener("click", () => {
-    setView(b.dataset.view);
-    if (data) render();
-  }));
-  document.querySelectorAll("[data-side]").forEach(b => b.addEventListener("click", () => {
-    if (b.dataset.side === state.side) return;
-    setSide(b.dataset.side);
-    if (data) render();
-  }));
   // the season's teams, as its box scores abbreviate them; a team the new season lacks goes back to every team
   function fillTeams() {
-    const codes = [...new Set((data.rows[state.season] || []).flatMap(r => r.tm.split("/")))].filter(Boolean).sort();
+    const codes = [...new Set(data.rows[state.season].flatMap(r => r.tm.split("/")))].filter(Boolean).sort();
     if (!codes.includes(state.team)) state.team = "";
-    team.replaceChildren(...["", ...codes].map(c => { const o = document.createElement("option");
-                                                     o.value = c; o.textContent = c || "All"; return o; }));
+    team.replaceChildren(...["", ...codes].map(c => option(c, c || "All teams")));
     team.value = state.team;
   }
-  season.addEventListener("change", () => { state.season = season.value; fillTeams(); render(); });
+  // the season changes in place, from the list or the arrows, so Back skips the seasons stepped through
+  function setSeason(s) { state.season = season.value = s; fillTeams(); render(); }
+  function step(by) {                                 // meta.seasons runs latest first
+    const seasons = data.meta.seasons.map(String), next = seasons[seasons.indexOf(state.season) + by];
+    if (next !== undefined) setSeason(next);
+  }
+  season.addEventListener("change", () => setSeason(season.value));
+  $("older").addEventListener("click", () => step(1));
+  $("newer").addEventListener("click", () => step(-1));
   team.addEventListener("change", () => { state.team = team.value; render(); });
   find.addEventListener("input", () => { state.q = find.value; render(); });
-  let resized;                           // an open breakdown is redrawn for the new width
-  addEventListener("resize", () => {
-    clearTimeout(resized);
-    resized = setTimeout(() => { if (state.open !== null && data) render(); }, 150);
+  pieces.addEventListener("click", () => { setView(state.view === "ratings" ? "decomposition" : "ratings"); render(); });
+  document.querySelectorAll("[data-side]").forEach(b => b.addEventListener("click", () => {
+    if (b.dataset.side !== state.side) { state.side = b.dataset.side; render(); }
+  }));
+  // the cross goes Back when this player was opened from a list in this tab; otherwise its link opens the list
+  chip.addEventListener("click", e => { if (history.state && history.state.back) { e.preventDefault(); history.back(); } });
+  // a link notes how far down its page was, so Back can return there; the click comes before the navigation, so
+  // this still writes the entry being left
+  history.scrollRestoration = "manual";               // the list is drawn after the browser would restore it
+  document.addEventListener("click", e => {
+    if (e.target.closest("a[href]")) history.replaceState(Object.assign({}, history.state, { y: scrollY }), "");
+  });
+  addEventListener("hashchange", () => {
+    if (!data) return;                                // the first draw reads the address once the data is in
+    const h = new URLSearchParams(location.hash.slice(1)), was = history.state, fromList = state.player === null;
+    place(h);
+    if (was) state.q = was.q || "";                   // Back or Forward: the place and its Find text, not the buttons
+    else { buttons(h); if (state.player === null) state.q = ""; }      // a link to a list opens it unfiltered
+    find.value = state.q;
+    render();
+    if (!was) history.replaceState(Object.assign({}, history.state, { back: fromList && state.player !== null }), "");
+    scrollTo(0, (was && was.y) || 0);
   });
 
-  // the address carries the view, so a player's breakdown can be linked:
-  // #season=2026&view=decomposition&side=off&team=SAS&player=1641705  (no view: ratings; no side: total; no team:
-  // every team)
-  const h = new URLSearchParams(location.hash.slice(1));
-  if (SIDE_FIELD[h.get("side")]) setSide(h.get("side"));
-  if (h.get("view") === "decomposition") { const side = state.side; setView("decomposition"); setSide(side); }
-  if (h.get("player") !== null && h.get("player") !== "") state.open = +h.get("player");
+  const first = new URLSearchParams(location.hash.slice(1));
+  buttons(first);
+  state.player = +first.get("player") || null;        // so the header is right while the data loads
   head();
   load().then(d => {
     data = d;
-    const seasons = d.meta.seasons.map(String);
-    state.season = seasons.includes(h.get("season")) ? h.get("season") : seasons[0];
-    season.replaceChildren(...seasons.map(s => { const o = document.createElement("option");
-                                                 o.value = o.textContent = s; return o; }));
-    season.value = state.season;
-    state.team = h.get("team") || "";
-    fillTeams();
-    $("built").textContent = "Built " + d.meta.built + ".";
+    careers = careersOf(d);
+    season.replaceChildren(...d.meta.seasons.map(s => option(String(s), String(s))));
+    const now = new URLSearchParams(location.hash.slice(1));
+    place(now);
+    buttons(now);
+    const saved = history.state || {};                // a reload keeps the Find text and where the page was
+    state.q = find.value = saved.q || "";
     render();
-    const open = tbody.querySelector("tr.open");
-    if (open) open.scrollIntoView({ block: "center" });
-  }).catch(() => { $("count").textContent = "Could not load the data."; });
+    if (saved.y) scrollTo(0, saved.y);
+    return fetch("data/similarity/player_seasons.json").then(r => r.json()).then(pool => {
+      const f = pool.meta.fields, id = f.indexOf("id"), s = f.indexOf("s");
+      similar = new Set(pool.rows.map(r => r[id] + ":" + r[s]));
+      if (state.player !== null) render();
+    }, () => {});                                     // without it the seasons go without their ~
+  }).catch(() => { tbody.innerHTML = `<tr><td class="msg" colspan="99">Could not load the data.</td></tr>`; });
 })();
 </script>
 </body>

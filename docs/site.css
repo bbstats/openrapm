@@ -1,27 +1,59 @@
-/* Shared by every page: the width, the tabs at the top and the light/dark switch.  Each page keeps its own
-   colours as variables and gives their dark values under :root[data-theme="dark"]; site.js sets data-theme
-   before the page paints, from the saved choice or the system's. */
+/* Shared by every page: the width, the tabs at the top, the light/dark switch, the title, and the controls of the
+   pages that have them.  Each page keeps its own colours as variables (--line, --muted, --accent) and gives their dark
+   values under :root[data-theme="dark"]; site.js sets data-theme before the page paints, from the saved choice or the
+   system's. */
 :root { color-scheme: light; }
 :root[data-theme="dark"] { color-scheme: dark; }
 body { margin: 0; background: Canvas; color: CanvasText; }
-main { max-width: 1000px; margin: 0 auto; padding: 8px 16px 36px; }
-@media (max-width: 600px) { main { padding: 4px 10px 28px; } }
+main { max-width: 1000px; margin: 0 auto; padding: 18px 16px 40px; }
+[hidden] { display: none !important; }      /* hides a control even when it is drawn as a flex box */
+h1 { font-size: 22px; margin: 0 0 18px; }
 
-nav.site { display: flex; align-items: center; gap: 2px; border-bottom: 1px solid var(--line); margin: 0 0 12px; }
-nav.site a { padding: 8px 12px 7px; color: var(--muted); text-decoration: none; font-size: 14px;
+nav.site { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--line); margin: 0 0 36px; }
+nav.site a { padding: 11px 14px 10px; color: var(--muted); text-decoration: none; font-size: 15px;
              border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
 nav.site a:first-child { padding-left: 0; }
 nav.site a:hover { color: CanvasText; }
 nav.site a[aria-current="page"] { color: CanvasText; font-weight: 600; border-bottom-color: var(--accent); }
-nav.site .theme { margin-left: auto; display: inline-flex; padding: 5px; border: 1px solid var(--line);
-                  border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+nav.site .theme { margin-left: auto; display: inline-flex; padding: 9px; border: 1px solid var(--line);
+                  border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; }
 nav.site .theme:hover { color: CanvasText; }
-/* three tabs and the switch fit a 320 px phone at 8 px a side */
-@media (max-width: 380px) { nav.site a { padding-left: 8px; padding-right: 8px; } nav.site a:first-child { padding-left: 0; } }
 
-/* the switch between the OpenRAPM ratings page and the vanilla RAPM decomposition page: drawn like each page's
-   .seg buttons */
-nav.toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin: 0 0 10px; }
-nav.toggle a { font-size: 13px; padding: 4px 10px; color: var(--muted); text-decoration: none; }
-nav.toggle a + a { border-left: 1px solid var(--line); }
-nav.toggle a[aria-current="page"] { background: var(--accent); color: #fff; }
+/* The controls: every button, dropdown and search box is 40 px tall, so each is an easy target. */
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 14px; margin: 0 0 18px; }
+.controls select, .controls input, .controls button {
+  box-sizing: border-box; height: 40px; margin: 0; font: inherit; font-size: 14px; color: inherit;
+  background: transparent; border: 1px solid var(--line); border-radius: 8px; }
+.controls select, .controls input { padding: 0 12px; }
+.controls select { cursor: pointer; }
+.controls select option { background: Canvas; color: CanvasText; }
+.controls button { padding: 0 16px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.controls button:hover:not(:disabled) { color: CanvasText; border-color: var(--muted); }
+.controls button[aria-pressed="true"], .controls button[aria-pressed="true"]:hover {
+  background: var(--accent); border-color: var(--accent); color: #fff; }
+.controls :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* buttons joined in one box: one of them pressed */
+.seg { display: inline-flex; box-sizing: border-box; height: 40px; border: 1px solid var(--line); border-radius: 8px;
+       overflow: hidden; }
+.controls .seg button { height: 38px; border: 0; border-radius: 0; }
+.controls .seg button + button { border-left: 1px solid var(--line); }
+.controls .seg button:hover:not([aria-pressed="true"]) { background: rgb(128 128 128 / 0.1); }
+
+/* ‹ season ›: the arrows step a season, the year opens the list of seasons */
+.step { display: inline-flex; gap: 6px; }
+/* centred in the button by eye: the glyph sits low in its line, so the bottom padding lifts it */
+.controls .step button { display: inline-flex; align-items: center; justify-content: center; width: 40px;
+                         padding: 0 0 7px; font-size: 22px; line-height: 1; color: CanvasText; }
+.controls .step button:hover:not(:disabled) { background: rgb(128 128 128 / 0.12); }
+.controls .step button:disabled { color: var(--muted); opacity: 0.35; cursor: default; }
+
+@media (max-width: 600px) {
+  main { padding: 10px 10px 28px; }
+  h1 { font-size: 19px; margin-bottom: 14px; }
+  nav.site { margin-bottom: 24px; }
+  nav.site a { padding: 10px 9px 9px; font-size: 14px; }
+  nav.site a:first-child { padding-left: 0; }
+}
+/* four tabs and the switch fit a 320 px phone */
+@media (max-width: 380px) { nav.site a { padding-left: 6px; padding-right: 6px; } nav.site a:first-child { padding-left: 0; } }

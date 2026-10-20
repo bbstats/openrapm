@@ -10,40 +10,29 @@
   :root { --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6; --pick: #eef4fc; }
   :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5; --pick: #1f2a38; }
   body { color: var(--ink); font: 14px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
-  h1 { font-size: 21px; margin: 0 0 10px; }
-  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-bottom: 14px; }
-  label { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
-  select, input { font: inherit; padding: 4px 7px; border: 1px solid var(--line); border-radius: 5px;
-                  background: transparent; color: inherit; }
-  select option { background: Canvas; color: CanvasText; }
-  .field { display: flex; align-items: center; gap: 6px; }
-  .field label { display: inline; }
   .combo { position: relative; }
-  #player { width: 220px; }
-  #player-list { position: absolute; z-index: 10; top: 100%; left: 0; min-width: 100%; max-height: 320px;
+  #player { width: 250px; }
+  #player-list { position: absolute; z-index: 10; top: 100%; left: 0; min-width: 100%; max-height: 360px;
                  overflow-y: auto; margin: 3px 0 0; padding: 4px 0; list-style: none; background: Canvas;
-                 border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 18px rgb(0 0 0 / 0.14); }
-  #player-list li { padding: 5px 10px; white-space: nowrap; cursor: pointer; }
+                 border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 18px rgb(0 0 0 / 0.14); }
+  #player-list li { padding: 8px 12px; white-space: nowrap; cursor: pointer; }
   #player-list li[aria-selected="true"] { background: var(--accent); color: #fff; }
-  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
-  .seg button { font: inherit; font-size: 13px; padding: 5px 12px; border: 0; background: transparent;
-                color: var(--muted); cursor: pointer; }
-  .seg button + button { border-left: 1px solid var(--line); }
-  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
-  .count { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
-  .meta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0 16px; }
-  .dl { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+  .dl { color: var(--muted); font-size: 12.5px; margin: 10px 0 0; }
   .dl a { color: inherit; }
+  td.msg { text-align: left; color: var(--muted); }
   .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   table { border-collapse: separate; border-spacing: 0; width: 100%; font-variant-numeric: tabular-nums; }
-  th, td { padding: 4px 7px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  th, td { padding: 9px 9px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
   th { color: var(--muted); font-weight: 600; font-size: 13px; cursor: pointer; user-select: none; }
+  th:hover { color: var(--ink); }
   th.rank, td.rank { color: var(--muted); cursor: default; }
   th.name, td.name { text-align: left; position: sticky; left: 0; background: Canvas; cursor: default; }
   th.season { cursor: default; }
+  /* every header keeps room for the sort arrow, so sorting never shifts the columns */
+  th[data-k]::after { content: "\2193"; margin-left: 3px; visibility: hidden; }
+  th[aria-sort="descending"]::after { visibility: visible; }
+  th[aria-sort="ascending"]::after { content: "\2191"; visibility: visible; }
   th[aria-sort="descending"], th[aria-sort="ascending"] { color: var(--accent); }
-  th[aria-sort="descending"]::after { content: " \2193"; }
-  th[aria-sort="ascending"]::after { content: " \2191"; }
   tr.pick td { background: var(--pick); font-weight: 700; }
   tr.match { cursor: pointer; }
   tr.match:hover td.name, tr.match:focus-visible td.name { color: var(--accent); }
@@ -54,28 +43,23 @@
 <main>
   <nav class="site">
     <a href="./">Ratings</a>
+    <a href="similarity.html" aria-current="page">~ Similarity</a>
     <a href="bias.html">Bias</a>
-    <a href="similarity.html" aria-current="page">Similarity</a>
+    <a href="about.html">About</a>
     <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
   </nav>
   <h1>Similarity</h1>
   <div class="controls">
-    <div class="field"><label for="player">Player</label>
-      <div class="combo">
-        <input id="player" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false"
-               aria-controls="player-list" placeholder="player name" autocomplete="off" spellcheck="false">
-        <ul id="player-list" role="listbox" hidden></ul>
-      </div>
+    <div class="combo">
+      <input id="player" type="text" role="combobox" aria-label="Player" aria-autocomplete="list" aria-expanded="false"
+             aria-controls="player-list" placeholder="player name" autocomplete="off" spellcheck="false">
+      <ul id="player-list" role="listbox" hidden></ul>
     </div>
-    <label>Season <select id="season"></select></label>
+    <span class="step"><button type="button" id="older" aria-label="Previous season" title="Previous season">&lsaquo;</button><select id="season" aria-label="Season"></select><button type="button" id="newer" aria-label="Next season" title="Next season">&rsaquo;</button></span>
     <div class="seg" role="group" aria-label="List">
       <button type="button" data-list="seasons" aria-pressed="true">Seasons</button>
       <button type="button" data-list="players" aria-pressed="false">Players</button>
     </div>
-  </div>
-  <div class="meta">
-    <p class="count" id="count">Loading&hellip;</p>
-    <p class="dl">Download CSV: <a href="#" id="csv-view">this view</a></p>
   </div>
   <div class="scroll">
     <table id="table">
@@ -87,15 +71,17 @@
         <th data-k="t" aria-sort="none" title="sort">Total</th>
         <th data-k="p" aria-sort="none" title="sort">Poss.</th>
       </tr></thead>
-      <tbody></tbody>
+      <tbody><tr><td class="msg" colspan="8">Loading&hellip;</td></tr></tbody>
     </table>
   </div>
+  <p class="dl">Download CSV: <a href="#" id="csv-view">this view</a></p>
 </main>
 <script>
 (function () {
   const $ = id => document.getElementById(id);
-  const fold = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-  const fmt = v => (v > 0 ? "+" : "") + v.toFixed(1);
+  const fold = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  // as on the ratings page: a true minus sign, and Math.round rather than toFixed, so -1.25 shows as -1.2
+  const fmt = v => { const r = Math.round(v * 10) / 10 || 0; return (r > 0 ? "+" : r < 0 ? "−" : "") + Math.abs(r).toFixed(1); };
   const playerInput = $("player"), playerList = $("player-list"), seasonSelect = $("season");
   const tbody = $("table").querySelector("tbody");
   // nearest first; any other column starts high to low, and a second click on the same column flips it
@@ -178,8 +164,17 @@
   }
 
   function fillSeasons() {
-    seasonSelect.replaceChildren(...[...seasonsOf.get(state.id)].reverse().map(s => option(s, s)));
+    const seasons = seasonsOf.get(state.id);         // his seasons, oldest first
+    seasonSelect.replaceChildren(...[...seasons].reverse().map(s => option(s, s)));
     seasonSelect.value = String(state.season);
+    $("older").disabled = state.season === seasons[0];
+    $("newer").disabled = state.season === seasons[seasons.length - 1];
+  }
+  // the arrows step through his own seasons in place, like the list of seasons, so Back goes to the previous player
+  // picked rather than through every season stepped past
+  function step(by) {
+    const seasons = seasonsOf.get(state.id), next = seasons[seasons.indexOf(state.season) + by];
+    if (next !== undefined) pick_(state.id, next, false);
   }
 
   function readAddress() {
@@ -205,7 +200,7 @@
     tr.className = pick ? "pick" : "match";
     cell(tr, rank, "rank"); cell(tr, r.n, "name"); cell(tr, r.s, "");
     cell(tr, distance, ""); cell(tr, fmt(r.o), ""); cell(tr, fmt(r.d), ""); cell(tr, fmt(r.t), "");
-    cell(tr, r.p.toLocaleString(), "");
+    cell(tr, r.p.toLocaleString("en-US"), "");
     if (!pick) {
       tr.tabIndex = 0;
       const go = () => pick_(r.id, r.s);
@@ -225,14 +220,14 @@
     shown = rows;
     tbody.replaceChildren(row(pool[i], "", "", true), ...rows.map(r => row(r, r.rank, r.dist.toFixed(2), false)));
     document.querySelectorAll("[data-list]").forEach(b => b.setAttribute("aria-pressed", b.dataset.list === state.list));
-    $("count").textContent = rows.length + (state.list === "players" ? " players" : " player-seasons");
     showPick();
     fillSeasons();
   }
 
-  function pick_(id, season) {
+  // a new pick adds a step to the history; a new season of the same player replaces the step it is on
+  function pick_(id, season, push = true) {
     state.id = id; state.season = season;
-    writeAddress(true);
+    writeAddress(push);
     render();
     scrollTo({ top: 0 });
   }
@@ -243,7 +238,7 @@
     const q = v => { const s = String(v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     const head = ["rank", "player_id", "player", "season", "distance", "offense", "defense", "total", "possessions"];
     const body = shown.map(r => [r.rank, r.id, r.n, r.s, r.dist, r.o, r.d, r.t, r.p]);
-    const text = "﻿" + [head, ...body].map(r => r.map(q).join(",")).join("\r\n") + "\r\n";
+    const text = "\ufeff" + [head, ...body].map(r => r.map(q).join(",")).join("\r\n") + "\r\n";
     const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
     const name = `openrapm_similarity_${state.id}_${state.season}_${state.list}.csv`;
     const a = Object.assign(document.createElement("a"), { href: url, download: name });
@@ -279,12 +274,14 @@
   });
   // leaving the box without picking puts the picked player's name back
   playerInput.addEventListener("blur", () => { close(); playerInput.value = labelOf(state.id); });
-  seasonSelect.addEventListener("change", () => pick_(state.id, +seasonSelect.value));
+  seasonSelect.addEventListener("change", () => pick_(state.id, +seasonSelect.value, false));
+  $("older").addEventListener("click", () => step(-1));
+  $("newer").addEventListener("click", () => step(1));
   $("csv-view").addEventListener("click", e => { e.preventDefault(); downloadCSV(); });
   addEventListener("popstate", () => { readAddress(); render(); });
 
   loadPool().then(() => { readAddress(); writeAddress(false); return render(); })
-            .catch(() => { $("count").textContent = "Could not load the data."; });
+            .catch(() => { tbody.innerHTML = `<tr><td class="msg" colspan="8">Could not load the data.</td></tr>`; });
 })();
 </script>
 </body>

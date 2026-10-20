@@ -159,43 +159,37 @@ def test_a_rebuild_writes_the_same_bytes_and_drops_a_season_no_longer_in_the_poo
     assert _files(folder) == fresh
 
 
-def test_every_page_carries_the_same_three_tabs_with_its_own_marked():
+def test_every_page_carries_the_same_tabs_with_its_own_marked():
     import re
     from pathlib import Path
     docs = Path(__file__).resolve().parents[1] / "docs"
-    tabs = ["./", "bias.html", "similarity.html"]
-    pages = ("index.html", "decompose.html", "bias.html", "similarity.html")
+    tabs = ["./", "similarity.html", "bias.html", "about.html"]
+    pages = ("about.html", "index.html", "similarity.html", "bias.html")
     navs = {page: (docs / page).read_text(encoding="utf-8") for page in pages}
     navs["PAGE_HEAD"] = site.PAGE_HEAD + "</nav>"
     for page, text in navs.items():
         nav = re.search(r'<nav class="site">(.*?)</nav>', text, re.S).group(1)
         links = re.findall(r'<a href="([^"]+)"( aria-current="page")?>', nav)
         assert [href for href, _ in links] == tabs, page
-        # the vanilla RAPM decomposition sits under the Ratings tab, behind the toggle
-        own = ("./" if page in ("index.html", "decompose.html") else "bias.html" if page == "PAGE_HEAD" else page)
+        own = "./" if page == "index.html" else "bias.html" if page == "PAGE_HEAD" else page
         assert [href for href, current in links if current] == [own], page
-
-
-def test_the_ratings_page_and_the_vanilla_page_carry_the_same_toggle_with_their_own_marked():
-    import re
-    from pathlib import Path
-    docs = Path(__file__).resolve().parents[1] / "docs"
-    seen = {}
-    for page in ("index.html", "decompose.html"):
-        text = (docs / page).read_text(encoding="utf-8")
-        toggle = re.search(r'<nav class="toggle"[^>]*>(.*?)</nav>', text, re.S).group(1)
-        seen[page] = re.findall(r'<a href="([^"]+)"( aria-current="page")?>([^<]+)</a>', toggle)
-    links = {page: [(href, label) for href, _, label in found] for page, found in seen.items()}
-    assert links["index.html"] == [("./", "OpenRAPM"), ("decompose.html", "Vanilla RAPM")]
-    assert links["decompose.html"] == links["index.html"]
-    assert [href for href, current, _ in seen["index.html"] if current] == ["./"]
-    assert [href for href, current, _ in seen["decompose.html"] if current] == ["decompose.html"]
 
 
 def test_the_old_decomposition_address_sends_its_links_to_the_ratings_page():
     from pathlib import Path
     text = (Path(__file__).resolve().parents[1] / "docs" / "decompose_openrapm.html").read_text(encoding="utf-8")
     assert 'location.replace("./#"' in text and 'h.set("view", "decomposition")' in text
+
+
+def test_the_vanilla_pages_old_address_opens_the_openrapm_decomposition_and_nothing_links_it():
+    from pathlib import Path
+    docs = Path(__file__).resolve().parents[1] / "docs"
+    text = (docs / "decompose.html").read_text(encoding="utf-8")
+    assert 'location.replace("./#"' in text and 'to.set("view", "decomposition")' in text
+    assert '<nav class="site">' not in text
+    for page in ("about.html", "index.html", "similarity.html", "bias.html", "site.css"):
+        assert "decompose.html" not in (docs / page).read_text(encoding="utf-8"), page
+    assert not (docs / "data" / "decompose_1y.json").exists() and not (docs / "data" / "decompose_3y.json").exists()
 
 
 
