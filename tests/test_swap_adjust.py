@@ -248,8 +248,11 @@ def test_adjust_end_to_end_keeps_each_team_total_and_the_spread_inside_teams(lin
 _CFG = load_config()
 # experiment 80's pair since 2026-10-19 (step 5 trained on the folds' held-back games); the weightfix pair before it,
 # onethread/gate0_*, pinned step 5 as it was
-_REBUILDS = ((PRODUCT, "crossfit80/product_step4.parquet", "crossfit80/product_step5.parquet"),
-             (TEST, "crossfit80/test_step4.parquet", "crossfit80/test_step5.parquet"))
+# step 5 off since experiment 82 (adopted 2026-10-20); the pair pins step 5's code at the share it was built with
+_REBUILDS = ((replace(PRODUCT, swap=replace(PRODUCT.swap, applied_share=0.5)), "crossfit80/product_step4.parquet",
+              "crossfit80/product_step5.parquet"),
+             (replace(TEST, swap=replace(TEST.swap, applied_share=0.5)), "crossfit80/test_step4.parquet",
+              "crossfit80/test_step5.parquet"))
 
 
 @pytest.mark.slow
@@ -303,3 +306,14 @@ def test_a_folds_features_are_read_on_the_tables_scale():
 def test_the_type_features_are_from_the_rated_season_only():
     """Experiment 80, the owner, 2026-10-19: "it must ONLY come from the season in question"."""
     assert "seasons_before" not in sa.TYPE_FEATURES and len(sa.TYPE_FEATURES) == 21
+
+
+def test_an_applied_share_of_zero_leaves_every_rating_as_it_was(lineup_league):
+    swaps, features, fold_of = _two_season_swaps(lineup_league)
+    table, main_team = _rated_table(swaps)
+    nothing = replace(PRODUCT.swap, applied_share=0.0)
+    predictions = sa.type_predictions(features, swaps, fold_of, {2021, 2022}, nothing)
+    out, factors = sa.adjust(table, sw.ratings_in_raw_sign(table), swaps, predictions, main_team, nothing)
+    assert (factors.factor == 1.0).all() and (out.c_off == 0.0).all() and (out.c_def == 0.0).all()
+    for column in table.columns:
+        assert np.array_equal(out[column].to_numpy(), table[column].to_numpy()), column

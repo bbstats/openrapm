@@ -337,3 +337,27 @@ def test_outside_labels_are_career_labels_with_the_rows_seasons_left_out(world):
         theirs = direct[side].set_index("player_id")
         assert mine.index.equals(theirs.index)
         assert np.allclose(mine[column], theirs[column], atol=1e-5), side
+
+
+# ------------------------------------------------------------ labels from the seasons next to a row
+def test_a_rows_neighbours_are_the_season_before_and_after_it_that_may_be_seen():
+    available = set(range(1997, 2027))
+    assert rapm.neighbour_seasons({2003, 2004}, available, {2009, 2010, 2011}) == frozenset({2002, 2005})
+    assert rapm.neighbour_seasons({2008}, available, {2009, 2010, 2011}) == frozenset({2007})
+    assert rapm.neighbour_seasons({1997}, available, set()) == frozenset({1998})       # no 1996 in the sums
+
+
+def test_nearest_labels_are_career_labels_over_the_neighbours_alone(world):
+    _, designs = world
+    sums = {PRODUCT.targets.offence: _sums(designs, SEASONS, 100.0),
+            PRODUCT.targets.defence: _sums(designs, SEASONS, 100.0)}
+    cache = {}
+    nearest = rapm.nearest_labels(sums, [2004], [frozenset({2002}), frozenset({2001, 2002, 2003})], PRODUCT.labels,
+                                  PRODUCT.targets, cache)
+    direct = rapm.career_labels(sums, [2002, 2004], PRODUCT.labels, PRODUCT.targets)     # 2002's neighbours: 2001, 2003
+    for side, column in (("O", "offense"), ("D", "defense")):
+        mine = nearest[frozenset({2002})][side].set_index("player_id")[column]
+        assert mine.equals(direct[side].set_index("player_id")[column]), side
+    # 2001-2003's neighbours are 2000, absent, and 2004, unseen: no label, so its rows will be dropped
+    assert all(table.empty for table in nearest[frozenset({2001, 2002, 2003})].values())
+    assert set(cache) == {frozenset({2001, 2003})}                 # the run-wide cache holds each neighbour set once

@@ -79,7 +79,7 @@ from ..features import (
     SHOT_TOTALS,
 )
 from ..on_court import offcourt_rates, oncourt_rates
-from .bio import PLAYER_INPUTS, player_inputs, tenure_inputs
+from .bio import PLAYER_INPUTS, bio_inputs, player_bio, player_inputs, tenure_inputs
 from .careers import ROLE_COLUMNS, careers_before
 from .config import resolve
 from .dashboard_rates import dashboard_rates
@@ -369,6 +369,15 @@ def _side_rows(side: str, season: int, rates, parts, players: pd.DataFrame, dash
                       dashboards[side]], axis=1)
 
 
+def body_table(cfg: dict) -> pd.DataFrame:
+    """player_id -> height_in, weight_lb: the body target's inputs (box_rates.body_targets), from the bio feed, a
+    player the feed never listed at its medians, as the panel's own body columns (data/bio.py)."""
+    bio = player_bio(cfg)
+    aligned = bio_inputs(bio, bio.player_id.to_numpy())
+    return pd.DataFrame({"height_in": aligned.height.to_numpy(float), "weight_lb": aligned.weight.to_numpy(float)},
+                        index=bio.player_id.to_numpy())
+
+
 def season_panel(season: int, cfg: dict, designs: dict, sources: SeasonSources, fit_game_ids=None) -> SeasonPanel:
     """One season's panel rows, every input from the fit games: all of the season's games when `fit_game_ids` is None.
 
@@ -378,10 +387,11 @@ def season_panel(season: int, cfg: dict, designs: dict, sources: SeasonSources, 
     season = int(season)
     fit = None if fit_game_ids is None else {str(game) for game in fit_game_ids}
     history = _role_history(season, sources, fit, share_cap(cfg))
-    rates = box_rates(designs[OFFENCE], pad_target=cfg["pad_target"])
+    body = body_table(cfg) if cfg["pad_target"] == "body_and_possessions" else None
+    rates = box_rates(designs[OFFENCE], pad_target=cfg["pad_target"], body=body)
     # after the 13 rates, so the event design shares the matrix box_rates built (data/event_counts.py)
     event_counts, event_games = event_design(designs[OFFENCE], sources.tables.event_counts)
-    parts = box_rates(event_counts, pad_target=cfg["pad_target"])
+    parts = box_rates(event_counts, pad_target=cfg["pad_target"], body=body)
     players = _player_columns(season, cfg, designs, history, fit, sources.debut)
     # the tracking dashboards are season totals: a fold scales them to the share of the season it fits on; the hustle
     # counts are summed over the games themselves (dashboard_rates.py)

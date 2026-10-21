@@ -87,7 +87,7 @@ import importlib.util
 import re
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -107,7 +107,9 @@ from openrapm.features import BOX_RATES
 from openrapm.prior_shrink import multipliers_by_season
 from openrapm.settings import TEST
 
-SWAP = TEST.swap             # the test setting: the type model never trains on the rated season or its neighbours
+# the test setting: the type model never trains on the rated season or its neighbours.  Step 5 is off since experiment
+# 82 (adopted 2026-10-20); this check audits it at the half strength it was built and shipped with
+SWAP = replace(TEST.swap, applied_share=0.5)
 TOLERANCE = 1e-9             # stage 0: the largest move of a rating the reproduction allows
 STEP4_TOLERANCE = 1e-12      # a fold's step 4 here against check 151's own
 SEEDS = (1, 2, 3, 4, 5)      # the placebo arms' shuffles, read as their mean (the plan)
@@ -123,6 +125,11 @@ AUDITED_PANEL = [*BOX_RATES, "team_possession_share", "games_started_share", "ga
                  "seasons_before", "height_in", "weight_lb"]
 AUDITED_FEATURES = AUDITED_PANEL + sa.PRIOR_FEATURES
 SINGLE_SEASON = [feature for feature in AUDITED_FEATURES if feature != "seasons_before"]
+# experiment 87 (`folds --age-curve`): age read as a curve as well, (age - 27)^2 beside age, because the ratings
+# over-credit the youngest and the oldest players inside teams (notes/DECISIONS.md, "The ratings' miss by age inside
+# teams"); the cache then sits in outputs/swap_audit/<system>_agecurve
+AGE_CURVE = "age_squared"
+AGE_CENTRE = 27.0
 PLAIN_RAPM = "season_ratings_plainrapm3000"     # 90_swap_test.py's plain single-season RAPM, penalty 3,000
 NOISE = {"bags10": "noise_bags10"}              # each system's noise control: the same build, players regrouped
 PLAIN_NAMES = {"threes_made_per100": "made threes", "threes_missed_per100": "missed threes",
@@ -205,6 +212,23 @@ class TypeModel:
         return sa.season_features(self.features, season)
 
 
+def with_age_curve(frame: pd.DataFrame) -> pd.DataFrame:
+    """`frame` with AGE_CURVE, (age - 27)^2, when the age curve is on (`use_age_curve`); unchanged otherwise."""
+    if AGE_CURVE not in AUDITED_PANEL:
+        return frame
+    return frame.assign(**{AGE_CURVE: (frame.age.astype(float) - AGE_CENTRE) ** 2})
+
+
+def use_age_curve() -> None:
+    """Experiment 87: every audited list reads the age curve too, after age."""
+    global AUDITED_PANEL, AUDITED_FEATURES, SINGLE_SEASON
+    at = AUDITED_PANEL.index("age") + 1
+    AUDITED_PANEL = [*AUDITED_PANEL[:at], AGE_CURVE, *AUDITED_PANEL[at:]]
+    AUDITED_FEATURES = AUDITED_PANEL + sa.PRIOR_FEATURES
+    SINGLE_SEASON = [feature for feature in AUDITED_FEATURES if feature != "seasons_before"]
+    PLAIN_NAMES.setdefault(AGE_CURVE, "age, squared distance from 27")
+
+
 def type_model(cfg: dict, name: str) -> TypeModel:
     """The system's tables, and its step 5 rebuilt as `openrapm build --setting test` builds it."""
     started = time.time()
@@ -212,6 +236,7 @@ def type_model(cfg: dict, name: str) -> TypeModel:
     step4 = pd.read_parquet(outputs / f"season_ratings_{name}_step4.parquet")
     final = pd.read_parquet(outputs / f"season_ratings_{name}.parquet")
     panel, trainable = panel_and_trainable_seasons(cfg)
+    panel = with_age_curve(panel)
     centre, scale = feature_scale(panel, step4)
     features = sa.type_features(panel, step4, AUDITED_FEATURES)
     raw = sw.ratings_in_raw_sign(step4)
@@ -382,7 +407,7 @@ def fold_factors(checks: Checks, folds: list) -> dict:
 def fold_features(model: TypeModel, rows_offence: pd.DataFrame, table: pd.DataFrame) -> pd.DataFrame:
     """player_id -> the standardised type features of a fold's rated players, on the audited list's scale
     (swap_adjust.fold_type_features)."""
-    return sa.fold_type_features(rows_offence, table, model.centre, model.scale)
+    return sa.fold_type_features(with_age_curve(rows_offence), table, model.centre, model.scale)
 
 
 def fold_main_team(rows_offence: pd.DataFrame, season: int) -> pd.Series:
@@ -618,7 +643,7 @@ def fold_run(cfg: dict, checks: Checks, name: str, seeds) -> FoldRun:
     by_season: dict = {}
     for fold in folds:
         by_season.setdefault(fold.season, []).append(fold)
-    out_dir = resolve(cfg, "outputs") / "swap_audit" / name
+    out_dir = resolve(cfg, "outputs") / "swap_audit" / (f"{name}_agecurve" if AGE_CURVE in AUDITED_PANEL else name)
     out_dir.mkdir(parents=True, exist_ok=True)
     return FoldRun(checks, model, placebo, by_season, where, fold_factors(checks, folds), out_dir)
 
@@ -1071,6 +1096,8 @@ def parse_args(argv=None) -> argparse.Namespace:
         if name == "folds":
             command.add_argument("--first", type=int, default=1997)
             command.add_argument("--last", type=int, default=2026)
+            command.add_argument("--age-curve", action="store_true",
+                                 help="experiment 87: step 5 also reads (age - 27)^2; cached under <system>_agecurve")
     decider = commands.add_parser("decider", help="the readings of stages 1 and 2 from the cached folds")
     decider.add_argument("--systems", default="bags10,noise_bags10", help="comma-separated (default %(default)s)")
     decider.add_argument("--tag", default="swap_audit", help="names the output files (default %(default)s)")
@@ -1083,6 +1110,8 @@ def parse_args(argv=None) -> argparse.Namespace:
 def main(argv=None) -> int:
     use_utf8()
     args = parse_args(argv)
+    if getattr(args, "age_curve", False):
+        use_age_curve()
     commands = {"reproduce": run_reproduce, "whole": run_whole, "folds": run_folds, "decider": run_decider,
                 "readings": run_readings, "types": run_types, "luck": run_luck, "whose": run_whose}
     with one_thread():

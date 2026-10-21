@@ -292,3 +292,39 @@ def test_site_writes_ratings_json_alone_by_default(monkeypatch):
 def test_site_refuses_a_date_it_cannot_read(text):
     with pytest.raises(SystemExit):
         _parse("site", "--built", text)
+
+
+def test_folds_read_the_whole_season_context_only_when_asked():
+    assert _parse("folds", "--models", "m", "--base", "b").whole_season_context is False
+    assert _parse("folds", "--models", "m", "--base", "b", "--whole-season-context").whole_season_context is True
+
+
+def test_rate_reads_the_shipped_second_prior_unless_told_otherwise(monkeypatch):
+    assert _recorded(monkeypatch, "run_build", "build")["settings"].prior.second_prior == "ctx82"
+    assert _recorded(monkeypatch, "run_build", "build", "--second-prior", "")["settings"].prior.second_prior == ""
+    seen = _recorded(monkeypatch, "run_build", "build", "--setting", "test", "--second-prior", "ctx81")
+    assert seen["settings"].prior.second_prior == "ctx81"
+
+
+def test_second_prior_needs_its_models_folds_and_tag():
+    args = _parse("second-prior", "--models", "m", "--folds", "a_early,a_within", "--tag", "t")
+    assert (args.models, args.folds, args.tag, args.seasons) == ("m", "a_early,a_within", "t", None)
+
+
+def test_the_second_prior_holds_team_totals_unless_told_otherwise(monkeypatch):
+    seen = _recorded(monkeypatch, "run_build", "build", "--second-prior", "ctx81")
+    assert seen["settings"].prior.second_prior_team_totals == "held"
+    seen = _recorded(monkeypatch, "run_build", "build", "--second-prior", "ctx81", "--second-prior-team-totals", "free")
+    assert seen["settings"].prior.second_prior_team_totals == "free"
+
+
+def test_step_5_can_be_switched_off_and_the_line_can_read_its_numbers(monkeypatch):
+    seen = _recorded(monkeypatch, "run_swap", "swap", "--base", "x", "--applied-share", "0")
+    assert seen["settings"].swap.applied_share == 0.0
+    assert _recorded(monkeypatch, "run_swap", "swap", "--base", "x")["settings"].swap.applied_share == 0.0
+    seen = _recorded(monkeypatch, "run_swap", "swap", "--base", "x", "--applied-share", "0.5")
+    assert seen["settings"].swap.applied_share == 0.5
+    seen = _recorded(monkeypatch, "run_build", "build", "--second-prior", "t",
+                     "--second-prior-inputs", "context_and_types")
+    assert seen["settings"].prior.second_prior_inputs == "context_and_types"
+    assert _parse("second-prior", "--models", "m", "--folds", "f", "--tag", "t").inputs == "context_and_types"

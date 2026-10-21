@@ -63,6 +63,7 @@ MODEL_LAYER = [
     "features.py",      # the prior's input catalogue, the derived columns, the shipped lists
     "rapm.py",          # step 1: the season sums, the leave-season-out RAPM, the un-shrunk label
     "box_prior.py",     # step 2: training rows, balanced player folds, the out-of-player LightGBM prior
+    "second_prior.py",  # the second prior: the context numbers and the line fitted on held-back swaps
     "prior_rapm.py",    # step 3: the ridge around the prior, the season's table, centring, the schema
     "prior_shrink.py",  # step 4: the prior part's multipliers from the within-season folds, the shrink
     "scoring.py",       # ratings scored on unseen games, the splits, the pooled and paired summaries

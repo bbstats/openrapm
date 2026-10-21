@@ -38,6 +38,14 @@ and, with --pieces (experiment 61's screen, check 145):
                                            and side
 A finished fold is skipped on a rerun, so a stopped run resumes where it stopped; a failed check stops the run.
 
+The second prior (experiment 81).  Boosters saved by `openrapm rate --second-prior TAG` carry the tag in their meta;
+each fold then reads its context numbers from the fit games' stint rows and answers, and step 3 pulls toward the
+second prior (second_prior.py), its line the season's from outputs/second_prior/<TAG>/ at the test setting.  The
+leak arm, --whole-season-context: the context numbers come from the whole season's stint rows and box scores,
+held-back games included, while the player's own box-score prior and the ridge read the fit games only.  The decider on
+those folds against the honest ones says how much of the second prior's gain a leak would explain.  Folds built this way
+say `context_inputs` "whole season" and are never step 4's.
+
 The leak control, --whole-season-inputs (2026-10-15).  An input that exists only as a season total, such as the
 tracking and hustle dashboards, cannot be rebuilt from the fit games, so a fold's prior would read the held-back games
 too.  With this flag every input the boosters read comes from the whole season, held-back games included; the ridge
@@ -49,13 +57,13 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from .. import box_prior, decomposition, prior_rapm, trade_set
+from .. import box_prior, decomposition, prior_rapm, second_prior, trade_set
 from ..data import legacy_names
 from ..data.careers import careers_before
 from ..data.config import resolve
@@ -72,11 +80,15 @@ from ..data.panel import (
     trainable_panel,
 )
 from ..data.roles import player_season_inputs, roles_path
+from ..data.seasons import trainable
+from ..data.second_prior_files import line_setup, load_grams
 from ..data.shots import DEFENSE_TARGETS, OPPONENT_THREE_LUCK_KEPT, expected_threes
 from ..data.tables import team_of_rows
 from ..features import CLOSENESS, OFF_COURT, ON_MINUS_OFF, PANEL_KEYS, PRIOR_FEATURES, add_features
 from ..scoring import Ratings, armse, predict_season, score
-from ..settings import ROW_LABELS, TEST
+from ..settings import ROW_LABELS, TEST, Targets
+from . import parallel
+from .build import season_lineup_rows
 
 SIDES = ("O", "D")
 REPEATS = 3
@@ -92,6 +104,20 @@ SETTINGS = TEST
 # the ratings' two (settings.Targets), in the order the leak checks list them
 WORLD_TARGETS = tuple(dict.fromkeys((SCORE_TARGET, OFFENCE, DEFENCE_ALL, SETTINGS.targets.offence,
                                      SETTINGS.targets.defence)))
+
+
+def world_targets(settings) -> tuple:
+    """WORLD_TARGETS for a run whose ratings are fitted on `settings.targets` (experiment 84 put the defence on the
+    offence's target): the points as scored, the panel's two, then the ratings' two, each once."""
+    return tuple(dict.fromkeys((SCORE_TARGET, OFFENCE, DEFENCE_ALL, settings.targets.offence,
+                                settings.targets.defence)))
+
+
+def fold_settings(meta: dict):
+    """The test setting with the targets the saved boosters' build was fitted on (its meta's settings), so a build on
+    another defensive target is rated on its own target; a file without them is read on the shipped targets."""
+    targets = (meta.get("settings") or {}).get("targets")
+    return TEST if not targets else replace(TEST, targets=Targets(**targets))
 # what a saved file's meta must say: the test setting's labels and training rows, the shipped rows and folds.  How
 # the training rows were labelled (`chunk_label`, settings.ROW_LABELS) is free: the folds only read the boosters
 EXPECTED_META = dict(exclude_neighbours=1, rows="chunks", unshrink=["defense"], player_folds=5)
@@ -99,31 +125,35 @@ EXPECTED_META = dict(exclude_neighbours=1, rows="chunks", unshrink=["defense"], 
 PLAYER_COLUMNS = list(dict.fromkeys(PRIOR_FEATURES + OFF_COURT + ON_MINUS_OFF + CLOSENESS))
 # the share of the opponents' three-point luck each defensive target keeps (data/shots.py), for the outcome pieces
 LUCK_KEPT = {"points_with_expected_opponent_threes": OPPONENT_THREE_LUCK_KEPT,
-             "points_with_expected_opponent_threes_all": 0.0}
+             "points_with_expected_opponent_threes_all": 0.0, "points_with_expected_opponent_threes_half": 0.5}
 PIECES_TOLERANCE = 1e-9         # the pieces add up to the games' part, and the refit reproduces it, to this
 PIECES_JITTER_TOLERANCE = 1e-6  # the same in a season whose solve needed rapm.solved_ridge's jitter (2020)
 
 
 # ------------------------------------------------------------------------------------------- the saved models
-def load_models(outputs: Path, models: str) -> dict:
+def load_models(outputs: Path, models: str, seasons=None) -> dict:
     """outputs/prior_models_<models>.pkl under the plain names: a file saved before 2026-10-11 names its inputs,
     input list and targets the old way, and is translated as it is read (data/legacy_names.py), with one line
-    saying so."""
+    saying so.  With `seasons`, only those seasons' boosters and the meta are kept: thirty seasons of boosters take
+    about 2 GB, and a process folding a few seasons holds no more than it reads."""
     saved, renamed = legacy_names.saved_models(pd.read_pickle(outputs / f"prior_models_{models}.pkl"))
     if renamed:
         print(f"prior_models_{models}.pkl uses the names from before 2026-10-11; read under the plain names "
               "(each booster's inputs keep their order)", flush=True)
+    if seasons is not None:
+        wanted = {"meta", *seasons}
+        saved = {key: value for key, value in saved.items() if key in wanted}
     return saved
 
 
 def _step3_mismatches(meta: dict) -> dict:
     """{name: (saved, expected)} for the step-3 settings a schema-2 file records and this command does not use.
 
-    The folds rate every season with `SETTINGS`' targets and ridge penalty; boosters saved by a build with
-    another defensive target or penalty would be rated on settings their base table was not built with.
+    The folds rate every season with `SETTINGS`' ridge penalty and the saved build's own targets (`fold_settings`);
+    boosters saved by a build with another penalty would be rated on settings their base table was not built with.
     """
     saved = meta.get("settings") or {}
-    expected = {"targets": asdict(SETTINGS.targets), "ridge": asdict(SETTINGS.ridge)}
+    expected = {"ridge": asdict(SETTINGS.ridge)}
     return {name: (saved[name], value) for name, value in expected.items() if name in saved and saved[name] != value}
 
 
@@ -162,14 +192,24 @@ def season_models(saved_all: dict, season: int) -> dict:
     return saved
 
 
-def saved_prior(panel: pd.DataFrame, side: str, saved: dict) -> dict:
-    """{player_id: prior} from the saved boosters, each player answered by the fold model that never saw him."""
-    rows = box_prior.rated_rows(panel[(panel.side == side) & (panel.possessions > 0)], saved["feats"])
+def saved_booster(saved: dict):
+    """One side's saved boosters as the box_prior object that built them: an OutOfPlayerPrior, or a BaggedPrior when
+    the file holds bags."""
     members = [box_prior.OutOfPlayerPrior(full=bag["full"], fold_models=list(bag["folds"]),
                                           held_out_players=list(bag["excluded"]), inputs=list(saved["model_feats"]))
                for bag in saved.get("bags", [saved])]
-    model = members[0] if "bags" not in saved else box_prior.BaggedPrior(members, list(saved["model_feats"]))
-    return dict(zip(rows.player_id.to_numpy(), box_prior.predict(model, rows)))
+    return members[0] if "bags" not in saved else box_prior.BaggedPrior(members, list(saved["model_feats"]))
+
+
+def prior_rows(panel: pd.DataFrame, side: str, saved: dict) -> pd.DataFrame:
+    """The panel rows one side's saved boosters answer for: that side's rows with possessions, derived."""
+    return box_prior.rated_rows(panel[(panel.side == side) & (panel.possessions > 0)], saved["feats"])
+
+
+def saved_prior(panel: pd.DataFrame, side: str, saved: dict) -> dict:
+    """{player_id: prior} from the saved boosters, each player answered by the fold model that never saw him."""
+    rows = prior_rows(panel, side, saved)
+    return dict(zip(rows.player_id.to_numpy(), box_prior.predict(saved_booster(saved), rows)))
 
 
 # ------------------------------------------------------------------------------------------------ the folds
@@ -261,23 +301,49 @@ class RatedWorld:
     """A season rebuilt from its fit games, and steps 2-3 on it."""
     world: SeasonWorld
     table: pd.DataFrame          # step 3's centred table, raw sign (prior_rapm.season_table's columns)
-    prior: dict                  # {"O", "D"}: {player_id: the boosters' answer, before the prior scale}
+    prior: dict                  # {"O", "D"}: {player_id: the prior step 3 read, before the prior scale}
+    box: dict | None = None      # {"O", "D"}: {player_id: the boosters' answer}, when step 3 read the second prior
 
 
-def rate_world(world: SeasonWorld, saved: dict, prior_panel: pd.DataFrame | None = None) -> RatedWorld:
+@dataclass
+class ContextInputs:
+    """What one rating's second prior reads (second_prior.py)."""
+    coefficients: dict           # {"O", "D"}: the season's line, second_prior.season_coefficients
+    stints: pd.DataFrame         # the stint rows the context numbers read: the fit games', or the whole season's
+    panel: pd.DataFrame | None   # the panel rows the context's boosters answer for; None: the boosters' own panel
+    n_folds: int                 # the line's player folds
+    team_totals: str = "held"    # second_prior.TEAM_TOTALS
+    type_scale: dict | None = None   # with the line on step 5's numbers too, their standardisation
+    input_set: str | None = None     # PriorSettings.second_prior_inputs; None reads it from type_scale
+
+
+def rate_world(world: SeasonWorld, saved: dict, prior_panel: pd.DataFrame | None = None,
+               context: ContextInputs | None = None, settings=SETTINGS) -> RatedWorld:
     """Steps 2-3 on the world's rebuilt inputs: the saved boosters' priors, both ridges, the centred table.
 
     `prior_panel`, when given, is what the boosters read instead of the world's own rows (the leak control, the
-    module docstring); the ridge reads the world's designs either way.
+    module docstring); the ridge reads the world's designs either way.  With `context`, step 3 reads the second prior
+    built from it instead of the boosters' answers.  `settings` names the targets the ridge reads (`fold_settings`).
     Adds one check to the world's: the ridge's possessions are the fit games' (five players on every row).
     """
     panel = world.panel if prior_panel is None else prior_panel
-    prior = {side: saved_prior(panel, side, saved[side]) for side in SIDES}
-    designs = {target: world.designs[target] for target in SETTINGS.targets.distinct()}
-    table = prior_rapm.rate_season(designs, prior, SETTINGS, world.season)
+    box = {side: saved_prior(panel, side, saved[side]) for side in SIDES}
+    prior = box
+    if context is not None:
+        context_panel = panel if context.panel is None else context.panel
+        answers = {side: second_prior.booster_answers(saved_booster(saved[side]),
+                                                      prior_rows(context_panel, side, saved[side])) for side in SIDES}
+        # step 5's numbers from the offence rows with possessions, the rows the build reads (a player with
+        # defensive possessions and no offensive ones has none there, and reads 0, the mean)
+        types = (None if context.type_scale is None else second_prior.standardised_types(
+            panel[(panel.side == "O") & (panel.possessions > 0)], context.type_scale))
+        prior, _ = second_prior.season_second_priors(context.stints, answers, box, context.coefficients,
+                                                     context.n_folds, context.team_totals, types, context.input_set)
+    designs = {target: world.designs[target] for target in settings.targets.distinct()}
+    table = prior_rapm.rate_season(designs, prior, settings, world.season)
     world.checks["ridge: possessions are the fit games' possessions"] = bool(np.isclose(
-        table.possessions.sum(), float(world.designs[SETTINGS.targets.offence].rows["poss"].sum()) * 5.0, rtol=1e-9))
-    return RatedWorld(world=world, table=table, prior=prior)
+        table.possessions.sum(), float(world.designs[settings.targets.offence].rows["poss"].sum()) * 5.0, rtol=1e-9))
+    return RatedWorld(world=world, table=table, prior=prior, box=None if context is None else box)
 
 
 def player_table(rated: RatedWorld) -> pd.DataFrame:
@@ -292,8 +358,13 @@ def player_table(rated: RatedWorld) -> pd.DataFrame:
         "prior_scale_off": table.prior_scale_off, "prior_scale_def": table.prior_scale_def})
     ratings["rating_total"] = ratings.rating_off + ratings.rating_def
     ratings["u_off"], ratings["u_def"] = ratings.rating_off - ratings.prior_off, ratings.rating_def - ratings.prior_def
-    ratings["prior_raw_off"] = ratings.player_id.map(rated.prior["O"])
-    ratings["prior_raw_def"] = -ratings.player_id.map(rated.prior["D"])
+    box = rated.prior if rated.box is None else rated.box
+    ratings["prior_raw_off"] = ratings.player_id.map(box["O"])
+    ratings["prior_raw_def"] = -ratings.player_id.map(box["D"])
+    if rated.box is not None:
+        # the second prior step 3 read, before the prior scale (second_prior.py)
+        ratings["second_prior_raw_off"] = ratings.player_id.map(rated.prior["O"])
+        ratings["second_prior_raw_def"] = -ratings.player_id.map(rated.prior["D"])
     # his main team in these games (most possessions on the court), for the team-level inputs of step 4's readers
     played = world.roles[world.roles.poss_on > 0]
     main = (played.sort_values(["player_id", "poss_on"], ascending=[True, False])
@@ -371,11 +442,17 @@ def reproduce(rated: RatedWorld, base: pd.DataFrame, panel: pd.DataFrame, saved:
     out = dict(season=world.season, players=int(len(mine)), board_players=int(len(theirs)), joined=int(len(joined)))
     for column in ("offense", "defense", "prior_offense", "prior_defense"):
         out[f"max_diff_{column}"] = float(np.max(np.abs(joined[column] - joined[f"{column}_base"])))
+    box = rated.prior if rated.box is None else rated.box
     for side in SIDES:
         built = pd.Series(saved[side]["prior"])
-        rebuilt = pd.Series(rated.prior[side]).reindex(built.index)
+        rebuilt = pd.Series(box[side]).reindex(built.index)
         out[f"max_diff_raw_prior_{side}"] = float(np.nanmax(np.abs(rebuilt - built)))
         out[f"raw_prior_missing_{side}"] = int(rebuilt.isna().sum())
+        if rated.box is not None:
+            built = pd.Series(saved[side]["second_prior"])
+            rebuilt = pd.Series(rated.prior[side]).reindex(built.index)
+            out[f"max_diff_second_prior_{side}"] = float(np.nanmax(np.abs(rebuilt - built)))
+            out[f"second_prior_missing_{side}"] = int(rebuilt.isna().sum())
     differences, stored_rows = _panel_differences(world, panel)
     out["panel_rows"], out["panel_rows_stored"] = int(len(world.panel)), stored_rows
     out["panel_max_diff"] = differences
@@ -399,6 +476,14 @@ class SeasonRun:
     out_dir: Path
     box_files: object = None     # commands.site.BoxScoreFiles when `--pieces` is on (the rows' teams), else None
     prior_panel: pd.DataFrame | None = None   # the whole season's panel rows with --whole-season-inputs, else None
+    line: dict | None = None     # {"O", "D"}: the season's second-prior line when the boosters carry one, else None
+    line_folds: int = 5          # the line's player folds
+    line_team_totals: str = "held"            # second_prior.TEAM_TOTALS
+    line_type_scale: dict | None = None       # with the line on step 5's numbers too
+    line_input_set: str | None = None         # the line's inputs, PriorSettings.second_prior_inputs
+    stints: pd.DataFrame | None = None        # the season's stint rows (swap_test.season_rows), with the line
+    context_panel: pd.DataFrame | None = None  # the whole season's panel rows with --whole-season-context, else None
+    settings: object = SETTINGS  # the test setting with the saved build's own targets (`fold_settings`)
 
     @property
     def game_ids(self) -> pd.Series:
@@ -420,12 +505,30 @@ class SeasonRun:
         return SeasonWorld(self.season, fit_idx, designs, inputs, checks)
 
     def rate(self, fit_ids) -> RatedWorld:
-        return rate_world(self.world(fit_ids), self.saved, self.prior_panel)
+        world = self.world(fit_ids)
+        context = None
+        if self.line is not None:
+            fit = {str(game) for game in fit_ids}
+            stints = self.stints
+            if self.context_panel is None:
+                stints = stints[stints.game_id.astype(str).isin(fit).to_numpy()]
+                world.checks["second prior: stint rows only from fit games"] = set(stints.game_id.astype(str)) <= fit
+            context = ContextInputs(self.line, stints, self.context_panel, self.line_folds, self.line_team_totals,
+                                    self.line_type_scale, self.line_input_set)
+        return rate_world(world, self.saved, self.prior_panel, context, self.settings)
 
     @property
     def prior_inputs(self) -> str:
         """Where the boosters' inputs come from: "fit games", or "whole season" for the leak control."""
         return "fit games" if self.prior_panel is None else "whole season"
+
+    @property
+    def context_inputs(self) -> str:
+        """Where the second prior's context numbers come from: "none" without one, "fit games", or "whole season" for
+        its leak arm."""
+        if self.line is None:
+            return "none"
+        return "fit games" if self.context_panel is None else "whole season"
 
 
 def run_reproduction(run: SeasonRun, base: pd.DataFrame, panel: pd.DataFrame, started: float) -> None:
@@ -487,8 +590,8 @@ def fold_pieces(run: SeasonRun, rated: RatedWorld, fit_ids: set) -> tuple[pd.Dat
     points = world.designs[SCORE_TARGET]
     keep = {int(season): sorted(fit_ids)}
     by_side, checks, retried = [], {}, False
-    for side, key, target, sign in (("O", "off", SETTINGS.targets.offence, 1.0),
-                                    ("D", "def", SETTINGS.targets.defence, -1.0)):
+    for side, key, target, sign in (("O", "off", run.settings.targets.offence, 1.0),
+                                    ("D", "def", run.settings.targets.defence, -1.0)):
         design = world.designs[target]
         fit = decomposition.refit(design, rated.prior["O"], rated.prior["D"], SETTINGS.ridge.penalty)
         lineup_o, lineup_d = decomposition.lineups(fit.players, fit.n_players)
@@ -546,6 +649,7 @@ def run_fold(run: SeasonRun, folds: pd.DataFrame, repeat: int, fold: int, starte
     # rate_from, split and cut name the fold shape, the only one left: kept so the files read as before
     summary.update(season=run.season, repeat=repeat, fold=fold, rate_from="rest", fit_games=len(fit_ids),
                    split="random", cut=None, test_games=len(test_ids), prior_inputs=run.prior_inputs,
+                   context_inputs=run.context_inputs,
                    players=int((rated.table.possessions > 0).sum()),
                    prior_scale_off=float(rated.table.prior_scale_off.iloc[0]),
                    prior_scale_def=float(rated.table.prior_scale_def.iloc[0]),
@@ -577,7 +681,10 @@ def run_season(run: SeasonRun, base: pd.DataFrame, panel: pd.DataFrame, reproduc
 
 
 def gather(out_dir: Path) -> None:
-    """summary.parquet and checks.parquet: every fold's summary, and every check one row each."""
+    """summary.parquet and checks.parquet: every fold's summary, and every check one row each.  A child of
+    `folds_in_parts` leaves it to its parent, which runs it once every child is done."""
+    if parallel.is_child():
+        return
     paths = sorted(out_dir.glob("fold_*.json"))
     if not paths:
         return
@@ -595,11 +702,45 @@ def gather(out_dir: Path) -> None:
     print(f"\nwrote {out_dir}/summary.parquet and checks.parquet: {len(loaded)} folds")
 
 
+def second_prior_lines(cfg: dict, meta: dict) -> tuple[dict | None, int, float, str, dict | None]:
+    """({season: {side: PairGrams}} or None, the line's player folds, its penalty, its team totals, the standardisation
+    of step 5's numbers when it reads them): the second prior the saved boosters' build read (its tag in the meta's
+    settings), at the test setting the folds rate at.  Boosters saved before the team totals were a setting applied
+    the line as it is, "free"."""
+    prior = (meta.get("settings") or {}).get("prior") or {}
+    tag = prior.get("second_prior") or ""
+    folds, penalty = int(prior.get("second_prior_folds", 5)), float(prior.get("second_prior_penalty", 1e-4))
+    totals = prior.get("second_prior_team_totals", "free")
+    if not tag:
+        return None, folds, penalty, totals, None
+    record = line_setup(cfg, tag, second_prior.INPUT_SETS[prior.get("second_prior_inputs", "context")])
+    # the nearest-seasons count rides on the record as well: SeasonRun reads it from there
+    record = {**record, "nearest": int(prior.get("second_prior_nearest", 0))}
+    return load_grams(cfg, tag), folds, penalty, totals, record
+
+
+def folds_in_parts(cfg: dict, seasons, tag: str, jobs: int, argv) -> bool:
+    """`openrapm folds --jobs N`: when more than one process fits (`parallel.affordable_jobs`), the seasons folded in
+    that many `openrapm folds` children at once, each writing its own seasons' files into outputs/within/<tag>/, and
+    the gather once at the end; True when it ran, False when the command should run in its own process."""
+    fits = parallel.affordable_jobs(jobs) if jobs > 1 and len(seasons) > 1 else 1
+    if fits < jobs:
+        print(f"{jobs} processes asked for, free memory holds {fits}", flush=True)
+    if fits < 2:
+        return False
+    parallel.run_children(list(argv), parallel.season_chunks(seasons, fits), lambda k: [],
+                          resolve(cfg, "outputs") / "parallel" / tag)
+    gather(resolve(cfg, "within") / tag)
+    return True
+
+
 def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_only: bool = False,
-              pieces: bool = False, whole_season_inputs: bool = False) -> int:
+              pieces: bool = False, whole_season_inputs: bool = False, whole_season_context: bool = False) -> int:
     """`openrapm folds`: the reproduction check and the folds of every season, then the gathered files.  With
     `pieces`, each fold also writes its pieces_<stem>.parquet (`fold_pieces`); with `whole_season_inputs`, every
-    fold's boosters read the whole season's inputs (the leak control, the module docstring)."""
+    fold's boosters read the whole season's inputs (the leak control, the module docstring); with
+    `whole_season_context`, every fold's second prior reads the whole season's context numbers (its leak arm).
+    `folds_in_parts` runs it in several processes at once."""
     box_files = None
     if pieces:
         from .site import BoxScoreFiles
@@ -607,9 +748,10 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
     outputs = resolve(cfg, "outputs")
     out_dir = resolve(cfg, "within") / tag
     out_dir.mkdir(parents=True, exist_ok=True)
-    saved_all = load_models(outputs, models)
+    saved_all = load_models(outputs, models, seasons)
     meta = saved_all.get("meta", {})
     check_models(meta)
+    settings = fold_settings(meta)
     base_table = pd.read_parquet(outputs / f"{base}.parquet")
     panel = trainable_panel(cfg)
     roles = pd.read_parquet(roles_path(cfg))
@@ -617,18 +759,41 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
     debut = careers_before(cfg, roles)            # the seasons before 1997, as the season panel read them
     designs = DesignCache(cfg)
     print(f"models {models} ({meta.get('argv')}); seasons {seasons[0]}-{seasons[-1]}; {REPEATS} repeats of "
-          f"{N_FOLDS} folds; writing {out_dir}", flush=True)
+          f"{N_FOLDS} folds; targets {settings.targets.offence} / {settings.targets.defence}; writing {out_dir}",
+          flush=True)
     if whole_season_inputs:
         print("the leak control: every fold's boosters read the WHOLE season's inputs, held-back games included",
               flush=True)
+    grams, line_folds, line_penalty, team_totals, record = second_prior_lines(cfg, meta)
+    type_scale = None if record is None else record.get("type_scale")
+    line_nearest = 0 if record is None else record["nearest"]
+    if whole_season_context and grams is None:
+        raise SystemExit("--whole-season-context is the second prior's leak arm; these boosters were saved without one")
+    if grams is not None:
+        print(f"the second prior: step 3 reads it, each season's line from the grams of "
+              f"{meta['settings']['prior']['second_prior']} more than {SETTINGS.exclude_neighbours} season away, "
+              f"team totals {team_totals}"
+              + ("; the leak arm: its context numbers from the WHOLE season" if whole_season_context else ""),
+              flush=True)
+    trainable_seasons = set(trainable(cfg).seasons)
     started = time.time()
     for season in seasons:
         saved = season_models(saved_all, season)
-        full = {target: designs.season(season, target) for target in WORLD_TARGETS}
+        full = {target: designs.season(season, target) for target in world_targets(settings)}
         run = SeasonRun(season, cfg, full, SeasonSources(SeasonTables(season, cfg), roles, inputs, debut), saved,
-                        out_dir, box_files)
+                        out_dir, box_files, settings=settings)
         if whole_season_inputs:
             run.prior_panel = run.world(set(run.game_ids)).panel
+        if grams is not None:
+            run.line = second_prior.season_coefficients(grams, season, trainable_seasons, SETTINGS.exclude_neighbours,
+                                                        line_folds, line_penalty, line_nearest)
+            run.line_folds, run.line_team_totals, run.line_type_scale = line_folds, team_totals, type_scale
+            run.line_input_set = ((meta.get("settings") or {}).get("prior") or {}).get("second_prior_inputs")
+            run.stints = season_lineup_rows(cfg, season)
+            if run.line is None:
+                raise SystemExit(f"{season}: no season of the grams may train its second prior's line")
+            if whole_season_context:
+                run.context_panel = run.world(set(run.game_ids)).panel
         run_season(run, base_table, panel, reproduce_only, started)
         designs.clear()
     gather(out_dir)

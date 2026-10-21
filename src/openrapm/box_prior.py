@@ -23,7 +23,9 @@ Every row carries the player's career label, so what differs between his rows is
 box score rests on; two inputs say how much (`row_possessions`, the possessions behind the row, and
 `row_seasons`, the seasons it covers).  With `settings.PriorSettings.row_labels` "outside" (experiment 79) each chunk
 row carries instead his RAPM over the seasons outside its own, and the career row, whose box score covers them all,
-is dropped: no row's label shares a game with its box score.  The weights:
+is dropped: no row's label shares a game with its box score.  With "nearest" (experiment 83) each chunk row carries
+his RAPM over only the season before it and the season after it (rapm.nearest_labels), through the same path, so its
+label is the player at about the row's own age.  The weights:
 
     career row      weight = L
     chunk row c     weight = L x poss_c / (sum of poss over his chunk rows)

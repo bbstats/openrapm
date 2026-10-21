@@ -495,3 +495,17 @@ def test_outside_labels_give_every_chunk_row_a_label_from_seasons_it_does_not_co
     assert 3 not in rows.index                           # one season: nothing outside it
     share = rows.loc[[2]].row_possessions / rows.loc[[2]].row_possessions.sum()
     assert np.allclose(rows.loc[[2]].row_weight, share * rows.loc[[2]].label_possessions)
+
+
+def test_a_chunk_whose_label_table_is_empty_is_dropped():
+    """Experiment 83: a chunk with no season next to it gets rapm.nearest_labels' empty tables, so no label."""
+    panel = _career_panel()
+    sets = box_prior.chunk_season_sets(panel)
+    empty = pd.DataFrame(columns=["player_id", "offense", "defense", "possessions"])
+    full = {key: pd.DataFrame({"player_id": sorted(panel.player_id.unique()), "offense": 1.0, "possessions": 1000.0})
+            for key in sets}
+    lone = frozenset({2011})
+    rows = box_prior.training_rows(_label(panel), panel, "offense", SHIPPED["O"], outside={**full, lone: empty})
+    members = box_prior.season_runs(panel)
+    lone_chunks = set(box_prior.chunk_seasons(members)[lambda seasons: seasons == lone].index)
+    assert lone_chunks and len(rows) == len(box_prior.chunk_seasons(members)) - len(lone_chunks)

@@ -6,6 +6,7 @@
     openrapm shrink    step 4 on a step-3 table: the prior part multiplied down
     openrapm swap      step 5 on a step-4 table: each team's credit re-split by its lineup swaps
     openrapm folds     the within-season folds: each season rated from three quarters of its games
+    openrapm second-prior   the swaps the second prior's line is fitted on, from the folds' held-back games
     openrapm site      the site's data: docs/data/ratings.json, and the bias, decomposition (vanilla RAPM and OpenRAPM)
                        and similarity pages when asked
     openrapm compare   two parquet tables, value by value
@@ -31,9 +32,10 @@ from datetime import datetime
 from pathlib import Path
 
 from ..data.legacy_names import feature_set_name, target_name
-from ..settings import PRODUCT, ROW_LABELS, TEST, Settings
+from ..settings import PRODUCT, ROW_LABELS, SECOND_PRIOR_INPUTS, TEAM_TOTALS, TEST, Settings
 from .console import use_utf8
 from .data import add_data
+from .parallel import default_jobs
 
 THREAD_VARIABLES = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS")
 BOOSTER_FILE = "params/booster_params_{}.json"
@@ -120,7 +122,11 @@ def chosen_settings(args: argparse.Namespace) -> Settings:
                    prior=replace(base.prior, feature_set=plain_name("--features", args.features, feature_set_name),
                                  booster_file=BOOSTER_FILE.format(args.booster_params),
                                  fold_assignment=args.fold_assignment, era_halflife=float(args.era_halflife),
-                                 bags=int(args.bags), row_labels=args.row_labels))
+                                 bags=int(args.bags), row_labels=args.row_labels,
+                                 second_prior=args.second_prior,
+                                 second_prior_team_totals=args.second_prior_team_totals,
+                                 second_prior_inputs=args.second_prior_inputs,
+                                 second_prior_nearest=int(args.second_prior_nearest)))
 
 
 def table_stem(text: str) -> str:
@@ -140,7 +146,7 @@ def output_name(base: str, step: str) -> str:
 def _run_build(args: argparse.Namespace, cfg: dict) -> int:
     from .build import run_build
     settings = chosen_settings(args)
-    settings = replace(settings, shrink=shrink_options(settings.shrink, args))
+    settings = replace(settings, shrink=shrink_options(settings.shrink, args), swap=swap_options(settings.swap, args))
     return run_build(cfg, settings, args.seasons, args.name or args.setting, args.save_models, argv=args.argv,
                      with_types=args.types)
 
@@ -148,7 +154,7 @@ def _run_build(args: argparse.Namespace, cfg: dict) -> int:
 def _run_rate(args: argparse.Namespace, cfg: dict) -> int:
     from .build import run_rate
     return run_rate(cfg, chosen_settings(args), args.seasons, args.name or args.setting, args.save_models,
-                    argv=args.argv)
+                    argv=args.argv, jobs=args.jobs)
 
 
 def _run_shrink(args: argparse.Namespace, cfg: dict) -> int:
@@ -161,15 +167,22 @@ def _run_shrink(args: argparse.Namespace, cfg: dict) -> int:
 def _run_swap(args: argparse.Namespace, cfg: dict) -> int:
     from .build import run_swap
     base = SETTINGS[args.setting]
-    settings = replace(base, shrink=shrink_options(base.shrink, args))
+    settings = replace(base, shrink=shrink_options(base.shrink, args), swap=swap_options(base.swap, args))
     return run_swap(cfg, settings, table_stem(args.base), args.name or output_name(args.base, "_step4"),
                     with_types=args.types)
 
 
 def _run_folds(args: argparse.Namespace, cfg: dict) -> int:
-    from .within_season import run_folds
+    from .within_season import folds_in_parts, run_folds
+    if folds_in_parts(cfg, args.seasons, args.tag, args.jobs, args.argv):
+        return 0
     return run_folds(cfg, args.models, args.base, args.seasons, args.tag, args.reproduce_only, args.pieces,
-                     args.whole_season_inputs)
+                     args.whole_season_inputs, args.whole_season_context)
+
+
+def _run_second_prior(args: argparse.Namespace, cfg: dict) -> int:
+    from .second_prior import run_second_prior
+    return run_second_prior(cfg, args.models, args.folds, args.tag, args.seasons, argv=args.argv, inputs=args.inputs)
 
 
 def _run_site(args: argparse.Namespace, cfg: dict) -> int:
@@ -235,6 +248,22 @@ def _add_setting_options(parser) -> None:
                         default=(PRODUCT.labels.team_offense_penalty, PRODUCT.labels.team_defense_penalty),
                         help="step 1's team-season flags: one column per team-season on offence and one on defence, "
                              "penalised at these two values.  0,0: no flags (default 0,0)")
+    parser.add_argument("--second-prior", metavar="TAG", default=PRODUCT.prior.second_prior,
+                        help="step 3 reads the second prior: the box-score prior corrected for who each player played "
+                             "with and against, by the line fitted on outputs/second_prior/<TAG>/, which `openrapm "
+                             "second-prior` writes.  Empty: the box-score prior itself (default, shipped)")
+    parser.add_argument("--second-prior-team-totals", choices=TEAM_TOTALS,
+                        default=PRODUCT.prior.second_prior_team_totals,
+                        help="held: each team's total stays the box-score prior's and the line re-splits credit inside "
+                             "the team; free: the line as it is (default %(default)s)")
+    parser.add_argument("--second-prior-inputs", choices=SECOND_PRIOR_INPUTS,
+                        default=PRODUCT.prior.second_prior_inputs,
+                        help="context: the line reads the box-score prior and the eight context numbers; "
+                             "context_and_types: also the other end's box-score prior and step 5's box counts, role "
+                             "and body.  Must match what `openrapm second-prior --inputs` fitted (default %(default)s)")
+    parser.add_argument("--second-prior-nearest", type=int, default=PRODUCT.prior.second_prior_nearest, metavar="K",
+                        help="0: each season's line is fitted on every season the setting allows.  K: on only the K "
+                             "nearest of them, as step 4 fits its multipliers (default %(default)s)")
 
 
 def _add_folds_tag(parser) -> None:
@@ -265,10 +294,24 @@ def parse_span(text) -> tuple:
     return first, last
 
 
+def swap_options(swap, args: argparse.Namespace):
+    """The step-5 settings with --applied-share applied."""
+    if not 0.0 <= args.applied_share <= 1.0:
+        raise SystemExit("--applied-share is between 0 (step 5 moves no one) and 1")
+    return replace(swap, applied_share=float(args.applied_share))
+
+
 def shrink_options(shrink, args: argparse.Namespace):
     """settings.shrink with the command line's fold folders, fold seasons and nearest count."""
     return replace(shrink, folds_tag=args.folds, fold_seasons=args.fold_seasons, nearest=args.nearest,
                    free_games_part=args.free_games_part, defence_factor=args.defence_factor)
+
+
+def _add_applied_share(parser) -> None:
+    parser.add_argument("--applied-share", type=float, default=PRODUCT.swap.applied_share, metavar="K",
+                        help="the share of step 5's type prediction applied: 0 leaves step 4's ratings exactly as "
+                             "they are (experiment 82: the swaps' lesson moved into the second prior) "
+                             "(default %(default)s)")
 
 
 def _add_types(parser) -> None:
@@ -289,7 +332,14 @@ def _add_build(commands) -> None:
     _add_setting_options(build)
     _add_folds_tag(build)
     _add_types(build)
+    _add_applied_share(build)
     build.set_defaults(run=_run_build)
+
+
+def _add_jobs(parser) -> None:
+    parser.add_argument("--jobs", type=int, default=default_jobs(), metavar="N",
+                        help="rate the seasons in N processes at once, the same numbers sooner; cut to what free "
+                             "memory holds, about 5.5 GB each (default OPENRAPM_JOBS, else %(default)s)")
 
 
 def _add_rate(commands) -> None:
@@ -299,6 +349,7 @@ def _add_rate(commands) -> None:
                     "box-score prior, and the ridge that pulls each season's RAPM toward the prior.  Writes "
                     "outputs/season_ratings_<NAME>_step3.parquet once, at the end.")
     _add_setting_options(rate)
+    _add_jobs(rate)
     rate.set_defaults(run=_run_rate)
 
 
@@ -337,6 +388,7 @@ def _add_swap(commands) -> None:
                                             "base's name: season_ratings_X_step4 gives X)")
     _add_folds_tag(swap_parser)
     _add_types(swap_parser)
+    _add_applied_share(swap_parser)
     swap_parser.set_defaults(run=_run_swap)
 
 
@@ -362,7 +414,34 @@ def _add_folds(commands) -> None:
                        help="the leak control: the boosters read every input from the whole season, held-back games "
                             "included, while the ridge reads the fit games only; sizes the leak of an input that "
                             "exists only as a season total.  Never for step 4")
+    folds.add_argument("--whole-season-context", action="store_true",
+                       help="the second prior's leak arm: its context numbers read the whole season, held-back games "
+                            "included, while the player's own box-score prior and the ridge read the fit games only.  "
+                            "Needs boosters saved with --second-prior.  Never for step 4")
+    _add_jobs(folds)
     folds.set_defaults(run=_run_folds)
+
+
+def _add_second_prior(commands) -> None:
+    second = commands.add_parser(
+        "second-prior", help="the swaps the second prior's line is fitted on, from the folds' held-back games",
+        description="For every within-season fold: each player's box-score prior and eight context numbers (his "
+                    "teammates' and opponents' box-score priors, on offence and defence, with him on the court and "
+                    "on the bench) from the fit games, and the swaps of the held-back games scored at step 4.  Writes "
+                    "each season's normal equations to outputs/second_prior/<TAG>/, which `rate --second-prior "
+                    "TAG` fits the line on.")
+    second.add_argument("--models", required=True, metavar="NAME",
+                        help="outputs/prior_models_<NAME>.pkl, the boosters the folds were rated with")
+    second.add_argument("--folds", required=True, metavar="TAG",
+                        help="the within-season folds, comma-separated folders under outputs/within/, e.g. "
+                             "bags10_early,bags10_within")
+    second.add_argument("--tag", required=True, help="the folder under outputs/second_prior/")
+    second.add_argument("--seasons", type=parse_seasons, default=None,
+                        help="the seasons to write: 2026, 2017-2026 or 2017,2018 (default every season of the folds)")
+    second.add_argument("--inputs", choices=SECOND_PRIOR_INPUTS, default=PRODUCT.prior.second_prior_inputs,
+                        help="context: the box-score prior and the eight context numbers; context_and_types: also the "
+                             "other end's box-score prior and step 5's 19 numbers (default %(default)s)")
+    second.set_defaults(run=_run_second_prior)
 
 
 def parse_date(text: str) -> str:
@@ -441,6 +520,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_shrink(commands)
     _add_swap(commands)
     _add_folds(commands)
+    _add_second_prior(commands)
     _add_site(commands)
     _add_compare(commands)
     _add_glossary(commands)

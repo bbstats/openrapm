@@ -32,6 +32,12 @@ flowchart TD
 `openrapm rate` runs steps 1-3, `openrapm shrink` step 4, `openrapm swap` step 5, and `openrapm build` all
 five in one process (`src/openrapm/commands/build.py`). Each command writes its tables once, at the end.
 
+Every library runs on one thread, so one process keeps one core busy.  `openrapm rate --jobs N` and `openrapm folds
+--jobs N` split their seasons over N processes and give the same numbers (`commands/parallel.py`; checked equal to the
+last digit on 2024-2026 and on 24 folds); `OPENRAPM_JOBS` sets the default and the experiment chain asks for 4.  Never
+more processes than free memory holds, 5.5 GB each with 2 GB kept back, at most 5: on a machine short of memory the
+command runs in one process as before.
+
 ## The data steps
 
 ### Ingest: the raw files
@@ -180,8 +186,27 @@ five in one process (`src/openrapm/commands/build.py`). Each command writes its 
   The offence half of the table comes from the fit on the offence target, the defence half from the fit
   on the defence target. Then each season and side is centred: the possession-weighted mean rating is 0.
   2026's offensive prior scale is 2.35, so a player whose booster prior is +0.5 per 100 starts at +1.18.
+- **The second prior.**  Since experiment 82 (adopted 2026-10-20) the priors P_O and P_D are not step 2's
+  box-score priors themselves but a second prior: one straight line per side on his box-score prior, eight
+  context numbers, his box-score prior at the other end and step 5's 19 box-score, role and body numbers.  The
+  eight context numbers are his teammates' and his opponents' offensive and defensive box-score priors,
+  possession-weighted, with him on the court and on the bench, each padded toward his team's level.  The line is
+  fitted on the lineup swaps of the within-season folds' held-back games, `bags10_early,bags10_within`, by weighted
+  least squares; each team's total is held where b x box-score prior puts it, so the line only moves credit
+  between teammates.  The swaps' lesson then enters before the ridge, and a player's games can argue with it.
+  `second_prior.py`, `openrapm second-prior --tag ctx82` writes the line's normal equations to
+  `outputs/second_prior/ctx82/`; `PriorSettings.second_prior`, `--second-prior ""` reads the box-score prior alone.
+  The line's input sets (`--second-prior-inputs`): `context`, the box-score prior and the eight context numbers
+  (experiment 81); `context_and_types`, also his other side's box-score prior and the swap adjustment's 19 box-score,
+  role and body numbers (experiment 82, shipped); `own_teammates_opponents`, his box-score prior, teammates'
+  same-side sum and opponents' other-side sum, on inputs centred on the season's average (experiment 92, not
+  adopted).  Team totals (`--second-prior-team-totals`): `held` (shipped), `free`, or `spread_held`, which also holds
+  the spread inside teams as the swap adjustment did (experiment 90, not adopted).  Known flaw of the shipped line:
+  its inputs are not centred, so each of the five player-fold lines carries its own level, and a player's prior moves
+  with his id's fold, up to about 0.8 per 100 on 2026 defence (notes/DECISIONS.md, "Experiment 82's defensive prior
+  read through"); the fix, centring, is the next experiment.
 - **Settings:** penalty 13,037 on both sides, one value for every season (experiment 2 of 2026-09-14
-  evening).
+  evening); the second prior `ctx82`, inputs `context_and_types`, team totals held (experiment 82).
 - **Command:** `python -m openrapm rate` (steps 1-3); `--seasons 2026` rates one season, whose values
   equal the 2026 rows of a thirty-season run.
 - **Code:** `src/openrapm/prior_rapm.py`, `commands/build.py`.
@@ -208,8 +233,9 @@ five in one process (`src/openrapm/commands/build.py`). Each command writes its 
     2026-10-15; `ShrinkSettings.free_games_part`, `--no-free-games-part` holds it at 1);
   - both defensive multipliers times 0.866 in every season, chosen with the booster's settings by the same search
     (experiment 76, `ShrinkSettings.defence_factor`, `--defence-factor`);
-  - the folds `bags10_early,bags10_within` (experiment 78's own folds), seasons 1997-2026 pinned, because the
-    fold folder grew once and an unpinned rerun shrank harder (experiment 34's correction);
+  - the folds `ctx82_early,ctx82_within`, experiment 82's own folds, built with the second prior (before it
+    experiment 78's, `bags10_early,bags10_within`), seasons 1997-2026 pinned, because the fold folder grew once
+    and an unpinned rerun shrank harder (experiment 34's correction);
   - each season's multipliers from the 8 fold seasons nearest it (experiment 55, adopted 2026-10-12).
 - **Command:** `python -m openrapm shrink --base season_ratings_NAME_step3`.
 - **Code:** `src/openrapm/prior_shrink.py`, `data/within_folds.py`.
@@ -230,7 +256,10 @@ five in one process (`src/openrapm/commands/build.py`). Each command writes its 
   held-back games supply the swaps, scored against the fold's own step-4 ratings, and its fit games supply the
   type features (experiment 80, adopted 2026-10-19; learned on the same games, it paid players a second time for
   shots that went in during those games).
-- **Settings:** half strength, the spread held within teams ("The swap adjustment with the spread held: it
+- **Off since experiment 82** (adopted 2026-10-20): its inputs moved into step 3's second prior, and
+  `SwapSettings.applied_share` is 0, which leaves step 4's ratings exactly as they are.  The step stays in the
+  build; `--applied-share 0.5` runs it as it shipped until then.
+- **Settings until experiment 82:** half strength, the spread held within teams ("The swap adjustment with the spread held: it
   passes", adopted 2026-10-01); the give-back by share of possessions (experiment 41); the type model's
   ridge penalty 1e-4 x the mean diagonal of its Gram matrix, five player folds (player_id % 5). Half,
   because on the swap test half the type prediction kept most of full strength's gain in ordering

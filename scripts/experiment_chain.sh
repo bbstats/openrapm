@@ -14,6 +14,9 @@
 cd "$(dirname "$0")/.."
 # the environment's python: .venv/Scripts/python on Windows, .venv/bin/python on macOS and Linux; PY=... overrides
 if [ -z "$PY" ]; then PY=.venv/bin/python; [ -x .venv/Scripts/python ] && PY=.venv/Scripts/python; fi
+# rate and folds split their seasons over up to 4 processes, as many as free memory holds (commands/parallel.py;
+# the owner, 2026-10-21: "You can do whatever you want as long as it's faster"); OPENRAPM_JOBS=1 runs one
+export OPENRAPM_JOBS=${OPENRAPM_JOBS:-4}
 NAME=$1
 TARGET=$2
 EXTRA=${3:-}          # extra flags for `openrapm rate`, e.g. --fold-assignment 1 or --features <set>
@@ -46,11 +49,14 @@ LOG=outputs/${NAME}_chain.log
 # Since 2026-10-19 it is experiment 80 (crossfit80): bags10's steps 1-4 and folds, with step 5's type model trained on
 # the folds' held-back games and seasons played before this one out of its inputs; its tables crossfit80, its folds
 # still bags10's.  Every candidate's step 5 now reads its own folds (`openrapm swap --folds`).
-INC_NAME=${INC_NAME:-crossfit80}
-INC_SYSTEM=${INC_SYSTEM:-bags10}                 # the incumbent's folds (<name>_early, <name>_within) for 151
+# Since 2026-10-20 it is experiment 82 (ctx82): step 3 reads the second prior ctx82, step 5 off, step 4 on its own
+# folds ctx82_early and ctx82_within, all three the shipped defaults; no noise control on it yet, so noise_bags10
+# stands in.
+INC_NAME=${INC_NAME:-ctx82}
+INC_SYSTEM=${INC_SYSTEM:-ctx82}                 # the incumbent's folds (<name>_early, <name>_within) for 151
 CONTROL_NAME=${CONTROL_NAME:-noise_bags10}       # the noise control's folds (<name>_early, <name>_within) for 151
-INC_FOLDS=${INC_FOLDS:-bags10_early,bags10_within}
-AUDIT_REF=${AUDIT_REF:-bags10_within}
+INC_FOLDS=${INC_FOLDS:-ctx82_early,ctx82_within}
+AUDIT_REF=${AUDIT_REF:-ctx82_within}
 INC=outputs/season_ratings_${INC_NAME}.parquet
 BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1_tune2 --features hustle_no_three_pct}
 [ -n "$NAME" ] && [ -n "$TARGET" ] || { echo "usage: scripts/experiment_chain.sh NAME TARGET [EXTRA RATE FLAGS]"; exit 1; }
@@ -66,6 +72,8 @@ reading() {            # reading LABEL SCRIPT [FLAGS...]: run one check into the
 }
 # SKIP_BUILD=1: outputs/season_ratings_NAME_step3.parquet already exists -- start at the prior shrink.
 # SHRINK_FLAGS: extra flags for `openrapm shrink`, e.g. "--fold-seasons 1997-2026 --nearest 8" (experiment 55).
+# SWAP_FLAGS: extra flags for `openrapm swap`, e.g. "--applied-share 0" to leave step 4's ratings as they are
+# (experiment 82, where the swaps' lesson moved into the second prior).
 # DECIDER_FLAGS: extra flags for the decider (151), e.g. "--defence-factors=NAME:0.9" beside SHRINK_FLAGS'
 # "--defence-factor 0.9", so the decider scores the step 4 that ships.
 # SHRINK_TAG=<tag>: the within-season folds step 4's multipliers are read from, outputs/within/<tag>/ (default the
@@ -122,7 +130,7 @@ fi
 echo "=== $(date) prior shrink (multipliers from outputs/within/$SHRINK_TAG)" >> $LOG
 $PY -u -m openrapm shrink --base season_ratings_${NAME}_step3 --setting test --folds $SHRINK_TAG $SHRINK_FLAGS --name ${NAME} >> $LOG 2>&1 || exit 1
 echo "=== $(date) swap adjustment" >> $LOG
-$PY -u -m openrapm swap --base season_ratings_${NAME}_step4 --setting test --folds $SHRINK_TAG $SHRINK_FLAGS --name ${NAME} --types >> $LOG 2>&1 || exit 1
+$PY -u -m openrapm swap --base season_ratings_${NAME}_step4 --setting test --folds $SHRINK_TAG $SHRINK_FLAGS $SWAP_FLAGS --name ${NAME} --types >> $LOG 2>&1 || exit 1
 if [ "$EARLY_FOLDS" = "1" ]; then
   echo "=== $(date) the decider: with or without you, stint by stint, on the held-back games (151)" >> $LOG
   reading "with or without you" scripts/checks/151_wowy.py --systems=${INC_SYSTEM},${CONTROL_NAME},${NAME} --ref=${INC_SYSTEM} --tag=${NAME} $DECIDER_FLAGS

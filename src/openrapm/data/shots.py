@@ -454,4 +454,8 @@ DEFENSE_TARGETS = {
     "points_with_expected_opponent_threes_all": _named(def_three_design, "points_with_expected_opponent_threes_all"),
     "points_with_expected_opponent_threes": _named(def_three_design, "points_with_expected_opponent_threes",
                                                    w3=OPPONENT_THREE_LUCK_KEPT),
+    # half of it kept: the luck adjustment blended half and half with the points as scored (notes/DECISIONS.md,
+    # experiment 89; the owner, 2026-10-20: "blend between luck adjusted and not")
+    "points_with_expected_opponent_threes_half": _named(def_three_design,
+                                                        "points_with_expected_opponent_threes_half", w3=0.5),
 }

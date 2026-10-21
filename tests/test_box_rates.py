@@ -1,6 +1,7 @@
 """The padded box-score rates (src/openrapm/box_rates.py) on a simulated league: which games count, the padding toward
 the possession bin, the pad k, the centring; and the two proportion helpers data/shots.py pads shooters with."""
 import numpy as np
+import pandas as pd
 import pytest
 
 from openrapm.box_rates import (
@@ -134,3 +135,51 @@ def test_the_example_and_a_player_without_possessions():
     padded = pad_rates(np.array([[4.2], [3.0]]), np.array([200.0, 0.0]), np.full((2, 1), 450.0), np.full((2, 1), 1.4))
     assert abs(padded[0, 0] - (200 * 2.1 + 450 * 1.4) / 650) < 1e-12 and round(padded[0, 0], 1) == 1.6
     assert padded[1, 0] == 1.4
+
+
+def test_the_body_target_reads_height_and_never_a_players_own_games():
+    """Experiment 86: blocks that rise with height give tall players the higher target; and a player's target does not
+    move when only his own counts change, since his fifth of the players is left out of the line he reads."""
+    from openrapm.box_rates import POSSESSION_BINS, body_targets
+    rng = np.random.default_rng(3)
+    n = 400
+    height = rng.normal(79.0, 3.5, n)
+    weight = 6.0 * height - 260.0 + rng.normal(0, 15, n)
+    possessions = rng.integers(200, 3000, n).astype(float)
+    blocks = rng.poisson(np.maximum(0.3 * (height - 72.0), 0.1) * possessions / 100.0).astype(float)
+    counts = np.column_stack([blocks, rng.poisson(2.0 * possessions / 100.0)])
+    bins = rng.integers(0, POSSESSION_BINS, n)
+    ids = np.arange(1000, 1000 + n)
+    fallback = np.full((n, 2), 1.0)
+    body = np.column_stack([height, weight])
+    target = body_targets(counts, possessions, np.zeros(n, int), 1, bins, bins, body, ids, fallback)
+    tall, short = height > 83, height < 75
+    assert target[tall, 0].mean() > 2.0 * target[short, 0].mean()
+    moved = counts.copy()
+    moved[0, 0] += 500.0                                   # player 1000's blocks only
+    again = body_targets(moved, possessions, np.zeros(n, int), 1, bins, bins, body, ids, fallback)
+    assert again[0, 0] == target[0, 0]                     # his own target is untouched
+    same_fold = (ids % 5 == ids[0] % 5)
+    assert np.array_equal(again[same_fold], target[same_fold]) and not np.array_equal(again, target)
+
+
+def test_box_rates_run_with_the_body_target(design):
+    ids = np.unique(design.spec.players.player_id.to_numpy())
+    rng = np.random.default_rng(5)
+    body = pd.DataFrame({"height_in": rng.normal(79, 3, len(ids)), "weight_lb": rng.normal(220, 20, len(ids))},
+                        index=ids)
+    rates = box_rates(design, pad_target="body_and_possessions", body=body)
+    shipped = box_rates(design)
+    assert np.isfinite(rates.offence.rates).all() and np.isfinite(rates.pad_k).all()
+    assert not np.allclose(rates.offence.rates, shipped.offence.rates)
+    with pytest.raises(ValueError, match="height and weight"):
+        box_rates(design, pad_target="body_and_possessions")
+
+
+def test_a_player_without_a_height_reads_the_medians_and_breaks_no_target(design):
+    ids = np.unique(design.spec.players.player_id.to_numpy())
+    rng = np.random.default_rng(6)
+    body = pd.DataFrame({"height_in": rng.normal(79, 3, len(ids)), "weight_lb": rng.normal(220, 20, len(ids))},
+                        index=ids).iloc[1:]                       # the first player is not in the table
+    rates = box_rates(design, pad_target="body_and_possessions", body=body)
+    assert np.isfinite(rates.offence.rates).all() and np.isfinite(rates.defence.rates).all()

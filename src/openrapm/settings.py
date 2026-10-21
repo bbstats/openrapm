@@ -30,7 +30,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 
-__all__ = ["Targets", "LabelSettings", "PriorSettings", "ROW_LABELS", "RidgeSettings", "ShrinkSettings",
+__all__ = ["Targets", "LabelSettings", "PriorSettings", "ROW_LABELS", "TEAM_TOTALS", "SECOND_PRIOR_INPUTS",
+           "RidgeSettings", "ShrinkSettings",
            "SwapSettings", "Settings", "PRODUCT", "TEST"]
 
 
@@ -129,11 +130,40 @@ class PriorSettings:
     # what each training row is labelled with.  "career": every row of a player carries his RAPM over every training
     # season, its own included (shipped).  "outside": each chunk row carries his RAPM over the seasons outside its
     # own and the career row is dropped, so no label shares a game with its row's box score (box_prior.training_rows;
-    # notes/DECISIONS.md, experiment 79, the owner, 2026-10-19: "try it on the prior first")
+    # notes/DECISIONS.md, experiment 79, the owner, 2026-10-19: "try it on the prior first").  "nearest": each chunk
+    # row carries his RAPM over only the seasons right next to it, the one before and the one after, so the label is
+    # the player at about the row's age (rapm.nearest_labels; notes/DECISIONS.md, experiment 83)
     row_labels: str = "career"
+    # "": step 3 reads the box-score prior itself, as it did until experiment 82.  A tag: step 3 reads the second
+    # prior instead, shipped as ctx82 since experiment 82 was adopted 2026-10-20, "adopt for now".  It is the
+    # box-score prior corrected for who a player played with and against, by a line fitted on the swaps of the
+    # within-season folds' held-back games written under outputs/second_prior/<tag>/ (second_prior.py;
+    # notes/DECISIONS.md, experiment 81, the owner, 2026-10-19: "take the handoff idea ... in as inputs to the prior")
+    second_prior: str = "ctx82"
+    # the line's player folds (player_id % 5) and its ridge penalty relative to the mean diagonal of its Gram matrix:
+    # step 5's type model's, the method the line borrows
+    second_prior_folds: int = 5
+    second_prior_penalty: float = 1e-4
+    # each team's total: "held" at the line's box-score part's, b x box-score prior, the context re-splitting credit
+    # inside the team only, or "free", the line as it is.  A swap cannot see team strength, and with totals free the
+    # step-3 ratings predicted the held-back team-games worse in 44 of 48 folds of four seasons (second_prior.py;
+    # notes/DECISIONS.md, experiment 81).  "spread_held": totals held and each season's spread inside teams held to
+    # the box-score part's too, as step 5 held it (experiment 90)
+    second_prior_team_totals: str = "held"
+    # what the line reads: "context", the box-score prior and the eight context numbers (experiment 81), or
+    # "context_and_types", also the other end's box-score prior and step 5's box counts, role and body, so the swaps'
+    # lesson enters before the ridge (experiment 82, the owner, 2026-10-19: "wouldnt it stand to reason to put the
+    # swap adjustments into the priors before RAPMizing?")
+    # shipped: "context_and_types", experiment 82, adopted 2026-10-20
+    second_prior_inputs: str = "context_and_types"
+    # 0: each season's line is fitted on every season the setting allows.  K: on only the K nearest of them, as step 4
+    # fits its multipliers (experiment 85: experiment 82 won 1997-2016 and lost 2017-2026 with one line for all eras)
+    second_prior_nearest: int = 0
 
 
-ROW_LABELS = ("career", "outside")
+ROW_LABELS = ("career", "outside", "nearest")
+TEAM_TOTALS = ("held", "free", "spread_held")    # PriorSettings.second_prior_team_totals
+SECOND_PRIOR_INPUTS = ("context", "context_and_types", "own_teammates_opponents")   # PriorSettings.second_prior_inputs
 
 
 @dataclass(frozen=True)
@@ -161,7 +191,8 @@ class ShrinkSettings:
     # and 2017-2026 (notes/DECISIONS.md, "Experiment 78", adopted 2026-10-17; before it experiment 77's,
     # nothreepct_early,nothreepct_within, experiment 76's, tune2_early,tune2_within, and experiment 63's,
     # cols06_early,cols06_within); the method is experiment 33b's, adopted 2026-10-03
-    folds_tag: str = "bags10_early,bags10_within"
+    # since experiment 82, adopted 2026-10-20, its own folds, ctx82_early,ctx82_within, built with the second prior
+    folds_tag: str = "ctx82_early,ctx82_within"
     # each season's factors from only the K fold seasons nearest it (prior_shrink.fold_seasons_used): the defensive
     # prior part holds up less in older seasons, 0.79 in 1997-2006 against 0.95 in 2017-2026 (notes/DECISIONS.md,
     # "Era drift" and experiment 55, adopted 2026-10-12: "yes. build."); 0 would use every fold season the rule allows
@@ -190,7 +221,9 @@ class SwapSettings:
     """
     # the share of the type model's prediction applied: half (kappa in notes/DECISIONS.md, "The swap adjustment with
     # the spread held: it passes", adopted 2026-10-01: "Team version.")
-    applied_share: float = 0.5
+    # 0 since experiment 82, adopted 2026-10-20: the swaps' lesson moved into the second prior, so step 5 leaves
+    # step 4's ratings exactly as they are; 0.5 before it
+    applied_share: float = 0.0
     # the type model's ridge penalty, relative to the mean diagonal of its Gram matrix, and the number of player
     # folds it is fitted on (the swap adjustment's first run, 2026-10-01)
     type_model_penalty: float = 1e-4

@@ -76,7 +76,7 @@ import scipy.linalg
 
 __all__ = ["design_blocks", "NormalEquations", "normal_equations", "player_possessions", "block_penalty",
            "solved_ridge", "solve_ridge", "team_flags", "SeasonSums", "unshrink", "career_labels", "profile",
-           "LeaveOut", "outside_labels"]
+           "LeaveOut", "outside_labels", "neighbour_seasons", "nearest_labels"]
 
 
 def design_blocks(design):
@@ -525,4 +525,44 @@ def outside_labels(sums: dict, unseen, season_sets, label_settings, targets) -> 
                                  label_settings.tier_edges)
             tables[side] = table
         out[frozenset(int(season) for season in seasons)] = tables
+    return out
+
+
+def neighbour_seasons(seasons, available, unseen) -> frozenset:
+    """The seasons right next to a training row's seasons: the one before its first and the one after its last, each
+    kept only when the sums hold it and it is not unseen.
+
+    Example: rating 2010 in the test setting (unseen 2009-2011), a row of 2003 and 2004 gives {2002, 2005}; a row of
+    2008 gives {2007}, since 2009 is unseen.
+    """
+    first, last = min(int(season) for season in seasons), max(int(season) for season in seasons)
+    return frozenset(season for season in (first - 1, last + 1) if season in available and season not in unseen)
+
+
+NO_LABELS = ("player_id", "offense", "defense", "possessions")
+
+
+def nearest_labels(sums: dict, unseen, season_sets, label_settings, targets, cache: dict | None = None) -> dict:
+    """{seasons: {"O": offence labels, "D": defence labels}} for each set of seasons in `season_sets`: `career_labels`
+    over only the seasons right next to the set (`neighbour_seasons`), so a row's label describes the player at about
+    the row's own age and shares no game with its box score (notes/DECISIONS.md, experiment 83; the owner, 2026-10-19:
+    "are there aging/censoring effects in the prior fits themselves?").  A set with no neighbour gets empty tables, so
+    its rows have no label and are dropped.  `cache`, {neighbour seasons: labels}, may be shared by every rated season
+    of a run: the labels over a set of seasons do not depend on which season is being rated.
+
+    Example: a player's chunk row of 2003-2004 is labelled with his RAPM fitted on 2002 and 2005 alone.
+    """
+    available = {int(season) for season in sums[targets.offence].seasons}
+    unseen = {int(season) for season in unseen}
+    cache = {} if cache is None else cache
+    out = {}
+    for seasons in season_sets:
+        key = frozenset(int(season) for season in seasons)
+        near = neighbour_seasons(key, available, unseen)
+        if not near:
+            out[key] = {side: pd.DataFrame(columns=list(NO_LABELS)) for side in ("O", "D")}
+            continue
+        if near not in cache:
+            cache[near] = career_labels(sums, sorted(available - near), label_settings, targets)
+        out[key] = cache[near]
     return out

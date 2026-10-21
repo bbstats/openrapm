@@ -13,7 +13,8 @@ Words used below
                    measured from every player's odd- against even-numbered games (`split_half_k`)
     bin            one of six ranges of possessions, equally wide on a log scale
     target         the typical value a rate is padded toward: that season's rate among the players of his bin (the
-                   possession-conditional target, config.yaml's pad_target), or the season's league rate
+                   possession-conditional target, config.yaml's pad_target), or the season's league rate, or the rate
+                   his height, weight and bin predict (`body_targets`, pad_target body_and_possessions)
     centred        the possession-weighted average player subtracted, so 0 is an average player
 
 The padding (`shrink`):
@@ -28,6 +29,18 @@ The padding (`shrink`):
 Example: a 200-possession bench player with 2.1 steals per 100, k = 450 and a bin rate of 1.4 is padded to
 (200 x 2.1 + 450 x 1.4) / (200 + 450) = 1.6 steals per 100; a 3,000-possession starter with the same 2.1 keeps almost
 all of it: (3000 x 2.1 + 450 x 1.4) / 3450 = 2.0.
+
+The body target (pad_target body_and_possessions; notes/DECISIONS.md, experiment 86; the owner, 2026-10-20: "out of
+fold ... priors for the padded metrics (eg use height and weight and, the buckets we were using earlier like for
+possessions)").  Per season and count, a weighted least-squares line of the players' rates on height, weight and one
+column per possession bin, weighted by offensive possessions, fitted without the player's fifth of the players
+(player_id % 5) and read at his own height, weight and bin; never below 0.  His own games never set his target.  The
+pad k is then measured around it: the halves' covariance of (rate - his target), not of (rate - the mean), so k says
+how much of the spread the target leaves.  A better target leaves less, so k rises: the rate leans more on a better
+guess.
+
+Example: a 7-foot rookie with 300 possessions and 4.0 blocks per 100 is padded toward what players of his height,
+weight and bin block, say 3.0, where the bin alone would say 1.2.
 
 `mom_k` is the same idea for a made / attempted proportion (a shooter's free-throw percentage, data/shots.py), its k in
 attempts.
@@ -52,7 +65,10 @@ K_FALLBACK = 40.0               # mom_k's k when too few players carry a proport
 MIN_HALF_POSSESSIONS = 20.0     # a player enters split_half_k with at least this many possessions in each half
 POSSESSION_BINS = 6
 MIN_BIN_PLAYERS = 5             # a season's bin needs this many players to have a rate of its own
-PAD_TARGETS = ("league", "poss_conditional")
+PAD_TARGETS = ("league", "poss_conditional", "body_and_possessions")
+BODY = ("height_in", "weight_lb")      # the body target's inputs (data/bio.py), one row per player
+BODY_FOLDS = 5                          # its player folds: player_id % 5
+MIN_BODY_PLAYERS = 20                   # a season's fold needs this many players with possessions to fit a line
 LINEUP = 5                      # players on the court per side
 
 
@@ -121,7 +137,7 @@ def _odd_even_totals(player: np.ndarray, game: np.ndarray, counts: np.ndarray, p
 
 
 def _season_k(counts_a: np.ndarray, possessions_a: np.ndarray, counts_b: np.ndarray,
-              possessions_b: np.ndarray) -> np.ndarray:
+              possessions_b: np.ndarray, target: np.ndarray | None = None) -> np.ndarray:
     """One season's pad k per count from its players' two half rates r_A and r_B (per 100, over P_A and P_B
     possessions):
 
@@ -130,15 +146,19 @@ def _season_k(counts_a: np.ndarray, possessions_a: np.ndarray, counts_b: np.ndar
         k              = sigma^2_within / tau^2_between,  K_MAX when tau^2 <= 0
 
     The two halves share a player's true rate and nothing else, so their weighted covariance is the variance of the
-    true rates between players; the squared gap between them is pure noise.
+    true rates between players; the squared gap between them is pure noise.  With `target` (one row per player, the
+    body target), tau^2 is the weighted mean of (r_A - target)(r_B - target): the spread the target leaves.
     """
     rate_a = 100.0 * counts_a / possessions_a[:, None]
     rate_b = 100.0 * counts_b / possessions_b[:, None]
     inverse = (1.0 / possessions_a + 1.0 / possessions_b)[:, None]
     within = np.mean((rate_a - rate_b) ** 2 / inverse, axis=0)
     weight = (possessions_a + possessions_b)[:, None]
-    mean_a = (weight * rate_a).sum(0) / weight.sum()
-    mean_b = (weight * rate_b).sum(0) / weight.sum()
+    if target is None:
+        mean_a = (weight * rate_a).sum(0) / weight.sum()
+        mean_b = (weight * rate_b).sum(0) / weight.sum()
+    else:
+        mean_a = mean_b = target
     between = ((weight * (rate_a - mean_a) * (rate_b - mean_b)).sum(0) / weight.sum())
     with np.errstate(divide="ignore", invalid="ignore"):
         k = np.where(between > 0, within / np.maximum(between, 1e-12), K_MAX)
@@ -147,7 +167,7 @@ def _season_k(counts_a: np.ndarray, possessions_a: np.ndarray, counts_b: np.ndar
 
 def split_half_k(player: np.ndarray, game: np.ndarray, counts: np.ndarray, possessions: np.ndarray,
                  season_of_player: np.ndarray, n_seasons: int,
-                 min_half_possessions: float = MIN_HALF_POSSESSIONS) -> np.ndarray:
+                 min_half_possessions: float = MIN_HALF_POSSESSIONS, target: np.ndarray | None = None) -> np.ndarray:
     """The pad k of every count in every season, (seasons x counts), in possessions; NaN for a season with fewer than
     three players carrying `min_half_possessions` in both halves.
 
@@ -164,7 +184,8 @@ def split_half_k(player: np.ndarray, game: np.ndarray, counts: np.ndarray, posse
         both = ((season_of_player == season) & (possessions_a >= min_half_possessions)
                 & (possessions_b >= min_half_possessions))
         if both.sum() >= 3:
-            k[season] = _season_k(counts_a[both], possessions_a[both], counts_b[both], possessions_b[both])
+            k[season] = _season_k(counts_a[both], possessions_a[both], counts_b[both], possessions_b[both],
+                                  None if target is None else target[both])
     return k
 
 
@@ -223,11 +244,12 @@ def league_rates(counts: np.ndarray, offensive_possessions: np.ndarray, season_o
     return rates
 
 
-def pad_k(totals: GameTotals, season_of: np.ndarray, n_seasons: int) -> np.ndarray:
+def pad_k(totals: GameTotals, season_of: np.ndarray, n_seasons: int, target: np.ndarray | None = None) -> np.ndarray:
     """(seasons x counts): `split_half_k` on the offensive possessions, a season without enough players taking the
-    mean k of the seasons that have them (all zeros when none has)."""
+    mean k of the seasons that have them (all zeros when none has); around `target` (one row per player-season) when
+    given."""
     k = split_half_k(totals.player_season, totals.game, totals.counts, totals.offensive_possessions, season_of,
-                     n_seasons)
+                     n_seasons, target=target)
     if not np.isfinite(k).any():
         return np.zeros((n_seasons, totals.counts.shape[1]))
     return np.where(np.isnan(k), np.nanmean(k, axis=0, keepdims=True), k)
@@ -285,6 +307,42 @@ def bin_targets(counts: np.ndarray, offensive_possessions: np.ndarray, season_of
             else:
                 targets[season, b] = league[season]
     return targets
+
+
+def body_targets(counts: np.ndarray, offensive_possessions: np.ndarray, season_of: np.ndarray, n_seasons: int,
+                 train_bins: np.ndarray, apply_bins: np.ndarray, body: np.ndarray, player_ids: np.ndarray,
+                 fallback: np.ndarray) -> np.ndarray:
+    """(player-seasons x counts): each player-season's body target (module docstring).
+
+    `body` is (player-seasons x 2), height and weight; `train_bins` the bins the lines are fitted on (offensive
+    possessions), `apply_bins` the bins each player-season is read at (this side's possessions); `fallback` the
+    target where a season's fold has too few players to fit a line.  A small ridge, 1e-8 of the mean diagonal, keeps a
+    bin without players from making the fit singular.
+    """
+    played = offensive_possessions > 0
+    with np.errstate(divide="ignore", invalid="ignore"):
+        rate = np.where(played[:, None], 100.0 * counts / np.where(played, offensive_possessions, 1.0)[:, None], 0.0)
+
+    def design(bins):
+        dummies = (np.asarray(bins)[:, None] == np.arange(1, POSSESSION_BINS)[None, :]).astype(float)
+        return np.column_stack([np.ones(len(bins)), body, dummies])
+
+    fit_rows, read_rows = design(train_bins), design(apply_bins)
+    fold = np.asarray(player_ids, dtype=np.int64) % BODY_FOLDS
+    out = np.asarray(fallback, dtype=float).copy()
+    for season in range(n_seasons):
+        in_season = season_of == season
+        for left_out in range(BODY_FOLDS):
+            train = in_season & played & (fold != left_out)
+            read = in_season & (fold == left_out)
+            if train.sum() < MIN_BODY_PLAYERS or not read.any():
+                continue
+            weighted = fit_rows[train] * offensive_possessions[train][:, None]
+            gram = weighted.T @ fit_rows[train]
+            gram += 1e-8 * np.mean(np.diag(gram)) * np.eye(len(gram))
+            beta = np.linalg.solve(gram, weighted.T @ rate[train])
+            out[read] = np.maximum(read_rows[read] @ beta, 0.0)
+    return out
 
 
 # ------------------------------------------------------------------------------------------- one player, one rate
@@ -365,7 +423,7 @@ def _targets(league, edges, targets, player_possessions, season_of, player_of) -
     return targets[season_of, bin_of(edges, player_possessions[player_of])]
 
 
-def box_rates(design, pad_target: str = "poss_conditional") -> BoxRates:
+def box_rates(design, pad_target: str = "poss_conditional", body: pd.DataFrame | None = None) -> BoxRates:
     """The padded rates of every player of `design` (data/designs.py), both sides, from the design's games.
 
     Per player-season: his counts and possessions summed over the counted games (`game_totals`), each season's league
@@ -375,9 +433,12 @@ def box_rates(design, pad_target: str = "poss_conditional") -> BoxRates:
     an average lineup add to 0.
 
     The same padding gives both sides: on offence n is his team's offensive possessions, on defence the defensive ones.
+    Under the body target, `body` (indexed by player_id, `BODY`) gives every player's height and weight.
     """
     if pad_target not in PAD_TARGETS:
         raise ValueError(f"unknown pad_target {pad_target!r}; use one of {PAD_TARGETS}")
+    if pad_target == "body_and_possessions" and body is None:
+        raise ValueError("the body target needs every player's height and weight")
     spec = design.spec
     player_of = (spec.player_of_player_season if spec.player_of_player_season is not None
                  else np.arange(spec.n_player_seasons))
@@ -392,16 +453,29 @@ def box_rates(design, pad_target: str = "poss_conditional") -> BoxRates:
     player_counts = np.asarray(per_player @ counts)
     player_possessions = {side: np.asarray(per_player @ values).ravel() for side, values in possessions.items()}
     league = league_rates(counts, possessions["O"], season_of, spec.n_seasons)
-    k = pad_k(totals, season_of, spec.n_seasons)
     edges = (possession_bins(possessions["O"], player_possessions["O"][player_of])
-             if pad_target == "poss_conditional" else None)
+             if pad_target in ("poss_conditional", "body_and_possessions") else None)
     targets = None if edges is None else bin_targets(counts, possessions["O"], season_of, spec.n_seasons,
                                                      bin_of(edges, player_possessions["O"][player_of]), league)
+    side_targets = {side: _targets(league, edges, targets, player_possessions[side], season_of, player_of)
+                    for side in ("O", "D")}
+    k_target = None
+    if pad_target == "body_and_possessions" and edges is not None:
+        player_ids = spec.players.set_index("player_column").player_id.reindex(player_of).to_numpy()
+        # a player the body table lacks reads its medians, as the panel's own body columns do (data/bio.py); one
+        # missing height would otherwise leave his season's whole line, and every target read off it, missing
+        heights = body.reindex(player_ids)[list(BODY)].fillna(body[list(BODY)].median()).to_numpy(float)
+        train_bins = bin_of(edges, player_possessions["O"][player_of])
+        side_targets = {side: body_targets(counts, possessions["O"], season_of, spec.n_seasons, train_bins,
+                                           bin_of(edges, player_possessions[side][player_of]), heights, player_ids,
+                                           side_targets[side])
+                        for side in ("O", "D")}
+        k_target = side_targets["O"]
+    k = pad_k(totals, season_of, spec.n_seasons, k_target)
     sides = {}
     for side, lineup in zip(("O", "D"), lineups(design)):
         player_k = _blend(k[season_of], possessions[side], player_of, spec.n_players)
-        target = _blend(_targets(league, edges, targets, player_possessions[side], season_of, player_of),
-                        possessions[side], player_of, spec.n_players)
+        target = _blend(side_targets[side], possessions[side], player_of, spec.n_players)
         rates = pad_rates(player_counts, player_possessions[side], player_k, target)
         centred = rates - _lineup_mean(rates, lineup, np.asarray(design.w, dtype=float)) / LINEUP
         sides[side] = SideRates(rates=rates, centred=centred, possessions=player_possessions[side])

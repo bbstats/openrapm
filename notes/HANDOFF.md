@@ -1,235 +1,160 @@
 # Handoff
 
 **What this file is.**  Where the work stands, what waits on the owner, and the commands a session runs.  Rewritten
-whole on 2026-10-16; the earlier, longer file is in git history at feeb8e6.  `DECISIONS.md` is the permanent record and
-carries every number quoted here; read its measurement traps before trusting a number.  `README.md` says what
-OpenRAPM is, `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing rules.
+whole on 2026-10-21; the earlier file is in git history.  `DECISIONS.md` is the permanent record and carries every
+number quoted here; read its measurement traps before trusting a number.  `README.md` says what OpenRAPM is,
+`PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's standing rules.
 
-## Where it stands, 2026-10-19
+## Talking to the owner
 
-- **Live on the site since 2026-10-19 (8dc207b):** experiment 80, step 5 cross-fitted and single-season (the owner:
-  "this looks much better anecdotally so - adopt").  The product table and the site's files are rebuilt
-  and published, the owner: "commit and publish".
-- **Before it, experiment 78**, published 2026-10-17: experiment 77 (experiment 76's booster settings and
-  defence factor, three-point % off the offensive booster) with the prior averaged over 10 bootstraps of the players.
-  Decider -0.086, z -3.13, the twenty untouched seasons z -2.40; guard z +0.60.  A product build now takes longer: a
-  season's rating about 96 s against 24.
-- **Tests:** `pytest -q` 686 passed and 1 expected failure, the backup bigs; `pytest -m slow` 7 passed, the step-5
-  golden pair `golden/crossfit80/` byte for byte; `ruff check .` clean.  The Curry ceiling passes.
-- **The input cull, done 2026-10-17:** check 152 `cull` / `cull-table`, every input shadowed and dropped at three
-  seeds on the tune cache (DECISIONS.md "The input cull on the decider").  One cut, three-point % on offence, became
-  experiment 77.  The cull also found the booster's seed alone moves the decider about 0.03; bagging, experiment
-  78, replaced the single booster.  Tracking is on hold ("not yet").
-- **Next, the owner's open threads:** tracking game by game (below); the arena scorekeeper checks; the big-man lean against the consensus.
-- **Done 2026-10-18: check 153, what step 5 does** (`notes/PLAN_swap_step.md`; DECISIONS.md "Check 153"; sheet tabs
-  "Swap step" and "Swap step types").  Step 5 helps on the decider, -0.361, z -6.0, and ties the guard.  Its gain is
-  type content, not the within-team shrink: the shrink alone is +1.25 on the decider.  On offence its biggest terms,
-  made and missed shots, are same-games luck.  Refitted on the folds' held-back games, `step5_other`, it beats shipped
-  step 5 on the decider by 0.547, z -12.2, 30 of 30, and on the guard by 0.163, z -3.2.
-- **The owner's ruling, 2026-10-19:** "fix step 5 but - yes it must ONLY come from the season in question.  since this
-  is post hoc we should try it on the prior first.  so - commit everything, try fixing the prior, then work on fixes to
-  step 5".  Order: (1) commit; (2) the same-games fix on the prior: each training row's label from games its box score
-  did not come from, experiment 25's idea, judged on the decider; (3) then step 5, cross-fitted, its inputs from the
-  rated season only, so `seasons_before` goes.
-- **Experiment 79 run 2026-10-19** (`--row-labels outside`, DECISIONS.md): decider +0.063, z +1.20, a tie; 1997-2016
-  leans better, 15 of 20 seasons, 2017-2026 worse in all 10, +0.360, z +7.2; guard a tie.  Not adopted, the owner: "leave as is for now".
-- **Experiment 80 run 2026-10-19**, step 5 cross-fitted and single-season, read by check 153 (DECISIONS.md): against
-  shipped step 5, decider -0.553, z -12.9, 30 of 30, every era; guard -0.156, z -3.05.  Verdict pending; if adopted, the
-  build's step 5 must reproduce check 153's table before it ships.
+- American English in everything shared: defense, offense, color.  Code names keep their spelling.
+- No step numbers in messages.  The names: **box-score prior** (the LightGBM, also "preliminary prior"); **+/-** (what
+  the season's games add on top of the prior); **swap adjustment** (the old after-the-fact correction from lineup
+  swaps, off since experiment 82); **swap part of the prior** (experiment 82's line, learned from the same swaps,
+  added before the games are weighed); **defense dial** (step 4's extra 0.866 on defense).  Define each the first
+  time it appears.
+- Experiments by name in chat, numbers only in the record files ("the three-input prior", not "experiment 92").
+- Answer exactly what is asked.  Results as tables, one quantity per column, no parentheses, one TL;DR sentence.
+- Within-season WOWY is what counts, and a win must hold in every era: 1997-2006, 2007-2016, 2017-2026.
 
-## What ships
+## Where it stands, 2026-10-21
 
-| step | module | as shipped |
-|---|---|---|
-| 1, the label | `rapm.py` | one RAPM per player over every season but the rated one; penalties 40,000 / 40,000 / 0; the defensive label un-shrunk |
-| 2, the box-score prior | `box_prior.py` | LightGBM, `params/booster_params_lgb1_tune2.json`, chosen on the decider by check 152's guarded search; feature set `hustle_no_three_pct`; five player folds, out of player; 10 bags, each on a bootstrap of the players |
-| 3, the rating | `prior_rapm.py` | the season's RAPM pulled toward the prior, residual penalty 13,037, centred |
-| 4, the shrink | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, from the 8 nearest fold seasons, both defensive factors times 0.866: prior part 0.659-0.728 offence, 0.684-0.794 defence; games' part 1.186-1.393 and 1.252-1.351; folds `bags10_early,bags10_within` |
-| 5, the swap step | `swap_adjust.py` | credit re-split inside each team from lineup swaps, team totals fixed, spread inside teams held to step 4's; the type model trained on the within-season folds' held-back games, 21 inputs all from the rated season (experiment 80) |
+- **The incumbent is experiment 82**, adopted 2026-10-20 ("adopt for now"): step 3 pulls toward a second prior, the
+  box-score prior plus a line fitted on held-back lineup swaps that reads teammates' and opponents' box-score
+  priors, the player's other-side box-score prior and the swap adjustment's 19 box-score, role and body numbers, team
+  totals held; the swap adjustment off; step 4 on 82's own folds.  These are the shipped defaults
+  (`settings.py`); the chain's incumbent is `ctx82`.
+- **The product table is built with experiment 82** (`outputs/season_ratings_product.parquet`, 2026-10-20; the old
+  one kept as `season_ratings_product_before_ctx82*`).  **Not published**: the site still shows experiment 80.  The
+  owner, on seeing 82's ratings: "we can't publish an even stronger defense".  `docs/` was restored to the live
+  files; rebuild it with `openrapm site` when publishing.
+- **Experiment 82's defense is wider**: defense spread 1.69 / 1.59 / 1.49 by era against 1.38 / 1.32 / 1.36 before.
+  Against the consensus in 2026 the slope of our defense on theirs is about 1; the extra spread is players rated
+  differently, carried by big-man stats: blocks, height, defensive rebounds, fouls (DECISIONS.md, "Experiment 82's
+  defensive prior read through").
+- **Two flaws found in experiment 82's line** (same section):
+  1. **The ID-group bug.**  The line is fitted five times, each without one player fold (player_id % 5), and has no
+     intercept on uncentred inputs, so each fold's line carries its own level.  2026 defense: ids ending 2 or 7
+     average +0.50, ending 4 or 9 -0.31.  Fix: centre the inputs on the season's possession-weighted average.
+  2. **Cross-side inputs.**  The defensive line reads his offensive box-score prior with weight 0.91 beside 1.03 on
+     his defensive one (2026, raw scale), copied from the swap adjustment's inputs.
+- **Tried since and not adopted** (DECISIONS.md has each): 86 padding toward height, weight and possessions; 87 the
+  swap adjustment reads age as a curve; 88/88b none of the opponents' three-point luck kept; 89b half kept; 90 the
+  spread inside teams held; 91 the defense dial at 0.70-0.95 (0.80 narrows defense at a within-season cost); 92 the
+  three-input prior, own prior plus teammates' same-side and opponents' other-side sums, which scored like no swap
+  correction at all: 82's gain comes from the box-score stats in its line, not from teammates or opponents.
+- **Boruta on both stages**: the box-score prior's inputs on 2026-10-16; the second stage on 2026-10-21, a table of
+  ten candidates per side by era (DECISIONS.md, "Boruta on the second stage").
+- **Faster runs**: `openrapm rate --jobs N` and `openrapm folds --jobs N`, same numbers; the chain asks for 4, cut to
+  what free memory holds.  A chain takes about 50 minutes instead of 1 hour 40.
 
-- `openrapm build` writes `outputs/season_ratings_product.parquet` with `_step3` and `_step4` beside it.  Previous
-  product tables: `outputs/season_ratings_product*_before_bags10.parquet`, `*_before_nothreepct.parquet`.
-- `openrapm site --bias --openrapm-decomposition --similarity` writes the site's files.  Commit, fast-forward `main`
-  and push only on the owner's word, then check the Pages build:
-  `gh api repos/bbstats/openrapm/pages/builds/latest`.
-- Since experiment 80 the incumbent's tables are `crossfit80`, `outputs/season_ratings_crossfit80*.parquet` (steps
-  1-4 bags10's), its folds still `bags10_early` and `bags10_within`; `openrapm swap` now takes `--folds`.
-- The incumbent for scoring is `bags10`, the test-setting tables `outputs/season_ratings_bags10*.parquet`, its
-  folds `bags10_early` and `bags10_within`; its noise control `noise_bags10`.  The decider applies the shipped defence factor, 0.866, to every system; a system
-  built before experiment 76 is read with `--defence-factors=NAME:1`.
+## Next: experiment 82 with the ID-group fix (the owner, 2026-10-21: "next handoff we will begin experiment 82")
 
-## How an experiment is judged
-
-The owner, 2026-10-15: "within-season is truly the best metric, particularly WOWY".  Three readings, nothing else:
-
-| reading | script | rule |
-|---|---|---|
-| the decider | `scripts/checks/151_wowy.py`, stint unit, step 4 as shipped | paired z of -2 or below against the incumbent; the noise control beside it |
-| the guard | `scripts/checks/63_yoy.py` | year over year not worse at z +2 |
-| the eye check | `scripts/checks/66_compare.py` | the 2026 top 20 |
-
-- One build: `bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes "EXTRA RATE FLAGS"`.  About
-  1 hour 40 minutes with 10 bags: steps 1-3 at the test setting, the candidate's own folds for all thirty seasons, steps 4 and 5, then the
-  three readings.  `INC_NAME=tune2` names the incumbent's tables and `INC_SYSTEM=tune2` its folds.
-- The noise control on the incumbent, `noise_bags10`, reads -0.003, se 0.011, z -0.33, 14 of 30 seasons; bagging cut
-  the regrouping noise to about a third of experiment 76's, se 0.029.
-- **Scale.**  On the decider, ratings of zero leave 3,648.6 a season and today's ratings 3,633.0: the ratings explain
-  15.7, so a gain of 0.27 is 1.7% more of what ratings explain.  `scratch/2026-10-15_overnight/zero_baseline.py`.
-- Every experiment gets a row in `experiments/runs.csv` through `scripts/checks/101_log_run.py`, mirrored to the
-  sheet "OpenRAPM experiments", tab Experiments.
-- Reports to the owner: four parts, what changed / result / 2026 top 20 / your call; one quantity per column, no
-  parentheses; plain words; one question at the end and a one-sentence TL;DR.
+1. Add an input set that is 82's inputs, centred: in `second_prior.py`, `INPUT_SETS["context_and_types_centred"]`
+   equal to the `context_and_types` list and the name in `CENTRED_SETS`; in `settings.py` the name in
+   `SECOND_PRIOR_INPUTS`.  `side_inputs` must treat it as `context_and_types` (it reads `types`), and
+   `season_second_priors` already centres any set in `CENTRED_SETS`.  The grams of `ctx82` fit it unchanged: the line
+   is fitted on swap differences, which centring does not change, and `line_setup` compares the input lists.
+2. A test: on uncentred inputs two fold lines that differ by a constant give the average player different values,
+   centred they do not.
+3. `bash scripts/experiment_chain.sh ctx82c points_with_expected_opponent_threes "--second-prior-inputs context_and_types_centred"`
+   about 50 minutes, against ctx82.
+4. Read by era, with each side's width (`scratch/2026-10-20_defence/defence_width_table.py ctx82c ctx82`), the fold
+   means of the prior part (`scratch/2026-10-21_charts/fold_level.py`, pointed at ctx82c), and the season-page score
+   (`scratch/2026-10-20_charts/season_scores.py`).
+5. Then, if the owner wants it: the same without the other side's own box-score prior.
 
 ## Waiting on the owner
 
-- **Done 2026-10-16:** experiment 76 adopted and published (the owner: "Hell yeah. Publish").  It supersedes
-  experiment 71 and the tune proposal; experiment 75 is not adopted.  Rerun a trial on the tune cache:
-  `python scripts/checks/152_decider_tune.py trial --tag tune1 --params NAME --features hustle --guard`, about 45 s.
-3. **Tracking, game by game.**  One-day pulls of the tracking dashboards return one game per player: probed
-   2026-10-16, drives on 2024-01-15 gave 229 players with one game each.  So all 21 tracking columns can be rebuilt
-   per game.  Everything: about 29,000 requests, 13 hours.  Defence first, defended twos, threes and rim shots plus
-   contested rebounds: about 11,700 requests, 5 hours.  Experiment 62 found the tracking signal on defence.
-4. Verdicts still pending in the experiment table: 64, 65b, 66, 67-72, 74; recommended not adopted except 71.
-5. The decider's bar, z -2, to confirm.
-6. The Curry star-guard ceiling test fails: Curry 83rd against a ceiling of 80.
+- What to publish: experiment 82 as it is, 82 with the defense dial at 0.80, experiment 90, or hold; after the
+  ID-group fix is read.
+- The EM ridge idea, a larger thread "not now": the ridge penalty by EM per season and side instead of the fixed
+  13,037.
+- Deleting the saved boosters of experiments that were not adopted, about 2 GB each in `outputs/prior_models_*.pkl`
+  (luckall88, luckall88b, luckhalf89, luckhalf89b, near83, same84, ctx85, body86, spread90, three92 and older ones).
+- Filed earlier: tracking game by game; arena scorekeeper checks; Stockton over Jordan in 1997-98; the Curry star-guard
+  ceiling test fails.
 
-**Filed for later by the owner.**
-- Arena-season scorekeeper checks on steals, blocks and assists.  Assists measured, DECISIONS.md "Home and away
-  assists": arena generosity had a true spread of about 7% before 2018, gone since the league's stats auditor arrived
-  in 2017-18; Utah was stingy; Stockton's home edge was below the era's median.
-- Stockton above Jordan in 1997 and 1998.  The offensive prior overshoots at its top: the top 25 offensive box-score
-  parts carry a mean residual of -0.75 per 100.  Nothing tried put Jordan above Stockton in 1997: input clip, plain
-  leaves, age, the points split.
+## What ships
 
-## Future plan: teammate and opponent context in step 5 (the owner, 2026-10-19)
+| step | plain name | module | as shipped |
+|---|---|---|---|
+| 1 | the label | `rapm.py` | one RAPM per player over every season but the rated one; penalties 40,000 / 40,000 / 0 |
+| 2 | box-score prior | `box_prior.py` | LightGBM `lgb1_tune2`, linear leaves; feature set `hustle_no_three_pct`; five player folds; 10 bags |
+| 2b | swap part of the prior | `second_prior.py` | line `ctx82` on `context_and_types`, team totals held |
+| 3 | the rating | `prior_rapm.py` | RAPM pulled toward the prior, penalty 13,037, centred |
+| 4 | the shrink, with the defense dial | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, 8 nearest fold seasons, defense times 0.866; folds `ctx82_early,ctx82_within` |
+| 5 | swap adjustment | `swap_adjust.py` | off: applied share 0, the build skips it |
 
-**The request:** "teammate prior, opponent prior x off/def, x on court/ off court".  That is eight numbers per
-player-season: his teammates' and his opponents' box-score priors, on offence and on defence, with him on the court
-and with him off it.  Not started.
+- `openrapm build` writes `outputs/season_ratings_product.parquet` with `_step3` and `_step4` beside it.
+- `openrapm site --bias --openrapm-decomposition --similarity` writes the site's files.  Commit, fast-forward `main`
+  and push only on the owner's word, then check the Pages build: `gh api repos/bbstats/openrapm/pages/builds/latest`.
+  With the second prior, the decomposition's "box score" piece carries the whole prior; its split is the owner's.
+- The incumbent's test-setting tables `outputs/season_ratings_ctx82*.parquet`, folds `ctx82_early`, `ctx82_within`;
+  no noise control on it yet, `noise_bags10` stands in.
 
-**Why it could help.**  The patterns step 5 found point at what a player's own box score cannot see: offensive
-rebounders and active defenders are under-credited, and shooters are over-credited on defence (DECISIONS.md, "Check
-153", stage 4).  What happens to teammates and to opponents, on offence and on defence, while he is on the court would
-carry that: spacing, rim protection, opponents' turnovers or shooting with him on.
+## How an experiment is judged
 
-**Where leakage comes from.**
-1. Same-games luck, the problem experiment 80 fixed in step 5.  If teammates shoot hot with him on the floor, that heat
-   sits both in the teammate inputs and in his lineups' points; a model fitted on the same games learns it as skill.
-2. Team strength.  Good players have good teammates, so teammate and opponent inputs quietly encode team quality:
-   measurement trap 32, "on-court inputs make a flexible prior team-driven".  Experiment 45 took the on-court inputs
-   off the prior partly for this reason; experiment 34, teammates' shot mix with him on the floor, was never resolved.
+| reading | script | rule |
+|---|---|---|
+| within-season WOWY test | `scripts/checks/151_wowy.py`, stint unit, step 4 as shipped | better in every era, against the incumbent; the noise control beside it |
+| year-over-year test | `scripts/checks/63_yoy.py` | not worse at z +2 |
+| the eye check | `scripts/checks/66_compare.py` | the 2026 top 20 |
 
-**How to control it.**
-- Put it in step 5, not step 2.  Step 5 is cross-fitted since experiment 80: inputs from the fit games, lineup results
-  from the held-back games, so same-games luck cannot get in by construction.
-- Build every input from the fit games only.  The folds already rebuild the on-court record from the fit games; finer
-  splits, such as teammates' three-point % with him on, need the same rebuild, and whether the data supports that is
-  not yet checked.
-- Measure each player against his own team: with him minus without him, or against the team's average, so team
-  strength cancels.  The decider already fits out team levels.
-- Always run the leak arm beside it: the same inputs from the whole season, held-back games included.  If the honest
-  version comes close to the leaky one, something is leaking.
-- Step 5 is not in the chain's folds, so read it the way experiment 80 was read: check 153's fold arms on the decider,
-  the whole-season table on the guard.
-
-## The overnight run, 2026-10-15/16
-
-The owner: "do as many tests as you want".  Against the incumbent; DECISIONS.md has a section for each.
-
-| exp | name | change | decider ΔMSE | decider z | guard z | reading |
-|---|---|---|---|---|---|---|
-| 64 | `vsleague2` | experiment 56's ratios against the league | -0.049 | -0.91 | +0.08 | tie |
-| 65b | `sourcesplit` | step 4 by source, built whole | -0.088 on top of 65 | -2.59 | +3.50 | fails the guard |
-| 66 | `hustlegames` | per-game hustle inputs | -0.196 | -2.96 | -0.03 | passes; half of it an era split |
-| 66b | `hustleplacebo` | hustle shuffled among players | -0.103 | -2.03 | +0.16 | the control |
-| 67 | `clip` | inputs clipped at 0.5% and 99.5% | +0.045 | +2.03 | +0.79 | worse |
-| 68 | `flat` | plain leaves | -0.102 | -3.19 | +0.42 | passes; 1997-2006 -0.197, z -4.3 |
-| 69 | `plusage` | age on both priors | +0.713 | +7.46 | -5.22 | the career-count pattern |
-| 70 | `cols04` | each tree 40% of inputs | -0.013 | -0.47 | -0.43 | tie |
-| 71 | `flathustle` | plain leaves + hustle | **-0.272** | **-4.87** | +0.30 | the candidate |
-| 72 | `pointsparts` | assisted and unassisted points | +0.022 | +0.67 | -0.31 | tie |
-| 73 | `flatera` | plain leaves + era marker 2017 | -0.156 | -3.92 | +0.33 | explains 66b |
-| 74 | `flathustletrack` | 71 + five per-game tracking columns | -0.291 | -4.75 | -0.28 | tie with 71 |
-
-- The leak control: folds whose prior read whole-season inputs scored -2.84, z -31.  A season-total input cannot be
-  judged on the decider.  `openrapm folds --whole-season-inputs`; never for step 4.
-- Hustle is real information: -0.31 in 2017-2026 beyond an era split, z -3.2.  Columns missing before 2017 let the
-  trees split the eras, which helps the early seasons; a plain marker does the same.
-
-## Data and code added since feeb8e6, uncommitted
-
-- `openrapm data hustle-games` and `openrapm data tracking-games`: per-game box scores, `BoxScoreHustleV2` 2017-2026,
-  12,812 games; `BoxScorePlayerTrackV3` 2014-2026, 16,758 games; none empty; under
-  `data/raw/dashboards/<source>/games/<season>/`.  The endpoint hangs every few minutes, so both ran under watchdogs
-  that restart the download every 10 minutes and resume: `scratch/2026-10-15_hustle/*_watchdog.ps1`.
-- The season panel, 132 columns: the nine hustle counts summed over the games a rating is built from, 2016 left
-  missing; the five tracking columns the per-game box score holds, summed the same way; the hustle placebo columns;
-  the era marker `season_from_2017`.  Every older column unchanged.  Backups `outputs/season_panel_before_*.parquet`.
-- A leak check per fold: the per-game counts read only fit games.
-- `box_prior.INPUT_CLIP`, `ClippedBooster`; params files `lgb1_cols06_flat`, `lgb1_cols06_clip`, `lgb1_cols04`.
-- Feature sets `no_career_ratios_vs_league`, `hustle_placebo`, `no_career_plus_age`, `no_career_points_parts`,
-  `no_career_era_marker`, `hustle_and_tracking_games`.
-- Check 151 `--pieces`; check 145 `family_ratings`.
-- Read-only scripts: `scratch/2026-10-15_assists/`, `scratch/2026-10-15_overnight/`.
+- One build: `bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes "EXTRA RATE FLAGS"`, about
+  50 minutes with 4 processes.  `INC_NAME` and `INC_SYSTEM` name the incumbent, `ctx82` by default.
+- **The season-page score**: each season, ratings of zero score 0 and the reference 100; the ratings before
+  experiment 82 explain 18.2 a season on this test (the 15.7 in older notes is experiment 63's step 4).
+  `scratch/2026-10-20_charts/season_scores.py` and `season_page.py`; page https://claude.ai/artifact/L7vwSTAvCCKQnj9jnnhYrq.
+- The noise control `noise_bags10` moves a season at most 0.7 on that score.
+- Every experiment gets a row in `experiments/runs.csv` (`scripts/checks/101_log_run.py`), mirrored to the sheet
+  "OpenRAPM experiments", tab Experiments; the next free row is 87.
 
 ## Commands a session runs
 
-    bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes "--features hustle --booster-params lgb1_cols06_flat"
-        one experiment, about 50 minutes; log outputs/NAME_chain.log
-    .venv/Scripts/python scripts/checks/151_wowy.py --systems=bags10,noise_bags10,NAME --ref=bags10 --tag=NAME
-        the decider alone on folds already built, about 3 minutes; --pieces=source,certainty adds step 4 in pieces
-    .venv/Scripts/python scripts/checks/63_yoy.py --rankings=NAME=outputs/season_ratings_NAME.parquet,incumbent=outputs/season_ratings_crossfit80.parquet --ref=incumbent --tag=NAME --splits=
-        the guard alone
-    .venv/Scripts/python scripts/checks/66_compare.py incumbent=outputs/season_ratings_crossfit80.parquet NAME=outputs/season_ratings_NAME.parquet --season=2026 --top=20 --ref=incumbent --open=0
-        the 2026 top 20
-    .venv/Scripts/python scripts/checks/101_log_run.py --name=NAME --exp=81 --incumbent=crossfit80 --idea=owner --verdict=pending --changed="one plain sentence" --notes="the readings"
-        the experiment table's row; --sheet prints the rows for the Google Sheet
-    .venv/Scripts/python scripts/checks/145_piece_multipliers.py --folds=TAG --first=1997 --last=2026
-        how much each piece of a rating holds up, on folds built with openrapm folds --pieces
-    .venv/Scripts/python -m openrapm build --name=product_NAME --booster-params=lgb1_cols06_flat --features=hustle --folds=NAME_early,NAME_within
-        a product-setting preview written beside the live table, about 12 minutes
-    .venv/Scripts/python -m openrapm data hustle-games 2017 2026
-        the per-game hustle box scores; tracking-games for the tracking ones; run long ones under the watchdogs
-    .venv/Scripts/python scripts/checks/153_swap_audit.py folds --system=bags10 --first=1997 --last=2026
-        check 153: every version of step 5 on every fold, cached per season in outputs/swap_audit/bags10/, about 10
-        minutes; then `decider --systems=bags10,noise_bags10`, `whole --system=bags10`, `readings --tag=swap_audit`;
-        the full order is scratch/2026-10-18_swap_audit/chain2.sh
+    bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes "EXTRA RATE FLAGS"
+        one experiment against ctx82, about 50 minutes; log outputs/NAME_chain.log
+    .venv/Scripts/python scripts/checks/151_wowy.py --systems=ctx82,noise_bags10,NAME --ref=ctx82 --tag=NAME
+        the within-season WOWY test on folds already built, about 3 minutes
+    .venv/Scripts/python -m openrapm second-prior --models bags10 --folds bags10_early,bags10_within --tag TAG --inputs SET
+        a second prior's line from held-back swaps, about 13 minutes
+    .venv/Scripts/python scripts/checks/101_log_run.py --name=NAME --exp=N --incumbent=ctx82 --idea=owner --verdict=pending --changed="..." --notes="..."
+        the experiment table's row
+    .venv/Scripts/python scratch/2026-10-21_charts/defense_gap_stats.py
+        every 2026 defense rating split by stat against the consensus, about 8 minutes
 
 ## The rulings that bind
 
 1. One rating per player per season, from that season's games only, regular season and playoffs.
-2. Single year or bust: a player's own other seasons may not reach his rating, not even through the booster's memory.
-   Model coefficients may be learned from other seasons; this-season facts such as age, height and weight are allowed.
-3. Never train on the current season until its Finals are over.  Loading is always allowed.
-4. The prior is trained on one row per player, his career with the rated season out, plus chunk rows of his seasons.
-5. The consensus is a sanity check, never a fitting target.
-6. Each season is centred at possession-weighted zero per side.
+2. Single year or bust: a player's own other seasons may not reach his rating.  Model coefficients may be learned from
+   other seasons.
+3. Never train on the current season until its Finals are over.
+4. The consensus is a sanity check, never a fitting target.
+5. Each season is centred at possession-weighted zero per side.
+6. The second prior is fitted to points only through swaps (the owner, 2026-10-19).
 
 ## How the work is done
 
-- Two jobs: implement the owner's ideas, or propose new ones.  One experiment at a time unless the owner says
-  otherwise, as for the overnight run.
-- One build at a time on the owner's machine.  When a chain is stopped, stop its python children too: `TaskStop` stops
-  only the wrapper.  Check `Get-Process python` before starting anything.
+- Implement the owner's ideas or propose new ones; one experiment at a time unless the owner says otherwise.
+- Never thrash the machine: several processes at once are fine while they fit its 12 threads and 32 GB.  When a chain
+  is stopped, stop its python children too; `TaskStop` can leave the processes running, so check `ps` after.  Never
+  edit `scripts/experiment_chain.sh` or `src/` while a chain runs: bash reads its script as it goes, and each new
+  python process imports the code as it is then.
 - Never commit, push or publish without the owner's word.  The site is `docs/`, served from `main`.
-- Movement is reported in points per 100, never rank places; under 0.1 is nothing.
-- On the site the ratings are "OpenRAPM"; no drafted prose on any page.
+- Movement in points per 100, never rank places; under 0.1 is nothing.
 
 ## Traps that cost a day
 
 1. `defense` in the ratings tables is points allowed, negative good; `rating_def` is positive good.
-2. Stint level and team-game level can disagree; say which a number is.
-3. A season-total input leaks into the within-season folds: whole-season inputs read z -31 on the decider.
-4. A long bash heredoc fails in this shell: write the script to a file first.
-5. The stats.nba.com endpoints hang without timing out: run long downloads under a watchdog that restarts them.
-6. A background job is stopped after 2 hours: split long downloads into stretches that end on their own.
-7. Thirty-seven more in DECISIONS.md, "The measurement traps", and the memory "era-coefs measurement traps".
+2. A season-total input leaks into the within-season folds: whole-season inputs read z -31.
+3. A long bash heredoc fails in this shell: write the script to a file first.
+4. A background job is stopped after 2 hours: launch long queues with `nohup ... &`.
+5. LightGBM's own Shapley values refuse linear leaves: sample orders instead (`scratch/2026-10-21_charts/prior_shap.py`).
+6. A line fitted on swaps has no intercept: centre its inputs, or each cross-fitted copy carries its own level.
+7. More in DECISIONS.md, "The measurement traps".
 
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest -q                       # 686 passed, 1 xfailed: the backup bigs
-    .venv/Scripts/python -m pytest -q -m slow               # 7 passed
-    .venv/Scripts/python scripts/checks/63_yoy.py --rankings=incumbent=outputs/season_ratings_crossfit80.parquet --tag=verify --splits=
-                                                            # game_armse 8.5934, both directions together
-    .venv/Scripts/python -m openrapm site --out-dir <scratch>/docs --built 2026-10-15
-    cmp docs/data/ratings.json <scratch>/docs/data/ratings.json       # no output: byte-identical
+    .venv/Scripts/python -m pytest -q                       # 723 passed, 2 skipped, 1 xfailed: the backup bigs
+    uvx ruff check .                                         # clean
+    git log --oneline -1                                     # the commit of 2026-10-21's cleanup

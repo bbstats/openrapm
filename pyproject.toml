@@ -15,6 +15,7 @@ dependencies = [
   "nba_api>=1.4",
   "pyyaml>=6",
   "requests>=2.31",
+  "psutil>=5.9",           # free memory, so `--jobs` never starts more processes than fit (openrapm.commands.parallel)
 ]
 
 [project.scripts]

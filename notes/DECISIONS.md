@@ -7861,3 +7861,640 @@ exact.  If adopted, the build's step 5 must reproduce check 153's table before a
   `_step3` and `_step4`, its folds bags10's.  The slow golden test of step 5 reads a new pair,
   `golden/crossfit80/` in the verification copies; the weightfix pair stays beside it.
 - **Tests.**  `pytest -q` 686 passed; `pytest -m slow` the step-5 golden pair byte for byte.
+
+
+## Experiment 81: the second prior, the box-score prior corrected for teammates and opponents (the owner, 2026-10-19: "take the handoff idea (eg adding in on-court, off-court, off-def x teammate, opponent priors) in as inputs to the prior, to hopefully learn a correction factor. this 'second prior' step would then be used for PI RAPM", then "we *can* fit to points provided we're only looking @ swaps!", then "Ok lets go"; registered before any result)
+
+**The change.**  Step 3 pulls each season's RAPM toward a second prior instead of the box-score prior
+(`src/openrapm/second_prior.py`, `--second-prior ctx81`).  The second prior is a straight line per side:
+
+    second prior = b x his box-score prior + one weight x each of his eight context numbers
+
+- **The eight context numbers**, each a possession-weighted average of box-score priors: his teammates' offensive
+  priors, their defensive priors, his opponents' offensive priors and their defensive priors, each over the stints he
+  played and over the stints of the same games his team played without him.  Team strength kept (the owner: "i dont
+  think you actually want to cancel out team strength here, that's a helpful data point").
+- **Padded** (the owner, 2026-10-19: "But let's use padded stats yea? Maybe just inference? Not sure. You can figure it
+  out").  Each number is padded toward his team's season level of the same number by its possessions, k by the method
+  of moments per number and season with each stint row one draw (on_court.py's method), the same when the line is
+  fitted and when it is applied: weights fitted on unpadded numbers and applied to padded ones would undercorrect by
+  the padding factor.  A player who never sat gets his team's level as his bench numbers.  The unpadded version's
+  normal equations are kept as `ctx81_unpadded`, for the screen only.
+- **Never saw him.**  Every prior inside a player's inputs is the answer of the booster that never trained on his
+  rows, in each of the ten bags; a teammate is read on the player's booster, not his own, so the player's other
+  seasons cannot reach him through a teammate's booster (ruling 2).
+- **The fit.**  On the swaps of the held-back games of every within-season fold, the incumbent's 360 folds
+  `bags10_early,bags10_within`: inputs from the fold's fit games; the target the two lineups' points difference per
+  100 with the opponents and the game context taken out by the fold's step-4 ratings held fixed, d = r + (rating_a -
+  rating_b); weighted by the swap's information; ridge 1e-4 of the mean diagonal, five player folds; for a rated
+  season, only the swaps of seasons more than one away in the test setting, every other season in the product
+  setting.  `openrapm second-prior --models bags10 --folds bags10_early,bags10_within --tag ctx81` writes the normal
+  equations.
+- **Why swaps and not a career label** (the conversation of 2026-10-19).  A label from the player's other seasons
+  carries the age gap and the censoring that sank experiment 28: a rookie's other seasons are his better later self,
+  and a player who left the league has none.  A swap compares two players of the same team in the same season, so it
+  has neither; its held-back games share no game with the fit games, so a shot counted in a box score never meets the
+  lineup result it scored (measurement trap 38).  A swap cannot see team strength: the two players share a team, so
+  the line's weights are learned inside teams and applied to the raw levels across them.
+
+**How it is read.**  The chain, `bash scripts/experiment_chain.sh ctx81 points_with_expected_opponent_threes
+"--second-prior ctx81"`: the candidate's own folds for all thirty seasons, each fold's context numbers rebuilt from
+its fit games (`openrapm folds` reads the tag from the saved boosters' settings), steps 4 and 5 on them, then the
+decider against `bags10` with `noise_bags10` beside it, the guard and the 2026 top 20.  **The leak arm** beside it:
+the same folds with the context numbers from the whole season, held-back games included (`openrapm folds
+--whole-season-context`, tags `ctx81_leak_early,ctx81_leak_within`), read by the decider as the system `ctx81_leak`.
+If the honest folds come close to the leak arm, something leaks.  **A screen first**, read-only
+(`scratch/2026-10-19_second_prior/screen.py`): each season's held-back swaps scored by the line fitted on the seasons
+more than one away, against a line on the box-score prior alone.
+
+**The adoption rule** is the standing one: decider z -2 or below against the incumbent, the guard not worse at z +2,
+the 2026 top 20 to the owner.
+
+**The screen, read-only, before the chain** (`outputs/ctx81_screen.log`, `ctx81_unpadded_screen.log`).  Each
+season's held-back swaps scored by the line fitted on the seasons more than one away, against the line on the box-score
+prior alone; the line's gain beyond the box-score prior's own, as a share of it:
+
+| version | side | paired z | seasons better | share of the box-score prior's gain |
+|---|---|---|---|---|
+| padded | defence | -5.76 | 26 of 30 | +8.5% |
+| padded | offence | -0.55 | 18 of 30 | +1.3%, worse in every season 2021-2026 |
+| unpadded | defence | -5.84 | 26 of 30 | +8.6% |
+| unpadded | offence | -0.66 | 19 of 30 | +1.2% |
+
+Padding moves little: most numbers rest on many possessions.  On defence the weights are steady between 1997-2011 and
+2012-2026; on offence they are not.
+
+**Team totals, measured before the chain** (`scratch/2026-10-19_second_prior/team_split.py`, trial builds
+`ctx81trial`, `ctx81trial2`: step 3 and folds for 2002, 2012, 2019 and 2025 with the line applied as it is).  The fold
+ratings' held-back team-game error against the incumbent's folds, and the same with the candidate's split inside each
+team on the incumbent's team totals:
+
+| season | as built | folds better | inside teams, incumbent's totals | folds better |
+|---|---|---|---|---|
+| 2002 | +0.064 | 0 of 12 | -0.022 | 11 of 12 |
+| 2012 | +0.068 | 0 of 12 | -0.038 | 11 of 12 |
+| 2019 | +0.033 | 1 of 12 | -0.027 | 12 of 12 |
+| 2025 | +0.024 | 3 of 12 | -0.047 | 10 of 12 |
+
+The line splits credit inside teams better and moves whole teams the wrong way: a swap cannot see team strength, and
+its inside-team weights applied to raw levels shift team totals no swap tested.  Hence `--second-prior-team-totals`:
+"held" (the default) keeps each team's possession-weighted total at the box-score prior's, every player of the team
+moved by one amount so the line's gaps inside it stay; "free" is the line as it is.  Both whole-season rebuilds
+reproduced the build to 0.0; all 48 trial folds passed every check.
+
+## Experiment 82: step 5's inputs in the second prior, step 5 off (the owner, 2026-10-19: "wouldnt it stand to reason to put the swap adjustments into the priors before RAPMizing? instead of doing it after RAPM?", then "yea queue it"; registered before any result)
+
+**The change.**  Experiment 81's second prior, with the line also reading the other end's box-score prior and step
+5's 19 box-score, role and body numbers (`swap_adjust.PANEL_FEATURES`), each standardised with one mean and standard
+deviation over every player-season of the trainable panel, all from the fold's fit games, fitted on the same
+held-back swaps, team totals held; step 5 off (`openrapm swap --applied-share 0`, which leaves step 4's ratings bit
+for bit).  `openrapm second-prior --inputs context_and_types --tag ctx82`; `--second-prior ctx82
+--second-prior-inputs context_and_types`.  What step 5 learns after the ridge is learned before it, and step 3 weighs
+it against the season's games instead of moving ratings the games already weighed.
+
+**How it is read.**  The decider reads the folds through step 4, and step 5 is not in them; the incumbent's shipped
+step 5 is worth -0.913 on the decider over its step 4 (z -19.5, 30 of 30; check 153's cache,
+`outputs/swap_audit/bags10/`).  So both candidates are read with check 153's fold arms
+(`scratch/2026-10-19_second_prior/decider_with_step5.py`): experiment 82's step 4 against the incumbent's step 5
+(`bags10:step5_other_single`) and against experiment 81's step 5; experiment 82 with step 5 refitted on its folds, to
+see whether step 5 still finds anything.  The guard and the 2026 top 20 read the final tables as always.  Order:
+`scratch/2026-10-19_second_prior/run82.sh`, after experiment 81's run.
+
+### Experiment 81, the first run: worse, from a scale bug in holding team totals (2026-10-19)
+
+`ctx81` (`outputs/ctx81_chain.log`), team totals held at the box-score prior's own scale.  Against the incumbent:
+
+| reading | change | standard error | paired z | seasons better |
+|---|---|---|---|---|
+| decider, step 4 | +0.598 | 0.099 | +6.05 | 5 of 30 |
+| decider, step 3 | +0.640 | 0.076 | +8.36 | 2 of 30 |
+| guard, team-game | +0.135 | 0.081 | +1.68 | 24 of 56 |
+| guard, stint level | +0.822 | 0.108 | +7.63 | 7 of 56 |
+
+Step 4 shrank its prior part harder: 0.490-0.601 on offence against 0.659-0.728.
+
+**Where it went wrong** (`scratch/2026-10-19_second_prior/decider_prior_only.py`, `decider_lines.py`, 2012-2021).
+- The prior part alone on the decider: +1.254, z +6.12, 1 of 10; the games' part alone -0.492, z -4.62, 10 of 10.
+- The line itself, on the incumbent's folds with no step 3 and no totals held, against its box-score-only version:
+  +0.053, z +0.39, a tie; against the incumbent's prior part -0.111, z -0.56, a tie.
+- So the line was not the loss; the holding was.  The line is on the swaps' points scale, about 3.5 times the
+  box-score prior; held at the box-score prior's own team totals, the second prior's team totals sat on one scale and
+  its gaps inside teams on another, and step 3's single prior scale, fitted mostly on team totals, came out near 1.3 and
+  stretched every team's gaps by as much.
+- **The fix**: each team's total held at the line's own box-score part, b x box-score prior, so second prior = b x
+  box-score prior + the context part less its team mean (`second_prior.season_second_priors`; test
+  `test_with_no_context_weight_the_held_second_prior_is_the_line_itself`).  A trial of three seasons, 2002, 2012 and
+  2025, against the incumbent on the decider, mean over the seasons: prior part +0.805 before, +0.263 after; step 3
+  +0.599 before, +0.040 after.  The trial's step 4 read from its own three seasons' folds, so it is not compared.
+- Rerun as `ctx81b`, with experiment 82 behind it (`scratch/2026-10-19_second_prior/run81b82.sh`).  The first run's
+  leak arm was stopped: it tested the broken version.
+
+### Experiment 81b: the second prior with team totals on the line's own scale (2026-10-20)
+
+`ctx81b` (`outputs/ctx81b_chain.log`, `outputs/run81b82.log`).  Against the incumbent; below 0 is better.
+
+| reading | change | standard error | paired z | seasons better |
+|---|---|---|---|---|
+| decider, step 4 | +0.067 | 0.058 | +1.15 | 16 of 30 |
+| decider, step 3 | +0.099 | 0.079 | +1.25 | 16 of 30 |
+| decider with step 5 on both, check 153's `step5_other_single` | +0.137 | 0.051 | +2.71 | 12 of 30 |
+| -- 1997-2006 / 2007-2016 / 2017-2026 | -0.005 / +0.209 / +0.206 | | -0.07 / +2.25 / +2.34 | 6 / 4 / 2 of 10 |
+| step 5's gain on its own step 4 | -0.843 | 0.048 | -17.54 | 30 of 30 |
+| the incumbent's step 5 on its step 4 | -0.913 | 0.047 | -19.46 | 30 of 30 |
+| guard, team-game | -0.036 | 0.049 | -0.73 | 29 of 56 |
+| guard, stint level | +0.233 | 0.062 | +3.77 | 17 of 56 |
+
+Step 4's multipliers are back beside the incumbent's (prior part 0.652-0.719 on offence, 0.677-0.792 on defence).
+The second prior takes a little of step 5's work (step 5 gains 0.07 less on it) and does it worse, so with step 5 on
+both it loses, in the later eras most.  **Recommended: not adopted.**  The line's own screen gain was on defence and
+the decider reads both sides together; a defence-only line is not tried, by the same-reason-same-method rule.
+
+**Experiment 82's first folds stopped (2026-10-20, 2:33 AM).**  The 2010 whole-season rebuild missed the build's
+defence by up to 0.17 (offence 1e-5): the folds read step 5's numbers from every offence row, a player with defensive
+possessions and none on offence included, where the build reads only rows with possessions, so that player read his
+team-mean 0 in one and his zero-possession row in the other, and his team's held totals moved his teammates.  Fixed in
+`within_season.rate_world`; every fold of `ctx82` rebuilt (`scratch/2026-10-19_second_prior/rerun82.sh`).  Experiment
+81b reads no step-5 numbers and is unaffected.
+
+### Experiment 82: result (2026-10-20, `outputs/ctx82_chain.log`, `outputs/rerun82.log`)
+
+Every fold rebuilt after the fold-type fix; all thirty whole-season rebuilds reproduced the build to 0.0.  Step 4's
+multipliers: prior part 0.619-0.707 on offence, 0.656-0.822 on defence.  The screen on held-back swaps
+(`outputs/ctx82_screen.log`): the line against the box-score prior alone, offence z -9.69 and defence z -8.76, 28 of 30
+each.  Against the incumbent; below 0 is better.
+
+| reading | change | standard error | paired z | seasons better |
+|---|---|---|---|---|
+| decider, experiment 82 step 4 against the incumbent's step 5 | -0.326 | 0.136 | -2.41 | 22 of 30 |
+| -- 1997-2006 / 2007-2016 / 2017-2026 | -0.611 / -0.720 / +0.352 | | -3.54 / -5.71 / +1.51 | 8 / 10 / 4 of 10 |
+| -- games with a regular out | -0.339 | 0.156 | -2.17 | 22 of 30 |
+| decider, step 5 refitted on top, against the incumbent's step 5 | -0.355 | 0.111 | -3.21 | 23 of 30 |
+| decider, step 4 against the incumbent's step 4 | -1.240 | 0.163 | -7.62 | 27 of 30 |
+| guard, team-game, both directions | +0.423 | 0.077 | +5.48 | 13 of 56 |
+| guard, stint level | +0.773 | 0.102 | +7.57 | 8 of 56 |
+
+Year over year it wants the ratings narrower, offence x0.97 and defence x0.93 (the incumbent x1.03 / x1.07), and the
+stint level rescaled is still worse (+0.725, z +7.95).  **It passes the decider and fails the guard**: experiment 37's
+pattern, learned on the same season's games, better inside it and worse for the seasons either side, and inside the
+season worse in 2017-2026.  2026 top 20, test setting, total per 100 against the incumbent: Julian Champagnie +0.95 in,
+Ty Jerome out; Moussa Diabaté +0.92, Giannis Antetokounmpo +0.62, Karl-Anthony Towns +0.53, Ausar Thompson +0.37;
+Victor Wembanyama -0.60, Luka Doncic -0.52, Kawhi Leonard -0.51, Nikola Jokic -0.37.  Players with 1,000+
+possessions moved a median 0.27, the ninetieth percentile 0.66.  **Recommended: not adopted as is** (the guard rule).
+
+**Verdicts, 2026-10-20 (the owner: "Ok go ahead" to the recommendation):** experiments 81b and 82 not adopted.  The
+code stays, off by default (`--second-prior` empty); the normal equations stay under outputs/second_prior/ctx81 and
+ctx82.
+
+## Our defence against the consensus's, read-only (the owner, 2026-10-20: "we like defense a lot more than consensus (just - affects our rankings/ratings more). wondering if it's due to some of the things we do different for O vs D")
+
+`scratch/2026-10-20_defence/defence_width.py`; `outputs/csv/defence_width_public.csv`, `defence_width_stages.csv`.
+
+**The public metrics, 2025-26**, the 391 players the consensus matches to our 2026 ratings: defence's standard
+deviation over offence's.  OpenRAPM 1.09 (defence 54% of the variance); the consensus blend 0.86 (42%).  Lineup-based
+metrics: RAPM 0.97, luck-adjusted RAPM 0.92, time-decay RAPM 0.95, time-decay luck-adjusted RAPM 0.85, xRAPM 1.00.
+Box-based metrics: BPM 0.53, EPM 0.60-0.62, BPM-informed luck-adjusted RAPM 0.61, RAPTOR 0.64, LEBRON's box part 0.65,
+DARKO 0.70, LEBRON 0.72, DRIP 0.78.  The consensus blends both kinds and lands between them.
+
+**Ours, by season** (players with 1,000+ possessions; defence's standard deviation over offence's):
+
+| stage | 1997-2016 | 2017-2026 | 2024-2026 |
+|---|---|---|---|
+| step 3, the prior part | 0.79 | 0.80 | 0.89-0.95 |
+| step 3, the games' part | 1.17 | 0.94 | 0.84-1.03 |
+| published | 0.85 | 0.93 | 1.04-1.09 |
+| step 4's prior multiplier, offence / defence | 0.70 / 0.70 | 0.67 / 0.76 | 0.66-0.67 / 0.75-0.78 |
+
+Over every season the published ratio is 0.87, the consensus's own.  The defence-heavy look is the recent seasons: the
+box-score prior puts relatively more spread on defence in 2024-2026, and since 2017 step 4, fitted on the held-back
+games, keeps 0.76 of the defensive prior part against 0.67 of the offensive (the shipped defence factor 0.866 already
+taken off).
+
+**Our two calibrations agree with the width.**  The year-over-year test's scale per side for the incumbent, mean over
+scored seasons (1 = calibrated, above 1 = too narrow): 1998-2007 offence 0.98, defence 1.12; 2008-2017 1.06, 1.06;
+2018-2025 1.04, 1.02.  Defence relative to offence is right to 2% since 2008 and too narrow by 15% before it.
+
+**Reading.**  The width is what the games support on both tests; the consensus is narrower because most of its parts
+are box-based, and a box score records little defence.  No change recommended.  Left open: the early seasons' defence
+reads 15% too narrow year over year, against the one defence factor every season shares.
+
+## The ratings' miss by age inside teams, read-only (the owner, 2026-10-19: "are there aging/censoring effects in the prior fits themselves?")
+
+`scratch/2026-10-20_aging/age_bands.py`; `outputs/age_bands.log`, `outputs/csv/age_band_miss.csv`.  The swaps of the
+incumbent's 360 folds' held-back games against the folds' step-4 ratings (step 5 is not in the folds), each swap's miss
+regressed, weighted by its information, on the two players' age bands, 26-28 the reference, one fit per season and
+side; the mean over seasons, positive = the ratings under-credit him against a 26-28-year-old teammate.
+
+| age | offence | z | offence 2017-2026 | z | defence | z |
+|---|---|---|---|---|---|---|
+| 22 and under | -0.092 | -0.69 | -0.611 | -7.44 | -0.578 | -4.99 |
+| 23-25 | -0.012 | -0.11 | -0.108 | -0.70 | -0.055 | -0.76 |
+| 29-31 | -0.058 | -0.61 | -0.029 | -0.19 | +0.028 | +0.26 |
+| 32-34 | -0.233 | -1.81 | -0.346 | -3.45 | -0.068 | -0.60 |
+| 35 and over | -0.634 | -3.73 | -0.887 | -2.67 | +0.053 | +0.37 |
+
+Defence 22 and under by era: -0.486, -0.844, -0.403.  Offence 22 and under by era: +0.050, +0.285, -0.611.
+
+**Reading.**  Both ends are over-credited inside teams, the shape a career label predicts: a young player's label is
+his later self, an old player's his prime.  Young players on defence in every era, about 0.6 per 100; young players on
+offence since 2017; players of 35 and over on offence, 0.6-0.9.  Step 5's type model reads age as one straight line
+(-0.14 per standard deviation on offence), so it marks the old down and, on offence, moves the young the wrong way.
+The candidates for a fix sit in the queue: age-matched labels judged on the decider, or a same-season target for the
+prior.
+
+## Experiment 83: each chunk row labelled from the seasons right next to it (the owner, 2026-10-20: "just - keep going. please don't stop", after the age check; registered before any result)
+
+**The change.**  `--row-labels nearest` (`rapm.nearest_labels`, `build.row_label_tables`): each 1-3 season chunk row of
+the box-score prior is labelled with the player's RAPM fitted on only the season before it and the season after it,
+each kept only when the build may see it; the career row is dropped, as in experiment 79; a chunk with no such season
+has no label and is dropped.  Both sides' labels un-shrunk with step 1's tier method (the defence's today): over one
+or two seasons at the label penalty of 40,000 a label keeps 5-13% of a player's impact by how much he played next to
+the row (a trial on 2015 put step 3's offensive prior scale at 15.3 against 4.6 without it).  Weights as experiment
+79's: each player's chunk rows together weigh the possessions behind his career label.
+
+**Why.**  The age check above: inside teams the ratings over-credit players of 22 and under and, on offence, of 35 and
+over, the career label's shape.  A label from the next seasons describes the player at about the row's age, and its
+games are not the row's.  Experiment 30 tried windows of this kind and lost year over year, which favours career-level
+labels; it never faced the within-season WOWY test.
+
+**How it is read** (the owner, 2026-10-20: within season is what counts, and a win must hold in every era): the
+within-season WOWY test with step 5 on the folds (check 153's `step5_other_single`) against the incumbent's, by era
+1997-2006, 2007-2016, 2017-2026; the age-band miss of the age check on its folds; the year-over-year test reported.
+`scratch/2026-10-20_aging/run83.sh`.
+
+## Experiment 84: the defence fitted on the offence's target (the owner, 2026-10-20: "My inkling is that the defense is coming from some setting were using for offense but not defense", then "just - keep going"; registered before any result)
+
+**The change.**  `--defensive-target points_with_expected_free_throws`: step 1's defensive labels, step 3's
+defensive ridge and the folds' defence all read the offence's target, so both sides carry the same luck adjustment,
+free throws only, and the defence no longer has three quarters of its opponents' three-point luck taken out.  The
+folds now rate on the saved build's own targets (`within_season.fold_settings`); a file naming none reads the
+shipped targets as before.
+
+**Why.**  The defence check above: our defence is wider than offence only from 2017, the years step 4 starts keeping
+more of the defensive prior part (0.76 against 0.67); of the settings that differ between the sides, the opponent-three
+adjustment is the one whose size grows with the era, as threes per game doubled after 2014.
+
+**How it is read:** the within-season WOWY test with step 5 on the folds against the incumbent's, by era; defence's
+width over offence's by era (`scratch/2026-10-20_defence/defence_width_table.py`); the year-over-year test reported.
+`scratch/2026-10-20_defence/run84.sh`, after experiment 83.
+
+### Experiment 83: result (2026-10-20, `outputs/near83_chain.log`, `outputs/run83.log`, `outputs/age_bands_near83.log`)
+
+The within-season WOWY test, step 5 on both (check 153's `step5_other_single`), against the incumbent; below 0 is better.
+
+| era | change | standard error | paired z | seasons better |
+|---|---|---|---|---|
+| 1997-2026 | +0.460 | 0.050 | +9.19 | 1 of 30 |
+| 1997-2006 | +0.469 | 0.099 | +4.76 | 1 of 10 |
+| 2007-2016 | +0.461 | 0.099 | +4.64 | 0 of 10 |
+| 2017-2026 | +0.449 | 0.067 | +6.67 | 0 of 10 |
+| step 4, both | +0.333 | 0.062 | +5.40 | 6 of 30 |
+
+The year-over-year test, team-game: +0.020, z +0.38, a tie.  Worse in every era.  **Not a win.**
+
+**The age check on its folds, and a correction.**  The miss by age inside teams barely moves: 22 and under on
+defence -0.555 against the incumbent's -0.578; 35 and over on offence -0.631 against -0.634; 22 and under on offence in
+2017-2026 -0.623 against -0.611.  Labels from the seasons next to each row describe the player at about the row's age,
+yet the ratings over-credit the young and the old as much as before.  So the career label is not what over-credits
+them (the age check's reading above said it was; that reading is withdrawn): the bias sits in something every label
+shares, such as how the booster reads a young or an old player's box score, or in what the swaps see of the minutes
+young and old players get.  The labels from one or two seasons are noisier than a career's, which is the likely cost.
+
+## Experiment 85: experiment 82 with each season's line fitted on its 8 nearest seasons (the owner, 2026-10-20: "keep going. please don't stop"; registered before any result)
+
+**The change.**  Experiment 82 as it ran (the line on the context and step 5's numbers, team totals held, step 5 off)
+with `--second-prior-nearest 8`: each season's line from the swaps of only the 8 seasons nearest it that the test
+setting allows, picked as step 4 picks its fold seasons (the nearer first; an equal distance, the earlier).  The
+normal equations are experiment 82's, outputs/second_prior/ctx82.
+
+**Why.**  Experiment 82 won the within-season WOWY test in 1997-2006 (-0.611, z -3.54) and 2007-2016 (-0.720, z -5.71)
+and lost 2017-2026 (+0.352, z +1.51) with one line fitted on every era; step 4 fixed the same kind of drift by fitting
+on the 8 nearest seasons (experiment 55).
+
+**How it is read:** the within-season WOWY test, experiment 85's step 4 against the incumbent's step 5, by era; a win
+only if every era is better.  `scratch/2026-10-20_defence/run85.sh`, after experiment 84.
+
+## Experiment 86: the box-score rates padded toward what a player's height, weight and possessions predict (the owner, 2026-10-20: "out of fold ... priors for the padded metrics (eg use height and weight and, the buckets we were using earlier like for possessions - to get the expectation of the ... League average of the prior"; registered before any result)
+
+**The change.**  `pad_target: body_and_possessions` (`box_rates.body_targets`; scratch config
+`scratch/2026-10-20_padding/config_body86.yaml`, panel `outputs/season_panel_body86.parquet`).  Each of the panel's
+padded rates, the 13 box counts and their play-by-play parts, is padded toward a target from a weighted least-squares
+line, per season and count, of the players' rates on height, weight and one column per possession bin, weighted by
+offensive possessions, fitted without the player's fifth of the players (player_id % 5), never below 0.  The pad k is
+measured around that target, from the halves' covariance of (rate - target).  In the within-season folds the lines are
+refitted from the fit games, as every rate is.
+
+**Why.**  Today's target is the average of players with about as many possessions, which pads a 7-foot rookie's
+blocks toward bench guards' as much as toward bench centres'.  A better target should leave each padded rate nearer
+the truth.  The owner hoped the pad k would fall; it should rise instead, since a better target leaves less of the
+spread between players, but every padded rate leans on a better guess.
+
+**How it is read:** the within-season WOWY test with step 5 on the folds, against the incumbent's, by era.
+`scratch/2026-10-20_padding/run86.sh`, after experiment 85.
+
+### Experiment 84: result (2026-10-20, `outputs/same84_chain.log`, `outputs/run84.log`)
+
+The within-season WOWY test, step 5 on both, against the incumbent: **+0.397, standard error 0.022, z +17.93, better in
+0 of 30**; 1997-2006 +0.391 (z +7.37), 2007-2016 +0.410 (z +21.91), 2017-2026 +0.390 (z +9.92), 0 of 10 each.  Step 4
+on both +0.298, z +10.07, 0 of 30.  The year-over-year test, team-game: +0.126, z +3.45.  Step 4's defensive prior
+multiplier 0.641-0.690, no longer rising in recent seasons (the incumbent 0.677-0.792).  Defence's width over
+offence's: 0.749 / 0.787 / 0.820 / 0.983 in 1997-2006 / 2007-2016 / 2017-2023 / 2024-2026, against the incumbent's
+0.816 / 0.873 / 0.886 / 1.069.
+
+**Reading.**  The owner's inkling holds: the defence's own target, three quarters of the opponents' three-point luck
+taken out, is what widens our defence, and most in the recent seasons.  But without it the ratings split credit
+worse in every season, so the width it gives is signal.  **Not a win; the shipped defensive target stays.**
+
+## Experiment 87: step 5 reads age as a curve (registered before any result, 2026-10-20)
+
+**The change.**  Step 5's type model also reads (age - 27)^2 beside age, standardised like its other inputs, fitted
+as shipped on the folds' held-back swaps.  Read first with check 153 (`folds --system=bags10 --age-curve`, cache
+`outputs/swap_audit/bags10_agecurve`): its `step5_other_single` arm is the candidate, against the incumbent's.
+
+**Why.**  The age check: the ratings over-credit the youngest players (about 0.6 per 100 on defence in every era) and,
+on offence, the oldest; experiment 83 showed it is not the career label.  Step 5 reads age as one straight line, so it
+cannot mark both ends down.  A curve can.  Step 5 is fitted on held-back swaps, so it stays leak-free.
+
+**How it is read:** the within-season WOWY test with step 5 on the folds, by era; a win only if every era is better.
+If it wins, the build's step 5 takes the curve and must reproduce check 153's table before anything ships.
+`scratch/2026-10-20_aging/run87.sh`, after experiment 86.
+
+## Experiments 88 and 89: how much of the opponents' three-point luck the defence keeps (the owner, 2026-10-20: "I think what we will need to do is blend between luck adjusted and not like adjusted"; registered before any result)
+
+The defensive target is already a blend: each opponent three is priced at its shooter's padded percentage, with a
+quarter of the realised deviation kept (`OPPONENT_THREE_LUCK_KEPT`, shipped).  Experiment 84 was the end with all of
+it kept, and lost in every season (+0.397, z +17.93).  The two other points of the line:
+
+- **Experiment 88**, none kept: `--defensive-target points_with_expected_opponent_threes_all` (exists).
+- **Experiment 89**, half kept: `points_with_expected_opponent_threes_half` (`data/shots.py`, w3 = 0.5).
+
+Read like the others: the within-season WOWY test with step 5 on the folds against the incumbent, by era, and
+defence's width over offence's.  `scratch/2026-10-20_defence/run8889.sh`, after experiment 87.
+
+### Experiment 85: result (2026-10-20, `outputs/ctx85_chain.log`, `outputs/run85.log`)
+
+Against experiment 82, both at step 4: +0.850, z +11.19, better in 1 of 30; 1997-2006 +0.848, 2007-2016 +1.075,
+2017-2026 +0.628.  Against the incumbent's step 5: +0.524, z +4.55, 7 of 30; 2017-2026 +0.980, z +5.72, 0 of 10.  Step 5
+refitted on top: -0.012, z -0.13 against the incumbent's, 2017-2026 +0.342, z +3.47.  The year-over-year test,
+team-game: +0.670, z +7.18.  **Not a win.**  Twenty-nine weights on the swaps of 8 seasons are too noisy: the line
+needs every season's swaps, and the drift experiment 82 showed in 2017-2026 is not what 8 nearer seasons fix.
+
+### Experiment 87: result (2026-10-20, `outputs/run87.log`, cache `outputs/swap_audit/bags10_agecurve`)
+
+The within-season WOWY test, step 5 with the age curve on the incumbent's folds, against shipped step 5: -0.0265,
+standard error 0.0126, z -2.10, better in 21 of 30; 1997-2006 -0.006 (z -0.31), 2007-2016 +0.002 (z +0.11), 2017-2026
+-0.075 (z -3.39, 10 of 10).  Games with a regular out: -0.021, z -1.35.  **Not a win by the owner's rule** (every
+era better): a tie before 2017, better after, the era in which the age check found the young players' offence
+over-credited (0.61 per 100 in 2017-2026 only).  It never loses.  About 0.2% of what the ratings explain.  Not built
+into step 5; the option stays in check 153 (`folds --age-curve`).
+
+**Experiment 86's first panel was broken, and caught before its chain went far (2026-10-20).**  One 2022 player missing
+from the bio feed had no height or weight, which left 2022's whole line, and every 2022 target read off it, missing:
+1,212 rows without padded rates.  The panel's own body columns fill such a player with the medians; `body_targets`
+now does the same (test `test_a_player_without_a_height_reads_the_medians_and_breaks_no_target`).  The rebuilt panel:
+no missing rate; each rate against the shipped panel's at correlation 0.93-0.99; a 7-foot-1 player with 95
+possessions in 2026 pads to 1.06 blocks per 100 against 0.60 (centred), a 6-foot player with 84 to -0.81 against
+-0.06.  The chain restarted from scratch.
+
+### Experiment 86: result (2026-10-20, `outputs/body86_chain.log`, `outputs/run86_88_89.log`)
+
+The within-season WOWY test, step 5 on both, against the incumbent: -0.020, standard error 0.010, z -1.98, better in 19
+of 30; 1997-2006 -0.020 (z -1.49), 2007-2016 +0.013 (z +1.09, 4 of 10), 2017-2026 -0.053 (z -2.49, 8 of 10).  Step 4 on
+both: -0.011, z -1.00; 2017-2026 -0.064, z -3.49.  The year-over-year test, team-game: +0.014, z +1.09.  Step 4's
+multipliers beside the incumbent's.  **Not a win by the owner's rule**: worse in 2007-2016, better since 2017, the
+same era as experiment 87's only gain.  Small either way, about 0.1% of what the ratings explain.
+
+**The season-by-season view (2026-10-20, the owner: "season=x axis, interpretable model score = y").**  Each season
+scored between ratings of zero, 0, and the incumbent with its step 5, 100
+(`scratch/2026-10-20_charts/season_scores.py`, `season_page.py`; `outputs/csv/season_scores_index_2026-10-20.csv`).
+The incumbent explains 18.2 a season on this test, ratings of zero against its step 5; the 15.7 under "Scale" in the
+handoff is experiment 63's step 4 and overstates every percentage by about 17%.  The noise control never moves a
+season more than 0.7 from 100; the incumbent without step 5 scores 94.8 / 94.4 / 95.8 by era.
+
+## Experiment 82 ADOPTED (2026-10-20, the owner: "ok. we need to 100% adopt it - the modern issue thing I think is partly noise. it makes the ratings do weird things without it so i think it's a must but - it probably deserves some more love / attention / planning from me. adopt for now.")
+
+This reverses the verdict under "Experiment 82: result".  The owner's reasons: the 2017-2026 loss is partly noise, the
+ratings do strange things without the swaps' lesson in the prior, and the step needs more planning from the owner.
+
+- **What ships.**  Step 3 reads the second prior `ctx82`: the line on the box-score prior, the eight context numbers,
+  the other end's box-score prior and step 5's 19 numbers, fitted on the swaps of the held-back games of bags10's
+  folds, team totals held (`PriorSettings.second_prior = "ctx82"`, `second_prior_inputs = "context_and_types"`).
+  Step 5 off (`SwapSettings.applied_share = 0`).  Step 4's multipliers from experiment 82's own folds
+  (`ShrinkSettings.folds_tag = "ctx82_early,ctx82_within"`).
+- **The readings at adoption**, all above: the within-season WOWY test against the old incumbent's step 5 -0.326,
+  z -2.41, 22 of 30; by era scores 103.2 / 103.9 / 97.9; the year-over-year test +0.423, z +5.48, worse.
+- **The incumbent for scoring** becomes `ctx82`: `outputs/season_ratings_ctx82*.parquet`, folds `ctx82_early` and
+  `ctx82_within`.  No noise control on it yet; `noise_bags10` stands beside it until one is built.  Since step 5 is
+  off, the within-season WOWY test reads its step 4 directly, with no check-153 arm.
+- **Left for the owner's planning.**  (1) The 2017-2026 loss and the year-over-year loss.  (2) The site's
+  decomposition: its "box score" piece is step 2's prior after step 4's multiplier, and with the second prior it
+  would carry teammates' and opponents' priors and the team-total shift too; its split and wording are the owner's.
+  (3) A candidate built on top reuses ctx82's line, fitted with bags10's box-score prior, on its own box-score prior;
+  whether a candidate that changes the prior refits the line is open.
+- **Experiments 88 and 89.**  88 ran on the old base, bags10 with step 5; its chain finishes first, then the queue
+  stops so the product build runs alone.  89 runs afterwards on the new base.
+- **The reproduction.**  `openrapm build --setting test --seasons 2026 --name verify82` under the new defaults equals
+  experiment 82's chain tables for 2026 to 0.0 in every rating column, step 3 and final
+  (`scratch/2026-10-20_adopt82/reproduce.py`).
+- **The product.**  `openrapm build`, 7:41 PM; the old tables kept as `season_ratings_product_before_ctx82*`.  2026,
+  players with 1,000+ possessions: totals moved a median 0.28 per 100, the ninetieth percentile 0.64; correlation with
+  the old totals 0.983.  Defence's standard deviation 1.525 to 1.600, offence's 1.406 to 1.415.  2026 top 20, total per
+  100: Moussa Diabaté +0.92, 12th to 7th; Julian Champagnie +0.79, 26th to 19th; Mitchell Robinson +0.77, 21st to
+  15th; Karl-Anthony Towns +0.57; Giannis Antetokounmpo +0.52, 6th to 4th; Ausar Thompson +0.49; Rudy Gobert +0.48,
+  23rd to 20th; Kawhi Leonard -0.45, 4th to 6th; Luka Dončić -0.39, 5th to 8th; Dyson Daniels -0.34, 20th to 29th;
+  Victor Wembanyama and Nikola Jokić -0.31 each, still 1st and 2nd.  In: Champagnie, Robinson, Gobert; out: Isaiah
+  Hartenstein, Donovan Mitchell, Dyson Daniels.
+- **The build with step 5 off.**  A build of one season stopped in step 5: the type model's training reads every fold
+  season's step-4 multipliers, and a one-season build holds only its own.  At an applied share of 0 step 5 now fits
+  nothing and hands step 4's table back with `c_off` and `c_def` at 0, what the full step gives at that share: on
+  experiment 82's tables the final table equals its step 4 in every column (`build.swap_seasons`; test
+  `test_step_5_off_keeps_step_4_and_reads_nothing`).  Check 153 audits step 5 at the half strength it shipped with
+  (`SWAP = replace(TEST.swap, applied_share=0.5)`), and so does the slow golden test of step 5.
+
+### Experiment 88: result, on the old base (2026-10-20, `outputs/luckall88_chain.log`, `outputs/adopt82_first.log`)
+
+None of the opponents' three-point luck kept, against a quarter as shipped; bags10's recipe, step 5 on.  Below 0 is
+better.
+
+| reading | change | standard error | paired z | seasons better |
+|---|---|---|---|---|
+| within-season WOWY, step 5 on its folds, against the incumbent's | -0.059 | 0.010 | -5.88 | 27 of 30 |
+| -- 1997-2006 | -0.083 | 0.020 | -4.10 | 10 of 10 |
+| -- 2007-2016 | -0.067 | 0.012 | -5.47 | 10 of 10 |
+| -- 2017-2026 | -0.029 | 0.016 | -1.78 | 7 of 10 |
+| -- games with a regular out | -0.075 | 0.015 | -5.13 | 25 of 30 |
+| within-season WOWY, step 4 against step 4 | +0.015 | 0.012 | +1.23 | 13 of 30 |
+| year over year, team-game, both directions | +0.020 | 0.016 | +1.25 | 21 of 56 |
+
+Better in every era with step 5, about 0.3% of what the ratings explain; a tie at step 4, so the gain comes through
+step 5's type model.  Defence's width over offence's rises about 0.02-0.03 in every era: taking the opponents'
+shooting luck out widens defence, it does not narrow it.  Step 5 is off since experiment 82, so the result does not
+carry over as it stands; **experiment 88b** reruns it on the new base by experiment 82's own recipe: the line fitted
+on the swaps of luckall88's folds (`openrapm second-prior --models luckall88 --folds luckall88_early,luckall88_within
+--inputs context_and_types --tag ctx88`), then the chain `luckall88b` with `--second-prior ctx88`, step 5 off,
+against `ctx82`.  Registered before any result.
+
+### Experiment 88b: result (2026-10-20, `outputs/luckall88b_chain.log`, `outputs/run_88b_89b.log`)
+
+The within-season WOWY test, step 4 against ctx82's: +0.001, standard error 0.015, z +0.05, better in 14 of 30;
+1997-2006 +0.013 (z +0.59), 2007-2016 +0.013 (z +0.48), 2017-2026 -0.023 (z -0.77).  The year-over-year test,
+team-game: +0.021, z +0.98.  Defence's width over offence's up about 0.02 in every era.  **A tie, not adopted as
+recommended**: experiment 88's gain on the old base came through step 5's type model, and on experiment 82's base,
+where the line does step 5's work before the ridge, nothing is left.  Experiment 89b, half the luck kept, was held:
+the owner, 2026-10-20, on the product with experiment 82: "we can't publish an even stronger defense".
+
+## Experiment 82's wider defence (the owner, 2026-10-20: "Phew I mean, we can't publish an even stronger defense. What changes did we make to make this happen")
+
+Each side's spread, players with 1,000+ possessions, each season's standard deviation and the mean over the era's
+seasons, the product before experiment 82 and after:
+
+| side | ratings | 1997-2006 | 2007-2016 | 2017-2026 | 2026 |
+|---|---|---|---|---|---|
+| defence | before | 1.384 | 1.326 | 1.357 | 1.525 |
+| defence | after | 1.685 | 1.574 | 1.541 | 1.600 |
+| offence | before | 1.710 | 1.517 | 1.463 | 1.406 |
+| offence | after | 1.798 | 1.608 | 1.448 | 1.415 |
+
+It enters at step 3: defence after the ridge 1.846 to 2.350, 1.721 to 2.170, 1.702 to 1.869 by era; step 4 carries
+it, and step 5 never changed the width, its spread held.  Experiment 82 took step 5's job into the prior with one of
+step 5's two holds, team totals, and not the other, the spread inside teams; on 2026-10-01 step 5 without that hold
+was 12% wider on offence and 27% on defence and failed the year-over-year test.  The year-over-year test reads
+experiment 82's defence too wide too, x0.93, the old ratings' x1.07.
+
+## Experiment 90: the second prior with the spread inside teams held (registered before any result, 2026-10-21)
+
+**The change.**  `--second-prior-team-totals spread_held`: after the team totals, one factor per season and side
+pulls each player toward his main team's possession-weighted mean until the spread inside teams equals the line's
+box-score part's, b x box-score prior's; the order inside each team stays the line's (`second_prior.hold_spread`, step
+5's `swap_adjust.hold_spread_within`; tests `test_the_held_spread_*`).  The line itself is ctx82's, unchanged.  Both
+sides, one method (the same statistical reason on both).  Chain `spread90`, its own folds, against ctx82; read like
+the others, by era, with each side's width.  `scratch/2026-10-21_spread90/run90.sh`.
+
+## Experiment 91: step 4's defence factor read again on experiment 82's base (read-only, registered before any result, 2026-10-21)
+
+The factor 0.866 on both defensive multipliers was chosen by check 152's guarded search on the old base.  On ctx82's
+folds and step-3 table, factors 0.70, 0.75, 0.80, 0.866 and 0.95: the within-season WOWY test against 0.866 by era
+(151, `--defence-factors=ctx82:K`), the year-over-year test (63) and the defence width
+(`scratch/2026-10-21_spread90/defence_factor.py`).  After experiment 90 in the same run.
+
+### Experiments 90 and 91: results (2026-10-21, `outputs/spread90_chain.log`, `outputs/run90.log`)
+
+Within-season WOWY scores, the ratings before experiment 82 at 100 each season (the score of the season page):
+
+| version | 1997-2006 | 2007-2016 | 2017-2026 | defense spread 2026 | defense over offense 2026 | year over year |
+|---|---|---|---|---|---|---|
+| before experiment 82 | 100 | 100 | 100 | 1.54 | 1.09 | |
+| experiment 82 | 103.2 | 103.9 | 97.9 | 1.57 | 1.10 | wants defense x0.93 |
+| 82, step 4's defense factor 0.80 | 102.2 | 103.1 | 97.7 | 1.45 | 1.02 | a tie with 82, z -0.7 |
+| 90, spread held | 100.7 | 101.6 | 97.4 | 1.48 | 1.03 | better than 82, z -8.0, 50 of 56 |
+
+- **Experiment 90** against 82: +0.331, z +6.64, better in 3 of 30; 1997-2006 +0.470, 2007-2016 +0.430, 2017-2026 +0.091
+  (z +1.14).  Holding the spread gives back most of 82's within-season gain and fixes its year-over-year width.
+- **Experiment 91**, against 0.866: 0.70 +0.42 (z +9.1), 0.75 +0.25 (z +7.9), 0.80 +0.12 (z +6.6; 2017-2026 +0.04,
+  z +1.3), 0.95 -0.07 (z -2.8, but 2017-2026 +0.05).  The within-season test wants defense wider, not narrower; the
+  year-over-year test is flat from 0.75 to 0.866 and worse at 0.95 (z +4.7).  0.80 would be chosen for a width,
+  not by either test.
+- **Against the consensus, 2026** (391 matched players, `scratch/2026-10-21_charts/defence_scatter.py`): the slope of
+  our defense on the consensus's is about 1 in every version (live 1.08, 82 1.07, 82 at 0.80 0.99, 90 1.02), the
+  correlation 0.84 live and 0.81-0.82 for the others; our wider spread, 1.45-1.57 against 1.19, comes from players
+  we rate differently, not from a stretch.  Defense over consensus offense: live 1.11, 82 1.12, 82 at 0.80 1.04, 90
+  1.06; the consensus's own 0.86.
+- **The owner's call is pending**: publish 82 with the factor at 0.80, publish 90, or hold.
+
+### Experiment 89b: result (2026-10-21, `outputs/luckhalf89b_chain.log`, `outputs/run89.log`)
+
+Half the opponents' three-point luck kept, on experiment 82's base by its recipe (base `luckhalf89` built without the
+second prior, line `ctx89` refitted on its folds' swaps).  Against ctx82: +0.047, z +3.44, better in 8 of 30; 1997-2006
++0.046, 2007-2016 +0.060, 2017-2026 +0.036, worse in every era.  Year over year +0.025, z +1.34.  Defense over offense
+down 0.01-0.03.  **Not a win.**  On experiment 82's base none kept ties (88b), half kept loses: the shipped quarter
+stays.  The base `luckhalf89` alone, no second prior and no step 5, reads +1.30 against ctx82, z +7.9, the same as the
+old ratings without step 5.
+
+## Parallel seasons (the owner, 2026-10-21: "You can do whatever you want as long as it's faster", then "just make sure you're never just thrashing")
+
+A build process runs every library on one thread and used 13% of the machine's 12 threads.  `openrapm rate --jobs N`
+and `openrapm folds --jobs N` (`commands/parallel.py`; `OPENRAPM_JOBS` sets the default) run the command N times over
+seasons dealt out in turn, each child one process, and stitch the step-3 tables and boosters back in season order, or
+gather the folds once.  Never more than free memory holds: 5.5 GB a process, 2 GB kept back, at most 5.  A folds
+process keeps only its own seasons' boosters (`load_models(..., seasons)`), not all of the 2.2 GB file.  The check
+(`scratch/2026-10-21_spread90/parallel_check.py`): rate 2024-2026 with 2 processes equals experiment 82's table in
+every column exactly; 24 folds of 2025-2026 equal ctx82_within's.  The first chain with it, `luckhalf89`, took 45
+minutes against about 1 hour 40.  Memory was the limit: other programs held 22 of 32 GB until the owner allowed
+closing Guppy and 12 idle Claude processes.
+
+## Experiment 82's defensive prior read through, 2026 (the owner, 2026-10-21)
+
+- **Shapley values of the defensive box-score prior** (`scratch/2026-10-21_charts/prior_shap.py`): the boosters grow
+  linear trees, which LightGBM's own TreeSHAP refuses, so the values are sampled over random orders of the 20 inputs,
+  each with its reverse, against 150 league players, from each bag's booster that never saw the player, averaged over
+  the 10 bags; they add up exactly to his prior minus the background's average.  Karl-Anthony Towns +0.48 better than
+  average: share of games started +0.29, defensive rebounds +0.16, share of team possessions +0.10, height +0.09.
+  Marcus Sasser -0.33: steals +0.13, defensive rebounds -0.09, share of games started -0.09.
+- **What drives our gap from the consensus** (`scratch/2026-10-21_charts/defense_gap_stats.py`,
+  `outputs/csv/defense_gap_stats_2026.csv`): every matched player's defense rating split into pieces that add up to it,
+  each stat's box-score Shapley value and its term in experiment 82's line together, the team and group shifts, and the
+  games' part.  How much closer to the consensus we would be without each, as a share of the squared gap: blocks 24%,
+  steals plus blocks 15%, height 15%, defensive rebounds 14%, fouls 10%; toward the consensus: the games' part -49%,
+  made twos -43%, offensive rebounds -30%, his offensive box-score prior -27%.  Big-man stats carry the gap.
+- **A level by player fold.**  The line has no intercept and its inputs were not centred, so each player fold's line,
+  fitted without that fold's swaps, carried its own level, w_f x the average inputs.  2026 defence, the published
+  prior part's possession-weighted mean by fold: +0.50 for ids ending 2 or 7 against -0.31 for 4 or 9, against +0.10
+  and +0.05 before experiment 82 (`scratch/2026-10-21_charts/fold_level.py`).  Fixed in experiment 92 by centring.
+- **The other end's own prior.**  Experiment 82's line reads both of a player's box-score priors on each side, copied
+  from step 5's inputs: on defence weight 1.03 on his defensive prior and 0.91 on his offensive one, 2026, raw scale.
+
+## Boruta on the second stage (the owner, 2026-10-21: "you need to make sure you are boruta-ing both steps")
+
+The first stage, the box-score prior's inputs, had its Boruta on 2026-10-16 ("The input cull on the decider"); its
+inputs have not changed since.  The second stage, the line from preliminary priors to the final prior
+(`scratch/2026-10-21_boruta2/boruta_line.py`, `outputs/csv/boruta_line_2026-10-21.csv`): ten candidates per side, every
+number built from preliminary priors (his own on each side; teammates' and opponents' sums on each side, him on the
+court and on the bench), on every swap of the held-back games of repeat 0 of bags10's folds, about 3.1 million a side.
+Twenty rounds, each with a shadow of every candidate shuffled among the fold's players; importance the mean absolute
+Shapley value of the line, |weight| x the weighted mean |difference|; accepted when the hits beat the best shadow
+significantly more than half the time.
+
+| side | candidate | importance | all seasons | 1997-2006 | 2007-2016 | 2017-2026 |
+|---|---|---|---|---|---|---|
+| defense | his own defensive prior | 1.57 | accepted | accepted | accepted | accepted |
+| defense | teammates' defensive priors, on court | 0.39 | accepted | accepted | accepted | accepted |
+| defense | teammates' offensive priors, on court | 0.35 | accepted | accepted | accepted | accepted |
+| defense | opponents' defensive priors, on court | 0.21 | accepted | accepted | accepted | rejected |
+| defense | opponents' offensive priors, on court | 0.19 | accepted | accepted | accepted | rejected |
+| defense | his own offensive prior | 0.16 | accepted | accepted | accepted | rejected |
+| defense | opponents' defensive priors, on bench | 0.16 | accepted | tentative | rejected | accepted |
+| defense | teammates' defensive priors, on bench | 0.15 | accepted | accepted | tentative | rejected |
+| defense | teammates' offensive priors, on bench | 0.11 | accepted | rejected | accepted | rejected |
+| defense | opponents' offensive priors, on bench | 0.08 | tentative | rejected | rejected | accepted |
+| offense | his own offensive prior | 1.84 | accepted | accepted | accepted | accepted |
+| offense | opponents' defensive priors, on court | 0.31 | accepted | accepted | accepted | rejected |
+| offense | teammates' offensive priors, on bench | 0.25 | accepted | accepted | accepted | rejected |
+| offense | opponents' offensive priors, on court | 0.22 | accepted | rejected | accepted | accepted |
+| offense | opponents' defensive priors, on bench | 0.13 | accepted | rejected | rejected | accepted |
+| offense | his own defensive prior | 0.10 | accepted | accepted | rejected | rejected |
+| offense | teammates' offensive priors, on court | 0.09 | accepted | rejected | rejected | accepted |
+| offense | teammates' defensive priors, on court | 0.07 | tentative | accepted | rejected | rejected |
+| offense | opponents' offensive priors, on bench | 0.07 | tentative | rejected | rejected | rejected |
+| offense | teammates' defensive priors, on bench | 0.05 | rejected | accepted | rejected | rejected |
+
+With three million swaps almost any real number beats the shadows over all seasons; the eras are the stricter read.
+
+## Experiment 92: the three-input prior (the owner, 2026-10-21: "[stats]-> prelim prior; [prelim prior, teammate prelim (same side of off/def), opponent prelim (other side of off/def)]->final prior", then "go ahead"; registered before any result)
+
+**The change.**  The second prior's line reads three numbers per side and nothing else: his box-score prior on that
+side, his teammates' box-score priors on that side summed over the four, his opponents' box-score priors on the other
+side summed over the five, both with him on the court, padded as before (`second_prior.three_inputs`,
+`--second-prior-inputs own_teammates_opponents`).  Fitted on bags10's held-back swaps as experiment 82's was (tag
+`three92`), team totals held, the swap adjustment off.  Its inputs are centred on the season's possession-weighted
+average before the line is applied, which removes the level by player fold (`second_prior.centred`).  All three
+inputs passed the second stage's Boruta over all seasons on both sides.  Chain `three92` against ctx82, read by era
+with each side's width.  `scratch/2026-10-21_three/run_three.sh`.
+
+### Experiment 92: result (2026-10-21, `outputs/three92_chain.log`, `outputs/run_three.log`)
+
+Scores on the within-season WOWY test, the old ratings at 100: **95.0 / 93.7 / 95.3** by era, below the old ratings in
+every season; the old ratings without the swap adjustment score 94.8 / 94.4 / 95.8.  Against experiment 82: +1.297,
+z +7.80, better in 2 of 30; 1997-2006 +1.561, 2007-2016 +1.838, 2017-2026 +0.491 (z +1.71).  The year-over-year test
+against 82: -0.199, z -1.76.  Defense spread 1.50 / 1.45 / 1.47 by era, 1.66 in 2026 (82: 1.57); defense over offense
+0.94 / 1.01 / 1.01 and 1.21 in 2024-2026.  **Not a win.**  Teammates and opponents add next to nothing beyond the
+box-score prior: the gain of experiment 82 and of the swap adjustment before it comes from the player-type stats the
+line read, not from the context numbers.

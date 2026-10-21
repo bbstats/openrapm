@@ -92,3 +92,16 @@ def test_every_folder_named_is_checked(tmp_path):
     assert str(tmp_path / "within" / "late_within") in _message(stop) and "--tag late_within" in _message(stop)
     _write_folds(tmp_path / "within" / "late_within", season=2026)
     build.require_folds(_cfg(tmp_path), shrink)
+
+
+def test_step_5_off_keeps_step_4_and_reads_nothing(tmp_path):
+    """At an applied share of 0, shipped since experiment 82, step 5 hands step 4's table back with its two columns
+    at 0 and opens no file: a build of one season, with no other season's multipliers, gets through it."""
+    import pandas as pd
+    step4 = pd.DataFrame({"player_id": [1, 2], "season": [2026, 2026], "rating_off": [1.5, -0.5],
+                          "rating_def": [0.25, -1.0]})
+    off = replace(PRODUCT, swap=replace(PRODUCT.swap, applied_share=0.0))
+    final, factors, types = build.swap_seasons(_cfg(tmp_path), step4, off)
+    pd.testing.assert_frame_equal(final.drop(columns=["c_off", "c_def"]), step4)
+    assert (final.c_off == 0).all() and (final.c_def == 0).all()
+    assert factors.empty and types.empty

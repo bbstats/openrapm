@@ -39,13 +39,11 @@ def test_models_from_other_settings_are_refused(change):
 
 
 @pytest.mark.parametrize("settings", [{"targets": {"offence": "points_with_expected_free_throws",
-                                                   "defence": "points_with_expected_opponent_threes_all"},
-                                       "ridge": {"penalty": 13037.0}},
-                                      {"targets": {"offence": "points_with_expected_free_throws",
                                                    "defence": "points_with_expected_opponent_threes"},
                                        "ridge": {"penalty": 10000.0}}])
-def test_models_saved_with_another_target_or_ridge_penalty_are_refused(settings):
-    """The folds rate with the shipped targets and penalty; a file that records others is refused, not rerated."""
+def test_models_saved_with_another_ridge_penalty_are_refused(settings):
+    """The folds rate with the shipped penalty; a file that records another is refused, not rerated.  Another target
+    is read as the file's own since experiment 84 (`fold_settings`)."""
     shipped = {"targets": asdict(TEST.targets), "ridge": asdict(TEST.ridge), "labels": asdict(TEST.labels)}
     ws.check_models({**LEGACY_META, "schema": 2, "settings": shipped})
     with pytest.raises(SystemExit, match="shipped test settings"):
@@ -163,3 +161,15 @@ def test_a_fold_says_where_its_boosters_inputs_came_from():
     assert run.prior_inputs == "fit games"
     run.prior_panel = pd.DataFrame()
     assert run.prior_inputs == "whole season"
+
+
+def test_the_folds_rate_on_the_saved_builds_own_targets():
+    """Experiment 84 fitted the defence on the offence's target; its folds must rate the same way, and a file that
+    names no targets is read on the shipped ones."""
+    same = {"offence": "points_with_expected_free_throws", "defence": "points_with_expected_free_throws"}
+    settings = ws.fold_settings({"settings": {"targets": same}})
+    assert settings.targets.distinct() == ["points_with_expected_free_throws"]
+    assert settings.exclude_neighbours == 1 and settings.ridge == ws.SETTINGS.ridge
+    assert ws.fold_settings({}) is ws.TEST
+    assert "points_with_expected_free_throws" in ws.world_targets(settings)
+    assert not ws._step3_mismatches({"settings": {"targets": same, "ridge": {"penalty": 13037.0}}})

@@ -113,17 +113,19 @@ def test_align_only_outside_the_band():
     assert np.allclose(ya[m] / y[m], 1 / 1.05)                   # a scalar, not an affine: shape untouched
 
 
-def test_the_two_defensive_targets_keep_their_names_and_settings():
+def test_the_defensive_targets_keep_their_names_and_settings():
     """The build, 70, the folds and the season panel (data/panel.py) look the defensive targets up by name;
     points_with_expected_opponent_threes (what ships; x3def_w0.25 before 2026-10-11) keeps a quarter of the
-    realised three-point deviation, points_with_expected_opponent_threes_all (x3def) none, and both use
-    def_three_design's other defaults."""
-    assert set(DEFENSE_TARGETS) == {"points_with_expected_opponent_threes_all", "points_with_expected_opponent_threes"}
+    realised three-point deviation, points_with_expected_opponent_threes_all (x3def) none, and
+    points_with_expected_opponent_threes_half (experiment 89) half; all use def_three_design's other defaults."""
+    kept = {"points_with_expected_opponent_threes_all": {}, "points_with_expected_opponent_threes": {"w3": 0.25},
+            "points_with_expected_opponent_threes_half": {"w3": 0.5}}
+    assert set(DEFENSE_TARGETS) == set(kept)
     for name, target in DEFENSE_TARGETS.items():
         assert target.__name__ == name
         bound = inspect.getclosurevars(target).nonlocals
         assert bound["fn"] is def_three_design
-        assert bound["kw"] == ({"w3": 0.25} if name == "points_with_expected_opponent_threes" else {})
+        assert bound["kw"] == kept[name]
     defaults = {k: p.default for k, p in inspect.signature(def_three_design).parameters.items()
                 if p.default is not inspect.Parameter.empty}
     assert defaults == {"prev": 0, "k3": 450.0, "calibrate": True, "keep": None, "w3": 0.0, "wft": 0.0}

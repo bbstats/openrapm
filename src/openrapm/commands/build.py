@@ -32,23 +32,26 @@ outputs/season_ratings_check_step3.parquet, whose values equal the 2026 rows of 
 from __future__ import annotations
 
 import time
-from dataclasses import asdict, replace
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from .. import box_prior, prior_rapm, prior_shrink, rapm, swap_adjust, swap_test
+from .. import box_prior, prior_rapm, prior_shrink, rapm, second_prior, swap_adjust, swap_test
 from ..data.config import booster_params, resolve
 from ..data.designs import DesignCache
 from ..data.panel import panel_and_trainable_seasons, trainable_panel
 from ..data.roles import main_teams
 from ..data.seasons import all_seasons, trainable
+from ..data.second_prior_files import line_setup, load_grams
 from ..data.stints import load_season_stints
 from ..data.tables import design_row_teams, player_names
 from ..data.within_folds import check_fold_files, fold_games, load_folds
+from . import parallel
 
 SIDES = ("O", "D")
+NEAREST_UNSHRINK = ("offense", "defense")     # experiment 83's labels from the seasons next to a row, both un-shrunk
 SIDE_WORDS = {"offense": "offence", "defense": "defence"}     # the tables' side keys as printed, offence first
 
 
@@ -69,10 +72,13 @@ def describe(settings, seasons) -> str:
     labels = settings.labels
     flags = (f"; team-season flags {labels.team_offense_penalty:g} / {labels.team_defense_penalty:g}"
              if labels.team_flags else "")
+    second = (f"; step 3 reads the second prior, its line from outputs/second_prior/{prior.second_prior} on the "
+              f"inputs {prior.second_prior_inputs}, team totals {prior.second_prior_team_totals}"
+              if prior.second_prior else "")
     return (f"rate {seasons[0]}-{seasons[-1]} ({len(seasons)} seasons): offence target {targets.offence}, defence "
             f"target {targets.defence}; inputs {prior.feature_set}; booster {prior.booster_file}; {prior.n_folds} "
             f"player folds, assignment {prior.fold_assignment}; neighbours left out {settings.exclude_neighbours}"
-            f"{era}{flags}")
+            f"{era}{flags}{second}")
 
 
 def accumulate_rapm(designs: DesignCache, seasons, settings) -> dict:
@@ -104,9 +110,11 @@ def unseen_seasons(season: int, settings) -> list:
     return list(range(season - reach, season + reach + 1))
 
 
-def saved_side(prior: box_prior.SidePrior, params: dict, settings, unseen) -> dict:
+def saved_side(prior: box_prior.SidePrior, params: dict, settings, unseen, second=None, side: str = "O") -> dict:
     """One side's boosters in the layout of the saved-booster files written before the 2026-10 cleanup (the code that
-    wrote them is at the tag archive/research-2026-10), so `openrapm folds` reads a file of either age."""
+    wrote them is at the tag archive/research-2026-10), so `openrapm folds` reads a file of either age.  With the second
+    prior on (`second`, a SeasonSecondPrior), also its values (`second_prior`) and the season's line (`line`, rows as
+    second_prior.season_coefficients gives them), which `openrapm folds` checks its whole-season rebuild against."""
     model = prior.model
     members = model.members if isinstance(model, box_prior.BaggedPrior) else [model]
     out = dict(full=members[0].full, folds=members[0].fold_models, excluded=members[0].held_out_players,
@@ -117,6 +125,9 @@ def saved_side(prior: box_prior.SidePrior, params: dict, settings, unseen) -> di
         # every bag, the first also in the old layout's keys; `openrapm folds` reads the bags when they are there
         out["bags"] = [dict(full=member.full, folds=member.fold_models, excluded=member.held_out_players)
                        for member in members]
+    if second is not None:
+        out["second_prior"] = dict(second.values[side])
+        out["line"] = np.asarray(second.coefficients[side]).tolist()
     return out
 
 
@@ -128,35 +139,111 @@ def outside_row_labels(sums: dict, panel: pd.DataFrame, unseen, settings) -> dic
     return rapm.outside_labels(sums, unseen, sorted(season_sets, key=sorted), settings.labels, settings.targets)
 
 
-def rate_one_season(season: int, sums: dict, panel: pd.DataFrame, designs: DesignCache, settings, params: dict):
+@dataclass
+class SecondPriorLines:
+    """What every rated season's line is fitted from: {season: {side: PairGrams}} (data/second_prior_files.py) and
+    the seasons a fit may train on."""
+    grams: dict
+    trainable: set
+    type_scale: dict | None = None          # with the line on step 5's numbers too (second_prior.type_scale)
+
+
+@dataclass
+class SeasonSecondPrior:
+    """One rated season's second prior: {"O", "D"} each of its values, the line it came from and that line's inputs."""
+    values: dict
+    coefficients: dict
+    inputs: dict
+
+
+def rated_second_prior(cfg: dict, season: int, panel: pd.DataFrame, priors: dict, lines: SecondPriorLines,
+                       settings) -> SeasonSecondPrior:
+    """The rated season's second prior (second_prior.py): its context numbers from the whole season's stint rows, every
+    prior in them from the season's own boosters that never saw the player, and the line of the seasons that may train
+    it (more than `exclude_neighbours` away)."""
+    prior = settings.prior
+    coefficients = second_prior.season_coefficients(lines.grams, season, lines.trainable, settings.exclude_neighbours,
+                                                    prior.second_prior_folds, prior.second_prior_penalty,
+                                                    prior.second_prior_nearest)
+    if coefficients is None:
+        raise SystemExit(f"{season}: no season of outputs/second_prior/{prior.second_prior} may train its line")
+    answers = {side: second_prior.booster_answers(
+        priors[side].model,
+        box_prior.rated_rows(panel[(panel.side == side) & (panel.season == season)], priors[side].feature_names))
+        for side in SIDES}
+    types = (None if lines.type_scale is None else
+             second_prior.standardised_types(panel[(panel.side == "O") & (panel.season == season)], lines.type_scale))
+    values, inputs = second_prior.season_second_priors(season_lineup_rows(cfg, season), answers,
+                                                       {side: priors[side].values for side in SIDES}, coefficients,
+                                                       prior.second_prior_folds, prior.second_prior_team_totals,
+                                                       types, prior.second_prior_inputs)
+    return SeasonSecondPrior(values=values, coefficients=coefficients, inputs=inputs)
+
+
+def line_words(coefficients: dict, names) -> str:
+    """The line fitted on every swap, both sides, one weight per input (`names`), for the log."""
+    return "; ".join(f"{side} " + ", ".join(f"{name} {weight:+.3f}" for name, weight
+                                             in zip(names, np.asarray(coefficients[side])[-1]))
+                     for side in SIDES)
+
+
+def row_label_tables(sums: dict, panel: pd.DataFrame, unseen, settings, cache: dict | None = None) -> dict | None:
+    """The tables the prior's chunk rows are labelled from, by `settings.prior.row_labels`: None for "career" (every
+    row carries the career label), the seasons outside each row for "outside" (experiment 79), the seasons right next
+    to it for "nearest" (experiment 83, `cache` shared across the run's rated seasons)."""
+    if settings.prior.row_labels == "outside":
+        return outside_row_labels(sums, panel, unseen, settings)
+    if settings.prior.row_labels == "nearest":
+        training = panel[~panel.season.isin(unseen)]
+        season_sets = set().union(*(box_prior.chunk_season_sets(training[training.side == side],
+                                                                settings.prior.chunk_sizes) for side in SIDES))
+        # both sides un-shrunk: a label over one or two seasons at step 1's penalty keeps 5-13% of a player's impact,
+        # by how much he played next to the row, which the booster cannot see (notes/DECISIONS.md, experiment 83)
+        labels = replace(settings.labels, unshrink_columns=NEAREST_UNSHRINK)
+        return rapm.nearest_labels(sums, unseen, season_sets, labels, settings.targets, cache)
+    return None
+
+
+def rate_one_season(season: int, sums: dict, panel: pd.DataFrame, designs: DesignCache, settings, params: dict,
+                    lines: SecondPriorLines | None = None, label_cache: dict | None = None):
     """The end of step 1 (labels), step 2 (priors) and step 3 (ridge) for one season.
 
-    Returns (the season's centred table in raw sign, {"O", "D"} its SidePriors, its unseen seasons).
+    Returns (the season's centred table in raw sign, {"O", "D"} its SidePriors, its unseen seasons, its
+    SeasonSecondPrior or None).  With `lines` (the second prior on, settings.PriorSettings.second_prior) step 3 reads
+    the second prior instead of the box-score prior.
     """
     unseen = unseen_seasons(season, settings)
     labels = rapm.career_labels(sums, unseen, settings.labels, settings.targets)
-    outside = outside_row_labels(sums, panel, unseen, settings) if settings.prior.row_labels == "outside" else None
+    outside = row_label_tables(sums, panel, unseen, settings, label_cache)
     priors = box_prior.season_priors(labels, panel, season, unseen, settings, params, outside)
     season_designs = {target: designs.season(season, target) for target in settings.targets.distinct()}
     values = {side: priors[side].values for side in SIDES}
-    return prior_rapm.rate_season(season_designs, values, settings, season), priors, unseen
+    second = None
+    if lines is not None:
+        second = rated_second_prior(designs.cfg, season, panel, priors, lines, settings)
+        values = second.values
+    return prior_rapm.rate_season(season_designs, values, settings, season), priors, unseen, second
 
 
 def rate_seasons(seasons, sums: dict, panel: pd.DataFrame, designs: DesignCache, settings, params: dict,
-                 keep_models: bool = False) -> tuple[list, dict]:
+                 keep_models: bool = False, lines: SecondPriorLines | None = None) -> tuple[list, dict]:
     """`rate_one_season` for each season: ([one centred table per season], {season: {side: saved boosters}}).
 
     The boosters are kept only when `keep_models`; thirty seasons of them are about a gigabyte.
     """
     started = time.time()
-    tables, models = [], {}
+    tables, models, label_cache = [], {}, {}
     for season in seasons:
-        table, priors, unseen = rate_one_season(season, sums, panel, designs, settings, params)
+        table, priors, unseen, second = rate_one_season(season, sums, panel, designs, settings, params, lines,
+                                                        label_cache)
         tables.append(table)
         if keep_models:
-            models[season] = {side: saved_side(priors[side], params[side], settings, unseen) for side in SIDES}
+            models[season] = {side: saved_side(priors[side], params[side], settings, unseen, second, side)
+                              for side in SIDES}
         print(f"  {season}: {len(table)} players, prior scale {table.prior_scale_off.iloc[0]:.2f} / "
               f"{table.prior_scale_def.iloc[0]:.2f}  ({time.time() - started:.0f}s)", flush=True)
+        if second is not None:
+            print(f"    the line: {line_words(second.coefficients, second.inputs['O'].columns)}", flush=True)
     return tables, models
 
 
@@ -222,7 +309,14 @@ def rate_table(cfg: dict, settings, seasons, keep_models: bool = False) -> tuple
     panel = trainable_panel(cfg)
     panel = panel[panel.possessions > 0].reset_index(drop=True)
     params = booster_params(cfg, settings.prior.booster_file)
-    tables, models = rate_seasons(seasons, sums, panel, designs, settings, params, keep_models=keep_models)
+    lines = None
+    if settings.prior.second_prior:
+        record = line_setup(cfg, settings.prior.second_prior,
+                            second_prior.INPUT_SETS[settings.prior.second_prior_inputs])
+        lines = SecondPriorLines(load_grams(cfg, settings.prior.second_prior), set(trainable(cfg).seasons),
+                                 record.get("type_scale"))
+    tables, models = rate_seasons(seasons, sums, panel, designs, settings, params, keep_models=keep_models,
+                                  lines=lines)
     return prior_rapm.published_table(pd.concat(tables, ignore_index=True), player_names(cfg)), models
 
 
@@ -241,11 +335,46 @@ def write_models(models: dict, settings, name: str, save_models: str, argv, cfg:
     print(f"wrote {path}: {len(models) - 1} seasons of boosters", flush=True)
 
 
-def run_rate(cfg: dict, settings, seasons, name: str, save_models: str | None = None, argv=()) -> int:
-    """`openrapm rate`: rate `seasons`, write the step-3 table (and the boosters when asked), print a summary."""
+def rate_in_parts(cfg: dict, seasons, name: str, save_models: str | None, argv, jobs: int) -> tuple[pd.DataFrame, dict]:
+    """`rate_table` over `parallel.season_chunks`, one `openrapm rate` child per chunk: (the step-3 table, the
+    boosters by season or {}).  Each child writes season_ratings_<name>__part<k>_step3.parquet and, when boosters are
+    kept, prior_models_<save_models>__part<k>.pkl; both are read back here, in season order, and removed."""
+    outputs = resolve(cfg, "outputs")
+    chunks = parallel.season_chunks(seasons, jobs)
+
+    def names(k):
+        kept = ["--save-models", parallel.part_name(save_models, k)] if save_models else []
+        return ["--name", parallel.part_name(name, k), *kept]
+
+    parallel.run_children(list(argv), chunks, names, outputs / "parallel" / name)
+    tables, models = [], {}
+    for k in range(len(chunks)):
+        path = outputs / f"season_ratings_{parallel.part_name(name, k)}_step3.parquet"
+        tables.append(pd.read_parquet(path))
+        path.unlink()
+        if save_models:
+            part = outputs / f"prior_models_{parallel.part_name(save_models, k)}.pkl"
+            saved = pd.read_pickle(part)
+            saved.pop("meta", None)
+            models.update(saved)
+            part.unlink()
+    table = pd.concat(tables, ignore_index=True).sort_values("season", kind="mergesort").reset_index(drop=True)
+    return table, ({season: models[season] for season in seasons} if save_models else {})
+
+
+def run_rate(cfg: dict, settings, seasons, name: str, save_models: str | None = None, argv=(), jobs: int = 1) -> int:
+    """`openrapm rate`: rate `seasons`, write the step-3 table (and the boosters when asked), print a summary.  With
+    `jobs` above 1, the seasons are rated in that many processes at once, as many as free memory holds
+    (`parallel.affordable_jobs`), with the same numbers."""
     started = time.time()
     seasons = check_seasons(seasons, cfg)
-    table, models = rate_table(cfg, settings, seasons, keep_models=bool(save_models))
+    fits = parallel.affordable_jobs(jobs) if jobs > 1 and len(seasons) > 1 else 1
+    if fits < jobs:
+        print(f"{jobs} processes asked for, free memory holds {fits}", flush=True)
+    if fits > 1:
+        table, models = rate_in_parts(cfg, seasons, name, save_models, argv, fits)
+    else:
+        table, models = rate_table(cfg, settings, seasons, keep_models=bool(save_models))
     print()
     write_table(table, resolve(cfg, "outputs") / f"season_ratings_{name}_step3.parquet", started)
     if save_models:
@@ -426,7 +555,15 @@ def swap_seasons(cfg: dict, table: pd.DataFrame, settings, folds: list | None = 
     """Step 5 on a step-4 table: (the adjusted table, the spread factors, the type model fitted on every season).
 
     The type model trains on the within-season folds' held-back games (`held_back_type_grams`); `folds`, `where` and
-    `multipliers` default to step 4's, read again from the folds when not handed in."""
+    `multipliers` default to step 4's, read again from the folds when not handed in.
+
+    With step 5 off, an applied share of 0 as shipped since experiment 82, nothing is fitted: the table comes back as
+    step 4 left it with step 5's two columns at 0, which is what the full step gives at that share, and a build of
+    one season, whose step 4 holds no other season's multipliers, needs none."""
+    if settings.swap.applied_share == 0:
+        print("  step 5: off, applied share 0; step 4's ratings kept as they are", flush=True)
+        return (table.assign(c_off=0.0, c_def=0.0), pd.DataFrame(columns=["season", "side", "factor"]),
+                pd.DataFrame())
     panel, trainable_seasons = panel_and_trainable_seasons(cfg)
     if folds is None:
         folds, where = step4_folds(cfg, settings.shrink)

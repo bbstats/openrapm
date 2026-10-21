@@ -35,6 +35,9 @@ def test_the_targets_prior_and_ridge():
     assert PRODUCT.prior.booster_file == "params/booster_params_lgb1_tune2.json"
     assert PRODUCT.prior.era_halflife == 0.0                 # every training season counts the same
     assert PRODUCT.prior.bags == 10                          # experiment 78, adopted 2026-10-17
+    assert PRODUCT.prior.second_prior == "ctx82"             # experiment 82, adopted 2026-10-20
+    assert PRODUCT.prior.second_prior_team_totals == "held"
+    assert PRODUCT.prior.second_prior_inputs == "context_and_types"
     assert PRODUCT.ridge.penalty == 13037.0
     assert PRODUCT.exclude_neighbours == 0
 
@@ -47,10 +50,10 @@ def test_each_distinct_target_is_fitted_once():
 
 def test_the_shrink_and_swap_settings():
     assert PRODUCT.shrink.fold_seasons == (1997, 2026) and PRODUCT.shrink.nearest == 8
-    assert PRODUCT.shrink.folds_tag == "bags10_early,bags10_within"
+    assert PRODUCT.shrink.folds_tag == "ctx82_early,ctx82_within"
     assert PRODUCT.shrink.defence_factor == 0.866
     swap = PRODUCT.swap
-    assert (swap.applied_share, swap.type_model_penalty, swap.n_folds) == (0.5, 1e-4, 5)
+    assert (swap.applied_share, swap.type_model_penalty, swap.n_folds) == (0.0, 1e-4, 5)   # step 5 off, experiment 82
 
 
 def test_the_test_setting_differs_in_three_places_only():

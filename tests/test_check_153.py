@@ -11,7 +11,6 @@ import pytest
 
 from openrapm import swap_adjust as sa
 from openrapm import swap_test as sw
-from openrapm.settings import TEST
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "checks" / "153_swap_audit.py"
@@ -69,7 +68,7 @@ def test_step_5_from_given_inputs_is_swap_adjusts_step_5(audit, lineup_league):
     """The fold code's step 5, handed a season's possessions and type predictions but none of its swaps, gives the
     shipped step 5 on that season to the last bit: the swaps reach the give-back only through their players' ids."""
     swaps, features, fold_of, table, main_team = _league(lineup_league)
-    settings = TEST.swap
+    settings = audit.SWAP            # step 5 at the half strength the check audits; off as shipped since experiment 82
     predictions = sa.type_predictions(features, swaps, fold_of, set(swaps), settings)
     shipped, factors = sa.adjust(table, sw.ratings_in_raw_sign(table), swaps, predictions, main_team, settings)
     grams = {season: kept.grams for season, kept in swaps.items()}
