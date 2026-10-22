@@ -222,8 +222,9 @@ class ShrinkSettings:
     # since experiment 93, adopted 2026-10-21, its own, ctx82c_early,ctx82c_within, built with the centred inputs;
     # since experiment 94, adopted 2026-10-22 (the bug-fix pass's parser fixes), its own on the rebuilt stints,
     # parser94_early,parser94_within; since experiment 95, adopted the same day (heaves counted as they happened), its
-    # own
-    folds_tag: str = "heave95_early,heave95_within"
+    # own, heave95_early,heave95_within; since experiment 99, adopted the same day (each season's own body listing, the
+    # pad k around the bins), its own
+    folds_tag: str = "inputs99_early,inputs99_within"
     # each season's factors from only the K fold seasons nearest it (prior_shrink.fold_seasons_used): the defensive
     # prior part holds up less in older seasons, 0.79 in 1997-2006 against 0.95 in 2017-2026 (notes/DECISIONS.md,
     # "Era drift" and experiment 55, adopted 2026-10-12: "yes. build."); 0 would use every fold season the rule allows

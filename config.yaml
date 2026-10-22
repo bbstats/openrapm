@@ -30,10 +30,11 @@ starter_poss_threshold: 1500  # and this many or more is "high_poss"; neither mo
 pad_target: poss_conditional  # what the season panel's box rates are padded toward (box_rates.py): the rate of players
                               # with about as many possessions; the league rate did no better (FINDINGS 21.14,
                               # git show archive/research-2026-09:FINDINGS.md)
-pad_k_around: league          # where the pad k measures the spread between players: around the league rate, as shipped,
-                              # or around the target the rates are padded toward ("target"; experiment 96)
-body_inputs: career_median    # height and weight: each player's median listing over his career, as shipped, or each
-                              # season's own listing on the barefoot ruler ("season_listing"; experiment 96)
+pad_k_around: target          # where the pad k measures the spread between players: around the target the rates are
+                              # padded toward, as shipped since experiment 99 (2026-10-22), or around the league rate
+                              # ("league", before it)
+body_inputs: season_listing   # height and weight: each season's own listing on the barefoot ruler, as shipped since
+                              # experiment 99, or each player's median listing over his career ("career_median")
 
 # Garbage time (data/stint_parser.py): a stint in it is flagged, and the design carries the flag as a context column.
 garbage_time:

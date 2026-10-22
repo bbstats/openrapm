@@ -8888,3 +8888,46 @@ folds.  The chain `inputs99` under `scratch/2026-10-22_bugfix/config_inputs.yaml
 tie or better in every era on the within-season test, the year-over-year test not worse at +2, the 2026 top 20.  The
 owner's "ok go for it" answered a message that also asked about experiment 96; it is taken to cover adopting it if it
 reads as experiment 96 did.
+
+### Experiment 99: result (2026-10-22, `outputs/inputs99_chain.log`, `outputs/inputs99_read.log`)
+
+Against the incumbent eras98, scored on its folds, heave95's; the score has ratings of zero at 0 and the incumbent at
+100:
+
+| era | change | standard error | z | Newey-West z | seasons better | score |
+|---|---|---|---|---|---|---|
+| 1997-2006 | -0.010 | 0.011 | -0.92 | -0.96 | 6 of 10 | 100.05 |
+| 2007-2016 | -0.017 | 0.008 | -2.07 | -2.81 | 8 of 10 | 100.10 |
+| 2017-2026 | -0.021 | 0.010 | -1.96 | -2.67 | 8 of 10 | 100.13 |
+| all seasons | -0.016 | 0.006 | -2.85 | -3.36 | 22 of 30 | 100.10 |
+
+The noise control, noise_bags10: +1.553, z +10.3.  The year-over-year test, team-game, both directions: -0.002,
+z -0.26, clustered -0.22, better in 30 of 56.  **Better in every era, a tie year over year: experiment 96's reading
+again, on the new base.**  Each side's spread within 0.008 of eras98's in every era.  2026 top 20: the same twenty
+players; the largest moves Ausar Thompson -0.07, Kawhi Leonard -0.06, Mitchell Robinson -0.05, OG Anunoby -0.05,
+Giannis Antetokounmpo +0.04; neighbors swap places: Neemias Queta 10th to 9th, Karl-Anthony Towns 14th to 13th, Cason
+Wallace 17th to 16th, Ty Jerome 19th to 18th.  Adopted, as the registration says.
+
+## Experiment 99 ADOPTED, with experiments 95 and 98, not published (2026-10-22)
+
+- **The shipped defaults.**  config `body_inputs: season_listing`, `pad_k_around: target`; the season panel built with
+  them is `outputs/season_panel.parquet`, the one before it `outputs/season_panel_before_inputs99.parquet`;
+  `ShrinkSettings.folds_tag` "inputs99_early,inputs99_within"; the chain's incumbent inputs99.
+- **The reproduction.**  `openrapm build --setting test --seasons 2026 --name verify99` equals inputs99's chain table
+  for 2026: the largest difference 0.
+- **The product.**  `openrapm build`, 4:09-4:55 PM (`scratch/2026-10-22_bugfix/build99.sh`); experiment 94's published
+  tables kept as `season_ratings_product_before_inputs99*`.  Against them, players with 1,000+ possessions: 2026 totals
+  moved a median 0.05 per 100, the ninetieth percentile 0.13, the largest 0.31, correlation 0.999; every season a
+  median 0.07, the ninetieth percentile 0.18, the largest 1.38.  Each side's standard deviation by era, published /
+  new: offense 1.87 / 1.88, 1.67 / 1.68, 1.51 / 1.51; defense 1.73 / 1.74, 1.61 / 1.62, 1.60 / 1.54.  2026 top 20:
+  the same twenty; Giannis Antetokounmpo 7th to 5th, Luka Dončić 9th to 7th, Neemias Queta 6th to 9th, Chet Holmgren
+  10th to 12th; Victor Wembanyama -0.19.
+- **The 2001 Lakers** hold the largest moves: Devean George +1.38, Robert Horry +1.22, Kobe Bryant -0.68, Brian Shaw
+  -0.67, Shaquille O'Neal +0.64; a mean move of 0.56 against 0.16 for the next team-season and 0.085 for the median
+  one.  The test-setting tables move them under 0.1, so it is the product's prior for that team.  Their split swings
+  from build to build: over the product builds of experiments 80, 82, 93, 94 and this one, Horry 1.05 / 2.13 / 2.31 /
+  0.95 / 2.17 and George -3.57 / -3.50 / -3.38 / -4.94 / -3.56.  The published build is the odd one out and this one
+  puts them back; Kobe has slid 5.35 to 4.21 over those builds and Shaq risen 5.08 to 6.14.
+- **Checks.**  The consensus tests pass (`tests/test_vs_consensus.py`: 10 passed and the known backup-bigs failure);
+  `openrapm site --bias --openrapm-decomposition --similarity` passes every identity.  The site files are written and
+  not committed: published on the owner's word.

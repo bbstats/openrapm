@@ -61,11 +61,14 @@ LOG=outputs/${NAME}_chain.log
 # Since later the same day it is experiment 98 (eras98): heave95's tables with the defense factor by era, 0.89
 # before 2017 and 0.84 from 2017 (settings.ShrinkSettings.defence_factors, the shipped default), its folds still
 # heave95's; 151 applies the same factors to every system it scores.
-INC_NAME=${INC_NAME:-eras98}
-INC_SYSTEM=${INC_SYSTEM:-heave95}               # the incumbent's folds (<name>_early, <name>_within) for 151
+# Since later the same day it is experiment 99 (inputs99): eras98 with each season's own body listing and the pad k
+# around the bins (config body_inputs season_listing, pad_k_around target, the shipped config), its own folds
+# inputs99_early and inputs99_within; not published yet.
+INC_NAME=${INC_NAME:-inputs99}
+INC_SYSTEM=${INC_SYSTEM:-inputs99}              # the incumbent's folds (<name>_early, <name>_within) for 151
 CONTROL_NAME=${CONTROL_NAME:-noise_bags10}       # the noise control's folds (<name>_early, <name>_within) for 151
-INC_FOLDS=${INC_FOLDS:-heave95_early,heave95_within}
-AUDIT_REF=${AUDIT_REF:-heave95_within}
+INC_FOLDS=${INC_FOLDS:-inputs99_early,inputs99_within}
+AUDIT_REF=${AUDIT_REF:-inputs99_within}
 INC=outputs/season_ratings_${INC_NAME}.parquet
 BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1_tune2 --features hustle_no_three_pct}
 [ -n "$NAME" ] && [ -n "$TARGET" ] || { echo "usage: scripts/experiment_chain.sh NAME TARGET [EXTRA RATE FLAGS]"; exit 1; }
