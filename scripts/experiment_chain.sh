@@ -7,7 +7,7 @@
 # a guard) and 66 (the 2026 top 20).  FULL_READINGS=1 adds the older readings (138, the second arm, 64, 90, 88, 70 + 73).
 # Everything not named is the incumbent's.
 #   bash scripts/experiment_chain.sh NAME DEFENSIVE_TARGET ["EXTRA RATE FLAGS"]   (INC_NAME, BASE_FLAGS, SHRINK_TAG, SKIP_BUILD: see below)
-#   bash scripts/experiment_chain.sh noise_control points_with_expected_opponent_threes "--fold-assignment 1"
+#   bash scripts/experiment_chain.sh noise_control points_with_expected_opponent_threes_late_as_scored "--fold-assignment 1"
 # Log: outputs/NAME_chain.log.  One build at a time.
 # A reading that fails is logged and the chain goes on to the next (each reading stands alone); the last line of the
 # log then names every reading that failed, and the chain exits with status 1.
@@ -54,11 +54,15 @@ LOG=outputs/${NAME}_chain.log
 # stands in.
 # Since 2026-10-21 it is experiment 93 (ctx82c): experiment 82 with the line's inputs centred on the season
 # (--second-prior-inputs context_and_types_centred, the shipped default), its own folds ctx82c_early and ctx82c_within.
-INC_NAME=${INC_NAME:-ctx82c}
-INC_SYSTEM=${INC_SYSTEM:-ctx82c}                # the incumbent's folds (<name>_early, <name>_within) for 151
+# Since 2026-10-22 it is experiment 95 (heave95): experiment 93 on the stints rebuilt with the parser's fixes
+# (experiment 94, parser94, published), with the threes of a period's last two seconds counted as they happened in the
+# defensive target (points_with_expected_opponent_threes_late_as_scored, the shipped default), its own folds
+# heave95_early and heave95_within; not published yet.
+INC_NAME=${INC_NAME:-heave95}
+INC_SYSTEM=${INC_SYSTEM:-heave95}               # the incumbent's folds (<name>_early, <name>_within) for 151
 CONTROL_NAME=${CONTROL_NAME:-noise_bags10}       # the noise control's folds (<name>_early, <name>_within) for 151
-INC_FOLDS=${INC_FOLDS:-ctx82c_early,ctx82c_within}
-AUDIT_REF=${AUDIT_REF:-ctx82c_within}
+INC_FOLDS=${INC_FOLDS:-heave95_early,heave95_within}
+AUDIT_REF=${AUDIT_REF:-heave95_within}
 INC=outputs/season_ratings_${INC_NAME}.parquet
 BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1_tune2 --features hustle_no_three_pct}
 [ -n "$NAME" ] && [ -n "$TARGET" ] || { echo "usage: scripts/experiment_chain.sh NAME TARGET [EXTRA RATE FLAGS]"; exit 1; }

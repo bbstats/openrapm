@@ -461,9 +461,10 @@ def _named(fn, name, **kw):
 # (notes/DECISIONS.md, "What was settled": x3def; settings.Targets).
 OPPONENT_THREE_LUCK_KEPT = 0.25
 
-# The two defensive targets: points_with_expected_opponent_threes (what ships: every opponent three-point make
-# replaced by 3 x the shooter's padded other-half 3P%, with OPPONENT_THREE_LUCK_KEPT of the realised deviation
-# kept) and points_with_expected_opponent_threes_all (none of it kept).  Before 2026-10-11: x3def_w0.25, x3def.
+# The defensive targets: points_with_expected_opponent_threes (what shipped until experiment 95: every opponent
+# three-point make replaced by 3 x the shooter's padded other-half 3P%, with OPPONENT_THREE_LUCK_KEPT of the realised
+# deviation kept) and points_with_expected_opponent_threes_all (none of it kept).  Before 2026-10-11: x3def_w0.25,
+# x3def.
 DEFENSE_TARGETS = {
     "points_with_expected_opponent_threes_all": _named(def_three_design, "points_with_expected_opponent_threes_all"),
     "points_with_expected_opponent_threes": _named(def_three_design, "points_with_expected_opponent_threes",
@@ -472,8 +473,9 @@ DEFENSE_TARGETS = {
     # experiment 89; the owner, 2026-10-20: "blend between luck adjusted and not")
     "points_with_expected_opponent_threes_half": _named(def_three_design,
                                                         "points_with_expected_opponent_threes_half", w3=0.5),
-    # the shipped target with the threes of a period's last two seconds counted as they happened (experiment 95, the
-    # bug-fix pass of 2026-10-22): needs stints of schema 5, which count them apart
+    # what ships since experiment 95 (the bug-fix pass of 2026-10-22, adopted the same day): the target above with
+    # the threes of a period's last two seconds counted as they happened; needs stints of schema 5, which count them
+    # apart
     "points_with_expected_opponent_threes_late_as_scored": _named(
         def_three_design, "points_with_expected_opponent_threes_late_as_scored", w3=OPPONENT_THREE_LUCK_KEPT,
         late_as_scored=True),

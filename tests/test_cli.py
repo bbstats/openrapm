@@ -6,6 +6,7 @@ import argparse
 import os
 import subprocess
 import sys
+from dataclasses import replace
 
 import pytest
 
@@ -84,7 +85,9 @@ def test_the_names_used_before_the_rename_still_work_and_say_so(capsys):
     assert chosen.prior.feature_set == "box_score_and_bio"
     said = capsys.readouterr().out.splitlines()
     assert len(said) == 2 and "x3def" in said[0] and "boruta_noonc" in said[1]
-    assert cli.chosen_settings(_parse("rate", "--defensive-target", "x3def_w0.25")) == PRODUCT
+    # x3def_w0.25 is points_with_expected_opponent_threes, the shipped target until experiment 95
+    assert cli.chosen_settings(_parse("rate", "--defensive-target", "x3def_w0.25")) == replace(
+        PRODUCT, targets=replace(PRODUCT.targets, defence="points_with_expected_opponent_threes"))
 
 
 def test_the_last_occurrence_of_a_flag_wins():

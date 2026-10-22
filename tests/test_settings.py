@@ -27,8 +27,8 @@ def test_the_label_settings():
 
 
 def test_the_targets_prior_and_ridge():
-    assert (PRODUCT.targets.offence, PRODUCT.targets.defence) == ("points_with_expected_free_throws",
-                                                                  "points_with_expected_opponent_threes")
+    assert (PRODUCT.targets.offence, PRODUCT.targets.defence) == (   # experiment 95, adopted 2026-10-22
+        "points_with_expected_free_throws", "points_with_expected_opponent_threes_late_as_scored")
     assert PRODUCT.prior.chunk_sizes == (1, 2, 3)
     assert PRODUCT.prior.n_folds == 5 and PRODUCT.prior.fold_assignment == 0
     assert PRODUCT.prior.feature_set == "hustle_no_three_pct"     # experiment 77, adopted 2026-10-17
@@ -43,14 +43,15 @@ def test_the_targets_prior_and_ridge():
 
 
 def test_each_distinct_target_is_fitted_once():
-    assert PRODUCT.targets.distinct() == ["points_with_expected_free_throws", "points_with_expected_opponent_threes"]
+    assert PRODUCT.targets.distinct() == ["points_with_expected_free_throws",
+                                          "points_with_expected_opponent_threes_late_as_scored"]
     assert replace(PRODUCT.targets, defence="points_with_expected_free_throws").distinct() == [
         "points_with_expected_free_throws"]
 
 
 def test_the_shrink_and_swap_settings():
     assert PRODUCT.shrink.fold_seasons == (1997, 2026) and PRODUCT.shrink.nearest == 8
-    assert PRODUCT.shrink.folds_tag == "parser94_early,parser94_within"     # experiment 94, adopted 2026-10-22
+    assert PRODUCT.shrink.folds_tag == "heave95_early,heave95_within"     # experiment 95, adopted 2026-10-22
     assert PRODUCT.shrink.defence_factor == 0.866
     swap = PRODUCT.swap
     assert (swap.applied_share, swap.type_model_penalty, swap.n_folds) == (0.0, 1e-4, 5)   # step 5 off, experiment 82

@@ -17,25 +17,26 @@ every number quoted here; read its measurement traps before trusting a number.  
 - Answer exactly what is asked.  Results as tables, one quantity per column, no parentheses, one TL;DR sentence.
 - Within-season WOWY is what counts, and a win must hold in every era: 1997-2006, 2007-2016, 2017-2026.
 
-## Where it stands, 2026-10-22, afternoon
+## Where it stands, 2026-10-22, evening
 
 - **The bug-fix pass of 2026-10-22** (DECISIONS.md, "The bug-fix pass"): the owner asked for a hunt for bugs behind the
-  artifacts; the findings, the code-only fixes and three experiments are there.
-- **The incumbent is experiment 94, adopted and PUBLISHED 2026-10-22** (the owner: "Adopt and publish, then test the
-  different width(s?)"): experiment 93 on stints rebuilt with the parser's four fixes (free-throw trips credited to the
-  five on the court at the foul; no possession from a defensive rebound with nothing after it; playoff free throws
-  priced on the whole season; the 2020 bubble's regular season neutral), its own folds `parser94_early`,
-  `parser94_within`.  Within-season WOWY test against 93: better in every era, -0.230, z -9.4; the year-over-year
-  guard worse, z +3.7, all of it width (its offense about 2% wider).
-- **The data on this machine.**  Until experiment 96's run ends, the rebuilt stints, caches and panel sit in
-  `data/stints_b1`, `data/cache_b1`, `outputs/season_panel_b1.parquet`: run every command with
-  `OPENRAPM_CONFIG=scratch/2026-10-22_bugfix/config_parser.yaml`.  Then they take the default paths and the old ones
-  are kept as `data/stints_before_parser94`, `data/cache_before_parser94`, `outputs/season_panel_before_parser94.parquet`.
-- **Experiment 95 adopted, to publish later** (the owner: "might as well do the heave fix i guess but - we can push for
-  later publish"): threes in a period's last two seconds counted as they happened in the defensive target; a tie on
-  both tests against 94.  Its settings follow in the next commit; the product is built at the next publish.
-- **Running**: experiment 96, each season's own listed body and the pad k around the bins, against 94
-  (`scratch/2026-10-22_bugfix/queue.sh`); then the widths the owner asked for (`width_sweep.py`).
+  artifacts; the findings, the code-only fixes, experiments 94-96 and the width test are there.
+- **The incumbent is experiment 95 (heave95), adopted 2026-10-22, in the code, NOT published** (the owner: "might as
+  well do the heave fix i guess but - we can push for later publish"): experiment 94 with the threes of a period's
+  last two seconds counted as they happened in the defensive target.  The product is built at the next publish.
+- **The site shows experiment 94 (parser94), PUBLISHED 2026-10-22** (63b2acc): experiment 93 on stints rebuilt with
+  the parser's four fixes (free-throw trips credited to the five on the court at the foul; no possession from a
+  defensive rebound with nothing after it; playoff free throws priced on the whole season; the 2020 bubble's regular
+  season neutral).  Within-season WOWY test against 93: better in every era, -0.230, z -9.4; at 93's width -0.101,
+  z -4.4, still every era: about half the published gain is width (DECISIONS.md, "The widths").
+- **Experiment 96, verdict the owner's**: each season's own listed body and the pad k around the bins.  Within-season
+  WOWY better in every era, -0.017, z -3.3; the year-over-year test a tie; the ratings barely move, a median 0.02 per
+  100.  Built on parser94; beside 95 it needs one more chain, about 55 minutes.
+- **The widths, read**: the within-season WOWY test wants every rating wider, the year-over-year test narrower; no
+  width passes both, so the shipped width stays (DECISIONS.md, "The widths").
+- **The data on this machine**: the rebuilt stints, caches and season panel at the default paths; the old ones are
+  `data/stints_before_parser94`, `data/cache_before_parser94`, `outputs/season_panel_before_parser94.parquet`.
+  Experiment 96's panel is `outputs/season_panel_b3.parquet` (`scratch/2026-10-22_bugfix/config_inputs.yaml`).
 - **New in the reports**: `z_clustered` in the year-over-year test and `z_newey_west` in check 151, beside the plain
   z; which rules is the owner's.
 - **Deferred by the owner**: rating the season in progress (DECISIONS.md, "The bug-fix pass").
@@ -50,9 +51,12 @@ every number quoted here; read its measurement traps before trusting a number.  
 
 ## Next: the owner's to pick
 
-- The same as experiment 93 without the other side's own box-score prior in the line, about 50 minutes: the first
-  suspect for the wider defense.
-- A noise control on experiment 93 (`--fold-assignment 1`), so its readings have their own.
+- Experiment 96 beside 95: one chain, about 55 minutes, then experiments 95 and 96 published together.
+- Width-matched readings in the chain (proposed, DECISIONS.md, "The widths"): every candidate also read rescaled to
+  the incumbent's width, so a win is told apart from a width.
+- The incumbent without the other side's own box-score prior in the line, about 50 minutes: the first suspect for the
+  wider defense.
+- A noise control on the incumbent (`--fold-assignment 1`), so its readings have their own.
 - The EM ridge idea, a larger thread "not now": the ridge penalty by EM per season and side instead of the fixed
   13,037.
 
@@ -71,14 +75,14 @@ every number quoted here; read its measurement traps before trusting a number.  
 | 2 | box-score prior | `box_prior.py` | LightGBM `lgb1_tune2`, linear leaves; feature set `hustle_no_three_pct`; five player folds; 10 bags |
 | 2b | swap part of the prior | `second_prior.py` | line `ctx82` on `context_and_types_centred`, team totals held |
 | 3 | the rating | `prior_rapm.py` | RAPM pulled toward the prior, penalty 13,037, centred |
-| 4 | the shrink, with the defense dial | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, 8 nearest fold seasons, defense times 0.866; folds `parser94_early,parser94_within` |
+| 4 | the shrink, with the defense dial | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, 8 nearest fold seasons, defense times 0.866; folds `heave95_early,heave95_within` |
 | 5 | swap adjustment | `swap_adjust.py` | off: applied share 0, the build skips it |
 
 - `openrapm build` writes `outputs/season_ratings_product.parquet` with `_step3` and `_step4` beside it.
 - `openrapm site --bias --openrapm-decomposition --similarity` writes the site's files.  Commit, fast-forward `main`
   and push only on the owner's word, then check the Pages build: `gh api repos/bbstats/openrapm/pages/builds/latest`.
   With the second prior, the decomposition's "box score" piece carries the whole prior; its split is the owner's.
-- The incumbent's test-setting tables `outputs/season_ratings_parser94*.parquet`, folds `parser94_early`, `parser94_within`;
+- The incumbent's test-setting tables `outputs/season_ratings_heave95*.parquet`, folds `heave95_early`, `heave95_within`;
   no noise control on it yet, `noise_bags10` stands in.
 
 ## How an experiment is judged
@@ -89,25 +93,24 @@ every number quoted here; read its measurement traps before trusting a number.  
 | year-over-year test | `scripts/checks/63_yoy.py` | not worse at z +2 |
 | the eye check | `scripts/checks/66_compare.py` | the 2026 top 20 |
 
-- One build: `bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes "EXTRA RATE FLAGS"`, about
-  50 minutes with 4 processes.  `INC_NAME` and `INC_SYSTEM` name the incumbent, `ctx82c` by default until the chain script is updated after
-  experiment 96's run: set them to `parser94` meanwhile.
+- One build: `bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes_late_as_scored "EXTRA RATE
+  FLAGS"`, about 50 minutes with 4 processes.  `INC_NAME` and `INC_SYSTEM` name the incumbent, `heave95` by default.
 - **The season-page score**: each season, ratings of zero score 0 and the reference 100; the ratings before
   experiment 82 explain 18.2 a season on this test (the 15.7 in older notes is experiment 63's step 4).
   `scratch/2026-10-20_charts/season_scores.py` and `season_page.py`; page https://claude.ai/artifact/L7vwSTAvCCKQnj9jnnhYrq.
 - The noise control `noise_bags10` moves a season at most 0.7 on that score.
 - Every experiment gets a row in `experiments/runs.csv` (`scripts/checks/101_log_run.py`), mirrored to the sheet
-  "OpenRAPM experiments", tab Experiments; the next free row is 88.
+  "OpenRAPM experiments", tab Experiments; the next free row is 92.
 
 ## Commands a session runs
 
-    bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes "EXTRA RATE FLAGS"
+    bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes_late_as_scored "EXTRA RATE FLAGS"
         one experiment against the incumbent, about 50-75 minutes; log outputs/NAME_chain.log
-    .venv/Scripts/python scripts/checks/151_wowy.py --systems=parser94,noise_bags10,NAME --ref=parser94 --tag=NAME
+    .venv/Scripts/python scripts/checks/151_wowy.py --systems=heave95,noise_bags10,NAME --ref=heave95 --tag=NAME
         the within-season WOWY test on folds already built, about 3 minutes
     .venv/Scripts/python -m openrapm second-prior --models bags10 --folds bags10_early,bags10_within --tag TAG --inputs SET
         a second prior's line from held-back swaps, about 13 minutes
-    .venv/Scripts/python scripts/checks/101_log_run.py --name=NAME --exp=N --incumbent=parser94 --idea=owner --verdict=pending --changed="..." --notes="..."
+    .venv/Scripts/python scripts/checks/101_log_run.py --name=NAME --exp=N --incumbent=heave95 --idea=owner --verdict=pending --changed="..." --notes="..."
         the experiment table's row
     .venv/Scripts/python scratch/2026-10-21_charts/defense_gap_stats.py
         every 2026 defense rating split by stat against the consensus, about 8 minutes

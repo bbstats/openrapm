@@ -13,12 +13,13 @@ Words used below
                   offence, "points_with_expected_free_throws": points - made free throws + expected free
                       throws, each free throw counted at the shooter's padded free-throw %, that game's own
                       attempts left out
-                  defence, "points_with_expected_opponent_threes": the same free-throw adjustment, and three
-                      quarters of the shooters' three-point luck taken off: points - 3 x 0.75 x (threes made -
-                      threes expected), threes expected = attempts x the shooter's three-point % from the other
-                      half of the season's games, padded toward the league by 450 attempts; then one number per
-                      season rescales the target so the season's total equals the points actually scored
-                      (data/shots.align)
+                  defence, "points_with_expected_opponent_threes_late_as_scored": the same free-throw
+                      adjustment, and three quarters of the shooters' three-point luck taken off: points - 3 x
+                      0.75 x (threes made - threes expected), threes expected = attempts x the shooter's
+                      three-point % from the other half of the season's games, padded toward the league by 450
+                      attempts, the threes of a period's last two seconds left out of both counts, so they count
+                      as they happened (experiment 95); then one number per season rescales the target so the
+                      season's total equals the points actually scored (data/shots.align)
     design      one column per player per side (offence, defence) plus the context columns
     context     per-season intercepts, home court, playoffs, playoff home court, garbage time, score margin
                 (clipped at +-25), margin x share of the game left

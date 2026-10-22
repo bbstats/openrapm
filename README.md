@@ -208,7 +208,7 @@ One experiment is one command:
 
 ```bash
 bash scripts/experiment_chain.sh NAME DEFENSIVE_TARGET ["EXTRA RATE FLAGS"]
-bash scripts/experiment_chain.sh noise_control points_with_expected_opponent_threes "--fold-assignment 1"
+bash scripts/experiment_chain.sh noise_control points_with_expected_opponent_threes_late_as_scored "--fold-assignment 1"
 ```
 
 The second line is the noise control: the incumbent rebuilt with only the players' assignment to the

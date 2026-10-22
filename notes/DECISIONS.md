@@ -8710,6 +8710,28 @@ Scottie Barnes +0.15, 21st to 20th, in; Donovan Mitchell -0.03, 19th to 22nd, ou
 **How it is read**: the panel rebuilt under `scratch/2026-10-22_bugfix/config_inputs.yaml`, the chain `inputs96` on
 experiment 94's stints against parser94, as a fix.
 
+### Experiment 96: result (2026-10-22, `outputs/inputs96_chain.log`, `outputs/inputs96_read.log`)
+
+Against parser94, both on the rebuilt stints; the score has ratings of zero at 0 and parser94 at 100:
+
+| era | change | standard error | z | Newey-West z | seasons better | score |
+|---|---|---|---|---|---|---|
+| 1997-2006 | -0.012 | 0.010 | -1.28 | -1.52 | 6 of 10 | 100.07 |
+| 2007-2016 | -0.017 | 0.008 | -2.03 | -2.63 | 7 of 10 | 100.10 |
+| 2017-2026 | -0.023 | 0.010 | -2.22 | -3.26 | 8 of 10 | 100.14 |
+| all seasons | -0.017 | 0.005 | -3.26 | -4.15 | 21 of 30 | 100.10 |
+
+The noise control, noise_bags10: +1.530, z +10.1.  The year-over-year test, team-game, both directions: -0.002,
+z -0.30, clustered -0.25, better in 31 of 56.  **Better in every era on the within-season WOWY test, a tie on the
+year-over-year test.**  The ratings barely move: players with 1,000+ possessions, every season, totals a median 0.013
+per 100, the ninetieth percentile 0.037, the largest 0.24, correlation 0.9999; 2026 a median 0.021, the largest 0.22.
+Each side's spread within 0.007 of parser94's in every era.  The lean by body and age, each season's
+possession-weighted mean change taken out: 6-11 and taller -0.004 on defense, 6-4 and shorter +0.001, 22 and under
+-0.004, 35 and over +0.004; offense within 0.005.  2026 top 20: the same twenty players; the largest moves Ausar
+Thompson -0.07, Cason Wallace -0.06, 15th to 16th, Jimmy Butler -0.06, OG Anunoby -0.06, Chet Holmgren +0.05, 11th to
+10th.  Verdict the owner's.  It is built on parser94: beside experiment 95 it needs one more chain, 95's defensive
+target on this panel with its own folds.
+
 ## Experiment 94 ADOPTED and PUBLISHED (2026-10-22, the owner: "Adopt and publish, then test the different width(s?)")
 
 - **The shipped defaults.**  `ShrinkSettings.folds_tag` "parser94_early,parser94_within"; the stints rebuilt with the
@@ -8735,5 +8757,67 @@ experiment 94's stints against parser94, as a fix.
 
 ## Experiment 95 ADOPTED, to publish later (2026-10-22, the owner: "might as well do the heave fix i guess but - we can push for later publish")
 
-The shipped defensive target becomes `points_with_expected_opponent_threes_late_as_scored` and step 4 reads heave95's
-folds; the product is built and published with the next publish.
+In the code since 2026-10-22, after experiment 96's run: `Targets.defence`
+"points_with_expected_opponent_threes_late_as_scored", `ShrinkSettings.folds_tag` "heave95_early,heave95_within", the
+chain's incumbent heave95 (`scripts/experiment_chain.sh`).  Committed, not pushed: the site still shows experiment
+94.  The product is built and published with the next publish.  The rebuilt stints, caches and season panel now sit
+at the default paths; the old ones are `data/stints_before_parser94`, `data/cache_before_parser94` and
+`outputs/season_panel_before_parser94.parquet`.
+
+## The widths (the owner, 2026-10-22: "Adopt and publish, then test the different width(s?)")
+
+Read-only (`scratch/2026-10-22_bugfix/width_sweep.py`; `outputs/width_sweep_heave95.log`, `_heave95_more.log`,
+`_parser94.log`).  A width is a factor on both of step 4's offensive multipliers, the prior part's and the games'
+part's, and the defense dial on both defensive ones, applied to the system's own fitted multipliers: offense 1.023
+puts every offensive rating 2.3% further from the season's average.  Offense 1 and dial 0.866 is the system as
+adopted; it reproduces the system's own table to 2e-15 and check 151's errors to 1e-12.  Read on heave95; parser94
+reads the same to 0.005 everywhere.
+
+The within-season WOWY test, all stints, against the shipped width, below 0 better:
+
+| offense factor | defense dial | 1997-2006 | 2007-2016 | 2017-2026 | all seasons | z | seasons better |
+|---|---|---|---|---|---|---|---|
+| 0.950 | 0.840 | +0.300 | +0.314 | +0.287 | +0.300 | +19.7 | 0 of 30 |
+| 0.950 | 0.866 | +0.244 | +0.271 | +0.308 | +0.274 | +18.0 | 0 of 30 |
+| 0.977 | 0.858 | +0.121 | +0.130 | +0.128 | +0.127 | +19.0 | 0 of 30 |
+| 0.977 | 0.866 | +0.105 | +0.118 | +0.135 | +0.119 | +17.2 | 0 of 30 |
+| 1 | 0.840 | +0.059 | +0.047 | -0.015 | +0.030 | +3.8 | 5 of 30 |
+| 1 | 0.890 | -0.046 | -0.035 | +0.024 | -0.019 | -2.6 | 22 of 30 |
+| 1.023 | 0.866 | -0.093 | -0.106 | -0.123 | -0.108 | -15.8 | 30 of 30 |
+| 1.023 | 0.890 | -0.141 | -0.143 | -0.102 | -0.129 | -15.2 | 30 of 30 |
+| 1.050 | 0.866 | -0.188 | -0.216 | -0.254 | -0.219 | -15.0 | 30 of 30 |
+
+The year-over-year test, team-game, both directions:
+
+| offense factor | defense dial | against the shipped width | z | seasons better | against ctx82c | z |
+|---|---|---|---|---|---|---|
+| 0.950 | 0.840 | -0.207 | -11.7 | 53 of 56 | -0.115 | -4.4 |
+| 0.950 | 0.866 | -0.192 | -10.4 | 53 of 56 | -0.100 | -3.7 |
+| 0.977 | 0.858 | -0.100 | -12.2 | 53 of 56 | -0.008 | -0.3 |
+| 0.977 | 0.866 | -0.095 | -11.0 | 53 of 56 | -0.002 | -0.1 |
+| 1 | 0.840 | -0.014 | -1.8 | 33 of 56 | +0.078 | +2.6 |
+| 1 | 0.866 | 0 | | | +0.092 | +3.2 |
+| 1 | 0.890 | +0.023 | +3.1 | 20 of 56 | +0.115 | +3.8 |
+| 1.023 | 0.866 | +0.105 | +12.0 | 3 of 56 | +0.197 | +5.9 |
+| 1.023 | 0.890 | +0.127 | +13.3 | 3 of 56 | +0.219 | +6.5 |
+| 1.050 | 0.866 | +0.241 | +12.6 | 3 of 56 | +0.334 | +8.2 |
+
+What the year-over-year test wants each side multiplied by, at the shipped width: offense 0.969, defense 0.922;
+ctx82c 0.994 and 0.925.
+
+**Reading.**
+- The two tests pull the width in opposite directions, steadily over the whole range read.  On the within-season WOWY
+  test every wider offense wins in every era and every season, about 0.045 per 1% of width, and every narrower one
+  loses the same way; the year-over-year test is the mirror image and would take offense about 3% and defense about
+  8% narrower.
+- The defense dial splits by era on the within-season test: 0.890 wins 1997-2006 and 2007-2016 and loses 2017-2026,
+  0.840 the reverse, with the offense at 1 or at 1.023.
+- No width passes both tests against the shipped one: wider fails the year-over-year guard at z +12, narrower loses
+  the within-season test in every era.  **The shipped width stays.**
+- A candidate that comes out wider wins the within-season test and loses the year-over-year test for its width alone:
+  experiment 94's pattern.  Experiment 94 rescaled to ctx82c's width, offense x0.977 and dial x0.991 (the
+  year-over-year test's own ratio of the two systems' scales), against ctx82c on the rebuilt stints: within-season
+  WOWY -0.101, z -4.4, 24 of 30 seasons, every era better, -0.093 / -0.140 / -0.071; year-over-year -0.015, z -0.7, a
+  tie.  So 44% of its published -0.230 holds at the old width and 56% was width; the adoption stands on the 44%.
+- Proposed, not built: every chain also reads the candidate rescaled to the incumbent's width, on both tests, so a
+  win is told apart from a width.
