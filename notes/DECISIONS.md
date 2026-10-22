@@ -8498,3 +8498,51 @@ against 82: -0.199, z -1.76.  Defense spread 1.50 / 1.45 / 1.47 by era, 1.66 in 
 0.94 / 1.01 / 1.01 and 1.21 in 2024-2026.  **Not a win.**  Teammates and opponents add next to nothing beyond the
 box-score prior: the gain of experiment 82 and of the swap adjustment before it comes from the player-type stats the
 line read, not from the context numbers.
+
+## Experiment 93: experiment 82 with the ID-group fix (the owner, 2026-10-21: "next handoff we will begin experiment 82", then "Experiment 82, go"; registered before any result)
+
+**The change.**  Experiment 82's line, its weights unchanged (the grams of `ctx82`), applied to its own inputs centred
+on the season's possession-weighted average (`--second-prior-inputs context_and_types_centred`,
+`second_prior.CENTRED_SETS`).  Centring takes away the level each player fold's line carried, w_f x the average
+inputs, the ID-group bug: 2026 defense, ids ending 2 or 7 averaged +0.50, ending 4 or 9 -0.31.  The line is fitted on
+swap differences, which centring leaves as they were, so 82's grams fit it unchanged.  Team totals held, the swap
+adjustment off, its own folds.  Chain `ctx82c` against ctx82, read by era with each side's width, the fold means of
+the prior part and the season-page score.
+
+### Experiment 93: result (2026-10-21, `outputs/ctx82c_chain.log`, `scratch/2026-10-21_charts/fix93_read.py`)
+
+Within-season WOWY test against experiment 82, step 4: -0.175, z -4.0, better in 23 of 30 seasons.  Season-page score,
+the ratings before experiment 82 at 100: **103.7 / 104.3 / 99.9** by era against 82's 103.2 / 103.9 / 97.9; the gain
++0.53 (z +2.2, 9 of 10 seasons) / +0.40 (z +1.9, 5 of 10) / +1.99 (z +3.7, 9 of 10), 2024-2026 +2.9, +3.2, +4.9.  The
+year-over-year test against 82: -0.172, z -3.9.  The fold means of the prior part now match the ratings before 82,
+which have no line (2026 defense range 0.49 against 0.37 there and 0.81 in 82): what is left is which players fell in
+which fold.  2026 players with 1,000+ possessions by id fold, total change: fold 2 -0.51, fold 4 +0.20.  Each side's
+standard deviation, players with 1,000+ possessions: offense 1.78 / 1.61 / 1.46, defense 1.69 / 1.60 / 1.56, 2026
+1.45 and 1.66 (82: defense 1.69 / 1.59 / 1.49, 2026 1.57; before 82: 1.38 / 1.32 / 1.36, 2026 1.54).  **Better than 82
+in every era; the defense is as wide or wider.**  Verdict the owner's.
+
+## Experiment 93 ADOPTED and PUBLISHED (2026-10-21, the owner: "Nah publish the fix. It's ok I decided.")
+
+- **The shipped defaults.**  `PriorSettings.second_prior_inputs` "context_and_types_centred", the line still `ctx82`;
+  `ShrinkSettings.folds_tag` "ctx82c_early,ctx82c_within"; the chain's incumbent `ctx82c`.  No noise control on it
+  yet: `noise_bags10` stands in.
+- **The reproduction.**  `openrapm build --setting test --seasons 2026 --name verify93` under the new defaults equals
+  experiment 93's chain tables for 2026 to 0.0 in every rating column, step 3 and final
+  (`scratch/2026-10-21_adopt93/reproduce.py`).
+- **The product.**  `openrapm build`, 45 minutes, 9:17 PM; the old tables, experiment 82's, kept as
+  `season_ratings_product_before_ctx82c*`.  2026, players with 1,000+ possessions: against 82 totals moved a median
+  0.18 per 100, the ninetieth percentile 0.43, correlation 0.994; against the live site, experiment 80, a median 0.21,
+  the ninetieth percentile 0.59, correlation 0.988.  Each side's standard deviation by era, 80 / 82 / 93: offense
+  1.71 / 1.80 / 1.80, 1.52 / 1.61 / 1.60, 1.46 / 1.45 / 1.46; defense 1.38 / 1.69 / 1.69, 1.33 / 1.57 / 1.58,
+  1.36 / 1.54 / 1.60; 2026 defense 1.53 / 1.60 / 1.67.  Step 4's multipliers: the prior's part 0.629-0.712 on offense
+  and 0.649-0.852 on defense, the games' part 1.244-1.478 and 1.289-1.393.
+- **2026 top 20 against the live site**: Wembanyama, Jokić, Gilgeous-Alexander, Leonard still 1-4; up the most
+  Moussa Diabaté +0.74, 12th to 9th; Mitchell Robinson +0.69, 21st to 17th; Neemias Queta +0.65, 9th to 7th; Donovan
+  Clingan +0.52, 17th to 13th; Ausar Thompson +0.45, 7th to 5th; OG Anunoby +0.43, 22nd to 19th; down Luka Dončić
+  -0.20, 5th to 6th.
+- **Published**: `openrapm site --bias --openrapm-decomposition --similarity`, the site's files from this table.
+- **The consensus guard re-based.**  `consensus.MAX_DEFENCE_SPREAD`, our defense's standard deviation over the
+  consensus's on the published table, 1.4 to 1.45: the published table reads 1.41 (experiment 80 1.26, 82 1.33).
+  The owner published knowing the defense is wider; every other consensus guard passes.
+- **Open**: the defense is wider than before experiment 82 in every era, more so since 2017; the cross-side input,
+  the defensive line reading his offensive box-score prior, is the first suspect.

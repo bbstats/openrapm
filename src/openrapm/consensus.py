@@ -41,7 +41,9 @@ SUFFIX = re.compile(r"\b(jr|sr|ii|iii|iv|v)\b")
 # The minimums tests/test_vs_consensus.py holds the shipped ratings to; the reason for each is in that file.
 MIN_RANK_AGREEMENT = 0.75           # Spearman, offence, defence and total
 OFFENCE_SPREAD = (0.55, 1.3)        # the ratings' offensive standard deviation over the consensus's
-MAX_DEFENCE_SPREAD = 1.4            # the same on defence
+# the same on defence: 1.4 until 2026-10-21, re-based once when experiment 93 was published at 1.41 (experiment 80,
+# the site before it, 1.26; 82 1.33), the owner knowing its defense is wider: "Nah publish the fix. It's ok I decided."
+MAX_DEFENCE_SPREAD = 1.45
 MIN_TOP_FIVE_SHARED = 3             # players in both top fives by total
 
 

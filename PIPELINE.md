@@ -198,15 +198,17 @@ command runs in one process as before.
   `outputs/second_prior/ctx82/`; `PriorSettings.second_prior`, `--second-prior ""` reads the box-score prior alone.
   The line's input sets (`--second-prior-inputs`): `context`, the box-score prior and the eight context numbers
   (experiment 81); `context_and_types`, also his other side's box-score prior and the swap adjustment's 19 box-score,
-  role and body numbers (experiment 82, shipped); `own_teammates_opponents`, his box-score prior, teammates'
-  same-side sum and opponents' other-side sum, on inputs centred on the season's average (experiment 92, not
-  adopted).  Team totals (`--second-prior-team-totals`): `held` (shipped), `free`, or `spread_held`, which also holds
-  the spread inside teams as the swap adjustment did (experiment 90, not adopted).  Known flaw of the shipped line:
-  its inputs are not centred, so each of the five player-fold lines carries its own level, and a player's prior moves
-  with his id's fold, up to about 0.8 per 100 on 2026 defence (notes/DECISIONS.md, "Experiment 82's defensive prior
-  read through"); the fix, centring, is the next experiment.
+  role and body numbers (experiment 82); `context_and_types_centred`, the same centred on the season's
+  possession-weighted average (experiment 93, shipped); `own_teammates_opponents`, his box-score prior, teammates'
+  same-side sum and opponents' other-side sum, centred too (experiment 92, not adopted).  Team totals
+  (`--second-prior-team-totals`): `held` (shipped), `free`, or `spread_held`, which also holds the spread inside
+  teams as the swap adjustment did (experiment 90, not adopted).  Why centred: the line has no intercept, and on
+  uncentred inputs each of the five player-fold lines carried its own level, so a player's prior moved with his id's
+  fold, up to about 0.8 per 100 on 2026 defence (notes/DECISIONS.md, "Experiment 82's defensive prior read through").
+  Centring leaves the swaps' differences as they were, so the line, `ctx82`, is the same.
 - **Settings:** penalty 13,037 on both sides, one value for every season (experiment 2 of 2026-09-14
-  evening); the second prior `ctx82`, inputs `context_and_types`, team totals held (experiment 82).
+  evening); the second prior `ctx82`, inputs `context_and_types_centred`, team totals held (experiments 82
+  and 93).
 - **Command:** `python -m openrapm rate` (steps 1-3); `--seasons 2026` rates one season, whose values
   equal the 2026 rows of a thirty-season run.
 - **Code:** `src/openrapm/prior_rapm.py`, `commands/build.py`.
@@ -226,15 +228,17 @@ command runs in one process as before.
   `outputs/csv/season_ratings_NAME_step4_multipliers.csv`.
 - **How:** four multipliers per season, the prior's part and the games' part on offence and defence, from
   one weighted least-squares fit on the folds' held-back team-games; each part is multiplied by its own, and
-  each season is centred again. The published multipliers, the defence factor included: the prior's part 0.659 to 0.728 on
-  offence and 0.684 to 0.794 on defence; the games' part 1.186 to 1.393 on offence and 1.252 to 1.351 on defence.
+  each season is centred again. The published multipliers, the defence factor included: the prior's part 0.629 to 0.712 on
+  offence and 0.649 to 0.852 on defence; the games' part 1.244 to 1.478 on offence and 1.289 to 1.393 on defence
+  (experiment 93, 2026-10-21).
 - **Settings:**
   - the method (experiment 33b, adopted 2026-10-03), with the games' part freed (experiment 65, adopted
     2026-10-15; `ShrinkSettings.free_games_part`, `--no-free-games-part` holds it at 1);
   - both defensive multipliers times 0.866 in every season, chosen with the booster's settings by the same search
     (experiment 76, `ShrinkSettings.defence_factor`, `--defence-factor`);
-  - the folds `ctx82_early,ctx82_within`, experiment 82's own folds, built with the second prior (before it
-    experiment 78's, `bags10_early,bags10_within`), seasons 1997-2026 pinned, because the fold folder grew once
+  - the folds `ctx82c_early,ctx82c_within`, experiment 93's own folds, built with the centred second prior (before
+    them experiment 82's, `ctx82_early,ctx82_within`, and experiment 78's, `bags10_early,bags10_within`), seasons
+    1997-2026 pinned, because the fold folder grew once
     and an unpinned rerun shrank harder (experiment 34's correction);
   - each season's multipliers from the 8 fold seasons nearest it (experiment 55, adopted 2026-10-12).
 - **Command:** `python -m openrapm shrink --base season_ratings_NAME_step3`.

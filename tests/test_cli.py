@@ -327,4 +327,4 @@ def test_step_5_can_be_switched_off_and_the_line_can_read_its_numbers(monkeypatc
     seen = _recorded(monkeypatch, "run_build", "build", "--second-prior", "t",
                      "--second-prior-inputs", "context_and_types")
     assert seen["settings"].prior.second_prior_inputs == "context_and_types"
-    assert _parse("second-prior", "--models", "m", "--folds", "f", "--tag", "t").inputs == "context_and_types"
+    assert _parse("second-prior", "--models", "m", "--folds", "f", "--tag", "t").inputs == "context_and_types_centred"

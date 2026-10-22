@@ -52,11 +52,13 @@ LOG=outputs/${NAME}_chain.log
 # Since 2026-10-20 it is experiment 82 (ctx82): step 3 reads the second prior ctx82, step 5 off, step 4 on its own
 # folds ctx82_early and ctx82_within, all three the shipped defaults; no noise control on it yet, so noise_bags10
 # stands in.
-INC_NAME=${INC_NAME:-ctx82}
-INC_SYSTEM=${INC_SYSTEM:-ctx82}                 # the incumbent's folds (<name>_early, <name>_within) for 151
+# Since 2026-10-21 it is experiment 93 (ctx82c): experiment 82 with the line's inputs centred on the season
+# (--second-prior-inputs context_and_types_centred, the shipped default), its own folds ctx82c_early and ctx82c_within.
+INC_NAME=${INC_NAME:-ctx82c}
+INC_SYSTEM=${INC_SYSTEM:-ctx82c}                # the incumbent's folds (<name>_early, <name>_within) for 151
 CONTROL_NAME=${CONTROL_NAME:-noise_bags10}       # the noise control's folds (<name>_early, <name>_within) for 151
-INC_FOLDS=${INC_FOLDS:-ctx82_early,ctx82_within}
-AUDIT_REF=${AUDIT_REF:-ctx82_within}
+INC_FOLDS=${INC_FOLDS:-ctx82c_early,ctx82c_within}
+AUDIT_REF=${AUDIT_REF:-ctx82c_within}
 INC=outputs/season_ratings_${INC_NAME}.parquet
 BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1_tune2 --features hustle_no_three_pct}
 [ -n "$NAME" ] && [ -n "$TARGET" ] || { echo "usage: scripts/experiment_chain.sh NAME TARGET [EXTRA RATE FLAGS]"; exit 1; }

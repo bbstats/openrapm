@@ -135,7 +135,8 @@ class PriorSettings:
     # the player at about the row's age (rapm.nearest_labels; notes/DECISIONS.md, experiment 83)
     row_labels: str = "career"
     # "": step 3 reads the box-score prior itself, as it did until experiment 82.  A tag: step 3 reads the second
-    # prior instead, shipped as ctx82 since experiment 82 was adopted 2026-10-20, "adopt for now".  It is the
+    # prior instead, shipped as ctx82 since experiment 82 was adopted 2026-10-20, "adopt for now", its inputs centred
+    # since experiment 93 (`second_prior_inputs`).  It is the
     # box-score prior corrected for who a player played with and against, by a line fitted on the swaps of the
     # within-season folds' held-back games written under outputs/second_prior/<tag>/ (second_prior.py;
     # notes/DECISIONS.md, experiment 81, the owner, 2026-10-19: "take the handoff idea ... in as inputs to the prior")
@@ -153,9 +154,11 @@ class PriorSettings:
     # what the line reads: "context", the box-score prior and the eight context numbers (experiment 81), or
     # "context_and_types", also the other end's box-score prior and step 5's box counts, role and body, so the swaps'
     # lesson enters before the ridge (experiment 82, the owner, 2026-10-19: "wouldnt it stand to reason to put the
-    # swap adjustments into the priors before RAPMizing?")
-    # shipped: "context_and_types", experiment 82, adopted 2026-10-20
-    second_prior_inputs: str = "context_and_types"
+    # swap adjustments into the priors before RAPMizing?"), or "context_and_types_centred", the same centred on the
+    # season's possession-weighted average, so no player fold's line carries its own level (experiment 93)
+    # shipped: "context_and_types_centred", experiment 93, adopted 2026-10-21 (experiment 82's "context_and_types"
+    # from 2026-10-20)
+    second_prior_inputs: str = "context_and_types_centred"
     # 0: each season's line is fitted on every season the setting allows.  K: on only the K nearest of them, as step 4
     # fits its multipliers (experiment 85: experiment 82 won 1997-2016 and lost 2017-2026 with one line for all eras)
     second_prior_nearest: int = 0
@@ -163,7 +166,8 @@ class PriorSettings:
 
 ROW_LABELS = ("career", "outside", "nearest")
 TEAM_TOTALS = ("held", "free", "spread_held")    # PriorSettings.second_prior_team_totals
-SECOND_PRIOR_INPUTS = ("context", "context_and_types", "own_teammates_opponents")   # PriorSettings.second_prior_inputs
+# PriorSettings.second_prior_inputs
+SECOND_PRIOR_INPUTS = ("context", "context_and_types", "context_and_types_centred", "own_teammates_opponents")
 
 
 @dataclass(frozen=True)
@@ -191,8 +195,9 @@ class ShrinkSettings:
     # and 2017-2026 (notes/DECISIONS.md, "Experiment 78", adopted 2026-10-17; before it experiment 77's,
     # nothreepct_early,nothreepct_within, experiment 76's, tune2_early,tune2_within, and experiment 63's,
     # cols06_early,cols06_within); the method is experiment 33b's, adopted 2026-10-03
-    # since experiment 82, adopted 2026-10-20, its own folds, ctx82_early,ctx82_within, built with the second prior
-    folds_tag: str = "ctx82_early,ctx82_within"
+    # since experiment 82, adopted 2026-10-20, its own folds, ctx82_early,ctx82_within, built with the second prior;
+    # since experiment 93, adopted 2026-10-21, its own, ctx82c_early,ctx82c_within, built with the centred inputs
+    folds_tag: str = "ctx82c_early,ctx82c_within"
     # each season's factors from only the K fold seasons nearest it (prior_shrink.fold_seasons_used): the defensive
     # prior part holds up less in older seasons, 0.79 in 1997-2006 against 0.95 in 2017-2026 (notes/DECISIONS.md,
     # "Era drift" and experiment 55, adopted 2026-10-12: "yes. build."); 0 would use every fold season the rule allows

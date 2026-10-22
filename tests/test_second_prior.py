@@ -293,3 +293,34 @@ def test_centred_inputs_take_away_the_level_each_player_folds_line_carries(lineu
         possessions = sp.team_possessions(rows, side).groupby("player_id").poss.sum()
         weight = possessions.reindex(inputs[side].index).fillna(0.0)
         assert np.allclose(np.average(inputs[side].to_numpy(), axis=0, weights=weight), 0.0, atol=1e-9)
+
+
+def test_experiment_82s_inputs_centred_give_the_average_player_0_on_every_folds_line(lineup_league):
+    # the ID-group bug (notes/DECISIONS.md, "Experiment 82's defensive prior read through"): on 82's raw inputs, fold
+    # 1's line reads the average player differently from fold 0's; on the same inputs centred, both read him 0, and
+    # every player moves by exactly the level his own fold's line carried
+    stints, truth, _ = lineup_league(3, games=40)
+    rows = sw.season_rows(stints)
+    box = {side: truth.set_index("player_id")[column].to_dict() for side, column in (("O", "o"), ("D", "d"))}
+    answers = {side: _answers(box[side]) for side in box}
+    rng = np.random.default_rng(3)
+    types = pd.DataFrame(rng.normal(0.5, 1.0, (len(truth), len(sp.TYPES))), columns=sp.TYPES,
+                         index=pd.Index(truth.player_id.to_numpy(), name="player_id"))
+    assert sp.INPUT_SETS["context_and_types_centred"] == sp.INPUT_SETS["context_and_types"]
+    weights = np.tile(np.linspace(1.0, -0.5, len(sp.INPUT_SETS["context_and_types"])), (6, 1))
+    weights[1] += 0.5                                       # fold 1's line differs from the others' on every weight
+    lines = {"O": weights, "D": weights}
+    raw, raw_inputs = sp.season_second_priors(rows, answers, box, lines, 5, "free", types, "context_and_types")
+    fixed, fixed_inputs = sp.season_second_priors(rows, answers, box, lines, 5, "free", types,
+                                                  "context_and_types_centred")
+    for side in ("O", "D"):
+        possessions = sp.team_possessions(rows, side).groupby("player_id").poss.sum()
+        weight = possessions.reindex(raw_inputs[side].index).fillna(0.0)
+        average_raw = np.average(raw_inputs[side].to_numpy(), axis=0, weights=weight)
+        average_fixed = np.average(fixed_inputs[side].to_numpy(), axis=0, weights=weight)
+        assert not np.isclose(average_raw @ weights[0], average_raw @ weights[1])
+        assert np.allclose(average_fixed @ weights[:2].T, 0.0, atol=1e-9)
+        ids = raw_inputs[side].index.to_numpy(dtype=np.int64)
+        level = (weights[ids % 5] @ average_raw)
+        gap = pd.Series(raw[side]).reindex(ids).to_numpy() - pd.Series(fixed[side]).reindex(ids).to_numpy()
+        assert np.allclose(gap, level)

@@ -128,7 +128,8 @@ season on both sides (notes/DECISIONS.md, "Boruta on the second stage").  Its in
 season's possession-weighted average (`centred`): the line is fitted on swaps, which see only differences between
 players, so it has no intercept, and each player fold's line then carried its own level, w_f x the average inputs;
 in experiment 82 a player's defensive prior moved by up to 0.8 per 100 with the fold his id falls in.  Centred, every
-fold's line reads 0 at the average player.
+fold's line reads 0 at the average player.  "context_and_types_centred" is experiment 82's inputs, centred so
+(experiment 93); its line is 82's own (the grams of ctx82), since centring leaves the swaps' differences as they were.
 """
 from __future__ import annotations
 
@@ -160,8 +161,10 @@ SAME_TEAMMATES = "teammates_same_side_on"     # the three-input prior's teammate
 OTHER_OPPONENTS = "opponents_other_side_on"   # its opponents, the other side, summed
 # the inputs each version of the line reads (settings.PriorSettings.second_prior_inputs)
 INPUT_SETS = {"context": INPUTS, "context_and_types": [*INPUTS, OTHER_BOX, *TYPES],
+              "context_and_types_centred": [*INPUTS, OTHER_BOX, *TYPES],
               "own_teammates_opponents": [BOX, SAME_TEAMMATES, OTHER_OPPONENTS]}
-CENTRED_SETS = {"own_teammates_opponents"}    # applied on inputs centred on the season's average (`centred`)
+# applied on inputs centred on the season's average (`centred`)
+CENTRED_SETS = {"own_teammates_opponents", "context_and_types_centred"}
 SIDE_KEYS = {"offense": "O", "defense": "D"}      # swap_adjust's side names -> the priors' side keys
 
 
