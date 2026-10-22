@@ -22,13 +22,11 @@ every number quoted here; read its measurement traps before trusting a number.  
 
 - **The bug-fix pass of 2026-10-22** (DECISIONS.md, "The bug-fix pass"): the owner asked for a hunt for bugs behind the
   artifacts; the findings, the code-only fixes, experiments 94-99, the width test and the season widths are there.
-- **The site shows experiment 94 (parser94), PUBLISHED 2026-10-22** (63b2acc): the parser's four fixes.
-- **The incumbent is experiment 99 (inputs99), adopted 2026-10-22, NOT published.**  On top of 94: the heave fix (95,
+- **The incumbent is experiment 99 (inputs99), PUBLISHED 2026-10-22** (the owner: "Publish").  On top of experiment
+  94's parser fixes, published the same morning: the heave fix (95,
   threes of a period's last two seconds counted as they happened); the defense factor by era (98, 0.89 before 2017 and
-  0.84 from 2017 in place of 0.866); each season's own body listing and the pad k around the bins (99).  The product is
-  built and the site files are written in `docs/`, not committed: to publish, on the owner's word, commit `docs/` and
-  fast-forward `main`.  The 2001 Lakers move most, back toward their usual split (DECISIONS.md, "Experiment 99
-  ADOPTED").
+  0.84 from 2017 in place of 0.866); each season's own body listing and the pad k around the bins (99).  The 2001
+  Lakers moved most, back toward their usual split (DECISIONS.md, "Experiment 99 ADOPTED").
 - **The widths** (DECISIONS.md, "The widths"): the within-season WOWY test wants every rating wider, the
   year-over-year test narrower; a candidate that comes out wider wins one and loses the other for its width alone.
   Proposed, not built: every chain also reads the candidate at the incumbent's width.
@@ -49,7 +47,6 @@ every number quoted here; read its measurement traps before trusting a number.  
 
 ## Next: the owner's to pick
 
-- Publish experiments 95, 98 and 99: the site files are written; a commit and a push.
 - Width-matched readings in the chain (proposed, DECISIONS.md, "The widths"): every candidate also read rescaled to
   the incumbent's width, so a win is told apart from a width.
 - The incumbent without the other side's own box-score prior in the line, about 50 minutes: the first suspect for the

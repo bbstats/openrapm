@@ -8929,5 +8929,9 @@ Wallace 17th to 16th, Ty Jerome 19th to 18th.  Adopted, as the registration says
   0.95 / 2.17 and George -3.57 / -3.50 / -3.38 / -4.94 / -3.56.  The published build is the odd one out and this one
   puts them back; Kobe has slid 5.35 to 4.21 over those builds and Shaq risen 5.08 to 6.14.
 - **Checks.**  The consensus tests pass (`tests/test_vs_consensus.py`: 10 passed and the known backup-bigs failure);
-  `openrapm site --bias --openrapm-decomposition --similarity` passes every identity.  The site files are written and
-  not committed: published on the owner's word.
+  `openrapm site --bias --openrapm-decomposition --similarity` passes every identity.
+
+## Experiments 95, 98 and 99 PUBLISHED (2026-10-22, the owner: "Publish")
+
+The site rebuilt from the product table above, with experiment 94's four parser fixes already live: the heave fix,
+the defense factor by era and each season's own body listing with the pad k around the bins.
