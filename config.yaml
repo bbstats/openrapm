@@ -16,6 +16,8 @@ windows:              # the decomposition page's ten three-season windows (openr
   - [2021, 2023]
   - [2024, 2026]
 neutral_site_seasons_po: [2020]   # playoffs played at a neutral site (the 2020 bubble): home court is 0 there
+neutral_site_from: [[2020, "2020-07-01"]]   # [season, date]: every game of the season from that date at a neutral site,
+                                            # the bubble's 88 regular-season games, which the game log lists with a home team
 
 # The raw per-game box counts every design carries, in this order (the stored design pieces record it).
 box_counts: [fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss, orb, drb, ast, tov, stl, blk, pf]
@@ -28,6 +30,10 @@ starter_poss_threshold: 1500  # and this many or more is "high_poss"; neither mo
 pad_target: poss_conditional  # what the season panel's box rates are padded toward (box_rates.py): the rate of players
                               # with about as many possessions; the league rate did no better (FINDINGS 21.14,
                               # git show archive/research-2026-09:FINDINGS.md)
+pad_k_around: league          # where the pad k measures the spread between players: around the league rate, as shipped,
+                              # or around the target the rates are padded toward ("target"; experiment 96)
+body_inputs: career_median    # height and weight: each player's median listing over his career, as shipped, or each
+                              # season's own listing on the barefoot ruler ("season_listing"; experiment 96)
 
 # Garbage time (data/stint_parser.py): a stint in it is flagged, and the design carries the flag as a context column.
 garbage_time:

@@ -135,6 +135,9 @@ def main() -> None:
     cfg = load_config()
     tables = read_tables(args.rankings, args.columns, cfg)
     ref = next(iter(tables)) if args.ref is None else args.ref
+    if ref not in tables:
+        # a misspelled reference used to print the pooled scores and no paired comparison, without a word
+        raise SystemExit(f"--ref {ref}: not one of the --rankings names {list(tables)}")
     fills = read_fills(args.fill, tables)
     if args.offset != 1:
         print(f"offset {args.offset}: each season is predicted by the rankings {args.offset} seasons before and "

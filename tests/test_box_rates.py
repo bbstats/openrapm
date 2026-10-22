@@ -11,6 +11,7 @@ from openrapm.box_rates import (
     game_totals,
     lineups,
     mom_k,
+    pad_k,
     pad_rates,
     shrink,
     split_half_k,
@@ -183,3 +184,17 @@ def test_a_player_without_a_height_reads_the_medians_and_breaks_no_target(design
                         index=ids).iloc[1:]                       # the first player is not in the table
     rates = box_rates(design, pad_target="body_and_possessions", body=body)
     assert np.isfinite(rates.offence.rates).all() and np.isfinite(rates.defence.rates).all()
+
+
+def test_the_pad_k_can_be_measured_around_the_bins_the_rates_are_padded_toward(design):
+    """config pad_k_around "target": the split-half spread between players is measured around each player-season's
+    possession bin, the target his rates are padded toward, not around the league; "league" is the shipped step."""
+    shipped = box_rates(design)
+    np.testing.assert_array_equal(box_rates(design, pad_k_around="league").pad_k, shipped.pad_k)
+    spec = design.spec
+    season_of, player_of = spec.season_of_player_season, spec.player_of_player_season
+    target = shipped.bin_targets[season_of, bin_of(shipped.bin_edges, shipped.offence.possessions[player_of])]
+    expected = pad_k(game_totals(design), season_of, spec.n_seasons, target)
+    np.testing.assert_allclose(box_rates(design, pad_k_around="target").pad_k, expected)
+    with pytest.raises(ValueError):
+        box_rates(design, pad_k_around="median")

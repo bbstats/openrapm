@@ -104,9 +104,14 @@ def team_arrays(directory: Path, stem: str) -> dict:
 
 
 def regulars_absent(fold, teams: dict) -> np.ndarray:
-    """True for each team-game in which a regular of either team sat out (the module docstring)."""
+    """True for each team-game in which a regular of either team sat out (the module docstring).
+
+    "Before" and "after" are in date order: the fold's `game_idx`, which the design numbers by date.  Game ids are not
+    in date order (NBA Cup and rescheduled games: 2024 holds a game played in December with the season's last id),
+    and in id order a traded regular's last game for his old team could sit after every game it played without him
+    (until 2026-10-22; notes/DECISIONS.md, the bug-fix pass)."""
     absent = np.zeros(len(fold.y), dtype=bool)
-    order = np.argsort(teams["game_id"].astype(str), kind="stable")
+    order = np.argsort(np.asarray(fold.game_idx), kind="stable")
     rank = np.empty(len(order), dtype=np.int64)
     rank[order] = np.arange(len(order))
     for side, team_column, poss_column in (("O", "team_off", "poss_off"), ("D", "team_def", "poss_def")):
@@ -240,9 +245,10 @@ class PieceStages:
     """Check 145's families on every fold season of a system: each fold's normal equations, then for a scored season
     each family's multipliers from its 8 nearest fold seasons (the test rule) and the ratings they give."""
 
-    def __init__(self, pieces_module, families: list, folds: list, where: dict):
+    def __init__(self, pieces_module, families: list, folds: list, where: dict,
+                 defence_factor: float = DEFENCE_FACTOR):
         from openrapm.prior_shrink import fold_seasons_used
-        self.module, self.where = pieces_module, where
+        self.module, self.where, self.defence_factor = pieces_module, where, float(defence_factor)
         self.families = list(dict.fromkeys([SHIPPED_FAMILY, *families]))
         unknown = set(families) - set(pieces_module.FAMILIES)
         if unknown:
@@ -266,10 +272,20 @@ class PieceStages:
         return pd.read_parquet(path)
 
     def stages(self, fold) -> dict:
-        """{"pieces_<family>": {"O", "D"}} for one fold, from its season's multipliers."""
+        """{"pieces_<family>": {"O", "D"}} for one fold, from its season's multipliers, the defensive ones dialled."""
         multipliers, pieces = self.multipliers[fold.season], self.read(fold)
-        return {f"pieces_{family}": self.module.family_ratings(fold, pieces, family, multipliers[family])
+        return {f"pieces_{family}": self.module.family_ratings(fold, pieces, family,
+                                                               self.dialled(family, multipliers[family]))
                 for family in self.families}
+
+    def dialled(self, family: str, values) -> np.ndarray:
+        """A family's multipliers, offence's pieces then defence's, with every defensive one times the defence factor,
+        as the shipped step 4 takes both of its defensive multipliers times it (`step4` in `system_errors`).  Without
+        it the shipped family could never equal `step4`, and the check in `stage_ratings` stopped every run on its
+        first fold (until 2026-10-22)."""
+        values = np.array(values, dtype=float)
+        values[len(self.module.FAMILIES[family]["columns"]):] *= self.defence_factor
+        return values
 
     def table(self, name: str) -> pd.DataFrame:
         """Every fold season's multipliers, one row per family, side and piece."""
@@ -300,13 +316,14 @@ def system_folds(within, name: str) -> tuple[list, dict]:
 
 
 def piece_stages(name: str, folds: list, where: dict, unit: str, families: list | None,
-                 multiplier_tables: list | None) -> PieceStages | None:
-    """The system's step-4-in-pieces stages, when families are asked and every fold carries pieces; else None."""
+                 multiplier_tables: list | None, defence_factor: float = DEFENCE_FACTOR) -> PieceStages | None:
+    """The system's step-4-in-pieces stages, when families are asked and every fold carries pieces; else None.  The
+    defensive multipliers are dialled by `defence_factor`, the system's step 4's."""
     if not families or not all((where[fold.stem] / f"pieces_{fold.stem}.parquet").exists() for fold in folds):
         return None
     if unit != "stint":
         raise SystemExit("--pieces scores stint by stint only")
-    pieces = PieceStages(_pieces(), families, folds, where)
+    pieces = PieceStages(_pieces(), families, folds, where, defence_factor)
     if multiplier_tables is not None:
         multiplier_tables.append(pieces.table(name))
     return pieces
@@ -323,7 +340,7 @@ def system_errors(audit, within, name: str, seasons: tuple, unit: str = "stint",
     multipliers = multipliers_by_season(sorted({fold.season for fold in scored}), folds, "test", NEAREST,
                                         free_games=FREE_GAMES)
     multipliers = multipliers.set_index("season")
-    pieces = piece_stages(name, folds, where, unit, families, multiplier_tables)
+    pieces = piece_stages(name, folds, where, unit, families, multiplier_tables, defence_factor)
     sums: dict = {}
     cache = None
     if unit == "stint":
@@ -349,10 +366,36 @@ def system_errors(audit, within, name: str, seasons: tuple, unit: str = "stint",
                          for (season, stage, slice_), (top, bottom) in sums.items()])
 
 
+def newey_west_se(diff: pd.Series, lags: int | None = None) -> float:
+    """The standard error of the mean of `diff`, a reading per season in season order, allowing seasons up to `lags`
+    apart to move together (Newey-West, Bartlett weights):
+
+        variance = n / (n - 1) x (g_0 + 2 x sum over l = 1..lags of (1 - l / (lags + 1)) g_l) / n
+        g_l      = sum over seasons of (d_s - mean)(d_{s+l} - mean) / n
+
+    Each season's multipliers come from its 8 nearest fold seasons, so neighbours share most of theirs and their
+    readings move together; dividing by the square root of 30 as if they did not overstates the evidence (experiment
+    93 against 82: -4.0 plain, about -3.1 here; notes/DECISIONS.md, the bug-fix pass of 2026-10-22).  `lags` defaults
+    to the usual rule, 4 x (n / 100)^(2/9) rounded down: 3 for 30 seasons.  With lags 0 it is the plain standard
+    error, sd / sqrt(n), exactly."""
+    values = diff.sort_index().to_numpy(float)
+    n = len(values)
+    if n < 2:
+        return float("nan")
+    lags = int(4 * (n / 100) ** (2 / 9)) if lags is None else int(lags)
+    residual = values - values.mean()
+
+    def autocovariance(lag):
+        return float(np.sum(residual[lag:] * residual[:n - lag]) / n)
+    variance = (autocovariance(0) + 2 * sum((1 - lag / (lags + 1)) * autocovariance(lag)
+                                            for lag in range(1, min(lags, n - 1) + 1))) * n / (n - 1)
+    return float(np.sqrt(variance / n)) if variance > 0 else float("nan")
+
+
 def paired(seasons_table: pd.DataFrame, system: str, reference: str) -> list:
     """Each of the system's stages and slices against the reference season by season.  A `pieces_<family>` stage,
     which only a system built with pieces has, is read against the reference's `step4`: the shipped step it would
-    replace."""
+    replace.  Beside the plain standard error and z, `se_newey_west` and `z_newey_west` (`newey_west_se`)."""
     rows = []
     table = seasons_table[seasons_table.stage != "share"]
     for (stage, slice_), group in table[table.system == system].groupby(["stage", "slice"]):
@@ -363,10 +406,12 @@ def paired(seasons_table: pd.DataFrame, system: str, reference: str) -> list:
         if len(diff) < 2:
             continue
         se = float(diff.std(ddof=1) / np.sqrt(len(diff)))
+        se_nw = newey_west_se(diff)
         rows.append(dict(system=system, reference=reference, stage=stage, against=against, slice=slice_,
                          error=float(mine.reindex(diff.index).mean()), mean_change=float(diff.mean()), se=se,
                          z=float(diff.mean() / se) if se > 0 else np.nan, seasons_better=int((diff < 0).sum()),
-                         seasons=len(diff)))
+                         seasons=len(diff), se_newey_west=se_nw,
+                         z_newey_west=float(diff.mean() / se_nw) if se_nw > 0 else np.nan))
     return rows
 
 

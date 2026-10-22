@@ -60,8 +60,34 @@ def test_a_regular_is_absent_only_between_two_games_he_played_for_that_team(wowy
     rows = pd.DataFrame({"player_id": [1, 2], "team_id": [7, 7], "poss_off": [1000.0, 200.0],
                          "poss_def": [1000.0, 200.0]})
     fold = SimpleNamespace(y=np.zeros(n), rows={"O": rows, "D": rows.iloc[:0]},
-                           Z={"O": sp.csr_matrix(offence), "D": sp.csr_matrix((n, 0))})
+                           Z={"O": sp.csr_matrix(offence), "D": sp.csr_matrix((n, 0))}, game_idx=np.arange(n))
     teams = {"team_off": np.full(n, 7), "team_def": np.full(n, 8),
              "game_id": np.array([f"002{i:07d}" for i in range(n)])}
     absent = wowy.regulars_absent(fold, teams)
     assert np.flatnonzero(absent).tolist() == [2, 4]
+
+
+def test_a_traded_regular_is_not_absent_after_the_trade_when_a_game_id_is_out_of_date_order(wowy):
+    """Team 7's regular plays its first three games by date and is then traded.  The second of those games carries the
+    season's last game id, as an NBA Cup game of 2023-24 does (0022301229, played 2023-12-07).  In id order his last
+    game for team 7 would come after its three games without him and flag all three; in date order none is."""
+    n = 6
+    offence = np.zeros((n, 1))
+    offence[[0, 1, 2], 0] = 1.0
+    rows = pd.DataFrame({"player_id": [1], "team_id": [7], "poss_off": [1000.0], "poss_def": [1000.0]})
+    fold = SimpleNamespace(y=np.zeros(n), rows={"O": rows, "D": rows.iloc[:0]},
+                           Z={"O": sp.csr_matrix(offence), "D": sp.csr_matrix((n, 0))}, game_idx=np.arange(n))
+    ids = ["0020000001", "0020000999", "0020000003", "0020000004", "0020000005", "0020000006"]
+    teams = {"team_off": np.full(n, 7), "team_def": np.full(n, 8), "game_id": np.array(ids)}
+    assert not wowy.regulars_absent(fold, teams).any()
+
+
+def test_the_newey_west_standard_error_is_the_plain_one_at_lag_0_and_larger_when_neighbours_move_together(wowy):
+    rng = np.random.default_rng(1)
+    independent = pd.Series(rng.normal(size=30), index=range(1997, 2027))
+    plain = independent.std(ddof=1) / np.sqrt(30)
+    assert wowy.newey_west_se(independent, lags=0) == pytest.approx(plain)
+    # a slow drift shared by neighbouring seasons: the plain standard error counts it 30 times
+    drifting = pd.Series(np.repeat(rng.normal(size=10), 3) + 0.1 * rng.normal(size=30), index=range(1997, 2027))
+    assert wowy.newey_west_se(drifting) > drifting.std(ddof=1) / np.sqrt(30)
+    assert int(4 * (30 / 100) ** (2 / 9)) == 3                          # the default lag for thirty seasons

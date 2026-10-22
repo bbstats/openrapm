@@ -149,7 +149,8 @@ __all__ = ["CONTEXT", "BOX", "INPUTS", "OTHER_BOX", "TYPES", "INPUT_SETS", "type
            "SIDE_KEYS", "BoosterAnswers", "booster_answers", "own_priors", "KINDS", "pad_toward_level",
            "context_numbers", "line_inputs", "side_inputs", "swap_targets", "held_back_grams", "season_coefficients",
            "second_priors", "TEAM_TOTALS", "team_possessions", "hold_team_totals", "hold_spread",
-           "season_second_priors", "SAME_TEAMMATES", "OTHER_OPPONENTS", "CENTRED_SETS", "three_inputs", "centred"]
+           "season_second_priors", "SAME_TEAMMATES", "OTHER_OPPONENTS", "CENTRED_SETS", "three_inputs", "centred",
+           "reads_types"]
 
 CONTEXT = ["teammates_offence_on", "teammates_defence_on", "opponents_offence_on", "opponents_defence_on",
            "teammates_offence_bench", "teammates_defence_bench", "opponents_offence_bench", "opponents_defence_bench"]
@@ -166,6 +167,15 @@ INPUT_SETS = {"context": INPUTS, "context_and_types": [*INPUTS, OTHER_BOX, *TYPE
 # applied on inputs centred on the season's average (`centred`)
 CENTRED_SETS = {"own_teammates_opponents", "context_and_types_centred"}
 SIDE_KEYS = {"offense": "O", "defense": "D"}      # swap_adjust's side names -> the priors' side keys
+
+
+def reads_types(input_set: str | None) -> bool:
+    """Whether the line on `input_set` reads step 5's numbers (`TYPES`), so its inputs need their standardisation
+    (`type_scale`).  None, the name a file written before the setting existed carries, reads no fixed set.
+
+    Example: "context_and_types" and "context_and_types_centred" do, "context" and "own_teammates_opponents" do not.
+    """
+    return input_set is not None and set(TYPES) <= set(INPUT_SETS[input_set])
 
 
 # ------------------------------------------------------------------------------- every booster's answer
@@ -425,7 +435,12 @@ def centred(frame: pd.DataFrame, possessions: pd.Series) -> pd.DataFrame:
 def side_inputs(box: dict, context: pd.DataFrame, types: pd.DataFrame | None = None,
                 input_set: str | None = None) -> dict:
     """{"O", "D"}: `line_inputs` for each side, `box` {"O", "D"}: player_id -> box-score prior (raw sign); with
-    `input_set` "own_teammates_opponents", `three_inputs` instead."""
+    `input_set` "own_teammates_opponents", `three_inputs` instead.  A set that reads step 5's numbers
+    (`reads_types`) with no `types` given is refused: without them `line_inputs` would hand back the eight context
+    numbers alone, and a line fitted on them would pass for the set it names."""
+    if types is None and reads_types(input_set):
+        raise ValueError(f"the line's inputs {input_set!r} read step 5's numbers and none were given: their "
+                         "standardisation (`type_scale`) is missing")
     if input_set == "own_teammates_opponents":
         return {side: three_inputs(pd.Series(box[side], dtype=float), context, side) for side in ("O", "D")}
     other = {"O": "D", "D": "O"}

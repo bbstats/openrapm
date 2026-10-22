@@ -35,7 +35,16 @@ import pandas as pd
 from ..design import AWAY_SLOTS, HOME_SLOTS, SEASON_PHASES
 from . import box_scores, shot_curves
 from .config import resolve
-from .ingest import OfflineFetch, fetch_boxscore, fetch_pbp, fetch_period_box, game_table, load_gamelog, pbpstats_games
+from .ingest import (
+    OfflineFetch,
+    fetch_boxscore,
+    fetch_pbp,
+    fetch_period_box,
+    game_table,
+    load_gamelog,
+    pbpstats_games,
+    raw_dir,
+)
 from .stint_parser import SHOT_TABLE, GameParser
 
 # Bumped whenever the stint schema changes.  It is written into the per-season diag frame and checked on
@@ -47,7 +56,11 @@ from .stint_parser import SHOT_TABLE, GameParser
 #   4  per-shooter attempt counters by lineup slot (design.SLOT_COUNTERS), the first attempt's realised
 #      points and rebound chance (pts1, chance1), the cross-fitting half per game, and the per-game
 #      shooter table -- the inputs of the shooter-level expected points (data/shots.py)
-STINT_SCHEMA = 4
+#   5  the bug-fix pass of 2026-10-22 (notes/DECISIONS.md): a possession that ends inside its free-throw trip
+#      is credited to the players on the court at the foul; a defensive rebound with nothing after it is no
+#      possession; late threes counted apart (fg3a_late, fg3m_late); expected free throws priced on the regular
+#      season and the playoffs together; the 2020 bubble's regular-season games neutral
+STINT_SCHEMA = 5
 
 
 class StaleStintCache(RuntimeError):
@@ -118,14 +131,17 @@ def build_season(season: int, phase: str, cfg, force=False, verbose=True):
     gamelog = load_gamelog(season, phase, cfg)
     games = game_table(gamelog)
     gt_rule = cfg.get("garbage_time", {})
-    # the shooters' season free-throw totals, for the leave-one-game-out expected makes
-    season_box = box_scores.box_from_gamelog(gamelog)
+    # the shooters' season free-throw totals over the regular season and the playoffs together, for the
+    # leave-one-game-out expected makes: a playoff run alone is too few attempts to price a shooter (its pad came
+    # out at 10-31 attempts; Billups 2008 read 0.819 from his playoff games against 0.910 over the season)
+    season_box = box_scores.box_from_gamelog(season_gamelogs(season, phase, gamelog, cfg))
     ft_rates = (box_scores.ft_totals(season_box), *box_scores.ft_padding(season_box))
     # the league's make probability by distance this season (the regular season's curve, for the playoffs
     # too).  `force` reaches the curve as well: a curve cached from an incomplete scrape used to survive
     # every later `openrapm data stints --force`, because only the stints were rebuilt.
     curve = shot_curves.curve_for(season, cfg, force=force, verbose=verbose)
     neutral_seasons = set(cfg.get("neutral_site_seasons_po", []))
+    neutral_from = neutral_site_dates(cfg)
     parts, diags, name_parts, shot_parts = [], [], [], []
     t0 = time.time()
     for games_done, game in enumerate(games.itertuples(index=False), start=1):
@@ -140,7 +156,7 @@ def build_season(season: int, phase: str, cfg, force=False, verbose=True):
         name_parts.append(names)
         shot_parts.append(shots)
         if len(game_stints):
-            parts.append(_label_stints(game_stints, game, season, phase, neutral_seasons))
+            parts.append(_label_stints(game_stints, game, season, phase, neutral_seasons, neutral_from))
         diag["home_team_id"] = game.home_team_id
         diag["away_team_id"] = game.away_team_id
         diags.append(diag)
@@ -177,11 +193,32 @@ def _load_cached(path, diag_path, season: int, phase: str):
         f"Rebuild with: openrapm data stints {season} {season} {phase} --force")
 
 
-def _label_stints(game_stints: pd.DataFrame, game, season: int, phase: str, neutral_seasons: set) -> pd.DataFrame:
+def season_gamelogs(season: int, phase: str, gamelog: pd.DataFrame, cfg) -> pd.DataFrame:
+    """`gamelog`, the phase's own game log, with the season's other phase's beside it when that one is on disk.  A
+    season in progress has no playoff log yet, and nothing is fetched for it."""
+    parts = [gamelog]
+    for other in SEASON_PHASES:
+        if other != phase and (raw_dir(cfg) / "gamelog" / f"{season}_{other}.parquet").exists():
+            parts.append(load_gamelog(season, other, cfg))
+    return pd.concat(parts, ignore_index=True)
+
+
+def neutral_site_dates(cfg) -> dict:
+    """{season: the first date from which every game of the season was at a neutral site}, from config
+    `neutral_site_from`, a list of [season, date]: the 2020 bubble's seeding games, which the game log lists with a
+    home team."""
+    return {int(season): pd.Timestamp(date) for season, date in (cfg.get("neutral_site_from") or [])}
+
+
+def _label_stints(game_stints: pd.DataFrame, game, season: int, phase: str, neutral_seasons: set,
+                  neutral_from: dict | None = None) -> pd.DataFrame:
     """The game's columns on its stints.  A playoff series is "season-lower team id-higher team id"; a game is
-    neutral in a neutral-site postseason (the 2020 bubble) or when the game log lists no home team."""
+    neutral in a neutral-site postseason (the 2020 bubble), on or after a season's neutral-site date
+    (`neutral_site_dates`: the bubble's 88 regular-season games), or when the game log lists no home team."""
     low, high = min(game.home_team_id, game.away_team_id), max(game.home_team_id, game.away_team_id)
-    neutral = (phase == "PO" and season in neutral_seasons) or bool(getattr(game, "neutral", False))
+    start = (neutral_from or {}).get(int(season))
+    neutral = ((phase == "PO" and season in neutral_seasons) or bool(getattr(game, "neutral", False))
+               or (start is not None and pd.Timestamp(game.game_date) >= start))
     game_stints["game_id"] = game.game_id
     game_stints["season"] = season
     game_stints["phase"] = phase

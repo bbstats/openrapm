@@ -119,7 +119,8 @@ def test_the_defensive_targets_keep_their_names_and_settings():
     realised three-point deviation, points_with_expected_opponent_threes_all (x3def) none, and
     points_with_expected_opponent_threes_half (experiment 89) half; all use def_three_design's other defaults."""
     kept = {"points_with_expected_opponent_threes_all": {}, "points_with_expected_opponent_threes": {"w3": 0.25},
-            "points_with_expected_opponent_threes_half": {"w3": 0.5}}
+            "points_with_expected_opponent_threes_half": {"w3": 0.5},
+            "points_with_expected_opponent_threes_late_as_scored": {"w3": 0.25, "late_as_scored": True}}
     assert set(DEFENSE_TARGETS) == set(kept)
     for name, target in DEFENSE_TARGETS.items():
         assert target.__name__ == name
@@ -128,4 +129,37 @@ def test_the_defensive_targets_keep_their_names_and_settings():
         assert bound["kw"] == kept[name]
     defaults = {k: p.default for k, p in inspect.signature(def_three_design).parameters.items()
                 if p.default is not inspect.Parameter.empty}
-    assert defaults == {"prev": 0, "k3": 450.0, "calibrate": True, "keep": None, "w3": 0.0, "wft": 0.0}
+    assert defaults == {"prev": 0, "k3": 450.0, "calibrate": True, "keep": None, "w3": 0.0, "wft": 0.0,
+                        "late_as_scored": False}
+
+
+def test_threes_of_a_periods_last_two_seconds_count_as_they_happened(monkeypatch):
+    """Two possessions, each one three by the shooter in slot 1, priced at 40%: a made three with time on the clock and
+    a missed heave.  The shipped target charges the made three 3 - 3 x 0.75 x (1 - 0.4) = 1.65 and the missed heave
+    0 - 3 x 0.75 x (0 - 0.4) = 0.9, a heave's miss read as the shooter's bad luck; with late threes as scored the heave
+    counts as it happened, 0, and the made three is unchanged."""
+    from types import SimpleNamespace
+
+    from openrapm.data import shots
+
+    class Rates:
+        league, k = {"fg3": 0.36}, {"fg3": 450.0}
+
+        def for_rows(self, kind, half):
+            return np.full(len(half), "ALL", dtype=object)
+
+        def take(self, name, half, players, default):
+            return np.full(len(players), 0.40)
+    monkeypatch.setattr(shots, "shooter_rates", lambda *args, **kwargs: Rates())
+    zeros = np.zeros(2)
+    counters = pd.DataFrame({"pts": [3.0, 0.0], "fg3m": [1.0, 0.0], "fg3m_late": zeros, "ftm": zeros,
+                             "ftm_tech": zeros, "xftm": zeros, "xftm_tech": zeros, "poss": [1.0, 1.0],
+                             "half": ["A", "B"], **{f"pid_s{k}": [k, k] for k in range(1, 6)},
+                             **{f"fg3a_s{k}": zeros for k in ("2", "3", "4", "5", "x")}, "fg3a_s1": [1.0, 1.0],
+                             **{f"fg3a_late_s{k}": zeros for k in ("2", "3", "4", "5", "x")},
+                             "fg3a_late_s1": [0.0, 1.0]})
+    design = SimpleNamespace(counters=counters, rows=pd.DataFrame({"season": [2024, 2024]}), y=zeros, w=zeros,
+                             with_target=lambda y: y)
+    shipped, _ = shots.def_three_design([2024], {}, design, calibrate=False, w3=0.25)
+    late, _ = shots.def_three_design([2024], {}, design, calibrate=False, w3=0.25, late_as_scored=True)
+    assert np.allclose(shipped, [165.0, 90.0]) and np.allclose(late, [165.0, 0.0])

@@ -10,7 +10,8 @@ For every fold of every season in the folds named:
        (prior_raw_off, prior_raw_def) to 1e-9, or the run stops: the folds were rated with other boosters.
     2. His eight context numbers, from the fit games' stint rows, every prior in them from the boosters that never saw
        him (second_prior.context_numbers).
-    With --inputs context_and_types (experiment 82) every player also carries his other end's box-score prior and
+    With --inputs context_and_types (experiment 82), or context_and_types_centred (experiment 93, the default: the
+    same inputs, centred only when the line is applied), every player also carries his other end's box-score prior and
     step 5's 19 numbers from the fold's players file, the fit games', standardised with the trainable panel's means
     and standard deviations, which run.json keeps for the build.
     3. The swaps of the held-back games, scored against the fold's step-4 ratings at the test setting's multipliers,
@@ -105,7 +106,10 @@ def run_second_prior(cfg: dict, models: str, folds_tag: str, tag: str, seasons=N
     multipliers = step4_multipliers(fold_seasons, folds, shrink)
     chosen = [season for season in fold_seasons if seasons is None or season in set(seasons)]
     scale = None
-    if inputs == "context_and_types":
+    # every set that reads step 5's numbers needs their standardisation, the centred one too: without it the line
+    # would be fitted on the eight context numbers alone under the set's name (notes/DECISIONS.md, the bug-fix
+    # pass of 2026-10-22)
+    if second_prior.reads_types(inputs):
         panel = trainable_panel(cfg)
         scale = second_prior.type_scale(panel[panel.side == "O"])
     print(f"second prior: {len(folds)} folds of {folds_tag}, boosters {models}; seasons {chosen[0]}-{chosen[-1]}; "

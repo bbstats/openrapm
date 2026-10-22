@@ -172,7 +172,10 @@ nothing fitted for a season has seen the two seasons that score it.
 
 **The paired z**: for each of the 56 observations, the candidate's team-game mean squared error minus the
 incumbent's; the mean of those differences divided by its standard error (a paired t-statistic). Below
-zero is better.
+zero is better. Beside it the report prints `z_clustered`, the same with the two observations that share a
+rated season's table counted together, since they move together; check 151 prints `z_newey_west`, each
+season allowed to move with its neighbours, whose multipliers share fold seasons. Which of them rules is the
+owner's call (notes/DECISIONS.md, the bug-fix pass of 2026-10-22).
 
 A change is adopted when all four hold; ties go to the simpler version.
 

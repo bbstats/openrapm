@@ -196,8 +196,9 @@ class ShrinkSettings:
     # nothreepct_early,nothreepct_within, experiment 76's, tune2_early,tune2_within, and experiment 63's,
     # cols06_early,cols06_within); the method is experiment 33b's, adopted 2026-10-03
     # since experiment 82, adopted 2026-10-20, its own folds, ctx82_early,ctx82_within, built with the second prior;
-    # since experiment 93, adopted 2026-10-21, its own, ctx82c_early,ctx82c_within, built with the centred inputs
-    folds_tag: str = "ctx82c_early,ctx82c_within"
+    # since experiment 93, adopted 2026-10-21, its own, ctx82c_early,ctx82c_within, built with the centred inputs;
+    # since experiment 94, adopted 2026-10-22 (the bug-fix pass's parser fixes), its own on the rebuilt stints
+    folds_tag: str = "parser94_early,parser94_within"
     # each season's factors from only the K fold seasons nearest it (prior_shrink.fold_seasons_used): the defensive
     # prior part holds up less in older seasons, 0.79 in 1997-2006 against 0.95 in 2017-2026 (notes/DECISIONS.md,
     # "Era drift" and experiment 55, adopted 2026-10-12: "yes. build."); 0 would use every fold season the rule allows

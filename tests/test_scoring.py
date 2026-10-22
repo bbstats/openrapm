@@ -14,6 +14,7 @@ from openrapm.scoring import (
     Prediction,
     Ratings,
     armse,
+    clustered_se,
     game_bench_share_split,
     keeps_whole_team_games,
     movers_split,
@@ -207,3 +208,25 @@ def test_quality_tiers_follow_the_rank_within_each_season():
     tiers = quality_tiers(table)
     assert tiers.loc[(0, 2026)] == "top 30" and tiers.loc[(399, 2026)] == "301+"
     assert set(tiers) == set(QUALITY_LABELS)
+
+
+def test_the_clustered_standard_error_counts_the_readings_of_one_table_together():
+    """The docstring example: two tables, each read twice with the same result."""
+    diff = pd.Series([-1.0, -1.0, 0.5, 0.5], index=[2001.0, 2001.5, 2002.0, 2002.5])
+    tables = pd.Series(["2000", "2000", "2003", "2003"], index=diff.index)
+    assert clustered_se(diff, tables) == pytest.approx(0.75)
+    assert diff.std(ddof=1) / 2.0 == pytest.approx(0.4330, abs=1e-4)
+    # one reading per table: the plain standard error, exactly
+    alone = pd.Series(["a", "b", "c", "d"], index=diff.index)
+    assert clustered_se(diff, alone) == pytest.approx(diff.std(ddof=1) / 2.0)
+
+
+def test_paired_reports_the_clustered_t_statistic_when_the_rated_season_is_known():
+    rows = _results()
+    rows["train"] = rows.held_out.map({2001: "2000", 2002: "2000", 2003: "2004", 2004: "2004"}).astype(str)
+    t = paired(rows, "ref", "tg").set_index("system")
+    diff = pd.Series([-1.0, -1.0, -1.0, 0.5], index=[2001, 2002, 2003, 2004])
+    expected = clustered_se(diff, pd.Series(["2000", "2000", "2004", "2004"], index=diff.index))
+    assert t.loc["better", "se_clustered"] == pytest.approx(expected)
+    assert t.loc["better", "z_clustered"] == pytest.approx(diff.mean() / expected)
+    assert "z_clustered" in paired(_results(), "ref", "tg").columns    # no rated season named: the column is NaN

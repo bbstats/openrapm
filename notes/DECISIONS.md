@@ -8514,7 +8514,9 @@ the prior part and the season-page score.
 Within-season WOWY test against experiment 82, step 4: -0.175, z -4.0, better in 23 of 30 seasons.  Season-page score,
 the ratings before experiment 82 at 100: **103.7 / 104.3 / 99.9** by era against 82's 103.2 / 103.9 / 97.9; the gain
 +0.53 (z +2.2, 9 of 10 seasons) / +0.40 (z +1.9, 5 of 10) / +1.99 (z +3.7, 9 of 10), 2024-2026 +2.9, +3.2, +4.9.  The
-year-over-year test against 82: -0.172, z -3.9.  The fold means of the prior part now match the ratings before 82,
+year-over-year test against 82, team-game: -0.099, z -2.82, better in 35 of 56 (corrected 2026-10-22: the
+-0.172, z -3.9 first written here was the report's "stint level with each side rescaled" line, a diagnostic;
+`outputs/ctx82c_chain.log`, the both-directions block).  The fold means of the prior part now match the ratings before 82,
 which have no line (2026 defense range 0.49 against 0.37 there and 0.81 in 82): what is left is which players fell in
 which fold.  2026 players with 1,000+ possessions by id fold, total change: fold 2 -0.51, fold 4 +0.20.  Each side's
 standard deviation, players with 1,000+ possessions: offense 1.78 / 1.61 / 1.46, defense 1.69 / 1.60 / 1.56, 2026
@@ -8546,3 +8548,192 @@ in every era; the defense is as wide or wider.**  Verdict the owner's.
   The owner published knowing the defense is wider; every other consensus guard passes.
 - **Open**: the defense is wider than before experiment 82 in every era, more so since 2017; the cross-side input,
   the defensive line reading his offensive box-score prior, is the first suspect.
+
+
+## The bug-fix pass (the owner, 2026-10-22: "it's bug-fix o'clock! look for bugs and potential bugs, focused on ones that could cause artifacts we're seeing or worse performance. but - whatever you find is good!")
+
+A read of the whole pipeline: the play-by-play parser, stints, shots and targets; the season panel, padding and bio;
+the labels, the box-score prior, the second prior, the ridge, step 4, the folds; both tests, the chain, the command
+line and the site.  Plan: `C:\Users\Nathan\.claude\plans\it-s-bug-fix-o-clock-look-squishy-piglet.md`; the owner
+approved it ("go for it"), put the season in progress aside for later, and added the standard errors ("feel free to
+add the standard-error point from the bug hunt into this").
+
+**Fixed without moving a rating** (tests beside each):
+- **The line refit's default inputs.**  `openrapm second-prior` computed the standardization of step 5's 19 numbers
+  only for `--inputs context_and_types`; its default, `context_and_types_centred`, wrote a 9-input line (the box-score
+  prior and the eight context numbers: experiment 81's line) under the set's 29 names, and the build and the folds
+  applied it without a word.  No line on disk was written that way.  Now every set that reads step 5's numbers gets
+  them (`second_prior.reads_types`), `line_setup` refuses normal equations whose size is not the number of inputs, and
+  `side_inputs` refuses a set that needs step 5's numbers without them.  Checked: the default refit of 2026 writes
+  29-by-29 grams with the type scale.
+- **The within-season WOWY test's missed-game slice** ranked a team's held-back games by game id, not by date.  NBA
+  Cup and rescheduled games carry ids far from date order (2024: 204 games 50+ places off; game 0022301229 was played
+  2023-12-07), so a traded regular whose last old-team game had a late id was counted absent from every old-team game
+  after the trade.  Now by `game_idx`, numbered in date order.  Re-run on ctx82c and noise_bags10: every all-stints
+  number equal to the last digit; the missed-game rows moved in 13 seasons; the missed-game share of the held-back
+  possessions 0.523 to 0.518.  Verdicts read the all-stints slice, so no adoption changes.
+- **Guards.**  `63_yoy.py --ref` misspelled now stops instead of printing no paired block; the hustle per-game reader
+  returns the games it summed, so the folds' hustle leak check can fail (nothing leaks today); check 151's `--pieces`
+  stages apply the defense factor, without which its own check stopped every run (a 0.51 miss on the first fold); two
+  stale command-line help texts.
+- **A record slip.**  Experiment 93's year-over-year result was quoted as -0.172, z -3.9: the report's "stint level with
+  each side rescaled" line, a diagnostic.  The team-game line, the test's own score: -0.099, z -2.82, better in 35 of
+  56.  Corrected above and in HANDOFF.md; the verdict stands.
+- **Standard errors** (the owner: "feel free to add the standard-error point from the bug hunt").  Both tests divide by
+  the square root of their readings as if each were independent.  The year-over-year test's 56 readings hold two per
+  rated table, the season before predicting forward and the season after predicting back, and the two move together
+  (their correlation runs from -0.29 to +0.58 over 197 saved runs).  The within-season WOWY test's 30 seasons take
+  their step 4 multipliers from their 8 nearest fold seasons, so neighbors share most of them (lag-one correlation of
+  the per-season differences +0.33 to +0.50).  The reports now print beside the plain z: `z_clustered` in the
+  year-over-year test (`scoring.clustered_se`, the two readings of one table counted together) and `z_newey_west` in
+  check 151 (`newey_west_se`, lag 3 by the usual rule for 30 seasons).  Experiment 93: year-over-year -2.82 plain,
+  -2.48 clustered; WOWY against 82, -4.0 plain, -3.1 Newey-West.  No past adoption flips at -2.  Which one rules is the
+  owner's.
+
+**Found and set aside by the owner, for later: the season in progress cannot be rated.**  `data ingest` caches a
+season's game log forever (no `--force`); the design always builds both phases, and with no playoff games the run
+stops; once playoff games exist, `build.rate_table` reads the panel without the season in progress and takes the
+rated season's rows from that same panel, so every prior is 0, the prior scale solves to 0 and the season publishes as
+plain RAPM, with no warning; the roles cache never adds a new season, and `roles.role_inputs_by_column` then gives
+every player of it a team possession share, a games-started share and an age of 0; the bio ages and
+`params/player_names.csv` are frozen.
+
+**Found, low priority, not changed:** the on-court and off-court columns' noise is per stint, not per possession, about
+4.5 times too small (`on_court.py`), so they are padded too little; they are not shipped inputs, but they were judged in
+that form when experiment 45 removed them.  A traded player's teams show on the site in game-id order.
+
+### Experiment 94: the parser's four fixes (registered before any result)
+
+**The change**, one rebuild of every season's stints (`data/stint_parser.py`, `data/stints.py`, schema 5):
+1. **A possession that ends inside its free-throw trip is credited to the ten on the court at the foul** (at the made
+   shot, for an and-one), the convention of pbpstats.  The feed logs substitutions between a foul and its free throws:
+   about 40% of trips hold one, 29% of trip possessions credited a defensive five other than the one at the foul (21-23%
+   on offense), and the fouler left during his own trip in 13-17% of them, centers most often.  Example, 2023-11-03,
+   game 0022300100, 7:22 of the second quarter: Wood's layup, Duarte's shooting foul, Huerter in for Duarte, Reaves in
+   for Russell, Wood's and-one: all 3 points went to Huerter, and Duarte was never charged.  The helper that found it
+   measured about 0.4 per 100 of noise per player, up to 1.3, and defense over-credited about 0.23 per 100 for players
+   6-11 and taller in 2010 (0.04 in 2024) and 0.12 for players 22 and under in 2024.
+2. **A defensive rebound with nothing after it is no possession**, as a made basket or a turnover with nothing after it
+   never was: the rebounders' possession is recorded once they act.  The parser counted 0.85 more possessions a game
+   than pbpstats, nearly all of them end-of-period possessions with no shot, turnover or points: a free stop for the
+   five on defense at the ends of periods.
+3. **Expected free throws priced on the regular season and the playoffs together.**  A playoff build read its own
+   games only: a pad of 10-31 attempts, Billups' 2008 playoff rate 0.819 against 0.910 over the season.
+4. **The 2020 bubble's 88 regular-season games are neutral** (config `neutral_site_from`), as its playoffs were.
+
+The stints also count the threes of a period's last two seconds apart (`fg3a_late`, `fg3m_late`), unused until
+experiment 95.  Built under `scratch/2026-10-22_bugfix/config_parser.yaml`: stints in `data/stints_b1`, caches in
+`data/cache_b1`, the panel `outputs/season_panel_b1.parquet`; the incumbent's stay as they are.  Three real games of
+2024 rebuilt first: points equal to the box score's in each, possessions down 0-2 a team, stints regrouped.
+
+**How it is read**, as a fix (a tie is enough): the chain `parser94` against ctx82c, the within-season WOWY test by era
+with the noise control beside it, the year-over-year test, the 2026 top 20.  Both systems are scored on the rebuilt
+stints, so the incumbent is read on the corrected credit too.
+
+### Experiment 94: result (2026-10-22, `outputs/parser94_chain.log`, `scratch/2026-10-22_bugfix/read_results.py`)
+
+The within-season WOWY test, step 4, against ctx82c, both scored on the rebuilt stints; the score has ratings of zero
+at 0 and ctx82c at 100, each season, from the zero baseline on the same stints:
+
+| era | change | standard error | z | Newey-West z | seasons better | score |
+|---|---|---|---|---|---|---|
+| 1997-2006 | -0.216 | 0.051 | -4.21 | -4.05 | 8 of 10 | 101.1 |
+| 2007-2016 | -0.272 | 0.029 | -9.46 | -8.95 | 10 of 10 | 101.5 |
+| 2017-2026 | -0.201 | 0.045 | -4.51 | -3.64 | 9 of 10 | 101.2 |
+| all seasons | -0.230 | 0.024 | -9.41 | -7.56 | 27 of 30 | 101.2 |
+
+The noise control, noise_bags10, on the same stints: +1.300, z +8.9.  Scored on the incumbent's stints instead
+(`151_wowy.py --systems=ctx82c,parser94 --tag=parser94_oldstints`), which favor ctx82c's convention: step 4 -0.113,
+z -4.82 (Newey-West -3.84), 23 of 30; step 3 +0.196, z +6.8.  About half the gain is the matching convention, half
+holds on the old stints, and there it rests on step 4.
+
+The year-over-year test, team-game, both directions: **+0.085, z +3.67** (clustered +3.58), better in 18 of 56:
+worse past the +2 guard.  Stint level -0.097, z -3.35; each side rescaled -0.122, z -5.63.  The scales: offense 0.973
+against 0.995, defense 0.913 against 0.920.  **The loss is width, not credit.**  On the rebuilt stints step 4's
+multipliers on the candidate's own folds come out 1-2% larger (the prior part on offense 0.700 / 0.682 / 0.663 by era
+against 0.691 / 0.670 / 0.648; the games' part 1.414 / 1.344 / 1.383 against 1.392 / 1.323 / 1.365) and step 3's
+offense 2% wider.  Narrowed by the year-over-year test's own scale ratio, offense x0.977 and defense x0.991
+(`width_check.py`, a diagnostic, not a candidate): team-game -0.015, z -0.72, 31 of 56, a tie; stint -0.126, z -5.25.
+
+Spread, players with 1,000+ possessions, mean over the era's seasons: offense 1.84 / 1.67 / 1.50 against 1.78 / 1.61
+/ 1.46; defense 1.72 / 1.62 / 1.56 against 1.69 / 1.60 / 1.56; 2026 defense 1.63 against 1.66.  The defense lean by
+body and age, every season, each season's mean change taken out: players 6-11 and taller +0.033 on defense, 6-4 and
+shorter -0.021, 22 and under -0.011, 35 and over +0.016: nothing, and not the artifact's direction.
+
+2026 top 20, total per 100 against ctx82c: Cade Cunningham +0.50, 14th to 8th; OG Anunoby +0.29, 22nd to 20th; Chet
+Holmgren +0.22; Victor Wembanyama +0.21; Bam Adebayo +0.20; Ausar Thompson -0.50, 6th to 7th; Neemias Queta -0.26,
+8th to 10th; Karl-Anthony Towns -0.20, 11th to 14th; Mitchell Robinson -0.16.  Out: Scottie Barnes, 20th to 21st.
+Verdict the owner's.
+
+### Experiment 95: heaves in the defensive target (registered before any result)
+
+**The change**: `--defensive-target points_with_expected_opponent_threes_late_as_scored`.  The shipped target prices
+every opponent three at the shooter's own percentage; threes in a period's last two seconds come 1.6 a game and go in
+15-16%, against 36%, so each charged the defense about 0.47 points it did not allow, about 0.1 per 100 for the players
+who close quarters.  The new target leaves those threes out of both the expected and the made count: they count as they
+happened.  Pricing by distance was the alternative; it would reprice every three and lean on the logged shot spot.
+
+**How it is read**: the chain `heave95` on experiment 94's stints, against parser94 (`INC_NAME=parser94`), as a fix.
+
+### Experiment 95: result (2026-10-22, `outputs/heave95_chain.log`, `scratch/2026-10-22_bugfix/read_results.py`)
+
+Against parser94, both on the rebuilt stints; the score has ratings of zero at 0 and parser94 at 100:
+
+| era | change | standard error | z | Newey-West z | seasons better | score |
+|---|---|---|---|---|---|---|
+| 1997-2006 | +0.022 | 0.018 | +1.24 | +1.26 | 3 of 10 | 99.9 |
+| 2007-2016 | -0.031 | 0.018 | -1.75 | -1.99 | 8 of 10 | 100.2 |
+| 2017-2026 | -0.018 | 0.019 | -0.92 | -0.87 | 5 of 10 | 100.1 |
+| all seasons | -0.009 | 0.011 | -0.81 | -0.69 | 16 of 30 | 100.0 |
+
+The year-over-year test, team-game, both directions: +0.007, z +0.58 (clustered +0.56), better in 27 of 56.  **A tie
+on both**, which a fix needs.  Defense spread 1.70 / 1.59 / 1.55 by era against 1.72 / 1.62 / 1.56; 2026 1.66
+against 1.63.  2026 top 20, total per 100 against parser94: Jimmy Butler +0.29, 17th to 15th; Ausar Thompson +0.25;
+Scottie Barnes +0.15, 21st to 20th, in; Donovan Mitchell -0.03, 19th to 22nd, out; Cade Cunningham -0.12, 8th to
+10th; Donovan Clingan -0.13.  Verdict the owner's; adopting it means the shipped defensive target becomes
+`points_with_expected_opponent_threes_late_as_scored` and step 4 reads heave95's folds.
+
+### Experiment 96: the season panel's body and padding (registered before any result)
+
+**The change**, two config switches, both off as shipped:
+1. `body_inputs: season_listing`.  Height and weight were each player's median over every season the bio feed lists
+   him, later seasons included, against the single-season ruling: Giannis 2014 read 242 lb and 83 in, listed that
+   season at 205 and 81; seasons of players 22 and under read 2.0 lb heavier on average, and 8.4% of player-seasons
+   are 10+ lb off.  Now each season's own listing; heights before 2020 lose 0.575 in, the drop in the same 400
+   players' listings when the NBA moved to barefoot heights (every other year moves under 0.03 in); a player a season
+   does not list reads that season's medians (`data/bio.py`, `season_body`).
+2. `pad_k_around: target`.  The shipped padding pulls each rate toward players with about as many possessions but
+   measured the pad k around the league mean, so the spread the possession bins explain counted as signal and bench
+   players were padded too little: fouls k 174 / 234 / 346 in 1998 / 2010 / 2024 against 217 / 307 / 387 measured
+   around the bins; free throws made about 7% low; the other counts within 8% (`box_rates.box_rates`).
+
+**How it is read**: the panel rebuilt under `scratch/2026-10-22_bugfix/config_inputs.yaml`, the chain `inputs96` on
+experiment 94's stints against parser94, as a fix.
+
+## Experiment 94 ADOPTED and PUBLISHED (2026-10-22, the owner: "Adopt and publish, then test the different width(s?)")
+
+- **The shipped defaults.**  `ShrinkSettings.folds_tag` "parser94_early,parser94_within"; the stints rebuilt with the
+  parser's four fixes (`STINT_SCHEMA` 5), with the caches and the season panel built on them.  On the project's machine
+  they sit in `data/stints_b1`, `data/cache_b1` and `outputs/season_panel_b1.parquet` (config
+  `scratch/2026-10-22_bugfix/config_parser.yaml`) until experiment 96's run ends; then they take the default paths.
+- **The reproduction.**  `openrapm build --setting test --seasons 2026 --name verify94` equals parser94's chain table
+  for 2026: identical values, the largest difference 0.
+- **The product.**  `openrapm build`, 2,904 s; the old tables, experiment 93's, kept as
+  `season_ratings_product_before_parser94*`.  2026, players with 1,000+ possessions: totals moved a median 0.11 per 100,
+  the ninetieth percentile 0.31, the largest 0.49; correlation 0.997.  Each side's standard deviation by era, 93 / 94:
+  offense 1.80 / 1.87, 1.60 / 1.67, 1.46 / 1.51, 2026 1.43 / 1.48; defense 1.69 / 1.73, 1.58 / 1.61, 1.60 / 1.60,
+  2026 1.67 / 1.64.  Step 4's multipliers: the prior's part 0.644-0.721 on offense and 0.641-0.861 on defense, the
+  games' part 1.265-1.506 and 1.316-1.424.
+- **2026 top 20 against the live site**: Wembanyama, Jokić, Gilgeous-Alexander, Leonard still 1-4; up the most Cade
+  Cunningham +0.41, 15th to 11th; Nikola Jokić +0.37; Bam Adebayo +0.33, 10th to 8th; down Dyson Daniels -0.42, 20th
+  to 28th, out; Ausar Thompson -0.33; Luka Dončić -0.33, 6th to 9th; Moussa Diabaté -0.33, 9th to 12th; in Jimmy
+  Butler, 21st to 20th.
+- **Checks.**  The consensus tests pass (`tests/test_vs_consensus.py`: 10 passed and the known backup-bigs failure);
+  `openrapm site --bias --openrapm-decomposition --similarity` passes every identity of the decomposition.
+- **Published** from that table.  The year-over-year guard read +0.085, z +3.67 against ctx82c, all of it width (the
+  result above); the owner published and asked for the widths to be tested next.
+
+## Experiment 95 ADOPTED, to publish later (2026-10-22, the owner: "might as well do the heave fix i guess but - we can push for later publish")
+
+The shipped defensive target becomes `points_with_expected_opponent_threes_late_as_scored` and step 4 reads heave95's
+folds; the product is built and published with the next publish.

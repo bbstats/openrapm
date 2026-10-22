@@ -357,4 +357,7 @@ def game_box_totals(cfg: dict, source: str, season: int, game_ids) -> tuple:
     frame = frame[frame.gameId.isin(wanted)]
     totals = frame.groupby("personId")[list(columns.values())].sum(min_count=1)
     totals.index = totals.index.astype(np.int64)
-    return totals.rename(columns={game: season_name for season_name, game in columns.items()}), wanted
+    # the games actually summed, not the games asked for: the folds' leak check compares these with the fit games,
+    # and handing back the request could never fail it (until 2026-10-22)
+    read = set(frame.gameId.astype(str).unique())
+    return totals.rename(columns={game: season_name for season_name, game in columns.items()}), read

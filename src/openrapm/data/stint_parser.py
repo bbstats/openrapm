@@ -7,7 +7,12 @@ of who has the ball, who is on the court, and what each possession has done so f
 
 Words used below
     possession  one team's turn with the ball: from when it gains the ball until the other team gains it
-                or the period ends.  It is credited to the ten players on the court when it ENDS.
+                or the period ends.  It is credited to the ten players on the court when it ENDS, except a
+                possession that ends inside its own free-throw trip: that one is credited to the ten on the
+                court at the foul (at the made shot, for an and-one), the convention of pbpstats.  The feed
+                logs substitutions between a foul and its free throws, and about 40% of trips hold one; credited
+                at the end, the trip's points went to players who came on after the foul and the fouler was
+                never charged (notes/DECISIONS.md, the bug-fix pass of 2026-10-22).
     offence     the team with the ball (the column is spelt `offense`, like every other table)
     lineup      one team's five players on the court, stored sorted by player id
     valid       both lineups are five known players.  Possessions with an unknown lineup are counted
@@ -27,7 +32,9 @@ How a possession ends
     defensive rebound     the rebounding team has the ball
     turnover
     made last free throw  of a trip ("2 of 2" made).  A missed last free throw is a live rebound.
-    end of period
+    end of period         a possession is recorded only once its offence has acted (a shot, a free throw, a
+                          turnover), however it began: a defensive rebound in a period's last seconds with
+                          nothing after it is no possession, as a made basket with nothing after it never was
     forced switch         the other team acts on offence (a shot, a turnover, a free throw) with no
                           recorded change of possession: the feed missed a row, so the possession in
                           progress is closed there (diagnostic `forced_switches`)
@@ -106,6 +113,9 @@ NAMED_ACTIONS = ("Made Shot", "Missed Shot", "Rebound", "Turnover", "Foul", "Fre
 # rows that end the search for a made shot's and-one free throw
 AND_ONE_STOPS = ("Made Shot", "Missed Shot", "Turnover", "period")
 RIM_FT = 3.0          # feet; a two at or inside this distance is in the "rim" bucket, beyond it "mid"
+# seconds; a three taken with this little left in the period is a late three, counted apart (fg3a_late, fg3m_late)
+# so the defensive target can leave heaves out of its luck adjustment: they go in about 15% of the time, not 36%
+LATE_THREE_SECONDS = 2.0
 SHOT_TABLE = ("fg2a", "fg2m", "xl2", "fg3a", "fg3m", "xl3")     # the per-game shooter table
 SLOT_COLUMNS = tuple(f"{counter}_{side}" for counter in SLOT_COUNTERS for side in ("h", "a"))
 
@@ -205,6 +215,15 @@ class GameTally:
     records: list = field(default_factory=list)   # one dict per recorded possession, in order
 
 
+@dataclass(frozen=True)
+class LineupSnapshot:
+    """Both teams' players on the court at one moment: team -> player ids, sorted; whether both were five known
+    players; the clock it was taken at."""
+    on: dict
+    valid: bool
+    clock: float
+
+
 @dataclass
 class Possession:
     """The possession being built: who has the ball, its points and counters, and the rebound chain's state."""
@@ -222,6 +241,8 @@ class Possession:
     cont_team: bool = False        # the last continuation was a TEAM offensive rebound (teamId 0)
     att_since_cont: int = 0        # attempts since that continuation
     retain_pending: int = 0        # a flagrant, clear-path or away-from-play trip: the next attempt is att_retained
+    and1_lineups: LineupSnapshot | None = None   # the players on the court at the made shot awaiting its and-one
+    trip_lineups: LineupSnapshot | None = None   # the players the possession is credited to if it ends in its trip
 
 
 @dataclass
@@ -235,6 +256,7 @@ class PeriodState:
     possession: Possession
     tally: GameTally
     last_foul_shooting: bool = False   # the period's last foul was a shooting foul
+    foul_lineups: LineupSnapshot | None = None   # the players on the court at the period's last non-technical foul
 
 
 class GameParser:
@@ -529,7 +551,9 @@ class GameParser:
             counters["chance1"] -= 1          # it was the first attempt's chance
 
     def _record(self, state: PeriodState, reason: str, end_clock: float) -> dict:
-        """The possession's row, with the offence's held technical free throws added to it."""
+        """The possession's row, with the offence's held technical free throws added to it.  Its lineups are the
+        ones on the court now, or, when it ends inside its free-throw trip, the ones at the foul (the module
+        docstring's "possession")."""
         possession = state.possession
         counters = possession.counters
         held = state.tally.held[possession.offense]
@@ -539,19 +563,24 @@ class GameParser:
         counters["ftm_tech"] += held.makes
         counters["xftm_tech"] += held.expected_makes
         state.tally.held[possession.offense] = HeldFreeThrows()
-        valid = self._lineups_known(state)
-        if not valid:
+        lineups = possession.trip_lineups or self._snapshot(state, end_clock)
+        if not lineups.valid:
             self.diag["invalid_possessions"] += 1
         return dict(period=state.period, offense=possession.offense, points=points,
                     start_clock=possession.start_clock, end_clock=end_clock,
                     score_home=possession.start_score[self.home], score_away=possession.start_score[self.away],
-                    home_lineup=tuple(sorted(state.on[self.home])), away_lineup=tuple(sorted(state.on[self.away])),
-                    valid=valid, reason=reason, shooters=dict(possession.shooters), **counters)
+                    home_lineup=lineups.on[self.home], away_lineup=lineups.on[self.away],
+                    valid=lineups.valid, reason=reason, shooters=dict(possession.shooters), **counters)
 
     def _lineups_known(self, state: PeriodState) -> bool:
         """Both teams have five known players on the court."""
         return (state.valid[self.home] and state.valid[self.away]
                 and len(state.on[self.home]) == 5 and len(state.on[self.away]) == 5)
+
+    def _snapshot(self, state: PeriodState, clock: float) -> LineupSnapshot:
+        """Both teams' players on the court now, sorted, and whether they are five known players each."""
+        return LineupSnapshot(on={team: tuple(sorted(state.on[team])) for team in self.teams},
+                              valid=self._lineups_known(state), clock=float(clock))
 
     def _ensure_offense(self, state: PeriodState, team: int, row) -> None:
         """An offensive action by `team`: if the other team had the ball, close its possession (a forced
@@ -675,32 +704,38 @@ class GameParser:
             return
         self._ensure_offense(state, team, row)    # may close the possession; every count below follows it
         possession = state.possession
+        possession.trip_lineups = None            # live play after a trip: the possession is the players' on now
         counters = possession.counters
         made = row.actionType == "Made Shot"
         three = int(row.shotValue) == 3
+        late = three and row.clock_s <= LATE_THREE_SECONDS
         bucket = "thr" if three else ("rim" if 0 <= row.shot_dist <= RIM_FT else "mid")
         counters["fga"] += 1
         counters[f"fga_{bucket}"] += 1
         counters["fg3a"] += three
+        counters["fg3a_late"] += late
         if made:
             counters["fgm"] += 1
             counters[f"fgm_{bucket}"] += 1
             counters["fg3m"] += three
+            counters["fg3m_late"] += late
         self._note_attempt(possession, bucket)    # resolves an earlier miss before this one is armed
         first = counters["att"] == 1
         league_p = self.shot_p(three, row.shot_dist, str(row.description))
-        self._count_shooter_attempt(possession, int(row.personId), three, made, league_p, first)
+        self._count_shooter_attempt(possession, int(row.personId), three, made, league_p, first, late)
         if not made:
             possession.pending_chance = 1
             return
         self._score_made_shot(state, index, row, team, first)
 
     def _count_shooter_attempt(self, possession: Possession, player: int, three: bool, made: bool,
-                               league_p: float, first: bool) -> None:
-        """The shooter's possession counters (SHOOTER_COUNTERS) and his per-game totals (SHOT_TABLE)."""
+                               league_p: float, first: bool, late: bool = False) -> None:
+        """The shooter's possession counters (SHOOTER_COUNTERS) and his per-game totals (SHOT_TABLE); `late` a
+        three in the period's last LATE_THREE_SECONDS."""
         kind = "3" if three else "2"
         shooter = possession.shooters.setdefault(player, dict.fromkeys(SHOOTER_COUNTERS, 0.0))
         shooter[f"fg{kind}a"] += 1
+        shooter["fg3a_late"] += late
         shooter[f"xl{kind}"] += league_p
         shooter[f"xv{kind}"] += league_p * (1.0 - league_p)
         if first:
@@ -722,6 +757,7 @@ class GameParser:
             possession.counters["pts1"] += points
         if self._and_one_follows(state.rows, index, team):
             possession.and1 = True
+            possession.and1_lineups = self._snapshot(state, row.clock_s)    # before any substitution of the trip
         else:
             self._close(state, "made_fg", row.clock_s, self._other(team))
 
@@ -765,7 +801,9 @@ class GameParser:
     @staticmethod
     def _offensive_rebound(possession: Possession, row) -> None:
         """Resolves the pending chance as a continuation.  Team rebounds (teamId 0) count here too; the
-        period-end ones are taken back out in _settle_last_continuation."""
+        period-end ones are taken back out in _settle_last_continuation.  Live play goes on, so a trip's lineups
+        no longer hold the possession."""
+        possession.trip_lineups = None
         if not possession.pending_chance:
             return
         counters = possession.counters
@@ -780,7 +818,11 @@ class GameParser:
         possession.att_since_cont = 0
 
     def _defensive_rebound(self, state: PeriodState, row, team: int) -> None:
-        """Resolves the chance BEFORE the close, which records the possession; the rebounders then have the ball."""
+        """Resolves the chance BEFORE the close, which records the possession; the rebounders then have the ball.
+        Their possession is recorded once they act, as after a made basket or a turnover: until 2026-10-22 it was
+        recorded at once, and a rebound in a period's last seconds gave the rebounders a scoreless possession and the
+        other five a free stop, 0.85 a game more possessions than pbpstats counts (notes/DECISIONS.md, the bug-fix
+        pass)."""
         possession = state.possession
         if possession.pending_chance:
             possession.counters["reb_chance"] += 1
@@ -788,7 +830,6 @@ class GameParser:
                 possession.counters["chance1"] += 1
             possession.pending_chance = 0
         self._close(state, "dreb", row.clock_s, team)
-        state.possession.active = True
 
     def _on_free_throw(self, state: PeriodState, index: int, row) -> None:
         """A free throw, "Free Throw <nth> of <trip_size>".  The first one starts a trip; a made last one ends
@@ -809,6 +850,9 @@ class GameParser:
         nth, trip_size = (int(match.group(2)), int(match.group(3))) if match else (1, 1)
         flagrant_or_clear_path = ("Flagrant" in sub_type) or ("Clear Path" in sub_type)
         if nth == 1:
+            # a flagrant or clear-path trip keeps the ball, so the possession goes on and is credited where it ends
+            possession.trip_lineups = None if flagrant_or_clear_path else self._trip_lineups(state, possession,
+                                                                                            row.clock_s)
             self._start_trip(state, possession, flagrant_or_clear_path or "Away From Play" in sub_type)
         self._count_free_throw(possession, row, made, nth == trip_size)
         if made:
@@ -839,6 +883,20 @@ class GameParser:
         held.attempts += 1
         held.makes += made
         held.expected_makes += expected
+
+    @staticmethod
+    def _trip_lineups(state: PeriodState, possession: Possession, clock: float) -> LineupSnapshot | None:
+        """The players a trip's possession is credited to if it ends inside the trip: those on the court at the made
+        shot of an and-one, else at the foul that awarded the trip, the period's last non-technical foul when it came
+        at the trip's clock; None when neither is known, and the possession keeps the players on the court when it
+        ends.
+
+        Example: a layup and the foul on it at 7:22, two substitutions at 7:22, the and-one free throw at 7:22: the
+        possession is credited to the ten on the court at the layup, the fouler among them."""
+        if possession.and1 and not possession.and1_used and possession.and1_lineups is not None:
+            return possession.and1_lineups
+        foul = state.foul_lineups
+        return foul if foul is not None and foul.clock == clock else None
 
     def _start_trip(self, state: PeriodState, possession: Possession, ball_returned: bool) -> None:
         """The first free throw of a trip: is the trip a new attempt event?  Three kinds are not:
@@ -885,9 +943,13 @@ class GameParser:
             shooter["ftlast1"] += 1
 
     def _on_foul(self, state: PeriodState, index: int, row) -> None:
-        """A foul ends nothing, but the trip after it needs to know whether it was a shooting foul: a shooting
-        foul on a MISS records no field-goal attempt at all."""
+        """A foul ends nothing, but the trip after it needs to know whether it was a shooting foul (a shooting
+        foul on a MISS records no field-goal attempt at all) and who was on the court when it was called: the
+        possession is credited to them if it ends inside the trip (`_trip_lineups`).  A technical foul's free
+        throws are no trip, so it takes no snapshot."""
         state.last_foul_shooting = "Shooting" in str(row.subType)
+        if "Technical" not in str(row.subType):
+            state.foul_lineups = self._snapshot(state, row.clock_s)
 
     # The dispatch table.  Every other action type ("Timeout", "Violation", "Instant Replay", "Ejection", the
     # blank steal and block rows) has no effect on the possession.

@@ -70,11 +70,21 @@ def write_run(directory: Path, record: dict) -> None:
 
 def line_setup(cfg: dict, tag: str, inputs: list) -> dict:
     """run.json of outputs/second_prior/<tag>/, after checking its line read `inputs` in that order (a line applied
-    to other inputs than it was fitted on would read each weight on the wrong number); it carries `type_scale` when
-    the line reads step 5's numbers."""
-    record = read_run(grams_directory(cfg, tag))
+    to other inputs than it was fitted on would read each weight on the wrong number) and that its normal equations
+    hold one row per input; it carries `type_scale` when the line reads step 5's numbers.
+
+    The second check catches grams written under a set's name without all of its inputs: until 2026-10-22
+    `openrapm second-prior --inputs context_and_types_centred` wrote 9-input grams under 29 names."""
+    directory = grams_directory(cfg, tag)
+    record = read_run(directory)
     if list(record.get("inputs", [])) != list(inputs):
         raise SystemExit(f"outputs/second_prior/{tag} was fitted on the inputs {record.get('inputs')}, not {inputs}")
+    paths = sorted(directory.glob("grams_*.npz"))
+    if paths:
+        size = int(np.load(paths[0])["offense_G"].shape[0])
+        if size != len(inputs):
+            raise SystemExit(f"outputs/second_prior/{tag} holds normal equations on {size} inputs where its run.json "
+                             f"names {len(inputs)}; write them again with `openrapm second-prior`")
     return record
 
 

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from openrapm import box_prior
 from openrapm import second_prior as sp
@@ -324,3 +325,34 @@ def test_experiment_82s_inputs_centred_give_the_average_player_0_on_every_folds_
         level = (weights[ids % 5] @ average_raw)
         gap = pd.Series(raw[side]).reindex(ids).to_numpy() - pd.Series(fixed[side]).reindex(ids).to_numpy()
         assert np.allclose(gap, level)
+
+
+def test_a_line_on_step_5s_numbers_refuses_to_run_without_them():
+    # until 2026-10-22 `openrapm second-prior --inputs context_and_types_centred`, the command's default, computed no
+    # standardisation for step 5's numbers, and the line was fitted on the eight context numbers alone under the set's
+    # 29 names (notes/DECISIONS.md, the bug-fix pass)
+    assert sp.reads_types("context_and_types") and sp.reads_types("context_and_types_centred")
+    assert not sp.reads_types("context") and not sp.reads_types("own_teammates_opponents") and not sp.reads_types(None)
+    context = pd.DataFrame(0.0, index=pd.Index([1, 2], name="player_id"), columns=sp.CONTEXT)
+    box = {"O": {1: 0.5, 2: -0.5}, "D": {1: -1.0, 2: 1.0}}
+    with pytest.raises(ValueError, match="none were given"):
+        sp.side_inputs(box, context, None, "context_and_types_centred")
+    assert list(sp.side_inputs(box, context, None, "context")["O"].columns) == sp.INPUTS
+
+
+def test_a_line_whose_normal_equations_miss_some_of_its_inputs_is_refused(tmp_path):
+    from openrapm.data import second_prior_files as files
+    cfg = {"_root": str(tmp_path), "paths": {"outputs": str(tmp_path)}}
+    names = sp.INPUT_SETS["context_and_types_centred"]
+    directory = files.grams_directory(cfg, "short")
+    directory.mkdir(parents=True)
+    files.write_run(directory, {"inputs": names, "padded": True})
+
+    def grams(size):
+        return {side: sa.PairGrams(G=np.eye(size), b=np.zeros(size), G_fold=np.zeros((5, size, size)),
+                                   b_fold=np.zeros((5, size)), n=1) for side in files.SIDES}
+    files.write_grams(files.grams_path(directory, 2020), grams(len(sp.INPUTS)))
+    with pytest.raises(SystemExit, match=f"on {len(sp.INPUTS)} inputs"):
+        files.line_setup(cfg, "short", names)
+    files.write_grams(files.grams_path(directory, 2020), grams(len(names)))
+    assert files.line_setup(cfg, "short", names)["inputs"] == names

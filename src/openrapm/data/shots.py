@@ -371,27 +371,34 @@ def _check(wd, col: str = "fg2a_s1"):
         raise RuntimeError(f"the design carries no {col}; rebuild the stints (STINT_SCHEMA 4)")
 
 
-def expected_threes(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, keep=None):
+def expected_threes(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, keep=None, late: bool = True):
     """Each row's EXPECTED opponent three-point makes: every attempt at the shooter's padded other-half 3P%
-    (the defensive target's repricing, the one piece of it the four-factor eFG% needs too).  Returns (x3, rates)."""
+    (the defensive target's repricing, the one piece of it the four-factor eFG% needs too).  With `late` False the
+    threes of a period's last two seconds are left out (`fg3a_late`, stints of schema 5).  Returns (x3, rates)."""
     cnt = wd_pts.counters
+    if not late:
+        _check(wd_pts, "fg3a_late_s1")
     seasons = sorted(int(s) for s in seasons)
     rates = shooter_rates(seasons, cfg, prev=prev, k_fixed={"fg3": k3}, keep=keep)
     which = rates.for_rows("fg3", cnt["half"].to_numpy())
     n = len(cnt)
-    x3 = cnt["fg3a_sx"].to_numpy(dtype=float) * rates.league["fg3"]
+
+    def attempts(slot):
+        taken = cnt[f"fg3a_s{slot}"].to_numpy(dtype=float)
+        return taken if late else taken - cnt[f"fg3a_late_s{slot}"].to_numpy(dtype=float)
+    x3 = attempts("x") * rates.league["fg3"]
     masks = [(h, m) for h in ("A", "B", "ALL") if (m := which == h).any()]     # once, not once per slot
     for s in SLOTS:
         pid = cnt[f"pid_s{s}"].to_numpy()
         p = np.full(n, rates.league["fg3"])
         for h, m in masks:
             p[m] = rates.take("p3", h, pid[m], rates.league["fg3"])
-        x3 += cnt[f"fg3a_s{s}"].to_numpy(dtype=float) * p
+        x3 += attempts(s) * p
     return x3, rates
 
 
 def def_three_design(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, calibrate: bool = True,
-                     keep=None, w3: float = 0.0, wft: float = 0.0):
+                     keep=None, w3: float = 0.0, wft: float = 0.0, late_as_scored: bool = False):
     """The DEFENSIVE target: actual points with every opponent three-point make replaced by
     3 x the shooter's padded 3P%, free throws adjusted as shipped, everything else as it happened.
 
@@ -401,12 +408,18 @@ def def_three_design(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, cal
     the `prev` seasons before the block, padded toward the league with k = `k3` attempts (450: the
     split-half reliability of high-volume shooters, FINDINGS.md section 18).  No location curve.
     Meant to supply the DEFENSIVE coefficients only; offence comes from the free-throw target.
+
+    `late_as_scored`: the threes of a period's last two seconds (stint_parser.LATE_THREE_SECONDS), heaves mostly,
+    are left out of the repricing and count as they happened.  Priced at the shooter's own percentage, about 36%,
+    where they go in about 15%, each charged the defence about 0.47 points it did not allow (notes/DECISIONS.md, the
+    bug-fix pass of 2026-10-22, experiment 95).
     """
     _check(wd_pts, "fg3a_s1")
     cnt, season = wd_pts.counters, wd_pts.rows["season"].to_numpy()
-    x3, rates = expected_threes(seasons, cfg, wd_pts, prev=prev, k3=k3, keep=keep)
+    x3, rates = expected_threes(seasons, cfg, wd_pts, prev=prev, k3=k3, keep=keep, late=not late_as_scored)
     poss = cnt["poss"].to_numpy(dtype=float)
     c = cnt
+    made_threes = c["fg3m"] - c["fg3m_late"] if late_as_scored else c["fg3m"]
     # `w3` / `wft` are how much of the REALISED deviation the defence keeps, 0 being the original full
     # replacement.  Full replacement assumes a defence has no effect at all on whether a three or a free
     # throw drops, and FINDINGS 35.1 measures that as false: the true between-team spread is 0.59 points
@@ -414,13 +427,13 @@ def def_three_design(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, cal
     # channel does not change its signal-to-noise ratio -- it changes how much that channel counts in the
     # composite target relative to the channels a defence really does control, which is the thing worth
     # choosing.  The criterion picks it; nothing here is set from the measurement directly.
-    pts_adj = (c["pts"] - 3.0 * (1.0 - float(w3)) * (c["fg3m"] - x3)
+    pts_adj = (c["pts"] - 3.0 * (1.0 - float(w3)) * (made_threes - x3)
                - (1.0 - float(wft)) * (c["ftm"] + c["ftm_tech"] - c["xftm"] - c["xftm_tech"])).to_numpy(dtype=float)
     y = 100.0 * pts_adj / poss
     rows = []
     for s in np.unique(season):
         m = season == s
-        rows.append(dict(season=int(s), r2=1.0, r3=float(x3[m].sum() / max(c.fg3m[m].sum(), 1.0)),
+        rows.append(dict(season=int(s), r2=1.0, r3=float(x3[m].sum() / max(made_threes[m].sum(), 1.0)),
                          rft=float(c.xftm[m].sum() / max(c.ftm[m].sum(), 1.0)),
                          pts=float((y[m] * poss[m] / 100.0).sum() / max(c.pts[m].sum(), 1.0)), pts1=1.0, chance1=1.0))
     g = pd.DataFrame(rows)
@@ -430,7 +443,8 @@ def def_three_design(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, cal
     cal = pd.DataFrame()
     if calibrate:
         y, cal = align(y, wd_pts.y, wd_pts.w, season, poss)
-    name = f"points_with_expected_opponent_threes_p{prev}" + (f"_w{w3:g}" if w3 else "") + (f"_f{wft:g}" if wft else "")
+    name = (f"points_with_expected_opponent_threes_p{prev}" + (f"_w{w3:g}" if w3 else "")
+            + (f"_f{wft:g}" if wft else "") + ("_late_as_scored" if late_as_scored else ""))
     return wd_pts.with_target(y), dict(target=name, x=None, gates=g, calibration=cal, k3=rates.k["fg3"],
                                        w3=float(w3), wft=float(wft))
 
@@ -458,4 +472,9 @@ DEFENSE_TARGETS = {
     # experiment 89; the owner, 2026-10-20: "blend between luck adjusted and not")
     "points_with_expected_opponent_threes_half": _named(def_three_design,
                                                         "points_with_expected_opponent_threes_half", w3=0.5),
+    # the shipped target with the threes of a period's last two seconds counted as they happened (experiment 95, the
+    # bug-fix pass of 2026-10-22): needs stints of schema 5, which count them apart
+    "points_with_expected_opponent_threes_late_as_scored": _named(
+        def_three_design, "points_with_expected_opponent_threes_late_as_scored", w3=OPPONENT_THREE_LUCK_KEPT,
+        late_as_scored=True),
 }

@@ -283,27 +283,52 @@ def pooled(res: pd.DataFrame, by=POOL_BY) -> pd.DataFrame:
     return out
 
 
+def clustered_se(diff: pd.Series, cluster: pd.Series) -> float:
+    """The standard error of the mean of `diff`, the readings that share a `cluster` counted together (the
+    cluster-robust form): sqrt(G / (G - 1) x sum over the G clusters of (the sum of its residuals)^2) / n, residual =
+    reading minus the mean.  With one reading per cluster it is the plain standard error, sd / sqrt(n), exactly.
+
+    Example: readings -1.0 and -1.0 from one table and +0.5 and +0.5 from another.  The plain standard error is
+    0.866 / sqrt(4) = 0.43; clustered, the residual sums are -1.5 and +1.5 and it is sqrt(2 x 4.5) / 4 = 0.75, since
+    each table's two readings say the same thing twice."""
+    residual = diff - diff.mean()
+    sums = residual.groupby(np.asarray(cluster.reindex(diff.index))).sum()
+    clusters, n = len(sums), len(diff)
+    return float(np.sqrt(clusters / (clusters - 1) * np.sum(sums ** 2)) / n) if clusters > 1 else np.nan
+
+
 def paired(res: pd.DataFrame, ref: str, value: str = "mse", by=("k", "lam", "split", "group")) -> pd.DataFrame:
     """Every system against `ref`, paired by scored season: the mean difference, its standard error, the paired
     t-statistic z = mean / standard error, and the seasons won.
 
     `value` is "mse" (stint), "tg" (team-game) or "calib_side".  A negative difference is better than `ref`.
+
+    Beside them, when `res` names each reading's rated season (`train`), `se_clustered` and `z_clustered`: the same
+    with the readings of one rated season's table counted together (`clustered_se`).  Both directions together hold
+    two readings per table, the season before predicting forward and the season after predicting back, and the two
+    move together; counted as independent they overstate the evidence (experiment 93 against 82: z -2.82, clustered
+    -2.48; notes/DECISIONS.md, the bug-fix pass of 2026-10-22).  One direction alone has one reading per table, and
+    the two columns agree.
     """
     rows = []
     for key, d in res.groupby(list(by), sort=True):
         p = d.pivot_table(index="held_out", columns="system", values=value)
         if ref not in p.columns:
             continue
+        rated = (d.drop_duplicates("held_out").set_index("held_out")["train"] if "train" in d.columns else None)
         for s in p.columns:
             if s == ref:
                 continue
             diff = (p[s] - p[ref]).dropna()
             n = len(diff)
             sd = diff.std(ddof=1) if n > 1 else np.nan
+            se_clustered = clustered_se(diff, rated) if rated is not None and n > 1 else np.nan
             rows.append(dict(**dict(zip(by, key)), system=s, ref=ref, value=value, mean_diff=float(diff.mean()),
                              se=float(sd / np.sqrt(n)) if n > 1 else np.nan,
                              z=float(diff.mean() / (sd / np.sqrt(n))) if n > 1 and sd > 0 else np.nan,
-                             wins=int((diff < 0).sum()), n_seasons=n))
+                             wins=int((diff < 0).sum()), n_seasons=n, se_clustered=se_clustered,
+                             z_clustered=(float(diff.mean() / se_clustered) if se_clustered and se_clustered > 0
+                                          else np.nan)))
     return pd.DataFrame(rows)
 
 

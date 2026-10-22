@@ -66,6 +66,12 @@ MIN_HALF_POSSESSIONS = 20.0     # a player enters split_half_k with at least thi
 POSSESSION_BINS = 6
 MIN_BIN_PLAYERS = 5             # a season's bin needs this many players to have a rate of its own
 PAD_TARGETS = ("league", "poss_conditional", "body_and_possessions")
+# where the pad k measures the spread between players (config pad_k_around): around the league rate, as shipped, or
+# around the target the rates are padded toward.  The body target always measures it around itself; the
+# possession-conditional one measured it around the league until 2026-10-22, which counts the spread the bins
+# already explain as signal and pads too little: fouls k 174 / 234 / 346 in 1998 / 2010 / 2024 against
+# 217 / 307 / 387 around the bins (notes/DECISIONS.md, the bug-fix pass, experiment 96)
+PAD_K_AROUND = ("league", "target")
 BODY = ("height_in", "weight_lb")      # the body target's inputs (data/bio.py), one row per player
 BODY_FOLDS = 5                          # its player folds: player_id % 5
 MIN_BODY_PLAYERS = 20                   # a season's fold needs this many players with possessions to fit a line
@@ -423,7 +429,8 @@ def _targets(league, edges, targets, player_possessions, season_of, player_of) -
     return targets[season_of, bin_of(edges, player_possessions[player_of])]
 
 
-def box_rates(design, pad_target: str = "poss_conditional", body: pd.DataFrame | None = None) -> BoxRates:
+def box_rates(design, pad_target: str = "poss_conditional", body: pd.DataFrame | None = None,
+              pad_k_around: str = "league") -> BoxRates:
     """The padded rates of every player of `design` (data/designs.py), both sides, from the design's games.
 
     Per player-season: his counts and possessions summed over the counted games (`game_totals`), each season's league
@@ -434,9 +441,12 @@ def box_rates(design, pad_target: str = "poss_conditional", body: pd.DataFrame |
 
     The same padding gives both sides: on offence n is his team's offensive possessions, on defence the defensive ones.
     Under the body target, `body` (indexed by player_id, `BODY`) gives every player's height and weight.
+    `pad_k_around` "target" measures the possession-conditional target's pad k around the target (`PAD_K_AROUND`).
     """
     if pad_target not in PAD_TARGETS:
         raise ValueError(f"unknown pad_target {pad_target!r}; use one of {PAD_TARGETS}")
+    if pad_k_around not in PAD_K_AROUND:
+        raise ValueError(f"unknown pad_k_around {pad_k_around!r}; use one of {PAD_K_AROUND}")
     if pad_target == "body_and_possessions" and body is None:
         raise ValueError("the body target needs every player's height and weight")
     spec = design.spec
@@ -459,7 +469,7 @@ def box_rates(design, pad_target: str = "poss_conditional", body: pd.DataFrame |
                                                      bin_of(edges, player_possessions["O"][player_of]), league)
     side_targets = {side: _targets(league, edges, targets, player_possessions[side], season_of, player_of)
                     for side in ("O", "D")}
-    k_target = None
+    k_target = side_targets["O"] if pad_k_around == "target" and edges is not None else None
     if pad_target == "body_and_possessions" and edges is not None:
         player_ids = spec.players.set_index("player_column").player_id.reindex(player_of).to_numpy()
         # a player the body table lacks reads its medians, as the panel's own body columns do (data/bio.py); one

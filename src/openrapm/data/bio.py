@@ -35,6 +35,14 @@ BIO_INPUTS = ["height", "weight", "draft_pick"]
 TENURE_INPUTS = ["tenure", "n_teams"]
 PLAYER_INPUTS = [*BIO_INPUTS, *TENURE_INPUTS]
 UNDRAFTED = 61.0
+# config body_inputs: "career_median", one height and weight per player over every season the feed lists him (as
+# shipped), or "season_listing", each season's own listing, so a player's other seasons never reach his body inputs
+# (the single-season ruling; notes/DECISIONS.md, the bug-fix pass of 2026-10-22, experiment 96)
+BODY_INPUTS = ("career_median", "season_listing")
+# The NBA has listed barefoot heights since the 2019-20 season (season 2020).  The same 400 players' listings drop
+# 0.575 inches from 2019 to 2020 and move under 0.03 in every other year, so the listings before it are put on the
+# barefoot ruler by taking this off
+BAREFOOT_FROM, SHOE_INCHES = 2020, 0.575
 
 
 def player_bio(cfg, force: bool = False) -> pd.DataFrame:
@@ -78,6 +86,35 @@ def bio_from_feed(raw_bio: Path) -> pd.DataFrame:
                                    draft_pick=("draft_pick", "median")).reset_index()
     g["draft_pick"] = g.draft_pick.fillna(UNDRAFTED)
     return g
+
+
+@functools.lru_cache(maxsize=None)
+def _season_listings(raw_bio: Path) -> pd.DataFrame:
+    """player_id, season, height, weight: every season's own listing in the bio feed, heights on the barefoot ruler
+    (BAREFOOT_FROM, SHOE_INCHES); read once per process."""
+    parts = []
+    for path in sorted(Path(raw_bio).glob("*_RS.parquet")):
+        d = pd.read_parquet(path, columns=["PLAYER_ID", "PLAYER_HEIGHT_INCHES", "PLAYER_WEIGHT"])
+        season = int(path.name[:4])
+        height = pd.to_numeric(d.PLAYER_HEIGHT_INCHES, errors="coerce")
+        parts.append(pd.DataFrame({"player_id": d.PLAYER_ID.astype(np.int64), "season": season,
+                                   "height": height - (SHOE_INCHES if season < BAREFOOT_FROM else 0.0),
+                                   "weight": pd.to_numeric(d.PLAYER_WEIGHT, errors="coerce")}))
+    return pd.concat(parts, ignore_index=True).drop_duplicates(["player_id", "season"])
+
+
+def season_body(cfg, season: int, player_ids) -> pd.DataFrame:
+    """height and weight aligned to `player_ids` from `season`'s own listing in the bio feed, heights on the barefoot
+    ruler; a player the season's feed does not list takes that season's medians.
+
+    Example: Giannis Antetokounmpo's 2014 row reads 81 - 0.575 = 80.4 in and 205 lb, his listing that season, where
+    the career median reads 83 in and 242 lb."""
+    listings = _season_listings(resolve(cfg, "raw") / "bio")
+    rows = listings[listings.season == int(season)].set_index("player_id")
+    out = rows.reindex(np.asarray(player_ids))[["height", "weight"]].reset_index(drop=True)
+    for column in ("height", "weight"):
+        out[column] = out[column].fillna(float(rows[column].median())).astype(float)
+    return out
 
 
 def bio_inputs(bio: pd.DataFrame, player_ids) -> pd.DataFrame:
@@ -127,7 +164,15 @@ def tenure_inputs(roles: pd.DataFrame, seasons, player_ids, exclude_seasons=()) 
 
 
 def player_inputs(cfg, roles: pd.DataFrame, seasons, player_ids, exclude_seasons=()) -> pd.DataFrame:
-    """The whole block, PLAYER_INPUTS, aligned to `player_ids`."""
+    """The whole block, PLAYER_INPUTS, aligned to `player_ids`.  With config body_inputs "season_listing" and one
+    season asked for, height and weight are that season's own listing (`season_body`)."""
     b = bio_inputs(player_bio(cfg), player_ids)
+    mode = cfg.get("body_inputs", "career_median")
+    if mode not in BODY_INPUTS:
+        raise ValueError(f"unknown body_inputs {mode!r}; use one of {BODY_INPUTS}")
+    if mode == "season_listing":
+        if len(list(seasons)) != 1:
+            raise ValueError("body_inputs season_listing reads one season's listing; ask for one season")
+        b[["height", "weight"]] = season_body(cfg, list(seasons)[0], player_ids).to_numpy()
     t = tenure_inputs(roles, seasons, player_ids, exclude_seasons)
     return pd.concat([b, t], axis=1)

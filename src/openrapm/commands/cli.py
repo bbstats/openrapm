@@ -242,8 +242,9 @@ def _add_setting_options(parser) -> None:
     parser.add_argument("--row-labels", choices=ROW_LABELS, default=PRODUCT.prior.row_labels,
                         help="career: every training row of the prior carries the player's RAPM over every training "
                              "season.  outside: each chunk row carries his RAPM over the seasons outside its own and "
-                             "the career row is dropped, so no label shares a game with its box score (default "
-                             "%(default)s)")
+                             "the career row is dropped, so no label shares a game with its box score.  nearest: "
+                             "each chunk row carries his RAPM over only the season before it and the season after "
+                             "it (default %(default)s)")
     parser.add_argument("--team-season-penalties", type=parse_penalty_pair, metavar="ATTACKING,DEFENDING",
                         default=(PRODUCT.labels.team_offense_penalty, PRODUCT.labels.team_defense_penalty),
                         help="step 1's team-season flags: one column per team-season on offence and one on defence, "
@@ -273,8 +274,8 @@ def _add_folds_tag(parser) -> None:
     parser.add_argument("--fold-seasons", type=parse_span, default=PRODUCT.shrink.fold_seasons, metavar="FIRST-LAST",
                         help="the fold seasons read (default %(default)s)")
     parser.add_argument("--nearest", type=int, default=PRODUCT.shrink.nearest, metavar="K",
-                        help="fit each season's multipliers on only the K fold seasons nearest it (default 0: every "
-                             "fold season the rule allows)")
+                        help="fit each season's multipliers on only the K fold seasons nearest it; 0: every fold "
+                             "season the rule allows (default %(default)s)")
     parser.add_argument("--free-games-part", action=argparse.BooleanOptionalAction,
                         default=PRODUCT.shrink.free_games_part,
                         help="also multiply the games' part by a factor fitted beside the prior's (shipped since "
@@ -440,7 +441,9 @@ def _add_second_prior(commands) -> None:
                         help="the seasons to write: 2026, 2017-2026 or 2017,2018 (default every season of the folds)")
     second.add_argument("--inputs", choices=SECOND_PRIOR_INPUTS, default=PRODUCT.prior.second_prior_inputs,
                         help="context: the box-score prior and the eight context numbers; context_and_types: also the "
-                             "other end's box-score prior and step 5's 19 numbers (default %(default)s)")
+                             "other end's box-score prior and step 5's 19 numbers; context_and_types_centred: the "
+                             "same, centred on the season when applied; own_teammates_opponents: experiment 92's "
+                             "three numbers (default %(default)s)")
     second.set_defaults(run=_run_second_prior)
 
 

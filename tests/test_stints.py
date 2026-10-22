@@ -225,9 +225,10 @@ def test_an_offensive_rebound_continues_the_possession():
         _ev(1, 690, HOME, 2, "Missed Shot", "Jump Shot", "MISS Htwo 25' 3PT Jump Shot", 3),
         _ev(1, 688, AWAY, 11, "Rebound", "Unknown", "Aone REBOUND (Off:0 Def:1)"),
     ])
-    # the defensive rebound gives the away team the ball, and it holds it until the period ends
-    assert list(poss["reason"]) == ["dreb", "period_end"]
-    assert list(poss["offense"]) == [HOME, AWAY]
+    # the defensive rebound gives the away team the ball; it never acts before the period ends, so, as after a made
+    # basket, its possession is not recorded
+    assert list(poss["reason"]) == ["dreb"]
+    assert list(poss["offense"]) == [HOME]
     first = poss.iloc[0]
     assert (first.fga, first.fg3a, first.att, first.att1_mid) == (2, 1, 2, 1)
     # two rebound chances: the first went to the offence (a continuation), the second to the defence
@@ -246,8 +247,10 @@ def test_a_team_rebound_as_the_period_ends_is_taken_back_out():
     assert (last.reb_cont, last.reb_chance, last.oreb_t, last.chance1, last.reb_drop) == (0, 0, 0, 0, 1)
 
 
-def test_a_substitution_between_free_throws():
-    """The possession is credited to the ten players on the court when it ENDS: after the substitution."""
+def test_a_substitution_between_free_throws_leaves_the_trip_with_the_five_at_the_foul():
+    """A possession that ends inside its free-throw trip is credited to the ten on the court at the foul, so the
+    substitution between the two free throws starts the next stint, not this one (until 2026-10-22 the trip went
+    to the players on the court when it ended: 1, 2, 3, 4 and 6)."""
     gp, poss = _parse([
         _ev(1, 700, HOME, 1, "Made Shot", "Jump Shot", "Hone 15' Jump Shot (2 PTS)", 2, 2, 0),
         _ev(1, 680, AWAY, 11, "Made Shot", "Layup Shot", "Aone 1' Layup (2 PTS)", 2, 2, 2),
@@ -258,14 +261,14 @@ def test_a_substitution_between_free_throws():
     ])
     assert list(poss["reason"]) == ["made_fg", "made_fg", "made_ft"]
     trip = poss.iloc[2]
-    assert trip.home_lineup == (1, 2, 3, 4, 6) and trip.away_lineup == (11, 12, 13, 14, 15)
+    assert trip.home_lineup == (1, 2, 3, 4, 5) and trip.away_lineup == (11, 12, 13, 14, 15)
     assert (trip.points, trip.fta, trip.ftm, trip.fta1, trip.pts1) == (2, 2, 2, 2, 2)
     assert (trip.att, trip.trip_shoot, trip.att1_ft) == (1, 1, 1)   # one trip after a shooting foul: one attempt
     assert poss["valid"].all() and gp.diag["unresolved_subs"] == 0
     st = gp.stints(poss)
-    assert len(st) == 2                                            # the substitution starts a new stint
-    assert list(st["poss_h"]) == [1, 1] and list(st["pts_h"]) == [2.0, 2.0] and list(st["h5"]) == [5, 6]
-    assert st["fta_s1_h"].iloc[1] == 2 and st["ftlast1_s1_h"].iloc[1] == 1   # the shooter, player 1, is slot 1
+    assert len(st) == 1                                            # every possession had the same ten players
+    assert list(st["poss_h"]) == [2] and list(st["pts_h"]) == [4.0] and list(st["h5"]) == [5]
+    assert st["fta_s1_h"].iloc[0] == 2 and st["ftlast1_s1_h"].iloc[0] == 1   # the shooter, player 1, is slot 1
 
 
 def test_an_and_one_is_one_attempt_and_its_free_throw_ends_the_possession():
@@ -288,7 +291,125 @@ def test_a_missed_and_one_free_throw_is_a_live_rebound():
         _ev(1, 650, HOME, 2, "Free Throw", "Free Throw 1 of 1", "MISS Htwo Free Throw 1 of 1", 0, 2, 0),
         _ev(1, 648, AWAY, 14, "Rebound", "Unknown", "Afour REBOUND (Off:0 Def:1)"),
     ])
-    assert list(poss["reason"]) == ["dreb", "period_end"]
+    assert list(poss["reason"]) == ["dreb"]               # the rebounders never act before the period ends
     and_one = poss.iloc[0]
     assert (and_one.points, and_one.fta, and_one.ftm, and_one.att, and_one.and1) == (2, 1, 0, 1, 1)
     assert (and_one.reb_chance, and_one.chance1, and_one.pts1) == (1, 1, 2)
+
+
+def test_an_and_one_with_substitutions_before_its_free_throw_is_credited_to_the_ten_at_the_shot():
+    """The play of 2023-11-03, game 0022300100, at 7:22 of the second quarter: Wood's layup, Duarte's shooting foul,
+    Huerter in for Duarte and Reaves in for Russell, then Wood's and-one.  Here home player 2 scores, away player 13
+    fouls, 16 comes on for 13 and home 6 for 1, then the free throw: all 3 points belong to the ten on the court at
+    the layup, the fouler among them, and the substitutions start the next stint."""
+    gp, poss = _parse([
+        _ev(1, 442, HOME, 2, "Made Shot", "Running Layup Shot", "Htwo 2' Running Layup (2 PTS)", 2, 2, 0),
+        _ev(1, 442, AWAY, 13, "Foul", "Shooting", "Athree S.FOUL (P2.T4)"),
+        _ev(1, 442, AWAY, 13, "Substitution", "", "SUB: Asix FOR Athree"),
+        _ev(1, 442, HOME, 1, "Substitution", "", "SUB: Hsix FOR Hone"),
+        _ev(1, 442, HOME, 2, "Free Throw", "Free Throw 1 of 1", "Htwo Free Throw 1 of 1 (3 PTS)", 0, 3, 0),
+        _ev(1, 420, AWAY, 16, "Made Shot", "Jump Shot", "Asix 15' Jump Shot (2 PTS)", 2, 3, 2),
+    ])
+    assert list(poss["reason"]) == ["made_ft", "made_fg"]
+    and_one, after = poss.iloc[0], poss.iloc[1]
+    assert and_one.points == 3 and and_one.home_lineup == (1, 2, 3, 4, 5)
+    assert and_one.away_lineup == (11, 12, 13, 14, 15)
+    assert after.home_lineup == (2, 3, 4, 5, 6) and after.away_lineup == (11, 12, 14, 15, 16)
+    st = gp.stints(poss)
+    assert len(st) == 2 and list(st["pts_h"]) == [3.0, 0.0] and list(st["pts_a"]) == [0.0, 2.0]
+
+
+def test_a_missed_last_free_throw_rebounded_by_the_defence_stays_with_the_ten_at_the_foul():
+    _, poss = _parse([
+        _ev(1, 600, AWAY, 12, "Foul", "Shooting", "Atwo S.FOUL (P1.T1)"),
+        _ev(1, 600, HOME, 1, "Free Throw", "Free Throw 1 of 2", "Hone Free Throw 1 of 2 (1 PTS)", 0, 1, 0),
+        _ev(1, 600, AWAY, 12, "Substitution", "", "SUB: Asix FOR Atwo"),
+        _ev(1, 600, HOME, 1, "Free Throw", "Free Throw 2 of 2", "MISS Hone Free Throw 2 of 2"),
+        _ev(1, 598, AWAY, 16, "Rebound", "Unknown", "Asix REBOUND (Off:0 Def:1)"),
+        _ev(1, 580, AWAY, 16, "Made Shot", "Jump Shot", "Asix 15' Jump Shot (2 PTS)", 2, 1, 2),
+    ])
+    assert list(poss["reason"]) == ["dreb", "made_fg"]
+    assert poss.iloc[0].points == 1 and poss.iloc[0].away_lineup == (11, 12, 13, 14, 15)
+    assert poss.iloc[1].away_lineup == (11, 13, 14, 15, 16)
+
+
+def test_live_play_after_a_trip_credits_the_possession_where_it_ends():
+    """The missed last free throw is rebounded by the shooting team, which then scores: live play with the player
+    who came on, so the possession is credited to the ten on the court when it ends."""
+    _, poss = _parse([
+        _ev(1, 600, AWAY, 12, "Foul", "Shooting", "Atwo S.FOUL (P1.T1)"),
+        _ev(1, 600, HOME, 1, "Free Throw", "Free Throw 1 of 2", "Hone Free Throw 1 of 2 (1 PTS)", 0, 1, 0),
+        _ev(1, 600, HOME, 5, "Substitution", "", "SUB: Hsix FOR Hfive"),
+        _ev(1, 600, HOME, 1, "Free Throw", "Free Throw 2 of 2", "MISS Hone Free Throw 2 of 2"),
+        _ev(1, 598, HOME, 6, "Rebound", "Unknown", "Hsix REBOUND (Off:1 Def:0)"),
+        _ev(1, 595, HOME, 6, "Made Shot", "Layup Shot", "Hsix 1' Layup (2 PTS)", 2, 3, 0),
+    ])
+    assert list(poss["reason"]) == ["made_fg"]
+    assert poss.iloc[0].points == 3 and poss.iloc[0].home_lineup == (1, 2, 3, 4, 6)
+
+
+def test_a_defensive_rebound_as_the_period_ends_gives_no_possession_until_the_rebounders_act():
+    _, poss = _parse([
+        _ev(1, 3, HOME, 1, "Missed Shot", "Jump Shot", "MISS Hone 26' 3PT Jump Shot", 3),
+        _ev(1, 1, AWAY, 11, "Rebound", "Unknown", "Aone REBOUND (Off:0 Def:1)"),
+    ])
+    assert list(poss["reason"]) == ["dreb"] and list(poss["offense"]) == [HOME]
+    _, poss = _parse([
+        _ev(1, 30, HOME, 1, "Missed Shot", "Jump Shot", "MISS Hone 26' 3PT Jump Shot", 3),
+        _ev(1, 28, AWAY, 11, "Rebound", "Unknown", "Aone REBOUND (Off:0 Def:1)"),
+        _ev(1, 10, AWAY, 11, "Missed Shot", "Jump Shot", "MISS Aone 20' Jump Shot", 2),
+    ])
+    assert list(poss["reason"]) == ["dreb", "period_end"] and list(poss["offense"]) == [HOME, AWAY]
+
+
+def test_threes_in_the_last_two_seconds_of_a_period_are_counted_apart():
+    gp, poss = _parse([
+        _ev(1, 30, HOME, 1, "Made Shot", "Jump Shot", "Hone 25' 3PT Jump Shot (3 PTS)", 3, 3, 0),
+        _ev(1, 2, AWAY, 11, "Made Shot", "Jump Shot", "Aone 45' 3PT Jump Shot (3 PTS)", 3, 3, 3),
+    ])
+    assert list(poss["fg3a"]) == [1, 1] and list(poss["fg3a_late"]) == [0, 1] and list(poss["fg3m_late"]) == [0, 1]
+    st = gp.stints(poss)
+    assert st["fg3a_late_s1_a"].sum() == 1 and st["fg3a_late_s1_h"].sum() == 0 and st["fg3m_late_a"].sum() == 1
+
+
+# ------------------------------------------------------------------- the season build (data/stints.py)
+def _gamelog(season, phase, players):
+    """A game log's columns for one game per player: (player id, free throws made, attempted)."""
+    return pd.DataFrame({"GAME_ID": [f"00{'2' if phase == 'RS' else '4'}0000{k}" for k in range(len(players))],
+                         "PLAYER_ID": [pid for pid, _, _ in players], "FTM": [made for _, made, _ in players],
+                         "FTA": [attempts for _, _, attempts in players], "season": season, "phase": phase})
+
+
+def test_expected_free_throws_are_priced_on_the_regular_season_and_the_playoffs_together(tmp_path):
+    """A playoff build reads the season's regular-season log beside its own, so a shooter's rate rests on his whole
+    season: 0.819 over a playoff run was Billups' 2008 rate in the playoff stints, 0.910 his season's."""
+    from openrapm.data.stints import season_gamelogs
+    cfg = {"_root": str(tmp_path), "paths": {"raw": "raw"}}
+    folder = tmp_path / "raw" / "gamelog"
+    folder.mkdir(parents=True)
+    regular = _gamelog(2008, "RS", [(1, 9, 10), (2, 5, 10)])
+    playoffs = _gamelog(2008, "PO", [(1, 3, 5)])
+    regular.to_parquet(folder / "2008_RS.parquet", index=False)
+    both = season_gamelogs(2008, "PO", playoffs, cfg)
+    assert sorted(both.phase.unique()) == ["PO", "RS"] and len(both) == 3
+    assert both[both.PLAYER_ID == 1].FTM.sum() == 12
+    # a season with no regular-season log on disk (or one in progress, with no playoff log) reads its own phase only
+    assert len(season_gamelogs(2009, "RS", _gamelog(2009, "RS", [(1, 1, 2)]), cfg)) == 1
+
+
+def test_the_bubbles_regular_season_games_are_neutral():
+    """The 2020 bubble's 88 regular-season games list a home team in the game log, so they are marked neutral by
+    date (config neutral_site_from), as its playoffs are by season."""
+    from types import SimpleNamespace
+
+    from openrapm.data.stints import _label_stints, neutral_site_dates
+    dates = neutral_site_dates({"neutral_site_from": [[2020, "2020-07-01"]]})
+
+    def game(day):
+        return SimpleNamespace(home_team_id=HOME, away_team_id=AWAY, game_id="0021901281", game_date=pd.Timestamp(day),
+                               neutral=False)
+    before = _label_stints(pd.DataFrame({"x": [1]}), game("2020-03-10"), 2020, "RS", {2020}, dates)
+    bubble = _label_stints(pd.DataFrame({"x": [1]}), game("2020-07-31"), 2020, "RS", {2020}, dates)
+    other = _label_stints(pd.DataFrame({"x": [1]}), game("2021-07-31"), 2021, "RS", {2020}, dates)
+    assert not before.neutral.iloc[0] and bubble.neutral.iloc[0] and not other.neutral.iloc[0]
+    assert neutral_site_dates({}) == {}

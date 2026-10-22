@@ -116,6 +116,8 @@ POSS_COUNTERS = (
     "xftm", "xftm_tech",                                    # EXPECTED free-throw makes (data/stint_parser.py)
     "pts1", "chance1",                                      # the first attempt's realised points (incl. its
                                                             # free throws) and whether it produced a rebound chance
+    "fg3a_late", "fg3m_late",                               # threes taken (made) in a period's last two seconds,
+                                                            # heaves mostly (stint_parser.LATE_THREE_SECONDS)
 )
 
 # Per-SHOOTER counters, kept by lineup slot so the shooter's own padded rate can price them when the
@@ -127,11 +129,13 @@ POSS_COUNTERS = (
 #   *1                the same restricted to the possession's first attempt (fg2a1/xl2_1/fg3a1/xl3_1),
 #                     the free throws that belong to it (fta1), and its trip's last free throw (ftlast1),
 #                     the one whose miss creates a rebound chance
-# Slots are positions in the stint's SORTED lineup (h1..h5 / a1..a5); `x` is a shooter who was no
-# longer on the court when the possession closed (subbed out after his free throws), priced at the
-# league rate.
+# Slots are positions in the stint's SORTED lineup (h1..h5 / a1..a5); `x` is a shooter outside the lineup the
+# possession is credited to, priced at the league rate.  Since a possession that ends inside its free-throw
+# trip is credited to the players on the court at the foul (data/stint_parser.py), the shooter of a trip is
+# in it; before 2026-10-22 a shooter subbed out after his free throws went to `x`.
 SHOOTER_COUNTERS = ("fg2a", "xl2", "xv2", "fg3a", "xl3", "xv3", "fta",
-                    "fg2a1", "xl2_1", "fg3a1", "xl3_1", "fta1", "ftlast1")
+                    "fg2a1", "xl2_1", "fg3a1", "xl3_1", "fta1", "ftlast1",
+                    "fg3a_late")                    # his threes in a period's last two seconds, part of his fg3a
 SLOTS = ("1", "2", "3", "4", "5", "x")
 SLOT_COUNTERS = tuple(f"{counter}_s{slot}" for counter in SHOOTER_COUNTERS for slot in SLOTS)
 

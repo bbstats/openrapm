@@ -388,10 +388,11 @@ def season_panel(season: int, cfg: dict, designs: dict, sources: SeasonSources, 
     fit = None if fit_game_ids is None else {str(game) for game in fit_game_ids}
     history = _role_history(season, sources, fit, share_cap(cfg))
     body = body_table(cfg) if cfg["pad_target"] == "body_and_possessions" else None
-    rates = box_rates(designs[OFFENCE], pad_target=cfg["pad_target"], body=body)
+    around = cfg.get("pad_k_around", "league")
+    rates = box_rates(designs[OFFENCE], pad_target=cfg["pad_target"], body=body, pad_k_around=around)
     # after the 13 rates, so the event design shares the matrix box_rates built (data/event_counts.py)
     event_counts, event_games = event_design(designs[OFFENCE], sources.tables.event_counts)
-    parts = box_rates(event_counts, pad_target=cfg["pad_target"], body=body)
+    parts = box_rates(event_counts, pad_target=cfg["pad_target"], body=body, pad_k_around=around)
     players = _player_columns(season, cfg, designs, history, fit, sources.debut)
     # the tracking dashboards are season totals: a fold scales them to the share of the season it fits on; the hustle
     # counts are summed over the games themselves (dashboard_rates.py)

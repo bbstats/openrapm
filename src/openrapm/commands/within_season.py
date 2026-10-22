@@ -125,6 +125,7 @@ EXPECTED_META = dict(exclude_neighbours=1, rows="chunks", unshrink=["defense"], 
 PLAYER_COLUMNS = list(dict.fromkeys(PRIOR_FEATURES + OFF_COURT + ON_MINUS_OFF + CLOSENESS))
 # the share of the opponents' three-point luck each defensive target keeps (data/shots.py), for the outcome pieces
 LUCK_KEPT = {"points_with_expected_opponent_threes": OPPONENT_THREE_LUCK_KEPT,
+             "points_with_expected_opponent_threes_late_as_scored": OPPONENT_THREE_LUCK_KEPT,
              "points_with_expected_opponent_threes_all": 0.0, "points_with_expected_opponent_threes_half": 0.5}
 PIECES_TOLERANCE = 1e-9         # the pieces add up to the games' part, and the refit reproduces it, to this
 PIECES_JITTER_TOLERANCE = 1e-6  # the same in a season whose solve needed rapm.solved_ridge's jitter (2020)

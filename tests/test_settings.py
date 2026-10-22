@@ -50,7 +50,7 @@ def test_each_distinct_target_is_fitted_once():
 
 def test_the_shrink_and_swap_settings():
     assert PRODUCT.shrink.fold_seasons == (1997, 2026) and PRODUCT.shrink.nearest == 8
-    assert PRODUCT.shrink.folds_tag == "ctx82c_early,ctx82c_within"
+    assert PRODUCT.shrink.folds_tag == "parser94_early,parser94_within"     # experiment 94, adopted 2026-10-22
     assert PRODUCT.shrink.defence_factor == 0.866
     swap = PRODUCT.swap
     assert (swap.applied_share, swap.type_model_penalty, swap.n_folds) == (0.0, 1e-4, 5)   # step 5 off, experiment 82
