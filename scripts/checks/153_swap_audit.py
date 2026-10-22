@@ -105,7 +105,7 @@ from openrapm.data.stints import load_season_stints
 from openrapm.data.within_folds import fold_games
 from openrapm.features import BOX_RATES
 from openrapm.prior_shrink import multipliers_by_season
-from openrapm.settings import TEST
+from openrapm.settings import TEST, factor_for
 
 # the test setting: the type model never trains on the rated season or its neighbours.  Step 5 is off since experiment
 # 82 (adopted 2026-10-20); this check audits it at the half strength it was built and shipped with
@@ -394,13 +394,14 @@ def unmatched(mine: pd.DataFrame, theirs: pd.DataFrame) -> int:
 # --------------------------------------------------------------------------------------------------- the folds
 def fold_factors(checks: Checks, folds: list) -> dict:
     """{season: (m_O, m_D, g_O, g_D)}, step 4's factors fitted as check 151 fits them (the 8 nearest fold seasons, the
-    test rule), the defensive ones times the shipped defence factor."""
+    test rule), the defensive ones times the shipped defence factor of their season."""
     wowy = checks.wowy
     table = multipliers_by_season(sorted({fold.season for fold in folds}), folds, "test", wowy.NEAREST,
                                   free_games=wowy.FREE_GAMES).set_index("season")
-    return {int(season): (float(row.multiplier_off), wowy.DEFENCE_FACTOR * float(row.multiplier_def),
+    factor = {int(season): factor_for(wowy.DEFENCE_FACTORS, int(season)) for season in table.index}
+    return {int(season): (float(row.multiplier_off), factor[int(season)] * float(row.multiplier_def),
                           float(row.get("games_multiplier_off", 1.0)),
-                          wowy.DEFENCE_FACTOR * float(row.get("games_multiplier_def", 1.0)))
+                          factor[int(season)] * float(row.get("games_multiplier_def", 1.0)))
             for season, row in table.iterrows()}
 
 

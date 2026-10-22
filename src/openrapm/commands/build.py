@@ -48,6 +48,7 @@ from ..data.second_prior_files import line_setup, load_grams
 from ..data.stints import load_season_stints
 from ..data.tables import design_row_teams, player_names
 from ..data.within_folds import check_fold_files, fold_games, load_folds
+from ..settings import describe_factors
 from . import parallel
 
 SIDES = ("O", "D")
@@ -438,10 +439,10 @@ def step4_multipliers(seasons, folds: list, shrink) -> pd.DataFrame:
     multipliers = prior_shrink.multipliers_by_season(seasons, folds, shrink.rule, shrink.nearest,
                                                      shrink.free_games_part).assign(
         fold_tag=shrink.folds_tag, fold_first=fold_seasons[0], fold_last=fold_seasons[-1])
-    if shrink.defence_factor != 1.0:
-        multipliers["multiplier_def"] *= shrink.defence_factor
-        if shrink.free_games_part:
-            multipliers["games_multiplier_def"] *= shrink.defence_factor
+    factor = multipliers.season.map(shrink.defence_factor_for).to_numpy(float)
+    multipliers["multiplier_def"] *= factor
+    if shrink.free_games_part:
+        multipliers["games_multiplier_def"] *= factor
     return multipliers
 
 
@@ -452,8 +453,8 @@ def shrink_seasons(cfg: dict, table: pd.DataFrame, settings,
     shrink = settings.shrink
     folds = step4_folds(cfg, shrink)[0] if folds is None else folds
     multipliers = step4_multipliers(table.season.unique(), folds, shrink)
-    if shrink.defence_factor != 1.0:
-        print(f"  step 4: both defensive multipliers times {shrink.defence_factor:g}", flush=True)
+    if shrink.defence_factors != ((0, 1.0),):
+        print(f"  step 4: both defensive multipliers times {describe_factors(shrink.defence_factors)}", flush=True)
     nearest = f", the {shrink.nearest} nearest fold seasons" if shrink.nearest else ""
     print(f"  step 4: {len(folds)} folds of {shrink.folds_tag} ({shrink.fold_seasons[0]}-{shrink.fold_seasons[1]}), "
           f"{shrink.rule} rule{nearest}; the prior part multiplied by {multipliers.multiplier_off.min():.3f} to "

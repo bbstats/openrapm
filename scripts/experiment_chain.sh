@@ -58,7 +58,10 @@ LOG=outputs/${NAME}_chain.log
 # (experiment 94, parser94, published), with the threes of a period's last two seconds counted as they happened in the
 # defensive target (points_with_expected_opponent_threes_late_as_scored, the shipped default), its own folds
 # heave95_early and heave95_within; not published yet.
-INC_NAME=${INC_NAME:-heave95}
+# Since later the same day it is experiment 98 (eras98): heave95's tables with the defense factor by era, 0.89
+# before 2017 and 0.84 from 2017 (settings.ShrinkSettings.defence_factors, the shipped default), its folds still
+# heave95's; 151 applies the same factors to every system it scores.
+INC_NAME=${INC_NAME:-eras98}
 INC_SYSTEM=${INC_SYSTEM:-heave95}               # the incumbent's folds (<name>_early, <name>_within) for 151
 CONTROL_NAME=${CONTROL_NAME:-noise_bags10}       # the noise control's folds (<name>_early, <name>_within) for 151
 INC_FOLDS=${INC_FOLDS:-heave95_early,heave95_within}

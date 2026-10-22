@@ -8821,3 +8821,70 @@ ctx82c 0.994 and 0.925.
   tie.  So 44% of its published -0.230 holds at the old width and 56% was width; the adoption stands on the 44%.
 - Proposed, not built: every chain also reads the candidate rescaled to the incumbent's width, on both tests, so a
   win is told apart from a width.
+
+### The defense factor by era (the owner, 2026-10-22: "defensive 'dials' (yuck) by era is fine probably? what else?")
+
+Read-only (`scratch/2026-10-22_bugfix/era_dial.py`, `outputs/era_dial_heave95.log`), on heave95 with the offense as
+shipped; the factor replaces the 0.866 on both defensive multipliers.  Against shipped, below 0 better:
+
+| version | factor 1997-2006 | factor 2007-2016 | factor 2017-2026 | WOWY 1997-2006 | WOWY 2007-2016 | WOWY 2017-2026 | WOWY z | year-over-year | z |
+|---|---|---|---|---|---|---|---|---|---|
+| two eras, by hand | 0.89 | 0.89 | 0.866 | -0.046 | -0.035 | 0 | -5.4 | +0.016 | +2.5 |
+| two eras, by hand | 0.89 | 0.89 | 0.84 | -0.046 | -0.035 | -0.015 | -5.8 | +0.012 | +1.5 |
+| each season from its 8 fold seasons | 1.000 | 0.956 | 0.867 | -0.161 | -0.071 | +0.011 | -3.5 | +0.129 | +3.8 |
+
+Seasons better with 0.89 / 0.84: 10 of 10, 10 of 10, 5 of 10.  The fitted factor, the grid value with the lowest
+within-season error over the 8 fold seasons step 4 already uses: 1.0 in 1997-2007, the grid's top, 0.95 in 2008-2014,
+0.89-0.92 in 2015-2019, 0.84-0.866 in 2020-2025, 0.80 in 2026, the grid's bottom.  Defense spread by era: shipped 1.70
+/ 1.59 / 1.55; 0.89 / 0.84 1.74 / 1.63 / 1.51; fitted 1.96 / 1.75 / 1.56.
+
+**Reading.**  The within-season test wants the defense wider the older the season; fitted from neighboring seasons it
+fails the year-over-year guard.  0.89 before 2017 and 0.84 from 2017 passes both: better in every season of the two
+older eras, a tie in 2017-2026, a tie year over year.  Its two numbers were picked by eye from the width test on the
+same seasons, so part of the gain may be tuning.  2026 under it: defense 3% narrower; the same top 20 but Ty Jerome
+21st to 19th, in, and Scottie Barnes 20th to 21st, out; Victor Wembanyama -0.19, Neemias Queta -0.14, Ausar Thompson
+-0.13.  Verdict the owner's.
+
+### Season widths from a smooth curve (the owner, 2026-10-22: "maybe just a lowess (x=season,y=width) that for the 'next season' just updates slowly for 'new season'")
+
+Read-only (`scratch/2026-10-22_bugfix/width_curve.py`, `outputs/width_curve_heave95.log`), on heave95.  Each season's
+wanted width per side is the factor with the lowest within-season WOWY error on its own held-back stints, from a grid
+with a parabola through the best three points: offense 1.07-1.33, mean about 1.22, no trend; defense about 1.0-1.1 in
+1997-2003 falling to 0.70-0.91 in 2017-2026.  The curve is a tricube-weighted local mean on the 9 nearest seasons,
+each season's value fitted without the season and its two neighbors; one constant per side keeps its mean over
+1997-2026 at today's width, offense 1 and defense 0.866, since the within-season test alone wants every season far
+wider.  Defense on the curve: 0.928 / 0.883 / 0.787 by era, 2026 0.742, a new season 0.735.  Offense: 0.977 / 1.009
+/ 1.014.
+
+| version | WOWY 1997-2006 | WOWY 2007-2016 | WOWY 2017-2026 | WOWY z | year-over-year | z | 2026 defense width |
+|---|---|---|---|---|---|---|---|
+| curve, both sides | -0.004 | -0.054 | -0.055 | -2.4 | +0.020 | +0.8 | 0.742 |
+| curve, defense only | -0.112 | -0.014 | -0.003 | -2.4 | +0.028 | +1.6 | 0.742 |
+| two eras by hand, above | -0.046 | -0.035 | -0.015 | -5.8 | +0.012 | +1.5 | 0.84 |
+
+**Reading.**  The curve passes both tests, no era worse, but at the newest season it leans on 2023-2025, whose own
+readings want 0.70-0.78, while 2026's own games want 0.87: 2026's within-season error gets worse, +0.093 with both
+sides on the curve and +0.177 with defense only, and its defensive players drop, Victor Wembanyama -0.86, Neemias
+Queta -0.67, Ausar Thompson -0.61; Mitchell Robinson and Scottie Barnes leave the top 20, Ty Jerome and Donovan
+Mitchell enter.  The two eras by hand read better on every count here.  Verdict the owner's.
+
+## Experiment 98 ADOPTED (2026-10-22, the owner, after the two-era split was explained: "ok go for it"): the defense factor by era
+
+- **The shipped default.**  `ShrinkSettings.defence_factors` ((0, 0.89), (2017, 0.84)), 0.89 before 2017 and 0.84 from
+  2017, in place of 0.866 in every season; `--defence-factor` takes one factor or one by era, `0.89,2017:0.84`; the
+  build, check 151 and check 153 apply each season's own factor.
+- **The reproduction.**  `openrapm shrink --setting test --folds heave95_early,heave95_within --name eras98` on
+  heave95's step-3 table equals the read-only table of "The defense factor by era" to 2e-15.  The year-over-year test,
+  team-game, both directions, against heave95: +0.012, z +1.53, clustered +1.34, 26 of 56, as read.  Within-season
+  WOWY against heave95, from that read: -0.046 / -0.035 / -0.015 by era, z -5.8, 25 of 30.
+- **The incumbent's test tables** are `outputs/season_ratings_eras98*.parquet`; its folds are still heave95's; the
+  chain's `INC_NAME` is eras98.  Not published: the product is built at the next publish, with experiment 95.
+
+### Experiment 99: experiment 96 on the incumbent (registered before any result)
+
+Experiment 96's two switches, `body_inputs: season_listing` and `pad_k_around: target`, with its season panel
+`outputs/season_panel_b3.parquet`, on the incumbent: heave95's defensive target and the defense factor by era, its own
+folds.  The chain `inputs99` under `scratch/2026-10-22_bugfix/config_inputs.yaml`, against eras98.  Read as a fix: a
+tie or better in every era on the within-season test, the year-over-year test not worse at +2, the 2026 top 20.  The
+owner's "ok go for it" answered a message that also asked about experiment 96; it is taken to cover adopting it if it
+reads as experiment 96 did.

@@ -11,7 +11,8 @@ every number quoted here; read its measurement traps before trusting a number.  
 - No step numbers in messages.  The names: **box-score prior** (the LightGBM, also "preliminary prior"); **+/-** (what
   the season's games add on top of the prior); **swap adjustment** (the old after-the-fact correction from lineup
   swaps, off since experiment 82); **swap part of the prior** (experiment 82's line, learned from the same swaps,
-  added before the games are weighed); **defense dial** (step 4's extra 0.866 on defense).  Define each the first
+  added before the games are weighed); **defense factor** (the shrink's extra factor on defense, 0.89 before 2017 and 0.84 from 2017; never "dial",
+  the owner: "yuck").  Define each the first
   time it appears.
 - Experiments by name in chat, numbers only in the record files ("the three-input prior", not "experiment 92").
 - Answer exactly what is asked.  Results as tables, one quantity per column, no parentheses, one TL;DR sentence.
@@ -75,7 +76,7 @@ every number quoted here; read its measurement traps before trusting a number.  
 | 2 | box-score prior | `box_prior.py` | LightGBM `lgb1_tune2`, linear leaves; feature set `hustle_no_three_pct`; five player folds; 10 bags |
 | 2b | swap part of the prior | `second_prior.py` | line `ctx82` on `context_and_types_centred`, team totals held |
 | 3 | the rating | `prior_rapm.py` | RAPM pulled toward the prior, penalty 13,037, centred |
-| 4 | the shrink, with the defense dial | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, 8 nearest fold seasons, defense times 0.866; folds `heave95_early,heave95_within` |
+| 4 | the shrink, with the defense factor | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, 8 nearest fold seasons, defense times 0.89 before 2017 and 0.84 from 2017; folds `heave95_early,heave95_within` |
 | 5 | swap adjustment | `swap_adjust.py` | off: applied share 0, the build skips it |
 
 - `openrapm build` writes `outputs/season_ratings_product.parquet` with `_step3` and `_step4` beside it.

@@ -280,8 +280,39 @@ def _add_folds_tag(parser) -> None:
                         default=PRODUCT.shrink.free_games_part,
                         help="also multiply the games' part by a factor fitted beside the prior's (shipped since "
                              "experiment 65; --no-free-games-part holds it at 1)")
-    parser.add_argument("--defence-factor", type=float, default=PRODUCT.shrink.defence_factor, metavar="K",
-                        help="multiply both defensive multipliers by K, every season (default %(default)s)")
+    parser.add_argument("--defence-factor", type=parse_defence_factors, default=PRODUCT.shrink.defence_factors,
+                        metavar="K[,FIRST:K...]",
+                        help="multiply both defensive multipliers by K: one factor for every season, or one by era, "
+                             "each from its first season on: 0.89,2017:0.84 is 0.89 before 2017 and 0.84 from 2017 "
+                             f"(default {format_defence_factors(PRODUCT.shrink.defence_factors)})")
+
+
+def parse_defence_factors(text) -> tuple:
+    """"0.866" -> ((0, 0.866),), every season; "0.89,2017:0.84" -> ((0, 0.89), (2017, 0.84)); a tuple passes
+    through."""
+    if isinstance(text, tuple):
+        return text
+    pairs = []
+    for i, part in enumerate(str(text).split(",")):
+        first, colon, factor = part.strip().rpartition(":")
+        try:
+            pairs.append((int(first) if colon else 0, float(factor)))
+        except ValueError:
+            pairs = []
+            break
+        if bool(colon) != (i > 0):
+            pairs = []
+            break
+    firsts = [first for first, _ in pairs]
+    if not pairs or firsts != sorted(set(firsts)) or any(factor <= 0 for _, factor in pairs):
+        raise argparse.ArgumentTypeError(f"{text!r}: write one factor, 0.866, or one by era with its first season "
+                                         "after the first, 0.89,2017:0.84, seasons rising and factors above 0")
+    return tuple(pairs)
+
+
+def format_defence_factors(factors: tuple) -> str:
+    """((0, 0.89), (2017, 0.84)) -> "0.89,2017:0.84", the form --defence-factor reads."""
+    return ",".join([f"{factors[0][1]:g}"] + [f"{first}:{factor:g}" for first, factor in factors[1:]])
 
 
 def parse_span(text) -> tuple:
@@ -305,7 +336,7 @@ def swap_options(swap, args: argparse.Namespace):
 def shrink_options(shrink, args: argparse.Namespace):
     """settings.shrink with the command line's fold folders, fold seasons and nearest count."""
     return replace(shrink, folds_tag=args.folds, fold_seasons=args.fold_seasons, nearest=args.nearest,
-                   free_games_part=args.free_games_part, defence_factor=args.defence_factor)
+                   free_games_part=args.free_games_part, defence_factors=args.defence_factor)
 
 
 def _add_applied_share(parser) -> None:

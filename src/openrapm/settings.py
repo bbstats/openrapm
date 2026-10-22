@@ -31,8 +31,29 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 
 __all__ = ["Targets", "LabelSettings", "PriorSettings", "ROW_LABELS", "TEAM_TOTALS", "SECOND_PRIOR_INPUTS",
-           "RidgeSettings", "ShrinkSettings",
+           "RidgeSettings", "ShrinkSettings", "factor_for", "describe_factors",
            "SwapSettings", "Settings", "PRODUCT", "TEST"]
+
+
+def factor_for(factors: tuple, season: int) -> float:
+    """The factor of `season` from (first season, factor) pairs in season order, each pair holding from its first
+    season until the next pair's; a season before the first pair takes the first pair's.
+
+    Example: with ((0, 0.89), (2017, 0.84)), 2016 gives 0.89, and 2017 and 2027 give 0.84.
+    """
+    chosen = factors[0][1]
+    for first, factor in factors:
+        if int(season) >= first:
+            chosen = factor
+    return float(chosen)
+
+
+def describe_factors(factors: tuple) -> str:
+    """The pairs in words: "0.866 every season", or "0.89 before 2017, 0.84 from 2017"."""
+    if len(factors) == 1:
+        return f"{factors[0][1]:g} every season"
+    return ", ".join([f"{factors[0][1]:g} before {factors[1][0]}"]
+                     + [f"{factor:g} from {first}" for first, factor in factors[1:]])
 
 
 @dataclass(frozen=True)
@@ -210,10 +231,17 @@ class ShrinkSettings:
     # a multiplier on the games' part too, fitted beside the prior's (prior_shrink, "The games' part freed";
     # notes/DECISIONS.md, experiment 65, adopted 2026-10-15: "Adopt one multiplier as the new incumbent")
     free_games_part: bool = True
-    # one more factor on both defensive multipliers, shared by every season, chosen with the booster's settings by
-    # check 152's guarded search (notes/DECISIONS.md, experiment 76, adopted 2026-10-16): the held-back games set the
-    # defence's width within a season, and the next-season check wants it narrower on the tuned prior; 1 is the old step
-    defence_factor: float = 0.866
+    # one more factor on both defensive multipliers, by era: (first season, factor) pairs, each holding from its first
+    # season until the next pair's (`factor_for`).  0.866 in every season from experiment 76 (adopted 2026-10-16,
+    # check 152's guarded search: the held-back games set the defence's width within a season, and the next-season
+    # check wants it narrower); since experiment 98 (adopted 2026-10-22) 0.89 before 2017 and 0.84 from 2017: the
+    # within-season test wants the older seasons' defence wider in all 20 of them, and narrowing the newest era keeps
+    # the year-over-year test even (notes/DECISIONS.md, "The defense factor by era").  ((0, 1.0),) is the old step
+    defence_factors: tuple = ((0, 0.89), (2017, 0.84))
+
+    def defence_factor_for(self, season: int) -> float:
+        """The factor on `season`'s two defensive multipliers."""
+        return factor_for(self.defence_factors, season)
 
 
 @dataclass(frozen=True)

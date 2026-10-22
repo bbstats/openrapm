@@ -69,14 +69,14 @@ import pandas as pd
 import scipy.sparse as sp
 
 from openrapm.commands.console import use_utf8
-from openrapm.settings import PRODUCT
+from openrapm.settings import PRODUCT, factor_for
 
 REGULAR_SHARE = 0.40            # a regular's share of his team's fit-game possessions on that side
 NEAREST = 8                     # step 4's fold seasons, as shipped
 SLICES = ("all", "dnp")
 PIECES_TOLERANCE = 1e-8         # the shipped step through check 145's code against `step4`, per player (145's own)
 FREE_GAMES = PRODUCT.shrink.free_games_part     # step 4 multiplies the games' part too (experiment 65)
-DEFENCE_FACTOR = PRODUCT.shrink.defence_factor  # and both defensive factors by one more, every season (experiment 76)
+DEFENCE_FACTORS = PRODUCT.shrink.defence_factors  # and both defensive factors by one more, by era (experiments 76, 98)
 SHIPPED_FAMILY = "u_whole" if FREE_GAMES else "step4"      # check 145's family that is the shipped step 4
 
 
@@ -246,9 +246,9 @@ class PieceStages:
     each family's multipliers from its 8 nearest fold seasons (the test rule) and the ratings they give."""
 
     def __init__(self, pieces_module, families: list, folds: list, where: dict,
-                 defence_factor: float = DEFENCE_FACTOR):
+                 defence_factors: tuple = DEFENCE_FACTORS):
         from openrapm.prior_shrink import fold_seasons_used
-        self.module, self.where, self.defence_factor = pieces_module, where, float(defence_factor)
+        self.module, self.where, self.defence_factors = pieces_module, where, tuple(defence_factors)
         self.families = list(dict.fromkeys([SHIPPED_FAMILY, *families]))
         unknown = set(families) - set(pieces_module.FAMILIES)
         if unknown:
@@ -275,16 +275,17 @@ class PieceStages:
         """{"pieces_<family>": {"O", "D"}} for one fold, from its season's multipliers, the defensive ones dialled."""
         multipliers, pieces = self.multipliers[fold.season], self.read(fold)
         return {f"pieces_{family}": self.module.family_ratings(fold, pieces, family,
-                                                               self.dialled(family, multipliers[family]))
+                                                               self.dialled(family, multipliers[family],
+                                                                            fold.season))
                 for family in self.families}
 
-    def dialled(self, family: str, values) -> np.ndarray:
-        """A family's multipliers, offence's pieces then defence's, with every defensive one times the defence factor,
-        as the shipped step 4 takes both of its defensive multipliers times it (`step4` in `system_errors`).  Without
-        it the shipped family could never equal `step4`, and the check in `stage_ratings` stopped every run on its
-        first fold (until 2026-10-22)."""
+    def dialled(self, family: str, values, season: int) -> np.ndarray:
+        """A family's multipliers, offence's pieces then defence's, with every defensive one times the season's defence
+        factor, as the shipped step 4 takes both of its defensive multipliers times it (`step4` in `system_errors`).
+        Without it the shipped family could never equal `step4`, and the check in `stage_ratings` stopped every run on
+        its first fold (until 2026-10-22)."""
         values = np.array(values, dtype=float)
-        values[len(self.module.FAMILIES[family]["columns"]):] *= self.defence_factor
+        values[len(self.module.FAMILIES[family]["columns"]):] *= factor_for(self.defence_factors, season)
         return values
 
     def table(self, name: str) -> pd.DataFrame:
@@ -316,21 +317,21 @@ def system_folds(within, name: str) -> tuple[list, dict]:
 
 
 def piece_stages(name: str, folds: list, where: dict, unit: str, families: list | None,
-                 multiplier_tables: list | None, defence_factor: float = DEFENCE_FACTOR) -> PieceStages | None:
+                 multiplier_tables: list | None, defence_factors: tuple = DEFENCE_FACTORS) -> PieceStages | None:
     """The system's step-4-in-pieces stages, when families are asked and every fold carries pieces; else None.  The
-    defensive multipliers are dialled by `defence_factor`, the system's step 4's."""
+    defensive multipliers are dialled by `defence_factors`, the system's step 4's."""
     if not families or not all((where[fold.stem] / f"pieces_{fold.stem}.parquet").exists() for fold in folds):
         return None
     if unit != "stint":
         raise SystemExit("--pieces scores stint by stint only")
-    pieces = PieceStages(_pieces(), families, folds, where, defence_factor)
+    pieces = PieceStages(_pieces(), families, folds, where, defence_factors)
     if multiplier_tables is not None:
         multiplier_tables.append(pieces.table(name))
     return pieces
 
 
 def system_errors(audit, within, name: str, seasons: tuple, unit: str = "stint", families: list | None = None,
-                  multiplier_tables: list | None = None, defence_factor: float = DEFENCE_FACTOR) -> pd.DataFrame:
+                  multiplier_tables: list | None = None, defence_factors: tuple = DEFENCE_FACTORS) -> pd.DataFrame:
     """One row per season, stage and slice: the system's WOWY error over the season's folds.  With `families` (check
     145's), a system whose folds carry pieces also gets a stage per family; its multipliers go to
     `multiplier_tables`."""
@@ -340,7 +341,7 @@ def system_errors(audit, within, name: str, seasons: tuple, unit: str = "stint",
     multipliers = multipliers_by_season(sorted({fold.season for fold in scored}), folds, "test", NEAREST,
                                         free_games=FREE_GAMES)
     multipliers = multipliers.set_index("season")
-    pieces = piece_stages(name, folds, where, unit, families, multiplier_tables, defence_factor)
+    pieces = piece_stages(name, folds, where, unit, families, multiplier_tables, defence_factors)
     sums: dict = {}
     cache = None
     if unit == "stint":
@@ -349,9 +350,10 @@ def system_errors(audit, within, name: str, seasons: tuple, unit: str = "stint",
         cache = DesignCache(load_config(), keep=1)
     for fold in scored:
         row = multipliers.loc[fold.season]
-        step4 = (float(row.multiplier_off), defence_factor * float(row.multiplier_def),
+        factor = factor_for(defence_factors, fold.season)
+        step4 = (float(row.multiplier_off), factor * float(row.multiplier_def),
                  float(row.get("games_multiplier_off", 1.0)),
-                 defence_factor * float(row.get("games_multiplier_def", 1.0)))
+                 factor * float(row.get("games_multiplier_def", 1.0)))
         teams = team_arrays(where[fold.stem], fold.stem)
         if unit == "stint":
             errors = stint_fold_errors(audit, fold, teams, cache.season(fold.season, "pts"), step4,
@@ -427,9 +429,9 @@ def main(argv=None) -> int:
                         help="check 145's families, comma-separated (source, certainty, ...): a stage each for the "
                              "systems whose folds carry pieces (`openrapm folds --pieces`)")
     parser.add_argument("--defence-factors", default="",
-                        help="name:K,... : step 4's defensive multipliers times K for that system instead of the "
-                             "shipped settings.ShrinkSettings.defence_factor (openrapm shrink --defence-factor); a "
-                             "system built before experiment 76 is 1")
+                        help="name:K,... : step 4's defensive multipliers times K in every season for that "
+                             "system instead of the shipped settings.ShrinkSettings.defence_factors (openrapm shrink "
+                             "--defence-factor); a system built before experiment 76 is 1")
     parser.add_argument("--first", type=int, default=1997)
     parser.add_argument("--last", type=int, default=2026)
     args = parser.parse_args(argv)
@@ -444,11 +446,11 @@ def main(argv=None) -> int:
         names.insert(0, args.ref)
     tables, multiplier_tables = [], []
     families = [family for family in args.pieces.split(",") if family]
-    factors = {key: float(value) for key, value in (part.split(":") for part in args.defence_factors.split(",")
-                                                    if part)}
+    factors = {key: ((0, float(value)),) for key, value in (part.split(":") for part in args.defence_factors.split(",")
+                                                            if part)}
     for name in names:
         tables.append(system_errors(audit, within, name, (args.first, args.last), args.unit, families,
-                                    multiplier_tables, factors.get(name, DEFENCE_FACTOR)))
+                                    multiplier_tables, factors.get(name, DEFENCE_FACTORS)))
         print(f"  {name}: {tables[-1].season.nunique()} seasons ({time.time() - started:.0f}s)", flush=True)
     seasons_table = pd.concat(tables, ignore_index=True)
     (outputs / "csv").mkdir(exist_ok=True)

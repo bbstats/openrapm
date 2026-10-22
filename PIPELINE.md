@@ -234,10 +234,13 @@ command runs in one process as before.
 - **Settings:**
   - the method (experiment 33b, adopted 2026-10-03), with the games' part freed (experiment 65, adopted
     2026-10-15; `ShrinkSettings.free_games_part`, `--no-free-games-part` holds it at 1);
-  - both defensive multipliers times 0.866 in every season, chosen with the booster's settings by the same search
-    (experiment 76, `ShrinkSettings.defence_factor`, `--defence-factor`);
-  - the folds `ctx82c_early,ctx82c_within`, experiment 93's own folds, built with the centred second prior (before
-    them experiment 82's, `ctx82_early,ctx82_within`, and experiment 78's, `bags10_early,bags10_within`), seasons
+  - both defensive multipliers times 0.89 before 2017 and 0.84 from 2017 (experiment 98, adopted 2026-10-22:
+    the within-season test wants the older seasons' defense wider, and narrowing the newest era keeps the
+    year-over-year test even; `ShrinkSettings.defence_factors`, `--defence-factor 0.89,2017:0.84`); 0.866 in
+    every season before it, chosen with the booster's settings by the same search (experiment 76);
+  - the folds `heave95_early,heave95_within`, experiment 95's own folds on the rebuilt stints (before them
+    experiment 94's, `parser94_early,parser94_within`, experiment 93's, `ctx82c_early,ctx82c_within`, built with
+    the centred second prior, experiment 82's and experiment 78's, `bags10_early,bags10_within`), seasons
     1997-2026 pinned, because the fold folder grew once
     and an unpinned rerun shrank harder (experiment 34's correction);
   - each season's multipliers from the 8 fold seasons nearest it (experiment 55, adopted 2026-10-12).

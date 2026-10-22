@@ -90,6 +90,17 @@ def test_the_names_used_before_the_rename_still_work_and_say_so(capsys):
         PRODUCT, targets=replace(PRODUCT.targets, defence="points_with_expected_opponent_threes"))
 
 
+def test_the_defence_factor_is_one_number_or_one_by_era():
+    assert cli.parse_defence_factors("0.866") == ((0, 0.866),)
+    assert cli.parse_defence_factors("0.89,2017:0.84") == ((0, 0.89), (2017, 0.84))
+    assert cli.format_defence_factors(((0, 0.89), (2017, 0.84))) == "0.89,2017:0.84"
+    args = _parse("shrink", "--base", "x", "--defence-factor", "0.866")
+    assert cli.shrink_options(PRODUCT.shrink, args).defence_factors == ((0, 0.866),)
+    for text in ("2017:0.84", "0.89,0.84", "0.89,2017:0.84,2010:0.9", "0.89,2017:-1", "a"):
+        with pytest.raises(argparse.ArgumentTypeError):
+            cli.parse_defence_factors(text)
+
+
 def test_the_last_occurrence_of_a_flag_wins():
     """scripts/experiment_chain.sh puts the incumbent's flags first so an experiment's own can override them."""
     args = _parse("rate", "--features", "box_score_and_bio", "--booster-params", "lgb1", "--booster-params", "other")

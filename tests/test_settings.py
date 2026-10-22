@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from openrapm.data.config import booster_params, load_config
-from openrapm.settings import PRODUCT, TEST
+from openrapm.settings import PRODUCT, TEST, describe_factors, factor_for
 
 ROOT = Path(__file__).resolve().parents[1]
 BOOSTER_KEYS = {"learning_rate", "n_estimators", "num_leaves", "max_depth", "min_child_samples", "reg_lambda",
@@ -52,9 +52,21 @@ def test_each_distinct_target_is_fitted_once():
 def test_the_shrink_and_swap_settings():
     assert PRODUCT.shrink.fold_seasons == (1997, 2026) and PRODUCT.shrink.nearest == 8
     assert PRODUCT.shrink.folds_tag == "heave95_early,heave95_within"     # experiment 95, adopted 2026-10-22
-    assert PRODUCT.shrink.defence_factor == 0.866
+    assert PRODUCT.shrink.defence_factors == ((0, 0.89), (2017, 0.84))     # experiment 98, adopted 2026-10-22
+    assert [PRODUCT.shrink.defence_factor_for(s) for s in (1997, 2016, 2017, 2026, 2027)] == [0.89, 0.89, 0.84, 0.84,
+                                                                                              0.84]
     swap = PRODUCT.swap
     assert (swap.applied_share, swap.type_model_penalty, swap.n_folds) == (0.0, 1e-4, 5)   # step 5 off, experiment 82
+
+
+def test_a_factor_by_era_holds_from_its_first_season_until_the_next():
+    factors = ((0, 0.9), (2007, 0.88), (2017, 0.84))
+    assert [factor_for(factors, s) for s in (1990, 2006, 2007, 2016, 2017, 2030)] == [0.9, 0.9, 0.88, 0.88, 0.84,
+                                                                                      0.84]
+    assert factor_for(((0, 0.866),), 2026) == 0.866
+    assert factor_for(((1997, 0.9),), 1990) == 0.9          # before the first pair: the first pair's
+    assert describe_factors(((0, 0.866),)) == "0.866 every season"
+    assert describe_factors(((0, 0.89), (2017, 0.84))) == "0.89 before 2017, 0.84 from 2017"
 
 
 def test_the_test_setting_differs_in_three_places_only():
