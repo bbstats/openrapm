@@ -30,7 +30,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 
-__all__ = ["Targets", "LabelSettings", "PriorSettings", "ROW_LABELS", "TEAM_TOTALS", "SECOND_PRIOR_INPUTS",
+__all__ = ["Targets", "LabelSettings", "UNSHRINK_LABELS", "PriorSettings", "ROW_LABELS", "TEAM_TOTALS",
+           "SECOND_PRIOR_INPUTS",
            "RidgeSettings", "ShrinkSettings", "factor_for", "describe_factors",
            "SwapSettings", "Settings", "PRODUCT", "TEST"]
 
@@ -188,6 +189,10 @@ class PriorSettings:
 
 
 ROW_LABELS = ("career", "outside", "nearest")
+# LabelSettings.unshrink_columns by name (`openrapm rate --unshrink-labels`): the defensive label alone, shipped since
+# experiment 22 (2026-09-18), or both labels, experiment 102 (notes/DECISIONS.md; the owner, 2026-10-23: "let's try un
+# shrinking the offensive label"): the offensive prior is then priced on the same scale as the defensive one
+UNSHRINK_LABELS = {"defense": ("defense",), "both": ("offense", "defense")}
 TEAM_TOTALS = ("held", "free", "spread_held")    # PriorSettings.second_prior_team_totals
 # PriorSettings.second_prior_inputs
 SECOND_PRIOR_INPUTS = ("context", "context_and_types", "context_and_types_centred", "own_teammates_opponents")
@@ -244,6 +249,12 @@ class ShrinkSettings:
     # within-season test wants the older seasons' defence wider in all 20 of them, and narrowing the newest era keeps
     # the year-over-year test even (notes/DECISIONS.md, "The defense factor by era").  ((0, 1.0),) is the old step
     defence_factors: tuple = ((0, 0.89), (2017, 0.84))
+    # two layers (prior_shrink, "Since experiment 106"): each part split into his team's mean, multiplied as above, and
+    # his deviation from it, with four multipliers of its own fitted on the held-back stints within games
+    # (notes/DECISIONS.md, experiment 106, adopted 2026-10-23: "please adopt, yes - D"); False is one layer
+    within_team_layer: bool = True
+    # the within layer's multipliers times these, offence then defence: version D of experiment 106
+    within_factors: tuple = (0.75, 1.0)
 
     def defence_factor_for(self, season: int) -> float:
         """The factor on `season`'s two defensive multipliers."""

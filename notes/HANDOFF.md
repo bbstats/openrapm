@@ -1,7 +1,7 @@
 # Handoff
 
 **What this file is.**  Where the work stands, what waits on the owner, and the commands a session runs.  Rewritten
-on the afternoon of 2026-10-22; the earlier file is in git history.  `DECISIONS.md` is the permanent record and carries
+on the afternoon of 2026-10-22, its status and next steps on 2026-10-23 (twice); the earlier file is in git history.  `DECISIONS.md` is the permanent record and carries
 every number quoted here; read its measurement traps before trusting a number.  `README.md` says what OpenRAPM is,
 `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's standing rules.
 
@@ -18,11 +18,17 @@ every number quoted here; read its measurement traps before trusting a number.  
 - Answer exactly what is asked.  Results as tables, one quantity per column, no parentheses, one TL;DR sentence.
 - Within-season WOWY is what counts, and a win must hold in every era: 1997-2006, 2007-2016, 2017-2026.
 
-## Where it stands, 2026-10-22, evening
+## Where it stands, 2026-10-23
 
 - **The bug-fix pass of 2026-10-22** (DECISIONS.md, "The bug-fix pass"): the owner asked for a hunt for bugs behind the
   artifacts; the findings, the code-only fixes, experiments 94-99, the width test and the season widths are there.
-- **The incumbent is experiment 99 (inputs99), PUBLISHED 2026-10-22** (the owner: "Publish").  On top of experiment
+- **The incumbent is experiment 106 (layers106), PUBLISHED 2026-10-23** (the owner: "please adopt, yes - D. you may
+  publish if 2026 our rankings correlate more nicely w/ consensus"; DECISIONS.md, "Experiment 106 ADOPTED and
+  PUBLISHED"): inputs99 with the shrink in two layers, each player's deviation from his team's mean multiplied on its
+  own, fitted on held-back stints within games, times 0.75 on offense and 1.0 on defense.  2026 defense over offense
+  1.09 to 0.91; consensus agreement of the total 0.811 to 0.831 in 2026.  The chain's incumbent tables are
+  `season_ratings_layers106*`, its folds still inputs99's.
+- **Before it, experiment 99 (inputs99), PUBLISHED 2026-10-22** (the owner: "Publish").  On top of experiment
   94's parser fixes, published the same morning: the heave fix (95,
   threes of a period's last two seconds counted as they happened); the defense factor by era (98, 0.89 before 2017 and
   0.84 from 2017 in place of 0.866); each season's own body listing and the pad k around the bins (99).  The 2001
@@ -46,25 +52,45 @@ every number quoted here; read its measurement traps before trusting a number.  
   1.38 / 1.33 / 1.36 and 1.53 for experiment 80.  Against the consensus in 2026 the slope of our defense on theirs is
   about 1; the extra spread is players rated differently, carried by big-man stats: blocks, height, defensive
   rebounds, fouls (DECISIONS.md, "Experiment 82's defensive prior read through").
+- **The defense read of 2026-10-23** (DECISIONS.md, the four sections from "Why the defense is wide relative to the
+  offense" to "Should defense take a heavier ridge penalty"; scripts `scratch/2026-10-23_defense/`, tables
+  `outputs/csv/defense_2026_*.csv`, the per-player table on the sheet tab "Defense 2026"):
+  - Where the width is made: nothing before the shrink is defense-heavy, 0.92 in 2026; the shrink keeps 0.97 of the
+    defensive prior part and 0.68 of the offensive since 2017, 1.30, and the defense factor brings it to 1.09.
+  - At team level the defense is not too wide: held-back team-games want it wider, every metric's defense adds up to
+    too little team defense in 2026, and our defensive order is LEBRON's at 0.90.
+  - Within teams it is: from each season's own games, with a free level per playing-time band, ours keeps 0.89 of the
+    true defensive spread among regulars and 0.69 of the offensive since 2017, where the less-known side, defense,
+    should keep less.  The WOWY test's wish for a wider offense, 1.17 in 2026, points the same way.
+  - The textbook heavier defensive ridge penalty is the bench's offensive gap passing for offensive spread; around
+    each playing-time level the two sides are equally spread.
+  - Experiment 102, both labels un-shrunk, taken apart with its control, experiment 103: the un-shrink made the
+    offensive box-score prior a measure of playing time and cost the scorers, worse within season in every era; the
+    line refit on today's data gave the big men their defense and the whole year-over-year gain.  The high-usage lean
+    on offense does not come from the shrunk label.
 - **The remaining known flaw: cross-side inputs.**  The defensive line reads his offensive box-score prior with weight
   0.91 beside 1.03 on his defensive one (2026, raw scale), copied from the swap adjustment's inputs.
 - **Faster runs**: `openrapm rate --jobs N` and `openrapm folds --jobs N`, same numbers; the chain asks for 4, cut to
   what free memory holds.  A chain takes about 50-75 minutes.
 
-## Next: the owner's to pick
+## Next
 
-- Width-matched readings in the chain (proposed, DECISIONS.md, "The widths"): every candidate also read rescaled to
-  the incumbent's width, so a win is told apart from a width.
-- The incumbent without the other side's own box-score prior in the line, about 50 minutes: the first suspect for the
-  wider defense.
-- A noise control on the incumbent (`--fold-assignment 1`), so its readings have their own.
-- The EM ridge idea, a larger thread "not now": the ridge penalty by EM per season and side instead of the fixed
-  13,037.
+The offense/defense balance is fixed and published (experiment 106, version D).  Nothing is queued; the owner brings
+the next idea.  What the work of 2026-10-23 left open:
+- Your two tests use different units and disagree on how far apart teammates should be: the within-season WOWY test
+  scores stints, the year-over-year test whole team-games, and minutes that react to the game pull the team-game
+  reading down (DECISIONS.md, "Why the shrink cuts the offense: the unit it is fitted on").  Version D cost the
+  year-over-year test +0.16, z +4.4, adopted by the owner anyway.  A stint-level year-over-year reading already exists
+  in `63_yoy.py`'s output; which unit rules the guard is the owner's.
+- Before 2017 version D widens the defense, 1.73 to 1.92 and 1.63 to 1.78 by era: the balance moved only in 2017-2026.
+- Parked, not next: experiment 104, the band-difference un-shrink; experiment 103, the line refit alone;
+  width-matched readings in the chain; a noise control on the incumbent; the EM ridge idea.
 
 ## Waiting on the owner
 
 - Deleting the saved boosters of experiments that were not adopted, about 2 GB each in `outputs/prior_models_*.pkl`
-  (luckall88, luckall88b, luckhalf89, luckhalf89b, near83, same84, ctx85, body86, spread90, three92 and older ones).
+  (luckall88, luckall88b, luckhalf89, luckhalf89b, near83, same84, ctx85, body86, spread90, three92, unshrinkbase102,
+  unshrink102, shrunkbase103 and older ones; refit103's stays while experiment 104 is open).
 - Filed earlier: tracking game by game; arena scorekeeper checks; Stockton over Jordan in 1997-98; the Curry star-guard
   ceiling test fails.
 
@@ -76,14 +102,14 @@ every number quoted here; read its measurement traps before trusting a number.  
 | 2 | box-score prior | `box_prior.py` | LightGBM `lgb1_tune2`, linear leaves; feature set `hustle_no_three_pct`; five player folds; 10 bags |
 | 2b | swap part of the prior | `second_prior.py` | line `ctx82` on `context_and_types_centred`, team totals held |
 | 3 | the rating | `prior_rapm.py` | RAPM pulled toward the prior, penalty 13,037, centred |
-| 4 | the shrink, with the defense factor | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, 8 nearest fold seasons, defense times 0.89 before 2017 and 0.84 from 2017; folds `inputs99_early,inputs99_within`, each multiplier read to a full season with the tenth folds `inputs99_k10` (experiment 101) |
+| 4 | the shrink, with the defense factor | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, 8 nearest fold seasons, defense times 0.89 before 2017 and 0.84 from 2017; folds `inputs99_early,inputs99_within`, each multiplier read to a full season with the tenth folds `inputs99_k10` (experiment 101); two layers since experiment 106: each part's team mean on held-back team-games, each player's deviation from it on held-back stints within games, the within layer times 0.75 on offense and 1.0 on defense |
 | 5 | swap adjustment | `swap_adjust.py` | off: applied share 0, the build skips it |
 
 - `openrapm build` writes `outputs/season_ratings_product.parquet` with `_step3` and `_step4` beside it.
 - `openrapm site --bias --openrapm-decomposition --similarity` writes the site's files.  Commit, fast-forward `main`
   and push only on the owner's word, then check the Pages build: `gh api repos/bbstats/openrapm/pages/builds/latest`.
   With the second prior, the decomposition's "box score" piece carries the whole prior; its split is the owner's.
-- The incumbent's test-setting tables `outputs/season_ratings_inputs99*.parquet`, folds `inputs99_early`, `inputs99_within`;
+- The incumbent's test-setting tables `outputs/season_ratings_layers106*.parquet`, folds `inputs99_early`, `inputs99_within`;
   no noise control on it yet, `noise_bags10` stands in.
 
 ## How an experiment is judged
@@ -95,13 +121,13 @@ every number quoted here; read its measurement traps before trusting a number.  
 | the eye check | `scripts/checks/66_compare.py` | the 2026 top 20 |
 
 - One build: `bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes_late_as_scored "EXTRA RATE
-  FLAGS"`, about 50 minutes with 4 processes.  `INC_NAME` and `INC_SYSTEM` name the incumbent, `inputs99` by default.
+  FLAGS"`, about 50 minutes with 4 processes.  `INC_NAME` and `INC_SYSTEM` name the incumbent's tables and folds, `layers106` and `inputs99` by default.
 - **The season-page score**: each season, ratings of zero score 0 and the reference 100; the ratings before
   experiment 82 explain 18.2 a season on this test (the 15.7 in older notes is experiment 63's step 4).
   `scratch/2026-10-20_charts/season_scores.py` and `season_page.py`; page https://claude.ai/artifact/L7vwSTAvCCKQnj9jnnhYrq.
 - The noise control `noise_bags10` moves a season at most 0.7 on that score.
 - Every experiment gets a row in `experiments/runs.csv` (`scripts/checks/101_log_run.py`), mirrored to the sheet
-  "OpenRAPM experiments", tab Experiments; the next free row is 96.
+  "OpenRAPM experiments", tab Experiments; the next free row is 100.
 
 ## Commands a session runs
 
@@ -148,6 +174,6 @@ every number quoted here; read its measurement traps before trusting a number.  
 
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest -q                       # 724 passed, 2 skipped, 1 xfailed: the backup bigs
+    .venv/Scripts/python -m pytest -q                       # 755 passed, 2 skipped, 1 xfailed: the backup bigs
     uvx ruff check .                                         # clean
-    git log --oneline -1                                     # the commit of 2026-10-21's adoption of experiment 93
+    git log --oneline -1                                     # the publish of experiment 106

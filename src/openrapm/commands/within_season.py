@@ -87,7 +87,7 @@ from ..data.shots import DEFENSE_TARGETS, OPPONENT_THREE_LUCK_KEPT, expected_thr
 from ..data.tables import team_of_rows
 from ..features import CLOSENESS, OFF_COURT, ON_MINUS_OFF, PANEL_KEYS, PRIOR_FEATURES, add_features
 from ..scoring import Ratings, armse, predict_season, score
-from ..settings import ROW_LABELS, TEST, Targets
+from ..settings import ROW_LABELS, TEST, UNSHRINK_LABELS, Targets
 from . import parallel
 from .build import season_lineup_rows
 
@@ -120,8 +120,10 @@ def fold_settings(meta: dict):
     targets = (meta.get("settings") or {}).get("targets")
     return TEST if not targets else replace(TEST, targets=Targets(**targets))
 # what a saved file's meta must say: the test setting's labels and training rows, the shipped rows and folds.  How
-# the training rows were labelled (`chunk_label`, settings.ROW_LABELS) is free: the folds only read the boosters
-EXPECTED_META = dict(exclude_neighbours=1, rows="chunks", unshrink=["defense"], player_folds=5)
+# the training rows were labelled (`chunk_label`, settings.ROW_LABELS) is free: the folds only read the boosters.  So
+# is which labels were un-shrunk, among settings.UNSHRINK_LABELS (experiment 102), for the same reason
+EXPECTED_META = dict(exclude_neighbours=1, rows="chunks", player_folds=5)
+UNSHRINK_ALLOWED = [list(columns) for columns in UNSHRINK_LABELS.values()]
 # every column of the player tables: the prior's possible inputs, the off-court record, the score state
 PLAYER_COLUMNS = list(dict.fromkeys(PRIOR_FEATURES + OFF_COURT + ON_MINUS_OFF + CLOSENESS))
 # the share of the opponents' three-point luck each defensive target keeps (data/shots.py), for the outcome pieces
@@ -169,6 +171,8 @@ def check_models(meta: dict) -> None:
     wrong = {key: (meta.get(key), value) for key, value in EXPECTED_META.items() if meta.get(key) != value}
     if meta.get("chunk_label") not in ROW_LABELS:
         wrong["chunk_label"] = (meta.get("chunk_label"), ROW_LABELS)
+    if meta.get("unshrink") not in UNSHRINK_ALLOWED:
+        wrong["unshrink"] = (meta.get("unshrink"), UNSHRINK_ALLOWED)
     wrong.update(_step3_mismatches(meta))
     if meta.get("crossfit") == "honest":
         raise SystemExit("these boosters priced the prior scale with --crossfit=honest, which `openrapm folds` "

@@ -45,9 +45,11 @@ from ..data.config import resolve, resolve_path
 from ..data.designs import DesignCache, block_design
 from ..data.ingest import raw_dir
 from ..data.panel import trainable_panel
+from ..data.roles import main_teams
 from ..decomposition import lineups, refit, row_groups, row_keys, side_team, split_games_part, team_codes
 from ..features import FEATURE_SETS
 from ..player_types import RATES, bias_by_type, cluster_proba, describe_types, fit_mixture, per36
+from ..prior_shrink import team_split
 from ..rapm import SeasonSums
 from ..settings import PRODUCT
 from ..similarity import closest, distances, own_season_ranks, player_seasons, similarity_inputs, standardise
@@ -173,6 +175,13 @@ NAMES = {
     "+stl +drb +pf +orb": "Busy all-round forwards",
     "-ftm -tov -pts -ast": "Low-usage wings who stay out of the way",
     "+stl -pts -ftm -fg3m": "Ball-hawk defenders who rarely shoot",
+    # the same types after the parser fixes of 2026-10-22 reordered each one's four standout stats
+    "+orb +pf +drb -ast": "Busy all-round forwards",
+    "+ast -orb -blk -drb": "Guards who handle the ball",
+    "+orb -fg3_miss -fg3m +blk": "Rim-protecting centers",
+    "-drb -ftm -tov +fg3m": "Wings who shoot threes",
+    "+stl +ast -drb +tov": "Ball-hawk defenders who rarely shoot",
+    "+blk +pts +ftm +drb": "Two-way big men who score",
 }
 # The plain words for each rate a signature names.
 RATE_WORDS = {"pts": "points", "fg3m": "threes made", "fg3_miss": "threes missed", "ftm": "free throws",
@@ -898,11 +907,64 @@ def step3_path(ratings_path: Path) -> Path:
 GAMES_FACTOR_TOLERANCE = 1e-12   # the table's games' part against its step-3 table's times one factor
 
 
-def published_parts(ratings_path: Path) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+class GamesLayers:
+    """Step 4's two layers on one season and side's games' part (prior_shrink, "Since experiment 106"): the part
+    split into each player's team mean, times `team`, and his deviation from it, times `within`; the team is his main
+    team (data.roles.main_teams), the mean weighted by his possessions on that side.  The map is linear, so a piece of
+    the games' part goes through it the same way and the pieces still add up to the part."""
+
+    def __init__(self, team: float, within: float, team_of: dict, weight_of: dict):
+        self.team, self.within, self.team_of, self.weight_of = float(team), float(within), team_of, weight_of
+
+    def apply(self, player_ids, values) -> np.ndarray:
+        ids = pd.Series(np.asarray(player_ids))
+        team = np.array(ids.map(self.team_of).to_numpy(float), dtype=float)
+        alone = np.isnan(team)
+        team[alone] = -1.0 - np.arange(int(alone.sum()))
+        mean, deviation = team_split(team, values, ids.map(self.weight_of).fillna(0.0).to_numpy(float))
+        return self.team * mean + self.within * deviation
+
+
+def games_image(factor, player_ids, values) -> np.ndarray:
+    """A games' part (or one of its pieces) after step 4: `factor` times it with one layer, `GamesLayers.apply` with
+    two.  `player_ids` and `values` are a whole season's table rows, as step 4 splits them."""
+    values = np.asarray(values, dtype=float)
+    if isinstance(factor, GamesLayers):
+        return factor.apply(player_ids, values)
+    return (1.0 if factor is None else float(factor)) * values
+
+
+def layered_games_factors(both: pd.DataFrame, table: pd.DataFrame, teams: pd.DataFrame) -> tuple[dict, float]:
+    """({season: {"off", "def"}: GamesLayers}, the largest miss): each season and side's two multipliers on the
+    games' part read off the table by least squares on the step-3 part's team means and deviations."""
+    team_of = teams.set_index(["player_id", "season"]).team_id
+    poss = table.set_index(["player_id", "season"])[["poss_off", "poss_def"]]
+    factors, miss = {}, 0.0
+    for season, rows in both.groupby("season"):
+        factors[int(season)] = {}
+        ids = rows.player_id.to_numpy()
+        key = pd.MultiIndex.from_arrays([ids, np.full(len(ids), season)])
+        teams_now = dict(zip(ids, team_of.reindex(key).to_numpy(float)))
+        teams_now = {player: team for player, team in teams_now.items() if not np.isnan(team)}
+        for side in ("off", "def"):
+            weight_of = dict(zip(ids, poss.reindex(key)[f"poss_{side}"].to_numpy(float)))
+            unit = GamesLayers(1.0, 0.0, teams_now, weight_of)
+            theirs = rows[f"u_{side}_step3"].to_numpy(float)
+            mean = unit.apply(ids, theirs)
+            design = np.column_stack([mean, theirs - mean])
+            mine = rows[f"u_{side}"].to_numpy(float)
+            team, within = np.linalg.lstsq(design, mine, rcond=None)[0]
+            factors[int(season)][side] = GamesLayers(team, within, teams_now, weight_of)
+            miss = max(miss, float(np.abs(mine - design @ np.array([team, within])).max()))
+    return factors, miss
+
+
+def published_parts(ratings_path: Path, cfg: dict | None = None) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     """(the ratings table, its step-3 table, {season: {"off", "def"}: step 4's factor on the games' part}), after
     checking they are one build's: the same player-seasons, the same games' part up to one factor per season and side
     (step 4 multiplies it since experiment 65, 1 before; step 5 leaves it alone), and the penalty the shipped settings
-    name."""
+    name.  When one factor does not reproduce the table and `cfg` is given, the two layers of experiment 106: two
+    multipliers per season and side, on each player's team mean and on his deviation from it (`GamesLayers`)."""
     step3_file = step3_path(ratings_path)
     if not step3_file.exists():
         raise SystemExit(f"{step3_file} does not exist; `openrapm build` writes it beside the ratings table")
@@ -925,6 +987,8 @@ def published_parts(ratings_path: Path) -> tuple[pd.DataFrame, pd.DataFrame, dic
             factor = float(mine @ theirs / (theirs @ theirs)) if theirs @ theirs > 0 else 1.0
             factors[int(season)][side] = factor
             miss = max(miss, float(np.abs(mine - factor * theirs).max()))
+    if miss >= GAMES_FACTOR_TOLERANCE and cfg:
+        factors, miss = layered_games_factors(both, table, main_teams(cfg))
     check(miss < GAMES_FACTOR_TOLERANCE, f"the ratings table and its step-3 table have the same games' part, up to "
                                          f"step 4's factor per season and side (max miss {miss:.1e})")
     check(set(table.offense_lambda.unique()) == {float(PRODUCT.ridge.penalty)},
@@ -971,9 +1035,9 @@ def season_pieces(rows: pd.DataFrame, parts: dict, factors: dict | None = None) 
         if games.u.isna().any():
             raise SystemExit(f"{int(rows.season.iloc[0])}: the refit has no row for some players of the ratings table")
         pieces[f"{side}_box_score"] = rows[f"prior_{side}"].to_numpy()
-        factor = 1.0 if factors is None else factors[side]
+        factor = None if factors is None else factors[side]
         for piece in ("on_court", "off_court", "team_sos"):
-            pieces[f"{side}_{piece}"] = factor * games[piece].to_numpy()
+            pieces[f"{side}_{piece}"] = games_image(factor, rows.player_id.to_numpy(), games[piece].to_numpy())
         pieces[f"{side}_swap"] = rows[f"c_{side}"].to_numpy()
         pieces[f"{side}_rating"] = rows[f"rating_{side}"].to_numpy()
     for piece in OPENRAPM_PIECES[:-1]:
@@ -1005,8 +1069,8 @@ def update_openrapm_worst(worst: dict, rows: pd.DataFrame, pieces: pd.DataFrame,
         added = sum(pieces[f"{side}_{piece}"] for piece in OPENRAPM_PIECES[:-1])
         season["identity"] = max(season["identity"], float((added - pieces[f"{side}_rating"]).abs().max()))
     for side in ("off", "def"):
-        refit_u = (1.0 if factors is None else factors[side]) * parts[side].set_index("player_id").u.reindex(
-            rows.player_id).to_numpy()
+        refit_u = games_image(None if factors is None else factors[side], rows.player_id.to_numpy(),
+                              parts[side].set_index("player_id").u.reindex(rows.player_id).to_numpy())
         season["games_part"] = max(season["games_part"], float(np.abs(refit_u - rows[f"u_{side}"].to_numpy()).max()))
         season["scale"] = max(season["scale"], misses[side]["scale"])
         season["sum_hy"] = max(season["sum_hy"], misses[side]["sum_hy"])
@@ -1070,7 +1134,7 @@ def write_openrapm_file(path: Path, rows: dict, built: str, penalty: float) -> N
 def write_openrapm_decomposition(cfg: dict, ratings_path: Path, data_dir: Path, built: str) -> None:
     """decompose_openrapm.json in `data_dir`, after its checks pass.  Solves step 3 again for every season and both
     sides, so it must run after `openrapm build`, whenever the ratings table changes."""
-    table, step3, factors = published_parts(ratings_path)
+    table, step3, factors = published_parts(ratings_path, cfg)
     names, box_files, designs = name_table(ratings_path, cfg), BoxScoreFiles(cfg), DesignCache(cfg)
     penalty = float(PRODUCT.ridge.penalty)
     started, rows, worst = time.time(), {}, new_openrapm_worst()

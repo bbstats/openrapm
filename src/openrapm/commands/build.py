@@ -47,7 +47,7 @@ from ..data.seasons import all_seasons, trainable
 from ..data.second_prior_files import line_setup, load_grams
 from ..data.stints import load_season_stints
 from ..data.tables import design_row_teams, player_names
-from ..data.within_folds import check_fold_files, fold_games, load_folds
+from ..data.within_folds import check_fold_files, fold_games, held_back_stints, load_folds
 from ..settings import describe_factors
 from . import parallel
 
@@ -461,14 +461,66 @@ def step4_multipliers(seasons, folds: list, shrink, second_folds: list | None = 
     return multipliers
 
 
-def shrink_seasons(cfg: dict, table: pd.DataFrame, settings,
-                   folds: list | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Step 4 on a step-3 table: (the shrunk table, the multipliers of every season).  `folds` defaults to
+def held_back_stint_equations(cfg: dict, folds: list, where: dict) -> dict:
+    """{fold season: (A, b)}: the within layer's normal equations (prior_shrink.stint_equations) summed over each
+    season's folds, each fold's held-back stints read from its season's points design."""
+    started = time.time()
+    designs = DesignCache(cfg, keep=1)
+    equations: dict = {}
+    for fold in sorted(folds, key=lambda f: (f.season, f.repeat, f.fold)):
+        stints = held_back_stints(designs.season(fold.season, "pts"), fold_games(where[fold.stem], fold)[1])
+        a, b = prior_shrink.stint_equations(fold, stints)
+        slot = equations.get(fold.season)
+        equations[fold.season] = (a, b) if slot is None else (slot[0] + a, slot[1] + b)
+    print(f"  step 4: the within layer's equations from {len(folds)} folds' held-back stints "
+          f"({time.time() - started:.0f}s)", flush=True)
+    return equations
+
+
+def within_layer_multipliers(cfg: dict, seasons, folds: list, where: dict, shrink,
+                             second_folds: list | None = None) -> pd.DataFrame:
+    """season and the four prior_shrink.WITHIN_COLUMNS: the within layer's multipliers on `folds`' held-back stints,
+    read to a full season with `second_folds` as the team layer's are, then times settings.shrink.within_factors
+    (offence, defence) and the defensive two times the defence factor."""
+    multipliers = prior_shrink.within_multipliers_by_season(seasons, held_back_stint_equations(cfg, folds, where),
+                                                            shrink.rule, shrink.nearest)
+    if second_folds:
+        directory = resolve(cfg, "within") / shrink.extrapolate_folds_tag
+        second = prior_shrink.within_multipliers_by_season(
+            seasons, held_back_stint_equations(cfg, second_folds, {fold.stem: directory for fold in second_folds}),
+            shrink.rule, shrink.nearest)
+        multipliers = prior_shrink.read_to_full_season(multipliers, second, prior_shrink.held_back_share(folds),
+                                                       prior_shrink.held_back_share(second_folds))
+    offence, defence = shrink.within_factors
+    factor = multipliers.season.map(shrink.defence_factor_for).to_numpy(float)
+    off_columns, def_columns = prior_shrink.WITHIN_COLUMNS[:2], prior_shrink.WITHIN_COLUMNS[2:]
+    multipliers[list(off_columns)] = multipliers[list(off_columns)] * offence
+    multipliers[list(def_columns)] = multipliers[list(def_columns)].mul(defence * factor, axis=0)
+    return multipliers
+
+
+def shrink_seasons(cfg: dict, table: pd.DataFrame, settings, folds: list | None = None,
+                   where: dict | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Step 4 on a step-3 table: (the shrunk table, the multipliers of every season).  `folds` and `where` default to
     `step4_folds`'s."""
     shrink = settings.shrink
-    folds = step4_folds(cfg, shrink)[0] if folds is None else folds
+    if folds is None or where is None:
+        folds, where = step4_folds(cfg, shrink)
     second = extrapolation_folds(cfg, shrink)
     multipliers = step4_multipliers(table.season.unique(), folds, shrink, second)
+    teams = None
+    if shrink.within_team_layer:
+        within = within_layer_multipliers(cfg, table.season.unique(), folds, where, shrink, second)
+        multipliers = multipliers.merge(within, on="season")
+        teams = main_teams(cfg)
+        print(f"  step 4: two layers; each player's deviation from his team's mean multiplied by "
+              f"{multipliers.within_multiplier_off.min():.3f} to {multipliers.within_multiplier_off.max():.3f} "
+              f"(prior part) and {multipliers.within_games_multiplier_off.min():.3f} to "
+              f"{multipliers.within_games_multiplier_off.max():.3f} (games' part) on offence, "
+              f"{multipliers.within_multiplier_def.min():.3f} to {multipliers.within_multiplier_def.max():.3f} and "
+              f"{multipliers.within_games_multiplier_def.min():.3f} to "
+              f"{multipliers.within_games_multiplier_def.max():.3f} on defence, the within factors "
+              f"{shrink.within_factors[0]:g} and {shrink.within_factors[1]:g} in", flush=True)
     if second:
         print(f"  step 4: each multiplier read to a full season from the folds holding back "
               f"{prior_shrink.held_back_share(folds):.0%} and {prior_shrink.held_back_share(second):.0%} of the "
@@ -484,7 +536,7 @@ def shrink_seasons(cfg: dict, table: pd.DataFrame, settings,
         print(f"  step 4: the games' part multiplied by {multipliers.games_multiplier_off.min():.3f} to "
               f"{multipliers.games_multiplier_off.max():.3f} on offence, {multipliers.games_multiplier_def.min():.3f} "
               f"to {multipliers.games_multiplier_def.max():.3f} on defence", flush=True)
-    return prior_shrink.shrink(table, multipliers), multipliers
+    return prior_shrink.shrink(table, multipliers, teams), multipliers
 
 
 def write_multipliers(multipliers: pd.DataFrame, cfg: dict, name: str) -> None:
@@ -649,7 +701,7 @@ def run_build(cfg: dict, settings, seasons, name: str, save_models: str | None =
     require_folds(cfg, settings.shrink)
     step3, models = rate_table(cfg, settings, seasons, keep_models=bool(save_models))
     folds, where = step4_folds(cfg, settings.shrink)
-    step4, multipliers = shrink_seasons(cfg, step3, settings, folds)
+    step4, multipliers = shrink_seasons(cfg, step3, settings, folds, where)
     final, _, types = swap_seasons(cfg, step4, settings, folds, where, multipliers)
     outputs = resolve(cfg, "outputs")
     print()

@@ -23,6 +23,22 @@ Example, from before experiment 65: rating 2026 in the product setting, m_O = 0.
 offensive prior part of 5.394 becomes 0.704 x 5.394 = 3.80, less the season's shift of 0.02 = 3.78; his games' part
 stays 0.97, so his offensive rating goes from 6.37 to 4.75.  With g_O = 1.33 his games' part would be 1.29.
 
+Since experiment 106 (adopted 2026-10-23, the owner: "please adopt, yes - D") the step has two layers
+(settings.ShrinkSettings.within_team_layer).  Each of the four parts (prior and games' part, offence and defence) is
+split into his team's possession-weighted mean and his deviation from it (`team_split`: the team is his main team,
+the one he played the most possessions for; the weight his possessions on that side).  The team means keep the
+multipliers above, fitted on held-back team-games.  The deviations get four multipliers of their own, fitted on the
+held-back STINTS with a free level per team-game (`stint_equations`), so only how a team's lineups differ inside a
+game sets them: on team-games, minutes that react to how a lineup is doing pull the within-team split down
+(notes/DECISIONS.md, "Why the shrink cuts the offense: the unit it is fitted on").  The within layer is then
+multiplied by settings.ShrinkSettings.within_factors, 0.75 on offence and 1.0 on defence (version D), and by the
+defence factor as the team layer is.
+
+Example, the within layer, 2017-2026 means before any factor: the deviation of the offensive prior part kept 0.97
+(the team layer 0.66), of the offensive games' part 1.32 (1.38); defence 0.84 and 2.06 (0.93 and 1.56).  A star whose
+offensive prior part is +5.0 on a team whose mean is +0.4 gets 0.66 x 0.4 + 0.75 x 0.97 x 4.6 = 3.61 before the
+re-centring, against 0.66 x 5.0 = 3.30 with one multiplier.
+
 Words used below
     within-season fold
                     one season rated from three quarters of its games (the fit games), and scored on the
@@ -82,10 +98,20 @@ import scipy.sparse as sp
 
 __all__ = ["RULES", "unseen_fold_seasons", "fold_seasons_used", "fold_terms", "fit_multipliers",
            "multipliers_by_season", "held_back_share", "read_to_full_season", "full_season_multipliers",
-           "shrink", "season_factors", "shrink_fold"]
+           "team_split", "stint_equations", "within_multipliers_by_season", "shrink", "season_factors",
+           "layered_fold_parts", "shrink_fold"]
 
 RULES = ("product", "test")
-MULTIPLIER_COLUMNS = ("multiplier_off", "multiplier_def", "games_multiplier_off", "games_multiplier_def")
+# the within layer's four multipliers (experiment 106), in this order: offence prior part, offence games' part,
+# defence prior part, defence games' part
+WITHIN_COLUMNS = ("within_multiplier_off", "within_games_multiplier_off", "within_multiplier_def",
+                  "within_games_multiplier_def")
+MULTIPLIER_COLUMNS = ("multiplier_off", "multiplier_def", "games_multiplier_off", "games_multiplier_def",
+                      *WITHIN_COLUMNS)
+# each part of the within layer: its column, the possessions that weigh its team mean, and its sign in a team-game
+# (the defence in points allowed)
+LAYER_PARTS = (("prior_off", "poss_off", 1.0), ("u_off", "poss_off", 1.0), ("prior_def", "poss_def", -1.0),
+               ("u_def", "poss_def", -1.0))
 
 
 def unseen_fold_seasons(season: int, rule: str) -> set:
@@ -220,16 +246,101 @@ def full_season_multipliers(seasons, folds: list, second_folds: list, rule: str,
                                held_back_share(folds), held_back_share(second_folds))
 
 
+# ------------------------------------------------------------------------------------- the within layer
+def team_split(team, values, weight) -> tuple[np.ndarray, np.ndarray]:
+    """(each row's team mean, its deviation from it): the possession-weighted mean of `values` over the rows of the same
+    team; a team whose rows weigh nothing has mean 0.
+
+    Example: two players of one team, +4.0 on 3,000 possessions and -1.0 on 1,000: the mean is (12,000 - 1,000) /
+    4,000 = 2.75, the deviations +1.25 and -3.75.
+    """
+    codes, _ = pd.factorize(np.asarray(team))
+    values = np.asarray(values, dtype=float)
+    weight = np.maximum(np.asarray(weight, dtype=float), 0.0)
+    total = np.bincount(codes, weights=weight)
+    sums = np.bincount(codes, weights=weight * values)
+    mean = np.divide(sums, total, out=np.zeros_like(sums), where=total > 0)[codes]
+    return mean, values - mean
+
+
+def _within_games(codes: np.ndarray, values: np.ndarray, w: np.ndarray) -> np.ndarray:
+    """sqrt(w) x (values less their team-game's possession-weighted mean): a free level per team-game, taken out."""
+    values = np.atleast_2d(values.T).T
+    total = np.bincount(codes, weights=w)
+    means = np.column_stack([np.bincount(codes, weights=w * values[:, k]) / total for k in range(values.shape[1])])
+    return (values - means[codes]) * np.sqrt(w)[:, None]
+
+
+def stint_equations(fold, stints) -> tuple[np.ndarray, np.ndarray]:
+    """(A, b): one fold's share of the within layer's normal equations, A m = b with m the four WITHIN_COLUMNS.
+
+    `stints` is a `data.within_folds.HeldStints`: the fold's held-back stints.  Each stint's points per 100, less its
+    stand-ins and less the ten players' team means (each at 1), are fitted on the ten players' summed deviations of
+    the four parts, with a free level per team-game, weighted by possessions:
+
+        y_s - S_s - sum of team means  =  level of the team-game + sum over k of m_k x D_k,s
+
+    D_k,s the offence's five's summed deviations of part k (the defence's negated, points allowed).  A player without
+    a rating in the fold carries the fold's stand-in rating, as check 151 scores him.
+    """
+    columns, means, rated = [], np.zeros(len(stints.y)), {}
+    for column, weight_column, sign in LAYER_PARTS:
+        side = "O" if column.endswith("off") else "D"
+        rows = fold.rows[side]
+        mean, deviation = team_split(rows.team_id.to_numpy(), rows[column].to_numpy(float),
+                                     rows[weight_column].to_numpy(float))
+        lineup = stints.lineup_o if side == "O" else stints.lineup_d
+        index = pd.Index(rows.player_id.to_numpy(np.int64)).get_indexer(lineup.ravel()).reshape(lineup.shape)
+        rated[side] = index >= 0
+        safe = np.where(rated[side], index, 0)
+        columns.append(sign * np.where(rated[side], deviation[safe], 0.0).sum(axis=1))
+        means += sign * np.where(rated[side], mean[safe], 0.0).sum(axis=1)
+    fills = (5 - rated["O"].sum(axis=1)) * fold.fill_o + (5 - rated["D"].sum(axis=1)) * fold.fill_d
+    x = _within_games(stints.team_game, np.column_stack(columns), stints.w)
+    t = _within_games(stints.team_game, stints.y - fills - means, stints.w)[:, 0]
+    return x.T @ x, x.T @ t
+
+
+def within_multipliers_by_season(seasons, equations: dict, rule: str, nearest: int = 0) -> pd.DataFrame:
+    """One row per season: season and the four WITHIN_COLUMNS, each season's from the summed `stint_equations` of the
+    fold seasons the rule allows (`fold_seasons_used`); `equations` is {fold season: (A, b)}, summed over its folds."""
+    fold_seasons = sorted(equations)
+    fits, rows = {}, []
+    for season in sorted(seasons):
+        used = fold_seasons_used(season, fold_seasons, rule, nearest)
+        if used not in fits:
+            fits[used] = np.linalg.solve(sum(equations[s][0] for s in used), sum(equations[s][1] for s in used))
+        rows.append(dict(season=int(season), **{name: float(value) for name, value in zip(WITHIN_COLUMNS,
+                                                                                           fits[used])}))
+    return pd.DataFrame(rows)
+
+
+def _layered(rows: pd.DataFrame, team, team_multipliers: tuple, within: tuple) -> dict:
+    """{part column: the part after both layers}: team multiplier x team mean + within multiplier x deviation, each
+    part's team mean weighted by that side's possessions.  `team_multipliers` and `within` follow LAYER_PARTS."""
+    out = {}
+    for (column, weight_column, _), team_m, within_m in zip(LAYER_PARTS, team_multipliers, within):
+        mean, deviation = team_split(team, rows[column].to_numpy(float), rows[weight_column].to_numpy(float))
+        out[column] = team_m * mean + within_m * deviation
+    return out
+
+
 def _shrink_season(rows: pd.DataFrame, multiplier_off: float, multiplier_def: float, games_off: float = 1.0,
-                   games_def: float = 1.0) -> pd.DataFrame:
+                   games_def: float = 1.0, within: tuple | None = None, team=None) -> pd.DataFrame:
     """One season's rows with the prior parts multiplied (and the games' parts, when freed) and the ratings
-    re-centred (the module docstring)."""
+    re-centred (the module docstring).  With `within`, the four within-layer multipliers in LAYER_PARTS order, and
+    `team`, each row's main team, every part is split into team mean and deviation first (the two layers)."""
     rows = rows.copy()
-    rows["prior_off"] = multiplier_off * rows.prior_off
-    rows["prior_def"] = multiplier_def * rows.prior_def
-    if games_off != 1.0 or games_def != 1.0:
-        rows["u_off"] = games_off * rows.u_off
-        rows["u_def"] = games_def * rows.u_def
+    if within is not None:
+        for column, values in _layered(rows, team, (multiplier_off, games_off, multiplier_def, games_def),
+                                       within).items():
+            rows[column] = values
+    else:
+        rows["prior_off"] = multiplier_off * rows.prior_off
+        rows["prior_def"] = multiplier_def * rows.prior_def
+        if games_off != 1.0 or games_def != 1.0:
+            rows["u_off"] = games_off * rows.u_off
+            rows["u_def"] = games_def * rows.u_def
     weight = rows.poss_off.to_numpy(float)
     for side in ("off", "def"):
         shift = np.average(rows[f"prior_{side}"] + rows[f"u_{side}"], weights=weight)
@@ -242,9 +353,11 @@ def _shrink_season(rows: pd.DataFrame, multiplier_off: float, multiplier_def: fl
     return rows
 
 
-def shrink(table: pd.DataFrame, multipliers: pd.DataFrame) -> pd.DataFrame:
+def shrink(table: pd.DataFrame, multipliers: pd.DataFrame, teams: pd.DataFrame | None = None) -> pd.DataFrame:
     """Step 4 on a step-3 table: each season's prior parts times its multipliers, re-centred; u unchanged unless
-    `multipliers` carries games_multiplier_off and games_multiplier_def (the games' part freed).
+    `multipliers` carries games_multiplier_off and games_multiplier_def (the games' part freed).  When `multipliers`
+    carries the four WITHIN_COLUMNS, the two layers: `teams` (player_id, season, team_id: each player's main team,
+    data.roles.main_teams) says whose mean each part is split around; a player it lacks is a team of his own.
 
     `table` is in the published schema (prior_rapm.PUBLISHED_COLUMNS); `multipliers` is `multipliers_by_season`.
     The raw-sign columns (offense, defense, prior_offense, prior_defense) follow the published ones, and the
@@ -252,21 +365,38 @@ def shrink(table: pd.DataFrame, multipliers: pd.DataFrame) -> pd.DataFrame:
     """
     by_season = multipliers.set_index("season")
     freed = "games_multiplier_off" in by_season.columns
+    layered = all(column in by_season.columns for column in WITHIN_COLUMNS)
+    if layered and teams is None:
+        raise ValueError("the multipliers carry the within layer, so `teams` must say each player's main team")
+    team_of = teams.set_index(["player_id", "season"]).team_id if layered else None
 
     def games(season, side):
         return by_season.at[season, f"games_multiplier_{side}"] if freed else 1.0
-    seasons = [_shrink_season(rows, by_season.at[season, "multiplier_off"], by_season.at[season, "multiplier_def"],
-                              games(season, "off"), games(season, "def"))
-               for season, rows in table.groupby("season", sort=True)]
+    seasons = []
+    for season, rows in table.groupby("season", sort=True):
+        within, team = None, None
+        if layered:
+            within = tuple(float(by_season.at[season, column]) for column in WITHIN_COLUMNS)
+            key = pd.MultiIndex.from_arrays([rows.player_id.to_numpy(np.int64), np.full(len(rows), int(season))])
+            team = np.array(team_of.reindex(key).to_numpy(float), dtype=float)
+            alone = np.isnan(team)
+            team[alone] = -1.0 - np.arange(int(alone.sum()))          # a team of his own
+        seasons.append(_shrink_season(rows, by_season.at[season, "multiplier_off"],
+                                      by_season.at[season, "multiplier_def"], games(season, "off"),
+                                      games(season, "def"), within, team))
     return pd.concat(seasons, ignore_index=True)[list(table.columns)]
 
 
 def season_factors(multipliers: pd.DataFrame, season: int) -> tuple:
     """(m_O, m_D, g_O, g_D): one season's row of `multipliers_by_season`, as the build applies it (the defence factor
-    already in it), 1 for a games' part the table does not free."""
+    already in it), 1 for a games' part the table does not free; with the within layer, its four WITHIN_COLUMNS after
+    them, eight in all."""
     row = multipliers.set_index("season").loc[int(season)]
-    return (float(row.multiplier_off), float(row.multiplier_def), float(row.get("games_multiplier_off", 1.0)),
-            float(row.get("games_multiplier_def", 1.0)))
+    factors = (float(row.multiplier_off), float(row.multiplier_def), float(row.get("games_multiplier_off", 1.0)),
+               float(row.get("games_multiplier_def", 1.0)))
+    if all(column in row.index for column in WITHIN_COLUMNS):
+        factors += tuple(float(row[column]) for column in WITHIN_COLUMNS)
+    return factors
 
 
 def _shrink_side(prior: np.ndarray, games: np.ndarray, multiplier: float, games_multiplier: float,
@@ -288,6 +418,8 @@ def shrink_fold(rows: dict, season: int, factors: tuple) -> pd.DataFrame:
     defence row (2015, repeat 0, fold 2: one possession); his defence parts come from his offence row, shrunk as
     the defence rows were, and his defensive possessions are 0, so step 5 weighs him at nothing there.
     """
+    if len(factors) == 8:
+        return _shrink_fold_layered(rows, season, factors)
     offence, defence = rows["O"], rows["D"]
     prior_off, u_off, _ = _shrink_side(offence.prior_off.to_numpy(float), offence.u_off.to_numpy(float), factors[0],
                                        factors[2], offence.poss_off.to_numpy(float))
@@ -301,6 +433,50 @@ def shrink_fold(rows: dict, season: int, factors: tuple) -> pd.DataFrame:
     alone = table.prior_def.isna().to_numpy()
     table.loc[alone, "prior_def"] = factors[1] * offence.prior_def.to_numpy(float)[alone] - level
     table.loc[alone, "u_def"] = factors[3] * offence.u_def.to_numpy(float)[alone]
+    table["rating_off"] = table.prior_off + table.u_off
+    table["rating_def"] = table.prior_def + table.u_def
+    table["rating_total"] = table.rating_off + table.rating_def
+    table["offense"], table["defense"] = table.rating_off, -table.rating_def
+    return table
+
+
+def layered_fold_parts(rows: dict, factors: tuple) -> dict:
+    """{"O", "D"}: (prior part, games' part) of a fold's rated players after both layers, each side re-centred over its
+    own rows by offensive possessions, as step 4 re-centres; `factors` is `season_factors`'s eight.  The offence's
+    parts are split over the offence rows' teams, the defence's over the defence rows'."""
+    team_m = (factors[0], factors[2], factors[1], factors[3])
+    out = {}
+    for side, prior, games in (("O", "prior_off", "u_off"), ("D", "prior_def", "u_def")):
+        side_rows = rows[side]
+        parts = _layered(side_rows, side_rows.team_id.to_numpy(), team_m, factors[4:])
+        level = np.average(parts[prior] + parts[games], weights=side_rows.poss_off.to_numpy(float))
+        out[side] = (parts[prior] - level, parts[games])
+    return out
+
+
+def _shrink_fold_layered(rows: dict, season: int, factors: tuple) -> pd.DataFrame:
+    """`shrink_fold` with the two layers.  A player with no defence row takes his defence parts from his offence row,
+    split around his team's defensive mean as the defence rows are (0 when his team has no defence row)."""
+    offence, defence = rows["O"], rows["D"]
+    parts = layered_fold_parts(rows, factors)
+    table = pd.DataFrame({"player_id": offence.player_id.to_numpy(np.int64), "season": np.int64(season),
+                          "prior_off": parts["O"][0], "u_off": parts["O"][1],
+                          "poss_off": offence.poss_off.to_numpy(float), "poss_def": offence.poss_def.to_numpy(float)})
+    table = table.join(pd.DataFrame({"prior_def": parts["D"][0], "u_def": parts["D"][1]},
+                                    index=defence.player_id.to_numpy(np.int64)), on="player_id")
+    alone = table.prior_def.isna().to_numpy()
+    if alone.any():
+        raw = _layered(defence, defence.team_id.to_numpy(), (factors[0], factors[2], factors[1], factors[3]),
+                       factors[4:])
+        level = np.average(raw["prior_def"] + raw["u_def"], weights=defence.poss_off.to_numpy(float))
+        for column, team_m, within_m in (("prior_def", factors[1], factors[6]), ("u_def", factors[3], factors[7])):
+            mean, _ = team_split(defence.team_id.to_numpy(), defence[column].to_numpy(float),
+                                 defence.poss_def.to_numpy(float))
+            team_mean = pd.Series(mean, index=defence.team_id.to_numpy()).groupby(level=0).first()
+            mine = team_mean.reindex(offence.team_id.to_numpy()[alone]).fillna(0.0).to_numpy()
+            value = offence[column].to_numpy(float)[alone]
+            shift = level if column == "prior_def" else 0.0
+            table.loc[alone, column] = team_m * mine + within_m * (value - mine) - shift
     table["rating_off"] = table.prior_off + table.u_off
     table["rating_def"] = table.prior_def + table.u_def
     table["rating_total"] = table.rating_off + table.rating_def

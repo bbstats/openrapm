@@ -37,7 +37,7 @@ import scipy.sparse as sp
 from .legacy_names import translate_frame
 
 __all__ = ["Fold", "read_fold", "fold_stems", "check_fold_record", "check_repeats", "check_fold_files", "load_folds",
-           "fold_games"]
+           "fold_games", "HeldStints", "held_back_stints"]
 
 
 
@@ -205,3 +205,33 @@ def fold_games(directory: Path, fold: Fold) -> tuple[set, set]:
     if stored != held:
         raise ValueError(f"{fold.stem}: the test file holds {len(stored)} games, the assignment {len(held)}")
     return set(games[~held_mask]), held
+
+
+@dataclass
+class HeldStints:
+    """A fold's held-back stints, every stint of its test games with possessions, as step 4's within layer fits on
+    them (prior_shrink.stint_equations, experiment 106)."""
+    y: np.ndarray              # points per 100 as scored
+    w: np.ndarray              # possessions
+    lineup_o: np.ndarray       # stints x 5: the offence's player ids, -1 where the design has none
+    lineup_d: np.ndarray       # stints x 5: the defence's
+    team_game: np.ndarray      # one code per team-game: the game and which team has the ball
+
+
+def held_back_stints(design, held_ids) -> HeldStints:
+    """The rows of a season's points design (openrapm.data.designs) whose game is in `held_ids` (`fold_games`'s
+    second set) and that carry possessions.
+
+    Example: 2026, repeat 0, fold 0: the 329 held-back games' 19,000 or so stint rows, both teams on offence.
+    """
+    games = design.games.set_index("game_idx").game_id.astype(str)
+    game_id = design.rows.game_idx.map(games).to_numpy().astype(str)
+    keep = np.isin(game_id, np.array(sorted(held_ids), dtype=str)) & (np.asarray(design.w) > 0)
+    ids = design.spec.players.set_index("player_column").player_id
+
+    def lineup(name):
+        return ids.reindex(design.parts[name][keep].ravel()).fillna(-1).to_numpy(np.int64).reshape(-1, 5)
+    home = design.rows.is_home_off.to_numpy()[keep]
+    team_game, _ = pd.factorize(pd.Series(game_id[keep]) + np.where(home, "h", "a"))
+    return HeldStints(y=np.asarray(design.y)[keep], w=np.asarray(design.w)[keep], lineup_o=lineup("lineup_o"),
+                      lineup_d=lineup("lineup_d"), team_game=team_game)

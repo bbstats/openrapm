@@ -246,3 +246,99 @@ def test_a_player_without_a_defence_row_is_shrunk_as_the_defence_rows_are():
     assert np.isclose(mine.prior_def.iloc[0], 0.8 * table.prior_def.iloc[0] - level)
     assert np.isclose(mine.u_def.iloc[0], 1.4 * table.u_def.iloc[0])
     assert np.allclose(mine.rating_def.iloc[1:].to_numpy(), rest.rating_def.to_numpy())
+
+
+# ------------------------------------------------------------------------------- the two layers (experiment 106)
+def test_the_team_split_is_the_possession_weighted_team_mean_and_the_rest():
+    """The docstring's example: +4.0 on 3,000 possessions and -1.0 on 1,000 have mean 2.75; a team of no weight 0."""
+    mean, deviation = ps.team_split([7, 7, 9], [4.0, -1.0, 2.0], [3000.0, 1000.0, 0.0])
+    assert np.allclose(mean, [2.75, 2.75, 0.0]) and np.allclose(deviation, [1.25, -3.75, 2.0])
+
+
+def _layered_table(n=30, seed=3):
+    table = _fold_rows(n, seed).assign(team_id=np.arange(n) % 3 + 100)
+    return table.assign(rating_total=0.0, offense=0.0, defense=0.0, prior_total=0.0, u_total=0.0, prior_offense=0.0,
+                        prior_defense=0.0)
+
+
+_ONE = pd.DataFrame({"season": [2024], "multiplier_off": [0.7], "multiplier_def": [0.8], "games_multiplier_off": [1.3],
+                     "games_multiplier_def": [1.4]})
+
+
+def test_two_layers_with_the_same_multipliers_are_one_layer():
+    table = _layered_table()
+    teams = table[["player_id", "season", "team_id"]]
+    two = _ONE.assign(within_multiplier_off=0.7, within_games_multiplier_off=1.3, within_multiplier_def=0.8,
+                      within_games_multiplier_def=1.4)
+    one_layer = ps.shrink(table.drop(columns="team_id"), _ONE)
+    two_layers = ps.shrink(table.drop(columns="team_id"), two, teams)
+    for column in ("rating_off", "rating_def", "prior_off", "prior_def", "u_off", "u_def"):
+        assert np.allclose(one_layer[column], two_layers[column], atol=1e-12), column
+    with pytest.raises(ValueError):
+        ps.shrink(table.drop(columns="team_id"), two)
+
+
+def test_the_within_layer_moves_only_each_players_deviation_from_his_teams_mean():
+    """Within multiplier 1.2 on the offensive prior part, the team layer 0.5: every deviation from the team mean is
+    1.2 times what it was, and the team means move 0.5 times as far apart."""
+    table = _layered_table()
+    teams = table[["player_id", "season", "team_id"]]
+    multipliers = _ONE.assign(multiplier_off=0.5, within_multiplier_off=1.2, within_games_multiplier_off=1.3,
+                              within_multiplier_def=0.8, within_games_multiplier_def=1.4)
+    out = ps.shrink(table.drop(columns="team_id"), multipliers, teams)
+    mean_before, deviation_before = ps.team_split(table.team_id, table.prior_off, table.poss_off)
+    mean_after, deviation_after = ps.team_split(table.team_id, out.prior_off, out.poss_off)
+    assert np.allclose(deviation_after, 1.2 * deviation_before)
+    assert np.allclose(mean_after - mean_after[0], 0.5 * (mean_before - mean_before[0]))
+
+
+def test_the_within_layer_equations_recover_planted_multipliers_exactly():
+    """Held-back stints made from the parts with known within multipliers, a level per team-game and stand-ins for
+    unrated players: the normal equations give the four multipliers back."""
+    from types import SimpleNamespace
+
+    from openrapm.data.within_folds import HeldStints
+    rng = np.random.default_rng(11)
+    rows = pd.DataFrame({"player_id": np.arange(20, dtype=np.int64), "team_id": np.repeat([1, 2], 10),
+                         "prior_off": rng.normal(0, 2, 20), "u_off": rng.normal(0, 1, 20),
+                         "prior_def": rng.normal(0, 1, 20), "u_def": rng.normal(0, 1, 20),
+                         "poss_off": rng.uniform(100, 3000, 20), "poss_def": rng.uniform(100, 3000, 20)})
+    fold = SimpleNamespace(rows={"O": rows, "D": rows}, fill_o=0.3, fill_d=-0.2)
+    planted = np.array([0.9, 1.4, 0.8, 1.9])
+    n, games = 3000, 120
+    team_game = rng.integers(0, games, n)
+    offence_team = np.where(team_game % 2 == 0, 1, 2)
+    lineup_o = np.array([rng.choice(rows.player_id[rows.team_id == t], 5, replace=False) for t in offence_team])
+    lineup_d = np.array([rng.choice(rows.player_id[rows.team_id != t], 5, replace=False) for t in offence_team])
+    lineup_o[rng.random(n) < 0.1, 0] = -1                      # an unrated player: the stand-in rating
+    y = rng.normal(110, 5, games)[team_game]
+    for (column, weight, sign), m in zip(ps.LAYER_PARTS, planted):
+        mean, deviation = ps.team_split(rows.team_id, rows[column], rows[weight])
+        lineup = lineup_o if column.endswith("off") else lineup_d
+        safe = np.where(lineup >= 0, lineup, 0)
+        y += sign * np.where(lineup >= 0, mean[safe] + m * deviation[safe], 0.0).sum(axis=1)
+    y += (lineup_o < 0).sum(axis=1) * fold.fill_o
+    stints = HeldStints(y=y, w=rng.uniform(1, 12, n), lineup_o=lineup_o, lineup_d=lineup_d, team_game=team_game)
+    a, b = ps.stint_equations(fold, stints)
+    assert np.allclose(np.linalg.solve(a, b), planted)
+    table = ps.within_multipliers_by_season([2020, 2021], {2018: (a, b), 2023: (a, b)}, "test")
+    assert np.allclose(table[list(ps.WITHIN_COLUMNS)].to_numpy(), planted)
+
+
+def test_two_layers_on_a_folds_rows_are_two_layers_on_a_table():
+    table = _layered_table()
+    multipliers = _ONE.assign(within_multiplier_off=0.9, within_games_multiplier_off=1.1, within_multiplier_def=0.7,
+                              within_games_multiplier_def=1.9)
+    factors = ps.season_factors(multipliers, 2024)
+    assert factors == (0.7, 0.8, 1.3, 1.4, 0.9, 1.1, 0.7, 1.9)
+    mine = ps.shrink_fold({"O": table.assign(side="O"), "D": table.assign(side="D")}, 2024, factors)
+    theirs = ps.shrink(table.drop(columns="team_id"), multipliers, table[["player_id", "season", "team_id"]])
+    for column in ("rating_off", "rating_def", "prior_off", "prior_def", "u_off", "u_def"):
+        assert np.allclose(mine[column].to_numpy(), theirs[column].to_numpy(), atol=1e-12), column
+
+
+def test_the_within_layer_is_read_to_a_full_season_with_the_rest():
+    quarter = pd.DataFrame({"season": [2026], "multiplier_off": [0.70], "within_multiplier_off": [0.97]})
+    tenth = pd.DataFrame({"season": [2026], "multiplier_off": [0.71], "within_multiplier_off": [0.99]})
+    full = ps.read_to_full_season(quarter, tenth, 0.25, 0.10)
+    assert full.within_multiplier_off.iloc[0] == pytest.approx(0.99 + 0.10 * 0.02 / 0.15)

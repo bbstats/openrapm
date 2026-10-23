@@ -9028,3 +9028,507 @@ published, and step 4's own fit on that size's folds.  1 is the published 2026 w
   Dončić +0.21, 7th to 6th; Nikola Jokić +0.16; Giannis Antetokounmpo +0.12; Chet Holmgren -0.14; Bam Adebayo -0.11.
 - **Checks.**  The consensus tests pass (10 passed, the known backup-bigs failure); `openrapm site --bias
   --openrapm-decomposition --similarity` passes every identity; 747 tests pass.
+
+## Why the defense is wide relative to the offense: the read of 2026-10-23 (the owner, 2026-10-22: "Figure out what the heck is going on with our defense. There should be clear answers to why our defense is so strong (relative to our offense) eg in 2026. Develop tests vs epm, Darko and the rest")
+
+Read-only, on the published build of experiment 101 and the incumbent's folds, `scratch/2026-10-23_defense/` (`ladder.py`,
+`public.py`, `levels_in_out.py`, `level_term.py`, `team_sums.py`, `public_wowy.py`, `public_yoy.py`), every table in
+`outputs/csv/defense_2026_*.csv`; the held-out audit on inputs99's folds, `outputs/csv/audit_inputs99*.csv`.  The public
+metrics are `data/external/impact_metrics_2526.csv`, joined on the NBA player id, 390 players with 1,000+ possessions in
+2026.  A plan review by a second agent before the runs dropped the plan's build (below) and asked for the standard
+errors, the one-way rule and the predictive spread that the tables carry.
+
+**1. Where the width comes from: the shrink step, nowhere else.**  Defense's standard deviation over offense's, players
+with 1,000+ possessions, each season's ratio averaged over the era's seasons (the fold rows for the two raw priors, at
+750+ fit-game possessions):
+
+| stage | 1997-2006 | 2007-2016 | 2017-2026 | 2024-2026 | 2026 |
+|---|---|---|---|---|---|
+| raw box-score prior | 0.995 | 0.970 | 0.862 | 0.762 | 0.822 |
+| raw second prior | 0.933 | 0.971 | 0.934 | 0.851 | 0.885 |
+| after the ridge: prior part | 0.906 | 0.888 | 0.848 | 0.841 | 0.902 |
+| after the ridge: +/- | 1.210 | 1.160 | 0.977 | 0.986 | 1.100 |
+| after the ridge: rating | 0.915 | 0.898 | 0.861 | 0.864 | 0.921 |
+| after the shrink, before the defense factor | 1.023 | 1.079 | 1.214 | 1.255 | 1.297 |
+| published, with the defense factor | 0.910 | 0.960 | 1.019 | 1.054 | 1.090 |
+
+The published shrink multipliers, mean by era: prior part offense 0.724 / 0.694 / 0.676, 2026 0.681; prior part
+defense before the factor 0.797 / 0.819 / 0.968, 2026 0.970; +/- offense 1.334 / 1.267 / 1.314; +/- defense before the
+factor 1.415 / 1.436 / 1.440.  In 2026 the ridge leaves offense at standard deviation 2.09 and defense 1.92; the shrink
+takes offense to 1.49 and defense to 1.93; the factor 0.84 takes defense to 1.62.  The imbalance is the two sides'
+multipliers: the defensive prior part holds up on held-back team-games at 0.80 before 2017 and 0.97-1.00 since, the
+offensive at 0.68-0.72 in every era; the defensive +/- at 1.44 against 1.31.  Nothing before the shrink is defense-heavy.
+
+**2. One setting at a time**, tables on disk, defense over offense of the published rating by era, before then after:
+the second prior added, bags10 then ctx82, 0.81 / 0.86 / 0.93 to 0.95 / 1.00 / 1.04; the defense on the offense's
+target, crossfit80 then same84, 0.82 / 0.87 / 0.94 to 0.75 / 0.79 / 0.87; the hustle inputs, flat then flathustle,
+0.83 / 0.89 / 0.91 to 0.84 / 0.89 / 0.93; the defensive label un-shrunk, 2026-09 pipeline, 0.68 / 0.74 / 0.71 to 0.68 /
+0.76 / 0.72.  Each moves the ratio by 0.02 to 0.14; the shrink step moves it by 0.3 to 0.4.
+
+**3. Against the public metrics, 2026.**  Defense over offense: OpenRAPM 1.09; RAPM 0.97, xRAPM 1.00, luck-adjusted RAPM
+0.92, time-decay RAPM 0.95; EPM 0.62, DARKO 0.70, LEBRON 0.72, DRIP 0.78, RAPTOR 0.64, BPM 0.53.  Our offense's standard
+deviation 1.49 against EPM 1.96, LEBRON 1.52, DARKO 1.46; our defense 1.62 against xRAPM 1.63, RAPM 1.43, LEBRON 1.10,
+EPM 1.22, DARKO 1.03.  Correlation with ours: offense, EPM 0.89, xRAPM 0.88, LEBRON 0.87; defense, LEBRON 0.90, LEBRON's
+box part 0.88, DARKO 0.84, DRIP 0.82, EPM 0.76, xRAPM 0.70, RAPM 0.59.  The public metrics agree with each other less on
+defense, mean correlation with the others 0.59-0.78, than on offense, 0.63-0.85.  Our defensive order is LEBRON's; the
+difference is width.  By defensive role, standardized gap ours minus theirs: anchor bigs +0.60 against EPM, +0.25
+against LEBRON, -0.08 against DARKO; mobile bigs +0.56 / +0.15 / +0.19; chasers -0.30 / -0.10 / -0.09.  By offensive
+archetype our offense is 0.7 of EPM's width in every archetype.
+
+**4. Do the metrics add up to the teams, 2026** (`team_sums.py`: each team's actual points per 100 against the league on
+the sum of the five on the court's ratings, possession-weighted over its stints; slope of actual on predicted over 30
+teams, standard error about 0.04 at our R-squared of 0.96 and 0.1-0.15 at 0.6-0.8).  Teams differ more on defense than
+on offense: standard deviation 3.52 against 3.10.  Slopes offense / defense: OpenRAPM 1.11 / 1.39, R-squared 0.96 /
+0.96; EPM 0.93 / 1.06; LEBRON 0.95 / 1.24; DARKO 1.10 / 1.40; DRIP 1.36 / 1.69; BPM 0.80 / 0.93; RAPM 1.04 / 1.15;
+xRAPM 0.86 / 0.90; DARKO's box part 1.27 / 1.74.  Every metric's defense adds up to less of the teams' defense than its
+offense does of their offense.  Ours: the factor 0.84 explains 1.19 of the 1.39; the rest says our defensive team sums
+are about 17% too narrow for 2026's teams, the offensive about 11%.  In-sample for every metric here.
+
+**5. Team levels in and out at the team-game level** (`levels_in_out.py`: the shrink's four multipliers refitted on
+the same held-back team-games, as shipped and with a free level per attacking and defending team added to each fold's
+controls, standard errors from the weighted least squares; a second fit puts one factor per side on the published
+rating):
+
+| scope | team levels | prior part O | prior part D | +/- O | +/- D | published rating O | published rating D |
+|---|---|---|---|---|---|---|---|
+| 1997-2006 | in | 0.713 ± 0.011 | 0.787 ± 0.023 | 1.45 ± 0.04 | 1.55 ± 0.02 | 1.01 ± 0.01 | 1.20 ± 0.02 |
+| 1997-2006 | out | 0.620 ± 0.017 | 0.721 ± 0.027 | 1.26 ± 0.13 | 1.16 ± 0.13 | 0.86 ± 0.02 | 1.00 ± 0.04 |
+| 2007-2016 | in | 0.661 ± 0.011 | 0.809 ± 0.024 | 1.35 ± 0.04 | 1.59 ± 0.03 | 0.99 ± 0.01 | 1.21 ± 0.02 |
+| 2007-2016 | out | 0.507 ± 0.015 | 0.743 ± 0.028 | 0.53 ± 0.13 | 2.03 ± 0.12 | 0.72 ± 0.02 | 1.10 ± 0.03 |
+| 2017-2026 | in | 0.678 ± 0.011 | 0.966 ± 0.025 | 1.35 ± 0.04 | 1.58 ± 0.03 | 1.01 ± 0.01 | 1.25 ± 0.02 |
+| 2017-2026 | out | 0.559 ± 0.014 | 0.912 ± 0.027 | 1.21 ± 0.12 | 1.59 ± 0.13 | 0.83 ± 0.02 | 1.14 ± 0.03 |
+
+2026 alone, 12 folds, is a direction only: in 0.669 / 1.165, out 0.527 / 1.147 on the prior parts; the +/- multipliers
+there are unreadable, -0.78 ± 0.38 on offense.  With team levels out the offensive prior holds up less, not more, and
+the defensive about the same; the published rating's own factor at the team-game level is 1.0 on offense and 1.2-1.25
+on defense with team levels in, 0.83 and 1.14 with them out.  Held-back team-games want the published defense wider
+and the offense no wider either way.
+
+**6. The within-season WOWY test's wish for a wider offense is not a playing-time level** (`level_term.py`: the stint
+test's wanted width per side as `cv_widths.py` reads it, then again with the mean fit-game possession share of the
+offense's five and of the defense's five as two more controls):
+
+| season | controls | offense | defense | gain from the best offense width | offense term, points per 100 per unit share | defense term |
+|---|---|---|---|---|---|---|
+| 2003 | as the test has them | 1.18 | 1.20 | -0.41 | | |
+| 2003 | with the term | 1.22 | 1.27 | -0.21 | +4.9 | +0.3 |
+| 2010 | as the test has them | 1.14 | 1.02 | -0.19 | | |
+| 2010 | with the term | 1.14 | 1.01 | -0.06 | +6.1 | -4.2 |
+| 2016 | as the test has them | 1.17 | 1.12 | -0.33 | | |
+| 2016 | with the term | 1.09 | 1.13 | -0.03 | +10.5 | -7.6 |
+| 2021 | as the test has them | 1.18 | 1.05 | -0.53 | | |
+| 2021 | with the term | 1.21 | 1.13 | -0.21 | +8.0 | -2.8 |
+| 2026 | as the test has them | 1.17 | 1.03 | -0.35 | | |
+| 2026 | with the term | 1.15 | 1.15 | -0.11 | +5.0 | +2.1 |
+
+The best offense width stays 1.09-1.22 with the term in, but the term takes 40-90% of the gain from widening: within a
+team the two say nearly the same thing, lineups of heavy-minute players score more than their offensive ratings
+predict, 5-10 points per 100 per unit of mean share.  On defense the term's sign changes by season.
+
+**7. The public metrics on 2026's held-back stints, within teams** (`public_wowy.py`, the WOWY error of each metric as a
+fixed table on our quarter folds' held-back stints, team levels out; the share of what our fold ratings explain over
+ratings of zero): RAPM 2.33, xRAPM 1.94, EPM 1.72, time-decay RAPM 1.72, RAPTOR 1.65, LEBRON 1.31, DARKO 1.25, BPM 1.13,
+DRIP 1.10, ours 1.00, ours before the shrink 0.96, LEBRON's box part 0.93, DARKO's box part 0.90.  Every lineup-informed
+public metric was fitted on these very stints and its win says nothing; the two box-only parts read these games' box
+scores and still lose, which says a box-only side is worse than ours within teams even with that advantage.  The
+public metrics' wanted widths on this test sit at the grid's edge, 1.70, the in-sample stretch of a fitted estimate,
+and are not read.
+
+**8. 2026's ratings predicting 2025's games** (`public_yoy.py`, the year-over-year test's "next" direction, one scored
+season, no standard error; a player a table lacks is the average player; the predictive spread is the scale 2025 wants
+times the table's own width, the number comparable across tables):
+
+| table | team-game error | scale offense | scale defense | predictive spread O | predictive spread D | D over O | saw 2025 |
+|---|---|---|---|---|---|---|---|
+| time-decay RAPM | 8.68 | 1.34 | 1.44 | 1.82 | 1.86 | 1.02 | yes |
+| xRAPM | 8.70 | 1.17 | 1.06 | 1.91 | 1.74 | 0.91 | unknown |
+| EPM predictive | 8.78 | 1.02 | 1.22 | 1.88 | 1.35 | 0.72 | yes |
+| DRIP | 8.91 | 1.27 | 1.50 | 1.68 | 1.55 | 0.93 | yes |
+| DARKO | 8.93 | 1.09 | 1.48 | 1.59 | 1.52 | 0.96 | yes |
+| LEBRON | 8.99 | 1.08 | 1.18 | 1.63 | 1.30 | 0.80 | through its prior |
+| OpenRAPM, test setting | 8.99 | 1.00 | 0.90 | 1.52 | 1.45 | 0.95 | no |
+| OpenRAPM, published | 8.99 | 1.01 | 0.89 | 1.50 | 1.45 | 0.96 | through the prior |
+| EPM season | 9.03 | 0.79 | 0.91 | 1.54 | 1.11 | 0.72 | through its prior |
+| luck-adjusted RAPM | 9.07 | 1.20 | 1.04 | 1.53 | 1.22 | 0.80 | no |
+| RAPM | 9.25 | 0.81 | 0.74 | 1.20 | 1.07 | 0.89 | no |
+| BPM | 9.33 | 0.58 | 0.71 | 1.41 | 0.91 | 0.65 | no |
+| no ratings | 9.45 | | | | | | |
+
+Ours, single season, ties LEBRON and beats season EPM, BPM, RAPM and luck-adjusted RAPM; the metrics ahead of it have
+2025's games in them.  The spread that predicts last season has defense over offense 0.89-1.02 for every
+lineup-informed metric and 0.95 for ours; DARKO's, DRIP's and LEBRON's defenses must be stretched 1.2-1.5 to predict,
+ours shrunk 0.90.
+
+**9. The held-out audit on today's folds** (`audit_inputs99`, 2017-2026, the shipped stage; bottom tenth to top tenth
+of the input, + under-rated on held-back games): defense, the group rebounds, defensive rebounds and height +1.38
+COUNTS, defensive rebounds +1.31 COUNTS, weight +1.24 COUNTS, points +0.82 COUNTS; offense, possessions he finishes
+-0.88 COUNTS, turnovers -0.85 COUNTS, missed twos -0.80 COUNTS, two-point % +0.67 COUNTS, height -0.40 COUNTS.  Before
+the shrink the offensive usage lean is -2.73 and the prior part alone -0.90: the shrink's 0.68 repairs most of a lean
+that sits in the high-usage players, not evenly across the offense.  The defensive bigs are under-rated on held-back
+games after everything.
+
+**Reading.**
+- The defense is as wide as it is because the shrink step, fitted on held-back team-games, keeps the whole defensive
+  prior part since 2017 and two thirds of the offensive one.  Every held-back read agrees with the direction: at the
+  team level 2026's defenses differ more than its offenses and every metric's defense adds up to too little; held-back
+  team-games want the published defense 1.14-1.25 wider and the offense no wider; the spread that predicts last season
+  has defense over offense near 0.95 for ours and for every lineup-informed public metric.  The box-based public
+  metrics' 0.6-0.7 is the box score's blind spot on defense, not the game's balance.
+- Our defensive order is LEBRON's at 0.90.  The disagreement about bigs is with EPM, not with DARKO or LEBRON, and the
+  held-back games side with us: bigs are still under-rated on defense.
+- The one reading that wants the offense wider, the stint-level WOWY test at 1.17, is mostly heavy-minute lineups
+  outscoring their offensive ratings; a width and a playing-time level are nearly the same statement within a team.
+- The offensive side is where the leans are: the un-shrunk offensive prior over-rates high-usage players by 2.7 per
+  100 and the multiplier of 0.68 is the repair.  The offensive label is still the shrunk ridge coefficient, the
+  defensive label un-shrunk since experiment 22 on 2026-09-18, and the second prior's line stretches the offensive box
+  prior by 2.49 against 1.03 on defense to undo it.  One linear stretch cannot undo a shrink that depends on career
+  possessions: stars over-stretched, bench under-stretched, which is the sign pattern of the usage lean and of the
+  within-team readings.  The same-method rule says the un-shrink belongs on both sides or neither.
+- **The candidate: the label un-shrunk on both sides**, one chain of 50-75 minutes.  Expected: the offensive prior's
+  multiplier rises from 0.68, the offensive usage lean shrinks, defense over offense falls toward 1.0 without the
+  defense moving.  The alternative the plan carried, a within-team stretch per side with team totals held, was dropped
+  on the review: with team levels fitted out the WOWY test cannot tell a within-team stretch from the plain width it
+  already read, and taking the defense factor out widens every defensive team total by 19% on the one test that
+  scores totals.
+- Verdict the owner's.
+
+## Experiment 102: both labels un-shrunk (the owner, 2026-10-23: "Great - let's try un shrinking the offensive label"; registered before any result)
+
+**The change.**  `openrapm rate --unshrink-labels both` (`settings.UNSHRINK_LABELS`; shipped "defense"): step 1's
+offensive label is un-shrunk as the defensive one has been since experiment 22, each player's career RAPM divided by
+the share a ridge at the label penalty of 40,000 keeps of it, pulled toward his possession tier's level below 4,444
+label possessions (`rapm.unshrink`).  The folds accept boosters saved either way (`within_season.UNSHRINK_ALLOWED`);
+a plain run is the test setting exactly.  The recipe of experiments 88b and 89b: a base without the swap part of the
+prior (`unshrinkbase102`), its own folds for all thirty seasons, the line refitted on those folds' held-back swaps
+(`ctx102`), then the chain `unshrink102` on that line, its own folds, against inputs99.
+`scratch/2026-10-23_defense/run102.sh`, log `outputs/run102.log`.
+
+**Why.**  "Why the defense is wide relative to the offense" above: the imbalance is made in the shrink, which keeps
+0.68 of the offensive prior part against 0.97 of the defensive; before the shrink the offensive prior over-rates
+high-usage players by 2.7 per 100 on held-back games.  The offensive label is the shrunk ridge coefficient, so a
+long-career player's label keeps far more of his impact than a bench player's, and the swap part of the prior
+stretches the offensive box prior by 2.49 against 1.03 on defense; one stretch cannot undo a shrink that depends on
+possessions.  The same statistical reason on both sides takes the same method.
+
+**The risk, on record.**  Experiment 22 on the 2026-09 pipeline: both labels un-shrunk narrowed the 2026 offensive
+spread 1.60 to 1.14, emptied the top five of its stars and read worse once each side was rescaled, z +7.75; the
+defensive un-shrink alone was adopted.  That pipeline had no shrink step fitted on held-back games and no swap part of
+the prior.
+
+**How it is read**: the within-season WOWY test by era against inputs99, the noise control beside it, a win only if
+every era is better; the year-over-year test not worse at z +2, and again at inputs99's width
+(`width_check.py`); the 2026 top 20.  Beside them: the shrink's multipliers and defense over offense by era, the
+held-out audit's usage leans on the candidate's folds, and the public-metric agreement (`read102.py`).
+
+### Experiment 102: result (2026-10-23, `outputs/run102.log`, `outputs/unshrink102_chain.log`, `outputs/csv/exp102_*.csv`)
+
+The within-season WOWY test against inputs99, stint level, the shipped stage; below 0 is better:
+
+| era | change | standard error | z | seasons better |
+|---|---|---|---|---|
+| 1997-2006 | -0.047 | 0.126 | -0.37 | 7 of 10 |
+| 2007-2016 | +0.179 | 0.113 | +1.58 | 3 of 10 |
+| 2017-2026 | +0.459 | 0.101 | +4.54 | 0 of 10 |
+| all seasons | +0.197 | 0.074 | +2.65 | 10 of 30 |
+
+Newey-West z +1.96.  The year-over-year test, team-game, both directions: -0.211, z -3.92, clustered -3.55, better in 41
+of 56; stint level +0.105, z +1.30.  At inputs99's width, the candidate's offense times 1.011 and defense times 0.969:
+-0.185, z -3.29, 39 of 56.  2026's ratings predicting 2025's games: team-game error 8.993 against 8.990; the spread
+that predicts, offense 1.44 against 1.51, defense 1.56 against 1.43.
+
+**The mechanism read the other way.**  The shrink's offensive prior multiplier fell, 0.664 to 0.605 in 2017-2026 and
+0.672 to 0.610 in 2026; the defensive rose slightly, 0.783 to 0.800.  Offense's standard deviation by era 1.86 / 1.67 /
+1.47, 2026 1.43, against 1.86 / 1.68 / 1.51, 2026 1.50; defense 1.88 / 1.76 / 1.65, 2026 1.79, against 1.74 / 1.63 /
+1.51, 2026 1.60.  Defense over offense in 2026 1.25 against 1.07.  The offensive usage lean on held-back games did not
+move: possessions he finishes -0.89 against -0.88 at the shipped stage, -2.95 against -2.73 before the shrink.  The
+defensive big-man lean fell, the group rebounds, defensive rebounds and height +0.91 against +1.38, no longer counting.
+The refitted line weighs the offensive box-score prior 0.82 against 2.50, the other end's prior on offense -1.41
+against -0.90, and on defense its teammates' and opponents' defensive priors -2.50 and -3.57.
+
+**2026 top 20**, test setting, against inputs99: Giannis Antetokounmpo 5th to 19th, -2.07 with offense -1.87; Luka
+Dončić 6th to 15th, -1.00; Shai Gilgeous-Alexander 2nd to 3rd, -1.11; Ty Jerome 18th to 53rd, -1.62; Mitchell Robinson
+19th to 13th, +0.71; Donovan Clingan 15th to 8th, +0.56; Jarrett Allen 31st to 20th, +0.57; Nikola Jokić 3rd to 2nd,
++0.30.  Agreement with the public metrics lower on both sides: offense against EPM 0.875 against 0.896, defense
+against LEBRON 0.885 against 0.902.
+
+**Reading.**  Not a win by the owner's rule: worse within season, in all ten seasons of 2017-2026.  The registration's
+explanation is refuted: un-shrinking the offensive label left the offensive usage lean where it was and the shrink cut
+the offense harder, so the over-rating of high-usage players does not come from the shrunk label.  The run changed two
+things, the label and the line refitted on today's data in place of ctx82's from bags10's folds; the wider defense, the
+smaller big-man lean and the better defensive prediction of 2025 may come from either.  A refit of the line alone on
+inputs99's base would separate them.  Verdict the owner's.
+
+## Experiment 102 taken apart, with its control, experiment 103 (the owner, 2026-10-23: "looks clearly that un-shrinking the offensive labels made Blocks more important and points less important? figure out exactly what happened. do not stop until you're 100% sure. adversarially validate yourself")
+
+**The control, experiment 103 (`refit103`).**  Experiment 102's recipe exactly, without `--unshrink-labels both`: a base
+with no swap part of the prior (`shrunkbase103`), its folds, the line refitted on them (`ctx103`), the chain.
+`scratch/2026-10-23_defense/run103.sh`, `outputs/run103.log`, `outputs/refit103_chain.log`.  Its 2026 box-score priors
+equal inputs99's to the last digit on both sides, and experiment 102's defensive one equals both: the three builds form
+a clean two-by-two, the refit alone (103 against inputs99) and the label alone (102 against 103).
+
+| comparison | WOWY 1997-2006 | WOWY 2007-2016 | WOWY 2017-2026 | WOWY all | year over year, team-game | year over year, stint |
+|---|---|---|---|---|---|---|
+| refit alone, 103 against inputs99 | -0.141, 8 of 10 | -0.107, 6 of 10 | +0.186, z +3.7, 1 of 10 | -0.021, z -0.4 | -0.205, z -5.3, 44 of 56 | |
+| label alone, 102 against 103 | +0.094, 4 of 10 | +0.286, z +5.0, 0 of 10 | +0.273, z +3.4, 2 of 10 | +0.217, z +5.4 | -0.006, z -0.2 | +0.271, z +6.7 |
+| both, 102 against inputs99 | -0.047, 7 of 10 | +0.179, 3 of 10 | +0.459, z +4.5, 0 of 10 | +0.197, z +2.7 | -0.211, z -3.9 | |
+
+Defense width over offense width: inputs99 0.94 / 0.98 / 1.00, 2026 1.07; refit alone 0.99 / 1.02 / 1.06, 2026 1.16; both
+1.01 / 1.07 / 1.13, 2026 1.25.  Experiment 102's year-over-year gain was the refit's; the label alone loses within
+season in every era.
+
+**Where each stat's weight moved**, the exact split of every 2026 rating (`decompose.py`, `compare_decompose.py`;
+`outputs/csv/defense_2026_decompose_*.csv`): each box-score input's Shapley value through the line's weight and the build's
+slope, each line input held to team totals on its own, the other end's prior split by that side's Shapley values; every
+player's pieces add to his rating within 1e-15 and the Shapley values to his prior within 1e-14.  Share of the rating's
+variance across the 390 players with 1,000+ possessions:
+
+| group | inputs99 | refit alone | refit and label |
+|---|---|---|---|
+| offense: scoring | 0.60 | 0.59 | 0.50 |
+| offense: playing time | 0.25 | 0.20 | 0.20 |
+| defense: blocks | 0.20 | 0.21 | 0.21 |
+| defense: size | 0.09 | 0.14 | 0.14 |
+| defense: rebounding | 0.01 | 0.07 | 0.08 |
+| defense: steals | 0.12 | 0.09 | 0.09 |
+
+- **Points less important: the label.**  The stars' offensive drops are the scoring group: Giannis Antetokounmpo -2.41
+  of his -1.87, Luka Dončić -1.59 of -0.73, Shai Gilgeous-Alexander -1.52 of -0.71, Nikola Jokić -1.21, Victor Wembanyama
+  -1.06.  The refit alone leaves scoring's share where it was.
+- **Blocks barely moved, and the big-man gains on defense are the refit's.**  The control refit makes the same moves in
+  the defensive line as experiment 102's: offensive rebounds, which count against a player's defense, +0.27 to +0.12;
+  height -0.23 to -0.29; weight -0.09 to -0.20; defensive rebounds -0.27 to -0.32; blocks -0.32 to -0.37.  Mitchell
+  Robinson's +1.09 on defense: offensive rebounds' weight +0.66, blocks +0.19, size and the rest the remainder.  The
+  label's own mark on the defensive line is playing time, +0.10 to +0.30, and the weight on the other end's prior,
+  -0.84 to -0.39 on a prior 2.4 times wider.
+
+**Why the label moves scoring** (`labels102.py`, `band_levels.py`, `whatmoved102.py`).  The un-shrink divides each career
+label by the share the ridge keeps, possessions over possessions plus 40,000, and pulls a player under 4,444 toward his
+tier's level.  On offense coaches give minutes to good players, so the shrunk label already slopes with career minutes
+and the division multiplies that slope: the bands' averages go from -0.04 to -5.32 under 500 career possessions and
++0.95 to +1.55 above 40,000; a third of the label's possession-weighted spread is between the bands, against 5% on
+defense.  Measured directly, the ridge with each band's average left free, the gradient is real and steeper: -6.59 under
+500 against 0 for the top band on offense, -2.51 on defense.  The label, in standard units on career points per 100 and
+log career possessions together, weighted as the booster weighs it: shipped 0.45 and 0.30, un-shrunk 0.32 and 0.48.  The
+booster cannot read career minutes, so it reads this season's: the offensive box-score prior's correlation with share
+of team possessions 0.64 to 0.79, with points per 100 0.82 to 0.67.  Missed games are not the cause: over 2017-2026 a
+regular's offensive change is -0.007 per standard unit of games played.
+
+**Reading.**  Exactly what happened: the label change made the offensive box-score prior a measure of playing time and
+cost the scorers, which loses within season in every era and adds nothing year over year; the line refit on today's
+data, which experiment 102 carried with it, gave the big men more defense and the whole year-over-year gain.  The
+refit alone is better in 1997-2016 and worse in 2017-2026 within season, and widens the defense further.  Proposed to
+the owner, not built: un-shrink only each player's difference from his playing-time band.
+
+## Should defense take a heavier ridge penalty than offense? (the owner, 2026-10-23: "is 'more-heavily-penalized D than O using the lambda' a valid result for RAPM coefficients? ... if it is - why is our result different? if not - be super sure!", and "getting the right coefficients is *more important*")
+
+Read-only, plain single-season RAPM, every season 1997-2026 (`scratch/2026-10-23_defense/penalty_by_side.py`,
+`penalty_summary.py`, `regular_spread.py`; `outputs/csv/defense_2026_penalty_*.csv`, `defense_2026_regular_spread*.csv`).
+A ridge penalty is the noise variance over the true spread of player impact; the noise is shared by both sides, so the
+question is whether true defensive impact is less spread out.  Each side's spread is estimated from the season's own
+games by the restricted likelihood over a 13 x 13 grid of penalties, 500 to 50,000, one step 1.47 times; the
+held-back choice is the best pair on a quarter of the games held back.
+
+**Public practice.**  Most published RAPM uses one penalty for both sides (Sill 2010; ESPN's 2,000, squared2020.com).  Of
+the systems checked only L-RAPM (arXiv 2601.15000, 2026) separates them: 6,000 on defense against 4,000.  EPM's and
+LEBRON's method pages state no difference.  Experiment 35's plain RAPM, a free penalty per side chosen on held-back
+team-games pooled over seasons, picked equal penalties in 91% of 240 choices and 1.5 times on defense in the rest.
+
+**One zero-centred spread per side, the textbook model.**  Defense's true spread over offense's, medians by era:
+
+| era | points as scored | our targets | likelihood favors unequal by 2+ points | held-back choice, points | held-back choice, our targets, team-game |
+|---|---|---|---|---|---|
+| 1997-2006 | 0.75 | 0.74 | | 1.47 | 1.00 |
+| 2007-2016 | 0.75 | 0.72 | | 1.00 | 1.00 |
+| 2017-2026 | 0.82 | 0.66 | | 1.47 | 1.47 |
+| all | 0.82 | 0.73 | 67% of seasons | 1.47 | 1.00 |
+
+The held-back choices barely separate the pairs: the best beats the best equal pair by about 0.1% of the error.
+
+**With a free level for each band of the season's possessions.**  The deep bench is far worse on offense than on defense,
+medians -5.8 and -2.3 per 100 against the top band, and a zero-centred spread per side counts that gap as offensive
+spread.  With each band's level free, the spread of players around their band's level is equal on both sides: the median
+ratio is 1.00 in every era.  The heavier defensive penalty of the textbook model is the bench's offensive gap.
+
+**Among regulars**, players with 1,000+ possessions, the true spread is sqrt(the variance of their band levels + tau^2):
+
+| era | true offense | ours offense | ours keeps | true defense | ours defense | ours keeps | true ratio | ours |
+|---|---|---|---|---|---|---|---|---|
+| 1997-2006 | 2.49 | 1.86 | 0.75 | 2.02 | 1.73 | 0.85 | 0.82 | 0.92 |
+| 2007-2016 | 2.39 | 1.72 | 0.72 | 1.99 | 1.62 | 0.81 | 0.83 | 0.97 |
+| 2017-2026 | 2.23 | 1.50 | 0.69 | 1.64 | 1.54 | 0.89 | 0.77 | 1.05 |
+
+**Reading.**  A heavier defensive penalty is valid for plain RAPM and the data favor it, but for a reason: one spread per
+side around zero lets the bench's offensive gap pass for offensive spread.  Around each playing-time level the two sides
+are equally spread, and with the level in the model one penalty serves both.  Against the data's own true spread among
+regulars ours is inverted: an estimate should keep less of the side it knows less about, and the box score knows less
+about defense, yet ours keeps 0.85-0.89 of the defensive spread against 0.69-0.75 of the offensive, most since 2017.
+The cause measured in "Why the defense is wide relative to the offense": the shrink keeps 0.97 of the defensive prior
+part and 0.68 of the offensive since 2017.  Caveat: the true spreads are single-season estimates on a grid of 1.21 steps
+in tau, and "keeps" is the published standard deviation over the estimated truth.
+
+
+## Experiment 105: the shrink with the prior part in pieces (notes/HANDOFF.md, "Next: the one goal", step 1; the owner, 2026-10-23: "the ONLY THING WE NEED TO DO is fix the offense/defense problem"; read-only)
+
+**The change.**  In every fold and in the step-3 table, each side's prior part split by a possession-weighted linear
+projection on the player's standardized stats (each clipped at 3 standard deviations) into named pieces and the rest,
+the pieces adding to the prior part exactly; each piece its own multiplier in the shrink's least squares, the games'
+parts free as shipped, each season from its 8 nearest fold seasons under the test rule, the defense factor as shipped.
+Offense: volume (possessions he finishes, shots and free-throw attempts per 100), efficiency (true shooting %, two-point
+%, turnovers per possession used), the rest.  Defense, second arm, the same-method rule: size and rebounding (height,
+weight, defensive rebounds per 100), steals, the rest.  `scratch/2026-10-23_balance/pieces.py`, `screen.py`; log
+`outputs/balance_screen.log`.  One piece a side reproduces the shipped multipliers to 6e-12, inputs99's test-setting
+table to 5e-11 and check 151's errors to 7e-12.
+
+**Result.**  The multipliers, mean by era, 1997-2006 / 2007-2016 / 2017-2026, offense arm: volume 0.73 / 0.63 / 0.53,
+efficiency 0.71 / 0.69 / 0.67, the rest 0.68 / 0.70 / 0.72; shipped, one multiplier, 0.70 / 0.68 / 0.66.  The rest keeps
+0.72, not "far more than 0.68", and the offense narrows: standard deviation 1.51 to 1.45 since 2017, 1.50 to 1.42 in
+2026.
+
+| arm | WOWY 1997-2006 | WOWY 2007-2016 | WOWY 2017-2026 | WOWY all | year over year, team-game | year over year, stint |
+|---|---|---|---|---|---|---|
+| offense in pieces | -0.057, 10 of 10 | +0.132, 4 of 10 | +0.517, z +5.9, 0 of 10 | +0.197, z +3.4 | +0.004, z +0.2 | +0.172, z +3.9 |
+| both sides in pieces | -0.079, 7 of 10 | +0.178, 3 of 10 | +0.571, z +6.5, 0 of 10 | +0.224, z +3.4 | +0.019, z +0.6 | +0.311, z +5.5 |
+
+**Reading.**  Fails: the held-back team-games want the high-volume players cut, the held-back stints want them kept.
+The two units disagree, and that is the next section.
+
+## Why the shrink cuts the offense: the unit it is fitted on (2026-10-23, read-only)
+
+Scripts `scratch/2026-10-23_balance/units.py`, `windows.py`, `components.py`, `subs.py`, `iv.py`; tables
+`outputs/csv/balance_units.csv`, `balance_windows.csv`, `balance_components.csv`, `balance_subs*.csv`,
+`balance_iv.csv`.  Every reading on inputs99's folds, all thirty seasons, the shipped step 4 under the test rule: one
+weighted least squares per season over its twelve folds' held-back rows,
+
+    points per 100 less stand-ins  =  J x (the offense's five's ratings, summed)  +  D x (the defense's five's, points
+                                      allowed)  +  controls, free per fold
+
+J and D are the widths the held-back rows want, 1 = as shipped.  Each player's rating is also split into his team's
+possession-weighted mean and his deviation from it, each with its own coefficient.  "Levels in" is step 4's controls
+(the fold's level, home, playoffs); "levels out" adds a free level per attacking and per defending team, as the WOWY
+test does; "within games" is a free level per team-game.
+
+**1. The same held-back games, two units, opposite answers on the split within teams**, mean of the seasons, 2017-2026
+(standard error of the era mean about 0.02-0.04 for stints and 0.04-0.07 for team-games):
+
+| unit | controls | offense, team mean | offense, within team | defense, team mean | defense, within team |
+|---|---|---|---|---|---|
+| team-game | levels in | 1.09 | 0.82 | 1.20 | 1.15 |
+| team-game | levels out | | 0.84 | | 1.16 |
+| stint | levels in | 1.11 | 1.24 | 1.21 | 1.06 |
+| stint | levels out | | 1.27 | | 1.06 |
+| stint | within games | | 1.44 | | 1.06 |
+
+1997-2006 and 2007-2016 read the same way: offense within teams 0.87 and 0.74 on team-games, 1.30 and 1.39 within
+games on stints.  The team means agree across units.  Score state does not explain the stint reading: with garbage
+time, the margin and margin times the share of the game left as controls, the stint offense wants 1.30, not less.
+
+**2. The stint reading fades as stints are pooled into stretches of clock**, within games, the offense's within-team
+deviations: stint 1.44, 3 minutes 1.29, 6 minutes 1.14, a quarter 1.06 (2017-2026); 1.30, 1.13, 0.98, 0.77 (1997-2006).
+Under a linear model with fives fixed in advance every stretch length reads the same number.  The excess is in made
+twos, not free throws: twos 0.72 on stints against 0.51 at 6 minutes, free throws 0.37 against 0.37 (2017-2026).
+
+**3. Why: minutes react to how a five is doing.**  The offense's within-game miss of the shipped ratings, points per
+100, by what happens at the stint's end, 2017-2026: the offense's own team substitutes -12.5; the defense's team
+substitutes +13.9; both +0.9; the period ends -5.4 (each era within 1.3 of these).  A coach pulls a five that is doing
+badly and leaves one that is doing well, so a stretch's possession-weighted five depends on how the stretch went: the
+longer the stretch, the more of its outcome leaks into its average five.  A stint's five is fixed before any of its
+possessions, and a stint stopped on what happened in it is still scored without bias as long as the misses do not
+persist (Wald's identity); the misses of consecutive stints within a team-game correlate at -0.02 in every era.
+
+**4. The test: score each stretch by the five that started it** (fixed before the stretch is played) as an instrument
+for its average five, two-stage least squares, within games, 2017-2026 / 2007-2016 / 1997-2006: 3 minutes 1.40 / 1.35 /
+1.24 against plain 1.29 / 1.23 / 1.13; 6 minutes 1.23 / 1.19 / 1.12 against 1.14 / 1.02 / 0.98.  Across games, each
+player at his average share in every game he played, so a game's minutes cannot react to the game: 0.91 / 0.80 / 0.99
+against plain 0.84 / 0.73 / 0.87.  Every instrumented reading climbs toward the stint's, most where the instrument is
+strongest.
+
+**Reading.**  Step 4 fits its multipliers on held-back team-games, the unit whose split within teams is pulled down by
+minutes that react to the game; for team totals the two units agree.  That is why it cuts the whole offensive prior
+part to 0.68: within teams the team-games say 0.82 of what ships, the stints within games 1.44.  On defense the two
+units are close (1.15 and 1.06).  The year-over-year test is a team-game test too.
+
+## Experiment 106: step 4 in two layers (read-only screen, 2026-10-23; registered after the read above)
+
+**The change.**  Each rating part (prior part, games' part) of each side split, per fold and per season, into its
+team's possession-weighted mean and the player's deviation from it.  The within layer: four multipliers on the
+deviations, fitted on held-back stints within games (a free level per team-game), test rule, 8 nearest fold seasons.
+The team layer: four multipliers on the team means, on held-back team-games with the fold's controls as step 4 fits
+them now, the deviations entered at the within layer's values.  Then part = team multiplier x team mean + within
+multiplier x deviation, both defensive layers times the defense factor as shipped, re-centred as step 4 re-centres.
+`scratch/2026-10-23_balance/layers.py`, `variants.py`, `full_season.py`, `team_games.py`; logs
+`outputs/balance_layers*.log`, `balance_variants*.log`, `balance_matched*.log`, `balance_withinonly*.log`.  Every
+multiplier at the shipped value on both layers reproduces inputs99's test-setting table to 6e-12 and check 151 to 1e-12.
+
+**The multipliers**, before the defense factor, mean by era 1997-2006 / 2007-2016 / 2017-2026:
+
+| part | shipped | team layer | within layer, quarter folds | within layer, tenth folds | within layer, full season |
+|---|---|---|---|---|---|
+| offense, prior part | 0.70 / 0.68 / 0.66 | 0.79 / 0.81 / 0.85 | 0.93 / 0.95 / 0.97 | 0.95 / 0.97 / 0.99 | 0.96 / 0.99 / 1.00 |
+| offense, games' part | 1.41 / 1.34 / 1.38 | 1.36 / 1.26 / 1.22 | 1.69 / 1.50 / 1.32 | 1.61 / 1.49 / 1.30 | 1.56 / 1.48 / 1.29 |
+| defense, prior part | 0.80 / 0.81 / 0.93 | 0.93 / 0.94 / 1.04 | 0.85 / 0.86 / 0.84 | 0.87 / 0.88 / 0.85 | 0.88 / 0.89 / 0.87 |
+| defense, games' part | 1.55 / 1.58 / 1.57 | 1.53 / 1.55 / 1.54 | 2.05 / 2.01 / 2.06 | 1.96 / 1.94 / 1.98 | 1.91 / 1.89 / 1.93 |
+
+The team layer refitted and the team layer as shipped give the same within-season result to 0.01; the versions below
+keep it as shipped, so every team's total is the incumbent's.
+
+**Results**, against inputs99, chain setting (quarter folds, no reading to a full season).  The season score: each
+season, ratings of zero 0 and inputs99 100, on the current stints (`zero_baseline.py`; ratings explain 19.3 a season,
+13.2-25.6); the noise control moves a season at most 0.7.
+
+| version | within layer | WOWY score by era | seasons better | year over year, team-game | year over year, stint | same season, team-games | defense over offense, 2026 |
+|---|---|---|---|---|---|---|---|
+| inputs99 | as shipped | 100 / 100 / 100 | | | | | 1.07 |
+| A, as fitted | from stints | 101.6 / 102.1 / 102.0 | 25 of 30 | +2.18, z +15.1 | +1.86, z +8.4 | +0.95, z +10.6 | 0.71 |
+| B, A at the year-over-year test's own scale | x0.771 offense, x0.982 defense, both layers | 100.9 / 102.0 / 103.2 | 29 of 30 | +0.27, z +4.2 | +0.07, z +0.8 | +0.79, z +11.7 | 0.90 |
+| C | from stints, x0.75 offense, x0.90 defense | 99.9 / 101.2 / 102.2 | 24 of 30 | +0.066, z +1.8 | -0.24, z -4.5 | +0.11, z +3.4 | 0.84 |
+| D | from stints, x0.75 offense, x1.0 defense | 100.5 / 101.6 / 102.8 | 29 of 30 | +0.16, z +4.4 | -0.06, z -0.9 | +0.07, z +2.9 | 0.92 |
+
+WOWY by era for C: +0.022 (standard error 0.027, 5 of 10), -0.230 (10 of 10), -0.376 (9 of 10); for D -0.101 (9 of 10),
+-0.335 (10 of 10), -0.505 (10 of 10).  The regular-sat-out slice reads the same way (D: -0.186, -0.366, -0.525).  The
+year-over-year test's own scales at A: offense 0.75, defense 0.89 against 0.97 and 0.91: the extra spread within teams
+is this season's and does not carry to the neighbors.  One piece at a time (A's within layer on one part, the rest as
+shipped): the offense's prior part carries most of it, WOWY -0.282 and 2026 offense standard deviation 1.50 to 2.05;
+the defense's two parts together -0.108, better in every era, narrowing the 2026 defense 1.60 to 1.45.
+
+**2026 under B**, against inputs99: the top six in the same order; Luka Dončić offense +0.84, Giannis Antetokounmpo +0.51,
+Shai Gilgeous-Alexander +0.35; Victor Wembanyama defense -0.42, Neemias Queta -0.43, Ausar Thompson -0.44; offense
+standard deviation 1.50 to 1.58, defense 1.60 to 1.43.
+
+**Reading.**
+- The two stint tests (WOWY, year over year at the stint level) favor the two layers and opposed the pieces; the two
+  team-game tests (the same season's held-back team-games, the year-over-year guard) oppose the two layers and were
+  neutral on the pieces.  The unit decides, and the read above measured the team-game unit's split within teams
+  pulled down by minutes that react to the game.
+- No version passes every rule: better within season in every era, and the year-over-year test not worse at z +2 on
+  team-games.  C passes the guard and ties 1997-2006; D and B win every era and fail the guard at z +4.2-4.4; A, the
+  version without factors, fails it at z +15.
+- Verdict the owner's: which unit the guard is read on, or which version.
+
+## Experiment 106 ADOPTED and PUBLISHED, version D (2026-10-23, the owner: "please adopt, yes - D. you may publish if 2026 our rankings correlate more nicely w/ consensus")
+
+- **The setting.**  `settings.ShrinkSettings.within_team_layer = True`, `within_factors = (0.75, 1.0)`; `openrapm shrink`
+  and `build` flags `--within-team-layer` and `--within-factors`.  The code: `prior_shrink.team_split`,
+  `stint_equations`, `within_multipliers_by_season`, the two layers in `shrink` and `shrink_fold`;
+  `data.within_folds.held_back_stints`; `commands/build.within_layer_multipliers`, read to a full season off the
+  tenth folds as the team layer is.  Check 151 scores every system's step 4 with the two layers; the site's
+  decomposition carries each piece of the games' part through the same map.  Six tests.
+- **The reproduction.**  `openrapm shrink --setting test --extrapolate-folds=` on inputs99's step-3 table equals the
+  screen's version D to 8e-13 (`season_ratings_layers106`, the chain's incumbent now); check 151 on inputs99 equals the
+  screen's errors to 2e-12.
+- **The product.**  `openrapm shrink --base season_ratings_product_step3 --name product`, then `openrapm swap`; the
+  published tables kept as `season_ratings_product_before_layers106*`.  The within layer, with its factors, the product
+  rule and the full-season reading: offense prior part 0.70-0.76, games' part 0.85-1.28; defense 0.69-0.83 and
+  1.54-1.85.  Players with 1,000+ possessions, 2026 totals moved a median 0.23 per 100, the ninetieth percentile 0.54,
+  the largest 0.92; correlation 0.989.  Standard deviation offense / defense by era, published then new: 1.90 / 1.73
+  to 1.86 / 1.92; 1.70 / 1.63 to 1.79 / 1.78; 1.53 / 1.55 to 1.65 / 1.44; 2026 1.49 / 1.62 to 1.61 / 1.46, defense
+  over offense 1.09 to 0.91.
+- **2026 top 20**: nineteen of twenty the same; Mitchell Robinson 17th to 30th, Donovan Mitchell 21st to 10th (+0.66);
+  Luka Dončić 6th to 5th (+0.74), Shai Gilgeous-Alexander +0.51, Cade Cunningham 10th to 7th (+0.45); Ausar Thompson
+  7th to 9th (-0.57), Moussa Diabaté 11th to 17th (-0.56), Neemias Queta 9th to 12th (-0.47).
+- **Against the consensus** (`64_consensus_report.py`, players with 1,000+ possessions; 2026 alone, then 2024-26
+  pooled): rank correlation of the total 0.811 to 0.831, 0.832 to 0.860; defense 0.793 to 0.824, 0.772 to 0.809;
+  offense 0.839 to 0.829, 0.880 to 0.868; shared top five 5 to 4, 4 to 4; defense's share of the variance 0.54 to
+  0.45, 0.57 to 0.45, the consensus 0.39.  The total agrees better in 2026, the owner's condition: published.
+- **Checks.**  755 tests pass; the consensus tests pass (10 passed, the known backup-bigs failure); `openrapm site
+  --bias --openrapm-decomposition --similarity` passes every identity; the bias page's six type names added to
+  `site.NAMES`.

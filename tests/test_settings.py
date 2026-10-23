@@ -91,3 +91,11 @@ def test_the_booster_file_names_lightgbm_with_the_shipped_keys():
     loaded = booster_params(load_config(), PRODUCT.prior.booster_file)
     assert loaded == {side: spec[side]["params"] for side in ("O", "D")}
     assert loaded["O"]["n_estimators"] == 1091 and loaded["D"]["n_estimators"] == 130      # experiment 76
+
+
+def test_the_unshrink_option_names_the_shipped_labels_and_both():
+    """`openrapm rate --unshrink-labels`: "defense" is the shipped setting, "both" experiment 102's."""
+    from openrapm.commands import cli
+    from openrapm.settings import PRODUCT, UNSHRINK_LABELS
+    assert UNSHRINK_LABELS[cli.SHIPPED_UNSHRINK] == PRODUCT.labels.unshrink_columns
+    assert UNSHRINK_LABELS["both"] == ("offense", "defense")

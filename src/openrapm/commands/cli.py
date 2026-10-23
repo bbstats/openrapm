@@ -32,7 +32,7 @@ from datetime import datetime
 from pathlib import Path
 
 from ..data.legacy_names import feature_set_name, target_name
-from ..settings import PRODUCT, ROW_LABELS, SECOND_PRIOR_INPUTS, TEAM_TOTALS, TEST, Settings
+from ..settings import PRODUCT, ROW_LABELS, SECOND_PRIOR_INPUTS, TEAM_TOTALS, TEST, UNSHRINK_LABELS, Settings
 from .console import use_utf8
 from .data import add_data
 from .parallel import default_jobs
@@ -43,6 +43,8 @@ SHIPPED_BOOSTER = Path(PRODUCT.prior.booster_file).stem.removeprefix("booster_pa
 SEASON_SPAN = re.compile(r"(\d+)(?:-(\d+))?")          # "2026" or "2017-2026"
 SETTINGS = {"product": PRODUCT, "test": TEST}
 TABLE_PREFIX = "season_ratings_"
+# the shipped label un-shrink by its name in settings.UNSHRINK_LABELS
+SHIPPED_UNSHRINK = next(name for name, columns in UNSHRINK_LABELS.items() if columns == PRODUCT.labels.unshrink_columns)
 
 
 def pin_threads() -> None:
@@ -118,7 +120,8 @@ def chosen_settings(args: argparse.Namespace) -> Settings:
                    targets=replace(base.targets,
                                    defence=plain_name("--defensive-target", args.defensive_target, target_name)),
                    labels=replace(base.labels, team_offense_penalty=float(attacking),
-                                  team_defense_penalty=float(defending)),
+                                  team_defense_penalty=float(defending),
+                                  unshrink_columns=UNSHRINK_LABELS[args.unshrink_labels]),
                    prior=replace(base.prior, feature_set=plain_name("--features", args.features, feature_set_name),
                                  booster_file=BOOSTER_FILE.format(args.booster_params),
                                  fold_assignment=args.fold_assignment, era_halflife=float(args.era_halflife),
@@ -245,6 +248,9 @@ def _add_setting_options(parser) -> None:
                              "the career row is dropped, so no label shares a game with its box score.  nearest: "
                              "each chunk row carries his RAPM over only the season before it and the season after "
                              "it (default %(default)s)")
+    parser.add_argument("--unshrink-labels", choices=tuple(UNSHRINK_LABELS), default=SHIPPED_UNSHRINK,
+                        help="defense: only the defensive label is un-shrunk before the prior learns it, shipped.  "
+                             "both: the offensive label too (default %(default)s)")
     parser.add_argument("--team-season-penalties", type=parse_penalty_pair, metavar="ATTACKING,DEFENDING",
                         default=(PRODUCT.labels.team_offense_penalty, PRODUCT.labels.team_defense_penalty),
                         help="step 1's team-season flags: one column per team-season on offence and one on defence, "
@@ -284,11 +290,30 @@ def _add_folds_tag(parser) -> None:
                         help="a second fold folder holding back a smaller share of each season's games: each "
                              "multiplier is read off the line through the two sizes at nothing held back; "
                              "--extrapolate-folds= fits on --folds alone (default %(default)s)")
+    parser.add_argument("--within-team-layer", action=argparse.BooleanOptionalAction,
+                        default=PRODUCT.shrink.within_team_layer,
+                        help="two layers: each player's deviation from his team's mean gets multipliers of its own, "
+                             "fitted on the held-back stints within games (shipped since experiment 106; "
+                             "--no-within-team-layer is one layer)")
+    parser.add_argument("--within-factors", type=parse_within_factors, default=PRODUCT.shrink.within_factors,
+                        metavar="OFFENCE,DEFENCE",
+                        help="the within layer's multipliers times these (default "
+                             f"{PRODUCT.shrink.within_factors[0]:g},{PRODUCT.shrink.within_factors[1]:g})")
     parser.add_argument("--defence-factor", type=parse_defence_factors, default=PRODUCT.shrink.defence_factors,
                         metavar="K[,FIRST:K...]",
                         help="multiply both defensive multipliers by K: one factor for every season, or one by era, "
                              "each from its first season on: 0.89,2017:0.84 is 0.89 before 2017 and 0.84 from 2017 "
                              f"(default {format_defence_factors(PRODUCT.shrink.defence_factors)})")
+
+
+def parse_within_factors(text) -> tuple:
+    """"0.75,1.0" -> (0.75, 1.0): the within layer's factors, offence then defence."""
+    if isinstance(text, tuple):
+        return text
+    parts = [float(part) for part in str(text).split(",") if part.strip()]
+    if len(parts) != 2 or min(parts) <= 0:
+        raise argparse.ArgumentTypeError("--within-factors takes two positive numbers, offence then defence: 0.75,1.0")
+    return tuple(parts)
 
 
 def parse_defence_factors(text) -> tuple:
@@ -341,7 +366,8 @@ def shrink_options(shrink, args: argparse.Namespace):
     """settings.shrink with the command line's fold folders, fold seasons and nearest count."""
     return replace(shrink, folds_tag=args.folds, fold_seasons=args.fold_seasons, nearest=args.nearest,
                    free_games_part=args.free_games_part, defence_factors=args.defence_factor,
-                   extrapolate_folds_tag=args.extrapolate_folds)
+                   extrapolate_folds_tag=args.extrapolate_folds, within_team_layer=args.within_team_layer,
+                   within_factors=args.within_factors)
 
 
 def _add_applied_share(parser) -> None:

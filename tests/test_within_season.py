@@ -173,3 +173,9 @@ def test_the_folds_rate_on_the_saved_builds_own_targets():
     assert ws.fold_settings({}) is ws.TEST
     assert "points_with_expected_free_throws" in ws.world_targets(settings)
     assert not ws._step3_mismatches({"settings": {"targets": same, "ridge": {"penalty": 13037.0}}})
+
+
+def test_boosters_with_both_labels_un_shrunk_are_accepted():
+    """Experiment 102 un-shrinks the offensive label too; the folds only read the boosters, so its file is accepted
+    and one with no label un-shrunk is still refused (test_models_from_other_settings_are_refused)."""
+    ws.check_models({**LEGACY_META, "unshrink": ["offense", "defense"]})

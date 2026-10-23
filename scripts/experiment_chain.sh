@@ -64,7 +64,11 @@ LOG=outputs/${NAME}_chain.log
 # Since later the same day it is experiment 99 (inputs99): eras98 with each season's own body listing and the pad k
 # around the bins (config body_inputs season_listing, pad_k_around target, the shipped config), its own folds
 # inputs99_early and inputs99_within; not published yet.
-INC_NAME=${INC_NAME:-inputs99}
+# Since 2026-10-23 it is experiment 106 (layers106): inputs99's steps 1-3 and folds, with step 4 in two layers (each
+# player's deviation from his team's mean on held-back stints within games, settings.ShrinkSettings.within_team_layer,
+# the shipped default of `openrapm shrink`); its tables season_ratings_layers106*, its folds still inputs99's, and 151
+# scores every system's step 4 with the two layers.
+INC_NAME=${INC_NAME:-layers106}
 INC_SYSTEM=${INC_SYSTEM:-inputs99}              # the incumbent's folds (<name>_early, <name>_within) for 151
 CONTROL_NAME=${CONTROL_NAME:-noise_bags10}       # the noise control's folds (<name>_early, <name>_within) for 151
 INC_FOLDS=${INC_FOLDS:-inputs99_early,inputs99_within}
