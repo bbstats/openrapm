@@ -229,6 +229,11 @@ class ShrinkSettings:
     # prior part holds up less in older seasons, 0.79 in 1997-2006 against 0.95 in 2017-2026 (notes/DECISIONS.md,
     # "Era drift" and experiment 55, adopted 2026-10-12: "yes. build."); 0 would use every fold season the rule allows
     nearest: int = 8
+    # a second fold set, a tenth of each season's games held back ten times a repeat: each multiplier is read off the
+    # straight line through the two holdout sizes at nothing held back, as the full-season ratings are built
+    # (Richardson extrapolation, prior_shrink.full_season_multipliers; notes/DECISIONS.md, experiment 101, adopted
+    # 2026-10-22: "we are going to do it"); "" fits on folds_tag alone, as the experiment chain does
+    extrapolate_folds_tag: str = "inputs99_k10"
     # a multiplier on the games' part too, fitted beside the prior's (prior_shrink, "The games' part freed";
     # notes/DECISIONS.md, experiment 65, adopted 2026-10-15: "Adopt one multiplier as the new incumbent")
     free_games_part: bool = True

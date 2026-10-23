@@ -27,6 +27,12 @@ every number quoted here; read its measurement traps before trusting a number.  
   threes of a period's last two seconds counted as they happened); the defense factor by era (98, 0.89 before 2017 and
   0.84 from 2017 in place of 0.866); each season's own body listing and the pad k around the bins (99).  The 2001
   Lakers moved most, back toward their usual split (DECISIONS.md, "Experiment 99 ADOPTED").
+- **Experiment 101 (fullseason101), adopted 2026-10-22, NOT published** (the owner: "we are going to do it"): each
+  season's multipliers fitted on folds holding back a quarter and a tenth of its games (`inputs99_k10`, ten folds a
+  repeat, `openrapm folds --folds-per-repeat 10`) and read to a full season off the line through the two: the
+  games' part 5-10% smaller, the prior part 0-2% larger, the same in every era.  The year-over-year test +0.053,
+  z +2.5, past the guard.  The chain judges candidates without it (`--extrapolate-folds=`) against inputs99's
+  tables built the same way; an adopted candidate needs its own tenth folds, about 50 minutes.
 - **The widths** (DECISIONS.md, "The widths"): the within-season WOWY test wants every rating wider, the
   year-over-year test narrower; a candidate that comes out wider wins one and loses the other for its width alone.
   Proposed, not built: every chain also reads the candidate at the incumbent's width.
@@ -70,7 +76,7 @@ every number quoted here; read its measurement traps before trusting a number.  
 | 2 | box-score prior | `box_prior.py` | LightGBM `lgb1_tune2`, linear leaves; feature set `hustle_no_three_pct`; five player folds; 10 bags |
 | 2b | swap part of the prior | `second_prior.py` | line `ctx82` on `context_and_types_centred`, team totals held |
 | 3 | the rating | `prior_rapm.py` | RAPM pulled toward the prior, penalty 13,037, centred |
-| 4 | the shrink, with the defense factor | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, 8 nearest fold seasons, defense times 0.89 before 2017 and 0.84 from 2017; folds `inputs99_early,inputs99_within` |
+| 4 | the shrink, with the defense factor | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, 8 nearest fold seasons, defense times 0.89 before 2017 and 0.84 from 2017; folds `inputs99_early,inputs99_within`, each multiplier read to a full season with the tenth folds `inputs99_k10` (experiment 101) |
 | 5 | swap adjustment | `swap_adjust.py` | off: applied share 0, the build skips it |
 
 - `openrapm build` writes `outputs/season_ratings_product.parquet` with `_step3` and `_step4` beside it.
@@ -95,7 +101,7 @@ every number quoted here; read its measurement traps before trusting a number.  
   `scratch/2026-10-20_charts/season_scores.py` and `season_page.py`; page https://claude.ai/artifact/L7vwSTAvCCKQnj9jnnhYrq.
 - The noise control `noise_bags10` moves a season at most 0.7 on that score.
 - Every experiment gets a row in `experiments/runs.csv` (`scripts/checks/101_log_run.py`), mirrored to the sheet
-  "OpenRAPM experiments", tab Experiments; the next free row is 94.
+  "OpenRAPM experiments", tab Experiments; the next free row is 96.
 
 ## Commands a session runs
 

@@ -392,7 +392,7 @@ def require_folds(cfg: dict, shrink) -> None:
     `openrapm build` and `openrapm shrink` call this first: on fresh data `build` would otherwise run steps 1-3,
     about fifteen minutes, before step 4 found no folds.  Only the folds' small json files are read.
     """
-    for tag in fold_tags(shrink):
+    for tag in fold_tags(shrink) + ([shrink.extrapolate_folds_tag] if shrink.extrapolate_folds_tag else []):
         directory = resolve(cfg, "within") / tag
         try:
             check_fold_files(directory, shrink.fold_seasons)
@@ -432,13 +432,28 @@ def step4_folds(cfg: dict, shrink) -> tuple[list, dict]:
     return folds, where
 
 
-def step4_multipliers(seasons, folds: list, shrink) -> pd.DataFrame:
-    """`prior_shrink.multipliers_by_season` for `seasons`, the defence factor applied, with the fold folder and the
-    first and last fold season read, so a step-4 table can be traced to the folds that shrank it."""
+def extrapolation_folds(cfg: dict, shrink) -> list:
+    """The second fold set step 4 reads its multipliers to a full season with, paths.within/<extrapolate_folds_tag>,
+    its seasons pinned as step 4's; [] when the tag is empty."""
+    if not shrink.extrapolate_folds_tag:
+        return []
+    return load_folds(resolve(cfg, "within") / shrink.extrapolate_folds_tag, shrink.fold_seasons)
+
+
+def step4_multipliers(seasons, folds: list, shrink, second_folds: list | None = None) -> pd.DataFrame:
+    """`prior_shrink.multipliers_by_season` for `seasons`, read to a full season with `second_folds` when given
+    (`prior_shrink.full_season_multipliers`), the defence factor applied, with the fold folders and the first and
+    last fold season read, so a step-4 table can be traced to the folds that shrank it."""
     fold_seasons = sorted({fold.season for fold in folds})
-    multipliers = prior_shrink.multipliers_by_season(seasons, folds, shrink.rule, shrink.nearest,
-                                                     shrink.free_games_part).assign(
-        fold_tag=shrink.folds_tag, fold_first=fold_seasons[0], fold_last=fold_seasons[-1])
+    if second_folds:
+        multipliers = prior_shrink.full_season_multipliers(seasons, folds, second_folds, shrink.rule, shrink.nearest,
+                                                           shrink.free_games_part)
+        tag = f"{shrink.folds_tag}+{shrink.extrapolate_folds_tag}"
+    else:
+        multipliers = prior_shrink.multipliers_by_season(seasons, folds, shrink.rule, shrink.nearest,
+                                                         shrink.free_games_part)
+        tag = shrink.folds_tag
+    multipliers = multipliers.assign(fold_tag=tag, fold_first=fold_seasons[0], fold_last=fold_seasons[-1])
     factor = multipliers.season.map(shrink.defence_factor_for).to_numpy(float)
     multipliers["multiplier_def"] *= factor
     if shrink.free_games_part:
@@ -452,7 +467,12 @@ def shrink_seasons(cfg: dict, table: pd.DataFrame, settings,
     `step4_folds`'s."""
     shrink = settings.shrink
     folds = step4_folds(cfg, shrink)[0] if folds is None else folds
-    multipliers = step4_multipliers(table.season.unique(), folds, shrink)
+    second = extrapolation_folds(cfg, shrink)
+    multipliers = step4_multipliers(table.season.unique(), folds, shrink, second)
+    if second:
+        print(f"  step 4: each multiplier read to a full season from the folds holding back "
+              f"{prior_shrink.held_back_share(folds):.0%} and {prior_shrink.held_back_share(second):.0%} of the "
+              f"games ({shrink.extrapolate_folds_tag})", flush=True)
     if shrink.defence_factors != ((0, 1.0),):
         print(f"  step 4: both defensive multipliers times {describe_factors(shrink.defence_factors)}", flush=True)
     nearest = f", the {shrink.nearest} nearest fold seasons" if shrink.nearest else ""
@@ -568,7 +588,8 @@ def swap_seasons(cfg: dict, table: pd.DataFrame, settings, folds: list | None = 
     panel, trainable_seasons = panel_and_trainable_seasons(cfg)
     if folds is None:
         folds, where = step4_folds(cfg, settings.shrink)
-        multipliers = step4_multipliers(table.season.unique(), folds, settings.shrink)
+        multipliers = step4_multipliers(table.season.unique(), folds, settings.shrink,
+                                        extrapolation_folds(cfg, settings.shrink))
     raw = swap_test.ratings_in_raw_sign(table)
     features = swap_adjust.type_features(panel, table)
     fold_of = swap_adjust.player_folds(raw.player_id, settings.swap.n_folds)

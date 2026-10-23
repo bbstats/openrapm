@@ -94,6 +94,8 @@ def test_the_defence_factor_is_one_number_or_one_by_era():
     assert cli.parse_defence_factors("0.866") == ((0, 0.866),)
     assert cli.parse_defence_factors("0.89,2017:0.84") == ((0, 0.89), (2017, 0.84))
     assert cli.format_defence_factors(((0, 0.89), (2017, 0.84))) == "0.89,2017:0.84"
+    assert cli.shrink_options(PRODUCT.shrink, _parse("shrink", "--base", "x", "--extrapolate-folds=")
+                              ).extrapolate_folds_tag == ""
     args = _parse("shrink", "--base", "x", "--defence-factor", "0.866")
     assert cli.shrink_options(PRODUCT.shrink, args).defence_factors == ((0, 0.866),)
     for text in ("2017:0.84", "0.89,0.84", "0.89,2017:0.84,2010:0.9", "0.89,2017:-1", "a"):

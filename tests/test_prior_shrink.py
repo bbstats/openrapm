@@ -109,8 +109,36 @@ def test_the_shrink_multiplies_the_prior_part_recentres_and_leaves_the_games_par
     assert np.allclose(out.defense, -out.rating_def) and np.allclose(out.prior_offense, out.prior_off)
 
 
-def _record(season=2026, repeat=0, fold=0, rate_from="rest", checks=None):
-    return {"summary": {"season": season, "repeat": repeat, "fold": fold, "rate_from": rate_from},
+def test_each_multiplier_is_read_to_a_full_season_off_the_line_through_two_holdout_sizes():
+    """Experiment 101: a quarter held back gives 1.41 and a tenth 1.35, so the line reads 1.31 at nothing held back;
+    the prior part's 0.70 and 0.71 read 0.7167."""
+    quarter = pd.DataFrame({"season": [2026], "multiplier_off": [0.70], "games_multiplier_off": [1.41],
+                            "fold_seasons": [8]})
+    tenth = pd.DataFrame({"season": [2026], "multiplier_off": [0.71], "games_multiplier_off": [1.35],
+                          "fold_seasons": [8]})
+    full = ps.read_to_full_season(quarter, tenth, 0.25, 0.10)
+    assert full.games_multiplier_off.iloc[0] == pytest.approx(1.31)
+    assert full.multiplier_off.iloc[0] == pytest.approx(0.71 + 0.10 * 0.01 / 0.15)
+    assert full.fold_seasons.iloc[0] == 8
+    assert ps.read_to_full_season(tenth, quarter, 0.10, 0.25).games_multiplier_off.iloc[0] == pytest.approx(1.31)
+    with pytest.raises(ValueError):
+        ps.read_to_full_season(quarter, tenth, 0.25, 0.25)
+
+
+def test_the_held_back_share_is_one_over_the_folds_of_a_repeat():
+    from types import SimpleNamespace
+    quarter = [SimpleNamespace(season=2026, repeat=r, fold=k) for r in range(3) for k in range(4)]
+    assert ps.held_back_share(quarter) == 0.25
+    assert ps.held_back_share([SimpleNamespace(season=2026, repeat=0, fold=k) for k in range(10)]) == 0.10
+    with pytest.raises(ValueError):
+        ps.held_back_share(quarter + [SimpleNamespace(season=2025, repeat=0, fold=k) for k in range(10)])
+
+
+def _record(season=2026, repeat=0, fold=0, rate_from="rest", checks=None, folds_per_repeat=None):
+    summary = {"season": season, "repeat": repeat, "fold": fold, "rate_from": rate_from}
+    if folds_per_repeat is not None:
+        summary["folds_per_repeat"] = folds_per_repeat
+    return {"summary": summary,
             "checks": checks if checks is not None else {"a leak check": True, "a measured size": 0.4}}
 
 
@@ -126,8 +154,19 @@ def test_a_fold_of_another_size_or_with_a_failed_leak_check_is_refused():
 def test_every_repeat_must_have_its_four_folds():
     whole = {f"2026_r0_f{k}": _record(fold=k) for k in range(4)}
     wf.check_repeats(whole)
-    with pytest.raises(ValueError, match="four folds"):
+    with pytest.raises(ValueError, match="without exactly its folds"):
         wf.check_repeats({stem: record for stem, record in whole.items() if not stem.endswith("f3")})
+
+
+def test_a_repeat_of_another_fold_count_needs_every_fold_its_records_name():
+    """`openrapm folds --folds-per-repeat 2`: two folds a repeat, each record saying so."""
+    halves = {f"2026_r{r}_f{k}": _record(repeat=r, fold=k, folds_per_repeat=2) for r in range(2) for k in range(2)}
+    wf.check_repeats(halves)
+    with pytest.raises(ValueError, match="without exactly its folds"):
+        wf.check_repeats({stem: record for stem, record in halves.items() if stem != "2026_r1_f1"})
+    mixed = dict(halves, **{"2026_r1_f1": _record(repeat=1, fold=1, folds_per_repeat=3)})
+    with pytest.raises(ValueError, match="without exactly its folds"):
+        wf.check_repeats(mixed)
 
 
 _CFG = load_config()

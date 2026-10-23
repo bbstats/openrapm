@@ -39,7 +39,6 @@ from .legacy_names import translate_frame
 __all__ = ["Fold", "read_fold", "fold_stems", "check_fold_record", "check_repeats", "check_fold_files", "load_folds",
            "fold_games"]
 
-FOLDS_PER_REPEAT = frozenset({0, 1, 2, 3})
 
 
 @dataclass
@@ -145,19 +144,24 @@ def check_fold_record(record: dict, stem: str) -> None:
 
 
 def check_repeats(records: dict) -> None:
-    """Every repeat of every season must have exactly its four folds; `records` maps a stem to its fold json."""
+    """Every repeat of every season must have exactly its folds, 0 to K - 1, K its records' `folds_per_repeat`:
+    four for a fold written before that key existed, as step 4's folds are built; `records` maps a stem to its fold
+    json."""
     repeats: dict = {}
     for record in records.values():
         summary = record["summary"]
-        repeats.setdefault((int(summary["season"]), int(summary["repeat"])), set()).add(int(summary["fold"]))
-    short = {repeat: folds for repeat, folds in repeats.items() if folds != FOLDS_PER_REPEAT}
+        held = repeats.setdefault((int(summary["season"]), int(summary["repeat"])), (set(), set()))
+        held[0].add(int(summary["fold"]))
+        held[1].add(int(summary.get("folds_per_repeat", 4)))
+    short = {repeat: sorted(folds) for repeat, (folds, sizes) in repeats.items()
+             if len(sizes) != 1 or folds != set(range(min(sizes)))}
     if short:
-        raise ValueError(f"(season, repeat) without exactly four folds: {sorted(short)[:5]}")
+        raise ValueError(f"(season, repeat) without exactly its folds: {sorted(short.items())[:5]}")
 
 
 def check_fold_files(directory: Path, seasons: tuple[int, int]) -> list[str]:
     """The stems of the folds in `directory` whose season is in [first, last], after checking that each fold has
-    its three files, each passed its leak checks and every repeat has its four folds.  Reads only the small json
+    its three files, each passed its leak checks and every repeat has its folds.  Reads only the small json
     files, so a command can call it before the minutes of work that end in `load_folds`; raises ValueError naming
     the first problem.
 

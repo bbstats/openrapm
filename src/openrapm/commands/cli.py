@@ -177,7 +177,7 @@ def _run_folds(args: argparse.Namespace, cfg: dict) -> int:
     if folds_in_parts(cfg, args.seasons, args.tag, args.jobs, args.argv):
         return 0
     return run_folds(cfg, args.models, args.base, args.seasons, args.tag, args.reproduce_only, args.pieces,
-                     args.whole_season_inputs, args.whole_season_context)
+                     args.whole_season_inputs, args.whole_season_context, args.folds_per_repeat, args.repeats)
 
 
 def _run_second_prior(args: argparse.Namespace, cfg: dict) -> int:
@@ -280,6 +280,10 @@ def _add_folds_tag(parser) -> None:
                         default=PRODUCT.shrink.free_games_part,
                         help="also multiply the games' part by a factor fitted beside the prior's (shipped since "
                              "experiment 65; --no-free-games-part holds it at 1)")
+    parser.add_argument("--extrapolate-folds", metavar="TAG", default=PRODUCT.shrink.extrapolate_folds_tag,
+                        help="a second fold folder holding back a smaller share of each season's games: each "
+                             "multiplier is read off the line through the two sizes at nothing held back; "
+                             "--extrapolate-folds= fits on --folds alone (default %(default)s)")
     parser.add_argument("--defence-factor", type=parse_defence_factors, default=PRODUCT.shrink.defence_factors,
                         metavar="K[,FIRST:K...]",
                         help="multiply both defensive multipliers by K: one factor for every season, or one by era, "
@@ -336,7 +340,8 @@ def swap_options(swap, args: argparse.Namespace):
 def shrink_options(shrink, args: argparse.Namespace):
     """settings.shrink with the command line's fold folders, fold seasons and nearest count."""
     return replace(shrink, folds_tag=args.folds, fold_seasons=args.fold_seasons, nearest=args.nearest,
-                   free_games_part=args.free_games_part, defence_factors=args.defence_factor)
+                   free_games_part=args.free_games_part, defence_factors=args.defence_factor,
+                   extrapolate_folds_tag=args.extrapolate_folds)
 
 
 def _add_applied_share(parser) -> None:
@@ -450,6 +455,11 @@ def _add_folds(commands) -> None:
                        help="the second prior's leak arm: its context numbers read the whole season, held-back games "
                             "included, while the player's own box-score prior and the ridge read the fit games only.  "
                             "Needs boosters saved with --second-prior.  Never for step 4")
+    folds.add_argument("--folds-per-repeat", type=int, default=4, metavar="K",
+                       help="split each repeat's games into K folds, 1/K of them held back each time; step 4's folds "
+                            "are built with 4 (default %(default)s)")
+    folds.add_argument("--repeats", type=int, default=3, metavar="R",
+                       help="how many times the games are assigned over again (default %(default)s)")
     _add_jobs(folds)
     folds.set_defaults(run=_run_folds)
 

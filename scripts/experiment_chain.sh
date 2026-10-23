@@ -140,9 +140,11 @@ if [ "$FIRST_PASS" = "1" ]; then
   exit 0
 fi
 echo "=== $(date) prior shrink (multipliers from outputs/within/$SHRINK_TAG)" >> $LOG
-$PY -u -m openrapm shrink --base season_ratings_${NAME}_step3 --setting test --folds $SHRINK_TAG $SHRINK_FLAGS --name ${NAME} >> $LOG 2>&1 || exit 1
+# Candidates are judged without experiment 101's reading to a full season, against the incumbent's tables built the
+# same way: it needs each system's own tenth folds, built once a candidate is adopted (notes/HANDOFF.md).
+$PY -u -m openrapm shrink --base season_ratings_${NAME}_step3 --setting test --folds $SHRINK_TAG --extrapolate-folds= $SHRINK_FLAGS --name ${NAME} >> $LOG 2>&1 || exit 1
 echo "=== $(date) swap adjustment" >> $LOG
-$PY -u -m openrapm swap --base season_ratings_${NAME}_step4 --setting test --folds $SHRINK_TAG $SHRINK_FLAGS $SWAP_FLAGS --name ${NAME} --types >> $LOG 2>&1 || exit 1
+$PY -u -m openrapm swap --base season_ratings_${NAME}_step4 --setting test --folds $SHRINK_TAG --extrapolate-folds= $SHRINK_FLAGS $SWAP_FLAGS --name ${NAME} --types >> $LOG 2>&1 || exit 1
 if [ "$EARLY_FOLDS" = "1" ]; then
   echo "=== $(date) the decider: with or without you, stint by stint, on the held-back games (151)" >> $LOG
   reading "with or without you" scripts/checks/151_wowy.py --systems=${INC_SYSTEM},${CONTROL_NAME},${NAME} --ref=${INC_SYSTEM} --tag=${NAME} $DECIDER_FLAGS
@@ -158,8 +160,8 @@ if [ "$FULL_READINGS" != "1" ]; then
 fi
 if [ "$OWN_FOLDS" = "1" ]; then
   echo "=== $(date) the second arm: the incumbent's multipliers ($INC_FOLDS)" >> $LOG
-  $PY -u -m openrapm shrink --base season_ratings_${NAME}_step3 --setting test --folds $INC_FOLDS --name ${NAME}_incmult >> $LOG 2>&1 || exit 1
-  $PY -u -m openrapm swap --base season_ratings_${NAME}_incmult_step4 --setting test --folds $INC_FOLDS --name ${NAME}_incmult --types >> $LOG 2>&1 || exit 1
+  $PY -u -m openrapm shrink --base season_ratings_${NAME}_step3 --setting test --folds $INC_FOLDS --extrapolate-folds= --name ${NAME}_incmult >> $LOG 2>&1 || exit 1
+  $PY -u -m openrapm swap --base season_ratings_${NAME}_incmult_step4 --setting test --folds $INC_FOLDS --extrapolate-folds= --name ${NAME}_incmult --types >> $LOG 2>&1 || exit 1
   reading "year-over-year, second arm" scripts/checks/63_yoy.py --rankings=${NAME}_incmult=outputs/season_ratings_${NAME}_incmult.parquet,incumbent=$INC --ref=incumbent --tag=${NAME}_incmult --splits=
 fi
 echo "=== $(date) consensus" >> $LOG

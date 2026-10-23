@@ -8935,3 +8935,83 @@ Wallace 17th to 16th, Ty Jerome 19th to 18th.  Adopted, as the registration says
 
 The site rebuilt from the product table above, with experiment 94's four parser fixes already live: the heave fix,
 the defense factor by era and each season's own body listing with the pad k around the bins.
+
+## 2026 at six fold sizes (the owner, 2026-10-22: "do a 2026 only check where we just run 2026 with LOTS of different CV experiments (different CV sizes) and see what an optimizer would set as the "best width" for all our holdout sets")
+
+Read-only.  `openrapm folds` takes `--folds-per-repeat K` and `--repeats R`, defaults 4 and 3 as step 4's folds are
+built; each fold's record names its K.  2026's games held back 1/K at a time, K = 2, 3, 4, 5, 10, 20, four repeats
+each, inputs99's saved boosters (`scratch/2026-10-22_bugfix/cv2026.sh`); the K = 4 folds' first three repeats equal the
+chain's 2026 folds exactly.  Two optimizers on each size's held-back games (`scratch/2026-10-22_bugfix/cv_widths.py`,
+`outputs/cv_widths_2026.log`): the within-season WOWY test over a grid of widths, each side with the other as
+published, and step 4's own fit on that size's folds.  1 is the published 2026 width:
+
+| games held back | ratings built from | WOWY offense | WOWY defense | step 4 prior part offense | games' part offense | prior part defense | games' part defense |
+|---|---|---|---|---|---|---|---|
+| 50% | 50% | 1.11 | 1.02 | 0.93 | 0.80 | 1.14 | 1.37 |
+| 33% | 67% | 1.20 | 1.04 | 1.00 | 0.95 | 1.22 | 1.13 |
+| 25% | 75% | 1.20 | 1.03 | 1.00 | 0.85 | 1.22 | 1.11 |
+| 20% | 80% | 1.21 | 1.05 | 1.01 | 0.93 | 1.24 | 1.09 |
+| 10% | 90% | 1.26 | 1.05 | 1.03 | 0.87 | 1.25 | 1.04 |
+| 5% | 95% | 1.33 | 1.03 | 1.04 | 0.87 | 1.26 | 1.02 |
+| none, a straight line | 100% | 1.32 | 1.05 | 1.06 | 0.90 | 1.28 | 0.95 |
+
+**Reading.**
+- The two optimizers disagree on the offense at every size: the within-season test wants 2026's offense 11-33% wider,
+  more the more games the ratings are built from; step 4's own fit wants its prior part about as published and its
+  games' part 5-20% smaller.
+- The within-season test wants 2026's defense 2-5% wider at every size: a factor about 0.87 in place of 0.84, as 2026's
+  own reading in "Season widths from a smooth curve" said.
+- The fold size moves step 4's defensive games' part most: 1.37 with half the games held back, 1.11 at a quarter, 1.02
+  at 5%, 0.95 extrapolated to a full season.  Fitted on quarter folds it would be about 14% too large for ratings built
+  from every game, 1.11 against 0.95; the prior parts go the other way, about 5% too small.  One season, four repeats:
+  a lead to check on more seasons, not a finding.
+- The within-season test on small held-back sets fits each team's level on a few games, about 4 at 5%; its gain from
+  widening grows with that, -0.15 at half to -1.05 at 5%, so its small-fold optima are the least sure.
+
+## Experiment 101: the full-season width (the owner, 2026-10-22: "There has to be like a known mechanism for this that we can just apply ... I want you to just do season level width adjustments ... Figure out how you want to do it and do it ... But we are going to do it"; registered before any result)
+
+- **The mechanism.**  Step 4's four multipliers are fitted on folds whose ratings are built from three quarters of a
+  season's games and are then put on ratings built from all of them.  A fit on part of the data is off by an amount
+  that shrinks with the part held back ("2026 at six fold sizes"), so each season's multipliers are fitted at two
+  holdout sizes and the straight line through the two is read at nothing held back: Richardson extrapolation, the same
+  bias correction as the jackknife's.
+- **The fold sets.**  inputs99's quarter folds, four folds a repeat and three repeats (`inputs99_early`,
+  `inputs99_within`), and its tenth folds, ten folds a repeat and three repeats (`inputs99_k10`), every season.
+- **The multipliers.**  Each season's from each fold set's 8 nearest fold seasons, as now; then full = m10 + 0.10
+  (m10 - m4) / (0.25 - 0.10) = 5/3 m10 - 2/3 m4 for each of the four; then the defense factor by era.
+- **The readings.**  The mechanism in every era: each fold set's held-back stints should prefer the multipliers
+  fitted at its own holdout size.  The year-over-year test of the test-setting tables against inputs99, and the 2026
+  top 20.  The within-season WOWY test cannot read the change itself: it scores ratings built from part of a season,
+  and these multipliers are for ratings built from all of it.
+- **Adopted** on the owner's word, unless a reading shows it breaks something.
+
+### Experiment 101: result (2026-10-22, `outputs/full_season101.log`; `scratch/2026-10-22_bugfix/full_season.py`, `fit_share_check.py`)
+
+- **The mechanism holds in every era on step 4's own objective**, the held-back team-games after each fold's controls
+  are fitted out: each fold set prefers the multipliers fitted at its own holdout size, both from the 8 nearest fold
+  seasons by the test rule, undialled.
+
+| scored on | own size minus the other, 1997-2006 | 2007-2016 | 2017-2026 | all seasons | z | seasons better |
+|---|---|---|---|---|---|---|
+| tenth folds | -0.020 | -0.020 | -0.013 | -0.018 | -1.6 | 21 of 30 |
+| quarter folds | -0.021 | -0.026 | -0.008 | -0.018 | -1.7 | 18 of 30 |
+
+  On the within-season WOWY test the tenth folds' multipliers win on both fold sets: on the tenth folds -0.043, z -6.7,
+  27 of 30, every era; on the quarter folds their own are worse by +0.035, z +5.7.  The WOWY test prefers the tenth
+  folds' mix, more prior part and less games' part, whatever the fold size.
+- **The multipliers**, mean by era, defense factor applied, quarter folds / tenth folds / read to a full season: prior
+  part offense 0.701 / 0.712 / 0.718, 0.682 / 0.691 / 0.696, 0.664 / 0.672 / 0.677; prior part defense 0.713 / 0.714 /
+  0.714, 0.720 / 0.728 / 0.734, 0.783 / 0.793 / 0.800; games' part offense 1.411 / 1.352 / 1.313, 1.340 / 1.301 /
+  1.275, 1.377 / 1.332 / 1.303; games' part defense 1.377 / 1.308 / 1.263, 1.410 / 1.330 / 1.276, 1.314 / 1.246 /
+  1.201.  The same in every era, as the owner said: the games' part 5-10% smaller, the prior part 0-2% larger.
+- **The year-over-year test**, team-game, both directions, against inputs99: +0.053, z +2.50, clustered +2.32, better
+  in 20 of 56: past the +2 guard.  Stint level +0.019, z +0.76.  It wants offense times 0.961 against 0.968 and
+  defense times 0.931 against 0.913: the offense came out about 1.5% wider, spread 1.886 / 1.702 / 1.522 against
+  1.855 / 1.679 / 1.507; defense 1.726 / 1.637 / 1.519 against 1.743 / 1.633 / 1.505.
+- **2026 top 20**, test setting, against inputs99: the same twenty but OG Anunoby, 20th to 22nd, out and Donovan
+  Mitchell, 21st to 20th, in; Luka Dončić +0.19, Nikola Jokić +0.13, Giannis Antetokounmpo +0.13, Chet Holmgren -0.10.
+  2026 totals moved a median 0.04, the ninetieth percentile 0.10, the largest 0.19.
+- **Adopted** on the owner's word, the guard notwithstanding: `ShrinkSettings.extrapolate_folds_tag` "inputs99_k10";
+  `openrapm shrink --setting test` reproduces the read-only table to 9e-11.  The experiment chain judges candidates
+  without it (`--extrapolate-folds=`), against inputs99's tables built the same way; an adopted candidate needs its own
+  tenth folds, about 50 minutes with 2 processes.

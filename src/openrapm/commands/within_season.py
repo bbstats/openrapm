@@ -9,7 +9,8 @@ shrink every peak season; so the misses come from the season's own games, held o
 every input, what it is built from and the check that proves it.
 
 How.  A season's games (regular season and playoffs) are assigned to four folds at random, three times over (three
-repeats), each assignment drawn with the seed (season, repeat).  For each fold:
+repeats), each assignment drawn with the seed (season, repeat); `--folds-per-repeat` and `--repeats` change both,
+and step 4's folds are built with the four and the three.  For each fold:
 
     fit games    every game not in the fold.  Every input the rating reads (box score, playing time, starts,
                  tenure, on-court record) is rebuilt from these games alone (`data.panel.season_panel`, the function
@@ -91,8 +92,8 @@ from . import parallel
 from .build import season_lineup_rows
 
 SIDES = ("O", "D")
-REPEATS = 3
-N_FOLDS = 4
+REPEATS = 3                 # the repeats of a season's assignment, as step 4's folds are built (`--repeats`)
+N_FOLDS = 4                 # the folds of a repeat: a quarter of the games held back (`--folds-per-repeat`)
 SCORE_TARGET = "pts"                                        # the test games are scored on the points as scored
 # a player the rating never saw: the year-over-year test's fill, 0.25 of the mean rating of players under 500
 # possessions
@@ -484,6 +485,8 @@ class SeasonRun:
     line_input_set: str | None = None         # the line's inputs, PriorSettings.second_prior_inputs
     stints: pd.DataFrame | None = None        # the season's stint rows (swap_test.season_rows), with the line
     context_panel: pd.DataFrame | None = None  # the whole season's panel rows with --whole-season-context, else None
+    n_folds: int = N_FOLDS       # the folds of each repeat: 1 / n_folds of the season's games held back
+    repeats: int = REPEATS
     settings: object = SETTINGS  # the test setting with the saved build's own targets (`fold_settings`)
 
     @property
@@ -554,8 +557,8 @@ def season_folds(run: SeasonRun) -> pd.DataFrame:
     """The season's folds, one column per repeat, written to folds_<season>.parquet (checked against any earlier
     file: the assignment is seeded, so a rerun must draw the same folds)."""
     path = run.out_dir / f"folds_{run.season}.parquet"
-    folds = pd.concat([assign_folds(run.game_ids.to_numpy(), N_FOLDS, run.season, repeat)
-                       for repeat in range(REPEATS)], axis=1)
+    folds = pd.concat([assign_folds(run.game_ids.to_numpy(), run.n_folds, run.season, repeat)
+                       for repeat in range(run.repeats)], axis=1)
     if path.exists():
         earlier = pd.read_parquet(path)
         common = [column for column in earlier.columns if column in folds.columns]
@@ -648,7 +651,8 @@ def run_fold(run: SeasonRun, folds: pd.DataFrame, repeat: int, fold: int, starte
     table.to_parquet(run.out_dir / f"players_{stem}.parquet", index=False)
     save_test(run.out_dir / f"test_{stem}.npz", pooled, teams)
     # rate_from, split and cut name the fold shape, the only one left: kept so the files read as before
-    summary.update(season=run.season, repeat=repeat, fold=fold, rate_from="rest", fit_games=len(fit_ids),
+    summary.update(season=run.season, repeat=repeat, fold=fold, folds_per_repeat=run.n_folds, rate_from="rest",
+                   fit_games=len(fit_ids),
                    split="random", cut=None, test_games=len(test_ids), prior_inputs=run.prior_inputs,
                    context_inputs=run.context_inputs,
                    players=int((rated.table.possessions > 0).sum()),
@@ -675,8 +679,8 @@ def run_season(run: SeasonRun, base: pd.DataFrame, panel: pd.DataFrame, reproduc
     if reproduce_only:
         return
     folds = season_folds(run)
-    for repeat in range(REPEATS):
-        for fold in range(N_FOLDS):
+    for repeat in range(run.repeats):
+        for fold in range(run.n_folds):
             if not (run.out_dir / f"fold_{run.season}_r{repeat}_f{fold}.json").exists():
                 run_fold(run, folds, repeat, fold, started)
 
@@ -736,12 +740,14 @@ def folds_in_parts(cfg: dict, seasons, tag: str, jobs: int, argv) -> bool:
 
 
 def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_only: bool = False,
-              pieces: bool = False, whole_season_inputs: bool = False, whole_season_context: bool = False) -> int:
+              pieces: bool = False, whole_season_inputs: bool = False, whole_season_context: bool = False,
+              n_folds: int = N_FOLDS, repeats: int = REPEATS) -> int:
     """`openrapm folds`: the reproduction check and the folds of every season, then the gathered files.  With
     `pieces`, each fold also writes its pieces_<stem>.parquet (`fold_pieces`); with `whole_season_inputs`, every
     fold's boosters read the whole season's inputs (the leak control, the module docstring); with
     `whole_season_context`, every fold's second prior reads the whole season's context numbers (its leak arm).
-    `folds_in_parts` runs it in several processes at once."""
+    `folds_in_parts` runs it in several processes at once.  `n_folds` and `repeats` are the fold design, four and
+    three as step 4's folds are built."""
     box_files = None
     if pieces:
         from .site import BoxScoreFiles
@@ -759,8 +765,8 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
     inputs = player_season_inputs(roles, cap=share_cap(cfg))
     debut = careers_before(cfg, roles)            # the seasons before 1997, as the season panel read them
     designs = DesignCache(cfg)
-    print(f"models {models} ({meta.get('argv')}); seasons {seasons[0]}-{seasons[-1]}; {REPEATS} repeats of "
-          f"{N_FOLDS} folds; targets {settings.targets.offence} / {settings.targets.defence}; writing {out_dir}",
+    print(f"models {models} ({meta.get('argv')}); seasons {seasons[0]}-{seasons[-1]}; {repeats} repeats of "
+          f"{n_folds} folds; targets {settings.targets.offence} / {settings.targets.defence}; writing {out_dir}",
           flush=True)
     if whole_season_inputs:
         print("the leak control: every fold's boosters read the WHOLE season's inputs, held-back games included",
@@ -782,7 +788,7 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
         saved = season_models(saved_all, season)
         full = {target: designs.season(season, target) for target in world_targets(settings)}
         run = SeasonRun(season, cfg, full, SeasonSources(SeasonTables(season, cfg), roles, inputs, debut), saved,
-                        out_dir, box_files, settings=settings)
+                        out_dir, box_files, settings=settings, n_folds=n_folds, repeats=repeats)
         if whole_season_inputs:
             run.prior_panel = run.world(set(run.game_ids)).panel
         if grams is not None:

@@ -243,7 +243,11 @@ command runs in one process as before.
     the centred second prior, experiment 82's and experiment 78's, `bags10_early,bags10_within`), seasons
     1997-2026 pinned, because the fold folder grew once
     and an unpinned rerun shrank harder (experiment 34's correction);
-  - each season's multipliers from the 8 fold seasons nearest it (experiment 55, adopted 2026-10-12).
+  - each season's multipliers from the 8 fold seasons nearest it (experiment 55, adopted 2026-10-12);
+  - each multiplier read to a full season: fitted again on folds holding back a tenth of the games, ten folds a
+    repeat (`inputs99_k10`), and read off the straight line through the two holdout sizes at nothing held back,
+    because a fold's ratings are built from part of a season and the published ones from all of it (experiment
+    101, adopted 2026-10-22; `ShrinkSettings.extrapolate_folds_tag`, `--extrapolate-folds`).
 - **Command:** `python -m openrapm shrink --base season_ratings_NAME_step3`.
 - **Code:** `src/openrapm/prior_shrink.py`, `data/within_folds.py`.
 

@@ -16,7 +16,7 @@ TAG = build.fold_tags(PRODUCT.shrink)[0]          # the first folder checked
 SPAN = "{}-{}".format(*PRODUCT.shrink.fold_seasons)
 MAKE_RATE = f"openrapm rate --setting test --seasons {SPAN} --save-models NAME"
 MAKE_FOLDS = f"openrapm folds --models NAME --base season_ratings_test_step3 --seasons {SPAN} --tag {TAG}"
-ONE_FOLDER = replace(PRODUCT.shrink, folds_tag=TAG, fold_seasons=(2026, 2026))
+ONE_FOLDER = replace(PRODUCT.shrink, folds_tag=TAG, fold_seasons=(2026, 2026), extrapolate_folds_tag="")
 
 
 def _cfg(tmp_path) -> dict:
@@ -68,7 +68,7 @@ def test_an_incomplete_folder_is_refused_with_its_problem(tmp_path):
     _write_folds(directory, folds=range(3))
     with pytest.raises(SystemExit) as stop:
         build.require_folds(_cfg(tmp_path), settings.shrink)
-    assert "four folds" in _message(stop)
+    assert "without exactly its folds" in _message(stop)
     _write_folds(directory)
     (directory / "test_2026_r0_f3.npz").unlink()
     with pytest.raises(SystemExit) as stop:
@@ -82,10 +82,19 @@ def test_a_complete_folder_passes(tmp_path):
     build.require_folds(_cfg(tmp_path), settings.shrink)
 
 
+def test_the_folder_read_to_a_full_season_is_checked_too(tmp_path):
+    """Experiment 101's second fold set, `extrapolate_folds_tag`, must hold complete folds as well."""
+    _write_folds(tmp_path / "within" / TAG)
+    with pytest.raises(SystemExit) as stop:
+        build.require_folds(_cfg(tmp_path), replace(ONE_FOLDER, extrapolate_folds_tag="tenth"))
+    assert str(tmp_path / "within" / "tenth") in _message(stop) and "--tag tenth" in _message(stop)
+
+
 def test_every_folder_named_is_checked(tmp_path):
     """Several folders, comma-separated: each must hold complete folds, and the message names the one that does
     not."""
-    shrink = replace(PRODUCT.shrink, folds_tag="early_within,late_within", fold_seasons=(2016, 2026))
+    shrink = replace(PRODUCT.shrink, folds_tag="early_within,late_within", fold_seasons=(2016, 2026),
+                     extrapolate_folds_tag="")
     _write_folds(tmp_path / "within" / "early_within", season=2016)
     with pytest.raises(SystemExit) as stop:
         build.require_folds(_cfg(tmp_path), shrink)

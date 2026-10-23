@@ -53,6 +53,7 @@ def test_the_shrink_and_swap_settings():
     assert PRODUCT.shrink.fold_seasons == (1997, 2026) and PRODUCT.shrink.nearest == 8
     assert PRODUCT.shrink.folds_tag == "inputs99_early,inputs99_within"     # experiment 99, adopted 2026-10-22
     assert PRODUCT.shrink.defence_factors == ((0, 0.89), (2017, 0.84))     # experiment 98, adopted 2026-10-22
+    assert PRODUCT.shrink.extrapolate_folds_tag == "inputs99_k10"         # experiment 101, adopted 2026-10-22
     assert [PRODUCT.shrink.defence_factor_for(s) for s in (1997, 2016, 2017, 2026, 2027)] == [0.89, 0.89, 0.84, 0.84,
                                                                                               0.84]
     swap = PRODUCT.swap

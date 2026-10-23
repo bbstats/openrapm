@@ -81,9 +81,11 @@ import pandas as pd
 import scipy.sparse as sp
 
 __all__ = ["RULES", "unseen_fold_seasons", "fold_seasons_used", "fold_terms", "fit_multipliers",
-           "multipliers_by_season", "shrink", "season_factors", "shrink_fold"]
+           "multipliers_by_season", "held_back_share", "read_to_full_season", "full_season_multipliers",
+           "shrink", "season_factors", "shrink_fold"]
 
 RULES = ("product", "test")
+MULTIPLIER_COLUMNS = ("multiplier_off", "multiplier_def", "games_multiplier_off", "games_multiplier_def")
 
 
 def unseen_fold_seasons(season: int, rule: str) -> set:
@@ -170,6 +172,52 @@ def multipliers_by_season(seasons, folds: list, rule: str, nearest: int = 0, fre
             row.update(games_multiplier_off=fits[used][2], games_multiplier_def=fits[used][3])
         rows.append(dict(row, fold_seasons=len(used)))
     return pd.DataFrame(rows)
+
+
+def held_back_share(folds: list) -> float:
+    """1 / K, the share of its season's games each fold holds back, K the folds of a repeat; one K for every repeat of
+    `folds` (a ValueError when they differ).
+
+    Example: step 4's folds, four a repeat, give 0.25; `openrapm folds --folds-per-repeat 10` gives 0.10.
+    """
+    repeats: dict = {}
+    for fold in folds:
+        repeats.setdefault((int(fold.season), int(fold.repeat)), set()).add(int(fold.fold))
+    sizes = {len(held) for held in repeats.values()}
+    if len(sizes) != 1:
+        raise ValueError(f"the folds hold back different shares of their seasons: {sorted(sizes)} folds a repeat")
+    return 1.0 / sizes.pop()
+
+
+def read_to_full_season(first: pd.DataFrame, second: pd.DataFrame, first_share: float,
+                        second_share: float) -> pd.DataFrame:
+    """Each season's multipliers off the straight line through two holdout sizes, read at nothing held back, as the
+    full-season ratings are built (Richardson extrapolation, notes/DECISIONS.md, experiment 101).  `first` and
+    `second` are `multipliers_by_season` tables of fold sets holding back `first_share` and `second_share`.
+
+    Example: a games' part of 1.41 with a quarter held back and 1.35 with a tenth: the line falls 0.4 per whole season
+    held back, and reads 1.41 - 0.25 x 0.4 = 1.31 at nothing held back.
+    """
+    if first_share == second_share:
+        raise ValueError("the two fold sets hold back the same share; the line needs two")
+    columns = [column for column in MULTIPLIER_COLUMNS if column in first.columns]
+    a = first.set_index("season")
+    b = second.set_index("season").loc[a.index]
+    slope = (a[columns] - b[columns]) / (first_share - second_share)
+    out = a.copy()
+    out[columns] = a[columns] - first_share * slope
+    return out.reset_index()
+
+
+def full_season_multipliers(seasons, folds: list, second_folds: list, rule: str, nearest: int = 0,
+                            free_games: bool = False) -> pd.DataFrame:
+    """`multipliers_by_season` on two fold sets of different holdout sizes, read to a full season
+    (`read_to_full_season`): step 4's ratings are built from every game, its folds' from part of them, and the
+    multipliers that fit a fold's held-back games move with the part held back (notes/DECISIONS.md, "2026 at six fold
+    sizes" and experiment 101)."""
+    return read_to_full_season(multipliers_by_season(seasons, folds, rule, nearest, free_games),
+                               multipliers_by_season(seasons, second_folds, rule, nearest, free_games),
+                               held_back_share(folds), held_back_share(second_folds))
 
 
 def _shrink_season(rows: pd.DataFrame, multiplier_off: float, multiplier_def: float, games_off: float = 1.0,
