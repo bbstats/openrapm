@@ -27,7 +27,7 @@ every number quoted here; read its measurement traps before trusting a number.  
   threes of a period's last two seconds counted as they happened); the defense factor by era (98, 0.89 before 2017 and
   0.84 from 2017 in place of 0.866); each season's own body listing and the pad k around the bins (99).  The 2001
   Lakers moved most, back toward their usual split (DECISIONS.md, "Experiment 99 ADOPTED").
-- **Experiment 101 (fullseason101), adopted 2026-10-22, NOT published** (the owner: "we are going to do it"): each
+- **Experiment 101 (fullseason101), PUBLISHED 2026-10-22** (the owner: "we are going to do it", then "Publish"): each
   season's multipliers fitted on folds holding back a quarter and a tenth of its games (`inputs99_k10`, ten folds a
   repeat, `openrapm folds --folds-per-repeat 10`) and read to a full season off the line through the two: the
   games' part 5-10% smaller, the prior part 0-2% larger, the same in every era.  The year-over-year test +0.053,

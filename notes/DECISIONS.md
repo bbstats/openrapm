@@ -9015,3 +9015,16 @@ published, and step 4's own fit on that size's folds.  1 is the published 2026 w
   `openrapm shrink --setting test` reproduces the read-only table to 9e-11.  The experiment chain judges candidates
   without it (`--extrapolate-folds=`), against inputs99's tables built the same way; an adopted candidate needs its own
   tenth folds, about 50 minutes with 2 processes.
+
+## Experiment 101 PUBLISHED (2026-10-22, the owner: "Publish")
+
+- **The reproduction.**  `openrapm build --setting test --seasons 2026 --name verify101` equals fullseason101b's 2026
+  table: the largest difference 0.
+- **The product.**  `openrapm build`, 8:40-9:28 PM (`scratch/2026-10-22_bugfix/build101.sh`), the published tables
+  kept as `season_ratings_product_before_fullseason101*`.  Against them, players with 1,000+ possessions: 2026 totals
+  moved a median 0.05 per 100, the ninetieth percentile 0.12, the largest 0.21; every season a median 0.05, the
+  largest 0.31; correlation 0.999.  Each side's standard deviation by era, published / new: offense 1.88 / 1.90,
+  1.68 / 1.70, 1.51 / 1.53; defense 1.74 / 1.73, 1.62 / 1.63, 1.54 / 1.55.  2026 top 20: the same twenty; Luka
+  Dončić +0.21, 7th to 6th; Nikola Jokić +0.16; Giannis Antetokounmpo +0.12; Chet Holmgren -0.14; Bam Adebayo -0.11.
+- **Checks.**  The consensus tests pass (10 passed, the known backup-bigs failure); `openrapm site --bias
+  --openrapm-decomposition --similarity` passes every identity; 747 tests pass.
