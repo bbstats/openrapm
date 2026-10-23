@@ -68,11 +68,15 @@ LOG=outputs/${NAME}_chain.log
 # player's deviation from his team's mean on held-back stints within games, settings.ShrinkSettings.within_team_layer,
 # the shipped default of `openrapm shrink`); its tables season_ratings_layers106*, its folds still inputs99's, and 151
 # scores every system's step 4 with the two layers.
-INC_NAME=${INC_NAME:-layers106}
-INC_SYSTEM=${INC_SYSTEM:-inputs99}              # the incumbent's folds (<name>_early, <name>_within) for 151
+# Since later the same day it is experiment 107 (parts107): the box-score prior trained on part-season rows too
+# (settings.PriorSettings.part_season_shares, the shipped default of `openrapm rate`, which reads the panel of
+# `openrapm data panel --so-far 0.25,0.5,0.75`), its own folds parts107_early and parts107_within.  The noise control
+# noise_bags10 was built on the stints before experiment 94's parser fixes, so beside parts107 it reads more than noise.
+INC_NAME=${INC_NAME:-parts107}
+INC_SYSTEM=${INC_SYSTEM:-parts107}              # the incumbent's folds (<name>_early, <name>_within) for 151
 CONTROL_NAME=${CONTROL_NAME:-noise_bags10}       # the noise control's folds (<name>_early, <name>_within) for 151
-INC_FOLDS=${INC_FOLDS:-inputs99_early,inputs99_within}
-AUDIT_REF=${AUDIT_REF:-inputs99_within}
+INC_FOLDS=${INC_FOLDS:-parts107_early,parts107_within}
+AUDIT_REF=${AUDIT_REF:-parts107_within}
 INC=outputs/season_ratings_${INC_NAME}.parquet
 BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1_tune2 --features hustle_no_three_pct}
 [ -n "$NAME" ] && [ -n "$TARGET" ] || { echo "usage: scripts/experiment_chain.sh NAME TARGET [EXTRA RATE FLAGS]"; exit 1; }

@@ -54,12 +54,22 @@ deviation from it, with multipliers of its own fitted on the system's own held-b
 `--pieces` compares check 145's families with the one-layer step and so needs the system built and read with
 --no-within-team-layer in mind: its equality check stops on a two-layer step 4.
 
+The season so far (2026-10-23).  A system's folds may be the date folds of `openrapm folds --cut SHARE`: each season
+rated from its games through the day SHARE of its regular season had been played, and scored on the rest of the season,
+one fold a season.  Its step 4 is then fitted on those folds, as for any system: the multipliers of a season so far,
+from the 8 nearest seasons' own seasons so far.  `--step4-from LABEL:SYSTEM` fits a system's step 4 on another system's
+folds instead, as the full-season step 4 would be read onto a season so far; with `LABEL=FOLDERS` in --systems one set
+of folds can be read under two labels, once with each step 4.
+
 Writes outputs/csv/wowy_<tag>_seasons.csv (every system, season, stage and slice) and wowy_<tag>.csv (the paired
 summary).
 
     python scripts/checks/151_wowy.py --systems=nocareer,noise_nocareer,cols06 --ref=nocareer --tag=exp63
         (each name reads outputs/within/<name>_early and <name>_within; about 10 minutes)
     python scripts/checks/151_wowy.py --systems=cols06pieces --ref=cols06 --pieces=source,certainty --tag=pieces
+    python scripts/checks/151_wowy.py --systems=inputs99_cut25,full=inputs99_cut25 --ref=inputs99_cut25
+        --step4-from=full:inputs99 --tag=cut25
+        (each season's first quarter scored on the rest, step 4 fitted on the first quarters and on full seasons)
 """
 from __future__ import annotations
 
@@ -313,13 +323,14 @@ class PieceStages:
 # --------------------------------------------------------------------------------------------- one system
 def system_folds(within, name: str) -> tuple[list, dict]:
     """(every fold on disk of the system, {stem: its folder}): step 4's multipliers for a scored season come from the
-    seasons around it."""
+    seasons around it.  A system's folds are outputs/within/<name>_early and <name>_within, or one folder
+    outputs/within/<name> (the date folds of a season so far); date folds are read here, never by step 4 itself."""
     from openrapm.data.within_folds import load_folds
     folds, where = [], {}
-    for folder in (within / f"{name}_early", within / f"{name}_within"):
+    for folder in (within / name, within / f"{name}_early", within / f"{name}_within"):
         if not folder.exists():
             continue
-        for fold in load_folds(folder, (1997, 2026)):
+        for fold in load_folds(folder, (1997, 2026), allow_date=True):
             folds.append(fold)
             where[fold.stem] = folder
     return folds, where
@@ -354,18 +365,28 @@ def within_layer(folds: list, where: dict, seasons, defence_factors: tuple) -> p
     return within_layer_multipliers(load_config(), seasons, folds, where, shrink).set_index("season")
 
 
+def step4_tables(within, folds: list, where: dict, scored_seasons: list, defence_factors: tuple,
+                 step4_from: str | None) -> tuple[pd.DataFrame, pd.DataFrame | None]:
+    """(step 4's multipliers by season, its within layer by season or None), fitted on the system's own folds, or on
+    the folds of `step4_from` when given."""
+    from openrapm.prior_shrink import multipliers_by_season
+    if step4_from:
+        folds, where = system_folds(within, step4_from)
+    multipliers = multipliers_by_season(scored_seasons, folds, "test", NEAREST, free_games=FREE_GAMES)
+    return multipliers.set_index("season"), within_layer(folds, where, scored_seasons, defence_factors)
+
+
 def system_errors(audit, within, name: str, seasons: tuple, unit: str = "stint", families: list | None = None,
-                  multiplier_tables: list | None = None, defence_factors: tuple = DEFENCE_FACTORS) -> pd.DataFrame:
-    """One row per season, stage and slice: the system's WOWY error over the season's folds.  With `families` (check
-    145's), a system whose folds carry pieces also gets a stage per family; its multipliers go to
-    `multiplier_tables`."""
-    from openrapm.prior_shrink import WITHIN_COLUMNS, multipliers_by_season
+                  multiplier_tables: list | None = None, defence_factors: tuple = DEFENCE_FACTORS,
+                  label: str | None = None, step4_from: str | None = None) -> pd.DataFrame:
+    """One row per season, stage and slice: the system's WOWY error over the season's folds, under `label` (the name
+    when not given).  With `families` (check 145's), a system whose folds carry pieces also gets a stage per family;
+    its multipliers go to `multiplier_tables`.  With `step4_from`, step 4 is fitted on that system's folds."""
+    from openrapm.prior_shrink import WITHIN_COLUMNS
     folds, where = system_folds(within, name)
     scored = [fold for fold in folds if seasons[0] <= fold.season <= seasons[1]]
-    multipliers = multipliers_by_season(sorted({fold.season for fold in scored}), folds, "test", NEAREST,
-                                        free_games=FREE_GAMES)
-    multipliers = multipliers.set_index("season")
-    layer = within_layer(folds, where, sorted({fold.season for fold in scored}), defence_factors)
+    multipliers, layer = step4_tables(within, folds, where, sorted({fold.season for fold in scored}), defence_factors,
+                                      step4_from)
     pieces = piece_stages(name, folds, where, unit, families, multiplier_tables, defence_factors)
     sums: dict = {}
     cache = None
@@ -391,7 +412,7 @@ def system_errors(audit, within, name: str, seasons: tuple, unit: str = "stint",
             acc = sums.setdefault((fold.season, *key), [0.0, 0.0])
             acc[0] += top
             acc[1] += bottom
-    return pd.DataFrame([dict(system=name, season=season, stage=stage, slice=slice_, error=top / bottom)
+    return pd.DataFrame([dict(system=label or name, season=season, stage=stage, slice=slice_, error=top / bottom)
                          for (season, stage, slice_), (top, bottom) in sums.items()])
 
 
@@ -447,7 +468,9 @@ def paired(seasons_table: pd.DataFrame, system: str, reference: str) -> list:
 def main(argv=None) -> int:
     use_utf8()
     parser = argparse.ArgumentParser(description="The with-or-without-you test on the within-season folds.")
-    parser.add_argument("--systems", required=True, help="comma-separated names; each reads <name>_early/_within")
+    parser.add_argument("--systems", required=True,
+                        help="comma-separated names; each reads <name>_early/_within or the folder <name>; "
+                             "LABEL=NAME reads NAME's folds under LABEL")
     parser.add_argument("--ref", required=True, help="the reference system (the incumbent)")
     parser.add_argument("--tag", default="wowy", help="names the output files (default %(default)s)")
     parser.add_argument("--unit", default="stint", choices=("stint", "game"),
@@ -459,6 +482,9 @@ def main(argv=None) -> int:
                         help="name:K,... : step 4's defensive multipliers times K in every season for that "
                              "system instead of the shipped settings.ShrinkSettings.defence_factors (openrapm shrink "
                              "--defence-factor); a system built before experiment 76 is 1")
+    parser.add_argument("--step4-from", default="",
+                        help="label:system,... : that system's step 4 fitted on another system's folds, e.g. a season "
+                             "so far with the step 4 of full seasons")
     parser.add_argument("--first", type=int, default=1997)
     parser.add_argument("--last", type=int, default=2026)
     args = parser.parse_args(argv)
@@ -468,16 +494,21 @@ def main(argv=None) -> int:
     within = resolve(cfg, "within") if "within" in cfg.get("paths", {}) else outputs / "within"
     audit = _audit()
     # each name once, in order: the chain names the noise control beside the candidate, which may be the control itself
-    names = list(dict.fromkeys(name.strip() for name in args.systems.split(",") if name.strip()))
+    folders = dict(part.split("=", 1) if "=" in part else (part, part)
+                   for part in (name.strip() for name in args.systems.split(",")) if part)
+    names = list(folders)
     if args.ref not in names:
         names.insert(0, args.ref)
+        folders[args.ref] = args.ref
+    step4_from = dict(part.split(":", 1) for part in args.step4_from.split(",") if part)
     tables, multiplier_tables = [], []
     families = [family for family in args.pieces.split(",") if family]
     factors = {key: ((0, float(value)),) for key, value in (part.split(":") for part in args.defence_factors.split(",")
                                                             if part)}
     for name in names:
-        tables.append(system_errors(audit, within, name, (args.first, args.last), args.unit, families,
-                                    multiplier_tables, factors.get(name, DEFENCE_FACTORS)))
+        tables.append(system_errors(audit, within, folders[name], (args.first, args.last), args.unit, families,
+                                    multiplier_tables, factors.get(name, DEFENCE_FACTORS), label=name,
+                                    step4_from=step4_from.get(name)))
         print(f"  {name}: {tables[-1].season.nunique()} seasons ({time.time() - started:.0f}s)", flush=True)
     seasons_table = pd.concat(tables, ignore_index=True)
     (outputs / "csv").mkdir(exist_ok=True)

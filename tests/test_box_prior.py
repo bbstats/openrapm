@@ -182,6 +182,70 @@ def test_the_rated_row_reads_his_possessions_and_one_season():
     assert np.array_equal(rated.row_possessions.to_numpy(), rated.possessions.to_numpy())
     assert (rated.row_seasons == 1.0).all()
     assert not set(SHIPPED["D"]) - set(rated.columns)
+    # a rating of the season so far tells the booster the share of the regular season played (experiment 107)
+    assert (box_prior.rated_rows(panel[panel.season == 2015], SHIPPED["D"], 0.2504).row_seasons == 0.2504).all()
+
+
+# ------------------------------------------------------------------ the part-season rows (experiment 107)
+def _part_seasons(panel, shares=(0.25, 0.5), seed=9):
+    """Each row of `panel` again at each share, its possessions that share of the season's, other values drawn anew."""
+    rng = np.random.default_rng(seed)
+    parts = []
+    for share in shares:
+        part = pd.DataFrame([_panel_row(rng, pid, season) for pid, season in zip(panel.player_id, panel.season)])
+        part["possessions"] = panel.possessions.to_numpy() * share
+        parts.append(part.assign(share=share, season_share=share + 0.004))
+    return pd.concat(parts, ignore_index=True)
+
+
+def test_a_part_season_row_is_a_chunk_row_of_its_own_with_its_share_as_its_seasons():
+    panel = _career_panel()
+    part_seasons = _part_seasons(panel)
+    rows = box_prior.training_rows(_label(panel), panel, "offense", SHIPPED["O"], part_seasons=part_seasons)
+    plain = box_prior.training_rows(_label(panel), panel, "offense", SHIPPED["O"])
+    # player 0: the career row, nine chunk rows of whole seasons and two part-season rows for each of his four seasons
+    assert len(rows.loc[[0]]) == len(plain.loc[[0]]) + 4 * 2
+    covered = sorted(rows.loc[[0]].row_seasons)
+    assert covered[:8] == [0.254] * 4 + [0.504] * 4
+    # every row carries the player's label, and his rows still weigh twice his label: the career row its weight, his
+    # chunk rows, whole and part seasons, the other half by their possessions
+    assert np.array_equal(rows.label.to_numpy(), rows.index.to_numpy(float))
+    per_player = rows.groupby(level=0)
+    assert np.allclose(per_player.row_weight.sum().to_numpy(), 2.0 * per_player.label_possessions.first().to_numpy())
+    part = rows[rows.row_seasons < 1.0]
+    assert np.allclose(part.row_possessions.sort_values().to_numpy(),
+                       part_seasons.possessions.sort_values().to_numpy())
+
+
+def test_without_part_season_rows_nothing_changes_and_the_career_row_never_reads_them():
+    panel = _career_panel()
+    plain = box_prior.training_rows(_label(panel), panel, "offense", SHIPPED["O"])
+    assert plain.equals(box_prior.training_rows(_label(panel), panel, "offense", SHIPPED["O"], part_seasons=None))
+    with_parts = box_prior.training_rows(_label(panel), panel, "offense", SHIPPED["O"],
+                                         part_seasons=_part_seasons(panel))
+    career = plain.groupby(level=0).head(1)
+    assert career.equals(with_parts.groupby(level=0).head(1)[career.columns])
+
+
+def test_the_season_priors_train_on_part_seasons_of_the_training_seasons_only():
+    rng = np.random.default_rng(5)
+    panel = pd.DataFrame([_panel_row(rng, pid, s, side) for side in ("O", "D") for pid in range(60)
+                          for s in (2010, 2011, 2012, 2013)])
+    part_seasons = pd.concat([_part_seasons(panel[panel.side == side]).assign(side=side) for side in ("O", "D")],
+                             ignore_index=True)
+    labels = {"O": _label(panel[panel.side == "O"]),
+              "D": _label(panel[panel.side == "D"]).rename(columns={"offense": "defense"})}
+    params = {"O": PARAMS, "D": PARAMS}
+    with_parts = box_prior.season_priors(labels, panel, 2013, [2013], ONE_BOOSTER, params, part_seasons=part_seasons)
+    # noise in the rated season's own part seasons moves nothing: the rated season never trains
+    noisy = part_seasons.copy()
+    rated_season = noisy.season == 2013
+    noisy.loc[rated_season, "points_per100"] = rng.normal(0, 50, size=int(rated_season.sum()))
+    again = box_prior.season_priors(labels, panel, 2013, [2013], ONE_BOOSTER, params, part_seasons=noisy)
+    plain = box_prior.season_priors(labels, panel, 2013, [2013], ONE_BOOSTER, params)
+    for side in ("O", "D"):
+        assert with_parts[side].values == again[side].values
+        assert with_parts[side].values != plain[side].values
 
 
 # ------------------------------------------------------------------ the folds

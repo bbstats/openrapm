@@ -27,6 +27,7 @@ DEFAULT_PATHS = {
     "shot_curves": "data/shotcurve",  # the league's make probability by distance, one file per season
     "outputs": "outputs",             # the ratings tables, the saved prior models, the run logs
     "panel": "outputs/season_panel.parquet",   # the season panel: one row per player, season and side
+    "panel_so_far": "outputs/season_panel_so_far.parquet",   # each season so far, one row per player, share and side
     "within": "outputs/within",       # the within-season folds, one folder per tag
     "event_counts": "data/event_counts",   # the play-by-play counts per game, player and phase
 }

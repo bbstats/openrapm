@@ -22,7 +22,11 @@ every number quoted here; read its measurement traps before trusting a number.  
 
 - **The bug-fix pass of 2026-10-22** (DECISIONS.md, "The bug-fix pass"): the owner asked for a hunt for bugs behind the
   artifacts; the findings, the code-only fixes, experiments 94-99, the width test and the season widths are there.
-- **The incumbent is experiment 106 (layers106), PUBLISHED 2026-10-23** (the owner: "please adopt, yes - D. you may
+- **The chain's incumbent is experiment 107 (parts107), ADOPTED 2026-10-23, not published** (the owner: "Sure adopt
+  then build the shrink by share"): experiment 106 with the box-score prior trained on part-season rows too, its own
+  folds `parts107_early`, `parts107_within` and tenth folds `parts107_k10`; tables `season_ratings_parts107*`.  The site
+  still carries experiment 106.
+- **The published ratings are experiment 106 (layers106), PUBLISHED 2026-10-23** (the owner: "please adopt, yes - D. you may
   publish if 2026 our rankings correlate more nicely w/ consensus"; DECISIONS.md, "Experiment 106 ADOPTED and
   PUBLISHED"): inputs99 with the shrink in two layers, each player's deviation from his team's mean multiplied on its
   own, fitted on held-back stints within games, times 0.75 on offense and 1.0 on defense.  2026 defense over offense
@@ -72,11 +76,36 @@ every number quoted here; read its measurement traps before trusting a number.  
   0.91 beside 1.03 on his defensive one (2026, raw scale), copied from the swap adjustment's inputs.
 - **Faster runs**: `openrapm rate --jobs N` and `openrapm folds --jobs N`, same numbers; the chain asks for 4, cut to
   what free memory holds.  A chain takes about 50-75 minutes.
+- **The season so far, experiment 107, adopted** (the owner, 2026-10-23: "we need to CLEANLY support
+  mid-season ... want to support 'at any point in the season' really"; DECISIONS.md, "Experiment 107"; code not
+  committed).  New test: `openrapm folds --cut SHARE` rates every past season from its games through the day SHARE of
+  its regular season was played and scores it on the rest; check 151 reads those folds, `--step4-from` gives a system
+  another system's step 4.  New candidate: `openrapm rate --part-season-rows 0.25,0.5,0.75` with the panel of
+  `openrapm data panel --so-far 0.25,0.5,0.75`.  Results, ratings of zero 0 and today's prior with step 4 refit at the
+  cut 100: step 4 of whole seasons on a quarter season 90.1, the refit is the big lever; the part-season rows 100.4 /
+  100.2 / 100.3 at a quarter / half / three quarters, better in every era, and on whole seasons WOWY z -3.91 and the
+  year-over-year test z -2.20; 2026 top 20 the same players.  Folds `outputs/within/inputs99_cut25` (50, 75) and
+  `parts107_cut25` (50, 75), `parts107_early`, `parts107_within`; boosters `prior_models_parts107.pkl`.
 
 ## Next
 
-The offense/defense balance is fixed and published (experiment 106, version D).  Nothing is queued; the owner brings
-the next idea.  What the work of 2026-10-23 left open:
+The offense/defense balance is fixed and published for 2017-2026 (experiment 106, version D).
+
+**The season so far: build the shrink by share (the owner, 2026-10-23: "Sure adopt then build the shrink by
+share").**  For any day of a season: step 4 fitted by the
+share of the season played (a refit at a quarter season is worth 10 on the scale above; one date fold a season is
+noisy, so fit on several cut days or a smooth line in the share); and the season in progress itself, which cannot be
+rated yet (the bug-fix pass's list: the game log cached forever, both phases always built, the panel's rated rows
+dropped with the season, the roles cache, the bio ages).
+
+**Must fix, lower priority (the owner, 2026-10-23: "we REALLY need to fix pre-2017, but that's a lower priority"):
+the pre-2017 defense.**  Version D widened it instead of narrowing it: defense standard deviation 1.73 to 1.92 in
+1997-2006 and 1.63 to 1.78 in 2007-2016, defense over offense 0.94 to 1.03 and 0.98 to 0.99; 2017-2026 went 1.55 to
+1.44.  The within-season WOWY test liked D in every era, so the fix must hold that test there too.  Leads: the within
+layer's defensive games' part is about 2.0 in every era (DECISIONS.md, "Experiment 106"), and the defense factor is
+0.89 before 2017 against 0.84 after.
+
+What else the work of 2026-10-23 left open:
 - Your two tests use different units and disagree on how far apart teammates should be: the within-season WOWY test
   scores stints, the year-over-year test whole team-games, and minutes that react to the game pull the team-game
   reading down (DECISIONS.md, "Why the shrink cuts the offense: the unit it is fitted on").  Version D cost the
@@ -99,17 +128,17 @@ the next idea.  What the work of 2026-10-23 left open:
 | step | plain name | module | as shipped |
 |---|---|---|---|
 | 1 | the label | `rapm.py` | one RAPM per player over every season but the rated one; penalties 40,000 / 40,000 / 0 |
-| 2 | box-score prior | `box_prior.py` | LightGBM `lgb1_tune2`, linear leaves; feature set `hustle_no_three_pct`; five player folds; 10 bags |
+| 2 | box-score prior | `box_prior.py` | LightGBM `lgb1_tune2`, linear leaves; feature set `hustle_no_three_pct`; five player folds; 10 bags; part-season rows at a quarter, a half and three quarters of each training season since experiment 107 |
 | 2b | swap part of the prior | `second_prior.py` | line `ctx82` on `context_and_types_centred`, team totals held |
 | 3 | the rating | `prior_rapm.py` | RAPM pulled toward the prior, penalty 13,037, centred |
-| 4 | the shrink, with the defense factor | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, 8 nearest fold seasons, defense times 0.89 before 2017 and 0.84 from 2017; folds `inputs99_early,inputs99_within`, each multiplier read to a full season with the tenth folds `inputs99_k10` (experiment 101); two layers since experiment 106: each part's team mean on held-back team-games, each player's deviation from it on held-back stints within games, the within layer times 0.75 on offense and 1.0 on defense |
+| 4 | the shrink, with the defense factor | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, 8 nearest fold seasons, defense times 0.89 before 2017 and 0.84 from 2017; folds `parts107_early,parts107_within` since experiment 107, each multiplier read to a full season with the tenth folds `parts107_k10` (experiment 101); two layers since experiment 106: each part's team mean on held-back team-games, each player's deviation from it on held-back stints within games, the within layer times 0.75 on offense and 1.0 on defense |
 | 5 | swap adjustment | `swap_adjust.py` | off: applied share 0, the build skips it |
 
 - `openrapm build` writes `outputs/season_ratings_product.parquet` with `_step3` and `_step4` beside it.
 - `openrapm site --bias --openrapm-decomposition --similarity` writes the site's files.  Commit, fast-forward `main`
   and push only on the owner's word, then check the Pages build: `gh api repos/bbstats/openrapm/pages/builds/latest`.
   With the second prior, the decomposition's "box score" piece carries the whole prior; its split is the owner's.
-- The incumbent's test-setting tables `outputs/season_ratings_layers106*.parquet`, folds `inputs99_early`, `inputs99_within`;
+- The incumbent's test-setting tables `outputs/season_ratings_parts107*.parquet`, folds `parts107_early`, `parts107_within`;
   no noise control on it yet, `noise_bags10` stands in.
 
 ## How an experiment is judged
@@ -121,7 +150,7 @@ the next idea.  What the work of 2026-10-23 left open:
 | the eye check | `scripts/checks/66_compare.py` | the 2026 top 20 |
 
 - One build: `bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes_late_as_scored "EXTRA RATE
-  FLAGS"`, about 50 minutes with 4 processes.  `INC_NAME` and `INC_SYSTEM` name the incumbent's tables and folds, `layers106` and `inputs99` by default.
+  FLAGS"`, about 50 minutes with 4 processes.  `INC_NAME` and `INC_SYSTEM` name the incumbent's tables and folds, `parts107` for both by default.
 - **The season-page score**: each season, ratings of zero score 0 and the reference 100; the ratings before
   experiment 82 explain 18.2 a season on this test (the 15.7 in older notes is experiment 63's step 4).
   `scratch/2026-10-20_charts/season_scores.py` and `season_page.py`; page https://claude.ai/artifact/L7vwSTAvCCKQnj9jnnhYrq.

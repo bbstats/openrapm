@@ -127,17 +127,28 @@ def fold_stems(directory: Path, seasons: tuple[int, int]) -> list[str]:
     return stems
 
 
-def check_fold_record(record: dict, stem: str) -> None:
+def _summary_value(summary: dict, key: str, missing: str) -> str:
+    """A summary's text value, `missing` for a fold written before the key existed (none, or NaN)."""
+    value = summary.get(key)
+    return missing if value is None or (isinstance(value, float) and np.isnan(value)) else value
+
+
+def check_fold_record(record: dict, stem: str, allow_date: bool = False) -> None:
     """A fold must be a three-quarter-season fold whose leak checks all passed.
 
     `rate_from` "rest" is the fold size the shipped multipliers were fitted at; a fold written before that key
-    existed has none, or NaN, and is "rest" too.
+    existed has none, or NaN, and is "rest" too.  `split` "random" is a fold of games drawn at random over the whole
+    season; "date" is the season so far against the rest of it (`openrapm folds --cut`), which only a reading of the
+    season so far may ask for (`allow_date`): step 4's full-season multipliers fitted on it would be fitted on a
+    quarter season.  A fold written before the key existed is "random".
     """
-    mode = record["summary"].get("rate_from")
-    if mode is None or (isinstance(mode, float) and np.isnan(mode)):
-        mode = "rest"
+    mode = _summary_value(record["summary"], "rate_from", "rest")
     if mode != "rest":
         raise ValueError(f"fold {stem} rates from {mode!r}, not the three-quarter-season `rest` size")
+    split = _summary_value(record["summary"], "split", "random")
+    if split not in (("random", "date") if allow_date else ("random",)):
+        raise ValueError(f"fold {stem} splits its season by {split!r}; only a reading of the season so far reads "
+                         f"date folds (allow_date)")
     failed = [name for name, passed in record["checks"].items() if isinstance(passed, bool) and not passed]
     if failed:
         raise ValueError(f"fold {stem}: leak checks failed {failed}")
@@ -159,7 +170,7 @@ def check_repeats(records: dict) -> None:
         raise ValueError(f"(season, repeat) without exactly its folds: {sorted(short.items())[:5]}")
 
 
-def check_fold_files(directory: Path, seasons: tuple[int, int]) -> list[str]:
+def check_fold_files(directory: Path, seasons: tuple[int, int], allow_date: bool = False) -> list[str]:
     """The stems of the folds in `directory` whose season is in [first, last], after checking that each fold has
     its three files, each passed its leak checks and every repeat has its folds.  Reads only the small json
     files, so a command can call it before the minutes of work that end in `load_folds`; raises ValueError naming
@@ -176,18 +187,18 @@ def check_fold_files(directory: Path, seasons: tuple[int, int]) -> list[str]:
         raise ValueError(f"{directory} lacks {len(missing)} fold files, among them {missing[0]}")
     records = {stem: json.loads((directory / f"fold_{stem}.json").read_text()) for stem in stems}
     for stem, record in records.items():
-        check_fold_record(record, stem)
+        check_fold_record(record, stem, allow_date)
     check_repeats(records)
     return stems
 
 
-def load_folds(directory: Path, seasons: tuple[int, int]) -> list[Fold]:
-    """Every fold in `directory` whose season is in [first, last], after `check_fold_files`.
+def load_folds(directory: Path, seasons: tuple[int, int], allow_date: bool = False) -> list[Fold]:
+    """Every fold in `directory` whose season is in [first, last], after `check_fold_files` (`allow_date` as there).
 
     Example: `load_folds(paths.within / "weightfix_within", (2017, 2026))` reads 120 folds: ten seasons, three
     repeats each, four folds a repeat.
     """
-    return [read_fold(Path(directory), stem) for stem in check_fold_files(directory, seasons)]
+    return [read_fold(Path(directory), stem) for stem in check_fold_files(directory, seasons, allow_date)]
 
 
 def fold_games(directory: Path, fold: Fold) -> tuple[set, set]:

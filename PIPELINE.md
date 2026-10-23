@@ -159,6 +159,10 @@ command runs in one process as before.
     score, role and body (experiment 59, adopted 2026-10-14; experiment 57 had counted them from each player's
     debut, `data/careers.py`);
   - chunk sizes 1, 2 and 3 (experiment 3);
+  - part-season rows (experiment 107, adopted 2026-10-23): each training season so far at a quarter, a half and
+    three quarters of its regular season, one chunk row each from `outputs/season_panel_so_far.parquet` (`openrapm
+    data panel --so-far 0.25,0.5,0.75`), its `row_seasons` its share of the season, so a season so far can be rated
+    with `row_seasons` that day's share; `--part-season-rows ""` trains without them;
   - five player folds ("The SPM memorises long-career stars, and the out-of-player prior removes it",
     2026-09-14);
   - LightGBM's settings in `params/booster_params_lgb1_tune2.json`, chosen by the with-or-without-you test itself:
@@ -325,6 +329,11 @@ held back.
 - **Writes:** `outputs/within/TAG/`: `folds_<season>.parquet` (game to fold), `players_*.parquet` (each
   player's rating and its parts, whole season and per fold), `test_*.npz` (the held-back team-games) and
   `fold_*.json` (each fold's error and leak checks).
+- **The season so far:** `openrapm folds --cut SHARE` rates each season instead from its regular-season games
+  through the day SHARE of them had been played (`data.panel.season_to_date`; 2024 at 0.25: 308 games, through
+  2023-12-07), every input rebuilt from those games, and scores it on the rest of the season, playoffs included: one
+  fold a season, `split` "date".  Step 4 never reads these folds; check 151 does, its step 4 then refit on the
+  seasons so far, or with `--step4-from` taken from another system's random folds (experiment 107).
 - **Code:** `src/openrapm/commands/within_season.py`, `data/within_folds.py`.
 
 ## The similarity page (`similarity.py`)

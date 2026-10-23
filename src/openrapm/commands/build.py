@@ -41,7 +41,7 @@ import pandas as pd
 from .. import box_prior, prior_rapm, prior_shrink, rapm, second_prior, swap_adjust, swap_test
 from ..data.config import booster_params, resolve
 from ..data.designs import DesignCache
-from ..data.panel import panel_and_trainable_seasons, trainable_panel
+from ..data.panel import panel_and_trainable_seasons, trainable_panel, trainable_panel_so_far
 from ..data.roles import main_teams
 from ..data.seasons import all_seasons, trainable
 from ..data.second_prior_files import line_setup, load_grams
@@ -206,17 +206,19 @@ def row_label_tables(sums: dict, panel: pd.DataFrame, unseen, settings, cache: d
 
 
 def rate_one_season(season: int, sums: dict, panel: pd.DataFrame, designs: DesignCache, settings, params: dict,
-                    lines: SecondPriorLines | None = None, label_cache: dict | None = None):
+                    lines: SecondPriorLines | None = None, label_cache: dict | None = None,
+                    part_seasons: pd.DataFrame | None = None):
     """The end of step 1 (labels), step 2 (priors) and step 3 (ridge) for one season.
 
     Returns (the season's centred table in raw sign, {"O", "D"} its SidePriors, its unseen seasons, its
     SeasonSecondPrior or None).  With `lines` (the second prior on, settings.PriorSettings.second_prior) step 3 reads
-    the second prior instead of the box-score prior.
+    the second prior instead of the box-score prior; `part_seasons` (`part_season_panel`) adds the box-score prior's
+    part-season rows.
     """
     unseen = unseen_seasons(season, settings)
     labels = rapm.career_labels(sums, unseen, settings.labels, settings.targets)
     outside = row_label_tables(sums, panel, unseen, settings, label_cache)
-    priors = box_prior.season_priors(labels, panel, season, unseen, settings, params, outside)
+    priors = box_prior.season_priors(labels, panel, season, unseen, settings, params, outside, part_seasons)
     season_designs = {target: designs.season(season, target) for target in settings.targets.distinct()}
     values = {side: priors[side].values for side in SIDES}
     second = None
@@ -227,7 +229,8 @@ def rate_one_season(season: int, sums: dict, panel: pd.DataFrame, designs: Desig
 
 
 def rate_seasons(seasons, sums: dict, panel: pd.DataFrame, designs: DesignCache, settings, params: dict,
-                 keep_models: bool = False, lines: SecondPriorLines | None = None) -> tuple[list, dict]:
+                 keep_models: bool = False, lines: SecondPriorLines | None = None,
+                 part_seasons: pd.DataFrame | None = None) -> tuple[list, dict]:
     """`rate_one_season` for each season: ([one centred table per season], {season: {side: saved boosters}}).
 
     The boosters are kept only when `keep_models`; thirty seasons of them are about a gigabyte.
@@ -236,7 +239,7 @@ def rate_seasons(seasons, sums: dict, panel: pd.DataFrame, designs: DesignCache,
     tables, models, label_cache = [], {}, {}
     for season in seasons:
         table, priors, unseen, second = rate_one_season(season, sums, panel, designs, settings, params, lines,
-                                                        label_cache)
+                                                        label_cache, part_seasons)
         tables.append(table)
         if keep_models:
             models[season] = {side: saved_side(priors[side], params[side], settings, unseen, second, side)
@@ -302,6 +305,23 @@ def summary(table: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
+def part_season_panel(cfg: dict, settings) -> pd.DataFrame | None:
+    """The rows of each finished season so far at the shares settings.PriorSettings.part_season_shares asks, with
+    possessions (data.panel.trainable_panel_so_far); None when it asks for none, as shipped."""
+    shares = tuple(settings.prior.part_season_shares)
+    if not shares:
+        return None
+    panel = trainable_panel_so_far(cfg)
+    panel = panel[(panel.possessions > 0) & panel.share.isin(shares)].reset_index(drop=True)
+    missing = sorted(set(shares) - set(panel.share.unique()))
+    if missing:
+        raise SystemExit(f"the season-so-far panel holds no rows at the shares {missing}; build it with `openrapm data "
+                         f"panel --so-far {','.join(f'{share:g}' for share in shares)}`")
+    print(f"part-season rows: each training season so far at {', '.join(f'{share:g}' for share in shares)} of its "
+          f"regular season, {len(panel)} rows", flush=True)
+    return panel
+
+
 def rate_table(cfg: dict, settings, seasons, keep_models: bool = False) -> tuple[pd.DataFrame, dict]:
     """Steps 1-3 for `seasons`: (the step-3 table in the published schema, {season: saved boosters} or {})."""
     print(describe(settings, seasons), flush=True)
@@ -317,7 +337,7 @@ def rate_table(cfg: dict, settings, seasons, keep_models: bool = False) -> tuple
         lines = SecondPriorLines(load_grams(cfg, settings.prior.second_prior), set(trainable(cfg).seasons),
                                  record.get("type_scale"))
     tables, models = rate_seasons(seasons, sums, panel, designs, settings, params, keep_models=keep_models,
-                                  lines=lines)
+                                  lines=lines, part_seasons=part_season_panel(cfg, settings))
     return prior_rapm.published_table(pd.concat(tables, ignore_index=True), player_names(cfg)), models
 
 

@@ -129,6 +129,11 @@ class PriorSettings:
     feature_set: str = "hustle_no_three_pct"
     # the career row plus every run of 1, 2 and 3 consecutive seasons (notes/DECISIONS.md, experiment 3)
     chunk_sizes: tuple = (1, 2, 3)
+    # the seasons so far whose rows join each training season's: its first quarter, half and three quarters, each a
+    # chunk row of its own with the share it covers as its row_seasons (box_prior.training_rows; notes/DECISIONS.md,
+    # experiment 107, the owner, 2026-10-23: "it would be good to add in partial seasons - 1/4, 1/2, 3/4 as well - to
+    # better support early season data", adopted the same day: "Sure adopt").  () adds none, as before it
+    part_season_shares: tuple = (0.25, 0.5, 0.75)
     # each player's prior from the booster fitted without his fold (notes/DECISIONS.md, "The SPM memorises
     # long-career stars, and the out-of-player prior removes it", 2026-09-14)
     n_folds: int = 5
@@ -228,8 +233,9 @@ class ShrinkSettings:
     # since experiment 94, adopted 2026-10-22 (the bug-fix pass's parser fixes), its own on the rebuilt stints,
     # parser94_early,parser94_within; since experiment 95, adopted the same day (heaves counted as they happened), its
     # own, heave95_early,heave95_within; since experiment 99, adopted the same day (each season's own body listing, the
-    # pad k around the bins), its own
-    folds_tag: str = "inputs99_early,inputs99_within"
+    # pad k around the bins), its own, inputs99_early,inputs99_within; since experiment 107, adopted 2026-10-23 (the
+    # box-score prior's part-season rows), its own
+    folds_tag: str = "parts107_early,parts107_within"
     # each season's factors from only the K fold seasons nearest it (prior_shrink.fold_seasons_used): the defensive
     # prior part holds up less in older seasons, 0.79 in 1997-2006 against 0.95 in 2017-2026 (notes/DECISIONS.md,
     # "Era drift" and experiment 55, adopted 2026-10-12: "yes. build."); 0 would use every fold season the rule allows
@@ -237,8 +243,9 @@ class ShrinkSettings:
     # a second fold set, a tenth of each season's games held back ten times a repeat: each multiplier is read off the
     # straight line through the two holdout sizes at nothing held back, as the full-season ratings are built
     # (Richardson extrapolation, prior_shrink.full_season_multipliers; notes/DECISIONS.md, experiment 101, adopted
-    # 2026-10-22: "we are going to do it"); "" fits on folds_tag alone, as the experiment chain does
-    extrapolate_folds_tag: str = "inputs99_k10"
+    # 2026-10-22: "we are going to do it"); "" fits on folds_tag alone, as the experiment chain does.  inputs99_k10
+    # until experiment 107 was adopted; its own since
+    extrapolate_folds_tag: str = "parts107_k10"
     # a multiplier on the games' part too, fitted beside the prior's (prior_shrink, "The games' part freed";
     # notes/DECISIONS.md, experiment 65, adopted 2026-10-15: "Adopt one multiplier as the new incumbent")
     free_games_part: bool = True

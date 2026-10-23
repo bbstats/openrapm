@@ -344,3 +344,25 @@ def test_step_5_can_be_switched_off_and_the_line_can_read_its_numbers(monkeypatc
                      "--second-prior-inputs", "context_and_types")
     assert seen["settings"].prior.second_prior_inputs == "context_and_types"
     assert _parse("second-prior", "--models", "m", "--folds", "f", "--tag", "t").inputs == "context_and_types_centred"
+
+
+def test_the_part_season_rows_and_the_season_so_far_are_shares_between_0_and_1():
+    import argparse
+
+    import pytest
+
+    from openrapm.commands import cli
+    assert cli.parse_shares("0.75,0.25,0.5") == (0.25, 0.5, 0.75)
+    assert cli.parse_shares("") == ()
+    assert cli.parse_share("0.25") == 0.25
+    for text in ("0", "1", "x"):
+        with pytest.raises(argparse.ArgumentTypeError):
+            cli.parse_share(text)
+    args = cli.build_parser().parse_args(["rate", "--part-season-rows", "0.25,0.5"])
+    assert cli.chosen_settings(args).prior.part_season_shares == (0.25, 0.5)
+    # shipped since experiment 107 was adopted; "" trains without them, as before it
+    assert cli.chosen_settings(cli.build_parser().parse_args(["rate"])).prior.part_season_shares == (0.25, 0.5, 0.75)
+    none = cli.build_parser().parse_args(["rate", "--part-season-rows", ""])
+    assert cli.chosen_settings(none).prior.part_season_shares == ()
+    folds = cli.build_parser().parse_args(["folds", "--models", "m", "--base", "b", "--cut", "0.25"])
+    assert folds.cut == 0.25

@@ -92,6 +92,7 @@ python -m openrapm data ingest 1997 2026 RS,PO
 python -m openrapm data stints 1997 2026 RS,PO
 python -m openrapm data events 1997 2026
 python -m openrapm data panel
+python -m openrapm data panel --so-far 0.25,0.5,0.75
 python -m openrapm rate --setting test --seasons 2017-2026 --name for_folds --save-models mine
 python -m openrapm folds --models mine --base season_ratings_for_folds_step3 --tag mine_within
 python -m openrapm build --folds mine_within

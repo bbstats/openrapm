@@ -91,3 +91,33 @@ def test_a_season_rebuilt_from_all_its_games_is_the_stored_panel(season):
         else:
             # a dashboard column is missing (NaN) before its dashboard starts: the same place in both, not a difference
             assert np.array_equal(rows[column].to_numpy(), stored[column].to_numpy(), equal_nan=True), column
+
+
+# ------------------------------------------------------------------ the season so far (experiment 107)
+def _games(days_rs=(1, 1, 2, 3, 3, 3, 4, 5), days_po=(9, 10)):
+    """A season's games table: regular-season games on the given days of the month, then playoff games."""
+    import pandas as pd
+    days = [*days_rs, *days_po]
+    return pd.DataFrame({"game_id": [f"g{k:02d}" for k in range(len(days))],
+                         "phase": ["RS"] * len(days_rs) + ["PO"] * len(days_po),
+                         "game_date": pd.to_datetime([f"2024-01-{day:02d}" for day in days]),
+                         "game_idx": range(len(days))})
+
+
+def test_the_season_so_far_ends_with_the_day_its_share_is_reached_and_holds_no_playoff_game():
+    from openrapm.data.panel import season_to_date
+    games = _games()
+    # a quarter of 8 regular-season games is reached with the 2nd, on day 1: both of day 1's games
+    assert season_to_date(games, 0.25) == ({"g00", "g01"}, 0.25)
+    # half is reached with the 4th, on day 3, whose three games all count: 6 of 8
+    assert season_to_date(games, 0.5) == ({"g00", "g01", "g02", "g03", "g04", "g05"}, 0.75)
+    assert not {"g08", "g09"} & season_to_date(games, 0.99)[0]
+
+
+def test_the_season_so_far_is_a_share_between_0_and_1():
+    import pytest
+
+    from openrapm.data.panel import season_to_date
+    for share in (0.0, 1.0, 1.5):
+        with pytest.raises(ValueError, match="share between 0 and 1"):
+            season_to_date(_games(), share)

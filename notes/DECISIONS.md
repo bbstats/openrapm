@@ -9532,3 +9532,107 @@ standard deviation 1.50 to 1.58, defense 1.60 to 1.43.
 - **Checks.**  755 tests pass; the consensus tests pass (10 passed, the known backup-bigs failure); `openrapm site
   --bias --openrapm-decomposition --similarity` passes every identity; the bias page's six type names added to
   `site.NAMES`.
+
+
+## Experiment 107: the season so far, and the box-score prior's part-season rows (the owner, 2026-10-23: "we need to CLEANLY support mid-season. the best way I think to deal with that is to add smaller chunks to the prior builds ... it would be good to add in partial seasons - 1/4, 1/2, 3/4 as well - to better support early season data? really just need to test if it helps on 'early seasons'", then "want to support 'at any point in the season' really" and "things are tuned for a 'single season's scale' yknow?"; registered before any result)
+
+- **What is tuned at a whole season's scale.**
+
+  | piece | tuned on | a rating of a season's first quarter |
+  |---|---|---|
+  | box-score prior | rows of one, two and three seasons and whole careers: `row_seasons` 1 or more | has never seen a box score of under a season; a starter's quarter season looks like a bench player's whole season |
+  | step 4's multipliers | ratings from three quarters and nine tenths of a season, read to a whole one | fitted for the wrong amount of evidence |
+  | the ridge penalty, 13,037 | the year-over-year test of whole seasons | scale-free as a prior variance; not re-tuned here |
+  | the prior scale | the season's own games | refitted on the season so far, noisier |
+  | the second prior's line | swaps of three-quarter seasons | not re-tuned here |
+
+  The smoke test (2024 at a quarter, today's boosters, 308 games fitted, 1,004 scored): the test games' best scales
+  on the step-3 ratings are 0.64 on offense and 0.56 on defense, against 0.76 and 1.00 on a random quarter fold of
+  1997; the in-sample prior scale 1.13 on offense against 2.3 to 4.5 over whole seasons.
+- **The test, new.**  `openrapm folds --cut SHARE` rates each season from the season so far,
+  `data.panel.season_to_date`: every regular-season game through the day the first SHARE of the regular season had
+  been played (2024 at 0.25: 308 games through 2023-12-07, a share of 0.2504), every input rebuilt from those games as
+  the random folds rebuild theirs, and scores it on every game after that day, the playoffs included.  One fold a
+  season, `split` "date"; `data.within_folds` refuses such folds unless a reader asks (`allow_date`), so step 4 of
+  whole seasons never fits on them.  Check 151 reads them as any system: its step 4 is then refit at the cut, each
+  season's multipliers from the 8 nearest seasons' own seasons so far under the test rule; `--step4-from LABEL:SYSTEM`
+  fits it instead on another system's random folds, the step 4 a season so far would get from today's code.
+- **The candidate.**  `openrapm rate --part-season-rows 0.25,0.5,0.75` (settings.PriorSettings.part_season_shares):
+  every training season so far at a quarter, a half and three quarters joins the training rows, one chunk row each,
+  from `openrapm data panel --so-far 0.25,0.5,0.75` (outputs/season_panel_so_far.parquet, gated like the season
+  panel).  Its label is the player's, as every row's; its `row_seasons` its share of the regular season; its weight
+  its share of the chunk rows' possessions, so each player's rows still weigh twice his label.  A rating of a season so
+  far tells the boosters its share (`box_prior.rated_rows`); a whole season says 1, and so do step 4's random folds,
+  which stand in for a whole season.  Boosters trained without part-season rows are told 1 at every cut.  Without the
+  setting the training rows equal the committed code's to the byte on the real panel (both sides, 1997-2022 and
+  2026, 33,964 and 33,968 rows).
+- **The readings.**  At 0.25, 0.5 and 0.75, every season 1997-2026, within-season WOWY by stints on the rest of the
+  season, by era: (1) today's boosters with step 4 of whole seasons against step 4 refit at the cut, which says how
+  far the whole-season tuning is off; (2) the part-season boosters against today's, each with step 4 refit at the
+  cut, the question asked; (3) whole seasons, the chain: WOWY on the candidate's own random folds against inputs99,
+  the year-over-year test against layers106, the 2026 top 20.
+- **Fixed before the result.**  A gain at the cuts must hold in every era.  Whole-season ratings must not get worse:
+  WOWY in every era, the year-over-year guard at z +2.
+- **Runs.**  `scratch/2026-10-23_so_far/stage_a.sh`, `stage_b.sh`, `stage_c.sh`, log `outputs/so_far107.log`; folds
+  `outputs/within/inputs99_cut25`, `_cut50`, `_cut75` and `parts107_cut25`, `_cut50`, `_cut75`; boosters
+  `outputs/prior_models_parts107.pkl`; era tables `scratch/2026-10-23_so_far/eras.py`.
+
+### Experiment 107: result (2026-10-23, `outputs/so_far107.log`, `outputs/parts107_chain.log`; `scratch/2026-10-23_so_far/`)
+
+The scale below is the season page's on the within-season WOWY test of the rest of each season: ratings of zero score
+0, today's prior with step 4 refit at the cut 100, each season's score averaged (`scores.py`, `zero_wowy.py`).
+
+| share played | today's prior, step 4 of whole seasons | today's prior, refit | part-season prior, refit | part-season prior, step 4 of whole seasons | today's prior, no step 4 | part-season prior, no step 4 |
+|---|---|---|---|---|---|---|
+| 0.25 | 90.1 | 100 | 100.4 | 90.4 | 31.4 | 30.9 |
+| 0.50 | 99.5 | 100 | 100.2 | 99.7 | 70.1 | 69.8 |
+| 0.75 | 101.9 | 100 | 100.3 | 102.3 | 82.0 | 82.3 |
+
+- **The season so far, today's prior.**  Step 4 of whole seasons on a quarter season: +1.02 per season against the
+  refit, z +4.65, 6 of 30 seasons better, every era (95.1 / 88.8 / 86.4); half a season a tie (-0.009, z -0.09);
+  three quarters better than the refit (-0.377, z -3.69, 23 of 30), likely the WOWY test's preference for wider
+  ratings (trap 39) and a refit on 8 folds against 96.  The refit's team layer at a quarter season: prior part offense
+  0.44-0.47 and defense 0.50-0.62 by era, against 0.66-0.70 and 0.80-0.93 on whole seasons; games' part 1.59-2.03 and
+  2.10-2.58 against 1.34-1.41 and 1.55-1.58 (`multipliers.py`, the defense factor not applied).
+- **The part-season rows at the cuts**, each prior with step 4 refit at the cut: 0.25 -0.046, z -4.54, 26 of 30 (by
+  era -0.017 z -0.67, -0.067 z -6.79, -0.055 z -4.66); 0.50 -0.034, z -3.67, 22 of 30 (-0.028 z -1.45, -0.035 z -3.44,
+  -0.038 z -2.07); 0.75 -0.051, z -3.69, 23 of 30 (-0.060 z -3.34, -0.016 z -0.67, -0.078 z -2.86).  Better in all
+  nine era cells, two of them ties.  Before step 4, worse at a quarter season (+0.061, z +2.07).
+- **The rows do not make the prior less sure of itself early.**  Players with 500+ possessions, possession-weighted
+  standard deviations, today's prior at a quarter, a half, three quarters and the whole season: the booster's answer
+  on offense 0.614 / 0.611 / 0.607 / 0.600; with the second prior 1.950 / 1.983 / 1.998 / 1.993; the prior scale
+  fitted on those games 1.44 / 1.33 / 1.29 / 1.26; the prior part 2.79 / 2.62 / 2.56 / 2.50.  The part-season prior's
+  answer at a quarter: 0.592 on offense, 0.511 on defense, against 0.614 and 0.486; its refit multipliers equal today's
+  to 0.01.  So the early overconfidence is not in the booster: part of it is the prior scale, fitted on the same games
+  the box score comes from, and the rest is a season so far predicting the rest of its season less well.  The rows'
+  gain shows only after step 4.
+- **Whole seasons, the chain** (`outputs/parts107_chain.log`): the within-season WOWY test -0.031, z -3.91 (Newey-West
+  -2.96), 23 of 30; by era -0.037 z -3.45 8 of 10, -0.036 z -3.33 9 of 10, -0.021 z -1.08 6 of 10; on the scale above
+  100.18 / 100.18 / 100.11, where today's ratings explain 19.65 a season over ratings of zero.  The year-over-year
+  test, team-games, both directions: -0.023, z -2.20 (clustered -2.42), 35 of 56; the season before predicting
+  forward -0.0005, z -0.03; the season after predicting back -0.046, z -3.18.  The chain's noise control,
+  noise_bags10, reads +1.13 at step 4: it is built on the stints before the parser fixes, so it is no noise control
+  for inputs99, and none exists.
+- **2026 top 20**, the test-setting tables, layers106 against parts107: the same twenty players, the top nine in the
+  same order; Karl-Anthony Towns 16th to 12th (+0.14), Neemias Queta 13th to 11th (+0.12), Donovan Mitchell 10th to
+  13th (-0.08); Luka Dončić +0.24, Nikola Jokić +0.14, Victor Wembanyama -0.09.  Players with 1,000+ possessions: median
+  move 0.05, ninetieth percentile 0.13, largest 0.27 (Ariel Hukporti -0.27, Jaxson Hayes -0.26, Tyrese Maxey -0.24;
+  Herbert Jones +0.21), correlation 0.9993.  2026 at a quarter season, through early December 2025, both priors with
+  step 4 refit: the same top 20; median move 0.05, largest 0.25 (Zach LaVine -0.25, Kevin Durant -0.24, Luka Dončić
+  +0.19).  Step 4 of whole seasons on that quarter season puts Shai Gilgeous-Alexander at +9.9 against the refit's
+  +7.0, the order nearly the same.
+- **Cost.**  Rating thirty seasons at the test setting in 2 processes: 43 minutes against 25.  The season-so-far
+  panel: 10 minutes.  The folds of a cut: 7 minutes.
+- **Verdict:** pending the owner.
+
+## Experiment 107 ADOPTED, not published (2026-10-23, the owner: "Sure adopt then build the shrink by share")
+
+- **The setting.**  `settings.PriorSettings.part_season_shares = (0.25, 0.5, 0.75)`, the default of `openrapm rate` and
+  `build` (`--part-season-rows ""` trains without them); every build now reads `outputs/season_panel_so_far.parquet`,
+  `openrapm data panel --so-far 0.25,0.5,0.75` after `openrapm data panel` (README.md).  Step 4's folds are its own,
+  `settings.ShrinkSettings.folds_tag = "parts107_early,parts107_within"`, read to a full season with its own tenth
+  folds, `extrapolate_folds_tag = "parts107_k10"` (`openrapm folds --models parts107 --base
+  season_ratings_parts107_step3 --seasons 1997-2026 --tag parts107_k10 --folds-per-repeat 10`).
+- **The chain's incumbent** is parts107: `INC_NAME`, `INC_SYSTEM` parts107, `INC_FOLDS` parts107_early,parts107_within,
+  `AUDIT_REF` parts107_within.  The noise control is still noise_bags10, built before experiment 94's parser fixes.
+- **Not published.**  The product table and the site still carry experiment 106.

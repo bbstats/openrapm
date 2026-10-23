@@ -126,6 +126,7 @@ def chosen_settings(args: argparse.Namespace) -> Settings:
                                  booster_file=BOOSTER_FILE.format(args.booster_params),
                                  fold_assignment=args.fold_assignment, era_halflife=float(args.era_halflife),
                                  bags=int(args.bags), row_labels=args.row_labels,
+                                 part_season_shares=tuple(args.part_season_rows),
                                  second_prior=args.second_prior,
                                  second_prior_team_totals=args.second_prior_team_totals,
                                  second_prior_inputs=args.second_prior_inputs,
@@ -180,7 +181,8 @@ def _run_folds(args: argparse.Namespace, cfg: dict) -> int:
     if folds_in_parts(cfg, args.seasons, args.tag, args.jobs, args.argv):
         return 0
     return run_folds(cfg, args.models, args.base, args.seasons, args.tag, args.reproduce_only, args.pieces,
-                     args.whole_season_inputs, args.whole_season_context, args.folds_per_repeat, args.repeats)
+                     args.whole_season_inputs, args.whole_season_context, args.folds_per_repeat, args.repeats,
+                     args.cut)
 
 
 def _run_second_prior(args: argparse.Namespace, cfg: dict) -> int:
@@ -248,6 +250,11 @@ def _add_setting_options(parser) -> None:
                              "the career row is dropped, so no label shares a game with its box score.  nearest: "
                              "each chunk row carries his RAPM over only the season before it and the season after "
                              "it (default %(default)s)")
+    parser.add_argument("--part-season-rows", type=parse_shares, default=PRODUCT.prior.part_season_shares,
+                        metavar="SHARES",
+                        help="the box-score prior also trains on each training season so far at these shares of its "
+                             "regular season, comma-separated, from the panel `openrapm data panel --so-far` writes; "
+                             "\"\" for none, as before experiment 107 (default 0.25,0.5,0.75, as shipped)")
     parser.add_argument("--unshrink-labels", choices=tuple(UNSHRINK_LABELS), default=SHIPPED_UNSHRINK,
                         help="defense: only the defensive label is un-shrunk before the prior learns it, shipped.  "
                              "both: the offensive label too (default %(default)s)")
@@ -342,6 +349,23 @@ def parse_defence_factors(text) -> tuple:
 def format_defence_factors(factors: tuple) -> str:
     """((0, 0.89), (2017, 0.84)) -> "0.89,2017:0.84", the form --defence-factor reads."""
     return ",".join([f"{factors[0][1]:g}"] + [f"{first}:{factor:g}" for first, factor in factors[1:]])
+
+
+def parse_share(text) -> float:
+    """A share of the regular season strictly between 0 and 1: "0.25" gives 0.25."""
+    try:
+        share = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a number") from None
+    if not 0.0 < share < 1.0:
+        raise argparse.ArgumentTypeError(f"{text} is not a share between 0 and 1")
+    return share
+
+
+def parse_shares(text) -> tuple:
+    """Shares of the regular season, comma-separated, each strictly between 0 and 1: "0.25,0.5" gives (0.25, 0.5);
+    "" gives ()."""
+    return tuple(sorted({parse_share(part) for part in str(text).split(",") if part.strip()}))
 
 
 def parse_span(text) -> tuple:
@@ -486,6 +510,10 @@ def _add_folds(commands) -> None:
                             "are built with 4 (default %(default)s)")
     folds.add_argument("--repeats", type=int, default=3, metavar="R",
                        help="how many times the games are assigned over again (default %(default)s)")
+    folds.add_argument("--cut", type=parse_share, default=None, metavar="SHARE",
+                       help="the season so far: one fold a season, rated from its games through the day SHARE of its "
+                            "regular season had been played (0.25 a quarter) and scored on the rest of the season, "
+                            "playoffs included, in place of the random folds.  Never for step 4")
     _add_jobs(folds)
     folds.set_defaults(run=_run_folds)
 

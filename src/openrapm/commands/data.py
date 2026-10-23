@@ -17,6 +17,8 @@
                                                   bio feed, event counts and careers
     openrapm data panel --migrate-from FILE       the season panel from one written under the names used before
                                                   2026-10-11 (done once, on 2026-10-11)
+    openrapm data panel --so-far 0.25,0.5,0.75    each season so far at those shares of its regular season
+                                                  (paths.panel_so_far), the box-score prior's part-season rows
 
 Example, from nothing: `openrapm data ingest 1997 2026 RS,PO` (days, resumable: every file is cached), then
 `openrapm data stints 1997 2026 RS,PO`, then `openrapm data events 1997 2026` (minutes), then `openrapm data careers`
@@ -227,11 +229,22 @@ def _build(args: argparse.Namespace, cfg: dict) -> None:
           f"({time.time() - started:.0f}s)", flush=True)
 
 
+def _build_so_far(args: argparse.Namespace, cfg: dict) -> None:
+    from ..data.panel import write_panel_so_far
+    from .cli import parse_shares
+    started = time.time()
+    target, panel = write_panel_so_far(cfg, parse_shares(args.so_far), force=args.force)
+    print(f"wrote {target}: {len(panel)} rows, {panel.season.nunique()} seasons, shares "
+          f"{', '.join(f'{share:g}' for share in sorted(panel.share.unique()))} ({time.time() - started:.0f}s)",
+          flush=True)
+
+
 def run_panel(args: argparse.Namespace, cfg: dict) -> int:
-    """The season panel: built from the stints and box scores, or migrated from the old-named one.  An existing
-    panel stops the command with one line saying so."""
+    """The season panel: built from the stints and box scores, or migrated from the old-named one; with --so-far,
+    the panel of each season so far.  An existing panel stops the command with one line saying so."""
+    build = _migrate if args.migrate_from else (_build_so_far if args.so_far else _build)
     try:
-        (_migrate if args.migrate_from else _build)(args, cfg)
+        build(args, cfg)
     except FileExistsError as error:
         raise SystemExit(str(error)) from None
     return 0
@@ -360,6 +373,10 @@ def _add_panel(steps) -> None:
     panel.add_argument("--force", action="store_true", help="replace an existing season panel")
     panel.add_argument("--migrate-from", metavar="FILE",
                        help="the old-named panel, e.g. outputs/role_panel_season.parquet")
+    panel.add_argument("--so-far", metavar="SHARES", default="",
+                       help="instead, each season so far at these shares of its regular season, comma-separated "
+                            "(0.25,0.5,0.75), every input from those games alone, written to paths.panel_so_far for "
+                            "the box-score prior's part-season rows (`openrapm rate --part-season-rows`)")
     panel.set_defaults(run=run_panel)
 
 

@@ -58,5 +58,6 @@ paths:
   shot_curves: data/shotcurve           # the league's make probability by distance, one file per season
   outputs: outputs                      # the ratings tables, the saved boosters, the checks' outputs
   panel: outputs/season_panel.parquet   # openrapm data panel: one row per player, season and side
+  panel_so_far: outputs/season_panel_so_far.parquet   # openrapm data panel --so-far: each season so far, by share
   within: outputs/within                # openrapm folds: the within-season folds, one folder per tag
   event_counts: data/event_counts       # openrapm data events: play-by-play counts per game, player and phase

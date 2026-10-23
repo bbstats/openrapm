@@ -1,6 +1,8 @@
 """The within-season folds (src/openrapm/commands/within_season.py): the fold assignment, the saved models it
 accepts, and the prior it rebuilds from them.  The folds themselves need the real seasons; these parts do not."""
 from dataclasses import asdict
+from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -134,7 +136,7 @@ def test_boosters_saved_before_the_rename_are_read_under_the_plain_names(tmp_pat
 def test_the_leak_control_feeds_the_boosters_the_whole_season_and_the_ridge_the_fit_games(monkeypatch):
     """--whole-season-inputs: the boosters read the panel handed in, the ridge still the world's own designs."""
     read, rated = [], {}
-    monkeypatch.setattr(ws, "saved_prior", lambda panel, side, saved: read.append(panel) or {1: 0.0})
+    monkeypatch.setattr(ws, "saved_prior", lambda panel, side, saved, share=1.0: read.append(panel) or {1: 0.0})
 
     def rate_season(designs, prior, settings, season):
         rated.update(designs)
@@ -179,3 +181,44 @@ def test_boosters_with_both_labels_un_shrunk_are_accepted():
     """Experiment 102 un-shrinks the offensive label too; the folds only read the boosters, so its file is accepted
     and one with no label un-shrunk is still refused (test_models_from_other_settings_are_refused)."""
     ws.check_models({**LEGACY_META, "unshrink": ["offense", "defense"]})
+
+
+# ------------------------------------------------------------------ the season so far, --cut (experiment 107)
+def _season_games():
+    days = [1, 1, 2, 3, 3, 3, 4, 5, 9, 10]
+    return pd.DataFrame({"game_id": [f"g{k:02d}" for k in range(len(days))], "phase": ["RS"] * 8 + ["PO"] * 2,
+                         "game_date": pd.to_datetime([f"2024-01-{day:02d}" for day in days]),
+                         "game_idx": range(len(days))})
+
+
+def test_a_date_fold_fits_on_the_season_so_far_and_holds_back_the_rest_with_the_playoffs():
+    folds = ws.date_folds(_season_games(), 0.25)
+    assert folds.name == "r0"
+    assert sorted(folds.index[folds == -1]) == ["g00", "g01"]
+    assert sorted(folds.index[folds == 0]) == [f"g{k:02d}" for k in range(2, 10)]
+
+
+def test_only_boosters_trained_on_part_seasons_are_told_the_share_and_never_for_the_whole_season():
+    games = _season_games()
+    every = set(games.game_id)
+    so_far = {"g00", "g01"}
+
+    def run(cut, part_season_rows):
+        return ws.SeasonRun(2024, {}, {ws.SCORE_TARGET: SimpleNamespace(games=games)}, None, {}, Path("."),
+                            cut=cut, part_season_rows=part_season_rows)
+    assert run(0.25, True).prior_share(so_far) == 0.25
+    assert run(0.25, True).prior_share(every) == 1.0
+    assert run(0.25, False).prior_share(so_far) == 1.0
+    assert run(None, True).prior_share(so_far) == 1.0
+    assert ws.trained_on_part_seasons({"settings": {"prior": {"part_season_shares": [0.25]}}})
+    assert not ws.trained_on_part_seasons({"settings": {"prior": {"part_season_shares": []}}})
+    assert not ws.trained_on_part_seasons({})
+
+
+def test_step_4_never_reads_a_date_fold_unless_asked():
+    from openrapm.data.within_folds import check_fold_record
+    record = {"summary": {"rate_from": "rest", "split": "date"}, "checks": {"a check": True}}
+    with pytest.raises(ValueError, match="date folds"):
+        check_fold_record(record, "2024_r0_f0")
+    check_fold_record(record, "2024_r0_f0", allow_date=True)
+    check_fold_record({"summary": {"rate_from": "rest"}, "checks": {}}, "2024_r0_f0")

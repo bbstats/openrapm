@@ -101,8 +101,10 @@ from .seasons import drop_untrainable
 from .shots import DEFENSE_TARGETS, SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS, player_shot_frame
 
 __all__ = ["OFFENCE", "DEFENCE_ALL", "PANEL_TARGETS", "SeasonTables", "roles_from_games", "score_state",
-           "playoff_share", "cut_design", "fit_designs", "SeasonSources", "SeasonPanel", "season_panel",
-           "fill_missing_score_state", "build_panel", "write_panel", "trainable_panel", "panel_and_trainable_seasons",
+           "playoff_share", "cut_design", "fit_designs", "season_to_date", "SeasonSources", "SeasonPanel",
+           "season_panel",
+           "fill_missing_score_state", "build_panel", "write_panel", "build_panel_so_far", "write_panel_so_far",
+           "trainable_panel", "trainable_panel_so_far", "panel_and_trainable_seasons",
            "panel_from_old_names", "migrate_panel"]
 
 OFFENCE = "points_with_expected_free_throws"
@@ -270,6 +272,28 @@ def fit_designs(season: int, cfg: dict, whole: dict, fit_game_ids) -> dict:
         else:
             out[target] = points if target == "pts" else cut_design(design, fit_idx)
     return out
+
+
+def season_to_date(games: pd.DataFrame, share: float) -> tuple[set, float]:
+    """(the game ids of the season so far, the share of the regular season they hold) on the day the first `share` of
+    the season's regular-season games had been played: every regular-season game of that day or before it, in date
+    order (`game_idx`), and no playoff game.
+
+    A rating built from these games is the rating as it stood that evening; the games after it, the rest of the regular
+    season and the playoffs, are the ones it can be scored on (`openrapm folds --cut`).  The share returned counts the
+    regular-season games kept over all of the season's regular-season games, a little above `share` when that day
+    held more games.
+
+    Example: 2024 has 1,230 regular-season games.  A quarter of them, 307.5, is reached with the 308th, played on
+    2023-12-07, the last game of that day, so the season so far is 308 games and its share 308 / 1,230 = 0.2504.
+    """
+    if not 0.0 < float(share) < 1.0:
+        raise ValueError(f"the season so far is a share between 0 and 1 of the regular season, not {share}")
+    regular = games[games["phase"] == "RS"].sort_values("game_idx", kind="stable")
+    reached = int(np.ceil(float(share) * len(regular)))
+    last_day = regular["game_date"].iloc[max(reached, 1) - 1]
+    kept = regular[regular["game_date"] <= last_day]
+    return set(kept["game_id"].astype(str)), len(kept) / len(regular)
 
 
 # ----------------------------------------------------------------------------------------- one season's rows
@@ -444,6 +468,49 @@ def build_panel(cfg: dict, seasons=None) -> pd.DataFrame:
     return fill_missing_score_state(pd.concat(parts, ignore_index=True))
 
 
+def build_panel_so_far(cfg: dict, shares, seasons=None) -> pd.DataFrame:
+    """Every season's rows of each season so far, at each share of `shares`, in season order: the rows `season_panel`
+    builds from the games of `season_to_date` alone, as `openrapm folds --cut` rates them, with two more columns,
+    `share` (the share asked for) and `season_share` (the share of the regular season those games hold).  The score
+    state is filled share by share (`fill_missing_score_state`).  The box-score prior's part-season rows read it
+    (box_prior.training_rows, experiment 107).
+
+    Example: at 0.25, 2024's rows come from its first 308 games, through 2023-12-07, and say season_share 0.2504.
+    """
+    seasons = (range(int(cfg["first_season"]), int(cfg["last_season"]) + 1) if seasons is None else seasons)
+    roles = build_roles(cfg)
+    inputs = player_season_inputs(roles, cap=share_cap(cfg))
+    debut = careers_before(cfg, roles)
+    designs = DesignCache(cfg)
+    parts = []
+    for season in seasons:
+        started = time.time()
+        whole = {target: designs.season(int(season), target) for target in ("pts", *PANEL_TARGETS)}
+        sources = SeasonSources(SeasonTables(season, cfg), roles, inputs, debut)
+        for share in shares:
+            fit, season_share = season_to_date(whole["pts"].games, share)
+            rows = season_panel(int(season), cfg, fit_designs(int(season), cfg, whole, fit), sources, fit).rows
+            parts.append(rows.assign(share=float(share), season_share=season_share))
+        designs.clear()
+        print(f"  {season}: {sum(len(part) for part in parts[-len(shares):])} rows over {len(shares)} shares "
+              f"({time.time() - started:.1f}s)", flush=True)
+    panel = pd.concat(parts, ignore_index=True)
+    return pd.concat([fill_missing_score_state(group.copy()) for _, group in panel.groupby("share", sort=True)],
+                     ignore_index=True)
+
+
+def write_panel_so_far(cfg: dict, shares, force: bool = False, seasons=None) -> tuple[Path, pd.DataFrame]:
+    """Build the season-so-far panel (`build_panel_so_far`) and write it to paths.panel_so_far: (where, the panel).
+    An existing file is kept unless `force`."""
+    target = resolve(cfg, "panel_so_far")
+    if target.exists() and not force:
+        raise FileExistsError(f"{target} exists; pass --force to rebuild it")
+    panel = build_panel_so_far(cfg, shares, seasons)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    panel.to_parquet(target, index=False)
+    return target, panel
+
+
 def write_panel(cfg: dict, force: bool = False, seasons=None) -> tuple[Path, pd.DataFrame]:
     """Build the panel (`build_panel`) and write it to paths.panel: (where, the panel).  An existing panel is kept
     unless `force`, and the check comes before the build, which takes minutes."""
@@ -480,6 +547,16 @@ def panel_keys(cfg: dict) -> pd.DataFrame:
 def trainable_panel(cfg: dict) -> pd.DataFrame:
     """The season panel without the seasons nothing may be fitted on (none while no season is in progress)."""
     panel, _ = drop_untrainable(_read(cfg), cfg, what="the season panel")
+    return panel
+
+
+def trainable_panel_so_far(cfg: dict) -> pd.DataFrame:
+    """The season-so-far panel (`build_panel_so_far`) without the seasons nothing may be fitted on: a season in
+    progress trains on none of its days."""
+    path = resolve(cfg, "panel_so_far")
+    if not path.exists():
+        raise FileNotFoundError(f"{path} does not exist; build it with `openrapm data panel --so-far 0.25,0.5,0.75`")
+    panel, _ = drop_untrainable(pd.read_parquet(path), cfg, what="the season-so-far panel")
     return panel
 
 

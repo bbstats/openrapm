@@ -15,20 +15,29 @@ Words used below
     career row    the average over every season he has outside the unseen ones
     chunk row     the average over a run of 1, 2 or 3 consecutive seasons of his; consecutive among the
                   seasons he has, so a run may straddle the rated season
+    part-season row   one of his training seasons so far: its panel row rebuilt from the games through the day a
+                  share of its regular season had been played (data.panel.season_to_date), a quarter, a half and three
+                  quarters when settings.PriorSettings.part_season_shares asks; none as shipped
     row weight    how much a training row counts in the fit
     player fold   one of five groups of players.  Each player's prior comes from the booster fitted without
                   his fold, so it cannot have learned "this box score is LeBron" and returned his label
 
 Every row carries the player's career label, so what differs between his rows is only how much evidence the
 box score rests on; two inputs say how much (`row_possessions`, the possessions behind the row, and
-`row_seasons`, the seasons it covers).  With `settings.PriorSettings.row_labels` "outside" (experiment 79) each chunk
+`row_seasons`, the seasons it covers, a part-season row its share of the regular season).  Part-season rows
+(experiment 107; the owner, 2026-10-23: "want to support 'at any point in the season' really") teach the booster what
+a box score of a season so far says, so a season can be rated on any day of it with `row_seasons` that day's share; a
+booster trained on whole seasons only has seen no row under one season, and a quarter-season box score of a starter
+looks to it like a whole season of a bench player.
+
+With `settings.PriorSettings.row_labels` "outside" (experiment 79) each chunk
 row carries instead his RAPM over the seasons outside its own, and the career row, whose box score covers them all,
 is dropped: no row's label shares a game with its box score.  With "nearest" (experiment 83) each chunk row carries
 his RAPM over only the season before it and the season after it (rapm.nearest_labels), through the same path, so its
 label is the player at about the row's own age.  The weights:
 
     career row      weight = L
-    chunk row c     weight = L x poss_c / (sum of poss over his chunk rows)
+    chunk row c     weight = L x poss_c / (sum of poss over his chunk rows), his part-season rows among them
 
     L        the possessions behind his label (step 1)
     poss_c   the possessions behind chunk row c
@@ -133,6 +142,17 @@ def career_rows(label: pd.DataFrame, rows: pd.DataFrame, column: str, feature_na
     return out.assign(label=out[column].to_numpy(float), row_weight=out.label_possessions.to_numpy(float))
 
 
+def part_season_members(part_seasons: pd.DataFrame) -> pd.DataFrame:
+    """The part-season rows as members of chunks of their own, one each, keyed "player:part<share>:season", their
+    `season_share` (the share of the regular season the row's games hold) kept for `row_seasons`.
+
+    Example: player 7's 2011 season so far at a quarter is the chunk "7:part0.25:2011".
+    """
+    key = (part_seasons.player_id.astype(str) + ":part" + part_seasons.share.map("{:g}".format) + ":"
+           + part_seasons.season.astype(str))
+    return part_seasons.assign(chunk=key.to_numpy())
+
+
 def season_runs(rows: pd.DataFrame, chunk_sizes=(1, 2, 3)) -> pd.DataFrame:
     """`rows` repeated once per run each row belongs to, with the run's key ("player:size:start") in `chunk`.
 
@@ -175,13 +195,19 @@ def _outside_values(chunks: pd.DataFrame, members: pd.DataFrame, outside: dict, 
 
 
 def training_rows(label: pd.DataFrame, rows: pd.DataFrame, column: str, feature_names, chunk_sizes=(1, 2, 3),
-                  panel_columns=PANEL_INPUTS, outside: dict | None = None) -> pd.DataFrame:
+                  panel_columns=PANEL_INPUTS, outside: dict | None = None,
+                  part_seasons: pd.DataFrame | None = None) -> pd.DataFrame:
     """The career row and every chunk row of each labelled player, indexed by player_id.
 
     `label` is step 1's table for this side (player_id, `column`, possessions); `rows` the side's panel rows for
     the training seasons.  The row order (career rows by player, then chunk rows by run key) is what LightGBM
     is handed, so it is kept exactly.  Columns beside the averaged inputs: `column`, label_possessions, label,
     row_weight, row_possessions, row_seasons.
+
+    `part_seasons`, the side's rows of the training seasons so far (data.panel.build_panel_so_far: each with `share`
+    and `season_share`), adds a chunk row for each (`part_season_members`): its row_seasons is its season_share, its
+    label the player's, and it shares the chunk rows' weight by its possessions.  None, as shipped, adds none, and the
+    rows are those of before experiment 107 to the byte.
 
     With `outside` ({set of seasons: this side's label table with those seasons left out}, rapm.outside_labels),
     each chunk row is labelled with the player's RAPM over the seasons outside its own, so its box score and its
@@ -195,10 +221,13 @@ def training_rows(label: pd.DataFrame, rows: pd.DataFrame, column: str, feature_
     career = career.assign(row_possessions=per_player.possessions.sum().reindex(career.index).to_numpy(float),
                            row_seasons=per_player.season.nunique().reindex(career.index).to_numpy(float))
     members = season_runs(rows, chunk_sizes)
+    if part_seasons is not None:
+        members = pd.concat([members.assign(season_share=1.0), part_season_members(part_seasons)], ignore_index=True)
     chunks = average_over_seasons(members, feature_names, by=members.chunk, panel_columns=panel_columns)
     grouped = members.groupby("chunk")
     chunks["row_possessions"] = grouped.possessions.sum().reindex(chunks.index).to_numpy(float)
-    chunks["row_seasons"] = grouped.season.nunique().reindex(chunks.index).to_numpy(float)
+    covered = grouped.season.nunique() if part_seasons is None else grouped.season_share.sum()
+    chunks["row_seasons"] = covered.reindex(chunks.index).to_numpy(float)
     chunks["player_id"] = grouped.player_id.first().reindex(chunks.index).to_numpy()
     chunks = chunks.join(_labels(label, column), on="player_id", how="inner")
     if outside is not None:
@@ -366,10 +395,12 @@ def fit_prior(train: pd.DataFrame, inputs, params: dict, n_folds: int = 5, fold_
     return BaggedPrior(members=members, inputs=list(inputs))
 
 
-def rated_rows(season_rows: pd.DataFrame, feature_names) -> pd.DataFrame:
-    """The rated season's own panel rows, derived, with row_possessions = his possessions and row_seasons = 1."""
+def rated_rows(season_rows: pd.DataFrame, feature_names, share: float = 1.0) -> pd.DataFrame:
+    """The rated season's own panel rows, derived, with row_possessions = his possessions and row_seasons = `share`:
+    1 for a whole season; the share of the regular season played so far for a rating of the season so far
+    (`openrapm folds --cut`), which only boosters trained with part-season rows are told."""
     rows = add_features(season_rows.copy(), feature_names)
-    return rows.assign(row_possessions=rows.possessions.to_numpy(float), row_seasons=1.0)
+    return rows.assign(row_possessions=rows.possessions.to_numpy(float), row_seasons=float(share))
 
 
 def predict(prior: OutOfPlayerPrior | BaggedPrior, rows: pd.DataFrame) -> np.ndarray:
@@ -417,8 +448,21 @@ def era_kernel(seasons, rated: int, half_life: float, start: int = 1) -> np.ndar
     return 0.5 ** (distance / float(half_life))
 
 
+def training_seasons(panel: pd.DataFrame | None, side: str, unseen, season: int, settings) -> pd.DataFrame | None:
+    """A side's rows of `panel` outside the unseen seasons, each with its era kernel when the setting has a half-life
+    (`era_kernel`; on this copy, never on the panel every rated season shares); None for no panel."""
+    if panel is None:
+        return None
+    training = panel[(panel.side == side) & ~panel.season.isin(unseen)]
+    half_life = float(settings.prior.era_halflife)
+    if half_life > 0:
+        training = training.assign(era_kernel=era_kernel(training.season, season, half_life,
+                                                         settings.exclude_neighbours + 1))
+    return training
+
+
 def season_priors(labels: dict, panel: pd.DataFrame, season: int, unseen, settings, params: dict,
-                  outside: dict | None = None) -> dict:
+                  outside: dict | None = None, part_seasons: pd.DataFrame | None = None) -> dict:
     """{"O": SidePrior, "D": SidePrior} for one rated season.
 
     `labels` is step 1's {"O", "D"} tables; `panel` the season panel with the seasons a build may not train on
@@ -427,22 +471,18 @@ def season_priors(labels: dict, panel: pd.DataFrame, season: int, unseen, settin
     setting); `params` each side's LightGBM settings.  Inputs: the shipped list, then row_possessions, row_seasons.
     With an era half-life every training row also counts its era kernel (`era_kernel`), averaged over its seasons
     by possessions like an input.  With `outside` (rapm.outside_labels), every training row is labelled from the
-    seasons outside its own (`training_rows`).
+    seasons outside its own (`training_rows`).  `part_seasons`, the panel of each season so far gated the same way
+    (data.panel.trainable_panel_so_far, the shares asked for), adds the part-season rows of the training seasons.
     """
     half_life = float(settings.prior.era_halflife)
+    columns = [*PANEL_INPUTS, "era_kernel"] if half_life > 0 else PANEL_INPUTS
     out = {}
     for side, column in (("O", "offense"), ("D", "defense")):
         names = list(FEATURE_SETS[settings.prior.feature_set][side])
-        training = panel[(panel.side == side) & ~panel.season.isin(unseen)]
-        columns = PANEL_INPUTS
-        if half_life > 0:
-            # on this side's copy, never on the panel every rated season shares
-            training = training.assign(era_kernel=era_kernel(training.season, season, half_life,
-                                                             settings.exclude_neighbours + 1))
-            columns = [*PANEL_INPUTS, "era_kernel"]
+        training = training_seasons(panel, side, unseen, season, settings)
         side_outside = None if outside is None else {key: tables[side] for key, tables in outside.items()}
         train = training_rows(labels[side], training, column, names, settings.prior.chunk_sizes, columns,
-                              side_outside)
+                              side_outside, training_seasons(part_seasons, side, unseen, season, settings))
         kernel = train.era_kernel.to_numpy(float) if half_life > 0 else None
         model = fit_prior(train, names + ROW_FEATURES, params[side], settings.prior.n_folds,
                           settings.prior.fold_assignment, kernel, settings.prior.bags)

@@ -203,6 +203,25 @@ def test_the_gated_panel_drops_the_season_in_progress(tmp_path):
     assert sorted(set(trainable_panel(cfg).season)) == [2022, 2023]
 
 
+def test_the_gated_season_so_far_panel_drops_the_season_in_progress(tmp_path):
+    """The box-score prior's part-season rows (experiment 107) train on no day of a season still being played."""
+    from openrapm.data.panel import trainable_panel_so_far
+    cfg = _tree(tmp_path, finished_through=2023)
+    stored = tmp_path / "panel_so_far.parquet"
+    _panel([2022, 2023, 2024]).assign(share=0.25).to_parquet(stored, index=False)
+    cfg["paths"] = {**cfg["paths"], "panel_so_far": str(stored)}
+    assert sorted(set(trainable_panel_so_far(cfg).season)) == [2022, 2023]
+
+
+def test_the_season_so_far_panel_is_opened_in_one_place_and_gated_there():
+    pattern = re.compile(r"""resolve\(\s*cfg\s*,\s*["']panel_so_far["']\s*\)""")
+    openers = sorted(p.relative_to(SRC).as_posix() for p in SRC.rglob("*.py")
+                     if pattern.search(p.read_text(encoding="utf-8")))
+    assert openers == ["data/panel.py"]
+    source = (SRC / "commands" / "build.py").read_text(encoding="utf-8")
+    assert "trainable_panel_so_far" in source
+
+
 def test_rate_sums_only_finished_seasons_for_its_labels(tmp_path, monkeypatch):
     """A season in progress may be rated, but its games never reach the labels the prior learns."""
     from openrapm.commands import build
