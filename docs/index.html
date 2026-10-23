@@ -13,6 +13,7 @@
   #find { width: 210px; }
   /* the side buttons sit left of Decomposition, so the button stays under the pointer when they appear */
   .cols { display: inline-flex; gap: 8px; margin-left: auto; }
+  .controls #pct { width: 40px; padding: 0; }
   /* one link: the player's name and the cross that goes back to the list */
   .chip { display: inline-flex; align-items: center; gap: 12px; box-sizing: border-box; height: 40px;
           padding: 0 15px 0 17px; border: 1px solid var(--accent); border-radius: 999px; color: inherit;
@@ -90,6 +91,7 @@
     <span class="cols">
       <span class="seg" id="side" role="group" aria-label="Side" hidden><button type="button" data-side="off" aria-pressed="false">Offense</button><button type="button" data-side="def" aria-pressed="false">Defense</button><button type="button" data-side="total" aria-pressed="true">Total</button></span>
       <button type="button" id="pieces" aria-pressed="false">Decomposition</button>
+      <button type="button" id="pct" aria-pressed="false" title="Percentile among players with 500 or more possessions">%ile</button>
     </span>
   </div>
   <div class="scroll">
@@ -113,8 +115,8 @@
   // the data file's three sides; each holds the five pieces and the rating, in the order PIECES lists them
   const SIDE_FIELD = { off: "o", def: "d", total: "t" };
   const FIELD_SIDE = { o: "off", d: "def", t: "total" };
-  const PIECES = [["box", "Box score"], ["on", "On court"], ["off", "Off court"], ["sos", "Team SOS"],
-                  ["swap", "Swap adjustment"]];
+  // the file's fifth piece, the swap adjustment, is zero since experiment 82 and is not shown
+  const PIECES = [["box", "Box score"], ["on", "On court"], ["off", "Off court"], ["sos", "Team SOS"]];
   // the columns of each view, [key, header]: the ratings view shows each side's rating, the decomposition one
   // side's pieces
   const COLUMNS = { ratings: [["o", "Offense"], ["d", "Defense"], ["t", "Total"], ["p", "Poss."]],
@@ -156,9 +158,40 @@
   // one player's row as the table reads it: each side's rating, and the chosen side's five pieces and rating
   function onSide(r, side) {
     const v = r[SIDE_FIELD[side]];
-    return { n: r.n, id: r.id, p: r.p, tm: r.tm, o: r.o[5], d: r.d[5], t: r.t[5],
-             box: v[0], on: v[1], off: v[2], sos: v[3], swap: v[4], a: v[5] };
+    return { n: r.n, id: r.id, p: r.p, tm: r.tm, o: r.o[5], d: r.d[5], t: r.t[5], rt: r.t[5],
+             box: v[0], on: v[1], off: v[2], sos: v[3], a: v[5] };
   }
+
+  // the percentile button: each number becomes its percentile among the season's players with 500 or more
+  // possessions; a player under 500 gets none.  Remembered like the theme
+  const MIN_POSS = 500, PCT_KEYS = ["o", "d", "t", "box", "on", "off", "sos", "a"];
+  try { state.pct = localStorage.getItem("percentile") === "1"; } catch (e) {}
+  const pctCache = new Map();                         // "season:side" -> id -> that player's percentiles
+  function percentiles(season, side) {
+    const key = season + ":" + side;
+    if (pctCache.has(key)) return pctCache.get(key);
+    const pool = data.rows[season].filter(r => r.p >= MIN_POSS).map(r => onSide(r, side)), out = new Map();
+    for (const r of pool) out.set(r.id, {});
+    for (const k of PCT_KEYS) {
+      // the share of the pool below him, ties counted half
+      const vals = pool.map(r => r[k]).sort((a, b) => a - b), n = vals.length;
+      const below = v => { let lo = 0, hi = n; while (lo < hi) { const m = (lo + hi) >> 1; if (vals[m] < v) lo = m + 1; else hi = m; } return lo; };
+      const atOrBelow = v => { let lo = 0, hi = n; while (lo < hi) { const m = (lo + hi) >> 1; if (vals[m] <= v) lo = m + 1; else hi = m; } return lo; };
+      for (const r of pool) out.get(r.id)[k] = 100 * (below(r[k]) + (atOrBelow(r[k]) - below(r[k])) / 2) / n;
+    }
+    pctCache.set(key, out);
+    return out;
+  }
+  // a row as shown: the numbers, or their percentiles with null under 500 possessions
+  function shownRow(r, side, season) {
+    const x = onSide(r, side);
+    if (!state.pct) return x;
+    const q = percentiles(season, side).get(x.id);
+    for (const k of PCT_KEYS) x[k] = q ? q[k] : null;
+    return x;
+  }
+  // high to low or low to high, a missing percentile always last; ties go to the higher total
+  const byKey = (k, dir) => (a, b) => (a[k] === null) - (b[k] === null) || (a[k] - b[k]) * dir || b.rt - a.rt;
 
   // an address: a place (season, team, player) and the two buttons as they are now, in the order old links have:
   // #season=2026&view=decomposition&side=off&team=SAS&player=1641705.  With a player, the season and team are the
@@ -222,8 +255,8 @@
       // every player of the season is ranked first and the team and name filters come after, so a player found
       // either way keeps his rank among all of them
       const q = fold(state.q);
-      const all = data.rows[state.season].map(r => onSide(r, state.side));
-      all.sort((a, b) => (a[k] - b[k]) * dir || b.t - a.t);
+      const all = data.rows[state.season].map(r => shownRow(r, state.side, state.season));
+      all.sort(byKey(k, dir));
       all.forEach((r, i) => { r.rank = i + 1; });
       rows = all.filter(r => (!state.team || r.tm.split("/").includes(state.team)) && (!q || fold(r.n).includes(q)));
     } else {
@@ -231,7 +264,7 @@
       // season) with the list's tie-break; a stable sort numbers ties as the list does
       const rk = k === "s" ? (decomposition ? "a" : SIDE_FIELD[state.side]) : k;
       rows = careers.get(state.player).map(([s]) => {
-        const them = data.rows[s].map(r => onSide(r, state.side)).sort((a, b) => b[rk] - a[rk] || b.t - a.t);
+        const them = data.rows[s].map(r => shownRow(r, state.side, s)).sort(byKey(rk, -1));
         const i = them.findIndex(r => r.id === state.player);
         return Object.assign(them[i], { rank: i + 1, s: +s });
       });
@@ -249,6 +282,7 @@
           (phone.matches ? `<span class="tm">${links}</span>` : "") + `</td>`;
       return `<tr><td class="rank">${p.rank}</td>${first}<td class="team">${links}</td>` + cols.map(([key]) =>
         `<td${key === bold ? ' class="total"' : ""}>${key === "p" ? whole.format(p.p)
+          : state.pct ? (p[key] === null ? "—" : Math.round(p[key]))
           : decomposition ? fmt(p[key]) : fmt1(p[key])}</td>`).join("") + `</tr>`;
     }).join("");
 
@@ -266,6 +300,7 @@
     $("newer").disabled = state.season === seasons[0];
     $("side").hidden = !decomposition;
     pieces.setAttribute("aria-pressed", decomposition);
+    $("pct").setAttribute("aria-pressed", !!state.pct);
     document.querySelectorAll("[data-side]").forEach(b => b.setAttribute("aria-pressed", b.dataset.side === state.side));
     writeAddress();
   }
@@ -273,8 +308,8 @@
   // the CSV: the ratings view gives each side's rating, the decomposition view every side's pieces; both carry
   // the NBA player id, which the table leaves out.  UTF-8 with a byte-order mark so a spreadsheet opens names like
   // Jokić as written
-  const CSV_PIECES = ["box_score", "on_court_signal", "off_court_adjustment", "team_sos_adjustment",
-                      "swap_adjustment", "openrapm"];
+  const CSV_PIECES = ["box_score", "on_court_signal", "off_court_adjustment", "team_sos_adjustment", "openrapm"];
+  const csvPieces = v => [v[0], v[1], v[2], v[3], v[5]];      // the swap adjustment, v[4], left out
   function downloadCSV(filename, pairs) {
     const q = v => { if (v === null || v === undefined) return "";
                      const s = String(v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
@@ -283,7 +318,7 @@
          ...pairs.map(([per, x]) => [per, x.id, x.n, x.tm, x.o[5], x.d[5], x.t[5], x.p])]
       : [["season", "player_id", "player", "team", "possessions",
           ...["offense", "defense", "total"].flatMap(s => CSV_PIECES.map(k => s + "_" + k))],
-         ...pairs.map(([per, x]) => [per, x.id, x.n, x.tm, x.p, ...x.o, ...x.d, ...x.t])];
+         ...pairs.map(([per, x]) => [per, x.id, x.n, x.tm, x.p, ...csvPieces(x.o), ...csvPieces(x.d), ...csvPieces(x.t)])];
     const text = "\ufeff" + rows.map(r => r.map(q).join(",")).join("\r\n") + "\r\n";
     const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
     const a = Object.assign(document.createElement("a"), { href: url, download: filename });
@@ -324,6 +359,11 @@
   team.addEventListener("change", () => { state.team = team.value; render(); });
   find.addEventListener("input", () => { state.q = find.value; render(); });
   pieces.addEventListener("click", () => { setView(state.view === "ratings" ? "decomposition" : "ratings"); render(); });
+  $("pct").addEventListener("click", () => {
+    state.pct = !state.pct;
+    try { localStorage.setItem("percentile", state.pct ? "1" : "0"); } catch (e) {}
+    render();
+  });
   document.querySelectorAll("[data-side]").forEach(b => b.addEventListener("click", () => {
     if (b.dataset.side !== state.side) { state.side = b.dataset.side; render(); }
   }));
