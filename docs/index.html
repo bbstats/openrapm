@@ -60,7 +60,16 @@
   footer a { color: inherit; }
   @media (max-width: 600px) {
     body { font-size: 13.5px; }
-    #find { width: 150px; }
+    /* the controls in full-width rows: season and team, then Find, then the buttons; the side buttons, when shown,
+       take a row of their own above Decomposition and %ile */
+    .controls { gap: 8px; }
+    .controls [data-list] { flex: 1 1 auto; }
+    .controls .step { flex: 0 0 auto; }
+    #find { width: 100%; flex-basis: 100%; }
+    .cols { width: 100%; flex-wrap: wrap; margin-left: 0; }
+    .cols .seg { flex: 1 1 100%; }
+    .cols .seg button { flex: 1; padding: 0 8px; }
+    #pieces { flex: 1; }
     th, td { padding: 7px 5px; }
     table { font-size: 13px; }
     td.name { white-space: normal; min-width: 96px; }   /* a long name takes two lines so every column fits */
