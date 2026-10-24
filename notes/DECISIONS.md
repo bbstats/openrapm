@@ -9772,3 +9772,40 @@ T.J. McConnell, Jalen Suggs).  Waiting on the owner: publish 107 for every seaso
 - **The reading.**  Check 151, the within-season WOWY test on the stints of the rest of each season, held against
   shipped, at each share, by era: 1997-2006, 2007-2016, 2017-2026.  A win must hold in every era.  Beside it: the prior
   scales each arm used, and 2027's top 20 today under each.
+
+### Experiment 109: result (2026-10-24, `outputs/exp109.log`, `outputs/csv/exp109_eras.csv`, `outputs/exp109_2027.log`; `scratch/2026-10-24_daily/exp109*.py`)
+
+Within-season WOWY on the stints of the rest of each season, held minus fitted, both with the whole season's step 4;
+below 0 is better.
+
+| share | era | change | paired z | seasons better |
+|---|---|---|---|---|
+| 0.02 | 1997-2006 | -12.16 | -4.55 | 10 of 10 |
+| 0.02 | 2007-2016 | -13.21 | -5.65 | 9 of 10 |
+| 0.02 | 2017-2026 | -13.79 | -3.52 | 9 of 10 |
+| 0.05 | 1997-2006 | -4.38 | -3.61 | 10 of 10 |
+| 0.05 | 2007-2016 | -12.21 | -7.06 | 10 of 10 |
+| 0.05 | 2017-2026 | -7.89 | -3.26 | 9 of 10 |
+| 0.10 | 1997-2006 | -2.69 | -3.97 | 10 of 10 |
+| 0.10 | 2007-2016 | -4.18 | -4.44 | 10 of 10 |
+| 0.10 | 2017-2026 | -3.27 | -3.49 | 9 of 10 |
+
+- **Against ratings of zero** (`zero_wowy.py` on the same stints), the mean gain a season at step 4, fitted then held:
+  0.02 -10.2 then +2.8; 0.05 -2.8 then +5.4; 0.10 +5.4 then +8.7, every era the same way (0.02 fitted -8.0 / -10.8
+  / -11.9, held +4.2 / +2.4 / +1.9).  With the scale fitted, a season's first 2% and 5% predict the rest of it worse
+  than rating everyone zero; held, better at every share in every era.  For scale, whole-season folds gain 19.65.
+- **The scales.**  Fitted on a season's first 2% the offensive scale ran 1.66 to 2.30 in 2022-2026, held 1.14 to 1.16;
+  the folds' own test scales, how much the held-back games want each rating multiplied, rose from 0.20-0.33 to
+  0.39-0.47 at 2% on offense: still too wide, less so.
+- **2027 on 28 games** (product setting, held at the published 2019-2026 mean, 1.130 / 1.004; the fitted arm equals
+  the published 2027 to 1e-12): every rating about 45% smaller, the order the same.  The top eleven are players with
+  1 or 2 possessions either way (Tobi Lawal +16.7 fitted, +9.5 held), then Dyson Daniels, Giannis Antetokounmpo,
+  Cooper Flagg.
+- **Why the 1-2 possession players: the possession band's pad target** (box_rates.py, `bin_targets`), not the scale.
+  At 28 games the six bands' edges run 0, 2.4, 5.6, 13.3, 31.4, 74.3: the lowest holds 11 players with about 17
+  possessions among them, at least five players so it keeps its own target, and that target is 17.6 free throws made
+  per 100, 0 fouls and 0 turnovers, the noise of 17 possessions.  Past seasons at 2% put a player under 10 possessions
+  in their top ten 10 times in 300.  Whole seasons are not touched: their lowest band reaches about 30 possessions a
+  player.
+- **Verdict:** pending the owner.  Holding is tested to a tenth of a season; from a quarter the fitted scale was not
+  compared with a held one.
