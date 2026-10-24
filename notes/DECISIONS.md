@@ -9739,3 +9739,17 @@ in order; Neemias Queta 12th to 10th, Donovan Mitchell 10th to 12th (-0.12), OG 
 Dončić +0.17.  Largest drops are five backup centers, -0.25 to -0.29 on both sides (Robert Williams III, Jaxson Hayes,
 Dylan Cardwell, Ariel Hukporti, Trayce Jackson-Davis); largest gains guards and wings, +0.18 to +0.23 (Herbert Jones,
 T.J. McConnell, Jalen Suggs).  Waiting on the owner: publish 107 for every season.
+
+## Experiment 107 PUBLISHED (2026-10-24, the owner, after the 2026 preview by email: "Ok sure go for it")
+
+- **The build.**  `openrapm rate --jobs 4 --name product` (free memory held 3 processes, 1997-2027 in 31 minutes),
+  then `openrapm shrink --base season_ratings_product_step3 --name product` and `openrapm swap`; the same steps as
+  `openrapm build`, which in one process takes about 2.5 minutes a season.  The tables before it are in
+  `outputs/before_parts107/`.  2026 equals the preview to the last digit and 2027 equals the 6 AM build of the day.
+- **What moved**, players with 1,000+ possessions, the total: median 0.055 / 0.056 / 0.054 per 100 by era, the
+  ninetieth percentile 0.14 in each, the largest 0.43 / 0.36 / 0.38.  Standard deviations, offense then defense,
+  before and after: 1.87 / 1.92 to 1.87 / 1.93; 1.80 / 1.78 to 1.80 / 1.79; 1.65 / 1.44 to 1.66 / 1.44.
+- **Checks.**  The consensus tests pass (10 passed, the known backup-bigs failure); `openrapm site --bias
+  --openrapm-decomposition --similarity` passes every identity, the similarity pool leaving 2027 out until its Finals.
+- **Published** 42311b4 from the site worktree, the Pages build checked.  Every season on the site, and the daily 2027
+  update, now come from experiment 107.

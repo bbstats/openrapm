@@ -22,11 +22,12 @@ every number quoted here; read its measurement traps before trusting a number.  
 
 - **The bug-fix pass of 2026-10-22** (DECISIONS.md, "The bug-fix pass"): the owner asked for a hunt for bugs behind the
   artifacts; the findings, the code-only fixes, experiments 94-99, the width test and the season widths are there.
-- **The chain's incumbent is experiment 107 (parts107), ADOPTED 2026-10-23, not published** (the owner: "Sure adopt
+- **The chain's incumbent is experiment 107 (parts107), ADOPTED 2026-10-23, published 2026-10-24** (the owner: "Sure adopt
   then build the shrink by share"): experiment 106 with the box-score prior trained on part-season rows too, its own
-  folds `parts107_early`, `parts107_within` and tenth folds `parts107_k10`; tables `season_ratings_parts107*`.  The site
-  still carries experiment 106.
-- **The published ratings are experiment 106 (layers106), PUBLISHED 2026-10-23** (the owner: "please adopt, yes - D. you may
+  folds `parts107_early`, `parts107_within` and tenth folds `parts107_k10`; tables `season_ratings_parts107*`.
+- **The published ratings are experiment 107 (parts107), PUBLISHED 2026-10-24** (42311b4; DECISIONS.md, "Experiment 107
+  PUBLISHED"): every season, 2027 included, from the part-season prior rows and their folds.
+- **Before it, experiment 106 (layers106), PUBLISHED 2026-10-23** (the owner: "please adopt, yes - D. you may
   publish if 2026 our rankings correlate more nicely w/ consensus"; DECISIONS.md, "Experiment 106 ADOPTED and
   PUBLISHED"): inputs99 with the shrink in two layers, each player's deviation from his team's mean multiplied on its
   own, fitted on held-back stints within games, times 0.75 on offense and 1.0 on defense.  2026 defense over offense
@@ -102,12 +103,11 @@ DECISIONS.md, "The season in progress, 2027"; README.md, "The season in progress
   (861c30c), 16 games, 345 players.
 - **The page** opens on `meta.default_season` (8f025fd): the latest season whose median player, of everyone who
   played, has 250 offensive possessions (`site.default_season`).  2026 today, the 2027 median is 46.
-- **The job runs the working tree's code.**  None of this session's code is committed (the owner's word is needed): a
+- **The job runs the working tree's code**, committed as it is written (the owner, 2026-10-24: "always commit"): a
   stash or a branch switch in A:\code\spmm makes the next morning fail and leaves yesterday's ratings up.  Keep
   `config.yaml` `last_season: 2027`.  Local `main` lags origin/main by the job's commits: fetch before site work.
 - **Waiting on the owner**:
-  1. 2027 is rated by experiment 107, 1997-2026 on the site are still experiment 106; publish 107 for every season
-     (one full `openrapm build`, then `openrapm site --openrapm-decomposition`)?
+  1. Done 2026-10-24: experiment 107 published for every season.
   2. The first days are extreme (four 2-possession San Antonio players at +7 to +8 on 16 games: the prior scale
      2.24 against 1.17, and the swap part of the prior on their context).  Proposed, not built: score ratings built
      from each past season's first 2%, 5% and 10% of games on the rest of it, with the prior scale fitted on the
@@ -216,7 +216,8 @@ What else the work of 2026-10-23 left open:
   is stopped, stop its python children too; `TaskStop` can leave the processes running, so check `ps` after.  Never
   edit `scripts/experiment_chain.sh` or `src/` while a chain runs: bash reads its script as it goes, and each new
   python process imports the code as it is then.
-- Never commit, push or publish without the owner's word.  The site is `docs/`, served from `main`.
+- Commit every piece of work; never push or publish without the owner's word, but for the daily job.  The site is
+  `docs/`, served from `main`.
 - Movement in points per 100, never rank places; under 0.1 is nothing.
 
 ## Traps that cost a day
