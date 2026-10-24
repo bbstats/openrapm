@@ -9818,3 +9818,88 @@ bias and similarity pages already ask 1,000.  `meta.n_players` counts the player
 of 14,952; a finished season loses a median 18, from 8 to 60, 2027 on 28 games 142 of 376, its eleven 1-2
 possession players among them.  The ratings are unchanged.  Published 5ff2daf, the Pages build checked, the live
 minimum 60.  The daily job carries it.
+
+## Self-creation in lineups, check 154 (the owner, 2026-10-22: "how much better do lineups get ABOVE OPENRAPM EXPECTATION based on amount & concentration of simple self creation", then "just do a smaller test to start then ask for feedback"; 2026-10-24: "might be more apparent after a trade? worth a test"; a read-only check, no rating moves)
+
+**The question.**  The owner: RAPM does not pick up self-creation well, and team evaluations read through salaries
+look like "PI RAPM + usage".  OpenRAPM predicts every lineup as the plain sum of its ten players' ratings, so it cannot
+see how creation combines inside a lineup.  Every earlier look at creators was additive, one player at a time.
+
+**The metric.**  Self-creation, the owner's formula: true shooting attempts per 100 times one minus the share
+assisted, 0.73 - 0.03 x assists per 100 - 0.01 x field goals made per 100, clipped to 0 through 1.  Per fold, from
+the fit games' padded rates, so no held-back game is in it.  Assists are not a metric of their own here, the owner's
+call: the box-score prior reads them already.  2026 leaders, 1,500 or more possessions: Dončić 27.3,
+Antetokounmpo 24.8, Ball 24.2, Cunningham 23.7, Gilgeous-Alexander 23.6, Jokić 23.2.  A lineup's amount is the
+five's sum, one standard deviation 6.5 self-created attempts per 100, 5.5 / 6.2 / 7.7 by era; its concentration is 1
+minus the sum of squared shares, the Gini-Simpson index, one standard deviation 0.019; higher means spread more evenly.
+
+**The test** (`scripts/checks/154_self_creation.py`; logs `outputs/selfcreation_154.log` and
+`outputs/selfcreation_trade_154.log`; tables `outputs/csv/selfcreation*.csv`).  Per season, parts107's 12 folds
+pooled, each held-back stint's miss as check 151 builds it, both shrink layers and the defense factor, regressed with
+possession weights on the amount and the concentration beside free terms: team levels per fold and side, home and
+playoffs; garbage time, margin and margin times time left; slopes on both rating sums; the five's summed share of team
+possessions; the count of stand-ins.  With no terms, every season's error equals check 151's to 1.4e-12.  The
+yardstick is the held-out audit's career null, 200 draws: a two-season dry run showed that a lineup sum of any number
+a player carries, even one shuffled among teammates, reads about 0.25 a season either way, because a player's misfit
+carries over from season to season.
+
+**Result**, points per 100 per standard deviation, beyond OpenRAPM's expectation:
+
+| term | era | effect | standard error | z | Newey-West z | z against the career null | seasons with its sign |
+|---|---|---|---|---|---|---|---|
+| amount | all | +0.64 | 0.10 | +6.3 | +4.4 | +9.0 | 25 of 30 |
+| amount | 1997-2006 | +1.04 | 0.12 | +8.8 | +11.7 | +9.6 | 10 of 10 |
+| amount | 2007-2016 | +0.58 | 0.16 | +3.6 | +3.7 | +4.7 | 8 of 10 |
+| amount | 2017-2026 | +0.30 | 0.17 | +1.8 | +1.4 | +2.6 | 7 of 10 |
+| concentration | all | -0.40 | 0.09 | -4.7 | -3.8 | -5.9 | 21 of 30 |
+| concentration | 1997-2006 | -0.35 | 0.17 | -2.0 | -1.6 | -3.4 | 6 of 10 |
+| concentration | 2007-2016 | -0.27 | 0.15 | -1.8 | -2.1 | -2.2 | 6 of 10 |
+| concentration | 2017-2026 | -0.59 | 0.11 | -5.6 | -4.0 | -5.0 | 9 of 10 |
+
+With no team levels: amount +0.38, by era +0.73 / +0.34 / +0.07; concentration -0.35, by era -0.16 / -0.30 / -0.58.
+
+**The shape**, mean miss after the free terms alone, points per 100, each season's lineups in fifths of the amount:
+
+| amount fifth | mean amount | all | 1997-2006 | 2007-2016 | 2017-2026 |
+|---|---|---|---|---|---|
+| 1, least | 40.8 | -0.57 | -0.68 | -0.41 | -0.63 |
+| 2 | 46.9 | +0.06 | -0.18 | -0.04 | +0.35 |
+| 3 | 50.6 | +0.24 | +0.19 | +0.17 | +0.34 |
+| 4 | 54.1 | +0.23 | +0.34 | +0.12 | +0.24 |
+| 5, most | 59.0 | +0.05 | +0.33 | +0.15 | -0.30 |
+
+Within each fifth, all seasons, the third with its self-creation most concentrated against the most evenly spread:
+-0.29 against -0.62, +0.07 against -0.15, +0.52 against -0.10, +0.28 against +0.15, +0.11 against 0.00.
+
+**After a trade** (`parts107_cut50`: each season rated from its first half and scored on the rest, with the
+whole-season shrink; check 151's error reproduced to 9e-13).  The slice: stints of an offense that lost or gained,
+from the first held-back game on, a rotation player who moved between teams that season, 20 or more minutes a game for
+either team; 41% of the held-back possessions, 31% / 40% / 53% by era.  A first version, every move of a player with
+250 possessions, held 55% and was replaced; the box scores cannot tell a trade from a release and a signing.
+
+| term | no trade | after a trade | difference | standard error | z |
+|---|---|---|---|---|---|
+| amount | +1.21 | +1.19 | -0.03 | 0.17 | -0.16 |
+| concentration | -0.67 | -0.54 | +0.13 | 0.16 | +0.83 |
+
+The difference by era: amount +0.27 / -0.08 / -0.27, concentration -0.09 / +0.03 / +0.45; none past z 1.6.  Rated from
+half a season, the amount reads about twice its whole-season size.
+
+**Reading.**
+- Lineups short of self-creation score below OpenRAPM's expectation in every era, 0.4 to 0.7 per 100 in the bottom
+  fifth.  At the same amount, lineups whose self-creation sits with one or two players beat lineups that spread it
+  evenly, in every fifth.
+- Since 2017 the fifth with the most self-creation also scores below expectation, -0.30: past the middle, more stops
+  helping.  Before 2017 the top fifth sits at +0.33 and +0.15.
+- It does not show more after a trade.
+- A straight line in the amount is the same as a player-level lean, self-creators under-credited; the bend at the top
+  and the concentration are what no player rating can carry.  Telling the two apart needs a free offset per player,
+  not run.
+- The unit.  The held-out audit, on team-games, found high-usage players over-rated after the shrink (possessions he
+  finishes -0.88), and the stint unit is the one where heavy-minute lineups outscore their ratings ("The widths").  The
+  playing-time control and the rating-sum slopes are in this fit, but the same test on team-games is the reading that
+  could overturn the amount result.
+- Nothing adopted; no rating moved.
+
+**Next, the owner's:** the same test on team-games; a free offset per player; plain usage in place of self-creation;
+whether the terms predict held-back games better.

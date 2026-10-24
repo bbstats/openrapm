@@ -99,17 +99,26 @@ def test_a_donor_hands_over_the_same_step_of_his_career_or_his_last(check):
 
 def test_after_a_trade_runs_from_the_first_move_on_or_after_the_first_held_back_game(check):
     """Held-back games start at 5.  Team 1 moved at 3, before them, and again at 8; team 2 at 6; team 3 never."""
-    frame = pd.DataFrame({"team_off": [1, 1, 1, 2, 2, 3], "game_idx": [5, 8, 9, 5, 7, 9],
+    frame = pd.DataFrame({"team_off": [1, 1, 1, 2, 2, 3], "game_idx": [5, 8, 9, 5, 7, 9], "w": np.ones(6),
                           "amount": np.ones(6), "concentration": np.ones(6)})
     moves = pd.DataFrame({"team_id": [1, 1, 2], "game_idx": [3, 8, 6]})
     check.add_trade(frame, moves)
     assert frame.trade.tolist() == [0.0, 1.0, 1.0, 0.0, 1.0, 0.0]
 
 
-def test_a_move_dates_both_teams_by_his_first_game_for_the_new_one_and_skips_small_players(check):
-    """Player 7 plays games 0-4 for team 10 and 5-9 for team 20; player 8 moves too but had 100 possessions."""
+def test_a_move_dates_both_teams_by_his_first_game_for_the_new_one_and_skips_bench_players(check):
+    """Player 7 plays 30 minutes a game, games 0-4 for team 10 and 5-9 for team 20; player 8 moves too, at 12 minutes
+    a game for both teams, so his move does not count."""
     box = pd.DataFrame({"game_id": [f"g{k}" for k in range(10)] * 2, "player_id": [7] * 10 + [8] * 10,
-                        "team_id": [10] * 5 + [20] * 5 + [10] * 3 + [30] * 7, "minutes": 30.0})
+                        "team_id": [10] * 5 + [20] * 5 + [10] * 3 + [30] * 7, "minutes": [30.0] * 10 + [12.0] * 10})
     games = pd.DataFrame({"game_id": [f"g{k}" for k in range(10)], "game_idx": range(10)})
-    moves = check.trade_moves(box, games, pd.Series({7: 900.0, 8: 100.0}))
+    moves = check.trade_moves(box, games)
     assert moves.values.tolist() == [[10, 5], [20, 5]]
+
+
+def test_the_after_trade_terms_are_centred_so_the_level_reads_at_the_average_lineup(check):
+    frame = pd.DataFrame({"team_off": [1, 1, 1, 1], "game_idx": [5, 6, 7, 8], "w": [1.0, 1.0, 1.0, 1.0],
+                          "amount": [40.0, 50.0, 60.0, 50.0], "concentration": [0.7, 0.8, 0.75, 0.75]})
+    check.add_trade(frame, pd.DataFrame({"team_id": [1], "game_idx": [7]}))
+    assert frame.amount_after_trade.tolist() == [0.0, 0.0, 10.0, 0.0]
+    assert frame.concentration_after_trade.tolist() == pytest.approx([0.0, 0.0, 0.0, 0.0])

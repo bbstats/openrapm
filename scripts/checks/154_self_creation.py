@@ -32,8 +32,9 @@ Words used below
                     of the players who carry it, and a player's misfit carries over from season to season, so the
                     spread of the per-season estimates understates the uncertainty; the null keeps that carry-over
     after a trade   on the date folds of `openrapm folds --cut`: a held-back stint whose offense lost or gained, from
-                    the first held-back game on, a player who moved between teams that season with 250 or more
-                    offensive possessions in it; the move dated by his first game for his new team
+                    the first held-back game on, a rotation player who moved between teams that season, 20 or more
+                    minutes a game for the team he left or the one he joined; the move dated by his first game for
+                    his new team.  The box scores cannot tell a trade from a release and a signing, so both count
 
 The fit, per season, its folds pooled (weighted least squares, weight = possessions):
 
@@ -42,7 +43,8 @@ The fit, per season, its folds pooled (weighted least squares, weight = possessi
 each fold's team levels, home and playoffs fitted out of every column first, which gives the same a and c as one fit
 with them in.  a and c are reported per standard deviation of the season's amount and concentration over its
 held-back possessions: points per 100 beyond what OpenRAPM expects.  With --trade=1 the amount and the concentration
-also get a coefficient on the stints after a trade, the difference, beside a free level for those stints.
+also get a coefficient on the stints after a trade, the difference, beside a free level for those stints; both are
+centred on the fold's possession-weighted mean first, so that level reads at the fold's average lineup.
 
 Across seasons: the mean of the per-season estimates, its standard error across seasons, the z, the Newey-West z
 (check 151's `newey_west_se`), the seasons with the mean's sign, each era; beside it the same fit with no team levels.
@@ -89,7 +91,7 @@ from openrapm.settings import PRODUCT, factor_for
 SHARE_ASSISTED = (0.73, 0.03, 0.01)     # the owner's formula, 2026-10-22: level, per assist per 100, per make per 100
 FREE_THROW_WEIGHT = 0.44                # true shooting attempts = field-goal attempts + 0.44 x free-throw attempts
 STAND_IN_POSS = 500                     # an unrated player carries the mean self-creation of the players under this
-TRADE_POSS = 250                        # a move counts when its player had this many offensive possessions that season
+TRADE_MINUTES = 20.0                    # a move counts when its player played this many minutes a game for either team
 TRADE_MIN_POSS = 1000                   # a season's after-a-trade reading needs this many held-back possessions in it
 TOP_POSS = 1500                         # the players table: this many offensive possessions or more
 NULL_SEED = 20261024
@@ -215,9 +217,11 @@ def add_trade(frame: pd.DataFrame, moves: pd.DataFrame) -> list:
     start = moves[moves.game_idx >= first].groupby("team_id").game_idx.min()
     since = frame.team_off.map(start).to_numpy(float)
     trade = (np.nan_to_num(since, nan=np.inf) <= frame.game_idx.to_numpy(float)).astype(float)
+    w = frame.w.to_numpy(float)
     frame["trade"] = trade
-    frame["amount_after_trade"] = frame.amount.to_numpy() * trade
-    frame["concentration_after_trade"] = frame.concentration.to_numpy() * trade
+    for term in TERMS:
+        values = frame[term].to_numpy(float)
+        frame[f"{term}_after_trade"] = (values - np.average(values, weights=w)) * trade
     return list(TRADE_TERMS)
 
 
@@ -332,6 +336,8 @@ def season_readings(parts: pd.DataFrame, season: int, trade: bool) -> list:
     w = parts.w.to_numpy(float)
     rows = [dict(season=season, reading="baseline", term="error with team levels only",
                  value=float(np.sum(w * parts.p_miss.to_numpy() ** 2) / w.sum()))]
+    rows += [dict(season=season, reading="one standard deviation", term=term,
+                  value=weighted_sd(parts[f"raw_{term}"].to_numpy(float), w)) for term in TERMS]
     if trade:
         return rows + [dict(season=season, reading="after a trade", term=term, value=float(value))
                        for term, value in trade_reading(parts).items()]
@@ -494,24 +500,18 @@ def step4_of(fold, multipliers: pd.DataFrame, layer: pd.DataFrame | None) -> tup
     return step4
 
 
-def player_possessions(design) -> pd.Series:
-    """Each player's offensive possessions in the season's design."""
-    columns = design.spec.players.set_index("player_column").player_id
-    ids = columns.reindex(np.asarray(design.parts["lineup_o"]).ravel()).to_numpy()
-    return pd.Series(np.repeat(np.asarray(design.w, dtype=float), 5)).groupby(ids).sum()
-
-
-def trade_moves(box: pd.DataFrame, games: pd.DataFrame, possessions: pd.Series) -> pd.DataFrame:
-    """(team_id, game_idx): for every move of a player with TRADE_POSS offensive possessions or more, the team he left
-    and the team he joined, each dated by his first game for the new team."""
+def trade_moves(box: pd.DataFrame, games: pd.DataFrame) -> pd.DataFrame:
+    """(team_id, game_idx): for every move of a rotation player, TRADE_MINUTES a game or more for the team he left
+    or the one he joined, both teams, each dated by his first game for the new team."""
     played = box[box.minutes > 0].merge(games[["game_id", "game_idx"]], on="game_id")
-    big = possessions.index[possessions.to_numpy() >= TRADE_POSS]
-    played = played[played.player_id.isin(big)].sort_values(["player_id", "game_idx"], kind="stable")
+    per_game = played.groupby(["player_id", "team_id"]).minutes.mean()
+    played = played.sort_values(["player_id", "game_idx"], kind="stable")
     moves = []
-    for _, group in played.groupby("player_id"):
+    for player, group in played.groupby("player_id"):
         team, when = group.team_id.to_numpy(), group.game_idx.to_numpy()
         for k in np.flatnonzero(team[1:] != team[:-1]) + 1:
-            moves += [(team[k - 1], when[k]), (team[k], when[k])]
+            if max(per_game[(player, team[k - 1])], per_game[(player, team[k])]) >= TRADE_MINUTES:
+                moves += [(team[k - 1], when[k]), (team[k], when[k])]
     return pd.DataFrame(moves, columns=["team_id", "game_idx"])
 
 
@@ -521,7 +521,7 @@ def season_moves(cfg: dict, season: int, design) -> pd.DataFrame:
     from openrapm.data.ingest import played_phases
     box = season_box([season], played_phases(season, cfg), cfg)
     games = design.games.assign(game_id=design.games.game_id.astype(str))
-    return trade_moves(box.assign(game_id=box.game_id.astype(str)), games, player_possessions(design))
+    return trade_moves(box.assign(game_id=box.game_id.astype(str)), games)
 
 
 def stop_on_stale_pieces(cfg: dict, seasons: list) -> None:
