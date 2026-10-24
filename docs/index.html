@@ -214,7 +214,10 @@
                                                   addr(state.season, state.team, state.player));
   function place(h) {
     const seasons = data.meta.seasons.map(String), id = +h.get("player");
-    state.season = seasons.includes(h.get("season")) ? h.get("season") : seasons[0];
+    // with no season in the address, the one meta names: a season in progress only once its median player has 250
+    // offensive possessions (openrapm site, default_season)
+    const opens = String(data.meta.default_season || seasons[0]);
+    state.season = seasons.includes(h.get("season")) ? h.get("season") : seasons.includes(opens) ? opens : seasons[0];
     state.team = h.get("team") || "";
     state.player = careers.has(id) ? id : null;       // no id, a bad one or one without rows: the season list
     season.value = state.season;

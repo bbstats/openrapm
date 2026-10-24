@@ -152,7 +152,7 @@ def _run_build(args: argparse.Namespace, cfg: dict) -> int:
     settings = chosen_settings(args)
     settings = replace(settings, shrink=shrink_options(settings.shrink, args), swap=swap_options(settings.swap, args))
     return run_build(cfg, settings, args.seasons, args.name or args.setting, args.save_models, argv=args.argv,
-                     with_types=args.types)
+                     with_types=args.types, replace_seasons=args.replace_seasons)
 
 
 def _run_rate(args: argparse.Namespace, cfg: dict) -> int:
@@ -182,7 +182,7 @@ def _run_folds(args: argparse.Namespace, cfg: dict) -> int:
         return 0
     return run_folds(cfg, args.models, args.base, args.seasons, args.tag, args.reproduce_only, args.pieces,
                      args.whole_season_inputs, args.whole_season_context, args.folds_per_repeat, args.repeats,
-                     args.cut)
+                     args.cut, args.so_far)
 
 
 def _run_second_prior(args: argparse.Namespace, cfg: dict) -> int:
@@ -420,6 +420,10 @@ def _add_build(commands) -> None:
     _add_folds_tag(build)
     _add_types(build)
     _add_applied_share(build)
+    build.add_argument("--replace-seasons", action="store_true",
+                       help="write the seasons asked for into the tables already under --name, in place of their "
+                            "rows there, every other season's rows kept as they are: `openrapm build --seasons 2027 "
+                            "--replace-seasons` puts the season in progress into the published table each morning")
     build.set_defaults(run=_run_build)
 
 
@@ -510,10 +514,15 @@ def _add_folds(commands) -> None:
                             "are built with 4 (default %(default)s)")
     folds.add_argument("--repeats", type=int, default=3, metavar="R",
                        help="how many times the games are assigned over again (default %(default)s)")
-    folds.add_argument("--cut", type=parse_share, default=None, metavar="SHARE",
-                       help="the season so far: one fold a season, rated from its games through the day SHARE of its "
-                            "regular season had been played (0.25 a quarter) and scored on the rest of the season, "
-                            "playoffs included, in place of the random folds.  Never for step 4")
+    design = folds.add_mutually_exclusive_group()
+    design.add_argument("--cut", type=parse_share, default=None, metavar="SHARE",
+                        help="the season so far: one fold a season, rated from its games through the day SHARE of its "
+                             "regular season had been played (0.25 a quarter) and scored on the rest of the season, "
+                             "playoffs included, in place of the random folds.  Never for step 4")
+    design.add_argument("--so-far", type=parse_share, default=None, metavar="SHARE",
+                        help="the season so far drawn at random: the games through the day SHARE of its regular season "
+                             "had been played, put in folds as a whole season's are, every later game left out; the "
+                             "shrink by share's folds")
     _add_jobs(folds)
     folds.set_defaults(run=_run_folds)
 

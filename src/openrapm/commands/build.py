@@ -41,9 +41,9 @@ import pandas as pd
 from .. import box_prior, prior_rapm, prior_shrink, rapm, second_prior, swap_adjust, swap_test
 from ..data.config import booster_params, resolve
 from ..data.designs import DesignCache
-from ..data.panel import panel_and_trainable_seasons, trainable_panel, trainable_panel_so_far
+from ..data.panel import in_progress_panel, panel_and_trainable_seasons, trainable_panel, trainable_panel_so_far
 from ..data.roles import main_teams
-from ..data.seasons import all_seasons, trainable
+from ..data.seasons import all_seasons, share_played, trainable
 from ..data.second_prior_files import line_setup, load_grams
 from ..data.stints import load_season_stints
 from ..data.tables import design_row_teams, player_names
@@ -158,10 +158,11 @@ class SeasonSecondPrior:
 
 
 def rated_second_prior(cfg: dict, season: int, panel: pd.DataFrame, priors: dict, lines: SecondPriorLines,
-                       settings) -> SeasonSecondPrior:
+                       settings, share: float = 1.0) -> SeasonSecondPrior:
     """The rated season's second prior (second_prior.py): its context numbers from the whole season's stint rows, every
     prior in them from the season's own boosters that never saw the player, and the line of the seasons that may train
-    it (more than `exclude_neighbours` away)."""
+    it (more than `exclude_neighbours` away).  `panel` holds the rated season's rows; `share` is the share of its
+    regular season played (box_prior.rated_rows)."""
     prior = settings.prior
     coefficients = second_prior.season_coefficients(lines.grams, season, lines.trainable, settings.exclude_neighbours,
                                                     prior.second_prior_folds, prior.second_prior_penalty,
@@ -170,7 +171,7 @@ def rated_second_prior(cfg: dict, season: int, panel: pd.DataFrame, priors: dict
         raise SystemExit(f"{season}: no season of outputs/second_prior/{prior.second_prior} may train its line")
     answers = {side: second_prior.booster_answers(
         priors[side].model,
-        box_prior.rated_rows(panel[(panel.side == side) & (panel.season == season)], priors[side].feature_names))
+        box_prior.rated_rows(panel[(panel.side == side) & (panel.season == season)], priors[side].feature_names, share))
         for side in SIDES}
     types = (None if lines.type_scale is None else
              second_prior.standardised_types(panel[(panel.side == "O") & (panel.season == season)], lines.type_scale))
@@ -205,32 +206,57 @@ def row_label_tables(sums: dict, panel: pd.DataFrame, unseen, settings, cache: d
     return None
 
 
+@dataclass
+class SeasonsInProgress:
+    """The seasons a build rates that no fit may train on (data/seasons.py): their season panel rows, which the
+    trainable panel lacks, and {season: the share of its regular season played} (data.seasons.share_played)."""
+    rows: pd.DataFrame
+    shares: dict
+
+    @classmethod
+    def read(cls, cfg: dict, seasons) -> "SeasonsInProgress":
+        rows = in_progress_panel(cfg)
+        rows = rows[rows.possessions > 0].reset_index(drop=True)
+        shares = {int(season): share_played(int(season), cfg) for season in seasons
+                  if int(season) in set(rows.season.astype(int))}
+        for season, share in shares.items():
+            print(f"  {season} is in progress: rated from its {share:.1%} of the regular season so far, nothing "
+                  f"trained on it", flush=True)
+        return cls(rows, shares)
+
+
 def rate_one_season(season: int, sums: dict, panel: pd.DataFrame, designs: DesignCache, settings, params: dict,
                     lines: SecondPriorLines | None = None, label_cache: dict | None = None,
-                    part_seasons: pd.DataFrame | None = None):
+                    part_seasons: pd.DataFrame | None = None, progress: SeasonsInProgress | None = None):
     """The end of step 1 (labels), step 2 (priors) and step 3 (ridge) for one season.
 
     Returns (the season's centred table in raw sign, {"O", "D"} its SidePriors, its unseen seasons, its
     SeasonSecondPrior or None).  With `lines` (the second prior on, settings.PriorSettings.second_prior) step 3 reads
     the second prior instead of the box-score prior; `part_seasons` (`part_season_panel`) adds the box-score prior's
-    part-season rows.
+    part-season rows.  A season in `progress` is rated from its own rows there, the priors told the share played.
     """
     unseen = unseen_seasons(season, settings)
     labels = rapm.career_labels(sums, unseen, settings.labels, settings.targets)
     outside = row_label_tables(sums, panel, unseen, settings, label_cache)
-    priors = box_prior.season_priors(labels, panel, season, unseen, settings, params, outside, part_seasons)
+    rated, share = None, 1.0
+    if progress is not None and season in progress.shares:
+        rated, share = progress.rows, progress.shares[season]
+    priors = box_prior.season_priors(labels, panel, season, unseen, settings, params, outside, part_seasons, rated,
+                                     share)
     season_designs = {target: designs.season(season, target) for target in settings.targets.distinct()}
     values = {side: priors[side].values for side in SIDES}
     second = None
     if lines is not None:
-        second = rated_second_prior(designs.cfg, season, panel, priors, lines, settings)
+        second = rated_second_prior(designs.cfg, season, panel if rated is None else rated, priors, lines, settings,
+                                    share)
         values = second.values
     return prior_rapm.rate_season(season_designs, values, settings, season), priors, unseen, second
 
 
 def rate_seasons(seasons, sums: dict, panel: pd.DataFrame, designs: DesignCache, settings, params: dict,
                  keep_models: bool = False, lines: SecondPriorLines | None = None,
-                 part_seasons: pd.DataFrame | None = None) -> tuple[list, dict]:
+                 part_seasons: pd.DataFrame | None = None,
+                 progress: SeasonsInProgress | None = None) -> tuple[list, dict]:
     """`rate_one_season` for each season: ([one centred table per season], {season: {side: saved boosters}}).
 
     The boosters are kept only when `keep_models`; thirty seasons of them are about a gigabyte.
@@ -239,7 +265,7 @@ def rate_seasons(seasons, sums: dict, panel: pd.DataFrame, designs: DesignCache,
     tables, models, label_cache = [], {}, {}
     for season in seasons:
         table, priors, unseen, second = rate_one_season(season, sums, panel, designs, settings, params, lines,
-                                                        label_cache, part_seasons)
+                                                        label_cache, part_seasons, progress)
         tables.append(table)
         if keep_models:
             models[season] = {side: saved_side(priors[side], params[side], settings, unseen, second, side)
@@ -337,7 +363,8 @@ def rate_table(cfg: dict, settings, seasons, keep_models: bool = False) -> tuple
         lines = SecondPriorLines(load_grams(cfg, settings.prior.second_prior), set(trainable(cfg).seasons),
                                  record.get("type_scale"))
     tables, models = rate_seasons(seasons, sums, panel, designs, settings, params, keep_models=keep_models,
-                                  lines=lines, part_seasons=part_season_panel(cfg, settings))
+                                  lines=lines, part_seasons=part_season_panel(cfg, settings),
+                                  progress=SeasonsInProgress.read(cfg, seasons))
     return prior_rapm.published_table(pd.concat(tables, ignore_index=True), player_names(cfg)), models
 
 
@@ -712,18 +739,48 @@ def run_swap(cfg: dict, settings, base: str, name: str, with_types: bool = False
 
 
 # ------------------------------------------------------------------------------------------- all five
+def replace_season_rows(old: pd.DataFrame, new: pd.DataFrame, what: str) -> pd.DataFrame:
+    """`old` with the rows of `new`'s seasons replaced by `new`'s, in season order, every other row as it was.
+
+    Example: the published table holds 1997-2026 and yesterday's 2027; with this morning's 2027 it holds 1997-2026 as
+    they were and this morning's 2027."""
+    if list(old.columns) != list(new.columns):
+        raise SystemExit(f"{what} has the columns {list(old.columns)}, the build {list(new.columns)}: build every "
+                         "season again instead of replacing some")
+    kept = old[~old.season.isin(set(new.season.unique()))]
+    return pd.concat([kept, new], ignore_index=True).sort_values("season", kind="stable").reset_index(drop=True)
+
+
+def stored_tables(outputs: Path, name: str, cfg: dict) -> dict:
+    """{suffix: the table written under `name` before}, and "multipliers": step 4's, for --replace-seasons."""
+    paths = {suffix: outputs / f"season_ratings_{name}{suffix}.parquet" for suffix in ("_step3", "_step4", "")}
+    paths["multipliers"] = resolve(cfg, "outputs") / "csv" / f"season_ratings_{name}_step4_multipliers.csv"
+    missing = [str(path) for path in paths.values() if not path.exists()]
+    if missing:
+        raise SystemExit(f"--replace-seasons needs the tables of {name} on disk; missing {missing}")
+    return {key: pd.read_csv(path) if key == "multipliers" else pd.read_parquet(path) for key, path in paths.items()}
+
+
 def run_build(cfg: dict, settings, seasons, name: str, save_models: str | None = None, argv=(),
-              with_types: bool = False) -> int:
+              with_types: bool = False, replace_seasons: bool = False) -> int:
     """`openrapm build`: steps 1-5 in one process, the three tables and step 4's multipliers written at the end.
-    Step 4's folds are checked first (`require_folds`), so missing folds stop the run in seconds."""
+    Step 4's folds are checked first (`require_folds`), so missing folds stop the run in seconds.  With
+    `replace_seasons`, the seasons built go into the tables already under `name`, in place of their rows there."""
     started = time.time()
     seasons = check_seasons(seasons, cfg)
     require_folds(cfg, settings.shrink)
+    outputs = resolve(cfg, "outputs")
+    stored = stored_tables(outputs, name, cfg) if replace_seasons else None
     step3, models = rate_table(cfg, settings, seasons, keep_models=bool(save_models))
     folds, where = step4_folds(cfg, settings.shrink)
     step4, multipliers = shrink_seasons(cfg, step3, settings, folds, where)
     final, _, types = swap_seasons(cfg, step4, settings, folds, where, multipliers)
-    outputs = resolve(cfg, "outputs")
+    if stored is not None:
+        step3, step4, final = (replace_season_rows(stored[suffix], table, f"season_ratings_{name}{suffix}")
+                               for suffix, table in (("_step3", step3), ("_step4", step4), ("", final)))
+        multipliers = replace_season_rows(stored["multipliers"], multipliers, f"{name}'s step 4 multipliers")
+        print(f"  seasons {', '.join(str(s) for s in seasons)} written in place of their rows in {name}'s tables, "
+              f"{final.season.nunique()} seasons in all", flush=True)
     print()
     for table, suffix in ((step3, "_step3"), (step4, "_step4"), (final, "")):
         write_table(table, outputs / f"season_ratings_{name}{suffix}.parquet", started)

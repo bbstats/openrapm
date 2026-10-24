@@ -218,7 +218,37 @@ def test_only_boosters_trained_on_part_seasons_are_told_the_share_and_never_for_
 def test_step_4_never_reads_a_date_fold_unless_asked():
     from openrapm.data.within_folds import check_fold_record
     record = {"summary": {"rate_from": "rest", "split": "date"}, "checks": {"a check": True}}
-    with pytest.raises(ValueError, match="date folds"):
+    with pytest.raises(ValueError, match="splits its season by 'date'"):
         check_fold_record(record, "2024_r0_f0")
-    check_fold_record(record, "2024_r0_f0", allow_date=True)
+    check_fold_record(record, "2024_r0_f0", splits=("random", "date"))
     check_fold_record({"summary": {"rate_from": "rest"}, "checks": {}}, "2024_r0_f0")
+
+
+def test_a_so_far_fold_set_draws_the_season_so_far_into_folds_and_leaves_the_rest_out():
+    """Experiment 108: --so-far puts the games through the day of the share in folds as a whole season's are; every
+    later game is left out of the fold set, neither fitted nor held back."""
+    from openrapm.data.within_folds import OUTSIDE
+    games = _season_games()
+    folds = ws.so_far_folds(games, 0.5, 2, 2024, 0)
+    so_far = ["g00", "g01", "g02", "g03", "g04", "g05"]
+    assert folds.name == "r0"
+    assert sorted(folds.index[folds != OUTSIDE]) == so_far
+    assert sorted(folds[folds != OUTSIDE].value_counts().to_numpy()) == [3, 3]
+    assert (folds[["g06", "g07", "g08", "g09"]] == OUTSIDE).all()
+    # the same draw as a whole season's assignment of those games, seed and all
+    pd.testing.assert_series_equal(folds[folds != OUTSIDE].sort_index(), ws.assign_folds(so_far, 2, 2024, 0),
+                                   check_names=False)
+
+
+def test_a_left_out_game_is_neither_a_fit_nor_a_held_back_game(tmp_path):
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    from openrapm.data.within_folds import OUTSIDE, fold_games
+    assignment = pd.DataFrame({"r0": [0, 1, 1, OUTSIDE]}, index=["a", "b", "c", "d"])
+    assignment.to_parquet(tmp_path / "folds_2024.parquet")
+    np.savez(tmp_path / "test_2024_r0_f0.npz", game_id=np.array(["a"]))
+    fit, held = fold_games(tmp_path, SimpleNamespace(season=2024, repeat=0, fold=0, stem="2024_r0_f0"))
+    assert (fit, held) == ({"b", "c"}, {"a"})
+

@@ -118,10 +118,26 @@ def ratings_rows(table: pd.DataFrame) -> list[dict]:
             for r in short.itertuples(index=False)]
 
 
+# The owner, 2026-10-23: "2027 should not be the DEFAULT on the site until the median player has 250 possessions
+# played", and 2026-10-24, the median of everyone who has played in the season, on offensive possessions.
+DEFAULT_SEASON_POSSESSIONS = 250
+
+
+def default_season(table: pd.DataFrame) -> int:
+    """The season the pages open on: the latest whose median player, of everyone with possessions in it, has 250 or
+    more offensive possessions (poss_season, the pages' p).  Example: on 2026-10-24 the median 2027 player has 46, so
+    the pages open on 2026."""
+    played = table[table.poss_season > 0]
+    medians = played.groupby("season").poss_season.median()
+    ready = medians[medians >= DEFAULT_SEASON_POSSESSIONS]
+    return int(ready.index.max() if len(ready) else medians.index.max())
+
+
 def ratings_document(table: pd.DataFrame, built: str) -> dict:
-    """{"meta": the seasons, the built date and the number of players, "rows": `ratings_rows`}."""
+    """{"meta": the seasons, the season the pages open on, the built date and the number of players, "rows":
+    `ratings_rows`}."""
     rows = ratings_rows(table)
-    meta = dict(seasons=sorted({row["s"] for row in rows}), built=built,
+    meta = dict(seasons=sorted({row["s"] for row in rows}), default_season=default_season(table), built=built,
                 n_players=int(table.player_id.nunique()))
     return dict(meta=meta, rows=rows)
 
@@ -1122,11 +1138,13 @@ def run_openrapm_checks(worst: dict, rows: dict, table: pd.DataFrame) -> None:
                              "ratings and possessions")
 
 
-def write_openrapm_file(path: Path, rows: dict, built: str, penalty: float) -> None:
-    """decompose_openrapm.json: meta and the rows of every season, latest first; compact, UTF-8 letters as they are."""
+def write_openrapm_file(path: Path, rows: dict, built: str, penalty: float, opens_on: int | None = None) -> None:
+    """decompose_openrapm.json: meta and the rows of every season, latest first; compact, UTF-8 letters as they are.
+    `opens_on` is the season the ratings page opens on (`default_season`), the latest when not given."""
     seasons = sorted(rows, reverse=True)
-    document = dict(meta=dict(built=built, penalty=penalty, seasons=seasons, fields=OPENRAPM_FIELDS,
-                              pieces=OPENRAPM_PIECES),
+    document = dict(meta=dict(built=built, penalty=penalty, seasons=seasons,
+                              default_season=int(seasons[0] if opens_on is None else opens_on),
+                              fields=OPENRAPM_FIELDS, pieces=OPENRAPM_PIECES),
                     rows={str(season): rows[season] for season in seasons})
     path.write_text(json.dumps(document, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
@@ -1153,7 +1171,7 @@ def write_openrapm_decomposition(cfg: dict, ratings_path: Path, data_dir: Path, 
     run_openrapm_checks(worst, rows, table)
     data_dir.mkdir(parents=True, exist_ok=True)
     path = data_dir / OPENRAPM_FILE
-    write_openrapm_file(path, rows, built, penalty)
+    write_openrapm_file(path, rows, built, penalty, default_season(table))
     print(f"wrote {path}: {sum(len(v) for v in rows.values()):,} rows over {len(rows)} seasons, "
           f"{path.stat().st_size / 1e6:.2f} MB ({time.time() - started:.0f}s)", flush=True)
 

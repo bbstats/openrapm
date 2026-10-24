@@ -85,6 +85,7 @@ from openrapm.data.config import load_config, resolve, resolve_path
 from openrapm.data.designs import DesignCache
 from openrapm.data.legacy_names import target_name
 from openrapm.data.roles import roles_path
+from openrapm.data.seasons import last_finished
 from openrapm.data.tables import load_ratings, team_of_rows
 from openrapm.scoring import Ratings, armse, predict_season, score
 
@@ -148,7 +149,7 @@ class Run:
 
 def settings(args: argparse.Namespace, cfg: dict) -> Run:
     """The run's settings.  --fill=500x0.25 is (500 possessions, a quarter); --fill=500 is the whole level."""
-    first, last = int(cfg["first_season"]), int(cfg["last_season"])
+    first, last = int(cfg["first_season"]), last_finished(cfg)
     max_poss, _, shrink = args.fill.partition("x")
     seasons = ([int(s) for s in args.seasons.split(",")] if args.seasons
                else list(range(args.first or first, (args.last or last) + 1)))

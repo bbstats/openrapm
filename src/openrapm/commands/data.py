@@ -1,6 +1,8 @@
 """`openrapm data`: the data the five steps read, built in order.
 
     openrapm data ingest FIRST [LAST] [PHASES]    game logs, play-by-play and box scores from stats.nba.com, cached
+    openrapm data ingest 2027 2027 RS --refresh   the season in progress: its game log fetched again, through
+                                                  yesterday in US Eastern time, and every new game's files
     openrapm data stints FIRST [LAST] [PHASES]    the stints from the cached play-by-play, and each season's checks
     openrapm data events [FIRST] [LAST]           the play-by-play parts of four box counts, per game, player and
                                                   phase (paths.event_counts), each season held against its box score
@@ -52,7 +54,7 @@ def run_ingest(args: argparse.Namespace, cfg: dict) -> int:
     """Every season and phase asked for: game log, play-by-play and box scores, each file fetched once and cached."""
     from ..data.ingest import ingest_season
     for season in season_range(args, cfg):
-        ingest_season(season, phases(args), cfg, workers=args.workers, delay=args.delay)
+        ingest_season(season, phases(args), cfg, workers=args.workers, delay=args.delay, refresh=args.refresh)
     return 0
 
 
@@ -76,9 +78,10 @@ def run_stints(args: argparse.Namespace, cfg: dict) -> int:
     import pandas as pd
 
     from ..data.config import resolve
+    from ..data.ingest import played_phases
     pd.set_option("display.width", 250, "display.max_columns", 40, "display.precision", 3)
     out = pd.DataFrame([_stint_season(season, phase, cfg, args.force)
-                        for season in season_range(args, cfg) for phase in phases(args)])
+                        for season in season_range(args, cfg) for phase in played_phases(season, cfg, phases(args))])
     path = resolve(cfg, "stints") / "diagnostics_summary.parquet"
     if path.exists():
         old = pd.read_parquet(path)
@@ -267,6 +270,9 @@ def _add_ingest(steps) -> None:
     _add_seasons(ingest)
     ingest.add_argument("--workers", type=int, default=2, help="requests in flight at once (default %(default)s)")
     ingest.add_argument("--delay", type=float, default=0.6, help="seconds between requests (default %(default)s)")
+    ingest.add_argument("--refresh", action="store_true",
+                        help="the season in progress: fetch its game log again instead of reading the cache, keeping "
+                             "the games dated before today in US Eastern time, then every new game's files")
     ingest.set_defaults(run=run_ingest)
 
 

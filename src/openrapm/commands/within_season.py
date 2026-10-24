@@ -1,7 +1,7 @@
 """`openrapm folds`: each season rated from three quarters of its games and scored on the quarter it never saw.
 
     openrapm folds --models NAME --base NAME [--seasons 2017-2026] [--tag TAG] [--reproduce-only] [--pieces]
-                   [--whole-season-inputs] [--cut SHARE]
+                   [--whole-season-inputs] [--cut SHARE | --so-far SHARE]
 
 Why (the owner, 2026-10-03).  The prior shrink (step 4) needs the ratings' misses on games they never saw.  Misses
 on the neighbouring seasons' games would teach it that a peak season comes back down the year after, and it would
@@ -28,6 +28,14 @@ rated from its first 308 games, through 2023-12-07, and scored on the other 1,00
 rows (settings.PriorSettings.part_season_shares) are told the share of the season the rows cover (their `row_seasons`
 input); every other booster reads 1, as for a whole season.  Folds built this way say `split` "date" and are never
 step 4's (data/within_folds.py refuses them unless asked).
+
+The season so far drawn at random, --so-far SHARE (experiment 108; the owner, 2026-10-23: "Love it, let's try it").
+The games of the season so far, as --cut takes them, are put in folds as a whole season's are, four folds a repeat
+and three repeats by default, and every game after that day is left out of the fold set altogether (`OUTSIDE`, -2 in
+folds_<season>.parquet): each fold is rated from three quarters of the season so far and scored on the quarter of it
+held back.  The shrink by share fits a season so far's multipliers on these, as step 4 fits a whole season's on the
+random folds.  Example: 2024 at 0.25: its first 308 games in four folds of 77, rated from 231 and scored on 77, three
+times over.  Folds built this way say `split` "so_far".
 
 The reproduction check comes first: each season rebuilt from all of its games must give the row of the base table
 (`--base`, written by the same `openrapm rate --save-models` run), so the part-season ratings come from the shipped
@@ -95,6 +103,7 @@ from ..data.seasons import trainable
 from ..data.second_prior_files import line_setup, load_grams
 from ..data.shots import DEFENSE_TARGETS, OPPONENT_THREE_LUCK_KEPT, expected_threes
 from ..data.tables import team_of_rows
+from ..data.within_folds import OUTSIDE
 from ..features import CLOSENESS, OFF_COURT, ON_MINUS_OFF, PANEL_KEYS, PRIOR_FEATURES, add_features
 from ..scoring import Ratings, armse, predict_season, score
 from ..settings import ROW_LABELS, TEST, UNSHRINK_LABELS, Targets
@@ -245,6 +254,18 @@ def assign_folds(game_ids, n_folds: int, season: int, repeat: int) -> pd.Series:
     ids = np.sort(np.asarray(pd.unique(pd.Series(game_ids).astype(str))))
     rng = np.random.default_rng([int(season), int(repeat), 9701])
     return pd.Series(rng.permutation(len(ids)) % int(n_folds), index=ids, name=f"r{repeat}")
+
+
+def so_far_folds(games: pd.DataFrame, share: float, n_folds: int, season: int, repeat: int) -> pd.Series:
+    """game_id -> fold for --so-far: the games of the season so far (`season_to_date`) put in folds 0 to n_folds - 1
+    as `assign_folds` puts a whole season's, with the same seed, and every game after that day `OUTSIDE`.
+
+    Example: 2024 at 0.25 with four folds: its first 308 games in four folds of 77, the other 1,004 read -2.
+    """
+    ids = np.sort(np.asarray(pd.unique(games["game_id"].astype(str))))
+    so_far, _ = season_to_date(games, share)
+    drawn = assign_folds(sorted(so_far), n_folds, season, repeat)
+    return pd.Series(ids, index=ids).map(drawn).fillna(OUTSIDE).astype(int).rename(f"r{repeat}")
 
 
 def date_folds(games: pd.DataFrame, share: float) -> pd.Series:
@@ -522,12 +543,14 @@ class SeasonRun:
     n_folds: int = N_FOLDS       # the folds of each repeat: 1 / n_folds of the season's games held back
     repeats: int = REPEATS
     settings: object = SETTINGS  # the test setting with the saved build's own targets (`fold_settings`)
-    cut: float | None = None     # --cut: the season so far at this share of the regular season, else None
+    cut: float | None = None     # --cut or --so-far: the season so far at this share of the regular season, else None
+    split: str = "random"        # data.within_folds.SPLITS: "date" with --cut, "so_far" with --so-far
     part_season_rows: bool = False   # the boosters trained with part-season rows (`trained_on_part_seasons`)
 
     @property
     def season_share(self) -> float | None:
-        """With --cut, the share of the regular season the season so far holds (`season_to_date`); else None."""
+        """With --cut or --so-far, the share of the regular season the season so far holds (`season_to_date`); else
+        None."""
         return None if self.cut is None else season_to_date(self.full[SCORE_TARGET].games, self.cut)[1]
 
     def prior_share(self, fit_ids) -> float:
@@ -603,10 +626,14 @@ def run_reproduction(run: SeasonRun, base: pd.DataFrame, panel: pd.DataFrame, st
 def season_folds(run: SeasonRun) -> pd.DataFrame:
     """The season's folds, one column per repeat, written to folds_<season>.parquet (checked against any earlier
     file: the assignment is seeded, so a rerun must draw the same folds); with --cut, the one date fold
-    (`date_folds`)."""
+    (`date_folds`); with --so-far, the season so far's (`so_far_folds`)."""
     path = run.out_dir / f"folds_{run.season}.parquet"
-    if run.cut is not None:
-        folds = date_folds(run.full[SCORE_TARGET].games, run.cut).to_frame()
+    games = run.full[SCORE_TARGET].games
+    if run.split == "date":
+        folds = date_folds(games, run.cut).to_frame()
+    elif run.split == "so_far":
+        folds = pd.concat([so_far_folds(games, run.cut, run.n_folds, run.season, repeat)
+                           for repeat in range(run.repeats)], axis=1)
     else:
         folds = pd.concat([assign_folds(run.game_ids.to_numpy(), run.n_folds, run.season, repeat)
                            for repeat in range(run.repeats)], axis=1)
@@ -619,13 +646,16 @@ def season_folds(run: SeasonRun) -> pd.DataFrame:
     return folds
 
 
-def fold_checks(run: SeasonRun, rated: RatedWorld, test_checks: dict, fit_ids: set, test_ids: set) -> dict:
-    """Every leak check of one fold, in the order the fold file lists them."""
+def fold_checks(run: SeasonRun, rated: RatedWorld, test_checks: dict, fit_ids: set, test_ids: set,
+                universe: set | None = None) -> dict:
+    """Every leak check of one fold, in the order the fold file lists them.  `universe` is every game of the fold set,
+    the whole season unless --so-far leaves the games after the season so far out; the check keeps its name."""
     unseen = set(run.saved["O"]["unseen"]) & set(run.saved["D"]["unseen"])
     checks = dict(test_checks)
     checks.update(rated.world.checks)
     checks["folds: fit and test games disjoint"] = not (fit_ids & test_ids)
-    checks["folds: fit and test games cover the season"] = (fit_ids | test_ids) == set(run.game_ids)
+    checks["folds: fit and test games cover the season"] = (fit_ids | test_ids) == (
+        set(run.game_ids) if universe is None else universe)
     checks["prior models: never trained on this season or its neighbours"] = (
         {run.season - 1, run.season, run.season + 1} <= unseen)
     return checks
@@ -682,14 +712,16 @@ def run_fold(run: SeasonRun, folds: pd.DataFrame, repeat: int, fold: int, starte
     with --pieces)."""
     stem = f"{run.season}_r{repeat}_f{fold}"
     fold_started = time.time()
-    test_ids = set(folds.index[folds[f"r{repeat}"] == fold])
-    fit_ids = set(folds.index) - test_ids
+    column = folds[f"r{repeat}"]
+    test_ids = set(folds.index[column == fold])
+    universe = set(folds.index[column != OUTSIDE])
+    fit_ids = universe - test_ids
     games = run.full[SCORE_TARGET].games
     test_idx = np.sort(games.loc[games["game_id"].astype(str).isin(test_ids), "game_idx"].to_numpy())
     rated = run.rate(fit_ids)
     pooled, teams, test_poss, summary, test_checks = score_test_games(rated, run.full[SCORE_TARGET], test_idx,
                                                                       run.cfg)
-    checks = fold_checks(run, rated, test_checks, fit_ids, test_ids)
+    checks = fold_checks(run, rated, test_checks, fit_ids, test_ids, universe)
     if run.box_files is not None:
         pieces, piece_checks = fold_pieces(run, rated, fit_ids)
         checks.update(piece_checks)
@@ -701,10 +733,11 @@ def run_fold(run: SeasonRun, folds: pd.DataFrame, repeat: int, fold: int, starte
              .assign(season=run.season, repeat=repeat, fold=fold))
     table.to_parquet(run.out_dir / f"players_{stem}.parquet", index=False)
     save_test(run.out_dir / f"test_{stem}.npz", pooled, teams)
-    # rate_from, split and cut name the fold shape: rated from the rest of the season, its games drawn at random
-    # ("random", cut None) or the season so far ("date", cut the share asked for, season_share the share it holds)
+    # rate_from, split and cut name the fold shape: rated from the rest of the fold set, its games drawn at random
+    # over the season ("random", cut None), the season so far against the rest ("date", cut the share asked for,
+    # season_share the share it holds) or drawn at random over the season so far ("so_far")
     summary.update(season=run.season, repeat=repeat, fold=fold, folds_per_repeat=run.n_folds, rate_from="rest",
-                   fit_games=len(fit_ids), split="random" if run.cut is None else "date", cut=run.cut,
+                   fit_games=len(fit_ids), split=run.split, cut=run.cut,
                    season_share=run.season_share, rated_share=run.prior_share(fit_ids),
                    test_games=len(test_ids), prior_inputs=run.prior_inputs,
                    context_inputs=run.context_inputs,
@@ -835,26 +868,35 @@ def attach_line(run: SeasonRun, lines: FoldLines, whole_season_context: bool) ->
         run.context_panel = run.world(set(run.game_ids)).panel
 
 
-def cut_words(cut: float | None, part_season_rows: bool) -> str:
+def cut_words(cut: float | None, part_season_rows: bool, split: str = "date") -> str:
     """The fold design in words, for the run's first lines."""
     if cut is None:
         return ""
     told = ("its share of the season" if part_season_rows
             else "1, a whole season: they trained without part-season rows")
+    if split == "so_far":
+        return (f"the season so far drawn at random: each season's games through the day {cut:g} of its regular season "
+                f"had been played, in folds; every later game left out; the boosters are told {told}")
     return (f"the season so far: each season rated from its games through the day {cut:g} of its regular season had "
             f"been played, scored on the rest; the boosters are told {told}")
 
 
 def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_only: bool = False,
               pieces: bool = False, whole_season_inputs: bool = False, whole_season_context: bool = False,
-              n_folds: int = N_FOLDS, repeats: int = REPEATS, cut: float | None = None) -> int:
+              n_folds: int = N_FOLDS, repeats: int = REPEATS, cut: float | None = None,
+              so_far: float | None = None) -> int:
     """`openrapm folds`: the reproduction check and the folds of every season, then the gathered files.  With
     `pieces`, each fold also writes its pieces_<stem>.parquet (`fold_pieces`); with `whole_season_inputs`, every
     fold's boosters read the whole season's inputs (the leak control, the module docstring); with
     `whole_season_context`, every fold's second prior reads the whole season's context numbers (its leak arm).
     `folds_in_parts` runs it in several processes at once.  `n_folds` and `repeats` are the fold design, four and
     three as step 4's folds are built; with `cut`, one date fold a season, the season so far at that share of its
-    regular season against the rest (the module docstring)."""
+    regular season against the rest; with `so_far`, the season so far at that share drawn at random into the fold
+    design (the module docstring)."""
+    if cut is not None and so_far is not None:
+        raise SystemExit("--cut and --so-far are two fold designs; ask for one")
+    split = "date" if cut is not None else "so_far" if so_far is not None else "random"
+    cut = so_far if so_far is not None else cut
     box_files = None
     if pieces:
         from .site import BoxScoreFiles
@@ -867,7 +909,7 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
     check_models(meta)
     settings = fold_settings(meta)
     part_season_rows = trained_on_part_seasons(meta)
-    if cut is not None:
+    if split == "date":
         n_folds, repeats = 1, 1
     base_table = pd.read_parquet(outputs / f"{base}.parquet")
     panel = trainable_panel(cfg)
@@ -882,7 +924,7 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
         print("the leak control: every fold's boosters read the WHOLE season's inputs, held-back games included",
               flush=True)
     if cut is not None:
-        print(cut_words(cut, part_season_rows), flush=True)
+        print(cut_words(cut, part_season_rows, split), flush=True)
     lines = fold_lines(cfg, meta, whole_season_context)
     started = time.time()
     for season in seasons:
@@ -890,7 +932,7 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
         full = {target: designs.season(season, target) for target in world_targets(settings)}
         run = SeasonRun(season, cfg, full, SeasonSources(SeasonTables(season, cfg), roles, inputs, debut), saved,
                         out_dir, box_files, settings=settings, n_folds=n_folds, repeats=repeats, cut=cut,
-                        part_season_rows=part_season_rows)
+                        split=split, part_season_rows=part_season_rows)
         if whole_season_inputs:
             run.prior_panel = run.world(set(run.game_ids)).panel
         if lines is not None:

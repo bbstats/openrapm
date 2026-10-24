@@ -23,6 +23,7 @@ import numpy as np
 from ..design import SEASON_PHASES, TARGETS, Design, assemble, piece_from_frames
 from .box_scores import season_box
 from .config import resolve
+from .ingest import played_phases
 from .shots import DEFENSE_TARGETS
 from .stints import build_season
 
@@ -111,8 +112,9 @@ def stored_piece(season: int, phase: str, cfg: dict) -> dict:
 
 def block_design(seasons, cfg: dict, target: str = "pts", phases=SEASON_PHASES) -> Design:
     """The design of `seasons` on a `design.TARGETS` target, from the stored pieces of `phases` (both, by default:
-    a season is its regular season and its playoffs)."""
-    return assemble([stored_piece(season, phase, cfg) for season in seasons for phase in phases], cfg, target)
+    a season is its regular season and its playoffs) that were played (`played_phases`)."""
+    return assemble([stored_piece(season, phase, cfg) for season in seasons
+                     for phase in played_phases(season, cfg, phases)], cfg, target)
 
 
 class DesignCache:
@@ -167,5 +169,5 @@ class DesignCache:
             return design[0] if isinstance(design, tuple) else design
         if target not in TARGETS:
             raise KeyError(f"unknown target {target!r}; have {sorted(TARGETS)} and {sorted(DEFENSE_TARGETS)}")
-        pieces = [self.piece(season, phase) for season in seasons for phase in SEASON_PHASES]
+        pieces = [self.piece(season, phase) for season in seasons for phase in played_phases(season, self.cfg)]
         return assemble(pieces, self.cfg, target)

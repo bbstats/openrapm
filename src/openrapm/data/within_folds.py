@@ -36,8 +36,16 @@ import scipy.sparse as sp
 
 from .legacy_names import translate_frame
 
-__all__ = ["Fold", "read_fold", "fold_stems", "check_fold_record", "check_repeats", "check_fold_files", "load_folds",
-           "fold_games", "HeldStints", "held_back_stints"]
+__all__ = ["SPLITS", "OUTSIDE", "Fold", "read_fold", "fold_stems", "check_fold_record", "check_repeats",
+           "check_fold_files", "load_folds", "fold_games", "HeldStints", "held_back_stints"]
+
+# how a fold set splits its seasons (`openrapm folds`): "random", games drawn at random over the whole season, step 4's;
+# "date", the season so far against the rest of it (--cut), read only by the readings of a season so far; "so_far",
+# games drawn at random over the season so far (--so-far), the shrink by share's (notes/DECISIONS.md, experiment 108)
+SPLITS = ("random", "date", "so_far")
+# a game a fold set leaves out altogether, neither fitted on nor held back: with --so-far, every game after the season
+# so far.  In folds_<season>.parquet it reads -2; -1 is a date fold's fitted game
+OUTSIDE = -2
 
 
 
@@ -133,22 +141,20 @@ def _summary_value(summary: dict, key: str, missing: str) -> str:
     return missing if value is None or (isinstance(value, float) and np.isnan(value)) else value
 
 
-def check_fold_record(record: dict, stem: str, allow_date: bool = False) -> None:
-    """A fold must be a three-quarter-season fold whose leak checks all passed.
+def check_fold_record(record: dict, stem: str, splits=("random",)) -> None:
+    """A fold must be a three-quarter-season fold whose leak checks all passed, of a split its reader asks for.
 
     `rate_from` "rest" is the fold size the shipped multipliers were fitted at; a fold written before that key
-    existed has none, or NaN, and is "rest" too.  `split` "random" is a fold of games drawn at random over the whole
-    season; "date" is the season so far against the rest of it (`openrapm folds --cut`), which only a reading of the
-    season so far may ask for (`allow_date`): step 4's full-season multipliers fitted on it would be fitted on a
-    quarter season.  A fold written before the key existed is "random".
+    existed has none, or NaN, and is "rest" too.  `split` is one of `SPLITS`; a fold written before the key existed is
+    "random".  Step 4 of whole seasons reads "random" folds only: fitted on a season so far, its multipliers would be
+    fitted on a quarter season.
     """
     mode = _summary_value(record["summary"], "rate_from", "rest")
     if mode != "rest":
         raise ValueError(f"fold {stem} rates from {mode!r}, not the three-quarter-season `rest` size")
     split = _summary_value(record["summary"], "split", "random")
-    if split not in (("random", "date") if allow_date else ("random",)):
-        raise ValueError(f"fold {stem} splits its season by {split!r}; only a reading of the season so far reads "
-                         f"date folds (allow_date)")
+    if split not in tuple(splits):
+        raise ValueError(f"fold {stem} splits its season by {split!r}; this reader reads {', '.join(splits)} folds")
     failed = [name for name, passed in record["checks"].items() if isinstance(passed, bool) and not passed]
     if failed:
         raise ValueError(f"fold {stem}: leak checks failed {failed}")
@@ -170,7 +176,7 @@ def check_repeats(records: dict) -> None:
         raise ValueError(f"(season, repeat) without exactly its folds: {sorted(short.items())[:5]}")
 
 
-def check_fold_files(directory: Path, seasons: tuple[int, int], allow_date: bool = False) -> list[str]:
+def check_fold_files(directory: Path, seasons: tuple[int, int], splits=("random",)) -> list[str]:
     """The stems of the folds in `directory` whose season is in [first, last], after checking that each fold has
     its three files, each passed its leak checks and every repeat has its folds.  Reads only the small json
     files, so a command can call it before the minutes of work that end in `load_folds`; raises ValueError naming
@@ -187,35 +193,37 @@ def check_fold_files(directory: Path, seasons: tuple[int, int], allow_date: bool
         raise ValueError(f"{directory} lacks {len(missing)} fold files, among them {missing[0]}")
     records = {stem: json.loads((directory / f"fold_{stem}.json").read_text()) for stem in stems}
     for stem, record in records.items():
-        check_fold_record(record, stem, allow_date)
+        check_fold_record(record, stem, splits)
     check_repeats(records)
     return stems
 
 
-def load_folds(directory: Path, seasons: tuple[int, int], allow_date: bool = False) -> list[Fold]:
-    """Every fold in `directory` whose season is in [first, last], after `check_fold_files` (`allow_date` as there).
+def load_folds(directory: Path, seasons: tuple[int, int], splits=("random",)) -> list[Fold]:
+    """Every fold in `directory` whose season is in [first, last], after `check_fold_files` (`splits` as there).
 
     Example: `load_folds(paths.within / "weightfix_within", (2017, 2026))` reads 120 folds: ten seasons, three
     repeats each, four folds a repeat.
     """
-    return [read_fold(Path(directory), stem) for stem in check_fold_files(directory, seasons, allow_date)]
+    return [read_fold(Path(directory), stem) for stem in check_fold_files(directory, seasons, splits)]
 
 
 def fold_games(directory: Path, fold: Fold) -> tuple[set, set]:
     """(fit games, held-back games) of a fold, as game ids: its season's assignment, folds_<season>.parquet, column
-    r<repeat>.  The held-back games must be the ones its test file stores; a ValueError says so if not.
+    r<repeat>; a game the fold set leaves out (`OUTSIDE`) is neither.  The held-back games must be the ones its test
+    file stores; a ValueError says so if not.
 
     Example: 2024, repeat 0, fold 0 holds back 328 of the season's 1,312 games and fits on the other 984.
     """
     directory = Path(directory)
     assignment = pd.read_parquet(directory / f"folds_{fold.season}.parquet")
-    held_mask = assignment[f"r{fold.repeat}"].to_numpy() == fold.fold
+    column = assignment[f"r{fold.repeat}"].to_numpy()
+    held_mask = column == fold.fold
     games = assignment.index.astype(str)
     held = set(games[held_mask])
     stored = set(np.load(directory / f"test_{fold.stem}.npz", allow_pickle=True)["game_id"].astype(str))
     if stored != held:
         raise ValueError(f"{fold.stem}: the test file holds {len(stored)} games, the assignment {len(held)}")
-    return set(games[~held_mask]), held
+    return set(games[~held_mask & (column != OUTSIDE)]), held
 
 
 @dataclass

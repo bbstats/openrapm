@@ -125,6 +125,29 @@ def test_each_multiplier_is_read_to_a_full_season_off_the_line_through_two_holdo
         ps.read_to_full_season(quarter, tenth, 0.25, 0.25)
 
 
+def test_the_multipliers_of_any_share_come_off_the_line_and_a_whole_season_is_the_full_season_reading():
+    """The shrink by share (2026-10-23): a whole season, 1, off the line through the quarter folds, 0.75, and the tenth
+    folds, 0.90, is experiment 101's reading to a full season; between fitted shares the straight line; under the
+    smallest share its multipliers."""
+    seasons = [2025, 2026]
+    quarter = pd.DataFrame({"season": seasons, "multiplier_off": [0.70, 0.68], "games_multiplier_off": [1.41, 1.40],
+                            "fold_seasons": [8, 8]})
+    tenth = pd.DataFrame({"season": seasons, "multiplier_off": [0.71, 0.69], "games_multiplier_off": [1.35, 1.33],
+                          "fold_seasons": [8, 8]})
+    half = pd.DataFrame({"season": seasons, "multiplier_off": [0.55, 0.53], "games_multiplier_off": [1.60, 1.62],
+                         "fold_seasons": [8, 8]})
+    whole = ps.multipliers_at_share({0.75: quarter, 0.90: tenth}, 1.0)
+    pd.testing.assert_frame_equal(whole, ps.read_to_full_season(quarter, tenth, 0.25, 0.10))
+    by_share = {0.375: half, 0.75: quarter, 0.90: tenth}
+    at_half = ps.multipliers_at_share(by_share, 0.50).set_index("season")
+    assert at_half.games_multiplier_off[2025] == pytest.approx(1.60 + 0.125 / 0.375 * (1.41 - 1.60))
+    assert at_half.multiplier_off[2026] == pytest.approx(0.53 + 0.125 / 0.375 * (0.68 - 0.53))
+    pd.testing.assert_frame_equal(ps.multipliers_at_share(by_share, 0.75), quarter)
+    pd.testing.assert_frame_equal(ps.multipliers_at_share(by_share, 0.10), half)
+    assert ps.multipliers_at_share(by_share, 1.0).games_multiplier_off.tolist() == pytest.approx(
+        whole.games_multiplier_off.tolist())
+
+
 def test_the_held_back_share_is_one_over_the_folds_of_a_repeat():
     from types import SimpleNamespace
     quarter = [SimpleNamespace(season=2026, repeat=r, fold=k) for r in range(3) for k in range(4)]

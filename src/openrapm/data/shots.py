@@ -44,6 +44,7 @@ from ..box_rates import mom_k, shrink
 # The phases a shooter's totals are summed over; ("RS",) until the playoffs joined the fit.
 from ..design import SEASON_PHASES as SHOT_PHASES
 from .config import resolve
+from .ingest import played_phases
 
 OTHER = {"A": "B", "B": "A"}                     # a row in half A is priced with half-B totals
 CALIB_BAND = (0.995, 1.005)
@@ -66,11 +67,12 @@ def load_shots(seasons, cfg, phases: tuple = SHOT_PHASES) -> pd.DataFrame:
     (one parquet per season and phase, read once per process).
 
     A playoff game prices a shooter's attempts like any other (owner's ruling, 2026-09-10).  The PO
-    shots tables carry their own A/B split, so the halves stay balanced within each phase.
+    shots tables carry their own A/B split, so the halves stay balanced within each phase.  A phase not yet played
+    (ingest.played_phases: the playoffs of the season in progress) has no table and is skipped.
     """
     folder = resolve(cfg, "stints")
     return pd.concat([_shots_table(folder / f"{int(season)}_{phase}_shots.parquet", int(season), phase)
-                      for season in seasons for phase in phases], ignore_index=True)
+                      for season in seasons for phase in played_phases(season, cfg, phases)], ignore_index=True)
 
 
 def load_ft(seasons, cfg, halves: pd.Series, phases: tuple = SHOT_PHASES) -> pd.DataFrame:

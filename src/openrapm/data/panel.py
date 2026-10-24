@@ -79,7 +79,7 @@ from ..features import (
     SHOT_TOTALS,
 )
 from ..on_court import offcourt_rates, oncourt_rates
-from .bio import PLAYER_INPUTS, bio_inputs, player_bio, player_inputs, tenure_inputs
+from .bio import PLAYER_INPUTS, bio_inputs, player_bio, player_inputs, refresh_bio, tenure_inputs
 from .careers import ROLE_COLUMNS, careers_before
 from .config import resolve
 from .dashboard_rates import dashboard_rates
@@ -97,14 +97,14 @@ from .roles import (
     season_ages,
     shares_from_stints,
 )
-from .seasons import drop_untrainable
+from .seasons import drop_untrainable, in_progress, trainable_through
 from .shots import DEFENSE_TARGETS, SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS, player_shot_frame
 
 __all__ = ["OFFENCE", "DEFENCE_ALL", "PANEL_TARGETS", "SeasonTables", "roles_from_games", "score_state",
            "playoff_share", "cut_design", "fit_designs", "season_to_date", "SeasonSources", "SeasonPanel",
            "season_panel",
            "fill_missing_score_state", "build_panel", "write_panel", "build_panel_so_far", "write_panel_so_far",
-           "trainable_panel", "trainable_panel_so_far", "panel_and_trainable_seasons",
+           "trainable_panel", "trainable_panel_so_far", "in_progress_panel", "panel_and_trainable_seasons",
            "panel_from_old_names", "migrate_panel"]
 
 OFFENCE = "points_with_expected_free_throws"
@@ -438,22 +438,37 @@ def season_panel(season: int, cfg: dict, designs: dict, sources: SeasonSources, 
 
 
 # -------------------------------------------------------------------------------------------- every season's rows
-def fill_missing_score_state(panel: pd.DataFrame) -> pd.DataFrame:
+def fill_missing_score_state(panel: pd.DataFrame, through: int | None = None) -> pd.DataFrame:
     """A row with no possessions on its side has no score state; it takes the whole panel's mean, as the published
-    panel did (scripts/69_closeness_panel.py, retired).  Such a row weighs nothing in any fit.
+    panel did (scripts/69_closeness_panel.py, retired).  Such a row weighs nothing in any fit.  With `through`, the
+    mean of the seasons up to it only, so the season in progress, whose rows change every morning, moves no row of a
+    finished season.
 
     Example: in the published panel one row, a 2010 offence row with no offensive possessions, reads the means
     0.140, 0.309 and 9.54."""
+    source = panel if through is None else panel[panel.season.astype(int) <= int(through)]
     for column in CLOSENESS:
-        panel[column] = panel[column].fillna(panel[column].mean())
+        panel[column] = panel[column].fillna(source[column].mean())
     return panel
+
+
+def refresh_season_in_progress(cfg: dict) -> pd.DataFrame:
+    """The roles table (data/roles.py) with the season in progress built again, its bio feed fetched again, and the bio
+    cache rebuilt from the feed (data/bio.py), so a player's first game reaches his team share, age, height and draft
+    pick the next morning.  With no season in progress, the stored table as it is.  Returns the roles table."""
+    refresh = in_progress(cfg)
+    roles = build_roles(cfg, refresh=refresh)
+    if refresh:
+        refresh_bio(cfg)
+    return roles
 
 
 def build_panel(cfg: dict, seasons=None) -> pd.DataFrame:
     """Every season's rows from all of its games (`season_panel`), in season order, the score state filled
-    (`fill_missing_score_state`).  The roles table is read from paths.cache, or built there first (data/roles.py)."""
+    (`fill_missing_score_state`).  The roles table is read from paths.cache, or built there first (data/roles.py);
+    the season in progress has its roles rows and its bio feed built again (`refresh_season_in_progress`)."""
     seasons = (range(int(cfg["first_season"]), int(cfg["last_season"]) + 1) if seasons is None else seasons)
-    roles = build_roles(cfg)
+    roles = refresh_season_in_progress(cfg)
     inputs = player_season_inputs(roles, cap=share_cap(cfg))
     debut = careers_before(cfg, roles)
     designs = DesignCache(cfg)
@@ -465,7 +480,7 @@ def build_panel(cfg: dict, seasons=None) -> pd.DataFrame:
                                                                            inputs, debut)).rows)
         designs.clear()
         print(f"  {season}: {len(parts[-1])} rows ({time.time() - started:.1f}s)", flush=True)
-    return fill_missing_score_state(pd.concat(parts, ignore_index=True))
+    return fill_missing_score_state(pd.concat(parts, ignore_index=True), through=trainable_through(cfg))
 
 
 def build_panel_so_far(cfg: dict, shares, seasons=None) -> pd.DataFrame:
@@ -558,6 +573,13 @@ def trainable_panel_so_far(cfg: dict) -> pd.DataFrame:
         raise FileNotFoundError(f"{path} does not exist; build it with `openrapm data panel --so-far 0.25,0.5,0.75`")
     panel, _ = drop_untrainable(pd.read_parquet(path), cfg, what="the season-so-far panel")
     return panel
+
+
+def in_progress_panel(cfg: dict) -> pd.DataFrame:
+    """The season panel's rows of the seasons in progress (data/seasons.py `in_progress`): what a build rates such a
+    season from, its prior answering for them, while nothing trains on them.  Empty when no season is in progress."""
+    panel = _read(cfg)
+    return panel[panel.season.astype(int).isin(in_progress(cfg))].reset_index(drop=True)
 
 
 def panel_and_trainable_seasons(cfg: dict) -> tuple[pd.DataFrame, set]:

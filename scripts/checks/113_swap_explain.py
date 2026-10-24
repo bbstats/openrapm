@@ -46,6 +46,7 @@ from openrapm.data.config import load_config, resolve
 from openrapm.data.ingest import raw_dir
 from openrapm.data.panel import panel_and_trainable_seasons
 from openrapm.data.roles import main_teams
+from openrapm.data.seasons import last_finished
 from openrapm.data.stints import load_season_stints
 from openrapm.data.tables import load_ratings
 from openrapm.settings import PRODUCT
@@ -105,7 +106,7 @@ def parse_args(argv=None) -> argparse.Namespace:
 def all_season_swaps(cfg: dict, raw: pd.DataFrame, features: pd.DataFrame, fold_of: pd.Series,
                      n_folds: int) -> dict:
     """{season: swap_adjust.SeasonSwaps} for every season of the config, against the step-4 ratings."""
-    first, last = int(cfg["first_season"]), int(cfg["last_season"])
+    first, last = int(cfg["first_season"]), last_finished(cfg)
     margin_clip = float(cfg.get("margin_clip", 25))
     swaps = {}
     for season in range(first, last + 1):

@@ -1,4 +1,4 @@
-"""Raw data pulls, cached per game / per season as parquet. Never re-download.
+"""Raw data pulls, cached per game / per season as parquet. Never re-download, but for the season in progress.
 
 Sources (stats.nba.com via nba_api):
   - LeagueGameLog (player rows), one call per season and phase -> game list + per-game box counts
@@ -13,6 +13,13 @@ Layout under cfg paths.raw:
   box/{season}/{game_id}.parquet
   periodbox/{season}/{game_id}_{period}.parquet
   pbpstats_games/{season}_{phase}.parquet
+
+The season in progress (2026-10-23; the owner: "let's pull data for the current season so far. we also need to pull
+data regularly").  Its game log grows every night, so `openrapm data ingest --refresh` fetches the log again instead of
+reading the cache, and keeps only the games dated before today in US Eastern time (`eastern_today`): a game of today may
+still be in play, and its play-by-play, once cached, would never be fetched again; until 4 AM Eastern, today is still
+the night before.  Example: refreshed at 9:45 PM on 2026-10-23, or at 12:45 AM on 2026-10-24, the 2027 log holds the
+games of 2026-10-21 and 2026-10-22; the 6 AM refresh of 2026-10-24 adds 2026-10-23's.
 
 Offline: with the environment variable OPENRAPM_OFFLINE=1, every fetch raises `OfflineFetch` (a
 RuntimeError naming the file it would have written) instead of reaching the network, so a rebuild from
@@ -29,6 +36,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import pandas as pd
+import pyarrow.parquet as pq
 import requests
 
 from .config import resolve
@@ -87,8 +95,19 @@ def _retry(fn, tries=4, base_sleep=5.0, what=""):
 
 
 # ----------------------------------------------------------------------------- game logs
-def load_gamelog(season: int, phase: str, cfg, force=False) -> pd.DataFrame:
-    """Player-level game log for a season and phase (cached)."""
+LATE_GAME_HOURS = 4   # a night's last games end after midnight in US Eastern time: until 4 AM it is still that night
+
+
+def eastern_today(now=None) -> pd.Timestamp:
+    """Today's date in US Eastern time, the calendar the NBA dates its games by, without a time zone; until 4 AM it
+    is still the night before, whose last games may be in play (at 12:45 AM on 2026-10-24, today is 2026-10-23)."""
+    now = pd.Timestamp.now(tz="America/New_York") if now is None else pd.Timestamp(now).tz_convert("America/New_York")
+    return (now - pd.Timedelta(hours=LATE_GAME_HOURS)).normalize().tz_localize(None)
+
+
+def load_gamelog(season: int, phase: str, cfg, force=False, before=None) -> pd.DataFrame:
+    """Player-level game log for a season and phase (cached).  `force` fetches it again, as the season in progress
+    needs (the module docstring); `before`, a date, keeps only the games dated before it."""
     path = raw_dir(cfg) / "gamelog" / f"{season}_{phase}.parquet"
     if path.exists() and not force:
         return pd.read_parquet(path)
@@ -99,6 +118,8 @@ def load_gamelog(season: int, phase: str, cfg, force=False) -> pd.DataFrame:
                                            player_or_team_abbreviation="P", timeout=TIMEOUT).get_data_frames()[0]
     gl = _retry(pull, what=f"gamelog {season} {phase}")
     gl = gl[gl["GAME_ID"].str.startswith(GAME_PREFIX[phase])].copy()   # drop play-in etc.
+    if before is not None:
+        gl = gl[pd.to_datetime(gl["GAME_DATE"]) < pd.Timestamp(before)].copy()
     gl["season"] = season
     gl["phase"] = phase
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -106,8 +127,25 @@ def load_gamelog(season: int, phase: str, cfg, force=False) -> pd.DataFrame:
     return gl
 
 
+def played_phases(season: int, cfg: dict, phases=("RS", "PO")) -> list:
+    """The phases of `phases` the season has games in: all but one whose game log is on disk with no rows, the playoffs
+    of the season in progress.  A phase with no game log at all is kept, so building it fails loudly as before."""
+    out = []
+    for phase in phases:
+        path = raw_dir(cfg) / "gamelog" / f"{int(season)}_{phase}.parquet"
+        if not path.exists() or pq.ParquetFile(path).metadata.num_rows > 0:
+            out.append(phase)
+    return out
+
+
 def game_table(gl: pd.DataFrame) -> pd.DataFrame:
-    """One row per game: game_id, game_date, home_team_id, away_team_id, season, phase."""
+    """One row per game: game_id, game_date, home_team_id, away_team_id, season, phase.  A phase not yet played (the
+    playoffs of the season in progress) gives no rows."""
+    if gl.empty:
+        return pd.DataFrame({"game_id": pd.Series(dtype=str), "game_date": pd.Series(dtype="datetime64[ns]"),
+                             "season": pd.Series(dtype=int), "phase": pd.Series(dtype=str),
+                             "home_team_id": pd.Series(dtype=int), "away_team_id": pd.Series(dtype=int),
+                             "neutral": pd.Series(dtype=bool)})
     g = gl[["GAME_ID", "GAME_DATE", "TEAM_ID", "MATCHUP", "season", "phase"]].drop_duplicates(["GAME_ID", "TEAM_ID"])
     g = g.assign(is_home=g["MATCHUP"].str.contains(" vs. "))
     # neutral-site games (NBA Cup knockout rounds, international games) list both teams as "@" (or both "vs."):
@@ -224,12 +262,21 @@ def pbpstats_games(season: int, phase: str, cfg, force=False) -> pd.DataFrame:
 
 # ----------------------------------------------------------------------------- season driver
 def ingest_season(season: int, phases=("RS", "PO"), cfg=None, workers=2, delay=0.6, log_every=100,
-                  verbose=True) -> dict:
-    """Pull game logs, then PBP + boxscore for every game not yet cached. Idempotent."""
+                  verbose=True, refresh=False) -> dict:
+    """Pull game logs, then PBP + boxscore for every game not yet cached. Idempotent.  With `refresh`, the season in
+    progress: the game log and the pbpstats cross-check are fetched again, the log cut to the games before today in
+    US Eastern time (the module docstring)."""
     summary = {}
+    before = eastern_today() if refresh else None
     for phase in phases:
-        games = game_table(load_gamelog(season, phase, cfg))
-        _pbpstats_cross_check(season, phase, cfg, verbose)
+        log = load_gamelog(season, phase, cfg, force=refresh, before=before)
+        if log.empty:
+            summary[phase] = dict(n_games=0, fetched=0, failed=[], seconds=0.0)
+            if verbose:
+                print(f"{season} {phase}: no games yet")
+            continue
+        games = game_table(log)
+        _pbpstats_cross_check(season, phase, cfg, verbose, force=refresh)
         todo = [game_id for game_id in games["game_id"]
                 if not (_pbp_path(game_id, cfg).exists() and _box_path(game_id, cfg).exists())]
         if verbose:
@@ -242,10 +289,10 @@ def ingest_season(season: int, phases=("RS", "PO"), cfg=None, workers=2, delay=0
     return summary
 
 
-def _pbpstats_cross_check(season: int, phase: str, cfg, verbose: bool) -> None:
+def _pbpstats_cross_check(season: int, phase: str, cfg, verbose: bool, force: bool = False) -> None:
     """Cache the pbpstats possessions of the season (a cross-check only, so a failed pull is printed, not raised)."""
     try:
-        pbpstats_games(season, phase, cfg)
+        pbpstats_games(season, phase, cfg, force=force)
     except OfflineFetch:
         raise                                  # offline, a missing file stops the run; it is not a failed pull
     except Exception as error:

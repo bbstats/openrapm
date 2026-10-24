@@ -130,6 +130,15 @@ def trainable_through(cfg) -> int:
                    str(cfg.get("paths", {}).get("raw", DEFAULT_PATHS["raw"])))
 
 
+def last_finished(cfg) -> int:
+    """config.yaml's last season whose Finals are over: what a score or a check reads up to, so a season in progress
+    is never scored.  A config that names no data folder (a simulated league's) has none in progress: its last
+    season.  Example: 1997-2027 in October 2026 gives 2026."""
+    if "_root" not in cfg:
+        return int(cfg["last_season"])
+    return min(int(cfg["last_season"]), trainable_through(cfg))
+
+
 def trainable(cfg) -> Trainable:
     """Every season a model may be fit on."""
     cut = trainable_through(cfg)
@@ -140,6 +149,21 @@ def in_progress(cfg) -> tuple[int, ...]:
     """The seasons that exist in the data but may not be trained on -- normally zero or one of them."""
     cut = trainable_through(cfg)
     return tuple(s for s in all_seasons(cfg) if s > cut)
+
+
+SCHEDULED_GAMES = 1230   # a regular season's games since 2004-05: thirty teams, 82 games each, two teams a game
+
+
+def share_played(season: int, cfg) -> float:
+    """The share of `season`'s regular season played: 1 for a season whose Finals are over, else its regular-season
+    games in the cached game log over the 1,230 scheduled.  The box-score prior is told it (box_prior.rated_rows, the
+    part-season rows of experiment 107).  Example: on the morning of 2026-10-24, 2027's 16 games give 0.013."""
+    if int(season) <= trainable_through(cfg):
+        return 1.0
+    from .ingest import raw_dir
+    path = raw_dir(cfg) / "gamelog" / f"{int(season)}_RS.parquet"
+    games = pd.read_parquet(path, columns=["GAME_ID"]).GAME_ID.nunique() if path.exists() else 0
+    return min(1.0, games / SCHEDULED_GAMES)
 
 
 def check_trainable(seasons, cfg, what: str = "this fit") -> Trainable:

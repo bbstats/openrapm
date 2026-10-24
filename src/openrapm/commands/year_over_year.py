@@ -42,6 +42,7 @@ import pandas as pd
 from .. import scoring
 from ..data.box_scores import main_team_by_minutes
 from ..data.designs import DesignCache
+from ..data.seasons import last_finished
 
 __all__ = ["RESULT_COLUMNS", "SPLITS", "scored_seasons", "fill_rule", "NeighbourTable", "neighbour_tables",
            "split_labels", "score_season", "run", "by_direction", "report"]
@@ -67,11 +68,12 @@ REPORT_HEADER = (
 
 
 def scored_seasons(cfg: dict, first: int | None = None, last: int | None = None) -> list[int]:
-    """The scored seasons: `first` to `last`, by default every season with a season on both sides of it.
+    """The scored seasons: `first` to `last`, by default every season with a season on both sides of it, the seasons
+    counted through the last one whose Finals are over (a season in progress is never scored or scored against).
 
-    Example: config.yaml's 1997-2026 gives 1998-2025.
+    Example: config.yaml's 1997-2027, in October 2026, gives 1998-2025.
     """
-    first_season, last_season = int(cfg["first_season"]), int(cfg["last_season"])
+    first_season, last_season = int(cfg["first_season"]), last_finished(cfg)
     first = first_season + 1 if first is None else int(first)
     last = last_season - 1 if last is None else int(last)
     return [season for season in range(first, last + 1) if first_season <= season <= last_season]

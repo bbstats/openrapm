@@ -180,23 +180,34 @@ def season_ages(season: int, cfg, force: bool = False) -> pd.DataFrame:
 
 
 def build_roles(cfg, seasons=None, force: bool = False, verbose: bool = True,
-                phases: tuple = ROLE_PHASES) -> pd.DataFrame:
-    """Every season's roles + ages -> data/cache/roles_RSPO.parquet (one row per player-season-team)."""
+                phases: tuple = ROLE_PHASES, refresh=()) -> pd.DataFrame:
+    """Every season's roles + ages -> data/cache/roles_RSPO.parquet (one row per player-season-team).
+
+    A cached table is read, and the seasons it lacks are added (a season config.yaml's last_season has just reached);
+    `refresh`, the seasons in progress (data/seasons.py `in_progress`), are built again with their ages fetched again,
+    since every night adds games and players to them.  Example: on 2026-11-02 the cache holds 1997-2026 and the 2027
+    rows of the morning before; `build_roles(cfg, refresh=(2027,))` keeps 1997-2026 as stored and rebuilds 2027."""
     path = roles_path(cfg, phases)
-    if path.exists() and not force:
-        return pd.read_parquet(path)
     seasons = list(range(int(cfg["first_season"]), int(cfg["last_season"]) + 1)) if seasons is None else list(seasons)
+    refresh = {int(s) for s in refresh}
+    stored = pd.read_parquet(path) if path.exists() and not force else None
+    have = set() if stored is None else set(stored.season.astype(int))
+    todo = [s for s in seasons if s not in have or s in refresh]
+    if not todo:
+        return stored
     parts = []
-    for s in seasons:
+    for s in todo:
         r = season_roles(s, cfg, phases)
-        a = season_ages(s, cfg)
+        a = season_ages(s, cfg, force=s in refresh)
         r = r.merge(a, on=["player_id", "season"], how="left")
         miss = float(r.age.isna().mean()) if len(r) else 0.0
         parts.append(r)
         if verbose:
             print(f"  roles {s}: {r.player_id.nunique()} players, {len(r)} player-team rows, "
                   f"age missing {miss:.1%}", flush=True)
-    out = pd.concat(parts, ignore_index=True)
+    if stored is not None:
+        parts.insert(0, stored[~stored.season.astype(int).isin(todo)])
+    out = pd.concat(parts, ignore_index=True).sort_values("season", kind="stable").reset_index(drop=True)
     path.parent.mkdir(parents=True, exist_ok=True)
     out.to_parquet(path, index=False)
     return out

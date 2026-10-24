@@ -97,7 +97,8 @@ import pandas as pd
 import scipy.sparse as sp
 
 __all__ = ["RULES", "unseen_fold_seasons", "fold_seasons_used", "fold_terms", "fit_multipliers",
-           "multipliers_by_season", "held_back_share", "read_to_full_season", "full_season_multipliers",
+           "multipliers_by_season", "held_back_share", "read_to_full_season", "multipliers_at_share",
+           "full_season_multipliers",
            "team_split", "stint_equations", "within_multipliers_by_season", "shrink", "season_factors",
            "layered_fold_parts", "shrink_fold"]
 
@@ -232,6 +233,34 @@ def read_to_full_season(first: pd.DataFrame, second: pd.DataFrame, first_share: 
     slope = (a[columns] - b[columns]) / (first_share - second_share)
     out = a.copy()
     out[columns] = a[columns] - first_share * slope
+    return out.reset_index()
+
+
+def multipliers_at_share(by_share: dict, share: float) -> pd.DataFrame:
+    """Each season's multipliers for a rating built from `share` of a season's games, off a straight line in the
+    share through the multipliers fitted at other shares, column by column.
+
+    `by_share` is {share of the season the fitted ratings were built from: a `multipliers_by_season` table}: step 4's
+    quarter folds are 0.75, its tenth folds 0.90.  Between two fitted shares the line through them; past the largest,
+    the line through the two largest, extended; under the smallest, the smallest's multipliers.  A whole season reads
+    1, so {0.75: quarter folds, 0.90: tenth folds} at 1 is `read_to_full_season`, to the last digit: a rating's
+    multipliers depend on how much of a season it is built from (the owner, 2026-10-23: "things are tuned for a
+    'single season's scale'"), and a season so far is a smaller share of the same line.
+
+    Example: a games' part of 1.41 at 0.75 and 1.35 at 0.90 reads 1.31 at 1; with 1.60 at 0.375 as well, a rating of
+    the first half of a season, 0.50, reads 1.60 + (0.50 - 0.375) / (0.75 - 0.375) x (1.41 - 1.60) = 1.537.
+    """
+    shares = sorted(float(key) for key in by_share)
+    tables = {float(key): table.set_index("season") for key, table in by_share.items()}
+    share = float(share)
+    if len(shares) == 1 or share <= shares[0]:
+        return tables[shares[0]].reset_index()
+    upper = next((key for key in shares if key >= share), shares[-1])
+    lower = shares[shares.index(upper) - 1]
+    low, high = tables[lower], tables[upper].loc[tables[lower].index]
+    columns = [column for column in MULTIPLIER_COLUMNS if column in low.columns and column in high.columns]
+    out = low.copy()
+    out[columns] = low[columns] + (share - lower) / (upper - lower) * (high[columns] - low[columns])
     return out.reset_index()
 
 

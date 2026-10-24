@@ -1,7 +1,7 @@
 # Handoff
 
 **What this file is.**  Where the work stands, what waits on the owner, and the commands a session runs.  Rewritten
-on the afternoon of 2026-10-22, its status and next steps on 2026-10-23 (twice); the earlier file is in git history.  `DECISIONS.md` is the permanent record and carries
+on the afternoon of 2026-10-22, its status and next steps on 2026-10-23 (twice) and 2026-10-24; the earlier file is in git history.  `DECISIONS.md` is the permanent record and carries
 every number quoted here; read its measurement traps before trusting a number.  `README.md` says what OpenRAPM is,
 `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's standing rules.
 
@@ -51,7 +51,7 @@ every number quoted here; read its measurement traps before trusting a number.  
   `outputs/season_panel_before_inputs99.parquet`.
 - **New in the reports**: `z_clustered` in the year-over-year test and `z_newey_west` in check 151, beside the plain
   z; which rules is the owner's.
-- **Deferred by the owner**: rating the season in progress (DECISIONS.md, "The bug-fix pass").
+- **The season in progress, 2027, rated and published every morning since 2026-10-24** (Next, "START HERE").
 - **The defense is wider than before experiment 82**: standard deviation 1.73 / 1.61 / 1.60 by era, 2026 1.64, against
   1.38 / 1.33 / 1.36 and 1.53 for experiment 80.  Against the consensus in 2026 the slope of our defense on theirs is
   about 1; the extra spread is players rated differently, carried by big-man stats: blocks, height, defensive
@@ -89,10 +89,38 @@ every number quoted here; read its measurement traps before trusting a number.  
 
 ## Next
 
+### START HERE: 2027 is rated and published every morning (2026-10-24)
+
+The owner, 2026-10-24: "You can publish. Yea median player in 2027, off poss. 6am is great."  Done and running;
+DECISIONS.md, "The season in progress, 2027"; README.md, "The season in progress, every morning".
+
+- **The daily job**: Task Scheduler "OpenRAPM daily update" runs `scripts/daily_update.sh` at 6:00 AM (this PC keeps
+  Eastern time): ingest `--refresh`, stints, events, hustle games, dashboards, the panel, `openrapm build --seasons
+  2027 --replace-seasons`, `openrapm site --openrapm-decomposition` into `A:/code/spmm_site`, a worktree of
+  origin/main only the job writes, then the two data files committed and pushed to main.  Log
+  `outputs/daily/<date>.log`, the last result `outputs/daily/last.txt`.  First published 2026-10-24 at 1:36 AM
+  (861c30c), 16 games, 345 players.
+- **The page** opens on `meta.default_season` (8f025fd): the latest season whose median player, of everyone who
+  played, has 250 offensive possessions (`site.default_season`).  2026 today, the 2027 median is 46.
+- **The job runs the working tree's code.**  None of this session's code is committed (the owner's word is needed): a
+  stash or a branch switch in A:\code\spmm makes the next morning fail and leaves yesterday's ratings up.  Keep
+  `config.yaml` `last_season: 2027`.  Local `main` lags origin/main by the job's commits: fetch before site work.
+- **Waiting on the owner**:
+  1. 2027 is rated by experiment 107, 1997-2026 on the site are still experiment 106; publish 107 for every season
+     (one full `openrapm build`, then `openrapm site --openrapm-decomposition`)?
+  2. The first days are extreme (four 2-possession San Antonio players at +7 to +8 on 16 games: the prior scale
+     2.24 against 1.17, and the swap part of the prior on their context).  Proposed, not built: score ratings built
+     from each past season's first 2%, 5% and 10% of games on the rest of it, with the prior scale fitted on the
+     games against held at the finished seasons' value.
+
 The offense/defense balance is fixed and published for 2017-2026 (experiment 106, version D).
 
-**The season so far: build the shrink by share (the owner, 2026-10-23: "Sure adopt then build the shrink by
-share").**  For any day of a season: step 4 fitted by the
+**The season so far: the shrink by share was built and FAILED (experiment 108, DECISIONS.md).**  On held-back games
+inside a season so far, today's whole-season step 4 beats multipliers fitted on the season so far at every share from
+0.40 and ties at a quarter season, on the within-season WOWY test; the refit narrows the ratings within teams, which
+that test punishes.  So a season so far is described with today's step 4 and the part-season rows; the step 4 fitted on
+date folds is only for a forecast of the rest of a season.  What is left for mid-season support is the season in
+progress itself (below).  Earlier plan, kept for the record: for any day of a season: step 4 fitted by the
 share of the season played (a refit at a quarter season is worth 10 on the scale above; one date fold a season is
 noisy, so fit on several cut days or a smooth line in the share); and the season in progress itself, which cannot be
 rated yet (the bug-fix pass's list: the game log cached forever, both phases always built, the panel's rated rows

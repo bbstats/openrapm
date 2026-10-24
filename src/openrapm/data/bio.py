@@ -57,6 +57,13 @@ def player_bio(cfg, force: bool = False) -> pd.DataFrame:
     return _stored_bio(path)
 
 
+def refresh_bio(cfg) -> pd.DataFrame:
+    """bio.parquet built again from the bio feed, and every copy of the feed this process read forgotten: after the
+    season in progress's feed was fetched again (data/panel.py, `refresh_season_in_progress`)."""
+    _season_listings.cache_clear()
+    return player_bio(cfg, force=True)
+
+
 @functools.lru_cache(maxsize=None)
 def _stored_bio(path: Path) -> pd.DataFrame:
     """bio.parquet as stored at `path`, read once per process; keyed on the path, so a test that points paths.cache

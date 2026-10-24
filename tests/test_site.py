@@ -32,7 +32,17 @@ def test_ratings_rows_keep_players_with_possessions_best_first_at_two_decimals()
 
 def test_ratings_document_counts_every_player_of_the_table():
     meta = site.ratings_document(_table(), "2026-10-09")["meta"]
-    assert meta == {"seasons": [2025, 2026], "built": "2026-10-09", "n_players": 3}
+    assert meta == {"seasons": [2025, 2026], "default_season": 2026, "built": "2026-10-09", "n_players": 3}
+
+
+def test_a_season_in_progress_is_the_default_once_its_median_player_has_250_possessions():
+    """The owner, 2026-10-23: "2027 should not be the DEFAULT on the site until the median player has 250
+    possessions played"; the median of everyone who has played, on offensive possessions."""
+    finished = pd.DataFrame({"season": 2026, "poss_season": [5000.0, 3000.0, 400.0]})
+    early = pd.DataFrame({"season": 2027, "poss_season": [400.0, 249.0, 30.0, 0.0, 0.0]})   # median of the three: 249
+    assert site.default_season(pd.concat([finished, early])) == 2026
+    later = early.assign(poss_season=[400.0, 250.0, 30.0, 0.0, 0.0])
+    assert site.default_season(pd.concat([finished, later])) == 2027
 
 
 def test_a_table_without_a_published_column_is_refused():
@@ -49,7 +59,8 @@ def test_ratings_json_is_compact_escaped_and_dated_by_the_table(tmp_path):
     cfg = {"_root": str(tmp_path), "paths": {"outputs": str(tmp_path / "outputs")}}
     assert site.run_site(cfg, out_dir=tmp_path / "site") == 0
     text = (tmp_path / "site" / "data" / "ratings.json").read_text(encoding="utf-8")
-    assert text.startswith('{"meta":{"seasons":[2025,2026],"built":"2026-10-09","n_players":3},"rows":[{"s":2025,')
+    assert text.startswith('{"meta":{"seasons":[2025,2026],"default_season":2026,"built":"2026-10-09","n_players":3},'
+                           '"rows":[{"s":2025,')
     assert "Joki\\u0107" in text and not text.endswith("\n")
     site.run_site(cfg, out_dir=tmp_path / "site", built="2027-01-01")
     assert json.loads((tmp_path / "site" / "data" / "ratings.json").read_text())["meta"]["built"] == "2027-01-01"

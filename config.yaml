@@ -3,7 +3,7 @@
 
 # Seasons are named by the year they end (1997 = 1996-97).
 first_season: 1997    # the first season ingested, built and rated
-last_season: 2026     # the last; it may still be in progress (data/seasons.py decides what may be trained on)
+last_season: 2027     # the last; it may still be in progress (data/seasons.py decides what may be trained on)
 windows:              # the decomposition page's ten three-season windows (openrapm site --decomposition)
   - [1997, 1999]
   - [2000, 2002]

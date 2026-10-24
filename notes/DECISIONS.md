@@ -9636,3 +9636,94 @@ The scale below is the season page's on the within-season WOWY test of the rest 
 - **The chain's incumbent** is parts107: `INC_NAME`, `INC_SYSTEM` parts107, `INC_FOLDS` parts107_early,parts107_within,
   `AUDIT_REF` parts107_within.  The noise control is still noise_bags10, built before experiment 94's parser fixes.
 - **Not published.**  The product table and the site still carry experiment 106.
+
+## Experiment 108: the shrink by share (the owner, 2026-10-23: "Sure adopt then build the shrink by share", then, choosing to describe the season so far over forecasting the rest of it, "Love it, let's try it"; registered before any result)
+
+- **The idea.**  Step 4's multipliers depend on how much of a season a rating is built from: the quarter folds give
+  them for ratings built from 0.75 of a season, the tenth folds for 0.90, and experiment 101 reads the line through the
+  two at 1, a whole season.  A season so far is a smaller share of the same line.  `prior_shrink.multipliers_at_share`
+  reads each multiplier off the straight line through the fitted shares; at 1, through 0.75 and 0.90 alone, it is
+  `read_to_full_season` to the last digit.
+- **The points.**  `openrapm folds --so-far SHARE`: each season's games through the day SHARE of its regular season had
+  been played, drawn into folds as a whole season's are, four a repeat and three repeats, every later game left out
+  (`split` "so_far"); a fold is rated from three quarters of the season so far and scored on the quarter held back.  At
+  0.25, 0.5 and 0.75 with the adopted prior (parts107), ratings built from about 0.19, 0.38 and 0.56 of a season; with
+  the whole season's 0.75 and 0.90, five points.  The boosters are told the season so far's share, as a whole season's
+  folds tell them 1.
+- **The check.**  The same folds at 0.40 and 0.90, which the line never sees, ratings built from about 0.30 and 0.68 of
+  a season, and each of the three points with itself left out of the line; on each, the within-season WOWY test by
+  stints on its own held-back games: the line against step 4 refit on the scored folds, against today's whole-season
+  step 4 read to a full season, against the whole season's quarter folds alone, and against no step 4.
+- **Fixed before the result.**  The line works for any day if it ties the refit and beats the whole-season step 4 at
+  both check days, in every era.
+- **Runs.**  `scratch/2026-10-23_so_far/stage_d1.sh`, `stage_d2.sh`, `line_check.py`; log `outputs/so_far108.log`; folds
+  `outputs/within/parts107_sofar25`, `_sofar50`, `_sofar75`, `_sofar40`, `_sofar90`.
+
+### Experiment 108: result (2026-10-23, `outputs/so_far108.log`; `scratch/2026-10-23_so_far/line_check.py`, `line_report.py`): FAILED
+
+Within-season WOWY by stints on each fold set's own held-back games; ratings of zero 0, step 4 refit on the scored
+folds 100, each season's score averaged.  "Today's" is the whole-season step 4 read to a full season, the line
+through 0.75 and 0.90 at 1.  The ratings of each fold set are built from 0.19, 0.30, 0.38, 0.57 and 0.68 of a season.
+
+| scored folds | line | today's | the whole season's quarter folds | no step 4 | line minus today's, t | seasons the line is better |
+|---|---|---|---|---|---|---|
+| 0.25, its point left out | 102.7 | 101.7 | 102.5 | 77.5 | -0.62 | 15 of 30 |
+| 0.40, never seen | 99.9 | 103.5 | 103.5 | 89.4 | +6.88 | 3 of 30 |
+| 0.50, its point left out | 99.2 | 103.4 | 103.2 | 93.0 | +10.03 | 1 of 30 |
+| 0.75, its point left out | 100.1 | 102.1 | 101.7 | 95.9 | +12.55 | 0 of 30 |
+| 0.90, never seen | 100.3 | 101.5 | 100.9 | 96.9 | +11.86 | 0 of 30 |
+
+- **Today's step 4 wins at every share from 0.40, in every era** (the line minus today's, t +3.45 to +8.17 by era),
+  and ties at a quarter season (+1.07, -0.25, -2.31 by era).  A refit on the season so far itself loses to today's at
+  every share too (0.40: -0.60 for today's, t -7.34, 28 of 30; check 151 on the same folds equals the script to the
+  last digit).
+- **The multipliers do move with the share** (`multipliers.py`, means by era): at a quarter season the within layer's
+  offensive prior part 0.53-0.55 against 0.70-0.72 for the whole season's quarter folds, its defensive games' part
+  2.5-3.4 against about 2.0; the team layer's prior part 0.55-0.62 against 0.66-0.70, its games' part 1.67-1.86
+  against 1.36-1.42.  By 0.90 every multiplier is back within 0.03 of the whole season's.
+- **Why the refit loses: the width trap (39).**  The refit puts less on the prior part inside teams, so the season so
+  far's ratings come out narrower within teams; the within layer is fitted on stints inside games, and the WOWY test
+  scores stints across a season with the team levels out, which rewards the wider ratings, the same disagreement as
+  experiment 106's.  Today's step 4, read to a full season, is the widest of the arms and scores best.
+- **What it means.**  To describe a season so far on the within-season WOWY test, today's whole-season step 4 is the
+  best of the three: no step 4 by share is needed.  To forecast the rest of a season, the step 4 refit on date folds
+  (experiment 107's test) beats it by 10 points at a quarter season.  Whole-season ratings never move: at a share of 1
+  the line is today's step 4 to the last digit.
+- **Code kept, not shipped:** `prior_shrink.multipliers_at_share`, `openrapm folds --so-far`, `data.within_folds.SPLITS`
+  and `OUTSIDE`, with their tests; nothing reads them in a build.
+
+## The season in progress, 2027, rated and published every morning (the owner, 2026-10-23: "let's pull data for the current season so far. we also need to pull data regularly(!) ... 2027 should not be the DEFAULT on the site until the median player has 250 possessions played though"; 2026-10-24: "You can publish. Yea median player in 2027, off poss. 6am is great.")
+
+- **Pulled.**  2027's first 16 games, 2026-10-20 to 2026-10-22: play-by-play, box scores, stints, play-by-play counts,
+  hustle games, the 68 season-to-date dashboards.  `data ingest --refresh` fetches the season's game log again and
+  keeps the games dated before today in US Eastern time, until 4 AM the night before, so a late game still in play is
+  never cached half played (`ingest.eastern_today`; tests/test_season_in_progress.py).
+- **The bug-fix pass's blockers, fixed.**  A phase with an empty game log is not played (`ingest.played_phases`), so
+  the design, the shots and `data stints` build the regular season alone; `build.rate_table` rates a season in progress
+  from its own panel rows (`data.panel.in_progress_panel`, `build.SeasonsInProgress`) while every fit still reads the
+  trainable panel, and tells the box-score prior and the swap part of the prior the share played
+  (`data.seasons.share_played`: regular-season games over the 1,230 scheduled, 0.013 on 2026-10-24); `data panel`
+  builds the season's roles rows and bio feed again each run (`roles.build_roles(refresh=)`,
+  `panel.refresh_season_in_progress`); a rookie the frozen names file lacks takes his game-log name
+  (`tables.game_log_names`; the 33 players of 2027's game log the file lacks, Ja'Kobi Gillespie among them); the score-state fill of a row with no
+  possessions takes the finished seasons' mean, so the season in progress moves no finished season's row.
+  `config.yaml` `last_season: 2027`; the year-over-year test and checks 70, 73, 90 and 113 read through the last
+  finished season (`seasons.last_finished`), so 2027 is never scored.
+- **Nothing finished moved.**  With 2027 added, the season panel's 1997-2026 rows, the three published tables'
+  1997-2026 rows and step 4's 1997-2026 multipliers are byte-identical to before (`DataFrame.equals`).
+- **Published, 2026-10-24 at 1:36 AM** (861c30c, after 8f025fd, the page reading `meta.default_season`): 345 players
+  of 2027.  The page opens on 2026: the median 2027 player has 46 offensive possessions.  `openrapm build --seasons
+  2027 --replace-seasons` writes the season into the published tables in place of its old rows, 4.5 minutes;
+  `site --openrapm-decomposition`, 3.5 to 6 minutes.
+- **The daily job**: `scripts/daily_update.sh` (README.md, "The season in progress, every morning"), Task Scheduler
+  "OpenRAPM daily update", 6:00 AM, wakes the PC, starts late after a missed morning, runs only while the owner is
+  logged on (git's credentials need the session).  It stops at the first failure and leaves yesterday's ratings up.
+- **Two things for the owner.**
+  1. 2027 is rated by experiment 107 (the part-season rows and parts107's folds, the incumbent), while 1997-2026 on the
+     site are still experiment 106 (multipliers fold tag `inputs99_*` against 2027's `parts107_*`).  Publishing 107 for
+     every season is one full `openrapm build`.
+  2. A season's first days are extreme: at 16 games, four San Antonio players with 2 possessions each are rated +7 to
+     +8, between Chet Holmgren and Giannis Antetokounmpo.  Not the box-score prior's share input (its answers move
+     under 0.01 between telling it 1.3% and a whole season; `scratch/2026-10-24_daily/share_probe.py`): the 2027 prior
+     scale is 2.24 on offense against 1.17 in 2026, fitted on 16 games, and the swap part of the prior's line weighs
+     the 2-possession players' context.  In finished seasons every player under 50 possessions has a negative prior.

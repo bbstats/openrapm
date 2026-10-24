@@ -56,10 +56,11 @@ deviation from it, with multipliers of its own fitted on the system's own held-b
 
 The season so far (2026-10-23).  A system's folds may be the date folds of `openrapm folds --cut SHARE`: each season
 rated from its games through the day SHARE of its regular season had been played, and scored on the rest of the season,
-one fold a season.  Its step 4 is then fitted on those folds, as for any system: the multipliers of a season so far,
-from the 8 nearest seasons' own seasons so far.  `--step4-from LABEL:SYSTEM` fits a system's step 4 on another system's
-folds instead, as the full-season step 4 would be read onto a season so far; with `LABEL=FOLDERS` in --systems one set
-of folds can be read under two labels, once with each step 4.
+one fold a season; or the folds of `openrapm folds --so-far SHARE`, the games of that season so far drawn at random
+into folds, as step 4's folds draw a whole season's.  Its step 4 is then fitted on those folds, as for any system:
+the multipliers of a season so far, from the 8 nearest seasons' own seasons so far.  `--step4-from LABEL:SYSTEM` fits
+a system's step 4 on another system's folds instead, as the full-season step 4 would be read onto a season so far;
+with `LABEL=FOLDERS` in --systems one set of folds can be read under two labels, once with each step 4.
 
 Writes outputs/csv/wowy_<tag>_seasons.csv (every system, season, stage and slice) and wowy_<tag>.csv (the paired
 summary).
@@ -324,13 +325,14 @@ class PieceStages:
 def system_folds(within, name: str) -> tuple[list, dict]:
     """(every fold on disk of the system, {stem: its folder}): step 4's multipliers for a scored season come from the
     seasons around it.  A system's folds are outputs/within/<name>_early and <name>_within, or one folder
-    outputs/within/<name> (the date folds of a season so far); date folds are read here, never by step 4 itself."""
-    from openrapm.data.within_folds import load_folds
+    outputs/within/<name> (the folds of a season so far); a season so far's folds are read here, never by step 4 of
+    whole seasons."""
+    from openrapm.data.within_folds import SPLITS, load_folds
     folds, where = [], {}
     for folder in (within / name, within / f"{name}_early", within / f"{name}_within"):
         if not folder.exists():
             continue
-        for fold in load_folds(folder, (1997, 2026), allow_date=True):
+        for fold in load_folds(folder, (1997, 2026), splits=SPLITS):
             folds.append(fold)
             where[fold.stem] = folder
     return folds, where

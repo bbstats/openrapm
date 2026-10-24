@@ -136,6 +136,28 @@ python -m openrapm site --bias --decomposition --openrapm-decomposition --simila
 the environment variable `OPENRAPM_CONFIG`), points every command at another `config.yaml`, so a check
 can run in a scratch folder.
 
+### The season in progress, every morning
+
+`scripts/daily_update.sh` updates the season in progress (config.yaml's `last_season`, 2027) and publishes it. Task
+Scheduler runs it on the project's machine at 6 AM Eastern, after the night's games are final; about 20 minutes.
+
+```bash
+python -m openrapm data ingest 2027 2027 RS,PO --refresh     # the game log again, games before today, Eastern
+python -m openrapm data stints 2027 2027 RS,PO --force
+python -m openrapm data events 2027 2027 --force
+python -m openrapm data hustle-games 2027 2027
+python -m openrapm data dashboards 2027 2027 --force
+python -m openrapm data panel --force                        # also rebuilds the season's roles rows and bio feed
+python -m openrapm build --seasons 2027 --replace-seasons    # 2027 in place of yesterday's 2027, nothing else moves
+python -m openrapm site --openrapm-decomposition --out-dir A:/code/spmm_site/docs
+```
+
+Then it commits the two data files in `A:/code/spmm_site`, a worktree of `origin/main` that only the job writes, and
+pushes them to `main`. Nothing trains on the season in progress (data/seasons.py); it is rated from its own rows, the
+box-score prior told the share of the regular season played. The ratings page opens on it once its median player has
+250 offensive possessions. Each morning's log is `outputs/daily/<date>.log`, and `outputs/daily/last.txt` says how
+the last one ended.
+
 ## The two rules
 
 **1. The current season is never trained on.** Every season may be loaded and rated. A season may be

@@ -20,4 +20,6 @@ already in the repository keep their spelling.
   to the owner.
 - Never thrash the owner's machine. Several processes at once are fine (`--jobs`, `OPENRAPM_JOBS`) while they fit
   its memory and cores; when a chain is stopped, stop its python children too.
-- Never commit, push or publish (the site is `docs/`, served from `main`) without the owner's word.
+- Commit every piece of work as it is done (the owner, 2026-10-24: "always commit man! no reason not to"). Never push
+  or publish (the site is `docs/`, served from `main`) without the owner's word; the daily job of
+  `scripts/daily_update.sh` publishes the season in progress on its own, by the owner's word of 2026-10-24.

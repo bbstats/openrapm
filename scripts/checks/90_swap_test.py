@@ -73,6 +73,7 @@ from openrapm import swap_test as sw
 from openrapm.commands.console import one_thread, use_utf8
 from openrapm.data.config import load_config, resolve, resolve_path
 from openrapm.data.roles import main_teams
+from openrapm.data.seasons import last_finished
 from openrapm.data.stints import load_season_stints
 from openrapm.data.tables import load_ratings
 
@@ -267,7 +268,7 @@ def run(grading: Grading, cfg: dict, first: int, last: int, penalty: float) -> t
     Seasons are read in order and each is kept until the season after it is read, so at most two seasons' lineups
     are in memory.  Returns (scores, levels) in swap_test.score_season's shape plus scored, rated and direction.
     """
-    first_season, last_season = int(cfg["first_season"]), int(cfg["last_season"])
+    first_season, last_season = int(cfg["first_season"]), last_finished(cfg)
     seasons = range(first_season, last_season + 1)
     margin_clip = float(cfg.get("margin_clip", 25))
     path = plain_rapm_path(cfg, penalty)

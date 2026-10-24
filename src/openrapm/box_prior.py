@@ -462,7 +462,8 @@ def training_seasons(panel: pd.DataFrame | None, side: str, unseen, season: int,
 
 
 def season_priors(labels: dict, panel: pd.DataFrame, season: int, unseen, settings, params: dict,
-                  outside: dict | None = None, part_seasons: pd.DataFrame | None = None) -> dict:
+                  outside: dict | None = None, part_seasons: pd.DataFrame | None = None,
+                  rated: pd.DataFrame | None = None, share: float = 1.0) -> dict:
     """{"O": SidePrior, "D": SidePrior} for one rated season.
 
     `labels` is step 1's {"O", "D"} tables; `panel` the season panel with the seasons a build may not train on
@@ -473,6 +474,8 @@ def season_priors(labels: dict, panel: pd.DataFrame, season: int, unseen, settin
     by possessions like an input.  With `outside` (rapm.outside_labels), every training row is labelled from the
     seasons outside its own (`training_rows`).  `part_seasons`, the panel of each season so far gated the same way
     (data.panel.trainable_panel_so_far, the shares asked for), adds the part-season rows of the training seasons.
+    `rated`, the rated season's own panel rows when `panel` cannot hold them (the season in progress, which no fit
+    may train on), and `share`, the share of its regular season played (`rated_rows`), rate a season so far.
     """
     half_life = float(settings.prior.era_halflife)
     columns = [*PANEL_INPUTS, "era_kernel"] if half_life > 0 else PANEL_INPUTS
@@ -486,7 +489,8 @@ def season_priors(labels: dict, panel: pd.DataFrame, season: int, unseen, settin
         kernel = train.era_kernel.to_numpy(float) if half_life > 0 else None
         model = fit_prior(train, names + ROW_FEATURES, params[side], settings.prior.n_folds,
                           settings.prior.fold_assignment, kernel, settings.prior.bags)
-        rated = rated_rows(panel[(panel.side == side) & (panel.season == season)], names)
-        out[side] = SidePrior(values=dict(zip(rated.player_id.to_numpy(), predict(model, rated))), model=model,
+        source = panel if rated is None else rated
+        rows = rated_rows(source[(source.side == side) & (source.season == season)], names, share)
+        out[side] = SidePrior(values=dict(zip(rows.player_id.to_numpy(), predict(model, rows))), model=model,
                               feature_names=names)
     return out

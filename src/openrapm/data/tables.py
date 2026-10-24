@@ -28,9 +28,27 @@ CONSENSUS_FILE = "data/external/consensus.csv"
 
 
 def player_names(cfg: dict) -> pd.DataFrame:
-    """(player_id, player_name), one row per player; an empty name reads back as missing, nothing else does."""
-    return pd.read_csv(resolve_path(cfg, PLAYER_NAMES), dtype={"player_id": "int64", "player_name": "str"},
-                       keep_default_na=False, na_values=[""], encoding="utf-8")
+    """(player_id, player_name), one row per player; an empty name reads back as missing, nothing else does.  A player
+    the frozen file does not hold, a rookie of the season in progress, takes his name from the game logs
+    (`game_log_names`); every name the file holds stays as it is."""
+    frozen = pd.read_csv(resolve_path(cfg, PLAYER_NAMES), dtype={"player_id": "int64", "player_name": "str"},
+                         keep_default_na=False, na_values=[""], encoding="utf-8")
+    logged = game_log_names(cfg)
+    new = logged[~logged.player_id.isin(frozen.player_id)]
+    return pd.concat([frozen, new], ignore_index=True) if len(new) else frozen
+
+
+def game_log_names(cfg: dict) -> pd.DataFrame:
+    """(player_id, player_name) from every cached game log, the latest season's spelling first, one row per player.
+    Example: Ja'Kobi Gillespie, 1643551, first seen in the 2027 regular season's log."""
+    folder = resolve(cfg, "raw") / "gamelog"
+    parts = [pd.read_parquet(path, columns=["PLAYER_ID", "PLAYER_NAME"]) for path in sorted(folder.glob("*.parquet"),
+                                                                                         reverse=True)]
+    parts = [part for part in parts if len(part)]
+    if not parts:
+        return pd.DataFrame({"player_id": pd.Series(dtype="int64"), "player_name": pd.Series(dtype=str)})
+    names = pd.concat(parts, ignore_index=True).drop_duplicates("PLAYER_ID")
+    return pd.DataFrame({"player_id": names.PLAYER_ID.astype("int64"), "player_name": names.PLAYER_NAME.astype(str)})
 
 
 def team_of_rows(keys: pd.DataFrame, cfg: dict) -> pd.DataFrame:

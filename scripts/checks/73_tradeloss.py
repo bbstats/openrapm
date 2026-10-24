@@ -58,6 +58,7 @@ from openrapm.commands.console import use_utf8
 from openrapm.data.box_scores import main_team_by_minutes
 from openrapm.data.config import load_config, resolve_path
 from openrapm.data.roles import franchise
+from openrapm.data.seasons import last_finished
 from openrapm.scoring import QUALITY_LABELS, quality_tiers
 from openrapm.trade_set import SIDES, eligible_corrections, missed
 
@@ -131,7 +132,7 @@ def player_tiers(args: argparse.Namespace, cfg: dict) -> pd.Series | None:
     if args.movers and args.quality:
         raise SystemExit("--movers=1 and --quality= each set the tiers; pick one")
     if args.movers:
-        return mover_tiers(range(int(cfg["first_season"]), int(cfg["last_season"]) + 1), cfg)
+        return mover_tiers(range(int(cfg["first_season"]), last_finished(cfg) + 1), cfg)
     if args.quality:
         return quality_tiers(pd.read_parquet(resolve_path(cfg, args.quality),
                                              columns=["player_id", "season", "rating_total"]))
