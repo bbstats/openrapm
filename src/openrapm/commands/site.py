@@ -99,10 +99,14 @@ def run_site(cfg: dict, ratings=None, out_dir=None, built: str | None = None, bi
 # whole table.  The NBA id is in the file and the CSV download, not on the page.
 RATINGS_FIELDS = {"season": "s", "player_name": "n", "rating_off": "o", "rating_def": "d", "rating_total": "t",
                   "poss_season": "p", "player_id": "id"}
+# The owner, 2026-10-24: "i want to have a 60 possession minimum, site-wide".  A player-season with fewer offensive
+# possessions is rated as before and left off every page and download; the bias and similarity pages ask 1,000.
+MIN_POSSESSIONS_SHOWN = 60
 
 
 def ratings_rows(table: pd.DataFrame) -> list[dict]:
-    """One row per player-season with possessions, ratings at two decimals, by season and then best total first.
+    """One row per player-season with 60 or more offensive possessions (`MIN_POSSESSIONS_SHOWN`), ratings at two
+    decimals, by season and then best total first.
 
     Example: {"s": 2026, "n": "Victor Wembanyama", "o": 2.16, "d": 5.3, "t": 7.45, "p": 5398, "id": 1641705}.
     A missing name is written "".
@@ -112,7 +116,7 @@ def ratings_rows(table: pd.DataFrame) -> list[dict]:
         raise SystemExit(f"the ratings table lacks {missing}; `openrapm build` writes them all")
     short = table[list(RATINGS_FIELDS)].rename(columns=RATINGS_FIELDS)
     short["n"] = short["n"].fillna("").astype(str)
-    short = short[short.p > 0].sort_values(["s", "t"], ascending=[True, False])
+    short = short[short.p >= MIN_POSSESSIONS_SHOWN].sort_values(["s", "t"], ascending=[True, False])
     return [dict(s=int(r.s), n=r.n, o=round(float(r.o), 2), d=round(float(r.d), 2), t=round(float(r.t), 2),
                  p=int(r.p), id=int(r.id))
             for r in short.itertuples(index=False)]
@@ -134,11 +138,11 @@ def default_season(table: pd.DataFrame) -> int:
 
 
 def ratings_document(table: pd.DataFrame, built: str) -> dict:
-    """{"meta": the seasons, the season the pages open on, the built date and the number of players, "rows":
+    """{"meta": the seasons, the season the pages open on, the built date and the number of players shown, "rows":
     `ratings_rows`}."""
     rows = ratings_rows(table)
     meta = dict(seasons=sorted({row["s"] for row in rows}), default_season=default_season(table), built=built,
-                n_players=int(table.player_id.nunique()))
+                n_players=len({row["id"] for row in rows}))
     return dict(meta=meta, rows=rows)
 
 
@@ -1095,12 +1099,12 @@ def update_openrapm_worst(worst: dict, rows: pd.DataFrame, pieces: pd.DataFrame,
 
 
 def openrapm_rows(rows: pd.DataFrame, pieces: pd.DataFrame, names: np.ndarray, teams: dict | None = None) -> list:
-    """One season's rows in OPENRAPM_FIELDS order, best total first, players with no possessions left out (as
+    """One season's rows in OPENRAPM_FIELDS order, best total first, players under 60 possessions left out (as
     ratings.json leaves them): name, NBA id, possessions (whole, as ratings.json writes them), each side's pieces at
     two decimals, then his teams ({player_id: "SAC/IND"}; "" for a player it lacks)."""
     teams = teams or {}
     frame = pieces.assign(n=names, p=rows.poss_season.to_numpy())
-    frame = frame[frame.p > 0].sort_values("total_rating", ascending=False)
+    frame = frame[frame.p >= MIN_POSSESSIONS_SHOWN].sort_values("total_rating", ascending=False)
     return [[r["n"], int(r["player_id"]), int(r["p"]),
              *([round(float(r[f"{side}_{piece}"]), 2) for piece in OPENRAPM_PIECES] for side in OPENRAPM_SIDES),
              teams.get(int(r["player_id"]), "")]

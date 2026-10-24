@@ -32,7 +32,15 @@ def test_ratings_rows_keep_players_with_possessions_best_first_at_two_decimals()
 
 def test_ratings_document_counts_every_player_of_the_table():
     meta = site.ratings_document(_table(), "2026-10-09")["meta"]
-    assert meta == {"seasons": [2025, 2026], "default_season": 2026, "built": "2026-10-09", "n_players": 3}
+    assert meta == {"seasons": [2025, 2026], "default_season": 2026, "built": "2026-10-09", "n_players": 2}
+
+
+def test_the_pages_show_players_with_60_or_more_possessions():
+    """The owner, 2026-10-24: "i want to have a 60 possession minimum, site-wide"."""
+    table = _table().assign(poss_season=[5282.0, 59.9, 60.0, 2.0])
+    rows = site.ratings_rows(table)
+    assert [(row["s"], row["id"]) for row in rows] == [(2025, 203999), (2026, 1)]
+    assert site.ratings_document(table, "2026-10-24")["meta"]["n_players"] == 2
 
 
 def test_a_season_in_progress_is_the_default_once_its_median_player_has_250_possessions():
@@ -59,7 +67,7 @@ def test_ratings_json_is_compact_escaped_and_dated_by_the_table(tmp_path):
     cfg = {"_root": str(tmp_path), "paths": {"outputs": str(tmp_path / "outputs")}}
     assert site.run_site(cfg, out_dir=tmp_path / "site") == 0
     text = (tmp_path / "site" / "data" / "ratings.json").read_text(encoding="utf-8")
-    assert text.startswith('{"meta":{"seasons":[2025,2026],"default_season":2026,"built":"2026-10-09","n_players":3},'
+    assert text.startswith('{"meta":{"seasons":[2025,2026],"default_season":2026,"built":"2026-10-09","n_players":2},'
                            '"rows":[{"s":2025,')
     assert "Joki\\u0107" in text and not text.endswith("\n")
     site.run_site(cfg, out_dir=tmp_path / "site", built="2027-01-01")
