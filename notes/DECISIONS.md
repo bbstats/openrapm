@@ -9809,3 +9809,12 @@ below 0 is better.
   player.
 - **Verdict:** pending the owner.  Holding is tested to a tenth of a season; from a quarter the fitted scale was not
   compared with a held one.
+
+## A 60-possession minimum on the site (the owner, 2026-10-24: "i want to have a 60 possession minimum, site-wide. go. don't finish until published")
+
+`site.MIN_POSSESSIONS_SHOWN = 60`: a player-season under 60 offensive possessions is rated as before and left out of
+ratings.json and decompose_openrapm.json, so off the ratings page, its decomposition view and both CSV downloads; the
+bias and similarity pages already ask 1,000.  `meta.n_players` counts the players shown.  14,156 player-seasons shown
+of 14,952; a finished season loses a median 18, from 8 to 60, 2027 on 28 games 142 of 376, its eleven 1-2
+possession players among them.  The ratings are unchanged.  Published 5ff2daf, the Pages build checked, the live
+minimum 60.  The daily job carries it.

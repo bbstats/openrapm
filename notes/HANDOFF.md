@@ -101,6 +101,8 @@ DECISIONS.md, "The season in progress, 2027"; README.md, "The season in progress
   origin/main only the job writes, then the two data files committed and pushed to main.  Log
   `outputs/daily/<date>.log`, the last result `outputs/daily/last.txt`.  First published 2026-10-24 at 1:36 AM
   (861c30c), 16 games, 345 players.
+- **A 60-possession minimum on the site** since 2026-10-24 (5ff2daf, `site.MIN_POSSESSIONS_SHOWN`): fewer offensive
+  possessions and a player-season is rated but not shown.
 - **The page** opens on `meta.default_season` (8f025fd): the latest season whose median player, of everyone who
   played, has 250 offensive possessions (`site.default_season`).  2026 today, the 2027 median is 46.
 - **The job runs the working tree's code**, committed as it is written (the owner, 2026-10-24: "always commit"): a
