@@ -9753,3 +9753,22 @@ T.J. McConnell, Jalen Suggs).  Waiting on the owner: publish 107 for every seaso
   --openrapm-decomposition --similarity` passes every identity, the similarity pool leaving 2027 out until its Finals.
 - **Published** 42311b4 from the site worktree, the Pages build checked.  Every season on the site, and the daily 2027
   update, now come from experiment 107.
+
+## Experiment 109: the prior scale held for a season's first days (the owner, 2026-10-24: "Run it"; registered before any result)
+
+- **Why.**  On 2027's first 16 games four San Antonio players with 2 possessions each were rated +7 to +8, and the
+  offensive prior scale, fitted on those games, read 2.24 against 1.17 for 2026's whole season (DECISIONS.md, "The
+  season in progress, 2027").  The prior scale is the ridge's unpenalised coefficient on each side's lineup prior
+  (prior_rapm.py), so a few games set it alone.
+- **The arms.**  Every season 1997-2026 rated from its games through the day 2%, 5% and 10% of its regular season had
+  been played (`openrapm folds --cut`, experiment 107's season-so-far test, the parts107 boosters), and scored on the
+  rest of the season:
+  - shipped: the prior scales fitted on the season so far;
+  - held: the prior scales held at the mean of the whole-season scales of the 8 seasons nearest it in
+    `season_ratings_parts107_step3`, never the season itself (`prior_rapm.held_prior_scale`, `openrapm folds
+    --hold-prior-scale`); 2027 would read the mean of 2019-2026.
+  Both arms take step 4 as shipped for a season so far, the whole season's (experiment 108: `--step4-from`
+  parts107).
+- **The reading.**  Check 151, the within-season WOWY test on the stints of the rest of each season, held against
+  shipped, at each share, by era: 1997-2006, 2007-2016, 2017-2026.  A win must hold in every era.  Beside it: the prior
+  scales each arm used, and 2027's top 20 today under each.

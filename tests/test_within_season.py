@@ -138,7 +138,7 @@ def test_the_leak_control_feeds_the_boosters_the_whole_season_and_the_ridge_the_
     read, rated = [], {}
     monkeypatch.setattr(ws, "saved_prior", lambda panel, side, saved, share=1.0: read.append(panel) or {1: 0.0})
 
-    def rate_season(designs, prior, settings, season):
+    def rate_season(designs, prior, settings, season, scale=None):
         rated.update(designs)
         return pd.DataFrame({"possessions": [5.0]})
 

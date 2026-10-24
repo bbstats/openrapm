@@ -134,3 +134,31 @@ def test_rate_season_is_both_fits_and_the_centred_table(design):
     got = prior_rapm.rate_season(designs, {"O": prior_o, "D": prior_d}, PRODUCT, 2002)
     table, _ = _season(design)
     assert got.equals(prior_rapm.centre(table))
+
+
+def test_a_scale_held_at_the_one_the_games_chose_gives_the_same_fit(design):
+    """Experiment 109: `scale` holds (s_O, s_D); held where the free fit put them, nothing moves."""
+    prior_o, prior_d = _shrunk_prior(design)
+    free = prior_rapm.fit(design, prior_o, prior_d, penalty=3000.0)
+    held = prior_rapm.fit(design, prior_o, prior_d, penalty=3000.0, scale=tuple(free.prior_scale))
+    assert np.allclose(held.deviation, free.deviation, atol=1e-8)
+    assert np.allclose(held.ratings[["offense", "defense"]], free.ratings[["offense", "defense"]], atol=1e-8)
+    assert np.allclose(held.unpenalised, free.unpenalised, atol=1e-8)
+
+
+def test_a_held_scale_sets_the_reported_prior(design):
+    prior_o, prior_d = _shrunk_prior(design)
+    held = prior_rapm.fit(design, prior_o, prior_d, penalty=3000.0, scale=(1.5, 0.5))
+    ids = design.spec.players["player_id"].to_numpy()
+    assert list(held.prior_scale) == [1.5, 0.5]
+    assert np.allclose(held.ratings.prior_offense, 1.5 * prior_rapm.aligned_prior(prior_o, ids))
+    assert np.allclose(held.ratings.prior_defense, 0.5 * prior_rapm.aligned_prior(prior_d, ids))
+
+
+def test_the_held_scale_is_the_mean_of_the_eight_nearest_other_seasons():
+    seasons = np.arange(1997, 2027)
+    table = pd.DataFrame({"season": np.repeat(seasons, 2), "prior_scale_off": np.repeat(seasons - 2000.0, 2),
+                          "prior_scale_def": np.repeat(np.ones(len(seasons)), 2)})
+    assert prior_rapm.held_prior_scale(table, 2010) == (np.mean([6, 7, 8, 9, 11, 12, 13, 14]), 1.0)
+    assert prior_rapm.held_prior_scale(table, 2027)[0] == np.mean(range(19, 27)), "2019-2026 for the season in progress"
+    assert prior_rapm.held_prior_scale(table, 1997)[0] == np.mean(range(-2, 6)), "1998-2005 at the start"

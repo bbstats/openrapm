@@ -52,7 +52,8 @@ import scipy.sparse as sp
 from .rapm import design_blocks, normal_equations, player_possessions, solve_ridge
 
 __all__ = ["aligned_prior", "lineup_prior_sums", "PriorRapmFit", "RidgeSystem", "ridge_system", "fit",
-           "defence_possessions", "season_table", "centre", "rate_season", "PUBLISHED_COLUMNS", "published_table"]
+           "defence_possessions", "season_table", "centre", "rate_season", "held_prior_scale", "PUBLISHED_COLUMNS",
+           "published_table"]
 
 
 def aligned_prior(prior: dict, player_ids) -> np.ndarray:
@@ -93,34 +94,45 @@ class RidgeSystem:
     penalties: np.ndarray
 
 
-def ridge_system(design, prior_offense: dict, prior_defense: dict, penalty: float = 13037.0) -> RidgeSystem:
+def ridge_system(design, prior_offense: dict, prior_defense: dict, penalty: float = 13037.0,
+                 scale=None) -> RidgeSystem:
     """The linear system of the fit below: the lineup priors join the context as two more unpenalised columns, so
     the solve is a plain ridge on [players | context | P_O | P_D] with penalty lambda on the players and 0 on
-    everything else."""
+    everything else.  With `scale`, (s_O, s_D) held at those values instead of fitted (`held_prior_scale`): the two
+    columns times their scales come off the target, and the system is [players | context]."""
     n_players = design.spec.n_players
     player_ids = design.spec.players["player_id"].to_numpy()
     players, context = design_blocks(design)
     prior = np.concatenate([aligned_prior(prior_offense, player_ids), aligned_prior(prior_defense, player_ids)])
-    context = np.column_stack([context, *lineup_prior_sums(players, prior, n_players)])
-    sums = normal_equations(players, context, design.y, design.w)
+    sums_o, sums_d = lineup_prior_sums(players, prior, n_players)
+    target = design.y
+    if scale is None:
+        context = np.column_stack([context, sums_o, sums_d])
+    else:
+        target = design.y - float(scale[0]) * sums_o - float(scale[1]) * sums_d
+    sums = normal_equations(players, context, target, design.w)
     gram = np.block([[sums.gram_players, sums.gram_players_context],
                      [sums.gram_players_context.T, sums.gram_context]])
     rhs = np.concatenate([sums.rhs_players, sums.rhs_context])
     penalties = np.concatenate([np.full(n_players, penalty), np.full(n_players, penalty),
-                                np.full(context.shape[1] - 2, 0.0), np.zeros(2)])
+                                np.zeros(context.shape[1])])
     return RidgeSystem(players=players, unpenalised=context, prior=prior, gram=gram, rhs=rhs, penalties=penalties)
 
 
-def fit(design, prior_offense: dict, prior_defense: dict, penalty: float = 13037.0) -> PriorRapmFit:
+def fit(design, prior_offense: dict, prior_defense: dict, penalty: float = 13037.0, scale=None) -> PriorRapmFit:
     """The prior-informed ridge on one season's design (the equation in the module docstring), the system of
-    `ridge_system` solved."""
+    `ridge_system` solved; with `scale`, the prior scales held at (s_O, s_D) rather than fitted."""
     n_players = design.spec.n_players
     player_ids = design.spec.players["player_id"].to_numpy()
-    system = ridge_system(design, prior_offense, prior_defense, penalty)
+    system = ridge_system(design, prior_offense, prior_defense, penalty, scale)
     players, prior = system.players, system.prior
     coefficients = solve_ridge(system.gram, system.rhs, system.penalties)
     deviation, unpenalised = coefficients[:2 * n_players], coefficients[2 * n_players:]
-    scale = unpenalised[-2:].copy()
+    if scale is None:
+        scale = unpenalised[-2:].copy()
+    else:
+        scale = np.asarray(scale, dtype=float)
+        unpenalised = np.concatenate([unpenalised, scale])
     scaled_prior = np.concatenate([scale[0] * prior[:n_players], scale[1] * prior[n_players:]])
     ratings = pd.DataFrame({
         "player_id": player_ids,
@@ -193,16 +205,37 @@ def centre(table: pd.DataFrame) -> pd.DataFrame:
     return table
 
 
-def rate_season(designs: dict, priors: dict, settings, season: int) -> pd.DataFrame:
+def rate_season(designs: dict, priors: dict, settings, season: int, scale=None) -> pd.DataFrame:
     """Step 3 for one season: both fits, the season's table, centred.
 
     `designs` maps each target name to the season's design on it; `priors` is {"O": {player_id: prior},
-    "D": {...}} from step 2.  One fit per distinct target.
+    "D": {...}} from step 2.  One fit per distinct target.  `scale`, (s_O, s_D), holds the prior scales in both fits
+    (`held_prior_scale`); None fits them on the season's games, as shipped.
     """
     targets = settings.targets
-    fits = {name: fit(designs[name], priors["O"], priors["D"], settings.ridge.penalty) for name in targets.distinct()}
+    fits = {name: fit(designs[name], priors["O"], priors["D"], settings.ridge.penalty, scale)
+            for name in targets.distinct()}
     defence = defence_possessions(designs[targets.offence])
     return centre(season_table(fits[targets.offence], fits[targets.defence], defence, season))
+
+
+HELD_SCALE_SEASONS = 8      # the seasons a held prior scale is the mean of, as step 4's multipliers take 8
+
+
+def held_prior_scale(table: pd.DataFrame, season: int, nearest: int = HELD_SCALE_SEASONS) -> tuple:
+    """(s_O, s_D): the mean prior scales of the `nearest` seasons of `table` closest to `season`, never `season`
+    itself (the nearer first; at an equal distance, the earlier), each season's scales as its whole-season fit set
+    them.  Experiment 109: a season's first days hold the prior scale at this value, since a scale fitted on a few
+    games swings (2027 on 16 games, 2.24 on offense; 2026 on its whole season, 1.17).
+
+    Example: for 2010, the mean of 2006-2009 and 2011-2014."""
+    scales = table.groupby("season")[["prior_scale_off", "prior_scale_def"]].first()
+    others = sorted((int(s) for s in scales.index if int(s) != int(season)),
+                    key=lambda s: (abs(s - int(season)), s))[:nearest]
+    if not others:
+        raise ValueError(f"no season besides {season} to hold its prior scale at")
+    chosen = scales.loc[others]
+    return float(chosen.prior_scale_off.mean()), float(chosen.prior_scale_def.mean())
 
 
 # the published schema, positive good on both ends (`openrapm site` and the checks read it)

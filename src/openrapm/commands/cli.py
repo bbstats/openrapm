@@ -182,7 +182,7 @@ def _run_folds(args: argparse.Namespace, cfg: dict) -> int:
         return 0
     return run_folds(cfg, args.models, args.base, args.seasons, args.tag, args.reproduce_only, args.pieces,
                      args.whole_season_inputs, args.whole_season_context, args.folds_per_repeat, args.repeats,
-                     args.cut, args.so_far)
+                     args.cut, args.so_far, args.hold_prior_scale)
 
 
 def _run_second_prior(args: argparse.Namespace, cfg: dict) -> int:
@@ -523,6 +523,11 @@ def _add_folds(commands) -> None:
                         help="the season so far drawn at random: the games through the day SHARE of its regular season "
                              "had been played, put in folds as a whole season's are, every later game left out; the "
                              "shrink by share's folds")
+    folds.add_argument("--hold-prior-scale", metavar="TABLE", default=None,
+                       help="every fold's ridge holds its season's prior scales at the mean of the 8 seasons of "
+                            "outputs/<TABLE>.parquet nearest it, never the season itself, rather than fitting them on "
+                            "the fit games (experiment 109, a season's first days); the whole season is fitted as "
+                            "shipped")
     _add_jobs(folds)
     folds.set_defaults(run=_run_folds)
 
