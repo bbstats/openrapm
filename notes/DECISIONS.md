@@ -9727,3 +9727,15 @@ through 0.75 and 0.90 at 1.  The ratings of each fold set are built from 0.19, 0
      under 0.01 between telling it 1.3% and a whole season; `scratch/2026-10-24_daily/share_probe.py`): the 2027 prior
      scale is 2.24 on offense against 1.17 in 2026, fitted on 16 games, and the swap part of the prior's line weighs
      the 2-possession players' context.  In finished seasons every player under 50 possessions has a negative prior.
+
+### 2026 under experiment 107, before publishing it (2026-10-24, emailed to the owner)
+
+`openrapm build --seasons 2026 --name preview107`, the product setting, against the published 2026 (experiment 106;
+`scratch/2026-10-24_daily/preview_2026.py`).  Players with 1,000+ offensive possessions, 390: the total moves a median
+0.05 per 100, the ninetieth percentile 0.14, the largest 0.29, 21% over 0.1, correlation 0.9993; offense median 0.03,
+defense 0.02.  Standard deviations unchanged: offense 1.61, defense 1.46.  Consensus rank correlation, 2026 alone:
+total 0.831 to 0.832, offense 0.829 to 0.829, defense 0.824 to 0.826, shared top five 4.  The same top 20, the top nine
+in order; Neemias Queta 12th to 10th, Donovan Mitchell 10th to 12th (-0.12), OG Anunoby 20th to 18th (+0.11), Luka
+Dončić +0.17.  Largest drops are five backup centers, -0.25 to -0.29 on both sides (Robert Williams III, Jaxson Hayes,
+Dylan Cardwell, Ariel Hukporti, Trayce Jackson-Davis); largest gains guards and wings, +0.18 to +0.23 (Herbert Jones,
+T.J. McConnell, Jalen Suggs).  Waiting on the owner: publish 107 for every season.
