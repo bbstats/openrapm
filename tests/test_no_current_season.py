@@ -120,7 +120,8 @@ def test_replacing_the_current_season_with_noise_does_not_move_the_training_rows
 # ------------------------------------------------------- 3. every fit from the panel is gated
 # Scripts that FIT something from the season or block panel.  Each must pass its read through
 # `drop_untrainable`; a new one belongs here the day it is written.
-FITS_FROM_PANEL = ["88_yoy_by_player.py", "95_miss_by_group.py", "137_stat_calibration.py", "138_heldout_audit.py"]
+FITS_FROM_PANEL = ["88_yoy_by_player.py", "95_miss_by_group.py", "137_stat_calibration.py", "138_heldout_audit.py",
+                   "154_self_creation.py"]
 
 # A script that reads the panel names it one of these ways: paths.panel, or the file by name.
 NAMES_THE_PANEL = re.compile(r"""role_panel|season_panel|resolve\(\s*cfg\s*,\s*["']panel["']\s*\)""")
