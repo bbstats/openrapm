@@ -77,7 +77,9 @@ the largest difference against a check 151 seasons file.
 
 Writes outputs/csv/<tag>_seasons.csv (every season, reading and term), <tag>.csv (across seasons), <tag>_null.csv and
 <tag>_null_seasons.csv (the career null), <tag>_table.csv (the fifths and thirds, pooled and by era) and, with --top,
-<tag>_top.csv (that season's players by self-creation).
+<tag>_top.csv (that season's players by self-creation).  With --save-rows=DIR, DIR/<season>.parquet: every held-back
+stint with its possessions, the five's summed self-creation, the miss, the miss after the team levels, and what is
+above expected after every free term and the lineup shape, the y of the table, so other cuts need no rerun.
 """
 from __future__ import annotations
 
@@ -326,7 +328,9 @@ def fold_part(wowy, audit, fold, teams: dict, design, step4: tuple, moves) -> tu
     out = pd.concat([out, pd.DataFrame(level_only, columns=[f"q_{n}" for n in plain])], axis=1)
     for name in (*RAW, *(n for n in extra if n == "trade")):
         out[f"raw_{name}"] = frame[name].to_numpy(float)
-    out["w"] = w
+    out["w"], out["raw_miss"] = w, frame.miss.to_numpy(float)
+    out["game_idx"], out["team_off"], out["team_def"] = frame.game_idx, frame.team_off, frame.team_def
+    out["repeat"], out["fold"] = fold.repeat, fold.fold
     players, codes = np.unique(lineup_o.astype(np.int64), return_inverse=True)
     return out, NullFold(players, codes.reshape(lineup_o.shape), stand_in, projector(levels, w))
 
@@ -479,13 +483,20 @@ def weighted_bins(values: np.ndarray, w: np.ndarray, parts: int) -> np.ndarray:
     return bins
 
 
+def residual_after(parts: pd.DataFrame, free: tuple) -> np.ndarray:
+    """Each row's miss after the team levels and the `free` terms alone, fitted over the season: what is left for the
+    self-creation terms to explain."""
+    w = parts.w.to_numpy(float)
+    columns = parts[[f"p_{name}" for name in free]].to_numpy(float)
+    target = parts.p_miss.to_numpy(float)
+    return target - columns @ fit(target, columns, w)
+
+
 def season_table(parts: pd.DataFrame, season: int, free: tuple, held: str) -> pd.DataFrame:
     """The season's fifths of the amount by thirds of the concentration within each fifth: possession-weighted sums
     of the miss after the `free` terms alone, of the amount and of the concentration."""
     w = parts.w.to_numpy(float)
-    free = parts[[f"p_{name}" for name in free]].to_numpy(float)
-    target = parts.p_miss.to_numpy(float)
-    left = target - free @ fit(target, free, w)
+    left = residual_after(parts, free)
     amount, spread = parts.raw_amount.to_numpy(float), parts.raw_concentration.to_numpy(float)
     fifth = weighted_bins(amount, w, FIFTHS)
     third = np.zeros(len(w), dtype=int)
@@ -594,7 +605,7 @@ def stop_unless_date_folds(folds: list, where: dict) -> None:
 
 @dataclass
 class Inputs:
-    """What every season of a run reads: the checks, the folds, the shrink, the null."""
+    """What every season of a run reads: the checks, the folds, the shrink, the null, where the stint rows go."""
     wowy: object
     audit: object
     folds: list
@@ -603,6 +614,7 @@ class Inputs:
     layer: pd.DataFrame | None
     career: Career | None
     permutations: np.ndarray | None
+    save_rows: Path | None
 
 
 def trainable_panel(cfg: dict) -> pd.DataFrame:
@@ -625,7 +637,8 @@ def run_inputs(args: argparse.Namespace, cfg: dict, within: Path, wowy) -> Input
     stop_on_stale_pieces(cfg, seasons)
     career = Career(trainable_panel(cfg), args.last) if args.null else None
     return Inputs(wowy, wowy._audit(), scored, where, multipliers, layer, career,
-                  career.permutations(args.null) if career is not None else None)
+                  career.permutations(args.null) if career is not None else None,
+                  Path(args.save_rows) if args.save_rows else None)
 
 
 def run_season(inputs: Inputs, cfg: dict, season: int, design, trade: bool) -> tuple:
@@ -642,7 +655,30 @@ def run_season(inputs: Inputs, cfg: dict, season: int, design, trade: bool) -> t
                              for name, values in draws.items() for draw in range(len(values))
                              for k, term in enumerate(TERMS)])
     tables = pd.concat([season_table(parts, season, free, name) for name, free in READINGS], ignore_index=True)
+    if inputs.save_rows is not None:
+        inputs.save_rows.mkdir(parents=True, exist_ok=True)
+        stint_rows(parts, [fold for _, fold in built], season).to_parquet(inputs.save_rows / f"{season}.parquet",
+                                                                          index=False)
     return season_readings(parts, season, trade), tables, null
+
+
+def stint_rows(parts: pd.DataFrame, nulls: list, season: int) -> pd.DataFrame:
+    """One row per held-back stint, for cuts made after the run (--save-rows): its fold, game, teams, possessions, the
+    five's summed self-creation and concentration, the miss three ways, the five offensive player ids.  Each game is
+    held back once in each of the season's three repeats, so every stint appears three times, once per repeat."""
+    lineups = np.vstack([null.players[null.codes] for null in nulls])
+    out = pd.DataFrame({"season": np.int16(season), "repeat": parts.repeat.astype(np.int8),
+                        "fold": parts.fold.astype(np.int8), "game_idx": parts.game_idx.astype(np.int32),
+                        "team_off": parts.team_off, "team_def": parts.team_def,
+                        "possessions": parts.w.astype(np.float32),
+                        "self_creation_sum": parts.raw_amount.astype(np.float32),
+                        "concentration": parts.raw_concentration.astype(np.float32),
+                        "miss": parts.raw_miss.astype(np.float32),
+                        "miss_after_team_levels": parts.p_miss.astype(np.float32),
+                        "above_expected": residual_after(parts, (*FREE, *SHAPE)).astype(np.float32)})
+    for k in range(5):
+        out[f"offense_player_{k + 1}"] = lineups[:, k]
+    return out
 
 
 def run(args: argparse.Namespace, cfg: dict, within: Path, wowy) -> tuple:
@@ -732,6 +768,8 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--null", type=int, default=200,
                         help="career-null draws for the within-team reading, 0 for none (default %(default)s)")
     parser.add_argument("--check", default="", help="FILE:SYSTEM, a check 151 seasons file to compare against")
+    parser.add_argument("--save-rows", default="",
+                        help="a folder: one parquet per season of every held-back stint, for cuts made later")
     parser.add_argument("--top", type=int, default=2026,
                         help="the season of the players table by self-creation, 0 for none (default %(default)s)")
     parser.add_argument("--tag", default="selfcreation", help="names the output files (default %(default)s)")

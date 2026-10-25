@@ -97,6 +97,19 @@ def test_a_donor_hands_over_the_same_step_of_his_career_or_his_last(check):
     assert np.isnan(career.donated(swap, np.array([1, 3]), 2011)).all()
 
 
+def test_what_is_left_after_the_free_terms_is_orthogonal_to_them(check):
+    """The saved rows' above-expected column: the weighted residual of the miss on the free terms carries none of
+    them, so a smooth of it against self-creation shows only what the free terms leave."""
+    rng = np.random.default_rng(5)
+    n = 500
+    parts = pd.DataFrame({f"p_{name}": rng.normal(size=n) for name in check.FREE})
+    parts["p_miss"] = parts[[f"p_{name}" for name in check.FREE]].sum(axis=1) + rng.normal(size=n)
+    parts["w"] = rng.uniform(1, 6, n)
+    left = check.residual_after(parts, check.FREE)
+    columns = parts[[f"p_{name}" for name in check.FREE]].to_numpy()
+    assert np.allclose(columns.T @ (parts.w.to_numpy() * left), 0.0, atol=1e-8)
+
+
 def test_after_a_trade_runs_from_the_first_move_on_or_after_the_first_held_back_game(check):
     """Held-back games start at 5.  Team 1 moved at 3, before them, and again at 8; team 2 at 6; team 3 never."""
     frame = pd.DataFrame({"team_off": [1, 1, 1, 2, 2, 3], "game_idx": [5, 8, 9, 5, 7, 9], "w": np.ones(6),

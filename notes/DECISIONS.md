@@ -9953,3 +9953,25 @@ fifths chart and asked for the bins explained.  What lands in each fifth in 2026
 stint of the season's 12 folds): least under 45.8 self-created attempts per 100, 1.5 starters on the floor on average;
 second 45.8-51.0, 2.4; middle 51.0-55.2, 3.0; fourth 55.2-60.7, 3.5; most over 60.7, 4.1.  The least fifth is mostly
 lineups without the team's main creator: the Timberwolves' five with Conley for Edwards sums to 44.6, with Edwards 55.5.
+
+**Every stint saved, and a smooth curve** (the owner, 2026-10-24: "store the lineup sum of self-creation, and the total
+above expected - for each possession. But only do it for the last 20 seasons. Then ... a lowess").  `154_self_creation.py
+--first=2007 --save-rows=outputs/selfcreation_rows`: one parquet per season, 4,224,693 held-back stint rows, 122 MB, each
+stint once per repeat; check 151's error reproduced to 1.4e-12; the five bins rebuilt from the rows equal the table's.
+A stint is the finest unit the data hold, since points are recorded per stretch with the same ten players, so each row
+carries its possessions as its weight.  `scratch/2026-10-24_creation/smooth.py`: a possession-weighted LOWESS, the
+nearest 30% of a decade's possessions at each point, 0.25-attempt bins first; the band resamples the decade's ten
+seasons, 500 times.  Points per 100 above expectation, shape held:
+
+| summed self-creation | 2007-2016 | 2017-2026 |
+|---|---|---|
+| 34-35 | -0.69 | -0.92 |
+| 39-40 | -0.29 | -0.52 |
+| 45 | -0.10 | -0.05 |
+| 48 | +0.27 | +0.34 |
+| 53 | +0.22 | +0.24 |
+| 59 | -0.11 | +0.11 |
+| 64 | | -0.44 |
+| 67 | | -0.59 |
+
+2007-2016 rises and then holds; 2017-2026 rises to about +0.35 near 48-51 and falls past about 60, below zero by 61.
