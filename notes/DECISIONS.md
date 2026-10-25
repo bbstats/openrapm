@@ -10187,3 +10187,43 @@ against 6.5.
 - In the lineup test the accurate number halves the amount term and strengthens the concentration term: lineups
   whose self-creation is concentrated in one or two players beat expectation by more, and the shortfall of lineups
   short of self-creation is smaller than the formula said.
+
+## Experiment 112: a Boruta screen on the within-season test, with play-by-play candidates (the owner, 2026-10-25: "Probably time to do boruta instead of ditching.  But we should probably add in other interesting, helpful feature combinations, particularly those that are play-by-play related.  I also have a really really good estimate of potential assists ... we need to be robust in how we add in new features"; registered before any result)
+
+**The pool.**  Each candidate is appended to today's shipped list (creation110's) on one side, beside every shipped
+input; all are per-game counts padded per 100, so a fold reads only its fit games.
+
+| # | plain name | side | why |
+|---|---|---|---|
+| 1 | self-created shot attempts, passes estimated (experiment 111's) | offense | beside experiment 110's, not in its place |
+| 2 | potential assists, estimated from where the assists went | offense | the owner's estimate: passes that set up a shot, made or missed |
+| 3 | unassisted makes at the rim and in the paint | offense | finishing he creates himself |
+| 4 | unassisted made twos from beyond 10 ft | offense | pull-up and post creation |
+| 5 | unassisted made threes | offense | pull-up threes |
+| 6 | shots 20 seconds or more into the possession | offense | the late-clock burden goes to creators |
+| 7 | shots in transition | offense | open-court scoring |
+| 8 | putback attempts | offense | second-chance finishing |
+| 9 | and-ones | offense | contact finishing |
+| 10 | free-throw trips without a make | offense | fouls drawn on missed shots |
+| 11 | steals of a pass | defense | the steal split that passed its screen on 2026-10-12, never built |
+| 12 | steals from a dribbler | defense | the same split |
+| 13 | blocks his team recovered | defense | a block that ends the possession |
+
+Plus the shadow arm on experiment 110's self-creation.  Each candidate's split-half reliability, odd against even
+games within a season, is printed beside the pool, not gated.
+
+**The potential-assists estimate**, chosen before it enters the pool: the owner's regression, the NBA's potential
+assists on the four assists-by-zone counts with no intercept, fitted on 2014-2017 player-seasons; against the math
+version, each zone's assists over the season's make rate of passed shots there.  Held out by odd against even
+seasons, 2018-2026 read apart; the lower held-out error goes in.
+
+**The screen.**  Check 152 brought up to today's pipeline: 10 bags, the part-season rows, the second prior in step 3,
+both layers of the shrink, the defense factor by era.  Ten tune seasons, 1998, 2001, ..., 2025.  Arms: `add`, the
+candidate appended; `add_shadow`, the same column appended with its values shuffled among the rows that have one.
+Seeds 0-2 for every arm, the shipped settings at 5 seeds for the noise floor.
+
+**The rule.**  A candidate passes when, over the tune seasons, seeds averaged within each season and paired by
+season: (1) `add` beats `add_shadow` at z -2 or below; (2) `add` beats today's settings on the mean; (3) the guard,
+next season's team-games, is not worse at z +2.  The survivors are then built together in one chain, all thirty
+seasons, judged by era on the within-season WOWY test against creation110 and on the twenty untouched seasons alone,
+year over year not worse at z +2, with a noise control on creation110 and the 2026 top 20; the verdict the owner's.
