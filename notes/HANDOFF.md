@@ -156,7 +156,7 @@ What else the work of 2026-10-23 left open:
   terms keep their size in every era; offense times defense quality multiplies, talent concentration does not.
   Every held-back stint of 2007-2026 is saved (`outputs/selfcreation_rows`, `--save-rows`), and a smooth curve drawn
   (`scratch/2026-10-24_creation/smooth.py`; page https://claude.ai/artifact/584UMVRduxWxRJYHnuTYGA).
-- **Experiment 110 (creation110), verdict pending**: self-creation as an offensive box-score prior input.  Within-season
+- **Experiment 110 (creation110), ADOPTED and PUBLISHED 2026-10-25**: self-creation as an offensive box-score prior input.  Within-season
   WOWY -0.012, z -1.83, Newey-West -2.24, 7 of 10 in every era; year over year a tie; ratings nearly unchanged; check
   154's lineup pattern unchanged.  DECISIONS.md, "Experiment 110".
 - Deleting the saved boosters of experiments that were not adopted, about 2 GB each in `outputs/prior_models_*.pkl`
