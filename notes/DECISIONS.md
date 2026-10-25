@@ -9946,3 +9946,6 @@ The bottom fifth of the amount, held: -0.50, by era -0.65 / -0.38 / -0.49; the t
 - Talent concentrated in one or two players does not multiply: at the same rating sum a wider spread of the five
   offensive ratings scores slightly below, mostly before 2007.  Concentrated self-creation helps; concentrated talent
   does not.
+
+The plots, shape held: https://claude.ai/artifact/584UMVRduxWxRJYHnuTYGA, built by
+`scratch/2026-10-24_creation/build_data.py template.html OUT.html` from the check's tables.
