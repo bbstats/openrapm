@@ -151,8 +151,12 @@ What else the work of 2026-10-23 left open:
   stints, lineups short of the owner's self-creation score 0.4-0.7 per 100 below OpenRAPM's expectation in every era,
   concentrated self-creation beats evenly spread, the top fifth falls below expectation since 2017, and none of it is
   larger after a trade.  With the owner's lineup shape held, good lineups multiplying and concentrated talent, both
-  terms keep their size in every era; offense times defense quality multiplies, talent concentration does not.  The
-  owner picks the next step: the same test on team-games, a free offset per player, plain usage, or prediction.
+  terms keep their size in every era; offense times defense quality multiplies, talent concentration does not.
+  Every held-back stint of 2007-2026 is saved (`outputs/selfcreation_rows`, `--save-rows`), and a smooth curve drawn
+  (`scratch/2026-10-24_creation/smooth.py`; page https://claude.ai/artifact/584UMVRduxWxRJYHnuTYGA).
+- **Experiment 110 (creation110), verdict pending**: self-creation as an offensive box-score prior input.  Within-season
+  WOWY -0.012, z -1.83, Newey-West -2.24, 7 of 10 in every era; year over year a tie; ratings nearly unchanged; check
+  154's lineup pattern unchanged.  DECISIONS.md, "Experiment 110".
 - Deleting the saved boosters of experiments that were not adopted, about 2 GB each in `outputs/prior_models_*.pkl`
   (luckall88, luckall88b, luckhalf89, luckhalf89b, near83, same84, ctx85, body86, spread90, three92, unshrinkbase102,
   unshrink102, shrunkbase103 and older ones; refit103's stays while experiment 104 is open).

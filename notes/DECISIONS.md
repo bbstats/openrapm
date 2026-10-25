@@ -9992,3 +9992,31 @@ the 2026 top 20.  Then check 154 on the candidate's folds: the amount and concen
 and the smooth curve from the stint rows of 2007-2026, beside parts107's.  A prior input can take up only the
 straight-line part of check 154's pattern, the player-level lean; the bend at the top and the concentration are
 lineup effects no player rating carries.
+
+### Experiment 110: result (2026-10-25, `outputs/creation110_chain.log`, `outputs/selfcreation_creation110_154.log`)
+
+The within-season WOWY test against parts107, stint level, the shipped stage; below 0 is better:
+
+| era | change | standard error | z | Newey-West z | seasons better |
+|---|---|---|---|---|---|
+| 1997-2006 | -0.012 | 0.011 | -1.13 | -2.01 | 7 of 10 |
+| 2007-2016 | -0.016 | 0.014 | -1.13 | -1.06 | 7 of 10 |
+| 2017-2026 | -0.009 | 0.011 | -0.82 | -1.12 | 7 of 10 |
+| all seasons | -0.012 | 0.007 | -1.83 | -2.24 | 21 of 30 |
+
+The year-over-year test, team-game, both directions: -0.003, z -0.39, clustered -0.41, better in 24 of 56; stint level
+-0.018, z -1.62.  No clean noise control on parts107 exists.  2026: the top 20 the same but OG Anunoby out and Scottie
+Barnes in; players with 1,500+ possessions moved a median 0.03 on offense, the ninetieth percentile 0.10, correlation
+0.9992; the high self-creators slightly down, Gilgeous-Alexander -0.19, Dončić -0.09.
+
+Check 154 on the candidate's folds, lineup shape held, per standard deviation: amount +0.67 against parts107's +0.70
+(by era +1.11 / +0.58 / +0.33 against +1.11 / +0.60 / +0.38), career-null z +9.4; concentration -0.43 against -0.45,
+z -6.3.  The smooth curve from the saved rows (`outputs/selfcreation_rows_creation110`) lies on parts107's: 2017-2026
+-0.90 at a sum of 34 against -0.92, +0.36 at 48 against +0.34, -0.62 at 67 against -0.59.
+
+**Reading.**
+- A small gain, the same sign in every era and in 21 of 30 seasons, under the -2 rule on the plain z and past it on
+  the Newey-West z; the year-over-year test ties.
+- The lineup pattern is untouched.  The prior is fitted to each player's RAPM over his other seasons, an additive
+  rating, so an input can only help it predict what RAPM already credits; what lineups short of self-creation lose is
+  not in that label.  Verdict the owner's.
