@@ -72,13 +72,16 @@ LOG=outputs/${NAME}_chain.log
 # (settings.PriorSettings.part_season_shares, the shipped default of `openrapm rate`, which reads the panel of
 # `openrapm data panel --so-far 0.25,0.5,0.75`), its own folds parts107_early and parts107_within.  The noise control
 # noise_bags10 was built on the stints before experiment 94's parser fixes, so beside parts107 it reads more than noise.
-INC_NAME=${INC_NAME:-parts107}
-INC_SYSTEM=${INC_SYSTEM:-parts107}              # the incumbent's folds (<name>_early, <name>_within) for 151
+# Since 2026-10-25 it is experiment 110 (creation110): parts107 with the owner's self-creation on the offensive
+# box-score prior (--features hustle_no_three_pct_self_creation, the shipped default), its own folds creation110_early
+# and creation110_within.
+INC_NAME=${INC_NAME:-creation110}
+INC_SYSTEM=${INC_SYSTEM:-creation110}           # the incumbent's folds (<name>_early, <name>_within) for 151
 CONTROL_NAME=${CONTROL_NAME:-noise_bags10}       # the noise control's folds (<name>_early, <name>_within) for 151
-INC_FOLDS=${INC_FOLDS:-parts107_early,parts107_within}
-AUDIT_REF=${AUDIT_REF:-parts107_within}
+INC_FOLDS=${INC_FOLDS:-creation110_early,creation110_within}
+AUDIT_REF=${AUDIT_REF:-creation110_within}
 INC=outputs/season_ratings_${INC_NAME}.parquet
-BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1_tune2 --features hustle_no_three_pct}
+BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1_tune2 --features hustle_no_three_pct_self_creation}
 [ -n "$NAME" ] && [ -n "$TARGET" ] || { echo "usage: scripts/experiment_chain.sh NAME TARGET [EXTRA RATE FLAGS]"; exit 1; }
 # Every check the chain calls, looked for BEFORE the build: a missing one would otherwise surface only hours later.
 READINGS="151_wowy 63_yoy 66_compare 64_consensus_report 70_tradeset 73_tradeloss 88_yoy_by_player 90_swap_test 138_heldout_audit"

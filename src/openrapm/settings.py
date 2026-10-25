@@ -112,6 +112,8 @@ class LabelSettings:
 @dataclass(frozen=True)
 class PriorSettings:
     """Step 2: the box-score prior."""
+    # "hustle_no_three_pct_self_creation" (notes/DECISIONS.md, experiment 110, adopted 2026-10-25: "the rating changes
+    # are good - we can adopt and publish"): the offensive list with the owner's self-creation appended.  Before it:
     # "hustle_no_three_pct" (notes/DECISIONS.md, experiment 77, adopted 2026-10-17: "Adopt and publish"): hustle with
     # three-point % off the offensive booster, the one input the cull on the decider found worse than its own
     # shuffled copy (check 152 `cull`).  Before it:
@@ -126,7 +128,7 @@ class PriorSettings:
     # "box_score_and_bio": the inputs Boruta selected (a feature-selection method: an input is kept when its importance
     # beats that of shuffled copies of the inputs), without the on-court columns (features.SHIPPED; experiment 45,
     # adopted 2026-10-08, where it is called boruta_noonc)
-    feature_set: str = "hustle_no_three_pct"
+    feature_set: str = "hustle_no_three_pct_self_creation"
     # the career row plus every run of 1, 2 and 3 consecutive seasons (notes/DECISIONS.md, experiment 3)
     chunk_sizes: tuple = (1, 2, 3)
     # the seasons so far whose rows join each training season's: its first quarter, half and three quarters, each a
@@ -234,8 +236,9 @@ class ShrinkSettings:
     # parser94_early,parser94_within; since experiment 95, adopted the same day (heaves counted as they happened), its
     # own, heave95_early,heave95_within; since experiment 99, adopted the same day (each season's own body listing, the
     # pad k around the bins), its own, inputs99_early,inputs99_within; since experiment 107, adopted 2026-10-23 (the
-    # box-score prior's part-season rows), its own
-    folds_tag: str = "parts107_early,parts107_within"
+    # box-score prior's part-season rows), its own; since experiment 110, adopted 2026-10-25 (self-creation in the
+    # offensive prior), its own
+    folds_tag: str = "creation110_early,creation110_within"
     # each season's factors from only the K fold seasons nearest it (prior_shrink.fold_seasons_used): the defensive
     # prior part holds up less in older seasons, 0.79 in 1997-2006 against 0.95 in 2017-2026 (notes/DECISIONS.md,
     # "Era drift" and experiment 55, adopted 2026-10-12: "yes. build."); 0 would use every fold season the rule allows
@@ -244,8 +247,8 @@ class ShrinkSettings:
     # straight line through the two holdout sizes at nothing held back, as the full-season ratings are built
     # (Richardson extrapolation, prior_shrink.full_season_multipliers; notes/DECISIONS.md, experiment 101, adopted
     # 2026-10-22: "we are going to do it"); "" fits on folds_tag alone, as the experiment chain does.  inputs99_k10
-    # until experiment 107 was adopted; its own since
-    extrapolate_folds_tag: str = "parts107_k10"
+    # until experiment 107 was adopted; its own since, parts107_k10; experiment 110's own since 2026-10-25
+    extrapolate_folds_tag: str = "creation110_k10"
     # a multiplier on the games' part too, fitted beside the prior's (prior_shrink, "The games' part freed";
     # notes/DECISIONS.md, experiment 65, adopted 2026-10-15: "Adopt one multiplier as the new incumbent")
     free_games_part: bool = True
