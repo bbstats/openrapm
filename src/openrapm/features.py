@@ -47,7 +47,8 @@ import pandas as pd
 __all__ = ["Feature", "BOX_RATES", "UNCENTRED_RATES", "ROLE", "CLOSENESS", "SHOT_TOTALS", "SHOT_LEAGUE", "CAREER",
            "BIO", "ON_COURT", "OFF_COURT", "ON_MINUS_OFF", "PLAYOFF_SHARE", "EVENT_RATES", "CAREER_FROM_DEBUT",
            "FROM_DEBUT", "TRACKING_RATES", "HUSTLE_RATES", "MATCHUP_RATES", "DASHBOARD_RATES", "MISSING_OK", "DERIVED",
-           "RATIOS", "VS_LEAGUE", "SHOTQ", "SHOTQ_PADS", "CREATION", "CREATION_ACTUAL_MAKES", "UNCENTRED_EVENT_RATES",
+           "RATIOS", "VS_LEAGUE", "SHOTQ", "SHOTQ_PADS", "CREATION", "CREATION_ESTIMATED", "UNCENTRED_EVENT_RATES",
+           "CREATION_RATES", "UNCENTRED_CREATION_RATES",
            "PRIOR_FEATURES", "PANEL_INPUTS", "PANEL_KEYS",
            "SEASON_PANEL_COLUMNS", "ROW_FEATURES", "SHIPPED", "REBOUND_PARTS", "STEAL_PARTS", "POINTS_PARTS",
            "THREE_POINT_PARTS", "FEATURE_SETS", "CATALOGUE", "add_features", "add_shotq", "meaning",
@@ -224,24 +225,38 @@ SHOTQ = list(SHOTQ_PADS)
 CREATION = ["self_creation_per100"]
 SHARE_ASSISTED = (0.73, 0.03, 0.01)     # the owner's formula: level, per assist per 100, per field goal made per 100
 # The owner's adjustment (2026-10-25, experiment 111: "On FGM we use actual.  On FGX and FTA, we estimate potentially
-# assisted.  For a single number"): his own unassisted makes from the play-by-play, plus the misses and the free-throw
-# attempts times one minus the share assisted above,
-#     unassisted makes + (missed shots + 0.44 x free-throw attempts) x (1 - share assisted).
-CREATION_ACTUAL_MAKES = ["self_creation_actual_makes_per100"]
+# assisted.  For a single number", then "a more robust estimate"): his own unassisted makes from the play-by-play, his
+# misses and free-throw trips without a make less those estimated to have come off a pass (data/creation_counts.py),
+#     unassisted makes + sum over inside, other twos, threes of (misses - misses off a pass)
+#                      + (trips without a make - trips off a pass),
+#     misses off a pass in a group = his lean there x the misses' expected passes, held to his misses there,
+#     lean = (assisted makes + LEAN_PAD) / (expected assisted makes + LEAN_PAD), trips read his inside lean.
+CREATION_ESTIMATED = ["self_creation_estimated_per100"]
+LEAN_PAD = 0.5                          # per 100 possessions: about 10 makes of a 2,000-possession season
+# The counts behind it, per game, padded per 100 like the event counts and read with the level kept
+# (`UNCENTRED_CREATION_RATES`): assisted makes, expected assisted makes, misses and expected passed misses in each
+# spot group, then free-throw trips without a make and their expected passes.
+CREATION_GROUPS = ("inside", "two", "three")
+CREATION_RATES = [*(f"assisted_makes_{g}_per100" for g in CREATION_GROUPS),
+                  *(f"expected_assisted_makes_{g}_per100" for g in CREATION_GROUPS),
+                  *(f"misses_{g}_per100" for g in CREATION_GROUPS),
+                  *(f"expected_passed_misses_{g}_per100" for g in CREATION_GROUPS),
+                  "trips_without_make_per100", "expected_passed_trips_per100"]
+UNCENTRED_CREATION_RATES = [f"{rate}_uncentred" for rate in CREATION_RATES]
 
 # Every input the prior could read (133): the rates, the role, every derived column, career, body, on-court, the
 # play-by-play parts, the ratios against the league, the career counted from the debut, the dashboard inputs with
 # the hustle placebo, the era marker and both self-creations.
 # scripts/checks/95_miss_by_group.py and commands/within_season.py (its PLAYER_COLUMNS) report on all of them.
 PRIOR_FEATURES = [*BOX_RATES, *ROLE, *DERIVED, *RATIOS, *SHOTQ, *CAREER, *BIO, *ON_COURT, *EVENT_RATES, *VS_LEAGUE,
-                  *CAREER_FROM_DEBUT, *DASHBOARD_RATES, *ERA_MARKER, *CREATION, *CREATION_ACTUAL_MAKES]
+                  *CAREER_FROM_DEBUT, *DASHBOARD_RATES, *ERA_MARKER, *CREATION, *CREATION_ESTIMATED]
 # The panel columns averaged into a multi-season training row, before anything is derived from them; the play-by-play
 # parts came after every column the published ratings were built from (2026-10-12), the career counted from the debut
-# after them (2026-10-13), the dashboard inputs after them (2026-10-14), the two uncentred play-by-play parts last
-# (2026-10-25).
+# after them (2026-10-13), the dashboard inputs after them (2026-10-14), the two uncentred play-by-play parts and
+# self-creation's counts last (2026-10-25).
 PANEL_INPUTS = [*BOX_RATES, *ROLE, *CLOSENESS, *UNCENTRED_RATES, *SHOT_TOTALS, *SHOT_LEAGUE, *CAREER, *BIO,
                 *ON_COURT, *OFF_COURT, *ON_MINUS_OFF, *PLAYOFF_SHARE, *EVENT_RATES, *CAREER_FROM_DEBUT,
-                *DASHBOARD_RATES, *ERA_MARKER, *UNCENTRED_EVENT_RATES]
+                *DASHBOARD_RATES, *ERA_MARKER, *UNCENTRED_EVENT_RATES, *UNCENTRED_CREATION_RATES]
 # The season panel's columns, in order: who and when, the possessions behind the row (his offensive possessions
 # on an offence row, defensive on a defence row), then the inputs.
 PANEL_KEYS = ["side", "player_id", "season"]
@@ -343,10 +358,10 @@ FEATURE_SETS = {
     "hustle_no_three_pct_self_creation": {
         "O": [name for name in _NO_CAREER["O"] + HUSTLE_OFFENCE if name != "three_point_pct"] + CREATION,
         "D": _NO_CAREER["D"] + HUSTLE_DEFENCE},
-    # experiment 111 (2026-10-25, the owner: "On FGM we use actual"): experiment 110's lists with its self-creation
-    # swapped, in its place, for the one read from his own unassisted makes
-    "hustle_no_three_pct_self_creation_actual_makes": {
-        "O": [name for name in _NO_CAREER["O"] + HUSTLE_OFFENCE if name != "three_point_pct"] + CREATION_ACTUAL_MAKES,
+    # experiment 111 (2026-10-25, the owner: "On FGM we use actual ... a more robust estimate"): experiment 110's lists
+    # with its self-creation swapped, in its place, for the one from his unassisted makes and the estimated passes
+    "hustle_no_three_pct_self_creation_estimated": {
+        "O": [name for name in _NO_CAREER["O"] + HUSTLE_OFFENCE if name != "three_point_pct"] + CREATION_ESTIMATED,
         "D": _NO_CAREER["D"] + HUSTLE_DEFENCE},
     # the booster tune on the decider (check 152, 2026-10-16): the hustle lists with the era marker, its switch
     "hustle_era_marker": {"O": _NO_CAREER["O"] + HUSTLE_OFFENCE + ERA_MARKER,
@@ -432,23 +447,34 @@ def _add_creation(frame: pd.DataFrame) -> None:
     level, per_assist, per_make = SHARE_ASSISTED
     assisted = np.clip(level - per_assist * rate[ASSISTS] - per_make * makes, 0.0, 1.0)
     frame[CREATION[0]] = (makes + others) * (1.0 - assisted)
-    _add_creation_actual_makes(frame, makes, others * (1.0 - assisted))
 
 
-def _add_creation_actual_makes(frame: pd.DataFrame, makes: np.ndarray, others_created: np.ndarray) -> None:
-    """`self_creation_actual_makes_per100`, when the frame carries the uncentred unassisted parts
-    (`CREATION_ACTUAL_MAKES`): his unassisted makes, held between 0 and his makes (each part is padded with its own k),
-    plus `others_created`, the misses and 0.44 x the free-throw attempts times one minus the share assisted.
+def _add_creation_estimated(frame: pd.DataFrame) -> None:
+    """`self_creation_estimated_per100` from the uncentred rates, when the frame carries self-creation's counts
+    (`CREATION_ESTIMATED`, `UNCENTRED_CREATION_RATES`; data/creation_counts.py).  His unassisted makes are
+    (unassisted points - unassisted threes) / 2, held between 0 and his makes, as each part is padded with its own k.
 
-    Example: LeBron James 2026, the whole season: 11.72 unassisted points and 0.75 unassisted threes per 100 give
-    (11.72 - 0.75) / 2 = 5.49 unassisted makes of his 11.64; his 11.38 misses and 0.44 x 7.82 free-throw attempts,
-    14.82, times 1 - 0.298 add 10.41, so self-creation 15.89, where `self_creation_per100` reads 18.58.
+    Example: Shai Gilgeous-Alexander 2026, the whole season, per 100: (24.95 - 1.59) / 2 = 11.68 unassisted makes;
+    inside 1.47 assisted makes against 4.05 expected, a lean of (1.47 + 0.5) / (4.05 + 0.5) = 0.433, so of his 3.99
+    inside misses 0.433 x 2.09 = 0.90 came off a pass; the same for other twos and threes; of his 5.56 trips without
+    a make 0.433 x 1.67 = 0.72; self-creation 25.81, where `self_creation_per100` reads 23.57.
     """
-    if not all(name in frame.columns for name in UNCENTRED_EVENT_RATES):
+    needed = [*UNCENTRED_CREATION_RATES, *UNCENTRED_EVENT_RATES, f"{TWOS_MADE}_uncentred", f"{THREES_MADE}_uncentred"]
+    if CREATION_ESTIMATED[0] in frame.columns or not all(name in frame.columns for name in needed):
         return
+    rate = {name.removesuffix("_per100_uncentred"): frame[name].to_numpy(dtype=float)
+            for name in UNCENTRED_CREATION_RATES}
+    makes = frame[f"{TWOS_MADE}_uncentred"].to_numpy(dtype=float) + frame[f"{THREES_MADE}_uncentred"].to_numpy(float)
     points, threes = (frame[name].to_numpy(dtype=float) for name in UNCENTRED_EVENT_RATES)
-    unassisted = np.clip((points - threes) / 2.0, 0.0, makes)
-    frame[CREATION_ACTUAL_MAKES[0]] = unassisted + others_created
+    total = np.clip((points - threes) / 2.0, 0.0, makes)
+    lean = {}
+    for group in CREATION_GROUPS:
+        lean[group] = ((rate[f"assisted_makes_{group}"] + LEAN_PAD)
+                       / (rate[f"expected_assisted_makes_{group}"] + LEAN_PAD))
+        misses = rate[f"misses_{group}"]
+        total = total + misses - np.minimum(lean[group] * rate[f"expected_passed_misses_{group}"], misses)
+    trips = rate["trips_without_make"]
+    frame[CREATION_ESTIMATED[0]] = total + trips - np.minimum(lean["inside"] * rate["expected_passed_trips"], trips)
 
 
 def add_shotq(frame: pd.DataFrame) -> pd.DataFrame:
@@ -501,6 +527,7 @@ def add_features(frame: pd.DataFrame, names) -> pd.DataFrame:
     _add_ratios(frame)
     _add_ratios_vs_league(frame)
     _add_creation(frame)
+    _add_creation_estimated(frame)
     add_shotq(frame)
     missing = [name for name in names if name not in frame.columns]
     if missing:
@@ -527,6 +554,14 @@ def _family(names, meanings, formula, unit, scale, group) -> list:
 _RATE_MEANINGS = ["made threes", "missed threes", "made twos", "missed twos", "made free throws",
                   "missed free throws", "offensive rebounds", "defensive rebounds", "assists", "turnovers", "steals",
                   "blocks", "personal fouls"]
+_CREATION_MEANINGS = [*(f"assisted makes, {g}" for g in ("rim and paint", "other twos", "threes")),
+                      *(f"expected assisted makes from the season's cell shares, {g}"
+                        for g in ("rim and paint", "other twos", "threes")),
+                      *(f"missed shots, {g}" for g in ("rim and paint", "other twos", "threes")),
+                      *(f"misses expected off a pass, before his lean, {g}"
+                        for g in ("rim and paint", "other twos", "threes")),
+                      "free-throw trips without a make, technicals out",
+                      "trips without a make expected off a pass, before his lean"]
 _EVENT_MEANINGS = ["defensive rebounds of missed free throws", "defensive rebounds of missed threes",
                    "defensive rebounds of missed twos within 6 ft of the rim, or logged without a location",
                    "defensive rebounds of missed twos from beyond 6 ft", "steals of a pass (a bad-pass turnover)",
@@ -708,10 +743,12 @@ def _catalogue() -> tuple:
                      "(shot attempts + 0.44 x free-throw attempts) x (1 - share assisted), share assisted = 0.73 - "
                      "0.03 x assists - 0.01 x field goals made, clipped to 0-1; uncentred rates",
                      "per 100 possessions", "level", "creation")]
-    rows += [Feature(CREATION_ACTUAL_MAKES[0], "self-created shot attempts, his own unassisted makes counted",
-                     "unassisted makes + (missed shots + 0.44 x free-throw attempts) x (1 - share assisted), "
-                     "unassisted makes = (unassisted points - unassisted threes) / 2 held to 0 through his makes, "
-                     "share assisted as self_creation_per100's; uncentred rates",
+    rows += _family(UNCENTRED_CREATION_RATES, _CREATION_MEANINGS, "padded per-game count per 100, level kept",
+                    "per 100 possessions", "level", "creation count")
+    rows += [Feature(CREATION_ESTIMATED[0], "self-created shot attempts, passes estimated (experiment 111)",
+                     "unassisted makes + misses not off a pass + free-throw trips without a make not off a pass; "
+                     "off a pass = his lean x the expected passes, by spot group, held to his count; lean = "
+                     f"(assisted makes + {LEAN_PAD:g}) / (expected assisted makes + {LEAN_PAD:g}); uncentred rates",
                      "per 100 possessions", "level", "creation")]
     return tuple(rows)
 

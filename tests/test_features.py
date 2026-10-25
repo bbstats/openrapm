@@ -80,10 +80,10 @@ def test_the_stat_splits_lists_append_their_parts_where_the_box_count_is_read():
         "hustle_no_three_pct_self_creation": {
             "O": [name for name in feat.FEATURE_SETS["hustle"]["O"] if name != "three_point_pct"] + feat.CREATION,
             "D": feat.FEATURE_SETS["hustle"]["D"]},
-        # experiment 111: the same with the self-creation read from his own unassisted makes in its place
-        "hustle_no_three_pct_self_creation_actual_makes": {
+        # experiment 111: the same with the self-creation of estimated passes in its place
+        "hustle_no_three_pct_self_creation_estimated": {
             "O": [name for name in feat.FEATURE_SETS["hustle"]["O"] if name != "three_point_pct"]
-            + feat.CREATION_ACTUAL_MAKES,
+            + feat.CREATION_ESTIMATED,
             "D": feat.FEATURE_SETS["hustle"]["D"]}}
     wider = ["russell_blocks_per100", "rim_blocks_per100", "mid_range_blocks_per100", "three_point_blocks_per100",
              "offensive_fouls_per100", "stolen_turnovers_per100", "assists_to_rim_per100",
@@ -229,35 +229,45 @@ def test_self_creation_is_the_owners_formula_on_the_uncentred_rates_and_its_shar
     assert feat.CREATION[0] not in feat.FEATURE_SETS["hustle_no_three_pct_self_creation"]["D"]
 
 
-def test_self_creation_from_actual_makes_counts_his_unassisted_makes_and_estimates_the_rest():
-    """Experiment 111, LeBron James 2026, the whole season: 11.72 unassisted points and 0.75 unassisted threes give
-    5.49 unassisted makes of his 11.64; the misses and 0.44 x the free throws, 14.82, times 1 - 0.298, add 10.41, so
-    15.89.  A second player whose padded parts say more unassisted makes than makes is held at his makes."""
-    names = ["twos_made", "twos_missed", "threes_made", "threes_missed", "free_throws_made", "free_throws_missed",
-             "assists"]
-    rows = pd.DataFrame({f"{name}_per100_uncentred": values for name, values in zip(
-        names, ([9.6499, 10.0], [7.1604, 0.0], [1.9918, 0.0], [4.2219, 0.0], [5.8210, 0.0], [2.0026, 0.0],
-                [10.5189, 30.0]))})
-    rows["unassisted_points_per100_uncentred"] = [11.7168, 24.0]
-    rows["unassisted_threes_made_per100_uncentred"] = [0.7453, 0.0]
-    feat.add_features(rows, feat.CREATION + feat.CREATION_ACTUAL_MAKES)
-    assert rows.self_creation_actual_makes_per100.tolist() == pytest.approx([15.892, 10.0], abs=1e-3)
-    assert rows.self_creation_per100.tolist() == pytest.approx([18.579, 10.0], abs=1e-3)
-    sets = feat.FEATURE_SETS["hustle_no_three_pct_self_creation_actual_makes"]
-    assert sets["O"][-1] == feat.CREATION_ACTUAL_MAKES[0] and feat.CREATION[0] not in sets["O"]
-    assert feat.CREATION_ACTUAL_MAKES[0] not in sets["D"]
+def test_self_creation_estimated_reads_his_lean_in_each_spot_group_and_holds_each_part_to_his_count():
+    """Experiment 111, Shai Gilgeous-Alexander 2026, the whole season, his unassisted makes, inside shots and trips
+    only (the other twos and threes set to 0): 11.68 unassisted makes and a lean of 0.433 inside.  A second player:
+    lean (4 + 0.5) / (1 + 0.5) = 3 inside, so 3 x 2 expected passes would pass his
+    4 misses and are held at them; no makes elsewhere, so his lean there is 1 and only the expected passes count."""
+    groups = feat.CREATION_GROUPS
+    values = {"assisted_makes": ([1.4678, 4.0], [0.0, 0.0], [0.0, 0.0]),
+              "expected_assisted_makes": ([4.0456, 1.0], [0.0, 0.0], [0.0, 0.0]),
+              "misses": ([3.9907, 4.0], [0.0, 2.0], [0.0, 1.0]),
+              "expected_passed_misses": ([2.0869, 2.0], [0.0, 1.0], [0.0, 0.5])}
+    rows = pd.DataFrame({f"{name}_{g}_per100_uncentred": per_group[i] for name, per_group in values.items()
+                         for i, g in enumerate(groups)})
+    rows["trips_without_make_per100_uncentred"] = [5.5608, 2.0]
+    rows["expected_passed_trips_per100_uncentred"] = [1.6738, 1.0]
+    rows["unassisted_points_per100_uncentred"] = [24.945, 8.0]
+    rows["unassisted_threes_made_per100_uncentred"] = [1.5906, 0.0]
+    rows["twos_made_per100_uncentred"], rows["threes_made_per100_uncentred"] = [12.0, 8.0], [2.0, 0.0]
+    lean = (1.4678 + 0.5) / (4.0456 + 0.5)
+    sga = (24.945 - 1.5906) / 2 + 3.9907 - lean * 2.0869 + 5.5608 - lean * 1.6738
+    other = 4.0 + 0.0 + (2.0 - 1.0) + (1.0 - 0.5) + 0.0
+    feat.add_features(rows, feat.CREATION_ESTIMATED)
+    assert rows.self_creation_estimated_per100.tolist() == pytest.approx([sga, other], abs=1e-9)
+    assert (24.945 - 1.5906) / 2 == pytest.approx(11.68, abs=0.01) and lean == pytest.approx(0.433, abs=0.001)
+    sets = feat.FEATURE_SETS["hustle_no_three_pct_self_creation_estimated"]
+    assert sets["O"][-1] == feat.CREATION_ESTIMATED[0] and feat.CREATION[0] not in sets["O"]
+    assert feat.CREATION_ESTIMATED[0] not in sets["D"]
 
 
 def test_every_season_panel_column_but_the_keys_is_in_the_catalogue():
     names = {f.name for f in feat.CATALOGUE}
     assert feat.SEASON_PANEL_COLUMNS[:3] == feat.PANEL_KEYS == ["side", "player_id", "season"]
     assert not set(feat.SEASON_PANEL_COLUMNS[3:]) - names
-    assert len(feat.SEASON_PANEL_COLUMNS) == len(set(feat.SEASON_PANEL_COLUMNS)) == 134
-    assert feat.SEASON_PANEL_COLUMNS[-70:-48] == feat.EVENT_RATES, "the play-by-play parts follow every older column"
-    assert feat.SEASON_PANEL_COLUMNS[-48:-44] == feat.CAREER_FROM_DEBUT, "and the career from the debut after them"
-    assert feat.SEASON_PANEL_COLUMNS[-44:-3] == feat.DASHBOARD_RATES, "then the dashboard inputs"
-    assert feat.SEASON_PANEL_COLUMNS[-3:-2] == feat.ERA_MARKER, "and the era marker"
-    assert feat.SEASON_PANEL_COLUMNS[-2:] == feat.UNCENTRED_EVENT_RATES, "and the two uncentred parts last"
+    assert len(feat.SEASON_PANEL_COLUMNS) == len(set(feat.SEASON_PANEL_COLUMNS)) == 148
+    assert feat.SEASON_PANEL_COLUMNS[-84:-62] == feat.EVENT_RATES, "the play-by-play parts follow every older column"
+    assert feat.SEASON_PANEL_COLUMNS[-62:-58] == feat.CAREER_FROM_DEBUT, "and the career from the debut after them"
+    assert feat.SEASON_PANEL_COLUMNS[-58:-17] == feat.DASHBOARD_RATES, "then the dashboard inputs"
+    assert feat.SEASON_PANEL_COLUMNS[-17:-16] == feat.ERA_MARKER, "and the era marker"
+    assert feat.SEASON_PANEL_COLUMNS[-16:-14] == feat.UNCENTRED_EVENT_RATES, "then the two uncentred parts"
+    assert feat.SEASON_PANEL_COLUMNS[-14:] == feat.UNCENTRED_CREATION_RATES, "and self-creation's counts last"
 
 
 def test_the_dashboard_arms_append_to_the_incumbents_lists_and_name_real_columns():

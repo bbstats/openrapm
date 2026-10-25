@@ -32,6 +32,8 @@ Where each column comes from:
     the play-by-play parts (features.EVENT_RATES)              data/event_counts.py's counts, padded by
                                                                box_rates.box_rates on the offence design's games
     unassisted points and threes made with the level kept      the same, uncentred (features.UNCENTRED_EVENT_RATES)
+    self-creation's counts with the level kept                 data/creation_counts.py's counts, padded the same way
+                                                               (features.UNCENTRED_CREATION_RATES)
     the dashboard inputs (features.DASHBOARD_RATES)            data/dashboard_rates.py, from the cached tracking and
                                                                hustle dashboards (NaN before they start)
 
@@ -78,12 +80,14 @@ from ..features import (
     SEASON_PANEL_COLUMNS,
     SHOT_LEAGUE,
     SHOT_TOTALS,
+    UNCENTRED_CREATION_RATES,
     UNCENTRED_EVENT_RATES,
 )
 from ..on_court import offcourt_rates, oncourt_rates
 from .bio import PLAYER_INPUTS, bio_inputs, player_bio, player_inputs, refresh_bio, tenure_inputs
 from .careers import ROLE_COLUMNS, careers_before
 from .config import resolve
+from .creation_counts import CREATION_COUNTS, load_creation_counts
 from .dashboard_rates import dashboard_rates
 from .designs import DesignCache
 from .event_counts import event_design, load_event_counts
@@ -120,7 +124,7 @@ OLD_PANEL = "role_panel_season.parquet"          # the old-named panel's file na
 MIGRATED_PANEL_COLUMNS = [column for column in SEASON_PANEL_COLUMNS
                           if column not in EVENT_RATES and column not in CAREER_FROM_DEBUT
                           and column not in DASHBOARD_RATES and column not in ERA_MARKER
-                          and column not in UNCENTRED_EVENT_RATES]
+                          and column not in UNCENTRED_EVENT_RATES and column not in UNCENTRED_CREATION_RATES]
 STINT_COLUMNS = ["game_id", "period", *HOME_SLOTS, *AWAY_SLOTS, "poss_h", "poss_a", "margin_h", "is_gt"]
 # The data layer's names for the body and shot columns, against the panel's (the pairs are pinned in
 # tests/test_features.py and tests/test_panel.py); data/roles.py builds the role and career columns under the panel's
@@ -173,6 +177,12 @@ class SeasonTables:
         """The season's play-by-play counts per game, phase and player (data/event_counts.py), as cached by
         `openrapm data events`."""
         return load_event_counts(self.season, self.cfg)
+
+    @cached_property
+    def creation_counts(self) -> pd.DataFrame:
+        """The season's self-creation counts per game, phase and player (data/creation_counts.py), as cached by
+        `openrapm data events`."""
+        return load_creation_counts(self.season, self.cfg)
 
 
 def roles_from_games(tables: SeasonTables, keep_ids: set) -> tuple:
@@ -386,10 +396,12 @@ def _player_columns(season: int, cfg: dict, designs: dict, history: _RoleHistory
     return frame
 
 
-def _side_rows(side: str, season: int, rates, parts, players: pd.DataFrame, dashboards: dict) -> pd.DataFrame:
+def _side_rows(side: str, season: int, rates, parts, creation, players: pd.DataFrame,
+               dashboards: dict) -> pd.DataFrame:
     """A side's rows: the keys, his possessions and padded rates on that side, the columns both sides share, then
     the play-by-play parts on that side (centred), the dashboard inputs (data/dashboard_rates.py) and the two parts
-    self-creation reads with the league level kept (features.UNCENTRED_EVENT_RATES)."""
+    self-creation reads with the league level kept (features.UNCENTRED_EVENT_RATES) and its own counts, padded,
+    level kept (features.UNCENTRED_CREATION_RATES)."""
     possessions = (rates.offence if side == "O" else rates.defence).possessions
     keys = pd.DataFrame({"side": side, "player_id": players["player_id"].to_numpy(), "season": season,
                          "possessions": possessions})
@@ -397,8 +409,10 @@ def _side_rows(side: str, season: int, rates, parts, players: pd.DataFrame, dash
     events = pd.DataFrame(chosen.centred, columns=EVENT_RATES)
     uncentred = pd.DataFrame(chosen.rates[:, [EVENT_RATES.index(name.removesuffix("_uncentred"))
                                               for name in UNCENTRED_EVENT_RATES]], columns=UNCENTRED_EVENT_RATES)
+    own = pd.DataFrame((creation.offence if side == "O" else creation.defence).rates,
+                       columns=UNCENTRED_CREATION_RATES)
     return pd.concat([keys, rate_table(rates, side, BOX_RATES), players.drop(columns="player_id"), events,
-                      dashboards[side], uncentred], axis=1)
+                      dashboards[side], uncentred, own], axis=1)
 
 
 def body_table(cfg: dict) -> pd.DataFrame:
@@ -425,6 +439,8 @@ def season_panel(season: int, cfg: dict, designs: dict, sources: SeasonSources, 
     # after the 13 rates, so the event design shares the matrix box_rates built (data/event_counts.py)
     event_counts, event_games = event_design(designs[OFFENCE], sources.tables.event_counts)
     parts = box_rates(event_counts, pad_target=cfg["pad_target"], body=body, pad_k_around=around)
+    creation_counts, creation_games = event_design(designs[OFFENCE], sources.tables.creation_counts, CREATION_COUNTS)
+    creation = box_rates(creation_counts, pad_target=cfg["pad_target"], body=body, pad_k_around=around)
     players = _player_columns(season, cfg, designs, history, fit, sources.debut)
     # the tracking dashboards are season totals: a fold scales them to the share of the season it fits on; the hustle
     # counts are summed over the games themselves (dashboard_rates.py)
@@ -432,7 +448,7 @@ def season_panel(season: int, cfg: dict, designs: dict, sources: SeasonSources, 
     games = set(sources.tables.games["game_id"].astype(str)) if fit is None else fit
     dashboards = dashboard_rates(cfg, season, players["player_id"].to_numpy(),
                                  {"O": rates.offence.possessions, "D": rates.defence.possessions}, fit_share, games)
-    rows = pd.concat([_side_rows(side, season, rates, parts, players, dashboards) for side in SIDES],
+    rows = pd.concat([_side_rows(side, season, rates, parts, creation, players, dashboards) for side in SIDES],
                      ignore_index=True)
     stints = sources.tables.stints
     if fit is not None:
@@ -441,6 +457,7 @@ def season_panel(season: int, cfg: dict, designs: dict, sources: SeasonSources, 
     rows[PLAYOFF_SHARE[0]] = rows["player_id"].map(playoff_share(stints, sources.tables.games)).fillna(0.0)
     rows[ERA_MARKER[0]] = float(season >= 2017)
     read = {**history.games_read, "score-state stints": set(stints["game_id"].unique()), "event counts": event_games,
+            "self-creation counts": creation_games,
             "hustle games": dashboards["hustle_games"]}
     return SeasonPanel(season, rows[SEASON_PANEL_COLUMNS], history.season_roles, read)
 

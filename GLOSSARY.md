@@ -386,5 +386,19 @@ and `row_seasons`; the rest are candidates an experiment may try (the on-court c
 | `row_seasons` | seasons the row covers | panel column | seasons | level |
 | `season_from_2017` | 1 for a season from 2017 on, 0 before (an era marker) | season >= 2017 | flag | level |
 | `self_creation_per100` | self-created shot attempts (the owner's self-creation) | (shot attempts + 0.44 x free-throw attempts) x (1 - share assisted), share assisted = 0.73 - 0.03 x assists - 0.01 x field goals made, clipped to 0-1; uncentred rates | per 100 possessions | level |
-| `self_creation_actual_makes_per100` | self-created shot attempts, his own unassisted makes counted | unassisted makes + (missed shots + 0.44 x free-throw attempts) x (1 - share assisted), unassisted makes = (unassisted points - unassisted threes) / 2 held to 0 through his makes, share assisted as self_creation_per100's; uncentred rates | per 100 possessions | level |
+| `assisted_makes_inside_per100_uncentred` | assisted makes, rim and paint | padded per-game count per 100, level kept | per 100 possessions | level |
+| `assisted_makes_two_per100_uncentred` | assisted makes, other twos | padded per-game count per 100, level kept | per 100 possessions | level |
+| `assisted_makes_three_per100_uncentred` | assisted makes, threes | padded per-game count per 100, level kept | per 100 possessions | level |
+| `expected_assisted_makes_inside_per100_uncentred` | expected assisted makes from the season's cell shares, rim and paint | padded per-game count per 100, level kept | per 100 possessions | level |
+| `expected_assisted_makes_two_per100_uncentred` | expected assisted makes from the season's cell shares, other twos | padded per-game count per 100, level kept | per 100 possessions | level |
+| `expected_assisted_makes_three_per100_uncentred` | expected assisted makes from the season's cell shares, threes | padded per-game count per 100, level kept | per 100 possessions | level |
+| `misses_inside_per100_uncentred` | missed shots, rim and paint | padded per-game count per 100, level kept | per 100 possessions | level |
+| `misses_two_per100_uncentred` | missed shots, other twos | padded per-game count per 100, level kept | per 100 possessions | level |
+| `misses_three_per100_uncentred` | missed shots, threes | padded per-game count per 100, level kept | per 100 possessions | level |
+| `expected_passed_misses_inside_per100_uncentred` | misses expected off a pass, before his lean, rim and paint | padded per-game count per 100, level kept | per 100 possessions | level |
+| `expected_passed_misses_two_per100_uncentred` | misses expected off a pass, before his lean, other twos | padded per-game count per 100, level kept | per 100 possessions | level |
+| `expected_passed_misses_three_per100_uncentred` | misses expected off a pass, before his lean, threes | padded per-game count per 100, level kept | per 100 possessions | level |
+| `trips_without_make_per100_uncentred` | free-throw trips without a make, technicals out | padded per-game count per 100, level kept | per 100 possessions | level |
+| `expected_passed_trips_per100_uncentred` | trips without a make expected off a pass, before his lean | padded per-game count per 100, level kept | per 100 possessions | level |
+| `self_creation_estimated_per100` | self-created shot attempts, passes estimated (experiment 111) | unassisted makes + misses not off a pass + free-throw trips without a make not off a pass; off a pass = his lean x the expected passes, by spot group, held to his count; lean = (assisted makes + 0.5) / (expected assisted makes + 0.5); uncentred rates | per 100 possessions | level |
 <!-- end generated -->

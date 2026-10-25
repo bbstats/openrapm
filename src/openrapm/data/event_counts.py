@@ -322,9 +322,10 @@ def load_event_counts(season: int, cfg: dict) -> pd.DataFrame:
 
 
 # ------------------------------------------------------------------------------------- a design to pad them on
-def event_design(design, counts: pd.DataFrame) -> tuple:
-    """(`design` with its box table replaced by the event counts of the same game, player-season and phase rows and
-    its box_counts by `EVENT_COUNTS`; the game ids whose counts were read), for box_rates.box_rates to pad.
+def event_design(design, counts: pd.DataFrame, names=EVENT_COUNTS) -> tuple:
+    """(`design` with its box table replaced by the counts `names` of the same game, player-season and phase rows and
+    its box_counts by `names`; the game ids whose counts were read), for box_rates.box_rates to pad.  `names` is
+    `EVENT_COUNTS`, or data/creation_counts.py's `CREATION_COUNTS`.
 
     The rows are the box table's own, so the parts are counted over exactly the games and possessions the 13 rates
     are: a design cut to part of a season keeps part of its box table (data/panel.cut_design), and so part of the
@@ -335,8 +336,8 @@ def event_design(design, counts: pd.DataFrame) -> tuple:
     player_seasons = design.spec.player_seasons[["player_season", "player_id", "season"]]
     events = counts.merge(games, on="game_id").merge(player_seasons, on=["player_id", "season"])
     keys = design.game_box[["game_idx", "player_season", "phase"]]
-    table = keys.merge(events[["game_idx", "player_season", "phase", *EVENT_COUNTS]],
+    table = keys.merge(events[["game_idx", "player_season", "phase", *names]],
                        on=["game_idx", "player_season", "phase"], how="left")
-    table[EVENT_COUNTS] = table[EVENT_COUNTS].fillna(0.0)
+    table[list(names)] = table[list(names)].fillna(0.0)
     read = set(games.game_id[games.game_idx.isin(keys.game_idx.unique())])
-    return replace(design, game_box=table, spec=replace(design.spec, box_counts=list(EVENT_COUNTS))), read
+    return replace(design, game_box=table, spec=replace(design.spec, box_counts=list(names))), read
