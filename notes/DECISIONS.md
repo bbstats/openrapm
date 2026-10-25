@@ -10154,3 +10154,36 @@ its fit games alone (the fold check "self-creation: counts read only from fit ga
 use all of its games, a league level of 42 numbers.  2026 through the panel, 1,500+ possessions: Dončić 25.85,
 Gilgeous-Alexander 25.81, Jaylen Brown 22.73; correlation with experiment 110's 0.918.  The chain:
 `--features hustle_no_three_pct_self_creation_estimated`, its own folds; `scratch/2026-10-25_creation111/queue.sh`.
+
+### Experiment 111: result (2026-10-25, `outputs/creation111_chain.log`, `outputs/selfcreation_creation111_154.log`)
+
+The within-season WOWY test against creation110, stint level, the shipped stage; below 0 is better:
+
+| era | change | standard error | z | seasons better |
+|---|---|---|---|---|
+| 1997-2006 | +0.031 | 0.010 | +3.05 | 1 of 10 |
+| 2007-2016 | +0.018 | 0.012 | +1.47 | 4 of 10 |
+| 2017-2026 | +0.002 | 0.011 | +0.18 | 5 of 10 |
+| all seasons | +0.017 | 0.007 | +2.58 | 10 of 30 |
+
+Newey-West z +2.46; before the shrink +0.033, z +3.94.  The year-over-year test, team-game, both directions: +0.004,
+z +0.60, 29 of 56; stint level +0.030, z +3.23.  Ratings, 1,500+ possessions, offense: median move 0.02 per 100 in
+every era, ninetieth percentile 0.06-0.08, largest 0.41; 2026 top 20 the same but OG Anunoby in, Scottie Barnes
+out; Gilgeous-Alexander +0.22 on offense, Jokić -0.20, Porter -0.25.
+
+Check 154 with the new self-creation on the candidate's folds, lineup shape held, per standard deviation: amount
++0.38 against creation110's +0.67 with the owner's formula, by era +0.66 / +0.24 / +0.25; concentration -0.49
+against -0.43, within team -0.50, career-null z -8.5 against -5.6.  One standard deviation of the amount is 7.2
+against 6.5.
+
+**Reading.**
+- Worse within season, most in the earliest era and not at all since 2017; the year-over-year test ties at team-game
+  level.  Not adopted under the rule that a win must hold in every era; verdict the owner's.
+- The new number measures self-creation better (the 2016 tracking check) and predicts the box-score prior's label
+  worse than the owner's formula.  The formula rises with assists, so it carried playmaking; the new number takes a
+  passer's assisted makes out of his self-creation (Jokić 23.2 to 12.3), which is right for self-creation and loses
+  what the prior was using.  Not tested: the 2016 miss factors carried back to 1997-2006, where the shot diet
+  differed; before 2011 a quarter of missed twos and two fifths of made twos have no location and count at the rim.
+- In the lineup test the accurate number halves the amount term and strengthens the concentration term: lineups
+  whose self-creation is concentrated in one or two players beat expectation by more, and the shortfall of lineups
+  short of self-creation is smaller than the formula said.
