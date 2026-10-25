@@ -10138,3 +10138,19 @@ The single number, 1,500+ possessions, every season: correlation with experiment
 standard deviation 3.82 to 4.41.  2026 (`outputs/creation111/top_2026.csv`): Gilgeous-Alexander and Dončić 26.62,
 Jaylen Brown 23.34, Brunson 22.04; the largest drops Jokić 23.20 to 12.28, Porter 16.67 to 9.05, Vučević 11.90 to 4.77.
 Not yet in the pipeline: the box-score prior needs it from each fold's own games.
+
+### Experiment 111 in the pipeline (2026-10-25, the owner: "Build")
+
+`data/creation_counts.py` reads the play-by-play itself, since the shot logger behind `data/shotframe` was deleted on
+2026-10-11: each possession's start and offensive rebounds, every shot's spot and situation, every free-throw trip
+and and-one.  Against the research table in 2016: assist flags and makes 100% the same, possession situation 99.8%,
+spot 96.6% (the distance from x and y here, the feed's written feet there).  The constants were fitted again on its
+own tables (`scratch/2026-10-25_creation111/fit_constants.py`): the free-throw factor 0.651, and the two checks read
+as before, the player check error 0.037 against 0.113 for the owner's formula and 0.060 for his makes' share.
+
+Each count is padded per game like the event counts, 14 columns `features.UNCENTRED_CREATION_RATES`, so a fold reads
+its fit games alone (the fold check "self-creation: counts read only from fit games"), and
+`features.CREATION_ESTIMATED` applies the lean on the padded rates, `LEAN_PAD` 0.5 per 100.  The season's cell shares
+use all of its games, a league level of 42 numbers.  2026 through the panel, 1,500+ possessions: Dončić 25.85,
+Gilgeous-Alexander 25.81, Jaylen Brown 22.73; correlation with experiment 110's 0.918.  The chain:
+`--features hustle_no_three_pct_self_creation_estimated`, its own folds; `scratch/2026-10-25_creation111/queue.sh`.
