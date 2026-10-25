@@ -10079,3 +10079,14 @@ folds for all thirty seasons.
 **How it is read.**  The within-season WOWY test by era against creation110, the year-over-year test not worse at
 z +2, the 2026 top 20.  Then check 154 on the candidate's folds with the new self-creation (`--creation=actual_makes`),
 the amount and concentration terms against the career null, beside creation110's.
+
+**Stopped before any result** (2026-10-25, 3:20 PM; the owner: "no I wanted us to come up with a more robust estimate
+for missed field goals and FTA, not use the old estimate").  The chain was stopped during its first rating pass;
+the panel's two uncentred columns stay.  What the data say for a new estimate, `scratch/2026-10-25_creation111/`:
+- 2016 tracking, 102,444 shots of 631 games: made shots with no dribble were assisted 84% of the time, one dribble 72%,
+  two 43%, three or more 8%; with the ball under a second 87%, over four seconds 1%.  Shots off a catch, at most one
+  dribble and under two seconds, putbacks out: at the rim 35% of misses against 50% of makes, mid-range 36% against
+  38%, threes 79% against 82%.
+- The NBA's potential assists against the play-by-play, regular season: misses potentially assisted 0.53 / 0.52 /
+  0.52 / 0.51 in 2014-2017, then 0.41-0.47 from 2018, where makes were assisted 0.58-0.64.  The tracking provider
+  changed in 2018: free-throw assists fell from 5,654 to 2,664 that year, and 2025 reads 166.
