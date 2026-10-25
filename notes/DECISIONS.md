@@ -9903,3 +9903,46 @@ half a season, the amount reads about twice its whole-season size.
 
 **Next, the owner's:** the same test on team-games; a free offset per player; plain usage in place of self-creation;
 whether the terms predict held-back games better.
+
+### The lineup shape held (the owner, 2026-10-24: "if good lineups in general are quote multiplicative as are high concentration ones, it should be relatively easy to tease out that benefit from that benefit plus self-creation")
+
+Four more free terms in the same fit (`outputs/selfcreation_shape_154.log`, `outputs/csv/selfcreation_shape*.csv`):
+the squares of the offense's and the defense's rating sums and their product, each centred on the fold's
+possession-weighted mean, for good lineups multiplying; and the standard deviation of the five offensive ratings, for
+talent concentrated in one or two players at the same sum.  The career null redrawn for this fit, 200 draws; check
+151's error reproduced to 1.4e-12 again.
+
+Self-creation, points per 100 per standard deviation:
+
+| term | era | shape free | shape held | z against the career null, held | seasons with its sign, held |
+|---|---|---|---|---|---|
+| amount | all | +0.64 | +0.70 | +9.6 | 26 of 30 |
+| amount | 1997-2006 | +1.04 | +1.11 | +10.2 | 10 of 10 |
+| amount | 2007-2016 | +0.58 | +0.60 | +4.8 | 9 of 10 |
+| amount | 2017-2026 | +0.30 | +0.38 | +3.2 | 7 of 10 |
+| concentration | all | -0.40 | -0.45 | -6.6 | 22 of 30 |
+| concentration | 1997-2006 | -0.35 | -0.46 | -4.5 | 7 of 10 |
+| concentration | 2007-2016 | -0.27 | -0.31 | -2.6 | 6 of 10 |
+| concentration | 2017-2026 | -0.59 | -0.57 | -4.9 | 9 of 10 |
+
+The lineup-shape terms' own effects in that fit, points per 100:
+
+| term | all | 1997-2006 | 2007-2016 | 2017-2026 | z | Newey-West z | seasons with its sign |
+|---|---|---|---|---|---|---|---|
+| offense rating sum squared, at one standard deviation | -0.02 | +0.06 | +0.08 | -0.19 | -0.4 | -0.3 | 15 of 30 |
+| defense rating sum squared, at one standard deviation | +0.05 | +0.10 | +0.10 | -0.05 | +1.5 | +1.5 | 19 of 30 |
+| offense times defense rating sums, at one standard deviation each | +0.22 | +0.18 | +0.31 | +0.19 | +4.8 | +5.0 | 24 of 30 |
+| spread of the five offensive ratings, per standard deviation | -0.12 | -0.24 | -0.08 | -0.04 | -2.2 | -2.4 | 20 of 30 |
+
+The bottom fifth of the amount, held: -0.50, by era -0.65 / -0.38 / -0.49; the top fifth since 2017 -0.18 against -0.30.
+
+**Reading.**
+- Self-creation's benefit is not the general lineup benefit: with the lineup shape held, both terms keep their size
+  and sign in every era, a little larger.
+- Good lineups multiply only across the two sides: a strong offense against a weak defense scores more than the sum
+  says, and a weak offense against a strong defense loses less than the sum says, the pattern of points that
+  multiply, in every era (the defense sum is in points allowed).  Within the offense, no: the square of its rating sum
+  is flat over all seasons and bends down since 2017.
+- Talent concentrated in one or two players does not multiply: at the same rating sum a wider spread of the five
+  offensive ratings scores slightly below, mostly before 2007.  Concentrated self-creation helps; concentrated talent
+  does not.

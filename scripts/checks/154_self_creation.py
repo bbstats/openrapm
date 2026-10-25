@@ -26,6 +26,12 @@ Words used below
                     creation (the two tests read width in opposite directions: notes/DECISIONS.md, "The widths"); the
                     five's summed share of team possessions, since heavy-minute lineups outscore their offensive
                     ratings in held-back stints; and how many of the ten have no fold rating
+    lineup shape    the owner, 2026-10-24: "if good lineups in general are multiplicative as are high concentration
+                    ones, it should be relatively easy to tease out that benefit from that benefit plus self-creation".
+                    Four more free terms: the square of the offense's rating sum, the square of the defense's, their
+                    product, each centred on the fold's possession-weighted mean (good lineups multiplying), and the
+                    standard deviation of the five offensive ratings, the talent concentrated in one or two players at
+                    the same sum (high concentration multiplying)
     career null     check 138's yardstick on this one input: every player is handed another player's self-creation,
                     season by season along that player's career (the donor's last season when his career is shorter),
                     and every reading is refitted.  A lineup sum of ANY number a player carries picks up the misfit
@@ -42,9 +48,12 @@ The fit, per season, its folds pooled (weighted least squares, weight = possessi
 
 each fold's team levels, home and playoffs fitted out of every column first, which gives the same a and c as one fit
 with them in.  a and c are reported per standard deviation of the season's amount and concentration over its
-held-back possessions: points per 100 beyond what OpenRAPM expects.  With --trade=1 the amount and the concentration
-also get a coefficient on the stints after a trade, the difference, beside a free level for those stints; both are
-centred on the fold's possession-weighted mean first, so that level reads at the fold's average lineup.
+held-back possessions: points per 100 beyond what OpenRAPM expects.  Read twice: with the free terms, and with the
+lineup shape held as well, beside the lineup-shape terms' own effects in that fit: each square at one standard
+deviation of its rating sum, the product at one of each, the talent spread per standard deviation.  With --trade=1
+the amount and the concentration also get a coefficient on the stints after a trade, the difference, beside a free
+level for those stints; both are centred on the fold's possession-weighted mean first, so that level reads at the
+fold's average lineup.
 
 Across seasons: the mean of the per-season estimates, its standard error across seasons, the z, the Newey-West z
 (check 151's `newey_west_se`), the seasons with the mean's sign, each era; beside it the same fit with no team levels.
@@ -101,6 +110,13 @@ TERMS = ("amount", "concentration")
 TRADE_TERMS = ("amount_after_trade", "concentration_after_trade", "trade")
 CONTEXT = ("is_gt", "margin", "margin_frem")
 FREE = (*CONTEXT, "rating_sum_off", "rating_sum_def", "playing_time", "stand_ins")
+SHAPE = ("rating_curve_off", "rating_curve_def", "rating_cross", "talent_spread_off")
+SHAPE_NAMES = ("offense rating sum squared, at one standard deviation",
+               "defense rating sum squared, at one standard deviation",
+               "offense times defense rating sums, at one standard deviation each",
+               "spread of the five offensive ratings, per standard deviation")
+READINGS = (("within team", FREE), ("within team, lineup shape held", (*FREE, *SHAPE)))
+RAW = (*TERMS, "rating_sum_off", "rating_sum_def", "talent_spread_off")
 FIFTHS, THIRDS = 5, 3
 
 
@@ -203,6 +219,7 @@ def stint_frame(wowy, audit, fold, teams: dict, design, step4: tuple) -> tuple[p
                           "team_def": rows.team_def.to_numpy(), "is_home_off": rows.is_home_off.to_numpy(float),
                           "playoffs": (rows.phase == "PO").to_numpy(float), "y": design.y[index], "w": design.w[index],
                           "rating_sum_off": sum_off.sum(axis=1), "rating_sum_def": sum_def.sum(axis=1),
+                          "talent_spread_off": sum_off.std(axis=1),
                           "amount": created.sum(axis=1), "concentration": concentration(created),
                           "playing_time": mapped(lineup_o, share, 0.0)[0].sum(axis=1),
                           "stand_ins": (missing_o.sum(axis=1) + missing_d.sum(axis=1)).astype(float),
@@ -281,6 +298,15 @@ class NullFold:
     project: Callable
 
 
+def add_shape(frame: pd.DataFrame, w: np.ndarray) -> None:
+    """The lineup-shape terms beside the talent spread: each rating sum's square and their product, centred on the
+    fold's possession-weighted means."""
+    offense, defense = frame.rating_sum_off.to_numpy(float), frame.rating_sum_def.to_numpy(float)
+    offense, defense = offense - np.average(offense, weights=w), defense - np.average(defense, weights=w)
+    frame["rating_curve_off"], frame["rating_curve_def"] = offense ** 2, defense ** 2
+    frame["rating_cross"] = offense * defense
+
+
 def fold_part(wowy, audit, fold, teams: dict, design, step4: tuple, moves) -> tuple[pd.DataFrame, NullFold]:
     """(one fold's held-back stints with possessions: every column with the fold's team levels fitted out, p_; the
     miss and the terms with only a level, home and playoffs fitted out, q_; the raw terms and the weight; what the
@@ -291,27 +317,39 @@ def fold_part(wowy, audit, fold, teams: dict, design, step4: tuple, moves) -> tu
     keep = frame.w.to_numpy() > 0
     frame, levels, lineup_o = frame[keep].reset_index(drop=True), levels[keep], lineup_o[keep]
     w = frame.w.to_numpy(float)
-    names = [*TERMS, *FREE, *extra]
+    add_shape(frame, w)
+    names = [*TERMS, *FREE, *SHAPE, *extra]
     out = pd.DataFrame(project(levels, w, frame[names].to_numpy(float)), columns=[f"p_{n}" for n in names])
     out["p_miss"] = wowy.wowy_miss(frame.miss.to_numpy(float), levels, w)
     plain = [*TERMS, *FREE, "miss"]
     level_only = project(team_levels(frame, by_team=False), w, frame[plain].to_numpy(float))
     out = pd.concat([out, pd.DataFrame(level_only, columns=[f"q_{n}" for n in plain])], axis=1)
-    for name in (*TERMS, *(n for n in extra if n == "trade")):
+    for name in (*RAW, *(n for n in extra if n == "trade")):
         out[f"raw_{name}"] = frame[name].to_numpy(float)
     out["w"] = w
     players, codes = np.unique(lineup_o.astype(np.int64), return_inverse=True)
     return out, NullFold(players, codes.reshape(lineup_o.shape), stand_in, projector(levels, w))
 
 
-def reading(parts: pd.DataFrame, prefix: str, terms: tuple, scales: tuple) -> np.ndarray:
+def reading(parts: pd.DataFrame, prefix: str, terms: tuple, scales: tuple, free: tuple = FREE) -> np.ndarray:
     """The terms' coefficients beside the free terms, each times its scale: the standard deviation of the named raw
     column over the season, or 1."""
     w = parts.w.to_numpy(float)
-    columns = parts[[f"{prefix}{name}" for name in (*terms, *FREE)]].to_numpy(float)
+    columns = parts[[f"{prefix}{name}" for name in (*terms, *free)]].to_numpy(float)
     coef = fit(parts[f"{prefix}miss"].to_numpy(float), columns, w)[:len(terms)]
     sizes = [weighted_sd(parts[scale].to_numpy(float), w) if scale else 1.0 for scale in scales]
     return coef * np.array(sizes)
+
+
+def shape_reading(parts: pd.DataFrame) -> dict:
+    """The lineup-shape terms' own effects in the fit that holds them, points per 100: each square at one standard
+    deviation of its rating sum, the product at one of each, the talent spread per standard deviation."""
+    w = parts.w.to_numpy(float)
+    names = (*TERMS, *FREE, *SHAPE)
+    coef = fit(parts.p_miss.to_numpy(float), parts[[f"p_{name}" for name in names]].to_numpy(float), w)[-len(SHAPE):]
+    sd = {name: weighted_sd(parts[f"raw_{name}"].to_numpy(float), w) for name in RAW[len(TERMS):]}
+    offense, defense, spread = sd["rating_sum_off"], sd["rating_sum_def"], sd["talent_spread_off"]
+    return dict(zip(SHAPE_NAMES, coef * np.array([offense ** 2, defense ** 2, offense * defense, spread])))
 
 
 def trade_reading(parts: pd.DataFrame) -> dict:
@@ -341,10 +379,13 @@ def season_readings(parts: pd.DataFrame, season: int, trade: bool) -> list:
     if trade:
         return rows + [dict(season=season, reading="after a trade", term=term, value=float(value))
                        for term, value in trade_reading(parts).items()]
-    found = {"within team": reading(parts, "p_", TERMS, ("raw_amount", "raw_concentration")),
-             "no team levels": reading(parts, "q_", TERMS, ("raw_amount", "raw_concentration"))}
-    return rows + [dict(season=season, reading=name, term=term, value=float(value))
-                   for name, values in found.items() for term, value in zip(TERMS, values)]
+    scales = ("raw_amount", "raw_concentration")
+    found = {name: reading(parts, "p_", TERMS, scales, free) for name, free in READINGS}
+    found["no team levels"] = reading(parts, "q_", TERMS, scales)
+    rows += [dict(season=season, reading=name, term=term, value=float(value))
+             for name, values in found.items() for term, value in zip(TERMS, values)]
+    return rows + [dict(season=season, reading="lineup shape", term=term, value=float(value))
+                   for term, value in shape_reading(parts).items()]
 
 
 # ----------------------------------------------------------------------------------------------- the null
@@ -379,14 +420,14 @@ class Career:
         return out
 
 
-def null_readings(parts: pd.DataFrame, nulls: list, season: int, career: Career,
-                  permutations: np.ndarray) -> np.ndarray:
-    """draws x terms: the within-team coefficients, per standard deviation, with every player handed his donor's
-    self-creation."""
+def null_readings(parts: pd.DataFrame, nulls: list, season: int, career: Career, permutations: np.ndarray) -> dict:
+    """{reading: draws x terms}: each within-team reading's coefficients, per standard deviation, with every player
+    handed his donor's self-creation."""
     w = parts.w.to_numpy(float)
-    target, free = parts.p_miss.to_numpy(float), parts[[f"p_{name}" for name in FREE]].to_numpy(float)
+    target = parts.p_miss.to_numpy(float)
+    frees = {name: parts[[f"p_{column}" for column in free]].to_numpy(float) for name, free in READINGS}
     players = np.unique(np.concatenate([null.players for null in nulls]))
-    out = np.empty((len(permutations), len(TERMS)))
+    out = {name: np.empty((len(permutations), len(TERMS))) for name in frees}
     for draw, permutation in enumerate(permutations):
         donated = career.donated(permutation, players, season)
         raw, projected = [], []
@@ -396,29 +437,35 @@ def null_readings(parts: pd.DataFrame, nulls: list, season: int, career: Career,
             terms = np.column_stack([created.sum(axis=1), concentration(created)])
             raw.append(terms)
             projected.append(null.project(terms))
-        raw = np.vstack(raw)
-        coef = fit(target, np.hstack([np.vstack(projected), free]), w)[:len(TERMS)]
-        out[draw] = coef * np.array([weighted_sd(raw[:, k], w) for k in range(len(TERMS))])
+        raw, projected = np.vstack(raw), np.vstack(projected)
+        sizes = np.array([weighted_sd(raw[:, k], w) for k in range(len(TERMS))])
+        for name, free in frees.items():
+            out[name][draw] = fit(target, np.hstack([projected, free]), w)[:len(TERMS)] * sizes
     return out
 
 
+def against_null(mine: pd.Series, theirs: pd.DataFrame, seasons: list) -> dict:
+    """The real across-season mean against the null draws' means over the same seasons."""
+    value, draws = float(mine[seasons].mean()), theirs[seasons].mean(axis=1).to_numpy()
+    centre, spread = float(draws.mean()), float(draws.std(ddof=1))
+    return dict(mean=value, null_mean=centre, null_sd=spread,
+                z_against_null=(value - centre) / spread if spread > 0 else np.nan,
+                share_of_draws_as_far=float(np.mean(np.abs(draws - centre) >= abs(value - centre))),
+                draws=len(draws), seasons=len(seasons))
+
+
 def null_summary(per_season: pd.DataFrame, null_seasons: pd.DataFrame) -> pd.DataFrame:
-    """Each within-team term's across-season mean against the career null's draws of the same mean."""
+    """Each within-team reading's terms: the across-season mean against the career null's draws of the same mean."""
     rows = []
-    real = per_season[per_season.reading == "within team"]
-    for term in TERMS:
-        mine = real[real.term == term].set_index("season").value
-        theirs = null_seasons[null_seasons.term == term].pivot(index="draw", columns="season", values="value")
-        for label, (first, last) in eras():
-            seasons = [season for season in mine.index if first <= season <= last]
-            if not seasons:
-                continue
-            value, draws = float(mine[seasons].mean()), theirs[seasons].mean(axis=1).to_numpy()
-            centre, spread = float(draws.mean()), float(draws.std(ddof=1))
-            rows.append(dict(term=term, era=label, mean=value, null_mean=centre, null_sd=spread,
-                             z_against_null=(value - centre) / spread if spread > 0 else np.nan,
-                             share_of_draws_as_far=float(np.mean(np.abs(draws - centre) >= abs(value - centre))),
-                             draws=len(draws), seasons=len(seasons)))
+    for name, _ in READINGS:
+        real, null = per_season[per_season.reading == name], null_seasons[null_seasons.reading == name]
+        for term in TERMS:
+            mine = real[real.term == term].set_index("season").value
+            theirs = null[null.term == term].pivot(index="draw", columns="season", values="value")
+            for label, (first, last) in eras():
+                seasons = [season for season in mine.index if first <= season <= last]
+                if seasons:
+                    rows.append(dict(reading=name, term=term, era=label, **against_null(mine, theirs, seasons)))
     return pd.DataFrame(rows)
 
 
@@ -432,11 +479,11 @@ def weighted_bins(values: np.ndarray, w: np.ndarray, parts: int) -> np.ndarray:
     return bins
 
 
-def season_table(parts: pd.DataFrame, season: int) -> pd.DataFrame:
+def season_table(parts: pd.DataFrame, season: int, free: tuple, held: str) -> pd.DataFrame:
     """The season's fifths of the amount by thirds of the concentration within each fifth: possession-weighted sums
-    of the miss after the free terms alone, of the amount and of the concentration."""
+    of the miss after the `free` terms alone, of the amount and of the concentration."""
     w = parts.w.to_numpy(float)
-    free = parts[[f"p_{name}" for name in FREE]].to_numpy(float)
+    free = parts[[f"p_{name}" for name in free]].to_numpy(float)
     target = parts.p_miss.to_numpy(float)
     left = target - free @ fit(target, free, w)
     amount, spread = parts.raw_amount.to_numpy(float), parts.raw_concentration.to_numpy(float)
@@ -447,20 +494,21 @@ def season_table(parts: pd.DataFrame, season: int) -> pd.DataFrame:
         third[inside] = weighted_bins(spread[inside], w[inside], THIRDS)
     cells = pd.DataFrame({"fifth": fifth + 1, "third": third + 1, "w": w, "miss": w * left, "amount": w * amount,
                           "concentration": w * spread})
-    return cells.groupby(["fifth", "third"], as_index=False).sum().assign(season=season)
+    return cells.groupby(["fifth", "third"], as_index=False).sum().assign(season=season, held=held)
 
 
 def pooled_table(tables: pd.DataFrame) -> pd.DataFrame:
     """The cells pooled over all seasons and over each era: mean miss per 100, share of possessions, mean amount and
-    mean concentration."""
+    mean concentration; once for each set of free terms held."""
     out = []
-    for label, (first, last) in eras():
-        part = tables[(tables.season >= first) & (tables.season <= last)]
-        sums = part.groupby(["fifth", "third"], as_index=False)[["w", "miss", "amount", "concentration"]].sum()
-        out.append(pd.DataFrame({"era": label, "amount_fifth": sums.fifth, "concentration_third": sums.third,
-                                 "share_of_possessions": sums.w / sums.w.sum(), "mean_miss": sums.miss / sums.w,
-                                 "mean_amount": sums.amount / sums.w,
-                                 "mean_concentration": sums.concentration / sums.w}))
+    for held, table in tables.groupby("held", sort=False):
+        for label, (first, last) in eras():
+            part = table[(table.season >= first) & (table.season <= last)]
+            sums = part.groupby(["fifth", "third"], as_index=False)[["w", "miss", "amount", "concentration"]].sum()
+            out.append(pd.DataFrame({"held": held, "era": label, "amount_fifth": sums.fifth,
+                                     "concentration_third": sums.third, "share_of_possessions": sums.w / sums.w.sum(),
+                                     "mean_miss": sums.miss / sums.w, "mean_amount": sums.amount / sums.w,
+                                     "mean_concentration": sums.concentration / sums.w}))
     return pd.concat(out, ignore_index=True)
 
 
@@ -590,9 +638,11 @@ def run_season(inputs: Inputs, cfg: dict, season: int, design, trade: bool) -> t
     null = None
     if inputs.career is not None:
         draws = null_readings(parts, [fold for _, fold in built], season, inputs.career, inputs.permutations)
-        null = pd.DataFrame([dict(season=season, draw=draw, term=term, value=float(draws[draw, k]))
-                             for draw in range(len(draws)) for k, term in enumerate(TERMS)])
-    return season_readings(parts, season, trade), season_table(parts, season), null
+        null = pd.DataFrame([dict(season=season, reading=name, draw=draw, term=term, value=float(values[draw, k]))
+                             for name, values in draws.items() for draw in range(len(values))
+                             for k, term in enumerate(TERMS)])
+    tables = pd.concat([season_table(parts, season, free, name) for name, free in READINGS], ignore_index=True)
+    return season_readings(parts, season, trade), tables, null
 
 
 def run(args: argparse.Namespace, cfg: dict, within: Path, wowy) -> tuple:
@@ -659,8 +709,9 @@ def write_and_print(args: argparse.Namespace, cfg: dict, outputs: Path, found: t
         against.to_csv(csv / f"{args.tag}_null.csv", index=False)
         print(f"\nthe within-team readings against the career null, {args.null} draws")
         print(against.round(4).to_string(index=False))
-    print("\nthe fifths of the amount by thirds of the concentration, all seasons")
-    print(table[table.era == "all"].round(4).to_string(index=False))
+    for held, part in table[table.era == "all"].groupby("held", sort=False):
+        print(f"\nthe fifths of the amount by thirds of the concentration, all seasons, {held}")
+        print(part.drop(columns=["held", "era"]).round(4).to_string(index=False))
     if args.top:
         top = top_table(cfg, args.top)
         top.to_csv(csv / f"{args.tag}_top.csv", index=False)

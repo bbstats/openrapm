@@ -116,6 +116,15 @@ def test_a_move_dates_both_teams_by_his_first_game_for_the_new_one_and_skips_ben
     assert moves.values.tolist() == [[10, 5], [20, 5]]
 
 
+def test_the_lineup_shape_squares_and_multiplies_the_centred_rating_sums(check):
+    """Rating sums of +2 and -2 around a mean of 0 on offense, +1 and -1 on defense: squares 4 and 1, product +2."""
+    frame = pd.DataFrame({"rating_sum_off": [2.0, -2.0], "rating_sum_def": [1.0, -1.0]})
+    check.add_shape(frame, np.ones(2))
+    assert frame.rating_curve_off.tolist() == [4.0, 4.0]
+    assert frame.rating_curve_def.tolist() == [1.0, 1.0]
+    assert frame.rating_cross.tolist() == [2.0, 2.0]
+
+
 def test_the_after_trade_terms_are_centred_so_the_level_reads_at_the_average_lineup(check):
     frame = pd.DataFrame({"team_off": [1, 1, 1, 1], "game_idx": [5, 6, 7, 8], "w": [1.0, 1.0, 1.0, 1.0],
                           "amount": [40.0, 50.0, 60.0, 50.0], "concentration": [0.7, 0.8, 0.75, 0.75]})
