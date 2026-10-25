@@ -10024,8 +10024,16 @@ z -6.3.  The smooth curve from the saved rows (`outputs/selfcreation_rows_creati
 ## Experiment 110 ADOPTED (2026-10-25, the owner: "the rating changes are good - we can adopt and publish")
 
 `settings.PriorSettings.feature_set` "hustle_no_three_pct_self_creation"; step 4 on `creation110_early,creation110_within`
-read to a full season with its tenth folds `creation110_k10`; the chain's incumbent creation110.  The product build and
-the publish follow (`scratch/2026-10-25_adopt110/queue.sh`, `outputs/adopt110.log`).
+read to a full season with its tenth folds `creation110_k10`; the chain's incumbent creation110.
+
+**PUBLISHED 2026-10-25** (6cb55cd from the site worktree, the Pages build checked, the live ratings file identical).
+`scratch/2026-10-25_adopt110/queue.sh`: the tenth folds in 55 minutes, then `openrapm rate --jobs 4 --name product`,
+`shrink` and `swap`, 46 minutes; the tables before it in `outputs/before_creation110/`.  Players with 1,000+
+possessions, the total: median 0.026 / 0.026 / 0.032 per 100 by era, the ninetieth percentile 0.08 / 0.09 / 0.11, the
+largest 0.41 / 0.42 / 0.57; each side's standard deviation unchanged to two decimals.  2027 on a few games, everyone:
+median 0.09, largest 1.53.  2026 top 20 the same players, Gilgeous-Alexander -0.21 and Dončić -0.25 the largest
+moves.  The consensus tests pass, 10 and the known backup-bigs failure; `openrapm site --bias --openrapm-decomposition
+--similarity` passes every identity.  The daily 2027 update runs on it from tomorrow.
 
 ## The 60+ lineups and "only one ball" (the owner, 2026-10-25: "more lineups that have 60+! i'd love to just analyze the 60+ lineups vs the <60 lineups from 2017-2026. part of me wonders if it's just 'hey there's only one ball' type stuff?"; read-only)
 

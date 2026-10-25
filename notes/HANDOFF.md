@@ -22,11 +22,13 @@ every number quoted here; read its measurement traps before trusting a number.  
 
 - **The bug-fix pass of 2026-10-22** (DECISIONS.md, "The bug-fix pass"): the owner asked for a hunt for bugs behind the
   artifacts; the findings, the code-only fixes, experiments 94-99, the width test and the season widths are there.
-- **The chain's incumbent is experiment 107 (parts107), ADOPTED 2026-10-23, published 2026-10-24** (the owner: "Sure adopt
-  then build the shrink by share"): experiment 106 with the box-score prior trained on part-season rows too, its own
-  folds `parts107_early`, `parts107_within` and tenth folds `parts107_k10`; tables `season_ratings_parts107*`.
-- **The published ratings are experiment 107 (parts107), PUBLISHED 2026-10-24** (42311b4; DECISIONS.md, "Experiment 107
-  PUBLISHED"): every season, 2027 included, from the part-season prior rows and their folds.
+- **The chain's incumbent and the published ratings are experiment 110 (creation110), ADOPTED and PUBLISHED
+  2026-10-25** (6cb55cd; the owner: "the rating changes are good - we can adopt and publish"): experiment 107 with the
+  owner's self-creation on the offensive box-score prior (`--features hustle_no_three_pct_self_creation`), its own folds
+  `creation110_early`, `creation110_within` and tenth folds `creation110_k10`; tables `season_ratings_creation110*`;
+  DECISIONS.md, "Experiment 110 ADOPTED".
+- **Before it, experiment 107 (parts107), PUBLISHED 2026-10-24** (42311b4): the box-score prior trained on part-season
+  rows too, folds `parts107_early`, `parts107_within`, `parts107_k10`.
 - **Before it, experiment 106 (layers106), PUBLISHED 2026-10-23** (the owner: "please adopt, yes - D. you may
   publish if 2026 our rankings correlate more nicely w/ consensus"; DECISIONS.md, "Experiment 106 ADOPTED and
   PUBLISHED"): inputs99 with the shrink in two layers, each player's deviation from his team's mean multiplied on its
@@ -168,17 +170,17 @@ What else the work of 2026-10-23 left open:
 | step | plain name | module | as shipped |
 |---|---|---|---|
 | 1 | the label | `rapm.py` | one RAPM per player over every season but the rated one; penalties 40,000 / 40,000 / 0 |
-| 2 | box-score prior | `box_prior.py` | LightGBM `lgb1_tune2`, linear leaves; feature set `hustle_no_three_pct`; five player folds; 10 bags; part-season rows at a quarter, a half and three quarters of each training season since experiment 107 |
+| 2 | box-score prior | `box_prior.py` | LightGBM `lgb1_tune2`, linear leaves; feature set `hustle_no_three_pct_self_creation`, self-creation on offense since experiment 110; five player folds; 10 bags; part-season rows at a quarter, a half and three quarters of each training season since experiment 107 |
 | 2b | swap part of the prior | `second_prior.py` | line `ctx82` on `context_and_types_centred`, team totals held |
 | 3 | the rating | `prior_rapm.py` | RAPM pulled toward the prior, penalty 13,037, centred |
-| 4 | the shrink, with the defense factor | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, 8 nearest fold seasons, defense times 0.89 before 2017 and 0.84 from 2017; folds `parts107_early,parts107_within` since experiment 107, each multiplier read to a full season with the tenth folds `parts107_k10` (experiment 101); two layers since experiment 106: each part's team mean on held-back team-games, each player's deviation from it on held-back stints within games, the within layer times 0.75 on offense and 1.0 on defense |
+| 4 | the shrink, with the defense factor | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, 8 nearest fold seasons, defense times 0.89 before 2017 and 0.84 from 2017; folds `creation110_early,creation110_within` since experiment 110, each multiplier read to a full season with the tenth folds `creation110_k10` (experiment 101); two layers since experiment 106: each part's team mean on held-back team-games, each player's deviation from it on held-back stints within games, the within layer times 0.75 on offense and 1.0 on defense |
 | 5 | swap adjustment | `swap_adjust.py` | off: applied share 0, the build skips it |
 
 - `openrapm build` writes `outputs/season_ratings_product.parquet` with `_step3` and `_step4` beside it.
 - `openrapm site --bias --openrapm-decomposition --similarity` writes the site's files.  Commit, fast-forward `main`
   and push only on the owner's word, then check the Pages build: `gh api repos/bbstats/openrapm/pages/builds/latest`.
   With the second prior, the decomposition's "box score" piece carries the whole prior; its split is the owner's.
-- The incumbent's test-setting tables `outputs/season_ratings_parts107*.parquet`, folds `parts107_early`, `parts107_within`;
+- The incumbent's test-setting tables `outputs/season_ratings_creation110*.parquet`, folds `creation110_early`, `creation110_within`;
   no noise control on it yet, `noise_bags10` stands in.
 
 ## How an experiment is judged
