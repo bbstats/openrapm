@@ -10020,3 +10020,32 @@ z -6.3.  The smooth curve from the saved rows (`outputs/selfcreation_rows_creati
 - The lineup pattern is untouched.  The prior is fitted to each player's RAPM over his other seasons, an additive
   rating, so an input can only help it predict what RAPM already credits; what lineups short of self-creation lose is
   not in that label.  Verdict the owner's.
+
+## Experiment 110 ADOPTED (2026-10-25, the owner: "the rating changes are good - we can adopt and publish")
+
+`settings.PriorSettings.feature_set` "hustle_no_three_pct_self_creation"; step 4 on `creation110_early,creation110_within`
+read to a full season with its tenth folds `creation110_k10`; the chain's incumbent creation110.  The product build and
+the publish follow (`scratch/2026-10-25_adopt110/queue.sh`, `outputs/adopt110.log`).
+
+## The 60+ lineups and "only one ball" (the owner, 2026-10-25: "more lineups that have 60+! i'd love to just analyze the 60+ lineups vs the <60 lineups from 2017-2026. part of me wonders if it's just 'hey there's only one ball' type stuff?"; read-only)
+
+`scratch/2026-10-25_adopt110/one_ball.py` on check 154's saved stints of the incumbent creation110, each player's true
+shooting attempts per 100 from his fold's fit games; a high-usage player takes 25 or more, about the top fifth of
+possessions.  Means within each season, then over the seasons.
+
+- **More 60+ lineups.**  The share of possessions with the five summing to 60 or more self-created attempts per 100 ran
+  1.6-6.1% in 2007-2016 and grew from 8.3% in 2017 to 22.3% in 2026.  In 2017-2026 they score -0.43 per 100 below
+  expectation, standard error 0.14, 8 of 10 seasons; the rest +0.07.
+- **By high-usage players on the floor, 2017-2026:** none -0.29, 30% of possessions, 10 of 10 seasons; one +0.20, 48%,
+  10 of 10; two +0.05, 20%; three or more -0.67, 2%, standard error 0.42.  Inside the 60+ lineups: one -0.53, two
+  -0.31, three or more -1.06, standard error 0.36.
+- **The shot budget.**  An average lineup's five usually take 99.3 true shooting attempts per 100 possessions, what one
+  ball allows; with no high-usage player 90.6, one 100.5, two 108.2, three or more 115.1.  By that budget: under 85
+  -0.86, 85-90 -0.13, 90-95 +0.15, 95-100 +0.26, 100-105 +0.12, 105-110 +0.20, 110-115 -0.15, 115 or more -0.44.
+- **Shots or self-created shots.**  At a budget of 110 or more, the 60+ lineups score -0.54, 8 of 10 seasons, the rest
+  +0.18, standard error 0.33; at a balanced 95-105 the 60+ lineups hold 1.6% of possessions, too few to read.
+
+**Reading.**  Largely one ball: the 60+ lineups are mostly two or three high-usage players whose usual shots add up to
+more than a possession holds, and lineups score best when the five's usual shots add up to about what one ball allows.
+At the same oversupply of shots, the lineups that need the ball to create fall short and those of finishers do not,
+which points at on-ball creation colliding rather than shot volume alone; the data separate the two only weakly.
