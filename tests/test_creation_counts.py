@@ -88,3 +88,17 @@ def test_a_cells_share_is_padded_toward_its_prior_and_every_cell_has_a_factor():
     # misses at the rim come off a pass less often than makes there, in every possession situation but putbacks
     assert all(cc.MISS_FACTOR[f"rim|{context}"] < 0 for context in cc.CONTEXTS)
     assert np.isfinite(cc.FT_FACTOR) and 0.3 < cc.FT_FACTOR < 1.0
+
+
+def test_the_candidates_count_unassisted_makes_by_group_the_situations_and_the_and_ones():
+    """Experiment 112's counts on the hand-written game: player 2's transition layup is an unassisted make inside and
+    an and-one; player 9's tip a second after his offensive rebound is a putback; player 1's corner three 22 s into the
+    period and player 2's three 25 s after the made free throw are late-clock attempts."""
+    shots, trips = cc.game_shots(_game())
+    shots = cc.add_cells(shots).assign(game_id="0022500001", phase="RS")
+    counts = cc.season_creation_counts(shots, trips.assign(game_id="0022500001", phase="RS"), 2026)
+    counts = counts.set_index("player_id")
+    inside = ["unassisted_makes_inside", "and_ones", "transition_attempts", "late_clock_attempts"]
+    assert counts.loc[2, inside].tolist() == [1, 1, 1, 1]
+    assert counts.loc[1, ["unassisted_makes_three", "late_clock_attempts", "transition_attempts"]].tolist() == [0, 1, 0]
+    assert counts.loc[9, ["putback_attempts", "unassisted_makes_inside", "and_ones"]].tolist() == [1, 0, 0]

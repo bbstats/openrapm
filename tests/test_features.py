@@ -84,7 +84,10 @@ def test_the_stat_splits_lists_append_their_parts_where_the_box_count_is_read():
         "hustle_no_three_pct_self_creation_estimated": {
             "O": [name for name in feat.FEATURE_SETS["hustle"]["O"] if name != "three_point_pct"]
             + feat.CREATION_ESTIMATED,
-            "D": feat.FEATURE_SETS["hustle"]["D"]}}
+            "D": feat.FEATURE_SETS["hustle"]["D"]},
+        # experiment 112: the shipped lists with every candidate of the screen appended
+        "screen112_pool": {side: feat.FEATURE_SETS["hustle_no_three_pct_self_creation"][side]
+                           + feat.SCREEN_CANDIDATES[side] for side in ("O", "D")}}
     wider = ["russell_blocks_per100", "rim_blocks_per100", "mid_range_blocks_per100", "three_point_blocks_per100",
              "offensive_fouls_per100", "stolen_turnovers_per100", "assists_to_rim_per100",
              "assists_to_mid_range_per100", "assists_to_corner_threes_per100", "assists_to_above_break_threes_per100"]
@@ -107,7 +110,7 @@ def test_the_term_order_of_the_sums_is_kept():
     assert list(feat.DERIVED) == ["points_per100", "shots_per100", "free_throw_attempts_per100",
                                   "three_point_attempts_per100", "used_possessions_per100", "rebounds_per100",
                                   "steals_plus_blocks_per100", "assists_minus_turnovers_per100",
-                                  "threes_minus_twos_attempted_per100"]
+                                  "threes_minus_twos_attempted_per100", "potential_assists_estimated_per100"]
     assert list(feat.DERIVED["used_possessions_per100"]) == [
         "twos_made_per100", "twos_missed_per100", "threes_made_per100", "threes_missed_per100",
         "free_throws_made_per100", "free_throws_missed_per100", "turnovers_per100"]
@@ -211,7 +214,7 @@ def test_every_name_the_prior_can_read_is_in_the_catalogue():
     assert not wanted - set(names)
     assert {f.scale for f in feat.CATALOGUE} <= {"centred", "level"}
     assert all(f.meaning and f.formula and f.unit and f.group for f in feat.CATALOGUE)
-    assert len(feat.PRIOR_FEATURES) == len(set(feat.PRIOR_FEATURES)) == 133
+    assert len(feat.PRIOR_FEATURES) == len(set(feat.PRIOR_FEATURES)) == 142
 
 
 def test_self_creation_is_the_owners_formula_on_the_uncentred_rates_and_its_share_is_clipped():
@@ -261,13 +264,14 @@ def test_every_season_panel_column_but_the_keys_is_in_the_catalogue():
     names = {f.name for f in feat.CATALOGUE}
     assert feat.SEASON_PANEL_COLUMNS[:3] == feat.PANEL_KEYS == ["side", "player_id", "season"]
     assert not set(feat.SEASON_PANEL_COLUMNS[3:]) - names
-    assert len(feat.SEASON_PANEL_COLUMNS) == len(set(feat.SEASON_PANEL_COLUMNS)) == 148
-    assert feat.SEASON_PANEL_COLUMNS[-84:-62] == feat.EVENT_RATES, "the play-by-play parts follow every older column"
-    assert feat.SEASON_PANEL_COLUMNS[-62:-58] == feat.CAREER_FROM_DEBUT, "and the career from the debut after them"
-    assert feat.SEASON_PANEL_COLUMNS[-58:-17] == feat.DASHBOARD_RATES, "then the dashboard inputs"
-    assert feat.SEASON_PANEL_COLUMNS[-17:-16] == feat.ERA_MARKER, "and the era marker"
-    assert feat.SEASON_PANEL_COLUMNS[-16:-14] == feat.UNCENTRED_EVENT_RATES, "then the two uncentred parts"
-    assert feat.SEASON_PANEL_COLUMNS[-14:] == feat.UNCENTRED_CREATION_RATES, "and self-creation's counts last"
+    assert len(feat.SEASON_PANEL_COLUMNS) == len(set(feat.SEASON_PANEL_COLUMNS)) == 163
+    assert feat.SEASON_PANEL_COLUMNS[-99:-77] == feat.EVENT_RATES, "the play-by-play parts follow every older column"
+    assert feat.SEASON_PANEL_COLUMNS[-77:-73] == feat.CAREER_FROM_DEBUT, "and the career from the debut after them"
+    assert feat.SEASON_PANEL_COLUMNS[-73:-32] == feat.DASHBOARD_RATES, "then the dashboard inputs"
+    assert feat.SEASON_PANEL_COLUMNS[-32:-31] == feat.ERA_MARKER, "and the era marker"
+    assert feat.SEASON_PANEL_COLUMNS[-31:-29] == feat.UNCENTRED_EVENT_RATES, "then the two uncentred parts"
+    assert feat.SEASON_PANEL_COLUMNS[-29:-8] == feat.UNCENTRED_CREATION_RATES, "then self-creation's counts"
+    assert feat.SEASON_PANEL_COLUMNS[-8:] == feat.CREATION_INPUTS, "and experiment 112's candidates last"
 
 
 def test_the_dashboard_arms_append_to_the_incumbents_lists_and_name_real_columns():

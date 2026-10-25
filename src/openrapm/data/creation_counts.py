@@ -58,6 +58,8 @@ SPOT_GROUPS = {"rim": "inside", "paint": "inside", "mid": "two", "long_two": "tw
 CELL_PAD = 50.0
 CORNER_X, CORNER_Y = 220.0, 92.5          # tenths of a foot
 PUTBACK_SECONDS, EARLY_SECONDS = 3.0, 7.0
+# the possession situations counted as attempts (experiment 112): {context: count}
+SITUATIONS = {"s20_plus": "late_clock_attempts", "transition": "transition_attempts", "putback": "putback_attempts"}
 PBP_COLUMNS = ["actionNumber", "clock", "period", "teamId", "personId", "actionType", "subType", "description",
                "shotValue", "xLegacy", "yLegacy"]
 ASSISTED = re.compile(r"\d+ AST\)")
@@ -310,6 +312,13 @@ def season_creation_counts(shots: pd.DataFrame, trips: pd.DataFrame, season: int
     t = trips.rename(columns={"player_id": "shooter"}).set_index(keys)
     without = (t.trips - t.and_one_trips).clip(lower=0).groupby(level=keys).sum().astype(float)
     parts += [without.rename("trips_without_make"), (without * trip_chance).rename("expected_passed_trips")]
+    # experiment 112's candidates: unassisted makes by group, attempts by possession situation, and-ones
+    for group in GROUPS:
+        m = made[made.group == group]
+        parts.append((m.groupby(keys).size() - m.groupby(keys).assisted.sum()).rename(f"unassisted_makes_{group}"))
+    for context, name in SITUATIONS.items():
+        parts.append(shots[shots.context == context].groupby(keys).size().rename(name).astype(float))
+    parts.append(made.groupby(keys).and_one.sum().rename("and_ones").astype(float))
     out = pd.concat(parts, axis=1).fillna(0.0).reset_index().rename(columns={"shooter": "player_id"})
     out["season"] = int(season)
     return out[[*KEYS, *CREATION_COUNTS]]

@@ -317,6 +317,7 @@ and `row_seasons`; the rest are candidates an experiment may try (the on-court c
 | `steals_plus_blocks_per100` | steals plus blocks | steals_per100 + blocks_per100 | per 100 possessions | centred |
 | `assists_minus_turnovers_per100` | assists minus turnovers | assists_per100 - turnovers_per100 | per 100 possessions | centred |
 | `threes_minus_twos_attempted_per100` | threes minus twos taken | threes_made_per100 + threes_missed_per100 - twos_made_per100 - twos_missed_per100 | per 100 possessions | centred |
+| `potential_assists_estimated_per100` | potential assists, estimated from where the assists went | 1.656 assists_to_rim_per100 + 2.261 assists_to_mid_range_per100 + 2.057 assists_to_corner_threes_per100 + 2.503 assists_to_above_break_threes_per100 | per 100 possessions | centred |
 | `effective_fg_pct` | effective field-goal % | (twos_made_per100 + 1.5 threes_made_per100 + 3 x 0.5) / (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 3), uncentred rates | fraction | level |
 | `true_shooting_pct` | true shooting % | (2 twos_made_per100 + 3 threes_made_per100 + free_throws_made_per100 + 6 x 0.54) / (2 twos_made_per100 + 2 twos_missed_per100 + 2 threes_made_per100 + 2 threes_missed_per100 + 0.88 free_throws_made_per100 + 0.88 free_throws_missed_per100 + 6), uncentred rates | fraction | level |
 | `three_point_attempt_share` | share of shots that are threes | (threes_made_per100 + threes_missed_per100 + 3 x 0.25) / (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 3), uncentred rates | fraction | level |
@@ -400,5 +401,20 @@ and `row_seasons`; the rest are candidates an experiment may try (the on-court c
 | `expected_passed_misses_three_per100_uncentred` | misses expected off a pass, before his lean, threes | padded per-game count per 100, level kept | per 100 possessions | level |
 | `trips_without_make_per100_uncentred` | free-throw trips without a make, technicals out | padded per-game count per 100, level kept | per 100 possessions | level |
 | `expected_passed_trips_per100_uncentred` | trips without a make expected off a pass, before his lean | padded per-game count per 100, level kept | per 100 possessions | level |
+| `unassisted_makes_inside_per100_uncentred` | unassisted makes, rim and paint | padded per-game count per 100, level kept | per 100 possessions | level |
+| `unassisted_makes_two_per100_uncentred` | unassisted makes, other twos | padded per-game count per 100, level kept | per 100 possessions | level |
+| `unassisted_makes_three_per100_uncentred` | unassisted makes, threes | padded per-game count per 100, level kept | per 100 possessions | level |
+| `late_clock_attempts_per100_uncentred` | shot attempts 20 seconds or more into the possession | padded per-game count per 100, level kept | per 100 possessions | level |
+| `transition_attempts_per100_uncentred` | shot attempts in transition, within 7 seconds of a defensive rebound or a steal | padded per-game count per 100, level kept | per 100 possessions | level |
+| `putback_attempts_per100_uncentred` | putback attempts, within 3 seconds of his team's offensive rebound | padded per-game count per 100, level kept | per 100 possessions | level |
+| `and_ones_per100_uncentred` | and-ones | padded per-game count per 100, level kept | per 100 possessions | level |
+| `unassisted_makes_inside_per100` | unassisted makes, rim and paint | padded per-game count per 100 minus the league level | per 100 possessions | centred |
+| `unassisted_makes_two_per100` | unassisted makes, other twos | padded per-game count per 100 minus the league level | per 100 possessions | centred |
+| `unassisted_makes_three_per100` | unassisted makes, threes | padded per-game count per 100 minus the league level | per 100 possessions | centred |
+| `late_clock_attempts_per100` | shot attempts 20 seconds or more into the possession | padded per-game count per 100 minus the league level | per 100 possessions | centred |
+| `transition_attempts_per100` | shot attempts in transition, within 7 seconds of a defensive rebound or a steal | padded per-game count per 100 minus the league level | per 100 possessions | centred |
+| `putback_attempts_per100` | putback attempts, within 3 seconds of his team's offensive rebound | padded per-game count per 100 minus the league level | per 100 possessions | centred |
+| `and_ones_per100` | and-ones | padded per-game count per 100 minus the league level | per 100 possessions | centred |
+| `trips_without_make_per100` | free-throw trips without a make, technicals out | padded per-game count per 100 minus the league level | per 100 possessions | centred |
 | `self_creation_estimated_per100` | self-created shot attempts, passes estimated (experiment 111) | unassisted makes + misses not off a pass + free-throw trips without a make not off a pass; off a pass = his lean x the expected passes, by spot group, held to his count; lean = (assisted makes + 0.5) / (expected assisted makes + 0.5); uncentred rates | per 100 possessions | level |
 <!-- end generated -->

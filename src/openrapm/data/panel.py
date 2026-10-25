@@ -69,6 +69,8 @@ from ..features import (
     CAREER,
     CAREER_FROM_DEBUT,
     CLOSENESS,
+    CREATION_INPUTS,
+    CREATION_RATES,
     DASHBOARD_RATES,
     ERA_MARKER,
     EVENT_RATES,
@@ -124,7 +126,8 @@ OLD_PANEL = "role_panel_season.parquet"          # the old-named panel's file na
 MIGRATED_PANEL_COLUMNS = [column for column in SEASON_PANEL_COLUMNS
                           if column not in EVENT_RATES and column not in CAREER_FROM_DEBUT
                           and column not in DASHBOARD_RATES and column not in ERA_MARKER
-                          and column not in UNCENTRED_EVENT_RATES and column not in UNCENTRED_CREATION_RATES]
+                          and column not in UNCENTRED_EVENT_RATES and column not in UNCENTRED_CREATION_RATES
+                          and column not in CREATION_INPUTS]
 STINT_COLUMNS = ["game_id", "period", *HOME_SLOTS, *AWAY_SLOTS, "poss_h", "poss_a", "margin_h", "is_gt"]
 # The data layer's names for the body and shot columns, against the panel's (the pairs are pinned in
 # tests/test_features.py and tests/test_panel.py); data/roles.py builds the role and career columns under the panel's
@@ -409,10 +412,12 @@ def _side_rows(side: str, season: int, rates, parts, creation, players: pd.DataF
     events = pd.DataFrame(chosen.centred, columns=EVENT_RATES)
     uncentred = pd.DataFrame(chosen.rates[:, [EVENT_RATES.index(name.removesuffix("_uncentred"))
                                               for name in UNCENTRED_EVENT_RATES]], columns=UNCENTRED_EVENT_RATES)
-    own = pd.DataFrame((creation.offence if side == "O" else creation.defence).rates,
-                       columns=UNCENTRED_CREATION_RATES)
+    made = creation.offence if side == "O" else creation.defence
+    own = pd.DataFrame(made.rates, columns=UNCENTRED_CREATION_RATES)
+    measured = pd.DataFrame(made.centred[:, [CREATION_RATES.index(name) for name in CREATION_INPUTS]],
+                            columns=CREATION_INPUTS)
     return pd.concat([keys, rate_table(rates, side, BOX_RATES), players.drop(columns="player_id"), events,
-                      dashboards[side], uncentred, own], axis=1)
+                      dashboards[side], uncentred, own, measured], axis=1)
 
 
 def body_table(cfg: dict) -> pd.DataFrame:
