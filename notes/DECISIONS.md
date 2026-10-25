@@ -9948,4 +9948,8 @@ The bottom fifth of the amount, held: -0.50, by era -0.65 / -0.38 / -0.49; the t
   does not.
 
 The plots, shape held: https://claude.ai/artifact/584UMVRduxWxRJYHnuTYGA, built by
-`scratch/2026-10-24_creation/build_data.py template.html OUT.html` from the check's tables.
+`scratch/2026-10-24_creation/build_data.py template.html OUT.html` from the check's tables; the owner kept only the
+fifths chart and asked for the bins explained.  What lands in each fifth in 2026 (`bin_examples.py`, every held-back
+stint of the season's 12 folds): least under 45.8 self-created attempts per 100, 1.5 starters on the floor on average;
+second 45.8-51.0, 2.4; middle 51.0-55.2, 3.0; fourth 55.2-60.7, 3.5; most over 60.7, 4.1.  The least fifth is mostly
+lineups without the team's main creator: the Timberwolves' five with Conley for Edwards sums to 44.6, with Edwards 55.5.
