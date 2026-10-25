@@ -10090,3 +10090,51 @@ the panel's two uncentred columns stay.  What the data say for a new estimate, `
 - The NBA's potential assists against the play-by-play, regular season: misses potentially assisted 0.53 / 0.52 /
   0.52 / 0.51 in 2014-2017, then 0.41-0.47 from 2018, where makes were assisted 0.58-0.64.  The tracking provider
   changed in 2018: free-throw assists fell from 5,654 to 2,664 that year, and 2025 reads 166.
+
+### Experiment 111, the new estimate (2026-10-25, the owner: "Go"; `scratch/2026-10-25_creation111/`)
+
+Built on the play-by-play shot table of every season (`data/shotframe`), with 2016 tracking only to learn one factor
+per cell.  For each player-season:
+
+    self-creation = unassisted makes + misses not off a pass + free-throw trips without a make not off a pass
+
+- **A miss off a pass**, shot by shot (`cells.py`, `miss_factor.py`, `estimate.py`): the season's share of made shots
+  assisted in the shot's cell, 6 spots x 7 possession situations (putback, second chance, transition, early, 7-14,
+  14-20, 20+ seconds), padded 50 makes toward the all-season share; moved by the cell's miss factor, a logit shift
+  learned from 2016 tracking, where a make model that knows dribbles and touch time scores the misses (rim misses
+  -0.3 to -0.6, most other cells -0.2 to +0.1); times his lean in the shot's spot group, inside, other twos or threes,
+  (assisted makes + 10) / (expected assisted makes + 10); each chance held at 1.
+- **A trip off a pass**: trips counted from the play-by-play, "1 of 1/2/3", technicals out; an and-one's free throw
+  is left to its make, which already counts.  Every other trip: his inside lean x the season's mean chance a rim miss
+  came off a pass x 0.654, fitted so that trips off a pass with a free throw made add up to the NBA's free-throw
+  assists, 2014-2017.  Trips without a make come to 0.98 of 0.44 x free-throw attempts, median of 1,500+ possessions.
+
+The player check, 2016 tracking cross-fitted by halves of the games, 161 players with 150+ tracked misses, the share of
+his misses off a pass against the tracking model's:
+
+| estimate | error_sd | mean_error | correlation |
+|---|---|---|---|
+| the owner's formula | 0.113 | -0.056 | 0.765 |
+| his makes' assisted share | 0.060 | +0.003 | 0.946 |
+| cells alone | 0.151 | +0.034 | 0.344 |
+| cells x his lean | 0.049 | -0.025 | 0.967 |
+| cells x his lean by spot group, the estimate | 0.037 | -0.007 | 0.970 |
+
+The team check (`team_check.py`), regular season, the correlation across the 30 teams within each season with the
+NBA's count, mean over the seasons and the lowest season:
+
+| count | estimate | 2014-2017 mean | 2014-2017 lowest | 2018-2026 mean | 2018-2026 lowest |
+|---|---|---|---|---|---|
+| misses off a pass | the owner's formula | -0.14 | -0.37 | 0.01 | -0.37 |
+| misses off a pass | his makes' assisted share | 0.30 | 0.12 | 0.49 | 0.34 |
+| misses off a pass | the estimate | 0.32 | 0.25 | 0.49 | 0.38 |
+| trips off a pass | the owner's formula | 0.18 | 0.03 | 0.25 | 0.06 |
+| trips off a pass | his makes' assisted share | 0.49 | 0.40 | 0.58 | 0.51 |
+| trips off a pass | the estimate | 0.54 | 0.44 | 0.63 | 0.58 |
+
+2025's free-throw assists, 166 for the league, are left out.  Each NBA count sits on the passer's last team.
+
+The single number, 1,500+ possessions, every season: correlation with experiment 110's 0.894, mean 9.67 to 8.56,
+standard deviation 3.82 to 4.41.  2026 (`outputs/creation111/top_2026.csv`): Gilgeous-Alexander and Dončić 26.62,
+Jaylen Brown 23.34, Brunson 22.04; the largest drops Jokić 23.20 to 12.28, Porter 16.67 to 9.05, Vučević 11.90 to 4.77.
+Not yet in the pipeline: the box-score prior needs it from each fold's own games.
