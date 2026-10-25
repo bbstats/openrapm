@@ -383,4 +383,5 @@ and `row_seasons`; the rest are candidates an experiment may try (the on-court c
 | `row_possessions` | possessions behind the row | panel column | possessions | level |
 | `row_seasons` | seasons the row covers | panel column | seasons | level |
 | `season_from_2017` | 1 for a season from 2017 on, 0 before (an era marker) | season >= 2017 | flag | level |
+| `self_creation_per100` | self-created shot attempts (the owner's self-creation) | (shot attempts + 0.44 x free-throw attempts) x (1 - share assisted), share assisted = 0.73 - 0.03 x assists - 0.01 x field goals made, clipped to 0-1; uncentred rates | per 100 possessions | level |
 <!-- end generated -->

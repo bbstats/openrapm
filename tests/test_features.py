@@ -76,7 +76,10 @@ def test_the_stat_splits_lists_append_their_parts_where_the_box_count_is_read():
         "hustle_era_marker": {side: feat.FEATURE_SETS["hustle"][side] + ["season_from_2017"] for side in ("O", "D")},
         # experiment 77, shipped 2026-10-17: three-point % off the offensive list, the defensive list unchanged
         "hustle_no_three_pct": {"O": [name for name in feat.FEATURE_SETS["hustle"]["O"] if name != "three_point_pct"],
-                                "D": feat.FEATURE_SETS["hustle"]["D"]}}
+                                "D": feat.FEATURE_SETS["hustle"]["D"]},
+        "hustle_no_three_pct_self_creation": {
+            "O": [name for name in feat.FEATURE_SETS["hustle"]["O"] if name != "three_point_pct"] + feat.CREATION,
+            "D": feat.FEATURE_SETS["hustle"]["D"]}}
     wider = ["russell_blocks_per100", "rim_blocks_per100", "mid_range_blocks_per100", "three_point_blocks_per100",
              "offensive_fouls_per100", "stolen_turnovers_per100", "assists_to_rim_per100",
              "assists_to_mid_range_per100", "assists_to_corner_threes_per100", "assists_to_above_break_threes_per100"]
@@ -203,7 +206,22 @@ def test_every_name_the_prior_can_read_is_in_the_catalogue():
     assert not wanted - set(names)
     assert {f.scale for f in feat.CATALOGUE} <= {"centred", "level"}
     assert all(f.meaning and f.formula and f.unit and f.group for f in feat.CATALOGUE)
-    assert len(feat.PRIOR_FEATURES) == len(set(feat.PRIOR_FEATURES)) == 131
+    assert len(feat.PRIOR_FEATURES) == len(set(feat.PRIOR_FEATURES)) == 132
+
+
+def test_self_creation_is_the_owners_formula_on_the_uncentred_rates_and_its_share_is_clipped():
+    """LeBron James 2026, one fold: self-creation 17.75 (scripts/checks/154_self_creation.py has the same example).
+    A player with 25 assists and 12 makes per 100 has a share assisted below 0, so it is clipped and all his 30
+    attempts count."""
+    names = ["twos_made", "twos_missed", "threes_made", "threes_missed", "free_throws_made", "free_throws_missed",
+             "assists"]
+    rows = pd.DataFrame({f"{name}_per100_uncentred": values for name, values in zip(
+        names, ([9.246003, 10.0], [7.040046, 18.0], [2.070452, 2.0], [4.011177, 0.0], [5.583307, 0.0],
+                [2.125459, 0.0], [10.199733, 25.0]))})
+    feat.add_features(rows, feat.CREATION)
+    assert rows.self_creation_per100.tolist() == pytest.approx([17.752, 30.0], abs=1e-3)
+    assert feat.CREATION[0] in feat.FEATURE_SETS["hustle_no_three_pct_self_creation"]["O"]
+    assert feat.CREATION[0] not in feat.FEATURE_SETS["hustle_no_three_pct_self_creation"]["D"]
 
 
 def test_every_season_panel_column_but_the_keys_is_in_the_catalogue():

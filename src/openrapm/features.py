@@ -41,12 +41,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 
 __all__ = ["Feature", "BOX_RATES", "UNCENTRED_RATES", "ROLE", "CLOSENESS", "SHOT_TOTALS", "SHOT_LEAGUE", "CAREER",
            "BIO", "ON_COURT", "OFF_COURT", "ON_MINUS_OFF", "PLAYOFF_SHARE", "EVENT_RATES", "CAREER_FROM_DEBUT",
            "FROM_DEBUT", "TRACKING_RATES", "HUSTLE_RATES", "MATCHUP_RATES", "DASHBOARD_RATES", "MISSING_OK", "DERIVED",
-           "RATIOS", "VS_LEAGUE", "SHOTQ", "SHOTQ_PADS", "PRIOR_FEATURES", "PANEL_INPUTS", "PANEL_KEYS",
+           "RATIOS", "VS_LEAGUE", "SHOTQ", "SHOTQ_PADS", "CREATION", "PRIOR_FEATURES", "PANEL_INPUTS", "PANEL_KEYS",
            "SEASON_PANEL_COLUMNS", "ROW_FEATURES", "SHIPPED", "REBOUND_PARTS", "STEAL_PARTS", "POINTS_PARTS",
            "THREE_POINT_PARTS", "FEATURE_SETS", "CATALOGUE", "add_features", "add_shotq", "meaning",
            "glossary_markdown"]
@@ -210,13 +211,20 @@ SHOTQ_PADS = {"two_point_expected_pct": 50.0, "three_point_expected_pct": 50.0, 
               "three_point_pct_over_expected": 450.0, "expected_points_per_shot": 100.0,
               "points_per_shot_over_expected": 300.0}
 SHOTQ = list(SHOTQ_PADS)
+# The owner's self-creation (2026-10-22, scripts/checks/154_self_creation.py; experiment 110 puts it in the offensive
+# prior): his self-created shot attempts per 100, from the uncentred rates,
+#     (shot attempts + 0.44 x free-throw attempts) x (1 - share assisted),
+#     share assisted = 0.73 - 0.03 x assists - 0.01 x field goals made, clipped to 0 through 1.
+# A product of several rates, which a tree reading one column at a time can only approximate.
+CREATION = ["self_creation_per100"]
+SHARE_ASSISTED = (0.73, 0.03, 0.01)     # the owner's formula: level, per assist per 100, per field goal made per 100
 
-# Every input the prior could read (131): the rates, the role, every derived column, career, body, on-court, the
-# play-by-play parts, the ratios against the league, the career counted from the debut, and the dashboard inputs with
-# the hustle placebo.
+# Every input the prior could read (132): the rates, the role, every derived column, career, body, on-court, the
+# play-by-play parts, the ratios against the league, the career counted from the debut, the dashboard inputs with
+# the hustle placebo, the era marker and self-creation.
 # scripts/checks/95_miss_by_group.py and commands/within_season.py (its PLAYER_COLUMNS) report on all of them.
 PRIOR_FEATURES = [*BOX_RATES, *ROLE, *DERIVED, *RATIOS, *SHOTQ, *CAREER, *BIO, *ON_COURT, *EVENT_RATES, *VS_LEAGUE,
-                  *CAREER_FROM_DEBUT, *DASHBOARD_RATES, *ERA_MARKER]
+                  *CAREER_FROM_DEBUT, *DASHBOARD_RATES, *ERA_MARKER, *CREATION]
 # The panel columns averaged into a multi-season training row, before anything is derived from them; the play-by-play
 # parts came after every column the published ratings were built from (2026-10-12), the career counted from the debut
 # after them (2026-10-13), the dashboard inputs last (2026-10-14).
@@ -319,6 +327,11 @@ FEATURE_SETS = {
     # worse than its own shuffled copy on both arms
     "hustle_no_three_pct": {"O": [name for name in _NO_CAREER["O"] + HUSTLE_OFFENCE if name != "three_point_pct"],
                             "D": _NO_CAREER["D"] + HUSTLE_DEFENCE},
+    # experiment 110 (2026-10-25, the owner: "add in creation as a feature in the prior model (for offense)"): the
+    # shipped lists with self-creation appended to the offensive one, so every shipped input keeps its position
+    "hustle_no_three_pct_self_creation": {
+        "O": [name for name in _NO_CAREER["O"] + HUSTLE_OFFENCE if name != "three_point_pct"] + CREATION,
+        "D": _NO_CAREER["D"] + HUSTLE_DEFENCE},
     # the booster tune on the decider (check 152, 2026-10-16): the hustle lists with the era marker, its switch
     "hustle_era_marker": {"O": _NO_CAREER["O"] + HUSTLE_OFFENCE + ERA_MARKER,
                           "D": _NO_CAREER["D"] + HUSTLE_DEFENCE + ERA_MARKER},
@@ -387,6 +400,25 @@ def _add_ratios_vs_league(frame: pd.DataFrame) -> None:
         frame[name] = (top - level * bottom) / (bottom + pad)
 
 
+def _add_creation(frame: pd.DataFrame) -> None:
+    """`self_creation_per100` from the uncentred rates, when the frame carries them (the owner's formula, `CREATION`).
+
+    Example: LeBron James 2026, one fold: 9.25 and 7.04 twos made and missed, 2.07 and 4.01 threes, 5.58 and 2.13 free
+    throws and 10.20 assists per 100 give 25.76 attempts and 11.32 field goals made, a share assisted of
+    0.73 - 0.306 - 0.113 = 0.311 and self-creation 25.76 x 0.689 = 17.75.
+    """
+    rates = (TWOS_MADE, TWOS_MISSED, THREES_MADE, THREES_MISSED, FREE_THROWS_MADE, FREE_THROWS_MISSED, ASSISTS)
+    if CREATION[0] in frame.columns or not all(f"{rate}_uncentred" in frame.columns for rate in rates):
+        return
+    rate = {name: frame[f"{name}_uncentred"].to_numpy(dtype=float) for name in rates}
+    makes = rate[TWOS_MADE] + rate[THREES_MADE]
+    attempts = (makes + rate[TWOS_MISSED] + rate[THREES_MISSED]
+                + 0.44 * (rate[FREE_THROWS_MADE] + rate[FREE_THROWS_MISSED]))
+    level, per_assist, per_make = SHARE_ASSISTED
+    assisted = np.clip(level - per_assist * rate[ASSISTS] - per_make * makes, 0.0, 1.0)
+    frame[CREATION[0]] = attempts * (1.0 - assisted)
+
+
 def add_shotq(frame: pd.DataFrame) -> pd.DataFrame:
     """The `SHOTQ` columns, when the frame carries the shot totals and the league levels.
 
@@ -436,6 +468,7 @@ def add_features(frame: pd.DataFrame, names) -> pd.DataFrame:
     _add_combinations(frame)
     _add_ratios(frame)
     _add_ratios_vs_league(frame)
+    _add_creation(frame)
     add_shotq(frame)
     missing = [name for name in names if name not in frame.columns]
     if missing:
@@ -636,6 +669,10 @@ def _catalogue() -> tuple:
              for name, text, unit, scale, group in _PANEL_ROWS]
     rows += [Feature("season_from_2017", "1 for a season from 2017 on, 0 before (an era marker)", "season >= 2017",
                      "flag", "level", "era")]
+    rows += [Feature(CREATION[0], "self-created shot attempts (the owner's self-creation)",
+                     "(shot attempts + 0.44 x free-throw attempts) x (1 - share assisted), share assisted = 0.73 - "
+                     "0.03 x assists - 0.01 x field goals made, clipped to 0-1; uncentred rates",
+                     "per 100 possessions", "level", "creation")]
     return tuple(rows)
 
 

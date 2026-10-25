@@ -9975,3 +9975,20 @@ seasons, 500 times.  Points per 100 above expectation, shape held:
 | 67 | | -0.59 |
 
 2007-2016 rises and then holds; 2017-2026 rises to about +0.35 near 48-51 and falls past about 60, below zero by 61.
+
+## Experiment 110: self-creation in the offensive box-score prior (the owner, 2026-10-25: "Can we add in creation as a feature in the prior model (for offense) and then re-run this?"; registered before any result)
+
+**The change.**  The offensive box-score prior reads one more input, `self_creation_per100`: the owner's self-creation
+from the padded per-100 rates with the league level kept, check 154's formula (`features.CREATION`), appended to the
+shipped offensive list so every shipped input keeps its position (`--features hustle_no_three_pct_self_creation`).  The
+defensive list is unchanged.  Everything else is parts107's; the chain `creation110`, its own folds for all thirty
+seasons.
+
+**Why.**  Check 154: held-back lineups short of self-creation score below OpenRAPM's expectation in every era.  The
+prior reads the pieces, shot attempts, free-throw attempts, assists and points, but not their product.
+
+**How it is read.**  The within-season WOWY test by era against parts107, the year-over-year test not worse at z +2,
+the 2026 top 20.  Then check 154 on the candidate's folds: the amount and concentration terms against the career null,
+and the smooth curve from the stint rows of 2007-2026, beside parts107's.  A prior input can take up only the
+straight-line part of check 154's pattern, the player-level lean; the bend at the top and the concentration are
+lineup effects no player rating carries.
