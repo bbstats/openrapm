@@ -159,6 +159,12 @@ What else the work of 2026-10-23 left open:
 - **Experiment 110 (creation110), ADOPTED and PUBLISHED 2026-10-25**: self-creation as an offensive box-score prior input.  Within-season
   WOWY -0.012, z -1.83, Newey-West -2.24, 7 of 10 in every era; year over year a tie; ratings nearly unchanged; check
   154's lineup pattern unchanged.  DECISIONS.md, "Experiment 110".
+- **Experiment 111 (creation111), not adopted yet, verdict the owner's** (2026-10-25; DECISIONS.md, "Experiment 111"):
+  self-creation with actual unassisted makes and the passes on misses and free-throw trips estimated
+  (`data/creation_counts.py`, built by `openrapm data events`; `--features hustle_no_three_pct_self_creation_estimated`).
+  A better measure of self-creation against 2016 tracking, a worse prior input: within-season WOWY +0.017, z +2.58,
+  1997-2006 z +3.05, since 2017 a tie; year over year a tie.  Check 154 with it: amount +0.38 per sd against +0.67,
+  concentration -0.49 against -0.43.  Open: the foul's type for shooting against bonus trips.
 - Deleting the saved boosters of experiments that were not adopted, about 2 GB each in `outputs/prior_models_*.pkl`
   (luckall88, luckall88b, luckhalf89, luckhalf89b, near83, same84, ctx85, body86, spread90, three92, unshrinkbase102,
   unshrink102, shrunkbase103 and older ones; refit103's stays while experiment 104 is open).
