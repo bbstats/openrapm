@@ -79,6 +79,11 @@ def test_the_stat_splits_lists_append_their_parts_where_the_box_count_is_read():
                                 "D": feat.FEATURE_SETS["hustle"]["D"]},
         "hustle_no_three_pct_self_creation": {
             "O": [name for name in feat.FEATURE_SETS["hustle"]["O"] if name != "three_point_pct"] + feat.CREATION,
+            "D": feat.FEATURE_SETS["hustle"]["D"]},
+        # experiment 111: the same with the self-creation read from his own unassisted makes in its place
+        "hustle_no_three_pct_self_creation_actual_makes": {
+            "O": [name for name in feat.FEATURE_SETS["hustle"]["O"] if name != "three_point_pct"]
+            + feat.CREATION_ACTUAL_MAKES,
             "D": feat.FEATURE_SETS["hustle"]["D"]}}
     wider = ["russell_blocks_per100", "rim_blocks_per100", "mid_range_blocks_per100", "three_point_blocks_per100",
              "offensive_fouls_per100", "stolen_turnovers_per100", "assists_to_rim_per100",
@@ -206,7 +211,7 @@ def test_every_name_the_prior_can_read_is_in_the_catalogue():
     assert not wanted - set(names)
     assert {f.scale for f in feat.CATALOGUE} <= {"centred", "level"}
     assert all(f.meaning and f.formula and f.unit and f.group for f in feat.CATALOGUE)
-    assert len(feat.PRIOR_FEATURES) == len(set(feat.PRIOR_FEATURES)) == 132
+    assert len(feat.PRIOR_FEATURES) == len(set(feat.PRIOR_FEATURES)) == 133
 
 
 def test_self_creation_is_the_owners_formula_on_the_uncentred_rates_and_its_share_is_clipped():
@@ -224,15 +229,35 @@ def test_self_creation_is_the_owners_formula_on_the_uncentred_rates_and_its_shar
     assert feat.CREATION[0] not in feat.FEATURE_SETS["hustle_no_three_pct_self_creation"]["D"]
 
 
+def test_self_creation_from_actual_makes_counts_his_unassisted_makes_and_estimates_the_rest():
+    """Experiment 111, LeBron James 2026, the whole season: 11.72 unassisted points and 0.75 unassisted threes give
+    5.49 unassisted makes of his 11.64; the misses and 0.44 x the free throws, 14.82, times 1 - 0.298, add 10.41, so
+    15.89.  A second player whose padded parts say more unassisted makes than makes is held at his makes."""
+    names = ["twos_made", "twos_missed", "threes_made", "threes_missed", "free_throws_made", "free_throws_missed",
+             "assists"]
+    rows = pd.DataFrame({f"{name}_per100_uncentred": values for name, values in zip(
+        names, ([9.6499, 10.0], [7.1604, 0.0], [1.9918, 0.0], [4.2219, 0.0], [5.8210, 0.0], [2.0026, 0.0],
+                [10.5189, 30.0]))})
+    rows["unassisted_points_per100_uncentred"] = [11.7168, 24.0]
+    rows["unassisted_threes_made_per100_uncentred"] = [0.7453, 0.0]
+    feat.add_features(rows, feat.CREATION + feat.CREATION_ACTUAL_MAKES)
+    assert rows.self_creation_actual_makes_per100.tolist() == pytest.approx([15.892, 10.0], abs=1e-3)
+    assert rows.self_creation_per100.tolist() == pytest.approx([18.579, 10.0], abs=1e-3)
+    sets = feat.FEATURE_SETS["hustle_no_three_pct_self_creation_actual_makes"]
+    assert sets["O"][-1] == feat.CREATION_ACTUAL_MAKES[0] and feat.CREATION[0] not in sets["O"]
+    assert feat.CREATION_ACTUAL_MAKES[0] not in sets["D"]
+
+
 def test_every_season_panel_column_but_the_keys_is_in_the_catalogue():
     names = {f.name for f in feat.CATALOGUE}
     assert feat.SEASON_PANEL_COLUMNS[:3] == feat.PANEL_KEYS == ["side", "player_id", "season"]
     assert not set(feat.SEASON_PANEL_COLUMNS[3:]) - names
-    assert len(feat.SEASON_PANEL_COLUMNS) == len(set(feat.SEASON_PANEL_COLUMNS)) == 132
-    assert feat.SEASON_PANEL_COLUMNS[-68:-46] == feat.EVENT_RATES, "the play-by-play parts follow every older column"
-    assert feat.SEASON_PANEL_COLUMNS[-46:-42] == feat.CAREER_FROM_DEBUT, "and the career from the debut after them"
-    assert feat.SEASON_PANEL_COLUMNS[-42:-1] == feat.DASHBOARD_RATES, "then the dashboard inputs"
-    assert feat.SEASON_PANEL_COLUMNS[-1:] == feat.ERA_MARKER, "and the era marker last"
+    assert len(feat.SEASON_PANEL_COLUMNS) == len(set(feat.SEASON_PANEL_COLUMNS)) == 134
+    assert feat.SEASON_PANEL_COLUMNS[-70:-48] == feat.EVENT_RATES, "the play-by-play parts follow every older column"
+    assert feat.SEASON_PANEL_COLUMNS[-48:-44] == feat.CAREER_FROM_DEBUT, "and the career from the debut after them"
+    assert feat.SEASON_PANEL_COLUMNS[-44:-3] == feat.DASHBOARD_RATES, "then the dashboard inputs"
+    assert feat.SEASON_PANEL_COLUMNS[-3:-2] == feat.ERA_MARKER, "and the era marker"
+    assert feat.SEASON_PANEL_COLUMNS[-2:] == feat.UNCENTRED_EVENT_RATES, "and the two uncentred parts last"
 
 
 def test_the_dashboard_arms_append_to_the_incumbents_lists_and_name_real_columns():

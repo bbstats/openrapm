@@ -47,7 +47,8 @@ import pandas as pd
 __all__ = ["Feature", "BOX_RATES", "UNCENTRED_RATES", "ROLE", "CLOSENESS", "SHOT_TOTALS", "SHOT_LEAGUE", "CAREER",
            "BIO", "ON_COURT", "OFF_COURT", "ON_MINUS_OFF", "PLAYOFF_SHARE", "EVENT_RATES", "CAREER_FROM_DEBUT",
            "FROM_DEBUT", "TRACKING_RATES", "HUSTLE_RATES", "MATCHUP_RATES", "DASHBOARD_RATES", "MISSING_OK", "DERIVED",
-           "RATIOS", "VS_LEAGUE", "SHOTQ", "SHOTQ_PADS", "CREATION", "PRIOR_FEATURES", "PANEL_INPUTS", "PANEL_KEYS",
+           "RATIOS", "VS_LEAGUE", "SHOTQ", "SHOTQ_PADS", "CREATION", "CREATION_ACTUAL_MAKES", "UNCENTRED_EVENT_RATES",
+           "PRIOR_FEATURES", "PANEL_INPUTS", "PANEL_KEYS",
            "SEASON_PANEL_COLUMNS", "ROW_FEATURES", "SHIPPED", "REBOUND_PARTS", "STEAL_PARTS", "POINTS_PARTS",
            "THREE_POINT_PARTS", "FEATURE_SETS", "CATALOGUE", "add_features", "add_shotq", "meaning",
            "glossary_markdown"]
@@ -91,9 +92,10 @@ OFF_COURT = ["off_court_scored_per100", "off_court_allowed_per100", "off_court_o
 ON_MINUS_OFF = ["on_minus_off_scored_per100", "on_minus_off_allowed_per100"]
 PLAYOFF_SHARE = ["playoff_share"]
 # Parts of four box counts, read from the play-by-play (data/event_counts.py says how each is read) and padded per
-# 100 possessions like the thirteen rates (box_rates.py), centred; no `_uncentred` twins, since no ratio is built from
-# them.  The owner's stat-splits plan (2026-10-12, experiments 52-55): each part sits beside its box count, so the
-# prior can price two kinds of the same count differently.  Each part is padded with its own k, so the parts' rates
+# 100 possessions like the thirteen rates (box_rates.py), centred; no `_uncentred` twins but the two self-creation
+# reads (UNCENTRED_EVENT_RATES), since no ratio is built from them.  The owner's stat-splits plan (2026-10-12,
+# experiments 52-55): each part sits beside its box count, so the prior can price two kinds of the same count
+# differently.  Each part is padded with its own k, so the parts' rates
 # need not add up to the box count's rate.  Example: 9 defensive rebounds per 100 might be 1 of missed free throws,
 # 2.5 of missed threes, 4.5 of missed twos at the rim and 1 of missed twos from farther out.
 EVENT_RATES = ["def_rebounds_of_free_throws_per100", "def_rebounds_of_threes_per100",
@@ -159,6 +161,9 @@ MISSING_OK = list(DASHBOARD_RATES)
  ASSISTED_THREES, UNASSISTED_THREES, RUSSELL_BLOCKS, RIM_BLOCKS, MID_RANGE_BLOCKS, THREE_POINT_BLOCKS,
  OFFENSIVE_FOULS, STOLEN_TURNOVERS, ASSISTS_TO_RIM, ASSISTS_TO_MID_RANGE, ASSISTS_TO_CORNER_THREES,
  ASSISTS_TO_ABOVE_BREAK_THREES) = EVENT_RATES
+# The two play-by-play parts self-creation from his own unassisted makes reads (experiment 111), with the league level
+# kept, as UNCENTRED_RATES keeps it for the box rates: unassisted makes = (unassisted points - unassisted threes) / 2.
+UNCENTRED_EVENT_RATES = [f"{rate}_uncentred" for rate in (UNASSISTED_POINTS, UNASSISTED_THREES)]
 
 # ------------------------------------------------------------------------------ the derived columns
 # Linear sums of the centred rates.  A tree splits on one column at a time (x_j < c), so it can only approximate
@@ -218,19 +223,25 @@ SHOTQ = list(SHOTQ_PADS)
 # A product of several rates, which a tree reading one column at a time can only approximate.
 CREATION = ["self_creation_per100"]
 SHARE_ASSISTED = (0.73, 0.03, 0.01)     # the owner's formula: level, per assist per 100, per field goal made per 100
+# The owner's adjustment (2026-10-25, experiment 111: "On FGM we use actual.  On FGX and FTA, we estimate potentially
+# assisted.  For a single number"): his own unassisted makes from the play-by-play, plus the misses and the free-throw
+# attempts times one minus the share assisted above,
+#     unassisted makes + (missed shots + 0.44 x free-throw attempts) x (1 - share assisted).
+CREATION_ACTUAL_MAKES = ["self_creation_actual_makes_per100"]
 
-# Every input the prior could read (132): the rates, the role, every derived column, career, body, on-court, the
+# Every input the prior could read (133): the rates, the role, every derived column, career, body, on-court, the
 # play-by-play parts, the ratios against the league, the career counted from the debut, the dashboard inputs with
-# the hustle placebo, the era marker and self-creation.
+# the hustle placebo, the era marker and both self-creations.
 # scripts/checks/95_miss_by_group.py and commands/within_season.py (its PLAYER_COLUMNS) report on all of them.
 PRIOR_FEATURES = [*BOX_RATES, *ROLE, *DERIVED, *RATIOS, *SHOTQ, *CAREER, *BIO, *ON_COURT, *EVENT_RATES, *VS_LEAGUE,
-                  *CAREER_FROM_DEBUT, *DASHBOARD_RATES, *ERA_MARKER, *CREATION]
+                  *CAREER_FROM_DEBUT, *DASHBOARD_RATES, *ERA_MARKER, *CREATION, *CREATION_ACTUAL_MAKES]
 # The panel columns averaged into a multi-season training row, before anything is derived from them; the play-by-play
 # parts came after every column the published ratings were built from (2026-10-12), the career counted from the debut
-# after them (2026-10-13), the dashboard inputs last (2026-10-14).
+# after them (2026-10-13), the dashboard inputs after them (2026-10-14), the two uncentred play-by-play parts last
+# (2026-10-25).
 PANEL_INPUTS = [*BOX_RATES, *ROLE, *CLOSENESS, *UNCENTRED_RATES, *SHOT_TOTALS, *SHOT_LEAGUE, *CAREER, *BIO,
                 *ON_COURT, *OFF_COURT, *ON_MINUS_OFF, *PLAYOFF_SHARE, *EVENT_RATES, *CAREER_FROM_DEBUT,
-                *DASHBOARD_RATES, *ERA_MARKER]
+                *DASHBOARD_RATES, *ERA_MARKER, *UNCENTRED_EVENT_RATES]
 # The season panel's columns, in order: who and when, the possessions behind the row (his offensive possessions
 # on an offence row, defensive on a defence row), then the inputs.
 PANEL_KEYS = ["side", "player_id", "season"]
@@ -332,6 +343,11 @@ FEATURE_SETS = {
     "hustle_no_three_pct_self_creation": {
         "O": [name for name in _NO_CAREER["O"] + HUSTLE_OFFENCE if name != "three_point_pct"] + CREATION,
         "D": _NO_CAREER["D"] + HUSTLE_DEFENCE},
+    # experiment 111 (2026-10-25, the owner: "On FGM we use actual"): experiment 110's lists with its self-creation
+    # swapped, in its place, for the one read from his own unassisted makes
+    "hustle_no_three_pct_self_creation_actual_makes": {
+        "O": [name for name in _NO_CAREER["O"] + HUSTLE_OFFENCE if name != "three_point_pct"] + CREATION_ACTUAL_MAKES,
+        "D": _NO_CAREER["D"] + HUSTLE_DEFENCE},
     # the booster tune on the decider (check 152, 2026-10-16): the hustle lists with the era marker, its switch
     "hustle_era_marker": {"O": _NO_CAREER["O"] + HUSTLE_OFFENCE + ERA_MARKER,
                           "D": _NO_CAREER["D"] + HUSTLE_DEFENCE + ERA_MARKER},
@@ -412,11 +428,27 @@ def _add_creation(frame: pd.DataFrame) -> None:
         return
     rate = {name: frame[f"{name}_uncentred"].to_numpy(dtype=float) for name in rates}
     makes = rate[TWOS_MADE] + rate[THREES_MADE]
-    attempts = (makes + rate[TWOS_MISSED] + rate[THREES_MISSED]
-                + 0.44 * (rate[FREE_THROWS_MADE] + rate[FREE_THROWS_MISSED]))
+    others = rate[TWOS_MISSED] + rate[THREES_MISSED] + 0.44 * (rate[FREE_THROWS_MADE] + rate[FREE_THROWS_MISSED])
     level, per_assist, per_make = SHARE_ASSISTED
     assisted = np.clip(level - per_assist * rate[ASSISTS] - per_make * makes, 0.0, 1.0)
-    frame[CREATION[0]] = attempts * (1.0 - assisted)
+    frame[CREATION[0]] = (makes + others) * (1.0 - assisted)
+    _add_creation_actual_makes(frame, makes, others * (1.0 - assisted))
+
+
+def _add_creation_actual_makes(frame: pd.DataFrame, makes: np.ndarray, others_created: np.ndarray) -> None:
+    """`self_creation_actual_makes_per100`, when the frame carries the uncentred unassisted parts
+    (`CREATION_ACTUAL_MAKES`): his unassisted makes, held between 0 and his makes (each part is padded with its own k),
+    plus `others_created`, the misses and 0.44 x the free-throw attempts times one minus the share assisted.
+
+    Example: LeBron James 2026, the whole season: 11.72 unassisted points and 0.75 unassisted threes per 100 give
+    (11.72 - 0.75) / 2 = 5.49 unassisted makes of his 11.64; his 11.38 misses and 0.44 x 7.82 free-throw attempts,
+    14.82, times 1 - 0.298 add 10.41, so self-creation 15.89, where `self_creation_per100` reads 18.58.
+    """
+    if not all(name in frame.columns for name in UNCENTRED_EVENT_RATES):
+        return
+    points, threes = (frame[name].to_numpy(dtype=float) for name in UNCENTRED_EVENT_RATES)
+    unassisted = np.clip((points - threes) / 2.0, 0.0, makes)
+    frame[CREATION_ACTUAL_MAKES[0]] = unassisted + others_created
 
 
 def add_shotq(frame: pd.DataFrame) -> pd.DataFrame:
@@ -640,6 +672,9 @@ def _catalogue() -> tuple:
                     "per 100 possessions", "level", "box rate, uncentred")
     rows += _family(EVENT_RATES, _EVENT_MEANINGS, "padded play-by-play count per 100 minus the league level",
                     "per 100 possessions", "centred", "play-by-play rate")
+    rows += _family(UNCENTRED_EVENT_RATES, [f"{_EVENT_MEANINGS[EVENT_RATES.index(name.removesuffix('_uncentred'))]}"
+                                            ", league level kept" for name in UNCENTRED_EVENT_RATES],
+                    "padded play-by-play count per 100", "per 100 possessions", "level", "play-by-play rate, uncentred")
     rows += _family(TRACKING_RATES[:18], _TRACKING_MEANINGS,
                     "tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate",
                     "fraction above the league average", "centred", "tracking rate")
@@ -672,6 +707,11 @@ def _catalogue() -> tuple:
     rows += [Feature(CREATION[0], "self-created shot attempts (the owner's self-creation)",
                      "(shot attempts + 0.44 x free-throw attempts) x (1 - share assisted), share assisted = 0.73 - "
                      "0.03 x assists - 0.01 x field goals made, clipped to 0-1; uncentred rates",
+                     "per 100 possessions", "level", "creation")]
+    rows += [Feature(CREATION_ACTUAL_MAKES[0], "self-created shot attempts, his own unassisted makes counted",
+                     "unassisted makes + (missed shots + 0.44 x free-throw attempts) x (1 - share assisted), "
+                     "unassisted makes = (unassisted points - unassisted threes) / 2 held to 0 through his makes, "
+                     "share assisted as self_creation_per100's; uncentred rates",
                      "per 100 possessions", "level", "creation")]
     return tuple(rows)
 

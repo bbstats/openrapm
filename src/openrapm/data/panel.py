@@ -31,6 +31,7 @@ Where each column comes from:
     playoff_share                                              `playoff_share`, from the stints
     the play-by-play parts (features.EVENT_RATES)              data/event_counts.py's counts, padded by
                                                                box_rates.box_rates on the offence design's games
+    unassisted points and threes made with the level kept      the same, uncentred (features.UNCENTRED_EVENT_RATES)
     the dashboard inputs (features.DASHBOARD_RATES)            data/dashboard_rates.py, from the cached tracking and
                                                                hustle dashboards (NaN before they start)
 
@@ -77,6 +78,7 @@ from ..features import (
     SEASON_PANEL_COLUMNS,
     SHOT_LEAGUE,
     SHOT_TOTALS,
+    UNCENTRED_EVENT_RATES,
 )
 from ..on_court import offcourt_rates, oncourt_rates
 from .bio import PLAYER_INPUTS, bio_inputs, player_bio, player_inputs, refresh_bio, tenure_inputs
@@ -113,10 +115,12 @@ PANEL_TARGETS = (OFFENCE, DEFENCE_ALL)            # the designs one season's row
 SIDES = ("O", "D")
 OLD_PANEL = "role_panel_season.parquet"          # the old-named panel's file name, beside the new one
 # the columns the old-named panel carried: every column but the play-by-play parts (added 2026-10-12), the career
-# counted from the debut (added 2026-10-13) and the dashboard inputs (added 2026-10-14)
+# counted from the debut (added 2026-10-13), the dashboard inputs (added 2026-10-14) and the uncentred parts (added
+# 2026-10-25)
 MIGRATED_PANEL_COLUMNS = [column for column in SEASON_PANEL_COLUMNS
                           if column not in EVENT_RATES and column not in CAREER_FROM_DEBUT
-                          and column not in DASHBOARD_RATES and column not in ERA_MARKER]
+                          and column not in DASHBOARD_RATES and column not in ERA_MARKER
+                          and column not in UNCENTRED_EVENT_RATES]
 STINT_COLUMNS = ["game_id", "period", *HOME_SLOTS, *AWAY_SLOTS, "poss_h", "poss_a", "margin_h", "is_gt"]
 # The data layer's names for the body and shot columns, against the panel's (the pairs are pinned in
 # tests/test_features.py and tests/test_panel.py); data/roles.py builds the role and career columns under the panel's
@@ -384,13 +388,17 @@ def _player_columns(season: int, cfg: dict, designs: dict, history: _RoleHistory
 
 def _side_rows(side: str, season: int, rates, parts, players: pd.DataFrame, dashboards: dict) -> pd.DataFrame:
     """A side's rows: the keys, his possessions and padded rates on that side, the columns both sides share, then
-    the play-by-play parts on that side (centred) and the dashboard inputs (data/dashboard_rates.py)."""
+    the play-by-play parts on that side (centred), the dashboard inputs (data/dashboard_rates.py) and the two parts
+    self-creation reads with the league level kept (features.UNCENTRED_EVENT_RATES)."""
     possessions = (rates.offence if side == "O" else rates.defence).possessions
     keys = pd.DataFrame({"side": side, "player_id": players["player_id"].to_numpy(), "season": season,
                          "possessions": possessions})
-    events = pd.DataFrame((parts.offence if side == "O" else parts.defence).centred, columns=EVENT_RATES)
+    chosen = parts.offence if side == "O" else parts.defence
+    events = pd.DataFrame(chosen.centred, columns=EVENT_RATES)
+    uncentred = pd.DataFrame(chosen.rates[:, [EVENT_RATES.index(name.removesuffix("_uncentred"))
+                                              for name in UNCENTRED_EVENT_RATES]], columns=UNCENTRED_EVENT_RATES)
     return pd.concat([keys, rate_table(rates, side, BOX_RATES), players.drop(columns="player_id"), events,
-                      dashboards[side]], axis=1)
+                      dashboards[side], uncentred], axis=1)
 
 
 def body_table(cfg: dict) -> pd.DataFrame:

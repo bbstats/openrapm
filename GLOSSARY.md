@@ -265,6 +265,8 @@ and `row_seasons`; the rest are candidates an experiment may try (the on-court c
 | `assists_to_mid_range_per100` | assists on made twos from beyond 6 ft | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
 | `assists_to_corner_threes_per100` | assists on made corner threes | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
 | `assists_to_above_break_threes_per100` | assists on made above-the-break threes | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
+| `unassisted_points_per100_uncentred` | points from unassisted field goals, league level kept | padded play-by-play count per 100 | per 100 possessions | level |
+| `unassisted_threes_made_per100_uncentred` | unassisted made threes, league level kept | padded play-by-play count per 100 | per 100 possessions | level |
 | `drives_vs_league_avg` | drives to the basket | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
 | `drive_points_vs_league_avg` | points scored on drives | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
 | `potential_assists_vs_league_avg` | potential assists (passes that led to a shot) | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
@@ -384,4 +386,5 @@ and `row_seasons`; the rest are candidates an experiment may try (the on-court c
 | `row_seasons` | seasons the row covers | panel column | seasons | level |
 | `season_from_2017` | 1 for a season from 2017 on, 0 before (an era marker) | season >= 2017 | flag | level |
 | `self_creation_per100` | self-created shot attempts (the owner's self-creation) | (shot attempts + 0.44 x free-throw attempts) x (1 - share assisted), share assisted = 0.73 - 0.03 x assists - 0.01 x field goals made, clipped to 0-1; uncentred rates | per 100 possessions | level |
+| `self_creation_actual_makes_per100` | self-created shot attempts, his own unassisted makes counted | unassisted makes + (missed shots + 0.44 x free-throw attempts) x (1 - share assisted), unassisted makes = (unassisted points - unassisted threes) / 2 held to 0 through his makes, share assisted as self_creation_per100's; uncentred rates | per 100 possessions | level |
 <!-- end generated -->

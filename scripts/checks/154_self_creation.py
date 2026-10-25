@@ -71,6 +71,8 @@ With no terms but the team levels each season's error is check 151's `step4` / `
 the largest difference against a check 151 seasons file.
 
     python scripts/checks/154_self_creation.py --folds=parts107 --tag=selfcreation
+    python scripts/checks/154_self_creation.py --folds=creation111 --creation=actual_makes --tag=selfcreation_actual
+        (the self-creation of experiment 111: his own unassisted makes, the formula on the misses and free throws)
     python scripts/checks/154_self_creation.py --folds=parts107_cut50 --step4-from=parts107 --trade=1 --null=0
         --top=0 --tag=selfcreation_trade
         (each season rated from its first half and scored on the rest, with the shrink of whole seasons)
@@ -120,6 +122,7 @@ SHAPE_NAMES = ("offense rating sum squared, at one standard deviation",
 READINGS = (("within team", FREE), ("within team, lineup shape held", (*FREE, *SHAPE)))
 RAW = (*TERMS, "rating_sum_off", "rating_sum_def", "talent_spread_off")
 FIFTHS, THIRDS = 5, 3
+CREATION_READ = {"name": "owner"}       # --creation: "owner" (the formula above) or "actual_makes" (experiment 111)
 
 
 def _load(name: str, file: str):
@@ -144,7 +147,14 @@ def share_assisted(assists, makes) -> np.ndarray:
 
 
 def self_creation(rows: pd.DataFrame) -> np.ndarray:
-    """Self-created true shooting attempts per 100, from the padded per-100 rates with the league level kept."""
+    """Self-created true shooting attempts per 100, from the padded per-100 rates with the league level kept; with
+    --creation=actual_makes, his own unassisted makes in place of the estimate on his makes
+    (openrapm.features.CREATION_ACTUAL_MAKES, experiment 111)."""
+    if CREATION_READ["name"] == "actual_makes":
+        from openrapm.features import CREATION_ACTUAL_MAKES, UNCENTRED_EVENT_RATES, UNCENTRED_RATES, add_features
+        frame = rows[[*UNCENTRED_RATES, *UNCENTRED_EVENT_RATES]].reset_index(drop=True)
+        return add_features(frame, CREATION_ACTUAL_MAKES)[CREATION_ACTUAL_MAKES[0]].to_numpy(float)
+
     def rate(name: str) -> np.ndarray:
         return rows[f"{name}_per100_uncentred"].to_numpy(float)
     makes = rate("twos_made") + rate("threes_made")
@@ -775,12 +785,16 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--tag", default="selfcreation", help="names the output files (default %(default)s)")
     parser.add_argument("--first", type=int, default=1997)
     parser.add_argument("--last", type=int, default=2026)
+    parser.add_argument("--creation", default="owner", choices=("owner", "actual_makes"),
+                        help="owner: the formula on every attempt; actual_makes: his own unassisted makes, the formula "
+                             "on the misses and free throws (experiment 111) (default %(default)s)")
     return parser.parse_args(argv)
 
 
 def main(argv=None) -> int:
     use_utf8()
     args = parse_args(argv)
+    CREATION_READ["name"] = args.creation
     from openrapm.data.config import load_config, resolve
     cfg = load_config()
     outputs = resolve(cfg, "outputs")

@@ -10057,3 +10057,25 @@ possessions.  Means within each season, then over the seasons.
 more than a possession holds, and lineups score best when the five's usual shots add up to about what one ball allows.
 At the same oversupply of shots, the lineups that need the ball to create fall short and those of finishers do not,
 which points at on-ball creation colliding rather than shot volume alone; the data separate the two only weakly.
+
+## Experiment 111: self-creation from his own unassisted makes (the owner, 2026-10-25: "Let's make some adjustments to self creation: On FGM we use actual. On FGX and FTA, we estimate potentially assisted. For a single number"; registered before any result)
+
+**The change.**  Experiment 110's self-creation, `self_creation_per100`, estimated the share assisted on every
+attempt, makes included.  The new one, `self_creation_actual_makes_per100` (`features.CREATION_ACTUAL_MAKES`), counts
+his own unassisted makes from the play-by-play and keeps the owner's estimate where the play-by-play has nothing to
+say, the misses and the free throws:
+
+    self-creation = unassisted makes + (missed shots + 0.44 x free-throw attempts) x (1 - share assisted)
+    unassisted makes = (unassisted points - unassisted threes made) / 2, held between 0 and his makes
+    share assisted = 0.73 - 0.03 x assists - 0.01 x field goals made, clipped to 0 through 1
+
+all per 100 of his offensive possessions, padded, the league level kept.  The panel carries two new columns for it,
+`unassisted_points_per100_uncentred` and `unassisted_threes_made_per100_uncentred` (`features.UNCENTRED_EVENT_RATES`);
+the play-by-play's assisted and unassisted points and threes add up to the box score's in every season, to 0.0001.
+The new column takes experiment 110's place on the offensive list (`--features
+hustle_no_three_pct_self_creation_actual_makes`); everything else is creation110's; the chain `creation111`, its own
+folds for all thirty seasons.
+
+**How it is read.**  The within-season WOWY test by era against creation110, the year-over-year test not worse at
+z +2, the 2026 top 20.  Then check 154 on the candidate's folds with the new self-creation (`--creation=actual_makes`),
+the amount and concentration terms against the career null, beside creation110's.
