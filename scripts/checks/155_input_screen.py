@@ -29,8 +29,9 @@ The rule (DECISIONS.md, experiment 112, registered before the run): a candidate 
 seeds averaged within each season and paired by season, add beats add_shadow at z -2 or below, add beats the shipped
 lists on the mean, and the guard is not worse at z +2.
 
-    python scripts/checks/155_input_screen.py cache --tag screen112 --jobs 4     (once, resumes)
-    python scripts/checks/155_input_screen.py run --tag screen112 --workers 5    (resumes)
+    python scripts/checks/155_input_screen.py cache --tag screen112 [--seasons ...]  (once, resumes)
+    python scripts/checks/155_input_screen.py dry --tag screen112 --seasons 2025  (against creation110)
+    python scripts/checks/155_input_screen.py run --tag screen112                (resumes)
     python scripts/checks/155_input_screen.py table --tag screen112
 
 Writes under outputs/screen/<tag>/: season_<season>.pkl (the cache), trials.csv (one row per trial, season, stage and
@@ -172,6 +173,9 @@ def build_cache(tag: str, seasons) -> int:
                 worlds[frozenset(fit_ids)] = world
         worlds[frozenset(run.game_ids)] = run.world(set(run.game_ids))
         scored = {other: guard.guard_design(designs.season(other, "pts")) for other in (season - 1, season + 1)}
+        # the training rows apart too, for the workers that only fit boosters
+        with open(out_dir / f"train_{season}.pkl", "wb") as handle:
+            pickle.dump(dict(season=season, unseen=list(unseen), train=train), handle, protocol=5)
         with open(out_dir / f"season_{season}.pkl", "wb") as handle:
             pickle.dump(dict(season=season, unseen=list(unseen), train=train, worlds=worlds, scored=scored,
                              line=run.line), handle, protocol=5)
@@ -230,17 +234,19 @@ def shuffled(values: np.ndarray, seed: int, name: str, stream: str) -> np.ndarra
     return out
 
 
-def saved_side(model, names: list) -> dict:
-    """One side's boosters in the layout `openrapm folds` reads (within_season.saved_booster, prior_rows)."""
+def saved_side(model, names: list, unseen: list) -> dict:
+    """One side's boosters in the layout `openrapm folds` reads (within_season.saved_booster, prior_rows, and the
+    fold check that they never trained on the season or a neighbour)."""
     from openrapm.features import ROW_FEATURES
     first = model.members[0]
     return dict(full=first.full, folds=first.fold_models, excluded=first.held_out_players, feats=list(names),
-                model_feats=list(names) + ROW_FEATURES,
+                model_feats=list(names) + ROW_FEATURES, unseen=list(unseen),
                 bags=[dict(full=m.full, folds=m.fold_models, excluded=m.held_out_players) for m in model.members])
 
 
 class Season:
-    """One tune season in a worker: its cache and its SeasonRun, rated again for every trial."""
+    """One tune season in a worker: its SeasonRun, rated again for every trial, and its cache, read from disk for each
+    trial and let go after it (a season's cache holds about 2.5 GB; a worker holds one at a time)."""
 
     def __init__(self, tag: str, season: int):
         from openrapm.commands import within_season as ws
@@ -251,9 +257,7 @@ class Season:
         from openrapm.data.roles import player_season_inputs, roles_path
         from openrapm.settings import TEST
         self.tag, self.season, self.cfg = tag, season, load_config()
-        with open(screen_dir(tag) / f"season_{season}.pkl", "rb") as handle:
-            cache = pickle.load(handle)
-        self.train, self.worlds = cache["train"], cache["worlds"]
+        self.train = None
         self.settings = replace(TEST, prior=replace(TEST.prior, feature_set=POOL))
         self.params = box_prior_params(self.cfg)
         saved_all = ws.load_models(resolve(self.cfg, "outputs"), REFERENCE, [season])
@@ -267,23 +271,18 @@ class Season:
         self.run = cached_run_class()(season, self.cfg, full, sources, ws.season_models(saved_all, season),
                                       screen_dir(tag), settings=fold_settings,
                                       part_season_rows=ws.trained_on_part_seasons(meta))
-        self.run.worlds = self.worlds
         ws.attach_line(self.run, ws.fold_lines(self.cfg, meta, False), False)
 
-    def rate(self, trial: Trial, out_dir: Path) -> pd.DataFrame:
-        """Fit the trial's boosters, rate and write every fold into `out_dir`; return the whole season's step-3
-        table (raw sign)."""
+    def rate(self, trial: Trial, out_dir: Path, models: dict) -> pd.DataFrame:
+        """Rate and write every fold into `out_dir` with the trial's boosters `models` ({side: BaggedPrior}, from
+        `fit_task`); return the whole season's step-3 table (raw sign)."""
         from openrapm.commands import within_season as ws
-        from openrapm.features import ROW_FEATURES
+        with open(screen_dir(self.tag) / f"season_{self.season}.pkl", "rb") as handle:
+            cache = pickle.load(handle)
+        self.run.worlds, unseen = cache["worlds"], cache["unseen"]
+        del cache
         lists = trial_lists(trial)
-        saved = {}
-        for side in ("O", "D"):
-            train = self.train[side]
-            if trial.arm in ("add_shadow", "shadow") and trial.side == side:
-                train = train.copy()
-                train[trial.name] = shuffled(train[trial.name].to_numpy(float), trial.seed, trial.name, "train")
-            model = fit_bags(train, lists[side] + ROW_FEATURES, self.params[side], self.settings, trial.seed)
-            saved[side] = saved_side(model, lists[side])
+        saved = {side: saved_side(models[side], lists[side], unseen) for side in ("O", "D")}
         original = ws.prior_rows
 
         def prior_rows(panel, side, side_saved, share=1.0):
@@ -303,7 +302,60 @@ class Season:
             whole = self.run.rate(set(self.run.game_ids))
         finally:
             ws.prior_rows = original
+            self.run.worlds = None
         return whole.table.assign(season=self.season)
+
+
+_FIT = {}            # in a fitting process: the settings, the booster parameters and the last seasons' training rows
+
+
+def fit_task(tag: str, season: int, side: str, trial: Trial):
+    """(season, side, the trial's boosters on that side): the season's training rows, the trial's input list, the
+    input shuffled when the arm asks, bag k at k + SEED_STEP x seed."""
+    from openrapm.data.config import load_config
+    from openrapm.features import ROW_FEATURES
+    from openrapm.settings import TEST
+    if "settings" not in _FIT:
+        _FIT["settings"] = replace(TEST, prior=replace(TEST.prior, feature_set=POOL))
+        _FIT["params"] = box_prior_params(load_config())
+        _FIT["rows"] = {}
+    if season not in _FIT["rows"]:
+        if len(_FIT["rows"]) >= 2:
+            _FIT["rows"].pop(next(iter(_FIT["rows"])))
+        with open(screen_dir(tag) / f"train_{season}.pkl", "rb") as handle:
+            _FIT["rows"][season] = pickle.load(handle)["train"]
+    train = _FIT["rows"][season][side]
+    if trial.arm in ("add_shadow", "shadow") and trial.side == side:
+        train = train.copy()
+        train[trial.name] = shuffled(train[trial.name].to_numpy(float), trial.seed, trial.name, "train")
+    names = trial_lists(trial)[side]
+    return season, side, fit_bags(train, names + ROW_FEATURES, _FIT["params"][side], _FIT["settings"], trial.seed)
+
+
+class Fitters:
+    """A pool of small processes that only fit boosters; a trial's fits are sent off before the trial before it is
+    rated, so the two overlap."""
+
+    def __init__(self, tag: str, n_processes: int):
+        self.tag = tag
+        self.pool = mp.get_context("spawn").Pool(n_processes)
+
+    def submit(self, trial: Trial) -> list:
+        # offence first: its 1,091-tree boosters take most of the time
+        return [self.pool.apply_async(fit_task, (self.tag, season, side, trial))
+                for side in ("O", "D") for season in TUNE_SEASONS]
+
+    @staticmethod
+    def collect(pending: list) -> dict:
+        models: dict = {}
+        for result in pending:
+            season, side, model = result.get()
+            models.setdefault(season, {})[side] = model
+        return models
+
+    def close(self) -> None:
+        self.pool.close()
+        self.pool.join()
 
 
 def cached_run_class():
@@ -328,9 +380,9 @@ def _worker(tag: str, seasons: list, connection) -> None:
         message = connection.recv()
         if message is None:
             return
-        trial, out_dir = message
+        trial, out_dir, models = message
         try:
-            tables = [held[season].rate(trial, Path(out_dir)) for season in seasons]
+            tables = [held[season].rate(trial, Path(out_dir), models[season]) for season in seasons]
             connection.send(("done", pd.concat(tables, ignore_index=True)))
         except Exception as error:          # the parent stops the run and prints it
             import traceback
@@ -338,11 +390,13 @@ def _worker(tag: str, seasons: list, connection) -> None:
 
 
 class Workers:
-    """Persistent workers, the tune seasons dealt out among them."""
+    """Persistent rating workers, the tune seasons dealt out among them; each holds its seasons' SeasonRuns and reads
+    one season's cache at a time."""
 
     def __init__(self, tag: str, n_workers: int):
         context = mp.get_context("spawn")
         chunks = [list(TUNE_SEASONS[k::n_workers]) for k in range(n_workers)]
+        self.chunks = chunks
         self.links, self.processes = [], []
         for chunk in chunks:
             parent, child = context.Pipe()
@@ -356,9 +410,9 @@ class Workers:
                 raise SystemExit(f"a worker failed to start: {value}")
         print(f"{n_workers} workers ready", flush=True)
 
-    def rate(self, trial: Trial, out_dir: Path) -> pd.DataFrame:
-        for link in self.links:
-            link.send((trial, str(out_dir)))
+    def rate(self, trial: Trial, out_dir: Path, models: dict) -> pd.DataFrame:
+        for link, seasons in zip(self.links, self.chunks):
+            link.send((trial, str(out_dir), {season: models[season] for season in seasons}))
         tables = []
         for link in self.links:
             kind, value = link.recv()
@@ -461,14 +515,35 @@ def run_dry(args) -> int:
     if folder.exists():
         shutil.rmtree(folder)
     folder.mkdir(parents=True)
+    trial = Trial("base", "-", "-", 0)
     for season in seasons:
         started = time.time()
         held = Season(args.tag, season)
-        loaded = time.time() - started
-        held.rate(Trial("base", "-", "-", 0), folder)
-        print(f"{season}: loaded in {loaded:.0f}s, rated in {time.time() - started - loaded:.0f}s; largest rating "
-              f"difference against {REFERENCE}'s folds {compare_reference(name):.1e}", flush=True)
+        loaded = time.time()
+        models = {side: fit_task(args.tag, season, side, trial)[2] for side in ("O", "D")}
+        fitted = time.time()
+        held.rate(trial, folder, models)
+        print(f"{season}: loaded in {loaded - started:.0f}s, fitted in {fitted - loaded:.0f}s, rated in "
+              f"{time.time() - fitted:.0f}s; largest rating difference against {REFERENCE}'s folds "
+              f"{compare_reference(name):.1e}", flush=True)
     return 0
+
+
+def wait_for_the_daily_job() -> None:
+    """Between trials from 5:50 AM, hold until the morning's update (scripts/daily_update.sh, 6:00 AM) has written
+    today's result to outputs/daily/last.txt, or until 7:30 AM: the machine is not to be thrashed."""
+    from datetime import datetime
+
+    from openrapm.data.config import load_config, resolve
+    last = resolve(load_config(), "outputs") / "daily" / "last.txt"
+    while True:
+        now = datetime.now()
+        if not (now.replace(hour=5, minute=50) <= now <= now.replace(hour=7, minute=30)):
+            return
+        if last.exists() and last.read_text().startswith(now.strftime("%Y-%m-%d")):
+            return
+        print(f"  {now:%I:%M %p}: waiting for the daily update", flush=True)
+        time.sleep(120)
 
 
 def run_screen(args) -> int:
@@ -481,17 +556,26 @@ def run_screen(args) -> int:
     print(f"{len(todo)} trials to run, {len(done)} done", flush=True)
     if not todo:
         return 0
+    fitters = Fitters(args.tag, args.fitters)
     workers = Workers(args.tag, args.workers)
     guard = Guard(args.tag)
     try:
+        wait_for_the_daily_job()
+        pending = fitters.submit(todo[0])
         for number, trial in enumerate(todo, start=1):
             started = time.time()
+            models = fitters.collect(pending)
+            fitted = time.time()
+            if number < len(todo):
+                wait_for_the_daily_job()
+                pending = fitters.submit(todo[number])
             name = f"screen/{args.tag}/{trial.key}"
             folder = within_dir() / name
             if folder.exists():
                 shutil.rmtree(folder)
             folder.mkdir(parents=True)
-            whole = workers.rate(trial, folder)
+            whole = workers.rate(trial, folder, models)
+            rated = time.time()
             errors = score_folds(name).assign(trial=trial.key, arm=trial.arm, side=trial.side, input=trial.name,
                                               seed=trial.seed)
             scores = guard.score(whole, name).assign(trial=trial.key, arm=trial.arm, side=trial.side,
@@ -507,10 +591,11 @@ def run_screen(args) -> int:
             scores.to_csv(guard_path, mode="a", header=not guard_path.exists(), index=False)
             if not (trial.arm == "base" and trial.seed == 0):
                 shutil.rmtree(folder)
-            print(f"[{number}/{len(todo)}] {trial.key}: decider {reading:.4f}{extra} ({time.time() - started:.0f}s)",
-                  flush=True)
+            print(f"[{number}/{len(todo)}] {trial.key}: decider {reading:.4f}{extra} (waited {fitted - started:.0f}s "
+                  f"for the fits, rated in {rated - fitted:.0f}s, scored in {time.time() - rated:.0f}s)", flush=True)
     finally:
         workers.close()
+        fitters.close()
     return 0
 
 
@@ -580,7 +665,8 @@ def main(argv=None) -> int:
     cache.add_argument("--seasons", default="", help="comma-separated, default every tune season")
     run = commands.add_parser("run", help="every trial; resumes")
     run.add_argument("--tag", required=True)
-    run.add_argument("--workers", type=int, default=5)
+    run.add_argument("--workers", type=int, default=2, help="rating processes, about 6 GB each (default %(default)s)")
+    run.add_argument("--fitters", type=int, default=6, help="fitting processes, under 1 GB each (default %(default)s)")
     run.add_argument("--seeds", type=int, default=3)
     run.add_argument("--base-seeds", type=int, default=5)
     dry = commands.add_parser("dry", help="the shipped lists at seed 0 on a few seasons, against the reference")
