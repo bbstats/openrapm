@@ -10374,3 +10374,6 @@ Check 155's base arm, five random draws, the ten tune seasons, against the shipp
 -0.0126 / -0.0245 / -0.0038; the draws' spread, each season's standard deviation averaged, 0.027 against 0.058, 0.47
 of it; the guard +0.010, z +1.18.  Better in every era, half as noisy from draw to draw, the year-over-year guard not
 past z +2.  Fits and rates in the shipped time (about 6 minutes a draw for the fits, 6.5 for the rating).
+- split_per_bag (each bag its own random deal, 10 bags): -0.0139, z -1.54, 6 of 10; by era -0.0015 / -0.0306 /
+  -0.0038; spread 0.048, 0.83 of the shipped; the guard -0.011, z -0.97.  Better on average, about as noisy as today:
+  the bag-to-bag variation the deal adds was not the largest part of the noise.
