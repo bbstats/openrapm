@@ -276,6 +276,7 @@ PAGE_HEAD = """<!doctype html>
   <a href="similarity.html">~ Similarity</a>
   <a href="bias.html" aria-current="page">Bias</a>
   <a href="about.html">About</a>
+  <a href="changelog.html">Changelog</a>
   """
 # the dark-mode button, one line on the page
 THEME_BUTTON = ('<button class="theme" type="button" aria-label="Dark mode" title="Dark mode">'

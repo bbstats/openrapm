@@ -182,8 +182,8 @@ def test_every_page_carries_the_same_tabs_with_its_own_marked():
     import re
     from pathlib import Path
     docs = Path(__file__).resolve().parents[1] / "docs"
-    tabs = ["./", "similarity.html", "bias.html", "about.html"]
-    pages = ("about.html", "index.html", "similarity.html", "bias.html")
+    tabs = ["./", "similarity.html", "bias.html", "about.html", "changelog.html"]
+    pages = ("about.html", "index.html", "similarity.html", "bias.html", "changelog.html")
     navs = {page: (docs / page).read_text(encoding="utf-8") for page in pages}
     navs["PAGE_HEAD"] = site.PAGE_HEAD + "</nav>"
     for page, text in navs.items():

@@ -10383,3 +10383,28 @@ past z +2.  Fits and rates in the shipped time (about 6 minutes a draw for the f
 - The winner is out_of_bag60: the best mean, better in every era, the steadiest, at the shipped cost.  Next its full
   build, experiment 113 (outofbag113, `--bags 60 --prediction out_of_bag`), with three noise controls of its own,
   `--bag-draw 1`, `2` and `3`: with no deal, its randomness is the bags' resamples and seeds, which bag_draw redraws.
+
+### Experiment 113 built in full: a tie, worse since 2017 (2026-10-26, `outputs/outofbag113.log`, check 151 tag `outofbag113_all`, `scratch/2026-10-26_noise/outofbag113_read.py`)
+
+outofbag113 and its three controls (`--bag-draw 1-3`) against creation110 and its three random deals, paired build
+by build (the pairing is arbitrary; the averaged row is the one to read).  Step 4, all held-back possessions, below 0
+better:
+
+| build | change | z | seasons better | 1997-2006 | 2007-2016 | 2017-2026 |
+|---|---|---|---|---|---|---|
+| outofbag113 | +0.0006 | +0.05 | 14 | -0.0099 | -0.0015 | +0.0132 |
+| noise_outofbag113 | +0.0045 | +0.29 | 15 | -0.0053 | -0.0012 | +0.0199 |
+| noise2_outofbag113 | +0.0013 | +0.10 | 17 | -0.0314 | +0.0291 | +0.0064 |
+| noise3_outofbag113 | -0.0028 | -0.19 | 15 | -0.0301 | -0.0110 | +0.0326 |
+| four averaged | +0.0009 | +0.09 | 14 | -0.0192 | +0.0038 | +0.0180 |
+
+- How far each set of four spreads, the 30-season mean's standard deviation: today's 0.0074, out of bag 0.0055; by
+  era today's 0.0192 / 0.0043 / 0.0107, out of bag 0.0176 / 0.0172 / 0.0041; one season's 0.037 against 0.042.
+  Steadier on the 30-season mean, not season by season.
+- Step 3, before the swap step: four averaged -0.0087, z -0.70, 18 of 30; -0.0318 / -0.0085 / +0.0141; spread 0.0022
+  against 0.0084.  The prior itself is better and much steadier before 2017; the swap step takes the gain back.
+- Year over year, both directions: -0.0057 z -0.50, +0.0051 z +0.43, -0.0033 z -0.30, +0.0140 z +1.11.  No harm.
+- Verdict: fails the adoption rule.  Worse in 2017-2026 in all four pairings, +0.018 averaged; better 1997-2006 in all
+  four.  The screen's -0.015, z -2.02, did not carry to the full build: the screen's ten tune seasons and its base arm
+  without the swap step are where it differs.  Not adopted unless the owner rules otherwise; step 5 (retest unassisted
+  rim-and-paint makes on the new build) does not run.
