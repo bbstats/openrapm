@@ -165,6 +165,12 @@ What else the work of 2026-10-23 left open:
   A better measure of self-creation against 2016 tracking, a worse prior input: within-season WOWY +0.017, z +2.58,
   1997-2006 z +3.05, since 2017 a tie; year over year a tie.  Check 154 with it: amount +0.38 per sd against +0.67,
   concentration -0.49 against -0.43.  Open: the foul's type for shooting against bonus trips.
+- **Experiment 112 (screen112), not adopted yet, verdict the owner's** (2026-10-26; DECISIONS.md, "Experiment 112"):
+  check 155, Boruta on the within-season test on today's pipeline, screened 13 play-by-play candidates, the owner's
+  estimated potential assists among them; only unassisted makes at the rim and in the paint passed.  Its build: WOWY
+  -0.0016, z -1.24; 1997-2006 z -4.86, 10 of 10, nothing since; year over year a tie; ratings moved a median 0.004.
+  The first noise control on creation110, `noise_creation110`, reads -0.017, z -1.83: use it beside creation110 from
+  now on (`CONTROL_NAME=noise_creation110`).  Screen table on the sheet's tab "Input screen 112".
 - Deleting the saved boosters of experiments that were not adopted, about 2 GB each in `outputs/prior_models_*.pkl`
   (luckall88, luckall88b, luckhalf89, luckhalf89b, near83, same84, ctx85, body86, spread90, three92, unshrinkbase102,
   unshrink102, shrunkbase103 and older ones; refit103's stays while experiment 104 is open).
