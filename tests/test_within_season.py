@@ -91,6 +91,29 @@ def test_the_saved_prior_is_the_out_of_player_prediction():
     assert np.array_equal(np.array(list(got.values())), box_prior.predict(model, panel))
 
 
+@pytest.mark.parametrize("kind", [dict(bags=0), dict(bags=3), dict(bags=3, split_per_bag=True),
+                                  dict(bags=20, prediction="out_of_bag")])
+def test_every_kind_of_prior_saved_reads_back_as_the_same_prior(kind):
+    """build.booster_layout's keys, read by saved_booster, answer exactly as the prior that was saved; a saved
+    out-of-bag prior, which has no player folds, passes the season check."""
+    from openrapm.commands.build import booster_layout
+    rng = np.random.default_rng(3)
+    ids = np.repeat(np.arange(60), 2)
+    train = pd.DataFrame({"a": rng.normal(size=ids.size), "b": rng.normal(size=ids.size)},
+                         index=pd.Index(ids, name="player_id"))
+    train = train.assign(label=train.a - train.b + rng.normal(scale=0.2, size=ids.size),
+                         row_weight=rng.uniform(1, 3, ids.size))
+    params = {"n_estimators": 20, "num_leaves": 5, "learning_rate": 0.1, "min_child_samples": 3}
+    model = box_prior.fit_prior(train, ["a", "b"], params, n_folds=5, **kind)
+    panel = pd.DataFrame({"player_id": [3, 17, 999], "side": "O", "possessions": [800.0, 1200.0, 50.0],
+                          "a": [0.1, -1.0, 2.0], "b": [0.5, 0.0, -0.3]})
+    saved = dict(**booster_layout(model), feats=[], model_feats=["a", "b"], n_folds=5, groupings=1,
+                 unseen=[2025, 2026, 2027])
+    assert type(ws.saved_booster(saved)) is type(model)
+    assert np.array_equal(np.array(list(ws.saved_prior(panel, "O", saved).values())), box_prior.predict(model, panel))
+    ws.season_models({2026: {"O": saved, "D": saved}}, 2026)
+
+
 def test_the_saved_prior_builds_the_ratios_against_the_league_and_era_boosters_pass_the_check():
     """Experiment 56: a booster reading a `_vs_league` ratio is answered from the panel's own rates, as the build
     answered it; boosters fitted with an era half-life pass the check (it changes the training weights only)."""

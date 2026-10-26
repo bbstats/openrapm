@@ -76,10 +76,13 @@ def describe(settings, seasons) -> str:
     second = (f"; step 3 reads the second prior, its line from outputs/second_prior/{prior.second_prior} on the "
               f"inputs {prior.second_prior_inputs}, team totals {prior.second_prior_team_totals}"
               if prior.second_prior else "")
+    bags = "".join([f"; {prior.bags} bags predicted out of bag" if prior.prediction == "out_of_bag" else "",
+                    "; each bag its own split" if prior.split_per_bag else "",
+                    f"; bag draw {prior.bag_draw}" if prior.bag_draw else ""])
     return (f"rate {seasons[0]}-{seasons[-1]} ({len(seasons)} seasons): offence target {targets.offence}, defence "
             f"target {targets.defence}; inputs {prior.feature_set}; booster {prior.booster_file}; {prior.n_folds} "
             f"player folds, assignment {prior.fold_assignment}; neighbours left out {settings.exclude_neighbours}"
-            f"{era}{flags}{second}")
+            f"{bags}{era}{flags}{second}")
 
 
 def accumulate_rapm(designs: DesignCache, seasons, settings) -> dict:
@@ -111,21 +114,35 @@ def unseen_seasons(season: int, settings) -> list:
     return list(range(season - reach, season + reach + 1))
 
 
+def booster_layout(model) -> dict:
+    """A box-score prior's boosters under the saved-booster files' keys: `full`, `folds` and `excluded`, the first
+    bag's in the layout of the files written before the 2026-10 cleanup; every bag under `bags`, which `openrapm folds`
+    reads when they are there; an out-of-bag prior's boosters under `out_of_bag`, each with the players its resample
+    drew, its first booster as `full` and no folds (within_season.saved_booster reads every kind back)."""
+    if isinstance(model, box_prior.OutOfBagPrior):
+        return dict(full=model.models[0], folds=[], excluded=[],
+                    out_of_bag=[dict(model=booster, drawn=drawn)
+                                for booster, drawn in zip(model.models, model.drawn_players)])
+    members = model.members if isinstance(model, box_prior.BaggedPrior) else [model]
+    out = dict(full=members[0].full, folds=members[0].fold_models, excluded=members[0].held_out_players)
+    if isinstance(model, box_prior.BaggedPrior):
+        out["bags"] = [dict(full=member.full, folds=member.fold_models, excluded=member.held_out_players)
+                       for member in members]
+    return out
+
+
 def saved_side(prior: box_prior.SidePrior, params: dict, settings, unseen, second=None, side: str = "O") -> dict:
     """One side's boosters in the layout of the saved-booster files written before the 2026-10 cleanup (the code that
     wrote them is at the tag archive/research-2026-10), so `openrapm folds` reads a file of either age.  With the second
     prior on (`second`, a SeasonSecondPrior), also its values (`second_prior`) and the season's line (`line`, rows as
     second_prior.season_coefficients gives them), which `openrapm folds` checks its whole-season rebuild against."""
     model = prior.model
-    members = model.members if isinstance(model, box_prior.BaggedPrior) else [model]
-    out = dict(full=members[0].full, folds=members[0].fold_models, excluded=members[0].held_out_players,
-               params=dict(params), n_folds=settings.prior.n_folds, groupings=1, intercept=False, by_player=False,
-               feats=list(prior.feature_names), model_feats=list(model.inputs), unseen=list(unseen),
+    layout = booster_layout(model)
+    extra = {key: layout.pop(key) for key in ("bags", "out_of_bag") if key in layout}
+    out = dict(**layout, params=dict(params), n_folds=settings.prior.n_folds, groupings=1, intercept=False,
+               by_player=False, feats=list(prior.feature_names), model_feats=list(model.inputs), unseen=list(unseen),
                prior=dict(prior.values))
-    if isinstance(model, box_prior.BaggedPrior):
-        # every bag, the first also in the old layout's keys; `openrapm folds` reads the bags when they are there
-        out["bags"] = [dict(full=member.full, folds=member.fold_models, excluded=member.held_out_players)
-                       for member in members]
+    out.update(extra)
     if second is not None:
         out["second_prior"] = dict(second.values[side])
         out["line"] = np.asarray(second.coefficients[side]).tolist()

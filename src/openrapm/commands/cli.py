@@ -32,7 +32,16 @@ from datetime import datetime
 from pathlib import Path
 
 from ..data.legacy_names import feature_set_name, target_name
-from ..settings import PRODUCT, ROW_LABELS, SECOND_PRIOR_INPUTS, TEAM_TOTALS, TEST, UNSHRINK_LABELS, Settings
+from ..settings import (
+    PREDICTIONS,
+    PRODUCT,
+    ROW_LABELS,
+    SECOND_PRIOR_INPUTS,
+    TEAM_TOTALS,
+    TEST,
+    UNSHRINK_LABELS,
+    Settings,
+)
 from .console import use_utf8
 from .data import add_data
 from .parallel import default_jobs
@@ -115,6 +124,10 @@ def chosen_settings(args: argparse.Namespace) -> Settings:
         raise SystemExit("--era-halflife is 0 (every season counts the same, shipped) or a positive number of seasons")
     if args.bags < 0:
         raise SystemExit("--bags is 0 (one booster per side) or a positive number of bags")
+    if args.bag_draw < 0:
+        raise SystemExit("--bag-draw is 0 (the shipped bags) or a positive number")
+    if not args.bags and (args.prediction != "folds" or args.split_per_bag or args.bag_draw):
+        raise SystemExit("--prediction out_of_bag, --split-per-bag and --bag-draw need bags")
     attacking, defending = args.team_season_penalties
     return replace(base,
                    targets=replace(base.targets,
@@ -125,7 +138,9 @@ def chosen_settings(args: argparse.Namespace) -> Settings:
                    prior=replace(base.prior, feature_set=plain_name("--features", args.features, feature_set_name),
                                  booster_file=BOOSTER_FILE.format(args.booster_params),
                                  fold_assignment=args.fold_assignment, era_halflife=float(args.era_halflife),
-                                 bags=int(args.bags), row_labels=args.row_labels,
+                                 bags=int(args.bags), prediction=args.prediction,
+                                 split_per_bag=bool(args.split_per_bag), bag_draw=int(args.bag_draw),
+                                 row_labels=args.row_labels,
                                  part_season_shares=tuple(args.part_season_rows),
                                  second_prior=args.second_prior,
                                  second_prior_team_totals=args.second_prior_team_totals,
@@ -244,6 +259,16 @@ def _add_setting_options(parser) -> None:
     parser.add_argument("--bags", type=int, default=PRODUCT.prior.bags, metavar="K",
                         help="0: one booster per side.  K: K boosters, each on a bootstrap of the players, averaged "
                              "(default %(default)s)")
+    parser.add_argument("--prediction", choices=PREDICTIONS, default=PRODUCT.prior.prediction,
+                        help="folds: every bag's players split into the player folds, each answered by the booster "
+                             "fitted without his fold.  out_of_bag: one booster per bag, each player answered by the "
+                             "mean of the bags that did not draw him; give it about 60 bags (default %(default)s)")
+    parser.add_argument("--split-per-bag", action="store_true", default=PRODUCT.prior.split_per_bag,
+                        help="each bag splits its players into the player folds its own random way, in place of "
+                             "--fold-assignment's one split for every bag")
+    parser.add_argument("--bag-draw", type=int, default=PRODUCT.prior.bag_draw, metavar="D",
+                        help="0: the shipped bags.  A positive D draws every bag's resample and seed another way, "
+                             "a noise control (default %(default)s)")
     parser.add_argument("--row-labels", choices=ROW_LABELS, default=PRODUCT.prior.row_labels,
                         help="career: every training row of the prior carries the player's RAPM over every training "
                              "season.  outside: each chunk row carries his RAPM over the seasons outside its own and "

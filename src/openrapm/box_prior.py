@@ -73,6 +73,19 @@ the settings in params/booster_params_lgb1.json) solves:
 Player folds: players are sorted by label and assigned to folds 0,1,2,3,4,4,3,2,1,0,0,1,..., so every fold gets the
 same mix of good and bad players and leaving one out does not move the training mean (notes/DECISIONS.md, "The SPM
 memorises long-career stars", 2026-09-14; SPM was the box-score prior's earlier name).
+
+Bags (settings.PriorSettings.bags, 10 as shipped): a player's prior is the mean of K answers, each from boosters
+fitted on their own resample of the players (`player_bootstrap`).  How each answer avoids the boosters that saw him
+(settings.PriorSettings.prediction):
+
+    "folds"        every resample split into the five player folds above: a bag answers for him with the booster
+                   fitted without his fold, or with its full booster when its resample did not draw him (shipped)
+    "out_of_bag"   one booster per resample, no folds: his prior is the mean of the boosters whose resample did not
+                   draw him, about 37% of them, so 60 bags cost what the shipped 10 bags of 1 + 5 boosters do
+
+With settings.PriorSettings.split_per_bag each resample splits its players into the folds its own random way
+(`bag_split`), so a prior averages over K splits instead of one pattern (notes/DECISIONS.md, "The noise control read
+closely": how the players are split moves a regular's total rating a median 0.05 per 100).
 """
 from __future__ import annotations
 
@@ -82,12 +95,14 @@ import numpy as np
 import pandas as pd
 
 from .features import FEATURE_SETS, MISSING_OK, PANEL_INPUTS, ROW_FEATURES, add_features
+from .settings import PREDICTIONS
 
 __all__ = ["average_over_seasons", "career_rows", "season_runs", "chunk_seasons", "chunk_season_sets",
            "training_rows", "balanced_player_folds",
            "LIGHTGBM_FIXED", "COLUMN_SHARES", "INPUT_CLIP", "ClippedBooster", "fit_lightgbm", "OutOfPlayerPrior",
-           "fit_out_of_player", "BaggedPrior", "player_bootstrap", "fit_prior", "rated_rows", "predict", "SidePrior",
-           "era_kernel", "season_priors"]
+           "fit_out_of_player", "BaggedPrior", "player_bootstrap", "PREDICTIONS", "BAG_DRAW_STEP", "bag_split",
+           "OutOfBagPrior", "out_of_bag_weights", "fit_prior", "rated_rows", "predict", "SidePrior", "era_kernel",
+           "season_priors"]
 
 # columns a training row adds for its own bookkeeping: the label it carries, its weight in the fit, the
 # possessions behind the label and its era kernel.  None may share a name with an input (notes/DECISIONS.md,
@@ -382,16 +397,75 @@ def player_bootstrap(train: pd.DataFrame, bag: int, kernel: np.ndarray | None = 
     return rows, None if kernel is None else np.asarray(kernel, dtype=float)[keep]
 
 
+# bag k of draw d is drawn and fitted at k + BAG_DRAW_STEP x d (settings.PriorSettings.bag_draw), so draw 0 is the
+# shipped bags and every draw's bags differ from every other's while a draw has fewer than 100 bags; check 155's
+# random draws are the same numbers
+BAG_DRAW_STEP = 100
+
+
+def bag_split(fold_assignment: int, draw: int) -> int:
+    """The fold assignment of the bag drawn at `draw` (bag + BAG_DRAW_STEP x bag_draw) when each bag splits its players
+    its own random way: 1 + draw + 1000 x `fold_assignment`, a random split for every bag (`balanced_player_folds`).
+
+    Example: the shipped draws with fold_assignment 0 give bags 0-9 the splits 1-10; fold_assignment 1 gives them
+    1001-1010, another split for every bag.
+    """
+    return 1 + int(draw) + 1000 * int(fold_assignment)
+
+
+@dataclass
+class OutOfBagPrior:
+    """One booster per bag, each on its own resample of the players; a player's prediction is the mean of the
+    boosters whose resample did not draw him."""
+    models: list
+    drawn_players: list             # per booster, the set of player ids its resample drew
+    inputs: list
+
+
+def out_of_bag_weights(prior: OutOfBagPrior, player_ids) -> np.ndarray:
+    """A row per player, a column per booster of `prior`: 1 / (the number of boosters that never saw him) where the
+    booster's resample did not draw him, 0 where it did, so each row sums to 1 and a player with no training rows
+    (a rookie) weighs every booster alike.
+
+    Example: three boosters, a player drawn by the second only: 0.5, 0, 0.5.
+    """
+    unseen = np.array([[pid not in drawn for drawn in prior.drawn_players] for pid in player_ids], dtype=float)
+    unseen = unseen.reshape(len(player_ids), len(prior.models))
+    count = unseen.sum(axis=1)
+    if (count == 0).any():
+        raise ValueError(f"{int((count == 0).sum())} players were drawn by all {len(prior.models)} bags, so no "
+                         "booster answers for them without having seen them; use more bags")
+    return unseen / count[:, None]
+
+
 def fit_prior(train: pd.DataFrame, inputs, params: dict, n_folds: int = 5, fold_assignment: int = 0,
-              kernel: np.ndarray | None = None, bags: int = 0) -> OutOfPlayerPrior | BaggedPrior:
-    """`fit_out_of_player` with 0 bags; with K bags a `BaggedPrior`, bag k on `player_bootstrap(train, k)` at seed
-    k."""
+              kernel: np.ndarray | None = None, bags: int = 0, prediction: str = "folds",
+              split_per_bag: bool = False, bag_draw: int = 0) -> OutOfPlayerPrior | BaggedPrior | OutOfBagPrior:
+    """`fit_out_of_player` with 0 bags; with K bags, bag k on `player_bootstrap(train, k')` at seed k', where k' = k +
+    BAG_DRAW_STEP x `bag_draw`: a `BaggedPrior` of out-of-player priors, each split by `fold_assignment` or, with
+    `split_per_bag`, by its own `bag_split`; with `prediction` "out_of_bag", an `OutOfBagPrior` of the bags' full
+    boosters alone (the module docstring)."""
+    if prediction not in PREDICTIONS:
+        raise ValueError(f"prediction is one of {PREDICTIONS}, not {prediction!r}")
     if not bags:
+        if prediction != "folds" or split_per_bag or bag_draw:
+            raise ValueError("out-of-bag prediction, a split per bag and another draw of the bags all need bags")
         return fit_out_of_player(train, inputs, params, n_folds, fold_assignment, kernel)
-    members = []
+    if int(bag_draw) and int(bags) > BAG_DRAW_STEP:
+        raise ValueError(f"another draw of the bags reaches at most {BAG_DRAW_STEP} bags, not {bags}")
+    members, drawn = [], []
     for bag in range(int(bags)):
-        rows, bag_kernel = player_bootstrap(train, bag, kernel)
-        members.append(fit_out_of_player(rows, inputs, params, n_folds, fold_assignment, bag_kernel, seed=bag))
+        draw = bag + BAG_DRAW_STEP * int(bag_draw)
+        rows, bag_kernel = player_bootstrap(train, draw, kernel)
+        if prediction == "out_of_bag":
+            members.append(fit_lightgbm(params, rows[inputs].to_numpy(float), rows.label.to_numpy(float),
+                                        rows.row_weight.to_numpy(float), bag_kernel, draw))
+            drawn.append(set(rows.index.unique().tolist()))
+            continue
+        split = bag_split(fold_assignment, draw) if split_per_bag else fold_assignment
+        members.append(fit_out_of_player(rows, inputs, params, n_folds, split, bag_kernel, seed=draw))
+    if prediction == "out_of_bag":
+        return OutOfBagPrior(models=members, drawn_players=drawn, inputs=list(inputs))
     return BaggedPrior(members=members, inputs=list(inputs))
 
 
@@ -403,14 +477,19 @@ def rated_rows(season_rows: pd.DataFrame, feature_names, share: float = 1.0) -> 
     return rows.assign(row_possessions=rows.possessions.to_numpy(float), row_seasons=float(share))
 
 
-def predict(prior: OutOfPlayerPrior | BaggedPrior, rows: pd.DataFrame) -> np.ndarray:
-    """Each player's prediction from the fold model that never saw him; for a `BaggedPrior`, the mean over its bags.
+def predict(prior: OutOfPlayerPrior | BaggedPrior | OutOfBagPrior, rows: pd.DataFrame) -> np.ndarray:
+    """Each player's prediction from the fold model that never saw him; for a `BaggedPrior`, the mean over its bags;
+    for an `OutOfBagPrior`, the mean of the boosters whose resample did not draw him (`out_of_bag_weights`).
 
     A player with no training rows at all (a rookie, or a player whose other seasons earned no label) is in no
     fold, so the full fit answers for him.
     """
     if isinstance(prior, BaggedPrior):
         return np.mean([predict(member, rows) for member in prior.members], axis=0)
+    if isinstance(prior, OutOfBagPrior):
+        matrix = rows[prior.inputs].to_numpy(float)
+        answers = np.column_stack([model.predict(matrix) for model in prior.models])
+        return (answers * out_of_bag_weights(prior, rows.player_id.to_numpy())).sum(axis=1) + 0.0
     matrix = rows[prior.inputs].to_numpy(float)
     out = prior.full.predict(matrix)
     ids = rows.player_id.to_numpy()
@@ -428,7 +507,7 @@ def predict(prior: OutOfPlayerPrior | BaggedPrior, rows: pd.DataFrame) -> np.nda
 class SidePrior:
     """One side's prior for the rated season: {player_id: prior} and the boosters that made it."""
     values: dict
-    model: OutOfPlayerPrior | BaggedPrior
+    model: OutOfPlayerPrior | BaggedPrior | OutOfBagPrior
     feature_names: list
 
 
@@ -488,7 +567,8 @@ def season_priors(labels: dict, panel: pd.DataFrame, season: int, unseen, settin
                               side_outside, training_seasons(part_seasons, side, unseen, season, settings))
         kernel = train.era_kernel.to_numpy(float) if half_life > 0 else None
         model = fit_prior(train, names + ROW_FEATURES, params[side], settings.prior.n_folds,
-                          settings.prior.fold_assignment, kernel, settings.prior.bags)
+                          settings.prior.fold_assignment, kernel, settings.prior.bags, settings.prior.prediction,
+                          settings.prior.split_per_bag, settings.prior.bag_draw)
         source = panel if rated is None else rated
         rows = rated_rows(source[(source.side == side) & (source.season == season)], names, share)
         out[side] = SidePrior(values=dict(zip(rows.player_id.to_numpy(), predict(model, rows))), model=model,

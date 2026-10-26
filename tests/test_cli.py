@@ -186,6 +186,17 @@ def test_a_negative_fold_assignment_is_refused():
         cli.chosen_settings(_parse("rate", "--fold-assignment", "-1"))
 
 
+def test_the_ways_to_avoid_the_boosters_that_saw_a_player_reach_their_settings():
+    chosen = cli.chosen_settings(_parse("rate", "--bags", "60", "--prediction", "out_of_bag", "--bag-draw", "2"))
+    assert (chosen.prior.bags, chosen.prior.prediction, chosen.prior.bag_draw) == (60, "out_of_bag", 2)
+    assert not chosen.prior.split_per_bag
+    assert cli.chosen_settings(_parse("rate", "--split-per-bag")).prior.split_per_bag
+    for flags in (("--bags", "0", "--prediction", "out_of_bag"), ("--bags", "0", "--split-per-bag"),
+                  ("--bag-draw", "-1")):
+        with pytest.raises(SystemExit):
+            cli.chosen_settings(_parse("rate", *flags))
+
+
 def test_folds_needs_its_models_and_base_and_defaults_to_2017_2026():
     args = _parse("folds", "--models", "m", "--base", "b")
     assert (args.models, args.base, args.tag, args.reproduce_only) == ("m", "b", "within", False)

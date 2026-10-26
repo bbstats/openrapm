@@ -185,20 +185,32 @@ class BoosterAnswers:
 
     player_ids   (n,) the players, in the order of the rows the boosters were asked about
     values       (n, M): column m is booster m's answer for every player
-    choice       (n, B): for each of the B bags, the column of `values` whose booster never saw that row's player
+    choice       (n, B): for each of the B bags, the column of `values` whose booster never saw that row's player;
+                 None for an out-of-bag prior, which has `weights` instead
+    weights      (n, M) for an out-of-bag prior (box_prior.out_of_bag_weights): each row's weight on each column,
+                 the boosters that never saw its player alike, summing to 1; None otherwise
     """
     player_ids: np.ndarray
     values: np.ndarray
-    choice: np.ndarray
+    choice: np.ndarray | None
+    weights: np.ndarray | None = None
 
 
 def booster_answers(prior, rows: pd.DataFrame) -> BoosterAnswers:
-    """Every booster of `prior` (box_prior.OutOfPlayerPrior or BaggedPrior) asked about every row of `rows`.
+    """Every booster of `prior` (box_prior.OutOfPlayerPrior, BaggedPrior or OutOfBagPrior) asked about every row of
+    `rows`.
 
     Each bag gives 1 + n_folds columns: its full booster, then its fold boosters in order.  A player held out of a
     fold is answered for by that fold's booster, any other player by the bag's full booster, exactly as
-    box_prior.predict chooses; so the mean over bags of each player's chosen answers is his box-score prior.
+    box_prior.predict chooses; so the mean over bags of each player's chosen answers is his box-score prior.  An
+    out-of-bag prior gives a column per booster, and each player's prior is the mean of the columns whose resample did
+    not draw him (`weights`).
     """
+    if isinstance(prior, box_prior.OutOfBagPrior):
+        matrix = rows[prior.inputs].to_numpy(float)
+        ids = rows.player_id.to_numpy()
+        return BoosterAnswers(player_ids=ids, values=np.column_stack([model.predict(matrix) for model in prior.models]),
+                              choice=None, weights=box_prior.out_of_bag_weights(prior, ids))
     members = prior.members if isinstance(prior, box_prior.BaggedPrior) else [prior]
     matrix = rows[prior.inputs].to_numpy(float)
     ids = rows.player_id.to_numpy()
@@ -214,10 +226,17 @@ def booster_answers(prior, rows: pd.DataFrame) -> BoosterAnswers:
     return BoosterAnswers(player_ids=ids, values=np.column_stack(columns), choice=np.column_stack(choice))
 
 
+def _unseen_mean(numbers: np.ndarray, answers: BoosterAnswers) -> np.ndarray:
+    """`numbers`, a row per player of `answers` and a column per booster, averaged over each row's answers from the
+    boosters that never saw its player: one column per bag by `choice`, or every column by `weights`."""
+    if answers.weights is not None:
+        return (numbers * answers.weights).sum(axis=1) + 0.0
+    return numbers[np.arange(len(numbers))[:, None], answers.choice].mean(axis=1)
+
+
 def own_priors(answers: BoosterAnswers) -> pd.Series:
     """player_id -> his box-score prior: the mean over bags of the answers that never saw him."""
-    rows = np.arange(len(answers.player_ids))[:, None]
-    return pd.Series(answers.values[rows, answers.choice].mean(axis=1), index=answers.player_ids)
+    return pd.Series(_unseen_mean(answers.values, answers), index=answers.player_ids)
 
 
 # ------------------------------------------------------------------------------- the context numbers
@@ -235,8 +254,7 @@ def _aligned(ids: np.ndarray, answers: BoosterAnswers) -> np.ndarray:
 
 def _chosen(numbers: np.ndarray, ids: np.ndarray, answers: BoosterAnswers) -> np.ndarray:
     """Each answered player's number averaged over bags, every bag's read on the column that never saw him."""
-    rows = _positions(ids, answers.player_ids)[:, None]
-    return numbers[rows, answers.choice].mean(axis=1)
+    return _unseen_mean(numbers[_positions(ids, answers.player_ids)], answers)
 
 
 KINDS = ("teammates_{}_on", "opponents_{}_on", "teammates_{}_bench", "opponents_{}_bench")

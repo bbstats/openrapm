@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 
-__all__ = ["Targets", "LabelSettings", "UNSHRINK_LABELS", "PriorSettings", "ROW_LABELS", "TEAM_TOTALS",
+__all__ = ["Targets", "LabelSettings", "UNSHRINK_LABELS", "PriorSettings", "ROW_LABELS", "TEAM_TOTALS", "PREDICTIONS",
            "SECOND_PRIOR_INPUTS",
            "RidgeSettings", "ShrinkSettings", "factor_for", "describe_factors",
            "SwapSettings", "Settings", "PRODUCT", "TEST"]
@@ -158,6 +158,19 @@ class PriorSettings:
     # (box_prior.BaggedPrior; notes/DECISIONS.md, experiment 78, adopted 2026-10-17: "Adopt and publish"; one
     # booster before it)
     bags: int = 10
+    # how a player's prior avoids the boosters that saw him (box_prior's module docstring; notes/DECISIONS.md, "The
+    # noise control read closely", 2026-10-26).  "folds": every bag's players split into the n_folds player folds, each
+    # answered by the booster fitted without his fold (shipped).  "out_of_bag": one booster per bag and no folds, each
+    # player answered by the mean of the bags whose resample did not draw him; it needs enough bags that every player
+    # misses one, 60 for the cost of the shipped 10
+    prediction: str = "folds"
+    # False: every bag's players split by fold_assignment (shipped).  True: each bag splits its players its own random
+    # way (box_prior.bag_split), so the prior averages over as many splits as bags
+    split_per_bag: bool = False
+    # 0: the shipped bags.  A positive d: bag k drawn and fitted at k + 100 d (box_prior.BAG_DRAW_STEP), every bag's
+    # resample and LightGBM seed another; a noise control that redraws the resamples, where fold_assignment redraws
+    # only the split
+    bag_draw: int = 0
     # what each training row is labelled with.  "career": every row of a player carries his RAPM over every training
     # season, its own included (shipped).  "outside": each chunk row carries his RAPM over the seasons outside its
     # own and the career row is dropped, so no label shares a game with its row's box score (box_prior.training_rows;
@@ -201,6 +214,7 @@ ROW_LABELS = ("career", "outside", "nearest")
 # shrinking the offensive label"): the offensive prior is then priced on the same scale as the defensive one
 UNSHRINK_LABELS = {"defense": ("defense",), "both": ("offense", "defense")}
 TEAM_TOTALS = ("held", "free", "spread_held")    # PriorSettings.second_prior_team_totals
+PREDICTIONS = ("folds", "out_of_bag")              # PriorSettings.prediction
 # PriorSettings.second_prior_inputs
 SECOND_PRIOR_INPUTS = ("context", "context_and_types", "context_and_types_centred", "own_teammates_opponents")
 

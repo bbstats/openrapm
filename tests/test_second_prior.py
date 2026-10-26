@@ -109,6 +109,20 @@ def test_the_answers_give_back_the_box_score_prior_exactly():
     assert np.allclose(sp.own_priors(answers).to_numpy(), box_prior.predict(prior, rows), rtol=0, atol=1e-12)
 
 
+def test_an_out_of_bag_prior_answers_each_player_with_the_boosters_that_never_saw_him():
+    prior = box_prior.OutOfBagPrior(models=[_Times(1.0), _Times(2.0), _Times(4.0)],
+                                    drawn_players=[{1, 2}, {2, 3}, {1}], inputs=["x"])
+    rows = pd.DataFrame({"player_id": [1, 2, 3, 4], "x": [1.0, -2.0, 0.5, 3.0]})
+    answers = sp.booster_answers(prior, rows)
+    assert answers.values.shape == (4, 3) and answers.choice is None
+    # player 1: the second booster alone; 2: the third; 3: the first and third; 4, drawn by none: all three
+    assert np.allclose(sp.own_priors(answers).to_numpy(), [2.0, -8.0, 1.25, 7.0], rtol=0, atol=1e-12)
+    assert np.array_equal(sp.own_priors(answers).to_numpy(), box_prior.predict(prior, rows))
+    # a context number per booster reads each player's own columns the same way
+    numbers = np.arange(15, dtype=float).reshape(5, 3)                    # ids 0-4, column m = booster m
+    assert np.allclose(sp._chosen(numbers, np.arange(5), answers), [4.0, 8.0, 10.0, 13.0], rtol=0, atol=1e-12)
+
+
 def test_the_target_adds_back_the_two_swapped_players_ratings():
     pairs = {side: pd.DataFrame({"team": [1], "fifth_a": [7], "fifth_b": [8], "h": [2.0], "r": [0.5]})
              for side in sa.SIDES}

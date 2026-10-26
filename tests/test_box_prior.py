@@ -531,6 +531,66 @@ def test_a_player_left_out_of_a_bag_is_answered_by_a_booster_that_never_saw_him(
     assert left_out and not left_out & set().union(*member.held_out_players)
 
 
+# ------------------------------------------------------------------ robust to how the players are split (2026-10-26)
+def test_out_of_bag_answers_each_player_with_the_mean_of_the_bags_that_did_not_draw_him():
+    train = _rows()
+    frame = train.reset_index().drop_duplicates("player_id").iloc[:10].copy()
+    frame.loc[frame.index[-1], "player_id"] = -1                     # a player with no training rows
+    prior = box_prior.fit_prior(train, FEATS, PARAMS, bags=12, prediction="out_of_bag")
+    assert isinstance(prior, box_prior.OutOfBagPrior) and len(prior.models) == 12
+    x = frame[FEATS].to_numpy(float)
+    got = box_prior.predict(prior, frame)
+    for i, pid in enumerate(frame.player_id):
+        unseen = [model for model, drawn in zip(prior.models, prior.drawn_players) if pid not in drawn]
+        assert 0 < len(unseen) < 12 or pid == -1
+        assert np.isclose(got[i], np.mean([model.predict(x[i:i + 1])[0] for model in unseen]), rtol=0, atol=1e-12)
+    # a bag's booster is the full booster the shipped kind fits on the same resample at the same seed
+    rows, _ = box_prior.player_bootstrap(train, 3)
+    full = box_prior.fit_out_of_player(rows, FEATS, PARAMS, n_folds=5, seed=3).full
+    assert np.array_equal(prior.models[3].predict(x), full.predict(x))
+    assert prior.drawn_players[3] == set(rows.index)
+
+
+def test_out_of_bag_refuses_a_player_every_bag_drew_and_a_prior_without_bags():
+    prior = box_prior.OutOfBagPrior(models=[None, None], drawn_players=[{1, 2}, {1}], inputs=FEATS)
+    assert box_prior.out_of_bag_weights(prior, [2, 3]).tolist() == [[0.0, 1.0], [0.5, 0.5]]
+    with pytest.raises(ValueError, match="drawn by all 2 bags"):
+        box_prior.out_of_bag_weights(prior, [1])
+    for kind in (dict(prediction="out_of_bag"), dict(split_per_bag=True), dict(bag_draw=1)):
+        with pytest.raises(ValueError, match="need bags"):
+            box_prior.fit_prior(_rows(), FEATS, PARAMS, bags=0, **kind)
+    with pytest.raises(ValueError, match="prediction is one of"):
+        box_prior.fit_prior(_rows(), FEATS, PARAMS, bags=2, prediction="mean")
+
+
+def test_a_split_per_bag_gives_every_bag_its_own_random_split():
+    train = _rows()
+    prior = box_prior.fit_prior(train, FEATS, PARAMS, n_folds=5, bags=3, split_per_bag=True)
+    for bag, member in enumerate(prior.members):
+        rows, _ = box_prior.player_bootstrap(train, bag)
+        fold = box_prior.balanced_player_folds(rows, 5, fold_assignment=bag + 1)
+        assert member.held_out_players == [set(rows.index[fold == k]) for k in range(5)]
+    assert box_prior.bag_split(0, 4) == 5 and box_prior.bag_split(1, 4) == 1005
+    # every bag's split differs from the shipped pattern's
+    shipped = box_prior.fit_prior(train, FEATS, PARAMS, n_folds=5, bags=3)
+    assert all(mine.held_out_players != theirs.held_out_players
+               for mine, theirs in zip(prior.members, shipped.members))
+
+
+def test_another_bag_draw_redraws_every_bag_and_draw_zero_is_the_shipped_bags():
+    train = _rows()
+    frame = train.reset_index().drop_duplicates("player_id").iloc[:10].copy()
+    shipped = box_prior.fit_prior(train, FEATS, PARAMS, n_folds=5, bags=2)
+    assert np.array_equal(box_prior.predict(shipped, frame),
+                          box_prior.predict(box_prior.fit_prior(train, FEATS, PARAMS, n_folds=5, bags=2, bag_draw=0),
+                                            frame))
+    redrawn = box_prior.fit_prior(train, FEATS, PARAMS, n_folds=5, bags=2, bag_draw=1)
+    rows, _ = box_prior.player_bootstrap(train, box_prior.BAG_DRAW_STEP + 1)
+    assert set(rows.index) == set().union(*redrawn.members[1].held_out_players)
+    with pytest.raises(ValueError, match="at most 100 bags"):
+        box_prior.fit_prior(train, FEATS, PARAMS, bags=101, bag_draw=1)
+
+
 # ------------------------------------------------------------------ labels from outside a row's seasons
 def test_outside_labels_give_every_chunk_row_a_label_from_seasons_it_does_not_cover():
     """Experiment 79: a chunk row's label is the player's RAPM over the seasons outside the chunk; the career row,

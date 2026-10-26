@@ -22,6 +22,9 @@ Words used below
                   input shuffled in place
     seed          bag k of a trial at seed s is drawn and fitted at k + 100 s, so seed 0 is the shipped build; a
                   trial at another seed, nothing else changed, is the noise control
+    variant       the box-score prior at other settings (`VARIANTS`): the base arm alone at every base seed, read
+                  against the shipped prior's base arm by `variants` (2026-10-26: is a prior that averages over more
+                  ways of splitting its players both steadier from draw to draw and better on average?)
     guard         each tune season's whole-season ratings after the trial's step 4 predicting the seasons either side,
                   team-game by team-game (check 152's guard; step 5 is off)
 
@@ -33,9 +36,12 @@ lists on the mean, and the guard is not worse at z +2.
     python scripts/checks/155_input_screen.py dry --tag screen112 --seasons 2025  (against creation110)
     python scripts/checks/155_input_screen.py run --tag screen112                (resumes)
     python scripts/checks/155_input_screen.py table --tag screen112
+    python scripts/checks/155_input_screen.py run --tag screen112 --variant out_of_bag60   (the base arm alone)
+    python scripts/checks/155_input_screen.py variants --tag screen112
 
 Writes under outputs/screen/<tag>/: season_<season>.pkl (the cache), trials.csv (one row per trial, season, stage and
-slice), guard.csv (one row per trial and rated-scored pair), and outputs/csv/screen_<tag>_table.csv (the full table).
+slice), guard.csv (one row per trial and rated-scored pair), and outputs/csv/screen_<tag>_table.csv (the full table);
+a variant's trials_<variant>.csv and guard_<variant>.csv, and outputs/csv/screen_<tag>_variants.csv.
 """
 from __future__ import annotations
 
@@ -62,8 +68,13 @@ import pandas as pd  # noqa: E402
 TUNE_SEASONS = tuple(range(1998, 2026, 3))          # 1998, 2001, ..., 2025, check 152's
 POOL = "screen112_pool"
 REFERENCE = "creation110"                           # the shipped build whose saved boosters name the second prior
-SEED_STEP = 100
+SEED_STEP = 100                                     # box_prior.BAG_DRAW_STEP
 NEAREST = 8
+# the base arm at another setting of the box-score prior (HANDOFF, "START HERE" of 2026-10-26: the prior made robust
+# to how its players are split into the five training groups), each a dict of settings.PriorSettings fields
+VARIANTS = {"shipped": {}, "out_of_bag60": dict(prediction="out_of_bag", bags=60), "bags30": dict(bags=30),
+            "split_per_bag": dict(split_per_bag=True)}
+ERAS = {"1997-2006": (1998, 2001, 2004), "2007-2016": (2007, 2010, 2013, 2016), "2017-2026": (2019, 2022, 2025)}
 
 
 def _load(name: str, file: str):
@@ -193,15 +204,20 @@ def box_prior_params(cfg: dict) -> dict:
 
 
 def fit_bags(train: pd.DataFrame, inputs: list, params: dict, settings, seed: int):
-    """box_prior.fit_prior with bag k drawn and fitted at k + SEED_STEP x seed: at seed 0, the shipped fit."""
+    """box_prior.fit_prior with bag k drawn and fitted at k + SEED_STEP x seed (its bag_draw): at seed 0 and the
+    shipped settings, the shipped fit."""
     from openrapm import box_prior
-    members = []
-    for bag in range(int(settings.prior.bags)):
-        k = bag + SEED_STEP * int(seed)
-        rows, _ = box_prior.player_bootstrap(train, k)
-        members.append(box_prior.fit_out_of_player(rows, inputs, params, settings.prior.n_folds,
-                                                   settings.prior.fold_assignment, None, seed=k))
-    return box_prior.BaggedPrior(members=members, inputs=list(inputs))
+    prior = settings.prior
+    return box_prior.fit_prior(train, inputs, params, prior.n_folds, prior.fold_assignment, None, prior.bags,
+                               prior.prediction, prior.split_per_bag, bag_draw=int(seed))
+
+
+def variant_settings(variant: str):
+    """The test setting on the pool's lists with a variant's prior settings (`VARIANTS`)."""
+    from openrapm.settings import TEST
+    if variant not in VARIANTS:
+        raise SystemExit(f"--variant is one of {sorted(VARIANTS)}, not {variant!r}")
+    return replace(TEST, prior=replace(TEST.prior, feature_set=POOL, **VARIANTS[variant]))
 
 
 # ------------------------------------------------------------------------------------------------- a trial
@@ -211,10 +227,12 @@ class Trial:
     side: str                    # "O", "D", or "-" for base
     name: str                    # the input, or "-" for base
     seed: int
+    variant: str = "shipped"     # the box-score prior's settings, a key of VARIANTS
 
     @property
     def key(self) -> str:
-        return f"{self.arm}__{self.side}__{self.name}__s{self.seed}"
+        variant = "" if self.variant == "shipped" else f"__{self.variant}"
+        return f"{self.arm}__{self.side}__{self.name}__s{self.seed}{variant}"
 
 
 def trial_lists(trial: Trial) -> dict:
@@ -237,11 +255,10 @@ def shuffled(values: np.ndarray, seed: int, name: str, stream: str) -> np.ndarra
 def saved_side(model, names: list, unseen: list) -> dict:
     """One side's boosters in the layout `openrapm folds` reads (within_season.saved_booster, prior_rows, and the
     fold check that they never trained on the season or a neighbour)."""
+    from openrapm.commands.build import booster_layout
     from openrapm.features import ROW_FEATURES
-    first = model.members[0]
-    return dict(full=first.full, folds=first.fold_models, excluded=first.held_out_players, feats=list(names),
-                model_feats=list(names) + ROW_FEATURES, unseen=list(unseen),
-                bags=[dict(full=m.full, folds=m.fold_models, excluded=m.held_out_players) for m in model.members])
+    return dict(**booster_layout(model), feats=list(names), model_feats=list(names) + ROW_FEATURES,
+                unseen=list(unseen))
 
 
 class Season:
@@ -311,12 +328,10 @@ _FIT = {}            # in a fitting process: the settings, the booster parameter
 
 def fit_task(tag: str, season: int, side: str, trial: Trial):
     """(season, side, the trial's boosters on that side): the season's training rows, the trial's input list, the
-    input shuffled when the arm asks, bag k at k + SEED_STEP x seed."""
+    input shuffled when the arm asks, bag k at k + SEED_STEP x seed, the prior at the trial's variant."""
     from openrapm.data.config import load_config
     from openrapm.features import ROW_FEATURES
-    from openrapm.settings import TEST
-    if "settings" not in _FIT:
-        _FIT["settings"] = replace(TEST, prior=replace(TEST.prior, feature_set=POOL))
+    if "params" not in _FIT:
         _FIT["params"] = box_prior_params(load_config())
         _FIT["rows"] = {}
     if season not in _FIT["rows"]:
@@ -329,7 +344,8 @@ def fit_task(tag: str, season: int, side: str, trial: Trial):
         train = train.copy()
         train[trial.name] = shuffled(train[trial.name].to_numpy(float), trial.seed, trial.name, "train")
     names = trial_lists(trial)[side]
-    return season, side, fit_bags(train, names + ROW_FEATURES, _FIT["params"][side], _FIT["settings"], trial.seed)
+    return season, side, fit_bags(train, names + ROW_FEATURES, _FIT["params"][side], variant_settings(trial.variant),
+                                  trial.seed)
 
 
 class Fitters:
@@ -478,10 +494,12 @@ class Guard:
         return pd.DataFrame(out)
 
 
-def plan(seeds: int, base_seeds: int) -> list:
+def plan(seeds: int, base_seeds: int, variant: str = "shipped") -> list:
     """Every trial, the shipped lists at every base seed first, then each seed's arms in turn, so a run stopped part
-    way has whole seeds."""
+    way has whole seeds.  At another variant of the prior, the shipped lists at every base seed only."""
     from openrapm.features import CREATION, SCREEN_CANDIDATES
+    if variant != "shipped":
+        return [Trial("base", "-", "-", seed, variant) for seed in range(base_seeds)]
     trials = [Trial("base", "-", "-", seed) for seed in range(base_seeds)]
     for seed in range(seeds):
         for side in ("O", "D"):
@@ -546,13 +564,21 @@ def wait_for_the_daily_job() -> None:
         time.sleep(120)
 
 
+def result_paths(out_dir: Path, variant: str) -> tuple[Path, Path]:
+    """(trials, guard) of a variant: trials.csv and guard.csv for the shipped prior, trials_<variant>.csv and
+    guard_<variant>.csv for another."""
+    suffix = "" if variant == "shipped" else f"_{variant}"
+    return out_dir / f"trials{suffix}.csv", out_dir / f"guard{suffix}.csv"
+
+
 def run_screen(args) -> int:
     out_dir = screen_dir(args.tag)
-    trials_path, guard_path = out_dir / "trials.csv", out_dir / "guard.csv"
+    variant_settings(args.variant)
+    trials_path, guard_path = result_paths(out_dir, args.variant)
     done = set()
     if trials_path.exists():
         done = set(pd.read_csv(trials_path).trial.unique())
-    todo = [trial for trial in plan(args.seeds, args.base_seeds) if trial.key not in done]
+    todo = [trial for trial in plan(args.seeds, args.base_seeds, args.variant) if trial.key not in done]
     print(f"{len(todo)} trials to run, {len(done)} done", flush=True)
     if not todo:
         return 0
@@ -582,7 +608,7 @@ def run_screen(args) -> int:
                                                      input=trial.name, seed=trial.seed)
             reading = errors[(errors.stage == "step4") & (errors.slice == "all")].error.mean()
             extra = ""
-            if trial.arm == "base" and trial.seed == 0:
+            if trial.arm == "base" and trial.seed == 0 and trial.variant == "shipped":
                 worst = compare_reference(name)
                 extra = f"; against {REFERENCE}'s folds on disk, largest rating difference {worst:.1e}"
                 if worst > 1e-6:
@@ -657,6 +683,51 @@ def run_table(args) -> int:
     return 0
 
 
+def run_variants(args) -> int:
+    """Each variant of the prior against the shipped one, the shipped lists at every random draw: the change on the
+    decider and the guard, each season's draws averaged and paired by season, by era, and how far the draws spread
+    (each season's standard deviation over its draws, averaged over the seasons)."""
+    from openrapm.data.config import load_config, resolve
+    out_dir = screen_dir(args.tag)
+    errors, guards = {}, {}
+    for variant in VARIANTS:
+        trials_path, guard_path = result_paths(out_dir, variant)
+        if not trials_path.exists():
+            continue
+        rows = pd.read_csv(trials_path, keep_default_na=False)
+        rows = rows[(rows.arm == "base") & (rows.stage == "step4") & (rows.slice == "all")]
+        guard = pd.read_csv(guard_path, keep_default_na=False)
+        errors[variant] = rows.pivot_table(index="season", columns="seed", values="error")
+        guards[variant] = guard[guard.arm == "base"].pivot_table(index=["rated", "scored"], columns="seed",
+                                                                 values="tg")
+    if "shipped" not in errors:
+        raise SystemExit(f"no shipped base arm in {out_dir}")
+    shipped_spread = float(errors["shipped"].std(axis=1, ddof=1).mean())
+    table = []
+    for variant, mine in errors.items():
+        change = paired(mine.mean(axis=1), errors["shipped"].mean(axis=1))
+        guarded = paired(guards[variant].mean(axis=1), guards["shipped"].mean(axis=1))
+        spread = float(mine.std(axis=1, ddof=1).mean())
+        row = dict(variant=variant, draws=mine.shape[1], change_vs_shipped=change["change"], se=change["se"],
+                   z=change["z"], seasons_better=change["better"], seasons=change["n"])
+        for era, seasons in ERAS.items():
+            row[f"change_{era}"] = float((mine.mean(axis=1) - errors["shipped"].mean(axis=1)).reindex(seasons).mean())
+        row.update(draw_spread=spread, draw_spread_vs_shipped=spread / shipped_spread,
+                   guard_change=guarded["change"], guard_z=guarded["z"])
+        table.append(row)
+    out = pd.DataFrame(table)
+    path = resolve(load_config(), "outputs") / "csv" / f"screen_{args.tag}_variants.csv"
+    out.to_csv(path, index=False)
+    pd.set_option("display.width", 250)
+    print(out.round(4).to_string(index=False))
+    print("\neach season, the draws averaged, minus the shipped prior's")
+    seasons = pd.DataFrame({variant: mine.mean(axis=1) - errors["shipped"].mean(axis=1)
+                            for variant, mine in errors.items() if variant != "shipped"})
+    print(seasons.round(4).to_string())
+    print(f"\nwrote {path}")
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="The input screen on the within-season test (experiment 112).")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -669,6 +740,11 @@ def main(argv=None) -> int:
     run.add_argument("--fitters", type=int, default=6, help="fitting processes, under 1 GB each (default %(default)s)")
     run.add_argument("--seeds", type=int, default=3)
     run.add_argument("--base-seeds", type=int, default=5)
+    run.add_argument("--variant", default="shipped", choices=sorted(VARIANTS),
+                     help="the box-score prior's settings; another than shipped runs the base arm alone, at every "
+                          "base seed, into trials_<variant>.csv (default %(default)s)")
+    variants = commands.add_parser("variants", help="each variant of the prior against the shipped one")
+    variants.add_argument("--tag", required=True)
     dry = commands.add_parser("dry", help="the shipped lists at seed 0 on a few seasons, against the reference")
     dry.add_argument("--tag", required=True)
     dry.add_argument("--seasons", required=True)
@@ -682,6 +758,8 @@ def main(argv=None) -> int:
         return run_screen(args)
     if args.command == "dry":
         return run_dry(args)
+    if args.command == "variants":
+        return run_variants(args)
     return run_table(args)
 
 

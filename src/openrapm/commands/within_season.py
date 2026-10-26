@@ -208,7 +208,9 @@ def season_models(saved_all: dict, season: int) -> dict:
         raise SystemExit(f"no saved models for {season}")
     saved = saved_all[season]
     for side in SIDES:
-        if saved[side]["groupings"] != 1 or len(saved[side]["folds"]) != saved[side]["n_folds"]:
+        # an out-of-bag prior has no player folds (box_prior.OutOfBagPrior)
+        folds_kept = "out_of_bag" in saved[side] or len(saved[side]["folds"]) == saved[side]["n_folds"]
+        if saved[side]["groupings"] != 1 or not folds_kept:
             raise SystemExit(f"{season} {side}: the boosters average several fold groupings, which `predict` "
                              "does not; save them with one grouping")
     unseen = set(saved["O"]["unseen"]) & set(saved["D"]["unseen"])
@@ -218,8 +220,12 @@ def season_models(saved_all: dict, season: int) -> dict:
 
 
 def saved_booster(saved: dict):
-    """One side's saved boosters as the box_prior object that built them: an OutOfPlayerPrior, or a BaggedPrior when
-    the file holds bags."""
+    """One side's saved boosters as the box_prior object that built them: an OutOfPlayerPrior, a BaggedPrior when
+    the file holds bags, or an OutOfBagPrior when it holds out-of-bag boosters (build.booster_layout)."""
+    if "out_of_bag" in saved:
+        return box_prior.OutOfBagPrior(models=[bag["model"] for bag in saved["out_of_bag"]],
+                                       drawn_players=[set(bag["drawn"]) for bag in saved["out_of_bag"]],
+                                       inputs=list(saved["model_feats"]))
     members = [box_prior.OutOfPlayerPrior(full=bag["full"], fold_models=list(bag["folds"]),
                                           held_out_players=list(bag["excluded"]), inputs=list(saved["model_feats"]))
                for bag in saved.get("bags", [saved])]
