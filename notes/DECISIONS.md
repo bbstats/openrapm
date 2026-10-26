@@ -10227,3 +10227,37 @@ season: (1) `add` beats `add_shadow` at z -2 or below; (2) `add` beats today's s
 next season's team-games, is not worse at z +2.  The survivors are then built together in one chain, all thirty
 seasons, judged by era on the within-season WOWY test against creation110 and on the twenty untouched seasons alone,
 year over year not worse at z +2, with a noise control on creation110 and the 2026 top 20; the verdict the owner's.
+
+### Experiment 112: the pool built, potential assists chosen, the screen checked (2026-10-25, evening)
+
+**Potential assists** (`scratch/2026-10-26_screen/potential_assists.py`, `outputs/csv/potential_assists_check.csv`),
+players with 100+ assists, regular season, readings by season then averaged:
+
+| estimate | seasons | correlation with the NBA's count | correlation of potential per assist | error of potential per assist |
+|---|---|---|---|---|
+| assists times one number | 2014-2017, held out by parity | 0.989 | -- | 0.182 |
+| the owner's regression | 2014-2017, held out by parity | 0.990 | 0.340 | 0.171 |
+| the make-rate math | 2014-2017, held out by parity | 0.990 | 0.347 | 0.171 |
+| assists times one number | 2018-2026 | 0.985 | -- | 0.189 |
+| the owner's regression | 2018-2026 | 0.987 | 0.208 | 0.186 |
+| the make-rate math | 2018-2026 | 0.987 | 0.242 | 0.187 |
+
+The regression's error is the lower in both parts, so it goes in, with weights fitted on all of 2014-2017: rim 1.656,
+other twos 2.261, corner three 2.057, above-the-break three 2.503 (`features.DERIVED`,
+`potential_assists_estimated_per100`).  The estimate is nearly the assists themselves; the zones add about a tenth
+of the variation in potential assists per assist.
+
+**The candidates' counts** (`data/creation_counts.py`): unassisted makes by spot group, attempts 20+ s into the
+possession, in transition and putbacks, and-ones, per game; offered measured from the average player
+(`features.CREATION_INPUTS`).  The panels rebuilt: every older column the same but four of the self-creation
+expected counts, which moved by up to 0.004 per 100 in 1997, 1998, 2000 and 2018: the reader's refactor of
+2026-10-25 moves the last event's clock on two rows its first version skipped (a passed-over dead-ball rebound and a
+technical free throw), which changes a few shots' possession situations; experiment 111's chain read the first
+version.
+
+**The screen** is a new check, 155 (`scripts/checks/155_input_screen.py`), not check 152 changed: it rates through the
+code `openrapm rate` and `openrapm folds` run (`within_season.run_fold`, `rate_world` with the second prior, step 4
+in both layers through check 151's `system_errors`), where check 152 copies an older pipeline.  Checks before the
+run: the shipped boosters refitted from the screen's training rows give back creation110's saved priors to under
+1e-15 in every tune season; the shipped lists at seed 0 give back creation110's 2025 folds to 3.0e-13.  A season's
+boosters take about 145 s to fit and its twelve folds and whole season 44 s to rate.
