@@ -10300,3 +10300,33 @@ It carries weight.  Reliability: odd against even games, per 36 minutes, players
   alone.  Unassisted threes hurt too.
 - Experiment 111's self-creation adds nothing beside experiment 110's; the shuffled-in-place arm says experiment 110's
   is doing work.
+
+### Experiment 112: the confirming build (2026-10-26, `outputs/screen112_chain.log`, `outputs/screen112_confirm.log`)
+
+The one survivor, unassisted makes at the rim and in the paint, appended to the shipped offensive list, all thirty
+seasons, its own folds; beside it the first noise control on creation110, the same build with the boosters' players
+dealt again (`--fold-assignment 1`, `noise_creation110`).  The within-season WOWY test against creation110 after step
+4; below 0 is better:
+
+| system | era | change | standard error | z | seasons better |
+|---|---|---|---|---|---|
+| screen112 | 1997-2006 | -0.0081 | 0.0017 | -4.86 | 10 of 10 |
+| screen112 | 2007-2016 | +0.0019 | 0.0016 | +1.23 | 4 of 10 |
+| screen112 | 2017-2026 | +0.0012 | 0.0022 | +0.55 | 5 of 10 |
+| screen112 | all seasons | -0.0016 | 0.0013 | -1.24 | 19 of 30 |
+| screen112 | the 20 seasons the screen never read | -0.0009 | 0.0018 | -0.51 | 12 of 20 |
+| noise_creation110 | 1997-2006 | -0.0310 | 0.0098 | -3.16 | 8 of 10 |
+| noise_creation110 | 2007-2016 | -0.0096 | 0.0155 | -0.62 | 5 of 10 |
+| noise_creation110 | 2017-2026 | -0.0110 | 0.0220 | -0.50 | 3 of 10 |
+| noise_creation110 | all seasons | -0.0172 | 0.0094 | -1.83 | 16 of 30 |
+
+Year over year, team-game, both directions: +0.001, z +0.97, 25 of 56; stint level +0.0006, z +0.41.  Ratings,
+1,500+ possessions, offense: median move 0.004 per 100 in every era, largest 0.13; 2026 top 20 the same players in
+the same order.  Check 154's lineup terms unchanged: amount +0.673 per standard deviation, shape held.
+
+**Reading.**
+- The survivor is not better in every era: a clear gain in 1997-2006, every season, and nothing since.  On the
+  twenty seasons the screen never read it ties.  Not adopted under the every-era rule; verdict the owner's.
+- The noise control is the larger finding: dealing the same build's players into other booster folds moves the
+  within-season test by -0.017, z -1.83, ten times the survivor's change.  A candidate is read on the same deal, so
+  its change is not that noise, but any single build's standing against creation110 carries about 0.01-0.02 of it.
