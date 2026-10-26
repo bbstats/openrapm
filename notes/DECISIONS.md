@@ -10366,3 +10366,11 @@ Write-up: https://claude.ai/artifact/RqJCDQZfMtZbbcAvAL8oGt.  `scratch/2026-10-2
   (`box_prior.OutOfBagPrior`), `--split-per-bag` (`box_prior.bag_split`), `--bag-draw D` (every bag's resample and
   seed redrawn, `box_prior.BAG_DRAW_STEP`); check 155 `run --variant` and `variants`.  Today's prior through the new
   code gives back creation110's 2025 folds to 3.0e-13 (check 155 `dry`).
+
+### The variant screens, out of bag with 60 bags (2026-10-26, `outputs/screen_variants.log`, `outputs/csv/screen_screen112_variants.csv`)
+
+Check 155's base arm, five random draws, the ten tune seasons, against the shipped prior's five draws in
+`trials.csv`; each season's draws averaged, paired by season.  out_of_bag60: -0.0147, z -2.02, 7 of 10; by era
+-0.0126 / -0.0245 / -0.0038; the draws' spread, each season's standard deviation averaged, 0.027 against 0.058, 0.47
+of it; the guard +0.010, z +1.18.  Better in every era, half as noisy from draw to draw, the year-over-year guard not
+past z +2.  Fits and rates in the shipped time (about 6 minutes a draw for the fits, 6.5 for the rating).
