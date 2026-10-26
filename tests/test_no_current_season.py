@@ -121,7 +121,10 @@ def test_replacing_the_current_season_with_noise_does_not_move_the_training_rows
 # Scripts that FIT something from the season or block panel.  Each must pass its read through
 # `drop_untrainable`; a new one belongs here the day it is written.
 FITS_FROM_PANEL = ["88_yoy_by_player.py", "95_miss_by_group.py", "137_stat_calibration.py", "138_heldout_audit.py",
-                   "154_self_creation.py"]
+                   "154_self_creation.py", "155_input_screen.py"]
+# The library's readers that gate the read themselves (data/panel.py trainable_panel, commands/build.py
+# part_season_panel through trainable_panel_so_far): a script that reads the panel only through them is gated.
+GATED_READERS = ("drop_untrainable", "trainable_panel", "part_season_panel")
 
 # A script that reads the panel names it one of these ways: paths.panel, or the file by name.
 NAMES_THE_PANEL = re.compile(r"""role_panel|season_panel|resolve\(\s*cfg\s*,\s*["']panel["']\s*\)""")
@@ -144,7 +147,7 @@ def _calls(path: Path, name: str) -> bool:
 def test_a_script_that_fits_from_the_panel_gates_its_read(script):
     path = _script(script)
     assert path.exists(), f"{script} is on FITS_FROM_PANEL but does not exist -- update the list"
-    assert _calls(path, "drop_untrainable"), (
+    assert any(_calls(path, reader) for reader in GATED_READERS), (
         f"scripts/{script} reads the panel and fits from it without calling seasons.drop_untrainable.  "
         f"Every fit downstream of the panel -- the box prior, the blend coefficients, the feature "
         f"selection -- has to be gated at the read, or the year a season is in progress it will train "
