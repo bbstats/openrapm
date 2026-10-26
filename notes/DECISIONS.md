@@ -10261,3 +10261,42 @@ in both layers through check 151's `system_errors`), where check 152 copies an o
 run: the shipped boosters refitted from the screen's training rows give back creation110's saved priors to under
 1e-15 in every tune season; the shipped lists at seed 0 give back creation110's 2025 folds to 3.0e-13.  A season's
 boosters take about 145 s to fit and its twelve folds and whole season 44 s to rate.
+
+### Experiment 112: the screen's result (2026-10-26, `outputs/screen/screen112/screen.log`, `outputs/csv/screen_screen112_table.csv`, the sheet's tab "Input screen 112")
+
+86 trials in 8 hours 10 minutes, 2 rating and 6 fitting processes.  The shipped lists at seed 0 gave back
+creation110's folds in all ten tune seasons to 3.9e-13.  Noise floor, the shipped lists at seeds 1-4 against seed 0:
+-0.0215, +0.0149, -0.0345 (z -2.01), -0.0163; a candidate is read against the shipped lists and its shadow at the
+same seeds, so the bags' draw cancels.
+
+The within-season WOWY change after step 4, ten tune seasons, seeds 0-2; below 0 is better:
+
+| input | side | vs shipped | z | vs its shuffled copy | z | guard z | reliability 2002 / 2012 / 2022 | verdict |
+|---|---|---|---|---|---|---|---|---|
+| unassisted makes, rim and paint | offense | -0.0023 | -1.75 | -0.0018 | -2.10 | -0.78 | 0.90 / 0.91 / 0.93 | passes |
+| potential assists, estimated | offense | -0.0017 | -1.05 | -0.0012 | -1.06 | +0.83 | 0.98 / 0.97 / 0.96 | fails |
+| shots 20 s or more into the possession | offense | -0.0024 | -0.49 | -0.0020 | -0.42 | +1.99 | 0.84 / 0.84 / 0.85 | fails |
+| and-ones | offense | -0.0003 | -0.27 | +0.0001 | +0.17 | +0.46 | 0.71 / 0.75 / 0.77 | fails |
+| shots in transition | offense | -0.0000 | -0.02 | +0.0005 | +1.03 | +0.71 | 0.93 / 0.90 / 0.88 | fails |
+| free-throw trips without a make | offense | +0.0001 | +0.15 | +0.0005 | +1.14 | +1.11 | 0.89 / 0.87 / 0.91 | fails |
+| putback attempts | offense | +0.0006 | +0.92 | +0.0012 | +1.21 | -0.46 | 0.89 / 0.93 / 0.90 | fails |
+| unassisted makes, other twos | offense | +0.0023 | +0.64 | +0.0028 | +0.78 | +0.87 | 0.94 / 0.93 / 0.95 | fails |
+| self-creation, passes estimated | offense | +0.0032 | +0.91 | +0.0036 | +0.94 | +0.66 | 0.96 / 0.97 / 0.98 | fails |
+| unassisted makes, threes | offense | +0.0148 | +2.39 | +0.0152 | +2.33 | -1.01 | 0.89 / 0.85 / 0.93 | fails |
+| blocks his team recovered | defense | +0.0095 | +0.60 | +0.0056 | +0.91 | +1.77 | 0.90 / 0.89 / 0.91 | fails |
+| steals of a pass | defense | +0.0231 | +2.00 | +0.0189 | +2.67 | +3.19 | 0.70 / 0.59 / 0.62 | fails |
+| steals from a dribbler | defense | +0.0528 | +3.66 | +0.0489 | +4.97 | +3.34 | 0.80 / 0.67 / 0.59 | fails |
+
+Experiment 110's self-creation shuffled in place: +0.0233, z +2.62, 2 of 10 seasons better; guard -0.0046, z -0.29.
+It carries weight.  Reliability: odd against even games, per 36 minutes, players with 1,000+ minutes
+(`scratch/2026-10-26_screen/reliability.py`).
+
+**Reading.**
+- One candidate passes, unassisted makes at the rim and in the paint, by a small margin; it goes to the confirming
+  build alone (`--features hustle_no_three_pct_self_creation_unassisted_inside`, chain `screen112`).
+- The estimated potential assists lean the right way, z -1.06 against its shadow, but carry little beyond the
+  assists the prior already reads: their correlation with assists is 0.99.
+- The two steal kinds hurt in every reading; the defensive booster does worse with a steal split than with steals
+  alone.  Unassisted threes hurt too.
+- Experiment 111's self-creation adds nothing beside experiment 110's; the shuffled-in-place arm says experiment 110's
+  is doing work.
