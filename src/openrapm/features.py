@@ -388,6 +388,10 @@ FEATURE_SETS = {
     # experiment 112 (2026-10-25, the owner: "time to do boruta instead of ditching"): the shipped lists with every
     # candidate of the screen appended (`SCREEN_CANDIDATES`); check 152 reads each one alone beside the shipped list
     "screen112_pool": {side: _CREATION110[side] + SCREEN_CANDIDATES[side] for side in ("O", "D")},
+    # experiment 112's confirming build: the one candidate the screen passed, unassisted makes at the rim and in the
+    # paint, appended to the shipped offensive list
+    "hustle_no_three_pct_self_creation_unassisted_inside": {"O": _CREATION110["O"] + ["unassisted_makes_inside_per100"],
+                                                            "D": _CREATION110["D"]},
     # the booster tune on the decider (check 152, 2026-10-16): the hustle lists with the era marker, its switch
     "hustle_era_marker": {"O": _NO_CAREER["O"] + HUSTLE_OFFENCE + ERA_MARKER,
                           "D": _NO_CAREER["D"] + HUSTLE_DEFENCE + ERA_MARKER},

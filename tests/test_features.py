@@ -87,7 +87,10 @@ def test_the_stat_splits_lists_append_their_parts_where_the_box_count_is_read():
             "D": feat.FEATURE_SETS["hustle"]["D"]},
         # experiment 112: the shipped lists with every candidate of the screen appended
         "screen112_pool": {side: feat.FEATURE_SETS["hustle_no_three_pct_self_creation"][side]
-                           + feat.SCREEN_CANDIDATES[side] for side in ("O", "D")}}
+                           + feat.SCREEN_CANDIDATES[side] for side in ("O", "D")},
+        "hustle_no_three_pct_self_creation_unassisted_inside": {
+            "O": feat.FEATURE_SETS["hustle_no_three_pct_self_creation"]["O"] + ["unassisted_makes_inside_per100"],
+            "D": feat.FEATURE_SETS["hustle_no_three_pct_self_creation"]["D"]}}
     wider = ["russell_blocks_per100", "rim_blocks_per100", "mid_range_blocks_per100", "three_point_blocks_per100",
              "offensive_fouls_per100", "stolen_turnovers_per100", "assists_to_rim_per100",
              "assists_to_mid_range_per100", "assists_to_corner_threes_per100", "assists_to_above_break_threes_per100"]
