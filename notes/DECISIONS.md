@@ -10330,3 +10330,19 @@ the same order.  Check 154's lineup terms unchanged: amount +0.673 per standard 
 - The noise control is the larger finding: dealing the same build's players into other booster folds moves the
   within-season test by -0.017, z -1.83, ten times the survivor's change.  A candidate is read on the same deal, so
   its change is not that noise, but any single build's standing against creation110 carries about 0.01-0.02 of it.
+
+## The noise control read closely, and two deals averaged (2026-10-26, the owner: "Make a really nice write-up on the noise control and how we could improve our model ... make it robust to the noise control"; read-only)
+
+Write-up: https://claude.ai/artifact/RqJCDQZfMtZbbcAvAL8oGt.  `scratch/2026-10-26_noise/deal_noise.py`,
+`outputs/csv/deal_noise_moves.csv`, `outputs/csv/deal_noise_wowy_by_era.csv`, check 151 tag `deal_noise`.
+
+- The deal alone, creation110 against noise_creation110, players with 1,500+ offensive possessions: a total rating
+  moves a median 0.060 / 0.054 / 0.051 per 100 by era, the ninetieth percentile 0.14-0.16, the largest 0.62;
+  20-27% of them move more than 0.1.  Experiment 110 against parts107 moved them 0.025-0.028, experiment 112 against
+  creation110 0.005-0.006.
+- `avg_deals`, the two builds' folds averaged column by column, against creation110: -0.0126, z -2.70, 21 of 30;
+  by era -0.0199 / -0.0086 / -0.0095.  Against the midpoint of the two builds: -0.0040 in every season, 30 of 30,
+  by era -0.0044 / -0.0037 / -0.0040.  For a squared error that is a quarter of the two deals' squared difference,
+  so one build carries about 0.008 of deal noise, and K deals averaged leave 0.008 / K.
+- Proposed, not built: out-of-bag prediction with 60 bags in place of the player folds; 30 bags; each bag its own
+  random deal; ten player folds; three controls (deals 1-3) and candidates read paired by deal.
