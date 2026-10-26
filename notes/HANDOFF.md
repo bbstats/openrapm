@@ -1,7 +1,7 @@
 # Handoff
 
 **What this file is.**  Where the work stands, what waits on the owner, and the commands a session runs.  Rewritten
-on the afternoon of 2026-10-22, its status and next steps on 2026-10-23 (twice) and 2026-10-24; the earlier file is in git history.  `DECISIONS.md` is the permanent record and carries
+on the afternoon of 2026-10-22, its status and next steps on 2026-10-23 (twice), 2026-10-24 and 2026-10-26; the earlier file is in git history.  `DECISIONS.md` is the permanent record and carries
 every number quoted here; read its measurement traps before trusting a number.  `README.md` says what OpenRAPM is,
 `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's standing rules.
 
@@ -17,8 +17,37 @@ every number quoted here; read its measurement traps before trusting a number.  
 - Experiments by name in chat, numbers only in the record files ("the three-input prior", not "experiment 92").
 - Answer exactly what is asked.  Results as tables, one quantity per column, no parentheses, one TL;DR sentence.
 - Within-season WOWY is what counts, and a win must hold in every era: 1997-2006, 2007-2016, 2017-2026.
+- **No jargon ever** (the owner, 2026-10-26: "'the players deal' is insane jargon.  No jargon ever").  In anything the
+  owner reads: "how the box-score prior splits players into its five training groups", never "the deal" or "folds";
+  "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
+  "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
 
-## Where it stands, 2026-10-23
+## Where it stands, 2026-10-26
+
+- **Published ratings: unchanged since experiment 110 (creation110), 2026-10-25.**  The 2027 daily job runs every
+  morning on it (last: 2026-10-26, 2f65f94).
+- **New since 2026-10-25, all committed, none published** (DECISIONS.md, "Experiment 111", "Experiment 112", "The
+  noise control read closely"):
+  - `src/openrapm/data/creation_counts.py`: a play-by-play reader that follows the ball (possession starts, offensive
+    rebounds), every shot's spot and possession situation, free-throw trips and and-ones, and per-game counts.
+    Built by `openrapm data events` (the daily job builds 2027's).  Its constants were fitted once,
+    `scratch/2026-10-25_creation111/fit_constants.py`.
+  - The panel has 163 columns: two uncentred unassisted parts, 21 uncentred self-creation counts and 8 candidate
+    inputs measured from the average player (`features.UNCENTRED_EVENT_RATES`, `UNCENTRED_CREATION_RATES`,
+    `CREATION_INPUTS`); every older column unchanged.  Backup before any of it: `outputs/season_panel_before_creation111.parquet`.
+  - Experiment 111, self-creation with the passes estimated (`self_creation_estimated_per100`): a better measure,
+    a worse input, not adopted.  Experiment 112: check 155 screened 13 play-by-play candidates (the owner's potential
+    assists among them, `potential_assists_estimated_per100`); one passed, unassisted makes at the rim and in the
+    paint; its full build gains in 1997-2006 only.  Both verdicts are the owner's; my recommendation is not to adopt.
+  - **Check 155** (`scripts/checks/155_input_screen.py`): Boruta on the within-season WOWY test, rated through the
+    real fold code; caches in `outputs/screen/screen112/` (25 GB, reusable while the panel and shipped settings stand).
+  - **The first noise control on today's ratings, `noise_creation110`**, is now the chain's default control.
+  - **The noise finding** (write-up https://claude.ai/artifact/RqJCDQZfMtZbbcAvAL8oGt): how the box-score prior splits
+    players into its five training groups moves a regular's total by a median 0.05 per 100 and the within-season test
+    by -0.017; averaging two splits beats today's by -0.013, z -2.70, and beats the two builds' average score by 0.004
+    in all 30 seasons.  One build carries about 0.008 of avoidable error.  This is the next piece of work (Next).
+
+## Where it stood, 2026-10-23
 
 - **The bug-fix pass of 2026-10-22** (DECISIONS.md, "The bug-fix pass"): the owner asked for a hunt for bugs behind the
   artifacts; the findings, the code-only fixes, experiments 94-99, the width test and the season widths are there.
@@ -54,7 +83,7 @@ every number quoted here; read its measurement traps before trusting a number.  
   `outputs/season_panel_before_inputs99.parquet`.
 - **New in the reports**: `z_clustered` in the year-over-year test and `z_newey_west` in check 151, beside the plain
   z; which rules is the owner's.
-- **The season in progress, 2027, rated and published every morning since 2026-10-24** (Next, "START HERE").
+- **The season in progress, 2027, rated and published every morning since 2026-10-24** (Next, "The daily job").
 - **The defense is wider than before experiment 82**: standard deviation 1.73 / 1.61 / 1.60 by era, 2026 1.64, against
   1.38 / 1.33 / 1.36 and 1.53 for experiment 80.  Against the consensus in 2026 the slope of our defense on theirs is
   about 1; the extra spread is players rated differently, carried by big-man stats: blocks, height, defensive
@@ -92,7 +121,34 @@ every number quoted here; read its measurement traps before trusting a number.  
 
 ## Next
 
-### START HERE: 2027 is rated and published every morning (2026-10-24)
+### START HERE (2026-10-26): make the box-score prior robust to how players are split
+
+The owner asked for the write-up on the noise control "and how we could improve our model ... make it robust to the
+noise control", then: "Cleanup and write plan for handoff, next context window will handle".  The plan below is the
+write-up's recommended next steps, not yet started.  One step at a time; report each in plain words (no jargon)
+before the next.
+
+1. **Two more noise controls**, about 55 minutes each, one after the other:
+   `bash scripts/experiment_chain.sh noise2_creation110 points_with_expected_opponent_threes_late_as_scored "--fold-assignment 2"`,
+   then the same with `noise3_creation110` and `--fold-assignment 3`.  Then
+   `.venv/Scripts/python scripts/checks/151_wowy.py --systems=creation110,noise_creation110,noise2_creation110,noise3_creation110 --ref=creation110 --tag=noise3`.
+   Read: does every random split beat today's fixed pattern (then the pattern itself is worse), and the spread of the
+   three by era (the bar for "a change that means nothing").
+2. **Code the proposals** in `src/openrapm/box_prior.py`, behind settings so the shipped build is untouched:
+   - predict each player only with the versions that never saw him: `fit_prior` with a new setting (e.g.
+     `PriorSettings.prediction = "out_of_bag"`) fits one model per resample, no five groups; `predict` averages, per
+     player, the models whose resample did not draw him.  `commands/build.saved_side`, `within_season.saved_booster`
+     and check 155's `saved_side` must carry the new kind.
+   - more versions: `--bags 30` already exists.
+   - each version its own random split: `fit_prior` passing `fold_assignment = bag + 1` when a setting asks.
+3. **Screen them with check 155's base arm**, five random draws each, on the ten test seasons: today's five draws are
+   already in `outputs/screen/screen112/trials.csv` (arm `base`, seeds 0-4).  Check 155 needs a way to run the base arm
+   at another prior setting (a `--variant` option feeding `fit_task`).  A proposal wins if its draws spread less and
+   their average scores better.  About 1 hour a proposal at 10 versions, about 3 at 30.
+4. **Build the winner in full with three noise controls of its own**; adopt if better in every era and steadier.
+5. **Retest the unassisted rim and paint makes input** on the new build, compared on matching splits.
+
+### The daily job: 2027 is rated and published every morning (2026-10-24)
 
 The owner, 2026-10-24: "You can publish. Yea median player in 2027, off poss. 6am is great."  Done and running;
 DECISIONS.md, "The season in progress, 2027"; README.md, "The season in progress, every morning".
@@ -172,7 +228,7 @@ What else the work of 2026-10-23 left open:
   The first noise control on creation110, `noise_creation110`, reads -0.017, z -1.83: use it beside creation110 from
   now on (`CONTROL_NAME=noise_creation110`).  Screen table on the sheet's tab "Input screen 112".
 - Deleting the saved boosters of experiments that were not adopted, about 2 GB each in `outputs/prior_models_*.pkl`
-  (luckall88, luckall88b, luckhalf89, luckhalf89b, near83, same84, ctx85, body86, spread90, three92, unshrinkbase102,
+  (creation111, screen112; noise_creation110 stays while its folds may be extended; luckall88, luckall88b, luckhalf89, luckhalf89b, near83, same84, ctx85, body86, spread90, three92, unshrinkbase102,
   unshrink102, shrunkbase103 and older ones; refit103's stays while experiment 104 is open).
 - Filed earlier: tracking game by game; arena scorekeeper checks; Stockton over Jordan in 1997-98; the Curry star-guard
   ceiling test fails.
@@ -193,7 +249,7 @@ What else the work of 2026-10-23 left open:
   and push only on the owner's word, then check the Pages build: `gh api repos/bbstats/openrapm/pages/builds/latest`.
   With the second prior, the decomposition's "box score" piece carries the whole prior; its split is the owner's.
 - The incumbent's test-setting tables `outputs/season_ratings_creation110*.parquet`, folds `creation110_early`, `creation110_within`;
-  no noise control on it yet, `noise_bags10` stands in.
+  its noise control `noise_creation110` (2026-10-26), the chain's default `CONTROL_NAME`.
 
 ## How an experiment is judged
 
@@ -204,20 +260,27 @@ What else the work of 2026-10-23 left open:
 | the eye check | `scripts/checks/66_compare.py` | the 2026 top 20 |
 
 - One build: `bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes_late_as_scored "EXTRA RATE
-  FLAGS"`, about 50 minutes with 4 processes.  `INC_NAME` and `INC_SYSTEM` name the incumbent's tables and folds, `parts107` for both by default.
+  FLAGS"`, about 50 minutes with 4 processes.  `INC_NAME` and `INC_SYSTEM` name the incumbent's tables and folds,
+  `creation110` for both by default; `CONTROL_NAME` the noise control, `noise_creation110`.
 - **The season-page score**: each season, ratings of zero score 0 and the reference 100; the ratings before
   experiment 82 explain 18.2 a season on this test (the 15.7 in older notes is experiment 63's step 4).
   `scratch/2026-10-20_charts/season_scores.py` and `season_page.py`; page https://claude.ai/artifact/L7vwSTAvCCKQnj9jnnhYrq.
-- The noise control `noise_bags10` moves a season at most 0.7 on that score.
+- The noise control `noise_creation110` moves the within-season test by -0.017, z -1.83, on its own; a candidate is
+  read against today's ratings on the same split, so that noise does not enter its change, but any one build's
+  standing carries 0.01-0.02 of it.
 - Every experiment gets a row in `experiments/runs.csv` (`scripts/checks/101_log_run.py`), mirrored to the sheet
-  "OpenRAPM experiments", tab Experiments; the next free row is 100.
+  "OpenRAPM experiments", tab Experiments; the next free row is 106.  Input screens get their own tab ("Input
+  screen 112").
 
 ## Commands a session runs
 
     bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes_late_as_scored "EXTRA RATE FLAGS"
         one experiment against the incumbent, about 50-75 minutes; log outputs/NAME_chain.log
-    .venv/Scripts/python scripts/checks/151_wowy.py --systems=inputs99,noise_bags10,NAME --ref=inputs99 --tag=NAME
+    .venv/Scripts/python scripts/checks/151_wowy.py --systems=creation110,noise_creation110,NAME --ref=creation110 --tag=NAME
         the within-season WOWY test on folds already built, about 3 minutes
+    .venv/Scripts/python scripts/checks/155_input_screen.py run --tag TAG --workers 2 --fitters 6
+        the input screen: candidates against their shuffled copies, three random draws, ten test seasons, about 8 hours
+        for 13 candidates (cache once: `cache --tag TAG`, check it: `dry --tag TAG --seasons 2025`, read it: `table`)
     .venv/Scripts/python -m openrapm second-prior --models bags10 --folds bags10_early,bags10_within --tag TAG --inputs SET
         a second prior's line from held-back swaps, about 13 minutes
     .venv/Scripts/python scripts/checks/101_log_run.py --name=NAME --exp=N --incumbent=inputs99 --idea=owner --verdict=pending --changed="..." --notes="..."
@@ -258,6 +321,6 @@ What else the work of 2026-10-23 left open:
 
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest -q                       # 755 passed, 2 skipped, 1 xfailed: the backup bigs
+    .venv/Scripts/python -m pytest -q                       # 797 passed, 2 skipped, 1 xfailed: the backup bigs
     uvx ruff check .                                         # clean
-    git log --oneline -1                                     # the publish of experiment 106
+    git log --oneline -1                                     # the handoff of 2026-10-26
