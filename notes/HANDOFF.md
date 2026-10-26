@@ -121,32 +121,19 @@ every number quoted here; read its measurement traps before trusting a number.  
 
 ## Next
 
-### START HERE (2026-10-26): make the box-score prior robust to how players are split
+### Closed 2026-10-26: making the box-score prior robust to how players are split
 
-The owner asked for the write-up on the noise control "and how we could improve our model ... make it robust to the
-noise control", then: "Cleanup and write plan for handoff, next context window will handle".  The plan below is the
-write-up's recommended next steps, not yet started.  One step at a time; report each in plain words (no jargon)
-before the next.
+The owner's verdict on experiment 113, 2026-10-26: "Not adopted".  The five-step plan ran through step 4; step 5 does
+not run.  DECISIONS.md, "Three noise controls, and the prior made robust to the deal in code", has every reading.
 
-1. **Two more noise controls**, about 55 minutes each, one after the other:
-   `bash scripts/experiment_chain.sh noise2_creation110 points_with_expected_opponent_threes_late_as_scored "--fold-assignment 2"`,
-   then the same with `noise3_creation110` and `--fold-assignment 3`.  Then
-   `.venv/Scripts/python scripts/checks/151_wowy.py --systems=creation110,noise_creation110,noise2_creation110,noise3_creation110 --ref=creation110 --tag=noise3`.
-   Read: does every random split beat today's fixed pattern (then the pattern itself is worse), and the spread of the
-   three by era (the bar for "a change that means nothing").
-2. **Code the proposals** in `src/openrapm/box_prior.py`, behind settings so the shipped build is untouched:
-   - predict each player only with the versions that never saw him: `fit_prior` with a new setting (e.g.
-     `PriorSettings.prediction = "out_of_bag"`) fits one model per resample, no five groups; `predict` averages, per
-     player, the models whose resample did not draw him.  `commands/build.saved_side`, `within_season.saved_booster`
-     and check 155's `saved_side` must carry the new kind.
-   - more versions: `--bags 30` already exists.
-   - each version its own random split: `fit_prior` passing `fold_assignment = bag + 1` when a setting asks.
-3. **Screen them with check 155's base arm**, five random draws each, on the ten test seasons: today's five draws are
-   already in `outputs/screen/screen112/trials.csv` (arm `base`, seeds 0-4).  Check 155 needs a way to run the base arm
-   at another prior setting (a `--variant` option feeding `fit_task`).  A proposal wins if its draws spread less and
-   their average scores better.  About 1 hour a proposal at 10 versions, about 3 at 30.
-4. **Build the winner in full with three noise controls of its own**; adopt if better in every era and steadier.
-5. **Retest the unassisted rim and paint makes input** on the new build, compared on matching splits.
+- Three random splits of today's prior differ from each other as much as from today's: today's fixed split is not worse.
+- Out-of-bag prediction with 60 bags won the quick screen, then tied in the full build: four builds against four,
+  +0.0009, z +0.09; better 1997-2006 in all four, worse 2017-2026 in all four.  The prior alone is better and
+  steadier before the swap step, which takes the gain back.
+- The settings stay in the code, off by default: `--prediction out_of_bag`, `--split-per-bag`, `--bag-draw D`; check 155
+  `run --variant`.  Noise controls for today's build: noise_creation110, noise2_creation110, noise3_creation110.
+- The Changelog tab (docs/changelog.html, committed, not published) stays empty: this change did not ship.
+- Next: the owner's call.  Open from before: experiments 111 and 112, the foul-type question.
 
 ### The daily job: 2027 is rated and published every morning (2026-10-24)
 

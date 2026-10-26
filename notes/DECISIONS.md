@@ -10408,3 +10408,4 @@ better:
   four.  The screen's -0.015, z -2.02, did not carry to the full build: the screen's ten tune seasons and its base arm
   without the swap step are where it differs.  Not adopted unless the owner rules otherwise; step 5 (retest unassisted
   rim-and-paint makes on the new build) does not run.
+- The owner, 2026-10-26: "Not adopted".  The incumbent stays creation110.
