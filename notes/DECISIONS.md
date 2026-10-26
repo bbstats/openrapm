@@ -10346,3 +10346,23 @@ Write-up: https://claude.ai/artifact/RqJCDQZfMtZbbcAvAL8oGt.  `scratch/2026-10-2
   so one build carries about 0.008 of deal noise, and K deals averaged leave 0.008 / K.
 - Proposed, not built: out-of-bag prediction with 60 bags in place of the player folds; 30 bags; each bag its own
   random deal; ten player folds; three controls (deals 1-3) and candidates read paired by deal.
+
+## Three noise controls, and the prior made robust to the deal in code (2026-10-26, the owner: "go" on HANDOFF's plan)
+
+`scratch/2026-10-26_noise/noise23.sh` (log `outputs/noise23.log`), `noise3_read.py`, check 151 tag `noise3`,
+`outputs/csv/noise3_by_season.csv`.  noise2_creation110 and noise3_creation110 are creation110 with
+`--fold-assignment 2` and `3`; with noise_creation110 (`1`) there are three random deals beside creation110's fixed one.
+
+- Each random deal minus creation110, step 4, all held-back possessions: -0.0172 z -1.83, -0.0081 z -0.85, -0.0041
+  z -0.39; by era 1997-2006 / 2007-2016 / 2017-2026: -0.0310 / -0.0096 / -0.0110, -0.0170 / -0.0041 / -0.0031,
+  +0.0128 / -0.0009 / -0.0240.  Their mean: -0.0098, z -1.38, -0.0117 / -0.0049 / -0.0127.
+- Random deal against random deal: -0.0091, -0.0132, -0.0040, as large as random against fixed.  So the fixed
+  pattern is not shown worse: three of three better has a 1-in-8 chance with no difference, and no random deal wins
+  every era.
+- How far four builds differing only in the deal spread: the 30-season mean's standard deviation 0.0074; by era
+  0.0192 / 0.0043 / 0.0107; one season's 0.037.  That is the bar for two builds on different deals; a candidate read
+  against today's on the same deal carries less of it.
+- Step 2 of the plan, coded behind settings (309c64d, branch split-robust, fast-forwarded): `--prediction out_of_bag`
+  (`box_prior.OutOfBagPrior`), `--split-per-bag` (`box_prior.bag_split`), `--bag-draw D` (every bag's resample and
+  seed redrawn, `box_prior.BAG_DRAW_STEP`); check 155 `run --variant` and `variants`.  Today's prior through the new
+  code gives back creation110's 2025 folds to 3.0e-13 (check 155 `dry`).
