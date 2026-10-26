@@ -10377,3 +10377,9 @@ past z +2.  Fits and rates in the shipped time (about 6 minutes a draw for the f
 - split_per_bag (each bag its own random deal, 10 bags): -0.0139, z -1.54, 6 of 10; by era -0.0015 / -0.0306 /
   -0.0038; spread 0.048, 0.83 of the shipped; the guard -0.011, z -0.97.  Better on average, about as noisy as today:
   the bag-to-bag variation the deal adds was not the largest part of the noise.
+- bags30 (30 bags, three times the fits): -0.0112, z -1.28, 7 of 10; by era +0.0004 / -0.0352 / +0.0092; spread
+  0.033, 0.57 of the shipped; the guard -0.007, z -1.07.  Steadier than the shipped, not as steady as out of bag, and
+  worse since 2017.
+- The winner is out_of_bag60: the best mean, better in every era, the steadiest, at the shipped cost.  Next its full
+  build, experiment 113 (outofbag113, `--bags 60 --prediction out_of_bag`), with three noise controls of its own,
+  `--bag-draw 1`, `2` and `3`: with no deal, its randomness is the bags' resamples and seeds, which bag_draw redraws.
