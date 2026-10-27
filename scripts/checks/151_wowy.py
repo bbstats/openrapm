@@ -93,6 +93,7 @@ SLICES = ("all", "dnp")
 PIECES_TOLERANCE = 1e-8         # the shipped step through check 145's code against `step4`, per player (145's own)
 FREE_GAMES = PRODUCT.shrink.free_games_part     # step 4 multiplies the games' part too (experiment 65)
 DEFENCE_FACTORS = PRODUCT.shrink.defence_factors  # and both defensive factors by one more, by era (experiments 76, 98)
+WITHIN_FACTORS = PRODUCT.shrink.within_factors    # and the within layer's by these, offence then defence (106)
 SHIPPED_FAMILY = "u_whole" if FREE_GAMES else "step4"      # check 145's family that is the shipped step 4
 
 
@@ -352,7 +353,8 @@ def piece_stages(name: str, folds: list, where: dict, unit: str, families: list 
     return pieces
 
 
-def within_layer(folds: list, where: dict, seasons, defence_factors: tuple) -> pd.DataFrame | None:
+def within_layer(folds: list, where: dict, seasons, defence_factors: tuple,
+                 within_factors: tuple = WITHIN_FACTORS) -> pd.DataFrame | None:
     """The shipped step 4's within layer for `seasons`, indexed by season: its four multipliers fitted on the system's
     own held-back stints within games, test rule, 8 nearest fold seasons, times the within factors and the defence
     factor (commands/build.within_layer_multipliers); None when the shipped step 4 has one layer."""
@@ -363,32 +365,37 @@ def within_layer(folds: list, where: dict, seasons, defence_factors: tuple) -> p
     from openrapm.commands.build import within_layer_multipliers
     from openrapm.data.config import load_config
     shrink = replace(PRODUCT.shrink, rule="test", nearest=NEAREST, extrapolate_folds_tag="",
-                     defence_factors=tuple(defence_factors))
+                     defence_factors=tuple(defence_factors), within_factors=tuple(within_factors))
     return within_layer_multipliers(load_config(), seasons, folds, where, shrink).set_index("season")
 
 
 def step4_tables(within, folds: list, where: dict, scored_seasons: list, defence_factors: tuple,
-                 step4_from: str | None) -> tuple[pd.DataFrame, pd.DataFrame | None]:
+                 step4_from: str | None, within_factors: tuple = WITHIN_FACTORS
+                 ) -> tuple[pd.DataFrame, pd.DataFrame | None]:
     """(step 4's multipliers by season, its within layer by season or None), fitted on the system's own folds, or on
     the folds of `step4_from` when given."""
     from openrapm.prior_shrink import multipliers_by_season
     if step4_from:
         folds, where = system_folds(within, step4_from)
     multipliers = multipliers_by_season(scored_seasons, folds, "test", NEAREST, free_games=FREE_GAMES)
-    return multipliers.set_index("season"), within_layer(folds, where, scored_seasons, defence_factors)
+    return multipliers.set_index("season"), within_layer(folds, where, scored_seasons, defence_factors, within_factors)
 
 
 def system_errors(audit, within, name: str, seasons: tuple, unit: str = "stint", families: list | None = None,
                   multiplier_tables: list | None = None, defence_factors: tuple = DEFENCE_FACTORS,
-                  label: str | None = None, step4_from: str | None = None) -> pd.DataFrame:
+                  label: str | None = None, step4_from: str | None = None, within_factors: tuple = WITHIN_FACTORS,
+                  only=None) -> pd.DataFrame:
     """One row per season, stage and slice: the system's WOWY error over the season's folds, under `label` (the name
     when not given).  With `families` (check 145's), a system whose folds carry pieces also gets a stage per family;
-    its multipliers go to `multiplier_tables`.  With `step4_from`, step 4 is fitted on that system's folds."""
+    its multipliers go to `multiplier_tables`.  With `step4_from`, step 4 is fitted on that system's folds.
+    `within_factors` (offence, defence) multiply the within layer, as `--within-factors` does in `openrapm shrink`;
+    `only`, a set of seasons, keeps the folds of those seasons alone (check 156 scores check 152's tune seasons)."""
     from openrapm.prior_shrink import WITHIN_COLUMNS
     folds, where = system_folds(within, name)
-    scored = [fold for fold in folds if seasons[0] <= fold.season <= seasons[1]]
+    scored = [fold for fold in folds if seasons[0] <= fold.season <= seasons[1]
+              and (only is None or fold.season in only)]
     multipliers, layer = step4_tables(within, folds, where, sorted({fold.season for fold in scored}), defence_factors,
-                                      step4_from)
+                                      step4_from, within_factors)
     pieces = piece_stages(name, folds, where, unit, families, multiplier_tables, defence_factors)
     sums: dict = {}
     cache = None
