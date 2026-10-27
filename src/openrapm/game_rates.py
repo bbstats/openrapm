@@ -51,8 +51,9 @@ import pandas as pd
 
 __all__ = ["Stat", "STATS", "NAMES", "IS_PCT", "ATTEMPTS_OF", "HUSTLE_STATS", "TAUS", "BEST", "Games",
            "games_from_rows", "league_levels", "league_by_row", "opponent_sums", "opponent_factors",
-           "padding_forecasts", "padding_loss", "fit_pads", "nll", "input_names", "playing_time", "network_inputs",
-           "Standardised", "standardise", "neutral_inputs", "train_network", "forward_numpy", "forecast"]
+           "padding_forecasts", "padding_loss", "fit_pads", "nll", "input_names", "playing_time", "season_progress",
+           "network_inputs", "Standardised", "standardise", "neutral_inputs", "train_network", "forward_numpy",
+           "forecast"]
 
 
 @dataclass(frozen=True)
@@ -379,7 +380,7 @@ def playing_time(games: Games) -> np.ndarray:
     with np.errstate(invalid="ignore", divide="ignore"):
         share = np.clip(np.where(team_before > 0, own_before / team_before, 0.0), 0.0, 0.9)
         games_share = np.where(team_since > 0, played_with_team / np.maximum(team_since, 1.0), 1.0)
-    progress = _season_progress(frame)
+    progress = season_progress(frame)
     out = np.column_stack([
         np.log1p(played), (games.position == 0).astype(float), np.log1p(np.minimum(np.nan_to_num(days, nan=30.0), 30)),
         np.log1p(np.where(played > 0, 0.5 * own_before / np.maximum(played, 1.0), 0.0)), share,
@@ -409,7 +410,7 @@ def _team_before(frame: pd.DataFrame) -> tuple:
     return poss.astype(float), count.astype(float)
 
 
-def _season_progress(frame: pd.DataFrame) -> np.ndarray:
+def season_progress(frame: pd.DataFrame) -> np.ndarray:
     """The share of the season's regular-season games played on days before the row's game: 1 in the playoffs and on
     an end row."""
     real = ~frame["end"].to_numpy(dtype=bool)

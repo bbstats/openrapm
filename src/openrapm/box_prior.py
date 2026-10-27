@@ -101,8 +101,8 @@ __all__ = ["average_over_seasons", "career_rows", "season_runs", "chunk_seasons"
            "training_rows", "balanced_player_folds",
            "LIGHTGBM_FIXED", "COLUMN_SHARES", "INPUT_CLIP", "ClippedBooster", "fit_lightgbm", "OutOfPlayerPrior",
            "fit_out_of_player", "BaggedPrior", "player_bootstrap", "PREDICTIONS", "BAG_DRAW_STEP", "bag_split",
-           "OutOfBagPrior", "out_of_bag_weights", "fit_prior", "rated_rows", "predict", "SidePrior", "era_kernel",
-           "season_priors"]
+           "OutOfBagPrior", "out_of_bag_weights", "fit_prior", "rated_rows", "predict", "game_rated_rows",
+           "predict_chosen", "SidePrior", "era_kernel", "season_priors"]
 
 # columns a training row adds for its own bookkeeping: the label it carries, its weight in the fit, the
 # possessions behind the label and its era kernel.  None may share a name with an input (notes/DECISIONS.md,
@@ -500,6 +500,39 @@ def predict(prior: OutOfPlayerPrior | BaggedPrior | OutOfBagPrior, rows: pd.Data
             # over its fold assignments, (0.0 + prediction) / 1 with the one it shipped, and that sum did the
             # same; every other value is unchanged
             out[mine] = model.predict(matrix[mine]) + 0.0
+    return out
+
+
+def game_rated_rows(rows: pd.DataFrame, feature_names, least_possessions: float = 1.0,
+                    least_share: float = 0.0) -> pd.DataFrame:
+    """The rated season's game rows (game_prior.game_rows: the state before each game), derived, with row_possessions
+    = his possessions before the game and row_seasons = the share of the regular season played by that day (1 in
+    the playoffs), each held at least at the smallest the training rows reach: a linear leaf follows its line past
+    the range its rows cover, and a first game's row has no possessions at all."""
+    out = add_features(rows.copy(), feature_names)
+    return out.assign(row_possessions=np.maximum(out.possessions.to_numpy(float), float(least_possessions)),
+                      row_seasons=np.maximum(out.season_progress.to_numpy(float), float(least_share)))
+
+
+def predict_chosen(prior: OutOfPlayerPrior | BaggedPrior | OutOfBagPrior, rows: pd.DataFrame) -> np.ndarray:
+    """`predict`'s answers, each booster asked only about the rows it answers for: in each bag a player's rows go to
+    the fold booster that never saw him, or to the bag's full booster.  The same numbers at one pass over the rows a
+    bag instead of two; a season's game rows are about thirty times its player rows."""
+    if isinstance(prior, BaggedPrior):
+        return np.mean([predict_chosen(member, rows) for member in prior.members], axis=0)
+    if isinstance(prior, OutOfBagPrior):
+        return predict(prior, rows)
+    matrix = rows[prior.inputs].to_numpy(float)
+    ids = rows.player_id.to_numpy()
+    chosen = np.full(len(ids), -1)
+    for fold, held_out in enumerate(prior.held_out_players):
+        chosen[np.fromiter((pid in held_out for pid in ids), dtype=bool, count=len(ids))] = fold
+    out = np.empty(len(ids))
+    if (chosen < 0).any():
+        out[chosen < 0] = prior.full.predict(matrix[chosen < 0])
+    for fold, model in enumerate(prior.fold_models):
+        if (chosen == fold).any():
+            out[chosen == fold] = model.predict(matrix[chosen == fold]) + 0.0
     return out
 
 

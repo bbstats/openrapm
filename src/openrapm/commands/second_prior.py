@@ -100,6 +100,9 @@ def run_second_prior(cfg: dict, models: str, folds_tag: str, tag: str, seasons=N
     out_dir.mkdir(parents=True, exist_ok=True)
     saved_all = load_models(resolve(cfg, "outputs"), models)
     check_models(saved_all.get("meta", {}))
+    if ((saved_all.get("meta", {}).get("settings") or {}).get("prior") or {}).get("game_prior"):
+        raise SystemExit("these boosters' build read the box-score prior game by game; the second prior's swaps are "
+                         "read from folds rated one prior per player-season")
     shrink = replace(TEST.shrink, folds_tag=folds_tag)
     folds, where = step4_folds(cfg, shrink)
     fold_seasons = sorted({fold.season for fold in folds})

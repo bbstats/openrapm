@@ -206,6 +206,12 @@ class PriorSettings:
     # 0: each season's line is fitted on every season the setting allows.  K: on only the K nearest of them, as step 4
     # fits its multipliers (experiment 85: experiment 82 won 1997-2016 and lost 2017-2026 with one line for all eras)
     second_prior_nearest: int = 0
+    # "": one box-score prior per player and season, from the season panel (shipped).  A tag: the box-score prior game
+    # by game (game_prior.py; notes/DECISIONS.md, experiment 114, the owner, 2026-10-27): its rows are the multi-stat
+    # networks' forecasts, outputs/game_rates/<tag>/, each player's state before each game of the season, the
+    # part-season rows the states on the days of `part_season_shares`; the ridge pulls each stint toward its own game's
+    # prior and the season's prior part is the possession-weighted average
+    game_prior: str = ""
 
 
 ROW_LABELS = ("career", "outside", "nearest")
