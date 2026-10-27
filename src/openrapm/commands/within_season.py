@@ -430,8 +430,11 @@ def rate_world_by_game(world: SeasonWorld, saved: dict, network, games: pd.DataF
     world.checks["network: never trained on this season or its neighbours"] = not (
         {world.season - 1, world.season, world.season + 1} & {int(s) for s in network.seasons})
     states_games, states = game_prior.season_states(rows, network)
-    whole, _ = game_prior.network_panels(states_games, states, world.panel, ())
-    game_rows = game_prior.game_rows(states_games, states, world.panel)
+    # the season panel's rows with possessions, as `openrapm rate` hands them over (build.rate_table): a player with
+    # no possessions on one end reads no listing there in either, so the whole-season rebuild reproduces the build
+    base = world.panel[world.panel.possessions > 0]
+    whole, _ = game_prior.network_panels(states_games, states, base, ())
+    game_rows = game_prior.game_rows(states_games, states, base)
     boosters = {side: box_prior.SidePrior(values={}, model=saved_booster(saved[side]),
                                           feature_names=list(saved[side]["feats"])) for side in SIDES}
     game_rows["box_game"] = game_box_priors(game_rows, boosters, least_share)
