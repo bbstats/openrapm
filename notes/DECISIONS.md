@@ -10462,7 +10462,7 @@ reproduction; check 151 tag `net1`):
 | noise control noise_creation110, step 4 | -0.017 | 0.009 | -1.8 | 16 of 30 |
 | held-back team-game MSE, step 3, the folds' own score | -0.638 | 0.062 | -10.3 | 30 of 30 |
 | year over year, both directions, team-game | +0.051 | 0.063 | +0.8 | 23 of 56 |
-| next season / previous season | -0.129 / +0.232 | 0.092 / 0.073 | -1.4 / +3.2 | 16 / 7 of 28 |
+| a season's rating forecasting the season before / the season after | -0.129 / +0.232 | 0.092 / 0.073 | -1.4 / +3.2 | 16 / 7 of 28 |
 
 - Better team totals, worse credit inside teams: on the held-back games with team levels left in it wins every
   season of every era (-0.49 / -0.76 / -0.67); with a free level per attacking and defending team it loses every
@@ -10473,11 +10473,61 @@ reproduction; check 151 tag `net1`):
   2017) and the +/- part wider (0.575 against 0.467): more of the within-team split rests on the noisier part.
 - Why, as far as the numbers show: a game's prior knows only the games before it, so the first week's priors sit near
   average and the season's last games reach no prior, where today's prior reads every game alike; the average leans on
-  the early part of the season.  The year-over-year split agrees in kind: the season value forecasts the season after
-  better than the season before.
+  the early part of the season.  The year-over-year split agrees in kind: the season value forecasts the season before
+  better than the season after.  (Corrected 2026-10-27: the first version of this entry and of the report read 63's
+  "PREVIOUS season's rankings predict this season" as the season before; those rows are a rating looking forward.)
 - 2026: correlation of totals 0.983, median move 0.29; Cunningham, Towns, Derrick White, Ajay Mitchell up 0.53-0.58;
   Dončić -0.89, Leonard -0.82, Giannis -0.63, Clingan -0.61; Ty Jerome, 688 possessions, -2.19.
 - Verdict pending the owner; by the rules it fails (the within-season WOWY test worse in every era).  Report:
   https://claude.ai/artifact/5G3TBE5FcyP7vCJDhc9M7Y.  Natural next step if wanted: the same networks as one prior per
   season, the state after the season's last game, which separates the better stat forecasts from the game-by-game
   averaging.
+
+## Experiment 115: the box-score prior game by game, both ways (the owner, 2026-10-27: "run inference in reverse, to smooth out the weird beginning ... take 2nd half of forwards one + 1st half of backwards one")
+
+Experiment 114's networks read the games before each game, so every player's first priors sit near average.  The
+change: 30 more networks, `net1_back`, trained the same way on the seasons played in reverse
+(`game_rates.reverse_rows` mirrors each season's dates and game numbers; `openrapm game-rates train --tag net1_back
+--reverse`), each never trained on its season or its neighbors.  `game_prior.splice`: on each side, a player's first
+floor(n/2) games take the backward network's prior, the rest the forward one's.  The box-score prior still trains on
+the forward networks' states.  `openrapm rate --game-prior net1 --game-prior-backward net1_back`; the folds rebuild
+both passes from the fit games alone, with a new check that the backward network never saw the season or its
+neighbors, passed 360 of 360; every whole-season rebuild reproduced the rating step to 0.0.  Commit ed66238.
+
+**The full build** (`outputs/net1b_chain.log`; check 151 tag `net1b_all`, all four systems; eras by
+`scratch/2026-10-23_so_far/eras.py`):
+
+| reading | change | standard error | paired z | seasons better |
+|---|---|---|---|---|
+| within-season WOWY, step 4 | +0.196 | 0.034 | +5.8 | 5 of 30 |
+| 1997-2006 / 2007-2016 / 2017-2026 | +0.235 / +0.149 / +0.203 | 0.049 / 0.063 / 0.064 | +4.7 / +2.4 / +3.2 | 1 / 2 / 2 of 10 |
+| within-season WOWY, step 3 | -0.339 | 0.057 | -5.9 | 26 of 30 |
+| 1997-2006 / 2007-2016 / 2017-2026 | -0.358 / -0.360 / -0.299 | 0.125 / 0.086 / 0.089 | -2.9 / -4.2 / -3.3 | 9 / 9 / 8 of 10 |
+| noise control noise_creation110, step 4 | -0.017 | 0.009 | -1.8 | 16 of 30 |
+| held-back team-game MSE, step 3, the folds' own score | -0.657 | 0.046 | -14.2 | 30 of 30 |
+| year over year, both directions, team-game | +0.057 | 0.046 | +1.2 | 18 of 56 |
+| a season's rating forecasting the season before / the season after | -0.073 / +0.187 | 0.067 / 0.053 | -1.1 / +3.5 | 14 / 4 of 28 |
+
+- The slow start is gone: the first 2026 offensive prior is Jokić +6.24 against +0.05 forward only,
+  Gilgeous-Alexander +6.36 against -0.07, Wembanyama +2.49 against -1.18.  Where the two passes meet mid-season the
+  prior can step by about a point.
+- The step-3 win is at unmatched width (trap 39): before the shrink today's offense is about 10% wider than both ways
+  in every era, 2.153 against 1.952 since 2017.  The shrink narrows today's by 26% and both ways' by 18%, to 1.599 and
+  1.592; it gains 0.616 on today's step 3 and 0.081 on this one's.  At matched width, after the shrink, it loses in
+  every era, by a quarter of forward only's loss.
+- After the shrink the averaged prior part is narrower on offense, 1.480 against 1.530 since 2017, and the +/- part
+  wider, 0.519 against 0.467; forward only 1.448 and 0.575.  The fitted multipliers shrink it less: the offensive prior
+  part 0.718 against today's 0.678 on average, the within layer's 0.774 against 0.713, its games' part 1.267 against
+  1.145.  Not refitted: the fixed within factor on offense, 0.75, and the defense factors, 0.89 before 2017 and 0.84
+  from 2017, all set on today's ratings.  A setting costs about 4 minutes: the shrink 30 s, check 151 on one system
+  3 minutes.
+- Year over year a tie, but a season's rating forecasts the season after worse, z +3.5.  The splice weighs each
+  player's games symmetrically about midseason, so experiment 114's lean on the early games explains little of that:
+  +0.187 against +0.232.
+- 2026: correlation of totals 0.992 in every era, median move 0.16 since 2017.  The top six all fall 0.07-0.80, most of
+  it on offense: Dončić -0.80, Giannis -0.72, Gilgeous-Alexander -0.69, Leonard -0.54.  Up: Derrick White +0.56,
+  23rd to 15th; Towns +0.52.  Butler -0.55; Ty Jerome, 688 possessions, -1.96, 10th to 40th.
+- Verdict pending the owner; by the rules it fails (the within-season WOWY test worse after the shrink in every era).
+  Report: https://claude.ai/artifact/5G3TBE5FcyP7vCJDhc9M7Y, version 2, both builds.  Open: refit the shrink's fixed
+  settings for this prior on check 152's 10 tuning seasons and judge it on the other 20; or the end-of-season state as
+  one prior per season.
