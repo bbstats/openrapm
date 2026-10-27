@@ -15,6 +15,9 @@
                                                   within-season fold can rebuild them from its fit games
     openrapm data tracking-games [FIRST] [LAST]   the same for the per-game tracking box score (BoxScorePlayerTrackV3,
                                                   2014 on)
+    openrapm data player-games [FIRST] [LAST]     each player's games, one row per player and game, from the stored
+                                                  design pieces, game logs, box scores and hustle box scores
+                                                  (paths.cache/player_games): what the multi-stat network reads
     openrapm data panel                           the season panel (paths.panel) from the stints, box scores, roles,
                                                   bio feed, event counts and careers
     openrapm data panel --migrate-from FILE       the season panel from one written under the names used before
@@ -219,6 +222,17 @@ def run_hustle_games(args: argparse.Namespace, cfg: dict) -> int:
     return 1 if out["failed"] else 0
 
 
+def run_player_games(args: argparse.Namespace, cfg: dict) -> int:
+    """Each season's game rows (data/player_games.py), written once; --force writes them again."""
+    from ..data.player_games import write_player_games
+    started = time.time()
+    first = args.first_season if args.first_season is not None else int(cfg["first_season"])
+    last = args.last_season if args.last_season is not None else int(cfg["last_season"])
+    written = write_player_games(cfg, range(first, last + 1), force=args.force)
+    print(f"wrote {len(written)} seasons of game rows ({time.time() - started:.0f}s)", flush=True)
+    return 0
+
+
 def _migrate(args: argparse.Namespace, cfg: dict) -> None:
     from ..data.panel import migrate_panel
     target, panel, dropped = migrate_panel(Path(args.migrate_from), cfg)
@@ -371,6 +385,21 @@ def _add_hustle_games(steps) -> None:
     tracking.set_defaults(run=run_hustle_games, source="tracking")
 
 
+def _add_player_games(steps) -> None:
+    games = steps.add_parser(
+        "player-games", help="each player's games, one row per player and game (paths.cache/player_games)",
+        description="Writes one file a season to paths.cache/player_games/<season>.parquet: one row per player and "
+                    "game he played possessions in, with his team and the opponent, home or away, whether he "
+                    "started, his and his team's possessions at each end, his 13 box counts and, from 2017, his "
+                    "nine hustle counts (src/openrapm/data/player_games.py).  The multi-stat network reads it.")
+    games.add_argument("first_season", nargs="?", type=int, metavar="FIRST",
+                       help="the first season (default config.yaml's first_season)")
+    games.add_argument("last_season", nargs="?", type=int, metavar="LAST",
+                       help="the last season (default config.yaml's last_season)")
+    games.add_argument("--force", action="store_true", help="write seasons already on disk again")
+    games.set_defaults(run=run_player_games)
+
+
 def _add_panel(steps) -> None:
     panel = steps.add_parser(
         "panel", help="the season panel (paths.panel, outputs/season_panel.parquet)",
@@ -402,4 +431,5 @@ def add_data(commands) -> None:
     _add_careers(steps)
     _add_dashboards(steps)
     _add_hustle_games(steps)
+    _add_player_games(steps)
     _add_panel(steps)

@@ -24,6 +24,9 @@ openrapm = "openrapm.commands.cli:main"
 [project.optional-dependencies]
 # ruff pinned to the version CI runs (.github/workflows/test.yml), so a local `ruff check .` agrees with CI
 dev = ["pytest>=8", "pytest-xdist>=3", "ruff==0.17.0"]
+# the multi-stat network (openrapm.game_rates) trains with PyTorch; nothing else needs it, and the ratings read its
+# saved weights with numpy.  The GPU build: --index-url https://download.pytorch.org/whl/cu130
+network = ["torch>=2.4"]
 
 [build-system]
 requires = ["setuptools>=68"]

@@ -101,6 +101,31 @@ def roles_from_boxes(boxes: dict) -> pd.DataFrame:
         {"player_id": np.int64, "team_id": np.int64})
 
 
+def starts_by_game(boxes: dict) -> pd.DataFrame:
+    """Per (game_id, player_id): whether he started, by `roles_from_boxes`' rule (each team's first five rows in a V3
+    box), one row per player in each game's box score, played or not.  The per-game table of data/player_games.py reads
+    it; `roles_from_boxes` keeps its own sums, so the season panel's numbers do not move."""
+    parts = []
+    for game_id, box in boxes.items():
+        if len(box) == 0:
+            continue
+        rank = box.groupby("teamId").cumcount().to_numpy()
+        parts.append(pd.DataFrame({"game_id": str(game_id), "player_id": box["personId"].to_numpy(dtype=np.int64),
+                                   "started": (rank < 5).astype(float)}))
+    if not parts:
+        return pd.DataFrame({"game_id": pd.Series(dtype=str), "player_id": pd.Series(dtype=np.int64),
+                             "started": pd.Series(dtype=float)})
+    return pd.concat(parts, ignore_index=True).drop_duplicates(["game_id", "player_id"])
+
+
+def season_boxes(season: int, cfg, phases: tuple = ROLE_PHASES) -> dict:
+    """{game_id: the game's V3 box score (teamId, personId, minutes)} for the season's phases, as `season_roles` and
+    the season panel read them."""
+    box_dir = _box_dir(season, cfg)
+    return {path.stem: pd.read_parquet(path, columns=["teamId", "personId", "minutes"])
+            for phase in phases for path in sorted(box_dir.glob(f"{GAME_PREFIX[phase]}*.parquet"))}
+
+
 def shares_from_stints(stints: pd.DataFrame, games: pd.DataFrame) -> pd.DataFrame:
     """Per (player_id, team_id): on-floor possessions (both ends), and the team's season total.
 

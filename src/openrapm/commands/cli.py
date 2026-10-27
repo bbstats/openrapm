@@ -7,6 +7,7 @@
     openrapm swap      step 5 on a step-4 table: each team's credit re-split by its lineup swaps
     openrapm folds     the within-season folds: each season rated from three quarters of its games
     openrapm second-prior   the swaps the second prior's line is fitted on, from the folds' held-back games
+    openrapm game-rates     the multi-stat networks: one per rated season, trained on the GPU and scored
     openrapm site      the site's data: docs/data/ratings.json, and the bias, decomposition (vanilla RAPM and OpenRAPM)
                        and similarity pages when asked
     openrapm compare   two parquet tables, value by value
@@ -44,6 +45,7 @@ from ..settings import (
 )
 from .console import use_utf8
 from .data import add_data
+from .game_rates import add_game_rates
 from .parallel import default_jobs
 
 THREAD_VARIABLES = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS")
@@ -658,6 +660,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_swap(commands)
     _add_folds(commands)
     _add_second_prior(commands)
+    add_game_rates(commands, parse_seasons)
     _add_site(commands)
     _add_compare(commands)
     _add_glossary(commands)

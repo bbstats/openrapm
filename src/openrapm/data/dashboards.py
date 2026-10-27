@@ -328,6 +328,21 @@ def _season_game_boxes(folder: str, source: str) -> pd.DataFrame:
     return out
 
 
+def hustle_game_rows(cfg: dict, season: int) -> pd.DataFrame | None:
+    """Every cached hustle box score of the season, one row per player and game: game_id, player_id and the nine
+    counts under `HUSTLE_GAME_COLUMNS`' keys in lower case (deflections, contested_shots_2pt, ...), or None for a
+    season before `HUSTLE_GAMES_FIRST` or without the folder.  The per-game table of data/player_games.py reads it."""
+    folder = raw_dir(cfg) / "dashboards" / "hustle" / "games" / str(int(season))
+    if int(season) < HUSTLE_GAMES_FIRST or not folder.exists():
+        return None
+    frame = _season_game_boxes(str(folder), "hustle")
+    out = pd.DataFrame({"game_id": frame["gameId"].to_numpy(), "player_id": frame["personId"].to_numpy()})
+    for name, column in HUSTLE_GAME_COLUMNS.items():
+        out[name.lower()] = frame[column].to_numpy(dtype=float)
+    out = out[out["player_id"].notna()].astype({"player_id": np.int64})
+    return out.drop_duplicates(["game_id", "player_id"]).reset_index(drop=True)
+
+
 def hustle_game_totals(cfg: dict, season: int, game_ids) -> tuple:
     """`game_box_totals` for the hustle box scores."""
     return game_box_totals(cfg, "hustle", season, game_ids)

@@ -69,6 +69,7 @@ MODEL_LAYER = [
     "scoring.py",       # ratings scored on unseen games, the splits, the pooled and paired summaries
     "similarity.py",    # the similarity page: player-seasons' inputs, standardised, and the nearest of other players
     "decomposition.py",  # the decomposition pages: which rows of a ridge fit a coefficient comes from
+    "game_rates.py",    # the multi-stat network: league, opponent, padding, the state, training (PyTorch), forecasts
 ]
 
 # Model code that still reaches its own data, and what through.  Nothing may be added here.
