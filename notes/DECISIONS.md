@@ -10409,3 +10409,75 @@ better:
   without the swap step are where it differs.  Not adopted unless the owner rules otherwise; step 5 (retest unassisted
   rim-and-paint makes on the new build) does not run.
 - The owner, 2026-10-26: "Not adopted".  The incumbent stays creation110.
+
+
+## Experiment 114: the box-score prior game by game, from a multi-stat network (the owner, 2026-10-27: "let's implement and restart training on our end"; the handoff scratch/2026-10-27_multistat/)
+
+The owner's handoff: one network that forecasts all of a player's box-score stats for his next game from his earlier
+games, which beat per-stat padding on all 13 stats of a simulated league.  The owner's five changes for the real
+seasons: single-season inputs only; the stats are the box-score prior's inputs; the season value is the +/- coefficient
+plus the prior averaged over the season, since the prior now changes game by game; the game-varying prior multiplied
+into the ridge sparsely, by game; each game measured against the opponent and the league.  Plan:
+`~/.claude/plans/c-users-nathan-claude-uploads-160f7236-tingly-honey.md`.  Commits 7167b70, 26bf92d, a922e04.
+
+**Built.**
+- `openrapm data player-games` (data/player_games.py): one row per player and game played, 1997-2027, from the
+  stored design pieces, game logs, box scores and hustle box scores; possessions at both ends and starts equal the
+  roles table's exactly (2001, 2026).
+- game_rates.py: 21 forecasts, the 12 box counts and 9 hustle counts the prior's 18 inputs per side are built from;
+  each game's exposure times an opponent factor, what the opponent allowed in its earlier games of the season over the
+  season's league level, padded toward 1 with a pad per stat fitted by the padding's log-loss (pads 2,900-32,000
+  possessions; the make percentages have none); the handoff's per-stat recursion restarted each season as the
+  starting point; inputs from the player's earlier games of the season only (four sums, playing time, home, playoffs),
+  never height, weight, age or a career count; the handoff's network and settings, trained with PyTorch on the RTX
+  3070 (the CUDA build in .venv, torch in the optional group `network`), forecasts in numpy.
+- `openrapm game-rates train/score`: 30 networks, network S trained on every finished season but S - 1, S and S + 1,
+  never 2027; a tenth of the players stops each.  About 3 minutes a network, two at a time.
+- game_prior.py and `openrapm rate --game-prior TAG`: network S's states for every season the box-score prior of S
+  trains on (after each season, and on the days of `--part-season-rows 0.02,0.05,0.1,0.25,0.5,0.75`) and before every
+  game of S; the prior asked once per game (box_prior.predict_chosen, the same answers as `predict`); the swap part of
+  the prior on each player's season average, spread over his games by the line's box-score coefficient so it averages
+  back exactly; prior_rapm.ridge_system's `game_tables`, each row's lineup prior gathered at its own game; the reported
+  prior the scale times the possession-weighted average, the ridge's own average credit.  A constant game table
+  reproduces today's fit to 1e-9 (tests/test_game_prior.py).
+- `openrapm folds` rebuilds every state from the fit games alone (two new leak checks); every whole-season rebuild
+  reproduced the rating step to 0.0.  Two bugs found on the way: 2017's hustle box scores record no box-outs, whose
+  league level of 0 made infinite inputs that broke the linear leaves (now missing, as in the season panel); and a
+  player with defensive possessions and none on offense read his listing in the folds and not in `rate` (2001, 2006).
+
+**The network on seasons it never saw** (outputs/game_rates/net1/score_*.csv): summed log-loss per 1,000
+player-games against the per-stat padding, -283.7, 30 of 30 seasons; every one of the 12 box stats better in 30 of 30,
+the hustle stats in nearly every season they are counted; largest three-point attempts 46.9, assists 26.4, offensive
+rebounds 25.1, points off screens 99.8.  The opponent factor (net1_no_opponent, 10 seasons): -38.4 per 1,000, 10 of
+10, every count better, the percentages unmoved.
+
+**The full build** (`outputs/net1_chain.log`, `outputs/net1_chain_first.log` for the first pass stopped at 2001's
+reproduction; check 151 tag `net1`):
+
+| reading | change | standard error | paired z | seasons better |
+|---|---|---|---|---|
+| within-season WOWY, step 4 | +0.735 | 0.054 | +13.6 | 0 of 30 |
+| 1997-2006 / 2007-2016 / 2017-2026 | +0.761 / +0.660 / +0.784 | 0.076 / 0.098 / 0.109 | +10.0 / +6.7 / +7.2 | 0 / 0 / 0 of 10 |
+| within-season WOWY, step 3 | +0.278 | 0.082 | +3.4 | 8 of 30 |
+| noise control noise_creation110, step 4 | -0.017 | 0.009 | -1.8 | 16 of 30 |
+| held-back team-game MSE, step 3, the folds' own score | -0.638 | 0.062 | -10.3 | 30 of 30 |
+| year over year, both directions, team-game | +0.051 | 0.063 | +0.8 | 23 of 56 |
+| next season / previous season | -0.129 / +0.232 | 0.092 / 0.073 | -1.4 / +3.2 | 16 / 7 of 28 |
+
+- Better team totals, worse credit inside teams: on the held-back games with team levels left in it wins every
+  season of every era (-0.49 / -0.76 / -0.67); with a free level per attacking and defending team it loses every
+  season.  The shrink widens the WOWY gap from +0.28 to +0.74; its multipliers are refitted on the candidate's own
+  folds, but its fixed settings (offense within teams x0.75, the defense factors) were set on today's prior.
+- Not width: after the shrink the two systems' spreads agree within 2% in every era (offense 1.589 against 1.599
+  since 2017, defense 1.445 against 1.425).  The averaged prior part is narrower on offense (1.448 against 1.530 since
+  2017) and the +/- part wider (0.575 against 0.467): more of the within-team split rests on the noisier part.
+- Why, as far as the numbers show: a game's prior knows only the games before it, so the first week's priors sit near
+  average and the season's last games reach no prior, where today's prior reads every game alike; the average leans on
+  the early part of the season.  The year-over-year split agrees in kind: the season value forecasts the season after
+  better than the season before.
+- 2026: correlation of totals 0.983, median move 0.29; Cunningham, Towns, Derrick White, Ajay Mitchell up 0.53-0.58;
+  Dončić -0.89, Leonard -0.82, Giannis -0.63, Clingan -0.61; Ty Jerome, 688 possessions, -2.19.
+- Verdict pending the owner; by the rules it fails (the within-season WOWY test worse in every era).  Report:
+  https://claude.ai/artifact/5G3TBE5FcyP7vCJDhc9M7Y.  Natural next step if wanted: the same networks as one prior per
+  season, the state after the season's last game, which separates the better stat forecasts from the game-by-game
+  averaging.

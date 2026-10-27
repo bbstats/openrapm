@@ -1,7 +1,7 @@
 # Handoff
 
 **What this file is.**  Where the work stands, what waits on the owner, and the commands a session runs.  Rewritten
-on the afternoon of 2026-10-22, its status and next steps on 2026-10-23 (twice), 2026-10-24 and 2026-10-26; the earlier file is in git history.  `DECISIONS.md` is the permanent record and carries
+on the afternoon of 2026-10-22, its status and next steps on 2026-10-23 (twice), 2026-10-24, 2026-10-26 and 2026-10-27; the earlier file is in git history.  `DECISIONS.md` is the permanent record and carries
 every number quoted here; read its measurement traps before trusting a number.  `README.md` says what OpenRAPM is,
 `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's standing rules.
 
@@ -22,7 +22,23 @@ every number quoted here; read its measurement traps before trusting a number.  
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
 
-## Where it stands, 2026-10-26
+## Where it stands, 2026-10-27
+
+- **Published ratings unchanged: creation110.**  Nothing below is published or changes a default.
+- **Experiment 114, the box-score prior game by game, built in full; verdict the owner's** (DECISIONS.md, "Experiment
+  114"; report https://claude.ai/artifact/5G3TBE5FcyP7vCJDhc9M7Y).  The owner's multi-stat network handoff
+  (scratch/2026-10-27_multistat/) on the real seasons: `openrapm data player-games`, `openrapm game-rates train/score`
+  (30 networks under outputs/game_rates/net1/, trained on the RTX 3070; PyTorch's CUDA build is in .venv),
+  `openrapm rate --game-prior net1 --part-season-rows 0.02,0.05,0.1,0.25,0.5,0.75`, the folds rebuilt game by game.
+  - The network forecasts every stat better than the padding in every held-out season, -283.7 log-loss per 1,000
+    player-games; the opponent adjustment is -38.4 of it.
+  - As ratings: held-back team-games better in all 30 seasons (-0.64 at step 3), the within-season WOWY test worse in
+    all 30 (+0.74 at step 4, +0.28 at step 3), year over year a tie.  Width is not the reason.
+  - Next if the owner wants it: the same networks as one prior per season, to separate the better stat forecasts from
+    the game-by-game averaging.  Tables `season_ratings_net1*`, folds `net1_early`, `net1_within`, boosters
+    `prior_models_net1.pkl` (about 2 GB, delete when the experiment closes).
+
+## Where it stood, 2026-10-26
 
 - **Published ratings: unchanged since experiment 110 (creation110), 2026-10-25.**  The 2027 daily job runs every
   morning on it (last: 2026-10-26, 2f65f94).
@@ -256,7 +272,7 @@ What else the work of 2026-10-23 left open:
   read against today's ratings on the same split, so that noise does not enter its change, but any one build's
   standing carries 0.01-0.02 of it.
 - Every experiment gets a row in `experiments/runs.csv` (`scripts/checks/101_log_run.py`), mirrored to the sheet
-  "OpenRAPM experiments", tab Experiments; the next free row is 106.  Input screens get their own tab ("Input
+  "OpenRAPM experiments", tab Experiments; the next free row is 108.  Input screens get their own tab ("Input
   screen 112").
 
 ## Commands a session runs
