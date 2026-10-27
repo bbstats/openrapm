@@ -42,9 +42,17 @@ every number quoted here; read its measurement traps before trusting a number.  
   - The slow start is gone.  Before the shrink it wins the within-season WOWY test in every era (-0.34, 26 of 30), but
     at a 10% narrower offense; after the shrink, at matched width, it loses in every era (+0.20, 5 of 30).  Held-back
     team-games -0.66, 30 of 30; year over year a tie, the season after worse at z +3.5.
-  - Not tried: the shrink's fixed settings, the within factor 0.75 on offense and the defense factors 0.89 and 0.84,
-    were set on today's ratings; about 4 minutes a setting.  Or the end-of-season state as one prior per season.
   - Tables `season_ratings_net1b*`, folds `net1b_early`, `net1b_within`, boosters `prior_models_net1b.pkl`.
+- **Experiment 116, the shrink's four fixed settings refitted; verdict the owner's** (DECISIONS.md, "Experiment 116";
+  same report, version 3).  Check 156 (`scripts/checks/156_shrink_refit.py search|judge`) searched them for both ways
+  and for today's ratings alike, on check 152's 10 tune seasons with the next-season check as a limit.
+  - Both ways at its best still loses in every era of the 20 untouched seasons, +0.26 against today at its best, while
+    wider than today's ratings: the game-by-game prior splits credit inside teams worse.
+  - Today's ratings at their best gain on the within-season test in every era, -0.11, 18 of 20, but lose year over year
+    at z +4.2: the search sat on its limit's edge on the tune seasons.  The shipped settings stay.
+  - Tables `season_ratings_*_refit156_step4`, studies `outputs/tune/refit156_*`.
+  - Waiting on the owner: the cheap check of the network's inner numbers against the prior's target, and whether to
+    close the game-by-game prior; next proposed, the network's whole-season state as one prior per season.
 
 ## Where it stood, 2026-10-26
 
@@ -280,7 +288,7 @@ What else the work of 2026-10-23 left open:
   read against today's ratings on the same split, so that noise does not enter its change, but any one build's
   standing carries 0.01-0.02 of it.
 - Every experiment gets a row in `experiments/runs.csv` (`scripts/checks/101_log_run.py`), mirrored to the sheet
-  "OpenRAPM experiments", tab Experiments; the next free row is 109.  Input screens get their own tab ("Input
+  "OpenRAPM experiments", tab Experiments; the next free row is 110.  Input screens get their own tab ("Input
   screen 112").
 
 ## Commands a session runs

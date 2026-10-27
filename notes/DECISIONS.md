@@ -10531,3 +10531,57 @@ neighbors, passed 360 of 360; every whole-season rebuild reproduced the rating s
   Report: https://claude.ai/artifact/5G3TBE5FcyP7vCJDhc9M7Y, version 2, both builds.  Open: refit the shrink's fixed
   settings for this prior on check 152's 10 tuning seasons and judge it on the other 20; or the end-of-season state as
   one prior per season.
+
+## Experiment 116: the shrink's four fixed settings refitted, for both ways and for today's ratings (the owner, 2026-10-27: "refit")
+
+After step 4 fits its multipliers on a system's own held-back games, four fixed numbers multiply them: the within
+layer's factors on offense and defense, 0.75 and 1.0 (experiment 106: 0.75 the year-over-year test's own scale), and
+the defense factor by era, 0.89 before 2017 and 0.84 from 2017 (experiment 98: picked by eye from a width test).  All
+four were set on today's ratings over all 30 seasons, so experiment 115 was read at settings fitted to another prior.
+
+**Built.**  Check 156, `scripts/checks/156_shrink_refit.py`: Optuna's Gaussian-process sampler, 40 trials a system,
+the shipped four enqueued first, within factors drawn from 0.4 to 1.3 and defense factors from 0.6 to 1.2.  Score:
+check 151's within-season WOWY error after step 4, every held-back stint, the mean over check 152's 10 tune seasons.
+Hard limit: the next-season check on those seasons, each tune season's whole-season ratings predicting the seasons
+either side, paired against today's published ratings, z at most +1.0 on the 20 readings (check 152's).  Step 4's
+multipliers do not depend on the four settings, so each system's are fitted once with all four at 1 and a trial only
+multiplies and scores, 15 s.  At the shipped settings the fast path equals check 151 and the system's step-4 table on
+disk to 0.0.  `151_wowy.py`: `within_layer`, `step4_tables` and `system_errors` take `within_factors`, and
+`system_errors` takes `only`, a set of seasons; the defaults read as before.  Commit f396ae1.
+
+| system and settings | within offense / defense | defense before / from 2017 | tune WOWY | next-season check, tune seasons |
+|---|---|---|---|---|
+| both ways, shipped | 0.750 / 1.000 | 0.890 / 0.840 | 3657.092 | +0.087, z +1.20, outside the limit |
+| both ways, best, trial 35 | 0.770 / 0.952 | 0.862 / 0.918 | 3657.042 | +0.067, z +1.00 |
+| today, shipped | 0.750 / 1.000 | 0.890 / 0.840 | 3656.929 | 0 |
+| today, best, trial 32 | 0.779 / 1.001 | 0.823 / 0.870 | 3656.846 | +0.043, z +0.99 |
+
+**Judged on all 30 seasons** with check 151 (`156_shrink_refit.py judge`, `outputs/csv/refit156_net1b_creation110.csv`),
+step 4, every held-back stint, paired by season:
+
+| comparison | untouched 20 | untouched 1997-2006 / 2007-2016 / 2017-2026 | tune 10 | all 30 |
+|---|---|---|---|---|
+| both ways best against today best | +0.258, z +6.1, 2 of 20 | +0.307 0/7, +0.253 1/6, +0.215 1/7 | +0.196, z +3.4 | +0.238, z +7.0, 3 of 30 |
+| both ways best against today shipped | +0.152, z +3.0, 4 of 20 | +0.214 1/7, +0.192 1/6, +0.056 2/7 | +0.113, z +1.8 | +0.139, z +3.6, 7 of 30 |
+| both ways shipped against today shipped | +0.212, z +4.9, 4 of 20 | +0.255 1/7, +0.201 1/6, +0.178 2/7 | +0.163, z +3.0 | +0.196, z +5.8, 5 of 30 |
+| today best against today shipped | -0.106, z -5.3, 18 of 20 | -0.093 7/7, -0.060 4/6, -0.159 7/7 | -0.084, z -2.7 | -0.099, z -5.9, 25 of 30 |
+
+The full year-over-year test, `63_yoy.py` tag refit156, team-game, both directions, against today as shipped: both
+ways refitted +0.082, z +1.75, clustered +1.62, 19 of 56; today refitted +0.103, z +4.16, clustered +3.83, 14 of 56
+(forecasting the season after +0.058, z +1.49; the season before +0.147, z +5.15).
+
+- Both ways: the refit does not rescue it.  Every era is worse on the untouched seasons, and its refitted ratings are
+  wider than today's since 2017, offense 1.630 against 1.599 and defense 1.523 against 1.425, which the within-season
+  test rewards (trap 39): the loss is the split inside teams, not width.
+- Today's ratings at their refit: better on the within-season test in every era, mostly by width (offense wider in
+  every era, 1.914 / 1.805 / 1.655 against 1.848 / 1.743 / 1.599; defense narrower before 2017, wider from it), and
+  worse year over year at z +4.2, past the rule's z +2.  Not adopted; the shipped settings stay.
+- A search's winner sits on its limit's edge, z +1.00 and +0.99 on the 20 tune readings, and on fresh seasons the edge
+  is further out: today's refit read +0.99 there and +4.2 on the full test (trap 40).
+- 2026: today refitted lifts the top 20 by 0.1-0.3 with the order nearly unchanged; both ways refitted reads as both
+  ways did, Ty Jerome 10th to 41st, Towns 15th to 10th, Derrick White 23rd to 15th.
+- The owner's question that came with "refit", whether the network could be trained on the prior's target as well as
+  the stats: answered in conversation (the box-score prior already fits value from the network's output, and a
+  network trained on 13,997 noisy values from 2,860 players would need five copies per season to keep a player's
+  other seasons out); the cheap check of the network's inner numbers is waiting on the owner's word.
+- Verdict pending the owner; by the rules both fail.  Report, version 3: https://claude.ai/artifact/5G3TBE5FcyP7vCJDhc9M7Y.
