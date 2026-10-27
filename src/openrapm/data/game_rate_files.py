@@ -9,6 +9,8 @@ Each file holds what the network of rated season S needs to forecast and what it
     ks, opponent_pads          the padding's pad per stat and the opponent factor's (infinity: no factor)
     seasons                    the seasons it trained on: never S, S - 1 or S + 1, never a season in progress
     validation_players         the players whose rows stopped its training and never trained it
+    reverse                    trained on each season in reverse order (game_rates.reverse_rows): it forecasts a game
+                               from the games after it; absent in a file written before 2026-10-27, which reads False
     input_names, stats         the inputs and the stats, in order, checked when the file is read back
 
 Example: `load_network(cfg, "net1", 2010)` reads outputs/game_rates/net1/season_2010.npz, a network trained on
@@ -37,6 +39,7 @@ class SavedNetwork:
     validation_players: np.ndarray
     input_names: list
     stats: list
+    reverse: bool = False      # trained on each season in reverse order: forecasts a game from the games after it
 
 
 def network_dir(cfg: dict, tag: str) -> Path:
@@ -56,7 +59,8 @@ def save_network(cfg: dict, tag: str, network: SavedNetwork) -> Path:
     np.savez_compressed(path, season=np.int64(network.season), mean=network.mean, sd=network.sd, ks=network.ks,
                         opponent_pads=network.opponent_pads, seasons=np.asarray(network.seasons, dtype=np.int64),
                         validation_players=np.asarray(network.validation_players, dtype=np.int64),
-                        input_names=np.asarray(network.input_names), stats=np.asarray(network.stats), **layers)
+                        input_names=np.asarray(network.input_names), stats=np.asarray(network.stats),
+                        reverse=np.bool_(network.reverse), **layers)
     return path
 
 
@@ -73,7 +77,8 @@ def load_network(cfg: dict, tag: str, season: int, input_names=None, stats=None)
                                mean=file["mean"], sd=file["sd"], ks=file["ks"], opponent_pads=file["opponent_pads"],
                                seasons=file["seasons"], validation_players=file["validation_players"],
                                input_names=[str(name) for name in file["input_names"]],
-                               stats=[str(name) for name in file["stats"]])
+                               stats=[str(name) for name in file["stats"]],
+                               reverse=bool(file["reverse"]) if "reverse" in file.files else False)
     for what, expected, held in (("inputs", input_names, network.input_names), ("stats", stats, network.stats)):
         if expected is not None and list(expected) != list(held):
             raise ValueError(f"{path}: its {what} differ from today's code's; train the tag again")

@@ -145,3 +145,26 @@ def test_the_rows_a_fit_trains_on_skip_a_season_in_progress(tmp_path, monkeypatc
     assert set(kept.season) == {2018}
     with pytest.raises(FileNotFoundError):
         P.trainable_player_games(cfg, [2017])
+
+
+def test_reversing_twice_gives_the_rows_back():
+    rows = _league()
+    back = G.reverse_rows(G.reverse_rows(rows))
+    pd.testing.assert_frame_equal(back, rows)
+
+
+def test_the_backward_pass_reads_only_the_games_after_each_game():
+    """The backward pass's state for a game stands on the games after it: editing a game's counts leaves that game's
+    own backward inputs alone and changes the backward inputs of the game before it."""
+    rows = _league()
+    league = G.league_levels(G.games_from_rows(rows))
+    games, before, _, _ = _inputs(G.reverse_rows(rows), league)
+    edited = rows.copy()
+    target = (edited.player_id == 102) & (edited.game_id == "20190005")
+    edited.loc[target, ["ast", "fg3m", "drb"]] += 6.0
+    _, after, _, _ = _inputs(G.reverse_rows(edited), league)
+    own = _row(games, 102, "20190005")
+    np.testing.assert_array_equal(before[own], after[own])
+    his = rows[(rows.player_id == 102) & (rows.season == 2019)].sort_values("game_idx").game_id.tolist()
+    earlier = _row(games, 102, his[his.index("20190005") - 1])
+    assert not np.array_equal(before[earlier], after[earlier])

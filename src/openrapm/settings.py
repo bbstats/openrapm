@@ -212,6 +212,10 @@ class PriorSettings:
     # part-season rows the states on the days of `part_season_shares`; the ridge pulls each stint toward its own game's
     # prior and the season's prior part is the possession-weighted average
     game_prior: str = ""
+    # "": every game's prior from the games before it.  A tag of networks trained on reversed seasons: the first half of
+    # each player's games take their prior from the games after them instead (game_prior.splice; the owner, 2026-10-27:
+    # "run inference in reverse, to smooth out the weird beginning")
+    game_prior_backward: str = ""
 
 
 ROW_LABELS = ("career", "outside", "nearest")

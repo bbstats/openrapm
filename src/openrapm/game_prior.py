@@ -39,7 +39,7 @@ from . import game_rates as G
 from .features import BOX_RATES, UNCENTRED_RATES
 
 __all__ = ["BOX_COUNTS", "HUSTLE_INPUTS", "SHARE_PAD_GAMES", "season_states", "cut_days", "network_panels",
-           "game_rows", "season_average", "per_game_second", "game_tables"]
+           "game_rows", "backward_game_rows", "splice", "season_average", "per_game_second", "game_tables"]
 
 # the season panel's 13 rates by the per-game counts they are built from (config.yaml box_counts), and how each
 # count comes out of the network's forecasts: attempts times the make share, or one forecast as it is
@@ -284,6 +284,35 @@ def game_rows(games: G.Games, forecasts: np.ndarray, base: pd.DataFrame) -> pd.D
                            "poss_off_game": frame.poss_off.to_numpy()[real],
                            "poss_def_game": frame.poss_def.to_numpy()[real], "season_progress": progress[real]})
     return _panel_rows(games, forecasts, states, base)
+
+
+def backward_game_rows(rows: pd.DataFrame, network, base: pd.DataFrame) -> pd.DataFrame:
+    """`game_rows` from the backward pass: the season's rows in reverse order (game_rates.reverse_rows) through a
+    network trained on reversed seasons, so each game's state stands on the games after it: his possessions after it,
+    his shares of team possessions and starts in them, and `season_progress` the share of the regular season still to
+    come."""
+    if not getattr(network, "reverse", False):
+        raise ValueError("the backward pass needs a network trained on reversed seasons (game-rates train --reverse)")
+    games, forecasts = season_states(G.reverse_rows(rows), network)
+    return game_rows(games, forecasts, base)
+
+
+def splice(forward: pd.DataFrame, backward: pd.DataFrame) -> pd.DataFrame:
+    """Each player's game rows, side by side: the backward pass's for the first half of his games of the season, the
+    forward pass's for the rest (the owner, 2026-10-27: "take 2nd half of forwards one + 1st half of backwards one"),
+    so every game's state stands on at least half of his games.  `direction` says which.
+
+    Example: 81 games: the first 40 from the backward pass, each from the games after it (41 to 80 of them), the last 41
+    from the forward pass, each from the games before it (40 to 80)."""
+    key = ["season", "player_id", "side"]
+    grouped = forward.groupby(key, sort=False)
+    early = (grouped.cumcount() < grouped.game_id.transform("size") // 2).to_numpy()
+    taken = forward.loc[early, [*key, "game_id"]].merge(backward, on=[*key, "game_id"], how="left")
+    if len(taken) != int(early.sum()) or taken[backward.columns.difference(key + ["game_id"])].isna().all(axis=1).any():
+        raise ValueError("the backward pass lacks game rows the forward pass has")
+    taken.index = forward.index[early]
+    out = pd.concat([forward.loc[~early], taken[forward.columns]]).sort_index()
+    return out.assign(direction=np.where(early, "backward", "forward"))
 
 
 # ------------------------------------------------------------------------------------------ season averages

@@ -148,7 +148,7 @@ def chosen_settings(args: argparse.Namespace) -> Settings:
                                  second_prior_team_totals=args.second_prior_team_totals,
                                  second_prior_inputs=args.second_prior_inputs,
                                  second_prior_nearest=int(args.second_prior_nearest),
-                                 game_prior=args.game_prior))
+                                 game_prior=args.game_prior, game_prior_backward=args.game_prior_backward))
 
 
 def table_stem(text: str) -> str:
@@ -299,6 +299,10 @@ def _add_setting_options(parser) -> None:
                              "outputs/game_rates/<TAG>/ (`openrapm game-rates train`): each player's prior before each "
                              "game from his games before it, the part-season rows the networks' states on the days of "
                              "--part-season-rows.  Empty: one prior a season from the season panel (default, shipped)")
+    parser.add_argument("--game-prior-backward", metavar="TAG", default=PRODUCT.prior.game_prior_backward,
+                        help="with --game-prior, the first half of each player's games take their prior from the games "
+                             "after them, the networks of outputs/game_rates/<TAG>/ (`openrapm game-rates train "
+                             "--reverse`); the rest from the games before them (default: none, every game forward)")
     parser.add_argument("--second-prior-team-totals", choices=TEAM_TOTALS,
                         default=PRODUCT.prior.second_prior_team_totals,
                         help="held: each team's total stays the box-score prior's and the line re-splits credit inside "

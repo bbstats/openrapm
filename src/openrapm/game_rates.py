@@ -50,7 +50,7 @@ import numpy as np
 import pandas as pd
 
 __all__ = ["Stat", "STATS", "NAMES", "IS_PCT", "ATTEMPTS_OF", "HUSTLE_STATS", "TAUS", "BEST", "Games",
-           "games_from_rows", "league_levels", "league_by_row", "opponent_sums", "opponent_factors",
+           "reverse_rows", "games_from_rows", "league_levels", "league_by_row", "opponent_sums", "opponent_factors",
            "padding_forecasts", "padding_loss", "fit_pads", "nll", "input_names", "playing_time", "season_progress",
            "network_inputs", "Standardised", "standardise", "neutral_inputs", "train_network", "forward_numpy",
            "forecast"]
@@ -136,6 +136,22 @@ def _end_rows(rows: pd.DataFrame) -> pd.DataFrame:
     hustle = [column for stat in STATS[HUSTLE_STATS[0]:] for column in stat.counts]
     last[hustle] = np.nan
     return last
+
+
+def reverse_rows(rows: pd.DataFrame) -> pd.DataFrame:
+    """The per-game rows with each season's games in reverse order: game numbers and dates mirrored inside the season,
+    so every state built from them stands on the games AFTER each game, and every opponent's allowed rates on its later
+    games (the backward pass; the owner, 2026-10-27: "run inference in reverse, to smooth out the weird beginning").
+    Reversing twice gives the rows back.
+
+    Example: a season of games numbered 0 to 1,314 from 2025-10-21 to 2026-06-20: game 0 becomes game 1,314, played
+    on 2026-06-20, and the Finals' last game becomes game 0 on 2025-10-21."""
+    out = rows.copy()
+    first = out.groupby("season").game_date.transform("min")
+    last = out.groupby("season").game_date.transform("max")
+    out["game_date"] = first + (last - out.game_date)
+    out["game_idx"] = out.groupby("season").game_idx.transform("max") - out.game_idx
+    return out
 
 
 def games_from_rows(rows: pd.DataFrame) -> Games:

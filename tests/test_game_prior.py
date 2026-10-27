@@ -119,3 +119,13 @@ def test_game_tables_fill_a_missing_game_with_the_players_fallback(design):
     assert table_o[g0, 0] == 1.5 and table_d[g1, 0] == -2.0
     assert table_o[g1, 0] == 0.25 and table_d[g0, 0] == -0.5
     assert (table_o[:, 1:] == 0.0).all()
+
+
+def test_the_splice_takes_each_players_first_half_from_the_backward_pass():
+    games = [f"g{g}" for g in range(7)]
+    forward = pd.DataFrame({"season": 2002, "player_id": 9, "side": "O", "game_id": games, "value": np.arange(7.0)})
+    backward = forward.assign(value=-np.arange(7.0) - 1.0).iloc[::-1].reset_index(drop=True)
+    out = game_prior.splice(forward, backward)
+    assert out.direction.tolist() == ["backward"] * 3 + ["forward"] * 4
+    np.testing.assert_array_equal(out.value.to_numpy(), [-1.0, -2.0, -3.0, 3.0, 4.0, 5.0, 6.0])
+    assert out.game_id.tolist() == games

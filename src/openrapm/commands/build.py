@@ -277,15 +277,16 @@ def rate_one_season(season: int, sums: dict, panel: pd.DataFrame, designs: Desig
 
 
 # what a game-by-game build keeps of each game row: who, when, the box-score prior's answer and the prior step 3 read
-GAME_PRIOR_COLUMNS = ["season", "player_id", "side", "game_id", "possessions", "season_progress", "poss_off_game",
-                      "poss_def_game", "box_game", "prior_game"]
+GAME_PRIOR_COLUMNS = ["season", "player_id", "side", "game_id", "direction", "possessions", "season_progress",
+                      "poss_off_game", "poss_def_game", "box_game", "prior_game"]
 
 
-def network_rows(season: int, network, games: dict, unseen, base: pd.DataFrame, shares) -> tuple:
+def network_rows(season: int, network, games: dict, unseen, base: pd.DataFrame, shares, backward=None) -> tuple:
     """(whole-season rows of every season but the unseen ones, and of the rated one; part-season rows of the seasons
     the box-score prior may train on; the rated season's game rows), each from the network that never saw the rated
     season (game_prior.py).  `games` maps each season to its game rows (data/player_games.py), `base` is the season
-    panel the columns the network does not make come from."""
+    panel the columns the network does not make come from.  With `backward`, the backward network of the rated season,
+    the first half of each player's games take their rows from the backward pass (game_prior.splice)."""
     training = [s for s in sorted(games) if s not in set(unseen)]
     trained, trained_states = game_prior.season_states(pd.concat([games[s] for s in training], ignore_index=True),
                                                        network)
@@ -293,7 +294,25 @@ def network_rows(season: int, network, games: dict, unseen, base: pd.DataFrame, 
     rated, rated_states = game_prior.season_states(games[season], network)
     rated_whole, _ = game_prior.network_panels(rated, rated_states, base, ())
     rows = game_prior.game_rows(rated, rated_states, base)
+    if backward is not None:
+        rows = game_prior.splice(rows, game_prior.backward_game_rows(games[season], backward, base))
+    else:
+        rows = rows.assign(direction="forward")
     return pd.concat([whole, rated_whole], ignore_index=True), parts, rows
+
+
+def season_network(cfg: dict, tag: str, season: int, unseen, reverse: bool):
+    """The rated season's network of `tag` (None for no tag), refused when it trained on an unseen season or reads the
+    season the other way round from `reverse`."""
+    if not tag:
+        return None
+    network = load_network(cfg, tag, season, game_rates.input_names(), game_rates.NAMES)
+    if set(int(s) for s in network.seasons) & set(unseen):
+        raise SystemExit(f"{season}: the network of {tag} trained on {sorted(set(unseen))}")
+    if bool(network.reverse) != bool(reverse):
+        raise SystemExit(f"{tag}: its networks read the season {'backward' if network.reverse else 'forward'}; this "
+                         f"setting reads it {'backward' if reverse else 'forward'}")
+    return network
 
 
 def game_box_priors(rows: pd.DataFrame, priors: dict, least_share: float) -> np.ndarray:
@@ -337,12 +356,12 @@ def rate_one_season_by_game(season: int, sums: dict, panel: pd.DataFrame, design
     Returns `rate_one_season`'s four, each SidePrior's values the season averages, and the rated season's game rows
     (`GAME_PRIOR_COLUMNS`)."""
     unseen = unseen_seasons(season, settings)
-    network = load_network(designs.cfg, settings.prior.game_prior, season, game_rates.input_names(), game_rates.NAMES)
-    if set(int(s) for s in network.seasons) & set(unseen):
-        raise SystemExit(f"{season}: the network of {settings.prior.game_prior} trained on {sorted(unseen)}")
+    network = season_network(designs.cfg, settings.prior.game_prior, season, unseen, reverse=False)
+    backward = season_network(designs.cfg, settings.prior.game_prior_backward, season, unseen, reverse=True)
     labels = rapm.career_labels(sums, unseen, settings.labels, settings.targets)
     outside = row_label_tables(sums, panel, unseen, settings, label_cache)
-    whole, parts, rows = network_rows(season, network, games, unseen, panel, settings.prior.part_season_shares)
+    whole, parts, rows = network_rows(season, network, games, unseen, panel, settings.prior.part_season_shares,
+                                      backward)
     whole = whole[whole.possessions > 0].reset_index(drop=True)
     parts = None if parts is None else parts[parts.possessions > 0].reset_index(drop=True)
     priors = box_prior.season_priors(labels, whole, season, unseen, settings, params, outside, parts)

@@ -1,6 +1,6 @@
 """`openrapm game-rates`: the multi-stat networks (game_rates.py), one per rated season, trained and scored.
 
-    openrapm game-rates train --tag net1 [--seasons 1997-2026] [--no-opponent] [--seed 0]
+    openrapm game-rates train --tag net1 [--seasons 1997-2026] [--no-opponent] [--reverse] [--seed 0]
     openrapm game-rates score --tag net1 [--against net1_no_opponent]
 
 `train`, for each rated season S of `--seasons`:
@@ -63,7 +63,7 @@ def _train_one(season: int, games, league_row, sums: tuple, args, cfg: dict):
     save_network(cfg, args.tag, SavedNetwork(
         season=season, weights=weights, mean=scaling.mean, sd=scaling.sd, ks=ks, opponent_pads=pads, seasons=trained,
         validation_players=np.unique(players[validation]), input_names=game_rates.input_names(),
-        stats=game_rates.NAMES))
+        stats=game_rates.NAMES, reverse=bool(args.reverse)))
     rated = real & (games.season == season)
     forecasts = np.zeros_like(padding)
     forecasts[rated] = game_rates.forecast(weights, scaling, inputs[rated], padding[rated], neutral=False)
@@ -85,7 +85,8 @@ def run_train(args, cfg: dict) -> int:
     every = range(int(cfg["first_season"]), last + 1)
     seasons = [int(s) for s in (args.seasons or every)]
     started = time.time()
-    games = game_rates.games_from_rows(trainable_player_games(cfg, every))
+    rows = trainable_player_games(cfg, every)
+    games = game_rates.games_from_rows(game_rates.reverse_rows(rows) if args.reverse else rows)
     league_row = game_rates.league_by_row(games, game_rates.league_levels(games))
     sums = game_rates.opponent_sums(games, league_row)
     print(f"game rows {int((~games.frame['end']).sum()):,} over {len(every)} seasons, {games.n_player_seasons:,} "
@@ -158,6 +159,9 @@ def add_game_rates(commands, parse_seasons) -> None:
     train.add_argument("--seasons", type=parse_seasons, default=None,
                        help="the rated seasons: 2026, 2017-2026 or 2017,2018 (default every finished season)")
     train.add_argument("--seed", type=int, default=0, help="the random draws' seed (default %(default)s)")
+    train.add_argument("--reverse", action="store_true",
+                       help="each season in reverse order: the network forecasts a game from the games after it, "
+                            "the backward pass `openrapm rate --game-prior-backward` reads")
     train.add_argument("--no-opponent", action="store_true",
                        help="no opponent factor: every game's exposure as played (the comparison arm)")
     train.add_argument("--force", action="store_true", help="train seasons already trained again")
