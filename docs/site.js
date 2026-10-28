@@ -1,5 +1,6 @@
 // Shared by every page, loaded in <head> so the theme is set before anything paints: light or dark from the
-// saved choice, else the system's; the button in the tab bar flips it and remembers the choice.
+// saved choice, else the system's; the button in the tab bar flips it and remembers the choice.  Also shows the
+// Power tab once its ratings are ready.
 (function () {
   var root = document.documentElement, saved = null;
   try { saved = localStorage.getItem("theme"); } catch (e) {}
@@ -13,6 +14,11 @@
   if (system && system.addEventListener)
     system.addEventListener("change", function (e) { if (!saved) apply(e.matches ? "dark" : "light"); });
   document.addEventListener("DOMContentLoaded", function () {
+    // the Power tab waits until every team has played the games its ratings use (power.json's meta.ready)
+    var power = document.querySelector('nav.site a[href="power.html"][hidden]');
+    if (power && window.fetch)
+      fetch("data/power.json").then(function (r) { return r.json(); })
+        .then(function (d) { if (d.meta.ready) power.hidden = false; }).catch(function () {});
     var button = document.querySelector("nav.site .theme");
     if (!button) return;
     apply(root.getAttribute("data-theme"));
