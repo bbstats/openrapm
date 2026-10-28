@@ -32,6 +32,21 @@ every number quoted here; read its measurement traps before trusting a number.  
   the 5 before, and the Power tab stays hidden until every team has played 10 games (meta.ready; site.js).  Published without the Changelog tab, which is
   still not on main.
 - **Published ratings unchanged: creation110.**  Nothing below is published or changes a default.
+- **Experiment 119, play-by-play fouls, goaltends, blocked shots and counts over expected through the Boruta screen;
+  RUNNING** (DECISIONS.md, "Experiment 119"; the owner, 2026-10-28: "go for it and remember to boruta").
+  - New per-game counts, `data/foul_counts.py`, cached as `data/event_counts/{season}_fouls.parquet` by `openrapm data
+    events`: goaltends, shooting fouls, loose-ball fouls, the shooter's blocked shots, three-shot trips.
+  - Seven counts over expected, the owner's form for anything that would be a ratio (`features.OVER_EXPECTED`,
+    `data/panel.add_over_expected`): the count minus a possession-weighted line on the others through the season's
+    players on one side, refit on a fold's games.
+  - Goaltends start in 2002 (`features.GOALTENDS_FROM`): before it most rows name only the team.
+  - Both panels rebuilt with the 12 new columns; the 160 older columns unchanged to the bit
+    (`scratch/2026-10-28_fouls/panel_check.py`).  Cache `outputs/screen/screen119/` (24 GB): the shipped boosters
+    refitted give back creation110's priors to 6.7e-16; seed 0's folds give back creation110's to 3.9e-13.
+  - The run: `scratch/2026-10-28_fouls/run.sh`, log `scratch/2026-10-28_fouls/run.log`, 68 trials from 1:01 PM, about
+    6 hours; then `155_input_screen.py table --tag screen119`.  Check 155 now takes its pool from the tag (`SCREENS`).
+  - To do after the run, not during it: `add_over_expected` fills seven columns one by one and pandas warns the frame
+    is fragmented; build them apart and join once.
 - **Experiment 118, the box-score prior from NVIDIA's pretrained Kumo Tabular network; verdict the owner's**
   (DECISIONS.md, "Experiment 118").  `src/openrapm/in_context_prior.py`: a params file naming the learner
   `kumo_tabular` puts the network where each LightGBM booster stands, the same training rows and five player folds, no
