@@ -27,6 +27,9 @@ dev = ["pytest>=8", "pytest-xdist>=3", "ruff==0.17.0"]
 # the multi-stat network (openrapm.game_rates) trains with PyTorch; nothing else needs it, and the ratings read its
 # saved weights with numpy.  The GPU build: --index-url https://download.pytorch.org/whl/cu130
 network = ["torch>=2.4"]
+# the box-score prior from NVIDIA's pretrained Kumo Tabular network (openrapm.in_context_prior, experiment 118), on a
+# CUDA GPU with PyTorch's GPU build as above; the shipped LightGBM prior does not need it
+kumo = ["structured-data-models>=0.2.1", "torch>=2.7"]
 
 [build-system]
 requires = ["setuptools>=68"]

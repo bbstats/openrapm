@@ -1,0 +1,23 @@
+{
+  "O": {
+    "learner": "kumo_tabular",
+    "params": {
+      "size": "small",
+      "members": 8,
+      "context_rows": 20000,
+      "query_rows": 8192,
+      "draw": 0
+    }
+  },
+  "D": {
+    "learner": "kumo_tabular",
+    "params": {
+      "size": "small",
+      "members": 8,
+      "context_rows": 20000,
+      "query_rows": 8192,
+      "draw": 0
+    }
+  },
+  "note": "experiment 118 (2026-10-28): NVIDIA Kumo Tabular, the small network, answering in context from 20,000 training rows drawn by row weight, 8 members; no bags (openrapm rate --bags 0)"
+}

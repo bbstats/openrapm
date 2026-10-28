@@ -70,6 +70,10 @@ the settings in params/booster_params_lgb1.json) solves:
            and fits, in each leaf, a linear model on the inputs its branch split on, ridge penalty
            linear_lambda (LightGBM's linear_tree)
 
+A params file naming the Kumo learner (experiment 118) puts an in_context_prior.InContextPrior where each booster
+stands: a pretrained network shown the same training rows at answer time instead of trees fitted to them
+(in_context_prior.py says how the row weights pick the rows it is shown).
+
 Player folds: players are sorted by label and assigned to folds 0,1,2,3,4,4,3,2,1,0,0,1,..., so every fold gets the
 same mix of good and bad players and leaving one out does not move the training mean (notes/DECISIONS.md, "The SPM
 memorises long-career stars", 2026-09-14; SPM was the box-score prior's earlier name).
@@ -94,12 +98,14 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from . import in_context_prior
 from .features import FEATURE_SETS, MISSING_OK, PANEL_INPUTS, ROW_FEATURES, add_features
 from .settings import PREDICTIONS
 
 __all__ = ["average_over_seasons", "career_rows", "season_runs", "chunk_seasons", "chunk_season_sets",
            "training_rows", "balanced_player_folds",
-           "LIGHTGBM_FIXED", "COLUMN_SHARES", "INPUT_CLIP", "ClippedBooster", "fit_lightgbm", "OutOfPlayerPrior",
+           "LIGHTGBM_FIXED", "COLUMN_SHARES", "INPUT_CLIP", "ClippedBooster", "fit_lightgbm", "fit_booster",
+           "OutOfPlayerPrior",
            "fit_out_of_player", "BaggedPrior", "player_bootstrap", "PREDICTIONS", "BAG_DRAW_STEP", "bag_split",
            "OutOfBagPrior", "out_of_bag_weights", "fit_prior", "rated_rows", "predict", "game_rated_rows",
            "predict_chosen", "SidePrior", "era_kernel", "season_priors"]
@@ -340,6 +346,15 @@ def fit_lightgbm(params: dict, inputs: np.ndarray, label: np.ndarray, weights: n
     return ClippedBooster(model, lower, upper)
 
 
+def fit_booster(params: dict, inputs: np.ndarray, label: np.ndarray, weights: np.ndarray,
+                kernel: np.ndarray | None = None, seed: int = 0):
+    """One booster: `fit_lightgbm`, or, when `params` names the Kumo learner (in_context_prior.LEARNER), an
+    in_context_prior.InContextPrior holding the training rows it answers from (experiment 118)."""
+    if params.get("learner") == in_context_prior.LEARNER:
+        return in_context_prior.InContextPrior.from_rows(params, inputs, label, weights, kernel, seed)
+    return fit_lightgbm(params, inputs, label, weights, kernel, seed)
+
+
 @dataclass
 class OutOfPlayerPrior:
     """The booster fitted on every training row, and one per fold fitted without that fold's players."""
@@ -360,14 +375,14 @@ def fit_out_of_player(train: pd.DataFrame, inputs, params: dict, n_folds: int = 
     label = train.label.to_numpy(float)
     weight = train.row_weight.to_numpy(float)
     kernel = None if kernel is None else np.asarray(kernel, dtype=float)
-    prior = OutOfPlayerPrior(full=fit_lightgbm(params, matrix, label, weight, kernel, seed), fold_models=[],
+    prior = OutOfPlayerPrior(full=fit_booster(params, matrix, label, weight, kernel, seed), fold_models=[],
                              held_out_players=[], inputs=list(inputs))
     if n_folds > 1:
         fold = balanced_player_folds(train, n_folds, fold_assignment)
         for left_out in range(n_folds):
             keep = fold != left_out
-            prior.fold_models.append(fit_lightgbm(params, matrix[keep], label[keep], weight[keep],
-                                                  None if kernel is None else kernel[keep], seed))
+            prior.fold_models.append(fit_booster(params, matrix[keep], label[keep], weight[keep],
+                                                 None if kernel is None else kernel[keep], seed))
             prior.held_out_players.append(set(train.index[~keep].tolist()))
     return prior
 
@@ -458,8 +473,8 @@ def fit_prior(train: pd.DataFrame, inputs, params: dict, n_folds: int = 5, fold_
         draw = bag + BAG_DRAW_STEP * int(bag_draw)
         rows, bag_kernel = player_bootstrap(train, draw, kernel)
         if prediction == "out_of_bag":
-            members.append(fit_lightgbm(params, rows[inputs].to_numpy(float), rows.label.to_numpy(float),
-                                        rows.row_weight.to_numpy(float), bag_kernel, draw))
+            members.append(fit_booster(params, rows[inputs].to_numpy(float), rows.label.to_numpy(float),
+                                       rows.row_weight.to_numpy(float), bag_kernel, draw))
             drawn.append(set(rows.index.unique().tolist()))
             continue
         split = bag_split(fold_assignment, draw) if split_per_bag else fold_assignment

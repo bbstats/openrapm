@@ -73,7 +73,11 @@ NEAREST = 8
 # the base arm at another setting of the box-score prior (HANDOFF, "START HERE" of 2026-10-26: the prior made robust
 # to how its players are split into the five training groups), each a dict of settings.PriorSettings fields
 VARIANTS = {"shipped": {}, "out_of_bag60": dict(prediction="out_of_bag", bags=60), "bags30": dict(bags=30),
-            "split_per_bag": dict(split_per_bag=True)}
+            "split_per_bag": dict(split_per_bag=True),
+            # experiment 118 (2026-10-28): the pretrained Kumo network in place of LightGBM, no bags; a random draw
+            # picks each member's training rows (in_context_prior.py)
+            "kumo_small": dict(booster_file="params/booster_params_kumo_small.json", bags=0),
+            "kumo_medium": dict(booster_file="params/booster_params_kumo_medium.json", bags=0)}
 ERAS = {"1997-2006": (1998, 2001, 2004), "2007-2016": (2007, 2010, 2013, 2016), "2017-2026": (2019, 2022, 2025)}
 
 
@@ -197,10 +201,11 @@ def build_cache(tag: str, seasons) -> int:
     return 0
 
 
-def box_prior_params(cfg: dict) -> dict:
+def box_prior_params(cfg: dict, booster_file: str | None = None) -> dict:
+    """{"O", "D"}: the booster settings of `booster_file`, the shipped file by default."""
     from openrapm.commands.build import booster_params
     from openrapm.settings import TEST
-    return booster_params(cfg, TEST.prior.booster_file)
+    return booster_params(cfg, booster_file or TEST.prior.booster_file)
 
 
 def fit_bags(train: pd.DataFrame, inputs: list, params: dict, settings, seed: int):
@@ -311,6 +316,9 @@ class Season:
         ws.prior_rows = prior_rows
         try:
             self.run.saved, self.run.out_dir = saved, out_dir
+            for side in ("O", "D"):
+                prime_in_context(saved[side], [ws.prior_rows(world.panel, side, saved[side])
+                                               for world in self.run.worlds.values()])
             folds = ws.season_folds(self.run)
             started = time.time()
             for repeat in range(self.run.repeats):
@@ -323,7 +331,22 @@ class Season:
         return whole.table.assign(season=self.season)
 
 
-_FIT = {}            # in a fitting process: the settings, the booster parameters and the last seasons' training rows
+def prime_in_context(side_saved: dict, rows: list) -> None:
+    """Ask a side's in-context priors (in_context_prior.py) about every row of `rows` (one frame per world) in one
+    pass each, so the season's folds read kept answers; LightGBM boosters are left alone."""
+    from openrapm.in_context_prior import InContextPrior
+    boosters = [side_saved["full"], *side_saved["folds"]]
+    for bag in side_saved.get("bags", []):
+        boosters += [bag["full"], *bag["folds"]]
+    boosters = [booster for booster in boosters if isinstance(booster, InContextPrior)]
+    if not boosters:
+        return
+    matrix = np.concatenate([frame[side_saved["model_feats"]].to_numpy(float) for frame in rows])
+    for booster in boosters:
+        booster.prime(matrix)
+
+
+_FIT = {}            # in a fitting process: the booster parameters by file and the last seasons' training rows
 
 
 def fit_task(tag: str, season: int, side: str, trial: Trial):
@@ -331,9 +354,12 @@ def fit_task(tag: str, season: int, side: str, trial: Trial):
     input shuffled when the arm asks, bag k at k + SEED_STEP x seed, the prior at the trial's variant."""
     from openrapm.data.config import load_config
     from openrapm.features import ROW_FEATURES
+    from openrapm.in_context_prior import LEARNER
+    settings = variant_settings(trial.variant)
     if "params" not in _FIT:
-        _FIT["params"] = box_prior_params(load_config())
-        _FIT["rows"] = {}
+        _FIT["params"], _FIT["rows"] = {}, {}
+    if settings.prior.booster_file not in _FIT["params"]:
+        _FIT["params"][settings.prior.booster_file] = box_prior_params(load_config(), settings.prior.booster_file)
     if season not in _FIT["rows"]:
         if len(_FIT["rows"]) >= 2:
             _FIT["rows"].pop(next(iter(_FIT["rows"])))
@@ -344,8 +370,11 @@ def fit_task(tag: str, season: int, side: str, trial: Trial):
         train = train.copy()
         train[trial.name] = shuffled(train[trial.name].to_numpy(float), trial.seed, trial.name, "train")
     names = trial_lists(trial)[side]
-    return season, side, fit_bags(train, names + ROW_FEATURES, _FIT["params"][side], variant_settings(trial.variant),
-                                  trial.seed)
+    params = _FIT["params"][settings.prior.booster_file][side]
+    if params.get("learner") == LEARNER:
+        # no bags to draw: the seed picks the Kumo members' training rows instead
+        return season, side, fit_bags(train, names + ROW_FEATURES, {**params, "draw": trial.seed}, settings, 0)
+    return season, side, fit_bags(train, names + ROW_FEATURES, params, settings, trial.seed)
 
 
 class Fitters:
