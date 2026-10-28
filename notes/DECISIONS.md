@@ -10623,3 +10623,88 @@ world's own panel); every whole-season rebuild reproduced the rate step to 0.0. 
 - Verdict pending the owner; by the rules it fails.  Report, version 4: https://claude.ai/artifact/5G3TBE5FcyP7vCJDhc9M7Y.
   Left open from the conversation: the season in progress, where the network's shrinking of a few games' numbers
   should matter most, and stats read as if each player's teammates were average.
+
+
+## Experiment 118: the box-score prior from NVIDIA's pretrained Kumo Tabular network (the owner, 2026-10-28: "kumo medium or small - could we use that for prior(s)? will have different speed/GPU memory etc requirements ... test it")
+
+**What it is.**  Kumo Tabular (https://huggingface.co/blog/nvidia/kumo-tabular; the library structured-data-models
+0.2.1, `import sdm`; weights nvidia/Kumo-Tabular, revision v1.0.1) is a transformer pretrained on artificial tables.
+It is never fitted to this project's rows: it is shown the training rows with their labels and the rows to answer in
+one pass, and answers each from the training rows it resembles.  Only the box-score prior can take it: the swap part
+of the prior is a line fitted on lineup swaps, not rows with answers.
+
+**What was built** (f45625c, 2e6adb4): `src/openrapm/in_context_prior.py`, `box_prior.fit_booster`, the params files
+`kumo_small`, `kumo_medium` and `kumo_small_equal`, check 155's variants of the same names, `tests/test_in_context_prior.py`.
+The Kumo prior stands where each LightGBM booster stands: the same training rows, the same five player folds, so a
+player's own label never reaches his prior; no bags.  Each of 8 members is shown 20,000 of the about 69,000 training
+rows a side, drawn without replacement with chance rising with the row weight; the answer is the mean of the 999
+quantiles it predicts, averaged over members.  Rows are answered in batches of exactly 8,192, so a row's answer is
+the same to the bit whatever is asked beside it (checked on 2025), which `openrapm folds`' reproduction check needs.
+
+**Speed and memory on the RTX 3070** (`scratch/2026-10-28_kumo/bench.py`, one member, 20 inputs, 600 rows answered):
+
+| training rows | small, seconds | small, peak GB | medium, seconds | medium, peak GB |
+|---|---|---|---|---|
+| 2,000 | 0.07 | 0.30 | 0.19 | 0.55 |
+| 10,000 | 0.30 | 0.48 | 0.73 | 0.64 |
+| 20,000 | 0.70 | 0.54 | 1.70 | 0.76 |
+| 40,000 | 1.93 | 0.72 | 4.56 | 1.05 |
+
+- 28.5 million parameters small, 62.5 million medium.  Eight members cost about eight times one.  One season's prior,
+  both sides, twelve sets of training rows: 1.6 minutes small, 3.6 medium.
+- Two processes running medium at once filled the card's 8 GB, and the card paged memory: one season in 33 minutes.
+  One process holds about 3 GB; Kumo runs take `--workers 1`.
+
+**2025 against the label** (`scratch/2026-10-28_kumo/one_season.py`): each 2025 player's prior against his RAPM over
+the seasons outside 2024-2026, weighted by the possessions behind it, 389 players.
+
+| side | prior | error | correlation | spread |
+|---|---|---|---|---|
+| offense | Kumo small / medium | 1.140 / 1.145 | 0.52 / 0.53 | 0.66 / 0.63 |
+| offense | shipped | 1.050 | 0.55 | 0.78 |
+| defense | Kumo small / medium | 1.665 / 1.681 | 0.32 / 0.29 | 1.03 / 0.98 |
+| defense | shipped | 1.464 | 0.46 | 0.44 |
+
+**Check 155** (`outputs/screen/screen112/trials_kumo_*.csv`, `scratch/2026-10-28_kumo/read_screen.py`): the
+within-season WOWY test on the ten tune seasons, one random draw of each variant against the shipped prior's five,
+paired by season, below 0 better.
+
+| variant | stage | change | z | seasons better | 1997-2006 | 2007-2016 | 2017-2026 |
+|---|---|---|---|---|---|---|---|
+| small | after the shrink | +2.893 | +12.8 | 0 of 10 | +3.05 | +2.56 | +3.18 |
+| small | before the shrink | +3.703 | +9.9 | 0 of 10 | +3.51 | +3.08 | +4.72 |
+| medium | after the shrink | +3.067 | +11.4 | 0 of 10 | +3.46 | +2.78 | +3.06 |
+| medium | before the shrink | +3.890 | +9.4 | 0 of 10 | +4.01 | +3.33 | +4.51 |
+| small, rows drawn equally | after the shrink | +2.989 | +12.6 | 0 of 10 | +3.40 | +2.64 | +3.04 |
+| small, rows drawn equally | before the shrink | +3.810 | +10.9 | 0 of 10 | +3.84 | +3.23 | +4.56 |
+
+- The shipped prior's five draws spread 0.058 a season on this test; the loss is fifty times that.  The next-season
+  check: +1.05, z +3.9, 4 of 20 (small); +0.85, z +4.0, 5 of 20 (medium); +0.88, z +4.0, 3 of 20 (drawn equally).
+- Where, small's first held-back game set of each season, the box-score prior positive good:
+
+| side | possessions | Kumo mean | shipped mean | Kumo spread | shipped spread | correlation |
+|---|---|---|---|---|---|---|
+| offense | under 250 | -0.07 | -0.38 | 0.06 | 0.20 | 0.34 |
+| offense | 2,500 and up | +0.41 | +0.53 | 0.63 | 0.54 | 0.63 |
+| defense | under 250 | -1.38 | -0.23 | 0.38 | 0.35 | 0.50 |
+| defense | 2,500 and up | 0.00 | +0.16 | 1.23 | 0.54 | 0.67 |
+
+- The bench near average on offense and well below it on defense, and the defense of regulars 2.3 times as wide.  Drawn
+  equally, so the bench players' rows are shown as often as there are of them, nothing changes: the loss is the
+  network's, not the draw's.  Medium is the same.
+- The likely reason: every player's training rows, his career, his runs of one to three seasons and his part seasons,
+  share one label.  The shipped booster's settings were searched against this test and its defensive leaves need 2,500
+  rows; the network takes the rows as independent cases and passes the labels' noise through, most where the label is
+  noisiest, the un-shrunk defensive one.
+- Medium's first run, two rating processes, was stopped on the GPU's memory; its result is the rerun with one.
+
+**2026, small, with today's shrink** (`openrapm rate --setting test --booster-params kumo_small --bags 0 --seasons
+2026 --name kumo118_2026`, then `openrapm shrink` on creation110's folds, so the multipliers are today's): totals
+correlate 0.82 with today's among the 390 players with 1,000 offensive possessions, the median moves 0.82 points per
+100, the offense narrower, standard deviation 1.25 against 1.58.  Down: Giannis Antetokounmpo -4.26, 5.85 to 1.59;
+Donovan Mitchell -2.94; Kawhi Leonard -2.12; Shai Gilgeous-Alexander -1.88, his offense 6.14 to 4.29; Jimmy Butler
+-1.83; Bam Adebayo -1.78.  Up: Day'Ron Sharpe +2.16, Dru Smith +1.66, Moussa Diabaté +1.20, Luka Dončić +0.76.
+Wembanyama 8.97 to 8.89, still first.
+
+**Verdict** pending the owner; by the rules it fails by far, in every era, both sizes.  No full build was run.  The
+code stays, off by default.

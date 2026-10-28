@@ -1,7 +1,7 @@
 #!/bin/bash
 # Experiment 118's medium again: check 155 with kumo_medium (training rows drawn by weight
 # as kumo_small), one random draw, one rating process: two filled the 8 GB of GPU memory.
-#   nohup bash scratch/2026-10-28_kumo/equal.sh > /dev/null 2>&1 &
+#   nohup bash scratch/2026-10-28_kumo/medium.sh > /dev/null 2>&1 &
 cd "$(dirname "$0")/../.."
 
 LOG=outputs/screen/screen112/kumo_medium.log

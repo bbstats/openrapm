@@ -1,7 +1,7 @@
 # Handoff
 
 **What this file is.**  Where the work stands, what waits on the owner, and the commands a session runs.  Rewritten
-on the afternoon of 2026-10-22, its status and next steps on 2026-10-23 (twice), 2026-10-24, 2026-10-26 and 2026-10-27; the earlier file is in git history.  `DECISIONS.md` is the permanent record and carries
+on the afternoon of 2026-10-22, its status and next steps on 2026-10-23 (twice), 2026-10-24, 2026-10-26, 2026-10-27 and 2026-10-28; the earlier file is in git history.  `DECISIONS.md` is the permanent record and carries
 every number quoted here; read its measurement traps before trusting a number.  `README.md` says what OpenRAPM is,
 `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's standing rules.
 
@@ -22,7 +22,24 @@ every number quoted here; read its measurement traps before trusting a number.  
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
 
-## Where it stands, 2026-10-27
+## Where it stands, 2026-10-28
+
+- **Published ratings unchanged: creation110.**  Nothing below is published or changes a default.
+- **Experiment 118, the box-score prior from NVIDIA's pretrained Kumo Tabular network; verdict the owner's**
+  (DECISIONS.md, "Experiment 118").  `src/openrapm/in_context_prior.py`: a params file naming the learner
+  `kumo_tabular` puts the network where each LightGBM booster stands, the same training rows and five player folds, no
+  bags (`--booster-params kumo_small --bags 0`).  Library structured-data-models 0.2.1 in .venv, the optional group
+  `kumo` in pyproject.toml; the weights download from the Hugging Face hub on first use.
+  - Fits the RTX 3070 easily: under 1.1 GB of GPU memory per process; one season's prior 1.6 minutes small, 3.6
+    medium.  Two processes running medium at once filled the 8 GB and paged: Kumo runs take one GPU process.
+  - Check 155, one random draw each: the within-season WOWY test after the shrink +2.89 small, +3.07 medium, +2.99
+    with the rows drawn equally, z +11 to +13, worse in all 10 seasons and every era; the next-season check z +4.
+    It rates the bench near average on offense and well below on defense, and the defense twice as wide.
+  - No full build.  `openrapm folds` would need every rebuilt season asked in one pass, as check 155's
+    `prime_in_context` does, or each held-back game set costs twelve passes of the network.
+  - Tables `season_ratings_kumo118_2026*`, 2026 alone on today's shrink, for the eye check only.
+
+## Where it stood, 2026-10-27
 
 - **Published ratings unchanged: creation110.**  Nothing below is published or changes a default.
 - **Experiment 114, the box-score prior game by game, built in full; verdict the owner's** (DECISIONS.md, "Experiment
@@ -347,6 +364,6 @@ What else the work of 2026-10-23 left open:
 
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest -q                       # 797 passed, 2 skipped, 1 xfailed: the backup bigs
+    .venv/Scripts/python -m pytest -q                       # 838 passed, 2 skipped, 1 xfailed: the backup bigs
     uvx ruff check .                                         # clean
-    git log --oneline -1                                     # the handoff of 2026-10-26
+    git log --oneline -1                                     # the handoff of 2026-10-28
