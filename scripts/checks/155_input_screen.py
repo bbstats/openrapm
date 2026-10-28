@@ -77,7 +77,9 @@ VARIANTS = {"shipped": {}, "out_of_bag60": dict(prediction="out_of_bag", bags=60
             # experiment 118 (2026-10-28): the pretrained Kumo network in place of LightGBM, no bags; a random draw
             # picks each member's training rows (in_context_prior.py)
             "kumo_small": dict(booster_file="params/booster_params_kumo_small.json", bags=0),
-            "kumo_medium": dict(booster_file="params/booster_params_kumo_medium.json", bags=0)}
+            "kumo_medium": dict(booster_file="params/booster_params_kumo_medium.json", bags=0),
+            # its second look: every training row the same chance to be shown, whatever its weight
+            "kumo_small_equal": dict(booster_file="params/booster_params_kumo_small_equal.json", bags=0)}
 ERAS = {"1997-2006": (1998, 2001, 2004), "2007-2016": (2007, 2010, 2013, 2016), "2017-2026": (2019, 2022, 2025)}
 
 

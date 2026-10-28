@@ -1,0 +1,25 @@
+{
+  "O": {
+    "learner": "kumo_tabular",
+    "params": {
+      "size": "small",
+      "members": 8,
+      "context_rows": 20000,
+      "query_rows": 8192,
+      "draw": 0,
+      "draw_by": "equal"
+    }
+  },
+  "D": {
+    "learner": "kumo_tabular",
+    "params": {
+      "size": "small",
+      "members": 8,
+      "context_rows": 20000,
+      "query_rows": 8192,
+      "draw": 0,
+      "draw_by": "equal"
+    }
+  },
+  "note": "experiment 118's second look (2026-10-28): kumo_small with every training row the same chance to be shown, whatever its weight, so the bench players' rows are shown as often as there are of them; no bags (openrapm rate --bags 0)"
+}

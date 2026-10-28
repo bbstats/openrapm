@@ -33,8 +33,10 @@ seasons, about 6,000 rows a side.  The rows to answer go through the network in 
 the last one filled up with copies of its first row, so a row's answer never depends on which rows were asked with it.
 
 Settings (params/booster_params_kumo_*.json, read by data.config.booster_params): `size` small (28.5 million
-parameters) or medium (62.5 million), `members`, `context_rows`, `query_rows`, and `draw`, which picks another set of
-random draws for the noise control.
+parameters) or medium (62.5 million), `members`, `context_rows`, `query_rows`, `draw`, which picks another set of
+random draws for the noise control, and `draw_by`: "row_weight" as above, or "equal", every training row the same
+chance whatever its weight, so the bench players' rows are shown as often as there are of them (experiment 118's
+second look: drawn by weight, the prior got the bench wrong).
 
 On the RTX 3070 (scratch/2026-10-28_kumo/bench.py): one member on 20,000 training rows, 600 rows to answer, takes
 0.7 s small and 1.7 s medium, at most 0.8 GB of GPU memory.
@@ -48,10 +50,11 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-__all__ = ["LEARNER", "SIZES", "InContextPrior", "context_draws", "network"]
+__all__ = ["LEARNER", "SIZES", "DRAW_BY", "InContextPrior", "context_draws", "network"]
 
 LEARNER = "kumo_tabular"         # the learner a params file names for this prior
 SIZES = ("small", "medium")
+DRAW_BY = ("row_weight", "equal")    # what decides a training row's chance to be shown (`draw_by`)
 _NETWORKS: dict = {}             # size -> the network, loaded once per process
 
 
@@ -123,8 +126,13 @@ class InContextPrior:
     @classmethod
     def from_rows(cls, params: dict, inputs, label, weights, kernel=None, seed: int = 0) -> "InContextPrior":
         """The prior on box_prior's training rows with `params` (a params file's side, data.config.booster_params):
-        the row weights rescaled to mean 1 and times the era kernel, as box_prior.fit_lightgbm weighs them."""
+        the row weights rescaled to mean 1 and times the era kernel, as box_prior.fit_lightgbm weighs them; every
+        weight 1 with `draw_by` "equal"."""
+        if params.get("draw_by", "row_weight") not in DRAW_BY:
+            raise ValueError(f"draw_by is one of {DRAW_BY}, not {params['draw_by']!r}")
         weights = np.asarray(weights, dtype=float)
+        if params.get("draw_by", "row_weight") == "equal":
+            weights = np.ones_like(weights)
         weights = weights / weights.mean()
         if kernel is not None:
             weights = weights * np.asarray(kernel, dtype=float)

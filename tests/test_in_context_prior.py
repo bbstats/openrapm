@@ -44,6 +44,15 @@ def test_heavier_rows_are_shown_more_often_and_each_member_draws_its_own():
     assert not (shown == context_draws(weights, 4, 200, 1, 0)).all()      # another draw, other rows
 
 
+def test_drawn_equally_every_row_has_the_same_chance_whatever_its_weight():
+    weights = np.r_[np.ones(900), np.full(100, 50.0)]
+    params = {"learner": in_context_prior.LEARNER, "draw_by": "equal"}
+    prior = InContextPrior.from_rows(params, np.zeros((1000, 2)), np.zeros(1000), weights)
+    assert (prior.weights == 1).all()
+    with pytest.raises(ValueError):
+        InContextPrior.from_rows({**params, "draw_by": "possessions"}, np.zeros((3, 2)), np.zeros(3), np.ones(3))
+
+
 def test_a_row_without_weight_cannot_be_drawn():
     with pytest.raises(ValueError):
         context_draws(np.r_[1.0, 0.0, 2.0], members=1, context_rows=1, draw=0, seed=0)
