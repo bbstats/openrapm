@@ -182,8 +182,8 @@ def test_every_page_carries_the_same_tabs_with_its_own_marked():
     import re
     from pathlib import Path
     docs = Path(__file__).resolve().parents[1] / "docs"
-    tabs = ["./", "similarity.html", "bias.html", "about.html", "changelog.html"]
-    pages = ("about.html", "index.html", "similarity.html", "bias.html", "changelog.html")
+    tabs = ["./", "power.html", "similarity.html", "bias.html", "about.html", "changelog.html"]
+    pages = ("about.html", "index.html", "power.html", "similarity.html", "bias.html", "changelog.html")
     navs = {page: (docs / page).read_text(encoding="utf-8") for page in pages}
     navs["PAGE_HEAD"] = site.PAGE_HEAD + "</nav>"
     for page, text in navs.items():
@@ -357,3 +357,32 @@ def test_a_games_part_multiplied_by_step_4_is_split_with_its_factor(openrapm_sit
     for _, player_id, _, off, deff, _, _ in rows[:25]:
         for pieces, side in ((off, "off"), (deff, "def")):
             assert abs(sum(pieces[1:4]) - table.loc[player_id, f"u_{side}"]) < 0.0151
+
+
+# ------------------------------------------------------------------------------ the power ratings page
+def test_power_ratings_weigh_each_rating_by_its_share_of_the_last_games_with_blowouts_at_half():
+    slots = {f"{side}{i}": [10 * (side == "a") + i] * 3 for side in "ha" for i in range(1, 6)}
+    slots["h5"] = [5, 6, 6]                                # player 6 replaces player 5 in the later stints
+    dates = pd.to_datetime(["2026-10-20", "2026-10-20", "2026-10-22"])
+    stints = pd.DataFrame({"game_id": ["g1", "g1", "g2"], "game_date": dates,
+                           "poss_h": [40, 10, 50], "poss_a": [40, 10, 50], "is_gt": [False, True, False], **slots})
+    ids = list(range(1, 7)) + list(range(11, 16))
+    teams = pd.DataFrame([(game, pid, "HOM" if pid < 10 else "AWY", "Home" if pid < 10 else "Away")
+                          for game in ("g1", "g2") for pid in ids], columns=["game_id", "player_id", "tm", "name"])
+    games = site.player_game_possessions(stints, teams)
+    # game 1 counts 80 + 20 x 0.5 = 90 possessions; player 5 played the 80, player 6 the 10 of blowout and game 2's 100
+    both = site.team_shares(games, n_games=10)
+    shares = both.set_index("player_id").share
+    assert shares[5] == pytest.approx(80 / 190) and shares[6] == pytest.approx(110 / 190)
+    assert shares[1] == pytest.approx(1.0) and both.groupby("tm").share.sum().tolist() == pytest.approx([5, 5])
+    # the last game only: player 5 drops out
+    assert 5 not in set(site.team_shares(games, n_games=1).player_id)
+    table = pd.DataFrame({"season": 2027, "player_id": ids, "player_name": [f"P{i}" for i in ids],
+                          "rating_off": [1.0] * 5 + [3.0] + [0.0] * 5, "rating_def": 0.0,
+                          "rating_total": [1.0] * 5 + [3.0] + [0.0] * 5, "poss_season": [500] * 5 + [40] + [500] * 5})
+    document = site.power_document(table, games, 2027, "2026-10-28")
+    home = next(team for team in document["teams"] if team["tm"] == "HOM")
+    assert home["o"] == pytest.approx(round(4 + 80 / 190 + 3 * 110 / 190, 2))
+    assert document["teams"][0]["tm"] == "HOM" and document["meta"]["through"] == "2026-10-22"
+    # player 6 is under 60 possessions: counted in the sums, shown as the team's last row
+    assert home["players"][-1][:3] == ["Other players", None, round(100 * 110 / 190, 1)]

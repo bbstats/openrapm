@@ -216,7 +216,7 @@ def _run_site(args: argparse.Namespace, cfg: dict) -> int:
     from .site import run_site
     return run_site(cfg, ratings=args.ratings, out_dir=args.out_dir, built=args.built, bias=args.bias,
                     decomposition=args.decomposition, bias_tables=args.bias_tables, similarity=args.similarity,
-                    openrapm_decomposition=args.openrapm_decomposition)
+                    openrapm_decomposition=args.openrapm_decomposition, power=args.power)
 
 
 def _run_compare(args: argparse.Namespace, cfg: dict) -> int:
@@ -639,6 +639,9 @@ def _add_site(commands) -> None:
                       help="also the OpenRAPM decomposition page's file (rerun after every build)")
     site.add_argument("--similarity", action="store_true",
                       help="also the similarity page's files: each player-season's nearest player-seasons")
+    site.add_argument("--power", action="store_true",
+                      help="also the power ratings page's file: the latest season's ratings times each player's "
+                           "share of his team's possessions over its last 10 games")
     site.set_defaults(run=_run_site)
 
 

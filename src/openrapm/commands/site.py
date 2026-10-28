@@ -10,6 +10,8 @@
                                      published rating split into pieces that add up to it
     openrapm site --similarity       also docs/data/similarity/, the similarity page: each player-season's nearest
                                      player-seasons of other players
+    openrapm site --power            also docs/data/power.json, the power ratings page: each team's current ratings
+                                     times its players' shares of its possessions over its last 10 games
 
 The pages' wording and look are not this command's to change: it writes data, and the bias page's text is
 copied unchanged.
@@ -70,7 +72,7 @@ def today() -> str:
 
 def run_site(cfg: dict, ratings=None, out_dir=None, built: str | None = None, bias: bool = False,
              decomposition: bool = False, bias_tables=None, similarity: bool = False,
-             openrapm_decomposition: bool = False) -> int:
+             openrapm_decomposition: bool = False, power: bool = False) -> int:
     """`openrapm site`: ratings.json always; the bias page, the decomposition files, the similarity files and the
     OpenRAPM decomposition file when asked.
 
@@ -91,6 +93,8 @@ def run_site(cfg: dict, ratings=None, out_dir=None, built: str | None = None, bi
         write_similarity(cfg, ratings_path, out_dir / "data" / SIMILARITY_FOLDER, built or today())
     if openrapm_decomposition:
         write_openrapm_decomposition(cfg, ratings_path, out_dir / "data", built or table_date(ratings_path))
+    if power:
+        write_power(cfg, ratings_path, out_dir / "data", built or table_date(ratings_path))
     return 0
 
 
@@ -273,6 +277,7 @@ PAGE_HEAD = """<!doctype html>
 <main>
 <nav class="site">
   <a href="./">Ratings</a>
+  <a href="power.html">Power</a>
   <a href="similarity.html">~ Similarity</a>
   <a href="bias.html" aria-current="page">Bias</a>
   <a href="about.html">About</a>
@@ -1315,3 +1320,122 @@ def write_similarity(cfg: dict, ratings_path: Path, data_dir: Path, built: str) 
     size = sum(path.stat().st_size for path in data_dir.glob("*.json"))
     print(f"wrote {data_dir}: player_seasons.json and {rows.season.nunique()} season files, {size / 1e6:.1f} MB "
           f"({time.time() - started:.0f}s)", flush=True)
+
+
+# ===================================================================================== the power ratings page
+# Each team as it has played lately: every player's current-season rating times his share of the team's possessions
+# over its last 10 games, summed over the team (the owner's design, 2026-10-28).  Shares add up to 500%, five on the
+# floor, so a team of average players is 0 and the sums are points per 100 possessions above an average team.
+#
+# A possession counts for both teams of a game, on offense and on defense alike.  A blowout possession, the season's
+# garbage time (config garbage_time: the 4th quarter with a margin of 20 or more, or 15 or more in its last 6
+# minutes), counts half: "blowouts weighted somewhat less".
+#
+# The file, docs/data/power.json: {"meta": {"season", "through", "games", "blowout_weight", "built"},
+#     "teams": [{"tm": "OKC", "name": "Oklahoma City Thunder", "g": 10, "o", "d", "t",
+#                "players": [[name, id, share, o, d, t], ...]}, ...]}
+# teams best total first, each team's players by share; share a percent at one decimal, ratings at two.  Players
+# under the site's 60 offensive possessions (`MIN_POSSESSIONS_SHOWN`) count in their team's sums and are shown as one
+# last row, ["Other players", null, their summed share, their share-weighted ratings].
+POWER_FILE = "power.json"
+POWER_GAMES = 10
+BLOWOUT_WEIGHT = 0.5
+SLOTS = [f"{side}{i}" for side in "ha" for i in range(1, 6)]
+
+
+def season_stints(season: int, cfg: dict) -> pd.DataFrame:
+    """The season's stints, regular season and playoffs, whichever exist."""
+    paths = [resolve(cfg, "stints") / f"{season}_{phase}.parquet" for phase in ("RS", "PO")]
+    parts = [pd.read_parquet(path, columns=["game_id", "game_date", "poss_h", "poss_a", "is_gt", *SLOTS])
+             for path in paths if path.exists()]
+    if not parts:
+        raise SystemExit(f"no stints for {season}; `openrapm data stints` builds them")
+    return pd.concat(parts, ignore_index=True)
+
+
+def game_teams(season: int, cfg: dict) -> pd.DataFrame:
+    """Each player's team in each game of the season, from its game logs: game_id, player_id, tm, name."""
+    paths = [raw_dir(cfg) / "gamelog" / f"{season}_{phase}.parquet" for phase in ("RS", "PO")]
+    logs = pd.concat([pd.read_parquet(path, columns=["GAME_ID", "PLAYER_ID", "TEAM_ABBREVIATION", "TEAM_NAME"])
+                      for path in paths if path.exists()], ignore_index=True)
+    return logs.set_axis(["game_id", "player_id", "tm", "name"], axis=1).drop_duplicates(["game_id", "player_id"])
+
+
+def player_game_possessions(stints: pd.DataFrame, teams: pd.DataFrame) -> pd.DataFrame:
+    """One row per player per game: game_id, game_date, player_id, tm, name and poss, his possessions at both ends
+    with each blowout possession counted `BLOWOUT_WEIGHT`."""
+    weight = np.where(stints.is_gt, BLOWOUT_WEIGHT, 1.0) * (stints.poss_h + stints.poss_a)
+    long = pd.concat([pd.DataFrame({"game_id": stints.game_id, "game_date": stints.game_date,
+                                    "player_id": stints[slot].astype("int64"), "poss": weight})
+                      for slot in SLOTS], ignore_index=True)
+    games = long.groupby(["game_id", "game_date", "player_id"], as_index=False).poss.sum()
+    games = games.merge(teams, on=["game_id", "player_id"], how="left")
+    if games.tm.isna().any():
+        missing = games[games.tm.isna()]
+        raise SystemExit(f"{len(missing)} player-games of the stints are not in the game logs, e.g. "
+                         f"{missing.iloc[0].to_dict()}")
+    return games
+
+
+def team_shares(games: pd.DataFrame, n_games: int) -> pd.DataFrame:
+    """Each player's share of his team's possessions over the team's last `n_games` games: tm, name, player_id,
+    share (5.0 summed over a team) and g, the games counted.  A game's team possessions are its players' summed over
+    five."""
+    team_games = games.groupby(["tm", "game_id"], as_index=False).agg(game_date=("game_date", "first"),
+                                                                       poss=("poss", "sum"))
+    team_games["poss"] /= 5
+    last = (team_games.sort_values(["tm", "game_date", "game_id"]).groupby("tm").tail(n_games))
+    recent = games.merge(last[["tm", "game_id"]], on=["tm", "game_id"])
+    totals = last.groupby("tm").agg(team_poss=("poss", "sum"), g=("game_id", "size"))
+    players = recent.groupby(["tm", "player_id"], as_index=False).agg(name=("name", "last"), poss=("poss", "sum"))
+    players = players.join(totals, on="tm")
+    players["share"] = players.poss / players.team_poss
+    return players[["tm", "name", "player_id", "share", "g"]]
+
+
+def power_numbers(share, offense, defense, total) -> list:
+    """A player row's numbers: his share as a percent at one decimal, his three ratings at two."""
+    return [round(100 * float(share), 1), *(round(float(value), 2) for value in (offense, defense, total))]
+
+
+def power_document(table: pd.DataFrame, games: pd.DataFrame, season: int, built: str) -> dict:
+    """power.json's document for `season`: the teams, best total first, each with its players by share."""
+    ratings = table[table.season == season].set_index("player_id")
+    shares = team_shares(games, POWER_GAMES)
+    unrated = sorted(set(shares.player_id) - set(ratings.index))
+    if unrated:
+        raise SystemExit(f"{len(unrated)} players of {season}'s games have no {season} rating, e.g. {unrated[:5]}")
+    shares = shares.join(ratings[["player_name", "rating_off", "rating_def", "rating_total", "poss_season"]],
+                         on="player_id")
+    columns = ["rating_off", "rating_def", "rating_total"]
+    teams = []
+    for tm, rows in shares.groupby("tm"):
+        rows = rows.sort_values("share", ascending=False)
+        sums = [float((rows.share * rows[column]).sum()) for column in columns]
+        shown, others = rows[rows.poss_season >= MIN_POSSESSIONS_SHOWN], rows[rows.poss_season < MIN_POSSESSIONS_SHOWN]
+        players = [[r.player_name if isinstance(r.player_name, str) else "", int(r.player_id), *power_numbers(
+                    r.share, r.rating_off, r.rating_def, r.rating_total)] for r in shown.itertuples(index=False)]
+        if len(others):
+            share = others.share.sum()
+            players.append(["Other players", None, *power_numbers(
+                share, *((others.share * others[column]).sum() / share for column in columns))])
+        teams.append(dict(tm=tm, name=rows.name.iloc[0], g=int(rows.g.iloc[0]),
+                          **{side: round(value, 2) for side, value in zip("odt", sums)}, players=players))
+    teams.sort(key=lambda team: -team["t"])
+    meta = dict(season=season, through=pd.Timestamp(games.game_date.max()).strftime("%Y-%m-%d"), games=POWER_GAMES,
+                blowout_weight=BLOWOUT_WEIGHT, built=built)
+    return dict(meta=meta, teams=teams)
+
+
+def write_power(cfg: dict, ratings_path: Path, data_dir: Path, built: str) -> None:
+    """power.json in `data_dir`, for the ratings table's latest season."""
+    table = pd.read_parquet(ratings_path)
+    season = int(table.season.max())
+    games = player_game_possessions(season_stints(season, cfg), game_teams(season, cfg))
+    document = power_document(table, games, season, built)
+    data_dir.mkdir(parents=True, exist_ok=True)
+    path = data_dir / POWER_FILE
+    path.write_text(json.dumps(document, separators=(",", ":")), encoding="utf-8")
+    top = document["teams"][0]
+    print(f"wrote {path}: {len(document['teams'])} teams of {season} through {document['meta']['through']}, top "
+          f"{top['tm']} {top['t']:+.2f}", flush=True)

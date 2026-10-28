@@ -12,7 +12,9 @@
 #      place of yesterday's rows, every finished season as it was
 #   4. `openrapm site --openrapm-decomposition` into the site worktree, then the two data files committed and pushed to
 #      main, where GitHub Pages serves docs/.  The ratings page opens on the season in progress only once its median
-#      player has 250 offensive possessions (openrapm site, default_season).
+#      player has 250 offensive possessions (openrapm site, default_season).  Once the power ratings page is on main,
+#      `--power` writes its file too, docs/data/power.json: each team's current ratings times its players' shares of
+#      its possessions over its last 10 games, pushed with the other two.
 #
 # The site worktree, SITE, is a checkout of origin/main that only this job writes: it is reset to origin/main each
 # morning, so the working tree in ROOT, its branch and its uncommitted work are never touched.  Made once with
@@ -51,8 +53,10 @@ step $PY -u -m openrapm build --seasons $SEASON --replace-seasons
 [ "$PUBLISH" = "1" ] || finish "built, not published (PUBLISH=0)" 0
 step git -C "$SITE" fetch origin main
 step git -C "$SITE" checkout --detach --force origin/main
-step $PY -u -m openrapm site --openrapm-decomposition --out-dir "$SITE/docs"
 FILES="docs/data/ratings.json docs/data/decompose_openrapm.json"
+POWER=""
+if [ -f "$SITE/docs/power.html" ]; then POWER="--power"; FILES="$FILES docs/data/power.json"; fi
+step $PY -u -m openrapm site --openrapm-decomposition $POWER --out-dir "$SITE/docs"
 if git -C "$SITE" diff --quiet -- $FILES; then
   finish "nothing new to publish" 0
 fi
