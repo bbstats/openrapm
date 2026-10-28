@@ -48,7 +48,8 @@ __all__ = ["Feature", "BOX_RATES", "UNCENTRED_RATES", "ROLE", "CLOSENESS", "SHOT
            "BIO", "ON_COURT", "OFF_COURT", "ON_MINUS_OFF", "PLAYOFF_SHARE", "EVENT_RATES", "CAREER_FROM_DEBUT",
            "FROM_DEBUT", "TRACKING_RATES", "HUSTLE_RATES", "MATCHUP_RATES", "DASHBOARD_RATES", "MISSING_OK", "DERIVED",
            "RATIOS", "VS_LEAGUE", "SHOTQ", "SHOTQ_PADS", "CREATION", "CREATION_ESTIMATED", "UNCENTRED_EVENT_RATES",
-           "CREATION_RATES", "UNCENTRED_CREATION_RATES", "CREATION_INPUTS", "SCREEN_CANDIDATES",
+           "CREATION_RATES", "UNCENTRED_CREATION_RATES", "CREATION_INPUTS", "SCREEN_CANDIDATES", "FOUL_RATES",
+           "OVER_EXPECTED", "GOALTENDS_FROM", "GOALTEND_INPUTS", "SCREEN_CANDIDATES_119",
            "PRIOR_FEATURES", "PANEL_INPUTS", "PANEL_KEYS",
            "SEASON_PANEL_COLUMNS", "ROW_FEATURES", "SHIPPED", "REBOUND_PARTS", "STEAL_PARTS", "POINTS_PARTS",
            "THREE_POINT_PARTS", "FEATURE_SETS", "CATALOGUE", "add_features", "add_shotq", "meaning",
@@ -263,19 +264,63 @@ CREATION_INPUTS = [*(f"unassisted_makes_{g}_per100" for g in CREATION_GROUPS), "
 SCREEN_CANDIDATES = {"O": [*CREATION_ESTIMATED, "potential_assists_estimated_per100", *CREATION_INPUTS],
                      "D": ["bad_pass_steals_per100", "lost_ball_steals_per100", "russell_blocks_per100"]}
 
-# Every input the prior could read (133): the rates, the role, every derived column, career, body, on-court, the
+# Experiment 119 (the owner, 2026-10-28: goaltends per 100; "add in any useful proxies as well! like BLK/PF"; "it's
+# probably cleaner to do J - exp J (from K) so we don't get weird ratio tails - for anything we'd be dividing";
+# "let's do this with turnovers for sure! tov-exp tov from (TS Att and AST?)").  Five more per-game counts read from
+# the play-by-play (data/foul_counts.py), padded per 100 and centred like the event counts.
+FOUL_RATES = ["goaltends_per100", "shooting_fouls_per100", "loose_ball_fouls_per100", "shots_blocked_per100",
+              "three_shot_trips_per100"]
+GOALTENDS, SHOOTING_FOULS, LOOSE_BALL_FOULS, SHOTS_BLOCKED, THREE_SHOT_TRIPS = FOUL_RATES
+# Each proxy that would divide one count by another is the count minus the count expected from the others instead,
+# so a player with few of the others cannot make a long tail: a straight line through the season's players on one
+# side, weighted by possessions, on the padded centred rates of the games the rows are built from
+# (data/panel.add_over_expected), so a fold refits it on its fit games.  The rates are centred, so the line's
+# intercept takes the league levels.  {name: (the count, [the counts it is expected from])}, each a weighted sum of
+# panel columns.  Example, 2025 offence: expected turnovers per 100 = 0.27 + 0.070 x true-shooting attempts + 0.201 x
+# assists, uncentred; Westbrook's 5.27 is 1.55 over his 21.5 attempts and 9.7 assists.
+_TWOS_TAKEN = {TWOS_MADE: 1.0, TWOS_MISSED: 1.0}
+_THREES_TAKEN = {THREES_MADE: 1.0, THREES_MISSED: 1.0}
+_TRUE_SHOOTING_ATTEMPTS = {**_TWOS_TAKEN, **_THREES_TAKEN, FREE_THROWS_MADE: 0.44, FREE_THROWS_MISSED: 0.44}
+OVER_EXPECTED = {
+    "goaltends_over_expected_from_blocks_per100": ({GOALTENDS: 1.0}, [{BLOCKS: 1.0}]),
+    "blocks_over_expected_from_fouls_per100": ({BLOCKS: 1.0}, [{FOULS: 1.0}]),
+    "steals_over_expected_from_fouls_per100": ({STEALS: 1.0}, [{FOULS: 1.0}]),
+    "shots_blocked_over_expected_from_attempts_per100": ({SHOTS_BLOCKED: 1.0}, [_TWOS_TAKEN, _THREES_TAKEN]),
+    "three_shot_trips_over_expected_from_threes_per100": ({THREE_SHOT_TRIPS: 1.0}, [_THREES_TAKEN]),
+    "assists_over_expected_from_turnovers_per100": ({ASSISTS: 1.0}, [{TURNOVERS: 1.0}]),
+    "turnovers_over_expected_from_attempts_and_assists_per100": ({TURNOVERS: 1.0},
+                                                                 [_TRUE_SHOOTING_ATTEMPTS, {ASSISTS: 1.0}]),
+}
+# Before 2002 most goaltending rows name only the team ("76ERS Violation: Def. Goaltending Violation"): 11% name the
+# player in 1997, 30% in 1999, 50% in 2001, every one from 2002.  The two goaltend inputs are missing before 2002
+# (data/panel.py), as the dashboard inputs are before they start, so a training row averages them over the seasons
+# that have them.
+GOALTENDS_FROM = 2002
+GOALTEND_INPUTS = [GOALTENDS, "goaltends_over_expected_from_blocks_per100"]
+MISSING_OK.extend(GOALTEND_INPUTS)
+# Experiment 119's candidates, each appended alone to the shipped list of its side by check 155's screen
+SCREEN_CANDIDATES_119 = {
+    "O": ["turnovers_over_expected_from_attempts_and_assists_per100", "shots_blocked_over_expected_from_attempts_per100",
+          "assists_over_expected_from_turnovers_per100", "three_shot_trips_over_expected_from_threes_per100"],
+    "D": [GOALTENDS, "goaltends_over_expected_from_blocks_per100", "blocks_over_expected_from_fouls_per100",
+          "steals_over_expected_from_fouls_per100", SHOOTING_FOULS, LOOSE_BALL_FOULS]}
+
+# Every input the prior could read (145): the rates, the role, every derived column, career, body, on-court, the
 # play-by-play parts, the ratios against the league, the career counted from the debut, the dashboard inputs with
-# the hustle placebo, the era marker and both self-creations.
+# the hustle placebo, the era marker, both self-creations, and experiment 119's counts and counts over expected.
 # scripts/checks/95_miss_by_group.py and commands/within_season.py (its PLAYER_COLUMNS) report on all of them.
 PRIOR_FEATURES = [*BOX_RATES, *ROLE, *DERIVED, *RATIOS, *SHOTQ, *CAREER, *BIO, *ON_COURT, *EVENT_RATES, *VS_LEAGUE,
-                  *CAREER_FROM_DEBUT, *DASHBOARD_RATES, *ERA_MARKER, *CREATION, *CREATION_ESTIMATED, *CREATION_INPUTS]
+                  *CAREER_FROM_DEBUT, *DASHBOARD_RATES, *ERA_MARKER, *CREATION, *CREATION_ESTIMATED, *CREATION_INPUTS,
+                  *FOUL_RATES, *OVER_EXPECTED]
 # The panel columns averaged into a multi-season training row, before anything is derived from them; the play-by-play
 # parts came after every column the published ratings were built from (2026-10-12), the career counted from the debut
 # after them (2026-10-13), the dashboard inputs after them (2026-10-14), the two uncentred play-by-play parts and
-# self-creation's counts after them (2026-10-25), experiment 112's candidates measured from the average player last.
+# self-creation's counts after them (2026-10-25), experiment 112's candidates measured from the average player, then
+# experiment 119's counts and counts over expected (2026-10-28).
 PANEL_INPUTS = [*BOX_RATES, *ROLE, *CLOSENESS, *UNCENTRED_RATES, *SHOT_TOTALS, *SHOT_LEAGUE, *CAREER, *BIO,
                 *ON_COURT, *OFF_COURT, *ON_MINUS_OFF, *PLAYOFF_SHARE, *EVENT_RATES, *CAREER_FROM_DEBUT,
-                *DASHBOARD_RATES, *ERA_MARKER, *UNCENTRED_EVENT_RATES, *UNCENTRED_CREATION_RATES, *CREATION_INPUTS]
+                *DASHBOARD_RATES, *ERA_MARKER, *UNCENTRED_EVENT_RATES, *UNCENTRED_CREATION_RATES, *CREATION_INPUTS,
+                *FOUL_RATES, *OVER_EXPECTED]
 # The season panel's columns, in order: who and when, the possessions behind the row (his offensive possessions
 # on an offence row, defensive on a defence row), then the inputs.
 PANEL_KEYS = ["side", "player_id", "season"]
@@ -388,6 +433,8 @@ FEATURE_SETS = {
     # experiment 112 (2026-10-25, the owner: "time to do boruta instead of ditching"): the shipped lists with every
     # candidate of the screen appended (`SCREEN_CANDIDATES`); check 152 reads each one alone beside the shipped list
     "screen112_pool": {side: _CREATION110[side] + SCREEN_CANDIDATES[side] for side in ("O", "D")},
+    # experiment 119 (2026-10-28): the same for its play-by-play counts and counts over expected
+    "screen119_pool": {side: _CREATION110[side] + SCREEN_CANDIDATES_119[side] for side in ("O", "D")},
     # experiment 112's confirming build: the one candidate the screen passed, unassisted makes at the rim and in the
     # paint, appended to the shipped offensive list
     "hustle_no_three_pct_self_creation_unassisted_inside": {"O": _CREATION110["O"] + ["unassisted_makes_inside_per100"],
@@ -607,6 +654,20 @@ _EVENT_MEANINGS = ["defensive rebounds of missed free throws", "defensive reboun
                    "assists on makes at the rim (within 6 ft, or logged without a location)",
                    "assists on made twos from beyond 6 ft", "assists on made corner threes",
                    "assists on made above-the-break threes"]
+_FOUL_MEANINGS = ["defensive goaltending violations called on him",
+                  "shooting fouls he commits, blocking fouls on a shooter included", "loose-ball fouls he commits",
+                  "his missed shots that were blocked", "three-shot free-throw trips he earns: fouled shooting a three"]
+_OVER_EXPECTED_MEANINGS = {
+    "goaltends_over_expected_from_blocks_per100": "goaltends over those expected from his blocks",
+    "blocks_over_expected_from_fouls_per100": "blocks over those expected from his personal fouls",
+    "steals_over_expected_from_fouls_per100": "steals over those expected from his personal fouls",
+    "shots_blocked_over_expected_from_attempts_per100": "his shots blocked over those expected from his twos and "
+                                                        "threes taken",
+    "three_shot_trips_over_expected_from_threes_per100": "three-shot free-throw trips over those expected from his "
+                                                         "threes taken",
+    "assists_over_expected_from_turnovers_per100": "assists over those expected from his turnovers",
+    "turnovers_over_expected_from_attempts_and_assists_per100": "turnovers over those expected from his true-shooting "
+                                                                "attempts and assists"}
 # the first 18 of TRACKING_RATES: counts per 100 possessions; the last three are makes over expected (below)
 _TRACKING_MEANINGS = ["drives to the basket", "points scored on drives",
                       "potential assists (passes that led to a shot)", "passes made", "touches of the ball",
@@ -782,6 +843,13 @@ def _catalogue() -> tuple:
     rows += _family(CREATION_INPUTS, [_CREATION_MEANINGS[CREATION_RATES.index(name)] for name in CREATION_INPUTS],
                     "padded per-game count per 100 minus the league level", "per 100 possessions", "centred",
                     "creation count")
+    rows += _family(FOUL_RATES, _FOUL_MEANINGS, "padded per-game count per 100 minus the league level",
+                    "per 100 possessions", "centred", "play-by-play rate")
+    rows += [Feature(name, _OVER_EXPECTED_MEANINGS[name],
+                     f"{_linear(count)} minus a line on "
+                     f"{' and '.join(_linear(given) for given in givens)}, fitted on the season's players on his side, "
+                     f"weighted by possessions", "per 100 possessions", "centred", "over expected")
+             for name, (count, givens) in OVER_EXPECTED.items()]
     rows += [Feature(CREATION_ESTIMATED[0], "self-created shot attempts, passes estimated (experiment 111)",
                      "unassisted makes + misses not off a pass + free-throw trips without a make not off a pass; "
                      "off a pass = his lean x the expected passes, by spot group, held to his count; lean = "

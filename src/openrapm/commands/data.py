@@ -131,19 +131,22 @@ def event_check(totals, box):
 
 
 def run_events(args: argparse.Namespace, cfg: dict) -> int:
-    """Every season asked for: the play-by-play counts and self-creation's counts (data/creation_counts.py) cached (a
-    cached season is read, unless --force), then each season's parts against its box score (`event_check`)."""
+    """Every season asked for: the play-by-play counts, self-creation's counts (data/creation_counts.py) and the
+    fouls, goaltends, shots blocked and three-shot trips (data/foul_counts.py) cached (a cached season is read, unless
+    --force), then each season's parts against its box score (`event_check`)."""
     import pandas as pd
 
     from ..data.box_scores import season_box
     from ..data.creation_counts import build_creation_counts
     from ..data.event_counts import build_event_counts
+    from ..data.foul_counts import build_foul_counts
     if args.first_season is None:                 # no season typed: every season config.yaml names
         seasons = range(int(cfg["first_season"]), int(cfg["last_season"]) + 1)
     else:
         seasons = season_range(args, cfg)
     totals = build_event_counts(cfg, seasons, force=args.force)
     build_creation_counts(cfg, seasons, force=args.force)
+    build_foul_counts(cfg, seasons, force=args.force)
     check = event_check(totals, season_box(list(seasons), ["RS", "PO"], cfg))
     pd.set_option("display.width", 200)
     print("\nparts minus the box score, as a share of the box score (0.001 = 0.1%):")
@@ -312,8 +315,9 @@ def _add_events(steps) -> None:
                     "them, threes attempted from the corner or above the break, blocks by the shot and by who got "
                     "the ball back, stolen turnovers, offensive fouls, and assists by the zone of the make they set "
                     "up; and self-creation's counts (src/openrapm/data/creation_counts.py): every shot's spot and "
-                    "possession situation, the free-throw trips, and the passes expected on the misses and trips.  "
-                    "Caches them per season in paths.event_counts (data/event_counts) and prints each season's parts "
+                    "possession situation, the free-throw trips, and the passes expected on the misses and trips; "
+                    "and the fouls, goaltends, shots blocked and three-shot trips "
+                    "(src/openrapm/data/foul_counts.py).  Caches them per season in paths.event_counts (data/event_counts) and prints each season's parts "
                     "against its box score.")
     events.add_argument("first_season", nargs="?", type=int, metavar="FIRST",
                         help="the first season (default config.yaml's first_season)")

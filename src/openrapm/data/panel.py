@@ -36,6 +36,9 @@ Where each column comes from:
                                                                (features.UNCENTRED_CREATION_RATES)
     the dashboard inputs (features.DASHBOARD_RATES)            data/dashboard_rates.py, from the cached tracking and
                                                                hustle dashboards (NaN before they start)
+    fouls, goaltends, shots blocked, three-shot trips          data/foul_counts.py's counts, padded like the
+                                                               play-by-play parts (features.FOUL_RATES)
+    the counts over expected (features.OVER_EXPECTED)          `add_over_expected`, on each side's rows of the season
 
 Example: Stephen Curry's 2016 offence row reads possessions 6,994 (his team's offensive possessions with him on the
 court), assists_per100 4.25 above the average player (8.84 uncentred), team_possession_share 0.66 and playoff_share
@@ -74,9 +77,13 @@ from ..features import (
     DASHBOARD_RATES,
     ERA_MARKER,
     EVENT_RATES,
+    FOUL_RATES,
+    GOALTEND_INPUTS,
+    GOALTENDS_FROM,
     OFF_COURT,
     ON_COURT,
     ON_MINUS_OFF,
+    OVER_EXPECTED,
     PLAYOFF_SHARE,
     ROLE,
     SEASON_PANEL_COLUMNS,
@@ -93,6 +100,7 @@ from .creation_counts import CREATION_COUNTS, load_creation_counts
 from .dashboard_rates import dashboard_rates
 from .designs import DesignCache
 from .event_counts import event_design, load_event_counts
+from .foul_counts import FOUL_COUNTS, load_foul_counts
 from .ingest import GAME_PREFIX, game_table, load_gamelog, raw_dir
 from .legacy_names import is_deleted, translate_frame
 from .roles import (
@@ -111,7 +119,7 @@ from .shots import DEFENSE_TARGETS, SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS, player_sh
 __all__ = ["OFFENCE", "DEFENCE_ALL", "PANEL_TARGETS", "SeasonTables", "roles_from_games", "score_state",
            "playoff_share", "cut_design", "fit_designs", "season_to_date", "SeasonSources", "SeasonPanel",
            "season_panel",
-           "fill_missing_score_state", "build_panel", "write_panel", "build_panel_so_far", "write_panel_so_far",
+           "add_over_expected", "fill_missing_score_state", "build_panel", "write_panel", "build_panel_so_far", "write_panel_so_far",
            "trainable_panel", "trainable_panel_so_far", "in_progress_panel", "panel_and_trainable_seasons",
            "panel_from_old_names", "migrate_panel"]
 
@@ -121,13 +129,14 @@ PANEL_TARGETS = (OFFENCE, DEFENCE_ALL)            # the designs one season's row
 SIDES = ("O", "D")
 OLD_PANEL = "role_panel_season.parquet"          # the old-named panel's file name, beside the new one
 # the columns the old-named panel carried: every column but the play-by-play parts (added 2026-10-12), the career
-# counted from the debut (added 2026-10-13), the dashboard inputs (added 2026-10-14) and the uncentred parts (added
-# 2026-10-25)
+# counted from the debut (added 2026-10-13), the dashboard inputs (added 2026-10-14), the uncentred parts (added
+# 2026-10-25) and experiment 119's counts (added 2026-10-28)
 MIGRATED_PANEL_COLUMNS = [column for column in SEASON_PANEL_COLUMNS
                           if column not in EVENT_RATES and column not in CAREER_FROM_DEBUT
                           and column not in DASHBOARD_RATES and column not in ERA_MARKER
                           and column not in UNCENTRED_EVENT_RATES and column not in UNCENTRED_CREATION_RATES
-                          and column not in CREATION_INPUTS]
+                          and column not in CREATION_INPUTS and column not in FOUL_RATES
+                          and column not in OVER_EXPECTED]
 STINT_COLUMNS = ["game_id", "period", *HOME_SLOTS, *AWAY_SLOTS, "poss_h", "poss_a", "margin_h", "is_gt"]
 # The data layer's names for the body and shot columns, against the panel's (the pairs are pinned in
 # tests/test_features.py and tests/test_panel.py); data/roles.py builds the role and career columns under the panel's
@@ -186,6 +195,12 @@ class SeasonTables:
         """The season's self-creation counts per game, phase and player (data/creation_counts.py), as cached by
         `openrapm data events`."""
         return load_creation_counts(self.season, self.cfg)
+
+    @cached_property
+    def foul_counts(self) -> pd.DataFrame:
+        """The season's fouls, goaltends, shots blocked and three-shot trips per game, phase and player
+        (data/foul_counts.py), as cached by `openrapm data events`."""
+        return load_foul_counts(self.season, self.cfg)
 
 
 def roles_from_games(tables: SeasonTables, keep_ids: set) -> tuple:
@@ -399,12 +414,13 @@ def _player_columns(season: int, cfg: dict, designs: dict, history: _RoleHistory
     return frame
 
 
-def _side_rows(side: str, season: int, rates, parts, creation, players: pd.DataFrame,
+def _side_rows(side: str, season: int, rates, parts, creation, fouls, players: pd.DataFrame,
                dashboards: dict) -> pd.DataFrame:
     """A side's rows: the keys, his possessions and padded rates on that side, the columns both sides share, then
-    the play-by-play parts on that side (centred), the dashboard inputs (data/dashboard_rates.py) and the two parts
-    self-creation reads with the league level kept (features.UNCENTRED_EVENT_RATES) and its own counts, padded,
-    level kept (features.UNCENTRED_CREATION_RATES)."""
+    the play-by-play parts on that side (centred), the dashboard inputs (data/dashboard_rates.py), the two parts
+    self-creation reads with the league level kept (features.UNCENTRED_EVENT_RATES), its own counts, padded,
+    level kept (features.UNCENTRED_CREATION_RATES), and the fouls, goaltends, shots blocked and three-shot trips
+    (features.FOUL_RATES, centred)."""
     possessions = (rates.offence if side == "O" else rates.defence).possessions
     keys = pd.DataFrame({"side": side, "player_id": players["player_id"].to_numpy(), "season": season,
                          "possessions": possessions})
@@ -416,8 +432,36 @@ def _side_rows(side: str, season: int, rates, parts, creation, players: pd.DataF
     own = pd.DataFrame(made.rates, columns=UNCENTRED_CREATION_RATES)
     measured = pd.DataFrame(made.centred[:, [CREATION_RATES.index(name) for name in CREATION_INPUTS]],
                             columns=CREATION_INPUTS)
+    called = pd.DataFrame((fouls.offence if side == "O" else fouls.defence).centred, columns=FOUL_RATES)
     return pd.concat([keys, rate_table(rates, side, BOX_RATES), players.drop(columns="player_id"), events,
-                      dashboards[side], uncentred, own, measured], axis=1)
+                      dashboards[side], uncentred, own, measured, called], axis=1)
+
+
+def _weighted_sum(rows: pd.DataFrame, weights: dict) -> np.ndarray:
+    return sum(weight * rows[name].to_numpy(float) for name, weight in weights.items())
+
+
+def add_over_expected(rows: pd.DataFrame) -> pd.DataFrame:
+    """features.OVER_EXPECTED on one season's rows, in place: on each side, each count minus the count a straight
+    line through that side's players expects from the others, the line fitted by least squares weighted by
+    possessions on the rows with possessions.  Every rate is centred, so the intercept takes the league levels.
+
+    Example, 2025 defence: blocks over those expected from fouls reads a block-heavy, foul-light big man well above 0
+    and a big man who blocks as much but fouls far more near 0."""
+    for name in OVER_EXPECTED:
+        rows[name] = np.nan
+    for _, at in rows.groupby("side").groups.items():
+        part = rows.loc[at]
+        weight = np.sqrt(part["possessions"].to_numpy(float))
+        for name, (count, givens) in OVER_EXPECTED.items():
+            target = _weighted_sum(part, count)
+            given = np.column_stack([np.ones(len(part)), *(_weighted_sum(part, one) for one in givens)])
+            fit = (weight > 0) & np.isfinite(target) & np.isfinite(given).all(axis=1)
+            if not fit.any():                  # the goaltends before 2002: missing, and so is what is over them
+                continue
+            line = np.linalg.lstsq(given[fit] * weight[fit, None], target[fit] * weight[fit], rcond=None)[0]
+            rows.loc[at, name] = target - given @ line
+    return rows
 
 
 def body_table(cfg: dict) -> pd.DataFrame:
@@ -446,6 +490,8 @@ def season_panel(season: int, cfg: dict, designs: dict, sources: SeasonSources, 
     parts = box_rates(event_counts, pad_target=cfg["pad_target"], body=body, pad_k_around=around)
     creation_counts, creation_games = event_design(designs[OFFENCE], sources.tables.creation_counts, CREATION_COUNTS)
     creation = box_rates(creation_counts, pad_target=cfg["pad_target"], body=body, pad_k_around=around)
+    foul_counts, foul_games = event_design(designs[OFFENCE], sources.tables.foul_counts, FOUL_COUNTS)
+    fouls = box_rates(foul_counts, pad_target=cfg["pad_target"], body=body, pad_k_around=around)
     players = _player_columns(season, cfg, designs, history, fit, sources.debut)
     # the tracking dashboards are season totals: a fold scales them to the share of the season it fits on; the hustle
     # counts are summed over the games themselves (dashboard_rates.py)
@@ -453,8 +499,11 @@ def season_panel(season: int, cfg: dict, designs: dict, sources: SeasonSources, 
     games = set(sources.tables.games["game_id"].astype(str)) if fit is None else fit
     dashboards = dashboard_rates(cfg, season, players["player_id"].to_numpy(),
                                  {"O": rates.offence.possessions, "D": rates.defence.possessions}, fit_share, games)
-    rows = pd.concat([_side_rows(side, season, rates, parts, creation, players, dashboards) for side in SIDES],
-                     ignore_index=True)
+    rows = pd.concat([_side_rows(side, season, rates, parts, creation, fouls, players, dashboards)
+                      for side in SIDES], ignore_index=True)
+    if season < GOALTENDS_FROM:                # most goaltends name only the team before 2002 (features.py)
+        rows[GOALTEND_INPUTS[0]] = np.nan
+    add_over_expected(rows)
     stints = sources.tables.stints
     if fit is not None:
         stints = stints[stints["game_id"].isin(fit)]
@@ -462,7 +511,7 @@ def season_panel(season: int, cfg: dict, designs: dict, sources: SeasonSources, 
     rows[PLAYOFF_SHARE[0]] = rows["player_id"].map(playoff_share(stints, sources.tables.games)).fillna(0.0)
     rows[ERA_MARKER[0]] = float(season >= 2017)
     read = {**history.games_read, "score-state stints": set(stints["game_id"].unique()), "event counts": event_games,
-            "self-creation counts": creation_games,
+            "self-creation counts": creation_games, "foul counts": foul_games,
             "hustle games": dashboards["hustle_games"]}
     return SeasonPanel(season, rows[SEASON_PANEL_COLUMNS], history.season_roles, read)
 

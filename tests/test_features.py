@@ -88,6 +88,9 @@ def test_the_stat_splits_lists_append_their_parts_where_the_box_count_is_read():
         # experiment 112: the shipped lists with every candidate of the screen appended
         "screen112_pool": {side: feat.FEATURE_SETS["hustle_no_three_pct_self_creation"][side]
                            + feat.SCREEN_CANDIDATES[side] for side in ("O", "D")},
+        # experiment 119: the same for its play-by-play counts and counts over expected
+        "screen119_pool": {side: feat.FEATURE_SETS["hustle_no_three_pct_self_creation"][side]
+                           + feat.SCREEN_CANDIDATES_119[side] for side in ("O", "D")},
         "hustle_no_three_pct_self_creation_unassisted_inside": {
             "O": feat.FEATURE_SETS["hustle_no_three_pct_self_creation"]["O"] + ["unassisted_makes_inside_per100"],
             "D": feat.FEATURE_SETS["hustle_no_three_pct_self_creation"]["D"]}}
@@ -217,7 +220,7 @@ def test_every_name_the_prior_can_read_is_in_the_catalogue():
     assert not wanted - set(names)
     assert {f.scale for f in feat.CATALOGUE} <= {"centred", "level"}
     assert all(f.meaning and f.formula and f.unit and f.group for f in feat.CATALOGUE)
-    assert len(feat.PRIOR_FEATURES) == len(set(feat.PRIOR_FEATURES)) == 142
+    assert len(feat.PRIOR_FEATURES) == len(set(feat.PRIOR_FEATURES)) == 154
 
 
 def test_self_creation_is_the_owners_formula_on_the_uncentred_rates_and_its_share_is_clipped():
@@ -267,14 +270,15 @@ def test_every_season_panel_column_but_the_keys_is_in_the_catalogue():
     names = {f.name for f in feat.CATALOGUE}
     assert feat.SEASON_PANEL_COLUMNS[:3] == feat.PANEL_KEYS == ["side", "player_id", "season"]
     assert not set(feat.SEASON_PANEL_COLUMNS[3:]) - names
-    assert len(feat.SEASON_PANEL_COLUMNS) == len(set(feat.SEASON_PANEL_COLUMNS)) == 163
-    assert feat.SEASON_PANEL_COLUMNS[-99:-77] == feat.EVENT_RATES, "the play-by-play parts follow every older column"
-    assert feat.SEASON_PANEL_COLUMNS[-77:-73] == feat.CAREER_FROM_DEBUT, "and the career from the debut after them"
-    assert feat.SEASON_PANEL_COLUMNS[-73:-32] == feat.DASHBOARD_RATES, "then the dashboard inputs"
-    assert feat.SEASON_PANEL_COLUMNS[-32:-31] == feat.ERA_MARKER, "and the era marker"
-    assert feat.SEASON_PANEL_COLUMNS[-31:-29] == feat.UNCENTRED_EVENT_RATES, "then the two uncentred parts"
-    assert feat.SEASON_PANEL_COLUMNS[-29:-8] == feat.UNCENTRED_CREATION_RATES, "then self-creation's counts"
-    assert feat.SEASON_PANEL_COLUMNS[-8:] == feat.CREATION_INPUTS, "and experiment 112's candidates last"
+    assert len(feat.SEASON_PANEL_COLUMNS) == len(set(feat.SEASON_PANEL_COLUMNS)) == 175
+    assert feat.SEASON_PANEL_COLUMNS[-111:-89] == feat.EVENT_RATES, "the play-by-play parts follow every older column"
+    assert feat.SEASON_PANEL_COLUMNS[-89:-85] == feat.CAREER_FROM_DEBUT, "and the career from the debut after them"
+    assert feat.SEASON_PANEL_COLUMNS[-85:-44] == feat.DASHBOARD_RATES, "then the dashboard inputs"
+    assert feat.SEASON_PANEL_COLUMNS[-44:-43] == feat.ERA_MARKER, "and the era marker"
+    assert feat.SEASON_PANEL_COLUMNS[-43:-41] == feat.UNCENTRED_EVENT_RATES, "then the two uncentred parts"
+    assert feat.SEASON_PANEL_COLUMNS[-41:-20] == feat.UNCENTRED_CREATION_RATES, "then self-creation's counts"
+    assert feat.SEASON_PANEL_COLUMNS[-20:-12] == feat.CREATION_INPUTS, "then experiment 112's candidates"
+    assert feat.SEASON_PANEL_COLUMNS[-12:] == feat.FOUL_RATES + list(feat.OVER_EXPECTED), "and experiment 119's last"
 
 
 def test_the_dashboard_arms_append_to_the_incumbents_lists_and_name_real_columns():
@@ -282,8 +286,10 @@ def test_the_dashboard_arms_append_to_the_incumbents_lists_and_name_real_columns
     incumbent input keeping its position; every name is a panel column that may be missing."""
     incumbent = feat.FEATURE_SETS["no_career_counts"]
     assert len(feat.TRACKING_RATES) == 21 and len(feat.HUSTLE_RATES) == 9 and len(feat.MATCHUP_RATES) == 2
-    assert feat.DASHBOARD_RATES == feat.MISSING_OK == (feat.TRACKING_RATES + feat.HUSTLE_RATES + feat.MATCHUP_RATES
-                                                       + feat.HUSTLE_PLACEBO)
+    assert feat.DASHBOARD_RATES == (feat.TRACKING_RATES + feat.HUSTLE_RATES + feat.MATCHUP_RATES
+                                    + feat.HUSTLE_PLACEBO)
+    # experiment 119's goaltends may be missing too: before 2002 the feed rarely names the goaltender
+    assert feat.MISSING_OK == feat.DASHBOARD_RATES + feat.GOALTEND_INPUTS
     assert feat.HUSTLE_PLACEBO == [f"{name}_shuffled" for name in feat.HUSTLE_RATES]
     for name, extra in (("tracking", (feat.TRACKING_OFFENCE, feat.TRACKING_DEFENCE)),
                         ("hustle", (feat.HUSTLE_OFFENCE, feat.HUSTLE_DEFENCE)),

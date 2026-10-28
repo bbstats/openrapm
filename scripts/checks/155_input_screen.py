@@ -39,6 +39,9 @@ lists on the mean, and the guard is not worse at z +2.
     python scripts/checks/155_input_screen.py run --tag screen112 --variant out_of_bag60   (the base arm alone)
     python scripts/checks/155_input_screen.py variants --tag screen112
 
+Each tag screens its own pool (`SCREENS`): screen112 experiment 112's candidates, screen119 experiment 119's (the owner,
+2026-10-28: goaltends, fouls, blocked shots and counts over expected, "go for it and remember to boruta").
+
 Writes under outputs/screen/<tag>/: season_<season>.pkl (the cache), trials.csv (one row per trial, season, stage and
 slice), guard.csv (one row per trial and rated-scored pair), and outputs/csv/screen_<tag>_table.csv (the full table);
 a variant's trials_<variant>.csv and guard_<variant>.csv, and outputs/csv/screen_<tag>_variants.csv.
@@ -66,7 +69,9 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 TUNE_SEASONS = tuple(range(1998, 2026, 3))          # 1998, 2001, ..., 2025, check 152's
-POOL = "screen112_pool"
+# {tag: (the feature set holding the shipped lists and every candidate, the features.py name of the candidates)}
+SCREENS = {"screen112": ("screen112_pool", "SCREEN_CANDIDATES"),
+           "screen119": ("screen119_pool", "SCREEN_CANDIDATES_119")}
 REFERENCE = "creation110"                           # the shipped build whose saved boosters name the second prior
 SEED_STEP = 100                                     # box_prior.BAG_DRAW_STEP
 NEAREST = 8
@@ -89,6 +94,20 @@ def _load(name: str, file: str):
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def pool(tag: str) -> str:
+    """The feature set a tag screens: the shipped lists with every candidate appended."""
+    if tag not in SCREENS:
+        raise SystemExit(f"--tag is one of {sorted(SCREENS)}, not {tag!r}; a new screen adds its pool to SCREENS")
+    return SCREENS[tag][0]
+
+
+def candidates(tag: str) -> dict:
+    """{side: the inputs a tag screens, each appended alone to its side's shipped list}."""
+    from openrapm import features
+    pool(tag)
+    return getattr(features, SCREENS[tag][1])
 
 
 def screen_dir(tag: str) -> Path:
@@ -132,7 +151,7 @@ def build_cache(tag: str, seasons) -> int:
         print("every season cached", flush=True)
         return 0
     started = time.time()
-    settings = replace(TEST, prior=replace(TEST.prior, feature_set=POOL))
+    settings = replace(TEST, prior=replace(TEST.prior, feature_set=pool(tag)))
     designs = DesignCache(cfg)
     sums = accumulate_rapm(designs, trainable(cfg).seasons, settings)
     panel = trainable_panel(cfg)
@@ -154,7 +173,7 @@ def build_cache(tag: str, seasons) -> int:
         outside = row_label_tables(sums, panel, unseen, settings, None)
         train = {}
         for side, column in (("O", "offense"), ("D", "defense")):
-            names = list(FEATURE_SETS[POOL][side])
+            names = list(FEATURE_SETS[pool(tag)][side])
             side_outside = None if outside is None else {key: tables[side] for key, tables in outside.items()}
             train[side] = box_prior.training_rows(
                 labels[side], box_prior.training_seasons(panel, side, unseen, season, settings), column, names,
@@ -219,12 +238,12 @@ def fit_bags(train: pd.DataFrame, inputs: list, params: dict, settings, seed: in
                                prior.prediction, prior.split_per_bag, bag_draw=int(seed))
 
 
-def variant_settings(variant: str):
-    """The test setting on the pool's lists with a variant's prior settings (`VARIANTS`)."""
+def variant_settings(variant: str, tag: str):
+    """The test setting on the tag's pool with a variant's prior settings (`VARIANTS`)."""
     from openrapm.settings import TEST
     if variant not in VARIANTS:
         raise SystemExit(f"--variant is one of {sorted(VARIANTS)}, not {variant!r}")
-    return replace(TEST, prior=replace(TEST.prior, feature_set=POOL, **VARIANTS[variant]))
+    return replace(TEST, prior=replace(TEST.prior, feature_set=pool(tag), **VARIANTS[variant]))
 
 
 # ------------------------------------------------------------------------------------------------- a trial
@@ -282,7 +301,7 @@ class Season:
         from openrapm.settings import TEST
         self.tag, self.season, self.cfg = tag, season, load_config()
         self.train = None
-        self.settings = replace(TEST, prior=replace(TEST.prior, feature_set=POOL))
+        self.settings = replace(TEST, prior=replace(TEST.prior, feature_set=pool(tag)))
         self.params = box_prior_params(self.cfg)
         saved_all = ws.load_models(resolve(self.cfg, "outputs"), REFERENCE, [season])
         meta = saved_all["meta"]
@@ -357,7 +376,7 @@ def fit_task(tag: str, season: int, side: str, trial: Trial):
     from openrapm.data.config import load_config
     from openrapm.features import ROW_FEATURES
     from openrapm.in_context_prior import LEARNER
-    settings = variant_settings(trial.variant)
+    settings = variant_settings(trial.variant, tag)
     if "params" not in _FIT:
         _FIT["params"], _FIT["rows"] = {}, {}
     if settings.prior.booster_file not in _FIT["params"]:
@@ -525,16 +544,16 @@ class Guard:
         return pd.DataFrame(out)
 
 
-def plan(seeds: int, base_seeds: int, variant: str = "shipped") -> list:
+def plan(tag: str, seeds: int, base_seeds: int, variant: str = "shipped") -> list:
     """Every trial, the shipped lists at every base seed first, then each seed's arms in turn, so a run stopped part
     way has whole seeds.  At another variant of the prior, the shipped lists at every base seed only."""
-    from openrapm.features import CREATION, SCREEN_CANDIDATES
+    from openrapm.features import CREATION
     if variant != "shipped":
         return [Trial("base", "-", "-", seed, variant) for seed in range(base_seeds)]
     trials = [Trial("base", "-", "-", seed) for seed in range(base_seeds)]
     for seed in range(seeds):
         for side in ("O", "D"):
-            for name in SCREEN_CANDIDATES[side]:
+            for name in candidates(tag)[side]:
                 trials += [Trial("add", side, name, seed), Trial("add_shadow", side, name, seed)]
         trials.append(Trial("shadow", "O", CREATION[0], seed))
     return trials
@@ -604,12 +623,12 @@ def result_paths(out_dir: Path, variant: str) -> tuple[Path, Path]:
 
 def run_screen(args) -> int:
     out_dir = screen_dir(args.tag)
-    variant_settings(args.variant)
+    variant_settings(args.variant, args.tag)
     trials_path, guard_path = result_paths(out_dir, args.variant)
     done = set()
     if trials_path.exists():
         done = set(pd.read_csv(trials_path).trial.unique())
-    todo = [trial for trial in plan(args.seeds, args.base_seeds, args.variant) if trial.key not in done]
+    todo = [trial for trial in plan(args.tag, args.seeds, args.base_seeds, args.variant) if trial.key not in done]
     print(f"{len(todo)} trials to run, {len(done)} done", flush=True)
     if not todo:
         return 0

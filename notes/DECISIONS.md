@@ -10708,3 +10708,47 @@ Wembanyama 8.97 to 8.89, still first.
 
 **Verdict** pending the owner; by the rules it fails by far, in every era, both sizes.  No full build was run.  The
 code stays, off by default.
+
+## Experiment 119: fouls, goaltends, blocked shots and counts over expected through the Boruta screen (the owner, 2026-10-28: "think through some more pbp stats we could try to get into the model - like goaltends per 100?"; "add in any useful proxies as well! like BLK/PF"; "it's probably cleaner to do J - exp J (from K) so we don't get weird ratio tails - for anything we'd be dividing"; "let's do this with turnovers for sure! tov-exp tov from (TS Att and AST?)"; "go for it and remember to boruta"; registered before any result)
+
+**The counts** (`data/foul_counts.py`, per game, cached as `data/event_counts/{season}_fouls.parquet`): defensive
+goaltends, shooting fouls with blocking fouls on a shooter, loose-ball fouls, the shooter's missed shots that were
+blocked, and three-shot free-throw trips.  Padded per 100 and centred like the event counts (`features.FOUL_RATES`).
+The feed names the fouler and, in recent seasons, the referee, never the player fouled: there is no
+offensive-fouls-drawn count, only the hustle data's charges drawn from 2016, already on the shipped defense list.
+
+**Goaltends start in 2002.**  Before it most goaltending rows name only the team ("76ERS Violation: Def. Goaltending
+Violation"): 11% name the player in 1997, 30% in 1999, 50% in 2001, every one in 2002 and after.  The two goaltend
+inputs are missing before 2002 (`features.GOALTENDS_FROM`, `MISSING_OK`), as the dashboard inputs are before they
+start.  The other four counts name the player on every row in every season.
+
+**Counts over expected, the owner's form for anything that would be a ratio**: the count minus the count a straight
+line through the season's players on one side expects from the others, weighted by possessions, on padded centred
+rates (`features.OVER_EXPECTED`, `data/panel.add_over_expected`); a fold refits the line on its fit games.
+
+**The pool**, each appended alone to creation110's list of its side (`features.SCREEN_CANDIDATES_119`,
+`FEATURE_SETS["screen119_pool"]`).  Read on 2022-2025, players with 1,500+ possessions: how far each repeats the
+next season, and its correlation with the games' part of the published rating, the part the prior missed, from the
+same games, so a hint only:
+
+| # | plain name | side | next season | with the games' part |
+|---|---|---|---|---|
+| 1 | turnovers over those expected from true-shooting attempts and assists | offense | 0.77 | -0.17 |
+| 2 | his shots blocked over those expected from his twos and threes taken | offense | 0.66 | -0.15 |
+| 3 | assists over those expected from turnovers | offense | 0.87 | +0.12 |
+| 4 | three-shot trips over those expected from threes taken | offense | 0.59 | 0.00 |
+| 5 | goaltends | defense | 0.73 | -0.04 |
+| 6 | goaltends over those expected from blocks | defense | 0.55 | -0.13 |
+| 7 | blocks over those expected from personal fouls, the owner's blocks per foul | defense | 0.86 | +0.13 |
+| 8 | steals over those expected from personal fouls | defense | 0.78 | +0.07 |
+| 9 | shooting fouls | defense | 0.78 | -0.12 |
+| 10 | loose-ball fouls | defense | 0.72 | -0.02 |
+
+Plus the shadow arm on experiment 110's self-creation, as in experiment 112.
+
+**The screen and the rule** are experiment 112's, unchanged (check 155, tag `screen119`): ten tune seasons, 1998,
+2001, ..., 2025; seeds 0-2 for every arm, the shipped lists at 5 seeds.  A candidate passes when, seeds averaged within
+each season and paired by season: (1) `add` beats `add_shadow` at z -2 or below; (2) `add` beats today's settings on the
+mean; (3) the guard, next season's team-games, is not worse at z +2.  Survivors are built together in one chain, all
+thirty seasons, judged by era on the within-season WOWY test against creation110 beside the noise control
+noise_creation110, year over year not worse at z +2, with the 2026 top 20; the verdict the owner's.
