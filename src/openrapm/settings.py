@@ -216,6 +216,11 @@ class PriorSettings:
     # each player's games take their prior from the games after them instead (game_prior.splice; the owner, 2026-10-27:
     # "run inference in reverse, to smooth out the weird beginning")
     game_prior_backward: str = ""
+    # False: with `game_prior`, a prior before every game.  True: one prior per player and season, the box-score
+    # prior's answer for the networks' state after his last game, every game of the season read at once (the owner,
+    # 2026-10-27: "build the whole season version"): the networks' cleaner rates in place of the season panel's, and no
+    # game-by-game averaging
+    game_prior_whole_season: bool = False
 
 
 ROW_LABELS = ("career", "outside", "nearest")

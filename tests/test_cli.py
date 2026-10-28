@@ -197,6 +197,16 @@ def test_the_ways_to_avoid_the_boosters_that_saw_a_player_reach_their_settings()
             cli.chosen_settings(_parse("rate", *flags))
 
 
+def test_the_whole_season_game_prior_reads_the_forward_networks_alone():
+    chosen = cli.chosen_settings(_parse("rate", "--game-prior", "net1", "--game-prior-whole-season"))
+    assert chosen.prior.game_prior == "net1" and chosen.prior.game_prior_whole_season
+    assert not cli.chosen_settings(_parse("rate", "--game-prior", "net1")).prior.game_prior_whole_season
+    for flags in (("--game-prior-whole-season",),
+                  ("--game-prior", "net1", "--game-prior-backward", "net1_back", "--game-prior-whole-season")):
+        with pytest.raises(SystemExit):
+            cli.chosen_settings(_parse("rate", *flags))
+
+
 def test_folds_needs_its_models_and_base_and_defaults_to_2017_2026():
     args = _parse("folds", "--models", "m", "--base", "b")
     assert (args.models, args.base, args.tag, args.reproduce_only) == ("m", "b", "within", False)
