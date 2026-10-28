@@ -188,7 +188,7 @@ def test_every_page_carries_the_same_tabs_with_its_own_marked():
     navs["PAGE_HEAD"] = site.PAGE_HEAD + "</nav>"
     for page, text in navs.items():
         nav = re.search(r'<nav class="site">(.*?)</nav>', text, re.S).group(1)
-        links = re.findall(r'<a href="([^"]+)"( aria-current="page")?>', nav)
+        links = re.findall(r'<a href="([^"]+)"( aria-current="page")?(?: hidden)?>', nav)
         assert [href for href, _ in links] == tabs, page
         own = "./" if page == "index.html" else "bias.html" if page == "PAGE_HEAD" else page
         assert [href for href, current in links if current] == [own], page
@@ -375,6 +375,9 @@ def test_power_ratings_weigh_each_rating_by_its_share_of_the_last_games_with_blo
     shares = both.set_index("player_id").share
     assert shares[5] == pytest.approx(80 / 190) and shares[6] == pytest.approx(110 / 190)
     assert shares[1] == pytest.approx(1.0) and both.groupby("tm").share.sum().tolist() == pytest.approx([5, 5])
+    # the latest game counted double: player 6 played all of it
+    latest = site.team_shares(games, n_games=10, recent_games=1).set_index("player_id").share
+    assert latest[5] == pytest.approx(80 / 290) and latest[6] == pytest.approx(210 / 290)
     # the last game only: player 5 drops out
     assert 5 not in set(site.team_shares(games, n_games=1).player_id)
     table = pd.DataFrame({"season": 2027, "player_id": ids, "player_name": [f"P{i}" for i in ids],
@@ -384,5 +387,6 @@ def test_power_ratings_weigh_each_rating_by_its_share_of_the_last_games_with_blo
     home = next(team for team in document["teams"] if team["tm"] == "HOM")
     assert home["o"] == pytest.approx(round(4 + 80 / 190 + 3 * 110 / 190, 2))
     assert document["teams"][0]["tm"] == "HOM" and document["meta"]["through"] == "2026-10-22"
+    assert document["meta"]["ready"] is False                         # two games, not 10
     # player 6 is under 60 possessions: counted in the sums, shown as the team's last row
     assert home["players"][-1][:3] == ["Other players", None, round(100 * 110 / 190, 1)]

@@ -277,7 +277,7 @@ PAGE_HEAD = """<!doctype html>
 <main>
 <nav class="site">
   <a href="./">Ratings</a>
-  <a href="power.html">Power</a>
+  <a href="power.html" hidden>Power</a>
   <a href="similarity.html">~ Similarity</a>
   <a href="bias.html" aria-current="page">Bias</a>
   <a href="about.html">About</a>
@@ -1329,9 +1329,14 @@ def write_similarity(cfg: dict, ratings_path: Path, data_dir: Path, built: str) 
 #
 # A possession counts for both teams of a game, on offense and on defense alike.  A blowout possession, the season's
 # garbage time (config garbage_time: the 4th quarter with a margin of 20 or more, or 15 or more in its last 6
-# minutes), counts half: "blowouts weighted somewhat less".
+# minutes), counts half: "blowouts weighted somewhat less".  Each of a team's 5 latest games counts double the 5 before
+# them (the owner, 2026-10-28: "weigh the most recent 5 more than the previous 5").
 #
-# The file, docs/data/power.json: {"meta": {"season", "through", "games", "blowout_weight", "built"},
+# The Power tab is hidden until every team has played 10 games (meta.ready; site.js shows the tab), the owner,
+# 2026-10-28: "hide it until there are 10 games in the system".
+#
+# The file, docs/data/power.json: {"meta": {"season", "through", "games", "recent_games", "recent_weight",
+#     "blowout_weight", "ready", "built"},
 #     "teams": [{"tm": "OKC", "name": "Oklahoma City Thunder", "g": 10, "o", "d", "t",
 #                "players": [[name, id, share, o, d, t], ...]}, ...]}
 # teams best total first, each team's players by share; share a percent at one decimal, ratings at two.  Players
@@ -1339,6 +1344,8 @@ def write_similarity(cfg: dict, ratings_path: Path, data_dir: Path, built: str) 
 # last row, ["Other players", null, their summed share, their share-weighted ratings].
 POWER_FILE = "power.json"
 POWER_GAMES = 10
+RECENT_GAMES = 5
+RECENT_WEIGHT = 2.0
 BLOWOUT_WEIGHT = 0.5
 SLOTS = [f"{side}{i}" for side in "ha" for i in range(1, 6)]
 
@@ -1377,15 +1384,20 @@ def player_game_possessions(stints: pd.DataFrame, teams: pd.DataFrame) -> pd.Dat
     return games
 
 
-def team_shares(games: pd.DataFrame, n_games: int) -> pd.DataFrame:
-    """Each player's share of his team's possessions over the team's last `n_games` games: tm, name, player_id,
-    share (5.0 summed over a team) and g, the games counted.  A game's team possessions are its players' summed over
-    five."""
+def team_shares(games: pd.DataFrame, n_games: int, recent_games: int = RECENT_GAMES,
+                recent_weight: float = RECENT_WEIGHT) -> pd.DataFrame:
+    """Each player's share of his team's possessions over the team's last `n_games` games, its latest
+    `recent_games` counted `recent_weight` times: tm, name, player_id, share (5.0 summed over a team) and g, the games
+    counted.  A game's team possessions are its players' summed over five."""
     team_games = games.groupby(["tm", "game_id"], as_index=False).agg(game_date=("game_date", "first"),
                                                                        poss=("poss", "sum"))
     team_games["poss"] /= 5
-    last = (team_games.sort_values(["tm", "game_date", "game_id"]).groupby("tm").tail(n_games))
-    recent = games.merge(last[["tm", "game_id"]], on=["tm", "game_id"])
+    last = team_games.sort_values(["tm", "game_date", "game_id"]).groupby("tm").tail(n_games).copy()
+    games_back = last.groupby("tm").cumcount(ascending=False)          # 0 for the team's latest game
+    last["weight"] = np.where(games_back < recent_games, recent_weight, 1.0)
+    last["poss"] *= last.weight
+    recent = games.merge(last[["tm", "game_id", "weight"]], on=["tm", "game_id"])
+    recent["poss"] *= recent.weight
     totals = last.groupby("tm").agg(team_poss=("poss", "sum"), g=("game_id", "size"))
     players = recent.groupby(["tm", "player_id"], as_index=False).agg(name=("name", "last"), poss=("poss", "sum"))
     players = players.join(totals, on="tm")
@@ -1423,7 +1435,8 @@ def power_document(table: pd.DataFrame, games: pd.DataFrame, season: int, built:
                           **{side: round(value, 2) for side, value in zip("odt", sums)}, players=players))
     teams.sort(key=lambda team: -team["t"])
     meta = dict(season=season, through=pd.Timestamp(games.game_date.max()).strftime("%Y-%m-%d"), games=POWER_GAMES,
-                blowout_weight=BLOWOUT_WEIGHT, built=built)
+                recent_games=RECENT_GAMES, recent_weight=RECENT_WEIGHT, blowout_weight=BLOWOUT_WEIGHT,
+                ready=min(team["g"] for team in teams) >= POWER_GAMES, built=built)
     return dict(meta=meta, teams=teams)
 
 
