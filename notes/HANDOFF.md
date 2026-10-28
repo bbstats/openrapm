@@ -28,7 +28,8 @@ every number quoted here; read its measurement traps before trusting a number.  
   2026-10-28).  Each team's current-season offense, defense and total: every player's rating times his share of the
   team's possessions over its last 10 games, blowout possessions (garbage time, config `garbage_time`) counted half;
   shares add to 500%.  Click a team for its players.  A Power tab on every page.  The daily job writes
-  docs/data/power.json every morning now that power.html is on main.  Published without the Changelog tab, which is
+  docs/data/power.json every morning now that power.html is on main.  Since df01906 the latest 5 games count double
+  the 5 before, and the Power tab stays hidden until every team has played 10 games (meta.ready; site.js).  Published without the Changelog tab, which is
   still not on main.
 - **Published ratings unchanged: creation110.**  Nothing below is published or changes a default.
 - **Experiment 118, the box-score prior from NVIDIA's pretrained Kumo Tabular network; verdict the owner's**
