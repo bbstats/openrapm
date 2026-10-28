@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenRAPM: power ratings</title>
+<link rel="stylesheet" href="site.css">
+<script src="site.js"></script>
+<style>
+  :root { --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6; }
+  :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5; }
+  body { color: var(--ink); font: 14px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  h1 { margin-bottom: 2px; }
+  .byline { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+  .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { border-collapse: separate; border-spacing: 0; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { padding: 9px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; vertical-align: bottom; cursor: pointer;
+       user-select: none; }
+  th:hover { color: var(--ink); }
+  th.rank, td.rank { color: var(--muted); cursor: default; }
+  th.name, td.name { text-align: left; }
+  th.name { cursor: default; }
+  /* every header keeps room for the sort arrow, so sorting never shifts the columns */
+  th[data-k]::after { content: "\2193"; margin-left: 3px; visibility: hidden; }
+  th[aria-sort="descending"]::after { visibility: visible; }
+  th[aria-sort="ascending"]::after { content: "\2191"; visibility: visible; }
+  th[aria-sort="descending"], th[aria-sort="ascending"] { color: var(--accent); }
+  td.total { font-weight: 700; }
+  td.msg { text-align: left; color: var(--muted); }
+  /* a team's row opens its players under it; the whole row is the button */
+  tr.team { cursor: pointer; }
+  tr.team:hover td { background: rgb(128 128 128 / 0.08); }
+  tr.team td.name::before { content: "\25B8"; display: inline-block; width: 16px; color: var(--muted); }
+  tr.team[aria-expanded="true"] td.name::before { content: "\25BE"; color: var(--accent); }
+  tr.team[aria-expanded="true"] td { border-bottom-color: transparent; }
+  td.name .full { color: var(--muted); margin-left: 8px; }
+  tr.players > td { padding: 0 0 14px 24px; }
+  /* a team's players scroll in their own box, so they never widen the teams' table */
+  .inner { width: 0; min-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table.roster th { cursor: default; }
+  table.roster th, table.roster td { padding: 6px 8px; font-size: 13px; }
+  table.roster td.name a { color: inherit; text-decoration: none; }
+  table.roster td.name a:hover, table.roster td.name a:focus-visible { color: var(--accent); text-decoration: underline;
+                                                                       text-underline-offset: 2px; }
+  table.roster tr.others td { color: var(--muted); }
+  footer { margin-top: 24px; color: var(--muted); font-size: 12.5px; }
+  footer a { color: inherit; }
+  @media (max-width: 600px) {
+    body { font-size: 13.5px; }
+    th, td { padding: 7px 5px; }
+    table { font-size: 13px; }
+    td.name .full { display: none; }
+    tr.players > td { padding-left: 0; }
+    table.roster th, table.roster td { padding: 6px 4px; font-size: 12px; }
+    /* a long name or header takes two lines, so a team's players fit the phone's width */
+    table.roster th, table.roster td.name { white-space: normal; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <nav class="site">
+    <a href="./">Ratings</a>
+    <a href="power.html" aria-current="page">Power</a>
+    <a href="similarity.html">~ Similarity</a>
+    <a href="bias.html">Bias</a>
+    <a href="about.html">About</a>
+    <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
+  </nav>
+  <h1>Power Ratings</h1>
+  <p class="byline" id="byline">&nbsp;</p>
+  <div class="scroll">
+    <table id="table"><thead></thead><tbody><tr><td class="msg" colspan="99">Loading&hellip;</td></tr></tbody></table>
+  </div>
+  <footer><a href="https://github.com/bbstats/openrapm">github.com/bbstats/openrapm</a></footer>
+</main>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  // a true minus sign, and Math.round rather than toFixed, as on the ratings page
+  const sign = v => v > 0 ? "+" : v < 0 ? "−" : "";
+  const fmt = v => { const r = Math.round(v * 100) / 100 || 0; return sign(r) + Math.abs(r).toFixed(2); };
+  const pct = v => v.toFixed(1) + "%";
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const day = d => new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+  // the teams' columns, [key, header]; a player's row in the file is [name, id, share, offense, defense, total]
+  const COLUMNS = [["g", "Games"], ["o", "Offense"], ["d", "Defense"], ["t", "Total"]];
+  const state = { sort: { k: "t", dir: -1 }, open: new Set() };
+  const table = $("table"), thead = table.querySelector("thead"), tbody = table.querySelector("tbody");
+  let data = null;
+
+  function roster(team) {
+    const rows = team.players.map(([n, id, share, o, d, t]) => {
+      const name = id === null ? esc(n)
+        : `<a href="./#season=${data.meta.season}&player=${id}">${esc(n)}</a>`;
+      return `<tr${id === null ? ' class="others"' : ""}><td class="name">${name}</td><td>${pct(share)}</td>` +
+             `<td>${fmt(o)}</td><td>${fmt(d)}</td><td class="total">${fmt(t)}</td>` +
+             `<td>${fmt(share / 100 * t)}</td></tr>`;
+    }).join("");
+    return `<tr class="players"><td colspan="99"><div class="inner"><table class="roster"><thead><tr><th class="name">Player</th>` +
+           `<th>Share of possessions</th><th>Offense</th><th>Defense</th><th>Total</th><th>Adds to total</th></tr>` +
+           `</thead><tbody>${rows}</tbody></table></div></td></tr>`;
+  }
+
+  function render() {
+    const { k, dir } = state.sort;
+    const teams = [...data.teams].sort((a, b) => dir * (a[k] - b[k]) || b.t - a.t);
+    const th = (key, name) => `<th data-k="${key}"${key === k ? ` aria-sort="${dir < 0 ? "descending" : "ascending"}"` : ""}>${name}</th>`;
+    thead.innerHTML = `<tr><th class="rank">#</th><th class="name">Team</th>` +
+      COLUMNS.map(([key, name]) => th(key, name)).join("") + `</tr>`;
+    tbody.innerHTML = teams.map((team, i) => {
+      const open = state.open.has(team.tm);
+      return `<tr class="team" data-tm="${esc(team.tm)}" tabindex="0" aria-expanded="${open}">` +
+        `<td class="rank">${i + 1}</td><td class="name">${esc(team.tm)}<span class="full">${esc(team.name)}</span></td>` +
+        `<td>${team.g}</td><td>${fmt(team.o)}</td><td>${fmt(team.d)}</td><td class="total">${fmt(team.t)}</td></tr>` +
+        (open ? roster(team) : "");
+    }).join("");
+  }
+
+  thead.addEventListener("click", e => {
+    const key = e.target.closest("th")?.dataset.k;
+    if (!key) return;
+    state.sort = state.sort.k === key ? { k: key, dir: -state.sort.dir } : { k: key, dir: -1 };
+    render();
+  });
+  function toggle(row) {
+    const tm = row.dataset.tm;
+    state.open.has(tm) ? state.open.delete(tm) : state.open.add(tm);
+    render();
+  }
+  tbody.addEventListener("click", e => {
+    if (e.target.closest("a")) return;
+    const row = e.target.closest("tr.team");
+    if (row) toggle(row);
+  });
+  tbody.addEventListener("keydown", e => {
+    const row = e.target.closest("tr.team");
+    if (!row || (e.key !== "Enter" && e.key !== " ")) return;
+    e.preventDefault();
+    toggle(row);
+    tbody.querySelector(`tr.team[data-tm="${row.dataset.tm}"]`).focus();
+  });
+
+  fetch("data/power.json").then(r => r.json()).then(doc => {
+    data = doc;
+    $("byline").textContent = `${doc.meta.season} · last ${doc.meta.games} games · through ${day(doc.meta.through)}`;
+    render();
+  }).catch(() => { tbody.innerHTML = `<tr><td class="msg" colspan="99">Could not load the power ratings.</td></tr>`; });
+})();
+</script>
+</body>
+</html>

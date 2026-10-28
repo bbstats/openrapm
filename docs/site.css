@@ -55,5 +55,6 @@ nav.site .theme:hover { color: CanvasText; }
   nav.site a { padding: 10px 9px 9px; font-size: 14px; }
   nav.site a:first-child { padding-left: 0; }
 }
-/* four tabs and the switch fit a 320 px phone */
+/* the tabs and the switch take two rows on a phone */
+@media (max-width: 600px) { nav.site { flex-wrap: wrap; } }
 @media (max-width: 380px) { nav.site a { padding-left: 6px; padding-right: 6px; } nav.site a:first-child { padding-left: 0; } }
