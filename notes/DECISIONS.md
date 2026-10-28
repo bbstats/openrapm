@@ -10585,3 +10585,41 @@ ways refitted +0.082, z +1.75, clustered +1.62, 19 of 56; today refitted +0.103,
   network trained on 13,997 noisy values from 2,860 players would need five copies per season to keep a player's
   other seasons out); the cheap check of the network's inner numbers is waiting on the owner's word.
 - Verdict pending the owner; by the rules both fail.  Report, version 3: https://claude.ai/artifact/5G3TBE5FcyP7vCJDhc9M7Y.
+
+## Experiment 117: the box-score prior from the networks once a season (the owner, 2026-10-27: "Ok for now just - build the whole season version")
+
+The cleanest test of whether the multi-stat network's better stat forecasts make a better rating, without the
+game-by-game averaging of experiments 114-116.  `openrapm rate --game-prior net1 --game-prior-whole-season`: the
+box-score prior trains on net1's states after each season and on the cut days, exactly as in the game-by-game builds,
+and each player's prior is its answer for net1's state after his last game, every game of his season read at once:
+shooting luck and small samples shrunk, opponents adjusted for.  The second prior reads that value as it reads the
+season panel's; step 3 is today's, one prior per player-season.  Targets unchanged: the network forecasts next games,
+the box-score prior learns the career labels, the ridge the stints' points.  The within-season builds rebuild the
+state from the fit games alone (`rate_world_by_game` through `rate_world`, the second prior's step-5 numbers from the
+world's own panel); every whole-season rebuild reproduced the rate step to 0.0.  Commit bedc407.
+
+**The full build** (`outputs/net1s_chain.log`, check 151 tag `net1s`):
+
+| reading | change | standard error | paired z | seasons better |
+|---|---|---|---|---|
+| within-season WOWY, step 4 | +0.088 | 0.037 | +2.4 | 12 of 30 |
+| 1997-2006 / 2007-2016 / 2017-2026 | +0.110 / +0.082 / +0.073 | 0.074 / 0.056 / 0.067 | +1.5 / +1.5 / +1.1 | 4 / 3 / 5 of 10 |
+| within-season WOWY, step 3 | -0.029 | 0.054 | -0.6 | 15 of 30 |
+| noise control noise_creation110, step 4 | -0.017 | 0.009 | -1.8 | 16 of 30 |
+| held-back team-game MSE, step 3 | -0.319 | 0.045 | -7.1 | 28 of 30 |
+| year over year, both directions, team-game | +0.078 | 0.037 | +2.1 | 18 of 56 |
+| a season's rating forecasting the season after / the season before | +0.089 / +0.066 | 0.046 / 0.059 | +1.9 / +1.1 | 10 / 8 of 28 |
+
+- About half of both ways' within-season loss, +0.088 against +0.196, and about half its held-back team-game gain,
+  -0.32 against -0.66, by era -0.15 / -0.35 / -0.45: the game-by-game structure carried half of each.  The cleaner
+  stats alone still lose after the shrink, in every era, and tie before it.
+- Year over year +0.078, z +2.09, clustered +2.19: just past the rule's z +2.
+- Spreads after the shrink since 2017: offense 1.588 against today's 1.599, defense 1.441 against 1.425; the prior part
+  on offense 1.499 against 1.530, the +/- part 0.534 against 0.467, as in every network build.
+- 2026: correlation of totals 0.99 in every era, median move 0.18.  LaMelo Ball +1.43, 24th to 9th; Gobert 29th to
+  20th; Barnes 20th to 13th; Adebayo +0.80.  Down: Mitchell 12th to 23rd, Cunningham 7th to 12th, Giannis -0.64,
+  Wembanyama -0.44, still 1st; Ty Jerome, 688 possessions, 10th to 37th.  Beyond the top 20: Jaylen Brown -1.21,
+  Maxey -1.15, Sabonis +1.00.
+- Verdict pending the owner; by the rules it fails.  Report, version 4: https://claude.ai/artifact/5G3TBE5FcyP7vCJDhc9M7Y.
+  Left open from the conversation: the season in progress, where the network's shrinking of a few games' numbers
+  should matter most, and stats read as if each player's teammates were average.

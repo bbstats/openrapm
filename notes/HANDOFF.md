@@ -53,6 +53,13 @@ every number quoted here; read its measurement traps before trusting a number.  
   - Tables `season_ratings_*_refit156_step4`, studies `outputs/tune/refit156_*`.
   - Waiting on the owner: the cheap check of the network's inner numbers against the prior's target, and whether to
     close the game-by-game prior; next proposed, the network's whole-season state as one prior per season.
+- **Experiment 117, the box-score prior from the networks once a season; verdict the owner's** (DECISIONS.md,
+  "Experiment 117"; same report, version 4).  `openrapm rate --game-prior net1 --game-prior-whole-season`: the
+  network's state after each player's last game as the box-score prior's input, one prior a season.
+  - Within-season WOWY +0.088 after the shrink, every era worse, a tie before it; held-back team-games -0.32, 28 of
+    30; year over year z +2.1, just past the rule.  About half of both ways' loss and half its team-game gain.
+  - Tables `season_ratings_net1s*`, folds `net1s_early`, `net1s_within`, boosters `prior_models_net1s.pkl`.
+  - Open on the owner's word: the season in progress from the network's states; stats as if teammates were average.
 
 ## Where it stood, 2026-10-26
 
@@ -288,7 +295,7 @@ What else the work of 2026-10-23 left open:
   read against today's ratings on the same split, so that noise does not enter its change, but any one build's
   standing carries 0.01-0.02 of it.
 - Every experiment gets a row in `experiments/runs.csv` (`scripts/checks/101_log_run.py`), mirrored to the sheet
-  "OpenRAPM experiments", tab Experiments; the next free row is 110.  Input screens get their own tab ("Input
+  "OpenRAPM experiments", tab Experiments; the next free row is 111.  Input screens get their own tab ("Input
   screen 112").
 
 ## Commands a session runs
