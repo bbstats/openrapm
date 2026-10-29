@@ -27,8 +27,10 @@ every number quoted here; read its measurement traps before trusting a number.  
 - **Experiment 120, RUNNING since 9:13 AM 2026-10-29** (DECISIONS.md, "Experiment 120"; the owner: "let's go to boruta
   town ... hyperparameter tuning + boruta should probably always happen in tandem (or - if it shouldn't we should prove
   it)").  One driver, `scratch/2026-10-29_matchup_screen/run.sh`, log `run.log` beside it, every step resumes:
-  1. the matchup screen at the shipped settings, check 155 tag `screen120`, seasons 2018-2025, about 5 hours with the
-     cache (`outputs/csv/screen_screen120_table.csv`);
+  1. DONE 3:20 PM: the matchup screen at the shipped settings, check 155 tag `screen120`, seasons 2018-2025
+     (`outputs/csv/screen_screen120_table.csv`, sheet tab "Input screen 120"): nothing passes; on defense the real
+     values match their shuffled copies within 0.001, and any 21st defensive input costs +0.022 against the shipped
+     lists because the column share 0.367 then shows each tree 8 inputs, not 7;
   2. the booster settings searched again with the matchup inputs in, `tune --study tune120`, 80 trials, 8-10 hours
      (`outputs/screen/screen120/tune120.db`, `params/booster_params_tune120.json`);
   3. the matchup screen at the tuned settings, then `tandem` (`screen_screen120_tune120_tandem.csv`);
