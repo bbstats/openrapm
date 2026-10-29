@@ -19,7 +19,9 @@ Words used below
                   151's error stint by stint
     arm           base: the shipped lists; add: the candidate appended to its side's list; add_shadow: the same with
                   its values shuffled among the rows that have one, in training and in rating; shadow: a shipped
-                  input shuffled in place
+                  input shuffled in place; pool: every candidate of the tag appended, the lists the tune fits
+    screen seasons the seasons a tag's screen reads (`SCREENS`): the ten tune seasons, or for an input that has values
+                  in a few seasons only, those seasons (experiment 120's matchup inputs, 2018-2025)
     seed          bag k of a trial at seed s is drawn and fitted at k + 100 s, so seed 0 is the shipped build; a
                   trial at another seed, nothing else changed, is the noise control
     variant       the box-score prior at other settings (`VARIANTS`): the base arm alone at every base seed, read
@@ -27,6 +29,12 @@ Words used below
                   ways of splitting its players both steadier from draw to draw and better on average?)
     guard         each tune season's whole-season ratings after the trial's step 4 predicting the seasons either side,
                   team-game by team-game (check 152's guard; step 5 is off)
+    tune          the booster settings searched again on today's pipeline with the tag's pool in the lists
+                  (experiment 120; the owner, 2026-10-29: "hyperparameter tuning + boruta should probably always
+                  happen in tandem (or - if it shouldn't we should prove it)"): experiment 76's guarded search, its
+                  space less the era marker and the defence factor, on the ten tune seasons at seed 0
+    tandem        the screen at two booster settings side by side: each candidate's reading against its shuffled
+                  copy at both, and how far it moved, paired by season
 
 The rule (DECISIONS.md, experiment 112, registered before the run): a candidate passes when, over the tune seasons,
 seeds averaged within each season and paired by season, add beats add_shadow at z -2 or below, add beats the shipped
@@ -38,9 +46,13 @@ lists on the mean, and the guard is not worse at z +2.
     python scripts/checks/155_input_screen.py table --tag screen112
     python scripts/checks/155_input_screen.py run --tag screen112 --variant out_of_bag60   (the base arm alone)
     python scripts/checks/155_input_screen.py variants --tag screen112
+    python scripts/checks/155_input_screen.py tune --tag screen120 --study tune120         (resumes)
+    python scripts/checks/155_input_screen.py run --tag screen120 --variant tune120 --all-arms
+    python scripts/checks/155_input_screen.py tandem --tag screen120 --variant tune120
 
 Each tag screens its own pool (`SCREENS`): screen112 experiment 112's candidates, screen119 experiment 119's (the owner,
-2026-10-28: goaltends, fouls, blocked shots and counts over expected, "go for it and remember to boruta").
+2026-10-28: goaltends, fouls, blocked shots and counts over expected, "go for it and remember to boruta"), screen120
+experiment 120's matchup inputs on 2018-2025.
 
 Writes under outputs/screen/<tag>/: season_<season>.pkl (the cache), trials.csv (one row per trial, season, stage and
 slice), guard.csv (one row per trial and rated-scored pair), and outputs/csv/screen_<tag>_table.csv (the full table);
@@ -69,9 +81,13 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 TUNE_SEASONS = tuple(range(1998, 2026, 3))          # 1998, 2001, ..., 2025, check 152's
-# {tag: (the feature set holding the shipped lists and every candidate, the features.py name of the candidates)}
-SCREENS = {"screen112": ("screen112_pool", "SCREEN_CANDIDATES"),
-           "screen119": ("screen119_pool", "SCREEN_CANDIDATES_119")}
+# the matchup inputs have values from 2018 on; 2026's next season is the one in progress, so it is left out
+MATCHUP_SEASONS = tuple(range(2018, 2026))
+# {tag: (the feature set holding the shipped lists and every candidate, the features.py name of the candidates, the
+# seasons the screen reads)}
+SCREENS = {"screen112": ("screen112_pool", "SCREEN_CANDIDATES", TUNE_SEASONS),
+           "screen119": ("screen119_pool", "SCREEN_CANDIDATES_119", TUNE_SEASONS),
+           "screen120": ("screen120_pool", "SCREEN_CANDIDATES_MATCHUPS", MATCHUP_SEASONS)}
 REFERENCE = "creation110"                           # the shipped build whose saved boosters name the second prior
 SEED_STEP = 100                                     # box_prior.BAG_DRAW_STEP
 NEAREST = 8
@@ -84,8 +100,11 @@ VARIANTS = {"shipped": {}, "out_of_bag60": dict(prediction="out_of_bag", bags=60
             "kumo_small": dict(booster_file="params/booster_params_kumo_small.json", bags=0),
             "kumo_medium": dict(booster_file="params/booster_params_kumo_medium.json", bags=0),
             # its second look: every training row the same chance to be shown, whatever its weight
-            "kumo_small_equal": dict(booster_file="params/booster_params_kumo_small_equal.json", bags=0)}
+            "kumo_small_equal": dict(booster_file="params/booster_params_kumo_small_equal.json", bags=0),
+            # experiment 120: the booster settings the tune found with the matchup inputs in the lists
+            "tune120": dict(booster_file="params/booster_params_tune120.json")}
 ERAS = {"1997-2006": (1998, 2001, 2004), "2007-2016": (2007, 2010, 2013, 2016), "2017-2026": (2019, 2022, 2025)}
+ERA_SPANS = {"1997-2006": (1997, 2006), "2007-2016": (2007, 2016), "2017-2026": (2017, 2026)}
 
 
 def _load(name: str, file: str):
@@ -108,6 +127,12 @@ def candidates(tag: str) -> dict:
     from openrapm import features
     pool(tag)
     return getattr(features, SCREENS[tag][1])
+
+
+def screen_seasons(tag: str) -> tuple:
+    """The seasons a tag's screen reads."""
+    pool(tag)
+    return SCREENS[tag][2]
 
 
 def screen_dir(tag: str) -> Path:
@@ -249,9 +274,9 @@ def variant_settings(variant: str, tag: str):
 # ------------------------------------------------------------------------------------------------- a trial
 @dataclass(frozen=True)
 class Trial:
-    arm: str                     # base, add, add_shadow, shadow
-    side: str                    # "O", "D", or "-" for base
-    name: str                    # the input, or "-" for base
+    arm: str                     # base, add, add_shadow, shadow, pool
+    side: str                    # "O", "D", or "-" for base and pool
+    name: str                    # the input, or "-" for base and pool; a pool trial's tag
     seed: int
     variant: str = "shipped"     # the box-score prior's settings, a key of VARIANTS
 
@@ -266,6 +291,8 @@ def trial_lists(trial: Trial) -> dict:
     lists = shipped_lists()
     if trial.arm in ("add", "add_shadow"):
         lists[trial.side] = lists[trial.side] + [trial.name]
+    if trial.arm == "pool":
+        lists = {side: lists[side] + list(candidates(trial.name)[side]) for side in ("O", "D")}
     return lists
 
 
@@ -370,16 +397,17 @@ def prime_in_context(side_saved: dict, rows: list) -> None:
 _FIT = {}            # in a fitting process: the booster parameters by file and the last seasons' training rows
 
 
-def fit_task(tag: str, season: int, side: str, trial: Trial):
+def fit_task(tag: str, season: int, side: str, trial: Trial, params: dict | None = None):
     """(season, side, the trial's boosters on that side): the season's training rows, the trial's input list, the
-    input shuffled when the arm asks, bag k at k + SEED_STEP x seed, the prior at the trial's variant."""
+    input shuffled when the arm asks, bag k at k + SEED_STEP x seed, the prior at the trial's variant; `params`, one
+    side's LightGBM settings, in place of the variant's file (a tune's trial)."""
     from openrapm.data.config import load_config
     from openrapm.features import ROW_FEATURES
     from openrapm.in_context_prior import LEARNER
     settings = variant_settings(trial.variant, tag)
     if "params" not in _FIT:
         _FIT["params"], _FIT["rows"] = {}, {}
-    if settings.prior.booster_file not in _FIT["params"]:
+    if params is None and settings.prior.booster_file not in _FIT["params"]:
         _FIT["params"][settings.prior.booster_file] = box_prior_params(load_config(), settings.prior.booster_file)
     if season not in _FIT["rows"]:
         if len(_FIT["rows"]) >= 2:
@@ -391,7 +419,8 @@ def fit_task(tag: str, season: int, side: str, trial: Trial):
         train = train.copy()
         train[trial.name] = shuffled(train[trial.name].to_numpy(float), trial.seed, trial.name, "train")
     names = trial_lists(trial)[side]
-    params = _FIT["params"][settings.prior.booster_file][side]
+    if params is None:
+        params = _FIT["params"][settings.prior.booster_file][side]
     if params.get("learner") == LEARNER:
         # no bags to draw: the seed picks the Kumo members' training rows instead
         return season, side, fit_bags(train, names + ROW_FEATURES, {**params, "draw": trial.seed}, settings, 0)
@@ -406,10 +435,12 @@ class Fitters:
         self.tag = tag
         self.pool = mp.get_context("spawn").Pool(n_processes)
 
-    def submit(self, trial: Trial) -> list:
+    def submit(self, trial: Trial, seasons, params: dict | None = None) -> list:
+        """Every season's fits of `trial`, at {side: settings} `params` when given (a tune's trial)."""
         # offence first: its 1,091-tree boosters take most of the time
-        return [self.pool.apply_async(fit_task, (self.tag, season, side, trial))
-                for side in ("O", "D") for season in TUNE_SEASONS]
+        return [self.pool.apply_async(fit_task, (self.tag, season, side, trial, None if params is None
+                                                 else params[side]))
+                for side in ("O", "D") for season in seasons]
 
     @staticmethod
     def collect(pending: list) -> dict:
@@ -459,9 +490,9 @@ class Workers:
     """Persistent rating workers, the tune seasons dealt out among them; each holds its seasons' SeasonRuns and reads
     one season's cache at a time."""
 
-    def __init__(self, tag: str, n_workers: int):
+    def __init__(self, tag: str, n_workers: int, seasons):
         context = mp.get_context("spawn")
-        chunks = [list(TUNE_SEASONS[k::n_workers]) for k in range(n_workers)]
+        chunks = [list(tuple(seasons)[k::n_workers]) for k in range(n_workers)]
         self.chunks = chunks
         self.links, self.processes = [], []
         for chunk in chunks:
@@ -495,24 +526,25 @@ class Workers:
 
 
 # ------------------------------------------------------------------------------------------------- scoring
-def score_folds(name: str) -> pd.DataFrame:
+def score_folds(name: str, seasons) -> pd.DataFrame:
     """Check 151's error per season, stage and slice on the trial's folds (outputs/within/<name>), step 4 fitted on
     them alone."""
     wowy = _load("wowy_check", "151_wowy.py")
-    return wowy.system_errors(wowy._audit(), within_dir(), name, (TUNE_SEASONS[0], TUNE_SEASONS[-1]))
+    return wowy.system_errors(wowy._audit(), within_dir(), name, (min(seasons), max(seasons)))
 
 
 class Guard:
     """The whole seasons after the trial's step 4 predicting the seasons either side, team-game by team-game."""
 
-    def __init__(self, tag: str):
+    def __init__(self, tag: str, seasons):
         from openrapm.data.config import load_config
         from openrapm.data.roles import main_teams
         from openrapm.data.tables import player_names
         guard = _load("decider_tune", "152_decider_tune.py")
         self.cfg = load_config()
+        self.seasons = sorted(seasons)
         self.scored = {}
-        for season in TUNE_SEASONS:
+        for season in self.seasons:
             with open(screen_dir(tag) / f"season_{season}.pkl", "rb") as handle:
                 cache = pickle.load(handle)
             for other, design in cache["scored"].items():
@@ -527,7 +559,7 @@ class Guard:
         wowy = _load("wowy_check", "151_wowy.py")
         folds, where = wowy.system_folds(within_dir(), name)
         shrink = replace(PRODUCT.shrink, rule="test", nearest=NEAREST, extrapolate_folds_tag="")
-        seasons = sorted(TUNE_SEASONS)
+        seasons = self.seasons
         multipliers = step4_multipliers(seasons, folds, shrink, None)
         if shrink.within_team_layer:
             layer = within_layer_multipliers(self.cfg, seasons, folds, where, shrink)
@@ -544,18 +576,19 @@ class Guard:
         return pd.DataFrame(out)
 
 
-def plan(tag: str, seeds: int, base_seeds: int, variant: str = "shipped") -> list:
+def plan(tag: str, seeds: int, base_seeds: int, variant: str = "shipped", all_arms: bool = False) -> list:
     """Every trial, the shipped lists at every base seed first, then each seed's arms in turn, so a run stopped part
-    way has whole seeds.  At another variant of the prior, the shipped lists at every base seed only."""
+    way has whole seeds.  At another variant of the prior, the shipped lists at every base seed only, unless
+    `all_arms` asks for the whole screen at it (the screen at the tune's settings, experiment 120)."""
     from openrapm.features import CREATION
-    if variant != "shipped":
-        return [Trial("base", "-", "-", seed, variant) for seed in range(base_seeds)]
-    trials = [Trial("base", "-", "-", seed) for seed in range(base_seeds)]
+    trials = [Trial("base", "-", "-", seed, variant) for seed in range(base_seeds)]
+    if variant != "shipped" and not all_arms:
+        return trials
     for seed in range(seeds):
         for side in ("O", "D"):
             for name in candidates(tag)[side]:
-                trials += [Trial("add", side, name, seed), Trial("add_shadow", side, name, seed)]
-        trials.append(Trial("shadow", "O", CREATION[0], seed))
+                trials += [Trial("add", side, name, seed, variant), Trial("add_shadow", side, name, seed, variant)]
+        trials.append(Trial("shadow", "O", CREATION[0], seed, variant))
     return trials
 
 
@@ -623,28 +656,30 @@ def result_paths(out_dir: Path, variant: str) -> tuple[Path, Path]:
 
 def run_screen(args) -> int:
     out_dir = screen_dir(args.tag)
+    seasons = screen_seasons(args.tag)
     variant_settings(args.variant, args.tag)
     trials_path, guard_path = result_paths(out_dir, args.variant)
     done = set()
     if trials_path.exists():
         done = set(pd.read_csv(trials_path).trial.unique())
-    todo = [trial for trial in plan(args.tag, args.seeds, args.base_seeds, args.variant) if trial.key not in done]
-    print(f"{len(todo)} trials to run, {len(done)} done", flush=True)
+    todo = [trial for trial in plan(args.tag, args.seeds, args.base_seeds, args.variant, args.all_arms)
+            if trial.key not in done]
+    print(f"{len(todo)} trials to run, {len(done)} done; seasons {', '.join(map(str, seasons))}", flush=True)
     if not todo:
         return 0
     fitters = Fitters(args.tag, args.fitters)
-    workers = Workers(args.tag, args.workers)
-    guard = Guard(args.tag)
+    workers = Workers(args.tag, args.workers, seasons)
+    guard = Guard(args.tag, seasons)
     try:
         wait_for_the_daily_job()
-        pending = fitters.submit(todo[0])
+        pending = fitters.submit(todo[0], seasons)
         for number, trial in enumerate(todo, start=1):
             started = time.time()
             models = fitters.collect(pending)
             fitted = time.time()
             if number < len(todo):
                 wait_for_the_daily_job()
-                pending = fitters.submit(todo[number])
+                pending = fitters.submit(todo[number], seasons)
             name = f"screen/{args.tag}/{trial.key}"
             folder = within_dir() / name
             if folder.exists():
@@ -652,8 +687,8 @@ def run_screen(args) -> int:
             folder.mkdir(parents=True)
             whole = workers.rate(trial, folder, models)
             rated = time.time()
-            errors = score_folds(name).assign(trial=trial.key, arm=trial.arm, side=trial.side, input=trial.name,
-                                              seed=trial.seed)
+            errors = score_folds(name, seasons).assign(trial=trial.key, arm=trial.arm, side=trial.side,
+                                                       input=trial.name, seed=trial.seed)
             scores = guard.score(whole, name).assign(trial=trial.key, arm=trial.arm, side=trial.side,
                                                      input=trial.name, seed=trial.seed)
             reading = errors[(errors.stage == "step4") & (errors.slice == "all")].error.mean()
@@ -683,19 +718,37 @@ def paired(mine: pd.Series, theirs: pd.Series) -> dict:
                 better=int((diff < 0).sum()), n=len(diff))
 
 
-def run_table(args) -> int:
-    from openrapm.data.config import load_config, resolve
+def season_means(frame: pd.DataFrame, seeds) -> pd.Series:
+    """Each season's error, `seeds` averaged."""
+    return frame[frame.seed.isin(seeds)].groupby("season").error.mean()
+
+
+def guard_means(frame: pd.DataFrame, seeds) -> pd.Series:
+    return frame[frame.seed.isin(seeds)].groupby(["rated", "scored"]).tg.mean()
+
+
+def screen_rows(tag: str, variant: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """(every trial's step-4 error per season over all held-back stints, every trial's guard rows) of a variant."""
+    trials_path, guard_path = result_paths(screen_dir(tag), variant)
+    rows = pd.read_csv(trials_path, keep_default_na=False)
+    return (rows[(rows.stage == "step4") & (rows.slice == "all")],
+            pd.read_csv(guard_path, keep_default_na=False))
+
+
+def add_minus_shadow(rows: pd.DataFrame, side: str, name: str) -> pd.Series:
+    """Each season's add arm minus its add_shadow arm, the seeds both ran averaged within each."""
+    add = rows[(rows.arm == "add") & (rows.side == side) & (rows.input == name)]
+    shadow = rows[(rows.arm == "add_shadow") & (rows.side == side) & (rows.input == name)]
+    both = sorted(set(add.seed.unique()) & set(shadow.seed.unique()))
+    return season_means(add, both) - season_means(shadow, both)
+
+
+def screen_table(tag: str, variant: str = "shipped") -> tuple[pd.DataFrame, list]:
+    """(one row per arm and input: its change against the shipped lists and, for add, against its shuffled copy, the
+    guard, by era against the copy, and the verdict by experiment 112's rule; the noise floor, the shipped lists at
+    each other seed against seed 0)."""
     from openrapm.features import meaning
-    out_dir = screen_dir(args.tag)
-    rows = pd.read_csv(out_dir / "trials.csv", keep_default_na=False)
-    rows = rows[(rows.stage == "step4") & (rows.slice == "all")]
-    guard = pd.read_csv(out_dir / "guard.csv", keep_default_na=False)
-
-    def season_means(frame: pd.DataFrame, seeds) -> pd.Series:
-        return frame[frame.seed.isin(seeds)].groupby("season").error.mean()
-
-    def guard_means(frame: pd.DataFrame, seeds) -> pd.Series:
-        return frame[frame.seed.isin(seeds)].groupby(["rated", "scored"]).tg.mean()
+    rows, guard = screen_rows(tag, variant)
     base, base_guard = rows[rows.arm == "base"], guard[guard.arm == "base"]
     noise = [paired(season_means(base, [seed]), season_means(base, [0])) for seed in sorted(base.seed.unique())
              if seed != 0]
@@ -713,22 +766,83 @@ def run_table(args) -> int:
                    seasons_better_vs_shipped=against_base["better"], guard_change=guarded["change"],
                    guard_z=guarded["z"])
         if arm == "add":
-            shadow = rows[(rows.arm == "add_shadow") & (rows.side == side) & (rows.input == name)]
-            both = sorted(set(seeds) & set(shadow.seed.unique()))
-            against_shadow = paired(season_means(group, both), season_means(shadow, both))
+            difference = add_minus_shadow(rows, side, name)
+            against_shadow = paired(difference, pd.Series(0.0, index=difference.index))
             row.update(change_vs_shadow=against_shadow["change"], z_vs_shadow=against_shadow["z"],
                        seasons_better_vs_shadow=against_shadow["better"])
+            for era, (first, last) in ERA_SPANS.items():
+                inside = difference[(difference.index >= first) & (difference.index <= last)]
+                if len(inside):
+                    row[f"vs_shadow_{era}"] = float(inside.mean())
             row["verdict"] = ("passes" if against_shadow["z"] <= -2 and against_base["change"] < 0
                               and not guarded["z"] >= 2 else "fails")
         table.append(row)
-    out = pd.DataFrame(table).sort_values(["arm", "side", "z_vs_shadow"], na_position="last")
-    path = resolve(load_config(), "outputs") / "csv" / f"screen_{args.tag}_table.csv"
+    return pd.DataFrame(table).sort_values(["arm", "side", "z_vs_shadow"], na_position="last"), noise
+
+
+def table_path(tag: str, variant: str, kind: str = "table") -> Path:
+    from openrapm.data.config import load_config, resolve
+    suffix = "" if variant == "shipped" else f"_{variant}"
+    return resolve(load_config(), "outputs") / "csv" / f"screen_{tag}{suffix}_{kind}.csv"
+
+
+def run_table(args) -> int:
+    out, noise = screen_table(args.tag, args.variant)
+    path = table_path(args.tag, args.variant)
     out.to_csv(path, index=False)
     pd.set_option("display.width", 250)
     print("the noise floor: the shipped lists at each other seed against seed 0")
     for k, result in enumerate(noise, start=1):
         print(f"  seed {k}: {result['change']:+.4f}, z {result['z']:+.2f}, {result['better']} of {result['n']}")
     print(out.round(4).to_string(index=False))
+    print(f"\nwrote {path}")
+    return 0
+
+
+def verdict_of(row: pd.Series) -> str:
+    return row["verdict"] if isinstance(row.get("verdict"), str) else "-"
+
+
+def run_tandem(args) -> int:
+    """The screen at the shipped booster settings and at a variant's side by side (experiment 120): for each candidate,
+    its change against its shuffled copy at both, its verdict at both, and the variant's reading minus the shipped
+    one, season by season (each season's seeds averaged within each arm, the two settings paired by season); and the
+    shipped lists at the variant's settings against the shipped settings, every base seed averaged."""
+    from openrapm.features import meaning
+    first, _ = screen_table(args.tag, "shipped")
+    second, _ = screen_table(args.tag, args.variant)
+    rows_first, _ = screen_rows(args.tag, "shipped")
+    rows_second, _ = screen_rows(args.tag, args.variant)
+    table = []
+    for side in ("O", "D"):
+        for name in candidates(args.tag)[side]:
+            at = {label: frame[(frame.arm == "add") & (frame.side == side) & (frame.input == name)]
+                  for label, frame in (("shipped", first), (args.variant, second))}
+            if any(frame.empty for frame in at.values()):
+                continue
+            moved = paired(add_minus_shadow(rows_second, side, name), add_minus_shadow(rows_first, side, name))
+            row = dict(input=name, plain_name=meaning(name), side=side)
+            for label, frame in at.items():
+                one = frame.iloc[0]
+                row.update({f"vs_copy_{label}": one.change_vs_shadow, f"z_{label}": one.z_vs_shadow,
+                            f"verdict_{label}": verdict_of(one)})
+            row.update(moved=moved["change"], moved_se=moved["se"], moved_z=moved["z"], seasons=moved["n"])
+            row["verdict_flips"] = row["verdict_shipped"] != row[f"verdict_{args.variant}"]
+            row["matters"] = bool(row["verdict_flips"] and abs(moved["z"]) >= 2)
+            table.append(row)
+    out = pd.DataFrame(table)
+    base_first = rows_first[rows_first.arm == "base"]
+    base_second = rows_second[rows_second.arm == "base"]
+    retune = paired(season_means(base_second, sorted(base_second.seed.unique())),
+                    season_means(base_first, sorted(base_first.seed.unique())))
+    path = table_path(args.tag, args.variant, "tandem")
+    out.to_csv(path, index=False)
+    pd.set_option("display.width", 250)
+    print(out.round(4).to_string(index=False))
+    print(f"\nthe shipped lists at {args.variant}'s settings against the shipped settings, every base seed averaged: "
+          f"{retune['change']:+.4f}, z {retune['z']:+.2f}, {retune['better']} of {retune['n']} seasons better")
+    print(f"verdicts that flip: {int(out.verdict_flips.sum())} of {len(out)}; flips whose reading moved beyond z 2: "
+          f"{int(out.matters.sum())}")
     print(f"\nwrote {path}")
     return 0
 
@@ -778,12 +892,192 @@ def run_variants(args) -> int:
     return 0
 
 
+# ------------------------------------------------------------------------------------------------- the tune
+# Experiment 120 (the owner, 2026-10-29: "hyperparameter tuning + boruta should probably always happen in tandem (or -
+# if it shouldn't we should prove it)"): experiment 76's guarded search again, on today's pipeline, with the tag's
+# pool in the lists, so the settings it finds are the ones a screen run in tandem with a tune would read the candidates
+# at.  The shipped settings were searched on the pipeline of 2026-10-16: one booster a fold, no part-season rows, no
+# second prior, one layer of step 4.
+GUARD_Z_LIMIT = 1.0      # check 152's: the next-season check's z on its 20 readings, about +1.7 on the full test
+IN_FLIGHT = 2            # trials at once: a trial's boosters are fitted while the trial before it is rated
+
+
+def suggest(trial) -> dict:
+    """{side: one trial's LightGBM settings} on experiment 76's space (check 152's suggest_fixed), less its era marker
+    and its defence factor: the inputs are the tag's pool, and step 4 stays as shipped."""
+    linear = trial.suggest_categorical("linear_tree", [True, False])
+    params = {}
+    for side in ("O", "D"):
+        p = dict(
+            learning_rate=trial.suggest_float(f"{side}_learning_rate", 0.003, 0.15, log=True),
+            n_estimators=trial.suggest_int(f"{side}_n_estimators", 30, 2500, log=True),
+            num_leaves=trial.suggest_int(f"{side}_num_leaves", 3, 96, log=True),
+            max_depth=trial.suggest_int(f"{side}_max_depth", 1, 12),
+            min_child_samples=trial.suggest_int(f"{side}_min_child_samples", 10, 2500, log=True),
+            reg_lambda=trial.suggest_float(f"{side}_reg_lambda", 1e-3, 1000.0, log=True),
+            reg_alpha=trial.suggest_float(f"{side}_reg_alpha", 1e-4, 100.0, log=True),
+            max_bin=trial.suggest_categorical(f"{side}_max_bin", [15, 31, 63, 127, 255]),
+            path_smooth=trial.suggest_float(f"{side}_path_smooth", 1e-3, 30.0, log=True),
+            colsample_bytree=trial.suggest_float(f"{side}_colsample_bytree", 0.3, 1.0),
+            linear_tree=linear)
+        line_penalty = trial.suggest_float(f"{side}_linear_lambda", 1e-3, 1000.0, log=True)
+        if linear:
+            p["linear_lambda"] = line_penalty
+        params[side] = p
+    return params
+
+
+def enqueue(study, booster_file: str) -> None:
+    """Queue a params file's settings as one of the search's first trials."""
+    from openrapm.data.config import load_config
+    spec = box_prior_params(load_config(), booster_file)
+    values = {"linear_tree": bool(spec["O"].get("linear_tree", False))}
+    for side in ("O", "D"):
+        for key, value in spec[side].items():
+            if key != "linear_tree":
+                values[f"{side}_{key}"] = value
+    study.enqueue_trial(values, skip_if_exists=True)
+
+
+def rate_and_score(tag: str, label: str, trial: Trial, models: dict, workers: Workers, guard: Guard,
+                   seasons) -> tuple[pd.Series, pd.Series]:
+    """(each season's step-4 error over every held-back stint, each guard reading's team-game error) of a trial's
+    boosters; its folds are written under outputs/within/screen/<tag>/<label> and removed after."""
+    name = f"screen/{tag}/{label}"
+    folder = within_dir() / name
+    if folder.exists():
+        shutil.rmtree(folder)
+    folder.mkdir(parents=True)
+    whole = workers.rate(trial, folder, models)
+    errors = score_folds(name, seasons)
+    errors = errors[(errors.stage == "step4") & (errors.slice == "all")].set_index("season").error
+    readings = guard.score(whole, name).set_index(["rated", "scored"]).tg
+    shutil.rmtree(folder)
+    return errors, readings
+
+
+def tune_reference(args, fitters: Fitters, workers: Workers, guard: Guard) -> tuple[pd.Series, pd.Series]:
+    """(each season's error, each guard reading) of the pool lists at the shipped settings, seed 0, which the search's
+    limit is read against; computed once and kept beside the search as <study>_reference.pkl."""
+    path = screen_dir(args.tag) / f"{args.study}_reference.pkl"
+    if not path.exists():
+        started = time.time()
+        trial = Trial("pool", "-", args.tag, 0)
+        models = fitters.collect(fitters.submit(trial, TUNE_SEASONS))
+        pd.to_pickle(rate_and_score(args.tag, f"{args.study}_reference", trial, models, workers, guard, TUNE_SEASONS),
+                     path)
+        print(f"the reference, the pool lists at the shipped settings, seed 0 ({time.time() - started:.0f}s)",
+              flush=True)
+    return pd.read_pickle(path)
+
+
+def run_tune(args) -> int:
+    """The guarded search: Optuna's Gaussian-process sampler on experiment 76's space, two trials at once (the sampler
+    reads a trial still running as if it had come out as well as the best so far), the score the within-season test
+    after step 4 on the ten tune seasons at seed 0, the next-season check a hard limit against the pool lists at the
+    shipped settings; the best trial within the limit written as params/booster_params_<study>.json."""
+    from collections import deque
+
+    import optuna
+    from optuna.trial import TrialState
+
+    from openrapm.settings import TEST
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+    out_dir = screen_dir(args.tag)
+    seasons = TUNE_SEASONS
+    storage = f"sqlite:///{(out_dir / f'{args.study}.db').as_posix()}"
+    sampler = optuna.samplers.GPSampler(seed=args.seed, n_startup_trials=args.startup, deterministic_objective=True,
+                                        constraints_func=lambda frozen: frozen.user_attrs.get("constraint", [1.0]))
+    study = optuna.create_study(study_name=args.study, storage=storage, direction="minimize", sampler=sampler,
+                                load_if_exists=True)
+    for stale in study.get_trials(deepcopy=False, states=(TrialState.RUNNING,)):
+        study.tell(stale.number, state=TrialState.FAIL)       # a run stopped part way
+    if not study.trials:
+        enqueue(study, TEST.prior.booster_file)
+        enqueue(study, "params/booster_params_lgb1_tune1.json")
+    pool_trial = Trial("pool", "-", args.tag, 0)
+    trials_csv = out_dir / f"{args.study}_trials.csv"
+
+    def finished() -> int:
+        return len(study.get_trials(deepcopy=False, states=(TrialState.COMPLETE,)))
+
+    fitters = Fitters(args.tag, args.fitters)
+    workers = Workers(args.tag, args.workers, seasons)
+    guard = Guard(args.tag, seasons)
+    flight: deque = deque()
+
+    def launch() -> None:
+        wait_for_the_daily_job()
+        trial = study.ask()
+        params = suggest(trial)
+        flight.append((trial, params, fitters.submit(pool_trial, seasons, params), time.time()))
+
+    try:
+        reference_errors, reference_readings = tune_reference(args, fitters, workers, guard)
+        while len(flight) < IN_FLIGHT and finished() + len(flight) < args.trials:
+            launch()
+        while flight:
+            trial, params, pending, submitted = flight.popleft()
+            models = fitters.collect(pending)
+            if finished() + len(flight) + 1 < args.trials:
+                launch()
+            errors, readings = rate_and_score(args.tag, f"{args.study}_t{trial.number}", pool_trial, models, workers,
+                                              guard, seasons)
+            score = float(errors.mean())
+            change = paired(errors, reference_errors)
+            team = paired(readings, reference_readings)
+            limit = team["z"] if np.isfinite(team["z"]) else 0.0
+            trial.set_user_attr("constraint", [float(limit) - GUARD_Z_LIMIT])
+            for key, value in (("params", params), ("vs_reference", change), ("guard_team_game", team),
+                               ("seconds", time.time() - submitted)):
+                trial.set_user_attr(key, value)
+            errors.rename("error").reset_index().assign(trial=trial.number, guard_change=team["change"],
+                                                        guard_z=team["z"]).to_csv(
+                trials_csv, mode="a", header=not trials_csv.exists(), index=False)
+            study.tell(trial, score)
+            print(f"trial {trial.number}: decider {change['change']:+.4f} z {change['z']:+.2f} {change['better']}/"
+                  f"{change['n']}; next-season {team['change']:+.4f} z {team['z']:+.2f}"
+                  f"{'' if limit <= GUARD_Z_LIMIT else ', FAILS the limit'}; linear {params['O']['linear_tree']}  "
+                  f"({time.time() - submitted:.0f}s)", flush=True)
+    finally:
+        workers.close()
+        fitters.close()
+    return write_tuned(study, args)
+
+
+def write_tuned(study, args) -> int:
+    """The five best trials within the limit, and the best written as params/booster_params_<study>.json."""
+    import json
+
+    from optuna.trial import TrialState
+
+    from openrapm.data.config import load_config, resolve_path
+    feasible = [trial for trial in study.get_trials(deepcopy=False, states=(TrialState.COMPLETE,))
+                if trial.user_attrs.get("constraint", [1.0])[0] <= 0]
+    ranked = sorted(feasible, key=lambda trial: trial.value)
+    for trial in ranked[:5]:
+        change, team = trial.user_attrs["vs_reference"], trial.user_attrs["guard_team_game"]
+        print(f"  trial {trial.number}: decider {change['change']:+.4f} z {change['z']:+.2f}; next-season "
+              f"{team['change']:+.4f} z {team['z']:+.2f}")
+    best = ranked[0]
+    spec = {side: {"learner": "lightgbm", "params": best.user_attrs["params"][side]} for side in ("O", "D")}
+    spec["note"] = (f"check 155's tune {args.study} on tag {args.tag} (experiment 120, {time.strftime('%Y-%m-%d')}): "
+                    f"trial {best.number} of {len(study.trials)}, Optuna's GP sampler on the ten tune seasons, the "
+                    f"pool lists, the next-season check a hard limit; against the pool lists at the shipped settings "
+                    f"{best.user_attrs['vs_reference']}; next-season {best.user_attrs['guard_team_game']}")
+    path = resolve_path(load_config(), f"params/booster_params_{args.study}.json")
+    path.write_bytes(json.dumps(spec, indent=2).encode("utf-8"))
+    print(f"best within the limit: trial {best.number}; wrote {path}", flush=True)
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="The input screen on the within-season test (experiment 112).")
     commands = parser.add_subparsers(dest="command", required=True)
-    cache = commands.add_parser("cache", help="each tune season's cache, once; resumes")
+    cache = commands.add_parser("cache", help="each season's cache, once; resumes")
     cache.add_argument("--tag", required=True)
-    cache.add_argument("--seasons", default="", help="comma-separated, default every tune season")
+    cache.add_argument("--seasons", default="", help="comma-separated, default the tag's screen seasons and the ten "
+                                                     "tune seasons")
     run = commands.add_parser("run", help="every trial; resumes")
     run.add_argument("--tag", required=True)
     run.add_argument("--workers", type=int, default=2, help="rating processes, about 6 GB each (default %(default)s)")
@@ -793,6 +1087,7 @@ def main(argv=None) -> int:
     run.add_argument("--variant", default="shipped", choices=sorted(VARIANTS),
                      help="the box-score prior's settings; another than shipped runs the base arm alone, at every "
                           "base seed, into trials_<variant>.csv (default %(default)s)")
+    run.add_argument("--all-arms", action="store_true", help="at another variant, every arm of the screen")
     variants = commands.add_parser("variants", help="each variant of the prior against the shipped one")
     variants.add_argument("--tag", required=True)
     dry = commands.add_parser("dry", help="the shipped lists at seed 0 on a few seasons, against the reference")
@@ -800,9 +1095,24 @@ def main(argv=None) -> int:
     dry.add_argument("--seasons", required=True)
     table = commands.add_parser("table", help="the full table")
     table.add_argument("--tag", required=True)
+    table.add_argument("--variant", default="shipped", choices=sorted(VARIANTS))
+    tune = commands.add_parser("tune", help="the booster settings searched again with the tag's pool in; resumes")
+    tune.add_argument("--tag", required=True)
+    tune.add_argument("--study", default="tune120", help="the search's name and its params file's (default "
+                                                         "%(default)s)")
+    tune.add_argument("--trials", type=int, default=80, help="finished trials to reach (default %(default)s)")
+    tune.add_argument("--startup", type=int, default=10, help="trials before the Gaussian process, the queued ones "
+                                                              "among them (default %(default)s)")
+    tune.add_argument("--seed", type=int, default=0)
+    tune.add_argument("--workers", type=int, default=2)
+    tune.add_argument("--fitters", type=int, default=6)
+    tandem = commands.add_parser("tandem", help="the screen at the shipped settings and at a variant's, side by side")
+    tandem.add_argument("--tag", required=True)
+    tandem.add_argument("--variant", required=True, choices=sorted(VARIANTS))
     args = parser.parse_args(argv)
     if args.command == "cache":
-        seasons = [int(s) for s in args.seasons.split(",") if s] or list(TUNE_SEASONS)
+        seasons = ([int(s) for s in args.seasons.split(",") if s]
+                   or sorted(set(screen_seasons(args.tag)) | set(TUNE_SEASONS)))
         return build_cache(args.tag, seasons)
     if args.command == "run":
         return run_screen(args)
@@ -810,6 +1120,10 @@ def main(argv=None) -> int:
         return run_dry(args)
     if args.command == "variants":
         return run_variants(args)
+    if args.command == "tune":
+        return run_tune(args)
+    if args.command == "tandem":
+        return run_tandem(args)
     return run_table(args)
 
 

@@ -10878,3 +10878,55 @@ the season in progress `matchup_pairs` leaves out a game not on disk yet instead
 again; a finished season still stops on a missing game.  At 7 AM on 2026-10-29, 56 of 2027's 68 games were in; the 12
 of 2026-10-28 answered empty rosters, not processed yet, though their hustle numbers were in by 6 AM.  The 56 games'
 pairs sum to the season-total file exactly, 52,858 partial possessions.
+
+## Experiment 120: the matchup inputs through the Boruta screen, with the booster settings tuned again beside it (the owner, 2026-10-29: "now that we have matchup features, let's go to boruta town and see if we can add them. note - hyperparameter tuning + boruta should probably always happen in tandem (or - if it shouldn't we should prove it)"; registered before any result)
+
+**The pool**, each appended alone to creation110's list of the side it describes (`features.SCREEN_CANDIDATES_MATCHUPS`,
+`FEATURE_SETS["screen120_pool"]`): on offense the height of the players who guarded him; on defense the height,
+self-creation and total creation of the players he guarded, and his share of defense on the opposing top self-creator
+and top total creator, of all his defense and of the floor he shared with them.  Plus the shadow arm on experiment
+110's self-creation, as in experiments 112 and 119.
+
+**The seasons.**  The matchup inputs have values from 2018 only; of check 155's ten tune seasons only 2019, 2022 and
+2025 carry them.  The screen reads every season 2018-2025 (`MATCHUP_SEASONS`); 2026 is left out because its next
+season, which the guard reads, is the season in progress.  Each screen season's step 4 is fitted on the other screen
+seasons' folds outside its neighbors (test rule, 8 nearest), so on modern seasons alone.  What the inputs do before 2018,
+where they are missing, is left to the confirming build's eras.
+
+**The rule** is experiment 112's on these 8 seasons: seeds 0-2 averaged within each season and paired by season, a
+candidate passes when (1) `add` beats `add_shadow` at z -2 or below, (2) `add` beats today's lists on the mean, (3) the
+guard is not worse at z +2.  Survivors are built together in one chain, all thirty seasons, judged by era on the
+within-season WOWY test against creation110 beside noise_creation110, year over year not worse at z +2, with the 2026
+top 20; the verdict the owner's.
+
+**Tuned beside the screen** (the owner's question).  The shipped booster settings, `lgb1_tune2`, were searched on
+2026-10-16 (experiment 76) on the pipeline of that day: one booster a fold, no part-season rows, no second prior, one
+layer of step 4.  Nothing has searched them since.
+- The tune, check 155 `tune --tag screen120 --study tune120`: experiment 76's guarded search again on today's pipeline.
+  Optuna's Gaussian-process sampler, seed 0, 80 finished trials, two at once (the sampler counts a trial still running
+  as if it had come out as well as the best so far); experiment 76's space less the era marker and the defense factor,
+  so step 4 stays as shipped; the score the within-season WOWY test after step 4 on the ten tune seasons at seed 0; the
+  hard limit the next-season check, z at most +1.0 on its 20 readings, against the same lists at the shipped settings;
+  the shipped settings and experiment 75's queued first.  The lists are creation110's with all eight matchup inputs
+  appended, so the search can shape the boosters to them.  The best trial within the limit is written to
+  `params/booster_params_tune120.json`.
+- The matchup screen again at those settings, every arm, seeds 0-2, today's lists at 5 seeds (`run --variant tune120
+  --all-arms`).
+- A second pool at those settings: experiment 119's ten play-by-play counts, which have values in every era, on the ten
+  tune seasons, against experiment 119's own screen of 2026-10-28 at the shipped settings (same cache, seeds and rule).
+  For that pool the tuned settings are today's pipeline tuned again, not tuned with its candidates in.
+- The reading (`tandem`): for each of the 18 candidates, its change against its shuffled copy at both settings and the
+  difference between them, paired by season.
+- **The rule for the owner's question**, fixed now: tuning beside the screen matters if any candidate's verdict differs
+  between the two settings and its reading moved beyond z 2 between them.  If none does in either pool, the screen at
+  the shipped settings gives the answer a fresh tune would have given for these 18 inputs; that is the claim, not a
+  promise about every future pool.  A verdict that crosses the line by a small move, under z 2, is the screen's own
+  noise and is reported as such.
+- Also read: today's lists at the tuned settings against the shipped settings, 5 seeds each, paired by season, on both
+  pools' seasons: what the tune alone does to today's pipeline.  Adopting new settings needs its own full build; the
+  verdict the owner's.
+
+**Cost**: the cache, 15 seasons, about an hour and 37 GB (`outputs/screen/screen120/`); the screen, 56 trials, about 4
+hours; the tune, 80 trials, 8-10 hours; the screen at the tuned settings, about 4 hours; experiment 119's pool at them,
+68 trials, about 6.5 hours.  Every step holds 5:50-7:30 AM for the daily job.  Driver:
+`scratch/2026-10-29_matchup_screen/run.sh`, log `scratch/2026-10-29_matchup_screen/run.log`.

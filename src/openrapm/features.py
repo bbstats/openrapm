@@ -453,6 +453,9 @@ FEATURE_SETS = {
     "screen112_pool": {side: _CREATION110[side] + SCREEN_CANDIDATES[side] for side in ("O", "D")},
     # experiment 119 (2026-10-28): the same for its play-by-play counts and counts over expected
     "screen119_pool": {side: _CREATION110[side] + SCREEN_CANDIDATES_119[side] for side in ("O", "D")},
+    # experiment 120 (2026-10-29, the owner: "now that we have matchup features, let's go to boruta town"): the same
+    # for the matchup inputs, each on the side it describes (`SCREEN_CANDIDATES_MATCHUPS`)
+    "screen120_pool": {side: _CREATION110[side] + SCREEN_CANDIDATES_MATCHUPS[side] for side in ("O", "D")},
     # experiment 112's confirming build: the one candidate the screen passed, unassisted makes at the rim and in the
     # paint, appended to the shipped offensive list
     "hustle_no_three_pct_self_creation_unassisted_inside": {"O": _CREATION110["O"] + ["unassisted_makes_inside_per100"],
