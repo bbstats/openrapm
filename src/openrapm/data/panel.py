@@ -39,6 +39,9 @@ Where each column comes from:
     fouls, goaltends, shots blocked, three-shot trips          data/foul_counts.py's counts, padded like the
                                                                play-by-play parts (features.FOUL_RATES)
     the counts over expected (features.OVER_EXPECTED)          `add_over_expected`, on each side's rows of the season
+    who he guarded and who guarded him (features.MATCHUP_GAME_INPUTS)   data/matchups.py, from the per-game matchup
+                                                               box scores (NaN before 2018), each partner's height,
+                                                               self-creation and total creation from these rows
 
 Example: Stephen Curry's 2016 offence row reads possessions 6,994 (his team's offensive possessions with him on the
 court), assists_per100 4.25 above the average player (8.84 uncentred), team_possession_share 0.66 and playoff_share
@@ -72,14 +75,17 @@ from ..features import (
     CAREER,
     CAREER_FROM_DEBUT,
     CLOSENESS,
+    CREATION,
     CREATION_INPUTS,
     CREATION_RATES,
     DASHBOARD_RATES,
+    DERIVED,
     ERA_MARKER,
     EVENT_RATES,
     FOUL_RATES,
     GOALTEND_INPUTS,
     GOALTENDS_FROM,
+    MATCHUP_GAME_INPUTS,
     OFF_COURT,
     ON_COURT,
     ON_MINUS_OFF,
@@ -91,6 +97,8 @@ from ..features import (
     SHOT_TOTALS,
     UNCENTRED_CREATION_RATES,
     UNCENTRED_EVENT_RATES,
+    UNCENTRED_RATES,
+    add_features,
 )
 from ..on_court import offcourt_rates, oncourt_rates
 from .bio import PLAYER_INPUTS, bio_inputs, player_bio, player_inputs, refresh_bio, tenure_inputs
@@ -103,6 +111,7 @@ from .event_counts import event_design, load_event_counts
 from .foul_counts import FOUL_COUNTS, load_foul_counts
 from .ingest import GAME_PREFIX, game_table, load_gamelog, raw_dir
 from .legacy_names import is_deleted, translate_frame
+from .matchups import matchup_inputs, matchup_pairs
 from .roles import (
     ROLE_PHASES,
     build_roles,
@@ -137,13 +146,15 @@ MIGRATED_PANEL_COLUMNS = [column for column in SEASON_PANEL_COLUMNS
                           and column not in DASHBOARD_RATES and column not in ERA_MARKER
                           and column not in UNCENTRED_EVENT_RATES and column not in UNCENTRED_CREATION_RATES
                           and column not in CREATION_INPUTS and column not in FOUL_RATES
-                          and column not in OVER_EXPECTED]
+                          and column not in OVER_EXPECTED and column not in MATCHUP_GAME_INPUTS]
 STINT_COLUMNS = ["game_id", "period", *HOME_SLOTS, *AWAY_SLOTS, "poss_h", "poss_a", "margin_h", "is_gt"]
 # The data layer's names for the body and shot columns, against the panel's (the pairs are pinned in
 # tests/test_features.py and tests/test_panel.py); data/roles.py builds the role and career columns under the panel's
 # own names.
 BIO_NAMES = dict(zip(PLAYER_INPUTS, BIO))
 SHOT_NAMES = dict(zip([*SHOT_TOTAL_COLS, *SHOT_LEAGUE_COLS], [*SHOT_TOTALS, *SHOT_LEAGUE]))
+# what total creation adds to self-creation (data/matchups.py): the owner's estimated potential assists, experiment 112
+POTENTIAL_ASSISTS = "potential_assists_estimated_per100"
 # lineup slot -> (his team's possessions, the opponent's possessions)
 SCORE_SLOTS = ([(f"h{i}", "poss_h", "poss_a") for i in range(1, 6)]
                + [(f"a{i}", "poss_a", "poss_h") for i in range(1, 6)])
@@ -465,6 +476,35 @@ def add_over_expected(rows: pd.DataFrame) -> pd.DataFrame:
     return pd.concat([rows, over], axis=1)
 
 
+def _matchup_partners(rows: pd.DataFrame, parts) -> pd.DataFrame:
+    """Each player's height, self-creation, total creation and offensive possessions in the fit games, indexed by
+    player id, for data/matchups.py: self-creation from his offence row's uncentred rates (features.CREATION); total
+    creation adds the owner's estimated potential assists at their level, from the uncentred play-by-play parts
+    (features.DERIVED).  The offence rows and `parts` share the offence design's player order.
+
+    Example: Shai Gilgeous-Alexander 2026, the whole season: 23.57 self-created shots and about 13 estimated potential
+    assists per 100."""
+    offence = rows[rows["side"] == "O"]
+    creation = add_features(offence[UNCENTRED_RATES].copy(), CREATION)[CREATION[0]].to_numpy(dtype=float)
+    passes = sum(weight * parts.offence.rates[:, EVENT_RATES.index(name)]
+                 for name, weight in DERIVED[POTENTIAL_ASSISTS].items())
+    return pd.DataFrame({"height_in": offence["height_in"].to_numpy(dtype=float), "self_creation_per100": creation,
+                         "total_creation_per100": creation + passes,
+                         "possessions": offence["possessions"].to_numpy(dtype=float)},
+                        index=offence["player_id"].to_numpy())
+
+
+def _add_matchups(rows: pd.DataFrame, pairs: pd.DataFrame | None, parts, stints: pd.DataFrame,
+                  games: pd.DataFrame) -> pd.DataFrame:
+    """The rows with features.MATCHUP_GAME_INPUTS joined on, a player's values on both of his rows (data/matchups.py);
+    missing for a season without per-game matchups and for a player without pairs."""
+    values = pd.DataFrame(np.nan, index=rows.index, columns=MATCHUP_GAME_INPUTS)
+    if pairs is not None:
+        inputs = matchup_inputs(pairs, _matchup_partners(rows, parts), stints, games)
+        values = inputs.reindex(rows["player_id"].to_numpy()).set_axis(rows.index)
+    return pd.concat([rows, values], axis=1)
+
+
 def body_table(cfg: dict) -> pd.DataFrame:
     """player_id -> height_in, weight_lb: the body target's inputs (box_rates.body_targets), from the bio feed, a
     player the feed never listed at its medians, as the panel's own body columns (data/bio.py)."""
@@ -508,12 +548,14 @@ def season_panel(season: int, cfg: dict, designs: dict, sources: SeasonSources, 
     stints = sources.tables.stints
     if fit is not None:
         stints = stints[stints["game_id"].isin(fit)]
+    pairs, matchup_games = matchup_pairs(cfg, season, games)
+    rows = _add_matchups(rows, pairs, parts, stints, sources.tables.games)
     rows = rows.merge(score_state(stints, season), on=["player_id", "season", "side"], how="left")
     rows[PLAYOFF_SHARE[0]] = rows["player_id"].map(playoff_share(stints, sources.tables.games)).fillna(0.0)
     rows[ERA_MARKER[0]] = float(season >= 2017)
     read = {**history.games_read, "score-state stints": set(stints["game_id"].unique()), "event counts": event_games,
             "self-creation counts": creation_games, "foul counts": foul_games,
-            "hustle games": dashboards["hustle_games"]}
+            "hustle games": dashboards["hustle_games"], "matchup games": matchup_games}
     return SeasonPanel(season, rows[SEASON_PANEL_COLUMNS], history.season_roles, read)
 
 

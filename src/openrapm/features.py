@@ -49,7 +49,8 @@ __all__ = ["Feature", "BOX_RATES", "UNCENTRED_RATES", "ROLE", "CLOSENESS", "SHOT
            "FROM_DEBUT", "TRACKING_RATES", "HUSTLE_RATES", "MATCHUP_RATES", "DASHBOARD_RATES", "MISSING_OK", "DERIVED",
            "RATIOS", "VS_LEAGUE", "SHOTQ", "SHOTQ_PADS", "CREATION", "CREATION_ESTIMATED", "UNCENTRED_EVENT_RATES",
            "CREATION_RATES", "UNCENTRED_CREATION_RATES", "CREATION_INPUTS", "SCREEN_CANDIDATES", "FOUL_RATES",
-           "OVER_EXPECTED", "GOALTENDS_FROM", "GOALTEND_INPUTS", "SCREEN_CANDIDATES_119",
+           "OVER_EXPECTED", "GOALTENDS_FROM", "GOALTEND_INPUTS", "SCREEN_CANDIDATES_119", "MATCHUP_GAME_INPUTS",
+           "SCREEN_CANDIDATES_MATCHUPS",
            "PRIOR_FEATURES", "PANEL_INPUTS", "PANEL_KEYS",
            "SEASON_PANEL_COLUMNS", "ROW_FEATURES", "SHIPPED", "REBOUND_PARTS", "STEAL_PARTS", "POINTS_PARTS",
            "THREE_POINT_PARTS", "FEATURE_SETS", "CATALOGUE", "add_features", "add_shotq", "meaning",
@@ -306,13 +307,29 @@ SCREEN_CANDIDATES_119 = {
     "D": [GOALTENDS, "goaltends_over_expected_from_blocks_per100", "blocks_over_expected_from_fouls_per100",
           "steals_over_expected_from_fouls_per100", SHOOTING_FOULS, LOOSE_BALL_FOULS]}
 
+# The matchup inputs (the owner, 2026-10-28: "the matchup data, e.g. who is matched up with whom ... position!
+# (average height of who you are defending, average height of who defended you are wonderful proxies for this on
+# D/O) ... '% of time matched up with the #1 self creator' and '% of time matched up with the #1 overall creator',
+# and 'average self-creation of who you are defending' and 'average total creation of who you are defending'"): who
+# a player guarded and who guarded him in the fit games' per-game matchup box scores (data/matchups.py, 2018 on),
+# averages and shares weighted by matchup possessions, padded; the same value on his offence and defence rows.
+MATCHUP_GAME_INPUTS = ["attackers_guarded_height_in", "defenders_faced_height_in",
+                       "attackers_guarded_self_creation_per100", "attackers_guarded_total_creation_per100",
+                       "top_self_creator_guarded_share", "top_total_creator_guarded_share",
+                       "top_self_creator_guarded_share_on_shared_floor",
+                       "top_total_creator_guarded_share_on_shared_floor"]
+MISSING_OK.extend(MATCHUP_GAME_INPUTS)
+# For a later screen, each appended alone to the shipped list of the side it describes: the height of the defenders
+# who guarded him on offence, everything about who he guarded on defence
+SCREEN_CANDIDATES_MATCHUPS = {"O": MATCHUP_GAME_INPUTS[1:2], "D": [MATCHUP_GAME_INPUTS[0], *MATCHUP_GAME_INPUTS[2:]]}
+
 # Every input the prior could read (145): the rates, the role, every derived column, career, body, on-court, the
 # play-by-play parts, the ratios against the league, the career counted from the debut, the dashboard inputs with
 # the hustle placebo, the era marker, both self-creations, and experiment 119's counts and counts over expected.
 # scripts/checks/95_miss_by_group.py and commands/within_season.py (its PLAYER_COLUMNS) report on all of them.
 PRIOR_FEATURES = [*BOX_RATES, *ROLE, *DERIVED, *RATIOS, *SHOTQ, *CAREER, *BIO, *ON_COURT, *EVENT_RATES, *VS_LEAGUE,
                   *CAREER_FROM_DEBUT, *DASHBOARD_RATES, *ERA_MARKER, *CREATION, *CREATION_ESTIMATED, *CREATION_INPUTS,
-                  *FOUL_RATES, *OVER_EXPECTED]
+                  *FOUL_RATES, *OVER_EXPECTED, *MATCHUP_GAME_INPUTS]
 # The panel columns averaged into a multi-season training row, before anything is derived from them; the play-by-play
 # parts came after every column the published ratings were built from (2026-10-12), the career counted from the debut
 # after them (2026-10-13), the dashboard inputs after them (2026-10-14), the two uncentred play-by-play parts and
@@ -321,7 +338,7 @@ PRIOR_FEATURES = [*BOX_RATES, *ROLE, *DERIVED, *RATIOS, *SHOTQ, *CAREER, *BIO, *
 PANEL_INPUTS = [*BOX_RATES, *ROLE, *CLOSENESS, *UNCENTRED_RATES, *SHOT_TOTALS, *SHOT_LEAGUE, *CAREER, *BIO,
                 *ON_COURT, *OFF_COURT, *ON_MINUS_OFF, *PLAYOFF_SHARE, *EVENT_RATES, *CAREER_FROM_DEBUT,
                 *DASHBOARD_RATES, *ERA_MARKER, *UNCENTRED_EVENT_RATES, *UNCENTRED_CREATION_RATES, *CREATION_INPUTS,
-                *FOUL_RATES, *OVER_EXPECTED]
+                *FOUL_RATES, *OVER_EXPECTED, *MATCHUP_GAME_INPUTS]
 # The season panel's columns, in order: who and when, the possessions behind the row (his offensive possessions
 # on an offence row, defensive on a defence row), then the inputs.
 PANEL_KEYS = ["side", "player_id", "season"]
@@ -795,6 +812,21 @@ def _vs_league_formula(numerator: dict, denominator: dict, pad: float, typical: 
             f"uncentred rates; L the same ratio of the league's rates (each uncentred minus centred)")
 
 
+# (meaning, what the mean is weighted by, unit), in MATCHUP_GAME_INPUTS' order
+_GUARDING = "matchup possessions"
+_ON_FLOOR = "the shared floor with the opposing top creator, in matchup possessions"
+_MATCHUP_GAME_ROWS = [
+    ("height of the attackers he guarded", _GUARDING, "inches"),
+    ("height of the defenders who guarded him", _GUARDING, "inches"),
+    ("self-creation of the attackers he guarded", _GUARDING, "per 100 possessions"),
+    ("total creation of the attackers he guarded: self-creation plus estimated potential assists", _GUARDING,
+     "per 100 possessions"),
+    ("share of his defence on the opposing team's top self-creator of the game", _GUARDING, "fraction"),
+    ("share of his defence on the opposing team's top total creator of the game", _GUARDING, "fraction"),
+    ("share of his time on the floor with the opposing top self-creator spent guarding him", _ON_FLOOR, "fraction"),
+    ("share of his time on the floor with the opposing top total creator spent guarding him", _ON_FLOOR, "fraction")]
+
+
 def _catalogue() -> tuple:
     """Every column the prior can read, family by family, in the order the panel and the derivations list them."""
     rows = _family(BOX_RATES, _RATE_MEANINGS, "padded rate minus the league level", "per 100 possessions",
@@ -856,6 +888,9 @@ def _catalogue() -> tuple:
                      "off a pass = his lean x the expected passes, by spot group, held to his count; lean = "
                      f"(assisted makes + {LEAN_PAD:g}) / (expected assisted makes + {LEAN_PAD:g}); uncentred rates",
                      "per 100 possessions", "level", "creation")]
+    rows += [Feature(name, text, "mean over the fit games' per-game matchup pairs (data/matchups.py), weighted by "
+                     f"{weight}, padded toward his bin by a split-half pad k", unit, "level", "matchup, per game")
+             for name, (text, weight, unit) in zip(MATCHUP_GAME_INPUTS, _MATCHUP_GAME_ROWS)]
     return tuple(rows)
 
 

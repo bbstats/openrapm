@@ -357,6 +357,8 @@ def leak_checks(inputs: SeasonPanel, designs: dict, full: dict, fit_ids: set, fi
     checks["fouls and blocked shots: counts read only from fit games"] = inputs.games_read["foul counts"] <= fit_ids
     # the per-game hustle and tracking box scores (the key kept its first name)
     checks["hustle: per-game counts read only from fit games"] = inputs.games_read.get("hustle games", set()) <= fit_ids
+    checks["matchups: per-game pairs read only from fit games"] = (inputs.games_read.get("matchup games", set())
+                                                                    <= fit_ids)
     return checks
 
 
