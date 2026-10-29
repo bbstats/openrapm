@@ -24,6 +24,20 @@ every number quoted here; read its measurement traps before trusting a number.  
 
 ## Where it stands, 2026-10-29
 
+- **Experiment 120, RUNNING since 9:13 AM 2026-10-29** (DECISIONS.md, "Experiment 120"; the owner: "let's go to boruta
+  town ... hyperparameter tuning + boruta should probably always happen in tandem (or - if it shouldn't we should prove
+  it)").  One driver, `scratch/2026-10-29_matchup_screen/run.sh`, log `run.log` beside it, every step resumes:
+  1. the matchup screen at the shipped settings, check 155 tag `screen120`, seasons 2018-2025, about 5 hours with the
+     cache (`outputs/csv/screen_screen120_table.csv`);
+  2. the booster settings searched again with the matchup inputs in, `tune --study tune120`, 80 trials, 8-10 hours
+     (`outputs/screen/screen120/tune120.db`, `params/booster_params_tune120.json`);
+  3. the matchup screen at the tuned settings, then `tandem` (`screen_screen120_tune120_tandem.csv`);
+  4. experiment 119's ten counts at the tuned settings, then `tandem` (`screen_screen119_tune120_tandem.csv`).
+  Do not edit `src/` or `scripts/checks/155_input_screen.py` until it ends: each step starts fresh processes.  To stop
+  it, kill the bash driver and its python children.  When it ends: the tables to the sheet, the reading to DECISIONS.md,
+  the experiment's row (`101_log_run.py --exp=120`), the report to the owner with the 2026 top 20 only if a candidate
+  passes and is built.
+
 - **Matchup inputs, game by game: BUILT, not screened, nothing published** (DECISIONS.md, "Matchup inputs, game by
   game"; the owner, 2026-10-28: "the goal of this session is merely to build, not to test in the model yet").
   - `openrapm data matchup-games` fetches `BoxScoreMatchupsV3`, one file a game, 2018-2026 all on disk (11,503 games,
