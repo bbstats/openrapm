@@ -10968,3 +10968,22 @@ Experiment 110's self-creation shuffled in place: +0.0105, z +0.66, 2 of 8 seaso
   setting.  The retune running now sees the 25 defensive inputs of the pool and sets its own column share.
 - The retune's first trials (pool lists, seed 0, ten tune seasons): the shipped settings give back the reference exactly;
   experiment 75's settings read -0.049 within season, z -1.73, and -0.143 on the next-season check, z -5.10.
+
+### Experiment 120: the tune's first run stopped, the space capped (2026-10-29, evening)
+
+The first run of the tune stopped at 4:45 PM after 7 trials.  Its eighth, a random start, asked for offensive trees of
+88 leaves and depth 11, 1,382 rounds, with straight-line leaves: ten bags of six such boosters a side make a worker's
+seasons more than 2 GB, which Windows cannot pass between processes (`OSError: [WinError 87]` on the pipe).  Two
+changes, before any trial of the second run:
+- The boosters now go from the fitting processes to the rating processes through files, one season at a time
+  (`fit_task`'s out_path, `boosters_dir`), so no message carries more than one season-side's file path.  The same
+  objects are pickled the same way, so the numbers cannot change; the second run's first trial, today's settings,
+  is read against the first run's reference, which went through the pipe.
+- Trees are capped at 24 leaves and 1,500 rounds (experiment 76: 96 and 2,500).  Even through files, the top corner's
+  boosters, about 2.5 GB a season-side, would not fit two rating processes in memory beside the fitters.  Experiments
+  75 and 76 chose 5 to 13 leaves and 114 to 1,091 rounds; of the first run's 7 trials, the two inside the cap were
+  the queued ones and one at 23 leaves.
+- The first run's 7 trials are kept as `outputs/screen/screen120/tune120_first_run.db` and `_trials.csv`; the second
+  starts a fresh study under the same name with the same queued trials, 80 finished trials, and the same reference.
+  First-run readings, pool lists at seed 0 on the ten tune seasons: today's settings 0 by construction; experiment 75's
+  -0.049, z -1.73, next-season check -0.143, z -5.10; the five random starts +0.12 to +1.12, three past the limit.

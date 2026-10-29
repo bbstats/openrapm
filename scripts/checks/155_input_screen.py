@@ -342,11 +342,14 @@ class Season:
                                       screen_dir(tag), settings=fold_settings,
                                       part_season_rows=ws.trained_on_part_seasons(meta))
         ws.attach_line(self.run, ws.fold_lines(self.cfg, meta, False), False)
+        self.reference_saved = self.run.saved
 
     def rate(self, trial: Trial, out_dir: Path, models: dict) -> pd.DataFrame:
-        """Rate and write every fold into `out_dir` with the trial's boosters `models` ({side: BaggedPrior}, from
-        `fit_task`); return the whole season's step-3 table (raw sign)."""
+        """Rate and write every fold into `out_dir` with the trial's boosters `models` ({side: BaggedPrior, or the
+        file `fit_task` wrote it to}); return the whole season's step-3 table (raw sign).  The boosters are let go
+        after, so a worker holds one season's at a time."""
         from openrapm.commands import within_season as ws
+        models = {side: pd.read_pickle(model) if isinstance(model, str) else model for side, model in models.items()}
         with open(screen_dir(self.tag) / f"season_{self.season}.pkl", "rb") as handle:
             cache = pickle.load(handle)
         self.run.worlds, unseen = cache["worlds"], cache["unseen"]
@@ -375,7 +378,7 @@ class Season:
             whole = self.run.rate(set(self.run.game_ids))
         finally:
             ws.prior_rows = original
-            self.run.worlds = None
+            self.run.worlds, self.run.saved = None, self.reference_saved
         return whole.table.assign(season=self.season)
 
 
@@ -397,10 +400,21 @@ def prime_in_context(side_saved: dict, rows: list) -> None:
 _FIT = {}            # in a fitting process: the booster parameters by file and the last seasons' training rows
 
 
-def fit_task(tag: str, season: int, side: str, trial: Trial, params: dict | None = None):
+def fit_task(tag: str, season: int, side: str, trial: Trial, params: dict | None = None, out_path: str | None = None):
     """(season, side, the trial's boosters on that side): the season's training rows, the trial's input list, the
     input shuffled when the arm asks, bag k at k + SEED_STEP x seed, the prior at the trial's variant; `params`, one
-    side's LightGBM settings, in place of the variant's file (a tune's trial)."""
+    side's LightGBM settings, in place of the variant's file (a tune's trial).  With `out_path` the boosters are
+    written there and the path is returned in their place: Windows cannot pass 2 GB or more between processes, and
+    large settings make ten bags of six boosters that large (2026-10-29, a trial at 88 leaves and 1,382 trees)."""
+    model = fit_side(tag, season, side, trial, params)
+    if out_path is None:
+        return season, side, model
+    pd.to_pickle(model, out_path)
+    return season, side, out_path
+
+
+def fit_side(tag: str, season: int, side: str, trial: Trial, params: dict | None):
+    """The trial's boosters on one side of one season (`fit_task`)."""
     from openrapm.data.config import load_config
     from openrapm.features import ROW_FEATURES
     from openrapm.in_context_prior import LEARNER
@@ -423,8 +437,8 @@ def fit_task(tag: str, season: int, side: str, trial: Trial, params: dict | None
         params = _FIT["params"][settings.prior.booster_file][side]
     if params.get("learner") == LEARNER:
         # no bags to draw: the seed picks the Kumo members' training rows instead
-        return season, side, fit_bags(train, names + ROW_FEATURES, {**params, "draw": trial.seed}, settings, 0)
-    return season, side, fit_bags(train, names + ROW_FEATURES, params, settings, trial.seed)
+        return fit_bags(train, names + ROW_FEATURES, {**params, "draw": trial.seed}, settings, 0)
+    return fit_bags(train, names + ROW_FEATURES, params, settings, trial.seed)
 
 
 class Fitters:
@@ -435,11 +449,15 @@ class Fitters:
         self.tag = tag
         self.pool = mp.get_context("spawn").Pool(n_processes)
 
-    def submit(self, trial: Trial, seasons, params: dict | None = None) -> list:
-        """Every season's fits of `trial`, at {side: settings} `params` when given (a tune's trial)."""
+    def submit(self, trial: Trial, seasons, params: dict | None = None, folder: Path | None = None) -> list:
+        """Every season's fits of `trial`, at {side: settings} `params` when given (a tune's trial), each written to
+        `folder` when given (`fit_task`'s out_path)."""
+        if folder is not None:
+            folder.mkdir(parents=True, exist_ok=True)
         # offence first: its 1,091-tree boosters take most of the time
         return [self.pool.apply_async(fit_task, (self.tag, season, side, trial, None if params is None
-                                                 else params[side]))
+                                                 else params[side],
+                                                 None if folder is None else str(folder / f"{season}_{side}.pkl")))
                 for side in ("O", "D") for season in seasons]
 
     @staticmethod
@@ -654,6 +672,18 @@ def result_paths(out_dir: Path, variant: str) -> tuple[Path, Path]:
     return out_dir / f"trials{suffix}.csv", out_dir / f"guard{suffix}.csv"
 
 
+def boosters_dir(tag: str, label: str) -> Path:
+    """Where a trial's boosters are written between the fitting and the rating processes, removed once it is rated."""
+    return screen_dir(tag) / "boosters" / label
+
+
+def clear_boosters(tag: str) -> None:
+    """Every trial's boosters left by a run that stopped part way."""
+    folder = screen_dir(tag) / "boosters"
+    if folder.exists():
+        shutil.rmtree(folder)
+
+
 def run_screen(args) -> int:
     out_dir = screen_dir(args.tag)
     seasons = screen_seasons(args.tag)
@@ -670,22 +700,24 @@ def run_screen(args) -> int:
     fitters = Fitters(args.tag, args.fitters)
     workers = Workers(args.tag, args.workers, seasons)
     guard = Guard(args.tag, seasons)
+    clear_boosters(args.tag)
     try:
         wait_for_the_daily_job()
-        pending = fitters.submit(todo[0], seasons)
+        pending = fitters.submit(todo[0], seasons, folder=boosters_dir(args.tag, todo[0].key))
         for number, trial in enumerate(todo, start=1):
             started = time.time()
             models = fitters.collect(pending)
             fitted = time.time()
             if number < len(todo):
                 wait_for_the_daily_job()
-                pending = fitters.submit(todo[number], seasons)
+                pending = fitters.submit(todo[number], seasons, folder=boosters_dir(args.tag, todo[number].key))
             name = f"screen/{args.tag}/{trial.key}"
             folder = within_dir() / name
             if folder.exists():
                 shutil.rmtree(folder)
             folder.mkdir(parents=True)
             whole = workers.rate(trial, folder, models)
+            shutil.rmtree(boosters_dir(args.tag, trial.key))
             rated = time.time()
             errors = score_folds(name, seasons).assign(trial=trial.key, arm=trial.arm, side=trial.side,
                                                        input=trial.name, seed=trial.seed)
@@ -904,14 +936,17 @@ IN_FLIGHT = 2            # trials at once: a trial's boosters are fitted while t
 
 def suggest(trial) -> dict:
     """{side: one trial's LightGBM settings} on experiment 76's space (check 152's suggest_fixed), less its era marker
-    and its defence factor: the inputs are the tag's pool, and step 4 stays as shipped."""
+    and its defence factor: the inputs are the tag's pool, and step 4 stays as shipped.  Trees are capped at 24 leaves
+    and 1,500 rounds, where experiment 76 went to 96 and 2,500: with ten bags of six boosters a side, the top corner
+    makes a season's boosters too large to hold (2026-10-29, a trial at 88 leaves and 1,382 trees stopped the first
+    run); experiments 75 and 76 chose 5 to 13 leaves and 114 to 1,091 rounds."""
     linear = trial.suggest_categorical("linear_tree", [True, False])
     params = {}
     for side in ("O", "D"):
         p = dict(
             learning_rate=trial.suggest_float(f"{side}_learning_rate", 0.003, 0.15, log=True),
-            n_estimators=trial.suggest_int(f"{side}_n_estimators", 30, 2500, log=True),
-            num_leaves=trial.suggest_int(f"{side}_num_leaves", 3, 96, log=True),
+            n_estimators=trial.suggest_int(f"{side}_n_estimators", 30, 1500, log=True),
+            num_leaves=trial.suggest_int(f"{side}_num_leaves", 3, 24, log=True),
             max_depth=trial.suggest_int(f"{side}_max_depth", 1, 12),
             min_child_samples=trial.suggest_int(f"{side}_min_child_samples", 10, 2500, log=True),
             reg_lambda=trial.suggest_float(f"{side}_reg_lambda", 1e-3, 1000.0, log=True),
@@ -949,6 +984,7 @@ def rate_and_score(tag: str, label: str, trial: Trial, models: dict, workers: Wo
         shutil.rmtree(folder)
     folder.mkdir(parents=True)
     whole = workers.rate(trial, folder, models)
+    shutil.rmtree(boosters_dir(tag, label), ignore_errors=True)
     errors = score_folds(name, seasons)
     errors = errors[(errors.stage == "step4") & (errors.slice == "all")].set_index("season").error
     readings = guard.score(whole, name).set_index(["rated", "scored"]).tg
@@ -962,10 +998,9 @@ def tune_reference(args, fitters: Fitters, workers: Workers, guard: Guard) -> tu
     path = screen_dir(args.tag) / f"{args.study}_reference.pkl"
     if not path.exists():
         started = time.time()
-        trial = Trial("pool", "-", args.tag, 0)
-        models = fitters.collect(fitters.submit(trial, TUNE_SEASONS))
-        pd.to_pickle(rate_and_score(args.tag, f"{args.study}_reference", trial, models, workers, guard, TUNE_SEASONS),
-                     path)
+        trial, label = Trial("pool", "-", args.tag, 0), f"{args.study}_reference"
+        models = fitters.collect(fitters.submit(trial, TUNE_SEASONS, folder=boosters_dir(args.tag, label)))
+        pd.to_pickle(rate_and_score(args.tag, label, trial, models, workers, guard, TUNE_SEASONS), path)
         print(f"the reference, the pool lists at the shipped settings, seed 0 ({time.time() - started:.0f}s)",
               flush=True)
     return pd.read_pickle(path)
@@ -1004,13 +1039,15 @@ def run_tune(args) -> int:
     fitters = Fitters(args.tag, args.fitters)
     workers = Workers(args.tag, args.workers, seasons)
     guard = Guard(args.tag, seasons)
+    clear_boosters(args.tag)
     flight: deque = deque()
 
     def launch() -> None:
         wait_for_the_daily_job()
         trial = study.ask()
         params = suggest(trial)
-        flight.append((trial, params, fitters.submit(pool_trial, seasons, params), time.time()))
+        folder = boosters_dir(args.tag, f"{args.study}_t{trial.number}")
+        flight.append((trial, params, fitters.submit(pool_trial, seasons, params, folder), time.time()))
 
     try:
         reference_errors, reference_readings = tune_reference(args, fitters, workers, guard)
