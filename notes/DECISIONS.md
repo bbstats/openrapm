@@ -10930,3 +10930,41 @@ layer of step 4.  Nothing has searched them since.
 hours; the tune, 80 trials, 8-10 hours; the screen at the tuned settings, about 4 hours; experiment 119's pool at them,
 68 trials, about 6.5 hours.  Every step holds 5:50-7:30 AM for the daily job.  Driver:
 `scratch/2026-10-29_matchup_screen/run.sh`, log `scratch/2026-10-29_matchup_screen/run.log`.
+
+### Experiment 120: the matchup screen at today's settings (2026-10-29, `scratch/2026-10-29_matchup_screen/run.log`, `outputs/csv/screen_screen120_table.csv`, the sheet's tab "Input screen 120")
+
+The cache, 15 seasons: the shipped boosters refitted give back creation110's saved priors to under 1e-15 in every
+season.  56 trials from 10:27 AM to 3:20 PM, 2 rating and 6 fitting processes, about 5 minutes a trial.  The shipped
+lists at seed 0 gave back creation110's folds on all 8 seasons to 5.8e-13.  Noise floor, the shipped lists at seeds 1-4
+against seed 0: -0.0055, +0.0032, -0.0312, -0.0453.
+
+The within-season WOWY change after step 4, 2018-2025, seeds 0-2 averaged within each season; below 0 is better:
+
+| input | side | vs shipped | z | vs its shuffled copy | z | seasons better vs copy | copy vs shipped | next-season z | verdict |
+|---|---|---|---|---|---|---|---|---|---|
+| total creation of the players he guarded | defense | +0.0207 | +2.03 | -0.0010 | -0.54 | 5 of 8 | +0.0217 | +2.46 | fails |
+| share of his shared floor guarding the top total creator | defense | +0.0213 | +2.07 | -0.0005 | -0.52 | 5 of 8 | +0.0218 | +2.35 | fails |
+| share of his defense on the top total creator | defense | +0.0211 | +2.01 | -0.0005 | -0.43 | 4 of 8 | +0.0216 | +2.58 | fails |
+| self-creation of the players he guarded | defense | +0.0219 | +1.95 | +0.0001 | +0.02 | 5 of 8 | +0.0218 | +2.78 | fails |
+| share of his shared floor guarding the top self-creator | defense | +0.0219 | +2.06 | +0.0001 | +0.26 | 5 of 8 | +0.0218 | +2.32 | fails |
+| share of his defense on the top self-creator | defense | +0.0226 | +2.01 | +0.0009 | +0.64 | 4 of 8 | +0.0217 | +2.57 | fails |
+| height of the players he guarded | defense | +0.0220 | +2.09 | +0.0004 | +1.50 | 3 of 8 | +0.0216 | +2.23 | fails |
+| height of the players who guarded him | offense | +0.0017 | +0.89 | +0.0019 | +3.03 | 1 of 8 | -0.0002 | +1.33 | fails |
+
+Experiment 110's self-creation shuffled in place: +0.0105, z +0.66, 2 of 8 seasons better; next-season -0.0075, z
+-0.54.  On the ten tune seasons it read +0.0233, z +2.62: on these 8 seasons the screen sees it, more weakly.
+
+**Reading.**
+- Nothing passes.  On defense the real matchup values do exactly what their shuffled copies do, within 0.001 in every
+  input at every seed: the booster finds nothing in who a player guarded beyond what its 18 inputs already say.
+- Height of the players who guarded him is worse than its shuffled copy in 7 of 8 seasons, z +3.03.
+- Every defensive arm, real or shuffled, reads +0.021 to +0.024 against the shipped lists at each of the three seeds,
+  and +0.022 to +0.028 on the next-season check.  The cause is the booster's settings, not the inputs: the defensive
+  booster shows each tree 0.367 of its inputs, and LightGBM rounds the count, so the shipped 20 inputs (18 and the two
+  row columns) give 7 a tree and a 21st gives 8 (`column_share.py`).  On offense the count stays 11 at 20 or 21 inputs,
+  and the shuffled copy costs -0.0002.  So at today's settings no defensive candidate can pass rule (2), beating the
+  shipped lists on the mean, unless it is worth more than about 0.02 on its own; the comparison with the copy is not
+  affected.  This is the case the owner's question names: the screen's verdict against the shipped lists depends on a
+  setting.  The retune running now sees the 25 defensive inputs of the pool and sets its own column share.
+- The retune's first trials (pool lists, seed 0, ten tune seasons): the shipped settings give back the reference exactly;
+  experiment 75's settings read -0.049 within season, z -1.73, and -0.143 on the next-season check, z -5.10.
