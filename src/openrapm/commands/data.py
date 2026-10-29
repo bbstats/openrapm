@@ -219,9 +219,11 @@ def run_hustle_games(args: argparse.Namespace, cfg: dict) -> int:
     first = args.first_season if args.first_season is not None else dashboards.GAME_BOXES[args.source][1]
     last = args.last_season if args.last_season is not None else int(cfg["last_season"])
     started = time.time()
-    out = dashboards.fetch_game_boxes(cfg, args.source, range(first, last + 1), phases(args), delay=args.delay)
+    out = dashboards.fetch_game_boxes(cfg, args.source, range(first, last + 1), phases(args), delay=args.delay,
+                                      limit=getattr(args, "limit", None))
     print(f"{out['games']} games {first}-{last}: {out['fetched']} fetched now ({out['empty']} with no rows), "
-          f"{len(out['failed'])} failed ({time.time() - started:.0f}s)", flush=True)
+          f"{len(out['failed'])} failed ({time.time() - started:.0f}s)"
+          f"{'; stopped at the limit, run it again for the rest' if out['stopped'] else ''}", flush=True)
     for game_id, error in out["failed"][:20]:
         print(f"  failed {game_id}: {error}", flush=True)
     return 1 if out["failed"] else 0
@@ -401,6 +403,9 @@ def _add_hustle_games(steps) -> None:
                           help="the last season (default config.yaml's last_season)")
     matchups.add_argument("--phases", default=DEFAULT_PHASES, help="RS, PO or both (default %(default)s)")
     matchups.add_argument("--delay", type=float, default=0.6, help="seconds between requests (default %(default)s)")
+    matchups.add_argument("--limit", type=int, default=None, metavar="N",
+                          help="stop after N games fetched; a rerun goes on from there.  One process stalled after "
+                               "about 600 requests on 2026-10-28, so a long fetch runs best as several processes")
     matchups.set_defaults(run=run_hustle_games, source="matchups")
 
 

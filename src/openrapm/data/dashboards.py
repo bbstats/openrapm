@@ -323,13 +323,20 @@ def fetch_hustle_games(cfg: dict, seasons, phases=("RS", "PO"), delay: float = 0
 
 
 def fetch_game_boxes(cfg: dict, source: str, seasons, phases=("RS", "PO"), delay: float = 0.6,
-                     log_every: int = 250) -> dict:
+                     log_every: int = 250, limit: int | None = None) -> dict:
     """Every game's `source` box score for the seasons and phases, one request at a time, `delay` seconds apart (none
-    after a cached file).  Returns {"games", "fetched", "empty", "failed": [(game_id, error)]}; one bad game does not
-    stop the run, and a rerun fetches only what is missing.  OfflineFetch is not forgiven."""
+    after a cached file).  Returns {"games", "fetched", "empty", "failed": [(game_id, error)], "stopped"}; one bad
+    game does not stop the run, and a rerun fetches only what is missing.  OfflineFetch is not forgiven.
+
+    `limit` stops the run after that many games were fetched, "stopped" then True, so a long fetch can run as a chain
+    of fresh processes: on 2026-10-28 the matchup fetch stalled twice after about 600 requests in one process, with a
+    connection open that never answered, while a fresh process was answered at once."""
     games = [game for season in seasons for game in season_game_ids(cfg, int(season), phases)]
-    out, started = dict(games=len(games), fetched=0, empty=0, failed=[]), time.time()
+    out, started = dict(games=len(games), fetched=0, empty=0, failed=[], stopped=False), time.time()
     for done, game_id in enumerate(games, start=1):
+        if limit is not None and out["fetched"] >= limit:
+            out["stopped"] = True
+            break
         try:
             frame, cached = fetch_game_box(source, game_id, cfg)
             if not cached:

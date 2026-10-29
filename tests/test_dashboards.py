@@ -196,8 +196,23 @@ def test_matchup_games_ask_the_matchup_box_score_and_keep_one_row_per_pair(cfg, 
     assert pd.read_parquet(path).partialPossessions.tolist() == [12.5, 3.0, 9.25]
     from openrapm.commands.cli import build_parser
     args = build_parser().parse_args(["data", "matchup-games"])
-    assert (args.source, args.run, args.first_season) == ("matchups", data_command.run_hustle_games, None)
+    assert (args.source, args.run, args.first_season, args.limit) == ("matchups", data_command.run_hustle_games,
+                                                                      None, None)
     assert dashboards.GAME_BOXES[args.source] == ("BoxScoreMatchupsV3", 2018)
+
+
+def test_a_limit_stops_the_fetch_and_a_rerun_goes_on_from_there(cfg, monkeypatch):
+    """`--limit`: a long fetch runs as several fresh processes (one process stalled after about 600 requests)."""
+    games = ["0022500001", "0022500002", "0022500003"]
+    GameEndpoint.calls = []
+    GameEndpoint.answers = {game: pd.DataFrame({"personIdOff": [1], "partialPossessions": [2.0]}) for game in games}
+    monkeypatch.setattr(dashboards, "_endpoint_class", lambda name: GameEndpoint)
+    monkeypatch.setattr("time.sleep", lambda seconds: None)
+    monkeypatch.setattr(dashboards, "season_game_ids", lambda cfg, season, phases: games)
+    first = dashboards.fetch_game_boxes(cfg, "matchups", [2026], log_every=0, limit=2)
+    assert (first["fetched"], first["stopped"], GameEndpoint.calls) == (2, True, games[:2])
+    rest = dashboards.fetch_game_boxes(cfg, "matchups", [2026], log_every=0, limit=2)
+    assert (rest["fetched"], rest["stopped"], GameEndpoint.calls[2:]) == (1, False, games[2:])
 
 
 def test_a_request_that_stalls_is_abandoned_after_its_deadline():
