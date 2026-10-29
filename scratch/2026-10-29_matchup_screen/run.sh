@@ -3,8 +3,8 @@
 # booster settings searched again with the matchup inputs in (study tune120, the ten tune seasons), then the matchup
 # screen and experiment 119's screen again at the tuned settings, and each side by side with the shipped settings.
 # Every step resumes; the cache step checks the shipped boosters refitted give back creation110's saved priors, the
-# first screen trial checks seed 0's folds against creation110's, and the dry step checks screen119's cache still
-# gives back creation110's 2025 folds with today's code.
+# first screen trial checks seed 0's folds against creation110's, and the dry step checks screen119's rebuilt cache
+# gives back creation110's 2025 folds.
 cd /a/code/spmm
 PY=.venv/Scripts/python
 CHECK=scripts/checks/155_input_screen.py
@@ -18,6 +18,14 @@ date; $PY -u $CHECK run --tag screen120 --variant tune120 --all-arms --workers 2
 date; $PY -u $CHECK table --tag screen120 --variant tune120
 date; $PY -u $CHECK tandem --tag screen120 --variant tune120
 date; echo "screen120 at the tuned settings done"
+# experiment 119's cache was built before the matchup columns, which today's fold code reports on for every player: it
+# is built again, the old files kept in old_cache/ until the new one passes the dry check
+OLD=outputs/screen/screen119/old_cache
+if [ ! -d "$OLD" ]; then
+  mkdir -p "$OLD" && mv outputs/screen/screen119/season_*.pkl outputs/screen/screen119/train_*.pkl \
+    outputs/screen/screen119/folds_*.parquet "$OLD"/ || exit 1
+fi
+date; $PY -u $CHECK cache --tag screen119 || exit 1
 date; $PY -u $CHECK dry --tag screen119 --seasons 2025 || exit 1
 date; $PY -u $CHECK run --tag screen119 --variant tune120 --all-arms --workers 2 --fitters 6 || exit 1
 date; $PY -u $CHECK table --tag screen119 --variant tune120
