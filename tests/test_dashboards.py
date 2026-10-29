@@ -215,6 +215,30 @@ def test_a_limit_stops_the_fetch_and_a_rerun_goes_on_from_there(cfg, monkeypatch
     assert (rest["fetched"], rest["stopped"], GameEndpoint.calls[2:]) == (1, False, games[2:])
 
 
+class NoPlayers:
+    """A made-up endpoint whose reader fails as nba_api's does on an answer with no players."""
+
+    def __init__(self, game_id, timeout):
+        raise IndexError("list index out of range")
+
+
+def test_a_finished_game_answered_with_no_players_is_a_game_with_no_pairs(cfg, monkeypatch):
+    """0022100132 and a few others answer the matchup box score with empty rosters; a finished season's such game is
+    cached with no rows, which matchup_pairs reads as a game with no pairs.  Hustle, or the season in progress, stays a
+    failure and is asked again."""
+    monkeypatch.setattr(dashboards, "_endpoint_class", lambda name: NoPlayers)
+    monkeypatch.setattr("time.sleep", lambda seconds: None)
+    monkeypatch.setattr(dashboards, "answers_no_players", lambda game_id: True)
+    monkeypatch.setattr(dashboards, "in_progress", lambda cfg: (2027,))
+    frame, cached = dashboards.fetch_game_box("matchups", "0022100132", cfg)
+    assert (len(frame), cached, list(frame.columns)) == (0, False, dashboards.NO_PAIRS_COLUMNS)
+    assert dashboards.game_box_path(cfg, "matchups", "0022100132").exists()
+    for source, game in (("hustle", "0022100132"), ("matchups", "0022600132")):
+        with pytest.raises(RuntimeError, match="IndexError"):
+            dashboards.fetch_game_box(source, game, cfg)
+        assert not dashboards.game_box_path(cfg, source, game).exists()
+
+
 def test_a_request_that_stalls_is_abandoned_after_its_deadline():
     """The matchup fetch of 2026-10-28 hung 40 minutes on one game: a request gets a hard deadline, then a retry."""
     import threading

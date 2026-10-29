@@ -56,6 +56,7 @@ from .ingest import (
     season_of_game,
     season_str,
 )
+from .seasons import in_progress
 
 SOURCES = ("hustle", "tracking", "synergy", "matchups")
 MEASURES = ("Defense", "Rebounding", "Drives", "Passing", "Possessions", "SpeedDistance")        # LeagueDashPtStats
@@ -250,6 +251,10 @@ TRACKING_GAME_COLUMNS = {"TOUCHES": "touches", "PASSES_MADE": "passes", "OREB_CH
 # team, `matchupMinutesSort` the matchup's seconds; switches, potential assists and the help columns answer 0 in
 # every game probed, 2018-2027.
 MATCHUP_GAMES_FIRST = 2018
+# A few finished games answer the matchup box score with no player on either team (0022100132, 0022300383,
+# 0022301230 and some of 2019-20, 2026-10-29): there are no pairs to have.  nba_api's reader fails on that answer with
+# IndexError, so it is read raw and cached as a game with no pairs, these columns and no rows.
+NO_PAIRS_COLUMNS = ["gameId", "teamId", "personIdOff", "personIdDef", "partialPossessions"]
 # the per-game box scores fetched game by game: source -> (the nba_api endpoint, its first season with every player).
 # The tracking one (2026-10-15) holds distance, rebound chances, touches, passes, secondary and free-throw assists,
 # contested and uncontested shots, and shots defended at the rim, a part of the tracking dashboards
@@ -294,6 +299,23 @@ def answer_within(seconds: float, ask):
     return answer["value"]
 
 
+def answers_no_players(game_id: str) -> bool:
+    """Whether the league's matchup box score of `game_id` names no player on either team, read raw (nba_api's reader
+    fails on such an answer)."""
+    from nba_api.stats.library.http import NBAStatsHTTP
+    answer = NBAStatsHTTP().send_api_request(endpoint="boxscorematchupsv3", parameters={"GameID": game_id},
+                                             timeout=TIMEOUT).get_dict()
+    body = answer.get("boxScoreMatchups") or {}
+    return not any((body.get(side) or {}).get("players") for side in ("homeTeam", "awayTeam"))
+
+
+def _no_pairs(source: str, game_id: str, cfg: dict) -> bool:
+    """A matchup game of a finished season the league answers with no players (`NO_PAIRS_COLUMNS`).  A game of the
+    season in progress may not be processed yet, so it stays a failure and is asked again the next time."""
+    return (source == "matchups" and season_of_game(game_id) not in in_progress(cfg)
+            and answers_no_players(game_id))
+
+
 def fetch_game_box(source: str, game_id: str, cfg: dict, force: bool = False, tries: int = 4) -> tuple:
     """(one game's per-game box score of `source` (`GAME_BOXES`), one row per player, or per attacker and defender
     for the matchups, whether it was read from the cache), cached at `game_box_path`.  A game answered with no rows is
@@ -304,7 +326,12 @@ def fetch_game_box(source: str, game_id: str, cfg: dict, force: bool = False, tr
     refuse_if_offline(path, f"the {source} box score of {game_id}")
 
     def ask():
-        return _endpoint_class(GAME_BOXES[source][0])(game_id=game_id, timeout=TIMEOUT).get_data_frames()[0]
+        try:
+            return _endpoint_class(GAME_BOXES[source][0])(game_id=game_id, timeout=TIMEOUT).get_data_frames()[0]
+        except IndexError:
+            if _no_pairs(source, game_id, cfg):
+                return pd.DataFrame(columns=NO_PAIRS_COLUMNS)
+            raise
     frame = _retry(lambda: answer_within(2 * TIMEOUT, ask), tries=tries, base_sleep=3.0, what=f"{source} {game_id}")
     frame = frame.astype({column: str for column in frame.columns if frame[column].dtype == object})
     path.parent.mkdir(parents=True, exist_ok=True)
