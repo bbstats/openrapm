@@ -10871,3 +10871,10 @@ possessions, each input raw and padded):
 
 **Next, the owner's call**: screen them (check 155 with `SCREEN_CANDIDATES_MATCHUPS`); the daily job fetching 2027's
 games before any is used; the next inputs from the same pairs (switches are 0 in the feed, so not those).
+
+**2027, added 2026-10-29** (the owner: "did you grab the 2027 stuff?").  The daily job now fetches the season's
+matchup games after the hustle games, not as a step: no model reads them, so a failure must not stop the publish.  For
+the season in progress `matchup_pairs` leaves out a game not on disk yet instead of stopping, and the next morning asks
+again; a finished season still stops on a missing game.  At 7 AM on 2026-10-29, 56 of 2027's 68 games were in; the 12
+of 2026-10-28 answered empty rosters, not processed yet, though their hustle numbers were in by 6 AM.  The 56 games'
+pairs sum to the season-total file exactly, 52,858 partial possessions.

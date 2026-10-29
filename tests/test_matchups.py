@@ -103,8 +103,9 @@ def test_padding_with_too_few_players_takes_the_fallback_pad_toward_the_season()
     assert np.isnan(out[2]), "no weight, no value"
 
 
-def test_the_pairs_come_from_the_games_asked_for_and_a_missing_game_stops_the_run(tmp_path):
+def test_the_pairs_come_from_the_games_asked_for_and_a_missing_game_stops_the_run(tmp_path, monkeypatch):
     cfg = {"_root": str(tmp_path), "paths": {"raw": str(tmp_path / "raw")}}
+    monkeypatch.setattr(matchups, "in_progress", lambda cfg: (2027,))
     folder = matchups.matchup_folder(cfg, 2026)
     folder.mkdir(parents=True)
     for game in GAMES[:2]:
@@ -117,3 +118,19 @@ def test_the_pairs_come_from_the_games_asked_for_and_a_missing_game_stops_the_ru
         matchup_pairs(cfg, 2026, GAMES)
     assert matchup_pairs(cfg, 2017, GAMES) == (None, set())
     assert matchup_pairs(cfg, 2025, GAMES) == (None, set()), "no folder: a season not fetched reads missing"
+
+
+def test_the_season_in_progress_leaves_out_a_game_not_fetched_yet(tmp_path, monkeypatch):
+    """The league may not have processed last night's games by 6 AM: 2027 reads the games on disk; 2026 would stop."""
+    cfg = {"_root": str(tmp_path), "paths": {"raw": str(tmp_path / "raw")}}
+    monkeypatch.setattr(matchups, "in_progress", lambda cfg: (2027,))
+    games = ["0022600001", "0022600002"]
+    folder = matchups.matchup_folder(cfg, 2027)
+    folder.mkdir(parents=True)
+    pd.DataFrame({"gameId": games[0], "teamId": [10], "personIdOff": [1], "personIdDef": [4],
+                  "partialPossessions": [3.0]}).to_parquet(folder / f"{games[0]}.parquet")
+    got, read = matchup_pairs(cfg, 2027, games)
+    assert read == {games[0]} and got.game_id.tolist() == [games[0]]
+    monkeypatch.setattr(matchups, "in_progress", lambda cfg: ())
+    with pytest.raises(FileNotFoundError):
+        matchup_pairs(cfg, 2027, games)

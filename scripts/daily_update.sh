@@ -46,6 +46,10 @@ step $PY -u -m openrapm data ingest $SEASON $SEASON RS,PO --refresh
 step $PY -u -m openrapm data stints $SEASON $SEASON RS,PO --force
 step $PY -u -m openrapm data events $SEASON $SEASON --force
 step $PY -u -m openrapm data hustle-games $SEASON $SEASON
+# the per-game matchups (data/matchups.py), not a step: no model reads them yet, so a game the league has not processed
+# by morning must not stop the publish.  It is asked again tomorrow, and the panel leaves it out meanwhile.
+say "start: matchup-games"
+$PY -u -m openrapm data matchup-games $SEASON $SEASON >> "$LOG" 2>&1 || say "matchup games: some failed, asked again tomorrow"
 step $PY -u -m openrapm data dashboards $SEASON $SEASON --force
 step $PY -u -m openrapm data panel --force
 step $PY -u -m openrapm build --seasons $SEASON --replace-seasons

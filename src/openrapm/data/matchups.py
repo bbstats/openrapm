@@ -59,6 +59,7 @@ from ..design import AWAY_SLOTS, HOME_SLOTS
 from ..features import MATCHUP_GAME_INPUTS
 from .dashboards import MATCHUP_GAMES_FIRST
 from .ingest import raw_dir
+from .seasons import in_progress
 
 __all__ = ["PAIR_COLUMNS", "FALLBACK_PAD", "matchup_folder", "matchup_pairs", "top_creators", "shared_floor",
            "padded_average", "matchup_inputs"]
@@ -100,7 +101,8 @@ def matchup_pairs(cfg: dict, season: int, game_ids) -> tuple:
 
     A within-season fold hands its fit games, so the held-back games never enter (notes/WITHIN_SEASON_LEDGER.md).  A
     game of `game_ids` with no file stops the run, naming the command that fetches it; a game the league answered with
-    no pairs is read and adds nothing.
+    no pairs is read and adds nothing.  The season in progress is the exception: the league may not have processed
+    last night's games by the morning, so a game not on disk yet is left out, and the daily job asks again tomorrow.
 
     Example: the 980 fit games of a 2024 fold give about 180 pairs a game.
     """
@@ -108,12 +110,14 @@ def matchup_pairs(cfg: dict, season: int, game_ids) -> tuple:
     if int(season) < MATCHUP_GAMES_FIRST or not folder.exists():
         return None, set()
     wanted = {str(game) for game in game_ids}
-    missing = sorted(wanted - {path.stem for path in folder.glob("*.parquet")})
-    if missing:
+    on_disk = {path.stem for path in folder.glob("*.parquet")}
+    missing = sorted(wanted - on_disk)
+    if missing and int(season) not in in_progress(cfg):
         raise FileNotFoundError(f"{len(missing)} games of {season} have no matchup box score (first {missing[0]}); "
                                 f"`openrapm data matchup-games` fetches them")
+    read = wanted & on_disk
     pairs = _season_pairs(str(folder))
-    return pairs[pairs["game_id"].isin(wanted)].reset_index(drop=True), wanted
+    return pairs[pairs["game_id"].isin(read)].reset_index(drop=True), read
 
 
 # ------------------------------------------------------------------------------------ the top creators and the floor

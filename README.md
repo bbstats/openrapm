@@ -148,6 +148,7 @@ python -m openrapm data ingest 2027 2027 RS,PO --refresh     # the game log agai
 python -m openrapm data stints 2027 2027 RS,PO --force
 python -m openrapm data events 2027 2027 --force
 python -m openrapm data hustle-games 2027 2027
+python -m openrapm data matchup-games 2027 2027      # not a step: a failure does not stop the morning
 python -m openrapm data dashboards 2027 2027 --force
 python -m openrapm data panel --force                        # also rebuilds the season's roles rows and bio feed
 python -m openrapm build --seasons 2027 --replace-seasons    # 2027 in place of yesterday's 2027, nothing else moves

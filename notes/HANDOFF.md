@@ -27,8 +27,10 @@ every number quoted here; read its measurement traps before trusting a number.  
 - **Matchup inputs, game by game: BUILT, not screened, nothing published** (DECISIONS.md, "Matchup inputs, game by
   game"; the owner, 2026-10-28: "the goal of this session is merely to build, not to test in the model yet").
   - `openrapm data matchup-games` fetches `BoxScoreMatchupsV3`, one file a game, 2018-2026 all on disk (11,503 games,
-    about 4 hours; `--limit N` runs a long fetch as fresh processes, since one stalled after about 600 requests).  Not
-    2027: the daily job does not fetch it, so 2027 reads missing.
+    about 4 hours; `--limit N` runs a long fetch as fresh processes, since one stalled after about 600 requests).  2027
+    since 2026-10-29 (the owner: "did you grab the 2027 stuff?"): the daily job fetches it each morning, not as a
+    step, so a failure cannot stop the publish, and the season in progress leaves out the games the league has not
+    processed yet, usually last night's (at 7 AM on 2026-10-29 the 12 games of 2026-10-28 answered empty rosters).
   - `data/matchups.py`, `features.MATCHUP_GAME_INPUTS`: eight panel columns from the fit games' pairs alone, padded,
     on both rows: the height of the players he guarded and of those who guarded him, the self-creation and total
     creation of the players he guarded, and his share of defense on the opposing top self-creator and top total
@@ -239,7 +241,7 @@ The owner, 2026-10-24: "You can publish. Yea median player in 2027, off poss. 6a
 DECISIONS.md, "The season in progress, 2027"; README.md, "The season in progress, every morning".
 
 - **The daily job**: Task Scheduler "OpenRAPM daily update" runs `scripts/daily_update.sh` at 6:00 AM (this PC keeps
-  Eastern time): ingest `--refresh`, stints, events, hustle games, dashboards, the panel, `openrapm build --seasons
+  Eastern time): ingest `--refresh`, stints, events, hustle games, matchup games (not a step), dashboards, the panel, `openrapm build --seasons
   2027 --replace-seasons`, `openrapm site --openrapm-decomposition` into `A:/code/spmm_site`, a worktree of
   origin/main only the job writes, then the two data files committed and pushed to main.  Log
   `outputs/daily/<date>.log`, the last result `outputs/daily/last.txt`.  First published 2026-10-24 at 1:36 AM
@@ -408,6 +410,6 @@ What else the work of 2026-10-23 left open:
 
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest -q                       # 851 passed, 2 skipped, 1 xfailed: the backup bigs
+    .venv/Scripts/python -m pytest -q                       # 852 passed, 2 skipped, 1 xfailed: the backup bigs
     uvx ruff check .                                         # clean
     git log --oneline -1                                     # the handoff of 2026-10-29
