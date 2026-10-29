@@ -497,12 +497,13 @@ def _matchup_partners(rows: pd.DataFrame, parts) -> pd.DataFrame:
 def _add_matchups(rows: pd.DataFrame, pairs: pd.DataFrame | None, parts, stints: pd.DataFrame,
                   games: pd.DataFrame) -> pd.DataFrame:
     """The rows with features.MATCHUP_GAME_INPUTS joined on, a player's values on both of his rows (data/matchups.py);
-    missing for a season without per-game matchups and for a player without pairs."""
+    missing for a season without per-game matchups and for a player without pairs.  Copied once joined, so the
+    columns added after it do not meet a frame in too many pieces (pandas' fragmentation warning)."""
     values = pd.DataFrame(np.nan, index=rows.index, columns=MATCHUP_GAME_INPUTS)
     if pairs is not None:
         inputs = matchup_inputs(pairs, _matchup_partners(rows, parts), stints, games)
         values = inputs.reindex(rows["player_id"].to_numpy()).set_axis(rows.index)
-    return pd.concat([rows, values], axis=1)
+    return pd.concat([rows, values], axis=1).copy()
 
 
 def body_table(cfg: dict) -> pd.DataFrame:

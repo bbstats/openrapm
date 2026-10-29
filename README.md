@@ -112,6 +112,8 @@ python -m openrapm site --bias --decomposition --openrapm-decomposition --simila
    `outputs/season_panel.parquet`: one row per player, season and side, with his padded box-score rates and
    their play-by-play parts, role, career and body. 37 seconds in the last fresh build.
    Its first run also builds the roles table and fetches the bio feed, one request per season.
+   The matchup columns, who a player guarded and who guarded him, read the per-game matchup box scores of
+   `openrapm data matchup-games 2018 2026`, one request a game, about 4 hours; without them they read missing.
 4. **The within-season folds**, which step 4 is fitted on. `rate --setting test --save-models` rates
    2017-2026 and saves every season's boosters (the fitted LightGBM models): about 5 minutes. `folds`
    then rates each of those seasons from three quarters of its games with those boosters, twelve times a
