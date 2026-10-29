@@ -10792,3 +10792,82 @@ The goaltend inputs are missing in 1998 and 2001, so their 1998-2004 column rest
 
 **Verdict** pending the owner; by the rule, all ten fail.  The counts, the panel columns and `screen119` stay; the
 shipped lists are unchanged.
+
+## Matchup inputs, game by game: built, not screened (the owner, 2026-10-28: "we are going to slowly build features. the goal of this session is merely to build, not to test in the model yet. the features i care about are: the matchup data, e.g. who is matched up with whom. we can use this to build all sorts of things like - position! (average height of who you are defending, average height of who defended you are wonderful proxies for this on D/O). we can also use it to build features like '% of time matched up with the #1 self creator' and '% of time matched up with the #1 overall creator', and 'average self-creation of who you are defending' and 'average total creation of who you are defending' and LOTS AND LOTS more"; the plan's defaults approved the same evening)
+
+**Why game by game.**  Experiment 62's matchup columns read `LeagueSeasonMatchups`, season totals that a within-season
+fold cannot cut to its fit games, the leak that read z -31 ("The leak control for season-total inputs").  The
+per-game matchup box score, `BoxScoreMatchupsV3`, can be cut like every other per-game count.
+
+**The data** (`openrapm data matchup-games`, files under `data/raw/dashboards/matchups/games/<season>/`, one a game):
+- One row per attacker and defender: partial possessions, matchup time, the share of the time both were on the floor,
+  and the matchup box score.  `teamId` is the attacker's team; `matchupMinutesSort` is seconds.
+- It answers from 2017-18, the regular season and the playoffs; 2015-16 and 2016-17 games answer no table
+  (`scratch/2026-10-28_matchups/probe.py`).
+- Switches, potential assists and the four help columns are 0 in every game probed, 2018-2027.
+- A few finished games answer with no player on either team: 0022100132, 0022300383, 0022301230 and some of 2019-20.
+  They are cached as games with no pairs (`dashboards.NO_PAIRS_COLUMNS`).
+- 2026: the per-game pairs summed over the regular season equal the season-total file exactly, all 147,805 pairs and
+  1,168,041 partial possessions.  A regular's matchup possessions are 0.954 of his defensive possessions, 0.926 to
+  0.972 from the 5th to the 95th percentile.
+- One fetch process stalled twice, after about 600 requests each time, on a connection that never answered, while a
+  fresh process was answered at once.  So each request now has a hard deadline (`dashboards.answer_within`), and
+  `--limit N` lets a long fetch run as a chain of fresh processes (`scratch/2026-10-28_matchups/fetch_driver.py`
+  restarts any process that writes nothing for three minutes).  About 4 hours for 2018-2026.
+- Not 2027: the daily job does not fetch it, and a 2027 folder missing the night's games would stop the morning's
+  panel step.  2027 reads missing.
+
+**The inputs** (`data/matchups.py`, `features.MATCHUP_GAME_INPUTS`): one value per player and season, the same on both
+of his rows, from the fit games' pairs alone, each a mean weighted by matchup possessions and padded like a box rate,
+toward the players of his possession bin by a split-half pad k.  Missing before 2018.
+
+| plain name | panel code |
+|---|---|
+| height of the players he guarded | `attackers_guarded_height_in` |
+| height of the players who guarded him | `defenders_faced_height_in` |
+| self-creation of the players he guarded | `attackers_guarded_self_creation_per100` |
+| total creation of the players he guarded | `attackers_guarded_total_creation_per100` |
+| share of his defense on the opposing top self-creator | `top_self_creator_guarded_share` |
+| share of his defense on the opposing top total creator | `top_total_creator_guarded_share` |
+| share of his time on the floor with the top self-creator spent guarding him | `top_self_creator_guarded_share_on_shared_floor` |
+| the same for the top total creator | `top_total_creator_guarded_share_on_shared_floor` |
+
+- **Total creation** is self-creation plus the owner's estimated potential assists, experiment 112's formula at its
+  level: the shots he creates for himself and for others.  The tracked potential assists were the plan's first choice;
+  the matchup box score's are all 0, and the tracking box score has none per game.
+- **The top creator** of a team in a game is the attacker it used with the most created shots per game over the fit
+  games, his rate times his offensive possessions per game, so a starter who creates a lot outranks a bench scorer with
+  a higher rate.  Each team's most frequent top self-creator in 2026: Brunson 93 games, Mitchell 88, Barnes 87,
+  Wembanyama 86, Gilgeous-Alexander 83.
+- **The shared floor** is the possessions both were on the court, the top creator's team on offense, from the stints,
+  scaled per game by that team's matchup possessions over five times its stint possessions.
+- No input list reads them; `features.SCREEN_CANDIDATES_MATCHUPS` holds them for a later screen.  The fold's leak check
+  `matchups: per-game pairs read only from fit games` covers the pairs.
+
+**2026, the eye check** (sheet "OpenRAPM experiments", tab "Matchup inputs 2026": every player with 500 or more
+possessions, each input raw and padded):
+- Tallest players guarded: Hartenstein 81.57 in, Gobert 81.42, Zubac 81.24, Sarr 81.24, Mitchell Robinson 81.17.
+  Shortest: Javon Small 76.70, T.J. McConnell 76.75, Quenton Jackson 76.80, Daniss Jenkins 76.80, Jamal Shead 76.89.
+- Share of his defense on the top self-creator: Dort 0.34, Camara 0.33, Daniels 0.32, Castle 0.32, Wells 0.30;
+  lowest Gradey Dick 0.05.
+- Share of the shared floor: Walsh 0.43, Camara 0.43, Dort 0.42, Daniels 0.42, Castle 0.41; lowest Ingram 0.10,
+  McCollum 0.11, Brunson 0.11.
+- Self-creation of the players he guarded: Daniels 13.45, Dort 13.43, Castle 13.38, Ausar Thompson 13.14; lowest
+  Thomas Bryant 9.05, Anthony Gill 9.12.
+
+**Both panels rebuilt** (2026-10-29, `scratch/2026-10-28_matchups/rebuild.sh`, the check `panel_check.py`, log
+`rebuild.log`):
+- The season panel has 29,992 rows and 183 columns, the season-so-far panel 89,976 rows and 185.  Every one of the 175
+  older columns is unchanged to the bit, 1997-2026, in both.  In 2027 only the season-so-far panel's age moved, by one
+  year: the season in progress refetches its bio feed.
+- Every row with 100 or more possessions carries all eight inputs in 2018-2026, and none before 2018 or in 2027.  The
+  season-so-far rows at a quarter season carry the two shared-floor shares on 99.9%, the rest on all.
+- The panel builds about 4 seconds longer for each matchup season, about half a minute in all, in the daily job too.
+- Backups before the rebuild: `scratch/2026-10-28_matchups/season_panel_before.parquet` and
+  `season_panel_so_far_before.parquet`.
+- Defense rows with 1,000 or more possessions: the height of the players guarded averages 78.3-78.7 inches, its
+  standard deviation narrowing from 1.69 in 2018 to 1.22 in 2026; the share of his defense on the top self-creator
+  averages 0.13-0.14, standard deviation 0.04-0.06.
+
+**Next, the owner's call**: screen them (check 155 with `SCREEN_CANDIDATES_MATCHUPS`); the daily job fetching 2027's
+games before any is used; the next inputs from the same pairs (switches are 0 in the feed, so not those).

@@ -1,7 +1,7 @@
 # Handoff
 
 **What this file is.**  Where the work stands, what waits on the owner, and the commands a session runs.  Rewritten
-on the afternoon of 2026-10-22, its status and next steps on 2026-10-23 (twice), 2026-10-24, 2026-10-26, 2026-10-27 and 2026-10-28; the earlier file is in git history.  `DECISIONS.md` is the permanent record and carries
+on the afternoon of 2026-10-22, its status and next steps on 2026-10-23 (twice), 2026-10-24, 2026-10-26, 2026-10-27, 2026-10-28 and 2026-10-29; the earlier file is in git history.  `DECISIONS.md` is the permanent record and carries
 every number quoted here; read its measurement traps before trusting a number.  `README.md` says what OpenRAPM is,
 `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's standing rules.
 
@@ -22,7 +22,22 @@ every number quoted here; read its measurement traps before trusting a number.  
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
 
-## Where it stands, 2026-10-28
+## Where it stands, 2026-10-29
+
+- **Matchup inputs, game by game: BUILT, not screened, nothing published** (DECISIONS.md, "Matchup inputs, game by
+  game"; the owner, 2026-10-28: "the goal of this session is merely to build, not to test in the model yet").
+  - `openrapm data matchup-games` fetches `BoxScoreMatchupsV3`, one file a game, 2018-2026 all on disk (11,503 games,
+    about 4 hours; `--limit N` runs a long fetch as fresh processes, since one stalled after about 600 requests).  Not
+    2027: the daily job does not fetch it, so 2027 reads missing.
+  - `data/matchups.py`, `features.MATCHUP_GAME_INPUTS`: eight panel columns from the fit games' pairs alone, padded,
+    on both rows: the height of the players he guarded and of those who guarded him, the self-creation and total
+    creation of the players he guarded, and his share of defense on the opposing top self-creator and top total
+    creator, of all his defense and of the floor he shared with them.  Total creation adds the owner's estimated
+    potential assists; the feed's tracked ones are all 0.
+  - Both panels rebuilt (183 and 185 columns), the 175 older columns unchanged to the bit.  2026 values on the sheet's
+    tab "Matchup inputs 2026".  No input list reads them; `SCREEN_CANDIDATES_MATCHUPS` waits for a screen.
+
+## Where it stood, 2026-10-28
 
 - **Power ratings page, PUBLISHED 2026-10-28 (8820ba0, the owner: "Publish")** (`docs/power.html`, `openrapm site --power`, the owner's design
   2026-10-28).  Each team's current-season offense, defense and total: every player's rating times his share of the
@@ -351,6 +366,8 @@ What else the work of 2026-10-23 left open:
     .venv/Scripts/python scripts/checks/155_input_screen.py run --tag TAG --workers 2 --fitters 6
         the input screen: candidates against their shuffled copies, three random draws, ten test seasons, about 8 hours
         for 13 candidates (cache once: `cache --tag TAG`, check it: `dry --tag TAG --seasons 2025`, read it: `table`)
+    .venv/Scripts/python -m openrapm data matchup-games 2018 2026 --limit 400
+        the per-game matchups, 400 games a process; rerun until nothing is missing (scratch/2026-10-28_matchups/fetch_driver.py)
     .venv/Scripts/python -m openrapm second-prior --models bags10 --folds bags10_early,bags10_within --tag TAG --inputs SET
         a second prior's line from held-back swaps, about 13 minutes
     .venv/Scripts/python scripts/checks/101_log_run.py --name=NAME --exp=N --incumbent=inputs99 --idea=owner --verdict=pending --changed="..." --notes="..."
@@ -391,6 +408,6 @@ What else the work of 2026-10-23 left open:
 
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest -q                       # 838 passed, 2 skipped, 1 xfailed: the backup bigs
+    .venv/Scripts/python -m pytest -q                       # 851 passed, 2 skipped, 1 xfailed: the backup bigs
     uvx ruff check .                                         # clean
-    git log --oneline -1                                     # the handoff of 2026-10-28
+    git log --oneline -1                                     # the handoff of 2026-10-29
