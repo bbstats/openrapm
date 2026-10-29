@@ -179,6 +179,27 @@ def test_hustle_games_are_fetched_once_each_and_a_broken_game_is_listed_not_cach
     assert again["fetched"] == 0 and GameEndpoint.calls == ["0042500101"] * 4      # only the missing game, retried
 
 
+def test_matchup_games_ask_the_matchup_box_score_and_keep_one_row_per_pair(cfg, monkeypatch):
+    """`openrapm data matchup-games`: BoxScoreMatchupsV3, from 2018, each game's pairs cached as they answer."""
+    GameEndpoint.calls = []
+    pairs = pd.DataFrame({"gameId": ["0022500001"] * 3, "teamId": [10, 10, 20], "personIdOff": [1, 1, 3],
+                          "personIdDef": [3, 4, 1], "partialPossessions": [12.5, 3.0, 9.25]})
+    GameEndpoint.answers = {"0022500001": pairs}
+    asked = []
+    monkeypatch.setattr(dashboards, "_endpoint_class", lambda name: asked.append(name) or GameEndpoint)
+    monkeypatch.setattr("time.sleep", lambda seconds: None)
+    monkeypatch.setattr(dashboards, "season_game_ids", lambda cfg, season, phases: ["0022500001"])
+    out = dashboards.fetch_game_boxes(cfg, "matchups", [2026], log_every=0)
+    assert (out["games"], out["fetched"], asked) == (1, 1, ["BoxScoreMatchupsV3"])
+    path = dashboards.game_box_path(cfg, "matchups", "0022500001")
+    assert path.parts[-4:] == ("matchups", "games", "2026", "0022500001.parquet")
+    assert pd.read_parquet(path).partialPossessions.tolist() == [12.5, 3.0, 9.25]
+    from openrapm.commands.cli import build_parser
+    args = build_parser().parse_args(["data", "matchup-games"])
+    assert (args.source, args.run, args.first_season) == ("matchups", data_command.run_hustle_games, None)
+    assert dashboards.GAME_BOXES[args.source] == ("BoxScoreMatchupsV3", 2018)
+
+
 def test_offline_a_missing_hustle_game_stops_the_run(cfg, monkeypatch):
     monkeypatch.setenv("OPENRAPM_OFFLINE", "1")
     monkeypatch.setattr(dashboards, "season_game_ids", lambda cfg, season, phases: ["0022500001"])

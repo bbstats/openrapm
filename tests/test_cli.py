@@ -320,7 +320,8 @@ def test_site_writes_ratings_json_alone_by_default(monkeypatch):
     assert seen == dict(ratings=None, out_dir=None, built=None, bias=False, decomposition=False, bias_tables=None,
                         similarity=False, openrapm_decomposition=False, power=False)
     assert cli.main(["site", "--ratings", "r.parquet", "--out-dir", "out", "--built", "2026-10-09", "--bias",
-                     "--bias-tables", "tables", "--decomposition", "--similarity", "--openrapm-decomposition", "--power"]) == 0
+                     "--bias-tables", "tables", "--decomposition", "--similarity", "--openrapm-decomposition",
+                     "--power"]) == 0
     assert seen == dict(ratings="r.parquet", out_dir="out", built="2026-10-09", bias=True, decomposition=True,
                         bias_tables="tables", similarity=True, openrapm_decomposition=True, power=True)
 

@@ -29,7 +29,9 @@ Per game (2026-10-15).  A season total includes the games a within-season fold h
 test scores exactly those games: a fold whose prior read whole-season inputs scored z -31 better than an honest one
 (notes/DECISIONS.md, "The leak control for season-total inputs").  So the hustle numbers are also fetched game by game
 (`BoxScoreHustleV2`, one request a game, 2016-17 on), which a fold can sum over its fit games alone:
-data/raw/dashboards/hustle/games/<season>/<game_id>.parquet, the endpoint's player table as it answers.
+data/raw/dashboards/hustle/games/<season>/<game_id>.parquet, the endpoint's player table as it answers.  The matchups
+likewise (2026-10-28, `BoxScoreMatchupsV3`, 2017-18 on, playoffs too): one row per attacker and defender a game,
+read by data/matchups.py.
 """
 from __future__ import annotations
 
@@ -242,10 +244,16 @@ HUSTLE_GAME_COLUMNS = {"DEFLECTIONS": "deflections", "CONTESTED_SHOTS_2PT": "con
 TRACKING_GAME_COLUMNS = {"TOUCHES": "touches", "PASSES_MADE": "passes", "OREB_CHANCES": "reboundChancesOffensive",
                          "DREB_CHANCES": "reboundChancesDefensive",
                          "DEF_RIM_FGA": "defendedAtRimFieldGoalsAttempted"}
+# The matchup box score answers from 2017-18, the regular season and the playoffs; a 2015-16 or 2016-17 game answers
+# no table (scratch/2026-10-28_matchups/probe.py).  Its rows are attacker and defender pairs, `teamId` the attacker's
+# team, `matchupMinutesSort` the matchup's seconds; switches, potential assists and the help columns answer 0 in
+# every game probed, 2018-2027.
+MATCHUP_GAMES_FIRST = 2018
 # the per-game box scores fetched game by game: source -> (the nba_api endpoint, its first season with every player).
 # The tracking one (2026-10-15) holds distance, rebound chances, touches, passes, secondary and free-throw assists,
 # contested and uncontested shots, and shots defended at the rim, a part of the tracking dashboards
-GAME_BOXES = {"hustle": ("BoxScoreHustleV2", HUSTLE_GAMES_FIRST), "tracking": ("BoxScorePlayerTrackV3", 2014)}
+GAME_BOXES = {"hustle": ("BoxScoreHustleV2", HUSTLE_GAMES_FIRST), "tracking": ("BoxScorePlayerTrackV3", 2014),
+              "matchups": ("BoxScoreMatchupsV3", MATCHUP_GAMES_FIRST)}
 
 
 def game_box_path(cfg: dict, source: str, game_id: str) -> Path:
@@ -262,8 +270,9 @@ def fetch_hustle_game(game_id: str, cfg: dict, force: bool = False, tries: int =
 
 
 def fetch_game_box(source: str, game_id: str, cfg: dict, force: bool = False, tries: int = 4) -> tuple:
-    """(one game's per-game box score of `source` (`GAME_BOXES`), one row per player, whether it was read from the
-    cache), cached at `game_box_path`.  A game answered with no rows is cached as it is."""
+    """(one game's per-game box score of `source` (`GAME_BOXES`), one row per player, or per attacker and defender
+    for the matchups, whether it was read from the cache), cached at `game_box_path`.  A game answered with no rows is
+    cached as it is."""
     path = game_box_path(cfg, source, game_id)
     if path.exists() and not force:
         return pd.read_parquet(path), True

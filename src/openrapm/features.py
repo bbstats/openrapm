@@ -300,8 +300,9 @@ GOALTEND_INPUTS = [GOALTENDS, "goaltends_over_expected_from_blocks_per100"]
 MISSING_OK.extend(GOALTEND_INPUTS)
 # Experiment 119's candidates, each appended alone to the shipped list of its side by check 155's screen
 SCREEN_CANDIDATES_119 = {
-    "O": ["turnovers_over_expected_from_attempts_and_assists_per100", "shots_blocked_over_expected_from_attempts_per100",
-          "assists_over_expected_from_turnovers_per100", "three_shot_trips_over_expected_from_threes_per100"],
+    "O": ["turnovers_over_expected_from_attempts_and_assists_per100",
+          "shots_blocked_over_expected_from_attempts_per100", "assists_over_expected_from_turnovers_per100",
+          "three_shot_trips_over_expected_from_threes_per100"],
     "D": [GOALTENDS, "goaltends_over_expected_from_blocks_per100", "blocks_over_expected_from_fouls_per100",
           "steals_over_expected_from_fouls_per100", SHOOTING_FOULS, LOOSE_BALL_FOULS]}
 

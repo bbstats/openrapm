@@ -15,6 +15,8 @@
                                                   within-season fold can rebuild them from its fit games
     openrapm data tracking-games [FIRST] [LAST]   the same for the per-game tracking box score (BoxScorePlayerTrackV3,
                                                   2014 on)
+    openrapm data matchup-games [FIRST] [LAST]    the same for the per-game matchups, who guarded whom
+                                                  (BoxScoreMatchupsV3, 2018 on)
     openrapm data player-games [FIRST] [LAST]     each player's games, one row per player and game, from the stored
                                                   design pieces, game logs, box scores and hustle box scores
                                                   (paths.cache/player_games): what the multi-stat network reads
@@ -211,8 +213,8 @@ def run_dashboards(args: argparse.Namespace, cfg: dict) -> int:
 
 
 def run_hustle_games(args: argparse.Namespace, cfg: dict) -> int:
-    """The per-game box score of `args.source` (hustle or tracking) for every game of the seasons, one request a game,
-    cached; failed games are listed."""
+    """The per-game box score of `args.source` (hustle, tracking or matchups) for every game of the seasons, one
+    request a game, cached; failed games are listed."""
     from ..data import dashboards
     first = args.first_season if args.first_season is not None else dashboards.GAME_BOXES[args.source][1]
     last = args.last_season if args.last_season is not None else int(cfg["last_season"])
@@ -317,8 +319,8 @@ def _add_events(steps) -> None:
                     "up; and self-creation's counts (src/openrapm/data/creation_counts.py): every shot's spot and "
                     "possession situation, the free-throw trips, and the passes expected on the misses and trips; "
                     "and the fouls, goaltends, shots blocked and three-shot trips "
-                    "(src/openrapm/data/foul_counts.py).  Caches them per season in paths.event_counts (data/event_counts) and prints each season's parts "
-                    "against its box score.")
+                    "(src/openrapm/data/foul_counts.py).  Caches them per season in paths.event_counts "
+                    "(data/event_counts) and prints each season's parts against its box score.")
     events.add_argument("first_season", nargs="?", type=int, metavar="FIRST",
                         help="the first season (default config.yaml's first_season)")
     events.add_argument("last_season", nargs="?", type=int, metavar="LAST",
@@ -387,6 +389,19 @@ def _add_hustle_games(steps) -> None:
     tracking.add_argument("--phases", default=DEFAULT_PHASES, help="RS, PO or both (default %(default)s)")
     tracking.add_argument("--delay", type=float, default=0.6, help="seconds between requests (default %(default)s)")
     tracking.set_defaults(run=run_hustle_games, source="tracking")
+    matchups = steps.add_parser(
+        "matchup-games", help="the per-game matchups from stats.nba.com, who guarded whom, cached",
+        description="Fetches every game's matchup box score (BoxScoreMatchupsV3: each attacker and each defender who "
+                    "guarded him, with the matchup's partial possessions, time, share of the time both were on the "
+                    "floor and box score) into paths.raw/dashboards/matchups/games/<season>/, one file a game, as "
+                    "hustle-games does.  The matchup inputs (data/matchups.py) sum them over a fold's fit games.")
+    matchups.add_argument("first_season", nargs="?", type=int, metavar="FIRST",
+                          help="the first season (default 2018, the first the endpoint answers)")
+    matchups.add_argument("last_season", nargs="?", type=int, metavar="LAST",
+                          help="the last season (default config.yaml's last_season)")
+    matchups.add_argument("--phases", default=DEFAULT_PHASES, help="RS, PO or both (default %(default)s)")
+    matchups.add_argument("--delay", type=float, default=0.6, help="seconds between requests (default %(default)s)")
+    matchups.set_defaults(run=run_hustle_games, source="matchups")
 
 
 def _add_player_games(steps) -> None:

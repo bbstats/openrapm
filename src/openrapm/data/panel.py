@@ -119,7 +119,8 @@ from .shots import DEFENSE_TARGETS, SHOT_LEAGUE_COLS, SHOT_TOTAL_COLS, player_sh
 __all__ = ["OFFENCE", "DEFENCE_ALL", "PANEL_TARGETS", "SeasonTables", "roles_from_games", "score_state",
            "playoff_share", "cut_design", "fit_designs", "season_to_date", "SeasonSources", "SeasonPanel",
            "season_panel",
-           "add_over_expected", "fill_missing_score_state", "build_panel", "write_panel", "build_panel_so_far", "write_panel_so_far",
+           "add_over_expected", "fill_missing_score_state", "build_panel", "write_panel", "build_panel_so_far",
+           "write_panel_so_far",
            "trainable_panel", "trainable_panel_so_far", "in_progress_panel", "panel_and_trainable_seasons",
            "panel_from_old_names", "migrate_panel"]
 
