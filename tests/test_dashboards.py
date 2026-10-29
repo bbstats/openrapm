@@ -200,6 +200,18 @@ def test_matchup_games_ask_the_matchup_box_score_and_keep_one_row_per_pair(cfg, 
     assert dashboards.GAME_BOXES[args.source] == ("BoxScoreMatchupsV3", 2018)
 
 
+def test_a_request_that_stalls_is_abandoned_after_its_deadline():
+    """The matchup fetch of 2026-10-28 hung 40 minutes on one game: a request gets a hard deadline, then a retry."""
+    import threading
+    release = threading.Event()
+    with pytest.raises(TimeoutError):
+        dashboards.answer_within(0.05, lambda: release.wait(5))
+    release.set()
+    assert dashboards.answer_within(5, lambda: 7) == 7
+    with pytest.raises(KeyError, match="resultSet"):
+        dashboards.answer_within(5, lambda: {}["resultSet"])
+
+
 def test_offline_a_missing_hustle_game_stops_the_run(cfg, monkeypatch):
     monkeypatch.setenv("OPENRAPM_OFFLINE", "1")
     monkeypatch.setattr(dashboards, "season_game_ids", lambda cfg, season, phases: ["0022500001"])

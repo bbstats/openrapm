@@ -35,6 +35,7 @@ read by data/matchups.py.
 """
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -269,6 +270,30 @@ def fetch_hustle_game(game_id: str, cfg: dict, force: bool = False, tries: int =
     return fetch_game_box("hustle", game_id, cfg, force, tries)
 
 
+def answer_within(seconds: float, ask):
+    """`ask()`, or TimeoutError when it has not answered in `seconds`.  The request runs in a daemon thread that is
+    left behind on a timeout, so a stalled connection cannot hold the run or its exit.
+
+    Why: on 2026-10-28 the matchup fetch hung 40 minutes on one game, past the socket's own 60-second timeout, while
+    the same request answered in 0.4 seconds from a fresh process.
+    """
+    answer = {}
+
+    def run():
+        try:
+            answer["value"] = ask()
+        except Exception as error:        # handed to the caller, whose retry decides
+            answer["error"] = error
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    worker.join(seconds)
+    if worker.is_alive():
+        raise TimeoutError(f"no answer in {seconds:g} seconds")
+    if "error" in answer:
+        raise answer["error"]
+    return answer["value"]
+
+
 def fetch_game_box(source: str, game_id: str, cfg: dict, force: bool = False, tries: int = 4) -> tuple:
     """(one game's per-game box score of `source` (`GAME_BOXES`), one row per player, or per attacker and defender
     for the matchups, whether it was read from the cache), cached at `game_box_path`.  A game answered with no rows is
@@ -280,7 +305,7 @@ def fetch_game_box(source: str, game_id: str, cfg: dict, force: bool = False, tr
 
     def ask():
         return _endpoint_class(GAME_BOXES[source][0])(game_id=game_id, timeout=TIMEOUT).get_data_frames()[0]
-    frame = _retry(ask, tries=tries, base_sleep=3.0, what=f"{source} {game_id}")
+    frame = _retry(lambda: answer_within(2 * TIMEOUT, ask), tries=tries, base_sleep=3.0, what=f"{source} {game_id}")
     frame = frame.astype({column: str for column in frame.columns if frame[column].dtype == object})
     path.parent.mkdir(parents=True, exist_ok=True)
     frame.to_parquet(path, index=False)
