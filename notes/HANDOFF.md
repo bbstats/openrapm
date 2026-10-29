@@ -31,8 +31,11 @@ every number quoted here; read its measurement traps before trusting a number.  
      (`outputs/csv/screen_screen120_table.csv`, sheet tab "Input screen 120"): nothing passes; on defense the real
      values match their shuffled copies within 0.001, and any 21st defensive input costs +0.022 against the shipped
      lists because the column share 0.367 then shows each tree 8 inputs, not 7;
-  2. the booster settings searched again with the matchup inputs in, `tune --study tune120`, 80 trials, 8-10 hours
-     (`outputs/screen/screen120/tune120.db`, `params/booster_params_tune120.json`);
+  2. the booster settings searched again with the matchup inputs in, `tune --study tune120`, 80 trials
+     (`outputs/screen/screen120/tune120.db`, `params/booster_params_tune120.json`).  The first run stopped at 4:45 PM
+     on a trial whose boosters were too large to pass between processes; restarted 5:54 PM with the boosters passed
+     through files and trees capped at 24 leaves and 1,500 rounds, log `run2.log` (DECISIONS.md, "the tune's first run
+     stopped");
   3. the matchup screen at the tuned settings, then `tandem` (`screen_screen120_tune120_tandem.csv`);
   4. experiment 119's ten counts at the tuned settings, then `tandem` (`screen_screen119_tune120_tandem.csv`).
   Do not edit `src/` or `scripts/checks/155_input_screen.py` until it ends: each step starts fresh processes.  To stop
