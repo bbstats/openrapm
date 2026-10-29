@@ -33,7 +33,12 @@ every number quoted here; read its measurement traps before trusting a number.  
   still not on main.
 - **Published ratings unchanged: creation110.**  Nothing below is published or changes a default.
 - **Experiment 119, play-by-play fouls, goaltends, blocked shots and counts over expected through the Boruta screen;
-  RUNNING** (DECISIONS.md, "Experiment 119"; the owner, 2026-10-28: "go for it and remember to boruta").
+  ALL TEN FAIL, verdict the owner's** (DECISIONS.md, "Experiment 119"; the owner, 2026-10-28: "go for it and remember
+  to boruta").  Closest: blocks over those expected from fouls, z -1.18 against its copy, helping 1998-2004 only.
+  Steals over those expected from fouls worse in all 10 seasons, z +6.32.  The two turnover inputs worse within the
+  season but better on the guard, z -2.62 and -2.87.  No confirming build.  Self-creation shuffled in place reads
+  +0.0233, z +2.62, as in experiment 112.  Table on the sheet's tab "Input screen 119"; row 119 in experiments/runs.csv and on the
+  sheet.
   - New per-game counts, `data/foul_counts.py`, cached as `data/event_counts/{season}_fouls.parquet` by `openrapm data
     events`: goaltends, shooting fouls, loose-ball fouls, the shooter's blocked shots, three-shot trips.
   - Seven counts over expected, the owner's form for anything that would be a ratio (`features.OVER_EXPECTED`,
@@ -43,10 +48,10 @@ every number quoted here; read its measurement traps before trusting a number.  
   - Both panels rebuilt with the 12 new columns; the 160 older columns unchanged to the bit
     (`scratch/2026-10-28_fouls/panel_check.py`).  Cache `outputs/screen/screen119/` (24 GB): the shipped boosters
     refitted give back creation110's priors to 6.7e-16; seed 0's folds give back creation110's to 3.9e-13.
-  - The run: `scratch/2026-10-28_fouls/run.sh`, log `scratch/2026-10-28_fouls/run.log`, 68 trials from 1:01 PM, about
-    6 hours; then `155_input_screen.py table --tag screen119`.  Check 155 now takes its pool from the tag (`SCREENS`).
-  - To do after the run, not during it: `add_over_expected` fills seven columns one by one and pandas warns the frame
-    is fragmented; build them apart and join once.
+  - The run: `scratch/2026-10-28_fouls/run.sh`, log `scratch/2026-10-28_fouls/run.log`, 68 trials, 12:56 to 8:10 PM;
+    table `155_input_screen.py table --tag screen119`, eras `scratch/2026-10-28_fouls/eras.py`.  Check 155 now takes
+    its pool from the tag (`SCREENS`).
+  - `add_over_expected` builds its seven columns apart and joins them once (7c459dc), so pandas no longer warns.
 - **Experiment 118, the box-score prior from NVIDIA's pretrained Kumo Tabular network; verdict the owner's**
   (DECISIONS.md, "Experiment 118").  `src/openrapm/in_context_prior.py`: a params file naming the learner
   `kumo_tabular` puts the network where each LightGBM booster stands, the same training rows and five player folds, no

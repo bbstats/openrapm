@@ -10752,3 +10752,43 @@ each season and paired by season: (1) `add` beats `add_shadow` at z -2 or below;
 mean; (3) the guard, next season's team-games, is not worse at z +2.  Survivors are built together in one chain, all
 thirty seasons, judged by era on the within-season WOWY test against creation110 beside the noise control
 noise_creation110, year over year not worse at z +2, with the 2026 top 20; the verdict the owner's.
+
+### Experiment 119: the screen's result (2026-10-28, `scratch/2026-10-28_fouls/run.log`, `outputs/csv/screen_screen119_table.csv`, `outputs/csv/screen_screen119_eras.csv`)
+
+Both panels rebuilt with the twelve new columns; the 160 older columns unchanged to the bit.  Cache: ten tune seasons
+in 35 minutes, 24 GB; the shipped boosters refitted give back creation110's saved priors to 6.7e-16 in every season.
+68 trials from 12:56 to 8:10 PM with 2 rating and 6 fitting processes; the shipped lists at seed 0 gave back
+creation110's folds to 3.9e-13.  Noise floor, the shipped lists at seeds 1-4 against seed 0, as in experiment 112:
+-0.0215, +0.0149, -0.0345, -0.0163.  Experiment 110's self-creation shuffled in place: +0.0233, z +2.62, 2 of 10
+seasons better, the same reading as experiment 112's: the screen still sees an input that carries weight.
+
+The within-season WOWY change after step 4, ten tune seasons, seeds 0-2 averaged within each season; below 0 is
+better; the eras against the shipped lists:
+
+| input | side | vs shipped | z | vs its shuffled copy | z | seasons better vs copy | guard z | 1998-2004 | 2007-2016 | 2019-2025 | verdict |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| blocks over those expected from personal fouls | defense | -0.0062 | -0.35 | -0.0102 | -1.18 | 6 of 10 | +1.05 | -0.0632 | +0.0138 | +0.0240 | fails |
+| shooting fouls | defense | +0.0000 | +0.00 | -0.0039 | -1.16 | 6 of 10 | +1.79 | -0.0503 | +0.0268 | +0.0147 | fails |
+| shots blocked over those expected from twos and threes taken | offense | -0.0052 | -0.44 | -0.0048 | -0.41 | 6 of 10 | -0.41 | -0.0398 | -0.0151 | +0.0427 | fails |
+| goaltends over those expected from blocks | defense | +0.0081 | +0.31 | +0.0042 | +0.18 | 6 of 10 | -0.06 | +0.0162 | +0.0249 | -0.0226 | fails |
+| goaltends | defense | +0.0066 | +0.48 | +0.0029 | +0.39 | 5 of 10 | +1.35 | -0.0182 | +0.0225 | +0.0103 | fails |
+| loose-ball fouls | defense | +0.0075 | +0.67 | +0.0035 | +3.21 | 1 of 10 | +2.86 | -0.0313 | +0.0285 | +0.0185 | fails |
+| three-shot trips over those expected from threes taken | offense | +0.0042 | +1.77 | +0.0047 | +1.94 | 2 of 10 | +0.82 | +0.0064 | +0.0085 | -0.0036 | fails |
+| turnovers over those expected from true-shooting attempts and assists | offense | +0.0132 | +0.67 | +0.0135 | +0.69 | 5 of 10 | -2.62 | -0.0079 | +0.0229 | +0.0213 | fails |
+| assists over those expected from turnovers | offense | +0.0158 | +0.79 | +0.0161 | +0.81 | 4 of 10 | -2.87 | +0.0026 | +0.0099 | +0.0369 | fails |
+| steals over those expected from personal fouls | defense | +0.0643 | +5.57 | +0.0604 | +6.32 | 0 of 10 | +5.05 | +0.0434 | +0.0764 | +0.0691 | fails |
+
+The goaltend inputs are missing in 1998 and 2001, so their 1998-2004 column rests on 2004 alone.
+
+**Reading.**
+- Nothing passes; no confirming build.  The closest, blocks over those expected from fouls, is z -1.18 against its
+  copy and helps only 1998-2004; 2007-2016 and 2019-2025 are worse.
+- Steals over those expected from fouls is worse in every season and on the guard.  With experiment 112's two steal
+  splits, every reworking of steals has hurt the defensive booster; steals alone is the form it reads best.
+- Loose-ball fouls are worse than their copy in 9 of 10 seasons.
+- The two turnover inputs split the tests: worse on the within-season test, better on the guard, z -2.62 and -2.87,
+  the whole-season ratings predicting the seasons either side.  Within-season decides (the owner, 2026-10-20).
+- Four of the ten help 1998-2004 and hurt 2019-2025, the pattern of experiment 112's confirming build.
+
+**Verdict** pending the owner; by the rule, all ten fail.  The counts, the panel columns and `screen119` stay; the
+shipped lists are unchanged.
