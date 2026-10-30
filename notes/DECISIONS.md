@@ -11066,3 +11066,26 @@ settings and +0.013 at the retuned ones.  Rule (1), against the shuffled copy, d
 
 The retuned settings are not adopted.  Their gain is on the seasons the search scored; the test would be a full build
 judged on the twenty seasons it never read, as experiment 76's was; the owner's call.
+
+## Experiment 121: the box-score prior as a blend of the booster and a line on every input and every product of two, on a quick screen (the owner, 2026-10-30: "I want to try maybe combining algorithms? So I want to use a linear model so like elastic net or something, and I want to do combination features in the linear model, combine that with the gradient boosting model, and test a couple weightings of the two. For the gradient boosting model, just use what passed.  But I don't want this test to take 2 days", then "let's just screen it on a smaller subset so it doesn't take as long" and "the feature combinations is basically just Max of two interactions, everything (including things we have eliminated via boruta)"; registered before any result)
+
+**The blend.**  Each side's box-score prior is (1 - w) x the booster + w x the line, w = 0, 0.25, 0.5, 0.75 and 1.
+- The booster: today's settings (`lgb1_tune2`), 10 bags, on the 13 shipped inputs that beat their shuffled copies
+  (`features.PASSED_121`: offense 8, defense 5; the sheet's tab "Boruta list") and the two row columns.
+- The line (`linear_prior.py`): an elastic net on every input ever offered to the prior's screens, 61
+  (`features.EVERYTHING_121`, the same on both sides), and the two row columns; each standardized, a missing value
+  read as the mean with a flag column; every product of two of them, 2,016; about 2,100 columns.  Out of player like
+  the booster: the line on every training row answers players with none, the line without each of the booster's five
+  player folds answers that fold.  Its two penalties are chosen once per side on 2016's training rows: lasso shares 0.1,
+  0.5 and 0.9, ten penalties each down a thousandfold from the one that zeroes every column, scored by the weighted
+  squared miss on each fold's players with the line fitted without them.  Solved on the columns' Gram matrix
+  (`tests/test_linear_prior.py`: scikit-learn's elastic net to 1e-6, and a held-out player's label never reaches it).
+- One bagged prior whose members are the booster's 10 bags and the line, repeated so the line carries w of the mean;
+  each member answers a player with its part that never saw him.
+
+**The quick screen** (check 155, tag `blend121`; the owner's "smaller subset"): four seasons, 2001, 2010, 2019 and 2025,
+each season's step 4 fitted on the other three; one repeat of four held-back game sets a season, of twelve; random
+draws 0 and 1; no year-over-year check; screen120's cache, whose training rows and worlds hold every input.  Today's
+prior at draw 0 must give back creation110's folds.  Read: each weighting's change against today's prior at the same
+draws, paired by season, after the shrink and before it, each season apart.  No adoption rule: a quick look for the
+owner, who decides what goes further.

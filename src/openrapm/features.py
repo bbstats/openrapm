@@ -391,6 +391,18 @@ MATCHUP_DEFENCE = ["attackers_guarded_scoring_vs_league_avg"]
 # experiment 110's lists as shipped, "hustle_no_three_pct_self_creation" below
 _CREATION110 = {"O": [name for name in _NO_CAREER["O"] + HUSTLE_OFFENCE if name != "three_point_pct"] + CREATION,
                 "D": _NO_CAREER["D"] + HUSTLE_DEFENCE}
+# Experiment 121 (the owner, 2026-10-30: "combine that with the gradient boosting model ... For the gradient boosting
+# model, just use what passed"; the line on "everything (including things we have eliminated via boruta)"): the
+# shipped inputs that beat their shuffled copies (the sheet's tab "Boruta list"), in the shipped order, and every input
+# ever offered to the prior's screens, the same list on both sides
+PASSED_121 = {"O": ["assists_minus_turnovers_per100", "shots_per100", "off_rebounds_per100",
+                    "three_point_attempt_share", "team_possession_share", "points_per100", "true_shooting_pct",
+                    "self_creation_per100"],
+              "D": ["def_rebounds_per100", "shots_per100", "games_started_share", "points_per100", "steals_per100"]}
+EVERYTHING_121 = list(dict.fromkeys(
+    _CREATION110["O"] + _CREATION110["D"] + ["three_point_pct"]
+    + [name for pool in (SCREEN_CANDIDATES, SCREEN_CANDIDATES_119, SCREEN_CANDIDATES_MATCHUPS)
+       for side in ("O", "D") for name in pool[side]]))
 FEATURE_SETS = {
     # the box score, the role, the career and the body, no on-court record (experiment 45's boruta_noonc)
     "box_score_and_bio": SHIPPED,
@@ -456,6 +468,9 @@ FEATURE_SETS = {
     # experiment 120 (2026-10-29, the owner: "now that we have matchup features, let's go to boruta town"): the same
     # for the matchup inputs, each on the side it describes (`SCREEN_CANDIDATES_MATCHUPS`)
     "screen120_pool": {side: _CREATION110[side] + SCREEN_CANDIDATES_MATCHUPS[side] for side in ("O", "D")},
+    # experiment 121: the booster's inputs in the blend, and the line's
+    "passed121": PASSED_121,
+    "everything121": {"O": list(EVERYTHING_121), "D": list(EVERYTHING_121)},
     # experiment 112's confirming build: the one candidate the screen passed, unassisted makes at the rim and in the
     # paint, appended to the shipped offensive list
     "hustle_no_three_pct_self_creation_unassisted_inside": {"O": _CREATION110["O"] + ["unassisted_makes_inside_per100"],
