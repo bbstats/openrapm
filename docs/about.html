@@ -7,13 +7,20 @@
 <link rel="stylesheet" href="site.css">
 <script src="site.js"></script>
 <style>
-  :root { --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6; }
-  :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5; }
-  body { color: var(--ink); font: 14px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
-  h2 { font-size: 18px; margin: 8px 0 10px; }
-  p { margin: 0 0 10px; }
+  :root { --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6; --band: #f4f3ef; }
+  :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5; --band: #232321; }
+  body { color: var(--ink); font: 14px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  h2 { font-size: 18px; margin: 18px 0 8px; }
+  h3 { font-size: 15px; margin: 18px 0 6px; }
+  p { margin: 0 0 10px; max-width: 760px; }
   p a { color: var(--accent); }
-  pre { margin: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 6px; font: 13px/1.5 Consolas, Menlo, monospace; overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; max-width: 980px; margin: 0 0 8px; }
+  th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; color: var(--muted); font-size: 13px; }
+  td:first-child { font-weight: 600; white-space: nowrap; }
+  td:last-child { color: var(--muted); width: 26%; }
+  .example { background: var(--band); border-radius: 6px; padding: 10px 14px; max-width: 760px; margin: 0 0 10px; }
+  @media (max-width: 640px) { td:first-child { white-space: normal; } td:last-child { width: auto; } }
 </style>
 </head>
 <body>
@@ -26,49 +33,76 @@
     <a href="about.html" aria-current="page">About</a>
     <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
   </nav>
-  <h2>Prior Inputs</h2>
-  <p>All stats use <a href="https://kmedved.com/2020/08/06/nba-stabilization-rates-and-the-padding-approach/">padding method</a> to reduce noise.</p>
-  <pre>{
-  "Offense": [
-    "assists_per100",
-    "assists_minus_turnovers_per100",
-    "effective_fg_pct",
-    "shots_per100",
-    "free_throw_attempts_per100",
-    "off_rebounds_per100",
-    "off_rebound_share",
-    "three_point_attempt_share",
-    "team_possession_share",
-    "points_per100",
-    "steals_per100",
-    "true_shooting_pct",
-    "weight_lb",
-    "screen_assists_vs_league_avg",
-    "screen_assist_points_vs_league_avg",
-    "off_box_outs_vs_league_avg",
-    "loose_balls_recovered_vs_league_avg"
-  ],
-  "Defense": [
-    "blocks_per100",
-    "def_rebounds_per100",
-    "shots_per100",
-    "games_started_share",
-    "height_in",
-    "team_possession_share",
-    "points_per100",
-    "steals_per100",
-    "steals_plus_blocks_per100",
-    "true_shooting_pct",
-    "used_possessions_per100",
-    "weight_lb",
-    "deflections_vs_league_avg",
-    "contested_twos_vs_league_avg",
-    "contested_threes_vs_league_avg",
-    "charges_drawn_vs_league_avg",
-    "def_box_outs_vs_league_avg",
-    "loose_balls_recovered_vs_league_avg"
-  ]
-}</pre>
+
+  <h2>Prior inputs</h2>
+  <p>The box-score prior reads one season of stats, playoffs included, and nothing from any other season.
+  "Per 100" means per 100 on-court possessions: team possessions on the offense list, opponent possessions on
+  the defense list. Hustle stats, 2017 on, are per 100 and shown as % above or below the league average.</p>
+
+  <h3>Padding</h3>
+  <p>Over a few hundred possessions most of a rate is luck, so counting stats are
+  <a href="https://kmedved.com/2020/08/06/nba-stabilization-rates-and-the-padding-approach/">padded</a>:
+  blended with the rate of players who played about as many possessions that season. How much is blended in is
+  measured for each stat and each season: the more of the spread between players is luck, the more is blended in.</p>
+  <div class="example">A bench player with 200 possessions and 2.1 steals per 100. Steals that season carry a pad of
+  450 possessions, and players with about 200 possessions average 1.4. Padded: 200 &times; 2.1 + 450 &times; 1.4,
+  divided by 200 + 450, is 1.6. A starter with 3,000 possessions and the same 2.1 keeps 2.0.</div>
+  <p>Percentages are built from the padded makes and misses, then get a few league-typical attempts added on top,
+  so a player who went 2 for 2 on threes does not read as a 100% shooter.</p>
+
+  <h3>Offense</h3>
+  <table>
+    <thead><tr><th>Input</th><th>What it is</th><th>Padding</th></tr></thead>
+    <tbody>
+      <tr><td>Points per 100</td><td></td><td>Padded</td></tr>
+      <tr><td>Field-goal attempts per 100</td><td></td><td>Padded</td></tr>
+      <tr><td>Free-throw attempts per 100</td><td></td><td>Padded</td></tr>
+      <tr><td>Self-created shots per 100</td><td>Field-goal attempts + 0.44 &times; free-throw attempts, times the estimated unassisted share. Assisted share = 73% minus 3 points per assist per 100 minus 1 point per made field goal per 100, held between 0% and 100%.</td><td>Built from padded rates</td></tr>
+      <tr><td>True shooting %</td><td></td><td>Padded rates, plus 3 attempts at 54% added</td></tr>
+      <tr><td>Effective field-goal %</td><td></td><td>Padded rates, plus 3 shots at 50% added</td></tr>
+      <tr><td>Three-point attempt share</td><td></td><td>Padded rates, plus 3 shots at 25% threes added</td></tr>
+      <tr><td>Assists per 100</td><td></td><td>Padded</td></tr>
+      <tr><td>Assists minus turnovers per 100</td><td></td><td>Both padded</td></tr>
+      <tr><td>Offensive rebounds per 100</td><td></td><td>Padded</td></tr>
+      <tr><td>Offensive rebound share</td><td>Offensive rebounds over total rebounds.</td><td>Padded rates, plus 3 rebounds at 22% offensive added</td></tr>
+      <tr><td>Steals per 100</td><td></td><td>Padded</td></tr>
+      <tr><td>Screen assists</td><td></td><td>Padded</td></tr>
+      <tr><td>Points from screen assists</td><td></td><td>Padded</td></tr>
+      <tr><td>Offensive box-outs</td><td></td><td>Padded</td></tr>
+      <tr><td>Loose balls recovered</td><td></td><td>Padded</td></tr>
+      <tr><td>Share of team possessions</td><td>On-court possessions over one team's full season of possessions, summed across teams, capped at 90%.</td><td>Not padded</td></tr>
+      <tr><td>Weight</td><td>Listed, in pounds.</td><td>Not padded</td></tr>
+      <tr><td>Possessions played</td><td>On-court possessions behind the stats.</td><td>Not padded</td></tr>
+      <tr><td>Season played so far</td><td>1 once the season is over; during it, the share played, 0.25 a quarter in. Keeps a starter's quarter season from looking like a bench player's full season.</td><td>Not padded</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Defense</h3>
+  <table>
+    <thead><tr><th>Input</th><th>What it is</th><th>Padding</th></tr></thead>
+    <tbody>
+      <tr><td>Blocks per 100</td><td></td><td>Padded</td></tr>
+      <tr><td>Steals per 100</td><td></td><td>Padded</td></tr>
+      <tr><td>Steals plus blocks per 100</td><td></td><td>Both padded</td></tr>
+      <tr><td>Defensive rebounds per 100</td><td></td><td>Padded</td></tr>
+      <tr><td>Deflections</td><td></td><td>Padded</td></tr>
+      <tr><td>Contested twos</td><td></td><td>Padded</td></tr>
+      <tr><td>Contested threes</td><td></td><td>Padded</td></tr>
+      <tr><td>Charges drawn</td><td></td><td>Padded</td></tr>
+      <tr><td>Defensive box-outs</td><td></td><td>Padded</td></tr>
+      <tr><td>Loose balls recovered</td><td></td><td>Padded</td></tr>
+      <tr><td>Points per 100</td><td></td><td>Padded</td></tr>
+      <tr><td>Field-goal attempts per 100</td><td></td><td>Padded</td></tr>
+      <tr><td>Possessions used per 100</td><td>Field-goal attempts + 0.44 &times; free-throw attempts + turnovers.</td><td>Padded</td></tr>
+      <tr><td>True shooting %</td><td></td><td>Padded rates, plus 3 attempts at 54% added</td></tr>
+      <tr><td>Share of games started</td><td></td><td>Not padded</td></tr>
+      <tr><td>Share of team possessions</td><td></td><td>Not padded</td></tr>
+      <tr><td>Height</td><td>Listed, in inches, barefoot. Listings before 2020 were in shoes and lose 0.575 inches.</td><td>Not padded</td></tr>
+      <tr><td>Weight</td><td>Listed, in pounds.</td><td>Not padded</td></tr>
+      <tr><td>Possessions played</td><td>On-court possessions behind the stats.</td><td>Not padded</td></tr>
+      <tr><td>Season played so far</td><td>1 once the season is over; during it, the share played, 0.25 a quarter in. Keeps a starter's quarter season from looking like a bench player's full season.</td><td>Not padded</td></tr>
+    </tbody>
+  </table>
 </main>
 </body>
 </html>
