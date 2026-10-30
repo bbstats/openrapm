@@ -36,16 +36,15 @@
   </nav>
 
   <h2>Prior inputs</h2>
-  <p>The box-score prior reads one season of a player's stats and nothing from his other seasons.
-  "Per 100" means per 100 possessions he was on the court for: his team's possessions on the offense list,
-  the opponent's possessions on the defense list.</p>
+  <p>The box-score prior reads one season of stats and nothing from any other season.
+  "Per 100" means per 100 on-court possessions: team possessions on the offense list, opponent possessions on
+  the defense list. Hustle stats, 2016 on, are per 100 and shown as % above or below the league average.</p>
 
   <h3>Padding</h3>
   <p>Over a few hundred possessions most of a rate is luck, so counting stats are
   <a href="https://kmedved.com/2020/08/06/nba-stabilization-rates-and-the-padding-approach/">padded</a>:
   blended with the rate of players who played about as many possessions that season. How much is blended in is
-  measured for each stat and each season, from how well players' odd-numbered games agree with their
-  even-numbered games.</p>
+  measured for each stat and each season, from how well odd-numbered games agree with even-numbered games.</p>
   <div class="example">A bench player with 200 possessions and 2.1 steals per 100. Steals that season carry a pad of
   450 possessions, and players with about 200 possessions average 1.4. Padded: 200 &times; 2.1 + 450 &times; 1.4,
   divided by 200 + 450, is 1.6. A starter with 3,000 possessions and the same 2.1 keeps 2.0.</div>
@@ -56,25 +55,25 @@
   <table>
     <thead><tr><th>Input</th><th>What it is</th><th>Padding</th></tr></thead>
     <tbody>
-      <tr><td>Points per 100</td><td>Points he scored: 2 per made two, 3 per made three, 1 per made free throw.</td><td>Padded</td></tr>
-      <tr><td>Field-goal attempts per 100</td><td>Twos and threes he attempted, made or missed. Free throws not included.</td><td>Padded</td></tr>
-      <tr><td>Free-throw attempts per 100</td><td>Free throws he attempted, made or missed.</td><td>Padded</td></tr>
-      <tr><td>Self-created shots per 100</td><td>Field-goal attempts plus 0.44 &times; free-throw attempts, times the share estimated to be unassisted. The assisted share starts at 73% and drops 3 points for each assist per 100 he makes and 1 point for each made field goal per 100, held between 0% and 100%.</td><td>Built from padded rates</td></tr>
-      <tr><td>True shooting %</td><td>Points over 2 &times; field-goal attempts + 0.88 &times; free-throw attempts.</td><td>Padded rates, plus 3 attempts at 54% added</td></tr>
-      <tr><td>Effective field-goal %</td><td>Made field goals, a made three counting 1.5, over field-goal attempts.</td><td>Padded rates, plus 3 shots at 50% added</td></tr>
-      <tr><td>Three-point attempt share</td><td>Share of his field-goal attempts that were threes.</td><td>Padded rates, plus 3 shots at 25% threes added</td></tr>
-      <tr><td>Assists per 100</td><td>Passes credited as leading to a teammate's made basket.</td><td>Padded</td></tr>
-      <tr><td>Assists minus turnovers per 100</td><td>Assists per 100 less turnovers per 100.</td><td>Both padded</td></tr>
-      <tr><td>Offensive rebounds per 100</td><td>Rebounds of his own team's misses.</td><td>Padded</td></tr>
-      <tr><td>Offensive rebound share</td><td>Offensive rebounds over all his rebounds, offensive and defensive.</td><td>Padded rates, plus 3 rebounds at 22% offensive added</td></tr>
-      <tr><td>Steals per 100</td><td>Times he took the ball from the other team.</td><td>Padded</td></tr>
-      <tr><td>Screen assists</td><td>Screens he set that led straight to a teammate's made basket, per 100, as % above or below the league average.</td><td>Padded. 2016 on, missing before</td></tr>
-      <tr><td>Points from screen assists</td><td>Points scored off those screens, per 100, as % above or below the league average.</td><td>Padded. 2016 on, missing before</td></tr>
-      <tr><td>Offensive box-outs</td><td>Times he boxed out an opponent on his own team's miss, per 100, as % above or below the league average.</td><td>Padded. 2016 on, missing before</td></tr>
-      <tr><td>Loose balls recovered</td><td>Loose balls he came up with, per 100, as % above or below the league average.</td><td>Padded. 2016 on, missing before</td></tr>
-      <tr><td>Share of team possessions</td><td>His on-court possessions over one team's full season of possessions, summed across every team he played for, capped at 90%.</td><td>Not padded</td></tr>
-      <tr><td>Weight</td><td>Listed weight that season, in pounds.</td><td>Not padded</td></tr>
-      <tr><td>Possessions played</td><td>How many possessions the stats above rest on.</td><td>Not padded</td></tr>
+      <tr><td>Points per 100</td><td></td><td>Padded</td></tr>
+      <tr><td>Field-goal attempts per 100</td><td></td><td>Padded</td></tr>
+      <tr><td>Free-throw attempts per 100</td><td></td><td>Padded</td></tr>
+      <tr><td>Self-created shots per 100</td><td>Field-goal attempts + 0.44 &times; free-throw attempts, times the estimated unassisted share. Assisted share = 73% minus 3 points per assist per 100 minus 1 point per made field goal per 100, held between 0% and 100%.</td><td>Built from padded rates</td></tr>
+      <tr><td>True shooting %</td><td></td><td>Padded rates, plus 3 attempts at 54% added</td></tr>
+      <tr><td>Effective field-goal %</td><td></td><td>Padded rates, plus 3 shots at 50% added</td></tr>
+      <tr><td>Three-point attempt share</td><td></td><td>Padded rates, plus 3 shots at 25% threes added</td></tr>
+      <tr><td>Assists per 100</td><td></td><td>Padded</td></tr>
+      <tr><td>Assists minus turnovers per 100</td><td></td><td>Both padded</td></tr>
+      <tr><td>Offensive rebounds per 100</td><td></td><td>Padded</td></tr>
+      <tr><td>Offensive rebound share</td><td>Offensive rebounds over total rebounds.</td><td>Padded rates, plus 3 rebounds at 22% offensive added</td></tr>
+      <tr><td>Steals per 100</td><td></td><td>Padded</td></tr>
+      <tr><td>Screen assists</td><td></td><td>Padded</td></tr>
+      <tr><td>Points from screen assists</td><td></td><td>Padded</td></tr>
+      <tr><td>Offensive box-outs</td><td></td><td>Padded</td></tr>
+      <tr><td>Loose balls recovered</td><td></td><td>Padded</td></tr>
+      <tr><td>Share of team possessions</td><td>On-court possessions over one team's full season of possessions, summed across teams, capped at 90%.</td><td>Not padded</td></tr>
+      <tr><td>Weight</td><td>Listed, in pounds.</td><td>Not padded</td></tr>
+      <tr><td>Possessions played</td><td>On-court possessions behind the stats.</td><td>Not padded</td></tr>
       <tr><td>Share of the season</td><td>How much of the regular season the stats cover: 1 for a full season, 0.25 a quarter of the way in.</td><td>Not padded</td></tr>
     </tbody>
   </table>
@@ -83,26 +82,26 @@
   <table>
     <thead><tr><th>Input</th><th>What it is</th><th>Padding</th></tr></thead>
     <tbody>
-      <tr><td>Blocks per 100</td><td>Opponent shots he blocked.</td><td>Padded</td></tr>
-      <tr><td>Steals per 100</td><td>Times he took the ball from the other team.</td><td>Padded</td></tr>
-      <tr><td>Steals plus blocks per 100</td><td>The two added together.</td><td>Both padded</td></tr>
-      <tr><td>Defensive rebounds per 100</td><td>Rebounds of the opponent's misses.</td><td>Padded</td></tr>
-      <tr><td>Deflections</td><td>Passes or dribbles he got a hand on, per 100, as % above or below the league average.</td><td>Padded. 2016 on, missing before</td></tr>
-      <tr><td>Contested twos</td><td>Opponent two-point shots he contested, per 100, as % above or below the league average.</td><td>Padded. 2016 on, missing before</td></tr>
-      <tr><td>Contested threes</td><td>Opponent three-point shots he contested, per 100, as % above or below the league average.</td><td>Padded. 2016 on, missing before</td></tr>
-      <tr><td>Charges drawn</td><td>Charges he took, per 100, as % above or below the league average.</td><td>Padded. 2016 on, missing before</td></tr>
-      <tr><td>Defensive box-outs</td><td>Times he boxed out an opponent on the opponent's miss, per 100, as % above or below the league average.</td><td>Padded. 2016 on, missing before</td></tr>
-      <tr><td>Loose balls recovered</td><td>Loose balls he came up with, per 100, as % above or below the league average.</td><td>Padded. 2016 on, missing before</td></tr>
-      <tr><td>Points per 100</td><td>His own scoring, as on offense.</td><td>Padded</td></tr>
-      <tr><td>Field-goal attempts per 100</td><td>His own twos and threes attempted, as on offense.</td><td>Padded</td></tr>
-      <tr><td>Possessions used per 100</td><td>Possessions he ended on offense: field-goal attempts + 0.44 &times; free-throw attempts + turnovers.</td><td>Padded</td></tr>
-      <tr><td>True shooting %</td><td>His own shooting, as on offense.</td><td>Padded rates, plus 3 attempts at 54% added</td></tr>
-      <tr><td>Share of games started</td><td>Games started over games played.</td><td>Not padded</td></tr>
-      <tr><td>Share of team possessions</td><td>As on offense.</td><td>Not padded</td></tr>
-      <tr><td>Height</td><td>Listed height that season, in inches.</td><td>Not padded</td></tr>
-      <tr><td>Weight</td><td>Listed weight that season, in pounds.</td><td>Not padded</td></tr>
-      <tr><td>Possessions played</td><td>How many possessions the stats above rest on.</td><td>Not padded</td></tr>
-      <tr><td>Share of the season</td><td>As on offense.</td><td>Not padded</td></tr>
+      <tr><td>Blocks per 100</td><td></td><td>Padded</td></tr>
+      <tr><td>Steals per 100</td><td></td><td>Padded</td></tr>
+      <tr><td>Steals plus blocks per 100</td><td></td><td>Both padded</td></tr>
+      <tr><td>Defensive rebounds per 100</td><td></td><td>Padded</td></tr>
+      <tr><td>Deflections</td><td></td><td>Padded</td></tr>
+      <tr><td>Contested twos</td><td></td><td>Padded</td></tr>
+      <tr><td>Contested threes</td><td></td><td>Padded</td></tr>
+      <tr><td>Charges drawn</td><td></td><td>Padded</td></tr>
+      <tr><td>Defensive box-outs</td><td></td><td>Padded</td></tr>
+      <tr><td>Loose balls recovered</td><td></td><td>Padded</td></tr>
+      <tr><td>Points per 100</td><td></td><td>Padded</td></tr>
+      <tr><td>Field-goal attempts per 100</td><td></td><td>Padded</td></tr>
+      <tr><td>Possessions used per 100</td><td>Field-goal attempts + 0.44 &times; free-throw attempts + turnovers.</td><td>Padded</td></tr>
+      <tr><td>True shooting %</td><td></td><td>Padded rates, plus 3 attempts at 54% added</td></tr>
+      <tr><td>Share of games started</td><td></td><td>Not padded</td></tr>
+      <tr><td>Share of team possessions</td><td></td><td>Not padded</td></tr>
+      <tr><td>Height</td><td>Listed, in inches.</td><td>Not padded</td></tr>
+      <tr><td>Weight</td><td>Listed, in pounds.</td><td>Not padded</td></tr>
+      <tr><td>Possessions played</td><td>On-court possessions behind the stats.</td><td>Not padded</td></tr>
+      <tr><td>Share of the season</td><td></td><td>Not padded</td></tr>
     </tbody>
   </table>
 </main>
