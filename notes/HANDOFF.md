@@ -36,7 +36,10 @@ every number quoted here; read its measurement traps before trusting a number.  
      on a trial whose boosters were too large to pass between processes; restarted 5:54 PM with the boosters passed
      through files and trees capped at 24 leaves and 1,500 rounds, log `run2.log` (DECISIONS.md, "the tune's first run
      stopped");
-  3. the matchup screen at the tuned settings, then `tandem` (`screen_screen120_tune120_tandem.csv`);
+  3. DONE 5:08 AM 2026-10-30: the tune's best, trial 53, read -0.110 on its own ten seasons; the matchup screen at its
+     settings (`screen_screen120_tune120_tandem.csv`, sheet tab "Tandem 120"): no verdict differs, two readings move
+     beyond z 2; today's lists at the retuned settings on 2018-2025 +0.011, z +0.27, and +0.060 on the five seasons the
+     search never scored;
   4. experiment 119's ten counts at the tuned settings, then `tandem` (`screen_screen119_tune120_tandem.csv`).
   Do not edit `src/` or `scripts/checks/155_input_screen.py` until it ends: each step starts fresh processes.  To stop
   it, kill the bash driver and its python children.  When it ends: the tables to the sheet, the reading to DECISIONS.md,
