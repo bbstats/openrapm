@@ -10987,3 +10987,43 @@ changes, before any trial of the second run:
   starts a fresh study under the same name with the same queued trials, 80 finished trials, and the same reference.
   First-run readings, pool lists at seed 0 on the ten tune seasons: today's settings 0 by construction; experiment 75's
   -0.049, z -1.73, next-season check -0.143, z -5.10; the five random starts +0.12 to +1.12, three past the limit.
+
+### Experiment 120: the tune, and the matchup screen at its settings (2026-10-30, `scratch/2026-10-29_matchup_screen/run2.log`, `outputs/csv/screen_screen120_tune120_table.csv`, `outputs/csv/screen_screen120_tune120_tandem.csv`, the sheet's tab "Tandem 120")
+
+**The tune**, second run, 80 trials from 5:54 PM to 12:12 AM.  Its first trial, today's settings, gave back the first
+run's reference, which went through the pipe, to 0.0000.  The best within the limit, trial 53, against the pool lists at
+today's settings, seed 0, the ten tune seasons: within-season -0.110, z -2.55, 8 of 10 better; next-season check -0.087,
+z -1.65.  Trials 23 and 26 read -0.104, next-season -0.143 and -0.136.  Trial 53 by season: 1998 +0.071, 2001 -0.064,
+2004 -0.324, 2007 -0.077, 2010 -0.110, 2013 -0.181, 2016 +0.111, 2019 -0.256, 2022 -0.205, 2025 -0.067.
+
+The settings, `params/booster_params_tune120.json`: offense depth-1 trees, 1,500 rounds (the cap) at learning rate
+0.0045, 633 rows a leaf, column share 0.83, straight-line penalty 0.001 (the floor); defense learning rate 0.003 (the
+floor), 307 rounds, 10 leaves, depth 11, 2,500 rows a leaf (the ceiling), both leaf penalties, path smoothing and the
+straight-line penalty at their floors, 15 bins (the lowest), column share 0.358.  Nine settings sit at the space's limits.
+
+**The matchup screen at those settings**, 56 trials from 12:12 AM to 5:08 AM.  Noise floor, today's lists at seeds 1-4
+against seed 0: -0.0078, +0.0030, +0.0111, -0.0240.  Experiment 110's self-creation shuffled in place: +0.0163, z +0.79.
+
+| input | side | vs copy, today's settings | z | vs copy, retuned | z | moved | z of the move | verdicts |
+|---|---|---|---|---|---|---|---|---|
+| height of the players who guarded him | offense | +0.0019 | +3.03 | -0.0003 | -0.63 | -0.0022 | -3.51 | fails, fails |
+| share of his shared floor guarding the top total creator | defense | -0.0005 | -0.52 | -0.0012 | -1.19 | -0.0007 | -2.26 | fails, fails |
+| share of his defense on the top self-creator | defense | +0.0009 | +0.64 | -0.0000 | -0.02 | -0.0009 | -1.21 | fails, fails |
+| share of his shared floor guarding the top self-creator | defense | +0.0001 | +0.26 | -0.0003 | -0.42 | -0.0004 | -1.16 | fails, fails |
+| self-creation of the players he guarded | defense | +0.0001 | +0.02 | -0.0004 | -0.13 | -0.0004 | -0.52 | fails, fails |
+| total creation of the players he guarded | defense | -0.0010 | -0.54 | -0.0010 | -0.58 | -0.0000 | -0.04 | fails, fails |
+| height of the players he guarded | defense | +0.0004 | +1.50 | +0.0005 | +1.56 | +0.0001 | +0.20 | fails, fails |
+| share of his defense on the top total creator | defense | -0.0005 | -0.43 | -0.0000 | -0.01 | +0.0005 | +0.45 | fails, fails |
+
+**Reading.**
+- No verdict differs: all eight fail at both settings.  By the registered rule the retune did not matter for this pool.
+- The settings do move the readings: two of eight moved beyond z 2, where chance alone gives about 0.4.  The height of
+  the players who guarded him went from worse than its copy in 7 of 8 seasons to even with it; neither move reaches
+  the pass line.
+- A defensive copy costs +0.013 to +0.014 against today's lists at the retuned settings, against +0.022 at today's: the
+  retuned column share, 0.358, also turns 20 inputs into 7 a tree and 21 into 8.
+- **The retune alone does not carry to seasons it never scored.**  Today's lists at the retuned settings against today's
+  settings, 5 seeds averaged, 2018-2025: +0.011, z +0.27, 3 of 8 better.  On the three seasons the search scored, 2019,
+  2022 and 2025: -0.071 (-0.151, -0.096, +0.034).  On the five it never scored, 2018, 2020, 2021, 2023, 2024: +0.060
+  (+0.041, +0.014, -0.073, +0.099, +0.221), z +1.24.  Trap 40 again: a search's winner reads best on what it was
+  searched on.  Adopting these settings would need its own full build, and this reading says it would likely fail.
