@@ -399,6 +399,11 @@ PASSED_121 = {"O": ["assists_minus_turnovers_per100", "shots_per100", "off_rebou
                     "three_point_attempt_share", "team_possession_share", "points_per100", "true_shooting_pct",
                     "self_creation_per100"],
               "D": ["def_rebounds_per100", "shots_per100", "games_started_share", "points_per100", "steals_per100"]}
+# Experiment 122 (the owner, 2026-10-30, on experiment 121's booster: "I just mean like use the features boruta is
+# selecting just use your best judgement"): what Boruta keeps, its passes and its maybes, so today's lists less the one
+# shipped input that does worse than its shuffled copy, loose balls recovered on defense
+SELECTED_122 = {"O": list(_CREATION110["O"]),
+                "D": [name for name in _CREATION110["D"] if name != "loose_balls_recovered_vs_league_avg"]}
 EVERYTHING_121 = list(dict.fromkeys(
     _CREATION110["O"] + _CREATION110["D"] + ["three_point_pct"]
     + [name for pool in (SCREEN_CANDIDATES, SCREEN_CANDIDATES_119, SCREEN_CANDIDATES_MATCHUPS)
@@ -471,6 +476,8 @@ FEATURE_SETS = {
     # experiment 121: the booster's inputs in the blend, and the line's
     "passed121": PASSED_121,
     "everything121": {"O": list(EVERYTHING_121), "D": list(EVERYTHING_121)},
+    # experiment 122: the booster's inputs in the blend
+    "selected122": SELECTED_122,
     # experiment 112's confirming build: the one candidate the screen passed, unassisted makes at the rim and in the
     # paint, appended to the shipped offensive list
     "hustle_no_three_pct_self_creation_unassisted_inside": {"O": _CREATION110["O"] + ["unassisted_makes_inside_per100"],

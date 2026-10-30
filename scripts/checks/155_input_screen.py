@@ -93,10 +93,14 @@ SCREENS = {"screen112": ("screen112_pool", "SCREEN_CANDIDATES", TUNE_SEASONS),
            "screen119": ("screen119_pool", "SCREEN_CANDIDATES_119", TUNE_SEASONS),
            "screen120": ("screen120_pool", "SCREEN_CANDIDATES_MATCHUPS", MATCHUP_SEASONS),
            # experiment 121: the box-score prior blended with a line on every input and every product of two
-           "blend121": ("everything121", None, QUICK_SEASONS)}
-QUICK = {"blend121"}                                # tags read on one repeat of held-back game sets, no year-over-year
-CACHE_FROM = {"blend121": "screen120"}              # tags reading another tag's cache: its rows hold every input
-BLEND_WEIGHTS = (0.0, 0.25, 0.5, 0.75, 1.0)         # the line's share of the box-score prior
+           "blend121": ("everything121", None, QUICK_SEASONS),
+           # experiment 122: the same with the booster on what Boruta keeps
+           "blend122": ("everything121", None, QUICK_SEASONS)}
+QUICK = {"blend121", "blend122"}                    # tags read on one repeat of held-back game sets, no year-over-year
+CACHE_FROM = {"blend121": "screen120", "blend122": "screen120"}     # tags reading another tag's cache
+# a blend tag: (the booster's feature set, the line's shares of the box-score prior, the tag whose lines it reads)
+BLENDS = {"blend121": ("passed121", (0.0, 0.25, 0.5, 0.75, 1.0), "blend121"),
+          "blend122": ("selected122", (0.0, 0.1, 0.25, 0.5), "blend121")}
 PENALTY_SEASON = 2016                               # the season whose training rows choose the line's two penalties
 L1_SHARES = (0.1, 0.5, 0.9)                         # the elastic net's lasso shares tried
 N_ALPHAS = 10                                       # penalties tried for each, from the one that zeroes every column
@@ -483,17 +487,18 @@ def fit_side(tag: str, season: int, side: str, trial: Trial, params: dict | None
 # w of the mean: at w = 0.25 the ten bags three times and the line ten times, 10 of 40.  Each member answers a player
 # with the part of it that never saw him: the bag's own player folds for the booster, the line's own for the line.
 def line_path(tag: str, season: int, side: str) -> Path:
-    return screen_dir(tag) / f"line_{season}_{side}.pkl"
+    """A blend tag's line for one season and side, written under the tag whose lines it reads (`BLENDS`)."""
+    return screen_dir(BLENDS[tag][2]) / f"line_{season}_{side}.pkl"
 
 
 def fit_blend(tag: str, season: int, side: str, trial: Trial, train: pd.DataFrame, params: dict, settings):
-    """A blend trial's prior on one side of one season: the booster on `features.PASSED_121` at the trial's seed, the
-    season's line from `line_path` (the `linear` command), mixed at the trial's weight."""
+    """A blend trial's prior on one side of one season: the booster on the tag's inputs (`BLENDS`) at the trial's
+    seed, the season's line from `line_path` (the `linear` command), mixed at the trial's weight."""
     from openrapm.features import FEATURE_SETS, ROW_FEATURES
     weight = blend_weight(trial)
     trees = None
     if weight < 1:
-        trees = fit_bags(train, FEATURE_SETS["passed121"][side] + ROW_FEATURES, params, settings, trial.seed)
+        trees = fit_bags(train, FEATURE_SETS[BLENDS[tag][0]][side] + ROW_FEATURES, params, settings, trial.seed)
     line = pd.read_pickle(line_path(tag, season, side)) if weight > 0 else None
     return blend_prior(trees, line, weight, trial_lists(trial)[side] + ROW_FEATURES)
 
@@ -744,7 +749,7 @@ def plan(tag: str, seeds: int, base_seeds: int, variant: str = "shipped", all_ar
         # a blend's tag: today's prior and every weight at each seed, seed by seed
         return [trial for seed in range(seeds)
                 for trial in [Trial("base", "-", "-", seed)] + [Trial("blend", "-", weight_name(weight), seed)
-                                                                for weight in BLEND_WEIGHTS]]
+                                                                for weight in BLENDS[tag][1]]]
     trials = [Trial("base", "-", "-", seed, variant) for seed in range(base_seeds)]
     if variant != "shipped" and not all_arms:
         return trials
@@ -1296,7 +1301,7 @@ def run_blends(args) -> int:
     for stage in ("step4", "step3"):
         sub = rows[(rows.stage == stage) & (rows.slice == "all")]
         base = sub[sub.arm == "base"]
-        for weight in BLEND_WEIGHTS:
+        for weight in BLENDS[args.tag][1]:
             arm = sub[(sub.arm == "blend") & (sub.input == weight_name(weight))]
             seeds = sorted(set(arm.seed.unique()) & set(base.seed.unique()))
             if not seeds:

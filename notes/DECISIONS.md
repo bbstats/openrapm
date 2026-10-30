@@ -11133,3 +11133,12 @@ The line's penalties were chosen on these rows and folds, so its numbers are a l
   a prior closer to the long-run label splits credit inside a season worse.  The shipped booster's gentle settings,
   searched on the within-season test, sit far from the label's best fit, on defense most.
 - Not adopted; the owner's call.
+
+## Experiment 122: experiment 121's blend with the booster on what Boruta keeps (the owner, 2026-10-30, on experiment 121's booster cut to the 13 passes: "I just mean like use the features boruta is selecting just use your best judgement"; registered before any result)
+
+Boruta keeps its passes and its maybes and drops its fails, so the booster reads today's lists less the one shipped input
+that does worse than its shuffled copy, loose balls recovered on defense (`features.SELECTED_122`: offense 18, defense
+17).  The line is experiment 121's, its penalties and season fits read from `blend121`.  The line's shares 0, 0.1, 0.25
+and 0.5, the small end, since the line alone lost 1.62.  The same quick screen, tag `blend122`: 2001, 2010, 2019, 2025,
+four held-back game sets a season, draws 0 and 1, against today's prior at the same draws.  At share 0 the arm is
+today's prior without that one input.  Defense keeps 7 inputs a tree at 19 columns, as at 20.  No adoption rule.
