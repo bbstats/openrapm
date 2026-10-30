@@ -44,10 +44,10 @@
       <tr><td>Points per 100</td><td></td><td>Padded</td></tr>
       <tr><td>Field-goal attempts per 100</td><td></td><td>Padded</td></tr>
       <tr><td>Free-throw attempts per 100</td><td></td><td>Padded</td></tr>
-      <tr><td>Self-created shots per 100</td><td>Field-goal attempts + 0.44 &times; free-throw attempts, times the estimated percentage of those shots that were unassisted. Estimated assisted percentage = 73% minus 3 points per assist per 100 minus 1 point per made field goal per 100, held between 0% and 100%.</td><td>Built from padded rates</td></tr>
+      <tr><td>Self-created shots per 100</td><td>The player's field-goal attempts + 0.44 &times; the player's free-throw attempts, times the estimated percentage of those shots that came without an assist. Estimated assisted percentage = 73%, minus 3 points for each assist per 100 the player makes, minus 1 point for each made field goal per 100, held between 0% and 100%.</td><td>Built from padded rates</td></tr>
       <tr><td>True shooting %</td><td></td><td>Padded rates, plus 3 attempts at 54% added</td></tr>
       <tr><td>Effective field-goal %</td><td></td><td>Padded rates, plus 3 shots at 50% added</td></tr>
-      <tr><td>Three-point attempt share</td><td>Three-point attempts divided by field-goal attempts. 40% means 4 in 10 shots were threes.</td><td>Padded rates, plus 3 shots at 25% threes added</td></tr>
+      <tr><td>Three-point attempt rate</td><td>The player's three-point attempts divided by the player's own field-goal attempts, twos plus threes. 40% means 4 of every 10 shots the player took were threes.</td><td>Padded rates, plus 3 shots at 25% threes added</td></tr>
       <tr><td>Assists per 100</td><td></td><td>Padded</td></tr>
       <tr><td>Assists minus turnovers per 100</td><td></td><td>Both padded</td></tr>
       <tr><td>Offensive rebounds per 100</td><td></td><td>Padded</td></tr>
@@ -80,9 +80,9 @@
       <tr><td>Loose balls recovered</td><td></td><td>Padded</td></tr>
       <tr><td>Points per 100</td><td></td><td>Padded</td></tr>
       <tr><td>Field-goal attempts per 100</td><td></td><td>Padded</td></tr>
-      <tr><td>Possessions used per 100</td><td>Field-goal attempts + 0.44 &times; free-throw attempts + turnovers.</td><td>Padded</td></tr>
+      <tr><td>Possessions used per 100</td><td>The player's field-goal attempts + 0.44 &times; the player's free-throw attempts + the player's turnovers.</td><td>Padded</td></tr>
       <tr><td>True shooting %</td><td></td><td>Padded rates, plus 3 attempts at 54% added</td></tr>
-      <tr><td>Share of games started</td><td>Games started divided by games played.</td><td>Not padded</td></tr>
+      <tr><td>Share of games started</td><td>Games the player started divided by games the player played in.</td><td>Not padded</td></tr>
       <tr><td>Share of team possessions</td><td>The player's on-court possessions divided by one team's possessions over the whole season, games missed included. Half of every game all season is 50%. A traded player's teams are added together. Capped at 90%.</td><td>Not padded</td></tr>
       <tr><td>Height</td><td>Listed, in inches, barefoot. Listings before 2020 were in shoes and lose 0.575 inches.</td><td>Not padded</td></tr>
       <tr><td>Weight</td><td>Listed, in pounds.</td><td>Not padded</td></tr>
