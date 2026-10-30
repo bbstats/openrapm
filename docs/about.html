@@ -36,15 +36,15 @@
   </nav>
 
   <h2>Prior inputs</h2>
-  <p>The box-score prior reads one season of stats and nothing from any other season.
+  <p>The box-score prior reads one season of stats, playoffs included, and nothing from any other season.
   "Per 100" means per 100 on-court possessions: team possessions on the offense list, opponent possessions on
-  the defense list. Hustle stats, 2016 on, are per 100 and shown as % above or below the league average.</p>
+  the defense list. Hustle stats, 2017 on, are per 100 and shown as % above or below the league average.</p>
 
   <h3>Padding</h3>
   <p>Over a few hundred possessions most of a rate is luck, so counting stats are
   <a href="https://kmedved.com/2020/08/06/nba-stabilization-rates-and-the-padding-approach/">padded</a>:
   blended with the rate of players who played about as many possessions that season. How much is blended in is
-  measured for each stat and each season, from how well odd-numbered games agree with even-numbered games.</p>
+  measured for each stat and each season: the more of the spread between players is luck, the more is blended in.</p>
   <div class="example">A bench player with 200 possessions and 2.1 steals per 100. Steals that season carry a pad of
   450 possessions, and players with about 200 possessions average 1.4. Padded: 200 &times; 2.1 + 450 &times; 1.4,
   divided by 200 + 450, is 1.6. A starter with 3,000 possessions and the same 2.1 keeps 2.0.</div>
@@ -98,7 +98,7 @@
       <tr><td>True shooting %</td><td></td><td>Padded rates, plus 3 attempts at 54% added</td></tr>
       <tr><td>Share of games started</td><td></td><td>Not padded</td></tr>
       <tr><td>Share of team possessions</td><td></td><td>Not padded</td></tr>
-      <tr><td>Height</td><td>Listed, in inches.</td><td>Not padded</td></tr>
+      <tr><td>Height</td><td>Listed, in inches, barefoot. Listings before 2020 were in shoes and lose 0.575 inches.</td><td>Not padded</td></tr>
       <tr><td>Weight</td><td>Listed, in pounds.</td><td>Not padded</td></tr>
       <tr><td>Possessions played</td><td>On-court possessions behind the stats.</td><td>Not padded</td></tr>
       <tr><td>Season played so far</td><td>1 once the season is over; during it, the share played, 0.25 a quarter in. Keeps a starter's quarter season from looking like a bench player's full season.</td><td>Not padded</td></tr>
