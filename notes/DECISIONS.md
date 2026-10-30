@@ -11089,3 +11089,47 @@ draws 0 and 1; no year-over-year check; screen120's cache, whose training rows a
 prior at draw 0 must give back creation110's folds.  Read: each weighting's change against today's prior at the same
 draws, paired by season, after the shrink and before it, each season apart.  No adoption rule: a quick look for the
 owner, who decides what goes further.
+
+### Experiment 121: result (2026-10-30, `scratch/2026-10-30_blend/run.log`, `linear.log`, `outputs/csv/screen_blend121_blends.csv`, `scratch/2026-10-30_blend/label_check.py`)
+
+The line's penalties, 2016's training rows, five player folds, held-out squared miss against a constant: offense lasso
+share 0.9, penalty 0.0192, 0.361 against 0.943, 128 of 2,098 columns used; defense lasso share 0.9, penalty 0.0296,
+1.839 against 3.154, 152 columns.  The search took 26 minutes: below about a hundredth of the penalty that zeroes every
+column the descent needs 20,000 epochs, about a minute a fit.  The eight season lines then took a minute; each uses
+110-121 columns on offense and 144-146 on defense.
+
+The quick screen, 12 trials from 5:14 to 5:37 PM.  Today's prior at draw 0 gave back creation110's folds to 3.0e-13.
+The within-season WOWY change against today's prior, draws 0 and 1 averaged within each season, paired by season; below
+0 is better:
+
+| the line's share | after the shrink | z | seasons better | 2001 | 2010 | 2019 | 2025 | before the shrink |
+|---|---|---|---|---|---|---|---|---|
+| 0, the booster on the passed inputs alone | +0.332 | +3.84 | 0 of 4 | +0.528 | +0.194 | +0.180 | +0.427 | +0.371 |
+| 0.25 | +0.305 | +2.48 | 0 of 4 | +0.614 | +0.021 | +0.237 | +0.350 | +0.404 |
+| 0.5 | +0.579 | +3.00 | 0 of 4 | +1.013 | +0.075 | +0.589 | +0.640 | +0.728 |
+| 0.75 | +1.050 | +3.84 | 0 of 4 | +1.608 | +0.300 | +1.092 | +1.200 | +1.250 |
+| 1, the line alone | +1.619 | +4.56 | 0 of 4 | +2.304 | +0.637 | +1.632 | +1.902 | +1.887 |
+
+The prior's own target, the held-out players' long-run ratings on 2016's training rows, the same five folds, one bag:
+
+| side | prior | held-out squared miss | share of the spread explained |
+|---|---|---|---|
+| offense | today's booster | 0.408 | 0.567 |
+| offense | the booster on the passed inputs | 0.407 | 0.568 |
+| offense | the line | 0.361 | 0.617 |
+| defense | today's booster | 2.337 | 0.258 |
+| defense | the booster on the passed inputs | 2.501 | 0.206 |
+| defense | the line | 1.839 | 0.416 |
+
+The line's penalties were chosen on these rows and folds, so its numbers are a little flattering.
+
+**Reading.**
+- Every blend is worse than today's prior in every season, and the more line, the worse.
+- Two losses stack.  The booster on the 13 passed inputs alone loses 0.33: the inputs that only reach "maybe" carry
+  weight together, though none beats its shuffled copy alone.  The line then adds to the loss with its share; at a
+  quarter it ties the passed-input booster, +0.305 against +0.332, two seasons each way.
+- The line predicts the prior's own target far better than either booster, most on defense, 0.42 of the spread against
+  0.26, and still makes the within-season test worse.  It is the pattern of experiments 114 and 118 (the networks, Kumo):
+  a prior closer to the long-run label splits credit inside a season worse.  The shipped booster's gentle settings,
+  searched on the within-season test, sit far from the label's best fit, on defense most.
+- Not adopted; the owner's call.
