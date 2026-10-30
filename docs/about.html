@@ -7,8 +7,8 @@
 <link rel="stylesheet" href="site.css">
 <script src="site.js"></script>
 <style>
-  :root { --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6; --band: #f4f3ef; }
-  :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5; --band: #232321; }
+  :root { --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6; }
+  :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5; }
   body { color: var(--ink); font: 14px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
   h2 { font-size: 18px; margin: 18px 0 8px; }
   h3 { font-size: 15px; margin: 18px 0 6px; }
@@ -19,7 +19,6 @@
   th { font-weight: 600; color: var(--muted); font-size: 13px; }
   td:first-child { font-weight: 600; white-space: nowrap; }
   td:last-child { color: var(--muted); width: 26%; }
-  .example { background: var(--band); border-radius: 6px; padding: 10px 14px; max-width: 760px; margin: 0 0 10px; }
   @media (max-width: 640px) { td:first-child { white-space: normal; } td:last-child { width: auto; } }
 </style>
 </head>
@@ -34,21 +33,8 @@
     <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
   </nav>
 
-  <h2>Prior inputs</h2>
-  <p>The box-score prior reads one season of stats, playoffs included, and nothing from any other season.
-  "Per 100" means per 100 on-court possessions: team possessions on the offense list, opponent possessions on
-  the defense list. Hustle stats, 2017 on, are per 100 and shown as % above or below the league average.</p>
-
-  <h3>Padding</h3>
-  <p>Over a few hundred possessions most of a rate is luck, so counting stats are
-  <a href="https://kmedved.com/2020/08/06/nba-stabilization-rates-and-the-padding-approach/">padded</a>:
-  blended with the rate of players who played about as many possessions that season. How much is blended in is
-  measured for each stat and each season: the more of the spread between players is luck, the more is blended in.</p>
-  <div class="example">A bench player with 200 possessions and 2.1 steals per 100. Steals that season carry a pad of
-  450 possessions, and players with about 200 possessions average 1.4. Padded: 200 &times; 2.1 + 450 &times; 1.4,
-  divided by 200 + 450, is 1.6. A starter with 3,000 possessions and the same 2.1 keeps 2.0.</div>
-  <p>Percentages are built from the padded makes and misses, then get a few league-typical attempts added on top,
-  so a player who went 2 for 2 on threes does not read as a 100% shooter.</p>
+  <h2>Prior Inputs</h2>
+  <p>All stats use <a href="https://kmedved.com/2020/08/06/nba-stabilization-rates-and-the-padding-approach/">padding method</a> to reduce noise.</p>
 
   <h3>Offense</h3>
   <table>
