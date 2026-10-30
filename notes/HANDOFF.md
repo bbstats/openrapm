@@ -24,6 +24,13 @@ every number quoted here; read its measurement traps before trusting a number.  
 
 ## Where it stands, 2026-10-29
 
+- **Experiments 121-122, 2026-10-30, verdict the owner's** (DECISIONS.md): the box-score prior as a blend of the booster
+  and an elastic net on all 61 screened inputs and every product of two (`linear_prior.py`), on check 155's quick screen
+  (tags `blend121`, `blend122`: 2001, 2010, 2019, 2025, four held-back game sets, about 1.5-2 minutes a trial).  No share
+  of the line helps: with the booster on what Boruta keeps, a tenth ties, +0.021, larger shares are worse; the booster on
+  the 13 passes alone loses 0.33.  The line explains more of the long-run label than the booster, 0.62 / 0.42 of the
+  spread against 0.57 / 0.26, and splits credit within a season worse.  Today's lists less defensive loose balls
+  recovered tie, -0.009.
 - **Experiment 120, DONE 1:42 PM 2026-10-30, verdict the owner's** (DECISIONS.md, "Experiment 120"; the owner: "let's go to boruta
   town ... hyperparameter tuning + boruta should probably always happen in tandem (or - if it shouldn't we should prove
   it)").  One driver, `scratch/2026-10-29_matchup_screen/run.sh`, log `run.log` beside it, every step resumes:
