@@ -38,34 +38,34 @@
 
   <h3>Offense</h3>
   <table>
-    <thead><tr><th>Input</th><th>What it is</th><th>Padding</th></tr></thead>
+    <thead><tr><th>Input</th><th>Description</th><th>Padding</th></tr></thead>
     <tbody>
       <tr><td>Points per 100</td><td></td><td>Padded</td></tr>
       <tr><td>Field-goal attempts per 100</td><td></td><td>Padded</td></tr>
       <tr><td>Free-throw attempts per 100</td><td></td><td>Padded</td></tr>
-      <tr><td>Self-created shots per 100</td><td>Field-goal attempts + 0.44 &times; free-throw attempts, times the estimated unassisted share. Assisted share = 73% minus 3 points per assist per 100 minus 1 point per made field goal per 100, held between 0% and 100%.</td><td>Built from padded rates</td></tr>
+      <tr><td>Self-created shots per 100</td><td>The player's field-goal attempts + 0.44 &times; the player's free-throw attempts, times the estimated percentage of those shots that came without an assist. Estimated assisted percentage = 73%, minus 3 points for each assist per 100 the player makes, minus 1 point for each made field goal per 100, held between 0% and 100%.</td><td>Built from padded rates</td></tr>
       <tr><td>True shooting %</td><td></td><td>Padded rates, plus 3 attempts at 54% added</td></tr>
       <tr><td>Effective field-goal %</td><td></td><td>Padded rates, plus 3 shots at 50% added</td></tr>
-      <tr><td>Three-point attempt share</td><td></td><td>Padded rates, plus 3 shots at 25% threes added</td></tr>
+      <tr><td>Three-point attempt rate</td><td>The player's three-point attempts divided by the player's own field-goal attempts, twos plus threes. 40% means 4 of every 10 shots the player took were threes.</td><td>Padded rates, plus 3 shots at 25% threes added</td></tr>
       <tr><td>Assists per 100</td><td></td><td>Padded</td></tr>
       <tr><td>Assists minus turnovers per 100</td><td></td><td>Both padded</td></tr>
       <tr><td>Offensive rebounds per 100</td><td></td><td>Padded</td></tr>
-      <tr><td>Offensive rebound share</td><td>Offensive rebounds over total rebounds.</td><td>Padded rates, plus 3 rebounds at 22% offensive added</td></tr>
+      <tr><td>Offensive rebound share</td><td>The player's offensive rebounds divided by the player's total rebounds, offensive plus defensive. Not the share of available rebounds.</td><td>Padded rates, plus 3 rebounds at 22% offensive added</td></tr>
       <tr><td>Steals per 100</td><td></td><td>Padded</td></tr>
       <tr><td>Screen assists</td><td></td><td>Padded</td></tr>
       <tr><td>Points from screen assists</td><td></td><td>Padded</td></tr>
       <tr><td>Offensive box-outs</td><td></td><td>Padded</td></tr>
       <tr><td>Loose balls recovered</td><td></td><td>Padded</td></tr>
-      <tr><td>Share of team possessions</td><td>On-court possessions over one team's full season of possessions, summed across teams, capped at 90%.</td><td>Not padded</td></tr>
+      <tr><td>Share of team possessions</td><td>The player's on-court possessions divided by one team's possessions over the whole season, games missed included. Half of every game all season is 50%. A traded player's teams are added together. Capped at 90%.</td><td>Not padded</td></tr>
       <tr><td>Weight</td><td>Listed, in pounds.</td><td>Not padded</td></tr>
       <tr><td>Possessions played</td><td>On-court possessions behind the stats.</td><td>Not padded</td></tr>
-      <tr><td>Season played so far</td><td>1 once the season is over; during it, the share played, 0.25 a quarter in. Keeps a starter's quarter season from looking like a bench player's full season.</td><td>Not padded</td></tr>
+      <tr><td>Season played so far</td><td>Percentage of the regular season played so far, the same for every player: 100% once the season is over, 25% a quarter of the way in. Keeps a starter's quarter season from looking like a bench player's full season.</td><td>Not padded</td></tr>
     </tbody>
   </table>
 
   <h3>Defense</h3>
   <table>
-    <thead><tr><th>Input</th><th>What it is</th><th>Padding</th></tr></thead>
+    <thead><tr><th>Input</th><th>Description</th><th>Padding</th></tr></thead>
     <tbody>
       <tr><td>Blocks per 100</td><td></td><td>Padded</td></tr>
       <tr><td>Steals per 100</td><td></td><td>Padded</td></tr>
@@ -79,14 +79,14 @@
       <tr><td>Loose balls recovered</td><td></td><td>Padded</td></tr>
       <tr><td>Points per 100</td><td></td><td>Padded</td></tr>
       <tr><td>Field-goal attempts per 100</td><td></td><td>Padded</td></tr>
-      <tr><td>Possessions used per 100</td><td>Field-goal attempts + 0.44 &times; free-throw attempts + turnovers.</td><td>Padded</td></tr>
+      <tr><td>Possessions used per 100</td><td>The player's field-goal attempts + 0.44 &times; the player's free-throw attempts + the player's turnovers.</td><td>Padded</td></tr>
       <tr><td>True shooting %</td><td></td><td>Padded rates, plus 3 attempts at 54% added</td></tr>
-      <tr><td>Share of games started</td><td></td><td>Not padded</td></tr>
-      <tr><td>Share of team possessions</td><td></td><td>Not padded</td></tr>
+      <tr><td>Share of games started</td><td>Games the player started divided by games the player played in.</td><td>Not padded</td></tr>
+      <tr><td>Share of team possessions</td><td>The player's on-court possessions divided by one team's possessions over the whole season, games missed included. Half of every game all season is 50%. A traded player's teams are added together. Capped at 90%.</td><td>Not padded</td></tr>
       <tr><td>Height</td><td>Listed, in inches, barefoot. Listings before 2020 were in shoes and lose 0.575 inches.</td><td>Not padded</td></tr>
       <tr><td>Weight</td><td>Listed, in pounds.</td><td>Not padded</td></tr>
       <tr><td>Possessions played</td><td>On-court possessions behind the stats.</td><td>Not padded</td></tr>
-      <tr><td>Season played so far</td><td>1 once the season is over; during it, the share played, 0.25 a quarter in. Keeps a starter's quarter season from looking like a bench player's full season.</td><td>Not padded</td></tr>
+      <tr><td>Season played so far</td><td>Percentage of the regular season played so far, the same for every player: 100% once the season is over, 25% a quarter of the way in. Keeps a starter's quarter season from looking like a bench player's full season.</td><td>Not padded</td></tr>
     </tbody>
   </table>
 </main>
