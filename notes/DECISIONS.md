@@ -11027,3 +11027,42 @@ against seed 0: -0.0078, +0.0030, +0.0111, -0.0240.  Experiment 110's self-creat
   2022 and 2025: -0.071 (-0.151, -0.096, +0.034).  On the five it never scored, 2018, 2020, 2021, 2023, 2024: +0.060
   (+0.041, +0.014, -0.073, +0.099, +0.221), z +1.24.  Trap 40 again: a search's winner reads best on what it was
   searched on.  Adopting these settings would need its own full build, and this reading says it would likely fail.
+
+### Experiment 120: experiment 119's counts at the retuned settings, and the answer (2026-10-30, `scratch/2026-10-29_matchup_screen/run2.log`, `outputs/csv/screen_screen119_tune120_table.csv`, `outputs/csv/screen_screen119_tune120_tandem.csv`, the sheet's tab "Tandem 120")
+
+screen119's cache rebuilt on today's panel, 5:10 to 5:46 AM: the shipped boosters refitted give back creation110's saved
+priors to under 1e-15 in every season; the dry check gives back creation110's 2025 folds to 3.0e-13; the old cache was
+deleted.  68 trials from 6:20 AM, after the daily update, to 1:42 PM.  Noise floor at the retuned settings, today's
+lists at seeds 1-4 against seed 0: +0.0057, +0.0414, -0.0005, +0.0006.  Experiment 110's self-creation shuffled in
+place: +0.0309, z +2.29.
+
+| input | side | vs copy, today's settings | z | vs copy, retuned | z | moved | z of the move | verdicts |
+|---|---|---|---|---|---|---|---|---|
+| steals over those expected from fouls | defense | +0.0604 | +6.32 | +0.0446 | +5.12 | -0.0157 | -7.16 | fails, fails |
+| goaltends | defense | +0.0029 | +0.39 | -0.0004 | -0.04 | -0.0032 | -1.49 | fails, fails |
+| blocks over those expected from fouls | defense | -0.0102 | -1.18 | -0.0105 | -1.14 | -0.0003 | -0.17 | fails, fails |
+| loose-ball fouls | defense | +0.0035 | +3.21 | +0.0034 | +2.69 | -0.0000 | -0.08 | fails, fails |
+| shots blocked over those expected from attempts | offense | -0.0048 | -0.41 | -0.0013 | -0.09 | +0.0035 | +0.42 | fails, fails |
+| shooting fouls | defense | -0.0039 | -1.16 | -0.0033 | -1.00 | +0.0006 | +0.51 | fails, fails |
+| three-shot trips over those expected from threes | offense | +0.0047 | +1.94 | +0.0062 | +1.52 | +0.0015 | +0.61 | fails, fails |
+| goaltends over those expected from blocks | defense | +0.0042 | +0.18 | +0.0077 | +0.33 | +0.0036 | +0.64 | fails, fails |
+| turnovers over those expected from attempts and assists | offense | +0.0135 | +0.69 | +0.0179 | +1.10 | +0.0043 | +0.84 | fails, fails |
+| assists over those expected from turnovers | offense | +0.0161 | +0.81 | +0.0254 | +1.16 | +0.0093 | +1.70 | fails, fails |
+
+The retune alone on the ten tune seasons, today's lists at the retuned settings minus today's settings, 5 seeds
+averaged: -0.089, z -1.82, 7 of 10 better; by era -0.102 / -0.049 / -0.131; every seed between -0.076 and -0.110;
+next-season check -0.064, z -1.23, 12 of 20.  These are the seasons the search scored.  On the five matchup seasons it
+never scored: +0.060 within season, z +1.24; -0.041 on the next-season check, z -0.45.
+
+**The answer to the owner's question, by the rule registered before the run.**  Across 18 inputs in two pools, the
+retune changed no verdict.  Three readings moved beyond z 2, against about 0.8 expected by chance, and all three moved
+toward their copies: the height of the players who guarded him +0.0019 to -0.0003, steals over those expected from fouls
++0.060 to +0.045, the share of his shared floor on the top total creator -0.0005 to -0.0012.  The retuned boosters are
+gentler, one-split trees on offense and a learning rate of 0.003 with 2,500 rows a leaf on defense, so any one input
+moves them less.  So the screen at today's settings gives the verdicts a retune beside it would have given, and a retune
+adds a search fitted to the screen's own seasons.  What does tie a screen to the settings is rule (2), beating today's
+lists on the mean: on defense the column share's rounding charges any added column, real or shuffled, +0.022 at today's
+settings and +0.013 at the retuned ones.  Rule (1), against the shuffled copy, does not see it.
+
+The retuned settings are not adopted.  Their gain is on the seasons the search scored; the test would be a full build
+judged on the twenty seasons it never read, as experiment 76's was; the owner's call.

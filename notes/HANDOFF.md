@@ -24,7 +24,7 @@ every number quoted here; read its measurement traps before trusting a number.  
 
 ## Where it stands, 2026-10-29
 
-- **Experiment 120, RUNNING since 9:13 AM 2026-10-29** (DECISIONS.md, "Experiment 120"; the owner: "let's go to boruta
+- **Experiment 120, DONE 1:42 PM 2026-10-30, verdict the owner's** (DECISIONS.md, "Experiment 120"; the owner: "let's go to boruta
   town ... hyperparameter tuning + boruta should probably always happen in tandem (or - if it shouldn't we should prove
   it)").  One driver, `scratch/2026-10-29_matchup_screen/run.sh`, log `run.log` beside it, every step resumes:
   1. DONE 3:20 PM: the matchup screen at the shipped settings, check 155 tag `screen120`, seasons 2018-2025
@@ -40,7 +40,10 @@ every number quoted here; read its measurement traps before trusting a number.  
      settings (`screen_screen120_tune120_tandem.csv`, sheet tab "Tandem 120"): no verdict differs, two readings move
      beyond z 2; today's lists at the retuned settings on 2018-2025 +0.011, z +0.27, and +0.060 on the five seasons the
      search never scored;
-  4. experiment 119's ten counts at the tuned settings, then `tandem` (`screen_screen119_tune120_tandem.csv`).
+  4. DONE: experiment 119's ten counts at the tuned settings (`screen_screen119_tune120_tandem.csv`): no verdict
+     differs.  The answer: across 18 inputs the retune changed no verdict; three readings moved beyond z 2, all toward
+     their copies; screening at today's settings stands, and a retune is its own experiment, judged by a full build on
+     the twenty seasons the search never read.  The tune's settings are not adopted.
   Do not edit `src/` or `scripts/checks/155_input_screen.py` until it ends: each step starts fresh processes.  To stop
   it, kill the bash driver and its python children.  When it ends: the tables to the sheet, the reading to DECISIONS.md,
   the experiment's row (`101_log_run.py --exp=120`), the report to the owner with the 2026 top 20 only if a candidate
