@@ -1,0 +1,37 @@
+{
+  "O": {
+    "learner": "lightgbm",
+    "params": {
+      "learning_rate": 0.0045023378395247044,
+      "n_estimators": 1500,
+      "num_leaves": 24,
+      "max_depth": 1,
+      "min_child_samples": 633,
+      "reg_lambda": 0.26286358568870666,
+      "reg_alpha": 5.50016057702208,
+      "max_bin": 127,
+      "path_smooth": 0.07507238917281053,
+      "colsample_bytree": 0.8347192970999697,
+      "linear_tree": true,
+      "linear_lambda": 0.0010000000000000002
+    }
+  },
+  "D": {
+    "learner": "lightgbm",
+    "params": {
+      "learning_rate": 0.003,
+      "n_estimators": 307,
+      "num_leaves": 10,
+      "max_depth": 11,
+      "min_child_samples": 2500,
+      "reg_lambda": 0.0010000000000000002,
+      "reg_alpha": 0.00010000000000000009,
+      "max_bin": 15,
+      "path_smooth": 0.0010000000000000002,
+      "colsample_bytree": 0.3583119205490605,
+      "linear_tree": true,
+      "linear_lambda": 0.001017481006579408
+    }
+  },
+  "note": "check 155's tune tune120 on tag screen120 (experiment 120, 2026-10-30): trial 53 of 80, Optuna's GP sampler on the ten tune seasons, the pool lists, the next-season check a hard limit; against the pool lists at the shipped settings {'change': -0.11007279059963367, 'se': 0.043160707925870324, 'z': -2.5503008613456166, 'better': 8, 'n': 10}; next-season {'change': -0.08646212001629365, 'se': 0.05234483976142833, 'z': -1.6517792472068191, 'better': 12, 'n': 20}"
+}
