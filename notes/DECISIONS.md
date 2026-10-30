@@ -11142,3 +11142,24 @@ that does worse than its shuffled copy, loose balls recovered on defense (`featu
 and 0.5, the small end, since the line alone lost 1.62.  The same quick screen, tag `blend122`: 2001, 2010, 2019, 2025,
 four held-back game sets a season, draws 0 and 1, against today's prior at the same draws.  At share 0 the arm is
 today's prior without that one input.  Defense keeps 7 inputs a tree at 19 columns, as at 20.  No adoption rule.
+
+### Experiment 122: result (2026-10-30, `scratch/2026-10-30_blend/run122.log`, `outputs/csv/screen_blend122_blends.csv`)
+
+10 trials from 6:18 to 6:46 PM; today's prior at draw 0 gave back creation110's folds to 3.0e-13.  The within-season
+WOWY change against today's prior, draws 0 and 1 averaged within each season, paired by season; below 0 is better:
+
+| the line's share | after the shrink | z | seasons better | 2001 | 2010 | 2019 | 2025 | before the shrink |
+|---|---|---|---|---|---|---|---|---|
+| 0, today's lists less defensive loose balls recovered | -0.009 | -0.53 | 3 of 4 | -0.026 | -0.015 | +0.041 | -0.037 | -0.014 |
+| 0.1 | +0.021 | +0.47 | 2 of 4 | +0.099 | -0.066 | +0.096 | -0.045 | +0.049 |
+| 0.25 | +0.146 | +1.48 | 1 of 4 | +0.359 | -0.081 | +0.252 | +0.055 | +0.218 |
+| 0.5 | +0.525 | +2.82 | 0 of 4 | +0.929 | +0.039 | +0.650 | +0.483 | +0.658 |
+
+Today's prior at draw 1 against draw 0: +0.022, the size of the quick screen's draw-to-draw noise.
+
+**Reading.**
+- With the booster on what Boruta keeps, the line still does not help: a tenth is a tie, +0.021, and every larger
+  share is worse, in proportion.  Against the booster alone the tenth is +0.030.  The line fits the long-run ratings
+  better (experiment 121) and splits credit within a season worse, and mixing it in dilutes the booster.
+- Today's lists less defensive loose balls recovered tie today's prior, -0.009, 3 of 4 seasons better; the quick
+  screen cannot resolve that size.  Not adopted; the owner's call.
