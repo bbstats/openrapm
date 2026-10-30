@@ -13,7 +13,7 @@
   h2 { font-size: 18px; margin: 18px 0 8px; }
   h3 { font-size: 15px; margin: 18px 0 6px; }
   p { margin: 0 0 10px; max-width: 760px; }
-  p a { color: var(--accent); }
+  p a, td a { color: var(--accent); }
   table { border-collapse: collapse; width: 100%; max-width: 980px; margin: 0 0 8px; }
   th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
   th { font-weight: 600; color: var(--muted); font-size: 13px; }
@@ -43,23 +43,23 @@
       <tr><td>Points per 100</td><td></td><td>Padded</td></tr>
       <tr><td>Field-goal attempts per 100</td><td></td><td>Padded</td></tr>
       <tr><td>Free-throw attempts per 100</td><td></td><td>Padded</td></tr>
-      <tr><td>Self-created shots per 100</td><td>The player's field-goal attempts + 0.44 &times; the player's free-throw attempts, times the estimated percentage of those shots that came without an assist. Estimated assisted percentage = 73%, minus 3 points for each assist per 100 the player makes, minus 1 point for each made field goal per 100, held between 0% and 100%.</td><td>Built from padded rates</td></tr>
+      <tr><td>Self-created shots per 100</td><td>(FGA per 100 + (0.44 * FTA per 100)) * (<a href="https://thebasketballdistribution.blogspot.com/2012/04/new-stat-sleasy.html">Est % Unassisted FGAtt</a>)</td><td>Built from padded rates</td></tr>
       <tr><td>True shooting %</td><td></td><td>Padded rates, plus 3 attempts at 54% added</td></tr>
       <tr><td>Effective field-goal %</td><td></td><td>Padded rates, plus 3 shots at 50% added</td></tr>
-      <tr><td>Three-point attempt rate</td><td>The player's three-point attempts divided by the player's own field-goal attempts, twos plus threes. 40% means 4 of every 10 shots the player took were threes.</td><td>Padded rates, plus 3 shots at 25% threes added</td></tr>
+      <tr><td>Three-point attempt rate</td><td>3PA / FGA</td><td>Padded rates, plus 3 shots at 25% threes added</td></tr>
       <tr><td>Assists per 100</td><td></td><td>Padded</td></tr>
       <tr><td>Assists minus turnovers per 100</td><td></td><td>Both padded</td></tr>
       <tr><td>Offensive rebounds per 100</td><td></td><td>Padded</td></tr>
-      <tr><td>Offensive rebound share</td><td>The player's offensive rebounds divided by the player's total rebounds, offensive plus defensive. Not the share of available rebounds.</td><td>Padded rates, plus 3 rebounds at 22% offensive added</td></tr>
+      <tr><td>Offensive rebound share</td><td>OREB / (OREB + DREB)</td><td>Padded rates, plus 3 rebounds at 22% offensive added</td></tr>
       <tr><td>Steals per 100</td><td></td><td>Padded</td></tr>
       <tr><td>Screen assists</td><td></td><td>Padded</td></tr>
       <tr><td>Points from screen assists</td><td></td><td>Padded</td></tr>
       <tr><td>Offensive box-outs</td><td></td><td>Padded</td></tr>
       <tr><td>Loose balls recovered</td><td></td><td>Padded</td></tr>
-      <tr><td>Share of team possessions</td><td>The player's on-court possessions divided by one team's possessions over the whole season, games missed included. Half of every game all season is 50%. A traded player's teams are added together. Capped at 90%.</td><td>Not padded</td></tr>
+      <tr><td>Share of team possessions</td><td>On-Court Poss / Team Season Poss, capped at 90%</td><td>Not padded</td></tr>
       <tr><td>Weight</td><td>Listed, in pounds.</td><td>Not padded</td></tr>
-      <tr><td>Possessions played</td><td>On-court possessions behind the stats.</td><td>Not padded</td></tr>
-      <tr><td>Season played so far</td><td>Percentage of the regular season played so far, the same for every player: 100% once the season is over, 25% a quarter of the way in. Keeps a starter's quarter season from looking like a bench player's full season.</td><td>Not padded</td></tr>
+      <tr><td>Possessions played</td><td>On-Court Poss</td><td>Not padded</td></tr>
+      <tr><td>Season played so far</td><td>League Games Played So Far / League Games in a Full Regular Season</td><td>Not padded</td></tr>
     </tbody>
   </table>
 
@@ -79,14 +79,14 @@
       <tr><td>Loose balls recovered</td><td></td><td>Padded</td></tr>
       <tr><td>Points per 100</td><td></td><td>Padded</td></tr>
       <tr><td>Field-goal attempts per 100</td><td></td><td>Padded</td></tr>
-      <tr><td>Possessions used per 100</td><td>The player's field-goal attempts + 0.44 &times; the player's free-throw attempts + the player's turnovers.</td><td>Padded</td></tr>
+      <tr><td>Possessions used per 100</td><td>FGA per 100 + (0.44 * FTA per 100) + TOV per 100</td><td>Padded</td></tr>
       <tr><td>True shooting %</td><td></td><td>Padded rates, plus 3 attempts at 54% added</td></tr>
-      <tr><td>Share of games started</td><td>Games the player started divided by games the player played in.</td><td>Not padded</td></tr>
-      <tr><td>Share of team possessions</td><td>The player's on-court possessions divided by one team's possessions over the whole season, games missed included. Half of every game all season is 50%. A traded player's teams are added together. Capped at 90%.</td><td>Not padded</td></tr>
+      <tr><td>Share of games started</td><td>GS / GP</td><td>Not padded</td></tr>
+      <tr><td>Share of team possessions</td><td>On-Court Poss / Team Season Poss, capped at 90%</td><td>Not padded</td></tr>
       <tr><td>Height</td><td>Listed, in inches, barefoot. Listings before 2020 were in shoes and lose 0.575 inches.</td><td>Not padded</td></tr>
       <tr><td>Weight</td><td>Listed, in pounds.</td><td>Not padded</td></tr>
-      <tr><td>Possessions played</td><td>On-court possessions behind the stats.</td><td>Not padded</td></tr>
-      <tr><td>Season played so far</td><td>Percentage of the regular season played so far, the same for every player: 100% once the season is over, 25% a quarter of the way in. Keeps a starter's quarter season from looking like a bench player's full season.</td><td>Not padded</td></tr>
+      <tr><td>Possessions played</td><td>On-Court Poss</td><td>Not padded</td></tr>
+      <tr><td>Season played so far</td><td>League Games Played So Far / League Games in a Full Regular Season</td><td>Not padded</td></tr>
     </tbody>
   </table>
 </main>
