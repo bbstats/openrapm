@@ -155,3 +155,20 @@ def test_a_frame_with_no_season_column_is_refused():
         S.drop_untrainable(pd.DataFrame({"player_id": [1, 2]}), CFG)
     with pytest.raises(KeyError, match="season"):
         S.drop_untrainable(pd.DataFrame({"window": ["2023", "2025"], "player_id": [1, 2]}), CFG)
+
+
+def test_the_share_played_counts_the_games_the_stints_hold(tmp_path, capsys):
+    """2026-10-30: a game whose play-by-play failed is in the game log with no stints and is not rated; the share
+    counts the games rated and names the others."""
+    cfg = _write(tmp_path, 2026, _gamelog(16))
+    cfg = {**cfg, "first_season": 2026, "last_season": 2027, "paths": {**cfg["paths"], "stints": "data/stints"}}
+    games = [f"00226000{k:02d}" for k in range(1, 5)]
+    pd.DataFrame({"GAME_ID": games}).to_parquet(tmp_path / "data" / "raw" / "gamelog" / "2027_RS.parquet")
+    stints = tmp_path / "data" / "stints"
+    stints.mkdir(parents=True)
+    pd.DataFrame({"game_id": games[:3]}).to_parquet(stints / "2027_RS.parquet")
+    assert S.share_played(2027, cfg) == pytest.approx(3 / S.SCHEDULED_GAMES)
+    assert games[3] in capsys.readouterr().out
+    (stints / "2027_RS.parquet").unlink()
+    assert S.share_played(2027, cfg) == pytest.approx(4 / S.SCHEDULED_GAMES)
+    assert S.share_played(2026, cfg) == 1.0

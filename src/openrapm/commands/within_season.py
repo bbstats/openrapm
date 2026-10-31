@@ -74,7 +74,6 @@ built this way are never step 4's: each fold's summary says `prior_inputs` "whol
 from __future__ import annotations
 
 import json
-import os
 import time
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -1038,19 +1037,26 @@ def check_fold_boosters(out_dir: Path, identity: dict | None) -> None:
     if identity is None:
         return
     record = out_dir / "boosters.json"
-    if record.exists():
+    try:
+        with open(record, "x", encoding="utf-8") as handle:       # the first process of a run writes it
+            handle.write(json.dumps(identity))
+        return
+    except FileExistsError:
+        pass
+    # the processes of one run (`folds_in_parts`) start together: a record another one is still writing reads empty
+    # or, on Windows, refuses to open (2026-10-30, the first night: PermissionError stopped a part)
+    for _ in range(50):
         try:
             held = json.loads(record.read_text(encoding="utf-8"))
-        except ValueError:                # another process of the same run is writing it
-            return
-        if held != identity:
-            raise SystemExit(f"{out_dir} holds folds built from {held.get('boosters')} as it was then "
-                             f"({held.get('bytes')} bytes); {identity['boosters']} is another file now "
-                             f"({identity['bytes']} bytes).  Use another --tag, or remove the folder")
+            break
+        except (OSError, ValueError):
+            time.sleep(0.1)
+    else:
         return
-    temporary = out_dir / f"boosters.{os.getpid()}.tmp"
-    temporary.write_text(json.dumps(identity), encoding="utf-8")
-    os.replace(temporary, record)
+    if held != identity:
+        raise SystemExit(f"{out_dir} holds folds built from {held.get('boosters')} as it was then "
+                         f"({held.get('bytes')} bytes); {identity['boosters']} is another file now "
+                         f"({identity['bytes']} bytes).  Use another --tag, or remove the folder")
 
 
 def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_only: bool = False,

@@ -385,7 +385,10 @@ def test_power_ratings_weigh_each_rating_by_its_share_of_the_last_games_with_blo
                           "rating_total": [1.0] * 5 + [3.0] + [0.0] * 5, "poss_season": [500] * 5 + [40] + [500] * 5})
     document = site.power_document(table, games, 2027, "2026-10-28")
     home = next(team for team in document["teams"] if team["tm"] == "HOM")
-    assert home["o"] == pytest.approx(round(4 + 80 / 190 + 3 * 110 / 190, 2))
+    plain = 4 + 80 / 190 + 3 * 110 / 190                             # the away team's ratings are all 0
+    # each team against the average team, here half the home team's plain sum (2026-10-30)
+    assert home["o"] == pytest.approx(round(plain / 2, 2))
+    assert document["meta"]["average_team"]["o"] == pytest.approx(round(plain / 2, 2))
     assert document["teams"][0]["tm"] == "HOM" and document["meta"]["through"] == "2026-10-22"
     assert document["meta"]["ready"] is False                         # two games, not 10
     # player 6 is under 60 possessions: counted in the sums, shown as the team's last row

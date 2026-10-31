@@ -1325,7 +1325,10 @@ def write_similarity(cfg: dict, ratings_path: Path, data_dir: Path, built: str) 
 # ===================================================================================== the power ratings page
 # Each team as it has played lately: every player's current-season rating times his share of the team's possessions
 # over its last 10 games, summed over the team (the owner's design, 2026-10-28).  Shares add up to 500%, five on the
-# floor, so a team of average players is 0 and the sums are points per 100 possessions above an average team.
+# floor, so the sums are points per 100 possessions above an average team: each side's sum less the mean of the 30
+# teams' sums (meta "average_team").  The ratings are centred on every possession and the shares count blowouts half,
+# so the plain sums put the average team at +0.60 and 17 of 30 teams above it (2026-10-30); a player's row keeps his
+# rating and its share of the plain sum.
 #
 # A possession counts for both teams of a game, on offense and on defense alike.  A blowout possession, the season's
 # garbage time (config garbage_time: the 4th quarter with a margin of 20 or more, or 15 or more in its last 6
@@ -1432,11 +1435,15 @@ def power_document(table: pd.DataFrame, games: pd.DataFrame, season: int, built:
             players.append(["Other players", None, *power_numbers(
                 share, *((others.share * others[column]).sum() / share for column in columns))])
         teams.append(dict(tm=tm, name=rows.name.iloc[0], g=int(rows.g.iloc[0]),
-                          **{side: round(value, 2) for side, value in zip("odt", sums)}, players=players))
+                          **{side: value for side, value in zip("odt", sums)}, players=players))
+    average = {side: float(np.mean([team[side] for team in teams])) for side in "odt"}
+    for team in teams:
+        team.update({side: round(team[side] - average[side], 2) for side in "odt"})
     teams.sort(key=lambda team: -team["t"])
     meta = dict(season=season, through=pd.Timestamp(games.game_date.max()).strftime("%Y-%m-%d"), games=POWER_GAMES,
                 recent_games=RECENT_GAMES, recent_weight=RECENT_WEIGHT, blowout_weight=BLOWOUT_WEIGHT,
-                ready=min(team["g"] for team in teams) >= POWER_GAMES, built=built)
+                ready=min(team["g"] for team in teams) >= POWER_GAMES, built=built,
+                average_team={side: round(value, 2) for side, value in average.items()})
     return dict(meta=meta, teams=teams)
 
 

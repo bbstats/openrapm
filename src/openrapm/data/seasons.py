@@ -156,14 +156,27 @@ SCHEDULED_GAMES = 1230   # a regular season's games since 2004-05: thirty teams,
 
 def share_played(season: int, cfg) -> float:
     """The share of `season`'s regular season played: 1 for a season whose Finals are over, else its regular-season
-    games in the cached game log over the 1,230 scheduled.  The box-score prior is told it (box_prior.rated_rows, the
-    part-season rows of experiment 107).  Example: on the morning of 2026-10-24, 2027's 16 games give 0.013."""
+    games over the 1,230 scheduled.  The box-score prior is told it (box_prior.rated_rows, the part-season rows of
+    experiment 107).  Example: on the morning of 2026-10-24, 2027's 16 games give 0.013.
+
+    The games counted are the cached game log's that the season's stints hold, the games rated: a game whose
+    play-by-play failed to fetch or to parse is in the game log with no stints, and `data ingest` and `data stints` go
+    on without it (2026-10-30).  Such games are named.  Before the stints exist, the game log's count."""
     if int(season) <= trainable_through(cfg):
         return 1.0
+    from .config import resolve
     from .ingest import raw_dir
     path = raw_dir(cfg) / "gamelog" / f"{int(season)}_RS.parquet"
-    games = pd.read_parquet(path, columns=["GAME_ID"]).GAME_ID.nunique() if path.exists() else 0
-    return min(1.0, games / SCHEDULED_GAMES)
+    logged = set(pd.read_parquet(path, columns=["GAME_ID"]).GAME_ID.astype(str)) if path.exists() else set()
+    stints = resolve(cfg, "stints") / f"{int(season)}_RS.parquet"
+    if stints.exists():
+        rated = set(pd.read_parquet(stints, columns=["game_id"]).game_id.astype(str))
+        missing = sorted(logged - rated)
+        if missing:
+            print(f"  {season}: {len(missing)} games of the game log have no stints and are not rated: "
+                  f"{' '.join(missing[:10])}", flush=True)
+        logged &= rated
+    return min(1.0, len(logged) / SCHEDULED_GAMES)
 
 
 def check_trainable(seasons, cfg, what: str = "this fit") -> Trainable:
