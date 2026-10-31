@@ -11335,3 +11335,25 @@ test with the whole season's step 4, by era; at 50% also against the fitted arm,
 
 **The rule.**  Adopted when at no share is the blend worse than today's rule in any era at z +2: it removes the
 midseason jump, so a tie is enough.
+
+### Experiment 109 blended: result (2026-10-31, `outputs/blend109.log`, `outputs/csv/wowy_blend109_cutNN_eras.csv`)
+
+The blend minus today's rule on the rest of each season, both with the whole season's step 4; below 0 is better.  The
+weight on the fitted scales at each share, read off the folds' own logs: 14% at a tenth, 33-34% at a quarter.
+
+| share of season | weight on fitted | era | change | standard error | paired z | seasons better |
+|---|---|---|---|---|---|---|
+| 0.10 | 0.14 | 1997-2006 | +0.231 | 0.048 | +4.77 | 0 of 10 |
+| 0.10 | 0.14 | 2007-2016 | +0.363 | 0.082 | +4.44 | 0 of 10 |
+| 0.10 | 0.14 | 2017-2026 | +0.254 | 0.089 | +2.87 | 2 of 10 |
+| 0.25 | 0.33 | 1997-2006 | +0.135 | 0.062 | +2.18 | 4 of 10 |
+| 0.25 | 0.33 | 2007-2016 | +0.249 | 0.066 | +3.80 | 1 of 10 |
+| 0.25 | 0.33 | 2017-2026 | +0.142 | 0.059 | +2.39 | 2 of 10 |
+| 0.50 | 0.67 | all seasons, against held | +0.050 | 0.034 | +1.48 | 17 of 30 |
+| 0.50 | 0.67 | all seasons, against fitted | -0.073 | 0.026 | -2.81 | 18 of 30 |
+
+**Reading.**  Not adopted by the registered rule: worse than holding in every era at a tenth and a quarter of a season.
+A season's first weeks push the fitted scales so far out, 1.7 to 2.3 against 1.1, that a seventh of the way toward
+them costs more than the whole difference at half a season.  At half a season the blend ties holding and beats fitting.
+So the hold should stay full through at least a quarter of the season; a line from there to fitted at three quarters
+would remove the midseason jump without touching the shares where holding wins big.  `held_scale_blend` stays False.
