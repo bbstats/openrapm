@@ -11208,3 +11208,22 @@ built fresh with today's code (tags `parts107_cutNN_fit30`, `parts107_cutNN_held
 season by the within-season WOWY test with the whole season's step 4.  The rule: the season in progress holds the scale
 up to the share where the fitted scale wins in every era; if held wins at every share tested, it holds through three
 quarters of the regular season.
+
+## Experiment 123: a steadier within-team multiplier (the bug-fix pass's proposal; the owner, 2026-10-30: "steadier multiplier"; registered before any result)
+
+**Why.**  The shrink's within-team layer multiplies each player's distance from his team's average, its four
+multipliers fitted on the held-back stints of each season's 8 nearest fold seasons, the team layer's rule.  The
+offensive games' part jumps between neighbours: 1.293 in 2010, 0.976 in 2011; 1.116 in 2015, 0.871 in 2016.  Fitted on
+one season alone it runs from 0.23 in 2020 to 2.50 in 2011, so the 8-season window lurches whenever 2011 enters or
+leaves.  It moves regulars' offense by a standard deviation of 0.10 per 100, at most 0.33.  The 8-season rule was
+adopted for the team layer's era drift (experiment 55), a team-level finding.
+
+**The change.**  `settings.ShrinkSettings.within_nearest` 0 (`--within-nearest 0`): the within layer's multipliers fitted
+on every fold season the rule allows; the team layer keeps its 8 nearest.  Only the shrink changes, so the candidate
+takes creation110's test table before the shrink and creation110's held-back game sets, and the comparison with today's
+carries no regrouping noise (`scratch/2026-10-30_bugfix/exp123.sh`, tag `steady123`).  The control, the shrink at
+today's settings on the same table (`control123`), must give back creation110's test tables.
+
+**How it is read.**  The within-season WOWY test by era, each system with its own shrink (check 151 `--shrink-flags`,
+fixed tonight so it can see the change), better in every era to adopt; the year-over-year test not worse at z +2; the
+2026 top 20; the within layer's multipliers season by season beside today's.
