@@ -1,7 +1,7 @@
 # Handoff
 
 **What this file is.**  Where the work stands, what waits on the owner, and the commands a session runs.  Rewritten
-on the afternoon of 2026-10-22, its status and next steps on 2026-10-23 (twice), 2026-10-24, 2026-10-26, 2026-10-27, 2026-10-28 and 2026-10-29; the earlier file is in git history.  `DECISIONS.md` is the permanent record and carries
+on the afternoon of 2026-10-22, its status and next steps on 2026-10-23 (twice), 2026-10-24, 2026-10-26, 2026-10-27, 2026-10-28, 2026-10-29 and 2026-10-30; the earlier file is in git history.  `DECISIONS.md` is the permanent record and carries
 every number quoted here; read its measurement traps before trusting a number.  `README.md` says what OpenRAPM is,
 `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's standing rules.
 
@@ -22,7 +22,55 @@ every number quoted here; read its measurement traps before trusting a number.  
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
 
-## Where it stands, 2026-10-29
+## Where it stands, 2026-10-30 night: the bug-fix and make-better pass
+
+The owner: "Bugfix/make better mode. Go."; four answers at 9 PM, all the plan's recommendations.  DECISIONS.md, "The
+bug-fix and make-better pass of 2026-10-30", experiment 109 continued and experiment 123 hold every number.
+
+- **2027's hustle inputs, a live bug since the daily job began, fixed** (6195755, 186424b): the 6 AM job cached the
+  league's placeholder hustle box scores, 55 of 71; and each game's box score fills in over days, so the season in
+  progress now reads the league's season-to-date dashboards.  Its box scores are never cached empty
+  (`dashboards.NotProcessedYet`).  **When 2027's Finals are over: `openrapm data hustle-games 2027 2027 --force`
+  (and `matchup-games`) before its panel.**
+- **The held prior scale, adopted** (experiment 109 and its continuation; `RidgeSettings.held_scale_through` 0.50):
+  the season in progress holds its prior scales at the 8 nearest finished seasons' mean through half its regular
+  season, then fits them.  2027 today: 1.116 / 1.000 held, against 1.72 / 1.83 fitted on 71 games.
+- **What the 6 AM job of 2026-10-31 publishes**: 2027 with both; the first morning these reach the site.  On the
+  same 71 games against the published 2027, players with 60+ possessions move a median 0.63 per 100 in total, the
+  largest 5.20; the top 20 keeps 18 players, Anthony Edwards and Paul George in, Kyrie Irving and Kris Dunn out:
+
+| player | offense | defense | total | published total | published rank |
+|---|---|---|---|---|---|
+| Cooper Flagg | +4.31 | +1.72 | +6.04 | +9.44 | 1 |
+| Luka Dončić | +6.49 | -0.52 | +5.97 | +8.94 | 3 |
+| Victor Wembanyama | +2.59 | +3.27 | +5.86 | +9.08 | 2 |
+| Stephen Curry | +5.14 | -0.58 | +4.57 | +7.27 | 4 |
+| Ty Jerome | +5.00 | -0.79 | +4.21 | +6.12 | 5 |
+| Giannis Antetokounmpo | +3.97 | +0.11 | +4.08 | +6.05 | 6 |
+| Deni Avdija | +3.14 | +0.27 | +3.41 | +5.30 | 7 |
+| Tyrese Maxey | +3.33 | +0.03 | +3.36 | +5.16 | 8 |
+| Ajay Mitchell | +2.72 | +0.59 | +3.31 | +4.80 | 12 |
+| Jayson Tatum | +3.67 | -0.36 | +3.30 | +5.00 | 9 |
+| Dyson Daniels | +0.89 | +2.24 | +3.13 | +4.99 | 10 |
+| Moussa Diabaté | +1.36 | +1.65 | +3.01 | +4.96 | 11 |
+| Alperen Sengun | +2.28 | +0.65 | +2.92 | +4.59 | 13 |
+| Nikola Jokić | +2.03 | +0.80 | +2.82 | +4.22 | 15 |
+| Tyrese Haliburton | +3.32 | -0.52 | +2.80 | +4.06 | 18 |
+| Shai Gilgeous-Alexander | +2.76 | -0.03 | +2.73 | +4.20 | 16 |
+| Zion Williamson | +1.30 | +1.43 | +2.73 | +4.41 | 14 |
+| Scottie Barnes | +0.97 | +1.74 | +2.72 | +4.01 | 20 |
+| Anthony Edwards | +2.88 | -0.21 | +2.67 | +3.92 | 21 |
+| Paul George | +2.05 | +0.58 | +2.63 | +3.86 | 23 |
+
+- **Test tools fixed** (ccb3d9b): the Newey-West z is floored at the plain one, so the plain z rules; check 151 scores
+  each system with its own shrink (`--shrink-flags`) and prints the eras; the full-build script refuses a name already
+  built unless `REUSE=1`; `openrapm folds` records its boosters per folder; 101 logs the within-season test by era and
+  refuses partial or stale readings; the input screen's added arms keep the inputs per tree.
+- **Experiment 123, the steadier within-team multiplier**: see its entry; verdict the owner's.
+- **Open, the owner's call**: a settings check for the morning job (DECISIONS.md, "The rest of the pass": the job runs
+  the working tree's code, and the published tables come from three commands); experiments 111-122's verdicts.
+
+## Where it stood, 2026-10-29
 
 - **Experiments 121-122, 2026-10-30, verdict the owner's** (DECISIONS.md): the box-score prior as a blend of the booster
   and an elastic net on all 61 screened inputs and every product of two (`linear_prior.py`), on check 155's quick screen
