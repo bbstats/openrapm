@@ -243,9 +243,11 @@ class RidgeSettings:
     # the season in progress holds its prior scales, the ridge's unpenalised weight on each side's prior, at the mean
     # of the 8 nearest finished seasons' until this share of its regular season is played: fitted on a season's first
     # games they swing (2027 on 16 games, 2.24 on offense; 2026 on its whole season, 1.17), and held beat fitted on the
-    # rest of every past season at 2%, 5% and 10% of it, in every era (notes/DECISIONS.md, experiment 109, adopted
-    # 2026-10-30).  0 fits them on the season's games throughout
-    held_scale_through: float = 0.10
+    # rest of every past season at 2%, 5%, 10% and 25% of it, in every era, and at half of it in every era by a little
+    # (z -2.1 over all seasons); at three quarters the two tie, so from half a season on the scales are fitted, as a
+    # finished season's are (notes/DECISIONS.md, experiment 109 and its continuation, adopted 2026-10-30).  0 fits them
+    # on the season's games throughout
+    held_scale_through: float = 0.50
     # the step-3 table whose finished seasons' scales the season in progress holds: the published build's own
     held_scale_table: str = "season_ratings_product_step3"
 
