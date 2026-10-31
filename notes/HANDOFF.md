@@ -359,7 +359,7 @@ What else the work of 2026-10-23 left open:
 | 1 | the label | `rapm.py` | one RAPM per player over every season but the rated one; penalties 40,000 / 40,000 / 0 |
 | 2 | box-score prior | `box_prior.py` | LightGBM `lgb1_tune2`, linear leaves; feature set `hustle_no_three_pct_self_creation`, self-creation on offense since experiment 110; five player folds; 10 bags; part-season rows at a quarter, a half and three quarters of each training season since experiment 107 |
 | 2b | swap part of the prior | `second_prior.py` | line `ctx82` on `context_and_types_centred`, team totals held |
-| 3 | the rating | `prior_rapm.py` | RAPM pulled toward the prior, penalty 13,037, centred |
+| 3 | the rating | `prior_rapm.py` | RAPM pulled toward the prior, penalty 13,037, centred; the season in progress holds its prior scales at the 8 nearest finished seasons' mean while it is young (experiment 109, `RidgeSettings.held_scale_through`, adopted 2026-10-30) |
 | 4 | the shrink, with the defense factor | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, 8 nearest fold seasons, defense times 0.89 before 2017 and 0.84 from 2017; folds `creation110_early,creation110_within` since experiment 110, each multiplier read to a full season with the tenth folds `creation110_k10` (experiment 101); two layers since experiment 106: each part's team mean on held-back team-games, each player's deviation from it on held-back stints within games, the within layer times 0.75 on offense and 1.0 on defense |
 | 5 | swap adjustment | `swap_adjust.py` | off: applied share 0, the build skips it |
 
@@ -374,22 +374,28 @@ What else the work of 2026-10-23 left open:
 
 | reading | script | rule |
 |---|---|---|
-| within-season WOWY test | `scripts/checks/151_wowy.py`, stint unit, step 4 as shipped | better in every era, against the incumbent; the noise control beside it |
+| within-season WOWY test | `scripts/checks/151_wowy.py`, stint unit, each system's own step 4 (`--shrink-flags`, the chain passes them) | better in every era, against the incumbent; the noise control beside it; the era table is printed and written (`wowy_<tag>_eras.csv`) |
 | year-over-year test | `scripts/checks/63_yoy.py` | not worse at z +2 |
 | the eye check | `scripts/checks/66_compare.py` | the 2026 top 20 |
 
 - One build: `bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes_late_as_scored "EXTRA RATE
   FLAGS"`, about 50 minutes with 4 processes.  `INC_NAME` and `INC_SYSTEM` name the incumbent's tables and folds,
   `creation110` for both by default; `CONTROL_NAME` the noise control, `noise_creation110`.
-- **The season-page score**: each season, ratings of zero score 0 and the reference 100; the ratings before
-  experiment 82 explain 18.2 a season on this test (the 15.7 in older notes is experiment 63's step 4).
-  `scratch/2026-10-20_charts/season_scores.py` and `season_page.py`; page https://claude.ai/artifact/L7vwSTAvCCKQnj9jnnhYrq.
+- **The season-page score**: each season, ratings of zero score 0 and the reference 100.  The zero line on today's
+  stints is `outputs/csv/wowy_zero_baseline_inputs99_seasons.csv`, column zero, 3,681.6 a season: ratings of zero do
+  not depend on the system, and every system is scored on the same held-back stints.  creation110 explains 19.7 a
+  season, 14.1 to 26.2.  The older file, `wowy_zero_baseline_seasons.csv`, which
+  `scratch/2026-10-20_charts/season_scores.py` reads, predates the parser fixes of 2026-10-22 (3,648.6).
+- **Which z rules**: the plain z.  `z_newey_west` is floored at it since 2026-10-30: unfloored, a noise control
+  read -2.44 against plain -1.83, so noise passed -2 (DECISIONS.md, "The bug-fix and make-better pass of
+  2026-10-30").  Two builds that differ only in the box-score prior's random split differ by about 0.010 on the
+  within-season test.
 - The noise control `noise_creation110` moves the within-season test by -0.017, z -1.83, on its own; a candidate is
   read against today's ratings on the same split, so that noise does not enter its change, but any one build's
   standing carries 0.01-0.02 of it.
 - Every experiment gets a row in `experiments/runs.csv` (`scripts/checks/101_log_run.py`), mirrored to the sheet
-  "OpenRAPM experiments", tab Experiments; the next free row is 111.  Input screens get their own tab ("Input
-  screen 112").
+  "OpenRAPM experiments", tab Experiments; the next free row is 124.  Since 2026-10-30 it reads the within-season
+  test by era too, and refuses a partial or stale reading.  Input screens get their own tab ("Input screen 112").
 
 ## Commands a session runs
 
@@ -404,7 +410,7 @@ What else the work of 2026-10-23 left open:
         the per-game matchups, 400 games a process; rerun until nothing is missing (scratch/2026-10-28_matchups/fetch_driver.py)
     .venv/Scripts/python -m openrapm second-prior --models bags10 --folds bags10_early,bags10_within --tag TAG --inputs SET
         a second prior's line from held-back swaps, about 13 minutes
-    .venv/Scripts/python scripts/checks/101_log_run.py --name=NAME --exp=N --incumbent=inputs99 --idea=owner --verdict=pending --changed="..." --notes="..."
+    .venv/Scripts/python scripts/checks/101_log_run.py --name=NAME --exp=N --idea=owner --verdict=pending --changed="..." --notes="..."
         the experiment table's row
     .venv/Scripts/python scratch/2026-10-21_charts/defense_gap_stats.py
         every 2026 defense rating split by stat against the consensus, about 8 minutes
