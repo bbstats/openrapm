@@ -95,7 +95,7 @@ python -m openrapm data panel
 python -m openrapm data panel --so-far 0.25,0.5,0.75
 python -m openrapm rate --setting test --seasons 2017-2026 --name for_folds --save-models mine
 python -m openrapm folds --models mine --base season_ratings_for_folds_step3 --tag mine_within
-python -m openrapm build --folds mine_within
+python -m openrapm build --folds mine_within --extrapolate-folds=
 python -m openrapm site --bias --decomposition --openrapm-decomposition --similarity
 ```
 
@@ -117,15 +117,16 @@ python -m openrapm site --bias --decomposition --openrapm-decomposition --simila
 4. **The within-season folds**, which step 4 is fitted on. `rate --setting test --save-models` rates
    2017-2026 and saves every season's boosters (the fitted LightGBM models): about 5 minutes. `folds`
    then rates each of those seasons from three quarters of its games with those boosters, twelve times a
-   season, and stores the misses on the quarter held back: about 8 minutes. Rebuilt from the same data,
-   these folds give step 4 exactly the multipliers the shipped folds give (`weightfix_within`, the
-   default of `--folds`).
+   season, and stores the misses on the quarter held back: about 8 minutes. The shipped folds cover every
+   season, `creation110_early` for 1997-2016 and `creation110_within` for 2017-2026 (the default of
+   `--folds`), and each multiplier is read to a full season with folds holding back a tenth of the games,
+   `creation110_k10` (the default of `--extrapolate-folds`).
 5. **`build`** runs the five steps for all thirty seasons and writes `outputs/season_ratings_product.parquet`,
    the published table, with its step-3 and step-4 tables beside it: 927 seconds in the last run.
-   `build --setting test --folds mine_within --name weightfix` (874 seconds in the last run) writes the
-   table the year-over-year test scores, under the incumbent's name, so the chain and the checks find it.
-   Without `--folds`, `build` and `shrink` read `outputs/within/weightfix_within/`, which a fresh build
-   does not have; they stop at step 4 with "no folds in ...", after steps 1-3 have run.
+   `build --setting test --folds mine_within --extrapolate-folds= --name creation110` writes the table the
+   tests score, under the incumbent's name, so the chain and the checks find it. Without `--folds`, `build`
+   and `shrink` read the shipped folds, which a fresh build does not have; they stop at step 4 with "no
+   folds in ...", after steps 1-3 have run.
 6. **`site`** writes `docs/data/ratings.json` (under a second); `--bias` adds `docs/bias.html`;
    `--decomposition` fits plain RAPM for every season and every three-season window for
    `docs/data/decompose_1y.json` and `decompose_3y.json` (319 seconds in the last run); `--similarity` writes
@@ -182,7 +183,15 @@ layer.
 
 ## The test that decides, and how to run an experiment
 
-**The year-over-year test** (`scripts/checks/63_yoy.py`): rate a season from its own games, then predict
+**The within-season WOWY test decides** (`scripts/checks/151_wowy.py`; the owner, 2026-10-15). Each season
+is rated from three quarters of its games, twelve times over, and scored stint by stint on the quarter held
+back, with each team's own level in those games taken out, so what is scored is how the ratings split credit
+among teammates. The paired z is the mean of the 30 season-by-season differences in error, candidate minus
+incumbent, over its standard error. A change must be better in every era, 1997-2006, 2007-2016 and
+2017-2026, read beside the noise control: today's ratings rebuilt with only the box-score prior's random split
+of players changed, which moves this test by about 0.01 on its own.
+
+**The year-over-year test guards it** (`scripts/checks/63_yoy.py`): rate a season from its own games, then predict
 every stint of the season before and of the season after from the ten players' ratings alone, refitting
 only that season's intercept and home edge. The misses are summed to team-games (one team's points in
 one game), so the noise of single possessions cancels before a miss is squared.
@@ -192,8 +201,8 @@ in points per 100 possessions. The mean squared error weights each team-game by 
 factor sqrt(2 / pi) = 0.798 is the ratio of the mean absolute deviation to the standard deviation of a
 normal error, so the score reads as a typical miss rather than a root mean square. It is taken over 28
 scored seasons (1998-2025), each predicted from the season before and from the season after: 56
-observations. The incumbent, `outputs/season_ratings_weightfix.parquet` (experiment 46), reads
-**8.5857**. The tables it scores are built at the test setting (`openrapm build --setting test`), so
+observations. The incumbent, `outputs/season_ratings_creation110.parquet` (experiment 110), reads
+**8.6943**. The tables it scores are built at the test setting (`openrapm build --setting test`), so
 nothing fitted for a season has seen the two seasons that score it.
 
 **The paired z**: for each of the 56 observations, the candidate's team-game mean squared error minus the
@@ -203,17 +212,15 @@ rated season's table counted together, since they move together; check 151 print
 season allowed to move with its neighbours, whose multipliers share fold seasons. Which of them rules is the
 owner's call (notes/DECISIONS.md, the bug-fix pass of 2026-10-22).
 
-A change is adopted when all four hold; ties go to the simpler version.
+A change is adopted when all four hold, on the owner's word; ties go to the simpler version.
 
-- Its paired z is -2 or below. A bug fix, or a fix that removes a bias the held-out audit
-  (`scripts/checks/138_heldout_audit.py`) counts, needs only a tie: z between -2 and +2
-  (`notes/DECISIONS.md`, "The Robustness pass").
+- The within-season WOWY test is better in every era, against the noise control's own movement. A bug fix
+  needs only a tie.
+- The year-over-year test is not worse at a paired z of +2.
 - The consensus shows no gross miss. Experiment 2's rank agreement of 0.570 / 0.656 / 0.651 against a
   minimum of 0.75 was gross and vetoed it; 0.759 against the minimum of the time, 0.76, was not a veto;
   a miss in between (defence 0.689, 8% under, 2026-09-14) went to the owner. The minimum is
   `MIN_RANK_AGREEMENT` in `src/openrapm/consensus.py`.
-- The trade loss is not clearly worse. There is no cutoff: experiment 33b shipped with its defensive trade
-  loss worse at z +5.5, a difference of 0.0007 on a 0.248 scale.
 - The 2026 top 20 on the side-by-side page (`66_compare.py`) is not worse in the owner's reading.
 
 `GLOSSARY.md` defines the consensus and the trade loss; `CONTRIBUTING.md` says what a pull request has to
@@ -222,13 +229,12 @@ show.
 On a fresh build, make the incumbent's files once, then name your folds on every chain:
 
 ```bash
-python -m openrapm build --setting test --folds mine_within --name weightfix
-python scripts/checks/70_tradeset.py --rankings=outputs/season_ratings_weightfix.parquet --team_effects=team --out=tradeset_weightfix
-INC_FOLDS=mine_within bash scripts/experiment_chain.sh NAME DEFENSIVE_TARGET
+python -m openrapm build --setting test --folds mine_within --extrapolate-folds= --name creation110
+INC_FOLDS=mine_within INC_SYSTEM=mine bash scripts/experiment_chain.sh NAME DEFENSIVE_TARGET
 ```
 
-The first writes the incumbent; the second writes its trade-set corrections, which every chain's trade
-loss is paired against. On the project's machine both exist and `INC_FOLDS` can be left out.
+The first writes the incumbent. On the project's machine it exists, with its folds and its noise
+control, and `INC_FOLDS` and `INC_SYSTEM` can be left out.
 
 One experiment is one command:
 
@@ -239,20 +245,21 @@ bash scripts/experiment_chain.sh noise_control points_with_expected_opponent_thr
 
 The second line is the noise control: the incumbent rebuilt with only the players' assignment to the
 prior's five folds changed, which shows how far the readings move when nothing real has changed. The
-chain builds the candidate at the test setting, then reads it against the incumbent:
+chain builds the candidate at the test setting, its own folds for every season, then reads it against the
+incumbent:
 
+- the within-season WOWY test, by era, with the noise control beside it (`151_wowy.py`);
 - the year-over-year test (`63_yoy.py`);
-- the consensus: rank agreement with a blend of public metrics (`64_consensus_report.py`);
-- the 2026 top 20, side by side, as an HTML page (`66_compare.py`);
-- the swap test: does it order teammates the way their lineup swaps do (`90_swap_test.py`);
-- the year-over-year difference by player-quality tier: top 30, 31-90, 91-150, 151-300, 301+
-  (`88_yoy_by_player.py`);
-- the trade loss: how much a player's comings and goings in the seasons either side correct his rating
-  (`70_tradeset.py`, then `73_tradeloss.py`).
+- the 2026 top 20, side by side, as an HTML page (`66_compare.py`).
+
+`FULL_READINGS=1` adds the older readings: the consensus (`64_consensus_report.py`), the swap test
+(`90_swap_test.py`), the year-over-year test by player-quality tier (`88_yoy_by_player.py`) and the trade
+loss (`70_tradeset.py`, then `73_tradeloss.py`). A name is built once: the chain stops on a name whose
+files exist, unless `REUSE=1` says to go on from them.
 
 Every reading goes to `outputs/NAME_chain.log`. A reading that fails is logged and the chain goes on;
 the last line names every reading that failed. The chain does not log the experiment: afterwards,
-`scripts/checks/101_log_run.py --name=NAME --exp=<number> --incumbent=weightfix ...` adds its row to
+`scripts/checks/101_log_run.py --name=NAME --exp=<number> ...` adds its row to
 `experiments/runs.csv` (`CONTRIBUTING.md` gives the whole command).
 
 ## Layout

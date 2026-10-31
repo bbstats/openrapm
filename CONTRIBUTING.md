@@ -21,12 +21,14 @@ decides. `README.md`, "Building the ratings from scratch", builds the data.
 
 ## What a change has to clear
 
-**The year-over-year test decides.** Build the candidate at the test setting and score it with
-`scripts/checks/63_yoy.py` against the incumbent, `outputs/season_ratings_weightfix.parquet`, which reads
-8.5857 points per 100 per team-game (`README.md` defines the score). A change is adopted at a paired z of -2
-or below: z is the mean of the 56 season-by-season differences in team-game mean squared error (28 scored
-seasons, each predicted from the season before and the season after) divided by its standard error, a paired
-t-statistic. Ties go to the simpler and faster version, every time.
+**The within-season WOWY test decides** (`scripts/checks/151_wowy.py`, `README.md` defines it). Build the
+candidate with `scripts/experiment_chain.sh`, which scores it against the incumbent, experiment 110
+(`creation110`), with the noise control `noise_creation110` beside it. A change must be better in every era,
+1997-2006, 2007-2016 and 2017-2026; z is the mean of the 30 season-by-season differences in stint error over
+its standard error, a paired t-statistic. **The year-over-year test guards it** (`scripts/checks/63_yoy.py`):
+not worse at a paired z of +2, the mean of the 56 season-by-season differences in team-game mean squared error
+(28 scored seasons, each predicted from the season before and the season after) over its standard error. Ties go
+to the simpler and faster version, every time.
 
 **Three readings can veto it**, and none of them is ever fitted to:
 
@@ -34,8 +36,6 @@ t-statistic. Ties go to the simpler and faster version, every time.
   A gross miss vetoes; a marginal one does not (0.759 against the minimum of the time, 0.76, is noise on a
   sanity check; the minimum is now 0.75, `MIN_RANK_AGREEMENT` in `src/openrapm/consensus.py`).
   Never choose a constant because it clears a minimum in `tests/test_vs_consensus.py`.
-- **the trade loss** (`scripts/checks/70_tradeset.py`, then `73_tradeloss.py`): it counts every player once,
-  so it sees the bench players the year-over-year test, an error per team-game, barely weighs.
 - **the 2026 top 20** (`scripts/checks/66_compare.py`): the latest season's top of the ratings, side by side
   with the incumbent's.
 
@@ -74,7 +74,7 @@ Report movement in points per 100, never in rank places; under 0.1 per 100 is no
    `scripts/experiment_chain.sh` lists the other switches.
 
    On a fresh build, make the incumbent's files first (`README.md`, "The test that decides") and run every
-   chain with `INC_FOLDS=mine_within`. `OWN_FOLDS=1` then still stops at the audit: it reads a frozen
+   chain with `INC_FOLDS=mine_within INC_SYSTEM=mine`. `OWN_FOLDS=1` then still stops at the audit: it reads a frozen
    threshold file, `outputs/audit_lgb_noonc_2017_thresholds.json`, that no documented command writes.
 3. Read `outputs/NAME_chain.log`: the year-over-year test, the consensus, the 2026 top 20 (an HTML page), the
    swap test, the quality tiers and the trade loss. A reading that fails is logged and the chain goes on; the
@@ -82,13 +82,13 @@ Report movement in points per 100, never in rank places; under 0.1 per 100 is no
 4. Read the slices against the noise control:
 
    ```bash
-   python scripts/checks/135_robust_review.py --cands=NAME --controls=noise_control --ref=weightfix --out=robust_NAME
+   python scripts/checks/135_robust_review.py --cands=NAME --controls=noise_creation110 --ref=creation110 --out=robust_NAME
    ```
 
 5. Add the experiment's row to `experiments/runs.csv` (every number is read from the chain's outputs):
 
    ```bash
-   python scripts/checks/101_log_run.py --name=NAME --exp=<number> --incumbent=weightfix --idea=owner --verdict=pending --changed="one plain sentence"
+   python scripts/checks/101_log_run.py --name=NAME --exp=<number> --idea=owner --verdict=pending --changed="one plain sentence"
    ```
 
 A candidate is never scored on its step-3 table alone: the incumbent has steps 4 and 5, so a candidate
