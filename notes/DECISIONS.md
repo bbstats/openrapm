@@ -11284,3 +11284,26 @@ today's settings on the same table (`control123`), must give back creation110's 
 **How it is read.**  The within-season WOWY test by era, each system with its own shrink (check 151 `--shrink-flags`,
 fixed tonight so it can see the change), better in every era to adopt; the year-over-year test not worse at z +2; the
 2026 top 20; the within layer's multipliers season by season beside today's.
+
+### Experiment 123: result (2026-10-30, `outputs/steady123_chain.log`, `outputs/csv/wowy_steady123_eras.csv`)
+
+The control, the shrink at today's settings on creation110's test table, gave back creation110's step-4 test table to
+0.0.  The candidate's offensive games' part of the within layer moves 0.021 from season to season, against 0.083
+today.  The within-season WOWY test against creation110, both on creation110's folds, each with its own shrink;
+below 0 is better:
+
+| era | change | standard error | paired z | seasons better |
+|---|---|---|---|---|
+| 1997-2006 | -0.068 | 0.021 | -3.23 | 9 of 10 |
+| 2007-2016 | +0.004 | 0.020 | +0.19 | 3 of 10 |
+| 2017-2026 | +0.048 | 0.018 | +2.63 | 3 of 10 |
+| all seasons | -0.005 | 0.014 | -0.37 | 15 of 30 |
+
+The year-over-year test: -0.021, z -1.62, better in 33 of 56, a tie.  2026: players with 1,000+ possessions moved a
+median 0.05 per 100, the largest 0.24; the top 20 the same players but OG Anunoby in, 21st to 20th, and Scottie
+Barnes out, 20th to 21st.
+
+**Reading.**  Not better in every era: better before 2007, worse since 2017.  The within layer's jumps are not only
+noise: the older seasons want a smaller offensive games' part (pooled 1.10-1.15 against today's 1.20-1.37 there) and
+the newer ones a larger one.  Not adopted by the registered rule; the setting stays, off by default.  A middle way, a
+wider window such as 16 seasons, or the 8-season fit pulled part way toward the pooled one, would be a new experiment.
