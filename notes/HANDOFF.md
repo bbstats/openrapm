@@ -78,6 +78,10 @@ bug-fix and make-better pass of 2026-10-30", experiment 109 continued and experi
   prior scales free and its pieces missed the ratings by 0.13.  Fixed (032228c, 58e0d54), the job run again by hand.
   A `PUBLISH=0` dry run stops before the site step, so after a change to step 3 also run `openrapm site
   --openrapm-decomposition --power --out-dir <a scratch folder>`.
+- **The Changelog tab is live** (8d1ca8d, the owner: "We need to put this in the changelog"; wording the owner's pick):
+  two rows dated 2026-10-31, 2027's hustle stats and its prior weight until the season is half over.  New entries go
+  in docs/changelog.html, newest first, one short row per published change, in wording the owner approves; publish
+  through a temporary worktree of origin/main, as the morning job's own checkout is reset each day.
 - **Open, the owner's call**: a settings check for the morning job (DECISIONS.md, "The rest of the pass": the job runs
   the working tree's code, and the published tables come from three commands); experiments 111-122's verdicts.
 
@@ -137,8 +141,8 @@ bug-fix and make-better pass of 2026-10-30", experiment 109 continued and experi
   team's possessions over its last 10 games, blowout possessions (garbage time, config `garbage_time`) counted half;
   shares add to 500%.  Click a team for its players.  A Power tab on every page.  The daily job writes
   docs/data/power.json every morning now that power.html is on main.  Since df01906 the latest 5 games count double
-  the 5 before, and the Power tab stays hidden until every team has played 10 games (meta.ready; site.js).  Published without the Changelog tab, which is
-  still not on main.
+  the 5 before, and the Power tab stays hidden until every team has played 10 games (meta.ready; site.js).  Published without the Changelog tab, which
+  went on main on 2026-10-31 (8d1ca8d).
 - **Published ratings unchanged: creation110.**  Nothing below is published or changes a default.
 - **Experiment 119, play-by-play fouls, goaltends, blocked shots and counts over expected through the Boruta screen;
   ALL TEN FAIL, verdict the owner's** (DECISIONS.md, "Experiment 119"; the owner, 2026-10-28: "go for it and remember
@@ -323,7 +327,8 @@ not run.  DECISIONS.md, "Three noise controls, and the prior made robust to the 
   steadier before the swap step, which takes the gain back.
 - The settings stay in the code, off by default: `--prediction out_of_bag`, `--split-per-bag`, `--bag-draw D`; check 155
   `run --variant`.  Noise controls for today's build: noise_creation110, noise2_creation110, noise3_creation110.
-- The Changelog tab (docs/changelog.html, committed, not published) stays empty: this change did not ship.
+- The Changelog tab stayed empty then: this change did not ship.  Published 2026-10-31 (8d1ca8d) with its first
+  entries.
 - Next: the owner's call.  Open from before: experiments 111 and 112, the foul-type question.
 
 ### The daily job: 2027 is rated and published every morning (2026-10-24)
