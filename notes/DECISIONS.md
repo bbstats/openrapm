@@ -11357,3 +11357,17 @@ A season's first weeks push the fitted scales so far out, 1.7 to 2.3 against 1.1
 them costs more than the whole difference at half a season.  At half a season the blend ties holding and beats fitting.
 So the hold should stay full through at least a quarter of the season; a line from there to fitted at three quarters
 would remove the midseason jump without touching the shares where holding wins big.  `held_scale_blend` stays False.
+
+### Experiment 109 blended from a quarter (the owner, 2026-10-31: "hold to 25%, then line"; registered before any result)
+
+**The change.**  The season in progress's prior scales held in full through a quarter of its regular season, then a
+straight line to its own fitted ones at three quarters: half and half at midseason (`blend_weight(share, 0.75, 0.25)`;
+`RidgeSettings.held_scale_blend` True, `held_scale_blend_from` 0.25, `held_scale_through` 0.75).  Through a quarter it
+is the held arm, from three quarters the fitted arm, both measured; the new reading is at half a season.
+
+**The test**: each season 1997-2026 rated from its games through half its regular season with the weight a half
+(`openrapm folds --cut 0.50 --hold-prior-scale season_ratings_parts107_step3 --blend-through 0.75 --blend-from 0.25`,
+tag `parts107_cut50_line31`), scored on the rest of each season by the within-season WOWY test with the whole season's
+step 4, by era, against holding (`parts107_cut50_held30`) and against fitting (`parts107_cut50_fit30`).
+
+**The rule.**  Adopted when it is not worse than holding in any era at z +2: it removes the midseason jump.
