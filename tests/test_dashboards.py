@@ -165,10 +165,11 @@ def test_hustle_games_are_fetched_once_each_and_a_broken_game_is_listed_not_cach
                             "0042500101": "broken"}
     monkeypatch.setattr(dashboards, "_endpoint_class", lambda name: GameEndpoint)
     monkeypatch.setattr("time.sleep", lambda seconds: None)
+    monkeypatch.setattr(dashboards, "in_progress", lambda cfg: ())
     monkeypatch.setattr(dashboards, "season_game_ids",
                         lambda cfg, season, phases: ["0022500001", "0022500002", "0042500101"])
     out = dashboards.fetch_hustle_games(cfg, [2026], log_every=0)
-    assert (out["games"], out["fetched"], out["empty"]) == (3, 2, 1)
+    assert (out["games"], out["fetched"], out["empty"], out["pending"]) == (3, 2, 1, [])
     assert [game for game, _ in out["failed"]] == ["0042500101"]
     path = dashboards.hustle_game_path(cfg, "0022500001")
     assert path.parts[-2:] == ("2026", "0022500001.parquet")
@@ -224,8 +225,8 @@ class NoPlayers:
 
 def test_a_finished_game_answered_with_no_players_is_a_game_with_no_pairs(cfg, monkeypatch):
     """0022100132 and a few others answer the matchup box score with empty rosters; a finished season's such game is
-    cached with no rows, which matchup_pairs reads as a game with no pairs.  Hustle, or the season in progress, stays a
-    failure and is asked again."""
+    cached with no rows, which matchup_pairs reads as a game with no pairs.  A hustle reader that fails stays a failure;
+    the season in progress's game is not processed yet, asked once, not cached."""
     monkeypatch.setattr(dashboards, "_endpoint_class", lambda name: NoPlayers)
     monkeypatch.setattr("time.sleep", lambda seconds: None)
     monkeypatch.setattr(dashboards, "answers_no_players", lambda game_id: True)
@@ -233,10 +234,42 @@ def test_a_finished_game_answered_with_no_players_is_a_game_with_no_pairs(cfg, m
     frame, cached = dashboards.fetch_game_box("matchups", "0022100132", cfg)
     assert (len(frame), cached, list(frame.columns)) == (0, False, dashboards.NO_PAIRS_COLUMNS)
     assert dashboards.game_box_path(cfg, "matchups", "0022100132").exists()
+    with pytest.raises(RuntimeError, match="IndexError"):
+        dashboards.fetch_game_box("hustle", "0022100132", cfg)
+    with pytest.raises(dashboards.NotProcessedYet, match="not processed"):
+        dashboards.fetch_game_box("matchups", "0022600132", cfg)
     for source, game in (("hustle", "0022100132"), ("matchups", "0022600132")):
-        with pytest.raises(RuntimeError, match="IndexError"):
-            dashboards.fetch_game_box(source, game, cfg)
         assert not dashboards.game_box_path(cfg, source, game).exists()
+
+
+def test_a_game_of_the_season_in_progress_that_names_no_player_is_pending_and_asked_again(cfg, monkeypatch):
+    """By 6 AM the hustle box score of last night's game answers two rows of zeros, team 0 and player 0 (55 of 2027's
+    first 71 games were cached that way, 2026-10-30): such a game is not processed yet, not cached, not retried, and
+    does not fail the run; the next run asks again and keeps the real answer."""
+    placeholder = pd.DataFrame({"gameId": ["0022600146"] * 2, "teamId": [0, 0], "personId": [0, 0],
+                                "deflections": [0, 0]})
+    real = pd.DataFrame({"gameId": ["0022600146"] * 2, "teamId": [1, 2], "personId": [11, 12],
+                         "deflections": [3, 1]})
+    GameEndpoint.calls = []
+    GameEndpoint.answers = {"0022600145": real.assign(gameId="0022600145"), "0022600146": placeholder}
+    monkeypatch.setattr(dashboards, "_endpoint_class", lambda name: GameEndpoint)
+    monkeypatch.setattr("time.sleep", lambda seconds: None)
+    monkeypatch.setattr(dashboards, "in_progress", lambda cfg: (2027,))
+    monkeypatch.setattr(dashboards, "season_game_ids", lambda cfg, season, phases: ["0022600145", "0022600146"])
+    out = dashboards.fetch_hustle_games(cfg, [2027], log_every=0)
+    assert (out["fetched"], out["failed"], out["pending"]) == (1, [], ["0022600146"])
+    assert GameEndpoint.calls == ["0022600145", "0022600146"]                    # asked once, not retried
+    assert not dashboards.hustle_game_path(cfg, "0022600146").exists()
+    assert dashboards.names_a_player(real) and not dashboards.names_a_player(placeholder)
+    GameEndpoint.answers["0022600146"] = real
+    again = dashboards.fetch_hustle_games(cfg, [2027], log_every=0)
+    assert (again["fetched"], again["pending"]) == (1, [])
+    assert pd.read_parquet(dashboards.hustle_game_path(cfg, "0022600146")).deflections.tolist() == [3, 1]
+    from openrapm.commands.cli import build_parser
+    GameEndpoint.answers["0022600147"] = placeholder
+    monkeypatch.setattr(dashboards, "season_game_ids", lambda cfg, season, phases: ["0022600147"])
+    args = build_parser().parse_args(["data", "hustle-games", "2027", "2027"])
+    assert data_command.run_hustle_games(args, cfg) == 0                         # pending does not fail the morning
 
 
 def test_a_request_that_stalls_is_abandoned_after_its_deadline():

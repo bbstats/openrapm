@@ -214,7 +214,8 @@ def run_dashboards(args: argparse.Namespace, cfg: dict) -> int:
 
 def run_hustle_games(args: argparse.Namespace, cfg: dict) -> int:
     """The per-game box score of `args.source` (hustle, tracking or matchups) for every game of the seasons, one
-    request a game, cached; failed games are listed."""
+    request a game, cached; failed games are listed and fail the run.  A game of the season in progress the league
+    has not processed yet is named, not cached, and does not fail the run: the next run asks again."""
     from ..data import dashboards
     first = args.first_season if args.first_season is not None else dashboards.GAME_BOXES[args.source][1]
     last = args.last_season if args.last_season is not None else int(cfg["last_season"])
@@ -222,8 +223,11 @@ def run_hustle_games(args: argparse.Namespace, cfg: dict) -> int:
     out = dashboards.fetch_game_boxes(cfg, args.source, range(first, last + 1), phases(args), delay=args.delay,
                                       limit=getattr(args, "limit", None))
     print(f"{out['games']} games {first}-{last}: {out['fetched']} fetched now ({out['empty']} with no rows), "
-          f"{len(out['failed'])} failed ({time.time() - started:.0f}s)"
+          f"{len(out['failed'])} failed, {len(out['pending'])} not processed by the league yet "
+          f"({time.time() - started:.0f}s)"
           f"{'; stopped at the limit, run it again for the rest' if out['stopped'] else ''}", flush=True)
+    if out["pending"]:
+        print(f"  not processed yet, asked again next time: {' '.join(out['pending'][:20])}", flush=True)
     for game_id, error in out["failed"][:20]:
         print(f"  failed {game_id}: {error}", flush=True)
     return 1 if out["failed"] else 0

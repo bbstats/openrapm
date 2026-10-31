@@ -72,6 +72,7 @@ MODEL_LAYER = [
     "game_rates.py",    # the multi-stat network: league, opponent, padding, the state, training (PyTorch), forecasts
     "game_prior.py",    # the box-score prior game by game: the network's states as panel rows, averages, tables
     "in_context_prior.py",  # the box-score prior from the pretrained Kumo network: the rows shown, the answers kept
+    "linear_prior.py",  # the box-score prior as an elastic net on every input and every product of two (experiment 121)
 ]
 
 # Model code that still reaches its own data, and what through.  Nothing may be added here.

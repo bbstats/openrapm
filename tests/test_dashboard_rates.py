@@ -226,7 +226,7 @@ def test_the_hustle_counts_are_summed_over_the_games_handed_in_and_never_scaled(
     fit = list(games)[:2]
     totals, exact, read = dr.counts(cfg, 2026, fit)
     assert totals["deflections_vs_league_avg"].reindex(IDS).to_numpy() == pytest.approx(np.full(len(IDS), 3.0))
-    assert set(features.HUSTLE_RATES) <= exact and read == set(fit)
+    assert set(features.HUSTLE_RATES) <= exact and read == {"hustle": set(fit), "tracking": set()}
     fold = dr.dashboard_rates(cfg, 2026, IDS, n, fit_share=0.5, game_ids=fit)
     whole_counts = 3.0 * np.ones(len(IDS))
     assert fold["D"]["deflections_vs_league_avg"].to_numpy() == pytest.approx(
@@ -234,7 +234,10 @@ def test_the_hustle_counts_are_summed_over_the_games_handed_in_and_never_scaled(
     assert fold["hustle_games"] == set(fit)
 
 
-def test_a_hustle_game_without_its_file_stops_and_a_season_without_per_game_files_leaves_hustle_missing(cfg):
+def test_a_hustle_game_without_its_file_stops_and_a_season_without_per_game_files_leaves_hustle_missing(cfg,
+                                                                                                       monkeypatch):
+    from openrapm.data import dashboards
+    monkeypatch.setattr(dashboards, "in_progress", lambda cfg: ())                 # 2026 is finished
     write_hustle_games(cfg, 2026, {"0022500001": {int(IDS[0]): 2.0}})
     with pytest.raises(FileNotFoundError, match="openrapm data hustle-games"):
         dr.counts(cfg, 2026, ["0022500001", "0022500002"])
@@ -243,6 +246,35 @@ def test_a_hustle_game_without_its_file_stops_and_a_season_without_per_game_file
     out = dr.dashboard_rates(cfg, 2016, IDS, n, game_ids=["0021500001"])
     assert out["O"][features.HUSTLE_RATES].isna().all().all() and out["hustle_games"] == set()
     assert dr.dashboard_rates(cfg, 2016, IDS, n)["O"][features.HUSTLE_RATES].notna().any().any()
+
+
+def test_the_season_in_progress_reads_the_games_processed_and_divides_by_their_possessions(cfg, monkeypatch):
+    """2027 on a morning: game 1 read, game 2 answered with player 0 only, game 3 not fetched yet.  The counts are game
+    1's, the games read are game 1 alone, and the rates divide by the possessions `possessions_in` gives for game 1;
+    a finished season missing a game still stops."""
+    from openrapm.data import dashboards
+    write_dashboards(cfg, 2027)
+    write_hustle_games(cfg, 2027, {"0022600001": {int(i): 2.0 for i in IDS}, "0022600002": {0: 0.0}})
+    games = ["0022600001", "0022600002", "0022600003"]
+    monkeypatch.setattr(dashboards, "in_progress", lambda cfg: (2027,))
+    totals, exact, read = dr.counts(cfg, 2027, games)
+    assert read == {"hustle": {"0022600001"}, "tracking": set()}
+    assert totals["deflections_vs_league_avg"].reindex(IDS).to_numpy() == pytest.approx(np.full(len(IDS), 2.0))
+    n = {"O": np.full(len(IDS), 3000.0), "D": np.full(len(IDS), 3000.0)}
+    asked = []
+
+    def possessions_in(games_read):
+        asked.append(set(games_read))
+        return {"O": np.full(len(IDS), 1000.0), "D": np.linspace(800.0, 1200.0, len(IDS))}
+    out = dr.dashboard_rates(cfg, 2027, IDS, n, game_ids=games, possessions_in=possessions_in)
+    assert asked == [{"0022600001"}] and out["hustle_games"] == {"0022600001"}
+    counts = totals["deflections_vs_league_avg"].reindex(IDS).to_numpy(float)
+    assert out["D"]["deflections_vs_league_avg"].to_numpy() == pytest.approx(
+        dr.padded_relative(counts, possessions_in({"0022600001"})["D"]), nan_ok=True)
+    assert not np.allclose(out["D"]["deflections_vs_league_avg"].to_numpy(), dr.padded_relative(counts, n["D"]))
+    monkeypatch.setattr(dashboards, "in_progress", lambda cfg: ())
+    with pytest.raises(FileNotFoundError, match="openrapm data hustle-games"):
+        dr.counts(cfg, 2027, games)
 
 
 def test_the_placebo_moves_whole_profiles_among_the_players_who_have_one():
@@ -270,4 +302,5 @@ def test_the_tracking_columns_the_per_game_box_score_holds_are_summed_over_the_g
     fit = ["0022500000", "0022500001"]
     totals, exact, read = dr.counts(cfg, 2026, fit)
     assert totals["touches_vs_league_avg"].reindex(IDS).to_numpy() == pytest.approx(np.full(len(IDS), 3.0))
-    assert "touches_vs_league_avg" in exact and "drives_vs_league_avg" not in exact and read == set(fit)
+    assert "touches_vs_league_avg" in exact and "drives_vs_league_avg" not in exact
+    assert read == {"hustle": set(fit), "tracking": set(fit)}

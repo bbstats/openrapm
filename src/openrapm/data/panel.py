@@ -67,7 +67,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from ..box_rates import box_rates, rate_table
+from ..box_rates import box_rates, player_possessions, rate_table
 from ..design import AWAY_SLOTS, HOME_SLOTS, Design
 from ..features import (
     BIO,
@@ -536,11 +536,15 @@ def season_panel(season: int, cfg: dict, designs: dict, sources: SeasonSources, 
     fouls = box_rates(foul_counts, pad_target=cfg["pad_target"], body=body, pad_k_around=around)
     players = _player_columns(season, cfg, designs, history, fit, sources.debut)
     # the tracking dashboards are season totals: a fold scales them to the share of the season it fits on; the hustle
-    # counts are summed over the games themselves (dashboard_rates.py)
+    # counts are summed over the games themselves, over the possessions of the games read (dashboard_rates.py)
     fit_share = None if fit is None else len(fit) / len(sources.tables.games)
     games = set(sources.tables.games["game_id"].astype(str)) if fit is None else fit
     dashboards = dashboard_rates(cfg, season, players["player_id"].to_numpy(),
-                                 {"O": rates.offence.possessions, "D": rates.defence.possessions}, fit_share, games)
+                                 {"O": rates.offence.possessions, "D": rates.defence.possessions}, fit_share, games,
+                                 possessions_in=lambda read: player_possessions(designs[OFFENCE], read))
+    if dashboards["hustle_games"] and len(dashboards["hustle_games"]) < len(games):
+        print(f"  {season}: per-game hustle numbers from {len(dashboards['hustle_games'])} of {len(games)} games, the "
+              f"rest not processed by the league yet", flush=True)
     rows = pd.concat([_side_rows(side, season, rates, parts, creation, fouls, players, dashboards)
                       for side in SIDES], ignore_index=True)
     if season < GOALTENDS_FROM:                # most goaltends name only the team before 2002 (features.py)

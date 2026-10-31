@@ -255,6 +255,22 @@ MATCHUP_GAMES_FIRST = 2018
 # 0022301230 and some of 2019-20, 2026-10-29): there are no pairs to have.  nba_api's reader fails on that answer with
 # IndexError, so it is read raw and cached as a game with no pairs, these columns and no rows.
 NO_PAIRS_COLUMNS = ["gameId", "teamId", "personIdOff", "personIdDef", "partialPossessions"]
+
+
+class NotProcessedYet(RuntimeError):
+    """A game of the season in progress whose box score names no player yet: the league has not processed it.  Never
+    cached, so it is asked again the next time; `fetch_game_boxes` lists it apart from the failures.
+
+    Why: by 6 AM the hustle box score of a game played the night before answers two rows of zeros, team 0 and player 0.
+    Cached as they came, they were 55 of 2027's first 71 hustle games on 2026-10-30, every one the morning job had
+    fetched, so the season's hustle inputs read opening week alone."""
+
+
+def names_a_player(frame: pd.DataFrame) -> bool:
+    """Whether a per-game box score names at least one player: a person id above 0 in any of its person columns
+    (`personId`, or `personIdOff` and `personIdDef` for the matchups)."""
+    columns = [column for column in frame.columns if column.startswith("personId")]
+    return any(bool((pd.to_numeric(frame[column], errors="coerce") > 0).any()) for column in columns)
 # the per-game box scores fetched game by game: source -> (the nba_api endpoint, its first season with every player).
 # The tracking one (2026-10-15) holds distance, rebound chances, touches, passes, secondary and free-throw assists,
 # contested and uncontested shots, and shots defended at the rim, a part of the tracking dashboards
@@ -309,17 +325,13 @@ def answers_no_players(game_id: str) -> bool:
     return not any((body.get(side) or {}).get("players") for side in ("homeTeam", "awayTeam"))
 
 
-def _no_pairs(source: str, game_id: str, cfg: dict) -> bool:
-    """A matchup game of a finished season the league answers with no players (`NO_PAIRS_COLUMNS`).  A game of the
-    season in progress may not be processed yet, so it stays a failure and is asked again the next time."""
-    return (source == "matchups" and season_of_game(game_id) not in in_progress(cfg)
-            and answers_no_players(game_id))
-
-
 def fetch_game_box(source: str, game_id: str, cfg: dict, force: bool = False, tries: int = 4) -> tuple:
     """(one game's per-game box score of `source` (`GAME_BOXES`), one row per player, or per attacker and defender
-    for the matchups, whether it was read from the cache), cached at `game_box_path`.  A game answered with no rows is
-    cached as it is."""
+    for the matchups, whether it was read from the cache), cached at `game_box_path`.
+
+    A finished season's game answered with no player is cached as it is: a matchup game with no pairs
+    (`NO_PAIRS_COLUMNS`), or a box score with no rows.  A game of the season in progress answered with no player is not
+    processed yet: `NotProcessedYet`, not cached, not retried."""
     path = game_box_path(cfg, source, game_id)
     if path.exists() and not force:
         return pd.read_parquet(path), True
@@ -329,10 +341,14 @@ def fetch_game_box(source: str, game_id: str, cfg: dict, force: bool = False, tr
         try:
             return _endpoint_class(GAME_BOXES[source][0])(game_id=game_id, timeout=TIMEOUT).get_data_frames()[0]
         except IndexError:
-            if _no_pairs(source, game_id, cfg):
+            # nba_api's reader fails on a matchup answer with no players; read raw, it is a game with no pairs
+            if source == "matchups" and answers_no_players(game_id):
                 return pd.DataFrame(columns=NO_PAIRS_COLUMNS)
             raise
     frame = _retry(lambda: answer_within(2 * TIMEOUT, ask), tries=tries, base_sleep=3.0, what=f"{source} {game_id}")
+    if not names_a_player(frame) and season_of_game(game_id) in in_progress(cfg):
+        raise NotProcessedYet(f"{source} {game_id} names no player yet: not processed by the league, asked again "
+                              f"next time")
     frame = frame.astype({column: str for column in frame.columns if frame[column].dtype == object})
     path.parent.mkdir(parents=True, exist_ok=True)
     frame.to_parquet(path, index=False)
@@ -352,14 +368,15 @@ def fetch_hustle_games(cfg: dict, seasons, phases=("RS", "PO"), delay: float = 0
 def fetch_game_boxes(cfg: dict, source: str, seasons, phases=("RS", "PO"), delay: float = 0.6,
                      log_every: int = 250, limit: int | None = None) -> dict:
     """Every game's `source` box score for the seasons and phases, one request at a time, `delay` seconds apart (none
-    after a cached file).  Returns {"games", "fetched", "empty", "failed": [(game_id, error)], "stopped"}; one bad
-    game does not stop the run, and a rerun fetches only what is missing.  OfflineFetch is not forgiven.
+    after a cached file).  Returns {"games", "fetched", "empty", "failed": [(game_id, error)], "pending": [game_id],
+    "stopped"}: "pending" the games of the season in progress the league has not processed yet (`NotProcessedYet`).
+    One bad game does not stop the run, and a rerun fetches only what is missing.  OfflineFetch is not forgiven.
 
     `limit` stops the run after that many games were fetched, "stopped" then True, so a long fetch can run as a chain
     of fresh processes: on 2026-10-28 the matchup fetch stalled twice after about 600 requests in one process, with a
     connection open that never answered, while a fresh process was answered at once."""
     games = [game for season in seasons for game in season_game_ids(cfg, int(season), phases)]
-    out, started = dict(games=len(games), fetched=0, empty=0, failed=[], stopped=False), time.time()
+    out, started = dict(games=len(games), fetched=0, empty=0, failed=[], pending=[], stopped=False), time.time()
     for done, game_id in enumerate(games, start=1):
         if limit is not None and out["fetched"] >= limit:
             out["stopped"] = True
@@ -372,11 +389,14 @@ def fetch_game_boxes(cfg: dict, source: str, seasons, phases=("RS", "PO"), delay
                 time.sleep(delay)
         except OfflineFetch:
             raise
+        except NotProcessedYet:
+            out["pending"].append(game_id)
+            time.sleep(delay)
         except RuntimeError as error:
             out["failed"].append((game_id, str(error)[:300]))
         if log_every and (done % log_every == 0 or done == len(games)):
-            print(f"  {source} games: {done} of {len(games)}, {out['fetched']} fetched, {len(out['failed'])} failed "
-                  f"({time.time() - started:.0f}s)", flush=True)
+            print(f"  {source} games: {done} of {len(games)}, {out['fetched']} fetched, {len(out['failed'])} failed, "
+                  f"{len(out['pending'])} not processed yet ({time.time() - started:.0f}s)", flush=True)
     return out
 
 
@@ -407,7 +427,7 @@ def hustle_game_rows(cfg: dict, season: int) -> pd.DataFrame | None:
     out = pd.DataFrame({"game_id": frame["gameId"].to_numpy(), "player_id": frame["personId"].to_numpy()})
     for name, column in HUSTLE_GAME_COLUMNS.items():
         out[name.lower()] = frame[column].to_numpy(dtype=float)
-    out = out[out["player_id"].notna()].astype({"player_id": np.int64})
+    out = out[out["player_id"] > 0].astype({"player_id": np.int64})          # player 0: a placeholder row
     return out.drop_duplicates(["game_id", "player_id"]).reset_index(drop=True)
 
 
@@ -422,7 +442,9 @@ def game_box_totals(cfg: dict, source: str, season: int, game_ids) -> tuple:
     per-game files (hustle before 2017, tracking before 2014).
 
     A within-season fold hands its fit games, so the held-back games never enter (notes/WITHIN_SEASON_LEDGER.md).  A
-    game of `game_ids` with no file stops the run, naming the command that fetches it.
+    game of `game_ids` with no file stops the run, naming the command that fetches it, but in the season in progress,
+    whose latest games the league may not have processed yet (`NotProcessedYet`).  A box score that names no player is
+    no data: its game is not read.  The rates divide by the possessions of the games read (data/dashboard_rates.py).
 
     Example: the 980 fit games of a 2024 fold give each player his deflections, contested shots, charges drawn, loose
     balls, box-outs and screen assists in those games alone.
@@ -432,12 +454,12 @@ def game_box_totals(cfg: dict, source: str, season: int, game_ids) -> tuple:
         return None, set()
     wanted = {str(game) for game in game_ids}
     missing = sorted(wanted - {path.stem for path in folder.glob("*.parquet")})
-    if missing:
+    if missing and int(season) not in in_progress(cfg):
         raise FileNotFoundError(f"{len(missing)} games of {season} have no {source} box score (first {missing[0]}); "
                                 f"`openrapm data {source}-games` fetches them")
     columns = GAME_COLUMNS[source]
     frame = _season_game_boxes(str(folder), source)
-    frame = frame[frame.gameId.isin(wanted)]
+    frame = frame[frame.gameId.isin(wanted) & (frame.personId > 0)]
     totals = frame.groupby("personId")[list(columns.values())].sum(min_count=1)
     totals.index = totals.index.astype(np.int64)
     # the games actually summed, not the games asked for: the folds' leak check compares these with the fit games,

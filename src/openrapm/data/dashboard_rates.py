@@ -161,10 +161,11 @@ def _per_game(spec: Count, hustle, tracking, games_named: bool) -> tuple:
 
 
 def counts(cfg: dict, season: int, game_ids=None) -> tuple:
-    """(`season_counts`' frame, the columns summed game by game over `game_ids`, the hustle games read)."""
-    hustle, games_read = (None, set()) if game_ids is None else hustle_game_totals(cfg, season, game_ids)
+    """(`season_counts`' frame, the columns summed game by game over `game_ids`, {"hustle", "tracking"}: the games
+    each source's per-game box scores were read from)."""
+    hustle, hustle_read = (None, set()) if game_ids is None else hustle_game_totals(cfg, season, game_ids)
     tracking, tracking_read = (None, set()) if game_ids is None else game_box_totals(cfg, "tracking", season, game_ids)
-    games_read = games_read | tracking_read
+    games_read = {"hustle": hustle_read, "tracking": tracking_read}
     parts, cache, exact = [], {}, set()
 
     def table(source: str, kind: str):
@@ -326,15 +327,21 @@ def shuffled_rows(values: np.ndarray, season: int) -> np.ndarray:
 
 
 def dashboard_rates(cfg: dict, season: int, player_ids, possessions: dict, fit_share: float | None = None,
-                    game_ids=None) -> dict:
+                    game_ids=None, possessions_in=None) -> dict:
     """{"O", "D"}: a frame per side with every `DASHBOARD_RATES` column, one row per player in `player_ids`; and
-    "hustle_games", the games the per-game hustle counts were summed over (empty without them).
+    "hustle_games", the games the per-game hustle and tracking counts were summed over (empty without them).
 
     `possessions` is {"O": offensive possessions, "D": defensive possessions}, each in the order of `player_ids`.
     `fit_share` is the share of the season a within-season fold fits on (None for the whole season): each season-total
     count is multiplied by it (the module docstring).  `game_ids` are the games the rows are built from: the hustle
     counts are summed over them where the season has per-game files, and not scaled.  A column no dashboard has for
     the season is NaN throughout.
+
+    A per-game count whose box scores were read from fewer games than `game_ids` divides by the possessions of the
+    games read, `possessions_in(games)` (same form as `possessions`): in the season in progress the league has not
+    processed last night's games by morning (dashboards.NotProcessedYet), and dividing their possessions among counts
+    that lack them read a player who played last night low by his share of the possessions played then.  Every game of
+    a finished season and of a within-season fold is read, so their rates do not change.
 
     Example: a 2026 player with 12.3 contested twos per 100 possessions in a league at 10.0 reads 0.23 in
     `contested_twos_vs_league_avg` (before padding); a 2012 player reads NaN there.
@@ -343,6 +350,9 @@ def dashboard_rates(cfg: dict, season: int, player_ids, possessions: dict, fit_s
     scale = 1.0 if fit_share is None else float(fit_share)
     ids = np.asarray(player_ids)
     assignments = matchup_rates(cfg, season, ids, fit_share)
+    asked = None if game_ids is None else {str(game) for game in game_ids}
+    partial = {source: possessions_in(read) for source, read in games_read.items()
+               if read and asked is not None and read != asked and possessions_in is not None}
     out = {}
     for side in ("O", "D"):
         n = np.asarray(possessions[side], dtype=float)
@@ -350,7 +360,9 @@ def dashboard_rates(cfg: dict, season: int, player_ids, possessions: dict, fit_s
         for spec in COUNTS:
             if spec.name in totals.columns:
                 factor = 1.0 if spec.name in exact else scale
-                frame[spec.name] = padded_relative(factor * totals[spec.name].reindex(ids).to_numpy(float), n,
+                n_read = (np.asarray(partial[spec.source][side], dtype=float)
+                          if spec.name in exact and spec.source in partial else n)
+                frame[spec.name] = padded_relative(factor * totals[spec.name].reindex(ids).to_numpy(float), n_read,
                                                    spec.measured)
         for spec in OVER_EXPECTED:
             if spec.name in totals.columns:
@@ -360,5 +372,5 @@ def dashboard_rates(cfg: dict, season: int, player_ids, possessions: dict, fit_s
         frame[MATCHUP_RATES] = assignments.to_numpy()
         frame[HUSTLE_PLACEBO] = shuffled_rows(frame[HUSTLE_RATES].to_numpy(float), season)
         out[side] = frame[DASHBOARD_RATES]
-    out["hustle_games"] = games_read
+    out["hustle_games"] = games_read["hustle"] | games_read["tracking"]
     return out

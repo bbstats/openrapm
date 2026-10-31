@@ -57,8 +57,8 @@ import pandas as pd
 import scipy.sparse as sp
 
 __all__ = ["K_MAX", "K_FALLBACK", "PAD_TARGETS", "shrink", "mom_k", "split_half_k", "GameTotals", "game_totals",
-           "league_rates", "pad_k", "possession_bins", "bin_of", "bin_targets", "pad_rates", "lineups", "SideRates",
-           "BoxRates", "box_rates", "rate_table"]
+           "player_possessions", "league_rates", "pad_k", "possession_bins", "bin_of", "bin_targets", "pad_rates",
+           "lineups", "SideRates", "BoxRates", "box_rates", "rate_table"]
 
 K_MAX = 1e5                     # the pad k of a rate that shows no spread between players: the target, all but whole
 K_FALLBACK = 40.0               # mom_k's k when too few players carry a proportion to estimate it
@@ -227,6 +227,29 @@ def game_totals(design) -> GameTotals:
                       counts=table[counts].to_numpy(dtype=float),
                       offensive_possessions=table["poss_off"].to_numpy(dtype=float),
                       defensive_possessions=table["poss_def"].to_numpy(dtype=float))
+
+
+def player_possessions(design, game_ids=None) -> dict:
+    """{"O", "D"}: each player's possessions over the design's counted games (`game_totals`), in the design's player
+    order, as `box_rates` sums them; with `game_ids`, over those games alone.  The per-game hustle counts of the season
+    in progress divide by it, since the league has not processed last night's games by morning
+    (data/dashboard_rates.py).
+
+    Example: a player on the floor for 300 offensive possessions over 4 games, 80 of them last night, has 220 over the
+    other 3."""
+    spec = design.spec
+    player_of = (spec.player_of_player_season if spec.player_of_player_season is not None
+                 else np.arange(spec.n_player_seasons))
+    totals = game_totals(design)
+    keep = np.ones(len(totals.game), dtype=bool)
+    if game_ids is not None:
+        wanted = {str(game) for game in game_ids}
+        chosen = design.games.loc[design.games["game_id"].astype(str).isin(wanted), "game_idx"].to_numpy(np.int64)
+        keep = np.isin(totals.game, chosen)
+    per_season = _sum_matrix(totals.player_season[keep], spec.n_player_seasons)
+    per_player = _sum_matrix(player_of, spec.n_players)
+    return {side: np.asarray(per_player @ (per_season @ values[keep])).ravel()
+            for side, values in (("O", totals.offensive_possessions), ("D", totals.defensive_possessions))}
 
 
 def _sum_matrix(index: np.ndarray, n_out: int) -> sp.csr_matrix:

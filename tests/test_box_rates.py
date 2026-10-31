@@ -13,6 +13,7 @@ from openrapm.box_rates import (
     mom_k,
     pad_k,
     pad_rates,
+    player_possessions,
     shrink,
     split_half_k,
 )
@@ -83,6 +84,23 @@ def test_a_design_cut_to_some_games_counts_only_their_box_scores(design):
     np.testing.assert_allclose(rates.counts, totals)
     assert not np.isin(held, game_totals(part).game).any()
     assert (rates.offence.possessions < box_rates(design).offence.possessions + 1e-9).all()
+
+
+def test_player_possessions_are_box_rates_own_and_can_be_cut_to_some_games(design):
+    """`player_possessions`: with no games named, the possessions `box_rates` divides by; with some, the same over
+    those games alone, as a design cut to them counts (the season in progress's hustle rates, 2026-10-30)."""
+    rates = box_rates(design)
+    whole = player_possessions(design)
+    np.testing.assert_array_equal(whole["O"], rates.offence.possessions)
+    np.testing.assert_array_equal(whole["D"], rates.defence.possessions)
+    games = design.games
+    kept = games.game_id.astype(str).to_numpy()[::2]
+    kept_idx = games.game_idx[games.game_id.astype(str).isin(kept)].to_numpy()
+    cut = box_rates(design.subset(np.isin(design.rows["game_idx"].to_numpy(), kept_idx)))
+    part = player_possessions(design, kept)
+    np.testing.assert_allclose(part["O"], cut.offence.possessions)
+    np.testing.assert_allclose(part["D"], cut.defence.possessions)
+    assert 0 < part["O"].sum() < whole["O"].sum()
 
 
 def test_each_rate_is_padded_toward_its_bin_by_its_season_k(design):

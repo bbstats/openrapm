@@ -91,6 +91,13 @@ def test_the_stat_splits_lists_append_their_parts_where_the_box_count_is_read():
         # experiment 119: the same for its play-by-play counts and counts over expected
         "screen119_pool": {side: feat.FEATURE_SETS["hustle_no_three_pct_self_creation"][side]
                            + feat.SCREEN_CANDIDATES_119[side] for side in ("O", "D")},
+        # experiment 120: the same for the matchup inputs
+        "screen120_pool": {side: feat.FEATURE_SETS["hustle_no_three_pct_self_creation"][side]
+                           + feat.SCREEN_CANDIDATES_MATCHUPS[side] for side in ("O", "D")},
+        # experiments 121 and 122: the blend's booster inputs, and the line's every input ever screened
+        "passed121": feat.PASSED_121,
+        "everything121": {"O": feat.EVERYTHING_121, "D": feat.EVERYTHING_121},
+        "selected122": feat.SELECTED_122,
         "hustle_no_three_pct_self_creation_unassisted_inside": {
             "O": feat.FEATURE_SETS["hustle_no_three_pct_self_creation"]["O"] + ["unassisted_makes_inside_per100"],
             "D": feat.FEATURE_SETS["hustle_no_three_pct_self_creation"]["D"]}}
