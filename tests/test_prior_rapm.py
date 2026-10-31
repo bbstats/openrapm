@@ -177,7 +177,8 @@ def test_a_blended_scale_is_a_straight_line_from_held_to_fitted(design):
     assert [prior_rapm.blend_weight(share, 0.75, 0.25) for share in (0.1, 0.25, 0.5, 0.7, 0.8)] == pytest.approx(
         [0.0, 0.0, 0.5, 0.9, 1.0])
     assert [prior_rapm.blend_weight(share, 0.5, 0.5) for share in (0.49, 0.5)] == [0.0, 1.0]       # a switch
-    assert not PRODUCT.ridge.held_scale_blend, "off until its test passes"
+    assert PRODUCT.ridge.held_scale_blend and (PRODUCT.ridge.held_scale_blend_from,
+                                                PRODUCT.ridge.held_scale_through) == (0.25, 0.75)
 
 
 def test_the_held_scale_is_the_mean_of_the_eight_nearest_other_seasons():
