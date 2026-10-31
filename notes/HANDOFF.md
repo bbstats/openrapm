@@ -32,9 +32,12 @@ bug-fix and make-better pass of 2026-10-30", experiment 109 continued and experi
   progress now reads the league's season-to-date dashboards.  Its box scores are never cached empty
   (`dashboards.NotProcessedYet`).  **When 2027's Finals are over: `openrapm data hustle-games 2027 2027 --force`
   (and `matchup-games`) before its panel.**
-- **The held prior scale, adopted** (experiment 109 and its continuation; `RidgeSettings.held_scale_through` 0.50):
-  the season in progress holds its prior scales at the 8 nearest finished seasons' mean through half its regular
-  season, then fits them.  2027 today: 1.116 / 1.000 held, against 1.72 / 1.83 fitted on 71 games.
+- **The held prior scale, adopted** (experiment 109, its continuation and, 2026-10-31, the line): the season in
+  progress holds its prior scales at the 8 nearest finished seasons' mean through a quarter of its regular season, then
+  a straight line to its own fitted ones at three quarters (`RidgeSettings.held_scale_blend`, `held_scale_blend_from`
+  0.25, `held_scale_through` 0.75; the owner: "If it's just two different shrinkages we should probably just blend
+  between them").  The line from the first game lost at a tenth and a quarter; from a quarter it ties holding at half a
+  season and beats fitting.  2027 today: 1.116 / 1.000 held, against 1.72 / 1.83 fitted on 71 games.
 - **What the 6 AM job of 2026-10-31 publishes**: 2027 with both; the first morning these reach the site.  On the
   same 71 games against the published 2027, players with 60+ possessions move a median 0.63 per 100 in total, the
   largest 5.20; the top 20 keeps 18 players, Anthony Edwards and Paul George in, Kyrie Irving and Kris Dunn out:
@@ -423,7 +426,7 @@ What else the work of 2026-10-23 left open:
 | 1 | the label | `rapm.py` | one RAPM per player over every season but the rated one; penalties 40,000 / 40,000 / 0 |
 | 2 | box-score prior | `box_prior.py` | LightGBM `lgb1_tune2`, linear leaves; feature set `hustle_no_three_pct_self_creation`, self-creation on offense since experiment 110; five player folds; 10 bags; part-season rows at a quarter, a half and three quarters of each training season since experiment 107 |
 | 2b | swap part of the prior | `second_prior.py` | line `ctx82` on `context_and_types_centred`, team totals held |
-| 3 | the rating | `prior_rapm.py` | RAPM pulled toward the prior, penalty 13,037, centred; the season in progress holds its prior scales at the 8 nearest finished seasons' mean while it is young (experiment 109, `RidgeSettings.held_scale_through`, adopted 2026-10-30) |
+| 3 | the rating | `prior_rapm.py` | RAPM pulled toward the prior, penalty 13,037, centred; the season in progress holds its prior scales at the 8 nearest finished seasons' mean through a quarter of its season, then a straight line to its own fitted ones at three quarters (experiment 109, adopted 2026-10-30; the line 2026-10-31) |
 | 4 | the shrink, with the defense factor | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, 8 nearest fold seasons, defense times 0.89 before 2017 and 0.84 from 2017; folds `creation110_early,creation110_within` since experiment 110, each multiplier read to a full season with the tenth folds `creation110_k10` (experiment 101); two layers since experiment 106: each part's team mean on held-back team-games, each player's deviation from it on held-back stints within games, the within layer times 0.75 on offense and 1.0 on defense |
 | 5 | swap adjustment | `swap_adjust.py` | off: applied share 0, the build skips it |
 
