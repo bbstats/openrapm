@@ -5,8 +5,10 @@ today and checks every column it should fill."""
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -57,3 +59,48 @@ def test_every_column_read_off_the_chain_log_is_filled(tmp_path):
 def test_a_missing_year_over_year_file_leaves_its_columns_blank(tmp_path):
     row = logged_row(tmp_path)
     assert row["error"] == "NaN" and row["z"] == "NaN" and row["z_top30"] == "NaN"
+
+
+def run_101(tmp_path: Path, log: str = CHAIN_LOG, seasons=range(1997, 2027), extra=()) -> subprocess.CompletedProcess:
+    """101 on run "cand" against "inc", with a within-season file for `seasons`: cand's stint error 0.1 below inc's in
+    even seasons, 0.05 above in odd ones."""
+    cfg = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
+    cfg["paths"]["outputs"] = str(tmp_path)
+    config = tmp_path / "config.yaml"
+    with open(config, "w", encoding="utf-8") as handle:
+        yaml.safe_dump(cfg, handle)
+    (tmp_path / "cand_chain.log").write_text(log, encoding="utf-8")
+    rows = [f"{system},{season},step4,all,{100.0 + (0.0 if system == 'inc' else -0.1 if season % 2 == 0 else 0.05)}"
+            for season in seasons for system in ("inc", "cand")]
+    (tmp_path / "csv").mkdir(exist_ok=True)
+    (tmp_path / "csv" / "wowy_cand_seasons.csv").write_text("system,season,stage,slice,error\n" + "\n".join(rows),
+                                                             encoding="utf-8")
+    return subprocess.run([sys.executable, str(SCRIPT), "--name=cand", "--exp=p7test", "--incumbent=inc", "--dry",
+                           *extra], capture_output=True, text=True, encoding="utf-8", cwd=ROOT,
+                          env={**os.environ, "OPENRAPM_CONFIG": str(config)})
+
+
+def test_the_within_season_test_is_read_by_era_and_a_partial_or_stale_reading_stops(tmp_path):
+    """2026-10-30: the table reads the test that decides, 151, and refuses a reading that cannot be this build's."""
+    done = run_101(tmp_path)
+    row = {line.split()[0]: " ".join(line.split()[1:]) for line in done.stdout.splitlines() if line.strip()}
+    assert done.returncode == 0 and row["wowy_seasons_better"] == "15 of 30"
+    assert float(row["wowy_change"]) == pytest.approx(-0.025)
+    assert all(row[f"wowy_z_{era}"] != "NaN" for era in ("1997_2006", "2007_2016", "2017_2026"))
+    partial = run_101(tmp_path, seasons=range(2017, 2027))
+    assert partial.returncode != 0 and "10 of 30 seasons" in partial.stderr
+    assert run_101(tmp_path, seasons=range(2017, 2027), extra=["--allow-partial"]).returncode == 0
+    table = tmp_path / "season_ratings_cand.parquet"
+    table.write_bytes(b"")
+    os.utime(table, (time.time() + 60, time.time() + 60))
+    stale = run_101(tmp_path)
+    assert stale.returncode != 0 and "scores an earlier build" in stale.stderr
+
+
+def test_the_log_is_read_from_its_last_run(tmp_path):
+    """A resumed run (REUSE=1) appends to its log: the readings of the last "chain start" win."""
+    later = CHAIN_LOG.replace("0.850    0.781      0.804", "0.860    0.781      0.814")
+    log = "=== chain start: cand\n" + CHAIN_LOG + "=== chain start: cand\n" + later
+    row = {line.split()[0]: " ".join(line.split()[1:]) for line in run_101(tmp_path, log=log).stdout.splitlines()
+           if line.strip()}
+    assert row["consensus"] == "0.814" and row["z_with_without_offense"] == "-2.209"

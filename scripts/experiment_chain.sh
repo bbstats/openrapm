@@ -98,8 +98,8 @@ reading() {            # reading LABEL SCRIPT [FLAGS...]: run one check into the
 # SHRINK_FLAGS: extra flags for `openrapm shrink`, e.g. "--fold-seasons 1997-2026 --nearest 8" (experiment 55).
 # SWAP_FLAGS: extra flags for `openrapm swap`, e.g. "--applied-share 0" to leave step 4's ratings as they are
 # (experiment 82, where the swaps' lesson moved into the second prior).
-# DECIDER_FLAGS: extra flags for the decider (151), e.g. "--defence-factors=NAME:0.9" beside SHRINK_FLAGS'
-# "--defence-factor 0.9", so the decider scores the step 4 that ships.
+# DECIDER_FLAGS: extra flags for the decider (151).  The candidate's SHRINK_FLAGS reach it on their own since 2026-10-30
+# (151 --shrink-flags), so it scores the step 4 the candidate was built with; before, 151 rebuilt the shipped one.
 # SHRINK_TAG=<tag>: the within-season folds step 4's multipliers are read from, outputs/within/<tag>/ (default the
 # incumbent's, INC_FOLDS; with OWN_FOLDS=1 the candidate's own, NAME_within).  `openrapm folds --tag <tag>` makes them.
 # OWN_FOLDS=1 (the Robustness pass, 2026-10-08): save the candidate's boosters (--save-models NAME, every rated season),
@@ -111,7 +111,7 @@ reading() {            # reading LABEL SCRIPT [FLAGS...]: run one check into the
 # 400-draw career null of the 2017-2026 audit of experiment 45 (2026-10-08), so every candidate is judged on the same
 # frozen yardstick.  Both files must exist in outputs/.
 # FIRST_PASS=1: rate 2017-2026 only, its folds and the audit, and stop.  A later full run rates all
-# thirty seasons in one run and keeps the boosters the first pass saved (outputs/prior_models_NAME.pkl).
+# thirty seasons in one run, REUSE=1, and keeps the boosters the first pass saved (outputs/prior_models_NAME.pkl).
 # EARLY_FOLDS=1 (needs OWN_FOLDS=1, refuses FIRST_PASS=1): after the 2017-2026 folds and the audit, also the 1997-2016
 # folds (`openrapm folds --seasons 1997-2016 --tag NAME_early`, about 22 minutes), and step 4 reads both folders
 # (SHRINK_TAG NAME_early,NAME_within) by the shipped rule: each season's multipliers from its 8 nearest fold seasons.
@@ -121,12 +121,29 @@ FIRST_PASS=${FIRST_PASS:-0}
 EARLY_FOLDS=${EARLY_FOLDS:-1}
 FULL_READINGS=${FULL_READINGS:-0}
 CONTROL_TAG=${CONTROL_TAG:-}
+# REUSE=1: go on from a name's files already on disk, a stopped run or FIRST_PASS's second half.  Without it a name is
+# built once: with its boosters, folds, tables, log or readings on disk the chain stops before it starts (2026-10-30: a
+# rerun under one name kept the first run's boosters and folds, since the rate step saves boosters only when there are
+# none and `openrapm folds` skips every fold already written, so step 4 and the decider read the old build while step 3
+# and the year-over-year test read the new one; and the log, appended to, held both runs' readings).
+REUSE=${REUSE:-0}
+if [ "$REUSE" != "1" ]; then
+  FOUND=""
+  BUILT="outputs/prior_models_${NAME}.pkl outputs/within/${NAME}_within outputs/within/${NAME}_early outputs/season_ratings_${NAME}_step3.parquet"
+  [ "${SKIP_BUILD:-0}" = "1" ] && BUILT=""      # SKIP_BUILD=1 starts from the step-3 table, made for it
+  for f in $BUILT outputs/season_ratings_${NAME}.parquet $LOG outputs/yoy_${NAME}.parquet outputs/csv/wowy_${NAME}_seasons.csv; do
+    [ -e "$f" ] && FOUND="$FOUND $f"
+  done
+  [ -z "$FOUND" ] || { echo "$NAME was built before:$FOUND.  Pick a new name, remove those, or REUSE=1 to go on from them"; exit 1; }
+fi
 if [ "$EARLY_FOLDS" = "1" ] && [ "$OWN_FOLDS" != "1" ]; then echo "EARLY_FOLDS=1 needs OWN_FOLDS=1"; exit 1; fi
 if [ "$EARLY_FOLDS" = "1" ] && [ "$FIRST_PASS" = "1" ]; then echo "EARLY_FOLDS=1 rates all thirty seasons; FIRST_PASS=1 rates ten"; exit 1; fi
 if [ "$EARLY_FOLDS" = "1" ]; then SHRINK_TAG=${SHRINK_TAG:-${NAME}_early,${NAME}_within}
 elif [ "$OWN_FOLDS" = "1" ]; then SHRINK_TAG=${SHRINK_TAG:-${NAME}_within}; else SHRINK_TAG=${SHRINK_TAG:-$INC_FOLDS}; fi
 SEASONS=1997-2026
 [ "$FIRST_PASS" = "1" ] && SEASONS=2017-2026
+# every run opens with this line: 101_log_run.py reads the log from the last one on, so a resumed run's readings win
+echo "=== $(date) chain start: $NAME ($TARGET $EXTRA) REUSE=$REUSE SKIP_BUILD=${SKIP_BUILD:-0} SHRINK_FLAGS=${SHRINK_FLAGS:-} DECIDER_FLAGS=${DECIDER_FLAGS:-}" >> $LOG
 if [ "${SKIP_BUILD:-0}" != "1" ]; then
   SAVE=""
   [ "$OWN_FOLDS" = "1" ] && [ ! -f outputs/prior_models_${NAME}.pkl ] && SAVE="--save-models ${NAME}"
@@ -159,7 +176,11 @@ echo "=== $(date) swap adjustment" >> $LOG
 $PY -u -m openrapm swap --base season_ratings_${NAME}_step4 --setting test --folds $SHRINK_TAG --extrapolate-folds= $SHRINK_FLAGS $SWAP_FLAGS --name ${NAME} --types >> $LOG 2>&1 || exit 1
 if [ "$EARLY_FOLDS" = "1" ]; then
   echo "=== $(date) the decider: with or without you, stint by stint, on the held-back games (151)" >> $LOG
-  reading "with or without you" scripts/checks/151_wowy.py --systems=${INC_SYSTEM},${CONTROL_NAME},${NAME} --ref=${INC_SYSTEM} --tag=${NAME} $DECIDER_FLAGS
+  if [ -n "${SHRINK_FLAGS:-}" ]; then
+    reading "with or without you" scripts/checks/151_wowy.py --systems=${INC_SYSTEM},${CONTROL_NAME},${NAME} --ref=${INC_SYSTEM} --tag=${NAME} "--shrink-flags=${NAME}:${SHRINK_FLAGS}" $DECIDER_FLAGS
+  else
+    reading "with or without you" scripts/checks/151_wowy.py --systems=${INC_SYSTEM},${CONTROL_NAME},${NAME} --ref=${INC_SYSTEM} --tag=${NAME} $DECIDER_FLAGS
+  fi
 fi
 echo "=== $(date) the guard: year-over-year" >> $LOG
 reading "year-over-year" scripts/checks/63_yoy.py --rankings=${NAME}=outputs/season_ratings_${NAME}.parquet,incumbent=$INC --ref=incumbent --tag=${NAME} --splits=

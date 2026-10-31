@@ -38,7 +38,8 @@ Words used below
 
 The rule (DECISIONS.md, experiment 112, registered before the run): a candidate passes when, over the tune seasons,
 seeds averaged within each season and paired by season, add beats add_shadow at z -2 or below, add beats the shipped
-lists on the mean, and the guard is not worse at z +2.
+lists on the mean, and the guard is not worse at z +2.  Since 2026-10-30 the added arms show each tree as many inputs
+as today's lists do (`same_inputs_per_tree`): the rounding of the column share had charged every defensive candidate.
 
     python scripts/checks/155_input_screen.py cache --tag screen112 [--seasons ...]  (once, resumes)
     python scripts/checks/155_input_screen.py dry --tag screen112 --seasons 2025  (against creation110)
@@ -450,6 +451,23 @@ def fit_task(tag: str, season: int, side: str, trial: Trial, params: dict | None
     return season, side, out_path
 
 
+def same_inputs_per_tree(params: dict, shipped: int, now: int) -> dict:
+    """One side's LightGBM settings with the column share that shows each tree as many of `now` inputs as the shipped
+    share shows of the `shipped` inputs today's lists hold.
+
+    LightGBM rounds share x inputs to a whole count, at least 2: the defensive share 0.367 shows a tree 7 of 20 inputs
+    and 8 of 21, so any input added on defense paid +0.022 against today's lists on 2018-2025, and +0.004 on the ten
+    tune seasons, for the rounding alone (experiment 120, scratch/2026-10-29_matchup_screen/column_share.py), which
+    biased the rule's second part, "beats today's lists on the mean", against every defensive candidate (fixed
+    2026-10-30).  The first part is untouched: the added arm and its shuffled copy hold the same count either way.
+    The offensive 0.536 shows 11 of 20 and 11 of 21 already.  Settings without a column share pass through."""
+    share = params.get("colsample_bytree")
+    if share is None or share >= 1.0:
+        return params
+    count = max(int(shipped * share + 0.5), min(2, shipped))
+    return {**params, "colsample_bytree": count / now}
+
+
 def fit_side(tag: str, season: int, side: str, trial: Trial, params: dict | None):
     """The trial's boosters on one side of one season (`fit_task`)."""
     from openrapm.data.config import load_config
@@ -472,6 +490,8 @@ def fit_side(tag: str, season: int, side: str, trial: Trial, params: dict | None
     names = trial_lists(trial)[side]
     if params is None:
         params = _FIT["params"][settings.prior.booster_file][side]
+    if trial.arm in ("add", "add_shadow") and trial.side == side:
+        params = same_inputs_per_tree(params, len(shipped_lists()[side] + ROW_FEATURES), len(names + ROW_FEATURES))
     if trial.arm == "blend":
         return fit_blend(tag, season, side, trial, train, params, settings)
     if params.get("learner") == LEARNER:

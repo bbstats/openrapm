@@ -8,16 +8,25 @@ mirrored to the "OpenRAPM experiments" Google Sheet, whose header row is HEADERS
 table in the form the Sheets connector writes.
 
 Reads
+    outputs/csv/wowy_<tag>_seasons.csv   the within-season WOWY test (151), the test that decides: each season's
+                                         stint error at the shipped stage, the candidate against `--wowy-ref`
     outputs/yoy_<tag>.parquet            the year-over-year test (63): the error per team-game, the paired z and
                                          seasons better, each direction's z, and the order-only z (stint level,
                                          each side rescaled to the scored season)
     outputs/yoy_by_player_<tag>.parquet  the same split by quality tier (88): the top-30 z
     the chain log                        consensus agreement (64), the swap test's net order (90), the trade loss
-                                         (73), read off the printed tables
+                                         (73), read off the printed tables of the log's last run ("chain start")
+Refuses (2026-10-30) a reading that cannot be this build's: a year-over-year file short of its 56 readings or a
+within-season file short of its 30 seasons (a run that stopped part way; `--allow-partial` for one meant to be
+partial), and either file older than the candidate's ratings table (an earlier build's, left by a reading that
+failed).
 Writes
     experiments/runs.csv (not with `--dry`, which prints the row and writes nothing)
 
 How to read a row
+    wowy_change, wowy_z     the within-season WOWY test: the mean over seasons of the candidate's stint mean squared
+                            error minus the reference's (below zero = better), its paired t-statistic over seasons,
+                            seasons better, and the paired t-statistic in each era
     error, baseline_error   the year-over-year error per team-game, points per 100, candidate and incumbent
     change, z               the paired mean difference in team-game mean squared error (below zero = better) and
                             its paired t-statistic; seasons_better counts the scored-season observations won
@@ -29,7 +38,8 @@ replacement level of experiment 11: -0.144, z -5.24, 42 of 56.
 
     python scripts/checks/101_log_run.py --name=shotmix --exp=34 --idea=owner --verdict=pending
             --changed="one sentence, plain words" [--notes="..."] [--date=2026-10-04]
-            [--incumbent=weightfix] [--log=outputs/<name>_chain.log] [--command="..."] [--dry]
+            [--incumbent=creation110] [--wowy-ref=<system>] [--log=outputs/<name>_chain.log] [--command="..."]
+            [--dry] [--allow-partial]
             [--tag=<name>] [--system=<name>] [--compared=outputs/season_ratings_<incumbent>.parquet]
     python scripts/checks/101_log_run.py --sheet      (print the table as rows for the Google Sheet)
 
@@ -54,6 +64,7 @@ from openrapm.scoring import paired, pooled
 # The table's columns, in order; plain names because the owner reads this table directly.  American spelling and
 # standard terms: this table is read outside the project (the owner, 2026-10-04).
 COLUMNS = ("exp", "date", "name", "proposed_by", "change_made", "verdict",
+           "wowy_change", "wowy_z", "wowy_seasons_better", "wowy_z_1997_2006", "wowy_z_2007_2016", "wowy_z_2017_2026",
            "error", "baseline_error", "change", "z", "seasons_better",
            "z_next_season", "z_previous_season", "z_order_only", "z_top30",
            "swap_order_change", "z_swap_order",
@@ -62,19 +73,25 @@ COLUMNS = ("exp", "date", "name", "proposed_by", "change_made", "verdict",
            "baseline", "notes", "command", "commit")
 # The Google Sheet's header row ("OpenRAPM experiments", tab Experiments), one per column above.
 HEADERS = ("Exp", "Date", "Name", "Proposed by", "Change", "Result",
+           "Within-season WOWY: change in stint MSE (neg = better)", "Within-season WOWY: z (paired by season)",
+           "Within-season WOWY: seasons improved", "Within-season WOWY: z, 1997-2006",
+           "Within-season WOWY: z, 2007-2016", "Within-season WOWY: z, 2017-2026",
            "Holdout error (pts/100 per team-game)", "Baseline holdout error",
            "Change in team-game MSE (neg = better)",
            "z (paired by season)", "Seasons improved", "z, predicting next season", "z, predicting prior season",
            "z, rank order only (scale-adjusted)", "z, top-30 players",
            "Lineup-swap test: rank-order change (pos = better)",
            "Lineup-swap test: z", "Spearman vs. consensus", "Baseline Spearman", "Offense SD ratio vs. consensus",
-           "Baseline offense SD ratio", "With/without residual, offense: z (neg = better)",
-           "With/without residual, defense: z (neg = better)", "Baseline ratings file", "Notes", "Command", "Commit")
+           "Baseline offense SD ratio", "Trade loss, offense: z (neg = better)",
+           "Trade loss, defense: z (neg = better)", "Baseline ratings file", "Notes", "Command", "Commit")
 TEXT_COLUMNS = ("exp", "commit")          # given a leading apostrophe in the sheet so Sheets keeps them as text
 NUM = r"([+-]?\d+\.\d+)"                  # a printed decimal number
 # 63's "prev" rows are the PREVIOUS season's rating looking forward, i.e. predicting the next season.
 DIRECTION_COLUMNS = (("prev", "z_next_season"), ("next", "z_previous_season"))
 TRADE_LOSS_COLUMNS = (("offense", "z_with_without_offense"), ("defense", "z_with_without_defense"))
+ERAS = (("1997_2006", 1997, 2006), ("2007_2016", 2007, 2016), ("2017_2026", 2017, 2026))
+YOY_READINGS = 56                         # 28 scored seasons, each predicted from the season before and the one after
+WOWY_SEASONS = 30
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -83,8 +100,11 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--sheet", action="store_true", help="print the table as rows for the Google Sheet")
     parser.add_argument("--name", help="the run's name (required unless --sheet)")
     parser.add_argument("--exp", help="the experiment number, the row's key (required unless --sheet)")
-    # the incumbent since 2026-10-09 (experiment 46); before it lgb_noonc_rs (45), before that priorshrink (33b)
-    parser.add_argument("--incumbent", default="weightfix", help="default %(default)s")
+    # the incumbent since 2026-10-25 (experiment 110); weightfix (46) from 2026-10-09 to 2026-10-12
+    parser.add_argument("--incumbent", default="creation110", help="default %(default)s")
+    parser.add_argument("--wowy-ref", help="the within-season test's reference system (default --incumbent)")
+    parser.add_argument("--allow-partial", action="store_true",
+                        help="log a run with fewer readings than the full tests have, on purpose")
     parser.add_argument("--compared", help="the incumbent's table (default outputs/season_ratings_<incumbent>.parquet)")
     parser.add_argument("--tag", help="the output files' name (default --name)")
     parser.add_argument("--system", help="the candidate's name inside them (default --name)")
@@ -121,8 +141,10 @@ def paired_z(frame: pd.DataFrame, ref: str, name: str, value: str = "tg") -> flo
     return row.z if row is not None else np.nan
 
 
-def yoy(path: Path, name: str, ref: str) -> dict:
-    """The year-over-year columns of `name` against `ref` from a 63_yoy.py parquet; {} when it does not exist."""
+def yoy(path: Path, name: str, ref: str, allow_partial: bool = False) -> dict:
+    """The year-over-year columns of `name` against `ref` from a 63_yoy.py parquet; {} when it does not exist.  A
+    file short of `YOY_READINGS` paired readings stops the run unless `allow_partial`: 63 rewrites it after every
+    season, so a run that stopped part way leaves a partial one."""
     if not path.exists():
         return {}
     res = pd.read_parquet(path)
@@ -133,6 +155,9 @@ def yoy(path: Path, name: str, ref: str) -> dict:
     both["held_out"] = both.held_out + both.direction.map({"prev": 0.0, "next": 0.5})
     out = {}
     row = paired_row(both, ref, name)
+    if row is not None and int(row.n_seasons) < YOY_READINGS and not allow_partial:
+        raise SystemExit(f"{path.name} pairs {name} with {ref} on {int(row.n_seasons)} of {YOY_READINGS} readings: "
+                         f"a run that stopped part way.  Run 63 again, or --allow-partial")
     if row is not None:
         out.update(change=row.mean_diff, z=row.z, seasons_better=f"{row.wins} of {row.n_seasons}")
     out["error"] = game_armse(both, name)
@@ -141,6 +166,41 @@ def yoy(path: Path, name: str, ref: str) -> dict:
         out[column] = paired_z(res[res.direction == direction], ref, name)
     out["z_order_only"] = paired_z(both, ref, name, "calib_side")
     return out
+
+
+def paired_t(diffs: np.ndarray) -> float:
+    """The mean of paired differences over its standard error; NaN with fewer than two."""
+    diffs = np.asarray(diffs, dtype=float)
+    return float(diffs.mean() / (diffs.std(ddof=1) / np.sqrt(len(diffs)))) if len(diffs) > 1 else np.nan
+
+
+def wowy(path: Path, name: str, ref: str, allow_partial: bool = False) -> dict:
+    """The within-season WOWY columns of `name` against `ref` from 151's `wowy_<tag>_seasons.csv`: each season's
+    stint error at the shipped stage (step4, every stint), candidate minus reference, its mean, paired t-statistic,
+    seasons better, and the t-statistic in each era.  {} when the file or either system is missing; fewer than
+    `WOWY_SEASONS` paired seasons stops the run unless `allow_partial`."""
+    if not path.exists():
+        return {}
+    d = pd.read_csv(path)
+    d = d[(d.stage == "step4") & (d.slice == "all")].pivot_table(index="season", columns="system", values="error")
+    if name not in d.columns or ref not in d.columns:
+        return {}
+    diff = (d[name] - d[ref]).dropna()
+    if len(diff) < WOWY_SEASONS and not allow_partial:
+        raise SystemExit(f"{path.name} pairs {name} with {ref} in {len(diff)} of {WOWY_SEASONS} seasons: a run that "
+                         f"stopped part way.  Run 151 again, or --allow-partial")
+    out = dict(wowy_change=float(diff.mean()), wowy_z=paired_t(diff.to_numpy()),
+               wowy_seasons_better=f"{int((diff < 0).sum())} of {len(diff)}")
+    for label, first, last in ERAS:
+        out[f"wowy_z_{label}"] = paired_t(diff[(diff.index >= first) & (diff.index <= last)].to_numpy())
+    return out
+
+
+def refuse_older(reading: Path, table: Path) -> None:
+    """A reading written before the candidate's ratings table scores an earlier build: a reading that failed leaves
+    the last run's file in place.  Stop rather than log it."""
+    if reading.exists() and table.exists() and reading.stat().st_mtime < table.stat().st_mtime:
+        raise SystemExit(f"{reading} was written before {table}: it scores an earlier build.  Run its check again")
 
 
 def top30(path: Path, name: str) -> dict:
@@ -193,11 +253,17 @@ def trade_loss_from_log(text: str, name: str) -> dict:
     return out
 
 
+RUN_START = "chain start:"               # the line every run of scripts/experiment_chain.sh opens its log with
+
+
 def from_log(log: Path, name: str, ref_file: str) -> dict:
-    """Every column read off the chain log; {} when the log does not exist."""
+    """Every column read off the chain log, from its last run on (`RUN_START`; the whole log when it has none, as
+    before 2026-10-30); {} when the log does not exist."""
     if not log.exists():
         return {}
     text = log.read_text(encoding="utf-8", errors="replace")
+    if RUN_START in text:
+        text = text[text.rindex(RUN_START):]
     return {**consensus_from_log(text, name, ref_file), **swap_from_log(text, name), **trade_loss_from_log(text, name)}
 
 
@@ -216,7 +282,7 @@ def sheet_cell(column: str, value):
 def sheet_rows(table_path: Path) -> str:
     """The whole table as the JSON 2-D array the Sheets connector writes from A1: HEADERS, then one row per
     experiment."""
-    table = pd.read_csv(table_path, dtype={"exp": str, "commit": str})[list(COLUMNS)]
+    table = pd.read_csv(table_path, dtype={"exp": str, "commit": str}).reindex(columns=list(COLUMNS))
     rows = [list(HEADERS)] + [[sheet_cell(c, r[c]) for c in COLUMNS] for _, r in table.iterrows()]
     return json.dumps(rows)
 
@@ -248,7 +314,12 @@ def new_row(args: argparse.Namespace, cfg: dict) -> dict:
     row = dict(exp=str(args.exp), date=given(args.date, when), name=args.name, proposed_by=args.idea,
                change_made=args.changed, verdict=args.verdict.capitalize(), baseline=ref_file, notes=args.notes,
                command=args.command, commit=current_commit(Path(cfg["_root"])))
-    row.update(yoy(yoy_path, system, "incumbent"))
+    wowy_path = outputs / "csv" / f"wowy_{tag}_seasons.csv"
+    table = outputs / f"season_ratings_{system}.parquet"
+    for reading in (yoy_path, wowy_path):
+        refuse_older(reading, table)
+    row.update(wowy(wowy_path, system, given(args.wowy_ref, args.incumbent), args.allow_partial))
+    row.update(yoy(yoy_path, system, "incumbent", args.allow_partial))
     row.update(top30(outputs / f"yoy_by_player_{tag}.parquet", system))
     row.update(from_log(log, system, ref_file))
     return row
@@ -259,7 +330,7 @@ def with_row(table_path: Path, row: dict) -> pd.DataFrame:
     table = (pd.read_csv(table_path, dtype={"exp": str}) if table_path.exists()
              else pd.DataFrame(columns=list(COLUMNS)))
     table = table[table.exp != row["exp"]]
-    table = pd.concat([table, pd.DataFrame([row])], ignore_index=True)[list(COLUMNS)]
+    table = pd.concat([table, pd.DataFrame([row])], ignore_index=True).reindex(columns=list(COLUMNS))
     for c in table.columns:
         if table[c].dtype == float:
             table[c] = table[c].round(4)

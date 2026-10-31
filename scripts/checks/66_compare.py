@@ -139,11 +139,22 @@ def with_directions(res: pd.DataFrame) -> pd.DataFrame:
     return res
 
 
+YOY_READINGS = 56          # 28 scored seasons, each predicted from the season before and the one after
+
+
 def summary(yoy_path, names: list, ref: str) -> list[dict]:
-    """Per table: pooled year-over-year numbers and the paired test against `ref`, from a 63_yoy.py parquet."""
+    """Per table: pooled year-over-year numbers and the paired test against `ref`, from a 63_yoy.py parquet.  A file
+    short of its 56 paired readings gives no summary: 63 rewrites it after every season, so a run that stopped part way
+    leaves one that would read as finished (2026-10-30)."""
     both = with_directions(pd.read_parquet(yoy_path))
     pooled_table = pooled(both).set_index("system")
     paired_table = paired(both, ref, "tg").set_index("system") if ref in set(both.system) else None
+    short = (paired_table is not None and len(paired_table)
+             and int(paired_table["n_seasons"].min()) < YOY_READINGS)
+    if short:
+        print(f"no year-over-year summary: {yoy_path} holds {int(paired_table['n_seasons'].min())} of {YOY_READINGS} "
+              f"paired readings, a run that stopped part way", flush=True)
+        return []
     rows = []
     for n in (n for n in names if n in pooled_table.index):
         p = pooled_table.loc[n]

@@ -91,3 +91,33 @@ def test_the_newey_west_standard_error_is_the_plain_one_at_lag_0_and_larger_when
     drifting = pd.Series(np.repeat(rng.normal(size=10), 3) + 0.1 * rng.normal(size=30), index=range(1997, 2027))
     assert wowy.newey_west_se(drifting) > drifting.std(ddof=1) / np.sqrt(30)
     assert int(4 * (30 / 100) ** (2 / 9)) == 3                          # the default lag for thirty seasons
+
+
+def test_a_newey_west_z_is_never_further_from_zero_than_the_plain_one(wowy):
+    """Season differences that alternate in sign narrow the Newey-West standard error below the plain one; a noise
+    control read z -2.44 that way against plain -1.83 (2026-10-30), so `paired` floors it at the plain one."""
+    seasons = range(1997, 2027)
+    swing = np.array([0.03 if season % 2 else -0.06 for season in seasons])
+    rows = [dict(system=system, season=season, stage="step4", slice="all", error=100.0 + (diff if system == "cand"
+                                                                                         else 0.0))
+            for season, diff in zip(seasons, swing) for system in ("cand", "inc")]
+    (row,) = wowy.paired(pd.DataFrame(rows), "cand", "inc")
+    assert wowy.newey_west_se(pd.Series(swing, index=list(seasons))) < row["se"]
+    assert row["se_newey_west"] == pytest.approx(row["se"]) and row["z_newey_west"] == pytest.approx(row["z"])
+    eras = wowy.era_rows(pd.DataFrame(rows), "cand", "inc")
+    assert [era["era"] for era in eras] == ["1997-2006", "2007-2016", "2017-2026", "all seasons"]
+    assert [era["seasons"] for era in eras] == [10, 10, 10, 30]
+
+
+def test_each_system_is_scored_with_the_step_4_it_was_built_with(wowy):
+    """2026-10-30: a candidate's SHRINK_FLAGS reach check 151, read by `openrapm shrink`'s own options; the by-era
+    defence factor form check 156 prints no longer makes a system named after a season."""
+    from openrapm.settings import PRODUCT
+    shipped = wowy.shrink_settings("")
+    assert (shipped.rule, shipped.extrapolate_folds_tag, shipped.nearest) == ("test", "", PRODUCT.shrink.nearest)
+    assert (shipped.defence_factors, shipped.within_factors) == (PRODUCT.shrink.defence_factors,
+                                                                 PRODUCT.shrink.within_factors)
+    other = wowy.shrink_settings("--within-factors 0.8,1.1 --nearest 6 --defence-factor 0.9,2017:0.85")
+    assert (other.within_factors, other.nearest, other.defence_factors) == ((0.8, 1.1), 6, ((0, 0.9), (2017, 0.85)))
+    assert wowy.parse_defence_factors("cand:0.9,other:0.89,2017:0.84") == {"cand": ((0, 0.9),),
+                                                                            "other": ((0, 0.89), (2017, 0.84))}
