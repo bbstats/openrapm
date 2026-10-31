@@ -1021,13 +1021,13 @@ def season_held_scale(scales: pd.DataFrame | None, season: int) -> tuple | None:
     return held
 
 
-def blend_run(run: "SeasonRun", blend_through: float | None) -> None:
+def blend_run(run: "SeasonRun", blend_through: float | None, blend_from: float = 0.0) -> None:
     """--blend-through: the run's folds hold their prior scales a straight line from the held ones toward their own
-    fitted ones, by the season so far's share over `blend_through` (`SeasonRun.held_weight`), said once.  Only with
-    held scales and a season so far (--hold-prior-scale, --cut)."""
+    fitted ones, by the season so far's share from `blend_from` to `blend_through` (`SeasonRun.held_weight`), said
+    once.  Only with held scales and a season so far (--hold-prior-scale, --cut)."""
     if blend_through is None or run.held_scale is None or run.cut is None:
         return
-    run.held_weight = prior_rapm.blend_weight(run.season_share, blend_through)
+    run.held_weight = prior_rapm.blend_weight(run.season_share, blend_through, blend_from)
     print(f"  {run.season}: the prior scales {run.held_weight:.0%} of the way from held to the fit's own, "
           f"{run.season_share:.1%} of the season played", flush=True)
 
@@ -1076,7 +1076,7 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
               pieces: bool = False, whole_season_inputs: bool = False, whole_season_context: bool = False,
               n_folds: int = N_FOLDS, repeats: int = REPEATS, cut: float | None = None,
               so_far: float | None = None, hold_prior_scale: str | None = None,
-              blend_through: float | None = None) -> int:
+              blend_through: float | None = None, blend_from: float = 0.0) -> int:
     """`openrapm folds`: the reproduction check and the folds of every season, then the gathered files.  With
     `pieces`, each fold also writes its pieces_<stem>.parquet (`fold_pieces`); with `whole_season_inputs`, every
     fold's boosters read the whole season's inputs (the leak control, the module docstring); with
@@ -1132,7 +1132,7 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
                         out_dir, box_files, settings=settings, n_folds=n_folds, repeats=repeats, cut=cut,
                         split=split, part_season_rows=part_season_rows,
                         held_scale=season_held_scale(scales, season))
-        blend_run(run, blend_through)
+        blend_run(run, blend_through, blend_from)
         if whole_season_inputs:
             run.prior_panel = run.world(set(run.game_ids)).panel
         if lines is not None:

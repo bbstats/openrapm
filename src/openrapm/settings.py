@@ -248,10 +248,12 @@ class RidgeSettings:
     # finished season's are (notes/DECISIONS.md, experiment 109 and its continuation, adopted 2026-10-30).  0 fits them
     # on the season's games throughout
     held_scale_through: float = 0.50
-    # False: held in full until `held_scale_through`, then fitted, as adopted 2026-10-30; True: a straight line from
-    # held at the first game to fitted at `held_scale_through` (prior_rapm.blend_weight; the owner, 2026-10-31: "If
-    # it's just two different shrinkages we should probably just blend between them")
+    # False: held in full until `held_scale_through`, then fitted, as adopted 2026-10-30; True: held in full until
+    # `held_scale_blend_from`, then a straight line to fitted at `held_scale_through` (prior_rapm.blend_weight; the
+    # owner, 2026-10-31: "If it's just two different shrinkages we should probably just blend between them").  From
+    # the first game the line lost to holding at a tenth and a quarter of a season (experiment 109 blended)
     held_scale_blend: bool = False
+    held_scale_blend_from: float = 0.25
     # the step-3 table whose finished seasons' scales the season in progress holds: the published build's own
     held_scale_table: str = "season_ratings_product_step3"
 

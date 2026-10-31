@@ -279,13 +279,16 @@ def held_prior_scale(table: pd.DataFrame, season: int, nearest: int = HELD_SCALE
     return float(chosen.prior_scale_off.mean()), float(chosen.prior_scale_def.mean())
 
 
-def blend_weight(share: float, through: float) -> float:
-    """The weight on a season so far's own fitted prior scales against the held ones (`held_prior_scale`): 0 at its
-    first game, 1 from `through` of its regular season on, a straight line between (the owner, 2026-10-31: "If it's
-    just two different shrinkages we should probably just blend between them").  `through` 0 is 1 throughout.
+def blend_weight(share: float, through: float, start: float = 0.0) -> float:
+    """The weight on a season so far's own fitted prior scales against the held ones (`held_prior_scale`): 0 until
+    `start` of its regular season, 1 from `through` on, a straight line between (the owner, 2026-10-31: "If it's just
+    two different shrinkages we should probably just blend between them").  `through` at or below `start` is a switch.
 
-    Example: through 0.75, a quarter of the season played weighs the fitted scales a third, half of it two thirds."""
-    return 1.0 if through <= 0 else min(max(float(share) / float(through), 0.0), 1.0)
+    Example: start 0.25 and through 0.75, half the season played weighs the fitted scales a half.  From the first game
+    (start 0) the line lost to holding at a tenth and a quarter of a season in every era (experiment 109 blended)."""
+    if through <= start:
+        return 1.0 if float(share) >= through else 0.0
+    return min(max((float(share) - float(start)) / (float(through) - float(start)), 0.0), 1.0)
 
 
 def blended_scale(held, fitted, weight: float) -> tuple:

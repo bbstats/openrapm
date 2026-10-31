@@ -254,7 +254,8 @@ class SeasonsInProgress:
             if settings is not None and share < settings.ridge.held_scale_through:
                 held[season] = held_scales(cfg, settings.ridge.held_scale_table, season)
                 if settings.ridge.held_scale_blend:
-                    weight = prior_rapm.blend_weight(share, settings.ridge.held_scale_through)
+                    weight = prior_rapm.blend_weight(share, settings.ridge.held_scale_through,
+                                                     settings.ridge.held_scale_blend_from)
                     print(f"  {season}: its prior scales {weight:.0%} of the way from those to its own fitted ones, "
                           f"all the way at {settings.ridge.held_scale_through:.0%} of the season", flush=True)
         return cls(rows, shares, held)
@@ -301,8 +302,10 @@ def rate_one_season(season: int, sums: dict, panel: pd.DataFrame, designs: Desig
         second = rated_second_prior(designs.cfg, season, panel if rated is None else rated, priors, lines, settings,
                                     share)
         values = second.values
-    weight = (1.0 if scale is None else prior_rapm.blend_weight(share, settings.ridge.held_scale_through)
-              if settings.ridge.held_scale_blend else 0.0)
+    ridge = settings.ridge
+    weight = (1.0 if scale is None else prior_rapm.blend_weight(share, ridge.held_scale_through,
+                                                                ridge.held_scale_blend_from)
+              if ridge.held_scale_blend else 0.0)
     return (prior_rapm.rate_season_blended(season_designs, values, settings, season, scale, weight), priors, unseen,
             second)
 
