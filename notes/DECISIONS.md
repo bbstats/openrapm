@@ -11371,3 +11371,25 @@ tag `parts107_cut50_line31`), scored on the rest of each season by the within-se
 step 4, by era, against holding (`parts107_cut50_held30`) and against fitting (`parts107_cut50_fit30`).
 
 **The rule.**  Adopted when it is not worse than holding in any era at z +2: it removes the midseason jump.
+
+### Experiment 109 blended from a quarter: result (2026-10-31, `outputs/line109.log`, `outputs/csv/wowy_line109_cut50*_eras.csv`) ADOPTED
+
+At half a season the weight on the fitted scales is a half (50-51% in the folds' logs).  The line minus each arm on the
+rest of each season, whole-season step 4; below 0 is better:
+
+| against | era | change | standard error | paired z | seasons better |
+|---|---|---|---|---|---|
+| holding | 1997-2006 | -0.010 | 0.036 | -0.29 | 7 of 10 |
+| holding | 2007-2016 | +0.035 | 0.052 | +0.69 | 6 of 10 |
+| holding | 2017-2026 | +0.059 | 0.040 | +1.48 | 5 of 10 |
+| holding | all seasons | +0.028 | 0.025 | +1.14 | 18 of 30 |
+| fitting | 1997-2006 | -0.039 | 0.039 | -1.00 | 6 of 10 |
+| fitting | 2007-2016 | -0.103 | 0.065 | -1.60 | 4 of 10 |
+| fitting | 2017-2026 | -0.141 | 0.075 | -1.87 | 8 of 10 |
+| fitting | all seasons | -0.095 | 0.035 | -2.68 | 18 of 30 |
+
+**Decision.**  Not worse than holding in any era at z +2, and better than fitting: adopted by the registered rule.
+`RidgeSettings.held_scale_blend` True, `held_scale_blend_from` 0.25, `held_scale_through` 0.75; the decomposition
+replays any season under three quarters with the table's own scales.  2027 today, at 6% of its season, is held as
+before, unchanged to 0.0, and the site's files pass every check; the line first moves 2027 once a quarter of its
+season is played, in December.
