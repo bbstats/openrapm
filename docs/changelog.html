@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenRAPM: changelog</title>
+<link rel="stylesheet" href="site.css">
+<script src="site.js"></script>
+<style>
+  :root { --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; }
+  :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; }
+  body { color: var(--ink); font: 14px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  h2 { font-size: 18px; margin: 8px 0 10px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 10px 12px 10px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  th:first-child, td.date { white-space: nowrap; width: 120px; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<main>
+  <nav class="site">
+    <a href="./">Ratings</a>
+    <a href="power.html" hidden>Power</a>
+    <a href="similarity.html">~ Similarity</a>
+    <a href="bias.html">Bias</a>
+    <a href="about.html">About</a>
+    <a href="changelog.html" aria-current="page">Changelog</a>
+    <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
+  </nav>
+  <h2>Changelog</h2>
+  <table>
+    <thead><tr><th>Date</th><th>Change</th></tr></thead>
+    <tbody>
+      <!-- newest first, one row per published change:
+      <tr><td class="date">2026-10-27</td><td>One sentence.</td></tr>
+      -->
+      <tr><td class="date">2026-10-31</td><td>2027: hustle stats now use the NBA's season-to-date totals.</td></tr>
+      <tr><td class="date">2026-10-31</td><td>2027: until the season is half over, the prior keeps the weight it had in recent full seasons.</td></tr>
+    </tbody>
+  </table>
+</main>
+</body>
+</html>
