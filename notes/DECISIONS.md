@@ -11163,3 +11163,48 @@ Today's prior at draw 1 against draw 0: +0.022, the size of the quick screen's d
   better (experiment 121) and splits credit within a season worse, and mixing it in dilutes the booster.
 - Today's lists less defensive loose balls recovered tie today's prior, -0.009, 3 of 4 seasons better; the quick
   screen cannot resolve that size.  Not adopted; the owner's call.
+
+## The bug-fix and make-better pass of 2026-10-30 (the owner: "Bugfix/make better mode. Go.")
+
+A read of everything that arrived since the bug-fix pass of 2026-10-22, about 8,000 lines in 45 files: the morning job
+that rates and publishes 2027, the part-season rows, self-creation, the two-layer shrink, the full-season read of the
+multipliers, the power page, the test tools.  Plan: `C:\Users\Nathan\.claude\plans\bugfix-make-better-mode-go-cozy-scroll.md`.
+The owner's answers, 9 PM: the hustle fix published by the 6 AM job; the held prior scale tested at a quarter, a half
+and three quarters, then adopted for 2027; the next experiment the steadier within-team multiplier; self-creation kept.
+
+**Finished seasons: no live code bug.**  The shrink rebuilt from the folds on disk gives the published multipliers to
+4e-12 (team layer) and 4e-16 (within layer); every shipped input of a held-back game set is rebuilt from its own games;
+a set's box-score prior never trains on its season or the neighbours; part-season rows are 52% of the training rows
+and 11.2% of the weight.
+
+### 2027's hustle inputs (found and fixed 2026-10-30; live since the daily job began, 2026-10-24)
+
+- **Placeholders.**  At 6 AM the league answers a game played the night before with two rows of zeros, team 0 and
+  player 0, and `data hustle-games` cached the answer for good: 55 of 2027's 71 hustle box scores, every one the morning
+  job had fetched; the 16 real ones were opening week, fetched by hand.  In the panel 44 of 2027's 319 players with
+  60+ possessions had no hustle value at all (2026: 0 of 556), and the rest read opening-week counts over every game's
+  possessions.  Hustle is 6 of the 18 defensive inputs and 4 of the 18 offensive ones.  Finished seasons hold no such
+  file: 12,883 hustle and 16,758 tracking box scores scanned.
+- **Partial box scores.**  Asked again tonight, the league's box scores still fill in over the days after a game: a
+  game of 10-21 cached at 8 deflections reads 42; last night's games read deflections and contested shots but 0
+  box-outs and 0 screen-assist points; the four games of 10-27 still 0 box-outs three days on.  Summed over the 71
+  games, fresh copies hold 393 defensive box-outs and 1,249 screen-assist points, the season dashboard 741 and 2,433.
+  For finished 2026 the per-game sums match the dashboard to within 0.2%.
+- **The fix** (6195755 and the next commit): a box score of the season in progress that names no player is not
+  processed yet, never cached and asked again the next morning (`dashboards.NotProcessedYet`; the command does not fail
+  on it); a file naming no player is not a game read, and a per-game count read from fewer games than asked divides by
+  the possessions of the games read (`box_rates.player_possessions`); and the season in progress reads the league's
+  season-to-date dashboards, not its per-game box scores (`panel.season_panel`).  No fold is cut from a season in
+  progress, and a finished season's per-game sums equal its dashboard, so the season in progress reads what its
+  training seasons read.  Every 1997-2026 panel row is unchanged to the bit.
+- **Once 2027's Finals are over**: `openrapm data hustle-games 2027 2027 --force` (and `matchup-games`) before its
+  panel, since the files fetched during the season may still be partial.
+
+### Experiment 109 continued: the held prior scale at a quarter, a half and three quarters (registered before any result)
+
+Experiment 109 tested holding the prior scale at 2%, 5% and 10% of a season; the owner, 2026-10-30: test on, then adopt.
+The same two arms at 0.25, 0.5 and 0.75 of each season 1997-2026 (`scratch/2026-10-30_bugfix/exp109_more.sh`), both
+built fresh with today's code (tags `parts107_cutNN_fit30`, `parts107_cutNN_held30`), each scored on the rest of its
+season by the within-season WOWY test with the whole season's step 4.  The rule: the season in progress holds the scale
+up to the share where the fitted scale wins in every era; if held wins at every share tested, it holds through three
+quarters of the regular season.
