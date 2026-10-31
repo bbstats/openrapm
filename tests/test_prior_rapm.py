@@ -155,6 +155,27 @@ def test_a_held_scale_sets_the_reported_prior(design):
     assert np.allclose(held.ratings.prior_defense, 0.5 * prior_rapm.aligned_prior(prior_d, ids))
 
 
+def test_a_blended_scale_is_a_straight_line_from_held_to_fitted(design):
+    """2026-10-31, the owner: blend the two shrinkages.  Weight 0 is the held fit, 1 the plain one, and between them the
+    scales sit that share of the way from held to fitted, the ratings solved again at them."""
+    prior_o, prior_d = _shrunk_prior(design)
+    designs = {PRODUCT.targets.offence: design, PRODUCT.targets.defence: design}
+    priors = {"O": prior_o, "D": prior_d}
+    free = prior_rapm.rate_season(designs, priors, PRODUCT, 2002)
+    fitted = (float(free.prior_scale_off.iloc[0]), float(free.prior_scale_def.iloc[0]))
+    held = (fitted[0] + 0.4, fitted[1] - 0.3)
+    at = {w: prior_rapm.rate_season_blended(designs, priors, PRODUCT, 2002, held, w) for w in (0.0, 0.25, 1.0)}
+    pd.testing.assert_frame_equal(at[1.0], free)
+    pd.testing.assert_frame_equal(at[0.0], prior_rapm.rate_season(designs, priors, PRODUCT, 2002, held))
+    assert at[0.25].prior_scale_off.iloc[0] == pytest.approx(0.75 * held[0] + 0.25 * fitted[0])
+    assert at[0.25].prior_scale_def.iloc[0] == pytest.approx(0.75 * held[1] + 0.25 * fitted[1])
+    pd.testing.assert_frame_equal(prior_rapm.rate_season_blended(designs, priors, PRODUCT, 2002, None, 0.0), free)
+    assert [prior_rapm.blend_weight(share, 0.75) for share in (0.0, 0.25, 0.5, 0.75, 0.9)] == pytest.approx(
+        [0.0, 1 / 3, 2 / 3, 1.0, 1.0])
+    assert prior_rapm.blend_weight(0.2, 0.0) == 1.0
+    assert not PRODUCT.ridge.held_scale_blend, "off until its test passes"
+
+
 def test_the_held_scale_is_the_mean_of_the_eight_nearest_other_seasons():
     seasons = np.arange(1997, 2027)
     table = pd.DataFrame({"season": np.repeat(seasons, 2), "prior_scale_off": np.repeat(seasons - 2000.0, 2),

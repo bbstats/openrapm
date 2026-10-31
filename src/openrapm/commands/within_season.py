@@ -389,7 +389,7 @@ class ContextInputs:
 
 def rate_world(world: SeasonWorld, saved: dict, prior_panel: pd.DataFrame | None = None,
                context: ContextInputs | None = None, settings=SETTINGS, share: float = 1.0,
-               scale=None, types_panel: pd.DataFrame | None = None) -> RatedWorld:
+               scale=None, types_panel: pd.DataFrame | None = None, held_weight: float = 0.0) -> RatedWorld:
     """Steps 2-3 on the world's rebuilt inputs: the saved boosters' priors, both ridges, the centred table.
 
     `prior_panel`, when given, is what the boosters read instead of the world's own rows (the leak control, the
@@ -397,7 +397,8 @@ def rate_world(world: SeasonWorld, saved: dict, prior_panel: pd.DataFrame | None
     built from it instead of the boosters' answers.  `settings` names the targets the ridge reads (`fold_settings`).
     `share` is the share of a season the boosters are told the rows cover (`prior_rows`); `scale`, (s_O, s_D), holds
     the ridge's prior scales (prior_rapm.held_prior_scale, experiment 109); `types_panel`, the rows the second prior's
-    step-5 numbers are read from when not the boosters' (the network's whole-season rows, `rate_world_by_game`).
+    step-5 numbers are read from when not the boosters' (the network's whole-season rows, `rate_world_by_game`);
+    `held_weight`, the share of the way from the held scales to the fit's own (prior_rapm.rate_season_blended), 0 held.
     Adds one check to the world's: the ridge's possessions are the fit games' (five players on every row).
     """
     panel = world.panel if prior_panel is None else prior_panel
@@ -416,7 +417,7 @@ def rate_world(world: SeasonWorld, saved: dict, prior_panel: pd.DataFrame | None
         prior, _ = second_prior.season_second_priors(context.stints, answers, box, context.coefficients,
                                                      context.n_folds, context.team_totals, types, context.input_set)
     designs = {target: world.designs[target] for target in settings.targets.distinct()}
-    table = prior_rapm.rate_season(designs, prior, settings, world.season, scale)
+    table = prior_rapm.rate_season_blended(designs, prior, settings, world.season, scale, held_weight)
     world.checks["ridge: possessions are the fit games' possessions"] = bool(np.isclose(
         table.possessions.sum(), float(world.designs[settings.targets.offence].rows["poss"].sum()) * 5.0, rtol=1e-9))
     return RatedWorld(world=world, table=table, prior=prior, box=None if context is None else box)
@@ -625,6 +626,7 @@ class SeasonRun:
     split: str = "random"        # data.within_folds.SPLITS: "date" with --cut, "so_far" with --so-far
     part_season_rows: bool = False   # the boosters trained with part-season rows (`trained_on_part_seasons`)
     held_scale: tuple | None = None  # --hold-prior-scale: (s_O, s_D) every fold's ridge holds, the whole season never
+    held_weight: float = 0.0     # --blend-through: the share of the way from those to the fold's own fitted scales
     network: object = None       # with the box-score prior game by game, the season's network (game_prior.py)
     backward: object = None      # and its backward network, when the first half of each player's games read the rest
     games: pd.DataFrame | None = None    # and the season's game rows (data/player_games.py)
@@ -679,7 +681,7 @@ class SeasonRun:
                                       self.settings, None if whole else self.held_scale, self.backward,
                                       self.whole_season)
         return rate_world(world, self.saved, self.prior_panel, context, self.settings, self.prior_share(fit_ids),
-                          None if whole else self.held_scale)
+                          None if whole else self.held_scale, held_weight=self.held_weight)
 
     @property
     def prior_inputs(self) -> str:
@@ -1019,6 +1021,17 @@ def season_held_scale(scales: pd.DataFrame | None, season: int) -> tuple | None:
     return held
 
 
+def blend_run(run: "SeasonRun", blend_through: float | None) -> None:
+    """--blend-through: the run's folds hold their prior scales a straight line from the held ones toward their own
+    fitted ones, by the season so far's share over `blend_through` (`SeasonRun.held_weight`), said once.  Only with
+    held scales and a season so far (--hold-prior-scale, --cut)."""
+    if blend_through is None or run.held_scale is None or run.cut is None:
+        return
+    run.held_weight = prior_rapm.blend_weight(run.season_share, blend_through)
+    print(f"  {run.season}: the prior scales {run.held_weight:.0%} of the way from held to the fit's own, "
+          f"{run.season_share:.1%} of the season played", flush=True)
+
+
 def boosters_identity(outputs: Path, models: str) -> dict | None:
     """The saved boosters a fold folder is built from: outputs/prior_models_<models>.pkl's name, size and modified
     time; None when the file is not there under that name."""
@@ -1062,7 +1075,8 @@ def check_fold_boosters(out_dir: Path, identity: dict | None) -> None:
 def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_only: bool = False,
               pieces: bool = False, whole_season_inputs: bool = False, whole_season_context: bool = False,
               n_folds: int = N_FOLDS, repeats: int = REPEATS, cut: float | None = None,
-              so_far: float | None = None, hold_prior_scale: str | None = None) -> int:
+              so_far: float | None = None, hold_prior_scale: str | None = None,
+              blend_through: float | None = None) -> int:
     """`openrapm folds`: the reproduction check and the folds of every season, then the gathered files.  With
     `pieces`, each fold also writes its pieces_<stem>.parquet (`fold_pieces`); with `whole_season_inputs`, every
     fold's boosters read the whole season's inputs (the leak control, the module docstring); with
@@ -1072,7 +1086,8 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
     regular season against the rest; with `so_far`, the season so far at that share drawn at random into the fold
     design (the module docstring).  With `hold_prior_scale`, a table under outputs/, every fold's ridge holds the
     prior scales at the mean of that table's 8 seasons nearest its season (prior_rapm.held_prior_scale, experiment
-    109); the whole season, the reproduction, is fitted as shipped."""
+    109); the whole season, the reproduction, is fitted as shipped.  With `blend_through` too, the scales go a straight
+    line from held at a season's first game to its fit's own at that share (prior_rapm.blend_weight)."""
     if cut is not None and so_far is not None:
         raise SystemExit("--cut and --so-far are two fold designs; ask for one")
     split = "date" if cut is not None else "so_far" if so_far is not None else "random"
@@ -1117,6 +1132,7 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
                         out_dir, box_files, settings=settings, n_folds=n_folds, repeats=repeats, cut=cut,
                         split=split, part_season_rows=part_season_rows,
                         held_scale=season_held_scale(scales, season))
+        blend_run(run, blend_through)
         if whole_season_inputs:
             run.prior_panel = run.world(set(run.game_ids)).panel
         if lines is not None:

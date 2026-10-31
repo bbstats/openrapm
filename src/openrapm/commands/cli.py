@@ -204,7 +204,7 @@ def _run_folds(args: argparse.Namespace, cfg: dict) -> int:
         return 0
     return run_folds(cfg, args.models, args.base, args.seasons, args.tag, args.reproduce_only, args.pieces,
                      args.whole_season_inputs, args.whole_season_context, args.folds_per_repeat, args.repeats,
-                     args.cut, args.so_far, args.hold_prior_scale)
+                     args.cut, args.so_far, args.hold_prior_scale, args.blend_through)
 
 
 def _run_second_prior(args: argparse.Namespace, cfg: dict) -> int:
@@ -577,6 +577,10 @@ def _add_folds(commands) -> None:
                             "outputs/<TABLE>.parquet nearest it, never the season itself, rather than fitting them on "
                             "the fit games (experiment 109, a season's first days); the whole season is fitted as "
                             "shipped")
+    folds.add_argument("--blend-through", type=parse_share, default=None, metavar="SHARE",
+                       help="with --hold-prior-scale and --cut: the prior scales a straight line from held at a "
+                            "season's first game to its own fitted ones at SHARE of its regular season, each fold's "
+                            "weight its season so far's share over SHARE (prior_rapm.blend_weight)")
     _add_jobs(folds)
     folds.set_defaults(run=_run_folds)
 

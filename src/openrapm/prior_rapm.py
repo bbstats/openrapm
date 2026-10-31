@@ -53,7 +53,7 @@ from .rapm import design_blocks, normal_equations, player_possessions, solve_rid
 
 __all__ = ["aligned_prior", "lineup_prior_sums", "game_lineup_sums", "game_averages", "PriorRapmFit", "RidgeSystem",
            "ridge_system", "fit", "defence_possessions", "season_table", "centre", "rate_season", "held_prior_scale",
-           "PUBLISHED_COLUMNS", "published_table"]
+           "blend_weight", "blended_scale", "rate_season_blended", "PUBLISHED_COLUMNS", "published_table"]
 
 
 def aligned_prior(prior: dict, player_ids) -> np.ndarray:
@@ -277,6 +277,34 @@ def held_prior_scale(table: pd.DataFrame, season: int, nearest: int = HELD_SCALE
         raise ValueError(f"no season besides {season} to hold its prior scale at")
     chosen = scales.loc[others]
     return float(chosen.prior_scale_off.mean()), float(chosen.prior_scale_def.mean())
+
+
+def blend_weight(share: float, through: float) -> float:
+    """The weight on a season so far's own fitted prior scales against the held ones (`held_prior_scale`): 0 at its
+    first game, 1 from `through` of its regular season on, a straight line between (the owner, 2026-10-31: "If it's
+    just two different shrinkages we should probably just blend between them").  `through` 0 is 1 throughout.
+
+    Example: through 0.75, a quarter of the season played weighs the fitted scales a third, half of it two thirds."""
+    return 1.0 if through <= 0 else min(max(float(share) / float(through), 0.0), 1.0)
+
+
+def blended_scale(held, fitted, weight: float) -> tuple:
+    """(s_O, s_D) `weight` of the way from `held` to `fitted`."""
+    return tuple((1.0 - float(weight)) * float(h) + float(weight) * float(f) for h, f in zip(held, fitted))
+
+
+def rate_season_blended(designs: dict, priors: dict, settings, season: int, held=None, weight: float = 0.0,
+                        game_tables: dict | None = None) -> pd.DataFrame:
+    """`rate_season` with the prior scales `weight` of the way from `held` to the season's own fitted ones: the scales
+    fitted first, then held at the blend (`blended_scale`).  Weight 0 is the held fit, weight 1 or no `held` the plain
+    one, each through `rate_season` alone."""
+    if held is None or weight >= 1.0:
+        return rate_season(designs, priors, settings, season, None, game_tables)
+    if weight <= 0.0:
+        return rate_season(designs, priors, settings, season, held, game_tables)
+    free = rate_season(designs, priors, settings, season, None, game_tables)
+    fitted = (float(free.prior_scale_off.iloc[0]), float(free.prior_scale_def.iloc[0]))
+    return rate_season(designs, priors, settings, season, blended_scale(held, fitted, weight), game_tables)
 
 
 # the published schema, positive good on both ends (`openrapm site` and the checks read it)

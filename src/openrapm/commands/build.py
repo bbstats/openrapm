@@ -234,8 +234,9 @@ def row_label_tables(sums: dict, panel: pd.DataFrame, unseen, settings, cache: d
 class SeasonsInProgress:
     """The seasons a build rates that no fit may train on (data/seasons.py): their season panel rows, which the
     trainable panel lacks, {season: the share of its regular season played} (data.seasons.share_played), and
-    {season: (s_O, s_D)} the prior scales step 3 holds for a season still short of
-    settings.RidgeSettings.held_scale_through (prior_rapm.held_prior_scale, experiment 109)."""
+    {season: (s_O, s_D)} the held prior scales of a season still short of settings.RidgeSettings.held_scale_through
+    (prior_rapm.held_prior_scale, experiment 109), which step 3 blends with the season's own fitted ones by the share
+    played (prior_rapm.blend_weight, the owner, 2026-10-31)."""
     rows: pd.DataFrame
     shares: dict
     held_scales: dict = field(default_factory=dict)
@@ -252,6 +253,10 @@ class SeasonsInProgress:
                   f"trained on it", flush=True)
             if settings is not None and share < settings.ridge.held_scale_through:
                 held[season] = held_scales(cfg, settings.ridge.held_scale_table, season)
+                if settings.ridge.held_scale_blend:
+                    weight = prior_rapm.blend_weight(share, settings.ridge.held_scale_through)
+                    print(f"  {season}: its prior scales {weight:.0%} of the way from those to its own fitted ones, "
+                          f"all the way at {settings.ridge.held_scale_through:.0%} of the season", flush=True)
         return cls(rows, shares, held)
 
 
@@ -296,7 +301,10 @@ def rate_one_season(season: int, sums: dict, panel: pd.DataFrame, designs: Desig
         second = rated_second_prior(designs.cfg, season, panel if rated is None else rated, priors, lines, settings,
                                     share)
         values = second.values
-    return prior_rapm.rate_season(season_designs, values, settings, season, scale), priors, unseen, second
+    weight = (1.0 if scale is None else prior_rapm.blend_weight(share, settings.ridge.held_scale_through)
+              if settings.ridge.held_scale_blend else 0.0)
+    return (prior_rapm.rate_season_blended(season_designs, values, settings, season, scale, weight), priors, unseen,
+            second)
 
 
 # what a game-by-game build keeps of each game row: who, when, the box-score prior's answer and the prior step 3 read
