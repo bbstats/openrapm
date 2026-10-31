@@ -66,7 +66,14 @@ bug-fix and make-better pass of 2026-10-30", experiment 109 continued and experi
   each system with its own shrink (`--shrink-flags`) and prints the eras; the full-build script refuses a name already
   built unless `REUSE=1`; `openrapm folds` records its boosters per folder; 101 logs the within-season test by era and
   refuses partial or stale readings; the input screen's added arms keep the inputs per tree.
-- **Experiment 123, the steadier within-team multiplier**: see its entry; verdict the owner's.
+- **Experiment 123, the steadier within-team multiplier, not adopted** (the registered rule): the within layer fitted
+  on every fold season is better before 2007, z -3.2, a tie in 2007-2016, worse since 2017, z +2.6; year over year
+  a tie, z -1.6.  The window's jumps carry era drift, not only noise.  `--within-nearest` stays, off.  A wider window
+  or a pull part way toward the pooled fit would be a new experiment.
+- **The sheet** "OpenRAPM experiments": six within-season WOWY columns after Result, rows 109 Adopted and 123; the
+  Definitions tab names the within-season test and today's adoption rule.
+- **Checked tonight**: `PUBLISH=0 bash scripts/daily_update.sh` passes with all of it (2027 held at 1.116 / 1.000);
+  the site's files build, the power page's average team at 0.00, 13 of 30 teams above it.
 - **Open, the owner's call**: a settings check for the morning job (DECISIONS.md, "The rest of the pass": the job runs
   the working tree's code, and the published tables come from three commands); experiments 111-122's verdicts.
 
