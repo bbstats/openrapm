@@ -536,15 +536,18 @@ def season_panel(season: int, cfg: dict, designs: dict, sources: SeasonSources, 
     fouls = box_rates(foul_counts, pad_target=cfg["pad_target"], body=body, pad_k_around=around)
     players = _player_columns(season, cfg, designs, history, fit, sources.debut)
     # the tracking dashboards are season totals: a fold scales them to the share of the season it fits on; the hustle
-    # counts are summed over the games themselves, over the possessions of the games read (dashboard_rates.py)
+    # counts are summed over the games themselves, over the possessions of the games read (dashboard_rates.py).  The
+    # season in progress reads the league's season-to-date dashboards instead: it fills each game's hustle box score
+    # in over the days after it (2026-10-30: last night's box-outs 0, a game of the week before 8 deflections against
+    # 42 asked again; the 71 games' box scores held 393 defensive box-outs, the dashboard 741).  No fold is cut from a
+    # season in progress, and a finished season's per-game sums equal its dashboard (2026: within 0.2%).
     fit_share = None if fit is None else len(fit) / len(sources.tables.games)
     games = set(sources.tables.games["game_id"].astype(str)) if fit is None else fit
+    current = fit is None and season in in_progress(cfg)
     dashboards = dashboard_rates(cfg, season, players["player_id"].to_numpy(),
-                                 {"O": rates.offence.possessions, "D": rates.defence.possessions}, fit_share, games,
+                                 {"O": rates.offence.possessions, "D": rates.defence.possessions}, fit_share,
+                                 None if current else games,
                                  possessions_in=lambda read: player_possessions(designs[OFFENCE], read))
-    if dashboards["hustle_games"] and len(dashboards["hustle_games"]) < len(games):
-        print(f"  {season}: per-game hustle numbers from {len(dashboards['hustle_games'])} of {len(games)} games, the "
-              f"rest not processed by the league yet", flush=True)
     rows = pd.concat([_side_rows(side, season, rates, parts, creation, fouls, players, dashboards)
                       for side in SIDES], ignore_index=True)
     if season < GOALTENDS_FROM:                # most goaltends name only the team before 2002 (features.py)

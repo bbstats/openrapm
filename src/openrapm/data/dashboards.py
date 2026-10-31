@@ -366,11 +366,14 @@ def fetch_hustle_games(cfg: dict, seasons, phases=("RS", "PO"), delay: float = 0
 
 
 def fetch_game_boxes(cfg: dict, source: str, seasons, phases=("RS", "PO"), delay: float = 0.6,
-                     log_every: int = 250, limit: int | None = None) -> dict:
+                     log_every: int = 250, limit: int | None = None, force: bool = False) -> dict:
     """Every game's `source` box score for the seasons and phases, one request at a time, `delay` seconds apart (none
     after a cached file).  Returns {"games", "fetched", "empty", "failed": [(game_id, error)], "pending": [game_id],
     "stopped"}: "pending" the games of the season in progress the league has not processed yet (`NotProcessedYet`).
-    One bad game does not stop the run, and a rerun fetches only what is missing.  OfflineFetch is not forgiven.
+    One bad game does not stop the run, and a rerun fetches only what is missing, or every game with `force`: the
+    league fills a game's box score in over the days after it (2026-10-30: last night's games answered no box-outs, a
+    game of the week before 8 deflections against 42 later), so a season fetched while in progress is fetched again
+    once its Finals are over.  OfflineFetch is not forgiven.
 
     `limit` stops the run after that many games were fetched, "stopped" then True, so a long fetch can run as a chain
     of fresh processes: on 2026-10-28 the matchup fetch stalled twice after about 600 requests in one process, with a
@@ -382,7 +385,7 @@ def fetch_game_boxes(cfg: dict, source: str, seasons, phases=("RS", "PO"), delay
             out["stopped"] = True
             break
         try:
-            frame, cached = fetch_game_box(source, game_id, cfg)
+            frame, cached = fetch_game_box(source, game_id, cfg, force=force)
             if not cached:
                 out["fetched"] += 1
                 out["empty"] += int(len(frame) == 0)

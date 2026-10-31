@@ -221,7 +221,7 @@ def run_hustle_games(args: argparse.Namespace, cfg: dict) -> int:
     last = args.last_season if args.last_season is not None else int(cfg["last_season"])
     started = time.time()
     out = dashboards.fetch_game_boxes(cfg, args.source, range(first, last + 1), phases(args), delay=args.delay,
-                                      limit=getattr(args, "limit", None))
+                                      limit=getattr(args, "limit", None), force=getattr(args, "force", False))
     print(f"{out['games']} games {first}-{last}: {out['fetched']} fetched now ({out['empty']} with no rows), "
           f"{len(out['failed'])} failed, {len(out['pending'])} not processed by the league yet "
           f"({time.time() - started:.0f}s)"
@@ -383,6 +383,10 @@ def _add_hustle_games(steps) -> None:
                         help="the last season (default config.yaml's last_season)")
     hustle.add_argument("--phases", default=DEFAULT_PHASES, help="RS, PO or both (default %(default)s)")
     hustle.add_argument("--delay", type=float, default=0.6, help="seconds between requests (default %(default)s)")
+    hustle.add_argument("--force", action="store_true",
+                        help="fetch every game again, cached or not: the league fills a game's box score in over "
+                             "the days after it, so a season fetched while in progress is fetched again once its "
+                             "Finals are over")
     hustle.set_defaults(run=run_hustle_games, source="hustle")
     tracking = steps.add_parser(
         "tracking-games", help="the per-game tracking box scores from stats.nba.com, cached",
@@ -394,6 +398,10 @@ def _add_hustle_games(steps) -> None:
                           help="the last season (default config.yaml's last_season)")
     tracking.add_argument("--phases", default=DEFAULT_PHASES, help="RS, PO or both (default %(default)s)")
     tracking.add_argument("--delay", type=float, default=0.6, help="seconds between requests (default %(default)s)")
+    tracking.add_argument("--force", action="store_true",
+                        help="fetch every game again, cached or not: the league fills a game's box score in over "
+                             "the days after it, so a season fetched while in progress is fetched again once its "
+                             "Finals are over")
     tracking.set_defaults(run=run_hustle_games, source="tracking")
     matchups = steps.add_parser(
         "matchup-games", help="the per-game matchups from stats.nba.com, who guarded whom, cached",
@@ -407,6 +415,10 @@ def _add_hustle_games(steps) -> None:
                           help="the last season (default config.yaml's last_season)")
     matchups.add_argument("--phases", default=DEFAULT_PHASES, help="RS, PO or both (default %(default)s)")
     matchups.add_argument("--delay", type=float, default=0.6, help="seconds between requests (default %(default)s)")
+    matchups.add_argument("--force", action="store_true",
+                        help="fetch every game again, cached or not: the league fills a game's box score in over "
+                             "the days after it, so a season fetched while in progress is fetched again once its "
+                             "Finals are over")
     matchups.add_argument("--limit", type=int, default=None, metavar="N",
                           help="stop after N games fetched; a rerun goes on from there.  One process stalled after "
                                "about 600 requests on 2026-10-28, so a long fetch runs best as several processes")
