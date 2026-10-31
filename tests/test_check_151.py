@@ -119,5 +119,6 @@ def test_each_system_is_scored_with_the_step_4_it_was_built_with(wowy):
                                                                  PRODUCT.shrink.within_factors)
     other = wowy.shrink_settings("--within-factors 0.8,1.1 --nearest 6 --defence-factor 0.9,2017:0.85")
     assert (other.within_factors, other.nearest, other.defence_factors) == ((0.8, 1.1), 6, ((0, 0.9), (2017, 0.85)))
+    assert shipped.within_nearest is None and wowy.shrink_settings("--within-nearest 0").within_nearest == 0
     assert wowy.parse_defence_factors("cand:0.9,other:0.89,2017:0.84") == {"cand": ((0, 0.9),),
                                                                             "other": ((0, 0.89), (2017, 0.84))}

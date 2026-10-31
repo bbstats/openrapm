@@ -240,6 +240,14 @@ class RidgeSettings:
     # one penalty for every season and both sides, chosen once on the year-over-year test
     # (notes/DECISIONS.md, experiment 2 of 2026-09-14 evening)
     penalty: float = 13037.0
+    # the season in progress holds its prior scales, the ridge's unpenalised weight on each side's prior, at the mean
+    # of the 8 nearest finished seasons' until this share of its regular season is played: fitted on a season's first
+    # games they swing (2027 on 16 games, 2.24 on offense; 2026 on its whole season, 1.17), and held beat fitted on the
+    # rest of every past season at 2%, 5% and 10% of it, in every era (notes/DECISIONS.md, experiment 109, adopted
+    # 2026-10-30).  0 fits them on the season's games throughout
+    held_scale_through: float = 0.10
+    # the step-3 table whose finished seasons' scales the season in progress holds: the published build's own
+    held_scale_table: str = "season_ratings_product_step3"
 
 
 @dataclass(frozen=True)
@@ -294,6 +302,11 @@ class ShrinkSettings:
     within_team_layer: bool = True
     # the within layer's multipliers times these, offence then defence: version D of experiment 106
     within_factors: tuple = (0.75, 1.0)
+    # the within layer's fold seasons: None the team layer's `nearest`, as shipped; K its K nearest; 0 every fold season
+    # the rule allows.  Experiment 123 (registered 2026-10-30): fitted on one season alone the within layer's
+    # offensive games' multiplier runs from 0.23 (2020) to 2.50 (2011), so the 8-season window jumps as a season
+    # enters or leaves it (1.293 in 2010, 0.976 in 2011)
+    within_nearest: int | None = None
 
     def defence_factor_for(self, season: int) -> float:
         """The factor on `season`'s two defensive multipliers."""

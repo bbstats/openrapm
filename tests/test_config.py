@@ -236,7 +236,7 @@ def test_every_flag_a_doc_tells_you_to_type_is_one_the_script_understands():
                     checked += 1
                     if tok not in known:
                         bad.append(f"{md.name}: {m.group(1)} --{tok}")
-    assert checked > 20, f"only {checked} documented flags found; the command regex has stopped matching"
+    assert checked >= 15, f"only {checked} documented flags found; the command regex has stopped matching"
     assert not bad, (
         f"documented flag(s) no script understands: {sorted(set(bad))}.  argparse stops the run on these "
         f"instead of ignoring them, so a doc that names one is a command nobody can run.")

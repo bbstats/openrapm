@@ -74,8 +74,9 @@ built this way are never step 4's: each fold's summary says `prior_inputs` "whol
 from __future__ import annotations
 
 import json
+import os
 import time
-from dataclasses import asdict, dataclass, replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -176,10 +177,13 @@ def _step3_mismatches(meta: dict) -> dict:
 
     The folds rate every season with `SETTINGS`' ridge penalty and the saved build's own targets (`fold_settings`);
     boosters saved by a build with another penalty would be rated on settings their base table was not built with.
+    Only the penalty is compared: the ridge's other settings, the held prior scale of a season in progress
+    (settings.RidgeSettings.held_scale_through, 2026-10-30), never reach a fold of a finished season.
     """
-    saved = meta.get("settings") or {}
-    expected = {"ridge": asdict(SETTINGS.ridge)}
-    return {name: (saved[name], value) for name, value in expected.items() if name in saved and saved[name] != value}
+    saved = (meta.get("settings") or {}).get("ridge")
+    if saved is not None and saved.get("penalty") != SETTINGS.ridge.penalty:
+        return {"ridge": (saved, {"penalty": SETTINGS.ridge.penalty})}
+    return {}
 
 
 def check_models(meta: dict) -> None:
@@ -1016,6 +1020,39 @@ def season_held_scale(scales: pd.DataFrame | None, season: int) -> tuple | None:
     return held
 
 
+def boosters_identity(outputs: Path, models: str) -> dict | None:
+    """The saved boosters a fold folder is built from: outputs/prior_models_<models>.pkl's name, size and modified
+    time; None when the file is not there under that name."""
+    path = outputs / f"prior_models_{models}.pkl"
+    if not path.exists():
+        return None
+    stat = path.stat()
+    return {"boosters": path.name, "bytes": int(stat.st_size), "modified_ns": int(stat.st_mtime_ns)}
+
+
+def check_fold_boosters(out_dir: Path, identity: dict | None) -> None:
+    """One fold folder holds the folds of one set of boosters (2026-10-30).  A fold already on disk is skipped, and
+    its reproduction check with it, so a rerun under one tag after the boosters were saved again would have mixed two
+    builds without a word.  The first run writes boosters.json; a later run with other boosters stops.  A folder built
+    before the record existed takes the record of its first run since."""
+    if identity is None:
+        return
+    record = out_dir / "boosters.json"
+    if record.exists():
+        try:
+            held = json.loads(record.read_text(encoding="utf-8"))
+        except ValueError:                # another process of the same run is writing it
+            return
+        if held != identity:
+            raise SystemExit(f"{out_dir} holds folds built from {held.get('boosters')} as it was then "
+                             f"({held.get('bytes')} bytes); {identity['boosters']} is another file now "
+                             f"({identity['bytes']} bytes).  Use another --tag, or remove the folder")
+        return
+    temporary = out_dir / f"boosters.{os.getpid()}.tmp"
+    temporary.write_text(json.dumps(identity), encoding="utf-8")
+    os.replace(temporary, record)
+
+
 def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_only: bool = False,
               pieces: bool = False, whole_season_inputs: bool = False, whole_season_context: bool = False,
               n_folds: int = N_FOLDS, repeats: int = REPEATS, cut: float | None = None,
@@ -1041,6 +1078,7 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
     outputs = resolve(cfg, "outputs")
     out_dir = resolve(cfg, "within") / tag
     out_dir.mkdir(parents=True, exist_ok=True)
+    check_fold_boosters(out_dir, boosters_identity(outputs, models))
     saved_all = load_models(outputs, models, seasons)
     meta = saved_all.get("meta", {})
     check_models(meta)

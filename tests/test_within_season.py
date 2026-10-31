@@ -275,3 +275,23 @@ def test_a_left_out_game_is_neither_a_fit_nor_a_held_back_game(tmp_path):
     fit, held = fold_games(tmp_path, SimpleNamespace(season=2024, repeat=0, fold=0, stem="2024_r0_f0"))
     assert (fit, held) == ({"b", "c"}, {"a"})
 
+
+
+def test_a_fold_folder_holds_the_folds_of_one_set_of_boosters(tmp_path):
+    """2026-10-30: a rerun under one tag after the boosters were saved again stops, instead of skipping the folds on
+    disk and mixing two builds."""
+    import os
+    import time
+
+    from openrapm.commands import within_season as ws
+    boosters = tmp_path / "prior_models_cand.pkl"
+    boosters.write_bytes(b"first")
+    folder = tmp_path / "within" / "cand_within"
+    folder.mkdir(parents=True)
+    ws.check_fold_boosters(folder, ws.boosters_identity(tmp_path, "cand"))
+    ws.check_fold_boosters(folder, ws.boosters_identity(tmp_path, "cand"))          # the same boosters: on it goes
+    assert ws.boosters_identity(tmp_path, "missing") is None
+    boosters.write_bytes(b"second build")
+    os.utime(boosters, ns=(time.time_ns() + 10**9, time.time_ns() + 10**9))
+    with pytest.raises(SystemExit, match="another file now"):
+        ws.check_fold_boosters(folder, ws.boosters_identity(tmp_path, "cand"))

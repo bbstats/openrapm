@@ -348,6 +348,9 @@ def _add_folds_tag(parser) -> None:
                         help="two layers: each player's deviation from his team's mean gets multipliers of its own, "
                              "fitted on the held-back stints within games (shipped since experiment 106; "
                              "--no-within-team-layer is one layer)")
+    parser.add_argument("--within-nearest", type=int, default=PRODUCT.shrink.within_nearest, metavar="K",
+                        help="fit the within layer's multipliers on the K fold seasons nearest each season; 0: every "
+                             "fold season the rule allows; not given: --nearest's count, as shipped (experiment 123)")
     parser.add_argument("--within-factors", type=parse_within_factors, default=PRODUCT.shrink.within_factors,
                         metavar="OFFENCE,DEFENCE",
                         help="the within layer's multipliers times these (default "
@@ -437,7 +440,7 @@ def shrink_options(shrink, args: argparse.Namespace):
     return replace(shrink, folds_tag=args.folds, fold_seasons=args.fold_seasons, nearest=args.nearest,
                    free_games_part=args.free_games_part, defence_factors=args.defence_factor,
                    extrapolate_folds_tag=args.extrapolate_folds, within_team_layer=args.within_team_layer,
-                   within_factors=args.within_factors)
+                   within_factors=args.within_factors, within_nearest=args.within_nearest)
 
 
 def _add_applied_share(parser) -> None:

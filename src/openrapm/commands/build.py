@@ -32,7 +32,7 @@ outputs/season_ratings_check_step3.parquet, whose values equal the 2026 rows of 
 from __future__ import annotations
 
 import time
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -45,7 +45,7 @@ from ..data.game_rate_files import load_network
 from ..data.panel import in_progress_panel, panel_and_trainable_seasons, trainable_panel, trainable_panel_so_far
 from ..data.player_games import trainable_player_games
 from ..data.roles import main_teams
-from ..data.seasons import all_seasons, share_played, trainable
+from ..data.seasons import all_seasons, share_played, trainable, trainable_through
 from ..data.second_prior_files import line_setup, load_grams
 from ..data.stints import load_season_stints
 from ..data.tables import design_row_teams, player_names
@@ -193,7 +193,8 @@ def rated_second_prior(cfg: dict, season: int, panel: pd.DataFrame, priors: dict
         raise SystemExit(f"{season}: no season of outputs/second_prior/{prior.second_prior} may train its line")
     answers = {side: second_prior.booster_answers(
         priors[side].model,
-        box_prior.rated_rows(panel[(panel.side == side) & (panel.season == season)], priors[side].feature_names, share))
+        box_prior.rated_rows(panel[(panel.side == side) & (panel.season == season)], priors[side].feature_names, share,
+                             box_prior.least_share(settings)))
         for side in SIDES}
     typed = panel if types_panel is None else types_panel
     types = (None if lines.type_scale is None else
@@ -232,20 +233,42 @@ def row_label_tables(sums: dict, panel: pd.DataFrame, unseen, settings, cache: d
 @dataclass
 class SeasonsInProgress:
     """The seasons a build rates that no fit may train on (data/seasons.py): their season panel rows, which the
-    trainable panel lacks, and {season: the share of its regular season played} (data.seasons.share_played)."""
+    trainable panel lacks, {season: the share of its regular season played} (data.seasons.share_played), and
+    {season: (s_O, s_D)} the prior scales step 3 holds for a season still short of
+    settings.RidgeSettings.held_scale_through (prior_rapm.held_prior_scale, experiment 109)."""
     rows: pd.DataFrame
     shares: dict
+    held_scales: dict = field(default_factory=dict)
 
     @classmethod
-    def read(cls, cfg: dict, seasons) -> "SeasonsInProgress":
+    def read(cls, cfg: dict, seasons, settings=None) -> "SeasonsInProgress":
         rows = in_progress_panel(cfg)
         rows = rows[rows.possessions > 0].reset_index(drop=True)
         shares = {int(season): share_played(int(season), cfg) for season in seasons
                   if int(season) in set(rows.season.astype(int))}
+        held = {}
         for season, share in shares.items():
             print(f"  {season} is in progress: rated from its {share:.1%} of the regular season so far, nothing "
                   f"trained on it", flush=True)
-        return cls(rows, shares)
+            if settings is not None and share < settings.ridge.held_scale_through:
+                held[season] = held_scales(cfg, settings.ridge.held_scale_table, season)
+        return cls(rows, shares, held)
+
+
+def held_scales(cfg: dict, table_name: str, season: int) -> tuple | None:
+    """(s_O, s_D) the season in progress holds: the mean of the 8 finished seasons nearest it in
+    outputs/<table_name>.parquet (prior_rapm.held_prior_scale), said once; None, the scales fitted on its games as
+    before experiment 109, when that table is missing."""
+    path = resolve(cfg, "outputs") / f"{table_name}.parquet"
+    if not path.exists():
+        print(f"  {season}: no {path.name} to hold its prior scales at; fitted on its games", flush=True)
+        return None
+    table = pd.read_parquet(path, columns=["season", "prior_scale_off", "prior_scale_def"])
+    table = table[table.season.astype(int) <= trainable_through(cfg)]
+    held = prior_rapm.held_prior_scale(table, season)
+    print(f"  {season}: prior scales held at {held[0]:.3f} / {held[1]:.3f}, the mean of the 8 finished seasons "
+          f"nearest it in {path.name} (experiment 109)", flush=True)
+    return held
 
 
 def rate_one_season(season: int, sums: dict, panel: pd.DataFrame, designs: DesignCache, settings, params: dict,
@@ -261,9 +284,9 @@ def rate_one_season(season: int, sums: dict, panel: pd.DataFrame, designs: Desig
     unseen = unseen_seasons(season, settings)
     labels = rapm.career_labels(sums, unseen, settings.labels, settings.targets)
     outside = row_label_tables(sums, panel, unseen, settings, label_cache)
-    rated, share = None, 1.0
+    rated, share, scale = None, 1.0, None
     if progress is not None and season in progress.shares:
-        rated, share = progress.rows, progress.shares[season]
+        rated, share, scale = progress.rows, progress.shares[season], progress.held_scales.get(season)
     priors = box_prior.season_priors(labels, panel, season, unseen, settings, params, outside, part_seasons, rated,
                                      share)
     season_designs = {target: designs.season(season, target) for target in settings.targets.distinct()}
@@ -273,7 +296,7 @@ def rate_one_season(season: int, sums: dict, panel: pd.DataFrame, designs: Desig
         second = rated_second_prior(designs.cfg, season, panel if rated is None else rated, priors, lines, settings,
                                     share)
         values = second.values
-    return prior_rapm.rate_season(season_designs, values, settings, season), priors, unseen, second
+    return prior_rapm.rate_season(season_designs, values, settings, season, scale), priors, unseen, second
 
 
 # what a game-by-game build keeps of each game row: who, when, the box-score prior's answer and the prior step 3 read
@@ -340,9 +363,8 @@ def line_weights(coefficients: dict, n_folds: int, rows: pd.DataFrame) -> dict:
 
 def least_share(settings) -> float:
     """The smallest share of a season a part-season training row covers, which a game row's season share is held at;
-    1 without part-season rows."""
-    shares = tuple(settings.prior.part_season_shares)
-    return float(min(shares)) if shares else 1.0
+    1 without part-season rows (box_prior.least_share)."""
+    return box_prior.least_share(settings)
 
 
 def rate_one_season_by_game(season: int, sums: dict, panel: pd.DataFrame, designs: DesignCache, settings,
@@ -538,7 +560,7 @@ def rate_table(cfg: dict, settings, seasons, keep_models: bool = False) -> tuple
     tables, models, game_rows = rate_seasons(seasons, sums, panel, designs, settings, params, keep_models=keep_models,
                                              lines=lines,
                                              part_seasons=None if games else part_season_panel(cfg, settings),
-                                             progress=SeasonsInProgress.read(cfg, seasons), games=games)
+                                             progress=SeasonsInProgress.read(cfg, seasons, settings), games=games)
     table = prior_rapm.published_table(pd.concat(tables, ignore_index=True), player_names(cfg))
     return table, models, (pd.concat(game_rows, ignore_index=True) if game_rows else None)
 
@@ -719,15 +741,17 @@ def held_back_stint_equations(cfg: dict, folds: list, where: dict) -> dict:
 def within_layer_multipliers(cfg: dict, seasons, folds: list, where: dict, shrink,
                              second_folds: list | None = None) -> pd.DataFrame:
     """season and the four prior_shrink.WITHIN_COLUMNS: the within layer's multipliers on `folds`' held-back stints,
-    read to a full season with `second_folds` as the team layer's are, then times settings.shrink.within_factors
-    (offence, defence) and the defensive two times the defence factor."""
+    each season's from the fold seasons `shrink.within_nearest` names (the team layer's `nearest` when None), read to
+    a full season with `second_folds` as the team layer's are, then times settings.shrink.within_factors (offence,
+    defence) and the defensive two times the defence factor."""
+    nearest = shrink.nearest if shrink.within_nearest is None else int(shrink.within_nearest)
     multipliers = prior_shrink.within_multipliers_by_season(seasons, held_back_stint_equations(cfg, folds, where),
-                                                            shrink.rule, shrink.nearest)
+                                                            shrink.rule, nearest)
     if second_folds:
         directory = resolve(cfg, "within") / shrink.extrapolate_folds_tag
         second = prior_shrink.within_multipliers_by_season(
             seasons, held_back_stint_equations(cfg, second_folds, {fold.stem: directory for fold in second_folds}),
-            shrink.rule, shrink.nearest)
+            shrink.rule, nearest)
         multipliers = prior_shrink.read_to_full_season(multipliers, second, prior_shrink.held_back_share(folds),
                                                        prior_shrink.held_back_share(second_folds))
     offence, defence = shrink.within_factors

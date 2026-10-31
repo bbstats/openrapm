@@ -52,9 +52,10 @@ Words used below
                     mean rating of the fold's players with under 500 possessions (data/within_folds.py)
     prior part      s x prior from the fold's own rating (`prior_off`, `prior_def`)
     games' part     u from the fold's own rating (`u_off`, `u_def`)
-    fold seasons    the seasons whose folds may be used: 2017-2026, pinned (settings.ShrinkSettings), because
-                    the fold folder grew to 1997-2026 on 2026-10-04 and an unpinned rerun shrank harder than
-                    what ships (notes/DECISIONS.md, experiment 34's correction)
+    fold seasons    the seasons whose folds may be used, pinned (settings.ShrinkSettings.fold_seasons): 1997-2026
+                    since experiment 55, 2017-2026 before; pinned because the fold folder grew to 1997-2026 on
+                    2026-10-04 and an unpinned rerun shrank harder than what shipped (notes/DECISIONS.md,
+                    experiment 34's correction)
     multiplier      m_O, m_D: what the prior part is multiplied by, offence and defence
 
 The multipliers are one weighted least-squares fit over the test team-games of every fold used:
@@ -72,11 +73,11 @@ The multipliers are one weighted least-squares fit over the test team-games of e
 
 Which folds a season's multipliers are fitted on:
 
-    product rule   every fold season except the rated one, so a season's own games never set its multipliers.
-                   Seasons 1997-2016 have no folds, so each borrows the fit on all ten fold seasons
+    product rule   every fold season except the rated one, so a season's own games never set its multipliers
     test rule      every fold season except the rated one and its two neighbours, because the year-over-year
-                   test scores a season's ratings on its neighbours' games (1997-2015 borrow all ten; 2016 uses
-                   2018-2026)
+                   test scores a season's ratings on its neighbours' games
+    nearest        of those, the 8 fold seasons nearest the rated one (settings.ShrinkSettings.nearest, since
+                   experiment 55); before every fold season was 1997-2026, seasons without folds borrowed all ten
 
 Then, for each season and side (`shrink`):
 

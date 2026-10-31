@@ -17,7 +17,7 @@ Words used below
                   seasons he has, so a run may straddle the rated season
     part-season row   one of his training seasons so far: its panel row rebuilt from the games through the day a
                   share of its regular season had been played (data.panel.season_to_date), a quarter, a half and three
-                  quarters when settings.PriorSettings.part_season_shares asks; none as shipped
+                  quarters, settings.PriorSettings.part_season_shares (shipped since experiment 107)
     row weight    how much a training row counts in the fit
     player fold   one of five groups of players.  Each player's prior comes from the booster fitted without
                   his fold, so it cannot have learned "this box score is LeBron" and returned his label
@@ -60,11 +60,12 @@ so a row near the rated season counts fully and one half-life further away count
 less data under the same leaf penalties.
 
 Each booster (per side, one on every training row and one without each player fold; LightGBM regression with
-the settings in params/booster_params_lgb1.json) solves:
+the settings in params/booster_params_lgb1_tune2.json, settings.PriorSettings.booster_file) solves:
 
     minimise over f   sum over training rows  v (label - f(x))^2  +  LightGBM's penalties on the leaves
 
-    x      the row's inputs: the side's shipped list (features.SHIPPED), then row_possessions and row_seasons
+    x      the row's inputs: the side's shipped list (settings.PriorSettings.feature_set,
+           hustle_no_three_pct_self_creation), then row_possessions and row_seasons
     v      the row weight divided by the mean row weight (`fit_lightgbm`)
     f(x)   a sum of trees, each scaled by the learning rate; a tree splits on one input at a time (x_j < c)
            and fits, in each leaf, a linear model on the inputs its branch split on, ridge penalty
@@ -137,7 +138,10 @@ def average_over_seasons(rows: pd.DataFrame, feature_names, by=None, panel_colum
     columns = [name for name in panel_columns if name in rows.columns]
     key = rows.player_id if by is None else by
     weight = rows.possessions.groupby(key).sum()
-    mean = rows[columns].mul(rows.possessions, axis=0).groupby(key).sum().div(weight, axis=0)
+    # min_count=1: a column missing in every season stays missing, so the training rows' dropna drops the row; a plain
+    # sum read it as 0, an average player, which the rated row, missing there, never is (2026-10-30; no shipped input
+    # has a missing value today, so nothing moved)
+    mean = rows[columns].mul(rows.possessions, axis=0).groupby(key).sum(min_count=1).div(weight, axis=0)
     optional = [name for name in columns if name in MISSING_OK]
     if optional:
         # a column a season may lack (features.MISSING_OK) is averaged over the seasons that have it, and is missing
@@ -227,8 +231,8 @@ def training_rows(label: pd.DataFrame, rows: pd.DataFrame, column: str, feature_
 
     `part_seasons`, the side's rows of the training seasons so far (data.panel.build_panel_so_far: each with `share`
     and `season_share`), adds a chunk row for each (`part_season_members`): its row_seasons is its season_share, its
-    label the player's, and it shares the chunk rows' weight by its possessions.  None, as shipped, adds none, and the
-    rows are those of before experiment 107 to the byte.
+    label the player's, and it shares the chunk rows' weight by its possessions (shipped since experiment 107).  None
+    adds none, and the rows are those of before experiment 107 to the byte.
 
     With `outside` ({set of seasons: this side's label table with those seasons left out}, rapm.outside_labels),
     each chunk row is labelled with the player's RAPM over the seasons outside its own, so its box score and its
@@ -484,12 +488,21 @@ def fit_prior(train: pd.DataFrame, inputs, params: dict, n_folds: int = 5, fold_
     return BaggedPrior(members=members, inputs=list(inputs))
 
 
-def rated_rows(season_rows: pd.DataFrame, feature_names, share: float = 1.0) -> pd.DataFrame:
+def least_share(settings) -> float:
+    """The smallest share of a season a training row covers: the least part-season share, 1 without part-season
+    rows.  A rated row's share is held at it: a linear leaf follows its line past the range its rows cover."""
+    shares = tuple(settings.prior.part_season_shares)
+    return float(min(shares)) if shares else 1.0
+
+
+def rated_rows(season_rows: pd.DataFrame, feature_names, share: float = 1.0, least: float = 0.0) -> pd.DataFrame:
     """The rated season's own panel rows, derived, with row_possessions = his possessions and row_seasons = `share`:
     1 for a whole season; the share of the regular season played so far for a rating of the season so far
-    (`openrapm folds --cut`), which only boosters trained with part-season rows are told."""
+    (`openrapm folds --cut`, the season in progress), which only boosters trained with part-season rows are told,
+    held at `least` (`least_share`): 2027 at 6% of its season reads as a quarter, the least its training rows cover
+    (since 2026-10-30; a probe of 2026-10-24 found the answers move 0.01 at most between 1.3% and a whole season)."""
     rows = add_features(season_rows.copy(), feature_names)
-    return rows.assign(row_possessions=rows.possessions.to_numpy(float), row_seasons=float(share))
+    return rows.assign(row_possessions=rows.possessions.to_numpy(float), row_seasons=max(float(share), float(least)))
 
 
 def predict(prior: OutOfPlayerPrior | BaggedPrior | OutOfBagPrior, rows: pd.DataFrame) -> np.ndarray:
@@ -618,7 +631,8 @@ def season_priors(labels: dict, panel: pd.DataFrame, season: int, unseen, settin
                           settings.prior.fold_assignment, kernel, settings.prior.bags, settings.prior.prediction,
                           settings.prior.split_per_bag, settings.prior.bag_draw)
         source = panel if rated is None else rated
-        rows = rated_rows(source[(source.side == side) & (source.season == season)], names, share)
+        rows = rated_rows(source[(source.side == side) & (source.season == season)], names, share,
+                          least_share(settings))
         out[side] = SidePrior(values=dict(zip(rows.player_id.to_numpy(), predict(model, rows))), model=model,
                               feature_names=names)
     return out
