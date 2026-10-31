@@ -1056,8 +1056,11 @@ def season_games_parts(designs: DesignCache, box_files: BoxScoreFiles, season: i
 
 def held_scale_seasons(cfg: dict) -> set:
     """The seasons whose prior scales the build held (commands/build.SeasonsInProgress): those in progress short of
-    settings.RidgeSettings.held_scale_through of their regular season."""
+    settings.RidgeSettings.held_scale_through of their regular season.  A configuration that names no seasons or no
+    data folder, a simulated league's, has none in progress (as data.seasons.last_finished reads it)."""
     from ..data.seasons import in_progress, share_played
+    if "_root" not in cfg or "first_season" not in cfg:
+        return set()
     return {int(season) for season in in_progress(cfg)
             if share_played(int(season), cfg) < PRODUCT.ridge.held_scale_through}
 
