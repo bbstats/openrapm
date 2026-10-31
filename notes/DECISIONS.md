@@ -11307,3 +11307,15 @@ Barnes out, 20th to 21st.
 noise: the older seasons want a smaller offensive games' part (pooled 1.10-1.15 against today's 1.20-1.37 there) and
 the newer ones a larger one.  Not adopted by the registered rule; the setting stays, off by default.  A middle way, a
 wider window such as 16 seasons, or the 8-season fit pulled part way toward the pooled one, would be a new experiment.
+
+### The morning of 2026-10-31: the decomposition replayed 2027 with its prior scales free
+
+The 6 AM job built 2027 with the held prior scales and stopped at the site step, yesterday's 2027 left up: the
+decomposition page solves step 3 again for every season, and it solved 2027 with the scales free, so it landed on
+another solution and its pieces missed 2027's ratings by 0.13, which its own check caught ("in a jittered season":
+2027's free solve on 81 games needed the jitter).  Fixed in 032228c and 58e0d54: `decomposition.refit` takes the
+held scales and takes the scaled lineup priors off the outcome, as `prior_rapm.ridge_system` does, and
+`site.held_scale_seasons` names the seasons the build held by the same rule.  Every check passes on all 31 seasons, the
+jittered season's misses back to 7.6e-10.  The lesson: the decomposition replays step 3, so any change to how step 3
+solves a season has to reach that replay; last night's dry run of the job stopped before the site step and could not
+see it.  The job was run again by hand at 7:40 AM to publish.

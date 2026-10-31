@@ -74,6 +74,10 @@ bug-fix and make-better pass of 2026-10-30", experiment 109 continued and experi
   Definitions tab names the within-season test and today's adoption rule.
 - **Checked tonight**: `PUBLISH=0 bash scripts/daily_update.sh` passes with all of it (2027 held at 1.116 / 1.000);
   the site's files build, the power page's average team at 0.00, 13 of 30 teams above it.
+- **The morning of 2026-10-31**: the 6 AM job stopped at the site step: the decomposition solved 2027 again with its
+  prior scales free and its pieces missed the ratings by 0.13.  Fixed (032228c, 58e0d54), the job run again by hand.
+  A `PUBLISH=0` dry run stops before the site step, so after a change to step 3 also run `openrapm site
+  --openrapm-decomposition --power --out-dir <a scratch folder>`.
 - **Open, the owner's call**: a settings check for the morning job (DECISIONS.md, "The rest of the pass": the job runs
   the working tree's code, and the published tables come from three commands); experiments 111-122's verdicts.
 
