@@ -82,8 +82,8 @@ HEADERS = ("Exp", "Date", "Name", "Proposed by", "Change", "Result",
            "z, rank order only (scale-adjusted)", "z, top-30 players",
            "Lineup-swap test: rank-order change (pos = better)",
            "Lineup-swap test: z", "Spearman vs. consensus", "Baseline Spearman", "Offense SD ratio vs. consensus",
-           "Baseline offense SD ratio", "Trade loss, offense: z (neg = better)",
-           "Trade loss, defense: z (neg = better)", "Baseline ratings file", "Notes", "Command", "Commit")
+           "Baseline offense SD ratio", "With/without residual, offense: z (neg = better)",
+           "With/without residual, defense: z (neg = better)", "Baseline ratings file", "Notes", "Command", "Commit")
 TEXT_COLUMNS = ("exp", "commit")          # given a leading apostrophe in the sheet so Sheets keeps them as text
 NUM = r"([+-]?\d+\.\d+)"                  # a printed decimal number
 # 63's "prev" rows are the PREVIOUS season's rating looking forward, i.e. predicting the next season.
