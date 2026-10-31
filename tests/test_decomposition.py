@@ -95,6 +95,25 @@ def test_the_refit_is_step_3s_own_fit(world):
     assert np.array_equal(fit.theta[-2:], step_3.prior_scale)
 
 
+@pytest.mark.parametrize("side", ["off", "def"])
+def test_a_season_whose_prior_scales_were_held_is_split_with_them_held(world, side):
+    """A young season in progress holds its prior scales (experiment 109): the refit holds them too, its deviations
+    are step 3's own, and the groups add up to them; refitted free it lands elsewhere (2027, 2026-10-31)."""
+    design, free, keys, regular_season_only = world
+    prior_o, prior_d = _prior(design)
+    scale = (0.7 * float(free.theta[-2]), 1.3 * float(free.theta[-1]))         # held away from the free optimum
+    step_3 = prior_rapm.fit(design, prior_o, prior_d, penalty=3000.0, scale=scale)
+    held = decomposition.refit(design, prior_o, prior_d, penalty=3000.0, scale=scale)
+    n = held.n_players
+    assert np.array_equal(held.theta[:2 * n], step_3.deviation)
+    assert not np.allclose(free.theta[:2 * n], step_3.deviation, atol=1e-6)
+    frame, misses = decomposition.split_games_part(held, keys, side)
+    sign, first = (1.0, 0) if side == "off" else (-1.0, n)
+    assert np.allclose(frame.u, sign * step_3.deviation[first:first + n], atol=1e-12)
+    assert np.allclose(frame.on_court + frame.off_court + frame.team_sos, frame.u, atol=1e-12)
+    assert misses["sum_hy"] < 1e-9 and misses["leftover"] < (1e-6 if regular_season_only else 1e-9)
+
+
 def test_jitter_is_reported_only_where_the_solve_needed_it(world):
     _, fit, _, regular_season_only = world
     assert fit.retried == regular_season_only

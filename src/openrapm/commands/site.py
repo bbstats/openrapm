@@ -1023,32 +1023,43 @@ def published_parts(ratings_path: Path, cfg: dict | None = None) -> tuple[pd.Dat
 
 
 def season_games_parts(designs: DesignCache, box_files: BoxScoreFiles, season: int, step3: pd.DataFrame,
-                       penalty: float) -> tuple[dict, dict]:
+                       penalty: float, held: bool = False) -> tuple[dict, dict]:
     """One season's games' part split on both sides: ({"off": frame, "def": frame}, {"off": misses, "def": misses}).
 
     The offence half comes from the fit on the offence target, the defence half from the fit on the defence target,
     as `prior_rapm.rate_season` makes the table.  The priors are the step-3 table's own divided by its prior scale: a
     fit's deviations do not change with the prior's scale or with a constant added to it, because the scale is a free
     coefficient and the season intercept absorbs the constant.  `misses` adds the largest gap between the refit's
-    prior scale and the table's, and the share of rows the box scores cannot place.
+    prior scale and the table's, and the share of rows the box scores cannot place.  `held`: the build held the
+    season's prior scales (a young season in progress, `held_scale_seasons`), so the refit holds them at the table's
+    and its scale misses nothing by construction.
     """
     rows = step3[step3.season == season]
+    scale = (float(rows.prior_scale_off.iloc[0]), float(rows.prior_scale_def.iloc[0])) if held else None
     prior_offense = dict(zip(rows.player_id, rows.prior_offense / rows.prior_scale_off))
     prior_defense = dict(zip(rows.player_id, rows.prior_defense / rows.prior_scale_def))
     parts, misses = {}, {}
     for side, target, scale_column, scale_index in (("off", PRODUCT.targets.offence, "prior_scale_off", -2),
                                                     ("def", PRODUCT.targets.defence, "prior_scale_def", -1)):
         design = designs.season(season, target)
-        fit = refit(design, prior_offense, prior_defense, penalty)
+        fit = refit(design, prior_offense, prior_defense, penalty, scale)
         absent = set(fit.player_ids) - set(rows.player_id)
         if absent:
             raise SystemExit(f"{season}: {len(absent)} players of the design are not in the step-3 table")
         lineup_o, lineup_d = lineups(fit.players, fit.n_players)
         keys = row_keys(design, lineup_o, lineup_d, box_files.teams(season))
         parts[side], misses[side] = split_games_part(fit, keys, side)
-        misses[side].update(unplaced=keys["unplaced"],
-                            scale=abs(float(fit.theta[scale_index]) - float(rows[scale_column].iloc[0])))
+        misses[side].update(unplaced=keys["unplaced"], scale=0.0 if held else
+                            abs(float(fit.theta[scale_index]) - float(rows[scale_column].iloc[0])))
     return parts, misses
+
+
+def held_scale_seasons(cfg: dict) -> set:
+    """The seasons whose prior scales the build held (commands/build.SeasonsInProgress): those in progress short of
+    settings.RidgeSettings.held_scale_through of their regular season."""
+    from ..data.seasons import in_progress, share_played
+    return {int(season) for season in in_progress(cfg)
+            if share_played(int(season), cfg) < PRODUCT.ridge.held_scale_through}
 
 
 def season_pieces(rows: pd.DataFrame, parts: dict, factors: dict | None = None) -> pd.DataFrame:
@@ -1165,10 +1176,10 @@ def write_openrapm_decomposition(cfg: dict, ratings_path: Path, data_dir: Path, 
     table, step3, factors = published_parts(ratings_path, cfg)
     names, box_files, designs = name_table(ratings_path, cfg), BoxScoreFiles(cfg), DesignCache(cfg)
     penalty = float(PRODUCT.ridge.penalty)
-    started, rows, worst = time.time(), {}, new_openrapm_worst()
+    started, rows, worst, held = time.time(), {}, new_openrapm_worst(), held_scale_seasons(cfg)
     for season in sorted(int(s) for s in table.season.unique()):
         season_rows = table[table.season == season].reset_index(drop=True)
-        parts, misses = season_games_parts(designs, box_files, season, step3, penalty)
+        parts, misses = season_games_parts(designs, box_files, season, step3, penalty, season in held)
         designs.clear()
         pieces = season_pieces(season_rows, parts, factors[season])
         update_openrapm_worst(worst, season_rows, pieces, parts, misses, factors[season])

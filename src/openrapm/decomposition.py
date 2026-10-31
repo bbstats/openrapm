@@ -149,11 +149,11 @@ class GamesPartFit:
     """One season's step-3 fit on one target, with what the split needs: the rows and the matrix that was solved."""
     player_ids: np.ndarray
     players: sp.csr_matrix       # Z
-    unpenalised: np.ndarray      # [C | P_O | P_D]
-    y: np.ndarray
+    unpenalised: np.ndarray      # [C | P_O | P_D]; [C] with the prior scales held
+    y: np.ndarray                # the outcome; with the prior scales held, less the scaled lineup priors
     w: np.ndarray
     matrix: np.ndarray           # M = G + Lambda, with the jitter if the solve needed one
-    theta: np.ndarray            # [deviation (offence, defence) | context | s_O, s_D]
+    theta: np.ndarray            # [deviation (offence, defence) | context | s_O, s_D]; no s_O, s_D when held
     retried: bool                # the solve added a jitter (rapm.solved_ridge)
 
     @property
@@ -161,16 +161,25 @@ class GamesPartFit:
         return len(self.player_ids)
 
 
-def refit(design, prior_offense: dict, prior_defense: dict, penalty: float) -> GamesPartFit:
+def refit(design, prior_offense: dict, prior_defense: dict, penalty: float, scale=None) -> GamesPartFit:
     """Step 3's fit on one season's design (`prior_rapm.fit`'s system, through the same code), keeping the rows and
     the matrix.  The priors are {player_id: prior}; any multiple of the booster's prior, plus a constant, gives the
-    same deviations, because the prior scale is free and the season intercept absorbs the constant."""
-    system = prior_rapm.ridge_system(design, prior_offense, prior_defense, penalty)
+    same deviations, because the prior scale is free and the season intercept absorbs the constant.
+
+    With `scale`, (s_O, s_D), the prior scales held as the build held them for a young season in progress
+    (settings.RidgeSettings.held_scale_through, experiment 109): the scaled lineup priors come off the outcome, as
+    `prior_rapm.ridge_system` takes them, and the split reads that outcome.  Refitted free, such a season lands on
+    another solution, and its pieces missed its ratings by 0.13 (2027, the morning of 2026-10-31)."""
+    system = prior_rapm.ridge_system(design, prior_offense, prior_defense, penalty, scale)
     theta, matrix = rapm.solved_ridge(system.gram, system.rhs, system.penalties)
     retried = not np.array_equal(np.diag(matrix), np.diag(system.gram) + system.penalties)
+    y = np.asarray(design.y, dtype=float)
+    if scale is not None:
+        sums_o, sums_d = prior_rapm.lineup_prior_sums(system.players, system.prior, design.spec.n_players)
+        y = y - float(scale[0]) * sums_o - float(scale[1]) * sums_d
     return GamesPartFit(player_ids=design.spec.players["player_id"].to_numpy(), players=system.players,
-                        unpenalised=system.unpenalised, y=np.asarray(design.y, dtype=float),
-                        w=np.asarray(design.w, dtype=float), matrix=matrix, theta=theta, retried=retried)
+                        unpenalised=system.unpenalised, y=y, w=np.asarray(design.w, dtype=float), matrix=matrix,
+                        theta=theta, retried=retried)
 
 
 def row_weights(fit: GamesPartFit, solved_column: np.ndarray) -> np.ndarray:
