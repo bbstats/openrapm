@@ -11319,3 +11319,19 @@ held scales and takes the scaled lineup priors off the outcome, as `prior_rapm.r
 jittered season's misses back to 7.6e-10.  The lesson: the decomposition replays step 3, so any change to how step 3
 solves a season has to reach that replay; last night's dry run of the job stopped before the site step and could not
 see it.  The job was run again by hand at 7:40 AM to publish.
+
+### Experiment 109 blended: a straight line from held to fitted (the owner, 2026-10-31: "If it's just two different shrinkages we should probably just blend between them", then "straight line"; registered before any result)
+
+**The change.**  The season in progress's prior scales a straight line from the held ones at its first game to its own
+fitted ones at 75% of its regular season, where the two tie: weight on the fitted scales the share played over 0.75
+(`prior_rapm.blend_weight`; `RidgeSettings.held_scale_blend` True, `held_scale_through` 0.75).  Today's rule holds
+them in full until half the season, then fits them, so every 2027 rating would jump on the morning 2027 passes halfway.
+
+**The test** (`scratch/2026-10-31_blend/run.sh`): each season 1997-2026 rated from its games through 10%, 25% and 50% of
+its regular season, blended (`openrapm folds --cut S --hold-prior-scale season_ratings_parts107_step3 --blend-through
+0.75`, tags `parts107_cutNN_blend31`) and under today's rule (held: `parts107_cut10_held31`, built again, and last
+night's `parts107_cut25_held30`, `parts107_cut50_held30`), scored on the rest of each season by the within-season WOWY
+test with the whole season's step 4, by era; at 50% also against the fitted arm, the switch's other side.
+
+**The rule.**  Adopted when at no share is the blend worse than today's rule in any era at z +2: it removes the
+midseason jump, so a tie is enough.
