@@ -11587,3 +11587,63 @@ twos made a lot (800, 1,400, 1,100: the targets move 8-10% of the way at 7%, whe
 pooled over the other finished seasons reads the same to 0.01 everywhere, so the per-season one stands.  Still
 short of 1.00 after the fix: fouls 0.85, free throws made 0.89, missed twos 0.89, the pad k's own over-read (the
 second cause).
+
+### Experiment 127: result (2026-11-01, `outputs/exp127.log`, `outputs/padbins127_chain.log`, `outputs/csv/wowy_exp127_cutNN_eras.csv`, `wowy_padbins127_eras.csv`; verdict the owner's)
+
+`scratch/2026-11-01_padding/run.sh`, 3:18 to 5:16 PM: the candidate's panel (5 minutes) and its panel of each season
+so far (9 minutes), the chain `padbins127` (55 minutes; its own folds `padbins127_early`, `padbins127_within`), then
+each season 1997-2026 rated from its first 7.15% (2027's 88 games), 10%, 25% and 50% of games, candidate and
+incumbent (ctx110) built by the same code with the prior scales held at the 8 nearest seasons' mean, about 5.5
+minutes an arm, and the within-season WOWY test of the rest of each season, both with the whole season's step 4.
+
+**The season so far**, the shipped stage, every stint, the candidate minus today; below 0 is better:
+
+| share of season | era | change | standard error | paired z | seasons better |
+|---|---|---|---|---|---|
+| 7.15% | 1997-2006 | -1.812 | 0.452 | -4.01 | 8 of 10 |
+| 7.15% | 2007-2016 | -0.735 | 0.208 | -3.54 | 9 of 10 |
+| 7.15% | 2017-2026 | -0.718 | 0.177 | -4.05 | 8 of 10 |
+| 7.15% | all seasons | -1.088 | 0.195 | -5.59 | 25 of 30 |
+| 10% | 1997-2006 | -1.281 | 0.295 | -4.34 | 9 of 10 |
+| 10% | 2007-2016 | -0.947 | 0.226 | -4.19 | 10 of 10 |
+| 10% | 2017-2026 | -0.612 | 0.159 | -3.85 | 8 of 10 |
+| 10% | all seasons | -0.947 | 0.140 | -6.78 | 27 of 30 |
+| 25% | 1997-2006 | -0.433 | 0.126 | -3.42 | 9 of 10 |
+| 25% | 2007-2016 | -0.651 | 0.158 | -4.13 | 10 of 10 |
+| 25% | 2017-2026 | -0.326 | 0.178 | -1.83 | 8 of 10 |
+| 25% | all seasons | -0.470 | 0.090 | -5.21 | 27 of 30 |
+| 50% | 1997-2006 | -0.228 | 0.094 | -2.42 | 9 of 10 |
+| 50% | 2007-2016 | -0.178 | 0.094 | -1.90 | 8 of 10 |
+| 50% | 2017-2026 | -0.255 | 0.131 | -1.94 | 7 of 10 |
+| 50% | all seasons | -0.221 | 0.060 | -3.65 | 24 of 30 |
+
+Newey-West z, floored at the plain one, all seasons: -4.50, -6.04, -5.21, -3.58.  Before the shrink at 7.15% the
+change is -2.93, z -6.39, 29 of 30: the whole season's step 4 keeps a third of the gain, as it should, since it was
+fitted on whole seasons whose targets barely moved.
+
+**Whole seasons**, the chain, each system minus ctx110, the shipped stage, every stint:
+
+| system | era | change | standard error | paired z | seasons better |
+|---|---|---|---|---|---|
+| padded bin target | 1997-2006 | -0.017 | 0.029 | -0.60 | 7 of 10 |
+| padded bin target | 2007-2016 | +0.012 | 0.027 | +0.45 | 5 of 10 |
+| padded bin target | 2017-2026 | +0.017 | 0.030 | +0.57 | 5 of 10 |
+| padded bin target | all seasons | +0.004 | 0.016 | +0.24 | 17 of 30 |
+| noise control | all seasons | -0.013 | 0.008 | -1.63 | 17 of 30 |
+
+A tie, as registered (whole-season targets move about a tenth of the way).  Before the shrink -0.023, z -1.29.  The
+year-over-year test, both directions, 56 readings: team-game -0.037, z -1.50, 31 of 56 better; stint -0.110, z -2.86,
+38 of 56; stint with each side rescaled -0.089, z -2.91.  Widths: the scored season wants offense times 0.946 against
+0.938 for ctx110, defense 0.900 against 0.900: not width.
+
+The 2026 top 20 keeps its order through 19; OG Anunoby and Ausar Thompson swap 20th and 21st (3.46 against 3.44).
+No one in it moves more than 0.06 per 100 (Giannis +0.06, Kawhi Leonard +0.05, Dončić +0.05, Markkanen -0.04).
+Players with 500+ possessions move a median 0.02, the 90th percentile 0.05, the most 0.16; the spread 2.251 to 2.247;
+correlation 0.9999.  The largest moves are players under 100 possessions, -0.5 to -0.7 (Dario Šarić 82 possessions,
+Sean Pedulla 57, Isaac Jones 69, Mo Bamba 85): the deep-bench bin's targets, which carried its own few players' luck,
+now lean on the league.  Page `outputs/compare_incumbent_padbins127_2026.html`.
+
+**Against the registered rule.**  At a tenth: better in all three eras (z -4.34 / -4.19 / -3.85), pooled z -6.78, 27
+of 30 seasons: passed.  At a quarter and a half: better everywhere, nothing worse (the smallest z -1.83 at a quarter
+in 2017-2026 is a gain).  Whole seasons: a tie, +0.004, z +0.24, no era worse at z +2.  Year over year: not worse,
+a gain at z -2.9.  The verdict is the owner's; 2027 today under both arms follows below.
