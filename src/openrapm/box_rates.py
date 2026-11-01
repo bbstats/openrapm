@@ -49,7 +49,8 @@ rate is padded toward the season's league rate by the same rule, one level up, b
 Example: at 88 games a bin with 9,000 possessions and 1.9 steals per 100, k_group 12,000 and a league rate of 1.6 is
 padded to (9,000 x 1.9 + 12,000 x 1.6) / 21,000 = 1.73; over a whole season the same bin holds 130,000 possessions
 and keeps (130,000 x 1.9 + 12,000 x 1.6) / 142,000 = 1.87.  The players' pad k is then measured around the padded
-target (pad_k_around target).  With pad_bin_target none, as shipped, the bin rate is the target as counted.
+target (pad_k_around target).  Shipped since 2026-11-01; with pad_bin_target none, as before it, the bin rate is the
+target as counted.
 
 The body target (pad_target body_and_possessions; notes/DECISIONS.md, experiment 86; the owner, 2026-10-20: "out of
 fold ... priors for the padded metrics (eg use height and weight and, the buckets we were using earlier like for
@@ -95,10 +96,10 @@ PAD_TARGETS = ("league", "poss_conditional", "body_and_possessions")
 # 217 / 307 / 387 around the bins (notes/DECISIONS.md, the bug-fix pass, experiment 96)
 PAD_K_AROUND = ("league", "target")
 # whether each possession bin's own rate is padded toward the season's league rate by the bin's possessions before it
-# serves as a target (config pad_bin_target): "none", as shipped, the bin rate as counted; "league", the group pad of
-# the module docstring.  From the first 7% of the 30 finished seasons, one extra padded steal per 100 was followed by
-# 0.70 later in the season with the bin rate as counted and 0.89 with the league rate as the target; the bin rate
-# itself, 1.00 higher, by 0.14 (notes/DECISIONS.md, experiment 127)
+# serves as a target (config pad_bin_target): "none", the bin rate as counted, as shipped until 2026-11-01; "league",
+# the group pad of the module docstring, shipped since.  From the first 7% of the 30 finished seasons, one extra
+# padded steal per 100 was followed by 0.70 later in the season with the bin rate as counted and 0.89 with the league
+# rate as the target; the bin rate itself, 1.00 higher, by 0.14 (notes/DECISIONS.md, experiment 127)
 PAD_BIN_TARGETS = ("none", "league")
 BODY = ("height_in", "weight_lb")      # the body target's inputs (data/bio.py), one row per player
 BODY_FOLDS = 5                          # its player folds: player_id % 5

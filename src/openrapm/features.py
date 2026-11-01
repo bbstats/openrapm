@@ -10,7 +10,9 @@ Words used below
                 with a similar number of possessions (one of six possession bins) by k possessions' worth, k
                 estimated per rate and season from odd- versus even-game halves (box_rates.py).  With k = 450
                 and a bin average of 1.4 (illustrative values), a 200-possession bench player's 2.1 steals per
-                100 become (200 x 2.1 + 450 x 1.4) / (200 + 450) = 1.6
+                100 become (200 x 2.1 + 450 x 1.4) / (200 + 450) = 1.6.  The bin average is itself padded
+                toward the league rate by the bin's possessions first (experiment 127, 2026-11-01), so early in
+                a season, when a bin's average rests on a few dozen events, the league rate carries the weight
     centred     the possession-weighted league mean subtracted, so 0 is a league-average rate; "level"
                 columns keep their units
     uncentred   the same padded rate with the level kept (the `_uncentred` columns); a ratio needs the level back

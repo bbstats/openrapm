@@ -53,7 +53,10 @@ is that season's rate among the players of his possession bin (six ranges of pos
 scale). k is measured per count and season from every player's odd- against even-numbered games: the noise
 variance of one possession's worth of the rate over the variance of the true rates between players
 (`box_rates.py`). A 200-possession player with 2.1 steals per 100, k = 450 and a bin rate of 1.4 is padded to
-(200 x 2.1 + 450 x 1.4) / 650 = 1.6.
+(200 x 2.1 + 450 x 1.4) / 650 = 1.6. The bin rate is itself padded toward the league rate by the bin's
+possessions before it serves as the target (since 2026-11-01), so early in a season, when a bin's rate rests on a
+few dozen events, the league rate carries most of the weight; over a whole season the bin keeps about 90% of its
+own rate.
 
 **Box-score prior.** LightGBM's (gradient-boosted trees') prediction of a player's label from his season-panel
 row: 17 inputs on offence, 14 on defence (`features.SHIPPED`). Step 2, `box_prior.py`.

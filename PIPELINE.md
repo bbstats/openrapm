@@ -102,7 +102,12 @@ command runs in one process as before.
   Flat: the padding behind the box rates"): padded = (n x rate + k x bin rate) / (n + k), with n his
   possessions and k measured per count and season from every player's odd- against even-numbered games. A
   200-possession player with 2.1 steals per 100, k = 450 and a bin rate of 1.4 is padded to
-  (200 x 2.1 + 450 x 1.4) / 650 = 1.6.
+  (200 x 2.1 + 450 x 1.4) / 650 = 1.6. The bin rate is itself padded toward the league rate by the bin's
+  possessions before it serves as the target (config.yaml `pad_bin_target: league`, experiment 127, adopted
+  2026-11-01): a bin with 9,000 possessions and 1.9 steals per 100, a league rate of 1.6 and a bin pad of
+  12,000 gives a target of 1.73; over a whole season the same bin holds 130,000 possessions and keeps 1.87.
+  Early in a season a bin's rate rests on a few dozen steals; with it padded, the ratings built from a tenth
+  of a season predict the rest better in every era (notes/DECISIONS.md, "Early-season padding").
 - **Code:** `src/openrapm/data/panel.py`, `box_rates.py`, `on_court.py`, `data/roles.py`, `data/bio.py`,
   `data/designs.py`; `features.py` says what every column means.
 
