@@ -22,6 +22,38 @@ every number quoted here; read its measurement traps before trusting a number.  
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
 
+## Where it stands, 2026-11-01 evening: early-season padding (experiment 127, verdict pending)
+
+The owner asked "Are steals padded correctly? Or are players just benefiting from early season turnovers".  Not the
+league's turnovers: the possession bin a player's rate is padded toward is itself noise at 7% of a season (a bin
+target 1.00 steal higher is followed by 0.14 more over the rest of the season; steals carried 0.70 of a padded unit,
+the lowest of the 13 counts).  DECISIONS.md, "Early-season padding" and "Experiment 127", hold the record.
+
+- **The fix, built and tested, waiting on the owner's verdict**: each bin's rate is padded toward the season's
+  league rate by the bin's own possessions before it serves as a target, the same rule one level up
+  (`box_rates.group_k`, `padded_bin_targets`; config `pad_bin_target: league`, **off in config.yaml as shipped and
+  bit-identical off**; the candidate's config `scratch/2026-11-01_padding/config_padbins.yaml`, its panels
+  `season_panel_padbins127.parquet` and `season_panel_so_far_padbins127.parquet`, its tables `season_ratings_padbins127*`,
+  folds `padbins127_early/_within`, cut folds `padbins127_cutNN_held` and `ctx110_cutNN_held` for NN 0715, 10, 25, 50).
+  The owner's registered rule passed: the season so far at a tenth better in every era (z -4.3 / -4.2 / -3.8, pooled
+  z -6.8, 27 of 30 seasons), at 7.15% z -5.6, at a quarter z -5.2, at a half z -3.7; whole seasons a tie (+0.004,
+  z +0.2); year over year a gain (z -2.9); the 2026 top 20 keeps its order; the 2027 top 20 keeps its names (moves
+  within 0.14, Dyson Daniels -0.02).  **If adopted**: flip `pad_bin_target` to `league` in config.yaml between two
+  6 AM runs, keep today's panel as `season_panel_before_padbins127.parquet`, `openrapm data panel --force` and
+  `--so-far 0.25,0.5,0.75`, tenth folds `padbins127_k10` and `ShrinkSettings.folds_tag`, the swap part of the prior
+  refitted on the new boosters and folds as experiment 126 did (or an explicit note that it keeps ctx110's line), a
+  full build 1997-2027, the site, a noise control; docs: `PIPELINE.md` 99-105, `GLOSSARY.md` "Padded rate", the
+  config comment, the Changelog in the owner's words.
+- **Fixed first** (0ffbcc0): `openrapm folds --cut` had told the part-season boosters share 1.0 since the morning's
+  floor (4101702), so every cut build of 2026-11-01 before it rated the season so far as a whole season;
+  `within_season.least_share_of(meta)` and a check on the run.  The experiment-109 arms on disk predate the bug.
+- **Next, separately**: the hustle stats' own padding (`data/dashboard_rates.py`, `_bin_targets`, the same disease);
+  and the pad k's own over-read of early spread (fouls carry 0.85 of a padded unit after the fix, free throws made
+  0.89): a k from what lasts, measured on the finished seasons at the same share.
+- The quick read's tool: `scratch/2026-11-01_padding/screen.py` (all 13 counts, four shares, six arms, 7 minutes);
+  the build: `bash scratch/2026-11-01_padding/run.sh` (resumable, 2 hours; log `outputs/exp127.log`); 2027 under an
+  arm: `openrapm build --setting test --name NAMEp27 --seasons 2027 --replace-seasons` on copies of the chain tables.
+
 ## Where it stands, 2026-11-01: the fix pass ("Anything you'd fix?")
 
 The owner asked what I would fix and answered four questions at 2 PM: merge main and push; the percentile pool of a
@@ -524,7 +556,7 @@ What else the work of 2026-10-23 left open:
   on creation110 read -0.017, z -1.83); a candidate is read against today's ratings on the same split, so that noise
   does not enter its change, but any one build's standing carries 0.01-0.02 of it.
 - Every experiment gets a row in `experiments/runs.csv` (`scripts/checks/101_log_run.py`), mirrored to the sheet
-  "OpenRAPM experiments", tab Experiments; the next free row is 127.  Since 2026-10-30 it reads the within-season
+  "OpenRAPM experiments", tab Experiments; the next free row is 128.  Since 2026-10-30 it reads the within-season
   test by era too, and refuses a partial or stale reading.  Input screens get their own tab ("Input screen 112").
 
 ## Commands a session runs
