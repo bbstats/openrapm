@@ -11429,3 +11429,44 @@ noise_creation110; the year-over-year test as the guard at z +2; the 2026 top 20
 
 **The rule.**  Adopted when it is better in every era on the within-season test and not worse year over year at z +2;
 the verdict is the owner's.
+
+### Experiment 126: result (2026-11-01, `outputs/ctx110_chain.log`, `outputs/csv/wowy_ctx110_eras.csv`; verdict the owner's)
+
+The line fitted on creation110's boosters and folds (`outputs/second_prior/ctx110`, 30 seasons, 775 seconds), then the
+chain `ctx110` (9:32 to 10:33 AM, its own folds `ctx110_early`, `ctx110_within`).  The line's weights moved: on
+offense the opponents' offensive priors on the court read -0.8 to -1.3 against +0.1 to +0.5 for the shipped line, the
+teammates' on-court priors near 0 against +0.3 to +0.9, threes made +0.2 against -0.1 (`the line:` lines of the two
+chain logs, 1997-2003).
+
+The within-season WOWY test, the shipped stage, every stint, each system minus creation110; below 0 is better:
+
+| system | era | change | standard error | paired z | seasons better |
+|---|---|---|---|---|---|
+| refitted line | 1997-2006 | -0.237 | 0.077 | -3.06 | 8 of 10 |
+| refitted line | 2007-2016 | -0.263 | 0.087 | -3.03 | 9 of 10 |
+| refitted line | 2017-2026 | -0.014 | 0.064 | -0.23 | 5 of 10 |
+| refitted line | all seasons | -0.171 | 0.047 | -3.61 | 22 of 30 |
+| noise control | 1997-2006 | -0.031 | 0.010 | -3.16 | 8 of 10 |
+| noise control | 2007-2016 | -0.010 | 0.015 | -0.62 | 5 of 10 |
+| noise control | 2017-2026 | -0.011 | 0.022 | -0.50 | 3 of 10 |
+| noise control | all seasons | -0.017 | 0.009 | -1.83 | 16 of 30 |
+
+Newey-West z, floored at the plain one: -3.06, -2.51, -0.18, -2.73.  Before the shrink the change is -0.096, z -1.54;
+the shrink keeps the gain (its own folds, the registered reading).
+
+The year-over-year test, both directions, 56 readings: team-game -0.157, z -4.08, 37 of 56 better; stint -0.243,
+z -4.99; stint with each side rescaled -0.247, z -5.59.  The previous season's rankings alone -0.134, z -2.33; the next
+season's alone -0.180, z -3.46.  Widths: the scored season wants offense times 0.945 against 0.961 for creation110,
+defense 0.877 against 0.870: the gain is not width (trap 39).
+
+The 2026 top 20 keeps 19 of 20: Lauri Markkanen in, 22nd to 15th; Moussa Diabaté out, 18th to 22nd.  In points per
+100: Ausar Thompson -0.9 (4.4 to 3.5, 9th to 20th), Nikola Jokić +0.8 (7.1 to 7.9, 3rd to 2nd), Wembanyama +0.4,
+Kawhi Leonard +0.4, Luka Dončić +0.3, Giannis Antetokounmpo -0.2, Neemias Queta -0.4, Diabaté -0.4; everyone else
+within 0.3.  Page `outputs/compare_incumbent_ctx110_2026.html`.
+
+**Reading.**  Better in 1997-2006 and 2007-2016 by ten times the noise control, a tie in 2017-2026 (-0.014, z -0.23,
+5 of 10), and the year-over-year guard a clear win rather than a pass.  The registered rule asks for better in every
+era, and the third era is a tie, so the verdict is the owner's; nothing is worse anywhere, and the shipped line was
+fitted on boosters and stints the pipeline no longer uses.  Row 126 of experiments/runs.csv and the sheet carry the
+readings.  If adopted: `PriorSettings.second_prior = "ctx110"`, the folds `ctx110_early,ctx110_within` as the shrink's
+default, tenth folds `ctx110_k10` for the full-season read (about 50 minutes), a noise control, and a publish.

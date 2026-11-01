@@ -57,10 +57,19 @@ DECISIONS.md, "The fix pass of 2026-11-01" and "Experiment 126", hold the record
   players (DECISIONS.md, the last measurement trap: the league lists a player in a game's hustle box score only when
   he had a hustle event, so the counts are complete and never to be scaled by minutes); 84 roles rows of 2027 without
   an age are roster players without a stint, and age is not a shipped input.
-- **Experiment 126, the swap part of the prior refitted on today's boosters and folds**: the shipped line `ctx82`
-  comes from experiment 78's (2026-10-17), before the parser fixes, the body listing, the part-season rows and
-  self-creation.  Registered in DECISIONS.md and the experiment table; the line `ctx110` and the chain of the same
-  name; the verdict is the owner's.
+- **Experiment 126, the swap part of the prior refitted on today's boosters and folds, DONE 10:33 AM, verdict the
+  owner's** (DECISIONS.md, "Experiment 126"): the shipped line `ctx82` comes from experiment 78's (2026-10-17), before
+  the parser fixes, the body listing, the part-season rows and self-creation.  The line `ctx110` and the chain of the
+  same name: within-season WOWY -0.237 in 1997-2006 (z -3.06, 8 of 10), -0.263 in 2007-2016 (z -3.03, 9 of 10), a tie
+  in 2017-2026 (-0.014, z -0.23, 5 of 10), all seasons -0.171, z -3.61, the noise control -0.017; year over year a
+  clear win, team-game -0.157, z -4.08, both directions; the 2026 top 20 keeps 19 of 20 (Markkanen in, Diabaté out;
+  Ausar Thompson -0.9, Jokić +0.8).  The registered rule wants better in every era and the third is a tie, so the
+  owner decides.  If adopted: `PriorSettings.second_prior = "ctx110"`, the shrink's default folds
+  `ctx110_early,ctx110_within`, tenth folds `ctx110_k10` (about 50 minutes), a noise control, then a publish.  Tables
+  `season_ratings_ctx110*`, boosters `prior_models_ctx110.pkl` (about 2 GB, delete if not adopted).
+- **The dry run of the morning job passed end to end at 9:31 AM** with every change of the day, 2027 held at
+  1.116 / 1.000, the site's files in outputs/daily/site_dry (2027's percentile pool 60, every team's rows adding to
+  its total within 0.011).  The next real run is 2026-11-02 at 6:00 AM.
 - **Waiting on the owner, wording on the site** (I write no prose there): the About page says "Share of league games
   played" where the prior reads it floored at a quarter for the season in progress (`box_prior.rated_rows`); the box
   per-100 inputs are centered on the season's average player (`features.py`, `SHIPPED`) while the page says "vs
