@@ -4078,6 +4078,15 @@ a correlation across players cannot see. And Boruta cannot gate a collinear list
 blk`, `blk` fails against its own shadow — accepted on offense, rejected on defense, and swapping the two
 costs +0.050.
 
+**The hustle dashboard's games and minutes fall short of the game log, and its counts are still complete
+(2026-11-01).** The league lists a player in a game's hustle box score only when he had a hustle event in it (2026:
+absent from 388 of 6,606 player-games, at a median 3 minutes; 8 listed rows of 6,218 are all zero), so his season's
+`G` and `MIN` leave those games out while his counts miss nothing. In 2027 at 88 games, 89 of 422 players read 1-3
+games short, a sixth of their minutes; in 2025 and 2026, 58% of players, 1.2% of minutes. A reviewer read the 2027
+rates as a sixth too low and proposed scaling by minutes, which would have inflated them. *The check:* a finished
+season shows the same shortfall; divide every hustle count by every possession played, as the panel does, and never
+by the dashboard's minutes.
+
 ## Standing rules
 
 **Accuracy wins, provided the testing is robust — and the model has to stay shippable as open source.** The

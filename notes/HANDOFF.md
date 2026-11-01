@@ -416,8 +416,8 @@ What else the work of 2026-10-23 left open:
 - Deleting the saved boosters of experiments that were not adopted, about 2 GB each in `outputs/prior_models_*.pkl`
   (creation111, screen112; noise_creation110 stays while its folds may be extended; luckall88, luckall88b, luckhalf89, luckhalf89b, near83, same84, ctx85, body86, spread90, three92, unshrinkbase102,
   unshrink102, shrunkbase103 and older ones; refit103's stays while experiment 104 is open).
-- Filed earlier: tracking game by game; arena scorekeeper checks; Stockton over Jordan in 1997-98; the Curry star-guard
-  ceiling test fails.
+- Filed earlier: tracking game by game; arena scorekeeper checks; Stockton over Jordan in 1997-98.  The Curry
+  star-guard ceiling test passes again (2026-11-01: Curry 20th in 2026).
 
 ## What ships
 
@@ -515,6 +515,6 @@ What else the work of 2026-10-23 left open:
 
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest -q                       # 852 passed, 2 skipped, 1 xfailed: the backup bigs
+    .venv/Scripts/python -m pytest -q                       # 885 passed, 2 skipped, 7 deselected, 1 xfailed: the backup bigs
     uvx ruff check .                                         # clean
-    git log --oneline -1                                     # the handoff of 2026-10-29
+    git log --oneline -1                                     # the handoff of 2026-11-01
