@@ -285,6 +285,7 @@ def test_the_openrapm_file_adds_up_and_carries_ratings_jsons_ratings(openrapm_si
     assert meta["fields"] == site.OPENRAPM_FIELDS and meta["pieces"] == site.OPENRAPM_PIECES
     assert meta["built"] == "2026-10-13" and meta["penalty"] == 13037.0
     assert meta["seasons"] == [2002] and list(document["rows"]) == ["2002"]
+    assert meta["percentile_min"] == {}                   # a configuration naming no seasons has none in progress
     published = {row["id"]: row for row in json.loads((data / "ratings.json").read_text(encoding="utf-8"))["rows"]}
     assert sorted(row[1] for row in rows) == sorted(published)
     assert [row[5][-1] for row in rows] == sorted((row[5][-1] for row in rows), reverse=True)
@@ -360,6 +361,19 @@ def test_a_games_part_multiplied_by_step_4_is_split_with_its_factor(openrapm_sit
 
 
 # ------------------------------------------------------------------------------ the power ratings page
+def test_the_percentile_pool_of_a_season_in_progress_grows_with_the_share_played(monkeypatch):
+    assert site.percentile_minimums({}) == {}
+    shares = {2027: 0.072}
+    monkeypatch.setattr("openrapm.data.seasons.in_progress", lambda cfg: list(shares))
+    monkeypatch.setattr("openrapm.data.seasons.share_played", lambda season, cfg: shares[season])
+    cfg = {"_root": ".", "first_season": 1997}
+    assert site.percentile_minimums(cfg) == {2027: 60}                # 500 x 0.072 = 36, floored at the 60 shown
+    shares[2027] = 0.5
+    assert site.percentile_minimums(cfg) == {2027: 250}
+    shares[2027] = 0.9
+    assert site.percentile_minimums(cfg) == {2027: 450}
+
+
 def test_power_ratings_weigh_each_rating_by_its_share_of_the_last_games_with_blowouts_at_half():
     slots = {f"{side}{i}": [10 * (side == "a") + i] * 3 for side in "ha" for i in range(1, 6)}
     slots["h5"] = [5, 6, 6]                                # player 6 replaces player 5 in the later stints
@@ -393,3 +407,11 @@ def test_power_ratings_weigh_each_rating_by_its_share_of_the_last_games_with_blo
     assert document["meta"]["ready"] is False                         # two games, not 10
     # player 6 is under 60 possessions: counted in the sums, shown as the team's last row
     assert home["players"][-1][:3] == ["Other players", None, round(100 * 110 / 190, 1)]
+    # every player's rating is shifted down by a fifth of the average team (2026-11-01), so his row, share times
+    # rating, adds up to the team's total with the others, and the away team's players read minus that fifth
+    assert home["players"][0][3] == pytest.approx(round(1.0 - plain / 2 / 5, 2))
+    # the rows add up to the total but for their rounding, two decimals a rating and one a share, never the average
+    # team (1.54 here)
+    assert sum(row[2] / 100 * row[3] for row in home["players"]) == pytest.approx(home["o"], abs=0.03)
+    away = next(team for team in document["teams"] if team["tm"] == "AWY")
+    assert away["o"] == pytest.approx(round(-plain / 2, 2)) and away["players"][0][3] == round(-plain / 2 / 5, 2)

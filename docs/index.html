@@ -102,7 +102,7 @@
     <span class="cols">
       <span class="seg" id="side" role="group" aria-label="Side" hidden><button type="button" data-side="off" aria-pressed="false">Offense</button><button type="button" data-side="def" aria-pressed="false">Defense</button><button type="button" data-side="total" aria-pressed="true">Total</button></span>
       <button type="button" id="pieces" aria-pressed="false">Decomposition</button>
-      <button type="button" id="pct" aria-pressed="false" title="Percentile among players with 500 or more possessions">%ile</button>
+      <button type="button" id="pct" aria-pressed="false" title="Percentile among players with 500 or more possessions, fewer while a season is in progress">%ile</button>
     </span>
   </div>
   <div class="scroll">
@@ -174,14 +174,17 @@
   }
 
   // the percentile button: each number becomes its percentile among the season's players with 500 or more
-  // possessions; a player under 500 gets none.  Remembered like the theme
-  const MIN_POSS = 500, PCT_KEYS = ["o", "d", "t", "box", "on", "off", "sos", "a"];
+  // possessions, or in a season in progress 500 times the share of the season played, never under the 60 shown
+  // (meta.percentile_min, written by openrapm site); a player under the pool's minimum gets none.  Remembered like
+  // the theme
+  const PCT_KEYS = ["o", "d", "t", "box", "on", "off", "sos", "a"];
+  const poolMin = season => (data.meta.percentile_min || {})[season] || 500;
   try { state.pct = localStorage.getItem("percentile") === "1"; } catch (e) {}
   const pctCache = new Map();                         // "season:side" -> id -> that player's percentiles
   function percentiles(season, side) {
     const key = season + ":" + side;
     if (pctCache.has(key)) return pctCache.get(key);
-    const pool = data.rows[season].filter(r => r.p >= MIN_POSS).map(r => onSide(r, side)), out = new Map();
+    const pool = data.rows[season].filter(r => r.p >= poolMin(season)).map(r => onSide(r, side)), out = new Map();
     for (const r of pool) out.set(r.id, {});
     for (const k of PCT_KEYS) {
       // the share of the pool below him, ties counted half
@@ -193,7 +196,7 @@
     pctCache.set(key, out);
     return out;
   }
-  // a row as shown: the numbers, or their percentiles with null under 500 possessions
+  // a row as shown: the numbers, or their percentiles with null under the pool's minimum
   function shownRow(r, side, season) {
     const x = onSide(r, side);
     if (!state.pct) return x;
@@ -282,7 +285,7 @@
         const i = them.findIndex(r => r.id === state.player);
         return Object.assign(them[i], { rank: i + 1, s: +s });
       });
-      rows.sort((a, b) => (a[k] - b[k]) * dir || b.s - a.s);
+      rows.sort((a, b) => (a[k] === null) - (b[k] === null) || (a[k] - b[k]) * dir || b.s - a.s);
     }
     shown = rows;
     // a team code opens its season on that team; in the season list the chosen team's code clears it

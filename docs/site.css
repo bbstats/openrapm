@@ -1,5 +1,5 @@
 /* Shared by every page: the width, the tabs at the top, the light/dark switch, the title, and the controls of the
-   pages that have them.  Each page keeps its own colours as variables (--line, --muted, --accent) and gives their dark
+   pages that have them.  Each page keeps its own colors as variables (--line, --muted, --accent) and gives their dark
    values under :root[data-theme="dark"]; site.js sets data-theme before the page paints, from the saved choice or the
    system's. */
 :root { color-scheme: light; }
@@ -42,7 +42,7 @@ nav.site .theme:hover { color: CanvasText; }
 
 /* ‹ season ›: the arrows step a season, the year opens the list of seasons */
 .step { display: inline-flex; gap: 6px; }
-/* centred in the button by eye: the glyph sits low in its line, so the bottom padding lifts it */
+/* centered in the button by eye: the glyph sits low in its line, so the bottom padding lifts it */
 .controls .step button { display: inline-flex; align-items: center; justify-content: center; width: 40px;
                          padding: 0 0 7px; font-size: 22px; line-height: 1; color: CanvasText; }
 .controls .step button:hover:not(:disabled) { background: rgb(128 128 128 / 0.12); }

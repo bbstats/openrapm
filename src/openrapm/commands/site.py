@@ -1,6 +1,7 @@
 """`openrapm site`: the data behind the published site, docs/.
 
-    openrapm site                    docs/data/ratings.json, the ratings page's table
+    openrapm site                    docs/data/ratings.json, the ratings as one file (the pages read
+                                     decompose_openrapm.json, below, which carries them with their pieces)
     openrapm site --bias             also docs/bias.html, the bias by player type, with its two tables
                                      outputs/bias_groups.json and outputs/bgmm_proba.parquet
     openrapm site --decomposition    also docs/data/decompose_1y.json and decompose_3y.json, the vanilla RAPM
@@ -196,11 +197,11 @@ NAMES = {
     "+orb -fg3_miss +blk -fg3m": "Rim-protecting centers",
     "+fg3m +fg3_miss -drb -blk": "Wings who shoot threes",
     "+ast -orb +tov -drb": "Guards who handle the ball",
-    "+stl +drb +pf +orb": "Busy all-round forwards",
+    "+stl +drb +pf +orb": "Busy all-around forwards",
     "-ftm -tov -pts -ast": "Low-usage wings who stay out of the way",
     "+stl -pts -ftm -fg3m": "Ball-hawk defenders who rarely shoot",
     # the same types after the parser fixes of 2026-10-22 reordered each one's four standout stats
-    "+orb +pf +drb -ast": "Busy all-round forwards",
+    "+orb +pf +drb -ast": "Busy all-around forwards",
     "+ast -orb -blk -drb": "Guards who handle the ball",
     "+orb -fg3_miss -fg3m +blk": "Rim-protecting centers",
     "-drb -ftm -tov +fg3m": "Wings who shoot threes",
@@ -216,7 +217,7 @@ RATE_WORDS = {"pts": "points", "fg3m": "threes made", "fg3_miss": "threes missed
 # source, so positive means OpenRAPM rates the type higher.
 BLURB = """<div class="blurb">
 <p><b>vs 2026 observed.</b> We fit a RAPM model against the <em>residuals</em> of OpenRAPM's
-predictions. These are the average results for each player type (possession-weighted).</p>
+predictions. These are the average results for each player type, possession-weighted.</p>
 <p><b>vs consensus.</b> The consensus is a GLS-weighted mean of DRIP, LEBRON, EPM, DARKO DPM,
 Time-Decay RAPM, and Time-Decay-Luck-Adjusted RAPM.</p>
 </div>"""
@@ -1162,13 +1163,34 @@ def run_openrapm_checks(worst: dict, rows: dict, table: pd.DataFrame) -> None:
                              "ratings and possessions")
 
 
-def write_openrapm_file(path: Path, rows: dict, built: str, penalty: float, opens_on: int | None = None) -> None:
+PERCENTILE_POSSESSIONS = 500   # the ratings page's percentile pool: a finished season's players with this many
+
+
+def percentile_minimums(cfg: dict) -> dict:
+    """{season: possessions} for each season in progress: the fewest possessions a player needs to enter the ratings
+    page's percentile pool, PERCENTILE_POSSESSIONS times the share of its regular season played, never under
+    MIN_POSSESSIONS_SHOWN (the owner, 2026-11-01: with 500 alone, 2027 at 7% of its season pooled 1 player of the 334
+    shown).  Finished seasons are not listed; the page reads 500 for them.  A configuration that names no seasons or no
+    data folder has none in progress (`held_scale_seasons`).
+
+    Example: 2027 at 7.2% of its season, 500 x 0.072 = 36, reads 60; at half a season, 250."""
+    from ..data.seasons import in_progress, share_played
+    if "_root" not in cfg or "first_season" not in cfg:
+        return {}
+    return {int(season): int(max(MIN_POSSESSIONS_SHOWN, round(PERCENTILE_POSSESSIONS * share_played(int(season), cfg))))
+            for season in in_progress(cfg)}
+
+
+def write_openrapm_file(path: Path, rows: dict, built: str, penalty: float, opens_on: int | None = None,
+                        percentile_min: dict | None = None) -> None:
     """decompose_openrapm.json: meta and the rows of every season, latest first; compact, UTF-8 letters as they are.
-    `opens_on` is the season the ratings page opens on (`default_season`), the latest when not given."""
+    `opens_on` is the season the ratings page opens on (`default_season`), the latest when not given;
+    `percentile_min`, the seasons in progress' percentile pool minimums (`percentile_minimums`), none when not given."""
     seasons = sorted(rows, reverse=True)
+    minimums = {str(season): int(value) for season, value in (percentile_min or {}).items()}
     document = dict(meta=dict(built=built, penalty=penalty, seasons=seasons,
                               default_season=int(seasons[0] if opens_on is None else opens_on),
-                              fields=OPENRAPM_FIELDS, pieces=OPENRAPM_PIECES),
+                              percentile_min=minimums, fields=OPENRAPM_FIELDS, pieces=OPENRAPM_PIECES),
                     rows={str(season): rows[season] for season in seasons})
     path.write_text(json.dumps(document, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
@@ -1195,7 +1217,7 @@ def write_openrapm_decomposition(cfg: dict, ratings_path: Path, data_dir: Path, 
     run_openrapm_checks(worst, rows, table)
     data_dir.mkdir(parents=True, exist_ok=True)
     path = data_dir / OPENRAPM_FILE
-    write_openrapm_file(path, rows, built, penalty, default_season(table))
+    write_openrapm_file(path, rows, built, penalty, default_season(table), percentile_minimums(cfg))
     print(f"wrote {path}: {sum(len(v) for v in rows.values()):,} rows over {len(rows)} seasons, "
           f"{path.stat().st_size / 1e6:.2f} MB ({time.time() - started:.0f}s)", flush=True)
 
@@ -1338,11 +1360,12 @@ def write_similarity(cfg: dict, ratings_path: Path, data_dir: Path, built: str) 
 
 # ===================================================================================== the power ratings page
 # Each team as it has played lately: every player's current-season rating times his share of the team's possessions
-# over its last 10 games, summed over the team (the owner's design, 2026-10-28).  Shares add up to 500%, five on the
-# floor, so the sums are points per 100 possessions above an average team: each side's sum less the mean of the 30
-# teams' sums (meta "average_team").  The ratings are centred on every possession and the shares count blowouts half,
-# so the plain sums put the average team at +0.60 and 17 of 30 teams above it (2026-10-30); a player's row keeps his
-# rating and its share of the plain sum.
+# over its last 10 games, summed over the team (the owner's design, 2026-10-28).  The ratings are centred on every
+# possession and the shares count blowouts half, so the plain sums put the average team at +0.60 and 17 of 30 teams
+# above it (2026-10-30): every player's rating is shifted down by a fifth of the 30 plain sums' mean (meta
+# "average_team"), and shares add up to 500%, five on the floor, so the sums are points per 100 possessions above an
+# average team and each player's row, his shifted rating and its share of the sum, adds up to his team's total (the
+# owner, 2026-11-01: "adjust the team ratings to avg at 0").
 #
 # A possession counts for both teams of a game, on offense and on defense alike.  A blowout possession, the season's
 # garbage time (config garbage_time: the 4th quarter with a margin of 20 or more, or 15 or more in its last 6
@@ -1422,6 +1445,9 @@ def team_shares(games: pd.DataFrame, n_games: int, recent_games: int = RECENT_GA
     return players[["tm", "name", "player_id", "share", "g"]]
 
 
+SHARES_TOTAL = 5.0     # five players on the floor: a team's shares of its possessions add up to 500%
+
+
 def power_numbers(share, offense, defense, total) -> list:
     """A player row's numbers: his share as a percent at one decimal, his three ratings at two."""
     return [round(100 * float(share), 1), *(round(float(value), 2) for value in (offense, defense, total))]
@@ -1437,6 +1463,12 @@ def power_document(table: pd.DataFrame, games: pd.DataFrame, season: int, built:
     shares = shares.join(ratings[["player_name", "rating_off", "rating_def", "rating_total", "poss_season"]],
                          on="player_id")
     columns = ["rating_off", "rating_def", "rating_total"]
+    # the 30 plain sums' mean per side, taken off every player's rating a fifth at a time: shares add to 500%, so the
+    # teams then average 0 exactly and each player's row adds up to his team's total (the module comment)
+    plain = shares.assign(**{column: shares.share * shares[column] for column in columns}).groupby("tm")[columns].sum()
+    average = {side: float(plain[column].mean()) for side, column in zip("odt", columns)}
+    shares = shares.assign(**{column: shares[column] - average[side] / SHARES_TOTAL
+                              for side, column in zip("odt", columns)})
     teams = []
     for tm, rows in shares.groupby("tm"):
         rows = rows.sort_values("share", ascending=False)
@@ -1449,10 +1481,7 @@ def power_document(table: pd.DataFrame, games: pd.DataFrame, season: int, built:
             players.append(["Other players", None, *power_numbers(
                 share, *((others.share * others[column]).sum() / share for column in columns))])
         teams.append(dict(tm=tm, name=rows.name.iloc[0], g=int(rows.g.iloc[0]),
-                          **{side: value for side, value in zip("odt", sums)}, players=players))
-    average = {side: float(np.mean([team[side] for team in teams])) for side in "odt"}
-    for team in teams:
-        team.update({side: round(team[side] - average[side], 2) for side in "odt"})
+                          **{side: round(value, 2) for side, value in zip("odt", sums)}, players=players))
     teams.sort(key=lambda team: -team["t"])
     meta = dict(season=season, through=pd.Timestamp(games.game_date.max()).strftime("%Y-%m-%d"), games=POWER_GAMES,
                 recent_games=RECENT_GAMES, recent_weight=RECENT_WEIGHT, blowout_weight=BLOWOUT_WEIGHT,
