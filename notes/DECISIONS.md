@@ -11646,4 +11646,18 @@ now lean on the league.  Page `outputs/compare_incumbent_padbins127_2026.html`.
 **Against the registered rule.**  At a tenth: better in all three eras (z -4.34 / -4.19 / -3.85), pooled z -6.78, 27
 of 30 seasons: passed.  At a quarter and a half: better everywhere, nothing worse (the smallest z -1.83 at a quarter
 in 2017-2026 is a gain).  Whole seasons: a tie, +0.004, z +0.24, no era worse at z +2.  Year over year: not worse,
-a gain at z -2.9.  The verdict is the owner's; 2027 today under both arms follows below.
+a gain at z -2.9.  The verdict is the owner's.
+
+**2027 today under both arms** (`outputs/exp127_2027.log`, 5:18 to 5:27 PM: the test setting, the prior scales held
+at 1.085 / 0.985 for both, 2027 built into copies of the chain tables, `season_ratings_ctx110p27` and
+`season_ratings_padbins127p27`; the published 2027 differs from the incumbent's test-setting 2027 by a median 0.11,
+the setting, not the padding, so the pair is like for like).  The top 20 keeps its 20 names; four pairs swap places:
+Ty Jerome and Jayson Tatum at 10th and 11th, Bam Adebayo and Deni Avdija at 12th and 13th, Kyrie Irving and Alperen
+Sengun at 14th and 15th, Scottie Barnes and Zion Williamson at 16th and 17th.  The largest moves in it: Dončić -0.14
+(6.89 to 6.75, still 1st), Avdija -0.09, Adebayo +0.08, Haliburton +0.06, Jerome +0.06.  Players with 60+
+possessions, 334: median move 0.05, 90th percentile 0.19, the most 0.40; the spread 1.875 to 1.882; correlation
+0.998.  The high-steal players of the morning's question: Dyson Daniels -0.02 (2.41 to 2.39; his bin's steal rate
+already sat at the league's), Zion Williamson +0.02, Collin Gillespie +0.05, Cason Wallace -0.17, Kawhi Leonard
+-0.21 at 117 possessions.  The largest moves are 65-140-possession players, mostly up on offense (Jalen Duren +0.40,
+Oso Ighodaro +0.36, Trendon Watford +0.33; AJ Dybantsa -0.33, Ousmane Dieng -0.27): the deep-bench bins' targets,
+which carried their own few players' luck, now lean on the league.
