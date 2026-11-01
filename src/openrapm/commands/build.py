@@ -240,6 +240,7 @@ class SeasonsInProgress:
     rows: pd.DataFrame
     shares: dict
     held_scales: dict = field(default_factory=dict)
+    deferred: set = field(default_factory=set)   # the seasons whose held scales wait for the run's finished seasons
 
     @classmethod
     def read(cls, cfg: dict, seasons, settings=None) -> "SeasonsInProgress":
@@ -247,33 +248,56 @@ class SeasonsInProgress:
         rows = rows[rows.possessions > 0].reset_index(drop=True)
         shares = {int(season): share_played(int(season), cfg) for season in seasons
                   if int(season) in set(rows.season.astype(int))}
-        held = {}
+        # a run that rates finished seasons too holds the season at their fresh scales, once they are rated
+        # (`hold`, from rate_seasons); the morning's run of the season alone reads the published table now
+        finished_in_run = any(int(season) not in shares for season in seasons)
+        progress = cls(rows, shares)
         for season, share in shares.items():
             print(f"  {season} is in progress: rated from its {share:.1%} of the regular season so far, nothing "
                   f"trained on it", flush=True)
             if settings is not None and share < settings.ridge.held_scale_through:
-                held[season] = held_scales(cfg, settings.ridge.held_scale_table, season)
+                if finished_in_run:
+                    progress.deferred.add(season)
+                else:
+                    progress.hold(cfg, settings, season)
                 if settings.ridge.held_scale_blend:
                     weight = prior_rapm.blend_weight(share, settings.ridge.held_scale_through,
                                                      settings.ridge.held_scale_blend_from)
                     print(f"  {season}: its prior scales {weight:.0%} of the way from those to its own fitted ones, "
                           f"all the way at {settings.ridge.held_scale_through:.0%} of the season", flush=True)
-        return cls(rows, shares, held)
+        return progress
+
+    def hold(self, cfg: dict, settings, season: int, fresh: pd.DataFrame | None = None) -> None:
+        """The season's held scales (`held_scales`) from `fresh`, the step-3 tables this run has rated so far, and
+        the published table."""
+        self.held_scales[season] = held_scales(cfg, settings.ridge.held_scale_table, season, fresh)
+        self.deferred.discard(season)
 
 
-def held_scales(cfg: dict, table_name: str, season: int) -> tuple | None:
-    """(s_O, s_D) the season in progress holds: the mean of the 8 finished seasons nearest it in
-    outputs/<table_name>.parquet (prior_rapm.held_prior_scale), said once; None, the scales fitted on its games as
-    before experiment 109, when that table is missing."""
+SCALE_COLUMNS = ["season", "prior_scale_off", "prior_scale_def"]
+
+
+def held_scales(cfg: dict, table_name: str, season: int, fresh: pd.DataFrame | None = None) -> tuple | None:
+    """(s_O, s_D) the season in progress holds: the mean of the 8 finished seasons nearest it
+    (prior_rapm.held_prior_scale), each season's scales from `fresh`, the step-3 rows of the seasons this run has
+    rated, or else from outputs/<table_name>.parquet; said once.  A full build after a change would otherwise hold
+    the season at the previous build's scales until the next morning's run read the new table (2026-11-01).  None,
+    the scales fitted on its games as before experiment 109, when neither holds a finished season."""
     path = resolve(cfg, "outputs") / f"{table_name}.parquet"
-    if not path.exists():
-        print(f"  {season}: no {path.name} to hold its prior scales at; fitted on its games", flush=True)
-        return None
-    table = pd.read_parquet(path, columns=["season", "prior_scale_off", "prior_scale_def"])
+    stored = pd.read_parquet(path, columns=SCALE_COLUMNS) if path.exists() else pd.DataFrame(columns=SCALE_COLUMNS)
+    fresh = pd.DataFrame(columns=SCALE_COLUMNS) if fresh is None else fresh[SCALE_COLUMNS]
+    parts = [part for part in (stored[~stored.season.isin(set(fresh.season))], fresh) if len(part)]
+    table = pd.concat(parts, ignore_index=True) if parts else stored
     table = table[table.season.astype(int) <= trainable_through(cfg)]
+    if not len(table):
+        print(f"  {season}: no finished season in {path.name} or this run to hold its prior scales at; fitted on its "
+              "games", flush=True)
+        return None
     held = prior_rapm.held_prior_scale(table, season)
+    where = " and ".join(name for name, part in ((path.name, parts[0] if len(stored) else stored),
+                                                  ("this run's seasons", fresh)) if len(part))
     print(f"  {season}: prior scales held at {held[0]:.3f} / {held[1]:.3f}, the mean of the 8 finished seasons "
-          f"nearest it in {path.name} (experiment 109)", flush=True)
+          f"nearest it in {where} (experiment 109)", flush=True)
     return held
 
 
@@ -444,8 +468,13 @@ def rate_seasons(seasons, sums: dict, panel: pd.DataFrame, designs: DesignCache,
     The boosters are kept only when `keep_models`; thirty seasons of them are about a gigabyte.
     """
     started = time.time()
-    tables, models, label_cache, game_rows = [], {}, {}, []
-    for season in seasons:
+    rated, models, label_cache, game_rows = {}, {}, {}, []
+    # the seasons in progress last: their held prior scales are the mean of the finished seasons' fresh ones
+    ordered = sorted(seasons, key=lambda s: (progress is not None and int(s) in progress.shares, int(s)))
+    for season in ordered:
+        if progress is not None and season in progress.deferred:
+            progress.hold(designs.cfg, settings, season, pd.concat(list(rated.values()), ignore_index=True)
+                          if rated else None)
         if settings.prior.game_prior:
             table, priors, unseen, second, rows = rate_one_season_by_game(season, sums, panel, designs, settings,
                                                                           params, games, lines, label_cache)
@@ -454,7 +483,7 @@ def rate_seasons(seasons, sums: dict, panel: pd.DataFrame, designs: DesignCache,
         else:
             table, priors, unseen, second = rate_one_season(season, sums, panel, designs, settings, params, lines,
                                                             label_cache, part_seasons, progress)
-        tables.append(table)
+        rated[season] = table
         if keep_models:
             models[season] = {side: saved_side(priors[side], params[side], settings, unseen, second, side)
                               for side in SIDES}
@@ -462,7 +491,7 @@ def rate_seasons(seasons, sums: dict, panel: pd.DataFrame, designs: DesignCache,
               f"{table.prior_scale_def.iloc[0]:.2f}  ({time.time() - started:.0f}s)", flush=True)
         if second is not None:
             print(f"    the line: {line_words(second.coefficients, second.inputs['O'].columns)}", flush=True)
-    return tables, models, game_rows
+    return [rated[season] for season in seasons], models, game_rows
 
 
 def booster_name(settings) -> str:

@@ -22,6 +22,27 @@ def test_the_held_scales_are_the_mean_of_the_nearest_finished_seasons(tmp_path, 
     assert build.held_scales(cfg, "season_ratings_missing", 2027) is None
 
 
+def test_a_full_build_holds_the_season_at_the_scales_it_has_just_rated(tmp_path, monkeypatch, capsys):
+    """2026-11-01: the table on disk is the previous build's; the seasons rated in this run replace its rows."""
+    pd.DataFrame({"season": list(range(2015, 2028)), "prior_scale_off": 1.0, "prior_scale_def": 0.9}
+                 ).to_parquet(tmp_path / "season_ratings_product_step3.parquet")
+    cfg = {"_root": str(tmp_path), "paths": {"outputs": str(tmp_path)}}
+    monkeypatch.setattr(build, "trainable_through", lambda cfg: 2026)
+    fresh = pd.DataFrame({"season": [2025, 2026, 2027], "player_id": 1, "prior_scale_off": [2.0, 2.0, 9.0],
+                          "prior_scale_def": [0.5, 0.5, 9.0]})
+    # 2019-2024 from the table, 2025 and 2026 from this run, never 2027
+    held = build.held_scales(cfg, "season_ratings_product_step3", 2027, fresh)
+    assert held == pytest.approx(((6 * 1.0 + 2 * 2.0) / 8, (6 * 0.9 + 2 * 0.5) / 8))
+    assert "season_ratings_product_step3.parquet and this run's seasons" in capsys.readouterr().out
+    # without the table, this run's finished seasons alone; with neither, fitted on its games
+    assert build.held_scales(cfg, "season_ratings_missing", 2027, fresh) == pytest.approx((2.0, 0.5))
+    assert build.held_scales(cfg, "season_ratings_missing", 2027, fresh[fresh.season == 2027]) is None
+    # the run defers the season's scales until its finished seasons are rated (rate_seasons)
+    progress = build.SeasonsInProgress(rows=pd.DataFrame(), shares={2027: 0.07}, deferred={2027})
+    progress.hold(cfg, PRODUCT, 2027, fresh)
+    assert progress.deferred == set() and progress.held_scales[2027] == pytest.approx(held)
+
+
 def test_the_season_in_progress_holds_its_scales_only_before_the_share_set():
     assert 0 < PRODUCT.ridge.held_scale_through <= 1
     assert PRODUCT.ridge.held_scale_table == "season_ratings_product_step3"
