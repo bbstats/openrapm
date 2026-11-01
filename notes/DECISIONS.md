@@ -11503,3 +11503,72 @@ era, and the third era is a tie, so the verdict is the owner's; nothing is worse
 fitted on boosters and stints the pipeline no longer uses.  Row 126 of experiments/runs.csv and the sheet carry the
 readings.  If adopted: `PriorSettings.second_prior = "ctx110"`, the folds `ctx110_early,ctx110_within` as the shrink's
 default, tenth folds `ctx110_k10` for the full-season read (about 50 minutes), a noise control, and a publish.
+
+## Early-season padding (the owner, 2026-11-01: "Are steals padded correctly? Or are players just benefiting from early season turnovers")
+
+**The measurement** (`scratch/steal_padding_{check,check2,why,top}.py`, logs beside them).  Every finished season cut
+to its first 7% of games, where 2027 stood (88 games); the padded rates from those games against each player's rate
+over the rest of the regular season, players with 500+ later possessions weighted by them.  One extra padded steal per
+100 is followed by 0.70 later (1.00 = padded right), the lowest of the 13 counts (assists 0.97, blocks 0.90, turnovers
+0.77, fouls 0.73); the 15 highest padded steal rates averaged +0.97 above average early and +0.67 after.  Not the
+league's early turnovers: the league steal rate over the first 7% is +0.02 per 100 against the rest (19 of 30 seasons
+higher) where turnovers are +0.22 (30 of 30), and the prior reads steals against the season's average anyway.  The
+opening games are worse than a random set of as many games (0.72 against 0.87, lower in 25 of 30 seasons); at a
+quarter of a season the line is 0.86, at half 0.92.
+
+**The cause.**  The target.  A bin's steal rate at 7% rests on about 50 steals: a bin target 1.00 per 100 above the
+league is followed by only 0.14 more later.  With the league rate as the target and today's k, the line is 0.89 and
+the error predicting later steals falls 8%, better in 30 of 30 seasons; the same change lowers the error of all 13
+counts (turnovers -15%, fouls -14%, missed free throws -13%, defensive rebounds -6%, blocks -4%; made threes -2%,
+assists -2%).  Leaving the player's own games out of his bin's average changes nothing (0.70).  A second, smaller
+cause: the split-half k over-reads how much of the early spread lasts (the spread between the halves of the first 7%
+is 15% larger than what carries into the rest of the season, 6% for random games); a k from what lasts gives 0.74
+alone and 0.92 with the league target.  By era the shipped line is 0.76 / 0.69 / 0.65 and the league target's 0.86 /
+0.86 / 0.94.
+
+**The owner's choices, 2026-11-01**: one method all season, no switch (each bin's average padded toward the league
+rate by its own evidence); the 13 box rates and the 48 play-by-play, self-creation and foul inputs the same function
+pads, the hustle stats' own padding (`data/dashboard_rates.py`) next and separately; the rule below.
+
+### Experiment 127: each possession bin's target padded toward the league rate by the bin's own evidence (registered 2026-11-01, before any result)
+
+**The change** (`box_rates.group_k`, `padded_bin_targets`, `split_half_noise`; config `pad_bin_target: league`, off
+as shipped and bit-identical off: `tests/test_panel.py` rebuilds 2026 and 1998 to the last digit).  Before a bin's
+rate serves as a target it is padded toward the season's league rate by the same rule one level up: (P_b x rate_b +
+k_group x league) / (P_b + k_group), P_b the bin's offensive possessions in the design, k_group = sigma^2_within /
+tau^2_groups with the per-possession noise the pad k already measures over the variance of the true bin rates around
+the league: the possession-weighted spread of the bin targets less the noise each carries, sigma^2_within / P_b (the
+method of moments `mom_k` uses); K_MAX when nothing is left.  Steals: a bin with 9,000 possessions and 1.9 per 100,
+k_group 12,000 and a league rate of 1.6 is padded to 1.73; over a whole season the same bin holds 130,000 possessions
+and keeps 1.87, so whole-season targets move about a tenth of the way (0.01-0.03 steals per 100), early-season ones
+most of the way.  The players' k is then measured around the padded target (pad_k_around target).  Also fixed first,
+0ffbcc0: a season so far rated by `openrapm folds --cut` had told the part-season boosters share 1.0 since the floor of
+the morning (4101702); `least_share_of(meta)` and a check on the run.
+
+**The quick read, before any build** (`scratch/2026-11-01_padding/screen.py`, about 10 minutes): the measurement
+above at shares 0.0715, 0.10, 0.25 and 0.50, all 13 counts, both sides, players with 100+ later possessions, with the
+arms today / league target / padded target with today's k / padded target as the code composes it / a k_group pooled
+over the other finished seasons / raw.  Its threshold: at 0.0715 and 0.10 the composed arm reaches at least three
+quarters of the league target's error cut on steals (8%) and is better than today in 24 of 30 seasons; no count worse
+than today by two standard errors at any share.  If the per-season k_group is too noisy and only the pooled arm
+passes, the pooled rule becomes the design, recorded here before the build.
+
+**The test.**  A scratch config with the key on and its own panel files (`scratch/2026-11-01_padding/config_padbins.yaml`,
+`OPENRAPM_CONFIG` in the candidate's shell only; config.yaml untouched, since the 6 AM job rebuilds the panel and
+refits the boosters from it):
+
+    openrapm data panel --force; openrapm data panel --so-far 0.25,0.5,0.75
+    bash scripts/experiment_chain.sh padbins127 points_with_expected_opponent_threes_late_as_scored
+    openrapm folds --models padbins127 --base season_ratings_padbins127_step3 --seasons 1997-2026 --tag padbins127_cutNN_held --cut 0.NN --hold-prior-scale season_ratings_padbins127_step3 --jobs 4
+    openrapm folds --models ctx110 --base season_ratings_ctx110_step3 --seasons 1997-2026 --tag ctx110_cutNN_held --cut 0.NN --hold-prior-scale season_ratings_ctx110_step3 --jobs 4
+    151_wowy.py --systems=today=ctx110_cutNN_held,padbins127=padbins127_cutNN_held --ref=today --step4-from=today:ctx110,padbins127:padbins127 --tag=exp127_cutNN
+
+for NN in 07 (2027's 88 games, 0.0715), 10, 25 and 50, both arms built by the same code with the scales held, the
+incumbent's own step 4; and 2027 today under the candidate (`openrapm build --name padbins127 --seasons 2027
+--replace-seasons`) against the published 2027.
+
+**The rule** (the owner's choice).  At a tenth of a season: the within-season WOWY test on the rest of the season
+better in all three eras, pooled z at or below -2.  At a quarter, a half and on whole seasons: not worse in any era at
+z +2; year over year not worse at z +2.  The 2026 and 2027 top 20 for the eye check.  Whole-season tables barely move,
+so a whole-season tie within the noise control (0.01-0.02) is expected and is not a failure; the season-so-far reading
+decides.  The verdict is the owner's.
