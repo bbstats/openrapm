@@ -243,7 +243,8 @@ def build_cache(tag: str, seasons) -> int:
                              f"{worst:.1e}")
         full = {target: designs.season(season, target) for target in ws.world_targets(fold_settings)}
         run = ws.SeasonRun(season, cfg, full, SeasonSources(SeasonTables(season, cfg), roles, inputs, debut), saved,
-                           out_dir, settings=fold_settings, part_season_rows=ws.trained_on_part_seasons(meta))
+                           out_dir, settings=fold_settings, part_season_rows=ws.trained_on_part_seasons(meta),
+                           least_share=ws.least_share_of(meta))
         ws.attach_line(run, lines, False)
         folds = ws.season_folds(run)
         worlds = {}
@@ -377,7 +378,8 @@ class Season:
             self.cfg)), careers_before(self.cfg, roles))
         self.run = cached_run_class()(season, self.cfg, full, sources, ws.season_models(saved_all, season),
                                       screen_dir(tag), settings=fold_settings,
-                                      part_season_rows=ws.trained_on_part_seasons(meta))
+                                      part_season_rows=ws.trained_on_part_seasons(meta),
+                                      least_share=ws.least_share_of(meta))
         ws.attach_line(self.run, ws.fold_lines(self.cfg, meta, False), False)
         self.reference_saved = self.run.saved
 

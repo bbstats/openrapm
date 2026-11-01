@@ -255,6 +255,16 @@ def trained_on_part_seasons(meta: dict) -> bool:
     return bool(((meta.get("settings") or {}).get("prior") or {}).get("part_season_shares"))
 
 
+def least_share_of(meta: dict) -> float:
+    """The smallest share of a season the saved boosters' training rows cover (settings.PriorSettings.part_season_shares,
+    the least of them; 1 without part-season rows), the floor under what a season so far tells them
+    (SeasonRun.prior_share).
+
+    Example: boosters trained with part-season rows at a quarter, a half and three quarters give 0.25."""
+    shares = ((meta.get("settings") or {}).get("prior") or {}).get("part_season_shares") or ()
+    return float(min(shares)) if shares else 1.0
+
+
 # ------------------------------------------------------------------------------------------------ the folds
 def assign_folds(game_ids, n_folds: int, season: int, repeat: int) -> pd.Series:
     """game_id -> fold: the season's games put in a random order drawn with the seed (season, repeat, 9701) and
@@ -630,8 +640,15 @@ class SeasonRun:
     network: object = None       # with the box-score prior game by game, the season's network (game_prior.py)
     backward: object = None      # and its backward network, when the first half of each player's games read the rest
     games: pd.DataFrame | None = None    # and the season's game rows (data/player_games.py)
-    least_share: float = 1.0     # and the smallest part-season share its boosters trained on (build.least_share)
+    least_share: float = 1.0     # the smallest part-season share its boosters trained on (`least_share_of`)
     whole_season: bool = False   # and one prior a season from its state after the last game (game_prior_whole_season)
+
+    def __post_init__(self) -> None:
+        # a season so far rated by boosters trained with part-season rows must know the least share those rows cover,
+        # or `prior_share` tells them a whole season: every cut build of 2026-11-01 before this check did
+        if self.cut is not None and self.part_season_rows and not self.least_share < 1.0:
+            raise ValueError(f"{self.season}: boosters trained with part-season rows rate a season so far only "
+                             f"with least_share, the least share their rows cover (least_share_of)")
 
     @property
     def season_share(self) -> float | None:
@@ -1005,8 +1022,7 @@ def attach_networks(run: SeasonRun, meta: dict, tag: str) -> None:
         run.backward = load_network(run.cfg, prior["game_prior_backward"], run.season, game_rates.input_names(),
                                     game_rates.NAMES)
     run.games = season_games(run.cfg, run.season)
-    shares = prior.get("part_season_shares") or ()
-    run.least_share = float(min(shares)) if shares else 1.0
+    run.least_share = least_share_of(meta)
     run.whole_season = bool(prior.get("game_prior_whole_season"))
 
 
@@ -1142,7 +1158,7 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
         full = {target: designs.season(season, target) for target in world_targets(settings)}
         run = SeasonRun(season, cfg, full, SeasonSources(SeasonTables(season, cfg), roles, inputs, debut), saved,
                         out_dir, box_files, settings=settings, n_folds=n_folds, repeats=repeats, cut=cut,
-                        split=split, part_season_rows=part_season_rows,
+                        split=split, part_season_rows=part_season_rows, least_share=least_share_of(meta),
                         held_scale=season_held_scale(scales, season))
         blend_run(run, blend_through, blend_from)
         if whole_season_inputs:

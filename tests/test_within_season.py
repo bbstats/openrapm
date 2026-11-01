@@ -239,6 +239,25 @@ def test_only_boosters_trained_on_part_seasons_are_told_the_share_and_never_for_
     assert not ws.trained_on_part_seasons({})
 
 
+def test_a_cut_run_tells_the_boosters_the_least_share_their_rows_cover():
+    """A build's boosters record the part-season shares they trained on; a season so far is rated no lower than the
+    least of them (the floor the daily build applies), and a run that forgot to pass it is refused rather than
+    telling the boosters a whole season (the cut builds of 2026-11-01 before this check)."""
+    meta = {"settings": {"prior": {"part_season_shares": [0.25, 0.5, 0.75]}}}
+    assert ws.least_share_of(meta) == 0.25
+    assert ws.least_share_of({}) == 1.0
+    assert ws.least_share_of({"settings": {"prior": {"part_season_shares": []}}}) == 1.0
+    games = _season_games()
+    full = {ws.SCORE_TARGET: SimpleNamespace(games=games)}
+    run = ws.SeasonRun(2024, {}, full, None, {}, Path("."), cut=0.05,
+                       part_season_rows=ws.trained_on_part_seasons(meta), least_share=ws.least_share_of(meta))
+    assert run.prior_share({"g00", "g01"}) == 0.25
+    with pytest.raises(ValueError, match="least_share"):
+        ws.SeasonRun(2024, {}, full, None, {}, Path("."), cut=0.05, part_season_rows=True)
+    # random folds and whole seasons never read it, so they need not pass it (scripts/checks/155_input_screen.py)
+    assert ws.SeasonRun(2024, {}, full, None, {}, Path("."), part_season_rows=True).prior_share({"g00"}) == 1.0
+
+
 def test_step_4_never_reads_a_date_fold_unless_asked():
     from openrapm.data.within_folds import check_fold_record
     record = {"summary": {"rate_from": "rest", "split": "date"}, "checks": {"a check": True}}
