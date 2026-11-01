@@ -209,6 +209,15 @@ def run_dashboards(args: argparse.Namespace, cfg: dict) -> int:
     failed = int((table.status == "failed").sum())
     print(f"\n{len(table)} files ({failed} failed); wrote {csv / (stem + '.csv')}", flush=True)
     print(summary.round(3).to_string(index=False), flush=True)
+    # The hustle tables feed the box-score prior's shipped inputs, and a failed pull leaves yesterday's file in place
+    # (fetch_dashboard writes on success only): the season in progress would divide yesterday's totals by today's
+    # possessions and the morning would publish them (2026-11-01).  So a failed hustle pull fails the run; the other
+    # sources feed no shipped input and are only reported.
+    hustle_failed = table[(table.source == "hustle") & (table.status == "failed")]
+    if len(hustle_failed):
+        print("  hustle pulls failed, the run stops: "
+              + ", ".join(f"{r.kind} {r.season} {r.phase}" for r in hustle_failed.itertuples()), flush=True)
+        return 1
     return 0
 
 

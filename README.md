@@ -148,16 +148,17 @@ Scheduler runs it on the project's machine at 6 AM Eastern, after the night's ga
 python -m openrapm data ingest 2027 2027 RS,PO --refresh     # the game log again, games before today, Eastern
 python -m openrapm data stints 2027 2027 RS,PO --force
 python -m openrapm data events 2027 2027 --force
-python -m openrapm data hustle-games 2027 2027
-python -m openrapm data matchup-games 2027 2027      # not a step: a failure does not stop the morning
-python -m openrapm data dashboards 2027 2027 --force
+python -m openrapm data hustle-games 2027 2027       # not a step: a failure does not stop the morning
+python -m openrapm data matchup-games 2027 2027      # not a step either
+python -m openrapm data dashboards 2027 2027 --force         # the season-to-date hustle the season in progress reads
 python -m openrapm data panel --force                        # also rebuilds the season's roles rows and bio feed
 python -m openrapm build --seasons 2027 --replace-seasons    # 2027 in place of yesterday's 2027, nothing else moves
-python -m openrapm site --openrapm-decomposition --out-dir A:/code/spmm_site/docs
+python -m openrapm site --openrapm-decomposition --power --out-dir A:/code/spmm_site/docs
 ```
 
-Then it commits the two data files in `A:/code/spmm_site`, a worktree of `origin/main` that only the job writes, and
-pushes them to `main`. Nothing trains on the season in progress (data/seasons.py); it is rated from its own rows, the
+Then it commits the three data files in `A:/code/spmm_site`, a worktree of `origin/main` that only the job writes, and
+pushes them to `main` when one changed beyond the date it was built (`scripts/daily_files.py`). Nothing trains on the
+season in progress (data/seasons.py); it is rated from its own rows, the
 box-score prior told the share of the regular season played. The ratings page opens on it once its median player has
 250 offensive possessions. Each morning's log is `outputs/daily/<date>.log`, and `outputs/daily/last.txt` says how
 the last one ended.
@@ -168,8 +169,8 @@ the last one ended.
 *fit* on only once its Finals are over, which `src/openrapm/data/seasons.py` reads from the data rather
 than from a constant, by asking whether any team has won the playoff games that win a title (sixteen
 since 2003, fifteen before). That covers the labels, the box-score prior, step 5's type model and every setting. Step 4's
-multipliers are not gated there: they read only the folds of 2017-2026, a pinned setting
-(`settings.ShrinkSettings`). The ridge of step 3 is exempt, because a rating *is* a ridge coefficient
+multipliers are not gated there: they read the folds of the 8 finished seasons nearest the rated one, folds pinned
+to 1997-2026 (`settings.ShrinkSettings`). The ridge of step 3 is exempt, because a rating *is* a ridge coefficient
 and solving it on the season in progress is the product rather than a fit. `tests/test_seasons.py` pins
 the cutoff; `tests/test_no_current_season.py` checks it end to end: the season in progress is dropped
 from every read that trains, and replacing it with noise moves no training row by one byte.
