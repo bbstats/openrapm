@@ -68,9 +68,9 @@ DECISIONS.md, "The fix pass of 2026-11-01" and "Experiment 126", hold the record
   published ratings a player with 60+ possessions moves a median 0.24 per 100 in every era, the 90th percentile 0.6,
   the largest 1.9; the 2026 top 20 keeps its names (Jokić +0.7, Wembanyama +0.5, Kawhi +0.5, Cason Wallace -0.4).
   **The chain's incumbent is ctx110** (tables `season_ratings_ctx110*`, folds `ctx110_early`, `ctx110_within`); its
-  noise control `noise_ctx110` (`--fold-assignment 1`) started 1:18 PM, about an hour: when it is done, set the
-  chain's `INC_NAME`, `INC_SYSTEM`, `INC_FOLDS` and `CONTROL_NAME` defaults to it (never while a chain runs) and
-  CONTRIBUTING.md's two mentions.  Delete `prior_models_creation110.pkl` only if its folds are never extended again.
+  noise control `noise_ctx110` (`--fold-assignment 1`, 1:18 to 2:15 PM) reads -0.013, z -1.63, 17 of 30, the same
+  size as creation110's; the chain's `INC_NAME`, `INC_SYSTEM`, `INC_FOLDS` and `CONTROL_NAME` defaults and
+  CONTRIBUTING.md name them now.  Delete `prior_models_creation110.pkl` only if its folds are never extended again.
 - **The dry run of the morning job passed end to end at 9:31 AM** with every change of the day, 2027 held at
   1.116 / 1.000, the site's files in outputs/daily/site_dry (2027's percentile pool 60, every team's rows adding to
   its total within 0.011).  The next real run is 2026-11-02 at 6:00 AM.
@@ -510,8 +510,7 @@ What else the work of 2026-10-23 left open:
 
 - One build: `bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes_late_as_scored "EXTRA RATE
   FLAGS"`, about 50 minutes with 4 processes.  `INC_NAME` and `INC_SYSTEM` name the incumbent's tables and folds,
-  `ctx110` for both since 2026-11-01 (experiment 126; the script's defaults follow once its noise control is built);
-  `CONTROL_NAME` the noise control, `noise_ctx110` (building 2026-11-01; `noise_creation110` until then).
+  `ctx110` for both since 2026-11-01 (experiment 126); `CONTROL_NAME` the noise control, `noise_ctx110`.
 - **The season-page score**: each season, ratings of zero score 0 and the reference 100.  The zero line on today's
   stints is `outputs/csv/wowy_zero_baseline_inputs99_seasons.csv`, column zero, 3,681.6 a season: ratings of zero do
   not depend on the system, and every system is scored on the same held-back stints.  creation110 explains 19.7 a
@@ -521,10 +520,9 @@ What else the work of 2026-10-23 left open:
   read -2.44 against plain -1.83, so noise passed -2 (DECISIONS.md, "The bug-fix and make-better pass of
   2026-10-30").  Two builds that differ only in the box-score prior's random split differ by about 0.010 on the
   within-season test.
-- The noise control `noise_creation110` moved the within-season test by -0.017, z -1.83, on its own (its reading on
-  the new incumbent, `noise_ctx110`, goes in DECISIONS.md when its chain ends); a candidate is read against today's
-  ratings on the same split, so that noise does not enter its change, but any one build's standing carries 0.01-0.02
-  of it.
+- The noise control `noise_ctx110` moves the within-season test by -0.013, z -1.63, on its own (`noise_creation110`
+  on creation110 read -0.017, z -1.83); a candidate is read against today's ratings on the same split, so that noise
+  does not enter its change, but any one build's standing carries 0.01-0.02 of it.
 - Every experiment gets a row in `experiments/runs.csv` (`scripts/checks/101_log_run.py`), mirrored to the sheet
   "OpenRAPM experiments", tab Experiments; the next free row is 127.  Since 2026-10-30 it reads the within-season
   test by era too, and refuses a partial or stale reading.  Input screens get their own tab ("Input screen 112").

@@ -11491,6 +11491,12 @@ Kawhi Leonard +0.54, Wembanyama +0.51, Dončić +0.41, Ty Jerome +0.40, Cason Wa
 -0.10.  2027 (71 games of 5 AM against the same games): Dončić +0.70 to 7.07, Curry +0.75 to 4.60, Wembanyama +0.41,
 Flagg -0.23 to 6.21.
 
+**The noise control on the new incumbent, `noise_ctx110`** (the chain of that name, 1:18 to 2:15 PM, the same build
+with the boosters' players dealt again, `--fold-assignment 1`): the within-season WOWY test against ctx110, the shipped
+stage, -0.024 in 1997-2006 (z -2.35, 8 of 10), -0.006 in 2007-2016 (z -0.41), -0.009 in 2017-2026 (z -0.53), all
+seasons -0.013, z -1.63, 17 of 30: the same size as creation110's (-0.017, z -1.83).  The chain's defaults
+(`INC_NAME`, `INC_SYSTEM`, `INC_FOLDS`, `CONTROL_NAME`) now name ctx110 and noise_ctx110.
+
 **Reading.**  Better in 1997-2006 and 2007-2016 by ten times the noise control, a tie in 2017-2026 (-0.014, z -0.23,
 5 of 10), and the year-over-year guard a clear win rather than a pass.  The registered rule asks for better in every
 era, and the third era is a tie, so the verdict is the owner's; nothing is worse anywhere, and the shipped line was
