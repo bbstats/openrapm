@@ -11572,3 +11572,18 @@ better in all three eras, pooled z at or below -2.  At a quarter, a half and on 
 z +2; year over year not worse at z +2.  The 2026 and 2027 top 20 for the eye check.  Whole-season tables barely move,
 so a whole-season tie within the noise control (0.01-0.02) is expected and is not a failure; the season-so-far reading
 decides.  The verdict is the owner's.
+
+**The quick read's result** (2026-11-01, `scratch/2026-11-01_padding/screen.log`, `screen.csv`; 30 seasons, both
+sides, players with 100+ later possessions): passed.  Steals, the composed arm against today's padding: the error
+predicting the rest of the season -8.3% at 7% of a season (the league target -8.3%; better in 30 of 30 seasons),
+-8.7% at a tenth (29 of 30), -4.4% at a quarter, -1.8% at a half; the line 0.685 -> 0.877 at 7% (the league target
+0.885), by era 0.745 / 0.674 / 0.634 -> 0.850 / 0.849 / 0.931.  No count is worse at any share on either side; the
+largest gains at 7%: turnovers -16.6%, missed free throws -14.3%, fouls -11.9%, defensive rebounds -6.1%, blocks
+-4.5%, missed twos -5.2%; the smallest, assists -2.4%.  Where the plain league target loses (free throws made +0.8%
+at a quarter, assists +0.2% at a half) the padded target does not (-0.8%, -0.1%): the method sorts the counts
+itself.  k_group says which bins differ for real: steals none (K_MAX in 73% of seasons at 7%, whole-season median
+96,000: the league rate is the target), blocks and defensive rebounds little (16,000 and 36,000), fouls, assists and
+twos made a lot (800, 1,400, 1,100: the targets move 8-10% of the way at 7%, where steals move 65%).  A k_group
+pooled over the other finished seasons reads the same to 0.01 everywhere, so the per-season one stands.  Still
+short of 1.00 after the fix: fouls 0.85, free throws made 0.89, missed twos 0.89, the pad k's own over-read (the
+second cause).
