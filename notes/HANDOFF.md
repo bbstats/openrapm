@@ -57,16 +57,20 @@ DECISIONS.md, "The fix pass of 2026-11-01" and "Experiment 126", hold the record
   players (DECISIONS.md, the last measurement trap: the league lists a player in a game's hustle box score only when
   he had a hustle event, so the counts are complete and never to be scaled by minutes); 84 roles rows of 2027 without
   an age are roster players without a stint, and age is not a shipped input.
-- **Experiment 126, the swap part of the prior refitted on today's boosters and folds, DONE 10:33 AM, verdict the
-  owner's** (DECISIONS.md, "Experiment 126"): the shipped line `ctx82` comes from experiment 78's (2026-10-17), before
-  the parser fixes, the body listing, the part-season rows and self-creation.  The line `ctx110` and the chain of the
-  same name: within-season WOWY -0.237 in 1997-2006 (z -3.06, 8 of 10), -0.263 in 2007-2016 (z -3.03, 9 of 10), a tie
-  in 2017-2026 (-0.014, z -0.23, 5 of 10), all seasons -0.171, z -3.61, the noise control -0.017; year over year a
-  clear win, team-game -0.157, z -4.08, both directions; the 2026 top 20 keeps 19 of 20 (Markkanen in, Diabaté out;
-  Ausar Thompson -0.9, Jokić +0.8).  The registered rule wants better in every era and the third is a tie, so the
-  owner decides.  If adopted: `PriorSettings.second_prior = "ctx110"`, the shrink's default folds
-  `ctx110_early,ctx110_within`, tenth folds `ctx110_k10` (about 50 minutes), a noise control, then a publish.  Tables
-  `season_ratings_ctx110*`, boosters `prior_models_ctx110.pkl` (about 2 GB, delete if not adopted).
+- **Experiment 126, the swap part of the prior refitted on today's boosters and folds, ADOPTED and PUBLISHED
+  1:18 PM (e3405b4; the owner: "Adopt and publish")** (DECISIONS.md, "Experiment 126"): the shipped line `ctx82` came
+  from experiment 78's (2026-10-17), before the parser fixes, the body listing, the part-season rows and
+  self-creation.  The line `ctx110`: within-season WOWY -0.237 in 1997-2006 (z -3.06, 8 of 10), -0.263 in 2007-2016
+  (z -3.03, 9 of 10), a tie in 2017-2026 (-0.014, z -0.23, 5 of 10), all seasons -0.171, z -3.61, the noise control
+  -0.017; year over year a clear win, team-game -0.157, z -4.08, both directions.  Now shipped:
+  `PriorSettings.second_prior = "ctx110"`, the shrink's folds `ctx110_early,ctx110_within`, tenth folds `ctx110_k10`;
+  the full build of 1997-2027 with 2027 held at 1.085 / 0.985 from this run's own 2019-2026.  Against the morning's
+  published ratings a player with 60+ possessions moves a median 0.24 per 100 in every era, the 90th percentile 0.6,
+  the largest 1.9; the 2026 top 20 keeps its names (Jokić +0.7, Wembanyama +0.5, Kawhi +0.5, Cason Wallace -0.4).
+  **The chain's incumbent is ctx110** (tables `season_ratings_ctx110*`, folds `ctx110_early`, `ctx110_within`); its
+  noise control `noise_ctx110` (`--fold-assignment 1`) started 1:18 PM, about an hour: when it is done, set the
+  chain's `INC_NAME`, `INC_SYSTEM`, `INC_FOLDS` and `CONTROL_NAME` defaults to it (never while a chain runs) and
+  CONTRIBUTING.md's two mentions.  Delete `prior_models_creation110.pkl` only if its folds are never extended again.
 - **The dry run of the morning job passed end to end at 9:31 AM** with every change of the day, 2027 held at
   1.116 / 1.000, the site's files in outputs/daily/site_dry (2027's percentile pool 60, every team's rows adding to
   its total within 0.011).  The next real run is 2026-11-02 at 6:00 AM.
@@ -506,7 +510,8 @@ What else the work of 2026-10-23 left open:
 
 - One build: `bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes_late_as_scored "EXTRA RATE
   FLAGS"`, about 50 minutes with 4 processes.  `INC_NAME` and `INC_SYSTEM` name the incumbent's tables and folds,
-  `creation110` for both by default; `CONTROL_NAME` the noise control, `noise_creation110`.
+  `ctx110` for both since 2026-11-01 (experiment 126; the script's defaults follow once its noise control is built);
+  `CONTROL_NAME` the noise control, `noise_ctx110` (building 2026-11-01; `noise_creation110` until then).
 - **The season-page score**: each season, ratings of zero score 0 and the reference 100.  The zero line on today's
   stints is `outputs/csv/wowy_zero_baseline_inputs99_seasons.csv`, column zero, 3,681.6 a season: ratings of zero do
   not depend on the system, and every system is scored on the same held-back stints.  creation110 explains 19.7 a
@@ -516,9 +521,10 @@ What else the work of 2026-10-23 left open:
   read -2.44 against plain -1.83, so noise passed -2 (DECISIONS.md, "The bug-fix and make-better pass of
   2026-10-30").  Two builds that differ only in the box-score prior's random split differ by about 0.010 on the
   within-season test.
-- The noise control `noise_creation110` moves the within-season test by -0.017, z -1.83, on its own; a candidate is
-  read against today's ratings on the same split, so that noise does not enter its change, but any one build's
-  standing carries 0.01-0.02 of it.
+- The noise control `noise_creation110` moved the within-season test by -0.017, z -1.83, on its own (its reading on
+  the new incumbent, `noise_ctx110`, goes in DECISIONS.md when its chain ends); a candidate is read against today's
+  ratings on the same split, so that noise does not enter its change, but any one build's standing carries 0.01-0.02
+  of it.
 - Every experiment gets a row in `experiments/runs.csv` (`scripts/checks/101_log_run.py`), mirrored to the sheet
   "OpenRAPM experiments", tab Experiments; the next free row is 127.  Since 2026-10-30 it reads the within-season
   test by era too, and refuses a partial or stale reading.  Input screens get their own tab ("Input screen 112").
@@ -527,7 +533,7 @@ What else the work of 2026-10-23 left open:
 
     bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes_late_as_scored "EXTRA RATE FLAGS"
         one experiment against the incumbent, about 50-75 minutes; log outputs/NAME_chain.log
-    .venv/Scripts/python scripts/checks/151_wowy.py --systems=creation110,noise_creation110,NAME --ref=creation110 --tag=NAME
+    .venv/Scripts/python scripts/checks/151_wowy.py --systems=ctx110,noise_ctx110,NAME --ref=ctx110 --tag=NAME
         the within-season WOWY test on folds already built, about 3 minutes
     .venv/Scripts/python scripts/checks/155_input_screen.py run --tag TAG --workers 2 --fitters 6
         the input screen: candidates against their shuffled copies, three random draws, ten test seasons, about 8 hours

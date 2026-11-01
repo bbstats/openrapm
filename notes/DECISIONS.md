@@ -11464,6 +11464,33 @@ The 2026 top 20 keeps 19 of 20: Lauri Markkanen in, 22nd to 15th; Moussa Diabat�
 Kawhi Leonard +0.4, Luka Dončić +0.3, Giannis Antetokounmpo -0.2, Neemias Queta -0.4, Diabaté -0.4; everyone else
 within 0.3.  Page `outputs/compare_incumbent_ctx110_2026.html`.
 
+### Experiment 126 ADOPTED and PUBLISHED (2026-11-01, e3405b4; the owner: "Adopt and publish")
+
+`PriorSettings.second_prior = "ctx110"`, `ShrinkSettings.folds_tag = "ctx110_early,ctx110_within"`,
+`extrapolate_folds_tag = "ctx110_k10"` (the tenth folds built 10:37 to 11:41 AM, 900 folds, 25,200 checks, 0 failed).
+The full build of 1997-2027, 11:43 AM to 1:10 PM: 2027 held at 1.085 / 0.985, the mean of this run's own 2019-2026
+(the build's new rule of the morning, `build.held_scales` with the fresh rows), against 1.116 / 1.000 from the
+previous table.  The site's files written 1:11 to 1:17 PM, `openrapm site --bias --openrapm-decomposition --similarity
+--power`; the docs tests pass; the Changelog's two rows in the owner's words, the second clause of the first changed
+from "older seasons move most" to "a typical player moves a quarter of a point per 100", since the movement is even
+across eras (below).  main fast-forwarded and pushed; the incumbent is ctx110 for the chain, its test-setting tables
+`season_ratings_ctx110*`; its noise control `noise_ctx110` started 1:18 PM.
+
+Against the published ratings of the morning (creation110, 2027 of 5 AM), players with 60+ possessions, the total:
+
+| era | players | median move | 90th percentile | largest | spread before | spread after | correlation |
+|---|---|---|---|---|---|---|---|
+| 1997-2006 | 4,238 | 0.243 | 0.625 | 1.682 | 2.796 | 2.815 | 0.991 |
+| 2007-2016 | 4,490 | 0.245 | 0.618 | 1.944 | 2.702 | 2.714 | 0.991 |
+| 2017-2026 | 5,194 | 0.225 | 0.569 | 1.474 | 2.557 | 2.563 | 0.991 |
+| 2027 | 334 | 0.234 | 0.650 | 1.428 | 1.792 | 1.845 | 0.978 |
+
+The largest moves: Grant Jerrett 2015 -1.94, Glen Rice 2015 -1.73, Marcus Brown 2000 -1.68, Steve Novak 2012 +1.56,
+Boban Marjanovic 2024 +1.47.  The 2026 top 20 on the product tables keeps its names: Jokić +0.74 (7.96 to 8.70),
+Kawhi Leonard +0.54, Wembanyama +0.51, Dončić +0.41, Ty Jerome +0.40, Cason Wallace -0.42, Queta -0.37, Giannis
+-0.10.  2027 (71 games of 5 AM against the same games): Dončić +0.70 to 7.07, Curry +0.75 to 4.60, Wembanyama +0.41,
+Flagg -0.23 to 6.21.
+
 **Reading.**  Better in 1997-2006 and 2007-2016 by ten times the noise control, a tie in 2017-2026 (-0.014, z -0.23,
 5 of 10), and the year-over-year guard a clear win rather than a pass.  The registered rule asks for better in every
 era, and the third era is a tie, so the verdict is the owner's; nothing is worse anywhere, and the shipped line was
