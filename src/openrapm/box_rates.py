@@ -15,6 +15,8 @@ Words used below
     target         the typical value a rate is padded toward: that season's rate among the players of his bin (the
                    possession-conditional target, config.yaml's pad_target), or the season's league rate, or the rate
                    his height, weight and bin predict (`body_targets`, pad_target body_and_possessions)
+    group pad      k_group, how many possessions' worth of the league rate a bin's own rate is blended with before it
+                   serves as a target, one per count and season (`group_k`; config.yaml's pad_bin_target)
     centred        the possession-weighted average player subtracted, so 0 is an average player
 
 The padding (`shrink`):
@@ -29,6 +31,25 @@ The padding (`shrink`):
 Example: a 200-possession bench player with 2.1 steals per 100, k = 450 and a bin rate of 1.4 is padded to
 (200 x 2.1 + 450 x 1.4) / (200 + 450) = 1.6 steals per 100; a 3,000-possession starter with the same 2.1 keeps almost
 all of it: (3000 x 2.1 + 450 x 1.4) / 3450 = 2.0.
+
+The bin's own rate is a guess from a sample too (pad_bin_target league; notes/DECISIONS.md, experiment 127).  From
+the first 88 games of a season a bin's steal rate rests on about 50 steals, and over the 30 finished seasons a bin
+1.00 per 100 above the league at that point was followed by only 0.14 more over the rest of the season.  So the bin
+rate is padded toward the season's league rate by the same rule, one level up, before it serves as a target:
+
+    target_b = (P_b x rate_b + k_group x league) / (P_b + k_group)
+
+    P_b        the bin's offensive possessions in the design, its players' summed
+    rate_b     its rate, 100 x its players' counts / P_b (`bin_targets`)
+    k_group    sigma^2_within / tau^2_groups: the same per-possession noise over the variance of the true bin rates
+               around the league rate, which is the possession-weighted spread of the bin rates less what chance
+               alone would produce, sigma^2_within / P_b for each bin (`group_k`, the method of moments `mom_k`
+               uses); K_MAX when nothing is left, so the target is the league rate
+
+Example: at 88 games a bin with 9,000 possessions and 1.9 steals per 100, k_group 12,000 and a league rate of 1.6 is
+padded to (9,000 x 1.9 + 12,000 x 1.6) / 21,000 = 1.73; over a whole season the same bin holds 130,000 possessions
+and keeps (130,000 x 1.9 + 12,000 x 1.6) / 142,000 = 1.87.  The players' pad k is then measured around the padded
+target (pad_k_around target).  With pad_bin_target none, as shipped, the bin rate is the target as counted.
 
 The body target (pad_target body_and_possessions; notes/DECISIONS.md, experiment 86; the owner, 2026-10-20: "out of
 fold ... priors for the padded metrics (eg use height and weight and, the buckets we were using earlier like for
@@ -56,9 +77,10 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 
-__all__ = ["K_MAX", "K_FALLBACK", "PAD_TARGETS", "shrink", "mom_k", "split_half_k", "GameTotals", "game_totals",
-           "player_possessions", "league_rates", "pad_k", "possession_bins", "bin_of", "bin_targets", "pad_rates",
-           "lineups", "SideRates", "BoxRates", "box_rates", "rate_table"]
+__all__ = ["K_MAX", "K_FALLBACK", "PAD_TARGETS", "PAD_BIN_TARGETS", "shrink", "mom_k", "split_half_k",
+           "split_half_noise", "GameTotals", "game_totals", "player_possessions", "league_rates", "pad_k",
+           "pad_noise", "possession_bins", "bin_of", "bin_targets", "bin_possessions", "group_k",
+           "padded_bin_targets", "pad_rates", "lineups", "SideRates", "BoxRates", "box_rates", "rate_table"]
 
 K_MAX = 1e5                     # the pad k of a rate that shows no spread between players: the target, all but whole
 K_FALLBACK = 40.0               # mom_k's k when too few players carry a proportion to estimate it
@@ -72,6 +94,12 @@ PAD_TARGETS = ("league", "poss_conditional", "body_and_possessions")
 # already explain as signal and pads too little: fouls k 174 / 234 / 346 in 1998 / 2010 / 2024 against
 # 217 / 307 / 387 around the bins (notes/DECISIONS.md, the bug-fix pass, experiment 96)
 PAD_K_AROUND = ("league", "target")
+# whether each possession bin's own rate is padded toward the season's league rate by the bin's possessions before it
+# serves as a target (config pad_bin_target): "none", as shipped, the bin rate as counted; "league", the group pad of
+# the module docstring.  From the first 7% of the 30 finished seasons, one extra padded steal per 100 was followed by
+# 0.70 later in the season with the bin rate as counted and 0.89 with the league rate as the target; the bin rate
+# itself, 1.00 higher, by 0.14 (notes/DECISIONS.md, experiment 127)
+PAD_BIN_TARGETS = ("none", "league")
 BODY = ("height_in", "weight_lb")      # the body target's inputs (data/bio.py), one row per player
 BODY_FOLDS = 5                          # its player folds: player_id % 5
 MIN_BODY_PLAYERS = 20                   # a season's fold needs this many players with possessions to fit a line
@@ -142,6 +170,40 @@ def _odd_even_totals(player: np.ndarray, game: np.ndarray, counts: np.ndarray, p
     return counts_a, possessions_a, counts_b, possessions_b
 
 
+def _half_rates(counts_a: np.ndarray, possessions_a: np.ndarray, counts_b: np.ndarray,
+                possessions_b: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """(r_A, r_B, w): the two half rates per 100, one row per player, and the weight w = P_A + P_B as a column."""
+    rate_a = 100.0 * counts_a / possessions_a[:, None]
+    rate_b = 100.0 * counts_b / possessions_b[:, None]
+    return rate_a, rate_b, (possessions_a + possessions_b)[:, None]
+
+
+def _noise(rate_a: np.ndarray, rate_b: np.ndarray, possessions_a: np.ndarray, possessions_b: np.ndarray) -> np.ndarray:
+    """sigma^2_within per count: the mean over players of (r_A - r_B)^2 / (1/P_A + 1/P_B), the noise variance of one
+    possession's worth of the rate, since the squared gap between a player's two halves is pure noise."""
+    inverse = (1.0 / possessions_a + 1.0 / possessions_b)[:, None]
+    return np.mean((rate_a - rate_b) ** 2 / inverse, axis=0)
+
+
+def _spread(rate_a: np.ndarray, rate_b: np.ndarray, weight: np.ndarray,
+            target: np.ndarray | None = None) -> np.ndarray:
+    """tau^2_between per count: sum w (r_A - mean_A)(r_B - mean_B) / sum w, the halves' weighted covariance, around the
+    weighted means or, with `target` (one row per player), around it: the spread the target leaves."""
+    if target is None:
+        mean_a = (weight * rate_a).sum(0) / weight.sum()
+        mean_b = (weight * rate_b).sum(0) / weight.sum()
+    else:
+        mean_a = mean_b = target
+    return ((weight * (rate_a - mean_a) * (rate_b - mean_b)).sum(0) / weight.sum())
+
+
+def _k_of(within: np.ndarray, between: np.ndarray) -> np.ndarray:
+    """within / between per count, K_MAX where between is 0 or less (or NaN), never above K_MAX."""
+    with np.errstate(divide="ignore", invalid="ignore"):
+        k = np.where(between > 0, within / np.maximum(between, 1e-12), K_MAX)
+    return np.minimum(k, K_MAX)
+
+
 def _season_k(counts_a: np.ndarray, possessions_a: np.ndarray, counts_b: np.ndarray,
               possessions_b: np.ndarray, target: np.ndarray | None = None) -> np.ndarray:
     """One season's pad k per count from its players' two half rates r_A and r_B (per 100, over P_A and P_B
@@ -155,20 +217,25 @@ def _season_k(counts_a: np.ndarray, possessions_a: np.ndarray, counts_b: np.ndar
     true rates between players; the squared gap between them is pure noise.  With `target` (one row per player, the
     body target), tau^2 is the weighted mean of (r_A - target)(r_B - target): the spread the target leaves.
     """
-    rate_a = 100.0 * counts_a / possessions_a[:, None]
-    rate_b = 100.0 * counts_b / possessions_b[:, None]
-    inverse = (1.0 / possessions_a + 1.0 / possessions_b)[:, None]
-    within = np.mean((rate_a - rate_b) ** 2 / inverse, axis=0)
-    weight = (possessions_a + possessions_b)[:, None]
-    if target is None:
-        mean_a = (weight * rate_a).sum(0) / weight.sum()
-        mean_b = (weight * rate_b).sum(0) / weight.sum()
-    else:
-        mean_a = mean_b = target
-    between = ((weight * (rate_a - mean_a) * (rate_b - mean_b)).sum(0) / weight.sum())
-    with np.errstate(divide="ignore", invalid="ignore"):
-        k = np.where(between > 0, within / np.maximum(between, 1e-12), K_MAX)
-    return np.minimum(k, K_MAX)
+    rate_a, rate_b, weight = _half_rates(counts_a, possessions_a, counts_b, possessions_b)
+    within = _noise(rate_a, rate_b, possessions_a, possessions_b)
+    return _k_of(within, _spread(rate_a, rate_b, weight, target))
+
+
+def _season_halves(player: np.ndarray, game: np.ndarray, counts: np.ndarray, possessions: np.ndarray,
+                   season_of_player: np.ndarray, n_seasons: int, min_half_possessions: float) -> dict:
+    """{season: the mask of its players carrying `min_half_possessions` in both halves} for the seasons with at least
+    three of them, with the half totals of every player-season (`_odd_even_totals`): (masks, counts_a, possessions_a,
+    counts_b, possessions_b)."""
+    counts_a, possessions_a, counts_b, possessions_b = _odd_even_totals(player, game, counts, possessions,
+                                                                        len(season_of_player))
+    masks = {}
+    for season in range(n_seasons):
+        both = ((season_of_player == season) & (possessions_a >= min_half_possessions)
+                & (possessions_b >= min_half_possessions))
+        if both.sum() >= 3:
+            masks[season] = both
+    return masks, counts_a, possessions_a, counts_b, possessions_b
 
 
 def split_half_k(player: np.ndarray, game: np.ndarray, counts: np.ndarray, possessions: np.ndarray,
@@ -183,16 +250,30 @@ def split_half_k(player: np.ndarray, game: np.ndarray, counts: np.ndarray, posse
     Example: a count whose true rates spread with variance 0.36 between players and whose per-possession noise variance
     is 162 (a rate of about 1.6 per 100) gets k = 162 / 0.36 = 450 possessions.
     """
-    counts_a, possessions_a, counts_b, possessions_b = _odd_even_totals(player, game, counts, possessions,
-                                                                        len(season_of_player))
+    masks, counts_a, possessions_a, counts_b, possessions_b = _season_halves(
+        player, game, counts, possessions, season_of_player, n_seasons, min_half_possessions)
     k = np.full((n_seasons, counts.shape[1]), np.nan)
-    for season in range(n_seasons):
-        both = ((season_of_player == season) & (possessions_a >= min_half_possessions)
-                & (possessions_b >= min_half_possessions))
-        if both.sum() >= 3:
-            k[season] = _season_k(counts_a[both], possessions_a[both], counts_b[both], possessions_b[both],
-                                  None if target is None else target[both])
+    for season, both in masks.items():
+        k[season] = _season_k(counts_a[both], possessions_a[both], counts_b[both], possessions_b[both],
+                              None if target is None else target[both])
     return k
+
+
+def split_half_noise(player: np.ndarray, game: np.ndarray, counts: np.ndarray, possessions: np.ndarray,
+                     season_of_player: np.ndarray, n_seasons: int,
+                     min_half_possessions: float = MIN_HALF_POSSESSIONS) -> np.ndarray:
+    """sigma^2_within of every count in every season, (seasons x counts): the noise variance of one possession's worth
+    of the rate, from the same players and halves as `split_half_k`; NaN for a season with fewer than three of them.
+
+    Example: Poisson counts at 1.6 per 100 give about 160: a rate over P possessions has noise variance 160 / P.
+    """
+    masks, counts_a, possessions_a, counts_b, possessions_b = _season_halves(
+        player, game, counts, possessions, season_of_player, n_seasons, min_half_possessions)
+    noise = np.full((n_seasons, counts.shape[1]), np.nan)
+    for season, both in masks.items():
+        rate_a, rate_b, _ = _half_rates(counts_a[both], possessions_a[both], counts_b[both], possessions_b[both])
+        noise[season] = _noise(rate_a, rate_b, possessions_a[both], possessions_b[both])
+    return noise
 
 
 # ---------------------------------------------------------------------- the counts and possessions behind a rate
@@ -284,6 +365,13 @@ def pad_k(totals: GameTotals, season_of: np.ndarray, n_seasons: int, target: np.
     return np.where(np.isnan(k), np.nanmean(k, axis=0, keepdims=True), k)
 
 
+def pad_noise(totals: GameTotals, season_of: np.ndarray, n_seasons: int) -> np.ndarray:
+    """(seasons x counts): `split_half_noise` on the offensive possessions, as `pad_k` measures its k; NaN for a season
+    without enough players, which `group_k` reads as no evidence (K_MAX, the league rate)."""
+    return split_half_noise(totals.player_season, totals.game, totals.counts, totals.offensive_possessions, season_of,
+                            n_seasons)
+
+
 # ------------------------------------------------------------------------------ the possession-conditional target
 def possession_bins(offensive_possessions: np.ndarray, player_possessions: np.ndarray) -> np.ndarray | None:
     """The edges of the six possession bins: 0, then five edges equally spaced in log possessions from the 1st
@@ -336,6 +424,47 @@ def bin_targets(counts: np.ndarray, offensive_possessions: np.ndarray, season_of
             else:
                 targets[season, b] = league[season]
     return targets
+
+
+def bin_possessions(offensive_possessions: np.ndarray, season_of: np.ndarray, n_seasons: int,
+                    bins: np.ndarray) -> np.ndarray:
+    """(seasons x bins): P_b, each bin's offensive possessions in each season, its player-seasons' summed; the
+    possessions `bin_targets` divides the bin's counts by."""
+    held = np.zeros((n_seasons, POSSESSION_BINS))
+    np.add.at(held, (np.asarray(season_of, dtype=np.int64), np.asarray(bins, dtype=np.int64)),
+              np.asarray(offensive_possessions, dtype=float))
+    return held
+
+
+def group_k(noise: np.ndarray, targets: np.ndarray, held: np.ndarray, league: np.ndarray) -> np.ndarray:
+    """(seasons x counts): k_group, the pad k of the bin targets themselves, sigma^2_within / tau^2_groups.
+
+    `noise` is sigma^2_within per season and count (`pad_noise`); `targets` the bin targets (seasons x bins x counts,
+    `bin_targets`); `held` each bin's possessions (seasons x bins, `bin_possessions`); `league` the league rates
+    (seasons x counts).  tau^2_groups is the variance of the true bin rates around the league rate: the
+    possession-weighted spread of the bin targets around it, less the noise variance each carries, sigma^2_within / P_b,
+    weighted the same way (the method of moments, as `mom_k`).  K_MAX where nothing is left, or where the season has no
+    noise reading, so the target is the league rate.
+
+    Example: steals, sigma^2_within 160 and bin rates whose true spread is 0.013 give 160 / 0.013 = 12,000
+    possessions.
+    """
+    weight = held[:, :, None]
+    total = np.maximum(weight.sum(1), 1e-12)
+    spread = (weight * (targets - league[:, None, :]) ** 2).sum(1) / total
+    with np.errstate(divide="ignore", invalid="ignore"):
+        chance = noise * (held > 0).sum(1)[:, None] / total
+    return _k_of(noise, spread - chance)
+
+
+def padded_bin_targets(targets: np.ndarray, held: np.ndarray, league: np.ndarray, k_group: np.ndarray) -> np.ndarray:
+    """(seasons x bins x counts): the bin targets padded toward the season's league rate by the bin's own possessions,
+    (P_b x target_b + k_group x league) / (P_b + k_group) (`shrink`); a bin without possessions takes the league rate.
+
+    Example: 9,000 possessions, 1.9 steals per 100, k_group 12,000 and a league rate of 1.6 give 1.73; with 130,000
+    possessions, 1.87.
+    """
+    return shrink(targets, held[:, :, None], k_group[:, None, :], league[:, None, :])
 
 
 def body_targets(counts: np.ndarray, offensive_possessions: np.ndarray, season_of: np.ndarray, n_seasons: int,
@@ -441,7 +570,8 @@ class BoxRates:
     pad_k: np.ndarray                  # (seasons x counts), possessions
     league: np.ndarray                 # (seasons x counts): league rates per 100 offensive possessions
     bin_edges: np.ndarray | None       # the six possession bins, None under the league target
-    bin_targets: np.ndarray | None     # (seasons x bins x counts)
+    bin_targets: np.ndarray | None     # (seasons x bins x counts), the targets the rates are padded toward
+    group_k: np.ndarray | None = None  # (seasons x counts): the bin targets' own pad k under pad_bin_target league
 
 
 def _targets(league, edges, targets, player_possessions, season_of, player_of) -> np.ndarray:
@@ -453,7 +583,7 @@ def _targets(league, edges, targets, player_possessions, season_of, player_of) -
 
 
 def box_rates(design, pad_target: str = "poss_conditional", body: pd.DataFrame | None = None,
-              pad_k_around: str = "league") -> BoxRates:
+              pad_k_around: str = "league", pad_bin_target: str = "none") -> BoxRates:
     """The padded rates of every player of `design` (data/designs.py), both sides, from the design's games.
 
     Per player-season: his counts and possessions summed over the counted games (`game_totals`), each season's league
@@ -465,11 +595,18 @@ def box_rates(design, pad_target: str = "poss_conditional", body: pd.DataFrame |
     The same padding gives both sides: on offence n is his team's offensive possessions, on defence the defensive ones.
     Under the body target, `body` (indexed by player_id, `BODY`) gives every player's height and weight.
     `pad_k_around` "target" measures the possession-conditional target's pad k around the target (`PAD_K_AROUND`).
+    `pad_bin_target` "league" pads each bin's rate toward the league rate by the bin's possessions before it serves as
+    the target (`PAD_BIN_TARGETS`, the group pad of the module docstring; the possession-conditional target only).
     """
     if pad_target not in PAD_TARGETS:
         raise ValueError(f"unknown pad_target {pad_target!r}; use one of {PAD_TARGETS}")
     if pad_k_around not in PAD_K_AROUND:
         raise ValueError(f"unknown pad_k_around {pad_k_around!r}; use one of {PAD_K_AROUND}")
+    if pad_bin_target not in PAD_BIN_TARGETS:
+        raise ValueError(f"unknown pad_bin_target {pad_bin_target!r}; use one of {PAD_BIN_TARGETS}")
+    if pad_bin_target == "league" and pad_target != "poss_conditional":
+        raise ValueError("pad_bin_target pads the possession-conditional target's bins; the league target has none "
+                         "and the body target is not shipped")
     if pad_target == "body_and_possessions" and body is None:
         raise ValueError("the body target needs every player's height and weight")
     spec = design.spec
@@ -488,8 +625,14 @@ def box_rates(design, pad_target: str = "poss_conditional", body: pd.DataFrame |
     league = league_rates(counts, possessions["O"], season_of, spec.n_seasons)
     edges = (possession_bins(possessions["O"], player_possessions["O"][player_of])
              if pad_target in ("poss_conditional", "body_and_possessions") else None)
-    targets = None if edges is None else bin_targets(counts, possessions["O"], season_of, spec.n_seasons,
-                                                     bin_of(edges, player_possessions["O"][player_of]), league)
+    train_bins = None if edges is None else bin_of(edges, player_possessions["O"][player_of])
+    targets = None if edges is None else bin_targets(counts, possessions["O"], season_of, spec.n_seasons, train_bins,
+                                                     league)
+    group = None
+    if pad_bin_target == "league" and edges is not None:
+        held = bin_possessions(possessions["O"], season_of, spec.n_seasons, train_bins)
+        group = group_k(pad_noise(totals, season_of, spec.n_seasons), targets, held, league)
+        targets = padded_bin_targets(targets, held, league, group)
     side_targets = {side: _targets(league, edges, targets, player_possessions[side], season_of, player_of)
                     for side in ("O", "D")}
     k_target = side_targets["O"] if pad_k_around == "target" and edges is not None else None
@@ -498,7 +641,6 @@ def box_rates(design, pad_target: str = "poss_conditional", body: pd.DataFrame |
         # a player the body table lacks reads its medians, as the panel's own body columns do (data/bio.py); one
         # missing height would otherwise leave his season's whole line, and every target read off it, missing
         heights = body.reindex(player_ids)[list(BODY)].fillna(body[list(BODY)].median()).to_numpy(float)
-        train_bins = bin_of(edges, player_possessions["O"][player_of])
         side_targets = {side: body_targets(counts, possessions["O"], season_of, spec.n_seasons, train_bins,
                                            bin_of(edges, player_possessions[side][player_of]), heights, player_ids,
                                            side_targets[side])
@@ -513,7 +655,7 @@ def box_rates(design, pad_target: str = "poss_conditional", body: pd.DataFrame |
         centred = rates - _lineup_mean(rates, lineup, np.asarray(design.w, dtype=float)) / LINEUP
         sides[side] = SideRates(rates=rates, centred=centred, possessions=player_possessions[side])
     return BoxRates(offence=sides["O"], defence=sides["D"], counts=player_counts, pad_k=k, league=league,
-                    bin_edges=edges, bin_targets=targets)
+                    bin_edges=edges, bin_targets=targets, group_k=group)
 
 
 def rate_table(rates: BoxRates, side: str, names) -> pd.DataFrame:

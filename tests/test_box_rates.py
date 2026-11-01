@@ -6,16 +6,22 @@ import pytest
 
 from openrapm.box_rates import (
     K_FALLBACK,
+    K_MAX,
     bin_of,
+    bin_possessions,
     box_rates,
     game_totals,
+    group_k,
     lineups,
     mom_k,
     pad_k,
+    pad_noise,
     pad_rates,
+    padded_bin_targets,
     player_possessions,
     shrink,
     split_half_k,
+    split_half_noise,
 )
 from openrapm.design import FEATURES
 from openrapm.simulate import simulate
@@ -216,3 +222,79 @@ def test_the_pad_k_can_be_measured_around_the_bins_the_rates_are_padded_toward(d
     np.testing.assert_allclose(box_rates(design, pad_k_around="target").pad_k, expected)
     with pytest.raises(ValueError):
         box_rates(design, pad_k_around="median")
+
+
+# ------------------------------------------------------------------ the bin targets' own padding (experiment 127)
+def test_split_half_noise_is_the_per_possession_noise_the_pad_k_divides():
+    """Poisson counts at true rates mu (per 100) have per-possession noise variance 100 mu."""
+    rng = np.random.default_rng(1)
+    n_players, n_games = 400, 60
+    mu = rng.gamma(4.0, 2.0 / 4.0, size=(n_players, 1))
+    possessions = rng.integers(20, 60, size=(n_players, n_games)).astype(float)
+    counts = rng.poisson(mu[:, None, :] * possessions[:, :, None] / 100.0).astype(float)
+    player, game = np.repeat(np.arange(n_players), n_games), np.tile(np.arange(n_games), n_players)
+    noise = split_half_noise(player, game, counts.reshape(-1, 1), possessions.ravel(), np.zeros(n_players, int), 2)
+    np.testing.assert_allclose(noise[0], 100 * mu.mean(), rtol=0.1)
+    assert np.isnan(noise[1]).all()                                 # a season without players
+
+
+def test_group_k_reads_the_bins_true_spread_and_nothing_from_chance():
+    """Six bins whose true rates spread with variance V around the league, each over W possessions, give
+    k_group = 100 x mean rate / V; bins that truly agree give K_MAX, the league rate."""
+    rng = np.random.default_rng(2)
+    league_rate, apart = 1.5, np.array([-0.3, -0.2, -0.1, 0.1, 0.2, 0.3])
+    held = np.full((1, 6), 50_000.0)
+    counts = rng.poisson((league_rate + apart) * held[0] / 100.0).astype(float)
+    targets = (100.0 * counts / held[0])[None, :, None]
+    league = np.array([[100.0 * counts.sum() / held.sum()]])
+    noise = np.array([[100.0 * league_rate]])
+    k = group_k(noise, targets, held, league)
+    np.testing.assert_allclose(k[0, 0], 100.0 * league_rate / apart.var(), rtol=0.25)
+    same = np.full((1, 6, 1), league_rate)
+    assert group_k(noise, same, held, np.array([[league_rate]]))[0, 0] == K_MAX
+    assert group_k(np.array([[np.nan]]), targets, held, league)[0, 0] == K_MAX     # no noise reading: the league
+
+
+def test_the_docstring_examples_of_the_padded_bin_target():
+    targets = np.array([[[1.9], [1.9], [1.7]]])
+    held = np.array([[9_000.0, 130_000.0, 0.0]])
+    padded = padded_bin_targets(targets, held, np.array([[1.6]]), np.array([[12_000.0]]))
+    np.testing.assert_allclose(padded[0, :, 0], [(9_000 * 1.9 + 12_000 * 1.6) / 21_000,
+                                                 (130_000 * 1.9 + 12_000 * 1.6) / 142_000, 1.6])
+    assert round(padded[0, 0, 0], 2) == 1.73 and round(padded[0, 1, 0], 2) == 1.87
+
+
+def test_the_bin_targets_can_be_padded_toward_the_league_and_off_nothing_moves(design):
+    """config pad_bin_target "league": each bin's target sits between the bin's own rate and the league rate, the
+    rates are still padded toward the (padded) target by the season's k, and the k is finite; "none" is the shipped
+    step, bit for bit."""
+    shipped = box_rates(design)
+    off = box_rates(design, pad_bin_target="none")
+    for mine, theirs in ((off.offence.rates, shipped.offence.rates), (off.defence.rates, shipped.defence.rates),
+                         (off.pad_k, shipped.pad_k), (off.bin_targets, shipped.bin_targets)):
+        np.testing.assert_array_equal(mine, theirs)
+    assert off.group_k is None and shipped.group_k is None
+    on = box_rates(design, pad_bin_target="league", pad_k_around="target")
+    spec = design.spec
+    assert on.group_k.shape == on.pad_k.shape and np.isfinite(on.group_k).all() and (on.group_k > 0).all()
+    league = on.league[:, None, :]
+    assert ((on.bin_targets - league) * (shipped.bin_targets - league) >= -1e-12).all()
+    assert (np.abs(on.bin_targets - league) <= np.abs(shipped.bin_targets - league) + 1e-12).all()
+    assert not np.allclose(on.bin_targets, shipped.bin_targets)
+    season = spec.season_of_player
+    for side in (on.offence, on.defence):
+        k = on.pad_k[season]
+        target = on.bin_targets[season, bin_of(on.bin_edges, side.possessions)]
+        n = side.possessions[:, None]
+        np.testing.assert_allclose(side.rates, (100.0 * on.counts + k * target) / (n + k), rtol=1e-12)
+    held = bin_possessions(on.offence.possessions[spec.player_of_player_season],
+                           spec.season_of_player_season, spec.n_seasons,
+                           bin_of(on.bin_edges, on.offence.possessions[spec.player_of_player_season]))
+    np.testing.assert_allclose(held.sum(1), [on.offence.possessions[season == s].sum() for s in range(spec.n_seasons)])
+    expected = group_k(pad_noise(game_totals(design), spec.season_of_player_season, spec.n_seasons),
+                       shipped.bin_targets, held, on.league)
+    np.testing.assert_allclose(on.group_k, expected)
+    with pytest.raises(ValueError, match="pad_bin_target"):
+        box_rates(design, pad_bin_target="median")
+    with pytest.raises(ValueError, match="possession-conditional"):
+        box_rates(design, pad_target="league", pad_bin_target="league")

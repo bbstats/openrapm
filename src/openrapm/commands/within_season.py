@@ -256,9 +256,9 @@ def trained_on_part_seasons(meta: dict) -> bool:
 
 
 def least_share_of(meta: dict) -> float:
-    """The smallest share of a season the saved boosters' training rows cover (settings.PriorSettings.part_season_shares,
-    the least of them; 1 without part-season rows), the floor under what a season so far tells them
-    (SeasonRun.prior_share).
+    """The smallest share of a season the saved boosters' training rows cover (the least of
+    settings.PriorSettings.part_season_shares; 1 without part-season rows), the floor under what a season so far tells
+    them (SeasonRun.prior_share).
 
     Example: boosters trained with part-season rows at a quarter, a half and three quarters give 0.25."""
     shares = ((meta.get("settings") or {}).get("prior") or {}).get("part_season_shares") or ()

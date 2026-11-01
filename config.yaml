@@ -33,6 +33,10 @@ pad_target: poss_conditional  # what the season panel's box rates are padded tow
 pad_k_around: target          # where the pad k measures the spread between players: around the target the rates are
                               # padded toward, as shipped since experiment 99 (2026-10-22), or around the league rate
                               # ("league", before it)
+pad_bin_target: none          # whether each possession bin's own rate is padded toward the league rate by the bin's
+                              # possessions before it serves as a target ("league"; experiment 127: from the first 88
+                              # games of a season a bin's steal rate rests on about 50 steals), or used as counted
+                              # ("none", as shipped)
 body_inputs: season_listing   # height and weight: each season's own listing on the barefoot ruler, as shipped since
                               # experiment 99, or each player's median listing over his career ("career_median")
 

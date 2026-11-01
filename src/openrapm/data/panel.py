@@ -525,15 +525,17 @@ def season_panel(season: int, cfg: dict, designs: dict, sources: SeasonSources, 
     fit = None if fit_game_ids is None else {str(game) for game in fit_game_ids}
     history = _role_history(season, sources, fit, share_cap(cfg))
     body = body_table(cfg) if cfg["pad_target"] == "body_and_possessions" else None
-    around = cfg.get("pad_k_around", "league")
-    rates = box_rates(designs[OFFENCE], pad_target=cfg["pad_target"], body=body, pad_k_around=around)
+    # the one padding for the box rates and every play-by-play, self-creation and foul rate (box_rates.py)
+    padding = dict(pad_target=cfg["pad_target"], body=body, pad_k_around=cfg.get("pad_k_around", "league"),
+                   pad_bin_target=cfg.get("pad_bin_target", "none"))
+    rates = box_rates(designs[OFFENCE], **padding)
     # after the 13 rates, so the event design shares the matrix box_rates built (data/event_counts.py)
     event_counts, event_games = event_design(designs[OFFENCE], sources.tables.event_counts)
-    parts = box_rates(event_counts, pad_target=cfg["pad_target"], body=body, pad_k_around=around)
+    parts = box_rates(event_counts, **padding)
     creation_counts, creation_games = event_design(designs[OFFENCE], sources.tables.creation_counts, CREATION_COUNTS)
-    creation = box_rates(creation_counts, pad_target=cfg["pad_target"], body=body, pad_k_around=around)
+    creation = box_rates(creation_counts, **padding)
     foul_counts, foul_games = event_design(designs[OFFENCE], sources.tables.foul_counts, FOUL_COUNTS)
-    fouls = box_rates(foul_counts, pad_target=cfg["pad_target"], body=body, pad_k_around=around)
+    fouls = box_rates(foul_counts, **padding)
     players = _player_columns(season, cfg, designs, history, fit, sources.debut)
     # the tracking dashboards are season totals: a fold scales them to the share of the season it fits on; the hustle
     # counts are summed over the games themselves, over the possessions of the games read (dashboard_rates.py).  The
