@@ -286,16 +286,16 @@ def held_scales(cfg: dict, table_name: str, season: int, fresh: pd.DataFrame | N
     path = resolve(cfg, "outputs") / f"{table_name}.parquet"
     stored = pd.read_parquet(path, columns=SCALE_COLUMNS) if path.exists() else pd.DataFrame(columns=SCALE_COLUMNS)
     fresh = pd.DataFrame(columns=SCALE_COLUMNS) if fresh is None else fresh[SCALE_COLUMNS]
-    parts = [part for part in (stored[~stored.season.isin(set(fresh.season))], fresh) if len(part)]
-    table = pd.concat(parts, ignore_index=True) if parts else stored
-    table = table[table.season.astype(int) <= trainable_through(cfg)]
-    if not len(table):
+    finished = trainable_through(cfg)
+    stored = stored[~stored.season.isin(set(fresh.season)) & (stored.season.astype(int) <= finished)]
+    fresh = fresh[fresh.season.astype(int) <= finished]
+    parts = [part for part in (stored, fresh) if len(part)]
+    if not parts:
         print(f"  {season}: no finished season in {path.name} or this run to hold its prior scales at; fitted on its "
               "games", flush=True)
         return None
-    held = prior_rapm.held_prior_scale(table, season)
-    where = " and ".join(name for name, part in ((path.name, parts[0] if len(stored) else stored),
-                                                  ("this run's seasons", fresh)) if len(part))
+    held = prior_rapm.held_prior_scale(pd.concat(parts, ignore_index=True), season)
+    where = " and ".join(name for name, part in ((path.name, stored), ("this run's seasons", fresh)) if len(part))
     print(f"  {season}: prior scales held at {held[0]:.3f} / {held[1]:.3f}, the mean of the 8 finished seasons "
           f"nearest it in {where} (experiment 109)", flush=True)
     return held

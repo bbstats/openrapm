@@ -338,7 +338,7 @@ def test_folds_read_the_whole_season_context_only_when_asked():
 
 
 def test_rate_reads_the_shipped_second_prior_unless_told_otherwise(monkeypatch):
-    assert _recorded(monkeypatch, "run_build", "build")["settings"].prior.second_prior == "ctx82"
+    assert _recorded(monkeypatch, "run_build", "build")["settings"].prior.second_prior == "ctx110"
     assert _recorded(monkeypatch, "run_build", "build", "--second-prior", "")["settings"].prior.second_prior == ""
     seen = _recorded(monkeypatch, "run_build", "build", "--setting", "test", "--second-prior", "ctx81")
     assert seen["settings"].prior.second_prior == "ctx81"

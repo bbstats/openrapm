@@ -484,16 +484,16 @@ What else the work of 2026-10-23 left open:
 |---|---|---|---|
 | 1 | the label | `rapm.py` | one RAPM per player over every season but the rated one; penalties 40,000 / 40,000 / 0 |
 | 2 | box-score prior | `box_prior.py` | LightGBM `lgb1_tune2`, linear leaves; feature set `hustle_no_three_pct_self_creation`, self-creation on offense since experiment 110; five player folds; 10 bags; part-season rows at a quarter, a half and three quarters of each training season since experiment 107 |
-| 2b | swap part of the prior | `second_prior.py` | line `ctx82` on `context_and_types_centred`, team totals held |
+| 2b | swap part of the prior | `second_prior.py` | line `ctx110` on `context_and_types_centred`, team totals held; refitted on creation110's boosters and folds since experiment 126, adopted 2026-11-01 (ctx82, experiment 78's, until then) |
 | 3 | the rating | `prior_rapm.py` | RAPM pulled toward the prior, penalty 13,037, centred; the season in progress holds its prior scales at the 8 nearest finished seasons' mean through a quarter of its season, then a straight line to its own fitted ones at three quarters (experiment 109, adopted 2026-10-30; the line 2026-10-31) |
-| 4 | the shrink, with the defense factor | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, 8 nearest fold seasons, defense times 0.89 before 2017 and 0.84 from 2017; folds `creation110_early,creation110_within` since experiment 110, each multiplier read to a full season with the tenth folds `creation110_k10` (experiment 101); two layers since experiment 106: each part's team mean on held-back team-games, each player's deviation from it on held-back stints within games, the within layer times 0.75 on offense and 1.0 on defense |
+| 4 | the shrink, with the defense factor | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, 8 nearest fold seasons, defense times 0.89 before 2017 and 0.84 from 2017; folds `ctx110_early,ctx110_within` since experiment 126, each multiplier read to a full season with the tenth folds `ctx110_k10` (experiment 101); two layers since experiment 106: each part's team mean on held-back team-games, each player's deviation from it on held-back stints within games, the within layer times 0.75 on offense and 1.0 on defense |
 | 5 | swap adjustment | `swap_adjust.py` | off: applied share 0, the build skips it |
 
 - `openrapm build` writes `outputs/season_ratings_product.parquet` with `_step3` and `_step4` beside it.
 - `openrapm site --bias --openrapm-decomposition --similarity` writes the site's files.  Commit, fast-forward `main`
   and push only on the owner's word, then check the Pages build: `gh api repos/bbstats/openrapm/pages/builds/latest`.
   With the second prior, the decomposition's "box score" piece carries the whole prior; its split is the owner's.
-- The incumbent's test-setting tables `outputs/season_ratings_creation110*.parquet`, folds `creation110_early`, `creation110_within`;
+- The incumbent's test-setting tables `outputs/season_ratings_ctx110*.parquet` (experiment 126), folds `ctx110_early`, `ctx110_within`;
   its noise control `noise_creation110` (2026-10-26), the chain's default `CONTROL_NAME`.
 
 ## How an experiment is judged

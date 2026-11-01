@@ -180,11 +180,13 @@ class PriorSettings:
     row_labels: str = "career"
     # "": step 3 reads the box-score prior itself, as it did until experiment 82.  A tag: step 3 reads the second
     # prior instead, shipped as ctx82 since experiment 82 was adopted 2026-10-20, "adopt for now", its inputs centred
-    # since experiment 93 (`second_prior_inputs`).  It is the
+    # since experiment 93 (`second_prior_inputs`); ctx110 since experiment 126, adopted 2026-11-01, the same line
+    # refitted on creation110's boosters and folds (ctx82's came from experiment 78's, before the parser fixes, the
+    # body listing, the part-season rows and self-creation).  It is the
     # box-score prior corrected for who a player played with and against, by a line fitted on the swaps of the
     # within-season folds' held-back games written under outputs/second_prior/<tag>/ (second_prior.py;
     # notes/DECISIONS.md, experiment 81, the owner, 2026-10-19: "take the handoff idea ... in as inputs to the prior")
-    second_prior: str = "ctx82"
+    second_prior: str = "ctx110"
     # the line's player folds (player_id % 5) and its ridge penalty relative to the mean diagonal of its Gram matrix:
     # step 5's type model's, the method the line borrows
     second_prior_folds: int = 5
@@ -283,8 +285,8 @@ class ShrinkSettings:
     # own, heave95_early,heave95_within; since experiment 99, adopted the same day (each season's own body listing, the
     # pad k around the bins), its own, inputs99_early,inputs99_within; since experiment 107, adopted 2026-10-23 (the
     # box-score prior's part-season rows), its own; since experiment 110, adopted 2026-10-25 (self-creation in the
-    # offensive prior), its own
-    folds_tag: str = "creation110_early,creation110_within"
+    # offensive prior), its own; since experiment 126, adopted 2026-11-01 (the swap part of the prior refitted), its own
+    folds_tag: str = "ctx110_early,ctx110_within"
     # each season's factors from only the K fold seasons nearest it (prior_shrink.fold_seasons_used): the defensive
     # prior part holds up less in older seasons, 0.79 in 1997-2006 against 0.95 in 2017-2026 (notes/DECISIONS.md,
     # "Era drift" and experiment 55, adopted 2026-10-12: "yes. build."); 0 would use every fold season the rule allows
@@ -293,8 +295,9 @@ class ShrinkSettings:
     # straight line through the two holdout sizes at nothing held back, as the full-season ratings are built
     # (Richardson extrapolation, prior_shrink.full_season_multipliers; notes/DECISIONS.md, experiment 101, adopted
     # 2026-10-22: "we are going to do it"); "" fits on folds_tag alone, as the experiment chain does.  inputs99_k10
-    # until experiment 107 was adopted; its own since, parts107_k10; experiment 110's own since 2026-10-25
-    extrapolate_folds_tag: str = "creation110_k10"
+    # until experiment 107 was adopted; its own since, parts107_k10; experiment 110's own since 2026-10-25; experiment
+    # 126's own since 2026-11-01
+    extrapolate_folds_tag: str = "ctx110_k10"
     # a multiplier on the games' part too, fitted beside the prior's (prior_shrink, "The games' part freed";
     # notes/DECISIONS.md, experiment 65, adopted 2026-10-15: "Adopt one multiplier as the new incumbent")
     free_games_part: bool = True
