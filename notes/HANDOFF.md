@@ -1,7 +1,7 @@
 # Handoff
 
 **What this file is.**  Where the work stands, what waits on the owner, and the commands a session runs.  Rewritten
-on the afternoon of 2026-10-22, its status and next steps on 2026-10-23 (twice), 2026-10-24, 2026-10-26, 2026-10-27, 2026-10-28, 2026-10-29 and 2026-10-30; the earlier file is in git history.  `DECISIONS.md` is the permanent record and carries
+on the afternoon of 2026-10-22, its status and next steps on 2026-10-23 (twice), 2026-10-24, 2026-10-26, 2026-10-27, 2026-10-28, 2026-10-29, 2026-10-30 and 2026-11-01; the earlier file is in git history.  `DECISIONS.md` is the permanent record and carries
 every number quoted here; read its measurement traps before trusting a number.  `README.md` says what OpenRAPM is,
 `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's standing rules.
 
@@ -21,6 +21,56 @@ every number quoted here; read its measurement traps before trusting a number.  
   owner reads: "how the box-score prior splits players into its five training groups", never "the deal" or "folds";
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
+
+## Where it stands, 2026-11-01: the fix pass ("Anything you'd fix?")
+
+The owner asked what I would fix and answered four questions at 2 PM: merge main and push; the percentile pool of a
+season in progress; the Power page's teams at 0; the swap part of the prior refitted as the next experiment.
+DECISIONS.md, "The fix pass of 2026-11-01" and "Experiment 126", hold the record.
+
+- **main is the working tree's code again** (51a20ad, pushed on the owner's word): main's src/ and tests/ had stopped
+  at 2026-10-23, 148 commits behind this branch, which builds the site; CI's tests had failed on every push to main
+  since the Power page (main's site test expected four tabs).  Merged with main's copies of the generated site files;
+  CI green.  **At each publish, fast-forward main to this branch** (`git branch -f main HEAD`, push), never copy pages
+  across through a temporary worktree again.  The site's pages and docs/index.html changes below reach the site only
+  when main is pushed again: the owner's word.
+- **The scheduled task fired at 5:00 AM since the clocks changed**: its trigger was a fixed instant (StartBoundary
+  `2026-10-24T05:00:00-05:00`, 10:00 UTC).  Set to 6:00 AM local time (`schtasks /Change /TN "OpenRAPM daily update"
+  /ST 06:00`); the next run 2026-11-02 at 6:00 AM.
+- **The morning job** (8ef246c): a failed hustle dashboard pull now fails `openrapm data dashboards` (it returned 0,
+  and the season in progress would have divided yesterday's totals by today's possessions); `hustle-games` is no
+  longer a step, nothing the morning publishes reads the per-game files; `PUBLISH=0` writes the site's files to
+  `outputs/daily/site_dry`, so a dry run catches what stopped the morning of 2026-10-31; a day with no new games
+  publishes nothing (`scripts/daily_files.py` compares the three files with their built date masked; before, `git
+  diff --quiet` never came back clean); the commit's date reads the playoff log too; a failed rebase is aborted.
+- **The Power page** (9909e61): each player's rating on the page is shifted down by a fifth of the average team, so
+  the teams average 0 and each player's row adds to his team's total (the rows missed it by 0.37); team totals
+  unchanged to the hundredth; a player's numbers move -0.04 on offense and -0.03 on defense.  **The percentile pool**
+  of a season in progress is 500 times the share of its regular season played, never under the 60 shown
+  (`meta.percentile_min` in decompose_openrapm.json; 2027 today 60, where one player of 334 had qualified).
+- **A full build holds the season in progress at the fresh scales of the finished seasons it has just rated**
+  (66b06f5), not the previous build's table: after an adopted change 2027 moved twice.
+- **Fold tools as production** (4101702): the season so far's share floored at 0.25 (the least the training rows
+  cover), `--blend-from` shipped at 0.25, `--hold-prior-scale` drops the season in progress, a chain resumed with
+  `REUSE=1` repeats the reproduction check when the base table is newer than its record.
+- **Checked, not bugs**: the hustle dashboard's games and minutes fall short of the game log for a fifth of 2027's
+  players (DECISIONS.md, the last measurement trap: the league lists a player in a game's hustle box score only when
+  he had a hustle event, so the counts are complete and never to be scaled by minutes); 84 roles rows of 2027 without
+  an age are roster players without a stint, and age is not a shipped input.
+- **Experiment 126, the swap part of the prior refitted on today's boosters and folds**: the shipped line `ctx82`
+  comes from experiment 78's (2026-10-17), before the parser fixes, the body listing, the part-season rows and
+  self-creation.  Registered in DECISIONS.md and the experiment table; the line `ctx110` and the chain of the same
+  name; the verdict is the owner's.
+- **Waiting on the owner, wording on the site** (I write no prose there): the About page says "Share of league games
+  played" where the prior reads it floored at a quarter for the season in progress (`box_prior.rated_rows`); the box
+  per-100 inputs are centered on the season's average player (`features.py`, `SHIPPED`) while the page says "vs
+  league average" only for the hustle rows; its line "All stats use padding method" stands against ten "Not padded"
+  rows; the Power page's intro lacks the latest-5 double weight and the average team; the changelog dates the blend
+  entry 2026-10-31 though it first reached the site on 2026-11-01.
+- **Open**: the settings check for the morning job (main now equals the working tree, which removes most of the
+  risk).  **June 2027**: once the Finals end the job must not keep replacing 2027 alone, since every season's labels
+  change; a full build, after `openrapm data hustle-games 2027 2027 --force` and `matchup-games ... --force`; a guard
+  that refuses to run once `data/seasons.py` calls the season finished is proposed, not built.
 
 ## Where it stands, 2026-10-30 night: the bug-fix and make-better pass
 
@@ -461,7 +511,7 @@ What else the work of 2026-10-23 left open:
   read against today's ratings on the same split, so that noise does not enter its change, but any one build's
   standing carries 0.01-0.02 of it.
 - Every experiment gets a row in `experiments/runs.csv` (`scripts/checks/101_log_run.py`), mirrored to the sheet
-  "OpenRAPM experiments", tab Experiments; the next free row is 124.  Since 2026-10-30 it reads the within-season
+  "OpenRAPM experiments", tab Experiments; the next free row is 127.  Since 2026-10-30 it reads the within-season
   test by era too, and refuses a partial or stale reading.  Input screens get their own tab ("Input screen 112").
 
 ## Commands a session runs

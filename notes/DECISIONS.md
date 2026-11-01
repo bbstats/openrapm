@@ -11402,3 +11402,30 @@ rest of each season, whole-season step 4; below 0 is better:
 replays any season under three quarters with the table's own scales.  2027 today, at 6% of its season, is held as
 before, unchanged to 0.0, and the site's files pass every check; the line first moves 2027 once a quarter of its
 season is played, in December.
+
+## The fix pass of 2026-11-01 ("Anything you'd fix?")
+
+The owner asked what I would fix, and answered four questions at 2 PM: merge the working branch into main and push;
+the percentile pool of a season in progress at 500 times the share played, never under 60; the Power page's ratings
+adjusted so teams average 0; the swap part of the prior refitted as the next experiment.  What was fixed, with the
+numbers, is in the commits of the day (51a20ad to ec429ab) and HANDOFF.md, "Where it stands, 2026-11-01".  Two
+findings of the day's review were checked and are not bugs: the hustle dashboard's games and minutes (the trap above,
+"The measurement traps"), and 84 of 2027's 525 roles rows without an age, every one a roster player without a stint.
+
+### Experiment 126: the swap part of the prior refitted on today's boosters and folds (registered 2026-11-01, before any result)
+
+**The change.**  The shipped line, `ctx82` (`PriorSettings.second_prior`), was fitted on 2026-10-17 from experiment
+78's boosters and folds (`outputs/second_prior/ctx82/run.json`: models `bags10`, folds `bags10_early,bags10_within`),
+before the parser fixes (experiments 94 and 95), the per-season body listing (99), the part-season rows (107) and
+self-creation (110); nothing ties its grams to the boosters in use (`data/second_prior_files.py` checks the inputs
+and the gram size).  The same line, `context_and_types_centred` with team totals held, fitted on creation110's
+boosters and folds:
+
+    openrapm second-prior --models creation110 --folds creation110_early,creation110_within --tag ctx110 --inputs context_and_types_centred
+    bash scripts/experiment_chain.sh ctx110 points_with_expected_opponent_threes_late_as_scored "--second-prior ctx110"
+
+**The test.**  The registered rule: the within-season WOWY test against creation110, by era, beside the noise control
+noise_creation110; the year-over-year test as the guard at z +2; the 2026 top 20.
+
+**The rule.**  Adopted when it is better in every era on the within-season test and not worse year over year at z +2;
+the verdict is the owner's.
