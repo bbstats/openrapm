@@ -101,7 +101,7 @@ from ..data.panel import (
 )
 from ..data.player_games import season_games
 from ..data.roles import player_season_inputs, roles_path
-from ..data.seasons import trainable
+from ..data.seasons import trainable, trainable_through
 from ..data.second_prior_files import line_setup, load_grams
 from ..data.shots import DEFENSE_TARGETS, OPPONENT_THREE_LUCK_KEPT, expected_threes
 from ..data.tables import team_of_rows
@@ -641,9 +641,12 @@ class SeasonRun:
 
     def prior_share(self, fit_ids) -> float:
         """The share of a season the boosters are told the fit games cover: the season so far's share for boosters
-        trained with part-season rows, 1 otherwise and for the whole season."""
+        trained with part-season rows, never under the least their training rows cover (`least_share`, as the build
+        holds the season in progress's rows, box_prior.rated_rows; 2026-11-01), 1 otherwise and for the whole season."""
         whole = {str(game) for game in fit_ids} == set(self.game_ids)
-        return 1.0 if whole or self.cut is None or not self.part_season_rows else float(self.season_share)
+        if whole or self.cut is None or not self.part_season_rows:
+            return 1.0
+        return max(float(self.season_share), float(self.least_share))
 
     @property
     def game_ids(self) -> pd.Series:
@@ -850,9 +853,12 @@ def run_fold(run: SeasonRun, folds: pd.DataFrame, repeat: int, fold: int, starte
 
 
 def run_season(run: SeasonRun, base: pd.DataFrame, panel: pd.DataFrame, reproduce_only: bool,
-               started: float) -> None:
-    """The reproduction check (unless already on disk), then every fold not already on disk."""
-    if not (run.out_dir / f"reproduce_{run.season}.json").exists():
+               started: float, base_written: float = 0.0) -> None:
+    """The reproduction check (unless already on disk and newer than the base table, `base_written` its modification
+    time: a run resumed after a code change rebuilt the table and must prove the saved boosters still give it back,
+    2026-11-01), then every fold not already on disk."""
+    record = run.out_dir / f"reproduce_{run.season}.json"
+    if not record.exists() or record.stat().st_mtime < base_written:
         run_reproduction(run, base, panel, started)
     if reproduce_only:
         return
@@ -1004,12 +1010,17 @@ def attach_networks(run: SeasonRun, meta: dict, tag: str) -> None:
     run.whole_season = bool(prior.get("game_prior_whole_season"))
 
 
-def held_scale_table(outputs: Path, name: str | None) -> pd.DataFrame | None:
-    """--hold-prior-scale: outputs/<name>.parquet, whose seasons' prior scales the folds hold; None without."""
+def held_scale_table(outputs: Path, name: str | None, cfg: dict | None = None) -> pd.DataFrame | None:
+    """--hold-prior-scale: outputs/<name>.parquet, whose seasons' prior scales the folds hold, less the seasons past
+    `cfg`'s last finished one (a published table holds the season in progress, whose scales are themselves the mean
+    of its neighbours', build.held_scales; 2026-11-01); None without a name."""
     if name is None:
         return None
     print(f"every fold's prior scales held at the mean of {name}'s 8 seasons nearest its own", flush=True)
-    return pd.read_parquet(outputs / f"{name}.parquet")
+    table = pd.read_parquet(outputs / f"{name}.parquet")
+    if cfg is not None:
+        table = table[table.season.astype(int) <= trainable_through(cfg)]
+    return table
 
 
 def season_held_scale(scales: pd.DataFrame | None, season: int) -> tuple | None:
@@ -1109,6 +1120,7 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
     if split == "date":
         n_folds, repeats = 1, 1
     base_table = pd.read_parquet(outputs / f"{base}.parquet")
+    base_written = (outputs / f"{base}.parquet").stat().st_mtime
     panel = trainable_panel(cfg)
     roles = pd.read_parquet(roles_path(cfg))
     inputs = player_season_inputs(roles, cap=share_cap(cfg))
@@ -1122,7 +1134,7 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
               flush=True)
     if cut is not None:
         print(cut_words(cut, part_season_rows, split), flush=True)
-    scales = held_scale_table(outputs, hold_prior_scale)
+    scales = held_scale_table(outputs, hold_prior_scale, cfg)
     lines = fold_lines(cfg, meta, whole_season_context)
     started = time.time()
     for season in seasons:
@@ -1139,7 +1151,7 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
             attach_line(run, lines, whole_season_context)
         if game_tag:
             attach_networks(run, meta, game_tag)
-        run_season(run, base_table, panel, reproduce_only, started)
+        run_season(run, base_table, panel, reproduce_only, started, base_written)
         designs.clear()
     gather(out_dir)
     return 0

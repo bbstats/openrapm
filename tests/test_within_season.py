@@ -228,8 +228,9 @@ def test_only_boosters_trained_on_part_seasons_are_told_the_share_and_never_for_
 
     def run(cut, part_season_rows):
         return ws.SeasonRun(2024, {}, {ws.SCORE_TARGET: SimpleNamespace(games=games)}, None, {}, Path("."),
-                            cut=cut, part_season_rows=part_season_rows)
+                            cut=cut, part_season_rows=part_season_rows, least_share=0.25)
     assert run(0.25, True).prior_share(so_far) == 0.25
+    assert run(0.05, True).prior_share(so_far) == 0.25      # never under the least its training rows cover
     assert run(0.25, True).prior_share(every) == 1.0
     assert run(0.25, False).prior_share(so_far) == 1.0
     assert run(None, True).prior_share(so_far) == 1.0

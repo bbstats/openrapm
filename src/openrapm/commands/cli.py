@@ -581,9 +581,9 @@ def _add_folds(commands) -> None:
                        help="with --hold-prior-scale and --cut: the prior scales a straight line from held at a "
                             "season's first game to its own fitted ones at SHARE of its regular season, each fold's "
                             "weight its season so far's share over SHARE (prior_rapm.blend_weight)")
-    folds.add_argument("--blend-from", type=parse_share, default=0.0, metavar="SHARE",
+    folds.add_argument("--blend-from", type=parse_share, default=PRODUCT.ridge.held_scale_blend_from, metavar="SHARE",
                        help="with --blend-through: held in full until SHARE of the season, the line from there "
-                            "(default %(default)s, from the first game)")
+                            "(default %(default)s, as shipped; 0 is the line from the first game)")
     _add_jobs(folds)
     folds.set_defaults(run=_run_folds)
 
