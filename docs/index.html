@@ -132,7 +132,7 @@
   const PIECES = [["box", "Box score"], ["on", "On court"], ["off", "Off court"], ["sos", "Team SOS"]];
   // the columns of each view, [key, header]: the ratings view shows each side's rating, the decomposition one
   // side's pieces
-  const COLUMNS = { ratings: [["o", "Offense"], ["d", "Defense"], ["t", "Total"], ["p", "Poss."]],
+  const COLUMNS = { ratings: [["o", "Offense"], ["d", "Defense"], ["t", "Total"], ["w", "WOSA"], ["p", "Poss."]],
                     decomposition: [...PIECES, ["a", "OpenRAPM"], ["p", "Poss."]] };
 
   // the season list and a player's seasons keep a sort each, so the way back finds the list sorted as it was
@@ -171,7 +171,7 @@
   // one player's row as the table reads it: each side's rating, and the chosen side's five pieces and rating
   function onSide(r, side) {
     const v = r[SIDE_FIELD[side]];
-    return { n: r.n, id: r.id, p: r.p, tm: r.tm, o: r.o[5], d: r.d[5], t: r.t[5], rt: r.t[5],
+    return { n: r.n, id: r.id, p: r.p, tm: r.tm, w: r.w, o: r.o[5], d: r.d[5], t: r.t[5], rt: r.t[5],
              box: v[0], on: v[1], off: v[2], sos: v[3], a: v[5] };
   }
 
@@ -179,7 +179,7 @@
   // possessions, or in a season in progress 500 times the share of the season played, never under the 60 shown
   // (meta.percentile_min, written by openrapm site); a player under the pool's minimum gets none.  Remembered like
   // the theme
-  const PCT_KEYS = ["o", "d", "t", "box", "on", "off", "sos", "a"];
+  const PCT_KEYS = ["o", "d", "t", "w", "box", "on", "off", "sos", "a"];
   const poolMin = season => (data.meta.percentile_min || {})[season] || 500;
   try { state.pct = localStorage.getItem("percentile") === "1"; } catch (e) {}
   // the rookies button: the season list shows only that season's rookies (meta.rookies, written by openrapm site).
@@ -248,7 +248,7 @@
   // both tables' sorts move.  Turning the pieces on takes the side from the rating the shown table is sorted on
   function setView(view, side = (view === "decomposition" && FIELD_SIDE[sorting().k]) || state.side) {
     for (const s of Object.values(state.sort))
-      if (view === "ratings" ? s.k !== "p" && s.k !== "s" : FIELD_SIDE[s.k]) s.k = view === "ratings" ? SIDE_FIELD[side] : "a";
+      if (view === "ratings" ? s.k !== "p" && s.k !== "s" : FIELD_SIDE[s.k] || s.k === "w") s.k = view === "ratings" ? SIDE_FIELD[side] : "a";
     state.view = view;
     state.side = side;
   }
@@ -345,8 +345,8 @@
     const q = v => { if (v === null || v === undefined) return "";
                      const s = String(v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     const rows = state.view === "ratings"
-      ? [["season", "player_id", "player", "team", "offense", "defense", "total", "possessions"],
-         ...pairs.map(([per, x]) => [per, x.id, x.n, x.tm, x.o[5], x.d[5], x.t[5], x.p])]
+      ? [["season", "player_id", "player", "team", "offense", "defense", "total", "wosa", "possessions"],
+         ...pairs.map(([per, x]) => [per, x.id, x.n, x.tm, x.o[5], x.d[5], x.t[5], x.w, x.p])]
       : [["season", "player_id", "player", "team", "possessions",
           ...["offense", "defense", "total"].flatMap(s => CSV_PIECES.map(k => s + "_" + k))],
          ...pairs.map(([per, x]) => [per, x.id, x.n, x.tm, x.p, ...csvPieces(x.o), ...csvPieces(x.d), ...csvPieces(x.t)])];
