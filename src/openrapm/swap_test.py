@@ -72,7 +72,7 @@ import scipy.sparse as sp
 from .rapm import solve_ridge
 
 __all__ = ["HOME", "AWAY", "OFF", "DEF", "SIDES", "CONTEXTS", "RAPM_CONTROLS", "PAIR_GROUPS", "STINT_COLUMNS",
-           "ratings_in_raw_sign", "order_stints", "fatigue", "season_rows", "swap_pairs", "Season", "prepare",
+           "ratings_in_raw_sign", "order_stints", "next_in_same_period", "stint_durations", "fatigue", "season_rows", "swap_pairs", "Season", "prepare",
            "aligned", "predict", "side_rates", "side_scores", "score_season", "plain_rapm"]
 
 HOME = [f"h{i}" for i in range(1, 6)]
@@ -130,6 +130,27 @@ def order_stints(stints: pd.DataFrame) -> pd.DataFrame:
     return stints.iloc[np.argsort(stints["game_id"].to_numpy(), kind="stable")].reset_index(drop=True)
 
 
+def next_in_same_period(stints: pd.DataFrame) -> np.ndarray:
+    """For each stint, whether the next stored stint belongs to the same game and period (time order within a game)."""
+    game = stints["game_id"].to_numpy()
+    period = stints["period"].to_numpy()
+    same_next = np.zeros(len(stints), dtype=bool)
+    if len(stints) > 1:
+        same_next[:-1] = (game[1:] == game[:-1]) & (period[1:] == period[:-1])
+    return same_next
+
+
+def stint_durations(stints: pd.DataFrame) -> np.ndarray:
+    """Seconds each stint lasted: its start clock minus the next stint's in the same game and period, or minus 0 at the
+    end of the period; never negative.  The stints must be in time order within a game, each game's together.
+
+    Example: stints of one period starting at 720, 660 and 600 seconds left last 60, 60 and 600 seconds."""
+    clock = stints["start_clock"].to_numpy(dtype=float)
+    end = np.zeros(len(stints))
+    end[:-1] = np.where(next_in_same_period(stints)[:-1], clock[1:], 0.0)
+    return np.clip(clock - end, 0.0, None)
+
+
 def fatigue(stints: pd.DataFrame, cap: float = FATIGUE_CAP) -> tuple[np.ndarray, np.ndarray]:
     """Minutes each five had been on the court without a break when every stint began: (home, away).
 
@@ -143,15 +164,8 @@ def fatigue(stints: pd.DataFrame, cap: float = FATIGUE_CAP) -> tuple[np.ndarray,
     well the stint went (it came out as tired offenses scoring MORE, +1.8 a minute, on 2024-25).
     """
     n = len(stints)
-    game = stints["game_id"].to_numpy()
-    period = stints["period"].to_numpy()
-    clock = stints["start_clock"].to_numpy(dtype=float)
-    same_next = np.zeros(n, dtype=bool)
-    if n > 1:
-        same_next[:-1] = (game[1:] == game[:-1]) & (period[1:] == period[:-1])
-    end = np.zeros(n)
-    end[:-1] = np.where(same_next[:-1], clock[1:], 0.0)
-    duration = np.clip(clock - end, 0.0, None)
+    same_next = next_in_same_period(stints)
+    duration = stint_durations(stints)
 
     home = stints[HOME].to_numpy(dtype=np.int64).tolist()
     away = stints[AWAY].to_numpy(dtype=np.int64).tolist()

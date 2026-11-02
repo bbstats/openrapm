@@ -23,6 +23,7 @@ def test_fatigue_runs_while_on_court_and_resets():
         dict(base, period=1, start_clock=600.0, **{f"h{i}": i for i in range(1, 6)}, **away),  # 5 back, rested
         dict(base, period=2, start_clock=720.0, **{f"h{i}": i for i in range(1, 6)}, **away),
     ])
+    assert list(sw.stint_durations(stints)) == [60.0, 60.0, 600.0, 720.0]
     home, away_f = sw.fatigue(stints)
     # stint lengths 60, 60, 600 (the last runs to the end of the period) and 720; clocks read at the START,
     # so 1-4 have 60 s behind them in the second stint and 120 s in the third, and 5 comes back at zero
