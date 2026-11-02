@@ -361,6 +361,25 @@ def test_a_games_part_multiplied_by_step_4_is_split_with_its_factor(openrapm_sit
 
 
 # ------------------------------------------------------------------------------ the power ratings page
+def test_a_rookie_is_a_player_with_no_season_before_counted_from_the_debut(tmp_path, monkeypatch):
+    assert site.rookies({}) == {}
+    panel = pd.DataFrame({"season": [2004, 2004, 2004, 2004, 2005, 2005],
+                          "side": ["off", "def", "off", "def", "off", "def"],
+                          "player_id": [23, 23, 7, 7, 23, 23],
+                          "seasons_before_from_debut": [0.0, 0.0, 11.0, 11.0, 1.0, 1.0]})
+    panel.to_parquet(tmp_path / "panel.parquet")
+    monkeypatch.setattr(site, "resolve", lambda cfg, name: tmp_path / "panel.parquet")
+    assert site.rookies({"_root": ".", "paths": {}}) == {2004: [23]}  # two sides, one player; a veteran and a sophomore out
+
+
+def test_the_file_lists_only_the_rookies_the_season_shows(tmp_path):
+    row = lambda player: [f"Player {player}", player, 500, [0.0] * 6, [0.0] * 6, [0.0] * 6, "BOS"]
+    path = tmp_path / "file.json"
+    site.write_openrapm_file(path, {2004: [row(23)], 2005: [row(7)]}, "2026-11-02", 13037.0,
+                             rookie_ids={2004: [23, 99]})         # 99 played too little to be shown
+    assert json.loads(path.read_text(encoding="utf-8"))["meta"]["rookies"] == {"2004": [23], "2005": []}
+
+
 def test_the_percentile_pool_of_a_season_in_progress_grows_with_the_share_played(monkeypatch):
     assert site.percentile_minimums({}) == {}
     shares = {2027: 0.072}

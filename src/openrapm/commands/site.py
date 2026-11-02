@@ -1181,16 +1181,35 @@ def percentile_minimums(cfg: dict) -> dict:
             for season in in_progress(cfg)}
 
 
+def rookies(cfg: dict) -> dict:
+    """{season: player ids, ascending} of each season's rookies: the players with no season played before it, counted
+    from the debut, so a veteran of 1997 is not one (the season panel's seasons_before_from_debut, features.py).  A
+    configuration that names no data folder has none, like `percentile_minimums`.
+
+    Example: LeBron James is a rookie of 2004 and of no other season; A.C. Green, eleven seasons in by 1997, of none."""
+    if "_root" not in cfg or "paths" not in cfg:
+        return {}
+    panel = pd.read_parquet(resolve(cfg, "panel"), columns=["season", "player_id", "seasons_before_from_debut"])
+    first = panel[panel.seasons_before_from_debut == 0]
+    return {int(season): sorted(int(player) for player in players.unique())
+            for season, players in first.groupby("season").player_id}
+
+
 def write_openrapm_file(path: Path, rows: dict, built: str, penalty: float, opens_on: int | None = None,
-                        percentile_min: dict | None = None) -> None:
+                        percentile_min: dict | None = None, rookie_ids: dict | None = None) -> None:
     """decompose_openrapm.json: meta and the rows of every season, latest first; compact, UTF-8 letters as they are.
     `opens_on` is the season the ratings page opens on (`default_season`), the latest when not given;
-    `percentile_min`, the seasons in progress' percentile pool minimums (`percentile_minimums`), none when not given."""
+    `percentile_min`, the seasons in progress' percentile pool minimums (`percentile_minimums`), none when not given;
+    `rookie_ids`, each season's rookies (`rookies`), kept to the players the season's rows show, none when not given."""
     seasons = sorted(rows, reverse=True)
     minimums = {str(season): int(value) for season, value in (percentile_min or {}).items()}
+    shown = {season: {row[OPENRAPM_FIELDS.index("id")] for row in rows[season]} for season in seasons}
+    rookie_lists = {str(season): [player for player in (rookie_ids or {}).get(season, []) if player in shown[season]]
+                    for season in seasons}
     document = dict(meta=dict(built=built, penalty=penalty, seasons=seasons,
                               default_season=int(seasons[0] if opens_on is None else opens_on),
-                              percentile_min=minimums, fields=OPENRAPM_FIELDS, pieces=OPENRAPM_PIECES),
+                              percentile_min=minimums, rookies=rookie_lists, fields=OPENRAPM_FIELDS,
+                              pieces=OPENRAPM_PIECES),
                     rows={str(season): rows[season] for season in seasons})
     path.write_text(json.dumps(document, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
@@ -1217,7 +1236,7 @@ def write_openrapm_decomposition(cfg: dict, ratings_path: Path, data_dir: Path, 
     run_openrapm_checks(worst, rows, table)
     data_dir.mkdir(parents=True, exist_ok=True)
     path = data_dir / OPENRAPM_FILE
-    write_openrapm_file(path, rows, built, penalty, default_season(table), percentile_minimums(cfg))
+    write_openrapm_file(path, rows, built, penalty, default_season(table), percentile_minimums(cfg), rookies(cfg))
     print(f"wrote {path}: {sum(len(v) for v in rows.values()):,} rows over {len(rows)} seasons, "
           f"{path.stat().st_size / 1e6:.2f} MB ({time.time() - started:.0f}s)", flush=True)
 

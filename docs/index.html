@@ -13,7 +13,8 @@
   #find { width: 210px; }
   /* the side buttons sit left of Decomposition, so the button stays under the pointer when they appear */
   .cols { display: inline-flex; gap: 8px; margin-left: auto; }
-  .controls #pct { width: 40px; padding: 0; }
+  .controls #pct, .controls #rookies { width: 40px; padding: 0; }
+  .controls #rookies { font-size: 18px; }
   /* one link: the player's name and the cross that goes back to the list */
   .chip { display: inline-flex; align-items: center; gap: 12px; box-sizing: border-box; height: 40px;
           padding: 0 15px 0 17px; border: 1px solid var(--accent); border-radius: 999px; color: inherit;
@@ -102,6 +103,7 @@
     <span class="cols">
       <span class="seg" id="side" role="group" aria-label="Side" hidden><button type="button" data-side="off" aria-pressed="false">Offense</button><button type="button" data-side="def" aria-pressed="false">Defense</button><button type="button" data-side="total" aria-pressed="true">Total</button></span>
       <button type="button" id="pieces" aria-pressed="false">Decomposition</button>
+      <button type="button" id="rookies" aria-pressed="false" title="Rookies" aria-label="Rookies">&#x265C;</button>
       <button type="button" id="pct" aria-pressed="false" title="Percentile among players with 500 or more possessions, fewer while a season is in progress">%ile</button>
     </span>
   </div>
@@ -180,6 +182,14 @@
   const PCT_KEYS = ["o", "d", "t", "box", "on", "off", "sos", "a"];
   const poolMin = season => (data.meta.percentile_min || {})[season] || 500;
   try { state.pct = localStorage.getItem("percentile") === "1"; } catch (e) {}
+  // the rookies button: the season list shows only that season's rookies (meta.rookies, written by openrapm site).
+  // Remembered like the percentile button; a player's own seasons have nothing to filter, so it is not shown there
+  try { state.rookies = localStorage.getItem("rookies") === "1"; } catch (e) {}
+  const rookieSets = new Map();                       // season -> the ids of its rookies
+  function rookiesOf(season) {
+    if (!rookieSets.has(season)) rookieSets.set(season, new Set((data.meta.rookies || {})[season] || []));
+    return rookieSets.get(season);
+  }
   const pctCache = new Map();                         // "season:side" -> id -> that player's percentiles
   function percentiles(season, side) {
     const key = season + ":" + side;
@@ -275,7 +285,9 @@
       const all = data.rows[state.season].map(r => shownRow(r, state.side, state.season));
       all.sort(byKey(k, dir));
       all.forEach((r, i) => { r.rank = i + 1; });
-      rows = all.filter(r => (!state.team || r.tm.split("/").includes(state.team)) && (!q || fold(r.n).includes(q)));
+      const rookieIds = rookiesOf(state.season);
+      rows = all.filter(r => (!state.team || r.tm.split("/").includes(state.team)) && (!q || fold(r.n).includes(q)) &&
+                             (!state.rookies || rookieIds.has(r.id)));
     } else {
       // his rank each season: that season sorted high to low on the sorted column (on the bold one when sorted by
       // season) with the list's tie-break; a stable sort numbers ties as the list does
@@ -318,6 +330,8 @@
     $("side").hidden = !decomposition;
     pieces.setAttribute("aria-pressed", decomposition);
     $("pct").setAttribute("aria-pressed", !!state.pct);
+    $("rookies").setAttribute("aria-pressed", !!state.rookies);
+    $("rookies").hidden = one;
     document.querySelectorAll("[data-side]").forEach(b => b.setAttribute("aria-pressed", b.dataset.side === state.side));
     writeAddress();
   }
@@ -379,6 +393,11 @@
   $("pct").addEventListener("click", () => {
     state.pct = !state.pct;
     try { localStorage.setItem("percentile", state.pct ? "1" : "0"); } catch (e) {}
+    render();
+  });
+  $("rookies").addEventListener("click", () => {
+    state.rookies = !state.rookies;
+    try { localStorage.setItem("rookies", state.rookies ? "1" : "0"); } catch (e) {}
     render();
   });
   document.querySelectorAll("[data-side]").forEach(b => b.addEventListener("click", () => {

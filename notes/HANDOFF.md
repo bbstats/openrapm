@@ -79,6 +79,13 @@ DECISIONS.md, "The fix pass of 2026-11-01" and "Experiment 126", hold the record
   unchanged to the hundredth; a player's numbers move -0.04 on offense and -0.03 on defense.  **The percentile pool**
   of a season in progress is 500 times the share of its regular season played, never under the 60 shown
   (`meta.percentile_min` in decompose_openrapm.json; 2027 today 60, where one player of 334 had qualified).
+- **The rookies button, committed 2026-11-02, not published** (the owner: "add a rookies filter, same as percentiles,
+  just with a" chess rook): the season list shows only players with no season before it, counted from the debut
+  (`meta.rookies` in decompose_openrapm.json, `site.rookies`); 2026 shows 91 of 556, 2027 28 of 337.  Rank and
+  percentile stay against every player of the season; the choice is remembered like the percentile button; a
+  player's own seasons do not show it.  docs/data/decompose_openrapm.json holds the published numbers with the list
+  added, since the ratings table's 2027 was rewritten at 10:33 AM, after the 10:19 AM publish, and differs by about
+  0.01.  Publish index.html and that file together; the Changelog row waits on the owner's wording.
 - **A full build holds the season in progress at the fresh scales of the finished seasons it has just rated**
   (66b06f5), not the previous build's table: after an adopted change 2027 moved twice.
 - **Fold tools as production** (4101702): the season so far's share floored at 0.25 (the least the training rows
