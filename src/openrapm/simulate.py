@@ -225,6 +225,7 @@ def _play_game(rng, league: _League, state: _Season, home, away, phase: str, ser
 def _play_stint(rng, league: _League, state: _Season, game: _Game, frac_rem: float) -> dict:
     """One stint: both fives drawn, possessions drawn, each side's points; the score moves on."""
     margin_h = game.score_h - game.score_a
+    period = 1 + min(int(4 * (1 - frac_rem)), 3)
     is_gt = (frac_rem < 0.125 and abs(margin_h) >= 15) or (frac_rem < 0.25 and abs(margin_h) >= 20)
     home_five = game.home_players[_sample_lineup(rng, state.prop[game.home_players])]
     away_five = game.away_players[_sample_lineup(rng, state.prop[game.away_players])]
@@ -235,7 +236,7 @@ def _play_stint(rng, league: _League, state: _Season, game: _Game, frac_rem: flo
                                         (away_five, home_five, poss_a, -1.0, -margin_h)):
         pts[home] = _side_points(rng, league, state, game, (off, de, poss, home, margin, frac_rem, is_gt))
     row = dict(game_id=game.game_id, season=state.season, phase=game.phase, series_id=game.series,
-               game_date=game.game_number, period=1 + min(int(4 * (1 - frac_rem)), 3),
+               game_date=game.game_number, period=period, start_clock=frac_rem * 2880.0 - (4 - period) * 720.0,
                **{slot: int(league.pid[player]) for slot, player in zip(HOME_SLOTS, home_five)},
                **{slot: int(league.pid[player]) for slot, player in zip(AWAY_SLOTS, away_five)},
                poss_h=poss_h, poss_a=poss_a, pts_h=pts[1.0], pts_a=pts[-1.0],

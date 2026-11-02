@@ -73,6 +73,7 @@ MODEL_LAYER = [
     "game_prior.py",    # the box-score prior game by game: the network's states as panel rows, averages, tables
     "in_context_prior.py",  # the box-score prior from the pretrained Kumo network: the rows shown, the answers kept
     "linear_prior.py",  # the box-score prior as an elastic net on every input and every product of two (experiment 121)
+    "wins.py",          # wins over starter average: the win model, leverage, the pace ridge, the bar, the wins
 ]
 
 # Model code that still reaches its own data, and what through.  Nothing may be added here.
