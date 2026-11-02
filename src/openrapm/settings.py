@@ -33,7 +33,7 @@ from dataclasses import dataclass, field, replace
 __all__ = ["Targets", "LabelSettings", "UNSHRINK_LABELS", "PriorSettings", "ROW_LABELS", "TEAM_TOTALS", "PREDICTIONS",
            "SECOND_PRIOR_INPUTS",
            "RidgeSettings", "ShrinkSettings", "factor_for", "describe_factors",
-           "SwapSettings", "Settings", "PRODUCT", "TEST"]
+           "SwapSettings", "WinsSettings", "Settings", "PRODUCT", "TEST"]
 
 
 def factor_for(factors: tuple, season: int) -> float:
@@ -357,6 +357,27 @@ class SwapSettings:
 
 
 @dataclass(frozen=True)
+class WinsSettings:
+    """Wins over starter average (wins.py): no rating moves, and nothing here is scored by the within-season test.
+    The owner's decisions of 2026-11-02 and check 157's readings are in notes/DECISIONS.md, "WOSA"."""
+    # the bar: the mean of the players with the most regular-season starts, minutes breaking ties.  150 is five starters
+    # for each of 30 teams; before 2005 the league had 29
+    starters: int = 150
+    # the pace ridge's penalty, in seconds of weight: the least held-back error of check 157 on half-A and half-B games
+    # of six seasons across the eras, least in five of them and both neighbours worse (10,000 by 0.04 in 2001)
+    pace_penalty: float = 30000.0
+    # the pace ridge leaves out stints shorter than this: under 15 seconds a stint is 0.5% of the time and 43% of the
+    # weighted squared error (2025), a substitution at a free throw rather than a pace
+    pace_min_seconds: float = 15.0
+    # rating points, weighted by relative leverage, for one win: check 157's slope of teams' records on them, 25.8 /
+    # 26.3 / 27.7 by era (a season's standard error about 1.4).  One number for every season: a season's own slope
+    # would add its noise to every player, about 0.6 wins on a star
+    points_per_win: float = 27.0
+    # what the wins count and everything the module fits reads; the rating itself stays the season's
+    phases: tuple = ("RS",)
+
+
+@dataclass(frozen=True)
 class Settings:
     """Everything one build reads, step by step."""
     targets: Targets = field(default_factory=Targets)
@@ -365,6 +386,7 @@ class Settings:
     ridge: RidgeSettings = field(default_factory=RidgeSettings)
     shrink: ShrinkSettings = field(default_factory=ShrinkSettings)
     swap: SwapSettings = field(default_factory=SwapSettings)
+    wins: WinsSettings = field(default_factory=WinsSettings)
     # 0: the labels and training rows leave out the rated season only; 1: its two neighbours as well
     exclude_neighbours: int = 0
 

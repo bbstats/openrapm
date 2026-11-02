@@ -75,7 +75,7 @@ def test_the_test_setting_differs_in_three_places_only():
     assert TEST.exclude_neighbours == 1
     assert TEST.shrink.rule == "test" and PRODUCT.shrink.rule == "product"
     assert TEST.swap.exclude_near == 1 and PRODUCT.swap.exclude_near == 0
-    same = [name for name in ("targets", "labels", "prior", "ridge")]
+    same = [name for name in ("targets", "labels", "prior", "ridge", "wins")]
     assert all(getattr(TEST, name) == getattr(PRODUCT, name) for name in same)
 
 

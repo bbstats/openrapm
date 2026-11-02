@@ -79,6 +79,30 @@ def test_strength_leaves_the_game_itself_out():
     assert wins.strength_gap(results)[1] == pytest.approx(30.0 - 4.0)
 
 
+def test_the_win_model_reads_how_much_of_a_lead_lasts():
+    """A margin pulled back toward zero: the share of a lead that lasts falls with the time left, and sits near 1 at
+    the end.  With no pull it is 1 throughout."""
+    rng = np.random.default_rng(4)
+    rows = []
+    for game in range(1500):
+        margin = 0.0
+        for number in range(24):
+            move = rng.normal(0.0, 2.5) - 0.03 * margin
+            rows.append(dict(game_id=f"g{game}", phase="RS", period=1 + number // 6,
+                             start_clock=720.0 - 120.0 * (number % 6), margin_h=margin, is_gt=False, neutral=False,
+                             half="A", poss_h=4, poss_a=4,
+                             pts_h=max(move, 0.0), pts_a=max(-move, 0.0), home_team_id=game % 8,
+                             away_team_id=(game + 1) % 8))
+            margin += move
+    pulled = pd.DataFrame(rows)
+    model = wins.fit_win_model(pulled, sw.stint_durations(pulled), 2001)
+    assert wins.lead_kept(1.0 / 24.0, model) == pytest.approx(0.97, abs=0.05)
+    assert wins.lead_kept(0.5, model) == pytest.approx(0.97 ** 12, abs=0.08)
+    plain = _brownian_games(strength_sd=0.0)
+    model = wins.fit_win_model(plain, sw.stint_durations(plain), 2001)
+    assert model.lead_kept_at_end == pytest.approx(1.0, abs=0.05) and abs(model.lead_kept_per_game) < 0.2
+
+
 def test_the_win_model_recovers_a_planted_home_edge_and_spread():
     stints = _brownian_games()
     seconds = sw.stint_durations(stints)
@@ -106,10 +130,10 @@ def test_a_game_of_margin_zero_is_left_out_and_counted():
     assert model.n_games == 40 and model.n_ties == 1
 
 
-def _model(edge=0.0, spread=12.0) -> wins.WinModel:
-    """A spread of `spread` x sqrt(share left), read on a fine grid."""
+def _model(edge=0.0, spread=12.0, kept=1.0) -> wins.WinModel:
+    """A spread of `spread` x sqrt(share left), read on a fine grid; `kept` of a lead lasts at any time."""
     seconds_left = np.linspace(1.0, 2880.0, 400)
-    return wins.WinModel(2001, edge, 1.0, seconds_left, spread * np.sqrt(seconds_left / 2880.0), 1, 0)
+    return wins.WinModel(2001, edge, 1.0, kept, 0.0, seconds_left, spread * np.sqrt(seconds_left / 2880.0), 1, 0)
 
 
 def test_leverage_is_highest_late_and_close_and_nothing_once_a_game_is_decided():
@@ -128,8 +152,17 @@ def test_a_neutral_site_takes_the_home_edge_away():
     assert wins.win_probability(0.0, 1.0, model, neutral=True) == pytest.approx(0.5)
 
 
-def test_points_per_win_is_one_over_the_possession_weighted_mean():
-    assert wins.points_per_win(np.array([0.02, 0.06]), np.array([3.0, 1.0])) == pytest.approx(1.0 / 0.03)
+def test_a_lead_that_only_partly_lasts_is_worth_less_of_the_win_and_each_point_too():
+    full, kept = _model(), _model(kept=0.5)
+    assert wins.win_probability(6.0, 0.25, kept) == pytest.approx(wins.win_probability(3.0, 0.25, full))
+    assert wins.leverage(0.0, 0.25, kept) < wins.leverage(0.0, 0.25, full)
+
+
+def test_relative_leverage_averages_one_over_the_possessions():
+    stints, seconds, _, _ = _league()
+    relative = wins.relative_leverage(stints, seconds, wins.fit_win_model(stints, seconds, 2001))
+    assert np.average(relative, weights=stints.poss_h + stints.poss_a) == pytest.approx(1.0)
+    assert relative.max() > 1.5 and relative.min() < 0.5
 
 
 def test_the_leverage_of_every_point_scored_adds_up_to_the_wins():
@@ -147,7 +180,19 @@ def test_the_leverage_of_every_point_scored_adds_up_to_the_wins():
 
 def test_the_standings_read_about_thirty_points_a_win_on_a_league_of_about_that_size():
     stints = _brownian_games(n_games=2000)
-    assert wins.team_points_per_win(wins.game_results(stints)) == pytest.approx(30.0, abs=8.0)
+    assert wins.net_points_per_win(wins.game_results(stints)) == pytest.approx(30.0, abs=8.0)
+
+
+def test_rating_points_per_win_is_the_slope_of_records_on_the_ratings_points():
+    results_margin = {"g1": 10.0, "g2": 5.0, "g3": -5.0, "g4": 3.0}
+    teams = {"g1": (1, 2), "g2": (1, 3), "g3": (2, 3), "g4": (3, 2)}
+    stints = pd.DataFrame([_stint(game_id=game, pts_h=100.0 + value, pts_a=100.0, poss_h=100, poss_a=100,
+                                  home_team_id=teams[game][0], away_team_id=teams[game][1])
+                           for game, value in results_margin.items()])
+    margin = stints.pts_h.to_numpy() - stints.pts_a.to_numpy()      # per 100 on 100 possessions: the points themselves
+    got = wins.rating_points_per_win(stints, np.ones(4), margin)
+    assert got == pytest.approx(wins.net_points_per_win(wins.game_results(stints)))
+    assert wins.rating_points_per_win(stints, np.ones(4), margin * 0.5) == pytest.approx(got * 0.5)
 
 
 # ------------------------------------------------------------------------------------------- the pace ridge
@@ -278,19 +323,18 @@ def test_a_player_at_the_bar_reads_zero():
     bar = wins.Bar(0.5, 0.25, 0.75, 1.0, 150, 40)
     ratings = _with(ratings, 1, 0.5, 0.25)
     pace.loc[pace.player_id == 1, "pace_effect"] = 1.0
-    got = wins.season_wins(stints, seconds, ratings, _model(), pace, bar).set_index("player_id").loc[1]
+    got = wins.season_wins(stints, seconds, ratings, np.ones(1), pace, bar, 30.0).set_index("player_id").loc[1]
     assert got[["wosa_off", "wosa_def", "wosa_pace", "wosa"]].tolist() == pytest.approx([0.0] * 4, abs=1e-12)
 
 
 def test_the_value_parts_are_his_rating_over_the_bar_on_the_possessions_at_each_end():
     stints, seconds, ratings, pace = _one_stint(poss_h=100, poss_a=80)
     ratings = _with(ratings, 1, 5.0, 2.0)
-    lever = np.array([1.0 / 30.0])
-    got = wins.season_wins(stints, seconds, ratings, _model(), pace, BAR_ZERO, lever).set_index("player_id")
+    got = wins.season_wins(stints, seconds, ratings, np.ones(1), pace, BAR_ZERO, 30.0).set_index("player_id")
     assert got.loc[1, "wosa_off"] == pytest.approx(5.0 * 100.0 / 100.0 / 30.0)
     assert got.loc[1, "wosa_def"] == pytest.approx(2.0 * 80.0 / 100.0 / 30.0)
     away = _with(ratings, 11, 5.0, 2.0)                               # on the visitors each end is the other count
-    got = wins.season_wins(stints, seconds, away, _model(), pace, BAR_ZERO, lever).set_index("player_id")
+    got = wins.season_wins(stints, seconds, away, np.ones(1), pace, BAR_ZERO, 30.0).set_index("player_id")
     assert got.loc[11, "wosa_off"] == pytest.approx(5.0 * 80.0 / 100.0 / 30.0)
     assert got.loc[11, "wosa_def"] == pytest.approx(2.0 * 100.0 / 100.0 / 30.0)
 
@@ -298,12 +342,11 @@ def test_the_value_parts_are_his_rating_over_the_bar_on_the_possessions_at_each_
 def test_the_pace_part_follows_the_lineups_margin_and_flips_with_it():
     stints, seconds, ratings, pace = _one_stint()
     pace.loc[pace.player_id == 1, "pace_effect"] = 3.0
-    lever = np.array([1.0 / 30.0])
     ahead = _with(ratings, 2, 6.0, 0.0)                 # a teammate at +6: player 1's lineup is +6 without any of his
     behind = _with(ratings, 11, 6.0, 0.0)               # an opponent at +6
     edge_free = {"pts_h": 103.0, "pts_a": 97.0}         # the stint's result equals the ratings' margin: no home edge
-    up = wins.season_wins(stints.assign(**edge_free), seconds, ahead, _model(), pace, BAR_ZERO, lever)
-    down = wins.season_wins(stints.assign(pts_h=97.0, pts_a=103.0), seconds, behind, _model(), pace, BAR_ZERO, lever)
+    up = wins.season_wins(stints.assign(**edge_free), seconds, ahead, np.ones(1), pace, BAR_ZERO, 30.0)
+    down = wins.season_wins(stints.assign(pts_h=97.0, pts_a=103.0), seconds, behind, np.ones(1), pace, BAR_ZERO, 30.0)
     expected = 6.0 * 3.0 / 100.0 / 30.0                 # +6 per 100 on 3 extra possessions in the whole 48 minutes
     assert up.set_index("player_id").loc[1, "wosa_pace"] == pytest.approx(expected)
     assert down.set_index("player_id").loc[1, "wosa_pace"] == pytest.approx(-expected)
@@ -313,40 +356,40 @@ def test_his_own_surplus_is_not_paid_twice_on_the_possessions_he_adds():
     stints, seconds, ratings, pace = _one_stint()
     pace.loc[pace.player_id == 1, "pace_effect"] = 3.0
     star = _with(ratings, 1, 6.0, 0.0)                  # the lineup's whole margin is his
-    got = wins.season_wins(stints.assign(pts_h=103.0, pts_a=97.0), seconds, star, _model(), pace, BAR_ZERO,
-                           np.array([1.0 / 30.0])).set_index("player_id")
+    got = wins.season_wins(stints.assign(pts_h=103.0, pts_a=97.0), seconds, star, np.ones(1), pace, BAR_ZERO,
+                           30.0).set_index("player_id")
     assert got.loc[1, "wosa_pace"] == pytest.approx(0.0, abs=1e-12)
 
 
 def test_a_constant_on_every_rating_moves_the_bar_by_it_and_no_win():
     stints, seconds, ratings, pace = _league()
-    model = wins.fit_win_model(stints, seconds, 2001)
+    relative = wins.relative_leverage(stints, seconds, wins.fit_win_model(stints, seconds, 2001))
     starts = wins.starts_and_minutes(stints, seconds)
-    before = wins.season_wins(stints, seconds, ratings, model, pace, wins.starter_bar(ratings, starts, pace, 20))
+    bar = wins.starter_bar(ratings, starts, pace, 20)
+    before = wins.season_wins(stints, seconds, ratings, relative, pace, bar, 27.0)
     moved = ratings.assign(rating_off=ratings.rating_off + 2.0, rating_total=ratings.rating_total + 2.0)
-    bar = wins.starter_bar(moved, starts, pace, 20)
-    assert bar.off == pytest.approx(wins.starter_bar(ratings, starts, pace, 20).off + 2.0)
-    after = wins.season_wins(stints, seconds, moved, model, pace, bar)
+    moved_bar = wins.starter_bar(moved, starts, pace, 20)
+    assert moved_bar.off == pytest.approx(bar.off + 2.0)
+    after = wins.season_wins(stints, seconds, moved, relative, pace, moved_bar, 27.0)
     assert after.wosa.to_numpy() == pytest.approx(before.wosa.to_numpy(), abs=1e-10)
 
 
 def test_the_parts_add_up_and_the_long_way_round_gives_the_same_wins():
     stints, seconds, ratings, pace = _league()
-    model = wins.fit_win_model(stints, seconds, 2001)
+    relative = wins.relative_leverage(stints, seconds, wins.fit_win_model(stints, seconds, 2001))
     bar = wins.starter_bar(ratings, wins.starts_and_minutes(stints, seconds), pace, 20)
-    got = wins.season_wins(stints, seconds, ratings, model, pace, bar).set_index("player_id")
+    got = wins.season_wins(stints, seconds, ratings, relative, pace, bar, 27.0).set_index("player_id")
     assert got.wosa.to_numpy() == pytest.approx((got.wosa_off + got.wosa_def + got.wosa_pace).to_numpy(), abs=1e-12)
-    long_way = wins.counterfactual_wins(stints, seconds, ratings, model, pace, bar)
+    long_way = wins.counterfactual_wins(stints, seconds, ratings, relative, pace, bar, 27.0)
     assert long_way.reindex(got.index).to_numpy() == pytest.approx(got.wosa.to_numpy(), abs=1e-10)
 
 
 def test_leverage_reads_one_for_everyone_when_it_is_flat_and_above_one_for_who_closes():
     stints, seconds, ratings, pace = _league()
-    model = wins.fit_win_model(stints, seconds, 2001)
-    flat = wins.season_wins(stints, seconds, ratings, model, pace, BAR_ZERO, np.full(len(stints), 0.03))
+    flat = wins.season_wins(stints, seconds, ratings, np.ones(len(stints)), pace, BAR_ZERO, 27.0)
     assert flat.leverage.to_numpy() == pytest.approx(1.0)
     lever = (stints.start_clock.to_numpy() < 300.0) * (stints.period.to_numpy() == 4) * 0.2 + 0.01
-    closers = wins.season_wins(stints, seconds, ratings, model, pace, BAR_ZERO, lever)
+    closers = wins.season_wins(stints, seconds, ratings, lever, pace, BAR_ZERO, 27.0)
     assert closers.leverage.std() > 0.0 and np.average(closers.leverage, weights=closers.minutes_rs) == pytest.approx(
         1.0, abs=0.02)
 

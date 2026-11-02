@@ -10,22 +10,34 @@ Words used below
                      zero per side, so the bar sits above zero: starters are better than the average possession
     share left       the share of 48 minutes left in the game; an overtime reads its own clock, so 120 seconds left in
                      any overtime is 120 / 2,880
+    lead kept        the share of a lead that reaches the final margin, a line in the share left: about 0.94 with no
+                     time left and 0.75 at the half, in every era.  A team ahead coasts and a team behind presses, so
+                     a margin is not a random walk (check 157: with every point kept, a team up 7 to 12 in the first
+                     half is given 81% and wins 73%)
     win model        the chance the home team wins from a margin with a share of the game left,
-                         P = Phi((margin + home edge x share left) / spread(share left))
-                     where spread is the measured standard deviation of what the rest of a game adds to its margin, by
+                         P = Phi((lead kept(share left) x margin + home edge x share left) / spread(share left))
+                     where spread is the measured standard deviation of what is left of a final margin after that, by
                      time left, at average team strength
-    leverage         what one point is worth in wins at a stint's game state: (P(margin + 1) - P(margin - 1)) / 2, the
-                     same for both teams.  Read at the stint's starting margin, so its own result never weights it, and
-                     at the middle of its time
-    points per win   1 over the possession-weighted mean leverage of a season
+    leverage         what one point moves the win model by at a stint's game state: (P(margin + 1) - P(margin - 1)) / 2,
+                     the same for both teams.  Read at the stint's starting margin, so its own result never weights it,
+                     and at the middle of its time
+    relative leverage  a stint's leverage over the season's possession-weighted mean: 1 is an average possession.  About
+                     3 late in a close game, 0.02 in garbage time, 0.8 in the first quarter
+    points per win   how many rating points, weighted by relative leverage, a team needs for one more win: one number,
+                     27, read from the standings over 30 seasons (check 157; 25.8, 26.3 and 27.7 by era, each season's
+                     correlation 0.92 to 0.98).  The win model's own 1 over its mean leverage reads 41 to 45 and is not
+                     the scale: it values a point after leads shrink, where the published ratings already sit below
+                     teams' actual margins, so it would discount twice and leave team totals about 40% short of their
+                     records
     pace effect      a player's effect on the possessions per 48 minutes each team plays, from a ridge regression of
                      each stint's pace on the ten players on the court (pace RAPM)
 
 The equation, for a player over the regular-season stints he was on the court for:
 
-    wosa_off  = sum leverage / 100 x (rating_off - bar_off) x his team's possessions
-    wosa_def  = sum leverage / 100 x (rating_def - bar_def) x the opponent's possessions
-    wosa_pace = sum leverage / 100 x (margin - (rating_total - bar_total)) x extra possessions
+    value     = relative leverage / points per win / 100
+    wosa_off  = sum value x (rating_off - bar_off) x his team's possessions
+    wosa_def  = sum value x (rating_def - bar_def) x the opponent's possessions
+    wosa_pace = sum value x (margin - (rating_total - bar_total)) x extra possessions
     extra possessions = (pace effect - bar pace) x seconds / 2,880
     wosa      = wosa_off + wosa_def + wosa_pace
 
@@ -34,10 +46,10 @@ home edge.  This is exactly his team's expected margin on the stint with him min
 (`counterfactual_wins` computes it that way).  The extra possessions are valued at the margin WITHOUT his surplus
 because his rating on them is already in the first two lines; at the full margin a star would be paid for it twice.
 
-Example: a player at +9.0 per 100 against a bar of +0.8, over 5,300 possessions at each end, at a flat 36 points per
-win: 8.2 x 5,300 / 100 / 36 = 12.1 wins.  Three extra possessions per 48 over 2,500 minutes are 156 extra possessions;
-on a lineup at +8 per 100 with his surplus of +8.2 taken out they are worth -0.2 x 156 / 100 / 36 = -0.01 wins, while on
-a lineup at +8 that owes him nothing they would be worth 8 x 156 / 100 / 36 = 0.35 wins.
+Example: a player at +9.0 per 100 against a bar of +0.8, over 5,300 possessions at each end, at average leverage: 8.2 x
+5,300 / 100 / 27 = 16.1 wins.  Three extra possessions per 48 over 2,500 minutes are 156 extra possessions; on a lineup
+at +8 per 100 with his surplus of +8.2 taken out they are worth -0.2 x 156 / 100 / 27 = -0.01 wins, while on a lineup at
++8 that owes him nothing they would be worth 8 x 156 / 100 / 27 = 0.46 wins.
 """
 from __future__ import annotations
 
@@ -54,11 +66,10 @@ from .scoring import weighted_least_squares
 from .swap_test import AWAY, HOME, PERIOD_END_SECONDS
 
 __all__ = ["STINT_COLUMNS", "WINS_COLUMNS", "SPREAD_BIN_EDGES", "share_left", "game_results", "strength_gap",
-           "WinModel", "fit_win_model", "spread_at", "win_probability", "leverage", "points_per_win",
-           "team_points_per_win", "PACE_CONTEXT", "PaceRows", "PaceFit", "pace_rows", "solve_pace", "pace_error",
-           "pace_effects", "player_index",
-           "starts_and_minutes", "expected_margins", "Bar", "starter_bar", "SeasonParts", "season_wins",
-           "counterfactual_wins", "wins_columns"]
+           "WinModel", "fit_win_model", "spread_at", "lead_kept", "win_probability", "leverage", "relative_leverage",
+           "mean_leverage", "net_points_per_win", "rating_points_per_win", "PACE_CONTEXT", "PaceRows", "PaceFit",
+           "pace_rows", "solve_pace", "pace_error", "pace_effects", "player_index", "starts_and_minutes",
+           "expected_margins", "Bar", "starter_bar", "season_wins", "counterfactual_wins", "wins_columns"]
 
 REGULATION_SECONDS = 2880.0
 SHARE_LEFT_MINIMUM = 1.0 / REGULATION_SECONDS      # one second: a stint at the buzzer must not divide by zero
@@ -121,6 +132,8 @@ class WinModel:
     season: int
     home_edge: float               # points a full game adds for the home team, between teams of equal strength
     strength_slope: float          # points a full game adds per point of `strength_gap`, about 0.9: a net is noisy
+    lead_kept_at_end: float        # the share of a lead that lasts with no time left
+    lead_kept_per_game: float      # how that share moves per whole game left: negative, a long way to go loses more
     seconds_left: np.ndarray       # the middle of each spread bin, ascending
     spread: np.ndarray             # the spread there, never smaller with more time left
     n_games: int                   # the games it read
@@ -141,11 +154,12 @@ def _monotone_spread(variance: np.ndarray, weight: np.ndarray) -> np.ndarray:
 def fit_win_model(stints: pd.DataFrame, seconds: np.ndarray, season: int) -> WinModel:
     """`WinModel` from one season's regular-season stints in time order within each game.
 
-    The home edge and the strength slope come from the games' final margins by least squares.  The spread is the
-    possession-weighted root mean square, by bin of seconds left at the stint's middle, of the final margin minus the
-    margin at the stint's start minus the drift still expected.  One sigma x sqrt(share left) was tried first and does
-    not fit: late possessions are noisier than a straight line in time allows, and it read 40-45 points per win where
-    teams' records read 30-38 (notes/DECISIONS.md, "WOSA")."""
+    The home edge and the strength slope come from the games' final margins by least squares, and the lead kept from
+    the final margin less the drift still expected on the margin and its product with the share left.  The line stands
+    in for a slope per bin because a margin at the tip-off is near zero and its slope anything at all (-0.41 in 2011).
+    The spread is the possession-weighted root mean square of what is left, by bin of seconds left at the stint's
+    middle.  One sigma x sqrt(share left) was tried first and does not fit: late possessions are noisier than a straight
+    line in time allows (notes/DECISIONS.md, "WOSA")."""
     results = game_results(stints)
     played = results.margin.to_numpy() != 0.0
     gaps = strength_gap(results)
@@ -157,16 +171,21 @@ def fit_win_model(stints: pd.DataFrame, seconds: np.ndarray, season: int) -> Win
     level = home_edge * at_home + strength_slope * gaps
     left = share_left(stints.period, stints.start_clock, seconds)[1]
     final = _per_stint(results, stints, results.margin.to_numpy(dtype=float))
-    rest = final - stints.margin_h.to_numpy(dtype=float) - _per_stint(results, stints, level) * left
+    margin = stints.margin_h.to_numpy(dtype=float)
+    beyond_drift = final - _per_stint(results, stints, level) * left
     keep = final != 0.0
     weight = (stints.poss_h + stints.poss_a).to_numpy(dtype=float)
+    at_end, per_game = weighted_least_squares(np.column_stack([margin, margin * left])[keep], beyond_drift[keep],
+                                              weight[keep])
+    rest = beyond_drift - (at_end + per_game * left) * margin
     n_bins = len(SPREAD_BIN_EDGES) - 1
     bins = np.clip(np.searchsorted(SPREAD_BIN_EDGES, left * REGULATION_SECONDS, side="right") - 1, 0, n_bins - 1)
     total = np.bincount(bins[keep], weight[keep], minlength=n_bins)
     squares = np.bincount(bins[keep], (weight * rest ** 2)[keep], minlength=n_bins)
     filled = total > 0.0
     middles = (SPREAD_BIN_EDGES[:-1] + SPREAD_BIN_EDGES[1:]) / 2.0
-    return WinModel(int(season), float(home_edge), float(strength_slope), middles[filled],
+    return WinModel(int(season), float(home_edge), float(strength_slope), float(at_end), float(per_game),
+                    middles[filled],
                     _monotone_spread(squares[filled] / total[filled], total[filled]),
                     int(played.sum()), int((~played).sum()))
 
@@ -177,6 +196,11 @@ def spread_at(left, model: WinModel) -> np.ndarray:
     return np.maximum(np.interp(seconds_left, model.seconds_left, model.spread), SPREAD_MINIMUM)
 
 
+def lead_kept(left, model: WinModel) -> np.ndarray:
+    """The share of a lead that reaches the final margin with a share `left` of the game left."""
+    return model.lead_kept_at_end + model.lead_kept_per_game * np.asarray(left, dtype=float)
+
+
 def win_probability(margin, left, model: WinModel, neutral=False, strength=0.0) -> np.ndarray:
     """The chance the home team wins from `margin` with a share `left` of the game left; `strength` is `strength_gap`,
     0 for two teams of average strength.
@@ -185,7 +209,7 @@ def win_probability(margin, left, model: WinModel, neutral=False, strength=0.0) 
     left = np.asarray(left, dtype=float)
     edge = model.home_edge * (1.0 - np.asarray(neutral, dtype=float))
     drift = (edge + model.strength_slope * np.asarray(strength, dtype=float)) * left
-    return norm.cdf((np.asarray(margin, dtype=float) + drift) / spread_at(left, model))
+    return norm.cdf((lead_kept(left, model) * np.asarray(margin, dtype=float) + drift) / spread_at(left, model))
 
 
 def leverage(margin, left, model: WinModel, neutral=False) -> np.ndarray:
@@ -198,22 +222,51 @@ def leverage(margin, left, model: WinModel, neutral=False) -> np.ndarray:
     return (above - win_probability(margin - 1.0, left, model, neutral)) / 2.0
 
 
-def points_per_win(lever: np.ndarray, possessions: np.ndarray) -> float:
-    """1 over the possession-weighted mean leverage: the net points a season's average possessions need for one win."""
-    return 1.0 / float(np.average(lever, weights=possessions))
+def _stint_leverage(stints: pd.DataFrame, seconds: np.ndarray, model: WinModel) -> np.ndarray:
+    """Each stint's leverage, at its starting margin and the middle of its time."""
+    left = share_left(stints.period, stints.start_clock, seconds)[1]
+    neutral = stints.neutral.fillna(False).to_numpy(dtype=float)
+    return leverage(stints.margin_h.to_numpy(dtype=float), left, model, neutral)
 
 
-def team_points_per_win(results: pd.DataFrame) -> float:
-    """The same read from the standings, sharing nothing with the leverage: 1 over the slope of a team's wins per game
-    on its net points per game, across a season's teams.
+def mean_leverage(stints: pd.DataFrame, seconds: np.ndarray, model: WinModel) -> float:
+    """The possession-weighted mean leverage of these stints."""
+    return float(np.average(_stint_leverage(stints, seconds, model), weights=stints.poss_h + stints.poss_a))
 
-    Example: slope 0.0334 reads 29.9, the 2006 season; the usual rule of thumb is 30."""
+
+def relative_leverage(stints: pd.DataFrame, seconds: np.ndarray, model: WinModel) -> np.ndarray:
+    """Each stint's leverage over the mean of these stints: 1 is an average possession.
+
+    Example: 0.09 late in a close game against a season's mean of 0.03 reads 3."""
+    return _stint_leverage(stints, seconds, model) / mean_leverage(stints, seconds, model)
+
+
+def _team_season(results: pd.DataFrame, home_values: pd.Series) -> pd.DataFrame:
+    """Per team: wins above half its games, and `home_values` (the home team's view, per game) from its own view."""
     margin = results.margin.to_numpy(dtype=float)
-    teams = pd.DataFrame({"team": np.concatenate([results.home_team_id, results.away_team_id]),
-                          "net": np.concatenate([margin, -margin]),
-                          "won": np.concatenate([margin > 0.0, margin < 0.0]).astype(float)})
-    season = teams.groupby("team").mean()
-    return 1.0 / float(np.polyfit(season.net, season.won, 1)[0])
+    values = home_values.reindex(results.game_id.to_numpy()).to_numpy(dtype=float)
+    return pd.DataFrame({"team": np.concatenate([results.home_team_id, results.away_team_id]),
+                         "wins_above": np.concatenate([(margin > 0.0) - 0.5, (margin < 0.0) - 0.5]),
+                         "value": np.concatenate([values, -values])}).groupby("team").sum()
+
+
+def net_points_per_win(results: pd.DataFrame) -> float:
+    """Net points per win from the standings alone: 1 over the slope of a team's wins on its net points, across a
+    season's teams.
+
+    Example: 29.9 in 2006, the usual rule of thumb; 37.9 in 2026, when games are decided by more."""
+    season = _team_season(results, results.set_index("game_id").margin)
+    return 1.0 / float(np.polyfit(season.value, season.wins_above, 1)[0])
+
+
+def rating_points_per_win(stints: pd.DataFrame, relative: np.ndarray, margin: np.ndarray) -> float:
+    """Rating points per win: 1 over the slope of a team's wins on its expected margin from the published ratings, in
+    points and weighted by `relative` leverage, across a season's teams.  What `WinsSettings.points_per_win` is read
+    from: at this number a team's lineups add up to its record."""
+    points = relative * margin * (stints.poss_h + stints.poss_a).to_numpy(dtype=float) / 2.0 / 100.0
+    per_game = pd.Series(points).groupby(stints.game_id.to_numpy()).sum()
+    season = _team_season(game_results(stints), per_game)
+    return 1.0 / float(np.polyfit(season.value, season.wins_above, 1)[0])
 
 
 # ------------------------------------------------------------------------------------------- the pace ridge
@@ -360,28 +413,12 @@ def starter_bar(ratings: pd.DataFrame, starts: pd.DataFrame, pace: pd.DataFrame,
                float(top.pace_effect.mean()), len(top), int(top.starts_rs.min()))
 
 
-@dataclass(frozen=True)
-class SeasonParts:
-    """What `season_wins` and `counterfactual_wins` both read, per stint."""
-    lever: np.ndarray              # leverage
-    seconds: np.ndarray
-    margin: np.ndarray             # the home team's expected margin per 100
-    edge: float                    # the home edge per 100 inside it, 0 at a neutral site
-
-
-def _season_parts(stints: pd.DataFrame, seconds: np.ndarray, ratings: pd.DataFrame, model: WinModel) -> SeasonParts:
-    left = share_left(stints.period, stints.start_clock, seconds)[1]
-    neutral = stints.neutral.fillna(False).to_numpy(dtype=float)
-    margin, edge = expected_margins(stints, ratings)
-    return SeasonParts(leverage(stints.margin_h.to_numpy(dtype=float), left, model, neutral), seconds, margin, edge)
-
-
-def season_wins(stints: pd.DataFrame, seconds: np.ndarray, ratings: pd.DataFrame, model: WinModel, pace: pd.DataFrame,
-                bar: Bar, lever: np.ndarray | None = None) -> pd.DataFrame:
+def season_wins(stints: pd.DataFrame, seconds: np.ndarray, ratings: pd.DataFrame, relative: np.ndarray,
+                pace: pd.DataFrame, bar: Bar, points_per_win: float) -> pd.DataFrame:
     """One row per player in the stints: player_id and the columns WINS_COLUMNS, from the equation at the top of this
-    module.  `lever` replaces the model's leverage, for a test that wants a flat one."""
-    parts = _season_parts(stints, seconds, ratings, model)
-    lever = parts.lever if lever is None else lever
+    module; `relative` is each stint's `relative_leverage`."""
+    lever = relative / float(points_per_win)
+    margin = expected_margins(stints, ratings)[0]
     player_ids, home, away = player_index(stints)
     poss_h, poss_a = stints.poss_h.to_numpy(dtype=float), stints.poss_a.to_numpy(dtype=float)
     above_off = _ratings_for(player_ids, ratings, "rating_off") - bar.off
@@ -393,7 +430,7 @@ def season_wins(stints: pd.DataFrame, seconds: np.ndarray, ratings: pd.DataFrame
     own_end = np.asarray(home.T @ (lever * poss_h) + away.T @ (lever * poss_a))
     other_end = np.asarray(home.T @ (lever * poss_a) + away.T @ (lever * poss_h))
     per_share = lever * seconds / REGULATION_SECONDS
-    margin_part = np.asarray(home.T @ (per_share * parts.margin) - away.T @ (per_share * parts.margin))
+    margin_part = np.asarray(home.T @ (per_share * margin) - away.T @ (per_share * margin))
     time_part = np.asarray(home.T @ per_share + away.T @ per_share)
     wosa_off, wosa_def = above_off * own_end / 100.0, above_def * other_end / 100.0
     wosa_pace = above_pace * (margin_part - above_total * time_part) / 100.0
@@ -408,19 +445,20 @@ def season_wins(stints: pd.DataFrame, seconds: np.ndarray, ratings: pd.DataFrame
                          "starts_rs": starts.starts_rs.to_numpy(), "minutes_rs": starts.minutes_rs.to_numpy()})
 
 
-def counterfactual_wins(stints: pd.DataFrame, seconds: np.ndarray, ratings: pd.DataFrame, model: WinModel,
-                        pace: pd.DataFrame, bar: Bar) -> pd.Series:
+def counterfactual_wins(stints: pd.DataFrame, seconds: np.ndarray, ratings: pd.DataFrame, relative: np.ndarray,
+                        pace: pd.DataFrame, bar: Bar, points_per_win: float) -> pd.Series:
     """Each player's wins computed the long way, one stint and player at a time: his team's expected points for and
     against with him, minus the same with an average starter in his place on the possessions that would then be played.
     `season_wins` must equal it to rounding: `tests/test_wins.py` holds it there, and the check over every season."""
-    parts = _season_parts(stints, seconds, ratings, model)
+    lever = relative / float(points_per_win)
+    edge = expected_margins(stints, ratings)[1]
     player_ids, home, away = player_index(stints)
     offense = _ratings_for(player_ids, ratings, "rating_off")
     defense = _ratings_for(player_ids, ratings, "rating_def")
     at_home = ~stints.neutral.fillna(False).to_numpy(dtype=bool)
     home_off, home_def = np.asarray(home @ offense), np.asarray(home @ defense)
     away_off, away_def = np.asarray(away @ offense), np.asarray(away @ defense)
-    half_edge = parts.edge * at_home / 2.0
+    half_edge = edge * at_home / 2.0
     # per side: the possessions at his team's end, at the other end, and the two levels that add up to its margin
     sides = ((HOME, stints.poss_h.to_numpy(dtype=float), stints.poss_a.to_numpy(dtype=float),
               home_off - away_def + half_edge, home_def - away_off + half_edge),
@@ -436,7 +474,7 @@ def counterfactual_wins(stints: pd.DataFrame, seconds: np.ndarray, ratings: pd.D
             extra = (effects.reindex(player).fillna(0.0).to_numpy() - bar.pace) * seconds / REGULATION_SECONDS
             with_him = scored * own + stopped * other
             without = (scored - above_off) * (own - extra) + (stopped - above_def) * (other - extra)
-            totals = totals.add(pd.Series(parts.lever * (with_him - without) / 100.0).groupby(player).sum(),
+            totals = totals.add(pd.Series(lever * (with_him - without) / 100.0).groupby(player).sum(),
                                 fill_value=0.0)
     return totals
 
