@@ -11803,7 +11803,7 @@ differ by at most 2e-14 in every season.  The pace part is small: a 2026 regular
 from -0.22 (Pritchard) to +0.17 (Fox).  2026's fastest regulars: Jokić +2.8, Curry +2.8, Suggs +2.6; slowest: Sims -2.4,
 Pritchard -2.0, Queta -2.0.
 
-**The bar.**  +0.59 / +0.72 / +0.82 by era in total, offense +0.34 / +0.41 / +0.55, defense +0.25 / +0.31 / +0.26; 2026 +0.58
+**The bar.**  +0.59 / +0.72 / +0.83 by era in total, offense +0.34 / +0.41 / +0.56, defense +0.25 / +0.31 / +0.27; 2026 +0.58
 and +0.22, the 150th with 40 starts.  A start is being in a game's opening stint; for 2026 that matches the box scores' first
 five for every player, and in the worst seasons they differ in 5-7 games (2013: 6, 2015: 7, 1997: 5), up to 5 starts for a
 player.  Which of the two is right in those games I did not settle; it moves the bar by nothing visible.
