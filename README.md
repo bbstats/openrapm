@@ -118,12 +118,12 @@ python -m openrapm site --bias --decomposition --openrapm-decomposition --simila
    2017-2026 and saves every season's boosters (the fitted LightGBM models): about 5 minutes. `folds`
    then rates each of those seasons from three quarters of its games with those boosters, twelve times a
    season, and stores the misses on the quarter held back: about 8 minutes. The shipped folds cover every
-   season, `ctx110_early` for 1997-2016 and `ctx110_within` for 2017-2026 (the default of
+   season, `padbins127_early` for 1997-2016 and `padbins127_within` for 2017-2026 (the default of
    `--folds`), and each multiplier is read to a full season with folds holding back a tenth of the games,
-   `ctx110_k10` (the default of `--extrapolate-folds`).
+   `padbins127_k10` (the default of `--extrapolate-folds`).
 5. **`build`** runs the five steps for all thirty seasons and writes `outputs/season_ratings_product.parquet`,
-   the published table, with its step-3 and step-4 tables beside it: 927 seconds in the last run.
-   `build --setting test --folds mine_within --extrapolate-folds= --name ctx110` writes the table the
+   the published table, with its step-3 and step-4 tables beside it: 88 minutes in the last run.
+   `build --setting test --folds mine_within --extrapolate-folds= --name padbins127` writes the table the
    tests score, under the incumbent's name, so the chain and the checks find it. Without `--folds`, `build`
    and `shrink` read the shipped folds, which a fresh build does not have; they stop at step 4 with "no
    folds in ...", after steps 1-3 have run.
@@ -202,8 +202,8 @@ in points per 100 possessions. The mean squared error weights each team-game by 
 factor sqrt(2 / pi) = 0.798 is the ratio of the mean absolute deviation to the standard deviation of a
 normal error, so the score reads as a typical miss rather than a root mean square. It is taken over 28
 scored seasons (1998-2025), each predicted from the season before and from the season after: 56
-observations. The incumbent, `outputs/season_ratings_ctx110.parquet` (experiment 126), reads
-**8.6943**. The tables it scores are built at the test setting (`openrapm build --setting test`), so
+observations. The incumbent, `outputs/season_ratings_padbins127.parquet` (experiment 127), reads
+**8.6873**. The tables it scores are built at the test setting (`openrapm build --setting test`), so
 nothing fitted for a season has seen the two seasons that score it.
 
 **The paired z**: for each of the 56 observations, the candidate's team-game mean squared error minus the
@@ -230,7 +230,7 @@ show.
 On a fresh build, make the incumbent's files once, then name your folds on every chain:
 
 ```bash
-python -m openrapm build --setting test --folds mine_within --extrapolate-folds= --name ctx110
+python -m openrapm build --setting test --folds mine_within --extrapolate-folds= --name padbins127
 INC_FOLDS=mine_within INC_SYSTEM=mine bash scripts/experiment_chain.sh NAME DEFENSIVE_TARGET
 ```
 

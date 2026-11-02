@@ -1,7 +1,7 @@
 # Handoff
 
 **What this file is.**  Where the work stands, what waits on the owner, and the commands a session runs.  Rewritten
-on the afternoon of 2026-10-22, its status and next steps on 2026-10-23 (twice), 2026-10-24, 2026-10-26, 2026-10-27, 2026-10-28, 2026-10-29, 2026-10-30 and 2026-11-01; the earlier file is in git history.  `DECISIONS.md` is the permanent record and carries
+on the afternoon of 2026-10-22, its status and next steps on 2026-10-23 (twice), 2026-10-24, 2026-10-26, 2026-10-27, 2026-10-28, 2026-10-29, 2026-10-30, 2026-11-01 and 2026-11-02; the earlier file is in git history.  `DECISIONS.md` is the permanent record and carries
 every number quoted here; read its measurement traps before trusting a number.  `README.md` says what OpenRAPM is,
 `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's standing rules.
 
@@ -22,37 +22,33 @@ every number quoted here; read its measurement traps before trusting a number.  
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
 
-## Where it stands, 2026-11-01 evening: early-season padding (experiment 127, verdict pending)
+## Where it stands, 2026-11-02: early-season padding ADOPTED and PUBLISHED (experiment 127)
 
-The owner asked "Are steals padded correctly? Or are players just benefiting from early season turnovers".  Not the
-league's turnovers: the possession bin a player's rate is padded toward is itself noise at 7% of a season (a bin
-target 1.00 steal higher is followed by 0.14 more over the rest of the season; steals carried 0.70 of a padded unit,
-the lowest of the 13 counts).  DECISIONS.md, "Early-season padding" and "Experiment 127", hold the record.
+The owner asked 2026-11-01 "Are steals padded correctly? Or are players just benefiting from early season turnovers".
+Not the league's turnovers: the possession bin a player's rate is padded toward was itself noise at 7% of a season.
+DECISIONS.md, "Early-season padding" and "Experiment 127", hold the record, the last section the adoption.
 
-- **The fix, built and tested, waiting on the owner's verdict**: each bin's rate is padded toward the season's
-  league rate by the bin's own possessions before it serves as a target, the same rule one level up
-  (`box_rates.group_k`, `padded_bin_targets`; config `pad_bin_target: league`, **off in config.yaml as shipped and
-  bit-identical off**; the candidate's config `scratch/2026-11-01_padding/config_padbins.yaml`, its panels
-  `season_panel_padbins127.parquet` and `season_panel_so_far_padbins127.parquet`, its tables `season_ratings_padbins127*`,
-  folds `padbins127_early/_within`, cut folds `padbins127_cutNN_held` and `ctx110_cutNN_held` for NN 0715, 10, 25, 50).
-  The owner's registered rule passed: the season so far at a tenth better in every era (z -4.3 / -4.2 / -3.8, pooled
-  z -6.8, 27 of 30 seasons), at 7.15% z -5.6, at a quarter z -5.2, at a half z -3.7; whole seasons a tie (+0.004,
-  z +0.2); year over year a gain (z -2.9); the 2026 top 20 keeps its order; the 2027 top 20 keeps its names (moves
-  within 0.14, Dyson Daniels -0.02).  **If adopted**: flip `pad_bin_target` to `league` in config.yaml between two
-  6 AM runs, keep today's panel as `season_panel_before_padbins127.parquet`, `openrapm data panel --force` and
-  `--so-far 0.25,0.5,0.75`, tenth folds `padbins127_k10` and `ShrinkSettings.folds_tag`, the swap part of the prior
-  refitted on the new boosters and folds as experiment 126 did (or an explicit note that it keeps ctx110's line), a
-  full build 1997-2027, the site, a noise control; docs: `PIPELINE.md` 99-105, `GLOSSARY.md` "Padded rate", the
-  config comment, the Changelog in the owner's words.
+- **The fix, live**: each bin's rate is padded toward the season's league rate by the bin's own possessions before it
+  serves as a target (`box_rates.group_k`, `padded_bin_targets`; config `pad_bin_target: league`).  The season so far at
+  a tenth better in every era (z -4.3 / -4.2 / -3.8, pooled z -6.8, 27 of 30), whole seasons a tie, year over year a
+  gain.  **The incumbent is `padbins127`** (test-setting tables `season_ratings_padbins127*`, folds
+  `padbins127_early/_within`, tenth folds `padbins127_k10`); the published tables before it are
+  `season_ratings_product_before_padbins127*`.
+- **The swap part of the prior stays `ctx110`**: what was tested and approved.  A refit is its own experiment.
+- **The noise control on the new incumbent** is `noise_padbins127`.  Until DECISIONS.md records it, the chain's defaults
+  and `CONTRIBUTING.md` still name ctx110 and `noise_ctx110`.
 - **Fixed first** (0ffbcc0): `openrapm folds --cut` had told the part-season boosters share 1.0 since the morning's
   floor (4101702), so every cut build of 2026-11-01 before it rated the season so far as a whole season;
   `within_season.least_share_of(meta)` and a check on the run.  The experiment-109 arms on disk predate the bug.
-- **Next, separately**: the hustle stats' own padding (`data/dashboard_rates.py`, `_bin_targets`, the same disease);
-  and the pad k's own over-read of early spread (fouls carry 0.85 of a padded unit after the fix, free throws made
-  0.89): a k from what lasts, measured on the finished seasons at the same share.
+- **Next, separately, for the owner to pick, one at a time**: the hustle stats' own padding (`data/dashboard_rates.py`,
+  `_bin_targets`, the same disease); the pad k's own over-read of early spread (fouls carry 0.85 of a padded unit after
+  the fix, free throws made 0.89), a k from what lasts, measured on the finished seasons at the same share; a tested
+  refit of the swap part of the prior; whether the deep bench's new rise is right (players of 60-200 possessions in a
+  whole season rose a mean 0.26, and the tests barely see them).
 - The quick read's tool: `scratch/2026-11-01_padding/screen.py` (all 13 counts, four shares, six arms, 7 minutes);
-  the build: `bash scratch/2026-11-01_padding/run.sh` (resumable, 2 hours; log `outputs/exp127.log`); 2027 under an
-  arm: `openrapm build --setting test --name NAMEp27 --seasons 2027 --replace-seasons` on copies of the chain tables.
+  the build: `bash scratch/2026-11-01_padding/run.sh`; the adoption's: `scratch/2026-11-01_padding/adopt2.sh`; 2027
+  under an arm: `openrapm build --setting test --name NAMEp27 --seasons 2027 --replace-seasons` on copies of the chain
+  tables.
 
 ## Where it stands, 2026-11-01: the fix pass ("Anything you'd fix?")
 

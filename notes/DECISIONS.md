@@ -11661,3 +11661,69 @@ already sat at the league's), Zion Williamson +0.02, Collin Gillespie +0.05, Cas
 -0.21 at 117 possessions.  The largest moves are 65-140-possession players, mostly up on offense (Jalen Duren +0.40,
 Oso Ighodaro +0.36, Trendon Watford +0.33; AJ Dybantsa -0.33, Ousmane Dieng -0.27): the deep-bench bins' targets,
 which carried their own few players' luck, now lean on the league.
+
+### Experiment 127 ADOPTED and PUBLISHED (2026-11-02; the owner: "Adopt", after seeing 2027's diffs)
+
+`config.yaml` `pad_bin_target: league`, `ShrinkSettings.folds_tag = "padbins127_early,padbins127_within"`,
+`extrapolate_folds_tag = "padbins127_k10"`.  The incumbent for the chain is `padbins127`, its test-setting tables
+`season_ratings_padbins127*`.
+
+**A mistake of mine, corrected before anything was built on it.**  286e3b9 also set `second_prior = "ctx127"`, a refit
+of the swap part of the prior that was never tested and is not what the owner saw or approved.  Reverted in 0ffd5a1
+and the unfinished `outputs/second_prior/ctx127` deleted: the swap part of the prior stays `ctx110`, which is what
+the tests above ran on.  A refit would be its own experiment.
+
+**The crash.**  A memory stick came unseated about 6:04 PM on 2026-11-01, during the first tenth folds; rebooted 6:31
+PM with all 32 GB back.  The 6 AM job of 2026-11-02 refreshed 2027's data, then failed safely at `openrapm build` on a
+truncated fold file ("Expecting value: line 1 column 1"), so nothing was published and the site stood one day behind
+until this publish.  What was checked before trusting anything from before the crash: the panel rebuilt at 6:07 AM
+equals the candidate's for every finished season to the bit, as does the so-far panel; `git fsck` clean; the tenth
+folds built again from nothing on the clean machine (8:05 to 8:47 AM, 900 folds, 25,200 checks, 0 failed, every
+season's reproduction of the candidate's ratings and raw prior a difference of 0.0e+00); and the 271 folds the crashed
+run had finished equal the fresh run's on every number, the largest difference 0.00e+00, with only 2003_r2_f9 and
+2004_r2_f9 cut off (`scratch/2026-11-01_padding/compare_k10.py`, `outputs/adopt127.log`).  The crashed copy was then
+deleted.
+
+**The builds** (`scratch/2026-11-01_padding/adopt2.sh`).  Today's tables kept as
+`season_ratings_product_before_padbins127*`.  The full build of 1997-2027, 8:47 to 10:15 AM: 2027 held at 1.088 /
+0.979.  The site's files 10:15 to 10:19 AM, `openrapm site --bias --openrapm-decomposition --similarity --power`, every
+check passing.  Tests: 890 passed, the slow panel guards under the new config pass, ruff clean.  The site's data now
+runs through the games of 2026-11-01.
+
+Against the published ratings kept before it, players with 60+ possessions, the total:
+
+| seasons | players | median move | 90th percentile | largest | spread before | spread after | correlation |
+|---|---|---|---|---|---|---|---|
+| 1997-2006 | 4,238 | 0.032 | 0.127 | 1.977 | 2.817 | 2.772 | 0.998 |
+| 2007-2016 | 4,490 | 0.024 | 0.077 | 1.587 | 2.712 | 2.671 | 0.998 |
+| 2017-2026 | 5,194 | 0.020 | 0.087 | 0.786 | 2.556 | 2.553 | 0.999 |
+| 2027, 92 games against 88 | 337 | 0.092 | 0.420 | 2.467 | 1.879 | 1.880 | 0.989 |
+
+The finished seasons by a player's possessions; the deep bench is where the fix moves a whole season:
+
+| possessions | player-seasons | median move | 90th percentile | largest | mean change |
+|---|---|---|---|---|---|
+| 60-200 | 1,007 | 0.277 | 0.944 | 1.98 | +0.256 |
+| 200-500 | 1,265 | 0.056 | 0.208 | 0.60 | +0.007 |
+| 500-1,500 | 2,709 | 0.030 | 0.073 | 0.30 | -0.013 |
+| 1,500-4,444 | 6,296 | 0.019 | 0.052 | 0.18 | -0.007 |
+| 4,444 and up | 2,645 | 0.019 | 0.051 | 0.19 | +0.007 |
+
+The largest moves are under 100 possessions and up: Benoit Benjamin 1999 -4.91 to -2.94 at 61, Amir Johnson 2006 -7.42
+to -5.82 at 82, Eddie Gill 2009 -5.12 to -3.53 at 92, Mouhamed Sene 2009 -8.75 to -7.17 at 62.  The lowest bin's target
+sat well under the league's and now leans on the league, so its players rise a quarter of a point on average and the
+spread of 1997-2016 narrows by 0.04.  **Not a test result:** the within-season and year-over-year tests weigh by
+possessions and barely see these players, so nothing here says the rise is right or wrong for them.  Told to the owner;
+a question of its own if the owner wants it, whether a deep-bench season's other games sit where the new target says.
+
+The 2026 top 20 on the product tables keeps 19 of 20, moves at most 0.04: Derrick White in, 21st to 20th, Lauri
+Markkanen out, 19th to 21st (3.50 to 3.47); Adebayo and Giannis swap 7th and 8th, Donovan Mitchell and Jimmy Butler 10th
+and 11th, OG Anunoby 20th to 19th.  The result section's "keeps its order through 19" was the test-setting tables,
+which sit a median 0.13 from the product's for reasons of the setting; the published tables are the ones that count.
+
+2027 in this table mixes the fix with the 4 new games (92 against 88): 18 of 20 names, Kris Dunn in, 26th to 11th, +1.14
+on 57 new possessions, Anthony Edwards in, 21st to 17th, +0.28; Alperen Sengun out, 18th to 21st, -0.05, and Moussa
+Diabaté out, 20th to 22nd, +0.03.  Dončić +0.85 to 7.92 on 80 new possessions, still first.  **The Changelog's 0.05** is
+the like-for-like reading above (the same 88 games, median 0.046).  It holds: the 260 players on this table without a
+new game read a median 0.068, which also carries the ripple of other players' new games and held prior scales that
+moved a little (1.085 / 0.985 before, 1.088 / 0.979 now).  Under a tenth either way.
