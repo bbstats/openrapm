@@ -325,8 +325,12 @@ command runs in one process as before.
   to its player: half A against half B correlates 0.58 to 0.69 among regulars. The extra possessions are valued at the margin
   his lineup would have with an average starter in his place, since his rating on them is already in the value part. A
   regular's pace part has a standard deviation of 0.04 wins.
-- **End of game:** every player is valued at his rating there. `scripts/checks/158_endgame.py` found nothing to add: half
-  A against half B correlates 0.033, as random stints do (0.034), and a season against the next 0.002.
+- **No separate end-of-game term:** leverage alone weights a possession (the owner, 2026-11-02: "let's use leverage to
+  determine, and not something separate for end of game(s)"), so closing a blowout counts for nothing and a one-point
+  game with eight minutes left counts for a lot. Every player is valued at his rating on every possession.
+  `scripts/checks/158_high_leverage.py` found no own play to add on possessions worth at least twice an average one,
+  about 6% of all: half A against half B correlates 0.021, below random stints (0.027), and a season against the next
+  0.012.
 - **Command:** `python -m openrapm wins --name NAME` (`--seasons` to compute some and keep the rest). `build` runs it.
 - **Code:** `src/openrapm/wins.py`, `src/openrapm/commands/wins.py`, `settings.WinsSettings`; tests `tests/test_wins.py`,
   `tests/test_wins_command.py`.
@@ -487,7 +491,7 @@ handed without changing them.
 | `138_heldout_audit.py` | on held-back games, are players high on some input rated too high or too low |
 | `141_stepwise_inputs.py` | forward stepwise selection of the box-score prior's inputs, on one half of the seasons |
 | `157_wins_model.py` | the win model against the games and the standings, every season; the pace ridge's penalty |
-| `158_endgame.py` | do players play differently from their rating at the end of close games |
+| `158_high_leverage.py` | do players play differently from their rating when a possession counts most |
 
 `scripts/experiment_chain.sh` runs the build and the standard readings for one experiment; `README.md`
 and `CONTRIBUTING.md` say how.

@@ -2,7 +2,7 @@
 
 The owner's MVP score (2026-11-02): "how many wins you improve your team vs the average player in the top 150".  It
 reads the published ratings and the regular season's stints and changes no rating.  notes/DECISIONS.md, "WOSA", holds
-the checks behind every choice here (scripts/checks/157_wins_model.py, 158_endgame.py).
+the checks behind every choice here (scripts/checks/157_wins_model.py, 158_high_leverage.py).
 
 Words used below
     starter average  the bar: the mean rating, on each side, of the 150 players with the most regular-season games

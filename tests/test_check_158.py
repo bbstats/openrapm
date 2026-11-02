@@ -1,5 +1,5 @@
-"""scripts/checks/158_endgame.py: a planted end-of-game skill is found and repeats, none is not, and the controls keep
-what they say they keep."""
+"""scripts/checks/158_high_leverage.py: a planted high-leverage skill is found and repeats, none is not, and the
+controls keep what they say they keep."""
 import importlib.util
 import subprocess
 import sys
@@ -10,13 +10,15 @@ import pandas as pd
 import pytest
 import scipy.sparse as sp
 
+from openrapm.simulate import simulate
+
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "scripts" / "checks" / "158_endgame.py"
+SCRIPT = ROOT / "scripts" / "checks" / "158_high_leverage.py"
 
 
 @pytest.fixture(scope="module")
 def check():
-    spec = importlib.util.spec_from_file_location("endgame_check", SCRIPT)
+    spec = importlib.util.spec_from_file_location("high_leverage_check", SCRIPT)
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
@@ -41,10 +43,17 @@ def _league(skill_sd=0.0, n_players=60, n_stints=6000, seed=0):
     return signed, miss, weight, skills
 
 
-def test_the_end_of_game_rule_is_the_swap_tests(check):
-    stints = pd.DataFrame({"period": [4, 3, 4, 5, 4], "start_clock": [300.0, 100.0, 301.0, 200.0, 100.0],
-                           "margin_h": [5, 0, 0, -5, 6]})
-    assert check.end_of_game(stints).tolist() == [True, False, False, True, False]
+def test_high_leverage_is_the_wins_own_leverage_so_a_late_blowout_is_out_and_a_close_game_is_in(check):
+    """The leverage decides, with no clock rule beside it: a game within two points counts in the third quarter too."""
+    league = simulate(n_seasons=1, n_teams=6, players_per_team=9, games_per_season=200, stints_per_game=(20, 30),
+                      seed=3)["stints"].copy()
+    league["home_team_id"], league["away_team_id"] = league.h1 // 1000, league.a1 // 1000
+    relative = check.stint_relative_leverage(league, 2001)
+    period, margin = league.period.to_numpy(), np.abs(league.margin_h.to_numpy(dtype=float))
+    assert np.average(relative, weights=league.poss_h + league.poss_a) == pytest.approx(1.0)
+    late = (period == 4) & (league.start_clock.to_numpy() <= 300.0)
+    assert relative[late & (margin >= 20)].max() < check.HIGH_LEVERAGE
+    assert (relative[(period == 3) & (margin <= 2)] >= 1.0).mean() > 0.5
 
 
 def test_a_trip_at_one_end_is_read_against_that_ends_possessions(check):
@@ -120,8 +129,8 @@ def _verdict(check, real, shuffled, flipped, half_correlation, next_correlation)
 
 
 def _parts(check, rating_error_sd=0.0, skill_sd=0.0, n_stints=6000, seed=0):
-    """A season's parts: every player's rating wrong by a planted amount on all his stints, a planted skill on a tenth
-    of the stints, the end of game, alone."""
+    """A season's parts: every player's rating wrong by a planted amount on all his stints, a planted skill on a fifth
+    of the stints, the high-leverage ones, alone."""
     rng = np.random.default_rng(seed)
     signed, noise, weight, _ = _league(n_stints=n_stints, seed=seed)
     error = rng.normal(0.0, rating_error_sd, signed.shape[1]) if rating_error_sd else np.zeros(signed.shape[1])
@@ -140,7 +149,7 @@ def test_a_rating_wrong_everywhere_repeats_only_until_the_rest_is_taken_off(chec
     assert abs(check.repeat_reading(check.half_pairs(parts, parts["flag"]))["correlation"]) < 0.35
 
 
-def test_a_real_end_of_game_skill_still_repeats_with_the_rest_taken_off(check):
+def test_a_real_high_leverage_skill_still_repeats_with_the_rest_taken_off(check):
     parts = _parts(check, rating_error_sd=8.0, skill_sd=12.0)
     reading = check.repeat_reading(check.half_pairs(parts, parts["flag"]))
     assert reading["correlation"] > 0.5 and reading["z"] > 2.0

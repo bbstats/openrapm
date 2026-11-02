@@ -11808,7 +11808,35 @@ and +0.22, the 150th with 40 starts.  A start is being in a game's opening stint
 five for every player, and in the worst seasons they differ in 5-7 games (2013: 6, 2015: 7, 1997: 5), up to 5 starts for a
 player.  Which of the two is right in those games I did not settle; it moves the bar by nothing visible.
 
-**The end of game: nothing to add, by the rule set in `scripts/checks/158_endgame.py`.**
+**Own play: nothing to add, by the rule set in `scripts/checks/158_high_leverage.py`.**  The owner, after reading the first
+report: "let's use leverage to determine, and not something separate for end of game(s)".  WOSA's formula already had no
+such term.  The check did: it picked the swap test's clutch stints, the last five minutes within five.  It now picks stints
+whose relative leverage is 2 or more, the number the wins read, about 6% of possessions in every era.  The verdict holds:
+
+| reading | leverage 2 or more | random stints, same count per game | signs flipped, pure noise |
+|---|---|---|---|
+| player-seasons beyond 2 standard errors, of 9,364 | 633 | 661.9 | 525.6 |
+| half A against half B, correlation | 0.021, z +1.7 | 0.027, z +2.4 | |
+| a season against the next, correlation | 0.012, z +0.9 | | |
+
+At leverage 1.5 or more 7.3% of player-seasons sit beyond 2 standard errors, at 2 or more 6.8%, at 3 or more 8.6%.
+
+Where leverage puts a possession, 2026, relative to an average one; the last five minutes include overtime:
+
+| time left | margin 0-5 | 6-10 | 11-15 | 16-20 | 21+ |
+|---|---|---|---|---|---|
+| first half | 1.03 | 0.99 | 0.81 | 0.58 | 0.31 |
+| third quarter | 1.51 | 1.21 | 0.81 | 0.45 | 0.13 |
+| fourth, over five minutes left | 2.17 | 1.34 | 0.55 | 0.17 | 0.02 |
+| last five minutes | 3.17 | 0.94 | 0.17 | 0.01 | 0.00 |
+
+Jokić's +2.09 from leverage in 2026, before pace, is not all from finishes: +1.78 in the last five minutes within five, +1.79
+earlier within nine, against -0.15, -0.09, -0.73 and -0.52 on the lopsided rest.  He closes a blowout on 0.7% of his
+possessions, worth 0.004 wins.  A stint is read at its starting margin, so its own result never weights it; 4.5% of
+possessions are in stints that start under 15 and end at 15 or more, at a mean relative leverage of 0.80, and in the last
+five minutes 3.1%, at 0.30.
+
+The same reading on the swap test's clutch stints, before that word:
 
 | reading | end-of-game stints | random stints, same count per game | signs flipped, pure noise |
 |---|---|---|---|

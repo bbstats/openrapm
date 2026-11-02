@@ -1,26 +1,28 @@
-"""Check 158: do players really play better or worse than their rating at the end of close games?
+"""Check 158: do players really play better or worse than their rating when a possession counts most?
 
 The owner, 2026-11-02: leverage-adjust, "only adjusting for the leverage, not how they played there UNLESS it's
-statistically significant", "smart about sample sizes".  The wins over starter average (src/openrapm/wins.py) weight
-these possessions by their leverage at each player's normal rating.  This check decides whether a player's own play
-there should enter at all.
+statistically significant", "smart about sample sizes"; and "let's use leverage to determine, and not something separate
+for end of game(s)".  The wins over starter average (src/openrapm/wins.py) weight every possession by its leverage at
+each player's normal rating.  This check decides whether a player's own play on high-leverage possessions should enter
+at all.
 
 Words used below
-    end of game   the swap test's clutch stints: the last five minutes of the fourth or overtime, margin within five.
-                  About 3% of possessions, about 150 a season for a starter
+    high leverage  a stint whose relative leverage (wins.relative_leverage) is `HIGH_LEVERAGE` or more: each possession
+                  worth at least twice an average one.  About 6% of possessions, in every era, whatever the clock says:
+                  a one-point game with eight minutes left is in, a blowout's last minute is out
     miss          a stint's actual margin for the home team less its expected margin, per 100 possessions a team.  The
                   expected points are read at each end from that end's own possessions: the season's points per 100
                   plus the five on offence's rating_off minus the five on defence's rating_def.  Late in a game a coach
                   subs a shooter in for one trip and a stopper for the next, so many stints have the ball at one end
                   only; read as a margin per possession those show a shooter as a star and a stopper as a disaster, and
                   a first version that did read z +8.1 between half A and half B, Korver and Lou Williams against Bowen
-                  and Ben Wallace, with no end-of-game skill in it
-    rest          the same ridge as below on the stints of the same games that are not end of game, taken off the
+                  and Ben Wallace, with no skill in it
+    rest          the same ridge as below on the stints of the same games that are not high leverage, taken off the
                   misses first: the published ratings are shrunk, so a good player's misses are positive on any stints
-                  at all, which is how far his rating is from his season, not how he plays at the end of a game.  The
-                  rest of half A's games is taken off half A's end-of-game stints and half B's off half B's, so no noise
-                  is shared between the two
-    deviation     a player's coefficient in a ridge regression of the misses less the rest, on the end-of-game stints,
+                  at all, which is how far his rating is from his season, not how he plays when it counts.  The rest of
+                  half A's games is taken off half A's high-leverage stints and half B's off half B's, so no noise is
+                  shared between the two
+    deviation     a player's coefficient in a ridge regression of the misses less the rest, on the high-leverage stints,
                   on the ten players, +1 at home and -1 away, weighted by possessions, plus a free home edge, pulled to
                   0 by `PENALTY`
     standard error  the coefficient's standard error as a statistic of the sample,
@@ -29,19 +31,19 @@ Words used below
                   nobody beyond 2
     shuffled      the same fit on as many stints of each game, drawn at random: every game's count of stints is kept,
                   and no stint is special
-    flipped       the same fit on the real end-of-game stints with each stint's miss given a random sign: every lineup
+    flipped       the same fit on the real high-leverage stints with each stint's miss given a random sign: every lineup
                   and possession is kept, and no player can have a real deviation
     repeat        the correlation across players, weighted by possessions, of deviations from two sets of games that
                   share none: half A with half B of one season, and one season with the next.  Noise cannot repeat
 
-The rule.  A player's own end-of-game play enters only if all three hold: over 30 seasons more players sit beyond 2
+The rule.  A player's own high-leverage play enters only if all three hold: over 30 seasons more players sit beyond 2
 standard errors than in both controls, by more than 3 of the controls' own standard deviations; half A repeats in half B
 at z above 2 and above the shuffled stints' repeat; and a season repeats in the next at z above 2.  Otherwise it stays
 out, and every player is valued at his rating.  The same three were set before the first reading; the possessions at
 each end, the rest and the shuffled repeat were added after it, because of what it showed (notes/DECISIONS.md, "WOSA").
 
-Usage: .venv/Scripts/python scripts/checks/158_endgame.py --tag first
-writes outputs/csv/endgame_<tag>_seasons.csv, _players.csv, _controls.csv and _verdict.csv.
+Usage: .venv/Scripts/python scripts/checks/158_high_leverage.py --tag first
+writes outputs/csv/high_leverage_<tag>_seasons.csv, _players.csv, _controls.csv and _verdict.csv.
 """
 from __future__ import annotations
 
@@ -57,22 +59,23 @@ from openrapm.data.seasons import last_finished
 from openrapm.data.stints import load_season_stints
 from openrapm.settings import PRODUCT
 
-# A light penalty, as many possessions' worth: a starter with 150 end-of-game possessions keeps 60% of his raw
-# deviation, so the standard error measures the sample (about 10 per 100) and not the penalty.  A penalty near the
-# ratings' own 13,037 would leave everyone within 2 standard errors by construction.
+HIGH_LEVERAGE = 2.0               # relative leverage: each possession worth at least twice an average one
+OTHER_HIGH_LEVERAGE = (1.5, 3.0)  # read beside it, so a verdict cannot rest on where the line was drawn
+# A light penalty, as many possessions' worth: a starter with 150 high-leverage possessions keeps 60% of his raw
+# deviation, so the standard error measures the sample and not the penalty.  A penalty near the ratings' own 13,037
+# would leave everyone within 2 standard errors by construction.
 PENALTY = 100.0
 OTHER_PENALTIES = (30.0, 300.0)
-MIN_POSSESSIONS = 50.0            # a player enters the counts with this many end-of-game possessions
+MIN_POSSESSIONS = 50.0            # a player enters the counts with this many high-leverage possessions
 MIN_REPEAT_POSSESSIONS = 25.0     # and the repeats with this many in each of the two sets of games
 DRAWS = 10                        # draws of each control per season
 Z_LINES = (2.0, 3.0)
 
 
-def end_of_game(stints: pd.DataFrame) -> np.ndarray:
-    """The swap test's clutch rule on a season's stints."""
-    return ((stints.period.to_numpy() >= swap_test.CLUTCH_PERIOD)
-            & (stints.start_clock.to_numpy(dtype=float) <= swap_test.CLUTCH_SECONDS)
-            & (np.abs(stints.margin_h.to_numpy(dtype=float)) <= swap_test.CLUTCH_MARGIN))
+def stint_relative_leverage(stints: pd.DataFrame, season: int) -> np.ndarray:
+    """Each stint's relative leverage, from the win model fitted on the season's own games: the number the wins read."""
+    seconds = swap_test.stint_durations(stints)
+    return wins.relative_leverage(stints, seconds, wins.fit_win_model(stints, seconds, season))
 
 
 def stint_misses(stints: pd.DataFrame, ratings: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
@@ -166,9 +169,10 @@ def season_parts(cfg: dict, season: int, ratings: pd.DataFrame) -> dict:
     stints = swap_test.order_stints(load_season_stints(season, cfg, wins.STINT_COLUMNS, phases=PRODUCT.wins.phases))
     player_ids, home, away = wins.player_index(stints)
     miss, weight = stint_misses(stints, ratings)
+    relative = stint_relative_leverage(stints, season)
     return dict(stints=stints, player_ids=player_ids, signed=(home - away).tocsr(), miss=miss, weight=weight,
-                at_home=~stints.neutral.fillna(False).to_numpy(dtype=bool), flag=end_of_game(stints),
-                games=stints.game_id.to_numpy(), half=stints.half.to_numpy())
+                at_home=~stints.neutral.fillna(False).to_numpy(dtype=bool), relative=relative,
+                flag=relative >= HIGH_LEVERAGE, games=stints.game_id.to_numpy(), half=stints.half.to_numpy())
 
 
 def fit_on(parts: dict, chosen: np.ndarray, penalty: float = PENALTY, miss=None) -> pd.DataFrame:
@@ -214,13 +218,17 @@ def control_counts(parts: dict, rng) -> list:
 
 
 def season_reading(parts: dict, season: int, rng) -> dict:
-    """One season: its line, its players, its controls' counts, half A against half B on the end-of-game stints and on
+    """One season: its line, its players, its controls' counts, half A against half B on the high-leverage stints and on
     shuffled ones, each with the rest taken off and with nothing taken off, and its deviations to set beside the next
     season's."""
     every_game = np.ones(len(parts["miss"]), dtype=bool)
     table = fit_beyond_the_rest(parts, parts["flag"], every_game)
-    line = dict(season=season, end_of_game_share=float(parts["weight"][parts["flag"]].sum() / parts["weight"].sum()),
+    line = dict(season=season, high_leverage_share=float(parts["weight"][parts["flag"]].sum() / parts["weight"].sum()),
                 **beyond(table))
+    for cutoff in OTHER_HIGH_LEVERAGE:
+        other = fit_beyond_the_rest(parts, parts["relative"] >= cutoff, every_game)
+        line[f"beyond_2_at_leverage_{cutoff:g}"] = beyond(other)["beyond_2"]
+        line[f"players_at_leverage_{cutoff:g}"] = beyond(other)["players"]
     for penalty in OTHER_PENALTIES:
         line[f"beyond_2_at_penalty_{penalty:g}"] = beyond(fit_beyond_the_rest(parts, parts["flag"], every_game,
                                                                                penalty))["beyond_2"]
@@ -272,8 +280,8 @@ def run(cfg: dict, seasons: list, table: pd.DataFrame, seed: int = 0) -> dict:
 
 
 def parse_args(argv=None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Do players play differently from their rating late in close games?")
-    parser.add_argument("--tag", required=True, help="the outputs are outputs/csv/endgame_<TAG>_*.csv")
+    parser = argparse.ArgumentParser(description="Do players play differently from their rating at high leverage?")
+    parser.add_argument("--tag", required=True, help="the outputs are outputs/csv/high_leverage_<TAG>_*.csv")
     parser.add_argument("--table", default="season_ratings_product", help="the ratings table the misses read")
     parser.add_argument("--first", type=int, default=1997)
     return parser.parse_args(argv)
@@ -289,7 +297,7 @@ def main(argv=None) -> int:
         found = run(cfg, list(range(args.first, last_finished(cfg) + 1)), table)
     folder = resolve(cfg, "outputs") / "csv"
     folder.mkdir(parents=True, exist_ok=True)
-    stem = folder / f"endgame_{args.tag}"
+    stem = folder / f"high_leverage_{args.tag}"
     reading = verdict(found["lines"], found["controls"], found["halves"], found["nexts"], found["shuffled_halves"])
     plain, plain_shuffled = repeat_reading(found["plain_halves"]), repeat_reading(found["plain_shuffled_halves"])
     reading.update(plain_half_correlation=plain["correlation"], plain_half_z=plain["z"],

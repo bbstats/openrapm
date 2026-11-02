@@ -49,8 +49,10 @@ number; `src/openrapm/wins.py` the equation.  **No rating moved.**
     records.  One number, so the order inside a season does not depend on it.
   - The win model keeps a share of a lead, not all of it, since keeping all of it failed its calibration.
   - The own-play flag in settings was not added: nothing would read it.
-- **End of game: no player plays differently from his rating there**, so own play stays out, by the rule in check 158.
-  Its first version read z +8.1 and was a bug in the check (DECISIONS.md, "WOSA", and the trap there).
+- **Leverage alone decides; there is no separate end-of-game term or rule** (the owner: "let's use leverage to determine,
+  and not something separate for end of game(s)").  No player plays differently from his rating on high-leverage
+  possessions, so own play stays out, by the rule in check 158, which picks them by leverage since that word.  Its first
+  version read z +8.1 and was a bug in the check (DECISIONS.md, "WOSA", and the trap there).
 - **Next, if the owner wants them:** none is needed.  Open: the bar in a season's first days is its most-started players
   by a few games; `outputs/csv/wins_product_seasons.csv` shows it each morning, and holding the last finished season's
   until a quarter of the season would be one line.
