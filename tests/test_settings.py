@@ -35,7 +35,7 @@ def test_the_targets_prior_and_ridge():
     assert PRODUCT.prior.booster_file == "params/booster_params_lgb1_tune2.json"
     assert PRODUCT.prior.era_halflife == 0.0                 # every training season counts the same
     assert PRODUCT.prior.bags == 10                          # experiment 78, adopted 2026-10-17
-    assert PRODUCT.prior.second_prior == "ctx127"            # experiment 127, adopted 2026-11-01; ctx110 before it
+    assert PRODUCT.prior.second_prior == "ctx110"            # experiment 126, adopted 2026-11-01; ctx82 before it
     assert PRODUCT.prior.second_prior_team_totals == "held"
     assert PRODUCT.prior.second_prior_inputs == "context_and_types_centred"   # experiment 93, adopted 2026-10-21
     assert PRODUCT.prior.part_season_shares == (0.25, 0.5, 0.75)             # experiment 107, adopted 2026-10-23

@@ -182,12 +182,12 @@ class PriorSettings:
     # prior instead, shipped as ctx82 since experiment 82 was adopted 2026-10-20, "adopt for now", its inputs centred
     # since experiment 93 (`second_prior_inputs`); ctx110 since experiment 126, adopted 2026-11-01, the same line
     # refitted on creation110's boosters and folds (ctx82's came from experiment 78's, before the parser fixes, the
-    # body listing, the part-season rows and self-creation); ctx127 since experiment 127, adopted the same day (the
-    # possession bins' targets padded toward the league rate), the line refitted on its boosters and folds.  It is the
+    # body listing, the part-season rows and self-creation); experiment 127, adopted the same day, was tested and
+    # adopted on this line, so it stays until a refit passes a test of its own.  It is the
     # box-score prior corrected for who a player played with and against, by a line fitted on the swaps of the
     # within-season folds' held-back games written under outputs/second_prior/<tag>/ (second_prior.py;
     # notes/DECISIONS.md, experiment 81, the owner, 2026-10-19: "take the handoff idea ... in as inputs to the prior")
-    second_prior: str = "ctx127"
+    second_prior: str = "ctx110"
     # the line's player folds (player_id % 5) and its ridge penalty relative to the mean diagonal of its Gram matrix:
     # step 5's type model's, the method the line borrows
     second_prior_folds: int = 5
