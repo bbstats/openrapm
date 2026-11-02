@@ -21,20 +21,24 @@ Words used below
     leverage         what one point moves the win model by at a stint's game state: (P(margin + 1) - P(margin - 1)) / 2,
                      the same for both teams.  Read at the stint's starting margin, so its own result never weights it,
                      and at the middle of its time
-    relative leverage  a stint's leverage over the season's possession-weighted mean: 1 is an average possession.  About
-                     3 late in a close game, 0.02 in garbage time, 0.8 in the first quarter
-    points per win   how many rating points, weighted by relative leverage, a team needs for one more win: one number,
-                     27, read from the standings over 30 seasons (check 157; 25.8, 26.3 and 27.7 by era, each season's
+    weight           a stint's leverage over the possession-weighted mean of its own game.  Every game carries the same
+                     total weight, and leverage only divides it up inside that game (the owner, 2026-11-02: "if you
+                     cause the blowout you shouldn't be penalized").  A blowout win moves a team from about 50% to 100%
+                     as a buzzer-beater does, so a lopsided game counts as much as a close one: its weight goes to the
+                     possessions that built the lead, and its decided end stays near 0.  Read against the season's mean
+                     instead (`relative_leverage`, shipped first), San Antonio's 2026 games read 0.89 with Wembanyama
+                     and 1.06 without: a player was marked down for the blowouts he caused
+    points per win   how many rating points, weighted by the weight, a team needs for one more win: one number, 30,
+                     read from the standings over 30 seasons (check 157; 28.9, 29.2 and 30.6 by era, each season's
                      correlation 0.92 to 0.98).  The win model's own 1 over its mean leverage reads 41 to 45 and is not
                      the scale: it values a point after leads shrink, where the published ratings already sit below
-                     teams' actual margins, so it would discount twice and leave team totals about 40% short of their
-                     records
+                     teams' actual margins, so it would discount twice and leave team totals well short of their records
     pace effect      a player's effect on the possessions per 48 minutes each team plays, from a ridge regression of
                      each stint's pace on the ten players on the court (pace RAPM)
 
 The equation, for a player over the regular-season stints he was on the court for:
 
-    value     = relative leverage / points per win / 100
+    value     = weight / points per win / 100
     wosa_off  = sum value x (rating_off - bar_off) x his team's possessions
     wosa_def  = sum value x (rating_def - bar_def) x the opponent's possessions
     wosa_pace = sum value x (margin - (rating_total - bar_total)) x extra possessions
@@ -46,10 +50,10 @@ home edge.  This is exactly his team's expected margin on the stint with him min
 (`counterfactual_wins` computes it that way).  The extra possessions are valued at the margin WITHOUT his surplus
 because his rating on them is already in the first two lines; at the full margin a star would be paid for it twice.
 
-Example: a player at +9.0 per 100 against a bar of +0.8, over 5,300 possessions at each end, at average leverage: 8.2 x
-5,300 / 100 / 27 = 16.1 wins.  Three extra possessions per 48 over 2,500 minutes are 156 extra possessions; on a lineup
-at +8 per 100 with his surplus of +8.2 taken out they are worth -0.2 x 156 / 100 / 27 = -0.01 wins, while on a lineup at
-+8 that owes him nothing they would be worth 8 x 156 / 100 / 27 = 0.46 wins.
+Example: a player at +9.0 per 100 against a bar of +0.8, over 5,300 possessions at each end, at an average weight: 8.2 x
+5,300 / 100 / 30 = 14.5 wins.  Three extra possessions per 48 over 2,500 minutes are 156 extra possessions; on a lineup
+at +8 per 100 with his surplus of +8.2 taken out they are worth -0.2 x 156 / 100 / 30 = -0.01 wins, while on a lineup at
++8 that owes him nothing they would be worth 8 x 156 / 100 / 30 = 0.42 wins.
 """
 from __future__ import annotations
 
@@ -67,7 +71,8 @@ from .swap_test import AWAY, HOME, PERIOD_END_SECONDS
 
 __all__ = ["STINT_COLUMNS", "WINS_COLUMNS", "SPREAD_BIN_EDGES", "share_left", "game_results", "strength_gap",
            "WinModel", "fit_win_model", "spread_at", "lead_kept", "win_probability", "leverage", "relative_leverage",
-           "mean_leverage", "net_points_per_win", "rating_points_per_win", "PACE_CONTEXT", "PaceRows", "PaceFit",
+           "leverage_inside_games", "mean_leverage", "net_points_per_win", "rating_points_per_win", "PACE_CONTEXT",
+           "PaceRows", "PaceFit",
            "pace_rows", "solve_pace", "pace_error", "pace_effects", "player_index", "starts_and_minutes",
            "expected_margins", "Bar", "starter_bar", "season_wins", "counterfactual_wins", "wins_columns"]
 
@@ -241,6 +246,22 @@ def relative_leverage(stints: pd.DataFrame, seconds: np.ndarray, model: WinModel
     return _stint_leverage(stints, seconds, model) / mean_leverage(stints, seconds, model)
 
 
+def leverage_inside_games(stints: pd.DataFrame, seconds: np.ndarray, model: WinModel) -> np.ndarray:
+    """Each stint's weight: its leverage over the possession-weighted mean of its own game, so every game's possessions
+    average 1.
+
+    Example: a game decided after 60 possessions, the first 60 at a leverage of 0.03 and the last 40 at about 0, reads
+    about 1.67 and 0; a close game, 80 at 0.03 and the last 20 at 0.09, reads 0.71 and 2.14."""
+    lever = _stint_leverage(stints, seconds, model)
+    possessions = (stints.poss_h + stints.poss_a).to_numpy(dtype=float)
+    frame = pd.DataFrame({"game": stints.game_id.to_numpy(), "levered": lever * possessions,
+                          "possessions": possessions})
+    totals = frame.groupby("game")[["levered", "possessions"]].transform("sum")
+    mean = np.divide(totals.levered.to_numpy(), totals.possessions.to_numpy(), out=np.zeros(len(frame)),
+                     where=totals.possessions.to_numpy() > 0.0)
+    return np.divide(lever, mean, out=np.ones(len(frame)), where=mean > 0.0)
+
+
 def _team_season(results: pd.DataFrame, home_values: pd.Series) -> pd.DataFrame:
     """Per team: wins above half its games, and `home_values` (the home team's view, per game) from its own view."""
     margin = results.margin.to_numpy(dtype=float)
@@ -259,11 +280,11 @@ def net_points_per_win(results: pd.DataFrame) -> float:
     return 1.0 / float(np.polyfit(season.value, season.wins_above, 1)[0])
 
 
-def rating_points_per_win(stints: pd.DataFrame, relative: np.ndarray, margin: np.ndarray) -> float:
+def rating_points_per_win(stints: pd.DataFrame, weight: np.ndarray, margin: np.ndarray) -> float:
     """Rating points per win: 1 over the slope of a team's wins on its expected margin from the published ratings, in
-    points and weighted by `relative` leverage, across a season's teams.  What `WinsSettings.points_per_win` is read
+    points and weighted by `weight`, across a season's teams.  What `WinsSettings.points_per_win` is read
     from: at this number a team's lineups add up to its record."""
-    points = relative * margin * (stints.poss_h + stints.poss_a).to_numpy(dtype=float) / 2.0 / 100.0
+    points = weight * margin * (stints.poss_h + stints.poss_a).to_numpy(dtype=float) / 2.0 / 100.0
     per_game = pd.Series(points).groupby(stints.game_id.to_numpy()).sum()
     season = _team_season(game_results(stints), per_game)
     return 1.0 / float(np.polyfit(season.value, season.wins_above, 1)[0])
@@ -413,11 +434,11 @@ def starter_bar(ratings: pd.DataFrame, starts: pd.DataFrame, pace: pd.DataFrame,
                float(top.pace_effect.mean()), len(top), int(top.starts_rs.min()))
 
 
-def season_wins(stints: pd.DataFrame, seconds: np.ndarray, ratings: pd.DataFrame, relative: np.ndarray,
+def season_wins(stints: pd.DataFrame, seconds: np.ndarray, ratings: pd.DataFrame, weight: np.ndarray,
                 pace: pd.DataFrame, bar: Bar, points_per_win: float) -> pd.DataFrame:
     """One row per player in the stints: player_id and the columns WINS_COLUMNS, from the equation at the top of this
-    module; `relative` is each stint's `relative_leverage`."""
-    lever = relative / float(points_per_win)
+    module; `weight` is each stint's `leverage_inside_games`."""
+    lever = weight / float(points_per_win)
     margin = expected_margins(stints, ratings)[0]
     player_ids, home, away = player_index(stints)
     poss_h, poss_a = stints.poss_h.to_numpy(dtype=float), stints.poss_a.to_numpy(dtype=float)
@@ -437,20 +458,20 @@ def season_wins(stints: pd.DataFrame, seconds: np.ndarray, ratings: pd.DataFrame
 
     own_possessions = np.asarray(home.T @ (poss_h + poss_a) + away.T @ (poss_h + poss_a))
     mean_lever = float(np.average(lever, weights=poss_h + poss_a))
-    relative = np.divide(own_end + other_end, own_possessions, out=np.zeros(len(player_ids)),
+    own_weight = np.divide(own_end + other_end, own_possessions, out=np.zeros(len(player_ids)),
                          where=own_possessions > 0.0) / mean_lever
     starts = starts_and_minutes(stints, seconds)
     return pd.DataFrame({"player_id": player_ids, "wosa_off": wosa_off, "wosa_def": wosa_def, "wosa_pace": wosa_pace,
-                         "wosa": wosa_off + wosa_def + wosa_pace, "pace_effect": effect, "leverage": relative,
+                         "wosa": wosa_off + wosa_def + wosa_pace, "pace_effect": effect, "leverage": own_weight,
                          "starts_rs": starts.starts_rs.to_numpy(), "minutes_rs": starts.minutes_rs.to_numpy()})
 
 
-def counterfactual_wins(stints: pd.DataFrame, seconds: np.ndarray, ratings: pd.DataFrame, relative: np.ndarray,
+def counterfactual_wins(stints: pd.DataFrame, seconds: np.ndarray, ratings: pd.DataFrame, weight: np.ndarray,
                         pace: pd.DataFrame, bar: Bar, points_per_win: float) -> pd.Series:
     """Each player's wins computed the long way, one stint and player at a time: his team's expected points for and
     against with him, minus the same with an average starter in his place on the possessions that would then be played.
     `season_wins` must equal it to rounding: `tests/test_wins.py` holds it there, and the check over every season."""
-    lever = relative / float(points_per_win)
+    lever = weight / float(points_per_win)
     edge = expected_margins(stints, ratings)[1]
     player_ids, home, away = player_index(stints)
     offense = _ratings_for(player_ids, ratings, "rating_off")

@@ -7,9 +7,9 @@ each player's normal rating.  This check decides whether a player's own play on 
 at all.
 
 Words used below
-    high leverage  a stint whose relative leverage (wins.relative_leverage) is `HIGH_LEVERAGE` or more: each possession
-                  worth at least twice an average one.  About 6% of possessions, in every era, whatever the clock says:
-                  a one-point game with eight minutes left is in, a blowout's last minute is out
+    high leverage  a stint whose weight (wins.leverage_inside_games) is `HIGH_LEVERAGE` or more: each possession worth
+                  at least twice an average one of its game, whatever the clock says: a one-point game with eight
+                  minutes left is in, a blowout's last minute is out
     miss          a stint's actual margin for the home team less its expected margin, per 100 possessions a team.  The
                   expected points are read at each end from that end's own possessions: the season's points per 100
                   plus the five on offence's rating_off minus the five on defence's rating_def.  Late in a game a coach
@@ -59,7 +59,7 @@ from openrapm.data.seasons import last_finished
 from openrapm.data.stints import load_season_stints
 from openrapm.settings import PRODUCT
 
-HIGH_LEVERAGE = 2.0               # relative leverage: each possession worth at least twice an average one
+HIGH_LEVERAGE = 2.0               # the wins' weight: each possession worth at least twice an average one of its game
 OTHER_HIGH_LEVERAGE = (1.5, 3.0)  # read beside it, so a verdict cannot rest on where the line was drawn
 # A light penalty, as many possessions' worth: a starter with 150 high-leverage possessions keeps 60% of his raw
 # deviation, so the standard error measures the sample and not the penalty.  A penalty near the ratings' own 13,037
@@ -72,10 +72,10 @@ DRAWS = 10                        # draws of each control per season
 Z_LINES = (2.0, 3.0)
 
 
-def stint_relative_leverage(stints: pd.DataFrame, season: int) -> np.ndarray:
-    """Each stint's relative leverage, from the win model fitted on the season's own games: the number the wins read."""
+def stint_weight(stints: pd.DataFrame, season: int) -> np.ndarray:
+    """Each stint's weight, from the win model fitted on the season's own games: the number the wins read."""
     seconds = swap_test.stint_durations(stints)
-    return wins.relative_leverage(stints, seconds, wins.fit_win_model(stints, seconds, season))
+    return wins.leverage_inside_games(stints, seconds, wins.fit_win_model(stints, seconds, season))
 
 
 def stint_misses(stints: pd.DataFrame, ratings: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
@@ -169,10 +169,10 @@ def season_parts(cfg: dict, season: int, ratings: pd.DataFrame) -> dict:
     stints = swap_test.order_stints(load_season_stints(season, cfg, wins.STINT_COLUMNS, phases=PRODUCT.wins.phases))
     player_ids, home, away = wins.player_index(stints)
     miss, weight = stint_misses(stints, ratings)
-    relative = stint_relative_leverage(stints, season)
+    weight_of_stint = stint_weight(stints, season)
     return dict(stints=stints, player_ids=player_ids, signed=(home - away).tocsr(), miss=miss, weight=weight,
-                at_home=~stints.neutral.fillna(False).to_numpy(dtype=bool), relative=relative,
-                flag=relative >= HIGH_LEVERAGE, games=stints.game_id.to_numpy(), half=stints.half.to_numpy())
+                at_home=~stints.neutral.fillna(False).to_numpy(dtype=bool), relative=weight_of_stint,
+                flag=weight_of_stint >= HIGH_LEVERAGE, games=stints.game_id.to_numpy(), half=stints.half.to_numpy())
 
 
 def fit_on(parts: dict, chosen: np.ndarray, penalty: float = PENALTY, miss=None) -> pd.DataFrame:

@@ -158,6 +158,42 @@ def test_a_lead_that_only_partly_lasts_is_worth_less_of_the_win_and_each_point_t
     assert wins.leverage(0.0, 0.25, kept) < wins.leverage(0.0, 0.25, full)
 
 
+def _two_games() -> pd.DataFrame:
+    """A close game and a blowout, each four stints of the same possessions in the same quarters."""
+    rows = []
+    for game, margins in (("close", (0, 1, -1, 1)), ("blowout", (0, 12, 24, 30))):
+        for period, margin in zip((1, 2, 3, 4), margins):
+            rows.append(_stint(game_id=game, period=period, start_clock=720.0, margin_h=margin, poss_h=25, poss_a=25,
+                               pts_h=25.0, pts_a=25.0))
+    return pd.DataFrame(rows)
+
+
+def test_every_game_carries_the_same_weight_whichever_way_it_went():
+    """The owner, 2026-11-02: "if you cause the blowout you shouldn't be penalized"."""
+    stints = _two_games()
+    weight = wins.leverage_inside_games(stints, sw.stint_durations(stints), _model())
+    close, blowout = stints.game_id.to_numpy() == "close", stints.game_id.to_numpy() == "blowout"
+    assert weight[close].mean() == pytest.approx(1.0) and weight[blowout].mean() == pytest.approx(1.0)
+    assert weight[blowout][0] > weight[close][0]        # the possessions that built the lead count for more
+    assert weight[blowout][3] < 0.01                    # and the decided end for nothing
+    assert weight[close][3] > 1.5                       # a close game's end counts most
+
+
+def test_leverage_inside_games_is_the_whole_seasons_with_each_games_level_taken_out():
+    stints, seconds, _, _ = _league()
+    model = wins.fit_win_model(stints, seconds, 2001)
+    weight = wins.leverage_inside_games(stints, seconds, model)
+    relative = wins.relative_leverage(stints, seconds, model)
+    possessions = stints.poss_h + stints.poss_a
+    per_game = pd.DataFrame({"game": stints.game_id, "weighted": weight * possessions, "possessions": possessions}
+                            ).groupby("game").sum()
+    assert (per_game.weighted / per_game.possessions).to_numpy() == pytest.approx(1.0)
+    has_weight = weight > 1e-12
+    ratio = pd.Series((relative / np.where(has_weight, weight, 1.0))[has_weight]).groupby(
+        stints.game_id.to_numpy()[has_weight])
+    assert (ratio.max() - ratio.min()).max() < 1e-6     # inside one game the two differ by one number
+
+
 def test_relative_leverage_averages_one_over_the_possessions():
     stints, seconds, _, _ = _league()
     relative = wins.relative_leverage(stints, seconds, wins.fit_win_model(stints, seconds, 2001))

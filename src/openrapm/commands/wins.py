@@ -50,7 +50,7 @@ def season_summary(cfg: dict, stints: pd.DataFrame, seconds: np.ndarray, rows: p
                    bar: wins.Bar, season: int) -> dict:
     """One line of the summary: what this season's wins read, and the standings' own numbers for a finished season."""
     results = wins.game_results(stints)
-    relative = wins.relative_leverage(stints, seconds, model)
+    weight = wins.leverage_inside_games(stints, seconds, model)
     margin = wins.expected_margins(stints, rows)[0]
     finished = season <= last_finished(cfg)
     return dict(season=season, share_of_season_played=float(share_played(season, cfg)), win_model_season=model.season,
@@ -59,7 +59,7 @@ def season_summary(cfg: dict, stints: pd.DataFrame, seconds: np.ndarray, rows: p
                 games_margin_zero=model.n_ties, bar_off=bar.off, bar_def=bar.defense, bar_total=bar.total,
                 bar_pace=bar.pace, bar_players=bar.n, bar_fewest_starts=bar.fewest_starts,
                 net_points_per_win=wins.net_points_per_win(results) if finished else np.nan,
-                rating_points_per_win=wins.rating_points_per_win(stints, relative, margin) if finished else np.nan)
+                rating_points_per_win=wins.rating_points_per_win(stints, weight, margin) if finished else np.nan)
 
 
 def season_columns(cfg: dict, rows: pd.DataFrame, settings, kept: dict) -> tuple[pd.DataFrame, dict]:
@@ -71,8 +71,8 @@ def season_columns(cfg: dict, rows: pd.DataFrame, settings, kept: dict) -> tuple
     pace = wins.pace_effects(stints, seconds, choices.pace_penalty, choices.pace_min_seconds)
     rated = rows[RATING_COLUMNS]
     bar = wins.starter_bar(rated, wins.starts_and_minutes(stints, seconds), pace, choices.starters)
-    relative = wins.relative_leverage(stints, seconds, model)
-    computed = wins.season_wins(stints, seconds, rated, relative, pace, bar, choices.points_per_win)
+    weight = wins.leverage_inside_games(stints, seconds, model)
+    computed = wins.season_wins(stints, seconds, rated, weight, pace, bar, choices.points_per_win)
     return wins.wins_columns(rows, computed), season_summary(cfg, stints, seconds, rated, model, bar, season)
 
 

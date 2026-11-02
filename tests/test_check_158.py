@@ -48,7 +48,7 @@ def test_high_leverage_is_the_wins_own_leverage_so_a_late_blowout_is_out_and_a_c
     league = simulate(n_seasons=1, n_teams=6, players_per_team=9, games_per_season=200, stints_per_game=(20, 30),
                       seed=3)["stints"].copy()
     league["home_team_id"], league["away_team_id"] = league.h1 // 1000, league.a1 // 1000
-    relative = check.stint_relative_leverage(league, 2001)
+    relative = check.stint_weight(league, 2001)
     period, margin = league.period.to_numpy(), np.abs(league.margin_h.to_numpy(dtype=float))
     assert np.average(relative, weights=league.poss_h + league.poss_a) == pytest.approx(1.0)
     late = (period == 4) & (league.start_clock.to_numpy() <= 300.0)
