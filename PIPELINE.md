@@ -292,6 +292,45 @@ command runs in one process as before.
   A table of one season gets no swap adjustment, because the type model trains on the other seasons.
 - **Code:** `src/openrapm/swap_adjust.py`, `swap_test.py` (the lineup swaps).
 
+## Wins over starter average (`wins.py`)
+
+- **For:** the owner's MVP score: how many regular-season wins a player added to his team over an average starter. It
+  reads the published ratings and changes none of them.
+- **Reads:** a ratings table and each season's regular-season stints. A season in progress reads the latest finished
+  season's win model and its own everything else; nothing is fitted on it.
+- **Writes:** eight columns at the end of the final table, `wosa_off, wosa_def, wosa_pace, wosa, pace_effect, leverage,
+  starts_rs, minutes_rs`, and `outputs/csv/wins_NAME_seasons.csv`, each season's starter average and win model. Step 3's
+  and step 4's tables are untouched.
+- **The bar:** the mean rating of the 150 players with the most regular-season starts, minutes breaking ties (the owner,
+  2026-11-02). About +0.6 on the 1997-2006 tables, +0.7 on 2007-2016, +0.8 since. A start is being in a game's opening
+  stint; the box scores' first five differ in at most 7 games of a season, moving a player at most 5 starts.
+- **The win model:** P = Phi((lead kept x margin + home edge x share left) / spread), fitted on each finished season. A
+  margin is not a random walk: with every point kept, a team up 7 to 12 in the first half was given 81% and won 73%. The
+  share of a lead that lasts is a line in the share left, 0.93 at the end and 0.74 at the half in every era, and with it
+  the mean calibration miss is 0.01 in every era. The spread is measured by time left, and agrees with the games' own
+  final margins (11.5 and 11.45 in 2006, 14.5 and 14.37 in 2026).
+- **Leverage:** what a point moves that chance by, read at the stint's starting margin so its own result never weights
+  it. It is a relative weight, 1 on an average possession: about 3 late in a close game, 0.02 in garbage time, 0.8 in
+  the first quarter.
+- **Points per win:** 27 (`WinsSettings.points_per_win`). One number for every season, the rate at which teams' records
+  follow their lineups' leverage-weighted rating points: 25.8, 26.3 and 27.7 by era, correlation 0.97, a season's
+  standard error about 1.4. At 27 the slope of records on the ratings' wins is 1.05, 1.03 and 0.98 by era. The win model's own
+  1 over its mean leverage reads 41 to 45 and is not the scale: it values a point after leads shrink, and the published
+  ratings already sit below teams' actual margins, so it would leave team totals about 40% short of their records.
+- **Pace:** a ridge regression of each stint's possessions per 48 minutes on the ten players, weighted by seconds, with
+  garbage time, the margin, the margin x share left and period ends as context; regular season only. Penalty 30,000, the
+  least held-back error between each season's half-A and half-B games, interior in all six seasons searched. Stints
+  under 15 seconds leave this fit: they are 0.5% of the time and 43% of its weighted squared error, a substitution at a
+  free throw and not a pace; regulars' effects correlate 0.986 or better at a minimum of 10 or 30 seconds. An effect belongs
+  to its player: half A against half B correlates 0.58 to 0.69 among regulars. The extra possessions are valued at the margin
+  his lineup would have with an average starter in his place, since his rating on them is already in the value part. A
+  regular's pace part has a standard deviation of 0.04 wins.
+- **End of game:** every player is valued at his rating there. `scripts/checks/158_endgame.py` found nothing to add: half
+  A against half B correlates 0.033, as random stints do (0.034), and a season against the next 0.002.
+- **Command:** `python -m openrapm wins --name NAME` (`--seasons` to compute some and keep the rest). `build` runs it.
+- **Code:** `src/openrapm/wins.py`, `src/openrapm/commands/wins.py`, `settings.WinsSettings`; tests `tests/test_wins.py`,
+  `tests/test_wins_command.py`.
+
 ## The product setting and the test setting
 
 `--setting product` (the default) builds the published ratings. `--setting test` builds the table the
@@ -447,6 +486,8 @@ handed without changing them.
 | `137_stat_calibration.py` | calibration curves of the miss against each input (superseded for decisions by 138) |
 | `138_heldout_audit.py` | on held-back games, are players high on some input rated too high or too low |
 | `141_stepwise_inputs.py` | forward stepwise selection of the box-score prior's inputs, on one half of the seasons |
+| `157_wins_model.py` | the win model against the games and the standings, every season; the pace ridge's penalty |
+| `158_endgame.py` | do players play differently from their rating at the end of close games |
 
 `scripts/experiment_chain.sh` runs the build and the standard readings for one experiment; `README.md`
 and `CONTRIBUTING.md` say how.

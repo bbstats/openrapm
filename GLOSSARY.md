@@ -181,6 +181,31 @@ or too low (`scripts/checks/138_heldout_audit.py`).
 **Quality tiers.** Players grouped by the incumbent's rank in the rated season: top 30, 31-90, 91-150, 151-300,
 301 and below. Every experiment is read in each tier (`scripts/checks/88_yoy_by_player.py`).
 
+**WOSA** (wins over starter average). How many regular-season wins a player added to his team over an average starter,
+offence, defence and pace together (`wins.py`). No rating moves. A +9.0 player against a bar of +0.8, over 5,300
+possessions at each end at average leverage: 8.2 x 5,300 / 100 / 27 = 16.1 wins.
+
+**Starter average.** The bar WOSA is read against: the mean rating of the season's 150 players with the most
+regular-season games started, minutes breaking ties. It sits above zero, since ratings are centred on the average
+possession and starters are better than that.
+
+**Win model.** The chance the home team wins from a margin with a share of the game left, fitted on each finished season's
+games: Phi((lead kept x margin + home edge x share left) / spread). The spread is the measured standard deviation of what
+is left of a final margin, by time left.
+
+**Lead kept.** The share of a lead that reaches the final margin, a line in the share of the game left: 0.93 at the end
+and 0.74 at the half, in every era. A team ahead coasts and a team behind presses.
+
+**Leverage.** What one point moves the win model by at a stint's game state, over the season's possession-weighted mean: 1
+is an average possession, about 3 late in a close game, 0.02 in garbage time.
+
+**Points per win.** Rating points, weighted by leverage, for one win: 27, read from how teams' records follow their
+lineups' ratings over 30 seasons. Not the older rule of thumb of 30 net points per win, which is in actual points, and the
+ratings sit below teams' actual margins.
+
+**Pace effect.** A player's effect on the possessions per 48 minutes each team plays, from a ridge regression of each
+stint's pace on the ten players on the court. A standard deviation of about 0.9 among regulars.
+
 ## The raw box counts
 
 The thirteen per-game counts every design carries, in the order of `config.yaml`'s `box_counts`. They keep the

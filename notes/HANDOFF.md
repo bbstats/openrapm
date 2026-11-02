@@ -1,7 +1,7 @@
 # Handoff
 
 **What this file is.**  Where the work stands, what waits on the owner, and the commands a session runs.  Rewritten
-on the afternoon of 2026-10-22, its status and next steps on 2026-10-23 (twice), 2026-10-24, 2026-10-26, 2026-10-27, 2026-10-28, 2026-10-29, 2026-10-30, 2026-11-01 and 2026-11-02; the earlier file is in git history.  `DECISIONS.md` is the permanent record and carries
+on the afternoon of 2026-10-22, its status and next steps on 2026-10-23 (twice), 2026-10-24, 2026-10-26, 2026-10-27, 2026-10-28, 2026-10-29, 2026-10-30, 2026-11-01 and 2026-11-02 (twice); the earlier file is in git history.  `DECISIONS.md` is the permanent record and carries
 every number quoted here; read its measurement traps before trusting a number.  `README.md` says what OpenRAPM is,
 `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's standing rules.
 
@@ -21,6 +21,38 @@ every number quoted here; read its measurement traps before trusting a number.  
   owner reads: "how the box-score prior splits players into its five training groups", never "the deal" or "folds";
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
+
+## Where it stands, 2026-11-02, afternoon: WOSA built, in the published table, not on the site
+
+The owner: "want to add an MVP rating score should be = how many wins you improve your team vs the average player in the
+top 150"; the bar, then: "sort by games started, minutes played is the tiebreaker".  DECISIONS.md, "WOSA", holds every
+number; `src/openrapm/wins.py` the equation.  **No rating moved.**
+
+- **Done, on this branch:** `wins.py`, `openrapm wins`, every `build` adds the eight columns to its final table, checks
+  157 and 158.  The published table was given them by `openrapm wins --name product`; its 26 old columns equal
+  `outputs/season_ratings_product_before_wosa.parquet`.  The morning job computes them for 2027; its dry run:
+  outputs/daily/last.txt.
+- **The site's column is on the branch `wosa-site`, worktree `A:/code/spmm_wosa`, deliberately not here.**  The morning
+  job runs this working tree's code and pushes the site's data files to main, so a new field here would reach main ahead
+  of main's page and tests, turn CI red and publish without the word.  **On the owner's "publish":** merge `wosa-site`
+  into this branch, merge origin/main, run `openrapm site --openrapm-decomposition --power`, fast-forward main and push;
+  the next morning writes the field.  The worktree runs with `PYTHONPATH=A:/code/spmm_wosa/src` and a config whose paths
+  point at `A:/code/spmm/data` and `outputs`; `git worktree remove` it after the merge.
+- **Waiting on the owner:** the word to publish; the scale (below); wording for the About and Changelog pages, which I do
+  not write.  Drafts for those: "WOSA: wins over starter average.  How many regular-season wins a player added over the
+  average of the season's 150 most-started players, each possession weighted by how much it could swing the game." and
+  "Added WOSA, wins over starter average, to the ratings page."
+- **Differs from the approved plan, told to the owner:**
+  - Leverage is a relative weight and the scale comes from the standings, 27 rating points per win
+    (`WinsSettings.points_per_win`), since the win model's own 41-45 would leave team totals about 40% short of their
+    records.  One number, so the order inside a season does not depend on it.
+  - The win model keeps a share of a lead, not all of it, since keeping all of it failed its calibration.
+  - The own-play flag in settings was not added: nothing would read it.
+- **End of game: no player plays differently from his rating there**, so own play stays out, by the rule in check 158.
+  Its first version read z +8.1 and was a bug in the check (DECISIONS.md, "WOSA", and the trap there).
+- **Next, if the owner wants them:** none is needed.  Open: the bar in a season's first days is its most-started players
+  by a few games; `outputs/csv/wins_product_seasons.csv` shows it each morning, and holding the last finished season's
+  until a quarter of the season would be one line.
 
 ## Where it stands, 2026-11-02: early-season padding ADOPTED and PUBLISHED (experiment 127)
 
@@ -608,6 +640,7 @@ What else the work of 2026-10-23 left open:
 - Commit every piece of work; never push or publish without the owner's word, but for the daily job.  The site is
   `docs/`, served from `main`.
 - Movement in points per 100, never rank places; under 0.1 is nothing.
+- WOSA is a product column: it gets no row in `experiments/runs.csv`, since no rating moves.
 
 ## Traps that cost a day
 

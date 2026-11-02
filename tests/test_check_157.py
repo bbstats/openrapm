@@ -1,5 +1,5 @@
-"""scripts/checks/157_wins_model.py on a simulated season: the calibration's bins, the team sums, the penalty rule, the long
-way round, and the script starts."""
+"""scripts/checks/157_wins_model.py on a simulated season: the calibration's bins, the team sums, the penalty rule, the
+long way round, and the script starts."""
 import importlib.util
 import subprocess
 import sys

@@ -60,7 +60,8 @@ the equation it implements and an example with numbers.
    little credit?
 
 Then `settings.py` (every number the five steps use, and the experiment that set it) and `features.py`
-(every input the prior can read, with its meaning and formula). `GLOSSARY.md` defines each term.
+(every input the prior can read, with its meaning and formula). `GLOSSARY.md` defines each term. `wins.py` is not a
+step: it reads the finished ratings and says how many regular-season wins each is worth over an average starter.
 
 ## The five steps
 
@@ -122,7 +123,8 @@ python -m openrapm site --bias --decomposition --openrapm-decomposition --simila
    `--folds`), and each multiplier is read to a full season with folds holding back a tenth of the games,
    `padbins127_k10` (the default of `--extrapolate-folds`).
 5. **`build`** runs the five steps for all thirty seasons and writes `outputs/season_ratings_product.parquet`,
-   the published table, with its step-3 and step-4 tables beside it: 88 minutes in the last run.
+   the published table, with its step-3 and step-4 tables beside it: 88 minutes in the last run. It adds the wins over
+   starter average to the final table, seconds of it; `openrapm wins --name NAME` adds them to a table built before them.
    `build --setting test --folds mine_within --extrapolate-folds= --name padbins127` writes the table the
    tests score, under the incumbent's name, so the chain and the checks find it. Without `--folds`, `build`
    and `shrink` read the shipped folds, which a fresh build does not have; they stop at step 4 with "no
@@ -162,6 +164,18 @@ season in progress (data/seasons.py); it is rated from its own rows, the
 box-score prior told the share of the regular season played. The ratings page opens on it once its median player shown
 has 250 offensive possessions. Each morning's log is `outputs/daily/<date>.log`, and `outputs/daily/last.txt` says how
 the last one ended.
+
+### Wins over starter average
+
+WOSA: how many regular-season wins a player added to his team over an average starter. No rating moves. The starter is
+the mean of the season's 150 players with the most games started, minutes breaking ties. A point counts by how much it
+can swing a game, from a win-probability model read from the season's own games, and a point at average leverage is
+1/27 of a win, the rate teams' records read off their ratings over 30 seasons. A player who speeds up or slows down the
+game, by a ridge regression of each stint's pace on the ten players, is paid for the possessions he adds at the margin
+his lineup would have without him. `src/openrapm/wins.py` holds the equation and an example with numbers; `PIPELINE.md`
+says how each part was checked. The columns are `wosa`, its parts `wosa_off`, `wosa_def` and `wosa_pace`, and
+`pace_effect`, `leverage`, `starts_rs` and `minutes_rs`; each season's starter average and win model are in
+`outputs/csv/wins_NAME_seasons.csv`.
 
 ## The two rules
 
@@ -274,6 +288,7 @@ the last line names every reading that failed. The chain does not log the experi
       on_court.py       a team's record with a player on and off the court
       scoring.py        how ratings are scored on games they never saw
       similarity.py     the similarity page: each player-season's nearest player-seasons
+      wins.py           wins over starter average: the win model, leverage, the pace ridge, the bar, the wins
       decomposition.py  the decomposition pages: which rows of a ridge fit a rating comes from
       swap_test.py trade_set.py consensus.py player_types.py simulate.py
       data/             the data layer: everything that reads or writes the disk or the network

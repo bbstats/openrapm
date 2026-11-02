@@ -11736,3 +11736,106 @@ team-game -0.0005, z -0.05, stint -0.009, z -0.67, stint with each side rescaled
 failed.  The chain's defaults (`INC_NAME`, `INC_SYSTEM`, `INC_FOLDS`, `CONTROL_NAME`) and `CONTRIBUTING.md` now name
 padbins127 and noise_padbins127.  The dry run of the morning job passed end to end at 10:36 AM (PUBLISH=0, exit 0);
 the next real run is 2026-11-03 at 6:00 AM.  GitHub's tests passed on 820cefb.
+
+## WOSA: wins over starter average (2026-11-02)
+
+**The owner.**  "want to add an MVP rating score should be = how many wins you improve your team vs the average player in
+the top 150 (eg, a starter)"; the pace "better teams can get further ahead so faster pace can help there. but only if the
+player is causing-ish it (eg pace RAPM)"; the end of games "leverage adjusted but - only adjusting for the leverage, not
+how they played there UNLESS it's statistically significant"; the bar, last, "sort by games started, minutes played is the
+tiebreaker"; regular season only; one column on the ratings page, named WOSA.  `src/openrapm/wins.py` holds the
+equation.  No rating moved, so no row in `experiments/runs.csv`.  The published table's 26 old columns equal
+`outputs/season_ratings_product_before_wosa.parquet` row for row, and two runs write the same bytes.
+
+**The win model, and what its check changed.**  `scripts/checks/157_wins_model.py`, tag `first`, every finished season.
+The spread of the rest of a game as one sigma x sqrt(share left) read sigma 17-19 against final-margin spreads of 12-16;
+measured by time left it agrees with the games' own final margins (11.5 and 11.45 in 2006, 11.6 and 11.62 in 2016, 14.5
+and 14.37 in 2026).  The strength gap leaves the game itself out, and its slope reads 0.89 / 0.90 / 0.88 by era, under 1
+as a noisy strength should.  **Then the calibration failed the plan's gate of 0.02: a mean miss of 0.03, one way.**  A team
+up 7-12 in the first half was given 81% and won 73%; up 13 or more, 94% and 87%.  A margin is not a random walk: the team
+ahead coasts and the team behind presses.  So the model reads the share of a lead that lasts, fitted as a line in the
+share left because a slope per bin is anything at all at the tip-off, where margins are near zero (-0.41 in 2011).
+
+| era | lead kept at the end | at the half | at the tip-off | spread at the tip-off | home edge | mean calibration miss | largest miss, one season's cell |
+|---|---|---|---|---|---|---|---|
+| 1997-2006 | 0.933 | 0.739 | 0.546 | 11.4 | 3.36 | 0.011 | 0.051 |
+| 2007-2016 | 0.926 | 0.726 | 0.525 | 11.8 | 3.00 | 0.010 | 0.056 |
+| 2017-2026 | 0.935 | 0.767 | 0.599 | 13.4 | 2.14 | 0.011 | 0.061 |
+
+**The scale differs from the plan, and it is the owner's to overrule.**  The plan read points per win as 1 over the mean
+leverage, with a gate of 15% against the standings.  Calibrated, that gate fails by construction:
+
+| era | model: 1 over mean leverage | net points per win, standings | rating points per win, standings | slope of records on the ratings' wins at 27 | correlation |
+|---|---|---|---|---|---|
+| 1997-2006 | 41.0 | 29.6 | 25.8 | 1.05 | 0.967 |
+| 2007-2016 | 42.7 | 30.7 | 26.3 | 1.03 | 0.968 |
+| 2017-2026 | 45.2 | 34.9 | 27.7 | 0.98 | 0.952 |
+
+A calibrated leverage values a raw point at what reaches the final margin, after leads shrink.  The published ratings
+already sit below teams' actual margins (the slope of actual net points on the ratings' points: 1.08, 1.06 and 1.28 in 2006,
+2016 and 2026), so the model's number would discount twice and leave team totals about 40% short of their records.  Shipped:
+leverage as a relative weight, and one number for the scale, 27 rating points per win, read from the standings: the mean over
+30 seasons is 26.6, the standard deviation 1.6, from 22.1 in 1999 to 29.4 in 2019.  One number and not each season's slope,
+whose standard error of about 1.4 would add about 0.6 wins of noise to a star.  It is a constant, so the order inside a
+season does not depend on it.  At the old net rate of 35 every WOSA of today reads 23% smaller.  Other readings: the
+model's 1 over mean leverage at the stint's start and not its middle, 42.1 / 43.8 / 46.1; with each game's real strength in
+the leverage, 43.4 / 45.4 / 47.8.  Neither closes the gap, nor should.
+
+**Leverage.**  Relative, 3.0 / 3.1 / 3.2 late in a close game by era, 0.013 / 0.016 / 0.023 in garbage time, 0.82 / 0.81 /
+0.85 in the first quarter.  It moves a 2026 regular a median 0.08 wins, the 90th percentile 0.37, the largest 2.04: Jokić
+13.85 to 15.90, his leverage 1.15, and the top 20 a mean +0.43.  Regulars' leverage runs from 0.73 to 1.19.
+
+**The pace ridge.**  Penalty 30,000, the least held-back error between half-A and half-B games of 2001, 2006, 2011, 2016, 2021
+and 2026; least in five, and in 2001 by 0.04 behind 10,000.  Mean error above the best:
+
+| penalty | 1,000 | 3,000 | 10,000 | 30,000 | 100,000 | 300,000 | 1,000,000 | 3,000,000 | 10,000,000 | 30,000,000 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| error | 3.97 | 2.26 | 0.51 | 0.00 (297.2) | 1.35 | 4.15 | 7.76 | 9.91 | 10.94 | 11.26 |
+
+Stints under 15 seconds leave this fit only: in 2025 they are 6.3% of stints, 1.1% of possessions, 0.5% of the time and 43%
+of the seconds-weighted squared error, a substitution at a free throw and not a pace.  Regulars' effects at a minimum of 10
+or 30 seconds correlate 0.986 or better with those at 15.  **An effect belongs to its player:** half A against half B
+correlates 0.685, 0.640, 0.652, 0.597, 0.589 and 0.583 among regulars in those six seasons.  Their standard deviation is about
+0.9 possessions per 48, where I had guessed 1-2.  The extra possessions are valued at the lineup's margin with an average
+starter in his place, because his own surplus on them is already in the value part; at the full margin a star would be paid
+twice, about 0.4 wins at +9 and three extra possessions per 48.  `counterfactual_wins` computes the wins the long way, one stint and player at a time, and the two
+differ by at most 2e-14 in every season.  The pace part is small: a 2026 regular's has a standard deviation of 0.04 wins,
+from -0.22 (Pritchard) to +0.17 (Fox).  2026's fastest regulars: Jokić +2.8, Curry +2.8, Suggs +2.6; slowest: Sims -2.4,
+Pritchard -2.0, Queta -2.0.
+
+**The bar.**  +0.59 / +0.72 / +0.82 by era in total, offense +0.34 / +0.41 / +0.55, defense +0.25 / +0.31 / +0.26; 2026 +0.58
+and +0.22, the 150th with 40 starts.  A start is being in a game's opening stint; for 2026 that matches the box scores' first
+five for every player, and in the worst seasons they differ in 5-7 games (2013: 6, 2015: 7, 1997: 5), up to 5 starts for a
+player.  Which of the two is right in those games I did not settle; it moves the bar by nothing visible.
+
+**The end of game: nothing to add, by the rule set in `scripts/checks/158_endgame.py`.**
+
+| reading | end-of-game stints | random stints, same count per game | signs flipped, pure noise |
+|---|---|---|---|
+| player-seasons beyond 2 standard errors, of 6,835 | 534 | 608.7 | 403.9 |
+| half A against half B, correlation | 0.033, z +2.3 | 0.034, z +2.8 | |
+| a season against the next, correlation | 0.002, z +0.15 | | |
+
+Fewer players are out of line than on random stints, half A repeats in half B no more than random stints do, and a season does
+not repeat in the next.  Who is at the top has no story: Dort and Barnes, against Cory Joseph and Gortat, uncorrelated with
+offense or defense (+0.002, +0.026).  So every player is valued at his rating there.
+
+**A first version of that check read z +8.1 and z +9.1, and "passes: True".  It was a bug.**  The list gave it away: Korver,
+Lou Williams, Isaiah Thomas and Hield on top, Bowen, Ben Wallace, Tony Allen and Capela at the bottom.  Those are a coach's
+offense-for-defense substitutions, and a stint with the ball at one end only was being read as a margin per possession,
+against ratings that assume both ends: a shooter in for one trip looked like a star.  Reading expected points at each end
+from that end's possessions took half A against half B from 0.115 to 0.033 and a season against the next from 0.137 to 0.002.
+I had first blamed the ratings' shrink, and added the rest-of-season offset for that; it changes little (plain 0.029, z +2.1)
+and is right on its merits, so it stays.  The rule's shuffled repeat was added after the first reading, as was the
+possessions at each end: what the first reading showed, not what would pass.  The verdict is against the exception, the
+direction nobody could be accused of tuning for: it was passing.
+
+**Trap, for the list above.**  A stint's margin per possession means nothing when one team had the ball and the other did
+not.  A residual on a stint subset must read expected points at each end.  The value part of WOSA reads each end's own
+possessions and the pace part is a rate, so neither has it.
+
+**What the eye says.**  2026: Jokić +15.9, Gilgeous-Alexander +12.8, Wembanyama +12.6 on 1,860 minutes, Dončić +9.3, Kawhi
++9.2, Adebayo +7.8, Cunningham +7.8, Barnes +6.8, Mitchell +6.5, Towns +5.8.  Every season's top: LeBron 2010 +21.3, LeBron
+2009 +20.9, Duncan 2002 +19.8, Chris Paul 2009 +17.8, Garnett 2004 +17.5, Garnett 2003 +17.5, LeBron 2016 +17.3, Kawhi 2017
++17.3, Jokić 2025 +17.2.  A league sums to about -330 wins in 2026: "over starter average" means an average team's players
+sum below zero.  The bench stays small: no 2026 player under 500 minutes is above +0.8 or below -1.4.
