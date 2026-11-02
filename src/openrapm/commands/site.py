@@ -103,7 +103,7 @@ def run_site(cfg: dict, ratings=None, out_dir=None, built: str | None = None, bi
 # The ratings table's columns and their names in ratings.json: one letter each, because the page downloads the
 # whole table.  The NBA id is in the file and the CSV download, not on the page.
 RATINGS_FIELDS = {"season": "s", "player_name": "n", "rating_off": "o", "rating_def": "d", "rating_total": "t",
-                  "poss_season": "p", "player_id": "id"}
+                  "poss_season": "p", "player_id": "id", "wosa": "w"}
 # The owner, 2026-10-24: "i want to have a 60 possession minimum, site-wide".  A player-season with fewer offensive
 # possessions is rated as before and left off every page and download; the bias and similarity pages ask 1,000.
 MIN_POSSESSIONS_SHOWN = 60
@@ -113,7 +113,8 @@ def ratings_rows(table: pd.DataFrame) -> list[dict]:
     """One row per player-season with 60 or more offensive possessions (`MIN_POSSESSIONS_SHOWN`), ratings at two
     decimals, by season and then best total first.
 
-    Example: {"s": 2026, "n": "Victor Wembanyama", "o": 2.16, "d": 5.3, "t": 7.45, "p": 5398, "id": 1641705}.
+    Example: {"s": 2026, "n": "Victor Wembanyama", "o": 2.16, "d": 5.3, "t": 7.45, "p": 5398, "id": 1641705,
+    "w": 12.63}.
     A missing name is written "".
     """
     missing = [column for column in RATINGS_FIELDS if column not in table.columns]
@@ -123,7 +124,7 @@ def ratings_rows(table: pd.DataFrame) -> list[dict]:
     short["n"] = short["n"].fillna("").astype(str)
     short = short[short.p >= MIN_POSSESSIONS_SHOWN].sort_values(["s", "t"], ascending=[True, False])
     return [dict(s=int(r.s), n=r.n, o=round(float(r.o), 2), d=round(float(r.d), 2), t=round(float(r.t), 2),
-                 p=int(r.p), id=int(r.id))
+                 p=int(r.p), id=int(r.id), w=round(float(r.w), 2))
             for r in short.itertuples(index=False)]
 
 
@@ -916,13 +917,14 @@ def write_decomposition(cfg: dict, ratings_path: Path, data_dir: Path, built: st
 # Example (2026): Victor Wembanyama's offence, 2.07 = 0.69 + 1.41 - 0.27 + 0.06 + 0.18; his total, 7.16 = 3.98 + 2.65
 # - 0.21 + 0.14 + 0.61.
 OPENRAPM_FILE = "decompose_openrapm.json"
-OPENRAPM_FIELDS = ["n", "id", "p", "o", "d", "t", "tm"]
+OPENRAPM_FIELDS = ["n", "id", "p", "o", "d", "t", "tm", "w"]
 OPENRAPM_PIECES = ["box_score", "on_court", "off_court", "team_sos", "swap", "rating"]
 OPENRAPM_SIDES = ("off", "def", "total")
 OPENRAPM_TOLERANCE = 1e-9         # each identity holds to this, per player and side
 OPENRAPM_JITTER_TOLERANCE = 1e-6  # the same, in a season whose solve needed rapm.solved_ridge's jitter (2020)
 OPENRAPM_TABLE_COLUMNS = ["player_id", "season", "player_name", "poss_season", "prior_off", "prior_def", "u_off",
-                          "u_def", "c_off", "c_def", "rating_off", "rating_def", "rating_total", "offense_lambda"]
+                          "u_def", "c_off", "c_def", "rating_off", "rating_def", "rating_total", "offense_lambda",
+                          "wosa"]
 OPENRAPM_STEP3_COLUMNS = ["player_id", "season", "prior_offense", "prior_defense", "prior_scale_off",
                           "prior_scale_def", "u_off", "u_def"]
 
@@ -1123,13 +1125,14 @@ def update_openrapm_worst(worst: dict, rows: pd.DataFrame, pieces: pd.DataFrame,
 def openrapm_rows(rows: pd.DataFrame, pieces: pd.DataFrame, names: np.ndarray, teams: dict | None = None) -> list:
     """One season's rows in OPENRAPM_FIELDS order, best total first, players under 60 possessions left out (as
     ratings.json leaves them): name, NBA id, possessions (whole, as ratings.json writes them), each side's pieces at
-    two decimals, then his teams ({player_id: "SAC/IND"}; "" for a player it lacks)."""
+    two decimals, then his teams ({player_id: "SAC/IND"}; "" for a player it lacks), then his wins over starter average
+    at two decimals."""
     teams = teams or {}
-    frame = pieces.assign(n=names, p=rows.poss_season.to_numpy())
+    frame = pieces.assign(n=names, p=rows.poss_season.to_numpy(), w=rows.wosa.to_numpy())
     frame = frame[frame.p >= MIN_POSSESSIONS_SHOWN].sort_values("total_rating", ascending=False)
     return [[r["n"], int(r["player_id"]), int(r["p"]),
              *([round(float(r[f"{side}_{piece}"]), 2) for piece in OPENRAPM_PIECES] for side in OPENRAPM_SIDES),
-             teams.get(int(r["player_id"]), "")]
+             teams.get(int(r["player_id"]), ""), round(float(r["w"]), 2)]
             for r in frame.to_dict("records")]
 
 
@@ -1155,13 +1158,16 @@ def run_openrapm_checks(worst: dict, rows: dict, table: pd.DataFrame) -> None:
           f"the box scores name both teams of nearly every row (largest share without, in one season: "
           f"{worst['unplaced']:.2%})")
     check(worst["unnamed"] == 0, f"every player has a name ({worst['unnamed']} without)")
-    teamless = sum(1 for season_rows in rows.values() for row in season_rows if not row[6])
+    team_field = OPENRAPM_FIELDS.index("tm")
+    teamless = sum(1 for season_rows in rows.values() for row in season_rows if not row[team_field])
     check(teamless == 0, f"every player has a team ({teamless} without)")
-    published = {(row["s"], row["id"]): (row["o"], row["d"], row["t"], row["p"]) for row in ratings_rows(table)}
-    mine = {(season, row[1]): (row[3][-1], row[4][-1], row[5][-1], row[2])
+    published = {(row["s"], row["id"]): (row["o"], row["d"], row["t"], row["p"], row["w"])
+                 for row in ratings_rows(table)}
+    wins_field = OPENRAPM_FIELDS.index("w")
+    mine = {(season, row[1]): (row[3][-1], row[4][-1], row[5][-1], row[2], row[wins_field])
             for season, season_rows in rows.items() for row in season_rows}
     check(published == mine, f"the file holds the {len(published):,} player-seasons of ratings.json with its "
-                             "ratings and possessions")
+                             "ratings, possessions and wins over starter average")
 
 
 PERCENTILE_POSSESSIONS = 500   # the ratings page's percentile pool: a finished season's players with this many

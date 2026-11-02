@@ -20,13 +20,15 @@ def _table():
                          "player_name": ["Nikola Jokić", "Nikola Jokić", None, "Bench Player"],
                          "rating_off": [4.894, 4.886, 1.0, -1.0], "rating_def": [0.9, 0.904, 0.5, -0.2],
                          "rating_total": [5.794, 5.79, 1.5, -1.2], "poss_season": [5282.0, 5100.7, 300.0, 0.0],
-                         "player_id": [203999, 203999, 1, 2]})
+                         "player_id": [203999, 203999, 1, 2], "wosa": [14.126, 15.9, 0.4, -0.1]})
 
 
 def test_ratings_rows_keep_players_with_possessions_best_first_at_two_decimals():
     rows = site.ratings_rows(_table())
     assert [(row["s"], row["id"]) for row in rows] == [(2025, 203999), (2026, 203999), (2026, 1)]
-    assert rows[1] == {"s": 2026, "n": "Nikola Jokić", "o": 4.89, "d": 0.9, "t": 5.79, "p": 5100, "id": 203999}
+    assert rows[1] == {"s": 2026, "n": "Nikola Jokić", "o": 4.89, "d": 0.9, "t": 5.79, "p": 5100, "id": 203999,
+                       "w": 15.9}
+    assert rows[0]["w"] == 14.13
     assert rows[2]["n"] == ""                       # a missing name is written empty
 
 
@@ -128,7 +130,7 @@ def _similarity_world(tmp_path, seed=3):
             table.append({"player_id": player, "season": season, "player_name": f"Player {player}",
                           "poss_off": possessions["O"], "poss_def": possessions["D"], "poss_season": possessions["O"],
                           "u_off": rng.normal(), "u_def": rng.normal(), "rating_off": off, "rating_def": deff,
-                          "rating_total": off + deff})
+                          "rating_total": off + deff, "wosa": rng.normal()})
     ratings = tmp_path / "outputs" / "season_ratings_product.parquet"
     ratings.parent.mkdir()
     pd.DataFrame(table).to_parquet(ratings)
@@ -241,6 +243,7 @@ def openrapm_site(rated_season, tmp_path, monkeypatch):
     final["c_off"], final["c_def"] = rng.normal(0, 0.3, len(final)), rng.normal(0, 0.3, len(final))
     final["rating_off"], final["rating_def"] = step3.rating_off + final.c_off, step3.rating_def + final.c_def
     final["rating_total"] = final.rating_off + final.rating_def
+    final["wosa"] = rng.normal(0, 3.0, len(final))
     folder = tmp_path / "outputs"
     folder.mkdir()
     ratings = folder / "season_ratings_product.parquet"
@@ -289,8 +292,9 @@ def test_the_openrapm_file_adds_up_and_carries_ratings_jsons_ratings(openrapm_si
     published = {row["id"]: row for row in json.loads((data / "ratings.json").read_text(encoding="utf-8"))["rows"]}
     assert sorted(row[1] for row in rows) == sorted(published)
     assert [row[5][-1] for row in rows] == sorted((row[5][-1] for row in rows), reverse=True)
-    for name, player_id, possessions, off, deff, total, team in rows:
+    for name, player_id, possessions, off, deff, total, team, wosa in rows:
         assert name == f"Player {player_id}" and possessions == published[player_id]["p"] and team == "BOS"
+        assert wosa == published[player_id]["w"]
         for pieces, rating in ((off, "o"), (deff, "d"), (total, "t")):
             assert len(pieces) == 6 and pieces[-1] == published[player_id][rating]
             assert abs(sum(pieces[:-1]) - pieces[-1]) < 0.031           # five pieces at two decimals each
@@ -303,7 +307,7 @@ def test_the_pieces_are_the_tables_columns_and_a_split_of_the_games_part(openrap
     site.run_site({}, ratings=ratings, out_dir=data.parent, built="2026-10-13", openrapm_decomposition=True)
     rows = json.loads((data / site.OPENRAPM_FILE).read_text(encoding="utf-8"))["rows"]["2002"]
     table = final.set_index("player_id")
-    for _, player_id, _, off, deff, _, _ in rows[:25]:
+    for _, player_id, _, off, deff, _, _, _ in rows[:25]:
         for pieces, side in ((off, "off"), (deff, "def")):
             assert pieces[0] == round(table.loc[player_id, f"prior_{side}"], 2)
             assert pieces[4] == round(table.loc[player_id, f"c_{side}"], 2)
@@ -330,7 +334,7 @@ def test_a_ratings_table_and_step_3_table_of_different_builds_are_refused(openra
 
 
 def test_openrapm_rows_drop_players_without_possessions_and_sort_by_total():
-    rows = pd.DataFrame({"poss_season": [1000.7, 0.0, 500.2]})
+    rows = pd.DataFrame({"poss_season": [1000.7, 0.0, 500.2], "wosa": [4.567, 0.0, -1.234]})
     columns = {f"{side}_{piece}": [0.111, 0.222, 0.333] for side in site.OPENRAPM_SIDES
                for piece in site.OPENRAPM_PIECES}
     columns["total_rating"] = [1.234, 9.0, 3.456]
@@ -338,6 +342,7 @@ def test_openrapm_rows_drop_players_without_possessions_and_sort_by_total():
     got = site.openrapm_rows(rows, pieces, np.array(["A", "B", "C"], dtype=object), {3: "SAC/IND"})
     assert [(row[0], row[1], row[2]) for row in got] == [("C", 3, 500), ("A", 1, 1000)]       # whole possessions
     assert [row[6] for row in got] == ["SAC/IND", ""]
+    assert [row[7] for row in got] == [-1.23, 4.57]
     assert got[0][3] == [0.33] * 6 and got[0][5] == [0.33] * 5 + [3.46]
     assert got[1][4] == [0.11] * 6 and got[1][5] == [0.11] * 5 + [1.23]
 
@@ -355,7 +360,7 @@ def test_a_games_part_multiplied_by_step_4_is_split_with_its_factor(openrapm_sit
     assert site.run_site({}, ratings=ratings, out_dir=data.parent, built="2026-10-15", openrapm_decomposition=True) == 0
     rows = json.loads((data / site.OPENRAPM_FILE).read_text(encoding="utf-8"))["rows"]["2002"]
     table = scaled.set_index("player_id")
-    for _, player_id, _, off, deff, _, _ in rows[:25]:
+    for _, player_id, _, off, deff, _, _, _ in rows[:25]:
         for pieces, side in ((off, "off"), (deff, "def")):
             assert abs(sum(pieces[1:4]) - table.loc[player_id, f"u_{side}"]) < 0.0151
 
@@ -375,7 +380,7 @@ def test_a_rookie_is_a_player_with_no_season_before_counted_from_the_debut(tmp_p
 
 def test_the_file_lists_only_the_rookies_the_season_shows(tmp_path):
     def row(player):
-        return [f"Player {player}", player, 500, [0.0] * 6, [0.0] * 6, [0.0] * 6, "BOS"]
+        return [f"Player {player}", player, 500, [0.0] * 6, [0.0] * 6, [0.0] * 6, "BOS", 0.0]
 
     path = tmp_path / "file.json"
     site.write_openrapm_file(path, {2004: [row(23)], 2005: [row(7)]}, "2026-11-02", 13037.0,
