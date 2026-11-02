@@ -654,6 +654,6 @@ What else the work of 2026-10-23 left open:
 
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest -q                       # 885 passed, 2 skipped, 7 deselected, 1 xfailed: the backup bigs
+    .venv/Scripts/python -m pytest -q                       # 954 passed, 2 skipped, 7 deselected, 1 xfailed: the backup bigs
     uvx ruff check .                                         # clean
     git log --oneline -1                                     # the handoff of 2026-11-01
