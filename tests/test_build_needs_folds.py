@@ -7,6 +7,7 @@ both commands stop at once with a message naming the folds folder and the two co
 import json
 from dataclasses import replace
 
+import pandas as pd
 import pytest
 
 from openrapm.commands import build
@@ -17,6 +18,12 @@ SPAN = "{}-{}".format(*PRODUCT.shrink.fold_seasons)
 MAKE_RATE = f"openrapm rate --setting test --seasons {SPAN} --save-models NAME"
 MAKE_FOLDS = f"openrapm folds --models NAME --base season_ratings_test_step3 --seasons {SPAN} --tag {TAG}"
 ONE_FOLDER = replace(PRODUCT.shrink, folds_tag=TAG, fold_seasons=(2026, 2026), extrapolate_folds_tag="")
+
+
+def test_replacing_seasons_in_a_table_from_before_the_wins_names_the_command_that_adds_them():
+    old, new = pd.DataFrame({"season": [2026], "a": [1.0]}), pd.DataFrame({"season": [2026], "a": [1.0], "wosa": [1.0]})
+    with pytest.raises(SystemExit, match="openrapm wins --name"):
+        build.replace_season_rows(old, new, "season_ratings_product")
 
 
 def _cfg(tmp_path) -> dict:

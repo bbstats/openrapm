@@ -244,8 +244,9 @@ def era_lines(seasons: pd.DataFrame) -> pd.DataFrame:
     """The season table's means by era."""
     keep = ["home_edge", "strength_slope", "lead_kept_at_end", "lead_kept_at_half", "lead_kept_at_tipoff",
             "spread_tipoff", "model_points_per_win", "model_points_per_win_at_stint_start",
-            "model_points_per_win_real_strength", "net_points_per_win", "rating_points_per_win", "relative_leverage_close_late", "relative_leverage_garbage",
-            "relative_leverage_first_quarter", "miss_real_strength_mean", "miss_real_strength_largest",
+            "model_points_per_win_real_strength", "net_points_per_win", "rating_points_per_win",
+            "relative_leverage_close_late", "relative_leverage_garbage", "relative_leverage_first_quarter",
+            "miss_real_strength_mean", "miss_real_strength_largest",
             "miss_average_strength_mean", "leverage_sum_slope", "record_on_rating_wins_slope",
             "record_on_rating_wins_correlation"]
     rows = []

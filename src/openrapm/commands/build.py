@@ -52,6 +52,7 @@ from ..data.tables import design_row_teams, player_names
 from ..data.within_folds import check_fold_files, fold_games, held_back_stints, load_folds
 from ..settings import describe_factors
 from . import parallel
+from .wins import add_wins, write_wins_summary
 
 SIDES = ("O", "D")
 NEAREST_UNSHRINK = ("offense", "defense")     # experiment 83's labels from the seasons next to a row, both un-shrunk
@@ -1002,7 +1003,8 @@ def replace_season_rows(old: pd.DataFrame, new: pd.DataFrame, what: str) -> pd.D
     they were and this morning's 2027."""
     if list(old.columns) != list(new.columns):
         raise SystemExit(f"{what} has the columns {list(old.columns)}, the build {list(new.columns)}: build every "
-                         "season again instead of replacing some")
+                         "season again instead of replacing some, or, for a table from before the wins over starter "
+                         "average, run `openrapm wins --name NAME` on it once")
     kept = old[~old.season.isin(set(new.season.unique()))]
     return pd.concat([kept, new], ignore_index=True).sort_values("season", kind="stable").reset_index(drop=True)
 
@@ -1019,7 +1021,8 @@ def stored_tables(outputs: Path, name: str, cfg: dict) -> dict:
 
 def run_build(cfg: dict, settings, seasons, name: str, save_models: str | None = None, argv=(),
               with_types: bool = False, replace_seasons: bool = False) -> int:
-    """`openrapm build`: steps 1-5 in one process, the three tables and step 4's multipliers written at the end.
+    """`openrapm build`: steps 1-5 in one process, the wins over starter average added to the final table
+    (commands/wins.py; no rating moves), the three tables and step 4's multipliers written at the end.
     Step 4's folds are checked first (`require_folds`), so missing folds stop the run in seconds.  With
     `replace_seasons`, the seasons built go into the tables already under `name`, in place of their rows there."""
     started = time.time()
@@ -1032,6 +1035,7 @@ def run_build(cfg: dict, settings, seasons, name: str, save_models: str | None =
     folds, where = step4_folds(cfg, settings.shrink)
     step4, multipliers = shrink_seasons(cfg, step3, settings, folds, where)
     final, _, types = swap_seasons(cfg, step4, settings, folds, where, multipliers)
+    final, wins_summary = add_wins(cfg, final, settings)
     if stored is not None:
         step3, step4, final = (replace_season_rows(stored[suffix], table, f"season_ratings_{name}{suffix}")
                                for suffix, table in (("_step3", step3), ("_step4", step4), ("", final)))
@@ -1042,6 +1046,7 @@ def run_build(cfg: dict, settings, seasons, name: str, save_models: str | None =
     for table, suffix in ((step3, "_step3"), (step4, "_step4"), (final, "")):
         write_table(table, outputs / f"season_ratings_{name}{suffix}.parquet", started)
     write_multipliers(multipliers, cfg, name)
+    write_wins_summary(wins_summary, cfg, name)
     if save_models:
         write_models(models, settings, name, save_models, argv, cfg)
     if with_types:

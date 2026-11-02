@@ -177,6 +177,11 @@ def _run_build(args: argparse.Namespace, cfg: dict) -> int:
                      with_types=args.types, replace_seasons=args.replace_seasons)
 
 
+def _run_wins(args: argparse.Namespace, cfg: dict) -> int:
+    from .wins import run_wins
+    return run_wins(cfg, PRODUCT, args.name, args.seasons)
+
+
 def _run_rate(args: argparse.Namespace, cfg: dict) -> int:
     from .build import run_rate
     return run_rate(cfg, chosen_settings(args), args.seasons, args.name or args.setting, args.save_models,
@@ -476,6 +481,22 @@ def _add_build(commands) -> None:
     build.set_defaults(run=_run_build)
 
 
+def _add_wins(commands) -> None:
+    wins = commands.add_parser(
+        "wins", help="wins over starter average: its columns written into a ratings table",
+        description="How many regular-season wins each player added to his team over an average starter.  Writes "
+                    "the columns wosa_off, wosa_def, wosa_pace, wosa, pace_effect, leverage, starts_rs and minutes_rs "
+                    "into outputs/season_ratings_<NAME>.parquet, and each season's bar and win model to "
+                    "outputs/csv/wins_<NAME>_seasons.csv.  `openrapm build` adds them itself; this is for a table "
+                    "built before them.  No rating moves.")
+    wins.add_argument("--name", default="product", metavar="NAME",
+                      help="the table is outputs/season_ratings_<NAME>.parquet (default %(default)s)")
+    wins.add_argument("--seasons", type=parse_seasons, default=None,
+                      help="compute only these seasons, the others keep theirs: 2026, 2017-2026 or 2017,2018 (default "
+                           "every season of the table; the table must already carry the columns)")
+    wins.set_defaults(run=_run_wins)
+
+
 def _add_jobs(parser) -> None:
     parser.add_argument("--jobs", type=int, default=default_jobs(), metavar="N",
                         help="rate the seasons in N processes at once, the same numbers sooner; cut to what free "
@@ -690,6 +711,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_rate(commands)
     _add_shrink(commands)
     _add_swap(commands)
+    _add_wins(commands)
     _add_folds(commands)
     _add_second_prior(commands)
     add_game_rates(commands, parse_seasons)

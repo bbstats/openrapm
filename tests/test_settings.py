@@ -79,6 +79,12 @@ def test_the_test_setting_differs_in_three_places_only():
     assert all(getattr(TEST, name) == getattr(PRODUCT, name) for name in same)
 
 
+def test_the_wins_settings():
+    assert PRODUCT.wins.starters == 150 and PRODUCT.wins.phases == ("RS",)
+    assert PRODUCT.wins.pace_penalty == 30000.0 and PRODUCT.wins.pace_min_seconds == 15.0
+    assert PRODUCT.wins.points_per_win == 27.0
+
+
 def test_the_settings_cannot_be_changed_in_place():
     with pytest.raises(FrozenInstanceError):
         PRODUCT.ridge.penalty = 1.0
