@@ -707,6 +707,20 @@ def trainable_panel_so_far(cfg: dict) -> pd.DataFrame:
     return panel
 
 
+def rookies(cfg: dict) -> dict:
+    """{season: player ids, ascending} of each season's rookies, for the ratings page's filter: the players with no
+    season played before it, counted from the debut, so a veteran of 1997 is not one (seasons_before_from_debut,
+    features.py).  Nothing is fitted on this.  A configuration that names no data folder has none.
+
+    Example: LeBron James is a rookie of 2004 and of no other season; A.C. Green, eleven seasons in by 1997, of none."""
+    if "_root" not in cfg or "paths" not in cfg:
+        return {}
+    panel = _read(cfg)
+    first = panel[panel.seasons_before_from_debut == 0]
+    return {int(season): sorted(int(player) for player in players.unique())
+            for season, players in first.groupby("season").player_id}
+
+
 def in_progress_panel(cfg: dict) -> pd.DataFrame:
     """The season panel's rows of the seasons in progress (data/seasons.py `in_progress`): what a build rates such a
     season from, its prior answering for them, while nothing trains on them.  Empty when no season is in progress."""

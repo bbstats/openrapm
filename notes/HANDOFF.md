@@ -79,6 +79,9 @@ DECISIONS.md, "The fix pass of 2026-11-01" and "Experiment 126", hold the record
   unchanged to the hundredth; a player's numbers move -0.04 on offense and -0.03 on defense.  **The percentile pool**
   of a season in progress is 500 times the share of its regular season played, never under the 60 shown
   (`meta.percentile_min` in decompose_openrapm.json; 2027 today 60, where one player of 334 had qualified).
+- **The site opens on 2027 since 2026-11-02** (the owner: "median player has 250 and site didnt default to 2027"):
+  `site.default_season` now takes the median of the players the page shows, 60 possessions or more: 266 of 337 shown,
+  where the median of all 442 who have played is 217.  The rule of 2026-10-24 counted everyone who has played.
 - **The rookies button, PUBLISHED 2026-11-02 (the owner: "publish")** (the owner: "add a rookies filter, same as percentiles,
   just with a" chess rook): the season list shows only players with no season before it, counted from the debut
   (`meta.rookies` in decompose_openrapm.json, `site.rookies`); 2026 shows 91 of 556, 2027 28 of 337.  Rank and

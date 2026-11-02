@@ -45,11 +45,11 @@ def test_the_pages_show_players_with_60_or_more_possessions():
 
 def test_a_season_in_progress_is_the_default_once_its_median_player_has_250_possessions():
     """The owner, 2026-10-23: "2027 should not be the DEFAULT on the site until the median player has 250
-    possessions played"; the median of everyone who has played, on offensive possessions."""
+    possessions played", on offensive possessions; 2026-11-02, the median of the players the page shows."""
     finished = pd.DataFrame({"season": 2026, "poss_season": [5000.0, 3000.0, 400.0]})
-    early = pd.DataFrame({"season": 2027, "poss_season": [400.0, 249.0, 30.0, 0.0, 0.0]})   # median of the three: 249
+    early = pd.DataFrame({"season": 2027, "poss_season": [400.0, 249.0, 100.0, 30.0, 0.0]})  # of the 3 shown: 249
     assert site.default_season(pd.concat([finished, early])) == 2026
-    later = early.assign(poss_season=[400.0, 250.0, 30.0, 0.0, 0.0])
+    later = early.assign(poss_season=[400.0, 250.0, 100.0, 30.0, 0.0])                       # 30 and 0 not shown
     assert site.default_season(pd.concat([finished, later])) == 2027
 
 
@@ -368,12 +368,15 @@ def test_a_rookie_is_a_player_with_no_season_before_counted_from_the_debut(tmp_p
                           "player_id": [23, 23, 7, 7, 23, 23],
                           "seasons_before_from_debut": [0.0, 0.0, 11.0, 11.0, 1.0, 1.0]})
     panel.to_parquet(tmp_path / "panel.parquet")
-    monkeypatch.setattr(site, "resolve", lambda cfg, name: tmp_path / "panel.parquet")
-    assert site.rookies({"_root": ".", "paths": {}}) == {2004: [23]}  # two sides, one player; a veteran and a sophomore out
+    monkeypatch.setattr("openrapm.data.panel.resolve", lambda cfg, name: tmp_path / "panel.parquet")
+    # one player on two sides counted once; the veteran and the sophomore left out
+    assert site.rookies({"_root": ".", "paths": {}}) == {2004: [23]}
 
 
 def test_the_file_lists_only_the_rookies_the_season_shows(tmp_path):
-    row = lambda player: [f"Player {player}", player, 500, [0.0] * 6, [0.0] * 6, [0.0] * 6, "BOS"]
+    def row(player):
+        return [f"Player {player}", player, 500, [0.0] * 6, [0.0] * 6, [0.0] * 6, "BOS"]
+
     path = tmp_path / "file.json"
     site.write_openrapm_file(path, {2004: [row(23)], 2005: [row(7)]}, "2026-11-02", 13037.0,
                              rookie_ids={2004: [23, 99]})         # 99 played too little to be shown

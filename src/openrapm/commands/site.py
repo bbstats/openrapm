@@ -47,7 +47,7 @@ from ..data.box_scores import season_box
 from ..data.config import resolve, resolve_path
 from ..data.designs import DesignCache, block_design
 from ..data.ingest import raw_dir
-from ..data.panel import trainable_panel
+from ..data.panel import rookies, trainable_panel
 from ..data.roles import main_teams
 from ..decomposition import lineups, refit, row_groups, row_keys, side_team, split_games_part, team_codes
 from ..features import FEATURE_SETS
@@ -128,16 +128,17 @@ def ratings_rows(table: pd.DataFrame) -> list[dict]:
 
 
 # The owner, 2026-10-23: "2027 should not be the DEFAULT on the site until the median player has 250 possessions
-# played", and 2026-10-24, the median of everyone who has played in the season, on offensive possessions.
+# played", and 2026-10-24, on offensive possessions.  The median is of the players the page shows, 60 possessions or
+# more (the owner, 2026-11-02: "median player has 250 and site didnt default to 2027", at 266 shown and 217 of all 442).
 DEFAULT_SEASON_POSSESSIONS = 250
 
 
 def default_season(table: pd.DataFrame) -> int:
-    """The season the pages open on: the latest whose median player, of everyone with possessions in it, has 250 or
-    more offensive possessions (poss_season, the pages' p).  Example: on 2026-10-24 the median 2027 player has 46, so
-    the pages open on 2026."""
-    played = table[table.poss_season > 0]
-    medians = played.groupby("season").poss_season.median()
+    """The season the pages open on: the latest whose median player, of those the pages show (`MIN_POSSESSIONS_SHOWN`),
+    has 250 or more offensive possessions (poss_season, the pages' p).  Example: on 2026-11-02 the median of the 337
+    players 2027 shows has 266, so the pages open on 2027."""
+    shown = table[table.poss_season >= MIN_POSSESSIONS_SHOWN]
+    medians = shown.groupby("season").poss_season.median()
     ready = medians[medians >= DEFAULT_SEASON_POSSESSIONS]
     return int(ready.index.max() if len(ready) else medians.index.max())
 
@@ -1181,26 +1182,13 @@ def percentile_minimums(cfg: dict) -> dict:
             for season in in_progress(cfg)}
 
 
-def rookies(cfg: dict) -> dict:
-    """{season: player ids, ascending} of each season's rookies: the players with no season played before it, counted
-    from the debut, so a veteran of 1997 is not one (the season panel's seasons_before_from_debut, features.py).  A
-    configuration that names no data folder has none, like `percentile_minimums`.
-
-    Example: LeBron James is a rookie of 2004 and of no other season; A.C. Green, eleven seasons in by 1997, of none."""
-    if "_root" not in cfg or "paths" not in cfg:
-        return {}
-    panel = pd.read_parquet(resolve(cfg, "panel"), columns=["season", "player_id", "seasons_before_from_debut"])
-    first = panel[panel.seasons_before_from_debut == 0]
-    return {int(season): sorted(int(player) for player in players.unique())
-            for season, players in first.groupby("season").player_id}
-
-
 def write_openrapm_file(path: Path, rows: dict, built: str, penalty: float, opens_on: int | None = None,
                         percentile_min: dict | None = None, rookie_ids: dict | None = None) -> None:
     """decompose_openrapm.json: meta and the rows of every season, latest first; compact, UTF-8 letters as they are.
     `opens_on` is the season the ratings page opens on (`default_season`), the latest when not given;
     `percentile_min`, the seasons in progress' percentile pool minimums (`percentile_minimums`), none when not given;
-    `rookie_ids`, each season's rookies (`rookies`), kept to the players the season's rows show, none when not given."""
+    `rookie_ids`, each season's rookies (data/panel.py `rookies`), kept to the players the season's rows show, none
+    when not given."""
     seasons = sorted(rows, reverse=True)
     minimums = {str(season): int(value) for season, value in (percentile_min or {}).items()}
     shown = {season: {row[OPENRAPM_FIELDS.index("id")] for row in rows[season]} for season in seasons}

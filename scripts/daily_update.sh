@@ -13,7 +13,7 @@
 #      place of yesterday's rows, every finished season as it was
 #   4. `openrapm site --openrapm-decomposition --power` into the site worktree, then the three data files committed and
 #      pushed to main, where GitHub Pages serves docs/, when one of them changed beyond the date it was built
-#      (scripts/daily_files.py).  The ratings page opens on the season in progress only once its median player has
+#      (scripts/daily_files.py).  The ratings page opens on the season in progress only once its median player shown has
 #      250 offensive possessions (openrapm site, default_season).  docs/data/power.json is each team's current ratings
 #      times its players' shares of its possessions over its last 10 games.
 #

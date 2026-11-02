@@ -159,8 +159,8 @@ python -m openrapm site --openrapm-decomposition --power --out-dir A:/code/spmm_
 Then it commits the three data files in `A:/code/spmm_site`, a worktree of `origin/main` that only the job writes, and
 pushes them to `main` when one changed beyond the date it was built (`scripts/daily_files.py`). Nothing trains on the
 season in progress (data/seasons.py); it is rated from its own rows, the
-box-score prior told the share of the regular season played. The ratings page opens on it once its median player has
-250 offensive possessions. Each morning's log is `outputs/daily/<date>.log`, and `outputs/daily/last.txt` says how
+box-score prior told the share of the regular season played. The ratings page opens on it once its median player shown
+has 250 offensive possessions. Each morning's log is `outputs/daily/<date>.log`, and `outputs/daily/last.txt` says how
 the last one ended.
 
 ## The two rules
