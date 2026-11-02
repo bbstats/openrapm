@@ -179,7 +179,7 @@ def _run_build(args: argparse.Namespace, cfg: dict) -> int:
 
 def _run_wins(args: argparse.Namespace, cfg: dict) -> int:
     from .wins import run_wins
-    return run_wins(cfg, PRODUCT, args.name, args.seasons)
+    return run_wins(cfg, PRODUCT, args.name, args.seasons, args.rebuild_regular)
 
 
 def _run_rate(args: argparse.Namespace, cfg: dict) -> int:
@@ -494,6 +494,9 @@ def _add_wins(commands) -> None:
     wins.add_argument("--seasons", type=parse_seasons, default=None,
                       help="compute only these seasons, the others keep theirs: 2026, 2017-2026 or 2017,2018 (default "
                            "every season of the table; the table must already carry the columns)")
+    wins.add_argument("--rebuild-regular", action="store_true",
+                      help="first rate each finished season from its regular season alone, about 40 seconds a season, "
+                           "in outputs/season_ratings_<NAME>_regular.parquet; the wins read those ratings")
     wins.set_defaults(run=_run_wins)
 
 

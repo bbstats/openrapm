@@ -129,7 +129,7 @@ __all__ = ["OFFENCE", "DEFENCE_ALL", "PANEL_TARGETS", "SeasonTables", "roles_fro
            "playoff_share", "cut_design", "fit_designs", "season_to_date", "SeasonSources", "SeasonPanel",
            "season_panel",
            "add_over_expected", "fill_missing_score_state", "build_panel", "write_panel", "build_panel_so_far",
-           "write_panel_so_far",
+           "write_panel_so_far", "panel_sources", "regular_season_cut",
            "trainable_panel", "trainable_panel_so_far", "in_progress_panel", "panel_and_trainable_seasons",
            "panel_from_old_names", "migrate_panel"]
 
@@ -613,6 +613,26 @@ def build_panel(cfg: dict, seasons=None) -> pd.DataFrame:
         designs.clear()
         print(f"  {season}: {len(parts[-1])} rows ({time.time() - started:.1f}s)", flush=True)
     return fill_missing_score_state(pd.concat(parts, ignore_index=True), through=trainable_through(cfg))
+
+
+def panel_sources(cfg: dict) -> tuple:
+    """(the roles table, the role inputs, each player's debut): what `SeasonSources` adds to one season's tables."""
+    roles = build_roles(cfg)
+    return roles, player_season_inputs(roles, cap=share_cap(cfg)), careers_before(cfg, roles)
+
+
+def regular_season_cut(season: int, cfg: dict, designs: DesignCache, targets,
+                       sources: tuple) -> tuple[dict, pd.DataFrame]:
+    """({target: the design of the season's regular-season games}, the season panel's rows from those games alone), each
+    input rebuilt from them as `openrapm folds --cut` rebuilds a season so far, so no playoff game reaches a rating
+    built from these.  `sources` is `panel_sources`'s."""
+    wanted = dict.fromkeys(("pts", *PANEL_TARGETS, *targets))
+    whole = {target: designs.season(int(season), target) for target in wanted}
+    games = whole["pts"].games
+    regular = set(games.loc[games["phase"] == "RS", "game_id"].astype(str))
+    cut = fit_designs(int(season), cfg, whole, regular)
+    rows = season_panel(int(season), cfg, cut, SeasonSources(SeasonTables(season, cfg), *sources), regular).rows
+    return cut, fill_missing_score_state(rows.copy())
 
 
 def build_panel_so_far(cfg: dict, shares, seasons=None) -> pd.DataFrame:

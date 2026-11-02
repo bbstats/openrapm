@@ -151,7 +151,7 @@ def season_row(cfg: dict, season: int, stints: pd.DataFrame, seconds: np.ndarray
     teams = team_sums(stints, seconds, model, ratings, PRODUCT.wins.points_per_win)
     leverage_slope, leverage_r = slope_and_correlation(teams.leverage_sum, teams.wins_above)
     rating_slope, rating_r = slope_and_correlation(teams.rating_wins, teams.wins_above)
-    weight = wins.leverage_inside_games(stints, seconds, model)
+    inside = wins.leverage_inside_games(stints, seconds, model)
     period, clock = stints.period.to_numpy(), stints.start_clock.to_numpy(dtype=float)
     close_late = (period >= swap_test.CLUTCH_PERIOD) & (clock <= swap_test.CLUTCH_SECONDS) & (
         np.abs(margin) <= swap_test.CLUTCH_MARGIN)
@@ -171,13 +171,13 @@ def season_row(cfg: dict, season: int, stints: pd.DataFrame, seconds: np.ndarray
                                                                            weights=possessions)),
                 model_points_per_win_real_strength=1.0 / float(np.average(aware, weights=possessions)),
                 net_points_per_win=wins.net_points_per_win(results),
-                rating_points_per_win=wins.rating_points_per_win(stints, weight,
+                rating_points_per_win=wins.rating_points_per_win(stints, inside,
                                                                  wins.expected_margins(stints, ratings)[0]),
                 rating_points_per_win_season_mean=wins.rating_points_per_win(
                     stints, wins.relative_leverage(stints, seconds, model), wins.expected_margins(stints, ratings)[0]),
-                weight_close_late=float(np.average(weight[close_late], weights=possessions[close_late])),
-                weight_garbage=float(np.average(weight[garbage], weights=possessions[garbage])),
-                weight_first_quarter=float(np.average(weight[period == 1],
+                weight_close_late=float(np.average(inside[close_late], weights=possessions[close_late])),
+                weight_garbage=float(np.average(inside[garbage], weights=possessions[garbage])),
+                weight_first_quarter=float(np.average(inside[period == 1],
                                                                  weights=possessions[period == 1])),
                 miss_real_strength_mean=np.average(np.abs(cells.real_strength - cells.won), weights=weight),
                 miss_real_strength_largest=float(np.abs(cells.real_strength - cells.won).max()),
