@@ -30,8 +30,9 @@ number; `src/openrapm/wins.py` the equation.  **No rating moved.**
 
 - **Done, on this branch:** `wins.py`, `openrapm wins`, every `build` adds the eight columns to its final table, checks
   157 and 158.  The published table was given them by `openrapm wins --name product`; its 26 old columns equal
-  `outputs/season_ratings_product_before_wosa.parquet`.  The morning job computes them for 2027; its dry run:
-  outputs/daily/last.txt.
+  `outputs/season_ratings_product_before_wosa.parquet`.  The morning job computes them for 2027: its dry run passed end to end at 3:48
+  PM with them in, the wins step under a second, the finished seasons' old columns unchanged.  The next real run is
+  2026-11-03 at 6:00 AM.
 - **The site's column is on the branch `wosa-site`, worktree `A:/code/spmm_wosa`, deliberately not here.**  The morning
   job runs this working tree's code and pushes the site's data files to main, so a new field here would reach main ahead
   of main's page and tests, turn CI red and publish without the word.  **On the owner's "publish":** merge `wosa-site`
