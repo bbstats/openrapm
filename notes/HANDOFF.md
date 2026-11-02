@@ -89,6 +89,8 @@ DECISIONS.md, "The fix pass of 2026-11-01" and "Experiment 126", hold the record
   player's own seasons do not show it.  docs/data/decompose_openrapm.json holds the published numbers with the list
   added, since the ratings table's 2027 was rewritten at 10:33 AM, after the 10:19 AM publish, and differs by about
   0.01.  Published without a Changelog row, which waits on the owner's wording.
+- **The About page's opening paragraph, committed, NOT published**: the owner's sentence on Engelmann's RAPM, then one
+  sentence each on the target and the prior, drafted at the owner's request.
 - **A full build holds the season in progress at the fresh scales of the finished seasons it has just rated**
   (66b06f5), not the previous build's table: after an adopted change 2027 moved twice.
 - **Fold tools as production** (4101702): the season so far's share floored at 0.25 (the least the training rows
