@@ -22,6 +22,22 @@ every number quoted here; read its measurement traps before trusting a number.  
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
 
+## Where it stands, 2026-11-02, evening: two WOSA changes on a branch, not published
+
+The owner, on the published WOSA: "if you cause the blowout you shouldn't be penalized", then "switch! great"; and "ideally we
+just lock WOSA after reg season", then "go".  Both are on the branch `wosa-inside-game`, worktree `A:/code/spmm_inside`, deliberately
+not in this working tree: the 6 AM job runs this tree and writes every season's column to main, so a change here would publish
+without the word.  The worktree runs with `PYTHONPATH=A:/code/spmm_inside/src` and a config whose paths point at
+`A:/code/spmm/data` and `outputs`; its trial table is `outputs/season_ratings_wosa_inside.parquet`, its regular-season ratings
+`outputs/season_ratings_wosa_inside_regular.parquet`.
+
+- **The switch:** every game carries the same total weight, and leverage only divides it up inside that game.
+- **The lock:** WOSA reads a rating from the regular season alone; a season in progress keeps its own rows until its first
+  playoff game, then the last rows stored stand.
+- **On the owner's word:** merge the branch, copy the regular-season file to `outputs/season_ratings_product_regular.parquet`, run
+  `openrapm wins --name product`, then `openrapm site --openrapm-decomposition --power`, fast-forward main and push.  Without that
+  copy the morning job stops, since a finished season then has no regular-season rating.
+
 ## Where it stands, 2026-11-02, afternoon: WOSA PUBLISHED (the owner: "publish")
 
 The owner: "want to add an MVP rating score should be = how many wins you improve your team vs the average player in the
