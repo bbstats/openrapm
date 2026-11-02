@@ -16,6 +16,9 @@ Words used below
                   above half its games.  Above 1 by what the shrinking leads take back
     pace search   the pace ridge fitted on each season's half-A games and scored on its half-B games, and the reverse,
                   at a grid of penalties.  The chosen penalty must be interior, with both neighbours worse
+    pace repeat   the correlation among regulars of pace effects from half-A games and half-B games: whether a pace
+                  effect belongs to the player, as the owner asked ("only if the player is causing-ish it")
+    long way      `wins.counterfactual_wins`, each player's wins one stint at a time, against `wins.season_wins`
 
 Usage: .venv/Scripts/python scripts/checks/157_wins_model.py --part model --tag first
        .venv/Scripts/python scripts/checks/157_wins_model.py --part pace --tag first
@@ -113,6 +116,17 @@ def slope_and_correlation(x, y) -> tuple[float, float]:
     return float(np.polyfit(x, y, 1)[0]), float(np.corrcoef(x, y)[0, 1])
 
 
+def long_way_gap(stints: pd.DataFrame, seconds: np.ndarray, ratings: pd.DataFrame, model: wins.WinModel) -> float:
+    """The largest difference, over a season's players, between the wins as shipped and the wins the long way."""
+    choices = PRODUCT.wins
+    pace = wins.pace_effects(stints, seconds, choices.pace_penalty, choices.pace_min_seconds)
+    bar = wins.starter_bar(ratings, wins.starts_and_minutes(stints, seconds), pace, choices.starters)
+    relative = wins.relative_leverage(stints, seconds, model)
+    shipped = wins.season_wins(stints, seconds, ratings, relative, pace, bar, choices.points_per_win)
+    long_way = wins.counterfactual_wins(stints, seconds, ratings, relative, pace, bar, choices.points_per_win)
+    return float((shipped.set_index("player_id").wosa - long_way.reindex(shipped.player_id)).abs().max())
+
+
 def box_starts_gap(cfg: dict, season: int, starts: pd.DataFrame) -> tuple[int, int]:
     """(players whose starts differ from the box scores' first five, the largest difference): is a game's opening stint
     its starters?  Regular season alone, since the roles table pools the playoffs in."""
@@ -167,7 +181,8 @@ def season_row(cfg: dict, season: int, stints: pd.DataFrame, seconds: np.ndarray
                 miss_average_strength_mean=np.average(np.abs(cells.average_strength - cells.won), weights=weight),
                 leverage_sum_slope=leverage_slope, leverage_sum_correlation=leverage_r,
                 record_on_rating_wins_slope=rating_slope, record_on_rating_wins_correlation=rating_r,
-                players_with_other_starts_than_box=differ, largest_starts_gap=largest)
+                players_with_other_starts_than_box=differ, largest_starts_gap=largest,
+                largest_gap_to_the_long_way=long_way_gap(stints, seconds, ratings, model))
 
 
 def model_part(cfg: dict, seasons: list, table: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -210,6 +225,19 @@ def chosen_penalty(search: pd.DataFrame) -> tuple[float, bool]:
     return float(means.index[place]), interior
 
 
+def pace_repeat(stints: pd.DataFrame, seconds: np.ndarray, penalty: float, min_seconds: float, season: int) -> dict:
+    """Half A's pace effects against half B's, among players with 500 minutes in each half."""
+    effects, minutes = {}, {}
+    for half in ("A", "B"):
+        mask = stints.half.to_numpy() == half
+        effects[half] = wins.pace_effects(stints[mask], seconds[mask], penalty, min_seconds).set_index(
+            "player_id").pace_effect
+        minutes[half] = wins.starts_and_minutes(stints[mask], seconds[mask]).set_index("player_id").minutes_rs
+    regulars = minutes["A"][minutes["A"] >= 500.0].index.intersection(minutes["B"][minutes["B"] >= 500.0].index)
+    return dict(season=season, regulars=len(regulars),
+                correlation=float(np.corrcoef(effects["A"].reindex(regulars), effects["B"].reindex(regulars))[0, 1]))
+
+
 def agreement(stints: pd.DataFrame, seconds: np.ndarray, penalty: float, season: int) -> list:
     """How far the pace effects of regulars move with the shortest stint the fit keeps, against the shipped minimum."""
     effects = {least: wins.pace_effects(stints, seconds, penalty, least).set_index("player_id").pace_effect
@@ -234,10 +262,13 @@ def pace_part(cfg: dict, seasons=SEARCH_SEASONS) -> tuple[pd.DataFrame, pd.DataF
     by_penalty = search.groupby(["season", "penalty"]).error.mean().unstack("season")
     print((by_penalty - by_penalty.min()).round(2).to_string(), flush=True)
     print(f"the least mean error: penalty {best:g}, interior with both neighbours worse: {interior}", flush=True)
+    repeats = []
     for season in seasons:
         stints, seconds = season_stints(cfg, season)
         agreeing += agreement(stints, seconds, best, season)
-    return search, pd.DataFrame(agreeing)
+        repeats.append(pace_repeat(stints, seconds, best, PRODUCT.wins.pace_min_seconds, season))
+    print(pd.DataFrame(repeats).round(3).to_string(index=False), flush=True)
+    return search, pd.DataFrame(agreeing), pd.DataFrame(repeats)
 
 
 def era_lines(seasons: pd.DataFrame) -> pd.DataFrame:
@@ -275,13 +306,14 @@ def main(argv=None) -> int:
     stem = folder / f"wins_model_{args.tag}"
     with one_thread():
         if args.part == "pace":
-            search, agreeing = pace_part(cfg)
+            search, agreeing, repeats = pace_part(cfg)
             search.to_csv(f"{stem}_pace_search.csv", index=False)
             agreeing.to_csv(f"{stem}_pace_agreement.csv", index=False)
+            repeats.to_csv(f"{stem}_pace_repeat.csv", index=False)
             print(agreeing.round(3).to_string(index=False), flush=True)
             return 0
         table = pd.read_parquet(resolve(cfg, "outputs") / f"{args.table}.parquet",
-                                columns=["season", "player_id", "rating_total"])
+                                columns=["season", "player_id", "rating_off", "rating_def", "rating_total"])
         seasons, cells = model_part(cfg, list(range(args.first, last_finished(cfg) + 1)), table)
         seasons.to_csv(f"{stem}_seasons.csv", index=False)
         cells.to_csv(f"{stem}_calibration.csv", index=False)
