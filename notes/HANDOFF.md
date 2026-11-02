@@ -22,7 +22,7 @@ every number quoted here; read its measurement traps before trusting a number.  
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
 
-## Where it stands, 2026-11-02, afternoon: WOSA built, in the published table, not on the site
+## Where it stands, 2026-11-02, afternoon: WOSA PUBLISHED (the owner: "publish")
 
 The owner: "want to add an MVP rating score should be = how many wins you improve your team vs the average player in the
 top 150"; the bar, then: "sort by games started, minutes played is the tiebreaker".  DECISIONS.md, "WOSA", holds every
@@ -33,16 +33,18 @@ number; `src/openrapm/wins.py` the equation.  **No rating moved.**
   `outputs/season_ratings_product_before_wosa.parquet`.  The morning job computes them for 2027: its dry run passed end to end at 3:48
   PM with them in, the wins step under a second, the finished seasons' old columns unchanged.  The next real run is
   2026-11-03 at 6:00 AM.
-- **The site's column is on the branch `wosa-site`, worktree `A:/code/spmm_wosa`, deliberately not here.**  The morning
-  job runs this working tree's code and pushes the site's data files to main, so a new field here would reach main ahead
-  of main's page and tests, turn CI red and publish without the word.  **On the owner's "publish":** merge `wosa-site`
-  into this branch, merge origin/main, run `openrapm site --openrapm-decomposition --power`, fast-forward main and push;
-  the next morning writes the field.  The worktree runs with `PYTHONPATH=A:/code/spmm_wosa/src` and a config whose paths
-  point at `A:/code/spmm/data` and `outputs`; `git worktree remove` it after the merge.
-- **Waiting on the owner:** the word to publish; the scale (below); wording for the About and Changelog pages, which I do
-  not write.  Drafts for those: "WOSA: wins over starter average.  How many regular-season wins a player added over the
-  average of the season's 150 most-started players, each possession weighted by how much it could swing the game." and
-  "Added WOSA, wins over starter average, to the ratings page."
+- **The site's column, published:** one sortable column in the ratings view, in the percentile button and both CSV
+  downloads, merged at 10c369a and fast-forwarded to main.  It waited on a branch until the word, since the morning job
+  runs this working tree and pushes the data files: a new field here would have reached main ahead of main's page and
+  tests.  Main now holds the code, so the 6 AM job of 2026-11-03 writes the field.  Lesson for the next new field in the
+  site's files: the same.
+- **What the publish moved:** finished seasons nothing.  2027's ratings a median 0.01 and at most 0.14 on the same games,
+  the top 20 the same names: the morning job's dry run pulled the league's season-to-date hustle again at 3:34 PM, and the
+  move is all in the box-score prior, the games' part at most 0.002.
+- **Waiting on the owner:** the scale (below), and wording for the About and Changelog pages, which I do not write;
+  published without either.  Drafts: "WOSA: wins over starter average.  How many regular-season wins a player added over
+  the average of the season's 150 most-started players, each possession weighted by how much it could swing the game."
+  and "Added WOSA, wins over starter average, to the ratings page."
 - **Differs from the approved plan, told to the owner:**
   - Leverage is a relative weight and the scale comes from the standings, 27 rating points per win
     (`WinsSettings.points_per_win`), since the win model's own 41-45 would leave team totals about 40% short of their
