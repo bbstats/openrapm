@@ -11727,3 +11727,12 @@ Diabaté out, 20th to 22nd, +0.03.  Dončić +0.85 to 7.92 on 80 new possessions
 the like-for-like reading above (the same 88 games, median 0.046).  It holds: the 260 players on this table without a
 new game read a median 0.068, which also carries the ripple of other players' new games and held prior scales that
 moved a little (1.085 / 0.985 before, 1.088 / 0.979 now).  Under a tenth either way.
+
+**The noise control on the new incumbent, `noise_padbins127`** (the chain of that name, 10:37 to 11:50 AM, the same build
+with the boosters' players dealt again, `--fold-assignment 1`): the within-season WOWY test against padbins127, the
+shipped stage, -0.023 in 1997-2006 (z -1.80, 6 of 10), -0.000 in 2007-2016 (z -0.03, 5 of 10), -0.005 in 2017-2026
+(z -0.26, 5 of 10), all seasons -0.009, z -1.09, 16 of 30: the same size as ctx110's (-0.013, z -1.63).  Year over year,
+team-game -0.0005, z -0.05, stint -0.009, z -0.67, stint with each side rescaled -0.015, z -1.24.  The folds' checks, 0
+failed.  The chain's defaults (`INC_NAME`, `INC_SYSTEM`, `INC_FOLDS`, `CONTROL_NAME`) and `CONTRIBUTING.md` now name
+padbins127 and noise_padbins127.  The dry run of the morning job passed end to end at 10:36 AM (PUBLISH=0, exit 0);
+the next real run is 2026-11-03 at 6:00 AM.  GitHub's tests passed on 820cefb.

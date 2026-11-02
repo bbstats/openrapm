@@ -78,10 +78,13 @@ LOG=outputs/${NAME}_chain.log
 # prior's players split into its five training groups another way (--fold-assignment 1).
 # Since 2026-11-01 it is experiment 126 (ctx110): creation110 with the swap part of the prior refitted on its own boosters
 # and folds (--second-prior ctx110, the shipped default); its own folds, its noise control noise_ctx110 (-0.013, z -1.63).
-INC_NAME=${INC_NAME:-ctx110}
-INC_SYSTEM=${INC_SYSTEM:-ctx110}           # the incumbent's folds (<name>_early, <name>_within) for 151
-CONTROL_NAME=${CONTROL_NAME:-noise_ctx110}  # the noise control's folds (<name>_early, <name>_within) for 151
-INC_FOLDS=${INC_FOLDS:-ctx110_early,ctx110_within}
+# Since 2026-11-02 it is experiment 127 (padbins127): ctx110's swap part of the prior, with each possession bin's target
+# padded toward the league (config pad_bin_target: league, the shipped default); its own folds, its noise control
+# noise_padbins127 (-0.009, z -1.09).
+INC_NAME=${INC_NAME:-padbins127}
+INC_SYSTEM=${INC_SYSTEM:-padbins127}       # the incumbent's folds (<name>_early, <name>_within) for 151
+CONTROL_NAME=${CONTROL_NAME:-noise_padbins127}  # the noise control's folds (<name>_early, <name>_within) for 151
+INC_FOLDS=${INC_FOLDS:-padbins127_early,padbins127_within}
 AUDIT_REF=${AUDIT_REF:-creation110_within}
 INC=outputs/season_ratings_${INC_NAME}.parquet
 BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1_tune2 --features hustle_no_three_pct_self_creation}

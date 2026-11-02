@@ -35,8 +35,11 @@ DECISIONS.md, "Early-season padding" and "Experiment 127", hold the record, the 
   `padbins127_early/_within`, tenth folds `padbins127_k10`); the published tables before it are
   `season_ratings_product_before_padbins127*`.
 - **The swap part of the prior stays `ctx110`**: what was tested and approved.  A refit is its own experiment.
-- **The noise control on the new incumbent** is `noise_padbins127`.  Until DECISIONS.md records it, the chain's defaults
-  and `CONTRIBUTING.md` still name ctx110 and `noise_ctx110`.
+- **The noise control on the new incumbent**, `noise_padbins127` (`--fold-assignment 1`, 10:37 to 11:50 AM), reads
+  -0.009, z -1.09, 16 of 30, the same size as ctx110's; the chain's `INC_NAME`, `INC_SYSTEM`, `INC_FOLDS` and
+  `CONTROL_NAME` defaults and `CONTRIBUTING.md` name them.
+- **The dry run of the morning job passed end to end at 10:36 AM** with the fix in.  The next real run is 2026-11-03
+  at 6:00 AM.
 - **Fixed first** (0ffbcc0): `openrapm folds --cut` had told the part-season boosters share 1.0 since the morning's
   floor (4101702), so every cut build of 2026-11-01 before it rated the season so far as a whole season;
   `within_season.least_share_of(meta)` and a check on the run.  The experiment-109 arms on disk predate the bug.
@@ -95,7 +98,7 @@ DECISIONS.md, "The fix pass of 2026-11-01" and "Experiment 126", hold the record
   the full build of 1997-2027 with 2027 held at 1.085 / 0.985 from this run's own 2019-2026.  Against the morning's
   published ratings a player with 60+ possessions moves a median 0.24 per 100 in every era, the 90th percentile 0.6,
   the largest 1.9; the 2026 top 20 keeps its names (Jokić +0.7, Wembanyama +0.5, Kawhi +0.5, Cason Wallace -0.4).
-  **The chain's incumbent is ctx110** (tables `season_ratings_ctx110*`, folds `ctx110_early`, `ctx110_within`); its
+  **The chain's incumbent was ctx110 until experiment 127** (tables `season_ratings_ctx110*`, folds `ctx110_early`, `ctx110_within`); its
   noise control `noise_ctx110` (`--fold-assignment 1`, 1:18 to 2:15 PM) reads -0.013, z -1.63, 17 of 30, the same
   size as creation110's; the chain's `INC_NAME`, `INC_SYSTEM`, `INC_FOLDS` and `CONTROL_NAME` defaults and
   CONTRIBUTING.md name them now.  Delete `prior_models_creation110.pkl` only if its folds are never extended again.
@@ -518,15 +521,15 @@ What else the work of 2026-10-23 left open:
 | 2 | box-score prior | `box_prior.py` | LightGBM `lgb1_tune2`, linear leaves; feature set `hustle_no_three_pct_self_creation`, self-creation on offense since experiment 110; five player folds; 10 bags; part-season rows at a quarter, a half and three quarters of each training season since experiment 107 |
 | 2b | swap part of the prior | `second_prior.py` | line `ctx110` on `context_and_types_centred`, team totals held; refitted on creation110's boosters and folds since experiment 126, adopted 2026-11-01 (ctx82, experiment 78's, until then) |
 | 3 | the rating | `prior_rapm.py` | RAPM pulled toward the prior, penalty 13,037, centred; the season in progress holds its prior scales at the 8 nearest finished seasons' mean through a quarter of its season, then a straight line to its own fitted ones at three quarters (experiment 109, adopted 2026-10-30; the line 2026-10-31) |
-| 4 | the shrink, with the defense factor | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, 8 nearest fold seasons, defense times 0.89 before 2017 and 0.84 from 2017; folds `ctx110_early,ctx110_within` since experiment 126, each multiplier read to a full season with the tenth folds `ctx110_k10` (experiment 101); two layers since experiment 106: each part's team mean on held-back team-games, each player's deviation from it on held-back stints within games, the within layer times 0.75 on offense and 1.0 on defense |
+| 4 | the shrink, with the defense factor | `prior_shrink.py` | both parts multiplied by what holds up on held-back games, 8 nearest fold seasons, defense times 0.89 before 2017 and 0.84 from 2017; folds `padbins127_early,padbins127_within` since experiment 127, each multiplier read to a full season with the tenth folds `padbins127_k10` (experiment 101); two layers since experiment 106: each part's team mean on held-back team-games, each player's deviation from it on held-back stints within games, the within layer times 0.75 on offense and 1.0 on defense |
 | 5 | swap adjustment | `swap_adjust.py` | off: applied share 0, the build skips it |
 
 - `openrapm build` writes `outputs/season_ratings_product.parquet` with `_step3` and `_step4` beside it.
 - `openrapm site --bias --openrapm-decomposition --similarity` writes the site's files.  Commit, fast-forward `main`
   and push only on the owner's word, then check the Pages build: `gh api repos/bbstats/openrapm/pages/builds/latest`.
   With the second prior, the decomposition's "box score" piece carries the whole prior; its split is the owner's.
-- The incumbent's test-setting tables `outputs/season_ratings_ctx110*.parquet` (experiment 126), folds `ctx110_early`, `ctx110_within`;
-  its noise control `noise_creation110` (2026-10-26), the chain's default `CONTROL_NAME`.
+- The incumbent's test-setting tables `outputs/season_ratings_padbins127*.parquet` (experiment 127), folds `padbins127_early`,
+  `padbins127_within`; its noise control `noise_padbins127` (2026-11-02), the chain's default `CONTROL_NAME`.
 
 ## How an experiment is judged
 
@@ -538,7 +541,7 @@ What else the work of 2026-10-23 left open:
 
 - One build: `bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes_late_as_scored "EXTRA RATE
   FLAGS"`, about 50 minutes with 4 processes.  `INC_NAME` and `INC_SYSTEM` name the incumbent's tables and folds,
-  `ctx110` for both since 2026-11-01 (experiment 126); `CONTROL_NAME` the noise control, `noise_ctx110`.
+  `padbins127` for both since 2026-11-02 (experiment 127); `CONTROL_NAME` the noise control, `noise_padbins127`.
 - **The season-page score**: each season, ratings of zero score 0 and the reference 100.  The zero line on today's
   stints is `outputs/csv/wowy_zero_baseline_inputs99_seasons.csv`, column zero, 3,681.6 a season: ratings of zero do
   not depend on the system, and every system is scored on the same held-back stints.  creation110 explains 19.7 a
@@ -548,8 +551,8 @@ What else the work of 2026-10-23 left open:
   read -2.44 against plain -1.83, so noise passed -2 (DECISIONS.md, "The bug-fix and make-better pass of
   2026-10-30").  Two builds that differ only in the box-score prior's random split differ by about 0.010 on the
   within-season test.
-- The noise control `noise_ctx110` moves the within-season test by -0.013, z -1.63, on its own (`noise_creation110`
-  on creation110 read -0.017, z -1.83); a candidate is read against today's ratings on the same split, so that noise
+- The noise control `noise_padbins127` moves the within-season test by -0.009, z -1.09, on its own (`noise_ctx110`
+  on ctx110 read -0.013, z -1.63); a candidate is read against today's ratings on the same split, so that noise
   does not enter its change, but any one build's standing carries 0.01-0.02 of it.
 - Every experiment gets a row in `experiments/runs.csv` (`scripts/checks/101_log_run.py`), mirrored to the sheet
   "OpenRAPM experiments", tab Experiments; the next free row is 128.  Since 2026-10-30 it reads the within-season
@@ -559,7 +562,7 @@ What else the work of 2026-10-23 left open:
 
     bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes_late_as_scored "EXTRA RATE FLAGS"
         one experiment against the incumbent, about 50-75 minutes; log outputs/NAME_chain.log
-    .venv/Scripts/python scripts/checks/151_wowy.py --systems=ctx110,noise_ctx110,NAME --ref=ctx110 --tag=NAME
+    .venv/Scripts/python scripts/checks/151_wowy.py --systems=padbins127,noise_padbins127,NAME --ref=padbins127 --tag=NAME
         the within-season WOWY test on folds already built, about 3 minutes
     .venv/Scripts/python scripts/checks/155_input_screen.py run --tag TAG --workers 2 --fitters 6
         the input screen: candidates against their shuffled copies, three random draws, ten test seasons, about 8 hours
