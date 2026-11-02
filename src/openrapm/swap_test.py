@@ -72,8 +72,8 @@ import scipy.sparse as sp
 from .rapm import solve_ridge
 
 __all__ = ["HOME", "AWAY", "OFF", "DEF", "SIDES", "CONTEXTS", "RAPM_CONTROLS", "PAIR_GROUPS", "STINT_COLUMNS",
-           "ratings_in_raw_sign", "order_stints", "next_in_same_period", "stint_durations", "fatigue", "season_rows", "swap_pairs", "Season", "prepare",
-           "aligned", "predict", "side_rates", "side_scores", "score_season", "plain_rapm"]
+           "ratings_in_raw_sign", "order_stints", "next_in_same_period", "stint_durations", "fatigue", "season_rows",
+           "swap_pairs", "Season", "prepare", "aligned", "predict", "side_rates", "side_scores", "score_season", "plain_rapm"]
 
 HOME = [f"h{i}" for i in range(1, 6)]
 AWAY = [f"a{i}" for i in range(1, 6)]
