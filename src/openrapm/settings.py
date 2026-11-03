@@ -234,7 +234,8 @@ UNSHRINK_LABELS = {"defense": ("defense",), "both": ("offense", "defense")}
 TEAM_TOTALS = ("held", "free", "spread_held")    # PriorSettings.second_prior_team_totals
 PREDICTIONS = ("folds", "out_of_bag")              # PriorSettings.prediction
 # PriorSettings.second_prior_inputs
-SECOND_PRIOR_INPUTS = ("context", "context_and_types", "context_and_types_centred", "own_teammates_opponents")
+SECOND_PRIOR_INPUTS = ("context", "context_and_types", "context_and_types_centred", "own_teammates_opponents",
+                       "context_types_team_rates_centred")
 
 
 @dataclass(frozen=True)

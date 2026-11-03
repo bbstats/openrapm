@@ -14,6 +14,8 @@ For every fold of every season in the folds named:
     same inputs, centred only when the line is applied), every player also carries his other end's box-score prior and
     step 5's 19 numbers from the fold's players file, the fit games', standardised with the trainable panel's means
     and standard deviations, which run.json keeps for the build.
+    With --inputs context_types_team_rates_centred (experiment 128), also his team's 16 rates with him on the court and
+    off it, from the fit games' stint rows (second_prior.team_rate_numbers).
     3. The swaps of the held-back games, scored against the fold's step-4 ratings at the test setting's multipliers,
        give the fold's share of the line's normal equations (second_prior.held_back_grams).  The fit games and the
        held-back games never share a game, so a shot counted in a box score never meets the lineup result it scored.
@@ -82,7 +84,8 @@ def fold_grams(fold, directory: Path, stints: pd.DataFrame, saved: dict, factors
     context = second_prior.context_numbers(fit_stints, answers["O"], answers["D"])
     box = stored_box(players)
     types = None if scale is None else second_prior.standardised_types(players[players.side == "O"], scale)
-    inputs = second_prior.side_inputs(box, context, types, input_set)
+    team_rates = second_prior.team_rate_numbers(fit_stints) if second_prior.reads_team_rates(input_set) else None
+    inputs = second_prior.side_inputs(box, context, types, input_set, team_rates)
     held = swap_test.prepare(stints[game.isin(held_ids).to_numpy()].reset_index(drop=True), fold.season)
     ratings = swap_test.ratings_in_raw_sign(prior_shrink.shrink_fold(fold.rows, fold.season, factors))
     grams = second_prior.held_back_grams(held, ratings, inputs, n_folds)

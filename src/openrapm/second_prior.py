@@ -130,6 +130,23 @@ players, so it has no intercept, and each player fold's line then carried its ow
 in experiment 82 a player's defensive prior moved by up to 0.8 per 100 with the fold his id falls in.  Centred, every
 fold's line reads 0 at the average player.  "context_and_types_centred" is experiment 82's inputs, centred so
 (experiment 93); its line is 82's own (the grams of ctx82), since centring leaves the swaps' differences as they were.
+
+The team rates (`INPUT_SETS` "context_types_team_rates_centred", experiment 128; the owner, 2026-11-03: "I wonder if we
+should roll up lots more 'team share' metrics in here (like team ORB100, team TOV 100) as well", then "All eight, makes
+included") add sixteen numbers per side to experiment 93's inputs, all per 100 possessions, `TEAM_RATES`:
+
+    team_<count>_on    on offence his team's <count> over his rows on the court; on defence the <count> of the teams
+                       facing his, over the same kind of rows
+    team_<count>_off   the same over his rows on the bench
+
+for made and missed threes, twos and free throws, offensive rebounds and turnovers (swap_test.TEAM_COUNTS).  They are
+counted on one end only, the end the side is rated on, and padded by `pad_toward_level` toward his team's season rate of
+the count, from the same rows.  That season rate is not an input itself: two players of a swap share it, so it cancels
+in the swap, and the line could learn nothing from it.
+
+Example before padding: for 10 possessions on offence with him on the court his team takes 3 offensive rebounds, and
+for 5 without him 1.  His team_off_rebounds_on is 3 / 10 x 100 = 30.0, his team_off_rebounds_off 1 / 5 x 100 = 20.0, and
+the level both are padded toward 4 / 15 x 100 = 26.7.
 """
 from __future__ import annotations
 
@@ -143,14 +160,14 @@ from . import box_prior, swap_adjust
 from .box_rates import shrink
 from .on_court import NO_SPREAD_K
 from .settings import TEAM_TOTALS
-from .swap_test import DEF, OFF, Season
+from .swap_test import DEF, OFF, TEAM_COUNTS, Season
 
 __all__ = ["CONTEXT", "BOX", "INPUTS", "OTHER_BOX", "TYPES", "INPUT_SETS", "type_scale", "standardised_types",
            "SIDE_KEYS", "BoosterAnswers", "booster_answers", "own_priors", "KINDS", "pad_toward_level",
            "context_numbers", "line_inputs", "side_inputs", "swap_targets", "held_back_grams", "season_coefficients",
            "second_priors", "TEAM_TOTALS", "team_possessions", "hold_team_totals", "hold_spread",
            "season_second_priors", "SAME_TEAMMATES", "OTHER_OPPONENTS", "CENTRED_SETS", "three_inputs", "centred",
-           "reads_types", "adjustments"]
+           "reads_types", "adjustments", "TEAM_RATES", "reads_team_rates", "team_rate_numbers", "with_team_rates"]
 
 CONTEXT = ["teammates_offence_on", "teammates_defence_on", "opponents_offence_on", "opponents_defence_on",
            "teammates_offence_bench", "teammates_defence_bench", "opponents_offence_bench", "opponents_defence_bench"]
@@ -160,12 +177,15 @@ OTHER_BOX = "box_prior_other_end"     # his box-score prior on the other end, ra
 TYPES = list(swap_adjust.PANEL_FEATURES)    # step 5's box counts, role and body, standardised (`type_scale`)
 SAME_TEAMMATES = "teammates_same_side_on"     # the three-input prior's teammates, this side, summed (module docstring)
 OTHER_OPPONENTS = "opponents_other_side_on"   # its opponents, the other side, summed
+# his team's rates with him on the court and off it (module docstring, experiment 128)
+TEAM_RATES = [f"team_{count}_{where}" for where in ("on", "off") for count in TEAM_COUNTS]
 # the inputs each version of the line reads (settings.PriorSettings.second_prior_inputs)
 INPUT_SETS = {"context": INPUTS, "context_and_types": [*INPUTS, OTHER_BOX, *TYPES],
               "context_and_types_centred": [*INPUTS, OTHER_BOX, *TYPES],
-              "own_teammates_opponents": [BOX, SAME_TEAMMATES, OTHER_OPPONENTS]}
+              "own_teammates_opponents": [BOX, SAME_TEAMMATES, OTHER_OPPONENTS],
+              "context_types_team_rates_centred": [*INPUTS, OTHER_BOX, *TYPES, *TEAM_RATES]}
 # applied on inputs centred on the season's average (`centred`)
-CENTRED_SETS = {"own_teammates_opponents", "context_and_types_centred"}
+CENTRED_SETS = {"own_teammates_opponents", "context_and_types_centred", "context_types_team_rates_centred"}
 SIDE_KEYS = {"offense": "O", "defense": "D"}      # swap_adjust's side names -> the priors' side keys
 
 
@@ -176,6 +196,14 @@ def reads_types(input_set: str | None) -> bool:
     Example: "context_and_types" and "context_and_types_centred" do, "context" and "own_teammates_opponents" do not.
     """
     return input_set is not None and set(TYPES) <= set(INPUT_SETS[input_set])
+
+
+def reads_team_rates(input_set: str | None) -> bool:
+    """Whether the line on `input_set` reads his team's rates (`TEAM_RATES`), so its inputs need the stint rows' counts.
+
+    Example: "context_types_team_rates_centred" does, "context_and_types_centred" and None do not.
+    """
+    return input_set is not None and set(TEAM_RATES) <= set(INPUT_SETS[input_set])
 
 
 # ------------------------------------------------------------------------------- every booster's answer
@@ -391,6 +419,61 @@ def context_numbers(stints: pd.DataFrame, offence: BoosterAnswers, defence: Boos
     return frame
 
 
+def _end_team_rates(rows: _Entries, stints: pd.DataFrame, side: str, pad: bool) -> dict:
+    """{name: one number per player of `rows`}: `TEAM_RATES` on one end, "O" his team's offence and "D" the offence of
+    the teams facing his (the module docstring).  The noise of one possession is read as `_Entries.noise` reads it: each
+    row one draw, sum over players and rows of w^2 (row value - his number)^2 over sum of his w, with w x row value the
+    row's count x 100."""
+    n_rows = len(stints)
+    counted = np.zeros((2 * n_rows, len(TEAM_COUNTS)))
+    weight = np.zeros(2 * n_rows)
+    entries = slice(0, n_rows) if side == "O" else slice(n_rows, 2 * n_rows)
+    counted[entries] = 100.0 * stints[TEAM_COUNTS].to_numpy(dtype=float)
+    weight[entries] = stints.poss.to_numpy(dtype=float)
+    team_weight = np.asarray(rows.teams.T @ weight).ravel()
+    team_rate = np.asarray(rows.teams.T @ counted) / np.where(team_weight > 0, team_weight, 1.0)[:, None]
+    level = np.asarray(rows.mix @ team_rate) / np.where(rows.on_weight > 0, rows.on_weight, 1.0)[:, None]
+    out = {}
+    for where, total in (("on", rows.on), ("off", rows.bench)):
+        behind = np.maximum(total(weight), 0.0)
+        rate = total(counted) / np.where(behind > 0, behind, 1.0)[:, None]
+        spread = (total(counted * counted) - 2.0 * rate * total(counted * weight[:, None])
+                  + rate * rate * total(weight * weight)[:, None])
+        noise = np.maximum(spread, 0.0).sum(axis=0) / max(float(behind.sum()), 1e-12)
+        for at, count in enumerate(TEAM_COUNTS):
+            out[f"team_{count}_{where}"] = (pad_toward_level(rate[:, at], behind, level[:, at], float(noise[at])) if pad
+                                            else np.where(behind > 0, rate[:, at], level[:, at]))
+    return out
+
+
+def team_rate_numbers(stints: pd.DataFrame, pad: bool = True) -> dict:
+    """{"O", "D"}: player_id -> his `TEAM_RATES` on that end, padded toward his team's season rate (the module
+    docstring), for every player of `stints`.  A player of two teams takes each team's season rate by his possessions
+    with it.
+
+    `stints` is swap_test.season_rows' columns with its `TEAM_COUNTS`, for the games the numbers may read.  `pad` False
+    gives the rates unpadded (the docstring example), a number without possessions at its level.
+    """
+    missing = [count for count in TEAM_COUNTS if count not in stints.columns]
+    if missing:
+        raise ValueError(f"the team rates read the stint rows' counts and these rows lack {missing}: "
+                         "build them with swap_test.TEAM_COUNT_COLUMNS")
+    ids = np.unique(np.concatenate([stints[OFF].to_numpy(dtype=np.int64).ravel(),
+                                    stints[DEF].to_numpy(dtype=np.int64).ravel()]))
+    rows = _Entries(stints, ids)
+    index = pd.Index(ids, name="player_id")
+    return {side: pd.DataFrame(_end_team_rates(rows, stints, side, pad), index=index)[TEAM_RATES]
+            for side in ("O", "D")}
+
+
+def with_team_rates(frame: pd.DataFrame, rates: pd.DataFrame) -> pd.DataFrame:
+    """`frame`, one row per player, with `TEAM_RATES` after its columns.  A player missing them gets their mean over
+    the players who have them, as `line_inputs` fills the context numbers."""
+    out = frame.join(rates, how="left")
+    out[TEAM_RATES] = out[TEAM_RATES].fillna(rates.mean())
+    return out
+
+
 def type_scale(rows: pd.DataFrame) -> dict:
     """{name: [mean, population standard deviation]} of each of `TYPES` over `rows`, one row per player-season (the
     panel's offence rows: its box counts, role and body are the same on both ends)."""
@@ -451,19 +534,25 @@ def centred(frame: pd.DataFrame, possessions: pd.Series) -> pd.DataFrame:
 
 
 def side_inputs(box: dict, context: pd.DataFrame, types: pd.DataFrame | None = None,
-                input_set: str | None = None) -> dict:
+                input_set: str | None = None, team_rates: dict | None = None) -> dict:
     """{"O", "D"}: `line_inputs` for each side, `box` {"O", "D"}: player_id -> box-score prior (raw sign); with
-    `input_set` "own_teammates_opponents", `three_inputs` instead.  A set that reads step 5's numbers
-    (`reads_types`) with no `types` given is refused: without them `line_inputs` would hand back the eight context
-    numbers alone, and a line fitted on them would pass for the set it names."""
+    `input_set` "own_teammates_opponents", `three_inputs` instead; with a set that reads `TEAM_RATES`,
+    `team_rate_numbers`' answer joined on.  A set that reads step 5's numbers (`reads_types`) with no `types` given is
+    refused: without them `line_inputs` would hand back the eight context numbers alone, and a line fitted on them would
+    pass for the set it names.  So is a set that reads the team rates with no `team_rates` given."""
     if types is None and reads_types(input_set):
         raise ValueError(f"the line's inputs {input_set!r} read step 5's numbers and none were given: their "
                          "standardisation (`type_scale`) is missing")
+    if team_rates is None and reads_team_rates(input_set):
+        raise ValueError(f"the line's inputs {input_set!r} read the team's rates and none were given")
     if input_set == "own_teammates_opponents":
         return {side: three_inputs(pd.Series(box[side], dtype=float), context, side) for side in ("O", "D")}
     other = {"O": "D", "D": "O"}
-    return {side: line_inputs(pd.Series(box[side], dtype=float), context, pd.Series(box[other[side]], dtype=float),
-                              types) for side in ("O", "D")}
+    inputs = {side: line_inputs(pd.Series(box[side], dtype=float), context, pd.Series(box[other[side]], dtype=float),
+                                types) for side in ("O", "D")}
+    if reads_team_rates(input_set):
+        return {side: with_team_rates(frame, team_rates[side]) for side, frame in inputs.items()}
+    return inputs
 
 
 # ------------------------------------------------------------------------------- the line, on swaps
@@ -605,7 +694,8 @@ def season_second_priors(stints: pd.DataFrame, answers: dict, box: dict, coeffic
         raise ValueError(f"team totals are one of {TEAM_TOTALS}, not {team_totals!r}")
     context = context_numbers(stints, answers["O"], answers["D"])
     values = {}
-    inputs = side_inputs(box, context, types, input_set)
+    team_rates = team_rate_numbers(stints) if reads_team_rates(input_set) else None
+    inputs = side_inputs(box, context, types, input_set, team_rates)
     if input_set in CENTRED_SETS:
         inputs = {side: centred(frame, team_possessions(stints, side).groupby("player_id").poss.sum())
                   for side, frame in inputs.items()}

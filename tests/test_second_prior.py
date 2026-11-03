@@ -372,6 +372,127 @@ def test_a_line_whose_normal_equations_miss_some_of_its_inputs_is_refused(tmp_pa
     assert files.line_setup(cfg, "short", names)["inputs"] == names
 
 
+def _counted(rows, column, values) -> pd.DataFrame:
+    """Stint rows with every `swap_test.TEAM_COUNTS` at 0 but `column`, one value per row."""
+    return rows.assign(**{count: 0.0 for count in sw.TEAM_COUNTS}).assign(**{column: values})
+
+
+def test_the_team_rates_docstring_example():
+    # team 1 on offence: 10 possessions with player 7 on the court and 3 offensive rebounds, 5 without him and 1
+    rates = sp.team_rate_numbers(_counted(TWO_STINTS, "off_rebounds", [3.0, 1.0]), pad=False)
+    assert rates["O"].loc[7, "team_off_rebounds_on"] == pytest.approx(30.0)
+    assert rates["O"].loc[7, "team_off_rebounds_off"] == pytest.approx(20.0)
+    # player 1 played both stints, so he has no possessions off the court: he stays at his team's season rate
+    assert rates["O"].loc[1, "team_off_rebounds_on"] == pytest.approx(100.0 * 4.0 / 15.0)
+    assert rates["O"].loc[1, "team_off_rebounds_off"] == pytest.approx(100.0 * 4.0 / 15.0)
+
+
+def test_the_team_rates_on_defense_read_the_teams_facing_his_on_his_defensive_rows():
+    rates = sp.team_rate_numbers(_counted(TWO_STINTS, "off_rebounds", [3.0, 1.0]), pad=False)
+    # team 2 defended both rows: 11-15 for the 10 possessions with 3, 16-20 for the 5 with 1
+    assert rates["D"].loc[11, "team_off_rebounds_on"] == pytest.approx(30.0)
+    assert rates["D"].loc[16, "team_off_rebounds_on"] == pytest.approx(20.0)
+    # his team's rate with 11 on the bench in that game is the row 16-20 played
+    assert rates["D"].loc[11, "team_off_rebounds_off"] == pytest.approx(20.0)
+    # team 2 was never on offence, so on offence its players stay at their team's rate of nothing
+    assert rates["O"].loc[11, "team_off_rebounds_on"] == 0.0
+
+
+def test_two_teammates_who_never_sit_have_one_number_so_the_team_rate_cancels_in_their_swap():
+    # why a team's season rate cannot be an input: both read it, the difference is 0
+    rows = _counted(_stints([("g1", 1, 2, 10, [1, 2, 3, 4, 5], [11, 12, 13, 14, 15]),
+                             ("g2", 1, 2, 10, [1, 2, 3, 4, 5], [16, 17, 18, 19, 20])]), "turnovers", [1.0, 3.0])
+    rates = sp.team_rate_numbers(rows)["O"]
+    assert rates.loc[1].to_numpy() == pytest.approx(rates.loc[2].to_numpy())
+    assert rates.loc[1, "team_turnovers_off"] == pytest.approx(100.0 * 4.0 / 20.0)
+
+
+def test_the_team_rates_are_padded_between_the_rate_and_the_level(lineup_league):
+    stints, _, _ = lineup_league(1, games=40)
+    rng = np.random.default_rng(1)
+    rows = sw.season_rows(stints)
+    rows = rows.assign(**{count: rng.poisson(1.0, len(rows)).astype(float) for count in sw.TEAM_COUNTS})
+    raw, padded = sp.team_rate_numbers(rows, pad=False), sp.team_rate_numbers(rows)
+    for side in ("O", "D"):
+        assert list(padded[side].columns) == sp.TEAM_RATES and not padded[side].isna().any().any()
+        gap = (padded[side] - raw[side]).abs().to_numpy()
+        assert gap.max() > 0.0
+        # padding pulls every player's numbers together, on every rate
+        assert (padded[side].std() < raw[side].std()).all()
+
+
+def test_the_team_rates_read_only_the_rows_they_are_given():
+    # a fold hands the numbers its fit games: a held-back game's counts cannot reach them
+    fit = _counted(TWO_STINTS, "turnovers", [2.0, 1.0])
+    held = _counted(_stints([("g2", 1, 2, 10, [7, 1, 2, 3, 4], [11, 12, 13, 14, 15])]), "turnovers", [9.0])
+    every = pd.concat([fit, held], ignore_index=True)
+    alone = sp.team_rate_numbers(fit)["O"]
+    both = sp.team_rate_numbers(every)["O"]
+    assert alone.loc[7, "team_turnovers_on"] != both.loc[7, "team_turnovers_on"]
+    assert sp.team_rate_numbers(every[every.game_id == "g1"].reset_index(drop=True))["O"].equals(alone)
+
+
+def test_the_team_rate_set_is_todays_inputs_with_the_rates_after_them():
+    # the Detail view's split reads the box-score prior as the line's first weight (`adjustments`)
+    today = sp.INPUT_SETS["context_and_types_centred"]
+    assert sp.INPUT_SETS["context_types_team_rates_centred"] == [*today, *sp.TEAM_RATES]
+    assert today[0] == sp.BOX and len(today) == 29 and len(sp.TEAM_RATES) == 16
+    assert "context_types_team_rates_centred" in sp.CENTRED_SETS
+    assert sp.reads_team_rates("context_types_team_rates_centred") and sp.reads_types(
+        "context_types_team_rates_centred")
+    assert not any(sp.reads_team_rates(name) for name in ("context", "context_and_types",
+                                                          "context_and_types_centred", "own_teammates_opponents", None))
+
+
+def test_a_line_on_the_team_rates_refuses_to_run_without_them():
+    context = pd.DataFrame(0.0, index=pd.Index([1, 2], name="player_id"), columns=sp.CONTEXT)
+    types = pd.DataFrame(0.0, index=pd.Index([1, 2], name="player_id"), columns=sp.TYPES)
+    box = {"O": {1: 0.5, 2: -0.5}, "D": {1: -1.0, 2: 1.0}}
+    with pytest.raises(ValueError, match="none were given"):
+        sp.side_inputs(box, context, types, "context_types_team_rates_centred")
+    with pytest.raises(ValueError, match="lack"):
+        sp.team_rate_numbers(TWO_STINTS)
+
+
+def test_a_player_the_team_rates_lack_gets_their_mean():
+    frame = pd.DataFrame({sp.BOX: [1.0, 2.0, 3.0]}, index=pd.Index([1, 2, 3], name="player_id"))
+    rates = pd.DataFrame({name: [10.0, 20.0] for name in sp.TEAM_RATES}, index=pd.Index([1, 2], name="player_id"))
+    out = sp.with_team_rates(frame, rates)
+    assert list(out.columns) == [sp.BOX, *sp.TEAM_RATES]
+    assert out.loc[3, "team_turnovers_on"] == 15.0 and out.loc[1, "team_turnovers_on"] == 10.0
+
+
+def test_the_second_prior_on_the_team_rates_holds_every_teams_total_and_reads_them(lineup_league):
+    stints, truth, _ = lineup_league(4, games=40)
+    rng = np.random.default_rng(4)
+    rows = sw.season_rows(stints)
+    rows = rows.assign(**{count: rng.poisson(1.0, len(rows)).astype(float) for count in sw.TEAM_COUNTS})
+    box = {side: truth.set_index("player_id")[column].to_dict() for side, column in (("O", "o"), ("D", "d"))}
+    answers = {side: _answers(box[side]) for side in box}
+    types = pd.DataFrame(rng.normal(0.0, 1.0, (len(truth), len(sp.TYPES))), columns=sp.TYPES,
+                         index=pd.Index(truth.player_id.to_numpy(), name="player_id"))
+    name = "context_types_team_rates_centred"
+    today = "context_and_types_centred"
+    weights = np.zeros((6, len(sp.INPUT_SETS[name])))
+    weights[:, 0] = 1.5
+    without_rates = {"O": weights[:, :29], "D": weights[:, :29]}
+    weights = weights.copy()
+    weights[:, sp.INPUT_SETS[name].index("team_off_rebounds_on")] = 0.7
+    with_rates = {"O": weights, "D": weights}
+    values, inputs = sp.season_second_priors(rows, answers, box, with_rates, 5, "held", types, name)
+    plain, _ = sp.season_second_priors(rows, answers, box, without_rates, 5, "held", types, today)
+    for side in ("O", "D"):
+        assert list(inputs[side].columns) == sp.INPUT_SETS[name]
+        team_poss = sp.team_possessions(rows, side)
+        one_team = team_poss.groupby("player_id").team.transform("nunique") == 1
+        kept = team_poss[one_team]
+        moved = pd.Series(values[side]) - pd.Series(plain[side])
+        assert moved.abs().max() > 0.0
+        total = (moved.reindex(kept.player_id).to_numpy() * kept.poss.to_numpy())
+        for team in kept.team.unique():
+            assert abs(total[kept.team.to_numpy() == team].sum()) < 1e-6
+
+
 def test_the_adjustments_are_the_second_prior_less_its_box_score_part_and_cancel_on_a_team():
     frame = pd.DataFrame({sp.BOX: [1.0, -1.0, 2.0, 0.0], "other": [0.5, 0.5, -0.5, -0.5]}, index=[10, 11, 12, 13])
     coefficients = np.array([[2.0, 1.0], [3.0, 1.0], [2.0, 1.0]])             # player folds by id % 2, then every swap

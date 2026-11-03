@@ -13,6 +13,22 @@ def _season(league, seed=0):
     return sw.prepare(sw.season_rows(stints)), truth, roster
 
 
+def test_the_season_rows_carry_the_offences_counts_only_when_the_stints_have_them(lineup_league):
+    stints, _, _ = lineup_league(0, games=4)
+    assert set(sw.season_rows(stints).columns).isdisjoint(sw.TEAM_COUNTS)
+    # home: 3 threes taken and 1 made, 7 shots from the field taken and 3 made; away: nothing but 2 turnovers
+    counted = stints.assign(fg3m_h=1, fg3a_h=3, fgm_h=3, fga_h=7, ftm_h=2, fta_h=3, oreb_p_h=4, tov_h=1, fg3m_a=0,
+                            fg3a_a=0, fgm_a=0, fga_a=0, ftm_a=0, fta_a=0, oreb_p_a=0, tov_a=2)
+    rows = sw.season_rows(counted)
+    home = rows[rows.home > 0].iloc[0]
+    assert [home[count] for count in sw.TEAM_COUNTS] == [1, 2, 2, 2, 2, 1, 4, 1]
+    away = rows[rows.home < 0].iloc[0]
+    assert [away[count] for count in sw.TEAM_COUNTS] == [0, 0, 0, 0, 0, 0, 0, 2]
+    # the counts change nothing else about the rows
+    plain = sw.season_rows(stints)
+    pd.testing.assert_frame_equal(rows[plain.columns], plain)
+
+
 def test_fatigue_runs_while_on_court_and_resets():
     base = dict(game_id="g1", phase="RS", frac_rem=1.0, margin_h=0, is_gt=False, neutral=False,
                 poss_h=1, poss_a=1, pts_h=1.0, pts_a=1.0, home_team_id=1, away_team_id=2)

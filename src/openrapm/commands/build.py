@@ -885,8 +885,9 @@ def run_shrink(cfg: dict, settings, base: str, name: str) -> int:
 
 # ------------------------------------------------------------------------------------------- step 5
 def season_lineup_rows(cfg: dict, season: int) -> pd.DataFrame:
-    """One season's stints as swap_test.season_rows, the rows every lineup of step 5 is built from."""
-    stints = load_season_stints(season, cfg, swap_test.STINT_COLUMNS)
+    """One season's stints as swap_test.season_rows, the rows every lineup of step 5 is built from, with the offence's
+    counts the second prior's team rates read."""
+    stints = load_season_stints(season, cfg, [*swap_test.STINT_COLUMNS, *swap_test.TEAM_COUNT_COLUMNS])
     return swap_test.season_rows(stints, margin_clip=float(cfg.get("margin_clip", 25)))
 
 

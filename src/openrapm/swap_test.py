@@ -72,6 +72,7 @@ import scipy.sparse as sp
 from .rapm import solve_ridge
 
 __all__ = ["HOME", "AWAY", "OFF", "DEF", "SIDES", "CONTEXTS", "RAPM_CONTROLS", "PAIR_GROUPS", "STINT_COLUMNS",
+           "TEAM_COUNT_COLUMNS", "TEAM_COUNTS", "team_counts",
            "ratings_in_raw_sign", "order_stints", "next_in_same_period", "stint_durations", "fatigue", "season_rows",
            "swap_pairs", "Season", "prepare", "aligned", "predict", "side_rates", "side_scores", "score_season",
            "plain_rapm"]
@@ -108,6 +109,14 @@ PERIOD_END_SECONDS = 120.0   # the last two minutes of any period: the foul bonu
 # what `season_rows` reads from a season's stints, plus `home_team_id` / `away_team_id` from the diagnostics
 STINT_COLUMNS = ["game_id", "phase", "period", "start_clock", "frac_rem", "margin_h", "is_gt", "neutral",
                  "poss_h", "poss_a", "pts_h", "pts_a", *HOME, *AWAY]
+# The offence's eight counts on a stint row, which the second prior's team rates read (second_prior.team_rate_numbers,
+# notes/DECISIONS.md, experiment 128).  They are not in STINT_COLUMNS: `season_rows` carries them only when the stints
+# it is given have them.  Offensive rebounds are the players' (oreb_p), as in a box score: a team rebound counts for no
+# one.
+TEAM_COUNT_COLUMNS = [f"{count}_{side}" for count in ("fg3m", "fg3a", "fgm", "fga", "ftm", "fta", "oreb_p", "tov")
+                      for side in ("h", "a")]
+TEAM_COUNTS = ["threes_made", "threes_missed", "twos_made", "twos_missed", "free_throws_made", "free_throws_missed",
+               "off_rebounds", "turnovers"]
 
 
 def ratings_in_raw_sign(table: pd.DataFrame, columns: str = "rating") -> pd.DataFrame:
@@ -192,6 +201,20 @@ def fatigue(stints: pd.DataFrame, cap: float = FATIGUE_CAP) -> tuple[np.ndarray,
     return np.minimum(out_h, cap), np.minimum(out_a, cap)
 
 
+def team_counts(stints: pd.DataFrame, side: str) -> dict:
+    """{TEAM_COUNTS: one number per stint}: what the team of `side`, "h" or "a", did on offence.
+
+    Example: 3 threes taken and 1 made, 5 shots from the field taken and 2 made: threes made 1, threes missed 2, twos
+    made 1, twos missed 1.
+    """
+    read = {count: stints[f"{count}_{side}"].to_numpy(dtype=float)
+            for count in ("fg3m", "fg3a", "fgm", "fga", "ftm", "fta", "oreb_p", "tov")}
+    twos_made = read["fgm"] - read["fg3m"]
+    return {"threes_made": read["fg3m"], "threes_missed": read["fg3a"] - read["fg3m"], "twos_made": twos_made,
+            "twos_missed": read["fga"] - read["fg3a"] - twos_made, "free_throws_made": read["ftm"],
+            "free_throws_missed": read["fta"] - read["ftm"], "off_rebounds": read["oreb_p"], "turnovers": read["tov"]}
+
+
 def season_rows(stints: pd.DataFrame, margin_clip: float = 25.0) -> pd.DataFrame:
     """One row per stint and side that had possessions: the two fives, what happened, and the context.
 
@@ -200,6 +223,7 @@ def season_rows(stints: pd.DataFrame, margin_clip: float = 25.0) -> pd.DataFrame
     Columns: team_off, team_def, o1..o5 (the offensive five, sorted ids), d1..d5, poss, pts, y (points
     per 100), and every column of CONTEXTS["full"], in the offense's point of view: `home` is +1 when the
     offence is at home, -1 away, 0 at a neutral site; `margin` is the offence's lead at the stint's start.
+    With TEAM_COUNT_COLUMNS in `stints`, also the offence's TEAM_COUNTS.
     """
     stints = order_stints(stints)
     fat_h, fat_a = fatigue(stints)
@@ -239,6 +263,9 @@ def season_rows(stints: pd.DataFrame, margin_clip: float = 25.0) -> pd.DataFrame
         for k in range(5):
             frame[OFF[k]] = off[keep, k]
             frame[DEF[k]] = de[keep, k]
+        if set(TEAM_COUNT_COLUMNS) <= set(stints.columns):
+            for count, values in team_counts(stints, side).items():
+                frame[count] = values[keep]
         sides.append(frame)
     rows = pd.concat(sides, ignore_index=True)
     rows["y"] = 100.0 * rows.pts / rows.poss
