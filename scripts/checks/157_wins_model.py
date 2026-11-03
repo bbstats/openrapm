@@ -9,7 +9,8 @@ Words used below
     net points per win     from teams' records alone, 1 over the slope of wins on net points: the reading that
                   shares no construction with the leverage
     rating points per win  1 over the slope of wins on the expected margin from the published ratings, in points and
-                  weighted by relative leverage: what settings.WinsSettings.points_per_win is read from
+                  weighted by leverage inside each game: what settings.WinsSettings.points_per_win is read from; and
+                  the same weighted by leverage against the season's mean, the first version shipped
     model points per win   1 over the win model's mean leverage.  Not the scale: leads shrink, so it values a point at
                   what reaches the final margin, while the ratings already sit below teams' actual margins
     leverage sum  a team's leverage times its actual margin in each stint, summed over its season, against its wins
@@ -95,13 +96,13 @@ def team_sums(stints: pd.DataFrame, seconds: np.ndarray, model: wins.WinModel, r
     """Per team: its wins above half its games, its leverage sum, and its wins from the ratings at `points_per_win`.  A
     team's view of a home margin is the home team's margin, or its negative."""
     results = wins.game_results(stints)
-    relative = wins.relative_leverage(stints, seconds, model)
-    lever = relative * wins.mean_leverage(stints, seconds, model)
+    weight = wins.leverage_inside_games(stints, seconds, model)
+    lever = wins.relative_leverage(stints, seconds, model) * wins.mean_leverage(stints, seconds, model)
     actual = (stints.pts_h - stints.pts_a).to_numpy(dtype=float)
     margin = wins.expected_margins(stints, ratings)[0]
     possessions = (stints.poss_h + stints.poss_a).to_numpy(dtype=float) / 2.0
     home_view = pd.DataFrame({"game_id": stints.game_id.to_numpy(), "leverage_sum": lever * actual,
-                              "rating_wins": relative * margin * possessions / 100.0 / points_per_win
+                              "rating_wins": weight * margin * possessions / 100.0 / points_per_win
                               }).groupby("game_id").sum()
     games = results.set_index("game_id").join(home_view)
     margin_final = games.margin.to_numpy(dtype=float)
@@ -121,9 +122,9 @@ def long_way_gap(stints: pd.DataFrame, seconds: np.ndarray, ratings: pd.DataFram
     choices = PRODUCT.wins
     pace = wins.pace_effects(stints, seconds, choices.pace_penalty, choices.pace_min_seconds)
     bar = wins.starter_bar(ratings, wins.starts_and_minutes(stints, seconds), pace, choices.starters)
-    relative = wins.relative_leverage(stints, seconds, model)
-    shipped = wins.season_wins(stints, seconds, ratings, relative, pace, bar, choices.points_per_win)
-    long_way = wins.counterfactual_wins(stints, seconds, ratings, relative, pace, bar, choices.points_per_win)
+    weight = wins.leverage_inside_games(stints, seconds, model)
+    shipped = wins.season_wins(stints, seconds, ratings, weight, pace, bar, choices.points_per_win)
+    long_way = wins.counterfactual_wins(stints, seconds, ratings, weight, pace, bar, choices.points_per_win)
     return float((shipped.set_index("player_id").wosa - long_way.reindex(shipped.player_id)).abs().max())
 
 
@@ -150,7 +151,7 @@ def season_row(cfg: dict, season: int, stints: pd.DataFrame, seconds: np.ndarray
     teams = team_sums(stints, seconds, model, ratings, PRODUCT.wins.points_per_win)
     leverage_slope, leverage_r = slope_and_correlation(teams.leverage_sum, teams.wins_above)
     rating_slope, rating_r = slope_and_correlation(teams.rating_wins, teams.wins_above)
-    relative = wins.relative_leverage(stints, seconds, model)
+    inside = wins.leverage_inside_games(stints, seconds, model)
     period, clock = stints.period.to_numpy(), stints.start_clock.to_numpy(dtype=float)
     close_late = (period >= swap_test.CLUTCH_PERIOD) & (clock <= swap_test.CLUTCH_SECONDS) & (
         np.abs(margin) <= swap_test.CLUTCH_MARGIN)
@@ -170,11 +171,13 @@ def season_row(cfg: dict, season: int, stints: pd.DataFrame, seconds: np.ndarray
                                                                            weights=possessions)),
                 model_points_per_win_real_strength=1.0 / float(np.average(aware, weights=possessions)),
                 net_points_per_win=wins.net_points_per_win(results),
-                rating_points_per_win=wins.rating_points_per_win(stints, relative,
+                rating_points_per_win=wins.rating_points_per_win(stints, inside,
                                                                  wins.expected_margins(stints, ratings)[0]),
-                relative_leverage_close_late=float(np.average(relative[close_late], weights=possessions[close_late])),
-                relative_leverage_garbage=float(np.average(relative[garbage], weights=possessions[garbage])),
-                relative_leverage_first_quarter=float(np.average(relative[period == 1],
+                rating_points_per_win_season_mean=wins.rating_points_per_win(
+                    stints, wins.relative_leverage(stints, seconds, model), wins.expected_margins(stints, ratings)[0]),
+                weight_close_late=float(np.average(inside[close_late], weights=possessions[close_late])),
+                weight_garbage=float(np.average(inside[garbage], weights=possessions[garbage])),
+                weight_first_quarter=float(np.average(inside[period == 1],
                                                                  weights=possessions[period == 1])),
                 miss_real_strength_mean=np.average(np.abs(cells.real_strength - cells.won), weights=weight),
                 miss_real_strength_largest=float(np.abs(cells.real_strength - cells.won).max()),
@@ -276,7 +279,7 @@ def era_lines(seasons: pd.DataFrame) -> pd.DataFrame:
     keep = ["home_edge", "strength_slope", "lead_kept_at_end", "lead_kept_at_half", "lead_kept_at_tipoff",
             "spread_tipoff", "model_points_per_win", "model_points_per_win_at_stint_start",
             "model_points_per_win_real_strength", "net_points_per_win", "rating_points_per_win",
-            "relative_leverage_close_late", "relative_leverage_garbage", "relative_leverage_first_quarter",
+            "rating_points_per_win_season_mean", "weight_close_late", "weight_garbage", "weight_first_quarter",
             "miss_real_strength_mean", "miss_real_strength_largest",
             "miss_average_strength_mean", "leverage_sum_slope", "record_on_rating_wins_slope",
             "record_on_rating_wins_correlation"]

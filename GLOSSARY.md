@@ -183,7 +183,8 @@ or too low (`scripts/checks/138_heldout_audit.py`).
 
 **WOSA** (wins over starter average). How many regular-season wins a player added to his team over an average starter,
 offence, defence and pace together (`wins.py`). No rating moves. A +9.0 player against a bar of +0.8, over 5,300
-possessions at each end at average leverage: 8.2 x 5,300 / 100 / 27 = 16.1 wins.
+possessions at each end at an average weight: 8.2 x 5,300 / 100 / 30 = 14.5 wins. It reads each rating from the regular
+season alone, so it stops changing when the regular season ends.
 
 **Starter average.** The bar WOSA is read against: the mean rating of the season's 150 players with the most
 regular-season games started, minutes breaking ties. It sits above zero, since ratings are centred on the average
@@ -196,12 +197,12 @@ is left of a final margin, by time left.
 **Lead kept.** The share of a lead that reaches the final margin, a line in the share of the game left: 0.93 at the end
 and 0.74 at the half, in every era. A team ahead coasts and a team behind presses.
 
-**Leverage.** What one point moves the win model by at a stint's game state, over the season's possession-weighted mean: 1
-is an average possession, about 3 late in a close game, 0.02 in garbage time.
+**Leverage.** What one point moves the win model by at a stint's game state. WOSA uses it as a weight inside each game, a
+stint's leverage over its own game's mean: every game carries the same total weight, and 1 is an average possession of that
+game, about 2.3 late in a close game, 0.03 in garbage time.
 
-**Points per win.** Rating points, weighted by leverage, for one win: 27, read from how teams' records follow their
-lineups' ratings over 30 seasons. Not the older rule of thumb of 30 net points per win, which is in actual points, and the
-ratings sit below teams' actual margins.
+**Points per win.** Rating points, weighted by leverage inside each game, for one win: 30, read from how teams' records follow
+their lineups' regular-season ratings over 30 seasons.
 
 **Pace effect.** A player's effect on the possessions per 48 minutes each team plays, from a ridge regression of each
 stint's pace on the ten players on the court. A standard deviation of about 0.9 among regulars.

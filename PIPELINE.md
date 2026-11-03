@@ -294,10 +294,16 @@ command runs in one process as before.
 
 ## Wins over starter average (`wins.py`)
 
-- **For:** the owner's MVP score: how many regular-season wins a player added to his team over an average starter. It
-  reads the published ratings and changes none of them.
-- **Reads:** a ratings table and each season's regular-season stints. A season in progress reads the latest finished
-  season's win model and its own everything else; nothing is fitted on it.
+- **For:** the owner's MVP score: how many regular-season wins a player added to his team over an average starter. No
+  published rating moves.
+- **Reads:** each season's regular-season stints and each player's rating from that regular season alone. A season in
+  progress reads the latest finished season's win model and its own everything else; nothing is fitted on it.
+- **The lock:** the owner, 2026-11-02: "ideally we just lock WOSA after reg season". A finished season is rated from its
+  regular-season games through the code a season in progress goes through, step 4 as shipped, into
+  `outputs/season_ratings_NAME_regular.parquet`. A season in progress keeps its own rows until its first playoff game, each
+  morning stores them, and after that game the last rows stored stand. Rated with every game kept, a finished season's 181
+  inputs equal the published panel's with no gap, and 2027's designs give back its ratings to 2e-15. The lock moves a
+  regular's rating a median 0.10 per 100, the 90th percentile 0.42, the largest 1.02 (2026).
 - **Writes:** eight columns at the end of the final table, `wosa_off, wosa_def, wosa_pace, wosa, pace_effect, leverage,
   starts_rs, minutes_rs`, and `outputs/csv/wins_NAME_seasons.csv`, each season's starter average and win model. Step 3's
   and step 4's tables are untouched.
@@ -309,14 +315,15 @@ command runs in one process as before.
   share of a lead that lasts is a line in the share left, 0.93 at the end and 0.74 at the half in every era, and with it
   the mean calibration miss is 0.01 in every era. The spread is measured by time left, and agrees with the games' own
   final margins (11.5 and 11.45 in 2006, 14.5 and 14.37 in 2026).
-- **Leverage:** what a point moves that chance by, read at the stint's starting margin so its own result never weights
-  it. It is a relative weight, 1 on an average possession: about 3 late in a close game, 0.02 in garbage time, 0.8 in
-  the first quarter.
-- **Points per win:** 27 (`WinsSettings.points_per_win`). One number for every season, the rate at which teams' records
-  follow their lineups' leverage-weighted rating points: 25.8, 26.3 and 27.7 by era, correlation 0.97, a season's
-  standard error about 1.4. At 27 the slope of records on the ratings' wins is 1.05, 1.03 and 0.98 by era. The win model's own
-  1 over its mean leverage reads 41 to 45 and is not the scale: it values a point after leads shrink, and the published
-  ratings already sit below teams' actual margins, so it would leave team totals about 40% short of their records.
+- **Leverage:** what a point moves that chance by, read at the stint's starting margin. It is used as a weight inside each
+  game: a stint's leverage over its own game's mean, so every game carries the same total weight (the owner: "if you cause
+  the blowout you shouldn't be penalized"). About 2.3 late in a close game, 0.03 in garbage time, 0.96 in the first quarter.
+  Against the season's mean, the first version shipped, San Antonio's 2026 games read 0.89 with Wembanyama and 1.06 without.
+- **Points per win:** 30 (`WinsSettings.points_per_win`). One number for every season, the rate at which teams' records
+  follow their lineups' weighted rating points: 28.7, 28.9 and 30.4 by era, correlation 0.97, a season's standard error about
+  1.5. At 30 the slope of records on the ratings' wins is 1.05, 1.04 and 0.99 by era. The win model's own 1 over its mean
+  leverage reads 41 to 45 and is not the scale: it values a point after leads shrink, and the ratings already sit below teams'
+  actual margins, so it would leave team totals well short of their records.
 - **Pace:** a ridge regression of each stint's possessions per 48 minutes on the ten players, weighted by seconds, with
   garbage time, the margin, the margin x share left and period ends as context; regular season only. Penalty 30,000, the
   least held-back error between each season's half-A and half-B games, interior in all six seasons searched. Stints
@@ -330,8 +337,11 @@ command runs in one process as before.
   game with eight minutes left counts for a lot. Every player is valued at his rating on every possession.
   `scripts/checks/158_high_leverage.py` found no own play to add on possessions worth at least twice an average one,
   about 6% of all: half A against half B correlates 0.021, below random stints (0.027), and a season against the next
-  0.012.
-- **Command:** `python -m openrapm wins --name NAME` (`--seasons` to compute some and keep the rest). `build` runs it.
+  0.012. It chooses them by the game's state when the stint starts, never by the wins' weight, which knows how the game
+  ended.
+- **Command:** `python -m openrapm wins --name NAME` (`--seasons` to compute some and keep the rest; `--rebuild-regular --jobs
+  4` to rate the regular seasons first, about 4 minutes a season a process, and a stopped run goes on from the seasons it
+  finished). `build` at the product setting runs it; the test setting's tables get no wins.
 - **Code:** `src/openrapm/wins.py`, `src/openrapm/commands/wins.py`, `settings.WinsSettings`; tests `tests/test_wins.py`,
   `tests/test_wins_command.py`.
 

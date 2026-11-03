@@ -309,6 +309,12 @@ def _versus_pbpstats(parsed: pd.DataFrame, season: int, phase: str, cfg) -> dict
     return out
 
 
+def has_playoff_stints(season: int, cfg) -> bool:
+    """Whether any playoff game of `season` has stints on disk: the day its regular season's rating stops changing."""
+    path = resolve(cfg, "stints") / f"{int(season)}_PO.parquet"
+    return path.exists() and len(pd.read_parquet(path, columns=["game_id"])) > 0
+
+
 def load_season_stints(season: int, cfg, columns, phases=SEASON_PHASES, with_teams: bool = True) -> pd.DataFrame:
     """A season's stints, regular season then playoffs, with `columns` (and, `with_teams`, each game's teams).
 

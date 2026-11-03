@@ -315,12 +315,12 @@ def test_swap_reads_its_base_and_setting(monkeypatch):
 def test_wins_reads_its_name_and_seasons(monkeypatch):
     from openrapm.commands import wins
     seen = {}
-    monkeypatch.setattr(wins, "run_wins", lambda cfg, settings, name, seasons: seen.update(
-        settings=settings, name=name, seasons=seasons) or 0)
+    monkeypatch.setattr(wins, "run_wins", lambda cfg, settings, name, seasons, rebuild, jobs: seen.update(
+        settings=settings, name=name, seasons=seasons, rebuild=rebuild, jobs=jobs) or 0)
     assert cli.main(["wins"]) == 0
-    assert seen == dict(settings=PRODUCT, name="product", seasons=None)
-    assert cli.main(["wins", "--name", "trial", "--seasons", "2026-2027"]) == 0
-    assert seen == dict(settings=PRODUCT, name="trial", seasons=[2026, 2027])
+    assert seen == dict(settings=PRODUCT, name="product", seasons=None, rebuild=False, jobs=1)
+    assert cli.main(["wins", "--name", "trial", "--seasons", "2026-2027", "--rebuild-regular", "--jobs", "3"]) == 0
+    assert seen == dict(settings=PRODUCT, name="trial", seasons=[2026, 2027], rebuild=True, jobs=3)
 
 
 def test_site_writes_ratings_json_alone_by_default(monkeypatch):

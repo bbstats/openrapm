@@ -11867,3 +11867,63 @@ possessions and the pace part is a rate, so neither has it.
 2009 +20.9, Duncan 2002 +19.8, Chris Paul 2009 +17.8, Garnett 2004 +17.5, Garnett 2003 +17.5, LeBron 2016 +17.3, Kawhi 2017
 +17.3, Jokić 2025 +17.2.  A league sums to about -330 wins in 2026: "over starter average" means an average team's players
 sum below zero.  The bench stays small: no 2026 player under 500 minutes is above +0.8 or below -1.4.
+
+### WOSA, the switch and the lock (2026-11-02, evening)
+
+**The switch.**  The owner, on the published version: "playing well in lower leverage situations means that you are
+increasing your team's win probability! which we absolutely should not penalize" and "if you cause the blowout you shouldn't be
+penalized", then "switch! great".  Leverage against the season's mean holds two things, how close the whole game stayed and when
+in the game a possession came, and the first marks a player down for the blowouts he causes: San Antonio's 2026 games read 0.89
+with Wembanyama and 1.06 without.  A blowout win moves a team from about 50% to 100% as a buzzer-beater does.  So every game
+now carries the same total weight, and leverage divides it up inside that game (`wins.leverage_inside_games`).  Against records
+the correlation is 0.960 against 0.962, which costs nothing.
+
+| possession, 2026, 1.00 is average | against the season | inside the game |
+|---|---|---|
+| first half, margin 16-20 | 0.58 | 1.02 |
+| third quarter, margin 16-20 | 0.45 | 0.68 |
+| last 5 minutes, within 5 | 3.17 | 2.28 |
+| last 5 minutes, margin 16-20 | 0.01 | 0.02 |
+| last 5 minutes, margin 21 or more | 0.00 | 0.00 |
+
+**The lock.**  The owner: "unfortunately our ratings use playoff data so, not sure what to do about that", then "ideally we just
+lock WOSA after reg season", then "go".  WOSA counts regular-season wins and read a rating with the playoffs in it, so a playoff
+run moved it.  Now each season reads a rating from its regular season alone, every input rebuilt from those games
+(`regular_season_cut`, `regular_season_table`).  A season in progress is not rebuilt: until its first playoff game its own rows are
+the regular season, each morning stores them, and after that game the last rows stored stand.  **Proof the cut changes nothing
+when there is nothing to cut:** 2026 with every game kept gives its 181 panel inputs with no gap over 1e-9; 2027, which has no
+playoff games, gives its designs exactly and its published step-3 ratings to 2e-15.  (21 of 2027's inputs differ through the cut,
+its hustle read game by game and its score state, against the season-to-date numbers a season in progress reads: which is why
+a season in progress freezes its rows and is never rebuilt.)
+
+What the lock moves, 2026 regulars: rating a median 0.10 per 100, the 90th percentile 0.42, the largest 1.02; WOSA a median 0.06
+wins, the 90th percentile 0.59, the largest 1.51.  Largest: Randle +1.51, rating 1.50 to 2.39; Duren +1.36, 2.93 to 3.96; Towns
+-1.28, 4.06 to 3.37; Hart -1.20; Vassell -1.17; Gilgeous-Alexander +1.17, 7.51 to 8.28.
+
+**The first run was stopped at 90 minutes with 28 of 30 seasons done and lost them**: it wrote only at the end, and a season takes
+220 seconds, not the 40 first written in its docstring.  A season's file is now written as it finishes, a stopped run goes on
+from there, and the seasons run in several processes (`parallel`): 41 minutes in two.
+
+**The scale.**  Rating points per win, on these ratings and these weights, read 28.7 / 28.9 / 30.4 by era, a mean of 29.3, from
+check 157.  30 stays: at 30 the slope of records on the ratings' wins is 1.05 / 1.04 / 0.99, at 29 it would be 1.01 / 1.00 /
+0.95, the same size of miss, and 30 is where the recent era reads.  Correlation 0.966 / 0.967 / 0.953.  The wins equal the long way
+round to 2.5e-14 in every season.  The bar on these ratings: 0.67 / 0.79 / 0.91 by era.
+
+**Own play, read again: still out, and a second false pass.**  With the check's stints chosen by the wins' new weight it read half
+A against half B 0.120, z +9.3, a season against the next 0.070, z +5.1, 944 of 8,146 beyond 2 standard errors, "passes: True".
+Chosen by the game's state when the stint starts, on the same ratings:
+
+| reading | high leverage by the game's state | random stints, same count per game | signs flipped, pure noise |
+|---|---|---|---|
+| player-seasons beyond 2 standard errors, of 9,364 | 633 | 662.0 | 526.1 |
+| half A against half B, correlation | 0.021, z +1.7 | 0.027, z +2.4 | |
+| a season against the next, correlation | 0.012, z +0.9 | | |
+
+The ratings hardly matter here, since the rest of each player's games comes off first.  The weight divides by the mean of the game,
+which knows how the game ended: a game that became a blowout has its early stints chosen, the ones that built it.  A test on the
+same game state pins it.  So the choosing number stays the game's state, `--selection inside_game` keeps the bad reading
+reproducible, and own play stays out.  WOSA itself does not have this problem in the same form: it multiplies the weight by a
+rating, not by the stint's points, so how a game ended moves weight between stints and adds no points.
+
+**Trap, for the list above.**  A number normalized inside a game knows how the game ended.  Use it to divide credit if that is what
+you mean, never to choose which stints to test.

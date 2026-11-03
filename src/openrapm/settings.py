@@ -369,10 +369,10 @@ class WinsSettings:
     # the pace ridge leaves out stints shorter than this: under 15 seconds a stint is 0.5% of the time and 43% of the
     # weighted squared error (2025), a substitution at a free throw rather than a pace
     pace_min_seconds: float = 15.0
-    # rating points, weighted by relative leverage, for one win: check 157's slope of teams' records on them, 25.8 /
-    # 26.3 / 27.7 by era (a season's standard error about 1.4).  One number for every season: a season's own slope
-    # would add its noise to every player, about 0.6 wins on a star
-    points_per_win: float = 27.0
+    # rating points, weighted by leverage inside each game, for one win: check 157's slope of teams' records on the
+    # regular-season ratings, 28.7 / 28.9 / 30.4 by era (a season's standard error about 1.5).  One number for every
+    # season: a season's own slope would add its noise to every player, about 0.6 wins on a star
+    points_per_win: float = 30.0
     # what the wins count and everything the module fits reads; the rating itself stays the season's
     phases: tuple = ("RS",)
 
