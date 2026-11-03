@@ -22,23 +22,15 @@ every number quoted here; read its measurement traps before trusting a number.  
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
 
-## Where it stands, 2026-11-03: the Detail view built, NOT published (branch `detail-box-adj`, worktree `A:/code/spmm_detail`)
+## Where it stands, 2026-11-03: the Detail view PUBLISHED (the owner: "publish")
 
 The owner: "change 'decomposition' to 'detail' and separate out the lineup swaps model but just call it 'Box Adj'. and then On
 court Off court should be called On adj Off adj".  **No rating moves**: a rebuild of all 31 seasons matches the published tables on
 all 15,027 rows, difference 0, and a trial of the morning's `build --seasons 2027 --replace-seasons` on the new columns does too,
-wins over starter average included.  The work is on a branch because the morning job runs from `A:/code/spmm`: new data with
-the old page would show a Box score column short of its Box Adj.  Internal names stay: the `--openrapm-decomposition` flag,
+wins over starter average included.  Internal names stay: the `--openrapm-decomposition` flag,
 `decomposition.py`, `decompose_openrapm.json`.
 
-**To publish, on the owner's word:**
-
-1. Copy `box_adj_off` and `box_adj_def` from `outputs/season_ratings_detail_boxadj{,_step3,_step4}.parquet` onto
-   `season_ratings_product{,_step3,_step4}.parquet` by player and season, in the build's column order (`player_name`, the two
-   columns, then the rest), keeping copies first.  Without them the morning's `--replace-seasons` stops on the columns.
-2. Merge `detail-box-adj` into `main` and the checkout's branch, so the morning job runs the new code.
-3. `openrapm site --openrapm-decomposition --power` from the product table, then commit and push; check the Pages build.
-4. Remove the worktree and the scratch `detail_boxadj` tables.
+The published tables carry `box_adj_off` and `box_adj_def`; their copies from before are in `outputs/backup_boxadj/`.
 
 **Separately, not fixed, waiting on the owner:** the morning job of 2026-11-03 failed in `scripts/daily_files.py changed` with
 WinError 6 starting `git` with no valid console input, so that day's 2027 did not publish.  Likely fix, not tried:
