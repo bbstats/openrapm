@@ -365,3 +365,32 @@ def test_the_within_layer_is_read_to_a_full_season_with_the_rest():
     tenth = pd.DataFrame({"season": [2026], "multiplier_off": [0.71], "within_multiplier_off": [0.99]})
     full = ps.read_to_full_season(quarter, tenth, 0.25, 0.10)
     assert full.within_multiplier_off.iloc[0] == pytest.approx(0.99 + 0.10 * 0.02 / 0.15)
+
+
+def _box_adj_rows():
+    return pd.DataFrame({"player_id": [1, 2, 3, 4], "season": 2020, "prior_off": [2.0, -1.0, 1.0, 0.0],
+                         "prior_def": [0.5, 0.0, -0.5, 1.0], "u_off": [0.2, 0.1, -0.1, 0.0],
+                         "u_def": [0.0, 0.1, 0.2, 0.3], "poss_off": [100.0, 300.0, 200.0, 400.0],
+                         "poss_def": [100.0, 300.0, 200.0, 400.0], "box_adj_off": [0.6, -0.2, 0.4, -0.2],
+                         "box_adj_def": [0.3, -0.1, 0.1, -0.05]})
+
+
+def test_a_box_adj_takes_its_priors_multipliers_on_one_layer():
+    out = ps._shrink_season(_box_adj_rows(), 0.5, 0.25)
+    assert out.box_adj_off.tolist() == pytest.approx([0.3, -0.1, 0.2, -0.1])
+    assert out.box_adj_def.tolist() == pytest.approx([0.075, -0.025, 0.025, -0.0125])
+
+
+def test_on_two_layers_a_box_adj_is_shrunk_exactly_as_the_prior_it_is_part_of():
+    rows = _box_adj_rows()
+    team, within = np.array([1.0, 1.0, 2.0, 2.0]), (0.7, 0.9, 0.6, 0.8)
+    with_adj = ps._shrink_season(rows, 0.8, 0.5, 1.0, 1.0, within, team)
+    # the prior without its Box Adj, shrunk alone, is what is left of the shrunk prior: the two layers add
+    rest = rows.assign(prior_off=rows.prior_off - rows.box_adj_off, prior_def=rows.prior_def - rows.box_adj_def)
+    alone = ps._shrink_season(rest.drop(columns=["box_adj_off", "box_adj_def"]), 0.8, 0.5, 1.0, 1.0, within, team)
+    plain = ps._shrink_season(rows.drop(columns=["box_adj_off", "box_adj_def"]), 0.8, 0.5, 1.0, 1.0, within, team)
+    for side in ("off", "def"):
+        level = (plain[f"prior_{side}"] - with_adj[f"prior_{side}"]).abs().max()
+        assert level < 1e-12                                       # no rating moves for carrying the column
+        gap = with_adj[f"prior_{side}"] - with_adj[f"box_adj_{side}"] - alone[f"prior_{side}"]
+        assert gap.max() - gap.min() < 1e-12                       # the re-centring is the only difference

@@ -150,7 +150,7 @@ __all__ = ["CONTEXT", "BOX", "INPUTS", "OTHER_BOX", "TYPES", "INPUT_SETS", "type
            "context_numbers", "line_inputs", "side_inputs", "swap_targets", "held_back_grams", "season_coefficients",
            "second_priors", "TEAM_TOTALS", "team_possessions", "hold_team_totals", "hold_spread",
            "season_second_priors", "SAME_TEAMMATES", "OTHER_OPPONENTS", "CENTRED_SETS", "three_inputs", "centred",
-           "reads_types"]
+           "reads_types", "adjustments"]
 
 CONTEXT = ["teammates_offence_on", "teammates_defence_on", "opponents_offence_on", "opponents_defence_on",
            "teammates_offence_bench", "teammates_defence_bench", "opponents_offence_bench", "opponents_defence_bench"]
@@ -575,6 +575,19 @@ def hold_spread(line: pd.Series, anchor: pd.Series, team_poss: pd.DataFrame) -> 
     held, factor = swap_adjust.hold_spread_within(line.to_numpy(float), anchor.reindex(ids).to_numpy(float), weight,
                                                   team)
     return pd.Series(held, index=ids), factor
+
+
+def adjustments(values: dict, inputs: dict, coefficients: dict, n_folds: int) -> dict:
+    """{"O", "D"}: {player_id: c}, what the swaps' lesson adds to the box-score part in a second prior (the module
+    docstring: second prior = b x box-score prior + c).  `values` and `inputs` are `season_second_priors`' two answers,
+    so the box-score prior here is the one the line read, centred where the line's inputs are.  Team totals held, c adds
+    up to 0 on each team, so it only moves credit between teammates."""
+    out = {}
+    for side, frame in inputs.items():
+        weight = coefficients[side][frame.index.to_numpy(dtype=np.int64) % int(n_folds), 0]
+        anchor = pd.Series(weight * frame[BOX].to_numpy(float), index=frame.index)
+        out[side] = (pd.Series(values[side]).reindex(frame.index) - anchor).to_dict()
+    return out
 
 
 def season_second_priors(stints: pd.DataFrame, answers: dict, box: dict, coefficients: dict,

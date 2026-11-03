@@ -370,3 +370,17 @@ def test_a_line_whose_normal_equations_miss_some_of_its_inputs_is_refused(tmp_pa
         files.line_setup(cfg, "short", names)
     files.write_grams(files.grams_path(directory, 2020), grams(len(names)))
     assert files.line_setup(cfg, "short", names)["inputs"] == names
+
+
+def test_the_adjustments_are_the_second_prior_less_its_box_score_part_and_cancel_on_a_team():
+    frame = pd.DataFrame({sp.BOX: [1.0, -1.0, 2.0, 0.0], "other": [0.5, 0.5, -0.5, -0.5]}, index=[10, 11, 12, 13])
+    coefficients = np.array([[2.0, 1.0], [3.0, 1.0], [2.0, 1.0]])             # player folds by id % 2, then every swap
+    line = sp.second_priors(frame, coefficients, 2)
+    weight = coefficients[frame.index.to_numpy() % 2, 0]
+    anchor = pd.Series(weight * frame[sp.BOX].to_numpy(), index=frame.index)
+    team_poss = pd.DataFrame({"player_id": [10, 11, 12, 13], "team": [1, 1, 2, 2],
+                              "poss": [100.0, 300.0, 200.0, 200.0]})
+    held = sp.hold_team_totals(line, anchor, team_poss)
+    got = pd.Series(sp.adjustments({"O": held.to_dict()}, {"O": frame}, {"O": coefficients}, 2)["O"])
+    assert (held - anchor - got).abs().max() < 1e-12
+    assert abs(got[10] * 100 + got[11] * 300) < 1e-9 and abs(got[12] * 200 + got[13] * 200) < 1e-9

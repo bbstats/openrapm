@@ -3,18 +3,18 @@
 <head>
 <meta charset="utf-8">
 <title>OpenRAPM</title>
-<!-- the vanilla RAPM page is gone; an old link opens the OpenRAPM decomposition, in its season when it named one
+<!-- the vanilla RAPM page is gone; an old link opens the OpenRAPM detail view, in its season when it named one
      season (its player was a name, which the ratings page does not read) -->
 <script>
   (function () {
     var h = new URLSearchParams(location.hash.slice(1)), to = new URLSearchParams();
     var period = h.get("period") || "";
     if (/^[0-9]{4}$/.test(period) && h.get("span") !== "3y") to.set("season", period);
-    to.set("view", "decomposition");
+    to.set("view", "detail");
     location.replace("./#" + to.toString());
   })();
 </script>
-<meta http-equiv="refresh" content="0; url=./#view=decomposition">
+<meta http-equiv="refresh" content="0; url=./#view=detail">
 </head>
-<body><p><a href="./#view=decomposition">OpenRAPM decomposition</a></p></body>
+<body><p><a href="./#view=detail">OpenRAPM detail</a></p></body>
 </html>

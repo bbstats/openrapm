@@ -215,6 +215,18 @@ def rated_second_prior(cfg: dict, season: int, panel: pd.DataFrame, priors: dict
     return SeasonSecondPrior(values=values, coefficients=coefficients, inputs=inputs)
 
 
+def with_box_adj(table: pd.DataFrame, second: SeasonSecondPrior | None, n_folds: int) -> pd.DataFrame:
+    """One season's centred step-3 table with the part of each prior learned from lineup swaps, in the prior's published
+    units and sign: the table's prior scale x second_prior.adjustments.  A player the line does not read has none, as he
+    has no prior (prior_rapm.aligned_prior), and without the second prior every player has none."""
+    if second is None:
+        return table.assign(box_adj_off=0.0, box_adj_def=0.0)
+    adjusted = second_prior.adjustments(second.values, second.inputs, second.coefficients, n_folds)
+    off, deff = (prior_rapm.aligned_prior(adjusted[side], table.player_id) for side in SIDES)
+    return table.assign(box_adj_off=table.prior_scale_off.to_numpy(float) * off,
+                        box_adj_def=-table.prior_scale_def.to_numpy(float) * deff)
+
+
 def line_words(coefficients: dict, names) -> str:
     """The line fitted on every swap, both sides, one weight per input (`names`), for the log."""
     return "; ".join(f"{side} " + ", ".join(f"{name} {weight:+.3f}" for name, weight
@@ -492,7 +504,7 @@ def rate_seasons(seasons, sums: dict, panel: pd.DataFrame, designs: DesignCache,
         else:
             table, priors, unseen, second = rate_one_season(season, sums, panel, designs, settings, params, lines,
                                                             label_cache, part_seasons, progress)
-        rated[season] = table
+        rated[season] = with_box_adj(table, second, settings.prior.second_prior_folds)
         if keep_models:
             models[season] = {side: saved_side(priors[side], params[side], settings, unseen, second, side)
                               for side in SIDES}

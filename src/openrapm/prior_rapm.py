@@ -53,7 +53,7 @@ from .rapm import design_blocks, normal_equations, player_possessions, solve_rid
 
 __all__ = ["aligned_prior", "lineup_prior_sums", "game_lineup_sums", "game_averages", "PriorRapmFit", "RidgeSystem",
            "ridge_system", "fit", "defence_possessions", "season_table", "centre", "rate_season", "held_prior_scale",
-           "blend_weight", "blended_scale", "rate_season_blended", "PUBLISHED_COLUMNS", "published_table"]
+           "blend_weight", "blended_scale", "rate_season_blended", "PUBLISHED_COLUMNS", "BOX_ADJ_COLUMNS", "published_table"]
 
 
 def aligned_prior(prior: dict, player_ids) -> np.ndarray:
@@ -315,6 +315,9 @@ PUBLISHED_COLUMNS = ["player_id", "offense", "prior_offense", "poss_off", "defen
                      "season", "offense_lambda", "defense_lambda", "context_lambda", "prior_scale_off",
                      "prior_scale_def", "poss_season", "rating_off", "rating_def", "rating_total", "prior_off",
                      "prior_def", "prior_total", "u_off", "u_def", "u_total", "player_name"]
+# the part of prior_off and prior_def learned from lineup swaps (second_prior.adjustments), positive good, when the build
+# recorded it (commands/build.with_box_adj); it is already inside the prior columns
+BOX_ADJ_COLUMNS = ["box_adj_off", "box_adj_def"]
 
 
 def published_table(table: pd.DataFrame, names: pd.DataFrame) -> pd.DataFrame:
@@ -337,4 +340,5 @@ def published_table(table: pd.DataFrame, names: pd.DataFrame) -> pd.DataFrame:
     out["u_off"] = out.rating_off - out.prior_off
     out["u_def"] = out.rating_def - out.prior_def
     out["u_total"] = out.u_off + out.u_def
-    return out.merge(names, on="player_id", how="left")[PUBLISHED_COLUMNS]
+    kept = [*PUBLISHED_COLUMNS, *(column for column in BOX_ADJ_COLUMNS if column in out)]
+    return out.merge(names, on="player_id", how="left")[kept]

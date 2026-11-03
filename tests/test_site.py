@@ -199,14 +199,14 @@ def test_every_page_carries_the_same_tabs_with_its_own_marked():
 def test_the_old_decomposition_address_sends_its_links_to_the_ratings_page():
     from pathlib import Path
     text = (Path(__file__).resolve().parents[1] / "docs" / "decompose_openrapm.html").read_text(encoding="utf-8")
-    assert 'location.replace("./#"' in text and 'h.set("view", "decomposition")' in text
+    assert 'location.replace("./#"' in text and 'h.set("view", "detail")' in text
 
 
 def test_the_vanilla_pages_old_address_opens_the_openrapm_decomposition_and_nothing_links_it():
     from pathlib import Path
     docs = Path(__file__).resolve().parents[1] / "docs"
     text = (docs / "decompose.html").read_text(encoding="utf-8")
-    assert 'location.replace("./#"' in text and 'to.set("view", "decomposition")' in text
+    assert 'location.replace("./#"' in text and 'to.set("view", "detail")' in text
     assert '<nav class="site">' not in text
     for page in ("about.html", "index.html", "similarity.html", "bias.html", "site.css"):
         assert "decompose.html" not in (docs / page).read_text(encoding="utf-8"), page
@@ -241,6 +241,7 @@ def openrapm_site(rated_season, tmp_path, monkeypatch):
     rng = np.random.default_rng(1)
     final = step3.copy()
     final["c_off"], final["c_def"] = rng.normal(0, 0.3, len(final)), rng.normal(0, 0.3, len(final))
+    final["box_adj_off"], final["box_adj_def"] = rng.normal(0, 0.5, len(final)), rng.normal(0, 0.5, len(final))
     final["rating_off"], final["rating_def"] = step3.rating_off + final.c_off, step3.rating_def + final.c_def
     final["rating_total"] = final.rating_off + final.rating_def
     final["wosa"] = rng.normal(0, 3.0, len(final))
@@ -309,8 +310,9 @@ def test_the_pieces_are_the_tables_columns_and_a_split_of_the_games_part(openrap
     table = final.set_index("player_id")
     for _, player_id, _, off, deff, _, _, _ in rows[:25]:
         for pieces, side in ((off, "off"), (deff, "def")):
-            assert pieces[0] == round(table.loc[player_id, f"prior_{side}"], 2)
-            assert pieces[4] == round(table.loc[player_id, f"c_{side}"], 2)
+            adj = table.loc[player_id, f"box_adj_{side}"]
+            assert pieces[0] == round(table.loc[player_id, f"prior_{side}"] - adj, 2)
+            assert pieces[4] == round(adj + table.loc[player_id, f"c_{side}"], 2)
             assert abs(sum(pieces[1:4]) - table.loc[player_id, f"u_{side}"]) < 0.0151     # three pieces at two decimals
 
 

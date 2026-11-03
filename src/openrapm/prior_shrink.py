@@ -116,6 +116,9 @@ LAYER_PARTS = (("prior_off", "poss_off", 1.0), ("u_off", "poss_off", 1.0), ("pri
                ("u_def", "poss_def", -1.0))
 
 
+BOX_ADJ_OF = {"prior_off": "box_adj_off", "prior_def": "box_adj_def"}     # the part of each prior from lineup swaps
+
+
 def unseen_fold_seasons(season: int, rule: str) -> set:
     """The seasons whose folds may not fit `season`'s multipliers.
 
@@ -347,11 +350,13 @@ def within_multipliers_by_season(seasons, equations: dict, rule: str, nearest: i
 
 def _layered(rows: pd.DataFrame, team, team_multipliers: tuple, within: tuple) -> dict:
     """{part column: the part after both layers}: team multiplier x team mean + within multiplier x deviation, each
-    part's team mean weighted by that side's possessions.  `team_multipliers` and `within` follow LAYER_PARTS."""
+    part's team mean weighted by that side's possessions.  `team_multipliers` and `within` follow LAYER_PARTS.  A
+    prior's Box Adj (`BOX_ADJ_OF`), when the table has it, takes its prior's multipliers: a sum of parts stays a sum."""
     out = {}
     for (column, weight_column, _), team_m, within_m in zip(LAYER_PARTS, team_multipliers, within):
-        mean, deviation = team_split(team, rows[column].to_numpy(float), rows[weight_column].to_numpy(float))
-        out[column] = team_m * mean + within_m * deviation
+        for part in (column, *(adj for adj in [BOX_ADJ_OF.get(column)] if adj in rows.columns)):
+            mean, deviation = team_split(team, rows[part].to_numpy(float), rows[weight_column].to_numpy(float))
+            out[part] = team_m * mean + within_m * deviation
     return out
 
 
@@ -368,6 +373,9 @@ def _shrink_season(rows: pd.DataFrame, multiplier_off: float, multiplier_def: fl
     else:
         rows["prior_off"] = multiplier_off * rows.prior_off
         rows["prior_def"] = multiplier_def * rows.prior_def
+        if "box_adj_off" in rows.columns:
+            rows["box_adj_off"] = multiplier_off * rows.box_adj_off
+            rows["box_adj_def"] = multiplier_def * rows.box_adj_def
         if games_off != 1.0 or games_def != 1.0:
             rows["u_off"] = games_off * rows.u_off
             rows["u_def"] = games_def * rows.u_def

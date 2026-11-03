@@ -895,16 +895,17 @@ def write_decomposition(cfg: dict, ratings_path: Path, data_dir: Path, built: st
 # ===================================================================================== the OpenRAPM decomposition page
 # Every published rating split, on each side, into pieces that add up to it exactly:
 #
-#     rating = box score + on court + off court + team SOS + swap adjustment
+#     rating = box score + Box Adj + on court + off court + team SOS
 #
-#   box score        what the box score says: step 2's prior after step 4's multiplier (prior_off, prior_def)
+#   box score        what the box score says: the prior without its Box Adj, after step 4's multipliers
+#   Box Adj          the part of the prior learned from lineup swaps, which only moves credit between teammates (the
+#                    table's box_adj_off, box_adj_def), and step 5's adjustment, 0 since experiment 82 (c_off, c_def)
 #   on court         the part of the season's games' part (u, how far step 3 moved him from his prior, times step 4's
 #                    factor on it since experiment 65) that comes from the possessions he was on the court for
 #   off court        the part from his team's possessions without him: in games he played and in games he missed
 #   team SOS         the part from every other possession
-#   swap adjustment  step 5's adjustment inside his team (the table's c_off, c_def)
 #
-# The total is the sum of the two sides' pieces.  Box score and swap adjustment are columns of the ratings table; u is
+# The total is the sum of the two sides' pieces.  Box score and Box Adj come from the ratings table's columns; u is
 # split by solving step 3 again for each season and each side's target on the table's own priors (decomposition.py
 # says why that splits u exactly), and the run stops before writing unless the refit reproduces every u and every
 # prior scale in the table (to 1e-9; to 1e-6 in 2020, whose solve needs a jitter that follows the scale of the
@@ -918,12 +919,12 @@ def write_decomposition(cfg: dict, ratings_path: Path, data_dir: Path, built: st
 # - 0.21 + 0.14 + 0.61.
 OPENRAPM_FILE = "decompose_openrapm.json"
 OPENRAPM_FIELDS = ["n", "id", "p", "o", "d", "t", "tm", "w"]
-OPENRAPM_PIECES = ["box_score", "on_court", "off_court", "team_sos", "swap", "rating"]
+OPENRAPM_PIECES = ["box_score", "on_court", "off_court", "team_sos", "box_adj", "rating"]
 OPENRAPM_SIDES = ("off", "def", "total")
 OPENRAPM_TOLERANCE = 1e-9         # each identity holds to this, per player and side
 OPENRAPM_JITTER_TOLERANCE = 1e-6  # the same, in a season whose solve needed rapm.solved_ridge's jitter (2020)
 OPENRAPM_TABLE_COLUMNS = ["player_id", "season", "player_name", "poss_season", "prior_off", "prior_def", "u_off",
-                          "u_def", "c_off", "c_def", "rating_off", "rating_def", "rating_total", "offense_lambda",
+                          "u_def", "box_adj_off", "box_adj_def", "c_off", "c_def", "rating_off", "rating_def", "rating_total", "offense_lambda",
                           "wosa"]
 OPENRAPM_STEP3_COLUMNS = ["player_id", "season", "prior_offense", "prior_defense", "prior_scale_off",
                           "prior_scale_def", "u_off", "u_def"]
@@ -1078,11 +1079,11 @@ def season_pieces(rows: pd.DataFrame, parts: dict, factors: dict | None = None) 
         games = parts[side].set_index("player_id").reindex(rows.player_id)
         if games.u.isna().any():
             raise SystemExit(f"{int(rows.season.iloc[0])}: the refit has no row for some players of the ratings table")
-        pieces[f"{side}_box_score"] = rows[f"prior_{side}"].to_numpy()
+        pieces[f"{side}_box_score"] = rows[f"prior_{side}"].to_numpy() - rows[f"box_adj_{side}"].to_numpy()
         factor = None if factors is None else factors[side]
         for piece in ("on_court", "off_court", "team_sos"):
             pieces[f"{side}_{piece}"] = games_image(factor, rows.player_id.to_numpy(), games[piece].to_numpy())
-        pieces[f"{side}_swap"] = rows[f"c_{side}"].to_numpy()
+        pieces[f"{side}_box_adj"] = rows[f"box_adj_{side}"].to_numpy() + rows[f"c_{side}"].to_numpy()
         pieces[f"{side}_rating"] = rows[f"rating_{side}"].to_numpy()
     for piece in OPENRAPM_PIECES[:-1]:
         pieces[f"total_{piece}"] = pieces[f"off_{piece}"] + pieces[f"def_{piece}"]
@@ -1146,7 +1147,7 @@ def run_openrapm_checks(worst: dict, rows: dict, table: pd.DataFrame) -> None:
     def misses(key: str) -> str:
         return f"max miss {plain[key]:.1e}; in a jittered season {jittered[key]:.1e}"
 
-    check(holds("identity"), f"box score + on court + off court + team SOS + swap adjustment add up to every rating, "
+    check(holds("identity"), f"box score + Box Adj + on court + off court + team SOS add up to every rating, "
                              f"each side and the total ({misses('identity')})")
     check(holds("games_part"), f"solving step 3 again gives every player's games' part in the ratings table "
                                f"({misses('games_part')})")

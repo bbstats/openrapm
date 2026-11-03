@@ -11,7 +11,7 @@
   :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5; }
   body { color: var(--ink); font: 14px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
   #find { width: 210px; }
-  /* the side buttons sit left of Decomposition, so the button stays under the pointer when they appear */
+  /* the side buttons sit left of Detail, so the button stays under the pointer when they appear */
   .cols { display: inline-flex; gap: 8px; margin-left: auto; }
   .controls #pct, .controls #rookies { width: 40px; padding: 0; }
   .controls #rookies { font-size: 18px; }
@@ -62,7 +62,7 @@
   @media (max-width: 600px) {
     body { font-size: 13.5px; }
     /* the controls in full-width rows: season and team, then Find, then the buttons; the side buttons, when shown,
-       take a row of their own above Decomposition and %ile */
+       take a row of their own above Detail and %ile */
     .controls { gap: 8px; }
     .controls [data-list] { flex: 1 1 auto; }
     .controls .step { flex: 0 0 auto; }
@@ -102,7 +102,7 @@
     <a class="chip" id="chip" href="#" hidden><span id="chip-name"></span><span class="x" aria-hidden="true">&#x2715;</span></a>
     <span class="cols">
       <span class="seg" id="side" role="group" aria-label="Side" hidden><button type="button" data-side="off" aria-pressed="false">Offense</button><button type="button" data-side="def" aria-pressed="false">Defense</button><button type="button" data-side="total" aria-pressed="true">Total</button></span>
-      <button type="button" id="pieces" aria-pressed="false">Decomposition</button>
+      <button type="button" id="pieces" aria-pressed="false">Detail</button>
       <button type="button" id="rookies" aria-pressed="false" title="Rookies" aria-label="Rookies">&#x265C;</button>
       <button type="button" id="pct" aria-pressed="false" title="Percentile among players with 500 or more possessions, fewer while a season is in progress">%ile</button>
     </span>
@@ -128,12 +128,11 @@
   // the data file's three sides; each holds the five pieces and the rating, in the order PIECES lists them
   const SIDE_FIELD = { off: "o", def: "d", total: "t" };
   const FIELD_SIDE = { o: "off", d: "def", t: "total" };
-  // the file's fifth piece, the swap adjustment, is zero since experiment 82 and is not shown
-  const PIECES = [["box", "Box score"], ["on", "On court"], ["off", "Off court"], ["sos", "Team SOS"]];
-  // the columns of each view, [key, header]: the ratings view shows each side's rating, the decomposition one
+  const PIECES = [["box", "Box score"], ["adj", "Box Adj"], ["on", "On adj"], ["off", "Off adj"], ["sos", "Team SOS"]];
+  // the columns of each view, [key, header]: the ratings view shows each side's rating, the detail one
   // side's pieces
   const COLUMNS = { ratings: [["o", "Offense"], ["d", "Defense"], ["t", "Total"], ["w", "WOSA"], ["p", "Poss."]],
-                    decomposition: [...PIECES, ["a", "OpenRAPM"], ["p", "Poss."]] };
+                    detail: [...PIECES, ["a", "OpenRAPM"], ["p", "Poss."]] };
 
   // the season list and a player's seasons keep a sort each, so the way back finds the list sorted as it was
   const state = { view: "ratings", side: "total", season: null, team: "", q: "", player: null,
@@ -172,14 +171,14 @@
   function onSide(r, side) {
     const v = r[SIDE_FIELD[side]];
     return { n: r.n, id: r.id, p: r.p, tm: r.tm, w: r.w, o: r.o[5], d: r.d[5], t: r.t[5], rt: r.t[5],
-             box: v[0], on: v[1], off: v[2], sos: v[3], a: v[5] };
+             box: v[0], adj: v[4], on: v[1], off: v[2], sos: v[3], a: v[5] };
   }
 
   // the percentile button: each number becomes its percentile among the season's players with 500 or more
   // possessions, or in a season in progress 500 times the share of the season played, never under the 60 shown
   // (meta.percentile_min, written by openrapm site); a player under the pool's minimum gets none.  Remembered like
   // the theme
-  const PCT_KEYS = ["o", "d", "t", "w", "box", "on", "off", "sos", "a"];
+  const PCT_KEYS = ["o", "d", "t", "w", "box", "adj", "on", "off", "sos", "a"];
   const poolMin = season => (data.meta.percentile_min || {})[season] || 500;
   try { state.pct = localStorage.getItem("percentile") === "1"; } catch (e) {}
   // the rookies button: the season list shows only that season's rookies (meta.rookies, written by openrapm site).
@@ -218,7 +217,7 @@
   const byKey = (k, dir) => (a, b) => (a[k] === null) - (b[k] === null) || (a[k] - b[k]) * dir || b.rt - a.rt;
 
   // an address: a place (season, team, player) and the two buttons as they are now, in the order old links have:
-  // #season=2026&view=decomposition&side=off&team=SAS&player=1641705.  With a player, the season and team are the
+  // #season=2026&view=detail&side=off&team=SAS&player=1641705.  With a player, the season and team are the
   // list the cross goes back to.  The sort is not in it.  Built as a string: a redraw writes about 2,000 of them
   const addr = (season, team, player) => "#season=" + season +
     (state.view !== "ratings" ? "&view=" + state.view : "") + (state.side !== "total" ? "&side=" + state.side : "") +
@@ -240,13 +239,14 @@
   }
   // a link carries the buttons as they are, so only a typed or pasted address changes them
   function buttons(h) {
-    const view = h.get("view") === "decomposition" ? "decomposition" : "ratings",
+    // "decomposition" is the view's old name, which old links carry
+    const view = h.get("view") === "detail" || h.get("view") === "decomposition" ? "detail" : "ratings",
           side = SIDE_FIELD[h.get("side")] ? h.get("side") : "total";
     if (view !== state.view || side !== state.side) setView(view, side);
   }
   // the two column sets share the sort where they can: a side's rating is that side's OpenRAPM column, and back;
   // both tables' sorts move.  Turning the pieces on takes the side from the rating the shown table is sorted on
-  function setView(view, side = (view === "decomposition" && FIELD_SIDE[sorting().k]) || state.side) {
+  function setView(view, side = (view === "detail" && FIELD_SIDE[sorting().k]) || state.side) {
     for (const s of Object.values(state.sort))
       if (view === "ratings" ? s.k !== "p" && s.k !== "s" : FIELD_SIDE[s.k] || s.k === "w") s.k = view === "ratings" ? SIDE_FIELD[side] : "a";
     state.view = view;
@@ -276,7 +276,7 @@
   function render() {
     head();
     if (!data) return;
-    const one = state.player !== null, decomposition = state.view === "decomposition", { k, dir } = sorting();
+    const one = state.player !== null, detail = state.view === "detail", { k, dir } = sorting();
     let rows;
     if (!one) {
       // every player of the season is ranked first and the team and name filters come after, so a player found
@@ -291,7 +291,7 @@
     } else {
       // his rank each season: that season sorted high to low on the sorted column (on the bold one when sorted by
       // season) with the list's tie-break; a stable sort numbers ties as the list does
-      const rk = k === "s" ? (decomposition ? "a" : SIDE_FIELD[state.side]) : k;
+      const rk = k === "s" ? (detail ? "a" : SIDE_FIELD[state.side]) : k;
       rows = careers.get(state.player).map(([s]) => {
         const them = data.rows[s].map(r => shownRow(r, state.side, s)).sort(byKey(rk, -1));
         const i = them.findIndex(r => r.id === state.player);
@@ -303,7 +303,7 @@
     // a team code opens its season on that team; in the season list the chosen team's code clears it
     const teams = (tm, at) => tm.split("/").map(c =>
       `<a href="${esc(addr(at, one || c !== state.team ? c : "", null))}">${esc(c)}</a>`).join("/");
-    const cols = COLUMNS[state.view], bold = decomposition ? "a" : SIDE_FIELD[state.side];
+    const cols = COLUMNS[state.view], bold = detail ? "a" : SIDE_FIELD[state.side];
     tbody.innerHTML = rows.map(p => {
       const links = teams(p.tm, one ? String(p.s) : state.season);
       const first = one ? `<td class="season">${p.s}${similar.has(p.id + ":" + p.s) ? ` <a class="sim" href="similarity.html#player=${p.id}&amp;season=${p.s}" title="Similarity" aria-label="Similarity, ${p.s}">~</a>` : ""}</td>`
@@ -312,7 +312,7 @@
       return `<tr><td class="rank">${p.rank}</td>${first}<td class="team">${links}</td>` + cols.map(([key]) =>
         `<td${key === bold ? ' class="total"' : ""}>${key === "p" ? whole.format(p.p)
           : state.pct ? (p[key] === null ? "—" : Math.round(p[key]))
-          : decomposition ? fmt(p[key]) : fmt1(p[key])}</td>`).join("") + `</tr>`;
+          : detail ? fmt(p[key]) : fmt1(p[key])}</td>`).join("") + `</tr>`;
     }).join("");
 
     // the controls: the season list's, or the player's name with the cross back to the list
@@ -327,8 +327,8 @@
     const seasons = data.meta.seasons.map(String);
     $("older").disabled = state.season === seasons[seasons.length - 1];
     $("newer").disabled = state.season === seasons[0];
-    $("side").hidden = !decomposition;
-    pieces.setAttribute("aria-pressed", decomposition);
+    $("side").hidden = !detail;
+    pieces.setAttribute("aria-pressed", detail);
     $("pct").setAttribute("aria-pressed", !!state.pct);
     $("rookies").setAttribute("aria-pressed", !!state.rookies);
     $("rookies").hidden = one;
@@ -336,11 +336,11 @@
     writeAddress();
   }
 
-  // the CSV: the ratings view gives each side's rating, the decomposition view every side's pieces; both carry
+  // the CSV: the ratings view gives each side's rating, the detail view every side's pieces; both carry
   // the NBA player id, which the table leaves out.  UTF-8 with a byte-order mark so a spreadsheet opens names like
   // Jokić as written
-  const CSV_PIECES = ["box_score", "on_court_signal", "off_court_adjustment", "team_sos_adjustment", "openrapm"];
-  const csvPieces = v => [v[0], v[1], v[2], v[3], v[5]];      // the swap adjustment, v[4], left out
+  const CSV_PIECES = ["box_score", "box_adj", "on_adj", "off_adj", "team_sos_adjustment", "openrapm"];
+  const csvPieces = v => [v[0], v[4], v[1], v[2], v[3], v[5]];
   function downloadCSV(filename, pairs) {
     const q = v => { if (v === null || v === undefined) return "";
                      const s = String(v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
@@ -356,7 +356,7 @@
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  const csvName = what => `openrapm_${state.view === "ratings" ? "ratings" : "decomposition"}_${what}.csv`;
+  const csvName = what => `openrapm_${state.view === "ratings" ? "ratings" : "detail"}_${what}.csv`;
   $("csv-view").addEventListener("click", e => {
     e.preventDefault();
     if (!data) return;
@@ -389,7 +389,7 @@
   $("newer").addEventListener("click", () => step(-1));
   team.addEventListener("change", () => { state.team = team.value; render(); });
   find.addEventListener("input", () => { state.q = find.value; render(); });
-  pieces.addEventListener("click", () => { setView(state.view === "ratings" ? "decomposition" : "ratings"); render(); });
+  pieces.addEventListener("click", () => { setView(state.view === "ratings" ? "detail" : "ratings"); render(); });
   $("pct").addEventListener("click", () => {
     state.pct = !state.pct;
     try { localStorage.setItem("percentile", state.pct ? "1" : "0"); } catch (e) {}

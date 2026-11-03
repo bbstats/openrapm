@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <title>OpenRAPM</title>
-<!-- the decomposition now lives on the ratings page; an old link keeps its season, side and player -->
+<!-- the detail view lives on the ratings page; an old link keeps its season, side and player -->
 <script>
   (function () {
     var h = new URLSearchParams(location.hash.slice(1));
     h.delete("min");
-    h.set("view", "decomposition");
+    h.set("view", "detail");
     location.replace("./#" + h.toString());
   })();
 </script>
-<meta http-equiv="refresh" content="0; url=./#view=decomposition">
+<meta http-equiv="refresh" content="0; url=./#view=detail">
 </head>
-<body><p><a href="./#view=decomposition">OpenRAPM decomposition</a></p></body>
+<body><p><a href="./#view=detail">OpenRAPM detail</a></p></body>
 </html>
