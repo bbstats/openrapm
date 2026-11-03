@@ -12052,3 +12052,43 @@ What survives on what the rating leaves, with the same sign in every era, on def
 The 2026 top 20, total per 100 against the incumbent, keeps 16 of 20 (Bam Adebayo and Cade Cunningham swap 7th and 8th): Alex Caruso +0.43, Derrick White +0.51, Ausar Thompson +0.29, Ajay Mitchell +0.79, Moussa Diabaté +0.40 and Donovan Clingan +0.78 rise; Jimmy Butler -0.77, 10th to 24th, Karl-Anthony Towns -0.71, 12th to 22nd, Cason Wallace -0.42, 16th to 25th, OG Anunoby -0.08, 20th to 23rd, leave; Luka Dončić -0.52, Shai Gilgeous-Alexander -0.48.  The group of the ruling of 2026-10-08: Ajay Mitchell +0.79, Hugo González +0.69, Oso Ighodaro -0.23, Butler -0.77, Jokić -0.04, Zach Edey +0.24.  Players of 1,000+ possessions move a median 0.31, the ninetieth percentile 0.75, the largest 1.43.
 
 **Recommended: not adopted, by the registered rule.**  The code stays, off by default (`--second-prior-inputs context_types_team_rates_centred`); `outputs/second_prior/team128` and the boosters `prior_models_team128.pkl` stay until the owner rules.
+
+## Experiments 129-131: team numbers with the direct +/- out (the owner, 2026-11-03, on experiment 128's failure: "if it's failing the test, find out why.", then "can we just run the test again but eliminate the +/- direct type stuff? i dunno this is pretty easy data science work, just figure it out"; registered before any full build)
+
+**The read that chose them** (`scratch/2026-11-03_team_rates/read_no_plus_minus.py`, log beside it; read-only, the same swaps and rule as experiment 128's reads, seven lists, every one reported).  The change from adding each list to the line's 29 inputs, below 0 is better.  `line's target` adds the whole ratings back; `+/- out` adds only the prior parts back.
+
+| list added | side | line's target change | line's target z | +/- out change | +/- out z | +/- out 1997-2006 z | +/- out 2007-2016 z | +/- out 2017-2026 z |
+|---|---|---|---|---|---|---|---|---|
+| all eight rates, on and off, experiment 128 | offense | -0.196 | -4.58 | -0.089 | -2.36 | -1.51 | -0.57 | -2.06 |
+| all eight rates, on and off, experiment 128 | defense | -0.447 | -5.82 | -0.046 | -1.54 | -0.99 | -1.65 | +0.74 |
+| attempts, ORB and TOV, on and off | offense | -0.139 | -3.68 | -0.044 | -1.72 | -1.79 | +0.55 | -1.50 |
+| attempts, ORB and TOV, on and off | defense | -0.236 | -4.44 | -0.063 | -2.18 | -2.02 | -1.86 | +0.34 |
+| attempts, ORB and TOV, him on | offense | -0.119 | -3.31 | -0.019 | -0.97 | -1.36 | +0.76 | -0.72 |
+| attempts, ORB and TOV, him on | defense | -0.172 | -4.29 | -0.030 | -1.57 | -0.97 | -1.53 | -0.12 |
+| attempts, ORB and TOV, him off | offense | +0.000 | +0.00 | +0.006 | +0.52 | +0.06 | +1.06 | -0.21 |
+| attempts, ORB and TOV, him off | defense | -0.070 | -1.76 | -0.011 | -0.45 | -0.97 | -1.29 | +1.40 |
+| all eight rates, him off | offense | -0.018 | -0.75 | -0.019 | -0.83 | -0.61 | -0.05 | -0.89 |
+| all eight rates, him off | defense | -0.142 | -2.81 | -0.011 | -0.49 | -0.66 | -1.37 | +2.03 |
+| teammates' 13 box rates, him on | offense | +0.001 | +0.03 | +0.030 | +1.10 | -1.19 | +2.57 | +1.51 |
+| teammates' 13 box rates, him on | defense | +0.005 | +0.20 | +0.008 | +0.33 | +0.03 | +0.50 | -0.01 |
+| teammates' 13 box rates, him on, and his team's when he sits | offense | +0.005 | +0.12 | +0.036 | +1.08 | -1.31 | +1.07 | +2.60 |
+| teammates' 13 box rates, him on, and his team's when he sits | defense | +0.045 | +1.63 | +0.040 | +1.67 | +0.40 | +1.21 | +1.18 |
+| shuffled attempts, ORB and TOV | offense | +0.011 | +1.72 | +0.011 | +1.75 | +1.67 | +0.43 | +0.99 |
+| shuffled attempts, ORB and TOV | defense | +0.020 | +5.87 | +0.020 | +5.73 | +3.10 | +3.68 | +3.28 |
+| shuffled teammates' rates, both | offense | +0.034 | +4.22 | +0.033 | +3.91 | +5.05 | +1.85 | +0.94 |
+| shuffled teammates' rates, both | defense | +0.026 | +2.65 | +0.026 | +2.84 | +4.58 | -0.10 | +1.96 |
+
+- The team stats by who he plays with, the teammates' own box rates by shared possessions, hold nothing: they carry no lineup result of his and read like today's line, close to what shuffled inputs cost.  What team numbers forecast is the lineup results themselves.
+- Taking the makes out does not take the double counting out: attempts, ORB and TOV lose 68% of their gain on offense and 73% on defense with the +/- out, against 55% and 90% for all eight.  Attempts per possession still move with a lineup's turnovers and rebounds.
+
+**The three builds, in this order, one driver** (`scratch/2026-11-03_team_rates/run_no_makes.sh`):
+
+| experiment | name | line reads | line's target |
+|---|---|---|---|
+| 129 | nomakes129 | today's 29 and the 10 team numbers | the line's own |
+| 130 | nomakesout130 | today's 29 and the 10 team numbers | the +/- out |
+| 131 | ctxout131 | today's 29 | the +/- out: the control that tells 130's team numbers from its target |
+
+Each fitted on creation110's boosters and folds as ctx110 was, then a full build.  The 10 numbers, input set `context_types_team_profile_centred`: team threes, twos and free throws attempted, ORB and TOV per 100, him on the court and him on the bench; on defense the opponents' against his team.  The `+/- out` target, `openrapm second-prior --target prior_part`: the swap's residual on the fold's whole rating with only the two players' prior parts added back.
+
+**The test and the rule.**  As experiment 128: the within-season WOWY test against padbins127 by era beside noise_padbins127; the year-over-year test at z +2; the 2026 top 20, read for the players of the ruling of 2026-10-08; defense over offense.  Adopted when better in every era and not worse year over year at z +2; the verdict is the owner's.  Experiment 130 is read beside 131 before its gain or loss is put on the team numbers.

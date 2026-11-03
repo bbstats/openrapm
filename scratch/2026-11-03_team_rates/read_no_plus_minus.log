@@ -1,0 +1,106 @@
+folds loaded 360 7
+1997 13
+1998 19
+1999 24
+2000 30
+2001 36
+2002 43
+2003 49
+2004 55
+2005 61
+2006 68
+2007 75
+2008 81
+2009 88
+2010 94
+2011 100
+2012 105
+2013 112
+2014 119
+2015 125
+2016 132
+2017 138
+2018 145
+2019 151
+2020 158
+2021 164
+2022 170
+2023 177
+2024 184
+2025 190
+2026 198
+
+===== OFFENSE, target d: list | change | z | seasons better of 30 | 1997-2006 change z | 2007-2016 change z | 2017-2026 change z
+all eight, on and off | -0.196 | -4.58 | 23 | -0.270 -4.04 | -0.092 -1.22 | -0.227 -3.02
+no makes, on and off | -0.139 | -3.68 | 22 | -0.209 -2.88 | -0.060 -1.06 | -0.148 -2.32
+SHUFFLED no makes, on and off | +0.011 | +1.72 | 12 | +0.020 +1.71 | +0.005 +0.37 | +0.008 +1.06
+no makes, him on | -0.119 | -3.31 | 21 | -0.190 -2.41 | -0.059 -1.23 | -0.107 -1.98
+no makes, him off | +0.000 | +0.00 | 15 | -0.005 -0.23 | +0.005 +0.22 | -0.000 -0.01
+all eight, him off | -0.018 | -0.75 | 16 | -0.019 -0.38 | +0.003 +0.09 | -0.037 -1.00
+teammates on | +0.001 | +0.03 | 14 | -0.117 -1.79 | +0.054 +1.36 | +0.066 +1.07
+teammates on and his team when he sits | +0.005 | +0.12 | 16 | -0.146 -1.89 | +0.017 +0.31 | +0.146 +2.26
+SHUFFLED teammates on and his team when he sits | +0.034 | +4.22 | 6 | +0.056 +5.22 | +0.028 +2.04 | +0.016 +1.12
+
+===== OFFENSE, target d_prior: list | change | z | seasons better of 30 | 1997-2006 change z | 2007-2016 change z | 2017-2026 change z
+all eight, on and off | -0.089 | -2.36 | 20 | -0.105 -1.51 | -0.040 -0.57 | -0.121 -2.06
+no makes, on and off | -0.044 | -1.72 | 16 | -0.085 -1.79 | +0.020 +0.55 | -0.066 -1.50
+SHUFFLED no makes, on and off | +0.011 | +1.75 | 14 | +0.020 +1.67 | +0.006 +0.43 | +0.008 +0.99
+no makes, him on | -0.019 | -0.97 | 15 | -0.055 -1.36 | +0.021 +0.76 | -0.022 -0.72
+no makes, him off | +0.006 | +0.52 | 15 | +0.001 +0.06 | +0.020 +1.06 | -0.004 -0.21
+all eight, him off | -0.019 | -0.83 | 17 | -0.026 -0.61 | -0.002 -0.05 | -0.029 -0.89
+teammates on | +0.030 | +1.10 | 11 | -0.061 -1.19 | +0.078 +2.57 | +0.073 +1.51
+teammates on and his team when he sits | +0.036 | +1.08 | 12 | -0.077 -1.31 | +0.045 +1.07 | +0.139 +2.60
+SHUFFLED teammates on and his team when he sits | +0.033 | +3.91 | 7 | +0.057 +5.05 | +0.028 +1.85 | +0.014 +0.94
+
+OFFENSE: weights per sd on target d_prior, teammates on and his team when he sits: stat | on | when he sits
+threes_made | -0.133 | +0.225
+threes_missed | +0.068 | -0.472
+twos_made | -0.275 | -0.111
+twos_missed | +0.093 | -0.233
+free_throws_made | -0.110 | -0.011
+free_throws_missed | +0.188 | +0.016
+off_rebounds | +0.272 | -0.018
+def_rebounds | -0.115 | -0.076
+assists | +0.100 | -0.049
+turnovers | -0.202 | +0.033
+steals | -0.250 | +0.070
+blocks | +0.038 | -0.065
+fouls | +0.043 | -0.010
+
+===== DEFENSE, target d: list | change | z | seasons better of 30 | 1997-2006 change z | 2007-2016 change z | 2017-2026 change z
+all eight, on and off | -0.447 | -5.82 | 27 | -0.420 -4.09 | -0.626 -3.39 | -0.295 -3.74
+no makes, on and off | -0.236 | -4.44 | 26 | -0.290 -2.58 | -0.313 -3.34 | -0.105 -1.90
+SHUFFLED no makes, on and off | +0.020 | +5.87 | 3 | +0.016 +3.32 | +0.027 +3.66 | +0.017 +3.42
+no makes, him on | -0.172 | -4.29 | 24 | -0.218 -2.50 | -0.204 -2.93 | -0.093 -2.10
+no makes, him off | -0.070 | -1.76 | 18 | -0.100 -1.11 | -0.139 -2.44 | +0.029 +0.60
+all eight, him off | -0.142 | -2.81 | 22 | -0.204 -1.74 | -0.228 -2.95 | +0.007 +0.20
+teammates on | +0.005 | +0.20 | 15 | +0.012 +0.32 | +0.014 +0.25 | -0.010 -0.19
+teammates on and his team when he sits | +0.045 | +1.63 | 12 | +0.045 +0.97 | +0.055 +0.96 | +0.035 +0.80
+SHUFFLED teammates on and his team when he sits | +0.026 | +2.65 | 9 | +0.043 +4.02 | -0.003 -0.18 | +0.037 +1.91
+
+===== DEFENSE, target d_prior: list | change | z | seasons better of 30 | 1997-2006 change z | 2007-2016 change z | 2017-2026 change z
+all eight, on and off | -0.046 | -1.54 | 19 | -0.038 -0.99 | -0.121 -1.65 | +0.021 +0.74
+no makes, on and off | -0.063 | -2.18 | 18 | -0.094 -2.02 | -0.110 -1.86 | +0.013 +0.34
+SHUFFLED no makes, on and off | +0.020 | +5.73 | 3 | +0.016 +3.10 | +0.027 +3.68 | +0.016 +3.28
+no makes, him on | -0.030 | -1.57 | 17 | -0.037 -0.97 | -0.051 -1.53 | -0.004 -0.12
+no makes, him off | -0.011 | -0.45 | 16 | -0.037 -0.97 | -0.050 -1.29 | +0.055 +1.40
+all eight, him off | -0.011 | -0.49 | 15 | -0.028 -0.66 | -0.054 -1.37 | +0.050 +2.03
+teammates on | +0.008 | +0.33 | 16 | +0.001 +0.03 | +0.024 +0.50 | -0.001 -0.01
+teammates on and his team when he sits | +0.040 | +1.67 | 13 | +0.016 +0.40 | +0.058 +1.21 | +0.047 +1.18
+SHUFFLED teammates on and his team when he sits | +0.026 | +2.84 | 8 | +0.045 +4.58 | -0.002 -0.10 | +0.036 +1.96
+
+DEFENSE: weights per sd on target d_prior, teammates on and his team when he sits: stat | on | when he sits
+threes_made | -0.412 | +0.260
+threes_missed | +0.213 | -0.177
+twos_made | -0.047 | +0.052
+twos_missed | -0.060 | -0.087
+free_throws_made | +0.042 | +0.093
+free_throws_missed | -0.065 | +0.069
+off_rebounds | -0.018 | -0.038
+def_rebounds | +0.186 | -0.008
+assists | -0.254 | +0.052
+turnovers | -0.208 | -0.078
+steals | +0.214 | +0.153
+blocks | +0.228 | +0.033
+fouls | +0.174 | +0.123
+done 198
