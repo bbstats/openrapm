@@ -4087,6 +4087,15 @@ rates as a sixth too low and proposed scaling by minutes, which would have infla
 season shows the same shortfall; divide every hustle count by every possession played, as the panel does, and never
 by the dashboard's minutes.
 
+**The line's target adds the games' part back, so an input that restates the same games' results wins on the swaps and
+loses after the ridge (2026-11-03).** The line predicts a held-back swap with the opponents and context taken out and
+the two players' whole ratings added back, so anything that forecasts those games earns weight, including what step 3
+will read from the same fit games a second time.  The team's rates with him on and off, experiment 128, read +46% of
+what the line's other inputs add on defense, z -5.80, then lost in every era of the full build, z +7.27.  With only the
+prior parts added back, the same gain is one tenth the size.  *The check:* before building an input that comes from
+lineup results, read its gain on the swaps with the games' part left out of the target (`scratch/2026-11-03_team_rates/
+why_it_lost.py`, 2 minutes).
+
 ## Standing rules
 
 **Accuracy wins, provided the testing is robust — and the model has to stay shippable as open source.** The
@@ -11992,3 +12001,54 @@ to about 0 on a team before reporting it by player.
 ### Experiment 128: Boruta on the second stage (2026-11-03, `scratch/2026-11-03_team_rates/boruta_team_rates.log`, `outputs/csv/boruta_team128.csv`, the sheet's tab "Box Adj inputs 128")
 
 On the 3.1 million swaps a side of repeat 0 of creation110's folds, every input against shuffled copies of all 45, 20 rounds, five minutes.  **All eight stats stay under the registered rule:** none has both its numbers rejected on both ends in every era.  On offense the numbers with him on the court carry the weight: made twos, missed threes, made threes and made free throws with him on are accepted in every era, and every number with him on the bench but one is rejected in every era.  On defense opponents' made twos with him on are accepted in every era, and the opponents' offensive rebounds with him on and on the bench are accepted together in 2007-2026 with weights +3.23 and -3.32, per 100.  Turnovers are the weakest stat: on offense both numbers are rejected in every era, on defense neither is accepted in any era, though with him on it is accepted over all seasons.  The line is fitted on all sixteen: `outputs/second_prior/team128`, 871 seconds.
+
+### Experiment 128: result (2026-11-03, `outputs/team128_chain.log`, `outputs/csv/wowy_team128_eras.csv`, `scratch/2026-11-03_team_rates/why_it_lost.log`, `matched_width.log`; verdict the owner's)
+
+The line `team128` fitted 1:13 to 1:28 PM, the chain 1:28 to 2:41 PM, with its own folds `team128_early`, `team128_within`.  **It fails the registered rule: worse in every era on the within-season test.**
+
+The within-season WOWY test, the shipped stage, every stint, each system minus padbins127; below 0 is better:
+
+| system | era | change | standard error | paired z | seasons better |
+|---|---|---|---|---|---|
+| team rates | 1997-2006 | +0.290 | 0.065 | +4.48 | 1 of 10 |
+| team rates | 2007-2016 | +0.325 | 0.096 | +3.39 | 1 of 10 |
+| team rates | 2017-2026 | +0.403 | 0.083 | +4.83 | 2 of 10 |
+| team rates | all seasons | +0.339 | 0.047 | +7.27 | 4 of 30 |
+| noise control | 1997-2006 | -0.023 | 0.013 | -1.80 | 6 of 10 |
+| noise control | 2007-2016 | -0.000 | 0.014 | -0.03 | 5 of 10 |
+| noise control | 2017-2026 | -0.005 | 0.018 | -0.26 | 5 of 10 |
+| noise control | all seasons | -0.009 | 0.008 | -1.09 | 16 of 30 |
+
+Games with a regular out +0.349, z +4.25, 5 of 30.  Before the shrink +1.690, z +16.81, 0 of 30.
+
+The year-over-year test, both directions, 56 readings: team-game +0.076, z +1.36, 22 of 56, inside the guard; stint +0.195, z +2.37; stint with each side rescaled +0.302, z +4.08.  The previous season's rankings alone +0.098, z +1.13; the next season's alone +0.055, z +0.74.  The scored season wants offense times 0.955 against 0.946, defense 0.936 against 0.900.
+
+**Width is half of the within-season loss, and none of the year-over-year one.**  Standard deviation over player-seasons of 1,000 possessions or more on both ends, possession-weighted:
+
+| era | offense today | offense team rates | defense today | defense team rates | defense over offense today | defense over offense team rates |
+|---|---|---|---|---|---|---|
+| 1997-2006 | 1.971 | 1.921 | 1.997 | 1.818 | 1.013 | 0.946 |
+| 2007-2016 | 1.903 | 1.838 | 1.819 | 1.717 | 0.956 | 0.934 |
+| 2017-2026 | 1.793 | 1.771 | 1.479 | 1.424 | 0.825 | 0.804 |
+| 2026 | 1.706 | 1.717 | 1.499 | 1.477 | 0.879 | 0.860 |
+
+So the defense is not stronger.  The candidate widened back to about today's width, within factors 0.78 and 1.08 against 0.75 and 1 (`--shrink-flags`, table `season_ratings_team128wide_step4`: offense 1.990 / 1.904 / 1.834, defense 1.949 / 1.841 / 1.528): within-season +0.162, z +3.45, by era +0.100 z +1.56, +0.162 z +1.57, +0.226 z +2.95, 6 of 30; year over year team-game +0.321, z +5.56.
+
+**Why it wins on the swaps and loses after the ridge: the same games counted twice.**  On the swaps of creation110's folds, each season predicted by the line fitted without it and its neighbors; the change from adding the 16 rates to today's 29 inputs:
+
+| target | side | change | paired z | seasons better | 1997-2006 z | 2007-2016 z | 2017-2026 z |
+|---|---|---|---|---|---|---|---|
+| the swap with the whole ratings added back, the line's own | offense | -0.196 | -4.56 | 24 of 30 | -4.04 | -1.20 | -3.01 |
+| the swap with the whole ratings added back, the line's own | defense | -0.446 | -5.80 | 27 of 30 | -4.11 | -3.39 | -3.71 |
+| the swap with only the prior parts added back | offense | -0.089 | -2.35 | 20 of 30 | -1.53 | -0.55 | -2.05 |
+| the swap with only the prior parts added back | defense | -0.046 | -1.53 | 19 of 30 | -0.99 | -1.67 | +0.83 |
+| what the fold's whole rating leaves | offense | -0.102 | -2.52 | 20 of 30 | -1.68 | -0.72 | -1.99 |
+| what the fold's whole rating leaves | defense | -0.043 | -1.41 | 18 of 30 | -0.75 | -1.57 | +0.63 |
+
+With the games' part in place, 55% of the offensive gain and 90% of the defensive one are gone, and what is left does not hold in every era.  The makes go first: on offense team made threes with him on read +0.55 on the line's own target and -0.26 without the games' part, made twos +0.55 and +0.07, made free throws +0.41 and +0.18.  The build shows the same thing from the other side.  Before the shrink the ratings come out wider, defense 2.48 to 2.83, 2.23 to 2.63, 1.96 to 2.31 by era, offense 2.75 to 2.85, 2.63 to 2.72, 2.46 to 2.63, and the defensive prior scale rises from a mean 1.145 to 1.269, since the prior now holds some of the very games the ridge fits.  The shrink takes it back: its within layer on the prior part falls from 0.703 to 0.650 on offense and 0.735 to 0.602 on defense, on the games' part from 1.051 to 0.891 and 1.723 to 1.342.
+
+What survives on what the rating leaves, with the same sign in every era, on defense, per 100, him on against him on the bench: offensive rebounds allowed +2.40 / +2.25 / +0.59 against -2.07 / -2.75 / -0.41; threes made against -1.47 / -1.74 / -1.59 against +2.00 / +1.39 / +1.49, the rating still marking a defender down for shooting luck.  Read after the fact, so not a result.
+
+The 2026 top 20, total per 100 against the incumbent, keeps 16 of 20 (Bam Adebayo and Cade Cunningham swap 7th and 8th): Alex Caruso +0.43, Derrick White +0.51, Ausar Thompson +0.29, Ajay Mitchell +0.79, Moussa Diabaté +0.40 and Donovan Clingan +0.78 rise; Jimmy Butler -0.77, 10th to 24th, Karl-Anthony Towns -0.71, 12th to 22nd, Cason Wallace -0.42, 16th to 25th, OG Anunoby -0.08, 20th to 23rd, leave; Luka Dončić -0.52, Shai Gilgeous-Alexander -0.48.  The group of the ruling of 2026-10-08: Ajay Mitchell +0.79, Hugo González +0.69, Oso Ighodaro -0.23, Butler -0.77, Jokić -0.04, Zach Edey +0.24.  Players of 1,000+ possessions move a median 0.31, the ninetieth percentile 0.75, the largest 1.43.
+
+**Recommended: not adopted, by the registered rule.**  The code stays, off by default (`--second-prior-inputs context_types_team_rates_centred`); `outputs/second_prior/team128` and the boosters `prior_models_team128.pkl` stay until the owner rules.

@@ -1,0 +1,89 @@
+1997 11
+1998 14
+1999 16
+2000 20
+2001 23
+2002 26
+2003 30
+2004 33
+2005 37
+2006 40
+2007 44
+2008 47
+2009 51
+2010 54
+2011 58
+2012 61
+2013 64
+2014 68
+2015 71
+2016 75
+2017 79
+2018 82
+2019 86
+2020 89
+2021 93
+2022 96
+2023 100
+2024 104
+2025 107
+2026 111
+
+===== OFFENSE: change | z | seasons better of 30 | 1997-2006 change z | 2007-2016 change z | 2017-2026 change z
+d: 16 team rates added to today's 29, against today's 29 | -0.196 | -4.56 | 24 | -0.271 -4.04 | -0.091 -1.20 | -0.227 -3.01
+d: today's 29, against no line | -8.028 | -15.17 | 30 | -10.145 -28.50 | -8.687 -12.83 | -5.252 -6.19
+d: 16 team rates alone, against no line | -3.686 | -14.93 | 30 | -4.564 -10.95 | -3.754 -10.09 | -2.741 -9.03
+d_prior: 16 team rates added to today's 29, against today's 29 | -0.089 | -2.35 | 20 | -0.107 -1.53 | -0.039 -0.55 | -0.120 -2.05
+d_prior: today's 29, against no line | -8.113 | -15.62 | 30 | -10.192 -28.74 | -8.744 -12.84 | -5.402 -6.56
+d_prior: 16 team rates alone, against no line | -2.687 | -12.94 | 30 | -3.452 -10.91 | -2.811 -8.66 | -1.800 -7.49
+r: 16 team rates added to today's 29, against today's 29 | -0.102 | -2.52 | 20 | -0.120 -1.68 | -0.057 -0.72 | -0.130 -1.99
+r: today's 29, against no line | -0.263 | -2.38 | 23 | -0.452 -4.14 | -0.594 -4.95 | +0.258 +1.21
+r: 16 team rates alone, against no line | -0.180 | -4.00 | 24 | -0.233 -3.83 | -0.195 -1.87 | -0.111 -1.73
+
+team rate weights, per 100: input | on d | on d_prior | on r | on r 1997-2006 | 2007-2016 | 2017-2026
+team_threes_made_on | +0.545 | -0.255 | -0.304 | -0.003 | -0.511 | -0.386
+team_threes_missed_on | +0.302 | +0.413 | +0.384 | +0.464 | +0.267 | +0.454
+team_twos_made_on | +0.547 | +0.067 | +0.029 | +0.189 | -0.018 | -0.029
+team_twos_missed_on | +0.101 | +0.180 | +0.120 | +0.296 | +0.144 | +0.136
+team_free_throws_made_on | +0.410 | +0.177 | +0.161 | +0.245 | +0.074 | +0.128
+team_free_throws_missed_on | +0.288 | +0.107 | +0.083 | +0.371 | +0.211 | -0.339
+team_off_rebounds_on | +0.262 | +0.166 | +0.279 | +0.360 | +0.204 | +0.001
+team_turnovers_on | +0.049 | +0.167 | +0.099 | +0.174 | +0.013 | +0.405
+team_threes_made_off | +0.146 | +0.373 | +0.378 | +0.435 | +0.344 | +0.439
+team_threes_missed_off | +0.063 | +0.014 | +0.017 | +0.100 | -0.102 | +0.005
+team_twos_made_off | +0.015 | +0.180 | +0.176 | +0.284 | +0.041 | +0.176
+team_twos_missed_off | +0.228 | +0.150 | +0.106 | +0.148 | -0.135 | +0.227
+team_free_throws_made_off | -0.102 | -0.016 | +0.014 | +0.123 | -0.001 | -0.172
+team_free_throws_missed_off | +0.245 | +0.372 | +0.357 | +0.559 | +0.035 | +0.777
+team_off_rebounds_off | -0.717 | -0.656 | -0.595 | -1.138 | -0.121 | -0.350
+team_turnovers_off | -0.087 | -0.230 | -0.314 | -0.184 | -0.397 | -0.635
+
+===== DEFENSE: change | z | seasons better of 30 | 1997-2006 change z | 2007-2016 change z | 2017-2026 change z
+d: 16 team rates added to today's 29, against today's 29 | -0.446 | -5.80 | 27 | -0.419 -4.11 | -0.627 -3.39 | -0.292 -3.71
+d: today's 29, against no line | -5.327 | -17.41 | 30 | -5.856 -12.06 | -5.245 -12.17 | -4.880 -7.45
+d: 16 team rates alone, against no line | -1.981 | -11.99 | 30 | -2.290 -6.55 | -2.183 -8.46 | -1.471 -8.35
+d_prior: 16 team rates added to today's 29, against today's 29 | -0.046 | -1.53 | 19 | -0.038 -0.99 | -0.122 -1.67 | +0.022 +0.83
+d_prior: today's 29, against no line | -5.311 | -17.49 | 30 | -5.869 -12.32 | -5.218 -12.16 | -4.845 -7.47
+d_prior: 16 team rates alone, against no line | -1.074 | -8.95 | 27 | -1.302 -4.84 | -1.171 -6.45 | -0.751 -6.00
+r: 16 team rates added to today's 29, against today's 29 | -0.043 | -1.41 | 18 | -0.031 -0.75 | -0.116 -1.57 | +0.018 +0.63
+r: today's 29, against no line | -0.059 | -1.05 | 19 | +0.002 +0.02 | -0.072 -1.09 | -0.106 -0.88
+r: 16 team rates alone, against no line | -0.077 | -2.33 | 20 | -0.062 -1.19 | -0.143 -1.83 | -0.025 -0.86
+
+team rate weights, per 100: input | on d | on d_prior | on r | on r 1997-2006 | 2007-2016 | 2017-2026
+team_threes_made_on | -0.002 | -1.466 | -1.507 | -1.467 | -1.742 | -1.592
+team_threes_missed_on | +0.468 | +0.164 | +0.150 | -0.030 | +0.207 | -0.116
+team_twos_made_on | +1.050 | +0.424 | +0.425 | +0.133 | +0.503 | +0.411
+team_twos_missed_on | +0.054 | +0.229 | +0.224 | +0.088 | +0.336 | -0.106
+team_free_throws_made_on | +0.407 | +0.213 | +0.202 | +0.154 | +0.219 | +0.121
+team_free_throws_missed_on | +0.338 | +0.146 | +0.132 | +0.194 | +0.062 | +0.133
+team_off_rebounds_on | +1.266 | +0.867 | +0.903 | +2.396 | +2.245 | +0.589
+team_turnovers_on | -0.327 | -0.073 | -0.092 | -0.293 | -0.440 | +0.016
+team_threes_made_off | +0.261 | +1.426 | +1.495 | +1.995 | +1.392 | +1.487
+team_threes_missed_off | +0.277 | +0.363 | +0.331 | +0.253 | +0.471 | +0.482
+team_twos_made_off | -0.339 | -0.130 | -0.123 | -0.248 | -0.071 | +0.015
+team_twos_missed_off | +0.168 | -0.067 | -0.082 | -0.108 | -0.185 | +0.212
+team_free_throws_made_off | +0.031 | +0.066 | +0.062 | +0.001 | +0.129 | +0.098
+team_free_throws_missed_off | +0.011 | +0.063 | +0.074 | +0.349 | -0.151 | -0.195
+team_off_rebounds_off | -1.499 | -0.999 | -0.990 | -2.071 | -2.746 | -0.413
+team_turnovers_off | +0.511 | +0.173 | +0.164 | -0.030 | +0.574 | +0.201
+done 112

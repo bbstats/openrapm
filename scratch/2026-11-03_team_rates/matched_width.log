@@ -1,0 +1,21 @@
+  step 4: the within layer's equations from 360 folds' held-back stints (16s)
+  padbins127: 30 seasons (58s)
+  team128wide: step 4 as built with ['team128wide:--within-factors 0.78,1.08']
+  step 4: the within layer's equations from 360 folds' held-back stints (16s)
+  team128wide: 30 seasons (116s)
+
+DNP team-games: 51.8% of the held-back possessions
+each system minus the reference, season by season; below 0 is better
+     system  reference stage against slice      error  mean_change      se        z  seasons_better  seasons  se_newey_west  z_newey_west
+team128wide padbins127 step3   step3   all 3664.10908      1.68959 0.10053 16.80602               0       30        0.10053      16.80602
+team128wide padbins127 step3   step3   dnp 3655.69376      1.69459 0.14921 11.35703               1       30        0.20216       8.38252
+team128wide padbins127 step4   step4   all 3661.91737      0.16239 0.04701  3.45443               6       30        0.04701       3.45443
+team128wide padbins127 step4   step4   dnp 3653.38908      0.16668 0.08032  2.07517               8       30        0.11008       1.51424
+
+the shipped stage, every stint, by era; below 0 is better
+     system         era  mean_change      se       z  z_newey_west  seasons_better  seasons
+team128wide   1997-2006      0.09953 0.06363 1.56429       1.56429               2       10
+team128wide   2007-2016      0.16152 0.10272 1.57243       1.57243               2       10
+team128wide   2017-2026      0.22611 0.07662 2.95097       2.95097               2       10
+team128wide all seasons      0.16239 0.04701 3.45443       3.45443               6       30
+done in 116s
