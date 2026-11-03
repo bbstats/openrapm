@@ -915,8 +915,9 @@ def write_decomposition(cfg: dict, ratings_path: Path, data_dir: Path, built: st
 #      are the box scores' abbreviations in the order he joined them, "SAC/IND"
 # Rows are the ratings.json rows (possessions above 0), best total first.
 #
-# Example (2026): Victor Wembanyama's offence, 3.01 = 2.11 + 0.26 + 0.86 - 0.32 + 0.11; his total, 9.37 = 3.89 + 2.70 + 2.98
-# - 0.43 + 0.23: box score, Box Adj, on court, off court, team SOS.  The page calls on court and off court On adj and Off adj.
+# Example (2026): Victor Wembanyama's offence, 3.01 = 2.11 + 0.26 + 0.86 - 0.32 + 0.11; his total, 9.37 = 3.89 + 2.70
+# + 2.98 - 0.43 + 0.23: box score, Box Adj, on court, off court, team SOS.  The page's headers for on court and off
+# court are On adj and Off adj.
 OPENRAPM_FILE = "decompose_openrapm.json"
 OPENRAPM_FIELDS = ["n", "id", "p", "o", "d", "t", "tm", "w"]
 OPENRAPM_PIECES = ["box_score", "on_court", "off_court", "team_sos", "box_adj", "rating"]
@@ -924,7 +925,8 @@ OPENRAPM_SIDES = ("off", "def", "total")
 OPENRAPM_TOLERANCE = 1e-9         # each identity holds to this, per player and side
 OPENRAPM_JITTER_TOLERANCE = 1e-6  # the same, in a season whose solve needed rapm.solved_ridge's jitter (2020)
 OPENRAPM_TABLE_COLUMNS = ["player_id", "season", "player_name", "poss_season", "prior_off", "prior_def", "u_off",
-                          "u_def", "box_adj_off", "box_adj_def", "c_off", "c_def", "rating_off", "rating_def", "rating_total", "offense_lambda",
+                          "u_def", "box_adj_off", "box_adj_def", "c_off", "c_def", "rating_off", "rating_def",
+                          "rating_total", "offense_lambda",
                           "wosa"]
 OPENRAPM_STEP3_COLUMNS = ["player_id", "season", "prior_offense", "prior_defense", "prior_scale_off",
                           "prior_scale_def", "u_off", "u_def"]
