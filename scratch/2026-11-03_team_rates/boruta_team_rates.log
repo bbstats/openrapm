@@ -1,0 +1,110 @@
+  1 of 120 folds (7s)
+  13 of 120 folds (10s)
+  25 of 120 folds (14s)
+  37 of 120 folds (18s)
+  49 of 120 folds (21s)
+  61 of 120 folds (25s)
+  73 of 120 folds (29s)
+  85 of 120 folds (32s)
+  97 of 120 folds (36s)
+  109 of 120 folds (40s)
+defense 1997-2026: 3,078,459 swaps (71s)
+defense 1997-2006: 928,095 swaps (93s)
+defense 2007-2016: 995,067 swaps (117s)
+defense 2017-2026: 1,155,297 swaps (144s)
+offense 1997-2026: 3,059,063 swaps (68s)
+offense 1997-2006: 926,080 swaps (91s)
+offense 2007-2016: 988,454 swaps (114s)
+offense 2017-2026: 1,144,529 swaps (141s)
+   side                       input  importance    weight  hits 1997-2006 1997-2026 2007-2016 2017-2026
+defense                   box_prior    0.585520  1.080340    20  accepted  accepted  accepted  accepted
+defense           team_twos_made_on    0.508128  0.930373    20  accepted  accepted  accepted  accepted
+defense        teammates_defence_on    0.411941 -4.191911    20  accepted  accepted  accepted  accepted
+defense          threes_made_per100    0.386269  0.375421    20 tentative  accepted  accepted  accepted
+defense          garbage_time_share    0.335820  1.007664    20  accepted  accepted  accepted  accepted
+defense    team_free_throws_made_on    0.299386  0.356958    20  accepted  accepted  accepted  rejected
+defense        team_off_rebounds_on    0.292369  3.228016    20  rejected  accepted  accepted  accepted
+defense                fouls_per100    0.291218 -0.309138    20  accepted  accepted  accepted  accepted
+defense       team_off_rebounds_off    0.288591 -3.320481    20  rejected  accepted  accepted  accepted
+defense     opponents_offence_bench    0.276092  3.478443    20  accepted  accepted  rejected  accepted
+defense               steals_per100    0.256652 -0.247847    20  accepted  accepted  rejected tentative
+defense               blocks_per100    0.226959 -0.256572    20  accepted  accepted  rejected  accepted
+defense                   height_in    0.214765 -0.246571    20  accepted  accepted tentative  rejected
+defense          twos_missed_per100    0.199378  0.173783    20  accepted  accepted  rejected  accepted
+defense          team_twos_made_off    0.194077 -0.372569    20  accepted  accepted  rejected tentative
+defense         def_rebounds_per100    0.181652 -0.190388    20  rejected  accepted  accepted tentative
+defense         games_started_share    0.175645  0.140958    20 tentative  accepted tentative tentative
+defense         box_prior_other_end    0.170421 -0.323982    20  rejected  accepted  accepted  rejected
+defense            turnovers_per100    0.166568  0.154036    20  rejected  accepted  rejected  accepted
+defense                         age    0.151267 -0.141504    20  rejected  accepted  accepted  rejected
+defense                   weight_lb    0.138172 -0.157327    19  rejected  accepted  accepted tentative
+defense  team_free_throws_missed_on    0.137477  0.411215    19  accepted  accepted  rejected  rejected
+defense           team_turnovers_on    0.123087 -0.447469    18 tentative  accepted  rejected tentative
+defense        teammates_offence_on    0.119329 -0.934477    18  rejected  accepted tentative tentative
+defense     teammates_defence_bench    0.096426  1.007440    14 tentative tentative  rejected  rejected
+defense          team_turnovers_off    0.083045  0.408344     1  rejected  rejected tentative  rejected
+defense         off_rebounds_per100    0.078216  0.089669     1  rejected  rejected  rejected  rejected
+defense            twos_made_per100    0.074906  0.065913     0  accepted  rejected  accepted  accepted
+defense       team_threes_missed_on    0.071409  0.256664     1  rejected  rejected  rejected  rejected
+defense      team_threes_missed_off    0.070253  0.279200     0  rejected  rejected tentative  rejected
+defense     teammates_offence_bench    0.066939  0.507306     0  rejected  rejected  rejected  rejected
+defense        opponents_offence_on    0.061084 -0.738123     0  rejected  rejected  accepted  rejected
+defense        team_twos_missed_off    0.046954  0.147516     0  rejected  rejected  rejected  rejected
+defense        team_threes_made_off    0.046681  0.514665     0  rejected  rejected  accepted  rejected
+defense        threes_missed_per100    0.036912 -0.037867     0  rejected  rejected  accepted  rejected
+defense         team_twos_missed_on    0.034810 -0.101422     0  rejected  rejected  rejected  accepted
+defense         team_threes_made_on    0.030425 -0.365490     0  rejected  rejected tentative  rejected
+defense        opponents_defence_on    0.026417 -0.519060     0  rejected  rejected  accepted  rejected
+defense   free_throws_missed_per100    0.025473 -0.026877     0  rejected  rejected  rejected  rejected
+defense     free_throws_made_per100    0.021535 -0.018903     0  rejected  rejected  rejected  rejected
+defense team_free_throws_missed_off    0.020971  0.082589     0 tentative  rejected  rejected  rejected
+defense   team_free_throws_made_off    0.020863 -0.027828     0  rejected  rejected  rejected  rejected
+defense       team_possession_share    0.018885 -0.019344     0  rejected  rejected  rejected  rejected
+defense     opponents_defence_bench    0.010836  0.207433     0  rejected  rejected  rejected tentative
+defense              assists_per100    0.010597  0.011551     0  rejected  rejected tentative tentative
+offense                   box_prior    0.801306  1.525565    20  accepted  accepted  accepted  accepted
+offense     free_throws_made_per100    0.554025  0.486707    20  accepted  accepted  accepted  accepted
+offense         off_rebounds_per100    0.541237  0.619340    20  accepted  accepted  accepted  accepted
+offense           team_twos_made_on    0.511343  0.589924    20  accepted  accepted  accepted  accepted
+offense         box_prior_other_end    0.497427 -0.916784    20  accepted  accepted  accepted  accepted
+offense        threes_missed_per100    0.463518  0.474489    20  accepted  accepted  accepted  accepted
+offense            twos_made_per100    0.427390  0.376321    20  accepted  accepted  rejected  accepted
+offense          twos_missed_per100    0.387478 -0.337866    20  accepted  accepted  rejected  accepted
+offense               blocks_per100    0.348641 -0.393722    20  accepted  accepted  accepted  accepted
+offense              assists_per100    0.337960  0.368281    20  accepted  accepted  accepted  rejected
+offense       team_threes_missed_on    0.313265  0.290324    20  accepted  accepted  accepted  accepted
+offense       team_possession_share    0.310585  0.318391    20  accepted  accepted  accepted  rejected
+offense         team_threes_made_on    0.293262  0.527974    20  accepted  accepted  accepted  accepted
+offense          threes_made_per100    0.293211  0.284385    20  accepted  accepted  accepted  rejected
+offense            turnovers_per100    0.292326 -0.270426    20  accepted  accepted tentative  rejected
+offense          garbage_time_share    0.287194 -0.863187    20  accepted  accepted  accepted  accepted
+offense    team_free_throws_made_on    0.275027  0.411606    20  accepted  accepted  accepted  accepted
+offense        teammates_offence_on    0.222554 -1.743640    20  accepted  accepted  rejected  rejected
+offense   free_throws_missed_per100    0.218834 -0.230842    20  rejected  accepted  accepted  accepted
+offense     opponents_defence_bench    0.210349  4.027356    20  rejected  accepted tentative  accepted
+offense                fouls_per100    0.181600 -0.192707    20 tentative  accepted  rejected  rejected
+offense         def_rebounds_per100    0.173467 -0.181667    20  rejected  accepted  accepted  rejected
+offense                   height_in    0.149196 -0.171199    20  rejected  accepted  rejected  accepted
+offense     teammates_defence_bench    0.130278 -1.360637    20  rejected  accepted  accepted tentative
+offense                         age    0.100060 -0.093603    12  accepted tentative  rejected  rejected
+offense  team_free_throws_missed_on    0.099705  0.275792    13  accepted tentative  accepted  rejected
+offense       team_off_rebounds_off    0.094262 -0.476907    10 tentative tentative  rejected  rejected
+offense        team_twos_missed_off    0.088587  0.140663     8  rejected tentative  rejected  rejected
+offense        opponents_offence_on    0.085631 -1.035398     7  accepted tentative  rejected  rejected
+offense         team_twos_missed_on    0.077857  0.095140     3  accepted  rejected  accepted  rejected
+offense     opponents_offence_bench    0.068583  0.864360     0  rejected  rejected  rejected  rejected
+offense        team_off_rebounds_on    0.057372  0.163905     0  rejected  rejected  rejected  rejected
+offense        teammates_defence_on    0.051546  0.524392     0  rejected  rejected tentative  rejected
+offense                   weight_lb    0.051536 -0.058650     0  rejected  rejected  rejected  rejected
+offense   team_free_throws_made_off    0.048036 -0.079532     0  rejected  rejected  rejected  rejected
+offense      team_threes_missed_off    0.047463  0.055054     0  rejected  rejected  rejected  rejected
+offense        opponents_defence_on    0.045564  0.895434     0  rejected  rejected  accepted  rejected
+offense        team_threes_made_off    0.042375  0.094704     0  rejected  rejected  rejected  rejected
+offense     teammates_offence_bench    0.037025  0.280845     0  accepted  rejected  rejected  rejected
+offense          team_turnovers_off    0.027837 -0.128078     0  rejected  rejected  rejected  rejected
+offense               steals_per100    0.024350 -0.023522     0  rejected  rejected  rejected  accepted
+offense         games_started_share    0.023726 -0.019043     0  rejected  rejected  rejected tentative
+offense team_free_throws_missed_off    0.016879  0.069532     0  rejected  rejected  rejected  rejected
+offense          team_twos_made_off    0.004758  0.005916     0  rejected  rejected  rejected  rejected
+offense           team_turnovers_on    0.003811  0.012151     0  rejected  rejected  rejected  rejected
+wrote A:\code\spmm\outputs\csv\boruta_team128.csv
