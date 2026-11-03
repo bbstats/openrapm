@@ -123,8 +123,9 @@ python -m openrapm site --bias --decomposition --openrapm-decomposition --simila
    `--folds`), and each multiplier is read to a full season with folds holding back a tenth of the games,
    `padbins127_k10` (the default of `--extrapolate-folds`).
 5. **`build`** runs the five steps for all thirty seasons and writes `outputs/season_ratings_product.parquet`,
-   the published table, with its step-3 and step-4 tables beside it: 88 minutes in the last run. It adds the wins over
-   starter average to the final table, seconds of it; `openrapm wins --name NAME` adds them to a table built before them.
+   the published table, with its step-3 and step-4 tables beside it: 88 minutes in the last run. At the product setting
+   it also rates each season from its regular season alone for the wins over starter average, about 4 minutes a season a
+   process; `openrapm wins --name NAME --rebuild-regular --jobs 4` does that for a table built before them.
    `build --setting test --folds mine_within --extrapolate-folds= --name padbins127` writes the table the
    tests score, under the incumbent's name, so the chain and the checks find it. Without `--folds`, `build`
    and `shrink` read the shipped folds, which a fresh build does not have; they stop at step 4 with "no
@@ -167,15 +168,17 @@ the last one ended.
 
 ### Wins over starter average
 
-WOSA: how many regular-season wins a player added to his team over an average starter. No rating moves. The starter is
-the mean of the season's 150 players with the most games started, minutes breaking ties. A point counts by how much it
-can swing a game, from a win-probability model read from the season's own games, and a point at average leverage is
-1/27 of a win, the rate teams' records read off their ratings over 30 seasons. A player who speeds up or slows down the
-game, by a ridge regression of each stint's pace on the ten players, is paid for the possessions he adds at the margin
-his lineup would have without him. `src/openrapm/wins.py` holds the equation and an example with numbers; `PIPELINE.md`
-says how each part was checked. The columns are `wosa`, its parts `wosa_off`, `wosa_def` and `wosa_pace`, and
-`pace_effect`, `leverage`, `starts_rs` and `minutes_rs`; each season's starter average and win model are in
-`outputs/csv/wins_NAME_seasons.csv`.
+WOSA: how many regular-season wins a player added to his team over an average starter. No published rating moves. It is
+locked when the regular season ends: it reads each player's rating from that regular season alone,
+`outputs/season_ratings_NAME_regular.parquet`, so playoff games cannot move it. The starter is the mean of the season's
+150 players with the most games started, minutes breaking ties. Every game carries the same total weight, and leverage,
+from a win-probability model read from the season's own games, divides it up inside that game: causing a blowout costs
+nothing, and closing one earns nothing. A point at an average weight is 1/30 of a win, the rate teams' records read off
+those ratings over 30 seasons. A player who speeds up or slows down the game, by a ridge regression of each stint's pace
+on the ten players, is paid for the possessions he adds at the margin his lineup would have without him.
+`src/openrapm/wins.py` holds the equation and an example with numbers; `PIPELINE.md` says how each part was checked. The
+columns are `wosa`, its parts `wosa_off`, `wosa_def` and `wosa_pace`, and `pace_effect`, `leverage`, `starts_rs` and
+`minutes_rs`; each season's starter average and win model are in `outputs/csv/wins_NAME_seasons.csv`.
 
 ## The two rules
 

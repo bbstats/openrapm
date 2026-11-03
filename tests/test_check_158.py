@@ -162,6 +162,24 @@ def test_the_rule_needs_every_reading(check):
     assert not _verdict(check, 100, 50, 50, 0.3, 0.0)["passes"]        # a season does not repeat in the next
 
 
+def test_the_wins_weight_would_choose_the_stints_that_built_a_blowout_and_the_games_state_does_not(check):
+    """The weight divides by its game's mean, which knows how the game ended: choosing by it selects on the result."""
+    rows = []
+    for game, margins in (("close", (0, 1, -1, 1)), ("blowout", (0, 1, 24, 30))):
+        for period, margin in zip((1, 2, 3, 4), margins):
+            rows.append(dict(game_id=game, period=period, start_clock=720.0, margin_h=margin, poss_h=25, poss_a=25,
+                             neutral=False))
+    stints = pd.DataFrame(rows)
+    seconds = np.full(4 * 2, 720.0)
+    grid = np.linspace(1.0, 2880.0, 400)
+    model = check.wins.WinModel(2001, 0.0, 1.0, 1.0, 0.0, grid, 12.0 * np.sqrt(grid / 2880.0), 1, 0)
+    state = check.wins.relative_leverage(stints, seconds, model)
+    inside = check.wins.leverage_inside_games(stints, seconds, model)
+    # the second stint is the same game state in both games: the state reads it alike, the weight does not
+    assert state[1] == pytest.approx(state[5])
+    assert inside[5] > 1.3 * inside[1]
+
+
 def test_the_script_starts():
     done = subprocess.run([sys.executable, str(SCRIPT), "--help"], capture_output=True, text=True)
     assert done.returncode == 0 and "--tag" in done.stdout

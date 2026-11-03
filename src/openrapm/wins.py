@@ -1,8 +1,9 @@
 """Wins over starter average (WOSA): how many regular-season wins a player added to his team over an average starter.
 
 The owner's MVP score (2026-11-02): "how many wins you improve your team vs the average player in the top 150".  It
-reads the published ratings and the regular season's stints and changes no rating.  notes/DECISIONS.md, "WOSA", holds
-the checks behind every choice here (scripts/checks/157_wins_model.py, 158_high_leverage.py).
+reads the regular season's stints and each player's rating from that regular season alone (`commands/wins.py`, the
+lock), and changes no published rating.  notes/DECISIONS.md, "WOSA", holds the checks behind every choice here
+(scripts/checks/157_wins_model.py, 158_high_leverage.py).
 
 Words used below
     starter average  the bar: the mean rating, on each side, of the 150 players with the most regular-season games
@@ -29,14 +30,14 @@ Words used below
                      instead (`relative_leverage`, shipped first), San Antonio's 2026 games read 0.89 with Wembanyama
                      and 1.06 without: a player was marked down for the blowouts he caused
     points per win   how many rating points, weighted by the weight, a team needs for one more win: one number, 30,
-                     read from the standings over 30 seasons (check 157; 28.9, 29.2 and 30.6 by era, each season's
+                     read from the standings over 30 seasons (check 157; 28.7, 28.9 and 30.4 by era, each season's
                      correlation 0.92 to 0.98).  The win model's own 1 over its mean leverage reads 41 to 45 and is not
                      the scale: it values a point after leads shrink, where the published ratings already sit below
                      teams' actual margins, so it would discount twice and leave team totals well short of their records
     pace effect      a player's effect on the possessions per 48 minutes each team plays, from a ridge regression of
                      each stint's pace on the ten players on the court (pace RAPM)
 
-The equation, for a player over the regular-season stints he was on the court for:
+The equation, for a player over the regular-season stints he was on the court for, his ratings from that regular season:
 
     value     = weight / points per win / 100
     wosa_off  = sum value x (rating_off - bar_off) x his team's possessions

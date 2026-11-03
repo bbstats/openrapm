@@ -7,9 +7,13 @@ each player's normal rating.  This check decides whether a player's own play on 
 at all.
 
 Words used below
-    high leverage  a stint whose weight (wins.leverage_inside_games) is `HIGH_LEVERAGE` or more: each possession worth
-                  at least twice an average one of its game, whatever the clock says: a one-point game with eight
-                  minutes left is in, a blowout's last minute is out
+    high leverage  a stint whose leverage against the season's mean (wins.relative_leverage) is `HIGH_LEVERAGE` or more:
+                  each possession worth at least twice an average one, whatever the clock says: a one-point game with
+                  eight minutes left is in, a blowout's last minute is out.  It reads only the game's state when the
+                  stint starts.  The wins' own weight (wins.leverage_inside_games, `--selection inside_game`) must not
+                  choose them: it divides by the mean of the game, which knows how the game ended, so a game that became
+                  a blowout has its early stints chosen, the ones that built it.  That selects on the result: it reads z
+                  +9.3 and "passes", and random stints do not (notes/DECISIONS.md, "WOSA")
     miss          a stint's actual margin for the home team less its expected margin, per 100 possessions a team.  The
                   expected points are read at each end from that end's own possessions: the season's points per 100
                   plus the five on offence's rating_off minus the five on defence's rating_def.  Late in a game a coach
@@ -59,7 +63,8 @@ from openrapm.data.seasons import last_finished
 from openrapm.data.stints import load_season_stints
 from openrapm.settings import PRODUCT
 
-HIGH_LEVERAGE = 2.0               # the wins' weight: each possession worth at least twice an average one of its game
+HIGH_LEVERAGE = 2.0               # each possession worth at least twice an average one
+SELECTIONS = {"state": wins.relative_leverage, "inside_game": wins.leverage_inside_games}
 OTHER_HIGH_LEVERAGE = (1.5, 3.0)  # read beside it, so a verdict cannot rest on where the line was drawn
 # A light penalty, as many possessions' worth: a starter with 150 high-leverage possessions keeps 60% of his raw
 # deviation, so the standard error measures the sample and not the penalty.  A penalty near the ratings' own 13,037
@@ -72,10 +77,10 @@ DRAWS = 10                        # draws of each control per season
 Z_LINES = (2.0, 3.0)
 
 
-def stint_weight(stints: pd.DataFrame, season: int) -> np.ndarray:
-    """Each stint's weight, from the win model fitted on the season's own games: the number the wins read."""
+def stint_weight(stints: pd.DataFrame, season: int, selection: str = "state") -> np.ndarray:
+    """Each stint's number the choice reads, from the win model fitted on the season's own games."""
     seconds = swap_test.stint_durations(stints)
-    return wins.leverage_inside_games(stints, seconds, wins.fit_win_model(stints, seconds, season))
+    return SELECTIONS[selection](stints, seconds, wins.fit_win_model(stints, seconds, season))
 
 
 def stint_misses(stints: pd.DataFrame, ratings: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
@@ -164,12 +169,12 @@ def repeat_reading(pairs: pd.DataFrame) -> dict:
                 real_part_sd=float(np.sqrt(max(covariance, 0.0))))
 
 
-def season_parts(cfg: dict, season: int, ratings: pd.DataFrame) -> dict:
+def season_parts(cfg: dict, season: int, ratings: pd.DataFrame, selection: str = "state") -> dict:
     """What every fit of a season reads."""
     stints = swap_test.order_stints(load_season_stints(season, cfg, wins.STINT_COLUMNS, phases=PRODUCT.wins.phases))
     player_ids, home, away = wins.player_index(stints)
     miss, weight = stint_misses(stints, ratings)
-    weight_of_stint = stint_weight(stints, season)
+    weight_of_stint = stint_weight(stints, season, selection)
     return dict(stints=stints, player_ids=player_ids, signed=(home - away).tocsr(), miss=miss, weight=weight,
                 at_home=~stints.neutral.fillna(False).to_numpy(dtype=bool), relative=weight_of_stint,
                 flag=weight_of_stint >= HIGH_LEVERAGE, games=stints.game_id.to_numpy(), half=stints.half.to_numpy())
@@ -259,11 +264,11 @@ def verdict(lines: pd.DataFrame, controls: pd.DataFrame, halves: pd.DataFrame, n
                 next_z=next_reading["z"], next_real_part_sd=next_reading["real_part_sd"], passes=passes)
 
 
-def run(cfg: dict, seasons: list, table: pd.DataFrame, seed: int = 0) -> dict:
+def run(cfg: dict, seasons: list, table: pd.DataFrame, seed: int = 0, selection: str = "state") -> dict:
     rng = np.random.default_rng(seed)
     readings, nexts, before = [], [], None
     for season in seasons:
-        reading = season_reading(season_parts(cfg, season, table[table.season == season]), season, rng)
+        reading = season_reading(season_parts(cfg, season, table[table.season == season], selection), season, rng)
         readings.append(reading)
         if before is not None:
             nexts.append(repeat_table(before, reading["whole"], MIN_POSSESSIONS))
@@ -284,6 +289,9 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--tag", required=True, help="the outputs are outputs/csv/high_leverage_<TAG>_*.csv")
     parser.add_argument("--table", default="season_ratings_product", help="the ratings table the misses read")
     parser.add_argument("--first", type=int, default=1997)
+    parser.add_argument("--selection", choices=tuple(SELECTIONS), default="state",
+                        help="what chooses the stints: leverage from the game's state, or the wins' weight inside a "
+                             "game (default %(default)s)")
     return parser.parse_args(argv)
 
 
@@ -294,7 +302,7 @@ def main(argv=None) -> int:
     table = pd.read_parquet(resolve(cfg, "outputs") / f"{args.table}.parquet",
                             columns=["season", "player_id", "player_name", "rating_off", "rating_def"])
     with one_thread():
-        found = run(cfg, list(range(args.first, last_finished(cfg) + 1)), table)
+        found = run(cfg, list(range(args.first, last_finished(cfg) + 1)), table, selection=args.selection)
     folder = resolve(cfg, "outputs") / "csv"
     folder.mkdir(parents=True, exist_ok=True)
     stem = folder / f"high_leverage_{args.tag}"
