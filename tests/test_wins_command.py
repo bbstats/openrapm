@@ -176,7 +176,7 @@ def test_regular_ratings_rates_only_finished_seasons_with_playoff_games(monkeypa
     from openrapm.commands import build
     asked = []
 
-    def table_of(cfg, settings, seasons):
+    def table_of(cfg, settings, seasons, name, jobs):
         asked.extend(seasons)
         return pd.DataFrame({column: [1.0] * len(seasons) for column in command.REGULAR_COLUMNS}).assign(season=seasons)
 
@@ -185,10 +185,27 @@ def test_regular_ratings_rates_only_finished_seasons_with_playoff_games(monkeypa
     monkeypatch.setattr(build, "has_playoff_stints", lambda season, cfg: season != 2025)
     table = pd.DataFrame({"season": [2024, 2025, 2026, 2027]})
     stored = pd.DataFrame({column: [7.0] for column in command.REGULAR_COLUMNS}).assign(season=[2027])
-    result = build.regular_ratings({}, PRODUCT, table, stored)
+    result = build.regular_ratings({}, PRODUCT, table, stored, "trial")
     assert asked == [2024, 2026]                                       # 2025 no playoffs here, 2027 locked already
     assert sorted(result.season.tolist()) == [2024, 2026, 2027]
     assert result[result.season == 2027].rating_off.tolist() == [7.0]  # a locked season is left as it stood
+
+
+def test_a_stopped_run_goes_on_from_the_seasons_it_finished(tmp_path):
+    from openrapm.commands import build
+    (tmp_path / "2024.parquet").write_bytes(b"done")
+    (tmp_path / "2025.parquet.part").write_bytes(b"cut short")        # a season stopped mid-write counts as not done
+    assert build.seasons_still_to_rate(tmp_path, [2024, 2025, 2026]) == [2025, 2026]
+
+
+def test_a_child_process_rates_its_seasons_and_leaves_the_rest_to_its_parent(monkeypatch, tmp_path):
+    from openrapm.commands import build, parallel
+    rated = []
+    monkeypatch.setattr(parallel, "is_child", lambda: True)
+    monkeypatch.setattr(build, "regular_parts_folder", lambda cfg, name: tmp_path)
+    monkeypatch.setattr(build, "rate_regular_seasons", lambda cfg, settings, seasons, folder: rated.extend(seasons))
+    assert command.run_wins({}, PRODUCT, "trial", [2024, 2028], rebuild_regular=True, jobs=1) == 0
+    assert rated == [2024, 2028]
 
 
 def test_the_designs_are_cut_for_the_rated_season_alone():

@@ -2,9 +2,10 @@
 
     openrapm wins --name NAME    the columns wins.WINS_COLUMNS in outputs/season_ratings_<NAME>.parquet, every season,
                                  and outputs/csv/wins_<NAME>_seasons.csv: each season's bar and win model
-    openrapm wins --name NAME --rebuild-regular
-                                 first each finished season's rating from its regular season alone, about 40 seconds a
-                                 season, in outputs/season_ratings_<NAME>_regular.parquet
+    openrapm wins --name NAME --rebuild-regular --jobs 4
+                                 first each finished season's rating from its regular season alone, about 4 minutes a
+                                 season a process, in outputs/season_ratings_<NAME>_regular.parquet; a stopped run goes
+                                 on from the seasons it finished
 
 `openrapm build` calls the same `add_wins` on the table it has just made, so a built table always carries them; this
 command is for a table built before them.
@@ -162,9 +163,15 @@ def write_wins_summary(summary: pd.DataFrame, cfg: dict, name: str) -> None:
     summary.sort_values("season").to_csv(path, index=False)
 
 
-def run_wins(cfg: dict, settings, name: str, seasons=None, rebuild_regular: bool = False) -> int:
+def run_wins(cfg: dict, settings, name: str, seasons=None, rebuild_regular: bool = False, jobs: int = 1) -> int:
     """`openrapm wins`: the columns written into outputs/season_ratings_<name>.parquet, in place; with
-    `rebuild_regular`, each finished season's rating from its regular season alone first."""
+    `rebuild_regular`, each finished season's rating from its regular season alone first, in `jobs` processes.  A child
+    of those processes rates its seasons and stops; its parent does the rest."""
+    from . import parallel
+    if rebuild_regular and parallel.is_child():
+        from .build import rate_regular_seasons, regular_parts_folder
+        rate_regular_seasons(cfg, settings, seasons, regular_parts_folder(cfg, name))
+        return 0
     path = resolve(cfg, "outputs") / f"season_ratings_{name}.parquet"
     if not path.exists():
         raise SystemExit(f"{path} does not exist: `openrapm build --name {name}` writes it")
@@ -172,7 +179,7 @@ def run_wins(cfg: dict, settings, name: str, seasons=None, rebuild_regular: bool
     if rebuild_regular:
         from .build import regular_ratings
         asked = table if seasons is None else table[table.season.isin(seasons)]
-        regular = regular_ratings(cfg, settings, asked, regular)
+        regular = regular_ratings(cfg, settings, asked, regular, name, jobs)
         write_regular(regular, cfg, name)
     table, summary = add_wins(cfg, table, settings, seasons, regular)
     table.to_parquet(path, index=False)

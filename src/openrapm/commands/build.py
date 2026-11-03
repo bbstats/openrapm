@@ -31,6 +31,7 @@ outputs/season_ratings_check_step3.parquet, whose values equal the 2026 rows of 
 """
 from __future__ import annotations
 
+import shutil
 import time
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
@@ -1037,10 +1038,23 @@ class RegularSeasonDesigns:
         return self.cut[target] if int(season) == self.rated else self.designs.season(season, target)
 
 
-def regular_season_table(cfg: dict, settings, seasons) -> pd.DataFrame:
-    """Each of `seasons` rated from its regular-season games alone, through the code a season in progress goes through
-    and step 4 as shipped: the rating it had the morning after its last regular-season game, had the model been the same
-    (the owner, 2026-11-02: "ideally we just lock WOSA after reg season").  About 40 seconds a season."""
+def regular_parts_folder(cfg: dict, name: str) -> Path:
+    """Where a run of the regular-season ratings keeps each season as it finishes, one file a season."""
+    return resolve(cfg, "outputs") / "regular_parts" / name
+
+
+def seasons_still_to_rate(folder: Path, seasons) -> list:
+    """The `seasons` without a file in `folder`: a stopped run goes on from the seasons it finished."""
+    return [int(season) for season in seasons if not (folder / f"{int(season)}.parquet").exists()]
+
+
+def rate_regular_seasons(cfg: dict, settings, seasons, folder: Path) -> None:
+    """Steps 1-3 for each of `seasons` from its regular-season games alone, through the code a season in progress goes
+    through, each written to `folder` as it finishes.  About 4 minutes a season: every season trains its own boosters."""
+    missing = seasons_still_to_rate(folder, seasons)
+    if not missing:
+        return
+    folder.mkdir(parents=True, exist_ok=True)
     designs = DesignCache(cfg)
     sums = accumulate_rapm(designs, trainable(cfg).seasons, settings)
     panel = trainable_panel(cfg)
@@ -1049,22 +1063,44 @@ def regular_season_table(cfg: dict, settings, seasons) -> pd.DataFrame:
     record = line_setup(cfg, settings.prior.second_prior, second_prior.INPUT_SETS[settings.prior.second_prior_inputs])
     lines = SecondPriorLines(load_grams(cfg, settings.prior.second_prior), set(trainable(cfg).seasons),
                              record.get("type_scale"))
-    part_seasons, sources, label_cache, tables = part_season_panel(cfg, settings), panel_sources(cfg), {}, []
-    for season in (int(season) for season in seasons):
+    part_seasons, sources, label_cache = part_season_panel(cfg, settings), panel_sources(cfg), {}
+    for season in missing:
         started = time.time()
         cut, rows = regular_season_cut(season, cfg, designs, settings.targets.distinct(), sources)
         progress = SeasonsInProgress(rows[rows.possessions > 0].reset_index(drop=True), {season: 1.0})
-        tables.append(rate_one_season(season, sums, panel, RegularSeasonDesigns(designs, season, cut), settings, params,
-                                      lines, label_cache, part_seasons, progress)[0])
+        table = rate_one_season(season, sums, panel, RegularSeasonDesigns(designs, season, cut), settings, params,
+                                lines, label_cache, part_seasons, progress)[0]
+        written = folder / f"{season}.parquet.part"
+        table.to_parquet(written, index=False)
+        written.replace(folder / f"{season}.parquet")
         designs.clear()
         print(f"  {season}: rated from its regular season alone ({time.time() - started:.0f}s)", flush=True)
+
+
+def regular_season_table(cfg: dict, settings, seasons, name: str, jobs: int = 1) -> pd.DataFrame:
+    """Each of `seasons` rated from its regular-season games alone, then step 4 as shipped: the rating it had the morning
+    after its last regular-season game, had the model been the same (the owner, 2026-11-02: "ideally we just lock WOSA
+    after reg season").  `jobs` processes at once, as many as free memory holds."""
+    folder = regular_parts_folder(cfg, name)
+    missing = seasons_still_to_rate(folder, seasons)
+    fits = parallel.affordable_jobs(jobs) if jobs > 1 and len(missing) > 1 else 1
+    if fits > 1:
+        parallel.run_children(["openrapm", "wins", "--name", name, "--rebuild-regular"],
+                              parallel.season_chunks(missing, fits), lambda k: [],
+                              resolve(cfg, "outputs") / "parallel" / f"{name}_regular")
+    else:
+        rate_regular_seasons(cfg, settings, missing, folder)
+    tables = [pd.read_parquet(folder / f"{int(season)}.parquet") for season in seasons]
     step3 = prior_rapm.published_table(pd.concat(tables, ignore_index=True), player_names(cfg))
     folds, where = step4_folds(cfg, settings.shrink)
     step4, multipliers = shrink_seasons(cfg, step3, settings, folds, where)
-    return swap_seasons(cfg, step4, settings, folds, where, multipliers)[0]
+    final = swap_seasons(cfg, step4, settings, folds, where, multipliers)[0]
+    shutil.rmtree(folder, ignore_errors=True)
+    return final
 
 
-def regular_ratings(cfg: dict, settings, table: pd.DataFrame, stored: pd.DataFrame | None) -> pd.DataFrame | None:
+def regular_ratings(cfg: dict, settings, table: pd.DataFrame, stored: pd.DataFrame | None, name: str,
+                    jobs: int = 1) -> pd.DataFrame | None:
     """`stored` with every finished season of `table` that has playoff games rated from its regular season alone.  A
     season in progress is never rated here: until its first playoff game its own rows are the regular season, and after
     it the rows stored the morning before stand, which is the lock (`commands/wins.py`)."""
@@ -1073,7 +1109,7 @@ def regular_ratings(cfg: dict, settings, table: pd.DataFrame, stored: pd.DataFra
              if int(season) <= finished and has_playoff_stints(int(season), cfg)]
     if not asked:
         return stored
-    fresh = regular_season_table(cfg, settings, asked)[REGULAR_COLUMNS]
+    fresh = regular_season_table(cfg, settings, asked, name, jobs)[REGULAR_COLUMNS]
     return fresh if stored is None else replace_season_rows(stored, fresh, "the regular-season ratings")
 
 
@@ -1096,7 +1132,9 @@ def run_build(cfg: dict, settings, seasons, name: str, save_models: str | None =
     # the test setting's tables are scored, never shown, and nothing fitted for a season may see its neighbours there
     regular, wins_summary = None, None
     if settings.exclude_neighbours == 0:
-        regular = regular_ratings(cfg, settings, final, load_regular(cfg, name))
+        # a new build is a new model, so nothing of a run stopped before it may be reused
+        shutil.rmtree(regular_parts_folder(cfg, name), ignore_errors=True)
+        regular = regular_ratings(cfg, settings, final, load_regular(cfg, name), name, parallel.MAX_JOBS)
         final, wins_summary = add_wins(cfg, final, settings, regular=regular)
     if stored is not None:
         step3, step4, final = (replace_season_rows(stored[suffix], table, f"season_ratings_{name}{suffix}")
