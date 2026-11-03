@@ -11,7 +11,7 @@ every number quoted here; read its measurement traps before trusting a number.  
 - No step numbers in messages.  The names: **box-score prior** (the LightGBM, also "preliminary prior"); **+/-** (what
   the season's games add on top of the prior); **swap adjustment** (the old after-the-fact correction from lineup
   swaps, off since experiment 82); **swap part of the prior** (experiment 82's line, learned from the same swaps,
-  added before the games are weighed); **defense factor** (the shrink's extra factor on defense, 0.89 before 2017 and 0.84 from 2017; never "dial",
+  added before the games are weighed; on the page **Box Adj**); **defense factor** (the shrink's extra factor on defense, 0.89 before 2017 and 0.84 from 2017; never "dial",
   the owner: "yuck").  Define each the first
   time it appears.
 - Experiments by name in chat, numbers only in the record files ("the three-input prior", not "experiment 92").
@@ -21,6 +21,31 @@ every number quoted here; read its measurement traps before trusting a number.  
   owner reads: "how the box-score prior splits players into its five training groups", never "the deal" or "folds";
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
+
+## Where it stands, 2026-11-03: the Detail view built, NOT published (branch `detail-box-adj`, worktree `A:/code/spmm_detail`)
+
+The owner: "change 'decomposition' to 'detail' and separate out the lineup swaps model but just call it 'Box Adj'. and then On
+court Off court should be called On adj Off adj".  **No rating moves**: a rebuild of all 31 seasons matches the published tables on
+all 15,027 rows, difference 0, and a trial of the morning's `build --seasons 2027 --replace-seasons` on the new columns does too,
+wins over starter average included.  The work is on a branch because the morning job runs from `A:/code/spmm`: new data with
+the old page would show a Box score column short of its Box Adj.  Internal names stay: the `--openrapm-decomposition` flag,
+`decomposition.py`, `decompose_openrapm.json`.
+
+**To publish, on the owner's word:**
+
+1. Copy `box_adj_off` and `box_adj_def` from `outputs/season_ratings_detail_boxadj{,_step3,_step4}.parquet` onto
+   `season_ratings_product{,_step3,_step4}.parquet` by player and season, in the build's column order (`player_name`, the two
+   columns, then the rest), keeping copies first.  Without them the morning's `--replace-seasons` stops on the columns.
+2. Merge `detail-box-adj` into `main` and the checkout's branch, so the morning job runs the new code.
+3. `openrapm site --openrapm-decomposition --power` from the product table, then commit and push; check the Pages build.
+4. Remove the worktree and the scratch `detail_boxadj` tables.
+
+**Separately, not fixed, waiting on the owner:** the morning job of 2026-11-03 failed in `scripts/daily_files.py changed` with
+WinError 6 starting `git` with no valid console input, so that day's 2027 did not publish.  Likely fix, not tried:
+`stdin=subprocess.DEVNULL` on its `subprocess.run`.
+
+**A running trap:** `--config` and `OPENRAPM_CONFIG` do not move the root, which comes from where the code sits, so a worktree needs
+a config with absolute paths.
 
 ## Where it stands, 2026-11-02, evening: WOSA's switch and lock PUBLISHED (the owner: "Publish")
 
@@ -602,7 +627,7 @@ What else the work of 2026-10-23 left open:
 - `openrapm build` writes `outputs/season_ratings_product.parquet` with `_step3` and `_step4` beside it.
 - `openrapm site --bias --openrapm-decomposition --similarity` writes the site's files.  Commit, fast-forward `main`
   and push only on the owner's word, then check the Pages build: `gh api repos/bbstats/openrapm/pages/builds/latest`.
-  With the second prior, the decomposition's "box score" piece carries the whole prior; its split is the owner's.
+  The Detail view's Box score and Box Adj are the prior's two parts.
 - The incumbent's test-setting tables `outputs/season_ratings_padbins127*.parquet` (experiment 127), folds `padbins127_early`,
   `padbins127_within`; its noise control `noise_padbins127` (2026-11-02), the chain's default `CONTROL_NAME`.
 
