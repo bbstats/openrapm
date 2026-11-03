@@ -36,7 +36,8 @@ without the word.  The worktree runs with `PYTHONPATH=A:/code/spmm_inside/src` a
   playoff game, then the last rows stored stand.
 - **On the owner's word:** merge the branch, copy the regular-season file to `outputs/season_ratings_product_regular.parquet`, run
   `openrapm wins --name product`, then `openrapm site --openrapm-decomposition --power`, fast-forward main and push.  Without that
-  copy the morning job stops, since a finished season then has no regular-season rating.
+  copy `openrapm wins --name product` stops and names the command that builds it, about 4 minutes a season a process; the morning
+  job computes only 2027 and does not need it.
 
 ## Where it stands, 2026-11-02, afternoon: WOSA PUBLISHED (the owner: "publish")
 
