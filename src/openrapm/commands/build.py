@@ -1050,7 +1050,7 @@ def seasons_still_to_rate(folder: Path, seasons) -> list:
 
 def rate_regular_seasons(cfg: dict, settings, seasons, folder: Path) -> None:
     """Steps 1-3 for each of `seasons` from its regular-season games alone, through the code a season in progress goes
-    through, each written to `folder` as it finishes.  About 4 minutes a season: every season trains its own boosters."""
+    through, each written to `folder` as it finishes.  About 4 minutes a season: each season trains its own boosters."""
     missing = seasons_still_to_rate(folder, seasons)
     if not missing:
         return
@@ -1078,9 +1078,9 @@ def rate_regular_seasons(cfg: dict, settings, seasons, folder: Path) -> None:
 
 
 def regular_season_table(cfg: dict, settings, seasons, name: str, jobs: int = 1) -> pd.DataFrame:
-    """Each of `seasons` rated from its regular-season games alone, then step 4 as shipped: the rating it had the morning
-    after its last regular-season game, had the model been the same (the owner, 2026-11-02: "ideally we just lock WOSA
-    after reg season").  `jobs` processes at once, as many as free memory holds."""
+    """Each of `seasons` rated from its regular-season games alone, then step 4 as shipped: the rating it had the
+    morning after its last regular-season game, had the model been the same (the owner, 2026-11-02: "ideally we just
+    lock WOSA after reg season").  `jobs` processes at once, as many as free memory holds."""
     folder = regular_parts_folder(cfg, name)
     missing = seasons_still_to_rate(folder, seasons)
     fits = parallel.affordable_jobs(jobs) if jobs > 1 and len(missing) > 1 else 1

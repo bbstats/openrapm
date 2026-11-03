@@ -495,9 +495,9 @@ def _add_wins(commands) -> None:
                       help="compute only these seasons, the others keep theirs: 2026, 2017-2026 or 2017,2018 (default "
                            "every season of the table; the table must already carry the columns)")
     wins.add_argument("--rebuild-regular", action="store_true",
-                      help="first rate each finished season from its regular season alone, about 4 minutes a season a "
-                           "process, in outputs/season_ratings_<NAME>_regular.parquet; the wins read those ratings, and "
-                           "a stopped run goes on from the seasons it finished")
+                      help="first rate each finished season from its regular season alone, about 4 minutes a season "
+                           "a process, in outputs/season_ratings_<NAME>_regular.parquet; the wins read those ratings, "
+                           "and a stopped run goes on from the seasons it finished")
     _add_jobs(wins)
     wins.set_defaults(run=_run_wins)
 
