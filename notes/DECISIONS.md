@@ -11927,3 +11927,31 @@ rating, not by the stint's points, so how a game ended moves weight between stin
 
 **Trap, for the list above.**  A number normalized inside a game knows how the game ended.  Use it to divide credit if that is what
 you mean, never to choose which stints to test.
+
+## The Detail view: Box Adj in its own column (the owner, 2026-11-03: "change 'decomposition' to 'detail' and separate out the lineup swaps model but just call it 'Box Adj'. and then On court Off court should be called On adj Off adj")
+
+**No rating moves.**  A rebuild of all 31 seasons with the split recorded matches the published step-4 table exactly on all
+15,027 rows: every rating, prior and games' part, difference 0.  Box Adj is the second prior less b x the centred box-score
+prior (`second_prior.adjustments`), in the prior's units, shrunk with the prior's own multipliers, so box score + Box Adj is
+the old Box score column to the last digit.
+
+Standard deviation over player-seasons of 1,000 possessions or more on that side, possession-weighted:
+
+| era | side | box score | Box Adj |
+|---|---|---|---|
+| 1997-2006 | offense | 1.04 | 1.09 |
+| 1997-2006 | defense | 0.79 | 1.22 |
+| 2007-2016 | offense | 1.07 | 1.04 |
+| 2007-2016 | defense | 0.70 | 1.12 |
+| 2017-2026 | offense | 1.17 | 0.84 |
+| 2017-2026 | defense | 0.58 | 0.86 |
+
+In 2026, Box Adj's correlation with on + off is -0.07 on offense and -0.02 on defense, and with box score 0.52 and 0.73.
+On the published rows, a team's possession-weighted mean over its one-team players is 0.05 on average per side, largest 0.64.
+That reading leaves out players of two teams and players under 60 possessions, whom the team total counts;
+`tests/test_second_prior.py` pins the exact zero on one-team players.
+
+**Trap, for the list above.**  The second prior is anchored on b x the box-score prior after centring, not the raw one.  A
+read-only split that subtracted the raw one put a constant into every player's part: 2026 read Kolek -3.86 and Curry -0.97 where
+the true figures are -2.85 and +0.23.  Spreads barely moved, so the table looked right.  Check that a teammate-only part sums
+to about 0 on a team before reporting it by player.

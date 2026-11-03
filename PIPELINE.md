@@ -414,21 +414,24 @@ held back.
   page is rebuilt after every ratings build (`tests/test_similarity_site.py` fails otherwise).
 - **Code:** `src/openrapm/similarity.py`, `commands/site.py`, `docs/similarity.html`.
 
-## The OpenRAPM decomposition page (`decomposition.py`)
+## The OpenRAPM Detail view (`decomposition.py`)
 
 - **For:** the site's Ratings tab, `docs/index.html`, which reads this file and not `ratings.json`: its
-  Decomposition switch shows the pieces as columns, and a click on a player draws them as a waterfall (a toggle at
+  Detail button shows the pieces as columns, and a click on a player draws them as a waterfall (a toggle at
   the top of the page switches to the vanilla RAPM page; the old `docs/decompose_openrapm.html` address forwards
-  here).  Every published rating split, offense and defense separately, into box score + on court + off court +
-  team SOS + swap adjustment, which add up to the rating (the owner's design, 2026-10-13).  Total is the two sides'
-  pieces added.
+  here).  Every published rating split, offense and defense separately, into box score + Box Adj + on court + off
+  court + team SOS, which add up to the rating (the owner's design, 2026-10-13; the names of 2026-11-03: Detail, Box
+  Adj, On adj and Off adj, the last two the page's headers for on court and off court).  Total is the two sides' pieces
+  added.  Box Adj is the part of the prior learned from lineup swaps; it only moves credit between teammates.
 - **Reads:** the ratings table and its step-3 table (`outputs/season_ratings_product.parquet` and `_step3`), each
   season's two designs (step 1's targets for offense and defense, `data.designs.DesignCache`) and the box scores'
   teams (`data/raw/box`).
 - **Writes:** `docs/data/decompose_openrapm.json`, one row per player-season of `ratings.json`, with the player's
   teams as that season's box scores abbreviate them, in the order he joined them ("SAC/IND"; only games he played
   minutes in count), for the Ratings tab's Team column and filter.
-- **How:** box score and swap adjustment are the table's `prior_off` / `prior_def` and `c_off` / `c_def`.  The
+- **How:** Box Adj is the table's `box_adj_off` / `box_adj_def`, which the build records
+  (`second_prior.adjustments` x the prior scale, then step 4's multipliers, the same ones as the prior it is part of),
+  plus step 5's `c_off` / `c_def`, 0 since experiment 82.  Box score is `prior_off` / `prior_def` less `box_adj_*`.  The
   games' part `u` (step 3's coefficient beyond the prior, times step 4's factor on it since experiment 65) is a
   weighted sum of the season's row outcomes, so grouping the rows splits it: the rows he is on the court for (on court), his team's rows without him, in games he
   played and games he missed (off court), and every other row (team SOS).  Step 3 is solved again for each season

@@ -915,8 +915,8 @@ def write_decomposition(cfg: dict, ratings_path: Path, data_dir: Path, built: st
 #      are the box scores' abbreviations in the order he joined them, "SAC/IND"
 # Rows are the ratings.json rows (possessions above 0), best total first.
 #
-# Example (2026): Victor Wembanyama's offence, 2.07 = 0.69 + 1.41 - 0.27 + 0.06 + 0.18; his total, 7.16 = 3.98 + 2.65
-# - 0.21 + 0.14 + 0.61.
+# Example (2026): Victor Wembanyama's offence, 3.01 = 2.11 + 0.26 + 0.86 - 0.32 + 0.11; his total, 9.37 = 3.89 + 2.70 + 2.98
+# - 0.43 + 0.23: box score, Box Adj, on court, off court, team SOS.  The page calls on court and off court On adj and Off adj.
 OPENRAPM_FILE = "decompose_openrapm.json"
 OPENRAPM_FIELDS = ["n", "id", "p", "o", "d", "t", "tm", "w"]
 OPENRAPM_PIECES = ["box_score", "on_court", "off_court", "team_sos", "box_adj", "rating"]

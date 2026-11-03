@@ -30,9 +30,9 @@ rows (on court, off court, team SOS) adds up its own h_r z_r.  Where the solve n
 diagonal (rapm.solved_ridge: the 2020 bubble has an empty playoff home-court column), B'h is not exactly 0; the
 leftover goes to team SOS and is reported, about 1e-8.
 
-Example: Victor Wembanyama's 2026 offensive rating is 2.07 = box score 0.69 + games' part 1.20 + swap adjustment
-0.18, and his games' part splits as 1.41 on court - 0.27 off court + 0.06 team SOS: his own possessions say he was 1.41
-per 100 better than his context and priors predicted, and his team's possessions without him took 0.27 of it back.
+Example: Victor Wembanyama's 2026 offensive rating is 3.01 = box score 2.11 + Box Adj 0.26 + games' part 0.65, and his games'
+part splits as 0.86 on court - 0.32 off court + 0.11 team SOS: his own possessions say he was 0.86 per 100 better
+than his context and priors predicted, and his team's possessions without him took 0.32 of it back.
 
 Model layer: everything here takes frames and arrays.  commands/site.py loads the tables and the box scores.
 """

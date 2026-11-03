@@ -135,7 +135,7 @@ python -m openrapm site --bias --decomposition --openrapm-decomposition --simila
    `docs/data/decompose_1y.json` and `decompose_3y.json` (319 seconds in the last run); `--similarity` writes
    `docs/data/similarity/`, each player-season's nearest player-seasons of other players (33 seconds);
    `--openrapm-decomposition` solves step 3 again for every season and writes `docs/data/decompose_openrapm.json`,
-   each published rating split into box score, on court, off court, team SOS and swap adjustment (132 seconds;
+   each published rating split into box score, Box Adj, on court, off court and team SOS (132 seconds;
    run it after every `build`).
 
 `python -m openrapm <command> --help` lists every option. `--config FILE`, given before the command (or
