@@ -414,7 +414,7 @@ def test_the_team_rates_are_padded_between_the_rate_and_the_level(lineup_league)
     rows = rows.assign(**{count: rng.poisson(1.0, len(rows)).astype(float) for count in sw.TEAM_COUNTS})
     raw, padded = sp.team_rate_numbers(rows, pad=False), sp.team_rate_numbers(rows)
     for side in ("O", "D"):
-        assert list(padded[side].columns) == sp.TEAM_RATES and not padded[side].isna().any().any()
+        assert list(padded[side].columns) == sp.ALL_TEAM_RATES and not padded[side].isna().any().any()
         gap = (padded[side] - raw[side]).abs().to_numpy()
         assert gap.max() > 0.0
         # padding pulls every player's numbers together, on every rate
@@ -491,6 +491,62 @@ def test_the_second_prior_on_the_team_rates_holds_every_teams_total_and_reads_th
         total = (moved.reindex(kept.player_id).to_numpy() * kept.poss.to_numpy())
         for team in kept.team.unique():
             assert abs(total[kept.team.to_numpy() == team].sum()) < 1e-6
+
+
+def test_the_shots_taken_are_made_plus_missed_and_the_profile_reads_no_makes():
+    rows = _counted(TWO_STINTS, "threes_made", [2.0, 0.0]).assign(threes_missed=[1.0, 1.0])
+    rates = sp.team_rate_numbers(rows, pad=False)["O"]
+    assert rates.loc[7, "team_threes_taken_on"] == pytest.approx(30.0)          # 2 made + 1 missed in 10 possessions
+    assert rates.loc[7, "team_threes_taken_off"] == pytest.approx(20.0)         # 1 missed in 5
+    today = sp.INPUT_SETS["context_and_types_centred"]
+    assert sp.INPUT_SETS["context_types_team_profile_centred"] == [*today, *sp.TEAM_PROFILE_RATES]
+    assert len(sp.TEAM_PROFILE_RATES) == 10
+    assert not any("made" in name or "missed" in name for name in sp.TEAM_PROFILE_RATES)
+    assert sp.reads_team_rates("context_types_team_profile_centred")
+    assert sp.reads_types("context_types_team_profile_centred")
+    assert "context_types_team_profile_centred" in sp.CENTRED_SETS
+
+
+@pytest.mark.parametrize("name", ["context_types_team_rates_centred", "context_types_team_profile_centred"])
+def test_each_team_rate_set_reads_exactly_its_own_numbers(name):
+    index = pd.Index([1, 2], name="player_id")
+    context = pd.DataFrame(0.0, index=index, columns=sp.CONTEXT)
+    types = pd.DataFrame(0.0, index=index, columns=sp.TYPES)
+    box = {"O": {1: 0.5, 2: -0.5}, "D": {1: -1.0, 2: 1.0}}
+    rates = {side: pd.DataFrame(1.0, index=index, columns=sp.ALL_TEAM_RATES) for side in ("O", "D")}
+    inputs = sp.side_inputs(box, context, types, name, rates)
+    assert list(inputs["O"].columns) == sp.INPUT_SETS[name] == list(inputs["D"].columns)
+
+
+def test_the_line_can_leave_the_games_part_out_of_its_target(lineup_league):
+    stints, truth, _ = lineup_league(5, games=40)
+    held = sw.prepare(sw.season_rows(stints))
+    ratings = truth[["player_id", "o", "d"]]
+    priors = ratings.assign(o=0.5 * ratings.o, d=0.5 * ratings.d)
+    index = pd.Index(truth.player_id.to_numpy(), name="player_id")
+    rng = np.random.default_rng(5)
+    inputs = {side: pd.DataFrame(rng.normal(size=(len(index), 2)), index=index, columns=["a", "b"])
+              for side in ("O", "D")}
+    whole = sp.held_back_grams(held, ratings, inputs, 5)
+    part = sp.held_back_grams(held, ratings, inputs, 5, priors)
+    pairs = sa.residual_pairs(held, ratings, sa.RESIDUAL_CONTEXT)
+    targets = sp.swap_targets(pairs, priors)
+    for long_side, side in sp.SIDE_KEYS.items():
+        assert np.allclose(whole[long_side].G, part[long_side].G)
+        assert not np.allclose(whole[long_side].b, part[long_side].b)
+        wanted = sa.pair_grams(targets[long_side], inputs[side], sa.player_folds(index.to_numpy(), 5), 5)
+        assert np.allclose(part[long_side].b, wanted.b)
+    assert sa.residual_pairs(held, ratings, sa.RESIDUAL_CONTEXT)["offense"].r.equals(pairs["offense"].r)
+    assert sp.LINE_TARGETS == ("whole_rating", "prior_part")
+
+
+def test_the_prior_part_target_docstring_example():
+    pairs = {"offense": pd.DataFrame({"team": [1], "fifth_a": [7], "fifth_b": [8], "h": [10.0], "r": [1.0]}),
+             "defense": pd.DataFrame({"team": [1], "fifth_a": [7], "fifth_b": [8], "h": [10.0], "r": [0.0]})}
+    whole = pd.DataFrame({"player_id": [7, 8], "o": [3.0, 0.0], "d": [0.0, 0.0]})
+    prior = pd.DataFrame({"player_id": [7, 8], "o": [2.5, 0.0], "d": [0.0, 0.0]})
+    assert sp.swap_targets(pairs, whole)["offense"].r.iloc[0] == pytest.approx(4.0)
+    assert sp.swap_targets(pairs, prior)["offense"].r.iloc[0] == pytest.approx(3.5)
 
 
 def test_the_adjustments_are_the_second_prior_less_its_box_score_part_and_cancel_on_a_team():

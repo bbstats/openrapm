@@ -147,6 +147,21 @@ in the swap, and the line could learn nothing from it.
 Example before padding: for 10 possessions on offence with him on the court his team takes 3 offensive rebounds, and
 for 5 without him 1.  His team_off_rebounds_on is 3 / 10 x 100 = 30.0, his team_off_rebounds_off 1 / 5 x 100 = 20.0, and
 the level both are padded toward 4 / 15 x 100 = 26.7.
+
+Team makes with him on are his on-court points split by shot type, and step 3 reads those points in the same games: all
+eight rates read +46% of what the line's other inputs add on defense, then lost in every era of the full build
+(notes/DECISIONS.md, experiment 128).  Two ways to take the direct +/- out (the owner, 2026-11-03: "eliminate the +/-
+direct type stuff"; experiments 129-131):
+
+    the inputs   `INPUT_SETS` "context_types_team_profile_centred" reads `TEAM_PROFILE_RATES`: the threes, twos and free
+                 throws his team takes, made or not (`TEAM_TAKEN`), its offensive rebounds and turnovers, him on and off
+    the target   `LINE_TARGETS` "prior_part": the swap's residual on the fold's whole rating with only the two players'
+                 prior parts added back, d = r + (prior_a - prior_b), so what the fold's games' part already holds is
+                 out of what the line may claim.  "whole_rating", the equation above, adds their whole ratings back
+
+Example: a swap's residual is +1.0, the two players' whole ratings differ by +3.0 and their prior parts by +2.5.  The
+line's target reads +4.0 on "whole_rating" and +3.5 on "prior_part": the +0.5 the fold's games' part gave the first
+player is not there for an input of the fit games' lineup results to take credit for again.
 """
 from __future__ import annotations
 
@@ -159,7 +174,7 @@ import scipy.sparse as sp
 from . import box_prior, swap_adjust
 from .box_rates import shrink
 from .on_court import NO_SPREAD_K
-from .settings import TEAM_TOTALS
+from .settings import SECOND_PRIOR_TARGETS, TEAM_TOTALS
 from .swap_test import DEF, OFF, TEAM_COUNTS, Season
 
 __all__ = ["CONTEXT", "BOX", "INPUTS", "OTHER_BOX", "TYPES", "INPUT_SETS", "type_scale", "standardised_types",
@@ -167,7 +182,8 @@ __all__ = ["CONTEXT", "BOX", "INPUTS", "OTHER_BOX", "TYPES", "INPUT_SETS", "type
            "context_numbers", "line_inputs", "side_inputs", "swap_targets", "held_back_grams", "season_coefficients",
            "second_priors", "TEAM_TOTALS", "team_possessions", "hold_team_totals", "hold_spread",
            "season_second_priors", "SAME_TEAMMATES", "OTHER_OPPONENTS", "CENTRED_SETS", "three_inputs", "centred",
-           "reads_types", "adjustments", "TEAM_RATES", "reads_team_rates", "team_rate_numbers", "with_team_rates"]
+           "reads_types", "adjustments", "TEAM_RATES", "TEAM_TAKEN", "TEAM_PROFILE_RATES", "ALL_TEAM_RATES",
+           "reads_team_rates", "team_rate_numbers", "with_team_rates", "LINE_TARGETS"]
 
 CONTEXT = ["teammates_offence_on", "teammates_defence_on", "opponents_offence_on", "opponents_defence_on",
            "teammates_offence_bench", "teammates_defence_bench", "opponents_offence_bench", "opponents_defence_bench"]
@@ -179,14 +195,22 @@ SAME_TEAMMATES = "teammates_same_side_on"     # the three-input prior's teammate
 OTHER_OPPONENTS = "opponents_other_side_on"   # its opponents, the other side, summed
 # his team's rates with him on the court and off it (module docstring, experiment 128)
 TEAM_RATES = [f"team_{count}_{where}" for where in ("on", "off") for count in TEAM_COUNTS]
+# the same without the makes (module docstring, experiment 129): the shots taken, each made plus missed
+TEAM_TAKEN = ["threes_taken", "twos_taken", "free_throws_taken"]
+TEAM_PROFILE_RATES = [f"team_{count}_{where}" for where in ("on", "off")
+                      for count in (*TEAM_TAKEN, "off_rebounds", "turnovers")]
+ALL_TEAM_RATES = [f"team_{count}_{where}" for where in ("on", "off") for count in (*TEAM_COUNTS, *TEAM_TAKEN)]
 # the inputs each version of the line reads (settings.PriorSettings.second_prior_inputs)
 INPUT_SETS = {"context": INPUTS, "context_and_types": [*INPUTS, OTHER_BOX, *TYPES],
               "context_and_types_centred": [*INPUTS, OTHER_BOX, *TYPES],
               "own_teammates_opponents": [BOX, SAME_TEAMMATES, OTHER_OPPONENTS],
-              "context_types_team_rates_centred": [*INPUTS, OTHER_BOX, *TYPES, *TEAM_RATES]}
+              "context_types_team_rates_centred": [*INPUTS, OTHER_BOX, *TYPES, *TEAM_RATES],
+              "context_types_team_profile_centred": [*INPUTS, OTHER_BOX, *TYPES, *TEAM_PROFILE_RATES]}
 # applied on inputs centred on the season's average (`centred`)
-CENTRED_SETS = {"own_teammates_opponents", "context_and_types_centred", "context_types_team_rates_centred"}
+CENTRED_SETS = {"own_teammates_opponents", "context_and_types_centred", "context_types_team_rates_centred",
+                "context_types_team_profile_centred"}
 SIDE_KEYS = {"offense": "O", "defense": "D"}      # swap_adjust's side names -> the priors' side keys
+LINE_TARGETS = SECOND_PRIOR_TARGETS               # what the line's target adds back to a swap (module docstring)
 
 
 def reads_types(input_set: str | None) -> bool:
@@ -199,11 +223,12 @@ def reads_types(input_set: str | None) -> bool:
 
 
 def reads_team_rates(input_set: str | None) -> bool:
-    """Whether the line on `input_set` reads his team's rates (`TEAM_RATES`), so its inputs need the stint rows' counts.
+    """Whether the line on `input_set` reads any of his team's rates, so its inputs need the stint rows' counts.
 
-    Example: "context_types_team_rates_centred" does, "context_and_types_centred" and None do not.
+    Example: "context_types_team_rates_centred" and "context_types_team_profile_centred" do,
+    "context_and_types_centred" and None do not.
     """
-    return input_set is not None and set(TEAM_RATES) <= set(INPUT_SETS[input_set])
+    return input_set is not None and bool(set(ALL_TEAM_RATES) & set(INPUT_SETS[input_set]))
 
 
 # ------------------------------------------------------------------------------- every booster's answer
@@ -419,16 +444,24 @@ def context_numbers(stints: pd.DataFrame, offence: BoosterAnswers, defence: Boos
     return frame
 
 
+def _counts_read(stints: pd.DataFrame) -> np.ndarray:
+    """(rows x counts): `TEAM_COUNTS` of the stint rows, then `TEAM_TAKEN`, each shot made plus missed."""
+    taken = [(stints[f"{shot}_made"] + stints[f"{shot}_missed"]).to_numpy(dtype=float)
+             for shot in ("threes", "twos", "free_throws")]
+    return np.column_stack([stints[TEAM_COUNTS].to_numpy(dtype=float), *taken])
+
+
 def _end_team_rates(rows: _Entries, stints: pd.DataFrame, side: str, pad: bool) -> dict:
-    """{name: one number per player of `rows`}: `TEAM_RATES` on one end, "O" his team's offence and "D" the offence of
-    the teams facing his (the module docstring).  The noise of one possession is read as `_Entries.noise` reads it: each
-    row one draw, sum over players and rows of w^2 (row value - his number)^2 over sum of his w, with w x row value the
-    row's count x 100."""
+    """{name: one number per player of `rows`}: `ALL_TEAM_RATES` on one end, "O" his team's offence and "D" the offence
+    of the teams facing his (the module docstring).  The noise of one possession is read as `_Entries.noise` reads it:
+    each row one draw, sum over players and rows of w^2 (row value - his number)^2 over sum of his w, with w x row value
+    the row's count x 100."""
     n_rows = len(stints)
-    counted = np.zeros((2 * n_rows, len(TEAM_COUNTS)))
+    counts = (*TEAM_COUNTS, *TEAM_TAKEN)
+    counted = np.zeros((2 * n_rows, len(counts)))
     weight = np.zeros(2 * n_rows)
     entries = slice(0, n_rows) if side == "O" else slice(n_rows, 2 * n_rows)
-    counted[entries] = 100.0 * stints[TEAM_COUNTS].to_numpy(dtype=float)
+    counted[entries] = 100.0 * _counts_read(stints)
     weight[entries] = stints.poss.to_numpy(dtype=float)
     team_weight = np.asarray(rows.teams.T @ weight).ravel()
     team_rate = np.asarray(rows.teams.T @ counted) / np.where(team_weight > 0, team_weight, 1.0)[:, None]
@@ -440,14 +473,14 @@ def _end_team_rates(rows: _Entries, stints: pd.DataFrame, side: str, pad: bool) 
         spread = (total(counted * counted) - 2.0 * rate * total(counted * weight[:, None])
                   + rate * rate * total(weight * weight)[:, None])
         noise = np.maximum(spread, 0.0).sum(axis=0) / max(float(behind.sum()), 1e-12)
-        for at, count in enumerate(TEAM_COUNTS):
+        for at, count in enumerate(counts):
             out[f"team_{count}_{where}"] = (pad_toward_level(rate[:, at], behind, level[:, at], float(noise[at])) if pad
                                             else np.where(behind > 0, rate[:, at], level[:, at]))
     return out
 
 
 def team_rate_numbers(stints: pd.DataFrame, pad: bool = True) -> dict:
-    """{"O", "D"}: player_id -> his `TEAM_RATES` on that end, padded toward his team's season rate (the module
+    """{"O", "D"}: player_id -> his `ALL_TEAM_RATES` on that end, padded toward his team's season rate (the module
     docstring), for every player of `stints`.  A player of two teams takes each team's season rate by his possessions
     with it.
 
@@ -462,15 +495,15 @@ def team_rate_numbers(stints: pd.DataFrame, pad: bool = True) -> dict:
                                     stints[DEF].to_numpy(dtype=np.int64).ravel()]))
     rows = _Entries(stints, ids)
     index = pd.Index(ids, name="player_id")
-    return {side: pd.DataFrame(_end_team_rates(rows, stints, side, pad), index=index)[TEAM_RATES]
+    return {side: pd.DataFrame(_end_team_rates(rows, stints, side, pad), index=index)[ALL_TEAM_RATES]
             for side in ("O", "D")}
 
 
 def with_team_rates(frame: pd.DataFrame, rates: pd.DataFrame) -> pd.DataFrame:
-    """`frame`, one row per player, with `TEAM_RATES` after its columns.  A player missing them gets their mean over
-    the players who have them, as `line_inputs` fills the context numbers."""
+    """`frame`, one row per player, with the columns of `rates` after its own.  A player missing them gets their mean
+    over the players who have them, as `line_inputs` fills the context numbers."""
     out = frame.join(rates, how="left")
-    out[TEAM_RATES] = out[TEAM_RATES].fillna(rates.mean())
+    out[list(rates.columns)] = out[list(rates.columns)].fillna(rates.mean())
     return out
 
 
@@ -536,8 +569,8 @@ def centred(frame: pd.DataFrame, possessions: pd.Series) -> pd.DataFrame:
 def side_inputs(box: dict, context: pd.DataFrame, types: pd.DataFrame | None = None,
                 input_set: str | None = None, team_rates: dict | None = None) -> dict:
     """{"O", "D"}: `line_inputs` for each side, `box` {"O", "D"}: player_id -> box-score prior (raw sign); with
-    `input_set` "own_teammates_opponents", `three_inputs` instead; with a set that reads `TEAM_RATES`,
-    `team_rate_numbers`' answer joined on.  A set that reads step 5's numbers (`reads_types`) with no `types` given is
+    `input_set` "own_teammates_opponents", `three_inputs` instead; with a set that reads team rates, the ones it names
+    from `team_rate_numbers`' answer.  A set that reads step 5's numbers (`reads_types`) with no `types` given is
     refused: without them `line_inputs` would hand back the eight context numbers alone, and a line fitted on them would
     pass for the set it names.  So is a set that reads the team rates with no `team_rates` given."""
     if types is None and reads_types(input_set):
@@ -551,7 +584,7 @@ def side_inputs(box: dict, context: pd.DataFrame, types: pd.DataFrame | None = N
     inputs = {side: line_inputs(pd.Series(box[side], dtype=float), context, pd.Series(box[other[side]], dtype=float),
                                 types) for side in ("O", "D")}
     if reads_team_rates(input_set):
-        return {side: with_team_rates(frame, team_rates[side]) for side, frame in inputs.items()}
+        return {side: with_team_rates(frame, team_rates[side])[INPUT_SETS[input_set]] for side, frame in inputs.items()}
     return inputs
 
 
@@ -573,14 +606,18 @@ def swap_targets(pairs: dict, ratings: pd.DataFrame) -> dict:
     return out
 
 
-def held_back_grams(held: Season, ratings: pd.DataFrame, inputs: dict, n_folds: int) -> dict:
+def held_back_grams(held: Season, ratings: pd.DataFrame, inputs: dict, n_folds: int,
+                    added_back: pd.DataFrame | None = None) -> dict:
     """{side: swap_adjust.PairGrams}: one fold's share of the line's normal equations.
 
     `held` is the fold's held-back games (swap_test.prepare), `ratings` the fold's step-4 ratings in raw sign
     (player_id, o, d), `inputs` {"O", "D"}: `line_inputs` from the fit games.  A swap counts only if both players
     have inputs, and the swaps of each player fold are kept apart so his own swaps stay out of his own line.
+    `added_back`, the numbers the target adds back to each swap's residual (`swap_targets`): `ratings` by default, or
+    the fold's prior parts for the `LINE_TARGETS` "prior_part" (the module docstring).
     """
-    pairs = swap_targets(swap_adjust.residual_pairs(held, ratings, swap_adjust.RESIDUAL_CONTEXT), ratings)
+    pairs = swap_targets(swap_adjust.residual_pairs(held, ratings, swap_adjust.RESIDUAL_CONTEXT),
+                         ratings if added_back is None else added_back)
     fold_of = swap_adjust.player_folds(np.union1d(inputs["O"].index.to_numpy(), inputs["D"].index.to_numpy()),
                                        n_folds)
     return {side: swap_adjust.pair_grams(pairs[side], inputs[key], fold_of, n_folds)

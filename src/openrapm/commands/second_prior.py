@@ -19,6 +19,8 @@ For every fold of every season in the folds named:
     3. The swaps of the held-back games, scored against the fold's step-4 ratings at the test setting's multipliers,
        give the fold's share of the line's normal equations (second_prior.held_back_grams).  The fit games and the
        held-back games never share a game, so a shot counted in a box score never meets the lineup result it scored.
+       With --target prior_part (experiment 130) only the fold's prior parts are added back to each swap's residual,
+       not its whole ratings.
 
 Writes outputs/second_prior/<TAG>/ (data/second_prior_files.py): one grams_<season>.npz and inputs_<season>.parquet per
 season, and run.json.  A season already written is skipped, so a stopped run resumes where it stopped.
@@ -74,7 +76,7 @@ def fold_answers(players: pd.DataFrame, saved: dict) -> tuple[dict, float]:
 
 
 def fold_grams(fold, directory: Path, stints: pd.DataFrame, saved: dict, factors: tuple, n_folds: int,
-               scale: dict | None = None, input_set: str | None = None):
+               scale: dict | None = None, input_set: str | None = None, target: str = "whole_rating"):
     """One fold: ({side: PairGrams}, its players' inputs in one frame, the prior check's largest gap, swaps used)."""
     fit_ids, held_ids = fold_games(directory, fold)
     players = fold_players(directory, fold.stem)
@@ -87,15 +89,17 @@ def fold_grams(fold, directory: Path, stints: pd.DataFrame, saved: dict, factors
     team_rates = second_prior.team_rate_numbers(fit_stints) if second_prior.reads_team_rates(input_set) else None
     inputs = second_prior.side_inputs(box, context, types, input_set, team_rates)
     held = swap_test.prepare(stints[game.isin(held_ids).to_numpy()].reset_index(drop=True), fold.season)
-    ratings = swap_test.ratings_in_raw_sign(prior_shrink.shrink_fold(fold.rows, fold.season, factors))
-    grams = second_prior.held_back_grams(held, ratings, inputs, n_folds)
+    table = prior_shrink.shrink_fold(fold.rows, fold.season, factors)
+    ratings = swap_test.ratings_in_raw_sign(table)
+    added_back = swap_test.ratings_in_raw_sign(table, "prior") if target == "prior_part" else None
+    grams = second_prior.held_back_grams(held, ratings, inputs, n_folds, added_back)
     frame = pd.concat([inputs[side].reset_index().assign(side=side) for side in SIDES], ignore_index=True)
     frame = frame.assign(season=fold.season, repeat=fold.repeat, fold=fold.fold)
     return grams, frame, gap, {side: grams[side].n for side in grams}
 
 
 def run_second_prior(cfg: dict, models: str, folds_tag: str, tag: str, seasons=None, argv=(),
-                     inputs: str = "context") -> int:
+                     inputs: str = "context", target: str = "whole_rating") -> int:
     """`openrapm second-prior`: every season's grams and inputs, then run.json (the module docstring)."""
     started = time.time()
     n_folds = PRODUCT.prior.second_prior_folds
@@ -130,7 +134,8 @@ def run_second_prior(cfg: dict, models: str, folds_tag: str, tag: str, seasons=N
         factors = prior_shrink.season_factors(multipliers, season)
         parts, frames, used = [], [], {"offense": 0, "defense": 0}
         for fold in (fold for fold in folds if fold.season == season):
-            grams, frame, gap, n = fold_grams(fold, where[fold.stem], stints, saved, factors, n_folds, scale, inputs)
+            grams, frame, gap, n = fold_grams(fold, where[fold.stem], stints, saved, factors, n_folds, scale, inputs,
+                                              target)
             if not gap < PRIOR_TOLERANCE:
                 raise SystemExit(f"{fold.stem}: the boosters of {models} give priors {gap:.1e} from the fold's own; "
                                  "these folds were rated with other boosters")
@@ -144,7 +149,7 @@ def run_second_prior(cfg: dict, models: str, folds_tag: str, tag: str, seasons=N
         print(f"  {season}: {len(parts)} folds, {used['offense']:,} offensive and {used['defense']:,} defensive swaps; "
               f"priors within {worst_gap:.1e} of the folds' ({time.time() - started:.0f}s)", flush=True)
     write_run(out_dir, dict(argv=list(argv), models=models, folds=folds_tag, seasons=chosen, n_folds=n_folds,
-                            inputs=second_prior.INPUT_SETS[inputs], type_scale=scale, padded=True,
+                            inputs=second_prior.INPUT_SETS[inputs], type_scale=scale, padded=True, target=target,
                             step4_rule=shrink.rule,
                             prior_check=PRIOR_TOLERANCE))
     print(f"wrote {out_dir} ({time.time() - started:.0f}s)", flush=True)

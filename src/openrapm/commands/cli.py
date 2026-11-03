@@ -38,6 +38,7 @@ from ..settings import (
     PRODUCT,
     ROW_LABELS,
     SECOND_PRIOR_INPUTS,
+    SECOND_PRIOR_TARGETS,
     TEAM_TOTALS,
     TEST,
     UNSHRINK_LABELS,
@@ -214,7 +215,8 @@ def _run_folds(args: argparse.Namespace, cfg: dict) -> int:
 
 def _run_second_prior(args: argparse.Namespace, cfg: dict) -> int:
     from .second_prior import run_second_prior
-    return run_second_prior(cfg, args.models, args.folds, args.tag, args.seasons, argv=args.argv, inputs=args.inputs)
+    return run_second_prior(cfg, args.models, args.folds, args.tag, args.seasons, argv=args.argv, inputs=args.inputs,
+                            target=args.target)
 
 
 def _run_site(args: argparse.Namespace, cfg: dict) -> int:
@@ -634,7 +636,13 @@ def _add_second_prior(commands) -> None:
                         help="context: the box-score prior and the eight context numbers; context_and_types: also the "
                              "other end's box-score prior and step 5's 19 numbers; context_and_types_centred: the "
                              "same, centred on the season when applied; own_teammates_opponents: experiment 92's "
-                             "three numbers (default %(default)s)")
+                             "three numbers; context_types_team_rates_centred: experiment 128's team rates too; "
+                             "context_types_team_profile_centred: experiment 129's, without team makes "
+                             "(default %(default)s)")
+    second.add_argument("--target", choices=SECOND_PRIOR_TARGETS, default="whole_rating",
+                        help="what the line's target adds back to a swap's residual: the fold's whole ratings, or only "
+                             "their prior parts, so its games' part stays out of what the line may claim "
+                             "(default %(default)s)")
     second.set_defaults(run=_run_second_prior)
 
 
