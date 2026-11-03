@@ -62,3 +62,10 @@ def test_the_last_game_reads_the_playoff_log_too(daily_files, tmp_path):
     pd.DataFrame({"GAME_DATE": ["2026-04-12"]}).to_parquet(tmp_path / "2026_RS.parquet")
     assert daily_files.last_game(tmp_path, 2026) == "2026-04-12"
     assert daily_files.main(["last-game", str(tmp_path), "2027"]) == 0
+
+
+def test_the_job_gives_its_programs_a_usable_stdin_before_it_starts_any():
+    """Task Scheduler's headless console hands the job no usable stdin, and Python then cannot start a program."""
+    lines = (SCRIPT.parent / "daily_update.sh").read_text(encoding="utf-8").splitlines()
+    first_run = next(k for k, line in enumerate(lines) if "$PY " in line and not line.lstrip().startswith("#"))
+    assert lines.index("exec < /dev/null") < first_run
