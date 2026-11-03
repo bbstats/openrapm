@@ -122,3 +122,17 @@ for side, label in (("O", "OFFENSE"), ("D", "DEFENSE")):
         print(f"{name} | {on['d'][name]:+.3f} | {on['d_prior'][name]:+.3f} | {on['r'][name]:+.3f} | "
               + " | ".join(f"{per[era][name]:+.3f}" for era in ERAS))
 print("done", round(time.time() - started), flush=True)
+
+# Read after the tables above, so a proposal and not a result: the two stats whose weights on what the rating leaves kept
+# their sign in every era on defense, on the same swaps, one list on both ends.
+NARROW = {"team ORB, on and off": ["team_off_rebounds_on", "team_off_rebounds_off"],
+          "team made threes, on and off": ["team_threes_made_on", "team_threes_made_off"],
+          "team ORB and made threes, on and off": ["team_off_rebounds_on", "team_off_rebounds_off",
+                                                   "team_threes_made_on", "team_threes_made_off"]}
+for side, label in (("O", "OFFENSE"), ("D", "DEFENSE")):
+    print(f"\n===== {label}, narrower lists added to today's 29: change | z | seasons better of 30 | eras")
+    for target in ("d", "d_prior"):
+        today = held_out(side, TODAY, target)
+        for name, columns in NARROW.items():
+            print(f"{target}: {name} | {line(held_out(side, [*TODAY, *columns], target) - today)}")
+print("narrow done", round(time.time() - started), flush=True)
