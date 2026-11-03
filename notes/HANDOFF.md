@@ -1,7 +1,7 @@
 # Handoff
 
 **What this file is.**  Where the work stands, what waits on the owner, and the commands a session runs.  Rewritten
-on the afternoon of 2026-10-22, its status and next steps on 2026-10-23 (twice), 2026-10-24, 2026-10-26, 2026-10-27, 2026-10-28, 2026-10-29, 2026-10-30, 2026-11-01 and 2026-11-02 (twice); the earlier file is in git history.  `DECISIONS.md` is the permanent record and carries
+on the afternoon of 2026-10-22, its status and next steps on 2026-10-23 (twice), 2026-10-24, 2026-10-26, 2026-10-27, 2026-10-28, 2026-10-29, 2026-10-30, 2026-11-01, 2026-11-02 (twice) and 2026-11-03; the earlier file is in git history.  `DECISIONS.md` is the permanent record and carries
 every number quoted here; read its measurement traps before trusting a number.  `README.md` says what OpenRAPM is,
 `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's standing rules.
 
@@ -21,6 +21,31 @@ every number quoted here; read its measurement traps before trusting a number.  
   owner reads: "how the box-score prior splits players into its five training groups", never "the deal" or "folds";
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
+
+## Where it stands, 2026-11-03, afternoon: the team's rates in Box Adj failed their test (experiment 128); verdict the owner's
+
+The owner: "i have a hunch that the reason certain stats are being thrown into the 'lineup swaps' (now called 'box
+adjustment') is because they are adjusting for the 'team share' so - I wonder if we should roll up lots more 'team share'
+metrics in here (like team ORB100, team TOV 100) as well", then "All eight, makes included".  DECISIONS.md, "Experiment
+128", holds every number.  **Nothing shipped and nothing published changes:** the code is committed, off by default.
+
+- **The build:** 16 new inputs a side, the team's eight box rates per 100 with him on the court and off it, on offense his
+  team's and on defense the opponents' (`second_prior.team_rate_numbers`, input set `context_types_team_rates_centred`).
+  A team's season rate cannot work, since two players of a swap share it.
+- **The result:** within-season WOWY worse in every era, +0.290 z +4.48, +0.325 z +3.39, +0.403 z +4.83; all seasons
+  +0.339, z +7.27, 4 of 30; the noise control -0.009, z -1.09.  Year over year inside the guard, team-game z +1.36.  At
+  about today's width still worse, +0.162, z +3.45, and year over year z +5.56.
+- **Why:** the line's own target adds the whole ratings back, so inputs that restate the fit games' lineup results earn
+  weight there, +13% on offense and +46% on defense of what its other inputs add, and step 3 reads the same games again.
+  With the games' part out of the target the gain is -0.089, z -2.35, and -0.046, z -1.53, not in every era
+  (`scratch/2026-11-03_team_rates/why_it_lost.py`; a new measurement trap).  Own weights on rebounds, turnovers, missed
+  threes and steals fall a quarter to 40%; the hunch explains part of those few stats.
+- **Files:** `outputs/second_prior/team128`, tables `season_ratings_team128*` and `season_ratings_team128wide_step4`, folds
+  `team128_early`, `team128_within`, boosters `prior_models_team128.pkl`, 2 GB, to delete once the owner rules.  Sheet
+  tab "Box Adj inputs 128" holds the second-stage Boruta.  The Experiments tab has rows 127, which had not been mirrored,
+  and 128.
+- **Stale default:** `101_log_run.py --incumbent` still defaults to creation110, which left the within-season columns
+  blank until `--incumbent=padbins127` was passed.  Pass it.
 
 ## Where it stands, 2026-11-03: the Detail view PUBLISHED (the owner: "publish")
 
@@ -648,7 +673,7 @@ What else the work of 2026-10-23 left open:
   on ctx110 read -0.013, z -1.63); a candidate is read against today's ratings on the same split, so that noise
   does not enter its change, but any one build's standing carries 0.01-0.02 of it.
 - Every experiment gets a row in `experiments/runs.csv` (`scripts/checks/101_log_run.py`), mirrored to the sheet
-  "OpenRAPM experiments", tab Experiments; the next free row is 128.  Since 2026-10-30 it reads the within-season
+  "OpenRAPM experiments", tab Experiments; the next free row is 129.  Since 2026-10-30 it reads the within-season
   test by era too, and refuses a partial or stale reading.  Input screens get their own tab ("Input screen 112").
 
 ## Commands a session runs
