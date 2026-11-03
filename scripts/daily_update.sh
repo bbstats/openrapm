@@ -25,6 +25,9 @@
 # By hand: bash scripts/daily_update.sh            (PUBLISH=0 bash scripts/daily_update.sh builds, writes the site's
 #                                                   files to outputs/daily/site_dry and does not push)
 set -uo pipefail
+# Task Scheduler starts this under `conhost --headless`, which hands it no usable stdin: any Python that then starts a
+# program stops on WinError 6, as scripts/daily_files.py did on 2026-11-03 after the morning's ratings were built.
+exec < /dev/null
 
 ROOT=/a/code/spmm
 SITE=/a/code/spmm_site

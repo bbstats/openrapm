@@ -32,9 +32,10 @@ wins over starter average included.  Internal names stay: the `--openrapm-decomp
 
 The published tables carry `box_adj_off` and `box_adj_def`; their copies from before are in `outputs/backup_boxadj/`.
 
-**Separately, not fixed, waiting on the owner:** the morning job of 2026-11-03 failed in `scripts/daily_files.py changed` with
-WinError 6 starting `git` with no valid console input, so that day's 2027 did not publish.  Likely fix, not tried:
-`stdin=subprocess.DEVNULL` on its `subprocess.run`.
+**The morning job's failure of 2026-11-03, fixed (the owner: "yes, fix what is broken"):** `scripts/daily_files.py changed` stopped
+on WinError 6, because the task's `conhost --headless` gives the job no usable stdin and Python cannot start a program without
+one.  `scripts/daily_update.sh` now opens with `exec < /dev/null`.  A temporary task with the real one's launch command failed
+the same way without it and passed with it.
 
 **A running trap:** `--config` and `OPENRAPM_CONFIG` do not move the root, which comes from where the code sits, so a worktree needs
 a config with absolute paths.
