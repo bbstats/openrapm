@@ -22,24 +22,33 @@ every number quoted here; read its measurement traps before trusting a number.  
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
 
-## Where it stands, 2026-11-02, evening: two WOSA changes on a branch, not published
+## Where it stands, 2026-11-02, evening: WOSA's switch and lock PUBLISHED (the owner: "Publish")
 
-The owner, on the published WOSA: "if you cause the blowout you shouldn't be penalized", then "switch! great"; and "ideally we
-just lock WOSA after reg season", then "go".  Both are on the branch `wosa-inside-game`, worktree `A:/code/spmm_inside`, deliberately
-not in this working tree: the 6 AM job runs this tree and writes every season's column to main, so a change here would publish
-without the word.  The worktree runs with `PYTHONPATH=A:/code/spmm_inside/src` and a config whose paths point at
-`A:/code/spmm/data` and `outputs`; its trial table is `outputs/season_ratings_wosa_inside.parquet`, its regular-season ratings
-`outputs/season_ratings_wosa_inside_regular.parquet`.
+The owner, on the first published WOSA: "if you cause the blowout you shouldn't be penalized", then "switch! great"; and "ideally
+we just lock WOSA after reg season", then "go", then "Publish".  DECISIONS.md, "WOSA, the switch and the lock", holds every number.
+**No rating moved.**
 
-- **The switch:** every game carries the same total weight, and leverage only divides it up inside that game.
-- **The lock:** WOSA reads a rating from the regular season alone; a season in progress keeps its own rows until its first
-  playoff game, then the last rows stored stand.
-- **On the owner's word:** merge the branch, copy the regular-season file to `outputs/season_ratings_product_regular.parquet`, run
-  `openrapm wins --name product`, then `openrapm site --openrapm-decomposition --power`, fast-forward main and push.  Without that
-  copy `openrapm wins --name product` stops and names the command that builds it, about 4 minutes a season a process; the morning
-  job computes only 2027 and does not need it.
+- **The switch:** every game carries the same total weight, and leverage only divides it up inside that game
+  (`wins.leverage_inside_games`).  Scale 30 rating points per win.
+- **The lock:** WOSA reads a rating from the regular season alone, `outputs/season_ratings_product_regular.parquet`.  A season in
+  progress keeps its own rows until its first playoff game, each morning stores them, and after that game the last rows stored
+  stand, so WOSA stops changing the morning after the last regular-season game.
+- **What the publish moved:** WOSA in 13,584 of 14,259 rows.  Finished seasons' ratings nothing.  2027's ratings at most 0.03 on the
+  same games, the league's hustle pulled again.  2026's top: Jokić +14.05, Gilgeous-Alexander +12.91, Wembanyama +11.21.
+- **Every full build at the product setting now also rates each season from its regular season alone**, about 4 minutes a season a
+  process, in up to 5 processes as memory holds.  The test setting's tables get no wins.  `openrapm wins --name NAME
+  --rebuild-regular --jobs 4` does it for a table built before; a stopped run goes on from `outputs/regular_parts/NAME`.
+- **June 2027:** the full build then rates 2027 from its regular season too, in place of the rows the lock stored.
+- **The first playoff morning of 2027 is the lock's first live use.**  Read that morning's log and the WOSA column: 2027 should stop
+  moving.  If the last regular-season morning's job failed, the lock holds the morning before it, a day short.
+- **Waiting on the owner:** wording for the About and Changelog pages, which I do not write; published without either.  Drafts:
+  "WOSA: wins over starter average.  How many regular-season wins a player added over the average of the season's 150 most-started
+  players, each game counting the same and each possession weighted by how much it could swing that game." and "Added WOSA, wins
+  over starter average, to the ratings page."  **Proposed, not built:** regular-season possessions beside WOSA, since the page's
+  Rating and Poss. columns hold the playoffs and WOSA does not: Jokić shows 8.7 where WOSA reads 9.2.
+- **Backups:** `outputs/season_ratings_product_before_inside_lock.parquet`, `outputs/season_ratings_product_before_wosa.parquet`.
 
-## Where it stands, 2026-11-02, afternoon: WOSA PUBLISHED (the owner: "publish")
+## Where it stood, 2026-11-02, afternoon: WOSA first PUBLISHED (the owner: "publish"); its leverage and scale replaced that evening
 
 The owner: "want to add an MVP rating score should be = how many wins you improve your team vs the average player in the
 top 150"; the bar, then: "sort by games started, minutes played is the tiebreaker".  DECISIONS.md, "WOSA", holds every
@@ -676,6 +685,6 @@ What else the work of 2026-10-23 left open:
 
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest -q                       # 954 passed, 2 skipped, 7 deselected, 1 xfailed: the backup bigs
+    .venv/Scripts/python -m pytest -q                       # 966 passed, 2 skipped, 7 deselected, 1 xfailed: the backup bigs
     uvx ruff check .                                         # clean
     git log --oneline -1                                     # the handoff of 2026-11-01
