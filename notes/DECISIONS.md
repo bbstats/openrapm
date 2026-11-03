@@ -11955,3 +11955,36 @@ That reading leaves out players of two teams and players under 60 possessions, w
 read-only split that subtracted the raw one put a constant into every player's part: 2026 read Kolek -3.86 and Curry -0.97 where
 the true figures are -2.85 and +0.23.  Spreads barely moved, so the table looked right.  Check that a teammate-only part sums
 to about 0 on a team before reporting it by player.
+
+## Experiment 128: the team's rates with him on and off in the swap part of the prior (the owner, 2026-11-03: "i have a hunch that the reason certain stats are being thrown into the 'lineup swaps' (now called 'box adjustment') is because they are adjusting for the 'team share' so - I wonder if we should roll up lots more 'team share' metrics in here (like team ORB100, team TOV 100) as well", then, of the options below, "All eight, makes included"; registered before any full build)
+
+**The reads that led here** (`scratch/2026-11-03_team_rates/read_ten_seasons.py`, `read_thirty_seasons.py`, logs beside them; read-only, on the held-back swaps of creation110's folds, the games and players' inputs the shipped line was fitted on).  Each season predicted by the line fitted without it and its neighbors; the loss is the line's own, the mean squared miss of a swap's points per 100 weighted by the swap's information.  Below 0 is better.  Share is of what the line's other 28 inputs add beyond the box-score prior: 1.50 on offense, 0.97 on defense.
+
+| team numbers added | side | change | paired z | seasons better | share | 1997-2006 z | 2007-2016 z | 2017-2026 z |
+|---|---|---|---|---|---|---|---|---|
+| season rates, 8 stats | offense | +0.008 | +0.45 | 18 of 30 | -0.6% | -1.73 | +0.50 | +1.06 |
+| season rates, 8 stats | defense | -0.010 | -0.42 | 16 of 30 | +1.1% | -1.13 | -0.37 | +1.00 |
+| ORB and TOV, on and off | offense | -0.082 | -4.19 | 26 of 30 | +5.5% | -2.41 | -2.51 | -2.19 |
+| ORB and TOV, on and off | defense | -0.085 | -3.23 | 23 of 30 | +8.8% | -1.82 | -3.16 | -0.64 |
+| points alone, on and off | offense | -0.120 | -4.03 | 24 of 30 | +8.0% | -1.92 | -1.62 | -5.33 |
+| points alone, on and off | defense | -0.078 | -2.16 | 22 of 30 | +8.1% | -2.67 | -1.42 | +0.10 |
+| attempts, ORB and TOV, on and off | offense | -0.139 | -3.68 | 22 of 30 | +9.3% | -2.88 | -1.06 | -2.32 |
+| attempts, ORB and TOV, on and off | defense | -0.236 | -4.44 | 26 of 30 | +24.4% | -2.58 | -3.34 | -1.90 |
+| all eight rates, on and off | offense | -0.196 | -4.58 | 23 of 30 | +13.1% | -4.04 | -1.22 | -3.02 |
+| all eight rates, on and off | defense | -0.447 | -5.82 | 27 of 30 | +46.3% | -4.09 | -3.39 | -3.74 |
+| all eight, shuffled | offense | +0.008 | +0.64 | 14 of 30 | -0.5% | -1.07 | +1.68 | +0.86 |
+| all eight, shuffled | defense | +0.015 | +1.99 | 12 of 30 | -1.6% | +1.25 | +0.41 | +1.53 |
+
+- **The owner's numbers as written cannot work.**  A team's season rate is the same for the two players of a swap, so it cancels; only players of two teams give it any difference.  His share of the team's stat, the division written out, on ten seasons alone: offense +0.053, z +0.33; defense +0.141, z +1.33.
+- **The hunch is partly right.**  With attempts, ORB and TOV in, his own offensive rebounds fall from 0.84 to 0.60, turnovers from -0.36 to -0.24, missed threes from 0.64 to 0.46, steals on defense from -0.31 to -0.18; assists, fouls and made threes move under a fifth.  The 13 own stats' total size falls 10% on offense and 6% on defense, with all eight rates 18% and 16%.
+- **The change with him is what counts for rebounds and forced turnovers.**  In the fit on ORB and TOV alone, per standard deviation, him on against him off, 1997-2006 / 2007-2016 / 2017-2026: ORB on offense +1.79 / +1.34 / +0.52 against -2.02 / -1.00 / -0.37; ORB allowed on defense +2.44 / +3.66 / +2.08 against -2.11 / -3.61 / -1.27; turnovers forced on defense -1.55 / -2.41 / -0.94 against +1.35 / +2.28 / +0.86.  Turnovers on offense read through him on alone.
+- **The risk the owner chose with his eyes open.**  Team makes with him on are his on-court scoring split by shot type, and experiment 45 took on-court plus-minus off the prior on 2026-10-08.  Points alone reach 61% of all eight's gain on offense and 17% on defense.
+
+**The change.**  16 new inputs a side in the line, points per 100, `second_prior.TEAM_RATES`, the input set `context_types_team_rates_centred`: for made and missed threes, twos and free throws, offensive rebounds and turnovers, the team's rate with him on the court and with him on the bench in the games he played; on defense the rates of the teams facing his.  From the fit games alone, padded toward his team's season rate by the method of the context numbers, read from the rated season alone.  One list on both ends.  Team totals held.  The line is fitted on creation110's boosters and folds, as the shipped ctx110 was, so only its inputs differ; then a full build on them.
+
+    openrapm second-prior --models creation110 --folds creation110_early,creation110_within --tag team128 --inputs context_types_team_rates_centred
+    bash scripts/experiment_chain.sh team128 points_with_expected_opponent_threes_late_as_scored "--second-prior team128 --second-prior-inputs context_types_team_rates_centred"
+
+**The test.**  The within-season WOWY test against padbins127 by era, beside noise_padbins127; the year-over-year test; the 2026 top 20, read for the players of experiment 45's ruling, Ajay Mitchell, Hugo Gonzalez and Oso Ighodaro against Jimmy Butler, Nikola Jokić and Zach Edey; defense over offense by era and for 2026, since most of the gain above is on defense.  Boruta on the second stage first, on the held-back swaps: a stat leaves the list only if rejected on both ends in every era.
+
+**The rule.**  Adopted when better in every era on the within-season test and not worse year over year at z +2; the verdict is the owner's.
