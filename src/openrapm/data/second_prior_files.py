@@ -9,6 +9,9 @@
                               second_prior.INPUTS
     run.json                  the command that wrote them and the folds and boosters it read
 
+A line fitted on the rating (rating_line.py, `openrapm second-prior --target rating`) has sums_<season>.npz in place of
+the grams: Q, c, yy and sw of rating_line.RatingSums, both ends in one file.
+
 Example: outputs/second_prior/ctx81/grams_2019.npz holds 2019's share of both lines, from its twelve folds.
 """
 from __future__ import annotations
@@ -18,11 +21,12 @@ from pathlib import Path
 
 import numpy as np
 
+from ..rating_line import FITTED_PARTS, RatingSums
 from ..swap_adjust import PairGrams
 from .config import resolve
 
-__all__ = ["SIDES", "grams_directory", "grams_path", "write_grams", "read_grams", "load_grams", "write_run",
-           "read_run", "line_setup"]
+__all__ = ["SIDES", "grams_directory", "grams_path", "write_grams", "read_grams", "rating_sums_path",
+           "write_rating_sums", "read_rating_sums", "load_grams", "write_run", "read_run", "line_setup"]
 
 SIDES = ("offense", "defense")
 FIELDS = ("G", "b", "G_fold", "b_fold", "n")
@@ -50,17 +54,36 @@ def read_grams(path: Path) -> dict:
                             b_fold=stored[f"{side}_b_fold"], n=int(stored[f"{side}_n"])) for side in SIDES}
 
 
+def rating_sums_path(directory: Path, season: int) -> Path:
+    return Path(directory) / f"sums_{int(season)}.npz"
+
+
+def write_rating_sums(path: Path, sums: RatingSums) -> None:
+    """One season's `RatingSums` to `path`."""
+    np.savez(path, Q=sums.Q, c=sums.c, yy=sums.yy, sw=sums.sw)
+
+
+def read_rating_sums(path: Path) -> RatingSums:
+    """One season's `RatingSums` from `path`."""
+    stored = np.load(path)
+    return RatingSums(Q=stored["Q"], c=stored["c"], yy=float(stored["yy"]), sw=float(stored["sw"]))
+
+
 def load_grams(cfg: dict, tag: str, padded: bool | None = True) -> dict:
-    """{season: {side: PairGrams}} for every season under outputs/second_prior/<tag>/; stops, naming the command
-    that writes them, when there are none, and when run.json does not say the context numbers were padded as
-    `padded` asks (None: either), so a line is never applied to inputs of another kind than it was fitted on."""
+    """{season: {side: PairGrams}} for every season under outputs/second_prior/<tag>/, or {season: RatingSums} for a
+    line fitted on the rating; stops, naming the command that writes them, when there are none, and when run.json does
+    not say the context numbers were padded as `padded` asks (None: either), so a line is never applied to inputs of
+    another kind than it was fitted on."""
     directory = grams_directory(cfg, tag)
     paths = sorted(directory.glob("grams_*.npz"))
-    if not paths:
+    rating_paths = sorted(directory.glob("sums_*.npz"))
+    if not paths and not rating_paths:
         raise SystemExit(f"no second-prior grams in {directory}: `openrapm second-prior --tag {tag}` writes them")
     if padded is not None and bool(read_run(directory).get("padded", False)) != padded:
         raise SystemExit(f"{directory}/run.json does not say padded={padded}: these grams were fitted on context "
                          "numbers of another kind; write them again with `openrapm second-prior`")
+    if rating_paths:
+        return {int(path.stem.removeprefix("sums_")): read_rating_sums(path) for path in rating_paths}
     return {int(path.stem.removeprefix("grams_")): read_grams(path) for path in paths}
 
 
@@ -79,6 +102,12 @@ def line_setup(cfg: dict, tag: str, inputs: list) -> dict:
     record = read_run(directory)
     if list(record.get("inputs", [])) != list(inputs):
         raise SystemExit(f"outputs/second_prior/{tag} was fitted on the inputs {record.get('inputs')}, not {inputs}")
+    rating_paths = sorted(directory.glob("sums_*.npz"))
+    if rating_paths:
+        size = (int(np.load(rating_paths[0])["Q"].shape[0]) - FITTED_PARTS) // 2
+        if size != len(inputs):
+            raise SystemExit(f"outputs/second_prior/{tag} holds sums on {size} inputs a side where its run.json names "
+                             f"{len(inputs)}; write them again with `openrapm second-prior`")
     paths = sorted(directory.glob("grams_*.npz"))
     if paths:
         size = int(np.load(paths[0])["offense_G"].shape[0])

@@ -12224,3 +12224,13 @@ The 2026 top 20, experiment 133, total per 100 against the incumbent, keeps 17 o
 **Open before a line of this kind could ship.**  These test lines take the other end's weights and the fitted parts' multipliers from a fit on every season, the rated one included, through small cross terms; a shipped line solves both ends together without the rated season, in `src/`, with tests, and is built again.  The season so far is untested.  `playoff_share` stays out.  The list can go further: the screen's every-candidate row reads -0.830 against the 29, with +0.244 of it the cost of 172 shuffled inputs.
 
 **The lesson.**  The line's fit on swaps and the rating's objective disagree by more than the inputs do, so a selection method run on one stage says little about the next.  Score inputs on the final objective, here through `scratch/2026-11-03_direct/direct_screen.py`.
+
+## Experiment 134: the line fitted on the rating, in the shipped code (the owner, 2026-11-03: "Build ship version"; registered before any result)
+
+**The change.**  Experiment 133's inputs, today's 29 and all eight team rates, with the weights fitted as `src/openrapm/rating_line.py` fits them: `openrapm second-prior --target rating`, on padbins127's boosters and folds, so the line is today's pipeline's own.  Both ends are solved together on the seasons the rated one may train on, so nothing of the rated season reaches its line: the leak of experiments 132-133 is gone.  The within layer's factors in the columns are each fold season's own at the test rule.  `second_prior.season_coefficients` answers with the same array, so the rest of the pipeline is unchanged.  At today's settings nothing moves: `openrapm compare` prints IDENTICAL-BYTES for 2026.
+
+    bash scratch/2026-11-03_direct/run_ship.sh
+
+**The test.**  The within-season WOWY test against padbins127 by era, beside noise_padbins127; the year-over-year test; the 2026 top 20; defense over offense.  The season so far: each season rated from its first 7.15%, 10%, 25% and 50% of games, the prior scales held, scored on the rest of it against padbins127's same folds.  2027 today under both.
+
+**The rule.**  Adopted when better in every era on the within-season test, not worse year over year at z +2, and not worse in any era at a tenth or a quarter of a season at z +2; the verdict is the owner's, and so is the word to publish.

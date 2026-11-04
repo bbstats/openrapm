@@ -537,7 +537,7 @@ def test_the_line_can_leave_the_games_part_out_of_its_target(lineup_league):
         wanted = sa.pair_grams(targets[long_side], inputs[side], sa.player_folds(index.to_numpy(), 5), 5)
         assert np.allclose(part[long_side].b, wanted.b)
     assert sa.residual_pairs(held, ratings, sa.RESIDUAL_CONTEXT)["offense"].r.equals(pairs["offense"].r)
-    assert sp.LINE_TARGETS == ("whole_rating", "prior_part")
+    assert sp.LINE_TARGETS == ("whole_rating", "prior_part", "rating")
 
 
 def test_the_prior_part_target_docstring_example():

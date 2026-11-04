@@ -640,9 +640,10 @@ def _add_second_prior(commands) -> None:
                              "context_types_team_profile_centred: experiment 129's, without team makes "
                              "(default %(default)s)")
     second.add_argument("--target", choices=SECOND_PRIOR_TARGETS, default="whole_rating",
-                        help="what the line's target adds back to a swap's residual: the fold's whole ratings, or only "
-                             "their prior parts, so its games' part stays out of what the line may claim "
-                             "(default %(default)s)")
+                        help="what the line is fitted on: whole_rating, a swap's residual with the fold's whole "
+                             "ratings added back; prior_part, with only their prior parts, so its games' part stays "
+                             "out of what the line may claim; rating, the within-season test itself, through the ridge "
+                             "(rating_line.py) (default %(default)s)")
     second.set_defaults(run=_run_second_prior)
 
 

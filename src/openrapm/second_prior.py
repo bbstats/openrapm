@@ -162,6 +162,11 @@ direct type stuff"; experiments 129-131):
 Example: a swap's residual is +1.0, the two players' whole ratings differ by +3.0 and their prior parts by +2.5.  The
 line's target reads +4.0 on "whole_rating" and +3.5 on "prior_part": the +0.5 the fold's games' part gave the first
 player is not there for an input of the fit games' lineup results to take credit for again.
+
+`LINE_TARGETS` "rating" fits the weights on the within-season test itself, through the ridge, in place of the swaps
+(rating_line.py; the owner, 2026-11-03: "there has to be a direct way to measure which features we can add"; experiments
+132-134): one set of normal equations a season for both ends, solved together on the seasons the line may train on.
+Every use of the line below is the same: `season_coefficients` answers with the same array.
 """
 from __future__ import annotations
 
@@ -171,7 +176,7 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 
-from . import box_prior, swap_adjust
+from . import box_prior, rating_line, swap_adjust
 from .box_rates import shrink
 from .on_court import NO_SPREAD_K
 from .settings import SECOND_PRIOR_TARGETS, TEAM_TOTALS
@@ -629,7 +634,9 @@ def season_coefficients(grams: dict, season: int, trainable: set, exclude_near: 
     """{"O", "D"}: the rated season's line, an array (n_folds + 1, len(INPUTS)): row k fitted without player fold k's
     swaps, the last row on every swap.  None when no season may train it.
 
-    `grams` is {season: {side: PairGrams}}; the line trains on the seasons more than `exclude_near` from the rated
+    `grams` is {season: {side: PairGrams}}, or {season: rating_line.RatingSums} for a line fitted on the rating, both
+    ends solved together and every row of the arrays the same; the line trains on the seasons more than `exclude_near`
+    from the rated
     one that are trainable (swap_adjust.training_seasons: 0 in the product setting, 1 in the test setting).  With
     `nearest` = K, only the K of them closest to the rated season, the nearer first and on an equal distance the
     earlier, as step 4 picks its fold seasons (prior_shrink.fold_seasons_used; notes/DECISIONS.md, experiment 85).
@@ -641,6 +648,8 @@ def season_coefficients(grams: dict, season: int, trainable: set, exclude_near: 
         train = sorted(sorted(train, key=lambda other: (abs(other - season), other))[:int(nearest)])
     if not train:
         return None
+    if isinstance(grams[train[0]], rating_line.RatingSums):
+        return rating_line.coefficients([grams[other] for other in train], n_folds, penalty)
     return {key: np.vstack([swap_adjust.type_coefficients([grams[other][side] for other in train], fold, penalty)
                             for fold in [*range(n_folds), None]])
             for side, key in SIDE_KEYS.items()}
