@@ -325,8 +325,9 @@ class ShrinkSettings:
     # (notes/DECISIONS.md, experiment 106, adopted 2026-10-23: "please adopt, yes - D"); False is one layer
     within_team_layer: bool = True
     # the within layer's multipliers times these, offence then defence: (0.75, 1.0), version D of experiment 106, until
-    # experiment 136, adopted 2026-11-04: halfway from those to check 156's (0.7826, 0.9935).  Rounding them is not free:
-    # (0.77, 1.0) with a defense factor of 0.87 moves the year-over-year test from z +1.46 to z +1.83 (experiment 137)
+    # experiment 136, adopted 2026-11-04: halfway from those to check 156's (0.7826, 0.9935).  Rounding them is not
+    # free: (0.77, 1.0) with a defense factor of 0.87 moves the year-over-year test from z +1.46 to z +1.83 (experiment
+    # 137)
     within_factors: tuple = (0.7663, 0.9968)
     # the within layer's fold seasons: None the team layer's `nearest`, as shipped; K its K nearest; 0 every fold season
     # the rule allows.  Experiment 123 (registered 2026-10-30): fitted on one season alone the within layer's
