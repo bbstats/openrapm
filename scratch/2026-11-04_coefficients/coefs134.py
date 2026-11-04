@@ -91,16 +91,13 @@ for side, poss, column, sign in (("O", "poss_off", "box_adj_off", 1.0), ("D", "p
     good_inputs = np.column_stack([frame[n].to_numpy() * (-1.0 if flipped_input(side, n) else 1.0) for n in names])
     rule = good_inputs @ np.array([good(side, n, w) for n, w in zip(names, coefficients[side][-1])])
     print("  check 4, the sign rule against the raw form, largest gap:", float(np.abs(direct - rule).max()))
-    # what a row does among teammates: each player's deviation from his main team's possession-weighted mean
+    # what a row does among teammates: the model's own hold of team totals, which also takes a traded player's mix of
+    # team levels out (second_prior.hold_team_totals).  Measuring against his main team's mean alone leaves that mix in:
+    # opponents' offensive rebounds with him on the bench read +0.64 that way and nothing this way in 2026
     team_poss = sp.team_possessions(stints, side)
-    main = team_poss.sort_values("poss").groupby("player_id").tail(1).set_index("player_id")
-    team_col = [c for c in team_poss.columns if c not in ("player_id", "poss")][0]
-    teams = main[team_col].reindex(frame.index)
-    poss_all = main.poss.reindex(frame.index).fillna(0.0)
 
     def inside(values):
-        total = (values * poss_all).groupby(teams).transform("sum")
-        return values - total / poss_all.groupby(teams).transform("sum")
+        return sp.hold_team_totals(values, pd.Series(0.0, index=values.index), team_poss)
 
     def spread(values):
         x, w = values[keep].to_numpy(float), weight[keep].to_numpy(float)
