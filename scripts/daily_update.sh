@@ -82,13 +82,11 @@ esac
 LAST_GAME=$($PY scripts/daily_files.py last-game "$ROOT/data/raw/gamelog" $SEASON) || finish "FAILED: the last game's date" 1
 step git -C "$SITE" add -- $FILES
 step git -C "$SITE" commit -q -m "Daily update: $SEASON through the games of $LAST_GAME"
-# someone else may have pushed to main since the fetch: put this one commit on top of theirs and push again
-if ! git -C "$SITE" push -q origin HEAD:main >> "$LOG" 2>&1; then
-  step git -C "$SITE" fetch origin main
-  if ! git -C "$SITE" rebase -q origin/main >> "$LOG" 2>&1; then
-    git -C "$SITE" rebase --abort >> "$LOG" 2>&1
-    finish "FAILED: the rebase on origin/main, aborted; the day's commit is on $SITE's detached HEAD" 1
-  fi
-  step git -C "$SITE" push -q origin HEAD:main
-fi
-finish "published $(git -C "$SITE" rev-parse --short HEAD)" 0
+# tried for about an hour, on top of whatever main holds by then ($BASH: the bash running this job, not WSL's)
+say "start: scripts/daily_push.sh"
+"$BASH" "$ROOT/scripts/daily_push.sh" "$SITE" "$LOG"
+case $? in
+  0) finish "published $(git -C "$SITE" rev-parse --short HEAD)" 0 ;;
+  2) finish "FAILED: the rebase on origin/main, aborted; the day's commit is on $SITE's detached HEAD" 1 ;;
+  *) finish "FAILED: every push to main over an hour; the day's commit is on $SITE's detached HEAD" 1 ;;
+esac
