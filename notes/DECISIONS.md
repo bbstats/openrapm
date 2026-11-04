@@ -12287,3 +12287,31 @@ The 2026 top 20, total per 100 against the incumbent, keeps 17 of 20: in LaMelo 
 2027 today, 8.7% of its regular season, the test setting, each arm's own scales, 347 players of 60+ possessions: the top 20 keeps 18: in Jamal Murray +0.51, Donovan Clingan +0.59; out Moussa Diabaté -0.68, Tyrese Haliburton -0.61.  Gilgeous-Alexander +0.95, Avdija +0.44, Curry +0.43, Cunningham +0.40; Dončić -0.06, still first.  A median 0.38, the ninetieth percentile 0.76, the largest 1.67; correlation 0.970.
 
 **To adopt, if the owner says so:** `PriorSettings.second_prior = "rating134"`, `second_prior_inputs = "context_types_team_rates_centred"`, the shrink's folds `rating134_early,rating134_within`, tenth folds `rating134_k10` built first (about 50 minutes), the chain's incumbent defaults, then the full build of 1997-2027 and the site's files, a noise control `noise_rating134` after.  WOSA's 30 points per win is read from these ratings' team totals, so it is read again then.
+
+## Experiments 135-137: the four width settings on experiment 134's line (2026-11-04; check 156, `outputs/refit156_rating134*.log`, `outputs/refit135_*`, `outputs/mid136_*`, `outputs/width136_chain.log`, `scratch/2026-11-04_width/`)
+
+The owner: "will we need to find new spreads / new lambda/alphas for the pi ridges? (have we done that?)".  The line's prior scales fell by about a third, 2026 from 1.09 / 1.11 to 0.76 / 0.79, and step 4's multipliers were refitted on the line's own folds, but the four fixed settings and the ridge penalty were not.  Check 156 searched the four for `rating134`, 40 trials, its limit paired against padbins127 (its `TODAY`, moved there from creation110).
+
+| settings | within offense / defense | defense before / from 2017 | within-season against padbins127 | by era, z | seasons better | year over year, team-game | stint, each side rescaled | consensus off / def / total |
+|---|---|---|---|---|---|---|---|---|
+| experiment 134, shipped four | 0.75 / 1.0 | 0.89 / 0.84 | -0.488, z -6.70 | -7.10, -4.56, -2.69 | 28 of 30 | +0.033, z +0.47 | -0.478, z -5.93 | 0.863 / 0.795 / 0.858 |
+| 136, halfway | 0.7663 / 0.9968 | 0.8682 / 0.8704 | -0.572, z -7.80 | -8.38, -5.49, -3.17 | 28 of 30 | +0.108, z +1.46 | -0.490, z -6.11 | 0.862 / 0.796 / 0.858 |
+| 137, 136 rounded | 0.77 / 1.0 | 0.87 / 0.87 | -0.594, z -8.15 | -8.99, -5.78, -3.26 | 28 of 30 | +0.135, z +1.83 | -0.489, z -6.11 | 0.862 / 0.795 / 0.858 |
+| 135, the search's winner | 0.7826 / 0.9935 | 0.8464 / 0.9007 | -0.634, z -8.52 | -8.89, -6.14, -3.53 | 28 of 30 | +0.199, z +2.53, past the rule | -0.498, z -6.23 | |
+
+Beyond the shipped four on the same line: the winner -0.146, z -9.57, 29 of 30 (the twenty untouched seasons -0.155, z -9.16, 20 of 20), eras z -3.94, -6.47, -7.49; halfway -0.084, z -11.22, 29 of 30, eras z -4.72, -8.06, -8.11.  The winner sat on its limit's edge, z +1.00 on the tune readings, and read z +2.53 on the full test: trap 40 again.
+
+It is a trade of width, not a better split inside teams (trap 39): the within-season test rewards wider and year over year narrower, and with each side rescaled to the scored season year over year holds or improves.  Standard deviation over player-seasons of 1,000 possessions or more on both ends, offense / defense / defense over offense:
+
+| era | shipped four | halfway | winner |
+|---|---|---|---|
+| 1997-2006 | 2.049 / 1.854 / 0.905 | 2.089 / 1.804 / 0.863 | 2.129 / 1.753 / 0.823 |
+| 2007-2016 | 1.971 / 1.745 / 0.885 | 2.009 / 1.697 / 0.845 | 2.048 / 1.649 / 0.805 |
+| 2017-2026 | 1.876 / 1.433 / 0.764 | 1.912 / 1.480 / 0.774 | 1.949 / 1.527 / 0.784 |
+| 2026 | 1.826 / 1.505 / 0.824 | 1.862 / 1.556 / 0.836 | 1.897 / 1.605 / 0.846 |
+
+The 2026 top 20 keeps all 20 under both: halfway swaps only Queta and White, 18th and 19th.  Regulars move a median 0.038 at halfway, the most Wembanyama +0.28, 10.19 to 10.47.  Rounding is not free at this scale: halfway's settings rounded to two decimals move year over year from z +1.46 to z +1.83.
+
+**The owner, 2026-11-04, offered the ridge penalty's test first, about 3 hours, chose "Skip it, ship halfway width".**  The settings are 136's exactly, the numbers the owner approved.  The penalty stays 13,037: chosen 2026-09-14 on the year-over-year test of a much older prior, never read on the within-season test.
+
+**A bug the adoption found, fixed in 444d401.**  `build.regular_season_table` sends its seasons to child processes that run `openrapm wins`, which reads the shipped settings and takes no flags, so the full build `product134`, its line named by flags, rated its regular seasons on the shipped line under the new step 4.  Only the wins columns read that table.  A build at settings other than the shipped ones now rates them in its own process.  No table published before was built by flags.  `product136` is run from a copy of the code whose defaults are the new settings (`scratch/2026-11-04_width/final136.sh`), as the shipped code will be, and `product134_step3` is the step 3 it starts from: shrink then swap on it, at the shipped four, gives `product134`'s ratings, priors, games' parts and Box Adj to a gap of 0.0.
