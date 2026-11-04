@@ -12092,3 +12092,46 @@ The 2026 top 20, total per 100 against the incumbent, keeps 16 of 20 (Bam Adebay
 Each fitted on creation110's boosters and folds as ctx110 was, then a full build.  The 10 numbers, input set `context_types_team_profile_centred`: team threes, twos and free throws attempted, ORB and TOV per 100, him on the court and him on the bench; on defense the opponents' against his team.  The `+/- out` target, `openrapm second-prior --target prior_part`: the swap's residual on the fold's whole rating with only the two players' prior parts added back.
 
 **The test and the rule.**  As experiment 128: the within-season WOWY test against padbins127 by era beside noise_padbins127; the year-over-year test at z +2; the 2026 top 20, read for the players of the ruling of 2026-10-08; defense over offense.  Adopted when better in every era and not worse year over year at z +2; the verdict is the owner's.  Experiment 130 is read beside 131 before its gain or loss is put on the team numbers.
+
+### Experiments 129-131: result (2026-11-03, `outputs/nomakes129_chain.log`, `nomakesout130_chain.log`, `ctxout131_chain.log`, `scratch/2026-11-03_team_rates/team_numbers_alone.log`; verdict the owner's)
+
+The driver ran 3:15 to 7:17 PM, each line about 14 minutes, each chain 57 to 74.  **None is a win.  Without the double counting the team numbers tie.**
+
+The within-season WOWY test, the shipped stage, every stint, each system minus padbins127; below 0 is better:
+
+| system | era | change | standard error | paired z | seasons better |
+|---|---|---|---|---|---|
+| attempts, ORB and TOV | 1997-2006 | +0.007 | 0.113 | +0.06 | 6 of 10 |
+| attempts, ORB and TOV | 2007-2016 | +0.027 | 0.063 | +0.43 | 4 of 10 |
+| attempts, ORB and TOV | 2017-2026 | +0.139 | 0.046 | +3.01 | 2 of 10 |
+| attempts, ORB and TOV | all seasons | +0.058 | 0.046 | +1.27 | 12 of 30 |
+| the same, +/- out of the target | 1997-2006 | -0.041 | 0.060 | -0.69 | 6 of 10 |
+| the same, +/- out of the target | 2007-2016 | -0.004 | 0.056 | -0.06 | 5 of 10 |
+| the same, +/- out of the target | 2017-2026 | +0.050 | 0.057 | +0.88 | 2 of 10 |
+| the same, +/- out of the target | all seasons | +0.002 | 0.033 | +0.06 | 13 of 30 |
+| today's inputs, +/- out of the target | 1997-2006 | -0.007 | 0.028 | -0.27 | 5 of 10 |
+| today's inputs, +/- out of the target | 2007-2016 | -0.001 | 0.030 | -0.05 | 5 of 10 |
+| today's inputs, +/- out of the target | 2017-2026 | -0.016 | 0.021 | -0.76 | 6 of 10 |
+| today's inputs, +/- out of the target | all seasons | -0.008 | 0.015 | -0.56 | 16 of 30 |
+| noise control | all seasons | -0.009 | 0.008 | -1.09 | 16 of 30 |
+
+Each reading across the builds, today's ratings as the reference; `before the shrink` is the rating as step 3 builds it, the place the double counting shows:
+
+| system | before the shrink change | before the shrink z | year over year team-game change | year over year team-game z | 2026 defense over offense |
+|---|---|---|---|---|---|
+| all eight rates, experiment 128 | +1.690 | +16.81 | +0.076 | +1.36 | 0.860 |
+| attempts, ORB and TOV | +0.415 | +6.89 | +0.071 | +1.60 | 0.874 |
+| the same, +/- out of the target | +0.035 | +0.82 | +0.080 | +1.95 | 0.882 |
+| today's inputs, +/- out of the target | -0.048 | -2.30 | +0.062 | +3.27 | 0.899 |
+
+Today's is 0.879.  The loss before the shrink falling from +1.690 to +0.035 confirms the cause in the record of experiment 128: the double counting, gone, leaves no loss to explain.
+
+**The team numbers alone, the registered reading:** the +/- out build minus its control, same target, same inputs but the 10.  Within-season +0.010, standard error 0.031, z +0.32, 14 of 30; by era -0.034 z -0.56, -0.002 z -0.04, +0.066 z +1.37.  Year over year team-game +0.018, z +0.52, 27 of 56.  A tie: from 30 seasons at this standard error, a real gain of more than about 0.05 is unlikely, and a smaller one cannot be told from none; two builds that differ only by the box-score prior's random split differ by about 0.01.
+
+**The target is no win either.**  Today's inputs with the +/- out of the target tie within the season, the size of the noise control, and lose year over year past the guard, z +3.27; a season's rating forecasting the season after is worse at z +4.97.  Most of the +/- out build's year-over-year cost is this.  The line's own target stays.
+
+The 2026 top 20, total per 100 against the incumbent.  Attempts, ORB and TOV: in Moussa Diabaté +0.76, Derrick White +0.32, Ausar Thompson +0.18; out Karl-Anthony Towns -0.67, Lauri Markkanen -0.22, OG Anunoby -0.21.  The same with the +/- out: in Diabaté +0.85, Thompson +0.48, White +0.43; out Alex Caruso -0.07, Scottie Barnes -0.04, Anunoby +0.01; Donovan Clingan +0.72, Bam Adebayo +0.62, Ty Jerome -0.49, Towns -0.48.  The group of the ruling of 2026-10-08 in that build: Ajay Mitchell +0.35, Hugo González +0.40, Jimmy Butler -0.41, Jokić +0.19, Edey +0.10, Ighodaro -0.18.  The control: Thompson in +0.30, Anunoby out +0.13, Jerome -0.51, Giannis Antetokounmpo -0.35; regulars move a median 0.08.
+
+**Answer to the owner's hunch.**  Team numbers forecast held-back swaps because they restate the lineup results the +/- already reads.  With that taken out they add nothing measurable, and the team's composition by box stats adds nothing either.  A player's own stats in Box Adj keep their weight for reasons a team number does not explain, beyond a quarter to 40% on offensive rebounds, turnovers, missed threes and steals.
+
+**Recommended: not adopted, all four builds.**  The code stays, off by default.  Boosters `prior_models_{team128,nomakes129,nomakesout130,ctxout131}.pkl`, about 9 GB, stay until the owner rules.
