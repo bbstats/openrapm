@@ -22,6 +22,22 @@ every number quoted here; read its measurement traps before trusting a number.  
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
 
+## Where it stands, 2026-11-04, 11 AM: the owner chose the new Box Adj with halfway width; publish waits on the owner's word
+
+DECISIONS.md, "Experiments 135-137", holds the numbers.  **The working tree's settings are still the published ones, since
+the morning job runs on them.**  The owner: "Adopt, then show me", then, offered the ridge penalty's test first, "Skip it,
+ship halfway width".  So the settings to ship are `second_prior` "rating134", `second_prior_inputs`
+"context_types_team_rates_centred", `folds_tag` "rating134_early,rating134_within", `extrapolate_folds_tag` "rating134_k10",
+`within_factors` (0.7663, 0.9968), `defence_factors` ((0, 0.8682), (2017, 0.8704)): within-season -0.572, z -7.80, by era
+z -8.38, -5.49, -3.17, and year over year z +1.46.  The final tables are `season_ratings_product136*`, the site's files in
+`outputs/site_check136` (`scratch/2026-11-04_width/final136.sh`).
+
+**On the owner's word to publish:** the settings above, `tests/test_settings.py` and `tests/test_cli.py`, the docs (PIPELINE,
+README, CONTRIBUTING, GLOSSARY); back up the published tables, copy `product136` over `product` with its regular-season
+table and multipliers; `git branch -f main HEAD`, push, check Pages; then the noise control `noise_rating134` with
+`--fold-assignment 1` and the chain's INC_* and CONTROL_NAME defaults.  The owner writes the Changelog and About wording.
+`outputs/season_ratings_product134*` holds the wrong regular-season table and is not to be published (DECISIONS.md).
+
 ## The morning of 2026-11-04: GitHub was down, and a corrected box score is why a night without games had a change
 
 - **The failed push.**  The job built and committed 3b13b57, then both pushes failed at 6:17 AM with GitHub's 500, inside
@@ -730,7 +746,7 @@ What else the work of 2026-10-23 left open:
   on ctx110 read -0.013, z -1.63); a candidate is read against today's ratings on the same split, so that noise
   does not enter its change, but any one build's standing carries 0.01-0.02 of it.
 - Every experiment gets a row in `experiments/runs.csv` (`scripts/checks/101_log_run.py`), mirrored to the sheet
-  "OpenRAPM experiments", tab Experiments; the next free row is 135.  Since 2026-10-30 it reads the within-season
+  "OpenRAPM experiments", tab Experiments; the next free row is 138.  Since 2026-10-30 it reads the within-season
   test by era too, and refuses a partial or stale reading.  Input screens get their own tab ("Input screen 112").
 
 ## Commands a session runs
