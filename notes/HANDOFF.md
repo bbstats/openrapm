@@ -22,7 +22,29 @@ every number quoted here; read its measurement traps before trusting a number.  
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
 
-## Where it stands, 2026-11-03, afternoon: the team's rates in Box Adj failed their test (experiment 128); verdict the owner's
+## Where it stands, 2026-11-03, evening: without the double counting the team numbers tie (experiments 129-131); verdict the owner's
+
+The owner, on experiment 128 below: "if it's failing the test, find out why.", then "can we just run the test again but
+eliminate the +/- direct type stuff? ... just figure it out".  DECISIONS.md, "Experiments 129-131", holds every number.
+**Nothing shipped and nothing published changes**; the morning job is untouched, and both new options are off by default.
+
+| build | within-season WOWY | z | before the shrink | year over year team-game z |
+|---|---|---|---|---|
+| all eight rates, experiment 128 | +0.339 | +7.27 | +1.690 | +1.36 |
+| attempts, ORB and TOV, `nomakes129` | +0.058 | +1.27 | +0.415 | +1.60 |
+| the same, +/- out of the line's target, `nomakesout130` | +0.002 | +0.06 | +0.035 | +1.95 |
+| today's inputs, +/- out of the target, the control, `ctxout131` | -0.008 | -0.56 | -0.048 | +3.27 |
+
+- **The team numbers alone,** `nomakesout130` against its control: +0.010, standard error 0.031, z +0.32; year over year z +0.52.
+- **The target alone** fails the guard, so the line's own target stays.  Teammates' own box rates by shared possessions and the
+  team's rates with him off add nothing on the swaps (`scratch/2026-11-03_team_rates/read_no_plus_minus.py`).
+- **New options, off:** input set `context_types_team_profile_centred`; `openrapm second-prior --target prior_part`.
+- **Waiting on the owner:** whether to close it.  If closed: delete `prior_models_{team128,nomakes129,nomakesout130,ctxout131}.pkl`,
+  about 9 GB, and mark rows 128-131 Not adopted in `experiments/runs.csv` and the sheet.  The next free row is 132.
+- **Not tried:** team assists, steals, blocks and fouls per stint, which need the stint parser changed.  Nothing above argues
+  for them: they would be lineup results of the same kind.
+
+## Where it stood, 2026-11-03, afternoon: the team's rates in Box Adj failed their test (experiment 128)
 
 The owner: "i have a hunch that the reason certain stats are being thrown into the 'lineup swaps' (now called 'box
 adjustment') is because they are adjusting for the 'team share' so - I wonder if we should roll up lots more 'team share'
@@ -673,7 +695,7 @@ What else the work of 2026-10-23 left open:
   on ctx110 read -0.013, z -1.63); a candidate is read against today's ratings on the same split, so that noise
   does not enter its change, but any one build's standing carries 0.01-0.02 of it.
 - Every experiment gets a row in `experiments/runs.csv` (`scripts/checks/101_log_run.py`), mirrored to the sheet
-  "OpenRAPM experiments", tab Experiments; the next free row is 129.  Since 2026-10-30 it reads the within-season
+  "OpenRAPM experiments", tab Experiments; the next free row is 132.  Since 2026-10-30 it reads the within-season
   test by era too, and refuses a partial or stale reading.  Input screens get their own tab ("Input screen 112").
 
 ## Commands a session runs
