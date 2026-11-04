@@ -56,8 +56,8 @@ def test_the_shrink_and_swap_settings():
     assert PRODUCT.shrink.defence_factors == ((0, 0.8682), (2017, 0.8704))    # experiment 136, adopted 2026-11-04
     assert PRODUCT.shrink.within_factors == (0.7663, 0.9968)                  # experiment 136, adopted 2026-11-04
     assert PRODUCT.shrink.extrapolate_folds_tag == "rating134_k10"            # experiments 101 and 134
-    assert [PRODUCT.shrink.defence_factor_for(s) for s in (1997, 2016, 2017, 2026, 2027)] == [0.89, 0.89, 0.84, 0.84,
-                                                                                              0.84]
+    assert [PRODUCT.shrink.defence_factor_for(s) for s in (1997, 2016, 2017, 2026, 2027)] == [0.8682, 0.8682, 0.8704,
+                                                                                              0.8704, 0.8704]
     swap = PRODUCT.swap
     assert (swap.applied_share, swap.type_model_penalty, swap.n_folds) == (0.0, 1e-4, 5)   # step 5 off, experiment 82
 
