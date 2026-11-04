@@ -208,6 +208,33 @@ def test_a_child_process_rates_its_seasons_and_leaves_the_rest_to_its_parent(mon
     assert rated == [2024, 2028]
 
 
+def test_child_processes_rate_the_regular_seasons_only_at_the_shipped_settings(monkeypatch, tmp_path):
+    """They run `openrapm wins`, which reads the shipped settings and takes no flags, so a build of a new line named by
+    flags must rate its regular seasons itself or they come out on the shipped line."""
+    from dataclasses import replace
+
+    from openrapm.commands import build, parallel
+
+    class Rated(Exception):
+        pass
+
+    def rated_by(who):
+        def stop(*args, **kwargs):
+            raise Rated(who)
+        return stop
+
+    monkeypatch.setattr(build, "regular_parts_folder", lambda cfg, name: tmp_path)
+    monkeypatch.setattr(parallel, "affordable_jobs", lambda jobs: jobs)
+    monkeypatch.setattr(parallel, "run_children", rated_by("children"))
+    monkeypatch.setattr(build, "rate_regular_seasons", rated_by("this process"))
+    cfg = {"paths": {"outputs": str(tmp_path)}}
+    with pytest.raises(Rated, match="children"):
+        build.regular_season_table(cfg, PRODUCT, [2024, 2025], "trial", jobs=2)
+    new_line = replace(PRODUCT, prior=replace(PRODUCT.prior, second_prior="trial"))
+    with pytest.raises(Rated, match="this process"):
+        build.regular_season_table(cfg, new_line, [2024, 2025], "trial", jobs=2)
+
+
 def test_the_designs_are_cut_for_the_rated_season_alone():
     from openrapm.commands import build
 

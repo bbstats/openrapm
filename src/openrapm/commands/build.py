@@ -58,7 +58,7 @@ from ..data.second_prior_files import line_setup, load_grams
 from ..data.stints import has_playoff_stints, load_season_stints
 from ..data.tables import design_row_teams, player_names
 from ..data.within_folds import check_fold_files, fold_games, held_back_stints, load_folds
-from ..settings import describe_factors
+from ..settings import PRODUCT, describe_factors
 from . import parallel
 from .wins import REGULAR_COLUMNS, add_wins, load_regular, with_seasons_so_far, write_regular, write_wins_summary
 
@@ -1096,7 +1096,9 @@ def regular_season_table(cfg: dict, settings, seasons, name: str, jobs: int = 1)
     lock WOSA after reg season").  `jobs` processes at once, as many as free memory holds."""
     folder = regular_parts_folder(cfg, name)
     missing = seasons_still_to_rate(folder, seasons)
-    fits = parallel.affordable_jobs(jobs) if jobs > 1 and len(missing) > 1 else 1
+    # the child processes run `openrapm wins`, which reads the shipped settings and takes no flags, so a run at any other
+    # settings rates its seasons itself: on 2026-11-04 a build of a new line named by flags rated these on the shipped one
+    fits = parallel.affordable_jobs(jobs) if jobs > 1 and len(missing) > 1 and settings == PRODUCT else 1
     if fits > 1:
         parallel.run_children(["openrapm", "wins", "--name", name, "--rebuild-regular"],
                               parallel.season_chunks(missing, fits), lambda k: [],
