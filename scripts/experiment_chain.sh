@@ -81,10 +81,12 @@ LOG=outputs/${NAME}_chain.log
 # Since 2026-11-02 it is experiment 127 (padbins127): ctx110's swap part of the prior, with each possession bin's target
 # padded toward the league (config pad_bin_target: league, the shipped default); its own folds, its noise control
 # noise_padbins127 (-0.009, z -1.09).
-INC_NAME=${INC_NAME:-padbins127}
-INC_SYSTEM=${INC_SYSTEM:-padbins127}       # the incumbent's folds (<name>_early, <name>_within) for 151
-CONTROL_NAME=${CONTROL_NAME:-noise_padbins127}  # the noise control's folds (<name>_early, <name>_within) for 151
-INC_FOLDS=${INC_FOLDS:-padbins127_early,padbins127_within}
+# Since 2026-11-04 the incumbent is experiment 136, mid136: experiment 134's line and folds, rating134's, at the shipped
+# width settings, which 151 reads from settings.ShrinkSettings for it.
+INC_NAME=${INC_NAME:-mid136}
+INC_SYSTEM=${INC_SYSTEM:-rating134}       # the incumbent's folds (<name>_early, <name>_within) for 151
+CONTROL_NAME=${CONTROL_NAME:-noise_rating134}  # the noise control's folds (<name>_early, <name>_within) for 151
+INC_FOLDS=${INC_FOLDS:-rating134_early,rating134_within}
 AUDIT_REF=${AUDIT_REF:-creation110_within}
 INC=outputs/season_ratings_${INC_NAME}.parquet
 BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1_tune2 --features hustle_no_three_pct_self_creation}

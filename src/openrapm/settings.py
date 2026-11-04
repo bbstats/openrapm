@@ -183,11 +183,13 @@ class PriorSettings:
     # since experiment 93 (`second_prior_inputs`); ctx110 since experiment 126, adopted 2026-11-01, the same line
     # refitted on creation110's boosters and folds (ctx82's came from experiment 78's, before the parser fixes, the
     # body listing, the part-season rows and self-creation); experiment 127, adopted the same day, was tested and
-    # adopted on this line, so it stays until a refit passes a test of its own.  It is the
+    # adopted on this line, so it stayed until a refit passed a test of its own: rating134 since experiment 134, adopted
+    # 2026-11-04 (the owner: "Adopt, then show me"), the weights fitted on the within-season test through the ridge
+    # (`openrapm second-prior --target rating`) instead of on the swaps.  It is the
     # box-score prior corrected for who a player played with and against, by a line fitted on the swaps of the
     # within-season folds' held-back games written under outputs/second_prior/<tag>/ (second_prior.py;
     # notes/DECISIONS.md, experiment 81, the owner, 2026-10-19: "take the handoff idea ... in as inputs to the prior")
-    second_prior: str = "ctx110"
+    second_prior: str = "rating134"
     # the line's player folds (player_id % 5) and its ridge penalty relative to the mean diagonal of its Gram matrix:
     # step 5's type model's, the method the line borrows
     second_prior_folds: int = 5
@@ -203,9 +205,10 @@ class PriorSettings:
     # lesson enters before the ridge (experiment 82, the owner, 2026-10-19: "wouldnt it stand to reason to put the
     # swap adjustments into the priors before RAPMizing?"), or "context_and_types_centred", the same centred on the
     # season's possession-weighted average, so no player fold's line carries its own level (experiment 93)
-    # shipped: "context_and_types_centred", experiment 93, adopted 2026-10-21 (experiment 82's "context_and_types"
-    # from 2026-10-20)
-    second_prior_inputs: str = "context_and_types_centred"
+    # shipped: "context_types_team_rates_centred", experiment 134, adopted 2026-11-04, today's 29 and the team's eight
+    # box rates with the player on and off court ("context_and_types_centred", experiment 93, from 2026-10-21;
+    # experiment 82's "context_and_types" from 2026-10-20)
+    second_prior_inputs: str = "context_types_team_rates_centred"
     # 0: each season's line is fitted on every season the setting allows.  K: on only the K nearest of them, as step 4
     # fits its multipliers (experiment 85: experiment 82 won 1997-2016 and lost 2017-2026 with one line for all eras)
     second_prior_nearest: int = 0
@@ -292,8 +295,8 @@ class ShrinkSettings:
     # box-score prior's part-season rows), its own; since experiment 110, adopted 2026-10-25 (self-creation in the
     # offensive prior), its own; since experiment 126, adopted 2026-11-01 (the swap part of the prior refitted), its
     # own; since experiment 127, adopted the same day (the possession bins' targets padded toward the league rate),
-    # its own
-    folds_tag: str = "padbins127_early,padbins127_within"
+    # its own; since experiment 134, adopted 2026-11-04 (the line fitted on the rating, with team rates), its own
+    folds_tag: str = "rating134_early,rating134_within"
     # each season's factors from only the K fold seasons nearest it (prior_shrink.fold_seasons_used): the defensive
     # prior part holds up less in older seasons, 0.79 in 1997-2006 against 0.95 in 2017-2026 (notes/DECISIONS.md,
     # "Era drift" and experiment 55, adopted 2026-10-12: "yes. build."); 0 would use every fold season the rule allows
@@ -303,8 +306,8 @@ class ShrinkSettings:
     # (Richardson extrapolation, prior_shrink.full_season_multipliers; notes/DECISIONS.md, experiment 101, adopted
     # 2026-10-22: "we are going to do it"); "" fits on folds_tag alone, as the experiment chain does.  inputs99_k10
     # until experiment 107 was adopted; its own since, parts107_k10; experiment 110's own since 2026-10-25; experiment
-    # 126's own since 2026-11-01, then experiment 127's the same day
-    extrapolate_folds_tag: str = "padbins127_k10"
+    # 126's own since 2026-11-01, then experiment 127's the same day; experiment 134's own since 2026-11-04
+    extrapolate_folds_tag: str = "rating134_k10"
     # a multiplier on the games' part too, fitted beside the prior's (prior_shrink, "The games' part freed";
     # notes/DECISIONS.md, experiment 65, adopted 2026-10-15: "Adopt one multiplier as the new incumbent")
     free_games_part: bool = True
@@ -313,14 +316,18 @@ class ShrinkSettings:
     # check 152's guarded search: the held-back games set the defence's width within a season, and the next-season
     # check wants it narrower); since experiment 98 (adopted 2026-10-22) 0.89 before 2017 and 0.84 from 2017: the
     # within-season test wants the older seasons' defence wider in all 20 of them, and narrowing the newest era keeps
-    # the year-over-year test even (notes/DECISIONS.md, "The defense factor by era").  ((0, 1.0),) is the old step
-    defence_factors: tuple = ((0, 0.89), (2017, 0.84))
+    # the year-over-year test even (notes/DECISIONS.md, "The defense factor by era"); since experiment 136, adopted
+    # 2026-11-04, 0.8682 before 2017 and 0.8704 from 2017: halfway from those to what check 156 found for experiment
+    # 134's line, 0.8464 and 0.9007, which went past the year-over-year limit.  ((0, 1.0),) is the old step
+    defence_factors: tuple = ((0, 0.8682), (2017, 0.8704))
     # two layers (prior_shrink, "Since experiment 106"): each part split into his team's mean, multiplied as above, and
     # his deviation from it, with four multipliers of its own fitted on the held-back stints within games
     # (notes/DECISIONS.md, experiment 106, adopted 2026-10-23: "please adopt, yes - D"); False is one layer
     within_team_layer: bool = True
-    # the within layer's multipliers times these, offence then defence: version D of experiment 106
-    within_factors: tuple = (0.75, 1.0)
+    # the within layer's multipliers times these, offence then defence: (0.75, 1.0), version D of experiment 106, until
+    # experiment 136, adopted 2026-11-04: halfway from those to check 156's (0.7826, 0.9935).  Rounding them is not free:
+    # (0.77, 1.0) with a defense factor of 0.87 moves the year-over-year test from z +1.46 to z +1.83 (experiment 137)
+    within_factors: tuple = (0.7663, 0.9968)
     # the within layer's fold seasons: None the team layer's `nearest`, as shipped; K its K nearest; 0 every fold season
     # the rule allows.  Experiment 123 (registered 2026-10-30): fitted on one season alone the within layer's
     # offensive games' multiplier runs from 0.23 (2020) to 2.50 (2011), so the 8-season window jumps as a season

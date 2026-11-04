@@ -349,7 +349,7 @@ def test_folds_read_the_whole_season_context_only_when_asked():
 
 
 def test_rate_reads_the_shipped_second_prior_unless_told_otherwise(monkeypatch):
-    assert _recorded(monkeypatch, "run_build", "build")["settings"].prior.second_prior == "ctx110"
+    assert _recorded(monkeypatch, "run_build", "build")["settings"].prior.second_prior == "rating134"
     assert _recorded(monkeypatch, "run_build", "build", "--second-prior", "")["settings"].prior.second_prior == ""
     seen = _recorded(monkeypatch, "run_build", "build", "--setting", "test", "--second-prior", "ctx81")
     assert seen["settings"].prior.second_prior == "ctx81"
@@ -376,7 +376,8 @@ def test_step_5_can_be_switched_off_and_the_line_can_read_its_numbers(monkeypatc
     seen = _recorded(monkeypatch, "run_build", "build", "--second-prior", "t",
                      "--second-prior-inputs", "context_and_types")
     assert seen["settings"].prior.second_prior_inputs == "context_and_types"
-    assert _parse("second-prior", "--models", "m", "--folds", "f", "--tag", "t").inputs == "context_and_types_centred"
+    default = _parse("second-prior", "--models", "m", "--folds", "f", "--tag", "t").inputs
+    assert default == "context_types_team_rates_centred"
 
 
 def test_the_part_season_rows_and_the_season_so_far_are_shares_between_0_and_1():

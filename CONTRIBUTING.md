@@ -22,8 +22,8 @@ decides. `README.md`, "Building the ratings from scratch", builds the data.
 ## What a change has to clear
 
 **The within-season WOWY test decides** (`scripts/checks/151_wowy.py`, `README.md` defines it). Build the
-candidate with `scripts/experiment_chain.sh`, which scores it against the incumbent, experiment 110
-(`padbins127`, experiment 127), with the noise control `noise_padbins127` beside it. A change must be better in every era,
+candidate with `scripts/experiment_chain.sh`, which scores it against the incumbent
+(`mid136`, experiment 136), with the noise control `noise_rating134` beside it. A change must be better in every era,
 1997-2006, 2007-2016 and 2017-2026; z is the mean of the 30 season-by-season differences in stint error over
 its standard error, a paired t-statistic. **The year-over-year test guards it** (`scripts/checks/63_yoy.py`):
 not worse at a paired z of +2, the mean of the 56 season-by-season differences in team-game mean squared error
@@ -82,7 +82,7 @@ Report movement in points per 100, never in rank places; under 0.1 per 100 is no
 4. Read the slices against the noise control:
 
    ```bash
-   python scripts/checks/135_robust_review.py --cands=NAME --controls=noise_padbins127 --ref=padbins127 --out=robust_NAME
+   python scripts/checks/135_robust_review.py --cands=NAME --controls=noise_rating134 --ref=mid136 --out=robust_NAME
    ```
 
 5. Add the experiment's row to `experiments/runs.csv` (every number is read from the chain's outputs):

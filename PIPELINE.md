@@ -208,7 +208,8 @@ command runs in one process as before.
   The line's input sets (`--second-prior-inputs`): `context`, the box-score prior and the eight context numbers
   (experiment 81); `context_and_types`, also his other side's box-score prior and the swap adjustment's 19 box-score,
   role and body numbers (experiment 82); `context_and_types_centred`, the same centred on the season's
-  possession-weighted average (experiment 93, shipped); `own_teammates_opponents`, his box-score prior, teammates'
+  possession-weighted average (experiment 93); `context_types_team_rates_centred`, also the team's eight box rates with
+  him on and off court, on defense the opponents' (experiment 134, shipped); `own_teammates_opponents`, his box-score prior, teammates'
   same-side sum and opponents' other-side sum, centred too (experiment 92, not adopted).  Team totals
   (`--second-prior-team-totals`): `held` (shipped), `free`, or `spread_held`, which also holds the spread inside
   teams as the swap adjustment did (experiment 90, not adopted).  Why centred: the line has no intercept, and on
@@ -216,8 +217,10 @@ command runs in one process as before.
   fold, up to about 0.8 per 100 on 2026 defence (notes/DECISIONS.md, "Experiment 82's defensive prior read through").
   Centring leaves the swaps' differences as they were, so the line, `ctx82`, is the same.
 - **Settings:** penalty 13,037 on both sides, one value for every season (experiment 2 of 2026-09-14
-  evening); the second prior `ctx82`, inputs `context_and_types_centred`, team totals held (experiments 82
-  and 93).
+  evening); the second prior `rating134`, inputs `context_types_team_rates_centred`, team totals held (experiments 82,
+  93 and 134).  Since experiment 134 the line's weights are fitted on the within-season test through the ridge, not on the
+  swaps: `openrapm second-prior --models padbins127 --folds padbins127_early,padbins127_within --tag rating134
+  --inputs context_types_team_rates_centred --target rating` (`rating_line.py`, a rating is a straight line in its prior).
 - **Command:** `python -m openrapm rate` (steps 1-3); `--seasons 2026` rates one season, whose values
   equal the 2026 rows of a thirty-season run.
 - **Code:** `src/openrapm/prior_rapm.py`, `commands/build.py`.
@@ -243,10 +246,12 @@ command runs in one process as before.
 - **Settings:**
   - the method (experiment 33b, adopted 2026-10-03), with the games' part freed (experiment 65, adopted
     2026-10-15; `ShrinkSettings.free_games_part`, `--no-free-games-part` holds it at 1);
-  - both defensive multipliers times 0.89 before 2017 and 0.84 from 2017 (experiment 98, adopted 2026-10-22:
-    the within-season test wants the older seasons' defense wider, and narrowing the newest era keeps the
-    year-over-year test even; `ShrinkSettings.defence_factors`, `--defence-factor 0.89,2017:0.84`); 0.866 in
-    every season before it, chosen with the booster's settings by the same search (experiment 76);
+  - both defensive multipliers times 0.8682 before 2017 and 0.8704 from 2017, and the within layer's offense and
+    defense times 0.7663 and 0.9968 (experiment 136, adopted 2026-11-04: halfway from the settings below to what check
+    156 found on experiment 134's line, which went past the year-over-year limit; `ShrinkSettings.defence_factors` and
+    `within_factors`, `--defence-factor 0.8682,2017:0.8704`, `--within-factors 0.7663,0.9968`); before it 0.89 before
+    2017 and 0.84 from 2017 (experiment 98) and 0.75 and 1.0 (experiment 106); 0.866 in every season before those,
+    chosen with the booster's settings by the same search (experiment 76);
   - the folds `heave95_early,heave95_within`, experiment 95's own folds on the rebuilt stints (before them
     experiment 94's, `parser94_early,parser94_within`, experiment 93's, `ctx82c_early,ctx82c_within`, built with
     the centred second prior, experiment 82's and experiment 78's, `bags10_early,bags10_within`), seasons
