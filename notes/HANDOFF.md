@@ -34,7 +34,8 @@ within-season -0.572, z -7.80, by era z -8.38, -5.49, -3.17, and year over year 
   `rating134_k10`.  The published tables before it are in `outputs/before_mid136/`.  The next free row is 138.
 - **The noise control `noise_rating134`**, `--fold-assignment 1`, 12:20 to 1:32 PM, reads -0.010, z -1.07, 16 of 30, year
   over year z +0.49, the same size as padbins127's -0.009.  The morning job's dry run passed on the new settings at 12:20 PM.
-- **Waiting on the owner:** the Changelog row and About wording, in the owner's words.  Whether to test the ridge penalty,
+- **Changelog:** the owner's words, "Improved box adjustment."; the About page mentions nothing that changed.
+- **Waiting on the owner:** whether to test the ridge penalty,
   13,037, on the within-season test: offered and skipped for this publish, never read on that test.  Whether to delete the
   builds not adopted, `outputs/second_prior/{team128,nomakes129,nomakesout130,ctxout131,direct132,direct133}`, their boosters
   `prior_models_*.pkl` and `outputs/direct/ctx110_all`, about 15 GB.
