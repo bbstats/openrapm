@@ -22,6 +22,22 @@ every number quoted here; read its measurement traps before trusting a number.  
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
 
+## The morning of 2026-11-04: GitHub was down, and a corrected box score is why a night without games had a change
+
+- **The failed push.**  The job built and committed 3b13b57, then both pushes failed at 6:17 AM with GitHub's 500, inside
+  its Git incident of 4:49 to 6:50 AM Eastern; the second try came two seconds after the first.  `scripts/daily_push.sh`
+  (508e400, `tests/test_daily_push.py`) now tries for about an hour: on that morning 6:17, 6:18, 6:23, 6:38 and 7:18.
+  Nothing reached main, which stays at a39f1b3, and the next morning's reset of the site worktree drops 3b13b57.
+- **Why a night without games had anything to publish.**  The league's game log changed.  Tidjane Salaün now has a
+  turnover in CHA @ WAS of 2026-10-30 that his stored box score lacks, and he moved -0.15.  137 of the 347 players shown
+  moved at two decimals, and only Salaün and Sion James, +0.09, by more than 0.04.  James has no such correction, so his
+  move is not traced.  The ratings read each player's counts from the game log (`data/box_scores.py`), which the job
+  fetches again every morning, so a correction reaches them; 84 counts of 2027's 2,413 player-games differ from the box
+  files stored at each game's first fetch.  Publishing a correction is right, so the job's test for a change stays.
+- **No code moved those numbers.**  That morning's data through the code of 19cf726, the code of the published run, and
+  through today's gives every 2027 rating, prior and Box Adj to a gap of 0.0; today's code run again gives the morning's
+  table to 0.0.
+
 ## Where it stands, 2026-11-04, 1:30 AM: the line fitted on the rating passes everything (experiment 134); adopt and publish wait on the owner
 
 The owner: "there has to be a direct way to measure which features we can add ... we can use feature selection methods on

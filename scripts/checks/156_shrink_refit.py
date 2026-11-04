@@ -57,7 +57,7 @@ NAMES = ("within_off", "within_def", "def_early", "def_late")
 WITHIN_RANGE = (0.4, 1.3)
 DEFENCE_RANGE = (0.6, 1.2)
 GUARD_Z_LIMIT = 1.0                                 # check 152's: about z +1.7 on 63's fifty-six readings
-TODAY = "creation110"                               # the published ratings the guard is paired against
+TODAY = "padbins127"                                # the published ratings the guard is paired against
 
 
 def _load(name: str, file: str):
