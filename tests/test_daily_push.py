@@ -54,6 +54,8 @@ def repos(tmp_path):
     site = tmp_path / "site"
     subprocess.run(["git", "init", "-q", "-b", "main", str(site)], check=True, capture_output=True)
     git(site, "remote", "add", "origin", str(origin))
+    git(site, "config", "user.name", "Test")            # the script's rebase needs a name, and CI's machines have none
+    git(site, "config", "user.email", "test@example.com")
     commit(site, "ratings.json", "yesterday\n", "yesterday")
     git(site, "push", "-q", "origin", "HEAD:main")
     git(site, "fetch", "-q", "origin", "main")
