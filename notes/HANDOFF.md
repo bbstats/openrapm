@@ -11,7 +11,7 @@ every number quoted here; read its measurement traps before trusting a number.  
 - No step numbers in messages.  The names: **box-score prior** (the LightGBM, also "preliminary prior"); **+/-** (what
   the season's games add on top of the prior); **swap adjustment** (the old after-the-fact correction from lineup
   swaps, off since experiment 82); **swap part of the prior** (experiment 82's line, learned from the same swaps,
-  added before the games are weighed; on the page **Box Adj**); **defense factor** (the shrink's extra factor on defense, 0.89 before 2017 and 0.84 from 2017; never "dial",
+  added before the games are weighed; on the page **Box Adj**); **defense factor** (the shrink's extra factor on defense, 0.8682 before 2017 and 0.8704 from 2017; never "dial",
   the owner: "yuck").  Define each the first
   time it appears.
 - Experiments by name in chat, numbers only in the record files ("the three-input prior", not "experiment 92").
@@ -22,21 +22,27 @@ every number quoted here; read its measurement traps before trusting a number.  
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
 
-## Where it stands, 2026-11-04, 11 AM: the owner chose the new Box Adj with halfway width; publish waits on the owner's word
+## Where it stands, 2026-11-04, 12:10 PM: the new Box Adj with halfway width is PUBLISHED (d8113bb)
 
-DECISIONS.md, "Experiments 135-137", holds the numbers.  **The working tree's settings are still the published ones, since
-the morning job runs on them.**  The owner: "Adopt, then show me", then, offered the ridge penalty's test first, "Skip it,
-ship halfway width".  So the settings to ship are `second_prior` "rating134", `second_prior_inputs`
-"context_types_team_rates_centred", `folds_tag` "rating134_early,rating134_within", `extrapolate_folds_tag` "rating134_k10",
-`within_factors` (0.7663, 0.9968), `defence_factors` ((0, 0.8682), (2017, 0.8704)): within-season -0.572, z -7.80, by era
-z -8.38, -5.49, -3.17, and year over year z +1.46.  The final tables are `season_ratings_product136*`, the site's files in
-`outputs/site_check136` (`scratch/2026-11-04_width/final136.sh`).
+DECISIONS.md, "Experiments 135-137", holds the numbers.  The owner: "Adopt, then show me", then, offered the ridge penalty's
+test first, "Skip it, ship halfway width", then "Publish now".  The settings: `second_prior` "rating134",
+`second_prior_inputs` "context_types_team_rates_centred", `folds_tag` "rating134_early,rating134_within",
+`extrapolate_folds_tag` "rating134_k10", `within_factors` (0.7663, 0.9968), `defence_factors` ((0, 0.8682), (2017, 0.8704)):
+within-season -0.572, z -7.80, by era z -8.38, -5.49, -3.17, and year over year z +1.46.
 
-**On the owner's word to publish:** the settings above, `tests/test_settings.py` and `tests/test_cli.py`, the docs (PIPELINE,
-README, CONTRIBUTING, GLOSSARY); back up the published tables, copy `product136` over `product` with its regular-season
-table and multipliers; `git branch -f main HEAD`, push, check Pages; then the noise control `noise_rating134` with
-`--fold-assignment 1` and the chain's INC_* and CONTROL_NAME defaults.  The owner writes the Changelog and About wording.
-`outputs/season_ratings_product134*` holds the wrong regular-season table and is not to be published (DECISIONS.md).
+- **The incumbent is `mid136`**: test-setting tables `season_ratings_mid136*`, folds `rating134_early/_within`, tenth folds
+  `rating134_k10`.  The published tables before it are in `outputs/before_mid136/`.  The next free row is 138.
+- **The noise control `noise_rating134`** runs after the morning job's dry run (`scratch/2026-11-04_width/after_publish.sh`);
+  the chain's defaults already name it, so a chain before it finishes lacks its reading.
+- **Waiting on the owner:** the Changelog row and About wording, in the owner's words.  Whether to test the ridge penalty,
+  13,037, on the within-season test: offered and skipped for this publish, never read on that test.  Whether to delete the
+  builds not adopted, `outputs/second_prior/{team128,nomakes129,nomakesout130,ctxout131,direct132,direct133}`, their boosters
+  `prior_models_*.pkl` and `outputs/direct/ctx110_all`, about 15 GB.
+- `outputs/season_ratings_product134*` holds a wrong regular-season table (DECISIONS.md, the bug in 444d401) and is kept
+  only as the step 3 that `product136` started from.  `product136` equals the published tables.
+- A win-probability rule for garbage time: the owner asked what threshold the share uses.  It uses none: the fourth quarter
+  at 20 or more, or 15 or more under six minutes, which starts at about 98%.  98% or more would flag 9.4% of possessions
+  against 5.9% today; tested only if the owner asks (`scratch/2026-11-04_morning/garbage_wp.py`).
 
 ## The morning of 2026-11-04: GitHub was down, and a corrected box score is why a night without games had a change
 
@@ -118,7 +124,7 @@ metrics in here (like team ORB100, team TOV 100) as well", then "All eight, make
   tab "Box Adj inputs 128" holds the second-stage Boruta.  The Experiments tab has rows 127, which had not been mirrored,
   and 128.
 - **Stale default:** `101_log_run.py --incumbent` still defaults to creation110, which left the within-season columns
-  blank until `--incumbent=padbins127` was passed.  Pass it.
+  blank until the incumbent was passed; `--incumbent` now defaults to `mid136`.
 
 ## Where it stands, 2026-11-03: the Detail view PUBLISHED (the owner: "publish")
 
