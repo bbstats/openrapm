@@ -12178,3 +12178,49 @@ The full tables, every input added one at a time and today's 29 dropped one at a
 **The prediction, from the screen, at about today's width since the shrink is refit:** 132 about -0.25 against today's, 133 about -0.47.  A build far from these says the screen does not carry to the pipeline.
 
 **The test and the rule.**  As experiment 128; adopted when better in every era on the within-season test and not worse year over year at z +2; the verdict is the owner's.
+
+### Experiments 132-133: result (2026-11-03, `outputs/direct132_chain.log`, `outputs/direct133_chain.log`, `scratch/2026-11-03_direct/team_rates_alone.log`; verdict the owner's)
+
+The driver ran 8:12 to 10:44 PM.  **Both pass the registered rule, and both land near the prediction written first: -0.310 against about -0.25, -0.494 against about -0.47.**  The screen carries to the pipeline.
+
+The within-season WOWY test, the shipped stage, every stint, each system minus padbins127; below 0 is better:
+
+| system | era | change | standard error | paired z | seasons better |
+|---|---|---|---|---|---|
+| today's 29, weights through the rating | 1997-2006 | -0.429 | 0.048 | -9.00 | 10 of 10 |
+| today's 29, weights through the rating | 2007-2016 | -0.297 | 0.084 | -3.54 | 9 of 10 |
+| today's 29, weights through the rating | 2017-2026 | -0.205 | 0.161 | -1.27 | 6 of 10 |
+| today's 29, weights through the rating | all seasons | -0.310 | 0.063 | -4.94 | 25 of 30 |
+| and all eight team rates | 1997-2006 | -0.542 | 0.070 | -7.76 | 10 of 10 |
+| and all eight team rates | 2007-2016 | -0.446 | 0.084 | -5.31 | 10 of 10 |
+| and all eight team rates | 2017-2026 | -0.493 | 0.202 | -2.44 | 8 of 10 |
+| and all eight team rates | all seasons | -0.494 | 0.074 | -6.65 | 28 of 30 |
+| noise control | all seasons | -0.009 | 0.008 | -1.09 | 16 of 30 |
+
+Games with a regular out: -0.253, z -3.34, and -0.397, z -4.37.  Before the shrink: -0.526, z -6.93, and -0.852, z -8.27.
+
+The year-over-year test, both directions, 56 readings:
+
+| system | team-game change | z | seasons better | stint change | z | stint with each side rescaled | z |
+|---|---|---|---|---|---|---|---|
+| today's 29, weights through the rating | +0.005 | +0.09 | 26 of 56 | -0.338 | -4.17 | -0.333 | -4.68 |
+| and all eight team rates | +0.041 | +0.56 | 28 of 56 | -0.490 | -4.98 | -0.481 | -5.76 |
+
+**The team rates alone, 133 against 132:** within-season -0.184, z -4.32, 22 of 30; by era -0.113 z -1.41, -0.149 z -2.64, -0.288 z -3.77, largest where 132 is weakest.  Year over year team-game +0.036, z +0.91; stint -0.153, z -3.07.  So the owner's hunch holds once the weights are learned on the rating: on swaps the same rates lost z +7.27.
+
+Standard deviation over player-seasons of 1,000 possessions or more on both ends, possession-weighted:
+
+| era | offense today | offense 132 | offense 133 | defense today | defense 132 | defense 133 | defense over offense today | 132 | 133 |
+|---|---|---|---|---|---|---|---|---|---|
+| 1997-2006 | 1.971 | 2.035 | 2.068 | 1.997 | 1.945 | 1.842 | 1.013 | 0.956 | 0.891 |
+| 2007-2016 | 1.903 | 1.948 | 1.974 | 1.819 | 1.796 | 1.739 | 0.956 | 0.922 | 0.881 |
+| 2017-2026 | 1.793 | 1.855 | 1.884 | 1.479 | 1.457 | 1.438 | 0.825 | 0.785 | 0.763 |
+| 2026 | 1.706 | 1.824 | 1.841 | 1.499 | 1.496 | 1.510 | 0.879 | 0.820 | 0.820 |
+
+The offense widens and the defense does not, the balance the owner asked for on 2026-10-23.  The scored season wants offense times 0.932 and defense times 0.927 for 133, against 0.946 and 0.900 today.
+
+The 2026 top 20, experiment 133, total per 100 against the incumbent, keeps 17 of 20: in LaMelo Ball +0.73, Derrick White +0.46, Ausar Thompson +0.25; out Cason Wallace -0.63, OG Anunoby -0.10, Alex Caruso +0.06.  Donovan Clingan +0.98, Cade Cunningham +0.87, Wembanyama +0.86, Gilgeous-Alexander +0.83, Dončić +0.71, Jokić +0.66.  The group of the ruling of 2026-10-08: Oso Ighodaro -0.62, Hugo González -0.52, Ajay Mitchell -0.10, Butler -0.26, Edey -0.18, Jokić +0.66.  Regulars move a median 0.29, the ninetieth percentile 0.65, the largest 2.00, Matisse Thybulle 2.16 to 0.16.
+
+**Open before a line of this kind could ship.**  These test lines take the other end's weights and the fitted parts' multipliers from a fit on every season, the rated one included, through small cross terms; a shipped line solves both ends together without the rated season, in `src/`, with tests, and is built again.  The season so far is untested.  `playoff_share` stays out.  The list can go further: the screen's every-candidate row reads -0.830 against the 29, with +0.244 of it the cost of 172 shuffled inputs.
+
+**The lesson.**  The line's fit on swaps and the rating's objective disagree by more than the inputs do, so a selection method run on one stage says little about the next.  Score inputs on the final objective, here through `scratch/2026-11-03_direct/direct_screen.py`.

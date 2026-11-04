@@ -1,0 +1,23 @@
+  step 4: the within layer's equations from 360 folds' held-back stints (15s)
+  direct132: 30 seasons (61s)
+  step 4: the within layer's equations from 360 folds' held-back stints (15s)
+  direct133: 30 seasons (117s)
+
+DNP team-games: 51.8% of the held-back possessions
+each system minus the reference, season by season; below 0 is better
+   system reference stage against slice      error  mean_change      se        z  seasons_better  seasons  se_newey_west  z_newey_west
+direct133 direct132 step3   step3   all 3661.56775     -0.32616 0.06044 -5.39666              25       30        0.08126      -4.01392
+direct133 direct132 step3   step3   dnp 3653.18242     -0.29005 0.09829 -2.95085              21       30        0.11287      -2.56978
+direct133 direct132 step4   step4   all 3661.26131     -0.18359 0.04248 -4.32131              22       30        0.04950      -3.70886
+direct133 direct132 step4   step4   dnp 3652.82530     -0.14372 0.05601 -2.56603              21       30        0.06963      -2.06397
+
+the shipped stage, every stint, by era; below 0 is better
+   system         era  mean_change      se        z  z_newey_west  seasons_better  seasons
+direct133   1997-2006     -0.11339 0.08064 -1.40608      -1.17956               7       10
+direct133   2007-2016     -0.14904 0.05652 -2.63714      -2.63714               7       10
+direct133   2017-2026     -0.28833 0.07649 -3.76941      -3.76941               8       10
+direct133 all seasons     -0.18359 0.04248 -4.32131      -3.70886              22       30
+done in 117s
+  all   all direct133     0.0358 0.0393 0.9128    26         56        0.0416       0.8607
+  all   all direct133    -0.1528 0.0498 -3.0686    36         56         0.049      -3.1161
+  all   all direct133    -0.1482 0.0419 -3.5332    41         56        0.0436       -3.397

@@ -22,9 +22,24 @@ every number quoted here; read its measurement traps before trusting a number.  
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
 
-## Where it stands, 2026-11-03, evening: a direct screen on the within-season test, and two builds confirming it (experiments 132-133)
+## Where it stands, 2026-11-03, night: Box Adj fit straight on the within-season test wins in every era (experiments 132-133); verdict the owner's
 
-The owner: "there has to be a direct way to measure which features we can add".  Since a rating is a straight line in its prior, any input can be scored on the within-season test itself in one regression: `scratch/2026-11-03_direct/direct_screen.py`, 8 minutes for every input (DECISIONS.md, "The direct screen").  Builds `direct132`, `direct133` run through `scratch/2026-11-03_direct/run_direct.sh`; do not edit `src/` until it ends.
+The owner: "there has to be a direct way to measure which features we can add ... we can use feature selection methods on
+the box adj but then it doesn't matter for pi rapm? Don't love that".  DECISIONS.md, "The direct screen" and "Experiments
+132-133", hold every number.  **Nothing shipped and nothing published changes.**
+
+- **The method, `scratch/2026-11-03_direct/direct_screen.py`, read-only, 8 minutes for every input:** a rating is a straight
+  line in its prior, so any input's worth on the within-season test is one regression through the ridge.  It reproduces
+  check 151 to a mean +0.008, standard deviation 0.042, over 30 seasons.  Tables on the sheet's tab "Direct screen".
+- **`direct132`, today's 29 inputs, weights fit this way:** within-season -0.310, z -4.94, by era z -9.00, -3.54, -1.27; year
+  over year team-game z +0.09.
+- **`direct133`, those and all eight team rates:** within-season -0.494, z -6.65, by era z -7.76, -5.31, -2.44, 28 of 30; year
+  over year team-game z +0.56; 2026 defense over offense 0.879 to 0.820.  The team rates alone against 132: -0.184, z -4.32.
+- **To ship:** a clean line, both ends solved together without the rated season, in `src/` with tests, then a build and the
+  owner's word; the season so far read too.  `scratch/2026-11-03_direct/write_line.py` is a test tool: its cross terms read
+  the rated season.
+- **Files kept until the owner rules:** `outputs/direct/ctx110_all`, `outputs/second_prior/{team128,nomakes129,nomakesout130,
+  ctxout131,direct132,direct133}`, boosters `prior_models_*.pkl` of each, about 13 GB.  The next free row is 134.
 
 ## Where it stood, 2026-11-03, evening: without the double counting the team numbers tie (experiments 129-131); verdict the owner's
 
@@ -44,7 +59,7 @@ eliminate the +/- direct type stuff? ... just figure it out".  DECISIONS.md, "Ex
   team's rates with him off add nothing on the swaps (`scratch/2026-11-03_team_rates/read_no_plus_minus.py`).
 - **New options, off:** input set `context_types_team_profile_centred`; `openrapm second-prior --target prior_part`.
 - **Waiting on the owner:** whether to close it.  If closed: delete `prior_models_{team128,nomakes129,nomakesout130,ctxout131}.pkl`,
-  about 9 GB, and mark rows 128-131 Not adopted in `experiments/runs.csv` and the sheet.  The next free row is 132.
+  about 9 GB, and mark rows 128-131 Not adopted in `experiments/runs.csv` and the sheet.
 - **Not tried:** team assists, steals, blocks and fouls per stint, which need the stint parser changed.  Nothing above argues
   for them: they would be lineup results of the same kind.
 
@@ -699,7 +714,7 @@ What else the work of 2026-10-23 left open:
   on ctx110 read -0.013, z -1.63); a candidate is read against today's ratings on the same split, so that noise
   does not enter its change, but any one build's standing carries 0.01-0.02 of it.
 - Every experiment gets a row in `experiments/runs.csv` (`scripts/checks/101_log_run.py`), mirrored to the sheet
-  "OpenRAPM experiments", tab Experiments; the next free row is 132.  Since 2026-10-30 it reads the within-season
+  "OpenRAPM experiments", tab Experiments; the next free row is 134.  Since 2026-10-30 it reads the within-season
   test by era too, and refuses a partial or stale reading.  Input screens get their own tab ("Input screen 112").
 
 ## Commands a session runs
