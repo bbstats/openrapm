@@ -12135,3 +12135,46 @@ The 2026 top 20, total per 100 against the incumbent.  Attempts, ORB and TOV: in
 **Answer to the owner's hunch.**  Team numbers forecast held-back swaps because they restate the lineup results the +/- already reads.  With that taken out they add nothing measurable, and the team's composition by box stats adds nothing either.  A player's own stats in Box Adj keep their weight for reasons a team number does not explain, beyond a quarter to 40% on offensive rebounds, turnovers, missed threes and steals.
 
 **Recommended: not adopted, all four builds.**  The code stays, off by default.  Boosters `prior_models_{team128,nomakes129,nomakesout130,ctxout131}.pkl`, about 9 GB, stay until the owner rules.
+
+## The direct screen: inputs scored straight on the within-season test (the owner, 2026-11-03: "I feel like there has to be a direct way to measure which features we can add. Doing it with swaps and then into the full pi rapm seems like maybe we are losing some juice or something", then "we can use feature selection methods on the box adj but then it doesn't matter for pi rapm? Don't love that")
+
+**The method** (`scratch/2026-11-03_direct/direct_screen.py`; read-only; 360 folds in 8 minutes).  Step 3 is a ridge, so a rating is a straight line in its prior.  With u(p) = r(y) - X p, r the ridge's fit to a target and X p its fit to the lineups' priors, a rating inside a team after step 4 is m p + g u(p), and with p = sum_j beta_j z_j the prediction of a held-back stint is g Z_h r(y) + sum_j beta_j Z_h (m z_j - g X z_j).  So each input becomes one column of the held-back stints, what it still says once the ridge has read the fit games, and the within-season WOWY test is a weighted least-squares problem in the weights.  An input that restates the fit games' results loses its weight in that regression by itself.  m and g are the season's within layer; each fold's team levels, home and playoffs come out as in check 151; inputs come from the fit games, with columns a fold does not rebuild dropped as season totals (the tracking dashboards, trap 37); each season is predicted by weights fitted without it and its neighbors.
+
+**It reproduces the pipeline.**  With each target's own prior scales the formula gives the fold's step-3 ratings to 1e-4.  With one prior for both fits, the test's error from these sums against check 151's, over 30 seasons: step 3 a mean gap -0.015, standard deviation 0.018; step 4 +0.008, standard deviation 0.042.
+
+Against today's ratings, ctx110's, on 12 folds a season, below 0 is better:
+
+| what is fitted through the rating | change | paired z | seasons better | 1997-2006 change | z | 2007-2016 change | z | 2017-2026 change | z |
+|---|---|---|---|---|---|---|---|---|---|
+| no prior at all | +8.370 | +30.08 | 0 of 30 | +9.245 | +32.83 | +8.485 | +17.51 | +7.381 | +15.09 |
+| the box-score prior alone | +1.171 | +9.36 | 1 of 30 | +1.394 | +5.70 | +1.163 | +5.72 | +0.957 | +4.79 |
+| today's line, its multipliers refit | -0.449 | -10.34 | 30 of 30 | -0.503 | -6.38 | -0.461 | -5.56 | -0.384 | -5.82 |
+| today's 29 inputs, their weights refit | -0.702 | -7.13 | 28 of 30 | -0.867 | -11.96 | -0.810 | -6.72 | -0.429 | -1.73 |
+
+The multipliers' row is the width the within-season test always wants (trap 39), not a finding.  The weights' gain beyond it, -0.253, is what fitting on swaps left behind.
+
+Each list added to today's 29, against the 29, weights fit through the rating:
+
+| list | inputs a side | change | paired z | seasons better | 1997-2006 z | 2007-2016 z | 2017-2026 z | shuffled change | shuffled z |
+|---|---|---|---|---|---|---|---|---|---|
+| all eight team rates, on and off | 16 | -0.218 | -6.09 | 24 of 30 | -2.89 | -4.61 | -3.33 | +0.020 | +2.38 |
+| team attempts, ORB, TOV, on and off | 10 | -0.158 | -4.74 | 24 of 30 | -2.04 | -3.54 | -2.81 | +0.012 | +1.91 |
+| team attempts, ORB, TOV, him on | 5 | -0.159 | -5.31 | 25 of 30 | -2.82 | -3.33 | -2.95 | +0.008 | +2.14 |
+| team attempts, ORB, TOV, him off | 5 | -0.086 | -3.38 | 23 of 30 | -1.85 | -2.31 | -1.55 | +0.004 | +0.83 |
+| teammates' box rates, on and when he sits | 26 | +0.014 | +0.47 | 13 of 30 | +0.15 | +1.87 | -1.34 | +0.028 | +2.40 |
+| on-court and off-court plus-minus | 6 | -0.011 | -0.47 | 15 of 30 | -0.24 | -1.54 | +1.01 | +0.010 | +2.75 |
+| every candidate | 172 | -0.830 | -3.35 | 28 of 30 | -7.24 | -4.73 | -1.25 | +0.244 | +6.83 |
+
+- **Direct plus-minus adds nothing here,** as it should: the ridge has read those games.  The screen sees what the swaps could not.
+- **Team made threes flip sign.**  On the swaps they earned +0.55 with him on, offense; through the rating -1.13 on offense and -2.93 on defense, raw sign: the fit uses them to take shooting luck back out of the games' part.
+- **The top single input, `playoff_share`, is not usable as it stands:** -0.204, z -9.37 on offense.  It says who a coach trusted once the season was decided, the held-back games among what he saw, and a season in progress has none.  Left out of the builds below.
+
+The full tables, every input added one at a time and today's 29 dropped one at a time, are `outputs/csv/direct_screen_ctx110_all_add_one.csv` and `_drop_one.csv`.  Offense most needs its own offensive rebounds, dropped +0.397 z +6.20, made free throws +0.188 z +5.75, missed threes +0.122 z +5.20, share of team possessions +0.109 z +5.00; defense its box-score prior +0.082 z +4.81.
+
+## Experiments 132-133: full builds on lines fitted through the rating (registered before any result, 2026-11-03)
+
+**The change.**  The direct screen's weights written as a line (`scratch/2026-11-03_direct/write_line.py`), then the usual full build, which refits the prior scale and the shrink: 132, today's 29 inputs, `direct132`; 133, today's 29 and all eight team rates, `direct133`.  A shipped line would need the other end's weights fitted without the rated season, which these take from a fit on every season through small cross terms.
+
+**The prediction, from the screen, at about today's width since the shrink is refit:** 132 about -0.25 against today's, 133 about -0.47.  A build far from these says the screen does not carry to the pipeline.
+
+**The test and the rule.**  As experiment 128; adopted when better in every era on the within-season test and not worse year over year at z +2; the verdict is the owner's.

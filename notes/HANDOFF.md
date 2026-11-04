@@ -22,7 +22,11 @@ every number quoted here; read its measurement traps before trusting a number.  
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
 
-## Where it stands, 2026-11-03, evening: without the double counting the team numbers tie (experiments 129-131); verdict the owner's
+## Where it stands, 2026-11-03, evening: a direct screen on the within-season test, and two builds confirming it (experiments 132-133)
+
+The owner: "there has to be a direct way to measure which features we can add".  Since a rating is a straight line in its prior, any input can be scored on the within-season test itself in one regression: `scratch/2026-11-03_direct/direct_screen.py`, 8 minutes for every input (DECISIONS.md, "The direct screen").  Builds `direct132`, `direct133` run through `scratch/2026-11-03_direct/run_direct.sh`; do not edit `src/` until it ends.
+
+## Where it stood, 2026-11-03, evening: without the double counting the team numbers tie (experiments 129-131); verdict the owner's
 
 The owner, on experiment 128 below: "if it's failing the test, find out why.", then "can we just run the test again but
 eliminate the +/- direct type stuff? ... just figure it out".  DECISIONS.md, "Experiments 129-131", holds every number.

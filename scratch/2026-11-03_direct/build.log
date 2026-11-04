@@ -1,0 +1,1149 @@
+750 columns; 124 panel candidates; dropped as season totals: ['teams_this_season', 'rim_makes_over_expected_per_shot', 'twos_makes_over_expected_per_shot', 'threes_makes_over_expected_per_shot', 'attackers_guarded_scoring_vs_league_avg', 'defenders_faced_stinginess_vs_league_avg']
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+  1997_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 3.1e-03 offense, 1.4e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.177 1.340, largest gap 3.6e-13
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 1.115 1.316, largest gap 2.9e-13
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+1997: step-3 error 3472.5816; step-4 at the shipped within layer 3472.2013 (13s)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+  1998_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 2.8e-04 offense, 2.9e-03 defense
+    points_with_expected_free_throws: each target's own scales 1.228 1.334, largest gap 1.9e-13
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 1.213 1.331, largest gap 3.9e-13
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+1998: step-3 error 3464.9480; step-4 at the shipped within layer 3463.8485 (27s)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+  1999_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 4.7e-04 offense, 1.4e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.384 1.301, largest gap 1.6e-04
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 1.280 1.307, largest gap 1.6e-03
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+1999: step-3 error 3534.8791; step-4 at the shipped within layer 3532.8578 (36s)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+  2000_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 4.2e-04 offense, 1.7e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.258 1.347, largest gap 3.7e-13
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 1.155 1.343, largest gap 2.9e-13
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+2000: step-3 error 3378.3395; step-4 at the shipped within layer 3377.4879 (50s)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+  2001_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 2.6e-03 offense, 2.0e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.344 1.478, largest gap 6.5e-05
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 1.246 1.458, largest gap 6.4e-05
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+2001: step-3 error 3324.4844; step-4 at the shipped within layer 3324.2413 (62s)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+  2002_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 7.1e-04 offense, 2.5e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.310 1.239, largest gap 3.2e-13
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 1.169 1.245, largest gap 1.6e-13
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+2002: step-3 error 3365.7186; step-4 at the shipped within layer 3364.8132 (75s)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+  2003_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 5.0e-03 offense, 1.6e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.425 1.294, largest gap 3.9e-13
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 1.343 1.255, largest gap 1.5e-13
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+2003: step-3 error 3344.6775; step-4 at the shipped within layer 3344.2995 (88s)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+  2004_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 1.3e-03 offense, 2.4e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.470 1.347, largest gap 2.5e-13
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 1.356 1.362, largest gap 1.7e-13
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+2004: step-3 error 3407.9122; step-4 at the shipped within layer 3406.9425 (102s)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+  2005_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 4.1e-03 offense, 2.8e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.320 1.375, largest gap 2.4e-13
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 1.189 1.343, largest gap 2.8e-13
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+2005: step-3 error 3632.4233; step-4 at the shipped within layer 3632.6607 (116s)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+  2006_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 3.4e-03 offense, 2.9e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.270 1.250, largest gap 5.5e-13
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 1.169 1.225, largest gap 5.4e-13
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+2006: step-3 error 3642.9470; step-4 at the shipped within layer 3643.5072 (130s)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+  2007_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 3.5e-03 offense, 1.5e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.269 1.126, largest gap 7.7e-14
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 1.207 1.155, largest gap 1.8e-13
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+2007: step-3 error 3703.8860; step-4 at the shipped within layer 3703.0632 (144s)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+  2008_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 2.9e-03 offense, 3.0e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.335 1.061, largest gap 1.8e-13
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 1.209 1.082, largest gap 3.3e-13
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+2008: step-3 error 3506.7715; step-4 at the shipped within layer 3506.5307 (158s)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+  2009_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 4.0e-03 offense, 2.0e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.285 1.008, largest gap 1.7e-13
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 1.189 1.034, largest gap 3.6e-13
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+2009: step-3 error 3484.1486; step-4 at the shipped within layer 3484.1303 (171s)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+  2010_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 6.8e-03 offense, 2.0e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.201 1.137, largest gap 2.6e-13
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 1.104 1.183, largest gap 3.2e-13
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+2010: step-3 error 3486.2661; step-4 at the shipped within layer 3485.5831 (185s)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+  2011_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 3.7e-03 offense, 1.2e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.235 1.201, largest gap 1.7e-13
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 1.185 1.170, largest gap 1.9e-13
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+2011: step-3 error 3545.8473; step-4 at the shipped within layer 3545.4514 (198s)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+  2012_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 6.9e-03 offense, 3.4e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.478 1.343, largest gap 8.2e-14
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 1.326 1.289, largest gap 1.1e-13
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+2012: step-3 error 3518.2461; step-4 at the shipped within layer 3517.2661 (209s)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+  2013_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 2.6e-03 offense, 2.3e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.127 1.143, largest gap 2.2e-13
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 1.020 1.163, largest gap 1.4e-13
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+2013: step-3 error 3602.7437; step-4 at the shipped within layer 3601.8846 (223s)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+  2014_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 5.9e-03 offense, 2.7e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.233 1.016, largest gap 3.3e-13
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 1.116 1.055, largest gap 1.5e-13
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+2014: step-3 error 3619.8822; step-4 at the shipped within layer 3618.3606 (237s)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+  2015_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 2.0e-03 offense, 3.6e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.421 1.172, largest gap 2.8e-13
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 1.279 1.186, largest gap 6.7e-13
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+2015: step-3 error 3739.4410; step-4 at the shipped within layer 3738.7433 (251s)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+  2016_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 1.1e-02 offense, 4.2e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.300 1.324, largest gap 4.2e-13
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 1.151 1.252, largest gap 3.6e-13
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+2016: step-3 error 3759.5033; step-4 at the shipped within layer 3758.7486 (265s)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+  2017_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 9.2e-03 offense, 5.0e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.254 1.252, largest gap 1.9e-13
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 1.087 1.200, largest gap 5.6e-13
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py:182: RuntimeWarning: Mean of empty slice
+  means = np.nanmean(candidates, axis=0)
+2017: step-3 error 3814.9402; step-4 at the shipped within layer 3815.0102 (279s)
+  2018_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 2.3e-02 offense, 4.1e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.218 1.374, largest gap 1.2e-12
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 1.049 1.177, largest gap 6.2e-13
+2018: step-3 error 3824.5276; step-4 at the shipped within layer 3824.0547 (294s)
+  2019_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 9.6e-03 offense, 3.8e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.119 1.146, largest gap 4.2e-05
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 0.988 1.078, largest gap 1.4e-04
+2019: step-3 error 3826.0935; step-4 at the shipped within layer 3826.2958 (309s)
+Traceback (most recent call last):
+  File "A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py", line 491, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py", line 486, in main
+    return build(args) if args.command == "build" else read(args)
+           ^^^^^^^^^^^
+  File "A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py", line 326, in build
+    sums = screen.fold_sums(fold, whole, season_rows, stored_all, full_players, rng, number == 0)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "A:\code\spmm\scratch\2026-11-03_direct\direct_screen.py", line 238, in fold_sums
+    solved = np.linalg.solve(left, np.column_stack([rhs_off, rhs_def, right]))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "A:\code\spmm\.venv\Lib\site-packages\numpy\linalg\_linalg.py", line 463, in solve
+    r = gufunc(a, b, signature=signature)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "A:\code\spmm\.venv\Lib\site-packages\numpy\linalg\_linalg.py", line 144, in _raise_linalgerror_singular
+    raise LinAlgError("Singular matrix")
+numpy.linalg.LinAlgError: Singular matrix
+750 columns; 124 panel candidates; dropped as season totals: ['teams_this_season', 'rim_makes_over_expected_per_shot', 'twos_makes_over_expected_per_shot', 'threes_makes_over_expected_per_shot', 'attackers_guarded_scoring_vs_league_avg', 'defenders_faced_stinginess_vs_league_avg']
+  2020_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 1.4e-03 offense, 2.9e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.032 1.063, largest gap 5.8e-10
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 0.929 1.052, largest gap 5.7e-10
+2020: step-3 error 4047.2379; step-4 at the shipped within layer 4045.8260 (13s)
+  2021_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 9.4e-03 offense, 7.5e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.313 0.973, largest gap 1.8e-13
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 1.063 0.908, largest gap 2.2e-13
+2021: step-3 error 3855.3898; step-4 at the shipped within layer 3854.4983 (26s)
+  2022_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 2.4e-03 offense, 7.2e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.171 0.843, largest gap 2.9e-13
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 0.927 0.827, largest gap 1.2e-13
+2022: step-3 error 3970.0666; step-4 at the shipped within layer 3969.1674 (40s)
+  2023_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 4.6e-03 offense, 5.2e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.021 1.025, largest gap 1.4e-13
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 0.841 0.990, largest gap 1.7e-13
+2023: step-3 error 3875.1509; step-4 at the shipped within layer 3874.6628 (55s)
+  2024_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 4.3e-03 offense, 5.9e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.032 0.904, largest gap 1.2e-12
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 0.864 0.928, largest gap 4.1e-13
+2024: step-3 error 3891.7048; step-4 at the shipped within layer 3891.0147 (69s)
+  2025_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 2.9e-03 offense, 5.3e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.071 0.960, largest gap 1.5e-04
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 0.865 0.940, largest gap 7.5e-04
+2025: step-3 error 4029.2324; step-4 at the shipped within layer 4027.9185 (83s)
+  2026_r0_f0: the formula, one prior for both fits, against the fold's step-3 ratings, largest gap 1.4e-02 offense, 5.8e-02 defense
+    points_with_expected_free_throws: each target's own scales 1.140 1.249, largest gap 5.8e-13
+    points_with_expected_opponent_threes_late_as_scored: each target's own scales 0.911 1.147, largest gap 4.2e-13
+2026: step-3 error 4202.8228; step-4 at the shipped within layer 4201.7156 (98s)
