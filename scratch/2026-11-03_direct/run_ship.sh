@@ -40,19 +40,8 @@ for CUT in 0715 10 25 50; do
         || { stage "the test FAILED"; exit 1; }
   fi
 done
-for ARM in padbins127 $NAME; do
-  OUT=${ARM}now27
-  [ -f outputs/season_ratings_${OUT}.parquet ] && continue
-  stage "2027 today under $ARM"
-  for PART in "" _step3 _step4; do
-    cp outputs/season_ratings_${ARM}${PART}.parquet outputs/season_ratings_${OUT}${PART}.parquet
-  done
-  if [ "$ARM" = "$NAME" ]; then
-    FLAGS="--second-prior $NAME --second-prior-inputs $INPUTS --folds ${NAME}_early,${NAME}_within"
-  else
-    FLAGS="--folds padbins127_early,padbins127_within"
-  fi
-  $PY -u -m openrapm build --setting test --name $OUT --seasons 2027 --replace-seasons $FLAGS --extrapolate-folds= \
-      > outputs/${OUT}.log 2>&1 || { stage "the 2027 build FAILED"; exit 1; }
-done
+if [ ! -f outputs/season_ratings_rating134now27.parquet ]; then
+  stage "2027 today under both"
+  $PY -u scratch/2026-11-03_direct/build_2027.py > outputs/now27.log 2>&1 || { stage "the 2027 builds FAILED"; exit 1; }
+fi
 stage "all done"

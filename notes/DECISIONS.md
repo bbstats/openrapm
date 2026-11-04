@@ -12234,3 +12234,56 @@ The 2026 top 20, experiment 133, total per 100 against the incumbent, keeps 17 o
 **The test.**  The within-season WOWY test against padbins127 by era, beside noise_padbins127; the year-over-year test; the 2026 top 20; defense over offense.  The season so far: each season rated from its first 7.15%, 10%, 25% and 50% of games, the prior scales held, scored on the rest of it against padbins127's same folds.  2027 today under both.
 
 **The rule.**  Adopted when better in every era on the within-season test, not worse year over year at z +2, and not worse in any era at a tenth or a quarter of a season at z +2; the verdict is the owner's, and so is the word to publish.
+
+### Experiment 134: result (2026-11-04, `outputs/rating134_chain.log`, `outputs/csv/wowy_rating134_eras.csv`, `outputs/csv/wowy_rating134_cutNN_eras.csv`, `outputs/now27.log`; verdict the owner's)
+
+The line 11:07 to 11:22 PM, the chain to 12:35 AM, the season so far to 1:10 AM, 2027 to 1:21 AM.  Step 3 refitted against each season's first fold's stored ratings passed the check every season.  **It passes the registered rule on every count, and the leak of experiments 132-133 made no difference: -0.488 here, -0.494 there.**
+
+The within-season WOWY test, each system minus padbins127; below 0 is better:
+
+| reading | era | change | standard error | paired z | seasons better |
+|---|---|---|---|---|---|
+| whole seasons | 1997-2006 | -0.511 | 0.072 | -7.10 | 10 of 10 |
+| whole seasons | 2007-2016 | -0.440 | 0.096 | -4.56 | 10 of 10 |
+| whole seasons | 2017-2026 | -0.513 | 0.191 | -2.69 | 8 of 10 |
+| whole seasons | all seasons | -0.488 | 0.073 | -6.70 | 28 of 30 |
+| noise control, whole seasons | all seasons | -0.009 | 0.008 | -1.09 | 16 of 30 |
+| first 7.15% of a season, 2027's 88 games | 1997-2006 | -0.834 | 0.221 | -3.78 | 9 of 10 |
+| first 7.15% of a season | 2007-2016 | -0.898 | 0.153 | -5.86 | 10 of 10 |
+| first 7.15% of a season | 2017-2026 | -1.281 | 0.201 | -6.36 | 10 of 10 |
+| first 7.15% of a season | all seasons | -1.004 | 0.114 | -8.80 | 29 of 30 |
+| first 10% of a season | 1997-2006 | -0.786 | 0.187 | -4.20 | 8 of 10 |
+| first 10% of a season | 2007-2016 | -0.696 | 0.189 | -3.67 | 9 of 10 |
+| first 10% of a season | 2017-2026 | -0.952 | 0.125 | -7.62 | 10 of 10 |
+| first 10% of a season | all seasons | -0.811 | 0.097 | -8.39 | 27 of 30 |
+| first 25% of a season | 1997-2006 | -0.555 | 0.177 | -3.13 | 9 of 10 |
+| first 25% of a season | 2007-2016 | -0.687 | 0.185 | -3.71 | 10 of 10 |
+| first 25% of a season | 2017-2026 | -0.634 | 0.132 | -4.82 | 9 of 10 |
+| first 25% of a season | all seasons | -0.626 | 0.093 | -6.71 | 28 of 30 |
+| first 50% of a season | 1997-2006 | -0.947 | 0.154 | -6.17 | 10 of 10 |
+| first 50% of a season | 2007-2016 | -0.692 | 0.165 | -4.19 | 9 of 10 |
+| first 50% of a season | 2017-2026 | -0.556 | 0.264 | -2.11 | 8 of 10 |
+| first 50% of a season | all seasons | -0.732 | 0.116 | -6.33 | 27 of 30 |
+
+Games with a regular out, whole seasons: -0.392, z -4.34, 21 of 30.  Before the shrink: -0.850, z -8.56, 29 of 30.
+
+The year-over-year test, both directions, 56 readings: team-game +0.033, z +0.47, 29 of 56; stint -0.480, z -5.02, 40 of 56; stint with each side rescaled -0.478, z -5.93, 41 of 56.  The scored season wants offense times 0.932 and defense times 0.928, against 0.946 and 0.900 today.
+
+The consensus, 2024-26, 475 players: offense 0.838 to 0.863, defense 0.793 to 0.795, total 0.850 to 0.858.
+
+Standard deviation over player-seasons of 1,000 possessions or more on both ends, possession-weighted:
+
+| era | offense today | offense new | defense today | defense new | defense over offense today | defense over offense new |
+|---|---|---|---|---|---|---|
+| 1997-2006 | 1.971 | 2.055 | 1.997 | 1.851 | 1.013 | 0.901 |
+| 2007-2016 | 1.903 | 1.970 | 1.819 | 1.743 | 0.956 | 0.885 |
+| 2017-2026 | 1.793 | 1.875 | 1.479 | 1.432 | 0.825 | 0.764 |
+| 2026 | 1.706 | 1.826 | 1.499 | 1.505 | 0.879 | 0.824 |
+
+The prior scales fall to a mean 0.69 / 0.69 over 2019-2026 from 1.09 / 0.97: the line's weights are read on the rating, so step 3 no longer needs to scale the prior up on the same games.  A season in progress must hold its own line's scales: `openrapm build` holds the published table's, right once a full build has written this line's, wrong for a trial before it (`scratch/2026-11-03_direct/build_2027.py` holds each arm's own).
+
+The 2026 top 20, total per 100 against the incumbent, keeps 17 of 20: in LaMelo Ball +0.76, Derrick White +0.45, Ausar Thompson +0.31; out Cason Wallace -0.59, OG Anunoby -0.10, Lauri Markkanen -0.05.  Clingan +0.97, Cunningham +0.90, Wembanyama +0.82, Gilgeous-Alexander +0.75, Dončić +0.69, Jokić +0.56.  The group of the ruling of 2026-10-08: Ighodaro -0.64, González -0.47, Ajay Mitchell -0.07, Butler -0.35, Edey -0.16, Jokić +0.56.  Regulars move a median 0.30, the ninetieth percentile 0.64, the largest 1.98; correlation 0.982; down most Matisse Thybulle -1.98, Robert Williams -1.46, Jahmai Mashack -1.13, Javonte Green -1.09, Anthony Davis -1.04; up most Devin Carter +1.27, Kyshawn George +1.13, Tony Bradley +1.10, Miles McBride +1.01, Jalen Brunson +0.97.
+
+2027 today, 88 games or so, the test setting, each arm's own scales, 347 players of 60+ possessions: the top 20 keeps 18: in Jamal Murray +0.51, Donovan Clingan +0.59; out Moussa Diabaté -0.68, Tyrese Haliburton -0.61.  Gilgeous-Alexander +0.95, Avdija +0.44, Curry +0.43, Cunningham +0.40; Dončić -0.06, still first.  A median 0.38, the ninetieth percentile 0.76, the largest 1.67; correlation 0.970.
+
+**To adopt, if the owner says so:** `PriorSettings.second_prior = "rating134"`, `second_prior_inputs = "context_types_team_rates_centred"`, the shrink's folds `rating134_early,rating134_within`, tenth folds `rating134_k10` built first (about 50 minutes), the chain's incumbent defaults, then the full build of 1997-2027 and the site's files, a noise control `noise_rating134` after.  WOSA's 30 points per win is read from these ratings' team totals, so it is read again then.
