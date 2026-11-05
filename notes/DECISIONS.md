@@ -12516,3 +12516,18 @@ Read-only, `scratch/2026-11-04_coefficients/prior_by_sample.py`, `outputs/csv/pr
 | 1,000 to 2,000 | 0.20 | 0.57 | 0.26 | 0.77 | 0.43 | 1.81 | 0.36 | 1.54 |
 | 2,000 to 4,000 | 0.28 | 0.71 | 0.34 | 0.90 | 0.50 | 1.78 | 0.45 | 1.62 |
 | 4,000 or more | 0.58 | 1.03 | 0.59 | 1.08 | 0.54 | 1.70 | 0.55 | 1.76 |
+
+### The prior's columns regrouped by what they read, and a correction (the owner, 2026-11-05: "I just would like the box-adj to be a true 'adjustment' ... orthogonal in concept"; `scratch/2026-11-04_coefficients/regroup_columns.py`, `outputs/csv/regroup_columns.csv`)
+
+**A correction.**  `team_possession_share` is the player's own share of his team's possessions, a role input, and its name starts with `team_`.  `box_adj_overlap.py` and `trees138_columns.py` counted it in both "his role and body" and "team rates", so those tables' team rates and "all of Box Adj" are wrong on offense, and barely on defense.  Corrected on the published line, 2026, spread and correlation with the Box score column: team rates 0.45, -0.38 on offense and 0.36, 0.33 on defense; all of Box Adj 1.01, 0.71 and 0.88, 0.75; his role and body 0.32, 0.41 and 0.30, 0.31.  His box rates are unaffected.  The scripts are fixed.
+
+**The regrouping, the same weights, so no rating moves.**  The first column holds the LightGBM's answer, the other end's box-score prior, his 13 box rates, role and body; the second his teammates' and opponents' priors and the 16 team rates.  Among teammates through the hold of team totals, regulars of 1,000+ possessions, test-setting tables, 2000, 2005, 2010, 2015, 2022, 2026.
+
+| reading | offense, today | offense, regrouped | defense, today | defense, regrouped |
+|---|---|---|---|---|
+| own-stats column, six seasons' mean | 0.71 | 1.66 | 0.74 | 1.32 |
+| adjustment column, six seasons' mean | 1.17 | 0.40 | 0.92 | 0.40 |
+| correlation of the two, six seasons' mean | 0.75 | 0.17 | 0.71 | 0.44 |
+| own-stats column, 2026 | 0.86 | 1.70 | 0.61 | 1.09 |
+| adjustment column, 2026 | 1.00 | 0.43 | 0.86 | 0.44 |
+| correlation of the two, 2026 | 0.72 | -0.07 | 0.75 | 0.54 |

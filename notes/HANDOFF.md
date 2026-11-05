@@ -32,7 +32,7 @@ read-only and take minutes: `scratch/2026-11-04_coefficients/box_prior_stages.py
 1. Box Adj is as large as the box score and repeats it.  In 2026, among regulars of 1,000+ possessions, the Box score
    column spreads 0.92 on offense and 0.71 on defense, Box Adj 1.02 and 0.88, and the two correlate 0.69 and 0.72.  The
    repeat is one group of rows: his own box rates inside Box Adj spread 0.91 on offense, more than the Box score column,
-   and correlate 0.71 with it, 0.69 on defense.  The team rates correlate 0.01 and 0.30.  So a straight line on a player's
+   and correlate 0.71 with it, 0.69 on defense.  The team rates correlate -0.38 and 0.33 (corrected 2026-11-05: `team_possession_share` had been counted among them).  So a straight line on a player's
    box rates, learned on stints, finds much of what the LightGBM was meant to find from the same rates.
 2. The narrowing is at the LightGBM, not in the shrink.  After the LightGBM the output is widened on net, 1.34 times on
    offense and 1.48 on defense over 30 seasons: Box Adj's weight about 2.2 to 2.3, the prior scale about 0.8, the shrink

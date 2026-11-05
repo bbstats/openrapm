@@ -92,7 +92,7 @@ for label, tag, models_name, table, multipliers in (("today", "rating134", "rati
     BOX_RATES = [n for n in names if n.endswith("_per100")]
     ROLE_BODY = [n for n in names if n in scale and n not in BOX_RATES]
     OTHERS = [n for n in names if n not in scale and not n.startswith("team_") and n != "box_prior"]
-    TEAM = [n for n in names if n.startswith("team_")]
+    TEAM = [n for n in names if n.startswith("team_") and n != "team_possession_share"]
     GROUPS = {"his box rates": BOX_RATES, "his role and body": ROLE_BODY, "others' priors and his other end": OTHERS, "team rates": TEAM,
               "all of Box Adj": BOX_RATES + ROLE_BODY + OTHERS + TEAM}
     models = pd.read_pickle(f"outputs/prior_models_{models_name}.pkl")
