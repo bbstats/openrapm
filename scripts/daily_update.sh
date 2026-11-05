@@ -16,6 +16,9 @@
 #      (scripts/daily_files.py).  The ratings page opens on the season in progress only once its median player shown has
 #      250 offensive possessions (openrapm site, default_season).  docs/data/power.json is each team's current ratings
 #      times its players' shares of its possessions over its last 10 games.
+#   5. not steps, so they can never hold the ratings back: the five outside rating systems asked for their tables
+#      (`openrapm data public-ratings`) and the Bias page's file written from them (`openrapm site --bias`), which is
+#      committed with the three files above on a morning they publish
 #
 # The site worktree, SITE, is a checkout of origin/main that only this job writes: it is reset to origin/main each
 # morning, so the working tree in ROOT, its branch and its uncommitted work are never touched.  Made once with
@@ -45,6 +48,19 @@ step() {
   say "start: $*"
   "$@" >> "$LOG" 2>&1 || finish "FAILED: $*" 1
 }
+# The Bias page's file, docs/data/bias.json, is never a step: it needs five outside systems' pages, and a site that is
+# down or redesigned at 6 AM must not hold the ratings back.  A system that fails keeps its last stored table
+# (data/public_ratings.py), and when the file itself cannot be written the published one stays.  Each call gets five
+# minutes; /usr/bin/timeout by its full path, since Windows has a timeout of its own on the PATH.
+BIAS=docs/data/bias.json
+NOTE=""
+bias_file() {                 # $1: the site folder written into; fails when the file was not written
+  say "start: data public-ratings"
+  /usr/bin/timeout 300 $PY -u -m openrapm data public-ratings >> "$LOG" 2>&1 \
+    || NOTE="$NOTE; public ratings: a system failed, its last stored table is read"
+  say "start: site --bias"
+  /usr/bin/timeout 300 $PY -u -m openrapm site --bias --out-dir "$1" >> "$LOG" 2>&1
+}
 
 say "=== daily update of $SEASON"
 step $PY -u -m openrapm data ingest $SEASON $SEASON RS,PO --refresh
@@ -67,26 +83,39 @@ if [ "$PUBLISH" != "1" ]; then
   DRY=$ROOT/outputs/daily/site_dry
   mkdir -p "$DRY"
   step $PY -u -m openrapm site --openrapm-decomposition --power --out-dir "$DRY"
-  finish "built, not published (PUBLISH=0); the site's files in $DRY" 0
+  bias_file "$DRY" || NOTE="$NOTE; bias: not written"
+  finish "built, not published (PUBLISH=0); the site's files in $DRY$NOTE" 0
 fi
 step git -C "$SITE" fetch origin main
 step git -C "$SITE" checkout --detach --force origin/main
 step $PY -u -m openrapm site --openrapm-decomposition --power --out-dir "$SITE/docs"
+# The Bias page's file rides along once main has the page: the job never creates it there.  It is not one of FILES,
+# whose change decides the publish and each of which must exist, so an outside system that moved publishes nothing
+# on a morning without new games.
+ADD=$FILES
+if git -C "$SITE" cat-file -e "HEAD:$BIAS" 2>/dev/null; then
+  if bias_file "$SITE/docs"; then
+    ADD="$FILES $BIAS"
+  else
+    NOTE="$NOTE; bias: not written, the published table stays"
+    git -C "$SITE" checkout -- "$BIAS" >> "$LOG" 2>&1
+  fi
+fi
 # the files carry the date they were built, so they differ every morning; only a change beyond it is published
 $PY scripts/daily_files.py changed "$SITE" $FILES >> "$LOG" 2>&1
 case $? in
   0) ;;
-  3) finish "nothing new to publish" 0 ;;
+  3) finish "nothing new to publish$NOTE" 0 ;;
   *) finish "FAILED: scripts/daily_files.py changed" 1 ;;
 esac
 LAST_GAME=$($PY scripts/daily_files.py last-game "$ROOT/data/raw/gamelog" $SEASON) || finish "FAILED: the last game's date" 1
-step git -C "$SITE" add -- $FILES
+step git -C "$SITE" add -- $ADD
 step git -C "$SITE" commit -q -m "Daily update: $SEASON through the games of $LAST_GAME"
 # tried for about an hour, on top of whatever main holds by then ($BASH: the bash running this job, not WSL's)
 say "start: scripts/daily_push.sh"
 "$BASH" "$ROOT/scripts/daily_push.sh" "$SITE" "$LOG"
 case $? in
-  0) finish "published $(git -C "$SITE" rev-parse --short HEAD)" 0 ;;
+  0) finish "published $(git -C "$SITE" rev-parse --short HEAD)$NOTE" 0 ;;
   2) finish "FAILED: the rebase on origin/main, aborted; the day's commit is on $SITE's detached HEAD" 1 ;;
   *) finish "FAILED: every push to main over an hour; the day's commit is on $SITE's detached HEAD" 1 ;;
 esac

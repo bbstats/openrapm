@@ -157,10 +157,13 @@ python -m openrapm data dashboards 2027 2027 --force         # the season-to-dat
 python -m openrapm data panel --force                        # also rebuilds the season's roles rows and bio feed
 python -m openrapm build --seasons 2027 --replace-seasons    # 2027 in place of yesterday's 2027, nothing else moves
 python -m openrapm site --openrapm-decomposition --power --out-dir A:/code/spmm_site/docs
+python -m openrapm data public-ratings               # not a step: the Bias page's five outside systems, one request each
+python -m openrapm site --bias --out-dir A:/code/spmm_site/docs      # not a step either: docs/data/bias.json
 ```
 
 Then it commits the three data files in `A:/code/spmm_site`, a worktree of `origin/main` that only the job writes, and
-pushes them to `main` when one changed beyond the date it was built (`scripts/daily_files.py`). Nothing trains on the
+pushes them to `main` when one changed beyond the date it was built (`scripts/daily_files.py`). The Bias page's file
+is committed with them; it never decides a publish, and a system that is down leaves the last table up. Nothing trains on the
 season in progress (data/seasons.py); it is rated from its own rows, the
 box-score prior told the share of the regular season played. The ratings page opens on it once its median player shown
 has 250 offensive possessions. Each morning's log is `outputs/daily/<date>.log`, and `outputs/daily/last.txt` says how

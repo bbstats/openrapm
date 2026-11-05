@@ -69,3 +69,20 @@ def test_the_job_gives_its_programs_a_usable_stdin_before_it_starts_any():
     lines = (SCRIPT.parent / "daily_update.sh").read_text(encoding="utf-8").splitlines()
     first_run = next(k for k, line in enumerate(lines) if "$PY " in line and not line.lstrip().startswith("#"))
     assert lines.index("exec < /dev/null") < first_run
+
+
+def test_the_bias_file_can_never_hold_the_ratings_back():
+    """The Bias page's file needs five outside systems' pages, and one may be down at 6 AM.  So neither of its two
+    calls is a step, each is capped, the file is committed with the morning's three without being one of the files
+    whose change decides the publish, and the job never creates it on main."""
+    text = (SCRIPT.parent / "daily_update.sh").read_text(encoding="utf-8")
+    lines = [line.strip() for line in text.splitlines() if not line.strip().startswith("#")]
+    calls = [line for line in lines if "$PY" in line and ("public-ratings" in line or "site --bias" in line)]
+    assert len(calls) == 2 and all(line.startswith("/usr/bin/timeout 300 $PY") for line in calls)
+    assert not any(line.startswith("step ") and "bias" in line.lower() for line in lines)
+    files = next(line for line in lines if line.startswith("FILES="))
+    assert "bias.json" not in files and 'BIAS=docs/data/bias.json' in lines
+    assert 'daily_files.py changed "$SITE" $FILES' in text                 # the three ratings files alone decide
+    assert 'if git -C "$SITE" cat-file -e "HEAD:$BIAS" 2>/dev/null; then' in lines
+    assert 'git -C "$SITE" checkout -- "$BIAS" >> "$LOG" 2>&1' in lines     # a failed write leaves the published file
+    assert 'step git -C "$SITE" add -- $ADD' in lines
