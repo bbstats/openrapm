@@ -12609,3 +12609,20 @@ Among teammates, regulars of 1,000+ possessions, today's prior scales, no rating
 The column is orthogonal in the regression's held-back stints, not among teammates: the correlation is smaller than regrouping's 0.17 and 0.44 on defense, and on offense it changes sign and is larger in size.  Box Adj keeps rows on his own stats, spread 0.24 and 0.15, which correlate -0.52 with its others' rows: they take out what his own stats already say about his teammates, opponents and team rates.  Team totals stay today's only if the box score column's total is held at today's in the Detail view; not built.
 
 **The owner's choice, 2026-11-05: the box score learned first, Box Adj what is left of today's prior.**  Chosen over moving the rows only and over a rebuild of the ratings.  Nothing is implemented: `src/`, the settings, the site and the ratings are as they were.  It waits on the owner's word to change `src/` and on the owner's wording for the site.
+
+**Built, off, the same day (the owner: "especially if ratings dont move at all i REALLY don't care").**  `rating_line.first_stage`, `second_prior.season_first_stage`, `second_prior.adjustments`, `PriorSettings.box_first`, `--box-first`, `tests/test_box_first.py`; the setting stays False until the owner's word to publish, because the morning job runs on this working tree and pushes the Detail file.  1,009 tests passed.  2026 rated through the real code with the setting on, product setting: rating, prior and games' part on both ends differ from the published table by 0.00e+00.  `scratch/2026-11-05_second_stage/box_first_tables.py` writes the same split into copies of the published tables without a rebuild, reading both box-score priors back from the prior less today's Box Adj: 3e-15 from the real code on 2026; every other number in all 15,031 rows of all three tables differs by 0.0; each team's Box Adj total 1e-15; step 4's multipliers on today's Box Adj reproduce the table's exactly.
+
+Published tables, regulars of 1,000+ possessions, each season on its own, then the era's mean; this reads after step 4, so it is wider than the six-season read above at step 3 times the within multiplier alone:
+
+| era | side | Box score today | Box score learned first | Box Adj today | Box Adj learned first | correlation today | correlation learned first | whole prior |
+|---|---|---|---|---|---|---|---|---|
+| 1997-2006 | offense | 0.76 | 1.99 | 1.34 | 0.30 | 0.75 | -0.10 | 1.98 |
+| 1997-2006 | defense | 0.86 | 1.68 | 1.01 | 0.31 | 0.73 | 0.14 | 1.75 |
+| 2007-2016 | offense | 0.77 | 1.93 | 1.28 | 0.33 | 0.76 | -0.10 | 1.93 |
+| 2007-2016 | defense | 0.82 | 1.57 | 0.95 | 0.36 | 0.70 | 0.07 | 1.63 |
+| 2017-2026 | offense | 0.83 | 1.91 | 1.12 | 0.33 | 0.77 | -0.29 | 1.84 |
+| 2017-2026 | defense | 0.68 | 1.28 | 0.80 | 0.30 | 0.77 | 0.27 | 1.40 |
+| 2026 | offense | 0.92 | 1.94 | 1.02 | 0.40 | 0.69 | -0.47 | 1.79 |
+| 2026 | defense | 0.71 | 1.28 | 0.88 | 0.40 | 0.72 | 0.36 | 1.48 |
+
+On 2026's regulars the columns trade a median 0.62 points, the ninetieth percentile 1.49, the largest 4.48.  Offensive stars now carry a small negative Box Adj: Dončić box score 3.00 to 7.47, Box Adj 3.98 to -0.50; Jokić 3.03 to 6.28, 2.94 to -0.31.  **To publish, on the owner's word:** back up the three published tables, run `box_first_tables.py` fresh and move its copies over them, set `box_first = True` and drop the test that pins it off, then `openrapm site --openrapm-decomposition`.
