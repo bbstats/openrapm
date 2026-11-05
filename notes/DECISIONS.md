@@ -12504,3 +12504,15 @@ Read-only, `scratch/2026-11-04_coefficients/whole_rating.py`, the published Deta
 | 2017-2026 | defense | 39.3% | 46.2% | 14.4% |
 | 2026 | offense | 43.5% | 44.2% | 12.3% |
 | 2026 | defense | 37.5% | 46.2% | 16.3% |
+
+### The LightGBM's output by sample size (the owner, 2026-11-05: "i would assume it's because we have small sample size ... our padded values tie the player ratings towards the smaller sample 'average'")
+
+Read-only, `scratch/2026-11-04_coefficients/prior_by_sample.py`, `outputs/csv/prior_by_sample.csv`.  Experiment 134's saved boosters, the rated season's possessions, players with a target, weighted by possessions, season by season, the mean over 30.  Sample size and padding are not separated here.
+
+| possessions | offense output sd | offense target sd | offense correlation | offense target per point | defense output sd | defense target sd | defense correlation | defense target per point |
+|---|---|---|---|---|---|---|---|---|
+| under 500 | 0.18 | 0.47 | 0.14 | 0.35 | 0.33 | 1.74 | 0.30 | 1.54 |
+| 500 to 1,000 | 0.17 | 0.49 | 0.13 | 0.35 | 0.38 | 1.79 | 0.31 | 1.48 |
+| 1,000 to 2,000 | 0.20 | 0.57 | 0.26 | 0.77 | 0.43 | 1.81 | 0.36 | 1.54 |
+| 2,000 to 4,000 | 0.28 | 0.71 | 0.34 | 0.90 | 0.50 | 1.78 | 0.45 | 1.62 |
+| 4,000 or more | 0.58 | 1.03 | 0.59 | 1.08 | 0.54 | 1.70 | 0.55 | 1.76 |
