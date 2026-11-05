@@ -5,11 +5,6 @@ on the afternoon of 2026-10-22, its status and next steps on 2026-10-23 (twice),
 every number quoted here; read its measurement traps before trusting a number.  `README.md` says what OpenRAPM is,
 `PIPELINE.md` how each step works, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's standing rules.
 
-**A branch to know about, 2026-11-05.**  The new Bias page, OpenRAPM against a consensus of five outside systems stat
-by stat, is built on the branch `bias-page`, worktree `A:/code/spmm_bias`, and is NOT published.  This working tree
-does not have it, on purpose: the morning job runs this tree and a publish carries this whole branch.  That branch's
-`notes/HANDOFF.md` has the state and the steps of the publish, which waits on the owner's word.
-
 ## Talking to the owner
 
 - American English in everything shared: defense, offense, color.  Code names keep their spelling.
