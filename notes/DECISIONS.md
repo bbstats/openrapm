@@ -12586,3 +12586,24 @@ No reading is better in every era; 2017-2026 is worse in every one.  Not a win.
 **The read,** from the same sums, read-only.  A made-up example.  On each rated season's training seasons, the error of the joint fit, of the first read's stages, and of the residualized stages, at no penalty and at the shipped penalty; the largest gap between the residualized stages' recomposed weights and the joint weights; the same three errors on the rated season, by era.  Among teammates, the six seasons, today's prior scales: stage one's column and today's whole prior minus it, spread and correlation, and how much of the second column sits on his own stats' rows.
 
 **How to read it.**  The within-season test should not move beyond rounding, since nothing is refitted.  The orthogonality is in the regression's own columns, the held-back stints, so the correlation among teammates need not be 0: it is reported, not assumed.
+
+**The result (`scratch/2026-11-05_second_stage/residualized.py`, `outputs/csv/two_stage_residualized.csv`, `two_stage_residualized_columns.csv`).**  The owner's point holds once the second stage's inputs are residualized.  The recomposed weights equal the joint weights to 1.4e-13 in all 30 lines; the error on the training seasons and on the rated season moves 0.000000 in every era.  The first read's stage two, on the inputs as they stand, is worse than the joint fit on the training seasons in 30 of 30 lines, a mean +0.096, as it must be; that is the cost its table above measured, of leaving out this step and not of learning in two stages.  The handoff's design left it out too.
+
+The made-up example, x2 = 0.8 x1 + noise, y = x1 + x2 + noise:
+
+| way | weight on x1 | weight on x2 | mean squared error |
+|---|---|---|---|
+| one regression with both | 0.998 | 1.001 | 1.002 |
+| residuals on x2 as it stands | 1.800 | 0.361 | 1.234 |
+| residuals on x2 residualized on x1 | 1.800 | 1.001 | 1.002 |
+
+Among teammates, regulars of 1,000+ possessions, today's prior scales, no rating moved: the first column is stage one's weights, the second today's whole prior minus them.
+
+| reading | side | box score spread | Box Adj spread | correlation | whole prior spread |
+|---|---|---|---|---|---|
+| six seasons' mean | offense | 1.83 | 0.35 | -0.24 | 1.77 |
+| six seasons' mean | defense | 1.45 | 0.34 | 0.14 | 1.54 |
+| 2026 | offense | 1.87 | 0.38 | -0.47 | 1.72 |
+| 2026 | defense | 1.20 | 0.40 | 0.33 | 1.38 |
+
+The column is orthogonal in the regression's held-back stints, not among teammates: the correlation is smaller than regrouping's 0.17 and 0.44 on defense, and on offense it changes sign and is larger in size.  Box Adj keeps rows on his own stats, spread 0.24 and 0.15, which correlate -0.52 with its others' rows: they take out what his own stats already say about his teammates, opponents and team rates.  Team totals stay today's only if the box score column's total is held at today's in the Detail view; not built.
