@@ -2,8 +2,8 @@
 
     openrapm site                    docs/data/ratings.json, the ratings as one file (the pages read
                                      decompose_openrapm.json, below, which carries them with their pieces)
-    openrapm site --bias             also docs/bias.html, the bias by player type, with its two tables
-                                     outputs/bias_groups.json and outputs/bgmm_proba.parquet
+    openrapm site --bias             also docs/data/bias.json, the Bias page: where OpenRAPM rates players higher or
+                                     lower than a consensus of five outside systems, per standard deviation of a stat
     openrapm site --decomposition    also docs/data/decompose_1y.json and decompose_3y.json, the vanilla RAPM
                                      decomposition page
     openrapm site --openrapm-decomposition
@@ -14,16 +14,15 @@
     openrapm site --power            also docs/data/power.json, the power ratings page: each team's current ratings
                                      times its players' shares of its possessions over its last 10 games
 
-The pages' wording and look are not this command's to change: it writes data, and the bias page's text is
-copied unchanged.
+The pages' wording and look are not this command's to change: it writes data.
 
 Words used below
     ratings table   outputs/season_ratings_product.parquet, one row per player per season (`openrapm build`)
     built           the date in a file's meta.built.  ratings.json shows the ratings table's modification date,
                     so re-exporting the same table does not tell readers the ratings changed; the decomposition
                     files show the day they were computed.  --built sets it for every file written
-    consensus       data/external/consensus.csv: a GLS-weighted mean of DRIP, LEBRON, EPM, DARKO DPM, Time-Decay
-                    RAPM and Time-Decay-Luck-Adjusted RAPM (the 2026 snapshot)
+    consensus       on the Bias page, the weighted mean of five outside systems' ratings (bias.py), whose tables
+                    `openrapm data public-ratings` pulls; not data/external/consensus.csv, the adoption check's
     vanilla RAPM    plain ridge regression with no box-score prior: raw points, regular season and playoffs
 
 Example: `openrapm site --out-dir C:/tmp/site --built 2026-10-09` writes C:/tmp/site/data/ratings.json, whose
@@ -32,9 +31,7 @@ meta.built reads 2026-10-09 whatever the ratings table's date.
 from __future__ import annotations
 
 import json
-import re
 import time
-import unicodedata
 from functools import partial
 from pathlib import Path
 
@@ -43,15 +40,25 @@ import pandas as pd
 import scipy.linalg as sla
 import scipy.sparse as sp
 
-from ..data.box_scores import season_box
+from ..bias import (
+    CONSENSUS_WEIGHTS,
+    OFF_COURT_PLUS_MINUS,
+    ON_COURT_PLUS_MINUS,
+    OURS,
+    SIDES,
+    bias_table,
+    compared_players,
+    consensus,
+    player_stats,
+)
+from ..data import public_ratings
 from ..data.config import resolve, resolve_path
 from ..data.designs import DesignCache, block_design
 from ..data.ingest import raw_dir
-from ..data.panel import rookies, trainable_panel
+from ..data.panel import panel_of_season, rookies, trainable_panel
 from ..data.roles import main_teams
 from ..decomposition import lineups, refit, row_groups, row_keys, side_team, split_games_part, team_codes
-from ..features import FEATURE_SETS
-from ..player_types import RATES, bias_by_type, cluster_proba, describe_types, fit_mixture, per36
+from ..features import FEATURE_SETS, meaning
 from ..prior_shrink import team_split
 from ..rapm import SeasonSums
 from ..settings import PRODUCT
@@ -72,22 +79,20 @@ def today() -> str:
 
 
 def run_site(cfg: dict, ratings=None, out_dir=None, built: str | None = None, bias: bool = False,
-             decomposition: bool = False, bias_tables=None, similarity: bool = False,
-             openrapm_decomposition: bool = False, power: bool = False) -> int:
-    """`openrapm site`: ratings.json always; the bias page, the decomposition files, the similarity files and the
-    OpenRAPM decomposition file when asked.
+             decomposition: bool = False, similarity: bool = False, openrapm_decomposition: bool = False,
+             power: bool = False) -> int:
+    """`openrapm site`: ratings.json always; the decomposition files, the similarity files, the OpenRAPM decomposition
+    file, the power ratings file and the Bias page's file when asked.
 
-    `ratings` defaults to the ratings table under config paths.outputs, `out_dir` to the repository's docs/, and
-    `bias_tables` (where --bias writes bias_groups.json and bgmm_proba.parquet) to config paths.outputs.
+    `ratings` defaults to the ratings table under config paths.outputs and `out_dir` to the repository's docs/.  The
+    Bias page's file is written last: it alone needs the outside systems' tables, and a missing one then stops the
+    command with every other file already written.
     """
     ratings_path = Path(ratings) if ratings else resolve(cfg, "outputs") / RATINGS_TABLE
     if not ratings_path.exists():
         raise SystemExit(f"{ratings_path} does not exist; `openrapm build` writes it")
     out_dir = Path(out_dir) if out_dir else resolve_path(cfg, SITE_FOLDER)
     write_ratings_json(ratings_path, out_dir / "data" / "ratings.json", built or table_date(ratings_path))
-    if bias:
-        tables_dir = Path(bias_tables) if bias_tables else resolve(cfg, "outputs")
-        write_bias_page(cfg, ratings_path, out_dir / "bias.html", tables_dir)
     if decomposition:
         write_decomposition(cfg, ratings_path, out_dir / "data", built or today())
     if similarity:
@@ -96,6 +101,8 @@ def run_site(cfg: dict, ratings=None, out_dir=None, built: str | None = None, bi
         write_openrapm_decomposition(cfg, ratings_path, out_dir / "data", built or table_date(ratings_path))
     if power:
         write_power(cfg, ratings_path, out_dir / "data", built or table_date(ratings_path))
+    if bias:
+        write_bias(cfg, ratings_path, out_dir / "data", built or today())
     return 0
 
 
@@ -105,7 +112,7 @@ def run_site(cfg: dict, ratings=None, out_dir=None, built: str | None = None, bi
 RATINGS_FIELDS = {"season": "s", "player_name": "n", "rating_off": "o", "rating_def": "d", "rating_total": "t",
                   "poss_season": "p", "player_id": "id", "wosa": "w"}
 # The owner, 2026-10-24: "i want to have a 60 possession minimum, site-wide".  A player-season with fewer offensive
-# possessions is rated as before and left off every page and download; the bias and similarity pages ask 1,000.
+# possessions is rated as before and left off every page and download; the similarity page asks 1,000.
 MIN_POSSESSIONS_SHOWN = 60
 
 
@@ -161,346 +168,6 @@ def write_ratings_json(ratings_path: Path, path: Path, built: str) -> None:
     seasons = document["meta"]["seasons"]
     print(f"wrote {path}: {len(document['rows'])} rows over {len(seasons)} seasons ({seasons[0]}-{seasons[-1]}), "
           f"{path.stat().st_size / 1e6:.1f} MB, from {ratings_path}", flush=True)
-
-
-# ===================================================================================== the bias page
-# Where the published ratings sit above or below two other sources, by player type, on the OVERALL rating.
-#
-# The types come from `player_types`: a Bayesian Gaussian mixture fitted on the 2023-2025 regular seasons' per-36
-# profiles (one row per player-season with at least 1,000 possessions), then used to place each 2026 player.
-# Offence and defence are not reported: a type whose two sides are large and opposite is a disagreement about which
-# end a player's value comes from, and only the total says a rating is wrong.  Possession-weighted, because a
-# 1,000-possession player and a 5,000-possession player are not equally part of how wrong the ratings are.
-#
-# Two columns, both "our rating minus the source", points per 100, positive = the ratings rate the type higher:
-#   vs consensus      our overall rating, after one global rescale to the consensus's standard deviation (never a
-#                     rescale per type, which would define the answer away), minus the consensus
-#   vs 2026 observed  minus the per-player coefficient of a ridge fitted to what the games left over after our
-#                     rating predicted every 2026 team-game, with one free scale per side and one level per team
-#                     (outputs/tradeset_actual_b0_alpha.parquet; kept as it is until the owner decides on it)
-BIAS_SEASONS = (2026,)
-FIT_SEASONS = (2023, 2024, 2025)
-BIAS_MIN_POSSESSIONS = 1000
-MIXTURE_COMPONENTS = 8
-MIXTURE_SEED = 0
-MIN_COMPONENT_WEIGHT = 0.01       # a component with less weight than this counts as unused
-CONSENSUS_FILE = "data/external/consensus.csv"
-RESIDUAL_TABLE = "tradeset_actual_b0_alpha.parquet"
-SUFFIX = re.compile(r"\b(jr|sr|ii|iii|iv|v)\b")
-
-# The hand-chosen names, keyed by the signature the fit produces for a group: the four rates the group is
-# furthest from the league on, strongest first.  Four and not two because the two biggest scoring groups --
-# Jokic's and Brunson's -- are both `+ftm +pts` and separate only on the fourth rate, rebounds against
-# assists.  A signature is stable in a way a cluster number is not, and a group whose signature is not
-# listed prints as UNNAMED rather than borrowing a neighbour's name.
-NAMES = {
-    "+ftm +pts +tov +ast": "High-usage scorers who draw fouls",
-    "+ftm +blk +pts +drb": "Two-way big men who score",
-    "+orb -fg3_miss +blk -fg3m": "Rim-protecting centers",
-    "+fg3m +fg3_miss -drb -blk": "Wings who shoot threes",
-    "+ast -orb +tov -drb": "Guards who handle the ball",
-    "+stl +drb +pf +orb": "Busy all-around forwards",
-    "-ftm -tov -pts -ast": "Low-usage wings who stay out of the way",
-    "+stl -pts -ftm -fg3m": "Ball-hawk defenders who rarely shoot",
-    # the same types after the parser fixes of 2026-10-22 reordered each one's four standout stats
-    "+orb +pf +drb -ast": "Busy all-around forwards",
-    "+ast -orb -blk -drb": "Guards who handle the ball",
-    "+orb -fg3_miss -fg3m +blk": "Rim-protecting centers",
-    "-drb -ftm -tov +fg3m": "Wings who shoot threes",
-    "+stl +ast -drb +tov": "Ball-hawk defenders who rarely shoot",
-    "+blk +pts +ftm +drb": "Two-way big men who score",
-}
-# The plain words for each rate a signature names.
-RATE_WORDS = {"pts": "points", "fg3m": "threes made", "fg3_miss": "threes missed", "ftm": "free throws",
-              "ast": "assists", "orb": "offensive rebounds", "drb": "defensive rebounds", "stl": "steals",
-              "blk": "blocks", "tov": "turnovers", "pf": "fouls"}
-
-# The only prose on the page: what the two columns are measured against.  Both are OpenRAPM minus that
-# source, so positive means OpenRAPM rates the type higher.
-BLURB = """<div class="blurb">
-<p><b>vs 2026 observed.</b> We fit a RAPM model against the <em>residuals</em> of OpenRAPM's
-predictions. These are the average results for each player type, possession-weighted.</p>
-<p><b>vs consensus.</b> The consensus is a GLS-weighted mean of DRIP, LEBRON, EPM, DARKO DPM,
-Time-Decay RAPM, and Time-Decay-Luck-Adjusted RAPM.</p>
-</div>"""
-
-# The download under the table: the table itself as CSV, read off the page so it can never disagree with it.
-# UTF-8 with a byte-order mark, so a spreadsheet opens it as written.
-DOWNLOAD = '<p class="dl"><a href="#" id="csv">Download CSV</a></p>'
-CSV_SCRIPT = """<script>
-document.getElementById("csv").addEventListener("click", e => {
-  e.preventDefault();
-  const q = v => /[",\\r\\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
-  const slug = s => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_");
-  const head = [...document.querySelectorAll("thead th")].map(th => slug(th.textContent));
-  const rows = [[head[0], "signature", ...head.slice(1)]];
-  document.querySelectorAll("tbody tr").forEach(tr => {
-    const td = [...tr.children], sig = td[0].querySelector(".sig");
-    rows.push([td[0].firstChild.textContent.trim(), sig ? sig.textContent.trim() : "",
-               ...td.slice(1).map(c => c.textContent.trim().replace("\\u2013", ""))]);
-  });
-  const text = "\\uFEFF" + rows.map(r => r.map(q).join(",")).join("\\r\\n") + "\\r\\n";
-  const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
-  const a = Object.assign(document.createElement("a"), { href: url, download: "openrapm_bias_by_player_type.csv" });
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-});
-</script>"""
-
-PAGE_HEAD = """<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OpenRAPM: bias by player type</title>
-<link rel="stylesheet" href="site.css">
-<script src="site.js"></script>
-<style>
-  :root { --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6;
-          --over: 227 73 72; --under: 42 120 214; --zero: #f0efec; }
-  :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5;
-          --over: 230 103 103; --under: 57 135 229; --zero: #383835; }
-  body { color: var(--ink); font: 14px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
-  table { border-collapse: separate; border-spacing: 2px 0; width: 100%;
-          font-variant-numeric: tabular-nums; }
-  th, td { padding: 4px 7px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
-  th:nth-child(1), td:nth-child(1) { text-align: left; white-space: normal; }
-  th { color: var(--muted); font-weight: 600; }
-  th:nth-child(2), th:nth-child(3) { color: var(--ink); }
-  td.over, td.under { background: var(--zero); border-radius: 4px; }
-  td.over { background: rgb(var(--over) / calc(var(--depth) * 0.55)); }
-  td.under { background: rgb(var(--under) / calc(var(--depth) * 0.55)); }
-  .blurb { margin-top: 22px; color: var(--muted); max-width: 66ch; font-size: 13.5px; }
-  .blurb p { margin: 0 0 10px; } .blurb b { color: var(--ink); }
-  .sig { color: var(--muted); font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .dl { margin: 10px 0 0; color: var(--muted); font-size: 13px; } .dl a { color: inherit; }
-</style>
-</head>
-<body>
-<main>
-<nav class="site">
-  <a href="./">Ratings</a>
-  <a href="power.html" hidden>Power</a>
-  <a href="similarity.html">~ Similarity</a>
-  <a href="bias.html" aria-current="page">Bias</a>
-  <a href="about.html">About</a>
-  <a href="changelog.html">Changelog</a>
-  """
-# the dark-mode button, one line on the page
-THEME_BUTTON = ('<button class="theme" type="button" aria-label="Dark mode" title="Dark mode">'
-                '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">'
-                '<circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/>'
-                '<path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>')
-PAGE_TITLE = """
-</nav>
-<h1>OpenRAPM: bias by player type</h1>
-"""
-
-
-def name_key(name) -> str:
-    """A name as the consensus join matches it: accents dropped, lower case, letters and spaces, no suffix.
-
-    Example: "Jabari Smith Jr." gives "jabari smith".
-    """
-    text = unicodedata.normalize("NFKD", str(name)).encode("ascii", "ignore").decode().lower()
-    return SUFFIX.sub("", re.sub(r"[^a-z ]", "", text)).strip()
-
-
-def consensus_overall(consensus: pd.DataFrame) -> pd.DataFrame:
-    """key, adj_overall, var: one row per consensus name (the first of a repeated name)."""
-    named = consensus.dropna(subset=["player_name", "adj_overall"]).assign(key=lambda d: d.player_name.map(name_key))
-    return named.drop_duplicates("key")[["key", "adj_overall", "var"]]
-
-
-def pooled_ratings(table: pd.DataFrame, seasons) -> pd.DataFrame:
-    """One row per named player over `seasons`: each rating averaged with offensive-possession weights, his
-    possessions (`poss`) and the name of his latest season."""
-    rows = table[table.season.isin(seasons) & table.player_name.notna()].copy()
-    weights = rows.poss_off.to_numpy(float)
-    pooled = pd.DataFrame({column: (rows[column] * weights).groupby(rows.player_id).sum()
-                           / rows.groupby("player_id").poss_off.sum()
-                           for column in ("rating_off", "rating_def", "rating_total")})
-    pooled["poss"] = rows.groupby("player_id").poss_off.sum()
-    pooled["player_name"] = rows.sort_values("season").drop_duplicates("player_id", keep="last") \
-                                .set_index("player_id").player_name
-    return pooled.reset_index()
-
-
-def bias_players(table: pd.DataFrame, consensus: pd.DataFrame, profile: pd.DataFrame, seasons) -> pd.DataFrame:
-    """The players the page covers: at least BIAS_MIN_POSSESSIONS over `seasons`, matched to the consensus by name
-    (the player with more possessions keeps a shared name), with a per-36 profile."""
-    pooled = pooled_ratings(table, seasons)
-    pooled = pooled[pooled.poss >= BIAS_MIN_POSSESSIONS].assign(key=lambda x: x.player_name.map(name_key))
-    pooled = pooled.sort_values("poss").drop_duplicates("key", keep="last") \
-                   .merge(consensus_overall(consensus), on="key", how="inner")
-    return pooled.merge(profile[["player_id", "minutes", *RATES]], on="player_id", how="inner") \
-                 .reset_index(drop=True)
-
-
-def training_profiles(table: pd.DataFrame, cfg: dict, seasons) -> pd.DataFrame:
-    """One row per player-season over `seasons`: his per-36 rates in that regular season alone, for players with
-    at least BIAS_MIN_POSSESSIONS that season.
-
-    One row per player-season and not one per player, because the page places one season's rates, and a training
-    row should be the same kind of row as the row the mixture is asked about.
-    """
-    possessions = table[["player_id", "season", "poss_off"]]
-    rows = []
-    for season in seasons:
-        box = season_box([season], ["RS"], cfg)
-        profile = per36(box[box.phase == "RS"]).assign(season=season)
-        played = possessions[(possessions.season == season) & (possessions.poss_off >= BIAS_MIN_POSSESSIONS)]
-        rows.append(profile.merge(played[["player_id"]], on="player_id", how="inner"))
-    return pd.concat(rows, ignore_index=True)
-
-
-def bias_inputs(cfg: dict, ratings_path: Path) -> dict:
-    """Everything the bias page reads: the ratings table, the consensus, the 2026 regular-season profiles, the
-    training profiles and the residual table."""
-    table = pd.read_parquet(ratings_path)
-    box = season_box(list(BIAS_SEASONS), ["RS"], cfg)
-    return dict(table=table, consensus=pd.read_csv(resolve_path(cfg, CONSENSUS_FILE)),
-                profile=per36(box[box.phase == "RS"]), training=training_profiles(table, cfg, FIT_SEASONS),
-                residuals=pd.read_parquet(resolve(cfg, "outputs") / RESIDUAL_TABLE))
-
-
-def games_residual(residuals: pd.DataFrame, seasons) -> pd.DataFrame:
-    """player_id, ours_scaled, residual: our rating at the scale the games ask for, and what the games say it
-    missed, both sides added and pooled over `seasons` with offensive-possession weights.
-
-    `residuals` is outputs/tradeset_actual_b0_alpha.parquet: per player, season and side, our rating (positive
-    good), its fitted scale and the ridge coefficient on what the games left over (`alpha_good`).
-    """
-    eligible = residuals[residuals.season.isin(seasons) & residuals.eligible].copy()
-    eligible["scaled"] = eligible.rating_scale * eligible.rating
-    wide = eligible.pivot_table(index=["player_id", "season"], columns="side",
-                                values=["scaled", "alpha_good", "poss_off"]).reset_index()
-    wide.columns = [column[0] if not column[1] else f"{column[0]}_{column[1][:3]}" for column in wide.columns]
-    wide = wide.dropna(subset=["scaled_off", "scaled_def", "alpha_good_off", "alpha_good_def"])
-    wide["ours_scaled"] = wide.scaled_off + wide.scaled_def
-    wide["residual"] = wide.alpha_good_off + wide.alpha_good_def
-    weights = wide.poss_off_off.to_numpy(float)
-    pooled = pd.DataFrame({column: (wide[column] * weights).groupby(wide.player_id).sum()
-                           / wide.groupby("player_id").poss_off_off.sum()
-                           for column in ("ours_scaled", "residual")})
-    return pooled.reset_index()
-
-
-def with_types(players: pd.DataFrame, model, mean: np.ndarray, sd: np.ndarray) -> pd.DataFrame:
-    """Each player's probability of every type (p0, p1, ...), his type (`group`) and its probability."""
-    probability = cluster_proba(model, mean, sd, players[RATES].to_numpy(float))
-    columns = {f"p{i}": probability[:, i] for i in range(probability.shape[1])}
-    return players.assign(**columns, group=probability.argmax(axis=1), group_proba=probability.max(axis=1))
-
-
-def stretch_to_consensus(players: pd.DataFrame) -> tuple[pd.DataFrame, float]:
-    """Our overall rating stretched once, league-wide, to the consensus's standard deviation, and the bias.
-
-        ours_vs_consensus = mean(consensus) + (ours - mean(ours)) x sd(consensus) / sd(ours)
-        bias_vs_consensus = ours_vs_consensus - consensus
-    """
-    stretch = float(players.adj_overall.std(ddof=1) / players.rating_total.std(ddof=1))
-    ours = players.adj_overall.mean() + (players.rating_total - players.rating_total.mean()) * stretch
-    return players.assign(ours_vs_consensus=ours, bias_vs_consensus=ours - players.adj_overall), stretch
-
-
-def with_games(players: pd.DataFrame, residual: pd.DataFrame) -> pd.DataFrame:
-    """`games` = our scaled rating + what the games say it missed; `bias_vs_games` = minus that miss."""
-    players = players.merge(residual, on="player_id", how="left")
-    players["games"] = players.ours_scaled + players.residual
-    players["bias_vs_games"] = -players.residual
-    return players
-
-
-def type_probabilities(players: pd.DataFrame, n_types: int, season: int) -> pd.DataFrame:
-    """outputs/bgmm_proba.parquet: each player's type, its probability and the probability of every type."""
-    table = players[["player_id", "player_name", "poss", "group", "group_proba",
-                     *[f"p{i}" for i in range(n_types)]]].copy()
-    table.insert(1, "season", season)
-    return table
-
-
-def bias_result(inputs: dict, ratings_name: str) -> tuple[dict, pd.DataFrame]:
-    """outputs/bias_groups.json's content, and the type probabilities, from `bias_inputs`."""
-    seasons = list(BIAS_SEASONS)
-    players = bias_players(inputs["table"], inputs["consensus"], inputs["profile"], seasons)
-    training = inputs["training"]
-    model, mean, sd = fit_mixture(training[RATES].to_numpy(float), k=MIXTURE_COMPONENTS, seed=MIXTURE_SEED)
-    players = with_types(players, model, mean, sd)
-    # the types are described against the training seasons' league, the standardisation the fit used
-    z = pd.DataFrame({rate: (players[rate] - mu) / s for rate, mu, s in zip(RATES, mean, sd)})
-    players, stretch = stretch_to_consensus(players)
-    described = describe_types(players, z, NAMES)
-    players = with_games(players, games_residual(inputs["residuals"], seasons))
-    both = players.dropna(subset=["adj_overall", "games"])
-    rows_consensus = bias_by_type(players, described, "ours_vs_consensus", "adj_overall", "bias_vs_consensus")
-    rows_games = bias_by_type(players, described, "ours_scaled", "games", "bias_vs_games")
-    paired = {row["group"]: row["bias"] for row in rows_games}
-    shared = [(row["bias"], paired[row["group"]]) for row in rows_consensus if row["group"] in paired]
-    result = {"board": ratings_name, "seasons": seasons, "fit_seasons": list(FIT_SEASONS),
-              "k": MIXTURE_COMPONENTS, "seed": MIXTURE_SEED,
-              "r2_consensus_observed": float(np.corrcoef(both.adj_overall, both.games)[0, 1] ** 2),
-              "r_types": float(np.corrcoef([a for a, _ in shared], [b for _, b in shared])[0, 1]),
-              "train_rows": int(len(training)), "mean_top_proba": float(players.group_proba.mean()),
-              "players": len(players), "components_used": int((model.weights_ > MIN_COMPONENT_WEIGHT).sum()),
-              "global_stretch": stretch, "residual_players": int(players.residual.notna().sum()),
-              "groups": rows_consensus, "groups_vs_games": rows_games}
-    return result, type_probabilities(players, len(model.weights_), seasons[-1])
-
-
-def tint_cell(value) -> str:
-    """A diverging tint: red = OpenRAPM rates the type ABOVE that source, blue = below, grey at zero.
-
-    The depth is `min(|bias| / 0.9, 1)`, so the largest bias on the page is the full tint and the
-    owner's 0.1 threshold for "nothing" is a tenth of it -- barely visible, which is the point.
-    """
-    if value is None:
-        return '<td>&ndash;</td>'
-    depth = min(abs(value) / 0.9, 1.0)
-    pole = "over" if value > 0 else "under"
-    return (f'<td class="{pole}" style="--depth: {depth:.3f}"><b>{value:+.3f}</b></td>')
-
-
-def bias_page(result: dict) -> str:
-    """docs/bias.html: one row per type, in the consensus table's order, with both biases."""
-    by_group = {row["group"]: row for row in result["groups_vs_games"]}
-    out = ['<table><thead><tr><th>Player type</th><th>vs consensus</th>'
-           '<th>vs 2026 observed</th></tr></thead><tbody>']
-    for row in result["groups"]:
-        other = by_group.get(row["group"])
-        out.append(f"<tr><td>{row['name']}<br><span class=\"sig\">{row['signature']}</span></td>"
-                   f"{tint_cell(row['bias'])}{tint_cell(other['bias'] if other else None)}</tr>")
-    return (PAGE_HEAD + THEME_BUTTON + PAGE_TITLE + "".join(out) + "</tbody></table>" + DOWNLOAD + BLURB + "</main>"
-            + CSV_SCRIPT + "</body></html>")
-
-
-def bias_summary(result: dict) -> list[str]:
-    """The console report: coverage, any unnamed type, and both tables."""
-    lines = [f"  {len(result['groups'])} groups over {result['players']} players, {result['components_used']} of "
-             f"{result['k']} components used, OpenRAPM's overall rating stretched "
-             f"x{result['global_stretch']:.3f} to the consensus's spread; the residual RAPM covers "
-             f"{result['residual_players']} of them"]
-    unnamed = [row["signature"] for row in result["groups"] if row["name"] == "UNNAMED"]
-    if unnamed:
-        lines.append(f"  WARNING: no name for {unnamed} -- the fit moved and `NAMES` needs the new signature")
-    for key, label in (("groups", "against the consensus"), ("groups_vs_games", "against the games")):
-        lines.append(f"\n=== {label}, ordered by |bias| x possessions")
-        lines.extend(f"  {row['name']:<30} bias {row['bias']:+.3f}  OpenRAPM {row['ours']:+.2f}  "
-                     f"theirs {row['theirs']:+.2f}  {row['players']:>3} players, "
-                     f"{row['possessions'] / 1000:>5.0f}k possessions  {row['signature']}" for row in result[key])
-    return lines
-
-
-def write_bias_page(cfg: dict, ratings_path: Path, html_path: Path, tables_dir: Path) -> None:
-    """docs/bias.html, and bias_groups.json and bgmm_proba.parquet in `tables_dir`."""
-    result, probabilities = bias_result(bias_inputs(cfg, ratings_path), ratings_path.name)
-    tables_dir.mkdir(parents=True, exist_ok=True)
-    probabilities.to_parquet(tables_dir / "bgmm_proba.parquet", index=False)
-    (tables_dir / "bias_groups.json").write_text(json.dumps(result, indent=1), encoding="utf-8")
-    html_path.parent.mkdir(parents=True, exist_ok=True)
-    html_path.write_text(bias_page(result), encoding="utf-8")
-    print(f"wrote {html_path}, and bias_groups.json and bgmm_proba.parquet in {tables_dir}")
-    print("\n".join(bias_summary(result)), flush=True)
 
 
 # ===================================================================================== the decomposition page
@@ -1518,3 +1185,118 @@ def write_power(cfg: dict, ratings_path: Path, data_dir: Path, built: str) -> No
     top = document["teams"][0]
     print(f"wrote {path}: {len(document['teams'])} teams of {season} through {document['meta']['through']}, top "
           f"{top['tm']} {top['t']:+.2f}", flush=True)
+
+
+# ===================================================================================== the bias page
+# docs/data/bias.json, which docs/bias.html draws (the owner's design, 2026-11-05): for the season the pages open on,
+# how much higher or lower OpenRAPM rates players one standard deviation higher in each stat than a consensus of five
+# outside systems does.  bias.py holds the equations; the file:
+#
+#   {"meta": {"season", "through", "built", "min_possessions", "players_shown", "players",
+#             "multipliers": {"o", "d"}, "fields": BIAS_FIELDS},
+#    "systems": [{"key", "name", "by", "link", "weight", "as_of", "players"}, ...],    the five, heaviest first
+#    "rows": [[stat, label, o, d, t, o_se, d_se, t_se, sd], ...]}                      one per stat, bias.STATS order
+#
+# o and d are written at two decimals and t is their sum, so every row adds up on the page.  players_shown is the
+# season's players with 60 or more offensive possessions (`MIN_POSSESSIONS_SHOWN`), and players those of them all
+# five systems list.  A system's own `players` is how many of the shown it lists; its `as_of` is its own date, or the
+# day it was pulled when its page prints none.  Only these slopes are published: the systems' ratings stay in
+# paths.public_ratings, out of git.
+BIAS_FILE = "bias.json"
+BIAS_FIELDS = ["stat", "label", "o", "d", "t", "o_se", "d_se", "t_se", "sd"]
+BIAS_LABELS = {ON_COURT_PLUS_MINUS: "On-court plus-minus", OFF_COURT_PLUS_MINUS: "Off-court plus-minus"}
+
+
+def bias_label(stat: str) -> str:
+    """A row's name on the page: the catalogue's words for a box rate (`features.meaning`, "Made threes"), and the
+    two plus-minus rows by name."""
+    return BIAS_LABELS.get(stat) or meaning(stat).capitalize()
+
+
+def _rounded(value, digits: int = 2):
+    """A number as the file holds it; None where there is none (a stat with no spread has no slope)."""
+    return round(float(value), digits) if np.isfinite(value) else None
+
+
+def bias_row(row) -> list:
+    """One stat's row in `BIAS_FIELDS` order: offense and defense at two decimals, total their sum."""
+    offense, defense = _rounded(row.offense), _rounded(row.defense)
+    total = None if offense is None or defense is None else round(offense + defense, 2)
+    return [row.stat, bias_label(row.stat), offense, defense, total, _rounded(row.offense_se),
+            _rounded(row.defense_se), _rounded(row.total_se), _rounded(row.sd, 3)]
+
+
+def against_openrapm(players: pd.DataFrame, pulls: dict) -> list:
+    """The systems whose ratings run against OpenRAPM's on a side among the compared players, as "LOKI defense":
+    every system agrees with OpenRAPM far above 0 (0.5 to 0.8 on 2026-11-05), so one at 0 or below changed a sign."""
+    out = []
+    for key in CONSENSUS_WEIGHTS:
+        theirs = players[["player_id"]].merge(pulls[key].table, on="player_id")
+        out += [f"{public_ratings.SYSTEMS[key].name} {side}" for side in SIDES
+                if not np.corrcoef(players[OURS[side]], theirs[side])[0, 1] > 0]
+    return out
+
+
+def bias_document(table: pd.DataFrame, panel: pd.DataFrame, pulls: dict, season: int, built: str,
+                  through: str) -> dict:
+    """bias.json's document for `season`, from the ratings table, the season's panel rows and each system's stored
+    pull ({key: `public_ratings.PublicRatings`})."""
+    shown = table[(table.season == season) & (table.poss_season >= MIN_POSSESSIONS_SHOWN)]
+    blend = consensus({key: pulls[key].table for key in CONSENSUS_WEIGHTS})
+    players = compared_players(shown, blend, player_stats(panel))
+    flipped = against_openrapm(players, pulls)
+    if flipped:
+        raise SystemExit(f"{', '.join(flipped)} runs against OpenRAPM's among {len(players)} players: its page "
+                         f"changed a sign (data/public_ratings.py); the bias file is left as it was")
+    slopes, multipliers = bias_table(players)
+    systems = [dict(key=key, name=public_ratings.SYSTEMS[key].name, by=public_ratings.SYSTEMS[key].by,
+                    link=public_ratings.SYSTEMS[key].link, weight=weight,
+                    as_of=pulls[key].as_of or pulls[key].pulled,
+                    players=int(shown.player_id.isin(pulls[key].table.player_id).sum()))
+               for key, weight in CONSENSUS_WEIGHTS.items()]
+    meta = dict(season=season, through=through, built=built, min_possessions=MIN_POSSESSIONS_SHOWN,
+                players_shown=len(shown), players=len(players),
+                multipliers=dict(o=_rounded(multipliers["offense"], 3), d=_rounded(multipliers["defense"], 3)),
+                fields=BIAS_FIELDS)
+    return dict(meta=meta, systems=systems, rows=[bias_row(row) for row in slopes.itertuples(index=False)])
+
+
+def bias_summary(document: dict) -> list[str]:
+    """The console report: the players compared, the multipliers, each system's date, and the table."""
+    meta = document["meta"]
+    lines = [f"  {meta['players']} of the {meta['players_shown']} players shown for {meta['season']} are in all "
+             f"{len(document['systems'])} systems; OpenRAPM multiplied by {meta['multipliers']['o']:.3f} on offense "
+             f"and {meta['multipliers']['d']:.3f} on defense",
+             "  " + ", ".join(f"{system['name']} {system['weight']:.0%} as of {system['as_of']}"
+                              for system in document["systems"])]
+    lines += [f"  {row[1]:<22}" + "".join("     n/a" if value is None else f"{value:+8.2f}" for value in row[2:5])
+              + f"   standard error of the total {row[7]}" for row in document["rows"]]
+    return lines
+
+
+def write_bias(cfg: dict, ratings_path: Path, data_dir: Path, built: str) -> None:
+    """bias.json in `data_dir`, for the season the pages open on (`default_season`), from each system's newest stored
+    pull.  A system never pulled for that season, or dated before the season's first game, stops the command with
+    one line and the file as it was; so does a system that runs against OpenRAPM (`bias_document`)."""
+    table = pd.read_parquet(ratings_path)
+    season = default_season(table)
+    pulls = public_ratings.latest(cfg, season)
+    missing = [public_ratings.SYSTEMS[key].name for key in CONSENSUS_WEIGHTS if key not in pulls]
+    if missing:
+        raise SystemExit(f"no stored table of {', '.join(missing)} for {season}; `openrapm data public-ratings` "
+                         f"pulls them")
+    dates = pd.to_datetime(season_stints(season, cfg).game_date)
+    first, through = dates.min().strftime("%Y-%m-%d"), dates.max().strftime("%Y-%m-%d")
+    early = [f"{public_ratings.SYSTEMS[key].name} {pulls[key].as_of}" for key in CONSENSUS_WEIGHTS
+             if pulls[key].as_of and pulls[key].as_of < first]
+    if early:
+        raise SystemExit(f"{', '.join(early)}: dated before {season}'s first game, {first}; the bias file is left "
+                         f"as it was")
+    document = bias_document(table, panel_of_season(cfg, season), pulls, season, built, through)
+    data_dir.mkdir(parents=True, exist_ok=True)
+    path = data_dir / BIAS_FILE
+    part = path.with_name(BIAS_FILE + ".part")      # written whole, then moved: the page never reads half a file
+    part.write_text(json.dumps(document, separators=(",", ":")), encoding="utf-8")
+    part.replace(path)
+    print(f"wrote {path}: {season} through {through}", flush=True)
+    print("\n".join(bias_summary(document)), flush=True)

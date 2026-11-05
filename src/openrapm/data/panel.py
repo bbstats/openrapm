@@ -748,6 +748,13 @@ def in_progress_panel(cfg: dict) -> pd.DataFrame:
     return panel[panel.season.astype(int).isin(in_progress(cfg))].reset_index(drop=True)
 
 
+def panel_of_season(cfg: dict, season: int) -> pd.DataFrame:
+    """The season panel's rows of one season, finished or in progress, for a page that describes that season: the
+    Bias page reads its players' box rates and plus-minus here (commands/site.py).  Nothing is fitted on them."""
+    panel = _read(cfg)
+    return panel[panel.season.astype(int) == int(season)].reset_index(drop=True)
+
+
 def panel_and_trainable_seasons(cfg: dict) -> tuple[pd.DataFrame, set]:
     """(the whole season panel, the seasons a fit may train on): every season is read, only finished ones train."""
     panel = _read(cfg)

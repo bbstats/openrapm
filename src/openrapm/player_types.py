@@ -1,9 +1,10 @@
 """Player types: a Bayesian Gaussian mixture over each player's per-36 box-score profile, and how far the ratings
 sit from another source, type by type.
 
-The site's bias page (`openrapm site --bias`) and tests/test_vs_consensus.py read these.  The types are fitted,
-not hand-made: a formula such as "offensive rebounds + blocks - assists" is a guess about what a type is, and it
-answers only the question it was shaped for.
+tests/test_vs_consensus.py and scripts/checks/95_miss_by_group.py read these; the site's first Bias page, by player
+type, did until 2026-11-05 (bias.py is today's, by stat).  The types are fitted, not hand-made: a formula such as
+"offensive rebounds + blocks - assists" is a guess about what a type is, and it answers only the question it was
+shaped for.
 
 Words used below
     profile     a player's per-36-minute rates (RATES): points, threes made, threes missed, free throws made,
@@ -13,16 +14,14 @@ Words used below
                 toward zero rather than splitting a real type in two
     z-score     (value - mean) / standard deviation, with the mean and standard deviation of the seasons the
                 mixture was fitted on
-    signature   the four rates a type's average z-score is furthest from zero on, strongest first
     gap         a player's z-score on the OpenRAPM rating minus his z-score on the other source's
     spread      the standard deviation, across types with at least ten players, of the mean gap on the total
                 rating.  The total and not each side: a type whose offensive and defensive gaps are large and
                 opposite is a disagreement about which end a player's value comes from, and only the total says
                 a rating is wrong
 
-Example (2026, the bias page): the type of Rudy Gobert, Donovan Clingan and Deandre Ayton averages z-scores of
-+2.25 in offensive rebounds, -1.67 in threes missed, +1.60 in blocks and -1.55 in threes made, so its signature is
-"+orb -fg3_miss +blk -fg3m", which the page names "Rim-protecting centers".
+Example (2026): the type of Rudy Gobert, Donovan Clingan and Deandre Ayton averages z-scores of +2.25 in offensive
+rebounds, -1.67 in threes missed, +1.60 in blocks and -1.55 in threes made: rim-protecting centers.
 
 Model layer: everything here takes frames.  The caller loads the box scores.
 """
@@ -118,77 +117,3 @@ def gap_columns(ours: pd.DataFrame, theirs: pd.DataFrame, pairs=(("rating_off", 
 
     return pd.DataFrame({f"gap_{side}": z(ours[mine]) - z(theirs[yours])
                          for (mine, yours), side in zip(pairs, ("off", "def", "total"))})
-
-
-# ------------------------------------------------------------------------------- one table row per type
-MIN_TYPE_PLAYERS = 10      # a five-player component's mean is noise, not a type
-SHOWN_MEMBERS = 6          # the most-played and the most typical members listed per type
-SHOWN_OUTLIERS = 3         # the least typical members listed per type
-
-
-def signature(z_profile: pd.Series, n: int = 4) -> str:
-    """The `n` rates a type's average z-score is furthest from zero on, strongest first, each with its sign.
-
-    Four and not two because the two biggest scoring types (Jokic's and Brunson's) are both "+ftm +pts" and
-    separate only on the fourth rate, rebounds against assists.
-
-    Example: z-scores pts -0.40, orb +2.25, blk +1.60, fg3m -1.55, fg3_miss -1.67 (the rest nearer zero) give
-    "+orb -fg3_miss +blk -fg3m".
-    """
-    order = z_profile.abs().sort_values(ascending=False).index[:n]
-    return " ".join(f"{'+' if z_profile[c] > 0 else '-'}{c}" for c in order)
-
-
-def members(group: pd.DataFrame, z: pd.DataFrame, centre: pd.Series) -> dict:
-    """Who to show so a type's name can be judged: the most-played members, and the most and least typical.
-
-    Typical = the smallest distance sqrt(sum over RATES of (z - the type's average z)^2).
-    """
-    distance = np.sqrt(((z.loc[group.index, RATES] - centre) ** 2).sum(axis=1))
-    typical = group.assign(d=distance).sort_values("d")
-    return {"most_played": group.sort_values("poss", ascending=False).player_name.head(SHOWN_MEMBERS).tolist(),
-            "most_typical": typical.player_name.head(SHOWN_MEMBERS).tolist(),
-            "least_typical": typical.player_name.tail(SHOWN_OUTLIERS).tolist()[::-1]}
-
-
-def describe_types(players: pd.DataFrame, z: pd.DataFrame, names: dict) -> dict:
-    """{type: its signature, average z-score profile, name and members}, from every player of the type.
-
-    `players` has a `group` column (the type), `poss` and `player_name`; `z` holds the players' z-scores on
-    RATES, on the same index.  `names` maps a signature to a hand-chosen name; a signature it lacks reads
-    "UNNAMED" instead of borrowing a neighbour's name.  Computed once from the whole type and shared by every
-    table, so a type keeps its name when another table covers fewer of its players.
-    """
-    described = {}
-    for group, rows in players.groupby("group"):
-        centre = z.loc[rows.index, RATES].mean()
-        sig = signature(centre)
-        described[int(group)] = {"signature": sig, "profile": centre.round(2).to_dict(),
-                                 "name": names.get(sig, "UNNAMED"), **members(rows, z, centre)}
-    return described
-
-
-def bias_by_type(players: pd.DataFrame, described: dict, ours: str, theirs: str, bias: str) -> list:
-    """One row per type: the two levels and the bias, possession-weighted, largest |bias| x possessions first.
-
-        bias(type) = sum over its players of poss x bias / sum of poss
-
-    Ordered by |bias| x possessions, how much of the league a type's bias applies to, because a 0.6 miss over a
-    quarter of the possessions matters more than a 1.1 miss over a twentieth.  Players missing `ours` or
-    `theirs` are left out, and a type left with fewer than MIN_TYPE_PLAYERS players gets no row.
-    """
-    rows = []
-    for group, members_of in players.groupby("group"):
-        members_of = members_of.dropna(subset=[ours, theirs])
-        if len(members_of) < MIN_TYPE_PLAYERS:
-            continue
-        weights = members_of.poss.to_numpy(float)
-        rows.append({"group": int(group), "players": len(members_of), "possessions": float(weights.sum()),
-                     "bias": float(np.average(members_of[bias], weights=weights)),
-                     "ours": float(np.average(members_of[ours], weights=weights)),
-                     "theirs": float(np.average(members_of[theirs], weights=weights)),
-                     **described[int(group)]})
-    for row in rows:
-        row["cost"] = abs(row["bias"]) * row["possessions"]
-    rows.sort(key=lambda row: -row["cost"])
-    return rows

@@ -8,8 +8,8 @@
     openrapm folds     the within-season folds: each season rated from three quarters of its games
     openrapm second-prior   the swaps the second prior's line is fitted on, from the folds' held-back games
     openrapm game-rates     the multi-stat networks: one per rated season, trained on the GPU and scored
-    openrapm site      the site's data: docs/data/ratings.json, and the bias, decomposition (vanilla RAPM and OpenRAPM)
-                       and similarity pages when asked
+    openrapm site      the site's data: docs/data/ratings.json, and the decomposition (vanilla RAPM and OpenRAPM),
+                       similarity, power and bias pages' files when asked
     openrapm compare   two parquet tables, value by value
     openrapm glossary  GLOSSARY.md's table of the prior's columns, written from features.py (--check only compares)
 
@@ -223,7 +223,7 @@ def _run_second_prior(args: argparse.Namespace, cfg: dict) -> int:
 def _run_site(args: argparse.Namespace, cfg: dict) -> int:
     from .site import run_site
     return run_site(cfg, ratings=args.ratings, out_dir=args.out_dir, built=args.built, bias=args.bias,
-                    decomposition=args.decomposition, bias_tables=args.bias_tables, similarity=args.similarity,
+                    decomposition=args.decomposition, similarity=args.similarity,
                     openrapm_decomposition=args.openrapm_decomposition, power=args.power)
 
 
@@ -661,12 +661,14 @@ def parse_date(text: str) -> str:
 
 def _add_site(commands) -> None:
     site = commands.add_parser(
-        "site", help="the site's data: docs/data/ratings.json, and the bias, decomposition and similarity pages "
-                     "when asked",
+        "site", help="the site's data: docs/data/ratings.json, and the decomposition, similarity, power and bias "
+                     "pages' files when asked",
         description="Writes docs/data/ratings.json from the ratings table: one row per player-season with "
-                    "possessions, ratings at two decimals.  --bias also writes docs/bias.html (bias by player "
-                    "type, against the consensus and against 2026 observed) with outputs/bias_groups.json and "
-                    "outputs/bgmm_proba.parquet; --decomposition also writes docs/data/decompose_1y.json and "
+                    "possessions, ratings at two decimals.  --bias also writes docs/data/bias.json (for the season "
+                    "the pages open on, how much higher or lower OpenRAPM rates players one standard deviation "
+                    "higher in each box score stat, on-court and off-court plus-minus than a consensus of five "
+                    "outside systems does; their tables come from `openrapm data public-ratings`); "
+                    "--decomposition also writes docs/data/decompose_1y.json and "
                     "decompose_3y.json (vanilla RAPM split by player and by possession; every season and every "
                     "three-season window is fitted, 319 seconds in the last run); --openrapm-decomposition also "
                     "writes docs/data/decompose_openrapm.json (every published rating split into box score, on "
@@ -680,9 +682,8 @@ def _add_site(commands) -> None:
     site.add_argument("--built", type=parse_date, metavar="YYYY-MM-DD",
                       help="the date every written file's meta.built shows (default: ratings.json the ratings "
                            "table's modification date, the decomposition files today)")
-    site.add_argument("--bias", action="store_true", help="also the bias page and its two tables")
-    site.add_argument("--bias-tables", metavar="DIR",
-                      help="where --bias writes bias_groups.json and bgmm_proba.parquet (default outputs/)")
+    site.add_argument("--bias", action="store_true",
+                      help="also the Bias page's file, written last, from the outside systems' stored tables")
     site.add_argument("--decomposition", action="store_true", help="also the decomposition page's two files")
     site.add_argument("--openrapm-decomposition", action="store_true",
                       help="also the OpenRAPM decomposition page's file (rerun after every build)")

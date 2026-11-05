@@ -50,7 +50,8 @@ COMMANDS_DIR = "commands"    # src/openrapm/commands/: the commands, by location
 
 # Clean on both rules: no I/O verb, no data-layer import.
 MODEL_LAYER = [
-    "player_types.py",  # the box-profile mixture, the per-type gap and bias, each type's signature
+    "player_types.py",  # the box-profile mixture and the per-type gap
+    "bias.py",          # the Bias page: the consensus of outside systems, the width match, the slope per stat
     "design.py",        # the design matrix from the frames it is handed; the stint column and counter names
     "box_rates.py",     # the season panel's padded per-100 box rates, and the padding helpers
     "on_court.py",      # his team's record with him on the court and off it
