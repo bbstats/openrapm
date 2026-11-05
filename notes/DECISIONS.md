@@ -12376,3 +12376,26 @@ Registered before any result, 2026-11-04, 9:55 PM.  `scratch/2026-11-04_coeffici
 The reads, among regulars of 1,000+ possessions and weighted by possessions: the correlation between the two outputs; each output's standard deviation and the target's movement per point of it; and, since a change of scale cannot move a rating, the Box score column's movement beyond a rescale, in points per 100: the standard deviation of what is left of the 330-tree output after the best straight line on the 130-tree output, times that season's Box Adj weight, prior scale and shrink, divided by the line's slope.
 
 The rule, fixed now: under 0.1 points per 100 in all six seasons means the shape did not change and the full build is skipped; at or above it in any season, the build goes to the owner as candidate 1.  This reads the Box score column alone, with the line's other weights as they stand, so it is a first-order estimate and not a build.
+
+### Defense's boosters at 130 and 330 trees: result (2026-11-04, 9:57 PM)
+
+The first check passed: the largest gap between the 130-tree answers and the saved `prior` is 0 in all six seasons.  Among regulars of 1,000+ possessions, weighted by possessions.  The target is the career RAPM the LightGBM trains on, from seasons its boosters did not see; "target per point" is the target regressed on the output.  The last column is the registered read.
+
+| season | correlation between the two outputs | every rated player, same correlation | output sd, 130 trees | output sd, 330 trees | target per point, 130 trees | target per point, 330 trees | correlation with target, 130 trees | correlation with target, 330 trees | Box score column sd today | Box score column move beyond a rescale |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 2000 | 0.9945 | 0.9917 | 0.502 | 0.817 | 2.164 | 1.353 | 0.556 | 0.565 | 0.833 | 0.088 |
+| 2005 | 0.9952 | 0.9917 | 0.509 | 0.822 | 1.920 | 1.190 | 0.541 | 0.541 | 0.836 | 0.083 |
+| 2010 | 0.9941 | 0.9903 | 0.495 | 0.801 | 1.891 | 1.190 | 0.532 | 0.542 | 0.807 | 0.088 |
+| 2015 | 0.9944 | 0.9924 | 0.533 | 0.869 | 1.588 | 0.997 | 0.515 | 0.527 | 0.960 | 0.102 |
+| 2022 | 0.9905 | 0.9843 | 0.548 | 0.883 | 1.438 | 0.914 | 0.468 | 0.479 | 0.581 | 0.081 |
+| 2026 | 0.9905 | 0.9873 | 0.493 | 0.783 | 1.397 | 0.901 | 0.397 | 0.407 | 0.706 | 0.098 |
+
+**By the registered rule the build goes to the owner:** 2015 reads 0.102, at or above 0.1, by 0.002; the other five read 0.081 to 0.098.
+
+- **The early stop is most of the defensive slope.**  The mean over the six falls from 1.73 to 1.09, tested now, no longer a hypothesis.  The output's spread grows 1.61 times, more than the 1.37 that 95% / 69% says.  The slope still falls by era at 330 trees, 1.35 in 2000 to 0.90 in 2026, in the order it had at 130.
+- **The shape barely changes.**  From `scratch/2026-11-04_coefficients/box_prior_trees_movers.py`, `outputs/csv/box_prior_trees_movers.csv`: a regular's move has a median size of 0.056 to 0.071 points per 100, a 95th percentile of 0.165 to 0.216, a largest of 0.232 to 0.367, and at most 1.7% of regulars move 0.25 or more.
+- **What does change is not random.**  In raw sign, where a positive move reads worse on defense, the move correlates +0.33 to +0.44 with height and +0.31 to +0.42 with weight in all six seasons, while today's output correlates -0.42 to -0.51 with height: fit further, the boosters lean on size less.  In 2026: Valančiūnas +0.34, Nick Richards +0.32, Robert Williams III +0.28, Podziemski -0.26, Brunson -0.24, Gillespie -0.22.
+- **It tracks the target a little better** in all six seasons, by 0.0002 to 0.0115.  That target is not the test.
+- **It should not widen the Box score column.**  The spread's 1.6 goes into Box Adj's weight by the handoff's scale argument, which has still not been run, so a win here would come from the shift from size, not from a wider prior.
+
+Six seasons, the Box score column alone, the line's other weights as they stand: an estimate, not a build.

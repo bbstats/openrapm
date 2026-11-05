@@ -82,6 +82,9 @@ The claim follows from the code and has not been run: a unit test on it is the f
    correlation near 1 means the shape did not change, so the ratings will not move and the build can be skipped.
 2. **The offensive target's shrink.**  `--unshrink-labels both` again on a line fitted on the rating, or a lighter penalty on
    offense (`LabelSettings.offense_penalty`, no flag yet).
+   **The look is done, 2026-11-04, 9:57 PM; the build waits on the owner.**  DECISIONS.md, "Defense's boosters at 130 and 330 trees".
+   Slope 1.73 to 1.09, spread 1.61 times, the two outputs correlate 0.990 to 0.995, the Box score column moves 0.081 to 0.102 beyond a
+   rescale, taller players toward worse.  2015's 0.102 crossed the registered 0.1, so the build is the owner's call.
 3. **A retune with Box Adj in the loop.**  Check 152 must refit the line's weights inside each trial (`rating_line.py`).  Trap 40: a
    winner sits on its limit's edge, so run the full year-over-year test.
 4. **Trees trained on stints.**  A rating is a straight line in its prior, so each player's gradient of the within-season error
