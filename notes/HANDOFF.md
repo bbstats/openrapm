@@ -22,7 +22,7 @@ every number quoted here; read its measurement traps before trusting a number.  
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
 
-## The new Bias page: PUBLISHED 2026-11-05 (the owner: "Publish, refresh daily")
+## The new Bias page: PUBLISHED 2026-11-05, main 61de149 (the owner: "Publish, refresh daily")
 
 The owner, 2026-11-05: "we need a new bias page. that one is outdated and i don't like it".  DECISIONS.md, "The Bias
 page's consensus", holds every number, the owner's choices and what each source's terms allow.  **No rating moved.**
