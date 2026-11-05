@@ -15,9 +15,11 @@ nav.site a { padding: 11px 14px 10px; color: var(--muted); text-decoration: none
 nav.site a:first-child { padding-left: 0; }
 nav.site a:hover { color: CanvasText; }
 nav.site a[aria-current="page"] { color: CanvasText; font-weight: 600; border-bottom-color: var(--accent); }
-nav.site .theme { margin-left: auto; display: inline-flex; padding: 9px; border: 1px solid var(--line);
-                  border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; }
-nav.site .theme:hover { color: CanvasText; }
+nav.site .theme, nav.site .colors { margin-left: auto; display: inline-flex; padding: 9px;
+                  border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--muted);
+                  cursor: pointer; }
+nav.site .theme:hover, nav.site .colors:hover { color: CanvasText; }
+nav.site .colors + .theme { margin-left: 4px; }      /* the colors button, where a page has it, sits left of it */
 
 /* The controls: every button, dropdown and search box is 40 px tall, so each is an easy target. */
 .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 14px; margin: 0 0 18px; }

@@ -7,8 +7,13 @@
 <link rel="stylesheet" href="site.css">
 <script src="site.js"></script>
 <style>
-  :root { --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6; }
-  :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5; }
+  :root { --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6; --good: 34 165 90; --bad: 222 64 64; }
+  :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5;
+                             --good: 52 190 110; --bad: 235 85 85; }
+  /* the colors button: the pinwheel in gray while off, in color while on */
+  nav.site .colors svg { filter: grayscale(1); opacity: 0.75; }
+  nav.site .colors[aria-pressed="true"] svg { filter: none; opacity: 1; }
+  nav.site .colors[aria-pressed="true"] { border-color: var(--muted); }
   body { color: var(--ink); font: 14px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
   #find { width: 210px; }
   /* the side buttons sit left of Detail, so the button stays under the pointer when they appear */
@@ -91,6 +96,7 @@
     <a href="bias.html">Bias</a>
     <a href="about.html">About</a>
     <a href="changelog.html">Changelog</a>
+    <button class="colors" id="colors" type="button" aria-pressed="false" aria-label="Colors" title="Colors"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 8V1.5A4.5 4.5 0 0 1 12.5 6z" fill="#e5484d"/><path d="M8 8V1.5A4.5 4.5 0 0 1 12.5 6z" fill="#f5b700" transform="rotate(90 8 8)"/><path d="M8 8V1.5A4.5 4.5 0 0 1 12.5 6z" fill="#2fa36b" transform="rotate(180 8 8)"/><path d="M8 8V1.5A4.5 4.5 0 0 1 12.5 6z" fill="#3987e5" transform="rotate(270 8 8)"/><circle cx="8" cy="8" r="1.1" fill="currentColor"/></svg></button>
     <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
   </nav>
   <h1 class="titled">OpenRAPM</h1>
@@ -189,25 +195,49 @@
     if (!rookieSets.has(season)) rookieSets.set(season, new Set((data.meta.rookies || {})[season] || []));
     return rookieSets.get(season);
   }
+  // the colors button: each rating cell shaded by where its number falls among the same pool the percentiles use,
+  // green at the top, none at the middle, red at the bottom.  A player under the pool's minimum is shaded by where
+  // his number would fall in it.  Remembered like the theme
+  try { state.colors = localStorage.getItem("colors") === "1"; } catch (e) {}
+  const poolCache = new Map();                        // "season:side" -> key -> the pool's numbers, low to high
+  function poolOf(season, side) {
+    const key = season + ":" + side;
+    if (!poolCache.has(key)) {
+      const pool = data.rows[season].filter(r => r.p >= poolMin(season)).map(r => onSide(r, side)), out = {};
+      for (const k of PCT_KEYS) out[k] = pool.map(r => r[k]).sort((a, b) => a - b);
+      poolCache.set(key, out);
+    }
+    return poolCache.get(key);
+  }
+  // the share of the pool below v, ties counted half
+  function pctIn(vals, v) {
+    const n = vals.length;
+    if (!n) return null;
+    let lo = 0, hi = n;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (vals[m] < v) lo = m + 1; else hi = m; }
+    const below = lo;
+    hi = n;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (vals[m] <= v) lo = m + 1; else hi = m; }
+    return 100 * (below + (lo - below) / 2) / n;
+  }
   const pctCache = new Map();                         // "season:side" -> id -> that player's percentiles
   function percentiles(season, side) {
     const key = season + ":" + side;
     if (pctCache.has(key)) return pctCache.get(key);
-    const pool = data.rows[season].filter(r => r.p >= poolMin(season)).map(r => onSide(r, side)), out = new Map();
-    for (const r of pool) out.set(r.id, {});
-    for (const k of PCT_KEYS) {
-      // the share of the pool below him, ties counted half
-      const vals = pool.map(r => r[k]).sort((a, b) => a - b), n = vals.length;
-      const below = v => { let lo = 0, hi = n; while (lo < hi) { const m = (lo + hi) >> 1; if (vals[m] < v) lo = m + 1; else hi = m; } return lo; };
-      const atOrBelow = v => { let lo = 0, hi = n; while (lo < hi) { const m = (lo + hi) >> 1; if (vals[m] <= v) lo = m + 1; else hi = m; } return lo; };
-      for (const r of pool) out.get(r.id)[k] = 100 * (below(r[k]) + (atOrBelow(r[k]) - below(r[k])) / 2) / n;
-    }
+    const vals = poolOf(season, side), out = new Map();
+    for (const r of data.rows[season].filter(r => r.p >= poolMin(season)).map(r => onSide(r, side)))
+      out.set(r.id, Object.fromEntries(PCT_KEYS.map(k => [k, pctIn(vals[k], r[k])])));
     pctCache.set(key, out);
     return out;
   }
-  // a row as shown: the numbers, or their percentiles with null under the pool's minimum
+  // a cell's shade from its percentile: clear at the 50th, strongest at the 0th and 100th
+  const shade = q => q === null || q === undefined || q === 50 ? ""
+    : ` style="background: rgb(var(${q > 50 ? "--good" : "--bad"}) / ${(0.6 * Math.abs(q - 50) / 50).toFixed(3)})"`;
+  // a row as shown: the numbers, or their percentiles with null under the pool's minimum; with the colors on, each
+  // number's percentile for its shade in c
   function shownRow(r, side, season) {
     const x = onSide(r, side);
+    if (state.colors) { const vals = poolOf(season, side); x.c = {}; for (const k of PCT_KEYS) x.c[k] = pctIn(vals[k], x[k]); }
     if (!state.pct) return x;
     const q = percentiles(season, side).get(x.id);
     for (const k of PCT_KEYS) x[k] = q ? q[k] : null;
@@ -310,7 +340,7 @@
         : `<td class="name"><a href="${esc(addr(state.season, state.team, p.id))}">${esc(p.n)}</a>` +
           (phone.matches ? `<span class="tm">${links}</span>` : "") + `</td>`;
       return `<tr><td class="rank">${p.rank}</td>${first}<td class="team">${links}</td>` + cols.map(([key]) =>
-        `<td${key === bold ? ' class="total"' : ""}>${key === "p" ? whole.format(p.p)
+        `<td${key === bold ? ' class="total"' : ""}${p.c ? shade(p.c[key]) : ""}>${key === "p" ? whole.format(p.p)
           : state.pct ? (p[key] === null ? "—" : Math.round(p[key]))
           : detail ? fmt(p[key]) : fmt1(p[key])}</td>`).join("") + `</tr>`;
     }).join("");
@@ -331,6 +361,7 @@
     pieces.setAttribute("aria-pressed", detail);
     $("pct").setAttribute("aria-pressed", !!state.pct);
     $("rookies").setAttribute("aria-pressed", !!state.rookies);
+    $("colors").setAttribute("aria-pressed", !!state.colors);
     $("rookies").hidden = one;
     document.querySelectorAll("[data-side]").forEach(b => b.setAttribute("aria-pressed", b.dataset.side === state.side));
     writeAddress();
@@ -393,6 +424,11 @@
   $("pct").addEventListener("click", () => {
     state.pct = !state.pct;
     try { localStorage.setItem("percentile", state.pct ? "1" : "0"); } catch (e) {}
+    render();
+  });
+  $("colors").addEventListener("click", () => {
+    state.colors = !state.colors;
+    try { localStorage.setItem("colors", state.colors ? "1" : "0"); } catch (e) {}
     render();
   });
   $("rookies").addEventListener("click", () => {
