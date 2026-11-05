@@ -188,7 +188,8 @@ __all__ = ["CONTEXT", "BOX", "INPUTS", "OTHER_BOX", "TYPES", "INPUT_SETS", "type
            "second_priors", "TEAM_TOTALS", "team_possessions", "hold_team_totals", "hold_spread",
            "season_second_priors", "SAME_TEAMMATES", "OTHER_OPPONENTS", "CENTRED_SETS", "three_inputs", "centred",
            "reads_types", "adjustments", "TEAM_RATES", "TEAM_TAKEN", "TEAM_PROFILE_RATES", "ALL_TEAM_RATES",
-           "reads_team_rates", "team_rate_numbers", "with_team_rates", "LINE_TARGETS"]
+           "reads_team_rates", "team_rate_numbers", "with_team_rates", "LINE_TARGETS", "box_score_positions",
+           "season_first_stage"]
 
 CONTEXT = ["teammates_offence_on", "teammates_defence_on", "opponents_offence_on", "opponents_defence_on",
            "teammates_offence_bench", "teammates_defence_bench", "opponents_offence_bench", "opponents_defence_bench"]
@@ -643,9 +644,7 @@ def season_coefficients(grams: dict, season: int, trainable: set, exclude_near: 
 
     Example: rating 2020 in the test setting with nearest 8 trains on 2015-2018 and 2022-2025.
     """
-    train = swap_adjust.training_seasons(season, sorted(grams), trainable, exclude_near)
-    if nearest:
-        train = sorted(sorted(train, key=lambda other: (abs(other - season), other))[:int(nearest)])
+    train = _line_seasons(grams, season, trainable, exclude_near, nearest)
     if not train:
         return None
     if isinstance(grams[train[0]], rating_line.RatingSums):
@@ -653,6 +652,31 @@ def season_coefficients(grams: dict, season: int, trainable: set, exclude_near: 
     return {key: np.vstack([swap_adjust.type_coefficients([grams[other][side] for other in train], fold, penalty)
                             for fold in [*range(n_folds), None]])
             for side, key in SIDE_KEYS.items()}
+
+
+def _line_seasons(grams: dict, season: int, trainable: set, exclude_near: int, nearest: int) -> list:
+    """The seasons a rated season's line trains on (`season_coefficients`)."""
+    train = swap_adjust.training_seasons(season, sorted(grams), trainable, exclude_near)
+    if nearest:
+        train = sorted(sorted(train, key=lambda other: (abs(other - season), other))[:int(nearest)])
+    return train
+
+
+def box_score_positions(input_set: str) -> list:
+    """Where the inputs read from a player's own stats sit in the line: everything but his teammates' and opponents'
+    priors and the team rates.  `team_possession_share` is his own share of his team's possessions, so it is here."""
+    others = {*CONTEXT, *ALL_TEAM_RATES}
+    return [at for at, name in enumerate(INPUT_SETS[input_set]) if name not in others]
+
+
+def season_first_stage(grams: dict, season: int, trainable: set, exclude_near: int, n_folds: int, penalty: float,
+                       nearest: int, input_set: str) -> dict | None:
+    """{"O", "D"}: the Box score column's weights for the rated season (rating_line.first_stage), on the same seasons as
+    its line.  None when no season may train it, or when the line was fitted on swaps, whose sums have no such split."""
+    train = _line_seasons(grams, season, trainable, exclude_near, nearest)
+    if not train or not isinstance(grams[train[0]], rating_line.RatingSums):
+        return None
+    return rating_line.first_stage([grams[other] for other in train], n_folds, penalty, box_score_positions(input_set))
 
 
 def second_priors(inputs: pd.DataFrame, coefficients: np.ndarray, n_folds: int) -> pd.Series:
@@ -712,16 +736,23 @@ def hold_spread(line: pd.Series, anchor: pd.Series, team_poss: pd.DataFrame) -> 
     return pd.Series(held, index=ids), factor
 
 
-def adjustments(values: dict, inputs: dict, coefficients: dict, n_folds: int) -> dict:
+def adjustments(values: dict, inputs: dict, coefficients: dict, n_folds: int, first_stage: dict | None = None,
+                team_poss: dict | None = None) -> dict:
     """{"O", "D"}: {player_id: c}, what the swaps' lesson adds to the box-score part in a second prior (the module
     docstring: second prior = b x box-score prior + c).  `values` and `inputs` are `season_second_priors`' two answers,
     so the box-score prior here is the one the line read, centred where the line's inputs are.  Team totals held, c adds
-    up to 0 on each team, so it only moves credit between teammates."""
+    up to 0 on each team, so it only moves credit between teammates.
+
+    With `first_stage` (`season_first_stage`) and `team_poss` ({"O", "D"}: `team_possessions`), the box-score part is that
+    column's line instead, each team's total still b x box-score prior: his own stats learned alone, and c the rest of
+    the same second prior.  Only the split changes: box-score part + c is the second prior either way."""
     out = {}
     for side, frame in inputs.items():
         weight = coefficients[side][frame.index.to_numpy(dtype=np.int64) % int(n_folds), 0]
-        anchor = pd.Series(weight * frame[BOX].to_numpy(float), index=frame.index)
-        out[side] = (pd.Series(values[side]).reindex(frame.index) - anchor).to_dict()
+        part = pd.Series(weight * frame[BOX].to_numpy(float), index=frame.index)
+        if first_stage is not None:
+            part = hold_team_totals(second_priors(frame, first_stage[side], n_folds), part, team_poss[side])
+        out[side] = (pd.Series(values[side]).reindex(frame.index) - part).to_dict()
     return out
 
 

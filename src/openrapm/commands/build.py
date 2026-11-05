@@ -183,6 +183,8 @@ class SeasonSecondPrior:
     values: dict
     coefficients: dict
     inputs: dict
+    first_stage: dict | None = None         # with PriorSettings.box_first, second_prior.season_first_stage
+    team_poss: dict | None = None           # with it, {"O", "D"}: second_prior.team_possessions
 
 
 def rated_second_prior(cfg: dict, season: int, panel: pd.DataFrame, priors: dict, lines: SecondPriorLines,
@@ -209,10 +211,17 @@ def rated_second_prior(cfg: dict, season: int, panel: pd.DataFrame, priors: dict
     types = (None if lines.type_scale is None else
              second_prior.standardised_types(typed[(typed.side == "O") & (typed.season == season)], lines.type_scale))
     box = {side: priors[side].values for side in SIDES} if box is None else box
-    values, inputs = second_prior.season_second_priors(season_lineup_rows(cfg, season), answers, box, coefficients,
+    stints = season_lineup_rows(cfg, season)
+    values, inputs = second_prior.season_second_priors(stints, answers, box, coefficients,
                                                        prior.second_prior_folds, prior.second_prior_team_totals,
                                                        types, prior.second_prior_inputs)
-    return SeasonSecondPrior(values=values, coefficients=coefficients, inputs=inputs)
+    first_stage = (second_prior.season_first_stage(lines.grams, season, lines.trainable, settings.exclude_neighbours,
+                                                   prior.second_prior_folds, prior.second_prior_penalty,
+                                                   prior.second_prior_nearest, prior.second_prior_inputs)
+                   if prior.box_first else None)
+    team_poss = None if first_stage is None else {side: second_prior.team_possessions(stints, side) for side in SIDES}
+    return SeasonSecondPrior(values=values, coefficients=coefficients, inputs=inputs, first_stage=first_stage,
+                             team_poss=team_poss)
 
 
 def with_box_adj(table: pd.DataFrame, second: SeasonSecondPrior | None, n_folds: int) -> pd.DataFrame:
@@ -221,7 +230,8 @@ def with_box_adj(table: pd.DataFrame, second: SeasonSecondPrior | None, n_folds:
     has no prior (prior_rapm.aligned_prior), and without the second prior every player has none."""
     if second is None:
         return table.assign(box_adj_off=0.0, box_adj_def=0.0)
-    adjusted = second_prior.adjustments(second.values, second.inputs, second.coefficients, n_folds)
+    adjusted = second_prior.adjustments(second.values, second.inputs, second.coefficients, n_folds, second.first_stage,
+                                        second.team_poss)
     off, deff = (prior_rapm.aligned_prior(adjusted[side], table.player_id) for side in SIDES)
     return table.assign(box_adj_off=table.prior_scale_off.to_numpy(float) * off,
                         box_adj_def=-table.prior_scale_def.to_numpy(float) * deff)

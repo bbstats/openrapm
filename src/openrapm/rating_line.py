@@ -66,7 +66,7 @@ import scipy.sparse as sp
 from .rapm import normal_equations, solve_ridge
 
 __all__ = ["RatingSums", "HeldBack", "FITTED_PARTS", "ridge_parts", "team_free", "prior_columns", "team_levels",
-           "held_back_sums", "coefficients"]
+           "held_back_sums", "coefficients", "first_stage"]
 
 FITTED_PARTS = 2                 # the columns before the inputs: each end's fitted part
 NO_SPREAD = 1e-14                # a column's possession-weighted mean square at or below this has no spread
@@ -218,12 +218,45 @@ def coefficients(parts: list, n_folds: int, penalty: float) -> dict:
 
     Example: a column with no spread gets weight 0, and leaves the others as they would be without it."""
     total = sum(parts[1:], parts[0])
-    mean_square = np.diag(total.Q) / total.sw
+    return _as_line(_solve(total, np.arange(total.Q.shape[0]), penalty), n_folds)
+
+
+def first_stage(parts: list, n_folds: int, penalty: float, box_score: list) -> dict:
+    """{"O", "D"}: the Box score column's weights, laid out as `coefficients`' line and 0 on every input outside
+    `box_score`, the positions of the inputs read from a player's own stats: both fitted parts and both ends' `box_score`
+    inputs solved alone, the same scaling and penalty.
+
+    The whole line stays `coefficients`': by the Frisch-Waugh-Lovell theorem, solving the other inputs on what these
+    leave, with these columns taken out of them too, gives the same fit, so this only says how much of the prior his own
+    stats explain alone, and Box Adj is the rest (second_prior.adjustments; notes/DECISIONS.md, "The second stage with
+    its inputs residualized").
+
+    Example: x2 = 0.8 x1 + noise and y = x1 + x2 + noise.  One regression gives weights 1.0 and 1.0.  x1 alone gets 1.8,
+    and the 0.8 it took is x2's: x1's column reads 1.8 x x1, the rest reads 1.0 x (x2 - 0.8 x x1), and they add to the
+    same fit."""
+    total = sum(parts[1:], parts[0])
+    n_inputs = (total.Q.shape[0] - FITTED_PARTS) // 2
+    chosen = np.asarray(box_score, dtype=int)
+    at = np.concatenate([np.arange(FITTED_PARTS), FITTED_PARTS + chosen, FITTED_PARTS + n_inputs + chosen])
+    weights = np.zeros(total.Q.shape[0])
+    weights[at] = _solve(total, at, penalty)
+    return _as_line(weights, n_folds)
+
+
+def _solve(total: RatingSums, at: np.ndarray, penalty: float) -> np.ndarray:
+    """The ridge on the columns `at` of `total`: each scaled to one standard deviation, lambda = `penalty` x the mean
+    diagonal; a column with no spread gets 0."""
+    Q = total.Q[np.ix_(at, at)]
+    mean_square = np.diag(Q) / total.sw
     has_spread = mean_square > NO_SPREAD
     scale = np.where(has_spread, 1.0 / np.sqrt(np.where(has_spread, mean_square, 1.0)), 0.0)
-    gram = total.Q * np.outer(scale, scale)
+    gram = Q * np.outer(scale, scale)
     ridge = float(penalty) * float(np.mean(np.diag(gram)))
-    weights = np.linalg.solve(gram + ridge * np.eye(len(scale)), total.c * scale) * scale
-    n_inputs = (len(scale) - FITTED_PARTS) // 2
+    return np.linalg.solve(gram + ridge * np.eye(len(scale)), total.c[at] * scale) * scale
+
+
+def _as_line(weights: np.ndarray, n_folds: int) -> dict:
+    """{"O", "D"}: one weight per input, an array (n_folds + 1, K) with every row the same."""
+    n_inputs = (len(weights) - FITTED_PARTS) // 2
     offence, defence = weights[FITTED_PARTS:FITTED_PARTS + n_inputs], weights[FITTED_PARTS + n_inputs:]
     return {"O": np.tile(offence, (int(n_folds) + 1, 1)), "D": np.tile(defence, (int(n_folds) + 1, 1))}

@@ -152,6 +152,7 @@ def chosen_settings(args: argparse.Namespace) -> Settings:
                                  second_prior_team_totals=args.second_prior_team_totals,
                                  second_prior_inputs=args.second_prior_inputs,
                                  second_prior_nearest=int(args.second_prior_nearest),
+                                 box_first=bool(args.box_first),
                                  game_prior=args.game_prior, game_prior_backward=args.game_prior_backward,
                                  game_prior_whole_season=bool(args.game_prior_whole_season)))
 
@@ -331,6 +332,9 @@ def _add_setting_options(parser) -> None:
     parser.add_argument("--second-prior-nearest", type=int, default=PRODUCT.prior.second_prior_nearest, metavar="K",
                         help="0: each season's line is fitted on every season the setting allows.  K: on only the K "
                              "nearest of them, as step 4 fits its multipliers (default %(default)s)")
+    parser.add_argument("--box-first", action=argparse.BooleanOptionalAction, default=PRODUCT.prior.box_first,
+                        help="the Detail view's Box score column from his own stats' weights learned alone, Box Adj the "
+                             "rest of the same prior; no rating moves (default %(default)s)")
 
 
 def _add_folds_tag(parser) -> None:
