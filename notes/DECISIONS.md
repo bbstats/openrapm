@@ -12531,3 +12531,20 @@ Read-only, `scratch/2026-11-04_coefficients/prior_by_sample.py`, `outputs/csv/pr
 | own-stats column, 2026 | 0.86 | 1.70 | 0.61 | 1.09 |
 | adjustment column, 2026 | 1.00 | 0.43 | 0.86 | 0.44 |
 | correlation of the two, 2026 | 0.72 | -0.07 | 0.75 | 0.54 |
+
+## The box-score prior's second stage, the first read (the owner, 2026-11-05: "LEARN it as a 2nd stage of the box prior.  i just would like the box-adj to be a true 'adjustment' and be orthogonal", "orthogonal in concept, not saying it has to be completely decorrelated"; registered before any result)
+
+**The question.**  Today both columns of the prior are solved together.  If a player's own-stats weights are learned first and frozen, and the adjustment learns only what they leave, does the within-season WOWY test hold, and does Box Adj become a small second column?
+
+**The two stages.**  From `outputs/second_prior/rating134/sums_<season>.npz`, no fold rebuilt, for each rated season on the seasons the test setting lets it train on (`second_prior.season_coefficients`, 1 season either side left out), both ends in one regression, the column scaling and penalty of `rating_line.coefficients`.
+
+1. Stage one: the two fitted parts, and per end the LightGBM's answer, the other end's box-score prior, the 13 box rates and 6 role and body inputs, `team_possession_share` among them: 44 columns.
+2. Stage two: stage one's 42 input weights frozen and their prediction taken out; the two fitted parts solved again, and per end the eight teammates' and opponents' priors and the 16 team rates: 50 columns.
+
+**Checks first.**  The joint solve equals the line saved in `prior_models_rating134.pkl` for all 30 seasons; regrouped columns at today's weights equal `outputs/csv/regroup_columns.csv`; the formula's error at today's weights is set beside check 151's, season by season.  The sums were written with padbins127's within layer, so a gap there is expected: the formula's known gap is a mean +0.008, standard deviation 0.042.
+
+**The test.**  `RatingSums.error` on the rated season, two stages minus today's joint weights, each arm with its own fitted parts, paired by season: mean change, standard error, paired z and seasons better, for 1997-2006, 2007-2016, 2017-2026 and all 30, beside the noise control noise_rating134, -0.010, z -1.07 (-0.027, -0.012, +0.011 by era).  A second reading with both arms' fitted parts at the same value, so a gain cannot come from the games' multiplier alone.
+
+**Reported, never selected on.**  Both stages' weights beside today's.  The own-stats column's and adjustment column's spread and correlation among teammates through `second_prior.hold_team_totals`, regulars of 1,000+ possessions, the six seasons of the regrouping, read at today's prior scale and, because a change of scale does nothing, at each arm's own prior scale from step 3 solved again on the season.  The whole prior's spread and its correlation with today's whole prior, since the within-season test always wants width (trap 39).
+
+**How to read it.**  Tied means a change inside the noise control and the formula's gap in every era; a win must hold in every era, and it is less independent than it looks, since the weights are fitted on this test.  A cleaner split with the test worse is a cost to put in front of the owner, not a win.  The read leaves out the ridge's prior scale and step 4's refit, cannot read year over year and does not move a rating.  Nothing is built; `src/`, the settings and the site stay as they are.  Then the owner chooses between regrouping only and a full build.
