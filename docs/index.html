@@ -31,8 +31,13 @@
   .chip:hover, .chip:focus-visible { background: rgb(128 128 128 / 0.1); }
   .chip:hover .x, .chip:focus-visible .x { color: var(--accent); }
   .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  table { border-collapse: separate; border-spacing: 0; width: 100%; font-variant-numeric: tabular-nums; }
+  /* as wide as its columns, not the page: each number column about 60 px, as rating sites lay theirs out; the name
+     and team columns keep a set width so the table does not shift as Find or a team narrows the list */
+  table { border-collapse: separate; border-spacing: 0; width: auto; font-variant-numeric: tabular-nums; }
   th, td { padding: 9px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  th[data-k]:not(.season) { min-width: 44px; }
+  td.name { min-width: 190px; }
+  td.team { width: 72px; white-space: normal; }       /* two teams on a line; a third goes to the next */
   th { color: var(--muted); font-weight: 600; font-size: 13px; vertical-align: bottom; cursor: pointer;
        user-select: none; }
   th:hover { color: var(--ink); }
@@ -77,6 +82,7 @@
     .cols .seg button { flex: 1; padding: 0 8px; }
     #pieces { flex: 1; }
     th, td { padding: 7px 5px; }
+    th[data-k]:not(.season) { min-width: 0; }
     table { font-size: 13px; }
     td.name { white-space: normal; min-width: 96px; }   /* a long name takes two lines so every column fits */
     td.name > a { margin: 0; padding: 0; }
