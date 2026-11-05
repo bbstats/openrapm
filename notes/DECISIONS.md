@@ -12409,3 +12409,49 @@ Six seasons, the Box score column alone, the line's other weights as they stand:
 **Reported, never selected on.**  The target per output point by era; his box rates' spread inside Box Adj; the correlation between the Box score and Box Adj columns; Box Adj's weight on the output against `rating134`'s, which should fall about 1.6 times if the handoff's scale argument holds, the first time that argument meets a run.
 
 **A check before reading anything.**  The saved defensive answers of `outputs/prior_models_trees138.pkl` must equal the read-only look's 330-tree answers in its six seasons.  Row 138 of `experiments/runs.csv` follows the result.
+
+### Experiment 138: result (2026-11-05, 1:30 AM; `outputs/trees138_line_chain.log`, `scratch/2026-11-04_coefficients/trees138_read.py`, `trees138_columns.py`)
+
+**The check passed.**  The saved defensive answers of `trees138` and `trees138_line` equal the read-only look's 330-tree answers in all six seasons, largest gap 4e-16.  Offense's output is unchanged over 30 seasons, largest gap 0.
+
+**By the registered test it does not pass: within-season is a tie, and 2007-2016 is worse.**  Against `rating134`'s folds at the shipped width settings, below 0 is better:
+
+| era | change | standard error | z | seasons better | noise control change | noise control z |
+|---|---|---|---|---|---|---|
+| 1997-2006 | -0.022 | 0.016 | -1.35 | 8 of 10 | -0.027 | -3.65 |
+| 2007-2016 | +0.039 | 0.018 | +2.11 | 2 of 10 | -0.012 | -1.08 |
+| 2017-2026 | -0.021 | 0.019 | -1.10 | 8 of 10 | +0.011 | +0.47 |
+| all 30 seasons | -0.001 | 0.011 | -0.11 | 18 of 30 | -0.010 | -1.07 |
+
+Before the shrink the change is -0.018, z -1.27.  The first build, 330 trees on today's line with its weight fitted for the narrower output, reads +0.138, z +2.81, by era z +1.97, +2.03, +1.02: not a candidate, and the cost of a wider prior that nothing refits.
+
+**Year over year is better**, against `mid136`, both directions: team-game -0.058, z -5.35, 40 of 56, error 8.6914 to 8.6892, looking forward z -4.57, looking back z -3.05; stint level -0.036, z -2.18; stint level with each side rescaled -0.024, z -1.49.  The noise control reads z +0.49.  The total rating's spread does not change, so trap 39 does not explain it: 2.47, 2.41, 2.36 by era against 2.47, 2.41, 2.36.  Defense widens a little in the two older eras, 1.80 and 1.70 to 1.84 and 1.73, and offense narrows about 1%.
+
+**The 2026 top 20 holds the same players.**  The top 15 keep their order; Queta and Ausar Thompson swap 16th and 17th, Caruso and Derrick White 18th and 19th.  The largest moves among them: Jokić -0.15, Holmgren -0.14, Adebayo -0.13, Leonard -0.13, Gilgeous-Alexander -0.10.  Among all 2026 regulars of 1,000+ possessions the total rating moves a median 0.07, a 90th percentile 0.18, a largest 0.42, Valančiūnas.
+
+**The scale argument met its first run and held.**  Mean over 30 seasons, today then the candidate:
+
+| reading | defense, today | defense, candidate | offense, today | offense, candidate |
+|---|---|---|---|---|
+| LightGBM output's standard deviation | 0.524 | 0.845 | 0.572 | 0.572 |
+| Box Adj's weight on it | 2.308 | 1.391 | 2.189 | 2.120 |
+| weight x output | 1.209 | 1.176 | 1.255 | 1.215 |
+| prior scale | 0.838 | 0.918 | 0.775 | 0.800 |
+| target per output point | 1.707 | 1.076 | 0.959 | 0.959 |
+
+By era, defense's target per output point: 1.97 to 1.23, 1.70 to 1.06, 1.46 to 0.94.  The spread grew 1.61 times and the weight fell 1.66 times, so the early stop's narrowness was never reaching a rating.
+
+**The two columns are a little cleaner on defense, and Box Adj still repeats the box score.**  Among teammates through the model's hold of team totals, the test-setting tables, so not the published 0.71 of the section above:
+
+| reading | defense, today | defense, candidate | offense, today | offense, candidate |
+|---|---|---|---|---|
+| Box score column, 2026 | 0.611 | 0.650 | 0.861 | 0.862 |
+| all of Box Adj, 2026 | 0.859 | 0.833 | 1.147 | 1.122 |
+| correlation of the two, 2026 | 0.742 | 0.665 | 0.770 | 0.758 |
+| correlation of the two, six seasons' mean | 0.693 | 0.626 | 0.798 | 0.785 |
+| his box rates inside Box Adj, 2026 | 0.487 | 0.459 | 0.870 | 0.813 |
+| their correlation with the Box score column, 2026 | 0.676 | 0.655 | 0.692 | 0.700 |
+
+**The shift from size in the read-only look did not reach the ratings.**  The look's Box score column moved taller players toward worse, correlation with height +0.33 to +0.44 in points allowed.  In the final ratings the defense move correlates with height +0.45 in 1997-2006, +0.41 in 2007-2016, +0.06 in 2017-2026 and -0.10 in 2026, where positive now means taller players rated better.  The candidate's Box Adj refit stands between the two; which of its rows gives the credit back was not read.
+
+The stint-level reading, the public-metric agreement and the rest of 2027 were not run: the registration keeps them for a candidate that passes.  Row 138 of `experiments/runs.csv`, verdict pending.  The verdict is the owner's.

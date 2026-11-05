@@ -85,6 +85,8 @@ The claim follows from the code and has not been run: a unit test on it is the f
    **The look is done, 2026-11-04, 9:57 PM; the build waits on the owner.**  DECISIONS.md, "Defense's boosters at 130 and 330 trees".
    Slope 1.73 to 1.09, spread 1.61 times, the two outputs correlate 0.990 to 0.995, the Box score column moves 0.081 to 0.102 beyond a
    rescale, taller players toward worse.  2015's 0.102 crossed the registered 0.1, so the build is the owner's call.
+   **The build ran, experiment 138, 2026-11-05: within-season -0.001, z -0.11, by era z -1.35, +2.11, -1.10; year over year -0.058, z -5.35; the
+   2026 top 20 the same players.  Box Adj's weight fell 1.66 times against a spread up 1.61 times, so the scale argument held.  Verdict the owner's.**
 3. **A retune with Box Adj in the loop.**  Check 152 must refit the line's weights inside each trial (`rating_line.py`).  Trap 40: a
    winner sits on its limit's edge, so run the full year-over-year test.
 4. **Trees trained on stints.**  A rating is a straight line in its prior, so each player's gradient of the within-season error
@@ -102,7 +104,7 @@ bash scripts/experiment_chain.sh X_line $TARGET "--booster-params X --second-pri
 ```
 
 Trap 45: measure anything "among teammates" through `second_prior.hold_team_totals`.  The settings stay the published ones until the
-owner's word, since the morning job runs on the working tree.  The next free row is 138.
+owner's word, since the morning job runs on the working tree.  The next free row is 139.
 
 ## Where it stands, 2026-11-04, 12:10 PM: the new Box Adj with halfway width is PUBLISHED (d8113bb)
 
@@ -113,7 +115,7 @@ test first, "Skip it, ship halfway width", then "Publish now".  The settings: `s
 within-season -0.572, z -7.80, by era z -8.38, -5.49, -3.17, and year over year z +1.46.
 
 - **The incumbent is `mid136`**: test-setting tables `season_ratings_mid136*`, folds `rating134_early/_within`, tenth folds
-  `rating134_k10`.  The published tables before it are in `outputs/before_mid136/`.  The next free row is 138.
+  `rating134_k10`.  The published tables before it are in `outputs/before_mid136/`.  The next free row is 139.
 - **The noise control `noise_rating134`**, `--fold-assignment 1`, 12:20 to 1:32 PM, reads -0.010, z -1.07, 16 of 30, year
   over year z +0.49, the same size as padbins127's -0.009.  The morning job's dry run passed on the new settings at 12:20 PM.
 - **Changelog:** the owner's words, "Improved box adjustment."; the About page mentions nothing that changed.
@@ -835,7 +837,7 @@ What else the work of 2026-10-23 left open:
   on ctx110 read -0.013, z -1.63); a candidate is read against today's ratings on the same split, so that noise
   does not enter its change, but any one build's standing carries 0.01-0.02 of it.
 - Every experiment gets a row in `experiments/runs.csv` (`scripts/checks/101_log_run.py`), mirrored to the sheet
-  "OpenRAPM experiments", tab Experiments; the next free row is 138.  Since 2026-10-30 it reads the within-season
+  "OpenRAPM experiments", tab Experiments; the next free row is 139.  Since 2026-10-30 it reads the within-season
   test by era too, and refuses a partial or stale reading.  Input screens get their own tab ("Input screen 112").
 
 ## Commands a session runs
