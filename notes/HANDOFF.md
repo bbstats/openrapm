@@ -85,8 +85,10 @@ The claim follows from the code and has not been run: a unit test on it is the f
    **The look is done, 2026-11-04, 9:57 PM; the build waits on the owner.**  DECISIONS.md, "Defense's boosters at 130 and 330 trees".
    Slope 1.73 to 1.09, spread 1.61 times, the two outputs correlate 0.990 to 0.995, the Box score column moves 0.081 to 0.102 beyond a
    rescale, taller players toward worse.  2015's 0.102 crossed the registered 0.1, so the build is the owner's call.
-   **The build ran, experiment 138, 2026-11-05: within-season -0.001, z -0.11, by era z -1.35, +2.11, -1.10; year over year -0.058, z -5.35; the
-   2026 top 20 the same players.  Box Adj's weight fell 1.66 times against a spread up 1.61 times, so the scale argument held.  Verdict the owner's.**
+   **The build ran, experiment 138, 2026-11-05: within-season -0.001, z -0.11, by era z -1.35, +2.11, -1.10; year over year -0.058, z -5.35, which is width: -0.008, z -0.67 with each side's width matched; the
+   2026 top 20 the same players.  Box Adj's weight fell 1.66 times against a spread up 1.61 times, so the scale argument held.  A tie on both tests.  Verdict the owner's.**
+   **Tree count is not the lever.**  130 won its search by less than a random draw moves it, and 330 is arithmetic.  The LightGBM is 92% to 94% a straight line on its inputs, and Box Adj's own box
+   rates are another, on another target, so the repeat comes with the design.  DECISIONS.md, "Experiment 138 at matched width".  Read a year-over-year change at matched width, each side's, before calling it a gain.
 3. **A retune with Box Adj in the loop.**  Check 152 must refit the line's weights inside each trial (`rating_line.py`).  Trap 40: a
    winner sits on its limit's edge, so run the full year-over-year test.
 4. **Trees trained on stints.**  A rating is a straight line in its prior, so each player's gradient of the within-season error
