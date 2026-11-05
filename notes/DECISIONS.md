@@ -12612,7 +12612,7 @@ The column is orthogonal in the regression's held-back stints, not among teammat
 
 **Built, off, the same day (the owner: "especially if ratings dont move at all i REALLY don't care").**  `rating_line.first_stage`, `second_prior.season_first_stage`, `second_prior.adjustments`, `PriorSettings.box_first`, `--box-first`, `tests/test_box_first.py`; the setting stays False until the owner's word to publish, because the morning job runs on this working tree and pushes the Detail file.  1,009 tests passed.  2026 rated through the real code with the setting on, product setting: rating, prior and games' part on both ends differ from the published table by 0.00e+00.  `scratch/2026-11-05_second_stage/box_first_tables.py` writes the same split into copies of the published tables without a rebuild, reading both box-score priors back from the prior less today's Box Adj: 3e-15 from the real code on 2026; every other number in all 15,031 rows of all three tables differs by 0.0; each team's Box Adj total 1e-15; step 4's multipliers on today's Box Adj reproduce the table's exactly.
 
-Published tables, regulars of 1,000+ possessions, each season on its own, then the era's mean; this reads after step 4, so it is wider than the six-season read above at step 3 times the within multiplier alone:
+Published tables, regulars of 1,000+ possessions, each season on its own, then the era's mean.  These are the Detail view's columns across the league, team levels in the Box score column, so that column reads wider than the among-teammates tables above:
 
 | era | side | Box score today | Box score learned first | Box Adj today | Box Adj learned first | correlation today | correlation learned first | whole prior |
 |---|---|---|---|---|---|---|---|---|
