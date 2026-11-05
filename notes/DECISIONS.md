@@ -12489,3 +12489,18 @@ The miss bottoms at 330 trees in 2022 and 2026, about 500 in 2010, and is still 
 **The LightGBM is close to a straight line.**  A straight line on its own inputs, fitted on the players with even ids and read on the odd, over regulars and by era, gets 92.6%, 93.4%, 94.3% of the output's variance on offense and 91.5%, 92.2%, 92.3% on defense.  Inputs under half filled in an era are left out.  Box Adj's own-box-rate rows are another straight line on the same stats, with another target, so the repeat comes with the design.
 
 The within-season reads to set beside it are the direct screen's, on ctx110's line: no prior +8.370, the box-score prior alone +1.171, the 29 inputs refit -0.702; dropping the box-score prior from one end costs +0.082, z +4.81 on defense and +0.060, z +3.06 on offense.  Not read on today's line, and not read year over year.
+
+### The whole rating, by its columns (the owner, 2026-11-05: "I feel like you are struggling with the full picture and are instead focusing on parts")
+
+Read-only, `scratch/2026-11-04_coefficients/whole_rating.py`, the published Detail view.  Each column's covariance with the rating over the rating's variance, so a side's columns add to 100%; regulars of 1,000+ possessions, weighted by possessions, each season on its own, then the era's mean.  The season's games are On adj, Off adj and SOS.  Box Adj's team rates also come from the season's games, so the last column is a minimum.
+
+| era | side | Box score | Box Adj | the season's games |
+|---|---|---|---|---|
+| 1997-2006 | offense | 32.5% | 56.9% | 10.6% |
+| 1997-2006 | defense | 39.6% | 46.8% | 13.7% |
+| 2007-2016 | offense | 33.7% | 54.4% | 11.9% |
+| 2007-2016 | defense | 40.0% | 47.2% | 12.8% |
+| 2017-2026 | offense | 39.1% | 48.8% | 12.2% |
+| 2017-2026 | defense | 39.3% | 46.2% | 14.4% |
+| 2026 | offense | 43.5% | 44.2% | 12.3% |
+| 2026 | defense | 37.5% | 46.2% | 16.3% |
