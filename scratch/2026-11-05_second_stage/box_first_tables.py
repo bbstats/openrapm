@@ -32,7 +32,7 @@ finished = set(trainable(cfg).seasons)
 step3 = pd.read_parquet(f"outputs/season_ratings_{NAME}_step3.parquet")
 step4 = pd.read_parquet(f"outputs/season_ratings_{NAME}_step4.parquet")
 final = pd.read_parquet(f"outputs/season_ratings_{NAME}.parquet")
-multipliers = pd.read_csv(f"outputs/csv/season_ratings_{NAME}_step4_multipliers.csv").set_index("season")
+multipliers = pd.read_csv("outputs/csv/season_ratings_product_step4_multipliers.csv").set_index("season")
 teams = main_teams(cfg).set_index(["player_id", "season"]).team_id
 panel = pd.read_parquet("outputs/season_panel.parquet")
 OWN = [names[at] for at in sp.box_score_positions(prior.second_prior_inputs)]
@@ -50,15 +50,21 @@ for season, rows in step3.groupby("season", sort=True):
     stints = season_lineup_rows(cfg, int(season))
     types = sp.standardised_types(panel[(panel.season == season) & (panel.side == "O")], type_scale)
     moved = {}
+    # a player the line did not read on an end has exactly 0 Box Adj there, and stays out of that end, as in the build;
+    # his other end's box-score prior reads the mean of the players who have one (second_prior.line_inputs)
+    read = {"O": pd.Series(rows.box_adj_off.to_numpy() != 0.0, index=ids), "D": pd.Series(rows.box_adj_def.to_numpy() != 0.0, index=ids)}
     for side, other in (("O", "D"), ("D", "O")):
-        frame = pd.DataFrame({sp.BOX: box[side], sp.OTHER_BOX: box[other]}, index=ids).join(types, how="left")
+        chosen = ids[read[side].to_numpy()]
+        other_box = box[other][read[other]]
+        frame = pd.DataFrame({sp.BOX: box[side].reindex(chosen), sp.OTHER_BOX: other_box.reindex(chosen).fillna(other_box.mean())}, index=chosen).join(types, how="left")
         frame[sp.TYPES] = frame[sp.TYPES].fillna(0.0)
-        weights = first[side][-1][sp.box_score_positions(prior.second_prior_inputs)]
-        own_line = pd.Series(frame[OWN].to_numpy(float) @ weights, index=ids)
-        anchor = pd.Series(b[side] * box[side].to_numpy(), index=ids)
         team_poss = sp.team_possessions(stints, side)
-        moved[side] = sp.hold_team_totals(own_line, anchor, team_poss) - anchor
-        held = moved[side].reindex(team_poss.player_id).to_numpy() * team_poss.poss.to_numpy()
+        frame = sp.centred(frame, team_poss.groupby("player_id").poss.sum())
+        weights = first[side][-1][sp.box_score_positions(prior.second_prior_inputs)]
+        own_line = pd.Series(frame[OWN].to_numpy(float) @ weights, index=chosen)
+        anchor = pd.Series(b[side] * frame[sp.BOX].to_numpy(float), index=chosen)
+        moved[side] = (sp.hold_team_totals(own_line, anchor, team_poss) - anchor).reindex(ids).fillna(0.0)
+        held = moved[side].reindex(team_poss.player_id).fillna(0.0).to_numpy() * team_poss.poss.to_numpy()
         totals = pd.Series(held).groupby(team_poss.team.to_numpy()).sum().abs().max() / team_poss.groupby("team").poss.sum().max()
         worst["team_total"] = max(worst["team_total"], float(totals))
     new = rows.copy()
