@@ -12607,3 +12607,5 @@ Among teammates, regulars of 1,000+ possessions, today's prior scales, no rating
 | 2026 | defense | 1.20 | 0.40 | 0.33 | 1.38 |
 
 The column is orthogonal in the regression's held-back stints, not among teammates: the correlation is smaller than regrouping's 0.17 and 0.44 on defense, and on offense it changes sign and is larger in size.  Box Adj keeps rows on his own stats, spread 0.24 and 0.15, which correlate -0.52 with its others' rows: they take out what his own stats already say about his teammates, opponents and team rates.  Team totals stay today's only if the box score column's total is held at today's in the Detail view; not built.
+
+**The owner's choice, 2026-11-05: the box score learned first, Box Adj what is left of today's prior.**  Chosen over moving the rows only and over a rebuild of the ratings.  Nothing is implemented: `src/`, the settings, the site and the ratings are as they were.  It waits on the owner's word to change `src/` and on the owner's wording for the site.
