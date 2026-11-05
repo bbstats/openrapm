@@ -32,6 +32,7 @@ DEFAULT_PATHS = {
     "panel_so_far": "outputs/season_panel_so_far.parquet",   # each season so far, one row per player, share and side
     "within": "outputs/within",       # the within-season folds, one folder per tag
     "event_counts": "data/event_counts",   # the play-by-play counts per game, player and phase
+    "public_ratings": "data/public_ratings",   # the outside rating systems' tables, one file per system and day
 }
 
 

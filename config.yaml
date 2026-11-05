@@ -65,3 +65,4 @@ paths:
   panel_so_far: outputs/season_panel_so_far.parquet   # openrapm data panel --so-far: each season so far, by share
   within: outputs/within                # openrapm folds: the within-season folds, one folder per tag
   event_counts: data/event_counts       # openrapm data events: play-by-play counts per game, player and phase
+  public_ratings: data/public_ratings   # openrapm data public-ratings: the outside systems the Bias page compares with
