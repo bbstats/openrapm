@@ -12331,3 +12331,40 @@ The morning of the same day's failed push is in HANDOFF.md.  The sheet "OpenRAPM
 **A measurement trap.**  Measuring a player "among teammates" against his main team's mean leaves a traded player's mix of team levels in, and it dominates any team-level input: the 16 team rates read 1.47 for traded players on defense and 0.30 for the rest, and opponents' offensive rebounds on the bench read +0.64 where the model's hold gives 0.00.  The hold takes the mix out exactly (`hold_team_totals`, `mix`).  Measure a Box Adj input through the hold.
 
 **The noise control on the new incumbent, `noise_rating134`** (the chain of that name, 12:20 to 1:32 PM, the same build with the boosters' players dealt again, `--fold-assignment 1`; `outputs/noise_rating134_chain.log`): the within-season WOWY test against the incumbent, the shipped stage: -0.010, z -1.07, 16 of 30; by era -0.027, z -3.65, 8 of 10; -0.012, z -1.08, 6 of 10; +0.011, z +0.47, 2 of 10.  Year over year, team-game +0.004, z +0.49, 27 of 56.  The same size as padbins127's -0.009, z -1.09, against a publish that moved the test by -0.572.  The dry run of the morning job passed end to end on the new settings at 12:20 PM (PUBLISH=0, exit 0).  CI is green on 4cbd7fd, after the push test set its own git identity.
+
+## The box-score prior through the pipeline (the owner, 2026-11-04: "is it lightgbm or are we shrinking the prior?", then "Write handoff to help us fix this")
+
+Read-only, on the published tables and experiment 134's saved boosters: `scratch/2026-11-04_coefficients/box_prior_stages.py` (`outputs/csv/box_prior_stages.csv`, `box_prior_stages_tiers.csv`), `box_adj_overlap.py` (`outputs/csv/box_adj_overlap.csv`), `box_vs_adj.py`.  The target is the career RAPM the LightGBM trains on, from seasons its boosters did not see for that season; the output each player's answer from the boosters that never saw him.  Standard deviations are possession-weighted over regulars of 1,000+ possessions; the target's over those with a target, about 320 a season.  Slope: the target regressed on the output, so 1.0 means the output's spread suits its target.
+
+| era | defense target | defense output | defense slope | offense target | offense output | offense slope |
+|---|---|---|---|---|---|---|
+| 1997-2006 | 1.90 | 0.52 | 1.97 | 0.87 | 0.52 | 0.95 |
+| 2007-2016 | 1.72 | 0.52 | 1.70 | 1.00 | 0.55 | 1.12 |
+| 2017-2026 | 1.69 | 0.53 | 1.46 | 0.91 | 0.64 | 0.81 |
+| all 30 seasons | 1.77 | 0.52 | 1.71 | 0.93 | 0.57 | 0.96 |
+
+The slope is above 1 in 30 of 30 seasons on defense and 16 of 30 on offense.  By career possessions, slope and target's standard deviation:
+
+| career possessions | defense slope | defense target | offense slope | offense target |
+|---|---|---|---|---|
+| 20,000 or more | 1.77 | 1.63 | 0.92 | 1.03 |
+| 5,000 to 20,000 | 1.61 | 1.88 | 0.38 | 0.45 |
+| under 5,000 | 1.09 | 1.64 | 0.05 | 0.18 |
+
+The stages after the LightGBM, mean over 30 seasons, offense then defense: Box Adj's weight on the output 2.19 and 2.31; the prior scale 0.77 and 0.83; the shrink's within-team multiplier 0.80 and 0.77; net 1.34 and 1.48, by era 1.39, 1.35, 1.28 and 1.61, 1.56, 1.28.  In 2026: output 0.64 and 0.49, after the weight 1.46 and 1.16, after the scale 1.10 and 0.94, the Box score column 0.92 and 0.71.  Before experiment 134 the line's weight read about 2.5 on offense and 1.0 on defense, on swaps.
+
+**Why the two sides differ.**  The defensive label is un-shrunk (experiment 22) and the offensive is not, so at a label penalty of 40,000 a career of 3,000 possessions keeps 7% of the player's impact on offense and 30,000 keeps 43%.  Defense's boosters run 130 rounds at a learning rate of 0.00906, reaching at most 1 - (1 - 0.00906)^130 = 69% of what their trees could fit, and offense's 1,091 at 0.00300 reach 96%; 1 / 0.69 = 1.44 against slopes of 1.46 to 1.97.  That the rounds cause the defensive slope is a hypothesis, not tested.
+
+**Box Adj against the Box score column**, the published tables, among regulars, standard deviation and correlation:
+
+| | offense, Box score | offense, Box Adj | offense, correlation | defense, Box score | defense, Box Adj | defense, correlation |
+|---|---|---|---|---|---|---|
+| 2026 | 0.92 | 1.02 | 0.69 | 0.71 | 0.88 | 0.72 |
+| 2026, before experiment 134 | 1.18 | 0.73 | 0.53 | 0.60 | 0.80 | 0.74 |
+| 1997-2006 | 0.76 | 1.34 | 0.76 | 0.87 | 1.02 | 0.73 |
+| 2007-2016 | 0.77 | 1.29 | 0.76 | 0.82 | 0.96 | 0.70 |
+| 2017-2026 | 0.84 | 1.13 | 0.77 | 0.69 | 0.80 | 0.77 |
+
+Box Adj's groups in 2026, through the model's hold of team totals, standard deviation and correlation with the Box score column, offense then defense: his box rates 0.91, 0.71 and 0.47, 0.69; his role and body 0.32, 0.41 and 0.30, 0.31; others' priors and his other end 0.41, 0.28 and 0.33, 0.36; the team rates 0.40, 0.01 and 0.38, 0.30; all of Box Adj 1.16, 0.76 and 0.88, 0.74.
+
+**A change of scale does nothing, by construction, not run.**  Box Adj's columns are scaled to one standard deviation before the line's penalty, so the weight divides by any constant the output is multiplied by; the padding's k is a ratio of two variances that scale together; team totals are held on the weight times the output.  So check 152's search, scored after the prior scale and the shrink, could not see the narrowness, and defense's early stop cost it nothing.  The job, the candidates and what has been tried are in HANDOFF.md.

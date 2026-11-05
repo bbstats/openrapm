@@ -22,6 +22,85 @@ every number quoted here; read its measurement traps before trusting a number.  
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
 
+## Next job: the box-score prior is narrow and Box Adj repeats it (the owner, 2026-11-04: "Write handoff to help us fix this")
+
+Nothing is built.  DECISIONS.md, "The box-score prior through the pipeline", holds every number here.  The reads are
+read-only and take minutes: `scratch/2026-11-04_coefficients/box_prior_stages.py`, `box_adj_overlap.py`, `box_vs_adj.py`.
+
+**The problem, in three facts.**
+
+1. Box Adj is as large as the box score and repeats it.  In 2026, among regulars of 1,000+ possessions, the Box score
+   column spreads 0.92 on offense and 0.71 on defense, Box Adj 1.02 and 0.88, and the two correlate 0.69 and 0.72.  The
+   repeat is one group of rows: his own box rates inside Box Adj spread 0.91 on offense, more than the Box score column,
+   and correlate 0.71 with it, 0.69 on defense.  The team rates correlate 0.01 and 0.30.  So a straight line on a player's
+   box rates, learned on stints, finds much of what the LightGBM was meant to find from the same rates.
+2. The narrowing is at the LightGBM, not in the shrink.  After the LightGBM the output is widened on net, 1.34 times on
+   offense and 1.48 on defense over 30 seasons: Box Adj's weight about 2.2 to 2.3, the prior scale about 0.8, the shrink
+   about 0.8.
+3. The two sides narrow for different reasons:
+   - **Defense: the LightGBM stops early.**  Its target spreads 1.77 and its output 0.52.  Per point of output the target
+     moves 1.71, above 1 in all 30 seasons.  Likely cause, not tested: 130 rounds at a learning rate of 0.0091 can reach at
+     most 1 - (1 - 0.0091)^130 = 69% of what its trees could fit, and 1 / 0.69 = 1.44; offense's 1,091 rounds at 0.0030 reach 96%.
+   - **Offense: the target is narrow.**  Output 0.57, target 0.93, 0.96 per point, so the LightGBM is about right for
+     what it is shown.  What it is shown is career RAPM at a penalty of 40,000, not un-shrunk, so 3,000 career possessions keep 7%
+     of a player's impact and 30,000 keep 43%.  By career possessions the target spreads 1.03 at 20,000 or more, 0.45 at
+     5,000 to 20,000, 0.18 under 5,000, and moves 0.92, 0.38 and 0.05 per point of output.  It says a short career is about average.
+
+**A trap to know before anything else: a change of scale does nothing.**  Multiply the LightGBM's output by a constant and
+Box Adj's weight divides by it (its columns are scaled to one standard deviation before the penalty), the padding's k stays
+(noise and true spread scale together), and every rating comes out the same.  So 1.0 per point is not a goal in itself; only a
+change in the output's shape can move a rating.  This also means the LightGBM's tune, check 152, could not see the narrowness.
+The claim follows from the code and has not been run: a unit test on it is the first line of work.
+
+**What counts as fixed.**
+
+- The within-season WOWY test better in every era against `mid136`, `noise_rating134` beside it, each candidate with its own
+  line refitted.  The line is fitted on this test, so a win here is less independent than it was: read the rest as carefully.
+- The year-over-year test not worse at z +2.  Also the stint-level reading, the public-metric agreement, and the rest of 2027
+  (`outputs/before_mid136/season_ratings_product.parquet` and `season_ratings_product136.parquet` hold 2027 through the games of
+  2026-11-02, so they can be scored on the games after).
+- The 2026 top 20.  Watch the top of offense: experiment 22 emptied it, and the top 1% of offensive box-score parts already
+  carry a games' part of about -0.3 (Stockton 1997).
+- Reported, never selected on: per-point slope by era and side, his box rates' spread inside Box Adj, the two columns' correlation.
+- A cleaner split with ratings no better is not a win by itself.  The verdict is the owner's.
+
+**Tried already; read before repeating.**
+
+| what | result | why it may differ now |
+|---|---|---|
+| Experiment 22, both labels un-shrunk, 2026-09 | Offense's top emptied of stars, z +7.75 rescaled; defense alone adopted | No fitted shrink and no Box Adj then |
+| Experiment 102, both labels un-shrunk, 2026-10-23 | Within-season +0.197, z +2.65, by era -0.047, +0.179, +0.459; year over year -0.211, z -3.92 | Its line was fitted on swaps |
+| Experiment 76, the LightGBM tuned on the within-season test | Adopted; today's settings | Came before Box Adj; its search cannot see scale |
+| Experiment 120, a retune | -0.110, z -2.55 on its ten seasons, did not carry to the others; nine settings at their limits; not adopted | Screened other inputs on the old line |
+| Experiments 114-118, a network and Kumo as the box prior | Team-games better, within-season worse in every era | Different learner, not a different target |
+| Experiment 50, group lines after the fact | Within-season better, year over year worse; not adopted | |
+
+**Candidates, cheapest first.  Propose them with AskUserQuestion; one at a time; register in DECISIONS.md before any result.**
+
+1. **Defense boosters fit further.**  The same settings with about 330 rounds, which reach 95%.  First a read-only look, about 15
+   minutes: fit one side on a few seasons at 130 and 330 rounds and read the slope and the correlation between the two outputs.  A
+   correlation near 1 means the shape did not change, so the ratings will not move and the build can be skipped.
+2. **The offensive target's shrink.**  `--unshrink-labels both` again on a line fitted on the rating, or a lighter penalty on
+   offense (`LabelSettings.offense_penalty`, no flag yet).
+3. **A retune with Box Adj in the loop.**  Check 152 must refit the line's weights inside each trial (`rating_line.py`).  Trap 40: a
+   winner sits on its limit's edge, so run the full year-over-year test.
+4. **Trees trained on stints.**  A rating is a straight line in its prior, so each player's gradient of the within-season error
+   can be computed and handed to LightGBM as a custom objective, one row per player and season, with no career target.  The largest
+   change and the most fitted to the test; the independent reads would have to carry it.
+
+**A full build of a candidate, about 3 hours, unattended, outside 5:50 to 7:30 AM** (the form of `scratch/2026-11-03_direct/run_ship.sh`):
+
+```bash
+TARGET=points_with_expected_opponent_threes_late_as_scored
+INPUTS=context_types_team_rates_centred
+bash scripts/experiment_chain.sh X $TARGET "--booster-params X"     # params/booster_params_X.json; its boosters and folds
+.venv/Scripts/python -m openrapm second-prior --models X --folds X_early,X_within --tag X_line --inputs $INPUTS --target rating
+bash scripts/experiment_chain.sh X_line $TARGET "--booster-params X --second-prior X_line --second-prior-inputs $INPUTS"
+```
+
+Trap 45: measure anything "among teammates" through `second_prior.hold_team_totals`.  The settings stay the published ones until the
+owner's word, since the morning job runs on the working tree.  The next free row is 138.
+
 ## Where it stands, 2026-11-04, 12:10 PM: the new Box Adj with halfway width is PUBLISHED (d8113bb)
 
 DECISIONS.md, "Experiments 135-137", holds the numbers.  The owner: "Adopt, then show me", then, offered the ridge penalty's

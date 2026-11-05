@@ -37,7 +37,7 @@ def slope(x, y, w):
     return float(np.average((x - mx) * (y - my), weights=w) / np.average((x - mx) ** 2, weights=w))
 
 
-rows = []
+rows, tiers = [], []
 for season in SEASONS:
     saved = models[season]
     unseen = set(saved["O"]["unseen"])
@@ -58,6 +58,12 @@ for season in SEASONS:
         weight = float(line[side][-1][0])
         prior_scale = float(table[scale].iloc[0])
         shrink = float(multipliers.loc[season, within])
+        for tier, low, high in (("under 5,000", 0, 5000), ("5,000 to 20,000", 5000, 20000), ("20,000 or more", 20000, 1e12)):
+            career = label.loc[both, "possessions"].to_numpy(float)
+            mask = (career >= low) & (career < high)
+            if mask.sum() >= 15:
+                tiers.append(dict(season=season, side=side, tier=tier, players=int(mask.sum()), slope=slope(x[mask], y[mask], wb[mask]),
+                                  label_sd=wsd(y[mask], wb[mask]), output_sd=wsd(x[mask], wb[mask])))
         rows.append(dict(season=season, side=side, players_with_label=len(both), label_sd=wsd(y, wb), output_sd_same_players=wsd(x, wb),
                          label_on_output_slope=slope(x, y, wb), correlation=float(np.corrcoef(x, y)[0, 1]), output_sd=wsd(output, w),
                          line_weight=weight, after_weight=weight * wsd(output, w), prior_scale=prior_scale,
@@ -65,5 +71,13 @@ for season in SEASONS:
                          box_column=weight * prior_scale * shrink * wsd(output, w), net=weight * prior_scale * shrink,
                          median_label_possessions=float(label.loc[both, "possessions"].median())))
 pd.set_option("display.width", 220)
-t = pd.DataFrame(rows).set_index(["season", "side"]).round(3)
-print(t.T.to_string())
+t = pd.DataFrame(rows)
+t.to_csv("outputs/csv/box_prior_stages.csv", index=False)
+pd.DataFrame(tiers).to_csv("outputs/csv/box_prior_stages_tiers.csv", index=False)
+for era, first, last in (("1997-2006", 1997, 2006), ("2007-2016", 2007, 2016), ("2017-2026", 2017, 2026), ("all", 1997, 2026)):
+    part = t[(t.season >= first) & (t.season <= last)]
+    print(era)
+    print(part.groupby("side")[["label_sd", "output_sd_same_players", "label_on_output_slope", "correlation", "output_sd", "line_weight", "prior_scale", "shrink", "box_column", "net", "median_label_possessions"]].mean().round(3).T.to_string())
+tier = pd.DataFrame(tiers)
+print(tier.groupby(["side", "tier"])[["players", "slope", "label_sd", "output_sd"]].mean().round(3).to_string())
+print("seasons with the slope above 1:", t.assign(above=t.label_on_output_slope > 1).groupby("side").above.sum().to_dict(), "of", t.season.nunique())
