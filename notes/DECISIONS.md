@@ -12548,3 +12548,33 @@ Read-only, `scratch/2026-11-04_coefficients/prior_by_sample.py`, `outputs/csv/pr
 **Reported, never selected on.**  Both stages' weights beside today's.  The own-stats column's and adjustment column's spread and correlation among teammates through `second_prior.hold_team_totals`, regulars of 1,000+ possessions, the six seasons of the regrouping, read at today's prior scale and, because a change of scale does nothing, at each arm's own prior scale from step 3 solved again on the season.  The whole prior's spread and its correlation with today's whole prior, since the within-season test always wants width (trap 39).
 
 **How to read it.**  Tied means a change inside the noise control and the formula's gap in every era; a win must hold in every era, and it is less independent than it looks, since the weights are fitted on this test.  A cleaner split with the test worse is a cost to put in front of the owner, not a win.  The read leaves out the ridge's prior scale and step 4's refit, cannot read year over year and does not move a rating.  Nothing is built; `src/`, the settings and the site stay as they are.  Then the owner chooses between regrouping only and a full build.
+
+### The second stage, first read: result (2026-11-05; `scratch/2026-11-05_second_stage/`, `outputs/csv/two_stage_seasons.csv`, `two_stage_weights.csv`, `two_stage_columns.csv`, `two_stage_scales.csv`; verdict the owner's)
+
+**The checks.**  The joint solve equals `rating_line.coefficients` and the line saved with the boosters, largest gap 0.  Regrouped columns at today's weights equal `regroup_columns.csv`, 7e-14.  Step 3 solved here equals the table's prior scales, 1e-6.  **The test's error does not reproduce to the size the handoff carried.**  Formula minus check 151 over 30 seasons: scale 1 and the sums' within layer, mean -0.138, standard deviation 0.275; each season's prior scale and rating134's games multiplier, the closest, +0.135, standard deviation 0.133, by era +0.139, +0.081, +0.186.  The handoff's +0.008, 0.042 is the direct screen's, whose column held the fold's own prior with its scale.  These sums hold each input at scale 1 and at padbins127's within layer, mean games multipliers 1.05 and 1.72 against rating134's 1.43 and 1.49.  So the paired differences give a direction, and only a full build gives a size.
+
+**The within-season test, two stages minus today's.**  The registered reading and the second are at scale 1.  The last two rows were added after the check above failed, each version at its own prior scale from step 3.
+
+| reading | 1997-2006 change | z | 2007-2016 change | z | 2017-2026 change | z | all 30 change | z | seasons better |
+|---|---|---|---|---|---|---|---|---|---|
+| registered, each version's own fitted parts | -0.058 | -2.20 | +0.039 | +0.70 | +0.205 | +7.71 | +0.062 | +2.10 | 11 of 30 |
+| both at today's fitted parts | -0.085 | -3.14 | +0.038 | +0.62 | +0.236 | +9.01 | +0.063 | +1.87 | 12 of 30 |
+| own scale, the sums' within layer | +0.004 | +0.13 | +0.009 | +0.24 | +0.074 | +1.78 | +0.029 | +1.36 | 13 of 30 |
+| own scale, rating134's games multiplier, closest to check 151 | +0.006 | +0.19 | +0.028 | +0.84 | +0.082 | +2.12 | +0.039 | +1.93 | 13 of 30 |
+| noise control, full build | -0.027 | -3.65 | -0.012 | -1.08 | +0.011 | +0.47 | -0.010 | -1.07 | 16 of 30 |
+| stage one alone, scale 1 | +0.201 | +4.93 | +0.257 | +4.40 | +0.189 | +1.32 | +0.216 | +4.17 | 4 of 30 |
+
+No reading is better in every era; 2017-2026 is worse in every one.  Not a win.
+
+**The columns among teammates,** regulars of 1,000+ possessions, each version at its own prior scale, today's within multipliers on both.
+
+| season | side | own-stats today | own-stats two stages | adjustment today | adjustment two stages | correlation today | correlation two stages | whole prior today | whole prior two stages | whole prior correlation | whole prior move sd |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| six seasons' mean | offense | 1.66 | 1.74 | 0.40 | 0.27 | 0.17 | 0.01 | 1.77 | 1.76 | 0.997 | 0.14 |
+| six seasons' mean | defense | 1.32 | 1.38 | 0.40 | 0.31 | 0.44 | 0.28 | 1.54 | 1.50 | 0.999 | 0.09 |
+| 2026 | offense | 1.70 | 1.73 | 0.43 | 0.29 | -0.07 | -0.21 | 1.72 | 1.70 | 0.997 | 0.14 |
+| 2026 | defense | 1.09 | 1.16 | 0.44 | 0.36 | 0.54 | 0.42 | 1.38 | 1.35 | 0.997 | 0.10 |
+
+**The weights.**  The LightGBM's answer, mean over 30 seasons, 2.19 to 2.82 on offense and 2.31 to 2.57 on defense; 2026's line 2.31 to 3.06 and 2.21 to 2.49.  Teammates' priors lose most: on offense, teammates' offensive prior with him on the court -2.17 to -0.57 on 2026's line; on defense teammates' defensive prior -1.99 to -0.72.  His threes trade places: made 0.64 to 0.10, missed 0.70 to 1.36.  The team rates barely move.  Every weight is in `two_stage_weights.csv`.
+
+**What the test cannot see.**  The LightGBM's weight times the prior scale sets a team's total in the prior.  Two stages multiply that by a mean 1.24 on offense and 1.06 on defense, the prior scale falling 0.775 to 0.745 and 0.837 to 0.801.  The within-season test takes team levels out, so it is blind to this.  Year over year was not read; step 4's team multipliers would refit in a build.

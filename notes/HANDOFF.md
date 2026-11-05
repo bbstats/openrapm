@@ -24,6 +24,8 @@ every number quoted here; read its measurement traps before trusting a number.  
 
 ## Next job: learn the box-score prior's second stage, so Box Adj is a true adjustment (the owner, 2026-11-05)
 
+**The first read is done, 2026-11-05; the owner's choice between regrouping only and a full build is waiting.**  Not a win on the within-season test: 2017-2026 is worse in every reading, +0.205, z +7.71 as registered and +0.082, z +2.12 at each version's own prior scale.  Box Adj falls from 0.40 and 0.40 regrouped to 0.27 and 0.31.  The saved sums reproduce the weights exactly and the test's error only to a mean +0.135, standard deviation 0.133, not the +0.008, 0.042 quoted below.  DECISIONS.md, "The second stage, first read: result".
+
 **The owner's words.**  "if the box prior for the player is getting some weight X, couldn't we roll that up into the initial box prior. more importantly - LEARN it as a 2nd stage of the box prior.  i just would like the box-adj to be a true 'adjustment' and be orthogonal", "orthogonal in concept, not saying it has to be completely decorrelated", "might be a bit slower and complicated but will be significantly more interpretable".  The owner likes today's ratings and thinks there are too many steps.
 
 **The design.**
