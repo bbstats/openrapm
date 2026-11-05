@@ -1,5 +1,5 @@
-"""`openrapm site` (src/openrapm/commands/site.py) on small made-up tables: the form of ratings.json, the bias
-page's cells, and the decomposition's row bookkeeping.
+"""`openrapm site` (src/openrapm/commands/site.py) on small made-up tables: the form of ratings.json, the Bias
+page's file, and the decomposition's row bookkeeping.
 
 The published files themselves are pinned byte for byte against the old scripts' output by the cleanup's gate 6
 (A:/code/spmm_verify); tests/test_decompose_site.py checks the committed decomposition files add up.
@@ -81,30 +81,121 @@ def test_a_missing_ratings_table_stops_the_command(tmp_path):
         site.run_site({"_root": str(tmp_path)}, ratings=tmp_path / "none.parquet", out_dir=tmp_path)
 
 
-@pytest.mark.parametrize("value, cell", [
-    (None, "<td>&ndash;</td>"),
-    (0.45, '<td class="over" style="--depth: 0.500"><b>+0.450</b></td>'),
-    (-1.8, '<td class="under" style="--depth: 1.000"><b>-1.800</b></td>'),
-])
-def test_a_bias_cell_is_tinted_by_its_size_and_sign(value, cell):
-    assert site.tint_cell(value) == cell
+# ------------------------------------------------------------------------------ the bias page
+def _bias_world(seed=2):
+    """A made-up 2027: players 1-40 with 300 or more possessions, whom all five systems list; player 41 with 59
+    possessions, under the pages' minimum; player 42, shown and missing from xRAPM.  Each system is OpenRAPM plus
+    noise, the 3-year RAPM without a date of its own.  Returns (ratings table, panel rows, {key: PublicRatings})."""
+    from openrapm.bias import CONSENSUS_WEIGHTS
+    from openrapm.data.public_ratings import PublicRatings
+    from openrapm.features import BOX_RATES
+    rng = np.random.default_rng(seed)
+    ids = np.arange(1, 43)
+    offense, defense = rng.normal(0, 2, 42), rng.normal(0, 1, 42)
+    table = pd.DataFrame({"season": 2027, "player_id": ids, "player_name": [f"Player {i}" for i in ids],
+                          "rating_off": offense, "rating_def": defense, "rating_total": offense + defense,
+                          "poss_season": np.where(ids == 41, 59.0, rng.integers(300, 900, 42).astype(float)),
+                          "wosa": 0.0})
+    court = ["on_court_scored_per100", "on_court_allowed_per100", "off_court_scored_per100", "off_court_allowed_per100"]
+    rates = {name: rng.normal(0, 1, 42) for name in [*BOX_RATES, *court]}
+    panel = pd.concat([pd.DataFrame({"side": side, "player_id": ids, "season": 2027, **rates}) for side in "OD"],
+                      ignore_index=True)
+    pulls = {}
+    for key in CONSENSUS_WEIGHTS:
+        listed = ids[ids != 42] if key == "xrapm" else ids
+        ratings = pd.DataFrame({"player_id": ids, "offense": 0.7 * offense + rng.normal(0, 1, 42),
+                                "defense": 0.7 * defense + rng.normal(0, 0.5, 42)})
+        pulls[key] = PublicRatings(ratings[ratings.player_id.isin(listed)].reset_index(drop=True),
+                                   None if key == "rapm_3y" else "2026-11-04", "2026-11-05")
+    return table, panel, pulls
 
 
-def test_the_bias_page_lists_the_consensus_order_and_a_dash_where_the_games_have_no_row():
-    result = {"groups": [{"group": 3, "name": "Rim-protecting centers", "signature": "+orb", "bias": 0.95},
-                         {"group": 1, "name": "Wings who shoot threes", "signature": "+fg3m", "bias": -0.46}],
-              "groups_vs_games": [{"group": 1, "bias": -0.06}]}
-    page = site.bias_page(result)
-    assert page.index("Rim-protecting centers") < page.index("Wings who shoot threes")
-    assert '<span class="sig">+orb</span></td><td class="over" style="--depth: 1.000"><b>+0.950</b></td>' \
-           '<td>&ndash;</td></tr>' in page
-    assert page.startswith("<!doctype html>") and page.endswith("</script></body></html>")
-    assert "\n</nav>\n<h1>OpenRAPM: bias by player type</h1>\n<table>" in page
+def test_the_bias_document_counts_its_players_and_names_its_five_systems():
+    table, panel, pulls = _bias_world()
+    document = site.bias_document(table, panel, pulls, 2027, "2026-11-05", "2026-11-04")
+    meta = document["meta"]
+    assert {key: meta[key] for key in ("season", "through", "built", "min_possessions", "players_shown", "players")} \
+        == dict(season=2027, through="2026-11-04", built="2026-11-05", min_possessions=60, players_shown=41,
+                players=40)
+    assert meta["fields"] == site.BIAS_FIELDS and meta["multipliers"]["o"] > 0 and meta["multipliers"]["d"] > 0
+    assert [(system["key"], system["weight"]) for system in document["systems"]] == [
+        ("xrapm", 0.3), ("rapm_3y", 0.2), ("loki", 0.2), ("darko", 0.15), ("pulse", 0.15)]
+    assert [system["players"] for system in document["systems"]] == [40, 41, 41, 41, 41]
+    # a system's own date, or the day it was pulled when its page prints none
+    assert [system["as_of"] for system in document["systems"]] == ["2026-11-04", "2026-11-05", "2026-11-04",
+                                                                  "2026-11-04", "2026-11-04"]
+    assert document["systems"][2]["by"] == "LUMA Basketball Research and CourtShare"
+    assert set(document["systems"][0]) == {"key", "name", "by", "link", "weight", "as_of", "players"}
 
 
-def test_a_consensus_name_drops_accents_punctuation_and_suffixes():
-    assert site.name_key("Jabari Smith Jr.") == "jabari smith"
-    assert site.name_key("Nikola Jokić") == "nikola jokic"
+def test_the_bias_rows_are_the_fifteen_stats_and_every_row_adds_up_at_two_decimals():
+    document = site.bias_document(*_bias_world(), 2027, "2026-11-05", "2026-11-04")
+    rows = [dict(zip(site.BIAS_FIELDS, row)) for row in document["rows"]]
+    assert [row["label"] for row in rows] == [
+        "Made threes", "Missed threes", "Made twos", "Missed twos", "Made free throws", "Missed free throws",
+        "Offensive rebounds", "Defensive rebounds", "Assists", "Turnovers", "Steals", "Blocks", "Personal fouls",
+        "On-court plus-minus", "Off-court plus-minus"]
+    assert rows[0]["stat"] == "threes_made_per100" and rows[13]["stat"] == "on_court_plus_minus_per100"
+    for row in rows:
+        assert row["t"] == round(row["o"] + row["d"], 2), row["label"]
+        assert round(row["o"], 2) == row["o"] and round(row["d"], 2) == row["d"]
+        assert row["o_se"] > 0 and row["d_se"] > 0 and row["t_se"] > 0 and row["sd"] > 0
+
+
+def test_a_system_that_runs_against_openrapm_stops_the_document():
+    """A defense column printed with the other sign would pass every other check and turn the page upside down."""
+    from openrapm.data.public_ratings import PublicRatings
+    table, panel, pulls = _bias_world()
+    flipped = pulls["loki"].table.assign(defense=-pulls["loki"].table.defense)
+    pulls["loki"] = PublicRatings(flipped, "2026-11-01", "2026-11-05")
+    with pytest.raises(SystemExit, match="LOKI defense runs against OpenRAPM's"):
+        site.bias_document(table, panel, pulls, 2027, "2026-11-05", "2026-11-04")
+
+
+@pytest.fixture
+def bias_site(tmp_path, monkeypatch):
+    """`run_site(bias=True)` on the made-up 2027: the stored pulls, the panel and the game dates handed in."""
+    table, panel, pulls = _bias_world()
+    ratings = tmp_path / "outputs" / "season_ratings_product.parquet"
+    ratings.parent.mkdir()
+    table.to_parquet(ratings)
+    stints = pd.DataFrame({"game_date": ["2026-10-20", "2026-11-04"]})
+    monkeypatch.setattr(site.public_ratings, "latest", lambda cfg, season: dict(pulls) if season == 2027 else {})
+    monkeypatch.setattr(site, "panel_of_season", lambda cfg, season: panel[panel.season == season])
+    monkeypatch.setattr(site, "season_stints", lambda season, cfg: stints)
+    cfg = {"_root": str(tmp_path), "paths": {"outputs": str(tmp_path / "outputs")}}
+    return cfg, tmp_path / "site", pulls
+
+
+def test_the_bias_file_is_written_whole_and_the_same_bytes_twice(bias_site, capsys):
+    cfg, out_dir, _ = bias_site
+    assert site.run_site(cfg, out_dir=out_dir, built="2026-11-05", bias=True) == 0
+    path = out_dir / "data" / "bias.json"
+    first = path.read_bytes()
+    document = json.loads(first)
+    assert document["meta"]["season"] == 2027 and document["meta"]["through"] == "2026-11-04"
+    assert len(document["rows"]) == 15 and first.startswith(b'{"meta":{"season":2027,"through":"2026-11-04",')
+    assert "40 of the 41 players shown for 2027 are in all 5 systems" in capsys.readouterr().out
+    site.run_site(cfg, out_dir=out_dir, built="2026-11-05", bias=True)
+    assert path.read_bytes() == first and sorted(p.name for p in path.parent.iterdir()) == ["bias.json",
+                                                                                             "ratings.json"]
+
+
+def test_a_system_never_pulled_or_dated_before_the_season_leaves_the_bias_file_as_it_was(bias_site):
+    from openrapm.data.public_ratings import PublicRatings
+    cfg, out_dir, pulls = bias_site
+    site.run_site(cfg, out_dir=out_dir, built="2026-11-05", bias=True)
+    path = out_dir / "data" / "bias.json"
+    before = path.read_bytes()
+    kept = pulls.pop("xrapm")
+    with pytest.raises(SystemExit, match="no stored table of xRAPM for 2027; `openrapm data public-ratings`"):
+        site.run_site(cfg, out_dir=out_dir, built="2026-11-06", bias=True)
+    pulls["xrapm"] = PublicRatings(kept.table, "2026-04-12", "2026-11-05")       # last season's table still up
+    with pytest.raises(SystemExit, match="xRAPM 2026-04-12: dated before 2027's first game, 2026-10-20"):
+        site.run_site(cfg, out_dir=out_dir, built="2026-11-06", bias=True)
+    assert path.read_bytes() == before
+    # the ratings file is written first either way, so a missing system never holds the ratings back
+    assert json.loads((out_dir / "data" / "ratings.json").read_text())["meta"]["built"] == "2026-11-06"
 
 
 def test_span_labels():
@@ -187,12 +278,11 @@ def test_every_page_carries_the_same_tabs_with_its_own_marked():
     tabs = ["./", "power.html", "similarity.html", "bias.html", "about.html", "changelog.html"]
     pages = ("about.html", "index.html", "power.html", "similarity.html", "bias.html", "changelog.html")
     navs = {page: (docs / page).read_text(encoding="utf-8") for page in pages}
-    navs["PAGE_HEAD"] = site.PAGE_HEAD + "</nav>"
     for page, text in navs.items():
         nav = re.search(r'<nav class="site">(.*?)</nav>', text, re.S).group(1)
         links = re.findall(r'<a href="([^"]+)"( aria-current="page")?(?: hidden)?>', nav)
         assert [href for href, _ in links] == tabs, page
-        own = "./" if page == "index.html" else "bias.html" if page == "PAGE_HEAD" else page
+        own = "./" if page == "index.html" else page
         assert [href for href, current in links if current] == [own], page
 
 

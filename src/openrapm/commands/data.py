@@ -26,6 +26,8 @@
                                                   2026-10-11 (done once, on 2026-10-11)
     openrapm data panel --so-far 0.25,0.5,0.75    each season so far at those shares of its regular season
                                                   (paths.panel_so_far), the box-score prior's part-season rows
+    openrapm data public-ratings                  the five outside rating systems the Bias page compares OpenRAPM
+                                                  with (data/public_ratings.py), one request each, stored by day
 
 Example, from nothing: `openrapm data ingest 1997 2026 RS,PO` (days, resumable: every file is cached), then
 `openrapm data stints 1997 2026 RS,PO`, then `openrapm data events 1997 2026` (minutes), then `openrapm data careers`
@@ -289,6 +291,29 @@ def run_panel(args: argparse.Namespace, cfg: dict) -> int:
     return 0
 
 
+def run_public_ratings(args: argparse.Namespace, cfg: dict) -> int:
+    """Every outside system asked once and stored under today's date; one line each, and 1 when one failed.  A system
+    that fails keeps its earlier files, so the Bias page goes on reading its last good pull."""
+    from ..data import public_ratings
+    season = args.season if args.season is not None else int(cfg["last_season"])
+    keys = args.systems.split(",") if args.systems else list(public_ratings.SYSTEMS)
+    unknown = sorted(set(keys) - set(public_ratings.SYSTEMS))
+    if unknown:
+        raise SystemExit(f"no system named {', '.join(unknown)}; the systems are {', '.join(public_ratings.SYSTEMS)}")
+    records = public_ratings.pull(cfg, season, time.strftime("%Y-%m-%d"), keys)
+    stored = public_ratings.latest(cfg, season)
+    for record in records:
+        name = public_ratings.SYSTEMS[record["key"]].name
+        if record["status"] == "pulled":
+            print(f"  {name:<12} {record['rows']:>4} players, as of {record['as_of'] or 'no date on its page'}",
+                  flush=True)
+        else:
+            kept = stored.get(record["key"])
+            print(f"  {name:<12} FAILED: {record['error']}; "
+                  f"{f'its pull of {kept.pulled} stays' if kept else 'it has no stored pull'}", flush=True)
+    return 1 if any(record["status"] == "failed" for record in records) else 0
+
+
 def _add_seasons(parser) -> None:
     parser.add_argument("first_season", nargs="?", type=int, metavar="FIRST",
                         help="the first season (default config.yaml's first_season)")
@@ -468,6 +493,21 @@ def _add_panel(steps) -> None:
     panel.set_defaults(run=run_panel)
 
 
+def _add_public_ratings(steps) -> None:
+    public = steps.add_parser(
+        "public-ratings", help="the five outside rating systems the Bias page compares OpenRAPM with",
+        description="Asks xrapm.com (xRAPM and its 3-year RAPM), lumahoops.org (LOKI), darko.app (DARKO) and "
+                    "courtsignal.net (Pulse) for their current tables, one request each, checks each "
+                    "(src/openrapm/data/public_ratings.py) and stores it in "
+                    "paths.public_ratings/<season>/<system>/<today>.parquet, out of git.  A system that fails keeps "
+                    "its earlier files and the command ends 1.  With OPENRAPM_OFFLINE=1 nothing is asked.")
+    public.add_argument("--season", type=int, default=None, metavar="SEASON",
+                        help="the season the tables are stored under (default config.yaml's last_season)")
+    public.add_argument("--systems", default="", metavar="KEYS",
+                        help="only these systems, comma-separated: xrapm, rapm_3y, loki, darko, pulse (default all)")
+    public.set_defaults(run=run_public_ratings)
+
+
 def add_data(commands) -> None:
     """`openrapm data` and its five steps."""
     data = commands.add_parser("data", help="the data the ratings are built from: raw files, stints, season panel",
@@ -482,3 +522,4 @@ def add_data(commands) -> None:
     _add_hustle_games(steps)
     _add_player_games(steps)
     _add_panel(steps)
+    _add_public_ratings(steps)

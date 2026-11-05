@@ -176,6 +176,17 @@ the three seasons: 0.850 on offence, 0.781 on defence and 0.806 in total over 47
 table. A sanity check, read every time and never a fitting target: a gross miss can veto a change, a marginal
 one cannot.
 
+**The Bias page's consensus.** Another thing: for the season in progress, the weighted mean of five outside systems'
+ratings per side, 30% xRAPM, 20% xrapm.com's 3-year RAPM, 20% LOKI, 15% DARKO and 15% Pulse (the owner's weights,
+2026-11-05; `src/openrapm/bias.py`), over the players all five list. The page shows where OpenRAPM rates players
+higher or lower than it, per one standard deviation of each box score stat and of on-court and off-court
+plus-minus. Read the same way: never a fitting target.
+
+**Width match.** OpenRAPM's ratings are spread wider than a consensus's on one side and narrower on the other, and
+an unmatched difference would read that as a lean on every stat good players have. So before the Bias page
+subtracts, each side of OpenRAPM is multiplied once, league-wide, to the consensus's standard deviation: 0.82 on
+offense and 1.01 on defense on 2026-11-05. The page prints both multipliers.
+
 **Noise control.** The incumbent rebuilt with nothing changed but which players share each of the prior's five
 folds (`--fold-assignment 1`). It shows how far every reading moves when nothing real changes: on the
 year-over-year test it reads 8.5853 against the incumbent's 8.5857, paired z -0.24.
@@ -218,8 +229,8 @@ stint's pace on the ten players on the court. A standard deviation of about 0.9 
 ## The raw box counts
 
 The thirteen per-game counts every design carries, in the order of `config.yaml`'s `box_counts`. They keep the
-NBA's abbreviations in the box table, the stint counters and the bias page; the per-100 rates built from them
-have plain names (the table below).
+NBA's abbreviations in the box table and the stint counters; the per-100 rates built from them have plain names
+(the table below), which the Bias page's rows use.
 
 | code | plain name |
 |---|---|

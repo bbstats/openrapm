@@ -9,17 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from openrapm.player_types import (
-    RATES,
-    bias_by_type,
-    cluster_gaps,
-    describe_types,
-    fit_clusters,
-    gap_columns,
-    per36,
-    signature,
-    spread,
-)
+from openrapm.player_types import RATES, cluster_gaps, fit_clusters, gap_columns, per36, spread
 
 
 @pytest.fixture(scope="module")
@@ -119,48 +109,3 @@ def test_the_gap_is_scale_free(world):
     b = gap_columns(d.assign(rating_total=2 * d.rating_total, rating_off=2 * d.rating_off,
                              rating_def=2 * d.rating_def), d)
     assert np.allclose(a.to_numpy(), b.to_numpy())
-
-
-def test_a_signature_is_the_four_largest_z_scores_with_their_signs():
-    """The bias page's Rim-protecting centers, 2026: orb +2.25, threes missed -1.67, blk +1.60, threes made -1.55."""
-    profile = pd.Series({"pts": -0.40, "fg3m": -1.55, "fg3_miss": -1.67, "ftm": -0.01, "ast": -0.72, "orb": 2.25,
-                         "drb": 1.09, "stl": -0.22, "blk": 1.60, "tov": -0.18, "pf": 0.96})
-    assert signature(profile) == "+orb -fg3_miss +blk -fg3m"
-    assert signature(profile, n=2) == "+orb -fg3_miss"
-
-
-def _typed_players():
-    """Two types of twelve players and one of three: type 0 rated 1.0 above the source on 100 possessions each,
-    type 1 rated 0.5 below on 300 each."""
-    rng = np.random.default_rng(3)
-    groups = np.repeat([0, 1, 2], [12, 12, 3])
-    players = pd.DataFrame({"group": groups, "player_name": [f"player {i}" for i in range(len(groups))],
-                            "poss": np.where(groups == 1, 300.0, 100.0) + np.arange(len(groups)),
-                            "ours": rng.standard_normal(len(groups))})
-    players["theirs"] = players.ours - np.select([groups == 0, groups == 1], [1.0, -0.5], 0.0)
-    players["bias"] = players.ours - players.theirs
-    z = pd.DataFrame({rate: rng.standard_normal(len(groups)) + 2.0 * (groups == 0) * (rate == "orb")
-                      for rate in RATES})
-    return players, z
-
-
-def test_each_type_is_named_from_its_signature_or_left_unnamed():
-    players, z = _typed_players()
-    named = describe_types(players, z, {signature(z.loc[players.group == 0, RATES].mean()): "Big men"})
-    assert named[0]["name"] == "Big men" and named[0]["signature"].startswith("+orb")
-    assert named[1]["name"] == "UNNAMED"
-    assert list(named[0]) == ["signature", "profile", "name", "most_played", "most_typical", "least_typical"]
-    assert named[0]["most_played"][0] == "player 11"          # the type-0 player with the most possessions
-    assert len(named[0]["most_typical"]) == 6 and len(named[0]["least_typical"]) == 3
-
-
-def test_bias_by_type_is_possession_weighted_ordered_by_reach_and_skips_tiny_types():
-    """Type 1's bias is half type 0's but covers three times the possessions, so it comes first; type 2 has
-    three players, under the ten a row needs."""
-    players, z = _typed_players()
-    rows = bias_by_type(players, describe_types(players, z, {}), "ours", "theirs", "bias")
-    assert [row["group"] for row in rows] == [1, 0]
-    assert rows[0]["bias"] == pytest.approx(-0.5) and rows[1]["bias"] == pytest.approx(1.0)
-    assert rows[0]["cost"] == pytest.approx(0.5 * rows[0]["possessions"])
-    weights = players.poss[players.group == 0]
-    assert rows[1]["ours"] == pytest.approx(np.average(players.ours[players.group == 0], weights=weights))

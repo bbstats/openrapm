@@ -3,63 +3,158 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OpenRAPM: bias by player type</title>
+<title>OpenRAPM: bias</title>
 <link rel="stylesheet" href="site.css">
 <script src="site.js"></script>
 <style>
   :root { --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6;
-          --over: 227 73 72; --under: 42 120 214; --zero: #f0efec; }
+          --over: 227 73 72; --under: 42 120 214; }
   :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5;
-          --over: 230 103 103; --under: 57 135 229; --zero: #383835; }
+          --over: 230 103 103; --under: 57 135 229; }
   body { color: var(--ink); font: 14px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
-  table { border-collapse: separate; border-spacing: 2px 0; width: 100%;
-          font-variant-numeric: tabular-nums; }
-  th, td { padding: 4px 7px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
-  th:nth-child(1), td:nth-child(1) { text-align: left; white-space: normal; }
-  th { color: var(--muted); font-weight: 600; }
-  th:nth-child(2), th:nth-child(3) { color: var(--ink); }
-  td.over, td.under { background: var(--zero); border-radius: 4px; }
+  h1 { margin-bottom: 0; }
+  .lede { margin: 6px 0 4px; }
+  .byline { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+  .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { border-collapse: separate; border-spacing: 2px 0; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { padding: 9px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; vertical-align: bottom; }
+  th.name, td.name { text-align: left; }
+  /* the numbers keep one width, so a colored cell is a small block and the stat's name takes the rest of the row */
+  #table th:not(.name), #table td:not(.name) { width: 104px; }
+  #systems th:not(.name), #systems td:not(.name) { width: 104px; }
+  #table th { cursor: pointer; user-select: none; }
+  #table th:hover { color: var(--ink); }
+  /* every header keeps room for the sort arrow, so sorting never shifts the columns */
+  #table th[data-k]::after { content: "\2193"; margin-left: 3px; visibility: hidden; }
+  #table th[aria-sort="descending"]::after { visibility: visible; }
+  #table th[aria-sort="ascending"]::after { content: "\2191"; visibility: visible; }
+  #table th[aria-sort="descending"], #table th[aria-sort="ascending"] { color: var(--accent); }
+  /* red: OpenRAPM rates those players higher than the consensus; blue: lower; the depth grows with the size */
+  td.over, td.under { border-radius: 4px; font-weight: 700; }
   td.over { background: rgb(var(--over) / calc(var(--depth) * 0.55)); }
   td.under { background: rgb(var(--under) / calc(var(--depth) * 0.55)); }
-  .blurb { margin-top: 22px; color: var(--muted); max-width: 66ch; font-size: 13.5px; }
-  .blurb p { margin: 0 0 10px; } .blurb b { color: var(--ink); }
-  .sig { color: var(--muted); font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  tfoot td { color: var(--muted); }
+  td.msg { text-align: left; color: var(--muted); }
   .dl { margin: 10px 0 0; color: var(--muted); font-size: 13px; } .dl a { color: inherit; }
+  #systems { margin-top: 30px; }
+  #systems td a { color: inherit; text-underline-offset: 2px; }
+  #systems td a:hover, #systems td a:focus-visible { color: var(--accent); }
+  footer { margin-top: 24px; color: var(--muted); font-size: 12.5px; }
+  footer a { color: inherit; }
+  @media (max-width: 600px) {
+    body { font-size: 13.5px; }
+    th, td { padding: 7px 5px; }
+    table { font-size: 13px; }
+    /* narrower numbers, and a long name takes two lines, so both tables fit the phone's width */
+    #table th:not(.name), #table td:not(.name) { width: 62px; }
+    #systems th:not(.name), #systems td:not(.name) { width: auto; }
+    td.name, th.name { white-space: normal; }
+  }
 </style>
 </head>
 <body>
 <main>
-<nav class="site">
-  <a href="./">Ratings</a>
-  <a href="power.html" hidden>Power</a>
-  <a href="similarity.html">~ Similarity</a>
-  <a href="bias.html" aria-current="page">Bias</a>
-  <a href="about.html">About</a>
-  <a href="changelog.html">Changelog</a>
-  <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
-</nav>
-<h1>OpenRAPM: bias by player type</h1>
-<table><thead><tr><th>Player type</th><th>vs consensus</th><th>vs 2026 observed</th></tr></thead><tbody><tr><td>Wings who shoot threes<br><span class="sig">-drb -ftm -tov +fg3m</span></td><td class="under" style="--depth: 0.474"><b>-0.427</b></td><td class="under" style="--depth: 0.125"><b>-0.112</b></td></tr><tr><td>High-usage scorers who draw fouls<br><span class="sig">+ftm +pts +tov +ast</span></td><td class="over" style="--depth: 0.670"><b>+0.603</b></td><td class="over" style="--depth: 0.296"><b>+0.267</b></td></tr><tr><td>Busy all-around forwards<br><span class="sig">+orb +pf +drb -ast</span></td><td class="over" style="--depth: 0.151"><b>+0.136</b></td><td class="over" style="--depth: 0.043"><b>+0.038</b></td></tr><tr><td>Rim-protecting centers<br><span class="sig">+orb -fg3_miss -fg3m +blk</span></td><td class="over" style="--depth: 0.400"><b>+0.360</b></td><td class="over" style="--depth: 0.097"><b>+0.087</b></td></tr><tr><td>Two-way big men who score<br><span class="sig">+blk +pts +ftm +drb</span></td><td class="over" style="--depth: 0.589"><b>+0.530</b></td><td class="over" style="--depth: 0.426"><b>+0.384</b></td></tr><tr><td>Guards who handle the ball<br><span class="sig">+ast -orb -blk -drb</span></td><td class="under" style="--depth: 0.058"><b>-0.052</b></td><td class="over" style="--depth: 0.093"><b>+0.084</b></td></tr><tr><td>Ball-hawk defenders who rarely shoot<br><span class="sig">+stl +ast -drb +tov</span></td><td class="over" style="--depth: 0.155"><b>+0.140</b></td><td class="over" style="--depth: 0.038"><b>+0.034</b></td></tr></tbody></table><p class="dl"><a href="#" id="csv">Download CSV</a></p><div class="blurb">
-<p><b>vs 2026 observed.</b> We fit a RAPM model against the <em>residuals</em> of OpenRAPM's
-predictions. These are the average results for each player type, possession-weighted.</p>
-<p><b>vs consensus.</b> The consensus is a GLS-weighted mean of DRIP, LEBRON, EPM, DARKO DPM,
-Time-Decay RAPM, and Time-Decay-Luck-Adjusted RAPM.</p>
-</div></main><script>
-document.getElementById("csv").addEventListener("click", e => {
-  e.preventDefault();
-  const q = v => /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
-  const slug = s => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_");
-  const head = [...document.querySelectorAll("thead th")].map(th => slug(th.textContent));
-  const rows = [[head[0], "signature", ...head.slice(1)]];
-  document.querySelectorAll("tbody tr").forEach(tr => {
-    const td = [...tr.children], sig = td[0].querySelector(".sig");
-    rows.push([td[0].firstChild.textContent.trim(), sig ? sig.textContent.trim() : "",
-               ...td.slice(1).map(c => c.textContent.trim().replace("\u2013", ""))]);
+  <nav class="site">
+    <a href="./">Ratings</a>
+    <a href="power.html" hidden>Power</a>
+    <a href="similarity.html">~ Similarity</a>
+    <a href="bias.html" aria-current="page">Bias</a>
+    <a href="about.html">About</a>
+    <a href="changelog.html">Changelog</a>
+    <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
+  </nav>
+  <h1>Bias</h1>
+  <p class="lede">OpenRAPM minus a consensus of five public metrics, per 1 standard deviation of each stat, in points per 100</p>
+  <p class="byline" id="byline">&nbsp;</p>
+  <div class="scroll">
+    <table id="table"><thead></thead><tbody><tr><td class="msg" colspan="99">Loading&hellip;</td></tr></tbody><tfoot></tfoot></table>
+  </div>
+  <p class="dl"><a href="#" id="csv">Download CSV</a></p>
+  <div class="scroll">
+    <table id="systems"><thead></thead><tbody></tbody></table>
+  </div>
+  <footer><a href="https://github.com/bbstats/openrapm">github.com/bbstats/openrapm</a></footer>
+</main>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  // a true minus sign, and Math.round rather than toFixed, as on the ratings page
+  const sign = v => v > 0 ? "+" : v < 0 ? "−" : "";
+  const fmt = v => { const r = Math.round(v * 100) / 100 || 0; return sign(r) + Math.abs(r).toFixed(2); };
+  const plain = v => v.toFixed(2);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const day = d => new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const median = values => { const s = [...values].sort((a, b) => a - b), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+
+  const FULL = 0.5;      // a number this far from 0, in points per 100, takes the full color
+  // the sides' columns, [key in the file, header]; a row in the file is a list in meta.fields order
+  const COLUMNS = [["o", "Offense"], ["d", "Defense"], ["t", "Total"]];
+  const state = { sort: null };      // null: the file's order, the box score's; else { k, dir }
+  const table = $("table"), thead = table.querySelector("thead"), tbody = table.querySelector("tbody"),
+        tfoot = table.querySelector("tfoot");
+  let data = null, rows = [];
+
+  function cell(value, error) {
+    if (value === null) return `<td>—</td>`;
+    const pole = value > 0 ? "over" : value < 0 ? "under" : "";
+    const depth = Math.min(Math.abs(value) / FULL, 1).toFixed(3);
+    const title = error === null ? "" : ` title="±${plain(error)}"`;
+    return `<td${pole ? ` class="${pole}" style="--depth: ${depth}"` : ""}${title}>${fmt(value)}</td>`;
+  }
+
+  function render() {
+    const sorted = state.sort ? [...rows].sort((a, b) => state.sort.dir * (a[state.sort.k] - b[state.sort.k])) : rows;
+    const th = (key, name) => `<th data-k="${key}"${state.sort && state.sort.k === key
+      ? ` aria-sort="${state.sort.dir < 0 ? "descending" : "ascending"}"` : ""}>${name}</th>`;
+    thead.innerHTML = `<tr><th class="name" data-reset>Stat</th>` + COLUMNS.map(([key, name]) => th(key, name)).join("") + `</tr>`;
+    tbody.innerHTML = sorted.map(row => `<tr><td class="name">${esc(row.label)}</td>` +
+      COLUMNS.map(([key]) => cell(row[key], row[key + "_se"])).join("") + `</tr>`).join("");
+    const errors = COLUMNS.map(([key]) => rows.map(row => row[key + "_se"]).filter(v => v !== null));
+    const m = data.meta.multipliers;
+    tfoot.innerHTML = `<tr><td class="name">Median standard error</td>` +
+      errors.map(values => `<td>${values.length ? plain(median(values)) : "—"}</td>`).join("") + `</tr>` +
+      `<tr><td class="name">Width multiplier</td><td>${plain(m.o)}</td><td>${plain(m.d)}</td><td></td></tr>`;
+  }
+
+  function systems() {
+    const t = $("systems");
+    t.querySelector("thead").innerHTML = `<tr><th class="name">Consensus</th><th class="name">By</th><th>Weight</th><th>As of</th></tr>`;
+    t.querySelector("tbody").innerHTML = data.systems.map(s =>
+      `<tr><td class="name"><a href="${esc(s.link)}">${esc(s.name)}</a></td><td class="name">${esc(s.by)}</td>` +
+      `<td>${Math.round(s.weight * 100)}%</td><td>${day(s.as_of)}</td></tr>`).join("");
+  }
+
+  thead.addEventListener("click", e => {
+    const th = e.target.closest("th");
+    if (!th) return;
+    const key = th.dataset.k;
+    state.sort = !key ? null : state.sort && state.sort.k === key ? { k: key, dir: -state.sort.dir } : { k: key, dir: -1 };
+    render();
   });
-  const text = "\uFEFF" + rows.map(r => r.map(q).join(",")).join("\r\n") + "\r\n";
-  const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
-  const a = Object.assign(document.createElement("a"), { href: url, download: "openrapm_bias_by_player_type.csv" });
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-});
-</script></body></html>
+
+  // the table as a file: every number the page holds, the standard errors and each stat's standard deviation included
+  $("csv").addEventListener("click", e => {
+    e.preventDefault();
+    if (!data) return;
+    const q = v => v === null ? "" : /[",\r\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
+    const head = ["stat", "label", "offense", "defense", "total", "offense_se", "defense_se", "total_se", "stat_sd"];
+    const lines = [head, ...rows.map(r => [r.stat, r.label, r.o, r.d, r.t, r.o_se, r.d_se, r.t_se, r.sd])];
+    const text = "﻿" + lines.map(line => line.map(q).join(",")).join("\r\n") + "\r\n";
+    const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+    const a = Object.assign(document.createElement("a"), { href: url, download: `openrapm_bias_${data.meta.season}.csv` });
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+
+  fetch("data/bias.json").then(r => r.json()).then(doc => {
+    data = doc;
+    rows = doc.rows.map(values => Object.fromEntries(doc.meta.fields.map((field, i) => [field, values[i]])));
+    $("byline").textContent = `${doc.meta.season} · ${doc.meta.players} of ${doc.meta.players_shown} players · through ${day(doc.meta.through)}`;
+    render();
+    systems();
+  }).catch(() => { tbody.innerHTML = `<tr><td class="msg" colspan="99">Could not load the bias table.</td></tr>`; });
+})();
+</script>
+</body>
+</html>

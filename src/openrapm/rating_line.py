@@ -223,8 +223,8 @@ def coefficients(parts: list, n_folds: int, penalty: float) -> dict:
 
 def first_stage(parts: list, n_folds: int, penalty: float, box_score: list) -> dict:
     """{"O", "D"}: the Box score column's weights, laid out as `coefficients`' line and 0 on every input outside
-    `box_score`, the positions of the inputs read from a player's own stats: both fitted parts and both ends' `box_score`
-    inputs solved alone, the same scaling and penalty.
+    `box_score`, the positions of the inputs read from a player's own stats: both fitted parts and both ends'
+    `box_score` inputs solved alone, the same scaling and penalty.
 
     The whole line stays `coefficients`': by the Frisch-Waugh-Lovell theorem, solving the other inputs on what these
     leave, with these columns taken out of them too, gives the same fit, so this only says how much of the prior his own

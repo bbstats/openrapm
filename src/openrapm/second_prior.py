@@ -743,9 +743,9 @@ def adjustments(values: dict, inputs: dict, coefficients: dict, n_folds: int, fi
     so the box-score prior here is the one the line read, centred where the line's inputs are.  Team totals held, c adds
     up to 0 on each team, so it only moves credit between teammates.
 
-    With `first_stage` (`season_first_stage`) and `team_poss` ({"O", "D"}: `team_possessions`), the box-score part is that
-    column's line instead, each team's total still b x box-score prior: his own stats learned alone, and c the rest of
-    the same second prior.  Only the split changes: box-score part + c is the second prior either way."""
+    With `first_stage` (`season_first_stage`) and `team_poss` ({"O", "D"}: `team_possessions`), the box-score part is
+    that column's line instead, each team's total still b x box-score prior: his own stats learned alone, and c the
+    rest of the same second prior.  Only the split changes: box-score part + c is the second prior either way."""
     out = {}
     for side, frame in inputs.items():
         weight = coefficients[side][frame.index.to_numpy(dtype=np.int64) % int(n_folds), 0]
