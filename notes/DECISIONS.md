@@ -12399,3 +12399,13 @@ The first check passed: the largest gap between the 130-tree answers and the sav
 - **It should not widen the Box score column.**  The spread's 1.6 goes into Box Adj's weight by the handoff's scale argument, which has still not been run, so a win here would come from the shift from size, not from a wider prior.
 
 Six seasons, the Box score column alone, the line's other weights as they stand: an estimate, not a build.
+
+## Experiment 138: defense's boosters at 330 trees (the owner, 2026-11-04, offered the build at 10 PM: "Run the build (Recommended)"; registered before any result)
+
+**The change.**  `params/booster_params_trees138.json`: today's LightGBM settings with defense's trees at 330 instead of 130; offense's as they are.  `scratch/2026-11-04_coefficients/run_trees138.sh` runs the handoff's recipe: the full build `trees138` on today's Box Adj line, for its boosters and folds; the line refitted on them with the same inputs, `trees138_line`, `openrapm second-prior --target rating`; then the full build `trees138_line`, the candidate.  The width settings stay the shipped ones and are not searched again.  The first build is a step toward the line, not a candidate: its Box Adj weight was fitted for a narrower output.
+
+**The test, fixed now.**  Within-season WOWY better in every era against `mid136`, `noise_rating134` beside it; the year-over-year test not worse at z +2; the 2026 top 20, the top of offense watched.  If those pass, the stint-level reading, the public-metric agreement and the rest of 2027, as the handoff lists them.  A cleaner split with ratings no better is not a win.  The verdict is the owner's.
+
+**Reported, never selected on.**  The target per output point by era; his box rates' spread inside Box Adj; the correlation between the Box score and Box Adj columns; Box Adj's weight on the output against `rating134`'s, which should fall about 1.6 times if the handoff's scale argument holds, the first time that argument meets a run.
+
+**A check before reading anything.**  The saved defensive answers of `outputs/prior_models_trees138.pkl` must equal the read-only look's 330-tree answers in its six seasons.  Row 138 of `experiments/runs.csv` follows the result.
