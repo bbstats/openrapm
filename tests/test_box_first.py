@@ -1,5 +1,5 @@
-"""The Detail view's split with his own stats learned first (rating_line.first_stage, second_prior.adjustments): the fit is
-the one regression's, and only the division of the prior changes."""
+"""The Detail view's split with his own stats learned first (rating_line.first_stage, second_prior.adjustments): the
+fit is the one regression's, and only the division of the prior changes."""
 import numpy as np
 import pandas as pd
 
@@ -54,7 +54,8 @@ def _split():
                          index=[10, 11, 12, 13])
     line = np.tile([2.0, 1.0, 0.5], (3, 1))
     first = np.tile([3.0, 0.5, 0.0], (3, 1))
-    team_poss = pd.DataFrame({"player_id": [10, 11, 12, 13], "team": [1, 1, 2, 2], "poss": [100.0, 300.0, 200.0, 200.0]})
+    team_poss = pd.DataFrame({"player_id": [10, 11, 12, 13], "team": [1, 1, 2, 2],
+                              "poss": [100.0, 300.0, 200.0, 200.0]})
     anchor = pd.Series(2.0 * frame[sp.BOX].to_numpy(), index=frame.index)
     values = sp.hold_team_totals(sp.second_priors(frame, line, 2), anchor, team_poss)
     return frame, line, first, team_poss, anchor, values
@@ -62,14 +63,16 @@ def _split():
 
 def test_learned_first_box_adj_still_cancels_on_a_team():
     frame, line, first, team_poss, _, values = _split()
-    got = pd.Series(sp.adjustments({"O": values.to_dict()}, {"O": frame}, {"O": line}, 2, {"O": first}, {"O": team_poss})["O"])
+    got = pd.Series(sp.adjustments({"O": values.to_dict()}, {"O": frame}, {"O": line}, 2, {"O": first},
+                                   {"O": team_poss})["O"])
     assert abs(got[10] * 100 + got[11] * 300) < 1e-9 and abs(got[12] * 200 + got[13] * 200) < 1e-9
 
 
 def test_only_the_split_changes_each_teams_box_score_total_stays():
     frame, line, first, team_poss, anchor, values = _split()
     today = pd.Series(sp.adjustments({"O": values.to_dict()}, {"O": frame}, {"O": line}, 2)["O"])
-    new = pd.Series(sp.adjustments({"O": values.to_dict()}, {"O": frame}, {"O": line}, 2, {"O": first}, {"O": team_poss})["O"])
+    new = pd.Series(sp.adjustments({"O": values.to_dict()}, {"O": frame}, {"O": line}, 2, {"O": first},
+                                   {"O": team_poss})["O"])
     assert not np.allclose(today, new)
     box_today, box_new = values - today, values - new
     weight = team_poss.set_index("player_id").poss

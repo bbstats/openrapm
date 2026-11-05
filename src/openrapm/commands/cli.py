@@ -333,8 +333,8 @@ def _add_setting_options(parser) -> None:
                         help="0: each season's line is fitted on every season the setting allows.  K: on only the K "
                              "nearest of them, as step 4 fits its multipliers (default %(default)s)")
     parser.add_argument("--box-first", action=argparse.BooleanOptionalAction, default=PRODUCT.prior.box_first,
-                        help="the Detail view's Box score column from his own stats' weights learned alone, Box Adj the "
-                             "rest of the same prior; no rating moves (default %(default)s)")
+                        help="the Detail view's Box score column from his own stats' weights learned alone, Box Adj "
+                             "the rest of the same prior; no rating moves (default %(default)s)")
 
 
 def _add_folds_tag(parser) -> None:

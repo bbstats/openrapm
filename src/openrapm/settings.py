@@ -212,9 +212,9 @@ class PriorSettings:
     # 0: each season's line is fitted on every season the setting allows.  K: on only the K nearest of them, as step 4
     # fits its multipliers (experiment 85: experiment 82 won 1997-2016 and lost 2017-2026 with one line for all eras)
     second_prior_nearest: int = 0
-    # how the Detail view divides the prior; no rating reads this.  False: the Box score column is the line's own weight on
-    # the box-score prior.  True: it is his own stats' weights learned alone, and Box Adj is the rest of the same prior
-    # (rating_line.first_stage; the owner's choice of 2026-11-05, published the same day)
+    # how the Detail view divides the prior; no rating reads this.  False: the Box score column is the line's own weight
+    # on the box-score prior.  True: it is his own stats' weights learned alone, and Box Adj is the rest of the same
+    # prior (rating_line.first_stage; the owner's choice of 2026-11-05, published the same day)
     box_first: bool = True
     # "": one box-score prior per player and season, from the season panel (shipped).  A tag: the box-score prior game
     # by game (game_prior.py; notes/DECISIONS.md, experiment 114, the owner, 2026-10-27): its rows are the multi-stat
