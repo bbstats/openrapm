@@ -22,6 +22,63 @@ every number quoted here; read its measurement traps before trusting a number.  
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
 
+## The new Bias page: built on the branch `bias-page`, NOT published; waiting on the owner's word (2026-11-05)
+
+The owner, 2026-11-05: "we need a new bias page. that one is outdated and i don't like it".  DECISIONS.md, "The Bias
+page's consensus", holds every number, the owner's four choices and what each source's terms allow.
+
+- **What it is.**  One table for the season the pages open on: for each of the 13 box score rates per 100 and for
+  on-court and off-court plus-minus, how much higher or lower OpenRAPM rates players one standard deviation higher in
+  that stat than a consensus of five outside systems does, on offense, on defense and in total.  The consensus is the
+  owner's: 30% xRAPM, 20% xrapm.com's 3-year RAPM, 20% LOKI, 15% DARKO, 15% Pulse.  One stat at a time, and each side of
+  OpenRAPM multiplied to the consensus's spread first.  `src/openrapm/bias.py` has the equations and an example.
+- **Where it is.**  Branch `bias-page`, worktree `A:/code/spmm_bias`, four commits on cebdb8c.  The working tree
+  `A:/code/spmm` and `main` do not have it, on purpose: the morning job runs the working tree, and any publish
+  fast-forwards main to the working branch, so a page the owner has not seen waits on its own branch, as WOSA's column
+  did.  The five systems' tables of 2026-11-05 are in `A:/code/spmm/data/public_ratings/2027/`, out of git.
+- **To run it in the worktree.**  A worktree has no data and `--config` does not move the root, so copy `config.yaml`
+  with every path under `paths:` made absolute into `A:/code/spmm`, then:
+
+  ```bash
+  cd /a/code/spmm_bias
+  export OPENRAPM_CONFIG=<the copy> PYTHONPATH=A:/code/spmm_bias/src
+  /a/code/spmm/.venv/Scripts/python -m openrapm data public-ratings               # five requests, one line each
+  /a/code/spmm/.venv/Scripts/python -m openrapm site --bias --out-dir <a scratch folder>
+  /a/code/spmm/.venv/Scripts/python -m pytest -q                                  # 1,045 passed, 12 skipped there
+  ```
+
+  `site --bias` without `--out-dir` also rewrites `docs/data/ratings.json`; build into a scratch folder and copy
+  `data/bias.json` over.  To look at the page: `python -m http.server 8765 -d docs`, then `/bias.html`.
+- **To publish, only on the owner's word, outside 5:50 to 7:30 AM and with no build running.**
+  1. In `A:/code/spmm`: `git merge bias-page`, then `git fetch origin main` and `git merge origin/main` for the
+     morning's data commits, as c78f143 did.
+  2. `openrapm data public-ratings`, then `openrapm site --bias --out-dir <scratch>` and copy `data/bias.json` into
+     `docs/data/`, so the published table is that day's.
+  3. The morning job, below.  Then `pytest -q`, `uvx ruff@0.17.0 check .`, commit.
+  4. `git branch -f main HEAD`, `git push origin main`, and the Pages build:
+     `gh api repos/bbstats/openrapm/pages/builds/latest`.
+  5. `PUBLISH=0 bash scripts/daily_update.sh`, end to end, before the session ends.
+  6. `git worktree remove A:/code/spmm_bias` and `git branch -d bias-page`.
+- **The morning job, part of the publish and not before.**  In `scripts/daily_update.sh`: `openrapm data
+  public-ratings` and a second `openrapm site --bias --out-dir "$SITE/docs"` call, both outside `step` and each under
+  `/usr/bin/timeout 300`, after the main site step, so neither can stop the ratings from publishing;
+  `docs/data/bias.json` added to the `git add` list and NOT to `FILES`, because `scripts/daily_files.py changed` reads
+  every file of `FILES` and a missing one fails the morning, and because an outside system that moved must not publish
+  a day without games.  Gate both on `git -C "$SITE" cat-file -e HEAD:docs/data/bias.json`, so the job never creates
+  the file on main by itself, and restore the file from HEAD when the bias step fails.  The dry-run branch gets the
+  same two calls.  Add the script-text test to `tests/test_daily_files.py`, and the two lines to README's morning block.
+- **Waiting on the owner.**  The word to publish.  Wording: the page carries labels only, "Bias", "Stat", "Median
+  standard error", "Width multiplier", "Consensus", "By", "Weight", "As of"; a line saying what a number means and a
+  Changelog row are the owner's to write.  Each cell's own standard error is in its hover text and in the CSV.
+- **Never pulled.**  EPM: the terms of use of dunksandthrees.com forbid copying by script; it can join through a paid
+  API key or a hand-saved CSV.  nbarapm.com's time-decay RAPM: its robots.txt disallows `/load/`.  xPM: vorp.app
+  serves it to an account key only.  Read a site's terms and robots.txt before adding a system.
+- **Traps met.**  LOKI's page writes a defense of -0.00 as the string "$-0", which the parser reads as 0.  Chrome
+  headless will not lay a page out under 500 pixels wide: a phone-width screenshot needs the page inside a 390-pixel
+  frame.  The season is `site.default_season`, so in October 2027 the page stays on 2027 until 2028's median player
+  shown has 250 possessions; if the sources move to 2028 before `config.yaml`'s `last_season` does, xrapm.com's two
+  tables, which name no season, would be stored under 2027.
+
 ## Next job: learn the box-score prior's second stage, so Box Adj is a true adjustment (the owner, 2026-11-05)
 
 **The first read is done, 2026-11-05; the owner's choice between regrouping only and a full build is waiting.**  Not a win on the within-season test: 2017-2026 is worse in every reading, +0.205, z +7.71 as registered and +0.082, z +2.12 at each version's own prior scale.  Box Adj falls from 0.40 and 0.40 regrouped to 0.27 and 0.31.  The saved sums reproduce the weights exactly and the test's error only to a mean +0.135, standard deviation 0.133, not the +0.008, 0.042 quoted below.  DECISIONS.md, "The second stage, first read: result".
@@ -856,7 +913,8 @@ What else the work of 2026-10-23 left open:
 | 5 | swap adjustment | `swap_adjust.py` | off: applied share 0, the build skips it |
 
 - `openrapm build` writes `outputs/season_ratings_product.parquet` with `_step3` and `_step4` beside it.
-- `openrapm site --bias --openrapm-decomposition --similarity` writes the site's files.  Commit, fast-forward `main`
+- `openrapm site --openrapm-decomposition --similarity` writes the site's files; `--bias` adds the Bias page's file
+  from the outside systems' stored tables (`openrapm data public-ratings`).  Commit, fast-forward `main`
   and push only on the owner's word, then check the Pages build: `gh api repos/bbstats/openrapm/pages/builds/latest`.
   The Detail view's Box score and Box Adj are the prior's two parts.
 - The incumbent's test-setting tables `outputs/season_ratings_padbins127*.parquet` (experiment 127), folds `padbins127_early`,

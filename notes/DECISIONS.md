@@ -12628,3 +12628,77 @@ Published tables, regulars of 1,000+ possessions, each season on its own, then t
 On 2026's regulars the columns trade a median 0.62 points, the ninetieth percentile 1.49, the largest 4.48.  Offensive stars now carry a small negative Box Adj: Dončić box score 3.00 to 7.47, Box Adj 3.98 to -0.50; Jokić 3.03 to 6.28, 2.94 to -0.31.  **To publish, on the owner's word:** back up the three published tables, run `box_first_tables.py` fresh and move its copies over them, set `box_first = True` and drop the test that pins it off, then `openrapm site --openrapm-decomposition`.
 
 **PUBLISHED 2026-11-05 (the owner: "publish"), main a4d8179; only `docs/data/decompose_openrapm.json` changed.**  Before pushing, 2027 was rebuilt as the morning job does, and the rebuild caught a miss in the table copies: players a line does not read on one end, with 0 or 1 possessions, were given a Box Adj there.  `box_first_tables.py` now leaves them out and centers as the build does, and is 3e-15 from the real code on 2005 and 2026.  Finished seasons take its copies, 2027 keeps its real rebuild.  Rating, prior and games' part 0.00e+00 from the published tables on 2005, 2026 and 2027 through the real code; every other number 0.0 in all three tables; `ratings.json` and `power.json` the same beyond the date built; the site command's own checks passed.  One known leftover, not chased: on 2027 before the rebuild, Caleb Love, 0 offensive and 1 defensive possession, read 0.22 apart on defense between the copy and the real code, so a few 0-or-1-possession players of finished seasons may carry a gap of that size in Box Adj alone.  Backups: `outputs/season_ratings_product_before_boxfirst*.parquet`.
+
+## The Bias page's consensus (the owner, 2026-11-05: "we need a new bias page. that one is outdated and i don't like it")
+
+**The owner's words.**  "new one just takes box score, on court, and off court plus minus (all per 100) and counts directionally (eg 1 std dev movement in one direction) how we're biased vs consensus", and "we need to build our OWN consensus using EPM, XRAPM, DARKO - just weight it at 40% XRAPM, 40% EPM, 20% DARKO and do it on 2027 data. predictive EPM only! i just want to compare to 'the best' stuff".  No rating reads any of this: it is a page.
+
+**EPM cannot be pulled, so the consensus changed.**  The terms of use of dunksandthrees.com, read 2026-11-05, prohibit copying its content by automated means, with bots, scripts and scrapers named, and storing it on another website.  It sells a CSV download on every plan from $24.95 a year and an API on the $250 plan.  The page's default tab, "Expected", described as expected impact from preceding career data, reads as the predictive EPM the owner means; the 2025-26 file's `pred_*` columns were that.  Told this, the owner: "ok we will need to build a bigger consensus somehow.  LEBRON looks defunct.  DRIP is fine but basically parity w/ DPM.  need another prior informed RAPM or 2 and/or RAPM".
+
+**What was found, 2026-11-05.**  A public benchmark, Hoop Impact Bench (hoopimpactbench.org, LUMA Basketball Research), scores each system's saved ratings on 2026-27 games and lists OpenRAPM; its repository holds no other maker's ratings.  Each candidate's public table, its terms and its robots file:
+
+| system | what it is | where its table is | terms and robots | verdict |
+|---|---|---|---|---|
+| xRAPM, Jeremias Engelmann | prior-informed RAPM | xrapm.com, a table in the page | none stated, no robots file | pulled |
+| 3-year RAPM, the same site | plain RAPM over three seasons, older ones weighted less | xrapm.com/table_pages/RAPM_3y.html | the same | pulled |
+| LOKI, LUMA Basketball Research | box score plus lineups, with aging and time decay; weekly on Mondays | lumahoops.org/loki, inside the page's data | outputs open with credit to LUMA Basketball Research and CourtShare; robots allows the page | pulled |
+| DARKO, Kostya Medvedovsky | box score plus on/off daily forecast | darko.app/__data.json | none stated; the site offers a CSV download | pulled |
+| Pulse, CourtSignal | a daily model with priors | courtsignal.net/data/model-boards/current/season-2027.json | none stated; robots allows everything | pulled |
+| EPM, Dunks & Threes | | dunksandthrees.com/epm | terms forbid scripts | not pulled |
+| time-decay RAPM, nbarapm.com | plain RAPM, no prior, 550-day half-life | nbarapm.com/load/current_comp | robots.txt disallows `/load/` | not pulled |
+| xPM, VORP.app | first on the benchmark | an API behind an account key | "Do not systematically scrape or download the Service outside the authorized API" | not pulled |
+| MAMBA | prior-informed RAPM | nbarapm.com | stops at 2025 | not usable |
+
+A mistake to record: the time-decay RAPM was offered to the owner as pullable before its site's robots file had been read, and the owner chose a blend with it.  The robots file disallows the address, so the choice went back to the owner.  Read a site's terms and robots.txt before calling it pullable.
+
+**The owner's four choices.**  Through the question tool, numbers in each question.
+
+| question | choice |
+|---|---|
+| one stat at a time, or all 15 together | "One at a time" |
+| OpenRAPM's width against the consensus's | "Match width first": one multiplier per side, shown on the page |
+| the members and weights | "Five, with Pulse": xRAPM 30%, time-decay RAPM 20%, LOKI 20%, DARKO 15%, Pulse 15% |
+| what takes the time-decay RAPM's 20% | "xrapm.com 3-year RAPM" |
+
+**The five on 2026-11-05,** over the 317 of OpenRAPM's 355 shown players all five list (xRAPM lists none of the season's rookies), weighted by offensive possessions:
+
+| system | players listed | of the 355 shown | as of | offense spread | defense spread | correlation with OpenRAPM, total |
+|---|---|---|---|---|---|---|
+| OpenRAPM | | 355 | 2026-11-04 | 1.90 | 1.10 | |
+| xRAPM | 582 | 317 | 2026-11-04 | 1.60 | 1.42 | 0.66 |
+| 3-year RAPM | 737 | 355 | no date on its page | 1.25 | 0.96 | 0.59 |
+| LOKI | 740 | 355 | 2026-11-01 | 2.15 | 1.23 | 0.77 |
+| DARKO | 523 | 355 | 2026-11-04 | 1.62 | 1.03 | 0.76 |
+| Pulse | 660 | 355 | 2026-11-04 | 1.83 | 1.27 | 0.78 |
+
+Pulse correlates 0.92 with both DARKO and LOKI.  The owner's September method, one vote split among look-alikes, would give it about 5%; the owner kept it at 15%.
+
+**The method (`src/openrapm/bias.py`, which has the equations and a four-player example).**  The consensus is the weighted mean of the five, per side.  Each side of OpenRAPM, taken from its mean, is multiplied to the consensus's standard deviation, and the consensus taken from its mean is subtracted; the total's gap is the two sides' added.  Each stat, the panel's padded per-100 value, is standardized among the compared players, and the page's number is the possession-weighted slope of the gap on it.  Standard errors are the heteroskedasticity-robust ones.  A box rate is the mean of a player's offense and defense panel rows, which differ by up to 0.77 per 100 on personal fouls; on-court and off-court plus-minus are points scored minus allowed.
+
+**The page on 2026-11-05,** multipliers 0.816 on offense and 1.011 on defense, points per 100 per one standard deviation, positive where OpenRAPM rates those players higher:
+
+| stat | offense | defense | total | standard error of the total |
+|---|---|---|---|---|
+| made threes | +0.15 | -0.28 | -0.13 | 0.09 |
+| missed threes | +0.12 | -0.24 | -0.12 | 0.09 |
+| made twos | +0.11 | +0.09 | +0.20 | 0.09 |
+| missed twos | +0.01 | -0.05 | -0.04 | 0.11 |
+| made free throws | +0.10 | +0.03 | +0.13 | 0.09 |
+| missed free throws | +0.04 | +0.18 | +0.22 | 0.08 |
+| offensive rebounds | -0.07 | +0.26 | +0.19 | 0.08 |
+| defensive rebounds | -0.06 | +0.30 | +0.24 | 0.08 |
+| assists | +0.14 | -0.09 | +0.05 | 0.08 |
+| turnovers | +0.09 | +0.06 | +0.15 | 0.09 |
+| steals | +0.10 | +0.09 | +0.19 | 0.08 |
+| blocks | -0.09 | +0.33 | +0.24 | 0.09 |
+| personal fouls | -0.17 | +0.15 | -0.02 | 0.08 |
+| on-court plus-minus | -0.14 | -0.19 | -0.33 | 0.08 |
+| off-court plus-minus | -0.18 | -0.16 | -0.34 | 0.08 |
+
+On defense OpenRAPM rates shot blockers and rebounders higher than the consensus and three-point shooters lower.  It gives less than the consensus for team results: players with a high on-court plus-minus, and players whose teams do well without them, both read a third of a point lower.  What the reading cannot separate: OpenRAPM rates 2027 from eight games of it, and every one of the five carries other seasons, so part of each row is this season's games against a longer memory.
+
+**What was built.**  `data/public_ratings.py` and `openrapm data public-ratings`: one request a system, a User-Agent that names OpenRAPM, each table checked and stored by day out of git.  `bias.py`.  `openrapm site --bias` now writes `docs/data/bias.json`, last and whole, and stops with one line when a system has no table, is dated before the season's first game or runs against OpenRAPM on a side.  `docs/bias.html` is a hand-written page that draws the file.  The first page, by player type, and the code only it used are removed.  Through the real code the file equals the table above, which had been computed beforehand by hand.  1,045 tests pass in the worktree; a real browser was clicked through sorting, the footer rows and the CSV download.
+
+**Not published.**  On the branch `bias-page`, worktree `A:/code/spmm_bias`: the working tree and main do not have it, since the morning job runs the working tree and a publish carries the whole working branch.  The morning job is untouched until the owner's word; HANDOFF.md says how it changes then.  The page carries labels only; a line saying what a number means and a Changelog row are the owner's to word.
+
+**Open.**  EPM through a paid key or a hand-saved CSV, and xPM through a key, would each join without changing the page.  The cached 2025-26 file could give the same page for a full season.  The owner's first formula named the weights by hand; the September method would compute them from the systems' correlations.

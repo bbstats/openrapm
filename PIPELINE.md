@@ -26,7 +26,7 @@ flowchart TD
     FO["outputs/within/TAG/<br/>openrapm folds"] --> S4
     S4 --> S5["Step 5: swap adjustment<br/>season_ratings_NAME.parquet"]
     ST --> S5
-    S5 --> SITE["docs/data/ratings.json, docs/bias.html, docs/data/similarity/,<br/>docs/data/decompose_openrapm.json<br/>openrapm site"]
+    S5 --> SITE["docs/data/ratings.json, docs/data/bias.json, docs/data/similarity/,<br/>docs/data/decompose_openrapm.json<br/>openrapm site"]
 ```
 
 `openrapm rate` runs steps 1-3, `openrapm shrink` step 4, `openrapm swap` step 5, and `openrapm build` all
@@ -419,6 +419,35 @@ held back.
   page is rebuilt after every ratings build (`tests/test_similarity_site.py` fails otherwise).
 - **Code:** `src/openrapm/similarity.py`, `commands/site.py`, `docs/similarity.html`.
 
+## The Bias page (`bias.py`)
+
+- **For:** the site's Bias tab: for the season the pages open on, where OpenRAPM rates players higher or lower
+  than a consensus of five outside rating systems does, stat by stat (the owner's design, 2026-11-05; the first
+  page, bias by player type for 2026, is in git history).
+- **Reads:** the ratings table; the season panel's rows of that season through `data.panel.panel_of_season` (the
+  padded per-100 box rates and his team's points scored and allowed per 100 with him on the court and off it);
+  each system's newest stored table, `data.public_ratings.latest`.
+- **Writes:** `docs/data/bias.json`: the season, the players compared, the two width multipliers, the five systems
+  with their weights and dates, and one row per stat with offense, defense, total and their standard errors.
+- **How:** the players are those with 60 or more offensive possessions whom all five systems list.  The consensus
+  is 30% xRAPM, 20% xrapm.com's 3-year RAPM, 20% LOKI, 15% DARKO and 15% Pulse, per side.  Each side of OpenRAPM
+  is multiplied once to the consensus's standard deviation, the consensus subtracted, and that gap regressed on
+  each standardised stat alone, weighted by offensive possessions: the slope per one standard deviation is the
+  page's number, and its standard error is the heteroskedasticity-robust one.  A stat's total is its offense plus
+  its defense.  The 15 stats are the 13 box rates, each the mean of a player's two panel rows, and on-court and
+  off-court plus-minus, points scored minus allowed.
+- **The systems' tables:** `python -m openrapm data public-ratings` asks each system's public page once, checks
+  the table (300 or more rated players, no player twice, its own total equal to its offense plus defense, the
+  right season) and stores it in `paths.public_ratings/<season>/<system>/<day>.parquet`, out of git.  A system
+  that fails keeps its earlier files.  EPM, nbarapm.com's time-decay RAPM and xPM are not pulled: their terms of
+  use or robots file forbid it (`data/public_ratings.py`, `notes/DECISIONS.md`).
+- **Guards:** `site --bias` writes nothing, with one line saying why, when a system has no stored table for the
+  season, is dated before the season's first game, or runs against OpenRAPM on a side, which is how a column
+  whose sign changed would show.  The file is written last and whole, after every other file of the command.
+- **Settings:** in `bias.py`, the five weights; in `commands/site.py`, the 60-possession minimum (the pages').
+- **Command:** `python -m openrapm data public-ratings`, then `python -m openrapm site --bias` (seconds).
+- **Code:** `src/openrapm/bias.py`, `data/public_ratings.py`, `commands/site.py`, `docs/bias.html`.
+
 ## The OpenRAPM Detail view (`decomposition.py`)
 
 - **For:** the site's Ratings tab, `docs/index.html`, which reads this file and not `ratings.json`: its
@@ -472,7 +501,7 @@ are kept at the tag `archive/research-2026-10`, for example
 | 99 `prior_shrink` | step 4 | `openrapm shrink` |
 | 91 `swap_adjust` | step 5 | `openrapm swap` |
 | 52 `site` | `docs/data/ratings.json` | `openrapm site` |
-| 76 `bias_groups` | `docs/bias.html` | `openrapm site --bias` |
+| 76 `bias_groups` | the first Bias page, by player type | retired 2026-11-05; `openrapm site --bias` writes today's page |
 | 83 `decompose_site` | the decomposition page's data | `openrapm site --decomposition` |
 | 63, 64, 66, 70, 73, 88, 90, 95, 101, 113, 135, 137, 138 | the checks | `scripts/checks/`, same number and name |
 | every other number | research | retired |

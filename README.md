@@ -97,7 +97,7 @@ python -m openrapm data panel --so-far 0.25,0.5,0.75
 python -m openrapm rate --setting test --seasons 2017-2026 --name for_folds --save-models mine
 python -m openrapm folds --models mine --base season_ratings_for_folds_step3 --tag mine_within
 python -m openrapm build --folds mine_within --extrapolate-folds=
-python -m openrapm site --bias --decomposition --openrapm-decomposition --similarity
+python -m openrapm site --decomposition --openrapm-decomposition --similarity
 ```
 
 1. **`data ingest`** fetches each season's game log and every game's play-by-play and box score from
@@ -130,13 +130,13 @@ python -m openrapm site --bias --decomposition --openrapm-decomposition --simila
    tests score, under the incumbent's name, so the chain and the checks find it. Without `--folds`, `build`
    and `shrink` read the shipped folds, which a fresh build does not have; they stop at step 4 with "no
    folds in ...", after steps 1-3 have run.
-6. **`site`** writes `docs/data/ratings.json` (under a second); `--bias` adds `docs/bias.html`;
+6. **`site`** writes `docs/data/ratings.json` (under a second);
    `--decomposition` fits plain RAPM for every season and every three-season window for
    `docs/data/decompose_1y.json` and `decompose_3y.json` (319 seconds in the last run); `--similarity` writes
    `docs/data/similarity/`, each player-season's nearest player-seasons of other players (33 seconds);
    `--openrapm-decomposition` solves step 3 again for every season and writes `docs/data/decompose_openrapm.json`,
    each published rating split into box score, Box Adj, on court, off court and team SOS (132 seconds;
-   run it after every `build`).
+   run it after every `build`). `--bias` writes the Bias page's file for the season in progress, below.
 
 `python -m openrapm <command> --help` lists every option. `--config FILE`, given before the command (or
 the environment variable `OPENRAPM_CONFIG`), points every command at another `config.yaml`, so a check
@@ -165,6 +165,26 @@ season in progress (data/seasons.py); it is rated from its own rows, the
 box-score prior told the share of the regular season played. The ratings page opens on it once its median player shown
 has 250 offensive possessions. Each morning's log is `outputs/daily/<date>.log`, and `outputs/daily/last.txt` says how
 the last one ended.
+
+### The Bias page
+
+`docs/bias.html` asks where OpenRAPM rates players higher or lower than a consensus of five outside rating systems
+does, for the season the pages open on. One row per stat, the 13 box score rates per 100 and on-court and off-court
+plus-minus: how much higher OpenRAPM rates players one standard deviation higher in that stat than the consensus does,
+on offense, on defense and in total. Blocks at +0.33 on defense: a player one standard deviation higher in blocks,
+0.72 per 100, is rated a third of a point higher on defense by OpenRAPM than by the consensus (2026-11-05, 317 players).
+
+```bash
+python -m openrapm data public-ratings     # the five systems' tables, one request each, stored by day and out of git
+python -m openrapm site --bias             # docs/data/bias.json, from the newest stored table of each
+```
+
+The consensus is the owner's: 30% xRAPM, 20% xrapm.com's 3-year RAPM, 20% LOKI, 15% DARKO, 15% Pulse, for the players
+all five list. Each side of OpenRAPM is first multiplied once, league-wide, to the consensus's spread, so a row shows
+where the two disagree about who is good and not that one is spread wider. `src/openrapm/bias.py` holds the equations
+and an example with numbers; `src/openrapm/data/public_ratings.py` reads the five pages and says which systems must
+not be pulled: EPM, nbarapm.com's time-decay RAPM and xPM, whose terms or robots file forbid it. Only the page's own
+slopes are published, each system named, credited and linked.
 
 ### Wins over starter average
 
@@ -291,6 +311,7 @@ the last line names every reading that failed. The chain does not log the experi
       on_court.py       a team's record with a player on and off the court
       scoring.py        how ratings are scored on games they never saw
       similarity.py     the similarity page: each player-season's nearest player-seasons
+      bias.py           the Bias page: OpenRAPM against a consensus of outside systems, stat by stat
       wins.py           wins over starter average: the win model, leverage, the pace ridge, the bar, the wins
       decomposition.py  the decomposition pages: which rows of a ridge fit a rating comes from
       swap_test.py trade_set.py consensus.py player_types.py simulate.py
