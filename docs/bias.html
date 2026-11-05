@@ -21,6 +21,7 @@
   th { color: var(--muted); font-weight: 600; font-size: 13px; vertical-align: bottom; }
   th.name, td.name { text-align: left; }
   /* the numbers keep one width, so a colored cell is a small block and the stat's name takes the rest of the row */
+  #table { max-width: 560px; }
   #table th:not(.name), #table td:not(.name) { width: 104px; }
   #systems th:not(.name), #systems td:not(.name) { width: 104px; }
   #table th { cursor: pointer; user-select: none; }
@@ -89,7 +90,7 @@
 
   const FULL = 0.5;      // a number this far from 0, in points per 100, takes the full color
   // the sides' columns, [key in the file, header]; a row in the file is a list in meta.fields order
-  const COLUMNS = [["o", "Offense"], ["d", "Defense"], ["t", "Total"]];
+  const COLUMNS = [["t", "Total"]];      // the owner, 2026-11-05: "i dont want off/def, just do total"
   const state = { sort: null };      // null: the file's order, the box score's; else { k, dir }
   const table = $("table"), thead = table.querySelector("thead"), tbody = table.querySelector("tbody"),
         tfoot = table.querySelector("tfoot");
@@ -111,10 +112,8 @@
     tbody.innerHTML = sorted.map(row => `<tr><td class="name">${esc(row.label)}</td>` +
       COLUMNS.map(([key]) => cell(row[key], row[key + "_se"])).join("") + `</tr>`).join("");
     const errors = COLUMNS.map(([key]) => rows.map(row => row[key + "_se"]).filter(v => v !== null));
-    const m = data.meta.multipliers;
     tfoot.innerHTML = `<tr><td class="name">Median standard error</td>` +
-      errors.map(values => `<td>${values.length ? plain(median(values)) : "—"}</td>`).join("") + `</tr>` +
-      `<tr><td class="name">Width multiplier</td><td>${plain(m.o)}</td><td>${plain(m.d)}</td><td></td></tr>`;
+      errors.map(values => `<td>${values.length ? plain(median(values)) : "—"}</td>`).join("") + `</tr>`;
   }
 
   function systems() {
@@ -138,8 +137,8 @@
     e.preventDefault();
     if (!data) return;
     const q = v => v === null ? "" : /[",\r\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
-    const head = ["stat", "label", "offense", "defense", "total", "offense_se", "defense_se", "total_se", "stat_sd"];
-    const lines = [head, ...rows.map(r => [r.stat, r.label, r.o, r.d, r.t, r.o_se, r.d_se, r.t_se, r.sd])];
+    const head = ["stat", "label", "total", "total_se", "stat_sd"];
+    const lines = [head, ...rows.map(r => [r.stat, r.label, r.t, r.t_se, r.sd])];
     const text = "﻿" + lines.map(line => line.map(q).join(",")).join("\r\n") + "\r\n";
     const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
     const a = Object.assign(document.createElement("a"), { href: url, download: `openrapm_bias_${data.meta.season}.csv` });
