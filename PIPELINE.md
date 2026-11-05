@@ -427,7 +427,8 @@ held back.
   here).  Every published rating split, offense and defense separately, into box score + Box Adj + on court + off
   court + team SOS, which add up to the rating (the owner's design, 2026-10-13; the names of 2026-11-03: Detail, Box
   Adj, On adj and Off adj, the last two the page's headers for on court and off court).  Total is the two sides' pieces
-  added.  Box Adj is the part of the prior learned from lineup swaps; it only moves credit between teammates.
+  added.  Box score is what a player's own stats say learned alone, and Box Adj is the rest of the same prior; Box Adj only
+  moves credit between teammates, and no rating reads the split (the owner's choice of 2026-11-05).
 - **Reads:** the ratings table and its step-3 table (`outputs/season_ratings_product.parquet` and `_step3`), each
   season's two designs (step 1's targets for offense and defense, `data.designs.DesignCache`) and the box scores'
   teams (`data/raw/box`).
@@ -436,7 +437,10 @@ held back.
   minutes in count), for the Ratings tab's Team column and filter.
 - **How:** Box Adj is the table's `box_adj_off` / `box_adj_def`, which the build records
   (`second_prior.adjustments` x the prior scale, then step 4's multipliers, the same ones as the prior it is part of),
-  plus step 5's `c_off` / `c_def`, 0 since experiment 82.  Box score is `prior_off` / `prior_def` less `box_adj_*`.  The
+  plus step 5's `c_off` / `c_def`, 0 since experiment 82.  Box score is `prior_off` / `prior_def` less `box_adj_*`.
+  `PriorSettings.box_first` takes the box-score part from `rating_line.first_stage`: the line's fit with only his own
+  stats' inputs, the LightGBM's answer, the other end's box-score prior, his box rates, role and body, each team's total
+  held at the LightGBM's.  By the Frisch-Waugh-Lovell theorem that and the rest are one fit, so the prior is the same.  The
   games' part `u` (step 3's coefficient beyond the prior, times step 4's factor on it since experiment 65) is a
   weighted sum of the season's row outcomes, so grouping the rows splits it: the rows he is on the court for (on court), his team's rows without him, in games he
   played and games he missed (off court), and every other row (team SOS).  Step 3 is solved again for each season

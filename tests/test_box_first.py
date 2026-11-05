@@ -78,5 +78,5 @@ def test_only_the_split_changes_each_teams_box_score_total_stays():
     assert np.allclose(box_today, anchor)
 
 
-def test_the_published_setting_stays_off_until_the_owners_word():
-    assert PRODUCT.prior.box_first is False
+def test_the_published_ratings_use_the_split_learned_first():
+    assert PRODUCT.prior.box_first is True

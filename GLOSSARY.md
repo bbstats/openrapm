@@ -61,11 +61,13 @@ own rate.
 **Box-score prior.** LightGBM's (gradient-boosted trees') prediction of a player's label from his season-panel
 row: 17 inputs on offence, 14 on defence (`features.SHIPPED`). Step 2, `box_prior.py`.
 
-**Box Adj.** The part of a player's prior beyond his box-score prior, the Detail page's column. It is a straight line
-over his prior on the other end, his teammates' and opponents' priors with him on and off the court, his box-score rates,
-role and body, and his team's eight rates with him on and off the court: made and missed threes, twos and free throws,
-offensive rebounds and turnovers, on defense the opponents' (`PriorSettings.second_prior`, `rating_line.py`).  Its weights
-are fitted on the within-season WOWY test through the ridge.  Team totals are held, so it only moves credit inside a team.
+**Box Adj.** The part of a player's prior beyond what his own stats say alone, the Detail page's column.  The prior is a
+straight line over his box-score prior, his prior on the other end, his box-score rates, role and body, his teammates' and
+opponents' priors with him on and off the court, and his team's eight rates with him on and off the court: made and missed
+threes, twos and free throws, offensive rebounds and turnovers, on defense the opponents' (`PriorSettings.second_prior`,
+`rating_line.py`).  Its weights are fitted on the within-season WOWY test through the ridge.  The Box score column refits
+his own stats' inputs alone (`rating_line.first_stage`), and Box Adj is the rest of the same prior.  Team totals are held,
+so Box Adj only moves credit inside a team.
 
 **Booster.** One fitted LightGBM model. Each rated season and side has six: one fitted on every training row
 and one without each of the five player folds (below). `--save-models` writes them to
