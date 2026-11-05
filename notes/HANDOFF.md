@@ -22,6 +22,16 @@ every number quoted here; read its measurement traps before trusting a number.  
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
 
+## The colors button: PUBLISHED 2026-11-05, main 6efa7bc (the owner: "Publish, just say added color")
+
+A pinwheel button left of the theme button on the Ratings page shades each cell of Offense, Defense, Total, WOSA and
+every Detail column by its percentile in the season's pool, the one the %ile button uses: green at the 100th, none at
+the 50th, red at the 0th, as a background.  Poss. stays plain.  A player under the pool's minimum is shaded by where
+his number would fall in it.  Remembered in localStorage under "colors", like the theme.  The owner's picks through the
+question tool: green to white to red, percentile in season, those columns, cell background.  The clear middle is the
+median player, not 0 (2026's median defense is about -0.3), and the top 20 on Total all read nearly full green.
+Changelog row: "Added color."
+
 ## The new Bias page: PUBLISHED 2026-11-05, main 61de149 (the owner: "Publish, refresh daily")
 
 The owner, 2026-11-05: "we need a new bias page. that one is outdated and i don't like it".  DECISIONS.md, "The Bias
