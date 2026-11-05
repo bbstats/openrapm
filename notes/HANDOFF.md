@@ -41,8 +41,11 @@ page's consensus", holds every number, the owner's choices and what each source'
   `docs/data/bias.json` is committed with the morning's three files and is not one of `FILES`: the three ratings files
   alone decide a publish, so a morning without new games publishes nothing.  The job touches the file only when main
   already has it, and a failed write restores the published one.  `outputs/daily/last.txt` carries a note when a
-  system failed or the file was not written.  **The first live morning is 2026-11-06: read its log for "start: data
-  public-ratings" and "start: site --bias", and check the page's dates moved.**
+  system failed or the file was not written.  The dry run of 2026-11-05, 3:24 to 3:42 PM, passed end to end with both
+  calls in it: five systems pulled in 8 seconds, the file written in 1.  It rebuilt 2027 in the ratings table from the
+  afternoon's game log, as every dry run does, so that table reads a hair off the morning's published one until the
+  next morning.  **The first live morning is 2026-11-06: read its log for "start: data public-ratings" and "start:
+  site --bias", and check the page's dates moved.**
 - **Wording, the owner's picks through the question tool.**  The line under the title: "OpenRAPM minus a consensus of
   five public metrics, per 1 standard deviation of each stat, in points per 100".  The Changelog row: "New Bias page."
   The labels "Median standard error", "Width multiplier", "Consensus", "By", "Weight" and "As of" were shown in the
