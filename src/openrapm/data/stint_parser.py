@@ -113,6 +113,14 @@ NAMED_ACTIONS = ("Made Shot", "Missed Shot", "Rebound", "Turnover", "Foul", "Fre
 # rows that end the search for a made shot's and-one free throw
 AND_ONE_STOPS = ("Made Shot", "Missed Shot", "Turnover", "period")
 RIM_FT = 3.0          # feet; a two at or inside this distance is in the "rim" bucket, beyond it "mid"
+# the five shot zones (the owner, 2026-11-06: "rim, short mid, long mid, three, long three"; experiment 139): a two beyond
+# RIM_FT and at or inside SHORT_MID_FT is a short mid, beyond it a long mid; a three at or beyond LONG_THREE_FT is a long
+# three.  Rim and three are fga_rim and fga_thr less fga_lthr.  Before about 2002 many twos are logged at 0 feet, so
+# the early rim zone also holds twos whose distance was not recorded (notes/DECISIONS.md, experiment 139)
+SHORT_MID_FT = 13.0
+LONG_THREE_FT = 27.0
+ZONE_COUNTERS = ("fga_smid", "fgm_smid", "fga_lmid", "fgm_lmid", "fga_lthr", "fgm_lthr")
+STINT_COUNTERS = (*POSS_COUNTERS, *ZONE_COUNTERS)   # every possession counter a stint row sums
 # seconds; a three taken with this little left in the period is a late three, counted apart (fg3a_late, fg3m_late)
 # so the defensive target can leave heaves out of its luck adjustment: they go in about 15% of the time, not 36%
 LATE_THREE_SECONDS = 2.0
@@ -233,7 +241,7 @@ class Possession:
     active: bool = False           # the offence has acted; a possession that never became active is not recorded
     points: int = 0
     and1: bool = False             # a made field goal is waiting for its and-one free throw
-    counters: dict = field(default_factory=lambda: dict.fromkeys(POSS_COUNTERS, 0))
+    counters: dict = field(default_factory=lambda: dict.fromkeys(STINT_COUNTERS, 0))
     shooters: dict = field(default_factory=dict)   # player id -> SHOOTER_COUNTERS
     # the rebound chain (reb_chance, reb_cont, cont_dead, att_retained: design.POSS_COUNTERS)
     pending_chance: int = 0        # a miss is waiting to be resolved into a rebound
@@ -711,9 +719,14 @@ class GameParser:
         late = three and row.clock_s <= LATE_THREE_SECONDS
         bucket = "thr" if three else ("rim" if 0 <= row.shot_dist <= RIM_FT else "mid")
         counters["fga"] += 1
+        zone = (("lthr" if row.shot_dist >= LONG_THREE_FT else None) if three
+                else None if bucket == "rim" else ("smid" if 0 <= row.shot_dist <= SHORT_MID_FT else "lmid"))
         counters[f"fga_{bucket}"] += 1
         counters["fg3a"] += three
         counters["fg3a_late"] += late
+        if zone is not None:
+            counters[f"fga_{zone}"] += 1
+            counters[f"fgm_{zone}"] += made
         if made:
             counters["fgm"] += 1
             counters[f"fgm_{bucket}"] += 1
@@ -986,7 +999,7 @@ def side_sums(valid: pd.DataFrame, ids, home: int):
 
     One groupby over a masked matrix rather than a slice-sum per counter per stint: with 35 counters on both
     sides that was about 2.4 million pandas slice-sums a season and dominated the whole parse."""
-    columns = ["points"] + list(POSS_COUNTERS)
+    columns = ["points"] + list(STINT_COUNTERS)
     values = valid[columns].to_numpy(dtype=float)
     is_home = (valid["offense"].to_numpy() == home)
     both = np.concatenate([values * is_home[:, None], values * (~is_home)[:, None]], axis=1)
@@ -1014,7 +1027,7 @@ def stint_frame(first: pd.DataFrame, sums: pd.DataFrame, counts: pd.DataFrame, g
                         "pts_a": sums["pts_a"].to_numpy(), "margin_h": margin_h,
                         "frac_rem": frac_rem, "is_gt": garbage_time(period, clock, margin_h, gt_rule),
                         "start_clock": clock})
-    for counter in POSS_COUNTERS:
+    for counter in STINT_COUNTERS:
         out[f"{counter}_h"] = sums[f"{counter}_h"].to_numpy()
         out[f"{counter}_a"] = sums[f"{counter}_a"].to_numpy()
     for slots, column in ((HOME_SLOTS, "home_lineup"), (AWAY_SLOTS, "away_lineup")):
