@@ -12743,3 +12743,18 @@ The stints rebuilt in 25 minutes; against `data/stints` every existing column of
 **The test.**  The within-season WOWY test against mid136 by era, noise_rating134 beside it, -0.010, z -1.07; year over year, as built and with each side's width matched to the incumbent's (trap 39); the 2026 top 20.
 
 **The rule.**  Better within season in every era beyond the noise control; year over year not worse at z +2 at matched width; the 2026 top 20 not worse in the owner's reading.  The verdict and the word to publish are the owner's.
+
+### Experiment 139: the full build's result (2026-11-06, 1:11 to 2:58 PM; `outputs/zones139_chain.log`, `outputs/csv/wowy_zones139_eras.csv`, `scratch/2026-11-05_second_stage/zones139_matched.py`; verdict the owner's)
+
+Every fold's leak checks passed, 10,080 over 360 folds.  **It passes the registered rule.**
+
+| reading | 1997-2006 | z | 2007-2016 | z | 2017-2026 | z | all 30 | z | seasons better |
+|---|---|---|---|---|---|---|---|---|---|
+| within season, minus mid136 | -0.151 | -2.16 | -0.161 | -1.51 | -0.237 | -2.98 | -0.183 | -3.75 | 21 of 30 |
+| noise control noise_rating134 | -0.027 | -3.65 | -0.012 | -1.08 | +0.011 | +0.47 | -0.010 | -1.07 | 16 of 30 |
+
+Year over year, both directions, 56 readings: as built, team-game -0.049, z -1.01, 35 of 56; stint -0.183, z -3.37; stint with each side rescaled -0.138, z -2.82.  With each side's width matched to mid136's, season by season, among regulars: team-game +0.080, z +1.64, 22 of 56; stint -0.097, z -1.75.  The candidate is narrower than today's, most on defense: matching multiplies defense by 1.04, 1.07 and 1.00 by era and offense by 1.01 to 1.02, so the within-season gain is not width, and the year-over-year guard holds at matched width, below z +2.
+
+The 2026 top 20 keeps the same 20 players.  Regulars move a median 0.25, the ninetieth percentile 0.68, the largest 1.38; correlation 0.985.  Most of it is defense, the bigs down: Wembanyama -0.80 on defense, Jokić -0.44, Gobert 4.68 to 4.25, Clingan 3.93 to 3.69; Jaren Jackson Jr. 3.04 to 3.29.  Up: Markkanen +0.71, Mitchell +0.54, Butler +0.46.  Down most Moussa Cisse -1.38, Paul Reed -1.19, Onyeka Okongwu -1.08; up most Miles McBride +0.94, Aaron Holiday +0.91, Tyler Herro +0.87.
+
+**To adopt, on the owner's word:** move `data/stints_zones139` into `data/stints`, 2027 rebuilt with the zones; `PriorSettings.second_prior = "zones139_line"`, `second_prior_inputs = "context_types_team_zones_centred"`; the shrink's folds `zones139_early,zones139_within` and tenth folds `zones139_k10` built first; the chain's incumbent defaults; the full product build of 1997-2027 and the site's files; a noise control after.  Row 139 of `experiments/runs.csv`.
