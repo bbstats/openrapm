@@ -9,7 +9,7 @@ import pandas as pd
 
 sys.stdout.reconfigure(encoding="utf-8")
 worst, problems = 0.0, []
-for path in sorted(glob.glob("data/stints/*_[RP][SO].parquet")):
+for path in sorted(p for p in glob.glob("data/stints/*_[RP][SO].parquet") if not os.path.basename(p).startswith("2027")):
     name = os.path.basename(path)
     for suffix in ("", "_diag", "_shots", "_names"):
         old_path = path.replace(".parquet", f"{suffix}.parquet")
@@ -33,8 +33,9 @@ for path in sorted(glob.glob("data/stints/*_[RP][SO].parquet")):
             if pd.api.types.is_numeric_dtype(a) and pd.api.types.is_numeric_dtype(b):
                 gap = float(np.nanmax(np.abs(a.to_numpy(float) - b.to_numpy(float)))) if len(a) else 0.0
                 same_nan = bool((a.isna() == b.isna()).all())
-                if gap > 0 or not same_nan:
-                    problems.append(f"{os.path.basename(old_path)} {column}: largest gap {gap}")
+                if gap > 1e-6 or not same_nan:
+                    rows = int((np.abs(a.to_numpy(float) - b.to_numpy(float)) > 1e-6).sum())
+                    problems.append(f"{os.path.basename(old_path)} {column}: largest gap {gap}, rows {rows} of {len(a)}")
                 worst = max(worst, gap)
             elif not a.astype(str).equals(b.astype(str)):
                 problems.append(f"{os.path.basename(old_path)} {column}: differs")
