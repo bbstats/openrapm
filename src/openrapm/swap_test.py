@@ -72,7 +72,8 @@ import scipy.sparse as sp
 from .rapm import solve_ridge
 
 __all__ = ["HOME", "AWAY", "OFF", "DEF", "SIDES", "CONTEXTS", "RAPM_CONTROLS", "PAIR_GROUPS", "STINT_COLUMNS",
-           "TEAM_COUNT_COLUMNS", "TEAM_COUNTS", "team_counts",
+           "TEAM_COUNT_COLUMNS", "TEAM_COUNTS", "team_counts", "ZONE_COUNT_COLUMNS", "ZONES", "ZONE_COUNTS",
+           "zone_counts",
            "ratings_in_raw_sign", "order_stints", "next_in_same_period", "stint_durations", "fatigue", "season_rows",
            "swap_pairs", "Season", "prepare", "aligned", "predict", "side_rates", "side_scores", "score_season",
            "plain_rapm"]
@@ -117,6 +118,14 @@ TEAM_COUNT_COLUMNS = [f"{count}_{side}" for count in ("fg3m", "fg3a", "fgm", "fg
                       for side in ("h", "a")]
 TEAM_COUNTS = ["threes_made", "threes_missed", "twos_made", "twos_missed", "free_throws_made", "free_throws_missed",
                "off_rebounds", "turnovers"]
+# The offence's shots by zone, made and missed (data/stint_parser.py's zones, experiment 139): rim, 3 feet or closer;
+# short mid, to 13 feet; long mid, to the line; three, to 26 feet; long three, 27 feet or more.  Carried only when the
+# stints have them, as the team counts are.
+ZONE_COUNT_COLUMNS = [f"{count}_{side}" for count in ("fga_rim", "fgm_rim", "fga_smid", "fgm_smid", "fga_lmid",
+                                                      "fgm_lmid", "fga_thr", "fgm_thr", "fga_lthr", "fgm_lthr")
+                      for side in ("h", "a")]
+ZONES = ["rim", "short_mid", "long_mid", "zone_three", "long_three"]
+ZONE_COUNTS = [f"{zone}_{kind}" for zone in ZONES for kind in ("made", "missed")]
 
 
 def ratings_in_raw_sign(table: pd.DataFrame, columns: str = "rating") -> pd.DataFrame:
@@ -215,6 +224,24 @@ def team_counts(stints: pd.DataFrame, side: str) -> dict:
             "free_throws_missed": read["fta"] - read["ftm"], "off_rebounds": read["oreb_p"], "turnovers": read["tov"]}
 
 
+def zone_counts(stints: pd.DataFrame, side: str) -> dict:
+    """{ZONE_COUNTS: one number per stint}: the shots of the team of `side`, "h" or "a", made and missed in each zone.
+    The stints count the rim, all threes and the three zones apart; a three is every three less the long ones.
+
+    Example: 4 threes taken, 1 made, 1 of them from 27 feet and missed: three made 1, missed 2; long three missed 1."""
+    read = {count: stints[f"{count}_{side}"].to_numpy(dtype=float)
+            for count in ("fga_rim", "fgm_rim", "fga_smid", "fgm_smid", "fga_lmid", "fgm_lmid", "fga_thr", "fgm_thr",
+                          "fga_lthr", "fgm_lthr")}
+    taken = {"rim": read["fga_rim"], "short_mid": read["fga_smid"], "long_mid": read["fga_lmid"],
+             "zone_three": read["fga_thr"] - read["fga_lthr"], "long_three": read["fga_lthr"]}
+    made = {"rim": read["fgm_rim"], "short_mid": read["fgm_smid"], "long_mid": read["fgm_lmid"],
+            "zone_three": read["fgm_thr"] - read["fgm_lthr"], "long_three": read["fgm_lthr"]}
+    out = {}
+    for zone in ZONES:
+        out[f"{zone}_made"], out[f"{zone}_missed"] = made[zone], taken[zone] - made[zone]
+    return out
+
+
 def season_rows(stints: pd.DataFrame, margin_clip: float = 25.0) -> pd.DataFrame:
     """One row per stint and side that had possessions: the two fives, what happened, and the context.
 
@@ -265,6 +292,9 @@ def season_rows(stints: pd.DataFrame, margin_clip: float = 25.0) -> pd.DataFrame
             frame[DEF[k]] = de[keep, k]
         if set(TEAM_COUNT_COLUMNS) <= set(stints.columns):
             for count, values in team_counts(stints, side).items():
+                frame[count] = values[keep]
+        if set(ZONE_COUNT_COLUMNS) <= set(stints.columns):
+            for count, values in zone_counts(stints, side).items():
                 frame[count] = values[keep]
         sides.append(frame)
     rows = pd.concat(sides, ignore_index=True)

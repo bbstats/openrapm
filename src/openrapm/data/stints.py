@@ -315,6 +315,16 @@ def has_playoff_stints(season: int, cfg) -> bool:
     return path.exists() and len(pd.read_parquet(path, columns=["game_id"])) > 0
 
 
+def stints_have(season: int, cfg, columns, phases=SEASON_PHASES) -> bool:
+    """Whether every stint file of the season on disk carries `columns`: the shots by zone, for instance, are only in
+    stints built since experiment 139."""
+    import pyarrow.parquet as pq
+    folder = resolve(cfg, "stints")
+    paths = [folder / f"{season}_{phase}.parquet" for phase in phases]
+    paths = [path for path in paths if path.exists()]
+    return bool(paths) and all(set(columns) <= set(pq.read_schema(path).names) for path in paths)
+
+
 def load_season_stints(season: int, cfg, columns, phases=SEASON_PHASES, with_teams: bool = True) -> pd.DataFrame:
     """A season's stints, regular season then playoffs, with `columns` (and, `with_teams`, each game's teams).
 

@@ -180,7 +180,7 @@ from . import box_prior, rating_line, swap_adjust
 from .box_rates import shrink
 from .on_court import NO_SPREAD_K
 from .settings import SECOND_PRIOR_TARGETS, TEAM_TOTALS
-from .swap_test import DEF, OFF, TEAM_COUNTS, Season
+from .swap_test import DEF, OFF, TEAM_COUNTS, ZONE_COUNTS, Season
 
 __all__ = ["CONTEXT", "BOX", "INPUTS", "OTHER_BOX", "TYPES", "INPUT_SETS", "type_scale", "standardised_types",
            "SIDE_KEYS", "BoosterAnswers", "booster_answers", "own_priors", "KINDS", "pad_toward_level",
@@ -206,15 +206,22 @@ TEAM_TAKEN = ["threes_taken", "twos_taken", "free_throws_taken"]
 TEAM_PROFILE_RATES = [f"team_{count}_{where}" for where in ("on", "off")
                       for count in (*TEAM_TAKEN, "off_rebounds", "turnovers")]
 ALL_TEAM_RATES = [f"team_{count}_{where}" for where in ("on", "off") for count in (*TEAM_COUNTS, *TEAM_TAKEN)]
+# the team's shots by zone with him on and off the court (experiment 139), and the same with the players shuffled
+# within the games read, a placebo for the screen: they sit only beside rates whose stints carry the zones
+ZONE_RATES = [f"team_{count}_{where}" for where in ("on", "off") for count in ZONE_COUNTS]
+SHUFFLED_ZONE_RATES = [f"shuffled_{name}" for name in ZONE_RATES]
+SHUFFLE_DRAW = 139
 # the inputs each version of the line reads (settings.PriorSettings.second_prior_inputs)
 INPUT_SETS = {"context": INPUTS, "context_and_types": [*INPUTS, OTHER_BOX, *TYPES],
               "context_and_types_centred": [*INPUTS, OTHER_BOX, *TYPES],
               "own_teammates_opponents": [BOX, SAME_TEAMMATES, OTHER_OPPONENTS],
               "context_types_team_rates_centred": [*INPUTS, OTHER_BOX, *TYPES, *TEAM_RATES],
-              "context_types_team_profile_centred": [*INPUTS, OTHER_BOX, *TYPES, *TEAM_PROFILE_RATES]}
+              "context_types_team_profile_centred": [*INPUTS, OTHER_BOX, *TYPES, *TEAM_PROFILE_RATES],
+              "context_types_team_rates_zones_centred": [*INPUTS, OTHER_BOX, *TYPES, *TEAM_RATES, *ZONE_RATES,
+                                                         *SHUFFLED_ZONE_RATES]}
 # applied on inputs centred on the season's average (`centred`)
 CENTRED_SETS = {"own_teammates_opponents", "context_and_types_centred", "context_types_team_rates_centred",
-                "context_types_team_profile_centred"}
+                "context_types_team_profile_centred", "context_types_team_rates_zones_centred"}
 SIDE_KEYS = {"offense": "O", "defense": "D"}      # swap_adjust's side names -> the priors' side keys
 LINE_TARGETS = SECOND_PRIOR_TARGETS               # what the line's target adds back to a swap (module docstring)
 
@@ -454,16 +461,22 @@ def _counts_read(stints: pd.DataFrame) -> np.ndarray:
     """(rows x counts): `TEAM_COUNTS` of the stint rows, then `TEAM_TAKEN`, each shot made plus missed."""
     taken = [(stints[f"{shot}_made"] + stints[f"{shot}_missed"]).to_numpy(dtype=float)
              for shot in ("threes", "twos", "free_throws")]
-    return np.column_stack([stints[TEAM_COUNTS].to_numpy(dtype=float), *taken])
+    zones = [stints[ZONE_COUNTS].to_numpy(dtype=float)] if _has_zones(stints) else []
+    return np.column_stack([stints[TEAM_COUNTS].to_numpy(dtype=float), *taken, *zones])
+
+
+def _has_zones(stints: pd.DataFrame) -> bool:
+    """Whether the stint rows carry the shots by zone (swap_test.ZONE_COUNTS, experiment 139)."""
+    return set(ZONE_COUNTS) <= set(stints.columns)
 
 
 def _end_team_rates(rows: _Entries, stints: pd.DataFrame, side: str, pad: bool) -> dict:
     """{name: one number per player of `rows`}: `ALL_TEAM_RATES` on one end, "O" his team's offence and "D" the offence
-    of the teams facing his (the module docstring).  The noise of one possession is read as `_Entries.noise` reads it:
-    each row one draw, sum over players and rows of w^2 (row value - his number)^2 over sum of his w, with w x row value
-    the row's count x 100."""
+    of the teams facing his (the module docstring), and `ZONE_RATES` when the rows carry the zones.  The noise of one
+    possession is read as `_Entries.noise` reads it: each row one draw, sum over players and rows of w^2 (row value - his
+    number)^2 over sum of his w, with w x row value the row's count x 100."""
     n_rows = len(stints)
-    counts = (*TEAM_COUNTS, *TEAM_TAKEN)
+    counts = (*TEAM_COUNTS, *TEAM_TAKEN, *(ZONE_COUNTS if _has_zones(stints) else ()))
     counted = np.zeros((2 * n_rows, len(counts)))
     weight = np.zeros(2 * n_rows)
     entries = slice(0, n_rows) if side == "O" else slice(n_rows, 2 * n_rows)
@@ -501,8 +514,14 @@ def team_rate_numbers(stints: pd.DataFrame, pad: bool = True) -> dict:
                                     stints[DEF].to_numpy(dtype=np.int64).ravel()]))
     rows = _Entries(stints, ids)
     index = pd.Index(ids, name="player_id")
-    return {side: pd.DataFrame(_end_team_rates(rows, stints, side, pad), index=index)[ALL_TEAM_RATES]
-            for side in ("O", "D")}
+    names = [*ALL_TEAM_RATES, *(ZONE_RATES if _has_zones(stints) else [])]
+    out = {side: pd.DataFrame(_end_team_rates(rows, stints, side, pad), index=index)[names] for side in ("O", "D")}
+    if _has_zones(stints):
+        # the placebo: the same zone rates, each player handed another player's, one draw per end
+        for draw, side in enumerate(("O", "D")):
+            order = np.random.default_rng(SHUFFLE_DRAW + draw).permutation(len(index))
+            out[side][SHUFFLED_ZONE_RATES] = out[side][ZONE_RATES].to_numpy()[order]
+    return out
 
 
 def with_team_rates(frame: pd.DataFrame, rates: pd.DataFrame) -> pd.DataFrame:
@@ -665,7 +684,7 @@ def _line_seasons(grams: dict, season: int, trainable: set, exclude_near: int, n
 def box_score_positions(input_set: str) -> list:
     """Where the inputs read from a player's own stats sit in the line: everything but his teammates' and opponents'
     priors and the team rates.  `team_possession_share` is his own share of his team's possessions, so it is here."""
-    others = {*CONTEXT, *ALL_TEAM_RATES}
+    others = {*CONTEXT, *ALL_TEAM_RATES, *ZONE_RATES, *SHUFFLED_ZONE_RATES}
     return [at for at, name in enumerate(INPUT_SETS[input_set]) if name not in others]
 
 

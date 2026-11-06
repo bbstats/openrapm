@@ -55,7 +55,7 @@ from ..data.player_games import trainable_player_games
 from ..data.roles import main_teams
 from ..data.seasons import all_seasons, last_finished, share_played, trainable, trainable_through
 from ..data.second_prior_files import line_setup, load_grams
-from ..data.stints import has_playoff_stints, load_season_stints
+from ..data.stints import has_playoff_stints, load_season_stints, stints_have
 from ..data.tables import design_row_teams, player_names
 from ..data.within_folds import check_fold_files, fold_games, held_back_stints, load_folds
 from ..settings import PRODUCT, describe_factors
@@ -897,7 +897,10 @@ def run_shrink(cfg: dict, settings, base: str, name: str) -> int:
 def season_lineup_rows(cfg: dict, season: int) -> pd.DataFrame:
     """One season's stints as swap_test.season_rows, the rows every lineup of step 5 is built from, with the offence's
     counts the second prior's team rates read."""
-    stints = load_season_stints(season, cfg, [*swap_test.STINT_COLUMNS, *swap_test.TEAM_COUNT_COLUMNS])
+    columns = [*swap_test.STINT_COLUMNS, *swap_test.TEAM_COUNT_COLUMNS]
+    if stints_have(season, cfg, swap_test.ZONE_COUNT_COLUMNS):
+        columns += swap_test.ZONE_COUNT_COLUMNS
+    stints = load_season_stints(season, cfg, columns)
     return swap_test.season_rows(stints, margin_clip=float(cfg.get("margin_clip", 25)))
 
 
