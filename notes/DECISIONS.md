@@ -12721,3 +12721,15 @@ Box Adj split by its inputs through the hold of team totals, the prior scale and
 4. the zones in place of the threes and twos rows: 53 inputs an end.
 
 **The rule.**  The zones go to a full build only if reading 2 or 4 is better than reading 1 in every era and better than the placebo's change by more than its own size.  The read is at a prior scale of 1, as the first read of the second stage was, so it gives a direction, not a size.  Then stop and show the owner.
+
+### Experiment 139: the screen's result (2026-11-06, `outputs/second_prior/zones139/`, `outputs/csv/zones139_screen.csv`, `scratch/2026-11-05_second_stage/zones_screen.py`)
+
+The stints rebuilt in 25 minutes; against `data/stints` every existing column of 1997-2026 matches but the parse's own timing, `seconds_total` in the diagnostics, and the expected makes, to 1e-10 from the shot curves refitted; the zones add up to the twos, the mid bucket and the threes in every row.  The sums took 23 minutes.  Today's 45 inputs equal rating134's in every fold, gap 0.0; the error on those columns differs from rating134's sums by up to 0.094 because these sums carry today's within layer, experiment 136's width settings, and rating134's carried the settings before it.  Every reading below is on the same sums, at a prior scale of 1, so it gives a direction, not a size.
+
+| reading, minus today's 45 | 1997-2006 change | z | 2007-2016 change | z | 2017-2026 change | z | all 30 change | z | seasons better |
+|---|---|---|---|---|---|---|---|---|---|
+| plus the 20 zone rates | -0.267 | -3.20 | -0.127 | -1.59 | -0.261 | -3.93 | -0.219 | -4.91 | 23 of 30 |
+| plus the 20 zone rates shuffled, the placebo | +0.029 | +1.64 | +0.045 | +1.64 | +0.064 | +2.38 | +0.046 | +3.32 | 9 of 30 |
+| the zones in place of the threes and twos rows | -0.227 | -3.21 | -0.135 | -1.63 | -0.205 | -3.28 | -0.189 | -4.60 | 25 of 30 |
+
+**The registered rule passes:** both zone readings are better than today's in every era, and the placebo moves the other way by a fifth of their size.  2007-2016 is the weakest era, z -1.59 and -1.63.  A full build is the owner's call.
