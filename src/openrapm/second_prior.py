@@ -211,6 +211,9 @@ ALL_TEAM_RATES = [f"team_{count}_{where}" for where in ("on", "off") for count i
 ZONE_RATES = [f"team_{count}_{where}" for where in ("on", "off") for count in ZONE_COUNTS]
 SHUFFLED_ZONE_RATES = [f"shuffled_{name}" for name in ZONE_RATES]
 SHUFFLE_DRAW = 139
+# experiment 139's build: the team rates with the shots counted by zone in place of threes and twos
+TEAM_ZONE_RATES = [f"team_{count}_{where}" for where in ("on", "off")
+                   for count in (*ZONE_COUNTS, "free_throws_made", "free_throws_missed", "off_rebounds", "turnovers")]
 # the inputs each version of the line reads (settings.PriorSettings.second_prior_inputs)
 INPUT_SETS = {"context": INPUTS, "context_and_types": [*INPUTS, OTHER_BOX, *TYPES],
               "context_and_types_centred": [*INPUTS, OTHER_BOX, *TYPES],
@@ -218,10 +221,12 @@ INPUT_SETS = {"context": INPUTS, "context_and_types": [*INPUTS, OTHER_BOX, *TYPE
               "context_types_team_rates_centred": [*INPUTS, OTHER_BOX, *TYPES, *TEAM_RATES],
               "context_types_team_profile_centred": [*INPUTS, OTHER_BOX, *TYPES, *TEAM_PROFILE_RATES],
               "context_types_team_rates_zones_centred": [*INPUTS, OTHER_BOX, *TYPES, *TEAM_RATES, *ZONE_RATES,
-                                                         *SHUFFLED_ZONE_RATES]}
+                                                         *SHUFFLED_ZONE_RATES],
+              "context_types_team_zones_centred": [*INPUTS, OTHER_BOX, *TYPES, *TEAM_ZONE_RATES]}
 # applied on inputs centred on the season's average (`centred`)
 CENTRED_SETS = {"own_teammates_opponents", "context_and_types_centred", "context_types_team_rates_centred",
-                "context_types_team_profile_centred", "context_types_team_rates_zones_centred"}
+                "context_types_team_profile_centred", "context_types_team_rates_zones_centred",
+                "context_types_team_zones_centred"}
 SIDE_KEYS = {"offense": "O", "defense": "D"}      # swap_adjust's side names -> the priors' side keys
 LINE_TARGETS = SECOND_PRIOR_TARGETS               # what the line's target adds back to a swap (module docstring)
 

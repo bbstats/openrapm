@@ -43,3 +43,12 @@ def test_the_placebo_is_the_same_numbers_handed_to_other_players():
     shuffled = frame.to_numpy()[order]
     assert np.allclose(np.sort(shuffled, axis=0), np.sort(frame.to_numpy(), axis=0))
     assert not np.allclose(shuffled, frame.to_numpy())
+
+
+def test_the_builds_set_counts_shots_by_zone_in_place_of_threes_and_twos():
+    names = sp.INPUT_SETS["context_types_team_zones_centred"]
+    assert names[:29] == sp.INPUT_SETS["context_and_types_centred"] and len(names) == 29 + 28
+    assert not [name for name in names[29:] if "threes" in name or "twos" in name]
+    assert {"team_rim_made_on", "team_long_three_missed_off", "team_free_throws_made_on", "team_turnovers_off"} <= set(names)
+    assert len(sp.box_score_positions("context_types_team_zones_centred")) == 21
+    assert sp.reads_team_rates("context_types_team_zones_centred")

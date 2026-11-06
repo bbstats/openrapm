@@ -12733,3 +12733,13 @@ The stints rebuilt in 25 minutes; against `data/stints` every existing column of
 | the zones in place of the threes and twos rows | -0.227 | -3.21 | -0.135 | -1.63 | -0.205 | -3.28 | -0.189 | -4.60 | 25 of 30 |
 
 **The registered rule passes:** both zone readings are better than today's in every era, and the placebo moves the other way by a fifth of their size.  2007-2016 is the weakest era, z -1.59 and -1.63.  A full build is the owner's call.
+
+### Experiment 139: the full build (the owner, 2026-11-06, of the two zone versions: "Zones replace 3s/2s"; registered before any result)
+
+**The change.**  Box Adj's team rates count shots by the five zones, made and missed, in place of threes and twos made and missed; free throws, offensive rebounds and turnovers as they are: `--second-prior-inputs context_types_team_zones_centred`, 57 inputs an end.  The line, `zones139_line`, is the screen's sums cut to those columns (`scratch/2026-11-05_second_stage/zones139_line.py`), on padbins127's boosters and folds, as rating134's was.  The stints are `data/stints_zones139` through `config_zones139.yaml`, 2027's copied from `data/stints` without zones; nothing else differs.
+
+    OPENRAPM_CONFIG=scratch/2026-11-05_second_stage/config_zones139.yaml bash scripts/experiment_chain.sh zones139 points_with_expected_opponent_threes_late_as_scored "--second-prior zones139_line --second-prior-inputs context_types_team_zones_centred"
+
+**The test.**  The within-season WOWY test against mid136 by era, noise_rating134 beside it, -0.010, z -1.07; year over year, as built and with each side's width matched to the incumbent's (trap 39); the 2026 top 20.
+
+**The rule.**  Better within season in every era beyond the noise control; year over year not worse at z +2 at matched width; the 2026 top 20 not worse in the owner's reading.  The verdict and the word to publish are the owner's.
