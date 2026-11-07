@@ -90,6 +90,11 @@
 
   // the teams' columns, [key, header]; a player's row in the file is [name, id, share, offense, defense, total]
   const COLUMNS = [["g", "Games"], ["o", "Offense"], ["d", "Defense"], ["t", "Total"]];
+  // each column header's hover text
+  const TIPS = { g: "Team games counted: the last 10, the latest 5 counted double",
+                 o: "Players' offense ratings weighted by share of possessions, points per 100",
+                 d: "Players' defense ratings weighted by share of possessions, points per 100",
+                 t: "Offense plus defense, points per 100 possessions" };
   const state = { sort: { k: "t", dir: -1 }, open: new Set() };
   const table = $("table"), thead = table.querySelector("thead"), tbody = table.querySelector("tbody");
   let data = null;
@@ -103,14 +108,18 @@
              `<td>${fmt(share / 100 * t)}</td></tr>`;
     }).join("");
     return `<tr class="players"><td colspan="99"><div class="inner"><table class="roster"><thead><tr><th class="name">Player</th>` +
-           `<th>Share of possessions</th><th>Offense</th><th>Defense</th><th>Total</th><th>Adds to total</th></tr>` +
+           `<th title="Share of the team's possessions over its last 10 games, the latest 5 counted double">Share of possessions</th>` +
+           `<th title="Points per 100 possessions added on offense, vs. an average player">Offense</th>` +
+           `<th title="Points per 100 possessions saved on defense, vs. an average player">Defense</th>` +
+           `<th title="Offense plus defense, points per 100 possessions">Total</th>` +
+           `<th title="Share of possessions times Total: the player's part of the team's Total">Adds to total</th></tr>` +
            `</thead><tbody>${rows}</tbody></table></div></td></tr>`;
   }
 
   function render() {
     const { k, dir } = state.sort;
     const teams = [...data.teams].sort((a, b) => dir * (a[k] - b[k]) || b.t - a.t);
-    const th = (key, name) => `<th data-k="${key}"${key === k ? ` aria-sort="${dir < 0 ? "descending" : "ascending"}"` : ""}>${name}</th>`;
+    const th = (key, name) => `<th data-k="${key}" title="${TIPS[key]}"${key === k ? ` aria-sort="${dir < 0 ? "descending" : "ascending"}"` : ""}>${name}</th>`;
     thead.innerHTML = `<tr><th class="rank">#</th><th class="name">Team</th>` +
       COLUMNS.map(([key, name]) => th(key, name)).join("") + `</tr>`;
     tbody.innerHTML = teams.map((team, i) => {

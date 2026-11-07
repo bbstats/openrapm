@@ -107,7 +107,7 @@
   function render() {
     const sorted = state.sort ? [...rows].sort((a, b) => state.sort.dir * (a[state.sort.k] - b[state.sort.k])) : rows;
     const th = (key, name) => `<th data-k="${key}"${state.sort && state.sort.k === key
-      ? ` aria-sort="${state.sort.dir < 0 ? "descending" : "ascending"}"` : ""}>${name}</th>`;
+      ? ` aria-sort="${state.sort.dir < 0 ? "descending" : "ascending"}"` : ""} title="OpenRAPM minus the consensus, per 1 standard deviation of the stat, points per 100">${name}</th>`;
     thead.innerHTML = `<tr><th class="name" data-reset>Stat</th>` + COLUMNS.map(([key, name]) => th(key, name)).join("") + `</tr>`;
     tbody.innerHTML = sorted.map(row => `<tr><td class="name">${esc(row.label)}</td>` +
       COLUMNS.map(([key]) => cell(row[key], row[key + "_se"])).join("") + `</tr>`).join("");
@@ -118,7 +118,7 @@
 
   function systems() {
     const t = $("systems");
-    t.querySelector("thead").innerHTML = `<tr><th class="name">Consensus</th><th class="name">By</th><th>Weight</th><th>As of</th></tr>`;
+    t.querySelector("thead").innerHTML = `<tr><th class="name">Consensus</th><th class="name">By</th><th title="Share of the consensus">Weight</th><th title="Date the ratings were pulled">As of</th></tr>`;
     t.querySelector("tbody").innerHTML = data.systems.map(s =>
       `<tr><td class="name"><a href="${esc(s.link)}">${esc(s.name)}</a></td><td class="name">${esc(s.by)}</td>` +
       `<td>${Math.round(s.weight * 100)}%</td><td>${day(s.as_of)}</td></tr>`).join("");

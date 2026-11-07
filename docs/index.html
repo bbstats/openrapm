@@ -145,6 +145,18 @@
   // side's pieces
   const COLUMNS = { ratings: [["o", "Offense"], ["d", "Defense"], ["t", "Total"], ["w", "WOSA"], ["p", "Poss."]],
                     detail: [...PIECES, ["a", "OpenRAPM"], ["p", "Poss."]] };
+  // each column header's hover text
+  const TIPS = { o: "Points per 100 possessions added on offense, vs. an average player",
+                 d: "Points per 100 possessions saved on defense, vs. an average player",
+                 t: "Offense plus defense, points per 100 possessions",
+                 w: "Wins over starter average: wins added over the average of the 150 most-started players, regular season only",
+                 p: "Offensive possessions played, regular season and playoffs",
+                 box: "Rating predicted from the box score alone",
+                 adj: "Correction to the box-score rating, learned from lineup swaps",
+                 on: "Adjustment from the player's own possessions on court",
+                 off: "Adjustment from the team's possessions without the player",
+                 sos: "Adjustment from other teams' games: strength of schedule",
+                 a: "The full rating: the five columns before it, summed" };
 
   // the season list and a player's seasons keep a sort each, so the way back finds the list sorted as it was
   const state = { view: "ratings", side: "total", season: null, team: "", q: "", player: null,
@@ -294,7 +306,7 @@
     // with the rating columns the side is the rating sorted on, so the bold column is the sorted one (sorted by
     // possessions or season it stays where it was)
     if (state.view === "ratings" && FIELD_SIDE[k]) state.side = FIELD_SIDE[k];
-    const th = (key, name, cls) => `<th${cls ? ` class="${cls}"` : ""} data-k="${key}" aria-sort="${key === k
+    const th = (key, name, cls) => `<th${cls ? ` class="${cls}"` : ""}${TIPS[key] ? ` title="${TIPS[key]}"` : ""} data-k="${key}" aria-sort="${key === k
       ? (dir < 0 ? "descending" : "ascending") : "none"}">${name}</th>`;
     thead.innerHTML = `<tr><th class="rank">#</th>` + (one ? th("s", "Season", "season") : `<th class="name">Player</th>`) +
       `<th class="team">Team</th>` + COLUMNS[state.view].map(([key, name]) => th(key, name)).join("") + `</tr>`;
