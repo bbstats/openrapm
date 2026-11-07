@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from openrapm.commands.site import OPENRAPM_FIELDS, OPENRAPM_PIECES
+from openrapm.commands.site import OPENRAPM_FIELDS, OPENRAPM_PIECES, WOSA_PARTS
 
 DATA = Path(__file__).resolve().parents[1] / "docs" / "data"
 ROUNDING = 0.031          # six numbers at two decimals, the five pieces and the rating, each off by up to 0.005
@@ -27,6 +27,7 @@ def decomposition():
 def test_the_file_holds_every_season_latest_first_with_the_published_field_names(decomposition):
     meta = decomposition["meta"]
     assert meta["fields"] == OPENRAPM_FIELDS and meta["pieces"] == OPENRAPM_PIECES
+    assert meta["wosa_parts"] == WOSA_PARTS
     assert meta["seasons"] == sorted(meta["seasons"], reverse=True)
     assert list(decomposition["rows"]) == [str(season) for season in meta["seasons"]]
 
@@ -34,7 +35,7 @@ def test_the_file_holds_every_season_latest_first_with_the_published_field_names
 def test_on_each_side_and_in_total_the_five_pieces_add_up_to_the_rating(decomposition):
     worst = 0.0
     for season, rows in decomposition["rows"].items():
-        for name, player_id, possessions, *sides, team, wosa in rows:
+        for name, player_id, possessions, *sides, team, wosa in (row[:8] for row in rows):
             assert len(sides) == 3 and all(len(pieces) == len(OPENRAPM_PIECES) for pieces in sides)
             assert isinstance(team, str) and isinstance(wosa, (int, float))
             for pieces in sides:
@@ -45,7 +46,7 @@ def test_on_each_side_and_in_total_the_five_pieces_add_up_to_the_rating(decompos
 def test_a_total_is_the_two_sides_added(decomposition):
     worst = 0.0
     for rows in decomposition["rows"].values():
-        for _, _, _, off, deff, total, _, _ in rows:
+        for _, _, _, off, deff, total, *_ in rows:
             worst = max(worst, *(abs(t - (a + b)) for t, a, b in zip(total, off, deff)))
     assert worst <= 0.0101, f"a total misses its two sides by {worst:.3f}"       # three roundings of half a cent
 
@@ -55,7 +56,7 @@ def test_every_row_has_a_name_an_id_possessions_and_a_team_and_no_player_appears
         assert rows, f"{season} has no players"
         ids = [row[1] for row in rows]
         assert len(set(ids)) == len(ids), f"{season}: a player appears twice"
-        for name, player_id, possessions, *_, team, _ in rows:
+        for name, player_id, possessions, *_, team, _ in (row[:8] for row in rows):
             assert name and isinstance(player_id, int) and player_id > 0 and possessions > 0, (season, name)
             assert team and all(len(code) == 3 for code in team.split("/")), (season, name, team)
 
@@ -71,3 +72,13 @@ def test_the_rows_are_ratings_jsons_with_its_ratings_possessions_and_wins(decomp
     stale = sorted(set(published) ^ set(mine))[:3] or [key for key in published if published[key] != mine[key]][:3]
     assert published == mine, f"the file differs from ratings.json, e.g. {stale}: run `openrapm site " \
                               f"--openrapm-decomposition` after a ratings build"
+
+
+def test_each_sides_wosa_inputs_are_three_numbers_and_the_total_is_the_published_wosa(decomposition):
+    fields = decomposition["meta"]["fields"]
+    sides, wins, minutes = [fields.index(f) for f in ("wo", "wd", "wt")], fields.index("w"), fields.index("m")
+    for season, rows in decomposition["rows"].items():
+        for row in rows:
+            assert all(len(row[side]) == len(WOSA_PARTS) for side in sides), (season, row[0])
+            assert row[sides[2]][-1] == row[wins] and row[minutes] >= 0, (season, row[0])
+            assert abs(row[sides[0]][0] + row[sides[1]][0] - row[sides[2]][0]) <= 0.0101, (season, row[0])

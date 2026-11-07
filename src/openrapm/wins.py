@@ -51,6 +51,13 @@ home edge.  This is exactly his team's expected margin on the stint with him min
 (`counterfactual_wins` computes it that way).  The extra possessions are valued at the margin WITHOUT his surplus
 because his rating on them is already in the first two lines; at the full margin a star would be paid for it twice.
 
+The same two lines as three numbers a page can show, per side (the Detail view): above_off = rating_off - bar_off, his
+possessions at that end, and leverage_off = his mean weight over them, the season's mean weight being 1, so
+
+    wosa_off  = above_off x his team's possessions x leverage_off / 100 / points per win
+
+and the same at the other end.  `leverage` is his mean weight over the possessions at both ends.
+
 Example: a player at +9.0 per 100 against a bar of +0.8, over 5,300 possessions at each end, at an average weight: 8.2 x
 5,300 / 100 / 30 = 14.5 wins.  Three extra possessions per 48 over 2,500 minutes are 156 extra possessions; on a lineup
 at +8 per 100 with his surplus of +8.2 taken out they are worth -0.2 x 156 / 100 / 30 = -0.01 wins, while on a lineup at
@@ -85,7 +92,8 @@ MARGIN_CLIP = 25.0                                 # config margin_clip, as the 
 # what the wins read from a season's stints, plus home_team_id and away_team_id from the loader
 STINT_COLUMNS = ["game_id", "phase", "period", "start_clock", "margin_h", "is_gt", "neutral", "half",
                  "poss_h", "poss_a", "pts_h", "pts_a", *HOME, *AWAY]
-WINS_COLUMNS = ["wosa_off", "wosa_def", "wosa_pace", "wosa", "pace_effect", "leverage", "starts_rs", "minutes_rs"]
+WINS_COLUMNS = ["wosa_off", "wosa_def", "wosa_pace", "wosa", "pace_effect", "leverage", "starts_rs", "minutes_rs",
+                "above_off", "above_def", "leverage_off", "leverage_def"]
 
 # The bins of seconds left the spread is measured in: 10 seconds in the last minute, where a possession decides it; 30
 # to two minutes left; 1 minute to 12 left; 4 minutes before that, since a one-minute bin holding only each game's
@@ -457,14 +465,21 @@ def season_wins(stints: pd.DataFrame, seconds: np.ndarray, ratings: pd.DataFrame
     wosa_off, wosa_def = above_off * own_end / 100.0, above_def * other_end / 100.0
     wosa_pace = above_pace * (margin_part - above_total * time_part) / 100.0
 
-    own_possessions = np.asarray(home.T @ (poss_h + poss_a) + away.T @ (poss_h + poss_a))
+    own_side = np.asarray(home.T @ poss_h + away.T @ poss_a)
+    other_side = np.asarray(home.T @ poss_a + away.T @ poss_h)
     mean_lever = float(np.average(lever, weights=poss_h + poss_a))
-    own_weight = np.divide(own_end + other_end, own_possessions, out=np.zeros(len(player_ids)),
-                         where=own_possessions > 0.0) / mean_lever
+
+    def mean_weight(levered: np.ndarray, possessions: np.ndarray) -> np.ndarray:
+        """His mean weight over these possessions, against the season's; 0 with none."""
+        return np.divide(levered, possessions, out=np.zeros(len(player_ids)), where=possessions > 0.0) / mean_lever
+
     starts = starts_and_minutes(stints, seconds)
     return pd.DataFrame({"player_id": player_ids, "wosa_off": wosa_off, "wosa_def": wosa_def, "wosa_pace": wosa_pace,
-                         "wosa": wosa_off + wosa_def + wosa_pace, "pace_effect": effect, "leverage": own_weight,
-                         "starts_rs": starts.starts_rs.to_numpy(), "minutes_rs": starts.minutes_rs.to_numpy()})
+                         "wosa": wosa_off + wosa_def + wosa_pace, "pace_effect": effect,
+                         "leverage": mean_weight(own_end + other_end, own_side + other_side),
+                         "starts_rs": starts.starts_rs.to_numpy(), "minutes_rs": starts.minutes_rs.to_numpy(),
+                         "above_off": above_off, "above_def": above_def,
+                         "leverage_off": mean_weight(own_end, own_side), "leverage_def": mean_weight(other_end, other_side)})
 
 
 def counterfactual_wins(stints: pd.DataFrame, seconds: np.ndarray, ratings: pd.DataFrame, weight: np.ndarray,

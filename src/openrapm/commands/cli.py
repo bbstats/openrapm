@@ -491,7 +491,8 @@ def _add_wins(commands) -> None:
     wins = commands.add_parser(
         "wins", help="wins over starter average: its columns written into a ratings table",
         description="How many regular-season wins each player added to his team over an average starter.  Writes "
-                    "the columns wosa_off, wosa_def, wosa_pace, wosa, pace_effect, leverage, starts_rs and minutes_rs "
+                    "the columns wosa_off, wosa_def, wosa_pace, wosa, pace_effect, leverage, starts_rs, minutes_rs, "
+                    "above_off, above_def, leverage_off and leverage_def "
                     "into outputs/season_ratings_<NAME>.parquet, and each season's bar and win model to "
                     "outputs/csv/wins_<NAME>_seasons.csv.  `openrapm build` adds them itself; this is for a table "
                     "built before them.  No rating moves.")

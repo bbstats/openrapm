@@ -334,7 +334,12 @@ def openrapm_site(rated_season, tmp_path, monkeypatch):
     final["box_adj_off"], final["box_adj_def"] = rng.normal(0, 0.5, len(final)), rng.normal(0, 0.5, len(final))
     final["rating_off"], final["rating_def"] = step3.rating_off + final.c_off, step3.rating_def + final.c_def
     final["rating_total"] = final.rating_off + final.rating_def
-    final["wosa"] = rng.normal(0, 3.0, len(final))
+    final["wosa_off"], final["wosa_def"] = rng.normal(0, 2.0, len(final)), rng.normal(0, 2.0, len(final))
+    final["wosa"] = final.wosa_off + final.wosa_def + rng.normal(0, 0.05, len(final))
+    final["minutes_rs"] = rng.uniform(0, 2500, len(final))
+    final["above_off"], final["above_def"] = final.rating_off - 0.7, final.rating_def - 0.3
+    final["leverage_off"], final["leverage_def"] = rng.uniform(0.9, 1.1, len(final)), rng.uniform(0.9, 1.1, len(final))
+    final["leverage"] = (final.leverage_off + final.leverage_def) / 2.0
     folder = tmp_path / "outputs"
     folder.mkdir()
     ratings = folder / "season_ratings_product.parquet"
@@ -383,9 +388,15 @@ def test_the_openrapm_file_adds_up_and_carries_ratings_jsons_ratings(openrapm_si
     published = {row["id"]: row for row in json.loads((data / "ratings.json").read_text(encoding="utf-8"))["rows"]}
     assert sorted(row[1] for row in rows) == sorted(published)
     assert [row[5][-1] for row in rows] == sorted((row[5][-1] for row in rows), reverse=True)
-    for name, player_id, possessions, off, deff, total, team, wosa in rows:
+    assert meta["wosa_parts"] == site.WOSA_PARTS
+    by_id = final.set_index("player_id")
+    for name, player_id, possessions, off, deff, total, team, wosa, minutes, *wosa_sides in rows:
         assert name == f"Player {player_id}" and possessions == published[player_id]["p"] and team == "BOS"
-        assert wosa == published[player_id]["w"]
+        assert wosa == published[player_id]["w"] and minutes == round(by_id.minutes_rs[player_id])
+        mine = by_id.loc[player_id]
+        assert wosa_sides == [[round(mine.above_off, 2), round(mine.leverage_off, 2), round(mine.wosa_off, 2)],
+                              [round(mine.above_def, 2), round(mine.leverage_def, 2), round(mine.wosa_def, 2)],
+                              [round(mine.above_off + mine.above_def, 2), round(mine.leverage, 2), wosa]]
         for pieces, rating in ((off, "o"), (deff, "d"), (total, "t")):
             assert len(pieces) == 6 and pieces[-1] == published[player_id][rating]
             assert abs(sum(pieces[:-1]) - pieces[-1]) < 0.031           # five pieces at two decimals each
@@ -398,7 +409,7 @@ def test_the_pieces_are_the_tables_columns_and_a_split_of_the_games_part(openrap
     site.run_site({}, ratings=ratings, out_dir=data.parent, built="2026-10-13", openrapm_decomposition=True)
     rows = json.loads((data / site.OPENRAPM_FILE).read_text(encoding="utf-8"))["rows"]["2002"]
     table = final.set_index("player_id")
-    for _, player_id, _, off, deff, _, _, _ in rows[:25]:
+    for _, player_id, _, off, deff, *_ in rows[:25]:
         for pieces, side in ((off, "off"), (deff, "def")):
             adj = table.loc[player_id, f"box_adj_{side}"]
             assert pieces[0] == round(table.loc[player_id, f"prior_{side}"] - adj, 2)
@@ -426,7 +437,10 @@ def test_a_ratings_table_and_step_3_table_of_different_builds_are_refused(openra
 
 
 def test_openrapm_rows_drop_players_without_possessions_and_sort_by_total():
-    rows = pd.DataFrame({"poss_season": [1000.7, 0.0, 500.2], "wosa": [4.567, 0.0, -1.234]})
+    rows = pd.DataFrame({"poss_season": [1000.7, 0.0, 500.2], "wosa": [4.567, 0.0, -1.234],
+                         "wosa_off": [4.0, 0.0, -1.0], "wosa_def": [0.5, 0.0, -0.2], "minutes_rs": [2000.4, 0.0, 999.6],
+                         "above_off": [5.555, 0.0, -1.0], "above_def": [1.0, 0.0, -0.5], "leverage": [1.054, 0.0, 0.9],
+                         "leverage_off": [1.06, 0.0, 0.91], "leverage_def": [1.05, 0.0, 0.89]})
     columns = {f"{side}_{piece}": [0.111, 0.222, 0.333] for side in site.OPENRAPM_SIDES
                for piece in site.OPENRAPM_PIECES}
     columns["total_rating"] = [1.234, 9.0, 3.456]
@@ -435,6 +449,8 @@ def test_openrapm_rows_drop_players_without_possessions_and_sort_by_total():
     assert [(row[0], row[1], row[2]) for row in got] == [("C", 3, 500), ("A", 1, 1000)]       # whole possessions
     assert [row[6] for row in got] == ["SAC/IND", ""]
     assert [row[7] for row in got] == [-1.23, 4.57]
+    assert [row[8] for row in got] == [1000, 2000]                                             # whole minutes
+    assert got[1][9:] == [[5.55, 1.06, 4.0], [1.0, 1.05, 0.5], [6.55, 1.05, 4.57]]
     assert got[0][3] == [0.33] * 6 and got[0][5] == [0.33] * 5 + [3.46]
     assert got[1][4] == [0.11] * 6 and got[1][5] == [0.11] * 5 + [1.23]
 
@@ -452,7 +468,7 @@ def test_a_games_part_multiplied_by_step_4_is_split_with_its_factor(openrapm_sit
     assert site.run_site({}, ratings=ratings, out_dir=data.parent, built="2026-10-15", openrapm_decomposition=True) == 0
     rows = json.loads((data / site.OPENRAPM_FILE).read_text(encoding="utf-8"))["rows"]["2002"]
     table = scaled.set_index("player_id")
-    for _, player_id, _, off, deff, _, _, _ in rows[:25]:
+    for _, player_id, _, off, deff, *_ in rows[:25]:
         for pieces, side in ((off, "off"), (deff, "def")):
             assert abs(sum(pieces[1:4]) - table.loc[player_id, f"u_{side}"]) < 0.0151
 

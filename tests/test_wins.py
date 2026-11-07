@@ -420,6 +420,25 @@ def test_the_parts_add_up_and_the_long_way_round_gives_the_same_wins():
     assert long_way.reindex(got.index).to_numpy() == pytest.approx(got.wosa.to_numpy(), abs=1e-10)
 
 
+def test_each_side_is_his_rating_over_the_bar_times_his_possessions_times_his_leverage():
+    stints, seconds, ratings, pace = _league()
+    relative = wins.relative_leverage(stints, seconds, wins.fit_win_model(stints, seconds, 2001))
+    bar = wins.starter_bar(ratings, wins.starts_and_minutes(stints, seconds), pace, 20)
+    got = wins.season_wins(stints, seconds, ratings, relative, pace, bar, 27.0).set_index("player_id")
+    rated = ratings.set_index("player_id").reindex(got.index).fillna(0.0)
+    assert got.above_off.to_numpy() == pytest.approx((rated.rating_off - bar.off).to_numpy(), abs=1e-12)
+    assert got.above_def.to_numpy() == pytest.approx((rated.rating_def - bar.defense).to_numpy(), abs=1e-12)
+    _, home, away = wins.player_index(stints)
+    poss_h, poss_a = stints.poss_h.to_numpy(dtype=float), stints.poss_a.to_numpy(dtype=float)
+    own, other = home.T @ poss_h + away.T @ poss_a, home.T @ poss_a + away.T @ poss_h
+    assert got.wosa_off.to_numpy() == pytest.approx(
+        (got.above_off * own * got.leverage_off / 100.0 / 27.0).to_numpy(), abs=1e-10)
+    assert got.wosa_def.to_numpy() == pytest.approx(
+        (got.above_def * other * got.leverage_def / 100.0 / 27.0).to_numpy(), abs=1e-10)
+    both = (own * got.leverage_off + other * got.leverage_def) / (own + other)
+    assert got.leverage.to_numpy() == pytest.approx(both.to_numpy(), abs=1e-12)
+
+
 def test_leverage_reads_one_for_everyone_when_it_is_flat_and_above_one_for_who_closes():
     stints, seconds, ratings, pace = _league()
     flat = wins.season_wins(stints, seconds, ratings, np.ones(len(stints)), pace, BAR_ZERO, 27.0)

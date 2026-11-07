@@ -579,14 +579,17 @@ def write_decomposition(cfg: dict, ratings_path: Path, data_dir: Path, built: st
 # prior columns).  The one file, docs/data/decompose_openrapm.json:
 #     {"meta": {built, penalty, seasons, fields, pieces}, "rows": {season: [[name, NBA id, possessions, offence,
 #      defence, total, teams], ...]}}     each side's list holds OPENRAPM_PIECES in order, at two decimals; teams
-#      are the box scores' abbreviations in the order he joined them, "SAC/IND"
+#      are the box scores' abbreviations in the order he joined them, "SAC/IND"; then his wins over starter average,
+#      his regular-season minutes, and per side, offence, defence and total, [his regular-season rating over the
+#      starter average, his leverage, his wins over starter average] (WOSA_PARTS, wins.py says how they multiply)
 # Rows are the ratings.json rows (possessions above 0), best total first.
 #
 # Example (2026): Victor Wembanyama's offence, 3.01 = 2.11 + 0.26 + 0.86 - 0.32 + 0.11; his total, 9.37 = 3.89 + 2.70
 # + 2.98 - 0.43 + 0.23: box score, Box Adj, on court, off court, team SOS.  The page's headers for on court and off
 # court are On adj and Off adj.
 OPENRAPM_FILE = "decompose_openrapm.json"
-OPENRAPM_FIELDS = ["n", "id", "p", "o", "d", "t", "tm", "w"]
+OPENRAPM_FIELDS = ["n", "id", "p", "o", "d", "t", "tm", "w", "m", "wo", "wd", "wt"]
+WOSA_PARTS = ["above_starter_average", "leverage", "wosa"]
 OPENRAPM_PIECES = ["box_score", "on_court", "off_court", "team_sos", "box_adj", "rating"]
 OPENRAPM_SIDES = ("off", "def", "total")
 OPENRAPM_TOLERANCE = 1e-9         # each identity holds to this, per player and side
@@ -594,7 +597,8 @@ OPENRAPM_JITTER_TOLERANCE = 1e-6  # the same, in a season whose solve needed rap
 OPENRAPM_TABLE_COLUMNS = ["player_id", "season", "player_name", "poss_season", "prior_off", "prior_def", "u_off",
                           "u_def", "box_adj_off", "box_adj_def", "c_off", "c_def", "rating_off", "rating_def",
                           "rating_total", "offense_lambda",
-                          "wosa"]
+                          "wosa", "wosa_off", "wosa_def", "minutes_rs", "above_off", "above_def", "leverage",
+                          "leverage_off", "leverage_def"]
 OPENRAPM_STEP3_COLUMNS = ["player_id", "season", "prior_offense", "prior_defense", "prior_scale_off",
                           "prior_scale_def", "u_off", "u_def"]
 
@@ -796,13 +800,20 @@ def openrapm_rows(rows: pd.DataFrame, pieces: pd.DataFrame, names: np.ndarray, t
     """One season's rows in OPENRAPM_FIELDS order, best total first, players under 60 possessions left out (as
     ratings.json leaves them): name, NBA id, possessions (whole, as ratings.json writes them), each side's pieces at
     two decimals, then his teams ({player_id: "SAC/IND"}; "" for a player it lacks), then his wins over starter average
-    at two decimals."""
+    at two decimals, his regular-season minutes, whole, and each side's WOSA_PARTS at two decimals."""
     teams = teams or {}
-    frame = pieces.assign(n=names, p=rows.poss_season.to_numpy(), w=rows.wosa.to_numpy())
+    wosa = {"wo": ("above_off", "leverage_off", "wosa_off"), "wd": ("above_def", "leverage_def", "wosa_def")}
+    frame = pieces.assign(n=names, p=rows.poss_season.to_numpy(), w=rows.wosa.to_numpy(),
+                          m=rows.minutes_rs.to_numpy(),
+                          above_total=(rows.above_off + rows.above_def).to_numpy(),
+                          **{column: rows[column].to_numpy() for parts in wosa.values() for column in parts},
+                          leverage=rows.leverage.to_numpy())
+    wosa["wt"] = ("above_total", "leverage", "w")
     frame = frame[frame.p >= MIN_POSSESSIONS_SHOWN].sort_values("total_rating", ascending=False)
     return [[r["n"], int(r["player_id"]), int(r["p"]),
              *([round(float(r[f"{side}_{piece}"]), 2) for piece in OPENRAPM_PIECES] for side in OPENRAPM_SIDES),
-             teams.get(int(r["player_id"]), ""), round(float(r["w"]), 2)]
+             teams.get(int(r["player_id"]), ""), round(float(r["w"]), 2), int(round(float(r["m"]))),
+             *([round(float(r[column]), 2) for column in wosa[field]] for field in ("wo", "wd", "wt"))]
             for r in frame.to_dict("records")]
 
 
@@ -838,6 +849,9 @@ def run_openrapm_checks(worst: dict, rows: dict, table: pd.DataFrame) -> None:
             for season, season_rows in rows.items() for row in season_rows}
     check(published == mine, f"the file holds the {len(published):,} player-seasons of ratings.json with its "
                              "ratings, possessions and wins over starter average")
+    total_field = OPENRAPM_FIELDS.index("wt")
+    unequal = sum(1 for season_rows in rows.values() for row in season_rows if row[total_field][-1] != row[wins_field])
+    check(unequal == 0, f"each row's total wins over starter average is its WOSA ({unequal} differ)")
 
 
 PERCENTILE_POSSESSIONS = 500   # the ratings page's percentile pool: a finished season's players with this many
@@ -873,7 +887,7 @@ def write_openrapm_file(path: Path, rows: dict, built: str, penalty: float, open
     document = dict(meta=dict(built=built, penalty=penalty, seasons=seasons,
                               default_season=int(seasons[0] if opens_on is None else opens_on),
                               percentile_min=minimums, rookies=rookie_lists, fields=OPENRAPM_FIELDS,
-                              pieces=OPENRAPM_PIECES),
+                              pieces=OPENRAPM_PIECES, wosa_parts=WOSA_PARTS),
                     rows={str(season): rows[season] for season in seasons})
     path.write_text(json.dumps(document, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
