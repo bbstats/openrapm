@@ -16,6 +16,8 @@
   nav.site .colors[aria-pressed="true"] { border-color: var(--muted); }
   body { color: var(--ink); font: 14px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
   #find { width: 210px; }
+  /* Detail's eleven number columns, the pieces and WOSA's inputs, need more than the site's 1,000 px */
+  body.wide main { max-width: 1280px; }
   /* the side buttons sit left of Detail, so the button stays under the pointer when they appear */
   .cols { display: inline-flex; gap: 8px; margin-left: auto; }
   .controls #pct, .controls #rookies { width: 40px; padding: 0; }
@@ -144,10 +146,14 @@
   const SIDE_FIELD = { off: "o", def: "d", total: "t" };
   const FIELD_SIDE = { o: "off", d: "def", t: "total" };
   const PIECES = [["box", "Box score"], ["adj", "Box Adj"], ["on", "On adj"], ["off", "Off adj"], ["sos", "SOS Adj"]];
+  // the side's WOSA and the three numbers it multiplies from: regular-season minutes, rating over the starter
+  // average and leverage (meta.wosa_parts; src/openrapm/wins.py says how they multiply)
+  const WOSA_SIDE = { off: "wo", def: "wd", total: "wt" };
+  const WOSA_COLS = [["m", "Minutes"], ["wv", "vs starter avg"], ["wl", "Leverage"], ["ws", "WOSA"]];
   // the columns of each view, [key, header]: the ratings view shows each side's rating, the detail one
-  // side's pieces
+  // side's pieces and its WOSA's inputs
   const COLUMNS = { ratings: [["o", "Offense"], ["d", "Defense"], ["t", "Total"], ["w", "WOSA"], ["p", "Poss."]],
-                    detail: [...PIECES, ["a", "OpenRAPM"], ["p", "Poss."]] };
+                    detail: [...PIECES, ["a", "OpenRAPM"], ["p", "Poss."], ...WOSA_COLS] };
   // each column header's hover text
   const TIPS = { o: "Points per 100 possessions added on offense, vs. an average player",
                  d: "Points per 100 possessions saved on defense, vs. an average player",
@@ -159,7 +165,11 @@
                  on: "Adjustment from the player's own possessions on court",
                  off: "Adjustment from the team's possessions without the player",
                  sos: "Adjustment from other teams' games: strength of schedule",
-                 a: "The full rating: the five columns before it, summed" };
+                 a: "The full rating: the five columns before it, summed",
+                 m: "Regular-season minutes",
+                 wv: "Regular-season rating minus the average of the 150 most-started players, points per 100 possessions",
+                 wl: "How much his possessions could swing games: 1 is an average possession, above 1 is more time in close games",
+                 ws: "Wins over starter average: vs starter avg × regular-season possessions ÷ 100 ÷ 30 × leverage" };
 
   // the season list and a player's seasons keep a sort each, so the way back finds the list sorted as it was
   const state = { view: "ratings", side: "total", season: null, team: "", q: "", player: null,
@@ -196,16 +206,16 @@
 
   // one player's row as the table reads it: each side's rating, and the chosen side's five pieces and rating
   function onSide(r, side) {
-    const v = r[SIDE_FIELD[side]];
+    const v = r[SIDE_FIELD[side]], x = r[WOSA_SIDE[side]];
     return { n: r.n, id: r.id, p: r.p, tm: r.tm, w: r.w, o: r.o[5], d: r.d[5], t: r.t[5], rt: r.t[5],
-             box: v[0], adj: v[4], on: v[1], off: v[2], sos: v[3], a: v[5] };
+             box: v[0], adj: v[4], on: v[1], off: v[2], sos: v[3], a: v[5], m: r.m, wv: x[0], wl: x[1], ws: x[2] };
   }
 
   // the percentile button: each number becomes its percentile among the season's players with 500 or more
   // possessions, or in a season in progress 500 times the share of the season played, never under the 60 shown
   // (meta.percentile_min, written by openrapm site); a player under the pool's minimum gets none.  Remembered like
   // the theme
-  const PCT_KEYS = ["o", "d", "t", "w", "box", "adj", "on", "off", "sos", "a"];
+  const PCT_KEYS = ["o", "d", "t", "w", "box", "adj", "on", "off", "sos", "a", "m", "wv", "wl", "ws"];
   const poolMin = season => (data.meta.percentile_min || {})[season] || 500;
   try { state.pct = localStorage.getItem("percentile") === "1"; } catch (e) {}
   // the rookies button: the season list shows only that season's rookies (meta.rookies, written by openrapm site).
@@ -299,7 +309,8 @@
   // both tables' sorts move.  Turning the pieces on takes the side from the rating the shown table is sorted on
   function setView(view, side = (view === "detail" && FIELD_SIDE[sorting().k]) || state.side) {
     for (const s of Object.values(state.sort))
-      if (view === "ratings" ? s.k !== "p" && s.k !== "s" : FIELD_SIDE[s.k] || s.k === "w") s.k = view === "ratings" ? SIDE_FIELD[side] : "a";
+      if (view === "ratings" ? s.k === "ws" : s.k === "w") s.k = view === "ratings" ? "w" : "ws";
+      else if (view === "ratings" ? s.k !== "p" && s.k !== "s" : FIELD_SIDE[s.k]) s.k = view === "ratings" ? SIDE_FIELD[side] : "a";
     state.view = view;
     state.side = side;
   }
@@ -355,17 +366,19 @@
     // a team code opens its season on that team; in the season list the chosen team's code clears it
     const teams = (tm, at) => tm.split("/").map(c =>
       `<a href="${esc(addr(at, one || c !== state.team ? c : "", null))}">${esc(c)}</a>`).join("/");
-    const cols = COLUMNS[state.view], bold = detail ? "a" : SIDE_FIELD[state.side];
+    const cols = COLUMNS[state.view], bold = detail ? ["a", "ws"] : [SIDE_FIELD[state.side]];
     const latest = String(data.meta.seasons[0]);      // a player's latest-season row is marked: meta.seasons runs latest first
+    // a detail cell as written: minutes whole, leverage without a sign, the rest signed at two decimals
+    const detailCell = (key, v) => key === "m" ? whole.format(v) : key === "wl" ? v.toFixed(2) : fmt(v);
     tbody.innerHTML = rows.map(p => {
       const links = teams(p.tm, one ? String(p.s) : state.season);
       const first = one ? `<td class="season">${p.s}${similar.has(p.id + ":" + p.s) ? ` <a class="sim" href="similarity.html#player=${p.id}&amp;season=${p.s}" title="Similarity" aria-label="Similarity, ${p.s}">~</a>` : ""}</td>`
         : `<td class="name"><a href="${esc(addr(state.season, state.team, p.id))}">${esc(p.n)}</a>` +
           (phone.matches ? `<span class="tm">${links}</span>` : "") + `</td>`;
       return `<tr${one && String(p.s) === latest ? ' class="now"' : ""}><td class="rank">${p.rank}</td>${first}<td class="team">${links}</td>` + cols.map(([key]) =>
-        `<td${key === bold ? ' class="total"' : ""}${p.c ? shade(p.c[key]) : ""}>${key === "p" ? whole.format(p.p)
+        `<td${bold.includes(key) ? ' class="total"' : ""}${p.c ? shade(p.c[key]) : ""}>${key === "p" ? whole.format(p.p)
           : state.pct ? (p[key] === null ? "—" : Math.round(p[key]))
-          : detail ? fmt(p[key]) : fmt1(p[key])}</td>`).join("") + `</tr>`;
+          : detail ? detailCell(key, p[key]) : fmt1(p[key])}</td>`).join("") + `</tr>`;
     }).join("");
 
     // the controls: the season list's, or the player's name with the cross back to the list
@@ -381,6 +394,7 @@
     $("older").disabled = state.season === seasons[seasons.length - 1];
     $("newer").disabled = state.season === seasons[0];
     $("side").hidden = !detail;
+    document.body.classList.toggle("wide", detail);
     pieces.setAttribute("aria-pressed", detail);
     $("pct").setAttribute("aria-pressed", !!state.pct);
     $("rookies").setAttribute("aria-pressed", !!state.rookies);
@@ -395,6 +409,7 @@
   // Jokić as written
   const CSV_PIECES = ["box_score", "box_adj", "on_adj", "off_adj", "team_sos_adjustment", "openrapm"];
   const csvPieces = v => [v[0], v[4], v[1], v[2], v[3], v[5]];
+  const CSV_WOSA = ["vs_starter_average", "leverage", "wosa"];
   function downloadCSV(filename, pairs) {
     const q = v => { if (v === null || v === undefined) return "";
                      const s = String(v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
@@ -402,8 +417,10 @@
       ? [["season", "player_id", "player", "team", "offense", "defense", "total", "wosa", "possessions"],
          ...pairs.map(([per, x]) => [per, x.id, x.n, x.tm, x.o[5], x.d[5], x.t[5], x.w, x.p])]
       : [["season", "player_id", "player", "team", "possessions",
-          ...["offense", "defense", "total"].flatMap(s => CSV_PIECES.map(k => s + "_" + k))],
-         ...pairs.map(([per, x]) => [per, x.id, x.n, x.tm, x.p, ...csvPieces(x.o), ...csvPieces(x.d), ...csvPieces(x.t)])];
+          ...["offense", "defense", "total"].flatMap(s => CSV_PIECES.map(k => s + "_" + k)), "minutes",
+          ...["offense", "defense", "total"].flatMap(s => CSV_WOSA.map(k => s + "_" + k))],
+         ...pairs.map(([per, x]) => [per, x.id, x.n, x.tm, x.p, ...csvPieces(x.o), ...csvPieces(x.d), ...csvPieces(x.t),
+                                     x.m, ...x.wo, ...x.wd, ...x.wt])];
     const text = "\ufeff" + rows.map(r => r.map(q).join(",")).join("\r\n") + "\r\n";
     const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
     const a = Object.assign(document.createElement("a"), { href: url, download: filename });
