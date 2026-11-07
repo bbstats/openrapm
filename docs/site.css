@@ -34,6 +34,8 @@ nav.site .colors + .theme { margin-left: 4px; }      /* the colors button, where
 .controls button[aria-pressed="true"], .controls button[aria-pressed="true"]:hover {
   background: var(--accent); border-color: var(--accent); color: #fff; }
 .controls :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* on a touch screen a phone zooms in on a box whose text is under 16 px when it is tapped */
+@media (pointer: coarse) { .controls select, .controls input { font-size: 16px; } }
 
 /* buttons joined in one box: one of them pressed */
 .seg { display: inline-flex; box-sizing: border-box; height: 40px; border: 1px solid var(--line); border-radius: 8px;

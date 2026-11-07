@@ -38,7 +38,9 @@
   table { border-collapse: separate; border-spacing: 0; width: auto; font-variant-numeric: tabular-nums; }
   th, td { padding: 9px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
   th[data-k]:not(.season) { min-width: 44px; }
-  td.name { min-width: 190px; }
+  /* a set width, so more columns fit: a longer name is cut with an ellipsis and shown whole on hover */
+  td.name { width: 150px; max-width: 150px; }
+  td.name > a { overflow: hidden; text-overflow: ellipsis; }
   td.team { width: 72px; white-space: normal; }       /* two teams on a line; a third goes to the next */
   th { color: var(--muted); font-weight: 600; font-size: 13px; vertical-align: bottom; cursor: pointer;
        user-select: none; }
@@ -89,7 +91,7 @@
     th, td { padding: 7px 5px; }
     th[data-k]:not(.season) { min-width: 0; }
     table { font-size: 13px; }
-    td.name { white-space: normal; min-width: 96px; }   /* a long name takes two lines so every column fits */
+    td.name { white-space: normal; width: auto; max-width: none; min-width: 96px; }   /* a long name takes two lines */
     td.name > a { margin: 0; padding: 0; }
     th.team, td.team { display: none; }                 /* the team goes under the name instead */
     td.name .tm { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.3; }
@@ -373,7 +375,7 @@
     tbody.innerHTML = rows.map(p => {
       const links = teams(p.tm, one ? String(p.s) : state.season);
       const first = one ? `<td class="season">${p.s}${similar.has(p.id + ":" + p.s) ? ` <a class="sim" href="similarity.html#player=${p.id}&amp;season=${p.s}" title="Similarity" aria-label="Similarity, ${p.s}">~</a>` : ""}</td>`
-        : `<td class="name"><a href="${esc(addr(state.season, state.team, p.id))}">${esc(p.n)}</a>` +
+        : `<td class="name"><a href="${esc(addr(state.season, state.team, p.id))}" title="${esc(p.n)}">${esc(p.n)}</a>` +
           (phone.matches ? `<span class="tm">${links}</span>` : "") + `</td>`;
       return `<tr${one && String(p.s) === latest ? ' class="now"' : ""}><td class="rank">${p.rank}</td>${first}<td class="team">${links}</td>` + cols.map(([key]) =>
         `<td${bold.includes(key) ? ' class="total"' : ""}${p.c ? shade(p.c[key]) : ""}>${key === "p" ? whole.format(p.p)
