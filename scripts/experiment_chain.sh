@@ -83,10 +83,12 @@ LOG=outputs/${NAME}_chain.log
 # noise_padbins127 (-0.009, z -1.09).
 # Since 2026-11-04 the incumbent is experiment 136, mid136: experiment 134's line and folds, rating134's, at the shipped
 # width settings, which 151 reads from settings.ShrinkSettings for it.
-INC_NAME=${INC_NAME:-mid136}
-INC_SYSTEM=${INC_SYSTEM:-rating134}       # the incumbent's folds (<name>_early, <name>_within) for 151
+# Since 2026-11-06 it is experiment 139, zones139: the team's shots by zone in Box Adj, its own line zones139_line and folds;
+# no noise control on it yet, so noise_rating134 stands in.
+INC_NAME=${INC_NAME:-zones139}
+INC_SYSTEM=${INC_SYSTEM:-zones139}       # the incumbent's folds (<name>_early, <name>_within) for 151
 CONTROL_NAME=${CONTROL_NAME:-noise_rating134}  # the noise control's folds (<name>_early, <name>_within) for 151
-INC_FOLDS=${INC_FOLDS:-rating134_early,rating134_within}
+INC_FOLDS=${INC_FOLDS:-zones139_early,zones139_within}
 AUDIT_REF=${AUDIT_REF:-creation110_within}
 INC=outputs/season_ratings_${INC_NAME}.parquet
 BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1_tune2 --features hustle_no_three_pct_self_creation}

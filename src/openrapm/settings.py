@@ -185,11 +185,12 @@ class PriorSettings:
     # body listing, the part-season rows and self-creation); experiment 127, adopted the same day, was tested and
     # adopted on this line, so it stayed until a refit passed a test of its own: rating134 since experiment 134, adopted
     # 2026-11-04 (the owner: "Adopt, then show me"), the weights fitted on the within-season test through the ridge
-    # (`openrapm second-prior --target rating`) instead of on the swaps.  It is the
+    # (`openrapm second-prior --target rating`) instead of on the swaps; zones139_line since experiment 139, adopted
+    # 2026-11-06 (the owner: "Adopt but don't publish until tomorrows run"), the team's shots counted by five zones.  It is the
     # box-score prior corrected for who a player played with and against, by a line fitted on the swaps of the
     # within-season folds' held-back games written under outputs/second_prior/<tag>/ (second_prior.py;
     # notes/DECISIONS.md, experiment 81, the owner, 2026-10-19: "take the handoff idea ... in as inputs to the prior")
-    second_prior: str = "rating134"
+    second_prior: str = "zones139_line"
     # the line's player folds (player_id % 5) and its ridge penalty relative to the mean diagonal of its Gram matrix:
     # step 5's type model's, the method the line borrows
     second_prior_folds: int = 5
@@ -207,8 +208,10 @@ class PriorSettings:
     # season's possession-weighted average, so no player fold's line carries its own level (experiment 93)
     # shipped: "context_types_team_rates_centred", experiment 134, adopted 2026-11-04, today's 29 and the team's eight
     # box rates with the player on and off court ("context_and_types_centred", experiment 93, from 2026-10-21;
-    # experiment 82's "context_and_types" from 2026-10-20)
-    second_prior_inputs: str = "context_types_team_rates_centred"
+    # experiment 82's "context_and_types" from 2026-10-20); "context_types_team_zones_centred" since experiment 139,
+    # adopted 2026-11-06: the team's shots made and missed by zone, rim, short mid, long mid, three and long three, in
+    # place of threes and twos
+    second_prior_inputs: str = "context_types_team_zones_centred"
     # 0: each season's line is fitted on every season the setting allows.  K: on only the K nearest of them, as step 4
     # fits its multipliers (experiment 85: experiment 82 won 1997-2016 and lost 2017-2026 with one line for all eras)
     second_prior_nearest: int = 0
@@ -300,8 +303,9 @@ class ShrinkSettings:
     # box-score prior's part-season rows), its own; since experiment 110, adopted 2026-10-25 (self-creation in the
     # offensive prior), its own; since experiment 126, adopted 2026-11-01 (the swap part of the prior refitted), its
     # own; since experiment 127, adopted the same day (the possession bins' targets padded toward the league rate),
-    # its own; since experiment 134, adopted 2026-11-04 (the line fitted on the rating, with team rates), its own
-    folds_tag: str = "rating134_early,rating134_within"
+    # its own; since experiment 134, adopted 2026-11-04 (the line fitted on the rating, with team rates), its own; since
+    # experiment 139, adopted 2026-11-06 (the team's shots by zone), its own
+    folds_tag: str = "zones139_early,zones139_within"
     # each season's factors from only the K fold seasons nearest it (prior_shrink.fold_seasons_used): the defensive
     # prior part holds up less in older seasons, 0.79 in 1997-2006 against 0.95 in 2017-2026 (notes/DECISIONS.md,
     # "Era drift" and experiment 55, adopted 2026-10-12: "yes. build."); 0 would use every fold season the rule allows
@@ -311,8 +315,9 @@ class ShrinkSettings:
     # (Richardson extrapolation, prior_shrink.full_season_multipliers; notes/DECISIONS.md, experiment 101, adopted
     # 2026-10-22: "we are going to do it"); "" fits on folds_tag alone, as the experiment chain does.  inputs99_k10
     # until experiment 107 was adopted; its own since, parts107_k10; experiment 110's own since 2026-10-25; experiment
-    # 126's own since 2026-11-01, then experiment 127's the same day; experiment 134's own since 2026-11-04
-    extrapolate_folds_tag: str = "rating134_k10"
+    # 126's own since 2026-11-01, then experiment 127's the same day; experiment 134's own since 2026-11-04; experiment
+    # 139's own since 2026-11-06
+    extrapolate_folds_tag: str = "zones139_k10"
     # a multiplier on the games' part too, fitted beside the prior's (prior_shrink, "The games' part freed";
     # notes/DECISIONS.md, experiment 65, adopted 2026-10-15: "Adopt one multiplier as the new incumbent")
     free_games_part: bool = True
