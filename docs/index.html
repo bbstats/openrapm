@@ -51,6 +51,8 @@
   th[aria-sort="ascending"]::after { content: "\2191"; visibility: visible; }
   th[aria-sort="descending"], th[aria-sort="ascending"] { color: var(--accent); }
   td.total { font-weight: 700; }
+  /* in a player's seasons, the latest season: an accent bar and season */
+  tr.now td.season { color: var(--accent); font-weight: 700; box-shadow: inset 3px 0 var(--accent); }
   td.msg { text-align: left; color: var(--muted); }
   td a { color: inherit; text-decoration: none; }
   td a:hover, td a:focus-visible { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
@@ -160,7 +162,7 @@
 
   // the season list and a player's seasons keep a sort each, so the way back finds the list sorted as it was
   const state = { view: "ratings", side: "total", season: null, team: "", q: "", player: null,
-                  sort: { list: { k: "t", dir: -1 }, player: { k: "s", dir: -1 } } };
+                  sort: { list: { k: "t", dir: -1 }, player: { k: "s", dir: 1 } } };
   const sorting = () => state.sort[state.player === null ? "list" : "player"];
   const table = $("table"), thead = table.querySelector("thead"), tbody = table.querySelector("tbody");
   const season = $("season"), team = $("team"), find = $("find"), chip = $("chip"), pieces = $("pieces");
@@ -316,7 +318,8 @@
     const th = e.target.closest("th[data-k]");
     if (!th) return;
     const s = sorting();
-    s.dir = s.k === th.dataset.k ? -s.dir : -1;       // a new column starts high to low, Season newest first
+    // a new column starts high to low, Season oldest first
+    s.dir = s.k === th.dataset.k ? -s.dir : th.dataset.k === "s" ? 1 : -1;
     s.k = th.dataset.k;
     render();
   });
@@ -352,12 +355,13 @@
     const teams = (tm, at) => tm.split("/").map(c =>
       `<a href="${esc(addr(at, one || c !== state.team ? c : "", null))}">${esc(c)}</a>`).join("/");
     const cols = COLUMNS[state.view], bold = detail ? "a" : SIDE_FIELD[state.side];
+    const latest = String(data.meta.seasons[0]);      // a player's latest-season row is marked: meta.seasons runs latest first
     tbody.innerHTML = rows.map(p => {
       const links = teams(p.tm, one ? String(p.s) : state.season);
       const first = one ? `<td class="season">${p.s}${similar.has(p.id + ":" + p.s) ? ` <a class="sim" href="similarity.html#player=${p.id}&amp;season=${p.s}" title="Similarity" aria-label="Similarity, ${p.s}">~</a>` : ""}</td>`
         : `<td class="name"><a href="${esc(addr(state.season, state.team, p.id))}">${esc(p.n)}</a>` +
           (phone.matches ? `<span class="tm">${links}</span>` : "") + `</td>`;
-      return `<tr><td class="rank">${p.rank}</td>${first}<td class="team">${links}</td>` + cols.map(([key]) =>
+      return `<tr${one && String(p.s) === latest ? ' class="now"' : ""}><td class="rank">${p.rank}</td>${first}<td class="team">${links}</td>` + cols.map(([key]) =>
         `<td${key === bold ? ' class="total"' : ""}${p.c ? shade(p.c[key]) : ""}>${key === "p" ? whole.format(p.p)
           : state.pct ? (p[key] === null ? "—" : Math.round(p[key]))
           : detail ? fmt(p[key]) : fmt1(p[key])}</td>`).join("") + `</tr>`;
