@@ -16,6 +16,8 @@
   nav.site .colors[aria-pressed="true"] { border-color: var(--muted); }
   body { color: var(--ink); font: 14px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
   #find { width: 210px; }
+  /* Detail's eleven number columns, the pieces and WOSA's inputs, need more than the site's 1,000 px */
+  body.wide main { max-width: 1280px; }
   /* the side buttons sit left of Detail, so the button stays under the pointer when they appear */
   .cols { display: inline-flex; gap: 8px; margin-left: auto; }
   .controls #pct, .controls #rookies { width: 40px; padding: 0; }
@@ -392,6 +394,7 @@
     $("older").disabled = state.season === seasons[seasons.length - 1];
     $("newer").disabled = state.season === seasons[0];
     $("side").hidden = !detail;
+    document.body.classList.toggle("wide", detail);
     pieces.setAttribute("aria-pressed", detail);
     $("pct").setAttribute("aria-pressed", !!state.pct);
     $("rookies").setAttribute("aria-pressed", !!state.rookies);
