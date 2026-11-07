@@ -217,10 +217,14 @@ command runs in one process as before.
   fold, up to about 0.8 per 100 on 2026 defence (notes/DECISIONS.md, "Experiment 82's defensive prior read through").
   Centring leaves the swaps' differences as they were, so the line, `ctx82`, is the same.
 - **Settings:** penalty 13,037 on both sides, one value for every season (experiment 2 of 2026-09-14
-  evening); the second prior `rating134`, inputs `context_types_team_rates_centred`, team totals held (experiments 82,
-  93 and 134).  Since experiment 134 the line's weights are fitted on the within-season test through the ridge, not on the
-  swaps: `openrapm second-prior --models padbins127 --folds padbins127_early,padbins127_within --tag rating134
+  evening); the second prior `zones139_line`, inputs `context_types_team_zones_centred`, team totals held (experiments 82,
+  93, 134 and 139).  Since experiment 134 the line's weights are fitted on the within-season test through the ridge, not on
+  the swaps: `openrapm second-prior --models padbins127 --folds padbins127_early,padbins127_within --tag rating134
   --inputs context_types_team_rates_centred --target rating` (`rating_line.py`, a rating is a straight line in its prior).
+  Since experiment 139 (adopted 2026-11-06) the team rates count shots made and missed by zone, rim, 3 feet or closer, short
+  mid, to 13 feet, long mid, to the line, three, to 26 feet, and long three, 27 feet or more, in place of threes and twos:
+  the stints carry the zones (`data/stint_parser.py`), and `zones139_line` is the same pass's sums on those inputs
+  (`scratch/2026-11-05_second_stage/zones139_line.py`).
 - **Command:** `python -m openrapm rate` (steps 1-3); `--seasons 2026` rates one season, whose values
   equal the 2026 rows of a thirty-season run.
 - **Code:** `src/openrapm/prior_rapm.py`, `commands/build.py`.
