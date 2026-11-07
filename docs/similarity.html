@@ -10,8 +10,15 @@
   :root { --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6; --pick: #eef4fc; }
   :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5; --pick: #1f2a38; }
   body { color: var(--ink); font: 14px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  /* the player box reads as search and pick: a magnifier on the left, a chevron on the right that opens the list */
   .combo { position: relative; }
-  #player { width: 250px; }
+  #player { width: 270px; padding-left: 34px; padding-right: 38px; }
+  .combo .glass { position: absolute; left: 11px; top: 12px; color: var(--muted); pointer-events: none; }
+  .controls .combo .open { position: absolute; right: 1px; top: 1px; height: 38px; width: 36px; padding: 0;
+                           display: inline-flex; align-items: center; justify-content: center; border: 0;
+                           background: transparent; color: var(--muted); }
+  .combo .open svg { transition: transform 0.15s; }
+  .combo:has(#player[aria-expanded="true"]) .open svg { transform: rotate(180deg); }
   #player-list { position: absolute; z-index: 10; top: 100%; left: 0; min-width: 100%; max-height: 360px;
                  overflow-y: auto; margin: 3px 0 0; padding: 4px 0; list-style: none; background: Canvas;
                  border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 18px rgb(0 0 0 / 0.14); }
@@ -27,6 +34,8 @@
   th:hover { color: var(--ink); }
   th.rank, td.rank { color: var(--muted); cursor: default; }
   th.name, td.name { text-align: left; position: sticky; left: 0; background: Canvas; cursor: default; }
+  /* a set width, so more columns fit: a longer name is cut with an ellipsis and shown whole on hover */
+  td.name { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
   th.season { cursor: default; }
   /* every header keeps room for the sort arrow, so sorting never shifts the columns */
   th[data-k]::after { content: "\2193"; margin-left: 3px; visibility: hidden; }
@@ -53,8 +62,10 @@
   <h1>Similarity</h1>
   <div class="controls">
     <div class="combo">
+      <svg class="glass" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.75" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       <input id="player" type="text" role="combobox" aria-label="Player" aria-autocomplete="list" aria-expanded="false"
-             aria-controls="player-list" placeholder="player name" autocomplete="off" spellcheck="false">
+             aria-controls="player-list" placeholder="Search players" autocomplete="off" spellcheck="false">
+      <button type="button" class="open" id="player-open" tabindex="-1" aria-label="Show players" title="Show players"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 5.25 7 9.25l4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <ul id="player-list" role="listbox" hidden></ul>
     </div>
     <span class="step"><button type="button" id="older" aria-label="Previous season" title="Previous season">&lsaquo;</button><select id="season" aria-label="Season"></select><button type="button" id="newer" aria-label="Next season" title="Next season">&rsaquo;</button></span>
@@ -142,7 +153,7 @@
       playerList.children[n].scrollIntoView({ block: "nearest" });
     } else playerInput.removeAttribute("aria-activedescendant");
   }
-  function offer(list) {
+  function offer(list, start = 0) {
     offered = list;
     playerList.replaceChildren(...list.map((p, j) => {
       const li = document.createElement("li");
@@ -153,9 +164,14 @@
     }));
     playerList.hidden = !list.length;
     playerInput.setAttribute("aria-expanded", list.length > 0);
-    highlight(list.length ? 0 : -1);
+    highlight(list.length ? Math.max(start, 0) : -1);
   }
   const close = () => offer([]);
+  // with nothing typed: every player of the season shown, by name, so the box also works as a list to pick from
+  function browse() {
+    const list = players.filter(p => (seasonsOf.get(p.id) || []).includes(state.season));
+    offer(list, list.findIndex(p => p.id === state.id));            // the picked player is marked in it
+  }
   const labelOf = id => (players.find(p => p.id === id) || { label: "" }).label;
   const showPick = () => { if (document.activeElement !== playerInput) playerInput.value = labelOf(state.id); };
   function choose(p) {
@@ -195,6 +211,7 @@
     const td = document.createElement("td");
     td.textContent = text;
     if (cls) td.className = cls;
+    if (cls === "name") td.title = text;            // the whole name, where the column cuts it
     tr.appendChild(td);
   }
   function row(r, rank, distance, pick) {
@@ -258,10 +275,21 @@
   document.querySelectorAll("[data-list]").forEach(b => b.addEventListener("click", () => {
     if (b.dataset.list !== state.list) { state.list = b.dataset.list; writeAddress(false); render(); }
   }));
-  playerInput.addEventListener("focus", () => playerInput.select());
-  playerInput.addEventListener("input", () => offer(matching(playerInput.value)));
+  playerInput.addEventListener("focus", () => { playerInput.select(); browse(); });
+  // mousedown, not click, so the box keeps its focus; a second press closes the list
+  $("player-open").addEventListener("mousedown", e => {
+    e.preventDefault();
+    if (!playerList.hidden) return close();
+    if (document.activeElement === playerInput) browse(); else playerInput.focus();
+  });
+  playerInput.addEventListener("input", () => { if (playerInput.value.trim()) offer(matching(playerInput.value)); else browse(); });
   playerInput.addEventListener("keydown", e => {
-    if (e.key === "ArrowDown" && playerList.hidden) { offer(matching(playerInput.value)); e.preventDefault(); return; }
+    if (e.key === "ArrowDown" && playerList.hidden) {
+      if (playerInput.value.trim() && playerInput.value !== labelOf(state.id)) offer(matching(playerInput.value));
+      else browse();
+      e.preventDefault();
+      return;
+    }
     if (playerList.hidden) return;
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       highlight((active + (e.key === "ArrowDown" ? 1 : offered.length - 1)) % offered.length);
