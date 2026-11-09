@@ -7,8 +7,8 @@
 <link rel="stylesheet" href="site.css">
 <script src="site.js"></script>
 <style>
-  :root { --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6; }
-  :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5; }
+  :root { --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6; --good: 34 165 90; --bad: 222 64 64; }
+  :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5; --good: 52 190 110; --bad: 235 85 85; }
   body { color: var(--ink); font: 14px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
   h1 { margin-bottom: 0; }
   .byline { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
@@ -18,6 +18,10 @@
   th { color: var(--muted); font-weight: 600; font-size: 13px; vertical-align: bottom; cursor: pointer;
        user-select: none; }
   th:hover { color: var(--ink); }
+  /* the colors button: the pinwheel in gray while off, in color while on */
+  nav.site .colors svg { filter: grayscale(1); opacity: 0.75; }
+  nav.site .colors[aria-pressed="true"] svg { filter: none; opacity: 1; }
+  nav.site .colors[aria-pressed="true"] { border-color: var(--muted); }
   th.rank, td.rank { color: var(--muted); cursor: default; }
   th.name, td.name { text-align: left; }
   th.name { cursor: default; }
@@ -67,6 +71,7 @@
     <a href="bias.html">Bias</a>
     <a href="about.html">About</a>
     <a href="changelog.html">Changelog</a>
+    <button class="colors" id="colors" type="button" aria-pressed="false" aria-label="Colors" title="Colors"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 8V1.5A4.5 4.5 0 0 1 12.5 6z" fill="#e5484d"/><path d="M8 8V1.5A4.5 4.5 0 0 1 12.5 6z" fill="#f5b700" transform="rotate(90 8 8)"/><path d="M8 8V1.5A4.5 4.5 0 0 1 12.5 6z" fill="#2fa36b" transform="rotate(180 8 8)"/><path d="M8 8V1.5A4.5 4.5 0 0 1 12.5 6z" fill="#3987e5" transform="rotate(270 8 8)"/><circle cx="8" cy="8" r="1.1" fill="currentColor"/></svg></button>
     <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
   </nav>
   <h1>Power Ratings</h1>
@@ -95,15 +100,51 @@
                  t: "Offense plus defense, points per 100 possessions" };
   const state = { sort: { k: "t", dir: -1 }, open: new Set() };
   const table = $("table"), thead = table.querySelector("thead"), tbody = table.querySelector("tbody");
-  let data = null;
+  let data = null, pools = null;
+  // the colors button, as on the ratings page: each number shaded by where it falls among its own kind, green at the
+  // top, none at the middle, red at the bottom.  A team against the 30 teams, a player against every player listed, a
+  // team's last 10 performance against the 30 teams'.  Remembered like the theme
+  try { state.colors = localStorage.getItem("colors") === "1"; } catch (e) {}
+  const adds = ([, , share, , , t]) => share === null ? t : share / 100 * t;
+  // the share of `vals`, sorted low to high, below v, ties counted half
+  function pctIn(vals, v) {
+    const n = vals.length;
+    if (!n) return null;
+    let lo = 0, hi = n;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (vals[m] < v) lo = m + 1; else hi = m; }
+    const below = lo;
+    hi = n;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (vals[m] <= v) lo = m + 1; else hi = m; }
+    return 100 * (below + (lo - below) / 2) / n;
+  }
+  function shade(vals, v) {
+    if (!state.colors) return "";
+    const q = pctIn(vals, v);
+    return q === null || q === 50 ? ""
+      : ` style="background: rgb(var(${q > 50 ? "--good" : "--bad"}) / ${(0.6 * Math.abs(q - 50) / 50).toFixed(3)})"`;
+  }
+  function buildPools() {
+    const low = xs => xs.sort((a, b) => a - b);
+    const each = rows => ({ o: low(rows.map(r => r[3])), d: low(rows.map(r => r[4])), t: low(rows.map(r => r[5])),
+                            adds: low(rows.map(adds)) });
+    const rows = data.teams.flatMap(team => team.players);
+    pools = { team: { o: low(data.teams.map(team => team.o)), d: low(data.teams.map(team => team.d)),
+                      t: low(data.teams.map(team => team.t)) },
+              player: each(rows.filter(r => r[1] !== null)), stats: each(rows.filter(r => r[2] === null)) };
+  }
 
   function roster(team) {
-    const rows = team.players.map(([n, id, share, o, d, t]) => {
+    // the last 10 performance first, then the players by what they add to the total, the rest of the team last
+    const order = row => row[2] === null ? 0 : row[1] === null ? 2 : 1;
+    const players = [...team.players].sort((a, b) => order(a) - order(b) || adds(b) - adds(a));
+    const rows = players.map(row => {
+      const [n, id, share, o, d, t] = row;
+      const pool = share === null ? pools.stats : pools.player;
       const name = id === null ? esc(n)
         : `<a href="./#season=${data.meta.season}&player=${id}">${esc(n)}</a>`;
       return `<tr${id === null ? ' class="others"' : ""}><td class="name">${name}</td><td>${share === null ? "" : pct(share)}</td>` +
-             `<td>${fmt(o)}</td><td>${fmt(d)}</td><td class="total">${fmt(t)}</td>` +
-             `<td>${fmt(share === null ? t : share / 100 * t)}</td></tr>`;
+             `<td${shade(pool.o, o)}>${fmt(o)}</td><td${shade(pool.d, d)}>${fmt(d)}</td>` +
+             `<td class="total"${shade(pool.t, t)}>${fmt(t)}</td><td${shade(pool.adds, adds(row))}>${fmt(adds(row))}</td></tr>`;
     }).join("");
     return `<tr class="players"><td colspan="99"><div class="inner"><table class="roster"><thead><tr><th class="name">Player</th>` +
            `<th title="Share of the team's possessions over its last 10 games, the latest 5 counted double">Share of possessions</th>` +
@@ -115,6 +156,7 @@
   }
 
   function render() {
+    $("colors").setAttribute("aria-pressed", !!state.colors);
     const { k, dir } = state.sort;
     const teams = [...data.teams].sort((a, b) => dir * (a[k] - b[k]) || b.t - a.t);
     const th = (key, name) => `<th data-k="${key}" title="${TIPS[key]}"${key === k ? ` aria-sort="${dir < 0 ? "descending" : "ascending"}"` : ""}>${name}</th>`;
@@ -124,11 +166,17 @@
       const open = state.open.has(team.tm);
       return `<tr class="team" data-tm="${esc(team.tm)}" tabindex="0" aria-expanded="${open}">` +
         `<td class="rank">${i + 1}</td><td class="name">${esc(team.tm)}<span class="full">${esc(team.name)}</span></td>` +
-        `<td>${team.g}</td><td>${fmt(team.o)}</td><td>${fmt(team.d)}</td><td class="total">${fmt(team.t)}</td></tr>` +
+        `<td>${team.g}</td><td${shade(pools.team.o, team.o)}>${fmt(team.o)}</td><td${shade(pools.team.d, team.d)}>${fmt(team.d)}</td>` +
+        `<td class="total"${shade(pools.team.t, team.t)}>${fmt(team.t)}</td></tr>` +
         (open ? roster(team) : "");
     }).join("");
   }
 
+  $("colors").addEventListener("click", () => {
+    state.colors = !state.colors;
+    try { localStorage.setItem("colors", state.colors ? "1" : "0"); } catch (e) {}
+    if (data) render();
+  });
   thead.addEventListener("click", e => {
     const key = e.target.closest("th")?.dataset.k;
     if (!key) return;
@@ -155,6 +203,7 @@
 
   fetch("data/power.json").then(r => r.json()).then(doc => {
     data = doc;
+    buildPools();
     $("byline").textContent = `${doc.meta.season} · last ${doc.meta.games} games · through ${day(doc.meta.through)}`;
     render();
   }).catch(() => { tbody.innerHTML = `<tr><td class="msg" colspan="99">Could not load the power ratings.</td></tr>`; });
