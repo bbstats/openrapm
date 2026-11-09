@@ -12873,3 +12873,23 @@ Flat against today's at the other days: 7% -0.034, z -0.38; 25% -0.219, z -1.58,
 **Checks 159 to 161 on the published build.**  All 14 stats against Power at the 10% day -1.391, z -2.79, 20 of 30; by era -1.782, z -2.59; -1.761, z -1.53; -0.631, z -0.88, against -1.417, z -2.83 on rating134.  Backward elimination against all 14 +0.174, z +0.80, in 2017-2026 +0.518, z +2.58, 3 of 10; the same verdict.  Earlier seasons only -1.179, z -1.96, 13 of 20.  500 shuffles: 0 at or below the real change, and 7 in 2017-2026.  The leak audit all 0.  check 159's limit is closed: the gain is no smaller on the published build.  Nothing published changes.
 
 **The owner, 2026-11-09, on check 163: "Ok fine, flat works".**  The forecast counts each of the last 10 games once, in the shares and the stats, with all 14 stats.  The Power page keeps its doubled latest 5.  Nothing is published; whether the forecast becomes part of the morning job is open.
+
+
+## Check 164: are the last-10 stats a stand-in for an easier upcoming schedule? (the owner, 2026-11-09; registered before any result)
+
+The owner: "are we sure that the stats we are adding aren't just projecting whether or not a team is going to be playing easier competition?"
+
+**Why it could happen.**  The forecast accounts for each next opponent through that opponent's Power and stats as of the day, an early and noisy reading.  A season's schedule balances, so a team that has played hard opponents tends to have easier ones ahead, and its last-10 stats can carry that.
+
+**The test, `scripts/checks/164_power_next10_schedule.py`, on the published build, flat weights.**  Each next-10 game gains the opponent's strength in hindsight: its margin per 100 over the whole regular season with that game taken out.  That is information no forecast has; it is the strongest control of the schedule available.  With a free multiplier and no penalty:
+
+1. The forecast's form as it stands, with no hindsight.
+2. The same plus the hindsight opponent strength, in both the Power-alone baseline and the fit with the stats.
+3. Team side only: the team's Power and the team's own stats, the opponent described only by the hindsight strength.
+4. As 3, and the baseline also holds the mean hindsight strength of the team's last 10 opponents, its past schedule.
+
+Each reads the change in squared error per game and in a team's 10-game average, stats minus no stats, each season held out, by era, at four days of the season.
+
+**Direct link.**  With each team's stats part from a fit on the other seasons, the correlation inside a season with the mean hindsight strength of its next 10 opponents, of its last 10 opponents, and with its share of home games among the next 10, then averaged over 30 seasons.  An easier-schedule stand-in would show a clearly negative correlation with the next 10 opponents' strength.
+
+**The reading.**  The stats are not a schedule stand-in if at the 10% day the gain under 2 stays at z below -2 and is at least two thirds of the gain under 1, and the correlation with the next 10 opponents' strength is within 0.05 of 0.  If the gain shrinks by more than a third or the correlation is clearly negative, part of it is schedule, and the size of that part is reported.
