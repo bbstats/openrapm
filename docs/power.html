@@ -97,8 +97,8 @@
   const state = { sort: { k: "t", dir: -1 }, open: new Set() };
   const table = $("table"), thead = table.querySelector("thead"), tbody = table.querySelector("tbody");
   let data = null, pools = null;
-  // the colors button, as on the ratings page: each number shaded by where it falls among its own kind, green at the
-  // top, none at the middle, red at the bottom.  A team against the 30 teams, a player against every player listed, a
+  // the colors button, as on the ratings page: each number shaded by how large it is among its own kind: white at 0.00,
+  // greener the further above it, redder the further below it.  A team against the 30 teams, a player against every player listed, a
   // team's last 10 performance against the 30 teams'.  Remembered like the theme
   try { state.colors = localStorage.getItem("colors") === "1"; } catch (e) {}
   // a row's offense, defense and total contributions to its team: a player's share of the possessions times his
@@ -116,10 +116,12 @@
     return 100 * (below + (lo - below) / 2) / n;
   }
   function shade(vals, v) {
-    if (!state.colors) return "";
-    const q = pctIn(vals, v);
-    return q === null || q === 50 ? ""
-      : ` style="background: rgb(var(${q > 50 ? "--good" : "--bad"}) / ${(0.6 * Math.abs(q - 50) / 50).toFixed(3)})"`;
+    const shown = Math.round(v * 100) / 100;                    // the number on the page: 0.00 is always white
+    if (!state.colors || shown === 0) return "";
+    // how large it is among the numbers of its own sign, so 0.00 is the white middle, above it green and below it red
+    const same = shown > 0 ? vals.filter(x => x > 0) : vals.filter(x => x < 0).map(x => -x).reverse();
+    const q = pctIn(same, Math.abs(shown));
+    return ` style="background: rgb(var(${shown > 0 ? "--good" : "--bad"}) / ${(0.6 * q / 100).toFixed(3)})"`;
   }
   function buildPools() {
     const low = xs => xs.sort((a, b) => a - b);
