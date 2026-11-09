@@ -329,11 +329,11 @@ def test_site_writes_ratings_json_alone_by_default(monkeypatch):
     monkeypatch.setattr(site, "run_site", lambda cfg, **kwargs: seen.update(kwargs) or 0)
     assert cli.main(["site"]) == 0
     assert seen == dict(ratings=None, out_dir=None, built=None, bias=False, decomposition=False,
-                        similarity=False, openrapm_decomposition=False, power=False)
+                        similarity=False, openrapm_decomposition=False, power=False, power_forecast=False)
     assert cli.main(["site", "--ratings", "r.parquet", "--out-dir", "out", "--built", "2026-10-09", "--bias",
                      "--decomposition", "--similarity", "--openrapm-decomposition", "--power"]) == 0
     assert seen == dict(ratings="r.parquet", out_dir="out", built="2026-10-09", bias=True, decomposition=True,
-                        similarity=True, openrapm_decomposition=True, power=True)
+                        similarity=True, openrapm_decomposition=True, power=True, power_forecast=False)
 
 
 def test_site_no_longer_takes_the_old_bias_pages_tables_folder():
