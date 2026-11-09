@@ -138,7 +138,7 @@
     const order = row => row[2] === null ? 0 : row[1] === null ? 2 : 1;
     const players = [...team.players].sort((a, b) => order(a) - order(b) || contributions(b)[2] - contributions(a)[2]);
     const head = `<tr class="player head"><td></td><td class="name">Player</td><td></td>` +
-                 `<td>Off. Contrib</td><td>Def. Contrib</td><td>Total Contrib</td></tr>`;
+                 `<td>Off. Contrib</td><td>Def. Contrib</td><td>Tot Contrib</td></tr>`;
     return head + players.map(row => {
       const [n, id, share] = row;
       const [o, d, t] = contributions(row);
