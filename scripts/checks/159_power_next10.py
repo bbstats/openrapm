@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -44,11 +45,12 @@ from openrapm.commands.site import RECENT_GAMES, game_teams, player_game_possess
 from openrapm.data.config import load_config, resolve  # noqa: E402
 from openrapm.prior_shrink import WITHIN_COLUMNS, shrink_fold  # noqa: E402
 
+FAMILY = os.environ.get("POWER_NEXT10_FAMILY", "rating134")  # which build's season-so-far ratings are read
 CUTS = {
-    "7%": "rating134_cut0715_held",
-    "10%": "rating134_cut10_held",
-    "25%": "rating134_cut25_held",
-    "50%": "rating134_cut50_held",
+    "7%": f"{FAMILY}_cut0715_held",
+    "10%": f"{FAMILY}_cut10_held",
+    "25%": f"{FAMILY}_cut25_held",
+    "50%": f"{FAMILY}_cut50_held",
 }
 TODAY_CUT = "10%"
 SEASONS = range(1997, 2027)
@@ -118,15 +120,20 @@ def season_game_table(season: int, cfg: dict) -> pd.DataFrame:
     return table.sort_values(["tm", "game_date", "game_id"], kind="stable").reset_index(drop=True)
 
 
-def last_games_stats(played: pd.DataFrame) -> pd.DataFrame:
+def last_games_stats(played: pd.DataFrame, game_weights=None) -> pd.DataFrame:
     """The added stats of each team over its last `LAST_GAMES` games of `played`: one row per team, indexed by tm.
-    Every column is centered over the teams, so a season's or a day's level cannot enter."""
+    Every column is centered over the teams, so a season's or a day's level cannot enter.  `game_weights(tm, back)`,
+    given each game's team and how many games before the team's latest it is, returns the games' weights; by default
+    the latest `RECENT_GAMES` count `STATS_RECENT_WEIGHT`."""
     last = played.sort_values(["tm", "game_date", "game_id"], kind="stable").groupby("tm").tail(LAST_GAMES).copy()
     columns = [f"{c}_{side}" for c in COUNTS for side in "od"]
     # each game's counts and possessions take the game's weight before any rate is formed, so a rate is
     # (2 x the latest 5 games' count + the 5 before them) / (2 x their possessions + the 5 before them)
     games_back = last.groupby("tm").cumcount(ascending=False)  # 0 for the team's latest game
-    weight = np.where(games_back < RECENT_GAMES, STATS_RECENT_WEIGHT, 1.0)
+    if game_weights is None:
+        weight = np.where(games_back < RECENT_GAMES, STATS_RECENT_WEIGHT, 1.0)
+    else:
+        weight = game_weights(last.tm.to_numpy(), games_back.to_numpy())
     last[columns] = last[columns].astype(float).mul(weight, axis=0)
     sums = last.groupby("tm")[columns].sum()
     league = sums.sum()
