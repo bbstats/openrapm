@@ -1,7 +1,7 @@
 """Check 159: Power as the starting point for a team's next 10 games, with its last 10 games' stats added.
 
-The owner, 2026-11-08: "using current power ratings, then add in L10 shot zones, orb%, turnovers, and ft stuff, i want to
-use these power ratings as a prior for the next 10 games!".  notes/DECISIONS.md, "Check 159", holds the rule, written
+The owner, 2026-11-08: "using current power ratings, then add in L10 shot zones, orb%, turnovers, and ft stuff, i want
+to use these power ratings as a prior for the next 10 games!".  notes/DECISIONS.md, "Check 159", holds the rule, written
 before any result.
 
 Words used below
@@ -234,7 +234,7 @@ def day_ratings(wowy, within: Path, folder: str) -> dict:
 
 # -------------------------------------------------------------------------------------------- rows of a day
 def day_rows(cut: str, ratings: dict, tables: dict, stints: dict, teams: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """(team rows: season, tm, power, added stats; game rows: season, tm, opp, home, margin) of one day, every season."""
+    """(team rows: season, tm, power, added stats; game rows: season, tm, opp, home, margin) of one day."""
     team_rows, game_rows = [], []
     for season in SEASONS:
         rated, played_ids = ratings[season]
@@ -496,7 +496,7 @@ def main() -> None:
     base, _ = final_fit(base_x / base_spread, y, season, np.array([False, False, False]))
     base = base / base_spread
     print(
-        f"\nfinished fit, 10% day: penalty {penalty}; home edge {beta[0]:.2f}; Power multipliers offense {beta[1]:.3f}, "
+        f"\nfit, 10% day: penalty {penalty}; home edge {beta[0]:.2f}; Power multipliers offense {beta[1]:.3f}, "
         f"defense {beta[2]:.3f}; Power alone multipliers offense {base[1]:.3f}, defense {base[2]:.3f}",
         flush=True,
     )
