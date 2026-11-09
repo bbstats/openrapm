@@ -40,7 +40,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from openrapm.commands.site import game_teams, player_game_possessions, team_shares  # noqa: E402
+from openrapm.commands.site import RECENT_GAMES, game_teams, player_game_possessions, team_shares  # noqa: E402
 from openrapm.data.config import load_config, resolve  # noqa: E402
 from openrapm.prior_shrink import WITHIN_COLUMNS, shrink_fold  # noqa: E402
 
@@ -70,6 +70,9 @@ COUNTS = [
     *[f"{kind}_{zone}" for kind in ("fga", "fgm") for zone in ("rim", "smid", "lmid", "thr", "lthr")],
 ]
 SHUFFLE_SEED = 159
+# what each of a team's latest `RECENT_GAMES` games counts for in the last-10 stats; 1 is a plain last 10, as checks 159
+# to 161 ran.  Check 162 sets it to the Power page's site.RECENT_WEIGHT
+STATS_RECENT_WEIGHT = 1.0
 
 
 # ----------------------------------------------------------------------------------------- the games of a season
@@ -118,8 +121,14 @@ def season_game_table(season: int, cfg: dict) -> pd.DataFrame:
 def last_games_stats(played: pd.DataFrame) -> pd.DataFrame:
     """The added stats of each team over its last `LAST_GAMES` games of `played`: one row per team, indexed by tm.
     Every column is centered over the teams, so a season's or a day's level cannot enter."""
-    last = played.sort_values(["tm", "game_date", "game_id"], kind="stable").groupby("tm").tail(LAST_GAMES)
-    sums = last.groupby("tm")[[f"{c}_{side}" for c in COUNTS for side in "od"]].sum()
+    last = played.sort_values(["tm", "game_date", "game_id"], kind="stable").groupby("tm").tail(LAST_GAMES).copy()
+    columns = [f"{c}_{side}" for c in COUNTS for side in "od"]
+    # each game's counts and possessions take the game's weight before any rate is formed, so a rate is
+    # (2 x the latest 5 games' count + the 5 before them) / (2 x their possessions + the 5 before them)
+    games_back = last.groupby("tm").cumcount(ascending=False)  # 0 for the team's latest game
+    weight = np.where(games_back < RECENT_GAMES, STATS_RECENT_WEIGHT, 1.0)
+    last[columns] = last[columns].astype(float).mul(weight, axis=0)
+    sums = last.groupby("tm")[columns].sum()
     league = sums.sum()
     out = pd.DataFrame(index=sums.index)
     for side in "od":
