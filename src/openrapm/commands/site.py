@@ -1078,8 +1078,8 @@ def write_similarity(cfg: dict, ratings_path: Path, data_dir: Path, built: str) 
 # minutes), counts half: "blowouts weighted somewhat less".  Each of a team's 5 latest games counts double the 5 before
 # them (the owner, 2026-10-28: "weigh the most recent 5 more than the previous 5").
 #
-# The Power tab is hidden until every team has played 10 games (meta.ready; site.js shows the tab), the owner,
-# 2026-10-28: "hide it until there are 10 games in the system".
+# The Power tab is hidden until every team has played `POWER_READY_GAMES` games (meta.ready; site.js shows the tab), the
+# owner, 2026-10-28, then 2026-11-09: "'minimum=8' is a fine rule to swap in".
 #
 # The file, docs/data/power.json: {"meta": {"season", "through", "games", "recent_games", "recent_weight",
 #     "blowout_weight", "ready", "built"},
@@ -1090,6 +1090,7 @@ def write_similarity(cfg: dict, ratings_path: Path, data_dir: Path, built: str) 
 # last row, ["Other players", null, their summed share, their share-weighted ratings].
 POWER_FILE = "power.json"
 POWER_GAMES = 10
+POWER_READY_GAMES = 8
 RECENT_GAMES = 5
 RECENT_WEIGHT = 2.0
 BLOWOUT_WEIGHT = 0.5
@@ -1206,7 +1207,7 @@ def power_document(table: pd.DataFrame, games: pd.DataFrame, season: int, built:
     teams.sort(key=lambda team: -team["t"])
     meta = dict(season=season, through=pd.Timestamp(games.game_date.max()).strftime("%Y-%m-%d"), games=POWER_GAMES,
                 recent_games=RECENT_GAMES, recent_weight=RECENT_WEIGHT, blowout_weight=BLOWOUT_WEIGHT,
-                ready=min(team["g"] for team in teams) >= POWER_GAMES, built=built,
+                ready=min(team["g"] for team in teams) >= POWER_READY_GAMES, built=built,
                 average_team={side: round(value, 2) for side, value in average.items()})
     if forecast is not None:
         meta.update(forecast=True, share_played=round(forecast["share"], 4), flat_shares=forecast["flat"],

@@ -141,3 +141,20 @@ def test_with_the_stats_faded_no_stats_row_is_shown():
     document = document_with(pd.DataFrame({"o": [0.0, 0.0], "d": [0.0, 0.0]}, index=["HOM", "AWY"]))
     home = next(team for team in document["teams"] if team["tm"] == "HOM")
     assert all(row[1] is not None for row in home["players"])
+
+
+def test_the_power_tab_shows_once_every_team_has_played_eight_games():
+    def document_after(n: int) -> dict:
+        slots = {f"{side}{i}": [10 * (side == "a") + i] * n for side in "ha" for i in range(1, 6)}
+        ids = [*range(1, 6), *range(11, 16)]
+        names = [f"g{k}" for k in range(n)]
+        stints = pd.DataFrame({"game_id": names, "game_date": pd.date_range("2026-10-20", periods=n), "poss_h": 50,
+                               "poss_a": 50, "is_gt": False, **slots})
+        teams = pd.DataFrame([(game, pid, "HOM" if pid < 10 else "AWY", "Home" if pid < 10 else "Away")
+                              for game in names for pid in ids], columns=["game_id", "player_id", "tm", "name"])
+        table = pd.DataFrame({"season": 2027, "player_id": ids, "player_name": "P", "rating_off": 0.0, "rating_def": 0.0,
+                              "rating_total": 0.0, "poss_season": 500})
+        return site.power_document(table, site.player_game_possessions(stints, teams), 2027, "2026-11-09")
+
+    assert document_after(7)["meta"]["ready"] is False
+    assert document_after(8)["meta"]["ready"] is True
