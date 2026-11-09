@@ -12792,3 +12792,20 @@ Each group alone at the 10% day: zones -0.944, z -1.64; free throws -0.308, z -1
 The finished fit on all 30 seasons at the 10% day: penalty 1.0, inside the grid's limits; home edge 3.26; Power's multipliers 1.195 on offense and 1.261 on defense, 1.198 and 1.286 with no added stats.  So early in a season Power's gaps between teams run about a fifth short of the next 10 games.  Weights per 100 possessions: threes made over expected -0.236, long threes -0.521, rim makes over expected +0.094, opponents' rim makes -0.103, opponents' long mid makes +0.345, free throws made over expected +0.177, three attempts +0.048.  Recent three-point shooting above expected reads as luck, rim finishing and free-throw shooting as real.
 
 The 2027 table applies that fit to the published ratings of the games through 2026-11-07; the recomputed Power is within 0.004 of the page.  **Limit:** the past days' ratings are `rating134`, the build before the five-zone Box Adj (zones139, published 2026-11-07), and no season-so-far folders of zones139 exist.  The published Power already reads team shooting by zone, so the gain could be smaller on it.  The next read is the same check on season-so-far folds of zones139, about 30 minutes.  CSV files: `outputs/csv/check159_compared.csv`, `_today.csv`, `_weights.csv`.
+
+
+## Check 160: which last-10 stats to keep in the next-10-games forecast (the owner, 2026-11-08; registered before any result)
+
+The owner, on check 159: "feel free to judiciously deal w/ feature selection my guy", "eg like ok sure if oreb stuff doesnt matter fine just - smartly do feature selection".
+
+**Nothing published changes.**  `scripts/checks/160_power_next10_select.py`, read-only, on check 159's rows.
+
+**The candidates.**  Check 159's 14 stats, each taken or left whole on both ends, the team's and its opponents' (the owner's rule, 2026-10-03: never let a screen pick per side when the reason is the same on both): attempts and makes over expected from the rim, short mid, long mid, three and long three; offensive rebounds over expected; turnovers; free throw attempts; free throws made over expected.  Power on offense, Power on defense and the home edge are always in and carry no penalty.
+
+**The primary method, a shuffled-copy screen on the same rule as Boruta.**  In each of 100 rounds every stat gets a copy dealt to random teams of the same season, its two ends moved together.  One ridge regression holds the real stats and the copies.  A stat's importance is the square root of the sum of its two squared coefficients, on columns of unit spread.  A hit is a round in which a real stat's importance beats the largest copy's.  With a binomial test at 5% divided by 14 stats, a stat is accepted at 65 hits or more out of 100, rejected at 35 or fewer, and tentative between.  **Accepted and tentative stats are kept.**
+
+**The honest score.**  The whole selection runs again inside each held-out test: for each season it sees only the other 29, then a ridge on what it kept, with the penalty picked inside those 29, predicts the held-out season.  A control runs the same selection on stats dealt to the wrong teams.  Scored at all four days of the season, against Power at its own scale and against all 14 stats, as in check 159.
+
+**Beside it, reported and not chosen from after the fact.**  Accepted stats only; forward selection, adding the stat that most lowers the error on left-out seasons until none lowers it, again inside each held-out test; and dropping each stat in turn from the 14.
+
+**The rule.**  The screen's set replaces all 14 stats if, at the 10% day, its squared error is not worse than all 14's at z +1 and the control keeps on average at most one stat of 14.  The final list is the screen run once on all 30 seasons, and every stat's verdict, importance and number of held-out tests that kept it are shown.
