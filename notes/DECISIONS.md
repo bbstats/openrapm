@@ -12829,3 +12829,14 @@ The leak audit, four days of 30 seasons: 0 mismatches between the games read and
 Each season from 2007 predicted only from the seasons before it, all 14 stats against Power fitted the same way, squared error per game at the 10% day: 2007-2026 -1.206, standard error 0.603, z -2.00, 13 of 20; 2007-2016 -1.504, z -1.61, 7 of 10; 2017-2026 -0.907, z -1.13, 6 of 10.  At the 25% day -0.037, z -0.36; at 50% +0.096, z +0.33.
 
 500 shuffles of the stats across teams at the 10% day: all seasons real -1.417, shuffled mean +0.046, standard deviation 0.126, lowest -0.868, 0 of 500 at or below the real change.  2017-2026 real -0.637, shuffled mean +0.054, standard deviation 0.224, lowest -1.206, 8 of 500 at or below.  A shuffle's penalty runs high, so its fit sits close to Power and this reads whether the stats carry any signal; the season-paired z remains the stricter reading.
+
+
+## Check 162: the last-10 stats with the latest 5 games counted double (the owner, 2026-11-08; registered before any result)
+
+The owner, on checks 159 to 161: "are zones/orb/tov/ft done w/ same 'newer 5 weighted more' dealio? even if worse performance, i want to apply the same weight possibly? if linear easy, if not linear then would want to build it into the agg stats".
+
+They were not: Power's shares double a team's latest 5 games, the added stats were a plain last 10.  It is not linear: each stat is a count over possessions, so the weight goes on each game's counts and possessions before the division, and on the league's rates that "over expected" reads.  `last_games_stats` takes the weight, `site.RECENT_GAMES` and `site.RECENT_WEIGHT`, the Power page's own.  A team with 5 games or fewer has all of them doubled, as the page's shares do.  Power's blowouts-at-half is not applied to the stats; only the owner's "newer 5" is.
+
+**The test.**  All 14 stats, weighted against plain, paired by season, on the held-out squared error of the next 10 games, at the four days of a season, overall and by era; each against Power at its own scale; each season predicted only from the seasons before it at the 10% day.  Feature selection is not rerun.
+
+**The reading.**  The owner has said the weight may be wanted even if it scores worse, so no pass rule decides it.  The weighted version is called worse than plain only at z above +2 at the 10% day, and better only at z below -2 there, and either way the verdict is the owner's.  Nothing published changes.
