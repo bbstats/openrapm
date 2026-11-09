@@ -7,8 +7,8 @@ The owner, 2026-11-08: "be patient, be solid, be certain."  Three questions, non
        shrink's multipliers for a season must come from other seasons.
     2. Each season predicted only from the seasons before it, as a forecast would really be made.  Checks 159 and 160
        predict a season from the 29 others, later ones included.
-    3. All 14 stats dealt to the wrong teams many times over: how large a gain can a shuffle produce?  Each shuffle moves
-       a team's whole line of stats to another team of the same season, as check 159's control does once.
+    3. All 14 stats dealt to the wrong teams many times over: how large a gain can a shuffle produce?  Each shuffle
+       moves a team's whole line of stats to another team of the same season, as check 159's control does once.
 
     python scripts/checks/161_power_next10_audit.py [--shuffles 500]
 """
