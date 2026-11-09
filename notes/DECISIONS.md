@@ -12821,3 +12821,11 @@ The rule as registered had no era condition, and the owner's standing rule is th
 The list backward elimination keeps when run once on all 30 seasons: rim attempts, three attempts, rim makes, long mid makes, three makes, long three makes, offensive rebounds, free throw attempts and free throws made over expected.  All but offensive rebounds are kept in all 30 held-out tests; offensive rebounds in 15.  Left out: short mid attempts 9 of 30, long mid attempts 5, turnovers 2, long three attempts 0, short mid makes 0.
 
 Why hard selection loses: ridge at a penalty of 1.0 has already put the dead stats near 0, 0.005 on long three attempts, and the signal is many small weights.  The identical numbers of the forward and backward controls are not a bug: on wrong-team stats the penalty picked is 300 in 23 of 30 tests, each stat then acts alone, and the two methods choose the same stats in 30 of 30 tests, against 19 of 30 on the real stats.  Limit as in check 159: the past days' ratings are rating134, not zones139.
+
+**Check 161, an audit of checks 159 and 160, 2026-11-08 (the owner: "be patient, be solid, be certain").**  `scripts/checks/161_power_next10_audit.py`, read-only, 5 minutes.
+
+The leak audit, four days of 30 seasons: 0 mismatches between the games read and each fold's fit games, 0 games read outside the regular season, 0 games predicted that were also read, every predicted game after the last game read, 0 of 3,360 recorded leak checks failed, and no season's shrink multipliers fitted on that season.
+
+Each season from 2007 predicted only from the seasons before it, all 14 stats against Power fitted the same way, squared error per game at the 10% day: 2007-2026 -1.206, standard error 0.603, z -2.00, 13 of 20; 2007-2016 -1.504, z -1.61, 7 of 10; 2017-2026 -0.907, z -1.13, 6 of 10.  At the 25% day -0.037, z -0.36; at 50% +0.096, z +0.33.
+
+500 shuffles of the stats across teams at the 10% day: all seasons real -1.417, shuffled mean +0.046, standard deviation 0.126, lowest -0.868, 0 of 500 at or below the real change.  2017-2026 real -0.637, shuffled mean +0.054, standard deviation 0.224, lowest -1.206, 8 of 500 at or below.  A shuffle's penalty runs high, so its fit sits close to Power and this reads whether the stats carry any signal; the season-paired z remains the stricter reading.
