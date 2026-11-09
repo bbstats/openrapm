@@ -12846,3 +12846,20 @@ They were not: Power's shares double a team's latest 5 games, the added stats we
 Against Power at its own scale at the 10% day: weighted -1.108, z -2.47, 20 of 30, plain -1.417, z -2.83, 20 of 30.  Each season predicted only from the seasons before it: weighted -0.835, z -1.53, 11 of 20, plain -1.206, z -2.00, 13 of 20; in 2017-2026 weighted -0.808, z -1.05, plain -0.907, z -1.13.
 
 The hand-built weighting matches the code to 7e-15.  Weights barely move: Power's multipliers 1.201 and 1.247 weighted, 1.195 and 1.261 plain; threes made over expected -0.211 and -0.236; long mid makes by opponents +0.302 and +0.345.  2027's forecast moves by at most 0.55: Miami -0.55, Chicago -0.50, the Clippers +0.41, Utah -0.37, Dallas +0.34.  The verdict is the owner's, who has said the weight may be wanted even if it scores worse.  Limit as in check 159: rating134, not zones139.
+
+
+## Check 163: the best recency weighting over a team's last 10 games, for Power's shares and for the stats (the owner, 2026-11-08; registered before any result)
+
+The owner, on check 162: "meh just - do it right. find best recency weighting, and only use most recent 10. for both parts (openrapm part and performancey part we're doing now). just nail it, crush it, do a great job".  Read as: the weighting of the last 10 games in Power's shares of possessions, and in the 14 stats.  The players' ratings themselves still read the whole season so far.  Blowouts stay at half in the shares.  Nothing published changes.
+
+**The ratings.**  The published build: `zones139_cut*_held`, built 2026-11-08 by `scratch/2026-11-08_power_next10/build_cuts.sh`, which checks 159 to 161 also rerun on through `POWER_NEXT10_FAMILY=zones139`, closing their stated limit.
+
+**The weightings.**  A game counts decay^k, k the games before the team's latest game, over its last 10 games only: decay 1.00 is a flat last 10, 0.97, 0.94, 0.91, 0.88, 0.85, 0.80, 0.75, 0.70, 0.60 and 0.50.  One decay for the shares and one for the stats, 121 pairs.  Today's scheme, the latest 5 counted double, is an extra option for comparison.  All 14 stats stay in, as check 160 found.  Power's multipliers, the home edge, the ridge on the stats and its penalty are refitted for every pair.
+
+**How a pair is chosen, inside each held-out test.**  Over the other 29 seasons, each pair's error on left-out seasons, each season counting once.  The pair with the lowest error is the "best" pair.  **The primary choice is the one-standard-error rule**: of the pairs within one standard error of the best, paired by season, take the flattest, the largest sum of the two decays, because an argmax over 121 pairs of a flat surface is mostly noise.  Reported beside it: the lowest-error pair, and one shared decay for both parts.
+
+**The arms, scored as in check 159.**  Today's shares with plain stats, the recommended version so far; today's shares with doubled stats; flat on both; the three chosen arms; Power alone.  At all four days of the season, overall and by era, and each season predicted only from the seasons before it, the choice made on those seasons alone.
+
+**A noise control.**  The same search with each team's last 10 games dealt into a random order before the weights are applied, the order held across the 121 pairs: weighting by recency then means nothing, so any gain over flat is what choosing among 121 pairs yields by itself.
+
+**The reading.**  The owner asked for the best weighting, so no pass rule blocks it.  It is called better than today's at the 10% day only at z below -2 against the arm that uses today's shares with plain stats, lower in each era, and the control showing no such gain; otherwise it is reported as a tie and the simpler weighting is recommended.  The final pair is the one-standard-error rule run once on all 30 seasons at the 10% day; the whole grid and how often each pair was chosen are shown.
