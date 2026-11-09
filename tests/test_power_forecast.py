@@ -131,9 +131,9 @@ def test_the_one_rating_is_power_at_its_multipliers_plus_the_stats_and_the_rows_
     home = next(team for team in document["teams"] if team["tm"] == "HOM")
     assert home["o"] == pytest.approx(1.2 * 5 + 0.4) and home["d"] == pytest.approx(0.1)
     assert home["t"] == pytest.approx(home["o"] + home["d"])
-    assert home["players"][-1] == ["Last-10 stats", None, None, 0.4, 0.1, 0.5]
-    players = home["players"][:-1]
-    assert sum(row[2] / 100 * row[3] for row in players) + home["players"][-1][3] == pytest.approx(home["o"], abs=0.03)
+    assert home["players"][0] == ["Last 10 Performance Over Expected", None, None, 0.4, 0.1, 0.5]
+    players = home["players"][1:]
+    assert sum(row[2] / 100 * row[3] for row in players) + home["players"][0][3] == pytest.approx(home["o"], abs=0.03)
     assert document["meta"]["forecast"] is True and document["meta"]["recent_weight"] == 1.0
 
 

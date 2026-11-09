@@ -1151,6 +1151,7 @@ def team_shares(games: pd.DataFrame, n_games: int, recent_games: int = RECENT_GA
     return players[["tm", "name", "player_id", "share", "g"]]
 
 
+STATS_ROW = "Last 10 Performance Over Expected"  # the owner's name for a team's stats part, 2026-11-09
 SHARES_TOTAL = 5.0     # five players on the floor: a team's shares of its possessions add up to 500%
 
 
@@ -1165,7 +1166,7 @@ def power_document(table: pd.DataFrame, games: pd.DataFrame, season: int, built:
     given, in place of the page's own.  `forecast`, the one rating (power_forecast.py): {"offense", "defense", the
     multipliers; "parts", the stats parts by team; "share", the share of the regular season played; "flat", whether the
     shares count each game once}.  Each player's row then reads his rating at the multipliers, and a team's stats part
-    is one last row, ["Last-10 stats", null, null, offense, defense, total], so the rows still add up to the team's
+    is the first row, [`STATS_ROW`, null, null, offense, defense, total], so the rows still add up to the team's
     total."""
     ratings = table[table.season == season].set_index("player_id")
     shares = team_shares(games, POWER_GAMES) if shares is None else shares
@@ -1199,7 +1200,7 @@ def power_document(table: pd.DataFrame, games: pd.DataFrame, season: int, built:
             players.append(["Other players", None, *power_numbers(
                 share, *((others.share * others[column]).sum() / share for column in columns))])
         if forecast is not None and (part_o or part_d):
-            players.append(["Last-10 stats", None, None, round(part_o, 2), round(part_d, 2), round(part_o + part_d, 2)])
+            players.insert(0, [STATS_ROW, None, None, round(part_o, 2), round(part_d, 2), round(part_o + part_d, 2)])
         teams.append(dict(tm=tm, name=rows.name.iloc[0], g=int(rows.g.iloc[0]),
                           **{side: round(value, 2) for side, value in zip("odt", sums)}, players=players))
     teams.sort(key=lambda team: -team["t"])
