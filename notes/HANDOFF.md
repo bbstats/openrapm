@@ -22,6 +22,10 @@ every number quoted here; read its measurement traps before trusting a number.  
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; experiments by what they changed, never by number or code name; no formulas or letters.
 
+## A team's next 10 games: checks 159 to 163, 2026-11-08 and 11-09 (the owner: "i want to use these power ratings as a prior for the next 10 games")
+
+**Nothing published changes.**  DECISIONS.md, "Check 159" to "Check 163", holds every number.  Forecast = Power at about 1.2 times its scale, plus a ridge on a team's last-10 stats: attempts and makes over expected from five zones, offensive rebounds, turnovers, free throw attempts and makes, the team's and its opponents'.  It beats Power early in a season, z -2.79 at 10%, and is an early-season tool: better than Power through about a quarter of a season, worse at half.  All 14 stats stay in; cutting them loses in 2017-2026.  The recency search picks flat: every game of the last 10 counts once, for the shares and the stats.  `scripts/checks/163_power_next10_recency.py` with `POWER_NEXT10_FAMILY=zones139` makes the table, about 16 minutes; `outputs/within/zones139_cut*_held` are the season-so-far ratings.  **Waiting on the owner:** whether this becomes a daily table or a site column; the Power page keeps its doubled latest 5.
+
 ## The colors button: PUBLISHED 2026-11-05, main 6efa7bc (the owner: "Publish, just say added color")
 
 A pinwheel button left of the theme button on the Ratings page shades each cell of Offense, Defense, Total, WOSA and
