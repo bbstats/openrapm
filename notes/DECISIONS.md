@@ -12760,3 +12760,18 @@ The 2026 top 20 keeps the same 20 players.  Regulars move a median 0.25, the nin
 **To adopt, on the owner's word:** move `data/stints_zones139` into `data/stints`, 2027 rebuilt with the zones; `PriorSettings.second_prior = "zones139_line"`, `second_prior_inputs = "context_types_team_zones_centred"`; the shrink's folds `zones139_early,zones139_within` and tenth folds `zones139_k10` built first; the chain's incumbent defaults; the full product build of 1997-2027 and the site's files; a noise control after.  Row 139 of `experiments/runs.csv`.
 
 **Published 2026-11-07 by the 6 AM job, main 5de2e7a; the owner's Changelog row 74934b8, "Implemented further luck adjustment to box score prior."**  The noise control on the new incumbent, `noise_zones139` (`--fold-assignment 1`, 9:47 to 11:03 PM): the within-season test -0.009, z -1.03, 16 of 30; by era -0.025, z -3.93; -0.009, z -0.75; +0.008, z +0.37.  The same size as noise_rating134's; the chain's CONTROL_NAME now names it.
+
+
+## Check 159: Power as the starting point for a team's next 10 games (the owner, 2026-11-08; registered before any result)
+
+The owner: "using current power ratings, then add in L10 shot zones, orb%, turnovers, and ft stuff, i want to use these power ratings as a prior for the next 10 games! so this is kind of a nice baseline / sanity rating but - i want to make it more betterer."
+
+**Nothing published changes.**  `scripts/checks/159_power_next10.py`, read-only, from saved tables.
+
+**The rows.**  Every season 1997-2026, on each of four days: the day 7.15%, 10%, 25% and 50% of its regular-season games had been played.  10% is today's stage: 2027 is at 11.3% through 2026-11-07.  Each team's Power on that day is the Power page's sum, each player's rating times his share of the team's possessions over its last 10 games, the latest 5 counted double, blowouts half, with the ratings from `outputs/within/rating134_cut*_held`, which read only the games through that day, taken through the shipped shrink.  The target is each of the team's next 10 regular-season games: its margin per 100 possessions.
+
+**The fit.**  Margin per 100 = Power on offense's and on defense's difference between the two teams x two free multipliers + a home edge + a ridge regression on the difference of the added stats.  The penalty falls on the added stats only, so with no signal the fit returns Power at its own scale.  Each season is predicted from the other 29, and the penalty is picked inside those 29 by the same leave-one-season-out rule.
+
+**The added stats, each team's last 10 games, unweighted, its offense and the same for its opponents.**  Attempts per 100 from the rim, short mid, long mid, three and long three; makes per 100 over what the league's percentage in that zone expects; offensive rebounds per 100 over what the league's rate expects from the team's chances; turnovers per 100; free throw attempts per 100 and free throws made over what the league's percentage expects, technicals out.  Each stat is centered over the teams of the season and day.
+
+**The rule.**  The candidate is Power plus all four groups.  It beats Power at its own scale when the squared error of the next 10 games' per-game margin is lower at the 10% day, paired by season, at z below -2, lower in each of 1997-2006, 2007-2016 and 2017-2026, and when a control that shuffles the added stats across teams shows no such gain.  Reported beside it: each group alone, Power plus the plain last-10 margin, the last-10 margin alone, Power with no fitted multipliers, and the other three days.  The gap is also read on the 10-game average, team by team.
