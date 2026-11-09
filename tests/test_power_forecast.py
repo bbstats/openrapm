@@ -152,7 +152,8 @@ def test_the_power_tab_shows_once_every_team_has_played_eight_games():
                                "poss_a": 50, "is_gt": False, **slots})
         teams = pd.DataFrame([(game, pid, "HOM" if pid < 10 else "AWY", "Home" if pid < 10 else "Away")
                               for game in names for pid in ids], columns=["game_id", "player_id", "tm", "name"])
-        table = pd.DataFrame({"season": 2027, "player_id": ids, "player_name": "P", "rating_off": 0.0, "rating_def": 0.0,
+        table = pd.DataFrame({"season": 2027, "player_id": ids, "player_name": "P", "rating_off": 0.0,
+                              "rating_def": 0.0,
                               "rating_total": 0.0, "poss_season": 500})
         return site.power_document(table, site.player_game_possessions(stints, teams), 2027, "2026-11-09")
 
