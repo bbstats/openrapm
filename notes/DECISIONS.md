@@ -12775,3 +12775,20 @@ The owner: "using current power ratings, then add in L10 shot zones, orb%, turno
 **The added stats, each team's last 10 games, unweighted, its offense and the same for its opponents.**  Attempts per 100 from the rim, short mid, long mid, three and long three; makes per 100 over what the league's percentage in that zone expects; offensive rebounds per 100 over what the league's rate expects from the team's chances; turnovers per 100; free throw attempts per 100 and free throws made over what the league's percentage expects, technicals out.  Each stat is centered over the teams of the season and day.
 
 **The rule.**  The candidate is Power plus all four groups.  It beats Power at its own scale when the squared error of the next 10 games' per-game margin is lower at the 10% day, paired by season, at z below -2, lower in each of 1997-2006, 2007-2016 and 2017-2026, and when a control that shuffles the added stats across teams shows no such gain.  Reported beside it: each group alone, Power plus the plain last-10 margin, the last-10 margin alone, Power with no fitted multipliers, and the other three days.  The gap is also read on the 10-game average, team by team.
+
+**Result, 2026-11-08.**  Passes the registered rule at the 10% day, as a small gain; nothing adopted or published.  Change in the squared error of a game's margin per 100, candidate minus Power at its own scale, paired by season, 30 seasons:
+
+| day | change | standard error | z | seasons better of 30 | 10-game average, change | z |
+|---|---|---|---|---|---|---|
+| 7% | -1.463 | 0.670 | -2.19 | 21 | -0.540 | -1.24 |
+| 10% | -1.417 | 0.501 | -2.83 | 20 | -0.706 | -2.62 |
+| 25% | -0.163 | 0.117 | -1.39 | 19 | -0.129 | -1.62 |
+| 50% | +0.220 | 0.162 | +1.36 | 19 | +0.130 | +1.32 |
+
+The 10% day by era: 1997-2006 -1.808, z -2.64, 7 of 10; 2007-2016 -1.806, z -1.57, 7 of 10; 2017-2026 -0.637, z -0.88, 6 of 10, standard error 0.725.  Root mean squared error per game 13.274 to 13.221; a team's 10-game average 5.254 to 5.186.  The shuffled control +0.057, z +1.74.
+
+Each group alone at the 10% day: zones -0.944, z -1.64; free throws -0.308, z -1.23; offensive rebounds -0.039, z -0.27; turnovers +0.088, z +2.48, worse.  Power plus the plain last-10 margin +0.026, z +1.00: its weight goes to about 0.  The last-10 margin alone +2.900, z +2.87.  Power with no fitted multipliers +0.751, z +1.67, and the 10-game average z +2.11.
+
+The finished fit on all 30 seasons at the 10% day: penalty 1.0, inside the grid's limits; home edge 3.26; Power's multipliers 1.195 on offense and 1.261 on defense, 1.198 and 1.286 with no added stats.  So early in a season Power's gaps between teams run about a fifth short of the next 10 games.  Weights per 100 possessions: threes made over expected -0.236, long threes -0.521, rim makes over expected +0.094, opponents' rim makes -0.103, opponents' long mid makes +0.345, free throws made over expected +0.177, three attempts +0.048.  Recent three-point shooting above expected reads as luck, rim finishing and free-throw shooting as real.
+
+The 2027 table applies that fit to the published ratings of the games through 2026-11-07; the recomputed Power is within 0.004 of the page.  **Limit:** the past days' ratings are `rating134`, the build before the five-zone Box Adj (zones139, published 2026-11-07), and no season-so-far folders of zones139 exist.  The published Power already reads team shooting by zone, so the gain could be smaller on it.  The next read is the same check on season-so-far folds of zones139, about 30 minutes.  CSV files: `outputs/csv/check159_compared.csv`, `_today.csv`, `_weights.csv`.
