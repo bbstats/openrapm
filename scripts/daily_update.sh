@@ -82,13 +82,13 @@ if [ "$PUBLISH" != "1" ]; then
   # a dry run writes the site's files to a scratch folder, so a failure in the site step shows before a morning does
   DRY=$ROOT/outputs/daily/site_dry
   mkdir -p "$DRY"
-  step $PY -u -m openrapm site --openrapm-decomposition --power --out-dir "$DRY"
+  step $PY -u -m openrapm site --openrapm-decomposition --power --power-forecast --out-dir "$DRY"
   bias_file "$DRY" || NOTE="$NOTE; bias: not written"
   finish "built, not published (PUBLISH=0); the site's files in $DRY$NOTE" 0
 fi
 step git -C "$SITE" fetch origin main
 step git -C "$SITE" checkout --detach --force origin/main
-step $PY -u -m openrapm site --openrapm-decomposition --power --out-dir "$SITE/docs"
+step $PY -u -m openrapm site --openrapm-decomposition --power --power-forecast --out-dir "$SITE/docs"
 # The Bias page's file rides along once main has the page: the job never creates it there.  It is not one of FILES,
 # whose change decides the publish and each of which must exist, so an outside system that moved publishes nothing
 # on a morning without new games.
