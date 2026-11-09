@@ -7,11 +7,10 @@
 <link rel="stylesheet" href="site.css">
 <script src="site.js"></script>
 <style>
-  :root { --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6; }
-  :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5; }
+  :root { --line: #d9d8d3; --muted: #6b6a66; --ink: #1a1a19; --accent: #2a78d6; --good: 34 165 90; --bad: 222 64 64; }
+  :root[data-theme="dark"] { --line: #3a3a38; --muted: #a09f98; --ink: #f2f1ee; --accent: #3987e5; --good: 52 190 110; --bad: 235 85 85; }
   body { color: var(--ink); font: 14px/1.4 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
   h1 { margin-bottom: 0; }
-  .lede { margin: 6px 0 4px; }
   .byline { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
   .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   table { border-collapse: separate; border-spacing: 0; width: 100%; font-variant-numeric: tabular-nums; }
@@ -19,6 +18,10 @@
   th { color: var(--muted); font-weight: 600; font-size: 13px; vertical-align: bottom; cursor: pointer;
        user-select: none; }
   th:hover { color: var(--ink); }
+  /* the colors button: the pinwheel in gray while off, in color while on */
+  nav.site .colors svg { filter: grayscale(1); opacity: 0.75; }
+  nav.site .colors[aria-pressed="true"] svg { filter: none; opacity: 1; }
+  nav.site .colors[aria-pressed="true"] { border-color: var(--muted); }
   th.rank, td.rank { color: var(--muted); cursor: default; }
   th.name, td.name { text-align: left; }
   th.name { cursor: default; }
@@ -36,15 +39,14 @@
   tr.team[aria-expanded="true"] td.name::before { content: "\25BE"; color: var(--accent); }
   tr.team[aria-expanded="true"] td { border-bottom-color: transparent; }
   td.name .full { color: var(--muted); margin-left: 8px; }
-  tr.players > td { padding: 0 0 14px 24px; }
-  /* a team's players scroll in their own box, so they never widen the teams' table */
-  .inner { width: 0; min-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  table.roster th { cursor: default; }
-  table.roster th, table.roster td { padding: 6px 8px; font-size: 13px; }
-  table.roster td.name a { color: inherit; text-decoration: none; }
-  table.roster td.name a:hover, table.roster td.name a:focus-visible { color: var(--accent); text-decoration: underline;
-                                                                       text-underline-offset: 2px; }
-  table.roster tr.others td { color: var(--muted); }
+  /* a team's opened rows use the teams' own columns, so the numbers sit under Offense, Defense and Total */
+  tr.player td { padding-top: 6px; padding-bottom: 6px; font-size: 13px; }
+  tr.player td.name { padding-left: 24px; white-space: normal; }
+  tr.player.head td { color: var(--muted); font-weight: 600; }
+  tr.player td.name a { color: inherit; text-decoration: none; }
+  tr.player td.name a:hover, tr.player td.name a:focus-visible { color: var(--accent); text-decoration: underline;
+                                                                  text-underline-offset: 2px; }
+  tr.player.others td { color: var(--muted); }
   footer { margin-top: 24px; color: var(--muted); font-size: 12.5px; }
   footer a { color: inherit; }
   @media (max-width: 600px) {
@@ -52,10 +54,8 @@
     th, td { padding: 7px 5px; }
     table { font-size: 13px; }
     td.name .full { display: none; }
-    tr.players > td { padding-left: 0; }
-    table.roster th, table.roster td { padding: 6px 4px; font-size: 12px; }
-    /* a long name or header takes two lines, so a team's players fit the phone's width */
-    table.roster th, table.roster td.name { white-space: normal; }
+    tr.player td { padding-top: 6px; padding-bottom: 6px; font-size: 12px; }
+    tr.player td.name { padding-left: 12px; }
   }
 </style>
 </head>
@@ -68,10 +68,10 @@
     <a href="bias.html">Bias</a>
     <a href="about.html">About</a>
     <a href="changelog.html">Changelog</a>
+    <button class="colors" id="colors" type="button" aria-pressed="false" aria-label="Colors" title="Colors"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 8V1.5A4.5 4.5 0 0 1 12.5 6z" fill="#e5484d"/><path d="M8 8V1.5A4.5 4.5 0 0 1 12.5 6z" fill="#f5b700" transform="rotate(90 8 8)"/><path d="M8 8V1.5A4.5 4.5 0 0 1 12.5 6z" fill="#2fa36b" transform="rotate(180 8 8)"/><path d="M8 8V1.5A4.5 4.5 0 0 1 12.5 6z" fill="#3987e5" transform="rotate(270 8 8)"/><circle cx="8" cy="8" r="1.1" fill="currentColor"/></svg></button>
     <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
   </nav>
   <h1>Power Ratings</h1>
-  <p class="lede">Power Rating comes from Player Ratings x (% of possessions played, with blowouts downweighted)</p>
   <p class="byline" id="byline">&nbsp;</p>
   <div class="scroll">
     <table id="table"><thead></thead><tbody><tr><td class="msg" colspan="99">Loading&hellip;</td></tr></tbody></table>
@@ -84,39 +84,75 @@
   // a true minus sign, and Math.round rather than toFixed, as on the ratings page
   const sign = v => v > 0 ? "+" : v < 0 ? "−" : "";
   const fmt = v => { const r = Math.round(v * 100) / 100 || 0; return sign(r) + Math.abs(r).toFixed(2); };
-  const pct = v => v.toFixed(1) + "%";
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const day = d => new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
   // the teams' columns, [key, header]; a player's row in the file is [name, id, share, offense, defense, total]
   const COLUMNS = [["g", "Games"], ["o", "Offense"], ["d", "Defense"], ["t", "Total"]];
   // each column header's hover text
-  const TIPS = { g: "Team games counted: the last 10, the latest 5 counted double",
+  const TIPS = { g: "Team games counted: the last 10",
                  o: "Players' offense ratings weighted by share of possessions, points per 100",
                  d: "Players' defense ratings weighted by share of possessions, points per 100",
                  t: "Offense plus defense, points per 100 possessions" };
   const state = { sort: { k: "t", dir: -1 }, open: new Set() };
   const table = $("table"), thead = table.querySelector("thead"), tbody = table.querySelector("tbody");
-  let data = null;
+  let data = null, pools = null;
+  // the colors button, as on the ratings page: each number shaded by how large it is among its own kind: white at 0.00,
+  // greener the further above it, redder the further below it.  A team against the 30 teams, a player against every player listed, a
+  // team's last 10 performance against the 30 teams'.  Remembered like the theme
+  try { state.colors = localStorage.getItem("colors") === "1"; } catch (e) {}
+  // a row's offense, defense and total contributions to its team: a player's share of the possessions times his
+  // numbers, the last 10 performance's numbers as they are
+  const contributions = ([, , share, o, d, t]) => share === null ? [o, d, t] : [share / 100 * o, share / 100 * d, share / 100 * t];
+  // the share of `vals`, sorted low to high, below v, ties counted half
+  function pctIn(vals, v) {
+    const n = vals.length;
+    if (!n) return null;
+    let lo = 0, hi = n;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (vals[m] < v) lo = m + 1; else hi = m; }
+    const below = lo;
+    hi = n;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (vals[m] <= v) lo = m + 1; else hi = m; }
+    return 100 * (below + (lo - below) / 2) / n;
+  }
+  function shade(vals, v) {
+    const shown = Math.round(v * 100) / 100;                    // the number on the page: 0.00 is always white
+    if (!state.colors || shown === 0) return "";
+    // how large it is among the numbers of its own sign, so 0.00 is the white middle, above it green and below it red
+    const same = shown > 0 ? vals.filter(x => x > 0) : vals.filter(x => x < 0).map(x => -x).reverse();
+    const q = pctIn(same, Math.abs(shown));
+    return ` style="background: rgb(var(${shown > 0 ? "--good" : "--bad"}) / ${(0.6 * q / 100).toFixed(3)})"`;
+  }
+  function buildPools() {
+    const low = xs => xs.sort((a, b) => a - b);
+    const each = rows => ({ o: low(rows.map(r => contributions(r)[0])), d: low(rows.map(r => contributions(r)[1])),
+                            t: low(rows.map(r => contributions(r)[2])) });
+    const rows = data.teams.flatMap(team => team.players);
+    pools = { team: { o: low(data.teams.map(team => team.o)), d: low(data.teams.map(team => team.d)),
+                      t: low(data.teams.map(team => team.t)) },
+              player: each(rows.filter(r => r[1] !== null)), stats: each(rows.filter(r => r[2] === null)) };
+  }
 
   function roster(team) {
-    const rows = team.players.map(([n, id, share, o, d, t]) => {
+    // the last 10 performance first, then the players by what they add to the total, the rest of the team last
+    const order = row => row[2] === null ? 0 : row[1] === null ? 2 : 1;
+    const players = [...team.players].sort((a, b) => order(a) - order(b) || contributions(b)[2] - contributions(a)[2]);
+    const head = `<tr class="player head"><td></td><td class="name">Player</td><td></td>` +
+                 `<td>Off. Contrib</td><td>Def. Contrib</td><td>Total Contrib</td></tr>`;
+    return head + players.map(row => {
+      const [n, id, share] = row;
+      const [o, d, t] = contributions(row);
+      const pool = share === null ? pools.stats : pools.player;
       const name = id === null ? esc(n)
         : `<a href="./#season=${data.meta.season}&player=${id}">${esc(n)}</a>`;
-      return `<tr${id === null ? ' class="others"' : ""}><td class="name">${name}</td><td>${pct(share)}</td>` +
-             `<td>${fmt(o)}</td><td>${fmt(d)}</td><td class="total">${fmt(t)}</td>` +
-             `<td>${fmt(share / 100 * t)}</td></tr>`;
+      return `<tr class="player${id === null ? " others" : ""}"><td></td><td class="name">${name}</td><td></td>` +
+             `<td${shade(pool.o, o)}>${fmt(o)}</td><td${shade(pool.d, d)}>${fmt(d)}</td>` +
+             `<td class="total"${shade(pool.t, t)}>${fmt(t)}</td></tr>`;
     }).join("");
-    return `<tr class="players"><td colspan="99"><div class="inner"><table class="roster"><thead><tr><th class="name">Player</th>` +
-           `<th title="Share of the team's possessions over its last 10 games, the latest 5 counted double">Share of possessions</th>` +
-           `<th title="Points per 100 possessions added on offense, vs. an average player">Offense</th>` +
-           `<th title="Points per 100 possessions saved on defense, vs. an average player">Defense</th>` +
-           `<th title="Offense plus defense, points per 100 possessions">Total</th>` +
-           `<th title="Share of possessions times Total: the player's part of the team's Total">Adds to total</th></tr>` +
-           `</thead><tbody>${rows}</tbody></table></div></td></tr>`;
   }
 
   function render() {
+    $("colors").setAttribute("aria-pressed", !!state.colors);
     const { k, dir } = state.sort;
     const teams = [...data.teams].sort((a, b) => dir * (a[k] - b[k]) || b.t - a.t);
     const th = (key, name) => `<th data-k="${key}" title="${TIPS[key]}"${key === k ? ` aria-sort="${dir < 0 ? "descending" : "ascending"}"` : ""}>${name}</th>`;
@@ -126,11 +162,17 @@
       const open = state.open.has(team.tm);
       return `<tr class="team" data-tm="${esc(team.tm)}" tabindex="0" aria-expanded="${open}">` +
         `<td class="rank">${i + 1}</td><td class="name">${esc(team.tm)}<span class="full">${esc(team.name)}</span></td>` +
-        `<td>${team.g}</td><td>${fmt(team.o)}</td><td>${fmt(team.d)}</td><td class="total">${fmt(team.t)}</td></tr>` +
+        `<td>${team.g}</td><td${shade(pools.team.o, team.o)}>${fmt(team.o)}</td><td${shade(pools.team.d, team.d)}>${fmt(team.d)}</td>` +
+        `<td class="total"${shade(pools.team.t, team.t)}>${fmt(team.t)}</td></tr>` +
         (open ? roster(team) : "");
     }).join("");
   }
 
+  $("colors").addEventListener("click", () => {
+    state.colors = !state.colors;
+    try { localStorage.setItem("colors", state.colors ? "1" : "0"); } catch (e) {}
+    if (data) render();
+  });
   thead.addEventListener("click", e => {
     const key = e.target.closest("th")?.dataset.k;
     if (!key) return;
@@ -157,6 +199,7 @@
 
   fetch("data/power.json").then(r => r.json()).then(doc => {
     data = doc;
+    buildPools();
     $("byline").textContent = `${doc.meta.season} · last ${doc.meta.games} games · through ${day(doc.meta.through)}`;
     render();
   }).catch(() => { tbody.innerHTML = `<tr><td class="msg" colspan="99">Could not load the power ratings.</td></tr>`; });
