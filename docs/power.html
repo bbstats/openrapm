@@ -103,9 +103,9 @@
     const rows = team.players.map(([n, id, share, o, d, t]) => {
       const name = id === null ? esc(n)
         : `<a href="./#season=${data.meta.season}&player=${id}">${esc(n)}</a>`;
-      return `<tr${id === null ? ' class="others"' : ""}><td class="name">${name}</td><td>${pct(share)}</td>` +
+      return `<tr${id === null ? ' class="others"' : ""}><td class="name">${name}</td><td>${share === null ? "" : pct(share)}</td>` +
              `<td>${fmt(o)}</td><td>${fmt(d)}</td><td class="total">${fmt(t)}</td>` +
-             `<td>${fmt(share / 100 * t)}</td></tr>`;
+             `<td>${fmt(share === null ? t : share / 100 * t)}</td></tr>`;
     }).join("");
     return `<tr class="players"><td colspan="99"><div class="inner"><table class="roster"><thead><tr><th class="name">Player</th>` +
            `<th title="Share of the team's possessions over its last 10 games, the latest 5 counted double">Share of possessions</th>` +

@@ -59,6 +59,15 @@ from ..data.panel import panel_of_season, rookies, trainable_panel
 from ..data.roles import main_teams
 from ..decomposition import lineups, refit, row_groups, row_keys, side_team, split_games_part, team_codes
 from ..features import FEATURE_SETS, meaning
+from ..power_forecast import (
+    WEIGHTS_FILE,
+    flat_shares,
+    last_ten_stats,
+    load_knots,
+    stats_parts,
+    team_game_counts,
+    weights_at,
+)
 from ..prior_shrink import team_split
 from ..rapm import SeasonSums
 from ..settings import PRODUCT
@@ -80,7 +89,7 @@ def today() -> str:
 
 def run_site(cfg: dict, ratings=None, out_dir=None, built: str | None = None, bias: bool = False,
              decomposition: bool = False, similarity: bool = False, openrapm_decomposition: bool = False,
-             power: bool = False) -> int:
+             power: bool = False, power_forecast: bool = False) -> int:
     """`openrapm site`: ratings.json always; the decomposition files, the similarity files, the OpenRAPM decomposition
     file, the power ratings file and the Bias page's file when asked.
 
@@ -100,7 +109,7 @@ def run_site(cfg: dict, ratings=None, out_dir=None, built: str | None = None, bi
     if openrapm_decomposition:
         write_openrapm_decomposition(cfg, ratings_path, out_dir / "data", built or table_date(ratings_path))
     if power:
-        write_power(cfg, ratings_path, out_dir / "data", built or table_date(ratings_path))
+        write_power(cfg, ratings_path, out_dir / "data", built or table_date(ratings_path), forecast=power_forecast)
     if bias:
         write_bias(cfg, ratings_path, out_dir / "data", built or today())
     return 0
@@ -1150,10 +1159,16 @@ def power_numbers(share, offense, defense, total) -> list:
     return [round(100 * float(share), 1), *(round(float(value), 2) for value in (offense, defense, total))]
 
 
-def power_document(table: pd.DataFrame, games: pd.DataFrame, season: int, built: str) -> dict:
-    """power.json's document for `season`: the teams, best total first, each with its players by share."""
+def power_document(table: pd.DataFrame, games: pd.DataFrame, season: int, built: str,
+                   shares: pd.DataFrame | None = None, forecast: dict | None = None) -> dict:
+    """power.json's document for `season`: the teams, best total first, each with its players by share.  `shares`, when
+    given, in place of the page's own.  `forecast`, the one rating (power_forecast.py): {"offense", "defense", the
+    multipliers; "parts", the stats parts by team; "share", the share of the regular season played; "flat", whether the
+    shares count each game once}.  Each player's row then reads his rating at the multipliers, and a team's stats part
+    is one last row, ["Last-10 stats", null, null, offense, defense, total], so the rows still add up to the team's
+    total."""
     ratings = table[table.season == season].set_index("player_id")
-    shares = team_shares(games, POWER_GAMES)
+    shares = team_shares(games, POWER_GAMES) if shares is None else shares
     unrated = sorted(set(shares.player_id) - set(ratings.index))
     if unrated:
         raise SystemExit(f"{len(unrated)} players of {season}'s games have no {season} rating, e.g. {unrated[:5]}")
@@ -1166,10 +1181,16 @@ def power_document(table: pd.DataFrame, games: pd.DataFrame, season: int, built:
     average = {side: float(plain[column].mean()) for side, column in zip("odt", columns)}
     shares = shares.assign(**{column: shares[column] - average[side] / SHARES_TOTAL
                               for side, column in zip("odt", columns)})
+    if forecast is not None:
+        offense, defense = shares.rating_off * forecast["offense"], shares.rating_def * forecast["defense"]
+        shares = shares.assign(rating_off=offense, rating_def=defense, rating_total=offense + defense)
     teams = []
     for tm, rows in shares.groupby("tm"):
         rows = rows.sort_values("share", ascending=False)
         sums = [float((rows.share * rows[column]).sum()) for column in columns]
+        if forecast is not None:
+            part_o, part_d = float(forecast["parts"].o[tm]), float(forecast["parts"].d[tm])
+            sums = [sums[0] + part_o, sums[1] + part_d, sums[2] + part_o + part_d]
         shown, others = rows[rows.poss_season >= MIN_POSSESSIONS_SHOWN], rows[rows.poss_season < MIN_POSSESSIONS_SHOWN]
         players = [[r.player_name if isinstance(r.player_name, str) else "", int(r.player_id), *power_numbers(
                     r.share, r.rating_off, r.rating_def, r.rating_total)] for r in shown.itertuples(index=False)]
@@ -1177,6 +1198,8 @@ def power_document(table: pd.DataFrame, games: pd.DataFrame, season: int, built:
             share = others.share.sum()
             players.append(["Other players", None, *power_numbers(
                 share, *((others.share * others[column]).sum() / share for column in columns))])
+        if forecast is not None and (part_o or part_d):
+            players.append(["Last-10 stats", None, None, round(part_o, 2), round(part_d, 2), round(part_o + part_d, 2)])
         teams.append(dict(tm=tm, name=rows.name.iloc[0], g=int(rows.g.iloc[0]),
                           **{side: round(value, 2) for side, value in zip("odt", sums)}, players=players))
     teams.sort(key=lambda team: -team["t"])
@@ -1184,15 +1207,31 @@ def power_document(table: pd.DataFrame, games: pd.DataFrame, season: int, built:
                 recent_games=RECENT_GAMES, recent_weight=RECENT_WEIGHT, blowout_weight=BLOWOUT_WEIGHT,
                 ready=min(team["g"] for team in teams) >= POWER_GAMES, built=built,
                 average_team={side: round(value, 2) for side, value in average.items()})
+    if forecast is not None:
+        meta.update(forecast=True, share_played=round(forecast["share"], 4), flat_shares=forecast["flat"],
+                    recent_weight=1.0 if forecast["flat"] else RECENT_WEIGHT)
     return dict(meta=meta, teams=teams)
 
 
-def write_power(cfg: dict, ratings_path: Path, data_dir: Path, built: str) -> None:
-    """power.json in `data_dir`, for the ratings table's latest season."""
+def write_power(cfg: dict, ratings_path: Path, data_dir: Path, built: str, forecast: bool = False) -> None:
+    """power.json in `data_dir`, for the ratings table's latest season: with `forecast`, the one rating of
+    power_forecast.py, which the morning job does not write until the owner's word."""
     table = pd.read_parquet(ratings_path)
     season = int(table.season.max())
     games = player_game_possessions(season_stints(season, cfg), game_teams(season, cfg))
-    document = power_document(table, games, season, built)
+    if forecast:
+        from ..data.seasons import share_played
+        share = share_played(season, cfg)
+        weights = weights_at(share, load_knots(resolve_path(cfg, WEIGHTS_FILE)))
+        flat = flat_shares(share)
+        shares = team_shares(games, POWER_GAMES, recent_weight=1.0 if flat else RECENT_WEIGHT)
+        parts = stats_parts(last_ten_stats(team_game_counts(season, cfg)), weights)
+        document = power_document(table, games, season, built, shares=shares,
+                                  forecast=dict(offense=weights["offense_multiplier"],
+                                                defense=weights["defense_multiplier"], parts=parts, share=share,
+                                                flat=flat))
+    else:
+        document = power_document(table, games, season, built)
     data_dir.mkdir(parents=True, exist_ok=True)
     path = data_dir / POWER_FILE
     path.write_text(json.dumps(document, separators=(",", ":")), encoding="utf-8")
