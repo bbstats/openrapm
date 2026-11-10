@@ -13248,3 +13248,22 @@ The weights the added columns earned, offense and defense, mean of the 30 rated 
 
 
 **How it went out.**  A full build was running in the working tree, whose branch also held the half-life setting, unpushed.  The fix was made in a second checkout of main, `git worktree add`, tested there as a clone is, pushed from there and the checkout removed; the working branch takes it by merging main once the build is done.
+
+### Experiment 141: the full build's result (2026-11-10, 9:17 to 11:27 AM; `outputs/fade141_chain.log`, `outputs/csv/wowy_fade141_eras.csv`, `outputs/yoy_matched141.log`, `scratch/2026-11-09_improvements/fade141_matched.py`; row 141; verdict the owner's)
+
+The build ran one process at a time for its ratings, free memory holding no more, 98 minutes, then two for its folds.  The rate step's log names the fade, and the folds' line reads it from the saved boosters' record.
+
+**It passes the registered rule.**
+
+| reading | 1997-2006 | z | 2007-2016 | z | 2017-2026 | z | all 30 | z | seasons better |
+|---|---|---|---|---|---|---|---|---|---|
+| within season, minus zones139 | -0.195 | -4.94 | -0.040 | -1.41 | -0.165 | -3.41 | -0.133 | -5.26 | 25 of 30 |
+| noise control noise_zones139 | -0.025 | -3.93 | -0.009 | -0.75 | +0.008 | +0.37 | -0.009 | -1.03 | 16 of 30 |
+
+By era 10, 8 and 7 seasons of 10 are better.  Before step 4 the same test reads -0.161, z -4.97, 23 of 30; on the DNP team-games slice, 51.8% of the held-back possessions, -0.124, z -4.16, 22 of 30.  With a Newey-West standard error the z over all 30 is -3.67.  The read from the saved sums had said -0.207, with -0.264, -0.031 and -0.326 by era: the full test keeps its sign in each era and about two thirds of its size, the last era shrinking most, -0.326 to -0.165.
+
+Year over year, both directions, 56 readings: as built, team-game +0.027, z +1.25, 26 of 56; stint -0.041, z -1.55; stint with each side rescaled -0.053, z -2.41.  With each side's width matched to zones139's, season by season, among regulars: team-game -0.020, z -1.04, 29 of 56; stint -0.057, z -2.31.  The widths are within 2% of today's, the multipliers 0.97 to 1.02 by era and side, so the guard holds either way, below z +2, and at matched width leans better.
+
+The 2026 top 20, the test setting's tables: the first three as they are, Wembanyama 9.58 to 9.32, Gilgeous-Alexander 8.29 to 8.42, Jokić 8.12 to 8.13; Leonard fourth for Dončić, 6.78 to 6.36; Ajay Mitchell in at 20 for Alex Caruso.  Up: Neemias Queta +0.53 from 18th to 13th, Jimmy Butler +0.40, Karl-Anthony Towns +0.34, Lauri Markkanen +0.32, Donovan Clingan +0.25.  Among 2026's 291 regulars of 2,000 or more possessions the move is a median 0.12, the ninetieth percentile 0.33, the largest 0.59; correlation 0.9965.  Up most are centers, Wendell Carter Jr. +0.59, Mark Williams +0.56, Queta, Jarrett Allen +0.46, Moussa Diabaté +0.44; down most guards, Nolan Traore -0.46, Dončić and Anthony Edwards -0.41, Jared McCain -0.39, Keon Ellis -0.38.  By era the regulars' median move is 0.10, 0.07 and 0.08, and the largest of any season Ricky Pierce 1997, -2.63 to -3.66.
+
+**To adopt, on the owner's word:** `PriorSettings.second_prior_halflife = 8.0`; the shrink's folds `fade141_early,fade141_within`, and the tenth folds `fade141_k10` built first; the chain's incumbent and noise control names; the full product build of 1997 to 2027, where a rated season's line also reads its two neighbors; the regular-season ratings behind WOSA rebuilt; the Power table's weights refitted on the new build, check 166, after its seven season-so-far folders; Similarity's files and the site's; a dry run of the morning job; a noise control on the new incumbent after.
