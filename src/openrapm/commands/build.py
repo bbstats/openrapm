@@ -58,6 +58,7 @@ from ..data.second_prior_files import line_setup, load_grams
 from ..data.stints import has_playoff_stints, load_season_stints, stints_have
 from ..data.tables import design_row_teams, player_names
 from ..data.within_folds import check_fold_files, fold_games, held_back_stints, load_folds
+from ..design import SEASON_PHASES
 from ..settings import PRODUCT, describe_factors
 from . import parallel
 from .published import refuse_published_name
@@ -190,13 +191,15 @@ class SeasonSecondPrior:
 
 def rated_second_prior(cfg: dict, season: int, panel: pd.DataFrame, priors: dict, lines: SecondPriorLines,
                        settings, share: float = 1.0, box: dict | None = None,
-                       types_panel: pd.DataFrame | None = None) -> SeasonSecondPrior:
-    """The rated season's second prior (second_prior.py): its context numbers from the whole season's stint rows, every
+                       types_panel: pd.DataFrame | None = None, phases=SEASON_PHASES) -> SeasonSecondPrior:
+    """The rated season's second prior (second_prior.py): its context numbers from the season's stint rows, every
     prior in them from the season's own boosters that never saw the player, and the line of the seasons that may train
     it (more than `exclude_neighbours` away).  `panel` holds the rated season's rows; `share` is the share of its
     regular season played (box_prior.rated_rows).  With the box-score prior game by game, `box` is each player's
     season average ({"O", "D"}: {player_id: value}) and `types_panel` the season panel the line's step-5 numbers are
-    read from, as without it."""
+    read from, as without it.  `phases` are the stints read, the whole season unless the rating is from the regular
+    season alone (`rate_regular_seasons`): his teammates' and opponents' priors and his team's shooting with him on
+    and off the court are then the regular season's, with no playoff lineup in them."""
     prior = settings.prior
     coefficients = second_prior.season_coefficients(lines.grams, season, lines.trainable, settings.exclude_neighbours,
                                                     prior.second_prior_folds, prior.second_prior_penalty,
@@ -212,7 +215,7 @@ def rated_second_prior(cfg: dict, season: int, panel: pd.DataFrame, priors: dict
     types = (None if lines.type_scale is None else
              second_prior.standardised_types(typed[(typed.side == "O") & (typed.season == season)], lines.type_scale))
     box = {side: priors[side].values for side in SIDES} if box is None else box
-    stints = season_lineup_rows(cfg, season)
+    stints = season_lineup_rows(cfg, season, phases)
     values, inputs = second_prior.season_second_priors(stints, answers, box, coefficients,
                                                        prior.second_prior_folds, prior.second_prior_team_totals,
                                                        types, prior.second_prior_inputs)
@@ -335,13 +338,16 @@ def held_scales(cfg: dict, table_name: str, season: int, fresh: pd.DataFrame | N
 
 def rate_one_season(season: int, sums: dict, panel: pd.DataFrame, designs: DesignCache, settings, params: dict,
                     lines: SecondPriorLines | None = None, label_cache: dict | None = None,
-                    part_seasons: pd.DataFrame | None = None, progress: SeasonsInProgress | None = None):
+                    part_seasons: pd.DataFrame | None = None, progress: SeasonsInProgress | None = None,
+                    phases=SEASON_PHASES):
     """The end of step 1 (labels), step 2 (priors) and step 3 (ridge) for one season.
 
     Returns (the season's centred table in raw sign, {"O", "D"} its SidePriors, its unseen seasons, its
     SeasonSecondPrior or None).  With `lines` (the second prior on, settings.PriorSettings.second_prior) step 3 reads
     the second prior instead of the box-score prior; `part_seasons` (`part_season_panel`) adds the box-score prior's
     part-season rows.  A season in `progress` is rated from its own rows there, the priors told the share played.
+    `phases` are the stints the second prior's lineup rows are read from (`rated_second_prior`); the designs handed in
+    are already the games to rate.
     """
     unseen = unseen_seasons(season, settings)
     labels = rapm.career_labels(sums, unseen, settings.labels, settings.targets)
@@ -356,7 +362,7 @@ def rate_one_season(season: int, sums: dict, panel: pd.DataFrame, designs: Desig
     second = None
     if lines is not None:
         second = rated_second_prior(designs.cfg, season, panel if rated is None else rated, priors, lines, settings,
-                                    share)
+                                    share, phases=phases)
         values = second.values
     ridge = settings.ridge
     weight = (1.0 if scale is None else prior_rapm.blend_weight(share, ridge.held_scale_through,
@@ -897,13 +903,13 @@ def run_shrink(cfg: dict, settings, base: str, name: str) -> int:
 
 
 # ------------------------------------------------------------------------------------------- step 5
-def season_lineup_rows(cfg: dict, season: int) -> pd.DataFrame:
+def season_lineup_rows(cfg: dict, season: int, phases=SEASON_PHASES) -> pd.DataFrame:
     """One season's stints as swap_test.season_rows, the rows every lineup of step 5 is built from, with the offence's
-    counts the second prior's team rates read."""
+    counts the second prior's team rates read; `phases`, the regular season and the playoffs unless told otherwise."""
     columns = [*swap_test.STINT_COLUMNS, *swap_test.TEAM_COUNT_COLUMNS]
-    if stints_have(season, cfg, swap_test.ZONE_COUNT_COLUMNS):
+    if stints_have(season, cfg, swap_test.ZONE_COUNT_COLUMNS, phases):
         columns += swap_test.ZONE_COUNT_COLUMNS
-    stints = load_season_stints(season, cfg, columns)
+    stints = load_season_stints(season, cfg, columns, phases)
     return swap_test.season_rows(stints, margin_clip=float(cfg.get("margin_clip", 25)))
 
 
@@ -1080,7 +1086,11 @@ def seasons_still_to_rate(folder: Path, seasons) -> list:
 
 def rate_regular_seasons(cfg: dict, settings, seasons, folder: Path) -> None:
     """Steps 1-3 for each of `seasons` from its regular-season games alone, through the code a season in progress goes
-    through, each written to `folder` as it finishes.  About 4 minutes a season: each season trains its own boosters."""
+    through, each written to `folder` as it finishes.  About 4 minutes a season: each season trains its own boosters.
+
+    Three things are cut to the regular season: the designs the ridge reads, the panel rows the box-score prior
+    answers, and, since 2026-11-09, the lineup rows Box Adj reads (`settings.wins.phases`).  Until then Box Adj's
+    inputs came from every stint of the season, so a playoff run reached the rating WOSA is locked to."""
     missing = seasons_still_to_rate(folder, seasons)
     if not missing:
         return
@@ -1099,7 +1109,7 @@ def rate_regular_seasons(cfg: dict, settings, seasons, folder: Path) -> None:
         cut, rows = regular_season_cut(season, cfg, designs, settings.targets.distinct(), sources)
         progress = SeasonsInProgress(rows[rows.possessions > 0].reset_index(drop=True), {season: 1.0})
         table = rate_one_season(season, sums, panel, RegularSeasonDesigns(designs, season, cut), settings, params,
-                                lines, label_cache, part_seasons, progress)[0]
+                                lines, label_cache, part_seasons, progress, phases=settings.wins.phases)[0]
         written = folder / f"{season}.parquet.part"
         table.to_parquet(written, index=False)
         written.replace(folder / f"{season}.parquet")
