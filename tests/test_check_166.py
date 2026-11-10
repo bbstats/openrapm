@@ -56,6 +56,20 @@ def test_the_published_weights_are_read_back_knot_by_knot_and_on_the_line_betwee
     assert between.power_o == pytest.approx((first["offense_multiplier"] + second["offense_multiplier"]) / 2)
 
 
+def test_a_player_the_game_log_leaves_out_gets_the_team_of_his_side_of_the_floor(check):
+    """Two player-games of the finished seasons are on the floor in the stints and in no game log, one possession
+    each; the site's Power step stops on such a row, and the check gives him his side's team."""
+    slots = [f"{side}{i}" for side in "ha" for i in range(1, 6)]
+    stints = pd.DataFrame([["0029600896", *range(1, 6), *range(11, 16)],
+                           ["0029600896", 1, 2, 3, 4, 99, *range(11, 16)]], columns=["game_id", *slots])
+    teams = pd.DataFrame({"game_id": "0029600896", "player_id": [*range(1, 6), *range(11, 16)],
+                          "tm": ["CHI"] * 5 + ["UTA"] * 5, "name": ["Bulls"] * 5 + ["Jazz"] * 5})
+    out = check.with_unlogged_players(teams, stints)
+    assert len(out) == 11 and out.iloc[:10].equals(teams)
+    assert out.iloc[10].to_dict() == {"game_id": "0029600896", "player_id": 99, "tm": "CHI", "name": "Bulls"}
+    assert check.with_unlogged_players(out, stints) is out                     # nobody left out: the table as it came
+
+
 def test_the_knots_from_a_quarter_of_the_season_on_read_the_blended_folders(check):
     """Through a quarter of its season the published season in progress holds the prior's weight in full; from there
     it is on the line to its fitted one, and so are the folders the knots from a quarter on are fitted on."""

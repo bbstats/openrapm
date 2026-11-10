@@ -69,6 +69,27 @@ FLAT, DOUBLED = C165.FLAT, C165.DOUBLED
 POWER_ONLY = C160.columns_of([])
 
 
+def with_unlogged_players(teams: pd.DataFrame, stints: pd.DataFrame) -> pd.DataFrame:
+    """`teams` (game_id, player_id, tm, name) with a row for each player the stints put on the floor in a game whose
+    log does not list him: his team is that of the players on his side of the floor.
+
+    `site.player_game_possessions` stops on such a player-game, rightly for the season in progress.  The finished
+    seasons hold two, one possession each, 0029600896 of 1997 and 0029700714 of 1998, on days later in a season than
+    checks 159 to 165 read."""
+    on_floor = pd.concat(
+        [stints[["game_id", f"{side}{i}"]].set_axis(["game_id", "player_id"], axis=1).assign(side=side)
+         for side in "ha" for i in range(1, 6)], ignore_index=True).drop_duplicates()
+    on_floor["player_id"] = on_floor.player_id.astype("int64")
+    known = on_floor.merge(teams, on=["game_id", "player_id"], how="left")
+    unlogged = known[known.tm.isna()][["game_id", "player_id", "side"]]
+    if unlogged.empty:
+        return teams
+    side_team = (known.dropna(subset=["tm"]).groupby(["game_id", "side"])[["tm", "name"]]
+                 .agg(lambda values: values.mode().iloc[0]).reset_index())
+    added = unlogged.merge(side_team, on=["game_id", "side"], how="left")[["game_id", "player_id", "tm", "name"]]
+    return pd.concat([teams, added], ignore_index=True)
+
+
 def knot_days(cut: str, within: Path, wowy, tables: dict, stints: dict, teams: dict, folder: str) -> dict:
     """{pair: Day} of a day from the ratings as the published season in progress is shrunk."""
     ratings = C159.day_ratings(wowy, within, folder, step4="published")
@@ -150,7 +171,8 @@ def main() -> None:
     wowy = C159.load_wowy()
     tables = {season: C159.season_game_table(season, cfg) for season in C159.SEASONS}
     stints = {season: C159.season_stints_ids(season, cfg) for season in C159.SEASONS}
-    teams = {season: C159.regular_game_teams(season, cfg) for season in C159.SEASONS}
+    teams = {season: with_unlogged_players(C159.regular_game_teams(season, cfg), stints[season])
+             for season in C159.SEASONS}
 
     days, mean_shares = {}, {}
     for cut, folder in KNOTS.items():

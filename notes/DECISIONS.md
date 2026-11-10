@@ -13049,3 +13049,60 @@ The largest rating moves are players with few possessions, Dahntay Jones 2016 on
 2026's largest: Luke Kornet 0.64 to 1.17, Rudy Gobert 2.49 to 2.90, Kevin Durant 3.17 to 3.56, Victor Wembanyama 11.78 to 11.39, Devin Vassell -1.09 to -1.47, Julius Randle 1.77 to 1.40.  75 of 2026's 556 move a tenth of a win or more.
 
 **To take it back:** copy the three backups over `outputs/season_ratings_product.parquet`, `outputs/season_ratings_product_regular.parquet` and `outputs/csv/wins_product_seasons.csv`, and revert 2b71432.
+
+### Check 166: result (2026-11-09, 11:04 to 11:40 PM; `outputs/check166.log`, `outputs/csv/check166_line.csv`, `outputs/csv/check166_knots.csv`, `scratch/2026-11-09_improvements/build_line_cuts.sh`)
+
+**A second correction before any result, 11:36 PM.**  The first run stopped as it read its tables: `site.player_game_possessions` refuses a player the stints put on the floor in a game whose log does not list him, and the days from 62.5% on reach two such player-games that checks 159 to 165 never read, one possession each: player 93 in 0029600896, 1997-03-11, and player 1569 in 0029700714, 1998-02-13.  They are the only two in 1997 to 2027.  The check now gives such a player the team of the players on his side of the floor, `with_unlogged_players`, with a test; the site's guard stands for the season in progress.  No reading had been printed.
+
+**The folders.**  `zones139_cut25_line`, `_cut50_line`, `_cut625_line` and `_cut75_line`, 30 seasons each, 11:04 to 11:34 PM, two processes at once.  The knots' mean shares: 0.075, 0.104, 0.2537, 0.5033, 0.7544; the test days' 0.1793 and 0.6290.
+
+**The line at the two days that feed no knot**, each season predicted from knots fitted on the other 29.  Squared error per game, the line minus the arm named; the line's root mean squared error is 13.37 at 17.5% and 13.10 at 62.5%.
+
+| day | the line against | 1997-2006 | z | 2007-2016 | z | 2017-2026 | z | all 30 | z | seasons better |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 17.5% | a direct fit at the day | -0.784 | -1.36 | -0.459 | -1.44 | -1.533 | -3.01 | -0.925 | -3.30 | 21 of 30 |
+| 17.5% | Power alone at its own scale | -1.202 | -3.00 | -0.378 | -0.86 | -1.059 | -1.25 | -0.880 | -2.59 | 22 of 30 |
+| 17.5% | plain Power | -13.221 | -3.38 | -12.625 | -4.70 | -11.134 | -3.23 | -12.326 | -6.51 | 26 of 30 |
+| 17.5% | the weights published 2026-11-09 | +0.158 | +0.14 | -2.093 | -3.19 | -2.213 | -1.67 | -1.383 | -2.20 | 21 of 30 |
+| 62.5% | a direct fit at the day | -0.656 | -1.86 | -0.276 | -0.43 | +2.338 | +2.30 | +0.469 | +0.99 | 16 of 30 |
+| 62.5% | plain Power | -11.127 | -6.33 | -9.044 | -4.12 | +1.060 | +0.39 | -6.370 | -3.98 | 26 of 30 |
+| 62.5% | the weights published 2026-11-09 | -0.090 | -0.27 | -0.447 | -0.98 | -0.141 | -0.44 | -0.226 | -1.07 | 17 of 30 |
+
+**As registered, the rule holds at both days, and `params/power_forecast.json` is written**, five knots, `built_from` "zones139, the published shrink and prior scales (check 166)".  At 17.5% the line is better than a direct fit, z -3.30, and lower than Power alone at its own scale, -0.880.  At 62.5% it is not worse than the direct fit at z +1: +0.469, z +0.99.
+
+**The weak part, said plainly.**  The 62.5% day passes by a hundredth of a z.  In 2017-2026 the line between the half-season and three-quarter knots is worse than a fit at the day itself, +2.338, z +2.30, 3 of 10, and no better than plain Power there, +1.060, 6 of 10.  It still reads lower than the published weights at that day in each era, so writing it loses nothing against what was live.  The stretch from half a season to three quarters is to be read again before the season in progress reaches it, about the middle of January 2027, with a knot at 62.5% as the candidate.
+
+**What the mismatch cost.**  The weights published on 2026-11-09, fitted on ratings shrunk on their own early folds, against the line refitted on the ratings the page multiplies: 1.383 worse at 17.5%, z -2.20, 21 of 30; 0.226 worse at 62.5%, z -1.07.
+
+**The knots, beside the published weights read at the same share.**
+
+| day | share | offense multiplier | published | defense multiplier | published | largest stats weight | published |
+|---|---|---|---|---|---|---|---|
+| 7% | 0.075 | 1.369 | 1.339 | 1.751 | 1.198 | 0.342 | 0.668 |
+| 10% | 0.104 | 1.383 | 1.201 | 1.883 | 1.253 | 0.488 | 0.537 |
+| 25% | 0.254 | 1.176 | 1.112 | 1.463 | 1.029 | 0.140 | 0.129 |
+| 50% | 0.503 | 0.931 | 0.930 | 1.290 | 1.103 | 0.000 | 0.000 |
+| 75% | 0.754 | 0.973 | 0.930 | 1.163 | 1.103 | 0.000 | 0.000 |
+
+The defense multiplier is where the two fits part: 1.75 to 1.88 through a tenth of a season, where the published weights had 1.20 to 1.25.  A season in progress is published under the whole season's shrink, and its defense is that much narrower than the same ratings under a shrink fitted on the early stretch: the narrow early-season defense listed above under "Also found, left for later", met from the team side.
+
+**The 30 teams on the ratings through 2026-11-08, 11.9% of the season, under both** (`openrapm site --power --power-forecast` into two scratch folders, the same tables under each weights file).  The order holds: rank correlation 0.995, no team moves more than 2 places, the top three and the bottom four keep their places.  The spread widens by a third: the totals' standard deviation 2.98 to 3.97, offense 1.82 to 2.19, defense 1.51 to 2.26.  San Antonio +6.57 to +8.91, the Lakers +6.43 to +7.79, Milwaukee -5.72 to -7.88.
+
+**Not settled by this check.**  The season-so-far folders are built at the test setting, their boosters leaving the rated season's neighbors out, where the page multiplies ratings built at the product setting.  And the weights are for the published build: a new build of the ratings means a refit, `scripts/checks/166_power_forecast_refit.py --write`, after its seven season-so-far folders are rebuilt on it.
+
+**Do the multipliers carry over to the season in progress?**  (`scratch/2026-11-09_improvements/power_spread.py`, read-only.)  They would overshoot if 2027's published ratings, summed by team, were wider than the ratings the knots were fitted on.  The standard deviation across teams of Power before any multiplier:
+
+| | share of season | offense | defense | total |
+|---|---|---|---|---|
+| finished seasons at the 10% day, mean of 30 | 0.104 | 1.670 | 1.090 | 2.238 |
+| the same, 2017-2026 | 0.104 | 1.525 | 1.093 | 2.149 |
+| finished seasons at the 17.5% day, mean of 30 | 0.179 | 1.942 | 1.310 | 2.657 |
+| 2027 on the published table, 146 games | 0.119 | 1.677 | 1.113 | 2.503 |
+
+On the line between the two days the finished seasons read 1.72, 1.13 and 2.32 at 2027's share.  2027's offense and defense are within 3% of that; its total is 8% wider, inside the seasons' own range at the 10% day, 1.64 to 2.72.  So the fit's ratings and the page's are on one scale, and the wider table is the multipliers' doing and not a second mismatch.
+
+**What a reader of the page will see.**  A player's row is his share of the team's possessions times his rating at the day's multipliers.  Wembanyama's row goes from +7.26 to +9.49: his rating of +5.0 and +4.3 is multiplied by 1.36 and 1.84 to +6.8 and +7.9, a +14.7 player, which no whole season has seen.  The multipliers are fitted for the team's sum, where most players' early ratings are pulled far toward zero; on a player whose rating is already full-sized they read as too much.  The team totals are what the check scored.
+
+**Against the season so far, a look at scale and not a test**, the ratings being made from these games.  The 30 teams' margins a game through 2026-11-08 have a standard deviation of 8.45; the table's totals 2.98 under the published weights and 3.97 under the refit, 35% and 47% of it; their correlation with the margins 0.853 and 0.868.  San Antonio is +10.4 a game and +8.91 in the table, Milwaukee -13.3 and -7.88.
+
+**The dry run of the morning job on both changes** passed at 11:52 PM, 12 minutes, on the rebuilt WOSA tables and the new weights.  Its ratings file differs from the live one in WOSA alone for 1997 to 2026, 11,331 of 13,922 rows at the two decimals shown; its Power file is the refitted table; and the pool main carries is in step with its ratings, 0 stale, so the morning of 2026-11-10 writes no Similarity file.
