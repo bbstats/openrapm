@@ -13141,3 +13141,17 @@ With every weight at 1 the script gives back experiment 140's shipped column on 
 **For scale.**  The five zones' full build gained 0.183 on the full within-season test, z -3.75.  This formula's miss against that test is 0.042 a season, so the read gives a direction and a rough size, not the test's number.
 
 **Not done, the owner's call.**  A full build at half-life 8: a half-life in `PriorSettings` beside `second_prior_nearest`, read by `second_prior.season_coefficients` and `season_first_stage`, a flag, tests; then one build at the test setting, the within-season test by era against zones139 with its noise control, the year-over-year guard and the 2026 top 20.
+
+### The link preview and the tab icon (the owner, 2026-11-10, 8:40 AM, on the candidates shown on a private page: "link preview is good.")
+
+
+
+**On the site.**  `docs/favicon.svg`, the blue rounded square with the white plus-minus mark in the pages' own accent, #2a78d6; `docs/favicon.ico` holding it at 16, 32 and 48 pixels, for a browser that draws no SVG and for whoever asks for that address unprompted; `docs/apple-touch-icon.png`, 180 pixels and square to its corners, since a phone's home screen cuts its own; `docs/preview.png`, 1,200 by 630, the mark beside "OpenRAPM" and the address.  Each of the six pages' heads names the three icons and gives a shared link `og:site_name`, `og:title`, the page's own title as it stood, `og:url`, `og:image` by its full address with its size, and `twitter:card` as `summary_large_image`.  The two redirect pages are left as they were.
+
+
+
+**No description.**  The sentence under the name is the owner's to write and was not given with the yes, so no `description` and no `og:description` tag is written; a preview then shows the title, the picture and the address.  One line a page once the sentence comes.
+
+
+
+**Checked.**  Two tests in `tests/test_site_pages.py`: each page carries each tag once, with its own title and address; the files are the sizes the tags state.  In Chrome on the edited copy: the tags read back from each page, the four files load as pictures of their sizes, and the 37 page checks pass.

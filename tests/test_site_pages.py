@@ -2,6 +2,7 @@
 text, since the tests run without a browser.  Each was a defect found on 2026-11-09 (notes/DECISIONS.md, "The
 improvements round")."""
 import re
+import struct
 import unicodedata
 from pathlib import Path
 
@@ -140,3 +141,48 @@ def test_a_similarity_file_that_fails_to_load_says_so_in_the_table():
     assert "async function draw() {" in page and "async function render()" not in page
     catcher = page[page.index("const render = () => draw().catch(() => {"):]
     assert "Could not load the data." in catcher[:200]
+
+
+# each page of the site, and its address after https://openrapm.com/
+PAGES = {"index.html": "", "power.html": "power.html", "similarity.html": "similarity.html", "bias.html": "bias.html",
+         "about.html": "about.html", "changelog.html": "changelog.html"}
+SITE = "https://openrapm.com/"
+PNG_START = bytes([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+
+
+def _png_size(name: str) -> tuple:
+    """(width, height) of a PNG file in docs/, from its header."""
+    data = (DOCS / name).read_bytes()
+    assert data[:8] == PNG_START, name
+    return struct.unpack(">II", data[16:24])
+
+
+def test_every_page_names_the_tab_icon_and_the_picture_a_shared_link_shows():
+    """Until 2026-11-10 a tab showed a blank page and a shared link a bare address.  Each page's head names the icon
+    three ways, for any browser, for one that draws an SVG and for a phone's home screen; and it gives a shared link
+    the page's own title, its address and one picture, by their full addresses, since whoever draws the preview reads
+    the page from outside the site."""
+    for page, address in PAGES.items():
+        head = _page(page).split("</head>")[0]
+        title = re.search(r"<title>(.*)</title>", head).group(1)
+        for tag in ('<link rel="icon" href="favicon.ico" sizes="32x32">',
+                    '<link rel="icon" href="favicon.svg" type="image/svg+xml">',
+                    '<link rel="apple-touch-icon" href="apple-touch-icon.png">',
+                    '<meta property="og:site_name" content="OpenRAPM">',
+                    f'<meta property="og:title" content="{title}">',
+                    f'<meta property="og:url" content="{SITE}{address}">',
+                    f'<meta property="og:image" content="{SITE}preview.png">',
+                    '<meta name="twitter:card" content="summary_large_image">'):
+            assert head.count(tag) == 1, (page, tag)
+        # the picture's size as the tags state it
+        assert 'og:image:width" content="1200"' in head and 'og:image:height" content="630"' in head, page
+
+
+def test_the_icon_and_the_picture_are_files_of_the_sizes_the_pages_state():
+    assert _png_size("preview.png") == (1200, 630)
+    assert _png_size("apple-touch-icon.png") == (180, 180)
+    icon = (DOCS / "favicon.ico").read_bytes()
+    assert icon[:4] == bytes([0, 0, 1, 0]) and struct.unpack("<H", icon[4:6])[0] == 3       # an .ico of three sizes
+    assert {icon[6 + 16 * k] for k in range(3)} == {16, 32, 48}
+    mark = (DOCS / "favicon.svg").read_text(encoding="utf-8")
+    assert mark.startswith("<svg") and 'viewBox="0 0 32 32"' in mark

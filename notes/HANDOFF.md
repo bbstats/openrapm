@@ -63,24 +63,25 @@ live site; no Similarity file written, the pool being in step.
   1.20 to 1.25: the table's spread widens by a third, San Antonio +6.57 to +8.91, and its order holds, no team moving
   more than 2 places.  The weights file before it is in git at 143e24d.
 
-**The experiment, Box Adj's weights: read, nothing built.**  Two reads from the saved sums of the shipped line.  No
-penalty and no count of nearest seasons passes the registered rule.  A stronger penalty helps 2017-2026 at every
-strength up to 0.1 and hurts the two earlier eras; the 16 nearest seasons gain 0.130 over all 30 seasons and lose
-2007-2016 by 0.117.  Both ends of the 30 seasons want weights learned nearer themselves and the middle does not, which
-is what drift in the weights would give.  Proposed, not run: each training season weighted by how near it is to the
-rated one, read from the same sums in minutes.  The owner's call.
+**The experiment, Box Adj's weights: three reads, nothing built.**  From the saved sums of the shipped line.  No
+penalty and no count of nearest seasons passes the registered rule: a cut at the 16 nearest seasons gains 0.130 over
+all 30 seasons and loses 2007-2016 by 0.117.  A fade passes it at every half-life read, 4 to 24 seasons: each training
+season counted 0.5 to the power of its distance from the rated one over the half-life.  The rule picks 8: -0.207 over
+all 30, z -5.52, 26 of 30; by era -0.264, -0.031 and -0.326; 2024 to 2026 gain most, 2015 is worse at every
+half-life.  A read gives a direction and a rough size.  A full build is the owner's call; row 140b of the table.
 
 ## Waiting on the owner
 
 1. **The phone notice.**  Install the ntfy app and subscribe to the topic in `outputs/daily/notify.conf`, given to the
    owner in chat on 2026-11-09.  Until then a failure posts to a topic nobody reads.  A test line:
    `bash scripts/daily_notify.sh "test"`.
-2. **The link preview and tab icon.**  The candidate picture and icon are drawn, not on the site: a blue square with a
-   white plus-minus mark, and "OpenRAPM" with the address.  They need a yes, and the preview needs one sentence of the
-   owner's wording.  The files are in `scratch/2026-11-09_improvements/link_preview/`, on this PC only; the owner was
-   shown them on a private page on 2026-11-10.  Then: `description`, `og:` and `twitter:` tags and the icon links in
-   the six pages' heads, the picture and icon under `docs/`.
-3. **Box Adj's weights**: whether to read the weights with each training season weighted by its distance.
+2. **The link preview's one sentence.**  The tab icon and the picture a shared link shows are on the site since
+   2026-11-10, on the owner's "link preview is good."  No description tag is written: the sentence under the name is
+   the owner's.  When it comes, one `description` and one `og:description` line in each of the six pages' heads, and
+   a line in `tests/test_site_pages.py`.
+3. **Box Adj's weights**: whether to run a full build with each training season counted 0.5 to the power of its
+   distance over 8 seasons.  The read of 2026-11-10 from the saved sums: -0.207 over the 30 rated seasons, z -5.52,
+   26 of 30; by era -0.264, -0.031 and -0.326.  It needs a half-life setting beside `second_prior_nearest`.
 4. **Changelog rows**, in the owner's words, for: the rookies button, WOSA, the page opening on the season in progress,
    the Detail view, Detail's Leverage and WOSA columns, Similarity's search box, the Power page's one rating; and from
    this round the Similarity correction, the WOSA correction and the Power table's new weights.
