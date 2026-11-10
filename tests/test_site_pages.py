@@ -186,3 +186,19 @@ def test_the_icon_and_the_picture_are_files_of_the_sizes_the_pages_state():
     assert {icon[6 + 16 * k] for k in range(3)} == {16, 32, 48}
     mark = (DOCS / "favicon.svg").read_text(encoding="utf-8")
     assert mark.startswith("<svg") and 'viewBox="0 0 32 32"' in mark
+
+
+def test_the_power_table_is_as_wide_as_its_columns_where_the_screen_has_room():
+    """Stretched across the page's 1,000 pixels a team's name sat 320 to 417 pixels from its numbers, and opening a
+    team moved every column (the owner, 2026-11-10: "the team name to stat distance is incredibly wide").  From 720
+    pixels up the table takes its columns' widths, each one set: the name's for its longest row, a player's row the
+    same column for its deeper indent.  A narrower screen keeps the table across its width, as before."""
+    page = _page("power.html")
+    assert "table { border-collapse: separate; border-spacing: 0; width: 100%;" in page
+    wide = page[page.index("@media (min-width: 720px) {"):page.index("@media (max-width: 600px) {")]
+    assert "table { width: auto; }" in wide
+    widths = dict(re.findall(r"\n    ([^{\n]+) \{ width: (\d+)px;", wide))
+    assert set(widths) == {"th.name, td.name", "tr.player td.name", "th:nth-child(3), td:nth-child(3)",
+                           "th:nth-child(n+4), td:nth-child(n+4)"}
+    # a team's name cell has 8 pixels of padding on its left and a player's 24: the two cells come out equal
+    assert int(widths["th.name, td.name"]) + 8 == int(widths["tr.player td.name"]) + 24
