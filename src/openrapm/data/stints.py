@@ -25,7 +25,9 @@ rows and the play-by-play names of 196 players.
 """
 from __future__ import annotations
 
+import json
 import time
+from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 
@@ -43,6 +45,7 @@ from .ingest import (
     game_table,
     load_gamelog,
     pbpstats_games,
+    played_phases,
     raw_dir,
 )
 from .stint_parser import SHOT_TABLE, GameParser
@@ -307,6 +310,100 @@ def _versus_pbpstats(parsed: pd.DataFrame, season: int, phase: str, cfg) -> dict
     except Exception as error:
         out["pbpstats_error"] = repr(error)[:100]
     return out
+
+
+# ----------------------------------------------------------------- the games check, for the season in progress
+# `build_season` leaves a game that failed to load or to parse out of the stints with an `error` row in the diagnostics
+# and goes on, which is right for thirty seasons of history and wrong for last night: the morning job then rated and
+# published the season without that game, and said "published".  `check_games` holds a season's game log against its
+# stints, so the job can stop instead (`openrapm data check-games`, scripts/daily_update.sh).
+#
+#   a game passes when     it is in the game log, has stints, and its play-by-play scores what its box score says
+#   the record             {season}_games_checked.json in paths.stints: the games of the last morning that passed,
+#                          so a game log that has since lost a game is seen even when it gained another
+#
+# Example: the game log holds 146 games and the stints 145, the 146th with `error` "ValueError('empty pbp')": the
+# check names that game with that error, and the morning stops unless one more fetch and build mends it.
+CHECKED_GAMES = "{season}_games_checked.json"
+
+
+@dataclass(frozen=True)
+class GamesCheck:
+    """One phase of a season: its game log held against its stints (`check_games`)."""
+    phase: str
+    logged: tuple            # the game log's games, as ten-character ids, sorted
+    no_stints: dict          # game id -> why: the build's error for it, or "no stints"
+    points_differ: dict      # game id -> the play-by-play's points beside the box score's, in words
+    gone: tuple              # games the last morning that passed held and the game log no longer does
+
+    @property
+    def passed(self) -> bool:
+        return not (self.no_stints or self.points_differ or self.gone)
+
+
+def _ten(game_ids) -> list:
+    """Game ids as the ten characters the league writes: a file may hold them as text or as numbers."""
+    return [str(game_id).zfill(10) for game_id in game_ids]
+
+
+def checked_games_path(season: int, cfg) -> Path:
+    return resolve(cfg, "stints") / CHECKED_GAMES.format(season=int(season))
+
+
+def checked_games(season: int, cfg) -> dict:
+    """{phase: the games of the last morning that passed}; nothing before the first."""
+    path = checked_games_path(season, cfg)
+    return json.loads(path.read_text(encoding="utf-8"))["games"] if path.exists() else {}
+
+
+def _points_differ(diagnostics: pd.DataFrame, built: set, accepted: set) -> dict:
+    """{game: its points in words} for the built games whose play-by-play does not score what the box score says."""
+    if not {"pts_home", "pts_away", "box_pts_home", "box_pts_away"} <= set(diagnostics.columns):
+        return {}
+    out = {}
+    for row in diagnostics.itertuples(index=False):
+        if row.game_id in built and row.game_id not in accepted and (
+                row.pts_home != row.box_pts_home or row.pts_away != row.box_pts_away):
+            out[row.game_id] = (f"the play-by-play scores {row.pts_home:.0f}-{row.pts_away:.0f}, the box score "
+                                f"{row.box_pts_home:.0f}-{row.box_pts_away:.0f}")
+    return out
+
+
+def check_games(season: int, cfg, accepted=()) -> list:
+    """One GamesCheck for each phase of `season` that has games: the cached game log against the stints and their
+    diagnostics on disk, and against the record of the last morning that passed.  Nothing is fetched, built or
+    removed.  `accepted` names games whose points are known to differ for good (config `points_mismatch_accepted`).
+
+    A phase whose game log is on disk with no rows, the playoffs before they start, is passed over, and so is one with
+    no game log at all."""
+    folder, accepted, record = resolve(cfg, "stints"), set(_ten(accepted)), checked_games(season, cfg)
+    checks = []
+    for phase in played_phases(season, cfg):
+        log_path = raw_dir(cfg) / "gamelog" / f"{int(season)}_{phase}.parquet"
+        if not log_path.exists():
+            continue
+        logged = sorted(set(_ten(pd.read_parquet(log_path, columns=["GAME_ID"]).GAME_ID)))
+        stints_path, diag_path = folder / f"{season}_{phase}.parquet", folder / f"{season}_{phase}_diag.parquet"
+        built = set(_ten(pd.read_parquet(stints_path, columns=["game_id"]).game_id)) if stints_path.exists() else set()
+        diagnostics = pd.read_parquet(diag_path) if diag_path.exists() else pd.DataFrame({"game_id": []})
+        diagnostics = diagnostics.assign(game_id=_ten(diagnostics.game_id))
+        errors = {}
+        if "error" in diagnostics.columns:
+            failed = diagnostics[diagnostics.error.notna()]
+            errors = dict(zip(failed.game_id, failed.error.astype(str)))
+        no_stints = {game: errors.get(game, "no stints") for game in logged if game not in built}
+        gone = tuple(game for game in _ten(record.get(phase, [])) if game not in set(logged))
+        checks.append(GamesCheck(phase, tuple(logged), no_stints, _points_differ(diagnostics, built, accepted), gone))
+    return checks
+
+
+def write_checked_games(season: int, cfg, checks: list) -> Path:
+    """The record of a morning that passed: each phase's games, for the next morning's check."""
+    path = checked_games_path(season, cfg)
+    record = {"season": int(season), "checked": time.strftime("%Y-%m-%d"),
+              "games": {check.phase: list(check.logged) for check in checks}}
+    path.write_text(json.dumps(record, indent=1), encoding="utf-8")
+    return path
 
 
 def has_playoff_stints(season: int, cfg) -> bool:

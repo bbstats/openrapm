@@ -164,6 +164,17 @@ def test_data_ingest_and_stints_read_seasons_and_phases_as_the_old_scripts_did(c
     assert args.run is (data.run_ingest if command == "ingest" else data.run_stints)
 
 
+def test_data_in_progress_and_check_games_take_one_season():
+    """The morning job's two questions about the season in progress (scripts/daily_update.sh)."""
+    from openrapm.commands import data
+    asked = _parse("data", "in-progress", "2027")
+    assert (asked.season, asked.run) == (2027, data.run_in_progress)
+    checked = _parse("data", "check-games", "2027")
+    assert (checked.season, checked.run) == (2027, data.run_check_games)
+    with pytest.raises(SystemExit):
+        _parse("data", "check-games")
+
+
 def test_data_stints_force_and_ingest_pacing():
     assert _parse("data", "stints", "2026", "--force").force
     args = _parse("data", "ingest", "2026", "2026", "PO", "--workers", "4", "--delay", "1.5")

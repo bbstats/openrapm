@@ -4,6 +4,9 @@
     openrapm data ingest 2027 2027 RS --refresh   the season in progress: its game log fetched again, through
                                                   yesterday in US Eastern time, and every new game's files
     openrapm data stints FIRST [LAST] [PHASES]    the stints from the cached play-by-play, and each season's checks
+    openrapm data in-progress SEASON              exit 0 while the season's Finals are not over, 3 once they are
+    openrapm data check-games SEASON              the season in progress: every game of its game log has stints and
+                                                  scores what its box score says, or exit 1 with each game named
     openrapm data events [FIRST] [LAST]           the play-by-play parts of four box counts, per game, player and
                                                   phase (paths.event_counts), each season held against its box score
     openrapm data careers                         the seasons before the first one of every veteran the roles table
@@ -96,6 +99,52 @@ def run_stints(args: argparse.Namespace, cfg: dict) -> int:
         out = pd.concat([old, out], ignore_index=True)
     out.to_parquet(path, index=False)
     print(out.to_string(index=False))
+    return 0
+
+
+def run_in_progress(args: argparse.Namespace, cfg: dict) -> int:
+    """0 while the season's Finals are not over, 3 once a team has won the title (data/seasons.py): the morning job
+    asks right after its ingest and stops on 3, since a finished season is rated with every other, by a full build."""
+    from ..data.seasons import in_progress, trainable_through
+    season = int(args.season)
+    if season in in_progress(cfg):
+        print(f"{season} is in progress: its Finals are not over, so it is rated from its own games and nothing is "
+              f"trained on it", flush=True)
+        return 0
+    if season <= trainable_through(cfg):
+        print(f"{season}'s Finals are over: it is no longer a season in progress", flush=True)
+        return 3
+    raise SystemExit(f"{season} is past config.yaml's last_season, {int(cfg['last_season'])}")
+
+
+def run_check_games(args: argparse.Namespace, cfg: dict) -> int:
+    """The season in progress, its game log held against its stints (data/stints.check_games): 0 and the morning's
+    record written when every game has stints and the right points, else 1 with each game and its reason.  The cached
+    raw files of a game without stints or with the wrong points are removed, so the next `data ingest` fetches them
+    again.  A finished season is refused: its files are history, and some of its games never did add up."""
+    from ..data.ingest import forget_game
+    from ..data.seasons import in_progress
+    from ..data.stints import check_games, checked_games_path, write_checked_games
+    season = int(args.season)
+    if season not in in_progress(cfg):
+        raise SystemExit(f"{season} is not in progress: only the season in progress is checked, and no finished "
+                         f"season's raw files are ever removed")
+    checks = check_games(season, cfg, accepted=cfg.get("points_mismatch_accepted") or ())
+    for check in checks:
+        bad = {**check.no_stints, **check.points_differ}
+        print(f"{season} {check.phase}: {len(check.logged)} games in the game log, {len(check.no_stints)} without "
+              f"stints, {len(check.points_differ)} whose points differ from the box score, {len(check.gone)} gone "
+              f"from the game log since the last morning that passed", flush=True)
+        for game_id, why in sorted(bad.items()):
+            removed = forget_game(game_id, cfg)
+            print(f"  {game_id}: {why}; {len(removed)} cached files removed, fetched again by the next ingest",
+                  flush=True)
+        for game_id in check.gone:
+            print(f"  {game_id}: in the last morning's record and no longer in the game log.  If the league took the "
+                  f"game out for good, delete {checked_games_path(season, cfg)}", flush=True)
+    if not all(check.passed for check in checks):
+        return 1
+    write_checked_games(season, cfg, checks)
     return 0
 
 
@@ -348,6 +397,29 @@ def _add_stints(steps) -> None:
     stints.set_defaults(run=run_stints)
 
 
+def _add_season_checks(steps) -> None:
+    """The morning job's two questions about the season in progress."""
+    progress = steps.add_parser(
+        "in-progress", help="exit 0 while the season's Finals are not over, 3 once they are",
+        description="Asks data/seasons.py whether a team has won the season's title.  The morning job "
+                    "(scripts/daily_update.sh) asks right after its ingest and stops on 3: a finished season may be "
+                    "trained on, so it is rated with every other season by a full build, not alone.")
+    progress.add_argument("season", type=int, metavar="SEASON")
+    progress.set_defaults(run=run_in_progress)
+    games = steps.add_parser(
+        "check-games", help="the season in progress: every game of its game log has stints and the right points",
+        description="Holds the season's cached game log against its stints and their diagnostics "
+                    "(data/stints.check_games).  Exit 0 when every game has stints, its play-by-play scores what its "
+                    "box score says, and no game of the last morning that passed has left the game log; the games "
+                    "are then recorded in paths.stints/<season>_games_checked.json.  Exit 1 otherwise, each game "
+                    "named with its reason; the cached play-by-play, box score and period box scores of a game "
+                    "without stints or with the wrong points are removed, so the next `openrapm data ingest` fetches "
+                    "them again.  config.yaml's points_mismatch_accepted lists games whose points differ for good.  "
+                    "Only the season in progress is checked.")
+    games.add_argument("season", type=int, metavar="SEASON")
+    games.set_defaults(run=run_check_games)
+
+
 def _add_events(steps) -> None:
     events = steps.add_parser(
         "events", help="the play-by-play parts of box counts (paths.event_counts)",
@@ -516,6 +588,7 @@ def add_data(commands) -> None:
     steps = data.add_subparsers(dest="data_command", required=True, metavar="DATA")
     _add_ingest(steps)
     _add_stints(steps)
+    _add_season_checks(steps)
     _add_events(steps)
     _add_careers(steps)
     _add_dashboards(steps)

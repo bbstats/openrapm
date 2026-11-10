@@ -213,6 +213,23 @@ def fetch_boxscore(game_id: str, cfg, force=False) -> pd.DataFrame:
     return df
 
 
+def forget_game(game_id: str, cfg) -> list:
+    """Remove a game's cached raw files, its play-by-play, its box score and its period box scores, and return the
+    paths removed.  `ingest_season` fetches whatever is missing, so the game is fetched again by the next run: the way
+    out for a file cached while the league had not finished writing it, which would otherwise be read forever
+    (`openrapm data check-games`, for the season in progress only).
+
+    Example: "0022600189" loses data/raw/pbp/2027/0022600189.parquet, box/2027/0022600189.parquet and every
+    periodbox/2027/0022600189_<period>.parquet on disk."""
+    game_id = str(game_id)
+    paths = [_pbp_path(game_id, cfg), _box_path(game_id, cfg),
+             *sorted(_pbox_path(game_id, 1, cfg).parent.glob(f"{game_id}_*.parquet"))]
+    removed = [path for path in paths if path.exists()]
+    for path in removed:
+        path.unlink()
+    return removed
+
+
 def period_range(period: int):
     if period <= 4:
         return (period - 1) * 7200, period * 7200
