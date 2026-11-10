@@ -61,6 +61,16 @@
   tr.player.others td { color: var(--muted); }
   footer { margin-top: 24px; color: var(--muted); font-size: 12.5px; }
   footer a { color: inherit; }
+  /* on a screen with room for it the table is as wide as its columns, 671 pixels, not the page: stretched across the
+     page's 1,000 a team's name sat 320 to 417 pixels from its numbers.  Each column has a set width, the name's that
+     of its longest row, a team's "Last 10 Performance Over Expected", so opening a team moves no column */
+  @media (min-width: 720px) {
+    table { width: auto; }
+    th.name, td.name { width: 232px; padding-right: 16px; }
+    tr.player td.name { width: 216px; }            /* its left padding is 16 pixels more, so the same column */
+    th:nth-child(3), td:nth-child(3) { width: 56px; }
+    th:nth-child(n+4), td:nth-child(n+4) { width: 88px; }
+  }
   @media (max-width: 600px) {
     body { font-size: 13.5px; }
     th, td { padding: 7px 5px; }
