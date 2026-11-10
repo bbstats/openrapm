@@ -45,8 +45,10 @@ preview and icon".
 - **The morning job** checks that no game is missing, is the only thing that may write the published tables, holds a
   lock, sends a phone notice when it fails, and stops after the Finals.  Its log is 85 lines a stints step, not 3,300.
 
-**In the tables since that night, on the site with the morning job of 2026-11-10.**  Read that morning's log first:
-it is the first with the games check, the lock and the notice, and it carries both changes below.
+**Published by the morning job of 2026-11-10, main b50097b, 6:18 AM**, with both changes below.  It was the first
+morning with the games check, the lock and the notice: 154 games in the log, none without stints, none whose points
+differ; the log 302 lines where the morning before wrote 3,509; GitHub's tests green; the 37 page checks pass on the
+live site; no Similarity file written, the pool being in step.
 
 - **WOSA reads the regular season alone** (2b71432).  The rating behind WOSA had read Box Adj's lineup inputs from
   playoff stints too.  Every finished season rebuilt; no rating of the published table moved.  WOSA moves a median
