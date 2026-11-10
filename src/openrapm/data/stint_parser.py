@@ -113,10 +113,10 @@ NAMED_ACTIONS = ("Made Shot", "Missed Shot", "Rebound", "Turnover", "Foul", "Fre
 # rows that end the search for a made shot's and-one free throw
 AND_ONE_STOPS = ("Made Shot", "Missed Shot", "Turnover", "period")
 RIM_FT = 3.0          # feet; a two at or inside this distance is in the "rim" bucket, beyond it "mid"
-# the five shot zones (the owner, 2026-11-06: "rim, short mid, long mid, three, long three"; experiment 139): a two beyond
-# RIM_FT and at or inside SHORT_MID_FT is a short mid, beyond it a long mid; a three at or beyond LONG_THREE_FT is a long
-# three.  Rim and three are fga_rim and fga_thr less fga_lthr.  Before about 2002 many twos are logged at 0 feet, so
-# the early rim zone also holds twos whose distance was not recorded (notes/DECISIONS.md, experiment 139)
+# the five shot zones (the owner, 2026-11-06: "rim, short mid, long mid, three, long three"; experiment 139): a two
+# beyond RIM_FT and at or inside SHORT_MID_FT is a short mid, beyond it a long mid; a three at or beyond LONG_THREE_FT
+# is a long three.  Rim and three are fga_rim and fga_thr less fga_lthr.  Before about 2002 many twos are logged at 0
+# feet, so the early rim zone also holds twos whose distance was not recorded (notes/DECISIONS.md, experiment 139)
 SHORT_MID_FT = 13.0
 LONG_THREE_FT = 27.0
 ZONE_COUNTERS = ("fga_smid", "fgm_smid", "fga_lmid", "fgm_lmid", "fga_lthr", "fgm_lthr")
@@ -1022,19 +1022,22 @@ def stint_frame(first: pd.DataFrame, sums: pd.DataFrame, counts: pd.DataFrame, g
     margin_h = (first["score_home"] - first["score_away"]).to_numpy().astype(int)
     frac_rem = np.array([regulation_remaining(int(period_no), float(seconds))
                          for period_no, seconds in zip(period, clock)]) / 2880.0
-    out = pd.DataFrame({"period": period, "poss_h": counts["poss_h"].to_numpy(),
-                        "poss_a": counts["poss_a"].to_numpy(), "pts_h": sums["pts_h"].to_numpy(),
-                        "pts_a": sums["pts_a"].to_numpy(), "margin_h": margin_h,
-                        "frac_rem": frac_rem, "is_gt": garbage_time(period, clock, margin_h, gt_rule),
-                        "start_clock": clock})
+    columns = {"period": period, "poss_h": counts["poss_h"].to_numpy(),
+               "poss_a": counts["poss_a"].to_numpy(), "pts_h": sums["pts_h"].to_numpy(),
+               "pts_a": sums["pts_a"].to_numpy(), "margin_h": margin_h,
+               "frac_rem": frac_rem, "is_gt": garbage_time(period, clock, margin_h, gt_rule),
+               "start_clock": clock}
     for counter in STINT_COUNTERS:
-        out[f"{counter}_h"] = sums[f"{counter}_h"].to_numpy()
-        out[f"{counter}_a"] = sums[f"{counter}_a"].to_numpy()
+        columns[f"{counter}_h"] = sums[f"{counter}_h"].to_numpy()
+        columns[f"{counter}_a"] = sums[f"{counter}_a"].to_numpy()
     for slots, column in ((HOME_SLOTS, "home_lineup"), (AWAY_SLOTS, "away_lineup")):
         lineups = np.array([list(lineup) for lineup in first[column]], dtype=np.int64)
-        for position, name in enumerate(slots):
-            out[name] = lineups[:, position]
-    return out
+        columns.update({name: lineups[:, position] for position, name in enumerate(slots)})
+    # one frame from every column at once.  Added to a frame one at a time, the hundred columns left it in a hundred
+    # pieces, and pandas warned at every column added after that, here and as the season's columns went on
+    # (stints._label_stints): 22 lines a game in the morning job's log from 2026-11-06, when the zone counters took the
+    # count past a hundred
+    return pd.DataFrame(columns)
 
 
 def garbage_time(period, clock, margin_h, gt_rule: dict):

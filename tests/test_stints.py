@@ -151,6 +151,42 @@ def test_counters_survive_the_stint_collapse():
     assert a1["fga"] == 1 and a1["fta"] == 1 and a1["att"] == 1 and a1["and1"] == 1
 
 
+def test_a_stint_row_keeps_its_columns_their_order_and_their_types():
+    """The stints on disk are read by name and compared file against file, so the columns, their order and their types
+    are pinned: the nine of the stint's first possession, every counter home then away, the ten lineup slots, then the
+    shooters' counters by slot."""
+    from openrapm.data.stint_parser import SLOT_COLUMNS, STINT_COUNTERS
+    from openrapm.design import AWAY_SLOTS, HOME_SLOTS
+    gp, p = _poss()
+    st = gp.stints(p)
+    first = ["period", "poss_h", "poss_a", "pts_h", "pts_a", "margin_h", "frac_rem", "is_gt", "start_clock"]
+    counters = [f"{counter}_{side}" for counter in STINT_COUNTERS for side in ("h", "a")]
+    assert list(st.columns) == [*first, *counters, *HOME_SLOTS, *AWAY_SLOTS, *SLOT_COLUMNS]
+    assert (st[counters].dtypes == "float64").all()
+    assert (st[[*HOME_SLOTS, *AWAY_SLOTS]].dtypes == "int64").all()
+    assert st["is_gt"].dtype == bool and st["frac_rem"].dtype == "float64" and st["start_clock"].dtype == "float64"
+    assert all(pd.api.types.is_integer_dtype(st[column]) for column in ("period", "poss_h", "poss_a", "margin_h"))
+    assert st["pts_h"].dtype == "float64" and st["pts_a"].dtype == "float64"
+
+
+def test_a_games_stints_are_built_in_one_piece():
+    """A stint row has about a hundred columns.  Added to the frame one at a time they left it in a hundred pieces, and
+    pandas warned at every column added after that: five times a game in the parser and six more as the season's
+    columns went on (data/stints._label_stints), 3,200 of the 3,500 lines of the morning log of 2026-11-09."""
+    import warnings
+    from types import SimpleNamespace
+
+    from openrapm.data.stints import _label_stints
+    gp, p = _poss()
+    game = SimpleNamespace(home_team_id=HOME, away_team_id=AWAY, game_id="0020000001",
+                           game_date=pd.Timestamp("2026-11-08"), neutral=False)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", pd.errors.PerformanceWarning)
+        labelled = _label_stints(gp.stints(p), game, 2027, "RS", set())
+        labelled["half"] = 0
+    assert list(labelled.columns[-7:]) == ["game_id", "season", "phase", "game_date", "series_id", "neutral", "half"]
+
+
 def test_shooter_counters_by_slot():
     """The per-shooter counters sum to the side totals, and the first-attempt pieces are consistent."""
     from openrapm.data.shot_curves import ShotCurve
