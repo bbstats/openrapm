@@ -13234,3 +13234,17 @@ The weights the added columns earned, offense and defense, mean of the 30 rated 
 **Bounds on the reading.**  One step, with each player's curvature alone; ChimeraBoost's defaults with one fifth of the players held out for its stopping; blocks of three seasons.  A fit that repeats the step, or weighs teammates, could find more or the same; none of that was tried.  The size is this formula's, 0.042 a season from the full test's.  For scale: the fade of experiment 140's third read gained 0.207 here, and the five zones' full build 0.183 on the full test.
 
 **Not done, the owner's call.**  A booster stage after the line in the pipeline: its per-player targets come from the folds, so it is built where the line's sums are built, and the prior then carries a booster's output per player next to the line's.  The per-player sums make any such candidate a matter of minutes to score before it is built.
+
+### The Power table's width (the owner, 2026-11-10, 9:50 AM: "can you fix the power ratings tab, esp on widescreen desktop the team name to stat distance is incredibly wide")
+
+
+
+**The defect, measured on the live page in Chrome.**  The table took the page's full 1,000 pixels with the slack in the name column: a team's name ended 320 to 417 pixels before its Games number, at 1,280 pixels and at 1,920 alike.  And opening a team moved every column, the name's by 7 pixels and the numbers' by 35 to 50, since a player's row is wider than a team's.
+
+
+
+**The fix, `docs/power.html`, main e71b6bc.**  From a screen 720 pixels wide the table is as wide as its columns, 671 pixels: the name's column set for its longest row, a team's "Last 10 Performance Over Expected", Games 56 and the three ratings 88 each, a player's name cell set 16 narrower for its deeper indent so the two rows share one column.  A name now ends 92 to 190 pixels before its Games number, no column moves when every team is opened, no row wraps, and below 720 pixels the table is as it was.  One test of the page's text; in Chrome at 1,920, 1,280, 768, 640 and 390 pixels, then the 37 page checks, on the edited copy and on openrapm.com.
+
+
+
+**How it went out.**  A full build was running in the working tree, whose branch also held the half-life setting, unpushed.  The fix was made in a second checkout of main, `git worktree add`, tested there as a clone is, pushed from there and the checkout removed; the working branch takes it by merging main once the build is done.
