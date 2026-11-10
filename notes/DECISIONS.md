@@ -12950,6 +12950,8 @@ The plan, approved at 8:40 PM: `C:\Users\Nathan\.claude\plans\improvements-go-le
 
 **The reading, check 165's rule on two days that feed no knot.**  The line between knots at 17.5% of each season, and the line between the 50% and 75% knots at 62.5%: each season predicted from knots fitted on the other 29, read at that season's own share.  The line is accepted at a day if its squared error per game is not worse than a direct fit at that day by a paired z of +1, the mean season-by-season change over its standard error, and lower than Power alone at its own scale on the mean.  Beside it, reported and not ruled on: the weights published on 2026-11-09 applied to these ratings at each day, which is what the mismatch costs.
 
+**Check 166, corrected before any result, 2026-11-09, 9:45 PM.**  At 62.5% there are no stats, so "Power alone at its own scale" is the direct fit itself and the rule's second half asks nothing the first does not.  At that day the line is accepted on the first half alone, not worse than the direct fit at z +1; beside it, reported: the line against plain Power, every multiplier 1 on the doubled latest 5, the page as it was before 2026-11-09.  The script is `scripts/checks/166_power_forecast_refit.py`; `159_power_next10.day_ratings` takes `step4="published"`, and checks 159 to 165 keep `step4="folds"`, so each still gives back its own numbers.
+
 **If it passes,** `params/power_forecast.json` is written and the next morning's job publishes it, by the owner's "Every fix that passes".  If it fails at either day, the published weights stay and the numbers go to the owner.
 
 ### The WOSA fix (registered before any result, 2026-11-09)

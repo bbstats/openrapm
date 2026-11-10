@@ -43,7 +43,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from openrapm.commands.site import RECENT_GAMES, game_teams, player_game_possessions, team_shares  # noqa: E402
 from openrapm.data.config import load_config, resolve  # noqa: E402
-from openrapm.prior_shrink import WITHIN_COLUMNS, shrink_fold  # noqa: E402
+from openrapm.prior_shrink import WITHIN_COLUMNS, season_factors, shrink_fold  # noqa: E402
 
 FAMILY = os.environ.get("POWER_NEXT10_FAMILY", "rating134")  # which build's season-so-far ratings are read
 CUTS = {
@@ -219,27 +219,41 @@ def load_wowy():
     return module
 
 
-def day_ratings(wowy, within: Path, folder: str) -> dict:
+PUBLISHED_MULTIPLIERS = ROOT / "outputs" / "csv" / "season_ratings_product_step4_multipliers.csv"
+
+
+def day_ratings(wowy, within: Path, folder: str, step4: str = "folds") -> dict:
     """{season: player_id, rating_off, rating_def} of the day `folder`, through the shipped shrink, and each season's
-    games through that day: {season: (ratings, set of game ids)}."""
+    games through that day: {season: (ratings, set of game ids)}.
+
+    `step4` says where the shrink's multipliers come from.  "folds": fitted on the day's own season-so-far folds, as
+    checks 159 to 165 read them.  "published": each season's row of the published table's multipliers
+    (`PUBLISHED_MULTIPLIERS`), fitted on whole seasons without that season, which is what the season in progress is
+    published with and so what the Power page multiplies (check 166)."""
     folds, where = wowy.system_folds(within, folder)
     folds = [fold for fold in folds if fold.season in SEASONS]
     seasons = sorted({fold.season for fold in folds})
-    multipliers, layer = wowy.step4_tables(
-        within, folds, where, seasons, wowy.DEFENCE_FACTORS, folder, wowy.WITHIN_FACTORS
-    )
+    if step4 == "published":
+        published = pd.read_csv(PUBLISHED_MULTIPLIERS)
+    else:
+        multipliers, layer = wowy.step4_tables(
+            within, folds, where, seasons, wowy.DEFENCE_FACTORS, folder, wowy.WITHIN_FACTORS
+        )
     out = {}
     for fold in folds:
-        row = multipliers.loc[fold.season]
-        factor = wowy.factor_for(wowy.DEFENCE_FACTORS, fold.season)
-        factors = (
-            float(row.multiplier_off),
-            factor * float(row.multiplier_def),
-            float(row.get("games_multiplier_off", 1.0)),
-            factor * float(row.get("games_multiplier_def", 1.0)),
-        )
-        if layer is not None:
-            factors += tuple(float(layer.at[fold.season, column]) for column in WITHIN_COLUMNS)
+        if step4 == "published":
+            factors = season_factors(published, fold.season)
+        else:
+            row = multipliers.loc[fold.season]
+            factor = wowy.factor_for(wowy.DEFENCE_FACTORS, fold.season)
+            factors = (
+                float(row.multiplier_off),
+                factor * float(row.multiplier_def),
+                float(row.get("games_multiplier_off", 1.0)),
+                factor * float(row.get("games_multiplier_def", 1.0)),
+            )
+            if layer is not None:
+                factors += tuple(float(layer.at[fold.season, column]) for column in WITHIN_COLUMNS)
         rated = shrink_fold(fold.rows, fold.season, factors)
         file = pd.read_parquet(where[fold.stem] / f"folds_{fold.season}.parquet")
         ids = file.game_id if "game_id" in file.columns else file.index.to_series()
