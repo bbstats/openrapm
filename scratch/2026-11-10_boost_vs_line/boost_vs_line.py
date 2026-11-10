@@ -27,7 +27,12 @@ No season's column is made by a model that saw it: seasons go in blocks of three
 seasons two or more away from every season of the block.  A column's weight is then solved like any input's, on the
 seasons more than one from the rated one.
 
-Writes outputs/csv/boost_vs_line_seasons.csv and outputs/csv/boost_vs_line.csv.
+Two controls, by environment variable, each writing its own files (the tag joins the names):
+    BOOST_SEED=100       the boosters' random draws moved by that much: the same check again
+    BOOST_SHUFFLE=1      every target handed to another player of its season and end, weights and inputs left: what
+                         the arms read when there is nothing to learn
+
+Writes outputs/csv/boost_vs_line<tag>_seasons.csv and outputs/csv/boost_vs_line<tag>.csv.
     .venv/Scripts/python scratch/2026-11-10_boost_vs_line/boost_vs_line.py
 """
 import os
@@ -45,6 +50,9 @@ from openrapm import rating_line, second_prior  # noqa: E402
 from openrapm.data.config import load_config, resolve  # noqa: E402
 
 sys.stdout.reconfigure(encoding="utf-8")
+SEED = int(os.environ.get("BOOST_SEED", "0"))
+SHUFFLE = os.environ.get("BOOST_SHUFFLE", "0") == "1"
+TAG = ("_shuffled" if SHUFFLE else "") + (f"_seed{SEED}" if SEED else "")
 F = rating_line.FITTED_PARTS
 PENALTY = 1e-4
 SEASONS = list(range(1997, 2027))
@@ -173,6 +181,9 @@ def targets(folds: dict, seasons: list, side: str, weights: np.ndarray) -> pd.Da
     table = pd.concat(frames, ignore_index=True)
     table = table[table.h > 0].reset_index(drop=True)
     table["target"] = table.g / table.h
+    if SHUFFLE:
+        rng = np.random.default_rng(1000 + SEED + (0 if side == "O" else 1))
+        table["target"] = table.groupby("season").target.transform(lambda values: rng.permutation(values.to_numpy()))
     return table
 
 
@@ -220,8 +231,8 @@ def block_columns(folds: dict, line_sums: dict, started: float) -> dict:
         for side in ("O", "D"):
             at_base = targets(folds, train, side, base["box only"])
             at_line = targets(folds, train, side, base["line"])
-            makers = {"one step": one_step_line(at_base), "trees": trees(at_base, number),
-                      "trees on the line": trees(at_line, number)}
+            makers = {"one step": one_step_line(at_base), "trees": trees(at_base, number + SEED),
+                      "trees on the line": trees(at_line, number + SEED)}
             notes.append(dict(block=f"{block[0]}-{block[-1]}", side=side, rows=len(at_base),
                               target_sd_base=float(np.sqrt(np.average(at_base.target ** 2, weights=at_base.h))),
                               target_sd_line=float(np.sqrt(np.average(at_line.target ** 2, weights=at_line.h)))))
@@ -277,9 +288,9 @@ def main() -> None:
                 for season in SEASONS}
     print(f"the candidates' columns scored through the per-player sums ({time.time() - started:.0f}s)", flush=True)
     table, shares = scores(extended)
-    table.to_csv("outputs/csv/boost_vs_line_seasons.csv", index=False)
+    table.to_csv(f"outputs/csv/boost_vs_line{TAG}_seasons.csv", index=False)
     summary = by_era(table)
-    summary.to_csv("outputs/csv/boost_vs_line.csv", index=False)
+    summary.to_csv(f"outputs/csv/boost_vs_line{TAG}.csv", index=False)
     pd.set_option("display.width", 200)
     print(f"\nthe line, today's Box Adj: mean error {table['line'].mean():.4f}; "
           f"box only {table['box only'].mean():.4f}")

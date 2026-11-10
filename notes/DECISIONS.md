@@ -13207,3 +13207,30 @@ No season's column comes from a model that saw it: seasons in ten blocks of thre
 
 
 **The readings.**  "box + trees" against "box + line, one step" is learner against learner on identical rows.  "line + trees" against "line" asks whether trees find anything the line left; it is the one that could lead anywhere: better than the line in every era and by more than 0.042 over all 30 seasons, the rule of experiment 140, and it goes to the owner as a candidate, a booster stage in the prior being real work.  "box + trees" against "line" says whether trees could stand in for the line.  The one-step fit ignores that players share stints, so it may fall short of the joint solve: "box + line, one step" against "line" measures by how much, and bounds what the tree arms can be read to say.
+
+### Check 167: result (2026-11-10, 9:23 to 9:57 AM; `outputs/player_sums.log`, `outputs/boost_vs_line_first.log`, `outputs/boost_vs_line_shuffled.log`, `outputs/boost_vs_line_seed100.log`, `outputs/csv/boost_vs_line*.csv`)
+
+**The tool holds.**  All 30 seasons' per-player sums, 360 folds, 3.1 GB, 22 minutes: projected on the line's own columns they give back the shipped line's sums, the largest relative gap of any season 5.6e-14.  Scored through them the line's error is 3,660.6903 over the 30 rated seasons, the number of experiment 140's reads.  The fitted parts and the two box-score priors alone read 3,662.930: Box Adj's line is worth 2.240 on this scale.
+
+**The arms, each minus the line, paired by season; below 0 is better than the line.**
+
+| arm | 1997-2006 | z | 2007-2016 | z | 2017-2026 | z | all 30 | z | seasons better |
+|---|---|---|---|---|---|---|---|---|---|
+| box only | +2.644 | +12.19 | +2.319 | +10.68 | +1.757 | +6.59 | +2.240 | +15.20 | 0 of 30 |
+| box + line, one step | +2.324 | +15.11 | +2.091 | +12.13 | +1.576 | +5.79 | +1.997 | +15.52 | 0 of 30 |
+| box + trees | +1.830 | +15.27 | +1.777 | +9.93 | +1.221 | +4.79 | +1.609 | +13.54 | 0 of 30 |
+| line + trees | -0.111 | -2.89 | -0.066 | -2.33 | -0.124 | -2.27 | -0.100 | -4.22 | 21 of 30 |
+| line + trees, the boosters' draws moved | -0.128 | -3.55 | -0.087 | -2.69 | -0.130 | -2.15 | -0.115 | -4.57 | 21 of 30 |
+| line + trees, targets shuffled inside each season | +0.002 | +0.51 | +0.006 | +0.69 | +0.005 | +1.75 | +0.004 | +1.33 | 14 of 30 |
+
+The weights the added columns earned, offense and defense, mean of the 30 rated seasons: one step 0.076 and 0.146; trees at the base 0.151 and 0.289; trees on the line 0.096 and 0.185; with shuffled targets -0.000 and -0.003.
+
+**Read as registered.**
+
+1. *Learner against learner, identical rows, targets and weights.*  From the base, the one-step line gains 0.243 and the trees 0.631, 2.6 times as much, the trees ahead in each era.  With the targets shuffled the trees gain nothing, -0.012; the one-step line still gains 0.044, which is what a random mix of 57 useful inputs is worth once its weight is fitted, about a fifty-seventh of the line's 2.240.
+2. *Trees in the line's place: no.*  The trees at the base stay 1.609 short of the line, in every season.  But the one-step line stays 1.997 short of the same line on the same inputs: fitted one player at a time it recovers 11% of what the joint solve gets, because players share stints and the targets ignore it.  So the arm measures the fitting, not the learner, and says nothing against trees; a tree model cannot be solved jointly through the ridge as a line can, which is the line's whole advantage here.
+3. *Trees on what the line left: yes, on this read.*  Added to the line, the booster's column gains 0.100, z -4.22, 21 of 30, each era better, and 0.115 with the boosters' draws moved; with shuffled targets +0.004.  It passes the rule of experiment 140, every era and more than 0.042.  A straight line in these inputs has, by its joint solve, nothing linear left to give, so the gain is in the inputs' curves and products.  The column earns a small weight, 0.10 and 0.19, on targets whose spread is 5 points per 100: the targets are almost all noise, and a booster reads through it for a tenth of a point of error.
+
+**Bounds on the reading.**  One step, with each player's curvature alone; ChimeraBoost's defaults with one fifth of the players held out for its stopping; blocks of three seasons.  A fit that repeats the step, or weighs teammates, could find more or the same; none of that was tried.  The size is this formula's, 0.042 a season from the full test's.  For scale: the fade of experiment 140's third read gained 0.207 here, and the five zones' full build 0.183 on the full test.
+
+**Not done, the owner's call.**  A booster stage after the line in the pipeline: its per-player targets come from the folds, so it is built where the line's sums are built, and the prior then carries a booster's output per player next to the line's.  The per-player sums make any such candidate a matter of minutes to score before it is built.
