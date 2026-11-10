@@ -13120,3 +13120,24 @@ On the line between the two days the finished seasons read 1.72, 1.13 and 2.32 a
 First the script must give back, with every weight at 1, the shipped setting's error on each of the 30 seasons as `outputs/csv/box_adj_weights140_seasons.csv` holds it, to 1e-9.
 
 **The rule, experiment 140's.**  A half-life goes to a full build only if it is better than the shipped line in every era and by more than 0.042 over all 30 seasons.  Among the half-lives within one standard error of the best, the longest, the nearest to what ships.  The read gives a direction and not a size, for the reasons given under experiment 140.  Then stop and show the owner: a full build needs a half-life setting beside `second_prior_nearest` in `PriorSettings` and a flag, and is the owner's call.
+
+### Experiment 140, the third read: result (2026-11-10, 8:55 AM; `outputs/csv/box_adj_fade140.csv`, `outputs/csv/box_adj_fade140_seasons.csv`; row 140b of `experiments/runs.csv`)
+
+With every weight at 1 the script gives back experiment 140's shipped column on all 30 seasons, the largest gap 4.5e-13.  The shipped setting's mean error is 3,660.690 on 27.1 training seasons a rated season.  Each half-life minus the shipped setting, paired by season; z is the mean change over its standard error; "seasons' worth" is how many equally counted seasons the faded ones amount to, the sum of the weights squared over the sum of their squares.
+
+| half-life | 1997-2006 | z | 2007-2016 | z | 2017-2026 | z | all 30 | z | seasons better | seasons' worth |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 4 | -0.279 | -2.92 | -0.011 | -0.22 | -0.404 | -3.51 | -0.232 | -3.90 | 24 of 30 | 15.6 |
+| 6 | -0.291 | -5.46 | -0.029 | -0.74 | -0.371 | -3.98 | -0.230 | -5.04 | 25 of 30 | 19.5 |
+| 8 | -0.264 | -7.31 | -0.031 | -1.01 | -0.326 | -4.22 | -0.207 | -5.52 | 26 of 30 | 21.8 |
+| 12 | -0.209 | -9.37 | -0.027 | -1.28 | -0.253 | -4.47 | -0.163 | -5.92 | 26 of 30 | 24.2 |
+| 16 | -0.170 | -10.31 | -0.023 | -1.42 | -0.204 | -4.59 | -0.132 | -6.09 | 26 of 30 | 25.3 |
+| 24 | -0.122 | -11.12 | -0.017 | -1.56 | -0.146 | -4.71 | -0.095 | -6.24 | 27 of 30 | 26.2 |
+
+**As registered, every half-life passes, and the rule picks 8.**  Each is better than the shipped line in every era and by more than 0.042 over all 30 seasons.  The best over all 30 is half-life 4, -0.232 with a standard error of 0.059; within one standard error of it, at -0.172 or lower, are 4, 6 and 8, and the longest of those is 8: -0.207 over all 30, z -5.52, 26 of 30; by era -0.264, -0.031 and -0.326.
+
+**What the read says.**  The gain is at the two ends, 10 of 10 seasons in 1997-2006 and in 2017-2026 from half-life 8 on, and the middle decade neither gains nor loses, -0.011 to -0.031, 6 or 7 of 10.  That is what the cut at the 16 nearest seasons could not do: it gained the ends, -0.281 and -0.226, and lost the middle, +0.117; with the far seasons kept at less than full weight the middle holds.  The seasons that gain most are the last three, 2024 -0.674, 2025 -0.706 and 2026 -0.474 at half-life 8, whose training seasons all lie on one side: the case of the season in progress.  2015 is worse at every half-life, +0.335 at 4 and +0.054 at 24; 2008, 2010 and 2016 are worse by 0.03 or less at half-life 8; 1997 is worse at half-lives 4 and 6 only.  The shorter the half-life the larger the mean gain and the larger its spread across seasons, so the z falls from -6.24 at 24 to -3.90 at 4.
+
+**For scale.**  The five zones' full build gained 0.183 on the full within-season test, z -3.75.  This formula's miss against that test is 0.042 a season, so the read gives a direction and a rough size, not the test's number.
+
+**Not done, the owner's call.**  A full build at half-life 8: a half-life in `PriorSettings` beside `second_prior_nearest`, read by `second_prior.season_coefficients` and `season_first_stage`, a flag, tests; then one build at the test setting, the within-season test by era against zones139 with its noise control, the year-over-year guard and the 2026 top 20.
