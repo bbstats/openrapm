@@ -12970,3 +12970,26 @@ The plan, approved at 8:40 PM: `C:\Users\Nathan\.claude\plans\improvements-go-le
 First the script must give back `rating_line._solve`'s weights on every season with a gap of 0, and print the line of the season in progress beside the morning build's log.
 
 **The rule.**  A setting goes to a full build only if it is better than the shipped one in every era, and by more than 0.042 over all 30 seasons, the standard deviation of this formula's miss against check 151 season by season.  Among the settings within one standard error of the best, the strongest penalty, or the most seasons.  The sums carry padbins127's folds and experiment 136's within layer, and the read is at each line's own fitted parts, so it gives a direction and not a size.  Then stop and show the owner; a full build, with a `--second-prior-penalty` flag beside `--second-prior-nearest`, only on the owner's word.
+
+### Experiment 140: the two reads' result (2026-11-09, 9:20 PM; `outputs/csv/box_adj_weights140.csv`, `outputs/csv/box_adj_weights140_seasons.csv`)
+
+The script gives back `rating_line._solve`'s weights with a gap of 0.0, and the line of the season in progress is the one the morning's build logs: box_prior +2.217, teammates_offence_on -2.045, teammates_defence_on +0.581, opponents_offence_on +3.155.  The shipped setting's mean error over the 30 rated seasons is 3,660.690.  Each setting minus the shipped one, paired by season; z is the mean change over its standard error.
+
+| setting | 1997-2006 | z | 2007-2016 | z | 2017-2026 | z | all 30 | z | seasons better |
+|---|---|---|---|---|---|---|---|---|---|
+| penalty 0.001 | +0.000 | +0.01 | -0.001 | -0.52 | -0.007 | -4.43 | -0.002 | -2.68 | 20 of 30 |
+| penalty 0.01 | +0.004 | +0.36 | -0.001 | -0.15 | -0.061 | -4.23 | -0.019 | -2.25 | 18 of 30 |
+| penalty 0.03 | +0.029 | +0.99 | +0.011 | +0.57 | -0.131 | -3.78 | -0.031 | -1.47 | 17 of 30 |
+| penalty 0.03, fitted parts free | +0.017 | +0.95 | +0.001 | +0.05 | -0.128 | -3.63 | -0.037 | -2.00 | 17 of 30 |
+| penalty 0.1 | +0.163 | +2.59 | +0.105 | +2.74 | -0.208 | -2.53 | +0.020 | +0.43 | 12 of 30 |
+| penalty 0.3 | +0.601 | +5.32 | +0.430 | +6.53 | -0.116 | -0.67 | +0.305 | +3.39 | 5 of 30 |
+| penalty 1 | +1.951 | +9.96 | +1.475 | +9.31 | +0.620 | +1.84 | +1.349 | +7.95 | 3 of 30 |
+| nearest 8 seasons | +0.106 | +0.42 | +1.081 | +2.48 | -0.083 | -0.63 | +0.368 | +1.91 | 11 of 30 |
+| nearest 12 seasons | -0.154 | -1.46 | +0.259 | +2.64 | -0.239 | -2.23 | -0.045 | -0.63 | 16 of 30 |
+| nearest 16 seasons | -0.281 | -4.29 | +0.117 | +1.63 | -0.226 | -2.33 | -0.130 | -2.37 | 20 of 30 |
+
+Leaving the two fitted parts free of the penalty changes each penalty's row by 0.05 or less up to 0.1, and is the better of the two from 0.03 on; the CSV has every row.
+
+**As registered, nothing goes to a full build.**  No penalty is better in every era, and the best of them over all 30 seasons, 0.03 with the fitted parts free, gains 0.037, under the 0.042 the rule asks.  The nearest 16 seasons gain 0.130 over all 30 and lose 2007-2016, +0.117, 3 of 10.
+
+**What the two reads say together.**  Both ends of the 30 seasons want weights learned nearer to themselves, and the middle does not.  2017-2026 gains from a stronger penalty at every strength up to 0.1, 8 to 10 seasons of 10, and from dropping the far seasons, -0.226 at 16 and -0.239 at 12.  1997-2006 gains from dropping the far seasons too, -0.281 at 16, 9 of 10, and loses under a stronger penalty.  2007-2016, whose 16 nearest seasons already reach both ways, loses when the far seasons go.  That is the shape drift in the weights would give: a season in the middle borrows from both sides, a season at an end is rated with weights half made in another era.  A hard cut at 16 seasons throws the far seasons out; a weight that fades with distance would keep them at less than full weight, and the saved sums can read it in minutes, since a season's sums add.  Not run: it is not one of the two registered reads.  The owner's call.

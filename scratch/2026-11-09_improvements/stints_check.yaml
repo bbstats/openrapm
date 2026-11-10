@@ -1,0 +1,48 @@
+# config.yaml with the stints written to data/stints_check, every other path the real one, absolute: the proof that
+# building a game's stint table in one piece (data/stint_parser.stint_frame, 2026-11-09) leaves the stints on disk as
+# they were.  Run without --force, so the cached shot curves are read and nothing real is written:
+#   OPENRAPM_OFFLINE=1 OPENRAPM_CONFIG=A:/code/spmm/scratch/2026-11-09_improvements/stints_check.yaml \
+#     .venv/Scripts/python -u -m openrapm data stints 2026 2026 RS,PO
+first_season: 1997
+last_season: 2027
+windows:
+  - [1997, 1999]
+  - [2000, 2002]
+  - [2003, 2005]
+  - [2006, 2008]
+  - [2009, 2011]
+  - [2012, 2014]
+  - [2015, 2017]
+  - [2018, 2020]
+  - [2021, 2023]
+  - [2024, 2026]
+neutral_site_seasons_po: [2020]
+neutral_site_from: [[2020, "2020-07-01"]]
+box_counts: [fg3m, fg3_miss, fg2m, fg2_miss, ftm, ft_miss, orb, drb, ast, tov, stl, blk, pf]
+player_unit: player
+low_poss_threshold: 500
+starter_poss_threshold: 1500
+pad_target: poss_conditional
+pad_k_around: target
+pad_bin_target: league
+body_inputs: season_listing
+garbage_time:
+  q4_margin_late: 15
+  late_minutes: 6
+  q4_margin_any: 20
+gt_weight: 1.0
+margin_clip: 25
+roles:
+  cache: roles.parquet
+  share_cap: 0.9
+paths:
+  raw: A:/code/spmm/data/raw
+  stints: A:/code/spmm/data/stints_check
+  cache: A:/code/spmm/data/cache
+  shot_curves: A:/code/spmm/data/shotcurve
+  outputs: A:/code/spmm/outputs
+  panel: A:/code/spmm/outputs/season_panel.parquet
+  panel_so_far: A:/code/spmm/outputs/season_panel_so_far.parquet
+  within: A:/code/spmm/outputs/within
+  event_counts: A:/code/spmm/data/event_counts
+  public_ratings: A:/code/spmm/data/public_ratings
