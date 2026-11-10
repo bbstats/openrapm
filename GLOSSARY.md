@@ -145,21 +145,27 @@ free-throw percentage. Defence, `points_with_expected_opponent_threes`: the same
 threes expected), so three quarters of the shooters' three-point luck is taken off. Scoring is always against
 the points actually scored.
 
-**Year-over-year test.** The test that decides (`scripts/checks/63_yoy.py`): each season's ratings predict every
+**Within-season WOWY test.** The test that decides since 2026-10-15 (`scripts/checks/151_wowy.py`): each season is
+rated from three quarters of its games, twelve times over, and scored stint by stint on the quarter held back, with
+each team's own level in those games taken out, so what is scored is how the ratings split credit among
+teammates. A change must be better in each of 1997-2006, 2007-2016 and 2017-2026, read beside the noise control.
+
+**Year-over-year test.** The test that guards it (`scripts/checks/63_yoy.py`), and decided until 2026-10-15: each
+season's ratings predict every
 stint of the season before and the season after from the ten players' ratings alone, refitting only that
 season's intercept and home edge; the misses are summed to team-games. 28 scored seasons, each predicted from
 both sides: 56 observations. The score is sqrt(team-game mean squared error) x sqrt(2 / pi), in points per 100
-(`game_armse`, `scoring.py`): the incumbent reads 8.5857.
+(`game_armse`, `scoring.py`): the incumbent reads 8.6901. A change must not be worse at a paired z of +2.
 
 **Team-game.** One team's offence in one game: the unit the year-over-year test scores, because the noise of
 single possessions cancels inside a team's hundred-odd possessions before the miss is squared.
 
 **Paired z.** For each of the 56 observations, one table's team-game mean squared error minus the other's; the
-mean of those differences divided by its standard error (a paired t-statistic). A change is adopted at -2 or
-below.
+mean of those differences divided by its standard error (a paired t-statistic). Below zero is better. The
+within-season WOWY test pairs its 30 seasons the same way.
 
-**Incumbent.** The table every candidate is scored against: today `outputs/season_ratings_weightfix.parquet`,
-experiment 46 built at the test setting.
+**Incumbent.** The table every candidate is scored against: today `outputs/season_ratings_zones139.parquet`,
+experiment 139 built at the test setting, with its folds `zones139_early` and `zones139_within`.
 
 **Trade set.** For each rated season, the team-games of that season and the seasons either side, each player's
 share of his team's possessions in each, and the rated season's ratings subtracted; what is left is ridged back
@@ -188,8 +194,9 @@ subtracts, each side of OpenRAPM is multiplied once, league-wide, to the consens
 offense and 1.01 on defense on 2026-11-05. The page prints both multipliers.
 
 **Noise control.** The incumbent rebuilt with nothing changed but which players share each of the prior's five
-folds (`--fold-assignment 1`). It shows how far every reading moves when nothing real changes: on the
-year-over-year test it reads 8.5853 against the incumbent's 8.5857, paired z -0.24.
+folds (`--fold-assignment 1`). It shows how far every reading moves when nothing real changes: today's,
+`noise_zones139`, reads -0.009 on the within-season WOWY test, paired z -1.03, and +0.004 on the year-over-year
+test, paired z +0.52.
 
 **Replicate.** The same change built a second time with another random assignment of players to the prior's
 folds, so every reading is seen twice (`scripts/checks/135_robust_review.py`).

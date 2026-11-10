@@ -209,7 +209,9 @@ command runs in one process as before.
   (experiment 81); `context_and_types`, also his other side's box-score prior and the swap adjustment's 19 box-score,
   role and body numbers (experiment 82); `context_and_types_centred`, the same centred on the season's
   possession-weighted average (experiment 93); `context_types_team_rates_centred`, also the team's eight box rates with
-  him on and off court, on defense the opponents' (experiment 134, shipped); `own_teammates_opponents`, his box-score prior, teammates'
+  him on and off court, on defense the opponents' (experiment 134); `context_types_team_zones_centred`, the same with
+  the team's shots counted by five zones in place of threes and twos (experiment 139, shipped);
+  `own_teammates_opponents`, his box-score prior, teammates'
   same-side sum and opponents' other-side sum, centred too (experiment 92, not adopted).  Team totals
   (`--second-prior-team-totals`): `held` (shipped), `free`, or `spread_held`, which also holds the spread inside
   teams as the swap adjustment did (experiment 90, not adopted).  Why centred: the line has no intercept, and on
@@ -244,9 +246,9 @@ command runs in one process as before.
   `outputs/csv/season_ratings_NAME_step4_multipliers.csv`.
 - **How:** four multipliers per season, the prior's part and the games' part on offence and defence, from
   one weighted least-squares fit on the folds' held-back team-games; each part is multiplied by its own, and
-  each season is centred again. The published multipliers, the defence factor included: the prior's part 0.629 to 0.712 on
-  offence and 0.649 to 0.852 on defence; the games' part 1.244 to 1.478 on offence and 1.289 to 1.393 on defence
-  (experiment 93, 2026-10-21).
+  each season is centred again. The published multipliers, the defence factor included: the prior's part 0.599 to 0.706 on
+  offence and 0.643 to 0.788 on defence; the games' part 1.292 to 1.443 on offence and 1.218 to 1.317 on defence
+  (experiment 139, 2026-11-06; `outputs/csv/season_ratings_product_step4_multipliers.csv` holds every season's).
 - **Settings:**
   - the method (experiment 33b, adopted 2026-10-03), with the games' part freed (experiment 65, adopted
     2026-10-15; `ShrinkSettings.free_games_part`, `--no-free-games-part` holds it at 1);
@@ -256,14 +258,12 @@ command runs in one process as before.
     `within_factors`, `--defence-factor 0.8682,2017:0.8704`, `--within-factors 0.7663,0.9968`); before it 0.89 before
     2017 and 0.84 from 2017 (experiment 98) and 0.75 and 1.0 (experiment 106); 0.866 in every season before those,
     chosen with the booster's settings by the same search (experiment 76);
-  - the folds `heave95_early,heave95_within`, experiment 95's own folds on the rebuilt stints (before them
-    experiment 94's, `parser94_early,parser94_within`, experiment 93's, `ctx82c_early,ctx82c_within`, built with
-    the centred second prior, experiment 82's and experiment 78's, `bags10_early,bags10_within`), seasons
-    1997-2026 pinned, because the fold folder grew once
-    and an unpinned rerun shrank harder (experiment 34's correction);
+  - the folds `zones139_early,zones139_within`, experiment 139's own (every adopted build since experiment 78 has
+    brought its own; `settings.ShrinkSettings.folds_tag` names each in turn), seasons 1997-2026 pinned, because the
+    fold folder grew once and an unpinned rerun shrank harder (experiment 34's correction);
   - each season's multipliers from the 8 fold seasons nearest it (experiment 55, adopted 2026-10-12);
   - each multiplier read to a full season: fitted again on folds holding back a tenth of the games, ten folds a
-    repeat (`inputs99_k10`), and read off the straight line through the two holdout sizes at nothing held back,
+    repeat (`zones139_k10`), and read off the straight line through the two holdout sizes at nothing held back,
     because a fold's ratings are built from part of a season and the published ones from all of it (experiment
     101, adopted 2026-10-22; `ShrinkSettings.extrapolate_folds_tag`, `--extrapolate-folds`).
 - **Command:** `python -m openrapm shrink --base season_ratings_NAME_step3`.

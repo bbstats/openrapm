@@ -45,7 +45,7 @@ from openrapm.commands.site import RECENT_GAMES, game_teams, player_game_possess
 from openrapm.data.config import load_config, resolve  # noqa: E402
 from openrapm.prior_shrink import WITHIN_COLUMNS, season_factors, shrink_fold  # noqa: E402
 
-FAMILY = os.environ.get("POWER_NEXT10_FAMILY", "rating134")  # which build's season-so-far ratings are read
+FAMILY = os.environ.get("POWER_NEXT10_FAMILY", "zones139")  # which build's season-so-far ratings are read
 CUTS = {
     "7%": f"{FAMILY}_cut0715_held",
     "10%": f"{FAMILY}_cut10_held",

@@ -102,7 +102,7 @@ INC_NAME=${INC_NAME:-zones139}
 INC_SYSTEM=${INC_SYSTEM:-zones139}       # the incumbent's folds (<name>_early, <name>_within) for 151
 CONTROL_NAME=${CONTROL_NAME:-noise_zones139}  # the noise control's folds (<name>_early, <name>_within) for 151
 INC_FOLDS=${INC_FOLDS:-zones139_early,zones139_within}
-AUDIT_REF=${AUDIT_REF:-creation110_within}
+AUDIT_REF=${AUDIT_REF:-${INC_SYSTEM}_within}     # the held-out audit's reference: the incumbent's own folds
 INC=outputs/season_ratings_${INC_NAME}.parquet
 BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1_tune2 --features hustle_no_three_pct_self_creation}
 [ -n "$NAME" ] && [ -n "$TARGET" ] || { echo "usage: scripts/experiment_chain.sh NAME TARGET [EXTRA RATE FLAGS]"; exit 1; }
