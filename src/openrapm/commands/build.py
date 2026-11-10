@@ -60,6 +60,7 @@ from ..data.tables import design_row_teams, player_names
 from ..data.within_folds import check_fold_files, fold_games, held_back_stints, load_folds
 from ..settings import PRODUCT, describe_factors
 from . import parallel
+from .published import refuse_published_name
 from .wins import REGULAR_COLUMNS, add_wins, load_regular, with_seasons_so_far, write_regular, write_wins_summary
 
 SIDES = ("O", "D")
@@ -698,6 +699,7 @@ def run_rate(cfg: dict, settings, seasons, name: str, save_models: str | None = 
     """`openrapm rate`: rate `seasons`, write the step-3 table (and the boosters when asked), print a summary.  With
     `jobs` above 1, the seasons are rated in that many processes at once, as many as free memory holds
     (`parallel.affordable_jobs`), with the same numbers."""
+    refuse_published_name(cfg, name)
     started = time.time()
     seasons = check_seasons(seasons, cfg)
     fits = parallel.affordable_jobs(jobs) if jobs > 1 and len(seasons) > 1 else 1
@@ -884,6 +886,7 @@ def write_multipliers(multipliers: pd.DataFrame, cfg: dict, name: str) -> None:
 def run_shrink(cfg: dict, settings, base: str, name: str) -> int:
     """`openrapm shrink`: step 4 on outputs/<base>.parquet, written as outputs/season_ratings_<name>_step4.parquet,
     with its multipliers beside it (`write_multipliers`)."""
+    refuse_published_name(cfg, name)
     started = time.time()
     require_folds(cfg, settings.shrink)
     outputs = resolve(cfg, "outputs")
@@ -1015,6 +1018,7 @@ def write_types(types: pd.DataFrame, cfg: dict, name: str) -> None:
 
 def run_swap(cfg: dict, settings, base: str, name: str, with_types: bool = False) -> int:
     """`openrapm swap`: step 5 on outputs/<base>.parquet, written as outputs/season_ratings_<name>.parquet."""
+    refuse_published_name(cfg, name)
     started = time.time()
     outputs = resolve(cfg, "outputs")
     source, path = outputs / f"{base}.parquet", outputs / f"season_ratings_{name}.parquet"
@@ -1148,6 +1152,7 @@ def run_build(cfg: dict, settings, seasons, name: str, save_models: str | None =
     final table (commands/wins.py; no rating moves), the three tables and step 4's multipliers written at the end.
     Step 4's folds are checked first (`require_folds`), so missing folds stop the run in seconds.  With
     `replace_seasons`, the seasons built go into the tables already under `name`, in place of their rows there."""
+    refuse_published_name(cfg, name)
     started = time.time()
     seasons = check_seasons(seasons, cfg)
     require_folds(cfg, settings.shrink)

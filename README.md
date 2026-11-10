@@ -149,7 +149,9 @@ Scheduler runs it on the project's machine at 6 AM Eastern, after the night's ga
 
 ```bash
 python -m openrapm data ingest 2027 2027 RS,PO --refresh     # the game log again, games before today, Eastern
+python -m openrapm data in-progress 2027             # the job stops here once 2027's Finals are over
 python -m openrapm data stints 2027 2027 RS,PO --force
+python -m openrapm data check-games 2027             # every game of the log has stints and the box score's points
 python -m openrapm data events 2027 2027 --force
 python -m openrapm data hustle-games 2027 2027       # not a step: a failure does not stop the morning
 python -m openrapm data matchup-games 2027 2027      # not a step either
@@ -159,15 +161,37 @@ python -m openrapm build --seasons 2027 --replace-seasons    # 2027 in place of 
 python -m openrapm site --openrapm-decomposition --power --out-dir A:/code/spmm_site/docs
 python -m openrapm data public-ratings               # not a step: the Bias page's five outside systems, one request each
 python -m openrapm site --bias --out-dir A:/code/spmm_site/docs      # not a step either: docs/data/bias.json
+python -m openrapm site --similarity --out-dir A:/code/spmm_site/docs    # only when a finished season's rating moved
 ```
 
 Then it commits the three data files in `A:/code/spmm_site`, a worktree of `origin/main` that only the job writes, and
 pushes them to `main` when one changed beyond the date it was built (`scripts/daily_files.py`). The Bias page's file
-is committed with them; it never decides a publish, and a system that is down leaves the last table up. Nothing trains on the
+is committed with them; it never decides a publish, and a system that is down leaves the last table up. The Similarity
+page's files are written again, and committed with them, only on a morning when its player-seasons carry other ratings
+than the published ones, which is the morning after a new build of the ratings. Nothing trains on the
 season in progress (data/seasons.py); it is rated from its own rows, the
 box-score prior told the share of the regular season played. The ratings page opens on it once its median player shown
 has 250 offensive possessions. Each morning's log is `outputs/daily/<date>.log`, and `outputs/daily/last.txt` says how
-the last one ended.
+the last one ended; a dry run, `PUBLISH=0 bash scripts/daily_update.sh`, says it in `outputs/daily/last_dry.txt`.
+
+What keeps the job safe with nobody looking:
+
+- **A game cannot go missing.** `data check-games` stops the morning when a game of the game log has no stints or its
+  play-by-play does not score what its box score says, after one more fetch and build of that game. Yesterday's
+  ratings stay up.
+- **Only the job writes the published tables.** Where the job has run, a command that would write the name `product`
+  is refused unless `OPENRAPM_WRITE_PUBLISHED=1` is set, which the job sets and a full build after an adopted change
+  is typed with (`src/openrapm/commands/published.py`). A fresh clone is not affected.
+- **One run at a time.** The job holds a lock (`scripts/daily_lock.sh`); `scripts/experiment_chain.sh` waits while it
+  is held and between 5:50 and 7:30 AM.
+- **A failure reaches a phone.** A morning that ends FAILED posts one line through ntfy.sh to the topic named in
+  `outputs/daily/notify.conf`, a file out of git (`scripts/daily_notify.sh`), and a second task at 8 AM posts one when
+  the job never ran (`scripts/daily_missed.sh`).
+- **It stops when the season ends.** Once a team has won the title, `data in-progress` ends the morning after the
+  ingest: the season is then rated with every other, by a full build.
+
+Before any push to `main`, `bash scripts/publish_check.sh` runs what GitHub runs, on a clone of the commit with no
+data: the lint check, every test and the tutorial.
 
 ### The Bias page
 

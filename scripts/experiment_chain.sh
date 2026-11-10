@@ -12,6 +12,19 @@
 # A reading that fails is logged and the chain goes on to the next (each reading stands alone); the last line of the
 # log then names every reading that failed, and the chain exits with status 1.
 cd "$(dirname "$0")/.."
+# The morning job (scripts/daily_update.sh) has 5:50 to 7:30 AM to itself and holds a lock while it runs
+# (scripts/daily_lock.sh): it rebuilds the stints, the season panel and the published tables this chain reads, so a
+# chain started then waits, a minute at a time, and says so once.  MORNING_WAIT=0 starts at once.  A chain already
+# running when the job starts is not stopped: start one early enough to end before 5:50 AM, or after 7:30.
+. scripts/daily_lock.sh
+if [ "${MORNING_WAIT:-1}" = "1" ]; then
+  said=0
+  while lock_held || morning_window; do
+    [ "$said" = "1" ] || echo "waiting: the morning job holds its lock, or it is between 5:50 and 7:30 AM"
+    said=1
+    sleep 60
+  done
+fi
 # the environment's python: .venv/Scripts/python on Windows, .venv/bin/python on macOS and Linux; PY=... overrides
 if [ -z "$PY" ]; then PY=.venv/bin/python; [ -x .venv/Scripts/python ] && PY=.venv/Scripts/python; fi
 # rate and folds split their seasons over up to 4 processes, as many as free memory holds (commands/parallel.py;

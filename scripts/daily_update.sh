@@ -5,20 +5,31 @@
 # worked, and the first failure stops the morning, leaving yesterday's ratings on the site.
 #
 #   1. the game log fetched again, through yesterday in US Eastern time, and every new game's play-by-play and box
-#      score (`openrapm data ingest --refresh`)
-#   2. the season's stints built again, its play-by-play counts, the season-to-date dashboards, then the season panel
-#      (which also rebuilds the season's roles rows and bio feed); the new games' per-game hustle box scores and
-#      matchups are asked for between, not as steps, since nothing the morning publishes reads them
-#   3. `openrapm build --seasons SEASON --replace-seasons`: the season rated and written into the published table in
+#      score (`openrapm data ingest --refresh`).  Once the season's Finals are over the job stops here
+#      (`openrapm data in-progress`): the season is then rated with every other, by a full build
+#   2. the season's stints built again, then checked (`openrapm data check-games`): every game of the game log has
+#      stints, and its play-by-play scores what its box score says.  A game that fails is fetched and built once more;
+#      if it fails again the morning stops, since the ratings would be published without it
+#   3. the season's play-by-play counts, the season-to-date dashboards, then the season panel (which also rebuilds the
+#      season's roles rows and bio feed); the new games' per-game hustle box scores and matchups are asked for
+#      between, not as steps, since nothing the morning publishes reads them
+#   4. `openrapm build --seasons SEASON --replace-seasons`: the season rated and written into the published table in
 #      place of yesterday's rows, every finished season as it was
-#   4. `openrapm site --openrapm-decomposition --power` into the site worktree, then the three data files committed and
+#   5. `openrapm site --openrapm-decomposition --power` into the site worktree, then the three data files committed and
 #      pushed to main, where GitHub Pages serves docs/, when one of them changed beyond the date it was built
 #      (scripts/daily_files.py).  The ratings page opens on the season in progress only once its median player shown has
 #      250 offensive possessions (openrapm site, default_season).  docs/data/power.json is each team's current ratings
 #      times its players' shares of its possessions over its last 10 games.
-#   5. not steps, so they can never hold the ratings back: the five outside rating systems asked for their tables
-#      (`openrapm data public-ratings`) and the Bias page's file written from them (`openrapm site --bias`), which is
-#      committed with the three files above on a morning they publish
+#   6. not steps, so they can never hold the ratings back: the five outside rating systems asked for their tables
+#      (`openrapm data public-ratings`) and the Bias page's file written from them (`openrapm site --bias`); and the
+#      Similarity page's files, written again only on a morning when its player-seasons carry other ratings than the
+#      published ones (`openrapm site --similarity`).  Both are committed with the three files above on a morning they
+#      publish
+#
+# A morning that ends FAILED sends one line to the owner's phone (scripts/daily_notify.sh), and a second task at 8 AM
+# sends one when the morning never ran (scripts/daily_missed.sh).  The job holds a lock while it runs
+# (scripts/daily_lock.sh), which a full build waits for, and it alone says it means to write the published tables
+# (OPENRAPM_WRITE_PUBLISHED, src/openrapm/commands/published.py).
 #
 # The site worktree, SITE, is a checkout of origin/main that only this job writes: it is reset to origin/main each
 # morning, so the working tree in ROOT, its branch and its uncommitted work are never touched.  Made once with
@@ -26,7 +37,8 @@
 #
 # Log: outputs/daily/<date>.log, one a day; outputs/daily/last.txt says how the last morning ended.
 # By hand: bash scripts/daily_update.sh            (PUBLISH=0 bash scripts/daily_update.sh builds, writes the site's
-#                                                   files to outputs/daily/site_dry and does not push)
+#                                                   files to outputs/daily/site_dry and does not push; it says how it
+#                                                   ended in outputs/daily/last_dry.txt and sends no notice)
 set -uo pipefail
 # Task Scheduler starts this under `conhost --headless`, which hands it no usable stdin: any Python that then starts a
 # program stops on WinError 6, as scripts/daily_files.py did on 2026-11-03 after the morning's ratings were built.
@@ -39,11 +51,23 @@ PUBLISH=${PUBLISH:-1}
 PY=$ROOT/.venv/Scripts/python
 DAY=$(date +%F)               # this PC keeps US Eastern time (Git Bash cannot read TZ=America/New_York)
 LOG=$ROOT/outputs/daily/$DAY.log
+# a dry run keeps its own record, so last.txt always says how the last real morning ended, which the 8 AM task reads
+RECORD=$ROOT/outputs/daily/last.txt
+[ "$PUBLISH" = "1" ] || RECORD=$ROOT/outputs/daily/last_dry.txt
 mkdir -p "$ROOT/outputs/daily"
 cd "$ROOT" || exit 1
+export OPENRAPM_WRITE_PUBLISHED=1
+. "$ROOT/scripts/daily_lock.sh"
 
 say() { echo "$(date '+%F %I:%M:%S %p') $*" >> "$LOG"; }
-finish() { say "$1"; echo "$DAY $1" > "$ROOT/outputs/daily/last.txt"; exit "$2"; }
+# one line to the owner's phone; under a timeout and never able to fail, so it can neither hold nor change an ending
+notice() { /usr/bin/timeout 30 "$BASH" "$ROOT/scripts/daily_notify.sh" "$1" >> "$LOG" 2>&1 || true; }
+finish() {
+  say "$1"
+  echo "$DAY $1" > "$RECORD"
+  [ "$PUBLISH" = "1" ] && case "$1" in FAILED*) notice "OpenRAPM $DAY $1" ;; esac
+  exit "$2"
+}
 step() {
   say "start: $*"
   "$@" >> "$LOG" 2>&1 || finish "FAILED: $*" 1
@@ -61,10 +85,61 @@ bias_file() {                 # $1: the site folder written into; fails when the
   say "start: site --bias"
   /usr/bin/timeout 300 $PY -u -m openrapm site --bias --out-dir "$1" >> "$LOG" 2>&1
 }
+# The Similarity page's files, docs/data/similarity/, are never a step either.  Its pool holds finished seasons, whose
+# ratings change only when a new build is published; on such a morning the pool is written again, and on every other
+# morning it is left alone, since its files carry the date they were built.  Ten minutes at most.
+SIMILAR=docs/data/similarity
+similarity_files() {          # $1: the site folder written into; $2: the pool held against that folder's ratings
+  $PY scripts/daily_files.py similarity-stale "$1/data/ratings.json" "$2" >> "$LOG" 2>&1
+  case $? in                  # 3: the pool carries the published ratings, nothing to write; 0: it does not
+    0) ;;
+    3) return 3 ;;
+    *) return 1 ;;
+  esac
+  say "start: site --similarity"
+  /usr/bin/timeout 600 $PY -u -m openrapm site --similarity --out-dir "$1" >> "$LOG" 2>&1
+}
+
+# One run at a time.  A dry run that finds another at work stops at once and leaves every record alone; the morning
+# waits up to half an hour for a build typed by hand to give the lock back.
+if ! take_lock "the morning job, process $$"; then
+  [ "$PUBLISH" = "1" ] || { echo "another run holds the lock: $(lock_owner)" >&2; exit 1; }
+  say "waiting: $(lock_owner) holds the lock"
+  waited=0
+  until take_lock "the morning job, process $$"; do
+    [ "$waited" -lt 1800 ] || finish "FAILED: $(lock_owner) held the lock for 30 minutes" 1
+    sleep 60
+    waited=$((waited + 60))
+  done
+fi
+trap release_lock EXIT
 
 say "=== daily update of $SEASON"
 step $PY -u -m openrapm data ingest $SEASON $SEASON RS,PO --refresh
+# Once a team has won the title the season is finished: it may be trained on, so rating it alone would publish it under
+# another model than every other season's, from hustle files the league had not finished filling in.  The job stops,
+# tells the owner once, and stops quietly every morning after until the full build (notes/HANDOFF.md, "June").
+say "start: data in-progress"
+$PY -u -m openrapm data in-progress $SEASON >> "$LOG" 2>&1
+case $? in
+  0) ;;
+  3) grep -q "Finals are over" "$ROOT/outputs/daily/last.txt" 2>/dev/null \
+       || [ "$PUBLISH" != "1" ] \
+       || notice "OpenRAPM $DAY: $SEASON's Finals are over and the morning job has stopped; the full build is next"
+     finish "stopped: $SEASON's Finals are over, so it is no longer rated alone; the full build is next" 0 ;;
+  *) finish "FAILED: openrapm data in-progress $SEASON" 1 ;;
+esac
 step $PY -u -m openrapm data stints $SEASON $SEASON RS,PO --force
+# A game whose play-by-play failed to load or to parse is left out of the stints with one printed line, and the
+# ratings were then published without it.  The check removes such a game's cached files, so one more fetch and build
+# can mend a file that was not ready at 6 AM; a game that fails twice stops the morning.
+say "start: data check-games"
+if ! $PY -u -m openrapm data check-games $SEASON >> "$LOG" 2>&1; then
+  say "check-games failed: the games it named are fetched and built once more"
+  step $PY -u -m openrapm data ingest $SEASON $SEASON RS,PO --refresh
+  step $PY -u -m openrapm data stints $SEASON $SEASON RS,PO --force
+  step $PY -u -m openrapm data check-games $SEASON
+fi
 step $PY -u -m openrapm data events $SEASON $SEASON --force
 # the per-game hustle box scores and matchups (data/dashboards.py, data/matchups.py), not steps: the season in progress
 # reads its hustle from the league's season-to-date dashboards (data/panel.py) and no model reads the matchups yet, so
@@ -84,6 +159,8 @@ if [ "$PUBLISH" != "1" ]; then
   mkdir -p "$DRY"
   step $PY -u -m openrapm site --openrapm-decomposition --power --power-forecast --out-dir "$DRY"
   bias_file "$DRY" || NOTE="$NOTE; bias: not written"
+  similarity_files "$DRY" "$SITE/$SIMILAR/player_seasons.json"
+  case $? in 0|3) ;; *) NOTE="$NOTE; similarity: not written" ;; esac
   finish "built, not published (PUBLISH=0); the site's files in $DRY$NOTE" 0
 fi
 step git -C "$SITE" fetch origin main
@@ -100,6 +177,18 @@ if git -C "$SITE" cat-file -e "HEAD:$BIAS" 2>/dev/null; then
     NOTE="$NOTE; bias: not written, the published table stays"
     git -C "$SITE" checkout -- "$BIAS" >> "$LOG" 2>&1
   fi
+fi
+# The Similarity page's files ride along the same way, on a morning its pool is not in step with the ratings.  A
+# rebuild that fails puts the published files back, and takes out any file it left half written.
+if git -C "$SITE" cat-file -e "HEAD:$SIMILAR/player_seasons.json" 2>/dev/null; then
+  similarity_files "$SITE/docs" "$SITE/$SIMILAR/player_seasons.json"
+  case $? in
+    0) ADD="$ADD $SIMILAR" ;;
+    3) ;;
+    *) NOTE="$NOTE; similarity: not written, the published lists stay"
+       git -C "$SITE" checkout -- "$SIMILAR" >> "$LOG" 2>&1
+       git -C "$SITE" clean -fdq -- "$SIMILAR" >> "$LOG" 2>&1 ;;
+  esac
 fi
 # the files carry the date they were built, so they differ every morning; only a change beyond it is published
 $PY scripts/daily_files.py changed "$SITE" $FILES >> "$LOG" 2>&1

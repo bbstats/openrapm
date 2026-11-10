@@ -35,6 +35,7 @@ from .. import swap_test, wins
 from ..data.config import resolve
 from ..data.seasons import last_finished, share_played
 from ..data.stints import has_playoff_stints, load_season_stints
+from .published import refuse_published_name
 
 RATING_COLUMNS = ["player_id", "rating_off", "rating_def", "rating_total"]
 # what the regular-season ratings file keeps of a ratings table
@@ -167,6 +168,7 @@ def run_wins(cfg: dict, settings, name: str, seasons=None, rebuild_regular: bool
     """`openrapm wins`: the columns written into outputs/season_ratings_<name>.parquet, in place; with
     `rebuild_regular`, each finished season's rating from its regular season alone first, in `jobs` processes.  A child
     of those processes rates its seasons and stops; its parent does the rest."""
+    refuse_published_name(cfg, name)
     from . import parallel
     if rebuild_regular and parallel.is_child():
         from .build import rate_regular_seasons, regular_parts_folder
