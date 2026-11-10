@@ -75,7 +75,9 @@ rated one, read from the same sums in minutes.  The owner's call.
    `bash scripts/daily_notify.sh "test"`.
 2. **The link preview and tab icon.**  The candidate picture and icon are drawn, not on the site: a blue square with a
    white plus-minus mark, and "OpenRAPM" with the address.  They need a yes, and the preview needs one sentence of the
-   owner's wording.
+   owner's wording.  The files are in `scratch/2026-11-09_improvements/link_preview/`, on this PC only; the owner was
+   shown them on a private page on 2026-11-10.  Then: `description`, `og:` and `twitter:` tags and the icon links in
+   the six pages' heads, the picture and icon under `docs/`.
 3. **Box Adj's weights**: whether to read the weights with each training season weighted by its distance.
 4. **Changelog rows**, in the owner's words, for: the rookies button, WOSA, the page opening on the season in progress,
    the Detail view, Detail's Leverage and WOSA columns, Similarity's search box, the Power page's one rating; and from
