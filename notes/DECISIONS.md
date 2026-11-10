@@ -13267,3 +13267,43 @@ Year over year, both directions, 56 readings: as built, team-game +0.027, z +1.2
 The 2026 top 20, the test setting's tables: the first three as they are, Wembanyama 9.58 to 9.32, Gilgeous-Alexander 8.29 to 8.42, Jokić 8.12 to 8.13; Leonard fourth for Dončić, 6.78 to 6.36; Ajay Mitchell in at 20 for Alex Caruso.  Up: Neemias Queta +0.53 from 18th to 13th, Jimmy Butler +0.40, Karl-Anthony Towns +0.34, Lauri Markkanen +0.32, Donovan Clingan +0.25.  Among 2026's 291 regulars of 2,000 or more possessions the move is a median 0.12, the ninetieth percentile 0.33, the largest 0.59; correlation 0.9965.  Up most are centers, Wendell Carter Jr. +0.59, Mark Williams +0.56, Queta, Jarrett Allen +0.46, Moussa Diabaté +0.44; down most guards, Nolan Traore -0.46, Dončić and Anthony Edwards -0.41, Jared McCain -0.39, Keon Ellis -0.38.  By era the regulars' median move is 0.10, 0.07 and 0.08, and the largest of any season Ricky Pierce 1997, -2.63 to -3.66.
 
 **To adopt, on the owner's word:** `PriorSettings.second_prior_halflife = 8.0`; the shrink's folds `fade141_early,fade141_within`, and the tenth folds `fade141_k10` built first; the chain's incumbent and noise control names; the full product build of 1997 to 2027, where a rated season's line also reads its two neighbors; the regular-season ratings behind WOSA rebuilt; the Power table's weights refitted on the new build, check 166, after its seven season-so-far folders; Similarity's files and the site's; a dry run of the morning job; a noise control on the new incumbent after.
+
+### Experiment 141: which inputs moved 2026's players, and why (the owner, 2026-11-10, on the top 30: "what stats moved them, and why"; `scratch/2026-11-09_improvements/fade_what_moved.py`, read-only)
+
+**How it is read.**  A player's prior moves by the sum over the line's inputs of his input, as the line applies it, times the move of that input's weight between the line fitted on every season alike and the faded one, both for 2026 at the test setting.  His inputs are his twelve folds' averaged.  Among 2026's 291 regulars of 2,000 or more possessions the rating moves 0.406 per unit of his own offensive prior's move, correlation 0.907, and 0.399 per unit on defense, 0.839, so his own inputs give the direction and most of the size; what they leave is his teammates' priors moving and the ridge splitting the lineups' results between them again.
+
+**The weights that moved, per one standard deviation of the input among those regulars, in the prior's units.**
+
+| end | input | fitted on 1997-2010 alone | on 2011-2024 alone | every season alike | faded |
+|---|---|---|---|---|---|
+| offense | missed threes per 100 | +1.289 | +0.525 | +0.706 | +0.526 |
+| offense | offensive rebounds per 100 | +1.042 | +1.289 | +1.134 | +1.318 |
+| offense | his defensive box-score prior | -0.912 | -0.315 | -0.539 | -0.313 |
+| defense | his offensive box-score prior | -1.065 | -0.277 | -0.609 | -0.476 |
+| offense | assists per 100 | +0.829 | +0.506 | +0.653 | +0.537 |
+| offense | twos made per 100 | +0.606 | +0.399 | +0.550 | +0.431 |
+| defense | share of games started | +0.352 | -0.230 | +0.092 | -0.100 |
+| defense | height | -0.484 | -0.203 | -0.344 | -0.274 |
+
+The defensive line is in points allowed, so a negative weight helps.  The two periods disagree on each of these by more than the fade moves it: the line fitted on every season alike is a blend of the two, and the fade takes 2026's most of the way to the later one.
+
+**The moves by driver, rating points, both ends together.**
+
+| | rebounds | threes taken | the other end's prior | his other inputs | not his own inputs | rating move |
+|---|---|---|---|---|---|---|
+| Wendell Carter Jr. | +0.07 | +0.07 | -0.06 | +0.26 | +0.25 | +0.59 |
+| Mark Williams | +0.15 | +0.25 | -0.10 | +0.04 | +0.22 | +0.56 |
+| Neemias Queta | +0.15 | +0.26 | -0.17 | +0.05 | +0.24 | +0.53 |
+| Jarrett Allen | +0.11 | +0.24 | -0.09 | +0.16 | +0.05 | +0.46 |
+| Moussa Diabaté | +0.16 | +0.26 | -0.09 | -0.07 | +0.18 | +0.44 |
+| Luka Dončić | +0.02 | -0.24 | -0.26 | -0.10 | +0.16 | -0.41 |
+| Anthony Edwards | -0.04 | -0.12 | -0.07 | -0.08 | -0.09 | -0.41 |
+| Victor Wembanyama | +0.15 | -0.03 | -0.41 | -0.28 | +0.30 | -0.26 |
+| regulars 6 ft 10 and taller, 56 | +0.10 | +0.09 | -0.08 | -0.07 | +0.11 | +0.15 |
+| regulars under 6 ft 4, 46 | -0.06 | -0.04 | +0.02 | +0.01 | -0.03 | -0.10 |
+
+"Threes taken" is the missed and the made threes per 100 together; "his other inputs" here includes assists and twos made, which come to 0.03 or less for every row.
+
+**What it says.**  Three things move the bigs up and the guards down.  The line fitted on every season alike pays for three-point volume at a rate the last fourteen seasons do not support, 0.71 a standard deviation against 0.53, the early seasons' 1.29 pulling it up; faded, a center who takes none is marked down by less and a high-volume guard is paid less.  Rebounds are worth more in the later seasons, 1.29 against 1.04 on the offensive glass.  And the pay on one end for being good at the other, the weight on the other end's box-score prior, is a third as large in the later seasons, 0.32 against 0.91 on offense and 0.28 against 1.07 on defense: this one runs against the two-way stars, Wembanyama -0.41 and Dončić -0.26, and against bigs as a group, -0.08.  About 0.2 of each named center's rise is not in his own inputs: his teammates' priors fell and the ridge hands him more of the same lineups' results.
+
+**Why the periods differ** is not measured here; the weights by period are.

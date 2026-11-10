@@ -24,7 +24,34 @@ writing rules, `CLAUDE.md` the owner's standing rules.
 - I write no prose for the site.  Wording is the owner's; a page change of mine adds data, a column, or a line the
   owner has already approved elsewhere.
 
-## Where it stands, 2026-11-09 night: the improvements round
+## Where it stands, 2026-11-10 midday
+
+DECISIONS.md holds every number: "Experiment 140, a third read", "Experiment 141", "Check 167", "The Power table's
+width", "The link preview and the tab icon".
+
+- **Experiment 141 passes and waits for the owner's verdict.**  Box Adj's line with each training season counted 0.5
+  to the power of its distance from the rated one over 8 seasons (`PriorSettings.second_prior_halflife`, 0 as
+  shipped; `--second-prior-halflife 8`).  Full build `fade141`: within season -0.133 over the 30 seasons, z -5.26, 25
+  of 30; by era -0.195, -0.040 and -0.165; the noise control -0.009.  Year over year holds, team-game z +1.25 as
+  built and -1.04 at matched width.  The 2026 top 20 keeps its first three; centers up, guards down, a median 0.12
+  among regulars.  To adopt: the setting at 8, folds `fade141_early,fade141_within`, `fade141_k10` built first, the
+  chain's names, the product build of 1997 to 2027, WOSA's regular-season ratings, the Power weights refitted by
+  check 166 on the new build, Similarity and the site's files, a dry run, a noise control after.
+- **Check 167: a booster finds something Box Adj's line leaves.**  ChimeraBoost at its defaults, fitted on what each
+  player's prior should move by at the line's own solution and added to the line as one more input: -0.100 on the
+  read from saved sums, z -4.22, 21 of 30, every era; -0.115 with other random draws; +0.004 with the targets
+  shuffled.  In the line's place a booster cannot be solved jointly and falls 1.6 short.  Nothing built.  The tool
+  stays: `outputs/second_prior/zones139_players/`, 3.1 GB, each fold's sums with one column per player
+  (`scratch/2026-11-10_boost_vs_line/player_sums.py`), so any number per player is scored on the within-season test
+  in minutes (`boost_vs_line.py`).
+- **The site.**  The tab icon and the picture a shared link shows are live, with no description until the owner
+  writes the sentence.  The Power table is as wide as its columns from 720 pixels up, e71b6bc: a team's name sits 92
+  to 190 pixels from its numbers where it sat 320 to 417, and opening a team moves no column.
+- **A site fix beside a running build** goes out from a second checkout of main: `git worktree add --detach
+  A:/code/spmm_sitefix origin/main`, the edit and its checks there, with `PYTHONPATH` at that checkout's `src`, the
+  push from there, `git worktree remove`, and the working branch merges main once the build is done.
+
+## Where it stood, 2026-11-09 night: the improvements round
 
 The owner: "improvements, go."  DECISIONS.md, "The improvements round of 2026-11-09", holds every number.  The owner's
 four answers: the first experiment "Box Adj's weights"; what may go live without asking again, "Every fix that passes";
@@ -79,9 +106,9 @@ half-life.  A read gives a direction and a rough size.  A full build is the owne
    2026-11-10, on the owner's "link preview is good."  No description tag is written: the sentence under the name is
    the owner's.  When it comes, one `description` and one `og:description` line in each of the six pages' heads, and
    a line in `tests/test_site_pages.py`.
-3. **Box Adj's weights**: whether to run a full build with each training season counted 0.5 to the power of its
-   distance over 8 seasons.  The read of 2026-11-10 from the saved sums: -0.207 over the 30 rated seasons, z -5.52,
-   26 of 30; by era -0.264, -0.031 and -0.326.  It needs a half-life setting beside `second_prior_nearest`.
+3. **The verdict on experiment 141**, Box Adj's training seasons faded at a half-life of 8: it passes the rule, and
+   adopting it is the list above.  And, after it, whether to build a booster stage on what the line leaves, check
+   167's candidate.
 4. **Changelog rows**, in the owner's words, for: the rookies button, WOSA, the page opening on the season in progress,
    the Detail view, Detail's Leverage and WOSA columns, Similarity's search box, the Power page's one rating; and from
    this round the Similarity correction, the WOSA correction and the Power table's new weights.
@@ -176,7 +203,7 @@ and, in the round of 2026-11-09 only, the fixes the owner allowed.
   confirmed by a full build.
 - Register a reading in DECISIONS.md before any result.  Every experiment gets a row in `experiments/runs.csv`
   (`scripts/checks/101_log_run.py`), mirrored to the sheet "OpenRAPM experiments", tab Experiments, written at the first
-  free row after the last, never appended.  The next free row is 141.
+  free row after the last, never appended.  The next free row is 142.
 - Report in four parts: what changed, the result, the 2026 top 20, the owner's call.
 
 ## Leads, none started
