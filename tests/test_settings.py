@@ -38,6 +38,7 @@ def test_the_targets_prior_and_ridge():
     assert PRODUCT.prior.second_prior == "zones139_line"     # experiment 139, adopted 2026-11-06; rating134 before it
     assert PRODUCT.prior.second_prior_team_totals == "held"
     assert PRODUCT.prior.second_prior_inputs == "context_types_team_zones_centred"   # experiment 139
+    assert PRODUCT.prior.second_prior_nearest == 0 and PRODUCT.prior.second_prior_halflife == 0.0   # every season alike
     assert PRODUCT.prior.part_season_shares == (0.25, 0.5, 0.75)             # experiment 107, adopted 2026-10-23
     assert PRODUCT.ridge.penalty == 13037.0
     assert PRODUCT.exclude_neighbours == 0

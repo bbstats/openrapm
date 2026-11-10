@@ -13155,3 +13155,21 @@ With every weight at 1 the script gives back experiment 140's shipped column on 
 
 
 **Checked.**  Two tests in `tests/test_site_pages.py`: each page carries each tag once, with its own title and address; the files are the sizes the tags state.  In Chrome on the edited copy: the tags read back from each page, the four files load as pictures of their sizes, and the 37 page checks pass.
+
+### Experiment 141: Box Adj's training seasons faded by distance, half-life 8, the full build (the owner, 2026-11-10, 9:05 AM, on the read explained in plain words: "great! yeah do your checks."; registered before any result)
+
+
+
+**The change.**  `PriorSettings.second_prior_halflife`, 0 as shipped and 8 for the candidate: in each rated season's line a training season d seasons away counts 0.5 to the power d over 8 (`second_prior.season_weight`, `RatingSums.scaled`), and the Box score column's weights are faded the same way.  The sums are the shipped line's, `outputs/second_prior/zones139_line`; nothing else differs from zones139.  The flag is `--second-prior-halflife 8`; the folds read it from the saved boosters' record.  With the setting at 0 the code adds the same sums as before.
+
+
+
+**The build.**  `bash scripts/experiment_chain.sh fade141 points_with_expected_opponent_threes_late_as_scored "--second-prior-halflife 8"`: the test setting's ratings of 1997 to 2026 with their boosters saved, the candidate's own within-season folds, step 4 on them, then the three readings.
+
+
+
+**The rule, the standing one.**  The within-season test, check 151, against zones139 with noise_zones139 beside it, -0.009 and z -1.03: better in every era, 1997-2006, 2007-2016 and 2017-2026.  The year-over-year test, check 63, a guard: not worse at a paired z of +2, read at each side's width matched to the incumbent's if the widths differ.  The 2026 top 20 for the eye.  The read from the saved sums expects about -0.2 over all 30 seasons, the two end eras carrying it and 2007-2016 near -0.03, inside the noise control's size; a middle era that comes out above 0 on the full test fails the rule by its letter, and is reported as that.  The verdict is the owner's.
+
+
+
+**At the product setting**, if adopted, a rated season's line also reads its two neighbors, at 0.92 each; the line of the season in progress reads 2026 at 0.92 and 1997 at 0.07.

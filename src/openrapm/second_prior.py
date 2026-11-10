@@ -189,7 +189,7 @@ __all__ = ["CONTEXT", "BOX", "INPUTS", "OTHER_BOX", "TYPES", "INPUT_SETS", "type
            "season_second_priors", "SAME_TEAMMATES", "OTHER_OPPONENTS", "CENTRED_SETS", "three_inputs", "centred",
            "reads_types", "adjustments", "TEAM_RATES", "TEAM_TAKEN", "TEAM_PROFILE_RATES", "ALL_TEAM_RATES",
            "reads_team_rates", "team_rate_numbers", "with_team_rates", "LINE_TARGETS", "box_score_positions",
-           "season_first_stage"]
+           "season_first_stage", "season_weight"]
 
 CONTEXT = ["teammates_offence_on", "teammates_defence_on", "opponents_offence_on", "opponents_defence_on",
            "teammates_offence_bench", "teammates_defence_bench", "opponents_offence_bench", "opponents_defence_bench"]
@@ -655,7 +655,7 @@ def held_back_grams(held: Season, ratings: pd.DataFrame, inputs: dict, n_folds: 
 
 
 def season_coefficients(grams: dict, season: int, trainable: set, exclude_near: int, n_folds: int,
-                        penalty: float, nearest: int = 0) -> dict | None:
+                        penalty: float, nearest: int = 0, half_life: float = 0.0) -> dict | None:
     """{"O", "D"}: the rated season's line, an array (n_folds + 1, len(INPUTS)): row k fitted without player fold k's
     swaps, the last row on every swap.  None when no season may train it.
 
@@ -665,14 +665,19 @@ def season_coefficients(grams: dict, season: int, trainable: set, exclude_near: 
     one that are trainable (swap_adjust.training_seasons: 0 in the product setting, 1 in the test setting).  With
     `nearest` = K, only the K of them closest to the rated season, the nearer first and on an equal distance the
     earlier, as step 4 picks its fold seasons (prior_shrink.fold_seasons_used; notes/DECISIONS.md, experiment 85).
+    With `half_life` = H seasons, a line fitted on the rating counts each of them 0.5 ** (its distance from the rated
+    season / H): the far seasons stay in and weigh less (`_line_parts`; experiment 141).
 
     Example: rating 2020 in the test setting with nearest 8 trains on 2015-2018 and 2022-2025.
+    Example: rating 2026 with a half-life of 8 counts 2018 a half and 2010 a quarter.
     """
     train = _line_seasons(grams, season, trainable, exclude_near, nearest)
     if not train:
         return None
     if isinstance(grams[train[0]], rating_line.RatingSums):
-        return rating_line.coefficients([grams[other] for other in train], n_folds, penalty)
+        return rating_line.coefficients(_line_parts(grams, season, train, half_life), n_folds, penalty)
+    if half_life:
+        raise ValueError("a half-life is for a line fitted on the rating; this one was fitted on lineup swaps")
     return {key: np.vstack([swap_adjust.type_coefficients([grams[other][side] for other in train], fold, penalty)
                             for fold in [*range(n_folds), None]])
             for side, key in SIDE_KEYS.items()}
@@ -686,6 +691,25 @@ def _line_seasons(grams: dict, season: int, trainable: set, exclude_near: int, n
     return train
 
 
+def season_weight(other: int, season: int, half_life: float) -> float:
+    """What a training season `other` counts in the line of the rated `season`: 0.5 ** (seasons between / `half_life`),
+    1 without a half-life.
+
+    Example: half-life 8, rated 2026: 2024 counts 0.84, 2018 0.50, 2010 0.25 and 2002 0.125."""
+    if not half_life:
+        return 1.0
+    if half_life < 0:
+        raise ValueError("a half-life is 0, every season the same, or a positive number of seasons")
+    return float(0.5 ** (abs(int(other) - int(season)) / float(half_life)))
+
+
+def _line_parts(grams: dict, season: int, train: list, half_life: float) -> list:
+    """The sums of the seasons `train`, each counted `season_weight`: as they are without a half-life."""
+    if not half_life:
+        return [grams[other] for other in train]
+    return [grams[other].scaled(season_weight(other, season, half_life)) for other in train]
+
+
 def box_score_positions(input_set: str) -> list:
     """Where the inputs read from a player's own stats sit in the line: everything but his teammates' and opponents'
     priors and the team rates.  `team_possession_share` is his own share of his team's possessions, so it is here."""
@@ -694,13 +718,15 @@ def box_score_positions(input_set: str) -> list:
 
 
 def season_first_stage(grams: dict, season: int, trainable: set, exclude_near: int, n_folds: int, penalty: float,
-                       nearest: int, input_set: str) -> dict | None:
+                       nearest: int, input_set: str, half_life: float = 0.0) -> dict | None:
     """{"O", "D"}: the Box score column's weights for the rated season (rating_line.first_stage), on the same seasons as
-    its line.  None when no season may train it, or when the line was fitted on swaps, whose sums have no such split."""
+    its line, each counted as the line counts it (`season_coefficients`' `half_life`).  None when no season may train
+    it, or when the line was fitted on swaps, whose sums have no such split."""
     train = _line_seasons(grams, season, trainable, exclude_near, nearest)
     if not train or not isinstance(grams[train[0]], rating_line.RatingSums):
         return None
-    return rating_line.first_stage([grams[other] for other in train], n_folds, penalty, box_score_positions(input_set))
+    return rating_line.first_stage(_line_parts(grams, season, train, half_life), n_folds, penalty,
+                                   box_score_positions(input_set))
 
 
 def second_priors(inputs: pd.DataFrame, coefficients: np.ndarray, n_folds: int) -> pd.Series:

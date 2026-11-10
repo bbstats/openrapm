@@ -86,8 +86,10 @@ def describe(settings, seasons) -> str:
     labels = settings.labels
     flags = (f"; team-season flags {labels.team_offense_penalty:g} / {labels.team_defense_penalty:g}"
              if labels.team_flags else "")
+    fade = (f", a training season counted half for every {prior.second_prior_halflife:g} seasons from the rated one"
+            if prior.second_prior_halflife > 0 else "")
     second = (f"; step 3 reads the second prior, its line from outputs/second_prior/{prior.second_prior} on the "
-              f"inputs {prior.second_prior_inputs}, team totals {prior.second_prior_team_totals}"
+              f"inputs {prior.second_prior_inputs}, team totals {prior.second_prior_team_totals}{fade}"
               if prior.second_prior else "")
     bags = "".join([f"; {prior.bags} bags predicted out of bag" if prior.prediction == "out_of_bag" else "",
                     "; each bag its own split" if prior.split_per_bag else "",
@@ -203,7 +205,7 @@ def rated_second_prior(cfg: dict, season: int, panel: pd.DataFrame, priors: dict
     prior = settings.prior
     coefficients = second_prior.season_coefficients(lines.grams, season, lines.trainable, settings.exclude_neighbours,
                                                     prior.second_prior_folds, prior.second_prior_penalty,
-                                                    prior.second_prior_nearest)
+                                                    prior.second_prior_nearest, prior.second_prior_halflife)
     if coefficients is None:
         raise SystemExit(f"{season}: no season of outputs/second_prior/{prior.second_prior} may train its line")
     answers = {side: second_prior.booster_answers(
@@ -221,7 +223,8 @@ def rated_second_prior(cfg: dict, season: int, panel: pd.DataFrame, priors: dict
                                                        types, prior.second_prior_inputs)
     first_stage = (second_prior.season_first_stage(lines.grams, season, lines.trainable, settings.exclude_neighbours,
                                                    prior.second_prior_folds, prior.second_prior_penalty,
-                                                   prior.second_prior_nearest, prior.second_prior_inputs)
+                                                   prior.second_prior_nearest, prior.second_prior_inputs,
+                                                   prior.second_prior_halflife)
                    if prior.box_first else None)
     team_poss = None if first_stage is None else {side: second_prior.team_possessions(stints, side) for side in SIDES}
     return SeasonSecondPrior(values=values, coefficients=coefficients, inputs=inputs, first_stage=first_stage,

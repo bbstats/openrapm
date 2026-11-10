@@ -125,6 +125,9 @@ def chosen_settings(args: argparse.Namespace) -> Settings:
         raise SystemExit("--fold-assignment is 0 (the shipped order) or a positive seed")
     if args.era_halflife < 0:
         raise SystemExit("--era-halflife is 0 (every season counts the same, shipped) or a positive number of seasons")
+    if args.second_prior_halflife < 0:
+        raise SystemExit("--second-prior-halflife is 0 (every season counts the same, shipped) or a positive number "
+                         "of seasons")
     if args.bags < 0:
         raise SystemExit("--bags is 0 (one booster per side) or a positive number of bags")
     if args.bag_draw < 0:
@@ -152,6 +155,7 @@ def chosen_settings(args: argparse.Namespace) -> Settings:
                                  second_prior_team_totals=args.second_prior_team_totals,
                                  second_prior_inputs=args.second_prior_inputs,
                                  second_prior_nearest=int(args.second_prior_nearest),
+                                 second_prior_halflife=float(args.second_prior_halflife),
                                  box_first=bool(args.box_first),
                                  game_prior=args.game_prior, game_prior_backward=args.game_prior_backward,
                                  game_prior_whole_season=bool(args.game_prior_whole_season)))
@@ -333,6 +337,10 @@ def _add_setting_options(parser) -> None:
     parser.add_argument("--second-prior-nearest", type=int, default=PRODUCT.prior.second_prior_nearest, metavar="K",
                         help="0: each season's line is fitted on every season the setting allows.  K: on only the K "
                              "nearest of them, as step 4 fits its multipliers (default %(default)s)")
+    parser.add_argument("--second-prior-halflife", type=float, default=PRODUCT.prior.second_prior_halflife,
+                        metavar="H",
+                        help="0: every season the line is fitted on counts the same.  A positive H: a season counts "
+                             "half as much for every H seasons between it and the rated one (default %(default)s)")
     parser.add_argument("--box-first", action=argparse.BooleanOptionalAction, default=PRODUCT.prior.box_first,
                         help="the Detail view's Box score column from his own stats' weights learned alone, Box Adj "
                              "the rest of the same prior; no rating moves (default %(default)s)")

@@ -215,6 +215,11 @@ class PriorSettings:
     # 0: each season's line is fitted on every season the setting allows.  K: on only the K nearest of them, as step 4
     # fits its multipliers (experiment 85: experiment 82 won 1997-2016 and lost 2017-2026 with one line for all eras)
     second_prior_nearest: int = 0
+    # 0: every season a line trains on counts the same (shipped).  H: a season d seasons from the rated one counts
+    # 0.5 ** (d / H), so the far seasons stay in and weigh less, for a line fitted on the rating
+    # (second_prior.season_weight; experiment 141, from experiment 140's reads of 2026-11-09 and 2026-11-10: a cut at
+    # the 16 nearest seasons gained both ends of the 30 seasons and lost 2007-2016, and a fade held the middle)
+    second_prior_halflife: float = 0.0
     # how the Detail view divides the prior; no rating reads this.  False: the Box score column is the line's own weight
     # on the box-score prior.  True: it is his own stats' weights learned alone, and Box Adj is the rest of the same
     # prior (rating_line.first_stage; the owner's choice of 2026-11-05, published the same day)

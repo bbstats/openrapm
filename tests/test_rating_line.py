@@ -175,6 +175,65 @@ def test_the_line_never_reads_the_rated_season_or_its_neighbors():
     assert sp2.season_coefficients({2005: grams[2005]}, 2005, seasons, 0, 5, 1e-4) is None
 
 
+def test_a_half_life_counts_each_training_season_by_its_distance_from_the_rated_one():
+    """Experiment 141: with a half-life of H seasons a training season d seasons away counts 0.5 ** (d / H), so the far
+    seasons stay in the line and weigh less.  The line is the plain solve on the sums so weighted, the Box score
+    column's weights fade the same way, and without a half-life nothing changes."""
+    assert sp2.season_weight(2018, 2026, 8) == 0.5 and sp2.season_weight(2010, 2026, 8) == 0.25
+    assert sp2.season_weight(2024, 2026, 8) == pytest.approx(0.8409, abs=1e-4)
+    assert sp2.season_weight(2034, 2026, 8) == 0.5                              # a later season fades the same
+    assert sp2.season_weight(1997, 2026, 0) == 1.0
+    with pytest.raises(ValueError):
+        sp2.season_weight(1997, 2026, -4)
+
+    near, far = np.array([1.0, 1.5, 0.5, -0.25, 0.75, 0.1]), np.array([1.0, 1.5, -0.5, 0.25, -0.75, -0.1])
+    grams = {season: _sums_from(near if season >= 2018 else far, season) for season in range(2000, 2027)}
+    seasons = set(grams)
+    plain = sp2.season_coefficients(grams, 2026, seasons, 1, 5, 1e-4)
+    assert np.array_equal(sp2.season_coefficients(grams, 2026, seasons, 1, 5, 1e-4, half_life=0.0)["O"], plain["O"])
+    faded = sp2.season_coefficients(grams, 2026, seasons, 1, 5, 1e-4, half_life=4.0)
+    by_hand = rl.coefficients([grams[season].scaled(0.5 ** ((2026 - season) / 4.0)) for season in range(2000, 2025)],
+                              5, 1e-4)
+    assert np.allclose(faded["O"], by_hand["O"], rtol=0, atol=1e-12)
+    assert np.allclose(faded["D"], by_hand["D"], rtol=0, atol=1e-12)
+    # the 7 near seasons' weight on offence's first input is +0.5 and the 18 far ones' -0.5: counted alike the far
+    # ones carry the line, faded the near ones do
+    assert faded["O"][0, 0] > 0.0 > plain["O"][0, 0]
+
+    names = sp2.INPUT_SETS["context_types_team_rates_centred"]
+    size = 2 + 2 * len(names)
+    rng = np.random.default_rng(3)
+
+    def sums(season):
+        columns = rng.normal(0.0, 1.0, (600, size))
+        aim = columns @ np.full(size, 0.1 if season >= 2018 else -0.1) + rng.normal(0.0, 1.0, 600)
+        return rl.RatingSums(Q=columns.T @ columns, c=columns.T @ aim, yy=float(aim @ aim), sw=600.0)
+    wide = {season: sums(season) for season in range(2010, 2027)}
+    args = (wide, 2026, set(wide), 1, 5, 1e-4, 0, "context_types_team_rates_centred")
+    first, first_faded = sp2.season_first_stage(*args), sp2.season_first_stage(*args, half_life=4.0)
+    by_hand = rl.first_stage([wide[season].scaled(0.5 ** ((2026 - season) / 4.0)) for season in range(2010, 2025)],
+                             5, 1e-4, sp2.box_score_positions("context_types_team_rates_centred"))
+    assert np.allclose(first_faded["O"], by_hand["O"], rtol=0, atol=1e-12)
+    assert not np.allclose(first["O"], first_faded["O"])
+
+
+def test_sums_counted_some_times_over_keep_their_error_and_weigh_that_much_in_a_sum():
+    one, other = _sums_from(np.array([1.0, 1.0, 0.5, -0.5]), 1), _sums_from(np.array([1.0, 1.0, -0.5, 0.5]), 2)
+    weights = np.array([0.9, 1.1, 0.2, -0.1])
+    assert one.scaled(0.25).error(weights) == pytest.approx(one.error(weights), rel=1e-12)
+    both = one.scaled(3.0) + other
+    assert both.error(weights) == pytest.approx((3.0 * one.error(weights) * one.sw + other.error(weights) * other.sw)
+                                                / (3.0 * one.sw + other.sw), rel=1e-12)
+
+
+def test_a_line_fitted_on_swaps_takes_no_half_life():
+    from openrapm import swap_adjust as sa
+    gram = sa.PairGrams(G=np.eye(2), b=np.ones(2), G_fold=np.zeros((5, 2, 2)), b_fold=np.zeros((5, 2)), n=10)
+    grams = {season: {"offense": gram, "defense": gram} for season in (2010, 2011, 2014)}
+    with pytest.raises(ValueError, match="half-life"):
+        sp2.season_coefficients(grams, 2016, set(grams), 1, 5, 1e-4, half_life=8.0)
+
+
 def test_the_sums_files_read_back_and_a_line_of_the_wrong_size_is_refused(tmp_path):
     from openrapm.data import second_prior_files as files
     cfg = {"_root": str(tmp_path), "paths": {"outputs": str(tmp_path)}}

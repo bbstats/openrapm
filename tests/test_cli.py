@@ -66,6 +66,16 @@ def test_the_era_half_life_reaches_the_prior_and_a_negative_one_is_refused():
         cli.chosen_settings(_parse("rate", "--era-halflife", "-1"))
 
 
+def test_the_second_priors_half_life_reaches_the_line_and_a_negative_one_is_refused():
+    """Experiment 141: on rate and build alike; off unless asked."""
+    for command in ("rate", "build"):
+        assert cli.chosen_settings(_parse(command)).prior.second_prior_halflife == 0.0
+        chosen = cli.chosen_settings(_parse(command, "--second-prior-halflife", "8"))
+        assert chosen.prior.second_prior_halflife == 8.0 and chosen.prior.era_halflife == 0.0
+    with pytest.raises(SystemExit):
+        cli.chosen_settings(_parse("rate", "--second-prior-halflife", "-1"))
+
+
 def test_the_team_season_penalties_reach_the_labels_and_a_half_pair_is_refused():
     """Experiment 60: on rate and build alike; 0,0 (the default) is the shipped setting."""
     for command in ("rate", "build"):

@@ -920,8 +920,9 @@ def second_prior_lines(cfg: dict, meta: dict) -> tuple[dict | None, int, float, 
     if not tag:
         return None, folds, penalty, totals, None
     record = line_setup(cfg, tag, second_prior.INPUT_SETS[prior.get("second_prior_inputs", "context")])
-    # the nearest-seasons count rides on the record as well: SeasonRun reads it from there
-    record = {**record, "nearest": int(prior.get("second_prior_nearest", 0))}
+    # the nearest-seasons count and the half-life ride on the record as well: SeasonRun reads them from there
+    record = {**record, "nearest": int(prior.get("second_prior_nearest", 0)),
+              "half_life": float(prior.get("second_prior_halflife", 0.0))}
     return load_grams(cfg, tag), folds, penalty, totals, record
 
 
@@ -951,6 +952,7 @@ class FoldLines:
     nearest: int
     input_set: str | None
     trainable: set               # the seasons a line may be fitted on
+    half_life: float = 0.0       # PriorSettings.second_prior_halflife of the saved boosters' build
 
 
 def fold_lines(cfg: dict, meta: dict, whole_season_context: bool) -> FoldLines | None:
@@ -960,20 +962,22 @@ def fold_lines(cfg: dict, meta: dict, whole_season_context: bool) -> FoldLines |
         raise SystemExit("--whole-season-context is the second prior's leak arm; these boosters were saved without one")
     if grams is None:
         return None
+    half_life = float(record.get("half_life", 0.0))
+    fade = f", a training season counted half for every {half_life:g} seasons from the rated one" if half_life else ""
     print(f"the second prior: step 3 reads it, each season's line from the grams of "
           f"{meta['settings']['prior']['second_prior']} more than {SETTINGS.exclude_neighbours} season away, "
-          f"team totals {team_totals}"
+          f"team totals {team_totals}{fade}"
           + ("; the leak arm: its context numbers from the WHOLE season" if whole_season_context else ""),
           flush=True)
     return FoldLines(grams, line_folds, line_penalty, team_totals, record.get("type_scale"), record["nearest"],
                      ((meta.get("settings") or {}).get("prior") or {}).get("second_prior_inputs"),
-                     set(trainable(cfg).seasons))
+                     set(trainable(cfg).seasons), half_life)
 
 
 def attach_line(run: SeasonRun, lines: FoldLines, whole_season_context: bool) -> None:
     """The season's second-prior line and the stint rows its context numbers read, on `run`."""
     run.line = second_prior.season_coefficients(lines.grams, run.season, lines.trainable, SETTINGS.exclude_neighbours,
-                                                lines.folds, lines.penalty, lines.nearest)
+                                                lines.folds, lines.penalty, lines.nearest, lines.half_life)
     run.line_folds, run.line_team_totals, run.line_type_scale = lines.folds, lines.team_totals, lines.type_scale
     run.line_input_set = lines.input_set
     run.stints = season_lineup_rows(run.cfg, run.season)

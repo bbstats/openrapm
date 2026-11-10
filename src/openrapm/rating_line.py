@@ -84,6 +84,12 @@ class RatingSums:
     def __add__(self, other: "RatingSums") -> "RatingSums":
         return RatingSums(self.Q + other.Q, self.c + other.c, self.yy + other.yy, self.sw + other.sw)
 
+    def scaled(self, weight: float) -> "RatingSums":
+        """These sums counted `weight` times: every stint behind them weighs that much in a line that adds them
+        (second_prior.season_coefficients' half-life).  The error at any weights is unchanged."""
+        weight = float(weight)
+        return RatingSums(weight * self.Q, weight * self.c, weight * self.yy, weight * self.sw)
+
     def error(self, weights: np.ndarray) -> float:
         """The within-season test's error at `weights`, one per column."""
         return float((self.yy - 2.0 * weights @ self.c + weights @ self.Q @ weights) / self.sw)
