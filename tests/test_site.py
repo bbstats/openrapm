@@ -403,6 +403,36 @@ def test_the_openrapm_file_adds_up_and_carries_ratings_jsons_ratings(openrapm_si
         assert all(abs(t - (a + b)) < 0.0101 for t, a, b in zip(total, off, deff))      # a total is the two sides
 
 
+def test_the_list_file_is_the_detail_files_ratings_and_nothing_else(openrapm_site):
+    """ratings_list.json, what the ratings page draws as it opens: written beside the Detail file, from its document."""
+    ratings, _, _, data = openrapm_site
+    site.run_site({}, ratings=ratings, out_dir=data.parent, built="2026-10-13", openrapm_decomposition=True)
+    detail = json.loads((data / site.OPENRAPM_FILE).read_text(encoding="utf-8"))
+    listed = json.loads((data / site.RATINGS_LIST_FILE).read_text(encoding="utf-8"))
+    assert listed["meta"] == {"built": "2026-10-13", "seasons": [2002], "default_season": 2002, "percentile_min": {},
+                              "rookies": detail["meta"]["rookies"], "through": {}, "fields": site.RATINGS_LIST_FIELDS}
+    assert list(listed["rows"]) == ["2002"] and len(listed["rows"]["2002"]) == len(detail["rows"]["2002"])
+    for short, row in zip(listed["rows"]["2002"], detail["rows"]["2002"]):
+        name, player_id, possessions, off, deff, total, team, wosa = row[:8]
+        assert short == [name, player_id, possessions, team, off[-1], deff[-1], total[-1], wosa]
+    assert (data / site.RATINGS_LIST_FILE).stat().st_size < 0.5 * (data / site.OPENRAPM_FILE).stat().st_size
+
+
+def test_the_list_file_names_the_day_a_season_in_progress_runs_through():
+    detail = {"meta": {"built": "2026-11-09", "seasons": [2027, 2026], "default_season": 2027,
+                       "percentile_min": {"2027": 60}, "rookies": {"2027": [7], "2026": []},
+                       "fields": site.OPENRAPM_FIELDS, "pieces": site.OPENRAPM_PIECES},
+              "rows": {"2027": [["Victor Wembanyama", 1641705, 620, [3.9, 0.3, 0.2, 0.0, 0.66, 5.06],
+                                 [3.9, -0.3, 0.6, 0.0, 0.07, 4.27], [7.8, 0.0, 0.8, 0.0, 0.73, 9.33], "SAS", 1.9, 500,
+                                 [4.0, 1.0, 1.0], [4.0, 1.0, 0.9], [8.0, 1.0, 1.9]]],
+                       "2026": []}}
+    listed = site.ratings_list_document(detail, {2027: "2026-11-08"})
+    assert listed["rows"] == {"2027": [["Victor Wembanyama", 1641705, 620, "SAS", 5.06, 4.27, 9.33, 1.9]], "2026": []}
+    assert listed["meta"]["through"] == {"2027": "2026-11-08"} and listed["meta"]["percentile_min"] == {"2027": 60}
+    assert site.ratings_list_document(detail)["meta"]["through"] == {}        # every season finished
+    assert site.last_game_days({}) == {}                                       # no data folder, none in progress
+
+
 def test_the_pieces_are_the_tables_columns_and_a_split_of_the_games_part(openrapm_site):
     """Box score and swap adjustment are prior_* and c_* as the table has them; the other three add up to u."""
     ratings, final, _, data = openrapm_site

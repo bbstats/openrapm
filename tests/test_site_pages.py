@@ -83,3 +83,51 @@ def test_the_tab_bars_two_buttons_and_a_phones_headers_are_forty_pixel_targets()
     assert "th { padding-top: 11px; padding-bottom: 11px; }" in phone
     assert "td.name > a { margin: -7px -5px 0; padding: 7px 5px 2px; }" in phone
     assert "td.name .tm a { display: inline-block; margin: -2px 0 -7px; padding: 2px 0 7px; }" in phone
+
+
+# ------------------------------------------------------------------ the ratings page's two files
+def test_the_ratings_page_opens_on_the_list_file_and_asks_for_the_detail_file_only_when_detail_is_shown():
+    """The page read the Detail file for everything, 1.0 MB compressed before its first row was drawn; the list file
+    is 0.3 MB.  The Similarity pool, which only a player's own seasons read, waits for one to be drawn."""
+    page = _page("index.html")
+    load = page[page.index("async function load() {"):page.index("let detailed = null;")]
+    assert 'fetch("data/ratings_list.json")' in load and "decompose_openrapm" not in load
+    assert page.count('fetch("data/decompose_openrapm.json")') == 1
+    render = page[page.index("function render() {"):page.index("// the CSV:")]
+    waits = render.index("if (detail && !data.detail) {")
+    assert waits < render.index("loadDetail().then(render") < render.index("let rows;")
+    assert render.index("if (one) askSimilar();") < render.index("let rows;")
+    assert page.count('fetch("data/similarity/player_seasons.json")') == 1
+    assert 'for (const reached of ["pointerenter", "focus"])' in page          # on its way before the click
+
+
+def test_the_list_of_the_season_in_progress_says_the_day_it_runs_through():
+    """As the Power and Bias pages do: "through Nov 8, 2026", beside the byline, from the list file's meta.through."""
+    page = _page("index.html")
+    assert '<span id="through"></span></p>' in page
+    assert "const through = !one && (data.meta.through || {})[state.season];" in page
+    assert '$("through").textContent = through ? " \u00b7 through " + day(through) : "";' in page
+
+
+def test_the_committed_list_file_carries_the_detail_files_ratings():
+    """docs/data/ratings_list.json is cut from decompose_openrapm.json when both are written, and the morning job
+    commits both: every player-season of one is in the other with the same name, teams, ratings and WOSA."""
+    import json
+
+    import pytest
+    listed, detail = DOCS / "data" / "ratings_list.json", DOCS / "data" / "decompose_openrapm.json"
+    if not listed.exists() or not detail.exists():
+        pytest.skip("the ratings page's files are not built")
+    listed, detail = (json.loads(path.read_text(encoding="utf-8")) for path in (listed, detail))
+    assert listed["meta"]["fields"] == ["n", "id", "p", "tm", "o", "d", "t", "w"]
+    for key in ("seasons", "default_season", "percentile_min", "rookies"):
+        assert listed["meta"][key] == detail["meta"][key], key
+    at = {name: detail["meta"]["fields"].index(name) for name in listed["meta"]["fields"]}
+    assert list(listed["rows"]) == list(detail["rows"])
+    for season, rows in detail["rows"].items():
+        cut = [[row[at["n"]], row[at["id"]], row[at["p"]], row[at["tm"]], row[at["o"]][-1], row[at["d"]][-1],
+                row[at["t"]][-1], row[at["w"]]] for row in rows]
+        assert listed["rows"][season] == cut, season
+    in_progress = listed["meta"]["through"]
+    assert all(re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) for day in in_progress.values())
+    assert set(in_progress) <= {str(listed["meta"]["seasons"][0])}             # only the latest can be in progress

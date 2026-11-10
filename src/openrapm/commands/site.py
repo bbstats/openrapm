@@ -1,14 +1,16 @@
 """`openrapm site`: the data behind the published site, docs/.
 
-    openrapm site                    docs/data/ratings.json, the ratings as one file (the pages read
-                                     decompose_openrapm.json, below, which carries them with their pieces)
+    openrapm site                    docs/data/ratings.json, the ratings as one file (the ratings page reads
+                                     ratings_list.json and decompose_openrapm.json, below)
     openrapm site --bias             also docs/data/bias.json, the Bias page: where OpenRAPM rates players higher or
                                      lower than a consensus of five outside systems, per standard deviation of a stat
     openrapm site --decomposition    also docs/data/decompose_1y.json and decompose_3y.json, the vanilla RAPM
                                      decomposition page
     openrapm site --openrapm-decomposition
-                                     also docs/data/decompose_openrapm.json, the OpenRAPM decomposition page: every
-                                     published rating split into pieces that add up to it
+                                     also docs/data/decompose_openrapm.json, the ratings page's Detail view: every
+                                     published rating split into pieces that add up to it; and, cut from it,
+                                     docs/data/ratings_list.json, the ratings alone with each player's teams, which
+                                     is all the page needs to draw its list
     openrapm site --similarity       also docs/data/similarity/, the similarity page: each player-season's nearest
                                      player-seasons of other players
     openrapm site --power            also docs/data/power.json, the power ratings page: each team's current ratings
@@ -875,8 +877,9 @@ def percentile_minimums(cfg: dict) -> dict:
 
 
 def write_openrapm_file(path: Path, rows: dict, built: str, penalty: float, opens_on: int | None = None,
-                        percentile_min: dict | None = None, rookie_ids: dict | None = None) -> None:
+                        percentile_min: dict | None = None, rookie_ids: dict | None = None) -> dict:
     """decompose_openrapm.json: meta and the rows of every season, latest first; compact, UTF-8 letters as they are.
+    Returns the document written.
     `opens_on` is the season the ratings page opens on (`default_season`), the latest when not given;
     `percentile_min`, the seasons in progress' percentile pool minimums (`percentile_minimums`), none when not given;
     `rookie_ids`, each season's rookies (data/panel.py `rookies`), kept to the players the season's rows show, none
@@ -892,6 +895,51 @@ def write_openrapm_file(path: Path, rows: dict, built: str, penalty: float, open
                               pieces=OPENRAPM_PIECES, wosa_parts=WOSA_PARTS),
                     rows={str(season): rows[season] for season in seasons})
     path.write_text(json.dumps(document, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    return document
+
+
+# ratings_list.json: what the ratings page draws as it opens, cut from the Detail file's document, so the two can never
+# disagree.  The page read the Detail file for everything until 2026-11-09, 2.9 MB, 1.0 MB as the server compresses it,
+# before its first row was drawn.  This holds each player-season's name, NBA id, possessions, teams, three ratings and
+# wins over starter average: 0.8 MB, 0.3 MB compressed.  The page asks for the Detail file when Detail is opened.
+#
+#   {"meta": {"built", "seasons", "default_season", "percentile_min", "rookies",     as the Detail file has them
+#             "through": {season: the date of its last game},                        a season in progress only
+#             "fields": RATINGS_LIST_FIELDS},
+#    "rows": {season: [[name, id, possessions, teams, offense, defense, total, WOSA], ...]}}     the Detail file's order
+RATINGS_LIST_FILE = "ratings_list.json"
+RATINGS_LIST_FIELDS = ["n", "id", "p", "tm", "o", "d", "t", "w"]
+RATINGS_LIST_META = ("built", "seasons", "default_season", "percentile_min", "rookies")
+
+
+def ratings_list_document(detail: dict, through: dict | None = None) -> dict:
+    """ratings_list.json's document from decompose_openrapm.json's (`write_openrapm_file`): every row's name, id,
+    possessions and teams, each side's rating, the last of its pieces, and his wins over starter average; `through` is
+    {season: the date of its last game} for the seasons in progress (`last_game_days`).
+
+    Example: the Detail row ["Victor Wembanyama", 1641705, 620, [3.9, 0.3, 0.2, 0.0, 0.66, 5.06], [...], [...], "SAS",
+    1.9, ...] gives ["Victor Wembanyama", 1641705, 620, "SAS", 5.06, 4.27, 9.33, 1.9]."""
+    fields = detail["meta"]["fields"]
+    at = {name: fields.index(name) for name in RATINGS_LIST_FIELDS}
+    rating = detail["meta"]["pieces"].index("rating")
+    rows = {season: [[row[at["n"]], row[at["id"]], row[at["p"]], row[at["tm"]], row[at["o"]][rating],
+                      row[at["d"]][rating], row[at["t"]][rating], row[at["w"]]] for row in season_rows]
+            for season, season_rows in detail["rows"].items()}
+    meta = {key: detail["meta"][key] for key in RATINGS_LIST_META}
+    meta.update(through={str(season): str(day) for season, day in sorted((through or {}).items())},
+                fields=RATINGS_LIST_FIELDS)
+    return dict(meta=meta, rows=rows)
+
+
+def last_game_days(cfg: dict) -> dict:
+    """{season: the date of its last game with stints, written 2026-11-08} for each season in progress: the day the
+    ratings page says that season's numbers run through.  A configuration that names no seasons or no data folder has
+    none in progress (`percentile_minimums`)."""
+    from ..data.seasons import in_progress
+    if "_root" not in cfg or "first_season" not in cfg:
+        return {}
+    return {int(season): pd.Timestamp(season_stints(int(season), cfg).game_date.max()).strftime("%Y-%m-%d")
+            for season in in_progress(cfg)}
 
 
 def write_openrapm_decomposition(cfg: dict, ratings_path: Path, data_dir: Path, built: str) -> None:
@@ -916,9 +964,14 @@ def write_openrapm_decomposition(cfg: dict, ratings_path: Path, data_dir: Path, 
     run_openrapm_checks(worst, rows, table)
     data_dir.mkdir(parents=True, exist_ok=True)
     path = data_dir / OPENRAPM_FILE
-    write_openrapm_file(path, rows, built, penalty, default_season(table), percentile_minimums(cfg), rookies(cfg))
+    document = write_openrapm_file(path, rows, built, penalty, default_season(table), percentile_minimums(cfg),
+                                   rookies(cfg))
     print(f"wrote {path}: {sum(len(v) for v in rows.values()):,} rows over {len(rows)} seasons, "
           f"{path.stat().st_size / 1e6:.2f} MB ({time.time() - started:.0f}s)", flush=True)
+    list_path = data_dir / RATINGS_LIST_FILE
+    _write_compact(list_path, ratings_list_document(document, last_game_days(cfg)))
+    print(f"wrote {list_path}: the same rows' ratings for the ratings page's list, "
+          f"{list_path.stat().st_size / 1e6:.2f} MB", flush=True)
 
 
 # ===================================================================================== the similarity page

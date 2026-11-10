@@ -136,7 +136,9 @@ python -m openrapm site --decomposition --openrapm-decomposition --similarity
    `docs/data/similarity/`, each player-season's nearest player-seasons of other players (33 seconds);
    `--openrapm-decomposition` solves step 3 again for every season and writes `docs/data/decompose_openrapm.json`,
    each published rating split into box score, Box Adj, on court, off court and team SOS (132 seconds;
-   run it after every `build`). `--bias` writes the Bias page's file for the season in progress, below.
+   run it after every `build`), and beside it `docs/data/ratings_list.json`, the ratings alone with each player's
+   teams, which the ratings page draws its list from before it asks for anything larger. `--bias` writes the Bias
+   page's file for the season in progress, below.
 
 `python -m openrapm <command> --help` lists every option. `--config FILE`, given before the command (or
 the environment variable `OPENRAPM_CONFIG`), points every command at another `config.yaml`, so a check
@@ -164,7 +166,7 @@ python -m openrapm site --bias --out-dir A:/code/spmm_site/docs      # not a ste
 python -m openrapm site --similarity --out-dir A:/code/spmm_site/docs    # only when a finished season's rating moved
 ```
 
-Then it commits the three data files in `A:/code/spmm_site`, a worktree of `origin/main` that only the job writes, and
+Then it commits the four data files in `A:/code/spmm_site`, a worktree of `origin/main` that only the job writes, and
 pushes them to `main` when one changed beyond the date it was built (`scripts/daily_files.py`). The Bias page's file
 is committed with them; it never decides a publish, and a system that is down leaves the last table up. The Similarity
 page's files are written again, and committed with them, only on a morning when its player-seasons carry other ratings

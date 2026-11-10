@@ -82,7 +82,7 @@ def test_the_bias_file_can_never_hold_the_ratings_back():
     assert not any(line.startswith("step ") and "bias" in line.lower() for line in lines)
     files = next(line for line in lines if line.startswith("FILES="))
     assert "bias.json" not in files and 'BIAS=docs/data/bias.json' in lines
-    assert 'daily_files.py changed "$SITE" $FILES' in text                 # the three ratings files alone decide
+    assert 'daily_files.py changed "$SITE" $FILES' in text                 # the four ratings files alone decide
     assert 'if git -C "$SITE" cat-file -e "HEAD:$BIAS" 2>/dev/null; then' in lines
     assert 'git -C "$SITE" checkout -- "$BIAS" >> "$LOG" 2>&1' in lines     # a failed write leaves the published file
     assert 'step git -C "$SITE" add -- $ADD' in lines
@@ -130,7 +130,7 @@ def test_the_similarity_pool_is_stale_when_a_rating_or_the_possessions_moved(dai
 
 def test_the_similarity_files_can_never_hold_the_ratings_back():
     """Never a step and capped at ten minutes; written only on a morning the pool is not in step; a rebuild that fails
-    puts the published files back and takes out what it left; and the three ratings files still decide a publish."""
+    puts the published files back and takes out what it left; and the four ratings files still decide a publish."""
     lines = _job_lines()
     calls = [line for line in lines if "$PY" in line and "site --similarity" in line]
     assert calls == ['/usr/bin/timeout 600 $PY -u -m openrapm site --similarity --out-dir "$1" >> "$LOG" 2>&1']
@@ -142,6 +142,8 @@ def test_the_similarity_files_can_never_hold_the_ratings_back():
     assert 'git -C "$SITE" clean -fdq -- "$SIMILAR" >> "$LOG" 2>&1 ;;' in lines
     files = next(line for line in lines if line.startswith("FILES="))
     assert "similarity" not in files and '0) ADD="$ADD $SIMILAR" ;;' in lines
+    assert files == ('FILES="docs/data/ratings.json docs/data/decompose_openrapm.json docs/data/ratings_list.json '
+                     'docs/data/power.json"')
 
 
 def test_the_games_are_checked_after_the_stints_are_built_and_before_anything_reads_them():

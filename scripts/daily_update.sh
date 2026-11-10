@@ -15,7 +15,7 @@
 #      between, not as steps, since nothing the morning publishes reads them
 #   4. `openrapm build --seasons SEASON --replace-seasons`: the season rated and written into the published table in
 #      place of yesterday's rows, every finished season as it was
-#   5. `openrapm site --openrapm-decomposition --power` into the site worktree, then the three data files committed and
+#   5. `openrapm site --openrapm-decomposition --power` into the site worktree, then the four data files committed and
 #      pushed to main, where GitHub Pages serves docs/, when one of them changed beyond the date it was built
 #      (scripts/daily_files.py).  The ratings page opens on the season in progress only once its median player shown has
 #      250 offensive possessions (openrapm site, default_season).  docs/data/power.json is each team's current ratings
@@ -23,7 +23,7 @@
 #   6. not steps, so they can never hold the ratings back: the five outside rating systems asked for their tables
 #      (`openrapm data public-ratings`) and the Bias page's file written from them (`openrapm site --bias`); and the
 #      Similarity page's files, written again only on a morning when its player-seasons carry other ratings than the
-#      published ones (`openrapm site --similarity`).  Both are committed with the three files above on a morning they
+#      published ones (`openrapm site --similarity`).  Both are committed with the four files above on a morning they
 #      publish
 #
 # A morning that ends FAILED sends one line to the owner's phone (scripts/daily_notify.sh), and a second task at 8 AM
@@ -152,7 +152,8 @@ step $PY -u -m openrapm data dashboards $SEASON $SEASON --force
 step $PY -u -m openrapm data panel --force
 step $PY -u -m openrapm build --seasons $SEASON --replace-seasons
 
-FILES="docs/data/ratings.json docs/data/decompose_openrapm.json docs/data/power.json"
+# ratings_list.json is written with decompose_openrapm.json, cut from it: the ratings page's list (commands/site.py)
+FILES="docs/data/ratings.json docs/data/decompose_openrapm.json docs/data/ratings_list.json docs/data/power.json"
 if [ "$PUBLISH" != "1" ]; then
   # a dry run writes the site's files to a scratch folder, so a failure in the site step shows before a morning does
   DRY=$ROOT/outputs/daily/site_dry
