@@ -15,7 +15,11 @@ nav.site a { padding: 11px 14px 10px; color: var(--muted); text-decoration: none
 nav.site a:first-child { padding-left: 0; }
 nav.site a:hover { color: CanvasText; }
 nav.site a[aria-current="page"] { color: CanvasText; font-weight: 600; border-bottom-color: var(--accent); }
-nav.site .theme, nav.site .colors { margin-left: auto; display: inline-flex; padding: 9px;
+/* the Power tab is hidden in each page's markup until power.json says its ratings are ready; a browser that was told
+   so on an earlier page view shows it from the first paint (site.js sets data-power before the page is drawn) */
+:root[data-power="1"] nav.site a[href="power.html"][hidden] { display: inline !important; }
+/* 40 px square, like every control below */
+nav.site .theme, nav.site .colors { margin-left: auto; display: inline-flex; padding: 11px;
                   border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--muted);
                   cursor: pointer; }
 nav.site .theme:hover, nav.site .colors:hover { color: CanvasText; }

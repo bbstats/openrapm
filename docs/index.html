@@ -87,13 +87,16 @@
     .cols .seg button { flex: 1; padding: 0 8px; }
     #pieces { flex: 1; }
     th, td { padding: 7px 5px; }
+    th { padding-top: 11px; padding-bottom: 11px; }     /* a header is a 40 px target for a thumb */
     th[data-k]:not(.season) { min-width: 0; }
     table { font-size: 13px; }
     td.name { width: 110px; max-width: 110px; }          /* a long name is cut with an ellipsis, as on a desktop */
-    td.name > a { margin: 0; padding: 0; }
+    /* the name's tap area reaches the top and the sides of its cell and the teams' its bottom; nothing moves */
+    td.name > a { margin: -7px -5px 0; padding: 7px 5px 2px; }
     th.team, td.team { display: none; }                 /* the team goes under the name instead */
-    td.name .tm { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.3; }
-    td.name .tm a { display: inline; margin: 0; padding: 0; }
+    td.name .tm { display: block; color: var(--muted); font-size: 12px; line-height: 1.3; }
+    td.name .tm a { display: inline-block; margin: -2px 0 -7px; padding: 2px 0 7px; }
+    td.name .tm a:first-child { margin-left: -5px; padding-left: 5px; }
     table.career th.team, table.career td.team { display: table-cell; }   /* a player's seasons have no name cell */
   }
 </style>
@@ -113,7 +116,7 @@
   <h1 class="titled">OpenRAPM</h1>
   <p class="byline">by <a href="http://twitter.com/bbstats">Nathan Walker</a></p>
   <div class="controls">
-    <span class="step" data-list><button type="button" id="older" aria-label="Previous season" title="Previous season">&lsaquo;</button><select id="season" aria-label="Season"></select><button type="button" id="newer" aria-label="Next season" title="Next season">&rsaquo;</button></span>
+    <span class="step" data-list><button type="button" id="older" aria-label="Previous season" title="Previous season" disabled>&lsaquo;</button><select id="season" aria-label="Season"></select><button type="button" id="newer" aria-label="Next season" title="Next season" disabled>&rsaquo;</button></span>
     <select id="team" aria-label="Team" data-list></select>
     <input id="find" type="search" placeholder="Find player" aria-label="Find player" autocomplete="off" spellcheck="false" data-list>
     <a class="chip" id="chip" href="#" hidden><span id="chip-name"></span><span class="x" aria-hidden="true">&#x2715;</span></a>
@@ -139,7 +142,10 @@
   const fmt = v => sign(v) + Math.abs(v).toFixed(2);
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const whole = new Intl.NumberFormat("en-US");      // one formatter: toLocaleString builds a new one every call
-  const fold = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  // a name as Find compares it: no accents, no capitals, no apostrophes or periods, a hyphen read as a space, and no
+  // space at either end, so "jokic ", "gilgeous alexander", "DAngelo" and "pj tucker" each find their player
+  const fold = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    .replace(/['\u2018\u2019.]/g, "").replace(/[-\s]+/g, " ").trim();
   const option = (value, text) => Object.assign(document.createElement("option"), { value, textContent: text });
 
   // the data file's three sides; each holds the five pieces and the rating, in the order PIECES lists them
@@ -283,8 +289,13 @@
     (team ? "&team=" + encodeURIComponent(team) : "") + (player !== null ? "&player=" + player : "");
   // every entry the page has drawn carries a state: that is how a hashchange tells Back and Forward (a state) from
   // a link or a typed address (none).  It also keeps the Find text, which the address leaves out
+  // The page as it opens, the season the file names with every team and both buttons as they start, keeps a bare
+  // address: with the season written into it, a bookmark of the home page went on opening that season after the
+  // next one began
+  const opening = () => state.player === null && !state.team && state.view === "ratings" && state.side === "total" &&
+    state.season === String(data.meta.default_season || data.meta.seasons[0]);
   const writeAddress = () => history.replaceState(Object.assign({}, history.state, { q: state.q }), "",
-                                                  addr(state.season, state.team, state.player));
+    opening() ? location.pathname + location.search : addr(state.season, state.team, state.player));
   function place(h) {
     const seasons = data.meta.seasons.map(String), id = +h.get("player");
     // with no season in the address, the one meta names: a season in progress only once its median player shown has 250
@@ -428,10 +439,13 @@
   $("csv-view").addEventListener("click", e => {
     e.preventDefault();
     if (!data) return;
-    if (state.player !== null)                        // his seasons, oldest first like the all-seasons file
-      return downloadCSV(csvName("player_" + state.player), [...careers.get(state.player)].reverse());
-    const ids = new Set(shown.map(r => r.id));
-    downloadCSV(csvName(state.season), data.rows[state.season].filter(x => ids.has(x.id)).map(x => [state.season, x]));
+    // the rows on screen, in their order on screen: the sort, and the team, Find and rookies filters
+    if (state.player !== null) {                      // his seasons
+      const bySeason = new Map(careers.get(state.player));
+      return downloadCSV(csvName("player_" + state.player), shown.map(r => [String(r.s), bySeason.get(String(r.s))]));
+    }
+    const byId = new Map(data.rows[state.season].map(x => [x.id, x]));
+    downloadCSV(csvName(state.season), shown.map(r => [state.season, byId.get(r.id)]));
   });
   $("csv-all").addEventListener("click", e => {
     e.preventDefault();
@@ -449,6 +463,7 @@
   // the season changes in place, from the list or the arrows, so Back skips the seasons stepped through
   function setSeason(s) { state.season = season.value = s; fillTeams(); render(); }
   function step(by) {                                 // meta.seasons runs latest first
+    if (!data) return;                                // an arrow tapped while the page is still loading
     const seasons = data.meta.seasons.map(String), next = seasons[seasons.indexOf(state.season) + by];
     if (next !== undefined) setSeason(next);
   }

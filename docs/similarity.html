@@ -92,7 +92,10 @@
 <script>
 (function () {
   const $ = id => document.getElementById(id);
-  const fold = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  // a name as the box compares it, as on the ratings page: no accents, no capitals, no apostrophes or periods, a
+  // hyphen read as a space, and no space at either end
+  const fold = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    .replace(/['\u2018\u2019.]/g, "").replace(/[-\s]+/g, " ").trim();
   // as on the ratings page: a true minus sign, and Math.round rather than toFixed, so -1.25 shows as -1.2
   const fmt = v => { const r = Math.round(v * 10) / 10 || 0; return (r > 0 ? "+" : r < 0 ? "−" : "") + Math.abs(r).toFixed(1); };
   const playerInput = $("player"), playerList = $("player-list"), seasonSelect = $("season");
