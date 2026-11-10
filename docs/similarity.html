@@ -232,7 +232,7 @@
     return tr;
   }
 
-  async function render() {
+  async function draw() {
     const i = at.get(state.id + ":" + state.season), doc = await seasonFile(state.season);
     if (i !== at.get(state.id + ":" + state.season)) return;      // a newer pick arrived while this file loaded
     const [k, d, pk, pd] = doc.rows[i - doc.meta.first];
@@ -245,6 +245,10 @@
     showPick();
     fillSeasons();
   }
+  // a season's file that fails to load says so in the table: the old table used to stay up, the failure in the console
+  const render = () => draw().catch(() => {
+    tbody.innerHTML = `<tr><td class="msg" colspan="8">Could not load the data.</td></tr>`;
+  });
 
   // a new pick adds a step to the history; a new season of the same player replaces the step it is on
   function pick_(id, season, push = true) {

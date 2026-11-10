@@ -131,3 +131,12 @@ def test_the_committed_list_file_carries_the_detail_files_ratings():
     in_progress = listed["meta"]["through"]
     assert all(re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) for day in in_progress.values())
     assert set(in_progress) <= {str(listed["meta"]["seasons"][0])}             # only the latest can be in progress
+
+
+def test_a_similarity_file_that_fails_to_load_says_so_in_the_table():
+    """Every redraw goes through one function that catches: a season's file that failed left the old table up and the
+    failure in the console."""
+    page = _page("similarity.html")
+    assert "async function draw() {" in page and "async function render()" not in page
+    catcher = page[page.index("const render = () => draw().catch(() => {"):]
+    assert "Could not load the data." in catcher[:200]
