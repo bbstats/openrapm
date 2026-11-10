@@ -13173,3 +13173,37 @@ With every weight at 1 the script gives back experiment 140's shipped column on 
 
 
 **At the product setting**, if adopted, a rated season's line also reads its two neighbors, at 0.92 each; the line of the season in progress reads 2026 at 0.92 and 1997 at 0.07.
+
+### Check 167: for Box Adj, ChimeraBoost at its defaults against the straight line (the owner, 2026-11-10: "also would be good to do a quick check on chimeraboost defaults vs linear if we havent yet."; registered before any result)
+
+
+
+**Not done before.**  The record has ChimeraBoost against LightGBM for the box-score prior, 2026-10-08, and that prior blended with a line on every input and every product of two, experiment 121; nothing has put a tree model where Box Adj's line stands.  The reason is in how the line is fitted: on the within-season test itself, through the ridge, in closed form, which only a straight line in the inputs allows.
+
+
+
+**The tool, `scratch/2026-11-10_boost_vs_line/player_sums.py`.**  Each of the 360 folds behind the shipped line, its share of the test's normal equations with one column per player on each end in place of one per input: `rating_line.ridge_parts` and `held_back_sums` given the identity as their priors.  Any number per player, a booster's output included, is then scored exactly as the line's inputs are.  The check built in: each season's folds, projected on the line's own columns from the inputs the screen's run saved, must give back the shipped line's sums; the first season built, 2026, does to 2.9e-14.  Files in `outputs/second_prior/zones139_players/`, 4.3 GB.
+
+
+
+**The check, `scratch/2026-11-10_boost_vs_line/boost_vs_line.py`.**  A booster needs a number per player to forecast.  At a base prior, for each player and end: g, half the slope of the test's error in his prior, and h, its curvature in that one number, summed over the season's folds; the target is g over h, the step his prior would take alone, weighted by h.  One row per player, season and end, his 57 inputs averaged over the folds.  Arms, each scored through the per-player sums with its weights solved on the seasons more than one from the rated one, as the line's are:
+
+
+
+- box only: the fitted parts and each end's box-score prior, the base;
+
+- line: the shipped line, 57 inputs an end, solved jointly;
+
+- box + line, one step: a weighted least-squares line on the targets at the base, its output one more input;
+
+- box + trees: `ChimeraBoostRegressor()` at its defaults, players kept whole in its early-stopping split, on the same rows, targets and weights, its output one more input;
+
+- line + trees: the same booster on the targets at the line's own solution, added to the line.
+
+
+
+No season's column comes from a model that saw it: seasons in ten blocks of three, a block's models fitted on the seasons two or more from every season of the block.
+
+
+
+**The readings.**  "box + trees" against "box + line, one step" is learner against learner on identical rows.  "line + trees" against "line" asks whether trees find anything the line left; it is the one that could lead anywhere: better than the line in every era and by more than 0.042 over all 30 seasons, the rule of experiment 140, and it goes to the owner as a candidate, a booster stage in the prior being real work.  "box + trees" against "line" says whether trees could stand in for the line.  The one-step fit ignores that players share stints, so it may fall short of the joint solve: "box + line, one step" against "line" measures by how much, and bounds what the tree arms can be read to say.
