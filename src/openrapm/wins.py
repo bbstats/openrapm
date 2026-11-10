@@ -479,7 +479,8 @@ def season_wins(stints: pd.DataFrame, seconds: np.ndarray, ratings: pd.DataFrame
                          "leverage": mean_weight(own_end + other_end, own_side + other_side),
                          "starts_rs": starts.starts_rs.to_numpy(), "minutes_rs": starts.minutes_rs.to_numpy(),
                          "above_off": above_off, "above_def": above_def,
-                         "leverage_off": mean_weight(own_end, own_side), "leverage_def": mean_weight(other_end, other_side)})
+                         "leverage_off": mean_weight(own_end, own_side),
+                         "leverage_def": mean_weight(other_end, other_side)})
 
 
 def counterfactual_wins(stints: pd.DataFrame, seconds: np.ndarray, ratings: pd.DataFrame, weight: np.ndarray,

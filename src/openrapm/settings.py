@@ -186,8 +186,8 @@ class PriorSettings:
     # adopted on this line, so it stayed until a refit passed a test of its own: rating134 since experiment 134, adopted
     # 2026-11-04 (the owner: "Adopt, then show me"), the weights fitted on the within-season test through the ridge
     # (`openrapm second-prior --target rating`) instead of on the swaps; zones139_line since experiment 139, adopted
-    # 2026-11-06 (the owner: "Adopt but don't publish until tomorrows run"), the team's shots counted by five zones.  It is the
-    # box-score prior corrected for who a player played with and against, by a line fitted on the swaps of the
+    # 2026-11-06 (the owner: "Adopt but don't publish until tomorrows run"), the team's shots counted by five zones.
+    # It is the box-score prior corrected for who a player played with and against, by a line fitted on the swaps of the
     # within-season folds' held-back games written under outputs/second_prior/<tag>/ (second_prior.py;
     # notes/DECISIONS.md, experiment 81, the owner, 2026-10-19: "take the handoff idea ... in as inputs to the prior")
     second_prior: str = "zones139_line"

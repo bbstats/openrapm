@@ -1,5 +1,5 @@
-"""The shots by zone (experiment 139): the stints' counts, the offence's made and missed by zone, and the team rates with
-the placebo beside them."""
+"""The shots by zone (experiment 139): the stints' counts, the offence's made and missed by zone, and the team rates
+with the placebo beside them."""
 import numpy as np
 import pandas as pd
 
@@ -49,6 +49,7 @@ def test_the_builds_set_counts_shots_by_zone_in_place_of_threes_and_twos():
     names = sp.INPUT_SETS["context_types_team_zones_centred"]
     assert names[:29] == sp.INPUT_SETS["context_and_types_centred"] and len(names) == 29 + 28
     assert not [name for name in names[29:] if "threes" in name or "twos" in name]
-    assert {"team_rim_made_on", "team_long_three_missed_off", "team_free_throws_made_on", "team_turnovers_off"} <= set(names)
+    assert {"team_rim_made_on", "team_long_three_missed_off", "team_free_throws_made_on",
+            "team_turnovers_off"} <= set(names)
     assert len(sp.box_score_positions("context_types_team_zones_centred")) == 21
     assert sp.reads_team_rates("context_types_team_zones_centred")

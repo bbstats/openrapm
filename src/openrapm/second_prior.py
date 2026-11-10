@@ -478,8 +478,8 @@ def _has_zones(stints: pd.DataFrame) -> bool:
 def _end_team_rates(rows: _Entries, stints: pd.DataFrame, side: str, pad: bool) -> dict:
     """{name: one number per player of `rows`}: `ALL_TEAM_RATES` on one end, "O" his team's offence and "D" the offence
     of the teams facing his (the module docstring), and `ZONE_RATES` when the rows carry the zones.  The noise of one
-    possession is read as `_Entries.noise` reads it: each row one draw, sum over players and rows of w^2 (row value - his
-    number)^2 over sum of his w, with w x row value the row's count x 100."""
+    possession is read as `_Entries.noise` reads it: each row one draw, sum over players and rows of w^2 (row value -
+    his number)^2 over sum of his w, with w x row value the row's count x 100."""
     n_rows = len(stints)
     counts = (*TEAM_COUNTS, *TEAM_TAKEN, *(ZONE_COUNTS if _has_zones(stints) else ()))
     counted = np.zeros((2 * n_rows, len(counts)))
