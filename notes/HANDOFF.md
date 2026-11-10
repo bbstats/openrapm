@@ -251,7 +251,7 @@ and, in the round of 2026-11-09 only, the fixes the owner allowed.
 
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest -q        # 1,132 pass, 2 skipped, 7 deselected, 1 expected failure, about 2 minutes
+    .venv/Scripts/python -m pytest -q        # 1,134 pass, 2 skipped, 7 deselected, 1 expected failure, about 2 minutes
     uvx ruff@0.17.0 check .                  # clean
     cat outputs/daily/last.txt               # the last morning: published, nothing new, or FAILED
     gh run list --repo bbstats/openrapm --branch main --limit 3      # GitHub's tests on main: success
