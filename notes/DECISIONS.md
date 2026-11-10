@@ -13013,3 +13013,39 @@ Leaving the two fitted parts free of the penalty changes each penalty's row by 0
 **The site** (b4fa7f3, 143e24d), driven in headless Chrome through `playwright-core` at 1,280 and at 390 pixels, 37 checks, on the edited copy and then on openrapm.com.  Find reduces a name as it compares it: accents and capitals off, apostrophes and periods out, a hyphen read as a space, the ends trimmed; "Jokic " with a trailing space, "gilgeous alexander", "DeAaron" and "pj wash" each find their player.  The Power tab is drawn from the first paint once a browser has been told it is ready, and on a later visit no tab moves when power.json arrives.  "Download CSV: this view" follows the screen.  The season arrows are disabled until the data is in.  The page as it opens keeps a bare address.  On a phone the theme and colors buttons and the sort headers are 40 pixels, and the name link and the team under it fill their row, 27 and 25 of its 51 pixels, where they were 18 and 15.
 
 **The ratings page's list file** (143e24d).  `docs/data/ratings_list.json`, cut from the Detail file's document by `site.ratings_list_document`: 0.84 MB, 279 KB compressed.  The page opens on it and asks for the Detail file, 1.02 MB compressed, when Detail is shown or the pointer reaches its button, and for the Similarity pool, 151 KB compressed, when a player's seasons are drawn: 0.29 MB at open where it was 1.18.  Every table the page draws is the old page's, row for row: 2027, 2026 and 1998, the ratings, the percentiles, Detail on the total and on defense, and a player's seasons.  The list file published is cut from the Detail file already on main, not from the evening's table, whose 2027 a dry run had rebuilt: 330 of its 374 rows differ from the morning's at two decimals.  The list of the season in progress says "through Nov 8, 2026" beside the byline, from `meta.through`, as the Power and Bias pages do.  The morning job writes the file with the Detail file and it is one of the four whose change decides a publish.  Pushed 143e24d at 9:33 PM, GitHub's tests green, all 37 checks pass on the live site.
+
+### The WOSA fix: result (2026-11-09, 10:00 to 11:04 PM; commit 2b71432; `scratch/2026-11-09_improvements/wosa_moves.py`, `outputs/wosa_product.log`; backups `outputs/season_ratings_product_before_wosafix.parquet`, `outputs/season_ratings_product_regular_before_wosafix.parquet`, `outputs/csv/wins_product_seasons_before_wosafix.csv`)
+
+**The proofs on 2026, before any published file was touched.**  With the old code, `openrapm wins --name wosabefore --rebuild-regular --seasons 2026` on copies of the product tables gave back the stored regular-season rows and the whole table to the last byte, so the measurement starts from what was published.  `openrapm rate --seasons 2026` before and after the change: the two step-3 tables are the same to the last byte, 582 rows.  With the change, on the copies, no column outside the wins differs.  `tests/test_regular_season_lineups.py`, four tests: the regular season's lineup rows hold no playoff stint and no playoff result can move them; every default is the whole season; `rate_regular_seasons` asks for `settings.wins.phases`; Box Adj reads the lineup rows of the phases it is given.
+
+**The rebuild.**  `OPENRAPM_WRITE_PUBLISHED=1 openrapm wins --name product --rebuild-regular --jobs 4` under the lock, 10:15 to 11:04 PM, 2 processes at once since 15 GB of memory was free: 30 seasons, each rated from its regular season alone.  In the published table every column outside the wins is the backup's, 15,040 rows; `season_ratings_product_step3` and `_step4` keep their checksums; 2026's rows are the scratch run's; 2027's are untouched.  Of the twelve wins columns six move, `wosa_off`, `wosa_def`, `wosa_pace`, `wosa`, `above_off` and `above_def`; the pace effects, the leverage columns, the starts and the minutes do not.
+
+**What moved, among the 14,296 player-seasons with 60 or more possessions.**
+
+| reading | median | 90th percentile | largest |
+|---|---|---|---|
+| regular-season rating, offense, points per 100 | 0.023 | 0.093 | 0.658 |
+| regular-season rating, defense | 0.037 | 0.140 | 1.120 |
+| regular-season rating, total | 0.047 | 0.172 | 1.312 |
+| WOSA, wins | 0.026 | 0.149 | 0.846 |
+
+The largest rating moves are players with few possessions, Dahntay Jones 2016 on 78 and Juwan Morgan 2022 on 64; among the player-seasons with 2,000 or more the total moves a median 0.045, the ninetieth percentile 0.166, the largest 0.581.  2,494 of the 14,296 move a tenth of a win or more.  By season the median WOSA move runs from 0.018, 2023, to 0.070, 2014, and the largest from 0.325, 2009, to 0.846, 2014.
+
+**The leaders.**  One season's leader changes, 2026: Jokić led Gilgeous-Alexander 14.227 to 14.225 and now trails him 14.105 to 14.259; Wembanyama is third both ways, 11.776 to 11.388.  The top five keep their five players in 24 of the 30 seasons and their order in 14.
+
+| season | player | possessions | WOSA before | WOSA after | move |
+|---|---|---|---|---|---|
+| 2014 | Roy Hibbert | 5,561 | 0.92 | 1.76 | +0.85 |
+| 2022 | Pascal Siakam | 5,599 | 2.06 | 1.32 | -0.74 |
+| 2022 | Devonte' Graham | 4,476 | -1.39 | -0.66 | +0.73 |
+| 2017 | Lou Williams | 4,738 | 0.35 | 1.06 | +0.71 |
+| 2016 | Klay Thompson | 7,258 | 2.75 | 2.07 | -0.69 |
+| 2014 | DeAndre Jordan | 6,547 | 6.48 | 7.15 | +0.66 |
+| 2017 | Eric Gordon | 5,552 | -3.30 | -2.65 | +0.65 |
+| 2021 | Giannis Antetokounmpo | 5,891 | 10.40 | 9.78 | -0.62 |
+| 2015 | Draymond Green | 6,679 | 5.80 | 5.19 | -0.61 |
+| 2025 | Isaiah Hartenstein | 4,324 | 0.99 | 0.39 | -0.60 |
+
+2026's largest: Luke Kornet 0.64 to 1.17, Rudy Gobert 2.49 to 2.90, Kevin Durant 3.17 to 3.56, Victor Wembanyama 11.78 to 11.39, Devin Vassell -1.09 to -1.47, Julius Randle 1.77 to 1.40.  75 of 2026's 556 move a tenth of a win or more.
+
+**To take it back:** copy the three backups over `outputs/season_ratings_product.parquet`, `outputs/season_ratings_product_regular.parquet` and `outputs/csv/wins_product_seasons.csv`, and revert 2b71432.
