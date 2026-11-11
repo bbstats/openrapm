@@ -29,7 +29,12 @@ writing rules, `CLAUDE.md` the owner's standing rules.
 DECISIONS.md holds every number: "Experiment 140, a third read", "Experiment 141", "Check 167", "The Power table's
 width", "The link preview and the tab icon".
 
-- **Experiment 141 passes and waits for the owner's verdict.**  Box Adj's line with each training season counted 0.5
+- **Experiment 141 ADOPTED and PUBLISHED 2026-11-10, 8:46 PM, main 0b8c8ba** (the owner: "adopt and update the
+  site").  The shipped half-life is 8; the published tables are the full build `product141`'s, the ones before it
+  `outputs/season_ratings_product_before_fade141*`; step 4 reads `fade141_early,fade141_within` and `fade141_k10`;
+  the chain's incumbent is `fade141`, its noise control still `noise_zones139` until `noise_fade141` is read.  The
+  Power weights stay as refitted on 2026-11-09: the refit on the new build misses its rule at 62.5%, z +1.004, its
+  weights within 0.02 of those in place.  What the build showed before the verdict:  Box Adj's line with each training season counted 0.5
   to the power of its distance from the rated one over 8 seasons (`PriorSettings.second_prior_halflife`, 0 as
   shipped; `--second-prior-halflife 8`).  Full build `fade141`: within season -0.133 over the 30 seasons, z -5.26, 25
   of 30; by era -0.195, -0.040 and -0.165; the noise control -0.009.  Year over year holds, team-game z +1.25 as
@@ -106,9 +111,8 @@ half-life.  A read gives a direction and a rough size.  A full build is the owne
    2026-11-10, on the owner's "link preview is good."  No description tag is written: the sentence under the name is
    the owner's.  When it comes, one `description` and one `og:description` line in each of the six pages' heads, and
    a line in `tests/test_site_pages.py`.
-3. **The verdict on experiment 141**, Box Adj's training seasons faded at a half-life of 8: it passes the rule, and
-   adopting it is the list above.  And, after it, whether to build a booster stage on what the line leaves, check
-   167's candidate.
+3. **Whether to build a booster stage** on what Box Adj's line leaves, check 167's candidate.  And a Changelog row,
+   in the owner's words, for the recent-seasons weighting published 2026-11-10.
 4. **Changelog rows**, in the owner's words, for: the rookies button, WOSA, the page opening on the season in progress,
    the Detail view, Detail's Leverage and WOSA columns, Similarity's search box, the Power page's one rating; and from
    this round the Similarity correction, the WOSA correction and the Power table's new weights.
@@ -134,9 +138,9 @@ half-life.  A read gives a direction and a rough size.  A full build is the owne
 |---|---|---|---|
 | step 1 | the label | `rapm.py` | one RAPM per player over every season but the rated one; penalties 40,000 / 40,000 / 0; the defensive label un-shrunk |
 | step 2 | box-score prior | `box_prior.py` | LightGBM `lgb1_tune2`, linear leaves; inputs `hustle_no_three_pct_self_creation`; five player folds; 10 bags; part-season rows at a quarter, a half and three quarters |
-| step 2b | Box Adj | `second_prior.py`, `rating_line.py` | line `zones139_line` on `context_types_team_zones_centred`, 57 inputs an end, weights fitted on the within-season test through the ridge, team totals held, penalty 0.0001, every season; the Detail view's Box score column learned first (`box_first`) |
+| step 2b | Box Adj | `second_prior.py`, `rating_line.py` | line `zones139_line` on `context_types_team_zones_centred`, 57 inputs an end, weights fitted on the within-season test through the ridge, team totals held, penalty 0.0001, each season it is fitted on counted half for every 8 seasons from the rated one; the Detail view's Box score column learned first (`box_first`) |
 | step 3 | the rating | `prior_rapm.py` | RAPM pulled toward the prior, penalty 13,037; the season in progress holds its prior scales at the 8 nearest finished seasons' mean through a quarter of its season, then a straight line to its own at three quarters |
-| step 4 | the shrink | `prior_shrink.py` | both parts multiplied, 8 nearest fold seasons, folds `zones139_early,zones139_within`, read to a full season with `zones139_k10`; two layers, the within layer times 0.7663 on offense and 0.9968 on defense; defense factor 0.8682 before 2017, 0.8704 from 2017 |
+| step 4 | the shrink | `prior_shrink.py` | both parts multiplied, 8 nearest fold seasons, folds `fade141_early,fade141_within`, read to a full season with `fade141_k10`; two layers, the within layer times 0.7663 on offense and 0.9968 on defense; defense factor 0.8682 before 2017, 0.8704 from 2017 |
 | step 5 | swap adjustment | `swap_adjust.py` | off: applied share 0 |
 | | WOSA | `wins.py` | wins over the 150 most-started players' average, from the regular-season rating alone, 30 rating points a win |
 | | Power | `power_forecast.py`, `data/power_files.py` | Power at its multipliers plus the last-10 stats; weights at five points of the season in `params/power_forecast.json`, refitted 2026-11-09 by check 166 |
@@ -193,8 +197,8 @@ and, in the round of 2026-11-09 only, the fixes the owner allowed.
 | year-over-year test | `scripts/checks/63_yoy.py` | not worse at a paired z of +2, read at each side's width matched to the incumbent's |
 | the eye check | `scripts/checks/66_compare.py` | the 2026 top 20 |
 
-- The incumbent is `zones139`: tables `outputs/season_ratings_zones139*`, folds `zones139_early`, `zones139_within`,
-  year-over-year score 8.6901.  Its noise control `noise_zones139` reads -0.009 on the within-season test, paired z
+- The incumbent is `fade141`: tables `outputs/season_ratings_fade141*`, folds `fade141_early`, `fade141_within`,
+  year-over-year score 8.6908.  The incumbent before it was `zones139`.  Its noise control `noise_zones139` reads -0.009 on the within-season test, paired z
   -1.03, 16 of 30.  The plain z rules.
 - One full build: `bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes_late_as_scored "EXTRA
   RATE FLAGS"`, 50 to 75 minutes, log `outputs/NAME_chain.log`.  It waits while the morning job runs.
@@ -237,7 +241,7 @@ and, in the round of 2026-11-09 only, the fixes the owner allowed.
     PUBLISH=0 bash scripts/daily_update.sh                    # the morning job, nothing published, 12 minutes
     bash scripts/publish_check.sh                             # before any push to main
     bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes_late_as_scored "EXTRA RATE FLAGS"
-    .venv/Scripts/python scripts/checks/151_wowy.py --systems=zones139,noise_zones139,NAME --ref=zones139 --tag=NAME
+    .venv/Scripts/python scripts/checks/151_wowy.py --systems=fade141,noise_zones139,NAME --ref=fade141 --tag=NAME
     .venv/Scripts/python scripts/checks/101_log_run.py --name=NAME --exp=N --idea=owner --verdict=pending --changed="..."
     OPENRAPM_WRITE_PUBLISHED=1 .venv/Scripts/python -m openrapm build      # a full build of the published tables
 
