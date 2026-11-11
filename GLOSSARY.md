@@ -164,8 +164,8 @@ single possessions cancels inside a team's hundred-odd possessions before the mi
 mean of those differences divided by its standard error (a paired t-statistic). Below zero is better. The
 within-season WOWY test pairs its 30 seasons the same way.
 
-**Incumbent.** The table every candidate is scored against: today `outputs/season_ratings_zones139.parquet`,
-experiment 139 built at the test setting, with its folds `zones139_early` and `zones139_within`.
+**Incumbent.** The table every candidate is scored against: today `outputs/season_ratings_fade141.parquet`,
+experiment 141 built at the test setting, with its folds `fade141_early` and `fade141_within`.
 
 **Trade set.** For each rated season, the team-games of that season and the seasons either side, each player's
 share of his team's possessions in each, and the rated season's ratings subtracted; what is left is ridged back
@@ -194,8 +194,8 @@ subtracts, each side of OpenRAPM is multiplied once, league-wide, to the consens
 offense and 1.01 on defense on 2026-11-05. The page prints both multipliers.
 
 **Noise control.** The incumbent rebuilt with nothing changed but which players share each of the prior's five
-folds (`--fold-assignment 1`). It shows how far every reading moves when nothing real changes: today's,
-`noise_zones139`, reads -0.009 on the within-season WOWY test, paired z -1.03, and +0.004 on the year-over-year
+folds (`--fold-assignment 1`). It shows how far every reading moves when nothing real changes: the last
+incumbent's, `noise_zones139`, standing in until experiment 141's is built, reads -0.009 on the within-season WOWY test, paired z -1.03, and +0.004 on the year-over-year
 test, paired z +0.52.
 
 **Replicate.** The same change built a second time with another random assignment of players to the prior's

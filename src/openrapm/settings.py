@@ -218,8 +218,9 @@ class PriorSettings:
     # 0: every season a line trains on counts the same (shipped).  H: a season d seasons from the rated one counts
     # 0.5 ** (d / H), so the far seasons stay in and weigh less, for a line fitted on the rating
     # (second_prior.season_weight; experiment 141, from experiment 140's reads of 2026-11-09 and 2026-11-10: a cut at
-    # the 16 nearest seasons gained both ends of the 30 seasons and lost 2007-2016, and a fade held the middle)
-    second_prior_halflife: float = 0.0
+    # the 16 nearest seasons gained both ends of the 30 seasons and lost 2007-2016, and a fade held the middle).
+    # 8 since experiment 141, adopted 2026-11-10 (the owner: "adopt and update the site"); 0 before it
+    second_prior_halflife: float = 8.0
     # how the Detail view divides the prior; no rating reads this.  False: the Box score column is the line's own weight
     # on the box-score prior.  True: it is his own stats' weights learned alone, and Box Adj is the rest of the same
     # prior (rating_line.first_stage; the owner's choice of 2026-11-05, published the same day)
@@ -309,8 +310,9 @@ class ShrinkSettings:
     # offensive prior), its own; since experiment 126, adopted 2026-11-01 (the swap part of the prior refitted), its
     # own; since experiment 127, adopted the same day (the possession bins' targets padded toward the league rate),
     # its own; since experiment 134, adopted 2026-11-04 (the line fitted on the rating, with team rates), its own; since
-    # experiment 139, adopted 2026-11-06 (the team's shots by zone), its own
-    folds_tag: str = "zones139_early,zones139_within"
+    # experiment 139, adopted 2026-11-06 (the team's shots by zone), its own; since experiment 141, adopted 2026-11-10
+    # (Box Adj's training seasons faded by distance), its own
+    folds_tag: str = "fade141_early,fade141_within"
     # each season's factors from only the K fold seasons nearest it (prior_shrink.fold_seasons_used): the defensive
     # prior part holds up less in older seasons, 0.79 in 1997-2006 against 0.95 in 2017-2026 (notes/DECISIONS.md,
     # "Era drift" and experiment 55, adopted 2026-10-12: "yes. build."); 0 would use every fold season the rule allows
@@ -321,8 +323,8 @@ class ShrinkSettings:
     # 2026-10-22: "we are going to do it"); "" fits on folds_tag alone, as the experiment chain does.  inputs99_k10
     # until experiment 107 was adopted; its own since, parts107_k10; experiment 110's own since 2026-10-25; experiment
     # 126's own since 2026-11-01, then experiment 127's the same day; experiment 134's own since 2026-11-04; experiment
-    # 139's own since 2026-11-06
-    extrapolate_folds_tag: str = "zones139_k10"
+    # 139's own since 2026-11-06; experiment 141's own since 2026-11-10
+    extrapolate_folds_tag: str = "fade141_k10"
     # a multiplier on the games' part too, fitted beside the prior's (prior_shrink, "The games' part freed";
     # notes/DECISIONS.md, experiment 65, adopted 2026-10-15: "Adopt one multiplier as the new incumbent")
     free_games_part: bool = True

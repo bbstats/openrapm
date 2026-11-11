@@ -75,4 +75,4 @@ def test_the_knots_from_a_quarter_of_the_season_on_read_the_blended_folders(chec
     it is on the line to its fitted one, and so are the folders the knots from a quarter on are fitted on."""
     assert [folder.rsplit("_", 1)[1] for folder in check.KNOTS.values()] == ["held", "held", "line", "line", "line"]
     assert check.NO_STATS == ("50%", "75%") and list(check.KNOTS)[-2:] == ["50%", "75%"]
-    assert check.TESTS == {"17.5%": ("zones139_cut175_held", True), "62.5%": ("zones139_cut625_line", False)}
+    assert check.TESTS == {"17.5%": ("fade141_cut175_held", True), "62.5%": ("fade141_cut625_line", False)}

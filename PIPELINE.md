@@ -226,7 +226,9 @@ command runs in one process as before.
   Since experiment 139 (adopted 2026-11-06) the team rates count shots made and missed by zone, rim, 3 feet or closer, short
   mid, to 13 feet, long mid, to the line, three, to 26 feet, and long three, 27 feet or more, in place of threes and twos:
   the stints carry the zones (`data/stint_parser.py`), and `zones139_line` is the same pass's sums on those inputs
-  (`scratch/2026-11-05_second_stage/zones139_line.py`).
+  (`scratch/2026-11-05_second_stage/zones139_line.py`).  Since experiment 141 (adopted 2026-11-10) a rated season's
+  line counts each season it is fitted on 0.5 to the power of its distance from the rated one over 8 seasons
+  (`PriorSettings.second_prior_halflife`, `second_prior.season_weight`): the weights lean on the nearby seasons.
 - **Command:** `python -m openrapm rate` (steps 1-3); `--seasons 2026` rates one season, whose values
   equal the 2026 rows of a thirty-season run.
 - **Code:** `src/openrapm/prior_rapm.py`, `commands/build.py`.
@@ -258,12 +260,12 @@ command runs in one process as before.
     `within_factors`, `--defence-factor 0.8682,2017:0.8704`, `--within-factors 0.7663,0.9968`); before it 0.89 before
     2017 and 0.84 from 2017 (experiment 98) and 0.75 and 1.0 (experiment 106); 0.866 in every season before those,
     chosen with the booster's settings by the same search (experiment 76);
-  - the folds `zones139_early,zones139_within`, experiment 139's own (every adopted build since experiment 78 has
+  - the folds `fade141_early,fade141_within`, experiment 141's own (every adopted build since experiment 78 has
     brought its own; `settings.ShrinkSettings.folds_tag` names each in turn), seasons 1997-2026 pinned, because the
     fold folder grew once and an unpinned rerun shrank harder (experiment 34's correction);
   - each season's multipliers from the 8 fold seasons nearest it (experiment 55, adopted 2026-10-12);
   - each multiplier read to a full season: fitted again on folds holding back a tenth of the games, ten folds a
-    repeat (`zones139_k10`), and read off the straight line through the two holdout sizes at nothing held back,
+    repeat (`fade141_k10`), and read off the straight line through the two holdout sizes at nothing held back,
     because a fold's ratings are built from part of a season and the published ones from all of it (experiment
     101, adopted 2026-10-22; `ShrinkSettings.extrapolate_folds_tag`, `--extrapolate-folds`).
 - **Command:** `python -m openrapm shrink --base season_ratings_NAME_step3`.

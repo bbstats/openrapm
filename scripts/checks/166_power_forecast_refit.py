@@ -31,7 +31,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-os.environ.setdefault("POWER_NEXT10_FAMILY", "zones139")
+os.environ.setdefault("POWER_NEXT10_FAMILY", "fade141")
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 

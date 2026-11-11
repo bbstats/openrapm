@@ -98,10 +98,13 @@ LOG=outputs/${NAME}_chain.log
 # width settings, which 151 reads from settings.ShrinkSettings for it.
 # Since 2026-11-06 it is experiment 139, zones139: the team's shots by zone in Box Adj, its own line zones139_line and folds;
 # its noise control noise_zones139, -0.009, z -1.03, 16 of 30, built 2026-11-06.
-INC_NAME=${INC_NAME:-zones139}
-INC_SYSTEM=${INC_SYSTEM:-zones139}       # the incumbent's folds (<name>_early, <name>_within) for 151
+# Since 2026-11-10 it is experiment 141, fade141: Box Adj's training seasons counted half for every 8 seasons from the
+# rated one (--second-prior-halflife 8, the shipped default), its own folds; no noise control on it yet, so
+# noise_zones139 stands in.
+INC_NAME=${INC_NAME:-fade141}
+INC_SYSTEM=${INC_SYSTEM:-fade141}       # the incumbent's folds (<name>_early, <name>_within) for 151
 CONTROL_NAME=${CONTROL_NAME:-noise_zones139}  # the noise control's folds (<name>_early, <name>_within) for 151
-INC_FOLDS=${INC_FOLDS:-zones139_early,zones139_within}
+INC_FOLDS=${INC_FOLDS:-fade141_early,fade141_within}
 AUDIT_REF=${AUDIT_REF:-${INC_SYSTEM}_within}     # the held-out audit's reference: the incumbent's own folds
 INC=outputs/season_ratings_${INC_NAME}.parquet
 BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1_tune2 --features hustle_no_three_pct_self_creation}

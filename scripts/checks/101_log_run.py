@@ -38,7 +38,7 @@ replacement level of experiment 11: -0.144, z -5.24, 42 of 56.
 
     python scripts/checks/101_log_run.py --name=shotmix --exp=34 --idea=owner --verdict=pending
             --changed="one sentence, plain words" [--notes="..."] [--date=2026-10-04]
-            [--incumbent=zones139] [--wowy-ref=<system>] [--log=outputs/<name>_chain.log] [--command="..."]
+            [--incumbent=fade141] [--wowy-ref=<system>] [--log=outputs/<name>_chain.log] [--command="..."]
             [--dry] [--allow-partial]
             [--tag=<name>] [--system=<name>] [--compared=outputs/season_ratings_<incumbent>.parquet]
     python scripts/checks/101_log_run.py --sheet      (print the table as rows for the Google Sheet)
@@ -101,7 +101,7 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--name", help="the run's name (required unless --sheet)")
     parser.add_argument("--exp", help="the experiment number, the row's key (required unless --sheet)")
     # the incumbent since 2026-10-25 (experiment 110); weightfix (46) from 2026-10-09 to 2026-10-12
-    parser.add_argument("--incumbent", default="zones139", help="default %(default)s")
+    parser.add_argument("--incumbent", default="fade141", help="default %(default)s")
     parser.add_argument("--wowy-ref", help="the within-season test's reference system (default --incumbent)")
     parser.add_argument("--allow-partial", action="store_true",
                         help="log a run with fewer readings than the full tests have, on purpose")

@@ -67,11 +67,12 @@ def test_the_era_half_life_reaches_the_prior_and_a_negative_one_is_refused():
 
 
 def test_the_second_priors_half_life_reaches_the_line_and_a_negative_one_is_refused():
-    """Experiment 141: on rate and build alike; off unless asked."""
+    """Experiment 141: on rate and build alike; the shipped 8 unless asked, and 0 turns it off."""
     for command in ("rate", "build"):
-        assert cli.chosen_settings(_parse(command)).prior.second_prior_halflife == 0.0
-        chosen = cli.chosen_settings(_parse(command, "--second-prior-halflife", "8"))
-        assert chosen.prior.second_prior_halflife == 8.0 and chosen.prior.era_halflife == 0.0
+        assert cli.chosen_settings(_parse(command)).prior.second_prior_halflife == 8.0
+        chosen = cli.chosen_settings(_parse(command, "--second-prior-halflife", "12"))
+        assert chosen.prior.second_prior_halflife == 12.0 and chosen.prior.era_halflife == 0.0
+        assert cli.chosen_settings(_parse(command, "--second-prior-halflife", "0")).prior.second_prior_halflife == 0.0
     with pytest.raises(SystemExit):
         cli.chosen_settings(_parse("rate", "--second-prior-halflife", "-1"))
 
