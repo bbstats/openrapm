@@ -46,7 +46,7 @@
     <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
   </nav>
 
-  <p>OpenRAPM is a prior-informed RAPM, an upgrade on RAPM <a href="https://apbr.org/metrics/viewtopic.php?t=9844">first publicly introduced by Jeremias Engelmann</a>. The target is points per 100 possessions, with two small tweaks: free throws get each player's padded free-throw %, and on defense, we remove 75% of 'three point luck'. The prior is a LightGBM model that is trained on RAPM over every other season from the box-score stats below, then applies an initial 'lineup correction' which improves single season error.</p>
+  <p>OpenRAPM is a single season "prior-informed" RAPM. <a href="https://apbr.org/metrics/viewtopic.php?t=8025">First introduced by Jeremias Engelmann in 2012</a>, this flavor of RAPM that uses additional features from box score, play-by-play etc to better estimate player impact. The target is points per 100 possessions, with two small tweaks: free throws get each player's padded free-throw %, and on defense, we remove 75% of 'three point luck'. The prior is a LightGBM model that is trained on RAPM over every other season from the box-score stats below, then applies an initial 'lineup correction' which improves single season error.</p>
 
   <h2>Prior Inputs</h2>
   <p>All stats use <a href="https://kmedved.com/2020/08/06/nba-stabilization-rates-and-the-padding-approach/">padding method</a> to reduce noise.</p>
