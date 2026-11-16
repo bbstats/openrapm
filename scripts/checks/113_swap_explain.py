@@ -10,7 +10,7 @@ table (`--base`) and keeps every intermediate number, so each player's move read
                   model; experiment 80), times the applied share, 0.5.  Its three largest terms are listed beside it
     give-back     the team constraint: the team's possession-weighted total may not move, so the team's net type
                   prediction is taken back from its players in proportion to their share of its possessions
-    centring      the season's possession-weighted mean set back to the step-4 table's, one constant per side (the
+    centering      the season's possession-weighted mean set back to the step-4 table's, one constant per side (the
                   `_centering` columns)
     spread        the width the adjustment added, given back: each player's distance from his main team's mean
                   scaled by one factor per season and side (swap_adjust.hold_spread_within)
@@ -178,7 +178,7 @@ def side_steps(rows: pd.DataFrame, side: str, prediction: pd.Series, terms: pd.D
                weight: np.ndarray, team: np.ndarray, settings) -> dict:
     """One side's five parts for every player of the season, positive = good, as `<off|def>_<part>` columns.
 
-    In swap_adjust's order: give back kappa m inside each team, centre the season (possession-weighted mean 0),
+    In swap_adjust's order: give back kappa m inside each team, center the season (possession-weighted mean 0),
     hold the spread inside teams.  `weight` is the step-4 possessions on this end, `team` each player's main team.
     """
     share = settings.applied_share

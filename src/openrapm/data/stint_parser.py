@@ -13,7 +13,7 @@ Words used below
                 logs substitutions between a foul and its free throws, and about 40% of trips hold one; credited
                 at the end, the trip's points went to players who came on after the foul and the fouler was
                 never charged (notes/DECISIONS.md, the bug-fix pass of 2026-10-22).
-    offence     the team with the ball (the column is spelt `offense`, like every other table)
+    offense     the team with the ball (the column is spelt `offense`, like every other table)
     lineup      one team's five players on the court, stored sorted by player id
     valid       both lineups are five known players.  Possessions with an unknown lineup are counted
                 (diagnostic `invalid_possessions`) but never reach a stint.
@@ -32,10 +32,10 @@ How a possession ends
     defensive rebound     the rebounding team has the ball
     turnover
     made last free throw  of a trip ("2 of 2" made).  A missed last free throw is a live rebound.
-    end of period         a possession is recorded only once its offence has acted (a shot, a free throw, a
+    end of period         a possession is recorded only once its offense has acted (a shot, a free throw, a
                           turnover), however it began: a defensive rebound in a period's last seconds with
                           nothing after it is no possession, as a made basket with nothing after it never was
-    forced switch         the other team acts on offence (a shot, a turnover, a free throw) with no
+    forced switch         the other team acts on offense (a shot, a turnover, a free throw) with no
                           recorded change of possession: the feed missed a row, so the possession in
                           progress is closed there (diagnostic `forced_switches`)
     jump ball             won by the team without the ball, after the team with it has acted
@@ -131,7 +131,7 @@ SLOT_COLUMNS = tuple(f"{counter}_{side}" for counter in SLOT_COUNTERS for side i
 # the luck adjustment: whether a free throw drops is close to pure noise, and it is a fifth of all scoring.
 # `xftm` is the sum over the possession's attempts of the SHOOTER's own leave-one-game-out padded
 # percentage -- the shooter's own rate, not the lineup's, because free-throw percentage belongs to one
-# identified player and the defence barely touches it.  This is the rate when no season totals are given.
+# identified player and the defense barely touches it.  This is the rate when no season totals are given.
 FT_LEAGUE_DEFAULT = 0.75
 
 # A description token that ends the player's name: a number, a parenthesis, or one of these whole words.
@@ -238,7 +238,7 @@ class Possession:
     offense: int | None            # the team with the ball; None until an action in the period says who
     start_clock: float
     start_score: dict              # team -> points when the possession began
-    active: bool = False           # the offence has acted; a possession that never became active is not recorded
+    active: bool = False           # the offense has acted; a possession that never became active is not recorded
     points: int = 0
     and1: bool = False             # a made field goal is waiting for its and-one free throw
     counters: dict = field(default_factory=lambda: dict.fromkeys(STINT_COUNTERS, 0))
@@ -519,7 +519,7 @@ class GameParser:
         return pd.DataFrame(tally.records)
 
     def _start_period(self, period, rows, tally: GameTally) -> PeriodState:
-        """The period's starters on the court, and an empty possession with nobody yet on offence."""
+        """The period's starters on the court, and an empty possession with nobody yet on offense."""
         self.diag["n_periods"] += 1
         starters = self._starters(period, rows)
         start_clock = 720.0 if period <= 4 else 300.0
@@ -531,7 +531,7 @@ class GameParser:
             tally=tally)
 
     def _close(self, state: PeriodState, reason: str, end_clock: float, next_offense) -> None:
-        """End the possession in progress: record it if its offence acted, then start the next one."""
+        """End the possession in progress: record it if its offense acted, then start the next one."""
         possession = state.possession
         self._settle_last_continuation(possession, reason)
         if possession.offense is not None and possession.active:
@@ -607,7 +607,7 @@ class GameParser:
 
         Only the FIRST attempt is recorded by type: every later one exists only because a rebound went the
         offence's way, and conditioning on that is exactly the luck the expected-points target removes.
-        A new attempt while a miss is still unresolved means the offence kept the ball with no rebound row
+        A new attempt while a miss is still unresolved means the offense kept the ball with no rebound row
         in the feed (a block or a tip): a real continuation, `oreb_unattr`, about one possession in 100,000."""
         counters = possession.counters
         if possession.retain_pending and counters["att"] > 0:
@@ -683,7 +683,7 @@ class GameParser:
 
     def _on_jump_ball(self, state: PeriodState, index: int, row) -> None:
         """'Tip to <name>': the tip's team gets the ball.  When the other team had it and had acted, its
-        possession ends here; when nobody had it yet, the tip's team is on offence (not yet active)."""
+        possession ends here; when nobody had it yet, the tip's team is on offense (not yet active)."""
         tip_team = self._tip_team(row.description)
         possession = state.possession
         if tip_team is None:
@@ -798,7 +798,7 @@ class GameParser:
 
     def _on_rebound(self, state: PeriodState, index: int, row) -> None:
         """The offence's own rebound continues the possession; the defence's ends it.  A rebound with nobody
-        yet on offence gives the rebounder's team the ball."""
+        yet on offense gives the rebounder's team the ball."""
         team = self._row_team(row)
         if team not in self.teams:
             return

@@ -48,7 +48,7 @@ the panel gates its read while the ones that write the panel back do not.  That 
 one that had gone wrong -- five scripts read the season panel straight off the disk with no gate
 until 2026-09-18.
 
-What none of it can prove is that a fitted artefact already on disk was built after the guard
+What none of it can prove is that a fitted artifact already on disk was built after the guard
 existed.  For that, rebuild it.
 """
 from __future__ import annotations

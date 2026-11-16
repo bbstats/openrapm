@@ -7,7 +7,7 @@ Step 3 pulls the ratings toward what it says.
 
 Words used below
     booster       one fitted LightGBM model
-    panel row     one player, one season, one side ("O" offence, "D" defence): his padded box-score rates,
+    panel row     one player, one season, one side ("O" offense, "D" defense): his padded box-score rates,
                   role, career and body (features.py says what each column is)
     training row  a player's box score averaged over some of his seasons, carrying his label
     unseen        the seasons no training row may come from: the rated one (and, in the test setting, the
@@ -62,7 +62,7 @@ less data under the same leaf penalties.
 Each booster (per side, one on every training row and one without each player fold; LightGBM regression with
 the settings in params/booster_params_lgb1_tune2.json, settings.PriorSettings.booster_file) solves:
 
-    minimise over f   sum over training rows  v (label - f(x))^2  +  LightGBM's penalties on the leaves
+    minimize over f   sum over training rows  v (label - f(x))^2  +  LightGBM's penalties on the leaves
 
     x      the row's inputs: the side's shipped list (settings.PriorSettings.feature_set,
            hustle_no_three_pct_self_creation), then row_possessions and row_seasons
@@ -77,7 +77,7 @@ stands: a pretrained network shown the same training rows at answer time instead
 
 Player folds: players are sorted by label and assigned to folds 0,1,2,3,4,4,3,2,1,0,0,1,..., so every fold gets the
 same mix of good and bad players and leaving one out does not move the training mean (notes/DECISIONS.md, "The SPM
-memorises long-career stars", 2026-09-14; SPM was the box-score prior's earlier name).
+memorizes long-career stars", 2026-09-14; SPM was the box-score prior's earlier name).
 
 Bags (settings.PriorSettings.bags, 10 as shipped): a player's prior is the mean of K answers, each from boosters
 fitted on their own resample of the players (`player_bootstrap`).  How each answer avoids the boosters that saw him
@@ -160,7 +160,7 @@ def _labels(label: pd.DataFrame, column: str) -> pd.DataFrame:
 
 def career_rows(label: pd.DataFrame, rows: pd.DataFrame, column: str, feature_names,
                 panel_columns=PANEL_INPUTS) -> pd.DataFrame:
-    """One career row per labelled player, indexed by player_id; weight = the possessions behind his label."""
+    """One career row per labeled player, indexed by player_id; weight = the possessions behind his label."""
     out = average_over_seasons(rows, feature_names, panel_columns=panel_columns).join(_labels(label, column),
                                                                                       how="inner")
     out = out.dropna(subset=[name for name in out.columns if name not in MISSING_OK])
@@ -222,7 +222,7 @@ def _outside_values(chunks: pd.DataFrame, members: pd.DataFrame, outside: dict, 
 def training_rows(label: pd.DataFrame, rows: pd.DataFrame, column: str, feature_names, chunk_sizes=(1, 2, 3),
                   panel_columns=PANEL_INPUTS, outside: dict | None = None,
                   part_seasons: pd.DataFrame | None = None) -> pd.DataFrame:
-    """The career row and every chunk row of each labelled player, indexed by player_id.
+    """The career row and every chunk row of each labeled player, indexed by player_id.
 
     `label` is step 1's table for this side (player_id, `column`, possessions); `rows` the side's panel rows for
     the training seasons.  The row order (career rows by player, then chunk rows by run key) is what LightGBM
@@ -235,7 +235,7 @@ def training_rows(label: pd.DataFrame, rows: pd.DataFrame, column: str, feature_
     adds none, and the rows are those of before experiment 107 to the byte.
 
     With `outside` ({set of seasons: this side's label table with those seasons left out}, rapm.outside_labels),
-    each chunk row is labelled with the player's RAPM over the seasons outside its own, so its box score and its
+    each chunk row is labeled with the player's RAPM over the seasons outside its own, so its box score and its
     label share no game; a chunk without such a label is dropped, and so is the career row, whose box score covers
     every season (notes/DECISIONS.md, experiment 79).  The weights stay the career label's: each player's chunk
     rows together weigh the possessions behind his career label.
@@ -608,10 +608,10 @@ def season_priors(labels: dict, panel: pd.DataFrame, season: int, unseen, settin
 
     `labels` is step 1's {"O", "D"} tables; `panel` the season panel with the seasons a build may not train on
     removed (`data.seasons.drop_untrainable`) and only rows with possessions;
-    `unseen` the seasons no training row may come from (the rated one, plus its neighbours in the test
+    `unseen` the seasons no training row may come from (the rated one, plus its neighbors in the test
     setting); `params` each side's LightGBM settings.  Inputs: the shipped list, then row_possessions, row_seasons.
     With an era half-life every training row also counts its era kernel (`era_kernel`), averaged over its seasons
-    by possessions like an input.  With `outside` (rapm.outside_labels), every training row is labelled from the
+    by possessions like an input.  With `outside` (rapm.outside_labels), every training row is labeled from the
     seasons outside its own (`training_rows`).  `part_seasons`, the panel of each season so far gated the same way
     (data.panel.trainable_panel_so_far, the shares asked for), adds the part-season rows of the training seasons.
     `rated`, the rated season's own panel rows when `panel` cannot hold them (the season in progress, which no fit

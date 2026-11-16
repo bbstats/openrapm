@@ -159,7 +159,7 @@ def synthetic_design(small_cfg):
 
 def _lineup_league(seed=0, teams=4, players=8, games=240, per_period=6, poss=5, noise=1.2):
     """(stints, truth, roster) of a league with known ratings: random lineups, five possessions a side per stint,
-    points drawn around 1.1 a possession plus the ten players' ratings (offence adds, defence = points allowed).
+    points drawn around 1.1 a possession plus the ten players' ratings (offense adds, defense = points allowed).
 
     `stints` has swap_test.STINT_COLUMNS plus home_team_id / away_team_id; `truth` is (player_id, o, d);
     `roster` maps each team to its players' ids.

@@ -9,7 +9,7 @@ Words used below
     half          1997-2011 ("early") or 2012-2026 ("late").  Everything the selection reads comes from one half: the
                   labels (step 1's RAPM, over that half's seasons only), the training rows and the rated rows, so the
                   build that tests the selected inputs can be scored on the other half, which the selection never saw
-    screen season one of four rated seasons of the half (`SCREEN`); its neighbours are left out of the labels and
+    screen season one of four rated seasons of the half (`SCREEN`); its neighbors are left out of the labels and
                   the training rows, as in the test setting
     cell          one screen season under one assignment of players to the five player folds (0 is the shipped
                   assignment, 1 and 2 regroup the players: box_prior.balanced_player_folds); 4 x 3 = 12 cells
@@ -70,7 +70,7 @@ def pool_inputs() -> list:
 def prepare(half: str, cfg: dict) -> dict:
     """{(side, season): (training rows, rated rows)} for every screen season, with every shipped and pool input.
 
-    The labels are step 1's RAPM over the half's trainable seasons only, the screen season and its neighbours left
+    The labels are step 1's RAPM over the half's trainable seasons only, the screen season and its neighbors left
     out; the rated rows are the screen season's own, each with its label (players without one are dropped)."""
     from openrapm.box_prior import rated_rows, training_rows
     from openrapm.commands.build import accumulate_rapm, unseen_seasons

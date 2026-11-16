@@ -16,12 +16,12 @@ target: alpha reads the seasons either side of the rated one, so nothing scored 
 Words used below
     arm         one table's corrections: a check 70 <out>_alpha.parquet, named on the command line
     eligible    a player-season the loss reads: one team all season, and at least --min_without possessions of that
-                team playing without him in the neighbouring seasons (`trade_set.eligible_corrections`)
+                team playing without him in the neighboring seasons (`trade_set.eligible_corrections`)
     tier        a group of players read on its own.  By default the rated season's possessions (under 500, 500 to
                 1,500, over 1,500).  With --quality, the player's rank by total rating within his season in that
                 table (top 30, 31-90, 91-150, 151-300, 301+; "no rating" when the table has no row for him).  With
                 --movers=1, whether his main team (most box-score minutes, as a franchise) changed between the rated
-                season and the season before or after ("changed teams", "same team", "no neighbour season")
+                season and the season before or after ("changed teams", "same team", "no neighbor season")
     paired      per season, the candidate's loss minus the reference's, on the players both arms have
 
 **The two things the check gets right.**
@@ -30,7 +30,7 @@ Words used below
    number dropped from each arm is printed.
 2. Paired by season.  Thirty seasons per side, candidate minus reference, with the standard error of the mean
    difference.  The level of one arm alone means nothing: each arm's penalty is chosen by its own grid, and the
-   corrections of neighbouring seasons share games.
+   corrections of neighboring seasons share games.
 
 What it cannot tell you: alpha is a three-season average deviation from a one-season rating, so it mixes "the rating
 missed something" with "he was different the next year".  That confound is the same for both arms and cancels in the
@@ -42,7 +42,7 @@ How to read the table: cand and ref are each arm's loss, averaged over seasons; 
 means the candidate leaves a SMALLER correction and is better; se is its standard error; z = mean_diff / se; wins
 counts the seasons the candidate is better.  Example: corrections of +1.0 and -3.0 points per 100 give a loss of
 0.798 x sqrt((1 + 9) / 2) = 1.78.  The noise control noise_regroup2 (the incumbent with its prior's training players
-regrouped at random) reads, on offence, cand 0.2942 against ref 0.2952, mean_diff -0.0010, z -2.21, 21 of 30 seasons:
+regrouped at random) reads, on offense, cand 0.2942 against ref 0.2952, mean_diff -0.0010, z -2.21, 21 of 30 seasons:
 a regrouping alone can reach z -2, so read a candidate beside its noise control (check 135).
 
     python scripts/checks/73_tradeloss.py \\
@@ -93,7 +93,7 @@ def franchise_by_player(season: int, cfg: dict) -> dict:
     scores cannot supply."""
     try:
         main_team = main_team_by_minutes(season, cfg)
-    except Exception:          # a season outside the data: its players have no team, which is "no neighbour season"
+    except Exception:          # a season outside the data: its players have no team, which is "no neighbor season"
         main_team = {}
     players = np.fromiter(main_team.keys(), dtype=np.int64, count=len(main_team))
     franchises = franchise(np.fromiter(main_team.values(), dtype=np.int64, count=len(main_team)),
@@ -102,8 +102,8 @@ def franchise_by_player(season: int, cfg: dict) -> dict:
 
 
 def mover_label(now: int, neighbours: list) -> str:
-    """"changed teams" if a neighbouring season's franchise differs from `now`, "same team" if none does, and "no
-    neighbour season" if he played in neither neighbouring season."""
+    """"changed teams" if a neighboring season's franchise differs from `now`, "same team" if none does, and "no
+    neighbor season" if he played in neither neighboring season."""
     if not neighbours:
         return MOVER_LABELS[2]
     return MOVER_LABELS[0] if any(other != now for other in neighbours) else MOVER_LABELS[1]
@@ -112,7 +112,7 @@ def mover_label(now: int, neighbours: list) -> str:
 def mover_tiers(seasons, cfg: dict) -> pd.Series:
     """(player_id, season) -> whether he changed teams around the rated season.
 
-    The trade set's correction reads exactly the rated season and its two neighbours, so the owner (2026-10-01) asked
+    The trade set's correction reads exactly the rated season and its two neighbors, so the owner (2026-10-01) asked
     for every result split into traded and not traded.
     """
     rated = sorted(set(int(s) for s in seasons))

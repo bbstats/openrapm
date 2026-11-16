@@ -14,7 +14,7 @@ Words used below
                       sum of w (y - c - x b)^2 / (2 sum of w) + alpha (l1 sum of |b| + (1 - l1) / 2 sum of b^2),
                   the objective of scikit-learn's ElasticNet with sample weights; solved coordinate by coordinate on
                   the columns' weighted cross-products (their Gram matrix), never on the rows themselves
-    sums          what a set of rows contributes to the Gram matrix and its neighbours (`Sums`); the sums of a set of
+    sums          what a set of rows contributes to the Gram matrix and its neighbors (`Sums`); the sums of a set of
                   players' rows are subtracted from the training rows' to fit without them, so a held-out player's
                   line never saw his label
 

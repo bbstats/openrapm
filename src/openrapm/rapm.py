@@ -1,26 +1,26 @@
 """Step 1 of 5: plain RAPM, and the label the box-score prior learns from.
 
-RAPM (regularised adjusted plus-minus) asks of every stint: given the ten players on the court, how many points
-per 100 possessions did the offence score?  Five players share every possession, so one stint cannot say who
+RAPM (regularized adjusted plus-minus) asks of every stint: given the ten players on the court, how many points
+per 100 possessions did the offense score?  Five players share every possession, so one stint cannot say who
 was good; thousands of stints with different lineups can, once a ridge penalty keeps the answer from chasing
 noise.
 
 Words used below
     stint       a stretch of play with the same ten players on the court
-    row         one stint seen from one side: five players on offence, five on defence
+    row         one stint seen from one side: five players on offense, five on defense
     target      what the ridge explains for each row, y = 100 x adjusted points / possessions; the row's weight
                 w is its possessions.  One adjustment per side ships (settings.Targets):
-                  offence, "points_with_expected_free_throws": points - made free throws + expected free
+                  offense, "points_with_expected_free_throws": points - made free throws + expected free
                       throws, each free throw counted at the shooter's padded free-throw %, that game's own
                       attempts left out
-                  defence, "points_with_expected_opponent_threes_late_as_scored": the same free-throw
+                  defense, "points_with_expected_opponent_threes_late_as_scored": the same free-throw
                       adjustment, and three quarters of the shooters' three-point luck taken off: points - 3 x
                       0.75 x (threes made - threes expected), threes expected = attempts x the shooter's
                       three-point % from the other half of the season's games, padded toward the league by 450
                       attempts, the threes of a period's last two seconds left out of both counts, so they count
                       as they happened (experiment 95); then one number per season rescales the target so the
                       season's total equals the points actually scored (data/shots.align)
-    design      one column per player per side (offence, defence) plus the context columns
+    design      one column per player per side (offense, defense) plus the context columns
     context     per-season intercepts, home court, playoffs, playoff home court, garbage time, score margin
                 (clipped at +-25), margin x share of the game left
     raw impact  the coefficient an unpenalised fit would give a player
@@ -28,29 +28,29 @@ Words used below
                 his raw impact
     rated season    the season whose ratings are being built
     unseen seasons  the seasons a label may not use: the rated one, and in the test setting its two
-                neighbours as well
+                neighbors as well
     label       a player's RAPM from one ridge fit over every season except the unseen ones: ONE coefficient
                 per player per side for all those seasons together, his career level, assumed constant from
                 season to season.  Step 2's prior learns to predict it
     team-season flags   optional (`LabelSettings.team_offense_penalty`, `team_defense_penalty`; off when both are
                 0, the shipped setting): two more context blocks per season, one column per team that season.
-                The attacking flag is 1 on the rows that team is on offence, the defending flag 1 on the rows it is
-                on defence.  Each block has its own penalty; the flags' values are not part of any label.  Inside
+                The attacking flag is 1 on the rows that team is on offense, the defending flag 1 on the rows it is
+                on defense.  Each block has its own penalty; the flags' values are not part of any label.  Inside
                 one season a flag is the same as "every player on that team +x", so only players who change teams
                 between seasons tell the two apart (notes/DECISIONS.md, experiment 60)
 
 The fit, for one set of seasons:
 
-    minimise   sum over rows  w (y - B theta)^2  +  lambda_O |theta_O|^2  +  lambda_D |theta_D|^2
+    minimize   sum over rows  w (y - B theta)^2  +  lambda_O |theta_O|^2  +  lambda_D |theta_D|^2
     solution   (G + Lambda) theta = b,     G = B' W B,   b = B' W y
 
     B          the design matrix, one line per row: [Z_O | Z_D | C]
-    Z_O, Z_D   the player columns: Z_O[row, j] = 1 when player j is one of the five on offence, Z_D the same
-               for the five on defence; Z = [Z_O | Z_D]
+    Z_O, Z_D   the player columns: Z_O[row, j] = 1 when player j is one of the five on offense, Z_D the same
+               for the five on defense; Z = [Z_O | Z_D]
     C          the context columns
     y, w       each row's target and weight (its possessions); W the diagonal matrix of the weights
     theta      the coefficients: theta_O on Z_O, theta_D on Z_D, then gamma on C
-    lambda_O, lambda_D   the offence and defence penalties (40,000 each); the context is not penalised
+    lambda_O, lambda_D   the offense and defense penalties (40,000 each); the context is not penalized
     Lambda     the diagonal matrix of per-column penalties: lambda_O, lambda_D, 0 (`block_penalty`)
     G, b       the Gram matrix and right-hand side of the weighted least-squares normal equations
 
@@ -64,7 +64,7 @@ Example: with lambda = 40,000, a player with 54,000 career possessions keeps 57%
 The defensive label is "un-shrunk" (`unshrink`) before the prior learns from it, so long and short careers sit on
 one scale; the offensive label is not.  Un-shrinking both sides helped the year-over-year test (paired difference
 in team-game mean squared error -0.84, z -3.77) but made the order within each side worse (each side rescaled:
-+1.79, z +7.75, better in 8 of 56) and cut the consensus agreement from 0.771 to 0.680.  Un-shrinking defence alone
++1.79, z +7.75, better in 8 of 56) and cut the consensus agreement from 0.771 to 0.680.  Un-shrinking defense alone
 passed every check (-0.42, z -5.24, better in 43 of 56; notes/DECISIONS.md, experiment 22).
 """
 from __future__ import annotations
@@ -122,7 +122,7 @@ def normal_equations(players, context, target, weights) -> NormalEquations:
 
 
 def player_possessions(players, possessions, n_players: int) -> np.ndarray:
-    """Each player's possessions in the design: the possessions of the rows he is on offence in.
+    """Each player's possessions in the design: the possessions of the rows he is on offense in.
 
     Only one side is counted.  His defensive possessions are within a few of the offensive ones, and counting
     both would credit every player with about twice the trips he was on the court for.
@@ -133,8 +133,8 @@ def player_possessions(players, possessions, n_players: int) -> np.ndarray:
 def block_penalty(sizes, penalties) -> np.ndarray:
     """One penalty per column from one penalty per block.
 
-    Example: block sizes (3, 3, 2) with penalties (40000, 40000, 0) give three columns at 40,000 for offence,
-    three at 40,000 for defence and two context columns at 0.
+    Example: block sizes (3, 3, 2) with penalties (40000, 40000, 0) give three columns at 40,000 for offense,
+    three at 40,000 for defense and two context columns at 0.
     """
     return np.concatenate([np.full(size, penalty) for size, penalty in zip(sizes, penalties)])
 
@@ -186,7 +186,7 @@ def team_flags(team_off, team_def) -> tuple[np.ndarray, np.ndarray]:
 class SeasonSums:
     """Each season's normal equations, stored once; any set of seasons can then be left out and solved.
 
-    Columns: [offence of every player seen | defence of every player seen | each season's context].  A player's
+    Columns: [offense of every player seen | defense of every player seen | each season's context].  A player's
     column is fixed the first time a season brings him, so seasons must be added in ascending order for the
     columns (and so the bits of every solve) to match the published ratings.  A season added with its rows' teams
     carries its team-season flags at the end of its context: [plain context | attacking flags | defending flags].
@@ -309,7 +309,7 @@ class SeasonSums:
     def penalty(self, unseen=(), penalties=(40000.0, 40000.0, 0.0), team_penalties=(0.0, 0.0)) -> np.ndarray:
         """One penalty per column of `assemble(unseen)`.
 
-        penalties = (offence, defence, context) for the players and the plain context; team_penalties = (attacking,
+        penalties = (offense, defense, context) for the players and the plain context; team_penalties = (attacking,
         defending) for the team-season flags.  Flags need both above 0: unpenalised, a season's attacking flags (and
         its defending flags) add up to its intercept and the solve is singular.
         """
@@ -342,7 +342,7 @@ class SeasonSums:
         return pd.concat(frames, ignore_index=True).astype(columns) if frames else pd.DataFrame(columns=columns)
 
     def solve(self, unseen=(), penalties=(40000.0, 40000.0, 0.0), team_penalties=(0.0, 0.0)):
-        """(theta, each player's possessions) over the seasons not in `unseen`; theta is [offence | defence | each
+        """(theta, each player's possessions) over the seasons not in `unseen`; theta is [offense | defense | each
         kept season's context], the layout of `assemble`."""
         gram, rhs, possessions, _ = self.assemble(unseen)
         return solve_ridge(gram, rhs, self.penalty(unseen, penalties, team_penalties)), possessions
@@ -350,8 +350,8 @@ class SeasonSums:
     def ratings(self, unseen=(), penalties=(40000.0, 40000.0, 0.0), team_penalties=(0.0, 0.0)) -> pd.DataFrame:
         """One row per player with at least `min_possessions` in the seasons used (every season not in `unseen`).
 
-        penalties = (offence, defence, context); team_penalties = (attacking, defending), read only when a season
-        carries team-season flags.  Columns: player_id, offense, defense (raw sign: defence is points allowed, lower
+        penalties = (offense, defense, context); team_penalties = (attacking, defending), read only when a season
+        carries team-season flags.  Columns: player_id, offense, defense (raw sign: defense is points allowed, lower
         is better), possessions.
         """
         coefficients, possessions = self.solve(unseen, penalties, team_penalties)
@@ -399,12 +399,12 @@ def unshrink(ratings: pd.DataFrame, column: str, penalty: float, full_trust_poss
 
 
 def career_labels(sums: dict, unseen, label_settings, targets) -> dict:
-    """{"O": offence labels, "D": defence labels}: each side's RAPM over every season not in `unseen`.
+    """{"O": offense labels, "D": defense labels}: each side's RAPM over every season not in `unseen`.
 
     `sums` maps a target name to its `SeasonSums`; `label_settings` is `settings.LabelSettings` and `targets`
-    `settings.Targets`.  The offence label is the `offense` column of the fit on the offence target, the defence
-    label the `defense` column of the fit on the defence target.  A column named in
-    `label_settings.unshrink_columns` (shipped: defence only; notes/DECISIONS.md, experiment 22) is un-shrunk.
+    `settings.Targets`.  The offense label is the `offense` column of the fit on the offense target, the defense
+    label the `defense` column of the fit on the defense target.  A column named in
+    `label_settings.unshrink_columns` (shipped: defense only; notes/DECISIONS.md, experiment 22) is un-shrunk.
 
     With team-season flags on (`label_settings.team_offense_penalty` and `team_defense_penalty` above 0), every
     `SeasonSums` must have been built with each row's teams; with them off, without.
@@ -474,7 +474,7 @@ class LeaveOut:
         self.theta = self.inverse @ self.rhs
 
     def solve(self, out) -> tuple[np.ndarray, np.ndarray]:
-        """(theta, possessions): the player coefficients, [offence | defence], and each player's possessions with
+        """(theta, possessions): the player coefficients, [offense | defense], and each player's possessions with
         the seasons `out` left out as well."""
         removed = [self.parts[season] for season in sorted(out) if season in self.parts]
         if not removed:
@@ -502,14 +502,14 @@ class LeaveOut:
 
 
 def outside_labels(sums: dict, unseen, season_sets, label_settings, targets) -> dict:
-    """{seasons: {"O": offence labels, "D": defence labels}} for each set of seasons in `season_sets`: what
+    """{seasons: {"O": offense labels, "D": defense labels}} for each set of seasons in `season_sets`: what
     `career_labels` gives with those seasons left out as well as `unseen`, through `LeaveOut`.
 
-    A training row of the prior that averages a player's box score over some seasons is labelled with his RAPM over
+    A training row of the prior that averages a player's box score over some seasons is labeled with his RAPM over
     the other seasons, so the box score and the label it is fitted to share no game (the owner, 2026-10-19: "try it
     on the prior first"; notes/DECISIONS.md, experiment 79; experiment 25 the first try, 2026-09-29).
 
-    Example: rating 2010 in the test setting, the chunk row of a player's 2003 and 2004 is labelled with his RAPM
+    Example: rating 2010 in the test setting, the chunk row of a player's 2003 and 2004 is labeled with his RAPM
     over every season but 2003, 2004, 2009, 2010 and 2011.
     """
     penalties = (label_settings.offense_penalty, label_settings.defense_penalty, label_settings.context_penalty)
@@ -544,14 +544,14 @@ NO_LABELS = ("player_id", "offense", "defense", "possessions")
 
 
 def nearest_labels(sums: dict, unseen, season_sets, label_settings, targets, cache: dict | None = None) -> dict:
-    """{seasons: {"O": offence labels, "D": defence labels}} for each set of seasons in `season_sets`: `career_labels`
+    """{seasons: {"O": offense labels, "D": defense labels}} for each set of seasons in `season_sets`: `career_labels`
     over only the seasons right next to the set (`neighbour_seasons`), so a row's label describes the player at about
     the row's own age and shares no game with its box score (notes/DECISIONS.md, experiment 83; the owner, 2026-10-19:
-    "are there aging/censoring effects in the prior fits themselves?").  A set with no neighbour gets empty tables, so
-    its rows have no label and are dropped.  `cache`, {neighbour seasons: labels}, may be shared by every rated season
+    "are there aging/censoring effects in the prior fits themselves?").  A set with no neighbor gets empty tables, so
+    its rows have no label and are dropped.  `cache`, {neighbor seasons: labels}, may be shared by every rated season
     of a run: the labels over a set of seasons do not depend on which season is being rated.
 
-    Example: a player's chunk row of 2003-2004 is labelled with his RAPM fitted on 2002 and 2005 alone.
+    Example: a player's chunk row of 2003-2004 is labeled with his RAPM fitted on 2002 and 2005 alone.
     """
     available = {int(season) for season in sums[targets.offence].seasons}
     unseen = {int(season) for season in unseen}

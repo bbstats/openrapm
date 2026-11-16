@@ -173,7 +173,7 @@ def test_exposure_counts_games_the_team_played_without_him(world):
     team_of_player = dict(zip(truth[truth.season == rated].player_id.astype(int),
                               truth[truth.season == rated].team.astype(int)))
     # in the simulator a game is between two teams and every player belongs to one, so the team on
-    # offence is the modal team of the five with the largest shares on that side
+    # offense is the modal team of the five with the largest shares on that side
     n = ts.n_players
     team_of = np.array([team_of_player.get(int(p), -1) for p in ts.player_ids])
     dense_off = np.asarray(ts.Z[:, :n].todense())
@@ -229,7 +229,7 @@ def test_trade_loss_reads_only_players_with_evidence():
 
 
 def _team_of_rows(sim, ts):
-    """The team on offence and the team defending, per team-game row, from the simulator's truth.
+    """The team on offense and the team defending, per team-game row, from the simulator's truth.
 
     The simulator gives every player a team per season, so the team on a side is the modal team of the
     men with a share on that side.
@@ -254,7 +254,7 @@ def test_team_columns_name_one_team_per_side_per_row(world):
     rows = _team_of_rows(sim, ts)
     per_season, names = trade_set.team_columns(ts, rows, per_season=True)
     pooled, pooled_names = trade_set.team_columns(ts, rows, per_season=False)
-    # exactly two entries per row: the team on offence and the team defending
+    # exactly two entries per row: the team on offense and the team defending
     assert np.allclose(np.asarray(per_season.sum(axis=1)).ravel(), 2.0)
     assert np.allclose(np.asarray(pooled.sum(axis=1)).ravel(), 2.0)
     # one column per team per side when pooled, times the number of seasons when not
@@ -296,7 +296,7 @@ def test_team_terms_take_the_team_level_away_from_the_players(world):
 
 
 def test_trade_loss_with_no_evidence_returns_the_schema_not_an_empty_frame():
-    """`--block=0` fits one season alone, so nobody's team plays a neighbouring game without him.
+    """`--block=0` fits one season alone, so nobody's team plays a neighboring game without him.
     That is an empty answer, not a failure -- but a frame with no COLUMNS reaches the caller as
     `KeyError: 'side'`, which reads like a broken fit.  scripts/checks/70_tradeset.py groups this by side."""
     empty = pd.DataFrame({"eligible": pd.Series(dtype=bool), "without_poss": pd.Series(dtype=float),

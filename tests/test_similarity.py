@@ -1,4 +1,4 @@
-"""The similarity page's model (src/openrapm/similarity.py): the standardised inputs, the distance, the two lists, the
+"""The similarity page's model (src/openrapm/similarity.py): the standardized inputs, the distance, the two lists, the
 own-season ranks and the inputs themselves, on numbers whose answers are known by construction."""
 import numpy as np
 import pandas as pd
@@ -118,7 +118,7 @@ SHARED = set(ROLE) | set(CAREER) | set(BIO)          # equal on a player's two r
 
 
 def _panel(players=(11, 12, 13), seasons=(2001, 2002, 2003), seed=7):
-    """A made-up season panel: one offence and one defence row per player-season, every panel input filled; the
+    """A made-up season panel: one offense and one defense row per player-season, every panel input filled; the
     role, career and body columns equal on both rows, the rates different."""
     rng = np.random.default_rng(seed)
     rows = []

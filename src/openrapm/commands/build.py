@@ -66,7 +66,7 @@ from .wins import REGULAR_COLUMNS, add_wins, load_regular, with_seasons_so_far, 
 
 SIDES = ("O", "D")
 NEAREST_UNSHRINK = ("offense", "defense")     # experiment 83's labels from the seasons next to a row, both un-shrunk
-SIDE_WORDS = {"offense": "offence", "defense": "defence"}     # the tables' side keys as printed, offence first
+SIDE_WORDS = {"offense": "offence", "defense": "defence"}     # the tables' side keys as printed, offense first
 
 
 def check_seasons(seasons, cfg: dict) -> list:
@@ -232,7 +232,8 @@ def rated_second_prior(cfg: dict, season: int, panel: pd.DataFrame, priors: dict
 
 
 def with_box_adj(table: pd.DataFrame, second: SeasonSecondPrior | None, n_folds: int) -> pd.DataFrame:
-    """One season's centred step-3 table with the part of each prior learned from lineup swaps, in the prior's published
+    """One season's centered step-3 table with the part of each prior learned from lineup swaps, in the prior's
+    published
     units and sign: the table's prior scale x second_prior.adjustments.  A player the line does not read has none, as he
     has no prior (prior_rapm.aligned_prior), and without the second prior every player has none."""
     if second is None:
@@ -252,7 +253,7 @@ def line_words(coefficients: dict, names) -> str:
 
 
 def row_label_tables(sums: dict, panel: pd.DataFrame, unseen, settings, cache: dict | None = None) -> dict | None:
-    """The tables the prior's chunk rows are labelled from, by `settings.prior.row_labels`: None for "career" (every
+    """The tables the prior's chunk rows are labeled from, by `settings.prior.row_labels`: None for "career" (every
     row carries the career label), the seasons outside each row for "outside" (experiment 79), the seasons right next
     to it for "nearest" (experiment 83, `cache` shared across the run's rated seasons)."""
     if settings.prior.row_labels == "outside":
@@ -345,7 +346,7 @@ def rate_one_season(season: int, sums: dict, panel: pd.DataFrame, designs: Desig
                     phases=SEASON_PHASES):
     """The end of step 1 (labels), step 2 (priors) and step 3 (ridge) for one season.
 
-    Returns (the season's centred table in raw sign, {"O", "D"} its SidePriors, its unseen seasons, its
+    Returns (the season's centered table in raw sign, {"O", "D"} its SidePriors, its unseen seasons, its
     SeasonSecondPrior or None).  With `lines` (the second prior on, settings.PriorSettings.second_prior) step 3 reads
     the second prior instead of the box-score prior; `part_seasons` (`part_season_panel`) adds the box-score prior's
     part-season rows.  A season in `progress` is rated from its own rows there, the priors told the share played.
@@ -503,7 +504,7 @@ def rate_seasons(seasons, sums: dict, panel: pd.DataFrame, designs: DesignCache,
                  part_seasons: pd.DataFrame | None = None,
                  progress: SeasonsInProgress | None = None, games: dict | None = None) -> tuple[list, dict, list]:
     """`rate_one_season` for each season, or `rate_one_season_by_game` with the box-score prior game by game (`games`,
-    each season's game rows): ([one centred table per season], {season: {side: saved boosters}}, [each season's game
+    each season's game rows): ([one centered table per season], {season: {side: saved boosters}}, [each season's game
     rows, when game by game]).
 
     The boosters are kept only when `keep_models`; thirty seasons of them are about a gigabyte.
@@ -557,7 +558,7 @@ def models_meta(settings, name: str, argv) -> dict:
 
 
 def spread_lines(regulars: pd.DataFrame) -> list:
-    """The standard deviation of each part of the rating, offence and defence, one line per part.
+    """The standard deviation of each part of the rating, offense and defense, one line per part.
 
     After step 5 a rating is prior + u + c, so the swap adjustment c gets a line of its own.
     """
@@ -785,7 +786,7 @@ def extrapolation_folds(cfg: dict, shrink) -> list:
 
 def step4_multipliers(seasons, folds: list, shrink, second_folds: list | None = None) -> pd.DataFrame:
     """`prior_shrink.multipliers_by_season` for `seasons`, read to a full season with `second_folds` when given
-    (`prior_shrink.full_season_multipliers`), the defence factor applied, with the fold folders and the first and
+    (`prior_shrink.full_season_multipliers`), the defense factor applied, with the fold folders and the first and
     last fold season read, so a step-4 table can be traced to the folds that shrank it."""
     fold_seasons = sorted({fold.season for fold in folds})
     if second_folds:
@@ -824,8 +825,8 @@ def within_layer_multipliers(cfg: dict, seasons, folds: list, where: dict, shrin
                              second_folds: list | None = None) -> pd.DataFrame:
     """season and the four prior_shrink.WITHIN_COLUMNS: the within layer's multipliers on `folds`' held-back stints,
     each season's from the fold seasons `shrink.within_nearest` names (the team layer's `nearest` when None), read to
-    a full season with `second_folds` as the team layer's are, then times settings.shrink.within_factors (offence,
-    defence) and the defensive two times the defence factor."""
+    a full season with `second_folds` as the team layer's are, then times settings.shrink.within_factors (offense,
+    defense) and the defensive two times the defense factor."""
     nearest = shrink.nearest if shrink.within_nearest is None else int(shrink.within_nearest)
     multipliers = prior_shrink.within_multipliers_by_season(seasons, held_back_stint_equations(cfg, folds, where),
                                                             shrink.rule, nearest)
@@ -1176,7 +1177,7 @@ def run_build(cfg: dict, settings, seasons, name: str, save_models: str | None =
     folds, where = step4_folds(cfg, settings.shrink)
     step4, multipliers = shrink_seasons(cfg, step3, settings, folds, where)
     final, _, types = swap_seasons(cfg, step4, settings, folds, where, multipliers)
-    # the test setting's tables are scored, never shown, and nothing fitted for a season may see its neighbours there
+    # the test setting's tables are scored, never shown, and nothing fitted for a season may see its neighbors there
     regular, wins_summary = None, None
     if settings.exclude_neighbours == 0:
         # a new build is a new model, so nothing of a run stopped before it may be reused

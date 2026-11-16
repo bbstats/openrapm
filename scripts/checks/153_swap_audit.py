@@ -24,7 +24,7 @@ Words used below
                    the folds outputs/within/bags10_early and bags10_within
     fold           one season rated from three quarters of its games, the fit games, and scored on the quarter held
                    back (data/within_folds.py): 30 seasons x 12 folds
-    type features  step 5's 22 inputs (swap_adjust.TYPE_FEATURES), standardised with the whole table's means and
+    type features  step 5's 22 inputs (swap_adjust.TYPE_FEATURES), standardized with the whole table's means and
                    standard deviations, so a fold's player is read on the scale the type model was fitted on
     arm            a version of step 5, built the same way on a whole-season table and on every fold:
                        step5            as shipped
@@ -107,7 +107,7 @@ from openrapm.features import BOX_RATES
 from openrapm.prior_shrink import multipliers_by_season
 from openrapm.settings import TEST, factor_for
 
-# the test setting: the type model never trains on the rated season or its neighbours.  Step 5 is off since experiment
+# the test setting: the type model never trains on the rated season or its neighbors.  Step 5 is off since experiment
 # 82 (adopted 2026-10-20); this check audits it at the half strength it was built and shipped with
 SWAP = replace(TEST.swap, applied_share=0.5)
 TOLERANCE = 1e-9             # stage 0: the largest move of a rating the reproduction allows
@@ -173,7 +173,7 @@ def season_rows(cfg: dict, season: int) -> pd.DataFrame:
 
 def feature_scale(panel: pd.DataFrame, table: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
     """(means, population standard deviations) of the type features over every player-season of both the panel and
-    the table: what swap_adjust.type_features standardises with."""
+    the table: what swap_adjust.type_features standardizes with."""
     offence = panel[panel.side == "O"][["player_id", "season", *AUDITED_PANEL]]
     both = offence.merge(table[["player_id", "season", *sa.PRIOR_FEATURES]], on=["player_id", "season"], how="inner")
     values = both[AUDITED_FEATURES].astype(float)
@@ -202,7 +202,7 @@ class TypeModel:
     final: pd.DataFrame          # the step-5 test table as the build wrote it
     centre: pd.Series            # the type features' means and standard deviations over the table
     scale: pd.Series
-    features: pd.DataFrame       # standardised, indexed (player_id, season)
+    features: pd.DataFrame       # standardized, indexed (player_id, season)
     swaps: dict                  # {season: swap_adjust.SeasonSwaps} against the step-4 table
     trainable: set
     betas: dict                  # season_betas
@@ -340,7 +340,7 @@ class SeasonInputs:
     """What step 5 reads for one whole season or one fold."""
     table: pd.DataFrame          # step-4 rows: player_id, season, rating_off, rating_def, prior_off, prior_def,
                                  # poss_off, poss_def (positive good), and whatever else the table carries
-    features: pd.DataFrame       # the standardised type features, by player_id
+    features: pd.DataFrame       # the standardized type features, by player_id
     leak_features: pd.DataFrame | None   # the whole season's, for the leak control on a fold; None on a whole season
     team_poss: dict              # {side: player_id, team, poss}
     main_team: pd.Series         # (player_id, season) -> team
@@ -394,7 +394,7 @@ def unmatched(mine: pd.DataFrame, theirs: pd.DataFrame) -> int:
 # --------------------------------------------------------------------------------------------------- the folds
 def fold_factors(checks: Checks, folds: list) -> dict:
     """{season: (m_O, m_D, g_O, g_D)}, step 4's factors fitted as check 151 fits them (the 8 nearest fold seasons, the
-    test rule), the defensive ones times the shipped defence factor of their season."""
+    test rule), the defensive ones times the shipped defense factor of their season."""
     wowy = checks.wowy
     table = multipliers_by_season(sorted({fold.season for fold in folds}), folds, "test", wowy.NEAREST,
                                   free_games=wowy.FREE_GAMES).set_index("season")
@@ -406,7 +406,7 @@ def fold_factors(checks: Checks, folds: list) -> dict:
 
 
 def fold_features(model: TypeModel, rows_offence: pd.DataFrame, table: pd.DataFrame) -> pd.DataFrame:
-    """player_id -> the standardised type features of a fold's rated players, on the audited list's scale
+    """player_id -> the standardized type features of a fold's rated players, on the audited list's scale
     (swap_adjust.fold_type_features)."""
     return sa.fold_type_features(with_age_curve(rows_offence), table, model.centre, model.scale)
 
@@ -683,7 +683,7 @@ def reproduce_from_build(model: TypeModel) -> tuple[float, float]:
 def whole_season_world(cfg: dict, model: TypeModel, season: int, factors: tuple) -> tuple[SeasonInputs, float, int]:
     """The season handed to the fold code with every game as its fit games: (its inputs, how far its step 4 is from
     the step-4 table, the table's players it does not rate).  The fold code rates a player only with offensive
-    possessions; the table also keeps one who played defence alone (2010: one player, one possession)."""
+    possessions; the table also keeps one who played defense alone (2010: one player, one possession)."""
     within = resolve(cfg, "within")
     folder = next(within / f"{model.name}_{part}" for part in ("early", "within")
                   if (within / f"{model.name}_{part}" / f"players_{season}_all.parquet").exists())
@@ -936,7 +936,7 @@ def subset_coefficients(parts: dict) -> dict:
 
 
 def side_table(side: str, parts: dict, refits: dict) -> pd.DataFrame:
-    """One row per type feature: every reading of stage 3 for one side.  Defence is shown positive good: + means a
+    """One row per type feature: every reading of stage 3 for one side.  Defense is shown positive good: + means a
     player with more of the feature than the teammate he swaps with allowed fewer points than the ratings said."""
     sign = 1.0 if side == "offense" else -1.0
     beta, se = jackknife(parts)

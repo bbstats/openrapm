@@ -67,7 +67,7 @@ def test_a_trip_at_one_end_is_read_against_that_ends_possessions(check):
     assert miss.tolist() == pytest.approx([0.0, 0.0, 0.0]) and weight.tolist() == [0.5, 0.5, 0.0]
     rated = ratings.assign(rating_off=lambda frame: np.where(frame.player_id == 1, 10.0, 0.0))
     assert check.stint_misses(stints, rated)[0][0] == pytest.approx(-100.0 * 0.1 / 0.5)      # 1.2 expected, 1.1 scored
-    assert check.stint_misses(stints, rated)[0][1] == pytest.approx(0.0)                     # he was not on offence
+    assert check.stint_misses(stints, rated)[0][1] == pytest.approx(0.0)                     # he was not on offense
 
 
 def test_a_planted_skill_comes_back_and_no_skill_stays_inside_its_standard_errors(check):

@@ -1,7 +1,7 @@
 """Check 138, the held-out audit: on games the ratings never saw, are players who are high on some input rated too
 low or too high?
 
-A rating system can lean on an input: give big men too little credit on defence, say, or steals too much.  If it
+A rating system can lean on an input: give big men too little credit on defense, say, or steals too much.  If it
 does, the games those players play miss the ratings' prediction in one direction.  This check measures that for
 every input a box-score prior could read, and for every group of inputs that move together, on each season's own
 held-back games.  Every Robustness-pass build was judged by it (notes/DECISIONS.md, "The Robustness pass").
@@ -9,7 +9,7 @@ held-back games.  Every Robustness-pass build was judged by it (notes/DECISIONS.
 Words used below
     fold          one season rated from three quarters of its games, the other quarter held back
                   (`openrapm folds`; read back by openrapm.data.within_folds)
-    team-game     one team's offence in one held-back game: its points per 100 possessions as scored, weighted
+    team-game     one team's offense in one held-back game: its points per 100 possessions as scored, weighted
                   by its possessions
     prediction    each rated player's share of the team-game's possessions times his rating, a stand-in rating
                   for players without one (held at the fold's own value), and the level and home edge, fitted
@@ -33,7 +33,7 @@ The fit, per side, pooled over every fold (weighted least squares, weight = poss
     miss_g  =  level_f + home_f  +  sign x  sum over rated players i of  share_gi x correction(axis_i)
 
     g a team-game and f its fold; share_gi player i's share of g's possessions (each side's shares sum to 5);
-    sign +1 on offence and -1 on defence (a correction raises a rating, and on defence that lowers points allowed)
+    sign +1 on offense and -1 on defense (a correction raises a rating, and on defense that lowers points allowed)
 
 Three shapes of correction, each read per side on its own:
     line      slope x normal score: points per 100 per standard deviation of the axis
@@ -41,9 +41,9 @@ Three shapes of correction, each read per side on its own:
     tenths    one level per possession-weighted tenth of the axis: the top tenth minus the bottom tenth, points
               per 100
 
-Example: on the weightfix folds (2017-2026) the defence row for the group "rebounds, defensive rebounds, height
+Example: on the weightfix folds (2017-2026) the defense row for the group "rebounds, defensive rebounds, height
 (+1 more)" reads +1.77 with line z +8.2.  In held-back games the players in that group's top tenth are under-rated
-on defence by 1.77 points per 100 against its bottom tenth, and the line sits 8.2 null standard deviations from its
+on defense by 1.77 points per 100 against its bottom tenth, and the line sits 8.2 null standard deviations from its
 null mean, past the threshold of 3.64, so (with the other checks below) the lean COUNTS.
 
 The yardstick.  The z and the threshold come from a null that moves whole careers: every player is handed another
@@ -101,12 +101,12 @@ Reads   outputs/within/<tag>/ (each fold's json, players parquet and test npz), 
         panel (gated by seasons.drop_untrainable), the trade set's alpha table, and with --draws=0 the earlier
         audit's outputs/<name>_thresholds.json and outputs/csv/<name>_null.csv.
 Writes  outputs/csv/<out>.csv (every reading), <out>_tenths.csv (each tenth's level), <out>_summary.csv (one line
-        per test and side at the decision stage, then offence plus defence); with a new null, <out>_null.csv and
+        per test and side at the decision stage, then offense plus defense); with a new null, <out>_null.csv and
         outputs/<out>_thresholds.json; with --reference, <out>_paired.csv and outputs/<out>_paired_error.json; with
         --shares, <out>_shares.csv.
 
 The console: per side, the 30 largest tenths readings (+ = under-rated), each with its line z, bend z and joint z
-(all groups' lines fitted together), marked COUNTS when the rule above holds; then offence plus defence (is the lean
+(all groups' lines fitted together), marked COUNTS when the rule above holds; then offense plus defense (is the lean
 real, or credit landing on the wrong side?); then, paired, the change in held-out team-game error (negative: the
 candidate predicts better) and the 20 largest changes in a lean.
 
@@ -173,7 +173,7 @@ PARTS = "play-by-play parts"
 GROUPED = tuple(code for name, codes in CLASSES.items() if name != "team context" for code in codes)
 CLASS_OF = {code: name for name, codes in CLASSES.items() for code in codes}
 SIDES = ("O", "D")
-SIGN = {"O": 1.0, "D": -1.0}           # a correction raises a player's rating; on defence that lowers points allowed
+SIGN = {"O": 1.0, "D": -1.0}           # a correction raises a player's rating; on defense that lowers points allowed
 CUTS = (0.4, 0.5, 0.6)
 GROUP_MIN_POSS = 500.0
 BENCH_POSS = 500                        # the nuisance version's bench: players under 500 possessions on the side
@@ -214,7 +214,7 @@ def era_of(season: int) -> str:
 
 
 def poss_of(rows: pd.DataFrame, side: str) -> np.ndarray:
-    """Each rated player's possessions on one side ("O" offence, "D" defence)."""
+    """Each rated player's possessions on one side ("O" offense, "D" defense)."""
     return rows[("poss_off" if side == "O" else "poss_def")].to_numpy(float)
 
 
@@ -275,7 +275,7 @@ def normal_score(p: np.ndarray) -> np.ndarray:
 
 
 def centre_columns(values: np.ndarray, weights: np.ndarray) -> np.ndarray:
-    """Each column's possession-weighted mean taken out (a correction is centred within its fold and side)."""
+    """Each column's possession-weighted mean taken out (a correction is centered within its fold and side)."""
     values = np.asarray(values, dtype=float)
     return values - (weights @ values) / weights.sum()
 
@@ -443,7 +443,7 @@ def _project(root_weight: np.ndarray, basis: np.ndarray, values) -> np.ndarray:
 class RatingParts:
     """A fold's ratings split into parts, per rated player and summed into each test team-game.
 
-    Defence in the team-game sums is in points allowed: share x (-rating_def).  `stand_in` is what the players
+    Defense in the team-game sums is in points allowed: share x (-rating_def).  `stand_in` is what the players
     without a rating add to each team-game (the fold's base prediction minus the rated players' four parts).
     """
     prior_off: np.ndarray
@@ -470,7 +470,7 @@ class RatingParts:
 
 def correction_parts(fold, lines: list | None) -> dict:
     """`--correction` (the retired script 140's group correction): per side, each line times the player's axis
-    score on this fold's own inputs, centred; zero without one."""
+    score on this fold's own inputs, centered; zero without one."""
     add = {side: np.zeros(len(fold.rows[side])) for side in SIDES}
     for side in SIDES:
         axes = [(test, slope) for test, line_side, slope in (lines or []) if line_side == side]
@@ -539,7 +539,7 @@ class AuditFold:
     """One fold, reduced to the small matrices every regression is read from.
 
     With the level and home edge projected out (weighted), let Z~ be a side's possession shares, projected, and B a
-    correction basis (one row per rated player of the side, centred).  The lean's columns are X = sign Z~ B, so
+    correction basis (one row per rated player of the side, centered).  The lean's columns are X = sign Z~ B, so
 
         X'X = B' H B,   X'r = sign B' g,   X'N = sign B' M,   with  H = Z~'Z~,  g = Z~' r,  M = Z~' N
 
@@ -617,7 +617,7 @@ def swap_ratings(directory: Path) -> dict | None:
 
 def check_leaks(path: Path, tag: str, stem: str) -> None:
     """Stop on a fold whose json records a failed leak check (`openrapm folds` checks, for example, that the fit
-    and test games are disjoint and that the prior models never trained on the season or its neighbours)."""
+    and test games are disjoint and that the prior models never trained on the season or its neighbors)."""
     info = json.loads(path.read_text())
     failed = [name for name, passed in info["checks"].items() if isinstance(passed, bool) and not passed]
     assert not failed, f"{tag} fold {stem}: leak checks failed {failed}"
@@ -677,7 +677,7 @@ def statistic(kind: str, beta: np.ndarray) -> float:
 
 
 def centred_basis(fold: AuditFold, side: str, tests: list) -> np.ndarray:
-    """Players x NCOL x tests: every test's basis block, centred within the fold and side."""
+    """Players x NCOL x tests: every test's basis block, centered within the fold and side."""
     rows, weights = fold.rows[side], fold.weights[side]
     shared = axis_scores(rows, weights, tests)
     broken = axis_scores(rows, weights, tests, broken=True)
@@ -711,7 +711,7 @@ def empty_slot(stages: list) -> dict:
 
 def season_sums(folds: list, tests: list, stages: list, by_era: bool) -> dict:
     """{(side, era): {season: the summed normal equations}}, kept per season so a season can be dropped.  The
-    pooled free columns' terms are added once per fold, on offence, and shared with defence."""
+    pooled free columns' terms are added once per fold, on offense, and shared with defense."""
     sums = {}
     for fold in folds:
         for side in SIDES:
@@ -779,7 +779,7 @@ def read_side_era(side: str, era: str, seasons: dict, tests: list, stages: list)
 
 
 def tenth_levels(total: dict, test_index: int, test: dict, side: str, stage: str) -> list:
-    """Each tenth's level, centred on the ten levels' mean."""
+    """Each tenth's level, centered on the ten levels' mean."""
     levels = np.insert(solve_block(total["G"][test_index], total[f"h_{stage}"][test_index], KIND_COLUMNS["tenths"]),
                        REFERENCE_TENTH, 0.0)
     return [dict(test=test["id"], side=side, stage=stage, tenth=tenth + 1, level=float(level))
@@ -833,7 +833,7 @@ class CareerIndex:
     scores: dict          # (season key, side) -> players x tests
     ids: dict             # (season key, side) -> the players' ids, in row order
     position: dict        # player id -> his position
-    seasons_of: dict      # position -> his season keys (offence rows), in season order
+    seasons_of: dict      # position -> his season keys (offense rows), in season order
     row_of: dict          # (season key, side) -> {position: row}
     players: np.ndarray   # the positions that have a season key, sorted
 
@@ -968,7 +968,7 @@ def career_null(folds: list, tests: list, draws: int, seed: int = NULL_SEED) -> 
 
 
 def studentized_threshold(null: dict, level: float = 0.95) -> tuple:
-    """Each test's null mean and standard deviation, and the `level` quantile of the largest standardised
+    """Each test's null mean and standard deviation, and the `level` quantile of the largest standardized
     |estimate| over all tests, sides and both statistics in each draw."""
     centre, spread, standardized = {}, {}, []
     for kind in ("line", "bend"):
@@ -1152,7 +1152,7 @@ def tradeset_axis(frame: pd.DataFrame, weights: np.ndarray, per_season: list, te
 
 
 def clustered_line(z: np.ndarray, y: np.ndarray, player_ids: np.ndarray) -> tuple:
-    """The least-squares slope of y on z (both centred) and its standard error clustered by player."""
+    """The least-squares slope of y on z (both centered) and its standard error clustered by player."""
     z_centred, y_centred = z - z.mean(), y - y.mean()
     slope = float(z_centred @ y_centred / (z_centred @ z_centred))
     score = pd.Series(z_centred * (y_centred - slope * z_centred)).groupby(player_ids).sum().to_numpy()
@@ -1497,7 +1497,7 @@ def summary_row(test: dict, side: str, readings: DecisionReadings, stick: Yardst
 
 
 def total_row(test: dict, readings: DecisionReadings, stick: Yardstick) -> dict:
-    """Offence plus defence: does the lean survive on the total, or is it credit landing on the wrong side?"""
+    """Offence plus defense: does the lean survive on the total, or is it credit landing on the wrong side?"""
     offence, defence = (test["id"], "O"), (test["id"], "D")
     total_line = readings.line.loc[offence].estimate + readings.line.loc[defence].estimate
     z_total = float("nan")
@@ -1512,7 +1512,7 @@ def total_row(test: dict, readings: DecisionReadings, stick: Yardstick) -> dict:
 
 def summary_table(tests: list, readings: DecisionReadings, stick: Yardstick,
                   tradeset: pd.DataFrame | None) -> pd.DataFrame:
-    """One summary row per test and side, then one per test for offence plus defence."""
+    """One summary row per test and side, then one per test for offense plus defense."""
     rows = [summary_row(test, side, readings, stick, tradeset) for test in tests for side in SIDES]
     return pd.DataFrame(rows + [total_row(test, readings, stick) for test in tests])
 
@@ -1592,7 +1592,7 @@ def write_null(options: Options, stick: Yardstick, audit: Audit, tests: list, pa
 
 
 def print_leans(summary: pd.DataFrame, stick: Yardstick, tests: list, draws: int) -> None:
-    """The threshold, then per side the 30 largest tenths readings, then offence plus defence."""
+    """The threshold, then per side the 30 largest tenths readings, then offense plus defense."""
     source = (f" ({draws} draws; the season jackknife's own z would have needed "
               f"{np.quantile(stick.null['jack_max'], 0.95):.2f})" if stick.null is not None
               else f" (from {stick.source})")

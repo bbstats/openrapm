@@ -102,7 +102,7 @@ def test_solved_ridge_returns_the_matrix_it_solved_jitter_included():
     theta, matrix = rapm.solved_ridge(gram, rhs, penalty)
     assert np.array_equal(theta, rapm.solve_ridge(gram, rhs, penalty))
     plain = gram + np.diag(penalty)
-    assert np.array_equal(matrix[:2, :2], plain[:2, :2])                             # the penalised block is untouched
+    assert np.array_equal(matrix[:2, :2], plain[:2, :2])                             # the penalized block is untouched
     assert matrix[2, 2] > plain[2, 2] and matrix[3, 3] > plain[3, 3]                 # the two unpenalised columns
     assert np.allclose(matrix @ theta, rhs)                                          # theta solves what came back
     full = rng.normal(size=(50, 2))
@@ -354,10 +354,10 @@ def test_nearest_labels_are_career_labels_over_the_neighbours_alone(world):
     cache = {}
     nearest = rapm.nearest_labels(sums, [2004], [frozenset({2002}), frozenset({2001, 2002, 2003})], PRODUCT.labels,
                                   PRODUCT.targets, cache)
-    direct = rapm.career_labels(sums, [2002, 2004], PRODUCT.labels, PRODUCT.targets)     # 2002's neighbours: 2001, 2003
+    direct = rapm.career_labels(sums, [2002, 2004], PRODUCT.labels, PRODUCT.targets)     # 2002's neighbors: 2001, 2003
     for side, column in (("O", "offense"), ("D", "defense")):
         mine = nearest[frozenset({2002})][side].set_index("player_id")[column]
         assert mine.equals(direct[side].set_index("player_id")[column]), side
-    # 2001-2003's neighbours are 2000, absent, and 2004, unseen: no label, so its rows will be dropped
+    # 2001-2003's neighbors are 2000, absent, and 2004, unseen: no label, so its rows will be dropped
     assert all(table.empty for table in nearest[frozenset({2001, 2002, 2003})].values())
-    assert set(cache) == {frozenset({2001, 2003})}                 # the run-wide cache holds each neighbour set once
+    assert set(cache) == {frozenset({2001, 2003})}                 # the run-wide cache holds each neighbor set once

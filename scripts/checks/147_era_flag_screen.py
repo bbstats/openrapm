@@ -2,7 +2,7 @@
 before any build (notes/DECISIONS.md, experiment 62's "Next").
 
 Why.  Check 146's placebo (the dashboard columns shuffled among players, the missing values kept where they were) gained
-on offence: its missing pattern told the booster which training rows come from before the dashboards started, an
+on offense: its missing pattern told the booster which training rows come from before the dashboards started, an
 indicator of the modern era, and the prior priced the modern rated seasons a little better for knowing it (career
 yardstick -0.015, t -2.6, with no information in it).  This puts that indicator in by name, to see whether it is the
 flag and how large.
@@ -19,7 +19,7 @@ The arms: `today` (features.FEATURE_SETS["no_career_counts"]), `era_from_2005`, 
 `odd_seasons`; each flag is appended to both sides' lists.  Statistics and the gate are check 142's, registered before
 the first run (notes/DECISIONS.md, experiment 62): an arm passes when (a) on the career yardstick it beats today at t -2
 or below on at least one side, (b) neither side is worse at t +2 or beyond on either yardstick, (c) its change on the
-neighbours yardstick is not above 0 on a side that passed (a), (d) no era is worse in every one of its screen seasons;
+neighbors yardstick is not above 0 on a side that passed (a), (d) no era is worse in every one of its screen seasons;
 the placebo must fail (a), and a real arm must beat the placebo at t -2 or below on a side that passed.  Nothing
 passing: nothing is built.
 

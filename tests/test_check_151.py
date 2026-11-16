@@ -87,7 +87,7 @@ def test_the_newey_west_standard_error_is_the_plain_one_at_lag_0_and_larger_when
     independent = pd.Series(rng.normal(size=30), index=range(1997, 2027))
     plain = independent.std(ddof=1) / np.sqrt(30)
     assert wowy.newey_west_se(independent, lags=0) == pytest.approx(plain)
-    # a slow drift shared by neighbouring seasons: the plain standard error counts it 30 times
+    # a slow drift shared by neighboring seasons: the plain standard error counts it 30 times
     drifting = pd.Series(np.repeat(rng.normal(size=10), 3) + 0.1 * rng.normal(size=30), index=range(1997, 2027))
     assert wowy.newey_west_se(drifting) > drifting.std(ddof=1) / np.sqrt(30)
     assert int(4 * (30 / 100) ** (2 / 9)) == 3                          # the default lag for thirty seasons
@@ -111,7 +111,7 @@ def test_a_newey_west_z_is_never_further_from_zero_than_the_plain_one(wowy):
 
 def test_each_system_is_scored_with_the_step_4_it_was_built_with(wowy):
     """2026-10-30: a candidate's SHRINK_FLAGS reach check 151, read by `openrapm shrink`'s own options; the by-era
-    defence factor form check 156 prints no longer makes a system named after a season."""
+    defense factor form check 156 prints no longer makes a system named after a season."""
     from openrapm.settings import PRODUCT
     shipped = wowy.shrink_settings("")
     assert (shipped.rule, shipped.extrapolate_folds_tag, shipped.nearest) == ("test", "", PRODUCT.shrink.nearest)

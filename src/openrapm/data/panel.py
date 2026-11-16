@@ -1,7 +1,7 @@
 """The season panel: what the box-score prior reads, one row per player, season and side.
 
 Words used below
-    season panel  one row per player, season and side (offence "O", defence "D"): his possessions on that side, his
+    season panel  one row per player, season and side (offense "O", defense "D"): his possessions on that side, his
                   padded box-score rates, role, score state, shot totals, career, body and team, and his team's record
                   with him on and off the court.  `features.SEASON_PANEL_COLUMNS` lists the columns in order and
                   features.py says what each one means
@@ -17,7 +17,7 @@ games.  `season_panel(..., fit_game_ids)` builds the same rows from part of a se
 alone (commands/within_season.py); handed every game it gives the rows `build_panel` writes.
 
 Where each column comes from:
-    possessions, the 13 rates and their `_uncentred` twins     box_rates.box_rates on the offence design
+    possessions, the 13 rates and their `_uncentred` twins     box_rates.box_rates on the offense design
     team_possession_share, games_started_share, age            the roles table (data/roles.py), per player-season
     garbage_time_share, closeness, mean_abs_margin             `score_state`, from the stints
     the shot totals and the league levels beside them          data/shots.py, player_shot_frame
@@ -26,12 +26,12 @@ Where each column comes from:
     the same career counts from the debut (features.CAREER_FROM_DEBUT)  career_inputs and bio.tenure_inputs on the
                                                                roles table with the seasons before 1997 added
                                                                (data/careers.py, careers_before)
-    on court, off court, on minus off                          on_court.py, on the offence design (scored) and the
+    on court, off court, on minus off                          on_court.py, on the offense design (scored) and the
                                                                DEFENCE_ALL design (allowed)
     playoff_share                                              `playoff_share`, from the stints
     the play-by-play parts (features.EVENT_RATES)              data/event_counts.py's counts, padded by
-                                                               box_rates.box_rates on the offence design's games
-    unassisted points and threes made with the level kept      the same, uncentred (features.UNCENTRED_EVENT_RATES)
+                                                               box_rates.box_rates on the offense design's games
+    unassisted points and threes made with the level kept      the same, uncentered (features.UNCENTRED_EVENT_RATES)
     self-creation's counts with the level kept                 data/creation_counts.py's counts, padded the same way
                                                                (features.UNCENTRED_CREATION_RATES)
     the dashboard inputs (features.DASHBOARD_RATES)            data/dashboard_rates.py, from the cached tracking and
@@ -43,8 +43,8 @@ Where each column comes from:
                                                                box scores (NaN before 2018), each partner's height,
                                                                self-creation and total creation from these rows
 
-Example: Stephen Curry's 2016 offence row reads possessions 6,994 (his team's offensive possessions with him on the
-court), assists_per100 4.25 above the average player (8.84 uncentred), team_possession_share 0.66 and playoff_share
+Example: Stephen Curry's 2016 offense row reads possessions 6,994 (his team's offensive possessions with him on the
+court), assists_per100 4.25 above the average player (8.84 uncentered), team_possession_share 0.66 and playoff_share
 0.18.  2026 has 582 players, so 1,164 rows.
 
 Every fit reads the panel through `trainable_panel`, which first drops every row of a season whose Finals are not over
@@ -139,7 +139,7 @@ PANEL_TARGETS = (OFFENCE, DEFENCE_ALL)            # the designs one season's row
 SIDES = ("O", "D")
 OLD_PANEL = "role_panel_season.parquet"          # the old-named panel's file name, beside the new one
 # the columns the old-named panel carried: every column but the play-by-play parts (added 2026-10-12), the career
-# counted from the debut (added 2026-10-13), the dashboard inputs (added 2026-10-14), the uncentred parts (added
+# counted from the debut (added 2026-10-13), the dashboard inputs (added 2026-10-14), the uncentered parts (added
 # 2026-10-25) and experiment 119's counts (added 2026-10-28)
 MIGRATED_PANEL_COLUMNS = [column for column in SEASON_PANEL_COLUMNS
                           if column not in EVENT_RATES and column not in CAREER_FROM_DEBUT
@@ -239,7 +239,7 @@ def score_state(stints: pd.DataFrame, season: int) -> pd.DataFrame:
         closeness           possession-weighted mean of 1 / max(|margin|, 1)
         mean_abs_margin     possession-weighted mean |margin|
 
-    weighted on offence by his team's possessions, on defence by the opponent's.
+    weighted on offense by his team's possessions, on defense by the opponent's.
 
     Example: 600 possessions with 120 in garbage time give garbage_time_share 0.2.
     """
@@ -429,10 +429,10 @@ def _player_columns(season: int, cfg: dict, designs: dict, history: _RoleHistory
 def _side_rows(side: str, season: int, rates, parts, creation, fouls, players: pd.DataFrame,
                dashboards: dict) -> pd.DataFrame:
     """A side's rows: the keys, his possessions and padded rates on that side, the columns both sides share, then
-    the play-by-play parts on that side (centred), the dashboard inputs (data/dashboard_rates.py), the two parts
+    the play-by-play parts on that side (centered), the dashboard inputs (data/dashboard_rates.py), the two parts
     self-creation reads with the league level kept (features.UNCENTRED_EVENT_RATES), its own counts, padded,
     level kept (features.UNCENTRED_CREATION_RATES), and the fouls, goaltends, shots blocked and three-shot trips
-    (features.FOUL_RATES, centred)."""
+    (features.FOUL_RATES, centered)."""
     possessions = (rates.offence if side == "O" else rates.defence).possessions
     keys = pd.DataFrame({"side": side, "player_id": players["player_id"].to_numpy(), "season": season,
                          "possessions": possessions})
@@ -456,10 +456,10 @@ def _weighted_sum(rows: pd.DataFrame, weights: dict) -> np.ndarray:
 def add_over_expected(rows: pd.DataFrame) -> pd.DataFrame:
     """One season's rows with features.OVER_EXPECTED joined on: on each side, each count minus the count a straight
     line through that side's players expects from the others, the line fitted by least squares weighted by
-    possessions on the rows with possessions.  Every rate is centred, so the intercept takes the league levels.  The
+    possessions on the rows with possessions.  Every rate is centered, so the intercept takes the league levels.  The
     columns are built apart and joined once, so the frame stays in one block.
 
-    Example, 2025 defence, players with 2,500+ possessions: blocks over those expected from fouls reads Wembanyama
+    Example, 2025 defense, players with 2,500+ possessions: blocks over those expected from fouls reads Wembanyama
     +4.52 and Kessler +2.77 at the top, Niang -1.02 at the bottom."""
     over = pd.DataFrame(np.nan, index=rows.index, columns=list(OVER_EXPECTED))
     for _, at in rows.groupby("side").groups.items():
@@ -478,9 +478,9 @@ def add_over_expected(rows: pd.DataFrame) -> pd.DataFrame:
 
 def _matchup_partners(rows: pd.DataFrame, parts) -> pd.DataFrame:
     """Each player's height, self-creation, total creation and offensive possessions in the fit games, indexed by
-    player id, for data/matchups.py: self-creation from his offence row's uncentred rates (features.CREATION); total
-    creation adds the owner's estimated potential assists at their level, from the uncentred play-by-play parts
-    (features.DERIVED).  The offence rows and `parts` share the offence design's player order.
+    player id, for data/matchups.py: self-creation from his offense row's uncentered rates (features.CREATION); total
+    creation adds the owner's estimated potential assists at their level, from the uncentered play-by-play parts
+    (features.DERIVED).  The offense rows and `parts` share the offense design's player order.
 
     Example: Shai Gilgeous-Alexander 2026, the whole season: 23.57 self-created shots and about 13 estimated potential
     assists per 100."""
@@ -519,7 +519,7 @@ def season_panel(season: int, cfg: dict, designs: dict, sources: SeasonSources, 
     """One season's panel rows, every input from the fit games: all of the season's games when `fit_game_ids` is None.
 
     `designs` holds the season's `OFFENCE` and `DEFENCE_ALL` designs of the same games (`fit_designs` cuts them to
-    part of a season).  The rows: offence then defence, each in the design's player order; `SEASON_PANEL_COLUMNS`.
+    part of a season).  The rows: offense then defense, each in the design's player order; `SEASON_PANEL_COLUMNS`.
     """
     season = int(season)
     fit = None if fit_game_ids is None else {str(game) for game in fit_game_ids}
@@ -576,7 +576,7 @@ def fill_missing_score_state(panel: pd.DataFrame, through: int | None = None) ->
     mean of the seasons up to it only, so the season in progress, whose rows change every morning, moves no row of a
     finished season.
 
-    Example: in the published panel one row, a 2010 offence row with no offensive possessions, reads the means
+    Example: in the published panel one row, a 2010 offense row with no offensive possessions, reads the means
     0.140, 0.309 and 9.54."""
     source = panel if through is None else panel[panel.season.astype(int) <= int(through)]
     for column in CLOSENESS:

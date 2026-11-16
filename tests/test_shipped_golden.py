@@ -4,7 +4,7 @@
 trained on them, the ridge around it.  Each season is rated on its own, so its rows must equal the 2026 rows of the
 thirty-season run that built the published table (outputs/season_ratings_product_bags10_step3.parquet, a frozen
 copy of the step-3 table `openrapm build` wrote on 2026-10-17 with the booster settings of check 152's guarded search,
-the hustle inputs less three-point % on offence and 10 bags, experiment 78; before then
+the hustle inputs less three-point % on offense and 10 bags, experiment 78; before then
 season_ratings_product_nothreepct_step3.parquet, season_ratings_product_tune2_step3.parquet,
 season_ratings_product_cols06_step3.parquet,
 season_ratings_product_nocareer_step3.parquet, season_ratings_product_fromdebut_step3.parquet

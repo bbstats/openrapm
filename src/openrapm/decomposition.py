@@ -5,7 +5,7 @@ Both decomposition pages (commands/site.py) use this: the vanilla RAPM page, and
 step 3's games' part this way.
 
 Words used below
-    row             one stint seen from one side (design.py): five players on offence, five on defence
+    row             one stint seen from one side (design.py): five players on offense, five on defense
     games' part     u, how far the season's games moved a player from his box-score prior (step 3, prior_rapm.py);
                     one number per player per side, positive good
     unpenalised     the columns the ridge does not shrink: the context columns and the two lineup priors P_O, P_D
@@ -97,7 +97,7 @@ def his_teams(rows_off, rows_def, keys: dict) -> tuple:
 def row_groups(rows_off, rows_def, keys: dict, n_rows: int) -> dict:
     """The groups of rows one player's coefficient is split over, as boolean masks over all `n_rows` rows.
 
-    `rows_off` and `rows_def` are the rows he is on offence and on defence in; `keys` is `team_codes`.
+    `rows_off` and `rows_def` are the rows he is on offense and on defense in; `keys` is `team_codes`.
         on        he is one of the ten players
         without   his team is playing, he is not, and he played in that game
         missed    his team is playing in a season he was on it, he is not, and he did not play in that game
@@ -153,7 +153,7 @@ class GamesPartFit:
     y: np.ndarray                # the outcome; with the prior scales held, less the scaled lineup priors
     w: np.ndarray
     matrix: np.ndarray           # M = G + Lambda, with the jitter if the solve needed one
-    theta: np.ndarray            # [deviation (offence, defence) | context | s_O, s_D]; no s_O, s_D when held
+    theta: np.ndarray            # [deviation (offense, defense) | context | s_O, s_D]; no s_O, s_D when held
     retried: bool                # the solve added a jitter (rapm.solved_ridge)
 
     @property
@@ -235,7 +235,7 @@ def split_games_part(fit: GamesPartFit, keys: dict, side: str) -> tuple[pd.DataF
 # The response is a sum of three kinds of points, y = y_two + y_three + y_free (per 100 possessions, each row), so
 # u_j = u_two + u_three + u_free, each piece solved with the same M: u_k = e_j' M^-1 B'W y_k.
 #
-# Example: Victor Wembanyama's 2026 offence, games' part 1.20 = on court 1.41 + off court -0.27 + team SOS 0.06 (the
+# Example: Victor Wembanyama's 2026 offense, games' part 1.20 = on court 1.41 + off court -0.27 + team SOS 0.06 (the
 # OpenRAPM decomposition page).  `split_pieces` cuts the -0.27 into the part from his team's possessions without him in
 # games he played (`sat`) and in games he missed (`missed`), and also splits the same 1.20 into twos + threes + free
 # throws.
@@ -252,7 +252,7 @@ def residual_scale(fit: GamesPartFit) -> float:
 
 
 def posterior_sd(fit: GamesPartFit) -> tuple[np.ndarray, np.ndarray]:
-    """(offence, defence): every player's posterior standard deviation of his games' part u, sqrt(sigma^2 [M^-1]_jj)
+    """(offense, defense): every player's posterior standard deviation of his games' part u, sqrt(sigma^2 [M^-1]_jj)
     (`residual_scale`), in the design's player order.  `split_pieces` returns the same number for one side as `sd_u`,
     without splitting the rows.
 
@@ -271,14 +271,14 @@ def outcome_responses(counters: pd.DataFrame, y_points: np.ndarray, x3: np.ndarr
     `counters` are the design's per-row counters (design.Design.counters).  Each piece is per 100 possessions and the
     three add up to the target's response `design.y`:
         twos          pts - ftm - ftm_tech - 3 fg3m      the points from field goals other than threes
-        threes        3 fg3m on offence.  On defence 3 (luck_kept fg3m + (1 - luck_kept) x3): the target keeps
+        threes        3 fg3m on offense.  On defense 3 (luck_kept fg3m + (1 - luck_kept) x3): the target keeps
                       `luck_kept` of the opponents' threes and prices the rest at the shooters' expected makes x3
         free_throws   xftm + xftm_tech                   the expected free-throw makes, both targets
     The defence's target is also divided by one scalar per season (data/shots.align) so its total equals the points
-    scored: `ratio`, found the same way from `y_points` (the points design's response); 1 for the offence (x3 None).
+    scored: `ratio`, found the same way from `y_points` (the points design's response); 1 for the offense (x3 None).
 
     Example: a row of 4 possessions with 2 twos made, 1 three made, 2 free throws at an expected 0.8 each and 1
-    technical at an expected 0.8, offence: twos 100 x 4 / 4 = 100, threes 100 x 3 / 4 = 75, free_throws
+    technical at an expected 0.8, offense: twos 100 x 4 / 4 = 100, threes 100 x 3 / 4 = 75, free_throws
     100 x 2.4 / 4 = 60.
     """
     poss = counters["poss"].to_numpy(dtype=float)

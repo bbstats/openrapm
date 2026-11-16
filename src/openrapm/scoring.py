@@ -7,14 +7,14 @@ ratings are held exactly as they were handed in, so what is measured is the rati
 Words used below
     scored season   the season whose games are predicted
     rated season    the season whose ratings predict them
-    row             one stint seen from one side: five players on offence, five on defence (design.py)
+    row             one stint seen from one side: five players on offense, five on defense (design.py)
     raw sign        `o` adds points scored and `d` adds points ALLOWED, the sign of the design's defensive
                     columns.  A table stored positive-good is flipped on the way in: rating_def +1.5 is d = -1.5
     fill            what a player the ratings have no row for scores: 0 (the average player) unless a
                     replacement level is set (`replacement_level`)
     level           the intercept and the home edge, refitted on the scored season: scoring drifts across eras,
                     and that is not what is under test
-    team-game       one team's offence in one game: the unit the test decides on, because the noise inside a
+    team-game       one team's offense in one game: the unit the test decides on, because the noise inside a
                     team's hundred-odd possessions cancels before the miss is squared
 
 The prediction of a row r of the scored season:
@@ -23,7 +23,7 @@ The prediction of a row r of the scored season:
 
     a, b      the level: a weighted least-squares fit of the row's points per 100 on [1, home], with the
               ratings' part held fixed; weight = the row's possessions
-    home_r    +1 when the offence is at home, -1 away, 0 at a neutral site
+    home_r    +1 when the offense is at home, -1 away, 0 at a neutral site
 
 Two errors, each a weighted mean square:
 
@@ -42,7 +42,7 @@ A root mean square reads bigger than the typical miss, because squaring pays ext
 normal error the mean absolute deviation is sqrt(2 / pi) = 0.7979 of the standard deviation, so the scaled root
 says what a typical team-game misses by, in points per 100.
 
-Example: a home offence whose five ratings sum to +6.0 against a defence whose five sum to -2.0 (two points per
+Example: a home offense whose five ratings sum to +6.0 against a defense whose five sum to -2.0 (two points per
 100 fewer allowed than average), on a scored season whose level is a = 112.0 and b = 1.4, is predicted at
 112.0 + 1.4 + 6.0 - 2.0 = 117.4 points per 100.  A mean square of 100 is a root mean square of 10 and an ARMSE
 of 7.98.
@@ -97,14 +97,14 @@ class Ratings:
 
 
 def replacement_level(table: pd.DataFrame, max_poss: float = 500.0, shrink: float = 1.0) -> tuple[float, float]:
-    """(offence, defence) in raw sign for a player the table has no row for: the possession-weighted mean rating
+    """(offense, defense) in raw sign for a player the table has no row for: the possession-weighted mean rating
     of the table's own players under `max_poss` possessions, times `shrink`; (0, 0) when it has none.
 
     The year-over-year test settled on a quarter of that level (notes/DECISIONS.md: the only depth better in both
     directions).  `table` is one season with columns `o`, `d` and `poss`.
 
     Example: players at -2.0 (100 possessions) and -4.0 (300) and a starter at +8.0 (5,000): with max_poss 500
-    and shrink 0.25 the offence fill is 0.25 x (100 x -2.0 + 300 x -4.0) / 400 = -0.875.
+    and shrink 0.25 the offense fill is 0.25 x (100 x -2.0 + 300 x -4.0) / 400 = -0.875.
     """
     low = table[(table.poss > 0) & (table.poss < float(max_poss))]
     if len(low) == 0:

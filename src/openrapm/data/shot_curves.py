@@ -84,7 +84,7 @@ def natural_spline(x: np.ndarray, knots) -> np.ndarray:
 def logistic_irls(X, y, w=None, ridge=1e-3, iters=25, offset=None, beta0=None, penalise_first=False):
     """IRLS for a logistic regression with a ridge on every coefficient but the first (the intercept).
 
-    `ridge` is one value for every column, or a vector with one per column (the search penalises main, interaction
+    `ridge` is one value for every column, or a vector with one per column (the search penalizes main, interaction
     and era columns apart); the first entry is ignored unless `penalise_first`."""
     n, p = X.shape
     w = np.ones(n) if w is None else np.asarray(w, dtype=float)

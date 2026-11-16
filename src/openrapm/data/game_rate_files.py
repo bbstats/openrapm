@@ -5,7 +5,7 @@ and read by every rating that uses them (`openrapm rate --game-prior TAG` and th
 
 Each file holds what the network of rated season S needs to forecast and what it was trained on:
     W0, b0, W1, b1, ...        the layers, first to last (game_rates.forward_numpy)
-    mean, sd                   the inputs' standardisation, from its training rows
+    mean, sd                   the inputs' standardization, from its training rows
     ks, opponent_pads          the padding's pad per stat and the opponent factor's (infinity: no factor)
     seasons                    the seasons it trained on: never S, S - 1 or S + 1, never a season in progress
     validation_players         the players whose rows stopped its training and never trained it

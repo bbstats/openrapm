@@ -13,25 +13,25 @@ Words used below
                 100 become (200 x 2.1 + 450 x 1.4) / (200 + 450) = 1.6.  The bin average is itself padded
                 toward the league rate by the bin's possessions first (experiment 127, 2026-11-01), so early in
                 a season, when a bin's average rests on a few dozen events, the league rate carries the weight
-    centred     the possession-weighted league mean subtracted, so 0 is a league-average rate; "level"
+    centered     the possession-weighted league mean subtracted, so 0 is a league-average rate; "level"
                 columns keep their units
-    uncentred   the same padded rate with the level kept (the `_uncentred` columns); a ratio needs the level back
-    combination a fixed linear sum of the centred rates
-    ratio       an efficiency built from the uncentred rates, its denominator padded
+    uncentered   the same padded rate with the level kept (the `_uncentred` columns); a ratio needs the level back
+    combination a fixed linear sum of the centered rates
+    ratio       an efficiency built from the uncentered rates, its denominator padded
 
 The derived families:
 
-    combination   = sum over its rates of  weight x centred rate
+    combination   = sum over its rates of  weight x centered rate
     ratio         = (numerator + pad x typical value) / (denominator + pad)
     vs league     = (numerator - L x denominator) / (denominator + pad)
 
-    numerator, denominator   weighted sums of the uncentred rates (`RATIOS` lists the weights)
+    numerator, denominator   weighted sums of the uncentered rates (`RATIOS` lists the weights)
     pad                      how many denominator units of the typical value are added, so a bench player's
                              ratio is not a ratio of two roundings
     typical value            roughly the league's value of the ratio (0.54 for true shooting)
     L                        the league's value of the ratio in his seasons, from the league's rates (`VS_LEAGUE`)
 
-Example: a player with 6.0 made twos, 2.0 made threes and 3.0 made free throws per 100 (uncentred) and the league
+Example: a player with 6.0 made twos, 2.0 made threes and 3.0 made free throws per 100 (uncentered) and the league
 at 5.0, 1.5 and 2.5 has `points_per100` = 2 x 1.0 + 3 x 0.5 + 0.5 = 4.0 points per 100 above the league.
 
 The names are plain words (since 2026-10-11; files written before then use short codes, which
@@ -61,7 +61,7 @@ __all__ = ["Feature", "BOX_RATES", "UNCENTRED_RATES", "ROLE", "CLOSENESS", "SHOT
 
 @dataclass(frozen=True)
 class Feature:
-    """One column the prior can read: its name, what it means, how it is computed, its unit, centred or level."""
+    """One column the prior can read: its name, what it means, how it is computed, its unit, centered or level."""
     name: str
     meaning: str
     formula: str
@@ -71,7 +71,7 @@ class Feature:
 
 
 # ------------------------------------------------------------------------------ the panel's own columns
-# The thirteen padded rates per 100 possessions, centred, in the order of config.yaml's box_counts (the per-game
+# The thirteen padded rates per 100 possessions, centered, in the order of config.yaml's box_counts (the per-game
 # counts they are built from: fg3m, fg3_miss, fg2m, ...), which is the order the padding returns them in.
 BOX_RATES = ["threes_made_per100", "threes_missed_per100", "twos_made_per100", "twos_missed_per100",
              "free_throws_made_per100", "free_throws_missed_per100", "off_rebounds_per100", "def_rebounds_per100",
@@ -97,7 +97,7 @@ OFF_COURT = ["off_court_scored_per100", "off_court_allowed_per100", "off_court_o
 ON_MINUS_OFF = ["on_minus_off_scored_per100", "on_minus_off_allowed_per100"]
 PLAYOFF_SHARE = ["playoff_share"]
 # Parts of four box counts, read from the play-by-play (data/event_counts.py says how each is read) and padded per
-# 100 possessions like the thirteen rates (box_rates.py), centred; no `_uncentred` twins but the two self-creation
+# 100 possessions like the thirteen rates (box_rates.py), centered; no `_uncentred` twins but the two self-creation
 # reads (UNCENTRED_EVENT_RATES), since no ratio is built from them.  The owner's stat-splits plan (2026-10-12,
 # experiments 52-55): each part sits beside its box count, so the prior can price two kinds of the same count
 # differently.  Each part is padded with its own k, so the parts' rates
@@ -171,7 +171,7 @@ MISSING_OK = list(DASHBOARD_RATES)
 UNCENTRED_EVENT_RATES = [f"{rate}_uncentred" for rate in (UNASSISTED_POINTS, UNASSISTED_THREES)]
 
 # ------------------------------------------------------------------------------ the derived columns
-# Linear sums of the centred rates.  A tree splits on one column at a time (x_j < c), so it can only approximate
+# Linear sums of the centered rates.  A tree splits on one column at a time (x_j < c), so it can only approximate
 # a sum such as points = 2 x made twos + 3 x made threes + made free throws with many splits; the sum is handed
 # over as its own column.  {name: {rate: weight}}, terms in the order they are summed.
 DERIVED = {
@@ -192,7 +192,7 @@ DERIVED = {
     "potential_assists_estimated_per100": {ASSISTS_TO_RIM: 1.656, ASSISTS_TO_MID_RANGE: 2.261,
                                            ASSISTS_TO_CORNER_THREES: 2.057, ASSISTS_TO_ABOVE_BREAK_THREES: 2.503},
 }
-# Efficiencies from the uncentred rates (a ratio of centred rates means nothing), each denominator padded so a
+# Efficiencies from the uncentered rates (a ratio of centered rates means nothing), each denominator padded so a
 # 200-possession player is not a ratio of two roundings.  {name: (numerator, denominator, pad, typical value)}.
 _SHOTS = {TWOS_MADE: 1, TWOS_MISSED: 1, THREES_MADE: 1, THREES_MISSED: 1}
 _USED = {TWOS_MADE: 1, TWOS_MISSED: 1, THREES_MADE: 1, THREES_MISSED: 1, FREE_THROWS_MADE: 0.44,
@@ -213,7 +213,7 @@ RATIOS = {
 }
 # Each ratio against the league's value of it in the player's seasons (the owner, 2026-10-12: "vs league average";
 # notes/DECISIONS.md, experiment 56).  A ratio keeps its era's level, so a share of shots that are threes of 0.35 is
-# high in 1999 and average in 2024, while the centred rates are already measured from their season's league level.
+# high in 1999 and average in 2024, while the centered rates are already measured from their season's league level.
 # The league's rates are each `<rate>_uncentred - <rate>`: the season's possession-weighted level, the same on every
 # row of a season and side, and on a row averaged over seasons the possession-weighted level of his seasons.  The
 # ratio is padded toward L instead of the typical value, then L is subtracted, so a league-average player and a
@@ -227,7 +227,7 @@ SHOTQ_PADS = {"two_point_expected_pct": 50.0, "three_point_expected_pct": 50.0, 
               "points_per_shot_over_expected": 300.0}
 SHOTQ = list(SHOTQ_PADS)
 # The owner's self-creation (2026-10-22, scripts/checks/154_self_creation.py; experiment 110 puts it in the offensive
-# prior): his self-created shot attempts per 100, from the uncentred rates,
+# prior): his self-created shot attempts per 100, from the uncentered rates,
 #     (shot attempts + 0.44 x free-throw attempts) x (1 - share assisted),
 #     share assisted = 0.73 - 0.03 x assists - 0.01 x field goals made, clipped to 0 through 1.
 # A product of several rates, which a tree reading one column at a time can only approximate.
@@ -270,17 +270,17 @@ SCREEN_CANDIDATES = {"O": [*CREATION_ESTIMATED, "potential_assists_estimated_per
 # Experiment 119 (the owner, 2026-10-28: goaltends per 100; "add in any useful proxies as well! like BLK/PF"; "it's
 # probably cleaner to do J - exp J (from K) so we don't get weird ratio tails - for anything we'd be dividing";
 # "let's do this with turnovers for sure! tov-exp tov from (TS Att and AST?)").  Five more per-game counts read from
-# the play-by-play (data/foul_counts.py), padded per 100 and centred like the event counts.
+# the play-by-play (data/foul_counts.py), padded per 100 and centered like the event counts.
 FOUL_RATES = ["goaltends_per100", "shooting_fouls_per100", "loose_ball_fouls_per100", "shots_blocked_per100",
               "three_shot_trips_per100"]
 GOALTENDS, SHOOTING_FOULS, LOOSE_BALL_FOULS, SHOTS_BLOCKED, THREE_SHOT_TRIPS = FOUL_RATES
 # Each proxy that would divide one count by another is the count minus the count expected from the others instead,
 # so a player with few of the others cannot make a long tail: a straight line through the season's players on one
-# side, weighted by possessions, on the padded centred rates of the games the rows are built from
-# (data/panel.add_over_expected), so a fold refits it on its fit games.  The rates are centred, so the line's
+# side, weighted by possessions, on the padded centered rates of the games the rows are built from
+# (data/panel.add_over_expected), so a fold refits it on its fit games.  The rates are centered, so the line's
 # intercept takes the league levels.  {name: (the count, [the counts it is expected from])}, each a weighted sum of
-# panel columns.  Example, 2025 offence: expected turnovers per 100 = 0.27 + 0.070 x true-shooting attempts + 0.201 x
-# assists, uncentred; Westbrook's 5.27 is 1.55 over his 21.5 attempts and 9.7 assists.
+# panel columns.  Example, 2025 offense: expected turnovers per 100 = 0.27 + 0.070 x true-shooting attempts + 0.201 x
+# assists, uncentered; Westbrook's 5.27 is 1.55 over his 21.5 attempts and 9.7 assists.
 _TWOS_TAKEN = {TWOS_MADE: 1.0, TWOS_MISSED: 1.0}
 _THREES_TAKEN = {THREES_MADE: 1.0, THREES_MISSED: 1.0}
 _TRUE_SHOOTING_ATTEMPTS = {**_TWOS_TAKEN, **_THREES_TAKEN, FREE_THROWS_MADE: 0.44, FREE_THROWS_MISSED: 0.44}
@@ -314,7 +314,7 @@ SCREEN_CANDIDATES_119 = {
 # D/O) ... '% of time matched up with the #1 self creator' and '% of time matched up with the #1 overall creator',
 # and 'average self-creation of who you are defending' and 'average total creation of who you are defending'"): who
 # a player guarded and who guarded him in the fit games' per-game matchup box scores (data/matchups.py, 2018 on),
-# averages and shares weighted by matchup possessions, padded; the same value on his offence and defence rows.
+# averages and shares weighted by matchup possessions, padded; the same value on his offense and defense rows.
 MATCHUP_GAME_INPUTS = ["attackers_guarded_height_in", "defenders_faced_height_in",
                        "attackers_guarded_self_creation_per100", "attackers_guarded_total_creation_per100",
                        "top_self_creator_guarded_share", "top_total_creator_guarded_share",
@@ -322,7 +322,7 @@ MATCHUP_GAME_INPUTS = ["attackers_guarded_height_in", "defenders_faced_height_in
                        "top_total_creator_guarded_share_on_shared_floor"]
 MISSING_OK.extend(MATCHUP_GAME_INPUTS)
 # For a later screen, each appended alone to the shipped list of the side it describes: the height of the defenders
-# who guarded him on offence, everything about who he guarded on defence
+# who guarded him on offense, everything about who he guarded on defense
 SCREEN_CANDIDATES_MATCHUPS = {"O": MATCHUP_GAME_INPUTS[1:2], "D": [MATCHUP_GAME_INPUTS[0], *MATCHUP_GAME_INPUTS[2:]]}
 
 # Every input the prior could read (145): the rates, the role, every derived column, career, body, on-court, the
@@ -334,7 +334,7 @@ PRIOR_FEATURES = [*BOX_RATES, *ROLE, *DERIVED, *RATIOS, *SHOTQ, *CAREER, *BIO, *
                   *FOUL_RATES, *OVER_EXPECTED, *MATCHUP_GAME_INPUTS]
 # The panel columns averaged into a multi-season training row, before anything is derived from them; the play-by-play
 # parts came after every column the published ratings were built from (2026-10-12), the career counted from the debut
-# after them (2026-10-13), the dashboard inputs after them (2026-10-14), the two uncentred play-by-play parts and
+# after them (2026-10-13), the dashboard inputs after them (2026-10-14), the two uncentered play-by-play parts and
 # self-creation's counts after them (2026-10-25), experiment 112's candidates measured from the average player, then
 # experiment 119's counts and counts over expected (2026-10-28).
 PANEL_INPUTS = [*BOX_RATES, *ROLE, *CLOSENESS, *UNCENTRED_RATES, *SHOT_TOTALS, *SHOT_LEAGUE, *CAREER, *BIO,
@@ -342,7 +342,7 @@ PANEL_INPUTS = [*BOX_RATES, *ROLE, *CLOSENESS, *UNCENTRED_RATES, *SHOT_TOTALS, *
                 *DASHBOARD_RATES, *ERA_MARKER, *UNCENTRED_EVENT_RATES, *UNCENTRED_CREATION_RATES, *CREATION_INPUTS,
                 *FOUL_RATES, *OVER_EXPECTED, *MATCHUP_GAME_INPUTS]
 # The season panel's columns, in order: who and when, the possessions behind the row (his offensive possessions
-# on an offence row, defensive on a defence row), then the inputs.
+# on an offense row, defensive on a defense row), then the inputs.
 PANEL_KEYS = ["side", "player_id", "season"]
 SEASON_PANEL_COLUMNS = [*PANEL_KEYS, "possessions", *PANEL_INPUTS]
 # How much evidence a training row rests on; the rated season's own row reads its possessions and 1.
@@ -511,7 +511,7 @@ def _add_combinations(frame: pd.DataFrame) -> None:
 
 
 def _add_ratios(frame: pd.DataFrame) -> None:
-    """Each `RATIOS` column on the uncentred (`_uncentred`) rates:
+    """Each `RATIOS` column on the uncentered (`_uncentred`) rates:
 
         ratio = (numerator + pad x typical value) / (denominator + pad)
 
@@ -528,7 +528,7 @@ def _add_ratios(frame: pd.DataFrame) -> None:
 
 
 def _add_ratios_vs_league(frame: pd.DataFrame) -> None:
-    """Each `VS_LEAGUE` column, from the uncentred rates and the league's (`<rate>_uncentred - <rate>`):
+    """Each `VS_LEAGUE` column, from the uncentered rates and the league's (`<rate>_uncentred - <rate>`):
 
         L          = (numerator of the league's rates) / (denominator of the league's rates)
         vs league  = (numerator + pad x L) / (denominator + pad) - L
@@ -553,7 +553,7 @@ def _add_ratios_vs_league(frame: pd.DataFrame) -> None:
 
 
 def _add_creation(frame: pd.DataFrame) -> None:
-    """`self_creation_per100` from the uncentred rates, when the frame carries them (the owner's formula, `CREATION`).
+    """`self_creation_per100` from the uncentered rates, when the frame carries them (the owner's formula, `CREATION`).
 
     Example: LeBron James 2026, one fold: 9.25 and 7.04 twos made and missed, 2.07 and 4.01 threes, 5.58 and 2.13 free
     throws and 10.20 assists per 100 give 25.76 attempts and 11.32 field goals made, a share assisted of
@@ -571,7 +571,7 @@ def _add_creation(frame: pd.DataFrame) -> None:
 
 
 def _add_creation_estimated(frame: pd.DataFrame) -> None:
-    """`self_creation_estimated_per100` from the uncentred rates, when the frame carries self-creation's counts
+    """`self_creation_estimated_per100` from the uncentered rates, when the frame carries self-creation's counts
     (`CREATION_ESTIMATED`, `UNCENTRED_CREATION_RATES`; data/creation_counts.py).  His unassisted makes are
     (unassisted points - unassisted threes) / 2, held between 0 and his makes, as each part is padded with its own k.
 
@@ -657,7 +657,7 @@ def add_features(frame: pd.DataFrame, names) -> pd.DataFrame:
     return frame
 
 
-# ------------------------------------------------------------------------------ the catalogue
+# ------------------------------------------------------------------------------ the catalog
 def _linear(weights: dict) -> str:
     """{"twos_made_per100": 2.0, "free_throws_made_per100": 1.0} -> "2 twos_made_per100 + free_throws_made_per100"."""
     out = ""
@@ -828,13 +828,13 @@ _PANEL_ROWS = [
 
 def _ratio_formula(numerator: dict, denominator: dict, pad: float, typical: float) -> str:
     """A `RATIOS` entry written out: "(threes_made_per100 + 3 x 0.34) / (threes_made_per100 + threes_missed_per100
-    + 3), uncentred rates"."""
+    + 3), uncentered rates"."""
     return f"({_linear(numerator)} + {pad:g} x {typical:g}) / ({_linear(denominator)} + {pad:g}), uncentred rates"
 
 
 def _vs_league_formula(numerator: dict, denominator: dict, pad: float, typical: float) -> str:
     """A `VS_LEAGUE` entry written out: "(threes_made_per100 - L x (threes_made_per100 + threes_missed_per100)) /
-    (threes_made_per100 + threes_missed_per100 + 3), uncentred rates; L the same ratio of the league's rates"."""
+    (threes_made_per100 + threes_missed_per100 + 3), uncentered rates; L the same ratio of the league's rates"."""
     return (f"({_linear(numerator)} - L x ({_linear(denominator)})) / ({_linear(denominator)} + {pad:g}), "
             f"uncentred rates; L the same ratio of the league's rates (each uncentred minus centred)")
 
@@ -931,7 +931,7 @@ def meaning(name: str) -> str:
 
 
 def glossary_markdown() -> str:
-    """The catalogue as a markdown table, one row per name, for GLOSSARY.md."""
+    """The catalog as a markdown table, one row per name, for GLOSSARY.md."""
     def cell(text: str) -> str:
         return text.replace("|", "\\|")          # a literal |margin| would end the cell
 

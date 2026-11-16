@@ -2,7 +2,7 @@
 shared among the players on the court and added up by player group.
 
 The year-over-year test (scripts/checks/63_yoy.py) scores a team-game, one team's points in one game, predicted
-from the ten players' ratings of a neighbouring season.  Its splits label a stint or a team-game, so they cannot
+from the ten players' ratings of a neighboring season.  Its splits label a stint or a team-game, so they cannot
 say which PLAYERS a difference came from.  This check can, exactly:
 
     contribution of player i = sum over the team-games g he played in of  n_ig x (e_g^2 - r_g^2) / N
@@ -103,7 +103,7 @@ def read_by_direction(spec: str, cfg: dict) -> dict:
 
 
 def read_ages(cfg: dict) -> pd.DataFrame:
-    """player_id, season, age from the season panel's offence rows, read through the season gate like every other
+    """player_id, season, age from the season panel's offense rows, read through the season gate like every other
     reader of the panel."""
     panel, _ = drop_untrainable(pd.read_parquet(resolve(cfg, "panel"),
                                                 columns=["player_id", "season", "side", "age"]),

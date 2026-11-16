@@ -78,7 +78,7 @@ def test_the_matrix_is_its_parts_side_by_side(small_cfg):
 
 
 def test_a_neutral_site_has_no_home_court(small_cfg):
-    """Home is +1 for the home offence, -1 for the away offence and 0 for both at a neutral site; po_home is
+    """Home is +1 for the home offense, -1 for the away offense and 0 for both at a neutral site; po_home is
     playoffs x home."""
     stints = [stint(neutral=True), stint(game_id="g2", phase="PO", series_id="s1"),
               stint(game_id="g3", phase="PO", series_id="s1", neutral=True)]

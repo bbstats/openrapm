@@ -262,7 +262,7 @@ def test_step_4_on_a_folds_rows_is_step_4_on_a_table():
 
 def test_a_player_without_a_defence_row_is_shrunk_as_the_defence_rows_are():
     table = _fold_rows()
-    defence = table.iloc[1:].assign(side="D")             # player 0: offensive possessions, no defence row
+    defence = table.iloc[1:].assign(side="D")             # player 0: offensive possessions, no defense row
     mine = ps.shrink_fold({"O": table.assign(side="O"), "D": defence}, 2024, (0.7, 0.8, 1.3, 1.4))
     rest = ps.shrink_fold({"O": table.iloc[1:].assign(side="O"), "D": defence}, 2024, (0.7, 0.8, 1.3, 1.4))
     level = 0.8 * defence.prior_def.iloc[0] - rest.prior_def.iloc[0]

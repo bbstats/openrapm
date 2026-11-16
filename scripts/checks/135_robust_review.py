@@ -21,8 +21,8 @@ Words used below
 
 The tests, each from a file the chain saved for that run name (outputs/):
     year over year (check 63)       yoy_<name>.parquet: team-game and stint error per scored season and direction
-    side split                      check 63 run here on two mixed tables, the candidate's offence with the
-                                    reference's defence and the reverse (cached as yoy_<name>_sides.parquet)
+    side split                      check 63 run here on two mixed tables, the candidate's offense with the
+                                    reference's defense and the reverse (cached as yoy_<name>_sides.parquet)
     year over year by player (88)   yoy_by_player_<name>.parquet: the team-game difference shared among the players
     trade loss (checks 70, 73)      tradeset_<name>_alpha.parquet against tradeset_<ref>_alpha.parquet
     lineup-swap test (check 90)     swaptest_<name>.parquet
@@ -166,7 +166,7 @@ def yoy_slices(name: str, outputs: Path) -> list:
 
 
 def write_mixed_tables(name: str, ref_table: Path, outputs: Path) -> dict:
-    """{side: path} of the two mixed tables: the reference with the candidate's offence, and with its defence."""
+    """{side: path} of the two mixed tables: the reference with the candidate's offense, and with its defense."""
     cand = pd.read_parquet(outputs / f"season_ratings_{name}.parquet")
     ref = pd.read_parquet(ref_table)
     keys = ["player_id", "season"]
@@ -197,7 +197,7 @@ def score_mixed_tables(name: str, paths: dict, ref_table: Path, out_path: Path, 
 
 
 def side_slices(name: str, ref_table: Path, refresh: bool, outputs: Path, cfg: dict) -> list:
-    """Which side carries it: check 63 on the candidate's offence with the reference's defence, and the reverse."""
+    """Which side carries it: check 63 on the candidate's offense with the reference's defense, and the reverse."""
     out_path = outputs / f"yoy_{name}_sides.parquet"
     if refresh or not out_path.exists():
         score_mixed_tables(name, write_mixed_tables(name, ref_table, outputs), ref_table, out_path, cfg)
@@ -259,7 +259,7 @@ def trade_slices(name: str, ref: str, quality: pd.Series, outputs: Path) -> list
 
 # --------------------------------------------------------------------------------- the lineup-swap test
 def swap_slices(name: str, outputs: Path) -> list:
-    """Check 90: does the ranking order teammates the way the neighbouring seasons' lineup swaps do (order: higher is
+    """Check 90: does the ranking order teammates the way the neighboring seasons' lineup swaps do (order: higher is
     better, so it is negated; gaps: lower is better)."""
     t = pd.read_parquet(outputs / f"swaptest_{name}.parquet")
     t = t[(t.group == "all")]

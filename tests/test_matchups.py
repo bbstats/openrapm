@@ -49,7 +49,7 @@ def test_each_input_is_the_weighted_average_or_share_of_the_pairs():
 
 def test_the_top_creator_is_the_most_shots_a_game_not_the_highest_rate():
     out = matchup_inputs(pairs(), partners(), pad=0.0)
-    assert out.loc[4, "top_self_creator_guarded_share"] == 1.0                      # all his defence on player 1
+    assert out.loc[4, "top_self_creator_guarded_share"] == 1.0                      # all his defense on player 1
     assert out.loc[5, "top_self_creator_guarded_share"] == pytest.approx(0.25)      # 5 of 20 on player 1
     assert out.loc[6, "top_self_creator_guarded_share"] == pytest.approx(15 / 85)   # player 7 counts in the 85
     # team 20's top by total creation is player 4, 22 x 300 / 3 / 100 = 22 a game against player 5's 12.5
@@ -75,7 +75,7 @@ def test_a_tie_goes_to_the_lower_id_and_an_unknown_attacker_is_never_the_top():
 def test_the_shared_floor_share_counts_only_the_possessions_with_the_top_creator_on():
     """One game: player 1, team 10's only player with a volume, plays the first of two 10-possession stints.  Team
     10's attackers hold 100 matchup possessions on 20 stint possessions, a scale of 1, so each opposing defender shares
-    10 with him: defender 4 spent 6 of them on him, defender 5 4.  Of all their defence, 6 of 20 and 4 of 20."""
+    10 with him: defender 4 spent 6 of them on him, defender 5 4.  Of all their defense, 6 of 20 and 4 of 20."""
     game = "0022500001"
     rows = [(1, 4, 6.0), (1, 5, 4.0), (2, 5, 6.0), (2, 6, 14.0), (3, 6, 6.0), (3, 10, 14.0), (8, 10, 6.0),
             (8, 11, 14.0), (9, 11, 6.0), (9, 4, 14.0), (12, 5, 10.0)]

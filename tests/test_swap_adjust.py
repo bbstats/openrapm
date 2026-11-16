@@ -67,7 +67,7 @@ def test_a_planted_split_inside_a_team_shows_in_the_swap_residuals(lineup_league
     season, truth, roster = _season(lineup_league)
     good, bad = int(roster[1][0]), int(roster[1][1])
     rated = truth.set_index("player_id").copy()
-    rated.loc[good, "o"] -= 2.0                       # the ratings take two points of offence from one teammate
+    rated.loc[good, "o"] -= 2.0                       # the ratings take two points of offense from one teammate
     rated.loc[bad, "o"] += 2.0                        # and hand them to another: the team's total is unchanged
     pairs = sa.residual_pairs(season, rated.reset_index(), context="none")["offense"]
 

@@ -20,7 +20,7 @@ def _answers(values: dict) -> sp.BoosterAnswers:
 
 
 def _stints(rows) -> pd.DataFrame:
-    """Stint rows from (game, team on offence, team on defence, possessions, offence's five, defence's five)."""
+    """Stint rows from (game, team on offense, team on defense, possessions, offence's five, defence's five)."""
     return pd.DataFrame([dict(game_id=game, team_off=team_off, team_def=team_def, poss=float(poss),
                               **{f"o{k + 1}": player for k, player in enumerate(offence)},
                               **{f"d{k + 1}": player for k, player in enumerate(defence)})
@@ -148,7 +148,7 @@ def test_the_line_learns_from_seasons_away_from_the_rated_one(lineup_league):
     zero = truth.assign(o=0.0, d=0.0)
     grams = sp.held_back_grams(sw.prepare(rows), zero, inputs, 5)
     by_season = {2000: grams, 2001: grams}
-    assert sp.season_coefficients(by_season, 2001, {2000, 2001}, 1, 5, 1e-4) is None       # 2000 is a neighbour
+    assert sp.season_coefficients(by_season, 2001, {2000, 2001}, 1, 5, 1e-4) is None       # 2000 is a neighbor
     line = sp.season_coefficients(by_season, 2002, {2000, 2001}, 1, 5, 1e-4)
     assert set(line) == {"O", "D"} and line["O"].shape == (6, len(sp.INPUTS))
     # The lineups' points were drawn from the true ratings, so inside each team the line must give back the truth's
@@ -294,7 +294,7 @@ def test_centred_inputs_average_zero_by_possessions():
 
 
 def test_centred_inputs_take_away_the_level_each_player_folds_line_carries(lineup_league):
-    # experiment 82's lines differ by player fold, and on raw inputs each fold's line had its own level; centred, two
+    # experiment 82's lines differ by player fold, and on raw inputs each fold's line had its own level; centered, two
     # folds whose lines differ by a constant on every weight give the average player the same second prior
     stints, truth, _ = lineup_league(3, games=40)
     rows = sw.season_rows(stints)
@@ -312,7 +312,7 @@ def test_centred_inputs_take_away_the_level_each_player_folds_line_carries(lineu
 
 def test_experiment_82s_inputs_centred_give_the_average_player_0_on_every_folds_line(lineup_league):
     # the ID-group bug (notes/DECISIONS.md, "Experiment 82's defensive prior read through"): on 82's raw inputs, fold
-    # 1's line reads the average player differently from fold 0's; on the same inputs centred, both read him 0, and
+    # 1's line reads the average player differently from fold 0's; on the same inputs centered, both read him 0, and
     # every player moves by exactly the level his own fold's line carried
     stints, truth, _ = lineup_league(3, games=40)
     rows = sw.season_rows(stints)
@@ -343,7 +343,7 @@ def test_experiment_82s_inputs_centred_give_the_average_player_0_on_every_folds_
 
 def test_a_line_on_step_5s_numbers_refuses_to_run_without_them():
     # until 2026-10-22 `openrapm second-prior --inputs context_and_types_centred`, the command's default, computed no
-    # standardisation for step 5's numbers, and the line was fitted on the eight context numbers alone under the set's
+    # standardization for step 5's numbers, and the line was fitted on the eight context numbers alone under the set's
     # 29 names (notes/DECISIONS.md, the bug-fix pass)
     assert sp.reads_types("context_and_types") and sp.reads_types("context_and_types_centred")
     assert not sp.reads_types("context") and not sp.reads_types("own_teammates_opponents") and not sp.reads_types(None)
@@ -378,7 +378,7 @@ def _counted(rows, column, values) -> pd.DataFrame:
 
 
 def test_the_team_rates_docstring_example():
-    # team 1 on offence: 10 possessions with player 7 on the court and 3 offensive rebounds, 5 without him and 1
+    # team 1 on offense: 10 possessions with player 7 on the court and 3 offensive rebounds, 5 without him and 1
     rates = sp.team_rate_numbers(_counted(TWO_STINTS, "off_rebounds", [3.0, 1.0]), pad=False)
     assert rates["O"].loc[7, "team_off_rebounds_on"] == pytest.approx(30.0)
     assert rates["O"].loc[7, "team_off_rebounds_off"] == pytest.approx(20.0)
@@ -394,7 +394,7 @@ def test_the_team_rates_on_defense_read_the_teams_facing_his_on_his_defensive_ro
     assert rates["D"].loc[16, "team_off_rebounds_on"] == pytest.approx(20.0)
     # his team's rate with 11 on the bench in that game is the row 16-20 played
     assert rates["D"].loc[11, "team_off_rebounds_off"] == pytest.approx(20.0)
-    # team 2 was never on offence, so on offence its players stay at their team's rate of nothing
+    # team 2 was never on offense, so on offense its players stay at their team's rate of nothing
     assert rates["O"].loc[11, "team_off_rebounds_on"] == 0.0
 
 

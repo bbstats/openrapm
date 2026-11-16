@@ -10,8 +10,8 @@ them; the season panel (data/panel.py) asks for one season's players.
   TENURE   tenure (seasons with his current main team, counting this one, possession-weighted over the
            seasons asked for) and n_teams (distinct teams he played for in those seasons): a box line beside
            teammates he has played with for years against one beside new teammates, without a one-hot of the
-           team.  Why: a box line is worth less beside new teammates, by about 0.85 points per 100 on offence
-           and 0.55 on defence when every teammate is new (FINDINGS.md section 24, `git show
+           team.  Why: a box line is worth less beside new teammates, by about 0.85 points per 100 on offense
+           and 0.55 on defense when every teammate is new (FINDINGS.md section 24, `git show
            archive/research-2026-09:FINDINGS.md`).
 
 `exclude_seasons` drops those seasons from the roles table first, so the tenure chain steps over them as if

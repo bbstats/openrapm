@@ -512,7 +512,7 @@ class SeasonWorker:
     def rate(self, params: dict, feature_set: str, changes: tuple = (), seed: int = 0, ensemble: tuple = ("one", 1)
              ) -> tuple[list, pd.DataFrame | None]:
         """Every fold of the season rated through steps 2-3 on the trial's boosters, and the whole season when it is
-        cached: (the `Fold`s, the whole season's centred step-3 table in raw sign, or None).  `changes` and `seed` as
+        cached: (the `Fold`s, the whole season's centered step-3 table in raw sign, or None).  `changes` and `seed` as
         in `changed_matrix` and `booster_seed`; `ensemble` as in `ENSEMBLES`."""
         from openrapm import box_prior, trade_set
         from openrapm.commands import within_season as ws
@@ -562,7 +562,7 @@ class SeasonWorker:
 
     def step3(self, cached: dict, models: dict, feature_set: str, settings, names: dict, changes: tuple, seed: int,
               stream: str) -> pd.DataFrame:
-        """Steps 2-3 on one set of cached inputs and ridge pieces: the centred table in raw sign."""
+        """Steps 2-3 on one set of cached inputs and ridge pieces: the centered table in raw sign."""
         from openrapm import prior_rapm
         prior = {}
         for side in ("O", "D"):
@@ -1018,13 +1018,13 @@ def run_tune(args) -> int:
 
 # The second search (the owner, 2026-10-16: "the best most modern HPO on distributions"): Optuna's Gaussian-process
 # sampler, every setting drawn from a distribution over one fixed space, the next-season check a hard limit.
-GUARD_Z_LIMIT = 1.0      # the next-season check on the 20 neighbour seasons; about z +1.7 on the full test's 56
+GUARD_Z_LIMIT = 1.0      # the next-season check on the 20 neighbor seasons; about z +1.7 on the full test's 56
 DEF_FACTOR = (0.7, 1.2)
 
 
 def suggest_fixed(trial) -> tuple[dict, str, float]:
     """One trial's settings on a fixed space (the Gaussian process wants one): the straight-line penalty is drawn
-    every trial and read only with straight-line leaves; the defence factor multiplies step 4's two defensive
+    every trial and read only with straight-line leaves; the defense factor multiplies step 4's two defensive
     factors."""
     linear = trial.suggest_categorical("linear_tree", [True, False])
     era = trial.suggest_categorical("era_marker", [False, True])

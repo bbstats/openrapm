@@ -212,7 +212,7 @@ def test_shooter_counters_by_slot():
     # every shooter in this game was on the floor when his possession closed except the away
     # player subbed out after his and-1 free throw
     assert tot("fg2a", "h") + tot("fg3a", "h") > 0
-    # the first attempt's realised points and rebound chance
+    # the first attempt's realized points and rebound chance
     assert (p.pts1 <= p.points - p.pts_tech).all()
     assert (p.chance1 <= p.reb_chance).all() and (p.chance1 <= 1).all()
     a1 = p[p["reason"] == "made_ft"].iloc[0]
@@ -267,7 +267,7 @@ def test_an_offensive_rebound_continues_the_possession():
     assert list(poss["offense"]) == [HOME]
     first = poss.iloc[0]
     assert (first.fga, first.fg3a, first.att, first.att1_mid) == (2, 1, 2, 1)
-    # two rebound chances: the first went to the offence (a continuation), the second to the defence
+    # two rebound chances: the first went to the offense (a continuation), the second to the defense
     assert (first.reb_chance, first.reb_cont, first.oreb_p, first.chance1, first.cont_dead) == (2, 1, 1, 1, 0)
 
 

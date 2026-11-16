@@ -45,13 +45,13 @@ def per36(box: pd.DataFrame, rates: list | None = None) -> pd.DataFrame:
 
 
 def fit_mixture(X: np.ndarray, k: int = 8, seed: int = 0, n_init: int = 5) -> tuple:
-    """Fit a Bayesian Gaussian mixture and return `(model, mean, sd)` -- the standardisation included.
+    """Fit a Bayesian Gaussian mixture and return `(model, mean, sd)` -- the standardization included.
 
     Bayesian, not plain EM, so `k` is an upper bound rather than a choice: a component the data does not
     support has its weight driven toward zero instead of splitting a real cluster in two.
 
-    **The mean and sd come back because a season scored by this fit has to be standardised by the
-    TRAINING seasons' constants.**  Standardising the scored season by its own mean and sd would slide
+    **The mean and sd come back because a season scored by this fit has to be standardized by the
+    TRAINING seasons' constants.**  Standardizing the scored season by its own mean and sd would slide
     every player toward the middle of his own year and read a league-wide shift -- pace, the rise of the
     three -- as every player changing type.
     """
@@ -68,7 +68,7 @@ def fit_mixture(X: np.ndarray, k: int = 8, seed: int = 0, n_init: int = 5) -> tu
 def cluster_proba(model, mean: np.ndarray, sd: np.ndarray, X: np.ndarray) -> np.ndarray:
     """One row per player, one column per component: how much he belongs to each type.
 
-    Standardised by the fit's own `mean` and `sd`, never by `X`'s, so a season the mixture never saw is
+    Standardized by the fit's own `mean` and `sd`, never by `X`'s, so a season the mixture never saw is
     placed against the seasons it learned from.
     """
     return model.predict_proba((np.asarray(X, dtype=float) - mean) / sd)
@@ -108,7 +108,7 @@ def spread(table: pd.DataFrame, col: str = "gap_total", min_n: int = 10) -> floa
 def gap_columns(ours: pd.DataFrame, theirs: pd.DataFrame, pairs=(("rating_off", "adj_offense"),
                                                                  ("rating_def", "adj_defense"),
                                                                  ("rating_total", "adj_overall"))) -> pd.DataFrame:
-    """`gap_<side>` = our z minus their z, side by side.  Both are standardised because the two sources are
+    """`gap_<side>` = our z minus their z, side by side.  Both are standardized because the two sources are
     on different scales: the ratings' offensive spread is 1.19 per 100 against the blend's 1.96, and an
     unstandardised difference would read that as disagreement about every player."""
     def z(v):

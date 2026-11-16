@@ -9,8 +9,8 @@ fetches the dashboards (data/dashboards.py); this turns each season's cached tot
 Words used below
     count        a player's season total of one dashboard column, the regular season and playoffs added (the panel's
                  rows pool both phases)
-    rate         100 x count / n, n the possessions of the row's side: his team's on an offence row, the opponent's on a
-                 defence row (every column is built on both rows; the feature lists read the ones that mean something on
+    rate         100 x count / n, n the possessions of the row's side: his team's on an offense row, the opponent's on a
+                 defense row (every column is built on both rows; the feature lists read the ones that mean something on
                  that side)
     pad k        how many possessions' worth of the typical value is blended in, by the method of moments on the
                  season's players: noise variance of one possession's worth of the rate (100 x the league rate, an

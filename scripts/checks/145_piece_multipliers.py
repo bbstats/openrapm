@@ -1,7 +1,7 @@
 """Check 145, how much of each piece of a rating holds up on games the rating never saw (the screen for experiment 61).
 
 Step 4 (prior_shrink.py) multiplies the box-score part of a rating by how much of it holds up on the season's own
-held-out games (0.70 on offence, 0.93 on defence) and leaves the games' part, u, at 1.  u has only ever been
+held-out games (0.70 on offense, 0.93 on defense) and leaves the games' part, u, at 1.  u has only ever been
 multiplied whole, which tied (notes/DECISIONS.md, experiment 33b).  This check splits it into pieces and gives each
 piece its own multiplier, to see whether the pieces hold up differently.  It changes no rating.
 
@@ -35,7 +35,7 @@ difference's t.  The `step4` family is the shipped fit and is held to `prior_shr
 season, to 1e-8, as the check runs.
 
 The held-out error. A season's multipliers fitted on the other seasons (the 8 nearest fold seasons, the test rule: not
-the season or its neighbours, as step 4's are) and scored on the season's own held-out games, against the shipped
+the season or its neighbors, as step 4's are) and scored on the season's own held-out games, against the shipped
 step 4 and against `u_whole`, in the units of the year-over-year test (game_armse; below 0 is better).
 
 The gate, registered 2026-10-14 before the first run.  A family passes on a side when some pair of its pieces has

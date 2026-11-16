@@ -259,7 +259,7 @@ def _add_setting_options(parser) -> None:
                         help="also write every rated season's boosters to outputs/prior_models_<NAME>.pkl, which "
                              "`openrapm folds` reads")
     parser.add_argument("--defensive-target", default=PRODUCT.targets.defence,
-                        help="what the defence ridge explains, per 100 possessions: "
+                        help="what the defense ridge explains, per 100 possessions: "
                              "points_with_expected_opponent_threes or points_with_expected_opponent_threes_all "
                              "(the names x3def_w0.25 and x3def from before 2026-10-11 still work) "
                              "(default %(default)s)")
@@ -305,7 +305,7 @@ def _add_setting_options(parser) -> None:
                              "both: the offensive label too (default %(default)s)")
     parser.add_argument("--team-season-penalties", type=parse_penalty_pair, metavar="ATTACKING,DEFENDING",
                         default=(PRODUCT.labels.team_offense_penalty, PRODUCT.labels.team_defense_penalty),
-                        help="step 1's team-season flags: one column per team-season on offence and one on defence, "
+                        help="step 1's team-season flags: one column per team-season on offense and one on defense, "
                              "penalised at these two values.  0,0: no flags (default 0,0)")
     parser.add_argument("--second-prior", metavar="TAG", default=PRODUCT.prior.second_prior,
                         help="Box Adj: step 3 reads the box-score prior corrected for who each player played with and "
@@ -386,7 +386,7 @@ def _add_folds_tag(parser) -> None:
 
 
 def parse_within_factors(text) -> tuple:
-    """"0.75,1.0" -> (0.75, 1.0): the within layer's factors, offence then defence."""
+    """"0.75,1.0" -> (0.75, 1.0): the within layer's factors, offense then defense."""
     if isinstance(text, tuple):
         return text
     parts = [float(part) for part in str(text).split(",") if part.strip()]
@@ -639,7 +639,7 @@ def _add_second_prior(commands) -> None:
     second = commands.add_parser(
         "second-prior", help="the swaps the second prior's line is fitted on, from the folds' held-back games",
         description="For every within-season fold: each player's box-score prior and eight context numbers (his "
-                    "teammates' and opponents' box-score priors, on offence and defence, with him on the court and "
+                    "teammates' and opponents' box-score priors, on offense and defense, with him on the court and "
                     "on the bench) from the fit games, and the swaps of the held-back games scored at step 4.  Writes "
                     "each season's normal equations to outputs/second_prior/<TAG>/, which `rate --second-prior "
                     "TAG` fits the line on.")
@@ -733,7 +733,7 @@ def _add_glossary(commands) -> None:
     glossary = commands.add_parser(
         "glossary", help="GLOSSARY.md's table of the prior's columns, written from features.py",
         description="Rewrites the table between GLOSSARY.md's lines <!-- generated: features --> and <!-- end "
-                    "generated --> from features.py's catalogue; nothing else in the file changes.")
+                    "generated --> from features.py's catalog; nothing else in the file changes.")
     glossary.add_argument("--check", action="store_true",
                           help="only compare: exit 1 when the table and features.py differ")
     glossary.set_defaults(run=_run_glossary)

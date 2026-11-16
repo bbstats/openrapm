@@ -6,7 +6,7 @@ The owner, 2026-10-12: "any way to get era-level prior adjustments? one thought 
 price per input from all thirty seasons, and the defensive prices drift between eras (notes/DECISIONS.md, "Era drift").
 
 Words used below
-    screen season   one of ten rated seasons (`SCREEN`), at the test setting: it and its neighbours are left out of the
+    screen season   one of ten rated seasons (`SCREEN`), at the test setting: it and its neighbors are left out of the
                     labels and of the training rows
     cell            one screen season under one assignment of players to the five player folds (0 is the shipped
                     assignment, 1 and 2 the noise control's regroupings: box_prior.balanced_player_folds)
@@ -14,8 +14,8 @@ Words used below
     half-life       a training row counts half as much for every that many seasons between its seasons and the rated
                     one, beyond the nearest season the fit may use (box_prior.era_kernel)
     yardstick       what a held-out prior is scored against.  "career": the player's step-1 label, his RAPM over every
-                    season but the screen season and its neighbours (what the prior is trained on).  "neighbours": his
-                    RAPM over the two neighbouring seasons alone, weighted by his possessions there (what the
+                    season but the screen season and its neighbors (what the prior is trained on).  "neighbours": his
+                    RAPM over the two neighboring seasons alone, weighted by his possessions there (what the
                     year-over-year test scores, read player by player)
     held-out error  each rated player's prior comes from the booster fitted without his player fold (a player in no
                     fold from the booster fitted on every row, as in the build); the error is the possession-weighted
@@ -35,10 +35,10 @@ seasons (t = the mean change over its standard error, 9 degrees of freedom); by 
 The gate, registered before any result (notes/DECISIONS.md, experiment 56).  An arm passes when
     (a) on the career yardstick it beats today at t -2 or below on at least one side,
     (b) neither side is worse at t +2 or above on either yardstick,
-    (c) its mean change on the neighbours yardstick is not above 0 on a side that passed (a),
+    (c) its mean change on the neighbors yardstick is not above 0 on a side that passed (a),
     (d) no era is worse in every one of its screen seasons, on either side, on the career yardstick.
-The half-life: the longest passing one whose change (on defence; on offence if no passing one passed (a) on
-defence) is within one standard error of the best passing one's; 2 is eligible only when 4 beats both 8 and 16.  The
+The half-life: the longest passing one whose change (on defense; on offense if no passing one passed (a) on
+defense) is within one standard error of the best passing one's; 2 is eligible only when 4 beats both 8 and 16.  The
 ratios against the league join it only if both together pass and beat the half-life alone at t -2 or below on a side,
 worse on neither side and neither yardstick at t +2.  With no half-life passing, the ratios alone are built if they
 pass; with nothing passing, nothing is built.
@@ -78,7 +78,7 @@ PRE_1997_AGE = 24.0                 # first seen in 1997 at this age or older: a
 SIDES = (("O", "offense"), ("D", "defense"))
 YARDSTICKS = (("career", "possessions"), ("neighbours", "neighbours_possessions"))
 GROUPS = ("all", "bench", "pre1997", "since1997")
-# the inputs whose prices are read, each side: on defence the ones the era-drift test found moving, on offence the
+# the inputs whose prices are read, each side: on defense the ones the era-drift test found moving, on offense the
 # shooting ones whose league level moved most (a ratio is read through its twin in an arm that has the twin)
 PRICED = {"O": ["three_point_attempt_share", "true_shooting_pct", "points_per100", "assists_per100",
                 "off_rebounds_per100"],
@@ -120,8 +120,8 @@ def prepare(cfg: dict, every_arm: dict | None = None) -> dict:
 
     `every_arm` is {name: ({side: input list}, ...)}, `arms()` unless given (check 143 hands over its own lists).
 
-    The labels are step 1's RAPM over every trainable season but the screen season and its neighbours (the test
-    setting); the neighbours yardstick is the same fit over the two neighbouring seasons alone.  Only the columns the
+    The labels are step 1's RAPM over every trainable season but the screen season and its neighbors (the test
+    setting); the neighbors yardstick is the same fit over the two neighboring seasons alone.  Only the columns the
     workers read are kept."""
     from openrapm.box_prior import era_kernel, rated_rows, training_rows
     from openrapm.commands.build import accumulate_rapm, unseen_seasons

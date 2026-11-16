@@ -11,8 +11,8 @@ For every fold of every season in the folds named:
     2. His eight context numbers, from the fit games' stint rows, every prior in them from the boosters that never saw
        him (second_prior.context_numbers).
     With --inputs context_and_types (experiment 82), or context_and_types_centred (experiment 93, the default: the
-    same inputs, centred only when the line is applied), every player also carries his other end's box-score prior and
-    step 5's 19 numbers from the fold's players file, the fit games', standardised with the trainable panel's means
+    same inputs, centered only when the line is applied), every player also carries his other end's box-score prior and
+    step 5's 19 numbers from the fold's players file, the fit games', standardized with the trainable panel's means
     and standard deviations, which run.json keeps for the build.
     With --inputs context_types_team_rates_centred (experiment 128), also his team's 16 rates with him on the court and
     off it, from the fit games' stint rows (second_prior.team_rate_numbers).
@@ -71,7 +71,7 @@ def fold_players(directory: Path, stem: str) -> pd.DataFrame:
 
 
 def stored_box(players: pd.DataFrame) -> dict:
-    """{"O", "D"}: {player_id: the box-score prior the fold rated with}, raw sign (on defence, points allowed)."""
+    """{"O", "D"}: {player_id: the box-score prior the fold rated with}, raw sign (on defense, points allowed)."""
     offence = players[(players.side == "O") & players.prior_raw_off.notna()]
     defence = players[(players.side == "D") & players.prior_raw_def.notna()]
     return {"O": pd.Series(offence.prior_raw_off.to_numpy(float), index=offence.player_id.to_numpy()),
@@ -228,7 +228,7 @@ def run_second_prior(cfg: dict, models: str, folds_tag: str, tag: str, seasons=N
     multipliers = step4_multipliers(fold_seasons, folds, shrink)
     chosen = [season for season in fold_seasons if seasons is None or season in set(seasons)]
     scale = None
-    # every set that reads step 5's numbers needs their standardisation, the centred one too: without it the line
+    # every set that reads step 5's numbers needs their standardization, the centered one too: without it the line
     # would be fitted on the eight context numbers alone under the set's name (notes/DECISIONS.md, the bug-fix
     # pass of 2026-10-22)
     if second_prior.reads_types(inputs):

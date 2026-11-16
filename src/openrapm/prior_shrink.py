@@ -4,7 +4,7 @@ Step 3 splits each rating into two parts: the prior part, s x prior (the box-sco
 scale), and the games' part, u (how far the season's own games moved the player from it).  Scored on games the
 rating never saw, the two parts hold up differently.  Fit those games' points per 100 by weighted least squares on
 the ten players' summed prior parts and summed games' parts, both coefficients free (1 = the part holds up
-exactly): the prior part gets 0.70 on offence (0.64 for players with 2,500+ possessions) and 0.91 on defence, the
+exactly): the prior part gets 0.70 on offense (0.64 for players with 2,500+ possessions) and 0.91 on defense, the
 games' part 1.21 and 1.30 (notes/DECISIONS.md, experiment 33b).
 
 From 2026-10-03 the shipped step multiplied the prior part only, one multiplier per side and season, fitted the same
@@ -15,7 +15,7 @@ Since experiment 65 (adopted 2026-10-15, the owner: "Adopt one multiplier as the
 multiplied (`free_games=True`, settings.ShrinkSettings.free_games_part): the games' part's multipliers g_O and g_D
 are fitted in the same least squares with U_O and U_D as free columns and t_g = y_g - S_g.  The with-or-without-you
 test (scripts/checks/151_wowy.py), which scores how a team's results move as its lineup changes, read it at -0.648,
-z -17.5, better in 30 of 30 seasons, with g about 1.33 on offence and 1.48 on defence; the year-over-year test a tie.
+z -17.5, better in 30 of 30 seasons, with g about 1.33 on offense and 1.48 on defense; the year-over-year test a tie.
 Then u <- g x u before the re-centring, which still moves the prior part only.  `free_games=False` is the step as it
 was, and the module's defaults keep it so.
 
@@ -24,18 +24,18 @@ offensive prior part of 5.394 becomes 0.704 x 5.394 = 3.80, less the season's sh
 stays 0.97, so his offensive rating goes from 6.37 to 4.75.  With g_O = 1.33 his games' part would be 1.29.
 
 Since experiment 106 (adopted 2026-10-23, the owner: "please adopt, yes - D") the step has two layers
-(settings.ShrinkSettings.within_team_layer).  Each of the four parts (prior and games' part, offence and defence) is
+(settings.ShrinkSettings.within_team_layer).  Each of the four parts (prior and games' part, offense and defense) is
 split into his team's possession-weighted mean and his deviation from it (`team_split`: the team is his main team,
 the one he played the most possessions for; the weight his possessions on that side).  The team means keep the
 multipliers above, fitted on held-back team-games.  The deviations get four multipliers of their own, fitted on the
 held-back STINTS with a free level per team-game (`stint_equations`), so only how a team's lineups differ inside a
 game sets them: on team-games, minutes that react to how a lineup is doing pull the within-team split down
 (notes/DECISIONS.md, "Why the shrink cuts the offense: the unit it is fitted on").  The within layer is then
-multiplied by settings.ShrinkSettings.within_factors, 0.75 on offence and 1.0 on defence (version D), and by the
-defence factor as the team layer is.
+multiplied by settings.ShrinkSettings.within_factors, 0.75 on offense and 1.0 on defense (version D), and by the
+defense factor as the team layer is.
 
 Example, the within layer, 2017-2026 means before any factor: the deviation of the offensive prior part kept 0.97
-(the team layer 0.66), of the offensive games' part 1.32 (1.38); defence 0.84 and 2.06 (0.93 and 1.56).  A star whose
+(the team layer 0.66), of the offensive games' part 1.32 (1.38); defense 0.84 and 2.06 (0.93 and 1.56).  A star whose
 offensive prior part is +5.0 on a team whose mean is +0.4 gets 0.66 x 0.4 + 0.75 x 0.97 x 4.6 = 3.61 before the
 re-centring, against 0.66 x 5.0 = 3.30 with one multiplier.
 
@@ -45,7 +45,7 @@ Words used below
                     other quarter (the test games), which the rating never saw.  Each season's games are
                     assigned at random to four folds, three times over: twelve folds a season (`openrapm folds`,
                     data/within_folds.py)
-    test team-game  one team's offence in one test game: its points per 100 possessions as scored, its
+    test team-game  one team's offense in one test game: its points per 100 possessions as scored, its
                     possessions, and each player's share of the possessions on both ends
     rated player    a player with offensive possessions in the fold's fit games, so with a rating of his own
     stand-in rating what every other player in the test games carries: a quarter of the possession-weighted
@@ -56,11 +56,11 @@ Words used below
                     since experiment 55, 2017-2026 before; pinned because the fold folder grew to 1997-2026 on
                     2026-10-04 and an unpinned rerun shrank harder than what shipped (notes/DECISIONS.md,
                     experiment 34's correction)
-    multiplier      m_O, m_D: what the prior part is multiplied by, offence and defence
+    multiplier      m_O, m_D: what the prior part is multiplied by, offense and defense
 
 The multipliers are one weighted least-squares fit over the test team-games of every fold used:
 
-    minimise   sum over test team-games g   w_g (t_g - F_g gamma_f - m_O P_O,g - m_D P_D,g)^2
+    minimize   sum over test team-games g   w_g (t_g - F_g gamma_f - m_O P_O,g - m_D P_D,g)^2
     where      t_g = y_g - S_g - U_O,g - U_D,g
 
     y_g, w_g      the team-game's points per 100 possessions as scored, and its possessions
@@ -74,7 +74,7 @@ The multipliers are one weighted least-squares fit over the test team-games of e
 Which folds a season's multipliers are fitted on:
 
     product rule   every fold season except the rated one, so a season's own games never set its multipliers
-    test rule      every fold season except the rated one and its two neighbours, because the year-over-year
+    test rule      every fold season except the rated one and its two neighbors, because the year-over-year
                    test scores a season's ratings on its neighbours' games
     nearest        of those, the 8 fold seasons nearest the rated one (settings.ShrinkSettings.nearest, since
                    experiment 55); before every fold season was 1997-2026, seasons without folds borrowed all ten
@@ -84,7 +84,7 @@ Then, for each season and side (`shrink`):
     prior <- m x prior,   u <- g x u   (g = 1 when the games' part is held)
     shift  = sum(poss_off x (prior + u)) / sum(poss_off),   prior <- prior - shift,   rating = prior + u
 
-The weight is the offensive possession count on both sides, as in step 3's centring (prior_rapm.centre).  The
+The weight is the offensive possession count on both sides, as in step 3's centering (prior_rapm.centre).  The
 re-centring keeps the possession-weighted mean rating at zero, and it moves the prior part only.
 
 Example: rating 2026 in the product setting, m_O = 0.704 and m_D = 0.929.  Jokic's offensive prior part of 5.394
@@ -104,14 +104,14 @@ __all__ = ["RULES", "unseen_fold_seasons", "fold_seasons_used", "fold_terms", "f
            "layered_fold_parts", "shrink_fold"]
 
 RULES = ("product", "test")
-# the within layer's four multipliers (experiment 106), in this order: offence prior part, offence games' part,
-# defence prior part, defence games' part
+# the within layer's four multipliers (experiment 106), in this order: offense prior part, offense games' part,
+# defense prior part, defense games' part
 WITHIN_COLUMNS = ("within_multiplier_off", "within_games_multiplier_off", "within_multiplier_def",
                   "within_games_multiplier_def")
 MULTIPLIER_COLUMNS = ("multiplier_off", "multiplier_def", "games_multiplier_off", "games_multiplier_def",
                       *WITHIN_COLUMNS)
 # each part of the within layer: its column, the possessions that weigh its team mean, and its sign in a team-game
-# (the defence in points allowed)
+# (the defense in points allowed)
 LAYER_PARTS = (("prior_off", "poss_off", 1.0), ("u_off", "poss_off", 1.0), ("prior_def", "poss_def", -1.0),
                ("u_def", "poss_def", -1.0))
 
@@ -426,7 +426,7 @@ def shrink(table: pd.DataFrame, multipliers: pd.DataFrame, teams: pd.DataFrame |
 
 
 def season_factors(multipliers: pd.DataFrame, season: int) -> tuple:
-    """(m_O, m_D, g_O, g_D): one season's row of `multipliers_by_season`, as the build applies it (the defence factor
+    """(m_O, m_D, g_O, g_D): one season's row of `multipliers_by_season`, as the build applies it (the defense factor
     already in it), 1 for a games' part the table does not free; with the within layer, its four WITHIN_COLUMNS after
     them, eight in all."""
     row = multipliers.set_index("season").loc[int(season)]
@@ -452,9 +452,9 @@ def shrink_fold(rows: dict, season: int, factors: tuple) -> pd.DataFrame:
 
     `rows` is the fold's {"O", "D"} rated players (data/within_folds.Fold.rows) and `factors` `season_factors`.  Each
     side is re-centred over its own rows, weighted by offensive possessions, as the with-or-without-you test applies
-    step 4 to a fold (scripts/checks/151_wowy.py).  A player with offensive possessions and none on defence has no
-    defence row (2015, repeat 0, fold 2: one possession); his defence parts come from his offence row, shrunk as
-    the defence rows were, and his defensive possessions are 0, so step 5 weighs him at nothing there.
+    step 4 to a fold (scripts/checks/151_wowy.py).  A player with offensive possessions and none on defense has no
+    defense row (2015, repeat 0, fold 2: one possession); his defense parts come from his offense row, shrunk as
+    the defense rows were, and his defensive possessions are 0, so step 5 weighs him at nothing there.
     """
     if len(factors) == 8:
         return _shrink_fold_layered(rows, season, factors)
@@ -481,7 +481,7 @@ def shrink_fold(rows: dict, season: int, factors: tuple) -> pd.DataFrame:
 def layered_fold_parts(rows: dict, factors: tuple) -> dict:
     """{"O", "D"}: (prior part, games' part) of a fold's rated players after both layers, each side re-centred over its
     own rows by offensive possessions, as step 4 re-centres; `factors` is `season_factors`'s eight.  The offence's
-    parts are split over the offence rows' teams, the defence's over the defence rows'."""
+    parts are split over the offense rows' teams, the defence's over the defense rows'."""
     team_m = (factors[0], factors[2], factors[1], factors[3])
     out = {}
     for side, prior, games in (("O", "prior_off", "u_off"), ("D", "prior_def", "u_def")):
@@ -493,8 +493,8 @@ def layered_fold_parts(rows: dict, factors: tuple) -> dict:
 
 
 def _shrink_fold_layered(rows: dict, season: int, factors: tuple) -> pd.DataFrame:
-    """`shrink_fold` with the two layers.  A player with no defence row takes his defence parts from his offence row,
-    split around his team's defensive mean as the defence rows are (0 when his team has no defence row)."""
+    """`shrink_fold` with the two layers.  A player with no defense row takes his defense parts from his offense row,
+    split around his team's defensive mean as the defense rows are (0 when his team has no defense row)."""
     offence, defence = rows["O"], rows["D"]
     parts = layered_fold_parts(rows, factors)
     table = pd.DataFrame({"player_id": offence.player_id.to_numpy(np.int64), "season": np.int64(season),

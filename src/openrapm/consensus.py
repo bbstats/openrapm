@@ -17,7 +17,7 @@ Words used below
     rank agreement  Spearman's rank correlation between the ratings and the consensus, per side
     spread        the ratings' standard deviation over the consensus's, per side: 1 = the same width
 
-Example: a player rated +3.0 on offence over 2,000 possessions in 2025 and +1.0 over 1,000 in 2026 is pooled at
+Example: a player rated +3.0 on offense over 2,000 possessions in 2025 and +1.0 over 1,000 in 2026 is pooled at
 (2,000 x 3.0 + 1,000 x 1.0) / 3,000 = +2.33.
 """
 from __future__ import annotations
@@ -39,9 +39,9 @@ SIDES = (("total", "adj_overall"), ("off", "adj_offense"), ("def", "adj_defense"
 SUFFIX = re.compile(r"\b(jr|sr|ii|iii|iv|v)\b")
 
 # The minimums tests/test_vs_consensus.py holds the shipped ratings to; the reason for each is in that file.
-MIN_RANK_AGREEMENT = 0.75           # Spearman, offence, defence and total
+MIN_RANK_AGREEMENT = 0.75           # Spearman, offense, defense and total
 OFFENCE_SPREAD = (0.55, 1.3)        # the ratings' offensive standard deviation over the consensus's
-# the same on defence: 1.4 until 2026-10-21, re-based once when experiment 93 was published at 1.41 (experiment 80,
+# the same on defense: 1.4 until 2026-10-21, re-based once when experiment 93 was published at 1.41 (experiment 80,
 # the site before it, 1.26; 82 1.33), the owner knowing its defense is wider: "Nah publish the fix. It's ok I decided."
 MAX_DEFENCE_SPREAD = 1.45
 MIN_TOP_FIVE_SHARED = 3             # players in both top fives by total
@@ -96,7 +96,7 @@ def matched(ratings: pd.DataFrame, consensus: pd.DataFrame, min_possessions: flo
 
 def with_ranks(joined: pd.DataFrame) -> pd.DataFrame:
     """The `matched` players with, per side, the ratings' rank and the consensus's (1 = best) and the gap between
-    the two standardised ratings: rk_ours_<side>, rk_con_<side>, gap_<side> for side total, off and def."""
+    the two standardized ratings: rk_ours_<side>, rk_con_<side>, gap_<side> for side total, off and def."""
     joined = joined.copy()
     for side, consensus_column in SIDES:
         rating = joined[f"rating_{side}"]
@@ -122,7 +122,7 @@ def agreement(ranked: pd.DataFrame) -> dict:
 
       n               players matched
       rho_*           rank agreement per side
-      spread_*        the ratings' standard deviation over the consensus's, offence and defence
+      spread_*        the ratings' standard deviation over the consensus's, offense and defense
       top5            players in both top fives by total
       def_share       defence's share of the ratings' offence-plus-defence variance
       team_r2_*       how much of a player's rating his team alone explains (`team_r2`)

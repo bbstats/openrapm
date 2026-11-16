@@ -13,7 +13,7 @@ Words used below
     offset           how far the rated season sits from the scored one: 1 by default.  The trade set
                      (scripts/checks/70_tradeset.py) is fitted on the games one season either side of the rated one,
                      so it is scored at offset 2
-    neighbour table  one ratings table asked in one direction (`NeighbourTable`): nothing is fitted, so what is
+    neighbor table  one ratings table asked in one direction (`NeighbourTable`): nothing is fitted, so what is
                      measured is exactly the table handed in
     fill             what a player the rated season's table has no row for scores (`fill_rule`): 0 (the average
                      player), a replacement level read off the table itself, or two numbers set by hand
@@ -21,7 +21,7 @@ Words used below
                      changed team) or `game_bench_share` (the share of the team-game's possessions played by
                      players with fewer than 500 possessions in the rated season)
 
-Every result row is one scored season x neighbour table x split x group, with the columns of `RESULT_COLUMNS`.
+Every result row is one scored season x neighbor table x split x group, with the columns of `RESULT_COLUMNS`.
 Three of them are constant and kept so the files keep the schema every reader of them (scripts 66, 101, 135)
 expects: k = 1 (one rated season), lam = 0 (nothing is fitted) and cut = NaN.
 
@@ -79,7 +79,7 @@ def scored_seasons(cfg: dict, first: int | None = None, last: int | None = None)
     return [season for season in range(first, last + 1) if first_season <= season <= last_season]
 
 
-# ------------------------------------------------------------------------------------- the neighbour tables
+# ------------------------------------------------------------------------------------- the neighbor tables
 def no_fill(table: pd.DataFrame) -> tuple[float, float]:
     """The test's default for a player with no row: 0, the average player."""
     return 0.0, 0.0
@@ -96,7 +96,7 @@ def fill_rule(spec: str | None) -> Callable[[pd.DataFrame], tuple[float, float]]
         ""            no fill: 0, the average player
         "500"         the replacement level of the table's own players under 500 possessions (scoring.replacement_level)
         "500x0.25"    a quarter of that level, the depth the test settled on (notes/DECISIONS.md)
-        "-1.6/-0.5"   set by hand, positive-good, offence first: a defensive rating is stored points-allowed,
+        "-1.6/-0.5"   set by hand, positive-good, offense first: a defensive rating is stored points-allowed,
                       so its sign flips going in
 
     Example: fill_rule("-1.6/-0.5") gives a player with no row o = -1.6 and d = +0.5.
@@ -135,7 +135,7 @@ class NeighbourTable:
 
 
 def neighbour_tables(tables: dict, offset: int = 1, fills: dict | None = None) -> list[NeighbourTable]:
-    """Two neighbour tables per named table, "<name>:prev" then "<name>:next", in the order the tables are named.
+    """Two neighbor tables per named table, "<name>:prev" then "<name>:next", in the order the tables are named.
 
     `tables` is {name: {"prev": frame, "next": frame}} (usually the same frame twice: scripts/checks/63_yoy.py reads
     `name=a.parquet|b.parquet` as one file per direction); `fills` is {name: a `fill_rule` spec}.
@@ -161,7 +161,7 @@ def split_labels(split: str, prediction, design, cfg: dict, scored: int, rated: 
 
 
 def score_season(scored: int, systems: list, design, splits, cfg: dict) -> list[dict]:
-    """The result rows of one scored season: each neighbour table on all rows, then inside every split's groups."""
+    """The result rows of one scored season: each neighbor table on all rows, then inside every split's groups."""
     rows = []
     for system in systems:
         rated = system.rated_season(scored)
@@ -181,7 +181,7 @@ def score_season(scored: int, systems: list, design, splits, cfg: dict) -> list[
 
 def run(systems: list, designs: DesignCache, seasons: list, splits=(), out: Path | None = None,
         verbose: bool = True) -> pd.DataFrame:
-    """Every scored season predicted by every neighbour table: one row per season x table x split x group.
+    """Every scored season predicted by every neighbor table: one row per season x table x split x group.
 
     Each season is scored on its points design, playoffs included, because a season is one entity.  With `out`
     the rows so far are written after every season (a run can be read before it ends) and once at the end.

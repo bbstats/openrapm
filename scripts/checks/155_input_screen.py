@@ -32,7 +32,7 @@ Words used below
     tune          the booster settings searched again on today's pipeline with the tag's pool in the lists
                   (experiment 120; the owner, 2026-10-29: "hyperparameter tuning + boruta should probably always
                   happen in tandem (or - if it shouldn't we should prove it)"): experiment 76's guarded search, its
-                  space less the era marker and the defence factor, on the ten tune seasons at seed 0
+                  space less the era marker and the defense factor, on the ten tune seasons at seed 0
     tandem        the screen at two booster settings side by side: each candidate's reading against its shuffled
                   copy at both, and how far it moved, paired by season
 
@@ -344,7 +344,7 @@ def shuffled(values: np.ndarray, seed: int, name: str, stream: str) -> np.ndarra
 
 def saved_side(model, names: list, unseen: list) -> dict:
     """One side's boosters in the layout `openrapm folds` reads (within_season.saved_booster, prior_rows, and the
-    fold check that they never trained on the season or a neighbour)."""
+    fold check that they never trained on the season or a neighbor)."""
     from openrapm.commands.build import booster_layout
     from openrapm.features import ROW_FEATURES
     return dict(**booster_layout(model), feats=list(names), model_feats=list(names) + ROW_FEATURES,
@@ -622,7 +622,7 @@ class Fitters:
         `folder` when given (`fit_task`'s out_path)."""
         if folder is not None:
             folder.mkdir(parents=True, exist_ok=True)
-        # offence first: its 1,091-tree boosters take most of the time
+        # offense first: its 1,091-tree boosters take most of the time
         return [self.pool.apply_async(fit_task, (self.tag, season, side, trial, None if params is None
                                                  else params[side],
                                                  None if folder is None else str(folder / f"{season}_{side}.pkl")))
@@ -1110,7 +1110,7 @@ IN_FLIGHT = 2            # trials at once: a trial's boosters are fitted while t
 
 def suggest(trial) -> dict:
     """{side: one trial's LightGBM settings} on experiment 76's space (check 152's suggest_fixed), less its era marker
-    and its defence factor: the inputs are the tag's pool, and step 4 stays as shipped.  Trees are capped at 24 leaves
+    and its defense factor: the inputs are the tag's pool, and step 4 stays as shipped.  Trees are capped at 24 leaves
     and 1,500 rounds, where experiment 76 went to 96 and 2,500: with ten bags of six boosters a side, the top corner
     makes a season's boosters too large to hold (2026-10-29, a trial at 88 leaves and 1,382 trees stopped the first
     run); experiments 75 and 76 chose 5 to 13 leaves and 114 to 1,091 rounds."""

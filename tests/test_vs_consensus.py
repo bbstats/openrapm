@@ -207,7 +207,7 @@ def test_no_archetype_bias_by_cluster(ratings):
 
 # ------------------------------------------------------------------ fixed by the hybrid prior
 # These five were the defect.  They flipped when the retired scripts/08_ratings.py moved to the hybrid prior --
-# box score priced to predict a PLAYER on offence, no box prior at all on defence (a defensive box prior has
+# box score priced to predict a PLAYER on offense, no box prior at all on defense (a defensive box prior has
 # shipped since) -- so they are guards now: defensive spread 2.13 -> 1.23, defensive agreement 0.755 -> 0.888,
 # archetype bias +0.63 -> +0.20, overall agreement 0.784 -> 0.896, and the star guards came back up the ratings.
 def test_defensive_spread_is_calibrated(ratings):
@@ -216,8 +216,8 @@ def test_defensive_spread_is_calibrated(ratings):
 
 
 def test_defense_agrees_with_the_consensus(ratings):
-    """The blend's defence is 90% raw-points metrics (xRAPM 0.5, EPM 0.4) and 10% luck-adjusted RAPM.
-    The ratings' defence is fit with opponent three-point makes replaced by the shooter's expected
+    """The blend's defense is 90% raw-points metrics (xRAPM 0.5, EPM 0.4) and 10% luck-adjusted RAPM.
+    The ratings' defense is fit with opponent three-point makes replaced by the shooter's expected
     rate, which every luck-adjusted public metric agrees with MORE and every raw-points one LESS
     (FINDINGS.md section 18), so 0.81 against this blend is the expected level, not a regression;
     0.888 was the actual-points ratings.
@@ -227,7 +227,7 @@ def test_defense_agrees_with_the_consensus(ratings):
     defensive SPREAD from 1.30 to 1.28.  The owner's ruling: *"disagreeing with consensus is just a sanity
     check, never something to fully fit to."*  This guard exists to catch a ratings table that has gone
     grossly wrong, not to arbitrate a 0.1% rank-correlation difference against a metric blend that is 90%
-    raw-points on defence; 0.75 still catches a real fall and matches the offensive and overall minimums."""
+    raw-points on defense; 0.75 still catches a real fall and matches the offensive and overall minimums."""
     rho = spearmanr(ratings.rating_def, ratings.adj_defense).statistic
     assert rho >= MIN_RANK_AGREEMENT, f"defensive rank agreement is {rho:.3f}"    # 0.759 on tune501_b7
 

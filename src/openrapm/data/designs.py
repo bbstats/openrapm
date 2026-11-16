@@ -139,7 +139,7 @@ class DesignCache:
 
     def block(self, seasons, target: str) -> Design:
         """One design over several seasons on `target` (rows of every season, one column per player), built on
-        first request.  The trade set (scripts/checks/70_tradeset.py) fits a season and its two neighbours
+        first request.  The trade set (scripts/checks/70_tradeset.py) fits a season and its two neighbors
         together."""
         key = (tuple(int(season) for season in seasons), target)
         if key not in self._designs:

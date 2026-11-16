@@ -28,7 +28,7 @@ Words used below
 
 Example: before Jokić's 41st game the network's forecast is a row with his 40 games' possessions, his shares so far and
 row_seasons the share of the regular season played that morning; the box-score prior answers for it, 1.9 per 100 on
-offence say, and every stint of game 41 is pulled toward 1.9 times the season's prior scale.
+offense say, and every stint of game 41 is pulled toward 1.9 times the season's prior scale.
 """
 from __future__ import annotations
 
@@ -152,7 +152,7 @@ def _typical(games: G.Games) -> pd.DataFrame:
 
 
 def _levels(games: G.Games) -> dict:
-    """{"O", "D"}: each season's league level of the 13 counts per 100 of that side's possessions (the panel's centring
+    """{"O", "D"}: each season's league level of the 13 counts per 100 of that side's possessions (the panel's centering
     level, box_rates.py), and of the 9 hustle counts (data/dashboard_rates.py's league rate), over the games handed
     in."""
     frame = games.frame[~games.frame.end]
@@ -176,7 +176,7 @@ def _levels(games: G.Games) -> dict:
 
 def _side_rates(forecasts: np.ndarray, poss_off: np.ndarray, poss_def: np.ndarray, side: str) -> pd.DataFrame:
     """The 13 counts and 9 hustle counts per 100 possessions of `side`, from forecasts per 100 of each stat's own
-    exposure: a defensive stat on an offence row is scaled by his defensive over offensive possessions so far, and
+    exposure: a defensive stat on an offense row is scaled by his defensive over offensive possessions so far, and
     so on (1 before his first game)."""
     with np.errstate(invalid="ignore", divide="ignore"):
         to_off = np.where(poss_off > 0, poss_def / poss_off, 1.0)
@@ -203,7 +203,7 @@ def _side_rates(forecasts: np.ndarray, poss_off: np.ndarray, poss_def: np.ndarra
 def _panel_side(states: pd.DataFrame, forecasts: np.ndarray, so_far: pd.DataFrame, shares: pd.DataFrame,
                 levels: pd.DataFrame, base: pd.DataFrame, side: str) -> pd.DataFrame:
     """One side's panel rows for the states (season, player_id, plus any columns to keep): the network's rates
-    centred on the season's level, the hustle inputs against the league's, the role shares, the possessions, every
+    centered on the season's level, the hustle inputs against the league's, the role shares, the possessions, every
     other column from `base`'s row of the player, season and side."""
     rates = _side_rates(forecasts, so_far.poss_off.to_numpy(), so_far.poss_def.to_numpy(), side)
     level = levels.reindex(states.season.to_numpy()).reset_index(drop=True)
@@ -233,7 +233,7 @@ def _panel_side(states: pd.DataFrame, forecasts: np.ndarray, so_far: pd.DataFram
 
 def _panel_rows(games: G.Games, forecasts: np.ndarray, states: pd.DataFrame, base: pd.DataFrame) -> pd.DataFrame:
     """Both sides' panel rows for `states` (one row each: row, season, player_id, team_id, before: the day the state
-    stands on, plus any columns to keep), offence first."""
+    stands on, plus any columns to keep), offense first."""
     so_far = _so_far(games, states[["season", "player_id", "team_id", "before"]])
     shares = _role_shares(so_far, states.season.to_numpy(), _typical(games))
     levels = _levels(games)

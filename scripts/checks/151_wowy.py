@@ -10,12 +10,12 @@ game to game as its lineup changes.  The biggest such change is a regular not pl
 Words used below
     fold            one season rated from three quarters of its games, the other quarter held back (`openrapm folds`;
                     data/within_folds.py); each season has three repeats of four folds
-    team-game       one team's offence in one held-back game: points per 100 possessions as scored, weighted by its
+    team-game       one team's offense in one held-back game: points per 100 possessions as scored, weighted by its
                     possessions
     prediction      the fold's ratings summed over the ten players by their share of the team-game's possessions
-                    (defence in points allowed), a stand-in rating for a player the fold did not rate.  Two stages:
+                    (defense in points allowed), a stand-in rating for a player the fold did not rate.  Two stages:
                     `step3`, the rating as the fold built it; `step4`, its prior part times step 4's multiplier for the
-                    season (from the 8 fold seasons nearest it, never the season or its neighbours: the test rule, as
+                    season (from the 8 fold seasons nearest it, never the season or its neighbors: the test rule, as
                     the experiments ship), re-centred
     team totals out each fold's misses (points minus prediction) fitted with a free level for every attacking team, a
                     free level for every defending team, home and playoffs; what is left is the WOWY miss.  A rating
@@ -42,7 +42,7 @@ players assigned to other folds) shows what chance alone does.  Below 0 is bette
 Step 4 split into pieces (`--pieces source,certainty`, the retry plan's rank 3, 2026-10-15).  For a system whose
 folds were built with `openrapm folds --pieces`, one more stage per family of check 145: the box-score part and each
 piece of the games' part get their own multiplier, fitted as check 145 fits them on the 8 nearest fold seasons under
-the test rule, never the season or its neighbours, then applied to the season's folds and re-centred.  The stage
+the test rule, never the season or its neighbors, then applied to the season's folds and re-centred.  The stage
 The shipped step through the same code, `pieces_u_whole` since experiment 65 (`pieces_step4` before), must equal
 `step4` to the last digits; the check stops if not.
 
@@ -50,7 +50,7 @@ Step 4 here is the shipped one, settings.ShrinkSettings: since experiment 65 (ad
 games' part too, so `step4` is m x prior + g x u, both factors fitted on the 8 nearest fold seasons.  Since experiment
 106 (adopted 2026-10-23) it has two layers: each part split into the player's team mean, multiplied as before, and his
 deviation from it, with multipliers of its own fitted on the system's own held-back stints within games, test rule,
-8 nearest fold seasons, times the within factors and the defence factor (prior_shrink, "Since experiment 106").
+8 nearest fold seasons, times the within factors and the defense factor (prior_shrink, "Since experiment 106").
 `--pieces` compares check 145's families with the one-layer step and so needs the system built and read with
 --no-within-team-layer in mind: its equality check stops on a two-layer step 4.
 
@@ -93,7 +93,7 @@ SLICES = ("all", "dnp")
 PIECES_TOLERANCE = 1e-8         # the shipped step through check 145's code against `step4`, per player (145's own)
 FREE_GAMES = PRODUCT.shrink.free_games_part     # step 4 multiplies the games' part too (experiment 65)
 DEFENCE_FACTORS = PRODUCT.shrink.defence_factors  # and both defensive factors by one more, by era (experiments 76, 98)
-WITHIN_FACTORS = PRODUCT.shrink.within_factors    # and the within layer's by these, offence then defence (106)
+WITHIN_FACTORS = PRODUCT.shrink.within_factors    # and the within layer's by these, offense then defense (106)
 SHIPPED_FAMILY = "u_whole" if FREE_GAMES else "step4"      # check 145's family that is the shipped step 4
 
 
@@ -301,7 +301,7 @@ class PieceStages:
                 for family in self.families}
 
     def dialled(self, family: str, values, season: int) -> np.ndarray:
-        """A family's multipliers, offence's pieces then defence's, with every defensive one times the season's defence
+        """A family's multipliers, offence's pieces then defence's, with every defensive one times the season's defense
         factor, as the shipped step 4 takes both of its defensive multipliers times it (`step4` in `system_errors`).
         Without it the shipped family could never equal `step4`, and the check in `stage_ratings` stopped every run on
         its first fold (until 2026-10-22)."""
@@ -374,7 +374,7 @@ def shrink_settings(flags: str = ""):
 def within_layer(folds: list, where: dict, seasons, defence_factors: tuple,
                  within_factors: tuple = WITHIN_FACTORS, shrink=None) -> pd.DataFrame | None:
     """The shipped step 4's within layer for `seasons`, indexed by season: its four multipliers fitted on the system's
-    own held-back stints within games, test rule, 8 nearest fold seasons, times the within factors and the defence
+    own held-back stints within games, test rule, 8 nearest fold seasons, times the within factors and the defense
     factor (commands/build.within_layer_multipliers); None when the shipped step 4 has one layer.  With `shrink`
     (`shrink_settings`), that step 4's layer instead, and `defence_factors` and `within_factors` are not read."""
     from dataclasses import replace
@@ -415,7 +415,7 @@ def system_errors(audit, within, name: str, seasons: tuple, unit: str = "stint",
     """One row per season, stage and slice: the system's WOWY error over the season's folds, under `label` (the name
     when not given).  With `families` (check 145's), a system whose folds carry pieces also gets a stage per family;
     its multipliers go to `multiplier_tables`.  With `step4_from`, step 4 is fitted on that system's folds.
-    `within_factors` (offence, defence) multiply the within layer, as `--within-factors` does in `openrapm shrink`;
+    `within_factors` (offense, defense) multiply the within layer, as `--within-factors` does in `openrapm shrink`;
     `only`, a set of seasons, keeps the folds of those seasons alone (check 156 scores check 152's tune seasons).
     `shrink` (`shrink_settings`), the system's own step 4, in place of `defence_factors` and `within_factors`."""
     from openrapm.prior_shrink import WITHIN_COLUMNS
@@ -462,7 +462,7 @@ def newey_west_se(diff: pd.Series, lags: int | None = None) -> float:
         variance = n / (n - 1) x (g_0 + 2 x sum over l = 1..lags of (1 - l / (lags + 1)) g_l) / n
         g_l      = sum over seasons of (d_s - mean)(d_{s+l} - mean) / n
 
-    Each season's multipliers come from its 8 nearest fold seasons, so neighbours share most of theirs and their
+    Each season's multipliers come from its 8 nearest fold seasons, so neighbors share most of theirs and their
     readings move together; dividing by the square root of 30 as if they did not overstates the evidence (experiment
     93 against 82: -4.0 plain, about -3.1 here; notes/DECISIONS.md, the bug-fix pass of 2026-10-22).  `lags` defaults
     to the usual rule, 4 x (n / 100)^(2/9) rounded down: 3 for 30 seasons.  With lags 0 it is the plain standard
@@ -487,7 +487,7 @@ def paired(seasons_table: pd.DataFrame, system: str, reference: str) -> list:
     replace.  Beside the plain standard error and z, `se_newey_west` and `z_newey_west` (`newey_west_se`), never below
     the plain standard error.
 
-    Why the floor (2026-10-30): the Newey-West correction is there for neighbours that move together, which widens the
+    Why the floor (2026-10-30): the Newey-West correction is there for neighbors that move together, which widens the
     standard error.  Among four builds of the same ratings, each with the box-score prior's players split another way,
     every pair's season differences leaned the other way, lag-one correlation -0.03 to -0.23, so the correction
     narrowed it: a noise control against today's ratings read plain z -1.83 and Newey-West z -2.44.  The four builds'

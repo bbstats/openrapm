@@ -7,7 +7,7 @@ season's rating from every team-game, and ridges what is left back onto the play
 coefficient is alpha, and the check writes it for every player the rated season's table carries.
 
 Words used below
-    team-game      one team's offence in one game: its points per 100 possessions on the target, weighted by its
+    team-game      one team's offense in one game: its points per 100 possessions on the target, weighted by its
                    possessions
     share          a player's share of his team's possessions in that game: 0 when he did not play, and the five on
                    the court sum to 5
@@ -16,7 +16,7 @@ Words used below
     alpha          what a player's comings and goings say his rating did not already know, points per 100.  Written
                    positive-good as `alpha_good` (a defensive alpha of -1.0 raw is +1.0 good)
     rating scale   with --free_scale=1 each side's summed rating is one more free column, so a rating that is too
-                   wide for the neighbouring seasons is read as one multiplier per side, not written into every alpha
+                   wide for the neighboring seasons is read as one multiplier per side, not written into every alpha
     penalty        the ridge's lambda on the alphas, chosen from --lambdas
     H              the rated season; H-2 and H+2 are the seasons two before and two after it
     arm            one way of scoring a penalty: the rating alone, rescale only, or rescale + alpha (below)
@@ -25,15 +25,15 @@ Words used below
 
 The fit, per side, for one rated season:
 
-    minimise   sum over team-games  w (y - Z r - s (Z r) - F c - Z alpha)^2  +  lambda |alpha|^2
+    minimize   sum over team-games  w (y - Z r - s (Z r) - F c - Z alpha)^2  +  lambda |alpha|^2
 
     y      the team-game's points per 100 possessions on the target (--target_off, --target_def); w its possessions
-    Z      the players' possession shares; r the rated season's rating in raw sign (defence = points allowed)
+    Z      the players' possession shares; r the rated season's rating in raw sign (defense = points allowed)
     s      the rating scale minus one (free, one per side; absent with --free_scale=0)
     F, c   the fixed columns, unpenalised: each season's level, home court, playoffs, and with --team_effects one
            level per team (team) or per team and season (team_season)
 
-**Alpha never becomes a published rating.**  It reads the neighbouring seasons' games, and ruling 1 is that a
+**Alpha never becomes a published rating.**  It reads the neighboring seasons' games, and ruling 1 is that a
 season's rating comes from that season's games alone.  It is a per-player loss that counts a bench player as much
 as a starter (check 73 reads it), and a diagnostic of the box prior.
 
@@ -42,7 +42,7 @@ three seasons alpha was fitted on.  Three kinds of arm are scored: the rating al
 scale ("rescale only"); and that plus alpha ("rescale + alpha").  Without the middle arm a rescale and a discovery
 about players cannot be told apart.  The best penalty must be inside the grid: a best value at either end has chosen
 nothing.  Both arms read optimistically, because the incumbent's own prior was only held off H's immediate
-neighbours, so only the paired difference between arms means anything.
+neighbors, so only the paired difference between arms means anything.
 
 **Only players the rated season's table already carries get a row.**  The regression has a column for everyone who
 played in the three seasons, but publishing alpha for a player the rated season has no rating for would change who
@@ -195,7 +195,7 @@ class SeasonFit:
     """One rated season's trade set: who the columns are, how much absence each has, and the fit at every penalty.
 
     `alpha` maps a penalty to {"offense": vector, "defense": vector} in raw sign, one entry per player column;
-    `scale` maps a penalty to the (offence, defence) rating multipliers, and is empty with --free_scale=0.
+    `scale` maps a penalty to the (offense, defense) rating multipliers, and is empty with --free_scale=0.
     """
     season: int
     block: list
@@ -263,7 +263,7 @@ def side_alpha(alpha: np.ndarray, n_players: int, side: str) -> np.ndarray:
 
 
 def fit_penalties(normal: dict, lambdas: tuple, free_scale: bool) -> tuple:
-    """({penalty: {side: alpha}}, {penalty: (offence scale, defence scale)}): one solve per side and penalty.
+    """({penalty: {side: alpha}}, {penalty: (offense scale, defense scale)}): one solve per side and penalty.
 
     The scale is what each side's rating would have to be multiplied by for the three seasons to agree with it;
     read it before the alphas, because a rescale is not attribution.
@@ -306,7 +306,7 @@ def corrected(ratings_h: pd.DataFrame, player_ids, alpha_off, alpha_def, scale=(
 
 
 def penalty_arms(fit: SeasonFit, lambdas: tuple) -> dict:
-    """{arm: (offence alpha, defence alpha, scale)}: the rating alone, then per penalty the rescale only and the
+    """{arm: (offense alpha, defense alpha, scale)}: the rating alone, then per penalty the rescale only and the
     rescale plus alpha."""
     zero = np.zeros(len(fit.player_ids))
     arms = {NO_ALPHA: (zero, zero, (1.0, 1.0))}

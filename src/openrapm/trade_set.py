@@ -162,7 +162,7 @@ def replacement_fill(ratings, max_poss: float = 500.0, shrink: float = 0.25) -> 
 
 
 def offset_vector(player_ids, ratings, fill_o: float = 0.0, fill_d: float = 0.0) -> np.ndarray:
-    """The rated season's rating for every player column, raw sign, offence then defence.
+    """The rated season's rating for every player column, raw sign, offense then defense.
 
     Raw sign throughout: `o` adds points scored and `d` adds points ALLOWED, which is the sign the
     design's defensive columns carry.  A rating table stored positive-good has already had its
@@ -191,7 +191,7 @@ def rating_columns(ts: TradeSet, offset: np.ndarray) -> np.ndarray:
 
 
 def team_columns(ts: TradeSet, team_of_row: pd.DataFrame, per_season: bool = True) -> tuple:
-    """One free column per team on offence and per team on defence: (matrix, names).
+    """One free column per team on offense and per team on defense: (matrix, names).
 
     This is the control that answers the objection that sank the off-court record.  A team's output
     is the sum of its players' columns, so without a team term nothing stops a player's alpha from
@@ -206,7 +206,7 @@ def team_columns(ts: TradeSet, team_of_row: pd.DataFrame, per_season: bool = Tru
     persistent team quality -- the franchise, the coaching, the building -- while leaving a team's
     change from one season to the next available to identify the players who moved.
 
-    Two sets of columns, offence and defence, because a team's scoring and its defending are separate
+    Two sets of columns, offense and defense, because a team's scoring and its defending are separate
     facts and a single column per team would force them to share one number.
     """
     # The same guard `exposure_table` has.  `team_of_row` is built from ONE side's design and reused
@@ -272,9 +272,9 @@ def solve_alpha(gram, rhs, n_players: int, n_free: int, lam: float) -> tuple:
 def fit_alpha(ts: TradeSet, offset: np.ndarray, lam: float, free_scale: bool = True) -> tuple:
     """(alpha, free): the ridged correction on every player column, and the unpenalised coefficients.
 
-    `alpha` is 2*n_players long, offence then defence, in raw sign and in the same units as the
+    `alpha` is 2*n_players long, offense then defense, in raw sign and in the same units as the
     rating -- points per 100 possessions.  When `free_scale`, the first two of `free` are the rating
-    scales MINUS ONE, offence then defence.
+    scales MINUS ONE, offense then defense.
     """
     gram, rhs, n_free = normal_equations(ts, offset, free_scale=free_scale)
     return solve_alpha(gram, rhs, ts.n_players, n_free, lam)
@@ -284,7 +284,7 @@ def exposure_table(ts: TradeSet, team_of_row: pd.DataFrame, team_of_player: dict
     """How much evidence each player's own comings and goings carry, per side.
 
     `with_poss`     his on-floor possessions over the whole three seasons, on that side.
-    `without_poss`  possessions his RATED-SEASON team played in the neighbouring seasons with him not
+    `without_poss`  possessions his RATED-SEASON team played in the neighboring seasons with him not
                     on the floor -- games he missed, plus his old team's games once he is traded, plus
                     his new team's games before he arrives.  This is the trade set's actual sample
                     size for him, and it is zero for a player who never left the floor and for one
@@ -334,7 +334,7 @@ def exposure_table(ts: TradeSet, team_of_row: pd.DataFrame, team_of_player: dict
 def eligibility(roles: pd.DataFrame, season: int, min_poss: float = 100.0) -> pd.DataFrame:
     """Players whose rated season is one team and enough of it: player_id, team_id, poss_on.
 
-    One team, because a player traded mid-season has no single rated-season team for the neighbouring
+    One team, because a player traded mid-season has no single rated-season team for the neighboring
     games to be compared against -- his alpha is still estimated, it is simply not read.  Roster rows
     for a man who dressed and never played carry `poss_on` 0 and would otherwise make a one-team
     player look like a two-team one, so they go first.
@@ -385,7 +385,7 @@ def trade_loss(alpha_table: pd.DataFrame, min_without: float = 1.0) -> pd.DataFr
     """
     rows = alpha_table[(alpha_table.eligible) & (alpha_table.without_poss >= float(min_without))].copy()
     # No player with a with-and-without contrast is a legitimate answer, not a failure: `--block=0`
-    # fits one season on its own, so nobody's team plays a neighbouring game without him.  Return the
+    # fits one season on its own, so nobody's team plays a neighboring game without him.  Return the
     # schema anyway -- an empty frame with no columns reaches the caller as `KeyError: 'side'`, which
     # reads like a bug in the fit rather than the absence of evidence it is.
     if rows.empty:

@@ -19,7 +19,7 @@ How to read the page
                  difference in team-game mean squared error (below zero = better), its paired t-statistic z, and
                  the seasons won out of 56
     main table   every player in any table's top N for the season (a tick box shows every player): possessions,
-                 then rank, offence, defence and total per table, and the change in rank against the reference
+                 then rank, offense, defense and total per table, and the change in rank against the reference
                  (+3 = three places higher than in the reference).  Highlighted rows are in one table's top N but
                  not another's.  Click a header to sort, type to filter by name, hover a rank change for the ranks
 Example: a player ranked 12th by the incumbent and 9th by the candidate shows a change of +3, in green.
@@ -312,7 +312,7 @@ def ratings_cell(row: dict, name: str) -> str:
 
 
 def rank_change_cells(row: dict, name: str) -> str:
-    """A later table's rank and its change against the first: green up, red down, grey level or absent."""
+    """A later table's rank and its change against the first: green up, red down, gray level or absent."""
     rank, change = row[f"rank_{name}"], row[f"drank_{name}"]
     colour = UP if pd.notna(change) and change > 0 else DOWN if pd.notna(change) and change < 0 else FLAT
     text = "" if pd.isna(change) else (f"+{int(change)}" if change > 0 else str(int(change)))

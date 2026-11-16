@@ -7,7 +7,7 @@ GLOSSARY.md is hand-written prose around one generated block, the table of every
     <!-- end generated -->
 
 `openrapm glossary` rewrites what lies between them and leaves every other line alone; `openrapm glossary --check`
-only compares, and exits 1 when the block and the catalogue differ (tests/test_features.py makes the same
+only compares, and exits 1 when the block and the catalog differ (tests/test_features.py makes the same
 comparison, so a renamed or added feature cannot leave the glossary behind).
 """
 from __future__ import annotations

@@ -24,7 +24,7 @@ Words used below
                          the fit games, his rate per 100 times his offensive possessions per game, so a starter who
                          creates a lot outranks a bench scorer with a higher rate; one by self-creation, one by total
     shared floor         the possessions a defender and the opposing top creator were on the court together, the top
-                         creator's team on offence, from the stints; times the game's matchup possessions of that team
+                         creator's team on offense, from the stints; times the game's matchup possessions of that team
                          over five times its stint possessions, so the two counts are in one unit
 
 The inputs (features.MATCHUP_GAME_INPUTS), one value per player and season, the same on both of his rows; w is a

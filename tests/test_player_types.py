@@ -103,7 +103,7 @@ def test_per36_is_a_rate_not_a_total():
 
 
 def test_the_gap_is_scale_free(world):
-    """Both sides are standardised, so doubling the ratings' spread cannot by itself create a gap."""
+    """Both sides are standardized, so doubling the ratings' spread cannot by itself create a gap."""
     d, _ = world
     a = gap_columns(d, d)
     b = gap_columns(d.assign(rating_total=2 * d.rating_total, rating_off=2 * d.rating_off,

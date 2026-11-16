@@ -1,4 +1,4 @@
-"""Step 3 (src/openrapm/prior_rapm.py): the ridge around the prior, the season's table, centring, the schema.
+"""Step 3 (src/openrapm/prior_rapm.py): the ridge around the prior, the season's table, centering, the schema.
 
 The fit is a plain ridge with two more unpenalised columns (the lineup priors), so it must agree with the
 Frisch-Waugh two-step fit and with the fixed-centre fit at the scale it chose; halving the prior must double the

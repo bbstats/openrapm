@@ -57,19 +57,19 @@ MODEL_LAYER = [
     "on_court.py",      # his team's record with him on the court and off it
     "simulate.py",      # the simulated league, and its season panel, that the tests and the tutorial fit
     "swap_adjust.py",   # step 5: the swap type model, the give-back, team totals held, the spread held
-    "swap_test.py",     # the swap test: same-four lineup pairs, scored against a neighbouring season's ranking
+    "swap_test.py",     # the swap test: same-four lineup pairs, scored against a neighboring season's ranking
     "trade_set.py",     # the team-game with-and-without-you ridge and its losses
     "consensus.py",     # the consensus check: the name join, the pooling, rank agreement and spreads
     "settings.py",      # the shipped settings, each with the experiment that set it
-    "features.py",      # the prior's input catalogue, the derived columns, the shipped lists
+    "features.py",      # the prior's input catalog, the derived columns, the shipped lists
     "rapm.py",          # step 1: the season sums, the leave-season-out RAPM, the un-shrunk label
     "box_prior.py",     # step 2: training rows, balanced player folds, the out-of-player LightGBM prior
     "second_prior.py",  # the second prior: the context numbers and the line fitted on held-back swaps
     "rating_line.py",   # the second prior's weights fitted on the within-season test, through the ridge
-    "prior_rapm.py",    # step 3: the ridge around the prior, the season's table, centring, the schema
+    "prior_rapm.py",    # step 3: the ridge around the prior, the season's table, centering, the schema
     "prior_shrink.py",  # step 4: the prior part's multipliers from the within-season folds, the shrink
     "scoring.py",       # ratings scored on unseen games, the splits, the pooled and paired summaries
-    "similarity.py",    # the similarity page: player-seasons' inputs, standardised, and the nearest of other players
+    "similarity.py",    # the similarity page: player-seasons' inputs, standardized, and the nearest of other players
     "decomposition.py",  # the decomposition pages: which rows of a ridge fit a coefficient comes from
     "game_rates.py",    # the multi-stat network: league, opponent, padding, the state, training (PyTorch), forecasts
     "game_prior.py",    # the box-score prior game by game: the network's states as panel rows, averages, tables

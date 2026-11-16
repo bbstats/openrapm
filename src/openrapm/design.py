@@ -12,7 +12,7 @@ The data layer keeps pieces on disk (data/designs.py) and the simulated tests bu
 
 Words used below
     stint          a stretch of play with the same ten players on the court (data/stints.py)
-    row            one stint seen from one side: five players on offence, five on defence.  A stint gives two rows;
+    row            one stint seen from one side: five players on offense, five on defense.  A stint gives two rows;
                    every home-offence row of the design comes first, then every away-offence row
     player-season  one player in one season, the unit the possession and box-score tables are kept in.  Its key is
                    season x 100,000,000 + player id (`player_season_key`)
@@ -35,7 +35,7 @@ The design, one line per row:
     y = scale x numerator / denominator
     w = denominator x (gt_weight in garbage time, 1 otherwise)
 
-    Z_O, Z_D   Z_O[row, j] = 1 when player column j is one of the five on offence; Z_D the same for defence
+    Z_O, Z_D   Z_O[row, j] = 1 when player column j is one of the five on offense; Z_D the same for defense
     C          the context columns
     game       the row's game number (0, 1, 2, ... by season, regular season before playoffs, then date); it groups
                rows by game and is not a regressor
@@ -114,7 +114,7 @@ POSS_COUNTERS = (
     "fga_rim", "fgm_rim", "fga_mid", "fgm_mid", "fga_thr", "fgm_thr",
     "att1_rim", "att1_mid", "att1_thr", "att1_ft",          # the possession's FIRST attempt only
     "xftm", "xftm_tech",                                    # EXPECTED free-throw makes (data/stint_parser.py)
-    "pts1", "chance1",                                      # the first attempt's realised points (incl. its
+    "pts1", "chance1",                                      # the first attempt's realized points (incl. its
                                                             # free throws) and whether it produced a rebound chance
     "fg3a_late", "fg3m_late",                               # threes taken (made) in a period's last two seconds,
                                                             # heaves mostly (stint_parser.LATE_THREE_SECONDS)
@@ -186,7 +186,7 @@ class DesignSpec:
     player column   what a coefficient belongs to: one per player over the design's seasons (player_unit
                     "player") or one per player-season (player_unit "player_season").  There are `n_players` of
                     them, numbered 0, 1, 2, ... (the `player_column` of a table), so Z = [Z_O | Z_D] has
-                    2 x n_players columns: player column j is Z column j on offence and n_players + j on defence.
+                    2 x n_players columns: player column j is Z column j on offense and n_players + j on defense.
     player-season   one player in one season, always.  There are `n_player_seasons` of them, numbered 0, 1, 2, ...
                     in key order (the `player_season` of a table).  `game_box` and `game_poss` are kept per
                     player-season, so the padding constants and the league means stay per season even when a
@@ -521,7 +521,7 @@ def block_stints(pieces: list, players: Players) -> tuple[dict, list, np.ndarray
 
 
 def kept_rows(pieces: list, stints: dict, target: str) -> dict:
-    """Every row the target keeps (denominator above 0), home-offence rows first: its two fives (offence, defence),
+    """Every row the target keeps (denominator above 0), home-offence rows first: its two fives (offense, defense),
     possessions, the target's denominator and numerator, home (+1, -1, or 0 at a neutral site), the margin from the
     offence's side, its stint, and the stint's playoff, garbage-time, share-left, season and game values."""
     _require_target_columns(pieces, target)
@@ -547,7 +547,7 @@ def _require_target_columns(pieces: list, target: str) -> None:
 
 def _side_rows(pieces: list, stints: dict, rule: dict, on_offence: str, on_defence: str, side: str,
                sign: float) -> dict:
-    """The rows of one side (side "h": the home team on offence), those whose denominator is above 0.  `on_offence`
+    """The rows of one side (side "h": the home team on offense), those whose denominator is above 0.  `on_offence`
     and `on_defence` name the stints' fives, "home" or "away"."""
     def column(name):
         return np.concatenate([piece["tcols"][name] for piece in pieces])
@@ -622,7 +622,7 @@ def _block_table(pieces: list, name: str, game_offset: np.ndarray, to_block: lis
 def design_spec(pieces: list, players: Players, to_block: list, context_names: list, cfg: dict) -> DesignSpec:
     """The column layout, with each player column's season and the diagnostic column groups: player columns with
     under low_poss_threshold regular-season possessions ("low_poss") and with starter_poss_threshold or more
-    ("high_poss"; "high_poss_O" and "high_poss_D" its offence and defence columns)."""
+    ("high_poss"; "high_poss_O" and "high_poss_D" its offense and defense columns)."""
     n_players = len(players.columns)
     possessions = np.zeros(len(players.player_seasons))
     for piece, local in zip(pieces, to_block):

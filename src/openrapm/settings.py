@@ -6,7 +6,7 @@ season before it nor the season after it, because those are the seasons the test
 year-over-year test", 2026-09-13).
 
 Words used below
-    label       a player's RAPM over every season except the rated one (and, in TEST, its two neighbours):
+    label       a player's RAPM over every season except the rated one (and, in TEST, its two neighbors):
                 the number the box-score prior learns to predict (step 1)
     penalty     a ridge's lambda: a player's coefficient keeps about n / (n + lambda) of his raw impact (the
                 coefficient an unpenalised fit would give him), n = his possessions
@@ -68,7 +68,7 @@ class Targets:
     # shooter's padded free-throw %.  The only luck adjustment that has improved the ratings: 0.26 per 100 on
     # the year-over-year test against plain points (notes/DECISIONS.md, "What was settled": the free-throw adjustment)
     offence: str = "points_with_expected_free_throws"
-    # the offence target with 3 x 0.75 x (threes made - threes expected) also taken off: three quarters of the
+    # the offense target with 3 x 0.75 x (threes made - threes expected) also taken off: three quarters of the
     # shooters' three-point luck removed, a quarter kept (data/shots.py, OPPONENT_THREE_LUCK_KEPT).  Keeping the
     # quarter moved the score by -0.007 per 100 at z = -0.34 (z: the paired t-statistic over the scored seasons),
     # nothing measurable (notes/DECISIONS.md, "What was settled": x3def).  Since experiment 95, adopted 2026-10-22
@@ -77,19 +77,19 @@ class Targets:
     defence: str = "points_with_expected_opponent_threes_late_as_scored"
 
     def distinct(self) -> list:
-        """The targets to fit, each once: [offence, defence], or one name when both sides share a target."""
+        """The targets to fit, each once: [offense, defense], or one name when both sides share a target."""
         return list(dict.fromkeys([self.offence, self.defence]))
 
 
 @dataclass(frozen=True)
 class LabelSettings:
     """Step 1: the leave-season-out RAPM that becomes the prior's label."""
-    # swept on the end-to-end score, not on the RAPM's own accuracy; defence decisive, offence a plateau
+    # swept on the end-to-end score, not on the RAPM's own accuracy; defense decisive, offense a plateau
     # (notes/DECISIONS.md, "Choose a training target's penalty on the end-to-end score", 2026-09-12)
     offense_penalty: float = 40000.0
     defense_penalty: float = 40000.0
     context_penalty: float = 0.0
-    # a player needs this many possessions, counted on offence only (rapm.player_possessions), to get a label
+    # a player needs this many possessions, counted on offense only (rapm.player_possessions), to get a label
     # at all; set with the label when it was introduced (the same 2026-09-12 section)
     min_possessions: float = 100.0
     # only the defensive label is un-shrunk: the offensive un-shrink emptied the top of the offensive
@@ -126,7 +126,7 @@ class PriorSettings:
     # experiment 107, the owner, 2026-10-23: "it would be good to add in partial seasons - 1/4, 1/2, 3/4 as well - to
     # better support early season data", adopted the same day: "Sure adopt").  () adds none, as before it
     part_season_shares: tuple = (0.25, 0.5, 0.75)
-    # each player's prior from the booster fitted without his fold (notes/DECISIONS.md, "The SPM memorises
+    # each player's prior from the booster fitted without his fold (notes/DECISIONS.md, "The SPM memorizes
     # long-career stars, and the out-of-player prior removes it", 2026-09-14)
     n_folds: int = 5
     # 0: players sorted by label and assigned to folds 0,1,2,3,4,4,3,2,1,0,...  A positive number k is the
@@ -161,7 +161,7 @@ class PriorSettings:
     # resample and LightGBM seed another; a noise control that redraws the resamples, where fold_assignment redraws
     # only the split
     bag_draw: int = 0
-    # what each training row is labelled with.  "career": every row of a player carries his RAPM over every training
+    # what each training row is labeled with.  "career": every row of a player carries his RAPM over every training
     # season, its own included (shipped).  "outside": each chunk row carries his RAPM over the seasons outside its
     # own and the career row is dropped, so no label shares a game with its row's box score (box_prior.training_rows;
     # notes/DECISIONS.md, experiment 79, the owner, 2026-10-19: "try it on the prior first").  "nearest": each chunk
@@ -266,7 +266,7 @@ class ShrinkSettings:
     A within-season fold rates a season from three quarters of its games and keeps the other quarter back;
     the factors are a weighted least-squares fit on those held-back games (notes/DECISIONS.md, experiment 33b).
     """
-    # "product" fits the factors without the rated season; "test" also without its two neighbours
+    # "product" fits the factors without the rated season; "test" also without its two neighbors
     rule: str = "product"
     # the first and last season whose within-season folds are read; pinned, because the folds on disk grew
     # once and silently changed the factors (notes/DECISIONS.md, experiment 34's correction, 2026-10-05).  Every
@@ -298,7 +298,7 @@ class ShrinkSettings:
     # his deviation from it, with four multipliers of its own fitted on the held-back stints within games
     # (notes/DECISIONS.md, experiment 106, adopted 2026-10-23: "please adopt, yes - D"); False is one layer
     within_team_layer: bool = True
-    # the within layer's multipliers times these, offence then defence: (0.75, 1.0), version D of experiment 106, until
+    # the within layer's multipliers times these, offense then defense: (0.75, 1.0), version D of experiment 106, until
     # experiment 136, adopted 2026-11-04: halfway from those to check 156's (0.7826, 0.9935).  Rounding them is not
     # free: (0.77, 1.0) with a defense factor of 0.87 moves the year-over-year test from z +1.46 to z +1.83 (experiment
     # 137)
@@ -350,7 +350,7 @@ class WinsSettings:
     # for each of 30 teams; before 2005 the league had 29
     starters: int = 150
     # the pace ridge's penalty, in seconds of weight: the least held-back error of check 157 on half-A and half-B games
-    # of six seasons across the eras, least in five of them and both neighbours worse (10,000 by 0.04 in 2001)
+    # of six seasons across the eras, least in five of them and both neighbors worse (10,000 by 0.04 in 2001)
     pace_penalty: float = 30000.0
     # the pace ridge leaves out stints shorter than this: under 15 seconds a stint is 0.5% of the time and 43% of the
     # weighted squared error (2025), a substitution at a free throw rather than a pace
@@ -373,7 +373,7 @@ class Settings:
     shrink: ShrinkSettings = field(default_factory=ShrinkSettings)
     swap: SwapSettings = field(default_factory=SwapSettings)
     wins: WinsSettings = field(default_factory=WinsSettings)
-    # 0: the labels and training rows leave out the rated season only; 1: its two neighbours as well
+    # 0: the labels and training rows leave out the rated season only; 1: its two neighbors as well
     exclude_neighbours: int = 0
 
 

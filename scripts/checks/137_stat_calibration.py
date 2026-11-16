@@ -1,21 +1,22 @@
 """Check 137, calibration curves: is the rating over- or underrated as a function of each input stat?
 
 **Superseded for decisions by check 138, the held-out audit (2026-10-08, the Robustness pass).**  The miss here comes
-from the neighbouring seasons (which teaches "peak seasons regress"), on luck-adjusted targets, and the permutation z
+from the neighboring seasons (which teaches "peak seasons regress"), on luck-adjusted targets, and the permutation z
 below shuffles inputs within a season, which inflates the z of anything a player carries from season to season three
 to four times (body weight 16.9 -> about 4 once whole players are shuffled).  Kept as a picture of the
 neighbouring-season reading.
 
-The owner, 2026-10-08, after the fifths of check 95 showed steals overvalued on defence: "I almost would rather do a
+The owner, 2026-10-08, after the fifths of check 95 showed steals overvalued on defense: "I almost would rather do a
 calibration plot style rather than binning ... with overrating / underrating we should see y = 0 ... based on steals
 per 100", and "more like kbins or tree based model to get any non-monotonicity".
 
 Words used below
     miss            a player-season's trade-set correction (check 70's `alpha_good`), points per 100: positive means
                     his team's games with and without him say he is better than rated, i.e. underrated.  Read on the
-                    rows the trade loss reads: one-team players whose team played neighbouring games without them
+                    rows the trade loss reads: one-team players whose team played neighboring games without them
     input           a box-prior input exactly as the prior reads it: the season panel through `features.add_features`,
-                    the feature set "box_score_and_bio"; steals and blocks also on their uncentred padded rates per 100,
+                    the feature set "box_score_and_bio"; steals and blocks also on their uncentered padded rates per
+                    100,
                     for a readable axis
     bin             one of --bins equal-count groups of player-seasons by the input (at least 30 rows each): its mean
                     miss, with the standard error of that mean clustered by player (a player's seasons share errors)
@@ -33,7 +34,7 @@ Reads the alpha table (--alpha) and the season panel (paths.panel, without any s
 outputs/csv/stat_calibration_<tag>.csv (one row per input and side), outputs/csv/stat_calibration_<tag>_bins.csv
 (every bin) and outputs/stat_calibration_<tag>.png (steals, blocks and the four most mis-priced inputs per side).
 
-How to read a line, from experiment 45's defence (--tag=lgb_noonc_rs, 20 permutations): "steals per 100 (axis)  curve
+How to read a line, from experiment 45's defense (--tag=lgb_noonc_rs, 20 permutations): "steals per 100 (axis)  curve
 0.030 (null 0.015), z +11.0; bottom bin +0.067 +/- 0.018, top bin -0.050 +/- 0.019" says the miss moves with steals
 twice as much as with a shuffled input, and the players with the most steals are overrated by about 0.05 points per
 100 while those with the fewest are underrated by about 0.07.
@@ -58,7 +59,7 @@ CURVE = dict(n_estimators=150, learning_rate=0.05, num_leaves=6, min_child_sampl
 FEATURE_SET = "box_score_and_bio"
 SIDE = {"offense": "O", "defense": "D"}
 # The axis inputs: (the panel column, the label).  Steals and blocks are always drawn.  Their own names, so they
-# never overwrite the centred steals_per100 and blocks_per100 a prior reads.
+# never overwrite the centered steals_per100 and blocks_per100 a prior reads.
 AXIS = {"steals_axis": ("steals_per100_uncentred", "steals per 100 (axis)"),
         "blocks_axis": ("blocks_per100_uncentred", "blocks per 100 (axis)")}
 MIN_BIN_ROWS = 30

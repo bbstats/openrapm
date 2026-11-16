@@ -4,7 +4,7 @@
                    [--whole-season-inputs] [--cut SHARE | --so-far SHARE]
 
 Why (the owner, 2026-10-03).  The prior shrink (step 4) needs the ratings' misses on games they never saw.  Misses
-on the neighbouring seasons' games would teach it that a peak season comes back down the year after, and it would
+on the neighboring seasons' games would teach it that a peak season comes back down the year after, and it would
 shrink every peak season; so the misses come from the season's own games, held out.  notes/WITHIN_SEASON_LEDGER.md lists
 every input, what it is built from and the check that proves it.
 
@@ -129,7 +129,7 @@ WORLD_TARGETS = tuple(dict.fromkeys((SCORE_TARGET, OFFENCE, DEFENCE_ALL, SETTING
 
 
 def world_targets(settings) -> tuple:
-    """WORLD_TARGETS for a run whose ratings are fitted on `settings.targets` (experiment 84 put the defence on the
+    """WORLD_TARGETS for a run whose ratings are fitted on `settings.targets` (experiment 84 put the defense on the
     offence's target): the points as scored, the panel's two, then the ratings' two, each once."""
     return tuple(dict.fromkeys((SCORE_TARGET, OFFENCE, DEFENCE_ALL, settings.targets.offence,
                                 settings.targets.defence)))
@@ -141,7 +141,7 @@ def fold_settings(meta: dict):
     targets = (meta.get("settings") or {}).get("targets")
     return TEST if not targets else replace(TEST, targets=Targets(**targets))
 # what a saved file's meta must say: the test setting's labels and training rows, the shipped rows and folds.  How
-# the training rows were labelled (`chunk_label`, settings.ROW_LABELS) is free: the folds only read the boosters.  So
+# the training rows were labeled (`chunk_label`, settings.ROW_LABELS) is free: the folds only read the boosters.  So
 # is which labels were un-shrunk, among settings.UNSHRINK_LABELS (experiment 102), for the same reason
 EXPECTED_META = dict(exclude_neighbours=1, rows="chunks", player_folds=5)
 UNSHRINK_ALLOWED = [list(columns) for columns in UNSHRINK_LABELS.values()]
@@ -208,7 +208,7 @@ def check_models(meta: dict) -> None:
 
 
 def season_models(saved_all: dict, season: int) -> dict:
-    """{"O", "D"}: the season's saved boosters, after checking they never trained on it or a neighbour."""
+    """{"O", "D"}: the season's saved boosters, after checking they never trained on it or a neighbor."""
     if season not in saved_all:
         raise SystemExit(f"no saved models for {season}")
     saved = saved_all[season]
@@ -380,7 +380,7 @@ def leak_checks(inputs: SeasonPanel, designs: dict, full: dict, fit_ids: set, fi
 class RatedWorld:
     """A season rebuilt from its fit games, and steps 2-3 on it."""
     world: SeasonWorld
-    table: pd.DataFrame          # step 3's centred table, raw sign (prior_rapm.season_table's columns)
+    table: pd.DataFrame          # step 3's centered table, raw sign (prior_rapm.season_table's columns)
     prior: dict                  # {"O", "D"}: {player_id: the prior step 3 read, before the prior scale}
     box: dict | None = None      # {"O", "D"}: {player_id: the boosters' answer}, when step 3 read the second prior
 
@@ -393,14 +393,14 @@ class ContextInputs:
     panel: pd.DataFrame | None   # the panel rows the context's boosters answer for; None: the boosters' own panel
     n_folds: int                 # the line's player folds
     team_totals: str = "held"    # second_prior.TEAM_TOTALS
-    type_scale: dict | None = None   # with the line on step 5's numbers too, their standardisation
+    type_scale: dict | None = None   # with the line on step 5's numbers too, their standardization
     input_set: str | None = None     # PriorSettings.second_prior_inputs; None reads it from type_scale
 
 
 def rate_world(world: SeasonWorld, saved: dict, prior_panel: pd.DataFrame | None = None,
                context: ContextInputs | None = None, settings=SETTINGS, share: float = 1.0,
                scale=None, types_panel: pd.DataFrame | None = None, held_weight: float = 0.0) -> RatedWorld:
-    """Steps 2-3 on the world's rebuilt inputs: the saved boosters' priors, both ridges, the centred table.
+    """Steps 2-3 on the world's rebuilt inputs: the saved boosters' priors, both ridges, the centered table.
 
     `prior_panel`, when given, is what the boosters read instead of the world's own rows (the leak control, the
     module docstring); the ridge reads the world's designs either way.  With `context`, step 3 reads the second prior
@@ -419,7 +419,7 @@ def rate_world(world: SeasonWorld, saved: dict, prior_panel: pd.DataFrame | None
         answers = {side: second_prior.booster_answers(saved_booster(saved[side]),
                                                       prior_rows(context_panel, side, saved[side], share))
                    for side in SIDES}
-        # step 5's numbers from the offence rows with possessions, the rows the build reads (a player with
+        # step 5's numbers from the offense rows with possessions, the rows the build reads (a player with
         # defensive possessions and no offensive ones has none there, and reads 0, the mean)
         typed = panel if types_panel is None else types_panel
         types = (None if context.type_scale is None else second_prior.standardised_types(
@@ -448,7 +448,7 @@ def rate_world_by_game(world: SeasonWorld, saved: dict, network, games: pd.DataF
     world's own panel as the build reads them from the season panel.
 
     Adds two checks to the world's: every game row read is a fit game, and the network never trained on the season or
-    its neighbours."""
+    its neighbors."""
     fit = set(world.designs[SCORE_TARGET].games.set_index("game_idx").loc[world.fit_idx, "game_id"].astype(str))
     rows = games[games.game_id.astype(str).isin(fit).to_numpy()].reset_index(drop=True)
     world.checks["game rows: only from fit games"] = set(rows.game_id.astype(str)) <= fit
@@ -909,7 +909,7 @@ def gather(out_dir: Path) -> None:
 
 
 def second_prior_lines(cfg: dict, meta: dict) -> tuple[dict | None, int, float, str, dict | None]:
-    """({season: {side: PairGrams}} or None, the line's player folds, its penalty, its team totals, the standardisation
+    """({season: {side: PairGrams}} or None, the line's player folds, its penalty, its team totals, the standardization
     of step 5's numbers when it reads them): the second prior the saved boosters' build read (its tag in the meta's
     settings), at the test setting the folds rate at.  Boosters saved before the team totals were a setting applied
     the line as it is, "free"."""

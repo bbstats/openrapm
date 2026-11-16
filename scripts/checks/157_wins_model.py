@@ -16,7 +16,7 @@ Words used below
     leverage sum  a team's leverage times its actual margin in each stint, summed over its season, against its wins
                   above half its games.  Above 1 by what the shrinking leads take back
     pace search   the pace ridge fitted on each season's half-A games and scored on its half-B games, and the reverse,
-                  at a grid of penalties.  The chosen penalty must be interior, with both neighbours worse
+                  at a grid of penalties.  The chosen penalty must be interior, with both neighbors worse
     pace repeat   the correlation among regulars of pace effects from half-A games and half-B games: whether a pace
                   effect belongs to the player, as the owner asked ("only if the player is causing-ish it")
     long way      `wins.counterfactual_wins`, each player's wins one stint at a time, against `wins.season_wins`
@@ -221,7 +221,7 @@ def search_season(stints: pd.DataFrame, seconds: np.ndarray, penalties, min_seco
 
 
 def chosen_penalty(search: pd.DataFrame) -> tuple[float, bool]:
-    """(the penalty with the least mean error, whether it is interior with both neighbours worse)."""
+    """(the penalty with the least mean error, whether it is interior with both neighbors worse)."""
     means = search.groupby("penalty").error.mean().sort_index()
     place = int(np.argmin(means.to_numpy()))
     interior = 0 < place < len(means) - 1

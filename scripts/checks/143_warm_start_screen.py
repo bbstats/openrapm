@@ -15,13 +15,13 @@ Words used below
     arm          one (half-life, extra trees) pair; `today` is the base alone
     cell, held-out error, yardstick   as in check 142 (fold assignments 0, 1 and 2 of the shipped player folds; each
                  rated player's prior from the models fitted without his fold; the possessions-weighted squared miss of
-                 the label after the best straight line through the priors; the career label and the neighbouring
+                 the label after the best straight line through the priors; the career label and the neighboring
                  seasons' RAPM)
 
 Everything else is check 142's: the ten screen seasons at the test setting, the prepared rows (`prepare`), the paired
 statistics over seasons (`paired`) and the gate (`passes`).  The gate: an arm passes when it beats today on the career
 label at t -2 or below on at least one side, is worse at t +2 or beyond on neither side on either yardstick, is not
-worse on the neighbours yardstick on a side that passed, and no era loses in every one of its screen seasons.  Of the
+worse on the neighbors yardstick on a side that passed, and no era loses in every one of its screen seasons.  Of the
 passing arms the one with the largest defensive gain on the career label is the best; the chosen one is the arm with
 the fewest extra trees whose defensive change is within one standard error of the best's.
 

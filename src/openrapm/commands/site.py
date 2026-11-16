@@ -200,7 +200,7 @@ def write_ratings_json(ratings_path: Path, path: Path, built: str) -> None:
 #     RAPM = his minutes + his team without him + games he missed + everything else
 #
 # RAPM is linear in the outcomes: his published rating is c'beta = sum over rows of h_r y_r, h = W X A^-1 c, with
-# A = X'WX + the penalty, W the possessions and c picking his offence minus his defence less the zero point.  The
+# A = X'WX + the penalty, W the possessions and c picking his offense minus his defense less the zero point.  The
 # context columns are unpenalised, so h is orthogonal to each of them, and measuring every outcome against its
 # fitted context prediction leaves the total unchanged.  Each piece adds up h_r x (outcome - context prediction)
 # over one group of rows: the possessions he played; his team's possessions without him in games he played; his
@@ -344,7 +344,7 @@ def ridge_solve(gram: np.ndarray, rhs: np.ndarray, n_players: int, n_context: in
 
 
 def published_zero(beta: np.ndarray, diagonal: np.ndarray, possessions: np.ndarray, n_players: int) -> dict:
-    """Both sides centred as the ratings pages centre them, positive good: each side's possession-weighted mean
+    """Both sides centered as the ratings pages center them, positive good: each side's possession-weighted mean
     over players with at least the published minimum possessions is zero.  Also the two weight vectors."""
     keep = possessions >= PRODUCT.labels.min_possessions
     weight_off = np.where(keep, possessions, 0.0)
@@ -392,7 +392,7 @@ def row_terms(fit: dict) -> dict:
 
 
 def player_pieces(i: int, rows_off, rows_def, fit: dict, terms: dict) -> dict:
-    """The five pieces by player and his RAPM (offence plus defence, positive good)."""
+    """The five pieces by player and his RAPM (offense plus defense, positive good)."""
     y, w, off, dfn = fit["y"], fit["w"], fit["off"], fit["dfn"]
     return dict(margin=weighted_mean(y, rows_off, w) - weighted_mean(y, rows_def, w),
                 teammates=-((weighted_mean(terms["sum_o"], rows_off, w) - off[i])
@@ -581,14 +581,14 @@ def write_decomposition(cfg: dict, ratings_path: Path, data_dir: Path, built: st
 # says why that splits u exactly), and the run stops before writing unless the refit reproduces every u and every
 # prior scale in the table (to 1e-9; to 1e-6 in 2020, whose solve needs a jitter that follows the scale of the
 # prior columns).  The one file, docs/data/decompose_openrapm.json:
-#     {"meta": {built, penalty, seasons, fields, pieces}, "rows": {season: [[name, NBA id, possessions, offence,
-#      defence, total, teams], ...]}}     each side's list holds OPENRAPM_PIECES in order, at two decimals; teams
+#     {"meta": {built, penalty, seasons, fields, pieces}, "rows": {season: [[name, NBA id, possessions, offense,
+#      defense, total, teams], ...]}}     each side's list holds OPENRAPM_PIECES in order, at two decimals; teams
 #      are the box scores' abbreviations in the order he joined them, "SAC/IND"; then his wins over starter average,
-#      his regular-season minutes, and per side, offence, defence and total, [his regular-season rating over the
+#      his regular-season minutes, and per side, offense, defense and total, [his regular-season rating over the
 #      starter average, his leverage, his wins over starter average] (WOSA_PARTS, wins.py says how they multiply)
 # Rows are the ratings.json rows (possessions above 0), best total first.
 #
-# Example (2026): Victor Wembanyama's offence, 3.01 = 2.11 + 0.26 + 0.86 - 0.32 + 0.11; his total, 9.37 = 3.89 + 2.70
+# Example (2026): Victor Wembanyama's offense, 3.01 = 2.11 + 0.26 + 0.86 - 0.32 + 0.11; his total, 9.37 = 3.89 + 2.70
 # + 2.98 - 0.43 + 0.23: box score, Box Adj, on court, off court, team SOS.  The page's headers for on court and off
 # court are On adj and Off adj.
 OPENRAPM_FILE = "decompose_openrapm.json"
@@ -708,7 +708,7 @@ def season_games_parts(designs: DesignCache, box_files: BoxScoreFiles, season: i
                        penalty: float, held: bool = False) -> tuple[dict, dict]:
     """One season's games' part split on both sides: ({"off": frame, "def": frame}, {"off": misses, "def": misses}).
 
-    The offence half comes from the fit on the offence target, the defence half from the fit on the defence target,
+    The offense half comes from the fit on the offense target, the defense half from the fit on the defense target,
     as `prior_rapm.rate_season` makes the table.  The priors are the step-3 table's own divided by its prior scale: a
     fit's deviations do not change with the prior's scale or with a constant added to it, because the scale is a free
     coefficient and the season intercept absorbs the constant.  `misses` adds the largest gap between the refit's
@@ -783,7 +783,7 @@ def update_openrapm_worst(worst: dict, rows: pd.DataFrame, pieces: pd.DataFrame,
     after step 4's factor on it (`factors`, {"off", "def"}; 1 when None).
 
     A season whose solve needed rapm.solved_ridge's jitter (2020) is kept apart: the jitter is 1e-9 x the mean
-    diagonal, and the prior columns here are the table's (scaled and centred) rather than the build's own, so the
+    diagonal, and the prior columns here are the table's (scaled and centered) rather than the build's own, so the
     replayed matrix differs from the build's in the last digits and the games' part by about 1e-8.
     """
     season = worst["jittered" if any(misses[side]["retried"] for side in ("off", "def")) else "plain"]
@@ -976,7 +976,7 @@ def write_openrapm_decomposition(cfg: dict, ratings_path: Path, data_dir: Path, 
 
 # ===================================================================================== the similarity page
 # Which other player-seasons a player-season is most like: the nearest player-seasons of other players, by the
-# distance between their standardised inputs (similarity.py says how).  The owner's design, 2026-10-12.
+# distance between their standardized inputs (similarity.py says how).  The owner's design, 2026-10-12.
 #
 # The files, in docs/data/similarity/; the page loads the first once, and a season's file when one of its
 # player-seasons is picked:
@@ -1012,7 +1012,7 @@ def _named(rows: pd.DataFrame, ratings_path: Path, cfg: dict) -> pd.DataFrame:
 def similarity_frames(cfg: dict, ratings_path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     """(the pool, its inputs).
 
-    The inputs are standardised on the pool, so the pool holds only seasons a fit may train on (`trainable_panel`): a
+    The inputs are standardized on the pool, so the pool holds only seasons a fit may train on (`trainable_panel`): a
     season in progress waits for its Finals.  Stops when the panel's possessions differ from the ratings table's (one
     of them rebuilt since the other) or when the opening player-season is not in the pool.
     """
@@ -1112,7 +1112,7 @@ def write_similarity(cfg: dict, ratings_path: Path, data_dir: Path, built: str) 
 
 # ===================================================================================== the power ratings page
 # Each team as it has played lately: every player's current-season rating times his share of the team's possessions
-# over its last 10 games, summed over the team (the owner's design, 2026-10-28).  The ratings are centred on every
+# over its last 10 games, summed over the team (the owner's design, 2026-10-28).  The ratings are centered on every
 # possession and the shares count blowouts half, so the plain sums put the average team at +0.60 and 17 of 30 teams
 # above it (2026-10-30): every player's rating is shifted down by a fifth of the 30 plain sums' mean (meta
 # "average_team"), and shares add up to 500%, five on the floor, so the sums are points per 100 possessions above an

@@ -1,5 +1,5 @@
 """His team with him on the court and off it (src/openrapm/on_court.py): a planted on-court effect is found (and shared
-with his teammates), the on-court ratings are centred and padded toward the level, and the off-court possessions are
+with his teammates), the on-court ratings are centered and padded toward the level, and the off-court possessions are
 his team's possessions in his games without him, counted by hand."""
 import numpy as np
 import pytest
@@ -12,7 +12,7 @@ from openrapm.simulate import simulate
 
 
 def _planted(seed=0, players=40, rows=6000):
-    """Random lineups of `players`; player 3 adds 4 points per 100 on offence, player 7 takes 3 off on defence."""
+    """Random lineups of `players`; player 3 adds 4 points per 100 on offense, player 7 takes 3 off on defense."""
     rng = np.random.default_rng(seed)
     on_offence = np.array([rng.choice(players, 5, replace=False) for _ in range(rows)])
     on_defence = np.array([rng.choice(players, 5, replace=False) for _ in range(rows)])

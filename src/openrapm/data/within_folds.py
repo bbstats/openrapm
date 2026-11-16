@@ -9,20 +9,20 @@ quarter back.  Each fold is three files under paths.within/<tag>/ with one stem,
 
 Words used below
     repeat           one random assignment of a season's games to four folds; a season has three repeats
-    test team-game   one team's offence in one held-back game: its points per 100 possessions as scored (y), its
+    test team-game   one team's offense in one held-back game: its points per 100 possessions as scored (y), its
                      possessions (w), the controls (F: home, the season's intercept, playoffs, playoff home), and
-                     each player's share of its possessions, offence and defence (Z; each side's shares sum to 5)
+                     each player's share of its possessions, offense and defense (Z; each side's shares sum to 5)
     rated player     a player with offensive possessions in the fit games, so with a rating of his own
     stand-in rating  what a player without one carries in the test games: a quarter of the possession-weighted
                      mean rating of the fold's players with under 500 possessions (`fill_o`, `fill_d` in the
                      summary), the year-over-year test's rule
     base             each test team-game's prediction from the ten players alone,
-                     sum over the offence of share x rating_off + sum over the defence of share x (-rating_def)
-                     (defence in points allowed), a stand-in rating where a player has none
+                     sum over the offense of share x rating_off + sum over the defense of share x (-rating_def)
+                     (defense in points allowed), a stand-in rating where a player has none
 
 Example: 2026, repeat 0, fold 0 holds 329 test games (658 test team-games) and 581 rated players (its test games
 carry 582 player columns: one player appears only there, at the stand-in rating); its stand-in ratings are
--0.31 on offence and +0.19 on defence (points allowed).
+-0.31 on offense and +0.19 on defense (points allowed).
 """
 from __future__ import annotations
 
@@ -56,7 +56,7 @@ class Fold:
     season: int
     repeat: int
     fold: int
-    fill_o: float              # the stand-in ratings (offence; defence in points allowed)
+    fill_o: float              # the stand-in ratings (offense; defense in points allowed)
     fill_d: float
     y: np.ndarray              # points per 100 as scored, one per test team-game
     w: np.ndarray              # possessions, one per test team-game
@@ -241,7 +241,7 @@ def held_back_stints(design, held_ids) -> HeldStints:
     """The rows of a season's points design (openrapm.data.designs) whose game is in `held_ids` (`fold_games`'s
     second set) and that carry possessions.
 
-    Example: 2026, repeat 0, fold 0: the 329 held-back games' 19,000 or so stint rows, both teams on offence.
+    Example: 2026, repeat 0, fold 0: the 329 held-back games' 19,000 or so stint rows, both teams on offense.
     """
     games = design.games.set_index("game_idx").game_id.astype(str)
     game_id = design.rows.game_idx.map(games).to_numpy().astype(str)

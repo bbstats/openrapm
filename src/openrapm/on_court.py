@@ -3,20 +3,20 @@
 A player's on-court rating is his team's points per 100 possessions over the stints he played; his off-court rating
 is the same over the stints of the same games that his team played without him.  Neither separates him from his
 teammates (RAPM does that), so both lean toward whoever he played with; they are far less noisy than RAPM, and the
-box-score prior may weigh the one against the other.  Both are measured on the luck-adjusted targets: the offence
-design explains points with expected free throws, the defence design points with every opponent three repriced at
+box-score prior may weigh the one against the other.  Both are measured on the luck-adjusted targets: the offense
+design explains points with expected free throws, the defense design points with every opponent three repriced at
 the shooter's padded percentage (design.py, data/shots.py), so the free-throw and opponent-three luck is already out.
 
 Words used below
-    design       one season's stints as rows (design.py): the five players on offence, the five on defence, the
+    design       one season's stints as rows (design.py): the five players on offense, the five on defense, the
                  target y (points per 100) and the weight w (possessions)
-    on court     the possession-weighted mean of y over the rows he was on the court for: on offence for the
-                 scored rating, on defence for the allowed rating
+    on court     the possession-weighted mean of y over the rows he was on the court for: on offense for the
+                 scored rating, on defense for the allowed rating
     off court    the same over the rows of the games he played in where his team was on the court without him
     level        the possession-weighted mean of a rating over the players, subtracted so 0 is average
     pad k        sigma^2 / tau^2 in possessions, the method of moments below
 
-Both ratings are centred on the season's level and padded toward it (box_rates.shrink):
+Both ratings are centered on the season's level and padded toward it (box_rates.shrink):
 
     padded = n x (x - level) / (n + k)
     tau^2  = Var_n(x - level) - sigma^2 E_n[1 / n]        k = sigma^2 / tau^2
@@ -28,7 +28,7 @@ Both ratings are centred on the season's level and padded toward it (box_rates.s
 Example: with sigma^2 = 15,000 (points per 100, squared) and tau^2 = 21, k is about 700 possessions, a fifth of a
 season's play: a 300-possession player's on-court +10 becomes 300 x 10 / 1,000 = +3.
 
-The allowed ratings keep the design's raw sign (points the opponent scored per 100): lower is a better defence.
+The allowed ratings keep the design's raw sign (points the opponent scored per 100): lower is a better defense.
 """
 from __future__ import annotations
 
@@ -45,10 +45,10 @@ NO_SPREAD_K = 1e9               # the pad k when the ratings show no spread beyo
 
 
 def on_court(Zo, Zd, r, w) -> tuple:
-    """Per player, the weighted mean of `r` over the rows he was on offence for and over those he was on defence for,
-    with the weights behind each: (mean on offence, weight on offence, mean on defence, weight on defence).
+    """Per player, the weighted mean of `r` over the rows he was on offense for and over those he was on defense for,
+    with the weights behind each: (mean on offense, weight on offense, mean on defense, weight on defense).
 
-    `Zo` and `Zd` are (rows x players) indicators of who was on offence and on defence; a player with no weight gets 0.
+    `Zo` and `Zd` are (rows x players) indicators of who was on offense and on defense; a player with no weight gets 0.
     """
     w = np.asarray(w, dtype=float)
     r = np.asarray(r, dtype=float)
@@ -62,7 +62,7 @@ def on_court(Zo, Zd, r, w) -> tuple:
 
 
 def _court_columns(design) -> tuple:
-    """(offence, defence): the design's two (rows x players) indicator blocks."""
+    """(offense, defense): the design's two (rows x players) indicator blocks."""
     n_players = design.spec.n_players
     players = sp.csr_matrix(design.parts["Z"] if design.parts is not None else design.X[:, :2 * n_players])
     return players[:, :n_players], players[:, n_players:]
@@ -89,8 +89,8 @@ def _same_players(offence_design, defence_design) -> None:
 
 
 def oncourt_rates(offence_design, defence_design) -> pd.DataFrame:
-    """One row per player (design column order): `on_court_scored_per100` from the rows he was on offence for in the
-    offence design, `on_court_allowed_per100` from the rows he was on defence for in the defence design, each centred
+    """One row per player (design column order): `on_court_scored_per100` from the rows he was on offense for in the
+    offense design, `on_court_allowed_per100` from the rows he was on defense for in the defense design, each centered
     and padded, and the possessions behind each."""
     _same_players(offence_design, defence_design)
     columns = {}
@@ -103,8 +103,8 @@ def oncourt_rates(offence_design, defence_design) -> pd.DataFrame:
 
 
 def _team_groups(design) -> tuple:
-    """The design's rows grouped by (game, which team is on offence): group 2g + 1 when the home team of game g is on
-    offence, 2g when the away team is.  Returns (rows x groups indicator, number of groups)."""
+    """The design's rows grouped by (game, which team is on offense): group 2g + 1 when the home team of game g is on
+    offense, 2g when the away team is.  Returns (rows x groups indicator, number of groups)."""
     game = design.rows["game_idx"].to_numpy()
     home_off = design.rows["is_home_off"].to_numpy(dtype=bool)
     group = 2 * game + home_off.astype(int)
@@ -113,9 +113,9 @@ def _team_groups(design) -> tuple:
 
 
 def _his_team(offence_players, defence_players, groups, n_groups: int, side: int) -> np.ndarray:
-    """(players x groups): 1 for the groups in which his team was on offence (side 0) or on defence (side 1), in the
-    games he played.  His team in a game is read off the design: he is on the home team if he was on offence in more
-    home-offence rows plus defence in away-offence rows than the other way round."""
+    """(players x groups): 1 for the groups in which his team was on offense (side 0) or on defense (side 1), in the
+    games he played.  His team in a game is read off the design: he is on the home team if he was on offense in more
+    home-offence rows plus defense in away-offence rows than the other way round."""
     on_offence, on_defence = (offence_players.T @ groups).tocsr(), (defence_players.T @ groups).tocsr()
     home = np.asarray((on_offence[:, 1::2] + on_defence[:, 0::2]).todense())
     away = np.asarray((on_offence[:, 0::2] + on_defence[:, 1::2]).todense())
@@ -130,7 +130,7 @@ def _his_team(offence_players, defence_players, groups, n_groups: int, side: int
 
 
 def _off_court(design, side: int) -> tuple:
-    """(his team's points per 100 without him, the possessions behind it) on offence (side 0) or defence (side 1):
+    """(his team's points per 100 without him, the possessions behind it) on offense (side 0) or defense (side 1):
     his team's totals over its groups in his games, minus his own on-court totals."""
     offence_players, defence_players = _court_columns(design)
     y, w = np.asarray(design.y, dtype=float), np.asarray(design.w, dtype=float)
@@ -147,8 +147,8 @@ def _off_court(design, side: int) -> tuple:
 
 def offcourt_rates(offence_design, defence_design) -> pd.DataFrame:
     """One row per player (design column order): his team's points per 100 scored (`off_court_scored_per100`, from the
-    offence design) and allowed (`off_court_allowed_per100`, from the defence design) in the games he played, over
-    the stints he sat, centred and padded the same way as the on-court ones so on minus off is on one scale, and the
+    offense design) and allowed (`off_court_allowed_per100`, from the defense design) in the games he played, over
+    the stints he sat, centered and padded the same way as the on-court ones so on minus off is on one scale, and the
     possessions behind each.  Games he did not play in count nothing: his team without him for a whole game is
     another question."""
     _same_players(offence_design, defence_design)

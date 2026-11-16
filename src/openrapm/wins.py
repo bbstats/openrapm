@@ -7,7 +7,7 @@ lock), and changes no published rating.  notes/DECISIONS.md, "WOSA", holds the c
 
 Words used below
     starter average  the bar: the mean rating, on each side, of the 150 players with the most regular-season games
-                     started, minutes played breaking ties.  Every season's ratings are centred at possession-weighted
+                     started, minutes played breaking ties.  Every season's ratings are centered at possession-weighted
                      zero per side, so the bar sits above zero: starters are better than the average possession
     share left       the share of 48 minutes left in the game; an overtime reads its own clock, so 120 seconds left in
                      any overtime is 120 / 2,880
@@ -97,7 +97,7 @@ WINS_COLUMNS = ["wosa_off", "wosa_def", "wosa_pace", "wosa", "pace_effect", "lev
 
 # The bins of seconds left the spread is measured in: 10 seconds in the last minute, where a possession decides it; 30
 # to two minutes left; 1 minute to 12 left; 4 minutes before that, since a one-minute bin holding only each game's
-# opening seconds is 25 stints and read 17 points beside neighbours at 14 (2026).
+# opening seconds is 25 stints and read 17 points beside neighbors at 14 (2026).
 SPREAD_BIN_EDGES = np.concatenate([np.arange(0.0, 60.0, 10.0), np.arange(60.0, 120.0, 30.0),
                                    np.arange(120.0, 720.0, 60.0), np.arange(720.0, 2881.0, 240.0)])
 
@@ -408,7 +408,7 @@ def expected_margins(stints: pd.DataFrame, ratings: pd.DataFrame) -> tuple[np.nd
     """(per stint, the home team's expected margin per 100 from the ten published ratings and the home edge; that edge).
 
     The edge is the possession-weighted mean of what the ratings leave of the home team's actual margin per 100, over
-    stints at a home court; ratings are centred, so nothing else about the level matters to a margin."""
+    stints at a home court; ratings are centered, so nothing else about the level matters to a margin."""
     player_ids, home, away = player_index(stints)
     totals = _ratings_for(player_ids, ratings, "rating_total")
     from_ratings = np.asarray(home @ totals - away @ totals)

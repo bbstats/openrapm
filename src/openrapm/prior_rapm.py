@@ -11,34 +11,34 @@ Words used below
     lineup prior    the sum of the five priors on the court for a row: one column per side
     prior scale     s, the coefficient on a side's lineup prior; unpenalised, so the games set it
     deviation       r, how far the season's games move a player from s x prior: one coefficient per player per
-                    side (a coefficient, not a regression residual), penalised like a plain RAPM coefficient
-    centring        a shift per season and side so that the average possession is played by a 0 player
+                    side (a coefficient, not a regression residual), penalized like a plain RAPM coefficient
+    centering        a shift per season and side so that the average possession is played by a 0 player
 
 The fit, for one season and one target:
 
-    minimise   sum over rows  w (y - Z r - C gamma - s_O P_O - s_D P_D)^2  +  lambda (|r_O|^2 + |r_D|^2)
+    minimize   sum over rows  w (y - Z r - C gamma - s_O P_O - s_D P_D)^2  +  lambda (|r_O|^2 + |r_D|^2)
 
     y, w      the row's target (adjusted points per 100) and weight (its possessions), as in step 1
     Z, C      the player columns and the context columns (step 1); gamma the context coefficients (unpenalised)
     P_O, P_D  the lineup priors: the offence's five offensive priors summed, the defence's five defensive
               priors summed
-    s_O, s_D  the prior scales (unpenalised); r_O, r_D the deviations, offence and defence (penalised)
+    s_O, s_D  the prior scales (unpenalised); r_O, r_D the deviations, offense and defense (penalized)
     lambda    13,037 (settings.RidgeSettings)
 
     rating = s x prior + r,   reported prior = s x prior,   u = rating - reported prior = r   (per side)
 
-Two fits run per season: the offence half of the table comes from the fit on the offence target, the defence
-half from the fit on the defence target (step 1 defines both, "points_with_expected_free_throws" and
+Two fits run per season: the offense half of the table comes from the fit on the offense target, the defense
+half from the fit on the defense target (step 1 defines both, "points_with_expected_free_throws" and
 "points_with_expected_opponent_threes").
 
 Example: 2026's offensive prior scale is 2.35 (product setting).  A player whose booster prior is +0.5 per 100
 starts at 2.35 x 0.5 = +1.18.  If his 2,500 possessions say he was 2.5 per 100 better than that, he keeps about
-16% of it, r = +0.4, for a rating of +1.58 before centring.
+16% of it, r = +0.4, for a rating of +1.58 before centering.
 
-Why s is well above 1 on offence: the offensive label is a ridge coefficient that is not un-shrunk (step 1), so it
+Why s is well above 1 on offense: the offensive label is a ridge coefficient that is not un-shrunk (step 1), so it
 keeps only n / (n + 40,000) of a player's raw impact, and the prior learned from it is on that shrunk scale; s puts
 it back on the season's scale.  The defensive label is un-shrunk, and its scale stays near 1.  Over the thirty
-published seasons s runs from 2.32 to 4.47 on offence and from 0.93 to 1.39 on defence; with both labels un-shrunk
+published seasons s runs from 2.32 to 4.47 on offense and from 0.93 to 1.39 on defense; with both labels un-shrunk
 (notes/DECISIONS.md, experiment 1 of 2026-09-14 evening) the scales read 0.84 and 0.92.
 """
 from __future__ import annotations
@@ -65,7 +65,7 @@ def aligned_prior(prior: dict, player_ids) -> np.ndarray:
 def lineup_prior_sums(players, prior: np.ndarray, n_players: int):
     """(P_O, P_D) per row: the offence's five priors summed and the defence's five priors summed.
 
-    `prior` is [offence priors | defence priors] in the design's player order.
+    `prior` is [offense priors | defense priors] in the design's player order.
     """
     return players[:, :n_players] @ prior[:n_players], players[:, n_players:] @ prior[n_players:]
 
@@ -83,7 +83,7 @@ def game_lineup_sums(players, game: np.ndarray, tables: tuple, n_players: int):
 
 
 def game_averages(players, game: np.ndarray, weights: np.ndarray, tables: tuple, n_players: int) -> np.ndarray:
-    """[offence | defence] in the design's player order: each player's game priors averaged over his rows on that side
+    """[offense | defense] in the design's player order: each player's game priors averaged over his rows on that side
     by the rows' weights, his possessions; the prior his season value reports (game_prior.py), since each of his
     rows credits him the prior scale times that game's prior plus his deviation.  A player with no rows on a side
     reads his table's mean over the games."""
@@ -102,7 +102,7 @@ class PriorRapmFit:
     """One season's fit on one target."""
     ratings: pd.DataFrame        # player_id, offense, defense, prior_offense, prior_defense, possessions
     prior_scale: np.ndarray      # (s_O, s_D)
-    deviation: np.ndarray        # r, [offence | defence]
+    deviation: np.ndarray        # r, [offense | defense]
     unpenalised: np.ndarray      # gamma (the context coefficients), then s_O, s_D
     penalty: float
 
@@ -116,7 +116,7 @@ class RidgeSystem:
     """
     players: sp.csr_matrix
     unpenalised: np.ndarray
-    prior: np.ndarray            # [offence priors | defence priors], in the design's player order
+    prior: np.ndarray            # [offense priors | defense priors], in the design's player order
     gram: np.ndarray
     rhs: np.ndarray
     penalties: np.ndarray
@@ -204,7 +204,7 @@ def defence_possessions(design) -> dict:
 
 def season_table(offence_fit: PriorRapmFit, defence_fit: PriorRapmFit, poss_def: dict,
                  season: int) -> pd.DataFrame:
-    """One season's rows in raw sign (defence = points allowed): offence from its fit, defence from its own.
+    """One season's rows in raw sign (defense = points allowed): offense from its fit, defense from its own.
 
     `poss_def` is `defence_possessions` of the season's design.  Columns, in order: player_id, offense,
     prior_offense, possessions, defense, prior_defense, poss_def, season, offense_lambda, defense_lambda,
@@ -246,7 +246,7 @@ def centre(table: pd.DataFrame) -> pd.DataFrame:
 
 def rate_season(designs: dict, priors: dict, settings, season: int, scale=None,
                 game_tables: dict | None = None) -> pd.DataFrame:
-    """Step 3 for one season: both fits, the season's table, centred.
+    """Step 3 for one season: both fits, the season's table, centered.
 
     `designs` maps each target name to the season's design on it; `priors` is {"O": {player_id: prior},
     "D": {...}} from step 2.  One fit per distinct target.  `scale`, (s_O, s_D), holds the prior scales in both fits
@@ -322,10 +322,10 @@ BOX_ADJ_COLUMNS = ["box_adj_off", "box_adj_def"]
 
 
 def published_table(table: pd.DataFrame, names: pd.DataFrame) -> pd.DataFrame:
-    """The centred seasons in the published schema: ratings positive-good on both ends, plus player names.
+    """The centered seasons in the published schema: ratings positive-good on both ends, plus player names.
 
         rating_def = -defense      prior_def = -prior_defense      u = rating - prior,  per side
-        *_total    = offence + defence
+        *_total    = offense + defense
 
     `names` is (player_id, player_name), one row per player.  The raw-sign columns stay beside the published
     ones because later steps read them.

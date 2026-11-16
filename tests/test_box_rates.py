@@ -1,5 +1,5 @@
 """The padded box-score rates (src/openrapm/box_rates.py) on a simulated league: which games count, the padding toward
-the possession bin, the pad k, the centring; and the two proportion helpers data/shots.py pads shooters with."""
+the possession bin, the pad k, the centering; and the two proportion helpers data/shots.py pads shooters with."""
 import numpy as np
 import pandas as pd
 import pytest

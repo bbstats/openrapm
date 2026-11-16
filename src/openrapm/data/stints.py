@@ -56,7 +56,7 @@ from .stint_parser import SHOT_TABLE, GameParser
 #   1  the original schema: poss/pts/margin/lineups
 #   2  per-possession counters (design.POSS_COUNTERS), for the luck-adjusted target
 #   3  xftm / xftm_tech: expected free-throw makes, the first luck-adjusted term
-#   4  per-shooter attempt counters by lineup slot (design.SLOT_COUNTERS), the first attempt's realised
+#   4  per-shooter attempt counters by lineup slot (design.SLOT_COUNTERS), the first attempt's realized
 #      points and rebound chance (pts1, chance1), the cross-fitting half per game, and the per-game
 #      shooter table -- the inputs of the shooter-level expected points (data/shots.py)
 #   5  the bug-fix pass of 2026-10-22 (notes/DECISIONS.md): a possession that ends inside its free-throw trip

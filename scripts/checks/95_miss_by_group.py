@@ -9,12 +9,12 @@ Words used below
     miss            the trade set's correction for a player-season (scripts/checks/70_tradeset.py, the alpha behind
                     the trade loss): how far his team's games over the rated season and the two either side say his
                     rating should move, in points per 100, after the season's whole list is rescaled.  Read only
-                    where the trade loss reads it: one-team players whose team played some neighbouring games
+                    where the trade loss reads it: one-team players whose team played some neighboring games
                     without him.  Positive = the games say he is better than rated.  It includes real change
                     between seasons as well as the rating's own error, and it is a ridge estimate, so true misses
                     run larger
     evidence        what the correction rests on: his on-court possessions over the three seasons (`with_poss`)
-                    and his team's neighbouring possessions without him (`without_poss`)
+                    and his team's neighboring possessions without him (`without_poss`)
     expected miss   the squared miss a player rated the same, with the same evidence, is expected to have: a
                     gradient-boosted Poisson regression of the squared miss on the rating, both evidence counts and
                     the season, fitted with every player's seasons held out together (`adjusted_misses`).  The
@@ -32,7 +32,7 @@ The cuts, every one reported:
   1. statistics: fifths of every statistic in GLOSSARY.md, cut within each season, plus the off-court and on/off
      ratings, score state and playoff share;
   2. player types: a Bayesian Gaussian mixture (`player_types.fit_mixture`, up to eight types) on the thirteen box
-     rates per 100, standardised within each season so a type is a role relative to its era, fitted on
+     rates per 100, standardized within each season so a type is a role relative to its era, fitted on
      player-seasons with 500+ possessions and used to place every one;
   3. context: age, years in the league, era, his team's quality that season, and whether he changed teams the
      season before and the season after;
@@ -80,7 +80,7 @@ N_GROUPS = 5                       # fifths
 MIN_ROWS = 50                      # a cut with fewer player-seasons is not reported
 TYPE_POSSESSIONS = 500             # the player types are fitted on player-seasons with this many possessions or more
 STATS = tuple(dict.fromkeys(PRIOR_FEATURES + OFF_COURT + ON_MINUS_OFF + CLOSENESS + PLAYOFF_SHARE))
-# the player types' rates, uncentred (the order is the mixture's column order)
+# the player types' rates, uncentered (the order is the mixture's column order)
 TYPE_RATES = ("twos_made_per100", "twos_missed_per100", "threes_made_per100", "threes_missed_per100",
               "free_throws_made_per100", "free_throws_missed_per100", "off_rebounds_per100", "def_rebounds_per100",
               "assists_per100", "turnovers_per100", "steals_per100", "blocks_per100", "fouls_per100")
@@ -184,7 +184,7 @@ def built_columns(ratings: pd.DataFrame, own: str, other: str) -> pd.DataFrame:
 def player_types(stats: pd.DataFrame, k: int = 8) -> tuple:
     """(each player-season's type, {type: its plain description}), the biggest type first.
 
-    The thirteen box rates per 100 (uncentred, padded), standardised within each season so a type is a role
+    The thirteen box rates per 100 (uncentered, padded), standardized within each season so a type is a role
     relative to its era rather than to 1997 or 2026; a Bayesian Gaussian mixture fitted on the player-seasons with
     500+ possessions (a 100-possession profile is mostly noise) and used to place every player-season.  A type is
     described by the two rates it has most of and the two it has least of.
@@ -258,7 +258,7 @@ def adjusted_misses(rows: pd.DataFrame) -> pd.DataFrame:
     """Each row's squared miss against the expected squared miss for its rating level and its evidence.
 
     The expectation is a gradient-boosted Poisson model of the squared miss on the rating level, his on-court
-    possessions over the three seasons (`with_poss`), his team's neighbouring games without him (`without_poss`)
+    possessions over the three seasons (`with_poss`), his team's neighboring games without him (`without_poss`)
     and the season, cross-fitted over players (five folds), so no player's own miss sets his own expectation, and
     rescaled so the mean ratio is exactly 1.  The two possession counts go in separately because the correction is
     identified by both.  A first pass (2026-10-03) expected the miss from 6 x 6 cells of the rating level and ONE

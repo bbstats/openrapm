@@ -86,7 +86,7 @@ def test_a_season_never_reaches_another():
 
 
 def test_the_opponent_factor_reads_the_opponents_earlier_games_only():
-    """A team's first game is met at a factor of 1; a defence that gave up many assists in its earlier games makes
+    """A team's first game is met at a factor of 1; a defense that gave up many assists in its earlier games makes
     its next opponents' assists count for less."""
     rows = _league(seasons=(2018,))
     league = G.league_levels(G.games_from_rows(rows))

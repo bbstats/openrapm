@@ -7,14 +7,14 @@ against a defender above expected, rebound chances, contested shots, box-outs, d
 assists, touches.  This asks whether they let the prior predict a player better than the box score and his body do.
 
 Words used below
-    screen season   one of nine rated seasons, 2018-2026, at the test setting: it and its neighbours are left out of the
-                    labels and of the training rows (every screen season and its neighbours have both dashboards)
+    screen season   one of nine rated seasons, 2018-2026, at the test setting: it and its neighbors are left out of the
+                    labels and of the training rows (every screen season and its neighbors have both dashboards)
     cell            one screen season under one assignment of players to the five player folds (0 is the shipped
                     assignment, 1 and 2 the noise control's regroupings)
     arm             one way to fit the prior: its input list
     held-out error, yardstick   as in check 142: each rated player's prior comes from the booster fitted without his
                     player fold, scored against his career label (step 1's RAPM over every season but the screen
-                    season and its neighbours) and against his neighbours' RAPM, possession-weighted, after the best
+                    season and its neighbors) and against his neighbours' RAPM, possession-weighted, after the best
                     straight line through the priors
     placebo         the `tracking_and_hustle` inputs with every dashboard column shuffled among the players of its
                     season and side, the missing values kept where they are: the same columns with nothing in them.
@@ -26,9 +26,9 @@ Training rows from the seasons before a dashboard starts have its columns missin
 
 Statistics and the gate are check 142's, registered before the first run (notes/DECISIONS.md, experiment 62): an arm
 passes when (a) on the career yardstick it beats today at t -2 or below on at least one side, (b) neither side is worse
-at t +2 or beyond on either yardstick, (c) its mean change on the neighbours yardstick is not above 0 on a side that
+at t +2 or beyond on either yardstick, (c) its mean change on the neighbors yardstick is not above 0 on a side that
 passed (a), (d) no era is worse in every one of its screen seasons.  The placebo must fail (a).  Of the passing arms the
-best has the largest career-yardstick gain on the side that passed (defence when it did); the chosen one is the arm with
+best has the largest career-yardstick gain on the side that passed (defense when it did); the chosen one is the arm with
 the fewest added inputs whose change is within one standard error of the best's.  With nothing passing nothing is built.
 
 Known blind spot: the error weights players by possessions, so the bench barely counts (trap 29); it is read separately

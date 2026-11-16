@@ -32,7 +32,7 @@ __all__ = ["COLUMNS", "DELETED", "FEATURE_SETS", "TARGETS", "PLAYER_UNITS", "col
            "translate_frame", "saved_models", "target_name", "feature_set_name", "player_unit_name"]
 
 # The thirteen padded box-score rates per 100 possessions, in config.yaml's box_counts order.  Each had an
-# uncentred twin, raw_<old> -> <new>_uncentred.
+# uncentered twin, raw_<old> -> <new>_uncentred.
 _RATES = {
     "fg3m": "threes_made_per100", "fg3_miss": "threes_missed_per100", "fg2m": "twos_made_per100",
     "fg2_miss": "twos_missed_per100", "ftm": "free_throws_made_per100", "ft_miss": "free_throws_missed_per100",

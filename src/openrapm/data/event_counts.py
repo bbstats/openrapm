@@ -9,7 +9,7 @@ play-by-play says more about four of them, event by event:
     a made field goal        whether an assist is written beside it
     a three-point attempt    where it was taken: the corner or above the break
     a block                  where the blocked shot was taken, and whether the blocker's team got the ball back
-    a turnover               whether the defence stole it
+    a turnover               whether the defense stole it
     an assist                where the shot it set up was taken (credited to the passer)
 and the offensive fouls a player commits.
 

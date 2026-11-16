@@ -230,7 +230,7 @@ def opponent_factors(sums: tuple, pads: np.ndarray) -> np.ndarray:
     """(n, 21): each row's opponent factor (module docstring) from `opponent_sums`; 1 for a percentage and wherever
     the pad is infinite.
 
-    Example: a defence that allowed 1,100 offensive rebounds where the league level expected 1,000 on the 40,000
+    Example: a defense that allowed 1,100 offensive rebounds where the league level expected 1,000 on the 40,000
     possessions its opponents had, with a pad of 2,000 possessions: (44,000 + 2,000) / (40,000 + 2,000) = 1.095."""
     allowed, faced = sums
     pads = np.broadcast_to(np.asarray(pads, dtype=float), (len(STATS),))
@@ -308,7 +308,7 @@ def nll(forecast: np.ndarray, games: Games, factors: np.ndarray) -> np.ndarray:
 
 
 def _grid_fit(loss, low: float, high: float, coarse: int = 25, fine: int = 17) -> np.ndarray:
-    """One value per stat minimising `loss` (a function of (candidates, 21) values, returning (candidates, 21) mean
+    """One value per stat minimizing `loss` (a function of (candidates, 21) values, returning (candidates, 21) mean
     losses), searched on a log grid from `low` to `high`, then on a finer one around each stat's best."""
     grid = np.exp(np.linspace(np.log(low), np.log(high), coarse))
     losses = loss(np.repeat(grid[:, None], len(STATS), axis=1))
@@ -321,7 +321,7 @@ def _grid_fit(loss, low: float, high: float, coarse: int = 25, fine: int = 17) -
 
 
 def fit_pads(games: Games, league_row: np.ndarray, training: np.ndarray, opponent: bool = True) -> tuple:
-    """(ks, opponent pads): each stat's padding pad k, then its opponent pad, then k again, each minimising the mean
+    """(ks, opponent pads): each stat's padding pad k, then its opponent pad, then k again, each minimizing the mean
     NLL of the padding's forecasts on the `training` rows (a mask).  A percentage's opponent pad is infinity, and so
     is every stat's without `opponent` (the comparison arm: k alone).
 

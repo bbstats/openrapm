@@ -9,7 +9,7 @@ Step 3 is a ridge, so a rating is a straight line in its prior, and the test is 
 
 Words used below
     fit games, held-back games   one within-season fold's two sets of games (data/within_folds.py)
-    Z, C, w                      the fit games' player columns [offence | defence], context columns and possessions
+    Z, C, w                      the fit games' player columns [offense | defense], context columns and possessions
     Z_h                          the same player columns on the held-back stints
     fitted part                  r(t): the players' part of the ridge on [Z | C] fitted to a target t, the penalty on
                                  the players alone
@@ -98,18 +98,18 @@ class RatingSums:
 @dataclass
 class HeldBack:
     """One fold's held-back stints, rated by its fit games' ratings."""
-    players: sp.csr_matrix       # Z_h: stints x [offence | defence] player columns, the fit games' column order
+    players: sp.csr_matrix       # Z_h: stints x [offense | defense] player columns, the fit games' column order
     y: np.ndarray                # points per 100 as scored
     w: np.ndarray                # possessions
     levels: sp.csr_matrix        # stints x the fold's team levels (`team_levels`)
     rated: np.ndarray            # one per player column: the fit games rated him
-    stand_in: tuple              # (offence, defence): the rating an unrated player stands in at, as check 151 reads it
+    stand_in: tuple              # (offense, defense): the rating an unrated player stands in at, as check 151 reads it
 
 
 def ridge_parts(players, context: np.ndarray, weights: np.ndarray, offence_target: np.ndarray,
                 defence_target: np.ndarray, priors: np.ndarray, penalty: float) -> tuple:
-    """(r(offence target)'s offence half, r(defence target)'s defence half, X priors): one fold's ridge on [Z | C] for
-    two targets and any number of priors at once.  `priors` is (2 n x columns), [offence | defence] in Z's column order.
+    """(r(offense target)'s offense half, r(defense target)'s defense half, X priors): one fold's ridge on [Z | C] for
+    two targets and any number of priors at once.  `priors` is (2 n x columns), [offense | defense] in Z's column order.
     Step 3 fits each target on its own and keeps that end, so each fitted part reads its own target, and X is the same
     for both since only the target differs."""
     n_columns = players.shape[1]
@@ -148,8 +148,8 @@ def team_free(values: np.ndarray, player_ids: np.ndarray, team_poss: pd.DataFram
 
 
 def prior_columns(inputs: dict, player_ids: np.ndarray, team_poss: dict, box_column: int = 0) -> np.ndarray:
-    """(2 n x 2 K): every input as a prior, offence's K then defence's, each on its own half of [offence | defence] in
-    the order of `player_ids`, the design's.  The input at `box_column`, the box-score prior, is centred on the end's
+    """(2 n x 2 K): every input as a prior, offence's K then defence's, each on its own half of [offense | defense] in
+    the order of `player_ids`, the design's.  The input at `box_column`, the box-score prior, is centered on the end's
     possessions and keeps each team's total; the others are `team_free` (the module docstring).  A player without inputs
     reads 0.
 

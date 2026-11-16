@@ -75,7 +75,7 @@ def team_of_rows(keys: pd.DataFrame, cfg: dict) -> pd.DataFrame:
 
 
 def design_row_teams(design, cfg: dict) -> tuple[np.ndarray, np.ndarray]:
-    """(team_off, team_def): each row of a design, the team on offence and the team on defence (`team_of_rows`, the
+    """(team_off, team_def): each row of a design, the team on offense and the team on defense (`team_of_rows`, the
     row's game id read off the design's game table)."""
     game_ids = design.games.set_index("game_idx").game_id.reindex(design.rows.game_idx.to_numpy()).to_numpy()
     keys = pd.DataFrame({"season": design.rows.season.to_numpy(), "phase": design.rows.phase.to_numpy(),

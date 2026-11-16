@@ -29,7 +29,7 @@ Words used below
     lineup shape    the owner, 2026-10-24: "if good lineups in general are multiplicative as are high concentration
                     ones, it should be relatively easy to tease out that benefit from that benefit plus self-creation".
                     Four more free terms: the square of the offense's rating sum, the square of the defense's, their
-                    product, each centred on the fold's possession-weighted mean (good lineups multiplying), and the
+                    product, each centered on the fold's possession-weighted mean (good lineups multiplying), and the
                     standard deviation of the five offensive ratings, the talent concentrated in one or two players at
                     the same sum (high concentration multiplying)
     career null     check 138's yardstick on this one input: every player is handed another player's self-creation,
@@ -52,7 +52,7 @@ held-back possessions: points per 100 beyond what OpenRAPM expects.  Read twice:
 lineup shape held as well, beside the lineup-shape terms' own effects in that fit: each square at one standard
 deviation of its rating sum, the product at one of each, the talent spread per standard deviation.  With --trade=1
 the amount and the concentration also get a coefficient on the stints after a trade, the difference, beside a free
-level for those stints; both are centred on the fold's possession-weighted mean first, so that level reads at the
+level for those stints; both are centered on the fold's possession-weighted mean first, so that level reads at the
 fold's average lineup.
 
 Across seasons: the mean of the per-season estimates, its standard error across seasons, the z, the Newey-West z
@@ -317,7 +317,7 @@ class NullFold:
 
 
 def add_shape(frame: pd.DataFrame, w: np.ndarray) -> None:
-    """The lineup-shape terms beside the talent spread: each rating sum's square and their product, centred on the
+    """The lineup-shape terms beside the talent spread: each rating sum's square and their product, centered on the
     fold's possession-weighted means."""
     offense, defense = frame.rating_sum_off.to_numpy(float), frame.rating_sum_def.to_numpy(float)
     offense, defense = offense - np.average(offense, weights=w), defense - np.average(defense, weights=w)

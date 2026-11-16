@@ -404,16 +404,16 @@ def def_three_design(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, cal
     """The DEFENSIVE target: actual points with every opponent three-point make replaced by
     3 x the shooter's padded 3P%, free throws adjusted as shipped, everything else as it happened.
 
-    Team opponent 3P% needs 4,000-7,000 attempts to stabilise (Nylon Calculus, 2018), so the
+    Team opponent 3P% needs 4,000-7,000 attempts to stabilize (Nylon Calculus, 2018), so the
     defenders' effect on whether a three drops is almost entirely noise; this removes it from the
     variable their coefficients are fit to.  The shooter's rate is his other-half-of-block 3P%, plus
     the `prev` seasons before the block, padded toward the league with k = `k3` attempts (450: the
     split-half reliability of high-volume shooters, FINDINGS.md section 18).  No location curve.
-    Meant to supply the DEFENSIVE coefficients only; offence comes from the free-throw target.
+    Meant to supply the DEFENSIVE coefficients only; offense comes from the free-throw target.
 
     `late_as_scored`: the threes of a period's last two seconds (stint_parser.LATE_THREE_SECONDS), heaves mostly,
     are left out of the repricing and count as they happened.  Priced at the shooter's own percentage, about 36%,
-    where they go in about 15%, each charged the defence about 0.47 points it did not allow (notes/DECISIONS.md, the
+    where they go in about 15%, each charged the defense about 0.47 points it did not allow (notes/DECISIONS.md, the
     bug-fix pass of 2026-10-22, experiment 95).
     """
     _check(wd_pts, "fg3a_s1")
@@ -422,12 +422,12 @@ def def_three_design(seasons, cfg, wd_pts, prev: int = 0, k3: float = 450.0, cal
     poss = cnt["poss"].to_numpy(dtype=float)
     c = cnt
     made_threes = c["fg3m"] - c["fg3m_late"] if late_as_scored else c["fg3m"]
-    # `w3` / `wft` are how much of the REALISED deviation the defence keeps, 0 being the original full
-    # replacement.  Full replacement assumes a defence has no effect at all on whether a three or a free
+    # `w3` / `wft` are how much of the REALISED deviation the defense keeps, 0 being the original full
+    # replacement.  Full replacement assumes a defense has no effect at all on whether a three or a free
     # throw drops, and FINDINGS 35.1 measures that as false: the true between-team spread is 0.59 points
-    # on opponent 3P% and 0.52 on opponent FT%, against 1.31 and 2.47 for the offences.  Weighting a
+    # on opponent 3P% and 0.52 on opponent FT%, against 1.31 and 2.47 for the offenses.  Weighting a
     # channel does not change its signal-to-noise ratio -- it changes how much that channel counts in the
-    # composite target relative to the channels a defence really does control, which is the thing worth
+    # composite target relative to the channels a defense really does control, which is the thing worth
     # choosing.  The criterion picks it; nothing here is set from the measurement directly.
     pts_adj = (c["pts"] - 3.0 * (1.0 - float(w3)) * (made_threes - x3)
                - (1.0 - float(wft)) * (c["ftm"] + c["ftm_tech"] - c["xftm"] - c["xftm_tech"])).to_numpy(dtype=float)
@@ -458,13 +458,13 @@ def _named(fn, name, **kw):
     return target
 
 
-# The share of the shooters' realised three-point luck the shipped defensive target keeps: a quarter.  Keeping
+# The share of the shooters' realized three-point luck the shipped defensive target keeps: a quarter.  Keeping
 # it rather than none moved the year-over-year score by -0.007 per 100 at z = -0.34, nothing measurable
 # (notes/DECISIONS.md, "What was settled": x3def; settings.Targets).
 OPPONENT_THREE_LUCK_KEPT = 0.25
 
 # The defensive targets: points_with_expected_opponent_threes (what shipped until experiment 95: every opponent
-# three-point make replaced by 3 x the shooter's padded other-half 3P%, with OPPONENT_THREE_LUCK_KEPT of the realised
+# three-point make replaced by 3 x the shooter's padded other-half 3P%, with OPPONENT_THREE_LUCK_KEPT of the realized
 # deviation kept) and points_with_expected_opponent_threes_all (none of it kept).  Before 2026-10-11: x3def_w0.25,
 # x3def.
 DEFENSE_TARGETS = {

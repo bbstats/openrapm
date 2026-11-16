@@ -61,7 +61,7 @@ def _same(got, want) -> bool:
 
 
 def test_the_prior_improves_on_plain_rapm_where_the_box_score_sees_the_impact(small_tour):
-    """The story the tutorial tells holds on the small league too: on offence, where the box score explains most of
+    """The story the tutorial tells holds on the small league too: on offense, where the box score explains most of
     a player's impact, step 3 beats step 1 on the same season."""
     _, got = small_tour
     summary = got["summary"]

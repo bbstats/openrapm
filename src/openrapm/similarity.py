@@ -1,11 +1,11 @@
 """The similarity page: which other player-seasons a player-season is most like.
 
 The owner's design (2026-10-12): every player-season in the pool is described by the same inputs, each input is put
-on the same footing by standardising it, and two player-seasons are as similar as their standardised inputs are near.
+on the same footing by standardizing it, and two player-seasons are as similar as their standardized inputs are near.
 Each player-season's list holds the nearest seasons of OTHER players: every season of his own is left out, because a
 player's own seasons are the nearest to each other.  A classifier with one class per player-season, read for a
 Shepard-Luce similarity, was tried first and found a player's own seasons less well (notes/DECISIONS.md, "The
-similarity page: nearest neighbours, after a classifier").
+similarity page: nearest neighbors, after a classifier").
 
 Words used below
     player-season   one player in one season (NBA id x season; regular season and playoffs together)
@@ -14,17 +14,17 @@ Words used below
     inputs          what describes a player-season (`similarity_inputs`): every input the box-score prior reads for a
                     rated season (both sides' lists, features.FEATURE_SETS), his possessions on each side, the
                     season's games' part on each side (u_off, u_def: how far step 3 moved him from the prior) and the
-                    final rating (offence, defence, total)
-    standardised    an input minus its pool mean, over its pool standard deviation, so every input counts the same:
+                    final rating (offense, defense, total)
+    standardized    an input minus its pool mean, over its pool standard deviation, so every input counts the same:
                     a hundred possessions and a point of true shooting are each measured in their spread
-    distance        the straight-line distance between two player-seasons' standardised inputs, below
+    distance        the straight-line distance between two player-seasons' standardized inputs, below
     the two lists   for each row, the nearest rows of other players ("seasons"), and the nearest other players, each
                     at his nearest row ("players")
 
     z[r, i]  = (x[r, i] - mean of input i) / (standard deviation of input i)
     d(r, t)  = sqrt( sum over inputs i of (z[r, i] - z[t, i])^2 )
 
-Example: with two inputs, standardised, season A at (1.0, 0.0), season B at (0.4, 0.8) and season C at (-1.0, 0.5),
+Example: with two inputs, standardized, season A at (1.0, 0.0), season B at (0.4, 0.8) and season C at (-1.0, 0.5),
 d(A, B) = sqrt(0.6^2 + 0.8^2) = 1.0 and d(A, C) = sqrt(2.0^2 + 0.5^2) = 2.06: season B is the nearer one to A.
 
 Model layer: everything here takes frames and arrays.  commands/site.py loads the tables and writes the files.
@@ -80,9 +80,9 @@ def _side_rows(rows: pd.DataFrame, panel: pd.DataFrame, side: str, names) -> pd.
 
 
 def _paired_columns(offence: pd.DataFrame, defence: pd.DataFrame, offence_names, defence_names) -> dict:
-    """The box-score inputs, named: the offence list, then the defence list's other names.  An input on both lists
+    """The box-score inputs, named: the offense list, then the defense list's other names.  An input on both lists
     that is equal on every row is read once under its own name; one that differs is read from each side, as
-    `<name>_off` in the offence list's place and `<name>_def` in the defence list's."""
+    `<name>_off` in the offense list's place and `<name>_def` in the defense list's."""
     differs = {name for name in offence_names if name in defence_names
                and not np.array_equal(offence[name].to_numpy(float), defence[name].to_numpy(float))}
     columns = {}
@@ -197,7 +197,7 @@ def own_season_ranks(distance, players, block_rows: int = 1024) -> np.ndarray:
 
         rank = 1 + the number of other players' rows nearer to him than his nearest other season
 
-    so 1 means no other player's season comes before one of his own; ties count in his favour.  NaN for a row whose
+    so 1 means no other player's season comes before one of his own; ties count in his favor.  NaN for a row whose
     player has no other season in the pool.  `distance` and `players` as in `closest`.
     """
     players = np.asarray(players)

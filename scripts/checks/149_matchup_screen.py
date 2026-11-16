@@ -21,7 +21,7 @@ added per side); `placebo`.  The nine screen seasons are 2018-2026, the first ni
 
 The gate is check 146's, registered before the first run (notes/DECISIONS.md): `matchups` passes when (a) on the career
 yardstick it beats today at t -2 or below on at least one side, (b) neither side is worse at t +2 or beyond on either
-yardstick, (c) its mean change on the neighbours yardstick is not above 0 on a side that passed (a), (d) no era is
+yardstick, (c) its mean change on the neighbors yardstick is not above 0 on a side that passed (a), (d) no era is
 worse in every one of its screen seasons.  The placebo must fail (a): when it does not, a pass of `matchups` is not
 credited to the assignment and nothing is built (`decide`).
 

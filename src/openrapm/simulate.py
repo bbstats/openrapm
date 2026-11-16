@@ -5,7 +5,7 @@ real seasons.
 
 Words used below
     rate      a player's true count per 100 possessions of each box-score count (design.FEATURES)
-    impact    a player's true effect on points per 100, offence and defence: rate . beta + u, with u a part no
+    impact    a player's true effect on points per 100, offense and defense: rate . beta + u, with u a part no
               box count explains
     leak      made shots enter a stint's points mechanically (3 / 2 / 1 per make, the counts that happened),
               while every other count, and the "net" value of a make, enters through the player's true rate
@@ -40,7 +40,7 @@ from .features import BOX_RATES, SEASON_PANEL_COLUMNS
 LEAGUE_MEAN = np.array([2.4, 4.2, 5.6, 5.2, 3.6, 1.0, 2.0, 6.6, 4.8, 2.8, 1.6, 1.0, 4.0])
 BETA_O = np.array([1.6, -0.7, 0.9, -0.6, 0.5, -0.4, 0.5, 0.1, 0.4, -1.0, 0.1, 0.0, -0.1])
 BETA_D = np.array([-0.1, 0.1, -0.1, 0.2, 0.0, 0.1, 0.0, -0.3, -0.1, 0.1, -0.8, -0.6, 0.3])
-# Same-game mechanical slopes: realised counts enter the stint's points with these values
+# Same-game mechanical slopes: realized counts enter the stint's points with these values
 # (a make scores; a miss forfeits the possession's ~1 point unless an ORB follows; an ORB
 # restores it; a turnover forfeits it).  The player's TRUE rate enters with beta, so the
 # true coefficient is beta while the game's box count leaks with slope m.
@@ -98,14 +98,14 @@ def simulate(n_seasons=2, n_teams=10, players_per_team=12, games_per_season=150,
     `rho` and `turnover` exist for the year-over-year test (openrapm.scoring), which needs a player's
     talent to PERSIST across seasons and rosters to CHANGE:
       rho       None (default) redraws every player's rates and impacts independently each season, the
-                original behaviour, which every test fixture without `rho` was built with.  A
+                original behavior, which every test fixture without `rho` was built with.  A
                 float in [0, 1] makes the impacts AR(1) across seasons with that correlation (and the
                 rates AR(1) on the log scale), so a rating fit on one season carries information about
                 the next.
       turnover  the fraction of players moved to a different team each season (a permutation among the
                 movers, so every team keeps its size).  Player ids persist either way.
     `po_series_per_season` playoff series of 4 to 7 games follow each regular season; in them every player's
-    impact moves by rate . delta_O (offence) and rate . delta_D (defence).
+    impact moves by rate . delta_O (offense) and rate . delta_D (defense).
     """
     rng = np.random.default_rng(seed)
     beta_O, beta_D = np.asarray(beta_O, dtype=float), np.asarray(beta_D, dtype=float)
@@ -146,12 +146,12 @@ def _move_players(rng, team_of: np.ndarray, turnover: float) -> np.ndarray:
 
 
 def _season_talent(rng, previous: tuple, rho, tau_u, rate_cv: float, n_players: int) -> tuple:
-    """(rates, u offence, u defence) of one season.
+    """(rates, u offense, u defense) of one season.
 
     rho None: rates gamma with mean LEAGUE_MEAN and coefficient of variation rate_cv, u normal with standard
     deviations tau_u, redrawn every season.  rho a number: the first season from the stationary law (log-normal
     rates with the same mean and coefficient of variation), so a player's spread is the same in every season and
-    his neighbours predict him with slope 2 rho / (1 + rho^2); every later season AR(1) with correlation rho, the
+    his neighbors predict him with slope 2 rho / (1 + rho^2); every later season AR(1) with correlation rho, the
     rates on the log scale."""
     mu, u_off, u_def = previous
     n_counts = len(LEAGUE_MEAN)

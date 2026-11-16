@@ -40,14 +40,14 @@ the observations:
     gaps_vs_ref    t-statistic ("z") and the number of observations it wins ("x of n")
 
 `--checks=1` adds three copies of the reference that say whether the test sees what it claims to:
-    shuffled    the reference's ratings reassigned at random among each rated-season team's players (offence and
-                defence kept together): the order inside every team destroyed.  It must lose clearly
+    shuffled    the reference's ratings reassigned at random among each rated-season team's players (offense and
+                defense kept together): the order inside every team destroyed.  It must lose clearly
     team_now    one random constant per team of the SCORED season (normal, standard deviation `--shift_sd`, each
                 side) added to every player who played for it: what the test claims to be blind to.  `order`
                 must tie, apart from the few players who played for two teams
     team_then   the same with the teams of the RATED season.  Rosters change between seasons, so this must tie on
                 pairs who were teammates then too, and lose on pairs who were not: it measures how much of the
-                test is a player's credit travelling with him to a new team
+                test is a player's credit traveling with him to a new team
 
 Reads   each `--rankings` table, given as name=path[:rating|prior] (`rating`, the default, is the finished
         ratings; `prior` the box prior alone, the prior_off / prior_def columns of the same table); the stints of
@@ -116,7 +116,7 @@ class Grading:
 
 def parse_args(argv=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="The swap test: does a season's ranking order teammates the way "
-                                                 "the neighbouring seasons' games do?", allow_abbrev=False)
+                                                 "the neighboring seasons' games do?", allow_abbrev=False)
     parser.add_argument("--rankings", default="", help="name=path[:rating|prior],... (required)")
     parser.add_argument("--ref", default="", help="the reference ranking (default: the first named)")
     parser.add_argument("--plain_rapm", type=float, default=3000.0,
@@ -181,7 +181,7 @@ def shuffled_within_team(table: pd.DataFrame, teams: pd.DataFrame, seed: int) ->
 def shifted_by_team(table: pd.DataFrame, team_of: dict, seed: int, sd: float) -> pd.DataFrame:
     """One random constant per team and side added to every player `team_of` puts on that team.
 
-    Teams are drawn in ascending id order, offence then defence, so a seed always gives the same constants.
+    Teams are drawn in ascending id order, offense then defense, so a seed always gives the same constants.
     """
     rng = np.random.default_rng(seed)
     out = table.copy()
@@ -282,7 +282,7 @@ def run(grading: Grading, cfg: dict, first: int, last: int, penalty: float) -> t
         if fitted_here:
             fitted.append(fit)
         plain[season] = fit[["player_id", "season", "o", "d"]]
-        scored = season - 1                                     # every neighbour of `scored` is now rated
+        scored = season - 1                                     # every neighbor of `scored` is now rated
         if previous is not None and first <= scored <= last:
             season_scores, season_levels = grade_season(grading, previous, plain, scored, seasons)
             scores += season_scores

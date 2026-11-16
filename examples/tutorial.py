@@ -13,9 +13,9 @@ truth.
 
 Words used below
     stint         a stretch of play with the same ten players on the court
-    impact        a player's true effect on points per 100 possessions: on offence what he adds to the points his team
-                  scores, on defence what he takes away from the points it allows (positive is good on both ends).
-                  Both the impacts and the ratings are centred: the possession-weighted average player is 0
+    impact        a player's true effect on points per 100 possessions: on offense what he adds to the points his team
+                  scores, on defense what he takes away from the points it allows (positive is good on both ends).
+                  Both the impacts and the ratings are centered: the possession-weighted average player is 0
     rated season  the season whose ratings are built; here the last simulated one
     correlation   Pearson's correlation between the ratings and the true impacts, over the rated season's players
     error         the root mean square of (rating - true impact) over the same players, in points per 100
@@ -31,7 +31,7 @@ The league (`LEAGUES["full"]`)
 Step 1, plain RAPM (src/openrapm/rapm.py)
     One ridge regression of every stint's points per 100 possessions on the ten players on the court:
 
-        minimise   sum over rows  w (y - Z theta - C gamma)^2  +  40,000 |theta|^2
+        minimize   sum over rows  w (y - Z theta - C gamma)^2  +  40,000 |theta|^2
 
     with y the row's points per 100, w its possessions, Z the players on the court, theta their ratings, C the
     context (season, home court, score margin) and gamma its coefficients.  Run on 2004 alone it is the plain
@@ -46,7 +46,7 @@ Step 2, the box-score prior (src/openrapm/box_prior.py)
 Step 3, prior-informed RAPM (src/openrapm/prior_rapm.py)
     The 2004 ridge again, with each player pulled toward s x his prior instead of toward 0, and penalty 13,037:
 
-        minimise   sum over rows  w (y - Z r - C gamma - s_O P_O - s_D P_D)^2  +  13,037 |r|^2
+        minimize   sum over rows  w (y - Z r - C gamma - s_O P_O - s_D P_D)^2  +  13,037 |r|^2
 
     P_O and P_D are the sums of the five offensive and five defensive priors on the court; the prior scales s_O and
     s_D are set by the games, unpenalised.  A rating is s x prior + r.
@@ -63,9 +63,9 @@ What differs from the published build, and why
     params/booster_params_lgb1.json, which suit the tutorial's small league.
 
 What the full league prints, in short (2004's 390 players; error in points per 100)
-    one-season RAPM          correlation 0.74 on offence, 0.70 on defence; error 4.2 and 2.0
-    the box-score prior      correlation 0.88 on offence, 0.52 on defence, from the box score alone
-    prior-informed RAPM      correlation 0.93 on offence, 0.75 on defence; error 1.7 and 1.5
+    one-season RAPM          correlation 0.74 on offense, 0.70 on defense; error 4.2 and 2.0
+    the box-score prior      correlation 0.88 on offense, 0.52 on defense, from the box score alone
+    prior-informed RAPM      correlation 0.93 on offense, 0.75 on defense; error 1.7 and 1.5
 """
 from __future__ import annotations
 
@@ -153,13 +153,14 @@ def make_league(shape: dict) -> League:
 
 
 def centred(values, possessions) -> np.ndarray:
-    """Values minus their possession-weighted mean: 0 is the average possession's player, as the ratings are centred."""
+    """Values minus their possession-weighted mean: 0 is the average possession's player, as the ratings are
+    centered."""
     values = np.asarray(values, dtype=float)
     return values - np.average(values, weights=possessions)
 
 
 def rated_players(league: League, table: pd.DataFrame) -> pd.DataFrame:
-    """One row per rated-season player of step 3's table: his possessions and his true impact on each side, centred,
+    """One row per rated-season player of step 3's table: his possessions and his true impact on each side, centered,
     positive good."""
     truth = league.truth[league.truth.season == league.rated].set_index("player_id")
     players = pd.DataFrame({"player_id": table.player_id.to_numpy(), "possessions": table.poss_off.to_numpy()})
@@ -170,7 +171,7 @@ def rated_players(league: League, table: pd.DataFrame) -> pd.DataFrame:
 
 
 def agreement(rating, truth) -> dict:
-    """{"correlation", "error"} of a rating against the true impact (both centred, positive good)."""
+    """{"correlation", "error"} of a rating against the true impact (both centered, positive good)."""
     rating, truth = np.asarray(rating, dtype=float), np.asarray(truth, dtype=float)
     return {"correlation": float(np.corrcoef(rating, truth)[0, 1]),
             "error": float(np.sqrt(np.mean((rating - truth) ** 2)))}
@@ -187,7 +188,7 @@ def plain_rapm(league: League) -> tuple[dict, dict]:
 
 
 def one_season_rapm(league: League, sums: dict, players: pd.DataFrame) -> pd.DataFrame:
-    """Plain RAPM of the rated season alone, with step 1's penalties, centred, positive good, one row per player of
+    """Plain RAPM of the rated season alone, with step 1's penalties, centered, positive good, one row per player of
     `players` (0 for a player under the 100 possessions a rating needs)."""
     labels = SETTINGS.labels
     others = [season for season in league.seasons if season != league.rated]
@@ -280,7 +281,7 @@ def impact_parts(league: League) -> dict:
 
 
 def say_step2(results: dict, priors: dict, league: League) -> None:
-    """Print step 2: what the booster learns from, how well its prior alone predicts the truth, and why defence is
+    """Print step 2: what the booster learns from, how well its prior alone predicts the truth, and why defense is
     the weaker side."""
     step, parts = results["step2"], impact_parts(league)
     print("\nStep 2: the box-score prior (box_prior.py)", flush=True)
@@ -330,7 +331,7 @@ def by_tier(players: pd.DataFrame) -> dict:
 
 
 def say_negative_scale(results: dict) -> None:
-    """Print what a prior scale below 0 means, when one is (the small league's defence)."""
+    """Print what a prior scale below 0 means, when one is (the small league's defense)."""
     for side in SIDES:
         if results["step3"]["prior_scale"][side.name] < 0:
             say(f"A prior scale below 0 on {side.name} means that in this season's games the players the "

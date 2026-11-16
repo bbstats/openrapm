@@ -17,7 +17,7 @@ Writes
 
 How to read the printed numbers (lower is better everywhere)
     game_armse   what a typical team-game misses by, in points per 100 possessions: the root mean squared miss
-                 times sqrt(2 / pi).  A team-game is one team's offence in one game
+                 times sqrt(2 / pi).  A team-game is one team's offense in one game
     armse        the same per stint (a stretch of play with the same ten players on the court)
     scale_off, scale_def   what the scored season wants each side multiplied by: 1 = calibrated, below 1 = the
                  ratings are too spread out
@@ -53,7 +53,7 @@ players who played that season, so a rookie of the scored season (10% of its pos
 back) is scored as the average player, 0, which is the one thing he is not.  `--fill=name:500` gives that table
 the possession-weighted mean rating of its own players under 500 possessions, read off the rated season alone
 (`openrapm.scoring.replacement_level`); `500x0.25` takes a quarter of that level, the depth the test settled on
-(notes/DECISIONS.md, experiment 11); `name:-1.6/-0.5` sets the two levels by hand, positive-good, offence first.  A
+(notes/DECISIONS.md, experiment 11); `name:-1.6/-0.5` sets the two levels by hand, positive-good, offense first.  A
 table not listed keeps the 0 fill, so the same parquet can be handed in twice under two names and paired.
 
 `--offset=N` asks the ratings N seasons away instead of the adjacent one.  The trade set

@@ -1,7 +1,7 @@
 """The trust boundary: a season may be fit on only once its Finals are over.
 
 These tests do not need the scraped data.  `playoffs_complete` is exercised against a synthetic
-game log, so the behaviour that matters -- a season in progress is refused -- is checked even in the
+game log, so the behavior that matters -- a season in progress is refused -- is checked even in the
 usual case where every season on disk is already finished.
 """
 import pandas as pd

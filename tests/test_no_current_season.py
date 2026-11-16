@@ -2,7 +2,7 @@
 
 `tests/test_seasons.py` pins the guard itself: a title is sixteen playoff wins, a season whose Finals
 are unfinished is not complete, `Trainable` refuses a season past its cutoff.  That is necessary and
-it is not the claim.  The claim is about the artefacts -- that no fit in this project has a season in
+it is not the claim.  The claim is about the artifacts -- that no fit in this project has a season in
 progress anywhere in it -- and for a long time `src/openrapm/data/seasons.py` named this file as the thing
 that established it.  The file did not exist.
 
@@ -20,7 +20,7 @@ What it establishes now, in four parts:
      archive/research-2026-10).  Latent rather than live -- no season is in progress
      today, so the guard drops nothing -- but it is the shape of thing that is only ever noticed in
      the year it starts lying;
-  4. `openrapm rate`, `openrapm folds` and `openrapm site --similarity` (which standardises its inputs on the
+  4. `openrapm rate`, `openrapm folds` and `openrapm site --similarity` (which standardizes its inputs on the
      player-seasons it ranks) read the panel through one function, `data.panel.trainable_panel`,
      which gates it, and the labels of `rate` sum only seasons whose Finals are over; step 5 (`openrapm swap`)
      reads it through `data.panel.panel_and_trainable_seasons`, so its type model trains only on finished

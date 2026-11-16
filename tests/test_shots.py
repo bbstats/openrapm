@@ -115,7 +115,7 @@ def test_align_only_outside_the_band():
 
 def test_the_defensive_targets_keep_their_names_and_settings():
     """The build, 70, the folds and the season panel (data/panel.py) look the defensive targets up by name;
-    points_with_expected_opponent_threes (x3def_w0.25 before 2026-10-11) keeps a quarter of the realised
+    points_with_expected_opponent_threes (x3def_w0.25 before 2026-10-11) keeps a quarter of the realized
     three-point deviation, points_with_expected_opponent_threes_late_as_scored (what ships since experiment 95) the
     same with the threes of a period's last two seconds as they happened, points_with_expected_opponent_threes_all
     (x3def) none, and points_with_expected_opponent_threes_half (experiment 89) half; all use def_three_design's other

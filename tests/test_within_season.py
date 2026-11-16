@@ -189,7 +189,7 @@ def test_a_fold_says_where_its_boosters_inputs_came_from():
 
 
 def test_the_folds_rate_on_the_saved_builds_own_targets():
-    """Experiment 84 fitted the defence on the offence's target; its folds must rate the same way, and a file that
+    """Experiment 84 fitted the defense on the offence's target; its folds must rate the same way, and a file that
     names no targets is read on the shipped ones."""
     same = {"offence": "points_with_expected_free_throws", "defence": "points_with_expected_free_throws"}
     settings = ws.fold_settings({"settings": {"targets": same}})

@@ -11,7 +11,7 @@ Words used below
     source     hustle (`LeagueHustleStatsPlayer`: deflections, contested shots, charges drawn, loose balls recovered,
                screen assists, box outs), tracking (`LeagueDashPtStats` by measure and `LeagueDashPtDefend` by shot
                zone: defended shots at the rim, rebound chances, drives, passes, touches, speed and distance),
-               synergy (`SynergyPlayTypes`: possessions, points and shooting by play type, offence and defence),
+               synergy (`SynergyPlayTypes`: possessions, points and shooting by play type, offense and defense),
                matchups (`LeagueSeasonMatchups`: each offensive player a defender guarded, with possessions and points)
     probe      a few seasons of every pull, to learn which fields exist, from which season, and how many of the rated
                players each covers, before anything is fetched in full

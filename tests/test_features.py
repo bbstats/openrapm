@@ -1,4 +1,4 @@
-"""The feature catalogue (src/openrapm/features.py): the shipped lists, the formulas, and that every name is defined.
+"""The feature catalog (src/openrapm/features.py): the shipped lists, the formulas, and that every name is defined.
 
 The shipped lists are pinned here in full because the booster reads its inputs by POSITION: a reordered list
 would load the published models and silently feed each tree the wrong column.
@@ -174,8 +174,8 @@ def test_the_formulas_on_one_row():
 
 
 def test_the_ratios_against_the_league_on_one_row():
-    """Experiment 56: (numerator - L x denominator) / (denominator + pad), L from the league's rates (uncentred minus
-    centred); the same as padding toward L and subtracting it."""
+    """Experiment 56: (numerator - L x denominator) / (denominator + pad), L from the league's rates (uncentered minus
+    centered); the same as padding toward L and subtracting it."""
     row = _one_row()                       # league offensive rebounds 3.0 - 1.0 = 2.0, defensive 9.0 - 1.0 = 8.0
     out = feat.add_features(row, ["off_rebound_share_vs_league", "true_shooting_pct_vs_league"])
     level = 2.0 / (2.0 + 8.0)
@@ -191,7 +191,7 @@ def test_the_ratios_against_the_league_on_one_row():
 
 def test_a_league_average_player_and_a_player_without_attempts_read_zero():
     row = _one_row()
-    for rate in feat.BOX_RATES:            # his rates are the league's: every centred rate 0
+    for rate in feat.BOX_RATES:            # his rates are the league's: every centered rate 0
         row[rate] = 0.0
     average = feat.add_features(row.copy(), list(feat.VS_LEAGUE))
     assert np.allclose(average[list(feat.VS_LEAGUE)].to_numpy(), 0.0)

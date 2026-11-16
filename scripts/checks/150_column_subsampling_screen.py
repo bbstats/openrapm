@@ -20,7 +20,7 @@ changes.
 
 The gate is check 142's, registered before the first run (notes/DECISIONS.md, "Check 150"): an arm passes when (a) on
 the career yardstick it beats today at t -2 or below on at least one side, (b) neither side is worse at t +2 or beyond
-on either yardstick, (c) its mean change on the neighbours yardstick is not above 0 on a side that passed (a), (d) no
+on either yardstick, (c) its mean change on the neighbors yardstick is not above 0 on a side that passed (a), (d) no
 era is worse in every one of its screen seasons.  Of the passing arms the one with the largest summed career-yardstick
 gain over the two sides is the best; the chosen one is the mildest (the largest share drawn) whose summed gain is within
 one standard error of the best's.  Nothing passing, nothing is built.

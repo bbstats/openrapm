@@ -9,7 +9,7 @@ the prior, to hopefully learn a correction factor"; notes/DECISIONS.md, experime
 Words used below
     stint row         one stint seen from one side (swap_test.season_rows): the offence's five, the defence's five,
                       both teams, the game and the possessions.  A stint gives two rows, one per end
-    box-score prior   step 2's answer for one player, raw sign: on offence points scored per 100, on defence points
+    box-score prior   step 2's answer for one player, raw sign: on offense points scored per 100, on defense points
                       allowed per 100
     on the court      the stint rows he played, on either end
     on the bench      the stint rows of the games he played in where his team was on the court without him
@@ -62,7 +62,7 @@ average of all the boosters' answers; each player's number and level off the boo
 The line, one per side, is fitted on the swaps in the held-back games of the within-season folds
 (commands/second_prior.py writes their normal equations):
 
-    minimise over beta   sum over swaps  h (d - (x_a - x_b)' beta)^2  +  lambda |beta|^2
+    minimize over beta   sum over swaps  h (d - (x_a - x_b)' beta)^2  +  lambda |beta|^2
 
     x_a, x_b   the two swapped players' inputs, all from the fold's fit games: his box-score prior on this side, then
                his eight context numbers (`INPUTS`)
@@ -78,7 +78,7 @@ The line, one per side, is fitted on the swaps in the held-back games of the wit
     second prior = x' beta, from the line fitted without the swaps of his player fold (player_id % n_folds)
 
 A swap compares two players of one team, so the line's weights are learned inside teams; the intercept cancels in every
-swap and is 0 (step 3 centres each season and refits its own scale on the second prior).  Applied to the raw levels
+swap and is 0 (step 3 centers each season and refits its own scale on the second prior).  Applied to the raw levels
 above, a weight learned inside teams would also move whole teams, which no swap tested.  So by default each team's total
 stays the line's box-score part's, b x box-score prior, b the line's own weight on it (`TEAM_TOTALS` "held"), every
 player of a team moved by the same amount:
@@ -105,13 +105,13 @@ incumbent's totals better in 44 of 48.  "free" applies the line as it is.
 spread held: it passes", and experiment 90): after the team totals, one factor per season and side pulls every player
 toward his main team's possession-weighted mean until the spread inside teams equals the box-score part's,
 b x box-score prior's, so the line orders the players inside each team and adds no width (`hold_spread`).  Without
-it, experiment 82's ratings came out wider than the incumbent's, defence 14-22% by era, as step 5's did without its
-hold on 2026-10-01: 12% on offence, 27% on defence.
+it, experiment 82's ratings came out wider than the incumbent's, defense 14-22% by era, as step 5's did without its
+hold on 2026-10-01: 12% on offense, 27% on defense.
 
 With step 5's inputs (`INPUT_SETS` "context_and_types", experiment 82; the owner, 2026-10-19: "wouldnt it stand to
 reason to put the swap adjustments into the priors before RAPMizing? instead of doing it after RAPM?"), the line also
 reads the other end's box-score prior and step 5's 19 box-score, role and body numbers (swap_adjust.PANEL_FEATURES),
-each standardised with one mean and standard deviation over every player-season of the panel (`type_scale`), all from
+each standardized with one mean and standard deviation over every player-season of the panel (`type_scale`), all from
 the same games as the rest of his inputs.  Fitted on the same held-back swaps, it learns before the ridge what step 5
 learns after it, and step 3 weighs it against the season's games.
 
@@ -124,18 +124,18 @@ prior") reads three numbers per side and nothing else:
     opponents_other_side_on    the 5 opponents' priors on the other side, summed, over the same rows
 
 the sums four and five times experiment 81's padded averages.  All three passed the second stage's Boruta over every
-season on both sides (notes/DECISIONS.md, "Boruta on the second stage").  Its inputs are applied centred on the
+season on both sides (notes/DECISIONS.md, "Boruta on the second stage").  Its inputs are applied centered on the
 season's possession-weighted average (`centred`): the line is fitted on swaps, which see only differences between
 players, so it has no intercept, and each player fold's line then carried its own level, w_f x the average inputs;
-in experiment 82 a player's defensive prior moved by up to 0.8 per 100 with the fold his id falls in.  Centred, every
-fold's line reads 0 at the average player.  "context_and_types_centred" is experiment 82's inputs, centred so
-(experiment 93); its line is 82's own (the grams of ctx82), since centring leaves the swaps' differences as they were.
+in experiment 82 a player's defensive prior moved by up to 0.8 per 100 with the fold his id falls in.  Centered, every
+fold's line reads 0 at the average player.  "context_and_types_centred" is experiment 82's inputs, centered so
+(experiment 93); its line is 82's own (the grams of ctx82), since centering leaves the swaps' differences as they were.
 
 The team rates (`INPUT_SETS` "context_types_team_rates_centred", experiment 128; the owner, 2026-11-03: "I wonder if we
 should roll up lots more 'team share' metrics in here (like team ORB100, team TOV 100) as well", then "All eight, makes
 included") add sixteen numbers per side to experiment 93's inputs, all per 100 possessions, `TEAM_RATES`:
 
-    team_<count>_on    on offence his team's <count> over his rows on the court; on defence the <count> of the teams
+    team_<count>_on    on offense his team's <count> over his rows on the court; on defense the <count> of the teams
                        facing his, over the same kind of rows
     team_<count>_off   the same over his rows on the bench
 
@@ -144,7 +144,7 @@ counted on one end only, the end the side is rated on, and padded by `pad_toward
 the count, from the same rows.  That season rate is not an input itself: two players of a swap share it, so it cancels
 in the swap, and the line could learn nothing from it.
 
-Example before padding: for 10 possessions on offence with him on the court his team takes 3 offensive rebounds, and
+Example before padding: for 10 possessions on offense with him on the court his team takes 3 offensive rebounds, and
 for 5 without him 1.  His team_off_rebounds_on is 3 / 10 x 100 = 30.0, his team_off_rebounds_off 1 / 5 x 100 = 20.0, and
 the level both are padded toward 4 / 15 x 100 = 26.7.
 
@@ -196,7 +196,7 @@ CONTEXT = ["teammates_offence_on", "teammates_defence_on", "opponents_offence_on
 BOX = "box_prior"
 INPUTS = [BOX, *CONTEXT]              # the line's inputs, in the order of its weights
 OTHER_BOX = "box_prior_other_end"     # his box-score prior on the other end, raw sign
-TYPES = list(swap_adjust.PANEL_FEATURES)    # step 5's box counts, role and body, standardised (`type_scale`)
+TYPES = list(swap_adjust.PANEL_FEATURES)    # step 5's box counts, role and body, standardized (`type_scale`)
 SAME_TEAMMATES = "teammates_same_side_on"     # the three-input prior's teammates, this side, summed (module docstring)
 OTHER_OPPONENTS = "opponents_other_side_on"   # its opponents, the other side, summed
 # his team's rates with him on the court and off it (module docstring, experiment 128)
@@ -223,7 +223,7 @@ INPUT_SETS = {"context": INPUTS, "context_and_types": [*INPUTS, OTHER_BOX, *TYPE
               "context_types_team_rates_zones_centred": [*INPUTS, OTHER_BOX, *TYPES, *TEAM_RATES, *ZONE_RATES,
                                                          *SHUFFLED_ZONE_RATES],
               "context_types_team_zones_centred": [*INPUTS, OTHER_BOX, *TYPES, *TEAM_ZONE_RATES]}
-# applied on inputs centred on the season's average (`centred`)
+# applied on inputs centered on the season's average (`centred`)
 CENTRED_SETS = {"own_teammates_opponents", "context_and_types_centred", "context_types_team_rates_centred",
                 "context_types_team_profile_centred", "context_types_team_rates_zones_centred",
                 "context_types_team_zones_centred"}
@@ -232,7 +232,7 @@ LINE_TARGETS = SECOND_PRIOR_TARGETS               # what the line's target adds 
 
 
 def reads_types(input_set: str | None) -> bool:
-    """Whether the line on `input_set` reads step 5's numbers (`TYPES`), so its inputs need their standardisation
+    """Whether the line on `input_set` reads step 5's numbers (`TYPES`), so its inputs need their standardization
     (`type_scale`).  None, the name a file written before the setting existed carries, reads no fixed set.
 
     Example: "context_and_types" and "context_and_types_centred" do, "context" and "own_teammates_opponents" do not.
@@ -476,7 +476,7 @@ def _has_zones(stints: pd.DataFrame) -> bool:
 
 
 def _end_team_rates(rows: _Entries, stints: pd.DataFrame, side: str, pad: bool) -> dict:
-    """{name: one number per player of `rows`}: `ALL_TEAM_RATES` on one end, "O" his team's offence and "D" the offence
+    """{name: one number per player of `rows`}: `ALL_TEAM_RATES` on one end, "O" his team's offense and "D" the offense
     of the teams facing his (the module docstring), and `ZONE_RATES` when the rows carry the zones.  The noise of one
     possession is read as `_Entries.noise` reads it: each row one draw, sum over players and rows of w^2 (row value -
     his number)^2 over sum of his w, with w x row value the row's count x 100."""
@@ -539,7 +539,7 @@ def with_team_rates(frame: pd.DataFrame, rates: pd.DataFrame) -> pd.DataFrame:
 
 def type_scale(rows: pd.DataFrame) -> dict:
     """{name: [mean, population standard deviation]} of each of `TYPES` over `rows`, one row per player-season (the
-    panel's offence rows: its box counts, role and body are the same on both ends)."""
+    panel's offense rows: its box counts, role and body are the same on both ends)."""
     values = rows[TYPES].astype(float)
     return {name: [float(values[name].mean()), float(values[name].std(ddof=0))] for name in TYPES}
 
@@ -557,7 +557,7 @@ def line_inputs(box: pd.Series, context: pd.DataFrame, other_box: pd.Series | No
     """player_id -> the line's inputs for one side: his box-score prior on that side (raw sign), then his eight context
     numbers (`INPUTS`); with `types`, also his box-score prior on the other end and step 5's numbers
     (`INPUT_SETS["context_and_types"]`).  A player missing a number gets its mean over the players who have it (0
-    for a standardised one)."""
+    for a standardized one)."""
     frame = pd.DataFrame({BOX: box.astype(float)}).join(context, how="left")
     frame[CONTEXT] = frame[CONTEXT].fillna(context.mean())
     frame.index.name = "player_id"
@@ -575,7 +575,7 @@ def three_inputs(box: pd.Series, context: pd.DataFrame, side: str) -> pd.DataFra
     box-score prior on that side, his teammates' priors on that side summed over the four, his opponents' priors on the
     other side summed over the five, both with him on the court.  A missing number is filled as `line_inputs` fills it.
 
-    Example: on defence, teammates whose defensive priors average +0.5 sum to +2.0; opponents whose offensive priors
+    Example: on defense, teammates whose defensive priors average +0.5 sum to +2.0; opponents whose offensive priors
     average +0.2 sum to +1.0."""
     word, other = {"O": "offence", "D": "defence"}, {"O": "D", "D": "O"}[side]
     frame = pd.DataFrame({BOX: box.astype(float)}).join(context, how="left")
@@ -736,8 +736,8 @@ def second_priors(inputs: pd.DataFrame, coefficients: np.ndarray, n_folds: int) 
 
 
 def team_possessions(stints: pd.DataFrame, side: str) -> pd.DataFrame:
-    """(player_id, team, poss): each player's possessions for each team on one end of `stints`, "O" on offence and
-    "D" on defence (swap_adjust.team_possessions' layout)."""
+    """(player_id, team, poss): each player's possessions for each team on one end of `stints`, "O" on offense and
+    "D" on defense (swap_adjust.team_possessions' layout)."""
     five, team = (OFF, "team_off") if side == "O" else (DEF, "team_def")
     long = pd.DataFrame({"player_id": stints[five].to_numpy(dtype=np.int64).ravel(),
                          "team": np.repeat(stints[team].to_numpy(dtype=np.int64), 5),
@@ -790,7 +790,8 @@ def adjustments(values: dict, inputs: dict, coefficients: dict, n_folds: int, fi
                 team_poss: dict | None = None) -> dict:
     """{"O", "D"}: {player_id: c}, what the swaps' lesson adds to the box-score part in a second prior (the module
     docstring: second prior = b x box-score prior + c).  `values` and `inputs` are `season_second_priors`' two answers,
-    so the box-score prior here is the one the line read, centred where the line's inputs are.  Team totals held, c adds
+    so the box-score prior here is the one the line read, centered where the line's inputs are.  Team totals held, c
+    adds
     up to 0 on each team, so it only moves credit between teammates.
 
     With `first_stage` (`season_first_stage`) and `team_poss` ({"O", "D"}: `team_possessions`), the box-score part is
@@ -815,7 +816,7 @@ def season_second_priors(stints: pd.DataFrame, answers: dict, box: dict, coeffic
     box-score prior} for the players step 3 rates, the step-2 values themselves; `coefficients`
     `season_coefficients`; `team_totals` one of `TEAM_TOTALS`, each team's total read on `stints`' possessions;
     `types`, with the line on `INPUT_SETS["context_and_types"]`, `standardised_types` of the same games; `input_set`
-    the line's inputs, read from `types` when not given; a set of `CENTRED_SETS` is centred on the season (`centred`).
+    the line's inputs, read from `types` when not given; a set of `CENTRED_SETS` is centered on the season (`centred`).
     """
     if team_totals not in TEAM_TOTALS:
         raise ValueError(f"team totals are one of {TEAM_TOTALS}, not {team_totals!r}")

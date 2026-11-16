@@ -7,7 +7,7 @@ trusted.  The season panel's thirteen rates and their `_uncentred` twins come fr
 
 Words used below
     count          one of the thirteen per-game box counts of config.yaml's box_counts (fg3m, fg3_miss, ..., pf)
-    possessions    n, the possessions he was on the court for: his team's on offence, the opponent's on defence
+    possessions    n, the possessions he was on the court for: his team's on offense, the opponent's on defense
     rate           100 x count / n
     pad k          how many possessions' worth of the typical value is blended in, one per count and season,
                    measured from every player's odd- against even-numbered games (`split_half_k`)
@@ -17,7 +17,7 @@ Words used below
                    his height, weight and bin predict (`body_targets`, pad_target body_and_possessions)
     group pad      k_group, how many possessions' worth of the league rate a bin's own rate is blended with before it
                    serves as a target, one per count and season (`group_k`; config.yaml's pad_bin_target)
-    centred        the possession-weighted average player subtracted, so 0 is an average player
+    centered        the possession-weighted average player subtracted, so 0 is an average player
 
 The padding (`shrink`):
 
@@ -345,7 +345,7 @@ def league_rates(counts: np.ndarray, offensive_possessions: np.ndarray, season_o
                  n_seasons: int) -> np.ndarray:
     """(seasons x counts): each season's league rate, 100 x every player's counts / every offensive possession.
 
-    Example: 59,000 assists over 1,230,000 player-possessions on offence (246,000 team possessions, five players
+    Example: 59,000 assists over 1,230,000 player-possessions on offense (246,000 team possessions, five players
     each) is 4.8 per 100."""
     rates = np.zeros((n_seasons, counts.shape[1]))
     for season in range(n_seasons):
@@ -532,7 +532,7 @@ def pad_rates(counts: np.ndarray, possessions: np.ndarray, k: np.ndarray, target
 
 
 def lineups(design) -> tuple[np.ndarray, np.ndarray]:
-    """(offence, defence): each row's five player columns, in increasing order, as two (rows x 5) arrays."""
+    """(offense, defense): each row's five player columns, in increasing order, as two (rows x 5) arrays."""
     if design.parts is not None:
         return design.parts["lineup_o"], design.parts["lineup_d"]
     out = []
@@ -556,7 +556,7 @@ def _lineup_mean(rates: np.ndarray, lineup: np.ndarray, weights: np.ndarray) -> 
 # ------------------------------------------------------------------------------------------------- the whole step
 @dataclass(frozen=True)
 class SideRates:
-    """One side's rates: offence rates are per 100 of his team's offensive possessions, defence per 100 defensive."""
+    """One side's rates: offense rates are per 100 of his team's offensive possessions, defense per 100 defensive."""
     rates: np.ndarray            # (players x counts) padded, level kept (the panel's `_uncentred` columns)
     centred: np.ndarray          # the same minus the average player (the panel's rate columns)
     possessions: np.ndarray      # his possessions on this side over the counted games
@@ -589,11 +589,11 @@ def box_rates(design, pad_target: str = "poss_conditional", body: pd.DataFrame |
 
     Per player-season: his counts and possessions summed over the counted games (`game_totals`), each season's league
     rates, its pad k (`pad_k`) and, under the possession-conditional target, each bin's rate (`bin_targets`).  Per
-    player: k and the target blended over his seasons by possessions, then `pad_rates`.  Centred: minus a fifth of the
+    player: k and the target blended over his seasons by possessions, then `pad_rates`.  Centered: minus a fifth of the
     possession-weighted (row-weighted) mean over the design's rows of the five players' rates summed, so the rates of
     an average lineup add to 0.
 
-    The same padding gives both sides: on offence n is his team's offensive possessions, on defence the defensive ones.
+    The same padding gives both sides: on offense n is his team's offensive possessions, on defense the defensive ones.
     Under the body target, `body` (indexed by player_id, `BODY`) gives every player's height and weight.
     `pad_k_around` "target" measures the possession-conditional target's pad k around the target (`PAD_K_AROUND`).
     `pad_bin_target` "league" pads each bin's rate toward the league rate by the bin's possessions before it serves as
