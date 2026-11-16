@@ -27,6 +27,8 @@ function refresh() {
   sheet.getRange(2, 1, rows.length, HEAD.length).setValues(rows);
   sheet.getRange('K1:L2').setValues([['Season', Number(season)], ['Through', (meta.through || {})[season] || meta.built]]);
   sheet.setFrozenRows(1);
+  if (sheet.getFilter()) sheet.getFilter().remove();      // the filter grows with the player count
+  sheet.getRange(1, 1, rows.length + 1, HEAD.length).createFilter();
 }
 
 function everyMorning() {
