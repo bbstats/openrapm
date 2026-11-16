@@ -7,7 +7,6 @@
     openrapm swap      step 5 on a step-4 table: the swap adjustment, off as shipped
     openrapm folds     the within-season folds: each season rated from three quarters of its games
     openrapm second-prior   the sums Box Adj's line is fitted on, from the folds' held-back games
-    openrapm game-rates     the multi-stat networks: one per rated season, trained on the GPU and scored
     openrapm site      the site's data: docs/data/ratings.json, and the Detail view's, similarity, power and bias
                        pages' files when asked
     openrapm compare   two parquet tables, value by value
@@ -46,7 +45,6 @@ from ..settings import (
 )
 from .console import use_utf8
 from .data import add_data
-from .game_rates import add_game_rates
 from .parallel import default_jobs
 
 THREAD_VARIABLES = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS")
@@ -134,9 +132,6 @@ def chosen_settings(args: argparse.Namespace) -> Settings:
         raise SystemExit("--bag-draw is 0 (the shipped bags) or a positive number")
     if not args.bags and (args.prediction != "folds" or args.split_per_bag or args.bag_draw):
         raise SystemExit("--prediction out_of_bag, --split-per-bag and --bag-draw need bags")
-    if args.game_prior_whole_season and (not args.game_prior or args.game_prior_backward):
-        raise SystemExit("--game-prior-whole-season reads the networks of --game-prior once a season, after each "
-                         "player's last game, and takes no --game-prior-backward")
     attacking, defending = args.team_season_penalties
     return replace(base,
                    targets=replace(base.targets,
@@ -156,9 +151,7 @@ def chosen_settings(args: argparse.Namespace) -> Settings:
                                  second_prior_inputs=args.second_prior_inputs,
                                  second_prior_nearest=int(args.second_prior_nearest),
                                  second_prior_halflife=float(args.second_prior_halflife),
-                                 box_first=bool(args.box_first),
-                                 game_prior=args.game_prior, game_prior_backward=args.game_prior_backward,
-                                 game_prior_whole_season=bool(args.game_prior_whole_season)))
+                                 box_first=bool(args.box_first)))
 
 
 def table_stem(text: str) -> str:
@@ -312,20 +305,6 @@ def _add_setting_options(parser) -> None:
                              "against, by the line fitted on outputs/second_prior/<TAG>/, which `openrapm "
                              "second-prior` writes.  Empty: the box-score prior itself (default %(default)s, "
                              "shipped)")
-    parser.add_argument("--game-prior", metavar="TAG", default=PRODUCT.prior.game_prior,
-                        help="the box-score prior game by game, from the multi-stat networks of "
-                             "outputs/game_rates/<TAG>/ (`openrapm game-rates train`): each player's prior before each "
-                             "game from his games before it, the part-season rows the networks' states on the days of "
-                             "--part-season-rows.  Empty: one prior a season from the season panel (default, shipped)")
-    parser.add_argument("--game-prior-backward", metavar="TAG", default=PRODUCT.prior.game_prior_backward,
-                        help="with --game-prior, the first half of each player's games take their prior from the games "
-                             "after them, the networks of outputs/game_rates/<TAG>/ (`openrapm game-rates train "
-                             "--reverse`); the rest from the games before them (default: none, every game forward)")
-    parser.add_argument("--game-prior-whole-season", action="store_true",
-                        default=PRODUCT.prior.game_prior_whole_season,
-                        help="with --game-prior, one prior per player and season: the box-score prior's answer for the "
-                             "networks' state after his last game, every game read at once, in place of a prior "
-                             "before each game (default: off)")
     parser.add_argument("--second-prior-team-totals", choices=TEAM_TOTALS,
                         default=PRODUCT.prior.second_prior_team_totals,
                         help="held: each team's total stays the box-score prior's and the line re-splits credit inside "
@@ -750,7 +729,6 @@ def build_parser() -> argparse.ArgumentParser:
     _add_wins(commands)
     _add_folds(commands)
     _add_second_prior(commands)
-    add_game_rates(commands, parse_seasons)
     _add_site(commands)
     _add_compare(commands)
     _add_glossary(commands)

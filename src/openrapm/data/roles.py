@@ -103,8 +103,8 @@ def roles_from_boxes(boxes: dict) -> pd.DataFrame:
 
 def starts_by_game(boxes: dict) -> pd.DataFrame:
     """Per (game_id, player_id): whether he started, by `roles_from_boxes`' rule (each team's first five rows in a V3
-    box), one row per player in each game's box score, played or not.  The per-game table of data/player_games.py reads
-    it; `roles_from_boxes` keeps its own sums, so the season panel's numbers do not move."""
+    box), one row per player in each game's box score, played or not.  Check 157 reads it; `roles_from_boxes` keeps
+    its own sums, so the season panel's numbers do not move."""
     parts = []
     for game_id, box in boxes.items():
         if len(box) == 0:

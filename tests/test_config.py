@@ -326,6 +326,21 @@ def _openrapm_flags() -> dict:
             for name, sub in _openrapm_parsers().items()}
 
 
+# Commands and flags removed with code that lost its test, which the permanent record, notes/DECISIONS.md, still names
+# where it tells what was run: the game-by-game box-score prior, removed 2026-11-16 (at the tag
+# archive/research-2026-11).  Honored in the record alone; every other doc must name what exists.
+RECORD = "DECISIONS.md"
+RETIRED_FLAGS = {"--game-prior", "--game-prior-backward", "--game-prior-whole-season", "--decomposition"}
+RETIRED_COMMANDS = {"game-rates", "data player-games"}
+
+
+def test_the_retired_names_are_really_gone():
+    """The allowance above holds only while the names are retired: one that comes back leaves the list."""
+    known = _openrapm_flags()
+    assert not RETIRED_FLAGS & set().union(*known.values())
+    assert not RETIRED_COMMANDS & set(_openrapm_parsers())
+
+
 def test_every_openrapm_flag_the_docs_and_the_chain_use_exists():
     """argparse stops a run on an unknown flag, so a documented one that does not exist is a command nobody can run."""
     known = _openrapm_flags()
@@ -337,7 +352,7 @@ def test_every_openrapm_flag_the_docs_and_the_chain_use_exists():
                 command = " ".join(match.group(1).split())
                 for flag in re.findall(r"(?<![\w-])(--[a-z][\w-]*)", match.group(2)):
                     checked += 1
-                    if flag not in known[command]:
+                    if flag not in known[command] and not (path.name == RECORD and flag in RETIRED_FLAGS):
                         bad.append(f"{path.name}: openrapm {command} {flag}")
     assert checked >= 20, f"only {checked} openrapm flags found; the pattern has stopped matching"
     assert not bad, f"flags `openrapm` does not understand: {sorted(set(bad))}"
@@ -353,6 +368,8 @@ def test_every_openrapm_command_the_docs_name_exists():
             for match in NAMED_COMMAND.finditer(line):
                 checked += 1
                 name, inner = match.group(1), match.group(2)
+                if path.name == RECORD and (name in RETIRED_COMMANDS or f"{name} {inner}" in RETIRED_COMMANDS):
+                    continue
                 if name not in parsers:
                     bad.append(f"{path.name}: openrapm {name}")
                 elif _subcommands(parsers[name]) and inner and f"{name} {inner}" not in parsers:

@@ -51,7 +51,7 @@ import scipy.sparse as sp
 
 from .rapm import design_blocks, normal_equations, player_possessions, solve_ridge
 
-__all__ = ["aligned_prior", "lineup_prior_sums", "game_lineup_sums", "game_averages", "PriorRapmFit", "RidgeSystem",
+__all__ = ["aligned_prior", "lineup_prior_sums", "PriorRapmFit", "RidgeSystem",
            "ridge_system", "fit", "defence_possessions", "season_table", "centre", "rate_season", "held_prior_scale",
            "blend_weight", "blended_scale", "rate_season_blended", "PUBLISHED_COLUMNS", "BOX_ADJ_COLUMNS",
            "published_table"]
@@ -68,33 +68,6 @@ def lineup_prior_sums(players, prior: np.ndarray, n_players: int):
     `prior` is [offense priors | defense priors] in the design's player order.
     """
     return players[:, :n_players] @ prior[:n_players], players[:, n_players:] @ prior[n_players:]
-
-
-def game_lineup_sums(players, game: np.ndarray, tables: tuple, n_players: int):
-    """(P_O, P_D) per row from priors that change game by game (game_prior.game_tables: per side, a games x players
-    table): the five attackers' priors at the row's game summed, and the five defenders'.  The product Z x prior done
-    on the nonzeros of each side's player columns, each gathered from the table at its row's game."""
-    out = []
-    for block, table in ((players[:, :n_players], tables[0]), (players[:, n_players:], tables[1])):
-        cells = block.tocoo()
-        values = cells.data * table[game[cells.row], cells.col]
-        out.append(np.bincount(cells.row, weights=values, minlength=block.shape[0]))
-    return out[0], out[1]
-
-
-def game_averages(players, game: np.ndarray, weights: np.ndarray, tables: tuple, n_players: int) -> np.ndarray:
-    """[offense | defense] in the design's player order: each player's game priors averaged over his rows on that side
-    by the rows' weights, his possessions; the prior his season value reports (game_prior.py), since each of his
-    rows credits him the prior scale times that game's prior plus his deviation.  A player with no rows on a side
-    reads his table's mean over the games."""
-    out = []
-    for block, table in ((players[:, :n_players], tables[0]), (players[:, n_players:], tables[1])):
-        cells = block.tocoo()
-        weight = weights[cells.row] * cells.data
-        total = np.bincount(cells.col, weights=weight * table[game[cells.row], cells.col], minlength=n_players)
-        mass = np.bincount(cells.col, weights=weight, minlength=n_players)
-        out.append(np.where(mass > 0, total / np.where(mass > 0, mass, 1.0), table.mean(axis=0)))
-    return np.concatenate(out)
 
 
 @dataclass
@@ -123,25 +96,16 @@ class RidgeSystem:
 
 
 def ridge_system(design, prior_offense: dict, prior_defense: dict, penalty: float = 13037.0,
-                 scale=None, game_tables: tuple | None = None) -> RidgeSystem:
+                 scale=None) -> RidgeSystem:
     """The linear system of the fit below: the lineup priors join the context as two more unpenalised columns, so
     the solve is a plain ridge on [players | context | P_O | P_D] with penalty lambda on the players and 0 on
     everything else.  With `scale`, (s_O, s_D) held at those values instead of fitted (`held_prior_scale`): the two
-    columns times their scales come off the target, and the system is [players | context].
-
-    With `game_tables`, the priors change game by game (game_prior.py): each row's lineup prior reads its own game's
-    (`game_lineup_sums`), `prior_offense` and `prior_defense` are not read, and the prior the system carries is each
-    player's average over his rows (`game_averages`)."""
+    columns times their scales come off the target, and the system is [players | context]."""
     n_players = design.spec.n_players
     player_ids = design.spec.players["player_id"].to_numpy()
     players, context = design_blocks(design)
-    if game_tables is None:
-        prior = np.concatenate([aligned_prior(prior_offense, player_ids), aligned_prior(prior_defense, player_ids)])
-        sums_o, sums_d = lineup_prior_sums(players, prior, n_players)
-    else:
-        game = design.rows["game_idx"].to_numpy()
-        sums_o, sums_d = game_lineup_sums(players, game, game_tables, n_players)
-        prior = game_averages(players, game, np.asarray(design.w, dtype=float), game_tables, n_players)
+    prior = np.concatenate([aligned_prior(prior_offense, player_ids), aligned_prior(prior_defense, player_ids)])
+    sums_o, sums_d = lineup_prior_sums(players, prior, n_players)
     target = design.y
     if scale is None:
         context = np.column_stack([context, sums_o, sums_d])
@@ -156,14 +120,12 @@ def ridge_system(design, prior_offense: dict, prior_defense: dict, penalty: floa
     return RidgeSystem(players=players, unpenalised=context, prior=prior, gram=gram, rhs=rhs, penalties=penalties)
 
 
-def fit(design, prior_offense: dict, prior_defense: dict, penalty: float = 13037.0, scale=None,
-        game_tables: tuple | None = None) -> PriorRapmFit:
+def fit(design, prior_offense: dict, prior_defense: dict, penalty: float = 13037.0, scale=None) -> PriorRapmFit:
     """The prior-informed ridge on one season's design (the equation in the module docstring), the system of
-    `ridge_system` solved; with `scale`, the prior scales held at (s_O, s_D) rather than fitted; with `game_tables`,
-    priors that change game by game, the reported prior the scale times each player's average."""
+    `ridge_system` solved; with `scale`, the prior scales held at (s_O, s_D) rather than fitted."""
     n_players = design.spec.n_players
     player_ids = design.spec.players["player_id"].to_numpy()
-    system = ridge_system(design, prior_offense, prior_defense, penalty, scale, game_tables)
+    system = ridge_system(design, prior_offense, prior_defense, penalty, scale)
     players, prior = system.players, system.prior
     coefficients = solve_ridge(system.gram, system.rhs, system.penalties)
     deviation, unpenalised = coefficients[:2 * n_players], coefficients[2 * n_players:]
@@ -244,18 +206,15 @@ def centre(table: pd.DataFrame) -> pd.DataFrame:
     return table
 
 
-def rate_season(designs: dict, priors: dict, settings, season: int, scale=None,
-                game_tables: dict | None = None) -> pd.DataFrame:
+def rate_season(designs: dict, priors: dict, settings, season: int, scale=None) -> pd.DataFrame:
     """Step 3 for one season: both fits, the season's table, centered.
 
     `designs` maps each target name to the season's design on it; `priors` is {"O": {player_id: prior},
     "D": {...}} from step 2.  One fit per distinct target.  `scale`, (s_O, s_D), holds the prior scales in both fits
-    (`held_prior_scale`); None fits them on the season's games, as shipped.  `game_tables`, {target: (table_O,
-    table_D)} (game_prior.game_tables on that target's design), pulls each row toward its own game's priors.
+    (`held_prior_scale`); None fits them on the season's games, as shipped.
     """
     targets = settings.targets
-    fits = {name: fit(designs[name], priors["O"], priors["D"], settings.ridge.penalty, scale,
-                      None if game_tables is None else game_tables[name])
+    fits = {name: fit(designs[name], priors["O"], priors["D"], settings.ridge.penalty, scale)
             for name in targets.distinct()}
     defence = defence_possessions(designs[targets.offence])
     return centre(season_table(fits[targets.offence], fits[targets.defence], defence, season))
@@ -297,18 +256,18 @@ def blended_scale(held, fitted, weight: float) -> tuple:
     return tuple((1.0 - float(weight)) * float(h) + float(weight) * float(f) for h, f in zip(held, fitted))
 
 
-def rate_season_blended(designs: dict, priors: dict, settings, season: int, held=None, weight: float = 0.0,
-                        game_tables: dict | None = None) -> pd.DataFrame:
+def rate_season_blended(designs: dict, priors: dict, settings, season: int, held=None,
+                        weight: float = 0.0) -> pd.DataFrame:
     """`rate_season` with the prior scales `weight` of the way from `held` to the season's own fitted ones: the scales
     fitted first, then held at the blend (`blended_scale`).  Weight 0 is the held fit, weight 1 or no `held` the plain
     one, each through `rate_season` alone."""
     if held is None or weight >= 1.0:
-        return rate_season(designs, priors, settings, season, None, game_tables)
+        return rate_season(designs, priors, settings, season, None)
     if weight <= 0.0:
-        return rate_season(designs, priors, settings, season, held, game_tables)
-    free = rate_season(designs, priors, settings, season, None, game_tables)
+        return rate_season(designs, priors, settings, season, held)
+    free = rate_season(designs, priors, settings, season, None)
     fitted = (float(free.prior_scale_off.iloc[0]), float(free.prior_scale_def.iloc[0]))
-    return rate_season(designs, priors, settings, season, blended_scale(held, fitted, weight), game_tables)
+    return rate_season(designs, priors, settings, season, blended_scale(held, fitted, weight))
 
 
 # the published schema, positive good on both ends (`openrapm site` and the checks read it)

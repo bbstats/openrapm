@@ -71,8 +71,6 @@ MODEL_LAYER = [
     "scoring.py",       # ratings scored on unseen games, the splits, the pooled and paired summaries
     "similarity.py",    # the similarity page: player-seasons' inputs, standardized, and the nearest of other players
     "decomposition.py",  # the decomposition pages: which rows of a ridge fit a coefficient comes from
-    "game_rates.py",    # the multi-stat network: league, opponent, padding, the state, training (PyTorch), forecasts
-    "game_prior.py",    # the box-score prior game by game: the network's states as panel rows, averages, tables
     "wins.py",          # wins over starter average: the win model, leverage, the pace ridge, the bar, the wins
     "power_forecast.py",  # the Power page's one rating: the last-10 stats, the weights at a point of the season
 ]

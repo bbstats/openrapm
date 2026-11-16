@@ -161,7 +161,7 @@ def test_the_leak_control_feeds_the_boosters_the_whole_season_and_the_ridge_the_
     read, rated = [], {}
     monkeypatch.setattr(ws, "saved_prior", lambda panel, side, saved, share=1.0: read.append(panel) or {1: 0.0})
 
-    def rate_season(designs, prior, settings, season, scale=None, game_tables=None):
+    def rate_season(designs, prior, settings, season, scale=None):
         rated.update(designs)
         return pd.DataFrame({"possessions": [5.0]})
 
@@ -315,3 +315,15 @@ def test_a_fold_folder_holds_the_folds_of_one_set_of_boosters(tmp_path):
     os.utime(boosters, ns=(time.time_ns() + 10**9, time.time_ns() + 10**9))
     with pytest.raises(SystemExit, match="another file now"):
         ws.check_fold_boosters(folder, ws.boosters_identity(tmp_path, "cand"))
+
+
+def test_a_saved_model_file_of_a_game_by_game_build_is_refused_by_name(tmp_path):
+    """The game-by-game box-score prior was removed on 2026-11-16: a file it saved names its networks in its settings,
+    and is refused where saved models are read, rather than read as one prior a season; any other file loads."""
+    settings = asdict(TEST)
+    settings["prior"]["game_prior"] = "net1"
+    pd.to_pickle({"meta": {"settings": settings}}, tmp_path / "prior_models_net1.pkl")
+    with pytest.raises(SystemExit, match="game by game.*'net1'.*archive/research-2026-11"):
+        ws.load_models(tmp_path, "net1")
+    pd.to_pickle({"meta": {"settings": asdict(TEST)}}, tmp_path / "prior_models_today.pkl")
+    assert ws.load_models(tmp_path, "today")["meta"]["settings"]["prior"]["second_prior"] == TEST.prior.second_prior

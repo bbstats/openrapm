@@ -27,9 +27,6 @@ openrapm = "openrapm.commands.cli:main"
 dev = ["pytest>=8", "pytest-xdist>=3", "ruff==0.17.0"]
 # the searches of checks 152, 155 and 156 (Optuna); nothing the build runs needs it
 checks = ["optuna>=3"]
-# the multi-stat network (openrapm.game_rates) trains with PyTorch; nothing else needs it, and the ratings read its
-# saved weights with numpy.  The GPU build: --index-url https://download.pytorch.org/whl/cu130
-network = ["torch>=2.4"]
 
 [build-system]
 requires = ["setuptools>=68"]

@@ -81,12 +81,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .. import box_prior, decomposition, game_prior, game_rates, prior_rapm, second_prior, trade_set
+from .. import box_prior, decomposition, prior_rapm, second_prior, trade_set
 from ..data import legacy_names
 from ..data.careers import careers_before
 from ..data.config import resolve
 from ..data.designs import DesignCache
-from ..data.game_rate_files import load_network
 from ..data.panel import (
     DEFENCE_ALL,
     OFFENCE,
@@ -99,7 +98,6 @@ from ..data.panel import (
     share_cap,
     trainable_panel,
 )
-from ..data.player_games import season_games
 from ..data.roles import player_season_inputs, roles_path
 from ..data.seasons import trainable, trainable_through
 from ..data.second_prior_files import line_setup, load_grams
@@ -110,7 +108,7 @@ from ..features import CLOSENESS, OFF_COURT, ON_MINUS_OFF, PANEL_KEYS, PRIOR_FEA
 from ..scoring import Ratings, armse, predict_season, score
 from ..settings import ROW_LABELS, TEST, UNSHRINK_LABELS, Targets
 from . import parallel
-from .build import game_box_priors, line_weights, season_lineup_rows
+from .build import season_lineup_rows
 
 SIDES = ("O", "D")
 REPEATS = 3                 # the repeats of a season's assignment, as step 4's folds are built (`--repeats`)
@@ -162,6 +160,11 @@ def load_models(outputs: Path, models: str, seasons=None) -> dict:
     saying so.  With `seasons`, only those seasons' boosters and the meta are kept: thirty seasons of boosters take
     about 2 GB, and a process folding a few seasons holds no more than it reads."""
     saved, renamed = legacy_names.saved_models(pd.read_pickle(outputs / f"prior_models_{models}.pkl"))
+    network = ((saved.get("meta", {}).get("settings") or {}).get("prior") or {}).get("game_prior")
+    if network:
+        raise SystemExit(f"prior_models_{models}.pkl was saved by a build whose box-score prior was read game by game, "
+                         f"from the networks {network!r}: that code was removed on 2026-11-16 and is at the tag "
+                         f"archive/research-2026-11")
     if renamed:
         print(f"prior_models_{models}.pkl uses the names from before 2026-10-11; read under the plain names "
               "(each booster's inputs keep their order)", flush=True)
@@ -399,16 +402,15 @@ class ContextInputs:
 
 def rate_world(world: SeasonWorld, saved: dict, prior_panel: pd.DataFrame | None = None,
                context: ContextInputs | None = None, settings=SETTINGS, share: float = 1.0,
-               scale=None, types_panel: pd.DataFrame | None = None, held_weight: float = 0.0) -> RatedWorld:
+               scale=None, held_weight: float = 0.0) -> RatedWorld:
     """Steps 2-3 on the world's rebuilt inputs: the saved boosters' priors, both ridges, the centered table.
 
     `prior_panel`, when given, is what the boosters read instead of the world's own rows (the leak control, the
     module docstring); the ridge reads the world's designs either way.  With `context`, step 3 reads the second prior
     built from it instead of the boosters' answers.  `settings` names the targets the ridge reads (`fold_settings`).
     `share` is the share of a season the boosters are told the rows cover (`prior_rows`); `scale`, (s_O, s_D), holds
-    the ridge's prior scales (prior_rapm.held_prior_scale, experiment 109); `types_panel`, the rows the second prior's
-    step-5 numbers are read from when not the boosters' (the network's whole-season rows, `rate_world_by_game`);
-    `held_weight`, the share of the way from the held scales to the fit's own (prior_rapm.rate_season_blended), 0 held.
+    the ridge's prior scales (prior_rapm.held_prior_scale, experiment 109); `held_weight`, the share of the way from
+    the held scales to the fit's own (prior_rapm.rate_season_blended), 0 held.
     Adds one check to the world's: the ridge's possessions are the fit games' (five players on every row).
     """
     panel = world.panel if prior_panel is None else prior_panel
@@ -421,72 +423,12 @@ def rate_world(world: SeasonWorld, saved: dict, prior_panel: pd.DataFrame | None
                    for side in SIDES}
         # step 5's numbers from the offense rows with possessions, the rows the build reads (a player with
         # defensive possessions and no offensive ones has none there, and reads 0, the mean)
-        typed = panel if types_panel is None else types_panel
         types = (None if context.type_scale is None else second_prior.standardised_types(
-            typed[(typed.side == "O") & (typed.possessions > 0)], context.type_scale))
+            panel[(panel.side == "O") & (panel.possessions > 0)], context.type_scale))
         prior, _ = second_prior.season_second_priors(context.stints, answers, box, context.coefficients,
                                                      context.n_folds, context.team_totals, types, context.input_set)
     designs = {target: world.designs[target] for target in settings.targets.distinct()}
     table = prior_rapm.rate_season_blended(designs, prior, settings, world.season, scale, held_weight)
-    world.checks["ridge: possessions are the fit games' possessions"] = bool(np.isclose(
-        table.possessions.sum(), float(world.designs[settings.targets.offence].rows["poss"].sum()) * 5.0, rtol=1e-9))
-    return RatedWorld(world=world, table=table, prior=prior, box=None if context is None else box)
-
-
-def rate_world_by_game(world: SeasonWorld, saved: dict, network, games: pd.DataFrame, least_share: float,
-                       context: ContextInputs | None = None, settings=SETTINGS, scale=None,
-                       backward=None, whole_season: bool = False) -> RatedWorld:
-    """`rate_world` with the box-score prior game by game (game_prior.py), as `openrapm rate --game-prior` rates a
-    season (build.rate_one_season_by_game): the network's state before every fit game from the fit games alone, the
-    saved boosters' answer for each, each player's average over his fit games, the second prior on that average and
-    spread over his games by the line's box-score coefficient, and step 3 pulling every row toward its own game's
-    prior.  The held-back games leave every player's sequence, the opponents' allowed rates and the league levels.
-    With `backward`, the season's backward network, the first half of each player's fit games take their state from
-    the fit games after them (game_prior.splice), as `openrapm rate --game-prior-backward` rates the season.  With
-    `whole_season`, one prior a season, as `--game-prior-whole-season` rates it: the saved boosters' answer for the
-    network's state after each player's last fit game, read by `rate_world`, the second prior's step-5 numbers from the
-    world's own panel as the build reads them from the season panel.
-
-    Adds two checks to the world's: every game row read is a fit game, and the network never trained on the season or
-    its neighbors."""
-    fit = set(world.designs[SCORE_TARGET].games.set_index("game_idx").loc[world.fit_idx, "game_id"].astype(str))
-    rows = games[games.game_id.astype(str).isin(fit).to_numpy()].reset_index(drop=True)
-    world.checks["game rows: only from fit games"] = set(rows.game_id.astype(str)) <= fit
-    world.checks["network: never trained on this season or its neighbours"] = not (
-        {world.season - 1, world.season, world.season + 1} & {int(s) for s in network.seasons})
-    states_games, states = game_prior.season_states(rows, network)
-    # the season panel's rows with possessions, as `openrapm rate` hands them over (build.rate_table): a player with
-    # no possessions on one end reads no listing there in either, so the whole-season rebuild reproduces the build
-    base = world.panel[world.panel.possessions > 0]
-    whole, _ = game_prior.network_panels(states_games, states, base, ())
-    if whole_season:
-        whole = whole[whole.possessions > 0].reset_index(drop=True)
-        return rate_world(world, saved, whole, context, settings, 1.0, scale, types_panel=world.panel)
-    game_rows = game_prior.game_rows(states_games, states, base)
-    if backward is not None:
-        game_rows = game_prior.splice(game_rows, game_prior.backward_game_rows(rows, backward, base))
-        world.checks["backward network: never trained on this season or its neighbours"] = not (
-            {world.season - 1, world.season, world.season + 1} & {int(s) for s in backward.seasons})
-    boosters = {side: box_prior.SidePrior(values={}, model=saved_booster(saved[side]),
-                                          feature_names=list(saved[side]["feats"])) for side in SIDES}
-    game_rows["box_game"] = game_box_priors(game_rows, boosters, least_share)
-    box = game_prior.season_average(game_rows, "box_game")
-    prior = box
-    if context is not None:
-        answers = {side: second_prior.booster_answers(boosters[side].model, prior_rows(whole, side, saved[side]))
-                   for side in SIDES}
-        types = (None if context.type_scale is None else second_prior.standardised_types(
-            world.panel[(world.panel.side == "O") & (world.panel.possessions > 0)], context.type_scale))
-        prior, _ = second_prior.season_second_priors(context.stints, answers, box, context.coefficients,
-                                                     context.n_folds, context.team_totals, types, context.input_set)
-        weights = line_weights(context.coefficients, context.n_folds, game_rows)
-        game_rows["prior_game"] = game_prior.per_game_second(game_rows, "box_game", prior, box, weights)
-    else:
-        game_rows["prior_game"] = game_rows["box_game"]
-    designs = {target: world.designs[target] for target in settings.targets.distinct()}
-    tables = {target: game_prior.game_tables(design, game_rows, "prior_game", prior)
-              for target, design in designs.items()}
-    table = prior_rapm.rate_season(designs, prior, settings, world.season, scale, game_tables=tables)
     world.checks["ridge: possessions are the fit games' possessions"] = bool(np.isclose(
         table.possessions.sum(), float(world.designs[settings.targets.offence].rows["poss"].sum()) * 5.0, rtol=1e-9))
     return RatedWorld(world=world, table=table, prior=prior, box=None if context is None else box)
@@ -637,11 +579,7 @@ class SeasonRun:
     part_season_rows: bool = False   # the boosters trained with part-season rows (`trained_on_part_seasons`)
     held_scale: tuple | None = None  # --hold-prior-scale: (s_O, s_D) every fold's ridge holds, the whole season never
     held_weight: float = 0.0     # --blend-through: the share of the way from those to the fold's own fitted scales
-    network: object = None       # with the box-score prior game by game, the season's network (game_prior.py)
-    backward: object = None      # and its backward network, when the first half of each player's games read the rest
-    games: pd.DataFrame | None = None    # and the season's game rows (data/player_games.py)
     least_share: float = 1.0     # the smallest part-season share its boosters trained on (`least_share_of`)
-    whole_season: bool = False   # and one prior a season from its state after the last game (game_prior_whole_season)
 
     def __post_init__(self) -> None:
         # a season so far rated by boosters trained with part-season rows must know the least share those rows cover,
@@ -696,10 +634,6 @@ class SeasonRun:
             context = ContextInputs(self.line, stints, self.context_panel, self.line_folds, self.line_team_totals,
                                     self.line_type_scale, self.line_input_set)
         whole = {str(game) for game in fit_ids} == set(self.game_ids)
-        if self.network is not None:
-            return rate_world_by_game(world, self.saved, self.network, self.games, self.least_share, context,
-                                      self.settings, None if whole else self.held_scale, self.backward,
-                                      self.whole_season)
         return rate_world(world, self.saved, self.prior_panel, context, self.settings, self.prior_share(fit_ids),
                           None if whole else self.held_scale, held_weight=self.held_weight)
 
@@ -1000,36 +934,6 @@ def cut_words(cut: float | None, part_season_rows: bool, split: str = "date") ->
             f"been played, scored on the rest; the boosters are told {told}")
 
 
-def game_prior_tag(meta: dict, pieces: bool, whole_season_inputs: bool, whole_season_context: bool) -> str:
-    """The multi-stat networks' tag when the saved boosters' build read the box-score prior game by game, else "";
-    said once.  --pieces, --whole-season-inputs and --whole-season-context rebuild one prior per player-season and are
-    refused with it."""
-    tag = ((meta.get("settings") or {}).get("prior") or {}).get("game_prior") or ""
-    if tag and (pieces or whole_season_inputs or whole_season_context):
-        raise SystemExit("--pieces, --whole-season-inputs and --whole-season-context read one prior per player-season; "
-                         "these boosters' build read the box-score prior game by game")
-    if tag and ((meta.get("settings") or {}).get("prior") or {}).get("game_prior_whole_season"):
-        print(f"the box-score prior once a season from the networks of outputs/game_rates/{tag}/: each fold's state "
-              f"after every player's last fit game, the fit games alone", flush=True)
-    elif tag:
-        print(f"the box-score prior game by game: each fold's state before every fit game from the networks of "
-              f"outputs/game_rates/{tag}/, the fit games alone", flush=True)
-    return tag
-
-
-def attach_networks(run: SeasonRun, meta: dict, tag: str) -> None:
-    """The season's networks of the box-score prior game by game, forward and, when the build read one, backward, its
-    game rows and the smallest part-season share its boosters trained on, on `run`."""
-    prior = (meta.get("settings") or {}).get("prior") or {}
-    run.network = load_network(run.cfg, tag, run.season, game_rates.input_names(), game_rates.NAMES)
-    if prior.get("game_prior_backward"):
-        run.backward = load_network(run.cfg, prior["game_prior_backward"], run.season, game_rates.input_names(),
-                                    game_rates.NAMES)
-    run.games = season_games(run.cfg, run.season)
-    run.least_share = least_share_of(meta)
-    run.whole_season = bool(prior.get("game_prior_whole_season"))
-
-
 def held_scale_table(outputs: Path, name: str | None, cfg: dict | None = None) -> pd.DataFrame | None:
     """--hold-prior-scale: outputs/<name>.parquet, whose seasons' prior scales the folds hold, less the seasons past
     `cfg`'s last finished one (a published table holds the season in progress, whose scales are themselves the mean
@@ -1136,7 +1040,6 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
     check_models(meta)
     settings = fold_settings(meta)
     part_season_rows = trained_on_part_seasons(meta)
-    game_tag = game_prior_tag(meta, pieces, whole_season_inputs, whole_season_context)
     if split == "date":
         n_folds, repeats = 1, 1
     base_table = pd.read_parquet(outputs / f"{base}.parquet")
@@ -1169,8 +1072,6 @@ def run_folds(cfg: dict, models: str, base: str, seasons, tag: str, reproduce_on
             run.prior_panel = run.world(set(run.game_ids)).panel
         if lines is not None:
             attach_line(run, lines, whole_season_context)
-        if game_tag:
-            attach_networks(run, meta, game_tag)
         run_season(run, base_table, panel, reproduce_only, started, base_written)
         designs.clear()
     gather(out_dir)

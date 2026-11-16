@@ -39,10 +39,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .. import box_prior, game_prior, game_rates, prior_rapm, prior_shrink, rapm, second_prior, swap_adjust, swap_test
+from .. import box_prior, prior_rapm, prior_shrink, rapm, second_prior, swap_adjust, swap_test
 from ..data.config import booster_params, resolve
 from ..data.designs import DesignCache
-from ..data.game_rate_files import load_network
 from ..data.panel import (
     in_progress_panel,
     panel_and_trainable_seasons,
@@ -51,7 +50,6 @@ from ..data.panel import (
     trainable_panel,
     trainable_panel_so_far,
 )
-from ..data.player_games import trainable_player_games
 from ..data.roles import main_teams
 from ..data.seasons import all_seasons, last_finished, share_played, trainable, trainable_through
 from ..data.second_prior_files import line_setup, load_grams
@@ -192,16 +190,13 @@ class SeasonSecondPrior:
 
 
 def rated_second_prior(cfg: dict, season: int, panel: pd.DataFrame, priors: dict, lines: SecondPriorLines,
-                       settings, share: float = 1.0, box: dict | None = None,
-                       types_panel: pd.DataFrame | None = None, phases=SEASON_PHASES) -> SeasonSecondPrior:
+                       settings, share: float = 1.0, phases=SEASON_PHASES) -> SeasonSecondPrior:
     """The rated season's second prior (second_prior.py): its context numbers from the season's stint rows, every
     prior in them from the season's own boosters that never saw the player, and the line of the seasons that may train
     it (more than `exclude_neighbours` away).  `panel` holds the rated season's rows; `share` is the share of its
-    regular season played (box_prior.rated_rows).  With the box-score prior game by game, `box` is each player's
-    season average ({"O", "D"}: {player_id: value}) and `types_panel` the season panel the line's step-5 numbers are
-    read from, as without it.  `phases` are the stints read, the whole season unless the rating is from the regular
-    season alone (`rate_regular_seasons`): his teammates' and opponents' priors and his team's shooting with him on
-    and off the court are then the regular season's, with no playoff lineup in them."""
+    regular season played (box_prior.rated_rows).  `phases` are the stints read, the whole season unless the rating is
+    from the regular season alone (`rate_regular_seasons`): his teammates' and opponents' priors and his team's
+    shooting with him on and off the court are then the regular season's, with no playoff lineup in them."""
     prior = settings.prior
     coefficients = second_prior.season_coefficients(lines.grams, season, lines.trainable, settings.exclude_neighbours,
                                                     prior.second_prior_folds, prior.second_prior_penalty,
@@ -213,10 +208,9 @@ def rated_second_prior(cfg: dict, season: int, panel: pd.DataFrame, priors: dict
         box_prior.rated_rows(panel[(panel.side == side) & (panel.season == season)], priors[side].feature_names, share,
                              box_prior.least_share(settings)))
         for side in SIDES}
-    typed = panel if types_panel is None else types_panel
     types = (None if lines.type_scale is None else
-             second_prior.standardised_types(typed[(typed.side == "O") & (typed.season == season)], lines.type_scale))
-    box = {side: priors[side].values for side in SIDES} if box is None else box
+             second_prior.standardised_types(panel[(panel.side == "O") & (panel.season == season)], lines.type_scale))
+    box = {side: priors[side].values for side in SIDES}
     stints = season_lineup_rows(cfg, season, phases)
     values, inputs = second_prior.season_second_priors(stints, answers, box, coefficients,
                                                        prior.second_prior_folds, prior.second_prior_team_totals,
@@ -376,155 +370,24 @@ def rate_one_season(season: int, sums: dict, panel: pd.DataFrame, designs: Desig
             second)
 
 
-# what a game-by-game build keeps of each game row: who, when, the box-score prior's answer and the prior step 3 read
-GAME_PRIOR_COLUMNS = ["season", "player_id", "side", "game_id", "direction", "possessions", "season_progress",
-                      "poss_off_game", "poss_def_game", "box_game", "prior_game"]
-
-
-def network_rows(season: int, network, games: dict, unseen, base: pd.DataFrame, shares, backward=None,
-                 per_game: bool = True) -> tuple:
-    """(whole-season rows of every season but the unseen ones, and of the rated one; part-season rows of the seasons
-    the box-score prior may train on; the rated season's game rows), each from the network that never saw the rated
-    season (game_prior.py).  `games` maps each season to its game rows (data/player_games.py), `base` is the season
-    panel the columns the network does not make come from.  With `backward`, the backward network of the rated season,
-    the first half of each player's games take their rows from the backward pass (game_prior.splice).  Without
-    `per_game`, one prior a season (PriorSettings.game_prior_whole_season), no game rows: None in their place."""
-    training = [s for s in sorted(games) if s not in set(unseen)]
-    trained, trained_states = game_prior.season_states(pd.concat([games[s] for s in training], ignore_index=True),
-                                                       network)
-    whole, parts = game_prior.network_panels(trained, trained_states, base, shares)
-    rated, rated_states = game_prior.season_states(games[season], network)
-    rated_whole, _ = game_prior.network_panels(rated, rated_states, base, ())
-    if not per_game:
-        return pd.concat([whole, rated_whole], ignore_index=True), parts, None
-    rows = game_prior.game_rows(rated, rated_states, base)
-    if backward is not None:
-        rows = game_prior.splice(rows, game_prior.backward_game_rows(games[season], backward, base))
-    else:
-        rows = rows.assign(direction="forward")
-    return pd.concat([whole, rated_whole], ignore_index=True), parts, rows
-
-
-def season_network(cfg: dict, tag: str, season: int, unseen, reverse: bool):
-    """The rated season's network of `tag` (None for no tag), refused when it trained on an unseen season or reads the
-    season the other way round from `reverse`."""
-    if not tag:
-        return None
-    network = load_network(cfg, tag, season, game_rates.input_names(), game_rates.NAMES)
-    if set(int(s) for s in network.seasons) & set(unseen):
-        raise SystemExit(f"{season}: the network of {tag} trained on {sorted(set(unseen))}")
-    if bool(network.reverse) != bool(reverse):
-        raise SystemExit(f"{tag}: its networks read the season {'backward' if network.reverse else 'forward'}; this "
-                         f"setting reads it {'backward' if reverse else 'forward'}")
-    return network
-
-
-def game_box_priors(rows: pd.DataFrame, priors: dict, least_share: float) -> np.ndarray:
-    """The box-score prior's answer for every game row, each side from its boosters, each row from the ones that
-    never saw the player (box_prior.predict_chosen), its possessions and season share held at least at the training
-    rows' smallest (box_prior.game_rated_rows)."""
-    out = np.empty(len(rows))
-    for side in SIDES:
-        mask = (rows.side == side).to_numpy()
-        rated = box_prior.game_rated_rows(rows[mask], priors[side].feature_names, 1.0, least_share)
-        out[mask] = box_prior.predict_chosen(priors[side].model, rated)
-    return out
-
-
-def line_weights(coefficients: dict, n_folds: int, rows: pd.DataFrame) -> dict:
-    """{"O", "D"}: {player_id: b}, the line's coefficient on his box-score prior, from the line his player fold reads
-    (second_prior.season_second_priors holds team totals at b times it)."""
-    ids = np.unique(rows.player_id.to_numpy(dtype=np.int64))
-    return {side: dict(zip(ids, np.asarray(coefficients[side])[ids % int(n_folds), 0])) for side in SIDES}
-
-
-def least_share(settings) -> float:
-    """The smallest share of a season a part-season training row covers, which a game row's season share is held at;
-    1 without part-season rows (box_prior.least_share)."""
-    return box_prior.least_share(settings)
-
-
-def rate_one_season_by_game(season: int, sums: dict, panel: pd.DataFrame, designs: DesignCache, settings,
-                            params: dict, games: dict, lines: SecondPriorLines | None = None,
-                            label_cache: dict | None = None):
-    """`rate_one_season` with the box-score prior game by game (settings.PriorSettings.game_prior; game_prior.py):
-
-    1. the labels, as `rate_one_season`;
-    2. the box-score prior trained on the network's whole-season and part-season rows of the seasons it may train on;
-    3. its answer before every game of the rated season, and each player's season average, by his possessions;
-    4. with the second prior on, the line applied to the season average as today, and each game's prior the line's
-       box-score coefficient times that game's answer plus the player's correction (game_prior.per_game_second);
-    5. step 3 with each row pulled toward its own game's priors, the reported prior the scale times the average.
-
-    Returns `rate_one_season`'s four, each SidePrior's values the season averages, and the rated season's game rows
-    (`GAME_PRIOR_COLUMNS`).
-
-    With PriorSettings.game_prior_whole_season, one prior a season in place of 3-5: the box-score prior's answer for
-    the network's state after each player's last game is his prior, the second prior reads it as it reads the season
-    panel's, and step 3 is today's; no game rows (None)."""
-    unseen = unseen_seasons(season, settings)
-    network = season_network(designs.cfg, settings.prior.game_prior, season, unseen, reverse=False)
-    backward = season_network(designs.cfg, settings.prior.game_prior_backward, season, unseen, reverse=True)
-    labels = rapm.career_labels(sums, unseen, settings.labels, settings.targets)
-    outside = row_label_tables(sums, panel, unseen, settings, label_cache)
-    whole_season = bool(settings.prior.game_prior_whole_season)
-    whole, parts, rows = network_rows(season, network, games, unseen, panel, settings.prior.part_season_shares,
-                                      backward, per_game=not whole_season)
-    whole = whole[whole.possessions > 0].reset_index(drop=True)
-    parts = None if parts is None else parts[parts.possessions > 0].reset_index(drop=True)
-    priors = box_prior.season_priors(labels, whole, season, unseen, settings, params, outside, parts)
-    if whole_season:
-        values, second = {side: priors[side].values for side in SIDES}, None
-        if lines is not None:
-            second = rated_second_prior(designs.cfg, season, whole, priors, lines, settings, types_panel=panel)
-            values = second.values
-        season_designs = {target: designs.season(season, target) for target in settings.targets.distinct()}
-        return prior_rapm.rate_season(season_designs, values, settings, season), priors, unseen, second, None
-    rows = rows.assign(box_game=game_box_priors(rows, priors, least_share(settings)))
-    box_average = game_prior.season_average(rows, "box_game")
-    values, second = box_average, None
-    if lines is not None:
-        second = rated_second_prior(designs.cfg, season, whole, priors, lines, settings, box=box_average,
-                                    types_panel=panel)
-        weights = line_weights(second.coefficients, settings.prior.second_prior_folds, rows)
-        rows["prior_game"] = game_prior.per_game_second(rows, "box_game", second.values, box_average, weights)
-        values = second.values
-    else:
-        rows["prior_game"] = rows["box_game"]
-    priors = {side: replace(priors[side], values=box_average[side]) for side in SIDES}
-    season_designs = {target: designs.season(season, target) for target in settings.targets.distinct()}
-    tables = {target: game_prior.game_tables(design, rows, "prior_game", values)
-              for target, design in season_designs.items()}
-    table = prior_rapm.rate_season(season_designs, values, settings, season, game_tables=tables)
-    return table, priors, unseen, second, rows[GAME_PRIOR_COLUMNS]
-
-
 def rate_seasons(seasons, sums: dict, panel: pd.DataFrame, designs: DesignCache, settings, params: dict,
                  keep_models: bool = False, lines: SecondPriorLines | None = None,
                  part_seasons: pd.DataFrame | None = None,
-                 progress: SeasonsInProgress | None = None, games: dict | None = None) -> tuple[list, dict, list]:
-    """`rate_one_season` for each season, or `rate_one_season_by_game` with the box-score prior game by game (`games`,
-    each season's game rows): ([one centered table per season], {season: {side: saved boosters}}, [each season's game
-    rows, when game by game]).
+                 progress: SeasonsInProgress | None = None) -> tuple[list, dict]:
+    """`rate_one_season` for each season: ([one centered table per season], {season: {side: saved boosters}}).
 
     The boosters are kept only when `keep_models`; thirty seasons of them are about a gigabyte.
     """
     started = time.time()
-    rated, models, label_cache, game_rows = {}, {}, {}, []
+    rated, models, label_cache = {}, {}, {}
     # the seasons in progress last: their held prior scales are the mean of the finished seasons' fresh ones
     ordered = sorted(seasons, key=lambda s: (progress is not None and int(s) in progress.shares, int(s)))
     for season in ordered:
         if progress is not None and season in progress.deferred:
             progress.hold(designs.cfg, settings, season, pd.concat(list(rated.values()), ignore_index=True)
                           if rated else None)
-        if settings.prior.game_prior:
-            table, priors, unseen, second, rows = rate_one_season_by_game(season, sums, panel, designs, settings,
-                                                                          params, games, lines, label_cache)
-            if rows is not None:
-                game_rows.append(rows)
-        else:
-            table, priors, unseen, second = rate_one_season(season, sums, panel, designs, settings, params, lines,
-                                                            label_cache, part_seasons, progress)
+        table, priors, unseen, second = rate_one_season(season, sums, panel, designs, settings, params, lines,
+                                                        label_cache, part_seasons, progress)
         rated[season] = with_box_adj(table, second, settings.prior.second_prior_folds)
         if keep_models:
             models[season] = {side: saved_side(priors[side], params[side], settings, unseen, second, side)
@@ -533,7 +396,7 @@ def rate_seasons(seasons, sums: dict, panel: pd.DataFrame, designs: DesignCache,
               f"{table.prior_scale_def.iloc[0]:.2f}  ({time.time() - started:.0f}s)", flush=True)
         if second is not None:
             print(f"    the line: {line_words(second.coefficients, second.inputs['O'].columns)}", flush=True)
-    return [rated[season] for season in seasons], models, game_rows
+    return [rated[season] for season in seasons], models
 
 
 def booster_name(settings) -> str:
@@ -607,25 +470,8 @@ def part_season_panel(cfg: dict, settings) -> pd.DataFrame | None:
     return panel
 
 
-def season_game_rows(cfg: dict, settings, seasons) -> dict | None:
-    """{season: its game rows} for a game-by-game build (settings.PriorSettings.game_prior): every season a fit may
-    train on, read through the gate (data/player_games.py); None for a build that is not game by game.  A season in
-    progress cannot be rated game by game yet: its whole-season rows would read as finished seasons."""
-    if not settings.prior.game_prior:
-        return None
-    every = trainable(cfg).seasons
-    late = sorted(set(int(s) for s in seasons) - set(every))
-    if late:
-        raise SystemExit(f"the box-score prior game by game rates finished seasons only; {late} is in progress")
-    rows = trainable_player_games(cfg, every)
-    print(f"game rows: {len(rows):,} over {rows.season.nunique()} seasons, the networks of "
-          f"outputs/game_rates/{settings.prior.game_prior}/", flush=True)
-    return {int(season): part.reset_index(drop=True) for season, part in rows.groupby("season")}
-
-
-def rate_table(cfg: dict, settings, seasons, keep_models: bool = False) -> tuple[pd.DataFrame, dict, pd.DataFrame]:
-    """Steps 1-3 for `seasons`: (the step-3 table in the published schema, {season: saved boosters} or {}, every
-    season's game rows with the box-score prior game by game, or None)."""
+def rate_table(cfg: dict, settings, seasons, keep_models: bool = False) -> tuple[pd.DataFrame, dict]:
+    """Steps 1-3 for `seasons`: (the step-3 table in the published schema, {season: saved boosters} or {})."""
     print(describe(settings, seasons), flush=True)
     designs = DesignCache(cfg)
     sums = accumulate_rapm(designs, trainable(cfg).seasons, settings)
@@ -638,23 +484,11 @@ def rate_table(cfg: dict, settings, seasons, keep_models: bool = False) -> tuple
                             second_prior.INPUT_SETS[settings.prior.second_prior_inputs])
         lines = SecondPriorLines(load_grams(cfg, settings.prior.second_prior), set(trainable(cfg).seasons),
                                  record.get("type_scale"))
-    games = season_game_rows(cfg, settings, seasons)
-    tables, models, game_rows = rate_seasons(seasons, sums, panel, designs, settings, params, keep_models=keep_models,
-                                             lines=lines,
-                                             part_seasons=None if games else part_season_panel(cfg, settings),
-                                             progress=SeasonsInProgress.read(cfg, seasons, settings), games=games)
+    tables, models = rate_seasons(seasons, sums, panel, designs, settings, params, keep_models=keep_models,
+                                  lines=lines, part_seasons=part_season_panel(cfg, settings),
+                                  progress=SeasonsInProgress.read(cfg, seasons, settings))
     table = prior_rapm.published_table(pd.concat(tables, ignore_index=True), player_names(cfg))
-    return table, models, (pd.concat(game_rows, ignore_index=True) if game_rows else None)
-
-
-def write_game_rows(rows: pd.DataFrame | None, cfg: dict, name: str) -> None:
-    """outputs/game_priors_<name>.parquet: every game row's box-score prior and the prior step 3 read, so any
-    player's prior can be followed across his season; nothing is written for a build that is not game by game."""
-    if rows is None:
-        return
-    path = resolve(cfg, "outputs") / f"game_priors_{name}.parquet"
-    rows.to_parquet(path, index=False)
-    print(f"wrote {path}: {len(rows):,} game rows", flush=True)
+    return table, models
 
 
 def write_table(table: pd.DataFrame, path: Path, started: float) -> None:
@@ -674,9 +508,8 @@ def write_models(models: dict, settings, name: str, save_models: str, argv, cfg:
 
 def rate_in_parts(cfg: dict, seasons, name: str, save_models: str | None, argv, jobs: int) -> tuple:
     """`rate_table` over `parallel.season_chunks`, one `openrapm rate` child per chunk: (the step-3 table, the
-    boosters by season or {}, the game rows or None).  Each child writes season_ratings_<name>__part<k>_step3.parquet,
-    when boosters are kept prior_models_<save_models>__part<k>.pkl, and game by game
-    game_priors_<name>__part<k>.parquet; all are read back here, in season order, and removed."""
+    boosters by season or {}).  Each child writes season_ratings_<name>__part<k>_step3.parquet and, when boosters are
+    kept, prior_models_<save_models>__part<k>.pkl; all are read back here, in season order, and removed."""
     outputs = resolve(cfg, "outputs")
     chunks = parallel.season_chunks(seasons, jobs)
 
@@ -685,15 +518,11 @@ def rate_in_parts(cfg: dict, seasons, name: str, save_models: str | None, argv, 
         return ["--name", parallel.part_name(name, k), *kept]
 
     parallel.run_children(list(argv), chunks, names, outputs / "parallel" / name)
-    tables, models, game_rows = [], {}, []
+    tables, models = [], {}
     for k in range(len(chunks)):
         path = outputs / f"season_ratings_{parallel.part_name(name, k)}_step3.parquet"
         tables.append(pd.read_parquet(path))
         path.unlink()
-        games = outputs / f"game_priors_{parallel.part_name(name, k)}.parquet"
-        if games.exists():
-            game_rows.append(pd.read_parquet(games))
-            games.unlink()
         if save_models:
             part = outputs / f"prior_models_{parallel.part_name(save_models, k)}.pkl"
             saved = pd.read_pickle(part)
@@ -701,8 +530,7 @@ def rate_in_parts(cfg: dict, seasons, name: str, save_models: str | None, argv, 
             models.update(saved)
             part.unlink()
     table = pd.concat(tables, ignore_index=True).sort_values("season", kind="mergesort").reset_index(drop=True)
-    rows = pd.concat(game_rows, ignore_index=True).sort_values("season", kind="mergesort") if game_rows else None
-    return table, ({season: models[season] for season in seasons} if save_models else {}), rows
+    return table, ({season: models[season] for season in seasons} if save_models else {})
 
 
 def run_rate(cfg: dict, settings, seasons, name: str, save_models: str | None = None, argv=(), jobs: int = 1) -> int:
@@ -716,12 +544,11 @@ def run_rate(cfg: dict, settings, seasons, name: str, save_models: str | None = 
     if fits < jobs:
         print(f"{jobs} processes asked for, free memory holds {fits}", flush=True)
     if fits > 1:
-        table, models, game_rows = rate_in_parts(cfg, seasons, name, save_models, argv, fits)
+        table, models = rate_in_parts(cfg, seasons, name, save_models, argv, fits)
     else:
-        table, models, game_rows = rate_table(cfg, settings, seasons, keep_models=bool(save_models))
+        table, models = rate_table(cfg, settings, seasons, keep_models=bool(save_models))
     print()
     write_table(table, resolve(cfg, "outputs") / f"season_ratings_{name}_step3.parquet", started)
-    write_game_rows(game_rows, cfg, name)
     if save_models:
         write_models(models, settings, name, save_models, argv, cfg)
     print(summary(table), flush=True)
@@ -1172,8 +999,7 @@ def run_build(cfg: dict, settings, seasons, name: str, save_models: str | None =
     require_folds(cfg, settings.shrink)
     outputs = resolve(cfg, "outputs")
     stored = stored_tables(outputs, name, cfg) if replace_seasons else None
-    step3, models, game_rows = rate_table(cfg, settings, seasons, keep_models=bool(save_models))
-    write_game_rows(game_rows, cfg, name)
+    step3, models = rate_table(cfg, settings, seasons, keep_models=bool(save_models))
     folds, where = step4_folds(cfg, settings.shrink)
     step4, multipliers = shrink_seasons(cfg, step3, settings, folds, where)
     final, _, types = swap_seasons(cfg, step4, settings, folds, where, multipliers)

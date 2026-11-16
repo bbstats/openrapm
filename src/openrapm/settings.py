@@ -201,21 +201,6 @@ class PriorSettings:
     # on the box-score prior.  True: it is his own stats' weights learned alone, and Box Adj is the rest of the same
     # prior (rating_line.first_stage; the owner's choice of 2026-11-05, published the same day)
     box_first: bool = True
-    # "": one box-score prior per player and season, from the season panel (shipped).  A tag: the box-score prior game
-    # by game (game_prior.py; notes/DECISIONS.md, experiment 114, the owner, 2026-10-27): its rows are the multi-stat
-    # networks' forecasts, outputs/game_rates/<tag>/, each player's state before each game of the season, the
-    # part-season rows the states on the days of `part_season_shares`; the ridge pulls each stint toward its own game's
-    # prior and the season's prior part is the possession-weighted average
-    game_prior: str = ""
-    # "": every game's prior from the games before it.  A tag of networks trained on reversed seasons: the first half of
-    # each player's games take their prior from the games after them instead (game_prior.splice; the owner, 2026-10-27:
-    # "run inference in reverse, to smooth out the weird beginning")
-    game_prior_backward: str = ""
-    # False: with `game_prior`, a prior before every game.  True: one prior per player and season, the box-score
-    # prior's answer for the networks' state after his last game, every game of the season read at once (the owner,
-    # 2026-10-27: "build the whole season version"): the networks' cleaner rates in place of the season panel's, and no
-    # game-by-game averaging
-    game_prior_whole_season: bool = False
 
 
 ROW_LABELS = ("career", "outside", "nearest")
