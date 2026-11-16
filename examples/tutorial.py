@@ -57,8 +57,10 @@ What differs from the published build, and why
     shot locations, on-court record or birthdays, so the panel holds the thirteen rates and the role, career and body
     columns the shipped inputs (features.SHIPPED) are made from, and not the rest; heights and weights are drawn at
     random and say nothing about impact.
-    Everything else is the shipped setting: step 1's penalty of 40,000 with the defensive label un-shrunk, the
-    booster settings in params/booster_params_lgb1.json, five player folds, and step 3's penalty of 13,037.
+    Box Adj and the shrink are left out: the simulated league has no held-back games to fit them on.  Everything
+    else is the shipped setting but the booster's: step 1's penalty of 40,000 with the defensive label
+    un-shrunk, five player folds, step 3's penalty of 13,037, and the booster settings of
+    params/booster_params_lgb1.json, which suit the tutorial's small league.
 
 What the full league prints, in short (2004's 390 players; error in points per 100)
     one-season RAPM          correlation 0.74 on offence, 0.70 on defence; error 4.2 and 2.0

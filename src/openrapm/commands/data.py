@@ -13,7 +13,7 @@
                                                   sees (data/careers.py), from stats.nba.com, cached
     openrapm data dashboards --probe              a few seasons of the hustle, tracking, play-type and matchup
                                                   dashboards (data/dashboards.py), and how many rated players each
-                                                  covers; nothing reads them yet
+                                                  covers; the season in progress reads its hustle from them
     openrapm data hustle-games [FIRST] [LAST]     the hustle numbers game by game (BoxScoreHustleV2, 2017 on), so a
                                                   within-season fold can rebuild them from its fit games
     openrapm data tracking-games [FIRST] [LAST]   the same for the per-game tracking box score (BoxScorePlayerTrackV3,
@@ -457,7 +457,8 @@ def _add_careers(steps) -> None:
 def _add_dashboards(steps) -> None:
     dashboards = steps.add_parser(
         "dashboards", help="hustle, tracking, play-type and matchup dashboards from stats.nba.com, cached",
-        description="Fetches the league dashboards the ratings do not read yet (src/openrapm/data/dashboards.py) into "
+        description="Fetches the league dashboards (src/openrapm/data/dashboards.py), whose season-to-date hustle the "
+                    "season in progress reads, into "
                     "paths.raw/dashboards, one file per pull, season and phase (a file already there is not fetched "
                     "again), and prints how many of the season panel's rated players each covers.  --probe asks only "
                     "a few seasons of every pull, to learn which fields exist and from which season.  With "

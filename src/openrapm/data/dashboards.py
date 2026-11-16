@@ -1,4 +1,4 @@
-"""League dashboards from stats.nba.com that the ratings do not read yet: hustle, tracking, play types and matchups.
+"""League dashboards from stats.nba.com: hustle, tracking, play types and matchups; the hustle ones are inputs.
 
 Why (the owner, 2026-10-14: "let's look for hustle, tracking, synergy play types, and matchups").  The box score cannot
 see a deflection, a defended shot at the rim, the share of a player's possessions that end in an isolation, or whom

@@ -1,7 +1,7 @@
 """Add (or replace) one experiment's row in the experiment table, experiments/runs.csv.
 
 One row per experiment: who asked, what changed, the headline test numbers, the verdict.  Every number is read
-from what the standard chain (notes/HANDOFF.md, "The test"; scripts/experiment_chain.sh) already wrote, and nothing is
+from what the standard chain (scripts/experiment_chain.sh) already wrote, and nothing is
 typed in by hand.  A number whose source is missing is left blank rather than guessed.  Rows are keyed by `exp`;
 logging the same `exp` again replaces its row, so a corrected run does not leave a stale one behind.  The table is
 mirrored to the "OpenRAPM experiments" Google Sheet, whose header row is HEADERS below; `--sheet` prints the whole

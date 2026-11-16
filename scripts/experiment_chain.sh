@@ -1,11 +1,11 @@
 #!/bin/bash
-# One experiment's whole ratings chain, as notes/HANDOFF.md "The test" describes it: steps 1-3 in one run
+# One experiment's full build and its readings (README.md, "The test that decides"): steps 1-3 with Box Adj in one run
 # (`openrapm rate --setting test`), the candidate's own within-season folds for all thirty seasons, step 4 (`openrapm
-# shrink --setting test`), step 5 (`openrapm swap --setting test`), then the three readings the owner judges on
-# (2026-10-15: "too many tests ... within-season is truly the best metric, particularly WOWY"): 151 (the
-# with-or-without-you test on the held-back games, the decider, with the noise control beside it), 63 (year over year,
-# a guard) and 66 (the 2026 top 20).  FULL_READINGS=1 adds the older readings (138, the second arm, 64, 90, 88, 70 + 73).
-# Everything not named is the incumbent's.
+# shrink --setting test`), step 5 (`openrapm swap --setting test`, off as shipped), then the three readings the owner
+# judges on (2026-10-15: "too many tests ... within-season is truly the best metric, particularly WOWY"): check 151,
+# the within-season WOWY test, which decides, with the noise control beside it; check 63, the year-over-year test,
+# which guards it; and check 66, the 2026 top 20.  FULL_READINGS=1 adds the older readings (138, the second arm, 64,
+# 90, 88, 70 + 73).  Everything not named is the incumbent's.
 #   bash scripts/experiment_chain.sh NAME DEFENSIVE_TARGET ["EXTRA RATE FLAGS"]   (INC_NAME, BASE_FLAGS, SHRINK_TAG, SKIP_BUILD: see below)
 #   bash scripts/experiment_chain.sh noise_control points_with_expected_opponent_threes_late_as_scored "--fold-assignment 1"
 # Log: outputs/NAME_chain.log.  One build at a time.
@@ -34,73 +34,13 @@ NAME=$1
 TARGET=$2
 EXTRA=${3:-}          # extra flags for `openrapm rate`, e.g. --fold-assignment 1 or --features <set>
 LOG=outputs/${NAME}_chain.log
-# The incumbent since 2026-10-09: experiment 46 (the Robustness pass's body-weight fix on experiment 45's LightGBM prior
-# without the on-court inputs), with its own prior-shrink multipliers fitted on its own within-season folds
-# (weightfix_within).  Its rate settings ride in BASE_FLAGS, BEFORE the experiment's own EXTRA flags, because the
-# command line keeps the LAST occurrence of a flag: an experiment's --features or --booster-params wins.
-# INC_FOLDS: the incumbent's folds.  From 2026-10-12 the incumbent was experiment 55 (nearshrink): experiment 46's
-# ratings with step 4's multipliers from the 8 fold seasons nearest each season, over its folds for all thirty
-# seasons (the shipped default of `openrapm shrink`).  Since 2026-10-13 it is experiment 57 (fromdebut): the career
-# inputs counted from each player's debut (--features career_from_debut), its own folds for all thirty seasons and
-# step 4 by the same rule on them.  Since 2026-10-14 it is experiment 59 (nocareer): those career counts off the prior
-# (--features no_career_counts), its own folds for all thirty seasons, step 4 by the same rule.  Since 2026-10-15
-# it is experiment 63 (cols06): the same with each tree of the prior shown 60% of its inputs (--booster-params
-# lgb1_cols06), its own folds for all thirty seasons; its noise control is noise_cols06.  Since 2026-10-15, later the
-# same day, it is experiment 65 (gamesfree): cols06's steps 1-3 and folds, with step 4 multiplying the games' part too
-# (settings.ShrinkSettings.free_games_part, the default of `openrapm shrink`).  Its folds are cols06's, so the decider
-# reads them under INC_SYSTEM; the decider's step 4 follows the shipped setting for every system.  The held-out audit pairs a candidate with the incumbent's 2017-2026 folds
-# (AUDIT_REF).  A candidate with OWN_FOLDS=1 has folds for 2017-2026 only; its step 4 then reads the 8 nearest of
-# those.  EARLY_FOLDS=1 (with OWN_FOLDS=1; experiment 56) also builds its 1997-2016 folds (NAME_early), so its step 4
-# is the incumbent's rule on its own folds for all thirty seasons.
-# Since 2026-10-16 it is experiment 76 (tune2): the booster settings and step 4's defence factor from check 152's
-# guarded search, with the hustle inputs; its own folds, its noise control noise_tune2.
-# Since 2026-10-17 it is experiment 77 (nothreepct): tune2 with three-point % off the offensive booster, its own folds;
-# no noise control on it yet, so noise_tune2 stands in.
-# Since 2026-10-17, later the same day, it is experiment 78 (bags10): nothreepct with the prior averaged over 10
-# bootstraps of the players (--bags 10, the shipped default of `openrapm rate`), its own folds; its noise control
-# noise_bags10 (--fold-assignment 1).
-# Since 2026-10-19 it is experiment 80 (crossfit80): bags10's steps 1-4 and folds, with step 5's type model trained on
-# the folds' held-back games and seasons played before this one out of its inputs; its tables crossfit80, its folds
-# still bags10's.  Every candidate's step 5 now reads its own folds (`openrapm swap --folds`).
-# Since 2026-10-20 it is experiment 82 (ctx82): step 3 reads the second prior ctx82, step 5 off, step 4 on its own
-# folds ctx82_early and ctx82_within, all three the shipped defaults; no noise control on it yet, so noise_bags10
-# stands in.
-# Since 2026-10-21 it is experiment 93 (ctx82c): experiment 82 with the line's inputs centred on the season
-# (--second-prior-inputs context_and_types_centred, the shipped default), its own folds ctx82c_early and ctx82c_within.
-# Since 2026-10-22 it is experiment 95 (heave95): experiment 93 on the stints rebuilt with the parser's fixes
-# (experiment 94, parser94, published), with the threes of a period's last two seconds counted as they happened in the
-# defensive target (points_with_expected_opponent_threes_late_as_scored, the shipped default), its own folds
-# heave95_early and heave95_within; not published yet.
-# Since later the same day it is experiment 98 (eras98): heave95's tables with the defense factor by era, 0.89
-# before 2017 and 0.84 from 2017 (settings.ShrinkSettings.defence_factors, the shipped default), its folds still
-# heave95's; 151 applies the same factors to every system it scores.
-# Since later the same day it is experiment 99 (inputs99): eras98 with each season's own body listing and the pad k
-# around the bins (config body_inputs season_listing, pad_k_around target, the shipped config), its own folds
-# inputs99_early and inputs99_within; not published yet.
-# Since 2026-10-23 it is experiment 106 (layers106): inputs99's steps 1-3 and folds, with step 4 in two layers (each
-# player's deviation from his team's mean on held-back stints within games, settings.ShrinkSettings.within_team_layer,
-# the shipped default of `openrapm shrink`); its tables season_ratings_layers106*, its folds still inputs99's, and 151
-# scores every system's step 4 with the two layers.
-# Since later the same day it is experiment 107 (parts107): the box-score prior trained on part-season rows too
-# (settings.PriorSettings.part_season_shares, the shipped default of `openrapm rate`, which reads the panel of
-# `openrapm data panel --so-far 0.25,0.5,0.75`), its own folds parts107_early and parts107_within.  The noise control
-# noise_bags10 was built on the stints before experiment 94's parser fixes, so beside parts107 it reads more than noise.
-# Since 2026-10-25 it is experiment 110 (creation110): parts107 with the owner's self-creation on the offensive
-# box-score prior (--features hustle_no_three_pct_self_creation, the shipped default), its own folds creation110_early
-# and creation110_within.  Its noise control since 2026-10-26 is noise_creation110: the same build with the box-score
-# prior's players split into its five training groups another way (--fold-assignment 1).
-# Since 2026-11-01 it is experiment 126 (ctx110): creation110 with the swap part of the prior refitted on its own boosters
-# and folds (--second-prior ctx110, the shipped default); its own folds, its noise control noise_ctx110 (-0.013, z -1.63).
-# Since 2026-11-02 it is experiment 127 (padbins127): ctx110's swap part of the prior, with each possession bin's target
-# padded toward the league (config pad_bin_target: league, the shipped default); its own folds, its noise control
-# noise_padbins127 (-0.009, z -1.09).
-# Since 2026-11-04 the incumbent is experiment 136, mid136: experiment 134's line and folds, rating134's, at the shipped
-# width settings, which 151 reads from settings.ShrinkSettings for it.
-# Since 2026-11-06 it is experiment 139, zones139: the team's shots by zone in Box Adj, its own line zones139_line and folds;
-# its noise control noise_zones139, -0.009, z -1.03, 16 of 30, built 2026-11-06.
-# Since 2026-11-10 it is experiment 141, fade141: Box Adj's training seasons counted half for every 8 seasons from the
-# rated one (--second-prior-halflife 8, the shipped default), its own folds; its noise control
-# noise_fade141, -0.013, z -1.41, 16 of 30, built 2026-11-10.
+# The incumbent: experiment 141, fade141, adopted 2026-11-10 (notes/DECISIONS.md, "Experiment 141"): Box Adj's training
+# seasons counted half for every 8 seasons from the rated one, its own folds fade141_early and fade141_within.  Its
+# noise control noise_fade141 (--fold-assignment 1): -0.013, z -1.41, 16 of 30, built 2026-11-10.  Each adoption
+# names its build here; the earlier incumbents are in notes/DECISIONS.md and in git.  The incumbent's rate settings ride
+# in BASE_FLAGS, BEFORE the experiment's own EXTRA flags, because the command line keeps the LAST occurrence of a flag:
+# an experiment's --features or --booster-params wins.  The held-out audit pairs a candidate with the incumbent's
+# 2017-2026 folds (AUDIT_REF).
 INC_NAME=${INC_NAME:-fade141}
 INC_SYSTEM=${INC_SYSTEM:-fade141}       # the incumbent's folds (<name>_early, <name>_within) for 151
 CONTROL_NAME=${CONTROL_NAME:-noise_fade141}  # the noise control's folds (<name>_early, <name>_within) for 151
@@ -123,8 +63,8 @@ reading() {            # reading LABEL SCRIPT [FLAGS...]: run one check into the
 # SHRINK_FLAGS: extra flags for `openrapm shrink`, e.g. "--fold-seasons 1997-2026 --nearest 8" (experiment 55).
 # SWAP_FLAGS: extra flags for `openrapm swap`, e.g. "--applied-share 0" to leave step 4's ratings as they are
 # (experiment 82, where the swaps' lesson moved into the second prior).
-# DECIDER_FLAGS: extra flags for the decider (151).  The candidate's SHRINK_FLAGS reach it on their own since 2026-10-30
-# (151 --shrink-flags), so it scores the step 4 the candidate was built with; before, 151 rebuilt the shipped one.
+# DECIDER_FLAGS: extra flags for the within-season WOWY test (151).  The candidate's SHRINK_FLAGS reach it on their own since 2026-10-30
+# (151 --shrink-flags), so it scores the step 4 the candidate was built with.
 # SHRINK_TAG=<tag>: the within-season folds step 4's multipliers are read from, outputs/within/<tag>/ (default the
 # incumbent's, INC_FOLDS; with OWN_FOLDS=1 the candidate's own, NAME_within).  `openrapm folds --tag <tag>` makes them.
 # OWN_FOLDS=1 (the Robustness pass, 2026-10-08): save the candidate's boosters (--save-models NAME, every rated season),
@@ -140,7 +80,8 @@ reading() {            # reading LABEL SCRIPT [FLAGS...]: run one check into the
 # EARLY_FOLDS=1 (needs OWN_FOLDS=1, refuses FIRST_PASS=1): after the 2017-2026 folds and the audit, also the 1997-2016
 # folds (`openrapm folds --seasons 1997-2016 --tag NAME_early`, about 22 minutes), and step 4 reads both folders
 # (SHRINK_TAG NAME_early,NAME_within) by the shipped rule: each season's multipliers from its 8 nearest fold seasons.
-# since 2026-10-15 every experiment builds its own folds for all thirty seasons: the decider (151) scores them
+# since 2026-10-15 every experiment builds its own folds for all thirty seasons: the within-season WOWY test (151)
+# scores them.  FIRST_PASS=1 needs EARLY_FOLDS=0
 OWN_FOLDS=${OWN_FOLDS:-1}
 FIRST_PASS=${FIRST_PASS:-0}
 EARLY_FOLDS=${EARLY_FOLDS:-1}
@@ -149,7 +90,7 @@ CONTROL_TAG=${CONTROL_TAG:-}
 # REUSE=1: go on from a name's files already on disk, a stopped run or FIRST_PASS's second half.  Without it a name is
 # built once: with its boosters, folds, tables, log or readings on disk the chain stops before it starts (2026-10-30: a
 # rerun under one name kept the first run's boosters and folds, since the rate step saves boosters only when there are
-# none and `openrapm folds` skips every fold already written, so step 4 and the decider read the old build while step 3
+# none and `openrapm folds` skips every fold already written, so step 4 and check 151 read the old build while step 3
 # and the year-over-year test read the new one; and the log, appended to, held both runs' readings).
 REUSE=${REUSE:-0}
 if [ "$REUSE" != "1" ]; then

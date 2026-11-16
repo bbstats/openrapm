@@ -1,12 +1,12 @@
 """The command line: `python -m openrapm <command>`, or `openrapm <command>` once the package is installed.
 
     openrapm data      the data the steps read: `data ingest` (raw files), `data stints`, `data events`, `data panel`
-    openrapm build     all five steps in one run: the ratings tables after steps 3, 4 and 5
-    openrapm rate      steps 1-3 for the seasons asked for: the ratings table before the prior shrink
-    openrapm shrink    step 4 on a step-3 table: the prior part multiplied down
-    openrapm swap      step 5 on a step-4 table: each team's credit re-split by its lineup swaps
+    openrapm build     every step in one run: the ratings tables after steps 3, 4 and 5, and WOSA
+    openrapm rate      steps 1-3 with Box Adj for the seasons asked for: the ratings table before the shrink
+    openrapm shrink    step 4 on a step-3 table: each part of every rating multiplied by what holds up
+    openrapm swap      step 5 on a step-4 table: the swap adjustment, off as shipped
     openrapm folds     the within-season folds: each season rated from three quarters of its games
-    openrapm second-prior   the swaps the second prior's line is fitted on, from the folds' held-back games
+    openrapm second-prior   the sums Box Adj's line is fitted on, from the folds' held-back games
     openrapm game-rates     the multi-stat networks: one per rated season, trained on the GPU and scored
     openrapm site      the site's data: docs/data/ratings.json, and the decomposition (vanilla RAPM and OpenRAPM),
                        similarity, power and bias pages' files when asked
@@ -19,7 +19,7 @@ command's options.
 
 Every linear-algebra library (OpenMP, MKL, OpenBLAS) is held to one thread before numpy loads, so the same inputs
 give the same bits on any machine: a multi-threaded library adds in another order and moves the last digits
-(notes/HANDOFF.md, header: rebuilt on one thread, the published final table agrees to within 1.2e-12 per 100).
+(rebuilt on one thread in the 2026-10 cleanup, the published final table agreed to within 1.2e-12 per 100).
 numpy is imported only inside the commands, after that.
 """
 from __future__ import annotations
@@ -246,9 +246,9 @@ def _add_setting_options(parser) -> None:
     """The options `rate` and `build` share: which setting, which seasons, the name, and the experiment hooks."""
     parser.add_argument("--setting", choices=("product", "test"), default="product",
                         help="product: the published ratings.  test: what the year-over-year test scores, so "
-                             "nothing fitted for a season comes from the seasons either side of it (the labels and "
-                             "the prior's training rows; in build also step 4's multipliers and step 5's type "
-                             "model) (default %(default)s)")
+                             "nothing fitted for a season comes from the seasons either side of it (the labels, "
+                             "the prior's training rows and Box Adj's line; in build also step 4's multipliers and "
+                             "step 5's type model) (default %(default)s)")
     parser.add_argument("--seasons", type=parse_seasons, default=None,
                         help="the seasons to rate: 2026, 2017-2026 or 2017,2018 (default every season in "
                              "config.yaml)")
@@ -308,9 +308,10 @@ def _add_setting_options(parser) -> None:
                         help="step 1's team-season flags: one column per team-season on offence and one on defence, "
                              "penalised at these two values.  0,0: no flags (default 0,0)")
     parser.add_argument("--second-prior", metavar="TAG", default=PRODUCT.prior.second_prior,
-                        help="step 3 reads the second prior: the box-score prior corrected for who each player played "
-                             "with and against, by the line fitted on outputs/second_prior/<TAG>/, which `openrapm "
-                             "second-prior` writes.  Empty: the box-score prior itself (default, shipped)")
+                        help="Box Adj: step 3 reads the box-score prior corrected for who each player played with and "
+                             "against, by the line fitted on outputs/second_prior/<TAG>/, which `openrapm "
+                             "second-prior` writes.  Empty: the box-score prior itself (default %(default)s, "
+                             "shipped)")
     parser.add_argument("--game-prior", metavar="TAG", default=PRODUCT.prior.game_prior,
                         help="the box-score prior game by game, from the multi-stat networks of "
                              "outputs/game_rates/<TAG>/ (`openrapm game-rates train`): each player's prior before each "
@@ -331,9 +332,11 @@ def _add_setting_options(parser) -> None:
                              "the team; free: the line as it is (default %(default)s)")
     parser.add_argument("--second-prior-inputs", choices=SECOND_PRIOR_INPUTS,
                         default=PRODUCT.prior.second_prior_inputs,
-                        help="context: the line reads the box-score prior and the eight context numbers; "
-                             "context_and_types: also the other end's box-score prior and step 5's box counts, role "
-                             "and body.  Must match what `openrapm second-prior --inputs` fitted (default %(default)s)")
+                        help="what Box Adj's line reads, a key of second_prior.INPUT_SETS: "
+                             "context_types_team_zones_centred, shipped, is the box-score prior on both ends, the "
+                             "eight context numbers, his box rates, role and body, and his team's shots by zone with "
+                             "him on and off the court.  "
+                             "Must match what `openrapm second-prior --inputs` fitted (default %(default)s)")
     parser.add_argument("--second-prior-nearest", type=int, default=PRODUCT.prior.second_prior_nearest, metavar="K",
                         help="0: each season's line is fitted on every season the setting allows.  K: on only the K "
                              "nearest of them, as step 4 fits its multipliers (default %(default)s)")
@@ -538,10 +541,11 @@ def _add_rate(commands) -> None:
 def _add_shrink(commands) -> None:
     shrink = commands.add_parser(
         "shrink", help="step 4: the prior part of every rating multiplied down",
-        description="Step 4 on a step-3 table: each season's box-score prior part times two multipliers (offence, "
-                    "defence) fitted on the within-season folds' held-out games, the ratings re-centred, the "
-                    "games' part unchanged.  Writes outputs/season_ratings_<NAME>_step4.parquet, and the "
-                    "multipliers of every season to outputs/csv/season_ratings_<NAME>_step4_multipliers.csv.")
+        description="Step 4 on a step-3 table: each season's prior part and games' part, split into each team's "
+                    "mean and each player's deviation from it, times multipliers fitted on the within-season folds' "
+                    "held-back games, offense and defense, the ratings re-centered.  Writes "
+                    "outputs/season_ratings_<NAME>_step4.parquet, and the multipliers of every season to "
+                    "outputs/csv/season_ratings_<NAME>_step4_multipliers.csv.")
     shrink.add_argument("--base", required=True, metavar="NAME",
                         help="outputs/<NAME>.parquet, a step-3 table (season_ratings_<name>_step3)")
     shrink.add_argument("--setting", choices=("product", "test"), default="product",
@@ -556,9 +560,10 @@ def _add_shrink(commands) -> None:
 def _add_swap(commands) -> None:
     swap_parser = commands.add_parser(
         "swap", help="step 5: each team's credit re-split by its lineup swaps",
-        description="Step 5 on a step-4 table: half of what a type model of other seasons' lineup swaps predicts "
-                    "each player is under- or over-credited, given back inside his team so no team total moves, "
-                    "and the spread inside teams held.  The type model trains on the within-season folds' held-back "
+        description="Step 5 on a step-4 table, off as shipped (--applied-share 0): a share of what a type model of "
+                    "other seasons' lineup swaps predicts each player is under- or over-credited, given back inside "
+                    "his team so no team total moves, and the spread inside teams held.  The type model trains on "
+                    "the within-season folds' held-back "
                     "games, scored at step 4's multipliers, so it takes step 4's fold options.  Writes "
                     "outputs/season_ratings_<NAME>.parquet.")
     swap_parser.add_argument("--base", required=True, metavar="NAME",
@@ -642,17 +647,17 @@ def _add_second_prior(commands) -> None:
                         help="outputs/prior_models_<NAME>.pkl, the boosters the folds were rated with")
     second.add_argument("--folds", required=True, metavar="TAG",
                         help="the within-season folds, comma-separated folders under outputs/within/, e.g. "
-                             "bags10_early,bags10_within")
+                             "fade141_early,fade141_within")
     second.add_argument("--tag", required=True, help="the folder under outputs/second_prior/")
     second.add_argument("--seasons", type=parse_seasons, default=None,
                         help="the seasons to write: 2026, 2017-2026 or 2017,2018 (default every season of the folds)")
     second.add_argument("--inputs", choices=SECOND_PRIOR_INPUTS, default=PRODUCT.prior.second_prior_inputs,
-                        help="context: the box-score prior and the eight context numbers; context_and_types: also the "
-                             "other end's box-score prior and step 5's 19 numbers; context_and_types_centred: the "
-                             "same, centred on the season when applied; own_teammates_opponents: experiment 92's "
-                             "three numbers; context_types_team_rates_centred: experiment 128's team rates too; "
-                             "context_types_team_profile_centred: experiment 129's, without team makes "
-                             "(default %(default)s)")
+                        help="the inputs, a key of second_prior.INPUT_SETS: context_types_team_zones_centred, shipped, "
+                             "is "
+                             "the box-score prior on both ends, the eight context numbers, his box rates, role and "
+                             "body, and his team's shots by zone with him on and off the court; "
+                             "context_types_team_rates_zones_centred adds the team's twos and threes, the set the "
+                             "shipped line was cut from (default %(default)s)")
     second.add_argument("--target", choices=SECOND_PRIOR_TARGETS, default="whole_rating",
                         help="what the line is fitted on: whole_rating, a swap's residual with the fold's whole "
                              "ratings added back; prior_part, with only their prior parts, so its games' part stays "
@@ -679,19 +684,20 @@ def _add_site(commands) -> None:
                     "higher in each box score stat, on-court and off-court plus-minus than a consensus of five "
                     "outside systems does; their tables come from `openrapm data public-ratings`); "
                     "--decomposition also writes docs/data/decompose_1y.json and "
-                    "decompose_3y.json (vanilla RAPM split by player and by possession; every season and every "
-                    "three-season window is fitted, 319 seconds in the last run); --openrapm-decomposition also "
-                    "writes docs/data/decompose_openrapm.json (every published rating split into box score, on "
-                    "court, off court, team SOS and swap adjustment, which solves step 3 again for every season; "
-                    "run it after every `openrapm build`); --similarity also writes "
+                    "decompose_3y.json, the retired vanilla RAPM page's; --openrapm-decomposition also "
+                    "writes docs/data/decompose_openrapm.json and ratings_list.json (every published rating split "
+                    "into box score, Box Adj, on court, off court and team SOS, which solves step 3 again for every "
+                    "season; run it after every `openrapm build`); --similarity also writes "
                     "docs/data/similarity/ (each player-season's nearest player-seasons of other players, by the "
-                    "distance between their standardised inputs).  The pages' wording is not changed.")
+                    "distance between their standardized inputs); --power also writes docs/data/power.json.  The "
+                    "pages' wording is not changed.")
     site.add_argument("--ratings", metavar="FILE",
                       help="the ratings table (default outputs/season_ratings_product.parquet)")
     site.add_argument("--out-dir", metavar="DIR", help="the site folder written into (default the repository's docs/)")
     site.add_argument("--built", type=parse_date, metavar="YYYY-MM-DD",
-                      help="the date every written file's meta.built shows (default: ratings.json the ratings "
-                           "table's modification date, the decomposition files today)")
+                      help="the date every written file's meta.built shows (default: the ratings table's "
+                           "modification date for ratings.json, the Detail view's files and power.json; today for "
+                           "the Similarity and Bias files)")
     site.add_argument("--bias", action="store_true",
                       help="also the Bias page's file, written last, from the outside systems' stored tables")
     site.add_argument("--decomposition", action="store_true", help="also the decomposition page's two files")
@@ -704,7 +710,7 @@ def _add_site(commands) -> None:
                            "share of his team's possessions over its last 10 games")
     site.add_argument("--power-forecast", action="store_true",
                       help="with --power: the page's one rating, Power at its multipliers plus the last-10 stats "
-                           "(power_forecast.py); the morning job does not pass this")
+                           "(power_forecast.py); the morning job passes it")
     site.set_defaults(run=_run_site)
 
 

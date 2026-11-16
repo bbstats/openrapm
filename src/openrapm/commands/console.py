@@ -31,7 +31,7 @@ def one_thread() -> threadpool_limits:
     """Hold every linear-algebra library (OpenMP, MKL, OpenBLAS) to one thread inside a `with` block.
 
     A multi-threaded library splits a sum across threads and adds the pieces in another order, which moves the last
-    digits of a solve; one thread gives the same numbers on any machine (notes/HANDOFF.md, header: rebuilt on one
+    digits of a solve; one thread gives the same numbers on any machine (the 2026-10 cleanup: rebuilt on one
     thread, the published final table agrees to within 1.2e-12 per 100).
 
         with one_thread():

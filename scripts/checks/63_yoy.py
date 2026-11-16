@@ -1,6 +1,7 @@
 """The year-over-year test: how well does one season's ratings table predict the games of the seasons either side?
 
-This is the test that decides experiments.  For every scored season (1998-2025 by default) the previous season's
+It guards the within-season WOWY test, check 151, which decides experiments; it decided them until 2026-10-15.
+For every scored season (1998-2025 by default) the previous season's
 ratings and the next season's ratings are each asked to predict its games from the ten players' offensive and
 defensive ratings alone.  Only the season's level (intercept and home edge) is refitted on the scored season;
 nothing else is fitted here, so what is measured is exactly the table handed in.  The runner is

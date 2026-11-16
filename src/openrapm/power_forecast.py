@@ -19,9 +19,9 @@ The stats, from a team's last 10 games, each game counting once
 Every stat is centered over the 30 teams, so the average team reads 0.
 
 The multipliers and weights change through the season, because the stats help a forecast of the next 10 games early on
-and not later (checks 163 and 164).  `params/power_forecast.json` holds them at four points of the regular season, its
-knots, from `scripts/checks/165_power_forecast_weights.py`.  Between two knots each number is the straight line between
-them; before the first it holds the first's, after the last the last's, whose stats weights are 0.
+and not later (checks 163 and 164).  `params/power_forecast.json` holds them at five points of the regular season, its
+knots, refitted by `scripts/checks/166_power_forecast_refit.py`.  Between two knots each number is the straight line
+between them; before the first it holds the first's, after the last the last's, whose stats weights are 0.
 
 This module is handed its data.  data/power_files.py reads it: `team_game_counts`, a season's stints and game log as
 the one row per team per game that `last_ten_stats` takes, and `load_knots`, the weights file.
