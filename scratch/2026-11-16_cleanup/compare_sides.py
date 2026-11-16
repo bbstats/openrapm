@@ -32,11 +32,12 @@ def same_parquet(a: Path, b: Path) -> tuple[bool, str]:
 
 
 def same_npz(a: Path, b: Path) -> tuple[bool, str]:
-    x, y = np.load(a, allow_pickle=False), np.load(b, allow_pickle=False)
+    x, y = np.load(a, allow_pickle=True), np.load(b, allow_pickle=True)   # the build's own files: names as objects
     if sorted(x.files) != sorted(y.files):
         return False, f"arrays {sorted(x.files)} against {sorted(y.files)}"
     for name in x.files:
-        if not np.array_equal(x[name], y[name], equal_nan=True):
+        floats = np.issubdtype(x[name].dtype, np.floating)   # text arrays have no NaN to match
+        if not np.array_equal(x[name], y[name], equal_nan=floats):
             return False, f"array {name} differs"
     return True, "same arrays"
 

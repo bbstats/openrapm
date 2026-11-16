@@ -13,7 +13,7 @@ $PY -m openrapm folds --models net1 --base season_ratings_net1_step3 --seasons 2
 echo "exit $?" >> "$LOG"
 
 echo "== 2. a fresh two-season save, then its reproduction" >> "$LOG"
-$PY -m openrapm rate --setting test --seasons 2001,2026 --name cu_a_save --save-models --jobs 2 >> "$LOG" 2>&1
+$PY -m openrapm rate --setting test --seasons 2001,2026 --name cu_a_save --save-models cu_a_save --jobs 2 >> "$LOG" 2>&1
 echo "rate exit $?" >> "$LOG"
 $PY -m openrapm folds --models cu_a_save --base season_ratings_cu_a_save_step3 --seasons 2001,2026 \
   --tag cu_a_save --reproduce-only >> "$LOG" 2>&1
