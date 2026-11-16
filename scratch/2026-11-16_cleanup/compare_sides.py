@@ -76,6 +76,8 @@ def pairs() -> list:
         out.append((name.format("S"), OUT / name.format("b"), OUT / name.format("a")))
     out.append(("csv/wins_cu_S_morning_seasons.csv", OUT / "csv/wins_cu_b_morning_seasons.csv",
                 OUT / "csv/wins_cu_a_morning_seasons.csv"))
+    out.append(("cleanup_proof/pieces_S.txt, the pieces check's failure", OUT / "cleanup_proof/pieces_b.txt",
+                OUT / "cleanup_proof/pieces_a.txt"))
     folders = [*(f"within/cu_{{}}_{tag}" for tag in ("plain", "cut10", "cut50", "pieces")), "second_prior/cu_{}_sp",
                "cu_{}_site"]
     for folder in folders:

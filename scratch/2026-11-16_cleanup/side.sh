@@ -82,7 +82,17 @@ step folds_cut10  oo folds --models fade141 --base $BASE --seasons 2001,2026 --t
                      --hold-prior-scale $BASE
 step folds_cut50  oo folds --models fade141 --base $BASE --seasons 2001,2026 --tag cu_${S}_cut50 --cut 0.5 \
                      --hold-prior-scale $BASE --blend-through 0.75 --blend-from 0.25
-step folds_pieces oo folds --models fade141 --base $BASE --seasons 2026 --tag cu_${S}_pieces --repeats 1 --pieces
+# The pieces check fails at the tag's code too: under the shipped defensive target, whose late opponent threes count
+# as scored, the defensive pieces do not add up to the response (148.7 at most on 2026).  Both sides must fail the
+# same way, so the step keeps the failure's line, full precision, in pieces_<side>.txt for compare_sides.py.
+pieces_fail() {
+  oo folds --models fade141 --base $BASE --seasons 2026 --tag cu_${S}_pieces --repeats 1 --pieces > "$PROOF/pieces_$S.out" 2>&1
+  local status=$?
+  cat "$PROOF/pieces_$S.out"
+  grep "the pieces do not add up" "$PROOF/pieces_$S.out" > "$PROOF/pieces_$S.txt"
+  [ $status -ne 0 ] && [ -s "$PROOF/pieces_$S.txt" ]
+}
+step folds_pieces pieces_fail
 # 6. Box Adj's line, the shipped line's own command on two seasons
 step line oo second-prior --models padbins127 --folds padbins127_early,padbins127_within --tag cu_${S}_sp \
             --inputs context_types_team_rates_zones_centred --target rating --seasons 2001,2026
