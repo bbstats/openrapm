@@ -55,7 +55,7 @@ __all__ = ["Feature", "BOX_RATES", "UNCENTRED_RATES", "ROLE", "CLOSENESS", "SHOT
            "SCREEN_CANDIDATES_MATCHUPS",
            "PRIOR_FEATURES", "PANEL_INPUTS", "PANEL_KEYS",
            "SEASON_PANEL_COLUMNS", "ROW_FEATURES", "SHIPPED", "REBOUND_PARTS", "STEAL_PARTS", "POINTS_PARTS",
-           "THREE_POINT_PARTS", "FEATURE_SETS", "CATALOGUE", "add_features", "add_shotq", "meaning",
+           "THREE_POINT_PARTS", "FEATURE_SETS", "CATALOGUE", "add_features", "add_shotq", "meaning", "shipped_sides",
            "glossary_markdown"]
 
 
@@ -66,7 +66,7 @@ class Feature:
     meaning: str
     formula: str
     unit: str
-    scale: str          # "centred" or "level"
+    scale: str          # "centered" or "level"
     group: str
 
 
@@ -695,7 +695,7 @@ _EVENT_MEANINGS = ["defensive rebounds of missed free throws", "defensive reboun
                    "assisted made threes", "unassisted made threes",
                    "blocks his team recovered (Russell blocks)", "blocks of twos within 6 ft of the rim, or logged "
                    "without a location", "blocks of twos from beyond 6 ft", "blocks of threes",
-                   "offensive fouls committed", "turnovers stolen by the defence (live-ball turnovers)",
+                   "offensive fouls committed", "turnovers stolen by the defense (live-ball turnovers)",
                    "assists on makes at the rim (within 6 ft, or logged without a location)",
                    "assists on made twos from beyond 6 ft", "assists on made corner threes",
                    "assists on made above-the-break threes"]
@@ -717,12 +717,12 @@ _OVER_EXPECTED_MEANINGS = {
 _TRACKING_MEANINGS = ["drives to the basket", "points scored on drives",
                       "potential assists (passes that led to a shot)", "passes made", "touches of the ball",
                       "touches in the paint", "post touches", "elbow touches",
-                      "minutes with the ball in his hands", "miles run on offence",
+                      "minutes with the ball in his hands", "miles run on offense",
                       "offensive rebound chances (a rebound within his reach)", "contested offensive rebounds",
                       "defensive rebound chances (a rebound within his reach)", "contested defensive rebounds",
                       "shots at the rim he was the closest defender on",
                       "two-point shots he was the closest defender on",
-                      "three-point shots he was the closest defender on", "miles run on defence"]
+                      "three-point shots he was the closest defender on", "miles run on defense"]
 _OVER_EXPECTED_ROWS = [
     ("rim_makes_over_expected_per_shot", "shots made within 6 ft against him, above what the league's shooters make "
      "against those defenders, per shot faced"),
@@ -770,7 +770,7 @@ _SHOTQ_ROWS = [
 ]
 _PANEL_ROWS = [
     # name, meaning, unit, scale, group
-    ("possessions", "possessions behind the row: offensive on an offence row, defensive on a defence row",
+    ("possessions", "possessions behind the row: offensive on an offense row, defensive on a defense row",
      "possessions", "level", "role"),
     ("team_possession_share", "share of team possessions played", "share", "level", "role"),
     ("games_started_share", "share of games started", "share", "level", "role"),
@@ -804,21 +804,21 @@ _PANEL_ROWS = [
     ("age_at_debut", "age in his first NBA season (before 1997 too)", "years", "level", "career"),
     ("seasons_with_team_from_debut", "seasons with his current team, counted from his debut (before 1997 too)",
      "seasons", "level", "career"),
-    ("on_court_scored_per100", "team points scored per 100, him on court", "per 100 possessions", "centred",
+    ("on_court_scored_per100", "team points scored per 100, him on court", "per 100 possessions", "centered",
      "on court"),
-    ("on_court_allowed_per100", "team points allowed per 100, him on court", "per 100 possessions", "centred",
+    ("on_court_allowed_per100", "team points allowed per 100, him on court", "per 100 possessions", "centered",
      "on court"),
     ("on_court_off_possessions", "offensive possessions on court", "possessions", "level", "on court"),
     ("on_court_def_possessions", "defensive possessions on court", "possessions", "level", "on court"),
-    ("off_court_scored_per100", "team points scored per 100, him off court", "per 100 possessions", "centred",
+    ("off_court_scored_per100", "team points scored per 100, him off court", "per 100 possessions", "centered",
      "off court"),
-    ("off_court_allowed_per100", "team points allowed per 100, him off court", "per 100 possessions", "centred",
+    ("off_court_allowed_per100", "team points allowed per 100, him off court", "per 100 possessions", "centered",
      "off court"),
     ("off_court_off_possessions", "offensive possessions off court", "possessions", "level", "off court"),
     ("off_court_def_possessions", "defensive possessions off court", "possessions", "level", "off court"),
-    ("on_minus_off_scored_per100", "on court minus off court, points scored", "per 100 possessions", "centred",
+    ("on_minus_off_scored_per100", "on court minus off court, points scored", "per 100 possessions", "centered",
      "on/off"),
-    ("on_minus_off_allowed_per100", "on court minus off court, points allowed", "per 100 possessions", "centred",
+    ("on_minus_off_allowed_per100", "on court minus off court, points allowed", "per 100 possessions", "centered",
      "on/off"),
     ("playoff_share", "share of possessions in the playoffs", "share", "level", "playoffs"),
     ("row_possessions", "possessions behind the row", "possessions", "level", "row evidence"),
@@ -829,14 +829,14 @@ _PANEL_ROWS = [
 def _ratio_formula(numerator: dict, denominator: dict, pad: float, typical: float) -> str:
     """A `RATIOS` entry written out: "(threes_made_per100 + 3 x 0.34) / (threes_made_per100 + threes_missed_per100
     + 3), uncentered rates"."""
-    return f"({_linear(numerator)} + {pad:g} x {typical:g}) / ({_linear(denominator)} + {pad:g}), uncentred rates"
+    return f"({_linear(numerator)} + {pad:g} x {typical:g}) / ({_linear(denominator)} + {pad:g}), uncentered rates"
 
 
 def _vs_league_formula(numerator: dict, denominator: dict, pad: float, typical: float) -> str:
     """A `VS_LEAGUE` entry written out: "(threes_made_per100 - L x (threes_made_per100 + threes_missed_per100)) /
     (threes_made_per100 + threes_missed_per100 + 3), uncentered rates; L the same ratio of the league's rates"."""
     return (f"({_linear(numerator)} - L x ({_linear(denominator)})) / ({_linear(denominator)} + {pad:g}), "
-            f"uncentred rates; L the same ratio of the league's rates (each uncentred minus centred)")
+            f"uncentered rates; L the same ratio of the league's rates (each uncentered minus centered)")
 
 
 # (meaning, what the mean is weighted by, unit), in MATCHUP_GAME_INPUTS' order
@@ -848,8 +848,8 @@ _MATCHUP_GAME_ROWS = [
     ("self-creation of the attackers he guarded", _GUARDING, "per 100 possessions"),
     ("total creation of the attackers he guarded: self-creation plus estimated potential assists", _GUARDING,
      "per 100 possessions"),
-    ("share of his defence on the opposing team's top self-creator of the game", _GUARDING, "fraction"),
-    ("share of his defence on the opposing team's top total creator of the game", _GUARDING, "fraction"),
+    ("share of his defense on the opposing team's top self-creator of the game", _GUARDING, "fraction"),
+    ("share of his defense on the opposing team's top total creator of the game", _GUARDING, "fraction"),
     ("share of his time on the floor with the opposing top self-creator spent guarding him", _ON_FLOOR, "fraction"),
     ("share of his time on the floor with the opposing top total creator spent guarding him", _ON_FLOOR, "fraction")]
 
@@ -857,37 +857,37 @@ _MATCHUP_GAME_ROWS = [
 def _catalogue() -> tuple:
     """Every column the prior can read, family by family, in the order the panel and the derivations list them."""
     rows = _family(BOX_RATES, _RATE_MEANINGS, "padded rate minus the league level", "per 100 possessions",
-                   "centred", "box rate")
+                   "centered", "box rate")
     rows += _family(UNCENTRED_RATES, [f"{text}, league level kept" for text in _RATE_MEANINGS], "padded rate",
                     "per 100 possessions", "level", "box rate, uncentred")
     rows += _family(EVENT_RATES, _EVENT_MEANINGS, "padded play-by-play count per 100 minus the league level",
-                    "per 100 possessions", "centred", "play-by-play rate")
+                    "per 100 possessions", "centered", "play-by-play rate")
     rows += _family(UNCENTRED_EVENT_RATES, [f"{_EVENT_MEANINGS[EVENT_RATES.index(name.removesuffix('_uncentred'))]}"
                                             ", league level kept" for name in UNCENTRED_EVENT_RATES],
                     "padded play-by-play count per 100", "per 100 possessions", "level", "play-by-play rate, uncentred")
     rows += _family(TRACKING_RATES[:18], _TRACKING_MEANINGS,
                     "tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate",
-                    "fraction above the league average", "centred", "tracking rate")
+                    "fraction above the league average", "centered", "tracking rate")
     rows += [Feature(name, text, "(makes - expected makes) / (shots faced + pad); the pad is the shots in "
-                     "data/dashboard_rates.py", "makes per shot", "centred", "tracking rate")
+                     "data/dashboard_rates.py", "makes per shot", "centered", "tracking rate")
              for name, text in _OVER_EXPECTED_ROWS]
     rows += _family(HUSTLE_RATES, _HUSTLE_MEANINGS,
                     "hustle box scores summed over the games, per 100 possessions, padded, (rate - league rate) / "
-                    "league rate", "fraction above the league average", "centred", "hustle rate")
+                    "league rate", "fraction above the league average", "centered", "hustle rate")
     rows += _family(HUSTLE_PLACEBO, [f"{text}, shuffled among the season's players (a placebo)"
                                      for text in _HUSTLE_MEANINGS],
                     "the hustle column with each season's player profiles shuffled jointly, missing kept missing",
-                    "fraction above the league average", "centred", "hustle placebo")
+                    "fraction above the league average", "centered", "hustle placebo")
     rows += [Feature(name, text, "(attackers' points per matchup possession, each without his rows against the player, "
                      "padded 50 possessions toward the league's, mean weighted by possessions - league rate) / league "
-                     "rate; the second sign-flipped", "fraction above the league average", "centred", "matchup")
+                     "rate; the second sign-flipped", "fraction above the league average", "centered", "matchup")
              for name, text in _MATCHUP_ROWS]
-    rows += [Feature(name, _DERIVED_MEANINGS[name], _linear(weights), "per 100 possessions", "centred",
+    rows += [Feature(name, _DERIVED_MEANINGS[name], _linear(weights), "per 100 possessions", "centered",
                      "combination") for name, weights in DERIVED.items()]
     rows += [Feature(name, _RATIO_MEANINGS[name], _ratio_formula(*spec), "fraction", "level", "ratio")
              for name, spec in RATIOS.items()]
     rows += [Feature(name, f"{_RATIO_MEANINGS[ratio]} above the league's", _vs_league_formula(*RATIOS[ratio]),
-                     "fraction", "centred", "ratio vs league") for name, ratio in VS_LEAGUE.items()]
+                     "fraction", "centered", "ratio vs league") for name, ratio in VS_LEAGUE.items()]
     rows += [Feature(name, text, formula.format(pad=f"{SHOTQ_PADS[name]:g}"), unit, "level", "shot quality")
              for name, text, formula, unit in _SHOTQ_ROWS]
     rows += [Feature(name, text, "panel column", unit, scale, group)
@@ -896,24 +896,24 @@ def _catalogue() -> tuple:
                      "flag", "level", "era")]
     rows += [Feature(CREATION[0], "self-created shot attempts (the owner's self-creation)",
                      "(shot attempts + 0.44 x free-throw attempts) x (1 - share assisted), share assisted = 0.73 - "
-                     "0.03 x assists - 0.01 x field goals made, clipped to 0-1; uncentred rates",
+                     "0.03 x assists - 0.01 x field goals made, clipped to 0-1; uncentered rates",
                      "per 100 possessions", "level", "creation")]
     rows += _family(UNCENTRED_CREATION_RATES, _CREATION_MEANINGS, "padded per-game count per 100, level kept",
                     "per 100 possessions", "level", "creation count")
     rows += _family(CREATION_INPUTS, [_CREATION_MEANINGS[CREATION_RATES.index(name)] for name in CREATION_INPUTS],
-                    "padded per-game count per 100 minus the league level", "per 100 possessions", "centred",
+                    "padded per-game count per 100 minus the league level", "per 100 possessions", "centered",
                     "creation count")
     rows += _family(FOUL_RATES, _FOUL_MEANINGS, "padded per-game count per 100 minus the league level",
-                    "per 100 possessions", "centred", "play-by-play rate")
+                    "per 100 possessions", "centered", "play-by-play rate")
     rows += [Feature(name, _OVER_EXPECTED_MEANINGS[name],
                      f"{_linear(count)} minus a line on "
                      f"{' and '.join(_linear(given) for given in givens)}, fitted on the season's players on his side, "
-                     f"weighted by possessions", "per 100 possessions", "centred", "over expected")
+                     f"weighted by possessions", "per 100 possessions", "centered", "over expected")
              for name, (count, givens) in OVER_EXPECTED.items()]
     rows += [Feature(CREATION_ESTIMATED[0], "self-created shot attempts, passes estimated (experiment 111)",
                      "unassisted makes + misses not off a pass + free-throw trips without a make not off a pass; "
                      "off a pass = his lean x the expected passes, by spot group, held to his count; lean = "
-                     f"(assisted makes + {LEAN_PAD:g}) / (expected assisted makes + {LEAN_PAD:g}); uncentred rates",
+                     f"(assisted makes + {LEAN_PAD:g}) / (expected assisted makes + {LEAN_PAD:g}); uncentered rates",
                      "per 100 possessions", "level", "creation")]
     rows += [Feature(name, text, "mean over the fit games' per-game matchup pairs (data/matchups.py), weighted by "
                      f"{weight}, padded toward his bin by a split-half pad k", unit, "level", "matchup, per game")
@@ -930,12 +930,26 @@ def meaning(name: str) -> str:
     return next((feature.meaning for feature in CATALOGUE if feature.name == name), name)
 
 
-def glossary_markdown() -> str:
-    """The catalog as a markdown table, one row per name, for GLOSSARY.md."""
+def shipped_sides(name: str, feature_set: str) -> str:
+    """Which sides of the box-score prior read `name` in `feature_set`: "offense", "defense", "both" or ""; the two
+    row inputs are read on both."""
+    lists = FEATURE_SETS[feature_set]
+    offense = name in lists["O"] or name in ROW_FEATURES
+    defense = name in lists["D"] or name in ROW_FEATURES
+    return {(True, True): "both", (True, False): "offense", (False, True): "defense"}.get((offense, defense), "")
+
+
+def glossary_markdown(feature_set: str | None = None) -> str:
+    """The catalog as a markdown table, one row per name, for GLOSSARY.md; its "shipped" column says which sides of the
+    shipped box-score prior read each name (settings.PriorSettings.feature_set unless `feature_set` is given)."""
+    if feature_set is None:
+        from .settings import PRODUCT
+        feature_set = PRODUCT.prior.feature_set
+
     def cell(text: str) -> str:
         return text.replace("|", "\\|")          # a literal |margin| would end the cell
 
-    lines = ["| name | meaning | formula | unit | scale |", "|---|---|---|---|---|"]
-    lines += [f"| `{feature.name}` | {cell(feature.meaning)} | {cell(feature.formula)} | {feature.unit} | "
-              f"{feature.scale} |" for feature in CATALOGUE]
+    lines = ["| name | shipped | meaning | formula | unit | scale |", "|---|---|---|---|---|---|"]
+    lines += [f"| `{feature.name}` | {shipped_sides(feature.name, feature_set)} | {cell(feature.meaning)} | "
+              f"{cell(feature.formula)} | {feature.unit} | {feature.scale} |" for feature in CATALOGUE]
     return "\n".join(lines) + "\n"

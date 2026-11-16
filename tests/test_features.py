@@ -206,7 +206,7 @@ def test_each_ratio_has_one_twin_against_the_league():
     assert list(feat.VS_LEAGUE) == [f"{name}_vs_league" for name in feat.RATIOS]
     by_name = {f.name: f for f in feat.CATALOGUE}
     assert by_name["true_shooting_pct_vs_league"].meaning == "true shooting % above the league's"
-    assert {by_name[name].scale for name in feat.VS_LEAGUE} == {"centred"}
+    assert {by_name[name].scale for name in feat.VS_LEAGUE} == {"centered"}
 
 
 def test_a_column_already_present_is_left_alone():
@@ -225,7 +225,7 @@ def test_every_name_the_prior_can_read_is_in_the_catalogue():
     wanted = set(feat.PANEL_INPUTS) | set(feat.PRIOR_FEATURES) | set(feat.ROW_FEATURES)
     wanted |= set(feat.SHIPPED["O"]) | set(feat.SHIPPED["D"]) | set(feat.OFF_COURT) | set(feat.ON_MINUS_OFF)
     assert not wanted - set(names)
-    assert {f.scale for f in feat.CATALOGUE} <= {"centred", "level"}
+    assert {f.scale for f in feat.CATALOGUE} <= {"centered", "level"}
     assert all(f.meaning and f.formula and f.unit and f.group for f in feat.CATALOGUE)
     assert len(feat.PRIOR_FEATURES) == len(set(feat.PRIOR_FEATURES)) == 162
 
@@ -364,7 +364,23 @@ def test_the_glossary_has_one_row_per_name_and_escapes_bars():
     rows = [line for line in text.splitlines() if line.startswith("| `")]
     assert len(rows) == len(feat.CATALOGUE)
     closeness = next(line for line in rows if line.startswith("| `closeness`"))
-    assert "\\|margin\\|" in closeness and closeness.count(" | ") == 4
+    assert "\\|margin\\|" in closeness and closeness.count(" | ") == 5
+
+
+def test_the_glossary_marks_the_inputs_the_shipped_prior_reads():
+    """The "shipped" column is written from settings and features, so the glossary's list of shipped inputs cannot go
+    stale: 18 a side as of 2026-11-16, plus the two row inputs on both."""
+    from openrapm.settings import PRODUCT
+    lists = feat.FEATURE_SETS[PRODUCT.prior.feature_set]
+    rows = {line.split(" | ")[0][3:-1]: line.split(" | ")[1].strip()
+            for line in feat.glossary_markdown().splitlines() if line.startswith("| `")}
+    for name in set(lists["O"]) | set(lists["D"]) | set(feat.ROW_FEATURES):
+        row = name in feat.ROW_FEATURES
+        offense, defense = name in lists["O"] or row, name in lists["D"] or row
+        assert rows[name] == ("both" if offense and defense else "offense" if offense else "defense"), name
+    marked = {name for name, sides in rows.items() if sides}
+    assert marked == set(lists["O"]) | set(lists["D"]) | set(feat.ROW_FEATURES)
+    assert rows["self_creation_per100"] == "offense" and rows["three_point_pct"] == ""
 
 
 def test_the_glossary_file_holds_the_catalogue():

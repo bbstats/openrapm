@@ -77,7 +77,7 @@ Only the defensive label is un-shrunk. Example: with lambda = 40,000 the divisio
 - 0.24) x -3.0 = -1.77.
 
 **Box-score prior.** LightGBM's, gradient-boosted trees', prediction of a player's label from his season-panel row:
-18 inputs on offense and 18 on defense, listed below, plus `row_possessions` and `row_seasons`. Step 2,
+18 inputs on offense and 18 on defense, marked in the table below, plus `row_possessions` and `row_seasons`. Step 2,
 `box_prior.py`.
 
 **Booster.** One fitted LightGBM model. `--save-models` writes every rated season's boosters to
@@ -305,238 +305,231 @@ Files and notes from before 2026-10-11 use older column names, `poss_pct`, `onc_
 ## Every column the prior can read
 
 Written from `src/openrapm/features.py` by `openrapm glossary`; edit the catalogue there, not the table here. The
-shipped prior reads the inputs of `features.FEATURE_SETS["hustle_no_three_pct_self_creation"]`, plus
-`row_possessions` and `row_seasons`; the rest are candidates an experiment may try.
-
-- Offense, 18: assists; assists minus turnovers; effective field-goal %; shot attempts; free-throw attempts;
-  offensive rebounds; offensive-rebound share of his rebounds; share of shots that are threes; share of team
-  possessions played; points; steals; true shooting %; weight; screen assists; points from screen assists; offensive
-  box-outs; loose balls recovered; self-created shot attempts.
-- Defense, 18: blocks; defensive rebounds; shot attempts; share of games started; height; share of team possessions
-  played; points; steals; steals plus blocks; true shooting %; possessions he finishes; weight; deflections; contested
-  twos; contested threes; charges drawn; defensive box-outs; loose balls recovered.
+shipped column says which sides of the shipped box-score prior read each input, offense, defense or both, from
+`settings.PriorSettings.feature_set`; the rest are candidates an experiment may try. A centered column has the
+possession-weighted league mean subtracted, so 0 is a league-average rate; a level column keeps its units.
 
 <!-- generated: features -->
-| name | meaning | formula | unit | scale |
-|---|---|---|---|---|
-| `threes_made_per100` | made threes | padded rate minus the league level | per 100 possessions | centred |
-| `threes_missed_per100` | missed threes | padded rate minus the league level | per 100 possessions | centred |
-| `twos_made_per100` | made twos | padded rate minus the league level | per 100 possessions | centred |
-| `twos_missed_per100` | missed twos | padded rate minus the league level | per 100 possessions | centred |
-| `free_throws_made_per100` | made free throws | padded rate minus the league level | per 100 possessions | centred |
-| `free_throws_missed_per100` | missed free throws | padded rate minus the league level | per 100 possessions | centred |
-| `off_rebounds_per100` | offensive rebounds | padded rate minus the league level | per 100 possessions | centred |
-| `def_rebounds_per100` | defensive rebounds | padded rate minus the league level | per 100 possessions | centred |
-| `assists_per100` | assists | padded rate minus the league level | per 100 possessions | centred |
-| `turnovers_per100` | turnovers | padded rate minus the league level | per 100 possessions | centred |
-| `steals_per100` | steals | padded rate minus the league level | per 100 possessions | centred |
-| `blocks_per100` | blocks | padded rate minus the league level | per 100 possessions | centred |
-| `fouls_per100` | personal fouls | padded rate minus the league level | per 100 possessions | centred |
-| `threes_made_per100_uncentred` | made threes, league level kept | padded rate | per 100 possessions | level |
-| `threes_missed_per100_uncentred` | missed threes, league level kept | padded rate | per 100 possessions | level |
-| `twos_made_per100_uncentred` | made twos, league level kept | padded rate | per 100 possessions | level |
-| `twos_missed_per100_uncentred` | missed twos, league level kept | padded rate | per 100 possessions | level |
-| `free_throws_made_per100_uncentred` | made free throws, league level kept | padded rate | per 100 possessions | level |
-| `free_throws_missed_per100_uncentred` | missed free throws, league level kept | padded rate | per 100 possessions | level |
-| `off_rebounds_per100_uncentred` | offensive rebounds, league level kept | padded rate | per 100 possessions | level |
-| `def_rebounds_per100_uncentred` | defensive rebounds, league level kept | padded rate | per 100 possessions | level |
-| `assists_per100_uncentred` | assists, league level kept | padded rate | per 100 possessions | level |
-| `turnovers_per100_uncentred` | turnovers, league level kept | padded rate | per 100 possessions | level |
-| `steals_per100_uncentred` | steals, league level kept | padded rate | per 100 possessions | level |
-| `blocks_per100_uncentred` | blocks, league level kept | padded rate | per 100 possessions | level |
-| `fouls_per100_uncentred` | personal fouls, league level kept | padded rate | per 100 possessions | level |
-| `def_rebounds_of_free_throws_per100` | defensive rebounds of missed free throws | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
-| `def_rebounds_of_threes_per100` | defensive rebounds of missed threes | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
-| `def_rebounds_of_rim_twos_per100` | defensive rebounds of missed twos within 6 ft of the rim, or logged without a location | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
-| `def_rebounds_of_outside_twos_per100` | defensive rebounds of missed twos from beyond 6 ft | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
-| `bad_pass_steals_per100` | steals of a pass (a bad-pass turnover) | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
-| `lost_ball_steals_per100` | steals of the ball from a dribbler (a lost-ball turnover) | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
-| `assisted_points_per100` | points from assisted field goals | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
-| `unassisted_points_per100` | points from unassisted field goals | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
-| `corner_threes_attempted_per100` | corner threes attempted | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
-| `above_break_threes_attempted_per100` | above-the-break threes attempted | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
-| `assisted_threes_made_per100` | assisted made threes | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
-| `unassisted_threes_made_per100` | unassisted made threes | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
-| `russell_blocks_per100` | blocks his team recovered (Russell blocks) | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
-| `rim_blocks_per100` | blocks of twos within 6 ft of the rim, or logged without a location | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
-| `mid_range_blocks_per100` | blocks of twos from beyond 6 ft | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
-| `three_point_blocks_per100` | blocks of threes | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
-| `offensive_fouls_per100` | offensive fouls committed | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
-| `stolen_turnovers_per100` | turnovers stolen by the defence (live-ball turnovers) | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
-| `assists_to_rim_per100` | assists on makes at the rim (within 6 ft, or logged without a location) | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
-| `assists_to_mid_range_per100` | assists on made twos from beyond 6 ft | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
-| `assists_to_corner_threes_per100` | assists on made corner threes | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
-| `assists_to_above_break_threes_per100` | assists on made above-the-break threes | padded play-by-play count per 100 minus the league level | per 100 possessions | centred |
-| `unassisted_points_per100_uncentred` | points from unassisted field goals, league level kept | padded play-by-play count per 100 | per 100 possessions | level |
-| `unassisted_threes_made_per100_uncentred` | unassisted made threes, league level kept | padded play-by-play count per 100 | per 100 possessions | level |
-| `drives_vs_league_avg` | drives to the basket | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `drive_points_vs_league_avg` | points scored on drives | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `potential_assists_vs_league_avg` | potential assists (passes that led to a shot) | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `passes_made_vs_league_avg` | passes made | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `touches_vs_league_avg` | touches of the ball | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `paint_touches_vs_league_avg` | touches in the paint | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `post_touches_vs_league_avg` | post touches | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `elbow_touches_vs_league_avg` | elbow touches | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `minutes_with_ball_vs_league_avg` | minutes with the ball in his hands | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `miles_on_offense_vs_league_avg` | miles run on offence | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `off_reb_chances_vs_league_avg` | offensive rebound chances (a rebound within his reach) | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `off_reb_contested_vs_league_avg` | contested offensive rebounds | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `def_reb_chances_vs_league_avg` | defensive rebound chances (a rebound within his reach) | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `def_reb_contested_vs_league_avg` | contested defensive rebounds | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `rim_shots_defended_vs_league_avg` | shots at the rim he was the closest defender on | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `twos_defended_vs_league_avg` | two-point shots he was the closest defender on | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `threes_defended_vs_league_avg` | three-point shots he was the closest defender on | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `miles_on_defense_vs_league_avg` | miles run on defence | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `rim_makes_over_expected_per_shot` | shots made within 6 ft against him, above what the league's shooters make against those defenders, per shot faced | (makes - expected makes) / (shots faced + pad); the pad is the shots in data/dashboard_rates.py | makes per shot | centred |
-| `twos_makes_over_expected_per_shot` | two-point shots made against him above expected, per shot faced | (makes - expected makes) / (shots faced + pad); the pad is the shots in data/dashboard_rates.py | makes per shot | centred |
-| `threes_makes_over_expected_per_shot` | three-point shots made against him above expected, per shot faced | (makes - expected makes) / (shots faced + pad); the pad is the shots in data/dashboard_rates.py | makes per shot | centred |
-| `deflections_vs_league_avg` | deflections | hustle box scores summed over the games, per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `contested_twos_vs_league_avg` | contested two-point shots | hustle box scores summed over the games, per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `contested_threes_vs_league_avg` | contested three-point shots | hustle box scores summed over the games, per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `charges_drawn_vs_league_avg` | charges drawn | hustle box scores summed over the games, per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `loose_balls_recovered_vs_league_avg` | loose balls recovered | hustle box scores summed over the games, per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `def_box_outs_vs_league_avg` | defensive box-outs | hustle box scores summed over the games, per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `off_box_outs_vs_league_avg` | offensive box-outs | hustle box scores summed over the games, per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `screen_assists_vs_league_avg` | screen assists | hustle box scores summed over the games, per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `screen_assist_points_vs_league_avg` | points from his screen assists | hustle box scores summed over the games, per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centred |
-| `deflections_vs_league_avg_shuffled` | deflections, shuffled among the season's players (a placebo) | the hustle column with each season's player profiles shuffled jointly, missing kept missing | fraction above the league average | centred |
-| `contested_twos_vs_league_avg_shuffled` | contested two-point shots, shuffled among the season's players (a placebo) | the hustle column with each season's player profiles shuffled jointly, missing kept missing | fraction above the league average | centred |
-| `contested_threes_vs_league_avg_shuffled` | contested three-point shots, shuffled among the season's players (a placebo) | the hustle column with each season's player profiles shuffled jointly, missing kept missing | fraction above the league average | centred |
-| `charges_drawn_vs_league_avg_shuffled` | charges drawn, shuffled among the season's players (a placebo) | the hustle column with each season's player profiles shuffled jointly, missing kept missing | fraction above the league average | centred |
-| `loose_balls_recovered_vs_league_avg_shuffled` | loose balls recovered, shuffled among the season's players (a placebo) | the hustle column with each season's player profiles shuffled jointly, missing kept missing | fraction above the league average | centred |
-| `def_box_outs_vs_league_avg_shuffled` | defensive box-outs, shuffled among the season's players (a placebo) | the hustle column with each season's player profiles shuffled jointly, missing kept missing | fraction above the league average | centred |
-| `off_box_outs_vs_league_avg_shuffled` | offensive box-outs, shuffled among the season's players (a placebo) | the hustle column with each season's player profiles shuffled jointly, missing kept missing | fraction above the league average | centred |
-| `screen_assists_vs_league_avg_shuffled` | screen assists, shuffled among the season's players (a placebo) | the hustle column with each season's player profiles shuffled jointly, missing kept missing | fraction above the league average | centred |
-| `screen_assist_points_vs_league_avg_shuffled` | points from his screen assists, shuffled among the season's players (a placebo) | the hustle column with each season's player profiles shuffled jointly, missing kept missing | fraction above the league average | centred |
-| `attackers_guarded_scoring_vs_league_avg` | the scoring of the attackers he guarded (points per matchup possession without the rows against him), against the league's | (attackers' points per matchup possession, each without his rows against the player, padded 50 possessions toward the league's, mean weighted by possessions - league rate) / league rate; the second sign-flipped | fraction above the league average | centred |
-| `defenders_faced_stinginess_vs_league_avg` | how stingy the defenders were who guarded him (points allowed per matchup possession without the rows against him, sign-flipped), against the league's | (attackers' points per matchup possession, each without his rows against the player, padded 50 possessions toward the league's, mean weighted by possessions - league rate) / league rate; the second sign-flipped | fraction above the league average | centred |
-| `points_per100` | points | 2 twos_made_per100 + 3 threes_made_per100 + free_throws_made_per100 | per 100 possessions | centred |
-| `shots_per100` | shot attempts | twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 | per 100 possessions | centred |
-| `free_throw_attempts_per100` | free-throw attempts | free_throws_made_per100 + free_throws_missed_per100 | per 100 possessions | centred |
-| `three_point_attempts_per100` | three-point attempts | threes_made_per100 + threes_missed_per100 | per 100 possessions | centred |
-| `used_possessions_per100` | possessions he finishes | twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 0.44 free_throws_made_per100 + 0.44 free_throws_missed_per100 + turnovers_per100 | per 100 possessions | centred |
-| `rebounds_per100` | rebounds | off_rebounds_per100 + def_rebounds_per100 | per 100 possessions | centred |
-| `steals_plus_blocks_per100` | steals plus blocks | steals_per100 + blocks_per100 | per 100 possessions | centred |
-| `assists_minus_turnovers_per100` | assists minus turnovers | assists_per100 - turnovers_per100 | per 100 possessions | centred |
-| `threes_minus_twos_attempted_per100` | threes minus twos taken | threes_made_per100 + threes_missed_per100 - twos_made_per100 - twos_missed_per100 | per 100 possessions | centred |
-| `potential_assists_estimated_per100` | potential assists, estimated from where the assists went | 1.656 assists_to_rim_per100 + 2.261 assists_to_mid_range_per100 + 2.057 assists_to_corner_threes_per100 + 2.503 assists_to_above_break_threes_per100 | per 100 possessions | centred |
-| `effective_fg_pct` | effective field-goal % | (twos_made_per100 + 1.5 threes_made_per100 + 3 x 0.5) / (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 3), uncentred rates | fraction | level |
-| `true_shooting_pct` | true shooting % | (2 twos_made_per100 + 3 threes_made_per100 + free_throws_made_per100 + 6 x 0.54) / (2 twos_made_per100 + 2 twos_missed_per100 + 2 threes_made_per100 + 2 threes_missed_per100 + 0.88 free_throws_made_per100 + 0.88 free_throws_missed_per100 + 6), uncentred rates | fraction | level |
-| `three_point_attempt_share` | share of shots that are threes | (threes_made_per100 + threes_missed_per100 + 3 x 0.25) / (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 3), uncentred rates | fraction | level |
-| `free_throws_per_shot` | free throws per shot | (free_throws_made_per100 + free_throws_missed_per100 + 3 x 0.25) / (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 3), uncentred rates | fraction | level |
-| `three_point_pct` | three-point % | (threes_made_per100 + 3 x 0.34) / (threes_made_per100 + threes_missed_per100 + 3), uncentred rates | fraction | level |
-| `two_point_pct` | two-point % | (twos_made_per100 + 3 x 0.48) / (twos_made_per100 + twos_missed_per100 + 3), uncentred rates | fraction | level |
-| `free_throw_pct` | free-throw % | (free_throws_made_per100 + 2 x 0.75) / (free_throws_made_per100 + free_throws_missed_per100 + 2), uncentred rates | fraction | level |
-| `assists_per_used_possession` | assists per possession used | (assists_per100 + 3 x 0.18) / (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 0.44 free_throws_made_per100 + 0.44 free_throws_missed_per100 + turnovers_per100 + 3), uncentred rates | fraction | level |
-| `turnovers_per_used_possession` | turnovers per possession used | (turnovers_per100 + 3 x 0.13) / (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 0.44 free_throws_made_per100 + 0.44 free_throws_missed_per100 + turnovers_per100 + 3), uncentred rates | fraction | level |
-| `off_rebound_share` | offensive-rebound share of his rebounds | (off_rebounds_per100 + 3 x 0.22) / (off_rebounds_per100 + def_rebounds_per100 + 3), uncentred rates | fraction | level |
-| `effective_fg_pct_vs_league` | effective field-goal % above the league's | (twos_made_per100 + 1.5 threes_made_per100 - L x (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100)) / (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 3), uncentred rates; L the same ratio of the league's rates (each uncentred minus centred) | fraction | centred |
-| `true_shooting_pct_vs_league` | true shooting % above the league's | (2 twos_made_per100 + 3 threes_made_per100 + free_throws_made_per100 - L x (2 twos_made_per100 + 2 twos_missed_per100 + 2 threes_made_per100 + 2 threes_missed_per100 + 0.88 free_throws_made_per100 + 0.88 free_throws_missed_per100)) / (2 twos_made_per100 + 2 twos_missed_per100 + 2 threes_made_per100 + 2 threes_missed_per100 + 0.88 free_throws_made_per100 + 0.88 free_throws_missed_per100 + 6), uncentred rates; L the same ratio of the league's rates (each uncentred minus centred) | fraction | centred |
-| `three_point_attempt_share_vs_league` | share of shots that are threes above the league's | (threes_made_per100 + threes_missed_per100 - L x (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100)) / (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 3), uncentred rates; L the same ratio of the league's rates (each uncentred minus centred) | fraction | centred |
-| `free_throws_per_shot_vs_league` | free throws per shot above the league's | (free_throws_made_per100 + free_throws_missed_per100 - L x (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100)) / (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 3), uncentred rates; L the same ratio of the league's rates (each uncentred minus centred) | fraction | centred |
-| `three_point_pct_vs_league` | three-point % above the league's | (threes_made_per100 - L x (threes_made_per100 + threes_missed_per100)) / (threes_made_per100 + threes_missed_per100 + 3), uncentred rates; L the same ratio of the league's rates (each uncentred minus centred) | fraction | centred |
-| `two_point_pct_vs_league` | two-point % above the league's | (twos_made_per100 - L x (twos_made_per100 + twos_missed_per100)) / (twos_made_per100 + twos_missed_per100 + 3), uncentred rates; L the same ratio of the league's rates (each uncentred minus centred) | fraction | centred |
-| `free_throw_pct_vs_league` | free-throw % above the league's | (free_throws_made_per100 - L x (free_throws_made_per100 + free_throws_missed_per100)) / (free_throws_made_per100 + free_throws_missed_per100 + 2), uncentred rates; L the same ratio of the league's rates (each uncentred minus centred) | fraction | centred |
-| `assists_per_used_possession_vs_league` | assists per possession used above the league's | (assists_per100 - L x (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 0.44 free_throws_made_per100 + 0.44 free_throws_missed_per100 + turnovers_per100)) / (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 0.44 free_throws_made_per100 + 0.44 free_throws_missed_per100 + turnovers_per100 + 3), uncentred rates; L the same ratio of the league's rates (each uncentred minus centred) | fraction | centred |
-| `turnovers_per_used_possession_vs_league` | turnovers per possession used above the league's | (turnovers_per100 - L x (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 0.44 free_throws_made_per100 + 0.44 free_throws_missed_per100 + turnovers_per100)) / (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 0.44 free_throws_made_per100 + 0.44 free_throws_missed_per100 + turnovers_per100 + 3), uncentred rates; L the same ratio of the league's rates (each uncentred minus centred) | fraction | centred |
-| `off_rebound_share_vs_league` | offensive-rebound share of his rebounds above the league's | (off_rebounds_per100 - L x (off_rebounds_per100 + def_rebounds_per100)) / (off_rebounds_per100 + def_rebounds_per100 + 3), uncentred rates; L the same ratio of the league's rates (each uncentred minus centred) | fraction | centred |
-| `two_point_expected_pct` | difficulty of his twos | (shot_twos_expected_made + 50 league_two_point_pct) / (shot_twos_attempted + 50) | fraction | level |
-| `three_point_expected_pct` | difficulty of his threes | (shot_threes_expected_made + 50 league_three_point_pct) / (shot_threes_attempted + 50) | fraction | level |
-| `two_point_pct_over_expected` | two-point shot-making | (shot_twos_made - shot_twos_expected_made) / (shot_twos_attempted + 250) | makes per attempt | level |
-| `three_point_pct_over_expected` | three-point shot-making | (shot_threes_made - shot_threes_expected_made) / (shot_threes_attempted + 450) | makes per attempt | level |
-| `expected_points_per_shot` | expected points per shot | (2 shot_twos_expected_made + 3 shot_threes_expected_made + 100 league_points_per_shot) / (shot_twos_attempted + shot_threes_attempted + 100) | points | level |
-| `points_per_shot_over_expected` | points per shot above expected | (2 (shot_twos_made - shot_twos_expected_made) + 3 (shot_threes_made - shot_threes_expected_made)) / (shot_twos_attempted + shot_threes_attempted + 300) | points | level |
-| `possessions` | possessions behind the row: offensive on an offence row, defensive on a defence row | panel column | possessions | level |
-| `team_possession_share` | share of team possessions played | panel column | share | level |
-| `games_started_share` | share of games started | panel column | share | level |
-| `age` | age | panel column | years | level |
-| `garbage_time_share` | share of possessions in garbage time | panel column | share | level |
-| `closeness` | how close his games were: mean of 1 / max(\|margin\|, 1) | panel column | 1 / points | level |
-| `mean_abs_margin` | average score gap while he played | panel column | points | level |
-| `shot_twos_attempted` | two-point attempts | panel column | attempts | level |
-| `shot_twos_made` | two-point makes | panel column | makes | level |
-| `shot_twos_expected_made` | expected two-point makes, league rates from his spots | panel column | makes | level |
-| `shot_threes_attempted` | three-point attempts | panel column | attempts | level |
-| `shot_threes_made` | three-point makes | panel column | makes | level |
-| `shot_threes_expected_made` | expected three-point makes, league rates from his spots | panel column | makes | level |
-| `league_two_point_pct` | league two-point % | panel column | fraction | level |
-| `league_three_point_pct` | league three-point % | panel column | fraction | level |
-| `league_points_per_shot` | league points per shot | panel column | points | level |
-| `seasons_before` | seasons played before this one | panel column | seasons | level |
-| `career_possessions_before_k` | career possessions before this season | panel column | thousands | level |
-| `age_at_first_season` | age entering the league | panel column | years | level |
-| `height_in` | height | panel column | inches | level |
-| `weight_lb` | weight | panel column | pounds | level |
-| `draft_pick` | draft position | panel column | pick | level |
-| `seasons_with_team` | seasons with his current team | panel column | seasons | level |
-| `teams_this_season` | teams he played for this season | panel column | teams | level |
-| `seasons_before_from_debut` | seasons played before this one, counted from his debut (before 1997 too) | panel column | seasons | level |
-| `career_possessions_before_from_debut_k` | career possessions before this season, counted from his debut (before 1997 from his minutes) | panel column | thousands | level |
-| `age_at_debut` | age in his first NBA season (before 1997 too) | panel column | years | level |
-| `seasons_with_team_from_debut` | seasons with his current team, counted from his debut (before 1997 too) | panel column | seasons | level |
-| `on_court_scored_per100` | team points scored per 100, him on court | panel column | per 100 possessions | centred |
-| `on_court_allowed_per100` | team points allowed per 100, him on court | panel column | per 100 possessions | centred |
-| `on_court_off_possessions` | offensive possessions on court | panel column | possessions | level |
-| `on_court_def_possessions` | defensive possessions on court | panel column | possessions | level |
-| `off_court_scored_per100` | team points scored per 100, him off court | panel column | per 100 possessions | centred |
-| `off_court_allowed_per100` | team points allowed per 100, him off court | panel column | per 100 possessions | centred |
-| `off_court_off_possessions` | offensive possessions off court | panel column | possessions | level |
-| `off_court_def_possessions` | defensive possessions off court | panel column | possessions | level |
-| `on_minus_off_scored_per100` | on court minus off court, points scored | panel column | per 100 possessions | centred |
-| `on_minus_off_allowed_per100` | on court minus off court, points allowed | panel column | per 100 possessions | centred |
-| `playoff_share` | share of possessions in the playoffs | panel column | share | level |
-| `row_possessions` | possessions behind the row | panel column | possessions | level |
-| `row_seasons` | seasons the row covers | panel column | seasons | level |
-| `season_from_2017` | 1 for a season from 2017 on, 0 before (an era marker) | season >= 2017 | flag | level |
-| `self_creation_per100` | self-created shot attempts (the owner's self-creation) | (shot attempts + 0.44 x free-throw attempts) x (1 - share assisted), share assisted = 0.73 - 0.03 x assists - 0.01 x field goals made, clipped to 0-1; uncentred rates | per 100 possessions | level |
-| `assisted_makes_inside_per100_uncentred` | assisted makes, rim and paint | padded per-game count per 100, level kept | per 100 possessions | level |
-| `assisted_makes_two_per100_uncentred` | assisted makes, other twos | padded per-game count per 100, level kept | per 100 possessions | level |
-| `assisted_makes_three_per100_uncentred` | assisted makes, threes | padded per-game count per 100, level kept | per 100 possessions | level |
-| `expected_assisted_makes_inside_per100_uncentred` | expected assisted makes from the season's cell shares, rim and paint | padded per-game count per 100, level kept | per 100 possessions | level |
-| `expected_assisted_makes_two_per100_uncentred` | expected assisted makes from the season's cell shares, other twos | padded per-game count per 100, level kept | per 100 possessions | level |
-| `expected_assisted_makes_three_per100_uncentred` | expected assisted makes from the season's cell shares, threes | padded per-game count per 100, level kept | per 100 possessions | level |
-| `misses_inside_per100_uncentred` | missed shots, rim and paint | padded per-game count per 100, level kept | per 100 possessions | level |
-| `misses_two_per100_uncentred` | missed shots, other twos | padded per-game count per 100, level kept | per 100 possessions | level |
-| `misses_three_per100_uncentred` | missed shots, threes | padded per-game count per 100, level kept | per 100 possessions | level |
-| `expected_passed_misses_inside_per100_uncentred` | misses expected off a pass, before his lean, rim and paint | padded per-game count per 100, level kept | per 100 possessions | level |
-| `expected_passed_misses_two_per100_uncentred` | misses expected off a pass, before his lean, other twos | padded per-game count per 100, level kept | per 100 possessions | level |
-| `expected_passed_misses_three_per100_uncentred` | misses expected off a pass, before his lean, threes | padded per-game count per 100, level kept | per 100 possessions | level |
-| `trips_without_make_per100_uncentred` | free-throw trips without a make, technicals out | padded per-game count per 100, level kept | per 100 possessions | level |
-| `expected_passed_trips_per100_uncentred` | trips without a make expected off a pass, before his lean | padded per-game count per 100, level kept | per 100 possessions | level |
-| `unassisted_makes_inside_per100_uncentred` | unassisted makes, rim and paint | padded per-game count per 100, level kept | per 100 possessions | level |
-| `unassisted_makes_two_per100_uncentred` | unassisted makes, other twos | padded per-game count per 100, level kept | per 100 possessions | level |
-| `unassisted_makes_three_per100_uncentred` | unassisted makes, threes | padded per-game count per 100, level kept | per 100 possessions | level |
-| `late_clock_attempts_per100_uncentred` | shot attempts 20 seconds or more into the possession | padded per-game count per 100, level kept | per 100 possessions | level |
-| `transition_attempts_per100_uncentred` | shot attempts in transition, within 7 seconds of a defensive rebound or a steal | padded per-game count per 100, level kept | per 100 possessions | level |
-| `putback_attempts_per100_uncentred` | putback attempts, within 3 seconds of his team's offensive rebound | padded per-game count per 100, level kept | per 100 possessions | level |
-| `and_ones_per100_uncentred` | and-ones | padded per-game count per 100, level kept | per 100 possessions | level |
-| `unassisted_makes_inside_per100` | unassisted makes, rim and paint | padded per-game count per 100 minus the league level | per 100 possessions | centred |
-| `unassisted_makes_two_per100` | unassisted makes, other twos | padded per-game count per 100 minus the league level | per 100 possessions | centred |
-| `unassisted_makes_three_per100` | unassisted makes, threes | padded per-game count per 100 minus the league level | per 100 possessions | centred |
-| `late_clock_attempts_per100` | shot attempts 20 seconds or more into the possession | padded per-game count per 100 minus the league level | per 100 possessions | centred |
-| `transition_attempts_per100` | shot attempts in transition, within 7 seconds of a defensive rebound or a steal | padded per-game count per 100 minus the league level | per 100 possessions | centred |
-| `putback_attempts_per100` | putback attempts, within 3 seconds of his team's offensive rebound | padded per-game count per 100 minus the league level | per 100 possessions | centred |
-| `and_ones_per100` | and-ones | padded per-game count per 100 minus the league level | per 100 possessions | centred |
-| `trips_without_make_per100` | free-throw trips without a make, technicals out | padded per-game count per 100 minus the league level | per 100 possessions | centred |
-| `goaltends_per100` | defensive goaltending violations called on him | padded per-game count per 100 minus the league level | per 100 possessions | centred |
-| `shooting_fouls_per100` | shooting fouls he commits, blocking fouls on a shooter included | padded per-game count per 100 minus the league level | per 100 possessions | centred |
-| `loose_ball_fouls_per100` | loose-ball fouls he commits | padded per-game count per 100 minus the league level | per 100 possessions | centred |
-| `shots_blocked_per100` | his missed shots that were blocked | padded per-game count per 100 minus the league level | per 100 possessions | centred |
-| `three_shot_trips_per100` | three-shot free-throw trips he earns: fouled shooting a three | padded per-game count per 100 minus the league level | per 100 possessions | centred |
-| `goaltends_over_expected_from_blocks_per100` | goaltends over those expected from his blocks | goaltends_per100 minus a line on blocks_per100, fitted on the season's players on his side, weighted by possessions | per 100 possessions | centred |
-| `blocks_over_expected_from_fouls_per100` | blocks over those expected from his personal fouls | blocks_per100 minus a line on fouls_per100, fitted on the season's players on his side, weighted by possessions | per 100 possessions | centred |
-| `steals_over_expected_from_fouls_per100` | steals over those expected from his personal fouls | steals_per100 minus a line on fouls_per100, fitted on the season's players on his side, weighted by possessions | per 100 possessions | centred |
-| `shots_blocked_over_expected_from_attempts_per100` | his shots blocked over those expected from his twos and threes taken | shots_blocked_per100 minus a line on twos_made_per100 + twos_missed_per100 and threes_made_per100 + threes_missed_per100, fitted on the season's players on his side, weighted by possessions | per 100 possessions | centred |
-| `three_shot_trips_over_expected_from_threes_per100` | three-shot free-throw trips over those expected from his threes taken | three_shot_trips_per100 minus a line on threes_made_per100 + threes_missed_per100, fitted on the season's players on his side, weighted by possessions | per 100 possessions | centred |
-| `assists_over_expected_from_turnovers_per100` | assists over those expected from his turnovers | assists_per100 minus a line on turnovers_per100, fitted on the season's players on his side, weighted by possessions | per 100 possessions | centred |
-| `turnovers_over_expected_from_attempts_and_assists_per100` | turnovers over those expected from his true-shooting attempts and assists | turnovers_per100 minus a line on twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 0.44 free_throws_made_per100 + 0.44 free_throws_missed_per100 and assists_per100, fitted on the season's players on his side, weighted by possessions | per 100 possessions | centred |
-| `self_creation_estimated_per100` | self-created shot attempts, passes estimated (experiment 111) | unassisted makes + misses not off a pass + free-throw trips without a make not off a pass; off a pass = his lean x the expected passes, by spot group, held to his count; lean = (assisted makes + 0.5) / (expected assisted makes + 0.5); uncentred rates | per 100 possessions | level |
-| `attackers_guarded_height_in` | height of the attackers he guarded | mean over the fit games' per-game matchup pairs (data/matchups.py), weighted by matchup possessions, padded toward his bin by a split-half pad k | inches | level |
-| `defenders_faced_height_in` | height of the defenders who guarded him | mean over the fit games' per-game matchup pairs (data/matchups.py), weighted by matchup possessions, padded toward his bin by a split-half pad k | inches | level |
-| `attackers_guarded_self_creation_per100` | self-creation of the attackers he guarded | mean over the fit games' per-game matchup pairs (data/matchups.py), weighted by matchup possessions, padded toward his bin by a split-half pad k | per 100 possessions | level |
-| `attackers_guarded_total_creation_per100` | total creation of the attackers he guarded: self-creation plus estimated potential assists | mean over the fit games' per-game matchup pairs (data/matchups.py), weighted by matchup possessions, padded toward his bin by a split-half pad k | per 100 possessions | level |
-| `top_self_creator_guarded_share` | share of his defence on the opposing team's top self-creator of the game | mean over the fit games' per-game matchup pairs (data/matchups.py), weighted by matchup possessions, padded toward his bin by a split-half pad k | fraction | level |
-| `top_total_creator_guarded_share` | share of his defence on the opposing team's top total creator of the game | mean over the fit games' per-game matchup pairs (data/matchups.py), weighted by matchup possessions, padded toward his bin by a split-half pad k | fraction | level |
-| `top_self_creator_guarded_share_on_shared_floor` | share of his time on the floor with the opposing top self-creator spent guarding him | mean over the fit games' per-game matchup pairs (data/matchups.py), weighted by the shared floor with the opposing top creator, in matchup possessions, padded toward his bin by a split-half pad k | fraction | level |
-| `top_total_creator_guarded_share_on_shared_floor` | share of his time on the floor with the opposing top total creator spent guarding him | mean over the fit games' per-game matchup pairs (data/matchups.py), weighted by the shared floor with the opposing top creator, in matchup possessions, padded toward his bin by a split-half pad k | fraction | level |
+| name | shipped | meaning | formula | unit | scale |
+|---|---|---|---|---|---|
+| `threes_made_per100` |  | made threes | padded rate minus the league level | per 100 possessions | centered |
+| `threes_missed_per100` |  | missed threes | padded rate minus the league level | per 100 possessions | centered |
+| `twos_made_per100` |  | made twos | padded rate minus the league level | per 100 possessions | centered |
+| `twos_missed_per100` |  | missed twos | padded rate minus the league level | per 100 possessions | centered |
+| `free_throws_made_per100` |  | made free throws | padded rate minus the league level | per 100 possessions | centered |
+| `free_throws_missed_per100` |  | missed free throws | padded rate minus the league level | per 100 possessions | centered |
+| `off_rebounds_per100` | offense | offensive rebounds | padded rate minus the league level | per 100 possessions | centered |
+| `def_rebounds_per100` | defense | defensive rebounds | padded rate minus the league level | per 100 possessions | centered |
+| `assists_per100` | offense | assists | padded rate minus the league level | per 100 possessions | centered |
+| `turnovers_per100` |  | turnovers | padded rate minus the league level | per 100 possessions | centered |
+| `steals_per100` | both | steals | padded rate minus the league level | per 100 possessions | centered |
+| `blocks_per100` | defense | blocks | padded rate minus the league level | per 100 possessions | centered |
+| `fouls_per100` |  | personal fouls | padded rate minus the league level | per 100 possessions | centered |
+| `threes_made_per100_uncentred` |  | made threes, league level kept | padded rate | per 100 possessions | level |
+| `threes_missed_per100_uncentred` |  | missed threes, league level kept | padded rate | per 100 possessions | level |
+| `twos_made_per100_uncentred` |  | made twos, league level kept | padded rate | per 100 possessions | level |
+| `twos_missed_per100_uncentred` |  | missed twos, league level kept | padded rate | per 100 possessions | level |
+| `free_throws_made_per100_uncentred` |  | made free throws, league level kept | padded rate | per 100 possessions | level |
+| `free_throws_missed_per100_uncentred` |  | missed free throws, league level kept | padded rate | per 100 possessions | level |
+| `off_rebounds_per100_uncentred` |  | offensive rebounds, league level kept | padded rate | per 100 possessions | level |
+| `def_rebounds_per100_uncentred` |  | defensive rebounds, league level kept | padded rate | per 100 possessions | level |
+| `assists_per100_uncentred` |  | assists, league level kept | padded rate | per 100 possessions | level |
+| `turnovers_per100_uncentred` |  | turnovers, league level kept | padded rate | per 100 possessions | level |
+| `steals_per100_uncentred` |  | steals, league level kept | padded rate | per 100 possessions | level |
+| `blocks_per100_uncentred` |  | blocks, league level kept | padded rate | per 100 possessions | level |
+| `fouls_per100_uncentred` |  | personal fouls, league level kept | padded rate | per 100 possessions | level |
+| `def_rebounds_of_free_throws_per100` |  | defensive rebounds of missed free throws | padded play-by-play count per 100 minus the league level | per 100 possessions | centered |
+| `def_rebounds_of_threes_per100` |  | defensive rebounds of missed threes | padded play-by-play count per 100 minus the league level | per 100 possessions | centered |
+| `def_rebounds_of_rim_twos_per100` |  | defensive rebounds of missed twos within 6 ft of the rim, or logged without a location | padded play-by-play count per 100 minus the league level | per 100 possessions | centered |
+| `def_rebounds_of_outside_twos_per100` |  | defensive rebounds of missed twos from beyond 6 ft | padded play-by-play count per 100 minus the league level | per 100 possessions | centered |
+| `bad_pass_steals_per100` |  | steals of a pass (a bad-pass turnover) | padded play-by-play count per 100 minus the league level | per 100 possessions | centered |
+| `lost_ball_steals_per100` |  | steals of the ball from a dribbler (a lost-ball turnover) | padded play-by-play count per 100 minus the league level | per 100 possessions | centered |
+| `assisted_points_per100` |  | points from assisted field goals | padded play-by-play count per 100 minus the league level | per 100 possessions | centered |
+| `unassisted_points_per100` |  | points from unassisted field goals | padded play-by-play count per 100 minus the league level | per 100 possessions | centered |
+| `corner_threes_attempted_per100` |  | corner threes attempted | padded play-by-play count per 100 minus the league level | per 100 possessions | centered |
+| `above_break_threes_attempted_per100` |  | above-the-break threes attempted | padded play-by-play count per 100 minus the league level | per 100 possessions | centered |
+| `assisted_threes_made_per100` |  | assisted made threes | padded play-by-play count per 100 minus the league level | per 100 possessions | centered |
+| `unassisted_threes_made_per100` |  | unassisted made threes | padded play-by-play count per 100 minus the league level | per 100 possessions | centered |
+| `russell_blocks_per100` |  | blocks his team recovered (Russell blocks) | padded play-by-play count per 100 minus the league level | per 100 possessions | centered |
+| `rim_blocks_per100` |  | blocks of twos within 6 ft of the rim, or logged without a location | padded play-by-play count per 100 minus the league level | per 100 possessions | centered |
+| `mid_range_blocks_per100` |  | blocks of twos from beyond 6 ft | padded play-by-play count per 100 minus the league level | per 100 possessions | centered |
+| `three_point_blocks_per100` |  | blocks of threes | padded play-by-play count per 100 minus the league level | per 100 possessions | centered |
+| `offensive_fouls_per100` |  | offensive fouls committed | padded play-by-play count per 100 minus the league level | per 100 possessions | centered |
+| `stolen_turnovers_per100` |  | turnovers stolen by the defense (live-ball turnovers) | padded play-by-play count per 100 minus the league level | per 100 possessions | centered |
+| `assists_to_rim_per100` |  | assists on makes at the rim (within 6 ft, or logged without a location) | padded play-by-play count per 100 minus the league level | per 100 possessions | centered |
+| `assists_to_mid_range_per100` |  | assists on made twos from beyond 6 ft | padded play-by-play count per 100 minus the league level | per 100 possessions | centered |
+| `assists_to_corner_threes_per100` |  | assists on made corner threes | padded play-by-play count per 100 minus the league level | per 100 possessions | centered |
+| `assists_to_above_break_threes_per100` |  | assists on made above-the-break threes | padded play-by-play count per 100 minus the league level | per 100 possessions | centered |
+| `unassisted_points_per100_uncentred` |  | points from unassisted field goals, league level kept | padded play-by-play count per 100 | per 100 possessions | level |
+| `unassisted_threes_made_per100_uncentred` |  | unassisted made threes, league level kept | padded play-by-play count per 100 | per 100 possessions | level |
+| `drives_vs_league_avg` |  | drives to the basket | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `drive_points_vs_league_avg` |  | points scored on drives | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `potential_assists_vs_league_avg` |  | potential assists (passes that led to a shot) | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `passes_made_vs_league_avg` |  | passes made | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `touches_vs_league_avg` |  | touches of the ball | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `paint_touches_vs_league_avg` |  | touches in the paint | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `post_touches_vs_league_avg` |  | post touches | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `elbow_touches_vs_league_avg` |  | elbow touches | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `minutes_with_ball_vs_league_avg` |  | minutes with the ball in his hands | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `miles_on_offense_vs_league_avg` |  | miles run on offense | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `off_reb_chances_vs_league_avg` |  | offensive rebound chances (a rebound within his reach) | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `off_reb_contested_vs_league_avg` |  | contested offensive rebounds | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `def_reb_chances_vs_league_avg` |  | defensive rebound chances (a rebound within his reach) | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `def_reb_contested_vs_league_avg` |  | contested defensive rebounds | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `rim_shots_defended_vs_league_avg` |  | shots at the rim he was the closest defender on | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `twos_defended_vs_league_avg` |  | two-point shots he was the closest defender on | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `threes_defended_vs_league_avg` |  | three-point shots he was the closest defender on | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `miles_on_defense_vs_league_avg` |  | miles run on defense | tracking-dashboard season total per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `rim_makes_over_expected_per_shot` |  | shots made within 6 ft against him, above what the league's shooters make against those defenders, per shot faced | (makes - expected makes) / (shots faced + pad); the pad is the shots in data/dashboard_rates.py | makes per shot | centered |
+| `twos_makes_over_expected_per_shot` |  | two-point shots made against him above expected, per shot faced | (makes - expected makes) / (shots faced + pad); the pad is the shots in data/dashboard_rates.py | makes per shot | centered |
+| `threes_makes_over_expected_per_shot` |  | three-point shots made against him above expected, per shot faced | (makes - expected makes) / (shots faced + pad); the pad is the shots in data/dashboard_rates.py | makes per shot | centered |
+| `deflections_vs_league_avg` | defense | deflections | hustle box scores summed over the games, per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `contested_twos_vs_league_avg` | defense | contested two-point shots | hustle box scores summed over the games, per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `contested_threes_vs_league_avg` | defense | contested three-point shots | hustle box scores summed over the games, per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `charges_drawn_vs_league_avg` | defense | charges drawn | hustle box scores summed over the games, per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `loose_balls_recovered_vs_league_avg` | both | loose balls recovered | hustle box scores summed over the games, per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `def_box_outs_vs_league_avg` | defense | defensive box-outs | hustle box scores summed over the games, per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `off_box_outs_vs_league_avg` | offense | offensive box-outs | hustle box scores summed over the games, per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `screen_assists_vs_league_avg` | offense | screen assists | hustle box scores summed over the games, per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `screen_assist_points_vs_league_avg` | offense | points from his screen assists | hustle box scores summed over the games, per 100 possessions, padded, (rate - league rate) / league rate | fraction above the league average | centered |
+| `deflections_vs_league_avg_shuffled` |  | deflections, shuffled among the season's players (a placebo) | the hustle column with each season's player profiles shuffled jointly, missing kept missing | fraction above the league average | centered |
+| `contested_twos_vs_league_avg_shuffled` |  | contested two-point shots, shuffled among the season's players (a placebo) | the hustle column with each season's player profiles shuffled jointly, missing kept missing | fraction above the league average | centered |
+| `contested_threes_vs_league_avg_shuffled` |  | contested three-point shots, shuffled among the season's players (a placebo) | the hustle column with each season's player profiles shuffled jointly, missing kept missing | fraction above the league average | centered |
+| `charges_drawn_vs_league_avg_shuffled` |  | charges drawn, shuffled among the season's players (a placebo) | the hustle column with each season's player profiles shuffled jointly, missing kept missing | fraction above the league average | centered |
+| `loose_balls_recovered_vs_league_avg_shuffled` |  | loose balls recovered, shuffled among the season's players (a placebo) | the hustle column with each season's player profiles shuffled jointly, missing kept missing | fraction above the league average | centered |
+| `def_box_outs_vs_league_avg_shuffled` |  | defensive box-outs, shuffled among the season's players (a placebo) | the hustle column with each season's player profiles shuffled jointly, missing kept missing | fraction above the league average | centered |
+| `off_box_outs_vs_league_avg_shuffled` |  | offensive box-outs, shuffled among the season's players (a placebo) | the hustle column with each season's player profiles shuffled jointly, missing kept missing | fraction above the league average | centered |
+| `screen_assists_vs_league_avg_shuffled` |  | screen assists, shuffled among the season's players (a placebo) | the hustle column with each season's player profiles shuffled jointly, missing kept missing | fraction above the league average | centered |
+| `screen_assist_points_vs_league_avg_shuffled` |  | points from his screen assists, shuffled among the season's players (a placebo) | the hustle column with each season's player profiles shuffled jointly, missing kept missing | fraction above the league average | centered |
+| `attackers_guarded_scoring_vs_league_avg` |  | the scoring of the attackers he guarded (points per matchup possession without the rows against him), against the league's | (attackers' points per matchup possession, each without his rows against the player, padded 50 possessions toward the league's, mean weighted by possessions - league rate) / league rate; the second sign-flipped | fraction above the league average | centered |
+| `defenders_faced_stinginess_vs_league_avg` |  | how stingy the defenders were who guarded him (points allowed per matchup possession without the rows against him, sign-flipped), against the league's | (attackers' points per matchup possession, each without his rows against the player, padded 50 possessions toward the league's, mean weighted by possessions - league rate) / league rate; the second sign-flipped | fraction above the league average | centered |
+| `points_per100` | both | points | 2 twos_made_per100 + 3 threes_made_per100 + free_throws_made_per100 | per 100 possessions | centered |
+| `shots_per100` | both | shot attempts | twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 | per 100 possessions | centered |
+| `free_throw_attempts_per100` | offense | free-throw attempts | free_throws_made_per100 + free_throws_missed_per100 | per 100 possessions | centered |
+| `three_point_attempts_per100` |  | three-point attempts | threes_made_per100 + threes_missed_per100 | per 100 possessions | centered |
+| `used_possessions_per100` | defense | possessions he finishes | twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 0.44 free_throws_made_per100 + 0.44 free_throws_missed_per100 + turnovers_per100 | per 100 possessions | centered |
+| `rebounds_per100` |  | rebounds | off_rebounds_per100 + def_rebounds_per100 | per 100 possessions | centered |
+| `steals_plus_blocks_per100` | defense | steals plus blocks | steals_per100 + blocks_per100 | per 100 possessions | centered |
+| `assists_minus_turnovers_per100` | offense | assists minus turnovers | assists_per100 - turnovers_per100 | per 100 possessions | centered |
+| `threes_minus_twos_attempted_per100` |  | threes minus twos taken | threes_made_per100 + threes_missed_per100 - twos_made_per100 - twos_missed_per100 | per 100 possessions | centered |
+| `potential_assists_estimated_per100` |  | potential assists, estimated from where the assists went | 1.656 assists_to_rim_per100 + 2.261 assists_to_mid_range_per100 + 2.057 assists_to_corner_threes_per100 + 2.503 assists_to_above_break_threes_per100 | per 100 possessions | centered |
+| `effective_fg_pct` | offense | effective field-goal % | (twos_made_per100 + 1.5 threes_made_per100 + 3 x 0.5) / (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 3), uncentered rates | fraction | level |
+| `true_shooting_pct` | both | true shooting % | (2 twos_made_per100 + 3 threes_made_per100 + free_throws_made_per100 + 6 x 0.54) / (2 twos_made_per100 + 2 twos_missed_per100 + 2 threes_made_per100 + 2 threes_missed_per100 + 0.88 free_throws_made_per100 + 0.88 free_throws_missed_per100 + 6), uncentered rates | fraction | level |
+| `three_point_attempt_share` | offense | share of shots that are threes | (threes_made_per100 + threes_missed_per100 + 3 x 0.25) / (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 3), uncentered rates | fraction | level |
+| `free_throws_per_shot` |  | free throws per shot | (free_throws_made_per100 + free_throws_missed_per100 + 3 x 0.25) / (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 3), uncentered rates | fraction | level |
+| `three_point_pct` |  | three-point % | (threes_made_per100 + 3 x 0.34) / (threes_made_per100 + threes_missed_per100 + 3), uncentered rates | fraction | level |
+| `two_point_pct` |  | two-point % | (twos_made_per100 + 3 x 0.48) / (twos_made_per100 + twos_missed_per100 + 3), uncentered rates | fraction | level |
+| `free_throw_pct` |  | free-throw % | (free_throws_made_per100 + 2 x 0.75) / (free_throws_made_per100 + free_throws_missed_per100 + 2), uncentered rates | fraction | level |
+| `assists_per_used_possession` |  | assists per possession used | (assists_per100 + 3 x 0.18) / (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 0.44 free_throws_made_per100 + 0.44 free_throws_missed_per100 + turnovers_per100 + 3), uncentered rates | fraction | level |
+| `turnovers_per_used_possession` |  | turnovers per possession used | (turnovers_per100 + 3 x 0.13) / (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 0.44 free_throws_made_per100 + 0.44 free_throws_missed_per100 + turnovers_per100 + 3), uncentered rates | fraction | level |
+| `off_rebound_share` | offense | offensive-rebound share of his rebounds | (off_rebounds_per100 + 3 x 0.22) / (off_rebounds_per100 + def_rebounds_per100 + 3), uncentered rates | fraction | level |
+| `effective_fg_pct_vs_league` |  | effective field-goal % above the league's | (twos_made_per100 + 1.5 threes_made_per100 - L x (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100)) / (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 3), uncentered rates; L the same ratio of the league's rates (each uncentered minus centered) | fraction | centered |
+| `true_shooting_pct_vs_league` |  | true shooting % above the league's | (2 twos_made_per100 + 3 threes_made_per100 + free_throws_made_per100 - L x (2 twos_made_per100 + 2 twos_missed_per100 + 2 threes_made_per100 + 2 threes_missed_per100 + 0.88 free_throws_made_per100 + 0.88 free_throws_missed_per100)) / (2 twos_made_per100 + 2 twos_missed_per100 + 2 threes_made_per100 + 2 threes_missed_per100 + 0.88 free_throws_made_per100 + 0.88 free_throws_missed_per100 + 6), uncentered rates; L the same ratio of the league's rates (each uncentered minus centered) | fraction | centered |
+| `three_point_attempt_share_vs_league` |  | share of shots that are threes above the league's | (threes_made_per100 + threes_missed_per100 - L x (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100)) / (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 3), uncentered rates; L the same ratio of the league's rates (each uncentered minus centered) | fraction | centered |
+| `free_throws_per_shot_vs_league` |  | free throws per shot above the league's | (free_throws_made_per100 + free_throws_missed_per100 - L x (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100)) / (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 3), uncentered rates; L the same ratio of the league's rates (each uncentered minus centered) | fraction | centered |
+| `three_point_pct_vs_league` |  | three-point % above the league's | (threes_made_per100 - L x (threes_made_per100 + threes_missed_per100)) / (threes_made_per100 + threes_missed_per100 + 3), uncentered rates; L the same ratio of the league's rates (each uncentered minus centered) | fraction | centered |
+| `two_point_pct_vs_league` |  | two-point % above the league's | (twos_made_per100 - L x (twos_made_per100 + twos_missed_per100)) / (twos_made_per100 + twos_missed_per100 + 3), uncentered rates; L the same ratio of the league's rates (each uncentered minus centered) | fraction | centered |
+| `free_throw_pct_vs_league` |  | free-throw % above the league's | (free_throws_made_per100 - L x (free_throws_made_per100 + free_throws_missed_per100)) / (free_throws_made_per100 + free_throws_missed_per100 + 2), uncentered rates; L the same ratio of the league's rates (each uncentered minus centered) | fraction | centered |
+| `assists_per_used_possession_vs_league` |  | assists per possession used above the league's | (assists_per100 - L x (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 0.44 free_throws_made_per100 + 0.44 free_throws_missed_per100 + turnovers_per100)) / (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 0.44 free_throws_made_per100 + 0.44 free_throws_missed_per100 + turnovers_per100 + 3), uncentered rates; L the same ratio of the league's rates (each uncentered minus centered) | fraction | centered |
+| `turnovers_per_used_possession_vs_league` |  | turnovers per possession used above the league's | (turnovers_per100 - L x (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 0.44 free_throws_made_per100 + 0.44 free_throws_missed_per100 + turnovers_per100)) / (twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 0.44 free_throws_made_per100 + 0.44 free_throws_missed_per100 + turnovers_per100 + 3), uncentered rates; L the same ratio of the league's rates (each uncentered minus centered) | fraction | centered |
+| `off_rebound_share_vs_league` |  | offensive-rebound share of his rebounds above the league's | (off_rebounds_per100 - L x (off_rebounds_per100 + def_rebounds_per100)) / (off_rebounds_per100 + def_rebounds_per100 + 3), uncentered rates; L the same ratio of the league's rates (each uncentered minus centered) | fraction | centered |
+| `two_point_expected_pct` |  | difficulty of his twos | (shot_twos_expected_made + 50 league_two_point_pct) / (shot_twos_attempted + 50) | fraction | level |
+| `three_point_expected_pct` |  | difficulty of his threes | (shot_threes_expected_made + 50 league_three_point_pct) / (shot_threes_attempted + 50) | fraction | level |
+| `two_point_pct_over_expected` |  | two-point shot-making | (shot_twos_made - shot_twos_expected_made) / (shot_twos_attempted + 250) | makes per attempt | level |
+| `three_point_pct_over_expected` |  | three-point shot-making | (shot_threes_made - shot_threes_expected_made) / (shot_threes_attempted + 450) | makes per attempt | level |
+| `expected_points_per_shot` |  | expected points per shot | (2 shot_twos_expected_made + 3 shot_threes_expected_made + 100 league_points_per_shot) / (shot_twos_attempted + shot_threes_attempted + 100) | points | level |
+| `points_per_shot_over_expected` |  | points per shot above expected | (2 (shot_twos_made - shot_twos_expected_made) + 3 (shot_threes_made - shot_threes_expected_made)) / (shot_twos_attempted + shot_threes_attempted + 300) | points | level |
+| `possessions` |  | possessions behind the row: offensive on an offense row, defensive on a defense row | panel column | possessions | level |
+| `team_possession_share` | both | share of team possessions played | panel column | share | level |
+| `games_started_share` | defense | share of games started | panel column | share | level |
+| `age` |  | age | panel column | years | level |
+| `garbage_time_share` |  | share of possessions in garbage time | panel column | share | level |
+| `closeness` |  | how close his games were: mean of 1 / max(\|margin\|, 1) | panel column | 1 / points | level |
+| `mean_abs_margin` |  | average score gap while he played | panel column | points | level |
+| `shot_twos_attempted` |  | two-point attempts | panel column | attempts | level |
+| `shot_twos_made` |  | two-point makes | panel column | makes | level |
+| `shot_twos_expected_made` |  | expected two-point makes, league rates from his spots | panel column | makes | level |
+| `shot_threes_attempted` |  | three-point attempts | panel column | attempts | level |
+| `shot_threes_made` |  | three-point makes | panel column | makes | level |
+| `shot_threes_expected_made` |  | expected three-point makes, league rates from his spots | panel column | makes | level |
+| `league_two_point_pct` |  | league two-point % | panel column | fraction | level |
+| `league_three_point_pct` |  | league three-point % | panel column | fraction | level |
+| `league_points_per_shot` |  | league points per shot | panel column | points | level |
+| `seasons_before` |  | seasons played before this one | panel column | seasons | level |
+| `career_possessions_before_k` |  | career possessions before this season | panel column | thousands | level |
+| `age_at_first_season` |  | age entering the league | panel column | years | level |
+| `height_in` | defense | height | panel column | inches | level |
+| `weight_lb` | both | weight | panel column | pounds | level |
+| `draft_pick` |  | draft position | panel column | pick | level |
+| `seasons_with_team` |  | seasons with his current team | panel column | seasons | level |
+| `teams_this_season` |  | teams he played for this season | panel column | teams | level |
+| `seasons_before_from_debut` |  | seasons played before this one, counted from his debut (before 1997 too) | panel column | seasons | level |
+| `career_possessions_before_from_debut_k` |  | career possessions before this season, counted from his debut (before 1997 from his minutes) | panel column | thousands | level |
+| `age_at_debut` |  | age in his first NBA season (before 1997 too) | panel column | years | level |
+| `seasons_with_team_from_debut` |  | seasons with his current team, counted from his debut (before 1997 too) | panel column | seasons | level |
+| `on_court_scored_per100` |  | team points scored per 100, him on court | panel column | per 100 possessions | centered |
+| `on_court_allowed_per100` |  | team points allowed per 100, him on court | panel column | per 100 possessions | centered |
+| `on_court_off_possessions` |  | offensive possessions on court | panel column | possessions | level |
+| `on_court_def_possessions` |  | defensive possessions on court | panel column | possessions | level |
+| `off_court_scored_per100` |  | team points scored per 100, him off court | panel column | per 100 possessions | centered |
+| `off_court_allowed_per100` |  | team points allowed per 100, him off court | panel column | per 100 possessions | centered |
+| `off_court_off_possessions` |  | offensive possessions off court | panel column | possessions | level |
+| `off_court_def_possessions` |  | defensive possessions off court | panel column | possessions | level |
+| `on_minus_off_scored_per100` |  | on court minus off court, points scored | panel column | per 100 possessions | centered |
+| `on_minus_off_allowed_per100` |  | on court minus off court, points allowed | panel column | per 100 possessions | centered |
+| `playoff_share` |  | share of possessions in the playoffs | panel column | share | level |
+| `row_possessions` | both | possessions behind the row | panel column | possessions | level |
+| `row_seasons` | both | seasons the row covers | panel column | seasons | level |
+| `season_from_2017` |  | 1 for a season from 2017 on, 0 before (an era marker) | season >= 2017 | flag | level |
+| `self_creation_per100` | offense | self-created shot attempts (the owner's self-creation) | (shot attempts + 0.44 x free-throw attempts) x (1 - share assisted), share assisted = 0.73 - 0.03 x assists - 0.01 x field goals made, clipped to 0-1; uncentered rates | per 100 possessions | level |
+| `assisted_makes_inside_per100_uncentred` |  | assisted makes, rim and paint | padded per-game count per 100, level kept | per 100 possessions | level |
+| `assisted_makes_two_per100_uncentred` |  | assisted makes, other twos | padded per-game count per 100, level kept | per 100 possessions | level |
+| `assisted_makes_three_per100_uncentred` |  | assisted makes, threes | padded per-game count per 100, level kept | per 100 possessions | level |
+| `expected_assisted_makes_inside_per100_uncentred` |  | expected assisted makes from the season's cell shares, rim and paint | padded per-game count per 100, level kept | per 100 possessions | level |
+| `expected_assisted_makes_two_per100_uncentred` |  | expected assisted makes from the season's cell shares, other twos | padded per-game count per 100, level kept | per 100 possessions | level |
+| `expected_assisted_makes_three_per100_uncentred` |  | expected assisted makes from the season's cell shares, threes | padded per-game count per 100, level kept | per 100 possessions | level |
+| `misses_inside_per100_uncentred` |  | missed shots, rim and paint | padded per-game count per 100, level kept | per 100 possessions | level |
+| `misses_two_per100_uncentred` |  | missed shots, other twos | padded per-game count per 100, level kept | per 100 possessions | level |
+| `misses_three_per100_uncentred` |  | missed shots, threes | padded per-game count per 100, level kept | per 100 possessions | level |
+| `expected_passed_misses_inside_per100_uncentred` |  | misses expected off a pass, before his lean, rim and paint | padded per-game count per 100, level kept | per 100 possessions | level |
+| `expected_passed_misses_two_per100_uncentred` |  | misses expected off a pass, before his lean, other twos | padded per-game count per 100, level kept | per 100 possessions | level |
+| `expected_passed_misses_three_per100_uncentred` |  | misses expected off a pass, before his lean, threes | padded per-game count per 100, level kept | per 100 possessions | level |
+| `trips_without_make_per100_uncentred` |  | free-throw trips without a make, technicals out | padded per-game count per 100, level kept | per 100 possessions | level |
+| `expected_passed_trips_per100_uncentred` |  | trips without a make expected off a pass, before his lean | padded per-game count per 100, level kept | per 100 possessions | level |
+| `unassisted_makes_inside_per100_uncentred` |  | unassisted makes, rim and paint | padded per-game count per 100, level kept | per 100 possessions | level |
+| `unassisted_makes_two_per100_uncentred` |  | unassisted makes, other twos | padded per-game count per 100, level kept | per 100 possessions | level |
+| `unassisted_makes_three_per100_uncentred` |  | unassisted makes, threes | padded per-game count per 100, level kept | per 100 possessions | level |
+| `late_clock_attempts_per100_uncentred` |  | shot attempts 20 seconds or more into the possession | padded per-game count per 100, level kept | per 100 possessions | level |
+| `transition_attempts_per100_uncentred` |  | shot attempts in transition, within 7 seconds of a defensive rebound or a steal | padded per-game count per 100, level kept | per 100 possessions | level |
+| `putback_attempts_per100_uncentred` |  | putback attempts, within 3 seconds of his team's offensive rebound | padded per-game count per 100, level kept | per 100 possessions | level |
+| `and_ones_per100_uncentred` |  | and-ones | padded per-game count per 100, level kept | per 100 possessions | level |
+| `unassisted_makes_inside_per100` |  | unassisted makes, rim and paint | padded per-game count per 100 minus the league level | per 100 possessions | centered |
+| `unassisted_makes_two_per100` |  | unassisted makes, other twos | padded per-game count per 100 minus the league level | per 100 possessions | centered |
+| `unassisted_makes_three_per100` |  | unassisted makes, threes | padded per-game count per 100 minus the league level | per 100 possessions | centered |
+| `late_clock_attempts_per100` |  | shot attempts 20 seconds or more into the possession | padded per-game count per 100 minus the league level | per 100 possessions | centered |
+| `transition_attempts_per100` |  | shot attempts in transition, within 7 seconds of a defensive rebound or a steal | padded per-game count per 100 minus the league level | per 100 possessions | centered |
+| `putback_attempts_per100` |  | putback attempts, within 3 seconds of his team's offensive rebound | padded per-game count per 100 minus the league level | per 100 possessions | centered |
+| `and_ones_per100` |  | and-ones | padded per-game count per 100 minus the league level | per 100 possessions | centered |
+| `trips_without_make_per100` |  | free-throw trips without a make, technicals out | padded per-game count per 100 minus the league level | per 100 possessions | centered |
+| `goaltends_per100` |  | defensive goaltending violations called on him | padded per-game count per 100 minus the league level | per 100 possessions | centered |
+| `shooting_fouls_per100` |  | shooting fouls he commits, blocking fouls on a shooter included | padded per-game count per 100 minus the league level | per 100 possessions | centered |
+| `loose_ball_fouls_per100` |  | loose-ball fouls he commits | padded per-game count per 100 minus the league level | per 100 possessions | centered |
+| `shots_blocked_per100` |  | his missed shots that were blocked | padded per-game count per 100 minus the league level | per 100 possessions | centered |
+| `three_shot_trips_per100` |  | three-shot free-throw trips he earns: fouled shooting a three | padded per-game count per 100 minus the league level | per 100 possessions | centered |
+| `goaltends_over_expected_from_blocks_per100` |  | goaltends over those expected from his blocks | goaltends_per100 minus a line on blocks_per100, fitted on the season's players on his side, weighted by possessions | per 100 possessions | centered |
+| `blocks_over_expected_from_fouls_per100` |  | blocks over those expected from his personal fouls | blocks_per100 minus a line on fouls_per100, fitted on the season's players on his side, weighted by possessions | per 100 possessions | centered |
+| `steals_over_expected_from_fouls_per100` |  | steals over those expected from his personal fouls | steals_per100 minus a line on fouls_per100, fitted on the season's players on his side, weighted by possessions | per 100 possessions | centered |
+| `shots_blocked_over_expected_from_attempts_per100` |  | his shots blocked over those expected from his twos and threes taken | shots_blocked_per100 minus a line on twos_made_per100 + twos_missed_per100 and threes_made_per100 + threes_missed_per100, fitted on the season's players on his side, weighted by possessions | per 100 possessions | centered |
+| `three_shot_trips_over_expected_from_threes_per100` |  | three-shot free-throw trips over those expected from his threes taken | three_shot_trips_per100 minus a line on threes_made_per100 + threes_missed_per100, fitted on the season's players on his side, weighted by possessions | per 100 possessions | centered |
+| `assists_over_expected_from_turnovers_per100` |  | assists over those expected from his turnovers | assists_per100 minus a line on turnovers_per100, fitted on the season's players on his side, weighted by possessions | per 100 possessions | centered |
+| `turnovers_over_expected_from_attempts_and_assists_per100` |  | turnovers over those expected from his true-shooting attempts and assists | turnovers_per100 minus a line on twos_made_per100 + twos_missed_per100 + threes_made_per100 + threes_missed_per100 + 0.44 free_throws_made_per100 + 0.44 free_throws_missed_per100 and assists_per100, fitted on the season's players on his side, weighted by possessions | per 100 possessions | centered |
+| `self_creation_estimated_per100` |  | self-created shot attempts, passes estimated (experiment 111) | unassisted makes + misses not off a pass + free-throw trips without a make not off a pass; off a pass = his lean x the expected passes, by spot group, held to his count; lean = (assisted makes + 0.5) / (expected assisted makes + 0.5); uncentered rates | per 100 possessions | level |
+| `attackers_guarded_height_in` |  | height of the attackers he guarded | mean over the fit games' per-game matchup pairs (data/matchups.py), weighted by matchup possessions, padded toward his bin by a split-half pad k | inches | level |
+| `defenders_faced_height_in` |  | height of the defenders who guarded him | mean over the fit games' per-game matchup pairs (data/matchups.py), weighted by matchup possessions, padded toward his bin by a split-half pad k | inches | level |
+| `attackers_guarded_self_creation_per100` |  | self-creation of the attackers he guarded | mean over the fit games' per-game matchup pairs (data/matchups.py), weighted by matchup possessions, padded toward his bin by a split-half pad k | per 100 possessions | level |
+| `attackers_guarded_total_creation_per100` |  | total creation of the attackers he guarded: self-creation plus estimated potential assists | mean over the fit games' per-game matchup pairs (data/matchups.py), weighted by matchup possessions, padded toward his bin by a split-half pad k | per 100 possessions | level |
+| `top_self_creator_guarded_share` |  | share of his defense on the opposing team's top self-creator of the game | mean over the fit games' per-game matchup pairs (data/matchups.py), weighted by matchup possessions, padded toward his bin by a split-half pad k | fraction | level |
+| `top_total_creator_guarded_share` |  | share of his defense on the opposing team's top total creator of the game | mean over the fit games' per-game matchup pairs (data/matchups.py), weighted by matchup possessions, padded toward his bin by a split-half pad k | fraction | level |
+| `top_self_creator_guarded_share_on_shared_floor` |  | share of his time on the floor with the opposing top self-creator spent guarding him | mean over the fit games' per-game matchup pairs (data/matchups.py), weighted by the shared floor with the opposing top creator, in matchup possessions, padded toward his bin by a split-half pad k | fraction | level |
+| `top_total_creator_guarded_share_on_shared_floor` |  | share of his time on the floor with the opposing top total creator spent guarding him | mean over the fit games' per-game matchup pairs (data/matchups.py), weighted by the shared floor with the opposing top creator, in matchup possessions, padded toward his bin by a split-half pad k | fraction | level |
 <!-- end generated -->
