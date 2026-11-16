@@ -40,8 +40,8 @@ robots ... + please give Nathan some credit").  DECISIONS.md, "The cleanup of 20
   Box Adj has its own section everywhere; the swap adjustment is written as off; the build recipe builds Box Adj's line.
   `tests/test_docs.py` fails when a doc leaves out a check or a module, or names a stale setting or incumbent.
 - **Code that lost its test removed** (the owner: "Take all three out"): the game-by-game network prior (experiments
-  114-117), the Kumo prior (118), the elastic-net blend (121-122), and `openrapm site --decomposition`, the vanilla
-  page's writer.  About 4,300 lines.  All of it is readable at the tag `archive/research-2026-11`.  A saved model file
+  114-117), the Kumo prior (118), the elastic-net blend (121-122), and the site command's writer for the retired
+  vanilla RAPM page.  About 4,300 lines.  All of it is readable at the tag `archive/research-2026-11`.  A saved model file
   of a game-by-game build is refused by name.  The proof that no number moved is in DECISIONS.md.
 - **Comments, docstrings and help text** to what the code does, in American English; proven by comparing every touched
   file's syntax tree with docstrings and help text blanked (`scratch/2026-11-16_cleanup/same_code.py`).
