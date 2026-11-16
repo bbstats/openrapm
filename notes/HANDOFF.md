@@ -1,9 +1,9 @@
 # Handoff
 
 **What this file is.**  Where the work stands, what waits on the owner, and the commands a session runs.  Rewritten on
-2026-11-09, at the end of the improvements round; the file before it, a thousand lines of dated history, is in git at
-f4a5cba.  `DECISIONS.md` is the permanent record and carries every number quoted here; read its measurement traps
-before trusting a number.  `README.md` says what OpenRAPM is, `PIPELINE.md` how each step works, `CONTRIBUTING.md` the
+2026-11-16, at the end of the cleanup pass; the file before it is in git at 2c26966.  `DECISIONS.md` is the permanent
+record and carries every number quoted here; read its measurement traps before trusting a number.  `README.md` says
+what OpenRAPM is, `PIPELINE.md` how each part works, `GLOSSARY.md` what each word means, `CONTRIBUTING.md` the
 writing rules, `CLAUDE.md` the owner's standing rules.
 
 ## Talking to the owner
@@ -24,121 +24,65 @@ writing rules, `CLAUDE.md` the owner's standing rules.
 - I write no prose for the site.  Wording is the owner's; a page change of mine adds data, a column, or a line the
   owner has already approved elsewhere.
 
-## Where it stands, 2026-11-10 midday
+## Where it stands, 2026-11-16
 
-DECISIONS.md holds every number: "Experiment 140, a third read", "Experiment 141", "Check 167", "The Power table's
-width", "The link preview and the tab icon".
+**The cleanup pass** (the owner: "clean up the documentation / readme / and do a general cleanup pass", then "a strict
+robots ... + please give Nathan some credit").  DECISIONS.md, "The cleanup of 2026-11-16", holds every number.
 
-- **Experiment 141 ADOPTED and PUBLISHED 2026-11-10, 8:46 PM, main 0b8c8ba** (the owner: "adopt and update the
-  site").  The shipped half-life is 8; the published tables are the full build `product141`'s, the ones before it
-  `outputs/season_ratings_product_before_fade141*`; step 4 reads `fade141_early,fade141_within` and `fade141_k10`;
-  the chain's incumbent is `fade141`, its noise control still `noise_zones139` until `noise_fade141` is read.  The
-  Power weights stay as refitted on 2026-11-09: the refit on the new build misses its rule at 62.5%, z +1.004, its
-  weights within 0.02 of those in place.  What the build showed before the verdict:  Box Adj's line with each training season counted 0.5
-  to the power of its distance from the rated one over 8 seasons (`PriorSettings.second_prior_halflife`, 0 as
-  shipped; `--second-prior-halflife 8`).  Full build `fade141`: within season -0.133 over the 30 seasons, z -5.26, 25
-  of 30; by era -0.195, -0.040 and -0.165; the noise control -0.009.  Year over year holds, team-game z +1.25 as
-  built and -1.04 at matched width.  The 2026 top 20 keeps its first three; centers up, guards down, a median 0.12
-  among regulars.  To adopt: the setting at 8, folds `fade141_early,fade141_within`, `fade141_k10` built first, the
-  chain's names, the product build of 1997 to 2027, WOSA's regular-season ratings, the Power weights refitted by
-  check 166 on the new build, Similarity and the site's files, a dry run, a noise control after.
-- **Check 167: a booster finds something Box Adj's line leaves.**  ChimeraBoost at its defaults, fitted on what each
-  player's prior should move by at the line's own solution and added to the line as one more input: -0.100 on the
-  read from saved sums, z -4.22, 21 of 30, every era; -0.115 with other random draws; +0.004 with the targets
-  shuffled.  In the line's place a booster cannot be solved jointly and falls 1.6 short.  Nothing built.  The tool
-  stays: `outputs/second_prior/zones139_players/`, 3.1 GB, each fold's sums with one column per player
-  (`scratch/2026-11-10_boost_vs_line/player_sums.py`), so any number per player is scored on the within-season test
-  in minutes (`boost_vs_line.py`).
-- **The site.**  The tab icon and the picture a shared link shows are live, with no description until the owner
-  writes the sentence.  The Power table is as wide as its columns from 720 pixels up, e71b6bc: a team's name sits 92
-  to 190 pixels from its numbers where it sat 320 to 417, and opening a team moves no column.
-- **A site fix beside a running build** goes out from a second checkout of main: `git worktree add --detach
-  A:/code/spmm_sitefix origin/main`, the edit and its checks there, with `PYTHONPATH` at that checkout's `src`, the
-  push from there, `git worktree remove`, and the working branch merges main once the build is done.
-
-## Where it stood, 2026-11-09 night: the improvements round
-
-The owner: "improvements, go."  DECISIONS.md, "The improvements round of 2026-11-09", holds every number.  The owner's
-four answers: the first experiment "Box Adj's weights"; what may go live without asking again, "Every fix that passes";
-a failed morning reaches the owner by "Phone push"; the site additions "Date on Ratings", "Faster first load" and "Link
-preview and icon".
-
-**Live since tonight, no rating moved.**
-
-- **Similarity shows the published ratings again.**  It had shown the ratings of 2026-11-04 for three days: the
-  five-zone change went live through the morning job, which did not write Similarity's files.  The job now rebuilds them
-  on any morning the finished seasons' ratings changed.
-- **main is the working tree's code, and GitHub's tests are green**, for the first time since 2026-11-06.  15 pushes
-  in a row had failed.  `bash scripts/publish_check.sh` before every push runs what GitHub runs.
-- **The site.**  Find forgives a trailing space and a missing hyphen, apostrophe or period.  The Power tab no longer
-  comes in late and pushes the other tabs.  "Download CSV: this view" follows the screen.  The Ratings page opens on a
-  list file a quarter the size, 0.29 MB against 1.18 compressed, and says "through Nov 8, 2026" on the season in
-  progress.  On a phone the buttons and headers are 40 pixels.  The Similarity page says so when a file fails to load.
-- **The morning job** checks that no game is missing, is the only thing that may write the published tables, holds a
-  lock, sends a phone notice when it fails, and stops after the Finals.  Its log is 85 lines a stints step, not 3,300.
-
-**Published by the morning job of 2026-11-10, main b50097b, 6:18 AM**, with both changes below.  It was the first
-morning with the games check, the lock and the notice: 154 games in the log, none without stints, none whose points
-differ; the log 302 lines where the morning before wrote 3,509; GitHub's tests green; the 37 page checks pass on the
-live site; no Similarity file written, the pool being in step.
-
-- **WOSA reads the regular season alone** (2b71432).  The rating behind WOSA had read Box Adj's lineup inputs from
-  playoff stints too.  Every finished season rebuilt; no rating of the published table moved.  WOSA moves a median
-  0.026 wins and at most 0.85, Roy Hibbert 2014.  One season's leader changes: 2026, Gilgeous-Alexander 14.26 over
-  Jokić 14.10, where Jokić had led 14.227 to 14.225.  To take it back: the three backups named `*_before_wosafix*`
-  under `outputs/`, and revert 2b71432.
-- **The Power table's weights refitted on the ratings the page multiplies** (`params/power_forecast.json`).  The
-  weights of 2026-11-09 were fitted on ratings shrunk on their own early games; the page multiplies ratings under the
-  whole season's shrink.  Five points of the season now carry weights, the fifth at three quarters.  The registered
-  rule holds at both test days, at 62.5% of a season by a hundredth of a z; in 2017-2026 the line there is worse than
-  a fit at the day itself, z +2.30.  The defense multiplier through a tenth of a season is 1.75 to 1.88 where it was
-  1.20 to 1.25: the table's spread widens by a third, San Antonio +6.57 to +8.91, and its order holds, no team moving
-  more than 2 places.  The weights file before it is in git at 143e24d.
-
-**The experiment, Box Adj's weights: three reads, nothing built.**  From the saved sums of the shipped line.  No
-penalty and no count of nearest seasons passes the registered rule: a cut at the 16 nearest seasons gains 0.130 over
-all 30 seasons and loses 2007-2016 by 0.117.  A fade passes it at every half-life read, 4 to 24 seasons: each training
-season counted 0.5 to the power of its distance from the rated one over the half-life.  The rule picks 8: -0.207 over
-all 30, z -5.52, 26 of 30; by era -0.264, -0.031 and -0.326; 2024 to 2026 gain most, 2015 is worse at every
-half-life.  A read gives a direction and a rough size.  A full build is the owner's call; row 140b of the table.
+- **Live since 2026-11-16, main 9effe2d:** `docs/robots.txt` bars the 207 AI crawlers of the ai.robots.txt list at
+  be22abe from the whole site; search engines, Meta's link previews and Apple's search crawler stay allowed (the
+  owner's choice); Content-Signal search=yes, ai-input=no, ai-train=no.  Every page's footer carries the owner's line,
+  "Ratings by Nathan Walker. Use them with credit and a link to openrapm.com. No bulk copying or scraping.", and every
+  head the text-and-data-mining reservation.  `LICENSE-RATINGS.md` gives the ratings their own terms; the code stays
+  MIT.  `CITATION.cff`.  `data/external/impact_metrics_2526.csv`, other makers' ratings, untracked; `docs/progress.png`
+  and `progress.csv` deleted.
+- **Docs rewritten to what ships**: README, PIPELINE, GLOSSARY, CONTRIBUTING, this file, the held-back-games ledger.
+  Box Adj has its own section everywhere; the swap adjustment is written as off; the build recipe builds Box Adj's line.
+  `tests/test_docs.py` fails when a doc leaves out a check or a module, or names a stale setting or incumbent.
+- **Code that lost its test removed** (the owner: "Take all three out"): the game-by-game network prior (experiments
+  114-117), the Kumo prior (118), the elastic-net blend (121-122), and `openrapm site --decomposition`, the vanilla
+  page's writer.  About 4,300 lines.  All of it is readable at the tag `archive/research-2026-11`.  A saved model file
+  of a game-by-game build is refused by name.  The proof that no number moved is in DECISIONS.md.
+- **Comments, docstrings and help text** to what the code does, in American English; proven by comparing every touched
+  file's syntax tree with docstrings and help text blanked (`scratch/2026-11-16_cleanup/same_code.py`).
+- **The noise control on experiment 141** was read on 2026-11-11: `noise_fade141`, -0.013 on the within-season test,
+  paired z -1.41, 16 of 30.  The chain names it.
 
 ## Waiting on the owner
 
-1. **The phone notice.**  Install the ntfy app and subscribe to the topic in `outputs/daily/notify.conf`, given to the
-   owner in chat on 2026-11-09.  Until then a failure posts to a topic nobody reads.  A test line:
-   `bash scripts/daily_notify.sh "test"`.
-2. **The link preview's one sentence.**  The tab icon and the picture a shared link shows are on the site since
-   2026-11-10, on the owner's "link preview is good."  No description tag is written: the sentence under the name is
-   the owner's.  When it comes, one `description` and one `og:description` line in each of the six pages' heads, and
-   a line in `tests/test_site_pages.py`.
-3. **Whether to build a booster stage** on what Box Adj's line leaves, check 167's candidate.  And a Changelog row,
-   in the owner's words, for the recent-seasons weighting published 2026-11-10.
-4. **Changelog rows**, in the owner's words, for: the rookies button, WOSA, the page opening on the season in progress,
-   the Detail view, Detail's Leverage and WOSA columns, Similarity's search box, the Power page's one rating; and from
-   this round the Similarity correction, the WOSA correction and the Power table's new weights.
-5. **Page text that no longer matches the code.**  About: "Share of league games played", held at a quarter while a
+1. **Push the rest of the cleanup.**  The docs, the removals and the tests are on the branch `cleanup-2026-11-16`;
+   `A:/code/spmm` runs them.  The site part went live on the owner's word.
+2. **Google's AI answers.**  The robots file cannot keep the site out of the AI answers inside Google search; that is
+   the Search Console setting under Settings, "Search generative AI", in the owner's account, if it is live there.
+3. **Delete the old experiments' saved files?**  About 280 GB under `outputs/`: saved models 143 GB in 105 files, of
+   which `fade141`, `noise_fade141` and `padbins127` are today's (Box Adj's line was fitted on `padbins127`'s
+   held-back games); held-back games 61 GB in 255 folders, of which the `fade141_*` ones are today's; the input screens
+   87 GB.  And the old side checkouts `A:/code/spmm_gate`, `spmm_old`, `spmm_split`, `spmm_wosa`, `spmm_verify`, with
+   the merged branches `split-robust`, `ui-tweaks`, `wosa-detail`.
+4. **The phone notice.**  Install the ntfy app and subscribe to the topic in `outputs/daily/notify.conf`, given to the
+   owner in chat on 2026-11-09.  A test line: `bash scripts/daily_notify.sh "test"`.
+5. **The link preview's one sentence**, for the six pages' `description` and `og:description`.
+6. **Whether to build a booster stage** on what Box Adj's line leaves, check 167's candidate.
+7. **Changelog rows**, in the owner's words: the robots file and the credit line; the rookies button, WOSA, the page
+   opening on the season in progress, the Detail view, Detail's Leverage and WOSA columns, Similarity's search box, the
+   Power page's one rating, the Similarity and WOSA corrections and the Power table's new weights.
+8. **Page text that no longer matches the code.**  About: "Share of league games played", held at a quarter while a
    season is in progress; "vs league average" on the hustle rows only, though the box inputs are centered too; "All
-   stats use padding method" beside ten "Not padded" rows; a Changelog date of 2026-10-31 for an entry first live
-   2026-11-01.  Power: the column tips leave out the Last 10 row, the multipliers and blowout possessions counting
-   half.  Ratings: the Leverage tip says close games where the code compares moments inside each game.
-6. **`docs/progress.png` and `docs/progress.csv`**: linked from nowhere, reachable at openrapm.com, full of internal
-   labels.  Delete them?
-7. **Verdicts still open in the experiments table**: defense's boosters at 330 trees, a tie, recommended off; the
-   network and Kumo priors; self-creation with estimated passes; the play-by-play and matchup input screens; the team
-   rates without the direct plus-minus.  And whether to delete the saved boosters and builds of those not adopted,
-   about 15 GB under `outputs/second_prior/` and `outputs/prior_models_*.pkl`.
-8. **Sheet "OpenRAPM experiments", row 66**: a stray copy of the early-season padding row.  Clearing it was refused to
-   me as a write to an outside system; it takes one click.
-9. Older, still the owner's to ask for: EPM or xPM on the Bias page through a key; regular-season possessions beside
-   WOSA; a win-probability rule for garbage time; the ridge penalty read on the within-season test.
+   stats use padding method" beside ten "Not padded" rows.  Power: the column tips leave out the Last 10 row, the
+   multipliers and blowout possessions counting half.  Ratings: the Leverage tip says close games where the code
+   compares moments inside each game.
+9. **Verdicts still open in the experiments table**: defense's boosters at 330 trees, a tie, recommended off;
+   self-creation with estimated passes; the play-by-play and matchup input screens; the team rates without the direct
+   plus-minus.  The three removed priors' rows read not adopted.
+10. **Sheet "OpenRAPM experiments", row 66**: a stray copy of the early-season padding row; one click.
 
 ## What ships
 
 | part | plain name | module | as shipped |
 |---|---|---|---|
-| step 1 | the label | `rapm.py` | one RAPM per player over every season but the rated one; penalties 40,000 / 40,000 / 0; the defensive label un-shrunk |
-| step 2 | box-score prior | `box_prior.py` | LightGBM `lgb1_tune2`, linear leaves; inputs `hustle_no_three_pct_self_creation`; five player folds; 10 bags; part-season rows at a quarter, a half and three quarters |
-| step 2b | Box Adj | `second_prior.py`, `rating_line.py` | line `zones139_line` on `context_types_team_zones_centred`, 57 inputs an end, weights fitted on the within-season test through the ridge, team totals held, penalty 0.0001, each season it is fitted on counted half for every 8 seasons from the rated one; the Detail view's Box score column learned first (`box_first`) |
+| step 1 | the label | `rapm.py` | one RAPM per player over every finished season but the rated one; penalties 40,000 / 40,000 / 0; the defensive label un-shrunk |
+| step 2 | box-score prior | `box_prior.py` | LightGBM `lgb1_tune2`, linear leaves; inputs `hustle_no_three_pct_self_creation`, 18 a side; five player folds; 10 bags; part-season rows at a quarter, a half and three quarters |
+| between 2 and 3 | Box Adj | `second_prior.py`, `rating_line.py` | line `zones139_line` on `context_types_team_zones_centred`, 57 inputs an end, weights fitted on the within-season test through the ridge, team totals held, penalty 0.0001, each training season counted half for every 8 seasons from the rated one; the Detail view's Box score column learned first (`box_first`) |
 | step 3 | the rating | `prior_rapm.py` | RAPM pulled toward the prior, penalty 13,037; the season in progress holds its prior scales at the 8 nearest finished seasons' mean through a quarter of its season, then a straight line to its own at three quarters |
 | step 4 | the shrink | `prior_shrink.py` | both parts multiplied, 8 nearest fold seasons, folds `fade141_early,fade141_within`, read to a full season with `fade141_k10`; two layers, the within layer times 0.7663 on offense and 0.9968 on defense; defense factor 0.8682 before 2017, 0.8704 from 2017 |
 | step 5 | swap adjustment | `swap_adjust.py` | off: applied share 0 |
@@ -150,11 +94,13 @@ half-life.  A read gives a direction and a rough size.  A full build is the owne
 ## The morning job
 
 `scripts/daily_update.sh`, Task Scheduler "OpenRAPM daily update", 6:00 AM, from the working tree's code; about 13
-minutes.  README.md, "The season in progress, every morning", lists its commands and what protects it.
+minutes.  PIPELINE.md, "The morning job", lists its commands and what protects it.
 
-- **It runs the working tree.**  No edit under `src/` or `scripts/` between 5:50 and 7:30 AM.  After any change to
-  the job, the stints, the build or the site step: `PUBLISH=0 bash scripts/daily_update.sh`, 12 minutes, which writes
-  the site's files to `outputs/daily/site_dry` and says how it ended in `outputs/daily/last_dry.txt`.
+- **It runs the working tree.**  No edit under `src/` or `scripts/` of `A:/code/spmm` between 5:50 and 7:30 AM.  Work
+  that touches code goes in a second checkout, as the cleanup did, and reaches `A:/code/spmm` by one fast-forward once
+  proven.  After any change to the job, the stints, the build or the site step: `PUBLISH=0 bash
+  scripts/daily_update.sh`, 12 minutes, which writes the site's files to `outputs/daily/site_dry` and says how it
+  ended in `outputs/daily/last_dry.txt`.
 - **`outputs/daily/last.txt`** says how the last real morning ended; `outputs/daily/<date>.log` is its log.
 - **When it fails** the phone gets one line, and yesterday's ratings stay up.  A game that failed the games check has
   had its cached files removed and is fetched again by the next run.  A game whose points differ from its box score
@@ -166,15 +112,13 @@ minutes.  README.md, "The season in progress, every morning", lists its commands
 - **June 2027.**  The morning after the Finals the job stops after its ingest, `last.txt` reads "stopped", one notice.
   That day: `openrapm data hustle-games 2027 2027 --force`, `openrapm data matchup-games 2027 2027 --force`,
   `openrapm data panel --force`, `openrapm data panel --so-far 0.25,0.5,0.75 --force`, then a full build of every
-  season, the site's files, a refit of `params/power_forecast.json`, and the publish on the owner's word.  The last
-  Finals game reaches the site only through that build.  In October 2027 raise `last_season` in `config.yaml` and
-  `SEASON` in the job.
+  season, the site's files, a refit of `params/power_forecast.json`, and the publish on the owner's word.  In October
+  2027 raise `last_season` in `config.yaml` and `SEASON` in the job.
 - **The first playoff morning of 2027** is the WOSA lock's first live use: 2027's WOSA should stop moving.
 
 ## Publishing
 
-The site is `docs/`, served from `main`.  Nothing is pushed without the owner's word, but for the morning job's data
-and, in the round of 2026-11-09 only, the fixes the owner allowed.
+The site is `docs/`, served from `main`.  Nothing is pushed without the owner's word, but for the morning job's data.
 
     git fetch origin main && git merge --no-ff origin/main      # the job's data commits; the merge has been clean
     bash scripts/publish_check.sh                               # the lint check, every test, the tutorial, on a clone
@@ -188,6 +132,9 @@ and, in the round of 2026-11-09 only, the fixes the owner allowed.
   ratings are rebuilt on the new build).
 - A page is checked in a browser before it goes: `playwright-core` with the installed Chrome, at 1,280 and at 390
   pixels, and its tables against the live site's, row for row.
+- **The live site bars AI fetchers.**  A tool that fetches pages for an AI, the WebFetch tool among them, is refused by
+  openrapm.com's robots file; read the live site with `curl` or a browser.  To refresh the crawler list:
+  `scratch/2026-11-16_cleanup/make_robots.py <commit of ai.robots.txt>`, read the diff, run `tests/test_site_pages.py`.
 
 ## How an experiment is judged
 
@@ -198,16 +145,18 @@ and, in the round of 2026-11-09 only, the fixes the owner allowed.
 | the eye check | `scripts/checks/66_compare.py` | the 2026 top 20 |
 
 - The incumbent is `fade141`: tables `outputs/season_ratings_fade141*`, folds `fade141_early`, `fade141_within`,
-  year-over-year score 8.6908.  The incumbent before it was `zones139`.  Its noise control `noise_zones139` reads -0.009 on the within-season test, paired z
-  -1.03, 16 of 30.  The plain z rules.
+  year-over-year score 8.6908.  Its noise control is `noise_fade141`: -0.013 on the within-season test, paired z -1.41,
+  16 of 30.  Both are the defaults at the top of `scripts/experiment_chain.sh`.  The plain z is what adoptions have
+  been read on.
 - One full build: `bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes_late_as_scored "EXTRA
   RATE FLAGS"`, 50 to 75 minutes, log `outputs/NAME_chain.log`.  It waits while the morning job runs.
 - A Box Adj input or setting is read first from the saved sums, in minutes
   (`scratch/2026-11-09_improvements/box_adj_weights.py`, `scratch/2026-11-05_second_stage/zones_screen.py`), then
-  confirmed by a full build.
+  confirmed by a full build.  Any number per player is scored on the within-season test in minutes from
+  `outputs/second_prior/zones139_players/` (`scratch/2026-11-10_boost_vs_line/player_sums.py`, `boost_vs_line.py`).
 - Register a reading in DECISIONS.md before any result.  Every experiment gets a row in `experiments/runs.csv`
   (`scripts/checks/101_log_run.py`), mirrored to the sheet "OpenRAPM experiments", tab Experiments, written at the first
-  free row after the last, never appended.  The next free row is 142.
+  free row after the last, never appended.
 - Report in four parts: what changed, the result, the 2026 top 20, the owner's call.
 
 ## Leads, none started
@@ -216,21 +165,17 @@ and, in the round of 2026-11-09 only, the fixes the owner allowed.
   rule by a hundredth of a z and loses 2017-2026 to a fit at the day.  Read it again before the season in progress
   gets there, about the middle of January 2027, with weights fitted at 62.5% as the candidate
   (`scripts/checks/166_power_forecast_refit.py`).
-- **Early-season defense.**  2027's defense is 0.60 as wide as its offense among players with 250 or more possessions,
-  1.05 against 1.76; finished seasons read 0.87, 0.85 and 0.82 by era.  And the hustle rates are padded as the box
-  rates were before the early-season fix: toward the raw rate of players with similar possessions, the pad measured
-  around the league mean (`data/dashboard_rates.py`).  The Power refit met it from the team side: a team's defense
-  wants a multiplier of 1.75 to 1.88 through a tenth of a season.  First a read on finished seasons rated from their
-  first tenth.
+- **Early-season defense.**  2027's defense is 0.60 as wide as its offense among players with 250 or more possessions;
+  finished seasons read 0.87, 0.85 and 0.82 by era.  The hustle rates are padded toward the raw rate of players with
+  similar possessions, as the box rates were before the early-season fix (`data/dashboard_rates.py`).
 - **The ridge penalty**, 13,037, set on the year-over-year test in September and never read on the within-season
-  test; the owner's EM idea.  It has no flag, and the Box Adj sums carry it.
-- **Numbers fitted once and since overtaken**: the width settings, set before the zones narrowed the defense; WOSA's
-  30 points a win; the 0.25 of opponents' three-point luck kept; `lgb1_tune2`, tuned before Box Adj existed.
-- **2027's play-by-play** forces 0.60 possession switches a game against 0.30 over 2026's first 146: look for a change
-  in the league's feed.
+  test; the owner's EM idea.
+- **Numbers fitted once and since overtaken**: the width settings; WOSA's 30 points a win; the 0.25 of opponents'
+  three-point luck kept; `lgb1_tune2`, tuned before Box Adj existed.
+- **2027's play-by-play** forces 0.60 possession switches a game against 0.30 over 2026's first 146.
 - **Three neutral-site games of 2024** carry a home team in the game log: 0022301229, 0022301230 and 0022300527.
-- **The morning job** rebuilds all 31 seasons' panel rows and site pieces each morning, about 6 of its 13 minutes.
-  Its scheduled task runs only while the owner is logged on.  A record of what built the stored tables is not written.
+- **A fresh build cannot repeat the published Box Adj line bit for bit**: it was fitted on `padbins127`'s held-back
+  games, an earlier build's.  A refit of the line on `fade141`'s folds is a candidate, judged like any experiment.
 - **Check scripts that cannot run on today's build as they stand**: `155_input_screen.py`, whose reference is
   creation110, and `152_decider_tune.py`, whose pipeline has no Box Adj.
 
@@ -241,7 +186,7 @@ and, in the round of 2026-11-09 only, the fixes the owner allowed.
     PUBLISH=0 bash scripts/daily_update.sh                    # the morning job, nothing published, 12 minutes
     bash scripts/publish_check.sh                             # before any push to main
     bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes_late_as_scored "EXTRA RATE FLAGS"
-    .venv/Scripts/python scripts/checks/151_wowy.py --systems=fade141,noise_zones139,NAME --ref=fade141 --tag=NAME
+    .venv/Scripts/python scripts/checks/151_wowy.py --systems=fade141,noise_fade141,NAME --ref=fade141 --tag=NAME
     .venv/Scripts/python scripts/checks/101_log_run.py --name=NAME --exp=N --idea=owner --verdict=pending --changed="..."
     OPENRAPM_WRITE_PUBLISHED=1 .venv/Scripts/python -m openrapm build      # a full build of the published tables
 
@@ -260,10 +205,11 @@ and, in the round of 2026-11-09 only, the fixes the owner allowed.
 - Implement the owner's ideas or propose new ones; one experiment at a time unless the owner says otherwise.
 - Never thrash the machine: several processes at once are fine while they fit its 12 threads and 32 GB.  When a full
   build is stopped, stop its python children too.  Never edit `scripts/experiment_chain.sh` or `src/` while a build
-  runs: each new python process imports the code as it is then.
+  runs from the same checkout: each new python process imports the code as it is then.
 - Commit every piece of work; never push or publish without the owner's word, but for the morning job.
 - Movement in points per 100, never rank places; under 0.1 is nothing.
 - A proof that a change moves no number is a byte comparison with both sides built the same way.
+- Code that lost its test is removed and kept at an archive tag; the decisions record keeps naming it.
 
 ## Traps that cost a day
 
@@ -274,15 +220,18 @@ and, in the round of 2026-11-09 only, the fixes the owner allowed.
 4. A background job is stopped after its limit: long runs save as they go and resume.
 5. A year-over-year gain can be width: read it with each side's width matched to the incumbent's.
 6. `--config` and `OPENRAPM_CONFIG` do not move the root, which comes from where the code sits: a scratch config needs
-   absolute paths.
+   absolute paths.  A product build's WOSA processes start without `--config`: use `OPENRAPM_CONFIG`.
 7. A finished season's stints on disk differ from a rebuild in the expected-makes columns by 8e-11, the shot curve
    having been fitted in memory through another config: compare two builds, not a build with the disk.
 8. The job's log is written in the console's code page: a print of a name with ć or č from a plain script stops it.
-9. More in DECISIONS.md, "The measurement traps".
+9. Python's `urllib.robotparser` matches a crawler's name anywhere inside a longer one, so it reads LinkedInBot as the
+   AI crawler "nbot" and bars it; crawlers match the whole name (RFC 9309), and `tests/test_site_pages.py` reads the
+   file that way.
+10. More in DECISIONS.md, "The measurement traps".
 
 ## Verify you are where this file says
 
-    .venv/Scripts/python -m pytest -q        # 1,134 pass, 2 skipped, 7 deselected, 1 expected failure, about 2 minutes
+    .venv/Scripts/python -m pytest -q        # every test passes or skips; 1 expected failure
     uvx ruff@0.17.0 check .                  # clean
     cat outputs/daily/last.txt               # the last morning: published, nothing new, or FAILED
     gh run list --repo bbstats/openrapm --branch main --limit 3      # GitHub's tests on main: success
