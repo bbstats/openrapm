@@ -66,3 +66,7 @@ nav.site .colors + .theme { margin-left: 4px; }      /* the colors button, where
 /* the tabs and the switch take two rows on a phone */
 @media (max-width: 600px) { nav.site { flex-wrap: wrap; } }
 @media (max-width: 380px) { nav.site a { padding-left: 6px; padding-right: 6px; } nav.site a:first-child { padding-left: 0; } }
+
+/* the footer every page ends with: the code's address, and how the ratings may be used */
+footer { margin-top: 24px; color: var(--muted); font-size: 12.5px; }
+footer a { color: inherit; }

@@ -3,6 +3,7 @@ name = "openrapm"
 version = "0.1.0"
 description = "OpenRAPM: open NBA player-impact ratings, RAPM with a box-score prior, one rating per player per season"
 requires-python = ">=3.11"
+authors = [{ name = "Nathan Walker" }]
 dependencies = [
   "numpy>=1.26",
   "scipy>=1.12",

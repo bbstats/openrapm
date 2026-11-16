@@ -1,7 +1,7 @@
 # OpenRAPM
 
 Open player-impact ratings for the NBA, 1996-97 to now, in points per 100 possessions, one rating
-per player per season. Live at <https://bbstats.github.io/openrapm/>.
+per player per season. Live at <https://openrapm.com>.
 
 Each rating is RAPM (regularised adjusted plus-minus: a ridge regression of the points scored on the ten
 players on the court) pulled toward what the player's box score says, then corrected on games the
@@ -377,4 +377,10 @@ today's command. A `FINDINGS N.N` comment points at the research log kept at the
 See `CONTRIBUTING.md`. In one line: change the model layer, run the test against what ships, and
 report every variant you tried, not just the one that won.
 
-MIT licensed.
+## Using the code and the ratings
+
+Ratings by Nathan Walker. Use them with credit and a link to openrapm.com. No bulk copying or scraping.
+
+The code is MIT licensed, `LICENSE`: fork it, change it, run it. The published ratings, the site and `docs/data/`,
+carry their own terms in `LICENSE-RATINGS.md`: use and quote them with credit, do not republish the table or mirror
+the site without permission, no AI crawling. `docs/robots.txt` says the same to crawlers.

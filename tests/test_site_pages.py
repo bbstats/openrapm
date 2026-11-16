@@ -202,3 +202,79 @@ def test_the_power_table_is_as_wide_as_its_columns_where_the_screen_has_room():
                            "th:nth-child(n+4), td:nth-child(n+4)"}
     # a team's name cell has 8 pixels of padding on its left and a player's 24: the two cells come out equal
     assert int(widths["th.name, td.name"]) + 8 == int(widths["tr.player td.name"]) + 24
+
+
+# ------------------------------------------------------------------ credit, and what crawlers may read
+# The owner's sentence, 2026-11-16, word for word: the footer of every page, the top of robots.txt and the README.
+CREDIT = "Ratings by Nathan Walker. Use them with credit and a link to openrapm.com. No bulk copying or scraping."
+ROOT = DOCS.parent
+
+
+def test_every_page_ends_with_the_code_and_the_credit():
+    for page in PAGES:
+        text = _page(page)
+        footers = re.findall(r"<footer>(.*?)</footer>", text, re.S)
+        assert len(footers) == 1, page
+        assert '<a href="https://github.com/bbstats/openrapm">' in footers[0] and footers[0].count(CREDIT) == 1, page
+        assert text.index("<footer>") < text.index("</main>"), page
+    assert "footer { margin-top: 24px;" in _page("site.css")
+
+
+def test_every_page_reserves_text_and_data_mining():
+    """The W3C community group's TDM Reservation Protocol, in each page's head: rights reserved, no policy offered."""
+    for page in PAGES:
+        assert _page(page).split("</head>")[0].count('<meta name="tdm-reservation" content="1">') == 1, page
+
+
+def test_the_readme_the_robots_file_and_the_ratings_terms_carry_the_credit():
+    assert CREDIT in (ROOT / "README.md").read_text(encoding="utf-8")
+    assert _page("robots.txt").splitlines()[1] == "# " + CREDIT
+    terms = (ROOT / "LICENSE-RATINGS.md").read_text(encoding="utf-8")
+    assert "OpenRAPM by Nathan Walker" in terms and "docs/data/" in terms
+    assert (ROOT / "LICENSE").read_text(encoding="utf-8").startswith("MIT License")      # the code stays MIT
+
+
+def _robots_groups(text: str) -> dict:
+    """{user-agent token, lower case: [(allow, path prefix)]}, read as RFC 9309 reads a robots file: consecutive
+    user-agent lines open one group, and the rules after them belong to every one of those agents."""
+    groups, agents, in_rules = {}, [], False
+    for line in text.splitlines():
+        line = line.split("#", 1)[0].strip()
+        if ":" not in line:
+            continue
+        key, value = (part.strip() for part in line.split(":", 1))
+        key = key.lower()
+        if key == "user-agent":
+            if in_rules:
+                agents, in_rules = [], False
+            agents.append(value.lower())
+            groups.setdefault(value.lower(), [])
+        elif key in ("allow", "disallow"):
+            in_rules = True
+            for agent in agents:
+                groups[agent].append((key == "allow", value))
+    return groups
+
+
+def _may_fetch(groups: dict, token: str, path: str) -> bool:
+    """RFC 9309: the group whose token equals the crawler's, else the * group; the longest matching rule wins, and an
+    allow wins a tie.  Real crawlers match the token exactly, where urllib.robotparser matches any substring."""
+    rules = groups.get(token.lower(), groups.get("*", []))
+    matched = [(len(prefix), allow) for allow, prefix in rules if prefix and path.startswith(prefix)]
+    return max(matched)[1] if matched else True
+
+
+def test_search_and_link_previews_may_read_everything_and_ai_crawlers_nothing():
+    """The owner, 2026-11-16: "all AI crawling is banned but - people are certainly welcome to fork etc!", with Meta's
+    link previews and Apple's search crawler kept allowed."""
+    groups = _robots_groups(_page("robots.txt"))
+    for crawler in ("Googlebot", "Bingbot", "DuckDuckBot", "Twitterbot", "facebookexternalhit", "Applebot",
+                    "LinkedInBot", "Slackbot", "Discordbot"):
+        for path in ("/", "/data/ratings.json", "/about.html"):
+            assert _may_fetch(groups, crawler, path), (crawler, path)
+    for crawler in ("GPTBot", "ChatGPT-User", "OAI-SearchBot", "ClaudeBot", "Claude-User", "Google-Extended",
+                    "Applebot-Extended", "Bravebot", "CCBot", "meta-externalagent", "PerplexityBot", "Bytespider",
+                    "Amazonbot"):
+        for path in ("/", "/data/ratings.json"):
+            assert not _may_fetch(groups, crawler, path), (crawler, path)
+    assert "Content-Signal: search=yes, ai-input=no, ai-train=no" in _page("robots.txt")

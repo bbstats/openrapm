@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "Ratings by Nathan Walker. Use them with credit and a link to openrapm.com. No bulk copying or scraping."
+title: "OpenRAPM"
+type: software
+authors:
+  - family-names: "Walker"
+    given-names: "Nathan"
+url: "https://openrapm.com"
+repository-code: "https://github.com/bbstats/openrapm"
+license: MIT

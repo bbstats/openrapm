@@ -17,7 +17,7 @@ htmlcov/
 /data/*
 !/data/external/
 /data/external/*
-!/data/external/*.csv
+!/data/external/consensus.csv
 
 # Run output.  Every file is rebuilt by the command that wrote it, but some are inputs to later steps:
 # the season panel (`openrapm data panel`), the saved boosters (`openrapm rate --save-models`), the
