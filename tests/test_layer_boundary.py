@@ -73,7 +73,6 @@ MODEL_LAYER = [
     "decomposition.py",  # the decomposition pages: which rows of a ridge fit a coefficient comes from
     "game_rates.py",    # the multi-stat network: league, opponent, padding, the state, training (PyTorch), forecasts
     "game_prior.py",    # the box-score prior game by game: the network's states as panel rows, averages, tables
-    "in_context_prior.py",  # the box-score prior from the pretrained Kumo network: the rows shown, the answers kept
     "linear_prior.py",  # the box-score prior as an elastic net on every input and every product of two (experiment 121)
     "wins.py",          # wins over starter average: the win model, leverage, the pace ridge, the bar, the wins
     "power_forecast.py",  # the Power page's one rating: the last-10 stats, the weights at a point of the season

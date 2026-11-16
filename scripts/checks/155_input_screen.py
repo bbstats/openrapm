@@ -112,12 +112,6 @@ NEAREST = 8
 # to how its players are split into the five training groups), each a dict of settings.PriorSettings fields
 VARIANTS = {"shipped": {}, "out_of_bag60": dict(prediction="out_of_bag", bags=60), "bags30": dict(bags=30),
             "split_per_bag": dict(split_per_bag=True),
-            # experiment 118 (2026-10-28): the pretrained Kumo network in place of LightGBM, no bags; a random draw
-            # picks each member's training rows (in_context_prior.py)
-            "kumo_small": dict(booster_file="params/booster_params_kumo_small.json", bags=0),
-            "kumo_medium": dict(booster_file="params/booster_params_kumo_medium.json", bags=0),
-            # its second look: every training row the same chance to be shown, whatever its weight
-            "kumo_small_equal": dict(booster_file="params/booster_params_kumo_small_equal.json", bags=0),
             # experiment 120: the booster settings the tune found with the matchup inputs in the lists
             "tune120": dict(booster_file="params/booster_params_tune120.json")}
 ERAS = {"1997-2006": (1998, 2001, 2004), "2007-2016": (2007, 2010, 2013, 2016), "2017-2026": (2019, 2022, 2025)}
@@ -407,9 +401,6 @@ class Season:
         ws.prior_rows = prior_rows
         try:
             self.run.saved, self.run.out_dir = saved, out_dir
-            for side in ("O", "D"):
-                prime_in_context(saved[side], [ws.prior_rows(world.panel, side, saved[side])
-                                               for world in self.run.worlds.values()])
             folds = ws.season_folds(self.run)
             started = time.time()
             for repeat in range(1 if self.quick else self.run.repeats):
@@ -420,21 +411,6 @@ class Season:
             ws.prior_rows = original
             self.run.worlds, self.run.saved = None, self.reference_saved
         return pd.DataFrame() if whole is None else whole.table.assign(season=self.season)
-
-
-def prime_in_context(side_saved: dict, rows: list) -> None:
-    """Ask a side's in-context priors (in_context_prior.py) about every row of `rows` (one frame per world) in one
-    pass each, so the season's folds read kept answers; LightGBM boosters are left alone."""
-    from openrapm.in_context_prior import InContextPrior
-    boosters = [side_saved["full"], *side_saved["folds"]]
-    for bag in side_saved.get("bags", []):
-        boosters += [bag["full"], *bag["folds"]]
-    boosters = [booster for booster in boosters if isinstance(booster, InContextPrior)]
-    if not boosters:
-        return
-    matrix = np.concatenate([frame[side_saved["model_feats"]].to_numpy(float) for frame in rows])
-    for booster in boosters:
-        booster.prime(matrix)
 
 
 _FIT = {}            # in a fitting process: the booster parameters by file and the last seasons' training rows
@@ -474,7 +450,6 @@ def fit_side(tag: str, season: int, side: str, trial: Trial, params: dict | None
     """The trial's boosters on one side of one season (`fit_task`)."""
     from openrapm.data.config import load_config
     from openrapm.features import ROW_FEATURES
-    from openrapm.in_context_prior import LEARNER
     settings = variant_settings(trial.variant, tag)
     if "params" not in _FIT:
         _FIT["params"], _FIT["rows"] = {}, {}
@@ -496,9 +471,6 @@ def fit_side(tag: str, season: int, side: str, trial: Trial, params: dict | None
         params = same_inputs_per_tree(params, len(shipped_lists()[side] + ROW_FEATURES), len(names + ROW_FEATURES))
     if trial.arm == "blend":
         return fit_blend(tag, season, side, trial, train, params, settings)
-    if params.get("learner") == LEARNER:
-        # no bags to draw: the seed picks the Kumo members' training rows instead
-        return fit_bags(train, names + ROW_FEATURES, {**params, "draw": trial.seed}, settings, 0)
     return fit_bags(train, names + ROW_FEATURES, params, settings, trial.seed)
 
 

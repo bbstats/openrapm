@@ -41,4 +41,4 @@ def test_an_added_input_keeps_the_inputs_each_tree_is_shown(screen):
     assert widest_tree(fixed["colsample_bytree"], 21) == 7
     offence = screen.same_inputs_per_tree({"colsample_bytree": 0.5361093535529958}, 20, 21)
     assert round(21 * offence["colsample_bytree"]) == round(21 * 0.5361093535529958) == 11
-    assert screen.same_inputs_per_tree({"learner": "kumo_tabular"}, 20, 21) == {"learner": "kumo_tabular"}
+    assert screen.same_inputs_per_tree({"learning_rate": 0.05}, 20, 21) == {"learning_rate": 0.05}

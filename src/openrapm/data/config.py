@@ -17,8 +17,9 @@ from .legacy_names import player_unit_name
 
 ROOT = Path(__file__).resolve().parents[3]
 CONFIG_ENV = "OPENRAPM_CONFIG"
-# the box-score prior's learners a params/ file may name: LightGBM, shipped, and the pretrained Kumo network
-LEARNERS = ("lightgbm", "kumo_tabular")
+# the box-score prior's learner a params/ file names: LightGBM (the Kumo network of experiment 118 was removed on
+# 2026-11-16, at the tag archive/research-2026-11)
+LEARNERS = ("lightgbm",)
 
 # Where each data path points when the config does not name it: the folders the project has always
 # used, so a config written before a key existed resolves to the same place on disk.
@@ -70,9 +71,7 @@ def resolve(cfg: dict, key: str) -> Path:
 
 
 def booster_params(cfg: dict, path: str | Path) -> dict:
-    """{"O": settings, "D": settings} from a tracked params/ file: each side's LightGBM settings as they are, or, for a
-    side naming the Kumo learner (in_context_prior.py, experiment 118), its settings with `learner` added, which is
-    how box_prior.fit_booster tells the two apart.
+    """{"O": settings, "D": settings} from a tracked params/ file: each side's LightGBM settings as they are.
 
     `path` is `settings.PriorSettings.booster_file`, relative to the repository root.  Only the tracked copy is
     read: an untracked file of the same name elsewhere can never shadow it.
@@ -84,5 +83,5 @@ def booster_params(cfg: dict, path: str | Path) -> dict:
         if learner not in LEARNERS or "params" not in spec[side]:
             raise ValueError(f"{path}: side {side} must name a learner, one of {LEARNERS}, and its params")
         params = dict(spec[side]["params"])
-        out[side] = params if learner == "lightgbm" else {**params, "learner": learner}
+        out[side] = params
     return out
