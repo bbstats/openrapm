@@ -86,25 +86,9 @@ TUNE_SEASONS = tuple(range(1998, 2026, 3))          # 1998, 2001, ..., 2025, che
 MATCHUP_SEASONS = tuple(range(2018, 2026))
 # {tag: (the feature set holding the shipped lists and every candidate, the features.py name of the candidates, the
 # seasons the screen reads)}
-# Experiment 121's quick screen (the owner, 2026-10-30: "let's just screen it on a smaller subset so it doesn't take as
-# long"): four seasons, one an era and 2025, far enough apart that each season's step 4 reads the other three; one
-# repeat of four held-back game sets a season; no next-season check
-QUICK_SEASONS = (2001, 2010, 2019, 2025)
 SCREENS = {"screen112": ("screen112_pool", "SCREEN_CANDIDATES", TUNE_SEASONS),
            "screen119": ("screen119_pool", "SCREEN_CANDIDATES_119", TUNE_SEASONS),
-           "screen120": ("screen120_pool", "SCREEN_CANDIDATES_MATCHUPS", MATCHUP_SEASONS),
-           # experiment 121: the box-score prior blended with a line on every input and every product of two
-           "blend121": ("everything121", None, QUICK_SEASONS),
-           # experiment 122: the same with the booster on what Boruta keeps
-           "blend122": ("everything121", None, QUICK_SEASONS)}
-QUICK = {"blend121", "blend122"}                    # tags read on one repeat of held-back game sets, no year-over-year
-CACHE_FROM = {"blend121": "screen120", "blend122": "screen120"}     # tags reading another tag's cache
-# a blend tag: (the booster's feature set, the line's shares of the box-score prior, the tag whose lines it reads)
-BLENDS = {"blend121": ("passed121", (0.0, 0.25, 0.5, 0.75, 1.0), "blend121"),
-          "blend122": ("selected122", (0.0, 0.1, 0.25, 0.5), "blend121")}
-PENALTY_SEASON = 2016                               # the season whose training rows choose the line's two penalties
-L1_SHARES = (0.1, 0.5, 0.9)                         # the elastic net's lasso shares tried
-N_ALPHAS = 10                                       # penalties tried for each, from the one that zeroes every column
+           "screen120": ("screen120_pool", "SCREEN_CANDIDATES_MATCHUPS", MATCHUP_SEASONS)}
 REFERENCE = "creation110"                           # the shipped build whose saved boosters name the second prior
 SEED_STEP = 100                                     # box_prior.BAG_DRAW_STEP
 NEAREST = 8
@@ -134,11 +118,9 @@ def pool(tag: str) -> str:
 
 
 def candidates(tag: str) -> dict:
-    """{side: the inputs a tag screens, each appended alone to its side's shipped list}; none for a blend's tag."""
+    """{side: the inputs a tag screens, each appended alone to its side's shipped list}."""
     from openrapm import features
     pool(tag)
-    if SCREENS[tag][1] is None:
-        return {"O": [], "D": []}
     return getattr(features, SCREENS[tag][1])
 
 
@@ -151,11 +133,6 @@ def screen_seasons(tag: str) -> tuple:
 def screen_dir(tag: str) -> Path:
     from openrapm.data.config import load_config, resolve
     return resolve(load_config(), "outputs") / "screen" / tag
-
-
-def cache_dir(tag: str) -> Path:
-    """Where a tag's cache is read from: its own folder, or the tag it borrows from (`CACHE_FROM`)."""
-    return screen_dir(CACHE_FROM.get(tag, tag))
 
 
 def within_dir() -> Path:
@@ -293,9 +270,9 @@ def variant_settings(variant: str, tag: str):
 # ------------------------------------------------------------------------------------------------- a trial
 @dataclass(frozen=True)
 class Trial:
-    arm: str                     # base, add, add_shadow, shadow, pool, blend
-    side: str                    # "O", "D", or "-" for base, pool and blend
-    name: str                    # the input, or "-" for base; a pool trial's tag; a blend's weight, as "w25"
+    arm: str                     # base, add, add_shadow, shadow, pool
+    side: str                    # "O", "D", or "-" for base and pool
+    name: str                    # the input, or "-" for base; a pool trial's tag
     seed: int
     variant: str = "shipped"     # the box-score prior's settings, a key of VARIANTS
 
@@ -305,25 +282,13 @@ class Trial:
         return f"{self.arm}__{self.side}__{self.name}__s{self.seed}{variant}"
 
 
-def weight_name(weight: float) -> str:
-    """0.25 -> "w25", the name of a blend trial whose line carries that share of the prior."""
-    return f"w{round(100 * weight):02d}"
-
-
-def blend_weight(trial: Trial) -> float:
-    return int(trial.name[1:]) / 100.0
-
-
 def trial_lists(trial: Trial) -> dict:
-    """{side: the boosters' inputs} of a trial; a blend's are every input, of which the booster reads its own."""
-    from openrapm.features import EVERYTHING_121
+    """{side: the boosters' inputs} of a trial."""
     lists = shipped_lists()
     if trial.arm in ("add", "add_shadow"):
         lists[trial.side] = lists[trial.side] + [trial.name]
     if trial.arm == "pool":
         lists = {side: lists[side] + list(candidates(trial.name)[side]) for side in ("O", "D")}
-    if trial.arm == "blend":
-        lists = {side: list(EVERYTHING_121) for side in ("O", "D")}
     return lists
 
 
@@ -358,7 +323,6 @@ class Season:
         from openrapm.data.roles import player_season_inputs, roles_path
         from openrapm.settings import TEST
         self.tag, self.season, self.cfg = tag, season, load_config()
-        self.quick = tag in QUICK
         self.train = None
         self.settings = replace(TEST, prior=replace(TEST.prior, feature_set=pool(tag)))
         self.params = box_prior_params(self.cfg)
@@ -379,12 +343,11 @@ class Season:
 
     def rate(self, trial: Trial, out_dir: Path, models: dict) -> pd.DataFrame:
         """Rate and write every fold into `out_dir` with the trial's boosters `models` ({side: BaggedPrior, or the
-        file `fit_task` wrote it to}); return the whole season's step-3 table (raw sign), or nothing on a quick tag,
-        which rates one repeat of held-back game sets and no whole season.  The boosters are let go after, so a worker
-        holds one season's at a time."""
+        file `fit_task` wrote it to}); return the whole season's step-3 table (raw sign).  The boosters are let go
+        after, so a worker holds one season's at a time."""
         from openrapm.commands import within_season as ws
         models = {side: pd.read_pickle(model) if isinstance(model, str) else model for side, model in models.items()}
-        with open(cache_dir(self.tag) / f"season_{self.season}.pkl", "rb") as handle:
+        with open(screen_dir(self.tag) / f"season_{self.season}.pkl", "rb") as handle:
             cache = pickle.load(handle)
         self.run.worlds, unseen = cache["worlds"], cache["unseen"]
         del cache
@@ -403,14 +366,14 @@ class Season:
             self.run.saved, self.run.out_dir = saved, out_dir
             folds = ws.season_folds(self.run)
             started = time.time()
-            for repeat in range(1 if self.quick else self.run.repeats):
+            for repeat in range(self.run.repeats):
                 for fold in range(self.run.n_folds):
                     ws.run_fold(self.run, folds, repeat, fold, started)
-            whole = None if self.quick else self.run.rate(set(self.run.game_ids))
+            whole = self.run.rate(set(self.run.game_ids))
         finally:
             ws.prior_rows = original
             self.run.worlds, self.run.saved = None, self.reference_saved
-        return pd.DataFrame() if whole is None else whole.table.assign(season=self.season)
+        return whole.table.assign(season=self.season)
 
 
 _FIT = {}            # in a fitting process: the booster parameters by file and the last seasons' training rows
@@ -458,7 +421,7 @@ def fit_side(tag: str, season: int, side: str, trial: Trial, params: dict | None
     if season not in _FIT["rows"]:
         if len(_FIT["rows"]) >= 2:
             _FIT["rows"].pop(next(iter(_FIT["rows"])))
-        with open(cache_dir(tag) / f"train_{season}.pkl", "rb") as handle:
+        with open(screen_dir(tag) / f"train_{season}.pkl", "rb") as handle:
             _FIT["rows"][season] = pickle.load(handle)["train"]
     train = _FIT["rows"][season][side]
     if trial.arm in ("add_shadow", "shadow") and trial.side == side:
@@ -469,116 +432,7 @@ def fit_side(tag: str, season: int, side: str, trial: Trial, params: dict | None
         params = _FIT["params"][settings.prior.booster_file][side]
     if trial.arm in ("add", "add_shadow") and trial.side == side:
         params = same_inputs_per_tree(params, len(shipped_lists()[side] + ROW_FEATURES), len(names + ROW_FEATURES))
-    if trial.arm == "blend":
-        return fit_blend(tag, season, side, trial, train, params, settings)
     return fit_bags(train, names + ROW_FEATURES, params, settings, trial.seed)
-
-
-# ------------------------------------------------------------------------------------------------- the blend
-# Experiment 121 (the owner, 2026-10-30): the box-score prior as (1 - w) x the booster on the inputs that passed the
-# screen + w x a line on every input and every product of two (linear_prior.py).  Bagging averages the bags' answers,
-# so the blend is one BaggedPrior whose members are the booster's bags and the line, each repeated so the line carries
-# w of the mean: at w = 0.25 the ten bags three times and the line ten times, 10 of 40.  Each member answers a player
-# with the part of it that never saw him: the bag's own player folds for the booster, the line's own for the line.
-def line_path(tag: str, season: int, side: str) -> Path:
-    """A blend tag's line for one season and side, written under the tag whose lines it reads (`BLENDS`)."""
-    return screen_dir(BLENDS[tag][2]) / f"line_{season}_{side}.pkl"
-
-
-def fit_blend(tag: str, season: int, side: str, trial: Trial, train: pd.DataFrame, params: dict, settings):
-    """A blend trial's prior on one side of one season: the booster on the tag's inputs (`BLENDS`) at the trial's
-    seed, the season's line from `line_path` (the `linear` command), mixed at the trial's weight."""
-    from openrapm.features import FEATURE_SETS, ROW_FEATURES
-    weight = blend_weight(trial)
-    trees = None
-    if weight < 1:
-        trees = fit_bags(train, FEATURE_SETS[BLENDS[tag][0]][side] + ROW_FEATURES, params, settings, trial.seed)
-    line = pd.read_pickle(line_path(tag, season, side)) if weight > 0 else None
-    return blend_prior(trees, line, weight, trial_lists(trial)[side] + ROW_FEATURES)
-
-
-def blend_prior(trees, line, weight: float, inputs: list):
-    """One BaggedPrior reading `inputs` whose mean answer is (1 - weight) x the booster's + weight x the line's."""
-    from fractions import Fraction
-
-    from openrapm import box_prior
-    from openrapm.linear_prior import ColumnPick
-    share = Fraction(weight).limit_denominator(100)
-    wrapped = []
-    if trees is not None:
-        picks = np.array([inputs.index(name) for name in trees.inputs])
-        wrapped = [box_prior.OutOfPlayerPrior(full=ColumnPick(member.full, picks),
-                                              fold_models=[ColumnPick(model, picks) for model in member.fold_models],
-                                              held_out_players=member.held_out_players, inputs=list(inputs))
-                   for member in trees.members]
-    if share == 0:
-        members = wrapped
-    elif share == 1:
-        members = [line]
-    else:
-        members = wrapped * (share.denominator - share.numerator) + [line] * (share.numerator * len(wrapped))
-    if line is not None and list(line.inputs) != list(inputs):
-        raise SystemExit("the line was fitted on other inputs than the blend reads")
-    return box_prior.BaggedPrior(members=members, inputs=list(inputs))
-
-
-def fit_line_side(tag: str, season: int, side: str, alpha: float, l1: float) -> str:
-    """Fit and write one season and side's line, out of player as the booster is: the line on every training row
-    answers players with no rows; the line without each fold's players answers them (the `linear` command)."""
-    from openrapm import box_prior
-    from openrapm import linear_prior as lp
-    from openrapm.features import EVERYTHING_121, ROW_FEATURES
-    started = time.time()
-    with open(cache_dir(tag) / f"train_{season}.pkl", "rb") as handle:
-        train = pickle.load(handle)["train"][side]
-    inputs = list(EVERYTHING_121) + ROW_FEATURES
-    matrix, label = train[inputs].to_numpy(float), train.label.to_numpy(float)
-    weight = train.row_weight.to_numpy(float) / train.row_weight.mean()
-    fold = box_prior.balanced_player_folds(train, 5, 0)
-    expansion = lp.fit_expansion(matrix, weight)
-    parts = lp.row_sums(expansion, matrix, label, weight, fold, 5)
-    total = parts[0] + parts[1] + parts[2] + parts[3] + parts[4]
-    full = lp.line_from_sums(expansion, total, alpha, l1)
-    folds = [lp.line_from_sums(expansion, total - parts[k], alpha, l1) for k in range(5)]
-    held_out = [set(train.index[fold == k].tolist()) for k in range(5)]
-    prior = box_prior.OutOfPlayerPrior(full=full, fold_models=folds, held_out_players=held_out, inputs=inputs)
-    pd.to_pickle(prior, line_path(tag, season, side))
-    return (f"{season} {side}: {expansion.width} columns, {int((full.coef != 0).sum())} used by the line on every "
-            f"row ({time.time() - started:.0f}s)")
-
-
-def penalty_side(tag: str, side: str) -> dict:
-    """The line's two penalties for one side, chosen on `PENALTY_SEASON`'s training rows: for each lasso share, a path
-    of penalties from the one that zeroes every column down a thousandfold, each scored by its weighted squared miss
-    on the players of each of the five folds when fitted without them; the best pair, and every pair's score."""
-    from openrapm import box_prior
-    from openrapm import linear_prior as lp
-    from openrapm.features import EVERYTHING_121, ROW_FEATURES
-    started = time.time()
-    with open(cache_dir(tag) / f"train_{PENALTY_SEASON}.pkl", "rb") as handle:
-        train = pickle.load(handle)["train"][side]
-    inputs = list(EVERYTHING_121) + ROW_FEATURES
-    matrix, label = train[inputs].to_numpy(float), train.label.to_numpy(float)
-    weight = train.row_weight.to_numpy(float) / train.row_weight.mean()
-    fold = box_prior.balanced_player_folds(train, 5, 0)
-    expansion = lp.fit_expansion(matrix, weight)
-    parts = lp.row_sums(expansion, matrix, label, weight, fold, 5)
-    total = parts[0] + parts[1] + parts[2] + parts[3] + parts[4]
-    scores = []
-    baseline = sum(lp.held_out_error(parts[k], np.zeros(expansion.width), (total - parts[k]).wy / (total - parts[k]).w)
-                   for k in range(5)) / total.w
-    for l1 in L1_SHARES:
-        warm = [None] * 5
-        for alpha in lp.alpha_max(total, l1) * np.logspace(0, -3, N_ALPHAS + 1)[1:]:
-            miss = 0.0
-            for k in range(5):
-                coef, intercept, _ = lp.solve(total - parts[k], alpha, l1, warm[k])
-                warm[k] = coef
-                miss += lp.held_out_error(parts[k], coef, intercept)
-            scores.append(dict(side=side, l1=float(l1), alpha=float(alpha), held_out_error=miss / total.w,
-                               columns=int((warm[0] != 0).sum())))
-    best = min(scores, key=lambda row: row["held_out_error"])
-    return dict(side=side, best=best, scores=scores, baseline=baseline, seconds=time.time() - started)
 
 
 class Fitters:
@@ -739,11 +593,6 @@ def plan(tag: str, seeds: int, base_seeds: int, variant: str = "shipped", all_ar
     way has whole seeds.  At another variant of the prior, the shipped lists at every base seed only, unless
     `all_arms` asks for the whole screen at it (the screen at the tune's settings, experiment 120)."""
     from openrapm.features import CREATION
-    if SCREENS[tag][1] is None:
-        # a blend's tag: today's prior and every weight at each seed, seed by seed
-        return [trial for seed in range(seeds)
-                for trial in [Trial("base", "-", "-", seed)] + [Trial("blend", "-", weight_name(weight), seed)
-                                                                for weight in BLENDS[tag][1]]]
     trials = [Trial("base", "-", "-", seed, variant) for seed in range(base_seeds)]
     if variant != "shipped" and not all_arms:
         return trials
@@ -844,7 +693,7 @@ def run_screen(args) -> int:
         return 0
     fitters = Fitters(args.tag, args.fitters)
     workers = Workers(args.tag, args.workers, seasons)
-    guard = None if args.tag in QUICK else Guard(args.tag, seasons)
+    guard = Guard(args.tag, seasons)
     clear_boosters(args.tag)
     try:
         wait_for_the_daily_job()
@@ -1254,67 +1103,6 @@ def write_tuned(study, args) -> int:
     return 0
 
 
-def run_linear(args) -> int:
-    """A blend tag's line: its two penalties chosen on `PENALTY_SEASON` (`penalty_side`, both sides at once, kept as
-    line_penalty.json), then every screen season's line fitted and written (`fit_line_side`); resumes."""
-    import json
-    out_dir = screen_dir(args.tag)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    penalty_path = out_dir / "line_penalty.json"
-    with mp.get_context("spawn").Pool(args.processes) as pool:
-        if not penalty_path.exists():
-            results = pool.starmap(penalty_side, [(args.tag, side) for side in ("O", "D")])
-            table = pd.DataFrame([row for result in results for row in result["scores"]])
-            table.to_csv(out_dir / "line_penalty_scores.csv", index=False)
-            pd.set_option("display.width", 200)
-            print(table.round(5).to_string(index=False))
-            for result in results:
-                print(f"{result['side']}: held-out squared miss with no inputs {result['baseline']:.5f} "
-                      f"({result['seconds']:.0f}s)", flush=True)
-            penalty_path.write_text(json.dumps({result["side"]: result["best"] for result in results}, indent=1),
-                                    encoding="utf-8")
-        penalty = json.loads(penalty_path.read_text(encoding="utf-8"))
-        for side in ("O", "D"):
-            print(f"{side}: lasso share {penalty[side]['l1']}, penalty {penalty[side]['alpha']:.6f}, held-out squared "
-                  f"miss {penalty[side]['held_out_error']:.5f}, {penalty[side]['columns']} columns", flush=True)
-        todo = [(args.tag, season, side, penalty[side]["alpha"], penalty[side]["l1"])
-                for season in screen_seasons(args.tag) for side in ("O", "D")
-                if not line_path(args.tag, season, side).exists()]
-        for message in pool.starmap(fit_line_side, todo):
-            print(message, flush=True)
-    return 0
-
-
-def run_blends(args) -> int:
-    """A blend tag's arms against today's prior: each season's within-season error over every held-back stint, seeds
-    averaged within each season, paired by season, after the shrink (step4) and before it (step3); each season's
-    change and each era's."""
-    out_dir = screen_dir(args.tag)
-    rows = pd.read_csv(out_dir / "trials.csv", keep_default_na=False)
-    table = []
-    for stage in ("step4", "step3"):
-        sub = rows[(rows.stage == stage) & (rows.slice == "all")]
-        base = sub[sub.arm == "base"]
-        for weight in BLENDS[args.tag][1]:
-            arm = sub[(sub.arm == "blend") & (sub.input == weight_name(weight))]
-            seeds = sorted(set(arm.seed.unique()) & set(base.seed.unique()))
-            if not seeds:
-                continue
-            diff = season_means(arm, seeds) - season_means(base, seeds)
-            result = paired(diff, pd.Series(0.0, index=diff.index))
-            row = dict(stage=stage, line_share=weight, seeds=len(seeds), change=result["change"], se=result["se"],
-                       z=result["z"], seasons_better=result["better"], seasons=result["n"])
-            row.update({f"change_{season}": float(value) for season, value in diff.items()})
-            table.append(row)
-    out = pd.DataFrame(table)
-    path = table_path(args.tag, "shipped", "blends")
-    out.to_csv(path, index=False)
-    pd.set_option("display.width", 250)
-    print(out.round(4).to_string(index=False))
-    print(f"\nwrote {path}")
-    return 0
-
-
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="The input screen on the within-season test (experiment 112).")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -1353,11 +1141,6 @@ def main(argv=None) -> int:
     tandem = commands.add_parser("tandem", help="the screen at the shipped settings and at a variant's, side by side")
     tandem.add_argument("--tag", required=True)
     tandem.add_argument("--variant", required=True, choices=sorted(VARIANTS))
-    linear = commands.add_parser("linear", help="a blend tag's line: its penalties, then each season's; resumes")
-    linear.add_argument("--tag", required=True)
-    linear.add_argument("--processes", type=int, default=4)
-    blends = commands.add_parser("blends", help="a blend tag's arms against today's prior")
-    blends.add_argument("--tag", required=True)
     args = parser.parse_args(argv)
     if args.command == "cache":
         seasons = ([int(s) for s in args.seasons.split(",") if s]
@@ -1373,10 +1156,6 @@ def main(argv=None) -> int:
         return run_tune(args)
     if args.command == "tandem":
         return run_tandem(args)
-    if args.command == "linear":
-        return run_linear(args)
-    if args.command == "blends":
-        return run_blends(args)
     return run_table(args)
 
 
