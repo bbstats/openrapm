@@ -1,8 +1,9 @@
-"""The decomposition pages' model code: which rows of a ridge fit a player's rating comes from.
+"""The Detail view's model code: which rows of a ridge fit a player's rating comes from.
 
 A ridge coefficient is a weighted sum of the rows' outcomes, so grouping the rows splits the coefficient exactly.
-Both decomposition pages (commands/site.py) use this: the vanilla RAPM page, and the OpenRAPM page, which splits
-step 3's games' part this way.
+The ratings page's Detail view (commands/site.py) splits step 3's games' part this way, and `openrapm folds --pieces`
+splits each fold's.  The vanilla RAPM page that used it too was retired on 2026-10-20 and its code removed on
+2026-11-16; it is kept at the tag archive/research-2026-11.
 
 Words used below
     row             one stint seen from one side (design.py): five players on offense, five on defense

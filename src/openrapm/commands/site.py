@@ -4,8 +4,6 @@
                                      ratings_list.json and decompose_openrapm.json, below)
     openrapm site --bias             also docs/data/bias.json, the Bias page: where OpenRAPM rates players higher or
                                      lower than a consensus of five outside systems, per standard deviation of a stat
-    openrapm site --decomposition    also docs/data/decompose_1y.json and decompose_3y.json, the vanilla RAPM
-                                     decomposition page
     openrapm site --openrapm-decomposition
                                      also docs/data/decompose_openrapm.json, the ratings page's Detail view: every
                                      published rating split into pieces that add up to it; and, cut from it,
@@ -21,11 +19,10 @@ The pages' wording and look are not this command's to change: it writes data.
 Words used below
     ratings table   outputs/season_ratings_product.parquet, one row per player per season (`openrapm build`)
     built           the date in a file's meta.built.  ratings.json shows the ratings table's modification date,
-                    so re-exporting the same table does not tell readers the ratings changed; the decomposition
-                    files show the day they were computed.  --built sets it for every file written
+                    so re-exporting the same table does not tell readers the ratings changed; the Similarity and
+                    Bias files show the day they were computed.  --built sets it for every file written
     consensus       on the Bias page, the weighted mean of five outside systems' ratings (bias.py), whose tables
                     `openrapm data public-ratings` pulls; not data/external/consensus.csv, the adoption check's
-    vanilla RAPM    plain ridge regression with no box-score prior: raw points, regular season and playoffs
 
 Example: `openrapm site --out-dir C:/tmp/site --built 2026-10-09` writes C:/tmp/site/data/ratings.json, whose
 meta.built reads 2026-10-09 whatever the ratings table's date.
@@ -39,8 +36,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import scipy.linalg as sla
-import scipy.sparse as sp
 
 from ..bias import (
     CONSENSUS_WEIGHTS,
@@ -55,16 +50,15 @@ from ..bias import (
 )
 from ..data import public_ratings
 from ..data.config import resolve, resolve_path
-from ..data.designs import DesignCache, block_design
+from ..data.designs import DesignCache
 from ..data.ingest import raw_dir
 from ..data.panel import panel_of_season, rookies, trainable_panel
 from ..data.power_files import load_knots, team_game_counts
 from ..data.roles import main_teams
-from ..decomposition import lineups, refit, row_groups, row_keys, side_team, split_games_part, team_codes
+from ..decomposition import lineups, refit, row_keys, split_games_part
 from ..features import FEATURE_SETS, meaning
 from ..power_forecast import WEIGHTS_FILE, flat_shares, last_ten_stats, stats_parts, weights_at
 from ..prior_shrink import team_split
-from ..rapm import SeasonSums
 from ..settings import PRODUCT
 from ..similarity import closest, distances, own_season_ranks, player_seasons, similarity_inputs, standardise
 
@@ -83,10 +77,10 @@ def today() -> str:
 
 
 def run_site(cfg: dict, ratings=None, out_dir=None, built: str | None = None, bias: bool = False,
-             decomposition: bool = False, similarity: bool = False, openrapm_decomposition: bool = False,
+             similarity: bool = False, openrapm_decomposition: bool = False,
              power: bool = False, power_forecast: bool = False) -> int:
-    """`openrapm site`: ratings.json always; the decomposition files, the similarity files, the OpenRAPM decomposition
-    file, the power ratings file and the Bias page's file when asked.
+    """`openrapm site`: ratings.json always; the similarity files, the OpenRAPM decomposition file, the power ratings
+    file and the Bias page's file when asked.
 
     `ratings` defaults to the ratings table under config paths.outputs and `out_dir` to the repository's docs/.  The
     Bias page's file is written last: it alone needs the outside systems' tables, and a missing one then stops the
@@ -97,8 +91,6 @@ def run_site(cfg: dict, ratings=None, out_dir=None, built: str | None = None, bi
         raise SystemExit(f"{ratings_path} does not exist; `openrapm build` writes it")
     out_dir = Path(out_dir) if out_dir else resolve_path(cfg, SITE_FOLDER)
     write_ratings_json(ratings_path, out_dir / "data" / "ratings.json", built or table_date(ratings_path))
-    if decomposition:
-        write_decomposition(cfg, ratings_path, out_dir / "data", built or today())
     if similarity:
         write_similarity(cfg, ratings_path, out_dir / "data" / SIMILARITY_FOLDER, built or today())
     if openrapm_decomposition:
@@ -174,52 +166,8 @@ def write_ratings_json(ratings_path: Path, path: Path, built: str) -> None:
           f"{path.stat().st_size / 1e6:.1f} MB, from {ratings_path}", flush=True)
 
 
-# ===================================================================================== the decomposition page
-# Every player's vanilla RAPM over one season and over each three-season window, split two ways that each add up
-# to it exactly: by player and by possession.  One fit per span (each season alone, and each of config.yaml's ten
-# three-season windows), penalty 3,000 per side, the owner's choice when the page was built (2026-09-27).
-#
-# By player, who was on the court:
-#
-#     RAPM = on-court rating + teammates + opponents + context + ridge penalty
-#
-#   on-court rating  his team's points per 100 possessions minus the opponents', while he is on the court
-#   teammates        minus the RAPM of the four teammates on the court with him, added up, weighted by time together
-#   opponents        the RAPM of the five opponents on the court with him, added up, weighted by time
-#   context          minus what home court, playoffs, garbage time, the score margin and the season predict for his
-#                    minutes
-#   ridge penalty    the ridge's pull toward zero: minus penalty x his coefficient / his possessions, on each side
-#
-# It is exact because it is the ridge's own first-order condition for his offensive and his defensive column: the
-# residuals of the possessions he played add up to penalty x his coefficient.  On the published zero point
-# (possession-weighted zero per side) each side picks up a league-wide constant, 5 x the two sides' shifts, and the
-# two cancel in the net.  Each piece averages zero over the league, weighted by possessions.
-#
-# By possession, which possessions the rating came from:
-#
-#     RAPM = his minutes + his team without him + games he missed + everything else
-#
-# RAPM is linear in the outcomes: his published rating is c'beta = sum over rows of h_r y_r, h = W X A^-1 c, with
-# A = X'WX + the penalty, W the possessions and c picking his offense minus his defense less the zero point.  The
-# context columns are unpenalised, so h is orthogonal to each of them, and measuring every outcome against its
-# fitted context prediction leaves the total unchanged.  Each piece adds up h_r x (outcome - context prediction)
-# over one group of rows: the possessions he played; his team's possessions without him in games he played; his
-# teams' possessions in games he did not play, in seasons he played for them; and every other possession in the
-# span.  A row's team comes from the box scores (the team of the players on that side).  A season he missed
-# entirely lands in everything else; for a traded player, his other team's games count as games he missed.  The
-# page also shows his actual off-court rating beside the pieces (not a piece).
-#
-# Example (2026, one season): Victor Wembanyama, 7.16 = 15.34 - 8.28 + 2.45 + 1.95 - 4.30 by player,
-# and 7.20 - 0.19 - 0.45 + 0.60 by possession.  The command stops on a failed check, before writing the span's file.
-DECOMPOSITION_PENALTY = 3000.0
-# a row's fields: name, possessions, the five pieces by player, RAPM, the four by possession, the off-court rating,
-# the NBA id (in the files and the CSV download, not on the page)
-DECOMPOSITION_FIELDS = ["n", "p", "m", "t", "o", "x", "r", "a", "h", "w", "g", "e", "f", "id"]
-PIECES = ["margin", "teammates", "opponents", "context", "ridge"]
-SOURCES = ["his_minutes", "team_without_him", "games_missed", "everything_else"]
-IDENTITY_TOLERANCE = 1e-9      # each identity holds to this, per player, per span
-UNPLACED_TOLERANCE = 0.001     # rows whose team the box scores cannot name: under this share of the span's rows
-CENTRE_TOLERANCE = 0.05        # a piece's possession-weighted league average must sit this close to zero
+# rows whose team the box scores cannot name: under this share of a season's rows (the Detail view's check)
+UNPLACED_TOLERANCE = 0.001
 
 
 class BoxScoreFiles:
@@ -274,179 +222,6 @@ class BoxScoreFiles:
         return pd.Series(found, dtype=object)
 
 
-def span_label(seasons) -> str:
-    """"2026" for one season, "2024-26" for a window."""
-    return str(seasons[0]) if len(seasons) == 1 else f"{seasons[0]}-{str(seasons[-1])[-2:]}"
-
-
-def span_sums(seasons, cfg: dict) -> tuple[SeasonSums, dict]:
-    """Each season's points design, and the normal equations of all of them in one rapm.SeasonSums."""
-    sums, designs = SeasonSums(min_possessions=0.0), {}
-    for season in seasons:
-        designs[season] = block_design([season], cfg, target="pts")
-        sums.add(season, designs[season])
-    return sums, designs
-
-
-def season_rows(sums: SeasonSums, design, season: int, first_context: int, n_columns: int) -> dict:
-    """One season's rows in the span's columns: the sparse rows (ten players, then the context), both lineups as
-    span columns, the weights, the targets and each row's game id."""
-    n_players = len(sums.player_ids)
-    slot = sums.player_columns(season)
-    context = np.asarray(design.parts["F"], dtype=float)
-    rows, n_context = context.shape
-    if n_context != sums.context_size(season):
-        raise SystemExit(f"{season}: {n_context} context columns in the design, {sums.context_size(season)} in "
-                         "the fit")
-    lineup_o, lineup_d = slot[np.asarray(design.parts["lineup_o"])], slot[np.asarray(design.parts["lineup_d"])]
-    indices = np.hstack([lineup_o, lineup_d + n_players,
-                         np.broadcast_to(first_context + np.arange(n_context), (rows, n_context))])
-    data = np.hstack([np.ones((rows, 10)), context])
-    row_starts = np.arange(0, rows * (10 + n_context) + 1, 10 + n_context, dtype=np.int64)
-    game_ids = design.games.set_index("game_idx").game_id.reindex(design.rows.game_idx.to_numpy()).to_numpy() \
-        .astype(str)
-    return dict(X=sp.csr_matrix((data.ravel(), indices.ravel(), row_starts), shape=(rows, n_columns)),
-                lineup_o=lineup_o, lineup_d=lineup_d, w=np.asarray(design.w, dtype=float),
-                y=np.asarray(design.y, dtype=float), game_ids=game_ids, n_context=n_context)
-
-
-def span_rows(sums: SeasonSums, designs: dict, box_files: BoxScoreFiles, n_columns: int) -> dict:
-    """Every row of the span, seasons in `assemble`'s order so its context columns are ours, with each row's
-    attacking and defending team and season."""
-    column, blocks = 2 * len(sums.player_ids), []
-    for season in sums.seasons:
-        block = season_rows(sums, designs[season], season, column, n_columns)
-        teams = box_files.teams(season)
-        block["team_att"] = side_team(teams, block["game_ids"], sums.player_ids[block["lineup_o"]])
-        block["team_def"] = side_team(teams, block["game_ids"], sums.player_ids[block["lineup_d"]])
-        block["season"] = np.full(len(block["w"]), season, dtype=np.int64)
-        blocks.append(block)
-        column += block["n_context"]
-    joined = {key: np.concatenate([block[key] for block in blocks])
-              for key in ("w", "y", "game_ids", "team_att", "team_def", "season")}
-    joined.update(X=sp.vstack([block["X"] for block in blocks]).tocsr(),
-                  lineup_o=np.vstack([block["lineup_o"] for block in blocks]),
-                  lineup_d=np.vstack([block["lineup_d"] for block in blocks]))
-    return joined
-
-
-def ridge_solve(gram: np.ndarray, rhs: np.ndarray, n_players: int, n_context: int, penalty: float):
-    """(coefficients, the diagonal of G, the Cholesky factor of G + penalty): the plain ridge, context unpenalised.
-
-    An empty context column (the 2020 bubble's playoff home court) gets a token penalty of 1: its coefficient is
-    then exactly 0 and nothing else moves, where unpenalised it makes the system singular.
-    """
-    diagonal = np.diagonal(gram)
-    penalties = np.concatenate([np.full(2 * n_players, float(penalty)), np.zeros(n_context)])
-    penalties[(diagonal <= 0) & (penalties == 0)] = 1.0
-    factor = sla.cho_factor(gram + np.diag(penalties))
-    return sla.cho_solve(factor, rhs), diagonal, factor
-
-
-def published_zero(beta: np.ndarray, diagonal: np.ndarray, possessions: np.ndarray, n_players: int) -> dict:
-    """Both sides centered as the ratings pages center them, positive good: each side's possession-weighted mean
-    over players with at least the published minimum possessions is zero.  Also the two weight vectors."""
-    keep = possessions >= PRODUCT.labels.min_possessions
-    weight_off = np.where(keep, possessions, 0.0)
-    weight_def = np.where(keep, diagonal[n_players:2 * n_players], 0.0)
-    offence, defence = beta[:n_players], beta[n_players:2 * n_players]
-    return dict(off=offence - weight_off @ offence / weight_off.sum(),
-                dfn=-(defence - weight_def @ defence / weight_def.sum()),
-                w_off=weight_off / weight_off.sum(), w_def=weight_def / weight_def.sum())
-
-
-def span_fit(seasons, cfg: dict, penalty: float, box_files: BoxScoreFiles) -> dict:
-    """One span's vanilla RAPM: its rows in the span's columns, every row's ten players, the fit, the ratings."""
-    sums, designs = span_sums(seasons, cfg)
-    gram, rhs, possessions, n_context = sums.assemble(())
-    n_players = possessions.size
-    rows = span_rows(sums, designs, box_files, 2 * n_players + n_context)
-    beta, diagonal, factor = ridge_solve(gram, rhs, n_players, n_context, penalty)
-    return dict(n=n_players, X=rows["X"], lineup_o=rows["lineup_o"], lineup_d=rows["lineup_d"], w=rows["w"],
-                y=rows["y"], beta=beta, diag=diagonal, poss=possessions, player_ids=sums.player_ids.copy(),
-                lam=float(penalty), factor=factor, keys=team_codes(rows),
-                **published_zero(beta, diagonal, possessions, n_players))
-
-
-def weighted_mean(values: np.ndarray, rows, weights: np.ndarray) -> float:
-    """The mean of `values` over `rows`, weighted by possessions."""
-    return float(np.average(values[rows], weights=weights[rows]))
-
-
-def row_terms(fit: dict) -> dict:
-    """What every player's split reads per row: the residual, the context prediction, the outcome against it, the
-    two lineups' rating sums, which players are on each row, and A^-1 with the zero point's part of A^-1 c."""
-    n, X, w, beta = fit["n"], fit["X"], fit["w"], fit["beta"]
-    rows = np.arange(len(w))
-    context_row = X[:, 2 * n:] @ beta[2 * n:]
-    zero_point = np.zeros(X.shape[1])
-    zero_point[:n], zero_point[n:2 * n] = -fit["w_off"], fit["w_def"]
-    inverse = sla.cho_solve(fit["factor"], np.eye(X.shape[1]))
-    return dict(resid=fit["y"] - X @ beta, context_row=context_row, z=fit["y"] - context_row,
-                sum_o=fit["off"][fit["lineup_o"]].sum(axis=1), sum_d=fit["dfn"][fit["lineup_d"]].sum(axis=1),
-                at_o=sp.csc_matrix((np.ones(fit["lineup_o"].size), (np.repeat(rows, 5), fit["lineup_o"].ravel())),
-                                   shape=(len(w), n)),
-                at_d=sp.csc_matrix((np.ones(fit["lineup_d"].size), (np.repeat(rows, 5), fit["lineup_d"].ravel())),
-                                   shape=(len(w), n)),
-                inverse=inverse, u0=inverse @ zero_point)
-
-
-def player_pieces(i: int, rows_off, rows_def, fit: dict, terms: dict) -> dict:
-    """The five pieces by player and his RAPM (offense plus defense, positive good)."""
-    y, w, off, dfn = fit["y"], fit["w"], fit["off"], fit["dfn"]
-    return dict(margin=weighted_mean(y, rows_off, w) - weighted_mean(y, rows_def, w),
-                teammates=-((weighted_mean(terms["sum_o"], rows_off, w) - off[i])
-                            + (weighted_mean(terms["sum_d"], rows_def, w) - dfn[i])),
-                opponents=weighted_mean(terms["sum_d"], rows_off, w) + weighted_mean(terms["sum_o"], rows_def, w),
-                context=-(weighted_mean(terms["context_row"], rows_off, w)
-                          - weighted_mean(terms["context_row"], rows_def, w)),
-                ridge=-(weighted_mean(terms["resid"], rows_off, w) - weighted_mean(terms["resid"], rows_def, w)),
-                rapm=off[i] + dfn[i])
-
-
-def possession_groups(i: int, rows_off, rows_def, fit: dict, terms: dict) -> dict:
-    """The four pieces by possession, and his actual off-court rating (his team's net points per 100 without
-    him, in games he played; missing when one side has no such rows)."""
-    n, w, y = fit["n"], fit["w"], fit["y"]
-    hz = w * (fit["X"] @ (terms["u0"] + terms["inverse"][:, i] - terms["inverse"][:, n + i])) * terms["z"]
-    rows = row_groups(rows_off, rows_def, fit["keys"], len(w))
-    on, without, missed = rows["on"], rows["without"], rows["missed"]
-    groups = dict(his_minutes=hz[on].sum(), team_without_him=hz[without].sum(), games_missed=hz[missed].sum(),
-                  everything_else=hz[~(on | without | missed)].sum())
-    off_att, off_def = rows["off_att"], rows["off_def"]
-    both_sides = off_att.any() and off_def.any()
-    groups["off_rtg"] = weighted_mean(y, off_att, w) - weighted_mean(y, off_def, w) if both_sides else np.nan
-    return groups
-
-
-def record_misses(miss: dict, record: dict, i: int, rows_off, rows_def, fit: dict, terms: dict) -> None:
-    """Keep the largest miss of each identity the split rests on."""
-    n, w, beta, diagonal = fit["n"], fit["w"], fit["beta"], fit["diag"]
-    miss["identity"] = max(miss["identity"], abs(sum(record[k] for k in PIECES) - record["rapm"]))
-    miss["sources"] = max(miss["sources"], abs(sum(record[k] for k in SOURCES) - record["rapm"]))
-    miss["ridge"] = max(miss["ridge"],
-                        abs(weighted_mean(terms["resid"], rows_off, w) - fit["lam"] * beta[i] / diagonal[i]),
-                        abs(weighted_mean(terms["resid"], rows_def, w) - fit["lam"] * beta[n + i] / diagonal[n + i]))
-    miss["weights"] = max(miss["weights"], abs(w[rows_off].sum() - fit["poss"][i]) / fit["poss"][i])
-
-
-def decompose(fit: dict) -> tuple[pd.DataFrame, dict]:
-    """Every player's five pieces by player and four by possession, and the largest misses of the identities they
-    rest on.  Players who played on both sides only."""
-    terms = row_terms(fit)
-    at_o, at_d = terms["at_o"], terms["at_d"]
-    miss = dict(identity=0.0, ridge=0.0, weights=0.0, sources=0.0)
-    records = []
-    for i in np.flatnonzero((np.diff(at_o.indptr) > 0) & (np.diff(at_d.indptr) > 0)):
-        rows_off = at_o.indices[at_o.indptr[i]:at_o.indptr[i + 1]]
-        rows_def = at_d.indices[at_d.indptr[i]:at_d.indptr[i + 1]]
-        record = dict(i=i, poss=fit["poss"][i], **player_pieces(i, rows_off, rows_def, fit, terms))
-        record.update(possession_groups(i, rows_off, rows_def, fit, terms))
-        record_misses(miss, record, i, rows_off, rows_def, fit, terms)
-        records.append(record)
-    return pd.DataFrame(records), miss
-
-
 def name_table(ratings_path: Path, cfg: dict) -> pd.DataFrame:
     """player_id, season, player_name: the ratings table first, then the bio files for the players it lacks."""
     names = pd.read_parquet(ratings_path, columns=["player_id", "season", "player_name"]) \
@@ -470,97 +245,11 @@ def span_names(names: pd.DataFrame, ids: np.ndarray, seasons, box_files: BoxScor
     return got.to_numpy(object)
 
 
-def decomposition_row(r) -> list:
-    """One player's row in DECOMPOSITION_FIELDS order: numbers at two decimals, possessions whole."""
-    return [r.name, int(round(r.poss)), *(round(float(getattr(r, k)), 2) for k in PIECES), round(float(r.rapm), 2),
-            *(round(float(getattr(r, k)), 2) for k in SOURCES),
-            None if np.isnan(r.off_rtg) else round(float(r.off_rtg), 2), int(r.player_id)]
-
-
-def new_worst() -> dict:
-    return dict(identity=0.0, sources=0.0, ridge=0.0, weights=0.0, centre=0.0, unnamed=0, unplaced=0.0)
-
-
-def update_worst(worst: dict, table: pd.DataFrame, miss: dict, unplaced: float) -> None:
-    """Fold one span's misses into the worst over every span of its length."""
-    worst["unplaced"] = max(worst["unplaced"], unplaced)
-    for key in miss:
-        worst[key] = max(worst[key], miss[key])
-    for piece in PIECES:
-        worst["centre"] = max(worst["centre"], abs(float(np.average(table[piece], weights=table.poss))))
-    worst["unnamed"] += int(table["name"].isna().sum())
-
-
 def check(ok: bool, what: str) -> None:
     """Print a check; stop the run on a failure, so nothing is written past one."""
     print(("  PASS  " if ok else "  FAIL  ") + what, flush=True)
     if not ok:
         raise SystemExit(f"check failed: {what}")
-
-
-def run_checks(span_words: str, worst: dict) -> None:
-    """The seven checks on every span of one length, before its file is written."""
-    check(worst["identity"] < IDENTITY_TOLERANCE, f"{span_words}: the five pieces add up to RAPM for every player "
-                                                  f"of every span (max miss {worst['identity']:.1e})")
-    check(worst["sources"] < IDENTITY_TOLERANCE, f"{span_words}: the four possession groups add up to RAPM for "
-                                                 f"every player of every span (max miss {worst['sources']:.1e})")
-    check(worst["unplaced"] < UNPLACED_TOLERANCE, f"{span_words}: the box scores name both teams of nearly every "
-                                                  f"row (largest share without, in one span: "
-                                                  f"{worst['unplaced']:.2%})")
-    check(worst["ridge"] < IDENTITY_TOLERANCE, f"{span_words}: 'ridge penalty' equals penalty x coefficient / "
-                                               f"possessions on each side, the fit's own condition (max miss "
-                                               f"{worst['ridge']:.1e})")
-    check(worst["weights"] < IDENTITY_TOLERANCE, f"{span_words}: the fit's weights are his possessions, so 'per 100 "
-                                                 f"possessions' is literal (max relative miss "
-                                                 f"{worst['weights']:.1e})")
-    check(worst["centre"] < CENTRE_TOLERANCE, f"{span_words}: every piece averages zero over the league, weighted "
-                                              f"by possessions (largest {worst['centre']:.3f})")
-    check(worst["unnamed"] == 0, f"{span_words}: every player has a name ({worst['unnamed']} without)")
-
-
-def span_table(seasons, cfg: dict, names: pd.DataFrame, box_files: BoxScoreFiles, worst: dict) -> pd.DataFrame:
-    """One span's players with names and NBA ids, best RAPM first; its misses folded into `worst`."""
-    fit = span_fit(seasons, cfg, DECOMPOSITION_PENALTY, box_files)
-    table, miss = decompose(fit)
-    ids = fit["player_ids"][table.i.to_numpy()]
-    table["name"] = span_names(names, ids, seasons, box_files)
-    table["player_id"] = ids
-    update_worst(worst, table, miss, fit["keys"]["unplaced"])
-    return table.sort_values("rapm", ascending=False)
-
-
-def decomposition_spans(cfg: dict) -> dict:
-    """{file key: (the words for the span, the spans)}: every season alone, and config.yaml's three-season windows."""
-    return {"1y": ("1 season", [[s] for s in range(int(cfg["first_season"]), int(cfg["last_season"]) + 1)]),
-            "3y": ("3 seasons", [list(range(int(a), int(b) + 1)) for a, b in cfg["windows"]])}
-
-
-def write_span_file(path: Path, span_words: str, rows: dict, built: str) -> None:
-    """decompose_<key>.json: meta and the rows of every span, latest first; compact, UTF-8 letters as they are."""
-    periods = sorted(rows, reverse=True)
-    document = dict(meta=dict(span=span_words, penalty=DECOMPOSITION_PENALTY, built=built,
-                              fields=DECOMPOSITION_FIELDS, periods=periods),
-                    rows={period: rows[period] for period in periods})
-    path.write_text(json.dumps(document, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-
-
-def write_decomposition(cfg: dict, ratings_path: Path, data_dir: Path, built: str) -> None:
-    """decompose_1y.json and decompose_3y.json in `data_dir`, each after its checks pass."""
-    names, box_files = name_table(ratings_path, cfg), BoxScoreFiles(cfg)
-    data_dir.mkdir(parents=True, exist_ok=True)
-    for key, (span_words, spans) in decomposition_spans(cfg).items():
-        started, rows, worst = time.time(), {}, new_worst()
-        for seasons in spans:
-            table = span_table(seasons, cfg, names, box_files, worst)
-            rows[span_label(seasons)] = [decomposition_row(r) for r in table.itertuples(index=False)]
-            top = table.iloc[0]
-            print(f"  {span_label(seasons)}: {len(table)} players, top {top['name']} {top.rapm:+.2f} "
-                  f"({time.time() - started:.0f}s)", flush=True)
-        run_checks(span_words, worst)
-        path = data_dir / f"decompose_{key}.json"
-        write_span_file(path, span_words, rows, built)
-        print(f"wrote {path}: {sum(len(v) for v in rows.values()):,} rows over {len(rows)} periods, "
-              f"{path.stat().st_size / 1e6:.2f} MB ({time.time() - started:.0f}s)", flush=True)
 
 
 # ===================================================================================== the OpenRAPM decomposition page

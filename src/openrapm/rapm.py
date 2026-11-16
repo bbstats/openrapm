@@ -238,17 +238,6 @@ class SeasonSums:
         """Whether any season was added with its team-season flags."""
         return any(len(block["team_ids"]) for block in self._seasons.values())
 
-    def player_columns(self, season: int) -> np.ndarray:
-        """The column of each of a season's players, in the order of that season's design.
-
-        `openrapm site --decomposition` reads this and `context_size` to place each season inside `assemble`'s G.
-        """
-        return self._seasons[int(season)]["columns"]
-
-    def context_size(self, season: int) -> int:
-        """How many context columns a season brought."""
-        return self._seasons[int(season)]["n_context"]
-
     def context_penalty(self, season: int, penalties=(40000.0, 40000.0, 0.0), team_penalties=(0.0, 0.0)) -> np.ndarray:
         """One season's context columns' penalties, laid out as `penalty` lays them out."""
         block = self._seasons[int(season)]

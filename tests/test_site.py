@@ -1,8 +1,7 @@
 """`openrapm site` (src/openrapm/commands/site.py) on small made-up tables: the form of ratings.json, the Bias
-page's file, and the decomposition's row bookkeeping.
+page's file, the Similarity files and the Detail view's row bookkeeping.
 
-The published files themselves are pinned byte for byte against the old scripts' output by the cleanup's gate 6
-(A:/code/spmm_verify); tests/test_decompose_site.py checks the committed decomposition files add up.
+tests/test_decompose_openrapm_site.py checks the committed Detail file against ratings.json.
 """
 import json
 import os
@@ -198,12 +197,6 @@ def test_a_system_never_pulled_or_dated_before_the_season_leaves_the_bias_file_a
     assert json.loads((out_dir / "data" / "ratings.json").read_text())["meta"]["built"] == "2026-11-06"
 
 
-def test_span_labels():
-    assert site.span_label([2026]) == "2026"
-    assert site.span_label([2024, 2025, 2026]) == "2024-26"
-
-
-# ------------------------------------------------------------------------------ the similarity page
 def _similarity_world(tmp_path, seed=3):
     """A made-up season panel and ratings table: four players over three seasons, every possession count above the
     minimum; the role, career and body columns equal on a player's two panel rows, as in the real panel."""

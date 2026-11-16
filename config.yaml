@@ -4,17 +4,6 @@
 # Seasons are named by the year they end (1997 = 1996-97).
 first_season: 1997    # the first season ingested, built and rated
 last_season: 2027     # the last; it may still be in progress (data/seasons.py decides what may be trained on)
-windows:              # the decomposition page's ten three-season windows (openrapm site --decomposition)
-  - [1997, 1999]
-  - [2000, 2002]
-  - [2003, 2005]
-  - [2006, 2008]
-  - [2009, 2011]
-  - [2012, 2014]
-  - [2015, 2017]
-  - [2018, 2020]
-  - [2021, 2023]
-  - [2024, 2026]
 neutral_site_seasons_po: [2020]   # playoffs played at a neutral site (the 2020 bubble): home court is 0 there
 neutral_site_from: [[2020, "2020-07-01"]]   # [season, date]: every game of the season from that date at a neutral site,
                                             # the bubble's 88 regular-season games, which the game log lists with a home team
