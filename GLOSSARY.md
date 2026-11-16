@@ -1,243 +1,291 @@
 # Glossary
 
-The words this project uses, each in one or two lines, in the order a reader meets them; then the raw box
-counts; then every column the box-score prior can read, written from the code. Reports to the owner use the
-plain names, never the codes.
+The words this project uses, each in a few lines, in the order a reader meets them, so a term is defined before
+another entry leans on it; then the raw box counts; then every column the box-score prior can read, written from the
+code. Reports to the owner use the plain names, never the codes. Every setting named here has its value and the
+experiment that set it in `src/openrapm/settings.py`.
 
-## Method terms
+## The data
 
-**Stint.** A stretch of play with the same ten players on the court; a substitution or the end of a period
-starts a new one. The 2003 playoffs, 88 games, give 2,653 stints, about 30 a game.
+**Stint.** A stretch of play with the same ten players on the court; a substitution or the end of a period starts a
+new one. The 2003 playoffs, 88 games, give 2,653 stints, about 30 a game.
 
 **Possession.** One team's turn with the ball, from when it gains the ball until the other team gains it or the
 period ends; an offensive rebound continues it. Every rating is in points per 100 possessions.
 
-**RAPM** (regularised adjusted plus-minus). A ridge regression of every stint's points per 100 possessions on
-the ten players on the court, plus context columns; a player's coefficient is his rating. In the published
-tables positive is good on both ends.
+**Garbage time.** A stint in the fourth quarter with a margin of 20 or more, or of 15 or more with under six minutes
+left (`config.yaml`, `garbage_time`). It is flagged, and the design carries the flag as a context column; a
+garbage-time row weighs the same as any other.
 
-**Design.** The stints of one or more seasons as the rows of that regression: one column per player per side
-(offence, defence), plus the context columns (season intercept, home court, playoffs, garbage time, score
-margin, margin x share of the game left). Each row's target is its points per 100 possessions (adjusted as
-the two targets below say) and its weight its possessions (`design.py`).
+**Season panel.** One row per player, season and side: his possessions, padded box-score rates, role, career, body,
+team, his team's record with him on and off the court, the play-by-play parts and the hustle rates
+(`outputs/season_panel.parquet`).
 
-**Garbage time.** A stint in the fourth quarter with a margin of 20 or more, or of 15 or more with under six
-minutes left (`config.yaml`, `garbage_time`). It is flagged, and the design carries the flag as a context
-column; a garbage-time row weighs the same as any other (`gt_weight: 1.0`).
+**Padded rate.** A per-100 box-score rate pulled toward the rate of players with about as many possessions, by k
+possessions' worth of it: padded = (n x rate + k x bin rate) / (n + k), with n his possessions. The bin rate is that
+season's rate among the players of his possession bin, six ranges of possessions equally wide on a log scale. k is
+measured per count and season from every player's odd- against even-numbered games: the noise variance of one
+possession's worth of the rate over the variance of the true rates between players (`box_rates.py`). A 200-possession
+player with 2.1 steals per 100, k = 450 and a bin rate of 1.4 is padded to (200 x 2.1 + 450 x 1.4) / 650 = 1.6. The
+bin rate is itself padded toward the league rate by the bin's possessions, so early in a season, when a bin's rate
+rests on a few dozen events, the league rate carries most of the weight.
+
+**Hustle inputs.** Screen assists, points from screen assists, box-outs, loose balls recovered, deflections, contested
+twos and threes and charges drawn, from the league's hustle box scores, one per game since 2017; each padded per 100
+possessions and read against the league's rate: (player - league) / league. Missing before 2017. A season in progress
+reads the league's season-to-date totals instead (`data/dashboard_rates.py`).
+
+**Self-creation.** The owner's estimate of the shots a player creates for himself, per 100 possessions: (shot
+attempts + 0.44 x free-throw attempts) x (1 - share assisted), with share assisted = 0.73 - 0.03 x assists per 100 -
+0.01 x field goals made per 100, clipped to 0-1. An input of the offensive box-score prior.
+
+**Season in progress.** The season whose Finals are not over, 2027 as of this writing (`data/seasons.py`). It is
+rated every morning and never trained on.
+
+## How a rating is made
+
+**RAPM** (regularized adjusted plus-minus). A ridge regression of every stint's points per 100 possessions on the
+ten players on the court, plus context columns; a player's coefficient is his rating. In the published tables
+positive is good on both ends.
+
+**Design.** The stints of one or more seasons as the rows of that regression: one column per player per side, offense
+and defense, plus the context columns: season intercept, home court, playoffs, garbage time, score margin, margin x
+share of the game left. Each row's target is its points per 100 possessions, adjusted as the two targets below say,
+and its weight its possessions (`design.py`).
+
+**The two targets.** What each side's ridge explains, per 100 possessions. Offense,
+`points_with_expected_free_throws`: points with each made free throw replaced by the shooter's padded free-throw
+percentage. Defense, `points_with_expected_opponent_threes_late_as_scored`: the same, less 3 x 0.75 x (threes made -
+threes expected), so three quarters of the shooters' three-point luck is taken off; a three of a period's last two
+seconds counts as it happened. Scoring is always against the points actually scored.
 
 **Penalty.** The ridge's lambda. Seen alone, a player with n possessions keeps about n / (n + lambda) of his raw
-impact (the coefficient an unpenalised fit would give him). With lambda = 40,000, a player with 54,000
-possessions keeps 57% of it and one with 2,600 keeps 6%.
+impact, the coefficient an unpenalized fit would give him. With lambda = 40,000, a player with 54,000 possessions keeps
+57% of it and one with 2,600 keeps 6%.
 
 **Label.** What the box-score prior learns to predict: a player's RAPM from one fit over every season except the
 unseen ones, one number per side for all those seasons together (step 1, `rapm.py`).
 
-**Leave-season-out.** Fitted without the rated season (and, in the test setting, without the seasons either side
-of it). Each season's normal equations are stored once, so leaving a season out is one solve on the other
-seasons' sums, not thirty refits.
+**Leave-season-out.** Fitted without the rated season, and in the test setting without the seasons either side of it.
+Each season's normal equations are stored once, so leaving a season out is one solve on the other seasons' sums, not
+thirty refits.
 
-**Un-shrink.** Dividing a coefficient by the share n / (n + lambda) the ridge kept, so long and short careers sit
-on one scale. The division stops at 4,444 possessions and the rest comes from the level of the player's
-possession tier. Only the defensive label is un-shrunk (`notes/DECISIONS.md`, experiment 22): un-shrinking
-offence too helped the year-over-year test but made the order within each side worse and dropped the
-consensus agreement from 0.771 to 0.680. Example: with
-lambda = 40,000 the division stops at 4,444 / 44,444 = 0.10, so a 1,000-possession player (kept share 0.024)
-with coefficient 0.05, in a tier whose level is -3.0, gets 0.05 / 0.10 + (1 - 0.24) x -3.0 = -1.77.
+**Un-shrink.** Dividing a coefficient by the share n / (n + lambda) the ridge kept, so long and short careers sit on
+one scale. The division stops at 4,444 possessions and the rest comes from the level of the player's possession tier.
+Only the defensive label is un-shrunk. Example: with lambda = 40,000 the division stops at 4,444 / 44,444 = 0.10, so a
+1,000-possession player, kept share 0.024, with coefficient 0.05, in a tier whose level is -3.0, gets 0.05 / 0.10 + (1
+- 0.24) x -3.0 = -1.77.
 
-**Season panel.** One row per player, season and side: his possessions, padded box-score rates, role, career,
-body, team, and his team's record with him on and off the court (`outputs/season_panel.parquet`).
+**Box-score prior.** LightGBM's, gradient-boosted trees', prediction of a player's label from his season-panel row:
+18 inputs on offense and 18 on defense, listed below, plus `row_possessions` and `row_seasons`. Step 2,
+`box_prior.py`.
 
-**Padded rate.** A per-100 box-score rate pulled toward the rate of players with about as many possessions, by
-k possessions' worth of it: padded = (n x rate + k x bin rate) / (n + k), with n his possessions. The bin rate
-is that season's rate among the players of his possession bin (six ranges of possessions, equally wide on a log
-scale). k is measured per count and season from every player's odd- against even-numbered games: the noise
-variance of one possession's worth of the rate over the variance of the true rates between players
-(`box_rates.py`). A 200-possession player with 2.1 steals per 100, k = 450 and a bin rate of 1.4 is padded to
-(200 x 2.1 + 450 x 1.4) / 650 = 1.6. The bin rate is itself padded toward the league rate by the bin's
-possessions before it serves as the target (since 2026-11-01), so early in a season, when a bin's rate rests on a
-few dozen events, the league rate carries most of the weight; over a whole season the bin keeps about 90% of its
-own rate.
-
-**Box-score prior.** LightGBM's (gradient-boosted trees') prediction of a player's label from his season-panel
-row: 17 inputs on offence, 14 on defence (`features.SHIPPED`). Step 2, `box_prior.py`.
-
-**Box Adj.** The part of a player's prior beyond what his own stats say alone, the Detail page's column.  The prior is a
-straight line over his box-score prior, his prior on the other end, his box-score rates, role and body, his teammates' and
-opponents' priors with him on and off the court, and his team's eight rates with him on and off the court: made and missed
-threes, twos and free throws, offensive rebounds and turnovers, on defense the opponents' (`PriorSettings.second_prior`,
-`rating_line.py`).  Its weights are fitted on the within-season WOWY test through the ridge.  The Box score column refits
-his own stats' inputs alone (`rating_line.first_stage`), and Box Adj is the rest of the same prior.  Team totals are held,
-so Box Adj only moves credit inside a team.
-
-**Booster.** One fitted LightGBM model. Each rated season and side has six: one fitted on every training row
-and one without each of the five player folds (below). `--save-models` writes them to
+**Booster.** One fitted LightGBM model. `--save-models` writes every rated season's boosters to
 `outputs/prior_models_NAME.pkl`.
 
+**Bags.** The box-score prior averages 10 versions of itself, each trained on a resample of the players drawn with
+replacement; a player drawn twice counts twice in that version.
+
 **Career row and chunk rows.** A player's training rows for the prior. The career row averages his box score over
-every season outside the unseen ones; a chunk row averages a run of 1, 2 or 3 consecutive seasons. Every row
-carries his career label, and the chunk rows together weigh what the career row weighs. Example: seasons of
-1,000, 2,000 and 3,000 possessions and a label resting on 6,000 give six chunk rows weighing 300, 600, 900,
-900, 1,500 and 1,800, together 6,000.
+every season outside the unseen ones; a chunk row averages a run of 1, 2 or 3 consecutive seasons. Every row carries
+his career label, and the chunk rows together weigh what the career row weighs. Example: seasons of 1,000, 2,000 and
+3,000 possessions and a label resting on 6,000 give six chunk rows weighing 300, 600, 900, 900, 1,500 and 1,800,
+together 6,000.
+
+**Part-season rows.** Each training season so far at a quarter, a half and three quarters of its regular season, one
+chunk row each, so the prior has seen early-season box scores like the ones a season in progress has.
 
 **Out-of-player.** Players are sorted by label and assigned to five player folds, 0,1,2,3,4,4,3,2,1,0,..., and each
-player's prior comes from the model fitted without his fold, so it cannot recognise his box score and return
-his own label.
+player's prior comes from the booster fitted without his fold, so it cannot recognize his box score and return his own
+label.
 
-**Prior-informed RAPM.** Step 3 (`prior_rapm.py`): the season's RAPM with each player pulled toward a multiple of
-his prior instead of toward 0, penalty 13,037. A rating is s x prior + r, where r is how far the season's games
-moved him.
+**Held-back games.** Each season, 1997 to 2026, rated from three quarters of its games, the fit games, and scored on
+the other quarter, which the rating never saw. The games are assigned at random to four folds, three times over:
+twelve folds a season (`openrapm folds`, `notes/WITHIN_SEASON_LEDGER.md`). The code calls them the within-season
+folds. Box Adj's weights and the shrink's multipliers are fitted on them.
 
-**Prior scale.** That multiple, s: one per side and season, the coefficient on the summed priors of the five on
-the court, unpenalised, so the season's games set it. In 2026 it is 2.35 on offence (product setting): a
-player whose box-score prior is +0.5 per 100 starts at 2.35 x 0.5 = +1.18. Why s is well above 1 on offence:
-the offensive label is a ridge coefficient that is not un-shrunk, so it keeps only n / (n + 40,000) of a
-player's raw impact, and the prior learned from it is on that shrunk scale; s puts it back on the season's
-scale. The defensive label is un-shrunk, and its scale stays near 1. Over the thirty published seasons s runs
-from 2.32 to 4.47 on offence and from 0.93 to 1.39 on defence. With both labels un-shrunk (experiment 1 of
-2026-09-14 evening) the scales read 0.84 and 0.92.
+**Box Adj.** The part of a player's prior that corrects his box-score prior for who he played with and against; the
+Detail view's column, the code's second prior. The prior is a straight line over his box-score prior on both ends,
+his teammates' and opponents' box-score priors with him on and off the court, his box rates, role and body, and his
+team's shots by zone, free throws, offensive rebounds and turnovers with him on and off the court, on defense the
+opponents': 57 inputs an end, every one from the rated season (`second_prior.py`). Its weights are fitted on
+held-back games through the ridge (`rating_line.py`). Each team's total is held, so Box Adj only moves credit inside a
+team. The Detail view's Box score column refits his own stats' inputs alone, and Box Adj is the rest of the same
+prior.
 
-**Centring.** Per season and side, the possession-weighted mean rating is subtracted, so the average possession
-is played by a 0 player.
+**Zones.** Where a shot was taken from, five ways: the rim, 3 feet or closer; short mid, to 13 feet; long mid, to the
+three-point line; three, to 26 feet; long three, 27 feet or more. Box Adj reads a team's makes and misses in each.
+
+**Half-life.** Box Adj's line counts each season it is fitted on 0.5 to the power of its distance from the rated
+season over 8: a season 8 years away counts half, 16 away a quarter.
+
+**The rating, prior-informed RAPM.** Step 3 (`prior_rapm.py`): the season's RAPM with each player pulled toward a
+multiple of his prior instead of toward 0, penalty 13,037. A rating is s x prior + r, where r is how far the season's
+games moved him.
+
+**Prior scale.** That multiple, s: one per side and season, the coefficient on the summed priors of the five on the
+court, unpenalized, so the season's games set it. In 2026 it is 0.84 on offense and 0.71 on defense. A season in
+progress holds it at the 8 nearest finished seasons' mean through a quarter of its regular season, then moves on a
+straight line to its own at three quarters.
+
+**Centering.** Per season and side, the possession-weighted mean rating is subtracted, so the average possession is
+played by a 0 player.
 
 **Prior part and games' part.** The two parts of a rating after step 3: the prior part s x prior (`prior_off`,
 `prior_def`), and the games' part r, also called u (`u_off`, `u_def`).
 
-**Prior shrink.** Step 4 (`prior_shrink.py`): every rating's prior part multiplied by a multiplier per side and
-season, fitted on games the rating never saw, the games' part unchanged, then centred again. The published
-multipliers run from 0.699 to 0.715 on offence and from 0.929 to 0.976 on defence. Example: 2026, m = 0.704 on
-offence, so Jokic's offensive prior part of 5.394 becomes 3.80, 3.78 after centring; his games' part stays
-0.97, and his offensive rating goes from 6.37 to 4.75.
+**The shrink.** Step 4 (`prior_shrink.py`): each part of a rating multiplied by what holds up on held-back games, in
+two layers. Each part is split into the player's team mean and his deviation from it; the team means take four
+multipliers per season and the deviations four of their own, the prior's part and the games' part on offense and
+defense. The prior's part is multiplied down, the games' part up: in the published tables of 2026-11-16 the team
+layer's prior multiplier runs 0.600 to 0.707 on offense and 0.629 to 0.799 on defense, its games' multiplier 1.292 to
+1.439 and 1.224 to 1.309. Each season's multipliers come from the 8 fold seasons nearest it. The code calls it the
+prior shrink.
 
-**Within-season folds.** Each season of 2017-2026 rated from three quarters of its games (the fit games) and
-scored on the other quarter (the test games), which the rating never saw. The games are assigned at random to
-four folds, three times over: twelve folds a season (`openrapm folds`, `notes/WITHIN_SEASON_LEDGER.md`).
+**Defense factor.** One more factor on the shrink's two defensive team multipliers: 0.8682 before 2017 and 0.8704 from
+2017. The within layer's multipliers take 0.7663 on offense and 0.9968 on defense.
 
-**Lineup swap.** Two lineups of one team in one season that share four players. The four are held fixed, so the
-difference between the two lineups' results is evidence about the fifth player of each.
+**Read to a full season.** A fold's rating is built from three quarters of a season, the published one from all of it.
+So each multiplier is fitted twice, on folds holding back a quarter and on folds holding back a tenth, and read off
+the straight line through the two at nothing held back.
 
-**Swap test.** Does a ratings table order teammates the way their lineup swaps do: for every lineup swap in the
-seasons either side, the two swapped players' rating gap against the swap's result (`scripts/checks/90_swap_test.py`).
+**Lineup swap.** Two lineups of one team in one season that share four players, a same-four comparison. The four are
+held fixed, so the difference between the two lineups' results is evidence about the fifth player of each.
+
+**Swap adjustment.** Step 5 (`swap_adjust.py`), off since 2026-10-20: a ridge regression of each lineup swap's
+unexplained result on the two swapped players' box-score, role and body numbers predicted which kinds of player the
+ratings gave too much or too little credit, and half of that prediction was applied. Box Adj learns from the same
+comparisons before the ridge.
+
+**Give-back.** In the swap adjustment, each team's total adjustment taken back from its own players in proportion to
+their share of its possessions, so no team's total moved.
+
+**Spread held.** In the swap adjustment, each player's distance from his main team's mean scaled, one factor per
+season and side, until the spread inside teams equaled step 4's.
 
 **Main team.** The team a player played the most possessions for that season.
 
-**Swap adjustment.** Step 5 (`swap_adjust.py`): a type model (a ridge regression of each lineup swap's unexplained
-result on the two swapped players' standardised box-score, role, body and prior numbers, all from the rated season),
-fitted on other seasons' within-season folds, each fold's swaps from its held-back games and its players' numbers
-from its fit games, predicts which players the ratings give too much or too little credit; half of that prediction
-is applied.
+**Product setting and test setting.** Product builds the published ratings: a season's labels, the prior's training
+rows, Box Adj's line and step 4's multipliers all leave that season out. Test builds the table the year-over-year
+test scores: they also leave out the seasons either side, because those are the seasons the test predicts
+(`settings.py`, `PRODUCT` and `TEST`).
 
-**Give-back.** Each team's total adjustment is taken back from its own players in proportion to their share of
-its possessions, so no team's total moves. A starter on the court for 75% of his team's possessions has a
-share of 0.15 (five players per possession).
-
-**Spread held.** After the give-back, each player's distance from his main team's mean is scaled, one factor per
-season and side, until the spread inside teams equals step 4's. Team means and the order inside each team stay;
-over the thirty seasons the factors average 0.84 on offence and 0.86 on defence.
-
-**Product setting and test setting.** Product builds the published ratings: a season's labels, the prior's
-training rows, step 4's multipliers and step 5's type model all leave that season out. Test builds the table
-the year-over-year test scores: they also leave out the seasons either side, because those are the seasons the
-test predicts (`settings.py`, `PRODUCT` and `TEST`).
-
-**The two targets.** What each side's ridge explains, per 100 possessions. Offence,
-`points_with_expected_free_throws`: points with each made free throw replaced by the shooter's padded
-free-throw percentage. Defence, `points_with_expected_opponent_threes`: the same, less 3 x 0.75 x (threes made -
-threes expected), so three quarters of the shooters' three-point luck is taken off. Scoring is always against
-the points actually scored.
+## How a change is judged
 
 **Within-season WOWY test.** The test that decides since 2026-10-15 (`scripts/checks/151_wowy.py`): each season is
 rated from three quarters of its games, twelve times over, and scored stint by stint on the quarter held back, with
-each team's own level in those games taken out, so what is scored is how the ratings split credit among
-teammates. A change must be better in each of 1997-2006, 2007-2016 and 2017-2026, read beside the noise control.
+each team's own level in those games taken out, so what is scored is how the ratings split credit among teammates.
+WOWY is with or without you. A change must be better in each of 1997-2006, 2007-2016 and 2017-2026, read beside the
+noise control.
 
 **Year-over-year test.** The test that guards it (`scripts/checks/63_yoy.py`), and decided until 2026-10-15: each
-season's ratings predict every
-stint of the season before and the season after from the ten players' ratings alone, refitting only that
-season's intercept and home edge; the misses are summed to team-games. 28 scored seasons, each predicted from
-both sides: 56 observations. The score is sqrt(team-game mean squared error) x sqrt(2 / pi), in points per 100
-(`game_armse`, `scoring.py`): the incumbent reads 8.6901. A change must not be worse at a paired z of +2.
+season's ratings predict every stint of the season before and the season after from the ten players' ratings alone,
+refitting only that season's intercept and home edge; the misses are summed to team-games. 28 scored seasons, each
+predicted from both sides: 56 readings. The score is the root of the team-game mean squared error times the square
+root of 2 / pi, in points per 100 (`game_armse`, `scoring.py`): the incumbent reads 8.6908. A change must not be worse
+at a paired z of +2, read with each side's spread matched to the incumbent's.
 
-**Team-game.** One team's offence in one game: the unit the year-over-year test scores, because the noise of
-single possessions cancels inside a team's hundred-odd possessions before the miss is squared.
+**Team-game.** One team's offense in one game: the unit the year-over-year test scores, because the noise of single
+possessions cancels inside a team's hundred-odd possessions before the miss is squared.
 
-**Paired z.** For each of the 56 observations, one table's team-game mean squared error minus the other's; the
-mean of those differences divided by its standard error (a paired t-statistic). Below zero is better. The
-within-season WOWY test pairs its 30 seasons the same way.
+**Paired z.** For each reading, one table's error minus the other's; the mean of those differences divided by its
+standard error, a paired t-statistic. Below zero is better. The within-season WOWY test pairs its 30 seasons, the
+year-over-year test its 56 readings.
 
-**Incumbent.** The table every candidate is scored against: today `outputs/season_ratings_fade141.parquet`,
-experiment 141 built at the test setting, with its folds `fade141_early` and `fade141_within`.
+**Incumbent.** The table every candidate is scored against: `INC_NAME` at the top of `scripts/experiment_chain.sh`,
+today `fade141`, experiment 141 built at the test setting, with its held-back games `fade141_early` and
+`fade141_within`.
 
-**Trade set.** For each rated season, the team-games of that season and the seasons either side, each player's
-share of his team's possessions in each, and the rated season's ratings subtracted; what is left is ridged back
-onto the players. A player's coefficient, alpha, is what his comings and goings say that his rating did not
-already know (`scripts/checks/70_tradeset.py`).
+**Noise control.** The incumbent rebuilt with nothing changed but which players share each of the box-score prior's
+five folds (`--fold-assignment 1`): `CONTROL_NAME` at the top of `scripts/experiment_chain.sh`, today
+`noise_fade141`. It shows how far every reading moves when nothing real changes: -0.013 on the within-season WOWY test,
+paired z -1.41, better in 16 of 30 seasons.
 
-**Trade loss.** Two tables compared by the size of their trade-set corrections on the same players, paired by
-season (`scripts/checks/73_tradeloss.py`). It counts every player once, so it sees the bench players the
-year-over-year test, an error per team-game, barely weighs.
+**Replicate.** The same change built a second time with another random assignment of players to the prior's folds,
+so every reading is seen twice (`scripts/checks/135_robust_review.py`).
+
+**Swap test.** Does a ratings table order teammates the way their lineup swaps do: for every lineup swap in the
+seasons either side, the two swapped players' rating gap against the swap's result
+(`scripts/checks/90_swap_test.py`).
+
+**Trade set.** For each rated season, the team-games of that season and the seasons either side, each player's share
+of his team's possessions in each, and the rated season's ratings subtracted; what is left is ridged back onto the
+players. A player's coefficient is what his comings and goings say his rating did not already know
+(`scripts/checks/70_tradeset.py`).
+
+**Trade loss.** Two tables compared by the size of their trade-set corrections on the same players, paired by season
+(`scripts/checks/73_tradeloss.py`). It counts every player once, so it sees the bench players the year-over-year test,
+an error per team-game, barely weighs.
+
+**Held-out audit.** On held-back games, are players high on some input rated too high or too low
+(`scripts/checks/138_heldout_audit.py`).
+
+**Quality tiers.** Players grouped by the incumbent's rank in the rated season: top 30, 31-90, 91-150, 151-300, 301 and
+below (`scripts/checks/88_yoy_by_player.py`).
 
 **Consensus.** A blend of public all-in-one metrics for 2024-26 (`data/external/consensus.csv`). The ratings are
-compared with it by Spearman's rank correlation over players with 1,000 or more possessions, each pooled over
-the three seasons: 0.850 on offence, 0.781 on defence and 0.806 in total over 475 players for the published
-table. A sanity check, read every time and never a fitting target: a gross miss can veto a change, a marginal
-one cannot.
+compared with it by Spearman's rank correlation over players with 1,000 or more possessions, each pooled over the three
+seasons (`scripts/checks/64_consensus_report.py`). A sanity check, never a fitting target: a gross miss can veto a
+change, a marginal one cannot.
 
-**The Bias page's consensus.** Another thing: for the season in progress, the weighted mean of five outside systems'
-ratings per side, 30% xRAPM, 20% xrapm.com's 3-year RAPM, 20% LOKI, 15% DARKO and 15% Pulse (the owner's weights,
-2026-11-05; `src/openrapm/bias.py`), over the players all five list. The page shows where OpenRAPM rates players
-higher or lower than it, per one standard deviation of each box score stat and of on-court and off-court
-plus-minus. Read the same way: never a fitting target.
+## The site
 
-**Width match.** OpenRAPM's ratings are spread wider than a consensus's on one side and narrower on the other, and
-an unmatched difference would read that as a lean on every stat good players have. So before the Bias page
-subtracts, each side of OpenRAPM is multiplied once, league-wide, to the consensus's standard deviation: 0.82 on
-offense and 1.01 on defense on 2026-11-05. The page prints both multipliers.
+**Detail view.** The Ratings page's Detail button: each published rating split, offense and defense separately, into
+Box score + Box Adj + On adj + Off adj + Team SOS, which add up to the rating. On adj is the part of the games' part
+from the possessions he was on the court for, Off adj the part from his team's possessions without him, Team SOS the
+part from every other possession (`decomposition.py`).
 
-**Noise control.** The incumbent rebuilt with nothing changed but which players share each of the prior's five
-folds (`--fold-assignment 1`). It shows how far every reading moves when nothing real changes: the last
-incumbent's, `noise_zones139`, standing in until experiment 141's is built, reads -0.009 on the within-season WOWY test, paired z -1.03, and +0.004 on the year-over-year
-test, paired z +0.52.
+**The Bias page's consensus.** For the season the pages open on, the weighted mean of five outside systems' ratings
+per side, 30% xRAPM, 20% xrapm.com's 3-year RAPM, 20% LOKI, 15% DARKO and 15% Pulse (the owner's weights, 2026-11-05;
+`bias.py`), over the players all five list. The page shows where OpenRAPM rates players higher or lower than it, per
+one standard deviation of each box-score stat and of on-court and off-court plus-minus. Never a fitting target.
 
-**Replicate.** The same change built a second time with another random assignment of players to the prior's
-folds, so every reading is seen twice (`scripts/checks/135_robust_review.py`).
+**Width match.** Before the Bias page subtracts, each side of OpenRAPM is multiplied once, league-wide, to the
+consensus's standard deviation, so a row shows where the two disagree about who is good and not that one is spread
+wider. The page prints both multipliers.
 
-**Held-out audit.** On the within-season folds' held-back games, are players high on some input rated too high
-or too low (`scripts/checks/138_heldout_audit.py`).
+**Similarity.** For each player-season with 1,000 or more offensive possessions, the 50 nearest player-seasons of other
+players by the straight-line distance between their standardized inputs (`similarity.py`).
 
-**Quality tiers.** Players grouped by the incumbent's rank in the rated season: top 30, 31-90, 91-150, 151-300,
-301 and below. Every experiment is read in each tier (`scripts/checks/88_yoy_by_player.py`).
+**Power.** Each team as it has played lately: its players' current ratings times their shares of its possessions
+over its last 10 games, the latest five counted double and blowout possessions half, shifted so the average team
+reads 0. The page's one rating multiplies Power and adds the team's last-10 shooting, rebounding, turnover and
+free-throw stats, with weights that fade as the season goes on (`power_forecast.py`).
 
-**WOSA** (wins over starter average). How many regular-season wins a player added to his team over an average starter,
-offence, defence and pace together (`wins.py`). No rating moves. A +9.0 player against a bar of +0.8, over 5,300
-possessions at each end at an average weight: 8.2 x 5,300 / 100 / 30 = 14.5 wins. It reads each rating from the regular
-season alone, so it stops changing when the regular season ends.
+**Morning job.** `scripts/daily_update.sh`: at 6 AM Eastern it fetches the night's games, rates the season in progress
+in place of yesterday's, and publishes the site's data files (`PIPELINE.md`, "The morning job").
+
+**WOSA**, wins over starter average. How many regular-season wins a player added to his team over an average starter,
+offense, defense and pace together (`wins.py`). No rating moves. A +9.0 player against a bar of +0.8, over 5,300
+possessions at each end at an average weight: 8.2 x 5,300 / 100 / 30 = 14.5 wins. It reads each rating from the
+regular season alone, so it stops changing when the regular season ends.
 
 **Starter average.** The bar WOSA is read against: the mean rating of the season's 150 players with the most
-regular-season games started, minutes breaking ties. It sits above zero, since ratings are centred on the average
+regular-season games started, minutes breaking ties. It sits above zero, since ratings are centered on the average
 possession and starters are better than that.
 
-**Win model.** The chance the home team wins from a margin with a share of the game left, fitted on each finished season's
-games: Phi((lead kept x margin + home edge x share left) / spread). The spread is the measured standard deviation of what
-is left of a final margin, by time left.
+**Win model.** The chance the home team wins from a margin with a share of the game left, fitted on each finished
+season's games: Phi((lead kept x margin + home edge x share left) / spread). The spread is the measured standard
+deviation of what is left of a final margin, by time left.
 
 **Lead kept.** The share of a lead that reaches the final margin, a line in the share of the game left: 0.93 at the end
 and 0.74 at the half, in every era. A team ahead coasts and a team behind presses.
 
-**Leverage.** What one point moves the win model by at a stint's game state. WOSA uses it as a weight inside each game, a
-stint's leverage over its own game's mean: every game carries the same total weight, and 1 is an average possession of that
-game, about 2.3 late in a close game, 0.03 in garbage time.
+**Leverage.** What one point moves the win model by at a stint's game state. WOSA uses it as a weight inside each game,
+a stint's leverage over its own game's mean: every game carries the same total weight, and 1 is an average possession
+of that game, about 2.3 late in a close game, 0.03 in garbage time.
 
-**Points per win.** Rating points, weighted by leverage inside each game, for one win: 30, read from how teams' records follow
-their lineups' regular-season ratings over 30 seasons.
+**Points per win.** Rating points, weighted by leverage inside each game, for one win: 30, read from how teams'
+records follow their lineups' regular-season ratings over 30 seasons.
 
 **Pace effect.** A player's effect on the possessions per 48 minutes each team plays, from a ridge regression of each
-stint's pace on the ten players on the court. A standard deviation of about 0.9 among regulars.
+stint's pace on the ten players on the court.
 
 ## The raw box counts
 
-The thirteen per-game counts every design carries, in the order of `config.yaml`'s `box_counts`. They keep the
-NBA's abbreviations in the box table and the stint counters; the per-100 rates built from them have plain names
-(the table below), which the Bias page's rows use.
+The thirteen per-game counts every design carries, in the order of `config.yaml`'s `box_counts`. They keep the NBA's
+abbreviations in the box table and the stint counters; the per-100 rates built from them have plain names, in the
+table below, which the Bias page's rows use.
 
 | code | plain name |
 |---|---|
@@ -251,23 +299,22 @@ NBA's abbreviations in the box table and the stint counters; the per-100 rates b
 | blk | blocks |
 | pf | personal fouls |
 
-Files and notes from before 2026-10-11 use older column names (`poss_pct`, `onc_o`, `chunk_poss`, ...);
+Files and notes from before 2026-10-11 use older column names, `poss_pct`, `onc_o`, `chunk_poss` and others;
 `src/openrapm/data/legacy_names.py` maps each to the name below.
 
 ## Every column the prior can read
 
-Written from src/openrapm/features.py by `openrapm glossary`; edit the catalogue there, not the table here.
-The shipped prior reads 17 of these on offence and 14 on defence (`features.SHIPPED`), plus `row_possessions`
-and `row_seasons`; the rest are candidates an experiment may try (the on-court columns came out in experiment
-45).
+Written from `src/openrapm/features.py` by `openrapm glossary`; edit the catalogue there, not the table here. The
+shipped prior reads the inputs of `features.FEATURE_SETS["hustle_no_three_pct_self_creation"]`, plus
+`row_possessions` and `row_seasons`; the rest are candidates an experiment may try.
 
-- Offence: assists; assists minus turnovers; effective field-goal %; career possessions before this season;
-  seasons played before this one; three-point %; shot attempts; free-throw attempts; offensive rebounds;
-  offensive-rebound share of his rebounds; share of shots that are threes; share of team possessions played;
-  points; steals; seasons with his current team; true shooting %; weight.
-- Defence: blocks; defensive rebounds; career possessions before this season; seasons played before this one;
-  shot attempts; share of games started; height; share of team possessions played; points; steals; steals plus
-  blocks; true shooting %; possessions he finishes; weight.
+- Offense, 18: assists; assists minus turnovers; effective field-goal %; shot attempts; free-throw attempts;
+  offensive rebounds; offensive-rebound share of his rebounds; share of shots that are threes; share of team
+  possessions played; points; steals; true shooting %; weight; screen assists; points from screen assists; offensive
+  box-outs; loose balls recovered; self-created shot attempts.
+- Defense, 18: blocks; defensive rebounds; shot attempts; share of games started; height; share of team possessions
+  played; points; steals; steals plus blocks; true shooting %; possessions he finishes; weight; deflections; contested
+  twos; contested threes; charges drawn; defensive box-outs; loose balls recovered.
 
 <!-- generated: features -->
 | name | meaning | formula | unit | scale |
