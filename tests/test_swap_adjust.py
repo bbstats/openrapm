@@ -248,11 +248,14 @@ def test_adjust_end_to_end_keeps_each_team_total_and_the_spread_inside_teams(lin
 _CFG = load_config()
 # experiment 80's pair since 2026-10-19 (step 5 trained on the folds' held-back games); the weightfix pair before it,
 # onethread/gate0_*, pinned step 5 as it was
-# step 5 off since experiment 82 (adopted 2026-10-20); the pair pins step 5's code at the share it was built with
+# step 5 off since experiment 82 (adopted 2026-10-20); the pair pins step 5's code at the share it was built with.
+# The step-5 tables were frozen again on 2026-11-16, swap141/, from crossfit80's step-4 tables: the type model reads
+# the box-score prior's inputs and step 4's folds, and both had moved since crossfit80's step 5 was frozen; the code
+# before and after the cleanup of 2026-11-16 gave the same step 5, value for value (notes/DECISIONS.md)
 _REBUILDS = ((replace(PRODUCT, swap=replace(PRODUCT.swap, applied_share=0.5)), "crossfit80/product_step4.parquet",
-              "crossfit80/product_step5.parquet"),
+              "swap141/product_step5.parquet"),
              (replace(TEST, swap=replace(TEST.swap, applied_share=0.5)), "crossfit80/test_step4.parquet",
-              "crossfit80/test_step5.parquet"))
+              "swap141/test_step5.parquet"))
 
 
 @pytest.mark.slow
