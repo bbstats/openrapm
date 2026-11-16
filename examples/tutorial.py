@@ -222,8 +222,8 @@ def say_league(league: League, players: pd.DataFrame) -> None:
         f"with correlation {TALENT['rho']}; {TALENT['turnover']:.0%} of the players change teams each season.  "
         f"{league.rated} is the rated season: {len(players)} players, {players.possessions.median():,.0f} possessions "
         f"for the median one (from {players.possessions.min():,.0f} to {players.possessions.max():,.0f}).  Their "
-        f"true impacts spread by a standard deviation of {players.true_offence.std():.1f} points per 100 on offence "
-        f"and {players.true_defence.std():.1f} on defence.")
+        f"true impacts spread by a standard deviation of {players.true_offence.std():.1f} points per 100 on offense "
+        f"and {players.true_defence.std():.1f} on defense.")
 
 
 def say_step1(results: dict, players: pd.DataFrame) -> None:
@@ -232,8 +232,8 @@ def say_step1(results: dict, players: pd.DataFrame) -> None:
     bench, starters = tiers(players)
     print(f"\nStep 1: plain RAPM (rapm.py), penalty {penalty:,.0f}", flush=True)
     say(f"On {results['league']['rated']} alone, the correlation with the true impact is "
-        f"{step['one_season']['offence']['correlation']:.2f} on offence and "
-        f"{step['one_season']['defence']['correlation']:.2f} on defence; the root mean square error is "
+        f"{step['one_season']['offence']['correlation']:.2f} on offense and "
+        f"{step['one_season']['defence']['correlation']:.2f} on defense; the root mean square error is "
         f"{step['one_season']['offence']['error']:.1f} and {step['one_season']['defence']['error']:.1f} points per "
         f"100.")
     n_bench, n_starter = players.possessions[bench].median(), players.possessions[starters].median()
@@ -245,8 +245,8 @@ def say_step1(results: dict, players: pd.DataFrame) -> None:
         f"{players.true_offence[bench].std():.2f}.")
     say(f"On the other seasons together, the label: {step['label']['offence']['players']} players with "
         f"{SETTINGS.labels.min_possessions:.0f} possessions or more, correlation "
-        f"{step['label']['offence']['correlation']:.2f} on offence and {step['label']['defence']['correlation']:.2f} "
-        f"on defence with their true impact over those seasons.  More seasons, more possessions, a better estimate; "
+        f"{step['label']['offence']['correlation']:.2f} on offense and {step['label']['defence']['correlation']:.2f} "
+        f"on defense with their true impact over those seasons.  More seasons, more possessions, a better estimate; "
         f"but it is one number for several seasons, and a player has one only if he played in them.")
 
 
@@ -287,17 +287,17 @@ def say_step2(results: dict, priors: dict, league: League) -> None:
     print("\nStep 2: the box-score prior (box_prior.py)", flush=True)
     say(f"LightGBM learns the label from {results['step1']['label']['offence']['players']} players' box scores over "
         f"{len(league.seasons) - 1} seasons (each player's career row and every run of 1, 2 and 3 seasons), reading "
-        f"{len(priors['O'].feature_names)} inputs on offence and {len(priors['D'].feature_names)} on defence.  "
+        f"{len(priors['O'].feature_names)} inputs on offense and {len(priors['D'].feature_names)} on defense.  "
         f"Asked about {results['league']['rated']}'s box scores alone, it predicts the true impact with correlation "
-        f"{step['offence']['correlation']:.2f} on offence and {step['defence']['correlation']:.2f} on defence.")
-    say(f"Defence is the weaker side, partly because the box score sees less of it.  In this league most of the "
+        f"{step['offence']['correlation']:.2f} on offense and {step['defence']['correlation']:.2f} on defense.")
+    say(f"Defense is the weaker side, partly because the box score sees less of it.  In this league most of the "
         f"defensive weight sits on steals, blocks, defensive rebounds and fouls (simulate.BETA_D).  The box score's "
         f"part of a player's true defensive impact spreads by a standard deviation of "
         f"{parts['defence']['box_score']:.1f} points per 100 and the part no box count explains by "
-        f"{parts['defence']['unexplained']:.1f}; on offence the two are {parts['offence']['box_score']:.1f} and "
+        f"{parts['defence']['unexplained']:.1f}; on offense the two are {parts['offence']['box_score']:.1f} and "
         f"{parts['offence']['unexplained']:.1f}.  So a model that knew every player's true rates would reach a "
-        f"correlation of {parts['defence']['ceiling']:.2f} on defence and {parts['offence']['ceiling']:.2f} on "
-        f"offence; what the prior falls short of that is the booster's own: it learns the weights from the labels "
+        f"correlation of {parts['defence']['ceiling']:.2f} on defense and {parts['offence']['ceiling']:.2f} on "
+        f"offense; what the prior falls short of that is the booster's own: it learns the weights from the labels "
         f"and reads one season's counts, not the true rates.")
 
 
@@ -347,17 +347,17 @@ def say_step3(results: dict) -> None:
     step, before = results["step3"], results["step1"]["one_season"]
     bench, starters = step["by_tier"]["bench"], step["by_tier"]["starters"]
     print(f"\nStep 3: prior-informed RAPM (prior_rapm.py), penalty {SETTINGS.ridge.penalty:,.0f}", flush=True)
-    say(f"The games set the prior scale at {step['prior_scale']['offence']:.2f} on offence and "
-        f"{step['prior_scale']['defence']:.2f} on defence: each player now starts from that multiple of his prior "
+    say(f"The games set the prior scale at {step['prior_scale']['offence']:.2f} on offense and "
+        f"{step['prior_scale']['defence']:.2f} on defense: each player now starts from that multiple of his prior "
         f"rather than from 0.")
     say_negative_scale(results)
-    say(f"The correlation with the true impact is {step['offence']['correlation']:.2f} on offence and "
-        f"{step['defence']['correlation']:.2f} on defence (step 1 on the same season: "
+    say(f"The correlation with the true impact is {step['offence']['correlation']:.2f} on offense and "
+        f"{step['defence']['correlation']:.2f} on defense (step 1 on the same season: "
         f"{before['offence']['correlation']:.2f} and {before['defence']['correlation']:.2f}); the root mean square "
         f"error is "
         f"{step['offence']['error']:.1f} and {step['defence']['error']:.1f} points per 100 (step 1: "
         f"{before['offence']['error']:.1f} and {before['defence']['error']:.1f}).")
-    say(f"A bench player's rating is mostly his prior: on offence its prior part averages "
+    say(f"A bench player's rating is mostly his prior: on offense its prior part averages "
         f"{bench['offence']['prior_part']:.1f} points per 100 in size and the part his games add "
         f"{bench['offence']['games_part']:.1f}; a starter's games add {starters['offence']['games_part']:.1f} to a "
         f"prior part of {starters['offence']['prior_part']:.1f}.  A player with few possessions has little evidence "
@@ -366,7 +366,7 @@ def say_step3(results: dict) -> None:
     say(f"The offensive root mean square error fell from {bench['offence']['error_step1']:.1f} to "
         f"{bench['offence']['error_step3']:.1f} for the bench players and from "
         f"{starters['offence']['error_step1']:.1f} to {starters['offence']['error_step3']:.1f} for the starters; on "
-        f"defence from {bench['defence']['error_step1']:.1f} to {bench['defence']['error_step3']:.1f} and from "
+        f"defense from {bench['defence']['error_step1']:.1f} to {bench['defence']['error_step3']:.1f} and from "
         f"{starters['defence']['error_step1']:.1f} to {starters['defence']['error_step3']:.1f}.")
 
 
