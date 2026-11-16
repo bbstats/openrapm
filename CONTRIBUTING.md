@@ -115,8 +115,9 @@ starts no more than fit. When a chain is stopped, stop its python children too.
   it.
 - **No `# noqa`, no `global`, no mutable module globals, no `sys.path` changes, no importing one script from
   another.** The exceptions are named in `tests/test_code_rules.py`, which fails when one is added: the checks that
-  pin the thread variables before numpy loads carry `# noqa: E402` on their imports, and the checks that reuse check
-  151's scoring load it by path.
+  pin the thread variables before numpy loads carry `# noqa: E402` on their imports; the screens hand their workers'
+  state over through `global`; the Power checks put `src/` on the path; and the checks that reuse another check's
+  code, mostly check 151's scoring, load it by path. The package, the tests and the tutorial keep all four rules.
 - **Settings live in `src/openrapm/settings.py`**, each beside the experiment that set it. An experiment-only branch
   is deleted when the experiment ends: the shipped values are the defaults. Code that lost its test is removed and
   kept readable at an archive tag, as `archive/research-2026-11` keeps the three box-score priors that lost.
