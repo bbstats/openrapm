@@ -158,7 +158,9 @@ def check_fit_designs(fold, designs: dict, penalty: float) -> float:
     these are the fold's own fit games and targets, or the sums would read another ridge than the folds rate with."""
     worst = 0.0
     offence, defence = fold.rows["O"].set_index("player_id"), fold.rows["D"].set_index("player_id")
-    prior_o, prior_d = offence.second_prior_raw_off.to_dict(), (-defence.second_prior_raw_def).to_dict()
+    # the prior step 3 read before its scale: Box Adj's, or the box-score prior's in folds rated without Box Adj
+    read = "second_prior_raw" if "second_prior_raw_off" in offence.columns else "prior_raw"
+    prior_o, prior_d = offence[f"{read}_off"].to_dict(), (-defence[f"{read}_def"]).to_dict()
     for target, stored, column in ((TEST.targets.offence, offence.prior_off + offence.u_off, "offense"),
                                    (TEST.targets.defence, -(defence.prior_def + defence.u_def), "defense")):
         fitted = prior_rapm.fit(designs[target], prior_o, prior_d, penalty).ratings.set_index("player_id")[column]

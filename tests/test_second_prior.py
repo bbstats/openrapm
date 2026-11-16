@@ -1,6 +1,7 @@
 """The second prior (src/openrapm/second_prior.py): the eight context numbers, the boosters that never saw a player,
 and the line fitted on swaps."""
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -10,6 +11,8 @@ from openrapm import box_prior
 from openrapm import second_prior as sp
 from openrapm import swap_adjust as sa
 from openrapm import swap_test as sw
+from openrapm.commands import second_prior as command
+from openrapm.settings import TEST
 
 
 def _answers(values: dict) -> sp.BoosterAnswers:
@@ -561,3 +564,26 @@ def test_the_adjustments_are_the_second_prior_less_its_box_score_part_and_cancel
     got = pd.Series(sp.adjustments({"O": held.to_dict()}, {"O": frame}, {"O": coefficients}, 2)["O"])
     assert (held - anchor - got).abs().max() < 1e-12
     assert abs(got[10] * 100 + got[11] * 300) < 1e-9 and abs(got[12] * 200 + got[13] * 200) < 1e-9
+
+
+@pytest.mark.parametrize("box_adj", [True, False])
+def test_the_ridge_check_reads_the_prior_step_3_read(monkeypatch, box_adj):
+    """`second-prior` refits each fold's step 3 around the prior the fold read before its scale: Box Adj's when the
+    fold was rated with it, the box-score prior's when not, as README.md's first pass builds them."""
+    rows = {side: pd.DataFrame({"player_id": [1, 2], "prior_off": [0.0, 0.0], "u_off": [0.0, 0.0],
+                                "prior_def": [0.0, 0.0], "u_def": [0.0, 0.0], "prior_raw_off": [1.0, 2.0],
+                                "prior_raw_def": [-3.0, -4.0]}) for side in ("O", "D")}
+    if box_adj:
+        for frame in rows.values():
+            frame["second_prior_raw_off"], frame["second_prior_raw_def"] = [5.0, 6.0], [-7.0, -8.0]
+    seen = []
+
+    def fit(design, prior_o, prior_d, penalty):
+        seen.append((prior_o, prior_d))
+        return SimpleNamespace(ratings=pd.DataFrame({"player_id": [1, 2], "offense": 0.0, "defense": 0.0}))
+
+    monkeypatch.setattr(command.prior_rapm, "fit", fit)
+    command.check_fit_designs(SimpleNamespace(rows=rows), {TEST.targets.offence: None, TEST.targets.defence: None},
+                              1.0)
+    expected = ({1: 5.0, 2: 6.0}, {1: 7.0, 2: 8.0}) if box_adj else ({1: 1.0, 2: 2.0}, {1: 3.0, 2: 4.0})
+    assert len(seen) == 2 and all(pair == expected for pair in seen)
