@@ -503,6 +503,61 @@ What keeps the job safe with nobody looking:
 - **It stops when the season ends.** Once a team has won the title, `data in-progress` ends the morning after the
   ingest: the season is then rated with every other, by a full build.
 
+## The code, file by file
+
+The model layer, `src/openrapm/`, is handed data and returns numbers:
+
+| module | what it holds |
+|---|---|
+| `design.py` | the stints turned into the rows, columns, target and weight every fit reads |
+| `rapm.py` | step 1: plain RAPM, and the label |
+| `box_prior.py` | step 2: the box-score prior |
+| `second_prior.py`, `rating_line.py` | Box Adj: its inputs, and its weights fitted on held-back games |
+| `prior_rapm.py` | step 3: the rating |
+| `prior_shrink.py` | step 4: the shrink |
+| `swap_adjust.py`, `swap_test.py` | step 5, off, and the lineup swaps it read |
+| `settings.py` | every shipped setting and the experiment that set it |
+| `features.py` | every input the box-score prior can read, and the shipped lists |
+| `box_rates.py`, `on_court.py` | the padded box-score rates; a team's record with a player on and off |
+| `scoring.py` | how ratings are scored on games they never saw |
+| `wins.py` | WOSA |
+| `power_forecast.py` | the Power page's one rating |
+| `bias.py`, `consensus.py` | the Bias page; the consensus check |
+| `similarity.py`, `decomposition.py` | the Similarity page; the Detail view |
+| `trade_set.py`, `player_types.py` | the trade set; player types for the older checks |
+| `simulate.py` | the simulated league of the tutorial and the tests |
+
+The data layer, `src/openrapm/data/`, reads and writes the disk and the network:
+
+| module | what it holds |
+|---|---|
+| `data/config.py` | `config.yaml` and the paths it names |
+| `data/seasons.py` | which seasons may be trained on, and which only rated |
+| `data/ingest.py`, `data/box_scores.py`, `data/bio.py`, `data/careers.py` | the raw pulls, the per-game box counts, heights and weights, careers before 1997 |
+| `data/stints.py`, `data/stint_parser.py`, `data/shot_curves.py`, `data/shots.py` | the stints, the shot curves, each shooter's expected points |
+| `data/event_counts.py`, `data/creation_counts.py`, `data/foul_counts.py` | the counts read from the play-by-play |
+| `data/dashboards.py`, `data/dashboard_rates.py`, `data/matchups.py` | the hustle, tracking and matchup pulls and the panel's inputs from them |
+| `data/roles.py`, `data/panel.py` | the roles table and the season panel |
+| `data/designs.py` | the design pieces on disk |
+| `data/within_folds.py`, `data/second_prior_files.py` | the held-back games and Box Adj's sums on disk |
+| `data/power_files.py`, `data/public_ratings.py`, `data/tables.py` | what the Power and Bias pages read; player names and the consensus file |
+| `data/legacy_names.py` | the names files carried before 2026-10-11 |
+
+The commands, `src/openrapm/commands/`, join the two:
+
+| module | what it holds |
+|---|---|
+| `commands/cli.py` | the command line and every option |
+| `commands/data.py` | `openrapm data` |
+| `commands/build.py` | `openrapm rate`, `shrink`, `swap` and `build` |
+| `commands/second_prior.py` | `openrapm second-prior` |
+| `commands/within_season.py` | `openrapm folds` |
+| `commands/wins.py` | `openrapm wins` |
+| `commands/site.py` | `openrapm site` |
+| `commands/year_over_year.py` | the year-over-year test, read by check 63 |
+| `commands/compare.py`, `commands/glossary.py` | `openrapm compare`, `openrapm glossary` |
+| `commands/parallel.py`, `commands/console.py`, `commands/published.py` | seasons over several processes; one thread and the console's encoding; the guard on the published tables' name |
+
 ## Where the numbered scripts went
 
 Until the 2026-10 cleanup each stage was a numbered script; the notes in `notes/` still cite them. They are kept at

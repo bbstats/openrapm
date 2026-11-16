@@ -25,7 +25,9 @@ htmlcov/
 # What ships is the site, docs/ (`openrapm site`), which is tracked.
 /outputs/
 
-# Local research scratch, not part of the project.
+# Research scratch.  Ignored, so a run's logs and tables never slip in; the scripts behind a recorded result are added
+# by name (`git add -f`), one dated folder per piece of work, and notes/DECISIONS.md points at them.  Not part of the
+# package, the tests or the docs a reader follows.
 /scratch/
 
 # Node, only ever installed transiently to render-test the page.

@@ -13,7 +13,8 @@ already in the repository keep their spelling.
 
 ## Orientation
 
-- Read `README.md` first (what OpenRAPM is, the five steps, the commands), then `notes/HANDOFF.md` (where the work
+- Read `README.md` first (what OpenRAPM is, how a rating is made, the commands; `PIPELINE.md` has each part in full),
+  then `notes/HANDOFF.md` (where the work
   stands, what is waiting on the owner, and the commands a session runs). `notes/DECISIONS.md` is the record of
   every experiment; read its measurement traps before trusting a number.
 - The writing rules are in `CONTRIBUTING.md`, "The writing rules". They bind code, comments, docs and every message

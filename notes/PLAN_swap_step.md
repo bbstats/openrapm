@@ -1,5 +1,10 @@
 # Plan: what the swap step is actually doing
 
+> **History, not a live plan.** Run on 2026-10-18 as check 153; the results are in notes/DECISIONS.md, "Check 153:
+> what the swap step does".  The swap adjustment, step 5, has been off since experiment 82, adopted 2026-10-20: Box Adj
+> learns from the same lineup comparisons before the ridge.  The builds named below, `bags10` and `noise_bags10`, are
+> five incumbents old.
+
 Written 2026-10-18 for the next session.  Every stage is a read-only check: nothing here changes the shipped
 ratings, and any change to step 5 is the owner's call after the report.
 
