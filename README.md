@@ -1,14 +1,49 @@
 # OpenRAPM
 
-Open player-impact ratings for the NBA, 1996-97 to now, in points per 100 possessions, one rating
-per player per season. Live at <https://openrapm.com>.
+Open player-impact ratings for the NBA, 1996-97 to now, in points per 100 possessions: one rating per player per
+season, on offense and on defense. Live at <https://openrapm.com>.
 
-Each rating is RAPM (regularised adjusted plus-minus: a ridge regression of the points scored on the ten
-players on the court) pulled toward what the player's box score says, then corrected on games the
-ratings never saw.
+Each rating is RAPM, regularized adjusted plus-minus: a ridge regression of the points scored on the ten players on
+the court. Here the ridge pulls each player toward what his box score says rather than toward zero, and the result is
+then corrected by how well each part of it predicted games it never saw.
 
-The point of the project is the **test**, not any one model: every change is judged by whether it
-predicts games it never saw. Anyone is welcome to propose one; the criterion decides.
+The point of the project is the **test**, not any one model: every change is judged by whether it predicts games it
+never saw. Anyone is welcome to propose one; the test decides.
+
+## How a rating is made
+
+| part | the question it answers | module | as shipped |
+|---|---|---|---|
+| the label | what has each player done over every other season? | `rapm.py` | one RAPM per player and side over every finished season but the rated one, penalty 40,000; the defensive label un-shrunk |
+| the box-score prior | what does his box score say his label is? | `box_prior.py` | LightGBM on 18 offensive and 18 defensive inputs of the season panel, 10 averaged versions, each player answered only by versions that never saw him |
+| Box Adj | how much of his box score did his teammates and opponents make? | `second_prior.py`, `rating_line.py` | a straight line on his box-score prior, his teammates' and opponents' priors with him on and off the court, his box rates, role and body, and his team's shots by zone with him on and off; it only moves credit between teammates |
+| the rating | how far do this season's games move him from that prior? | `prior_rapm.py` | the season's ridge pulled toward the prior, penalty 13,037; how much the prior counts is set by the season's games |
+| the shrink | how much of each part of a rating holds up on games it never saw? | `prior_shrink.py` | the prior's part and the games' part each multiplied, inside teams and between them, by factors fitted on held-back games |
+| the swap adjustment | do same-four lineup comparisons say a teammate is over- or under-credited? | `swap_adjust.py` | off since 2026-10-20: Box Adj learns from the same comparisons before the ridge |
+
+The code names the first, second, fourth, fifth and sixth rows steps 1 to 5; Box Adj sits between steps 2 and 3. Every
+number above, and the experiment that set it, is in `src/openrapm/settings.py`.
+
+```mermaid
+flowchart TD
+    RAW["Play-by-play and box scores<br/>openrapm data ingest"] --> ST["Stints: the same ten players on the court<br/>openrapm data stints"]
+    ST --> PAN["Season panel: one row per player, season and side<br/>openrapm data panel"]
+    ST --> S1["The label: RAPM over every other season<br/>rapm.py"]
+    S1 --> S2["The box-score prior: LightGBM<br/>box_prior.py"]
+    PAN --> S2
+    S2 --> BA["Box Adj: teammates, opponents and team shots<br/>second_prior.py, rating_line.py"]
+    BA --> S3["The rating: the season's RAPM pulled toward the prior<br/>prior_rapm.py"]
+    S3 --> S4["The shrink: each part multiplied by how well it holds up<br/>prior_shrink.py"]
+    FOLDS["Held-back games: each season rated<br/>from three quarters of its games<br/>openrapm folds"] --> S4
+    FOLDS --> BA
+    S4 --> OUT["outputs/season_ratings_product.parquet<br/>openrapm build"]
+    OUT --> SITE["docs/data/<br/>openrapm site"]
+```
+
+Read from the finished ratings, not part of them: WOSA, wins over starter average (`wins.py`); the Power page
+(`power_forecast.py`); the Bias page (`bias.py`); the Similarity page (`similarity.py`); the Detail view, which splits
+each rating into its parts (`decomposition.py`). `PIPELINE.md` gives each part's inputs, outputs, command, settings
+and code; `GLOSSARY.md` defines every term.
 
 ## Quick start
 
@@ -16,341 +51,184 @@ predicts games it never saw. Anyone is welcome to propose one; the criterion dec
 git clone https://github.com/bbstats/openrapm && cd openrapm
 python -m venv .venv && source .venv/bin/activate     # .venv\Scripts\activate on Windows
 pip install -e ".[dev]"
-python examples/tutorial.py                           # steps 1-3 on a made-up league, about 15 seconds
+python examples/tutorial.py                           # the first steps on a made-up league, about 15 seconds
 pytest
 ```
 
-With uv, `uv venv` makes the environment and `uv pip install -e ".[dev]"` installs into it. Python 3.11 or
-later.
-The install also puts an `openrapm` command on your path; `python -m openrapm` is the same command, and
-it is what this file types.
+With uv, `uv venv` makes the environment and `uv pip install -e ".[dev]"` installs into it. Python 3.11 or later. The
+install puts an `openrapm` command on your path; `python -m openrapm` is the same command, and it is what the docs
+type.
 
-**On a fresh clone with no data**, `pytest` gives 548 passed, 10 skipped and 1 expected failure, in
-about 50 seconds (run on 2026-10-13, Python 3.12, Windows). The 7 slow tests rebuild real seasons and
-are left out unless you ask for them (`pytest -m slow`). The 10 skips need the scraped data (game logs,
-stints, box scores), and each skip message names the file or the command it is missing. The expected
-failure is
-`tests/test_vs_consensus.py::test_backup_bigs_are_not_in_the_top_twenty`: Robert Williams and Jonathan
-Isaac sit higher than the consensus of public metrics puts them, a known defect kept visible. Tests
-cannot reach the network: `tests/conftest.py` blocks it, and `tests/test_network_block.py` checks the
-block.
+**On a fresh clone with no data** every test passes or skips. A skipped test needs the scraped data, and its message
+names the file or the command it is missing. The tests marked slow rebuild real seasons and run only when asked,
+`pytest -m slow`. The one expected failure, `tests/test_vs_consensus.py::test_backup_bigs_are_not_in_the_top_twenty`,
+is a known defect kept visible: Robert Williams and Jonathan Isaac sit higher than the consensus of public metrics
+puts them. Tests cannot reach the network: `tests/conftest.py` blocks it.
 
-You can read, change and test the model without downloading anything.
-
-The tutorial needs no data either. It plays four seasons of a simulated league whose true player
-impacts are set in advance, runs the real code of steps 1-3 on it, and prints after each step how close
-the ratings came. On the rated season, plain RAPM (step 1) reaches a correlation of 0.74 with the true
-offensive impacts, the box-score prior alone 0.88, and the two together (step 3) 0.93.
+You can read, change and test the model without downloading anything. The tutorial needs no data either: it plays
+four seasons of a simulated league whose true player impacts are set in advance, runs the real code of the label,
+the box-score prior and the rating on it, and prints how close each came. On the rated season plain RAPM reaches a
+correlation of 0.74 with the true offensive impacts, the box-score prior alone 0.88, and the two together 0.93. The
+simulated league has no lineup detail for Box Adj, and no held-back games for the shrink.
 
 ## Read the code in this order
 
-Each step is one module in `src/openrapm/`. Each opens with the question it answers, the words it uses,
-the equation it implements and an example with numbers.
+Each module opens with the question it answers, the words it uses, the equation it implements and an example with
+numbers. All are in `src/openrapm/`.
 
-0. `design.py`, its docstring first: the regression design that steps 1 and 3 read (rows, player columns,
-   context columns, target, weight), with a one-stint example.
-1. `rapm.py`, step 1: given the ten players on the court, who was responsible for the points? Plain
-   RAPM, and the label step 2 learns: each player's RAPM over every season except the rated one.
-2. `box_prior.py`, step 2: what does a player's box score say his RAPM is? LightGBM (gradient-boosted
-   trees), fitted so that no player's prior comes from a model that saw his own rows.
-3. `prior_rapm.py`, step 3: how far do the season's own games move each player from that prior?
-4. `prior_shrink.py`, step 4: how much of each part of a rating, the prior's and the games', holds up on
-   games the rating never saw?
-5. `swap_adjust.py`, step 5: inside each team, which players do the lineup swaps say get too much or too
-   little credit?
+1. `design.py`: the regression's rows, player columns, context columns, target and weight.
+2. `rapm.py`: the label.
+3. `box_prior.py`: the box-score prior.
+4. `second_prior.py`, then `rating_line.py`: Box Adj, and how its weights are fitted on held-back games.
+5. `prior_rapm.py`: the rating.
+6. `prior_shrink.py`: the shrink.
+7. `swap_adjust.py`: the swap adjustment, off as shipped.
 
-Then `settings.py` (every number the five steps use, and the experiment that set it) and `features.py`
-(every input the prior can read, with its meaning and formula). `GLOSSARY.md` defines each term. `wins.py` is not a
-step: it reads the finished ratings and says how many regular-season wins each is worth over an average starter.
-
-## The five steps
-
-```mermaid
-flowchart TD
-    RAW["Play-by-play and box scores<br/>openrapm data ingest"] --> ST["Stints: the same ten players on the court<br/>openrapm data stints"]
-    ST --> PAN["Season panel: one row per player, season and side<br/>openrapm data panel"]
-    ST --> S1["Step 1: RAPM over every other season, the label<br/>rapm.py"]
-    S1 --> S2["Step 2: box-score prior, LightGBM<br/>box_prior.py"]
-    PAN --> S2
-    S2 --> S3["Step 3: the season's RAPM pulled toward the prior<br/>prior_rapm.py"]
-    S3 --> S4["Step 4: both parts multiplied by how well they hold up<br/>prior_shrink.py"]
-    FOLDS["Within-season folds: each season rated<br/>from three quarters of its games<br/>openrapm folds"] --> S4
-    S4 --> S5["Step 5: credit re-split inside each team<br/>swap_adjust.py"]
-    S5 --> OUT["outputs/season_ratings_product.parquet<br/>openrapm build"]
-    OUT --> SITE["docs/data/ratings.json<br/>openrapm site"]
-```
-
-`PIPELINE.md` gives each step's inputs, outputs, command, settings and code.
-
-## Building the ratings from scratch
-
-Everything under `data/` and `outputs/` is rebuilt by these commands, and none of it is in git (the one
-exception is `data/external/`, a snapshot of public metrics). The times are from the last full runs on
-the project's machine, every linear-algebra library on one thread.
-
-```bash
-python -m openrapm data ingest 1997 2026 RS,PO
-python -m openrapm data stints 1997 2026 RS,PO
-python -m openrapm data events 1997 2026
-python -m openrapm data panel
-python -m openrapm data panel --so-far 0.25,0.5,0.75
-python -m openrapm rate --setting test --seasons 2017-2026 --name for_folds --save-models mine
-python -m openrapm folds --models mine --base season_ratings_for_folds_step3 --tag mine_within
-python -m openrapm build --folds mine_within --extrapolate-folds=
-python -m openrapm site --decomposition --openrapm-decomposition --similarity
-```
-
-1. **`data ingest`** fetches each season's game log and every game's play-by-play and box score from
-   stats.nba.com: 37,986 games over 1997-2026, regular season (RS) and playoffs (PO). It takes days. A
-   file already on disk is not fetched again, so stopping and restarting it is fine.
-2. **`data stints`** turns each game's play-by-play into stints (a stint is a stretch of play with the
-   same ten players on the court) and fits each season's shot curve (the league's make probability by
-   distance). About 46 minutes: the 60 season-phases (30 seasons, regular season and playoffs each) took
-   2,749 seconds in total.
-3. **`data events`** counts, from the play-by-play, the parts of four box counts (defensive rebounds by
-   the miss they ended, steals by the turnover they took, points and threes by the assist and the spot),
-   about 12 seconds a season. **`data panel`** then writes the season panel,
-   `outputs/season_panel.parquet`: one row per player, season and side, with his padded box-score rates and
-   their play-by-play parts, role, career and body. 37 seconds in the last fresh build.
-   Its first run also builds the roles table and fetches the bio feed, one request per season.
-   The matchup columns, who a player guarded and who guarded him, read the per-game matchup box scores of
-   `openrapm data matchup-games 2018 2026`, one request a game, about 4 hours; without them they read missing.
-4. **The within-season folds**, which step 4 is fitted on. `rate --setting test --save-models` rates
-   2017-2026 and saves every season's boosters (the fitted LightGBM models): about 5 minutes. `folds`
-   then rates each of those seasons from three quarters of its games with those boosters, twelve times a
-   season, and stores the misses on the quarter held back: about 8 minutes. The shipped folds cover every
-   season, `fade141_early` for 1997-2016 and `fade141_within` for 2017-2026 (the default of
-   `--folds`), and each multiplier is read to a full season with folds holding back a tenth of the games,
-   `fade141_k10` (the default of `--extrapolate-folds`).
-5. **`build`** runs the five steps for all thirty seasons and writes `outputs/season_ratings_product.parquet`,
-   the published table, with its step-3 and step-4 tables beside it: 88 minutes in the last run. At the product setting
-   it also rates each season from its regular season alone for the wins over starter average, about 4 minutes a season a
-   process; `openrapm wins --name NAME --rebuild-regular --jobs 4` does that for a table built before them.
-   `build --setting test --folds mine_within --extrapolate-folds= --name fade141` writes the table the
-   tests score, under the incumbent's name, so the chain and the checks find it. Without `--folds`, `build`
-   and `shrink` read the shipped folds, which a fresh build does not have; they stop at step 4 with "no
-   folds in ...", after steps 1-3 have run.
-6. **`site`** writes `docs/data/ratings.json` (under a second);
-   `--decomposition` fits plain RAPM for every season and every three-season window for
-   `docs/data/decompose_1y.json` and `decompose_3y.json` (319 seconds in the last run); `--similarity` writes
-   `docs/data/similarity/`, each player-season's nearest player-seasons of other players (33 seconds);
-   `--openrapm-decomposition` solves step 3 again for every season and writes `docs/data/decompose_openrapm.json`,
-   each published rating split into box score, Box Adj, on court, off court and team SOS (132 seconds;
-   run it after every `build`), and beside it `docs/data/ratings_list.json`, the ratings alone with each player's
-   teams, which the ratings page draws its list from before it asks for anything larger. `--bias` writes the Bias
-   page's file for the season in progress, below.
-
-`python -m openrapm <command> --help` lists every option. `--config FILE`, given before the command (or
-the environment variable `OPENRAPM_CONFIG`), points every command at another `config.yaml`, so a check
-can run in a scratch folder.
-
-### The season in progress, every morning
-
-`scripts/daily_update.sh` updates the season in progress (config.yaml's `last_season`, 2027) and publishes it. Task
-Scheduler runs it on the project's machine at 6 AM Eastern, after the night's games are final; about 20 minutes.
-
-```bash
-python -m openrapm data ingest 2027 2027 RS,PO --refresh     # the game log again, games before today, Eastern
-python -m openrapm data in-progress 2027             # the job stops here once 2027's Finals are over
-python -m openrapm data stints 2027 2027 RS,PO --force
-python -m openrapm data check-games 2027             # every game of the log has stints and the box score's points
-python -m openrapm data events 2027 2027 --force
-python -m openrapm data hustle-games 2027 2027       # not a step: a failure does not stop the morning
-python -m openrapm data matchup-games 2027 2027      # not a step either
-python -m openrapm data dashboards 2027 2027 --force         # the season-to-date hustle the season in progress reads
-python -m openrapm data panel --force                        # also rebuilds the season's roles rows and bio feed
-python -m openrapm build --seasons 2027 --replace-seasons    # 2027 in place of yesterday's 2027, nothing else moves
-python -m openrapm site --openrapm-decomposition --power --out-dir A:/code/spmm_site/docs
-python -m openrapm data public-ratings               # not a step: the Bias page's five outside systems, one request each
-python -m openrapm site --bias --out-dir A:/code/spmm_site/docs      # not a step either: docs/data/bias.json
-python -m openrapm site --similarity --out-dir A:/code/spmm_site/docs    # only when a finished season's rating moved
-```
-
-Then it commits the four data files in `A:/code/spmm_site`, a worktree of `origin/main` that only the job writes, and
-pushes them to `main` when one changed beyond the date it was built (`scripts/daily_files.py`). The Bias page's file
-is committed with them; it never decides a publish, and a system that is down leaves the last table up. The Similarity
-page's files are written again, and committed with them, only on a morning when its player-seasons carry other ratings
-than the published ones, which is the morning after a new build of the ratings. Nothing trains on the
-season in progress (data/seasons.py); it is rated from its own rows, the
-box-score prior told the share of the regular season played. The ratings page opens on it once its median player shown
-has 250 offensive possessions. Each morning's log is `outputs/daily/<date>.log`, and `outputs/daily/last.txt` says how
-the last one ended; a dry run, `PUBLISH=0 bash scripts/daily_update.sh`, says it in `outputs/daily/last_dry.txt`.
-
-What keeps the job safe with nobody looking:
-
-- **A game cannot go missing.** `data check-games` stops the morning when a game of the game log has no stints or its
-  play-by-play does not score what its box score says, after one more fetch and build of that game. Yesterday's
-  ratings stay up.
-- **Only the job writes the published tables.** Where the job has run, a command that would write the name `product`
-  is refused unless `OPENRAPM_WRITE_PUBLISHED=1` is set, which the job sets and a full build after an adopted change
-  is typed with (`src/openrapm/commands/published.py`). A fresh clone is not affected.
-- **One run at a time.** The job holds a lock (`scripts/daily_lock.sh`); `scripts/experiment_chain.sh` waits while it
-  is held and between 5:50 and 7:30 AM.
-- **A failure reaches a phone.** A morning that ends FAILED posts one line through ntfy.sh to the topic named in
-  `outputs/daily/notify.conf`, a file out of git (`scripts/daily_notify.sh`), and a second task at 8 AM posts one when
-  the job never ran (`scripts/daily_missed.sh`).
-- **It stops when the season ends.** Once a team has won the title, `data in-progress` ends the morning after the
-  ingest: the season is then rated with every other, by a full build.
-
-Before any push to `main`, `bash scripts/publish_check.sh` runs what GitHub runs, on a clone of the commit with no
-data: the lint check, every test and the tutorial.
-
-### The Bias page
-
-`docs/bias.html` asks where OpenRAPM rates players higher or lower than a consensus of five outside rating systems
-does, for the season the pages open on. One row per stat, the 13 box score rates per 100 and on-court and off-court
-plus-minus: how much higher OpenRAPM rates players one standard deviation higher in that stat than the consensus does,
-on offense, on defense and in total. Blocks at +0.33 on defense: a player one standard deviation higher in blocks,
-0.72 per 100, is rated a third of a point higher on defense by OpenRAPM than by the consensus (2026-11-05, 317 players).
-
-```bash
-python -m openrapm data public-ratings     # the five systems' tables, one request each, stored by day and out of git
-python -m openrapm site --bias             # docs/data/bias.json, from the newest stored table of each
-```
-
-The consensus is the owner's: 30% xRAPM, 20% xrapm.com's 3-year RAPM, 20% LOKI, 15% DARKO, 15% Pulse, for the players
-all five list. Each side of OpenRAPM is first multiplied once, league-wide, to the consensus's spread, so a row shows
-where the two disagree about who is good and not that one is spread wider. `src/openrapm/bias.py` holds the equations
-and an example with numbers; `src/openrapm/data/public_ratings.py` reads the five pages and says which systems must
-not be pulled: EPM, nbarapm.com's time-decay RAPM and xPM, whose terms or robots file forbid it. Only the page's own
-slopes are published, each system named, credited and linked.
-
-### Wins over starter average
-
-WOSA: how many regular-season wins a player added to his team over an average starter. No published rating moves. It is
-locked when the regular season ends: it reads each player's rating from that regular season alone,
-`outputs/season_ratings_NAME_regular.parquet`, so playoff games cannot move it. The starter is the mean of the season's
-150 players with the most games started, minutes breaking ties. Every game carries the same total weight, and leverage,
-from a win-probability model read from the season's own games, divides it up inside that game: causing a blowout costs
-nothing, and closing one earns nothing. A point at an average weight is 1/30 of a win, the rate teams' records read off
-those ratings over 30 seasons. A player who speeds up or slows down the game, by a ridge regression of each stint's pace
-on the ten players, is paid for the possessions he adds at the margin his lineup would have without him.
-`src/openrapm/wins.py` holds the equation and an example with numbers; `PIPELINE.md` says how each part was checked. The
-columns are `wosa`, its parts `wosa_off`, `wosa_def` and `wosa_pace`, and `pace_effect`, `leverage`, `starts_rs` and
-`minutes_rs`; each season's starter average and win model are in `outputs/csv/wins_NAME_seasons.csv`.
+Then `settings.py`, every number the steps use and the experiment that set it, and `features.py`, every input the
+box-score prior can read, with its meaning and formula.
 
 ## The two rules
 
-**1. The current season is never trained on.** Every season may be loaded and rated. A season may be
-*fit* on only once its Finals are over, which `src/openrapm/data/seasons.py` reads from the data rather
-than from a constant, by asking whether any team has won the playoff games that win a title (sixteen
-since 2003, fifteen before). That covers the labels, the box-score prior, step 5's type model and every setting. Step 4's
-multipliers are not gated there: they read the folds of the 8 finished seasons nearest the rated one, folds pinned
-to 1997-2026 (`settings.ShrinkSettings`). The ridge of step 3 is exempt, because a rating *is* a ridge coefficient
-and solving it on the season in progress is the product rather than a fit. `tests/test_seasons.py` pins
-the cutoff; `tests/test_no_current_season.py` checks it end to end: the season in progress is dropped
-from every read that trains, and replacing it with noise moves no training row by one byte.
+**1. The season in progress is never trained on.** Every season may be loaded and rated. A season may be *fit* on
+only once its Finals are over, which `src/openrapm/data/seasons.py` reads from the data rather than from a constant,
+by asking whether any team has won the playoff games that win a title: sixteen since 2003, fifteen before. That
+covers the labels, the box-score prior, Box Adj's line, the swap adjustment's model and every setting. The shrink's
+multipliers read the held-back games of the 8 finished seasons nearest the rated one. The ridge of the rating itself
+is exempt: a rating *is* a ridge coefficient, and solving it on the season in progress is the product, not a fit.
+`tests/test_seasons.py` pins the cutoff; `tests/test_no_current_season.py` checks it end to end.
 
-**2. Model code does not load its own data.** The data layer, `src/openrapm/data/`, reads the disk and
-the network; the model layer, the other modules of `src/openrapm/`, is handed data and returns numbers;
-the commands, `src/openrapm/commands/`, join the two. `tests/test_layer_boundary.py` enforces it: a model
-module may not open a file or import the data layer, and only the commands and `__main__.py` import
-the commands. Add a data source freely (tracking data, a different feed, anything), but add it in the data
-layer.
+**2. Model code does not load its own data.** The data layer, `src/openrapm/data/`, reads the disk and the network;
+the model layer, the other modules of `src/openrapm/`, is handed data and returns numbers; the commands,
+`src/openrapm/commands/`, join the two. `tests/test_layer_boundary.py` enforces it. Add a data source freely, in the
+data layer.
 
-## The test that decides, and how to run an experiment
+## The test that decides
 
-**The within-season WOWY test decides** (`scripts/checks/151_wowy.py`; the owner, 2026-10-15). Each season
-is rated from three quarters of its games, twelve times over, and scored stint by stint on the quarter held
-back, with each team's own level in those games taken out, so what is scored is how the ratings split credit
-among teammates. The paired z is the mean of the 30 season-by-season differences in error, candidate minus
-incumbent, over its standard error. A change must be better in every era, 1997-2006, 2007-2016 and
-2017-2026, read beside the noise control: today's ratings rebuilt with only the box-score prior's random split
-of players changed, which moves this test by about 0.01 on its own.
+**The within-season WOWY test decides** (`scripts/checks/151_wowy.py`; the owner, 2026-10-15). Each season is rated
+from three quarters of its games, twelve times over, and scored stint by stint on the quarter held back, with each
+team's own level in those games taken out, so what is scored is how the ratings split credit among teammates. The
+reading is the mean of the 30 season-by-season differences in error, candidate minus incumbent, over its standard
+error: a paired t-statistic, z, below zero better. A change must be better in every era, 1997-2006, 2007-2016 and
+2017-2026, read beside the noise control: the incumbent rebuilt with only the box-score prior's split of players into
+its five training groups changed, which moves the test by about 0.01 on its own.
 
 **The year-over-year test guards it** (`scripts/checks/63_yoy.py`): rate a season from its own games, then predict
-every stint of the season before and of the season after from the ten players' ratings alone, refitting
-only that season's intercept and home edge. The misses are summed to team-games (one team's points in
-one game), so the noise of single possessions cancels before a miss is squared.
+every stint of the season before and of the season after from the ten players' ratings alone, refitting only that
+season's intercept and home edge. The misses are summed to team-games, one team's points in one game, so the noise of
+single possessions cancels before a miss is squared. The score, `game_armse` in `src/openrapm/scoring.py`, is the
+root of the team-game mean squared error times the square root of 2 / pi, so it reads as a typical miss in points per
+100: 56 readings, 28 seasons each predicted from the season before and from the season after. Each side is read with
+its spread matched to the incumbent's, since a wider or narrower table moves this test on its own.
 
-The score, `game_armse` (`src/openrapm/scoring.py`), is sqrt(team-game mean squared error) x sqrt(2 / pi),
-in points per 100 possessions. The mean squared error weights each team-game by its possessions. The
-factor sqrt(2 / pi) = 0.798 is the ratio of the mean absolute deviation to the standard deviation of a
-normal error, so the score reads as a typical miss rather than a root mean square. It is taken over 28
-scored seasons (1998-2025), each predicted from the season before and from the season after: 56
-observations. The incumbent, `outputs/season_ratings_fade141.parquet` (experiment 141), reads
-**8.6908**. The tables it scores are built at the test setting (`openrapm build --setting test`), so
-nothing fitted for a season has seen the two seasons that score it.
+Both tests print the plain z, which adoptions have been read on, and beside it a z that counts readings sharing
+seasons together: `z_clustered` and `z_newey_west`.
 
-**The paired z**: for each of the 56 observations, the candidate's team-game mean squared error minus the
-incumbent's; the mean of those differences divided by its standard error (a paired t-statistic). Below
-zero is better. Beside it the report prints `z_clustered`, the same with the two observations that share a
-rated season's table counted together, since they move together; check 151 prints `z_newey_west`, each
-season allowed to move with its neighbours, whose multipliers share fold seasons. Which of them rules is the
-owner's call (notes/DECISIONS.md, the bug-fix pass of 2026-10-22).
+A change is adopted on the owner's word when:
 
-A change is adopted when all four hold, on the owner's word; ties go to the simpler version.
+- the within-season WOWY test is better in every era, against the noise control's own movement; a bug fix needs only
+  a tie;
+- the year-over-year test is not worse at a paired z of +2;
+- the 2026 top 20, side by side with the incumbent's (`scripts/checks/66_compare.py`), is not worse in the owner's
+  reading.
 
-- The within-season WOWY test is better in every era, against the noise control's own movement. A bug fix
-  needs only a tie.
-- The year-over-year test is not worse at a paired z of +2.
-- The consensus shows no gross miss. Experiment 2's rank agreement of 0.570 / 0.656 / 0.651 against a
-  minimum of 0.75 was gross and vetoed it; 0.759 against the minimum of the time, 0.76, was not a veto;
-  a miss in between (defence 0.689, 8% under, 2026-09-14) went to the owner. The minimum is
-  `MIN_RANK_AGREEMENT` in `src/openrapm/consensus.py`.
-- The 2026 top 20 on the side-by-side page (`66_compare.py`) is not worse in the owner's reading.
-
-`GLOSSARY.md` defines the consensus and the trade loss; `CONTRIBUTING.md` says what a pull request has to
-show.
-
-On a fresh build, make the incumbent's files once, then name your folds on every chain:
-
-```bash
-python -m openrapm build --setting test --folds mine_within --extrapolate-folds= --name fade141
-INC_FOLDS=mine_within INC_SYSTEM=mine bash scripts/experiment_chain.sh NAME DEFENSIVE_TARGET
-```
-
-The first writes the incumbent. On the project's machine it exists, with its folds and its noise
-control, and `INC_FOLDS` and `INC_SYSTEM` can be left out.
-
-One experiment is one command:
+The consensus of public metrics (`scripts/checks/64_consensus_report.py`) is a sanity check, never a fitting target:
+a gross miss can veto a change. The incumbent and its noise control are named at the top of
+`scripts/experiment_chain.sh`, which builds a candidate and takes every reading in one command:
 
 ```bash
 bash scripts/experiment_chain.sh NAME DEFENSIVE_TARGET ["EXTRA RATE FLAGS"]
 bash scripts/experiment_chain.sh noise_control points_with_expected_opponent_threes_late_as_scored "--fold-assignment 1"
 ```
 
-The second line is the noise control: the incumbent rebuilt with only the players' assignment to the
-prior's five folds changed, which shows how far the readings move when nothing real has changed. The
-chain builds the candidate at the test setting, its own folds for every season, then reads it against the
-incumbent:
+The second line is a noise control. `CONTRIBUTING.md` says what a pull request has to show and how an experiment is
+logged.
 
-- the within-season WOWY test, by era, with the noise control beside it (`151_wowy.py`);
-- the year-over-year test (`63_yoy.py`);
-- the 2026 top 20, side by side, as an HTML page (`66_compare.py`).
+## Building the ratings
 
-`FULL_READINGS=1` adds the older readings: the consensus (`64_consensus_report.py`), the swap test
-(`90_swap_test.py`), the year-over-year test by player-quality tier (`88_yoy_by_player.py`) and the trade
-loss (`70_tradeset.py`, then `73_tradeloss.py`). A name is built once: the chain stops on a name whose
-files exist, unless `REUSE=1` says to go on from them.
+Everything under `data/` and `outputs/` is rebuilt by the commands below, and none of it is in git; the one
+exception is `data/external/consensus.csv`, a snapshot of public metrics. Times are from the project's machine, every
+linear-algebra library on one thread; `--jobs N` splits seasons over N processes where free memory allows, about 5.5
+GB each.
 
-Every reading goes to `outputs/NAME_chain.log`. A reading that fails is logged and the chain goes on;
-the last line names every reading that failed. The chain does not log the experiment: afterwards,
-`scripts/checks/101_log_run.py --name=NAME --exp=<number> ...` adds its row to
-`experiments/runs.csv` (`CONTRIBUTING.md` gives the whole command).
+The data, once:
+
+```bash
+python -m openrapm data ingest 1997 2026 RS,PO      # days; a file already on disk is not fetched again
+python -m openrapm data stints 1997 2026 RS,PO      # about 46 minutes
+python -m openrapm data events 1997 2026            # about 12 seconds a season
+python -m openrapm data careers                     # about 13 minutes
+python -m openrapm data hustle-games 2017 2026      # one request a game: the hustle inputs, from 2017
+python -m openrapm data panel                       # under a minute
+python -m openrapm data panel --so-far 0.25,0.5,0.75
+```
+
+The model, in four passes, because Box Adj and the shrink are both fitted on held-back games of a build before them:
+
+```bash
+# 1. ratings without Box Adj, at the test setting, keeping the boosters; their held-back games
+python -m openrapm rate --setting test --seasons 1997-2026 --second-prior "" --name base --save-models base --jobs 4
+python -m openrapm folds --models base --base season_ratings_base_step3 --seasons 1997-2016 --tag base_early --jobs 4
+python -m openrapm folds --models base --base season_ratings_base_step3 --seasons 2017-2026 --tag base_within --jobs 4
+# 2. Box Adj's line, fitted on those held-back games through the ridge
+python -m openrapm second-prior --models base --folds base_early,base_within --tag mine_line --target rating
+# 3. ratings with the line; their held-back games, at a quarter and at a tenth held back
+python -m openrapm rate --setting test --seasons 1997-2026 --second-prior mine_line --name mine --save-models mine --jobs 4
+python -m openrapm folds --models mine --base season_ratings_mine_step3 --seasons 1997-2016 --tag mine_early --jobs 4
+python -m openrapm folds --models mine --base season_ratings_mine_step3 --seasons 2017-2026 --tag mine_within --jobs 4
+python -m openrapm folds --models mine --base season_ratings_mine_step3 --seasons 1997-2026 --tag mine_k10 --folds-per-repeat 10 --jobs 4
+# 4. the published tables and the site's files
+python -m openrapm build --second-prior mine_line --folds mine_early,mine_within --extrapolate-folds mine_k10
+python -m openrapm site --openrapm-decomposition --similarity --power --bias
+```
+
+A rating pass takes about 3 minutes a season a process; the 120 held-back sets of ten seasons about 12 minutes; the
+final `build` rates 31 seasons and then each finished season from its regular season alone for WOSA: 12,792 seconds in
+one process on 2026-11-10. `openrapm build` writes `outputs/season_ratings_product.parquet` with the tables before
+the shrink and before the swap adjustment beside it; `build --setting test --name NAME` writes the table the tests
+score.
+
+What a fresh build cannot repeat bit for bit: the published Box Adj line was fitted on the held-back games of an
+earlier build, so a line refitted as above differs a little. Each command checks what it reads: `build` stops in
+seconds, before rating anything, when the held-back games it names are missing, and `rate` stops when Box Adj's line
+is.
+
+`python -m openrapm <command> --help` lists every option. `--config FILE`, before the command, or the environment
+variable `OPENRAPM_CONFIG`, points every command at another `config.yaml`; give it absolute paths, since relative
+ones are read from where the code sits.
+
+## The season in progress
+
+`scripts/daily_update.sh` rates the season in progress every morning at 6 AM Eastern, on the project's machine, and
+publishes it: the night's games are fetched, checked, built into stints and rated in place of yesterday's season,
+every finished season unchanged. Nothing is trained on the season in progress. `PIPELINE.md`, "The morning job",
+lists its steps and what keeps it safe with nobody looking. Before any push to `main`, `bash scripts/publish_check.sh`
+runs what GitHub runs, on a clone with no data: the lint check, every test and the tutorial.
 
 ## Layout
 
     src/openrapm/
-      rapm.py box_prior.py prior_rapm.py prior_shrink.py swap_adjust.py    the five steps
-      settings.py       every number the steps use, and the experiment that set it
-      features.py       the prior's inputs: name, meaning, formula
+      rapm.py box_prior.py second_prior.py rating_line.py prior_rapm.py prior_shrink.py swap_adjust.py
+                        how a rating is made
+      settings.py       every number the build uses, and the experiment that set it
+      features.py       the box-score prior's inputs: name, meaning, formula
       design.py         the regression design: players, context columns, box counts
       box_rates.py      padded per-100 box-score rates
       on_court.py       a team's record with a player on and off the court
       scoring.py        how ratings are scored on games they never saw
-      similarity.py     the similarity page: each player-season's nearest player-seasons
+      wins.py           WOSA: the win model, leverage, the pace ridge, the bar, the wins
+      power_forecast.py the Power page's one rating
       bias.py           the Bias page: OpenRAPM against a consensus of outside systems, stat by stat
-      wins.py           wins over starter average: the win model, leverage, the pace ridge, the bar, the wins
-      decomposition.py  the decomposition pages: which rows of a ridge fit a rating comes from
-      swap_test.py trade_set.py consensus.py player_types.py simulate.py
+      similarity.py     the Similarity page: each player-season's nearest player-seasons
+      decomposition.py  the Detail view: which rows of a ridge fit a rating comes from
+      consensus.py swap_test.py trade_set.py player_types.py simulate.py
+                        the consensus check, lineup swaps, trade sets, player types, the simulated league
       data/             the data layer: everything that reads or writes the disk or the network
       commands/         the openrapm command line
-    scripts/checks/     the 14 checks: the year-over-year test, the consensus, the trade loss, ...
-    scripts/experiment_chain.sh
+    scripts/checks/     the numbered checks: the two tests, the top-20 page, and the one-off studies; PIPELINE.md lists each
+    scripts/experiment_chain.sh, scripts/daily_update.sh and its helpers
     examples/tutorial.py
     tests/
-    params/             LightGBM settings, the held-out audit's input groups, player names
+    params/             LightGBM settings, the Power page's weights, the held-out audit's input groups, player names
     config.yaml         seasons, data constants and paths
     docs/               the published site
     notes/              the project's history
@@ -358,24 +236,21 @@ the last line names every reading that failed. The chain does not log the experi
 
 ## Where the history lives
 
-- `notes/HANDOFF.md`: where the work stands, what is waiting on the owner, and the commands a next
-  session runs.
-- `notes/DECISIONS.md`: every experiment, what the test settled and what it rejected, and the
-  measurement traps that have produced confident wrong numbers here before. Read the traps before
-  trusting a number.
-- `notes/WITHIN_SEASON_LEDGER.md`: what a within-season fold sees, what it never sees, and the check for
-  each.
+- `notes/HANDOFF.md`: where the work stands, what waits on the owner, and the commands a next session runs.
+- `notes/DECISIONS.md`: every experiment, what the test settled and what it rejected, and the measurement traps
+  that have produced confident wrong numbers here before. Read the traps before trusting a number.
+- `notes/WITHIN_SEASON_LEDGER.md`: what a set of held-back games sees, what it never sees, and the check for each.
 
-The notes cite numbered scripts such as `scripts/62_single_year_board.py`, retired in the 2026-10
-cleanup and kept at the tag `archive/research-2026-10`
-(`git show archive/research-2026-10:scripts/62_single_year_board.py`); `PIPELINE.md` maps each to
-today's command. A `FINDINGS N.N` comment points at the research log kept at the tag
-`archive/research-2026-09` (`git show archive/research-2026-09:FINDINGS.md`).
+The notes cite numbered scripts such as `scripts/62_single_year_board.py`, retired in the 2026-10 cleanup and kept at
+the tag `archive/research-2026-10`: `git show archive/research-2026-10:scripts/62_single_year_board.py`. A
+`FINDINGS N.N` comment points at the research log kept at the tag `archive/research-2026-09`. Code removed in the
+cleanup of 2026-11-16, the three box-score priors that lost their tests and the retired vanilla RAPM page, is kept at
+the tag `archive/research-2026-11`.
 
 ## Contributing
 
-See `CONTRIBUTING.md`. In one line: change the model layer, run the test against what ships, and
-report every variant you tried, not just the one that won.
+See `CONTRIBUTING.md`. In one line: change the model layer, run the test against what ships, and report every variant
+you tried, not just the one that won.
 
 ## Using the code and the ratings
 
