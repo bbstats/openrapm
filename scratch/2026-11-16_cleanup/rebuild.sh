@@ -14,8 +14,10 @@ mkdir -p "$DIR/done"
 LOG=$DIR/rebuild.log
 export PYTHONIOENCODING=utf-8
 say() { echo "=== $(date '+%F %I:%M:%S %p') $*" | tee -a "$LOG"; }
-until grep -q "refetch finished" outputs/refetch/refetch.log 2>/dev/null; do
-  grep -q "FAILED" outputs/refetch/refetch.log 2>/dev/null && { say "the refetch FAILED; nothing built"; exit 1; }
+FETCH=outputs/refetch/refetch.log
+FROM=$(( $(wc -l < "$FETCH") + 1 ))   # a failure logged before this chain started was fixed and the fetch restarted
+until tail -n +"$FROM" "$FETCH" | grep -q "refetch finished"; do
+  tail -n +"$FROM" "$FETCH" | grep -q "FAILED" && { say "the refetch FAILED; nothing built"; exit 1; }
   sleep 120
 done
 step() {

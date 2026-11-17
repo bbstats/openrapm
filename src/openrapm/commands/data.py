@@ -243,7 +243,14 @@ def run_dashboards(args: argparse.Namespace, cfg: dict) -> int:
             seasons = list(range(first, last_season + 1))
         wanted.append((pull, seasons))
     records = dashboards.pull_all(cfg, wanted, phases(args), delay=args.delay, force=args.force)
-    table = dashboards.coverage(records, dashboards.panel_rows(cfg))
+    # a first build has no season panel yet, and `data panel` reads these files: the coverage reads as none
+    if resolve(cfg, "panel").exists():
+        rows = dashboards.panel_rows(cfg)
+    else:
+        print("no season panel yet, so no coverage: `openrapm data panel` builds it from these files", flush=True)
+        rows = pd.DataFrame({"player_id": pd.Series(dtype="int64"), "season": pd.Series(dtype="int64"),
+                             "side": pd.Series(dtype="object"), "possessions": pd.Series(dtype="float64")})
+    table = dashboards.coverage(records, rows)
     csv = resolve(cfg, "outputs") / "csv"
     csv.mkdir(parents=True, exist_ok=True)
     stem = "dashboard_probe" if args.probe else "dashboard_coverage"

@@ -50,7 +50,7 @@ one process.
 | `openrapm data events FIRST LAST` | `data/event_counts/` | the season panel's play-by-play columns, self-creation and foul counts |
 | `openrapm data careers` | `data/raw/careers/`, `data/cache/careers_before.parquet` | the panel's career columns counted from a player's debut; no shipped input reads them |
 | `openrapm data hustle-games FIRST LAST` | `data/raw/dashboards/hustle/games/` | the box-score prior's hustle inputs for finished seasons, from 2017 |
-| `openrapm data dashboards FIRST LAST` | `data/raw/dashboards/` | the hustle inputs of the season in progress, season to date |
+| `openrapm data dashboards FIRST LAST` | `data/raw/dashboards/` | the season panel, which stops without them: the tracking files from 2014; and the hustle inputs of the season in progress, season to date |
 | `openrapm data tracking-games FIRST LAST` | `data/raw/dashboards/tracking/games/` | no shipped input; experiment 62 tried them |
 | `openrapm data matchup-games FIRST LAST` | `data/raw/dashboards/matchups/games/` | no shipped input; experiment 120 tried them |
 | `openrapm data panel` | `outputs/season_panel.parquet`, with `--so-far` `outputs/season_panel_so_far.parquet` | the box-score prior, Box Adj, Similarity |

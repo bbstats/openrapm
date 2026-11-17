@@ -158,6 +158,7 @@ python -m openrapm data stints 1997 2026 RS,PO      # about 46 minutes
 python -m openrapm data events 1997 2026            # about 12 seconds a season
 python -m openrapm data careers                     # about 13 minutes
 python -m openrapm data hustle-games 2017 2026      # one request a game: the hustle inputs, from 2017
+python -m openrapm data dashboards 1997 2026        # the season dashboards the panel reads, about an hour
 python -m openrapm data panel                       # under a minute
 python -m openrapm data panel --so-far 0.25,0.5,0.75
 python -m openrapm data public-ratings              # five outside systems' current tables, for the Bias page

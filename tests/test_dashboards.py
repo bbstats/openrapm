@@ -142,6 +142,19 @@ def test_the_command_probes_writes_the_coverage_and_rejects_an_unknown_source(cf
         data_command.run_dashboards(args, cfg)
 
 
+def test_a_first_build_with_no_season_panel_fetches_and_reads_the_coverage_as_none(cfg, endpoint, tmp_path, capsys):
+    """`data panel` reads the dashboards, so on a fresh clone they come before any panel: the command writes its files
+    and reports no coverage instead of stopping (README.md's data steps, 2026-11-17)."""
+    endpoint.answers = {"2025-26": pd.DataFrame({"PLAYER_ID": [1], "DEFLECTIONS": [3]})}
+    args = data_command.argparse.Namespace(probe=True, sources="hustle", phases="RS", delay=0.0, force=False,
+                                           first_season=None, last_season=None)
+    assert data_command.run_dashboards(args, cfg) == 0
+    assert "no season panel yet" in capsys.readouterr().out
+    assert dashboards.dashboard_path(cfg, hustle(), 2026, "RS").exists()
+    table = pd.read_csv(tmp_path / "outputs" / "csv" / "dashboard_probe.csv")
+    assert table.share_possessions.isna().all()
+
+
 def test_a_failed_hustle_pull_fails_the_command(cfg, endpoint, tmp_path, capsys):
     """The hustle tables feed shipped prior inputs and a failed pull leaves yesterday's file: the morning must stop."""
     pd.DataFrame({"player_id": [1], "season": [2026], "side": ["O"], "possessions": [100.0]}
