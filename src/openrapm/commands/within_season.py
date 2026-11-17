@@ -149,6 +149,8 @@ PLAYER_COLUMNS = list(dict.fromkeys(PRIOR_FEATURES + OFF_COURT + ON_MINUS_OFF + 
 LUCK_KEPT = {"points_with_expected_opponent_threes": OPPONENT_THREE_LUCK_KEPT,
              "points_with_expected_opponent_threes_late_as_scored": OPPONENT_THREE_LUCK_KEPT,
              "points_with_expected_opponent_threes_all": 0.0, "points_with_expected_opponent_threes_half": 0.5}
+# the defensive targets whose late threes count as they happened, unrepriced (data/shots.def_three_design)
+LATE_AS_SCORED = {"points_with_expected_opponent_threes_late_as_scored"}
 PIECES_TOLERANCE = 1e-9         # the pieces add up to the games' part, and the refit reproduces it, to this
 PIECES_JITTER_TOLERANCE = 1e-6  # the same in a season whose solve needed rapm.solved_ridge's jitter (2020)
 
@@ -727,11 +729,12 @@ def fold_pieces(run: SeasonRun, rated: RatedWorld, fit_ids: set) -> tuple[pd.Dat
         fit = decomposition.refit(design, rated.prior["O"], rated.prior["D"], SETTINGS.ridge.penalty)
         lineup_o, lineup_d = decomposition.lineups(fit.players, fit.n_players)
         keys = decomposition.row_keys(design, lineup_o, lineup_d, teams)
-        x3, luck_kept = None, 0.0
+        x3, luck_kept, late_as_scored = None, 0.0, target in LATE_AS_SCORED
         if side == "D":
-            x3 = expected_threes([int(season)], run.cfg, points, prev=0, k3=450.0, keep=keep)[0]
+            x3 = expected_threes([int(season)], run.cfg, points, prev=0, k3=450.0, keep=keep,
+                                 late=not late_as_scored)[0]
             luck_kept = LUCK_KEPT[target]
-        outcomes, _ = decomposition.outcome_responses(design.counters, points.y, x3, luck_kept)
+        outcomes, _ = decomposition.outcome_responses(design.counters, points.y, x3, luck_kept, late_as_scored)
         frame, misses = decomposition.split_pieces(fit, keys, key, outcomes)
         rating = table.set_index("player_id")
         own, prior = ("offense", "prior_offense") if side == "O" else ("defense", "prior_defense")

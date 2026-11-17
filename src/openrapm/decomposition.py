@@ -266,7 +266,7 @@ def posterior_sd(fit: GamesPartFit) -> tuple[np.ndarray, np.ndarray]:
 
 
 def outcome_responses(counters: pd.DataFrame, y_points: np.ndarray, x3: np.ndarray | None = None,
-                      luck_kept: float = 0.25) -> tuple[dict, float]:
+                      luck_kept: float = 0.25, late_as_scored: bool = False) -> tuple[dict, float]:
     """The response of a points target split by the points it is made of: ({piece: per-row response}, ratio).
 
     `counters` are the design's per-row counters (design.Design.counters).  Each piece is per 100 possessions and the
@@ -275,6 +275,8 @@ def outcome_responses(counters: pd.DataFrame, y_points: np.ndarray, x3: np.ndarr
         threes        3 fg3m on offense.  On defense 3 (luck_kept fg3m + (1 - luck_kept) x3): the target keeps
                       `luck_kept` of the opponents' threes and prices the rest at the shooters' expected makes x3
         free_throws   xftm + xftm_tech                   the expected free-throw makes, both targets
+    With `late_as_scored`, as the shipped defensive target (data/shots.def_three_design), the threes of a period's
+    last two seconds count as made, 3 fg3m_late, and the rest as above, x3 then their expected makes alone.
     The defence's target is also divided by one scalar per season (data/shots.align) so its total equals the points
     scored: `ratio`, found the same way from `y_points` (the points design's response); 1 for the offense (x3 None).
 
@@ -284,8 +286,9 @@ def outcome_responses(counters: pd.DataFrame, y_points: np.ndarray, x3: np.ndarr
     """
     poss = counters["poss"].to_numpy(dtype=float)
     fg3m = counters["fg3m"].to_numpy(dtype=float)
+    late = counters["fg3m_late"].to_numpy(dtype=float) if late_as_scored and x3 is not None else np.zeros_like(fg3m)
     parts = dict(twos=(counters["pts"] - counters["ftm"] - counters["ftm_tech"]).to_numpy(dtype=float) - 3.0 * fg3m,
-                 threes=3.0 * fg3m if x3 is None else 3.0 * (luck_kept * fg3m + (1.0 - luck_kept) * x3),
+                 threes=3.0 * fg3m if x3 is None else 3.0 * (late + luck_kept * (fg3m - late) + (1.0 - luck_kept) * x3),
                  free_throws=(counters["xftm"] + counters["xftm_tech"]).to_numpy(dtype=float))
     per_100 = {name: 100.0 * part / poss for name, part in parts.items()}
     ratio = 1.0

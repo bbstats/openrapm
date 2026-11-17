@@ -257,6 +257,22 @@ def test_the_defensive_target_keeps_a_share_of_the_threes_and_is_scaled_to_the_p
     assert pieces["threes"][1] * ratio == pytest.approx(100.0 * 3.0 * 0.75 * x3[1] / 5.0)
 
 
+def test_the_shipped_defensive_target_counts_late_threes_as_made():
+    """data/shots.def_three_design with late_as_scored: a period's last two seconds' threes as they happened, the rest
+    repriced with a quarter of their luck kept; the pieces add up to that target, before its one scalar."""
+    counters = _counters().assign(fg3m_late=[1.0, 0.0, 0.0, 0.0])    # row 0's three was a heave
+    x3 = np.array([0.0, 0.2, 0.3, 0.1])                               # expected makes of the other threes
+    y_points = 100.0 * counters.pts.to_numpy() / counters.poss.to_numpy()
+    pieces, ratio = decomposition.outcome_responses(counters, y_points, x3, luck_kept=0.25, late_as_scored=True)
+    made = counters.fg3m - counters.fg3m_late
+    unscaled = 100.0 * (counters.pts - 3.0 * 0.75 * (made - x3) - counters.ftm - counters.ftm_tech
+                        + counters.xftm + counters.xftm_tech) / counters.poss
+    assert np.allclose(sum(pieces.values()) * ratio, unscaled)
+    assert pieces["threes"][0] * ratio == pytest.approx(100.0 * 3.0 / 4.0)  # the heave, its 3 points in full
+    plain, plain_ratio = decomposition.outcome_responses(counters, y_points, x3, luck_kept=0.25)
+    assert plain["threes"][0] * plain_ratio < pieces["threes"][0] * ratio   # repriced, a quarter of it counted
+
+
 def test_the_weights_are_orthogonal_to_the_unpenalised_columns(world):
     _, fit, _, regular_season_only = world
     unit = np.zeros(fit.matrix.shape[0])
