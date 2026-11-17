@@ -160,6 +160,7 @@ python -m openrapm data careers                     # about 13 minutes
 python -m openrapm data hustle-games 2017 2026      # one request a game: the hustle inputs, from 2017
 python -m openrapm data panel                       # under a minute
 python -m openrapm data panel --so-far 0.25,0.5,0.75
+python -m openrapm data public-ratings              # five outside systems' current tables, for the Bias page
 ```
 
 The model, in four passes, because Box Adj and the shrink are both fitted on held-back games of a build before them:

@@ -32,6 +32,8 @@ step mine_k10    folds --models rc_mine --base season_ratings_rc_mine_step3 --se
                    --folds-per-repeat 10 --jobs 2
 step build       build --seasons $S --name rc --second-prior rc_line --folds rc_mine_early,rc_mine_within \
                    --extrapolate-folds rc_mine_k10
+# no --bias: the outside systems' stored tables are 2027's, the season in progress, and this table ends at 2026; the
+# proof's site step wrote the Bias file from the published table, the same bytes on both sides
 step site        site --ratings /a/code/spmm/outputs/season_ratings_rc.parquet --openrapm-decomposition --similarity \
-                   --power --bias --out-dir /a/code/spmm/outputs/rc_site
+                   --power --out-dir /a/code/spmm/outputs/rc_site
 say "recipe finished"
