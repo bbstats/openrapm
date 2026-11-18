@@ -170,9 +170,10 @@ class PriorSettings:
     row_labels: str = "career"
     # Box Adj: step 3 reads the box-score prior corrected for who a player played with and against, by the line whose
     # sums are under outputs/second_prior/<tag>/ (second_prior.py, rating_line.py; notes/DECISIONS.md, experiment 81).
-    # zones139_line since experiment 139, adopted 2026-11-06: weights fitted on the within-season test through the ridge
-    # (experiment 134), the team's shots counted by five zones.  "" reads the box-score prior itself
-    second_prior: str = "zones139_line"
+    # rebuilt_line since 2026-11-17: experiment 139's line, weights fitted on the within-season test through the ridge
+    # (experiment 134), the team's shots counted by five zones, fitted again by README.md's recipe after the data was
+    # deleted and fetched again (notes/DECISIONS.md, "The cleanup of 2026-11-16").  "" reads the box-score prior itself
+    second_prior: str = "rebuilt_line"
     # the line's player folds (player_id % 5) and its ridge penalty relative to the mean diagonal of its Gram matrix:
     # step 5's type model's, the method the line borrows
     second_prior_folds: int = 5
@@ -258,8 +259,8 @@ class ShrinkSettings:
     # season since experiment 55 (adopted 2026-10-12); 2017-2026 before
     fold_seasons: tuple = (1997, 2026)
     # the within-season folds the factors are fitted on, comma-separated folders, 1997-2016 and 2017-2026: every adopted
-    # build brings its own, experiment 141's since it was adopted 2026-11-10; the method is experiment 33b's
-    folds_tag: str = "fade141_early,fade141_within"
+    # build brings its own, the rebuild's of 2026-11-17 with experiment 141's settings; the method is experiment 33b's
+    folds_tag: str = "rebuilt_early,rebuilt_within"
     # each season's factors from only the K fold seasons nearest it (prior_shrink.fold_seasons_used): the defensive
     # prior part holds up less in older seasons, 0.79 in 1997-2006 against 0.95 in 2017-2026 (notes/DECISIONS.md,
     # "Era drift" and experiment 55, adopted 2026-10-12: "yes. build."); 0 would use every fold season the rule allows
@@ -267,9 +268,9 @@ class ShrinkSettings:
     # a second fold set, a tenth of each season's games held back ten times a repeat: each multiplier is read off the
     # straight line through the two holdout sizes at nothing held back, as the full-season ratings are built
     # (Richardson extrapolation, prior_shrink.full_season_multipliers; notes/DECISIONS.md, experiment 101, adopted
-    # 2026-10-22: "we are going to do it"); "" fits on folds_tag alone, as the experiment chain does.  Experiment 141's
-    # own since 2026-11-10
-    extrapolate_folds_tag: str = "fade141_k10"
+    # 2026-10-22: "we are going to do it"); "" fits on folds_tag alone, as the experiment chain does.  The rebuild's
+    # own since 2026-11-17
+    extrapolate_folds_tag: str = "rebuilt_k10"
     # a multiplier on the games' part too, fitted beside the prior's (prior_shrink, "The games' part freed";
     # notes/DECISIONS.md, experiment 65, adopted 2026-10-15: "Adopt one multiplier as the new incumbent")
     free_games_part: bool = True

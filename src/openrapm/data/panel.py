@@ -707,7 +707,11 @@ def _read(cfg: dict) -> pd.DataFrame:
 
 def panel_keys(cfg: dict) -> pd.DataFrame:
     """The season panel's player, season, side and possessions for every season, the one in progress included: what
-    a count of who a data source covers (`openrapm data dashboards`) needs.  Nothing is fitted on it."""
+    a count of who a data source covers (`openrapm data dashboards`) needs.  Nothing is fitted on it.  On a first
+    build, before any panel is built from the dashboards, no rows."""
+    if not resolve(cfg, "panel").exists():
+        return pd.DataFrame({"player_id": pd.Series(dtype="int64"), "season": pd.Series(dtype="int64"),
+                             "side": pd.Series(dtype="object"), "possessions": pd.Series(dtype="float64")})
     return _read(cfg)[["player_id", "season", "side", "possessions"]]
 
 

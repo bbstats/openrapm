@@ -222,14 +222,16 @@ fetch caches each file, so a stopped run resumes; with `OPENRAPM_OFFLINE=1` a mi
   (`rating_line.py`). Both ends are solved together, each input scaled to one standard deviation, penalty 1e-4 times
   the mean diagonal. A season of the line's sums counts 0.5 to the power of its distance from the rated one over 8
   seasons.
-- **Settings:** `PriorSettings.second_prior`, the sums `zones139_line`; `second_prior_inputs`,
+- **Settings:** `PriorSettings.second_prior`, the sums `rebuilt_line`; `second_prior_inputs`,
   `context_types_team_zones_centred` (experiments 134 and 139); `second_prior_team_totals`, `held` (experiment 81);
   `second_prior_halflife`, 8 (experiment 141). The line trains on finished seasons only, at the test setting without
   the rated season's neighbors. `--second-prior ""` reads the box-score prior alone.
-- **The shipped sums:** `openrapm second-prior --models padbins127 --folds padbins127_early,padbins127_within --tag
-  zones139 --inputs context_types_team_rates_zones_centred --target rating`, then cut to the shipped inputs by
-  `scratch/2026-11-05_second_stage/zones139_line.py`: the same normal equations on fewer columns, so the line is what
-  `openrapm second-prior --inputs context_types_team_zones_centred` would fit.
+- **The shipped sums:** since 2026-11-17, README.md's recipe on every season after the data was deleted and fetched
+  again: `openrapm second-prior --models rebuilt_base --folds rebuilt_base_early,rebuilt_base_within --tag
+  rebuilt_line --target rating`, on the held-back games of a build without Box Adj
+  (`scratch/2026-11-16_cleanup/rebuild.sh`).  Before it, `zones139_line`, fitted on padbins127's folds and cut to the
+  shipped inputs by `scratch/2026-11-05_second_stage/zones139_line.py`; the two agree within 0.05 points per 100 in
+  finished seasons.
 - **The Detail view's split:** `PriorSettings.box_first` takes the Box score column from the line's fit on his own
   stats' inputs alone, `rating_line.first_stage`, and Box Adj is the rest of the same prior. No rating reads the
   split.
@@ -276,10 +278,10 @@ fetch caches each file, so a stopped run resumes; with `OPENRAPM_OFFLINE=1` a mi
     `ShrinkSettings.free_games_part`) and the two layers (experiment 106, `within_team_layer`).
   - the defense factor: both defensive multipliers times 0.8682 before 2017 and 0.8704 from 2017; the within layer
     times 0.7663 on offense and 0.9968 on defense (experiment 136, `defence_factors` and `within_factors`).
-  - the held-back games `fade141_early,fade141_within`, experiment 141's own, seasons 1997-2026 pinned
+  - the held-back games `rebuilt_early,rebuilt_within`, experiment 141's settings rebuilt 2026-11-17, seasons 1997-2026 pinned
     (`folds_tag`, `fold_seasons`): every adopted build brings its own.
   - each season's multipliers from the 8 fold seasons nearest it (experiment 55, `nearest`).
-  - each multiplier read to a full season: fitted again on sets holding back a tenth of the games, `fade141_k10`, and
+  - each multiplier read to a full season: fitted again on sets holding back a tenth of the games, `rebuilt_k10`, and
     read off the straight line through the two holdout sizes at nothing held back, because a fold's ratings are built
     from part of a season and the published ones from all of it (experiment 101, `extrapolate_folds_tag`).
 - **Command:** `python -m openrapm shrink --base season_ratings_NAME_step3`.

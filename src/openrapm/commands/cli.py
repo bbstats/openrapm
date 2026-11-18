@@ -626,7 +626,7 @@ def _add_second_prior(commands) -> None:
                         help="outputs/prior_models_<NAME>.pkl, the boosters the folds were rated with")
     second.add_argument("--folds", required=True, metavar="TAG",
                         help="the within-season folds, comma-separated folders under outputs/within/, e.g. "
-                             "fade141_early,fade141_within")
+                             "rebuilt_early,rebuilt_within")
     second.add_argument("--tag", required=True, help="the folder under outputs/second_prior/")
     second.add_argument("--seasons", type=parse_seasons, default=None,
                         help="the seasons to write: 2026, 2017-2026 or 2017,2018 (default every season of the folds)")

@@ -35,7 +35,7 @@ def test_the_targets_prior_and_ridge():
     assert PRODUCT.prior.booster_file == "params/booster_params_lgb1_tune2.json"
     assert PRODUCT.prior.era_halflife == 0.0                 # every training season counts the same
     assert PRODUCT.prior.bags == 10                          # experiment 78, adopted 2026-10-17
-    assert PRODUCT.prior.second_prior == "zones139_line"     # experiment 139, adopted 2026-11-06; rating134 before it
+    assert PRODUCT.prior.second_prior == "rebuilt_line"      # experiment 139's line, rebuilt 2026-11-17
     assert PRODUCT.prior.second_prior_team_totals == "held"
     assert PRODUCT.prior.second_prior_inputs == "context_types_team_zones_centred"   # experiment 139
     assert PRODUCT.prior.second_prior_nearest == 0 and PRODUCT.prior.second_prior_halflife == 8.0   # experiment 141
@@ -53,10 +53,10 @@ def test_each_distinct_target_is_fitted_once():
 
 def test_the_shrink_and_swap_settings():
     assert PRODUCT.shrink.fold_seasons == (1997, 2026) and PRODUCT.shrink.nearest == 8
-    assert PRODUCT.shrink.folds_tag == "fade141_early,fade141_within"           # experiment 141, adopted 2026-11-10
+    assert PRODUCT.shrink.folds_tag == "rebuilt_early,rebuilt_within"           # experiment 141's, rebuilt 2026-11-17
     assert PRODUCT.shrink.defence_factors == ((0, 0.8682), (2017, 0.8704))    # experiment 136, adopted 2026-11-04
     assert PRODUCT.shrink.within_factors == (0.7663, 0.9968)                  # experiment 136, adopted 2026-11-04
-    assert PRODUCT.shrink.extrapolate_folds_tag == "fade141_k10"              # experiments 101 and 141
+    assert PRODUCT.shrink.extrapolate_folds_tag == "rebuilt_k10"              # experiments 101 and 141, rebuilt
     assert [PRODUCT.shrink.defence_factor_for(s) for s in (1997, 2016, 2017, 2026, 2027)] == [0.8682, 0.8682, 0.8704,
                                                                                               0.8704, 0.8704]
     swap = PRODUCT.swap
