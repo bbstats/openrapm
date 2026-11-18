@@ -24,7 +24,42 @@ writing rules, `CLAUDE.md` the owner's standing rules.
 - I write no prose for the site.  Wording is the owner's; a page change of mine adds data, a column, or a line the
   owner has already approved elsewhere.
 
-## Where it stands, 2026-11-16
+## Where it stands, 2026-11-17: the data deleted, fetched again, rebuilt
+
+**What happened.**  On 2026-11-16 at about 9:30 PM, `git worktree remove --force` on five old side checkouts deleted
+`A:/code/spmm/data` and `outputs` through the checkouts' junctions.  Drive A: is an NVMe SSD with TRIM, so nothing
+could be recovered.  The data was fetched again on 2026-11-17 (`scratch/2026-11-16_cleanup/refetch.sh`) and the ratings
+rebuilt by README.md's recipe on every season (`rebuild.sh`), the owner's choice.  DECISIONS.md, "The cleanup of
+2026-11-16", has the account.  **Never remove a side checkout before unlinking its junctions.**
+
+- **The shipped settings read the rebuild:** Box Adj's line `rebuilt_line`, the shrink's held-back games
+  `rebuilt_early,rebuilt_within` and `rebuilt_k10`.  The rebuild's test-setting tables and saved models are `rebuilt`;
+  pass 1, without Box Adj, `rebuilt_base`.
+- **Checked against the site before publishing** (the owner: "No publishing till we do testing on the data"): finished
+  seasons within 0.05 points per 100 typical, 0.29 at most; stints equal to the surviving copy in 60 of 61
+  season-phases; every game present.  `outputs/rebuild/against_site.txt`, `data_tests.txt`, `pieces_vs_site.txt`.
+- **Backup:** `D:\openrapm_backup\2026-11-17\data` and `outputs`, verified byte for byte.
+- **Lost and not rebuilt:** every old experiment's saved files; the noise control `noise_fade141` and the incumbent's
+  own `fade141` tables, folds and models, which `scripts/experiment_chain.sh` still names; `outputs/daily/notify.conf`,
+  the phone notice's topic.
+
+### Next: the score test, then the chain's incumbent
+
+The rebuild matches the site, but no one has read its scores.  In this order:
+
+1. **Its within-season and year-over-year scores, against fade141's recorded ones** (`experiments/runs.csv`, row 141;
+   DECISIONS.md, "Experiment 141: the full build's result").  The tables exist: `season_ratings_rebuilt_step3`,
+   `_step4`, the folds `rebuilt_early` and `rebuilt_within`.  Read them with the chain's own readings, check 151 for
+   the within-season WOWY test and check 63 for year over year, as `scripts/experiment_chain.sh` calls them for a
+   candidate, with `SKIP_BUILD=1` since the tables exist (its comment says what that skips); then set the rebuild's
+   absolute scores beside row 141's, by era: 1997-2006, 2007-2016, 2017-2026.
+2. **The noise control on the rebuild:** `--fold-assignment 1`, about 45 minutes, as `noise_fade141` was built
+   (DECISIONS.md, 2026-11-10).  Name it `noise_rebuilt`.
+3. **The chain's incumbent:** `INC_NAME`, `INC_SYSTEM`, `CONTROL_NAME` and `INC_FOLDS` at the top of
+   `scripts/experiment_chain.sh` to `rebuilt` and `noise_rebuilt`, with GLOSSARY.md and this file, which
+   `tests/test_docs.py` holds to the chain.  Until then any experiment reads against missing tables.
+
+## Where it stood, 2026-11-16
 
 **The cleanup pass** (the owner: "clean up the documentation / readme / and do a general cleanup pass", then "a strict
 robots ... + please give Nathan some credit").  DECISIONS.md, "The cleanup of 2026-11-16", holds every number.
