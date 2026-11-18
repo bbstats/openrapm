@@ -13349,3 +13349,85 @@ The owner, 2026-11-16: "clean up the documentation / readme / and do a general c
 **Left for the owner.**  Pushing the rest of the branch; the Search Console setting; whether to delete the old experiments' saved files, about 280 GB, the old side checkouts and the merged branches.
 
 **The pieces check, fixed the same evening (the owner, 2026-11-16: "Fix it").**  `decomposition.outcome_responses` takes `late_as_scored`: the threes of a period's last two seconds count as made, 3 `fg3m_late`, and the rest are repriced with a quarter of their luck kept, `x3` their expected makes alone, as `data/shots.def_three_design` builds the target; `within_season.fold_pieces` passes it for the targets in `LATE_AS_SCORED` and asks `expected_threes` for the other threes alone.  `folds --models fade141 --seasons 2026 --repeats 1 --pieces`, `outputs/within/cu_fix_pieces`: 40 of 40 checks in each of the 4 folds; the defensive outcome pieces against the response 1.1e-13 at most, against the games' part 2.6e-12, where they read 148.67 and 0.067 before.  Only the pieces split calls the function, so no rating and no page moves.  Test: `tests/test_decomposition.py::test_the_shipped_defensive_target_counts_late_threes_as_made`.
+
+## The data deleted and rebuilt (2026-11-16 and 2026-11-17)
+
+**What happened.**  On 2026-11-16 at about 9:30 PM, `git worktree remove --force` on five old side checkouts deleted `A:/code/spmm/data` and `outputs`: each checkout reached them through a junction, and the removal followed it.  Drive A: is an NVMe SSD with TRIM, so nothing came back.  **Never remove a side checkout before unlinking its junctions.**
+
+**The data fetched again, 2026-11-17** (`scratch/2026-11-16_cleanup/refetch.sh`).  Against the copy that survived in `data/stints_before139` the stints are equal in 60 of 61 season-phases, the one that differs 2027's regular season by its newest game; every one of 38,191 games has stints; seven games' points differ from their box score, the seven that always have (`outputs/rebuild/data_tests.txt`).
+
+**The ratings rebuilt by README.md's four passes on every season, the owner's choice** (`scratch/2026-11-16_cleanup/rebuild.sh`, 3:10 to 10:01 PM, from cd2d61b): pass 1 without Box Adj, `rebuilt_base`, and its held-back games `rebuilt_base_early` and `rebuilt_base_within`; Box Adj's line `rebuilt_line`, fitted on those through the ridge, 16 minutes; pass 3 with the line, the test-setting tables and saved models `rebuilt`, its held-back games `rebuilt_early`, `rebuilt_within` and, a tenth held back, `rebuilt_k10`; the published tables.  The shipped settings name them.  Against the site before it was replaced, `outputs/rebuild/against_site.txt`: the same 14,324 rows; in the 30 finished seasons the total rating's mean gap is 0.05 points per 100 at the median season and 0.29 at most for any player; 2026's top 18 keep their order.  A fresh build lands near the published numbers and not on them, since its line is fitted on other held-back games, as the README says.  Backup: `D:\openrapm_backup\2026-11-17`, verified byte for byte.
+
+**Lost for good.**  Every earlier experiment's saved files: tables, held-back games, saved models, the input screens' tables and the per-player sums of check 167.  Among them the incumbent `fade141` and its noise control `noise_fade141`, which the chain still names, and `outputs/daily/notify.conf`.
+
+## The research paths of 2026-11-18 (the owner: "what are some possible good research paths for improving openrapm (feel free to check what we've tested already)")
+
+The plan, approved that day: `C:\Users\Nathan\.claude\plans\what-are-some-possible-zippy-quill.md`.  Three searches went through this whole record, 18 candidate ideas checked against it and every lead and open verdict harvested.  The ranking rests on three readings already here: Box Adj is the only part fitted on the within-season test and the last three adopted changes came from it; the games' part takes back 57% to 60% of a prior change's team part and 12% to 14% of its within-team part; the LightGBM is 92% to 94% a straight line on its own inputs.
+
+| rank | path | what this record says of it |
+|---|---|---|
+| 1 | reads on Box Adj: more inputs; what the LightGBM is worth beside the line; the box-score prior's weight by playing time; trees on what the line leaves, several steps | every candidate at once -0.830 on the direct screen of 2026-11-03, the adopted team rates -0.218 of it; dropping the LightGBM's output from the line +0.060 and +0.082; check 167's one step -0.100 |
+| 2 | three-point luck out of the offense's target | FINDINGS 36 at the tag `archive/research-2026-09`: -0.208 unmapped was width, but the in-season attribution read at a quarter of a season was -0.163, z -3.12, 12 of 14; never read on check 151 |
+| 3 | early-season defense | the hustle rates' padding is still the old method, the owner's "next and separately" of 2026-11-01; fouls 0.85, made free throws 0.89 and missed twos 0.89 still short of 1.00 |
+| 4 | the ridge penalty on the within-season test, then the owner's EM idea | 13,037 never read there; the shipped games' multipliers are 1.29 to 1.44 on offense and 1.22 to 1.31 on defense in every season; REML read 2,516 and was set aside because the test then scored team-games |
+| 5 | lineup terms | check 154: the offense-by-defense product +0.22, 24 of 30; the owner's next reads never run |
+
+Later: lineups against the league's official minutes; shot quality for opponent threes on check 151, rejected on check 63 alone; the LightGBM's training seasons faded, `--era-halflife`, lost on the prior's own error in check 142 and never read on check 151; the settings last fitted on older builds; scorekeeper generosity on assists before 2018.
+
+**The owner's answer on which goes first**, through the question tool: "box adj is good but guess what - I want age removed! :) the rest is fine."  The first path had offered age as a curve in place of the line's one straight weight.  So: age out of Box Adj, experiment 142 below, then the reads on Box Adj without age.  **Age is not an input to any rating from this day**, and no screen or tree stage is offered it.
+
+**Three quick looks made while ranking, read-only, none registered, none a test reading.**
+
+- *Teammates' threes against their own season percentages, 2026 regular season.*  For each stint and side, the threes made minus the sum over the five shooters' attempts of each one's season percentage, summed over a player's possessions.  Among the 86 players with 4,000 or more offensive possessions the standard deviation is 0.88 points per 100; Julian Champagnie +34.2 threes, +2.18 per 100; James Harden -32.3, -1.97.  Chance alone in about 1,700 threes gives at most 1.3.
+- *On-court seconds from the stints against the game log's whole minutes, regular season.*
+
+  | season | player-games | within 45 seconds | off by 1 to 2 minutes | off by more than 2 minutes | games holding one of those |
+  |---|---|---|---|---|---|
+  | 1998 | 23,979 | 93.6% | 316 | 161 | 15 |
+  | 2005 | 24,936 | 81.1% | 2,091 | 108 | 44 |
+  | 2012 | 20,745 | 95.2% | 201 | 48 | 5 |
+  | 2019 | 26,089 | 95.9% | 135 | 114 | 10 |
+  | 2026 | 26,626 | 95.3% | 223 | 28 | 4 |
+
+  No audit of lineups against official minutes is in this record before it.  2005 stands apart and is not explained.
+- *Plus-minus from the stints against the game log's.*  Equal in 69.6% to 72.7% of player-games in the same five seasons; nearly all the rest differ by 1 to 3 points, as they must, since a free-throw trip is credited to the ten on the court at the foul (experiment 94); 38 to 168 player-games a season differ by 4 or more.
+
+## The rebuild read on the two tests, its noise control, and the chain's incumbent (2026-11-18; registered before any result)
+
+The handoff of 2026-11-17: "The rebuild matches the site, but no one has read its scores."  Until the chain names tables that exist, no experiment can be read.
+
+**What is read.**
+
+1. The rebuild's test tables, as the chain builds a candidate's: `openrapm shrink` and `openrapm swap` at the test setting on `season_ratings_rebuilt_step3`, held-back games `rebuilt_early,rebuilt_within`, no reading to a full season.
+2. Check 151 on `rebuilt` alone: its error by season at both stages.  No absolute within-season error of `fade141` survives the deletion, so these are recorded as the baseline and compared with nothing.
+3. Check 63 on `outputs/season_ratings_rebuilt.parquet`, both directions, against `fade141`'s recorded 8.6908, row 141.
+4. The line's formula from `outputs/second_prior/rebuilt_line/sums_<season>.npz`: each rated season's error at the weights solved on the seasons more than one away, each counted half as much for every 8 seasons of distance.  Experiment 140's reads put the same formula at 3,660.690 over the 30 seasons with every season counted alike and 0.207 less at a half-life of 8, on padbins127's held-back games.
+5. The noise control `noise_rebuilt`: the chain with `--fold-assignment 1` against `rebuilt`.  `noise_fade141` read -0.013 over 30 seasons, by era -0.032, -0.011, +0.005.
+6. Then the chain's `INC_NAME`, `INC_SYSTEM`, `CONTROL_NAME` and `INC_FOLDS` name `rebuilt` and `noise_rebuilt`, with GLOSSARY.md and the handoff.
+
+**The rule.**  These are readings of a build already published, not a candidate's.  A year-over-year score more than 0.05 from 8.6908, or a formula error more than 0.3 from 3,660.483, stops the work and goes to the owner before anything else is built; otherwise the rebuild is the incumbent as it stands.
+
+## Experiment 142: age out of Box Adj (the owner, 2026-11-18: "I want age removed!"; registered before any result)
+
+**Where age is read.**  Only in Box Adj's line: `second_prior.TYPES` is `swap_adjust.PANEL_FEATURES`, the 13 box rates, share of team possessions, share of games started, garbage-time share, age, height and weight, and the line gives each one weight an end.  The LightGBM's lists do not hold it, experiment 69 having lost with it; Similarity and WOSA do not read it.  The swap adjustment's type model lists it and is off.
+
+**What the weight does today**, read before this was registered, from the shipped line's own sums and no candidate's: the weights solved on every season but the rated one, each counted half as much for every 8 seasons of distance, age standardized at a mean of 26.95 and a standard deviation of 4.33 years.
+
+| rated season | offense, per standard deviation of age | per year | defense in points allowed, per standard deviation | per year |
+|---|---|---|---|---|
+| 1998 | -0.260 | -0.060 | -0.064 | -0.015 |
+| 2005 | -0.194 | -0.045 | -0.102 | -0.023 |
+| 2012 | -0.156 | -0.036 | -0.123 | -0.028 |
+| 2019 | -0.111 | -0.026 | -0.138 | -0.032 |
+| 2026 | -0.068 | -0.016 | -0.150 | -0.035 |
+
+Every input but the box-score prior only moves credit inside a team.  So in 2026 a 35-year-old is moved 0.22 down on offense and 0.49 better on defense against a 21-year-old teammate, before the shrink.  With age out the young lose that offense and gain that defense.  The check of 2026-10-20, on ratings that read no age, found players of 22 and under over-credited on defense by 0.578 against a teammate of 26 to 28, in every era, and players of 35 and over on offense by 0.634: about the cost to expect.
+
+**The change.**  A new list of inputs for the line, today's without age, 56 an end; everything else as shipped.  Not the default, so the morning job and the published line are untouched until an adoption.
+
+**The reads.**
+
+1. From the saved sums, minutes: for each rated season the formula's error with the two age columns dropped and the other weights solved again, against the shipped line's, the seasons more than one away, the fade at 8; paired by season, by era.  Such a read gave the fade's sign in every era and about one and a half times its full build's size.
+2. The full build: the line fitted on the new list from `rebuilt_base`'s held-back games, then the chain against `rebuilt` with `noise_rebuilt` beside it; check 151 by era, check 63 as built and with each side's width matched, the 2026 top 20, and the movers named by age.
+
+**The rule.**  Age out is the owner's ruling on what a rating may read.  The readings are reported as what the ruling costs or gains, in every era, not as a pass or a fail; adoption and publishing are the owner's word.
