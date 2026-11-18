@@ -123,7 +123,7 @@ def test_the_similarity_pool_is_stale_when_a_rating_or_the_possessions_moved(dai
     published, stale, fresh = tmp_path / "ratings.json", tmp_path / "stale.json", tmp_path / "fresh.json"
     published.write_text(json.dumps(ratings), encoding="utf-8")
     stale.write_text(json.dumps(pool((203999, "Nikola Jokić", 2026, 5269, 7.0, 2.3, 9.2))), encoding="utf-8")
-    fresh.write_text(json.dumps(pool(scott)), encoding="utf-8")
+    fresh.write_text(json.dumps(pool(scott, (203999, "Nikola Jokić", 2026, 5269, 7.0, 1.8, 8.7))), encoding="utf-8")
     assert daily_files.main(["similarity-stale", str(published), str(stale)]) == 0
     assert daily_files.main(["similarity-stale", str(published), str(fresh)]) == 3
 
@@ -181,3 +181,23 @@ def test_a_dry_run_keeps_its_own_record_and_sends_no_notice():
     assert '[ "$PUBLISH" = "1" ] || RECORD=$ROOT/outputs/daily/last_dry.txt' in lines
     assert 'echo "$DAY $1" > "$RECORD"' in lines
     assert '[ "$PUBLISH" = "1" ] && case "$1" in FAILED*) notice "OpenRAPM $DAY $1" ;; esac' in lines
+
+
+def test_the_similarity_pool_is_stale_the_morning_a_season_in_progress_reaches_500(daily_files, tmp_path):
+    """The owner, 2026-11-18: the season in progress joins the Similarity page once its median player shown has 500
+    offensive possessions.  The pool's own rows can all be in step that morning, so the seasons are asked too."""
+    def ratings(*possessions):
+        return {"meta": {}, "rows": [{"id": 2, "s": 1997, "n": "Byron Scott", "o": 0.9, "d": -1.5, "t": -0.6,
+                                      "p": 3000}] +
+                                    [{"id": 10 + i, "s": 2027, "n": f"P{i}", "o": 0.0, "d": 0.0, "t": 0.0, "p": p}
+                                     for i, p in enumerate(possessions)]}
+    pool = {"meta": {"fields": POOL_FIELDS}, "rows": [[2, "Byron Scott", 1997, 3000, 0.9, -1.5, -0.6]]}
+    assert daily_files.pool_seasons_off(ratings(300, 499, 900), pool) == []          # median 499: not yet
+    assert daily_files.pool_seasons_off(ratings(300, 499, 501, 900), pool) == [2027]  # median 500
+    published, held = tmp_path / "ratings.json", tmp_path / "pool.json"
+    published.write_text(json.dumps(ratings(300, 520, 900)), encoding="utf-8")
+    held.write_text(json.dumps(pool), encoding="utf-8")
+    assert daily_files.main(["similarity-stale", str(published), str(held)]) == 0
+    with_2027 = {**pool, "rows": pool["rows"] + [[11, "P1", 2027, 520, 0.0, 0.0, 0.0]]}
+    held.write_text(json.dumps(with_2027), encoding="utf-8")
+    assert daily_files.main(["similarity-stale", str(published), str(held)]) == 3

@@ -45,14 +45,22 @@ TABLE_INPUTS = ["u_off", "u_def", "rating_off", "rating_def", "rating_total"]
 TABLE_COLUMNS = [*KEYS, "player_name", "poss_off", "poss_def", *TABLE_INPUTS]
 
 
-def player_seasons(table: pd.DataFrame, min_possessions: float, seasons) -> pd.DataFrame:
+def player_seasons(table: pd.DataFrame, min_possessions, seasons) -> pd.DataFrame:
     """The pool: the ratings table's rows with at least `min_possessions` offensive possessions in `seasons`,
     sorted by season and then player id, so that a row's position is how the lists name it.  Columns
-    `TABLE_COLUMNS`."""
+    `TABLE_COLUMNS`.  `min_possessions` is one number for every season, or {season: possessions}, a season it does
+    not name at its largest value.
+
+    Example: {2026: 1000, 2027: 210} keeps a 2027 player with 230 offensive possessions and drops a 2026 one with
+    900."""
     missing = [column for column in TABLE_COLUMNS if column not in table.columns]
     if missing:
         raise KeyError(f"the ratings table lacks {missing}")
-    keep = (table.poss_off >= min_possessions) & table.season.isin(list(seasons))
+    if isinstance(min_possessions, dict):
+        floor = table.season.astype(int).map(min_possessions).fillna(max(min_possessions.values())).to_numpy(float)
+    else:
+        floor = float(min_possessions)
+    keep = (table.poss_off >= floor) & table.season.isin(list(seasons))
     rows = table.loc[keep, TABLE_COLUMNS].sort_values(["season", "player_id"], kind="stable").reset_index(drop=True)
     if rows.duplicated(KEYS).any():
         raise ValueError("the ratings table holds a player-season twice")

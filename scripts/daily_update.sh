@@ -85,8 +85,9 @@ bias_file() {                 # $1: the site folder written into; fails when the
   say "start: site --bias"
   /usr/bin/timeout 300 $PY -u -m openrapm site --bias --out-dir "$1" >> "$LOG" 2>&1
 }
-# The Similarity page's files, docs/data/similarity/, are never a step either.  Its pool holds finished seasons, whose
-# ratings change only when a new build is published; on such a morning the pool is written again, and on every other
+# The Similarity page's files, docs/data/similarity/, are never a step either.  Its pool holds finished seasons and,
+# once its median player shown has 500 offensive possessions, the season in progress (the owner, 2026-11-18); on a
+# morning its ratings or its seasons differ from the published ones the pool is written again, and on every other
 # morning it is left alone, since its files carry the date they were built.  Ten minutes at most.
 SIMILAR=docs/data/similarity
 similarity_files() {          # $1: the site folder written into; $2: the pool held against that folder's ratings

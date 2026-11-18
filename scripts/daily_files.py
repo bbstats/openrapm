@@ -7,15 +7,17 @@
     python scripts/daily_files.py similarity-stale RATINGS POOL
                                                             exit 0 when a player-season of the Similarity page's pool
                                                             (POOL, docs/data/similarity/player_seasons.json) carries
-                                                            other ratings than RATINGS (docs/data/ratings.json), 3
-                                                            when every one carries the published ones
+                                                            other ratings than RATINGS (docs/data/ratings.json), or
+                                                            the pool lacks a season whose median player shown has 500
+                                                            offensive possessions; 3 when it is in step
 
 The site's files carry the date they were built, so they differ from the published ones every morning: a plain
 `git diff --quiet` never came back clean, and a morning with no new games published anyway (2026-11-01).  The last
 game's date named the regular season's log alone, so a playoff commit would have named the regular season's last day.
 
-The Similarity page's pool holds finished seasons, so its ratings change only when a new build of the ratings is
-published.  The five-zone shooting change reached the site through the morning job on 2026-11-07, the job did not write
+The Similarity page's pool holds finished seasons, and from 2026-11-18 a season in progress once its median player
+shown has 500 offensive possessions, so its ratings change when a new build is published or the season in progress is
+rated again.  The five-zone shooting change reached the site through the morning job on 2026-11-07, the job did not write
 the pool, and for three days 8,850 of its 10,160 player-seasons showed a total the Ratings page no longer had; the job
 now asks every morning and rebuilds the pool when the answer is yes.
 """
@@ -85,6 +87,31 @@ def stale_pool(ratings: dict, pool: dict) -> list:
     return stale
 
 
+# commands/site.py SIMILARITY_SEASON_POSSESSIONS: a season joins the Similarity page's pool once the median of the
+# players ratings.json shows (60 or more possessions) has this many offensive possessions (the owner, 2026-11-18)
+SIMILARITY_SEASON_POSSESSIONS = 500
+
+
+def pool_seasons_off(ratings: dict, pool: dict) -> list:
+    """The seasons the pool should hold and does not, or holds and should not: a season belongs once the median `p`
+    of its rows in `ratings` is SIMILARITY_SEASON_POSSESSIONS or more.  So the morning a season in progress crosses
+    500 the pool is rebuilt with it, which `stale_pool` alone, reading only the pool's own rows, never asked.
+
+    Example: 2027's shown players at a median of 516 with no 2027 row in the pool gives [2027]."""
+    by_season = {}
+    for row in ratings["rows"]:
+        by_season.setdefault(row["s"], []).append(row["p"])
+    ready = set()
+    for season, possessions in by_season.items():
+        possessions.sort()
+        middle = len(possessions) // 2
+        median = possessions[middle] if len(possessions) % 2 else (possessions[middle - 1] + possessions[middle]) / 2
+        if median >= SIMILARITY_SEASON_POSSESSIONS:
+            ready.add(season)
+    held = {row[pool["meta"]["fields"].index("s")] for row in pool["rows"]}
+    return sorted(ready ^ held)
+
+
 def parser() -> argparse.ArgumentParser:
     top = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = top.add_subparsers(dest="command", required=True)
@@ -109,12 +136,14 @@ def main(argv) -> int:
         print(f"changed beyond the built date: {', '.join(files) if files else 'nothing'}")
         return 0 if files else 3
     if args.command == "similarity-stale":
-        stale = stale_pool(json.loads(args.ratings.read_text(encoding="utf-8")),
-                           json.loads(args.pool.read_text(encoding="utf-8")))
+        ratings = json.loads(args.ratings.read_text(encoding="utf-8"))
+        pool = json.loads(args.pool.read_text(encoding="utf-8"))
+        stale, seasons = stale_pool(ratings, pool), pool_seasons_off(ratings, pool)
         # the id, not the name: the job's log is written in the console's code page, which has no ć
         print(f"the Similarity page's pool: {len(stale)} player-seasons carry other ratings than the published ones"
-              + (f", the first player {stale[0][0]} in {stale[0][2]}" if stale else ""))
-        return 0 if stale else 3
+              + (f", the first player {stale[0][0]} in {stale[0][2]}" if stale else "")
+              + (f"; seasons to add or take out: {seasons}" if seasons else ""))
+        return 0 if stale or seasons else 3
     print(last_game(args.gamelog, args.season))
     return 0
 

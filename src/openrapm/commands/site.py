@@ -52,7 +52,7 @@ from ..data import public_ratings
 from ..data.config import resolve, resolve_path
 from ..data.designs import DesignCache
 from ..data.ingest import raw_dir
-from ..data.panel import panel_of_season, rookies, trainable_panel
+from ..data.panel import in_progress_panel, panel_of_season, rookies, trainable_panel
 from ..data.power_files import load_knots, team_game_counts
 from ..data.roles import main_teams
 from ..decomposition import lineups, refit, row_keys, split_games_part
@@ -684,6 +684,37 @@ SIMILARITY_FOLDER = "similarity"
 SIMILARITY_FIELDS = ["id", "n", "s", "p", "o", "d", "t"]
 SIMILARITY_LIST_FIELDS = ["k", "d", "pk", "pd"]
 SIMILARITY_SHOWN = 20                     # the console report's list length
+# The owner, 2026-11-18: "let's just turn similarity on when the median poss played = 500".  A season in progress joins
+# the pool once the median of the players the pages show (`MIN_POSSESSIONS_SHOWN` or more) has 500 offensive
+# possessions, the ratings page's rule for the season it opens on at 250 (`default_season`).  Its players need
+# SIMILARITY_MIN_POSSESSIONS times the share of its regular season played, never under MIN_POSSESSIONS_SHOWN, as the
+# percentile pool scales (`percentile_minimums`): with 1,000 alone, 2027 on 2026-11-18 at a median of 516 held 9
+# players.  scripts/daily_files.py reads the same rule from ratings.json, so the morning job rebuilds the pool the day a
+# season crosses it.
+SIMILARITY_SEASON_POSSESSIONS = 500
+
+
+def similarity_ready(table: pd.DataFrame) -> set[int]:
+    """The seasons whose median player shown has SIMILARITY_SEASON_POSSESSIONS or more offensive possessions
+    (poss_season, the pages' p).  Example: on 2026-11-18 2027's median of its shown players is 516, so 2027 is ready;
+    every finished season's is over 1,700."""
+    shown = table[table.poss_season >= MIN_POSSESSIONS_SHOWN]
+    medians = shown.groupby("season").poss_season.median()
+    return {int(season) for season in medians.index[medians >= SIMILARITY_SEASON_POSSESSIONS]}
+
+
+def similarity_in_progress(cfg: dict, table: pd.DataFrame) -> dict:
+    """{season: the fewest offensive possessions a player of it needs} for each season in progress that is ready
+    (`similarity_ready`).  A configuration that names no seasons or no data folder has none in progress.
+
+    Example: 2027 at 21% of its regular season, 1000 x 0.21 = 210."""
+    from ..data.seasons import in_progress, share_played
+    if "_root" not in cfg or "first_season" not in cfg:
+        return {}
+    ready = similarity_ready(table)
+    return {int(season): int(max(MIN_POSSESSIONS_SHOWN,
+                                 round(SIMILARITY_MIN_POSSESSIONS * share_played(int(season), cfg))))
+            for season in in_progress(cfg) if int(season) in ready}
 
 
 def _named(rows: pd.DataFrame, ratings_path: Path, cfg: dict) -> pd.DataFrame:
@@ -701,17 +732,26 @@ def _named(rows: pd.DataFrame, ratings_path: Path, cfg: dict) -> pd.DataFrame:
 def similarity_frames(cfg: dict, ratings_path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     """(the pool, its inputs).
 
-    The inputs are standardized on the pool, so the pool holds only seasons a fit may train on (`trainable_panel`): a
-    season in progress waits for its Finals.  Stops when the panel's possessions differ from the ratings table's (one
-    of them rebuilt since the other) or when the opening player-season is not in the pool.
+    The pool holds every finished season (`trainable_panel`) and each season in progress whose median player shown has
+    500 offensive possessions (`similarity_in_progress`); nothing is fitted on it, the inputs are only standardized
+    on the pool.  Stops when the panel's possessions differ from the ratings table's (one of them rebuilt since the
+    other) or when the opening player-season is not in the pool.
     """
     table = pd.read_parquet(ratings_path)
+    current = similarity_in_progress(cfg, table)
     panel = trainable_panel(cfg)
+    if current:
+        later = in_progress_panel(cfg)
+        panel = pd.concat([panel, later[later.season.astype(int).isin(current)]], ignore_index=True)
     seasons = sorted(set(panel.season.astype(int)))
     waiting = sorted(set(table.season.astype(int)) - set(seasons))
     if waiting:
-        print(f"  left out until their Finals are over: {waiting}", flush=True)
-    rows = _named(player_seasons(table, SIMILARITY_MIN_POSSESSIONS, seasons), ratings_path, cfg)
+        print(f"  left out until their median player shown has {SIMILARITY_SEASON_POSSESSIONS} offensive "
+              f"possessions: {waiting}", flush=True)
+    for season, floor in current.items():
+        print(f"  {season}, in progress: players with {floor} offensive possessions or more", flush=True)
+    floors = {season: current.get(season, SIMILARITY_MIN_POSSESSIONS) for season in seasons}
+    rows = _named(player_seasons(table, floors, seasons), ratings_path, cfg)
     inputs = similarity_inputs(rows, panel, FEATURE_SETS[SIMILARITY_FEATURE_SET])
     for side in ("off", "def"):
         if not np.array_equal(inputs[f"poss_{side}"].to_numpy(), rows[f"poss_{side}"].to_numpy(float)):

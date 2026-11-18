@@ -255,6 +255,32 @@ def test_the_similarity_files_hold_the_pool_and_lists_without_the_players_own_se
     assert pool["meta"]["built"] == "2026-10-12"
 
 
+def test_a_season_in_progress_joins_the_similarity_pool_at_its_own_floor(tmp_path, monkeypatch):
+    """The owner, 2026-11-18: a season in progress is in the pool once its median player shown has 500 offensive
+    possessions, its players from SIMILARITY_MIN_POSSESSIONS times the share played; here 2026 is the one in progress
+    at a floor of 1,500."""
+    cfg, panel = _similarity_world(tmp_path)
+    monkeypatch.setattr(site, "trainable_panel", lambda cfg: panel[panel.season < 2026].reset_index(drop=True))
+    monkeypatch.setattr(site, "in_progress_panel", lambda cfg: panel[panel.season == 2026].reset_index(drop=True))
+    monkeypatch.setattr(site, "SIMILARITY_DEFAULT", (102, 2025))
+    table = pd.read_parquet(tmp_path / "outputs" / "season_ratings_product.parquet")
+    expected = sorted(table.player_id[(table.season == 2026) & (table.poss_off >= 1500)])
+    assert 0 < len(expected) < 4
+    monkeypatch.setattr(site, "similarity_in_progress", lambda cfg, table: {2026: 1500})
+    rows, _ = site.similarity_frames(cfg, tmp_path / "outputs" / "season_ratings_product.parquet")
+    assert sorted(rows.player_id[rows.season == 2026]) == expected
+    assert (rows.season == 2025).sum() == 4
+    monkeypatch.setattr(site, "similarity_in_progress", lambda cfg, table: {})
+    rows, _ = site.similarity_frames(cfg, tmp_path / "outputs" / "season_ratings_product.parquet")
+    assert 2026 not in set(rows.season)
+
+
+def test_a_season_is_ready_for_similarity_at_a_median_of_500_shown():
+    table = pd.DataFrame({"season": [2027] * 4 + [2026] * 2, "poss_season": [40, 300, 500, 900, 2000, 2100]})
+    assert site.similarity_ready(table) == {2026, 2027}                 # 40 is not shown: median of 300, 500, 900
+    assert site.similarity_ready(table.assign(poss_season=[40, 300, 499, 900, 2000, 2100])) == {2026}
+
+
 def test_a_rebuild_writes_the_same_bytes_and_drops_a_season_no_longer_in_the_pool(small_similarity):
     cfg, folder = small_similarity
     site.run_site(cfg, out_dir=folder.parents[1], built="2026-10-12", similarity=True)
