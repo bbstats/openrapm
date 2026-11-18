@@ -167,6 +167,10 @@ player is not there for an input of the fit games' lineup results to take credit
 (rating_line.py; the owner, 2026-11-03: "there has to be a direct way to measure which features we can add"; experiments
 132-134): one set of normal equations a season for both ends, solved together on the seasons the line may train on.
 Every use of the line below is the same: `season_coefficients` answers with the same array.
+
+Without age (`INPUT_SETS` "context_types_no_age_team_zones_centred", experiment 142; the owner, 2026-11-18: "I want age
+removed!"): the shipped list less age, 56 inputs an end.  Age was read here and nowhere else in a rating.  Each input is
+its own column of the normal equations, so this list's sums are the shipped line's with age's two columns dropped.
 """
 from __future__ import annotations
 
@@ -222,22 +226,28 @@ INPUT_SETS = {"context": INPUTS, "context_and_types": [*INPUTS, OTHER_BOX, *TYPE
               "context_types_team_profile_centred": [*INPUTS, OTHER_BOX, *TYPES, *TEAM_PROFILE_RATES],
               "context_types_team_rates_zones_centred": [*INPUTS, OTHER_BOX, *TYPES, *TEAM_RATES, *ZONE_RATES,
                                                          *SHUFFLED_ZONE_RATES],
-              "context_types_team_zones_centred": [*INPUTS, OTHER_BOX, *TYPES, *TEAM_ZONE_RATES]}
+              "context_types_team_zones_centred": [*INPUTS, OTHER_BOX, *TYPES, *TEAM_ZONE_RATES],
+              # experiment 142: the list above less age (the owner, 2026-11-18: "I want age removed!")
+              "context_types_no_age_team_zones_centred": [*INPUTS, OTHER_BOX,
+                                                          *(name for name in TYPES if name != "age"),
+                                                          *TEAM_ZONE_RATES]}
 # applied on inputs centered on the season's average (`centred`)
 CENTRED_SETS = {"own_teammates_opponents", "context_and_types_centred", "context_types_team_rates_centred",
                 "context_types_team_profile_centred", "context_types_team_rates_zones_centred",
-                "context_types_team_zones_centred"}
+                "context_types_team_zones_centred", "context_types_no_age_team_zones_centred"}
 SIDE_KEYS = {"offense": "O", "defense": "D"}      # swap_adjust's side names -> the priors' side keys
 LINE_TARGETS = SECOND_PRIOR_TARGETS               # what the line's target adds back to a swap (module docstring)
 
 
 def reads_types(input_set: str | None) -> bool:
-    """Whether the line on `input_set` reads step 5's numbers (`TYPES`), so its inputs need their standardization
-    (`type_scale`).  None, the name a file written before the setting existed carries, reads no fixed set.
+    """Whether the line on `input_set` reads any of step 5's numbers (`TYPES`), so its inputs need their
+    standardization (`type_scale`).  None, the name a file written before the setting existed carries, reads no fixed
+    set.  A list that leaves one of them out, as experiment 142's leaves out age, still reads the rest.
 
-    Example: "context_and_types" and "context_and_types_centred" do, "context" and "own_teammates_opponents" do not.
+    Example: "context_and_types" and "context_types_no_age_team_zones_centred" do, "context" and
+    "own_teammates_opponents" do not.
     """
-    return input_set is not None and set(TYPES) <= set(INPUT_SETS[input_set])
+    return input_set is not None and bool(set(TYPES) & set(INPUT_SETS[input_set]))
 
 
 def reads_team_rates(input_set: str | None) -> bool:

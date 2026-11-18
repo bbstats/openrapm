@@ -13431,3 +13431,41 @@ Every input but the box-score prior only moves credit inside a team.  So in 2026
 2. The full build: the line fitted on the new list from `rebuilt_base`'s held-back games, then the chain against `rebuilt` with `noise_rebuilt` beside it; check 151 by era, check 63 as built and with each side's width matched, the 2026 top 20, and the movers named by age.
 
 **The rule.**  Age out is the owner's ruling on what a rating may read.  The readings are reported as what the ruling costs or gains, in every era, not as a pass or a fail; adoption and publishing are the owner's word.
+
+### The rebuild read on the two tests: result (2026-11-18, 5:24 to 5:26 PM; `scratch/2026-11-18_age_out/rebuilt_scores.sh`, `outputs/rebuilt_scores.log`, `outputs/csv/wowy_rebuilt_seasons.csv`, `outputs/csv/age_out_read.csv`)
+
+**The test tables.**  `season_ratings_rebuilt_step4` and `season_ratings_rebuilt`, 14,579 rows.  Step 4 at the test rule: the prior part times 0.591 to 0.694 on offense and 0.631 to 0.785 on defense, the games' part times 1.384 to 1.589 and 1.321 to 1.427; inside teams the prior part times 0.746 to 0.793 and 0.702 to 0.763, the games' part times 1.241 to 1.557 and 1.075 to 1.530.
+
+**Check 151 on the rebuild alone, the baseline from here on**, every stint, the mean of the seasons' errors:
+
+| era | step 3 | step 4, the shipped stage | step 4 on the DNP team-games |
+|---|---|---|---|
+| 1997-2006 | 3,455.668 | 3,455.273 | 3,442.865 |
+| 2007-2016 | 3,595.612 | 3,595.240 | 3,580.636 |
+| 2017-2026 | 3,932.455 | 3,932.011 | 3,933.584 |
+| all 30 | 3,661.245 | 3,660.841 | 3,652.362 |
+
+The DNP team-games are 51.8% of the held-back possessions, as they were.
+
+**Check 63.**  Both directions 8.6891, the season before 8.6919 and the season after 8.6864, against `fade141`'s recorded 8.6908: 0.0017 lower.  The scored seasons ask the offense times 0.9311 and the defense times 0.9436.
+
+**The line's formula.**  With every season counted alike 3,660.627 over the 30 rated seasons, and 3,660.446 at a half-life of 8; experiment 140's reads had 3,660.690 and 3,660.483 on padbins127's held-back games: 0.063 and 0.037 apart.  The fade is worth 0.181 here, z -5.07, 24 of 30, by era -0.231, -0.017 and -0.295, where it read 0.207 with -0.264, -0.031 and -0.326.
+
+**By the rule the rebuild is the incumbent as it stands**: 0.0017 against a limit of 0.05, and 0.037 against 0.3.  Its noise control follows.
+
+### Experiment 142, read 1: result (2026-11-18, 5:25 PM; `scratch/2026-11-18_age_out/age_out_read.py`, `outputs/csv/age_out_read.csv`, `outputs/csv/age_out_read_seasons.csv`)
+
+The line without its two age weights against the shipped line, the formula's error on each rated season's own held-back stints, the weights from the seasons more than one away at a half-life of 8, paired by season; above 0 is worse without age.
+
+| era | change | standard error | paired z | seasons better without age |
+|---|---|---|---|---|
+| 1997-2006 | +0.055 | 0.028 | +2.00 | 4 of 10 |
+| 2007-2016 | +0.044 | 0.027 | +1.59 | 2 of 10 |
+| 2017-2026 | -0.007 | 0.013 | -0.54 | 5 of 10 |
+| all 30 | +0.031 | 0.014 | +2.17 | 11 of 30 |
+
+The test setting's weight on age, per standard deviation of age: on offense -0.236 in 1997 falling to -0.084 in 2026; on defense, in points allowed, -0.055 in 1997, -0.174 at its largest in 2018 and -0.135 in 2026.
+
+**Reading.**  Age is worth 0.031 on the formula over the 30 seasons, a sixth of what the fade is worth on it, all of it before 2017; since 2017 the line does as well without it.  The fade's read came to about two thirds of itself on the full build, so the build is expected near +0.02, the size of the noise control's own movement.  The build follows.
+
+**The code**, off by default: `second_prior.INPUT_SETS["context_types_no_age_team_zones_centred"]`, the shipped list less age, 56 inputs an end, named in `CENTRED_SETS` and `settings.SECOND_PRIOR_INPUTS`; `reads_types` now holds for a list that reads any of step 5's numbers, where it asked for all 19, and reads the same for every list that existed.  `tests/test_age_out.py`.  Every test passes, 1,127, and the lint check, after one docstring line of `scripts/daily_files.py`, 121 characters since 2c8910f, was rewrapped.

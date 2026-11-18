@@ -17,9 +17,9 @@ game's date named the regular season's log alone, so a playoff commit would have
 
 The Similarity page's pool holds finished seasons, and from 2026-11-18 a season in progress once its median player
 shown has 500 offensive possessions, so its ratings change when a new build is published or the season in progress is
-rated again.  The five-zone shooting change reached the site through the morning job on 2026-11-07, the job did not write
-the pool, and for three days 8,850 of its 10,160 player-seasons showed a total the Ratings page no longer had; the job
-now asks every morning and rebuilds the pool when the answer is yes.
+rated again.  The five-zone shooting change reached the site through the morning job on 2026-11-07, the job did not
+write the pool, and for three days 8,850 of its 10,160 player-seasons showed a total the Ratings page no longer had;
+the job now asks every morning and rebuilds the pool when the answer is yes.
 """
 import argparse
 import json
