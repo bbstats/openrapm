@@ -170,10 +170,11 @@ class PriorSettings:
     row_labels: str = "career"
     # Box Adj: step 3 reads the box-score prior corrected for who a player played with and against, by the line whose
     # sums are under outputs/second_prior/<tag>/ (second_prior.py, rating_line.py; notes/DECISIONS.md, experiment 81).
-    # rebuilt_line since 2026-11-17: experiment 139's line, weights fitted on the within-season test through the ridge
-    # (experiment 134), the team's shots counted by five zones, fitted again by README.md's recipe after the data was
-    # deleted and fetched again (notes/DECISIONS.md, "The cleanup of 2026-11-16").  "" reads the box-score prior itself
-    second_prior: str = "rebuilt_line"
+    # noage142_line since 2026-11-18: the line without age (notes/DECISIONS.md, experiment 142; the owner: "I want age
+    # removed!"), weights fitted on the within-season test through the ridge (experiment 134), the team's shots counted
+    # by five zones (experiment 139), on the held-back games of the rebuild of 2026-11-17 without Box Adj.  "" reads the
+    # box-score prior itself
+    second_prior: str = "noage142_line"
     # the line's player folds (player_id % 5) and its ridge penalty relative to the mean diagonal of its Gram matrix:
     # step 5's type model's, the method the line borrows
     second_prior_folds: int = 5
@@ -187,8 +188,9 @@ class PriorSettings:
     # what the line reads, a key of second_prior.INPUT_SETS: the box-score prior on both ends, the eight context
     # numbers, his box rates, role and body (experiments 81, 82 and 93), and the team's shots made and missed by zone,
     # free throws, offensive rebounds and turnovers with him on and off the court (experiments 134 and 139), every input
-    # centered on the season, so no player fold's line carries its own level
-    second_prior_inputs: str = "context_types_team_zones_centred"
+    # centered on the season, so no player fold's line carries its own level.  Without age since experiment 142, adopted
+    # 2026-11-18: no rating reads a player's age
+    second_prior_inputs: str = "context_types_no_age_team_zones_centred"
     # 0: each season's line is fitted on every season the setting allows.  K: on only the K nearest of them, as step 4
     # fits its multipliers (experiment 85: experiment 82 won 1997-2016 and lost 2017-2026 with one line for all eras)
     second_prior_nearest: int = 0
@@ -260,8 +262,8 @@ class ShrinkSettings:
     # season since experiment 55 (adopted 2026-10-12); 2017-2026 before
     fold_seasons: tuple = (1997, 2026)
     # the within-season folds the factors are fitted on, comma-separated folders, 1997-2016 and 2017-2026: every adopted
-    # build brings its own, the rebuild's of 2026-11-17 with experiment 141's settings; the method is experiment 33b's
-    folds_tag: str = "rebuilt_early,rebuilt_within"
+    # build brings its own, experiment 142's since 2026-11-18; the method is experiment 33b's
+    folds_tag: str = "noage142_early,noage142_within"
     # each season's factors from only the K fold seasons nearest it (prior_shrink.fold_seasons_used): the defensive
     # prior part holds up less in older seasons, 0.79 in 1997-2006 against 0.95 in 2017-2026 (notes/DECISIONS.md,
     # "Era drift" and experiment 55, adopted 2026-10-12: "yes. build."); 0 would use every fold season the rule allows
@@ -269,9 +271,9 @@ class ShrinkSettings:
     # a second fold set, a tenth of each season's games held back ten times a repeat: each multiplier is read off the
     # straight line through the two holdout sizes at nothing held back, as the full-season ratings are built
     # (Richardson extrapolation, prior_shrink.full_season_multipliers; notes/DECISIONS.md, experiment 101, adopted
-    # 2026-10-22: "we are going to do it"); "" fits on folds_tag alone, as the experiment chain does.  The rebuild's
-    # own since 2026-11-17
-    extrapolate_folds_tag: str = "rebuilt_k10"
+    # 2026-10-22: "we are going to do it"); "" fits on folds_tag alone, as the experiment chain does.  Experiment
+    # 142's own since 2026-11-18
+    extrapolate_folds_tag: str = "noage142_k10"
     # a multiplier on the games' part too, fitted beside the prior's (prior_shrink, "The games' part freed";
     # notes/DECISIONS.md, experiment 65, adopted 2026-10-15: "Adopt one multiplier as the new incumbent")
     free_games_part: bool = True

@@ -206,11 +206,12 @@ fetch caches each file, so a stopped run resumes; with `OPENRAPM_OFFLINE=1` a mi
   `outputs/second_prior/<TAG>/`.
 - **Writes:** each player's prior per side, handed to step 3; the build records Box Adj's part of it as `box_adj_off`
   and `box_adj_def` in the tables.
-- **How:** one straight line per side over 57 inputs, every one from the rated season:
+- **How:** one straight line per side over 56 inputs, every one from the rated season:
   - his box-score prior on this side and on the other;
   - eight context numbers: his teammates' and his opponents' offensive and defensive box-score priors,
     possession-weighted, with him on the court and on the bench, each padded toward his team's level;
-  - his 13 box rates, share of team possessions, share of games started, garbage-time share, age, height, weight;
+  - his 13 box rates, share of team possessions, share of games started, garbage-time share, height, weight; not his
+    age, which no rating reads (experiment 142);
   - his team's shots made and missed by zone with him on the court and off it, on defense the opponents': the rim, 3
     feet or closer; short mid, to 13 feet; long mid, to the line; three, to 26 feet; long three, 27 feet or more;
     and free throws, offensive rebounds and turnovers.
@@ -222,16 +223,16 @@ fetch caches each file, so a stopped run resumes; with `OPENRAPM_OFFLINE=1` a mi
   (`rating_line.py`). Both ends are solved together, each input scaled to one standard deviation, penalty 1e-4 times
   the mean diagonal. A season of the line's sums counts 0.5 to the power of its distance from the rated one over 8
   seasons.
-- **Settings:** `PriorSettings.second_prior`, the sums `rebuilt_line`; `second_prior_inputs`,
-  `context_types_team_zones_centred` (experiments 134 and 139); `second_prior_team_totals`, `held` (experiment 81);
+- **Settings:** `PriorSettings.second_prior`, the sums `noage142_line`; `second_prior_inputs`,
+  `context_types_no_age_team_zones_centred` (experiments 134, 139 and 142); `second_prior_team_totals`, `held`
+  (experiment 81);
   `second_prior_halflife`, 8 (experiment 141). The line trains on finished seasons only, at the test setting without
   the rated season's neighbors. `--second-prior ""` reads the box-score prior alone.
-- **The shipped sums:** since 2026-11-17, README.md's recipe on every season after the data was deleted and fetched
-  again: `openrapm second-prior --models rebuilt_base --folds rebuilt_base_early,rebuilt_base_within --tag
-  rebuilt_line --target rating`, on the held-back games of a build without Box Adj
-  (`scratch/2026-11-16_cleanup/rebuild.sh`).  Before it, `zones139_line`, fitted on padbins127's folds and cut to the
-  shipped inputs by `scratch/2026-11-05_second_stage/zones139_line.py`; the two agree within 0.05 points per 100 in
-  finished seasons.
+- **The shipped sums:** since 2026-11-18, `openrapm second-prior --models rebuilt_base --folds
+  rebuilt_base_early,rebuilt_base_within --tag noage142_line --target rating --inputs
+  context_types_no_age_team_zones_centred`, on the held-back games of the rebuild of 2026-11-17 without Box Adj
+  (`scratch/2026-11-18_age_out/noise_and_age_out.sh`).  They are the sums of the line before it, `rebuilt_line`, with
+  age's two columns dropped, to 1e-16.
 - **The Detail view's split:** `PriorSettings.box_first` takes the Box score column from the line's fit on his own
   stats' inputs alone, `rating_line.first_stage`, and Box Adj is the rest of the same prior. No rating reads the
   split.
@@ -278,10 +279,10 @@ fetch caches each file, so a stopped run resumes; with `OPENRAPM_OFFLINE=1` a mi
     `ShrinkSettings.free_games_part`) and the two layers (experiment 106, `within_team_layer`).
   - the defense factor: both defensive multipliers times 0.8682 before 2017 and 0.8704 from 2017; the within layer
     times 0.7663 on offense and 0.9968 on defense (experiment 136, `defence_factors` and `within_factors`).
-  - the held-back games `rebuilt_early,rebuilt_within`, experiment 141's settings rebuilt 2026-11-17, seasons 1997-2026 pinned
+  - the held-back games `noage142_early,noage142_within`, experiment 142's, seasons 1997-2026 pinned
     (`folds_tag`, `fold_seasons`): every adopted build brings its own.
   - each season's multipliers from the 8 fold seasons nearest it (experiment 55, `nearest`).
-  - each multiplier read to a full season: fitted again on sets holding back a tenth of the games, `rebuilt_k10`, and
+  - each multiplier read to a full season: fitted again on sets holding back a tenth of the games, `noage142_k10`, and
     read off the straight line through the two holdout sizes at nothing held back, because a fold's ratings are built
     from part of a season and the published ones from all of it (experiment 101, `extrapolate_folds_tag`).
 - **Command:** `python -m openrapm shrink --base season_ratings_NAME_step3`.

@@ -312,10 +312,10 @@ def _add_setting_options(parser) -> None:
     parser.add_argument("--second-prior-inputs", choices=SECOND_PRIOR_INPUTS,
                         default=PRODUCT.prior.second_prior_inputs,
                         help="what Box Adj's line reads, a key of second_prior.INPUT_SETS: "
-                             "context_types_team_zones_centred, shipped, is the box-score prior on both ends, the "
-                             "eight context numbers, his box rates, role and body, and his team's shots by zone with "
-                             "him on and off the court; context_types_no_age_team_zones_centred is the same less "
-                             "age.  "
+                             "context_types_no_age_team_zones_centred, shipped, is the box-score prior on both "
+                             "ends, the eight context numbers, his box rates, role and body, and his team's shots by "
+                             "zone with him on and off the court; context_types_team_zones_centred is the same with "
+                             "his age.  "
                              "Must match what `openrapm second-prior --inputs` fitted (default %(default)s)")
     parser.add_argument("--second-prior-nearest", type=int, default=PRODUCT.prior.second_prior_nearest, metavar="K",
                         help="0: each season's line is fitted on every season the setting allows.  K: on only the K "
@@ -627,18 +627,17 @@ def _add_second_prior(commands) -> None:
                         help="outputs/prior_models_<NAME>.pkl, the boosters the folds were rated with")
     second.add_argument("--folds", required=True, metavar="TAG",
                         help="the within-season folds, comma-separated folders under outputs/within/, e.g. "
-                             "rebuilt_early,rebuilt_within")
+                             "noage142_early,noage142_within")
     second.add_argument("--tag", required=True, help="the folder under outputs/second_prior/")
     second.add_argument("--seasons", type=parse_seasons, default=None,
                         help="the seasons to write: 2026, 2017-2026 or 2017,2018 (default every season of the folds)")
     second.add_argument("--inputs", choices=SECOND_PRIOR_INPUTS, default=PRODUCT.prior.second_prior_inputs,
-                        help="the inputs, a key of second_prior.INPUT_SETS: context_types_team_zones_centred, shipped, "
-                             "is "
-                             "the box-score prior on both ends, the eight context numbers, his box rates, role and "
-                             "body, and his team's shots by zone with him on and off the court; "
-                             "context_types_team_rates_zones_centred adds the team's twos and threes, the set the "
-                             "shipped line was cut from; context_types_no_age_team_zones_centred is the shipped "
-                             "list less age (default %(default)s)")
+                        help="the inputs, a key of second_prior.INPUT_SETS: context_types_no_age_team_zones_centred, "
+                             "shipped, is the box-score prior on both ends, the eight context numbers, his box rates, "
+                             "role and body, and his team's shots by zone with him on and off the court; "
+                             "context_types_team_zones_centred is the same with his age; "
+                             "context_types_team_rates_zones_centred adds the team's twos and threes to that "
+                             "(default %(default)s)")
     second.add_argument("--target", choices=SECOND_PRIOR_TARGETS, default="whole_rating",
                         help="what the line is fitted on: whole_rating, a swap's residual with the fold's whole "
                              "ratings added back; prior_part, with only their prior parts, so its games' part stays "
