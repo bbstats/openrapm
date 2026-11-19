@@ -32,7 +32,9 @@ def main() -> None:
     meta = json.loads((out / "direct" / "reads143" / "names.json").read_text())
     at = {name: i for i, name in enumerate(meta["names"])}
     k = len(names)
-    screen_columns = ["O:fitted", "D:fitted", *[f"O:{n}" for n in names], *[f"D:{n}" for n in names]]
+    screen_name = {"close_game_share_over_share": "clutch_share_over_share_padded"}       # the screen's name for it
+    listed = [screen_name.get(n, n) for n in names]
+    screen_columns = ["O:fitted", "D:fitted", *[f"O:{n}" for n in listed], *[f"D:{n}" for n in listed]]
     worst = 0.0
     line, today = {}, {}
     for season in SEASONS:
