@@ -6,24 +6,33 @@ Writes outputs/csv/reads143_add_one.csv, reads143_steps.csv, reads143_lists.csv,
     .venv/Scripts/python scratch/2026-11-19_box_adj_reads/read.py
 """
 import json
+import os
 import sys
+
+for _name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+    os.environ.setdefault(_name, "1")
 
 import numpy as np
 import pandas as pd
 
 from openrapm import rating_line, second_prior
 from openrapm.data.config import load_config, resolve
+from openrapm.data.dashboard_rates import COUNTS
+from openrapm.data.dashboards import TRACKING_GAME_COLUMNS
 from openrapm.features import FEATURE_SETS
 
 sys.stdout.reconfigure(encoding="utf-8")
 pd.set_option("display.width", 250)
 pd.set_option("display.max_rows", 500)
+print = __import__("functools").partial(print, flush=True)
 TAG = "reads143"
 SEASONS = list(range(1997, 2027))
 ERAS = (("1997-2006", 1997, 2006), ("2007-2016", 2007, 2016), ("2017-2026", 2017, 2026))
 HALF_LIFE = 8.0
 PENALTY = 1e-4
 GAIN = 0.042                     # experiment 140's size over the 30 seasons
+# the tracking columns a fold only rescales, season totals holding the held-back games (data/dashboard_rates.py, "Folds")
+SEASON_TOTALS = {s.name for s in COUNTS if s.source == "tracking" and s.column not in TRACKING_GAME_COLUMNS}
 
 
 class Screen:
@@ -92,11 +101,12 @@ def main() -> None:
     print(f"today's line, 56 inputs an end: mean error {base_err.mean():.4f} over the 30 rated seasons\n")
 
     # ---------------------------------------------------------------- read 1: lists at once
-    candidates = meta["candidates"]
+    candidates = [c for c in meta["candidates"] if c not in SEASON_TOTALS]
+    print(f"left out as season totals: {sorted(SEASON_TOTALS & set(meta['candidates']))}")
     lists = {"every candidate": candidates,
              "team rates the line lacks": meta["team"],
              "teammates' box rates": meta["mates"],
-             "panel columns": meta["panel"],
+             "panel columns": [c for c in meta["panel"] if c not in SEASON_TOTALS],
              "the four built here": meta["built"]}
     rows = []
     for label, names in lists.items():
