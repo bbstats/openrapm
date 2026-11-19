@@ -69,8 +69,9 @@ DECISIONS.md holds every number, from "The data deleted and rebuilt" to "Experim
   `scratch/2026-11-10_boost_vs_line/player_sums.py` and `boost_vs_line.py`.  Report and stop.
 - **The noise control on the new incumbent, `noise_noage142`:** -0.013 on the within-season test, by era -0.032,
   -0.010, +0.004.  The chain names `noage142` and it since 2026-11-19.
-- **Still to do for the adoption:** row 142 in the experiments sheet.  The swap adjustment's unused model,
-  `swap_adjust.PANEL_FEATURES`, still lists age: the owner's one-line choice.
+- **Left from the adoption:** the swap adjustment's unused model, `swap_adjust.PANEL_FEATURES`, still lists age: the
+  owner's one-line choice.  Row 142 is in the experiments sheet, row 139 of its Experiments tab.  Two commits after
+  the publish, the record and the chain's incumbent, are local and not pushed.
 
 ## Where it stood, 2026-11-16
 
