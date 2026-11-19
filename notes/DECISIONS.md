@@ -13558,3 +13558,40 @@ The two ends nearly cancel in a player's total; in 2017-2026 the total moves by 
 4. *Trees on what the line leaves.*  `scratch/2026-11-10_boost_vs_line/player_sums.py` on today's folds and line, then `boost_vs_line.py` with the fade, without age; then the step repeated up to five times on targets at the line plus the trees so far, each step with `BOOST_SHUFFLE=1` and a second `BOOST_SEED` beside it.
 
 **The rule** (experiment 140's): a read or a candidate goes forward when it is better than today's line in every era, 1997-2006, 2007-2016 and 2017-2026, and by more than 0.042 over the 30 seasons, its shuffled copy at nothing, a paired z inside +-2 and a change under 0.042.  Between two that tie, the simpler one.  In 1997-2006 the noise control alone reads 0.031 better, so a gain there of that size is not one.  A read from saved sums gives the sign in each era and overstates the size: the fade read 0.207 and built 0.133.  A read that passes goes to the owner as a candidate for a full build; nothing is built on a read alone.
+
+### Experiment 143, reads 1 to 3: result (2026-11-19, 11:15 AM to 2:20 PM; `scratch/2026-11-19_box_adj_reads/screen.py`, `read.py`; `outputs/direct/reads143/logs/read2.log`; `outputs/csv/reads143_lists.csv`, `reads143_add_one.csv`, `reads143_steps.csv`, `reads143_seasons.csv`)
+
+**The tool holds.**  All 30 seasons' sums give back `noage142_line`'s own over today's 2 + 2 x 56 columns, the largest relative gap of any season 3.1e-15.  Today's line reads 3,660.477 on this scale.
+
+**A leak caught before the read was trusted.**  The first pass ranked miles run on defense first, then defensive rebound chances, miles on offense and contested rebounds, almost all of the gain in 2017-2026.  `data/dashboard_rates.py` says why: the tracking dashboards are season totals, and a fold only scales each count by its fit games' share of the season's possessions, "a known leak".  The screen's check, a column equal across two sets of one season, cannot see that, since the scaling makes every set differ.  Five tracking columns come game by game from 2014 and do not leak: touches, passes, rebound chances on each end, shots defended at the rim.  The other 13 were left out of every read below: drives, drive points, potential assists, paint, post and elbow touches, time with the ball, miles on each end, contested rebounds on each end, defended twos and threes.  Measurement trap: the screen's leak check misses a season total scaled per set.
+
+**Read 1, every list at once, minus today's line** (below 0 is better):
+
+| list | inputs an end | 1997-2006 | 2007-2016 | 2017-2026 | all 30 | z | seasons better | its shuffled copies | z |
+|---|---|---|---|---|---|---|---|---|---|
+| every candidate | 146 | -0.232 | -0.285 | -1.133 | -0.550 | -4.09 | 25 | +0.281 | +8.78 |
+| team rates the line lacks | 14 | +0.028 | -0.022 | -0.074 | -0.023 | -0.84 | 16 | +0.023 | +2.75 |
+| teammates' box rates | 26 | +0.049 | +0.017 | -0.005 | +0.020 | +0.57 | 14 | +0.059 | +5.26 |
+| the players file's columns | 102 | -0.299 | -0.329 | -1.063 | -0.564 | -5.23 | 25 | +0.186 | +7.59 |
+| the four built here | 4 | -0.148 | -0.038 | -0.118 | -0.101 | -3.84 | 23 | +0.013 | +2.95 |
+
+**Read 1, one at a time:** 292 rows, 146 candidates on each end, each beside its shuffled copy; three pass the rule, all on the defense end: his offensive rebound share -0.052, z -3.66; his close-game share over his share, padded, -0.051, z -2.26; his offensive rebound share against the league's -0.047, z -3.51.  Defensive rebound chances on defense read -0.140, z -2.99, all of it from 2014, and lose 1997-2006 by +0.014, where the column is empty: not a pass, and a candidate for a read on 2014-2026 alone.
+
+**Read 1, forward steps:** step 1, his offensive rebound share on the defense end, -0.052, z -3.66, 22 of 30, eras -0.029, -0.062, -0.065, its shuffled copy +0.001; step 2, his close-game share over his share, padded, on the defense end, -0.049, z -2.27, 20 of 30, eras -0.001, -0.019, -0.128, shuffled +0.002.  Then none passes.  The two against today's line: -0.102, z -3.52; eras -0.030 z -1.19, -0.081 z -1.63, -0.194 z -3.33.  Step 2 passes "every era" by 0.001 in 1997-2006, and step 1's 1997-2006 gain is the noise control's size there.  The line's penalty read again: at 0.001, 0.01 and 0.1 today's line reads -0.002, -0.015, +0.041 and the two-step line -0.002, -0.012, +0.077: 0.0001 stays.
+
+**The four built here, one at a time:**
+
+| end | candidate | 1997-2006 | 2007-2016 | 2017-2026 | all 30 | z | passes |
+|---|---|---|---|---|---|---|---|
+| defense | close-game share over share, padded | -0.001 | -0.019 | -0.134 | -0.051 | -2.26 | yes |
+| defense | close-game share over share | -0.005 | -0.008 | -0.110 | -0.041 | -1.89 | no |
+| defense | box-score prior times share | -0.076 | +0.004 | +0.002 | -0.023 | -1.90 | no |
+| defense | possessions per game | -0.032 | -0.010 | -0.020 | -0.021 | -1.43 | no |
+| offense | box-score prior times share | -0.025 | -0.007 | -0.000 | -0.011 | -2.43 | no |
+| offense | close-game share over share, padded | -0.014 | -0.013 | +0.002 | -0.008 | -1.16 | no |
+| offense | close-game share over share | -0.011 | -0.011 | +0.003 | -0.007 | -1.01 | no |
+| offense | possessions per game | +0.001 | +0.003 | +0.005 | +0.003 | +0.90 | no |
+
+**Read 2, the LightGBM beside the line, against today's line:** without the box-score prior's two columns +0.202, z +6.93, 3 of 30, every era worse; with its non-hustle inputs offered in its place +0.078, z +2.64; those inputs beside today's line -0.029, z -2.01, 2007-2016 +0.009.  2017-2026 with the hustle inputs too: in its place -0.065, z -1.11, 7 of 10; beside it -0.099, z -1.29, 6 of 10.  On the within-season test the LightGBM's output is worth 0.20 beyond its own inputs as straight lines, and it alone sets each team's total, which this test cannot see.  Not a candidate to drop.
+
+**Read 3, the box-score prior by playing time:** -0.034 on both ends, z -2.39, all of it in 1997-2006, -0.101, z -4.42; -0.003 and +0.001 since.  Fails the rule.
