@@ -1,10 +1,10 @@
 # Handoff
 
-**What this file is.**  Where the work stands, what waits on the owner, and the commands a session runs.  Rewritten on
-2026-11-16, at the end of the cleanup pass; the file before it is in git at 2c26966.  `DECISIONS.md` is the permanent
-record and carries every number quoted here; read its measurement traps before trusting a number.  `README.md` says
-what OpenRAPM is, `PIPELINE.md` how each part works, `GLOSSARY.md` what each word means, `CONTRIBUTING.md` the
-writing rules, `CLAUDE.md` the owner's standing rules.
+**What this file is.**  Where the work stands, the next piece of work in full, what waits on the owner, and the
+commands a session runs.  Its top was rewritten on 2026-11-19 for the next research path; the file before it is in git
+at a77b019.  `DECISIONS.md` is the permanent record and carries every number quoted here; read its measurement traps
+before trusting a number.  `README.md` says what OpenRAPM is, `PIPELINE.md` how each part works, `GLOSSARY.md` what
+each word means, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's standing rules.
 
 ## Talking to the owner
 
@@ -20,99 +20,157 @@ writing rules, `CLAUDE.md` the owner's standing rules.
 - **No jargon ever.**  "how the box-score prior splits players into its five training groups", never "folds";
   "10 averaged versions, each trained on a random resample of players", never "bags"; "random draws", never "seeds";
   "full build", never "chain"; no formulas or letters.
-- Decisions go through the question tool, with the numbers in the question and one outcome per option.
+- Decisions go through the question tool, with the numbers in the question and one outcome per option.  The owner
+  does not read every message: a question stands alone.
 - I write no prose for the site.  Wording is the owner's; a page change of mine adds data, a column, or a line the
   owner has already approved elsewhere.
+- **Age is not an input to any rating** (the owner, 2026-11-18: "I want age removed!").  Never offer age, an age
+  curve or age bands to the prior, to Box Adj, to a screen's candidates or to a tree stage.
+- The swap adjustment is off and the owner does not care about it (2026-11-19: "i dont care about the swap adjustment
+  if we're not using it").  Do not raise it.  Box Adj is the swap adjustment's lesson moved into the prior.
+- Before asking for a verdict, compare every season's top-rated player and WOSA leader in both tables, not 2026's
+  alone: on 2026-11-19 two old seasons' WOSA leaders changed and the owner had answered on 2026.
 
-## Where it stands, 2026-11-17: the data deleted, fetched again, rebuilt
+## Start here: the next research path, the reads on Box Adj
 
-**What happened.**  On 2026-11-16 at about 9:30 PM, `git worktree remove --force` on five old side checkouts deleted
-`A:/code/spmm/data` and `outputs` through the checkouts' junctions.  Drive A: is an NVMe SSD with TRIM, so nothing
-could be recovered.  The data was fetched again on 2026-11-17 (`scratch/2026-11-16_cleanup/refetch.sh`) and the ratings
-rebuilt by README.md's recipe on every season (`rebuild.sh`), the owner's choice.  DECISIONS.md, "The cleanup of
-2026-11-16", has the account.  **Never remove a side checkout before unlinking its junctions.**
+**Approved by the owner on 2026-11-18** ("box adj is good ... the rest is fine"), not started.  The plan with the
+whole ranked list: `C:\Users\Nathan\.claude\plans\what-are-some-possible-zippy-quill.md`; the record:
+DECISIONS.md, "The research paths of 2026-11-18".  Four reads, all from saved held-back games, no rating built, 3 to 4
+hours.  **Report and stop**: a read that passes goes to the owner as a candidate for a full build, through the
+question tool; nothing is built on a read alone.
 
-- **The shipped settings read the rebuild until 2026-11-19:** Box Adj's line `rebuilt_line`, the shrink's held-back
-  games `rebuilt_early,rebuilt_within` and `rebuilt_k10`; since then experiment 142's, below.  The rebuild's test-setting tables and saved models are `rebuilt`;
-  pass 1, without Box Adj, `rebuilt_base`.
-- **Checked against the site before publishing** (the owner: "No publishing till we do testing on the data"): finished
-  seasons within 0.05 points per 100 typical, 0.29 at most; stints equal to the surviving copy in 60 of 61
-  season-phases; every game present.  `outputs/rebuild/against_site.txt`, `data_tests.txt`, `pieces_vs_site.txt`.
-- **Backup:** `D:\openrapm_backup\2026-11-17\data` and `outputs`, verified byte for byte.
-- **Lost and not rebuilt:** every old experiment's saved files, the earlier incumbent `fade141` and its noise control
-  `noise_fade141` among them; `outputs/daily/notify.conf`, the phone notice's topic.
+**Why Box Adj.**  It is the only part of a rating fitted on the within-season test, about 45% of a regular's rating,
+and the last three gains came from it: its weights fitted on that test, 0.488; the team's shots by five zones, 0.183;
+its training seasons faded by distance, 0.133.  The season's games take back 57% to 60% of a prior change that moves a
+team's total and 12% to 14% of one that moves credit between teammates, so only the second kind is worth trying, and
+Box Adj holds team totals by construction.
 
-## Where it stands, 2026-11-19: age is out of Box Adj, adopted and published
+**The rule, registered before any read** (experiment 140's, used for the zones and the fade): a read goes forward when
+it is better than today's line in every era, 1997-2006, 2007-2016 and 2017-2026, and by more than 0.042 over the 30
+seasons, with its shuffled control at nothing.  Between two that tie, the simpler one.  A read from saved sums gives the
+sign in each era and overstates the size: the fade read 0.207 and built 0.133; age out read 0.031 and built 0.027.
+Register each read in DECISIONS.md before its result, as "Experiment 142, read 1" was.
 
-DECISIONS.md holds every number, from "The data deleted and rebuilt" to "Experiment 142: adopted".
+**What is on disk for it.**
 
-- **The research paths, ranked** (the owner, 2026-11-18): the plan
-  `C:\Users\Nathan\.claude\plans\what-are-some-possible-zippy-quill.md`, and DECISIONS.md, "The research paths of
-  2026-11-18".  The owner's answer on the first: "box adj is good but guess what - I want age removed! :) the rest is
-  fine."  **Age is not an input to any rating, and is offered to no screen or tree stage.**
-- **Experiment 142, age out of Box Adj's line: adopted and published on the owner's word, "Adopt and publish".**  The
-  shipped line is `noage142_line` on `context_types_no_age_team_zones_centred`, 56 inputs an end; the shrink reads
-  `noage142_early,noage142_within` and `noage142_k10`; the published tables are the full build `product142`'s, the
-  ones before them kept as `*_before_noage142*`.  Within-season +0.027, z +1.99, 10 of 30, by era +0.051, +0.041,
-  -0.011; year over year at matched width z +2.18, all of it a season's ratings asked about the season after it.
-  Published against the site before it: regulars' totals move a median 0.02 and 0.25 at most; no season's top-rated
-  player changes; two WOSA leaders change by a hair, 1999 Duncan to Mutombo and 2003 Nowitzki to Garnett.  The Power
-  table's weights stay.
-- **The rebuild of 2026-11-17 read on the tests** before any of it: year over year 8.6891 against the earlier
-  incumbent's 8.6908; check 151's errors on it 3,455.273, 3,595.240 and 3,932.011 by era; its noise control
-  `noise_rebuilt` -0.012.
-- **Next, approved by the owner:** the reads on Box Adj without age, from saved held-back games, no rating built:
-  more inputs through the direct screen, close fourth-quarter share and minutes per game among them; what the LightGBM
-  is worth beside the line; the box-score prior's weight by share of team possessions; trees on what the line leaves,
-  several steps.  The tools must be pointed at `rebuilt_base_early`, `rebuilt_base_within` and the shipped line's
-  folder, and given the fade's season weights: `scratch/2026-11-03_direct/direct_screen.py`,
-  `scratch/2026-11-10_boost_vs_line/player_sums.py` and `boost_vs_line.py`.  Report and stop.
-- **The noise control on the new incumbent, `noise_noage142`:** -0.013 on the within-season test, by era -0.032,
-  -0.010, +0.004.  The chain names `noage142` and it since 2026-11-19.
-- **Left from the adoption:** the swap adjustment's unused model, `swap_adjust.PANEL_FEATURES`, still lists age: the
-  owner's one-line choice.  Row 142 is in the experiments sheet, row 139 of its Experiments tab.  Two commits after
-  the publish, the record and the chain's incumbent, are local and not pushed.
+| what | where |
+|---|---|
+| the held-back games the line is fitted on, rated without Box Adj | `outputs/within/rebuilt_base_early`, `rebuilt_base_within`; saved models `outputs/prior_models_rebuilt_base.pkl` |
+| each of those sets' players, 239 columns rebuilt from its own games | `players_<season>_r<repeat>_f<fold>.parquet` inside those folders |
+| today's line: its sums and each set's inputs | `outputs/second_prior/noage142_line/sums_<season>.npz`, `inputs_<season>.parquet`, `run.json` |
+| the same with age, the line before it | `outputs/second_prior/rebuilt_line` |
+| the incumbent's test tables, held-back games and noise control | `noage142`, `noage142_early`, `noage142_within`; `noise_noage142` |
 
-## Where it stood, 2026-11-16
+A season's sums hold 114 columns: each end's fitted part, then 56 inputs for offense and 56 for defense, in the order
+of `second_prior.INPUT_SETS["context_types_no_age_team_zones_centred"]`.  `rating_line._solve(total, columns, 1e-4)`
+gives the weights on any subset of columns and `RatingSums.error(weights)` the within-season test's error at them.
+Today's line for a rated season is solved on the seasons more than one from it, each counted
+`second_prior.season_weight(other, rated, 8)`.  `scratch/2026-11-18_age_out/age_out_read.py` is the shortest working
+example of such a read: 30 seasons, paired by season, by era, in seconds.
 
-**The cleanup pass** (the owner: "clean up the documentation / readme / and do a general cleanup pass", then "a strict
-robots ... + please give Nathan some credit").  DECISIONS.md, "The cleanup of 2026-11-16", holds every number.
+**The four reads.**
 
-- **Live since 2026-11-16, main 9effe2d:** `docs/robots.txt` bars the 207 AI crawlers of the ai.robots.txt list at
-  be22abe from the whole site; search engines, Meta's link previews and Apple's search crawler stay allowed (the
-  owner's choice); Content-Signal search=yes, ai-input=no, ai-train=no.  Every page's footer carries the owner's line,
-  "Ratings by Nathan Walker. Use them with credit and a link to openrapm.com. No bulk copying or scraping.", and every
-  head the text-and-data-mining reservation.  `LICENSE-RATINGS.md` gives the ratings their own terms; the code stays
-  MIT.  `CITATION.cff`.  `data/external/impact_metrics_2526.csv`, other makers' ratings, untracked; `docs/progress.png`
-  and `progress.csv` deleted.
-- **Docs rewritten to what ships**: README, PIPELINE, GLOSSARY, CONTRIBUTING, this file, the held-back-games ledger.
-  Box Adj has its own section everywhere; the swap adjustment is written as off; the build recipe builds Box Adj's line.
-  `tests/test_docs.py` fails when a doc leaves out a check or a module, or names a stale setting or incumbent.
-- **Code that lost its test removed** (the owner: "Take all three out"): the game-by-game network prior (experiments
-  114-117), the Kumo prior (118), the elastic-net blend (121-122), and the site command's writer for the retired
-  vanilla RAPM page.  About 4,300 lines.  All of it is readable at the tag `archive/research-2026-11`.  A saved model file
-  of a game-by-game build is refused by name.  The proof that no number moved is in DECISIONS.md.
-- **Comments, docstrings and help text** to what the code does, in American English; proven by comparing every touched
-  file's syntax tree with docstrings and help text blanked (`scratch/2026-11-16_cleanup/same_code.py`).
-- **The noise control on experiment 141** was read on 2026-11-11: `noise_fade141`, -0.013 on the within-season test,
-  paired z -1.41, 16 of 30.  The chain names it.
+1. **More inputs** (`scratch/2026-11-03_direct/direct_screen.py`, `build` then `read`, about 8 minutes a pass).  On
+   2026-11-03 every candidate added to the line at once read 0.830 better, 28 of 30 seasons, eras z -7.24, -4.73,
+   -1.25; the team rates that were adopted were 0.218 of it; 172 shuffled candidates cost 0.244.  The add-one and
+   drop-one tables were lost with the data.  To run it today:
+   - `FOLDS_TAG` to `rebuilt_base_early,rebuilt_base_within`; `inputs_dir` to `outputs/second_prior/noage142_line`.
+   - Its within-layer multipliers come from a csv of a full build, `season_ratings_ctx110_step4_multipliers.csv`,
+     gone.  The line's own fit computes them from the same held-back games with
+     `commands.build.within_layer_multipliers`, as `commands/second_prior.run_second_prior` does; use that.
+   - It solves on every training season alike.  Add the fade: each training season's sums `.scaled(season_weight(...))`.
+   - Take `age`, `age_at_first_season`, `age_at_debut` and every career column out of the candidates; `NOT_INPUTS`
+     already holds the career ones.  `playoff_share` stays out: a coach's choice made after the held-back games.
+   - The tracking columns are season totals and leak the held-back games; the screen drops any column equal across two
+     sets of one season (`panel_candidates`).  Keep that check.
+   - Two candidates to build, from each set's own games only: his share of his team's possessions in the fourth
+     quarter and overtime with the margin within 5, set beside his share of all of them; and minutes per game.  The
+     stint rows carry `period`, `margin_h` and `frac_rem`; `garbage_time_share` in `data/panel.py` is the pattern.
+   - Then forward steps: the best candidate by the rule, added, and again, each beside its shuffled copy, until none
+     passes.  Report the whole table, every candidate's verdict, never a prose list.
+2. **What the LightGBM is worth beside the line.**  On 2026-11-03 dropping the box-score prior from one end of the
+   line cost 0.060 on offense and 0.082 on defense; it is 92% to 94% a straight line on its own inputs.  Not read
+   since the zones, the fade or age out, and never year over year.  The read: today's line without its `box_prior`
+   and `box_prior_other_end` columns, with the LightGBM's own inputs offered to the line directly,
+   `features.FEATURE_SETS["hustle_no_three_pct_self_creation"]`, 18 a side; those not already among the line's inputs
+   are candidates of read 1's screen, so this is two more rows of the same pass.  The hustle inputs exist from 2017
+   only: read 2017-2026 with them and every era without.  **A small cost is not a reason to drop the LightGBM by
+   itself**: it alone sets each team's total in the prior, which the within-season test cannot see and the
+   year-over-year test can.  A result here goes to the owner as a question, with what a build without it would have
+   to show year over year.
+3. **The box-score prior's weight by playing time.**  The line gives the box-score prior one weight for a starter and
+   a tenth man alike.  The read: one more column an end, the box-score prior times his centered share of team
+   possessions, scored like any candidate.  It is the backup-bigs question the tests keep visible,
+   `tests/test_vs_consensus.py::test_backup_bigs_are_not_in_the_top_twenty`.  A product of two inputs is not in the
+   saved sums: it needs the per-player sums of read 4, or a column in read 1's screen.
+4. **Trees on what the line leaves** (`scratch/2026-11-10_boost_vs_line/player_sums.py`, 22 minutes, then
+   `boost_vs_line.py`).  One step at ChimeraBoost's defaults read 0.100 better, 21 of 30, eras -0.111, -0.066, -0.124;
+   a second random draw 0.115; shuffled targets +0.004.  DECISIONS.md, check 167: "A fit that repeats the step, or
+   weighs teammates, could find more or the same; none of that was tried."  To run it today:
+   - `player_sums.py`: `FOLDS` to `rebuilt_base_early,rebuilt_base_within`; `SCREEN` and `LINE` to `noage142_line`,
+     whose folder holds both the inputs and the sums; `OUT` to `noage142_players`.  Its built-in check must pass: each
+     season's per-player sums, projected on the line's columns, give back the line's own sums.
+   - `boost_vs_line.py`: `NAMES` to the list without age, the folder to `noage142_players`, and the fade in `scores`
+     and `block_columns`, where every training season counts alike today.
+   - Then repeat the step: targets at the line plus the trees so far, a new column, weights solved again, up to five
+     steps, with `BOOST_SHUFFLE=1` and a second `BOOST_SEED` at each.  The per-player sums hold the whole quadratic,
+     so no ridge is solved again.  chimeraboost is installed in the environment and is not a dependency of the package.
+   - Three seasons to a block, a block's models fitted on the seasons two or more away: keep it, and write down that
+     a later step's targets come from columns whose models saw other blocks.  The shuffled control is what says
+     whether that matters.
+
+**Traps for these reads.**
+
+- A candidate built from lineup results restates what the ridge already reads from the same games.  Fitted through
+  the ridge it loses its weight by itself, which is why the direct screen exists; a candidate scored any other way
+  must first pass `scratch/2026-11-03_team_rates/why_it_lost.py`'s check.
+- 2017-2026 is the weak era for added inputs: more columns, more noise, and before the fade it wanted a stronger
+  penalty on the line.  Read the line's penalty, 0.0001, again at 0.001 to 0.1 once inputs are added.
+- In 1997-2006 the noise control alone reads 0.031 better, z -3.2.  A gain there of that size is not a gain.
+- 2007-2016 is the era that fails most often.  Say which era failed and by how much; a tie is not noise.
+- Every one of these is a read.  A full build is `bash scripts/experiment_chain.sh NAME
+  points_with_expected_opponent_threes_late_as_scored "EXTRA RATE FLAGS"`, 70 to 120 minutes on this machine, and
+  needs the owner's word.
+
+**After these reads, the ranked paths none has started** (the plan has what the record says of each): three-point
+luck out of the offense's target, as the defense's target has it; early-season defense, the hustle rates' padding
+first; the ridge penalty, 13,037, never read on the within-season test, and the owner's EM idea; lineup terms from the
+self-creation check; lineups against the league's official minutes.
+
+## Where it stands, 2026-11-19
+
+DECISIONS.md holds every number, from "The data deleted and rebuilt" to "The morning of 2026-11-19".
+
+- **The data was deleted on 2026-11-16 and rebuilt on 2026-11-17.**  `git worktree remove --force` on old side
+  checkouts followed their junctions into `data` and `outputs`.  **Never remove a side checkout before unlinking its
+  junctions.**  Every earlier experiment's saved files are gone; what is on disk is the rebuild's and this week's.
+  Backup of the rebuild: `D:\openrapm_backup\2026-11-17`.
+- **Age is out of Box Adj: adopted and published 2026-11-19** (experiment 142; site 102e307).  The shipped line is
+  `noage142_line`, 56 inputs an end; the shrink reads `noage142_early,noage142_within` and `noage142_k10`; the
+  published tables are the full build `product142`'s, the ones before kept as `*_before_noage142*`.  It cost 0.027 on
+  the within-season test, none of it since 2017, and its year-over-year cost is all a season's ratings asked about the
+  season after it.  No 2026 total moved 0.1; two WOSA leaders changed by a hair, 1999 and 2003.
+- **The incumbent is `noage142`, its noise control `noise_noage142`**, -0.013 on the within-season test; the chain
+  names both.  Check 151's errors on the incumbent before it, `rebuilt`: 3,455.273, 3,595.240 and 3,932.011 by era.
+- **The morning job waits for one game.**  0022600265, Hawks at Thunder of 2026-11-18, came from the league with every
+  play-by-play description blank, so it builds no stints.  `config.yaml`'s `no_stints_accepted` names it (the owner:
+  "skip the game for now but we should keep checking for it"): the season is rated without it, every morning asks the
+  league again, and the day a morning's log says it has stints, take it off the list.  Basketball Reference's page for
+  the game was not used: Sports Reference's terms bar feeding its pages to a model.
+- **Main holds everything**, c29342d, GitHub's tests green.
 
 ## Waiting on the owner
 
-1. **Push the rest of the cleanup.**  The docs, the removals and the tests are on the branch `cleanup-2026-11-16`;
-   `A:/code/spmm` runs them.  The site part went live on the owner's word.
+1. **Your word on any read of the next research path that passes its rule**, before a full build.
 2. **Google's AI answers.**  The robots file cannot keep the site out of the AI answers inside Google search; that is
    the Search Console setting under Settings, "Search generative AI", in the owner's account, if it is live there.
-3. **Delete the old experiments' saved files?**  About 280 GB under `outputs/`: saved models 143 GB in 105 files, of
-   which `fade141`, `noise_fade141` and `padbins127` are today's (Box Adj's line was fitted on `padbins127`'s
-   held-back games); held-back games 61 GB in 255 folders, of which the `fade141_*` ones are today's; the input screens
-   87 GB.  All of that is gone since the deletion of 2026-11-16; what is on disk is the rebuild's and this week's.
-   And the old side checkouts `A:/code/spmm_gate`, `spmm_old`, `spmm_split`, `spmm_wosa`, `spmm_verify`, with
-   the merged branches `split-robust`, `ui-tweaks`, `wosa-detail`.
+3. **The side checkout `A:/code/spmm_cleanup`** and its branch `cleanup-2026-11-16`, merged: remove them or keep them.
+   Unlink its junctions first.
 4. **The phone notice.**  Install the ntfy app and subscribe to the topic in `outputs/daily/notify.conf`, given to the
    owner in chat on 2026-11-09.  A test line: `bash scripts/daily_notify.sh "test"`.
 5. **The link preview's one sentence**, for the six pages' `description` and `og:description`.
-6. **A Changelog row for age out of Box Adj**, in the owner's words.
+6. **No Changelog row for age out of Box Adj for now** (the owner, 2026-11-19: "since we haven't explained box adj
+   just leave it for now").
 7. **Changelog rows**, in the owner's words: the robots file and the credit line; the rookies button, WOSA, the page
    opening on the season in progress, the Detail view, Detail's Leverage and WOSA columns, Similarity's search box, the
    Power page's one rating, the Similarity and WOSA corrections and the Power table's new weights.
