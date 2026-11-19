@@ -88,6 +88,35 @@ def test_a_game_whose_points_differ_from_its_box_score_stops_it_unless_the_confi
     assert len(_raw_files(tmp_path / "accepted", GAMES[1])) == 4
 
 
+def test_a_game_the_config_waits_for_does_not_stop_the_morning_and_is_asked_for_again(tmp_path, capsys):
+    """The league posted a game's play-by-play with every description blank (0022600265, 2026-11-18): the season is
+    rated without it, and its cached files are still removed, so the next ingest fetches it again."""
+    cfg = {**_season(tmp_path, built=GAMES[:3], errors={GAMES[3]: "ValueError('no lineups')"}),
+           "no_stints_accepted": [GAMES[3]]}
+    assert _run(cfg) == 0
+    out = capsys.readouterr().out
+    assert GAMES[3] in out and "no lineups" in out and "rated without it" in out and "0 without stints" in out
+    assert _raw_files(tmp_path, GAMES[3]) == [] and len(_raw_files(tmp_path, GAMES[0])) == 4
+    record = json.loads((tmp_path / "data" / "stints" / "2027_games_checked.json").read_text(encoding="utf-8"))
+    assert record["games"] == {"RS": GAMES}                    # still a game of the log: it must not read as gone
+    check = stints.check_games(2027, cfg, waited_for=[GAMES[3]])[0]
+    assert check.passed and list(check.waited_for) == [GAMES[3]] and check.arrived == ()
+
+
+def test_another_game_without_stints_still_stops_the_morning_beside_one_it_waits_for(tmp_path, capsys):
+    cfg = {**_season(tmp_path, built=GAMES[:2]), "no_stints_accepted": [GAMES[3]]}
+    assert _run(cfg) == 1
+    assert _raw_files(tmp_path, GAMES[2]) == [] and _raw_files(tmp_path, GAMES[3]) == []
+
+
+def test_the_day_a_waited_game_has_stints_the_check_says_it_can_come_off_the_list(tmp_path, capsys):
+    cfg = {**_season(tmp_path), "no_stints_accepted": [GAMES[3], "0022699999"]}
+    assert _run(cfg) == 0
+    out = capsys.readouterr().out
+    assert f"{GAMES[3]}: has stints now" in out and "0022699999" not in out      # a game not in the log is no one's
+    assert len(_raw_files(tmp_path, GAMES[3])) == 4                                # built: nothing of it is removed
+
+
 def test_a_game_log_that_lost_a_game_stops_it_even_when_another_was_added(tmp_path, capsys):
     """Containment, not a count: one game gone and one new leaves the count where it was."""
     cfg = _season(tmp_path, logged=GAMES[:3], built=GAMES[:3])

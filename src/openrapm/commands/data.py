@@ -118,7 +118,10 @@ def run_check_games(args: argparse.Namespace, cfg: dict) -> int:
     """The season in progress, its game log held against its stints (data/stints.check_games): 0 and the morning's
     record written when every game has stints and the right points, else 1 with each game and its reason.  The cached
     raw files of a game without stints or with the wrong points are removed, so the next `data ingest` fetches them
-    again.  A finished season is refused: its files are history, and some of its games never did add up."""
+    again.  A game of config.yaml's `no_stints_accepted` that has no stints does not stop the morning: it is named,
+    its cached files are removed all the same, so every morning asks the league for it again, and the day it has
+    stints the check says it can come off the list.  A finished season is refused: its files are history, and some of
+    its games never did add up."""
     from ..data.ingest import forget_game
     from ..data.seasons import in_progress
     from ..data.stints import check_games, checked_games_path, write_checked_games
@@ -126,7 +129,8 @@ def run_check_games(args: argparse.Namespace, cfg: dict) -> int:
     if season not in in_progress(cfg):
         raise SystemExit(f"{season} is not in progress: only the season in progress is checked, and no finished "
                          f"season's raw files are ever removed")
-    checks = check_games(season, cfg, accepted=cfg.get("points_mismatch_accepted") or ())
+    checks = check_games(season, cfg, accepted=cfg.get("points_mismatch_accepted") or (),
+                         waited_for=cfg.get("no_stints_accepted") or ())
     for check in checks:
         bad = {**check.no_stints, **check.points_differ}
         print(f"{season} {check.phase}: {len(check.logged)} games in the game log, {len(check.no_stints)} without "
@@ -136,6 +140,12 @@ def run_check_games(args: argparse.Namespace, cfg: dict) -> int:
             removed = forget_game(game_id, cfg)
             print(f"  {game_id}: {why}; {len(removed)} cached files removed, fetched again by the next ingest",
                   flush=True)
+        for game_id, why in sorted(check.waited_for.items()):
+            removed = forget_game(game_id, cfg)
+            print(f"  {game_id}: {why}, and config.yaml's no_stints_accepted waits for it: the season is rated without "
+                  f"it; {len(removed)} cached files removed, asked for again by the next ingest", flush=True)
+        for game_id in check.arrived:
+            print(f"  {game_id}: has stints now; take it off config.yaml's no_stints_accepted", flush=True)
         for game_id in check.gone:
             print(f"  {game_id}: in the last morning's record and no longer in the game log.  If the league took the "
                   f"game out for good, delete {checked_games_path(season, cfg)}", flush=True)
@@ -404,7 +414,9 @@ def _add_season_checks(steps) -> None:
                     "are then recorded in paths.stints/<season>_games_checked.json.  Exit 1 otherwise, each game "
                     "named with its reason; the cached play-by-play, box score and period box scores of a game "
                     "without stints or with the wrong points are removed, so the next `openrapm data ingest` fetches "
-                    "them again.  config.yaml's points_mismatch_accepted lists games whose points differ for good.  "
+                    "them again.  config.yaml's points_mismatch_accepted lists games whose points differ for good, "
+                    "and its no_stints_accepted games the season is rated without for now, asked for again every "
+                    "morning.  "
                     "Only the season in progress is checked.")
     games.add_argument("season", type=int, metavar="SEASON")
     games.set_defaults(run=run_check_games)

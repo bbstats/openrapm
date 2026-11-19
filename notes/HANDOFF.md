@@ -154,7 +154,10 @@ minutes.  PIPELINE.md, "The morning job", lists its commands and what protects i
 - **`outputs/daily/last.txt`** says how the last real morning ended; `outputs/daily/<date>.log` is its log.
 - **When it fails** the phone gets one line, and yesterday's ratings stay up.  A game that failed the games check has
   had its cached files removed and is fetched again by the next run.  A game whose points differ from its box score
-  for good goes in `config.yaml`, `points_mismatch_accepted`.
+  for good goes in `config.yaml`, `points_mismatch_accepted`.  A game the league posted without usable play-by-play
+  goes in `no_stints_accepted`: the season is rated without it, every morning asks for it again, and the check says
+  when it can come off.  Since 2026-11-19 it holds 0022600265, Hawks at Thunder of 2026-11-18, every description
+  blank (the owner: "skip the game for now but we should keep checking for it").
 - **A second task, "OpenRAPM morning check", 8:00 AM**, sends the notice when `last.txt` lacks the day's date.
 - **A command that writes the name `product`** is refused here unless `OPENRAPM_WRITE_PUBLISHED=1` is typed before it.
   A long one takes the lock first:

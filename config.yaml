@@ -37,6 +37,13 @@ garbage_time:
 gt_weight: 1.0          # a garbage-time row's weight relative to any other row's (1.0: the same)
 margin_clip: 25         # the score-margin context columns are clipped at plus or minus this many points
 
+# The morning job's games check (data/stints.check_games) stops when a game of the season in progress has no stints.
+# A game named here does not stop it: the season is rated without that game, and every morning asks the league for it
+# again and says here when it can come off.  0022600265, Hawks at Thunder of 2026-11-18: the league posted its
+# play-by-play with every description blank, so no substitution says who came in (the owner, 2026-11-19: "skip the game
+# for now but we should keep checking for it").
+no_stints_accepted: ["0022600265"]
+
 # The role inputs of the season panel (src/openrapm/data/roles.py).
 roles:
   cache: roles.parquet  # the roles table's file in paths.cache; the phases join the name: roles_RSPO.parquet

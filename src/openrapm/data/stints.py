@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
 
@@ -319,6 +319,10 @@ def _versus_pbpstats(parsed: pd.DataFrame, season: int, phase: str, cfg) -> dict
 # stints, so the job can stop instead (`openrapm data check-games`, scripts/daily_update.sh).
 #
 #   a game passes when     it is in the game log, has stints, and its play-by-play scores what its box score says
+#   a game is waited for   when config.yaml's `no_stints_accepted` names it and it has no stints: the morning goes on
+#                          without it, its cached files are still removed, and every morning's fetch asks for it again
+#                          (the owner, 2026-11-19, of a game the league posted with no substitution text: "skip the
+#                          game for now but we should keep checking for it")
 #   the record             {season}_games_checked.json in paths.stints: the games of the last morning that passed,
 #                          so a game log that has since lost a game is seen even when it gained another
 #
@@ -335,6 +339,8 @@ class GamesCheck:
     no_stints: dict          # game id -> why: the build's error for it, or "no stints"
     points_differ: dict      # game id -> the play-by-play's points beside the box score's, in words
     gone: tuple              # games the last morning that passed held and the game log no longer does
+    waited_for: dict = field(default_factory=dict)    # game id -> why, for the games without stints the config accepts
+    arrived: tuple = ()      # the games the config accepts that have stints now: they can come off its list
 
     @property
     def passed(self) -> bool:
@@ -369,14 +375,23 @@ def _points_differ(diagnostics: pd.DataFrame, built: set, accepted: set) -> dict
     return out
 
 
-def check_games(season: int, cfg, accepted=()) -> list:
+def _without_stints(logged: list, built: set, errors: dict, waited: set) -> tuple[dict, dict]:
+    """({game: why} for the logged games without stints that stop the morning, the same for the ones it waits for)."""
+    missing = {game: errors.get(game, "no stints") for game in logged if game not in built}
+    return ({game: why for game, why in missing.items() if game not in waited},
+            {game: why for game, why in missing.items() if game in waited})
+
+
+def check_games(season: int, cfg, accepted=(), waited_for=()) -> list:
     """One GamesCheck for each phase of `season` that has games: the cached game log against the stints and their
     diagnostics on disk, and against the record of the last morning that passed.  Nothing is fetched, built or
-    removed.  `accepted` names games whose points are known to differ for good (config `points_mismatch_accepted`).
+    removed.  `accepted` names games whose points are known to differ for good (config `points_mismatch_accepted`);
+    `waited_for` names games that may be without stints for now (config `no_stints_accepted`).
 
     A phase whose game log is on disk with no rows, the playoffs before they start, is passed over, and so is one with
     no game log at all."""
     folder, accepted, record = resolve(cfg, "stints"), set(_ten(accepted)), checked_games(season, cfg)
+    waited = set(_ten(waited_for))
     checks = []
     for phase in played_phases(season, cfg):
         log_path = raw_dir(cfg) / "gamelog" / f"{int(season)}_{phase}.parquet"
@@ -391,9 +406,10 @@ def check_games(season: int, cfg, accepted=()) -> list:
         if "error" in diagnostics.columns:
             failed = diagnostics[diagnostics.error.notna()]
             errors = dict(zip(failed.game_id, failed.error.astype(str)))
-        no_stints = {game: errors.get(game, "no stints") for game in logged if game not in built}
+        no_stints, waiting = _without_stints(logged, built, errors, waited)
         gone = tuple(game for game in _ten(record.get(phase, [])) if game not in set(logged))
-        checks.append(GamesCheck(phase, tuple(logged), no_stints, _points_differ(diagnostics, built, accepted), gone))
+        checks.append(GamesCheck(phase, tuple(logged), no_stints, _points_differ(diagnostics, built, accepted), gone,
+                                 waiting, tuple(sorted(waited & built & set(logged)))))
     return checks
 
 
