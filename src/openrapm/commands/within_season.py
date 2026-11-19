@@ -428,7 +428,8 @@ def rate_world(world: SeasonWorld, saved: dict, prior_panel: pd.DataFrame | None
         types = (None if context.type_scale is None else second_prior.standardised_types(
             panel[(panel.side == "O") & (panel.possessions > 0)], context.type_scale))
         prior, _ = second_prior.season_second_priors(context.stints, answers, box, context.coefficients,
-                                                     context.n_folds, context.team_totals, types, context.input_set)
+                                                     context.n_folds, context.team_totals, types, context.input_set,
+                                                     panel[(panel.side == "D") & (panel.possessions > 0)])
     designs = {target: world.designs[target] for target in settings.targets.distinct()}
     table = prior_rapm.rate_season_blended(designs, prior, settings, world.season, scale, held_weight)
     world.checks["ridge: possessions are the fit games' possessions"] = bool(np.isclose(

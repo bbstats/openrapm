@@ -214,7 +214,8 @@ def rated_second_prior(cfg: dict, season: int, panel: pd.DataFrame, priors: dict
     stints = season_lineup_rows(cfg, season, phases)
     values, inputs = second_prior.season_second_priors(stints, answers, box, coefficients,
                                                        prior.second_prior_folds, prior.second_prior_team_totals,
-                                                       types, prior.second_prior_inputs)
+                                                       types, prior.second_prior_inputs,
+                                                       panel[(panel.side == "D") & (panel.season == season)])
     first_stage = (second_prior.season_first_stage(lines.grams, season, lines.trainable, settings.exclude_neighbours,
                                                    prior.second_prior_folds, prior.second_prior_penalty,
                                                    prior.second_prior_nearest, prior.second_prior_inputs,

@@ -171,6 +171,16 @@ Every use of the line below is the same: `season_coefficients` answers with the 
 Without age (`INPUT_SETS` "context_types_no_age_team_zones_centred", experiment 142; the owner, 2026-11-18: "I want age
 removed!"): the shipped list less age, 56 inputs an end.  Age was read here and nowhere else in a rating.  Each input is
 its own column of the normal equations, so this list's sums are the shipped line's with age's two columns dropped.
+
+Two inputs on the defense end alone (`INPUT_SETS` "context_types_no_age_team_zones_defence_only_centred", experiment
+143; the owner, 2026-11-19, on the reads: "Two inputs first"): the list above plus `DEFENCE_ONLY`, his offensive rebound
+share and his close-game share of his team's possessions over his share of all of them (`close_game_shares`).  The read
+that chose them scored each on one end; on the offense end both read 0 for every player, a column with no spread, which
+the line gives weight 0 (rating_line._solve), so only the defense end weighs them.
+
+Example: a defender on the court for 30% of his team's possessions in the last five minutes of the fourth quarter or
+overtime with the margin within 5, and for 20% of all its possessions in the games he played, over 150 such team
+possessions, reads (0.30 - 0.20) x 150 / (150 + 50) = +0.075.
 """
 from __future__ import annotations
 
@@ -193,7 +203,8 @@ __all__ = ["CONTEXT", "BOX", "INPUTS", "OTHER_BOX", "TYPES", "INPUT_SETS", "type
            "season_second_priors", "SAME_TEAMMATES", "OTHER_OPPONENTS", "CENTRED_SETS", "three_inputs", "centred",
            "reads_types", "adjustments", "TEAM_RATES", "TEAM_TAKEN", "TEAM_PROFILE_RATES", "ALL_TEAM_RATES",
            "reads_team_rates", "team_rate_numbers", "with_team_rates", "LINE_TARGETS", "box_score_positions",
-           "season_first_stage", "season_weight"]
+           "season_first_stage", "season_weight", "DEFENCE_ONLY", "CLOSE_GAME_SHARE", "reads_defence_only",
+           "close_game_shares", "defence_only_numbers"]
 
 CONTEXT = ["teammates_offence_on", "teammates_defence_on", "opponents_offence_on", "opponents_defence_on",
            "teammates_offence_bench", "teammates_defence_bench", "opponents_offence_bench", "opponents_defence_bench"]
@@ -231,10 +242,17 @@ INPUT_SETS = {"context": INPUTS, "context_and_types": [*INPUTS, OTHER_BOX, *TYPE
               "context_types_no_age_team_zones_centred": [*INPUTS, OTHER_BOX,
                                                           *(name for name in TYPES if name != "age"),
                                                           *TEAM_ZONE_RATES]}
+# experiment 143: two inputs read on the defense end alone (module docstring)
+CLOSE_GAME_SHARE = "close_game_share_over_share"
+DEFENCE_ONLY = ["off_rebound_share", CLOSE_GAME_SHARE]
+CLOSE_GAME_PAD = 50.0             # team possessions in close games, of the padding toward no difference
+INPUT_SETS["context_types_no_age_team_zones_defence_only_centred"] = [
+    *INPUT_SETS["context_types_no_age_team_zones_centred"], *DEFENCE_ONLY]
 # applied on inputs centered on the season's average (`centred`)
 CENTRED_SETS = {"own_teammates_opponents", "context_and_types_centred", "context_types_team_rates_centred",
                 "context_types_team_profile_centred", "context_types_team_rates_zones_centred",
-                "context_types_team_zones_centred", "context_types_no_age_team_zones_centred"}
+                "context_types_team_zones_centred", "context_types_no_age_team_zones_centred",
+                "context_types_no_age_team_zones_defence_only_centred"}
 SIDE_KEYS = {"offense": "O", "defense": "D"}      # swap_adjust's side names -> the priors' side keys
 LINE_TARGETS = SECOND_PRIOR_TARGETS               # what the line's target adds back to a swap (module docstring)
 
@@ -257,6 +275,55 @@ def reads_team_rates(input_set: str | None) -> bool:
     "context_and_types_centred" and None do not.
     """
     return input_set is not None and bool(set(ALL_TEAM_RATES) & set(INPUT_SETS[input_set]))
+
+
+def reads_defence_only(input_set: str | None) -> bool:
+    """Whether the line on `input_set` reads `DEFENCE_ONLY`, so its inputs need `defence_only_numbers`."""
+    return input_set is not None and bool(set(DEFENCE_ONLY) & set(INPUT_SETS[input_set]))
+
+
+def close_game_shares(stints: pd.DataFrame, side: str) -> pd.Series:
+    """player_id -> his share of his team's possessions in close games less his share of all of them, on one end ("O"
+    his offensive fives, "D" his defensive ones), both over the games he played, padded by `CLOSE_GAME_PAD` close-game
+    team possessions toward 0.  A close game's possession is a stint row's `clutch` flag (swap_test: the last five
+    minutes of the fourth quarter or overtime, the margin within 5).  A player whose games had none reads 0.
+
+    Example: the module docstring's, +0.075."""
+    five, team = (OFF, "team_off") if side == "O" else (DEF, "team_def")
+    poss = stints.poss.to_numpy(float)
+    close = poss * stints.clutch.to_numpy(float)
+    games = stints.game_id.astype(str).to_numpy()
+    teams = stints[team].to_numpy(dtype=np.int64)
+    team_game = (pd.DataFrame({"team": teams, "game": games, "poss": poss, "close": close})
+                 .groupby(["team", "game"], as_index=False)[["poss", "close"]].sum())
+    long = pd.DataFrame({"player_id": stints[five].to_numpy(dtype=np.int64).ravel(), "team": np.repeat(teams, 5),
+                         "game": np.repeat(games, 5), "poss": np.repeat(poss, 5), "close": np.repeat(close, 5)})
+    his = long.groupby(["player_id", "team", "game"], as_index=False)[["poss", "close"]].sum()
+    total = (his.merge(team_game, on=["team", "game"], suffixes=("", "_team"))
+             .groupby("player_id")[["poss", "close", "poss_team", "close_team"]].sum())
+    share = total.poss / total.poss_team.where(total.poss_team > 0, 1.0)
+    close_share = (total.close / total.close_team.where(total.close_team > 0, 1.0)).where(total.close_team > 0, share)
+    return ((close_share - share) * total.close_team / (total.close_team + CLOSE_GAME_PAD)).rename(CLOSE_GAME_SHARE)
+
+
+def defence_only_numbers(stints: pd.DataFrame, rows: pd.DataFrame) -> pd.DataFrame:
+    """player_id -> `DEFENCE_ONLY`: his offensive rebound share from `rows` (his defense rows of the panel or of a
+    fold's players file, the games the rating reads) and `close_game_shares` on defense from `stints`, the same
+    games."""
+    share = rows.drop_duplicates("player_id").set_index("player_id").off_rebound_share.astype(float)
+    out = pd.concat([share, close_game_shares(stints, "D")], axis=1)
+    out.index.name = "player_id"
+    return out[DEFENCE_ONLY]
+
+
+def with_defence_only(frame: pd.DataFrame, numbers: pd.DataFrame, side: str) -> pd.DataFrame:
+    """`frame` with `DEFENCE_ONLY` after its own columns: `numbers` on defense, a player missing one at its mean over
+    the players of `frame` who have it; 0 for everyone on offense, a column the line weighs 0."""
+    if side == "O":
+        return frame.assign(**{name: 0.0 for name in DEFENCE_ONLY})
+    out = frame.join(numbers[DEFENCE_ONLY], how="left")
+    out[DEFENCE_ONLY] = out[DEFENCE_ONLY].fillna(out[DEFENCE_ONLY].mean()).fillna(0.0)
+    return out
 
 
 # ------------------------------------------------------------------------------- every booster's answer
@@ -607,24 +674,32 @@ def centred(frame: pd.DataFrame, possessions: pd.Series) -> pd.DataFrame:
 
 
 def side_inputs(box: dict, context: pd.DataFrame, types: pd.DataFrame | None = None,
-                input_set: str | None = None, team_rates: dict | None = None) -> dict:
+                input_set: str | None = None, team_rates: dict | None = None,
+                defence_only: pd.DataFrame | None = None) -> dict:
     """{"O", "D"}: `line_inputs` for each side, `box` {"O", "D"}: player_id -> box-score prior (raw sign); with
     `input_set` "own_teammates_opponents", `three_inputs` instead; with a set that reads team rates, the ones it names
     from `team_rate_numbers`' answer.  A set that reads step 5's numbers (`reads_types`) with no `types` given is
     refused: without them `line_inputs` would hand back the eight context numbers alone, and a line fitted on them would
-    pass for the set it names.  So is a set that reads the team rates with no `team_rates` given."""
+    pass for the set it names.  So is a set that reads the team rates with no `team_rates` given, and one that reads
+    `DEFENCE_ONLY` with no `defence_only` (`defence_only_numbers`)."""
     if types is None and reads_types(input_set):
         raise ValueError(f"the line's inputs {input_set!r} read step 5's numbers and none were given: their "
                          "standardisation (`type_scale`) is missing")
     if team_rates is None and reads_team_rates(input_set):
         raise ValueError(f"the line's inputs {input_set!r} read the team's rates and none were given")
+    if defence_only is None and reads_defence_only(input_set):
+        raise ValueError(f"the line's inputs {input_set!r} read {DEFENCE_ONLY} and none were given")
     if input_set == "own_teammates_opponents":
         return {side: three_inputs(pd.Series(box[side], dtype=float), context, side) for side in ("O", "D")}
     other = {"O": "D", "D": "O"}
     inputs = {side: line_inputs(pd.Series(box[side], dtype=float), context, pd.Series(box[other[side]], dtype=float),
                                 types) for side in ("O", "D")}
     if reads_team_rates(input_set):
-        return {side: with_team_rates(frame, team_rates[side])[INPUT_SETS[input_set]] for side, frame in inputs.items()}
+        inputs = {side: with_team_rates(frame, team_rates[side]) for side, frame in inputs.items()}
+    if reads_defence_only(input_set):
+        inputs = {side: with_defence_only(frame, defence_only, side) for side, frame in inputs.items()}
+    if reads_team_rates(input_set) or reads_defence_only(input_set):
+        return {side: frame[INPUT_SETS[input_set]] for side, frame in inputs.items()}
     return inputs
 
 
@@ -819,21 +894,28 @@ def adjustments(values: dict, inputs: dict, coefficients: dict, n_folds: int, fi
 
 def season_second_priors(stints: pd.DataFrame, answers: dict, box: dict, coefficients: dict,
                          n_folds: int, team_totals: str = "held",
-                         types: pd.DataFrame | None = None, input_set: str | None = None) -> tuple[dict, dict]:
+                         types: pd.DataFrame | None = None, input_set: str | None = None,
+                         defence_rows: pd.DataFrame | None = None) -> tuple[dict, dict]:
     """({"O", "D"}: {player_id: second prior}, {"O", "D"}: the inputs it came from) for one rated season.
 
     `answers` is {"O", "D"}: `booster_answers` for the players the context reads; `box` {"O", "D"}: {player_id:
     box-score prior} for the players step 3 rates, the step-2 values themselves; `coefficients`
     `season_coefficients`; `team_totals` one of `TEAM_TOTALS`, each team's total read on `stints`' possessions;
     `types`, with the line on `INPUT_SETS["context_and_types"]`, `standardised_types` of the same games; `input_set`
-    the line's inputs, read from `types` when not given; a set of `CENTRED_SETS` is centered on the season (`centred`).
+    the line's inputs, read from `types` when not given; a set of `CENTRED_SETS` is centered on the season (`centred`);
+    `defence_rows`, with a set that reads `DEFENCE_ONLY`, the season's defense rows of the same games.
     """
     if team_totals not in TEAM_TOTALS:
         raise ValueError(f"team totals are one of {TEAM_TOTALS}, not {team_totals!r}")
     context = context_numbers(stints, answers["O"], answers["D"])
     values = {}
     team_rates = team_rate_numbers(stints) if reads_team_rates(input_set) else None
-    inputs = side_inputs(box, context, types, input_set, team_rates)
+    defence_only = None
+    if reads_defence_only(input_set):
+        if defence_rows is None:
+            raise ValueError(f"the line's inputs {input_set!r} read {DEFENCE_ONLY}: the defense rows are missing")
+        defence_only = defence_only_numbers(stints, defence_rows)
+    inputs = side_inputs(box, context, types, input_set, team_rates, defence_only)
     if input_set in CENTRED_SETS:
         inputs = {side: centred(frame, team_possessions(stints, side).groupby("player_id").poss.sum())
                   for side, frame in inputs.items()}

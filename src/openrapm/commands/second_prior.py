@@ -120,7 +120,10 @@ def fold_inputs(fold, directory: Path, stints: pd.DataFrame, saved: dict, scale:
     box = stored_box(players)
     types = None if scale is None else second_prior.standardised_types(players[players.side == "O"], scale)
     team_rates = second_prior.team_rate_numbers(fit_stints) if second_prior.reads_team_rates(input_set) else None
-    return second_prior.side_inputs(box, context, types, input_set, team_rates), gap, fit_stints, held_ids
+    defence_only = (second_prior.defence_only_numbers(fit_stints, players[players.side == "D"])
+                    if second_prior.reads_defence_only(input_set) else None)
+    return (second_prior.side_inputs(box, context, types, input_set, team_rates, defence_only), gap, fit_stints,
+            held_ids)
 
 
 @dataclass

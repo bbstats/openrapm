@@ -217,7 +217,8 @@ PREDICTIONS = ("folds", "out_of_bag")              # PriorSettings.prediction
 SECOND_PRIOR_INPUTS = ("context", "context_and_types", "context_and_types_centred", "own_teammates_opponents",
                        "context_types_team_rates_centred", "context_types_team_profile_centred",
                        "context_types_team_rates_zones_centred", "context_types_team_zones_centred",
-                       "context_types_no_age_team_zones_centred")
+                       "context_types_no_age_team_zones_centred",
+                       "context_types_no_age_team_zones_defence_only_centred")
 # what the line's target adds back to a swap's residual, `openrapm second-prior --target` (second_prior.py, experiment
 # 130)
 SECOND_PRIOR_TARGETS = ("whole_rating", "prior_part", "rating")
