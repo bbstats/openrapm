@@ -13623,3 +13623,22 @@ The step against the one before it, all 30: trees -0.085, -0.004, +0.009, -0.006
 **The build** (`scratch/2026-11-19_box_adj_reads/build143.sh`): the line `rd143_line` from `rebuilt_base`'s held-back games; its sums checked against the screen's over the same columns and its formula error against today's line, which the read gave as -0.102; then the chain `rd143` against `noage142` with `noise_noage142` beside it; then the year-over-year test with each side's width matched to the incumbent's.
 
 **The readings and the rule**, as for every build: check 151 by era, better in 1997-2006, 2007-2016 and 2017-2026 against the incumbent, read beside the noise control, which alone reads -0.032 in 1997-2006; check 63 not worse than a paired z of +2, as built and at matched width; every season's top-rated player and WOSA leader in both tables, and the 2026 top 20.  The read overstates a build: expect about two thirds of -0.102.  Adoption is the owner's word.
+
+### Experiment 143, the full build: result (2026-11-19, 2:21 to 3:33 PM; `scratch/2026-11-19_box_adj_reads/build143.sh`, `outputs/rd143/driver.log`, `outputs/rd143_chain.log`, `outputs/csv/wowy_rd143_eras.csv`; row 143; verdict the owner's)
+
+**Two stops on the way, neither a number.**  The line check first failed on a name: the screen calls the close-game input `clutch_share_over_share_padded`.  Then the build stopped at its first season: the season panel holds the raw rebound rates, not the share, which a fold's players file carries; `defence_only_numbers` now builds it from them as the box-score prior does (9f0eea9), a test beside it.  The check then passed: `rd143_line`'s sums are the screen's to 3.1e-15 over 30 seasons, and its formula reads -0.102, z -3.52, as the read did.
+
+**Within-season WOWY test, check 151, against `noage142`** (below 0 is better):
+
+| system | 1997-2006 | z | 2007-2016 | z | 2017-2026 | z | all 30 | z | seasons better |
+|---|---|---|---|---|---|---|---|---|---|
+| two defense inputs | -0.025 | -0.97 | -0.094 | -1.89 | -0.180 | -3.37 | -0.099 | -3.62 | 24 |
+| noise control | -0.032 | -3.26 | -0.010 | -0.79 | +0.004 | +0.18 | -0.013 | -1.39 | 16 |
+
+The build kept 97% of the read's -0.102, more than the fade's two thirds.  Better in every era; the 1997-2006 gain is the noise control's size there, so the gain is 2007-2026's.
+
+**Year over year, check 63, team-game error, both directions:** as built 8.6900 against 8.6901, -0.004, z -0.18, 30 of 56; at matched width, each side multiplied about 0.99 to the incumbent's spread, -0.047, z -2.35, 32 of 56.  Stint level as built -0.079, z -3.17.  Not worse: passes.
+
+**Who moved.**  Among regulars of 1,000 or more possessions the total moves a median 0.104 per 100, the ninetieth percentile 0.267, the largest 1.015.  Two seasons' top-rated player changes, each close: 2020, James Harden 7.68 behind Giannis Antetokounmpo 7.69, from 7.67 and 7.35; 2025, Shai Gilgeous-Alexander 8.88 behind Nikola Jokić 8.99, from 9.21 and 8.94.  2026's top three stay Wembanyama, Jokić and Gilgeous-Alexander, the last two trading second and third.  WOSA leaders are not compared: WOSA reads ratings from the regular season alone, which `openrapm wins --rebuild-regular` builds only on the shipped settings, so the candidate's need its product build, about 3 hours.
+
+**What the two inputs do, and a mistake of mine.**  The question put to the owner said bigs who crash the offensive glass grade better on defense.  The build says otherwise.  The defense end's weights per standard deviation of each input, for 2026, in points allowed: offensive rebounds per 100 +1.088, against +0.123 before; defensive rebounds per 100 -0.805, against -0.217; the new share -0.929.  Read together, the line now counts a center's defensive rebounds for his defense and his offensive rebounds against it, the share offsetting part of the second.  So centers whose rebounds are mostly offensive lose: Mitchell Robinson 2.40 to 1.42, Clint Capela 2.70 to 1.89, Steven Adams 1.95 to 1.19, Donovan Clingan 3.96 to 3.30.  Three large weights of opposite sign on three related inputs is a pattern to distrust; the tests do not punish it here.  The close-game share does what was said: across 2026's regulars it correlates +0.56 with the defense change, and the six highest, Tre Jones, Wendell Carter Jr., Jrue Holiday, Christian Braun, Alex Caruso and Aaron Gordon, gain 0.24 to 0.34.
