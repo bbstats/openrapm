@@ -13479,4 +13479,39 @@ The test setting's weight on age, per standard deviation of age: on offense -0.2
 
 **Reading.**  Age is worth 0.031 on the formula over the 30 seasons, a sixth of what the fade is worth on it, all of it before 2017; since 2017 the line does as well without it.  The fade's read came to about two thirds of itself on the full build, so the build is expected near +0.02, the size of the noise control's own movement.  The build follows.
 
+### Experiment 142: the full build's result (2026-11-18, 7:30 to 8:56 PM; `scratch/2026-11-18_age_out/noise_and_age_out.sh`, `outputs/age_out/driver.log`, `outputs/noage142_chain.log`, `outputs/csv/wowy_noage142_eras.csv`, `outputs/csv/noage142_moves.csv`, `outputs/csv/noage142_by_age.csv`; row 142; verdict the owner's)
+
+The line on the list without age, `noage142_line`, 16 minutes: its sums equal `rebuilt_line`'s with age's two columns dropped, the largest relative gap over 30 seasons 1.1e-16.  The chain `noage142` against `rebuilt`, the rate step 42 minutes.
+
+**The within-season WOWY test**, the shipped stage, every stint, minus `rebuilt`; above 0 is worse without age:
+
+| system | era | change | standard error | paired z | seasons better |
+|---|---|---|---|---|---|
+| age out | 1997-2006 | +0.051 | 0.026 | +1.98 | 4 of 10 |
+| age out | 2007-2016 | +0.041 | 0.024 | +1.70 | 2 of 10 |
+| age out | 2017-2026 | -0.011 | 0.017 | -0.65 | 4 of 10 |
+| age out | all 30 | +0.027 | 0.014 | +1.99 | 10 of 30 |
+| noise control | all 30 | -0.012 | 0.009 | -1.38 | 16 of 30 |
+
+Before step 4 +0.038, z +2.36, 10 of 30; on the DNP team-games +0.031, z +1.61, 14 of 30.  The read from the saved sums had said +0.031 with +0.055, +0.044 and -0.007: the build keeps each era's sign and nine tenths of the size.
+
+**Year over year**, 56 readings: as built, team-game +0.024, z +1.09, 20 of 56; stint +0.037, z +1.26.  With each side's width matched to the incumbent's, the multipliers 0.997 to 1.007 by era and side, team-game +0.044, z +2.18, 17 of 56, past the limit of +2.  **All of it is one direction.**  A season's ratings asked about the season after it: +0.101, z +5.08, 4 of 28, stint +0.183, z +6.96.  Asked about the season before it: -0.053, z -1.58, 16 of 28, stint -0.110, z -3.23, better without age.  The weight on age was a forecast of where a player is headed, the old down and the young up on offense; taken out, a rating says less about his next season and more about his last.
+
+**Who moves.**  Among the 10,160 player-seasons of 1,000 or more offensive possessions: offense a median 0.042 and 0.364 at most, defense 0.032 and 0.313, total 0.020 and 0.273; correlation 0.9998 on the total.  The mean move by age, weighted by possessions, all 30 seasons:
+
+| age | player-seasons | offense | defense | total |
+|---|---|---|---|---|
+| 22 and under | 1,359 | -0.065 | +0.050 | -0.015 |
+| 23 to 25 | 2,668 | -0.040 | +0.028 | -0.012 |
+| 26 to 28 | 2,499 | -0.007 | +0.004 | -0.003 |
+| 29 to 31 | 1,882 | +0.031 | -0.023 | +0.007 |
+| 32 to 34 | 1,128 | +0.065 | -0.045 | +0.020 |
+| 35 and over | 624 | +0.110 | -0.077 | +0.033 |
+
+The two ends nearly cancel in a player's total; in 2017-2026 the total moves by 0.012 or less in every band.
+
+**2026.**  The top 20 are the same 20 in the same order: Wembanyama 9.47 to 9.49, Gilgeous-Alexander 8.35 to 8.33, Jokić 8.16 to 8.15, Dončić 6.36 to 6.37, Leonard 6.34 to 6.31.  Among the 291 players of 2,000 or more offensive possessions the total moves a median 0.016, the ninetieth percentile 0.034, the largest 0.064: Kevin Durant, 37, 2.11 to 2.05, offense +0.09 and defense -0.15; LeBron James, 41, 1.82 to 1.78, +0.11 and -0.15; Miles McBride, 25, up 0.06; Cooper Flagg, 19, 0.99 to 1.01, -0.06 and +0.08.  No player's total moves 0.1.
+
+**Reading.**  The ruling costs 0.027 on the within-season test, twice the noise control's own movement and a fifth of what the fade gained, all of it before 2017, and it fails the year-over-year limit at matched width only because the age weight forecast the next season.  No rating in 2026 moves by an amount that counts.  Adoption and publishing are the owner's word.
+
 **The code**, off by default: `second_prior.INPUT_SETS["context_types_no_age_team_zones_centred"]`, the shipped list less age, 56 inputs an end, named in `CENTRED_SETS` and `settings.SECOND_PRIOR_INPUTS`; `reads_types` now holds for a list that reads any of step 5's numbers, where it asked for all 19, and reads the same for every list that existed.  `tests/test_age_out.py`.  Every test passes, 1,127, and the lint check, after one docstring line of `scripts/daily_files.py`, 121 characters since 2c8910f, was rewrapped.
