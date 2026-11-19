@@ -34,17 +34,18 @@ NAME=$1
 TARGET=$2
 EXTRA=${3:-}          # extra flags for `openrapm rate`, e.g. --fold-assignment 1 or --features <set>
 LOG=outputs/${NAME}_chain.log
-# The incumbent: experiment 141, fade141, adopted 2026-11-10 (notes/DECISIONS.md, "Experiment 141"): Box Adj's training
-# seasons counted half for every 8 seasons from the rated one, its own folds fade141_early and fade141_within.  Its
-# noise control noise_fade141 (--fold-assignment 1): -0.013, z -1.41, 16 of 30, built 2026-11-10.  Each adoption
+# The incumbent: rebuilt, experiment 141's settings built again on 2026-11-17 after the data was deleted and fetched
+# again (notes/DECISIONS.md, "The data deleted and rebuilt" and "The rebuild read on the two tests"), its own folds
+# rebuilt_early and rebuilt_within.  Its noise control noise_rebuilt (--fold-assignment 1): -0.012, z -1.38, 16 of 30,
+# built 2026-11-18.  Each adoption
 # names its build here; the earlier incumbents are in notes/DECISIONS.md and in git.  The incumbent's rate settings ride
 # in BASE_FLAGS, BEFORE the experiment's own EXTRA flags, because the command line keeps the LAST occurrence of a flag:
 # an experiment's --features or --booster-params wins.  The held-out audit pairs a candidate with the incumbent's
 # 2017-2026 folds (AUDIT_REF).
-INC_NAME=${INC_NAME:-fade141}
-INC_SYSTEM=${INC_SYSTEM:-fade141}       # the incumbent's folds (<name>_early, <name>_within) for 151
-CONTROL_NAME=${CONTROL_NAME:-noise_fade141}  # the noise control's folds (<name>_early, <name>_within) for 151
-INC_FOLDS=${INC_FOLDS:-fade141_early,fade141_within}
+INC_NAME=${INC_NAME:-rebuilt}
+INC_SYSTEM=${INC_SYSTEM:-rebuilt}       # the incumbent's folds (<name>_early, <name>_within) for 151
+CONTROL_NAME=${CONTROL_NAME:-noise_rebuilt}  # the noise control's folds (<name>_early, <name>_within) for 151
+INC_FOLDS=${INC_FOLDS:-rebuilt_early,rebuilt_within}
 AUDIT_REF=${AUDIT_REF:-${INC_SYSTEM}_within}     # the held-out audit's reference: the incumbent's own folds
 INC=outputs/season_ratings_${INC_NAME}.parquet
 BASE_FLAGS=${BASE_FLAGS:---booster-params lgb1_tune2 --features hustle_no_three_pct_self_creation}

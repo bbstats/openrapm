@@ -193,13 +193,13 @@ standard error, a paired t-statistic. Below zero is better. The within-season WO
 year-over-year test its 56 readings.
 
 **Incumbent.** The table every candidate is scored against: `INC_NAME` at the top of `scripts/experiment_chain.sh`,
-today `fade141`, experiment 141 built at the test setting, with its held-back games `fade141_early` and
-`fade141_within`.
+today `rebuilt`, experiment 141's settings built at the test setting on 2026-11-17, with its held-back games
+`rebuilt_early` and `rebuilt_within`.
 
 **Noise control.** The incumbent rebuilt with nothing changed but which players share each of the box-score prior's
 five folds (`--fold-assignment 1`): `CONTROL_NAME` at the top of `scripts/experiment_chain.sh`, today
-`noise_fade141`. It shows how far every reading moves when nothing real changes: -0.013 on the within-season WOWY test,
-paired z -1.41, better in 16 of 30 seasons.
+`noise_rebuilt`. It shows how far every reading moves when nothing real changes: -0.012 on the within-season WOWY
+test, paired z -1.38, better in 16 of 30 seasons.
 
 **Replicate.** The same change built a second time with another random assignment of players to the prior's folds,
 so every reading is seen twice (`scripts/checks/135_robust_review.py`).

@@ -13464,6 +13464,8 @@ The DNP team-games are 51.8% of the held-back possessions, as they were.
 
 `noise_fade141` read -0.032, -0.011, +0.005 and -0.013: the same control on the rebuilt data to the third decimal.  On the DNP team-games -0.022, z -1.98, 20 of 30.  Year over year, both directions: team-game +0.0088, z +1.07, 24 of 56; stint -0.0009, z -0.08.  The first era's lean, better with the players split the other way in 8 seasons of 10, is the one every noise control since experiment 126 has shown.
 
+**The chain's incumbent, 2026-11-18, 9 PM, with no build running:** `INC_NAME`, `INC_SYSTEM` and `INC_FOLDS` name `rebuilt`, `CONTROL_NAME` `noise_rebuilt`; `101_log_run.py`'s default incumbent, GLOSSARY.md, CONTRIBUTING.md and the handoff with them.  Checks 156, 159 and 166 still name `fade141`'s tables and season-so-far folders, which were deleted and are not rebuilt.  Every test passes, 1,127.
+
 ### Experiment 142, read 1: result (2026-11-18, 5:25 PM; `scratch/2026-11-18_age_out/age_out_read.py`, `outputs/csv/age_out_read.csv`, `outputs/csv/age_out_read_seasons.csv`)
 
 The line without its two age weights against the shipped line, the formula's error on each rated season's own held-back stints, the weights from the seasons more than one away at a half-life of 8, paired by season; above 0 is worse without age.
