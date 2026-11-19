@@ -13595,3 +13595,23 @@ The two ends nearly cancel in a player's total; in 2017-2026 the total moves by 
 **Read 2, the LightGBM beside the line, against today's line:** without the box-score prior's two columns +0.202, z +6.93, 3 of 30, every era worse; with its non-hustle inputs offered in its place +0.078, z +2.64; those inputs beside today's line -0.029, z -2.01, 2007-2016 +0.009.  2017-2026 with the hustle inputs too: in its place -0.065, z -1.11, 7 of 10; beside it -0.099, z -1.29, 6 of 10.  On the within-season test the LightGBM's output is worth 0.20 beyond its own inputs as straight lines, and it alone sets each team's total, which this test cannot see.  Not a candidate to drop.
 
 **Read 3, the box-score prior by playing time:** -0.034 on both ends, z -2.39, all of it in 1997-2006, -0.101, z -4.42; -0.003 and +0.001 since.  Fails the rule.
+
+### Experiment 143, read 4: result (2026-11-19, 1:00 to 2:55 PM; `scratch/2026-11-19_box_adj_reads/player_sums.py`, `trees_steps.py`; `outputs/direct/reads143/logs/trees*.log`; `outputs/csv/reads143_trees*.csv`; rows 143a to 143d)
+
+**The tool holds.**  `noage142_players`, 360 folds: projected on the line's columns they give back `noage142_line`'s sums, the largest relative gap of any season 5.3e-14.  The line reads 3,660.477 through them, as through the screen.
+
+**Each run against today's line, paired by season** (below 0 is better; z in the second row of each):
+
+| run | step | 1997-2006 | 2007-2016 | 2017-2026 | all 30 | z | seasons better |
+|---|---|---|---|---|---|---|---|
+| trees | 1 | -0.113 | -0.077 | -0.066 | -0.085 | -4.47 | 26 |
+| trees | 2 | -0.108 | -0.074 | -0.086 | -0.089 | -4.34 | 23 |
+| trees | 5 | -0.118 | -0.071 | -0.059 | -0.082 | -4.00 | 24 |
+| draws moved | 1 | -0.058 | -0.044 | -0.059 | -0.054 | -2.98 | 21 |
+| draws moved | 5 | -0.045 | -0.062 | -0.057 | -0.055 | -2.25 | 18 |
+| shuffled targets | 1 | -0.004 | +0.002 | -0.006 | -0.003 | -0.88 | 15 |
+| shuffled targets | 5 | +0.050 | +0.007 | +0.120 | +0.059 | +1.88 | 13 |
+
+The step against the one before it, all 30: trees -0.085, -0.004, +0.009, -0.006, +0.004; draws moved -0.054, +0.002, -0.004, -0.003, +0.003.  The new column's weights for 2026, offense and defense: step 1 0.100 and 0.156, after it alternating in sign about 0.
+
+**Read as registered.**  One step passes the rule on both draws: every era better and more than 0.042 over the 30, its shuffled control at nothing.  Repeating the step finds nothing: what trees find beyond the line is found at once, and the later columns earn weights of no fixed sign.  The two draws differ by 0.031, so a build would average several draws.  The size is the formula's, and a read overstates a build: the fade read 0.207 and built 0.133.  Against check 167's one step on the line with age, -0.100 and -0.115, this is -0.085 and -0.054.  Not read: the trees and read 1's two inputs together, since the per-player sums do not carry those inputs.
