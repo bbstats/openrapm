@@ -67,10 +67,10 @@ DECISIONS.md holds every number, from "The data deleted and rebuilt" to "Experim
   several steps.  The tools must be pointed at `rebuilt_base_early`, `rebuilt_base_within` and the shipped line's
   folder, and given the fade's season weights: `scratch/2026-11-03_direct/direct_screen.py`,
   `scratch/2026-11-10_boost_vs_line/player_sums.py` and `boost_vs_line.py`.  Report and stop.
-- **Still to do for the adoption:** a noise control on `noage142`, `--fold-assignment 1`, about 2 hours, then the
-  chain's `INC_NAME`, `INC_SYSTEM`, `INC_FOLDS` and `CONTROL_NAME` to `noage142` and it, with GLOSSARY.md and this
-  file; until then the chain scores against `rebuilt`, the incumbent before it.  Row 142 in the experiments sheet.
-  The swap adjustment's unused model, `swap_adjust.PANEL_FEATURES`, still lists age: the owner's one-line choice.
+- **The noise control on the new incumbent, `noise_noage142`:** -0.013 on the within-season test, by era -0.032,
+  -0.010, +0.004.  The chain names `noage142` and it since 2026-11-19.
+- **Still to do for the adoption:** row 142 in the experiments sheet.  The swap adjustment's unused model,
+  `swap_adjust.PANEL_FEATURES`, still lists age: the owner's one-line choice.
 
 ## Where it stood, 2026-11-16
 
@@ -193,9 +193,10 @@ The site is `docs/`, served from `main`.  Nothing is pushed without the owner's 
 | year-over-year test | `scripts/checks/63_yoy.py` | not worse at a paired z of +2, read at each side's width matched to the incumbent's |
 | the eye check | `scripts/checks/66_compare.py` | the 2026 top 20 |
 
-- The incumbent is `rebuilt`: tables `outputs/season_ratings_rebuilt*`, folds `rebuilt_early`, `rebuilt_within`,
-  year-over-year score 8.6891.  Its noise control is `noise_rebuilt`: -0.012 on the within-season test, paired z -1.38,
-  16 of 30, and -0.031, z -3.18 in 1997-2006 alone, so that era is read beside it.  Both are the defaults at the top of `scripts/experiment_chain.sh`.  The plain z is what adoptions have
+- The incumbent is `noage142`: tables `outputs/season_ratings_noage142*`, folds `noage142_early`,
+  `noage142_within`, year-over-year score 8.6901.  Its noise control is `noise_noage142`: -0.013 on the within-season
+  test, paired z -1.39, 16 of 30, and -0.032, z -3.26 in 1997-2006 alone, so that era is read beside it.  The
+  incumbent before it, `rebuilt`, and `noise_rebuilt` are still on disk.  Both are the defaults at the top of `scripts/experiment_chain.sh`.  The plain z is what adoptions have
   been read on.
 - One full build: `bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes_late_as_scored "EXTRA
   RATE FLAGS"`, 50 to 75 minutes, log `outputs/NAME_chain.log`.  It waits while the morning job runs.
@@ -239,7 +240,7 @@ The site is `docs/`, served from `main`.  Nothing is pushed without the owner's 
     PUBLISH=0 bash scripts/daily_update.sh                    # the morning job, nothing published, 12 minutes
     bash scripts/publish_check.sh                             # before any push to main
     bash scripts/experiment_chain.sh NAME points_with_expected_opponent_threes_late_as_scored "EXTRA RATE FLAGS"
-    .venv/Scripts/python scripts/checks/151_wowy.py --systems=rebuilt,noise_rebuilt,NAME --ref=rebuilt --tag=NAME
+    .venv/Scripts/python scripts/checks/151_wowy.py --systems=noage142,noise_noage142,NAME --ref=noage142 --tag=NAME
     .venv/Scripts/python scripts/checks/101_log_run.py --name=NAME --exp=N --idea=owner --verdict=pending --changed="..."
     OPENRAPM_WRITE_PUBLISHED=1 .venv/Scripts/python -m openrapm build      # a full build of the published tables
 
