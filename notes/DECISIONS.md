@@ -13453,6 +13453,17 @@ The DNP team-games are 51.8% of the held-back possessions, as they were.
 
 **By the rule the rebuild is the incumbent as it stands**: 0.0017 against a limit of 0.05, and 0.037 against 0.3.  Its noise control follows.
 
+**The noise control, `noise_rebuilt`** (`--fold-assignment 1` through the chain against `rebuilt`, 5:31 to 7:30 PM, the rate step 83 minutes; `outputs/noise_rebuilt_chain.log`, `outputs/csv/wowy_noise_rebuilt_eras.csv`).  The within-season test, the shipped stage, every stint, minus `rebuilt`:
+
+| era | change | standard error | paired z | seasons better |
+|---|---|---|---|---|
+| 1997-2006 | -0.031 | 0.010 | -3.18 | 8 of 10 |
+| 2007-2016 | -0.010 | 0.013 | -0.75 | 5 of 10 |
+| 2017-2026 | +0.003 | 0.021 | +0.16 | 3 of 10 |
+| all 30 | -0.012 | 0.009 | -1.38 | 16 of 30 |
+
+`noise_fade141` read -0.032, -0.011, +0.005 and -0.013: the same control on the rebuilt data to the third decimal.  On the DNP team-games -0.022, z -1.98, 20 of 30.  Year over year, both directions: team-game +0.0088, z +1.07, 24 of 56; stint -0.0009, z -0.08.  The first era's lean, better with the players split the other way in 8 seasons of 10, is the one every noise control since experiment 126 has shown.
+
 ### Experiment 142, read 1: result (2026-11-18, 5:25 PM; `scratch/2026-11-18_age_out/age_out_read.py`, `outputs/csv/age_out_read.csv`, `outputs/csv/age_out_read_seasons.csv`)
 
 The line without its two age weights against the shipped line, the formula's error on each rated season's own held-back stints, the weights from the seasons more than one away at a half-life of 8, paired by season; above 0 is worse without age.
