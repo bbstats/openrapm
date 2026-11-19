@@ -192,6 +192,7 @@ import scipy.sparse as sp
 
 from . import box_prior, rating_line, swap_adjust
 from .box_rates import shrink
+from .features import add_features
 from .on_court import NO_SPREAD_K
 from .settings import SECOND_PRIOR_TARGETS, TEAM_TOTALS
 from .swap_test import DEF, OFF, TEAM_COUNTS, ZONE_COUNTS, Season
@@ -309,8 +310,12 @@ def close_game_shares(stints: pd.DataFrame, side: str) -> pd.Series:
 def defence_only_numbers(stints: pd.DataFrame, rows: pd.DataFrame) -> pd.DataFrame:
     """player_id -> `DEFENCE_ONLY`: his offensive rebound share from `rows` (his defense rows of the panel or of a
     fold's players file, the games the rating reads) and `close_game_shares` on defense from `stints`, the same
-    games."""
-    share = rows.drop_duplicates("player_id").set_index("player_id").off_rebound_share.astype(float)
+    games.  The season panel holds the raw rates the share is made of and a fold's players file the share itself, so it
+    is built when missing (features.add_features), as the box-score prior builds it."""
+    rows = rows.drop_duplicates("player_id")
+    if "off_rebound_share" not in rows.columns:
+        rows = add_features(rows.copy(), ["off_rebound_share"])
+    share = rows.set_index("player_id").off_rebound_share.astype(float)
     out = pd.concat([share, close_game_shares(stints, "D")], axis=1)
     out.index.name = "player_id"
     return out[DEFENCE_ONLY]

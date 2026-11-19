@@ -70,3 +70,15 @@ def test_offense_end_reads_zero_and_defense_end_the_numbers():
     assert two["D"].loc[13, "off_rebound_share"] == pytest.approx(np.mean([0.10, 0.02, 0.05]))
     with pytest.raises(ValueError, match="none were given"):
         sp.side_inputs(box, context, types, TWO, rates)
+
+
+def test_the_share_is_built_from_the_raw_rates_when_the_rows_lack_it():
+    # the features docstring's example: 3.0 offensive and 9.0 defensive rebounds per 100 give 0.244
+    five, attackers = (1, 2, 3, 4, 5), (11, 12, 13, 14, 15)
+    stints = _stints([("g", 9, 1, attackers, five, 50, 0)])
+    rows = pd.DataFrame({"player_id": [1], "off_rebounds_per100_uncentred": [3.0],
+                         "def_rebounds_per100_uncentred": [9.0]})
+    numbers = sp.defence_only_numbers(stints, rows)
+    assert numbers.loc[1, "off_rebound_share"] == pytest.approx((3.0 + 3 * 0.22) / (3.0 + 9.0 + 3))
+    built = rows.assign(off_rebound_share=0.5)
+    assert sp.defence_only_numbers(stints, built).loc[1, "off_rebound_share"] == pytest.approx(0.5)
