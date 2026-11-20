@@ -31,7 +31,7 @@ each word means, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's st
 - Before asking for a verdict, compare every season's top-rated player and WOSA leader in both tables, not 2026's
   alone: on 2026-11-19 two old seasons' WOSA leaders changed and the owner had answered on 2026.
 
-## Running 2026-11-20: experiment 145, the ridge penalty on the within-season test
+## Done 2026-11-20: experiment 145, the ridge penalty on the within-season test: 13,037 stays
 
 DECISIONS.md, "Experiment 145".  Four full builds at step-3 penalties 6,500, 4,400, 9,000 and 18,000, Box Adj's line
 held: `scratch/2026-11-20_ridge/build145.sh`, started 12:16 PM, log `outputs/ridge145/driver.log`, markers in

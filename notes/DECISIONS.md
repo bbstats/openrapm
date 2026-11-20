@@ -13794,3 +13794,25 @@ test scores.  Other reads put it lower: 7,620 for ratings from part of a season,
 **How it is read**, experiment 140's rule per penalty: better than `rd143` in every era by more than the noise control,
 more than 0.042 over the 30 seasons; the year-over-year test not worse at z +2; the shrink's multipliers at each
 penalty; the 2026 top 20 for the best.  Report and stop.
+
+### Experiment 145: result (2026-11-20, `outputs/ridge145/driver.log`, `outputs/ridge<penalty>_chain.log`)
+
+Built 12:16 to 5:27 PM from 8ebad9b.  The within-season WOWY test against `rd143`, below 0 is better; the shipped
+stage, then step 3 before the shrink; the shrink's median games multipliers, offense / defense (13,037: 1.37 / 1.26,
+the published build's); the year-over-year test, both directions, team-game and with each side rescaled.
+
+| penalty | 1997-2006 | 2007-2016 | 2017-2026 | all 30 | z | better | before the shrink | z | games multipliers | year over year | z | rescaled | z |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 4,400 | +0.063 | +0.107 | +0.082 | +0.084 | +3.83 | 7 | -0.099 | -1.35 | 0.95 / 0.90 | -0.127 | -3.88 | +0.005 | +0.17 |
+| 6,500 | +0.017 | +0.049 | +0.034 | +0.033 | +2.43 | 10 | -0.303 | -6.67 | 1.09 / 1.03 | -0.100 | -4.64 | -0.019 | -0.88 |
+| 9,000 | -0.001 | +0.017 | +0.010 | +0.008 | +1.19 | 16 | -0.232 | -9.97 | 1.25 / 1.16 | -0.061 | -5.26 | -0.020 | -1.75 |
+| 18,000 | +0.017 | +0.001 | +0.004 | +0.007 | +1.28 | 11 | +0.260 | +14.57 | 1.77 / 1.63 | +0.065 | +6.47 | +0.033 | +3.46 |
+| noise control | -0.031 | -0.010 | +0.004 | -0.012 | -1.37 | 17 | | | | | | | |
+
+**Reading.**  13,037 is the best of the five on the test that decides.  Before the shrink a lighter penalty reads far
+better, 6,500 by 0.303, z -6.67, 27 of 30, and at 6,500 the shrink's games multipliers fall to about 1.0, as expected;
+but the shrink at 13,037 multiplies what the games add by 1.37 and does better than any lighter penalty does on its
+own.  So the penalty works as a size, and the shrink already sets the size; a lighter one does not split credit between
+teammates better.  The year-over-year gains of the lighter penalties are width: with each side rescaled to the scored
+season they are -0.020 at most, z -1.75.  Nothing adopted; 13,037 stays.  The owner's EM idea, a penalty per season and
+side, is the next read of this path and waits on the owner's setup.
