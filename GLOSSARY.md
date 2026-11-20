@@ -108,7 +108,7 @@ folds. Box Adj's weights and the shrink's multipliers are fitted on them.
 Detail view's column, the code's second prior. The prior is a straight line over his box-score prior on both ends,
 his teammates' and opponents' box-score priors with him on and off the court, his box rates, role and body, and his
 team's shots by zone, free throws, offensive rebounds and turnovers with him on and off the court, on defense the
-opponents': 56 inputs an end, every one from the rated season and none of them his age (`second_prior.py`). Its weights are fitted on
+opponents': 56 inputs an end and two more on defense, his offensive rebound share and his close-game share of team possessions, every one from the rated season and none of them his age (`second_prior.py`). Its weights are fitted on
 held-back games through the ridge (`rating_line.py`). Each team's total is held, so Box Adj only moves credit inside a
 team. The Detail view's Box score column refits his own stats' inputs alone, and Box Adj is the rest of the same
 prior.
