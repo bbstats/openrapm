@@ -134,6 +134,7 @@ def chosen_settings(args: argparse.Namespace) -> Settings:
         raise SystemExit("--prediction out_of_bag, --split-per-bag and --bag-draw need bags")
     attacking, defending = args.team_season_penalties
     return replace(base,
+                   ridge=base.ridge if args.ridge_penalty is None else replace(base.ridge, penalty=args.ridge_penalty),
                    targets=replace(base.targets,
                                    offence=plain_name("--offensive-target", args.offensive_target, target_name),
                                    defence=plain_name("--defensive-target", args.defensive_target, target_name)),
@@ -261,6 +262,10 @@ def _add_setting_options(parser) -> None:
                         help="what the offense ridge explains, per 100 possessions: points_with_expected_free_throws, "
                              "or a defensive target's name to take the same share of the shooters' three-point luck "
                              "out of the offense (experiment 144) (default %(default)s)")
+    parser.add_argument("--ridge-penalty", type=float, default=None, metavar="LAMBDA",
+                        help="step 3's ridge penalty around the prior, every season and both sides; the held-back "
+                             f"games of a build are rated with the build's own (default the setting's, "
+                             f"{PRODUCT.ridge.penalty:,.0f})")
     parser.add_argument("--features", default=PRODUCT.prior.feature_set,
                         help="the prior's input list, a key of features.FEATURE_SETS (the old name boruta_noonc "
                              "still works) (default %(default)s)")

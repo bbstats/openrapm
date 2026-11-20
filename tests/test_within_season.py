@@ -40,16 +40,13 @@ def test_models_from_other_settings_are_refused(change):
         ws.check_models({**LEGACY_META, **change})
 
 
-@pytest.mark.parametrize("settings", [{"targets": {"offence": "points_with_expected_free_throws",
-                                                   "defence": "points_with_expected_opponent_threes"},
-                                       "ridge": {"penalty": 10000.0}}])
-def test_models_saved_with_another_ridge_penalty_are_refused(settings):
-    """The folds rate with the shipped penalty; a file that records another is refused, not rerated.  Another target
-    is read as the file's own since experiment 84 (`fold_settings`)."""
+def test_models_saved_with_another_ridge_penalty_are_rated_at_it():
+    """Since the ridge read of 2026-11-20 the folds rate a build at its own step-3 penalty (`fold_settings`), as they
+    have rated it on its own targets since experiment 84; such a file is accepted."""
     shipped = {"targets": asdict(TEST.targets), "ridge": asdict(TEST.ridge), "labels": asdict(TEST.labels)}
-    ws.check_models({**LEGACY_META, "schema": 2, "settings": shipped})
-    with pytest.raises(SystemExit, match="shipped test settings"):
-        ws.check_models({**LEGACY_META, "schema": 2, "settings": {**shipped, **settings}})
+    other = {**shipped, "ridge": {**asdict(TEST.ridge), "penalty": 10000.0}}
+    ws.check_models({**LEGACY_META, "schema": 2, "settings": other})
+    assert ws.fold_settings({"settings": other}).ridge.penalty == 10000.0
 
 
 def test_the_honest_cross_fitted_scale_is_refused_by_name():
@@ -197,7 +194,15 @@ def test_the_folds_rate_on_the_saved_builds_own_targets():
     assert settings.exclude_neighbours == 1 and settings.ridge == ws.SETTINGS.ridge
     assert ws.fold_settings({}) is ws.TEST
     assert "points_with_expected_free_throws" in ws.world_targets(settings)
-    assert not ws._step3_mismatches({"settings": {"targets": same, "ridge": {"penalty": 13037.0}}})
+    assert ws.fold_settings({"settings": {"targets": same, "ridge": {"penalty": 13037.0}}}).ridge == ws.SETTINGS.ridge
+
+
+def test_the_folds_rate_on_the_saved_builds_own_penalty():
+    """The ridge read of 2026-11-20: a build at another step-3 penalty has its held-back games rated at it, and its
+    boosters are accepted."""
+    settings = ws.fold_settings({"settings": {"ridge": {"penalty": 6500.0, "held_scale_through": 0.75}}})
+    assert settings.ridge.penalty == 6500.0 and settings.targets == ws.SETTINGS.targets
+    assert settings.ridge.held_scale_through == ws.SETTINGS.ridge.held_scale_through
 
 
 def test_boosters_with_both_labels_un_shrunk_are_accepted():

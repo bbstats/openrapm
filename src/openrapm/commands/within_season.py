@@ -134,10 +134,17 @@ def world_targets(settings) -> tuple:
 
 
 def fold_settings(meta: dict):
-    """The test setting with the targets the saved boosters' build was fitted on (its meta's settings), so a build on
-    another defensive target is rated on its own target; a file without them is read on the shipped targets."""
-    targets = (meta.get("settings") or {}).get("targets")
-    return TEST if not targets else replace(TEST, targets=Targets(**targets))
+    """The test setting with the targets and the step-3 penalty the saved boosters' build was rated with (its meta's
+    settings), so a build on another defensive target, or another penalty (the ridge read of 2026-11-20), is rated on
+    its own; a file without them is read on the shipped ones."""
+    saved = meta.get("settings") or {}
+    settings = TEST
+    if saved.get("targets"):
+        settings = replace(settings, targets=Targets(**saved["targets"]))
+    penalty = (saved.get("ridge") or {}).get("penalty")
+    if penalty is not None and float(penalty) != settings.ridge.penalty:
+        settings = replace(settings, ridge=replace(settings.ridge, penalty=float(penalty)))
+    return settings
 # what a saved file's meta must say: the test setting's labels and training rows, the shipped rows and folds.  How
 # the training rows were labeled (`chunk_label`, settings.ROW_LABELS) is free: the folds only read the boosters.  So
 # is which labels were un-shrunk, among settings.UNSHRINK_LABELS (experiment 102), for the same reason
@@ -176,20 +183,6 @@ def load_models(outputs: Path, models: str, seasons=None) -> dict:
     return saved
 
 
-def _step3_mismatches(meta: dict) -> dict:
-    """{name: (saved, expected)} for the step-3 settings a schema-2 file records and this command does not use.
-
-    The folds rate every season with `SETTINGS`' ridge penalty and the saved build's own targets (`fold_settings`);
-    boosters saved by a build with another penalty would be rated on settings their base table was not built with.
-    Only the penalty is compared: the ridge's other settings, the held prior scale of a season in progress
-    (settings.RidgeSettings.held_scale_through, 2026-10-30), never reach a fold of a finished season.
-    """
-    saved = (meta.get("settings") or {}).get("ridge")
-    if saved is not None and saved.get("penalty") != SETTINGS.ridge.penalty:
-        return {"ridge": (saved, {"penalty": SETTINGS.ridge.penalty})}
-    return {}
-
-
 def check_models(meta: dict) -> None:
     """Refuse boosters that were not saved by a test-setting build of the shipped steps.
 
@@ -202,7 +195,6 @@ def check_models(meta: dict) -> None:
         wrong["chunk_label"] = (meta.get("chunk_label"), ROW_LABELS)
     if meta.get("unshrink") not in UNSHRINK_ALLOWED:
         wrong["unshrink"] = (meta.get("unshrink"), UNSHRINK_ALLOWED)
-    wrong.update(_step3_mismatches(meta))
     if meta.get("crossfit") == "honest":
         raise SystemExit("these boosters priced the prior scale with --crossfit=honest, which `openrapm folds` "
                          "does not rebuild; save them again with `openrapm rate --setting test --save-models`")
@@ -728,7 +720,7 @@ def fold_pieces(run: SeasonRun, rated: RatedWorld, fit_ids: set) -> tuple[pd.Dat
     for side, key, target, sign in (("O", "off", run.settings.targets.offence, 1.0),
                                     ("D", "def", run.settings.targets.defence, -1.0)):
         design = world.designs[target]
-        fit = decomposition.refit(design, rated.prior["O"], rated.prior["D"], SETTINGS.ridge.penalty)
+        fit = decomposition.refit(design, rated.prior["O"], rated.prior["D"], run.settings.ridge.penalty)
         lineup_o, lineup_d = decomposition.lineups(fit.players, fit.n_players)
         keys = decomposition.row_keys(design, lineup_o, lineup_d, teams)
         x3, luck_kept, late_as_scored = None, 0.0, target in LATE_AS_SCORED

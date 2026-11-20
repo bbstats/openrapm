@@ -54,6 +54,12 @@ def test_the_offense_can_take_the_defense_target():
     assert chosen == replace(TEST, targets=replace(TEST.targets, offence=name))
 
 
+def test_the_ridge_penalty_reaches_step_3():
+    """The ridge read of 2026-11-20: --ridge-penalty changes step 3's penalty and nothing else."""
+    chosen = cli.chosen_settings(_parse("rate", "--setting", "test", "--ridge-penalty", "6500"))
+    assert chosen == replace(TEST, ridge=replace(TEST.ridge, penalty=6500.0))
+
+
 def test_each_rate_option_reaches_its_setting(capsys):
     args = _parse("rate", "--setting", "test", "--defensive-target", "points_with_expected_opponent_threes_all",
                   "--features", "box_score_and_bio", "--booster-params", "other", "--fold-assignment", "1",

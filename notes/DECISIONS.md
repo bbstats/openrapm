@@ -13772,3 +13772,25 @@ defensive box outs 7 of 10 at a tenth (-3.6%).  Nothing worse at two standard er
 
 **The owner, 2026-11-20, through the question tool: "Stop here".**  Not built; the read stays on record.  Next: the ridge
 penalty on the within-season test, path 4.
+
+## Experiment 145: the ridge penalty on the within-season test (path 4 of 2026-11-18; the owner, 2026-11-20, "Stop here" on the hustle padding, whose option named this path next; registered before any result)
+
+**The change.**  Step 3's penalty around the prior, 13,037 since September, chosen on the year-over-year test and never
+read on the within-season test.  Four full builds at 4,400, 6,500, 9,000 and 18,000 (`--ridge-penalty`), every season
+and both sides, each with its own held-back games rated at its own penalty and its own shrink, Box Adj's line held as
+shipped (`rd143_line`, fitted through the ridge at 13,037: a first read, the line refitted only for a penalty that
+reads well).  `scratch/2026-11-20_ridge/build145.sh`, the chain `ridge<penalty>` against `rd143`, `noise_rd143` beside.
+
+**Code.**  `openrapm rate --ridge-penalty`; the held-back games are rated at the build's own penalty
+(`within_season.fold_settings` reads it from the saved boosters' settings, as it reads the targets), where a build at
+another penalty was refused before; Box Adj's fit reads it the same way.
+
+**Why.**  At 13,037 a 2,500-possession starter keeps about 16% of what his games say beyond his prior, and the shrink,
+fitted on held-back games, multiplies what the games add by 1.29 to 1.44 on offense and 1.22 to 1.31 on defense in
+every season: the games want more weight than the penalty gives them.  A multiplier resizes every player alike; a
+lighter penalty also changes the split between teammates who share most of their minutes, which the within-season
+test scores.  Other reads put it lower: 7,620 for ratings from part of a season, 2,516 by restricted likelihood.
+
+**How it is read**, experiment 140's rule per penalty: better than `rd143` in every era by more than the noise control,
+more than 0.042 over the 30 seasons; the year-over-year test not worse at z +2; the shrink's multipliers at each
+penalty; the 2026 top 20 for the best.  Report and stop.

@@ -200,14 +200,13 @@ def fold_rating_sums(fold, directory: Path, stints: pd.DataFrame, saved: dict, s
 
 def rating_season(cfg: dict, season: int, season_folds: list, where: dict, saved: dict, within: pd.DataFrame,
                   scale: dict | None, input_set: str, out_dir: Path, designs: DesignCache,
-                  targets: Targets = TEST.targets) -> float:
+                  targets: Targets = TEST.targets, penalty: float = TEST.ridge.penalty) -> float:
     """One season's sums_<season>.npz and inputs_<season>.parquet, the line fitted on the rating; its largest gap."""
     stints = season_lineup_rows(cfg, season)
     whole = {target: designs.season(season, target) for target in dict.fromkeys(("pts", *targets.distinct()))}
     row = within.loc[season]
     shared = RatingSeason(cfg, whole, design_blocks(whole["pts"])[0],
-                          tuple(float(row[column]) for column in prior_shrink.WITHIN_COLUMNS), TEST.ridge.penalty,
-                          targets)
+                          tuple(float(row[column]) for column in prior_shrink.WITHIN_COLUMNS), penalty, targets)
     total, frames, worst = None, [], 0.0
     for number, fold in enumerate(season_folds):
         sums, frame, gap = fold_rating_sums(fold, where[fold.stem], stints, saved, shared, scale, input_set,
@@ -229,7 +228,8 @@ def run_second_prior(cfg: dict, models: str, folds_tag: str, tag: str, seasons=N
     out_dir.mkdir(parents=True, exist_ok=True)
     saved_all = load_models(resolve(cfg, "outputs"), models)
     check_models(saved_all.get("meta", {}))
-    targets = fold_settings(saved_all.get("meta", {})).targets
+    fold_setting = fold_settings(saved_all.get("meta", {}))
+    targets = fold_setting.targets
     shrink = replace(TEST.shrink, folds_tag=folds_tag)
     folds, where = step4_folds(cfg, shrink)
     fold_seasons = sorted({fold.season for fold in folds})
@@ -256,7 +256,7 @@ def run_second_prior(cfg: dict, models: str, folds_tag: str, tag: str, seasons=N
             saved = season_models(saved_all, season)
             season_folds = [fold for fold in folds if fold.season == season]
             worst_gap = max(worst_gap, rating_season(cfg, season, season_folds, where, saved, within, scale, inputs,
-                                                     out_dir, designs, targets))
+                                                     out_dir, designs, targets, fold_setting.ridge.penalty))
             print(f"  {season}: priors within {worst_gap:.1e} of the folds' ({time.time() - started:.0f}s)", flush=True)
             continue
         path = grams_path(out_dir, season)
