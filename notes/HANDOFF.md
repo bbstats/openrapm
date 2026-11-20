@@ -31,26 +31,28 @@ each word means, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's st
 - Before asking for a verdict, compare every season's top-rated player and WOSA leader in both tables, not 2026's
   alone: on 2026-11-19 two old seasons' WOSA leaders changed and the owner had answered on 2026.
 
-## In progress, 2026-11-19 evening: experiment 143, two defense inputs in Box Adj
+## Done 2026-11-19: experiment 143, two defense inputs in Box Adj, ADOPTED and PUBLISHED (71436f5)
 
-DECISIONS.md, "Experiment 143" (registration, the four reads, the full build).  The four reads below are done:
+DECISIONS.md, "Experiment 143" (registration, the four reads, the full build, the product build, adoption, publish).
 
-- **Read 1, more inputs:** two pass, both on the defense end: his offensive rebound share and his close-game share
-  (his share of his team's possessions in the last five minutes of the fourth quarter or overtime within 5, minus his
-  share of all of them, padded by 50).  13 tracking columns were left out as a leak: season totals a fold only
-  rescales (`data/dashboard_rates.py`, "Folds"); the screen's equal-across-sets check cannot see that.
-- **Read 2:** the LightGBM earns its place in the line, +0.202 without it.  **Read 3:** the box-score prior by playing
-  time fails, all of it 1997-2006.  **Read 4:** one tree step on what the line leaves passes on both draws, -0.085 and
-  -0.054; repeated steps add nothing.  Not built; the owner chose the two inputs first.
-- **The full build `rd143`** (input list `context_types_no_age_team_zones_defence_only_centred`, line `rd143_line`):
-  within-season -0.099, z -3.62, every era better, 1997-2006 at noise-control size; year over year a tie as built,
-  better at matched width.  The offensive rebound share moves mostly-offensive-rebounding centers' defense DOWN
-  (Robinson 2.40 to 1.42); the owner was told the reverse in the first question and the correction in the second.
-- **Running:** `scratch/2026-11-19_box_adj_reads/product143.sh` (log `outputs/rd143/product143.log`): the tenth folds
-  `rd143_k10`, then the product build `product143`.  When it ends: `leaders143.py` compares every season's top-rated
-  player and WOSA leader with the published tables, then the owner decides through the question tool (his choice of
-  2026-11-19: "Product build, then decide").  If adopted, the switch follows experiment 142's
-  (`scratch/2026-11-18_age_out/switch142.py`), then a noise control on the new incumbent.
+- **Shipped now:** Box Adj's line `rd143_line` on `context_types_no_age_team_zones_defence_only_centred`: today's 56
+  inputs an end plus, on the defense end alone, his offensive rebound share and his close-game share (his share of his
+  team's possessions in the last five minutes of the fourth quarter or overtime within 5, minus his share of all of
+  them, padded by 50; `second_prior.DEFENCE_ONLY`).  The shrink reads `rd143_early,rd143_within` and `rd143_k10`.  The
+  published tables are `product143`'s; the ones before are `*_before_rd143*`.
+- **What it did:** within-season -0.099, z -3.62, every era better (1997-2006 at noise-control size); year over year a
+  tie as built.  The line now weighs defensive rebounds about four times as heavily on defense and offensive rebounds
+  against it; mostly-offensive-rebounding centers fall (Robinson 2.40 to 1.42).  WOSA's 2025 and 2026 leader became
+  Jokić over Gilgeous-Alexander; WOSA leaders also changed in 1999, 2006 and 2017.  The owner saw all of it and chose
+  "Adopt and publish".
+- **Left to do:** the noise control `noise_rd143` (started 8:34 PM 2026-11-19, `scratch/2026-11-19_box_adj_reads/
+  noise_rd143.sh`, log `outputs/rd143/noise_rd143.out`); when it ends, switch the chain's incumbent to `rd143` and
+  `noise_rd143` as `scratch/2026-11-18_age_out/incumbent142.py` did for 142.  A Changelog row waits for the owner's
+  words.  The Power table's weights were not refitted (check 166 cannot run on today's build).
+- **Read 4's candidate, not built:** one ChimeraBoost step on what the line leaves read -0.085 and -0.054 on two draws;
+  a build would average several draws.  The owner chose the two inputs first.
+- **Leak caught:** 13 tracking columns are season totals a fold only rescales; they leak and were left out of the
+  screen (DECISIONS.md, measurement traps).
 
 ## The next research path, the reads on Box Adj (done 2026-11-19, above)
 
