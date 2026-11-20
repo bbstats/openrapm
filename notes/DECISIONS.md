@@ -13725,3 +13725,7 @@ in the test-setting tables and was not read.
 **Reading.**  Fails the rule of experiment 140: better in 2007-2016 alone, and by 0.022 over the 30 seasons against the
 0.042 asked.  Unlike the defense, where the same adjustment is worth 0.397, on offense it is a tie as built.  Verdict
 the owner's.
+
+**The owner's verdict, 2026-11-20, through the question tool: "Leave it off".**  Not adopted; the shipped offense
+target stays `points_with_expected_free_throws`.  The `--offensive-target` flag and Box Adj's fit on its folds' own
+targets stay in the code.  Next: early-season defense.

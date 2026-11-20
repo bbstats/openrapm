@@ -37,7 +37,7 @@ DECISIONS.md, "Experiment 144" (registered before any result).  The offense fitt
 `--offensive-target points_with_expected_opponent_threes_late_as_scored`, by README.md's passes with Box Adj's line
 refitted: `scratch/2026-11-20_offense_threes/build144.sh`, started 9:40 AM, log `outputs/off3_144/driver.log`, markers
 in `outputs/off3_144/done/` (a rerun skips finished steps).  Names: `off3_144_base`, `off3_144_line`, `off3_144`,
-`matched144`.  **Result: fails the rule**, within-season -0.022, z -0.70, eras +0.003, -0.091, +0.021; before the shrink -0.083, z -2.85; year over year a tie.  Asked the owner for the verdict 2026-11-20.
+`matched144`.  **Result: fails the rule**, within-season -0.022, z -0.70, eras +0.003, -0.091, +0.021; before the shrink -0.083, z -2.85; year over year a tie.  **Left off by the owner 2026-11-20** ("Leave it off"); next, early-season defense.
 
 ## Done 2026-11-19: experiment 143, two defense inputs in Box Adj, ADOPTED and PUBLISHED (71436f5)
 
