@@ -1,0 +1,186 @@
+A:\code\spmm\scratch\2026-11-20_early_defense\hustle_screen.py:48: RuntimeWarning: invalid value encountered in scalar divide
+  return float((w * x * y).sum() / (w * x * x).sum())
+A:\code\spmm\scratch\2026-11-20_early_defense\hustle_screen.py:48: RuntimeWarning: invalid value encountered in scalar divide
+  return float((w * x * y).sum() / (w * x * x).sum())
+A:\code\spmm\scratch\2026-11-20_early_defense\hustle_screen.py:48: RuntimeWarning: invalid value encountered in scalar divide
+  return float((w * x * y).sum() / (w * x * x).sum())
+A:\code\spmm\scratch\2026-11-20_early_defense\hustle_screen.py:48: RuntimeWarning: invalid value encountered in scalar divide
+  return float((w * x * y).sum() / (w * x * x).sum())
+2017 done, 4s
+2018 done, 7s
+2019 done, 11s
+2020 done, 14s
+2021 done, 17s
+2022 done, 21s
+2023 done, 25s
+2024 done, 28s
+2025 done, 32s
+2026 done, 36s
+
+===== side D: later rate per extra padded unit (1.00 = padded right), mean over seasons
+                              line: shipped  line: league target  line: padded target  line: padded target, its k  line: raw
+share  count                                                                                                                
+0.0715 charges_drawn                  0.646                0.755                0.747                       0.750      0.234
+       contested_threes               0.644                0.825                0.820                       0.822      0.191
+       contested_twos                 0.944                0.966                0.961                       0.962      0.683
+       def_box_outs                   0.794                0.859                0.852                       0.853      0.473
+       deflections                    0.774                0.861                0.859                       0.859      0.311
+       loose_balls_recovered          0.368                1.910                1.683                       1.661      0.075
+       off_box_outs                   0.894                0.986                0.980                       0.981      0.402
+       screen_assist_points           0.880                0.883                0.882                       0.882      0.764
+       screen_assists                 0.971                0.977                0.975                       0.975      0.769
+0.1000 charges_drawn                  0.680                0.752                0.750                       0.752      0.271
+       contested_threes               0.724                0.790                0.787                       0.789      0.224
+       contested_twos                 0.945                0.955                0.951                       0.953      0.755
+       def_box_outs                   0.834                0.858                0.849                       0.853      0.524
+       deflections                    0.761                0.830                0.826                       0.829      0.360
+       loose_balls_recovered          0.540                2.195                1.077                       1.054      0.086
+       off_box_outs                   0.923                0.986                0.981                       0.984      0.477
+       screen_assist_points           0.898                0.900                0.899                       0.900      0.810
+       screen_assists                 0.969                0.973                0.971                       0.972      0.811
+0.2500 charges_drawn                  0.759                0.805                0.800                       0.803      0.374
+       contested_threes               0.800                0.845                0.842                       0.844      0.349
+       contested_twos                 0.960                0.962                0.961                       0.962      0.867
+       def_box_outs                   0.879                0.891                0.886                       0.889      0.649
+       deflections                    0.850                0.891                0.888                       0.890      0.505
+       loose_balls_recovered          0.636                0.819                0.814                       0.820      0.150
+       off_box_outs                   0.963                0.980                0.976                       0.978      0.593
+       screen_assist_points           0.924                0.925                0.925                       0.925      0.857
+       screen_assists                 0.961                0.963                0.962                       0.963      0.859
+0.5000 charges_drawn                  0.827                0.842                0.840                       0.842      0.535
+       contested_threes               0.862                0.890                0.887                       0.889      0.522
+       contested_twos                 0.965                0.967                0.966                       0.966      0.908
+       def_box_outs                   0.857                0.864                0.861                       0.862      0.739
+       deflections                    0.883                0.897                0.896                       0.896      0.653
+       loose_balls_recovered          0.783                0.896                0.891                       0.895      0.249
+       off_box_outs                   0.934                0.940                0.938                       0.939      0.732
+       screen_assist_points           0.927                0.928                0.927                       0.928      0.877
+       screen_assists                 0.948                0.949                0.949                       0.949      0.876
+
+===== side D: error change against today's padding, percent, its standard error over seasons, and seasons better of 10
+                              league target %  league target se  league target better  padded target %  padded target se  padded target better  padded target, its k %  padded target, its k se  padded target, its k better  raw %  raw se  raw better
+share  count                                                                                                                                                                                                                                           
+0.0715 charges_drawn                     -7.2               2.1                     9             -6.9               2.0                     9                    -7.0                      2.0                            9  295.8    32.1           0
+       contested_threes                 -13.0               3.6                     8            -12.9               3.5                     8                   -12.9                      3.5                            8  336.1    22.1           0
+       contested_twos                    -5.0               1.8                     5             -4.7               1.6                     6                    -4.8                      1.6                            7   86.2     7.7           0
+       def_box_outs                     -14.5               2.7                     9            -13.9               2.5                     9                   -14.1                      2.5                            9   98.0    27.9           0
+       deflections                       -8.0               1.4                    10             -8.0               1.3                    10                    -8.1                      1.3                           10  199.5    15.5           0
+       loose_balls_recovered            -14.0               2.3                    10            -13.8               2.3                    10                   -13.9                      2.3                           10  584.8    60.4           0
+       off_box_outs                      -5.0               2.1                     8             -5.0               2.4                     8                    -5.0                      2.3                            8  290.9   210.9           0
+       screen_assist_points              -0.2               0.4                     5             -0.3               0.3                     6                    -0.3                      0.3                            8   35.9     5.3           0
+       screen_assists                    -0.0               0.4                     5             -0.2               0.4                     4                    -0.2                      0.4                            4   42.0     5.2           0
+0.1000 charges_drawn                     -5.0               1.3                     9             -4.9               1.3                     9                    -5.0                      1.3                            9  248.6    35.7           0
+       contested_threes                  -3.9               1.7                     9             -3.8               1.7                     9                    -3.9                      1.7                            9  304.2    28.7           0
+       contested_twos                    -2.1               1.0                     9             -1.8               0.9                     9                    -1.9                      0.9                            9   57.8     7.1           0
+       def_box_outs                      -3.8               1.7                     7             -3.2               1.1                     7                    -3.6                      1.3                            7   85.2    51.2           0
+       deflections                       -9.1               2.6                    10             -8.9               2.6                    10                    -9.1                      2.6                           10  155.4    10.4           0
+       loose_balls_recovered             -5.4               1.4                    10             -5.4               1.3                    10                    -5.5                      1.3                           10  668.5   190.1           0
+       off_box_outs                      -5.3               1.7                     9             -5.0               1.8                     9                    -5.1                      1.7                            9  232.0    58.2           0
+       screen_assist_points              -0.4               0.4                     7             -0.4               0.3                     8                    -0.5                      0.3                            9   28.3     5.2           0
+       screen_assists                    -0.3               0.6                     7             -0.5               0.5                     7                    -0.5                      0.5                            7   35.8     6.9           0
+0.2500 charges_drawn                     -9.2               3.7                     9             -8.8               3.7                     9                    -9.0                      3.7                            9  445.0   163.4           0
+       contested_threes                  -3.5               1.2                     9             -3.5               1.2                     9                    -3.6                      1.2                            9  167.9    25.3           0
+       contested_twos                    -0.3               0.5                     6             -0.3               0.4                     4                    -0.3                      0.4                            5   25.5     4.1           0
+       def_box_outs                      -2.9               1.0                     6             -2.9               0.8                     6                    -3.0                      0.9                            6   56.1    19.9           0
+       deflections                       -6.0               1.5                    10             -5.8               1.5                    10                    -5.8                      1.5                           10  119.6    25.8           0
+       loose_balls_recovered             -8.3               2.7                    10             -8.3               2.7                    10                    -8.4                      2.7                           10  275.7    40.5           0
+       off_box_outs                      -1.1               0.8                     7             -0.9               0.7                     7                    -1.0                      0.7                            7  319.8    82.6           0
+       screen_assist_points              -0.1               0.2                     5             -0.2               0.2                     6                    -0.2                      0.2                            6   34.0    11.5           0
+       screen_assists                    -0.2               0.3                     6             -0.2               0.2                     7                    -0.3                      0.2                            7   40.1    14.1           0
+0.5000 charges_drawn                     -1.5               0.6                     7             -1.4               0.5                     7                    -1.5                      0.6                            7   46.7    14.2           2
+       contested_threes                  -2.6               1.4                     8             -2.6               1.5                     9                    -2.7                      1.4                            9   68.0     9.9           0
+       contested_twos                    -0.6               0.5                     8             -0.6               0.5                     7                    -0.6                      0.5                            7   16.4     2.8           0
+       def_box_outs                      -2.7               0.8                     8             -2.1               0.6                     9                    -2.2                      0.6                            9   33.8     7.0           0
+       deflections                       -2.2               0.7                    10             -2.1               0.7                     9                    -2.1                      0.7                            9   45.2     3.7           0
+       loose_balls_recovered             -3.3               0.9                     8             -3.3               0.9                     8                    -3.3                      0.9                            8  140.2    46.6           0
+       off_box_outs                      -1.6               0.5                     9             -1.5               0.5                     9                    -1.5                      0.5                            9  129.1   156.6           0
+       screen_assist_points              -0.4               0.2                     8             -0.4               0.1                     8                    -0.4                      0.1                            9   28.4     9.7           0
+       screen_assists                    -0.6               0.3                     6             -0.5               0.3                     7                    -0.5                      0.3                            7   35.0    10.1           0
+
+===== side O: later rate per extra padded unit (1.00 = padded right), mean over seasons
+                              line: shipped  line: league target  line: padded target  line: padded target, its k  line: raw
+share  count                                                                                                                
+0.0715 charges_drawn                  0.660                0.784                0.782                       0.783      0.234
+       contested_threes               0.623                0.824                0.818                       0.820      0.190
+       contested_twos                 0.948                0.966                0.962                       0.963      0.684
+       def_box_outs                   0.814                0.861                0.855                       0.856      0.465
+       deflections                    0.779                0.861                0.860                       0.860      0.311
+       loose_balls_recovered          0.426                1.658                1.413                       1.396      0.076
+       off_box_outs                   0.880                0.988                0.983                       0.983      0.396
+       screen_assist_points           0.881                0.885                0.884                       0.884      0.772
+       screen_assists                 0.971                0.978                0.976                       0.976      0.776
+0.1000 charges_drawn                  0.677                0.748                0.746                       0.748      0.271
+       contested_threes               0.710                0.789                0.786                       0.788      0.222
+       contested_twos                 0.941                0.955                0.951                       0.953      0.754
+       def_box_outs                   0.834                0.858                0.849                       0.853      0.522
+       deflections                    0.765                0.831                0.827                       0.830      0.360
+       loose_balls_recovered          0.495                3.002                1.004                       0.969      0.085
+       off_box_outs                   0.921                0.988                0.982                       0.986      0.476
+       screen_assist_points           0.899                0.901                0.900                       0.901      0.814
+       screen_assists                 0.970                0.974                0.972                       0.973      0.815
+0.2500 charges_drawn                  0.758                0.804                0.800                       0.802      0.373
+       contested_threes               0.791                0.845                0.843                       0.845      0.351
+       contested_twos                 0.959                0.962                0.961                       0.962      0.852
+       def_box_outs                   0.877                0.890                0.886                       0.888      0.651
+       deflections                    0.846                0.891                0.888                       0.890      0.503
+       loose_balls_recovered          0.619                0.821                0.816                       0.821      0.151
+       off_box_outs                   0.966                0.981                0.978                       0.980      0.602
+       screen_assist_points           0.925                0.926                0.926                       0.926      0.863
+       screen_assists                 0.962                0.964                0.963                       0.964      0.864
+0.5000 charges_drawn                  0.828                0.842                0.840                       0.842      0.533
+       contested_threes               0.862                0.889                0.885                       0.887      0.520
+       contested_twos                 0.964                0.966                0.965                       0.966      0.906
+       def_box_outs                   0.856                0.863                0.860                       0.862      0.737
+       deflections                    0.880                0.897                0.895                       0.896      0.650
+       loose_balls_recovered          0.782                0.899                0.894                       0.898      0.244
+       off_box_outs                   0.935                0.940                0.939                       0.940      0.737
+       screen_assist_points           0.927                0.928                0.928                       0.928      0.873
+       screen_assists                 0.949                0.950                0.949                       0.950      0.871
+
+===== side O: error change against today's padding, percent, its standard error over seasons, and seasons better of 10
+                              league target %  league target se  league target better  padded target %  padded target se  padded target better  padded target, its k %  padded target, its k se  padded target, its k better  raw %  raw se  raw better
+share  count                                                                                                                                                                                                                                           
+0.0715 charges_drawn                     -6.2               1.8                     9             -6.2               1.8                     9                    -6.3                      1.8                            9  297.3    32.4           0
+       contested_threes                 -14.3               3.4                    10            -14.1               3.3                    10                   -14.1                      3.3                           10  333.5    23.4           0
+       contested_twos                    -3.6               1.5                     7             -3.5               1.4                     7                    -3.6                      1.3                            7   89.9    10.9           0
+       def_box_outs                     -12.6               2.7                     9            -11.9               2.4                     9                   -12.1                      2.4                            9  117.5    32.9           0
+       deflections                       -7.8               1.9                    10             -8.0               1.9                    10                    -8.0                      1.9                           10  200.0    13.1           0
+       loose_balls_recovered             -8.1               2.2                    10             -8.1               2.1                    10                    -8.2                      2.1                           10  634.7    51.0           0
+       off_box_outs                      -6.2               3.1                     9             -6.1               3.3                     8                    -6.2                      3.3                            8  290.4   217.6           0
+       screen_assist_points              -0.7               0.7                     6             -0.7               0.6                     6                    -0.8                      0.6                            8   31.4     3.5           0
+       screen_assists                    -0.7               0.8                     4             -0.8               0.8                     4                    -0.8                      0.8                            4   37.2     4.1           0
+0.1000 charges_drawn                     -5.1               1.3                     9             -5.0               1.3                     9                    -5.1                      1.3                            9  247.6    35.3           0
+       contested_threes                  -5.6               2.7                    10             -5.6               2.6                    10                    -5.6                      2.6                           10  303.2    27.9           0
+       contested_twos                    -3.3               1.3                    10             -2.9               1.2                    10                    -3.0                      1.2                           10   57.0     6.5           0
+       def_box_outs                      -4.5               1.6                     7             -3.8               1.1                     7                    -4.3                      1.3                            7   91.3    40.1           0
+       deflections                       -8.4               2.5                    10             -8.3               2.5                    10                    -8.6                      2.5                           10  156.9     9.9           0
+       loose_balls_recovered             -7.3               1.5                    10             -7.2               1.5                    10                    -7.2                      1.4                           10  619.2   129.6           0
+       off_box_outs                      -6.4               2.1                     8             -6.1               2.1                     9                    -6.2                      2.0                            9  227.7    57.2           0
+       screen_assist_points              -0.5               0.3                     7             -0.5               0.3                     8                    -0.6                      0.3                            8   25.7     3.7           0
+       screen_assists                    -0.6               0.5                     6             -0.7               0.4                     6                    -0.7                      0.4                            6   32.5     5.2           0
+0.2500 charges_drawn                     -9.1               3.7                     9             -8.7               3.6                     9                    -8.9                      3.7                            9  530.5   207.1           0
+       contested_threes                  -4.6               1.9                     9             -4.7               1.9                     9                    -4.8                      1.9                            9  165.1    25.1           0
+       contested_twos                    -0.3               0.6                     5             -0.3               0.6                     5                    -0.4                      0.5                            5   39.7    19.5           0
+       def_box_outs                      -3.3               0.9                     7             -3.1               0.7                     7                    -3.3                      0.7                            7   53.2    20.6           0
+       deflections                       -6.7               1.8                    10             -6.5               1.8                    10                    -6.5                      1.8                           10  119.1    24.7           0
+       loose_balls_recovered             -9.2               2.8                    10             -9.3               2.9                    10                    -9.3                      2.9                           10  268.4    36.4           0
+       off_box_outs                      -1.0               0.6                     6             -0.9               0.6                     7                    -0.9                      0.6                            7  314.8    82.7           0
+       screen_assist_points              -0.2               0.2                     5             -0.2               0.2                     5                    -0.3                      0.2                            5   29.6     8.7           0
+       screen_assists                    -0.2               0.3                     5             -0.2               0.2                     4                    -0.3                      0.2                            6   34.9    10.4           0
+0.5000 charges_drawn                     -1.2               0.7                     7             -1.0               0.6                     7                    -1.1                      0.6                            7   47.9    14.4           1
+       contested_threes                  -2.4               1.0                     9             -2.4               1.1                     9                    -2.5                      1.1                            9   69.8     9.2           0
+       contested_twos                    -0.4               0.5                     8             -0.4               0.4                     8                    -0.4                      0.4                            8   17.7     2.8           0
+       def_box_outs                      -1.9               0.8                     8             -1.4               0.6                     9                    -1.6                      0.6                            9   35.3     7.0           0
+       deflections                       -2.7               0.8                    10             -2.5               0.8                    10                    -2.6                      0.8                           10   45.5     4.4           0
+       loose_balls_recovered             -3.4               0.9                     8             -3.4               0.9                     8                    -3.4                      0.9                            8  169.5    76.9           0
+       off_box_outs                      -1.4               0.5                     9             -1.4               0.5                     9                    -1.4                      0.5                            9  125.3   153.4           0
+       screen_assist_points              -0.4               0.2                     8             -0.4               0.2                     8                    -0.4                      0.2                            8   33.4    12.8           0
+       screen_assists                    -0.4               0.3                     7             -0.3               0.3                     8                    -0.4                      0.3                            8   41.3    13.9           0
+
+===== k_group (defense rows), median over seasons
+count   charges_drawn  contested_threes  contested_twos  def_box_outs  deflections  loose_balls_recovered  off_box_outs  screen_assist_points  screen_assists
+share                                                                                                                                                        
+0.0715       100000.0           23071.0          1871.0        6116.0      37508.0               100000.0        6074.0                1005.0          2689.0
+0.1000       100000.0          100000.0          2358.0        4078.0      29003.0               100000.0        5935.0                1272.0          2998.0
+0.2500        85849.0           47398.0          2871.0        4759.0      37692.0               100000.0       14056.0                1699.0          3956.0
+0.5000       100000.0           48259.0          5017.0        4722.0      57193.0               100000.0       15044.0                1512.0          3584.0

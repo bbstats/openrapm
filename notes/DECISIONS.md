@@ -13729,3 +13729,43 @@ the owner's.
 **The owner's verdict, 2026-11-20, through the question tool: "Leave it off".**  Not adopted; the shipped offense
 target stays `points_with_expected_free_throws`.  The `--offensive-target` flag and Box Adj's fit on its folds' own
 targets stay in the code.  Next: early-season defense.
+
+## Early-season defense, read 1: the hustle stats' padding (the owner, 2026-11-20: "Leave it off", whose option named this path next; path 3 of 2026-11-18; registered before any result)
+
+**What.**  The hustle stats (`data/dashboard_rates.padded_relative`) are still padded toward the raw rate of players
+with about as many possessions, the method the box stats left in experiment 127.  The quick read, no rating built
+(`scratch/2026-11-20_early_defense/hustle_screen.py`): each season 2017-2026 cut to its first 7.15%, 10%, 25% and 50% of
+regular-season games (`panel.season_to_date`); the nine hustle counts from those games alone, padded each way, against
+each player's rate over the rest of the regular season, players with 100 or more later possessions weighted by them,
+both sides.  Arms: today's; the league rate as the target with today's k; each bin's rate padded toward the league by
+its own possessions (experiment 127's k_group, Poisson noise as `moment_k` assumes) with today's k; the same with the
+k measured around the padded target; the raw rate.  Per arm the line of later rate on padded rate (1.00 = padded
+right) and the error.
+
+**The rule** (experiment 127's quick read): at 7.15% and 10% the composed arm reaches at least three quarters of the
+league target's error cut on the defense inputs the prior reads (deflections, contested twos and threes, charges, box
+outs, loose balls) and is better than today in at least 8 of 10 seasons; no count worse than today by two standard
+errors at any share.  A pass goes to the owner before a build.
+
+**Result** (2026-11-20, `scratch/2026-11-20_early_defense/hustle_screen.log`, `.csv`; 36 seconds).  The composed arm
+(bins padded toward the league, k measured around that target) against today's padding, defense side, the error
+predicting the rest of the season, percent, standard error over seasons, seasons better of 10:
+
+| input | at 7.15% | se | better | at 10% | se | better | at 25% | at 50% |
+|---|---|---|---|---|---|---|---|---|
+| deflections | -8.1 | 1.3 | 10 | -9.1 | 2.6 | 10 | -5.8 | -2.1 |
+| contested twos | -4.8 | 1.6 | 7 | -1.9 | 0.9 | 9 | -0.3 | -0.6 |
+| contested threes | -12.9 | 3.5 | 8 | -3.9 | 1.7 | 9 | -3.6 | -2.7 |
+| charges drawn | -7.0 | 2.0 | 9 | -5.0 | 1.3 | 9 | -9.0 | -1.5 |
+| defensive box outs | -14.1 | 2.5 | 9 | -3.6 | 1.3 | 7 | -3.0 | -2.2 |
+| loose balls | -13.9 | 2.3 | 10 | -5.5 | 1.3 | 10 | -8.4 | -3.3 |
+
+The plain league target's cut on the same inputs at 7.15%: -8.0, -5.0, -13.0, -7.2, -14.5, -14.0; the composed arm
+reaches 96% to 100% of it everywhere.  No count is worse than today at any share on either side; the offense side reads
+the same (screen assists and their points -0.2 to -0.8, the rest -1 to -14).  The line at 7.15%, today against the
+composed arm: deflections 0.77 to 0.86, contested threes 0.64 to 0.82, charges 0.65 to 0.75, loose balls 0.37 to 1.66
+(its k, about 1,600 possessions, now pads too far), defensive box outs 0.79 to 0.85.
+
+**Against the rule.**  Three quarters of the league target's cut: passed on all six.  At least 8 of 10 seasons better:
+passed on four of six at both shares; contested twos read 7 of 10 at 7.15% (-4.8%, about three standard errors) and
+defensive box outs 7 of 10 at a tenth (-3.6%).  Nothing worse at two standard errors.  To the owner before a build.
