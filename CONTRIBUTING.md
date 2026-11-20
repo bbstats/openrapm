@@ -72,7 +72,7 @@ nothing.
 4. Read the slices against the noise control:
 
    ```bash
-   python scripts/checks/135_robust_review.py --cands=NAME --controls=noise_noage142 --ref=noage142 --out=robust_NAME
+   python scripts/checks/135_robust_review.py --cands=NAME --controls=noise_rd143 --ref=rd143 --out=robust_NAME
    ```
 
 5. Add the experiment's row to `experiments/runs.csv`; every number is read from the chain's outputs:
