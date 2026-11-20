@@ -13654,3 +13654,9 @@ The tenth folds `rd143_k10`, 58 minutes; the full build of 1997-2027 under the n
 **Why Gilgeous-Alexander drops.**  His defense 1.17 to 0.88 in 2026 and 2.01 to 1.64 in 2025; offense +0.04 and +0.03.  His close-game share over share is in the 90th percentile of 2026's regulars, which raises him; his offensive rebound share in the 7th, and he grabs few defensive rebounds, which the line now weighs about four times as heavily on defense.  Jokić, 40th and 87th, gains 0.10.  Donovan Clingan, 94th and 47th, loses 0.63; Jimmy Butler III, 93rd and 86th, gains 0.28: the rebounding inputs do not simply mark down offensive rebounders, they move defense toward defensive rebounding, and the close-game share decides much of the rest.
 
 2026's rating top three stay Wembanyama, Jokić, Gilgeous-Alexander; 2027's top two stay Wembanyama and Dončić.
+
+### Experiment 143: adopted (the owner, 2026-11-19, 8:05 PM, through the question tool, on the product build's leaders: "Adopt and publish")
+
+**The switch** (22ebe90, no build running; `scratch/2026-11-19_box_adj_reads/switch143.py`): `second_prior` `rd143_line`, `second_prior_inputs` `context_types_no_age_team_zones_defence_only_centred`, the shrink's `folds_tag` `rd143_early,rd143_within` and `extrapolate_folds_tag` `rd143_k10`; the tests that pin them; PIPELINE.md, 56 inputs to 58 with the two named; GLOSSARY.md.  Every test passes, 1,135, and the lint check.
+
+**The tables** (ae85d4c, under the lock; `copy143.sh`): the six product files from `product143`, byte for byte, the ones before kept as `*_before_rd143*`.  The Power table's weights are not refitted: check 166 still names `fade141`'s season-so-far folders, deleted on 2026-11-16 and not rebuilt.
