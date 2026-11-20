@@ -31,6 +31,14 @@ each word means, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's st
 - Before asking for a verdict, compare every season's top-rated player and WOSA leader in both tables, not 2026's
   alone: on 2026-11-19 two old seasons' WOSA leaders changed and the owner had answered on 2026.
 
+## Running 2026-11-20: experiment 144, three-point luck out of the offense's target
+
+DECISIONS.md, "Experiment 144" (registered before any result).  The offense fitted on the defense's own target,
+`--offensive-target points_with_expected_opponent_threes_late_as_scored`, by README.md's passes with Box Adj's line
+refitted: `scratch/2026-11-20_offense_threes/build144.sh`, started 9:40 AM, log `outputs/off3_144/driver.log`, markers
+in `outputs/off3_144/done/` (a rerun skips finished steps).  Names: `off3_144_base`, `off3_144_line`, `off3_144`,
+`matched144`.  Report in four parts and stop for the owner's verdict.
+
 ## Done 2026-11-19: experiment 143, two defense inputs in Box Adj, ADOPTED and PUBLISHED (71436f5)
 
 DECISIONS.md, "Experiment 143" (registration, the four reads, the full build, the product build, adoption, publish).
