@@ -46,8 +46,7 @@ DECISIONS.md, "Experiment 143" (registration, the four reads, the full build, th
   Jokić over Gilgeous-Alexander; WOSA leaders also changed in 1999, 2006 and 2017.  The owner saw all of it and chose
   "Adopt and publish".
 - **Done:** the noise control `noise_rd143`, -0.012, z -1.37, by era -0.031, -0.010, +0.004; the chain names
-  `rd143` and it (`scratch/2026-11-19_box_adj_reads/incumbent143.py`).  **Left to do:** a Changelog row waits for the owner's
-  words.  The Power table's weights were not refitted (check 166 cannot run on today's build).
+  `rd143` and it (`scratch/2026-11-19_box_adj_reads/incumbent143.py`).  The Changelog row is live ("Box-adj now reads two more defensive inputs.", 9e43827).  **Left to do:** the Power table's weights, not refitted (check 166 cannot run on today's build).
 - **Read 4's candidate, not built:** one ChimeraBoost step on what the line leaves read -0.085 and -0.054 on two draws;
   a build would average several draws.  The owner chose the two inputs first.
 - **Leak caught:** 13 tracking columns are season totals a fold only rescales; they leak and were left out of the
