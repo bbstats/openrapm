@@ -13769,3 +13769,6 @@ composed arm: deflections 0.77 to 0.86, contested threes 0.64 to 0.82, charges 0
 **Against the rule.**  Three quarters of the league target's cut: passed on all six.  At least 8 of 10 seasons better:
 passed on four of six at both shares; contested twos read 7 of 10 at 7.15% (-4.8%, about three standard errors) and
 defensive box outs 7 of 10 at a tenth (-3.6%).  Nothing worse at two standard errors.  To the owner before a build.
+
+**The owner, 2026-11-20, through the question tool: "Stop here".**  Not built; the read stays on record.  Next: the ridge
+penalty on the within-season test, path 4.
