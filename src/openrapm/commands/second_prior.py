@@ -56,9 +56,9 @@ from ..data.second_prior_files import (
 )
 from ..data.within_folds import fold_games
 from ..rapm import design_blocks
-from ..settings import PRODUCT, TEST
+from ..settings import PRODUCT, TEST, Targets
 from .build import season_lineup_rows, step4_folds, step4_multipliers, within_layer_multipliers
-from .within_season import check_models, load_models, prior_rows, saved_booster, season_models
+from .within_season import check_models, fold_settings, load_models, prior_rows, saved_booster, season_models
 
 SIDES = ("O", "D")
 PRIOR_TOLERANCE = 1e-9          # the boosters' answers against the prior the fold stored
@@ -134,6 +134,9 @@ class RatingSeason:
     players: object              # the "pts" design's player columns, every stint of the season
     within: tuple                # the season's within layer, prior_shrink.WITHIN_COLUMNS' order
     penalty: float
+    # the targets the folds were rated on, their saved boosters' build's (within_season.fold_settings): the test
+    # setting's, unless a build was fitted on others (experiment 144 put the offense on the defense's target)
+    targets: Targets = TEST.targets
 
 
 def held_back_stints(season: RatingSeason, directory: Path, fold) -> rating_line.HeldBack:
@@ -156,7 +159,7 @@ def held_back_stints(season: RatingSeason, directory: Path, fold) -> rating_line
                                 stand_in=(fold.fill_o, fold.fill_d))
 
 
-def check_fit_designs(fold, designs: dict, penalty: float) -> float:
+def check_fit_designs(fold, designs: dict, penalty: float, targets: Targets = TEST.targets) -> float:
     """The largest gap between step 3 refitted on `designs` and the ratings the fold stored, each end's level aside:
     these are the fold's own fit games and targets, or the sums would read another ridge than the folds rate with."""
     worst = 0.0
@@ -164,8 +167,8 @@ def check_fit_designs(fold, designs: dict, penalty: float) -> float:
     # the prior step 3 read before its scale: Box Adj's, or the box-score prior's in folds rated without Box Adj
     read = "second_prior_raw" if "second_prior_raw_off" in offence.columns else "prior_raw"
     prior_o, prior_d = offence[f"{read}_off"].to_dict(), (-defence[f"{read}_def"]).to_dict()
-    for target, stored, column in ((TEST.targets.offence, offence.prior_off + offence.u_off, "offense"),
-                                   (TEST.targets.defence, -(defence.prior_def + defence.u_def), "defense")):
+    for target, stored, column in ((targets.offence, offence.prior_off + offence.u_off, "offense"),
+                                   (targets.defence, -(defence.prior_def + defence.u_def), "defense")):
         fitted = prior_rapm.fit(designs[target], prior_o, prior_d, penalty).ratings.set_index("player_id")[column]
         gap = (fitted.reindex(stored.index) - stored).dropna()
         worst = max(worst, float((gap - gap.mean()).abs().max()))
@@ -179,30 +182,32 @@ def fold_rating_sums(fold, directory: Path, stints: pd.DataFrame, saved: dict, s
     fit_ids, _ = fold_games(directory, fold)
     designs = fit_designs(fold.season, season.cfg, season.whole, fit_ids)
     if check:
-        ridge_gap = check_fit_designs(fold, designs, season.penalty)
+        ridge_gap = check_fit_designs(fold, designs, season.penalty, season.targets)
         if not ridge_gap < RIDGE_TOLERANCE:
             raise SystemExit(f"{fold.stem}: step 3 refitted here misses the fold's ratings by {ridge_gap:.1e}")
-    design = designs[TEST.targets.offence]
+    design = designs[season.targets.offence]
     players, context = design_blocks(design)
     ids = design.spec.players["player_id"].to_numpy(dtype=np.int64)
     team_poss = {side: second_prior.team_possessions(fit_stints, side) for side in SIDES}
     priors = rating_line.prior_columns(inputs, ids, team_poss)
     offence, defence, explained = rating_line.ridge_parts(
         players, context, np.asarray(design.w, dtype=float), np.asarray(design.y, dtype=float),
-        np.asarray(designs[TEST.targets.defence].y, dtype=float), priors, season.penalty)
+        np.asarray(designs[season.targets.defence].y, dtype=float), priors, season.penalty)
     sums = rating_line.held_back_sums(held_back_stints(season, directory, fold), (offence, defence), priors, explained,
                                       season.within)
     return sums, inputs_frame(inputs, fold), gap
 
 
 def rating_season(cfg: dict, season: int, season_folds: list, where: dict, saved: dict, within: pd.DataFrame,
-                  scale: dict | None, input_set: str, out_dir: Path, designs: DesignCache) -> float:
+                  scale: dict | None, input_set: str, out_dir: Path, designs: DesignCache,
+                  targets: Targets = TEST.targets) -> float:
     """One season's sums_<season>.npz and inputs_<season>.parquet, the line fitted on the rating; its largest gap."""
     stints = season_lineup_rows(cfg, season)
-    whole = {target: designs.season(season, target) for target in ("pts", TEST.targets.offence, TEST.targets.defence)}
+    whole = {target: designs.season(season, target) for target in dict.fromkeys(("pts", *targets.distinct()))}
     row = within.loc[season]
     shared = RatingSeason(cfg, whole, design_blocks(whole["pts"])[0],
-                          tuple(float(row[column]) for column in prior_shrink.WITHIN_COLUMNS), TEST.ridge.penalty)
+                          tuple(float(row[column]) for column in prior_shrink.WITHIN_COLUMNS), TEST.ridge.penalty,
+                          targets)
     total, frames, worst = None, [], 0.0
     for number, fold in enumerate(season_folds):
         sums, frame, gap = fold_rating_sums(fold, where[fold.stem], stints, saved, shared, scale, input_set,
@@ -224,6 +229,7 @@ def run_second_prior(cfg: dict, models: str, folds_tag: str, tag: str, seasons=N
     out_dir.mkdir(parents=True, exist_ok=True)
     saved_all = load_models(resolve(cfg, "outputs"), models)
     check_models(saved_all.get("meta", {}))
+    targets = fold_settings(saved_all.get("meta", {})).targets
     shrink = replace(TEST.shrink, folds_tag=folds_tag)
     folds, where = step4_folds(cfg, shrink)
     fold_seasons = sorted({fold.season for fold in folds})
@@ -250,7 +256,7 @@ def run_second_prior(cfg: dict, models: str, folds_tag: str, tag: str, seasons=N
             saved = season_models(saved_all, season)
             season_folds = [fold for fold in folds if fold.season == season]
             worst_gap = max(worst_gap, rating_season(cfg, season, season_folds, where, saved, within, scale, inputs,
-                                                     out_dir, designs))
+                                                     out_dir, designs, targets))
             print(f"  {season}: priors within {worst_gap:.1e} of the folds' ({time.time() - started:.0f}s)", flush=True)
             continue
         path = grams_path(out_dir, season)
@@ -277,7 +283,7 @@ def run_second_prior(cfg: dict, models: str, folds_tag: str, tag: str, seasons=N
               f"priors within {worst_gap:.1e} of the folds' ({time.time() - started:.0f}s)", flush=True)
     write_run(out_dir, dict(argv=list(argv), models=models, folds=folds_tag, seasons=chosen, n_folds=n_folds,
                             inputs=second_prior.INPUT_SETS[inputs], type_scale=scale, padded=True, target=target,
-                            step4_rule=shrink.rule,
+                            step4_rule=shrink.rule, targets=[targets.offence, targets.defence],
                             prior_check=PRIOR_TOLERANCE))
     print(f"wrote {out_dir} ({time.time() - started:.0f}s)", flush=True)
     return 0

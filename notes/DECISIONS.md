@@ -13666,3 +13666,36 @@ The tenth folds `rd143_k10`, 58 minutes; the full build of 1997-2027 under the n
 **The noise control on the new incumbent, `noise_rd143`** (`--fold-assignment 1` through the chain against `rd143`, 8:34 to 9:46 PM; `outputs/noise_rd143_chain.log`): the within-season test -0.012, z -1.37, 17 of 30; by era -0.031, z -3.18; -0.010, z -0.81; +0.004, z +0.17.  Year over year team-game +0.007, z +0.83, 24 of 56.  The fourth control in a row of this size and shape.  The chain's `INC_NAME`, `INC_SYSTEM`, `INC_FOLDS` and `CONTROL_NAME` name `rd143` and it since 9:50 PM, with `101_log_run.py`'s default, GLOSSARY.md, CONTRIBUTING.md and the handoff (`scratch/2026-11-19_box_adj_reads/incumbent143.py`).
 
 **The Changelog row** (the owner, 2026-11-20, choosing among three drafts: "1, shortest. Push it"): 2026-11-19, "Box-adj now reads two more defensive inputs."  Pushed with the records of the adoption at 9e43827 after the morning job had published f212a24; GitHub's tests and the Pages build green; live on openrapm.com.
+
+## Experiment 144: three-point luck out of the offense's target (the owner, 2026-11-20: "next research session, go", on the ranked paths of 2026-11-18, path 2; registered before any result)
+
+**The change.**  `--offensive-target points_with_expected_opponent_threes_late_as_scored`: the offense is fitted on the
+target the defense already uses.  Every made three is counted at three times the shooter's padded three-point
+percentage from the season's other games, a quarter of the difference between his makes and that kept, the threes of a
+period's last two seconds counted as they happened, free throws as shipped.  A stint row is one team's possessions, so
+the same row's number serves both ends: the shooters are the offense, and both ridges now fit one target
+(`settings.Targets.distinct`).  Step 1's offensive labels, the LightGBM trained on them, step 3's offensive ridge, the
+held-back games' ratings, and Box Adj's line refitted on the new base's held-back games.  The within-season test still
+scores the held-back games on the points as scored.
+
+**Code.**  `openrapm rate --offensive-target` (`commands/cli.chosen_settings`); the held-back games' outcome pieces
+price the threes on whichever side's target prices them (`within_season`, `target in LUCK_KEPT`); Box Adj's fit reads
+the targets its folds' build was fitted on (`second_prior.RatingSeason.targets`, `fold_settings`), where it read the
+test setting's before.
+
+**Why.**  Experiment 84 put the defense on the offense's target and lost by +0.397, z +17.93, worse in all 30 seasons:
+taking the opponents' three-point luck out splits credit better.  The offense has the same reason, a lineup's threes
+going in or not over a few hundred attempts, and the owner's rule is one method on both sides when the reason is shared.
+FINDINGS 36 (tag `archive/research-2026-09`) read the same change at a quarter of a season, -0.163, z -3.12, 12 of 14,
+and it was shelved on a test of team totals.  It has never been read on the within-season test.  The risk: a passer
+who makes his teammates' threes better than their own percentages loses three quarters of that credit.
+
+**How it is built** (`scratch/2026-11-20_offense_threes/build144.sh`): README.md's passes on the new target.  Pass 1
+without Box Adj, `off3_144_base`, saved models and its held-back games `off3_144_base_early`, `off3_144_base_within`;
+Box Adj's line `off3_144_line` on today's list, `context_types_no_age_team_zones_defence_only_centred`, from those;
+then the chain `off3_144` against `rd143` with `noise_rd143` beside it.
+
+**How it is read**, the rule of experiment 140: the within-season WOWY test better in every era, 1997-2006, 2007-2016
+and 2017-2026, each era beside the noise control's own number (1997-2006 -0.031); the year-over-year test not worse at
+a paired z of +2; the 2026 top 20 and every season's top-rated player and WOSA leader in both tables.  Report and stop:
+nothing is adopted without the owner's word.

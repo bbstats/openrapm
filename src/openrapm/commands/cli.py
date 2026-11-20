@@ -135,6 +135,7 @@ def chosen_settings(args: argparse.Namespace) -> Settings:
     attacking, defending = args.team_season_penalties
     return replace(base,
                    targets=replace(base.targets,
+                                   offence=plain_name("--offensive-target", args.offensive_target, target_name),
                                    defence=plain_name("--defensive-target", args.defensive_target, target_name)),
                    labels=replace(base.labels, team_offense_penalty=float(attacking),
                                   team_defense_penalty=float(defending),
@@ -256,6 +257,10 @@ def _add_setting_options(parser) -> None:
                              "points_with_expected_opponent_threes or points_with_expected_opponent_threes_all "
                              "(the names x3def_w0.25 and x3def from before 2026-10-11 still work) "
                              "(default %(default)s)")
+    parser.add_argument("--offensive-target", default=PRODUCT.targets.offence,
+                        help="what the offense ridge explains, per 100 possessions: points_with_expected_free_throws, "
+                             "or a defensive target's name to take the same share of the shooters' three-point luck "
+                             "out of the offense (experiment 144) (default %(default)s)")
     parser.add_argument("--features", default=PRODUCT.prior.feature_set,
                         help="the prior's input list, a key of features.FEATURE_SETS (the old name boruta_noonc "
                              "still works) (default %(default)s)")

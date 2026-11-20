@@ -44,6 +44,16 @@ def test_the_test_setting_is_the_shipped_test_setting():
     assert cli.chosen_settings(_parse("rate", "--setting", "test")) == TEST
 
 
+def test_the_offense_can_take_the_defense_target():
+    """Experiment 144: the offense fitted on the target that takes three quarters of the shooters' three-point luck out,
+    the defense's own; both sides then share one fit (settings.Targets.distinct)."""
+    name = "points_with_expected_opponent_threes_late_as_scored"
+    chosen = cli.chosen_settings(_parse("rate", "--setting", "test", "--offensive-target", name))
+    assert chosen.targets.offence == name and chosen.targets.defence == TEST.targets.defence == name
+    assert chosen.targets.distinct() == [name]
+    assert chosen == replace(TEST, targets=replace(TEST.targets, offence=name))
+
+
 def test_each_rate_option_reaches_its_setting(capsys):
     args = _parse("rate", "--setting", "test", "--defensive-target", "points_with_expected_opponent_threes_all",
                   "--features", "box_score_and_bio", "--booster-params", "other", "--fold-assignment", "1",

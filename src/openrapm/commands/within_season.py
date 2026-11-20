@@ -716,7 +716,8 @@ def fold_pieces(run: SeasonRun, rated: RatedWorld, fit_ids: set) -> tuple[pd.Dat
 
     Step 3 is solved again on each target's fit-games design with the same boosters' priors, through the code the
     rating used, so the refit's games' part is the fold's own; the checks say by how much (they must be 0, up to the
-    solver's last digits).  The defence's outcome pieces price the opponents' threes at the shooters' expected makes
+    solver's last digits).  A side whose target prices threes, the defense and, since experiment 144, the offense on its
+    own target, has its outcome pieces price the threes at the shooters' expected makes
     from the fit games alone, as the fold's defensive target did (data/panel.fit_designs).
     """
     world, table, season = rated.world, rated.table, run.season
@@ -731,7 +732,7 @@ def fold_pieces(run: SeasonRun, rated: RatedWorld, fit_ids: set) -> tuple[pd.Dat
         lineup_o, lineup_d = decomposition.lineups(fit.players, fit.n_players)
         keys = decomposition.row_keys(design, lineup_o, lineup_d, teams)
         x3, luck_kept, late_as_scored = None, 0.0, target in LATE_AS_SCORED
-        if side == "D":
+        if target in LUCK_KEPT:      # either side's target that prices threes (the offense's since experiment 144)
             x3 = expected_threes([int(season)], run.cfg, points, prev=0, k3=450.0, keep=keep,
                                  late=not late_as_scored)[0]
             luck_kept = LUCK_KEPT[target]
