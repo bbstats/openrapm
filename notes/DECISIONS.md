@@ -13699,3 +13699,29 @@ then the chain `off3_144` against `rd143` with `noise_rd143` beside it.
 and 2017-2026, each era beside the noise control's own number (1997-2006 -0.031); the year-over-year test not worse at
 a paired z of +2; the 2026 top 20 and every season's top-rated player and WOSA leader in both tables.  Report and stop:
 nothing is adopted without the owner's word.
+
+### Experiment 144: result (2026-11-20, `outputs/off3_144/driver.log`, `outputs/off3_144_chain.log`)
+
+Built 9:40 AM to 12:06 PM from 85921cd's code (the driver's first line names 52e3771, the commit under the uncommitted
+change it ran).  The within-season WOWY test at the shipped stage, against `rd143`; below 0 is better.
+
+| era | off3_144 | z | seasons better | noise control | z |
+|---|---|---|---|---|---|
+| 1997-2006 | +0.003 | +0.06 | 4 of 10 | -0.031 | -3.18 |
+| 2007-2016 | -0.091 | -2.27 | 8 of 10 | -0.010 | -0.81 |
+| 2017-2026 | +0.021 | +0.29 | 4 of 10 | +0.004 | +0.17 |
+| all 30 | -0.022 | -0.70 | 16 of 30 | -0.012 | -1.37 |
+
+Before the shrink, step 3: -0.083, z -2.85, 22 of 30; the shrink took back three quarters of it (the incumbent's shrink
+gains 0.37 on step 3, the candidate's 0.31).  The year-over-year test, team-game: +0.033, z +0.70, a tie; with each
+side's width matched to the incumbent's, `matched144`, the previous season's ratings +0.006, z +0.09.
+
+What moved, 2026, regulars of 2,000 offensive possessions or more: the offense moves 0.13 per 100 on average.  Players
+who make threes for others fall, Antetokounmpo -1.09, Murray -0.86, Ball -0.53; bigs rise, Clingan +0.42, Williams
++0.40.  The top-rated player changes in 6 seasons: 1998 Robinson to Jordan, 2013 James to Paul, 2017 Leonard to
+Westbrook, 2019 Harden to Antetokounmpo, 2020 Antetokounmpo to Harden, 2025 Jokić to Gilgeous-Alexander.  WOSA is not
+in the test-setting tables and was not read.
+
+**Reading.**  Fails the rule of experiment 140: better in 2007-2016 alone, and by 0.022 over the 30 seasons against the
+0.042 asked.  Unlike the defense, where the same adjustment is worth 0.397, on offense it is a tie as built.  Verdict
+the owner's.
