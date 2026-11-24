@@ -31,7 +31,14 @@ each word means, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's st
 - Before asking for a verdict, compare every season's top-rated player and WOSA leader in both tables, not 2026's
   alone: on 2026-11-19 two old seasons' WOSA leaders changed and the owner had answered on 2026.
 
-## Done 2026-11-24: the Bias page reads "vs consensus" and "vs game results", PUBLISHED (99988c5)
+## Done 2026-11-24: the Bias page reads "vs consensus '27", "vs game results '27" and "vs game results, last 10 seasons", PUBLISHED (5fed7e0)
+
+- The third column pools 2018-2027's 23,520 team-games, each season against its own ratings and width; a team is left
+  out of every season at once for its error.  Over ten seasons OpenRAPM rates box-score volume above what the games
+  bear out: made free throws +0.69 at 5.3 errors, made twos +0.36 at 3.0.  In-sample; a lead for a research session,
+  the owner's to open.  `DECISIONS.md`, "The Bias page's third column".  The morning bias step takes about 14 seconds.
+
+Earlier the same day:
 
 - The consensus is xRAPM 50%, 3-year RAPM 30%, DARKO 20%, the owner's: LOKI and Pulse dropped, and no 2026-27
   LEBRON is published (fda1753).
