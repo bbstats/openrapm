@@ -14223,3 +14223,48 @@ of an unrelated player number reaches, which keeps a player's misfit carrying ov
 39 readings are tested, so about two would pass condition 2 alone by chance; condition 1 and 3 together are the guard.
 The whole table is reported, every stat and each era.  A lean that passes is a candidate for a Box Adj read, not a
 change; nothing is built on it without the owner's word.
+
+### The Bias page's leans on held-back games: result (2026-11-24; `scratch/2026-11-24_bias_heldback/heldback_lean.py`, `show.py`; `outputs/bias_heldback/summary.csv`, `seasons.csv`; about 15 minutes in four processes)
+
+**Nothing passes the rule.**  The miss with team levels alone matches check 151's to 7e-06 in every season.  The page's
+number, the total, OpenRAPM minus the games, points per 100 per player per standard deviation; the in-sample column is
+the page's "last 10 seasons", 2018-2027; the error is the larger of the across-season standard error and the career
+null's spread:
+
+| stat | in-sample, last 10 seasons | held back, width free | its error | held back, own width | its error |
+|---|---|---|---|---|---|
+| made free throws | +0.69 | +0.006 | 0.054 | -0.078 | 0.047 |
+| missed free throws | +0.29 | +0.039 | 0.046 | -0.019 | 0.047 |
+| made twos | +0.36 | +0.008 | 0.050 | -0.016 | 0.049 |
+| missed twos | +0.27 | +0.034 | 0.046 | +0.046 | 0.047 |
+| assists | +0.36 | -0.009 | 0.058 | -0.086 | 0.057 |
+| turnovers | +0.34 | +0.029 | 0.045 | -0.002 | 0.045 |
+| defensive rebounds | +0.44 | -0.103 | 0.072 | -0.167 | 0.068 |
+| offensive rebounds | +0.08 | -0.150 | 0.071 | -0.188 | 0.067 |
+| steals | +0.14 | -0.023 | 0.049 | -0.094 | 0.048 |
+| blocks | +0.17 | +0.002 | 0.060 | -0.087 | 0.053 |
+| personal fouls | -0.16 | -0.049 | 0.050 | -0.040 | 0.047 |
+| made threes | +0.02 | +0.021 | 0.052 | -0.017 | 0.049 |
+| missed threes | +0.14 | +0.027 | 0.052 | -0.002 | 0.049 |
+
+The career null centres on nothing everywhere (largest null mean 0.009 against spreads of 0.028 to 0.049).  The
+closest to passing, every one failing on an era's sign or on one width:
+- **Rebounders, total**: offensive rebounds -0.150 width free, -0.188 own width, beyond 2 errors both ways, but
+  2007-2016 reads +0.041 and +0.004; defensive rebounds every era negative in both runs, but width free is 1.4
+  across-season errors.  OpenRAPM rates rebounders a little lower than held-back games bear out, mostly on defense.
+- **Defense, shooters**: players with more threes are rated better on defense by OpenRAPM than the games bear out,
+  made threes +0.058 width free and +0.096 own width, every era positive in both, but 1.8 against the null width free.
+- **At OpenRAPM's own width alone**: offense reads assists -0.136, made free throws -0.119, made threes -0.112;
+  defense reads blocks -0.141, defensive rebounds -0.152, offensive rebounds -0.142.  Width free they shrink to a
+  third or less.  This is width: the games want both sides a little wider, and good players have more of every
+  volume stat, so at a fixed width volume picks up the narrowness.  Its sign is the reverse of the in-sample page's.
+
+**What it says.**  The in-sample lean, volume over-credited, made free throws +0.69 at 5.3 errors, does not exist on
+games the ratings never saw: +0.006 width free, -0.078 at OpenRAPM's own width, both within 1.7 errors, and no box
+stat on the page passes in any era on either end.  The page's game-results columns describe how a season's ratings sit
+on that season's own games; they do not locate a credit error, toward players or toward teams.  The held-back read is
+about three times as precise as the in-sample column's error, so a real lean of 0.15 or more would have shown.
+Not read here: transition attempts on defense, the scan's lead of 2026-11-23 (-0.29 per player standard deviation,
+z -6.0, 26 of 30 seasons; positive meaning the games rate them higher, so OpenRAPM over-credits them).  It is in
+neither the box-score prior's defense inputs nor Box Adj's (`second_prior.INPUT_SETS`); weight is already a Box Adj
+input.  Read-only; no rating moved.
