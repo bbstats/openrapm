@@ -31,16 +31,17 @@ each word means, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's st
 - Before asking for a verdict, compare every season's top-rated player and WOSA leader in both tables, not 2026's
   alone: on 2026-11-19 two old seasons' WOSA leaders changed and the owner had answered on 2026.
 
-## Done 2026-11-24: the Bias page's residual RAPM column and three systems, PUBLISHED (fda1753)
+## Done 2026-11-24: the Bias page reads "vs consensus" and "vs game results", PUBLISHED (99988c5)
 
-- The owner: "add in the 'residual rapm' ... as a column in addition to 'total'" and "get rid of Loki and Pulse.
-  replace with LEBRON if you can find it. if not, just do xRAPM, 3yr RAPM and Darko DPM".  No 2026-27 LEBRON is
-  published, so the consensus is xRAPM 50%, 3-year RAPM 30%, DARKO 20%, the owner's weights.
-- The residual RAPM (`residual_rapm.py`): the season's team-games ridged on what the published rating misses, at
-  13,037, one free multiplier per side, no team levels; the column keeps the residual's own sign (the owner's choice).
-  Every slope is under 0.03 this early.  `DECISIONS.md`, "The Bias page, three systems and a residual RAPM column".
-- The morning job writes it from this working tree from tomorrow; the fit adds about two seconds to `site --bias`.
-- Open: no Changelog row was added (wording is the owner's); the Residual RAPM header's hover line is mine.
+- The consensus is xRAPM 50%, 3-year RAPM 30%, DARKO 20%, the owner's: LOKI and Pulse dropped, and no 2026-27
+  LEBRON is published (fda1753).
+- "vs game results" (`game_results.py`) replaced the residual RAPM the same day (the owner: "the ridge penalization
+  just makes it a bit too hard to interpret"): each team-game's miss against OpenRAPM's prediction, least squares on
+  the stat of the players on the court, no penalty; OpenRAPM minus the games, the owner's sign.  Its standard error
+  leaves one team out at a time.  No row reaches two errors this early.  `DECISIONS.md`, "The Bias page's second
+  column: vs game results, no ridge".
+- The morning job writes it from this working tree from tomorrow; the fit adds about three seconds to `site --bias`.
+- Open: no Changelog row was added (wording is the owner's); the "vs game results" header's hover line is mine.
 
 ## Done 2026-11-23: lineup synergies, read-only
 
