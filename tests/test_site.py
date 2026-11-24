@@ -129,7 +129,7 @@ def test_the_bias_document_counts_its_players_and_names_its_three_systems():
     assert meta["fields"] == site.BIAS_FIELDS and meta["multipliers"]["o"] > 0 and meta["multipliers"]["d"] > 0
     assert meta["residual"] == {"penalty": 13037.0, "multipliers": {"o": 1.4, "d": 2.1}}
     assert [(system["key"], system["weight"]) for system in document["systems"]] == [
-        ("xrapm", 6 / 13), ("rapm_3y", 4 / 13), ("darko", 3 / 13)]
+        ("xrapm", 0.5), ("rapm_3y", 0.3), ("darko", 0.2)]
     assert [system["players"] for system in document["systems"]] == [40, 41, 41]
     # a system's own date, or the day it was pulled when its page prints none
     assert [system["as_of"] for system in document["systems"]] == ["2026-11-04", "2026-11-05", "2026-11-04"]

@@ -432,9 +432,8 @@ them that a peak season comes back down the year after, so the misses come from 
   with their weights and dates, the residual RAPM's penalty and multipliers, and one row per stat with offense,
   defense, total, the residual RAPM's slope and their standard errors.
 - **How:** the players are those with 60 or more offensive possessions whom all three systems list. The consensus
-  is 6/13 xRAPM, 4/13 xrapm.com's 3-year RAPM and 3/13 DARKO, per side: the owner's 30, 20 and 15 of
-  2026-11-05, scaled to add to one once LOKI and Pulse were dropped (2026-11-24; no 2026-27 LEBRON is
-  published). Each side of OpenRAPM is multiplied once to the consensus's standard deviation, the consensus
+  is 50% xRAPM, 30% xrapm.com's 3-year RAPM and 20% DARKO, per side, the owner's of 2026-11-24, when LOKI and
+  Pulse were dropped and no 2026-27 LEBRON was published. Each side of OpenRAPM is multiplied once to the consensus's standard deviation, the consensus
   subtracted, and that gap regressed on each standardized stat alone, weighted by offensive possessions: the slope per one standard deviation is the page's
   number, with a heteroskedasticity-robust standard error. The 15 stats are the 13 box rates and on-court and
   off-court plus-minus.

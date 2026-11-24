@@ -16,20 +16,19 @@ THEIRS = {"offense": np.array([2.0, 0.0, -1.0, 1.0]), "defense": np.array([-2.0,
 
 
 def test_the_consensus_is_the_owners_weighted_mean_over_the_players_all_three_list():
-    """A player at 3.0, 1.0 and 2.0 reads (18 + 4 + 6) / 13 = 2.15; one a system lacks is out."""
+    """A player at 3.0, 1.0 and 2.0 reads 1.5 + 0.3 + 0.4 = 2.2; one a system lacks is out."""
     values = {"xrapm": 3.0, "rapm_3y": 1.0, "darko": 2.0}
     tables = {key: pd.DataFrame({"player_id": [7, 8], "offense": [value, 1.0], "defense": [-value, 1.0]})
               for key, value in values.items()}
     tables["darko"] = tables["darko"][tables["darko"].player_id == 7]
     blend = bias.consensus(tables)
     assert list(blend.columns) == ["player_id", "offense", "defense"] and list(blend.player_id) == [7]
-    assert blend.offense[0] == pytest.approx(28 / 13) and blend.defense[0] == pytest.approx(-28 / 13)
+    assert blend.offense[0] == pytest.approx(2.2) and blend.defense[0] == pytest.approx(-2.2)
 
 
 def test_the_weights_are_the_owners_and_add_up_to_one():
-    """The 30, 20 and 15 of 2026-11-05, scaled to add to one once LOKI and Pulse were dropped (2026-11-24)."""
-    assert bias.CONSENSUS_WEIGHTS == pytest.approx({"xrapm": 0.30 / 0.65, "rapm_3y": 0.20 / 0.65,
-                                                    "darko": 0.15 / 0.65})
+    """The owner, 2026-11-24, once LOKI and Pulse were dropped: "50% xRAPM 30% 3yr RAPM 20% DARKO DPM"."""
+    assert bias.CONSENSUS_WEIGHTS == {"xrapm": 0.50, "rapm_3y": 0.30, "darko": 0.20}
     assert sum(bias.CONSENSUS_WEIGHTS.values()) == pytest.approx(1.0)
     from openrapm.data import public_ratings
     assert set(bias.CONSENSUS_WEIGHTS) == set(public_ratings.SYSTEMS)

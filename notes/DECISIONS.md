@@ -13916,8 +13916,9 @@ product (teams/duke, bracket, tournament) and no LEBRON page.  Robots files: fan
 r2-bbi.fanspo.com carries only the comment block of content signals and no rule.  So the consensus is the owner's
 fallback: xRAPM, the 3-year RAPM and DARKO.
 
-**The weights:** the owner's 30, 20 and 15 of 2026-11-05, scaled to add to one: 6/13, 4/13 and 3/13 (46%, 31%, 23%).
-The owner named the members and no weights; this is the default, the owner's to change.
+**The weights,** the owner's through the question tool, offered 46/31/23 (the 30, 20 and 15 of 2026-11-05 scaled
+to add to one) or equal thirds: "50% xRAPM 30% 3yr RAPM 20% DARKO DPM".  The page's numbers below are at 46/31/23;
+the published file is at 50/30/20 ("The page as published", below).
 
 **The residual RAPM (`src/openrapm/residual_rapm.py`).**  What the Bias page of 2026-09-18 had as "vs 2026 observed":
 the published rating is the prediction for every team-game of the season (the trade set's machinery, block 0), a
@@ -13940,7 +13941,8 @@ held-out mean square of the residual's target after the rating:
   build's own, 13,037 (settings.RidgeSettings), so the column is what OpenRAPM's own ridge would add if run once
   more on the season's team-games.  The games' multipliers: 1.788 on offense, 2.399 on defense.
 - Sign: the residual's own.  Positive means the games rate those players higher than OpenRAPM does; the Total
-  column's positive means OpenRAPM rates them higher than the consensus does.  The owner's to confirm.
+  column's positive means OpenRAPM rates them higher than the consensus does.  The owner chose it over "OpenRAPM
+  minus the games", the way Total reads (2026-11-24, the question tool: "Residual's own").
 
 **The page, 2027 through 2026-11-23,** 419 of the 420 players shown, OpenRAPM multiplied by 0.839 on offense and 0.956
 on defense against the three (0.914 and 0.951 against the five).  Points per 100 per one standard deviation of the stat:
@@ -13966,5 +13968,25 @@ on defense against the three (0.914 and 0.951 against the five).  Points per 100
 Every residual slope is under 0.03, against the owner's 0.1 for nothing: the season's games so far would move
 OpenRAPM by no stat.  The largest, on-court plus-minus at -0.025 (z -3.6), says the games rate players with a high
 on-court plus-minus a little lower than OpenRAPM does, the opposite way from the consensus (-0.41).  Built on the side
-branch bias-residual-2026-11-24, not published; the 6 AM job runs the working tree, so the branch merges in only on
-the owner's word.
+branch bias-residual-2026-11-24; the owner, shown a private preview: "Publish now".
+
+**The page as published, 2026-11-24, 50/30/20,** 2027 through 2026-11-23, OpenRAPM multiplied by 0.848 on offense and
+0.977 on defense; the residual RAPM column is unchanged by the weights:
+
+| stat | total | its standard error | residual RAPM |
+|---|---|---|---|
+| made threes | -0.33 | 0.07 | +0.00 |
+| missed threes | -0.33 | 0.07 | -0.00 |
+| made twos | +0.23 | 0.09 | -0.01 |
+| missed twos | +0.11 | 0.09 | -0.01 |
+| made free throws | +0.12 | 0.09 | -0.02 |
+| missed free throws | +0.27 | 0.07 | -0.01 |
+| offensive rebounds | +0.44 | 0.06 | +0.00 |
+| defensive rebounds | +0.37 | 0.08 | -0.01 |
+| assists | +0.02 | 0.07 | -0.01 |
+| turnovers | +0.26 | 0.08 | -0.01 |
+| steals | +0.13 | 0.07 | -0.02 |
+| blocks | +0.27 | 0.10 | -0.01 |
+| personal fouls | +0.22 | 0.07 | +0.01 |
+| on-court plus-minus | -0.42 | 0.07 | -0.03 |
+| off-court plus-minus | -0.31 | 0.08 | +0.01 |

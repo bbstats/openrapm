@@ -23,7 +23,7 @@ Words used below
 
 Equations, over the compared players i with weights w_i (m is the weighted mean, s the weighted standard deviation)
 
-    consensus    c_i = (6 xRAPM_i + 4 RAPM3y_i + 3 DARKO_i) / 13                                        each side
+    consensus    c_i = 0.50 xRAPM_i + 0.30 RAPM3y_i + 0.20 DARKO_i                                       each side
     width match  k = s(c) / s(o)          gap_i = k (o_i - m(o)) - (c_i - m(c))                         each side
     total        gap_i(total) = gap_i(offense) + gap_i(defense)
     residual     gap_i(residual) = a_i(offense) + a_i(defense), a the residual RAPM, read like any gap below
@@ -55,9 +55,9 @@ from .features import BOX_RATES
 # The owner, 2026-11-05: "Five, with Pulse", then xrapm.com's 3-year RAPM in the place of nbarapm.com's time-decay
 # RAPM, whose robots.txt disallows the pull (notes/DECISIONS.md, "The Bias page's consensus").  The owner, 2026-11-24:
 # "get rid of Loki and Pulse. replace with LEBRON if you can find it. if not, just do xRAPM, 3yr RAPM and Darko DPM";
-# no 2026-27 LEBRON is published, and the three keep their 30, 20 and 15 of 2026-11-05, scaled to add to one.  Keys
-# as in data/public_ratings.SYSTEMS.
-CONSENSUS_WEIGHTS = {"xrapm": 6 / 13, "rapm_3y": 4 / 13, "darko": 3 / 13}
+# no 2026-27 LEBRON is published.  The weights, the same day: "50% xRAPM 30% 3yr RAPM 20% DARKO DPM".  Keys as in
+# data/public_ratings.SYSTEMS.
+CONSENSUS_WEIGHTS = {"xrapm": 0.50, "rapm_3y": 0.30, "darko": 0.20}
 ON_COURT_PLUS_MINUS = "on_court_plus_minus_per100"
 OFF_COURT_PLUS_MINUS = "off_court_plus_minus_per100"
 STATS = [*BOX_RATES, ON_COURT_PLUS_MINUS, OFF_COURT_PLUS_MINUS]
@@ -69,7 +69,7 @@ def consensus(tables: dict, weights: dict = CONSENSUS_WEIGHTS) -> pd.DataFrame:
     """player_id, offense, defense: the weighted mean of the systems' ratings, for the players every system lists.
 
     `tables` maps a system's key to its table (player_id, offense, defense; data/public_ratings.py).
-    Example: a player at 3.0, 1.0 and 2.0 on a side reads (18 + 4 + 6) / 13 = 2.15.
+    Example: a player at 3.0, 1.0 and 2.0 on a side reads 1.5 + 0.3 + 0.4 = 2.2.
     """
     missing = sorted(set(weights) - set(tables))
     if missing:
