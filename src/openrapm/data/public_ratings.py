@@ -1,26 +1,28 @@
 """The outside rating systems the Bias page compares OpenRAPM with: each one's public table pulled, checked and stored.
 
-The Bias page (bias.py, commands/site.py) asks where OpenRAPM rates players higher or lower than a consensus of five
-outside systems does.  This module gets the five tables.  Each system publishes one rating per player and side for
+The Bias page (bias.py, commands/site.py) asks where OpenRAPM rates players higher or lower than a consensus of three
+outside systems does.  This module gets the three tables.  Each system publishes one rating per player and side for
 the season in progress on a public page, keyed by the NBA's player id, so no name is ever matched.
 
 Words used below
-    system     one outside rating (`SYSTEMS`): xRAPM, xrapm.com's 3-year RAPM, LOKI, DARKO, Pulse
+    system     one outside rating (`SYSTEMS`): xRAPM, xrapm.com's 3-year RAPM, DARKO
     address    the one page or file a system's table is read from; one request a pull, never a retry
     table      player_id, offense, defense: points per 100 possessions, positive good on both sides.  xrapm.com prints
                defense as points allowed, "less is better", so its sign is flipped on the way in
     as of      the date a system says its ratings run through; None when its page prints none
     pull       one morning's request of every system, each stored in paths.public_ratings/<season>/<key>/<day>.parquet
 
-The five are the owner's choice of 2026-11-05 (notes/DECISIONS.md, "The Bias page's consensus").  What is not pulled,
-and must not be: EPM, since the terms of use of dunksandthrees.com forbid copying by script; nbarapm.com's time-decay
-RAPM, since its robots.txt disallows the address its table comes from; xPM, which vorp.app serves to an account key
-only.  Read a site's terms and its robots.txt before adding a system here.
+The three are the owner's choice of 2026-11-24 (notes/DECISIONS.md, "The Bias page's consensus"): LOKI and Pulse were
+dropped, and LEBRON was wanted in their place but no 2026-27 LEBRON is published (fanspo.com and its file
+r2-bbi.fanspo.com/impact_metrics_2526.csv still hold 2025-26).  What is not pulled, and must not be: EPM, since the
+terms of use of dunksandthrees.com forbid copying by script; nbarapm.com's time-decay RAPM, since its robots.txt
+disallows the address its table comes from; xPM, which vorp.app serves to an account key only.  Read a site's terms and
+its robots.txt before adding a system here.
 
 The stored tables stay out of git (.gitignore, /data/*) and off the site: the repository is public and the ratings
 are their makers'.  The page publishes only its own slopes, with each system named, credited and linked.
 
-Example: `pull(cfg, 2027, "2026-11-05")` makes five requests and writes five files.  If lumahoops.org is down, LOKI's
+Example: `pull(cfg, 2027, "2026-11-05")` makes three requests and writes three files.  If darko.app is down, DARKO's
 record reads "failed" with the reason, its files of earlier days stay, and `latest` goes on returning the newest.
 """
 from __future__ import annotations
@@ -43,7 +45,7 @@ from .ingest import refuse_if_offline
 
 USER_AGENT = "OpenRAPM (https://openrapm.com, github.com/bbstats/openrapm): one request a day for its Bias page"
 TIMEOUT = 30            # seconds; a system that has not answered by then is asked again the next morning
-PAUSE = 1.0             # seconds between two requests: two of the five go to xrapm.com
+PAUSE = 1.0             # seconds between two requests: two of the three go to xrapm.com
 MIN_ROWS = 300          # every system lists 500 or more players, so fewer means its page changed
 MAX_RATING = 25.0       # points per 100: no system rates anyone near it, so a larger number is a misread column
 SUM_TOLERANCE = 0.11    # a system's own total may miss its offense + defense by rounding: xrapm.com prints one decimal
@@ -181,69 +183,13 @@ def parse_darko(text: str, season: int) -> PublicRatings:
                          through if re.fullmatch(r"\d{4}-\d{2}-\d{2}", through) else None)
 
 
-# ------------------------------------------------------------------------------------ lumahoops.org: LOKI
-# The page is written by Next.js, which ships its data as JavaScript strings pushed one after another; joined, they
-# hold each data file under its name.  A number JSON cannot hold is written as a string: "$-0" is negative zero
-# (a defense of -0.00, met on 2026-11-05) and "$NaN" no number at all.
-NEXT_STRING = re.compile(r'self\.__next_f\.push\(\[1,"((?:[^"\\]|\\.)*)"\]\)')
-NEXT_NUMBERS = {"$-0": 0.0, "$NaN": None, "$undefined": None}
-
-
-@_a_page_read
-def parse_loki(text: str, season: int) -> PublicRatings:
-    """lumahoops.org/loki's current board, refreshed on Mondays: the object the page holds under
-    "loki/<season>/current.json", with `cols` and `rows`; `pid` is the NBA id, `O` and `D` the two sides (defense
-    positive good), `net` their sum and `asof` the date.
-
-    Example: cols ["pid", "name", "team", "net", "O", "D", ...] and the row [1628983, "...", "OKC", 12.89, 10.2, 2.69]
-    give offense 10.2 and defense 2.69.
-    """
-    payload = "".join(json.loads(f'"{piece}"') for piece in NEXT_STRING.findall(text))
-    name = f'"loki/{int(season)}/current.json":'
-    if name not in payload:
-        raise FormatChanged(f"lumahoops.org: the page holds no {name[:-1]}")
-    board, _ = json.JSONDecoder().raw_decode(payload, payload.index("{", payload.index(name) + len(name)))
-    if int(board["season"]) != int(season):
-        raise FormatChanged(f"lumahoops.org: season {board['season']} where {season} was asked")
-    rows = [[NEXT_NUMBERS.get(value, value) if isinstance(value, str) else value for value in row]
-            for row in board["rows"]]
-    frame = pd.DataFrame(rows, columns=board["cols"]).rename(
-        columns={"pid": "player_id", "O": "offense", "D": "defense", "net": "total"})
-    return PublicRatings(checked("lumahoops.org", frame[["player_id", "offense", "defense", "total"]]),
-                         str(board["asof"])[:10])
-
-
-# ------------------------------------------------------------------------------------ courtsignal.net: Pulse
-@_a_page_read
-def parse_pulse(text: str, season: int) -> PublicRatings:
-    """courtsignal.net's daily board of the season, data/model-boards/current/season-<season>.json: `rows` holds one
-    list of players per date, each [NBA id, total, offense, defense, ...] with defense positive good; the latest
-    date is read.
-
-    Example: {"season": 2027, "dates": ["2026-11-04"], "rows": {"2026-11-04": [[203999, 9.0, 7.95, 1.05, ...]]}}
-    gives offense 7.95 and defense 1.05, as of 2026-11-04.
-    """
-    document = json.loads(text)
-    if int(document["season"]) != int(season):
-        raise FormatChanged(f"courtsignal.net: season {document['season']} where {season} was asked")
-    day = max(document["dates"])
-    frame = pd.DataFrame([row[:4] for row in document["rows"][day]],
-                         columns=["player_id", "total", "offense", "defense"])
-    return PublicRatings(checked("courtsignal.net", frame), str(day)[:10])
-
-
-# ------------------------------------------------------------------------------------ the five, and their pull
+# ------------------------------------------------------------------------------------ the three, and their pull
 SYSTEMS = {system.key: system for system in (
     System("xrapm", "xRAPM", "Jeremias Engelmann", "https://xrapm.com/", "https://xrapm.com/", parse_xrapm),
     System("rapm_3y", "3-year RAPM", "Jeremias Engelmann", "https://xrapm.com/table_pages/RAPM_3y.html",
            "https://xrapm.com/table_pages/RAPM_3y.html", parse_xrapm),
-    # LUMA's outputs are open with credit to both names (lumahoops.org/luma/data/_notice.json, 2026-11-05)
-    System("loki", "LOKI", "LUMA Basketball Research and CourtShare", "https://lumahoops.org/loki",
-           "https://lumahoops.org/loki", parse_loki),
     System("darko", "DARKO", "Kostya Medvedovsky", "https://www.darko.app/", "https://www.darko.app/__data.json",
            parse_darko),
-    System("pulse", "Pulse", "CourtSignal", "https://courtsignal.net/ratings",
-           "https://courtsignal.net/data/model-boards/current/season-{season}.json", parse_pulse),
 )}
 
 
@@ -283,7 +229,7 @@ def pull_one(cfg: dict, system: System, season: int, day: str) -> dict:
 
 
 def pull(cfg: dict, season: int, day: str, keys=None, pause: float = PAUSE) -> list[dict]:
-    """Every system of `keys` (default all five) asked once, `pause` seconds apart: one record each (`pull_one`).
+    """Every system of `keys` (default all three) asked once, `pause` seconds apart: one record each (`pull_one`).
     With OPENRAPM_OFFLINE=1 the first request raises `OfflineFetch`."""
     records = []
     for position, key in enumerate(keys or SYSTEMS):

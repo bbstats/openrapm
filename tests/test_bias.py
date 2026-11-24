@@ -15,19 +15,20 @@ OURS = {"offense": np.array([-3.0, 1.0, 1.0, 5.0]), "defense": np.array([1.0, -1
 THEIRS = {"offense": np.array([2.0, 0.0, -1.0, 1.0]), "defense": np.array([-2.0, 2.0, -2.0, 2.0])}
 
 
-def test_the_consensus_is_the_owners_weighted_mean_over_the_players_all_five_list():
-    """A player at 3.0, 1.0, 3.0, 2.0 and 0.0 reads 0.9 + 0.2 + 0.6 + 0.3 + 0.0 = 2.0; one a system lacks is out."""
-    values = {"xrapm": 3.0, "rapm_3y": 1.0, "loki": 3.0, "darko": 2.0, "pulse": 0.0}
+def test_the_consensus_is_the_owners_weighted_mean_over_the_players_all_three_list():
+    """A player at 3.0, 1.0 and 2.0 reads 1.5 + 0.3 + 0.4 = 2.2; one a system lacks is out."""
+    values = {"xrapm": 3.0, "rapm_3y": 1.0, "darko": 2.0}
     tables = {key: pd.DataFrame({"player_id": [7, 8], "offense": [value, 1.0], "defense": [-value, 1.0]})
               for key, value in values.items()}
-    tables["pulse"] = tables["pulse"][tables["pulse"].player_id == 7]
+    tables["darko"] = tables["darko"][tables["darko"].player_id == 7]
     blend = bias.consensus(tables)
     assert list(blend.columns) == ["player_id", "offense", "defense"] and list(blend.player_id) == [7]
-    assert blend.offense[0] == pytest.approx(2.0) and blend.defense[0] == pytest.approx(-2.0)
+    assert blend.offense[0] == pytest.approx(2.2) and blend.defense[0] == pytest.approx(-2.2)
 
 
 def test_the_weights_are_the_owners_and_add_up_to_one():
-    assert bias.CONSENSUS_WEIGHTS == {"xrapm": 0.30, "rapm_3y": 0.20, "loki": 0.20, "darko": 0.15, "pulse": 0.15}
+    """The owner, 2026-11-24, once LOKI and Pulse were dropped: "50% xRAPM 30% 3yr RAPM 20% DARKO DPM"."""
+    assert bias.CONSENSUS_WEIGHTS == {"xrapm": 0.50, "rapm_3y": 0.30, "darko": 0.20}
     assert sum(bias.CONSENSUS_WEIGHTS.values()) == pytest.approx(1.0)
     from openrapm.data import public_ratings
     assert set(bias.CONSENSUS_WEIGHTS) == set(public_ratings.SYSTEMS)
@@ -136,3 +137,42 @@ def test_the_compared_players_are_those_rated_listed_by_the_consensus_and_in_the
     players = bias.compared_players(ratings, blend, stats)
     assert list(players.player_id) == [1, 3] and list(players.weight) == [100.0, 300.0]
     assert list(players.consensus_offense) == [1.0, 3.0] and "player_name" not in players
+    assert "residual_offense" not in players
+
+
+def test_a_player_the_games_do_not_hold_has_a_residual_of_0():
+    ratings = pd.DataFrame({"player_id": [1, 3], "poss_season": [100.0, 300.0], "rating_off": [0.1, 0.3],
+                            "rating_def": [0.0, 0.0]})
+    blend = pd.DataFrame({"player_id": [1, 3], "offense": [1.0, 3.0], "defense": [0.0, 0.0]})
+    stats = pd.DataFrame({"player_id": [1, 3], **{stat: [0.0, 0.0] for stat in bias.STATS}})
+    residual = pd.DataFrame({"player_id": [3, 9], "residual_offense": [0.2, 5.0], "residual_defense": [-0.1, 5.0]})
+    players = bias.compared_players(ratings, blend, stats, residual)
+    assert list(players.player_id) == [1, 3]
+    assert list(players.residual_offense) == [0.0, 0.2] and list(players.residual_defense) == [0.0, -0.1]
+
+
+def test_without_a_residual_the_table_has_no_residual_column_and_with_one_the_rest_is_unchanged():
+    players = _players()
+    plain, _ = bias.bias_table(players)
+    assert "residual" not in plain and "residual_se" not in plain
+    rng = np.random.default_rng(8)
+    both, _ = bias.bias_table(players.assign(residual_offense=rng.normal(0, 0.1, len(players)),
+                                             residual_defense=rng.normal(0, 0.1, len(players))))
+    assert list(both.columns) == ["stat", "sd", "offense", "defense", "total", "residual", "offense_se", "defense_se",
+                                  "total_se", "residual_se"]
+    numbers = list(plain.columns[1:])
+    assert np.allclose(both[numbers].to_numpy(float), plain[numbers].to_numpy(float))
+
+
+def test_a_residual_built_from_one_stat_is_read_back_on_that_stat_with_its_sign():
+    """The games rate players 0.03 per 100 lower per standard deviation of steals, split across the two sides: the
+    steals row's residual reads -0.03 (no width match: the residual is already in points per 100), the others near 0."""
+    players = _players(n=400, seed=12)
+    weights = players.weight.to_numpy()
+    z = (players.steals_per100 - bias.weighted_mean(players.steals_per100, weights)) \
+        / bias.weighted_sd(players.steals_per100, weights)
+    table, _ = bias.bias_table(players.assign(residual_offense=-0.01 * z, residual_defense=-0.02 * z))
+    table = table.set_index("stat")
+    assert table.loc["steals_per100", "residual"] == pytest.approx(-0.03)
+    assert table.loc["steals_per100", "residual_se"] == pytest.approx(0.0, abs=1e-12)
+    assert table.drop(index="steals_per100").residual.abs().max() < 0.01

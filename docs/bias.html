@@ -34,8 +34,8 @@
   th { color: var(--muted); font-weight: 600; font-size: 13px; vertical-align: bottom; }
   th.name, td.name { text-align: left; }
   /* the numbers keep one width, so a colored cell is a small block and the stat's name takes the rest of the row */
-  #table { max-width: 560px; }
-  #table th:not(.name), #table td:not(.name) { width: 104px; }
+  #table { max-width: 680px; }
+  #table th:not(.name), #table td:not(.name) { width: 116px; }
   #systems th:not(.name), #systems td:not(.name) { width: 104px; }
   #table th { cursor: pointer; user-select: none; }
   #table th:hover { color: var(--ink); }
@@ -77,7 +77,7 @@
     <button class="theme" type="button" aria-label="Dark mode" title="Dark mode"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
   </nav>
   <h1>Bias</h1>
-  <p class="lede">OpenRAPM minus a consensus of five public metrics, per 1 standard deviation of each stat, in points per 100</p>
+  <p class="lede">OpenRAPM minus a consensus of three public metrics, per 1 standard deviation of each stat, in points per 100</p>
   <p class="byline" id="byline">&nbsp;</p>
   <div class="scroll">
     <table id="table"><thead></thead><tbody><tr><td class="msg" colspan="99">Loading&hellip;</td></tr></tbody><tfoot></tfoot></table>
@@ -100,15 +100,19 @@
   const median = values => { const s = [...values].sort((a, b) => a - b), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 
   const FULL = 0.5;      // a number this far from 0, in points per 100, takes the full color
-  // the sides' columns, [key in the file, header]; a row in the file is a list in meta.fields order
-  const COLUMNS = [["t", "Total"]];      // the owner, 2026-11-05: "i dont want off/def, just do total"
+  // the columns, [key in the file, header, hover]; a row in the file is a list in meta.fields order.  The owner,
+  // 2026-11-05: "i dont want off/def, just do total"; 2026-11-24: "add in the 'residual rapm' ... as a column in
+  // addition to 'total'"
+  const COLUMNS = [
+    ["t", "Total", "OpenRAPM minus the consensus, per 1 standard deviation of the stat, points per 100"],
+    ["r", "Residual RAPM", "What this season's games add to OpenRAPM, per 1 standard deviation of the stat, points per 100"]];
   const state = { sort: null };      // null: the file's order, the box score's; else { k, dir }
   const table = $("table"), thead = table.querySelector("thead"), tbody = table.querySelector("tbody"),
         tfoot = table.querySelector("tfoot");
   let data = null, rows = [];
 
   function cell(value, error) {
-    if (value === null) return `<td>—</td>`;
+    if (value === null || value === undefined) return `<td>—</td>`;      // undefined: a file written before the column
     const pole = value > 0 ? "over" : value < 0 ? "under" : "";
     const depth = Math.min(Math.abs(value) / FULL, 1).toFixed(3);
     const title = error === null ? "" : ` title="±${plain(error)}"`;
@@ -117,9 +121,9 @@
 
   function render() {
     const sorted = state.sort ? [...rows].sort((a, b) => state.sort.dir * (a[state.sort.k] - b[state.sort.k])) : rows;
-    const th = (key, name) => `<th data-k="${key}"${state.sort && state.sort.k === key
-      ? ` aria-sort="${state.sort.dir < 0 ? "descending" : "ascending"}"` : ""} title="OpenRAPM minus the consensus, per 1 standard deviation of the stat, points per 100">${name}</th>`;
-    thead.innerHTML = `<tr><th class="name" data-reset>Stat</th>` + COLUMNS.map(([key, name]) => th(key, name)).join("") + `</tr>`;
+    const th = (key, name, hover) => `<th data-k="${key}"${state.sort && state.sort.k === key
+      ? ` aria-sort="${state.sort.dir < 0 ? "descending" : "ascending"}"` : ""} title="${hover}">${name}</th>`;
+    thead.innerHTML = `<tr><th class="name" data-reset>Stat</th>` + COLUMNS.map(column => th(...column)).join("") + `</tr>`;
     tbody.innerHTML = sorted.map(row => `<tr><td class="name">${esc(row.label)}</td>` +
       COLUMNS.map(([key]) => cell(row[key], row[key + "_se"])).join("") + `</tr>`).join("");
     const errors = COLUMNS.map(([key]) => rows.map(row => row[key + "_se"]).filter(v => v !== null));
@@ -148,8 +152,8 @@
     e.preventDefault();
     if (!data) return;
     const q = v => v === null ? "" : /[",\r\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
-    const head = ["stat", "label", "total", "total_se", "stat_sd"];
-    const lines = [head, ...rows.map(r => [r.stat, r.label, r.t, r.t_se, r.sd])];
+    const head = ["stat", "label", "total", "total_se", "residual_rapm", "residual_rapm_se", "stat_sd"];
+    const lines = [head, ...rows.map(r => [r.stat, r.label, r.t, r.t_se, r.r, r.r_se, r.sd])];
     const text = "﻿" + lines.map(line => line.map(q).join(",")).join("\r\n") + "\r\n";
     const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
     const a = Object.assign(document.createElement("a"), { href: url, download: `openrapm_bias_${data.meta.season}.csv` });

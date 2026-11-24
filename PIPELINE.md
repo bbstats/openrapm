@@ -423,18 +423,26 @@ them that a peak season comes back down the year after, so the misses come from 
 
 ## The Bias page (`bias.py`)
 
-- **For:** for the season the pages open on, where OpenRAPM rates players higher or lower than a consensus of five
-  outside rating systems does, stat by stat (the owner's design, 2026-11-05).
+- **For:** for the season the pages open on, where OpenRAPM rates players higher or lower than a consensus of three
+  outside rating systems does, stat by stat (the owner's design, 2026-11-05), and where the season's own games
+  would move it: the residual RAPM column (the owner, 2026-11-24).
 - **Reads:** the ratings table; the season panel's rows of that season, `data.panel.panel_of_season`; each system's
-  newest stored table, `data.public_ratings.latest`.
-- **Writes:** `docs/data/bias.json`: the season, the players compared, the two width multipliers, the five systems
-  with their weights and dates, and one row per stat with offense, defense, total and their standard errors.
-- **How:** the players are those with 60 or more offensive possessions whom all five systems list. The consensus is
-  30% xRAPM, 20% xrapm.com's 3-year RAPM, 20% LOKI, 15% DARKO and 15% Pulse, per side. Each side of OpenRAPM is
-  multiplied once to the consensus's standard deviation, the consensus subtracted, and that gap regressed on each
-  standardized stat alone, weighted by offensive possessions: the slope per one standard deviation is the page's
+  newest stored table, `data.public_ratings.latest`; the season's stored design pieces, for the residual RAPM.
+- **Writes:** `docs/data/bias.json`: the season, the players compared, the two width multipliers, the three systems
+  with their weights and dates, the residual RAPM's penalty and multipliers, and one row per stat with offense,
+  defense, total, the residual RAPM's slope and their standard errors.
+- **How:** the players are those with 60 or more offensive possessions whom all three systems list. The consensus
+  is 50% xRAPM, 30% xrapm.com's 3-year RAPM and 20% DARKO, per side, the owner's of 2026-11-24, when LOKI and
+  Pulse were dropped and no 2026-27 LEBRON was published. Each side of OpenRAPM is multiplied once to the consensus's standard deviation, the consensus
+  subtracted, and that gap regressed on each standardized stat alone, weighted by offensive possessions: the slope per one standard deviation is the page's
   number, with a heteroskedasticity-robust standard error. The 15 stats are the 13 box rates and on-court and
   off-court plus-minus.
+- **Residual RAPM** (`residual_rapm.py`): the published rating is the prediction for every team-game of the
+  season, and a ridge at the build's own penalty, 13,037, is fitted to what is left, with one free multiplier per
+  side and the season's level, home court and playoff columns. A player's coefficient, offense plus defense, is
+  his residual RAPM; the column is its slope on each standardized stat, read like the gap above but with no
+  width match (positive: the games rate those players higher than OpenRAPM does). No free level per team: on
+  2027's first 514 team-games, held out by game, team levels made every penalty worse.
 - **The systems' tables:** `python -m openrapm data public-ratings` asks each system's public page once, checks the
   table, and stores it in `data/public_ratings/<season>/<system>/<day>.parquet`, out of git: the ratings are their
   makers'. EPM, nbarapm.com's time-decay RAPM and xPM are not pulled: their terms of use or robots file forbid it
@@ -480,7 +488,7 @@ python -m openrapm data dashboards 2027 2027 --force         # the season-to-dat
 python -m openrapm data panel --force                        # also rebuilds the season's roles rows and bio feed
 python -m openrapm build --seasons 2027 --replace-seasons    # 2027 in place of yesterday's 2027, nothing else moves
 python -m openrapm site --openrapm-decomposition --power --power-forecast --out-dir A:/code/spmm_site/docs
-python -m openrapm data public-ratings               # not a step: the Bias page's five outside systems
+python -m openrapm data public-ratings               # not a step: the Bias page's three outside systems
 python -m openrapm site --bias --out-dir A:/code/spmm_site/docs      # not a step either
 python -m openrapm site --similarity --out-dir A:/code/spmm_site/docs    # only when a finished season's rating moved
 ```

@@ -20,7 +20,7 @@
 #      (scripts/daily_files.py).  The ratings page opens on the season in progress only once its median player shown has
 #      250 offensive possessions (openrapm site, default_season).  docs/data/power.json is each team's current ratings
 #      times its players' shares of its possessions over its last 10 games.
-#   6. not steps, so they can never hold the ratings back: the five outside rating systems asked for their tables
+#   6. not steps, so they can never hold the ratings back: the three outside rating systems asked for their tables
 #      (`openrapm data public-ratings`) and the Bias page's file written from them (`openrapm site --bias`); and the
 #      Similarity page's files, written again only on a morning when its player-seasons carry other ratings than the
 #      published ones (`openrapm site --similarity`).  Both are committed with the four files above on a morning they
@@ -72,7 +72,7 @@ step() {
   say "start: $*"
   "$@" >> "$LOG" 2>&1 || finish "FAILED: $*" 1
 }
-# The Bias page's file, docs/data/bias.json, is never a step: it needs five outside systems' pages, and a site that is
+# The Bias page's file, docs/data/bias.json, is never a step: it needs three outside systems' pages, and a site that is
 # down or redesigned at 6 AM must not hold the ratings back.  A system that fails keeps its last stored table
 # (data/public_ratings.py), and when the file itself cannot be written the published one stays.  Each call gets five
 # minutes; /usr/bin/timeout by its full path, since Windows has a timeout of its own on the PATH.

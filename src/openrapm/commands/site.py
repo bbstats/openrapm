@@ -3,7 +3,8 @@
     openrapm site                    docs/data/ratings.json, the ratings as one file (the ratings page reads
                                      ratings_list.json and decompose_openrapm.json, below)
     openrapm site --bias             also docs/data/bias.json, the Bias page: where OpenRAPM rates players higher or
-                                     lower than a consensus of five outside systems, per standard deviation of a stat
+                                     lower than a consensus of three outside systems, per standard deviation of a
+                                     stat, and where the season's own games would move them (residual RAPM)
     openrapm site --openrapm-decomposition
                                      also docs/data/decompose_openrapm.json, the ratings page's Detail view: every
                                      published rating split into pieces that add up to it; and, cut from it,
@@ -21,7 +22,7 @@ Words used below
     built           the date in a file's meta.built.  ratings.json shows the ratings table's modification date,
                     so re-exporting the same table does not tell readers the ratings changed; the Similarity and
                     Bias files show the day they were computed.  --built sets it for every file written
-    consensus       on the Bias page, the weighted mean of five outside systems' ratings (bias.py), whose tables
+    consensus       on the Bias page, the weighted mean of three outside systems' ratings (bias.py), whose tables
                     `openrapm data public-ratings` pulls; not data/external/consensus.csv, the adoption check's
 
 Example: `openrapm site --out-dir C:/tmp/site --built 2026-10-09` writes C:/tmp/site/data/ratings.json, whose
@@ -59,7 +60,9 @@ from ..decomposition import lineups, refit, row_keys, split_games_part
 from ..features import FEATURE_SETS, meaning
 from ..power_forecast import WEIGHTS_FILE, flat_shares, last_ten_stats, stats_parts, weights_at
 from ..prior_shrink import team_split
-from ..settings import PRODUCT
+from ..residual_rapm import PENALTY as RESIDUAL_PENALTY
+from ..residual_rapm import season_residual
+from ..settings import PRODUCT, Targets
 from ..similarity import closest, distances, own_season_ranks, player_seasons, similarity_inputs, standardise
 
 RATINGS_TABLE = "season_ratings_product.parquet"
@@ -1019,21 +1022,23 @@ def write_power(cfg: dict, ratings_path: Path, data_dir: Path, built: str, forec
 
 # ===================================================================================== the bias page
 # docs/data/bias.json, which docs/bias.html draws (the owner's design, 2026-11-05): for the season the pages open on,
-# how much higher or lower OpenRAPM rates players one standard deviation higher in each stat than a consensus of five
-# outside systems does.  bias.py holds the equations; the file:
+# how much higher or lower OpenRAPM rates players one standard deviation higher in each stat than a consensus of three
+# outside systems does, and the season's residual RAPM's slope on the same stat (the owner, 2026-11-24: "add in the
+# 'residual rapm' ... as a column in addition to 'total'").  bias.py and residual_rapm.py hold the equations; the file:
 #
 #   {"meta": {"season", "through", "built", "min_possessions", "players_shown", "players",
-#             "multipliers": {"o", "d"}, "fields": BIAS_FIELDS},
-#    "systems": [{"key", "name", "by", "link", "weight", "as_of", "players"}, ...],    the five, heaviest first
-#    "rows": [[stat, label, o, d, t, o_se, d_se, t_se, sd], ...]}                      one per stat, bias.STATS order
+#             "multipliers": {"o", "d"}, "residual": {"penalty", "multipliers": {"o", "d"}}, "fields": BIAS_FIELDS},
+#    "systems": [{"key", "name", "by", "link", "weight", "as_of", "players"}, ...],    the three, heaviest first
+#    "rows": [[stat, label, o, d, t, o_se, d_se, t_se, sd, r, r_se], ...]}             one per stat, bias.STATS order
 #
-# o and d are written at two decimals and t is their sum, so every row adds up on the page.  players_shown is the
-# season's players with 60 or more offensive possessions (`MIN_POSSESSIONS_SHOWN`), and players those of them all
-# five systems list.  A system's own `players` is how many of the shown it lists; its `as_of` is its own date, or the
-# day it was pulled when its page prints none.  Only these slopes are published: the systems' ratings stay in
-# paths.public_ratings, out of git.
+# o and d are written at two decimals and t is their sum, so every row adds up on the page.  r, the residual RAPM's
+# slope, and its standard error are written at three: this early in a season they are hundredths.  players_shown is
+# the season's players with 60 or more offensive possessions (`MIN_POSSESSIONS_SHOWN`), and players those of them all
+# three systems list; r is read on the same players.  A system's own `players` is how many of the shown it lists; its
+# `as_of` is its own date, or the day it was pulled when its page prints none.  Only these slopes are published: the
+# systems' ratings stay in paths.public_ratings, out of git, and no player's residual is written.
 BIAS_FILE = "bias.json"
-BIAS_FIELDS = ["stat", "label", "o", "d", "t", "o_se", "d_se", "t_se", "sd"]
+BIAS_FIELDS = ["stat", "label", "o", "d", "t", "o_se", "d_se", "t_se", "sd", "r", "r_se"]
 BIAS_LABELS = {ON_COURT_PLUS_MINUS: "On-court plus-minus", OFF_COURT_PLUS_MINUS: "Off-court plus-minus"}
 
 
@@ -1049,15 +1054,17 @@ def _rounded(value, digits: int = 2):
 
 
 def bias_row(row) -> list:
-    """One stat's row in `BIAS_FIELDS` order: offense and defense at two decimals, total their sum."""
+    """One stat's row in `BIAS_FIELDS` order: offense and defense at two decimals, total their sum, the residual RAPM's
+    slope and its standard error at three."""
     offense, defense = _rounded(row.offense), _rounded(row.defense)
     total = None if offense is None or defense is None else round(offense + defense, 2)
     return [row.stat, bias_label(row.stat), offense, defense, total, _rounded(row.offense_se),
-            _rounded(row.defense_se), _rounded(row.total_se), _rounded(row.sd, 3)]
+            _rounded(row.defense_se), _rounded(row.total_se), _rounded(row.sd, 3), _rounded(row.residual, 3),
+            _rounded(row.residual_se, 3)]
 
 
 def against_openrapm(players: pd.DataFrame, pulls: dict) -> list:
-    """The systems whose ratings run against OpenRAPM's on a side among the compared players, as "LOKI defense":
+    """The systems whose ratings run against OpenRAPM's on a side among the compared players, as "DARKO defense":
     every system agrees with OpenRAPM far above 0 (0.5 to 0.8 on 2026-11-05), so one at 0 or below changed a sign."""
     out = []
     for key in CONSENSUS_WEIGHTS:
@@ -1068,12 +1075,14 @@ def against_openrapm(players: pd.DataFrame, pulls: dict) -> list:
 
 
 def bias_document(table: pd.DataFrame, panel: pd.DataFrame, pulls: dict, season: int, built: str,
-                  through: str) -> dict:
-    """bias.json's document for `season`, from the ratings table, the season's panel rows and each system's stored
-    pull ({key: `public_ratings.PublicRatings`})."""
+                  through: str, residual: tuple) -> dict:
+    """bias.json's document for `season`, from the ratings table, the season's panel rows, each system's stored
+    pull ({key: `public_ratings.PublicRatings`}) and the season's residual RAPM (`residual_rapm.season_residual`:
+    the players' residuals and the two multipliers)."""
     shown = table[(table.season == season) & (table.poss_season >= MIN_POSSESSIONS_SHOWN)]
     blend = consensus({key: pulls[key].table for key in CONSENSUS_WEIGHTS})
-    players = compared_players(shown, blend, player_stats(panel))
+    residuals, residual_multipliers = residual
+    players = compared_players(shown, blend, player_stats(panel), residuals)
     flipped = against_openrapm(players, pulls)
     if flipped:
         raise SystemExit(f"{', '.join(flipped)} runs against OpenRAPM's among {len(players)} players: its page "
@@ -1087,27 +1096,45 @@ def bias_document(table: pd.DataFrame, panel: pd.DataFrame, pulls: dict, season:
     meta = dict(season=season, through=through, built=built, min_possessions=MIN_POSSESSIONS_SHOWN,
                 players_shown=len(shown), players=len(players),
                 multipliers=dict(o=_rounded(multipliers["offense"], 3), d=_rounded(multipliers["defense"], 3)),
+                residual=dict(penalty=RESIDUAL_PENALTY,
+                              multipliers=dict(o=_rounded(residual_multipliers["offense"], 3),
+                                               d=_rounded(residual_multipliers["defense"], 3))),
                 fields=BIAS_FIELDS)
     return dict(meta=meta, systems=systems, rows=[bias_row(row) for row in slopes.itertuples(index=False)])
 
 
 def bias_summary(document: dict) -> list[str]:
-    """The console report: the players compared, the multipliers, each system's date, and the table."""
+    """The console report: the players compared, the multipliers, each system's date, and the table: offense,
+    defense, total, residual RAPM."""
     meta = document["meta"]
+    games = meta["residual"]["multipliers"]
     lines = [f"  {meta['players']} of the {meta['players_shown']} players shown for {meta['season']} are in all "
              f"{len(document['systems'])} systems; OpenRAPM multiplied by {meta['multipliers']['o']:.3f} on offense "
              f"and {meta['multipliers']['d']:.3f} on defense",
              "  " + ", ".join(f"{system['name']} {system['weight']:.0%} as of {system['as_of']}"
-                              for system in document["systems"])]
-    lines += [f"  {row[1]:<22}" + "".join("     n/a" if value is None else f"{value:+8.2f}" for value in row[2:5])
-              + f"   standard error of the total {row[7]}" for row in document["rows"]]
+                              for system in document["systems"]),
+             f"  residual RAPM at penalty {meta['residual']['penalty']:,.0f}, the games' multipliers {games['o']:.3f} "
+             f"on offense and {games['d']:.3f} on defense"]
+    field = {name: position for position, name in enumerate(meta["fields"])}
+    columns = ["o", "d", "t", "r"]
+    lines += [f"  {row[1]:<22}" + "".join("     n/a" if row[field[name]] is None else f"{row[field[name]]:+8.2f}"
+                                          for name in columns)
+              + f"   standard errors {row[field['t_se']]}, {row[field['r_se']]}" for row in document["rows"]]
     return lines
+
+
+def season_designs(cfg: dict, season: int) -> dict:
+    """The season's design on each side's target, the build's (settings.Targets), from its stored pieces: what the
+    residual RAPM is fitted on (residual_rapm.season_residual)."""
+    cache, targets = DesignCache(cfg, keep=2), Targets()
+    return {"offense": cache.season(season, targets.offence), "defense": cache.season(season, targets.defence)}
 
 
 def write_bias(cfg: dict, ratings_path: Path, data_dir: Path, built: str) -> None:
     """bias.json in `data_dir`, for the season the pages open on (`default_season`), from each system's newest stored
-    pull.  A system never pulled for that season, or dated before the season's first game, stops the command with
-    one line and the file as it was; so does a system that runs against OpenRAPM (`bias_document`)."""
+    pull and the season's residual RAPM, fitted here on its stored design pieces (a second or two).  A system never
+    pulled for that season, or dated before the season's first game, stops the command with one line and the file as
+    it was; so does a system that runs against OpenRAPM (`bias_document`)."""
     table = pd.read_parquet(ratings_path)
     season = default_season(table)
     pulls = public_ratings.latest(cfg, season)
@@ -1122,7 +1149,8 @@ def write_bias(cfg: dict, ratings_path: Path, data_dir: Path, built: str) -> Non
     if early:
         raise SystemExit(f"{', '.join(early)}: dated before {season}'s first game, {first}; the bias file is left "
                          f"as it was")
-    document = bias_document(table, panel_of_season(cfg, season), pulls, season, built, through)
+    document = bias_document(table, panel_of_season(cfg, season), pulls, season, built, through,
+                             season_residual(season_designs(cfg, season), table, season))
     data_dir.mkdir(parents=True, exist_ok=True)
     path = data_dir / BIAS_FILE
     part = path.with_name(BIAS_FILE + ".part")      # written whole, then moved: the page never reads half a file

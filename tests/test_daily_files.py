@@ -72,7 +72,7 @@ def test_the_job_gives_its_programs_a_usable_stdin_before_it_starts_any():
 
 
 def test_the_bias_file_can_never_hold_the_ratings_back():
-    """The Bias page's file needs five outside systems' pages, and one may be down at 6 AM.  So neither of its two
+    """The Bias page's file needs three outside systems' pages, and one may be down at 6 AM.  So neither of its two
     calls is a step, each is capped, the file is committed with the morning's three without being one of the files
     whose change decides the publish, and the job never creates it on main."""
     text = (SCRIPT.parent / "daily_update.sh").read_text(encoding="utf-8")

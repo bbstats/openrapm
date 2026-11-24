@@ -13903,3 +13903,90 @@ Self-creation's none by era -0.26 / -0.17 / -0.25, one +0.05 / +0.15 / +0.14; he
 - Leans, one player at a time and not synergies, from the same fits: on defense, players who run in transition are
   over-credited, -0.29 per player standard deviation, z -6.0, 26 of 30; heavier players under-credited, +0.13, z
   +4.0; on offense, shot blockers over-credited, -0.13, z -2.8.  Nothing adopted; no rating moved.
+
+## The Bias page, three systems and a residual RAPM column (the owner, 2026-11-24: "add in the 'residual rapm' (residual of openrapm) and call it 'residual rapm' (as a column in addition to 'total'). we have done this before. also get rid of Loki and Pulse. replace with LEBRON if you can find it. if not, just do xRAPM, 3yr RAPM and Darko DPM")
+
+**LEBRON is not published for 2026-27.**  Checked 2026-11-24, one request each with the OpenRAPM user agent:
+fanspo.com's player pages print a "single-year LEBRON", and the numbers are 2025-26's (Giannis Antetokounmpo +5.13 and
+Jayson Tatum +3.89 on a compare page, the same as the 2025-26 file).  That file, r2-bbi.fanspo.com/impact_metrics_2526.csv
+(582 players, through 2026-04-12), was modified 2026-11-24 but still holds 2025-26; impact_metrics_2627.csv,
+impact_metrics_2027.csv and impact_metrics.csv are 404.  fanspo.com has no LEBRON table page (its sitemap lists
+none), and pulling 500 player pages a morning would be scraping.  bball-index.com's sitemap now lists a college
+product (teams/duke, bracket, tournament) and no LEBRON page.  Robots files: fanspo.com allows its pages,
+r2-bbi.fanspo.com carries only the comment block of content signals and no rule.  So the consensus is the owner's
+fallback: xRAPM, the 3-year RAPM and DARKO.
+
+**The weights,** the owner's through the question tool, offered 46/31/23 (the 30, 20 and 15 of 2026-11-05 scaled
+to add to one) or equal thirds: "50% xRAPM 30% 3yr RAPM 20% DARKO DPM".  The page's numbers below are at 46/31/23;
+the published file is at 50/30/20 ("The page as published", below).
+
+**The residual RAPM (`src/openrapm/residual_rapm.py`).**  What the Bias page of 2026-09-18 had as "vs 2026 observed":
+the published rating is the prediction for every team-game of the season (the trade set's machinery, block 0), a
+ridge is fitted to what is left with one free multiplier per side, and the coefficient is the player's residual.
+Two of 2026-09-18's choices were read again on 2027's 514 team-games through 2026-11-23, five folds of games held out,
+held-out mean square of the residual's target after the rating:
+
+| penalty | offense, team levels free | offense, no team levels | defense, team levels free | defense, no team levels |
+|---|---|---|---|---|
+| 300 | 127.56 | 122.58 | 70.57 | 67.34 |
+| 1,000 | 126.50 | 116.60 | 68.24 | 62.39 |
+| 3,000 | 126.79 | 110.56 | 67.67 | 58.40 |
+| 13,037 | 127.09 | 104.54 | 67.48 | 54.86 |
+| 100,000 | 127.19 | 101.99 | 67.44 | 53.43 |
+| no residual | 127.14 | 101.55 | 67.29 | 53.20 |
+
+- Team levels make every penalty worse, by 17 to 23 on offense: left out (2026-09-18 had one per team).
+- No residual beats every penalty: 17 games a team do not support a player-level correction to the rating, the
+  finding of experiment 4 ("an honest within-season CV cannot validate a per-player residual").  The penalty is the
+  build's own, 13,037 (settings.RidgeSettings), so the column is what OpenRAPM's own ridge would add if run once
+  more on the season's team-games.  The games' multipliers: 1.788 on offense, 2.399 on defense.
+- Sign: the residual's own.  Positive means the games rate those players higher than OpenRAPM does; the Total
+  column's positive means OpenRAPM rates them higher than the consensus does.  The owner chose it over "OpenRAPM
+  minus the games", the way Total reads (2026-11-24, the question tool: "Residual's own").
+
+**The page, 2027 through 2026-11-23,** 419 of the 420 players shown, OpenRAPM multiplied by 0.839 on offense and 0.956
+on defense against the three (0.914 and 0.951 against the five).  Points per 100 per one standard deviation of the stat:
+
+| stat | total, five systems | total, three systems | its standard error | residual RAPM | its standard error |
+|---|---|---|---|---|---|
+| made threes | -0.20 | -0.31 | 0.07 | +0.002 | 0.007 |
+| missed threes | -0.22 | -0.31 | 0.07 | -0.001 | 0.007 |
+| made twos | +0.12 | +0.21 | 0.09 | -0.015 | 0.007 |
+| missed twos | +0.01 | +0.11 | 0.09 | -0.011 | 0.006 |
+| made free throws | +0.04 | +0.12 | 0.08 | -0.018 | 0.008 |
+| missed free throws | +0.18 | +0.25 | 0.07 | -0.009 | 0.006 |
+| offensive rebounds | +0.36 | +0.42 | 0.06 | +0.004 | 0.006 |
+| defensive rebounds | +0.26 | +0.35 | 0.07 | -0.006 | 0.006 |
+| assists | -0.04 | +0.02 | 0.07 | -0.010 | 0.007 |
+| turnovers | +0.17 | +0.25 | 0.08 | -0.009 | 0.008 |
+| steals | +0.13 | +0.12 | 0.07 | -0.020 | 0.006 |
+| blocks | +0.19 | +0.25 | 0.10 | -0.008 | 0.008 |
+| personal fouls | +0.24 | +0.21 | 0.07 | +0.007 | 0.005 |
+| on-court plus-minus | -0.36 | -0.41 | 0.07 | -0.025 | 0.007 |
+| off-court plus-minus | -0.27 | -0.31 | 0.08 | +0.013 | 0.007 |
+
+Every residual slope is under 0.03, against the owner's 0.1 for nothing: the season's games so far would move
+OpenRAPM by no stat.  The largest, on-court plus-minus at -0.025 (z -3.6), says the games rate players with a high
+on-court plus-minus a little lower than OpenRAPM does, the opposite way from the consensus (-0.41).  Built on the side
+branch bias-residual-2026-11-24; the owner, shown a private preview: "Publish now".
+
+**The page as published, 2026-11-24, 50/30/20,** 2027 through 2026-11-23, OpenRAPM multiplied by 0.848 on offense and
+0.977 on defense; the residual RAPM column is unchanged by the weights:
+
+| stat | total | its standard error | residual RAPM |
+|---|---|---|---|
+| made threes | -0.33 | 0.07 | +0.00 |
+| missed threes | -0.33 | 0.07 | -0.00 |
+| made twos | +0.23 | 0.09 | -0.01 |
+| missed twos | +0.11 | 0.09 | -0.01 |
+| made free throws | +0.12 | 0.09 | -0.02 |
+| missed free throws | +0.27 | 0.07 | -0.01 |
+| offensive rebounds | +0.44 | 0.06 | +0.00 |
+| defensive rebounds | +0.37 | 0.08 | -0.01 |
+| assists | +0.02 | 0.07 | -0.01 |
+| turnovers | +0.26 | 0.08 | -0.01 |
+| steals | +0.13 | 0.07 | -0.02 |
+| blocks | +0.27 | 0.10 | -0.01 |
+| personal fouls | +0.22 | 0.07 | +0.01 |
+| on-court plus-minus | -0.42 | 0.07 | -0.03 |
+| off-court plus-minus | -0.31 | 0.08 | +0.01 |

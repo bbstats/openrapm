@@ -82,7 +82,7 @@ def test_a_missing_ratings_table_stops_the_command(tmp_path):
 
 # ------------------------------------------------------------------------------ the bias page
 def _bias_world(seed=2):
-    """A made-up 2027: players 1-40 with 300 or more possessions, whom all five systems list; player 41 with 59
+    """A made-up 2027: players 1-40 with 300 or more possessions, whom all three systems list; player 41 with 59
     possessions, under the pages' minimum; player 42, shown and missing from xRAPM.  Each system is OpenRAPM plus
     noise, the 3-year RAPM without a date of its own.  Returns (ratings table, panel rows, {key: PublicRatings})."""
     from openrapm.bias import CONSENSUS_WEIGHTS
@@ -109,26 +109,55 @@ def _bias_world(seed=2):
     return table, panel, pulls
 
 
-def test_the_bias_document_counts_its_players_and_names_its_five_systems():
+def _residual(seed=4):
+    """A made-up residual RAPM of the 2027 above, as `residual_rapm.season_residual` returns it: players 1-42 but 7,
+    whom the season's games do not hold, and the games' two multipliers."""
+    rng = np.random.default_rng(seed)
+    ids = np.array([i for i in range(1, 43) if i != 7])
+    frame = pd.DataFrame({"player_id": ids, "residual_offense": rng.normal(0, 0.1, len(ids)),
+                          "residual_defense": rng.normal(0, 0.1, len(ids))})
+    return frame, {"offense": 1.4, "defense": 2.1}
+
+
+def test_the_bias_document_counts_its_players_and_names_its_three_systems():
     table, panel, pulls = _bias_world()
-    document = site.bias_document(table, panel, pulls, 2027, "2026-11-05", "2026-11-04")
+    document = site.bias_document(table, panel, pulls, 2027, "2026-11-05", "2026-11-04", _residual())
     meta = document["meta"]
     assert {key: meta[key] for key in ("season", "through", "built", "min_possessions", "players_shown", "players")} \
         == dict(season=2027, through="2026-11-04", built="2026-11-05", min_possessions=60, players_shown=41,
                 players=40)
     assert meta["fields"] == site.BIAS_FIELDS and meta["multipliers"]["o"] > 0 and meta["multipliers"]["d"] > 0
+    assert meta["residual"] == {"penalty": 13037.0, "multipliers": {"o": 1.4, "d": 2.1}}
     assert [(system["key"], system["weight"]) for system in document["systems"]] == [
-        ("xrapm", 0.3), ("rapm_3y", 0.2), ("loki", 0.2), ("darko", 0.15), ("pulse", 0.15)]
-    assert [system["players"] for system in document["systems"]] == [40, 41, 41, 41, 41]
+        ("xrapm", 0.5), ("rapm_3y", 0.3), ("darko", 0.2)]
+    assert [system["players"] for system in document["systems"]] == [40, 41, 41]
     # a system's own date, or the day it was pulled when its page prints none
-    assert [system["as_of"] for system in document["systems"]] == ["2026-11-04", "2026-11-05", "2026-11-04",
-                                                                  "2026-11-04", "2026-11-04"]
-    assert document["systems"][2]["by"] == "LUMA Basketball Research and CourtShare"
+    assert [system["as_of"] for system in document["systems"]] == ["2026-11-04", "2026-11-05", "2026-11-04"]
+    assert document["systems"][2]["by"] == "Kostya Medvedovsky"
     assert set(document["systems"][0]) == {"key", "name", "by", "link", "weight", "as_of", "players"}
 
 
+def test_the_residual_column_is_the_residual_rapms_slope_at_three_decimals():
+    """Player 7, whom the season's games do not hold, counts at a residual of 0; the column is the same slope as
+    bias.slope_per_sd reads off the residuals, offense plus defense, on the compared players."""
+    from openrapm import bias
+    table, panel, pulls = _bias_world()
+    residual = _residual()
+    document = site.bias_document(table, panel, pulls, 2027, "2026-11-05", "2026-11-04", residual)
+    rows = [dict(zip(site.BIAS_FIELDS, row)) for row in document["rows"]]
+    shown = table[table.poss_season >= 60]
+    blend = bias.consensus({key: pulls[key].table for key in bias.CONSENSUS_WEIGHTS})
+    players = bias.compared_players(shown, blend, bias.player_stats(panel), residual[0])
+    assert players.set_index("player_id").loc[7, ["residual_offense", "residual_defense"]].tolist() == [0.0, 0.0]
+    gap = (players.residual_offense + players.residual_defense).to_numpy()
+    for row in rows:
+        slope, error = bias.slope_per_sd(players[row["stat"]].to_numpy(), gap, players.weight.to_numpy())
+        assert (row["r"], row["r_se"]) == (round(slope, 3), round(error, 3)), row["label"]
+        assert row["r_se"] > 0
+
+
 def test_the_bias_rows_are_the_fifteen_stats_and_every_row_adds_up_at_two_decimals():
-    document = site.bias_document(*_bias_world(), 2027, "2026-11-05", "2026-11-04")
+    document = site.bias_document(*_bias_world(), 2027, "2026-11-05", "2026-11-04", _residual())
     rows = [dict(zip(site.BIAS_FIELDS, row)) for row in document["rows"]]
     assert [row["label"] for row in rows] == [
         "Made threes", "Missed threes", "Made twos", "Missed twos", "Made free throws", "Missed free throws",
@@ -145,10 +174,10 @@ def test_a_system_that_runs_against_openrapm_stops_the_document():
     """A defense column printed with the other sign would pass every other check and turn the page upside down."""
     from openrapm.data.public_ratings import PublicRatings
     table, panel, pulls = _bias_world()
-    flipped = pulls["loki"].table.assign(defense=-pulls["loki"].table.defense)
-    pulls["loki"] = PublicRatings(flipped, "2026-11-01", "2026-11-05")
-    with pytest.raises(SystemExit, match="LOKI defense runs against OpenRAPM's"):
-        site.bias_document(table, panel, pulls, 2027, "2026-11-05", "2026-11-04")
+    flipped = pulls["darko"].table.assign(defense=-pulls["darko"].table.defense)
+    pulls["darko"] = PublicRatings(flipped, "2026-11-01", "2026-11-05")
+    with pytest.raises(SystemExit, match="DARKO defense runs against OpenRAPM's"):
+        site.bias_document(table, panel, pulls, 2027, "2026-11-05", "2026-11-04", _residual())
 
 
 @pytest.fixture
@@ -162,6 +191,8 @@ def bias_site(tmp_path, monkeypatch):
     monkeypatch.setattr(site.public_ratings, "latest", lambda cfg, season: dict(pulls) if season == 2027 else {})
     monkeypatch.setattr(site, "panel_of_season", lambda cfg, season: panel[panel.season == season])
     monkeypatch.setattr(site, "season_stints", lambda season, cfg: stints)
+    monkeypatch.setattr(site, "season_designs", lambda cfg, season: None)
+    monkeypatch.setattr(site, "season_residual", lambda designs, table, season: _residual())
     cfg = {"_root": str(tmp_path), "paths": {"outputs": str(tmp_path / "outputs")}}
     return cfg, tmp_path / "site", pulls
 
@@ -174,7 +205,9 @@ def test_the_bias_file_is_written_whole_and_the_same_bytes_twice(bias_site, caps
     document = json.loads(first)
     assert document["meta"]["season"] == 2027 and document["meta"]["through"] == "2026-11-04"
     assert len(document["rows"]) == 15 and first.startswith(b'{"meta":{"season":2027,"through":"2026-11-04",')
-    assert "40 of the 41 players shown for 2027 are in all 5 systems" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "40 of the 41 players shown for 2027 are in all 3 systems" in out
+    assert "residual RAPM at penalty 13,037, the games' multipliers 1.400 on offense and 2.100 on defense" in out
     site.run_site(cfg, out_dir=out_dir, built="2026-11-05", bias=True)
     assert path.read_bytes() == first and sorted(p.name for p in path.parent.iterdir()) == ["bias.json",
                                                                                              "ratings.json"]

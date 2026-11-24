@@ -1,6 +1,6 @@
 """The Bias page's committed file (docs/data/bias.json, written by `openrapm site --bias`) and the page that draws
-it (docs/bias.html): the file has the published fields, its fifteen rows add up, its five systems carry the owner's
-weights and their makers' names, and nothing in it is a system's own rating.
+it (docs/bias.html): the file has the published fields, its fifteen rows add up, each has a residual RAPM slope, its
+three systems carry the owner's weights and their makers' names, and nothing in it is a system's own rating.
 
 The command builds the file from the outside systems' stored tables, which are not in git; this checks what was
 actually committed.  The page reads the file by name, so a page committed without its file fails here.
@@ -45,7 +45,21 @@ def test_every_row_adds_up_at_the_two_decimals_the_page_shows(document):
         assert all(stat[key] > 0 for key in ("o_se", "d_se", "t_se", "sd")), stat["label"]
 
 
-def test_the_five_systems_carry_the_owners_weights_and_their_makers_names(document):
+def test_every_row_has_a_residual_rapm_slope_and_the_file_says_how_it_was_fitted(document):
+    residual = document["meta"]["residual"]
+    assert residual["penalty"] > 0 and residual["multipliers"]["o"] > 0 and residual["multipliers"]["d"] > 0
+    for row in document["rows"]:
+        stat = dict(zip(BIAS_FIELDS, row))
+        assert stat["r"] is not None and stat["r_se"] > 0, stat["label"]
+        assert round(stat["r"], 3) == stat["r"], stat["label"]
+
+
+def test_the_page_shows_the_residual_rapm_beside_the_total():
+    page = (DOCS / "bias.html").read_text(encoding="utf-8")
+    assert '["t", "Total",' in page and '["r", "Residual RAPM",' in page
+
+
+def test_the_three_systems_carry_the_owners_weights_and_their_makers_names(document):
     systems = document["systems"]
     assert {system["key"]: system["weight"] for system in systems} == CONSENSUS_WEIGHTS
     assert [system["weight"] for system in systems] == sorted((s["weight"] for s in systems), reverse=True)
@@ -62,4 +76,4 @@ def test_the_file_publishes_slopes_and_no_players_rating(document):
     assert set(document) == {"meta", "systems", "rows"}
     text = json.dumps(document)
     assert "player_id" not in text and "nba_id" not in text
-    assert len(text) < 5000, "fifteen rows and five systems; anything much longer is carrying something else"
+    assert len(text) < 5000, "fifteen rows and three systems; anything much longer is carrying something else"
