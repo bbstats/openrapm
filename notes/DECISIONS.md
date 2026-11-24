@@ -14268,3 +14268,45 @@ Not read here: transition attempts on defense, the scan's lead of 2026-11-23 (-0
 z -6.0, 26 of 30 seasons; positive meaning the games rate them higher, so OpenRAPM over-credits them).  It is in
 neither the box-score prior's defense inputs nor Box Adj's (`second_prior.INPUT_SETS`); weight is already a Box Adj
 input.  Read-only; no rating moved.
+
+### The page's two plus-minus rows on held-back games (2026-11-24; the same script, `outputs/bias_heldback15/`; outside the registered rule, which named the 13 box stats, so read as a search)
+
+The 13 box stats reproduce the first run to 1e-15.  OpenRAPM minus the games, total, per player per standard deviation:
+
+| stat | stretched to the games | z | against null | 1997-2006 | 2007-2016 | 2017-2026 | as rated | z | 1997-2006 | 2007-2016 | 2017-2026 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| off-court plus-minus | -0.344 | -7.1 | -7.9 | -0.370 | -0.346 | -0.316 | -0.180 | -3.9 | -0.150 | -0.194 | -0.197 |
+| on-court plus-minus | +0.288 | +4.5 | +7.3 | +0.458 | +0.296 | +0.112 | +0.079 | +1.4 | +0.172 | +0.121 | -0.055 |
+
+Off-court plus-minus would meet every condition of the rule: OpenRAPM rates players whose team did well with them on
+the bench, in the fit games, lower than new games bear out, two thirds of it on defense (-0.210 and -0.120 at the two
+widths, every era).  With the fives' playing time out it reads -0.305.  On-court plus-minus does not hold at
+OpenRAPM's own width.  The likely kin is check 145 (2026-10-14): the pieces of the games' part hold up differently,
+the bench third's about twice; its build, experiment 61, tied year over year.  A lead, not tested further.
+
+## The Bias page's last-10-seasons column from held-back games (the owner, 2026-11-24, through the question tool, on the result above: "Held-back, drop ’27")
+
+On the side branch `bias-held-back-2026-11-24` until the owner's word to publish (the morning job runs this working
+tree and writes the Bias file onto main's page, so the change cannot sit here unpublished).  The page keeps "vs
+consensus ’27"; "vs game results ’27" comes off; "vs game results, last 10 seasons", the owner's header, now reads
+`params/bias_held_back.json`: the held-back read's 2017-2026 era, stretched to the games as the page's in-sample
+columns were, total, its error the larger of the across-season one and the career null's spread
+(`scratch/2026-11-24_bias_heldback/write_params.py`).  Fixed until the next adopted build: then rerun
+`scratch/2026-11-23_synergy/extract.py`, `heldback_lean.py` and `write_params.py` on its test.  The hover loses only
+the words that stopped being true ("team-", "each season against its own ratings"); its wording is the owner's.  The
+morning job's bias step no longer reads ten seasons' designs.  `game_results.py` stays, used by the scratch reads.
+
+## Where a new input goes: the box-score prior or Box Adj (the owner, 2026-11-24, on transition attempts on defense: "should test it in the prior first, no? i'll trust your judgement if you have evidence to support it going into the box adj")
+
+The evidence on the record, the within-season test after step 4, below 0 better:
+
+| where | change | build | 30 seasons | z |
+|---|---|---|---|---|
+| box-score prior | unassisted makes at the rim and in the paint, the one survivor of an 86-trial screen | experiment 112 | -0.0016 | -1.24 |
+| box-score prior | its noise control, the same build dealt again | experiment 112 | -0.0172 | -1.83 |
+| Box Adj | two defense inputs | experiment 143 | -0.099 | -3.62 |
+| Box Adj | 29 inputs' weights fitted through the rating | experiment 132 | -0.310 | -4.94 |
+
+The box-score prior learns each player's label, his RAPM over every other season; Box Adj's line is fitted on the
+within-season test, where the transition lean was found.  A prior input's gain has been smaller than the prior's own
+noise control; the screen for one took 8 hours, against 8 minutes for the direct screen.

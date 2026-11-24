@@ -52,7 +52,11 @@ CHECKS = ROOT / "scripts" / "checks"
 SYNERGY = ROOT / "scratch" / "2026-11-23_synergy"
 SEED = 20261124
 MIN_SHOWN = 60
-STATS = tuple(BOX_RATES)
+# The page's 13 box rates, then its two plus-minus rows, his team's points scored minus allowed per 100 with him on the
+# court and off it (bias.player_stats); a fold rebuilds both from its fit games.  The rule was registered on the 13.
+PLUS_MINUS = ("on_court_plus_minus_per100", "off_court_plus_minus_per100")
+COURT = ("on_court_scored_per100", "on_court_allowed_per100", "off_court_scored_per100", "off_court_allowed_per100")
+STATS = (*BOX_RATES, *PLUS_MINUS)
 ERAS = (("all", 1997, 2026), ("1997-2006", 1997, 2006), ("2007-2016", 2007, 2016), ("2017-2026", 2017, 2026))
 CONTEXT = ("is_gt", "margin", "margin_frem")
 TIME = ("playing_time", "playing_time_def")
@@ -100,8 +104,12 @@ def fold_file(within: Path, season: int, repeat: int, fold: int) -> Path:
 def fold_rates(within: Path, season: int, repeat: int, fold: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """(player ids, players x stats raw rates as the mean of his two rows, offensive possessions), from the fold's fit
     games."""
-    rows = pd.read_parquet(fold_file(within, season, repeat, fold), columns=["player_id", "side", "poss_off", *STATS])
-    rates = rows.groupby("player_id")[list(STATS)].mean()
+    rows = pd.read_parquet(fold_file(within, season, repeat, fold),
+                           columns=["player_id", "side", "poss_off", *BOX_RATES, *COURT])
+    rates = rows.groupby("player_id")[[*BOX_RATES, *COURT]].mean()
+    rates["on_court_plus_minus_per100"] = rates.on_court_scored_per100 - rates.on_court_allowed_per100
+    rates["off_court_plus_minus_per100"] = rates.off_court_scored_per100 - rates.off_court_allowed_per100
+    rates = rates[list(STATS)]
     poss = rows.groupby("player_id").poss_off.max().reindex(rates.index)
     return rates.index.to_numpy(np.int64), rates.to_numpy(float), poss.to_numpy(float)
 
