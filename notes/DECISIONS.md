@@ -13816,3 +13816,90 @@ own.  So the penalty works as a size, and the shrink already sets the size; a li
 teammates better.  The year-over-year gains of the lighter penalties are width: with each side rescaled to the scored
 season they are -0.020 at most, z -1.75.  Nothing adopted; 13,037 stays.  The owner's EM idea, a penalty per season and
 side, is the next read of this path and waits on the owner's setup.
+
+## Lineup synergies, 23 statistics on both ends (the owner, 2026-11-23: "what are the 'statistical synergies' that improve lineups on offense AND on defense? i think we have shown that self-creation helps! (eg having none is really bad etc). what else? look at everything"; read-only, no rating moves; registered after the scan's first table, so read it as a search)
+
+**What was read.**  Check 154's held-back stints on today's incumbent `rd143`, every season, all 12 sets of held-back
+games pooled, 6.2 million stint rows; the error with team levels only reproduces check 151's to 7e-06 (float32 storage)
+in all 30 seasons.  `scratch/2026-11-23_synergy/`: `extract.py` saves each stint once with both fives
+(`outputs/synergy/rd143/stints_<season>.parquet`, 48 seconds for 30 seasons) and each set's players with their rates
+from its fit games (`players_<season>.parquet`); `scan.py` scores any statistic from those in 2 minutes; `null.py` is
+check 154's career null, 200 draws, 45 minutes in 4 processes.  Check 154's free terms with the lineup shape held, plus
+the defense five's playing time and rating spread.
+
+**The terms.**  A statistic is centered on its set's possession-weighted average; for the five's values: their sum, a
+straight line in which any player rating can carry; the sum of their squares, also one player at a time; and the sum
+over the ten pairs of teammates of the product of their values, the one part no player rating can carry, the synergy.
+Above 0, two players high in the statistic do better together than their two ratings; below 0, the second is worth less
+beside the first.  Check 154's concentration at the same amount is this term with its sign turned.  Every stint row is
+read on both ends at once: the offense five on the points it scored, the defense five on the points it allowed, both
+reported positive-better.  Read per standard deviation of the synergy term over the season's stints.  The career null:
+every player handed another player's standing in the statistic along his career, a 2020 donor's standing in 2020 and
+never his 2020 rate; with every player his own donor the null tracks the real reading at a correlation of 0.97, and
+its 200 draws read the all-season mean at 0.00, standard deviation 0.05, for every statistic.
+
+**Result**, synergy per lineup standard deviation, points per 100, all 30 seasons, those past z -2 against the career
+null; no statistic reads past +2 on either end:
+
+| end | statistic | effect | z, plain | z against the null | seasons with its sign | 1997-2006 | 2007-2016 | 2017-2026 |
+|---|---|---|---|---|---|---|---|---|
+| offense | points per 100 | -0.41 | -6.2 | -8.7 | 26 | -0.41 | -0.21 | -0.60 |
+| offense | unassisted points | -0.39 | -6.7 | -7.9 | 27 | -0.46 | -0.27 | -0.45 |
+| offense | self-creation | -0.38 | -5.4 | -7.6 | 24 | -0.32 | -0.28 | -0.55 |
+| offense | used possessions | -0.29 | -5.5 | -6.0 | 24 | -0.29 | -0.16 | -0.41 |
+| offense | defensive rebounds | -0.21 | -2.7 | -4.4 | 18 | -0.10 | -0.40 | -0.13 |
+| offense | free-throw attempts | -0.22 | -4.1 | -4.3 | 21 | -0.29 | -0.12 | -0.26 |
+| offense | assists | -0.18 | -2.4 | -3.5 | 19 | -0.02 | -0.31 | -0.20 |
+| offense | offensive rebounds | -0.11 | -1.7 | -2.2 | 17 | -0.22 | -0.01 | -0.09 |
+| defense | assists | -0.22 | -3.2 | -4.4 | 22 | -0.36 | -0.28 | -0.03 |
+| defense | height | -0.23 | -3.8 | -4.4 | 23 | -0.37 | -0.25 | -0.07 |
+| defense | defensive rebounds | -0.17 | -2.4 | -3.6 | 19 | -0.18 | -0.06 | -0.28 |
+| defense | weight | -0.15 | -3.1 | -3.0 | 20 | -0.20 | -0.11 | -0.16 |
+| defense | offensive rebounds | -0.15 | -2.6 | -2.9 | 20 | -0.25 | -0.15 | -0.04 |
+| defense | transition attempts | -0.12 | -2.4 | -2.5 | 21 | -0.24 | -0.16 | +0.04 |
+| defense | rim blocks | -0.12 | -2.0 | -2.5 | 18 | -0.11 | -0.07 | -0.19 |
+| defense | three-point percentage | -0.13 | -3.7 | -2.5 | 21 | -0.08 | -0.23 | -0.09 |
+| defense | blocks | -0.13 | -1.9 | -2.4 | 17 | -0.18 | +0.02 | -0.22 |
+| defense | self-creation | -0.11 | -1.7 | -2.4 | 20 | -0.11 | -0.26 | +0.04 |
+
+Nothing near: true shooting, three-point attempts, threes made, steals, turnovers, putbacks on either end; height and
+blocks on offense; free-throw attempts, used possessions and unassisted points on defense.
+
+**Two different players together**, the term over pairs of teammates with one high in each, each statistic's own
+terms held; nothing past +2: offense, a defensive rebounder beside a shot blocker -0.23, z -2.5, 20 of 30; a
+self-creator beside height -0.12, z -2.1; everything else -0.11 to +0.07, among them a self-creator beside three-point
+shooters +0.03, z +0.5, and a passer beside shooters +0.07, z +1.1; defense, a self-creator beside three-point
+shooters -0.11, z -2.1, mostly 1997-2006; a shot blocker beside a ball hawk +0.07, z +1.3.  No career null on these.
+
+**The same as counts**, the miss after the free terms by how many of the five sit in their set's top fifth by
+possessions, positive better, all seasons, then the share of possessions:
+
+| end | statistic | none | one | two | three or more | shares |
+|---|---|---|---|---|---|---|
+| offense | self-creation, about 14 a 100 and up: Derrick White, Quickley, Markkanen in 2026 | -0.22 | +0.11 | +0.04 | -0.08 | 26 / 50 / 22 / 2% |
+| offense | used possessions | -0.15 | +0.09 | +0.02 | -0.26 | 26 / 49 / 22 / 2% |
+| offense | free-throw attempts | -0.16 | +0.10 | +0.06 | -0.24 | 28 / 47 / 22 / 3% |
+| offense | assists | -0.12 | +0.06 | -0.05 | -0.31 | 19 / 64 / 17 / 1% |
+| offense | blocks | +0.14 | -0.03 | -0.13 | +0.21 | 23 / 55 / 20 / 1% |
+| defense | height, about 6'9" and up: Horry, Webber, Mourning in 2006 | -0.12 | -0.05 | +0.12 | -0.23 | 11 / 52 / 33 / 4% |
+| defense | offensive rebounds | -0.17 | +0.05 | +0.01 | -0.51 | 22 / 57 / 20 / 1% |
+
+Self-creation's none by era -0.26 / -0.17 / -0.25, one +0.05 / +0.15 / +0.14; height on defense, none -0.13 / -0.13 /
+-0.09, two +0.16 / +0.02 / +0.17.  `scratch/2026-11-23_synergy/counts_by_era.py`.
+
+**Reading.**
+- Every lineup synergy found is an overlap: two players of the same kind do less together than their two ratings
+  say.  No complement, two different kinds of player helping each other, reads past z 2 on either end.
+- Offense: the ball.  Scoring load, self-creation, usage, free-throw attempts and passing all overlap, every era past
+  z -2 against the null for the scoring four.  A lineup needs one: none scores 0.22 under its ratings on
+  self-creation, one is best, a second adds nothing, a third costs.  Check 154's concentration on parts107, -0.45, is
+  the same finding.  Two defensive rebounders, or a rebounder beside a shot blocker, also overlap on offense.
+- Defense: the positions.  Height, weight, both rebounds, blocks and passing overlap: too small or too big defends
+  worse than the sum.  A lineup with no player 6'9" or taller allows 0.12 more than its ratings; two such players are
+  best, +0.12; three or more -0.23.  Height and passing fade since 2017 to nothing; rebounding and rim protection
+  are strongest since 2017.
+- The terms are read on held-back games from ratings built without them, so they predict what the ratings miss; a
+  fit on the games a rating is built from, and a free offset per player, check 154's next reads, are still not run.
+- Leans, one player at a time and not synergies, from the same fits: on defense, players who run in transition are
+  over-credited, -0.29 per player standard deviation, z -6.0, 26 of 30; heavier players under-credited, +0.13, z
+  +4.0; on offense, shot blockers over-credited, -0.13, z -2.8.  Nothing adopted; no rating moved.
