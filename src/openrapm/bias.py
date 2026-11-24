@@ -3,11 +3,15 @@
 The question: among a season's players, do those with more of a stat (blocks, made threes, a high on-court
 plus-minus) get more from OpenRAPM than from the consensus, or less?  One number per stat and side answers it, in
 points per 100 possessions per one standard deviation of the stat.  Positive: OpenRAPM rates those players higher.
+A second column asks the same of the season's own games: the residual RAPM's slope on the stat (residual_rapm.py).
+Positive there: the games rate those players higher than OpenRAPM does.
 
 Words used below
-    consensus     the weighted mean of five outside systems' ratings, per side, at the owner's weights
-                  (`CONSENSUS_WEIGHTS`); a player counts only when all five list him.  This page's alone: consensus.py
+    consensus     the weighted mean of three outside systems' ratings, per side, at the owner's weights
+                  (`CONSENSUS_WEIGHTS`); a player counts only when all three list him.  This page's alone: consensus.py
                   and data/external/consensus.csv are the 2024-26 snapshot the adoption check reads
+    residual      a player's residual RAPM, offense plus defense: what the season's team-games say beyond his rating,
+                  after one multiplier per side (residual_rapm.py), so it needs no width match of its own
     weight        a player's offensive possessions: whose disagreement counts for how much
     width match   OpenRAPM's ratings are spread wider or narrower than the consensus's, which would show as a lean on
                   every stat good players have.  So each side of OpenRAPM is multiplied once, league-wide, to the
@@ -19,9 +23,10 @@ Words used below
 
 Equations, over the compared players i with weights w_i (m is the weighted mean, s the weighted standard deviation)
 
-    consensus    c_i = 0.30 xRAPM_i + 0.20 RAPM3y_i + 0.20 LOKI_i + 0.15 DARKO_i + 0.15 Pulse_i        each side
+    consensus    c_i = (6 xRAPM_i + 4 RAPM3y_i + 3 DARKO_i) / 13                                        each side
     width match  k = s(c) / s(o)          gap_i = k (o_i - m(o)) - (c_i - m(c))                         each side
     total        gap_i(total) = gap_i(offense) + gap_i(defense)
+    residual     gap_i(residual) = a_i(offense) + a_i(defense), a the residual RAPM, read like any gap below
     stat         z_i = (x_i - m(x)) / s(x)
     slope        b = m(z x gap)
     its error    e_i = gap_i - b z_i      se = sqrt( n / (n - 2) x sum (w_i z_i e_i)^2 ) / sum w_i
@@ -48,9 +53,11 @@ import pandas as pd
 from .features import BOX_RATES
 
 # The owner, 2026-11-05: "Five, with Pulse", then xrapm.com's 3-year RAPM in the place of nbarapm.com's time-decay
-# RAPM, whose robots.txt disallows the pull (notes/DECISIONS.md, "The Bias page's consensus").  Keys as in
-# data/public_ratings.SYSTEMS.
-CONSENSUS_WEIGHTS = {"xrapm": 0.30, "rapm_3y": 0.20, "loki": 0.20, "darko": 0.15, "pulse": 0.15}
+# RAPM, whose robots.txt disallows the pull (notes/DECISIONS.md, "The Bias page's consensus").  The owner, 2026-11-24:
+# "get rid of Loki and Pulse. replace with LEBRON if you can find it. if not, just do xRAPM, 3yr RAPM and Darko DPM";
+# no 2026-27 LEBRON is published, and the three keep their 30, 20 and 15 of 2026-11-05, scaled to add to one.  Keys
+# as in data/public_ratings.SYSTEMS.
+CONSENSUS_WEIGHTS = {"xrapm": 6 / 13, "rapm_3y": 4 / 13, "darko": 3 / 13}
 ON_COURT_PLUS_MINUS = "on_court_plus_minus_per100"
 OFF_COURT_PLUS_MINUS = "off_court_plus_minus_per100"
 STATS = [*BOX_RATES, ON_COURT_PLUS_MINUS, OFF_COURT_PLUS_MINUS]
@@ -62,7 +69,7 @@ def consensus(tables: dict, weights: dict = CONSENSUS_WEIGHTS) -> pd.DataFrame:
     """player_id, offense, defense: the weighted mean of the systems' ratings, for the players every system lists.
 
     `tables` maps a system's key to its table (player_id, offense, defense; data/public_ratings.py).
-    Example: a player at 3.0, 1.0, 3.0, 2.0 and 0.0 on a side reads 0.9 + 0.2 + 0.6 + 0.3 + 0.0 = 2.0.
+    Example: a player at 3.0, 1.0 and 2.0 on a side reads (18 + 4 + 6) / 13 = 2.15.
     """
     missing = sorted(set(weights) - set(tables))
     if missing:
@@ -91,14 +98,19 @@ def player_stats(panel: pd.DataFrame) -> pd.DataFrame:
     return stats[STATS].reset_index()
 
 
-def compared_players(ratings: pd.DataFrame, blend: pd.DataFrame, stats: pd.DataFrame) -> pd.DataFrame:
+def compared_players(ratings: pd.DataFrame, blend: pd.DataFrame, stats: pd.DataFrame,
+                     residual: pd.DataFrame | None = None) -> pd.DataFrame:
     """The players the page compares, by player id: those of `ratings` (one season's shown players: player_id,
     poss_season, rating_off, rating_def) whom the consensus and the panel both hold.  Columns: player_id, weight,
-    rating_off, rating_def, consensus_offense, consensus_defense and `STATS`."""
+    rating_off, rating_def, consensus_offense, consensus_defense, `STATS` and, given `residual`
+    (residual_rapm.COLUMNS), residual_offense and residual_defense: 0 for a player the season's games do not hold."""
     ours = ratings[["player_id", "poss_season", *OURS.values()]].rename(columns={"poss_season": "weight"})
     theirs = blend.rename(columns={side: f"consensus_{side}" for side in SIDES})
-    return ours.merge(theirs, on="player_id").merge(stats, on="player_id").sort_values("player_id") \
-               .reset_index(drop=True)
+    players = ours.merge(theirs, on="player_id").merge(stats, on="player_id")
+    if residual is not None:
+        players = players.merge(residual, on="player_id", how="left") \
+                         .fillna({"residual_offense": 0.0, "residual_defense": 0.0})
+    return players.sort_values("player_id").reset_index(drop=True)
 
 
 def weighted_mean(values, weights) -> float:
@@ -136,7 +148,8 @@ def bias_table(players: pd.DataFrame, stats=STATS) -> tuple[pd.DataFrame, dict]:
     """(one row per stat, {"offense": multiplier, "defense": multiplier}) from `compared_players`.
 
     The rows: stat, sd (the stat's standard deviation among the players, in its own units), then offense, defense
-    and total, the slopes, and offense_se, defense_se and total_se, their standard errors.
+    and total, the slopes, and offense_se, defense_se and total_se, their standard errors; and, when `players` has the
+    residual columns, residual and residual_se, the residual RAPM's slope and its standard error.
     """
     weights = players.weight.to_numpy(float)
     gaps, multipliers = {}, {}
@@ -144,12 +157,14 @@ def bias_table(players: pd.DataFrame, stats=STATS) -> tuple[pd.DataFrame, dict]:
         gaps[side], multipliers[side] = width_match(players[OURS[side]].to_numpy(float),
                                                     players[f"consensus_{side}"].to_numpy(float), weights)
     gaps["total"] = gaps["offense"] + gaps["defense"]
+    if "residual_offense" in players:
+        gaps["residual"] = (players.residual_offense + players.residual_defense).to_numpy(float)
     rows = []
     for stat in stats:
         values = players[stat].to_numpy(float)
         row = {"stat": stat, "sd": weighted_sd(values, weights)}
-        for side, gap in gaps.items():
-            row[side], row[f"{side}_se"] = slope_per_sd(values, gap, weights)
+        for name, gap in gaps.items():
+            row[name], row[f"{name}_se"] = slope_per_sd(values, gap, weights)
         rows.append(row)
-    columns = ["stat", "sd", "offense", "defense", "total", "offense_se", "defense_se", "total_se"]
+    columns = ["stat", "sd", *gaps, *(f"{name}_se" for name in gaps)]
     return pd.DataFrame(rows)[columns], multipliers

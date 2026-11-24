@@ -1,4 +1,4 @@
-"""data/public_ratings.py: the five outside systems' pages read, checked and stored, on invented pages.
+"""data/public_ratings.py: the three outside systems' pages read, checked and stored, on invented pages.
 
 Every row below is made up, in each system's own format: the repository is public and the real ratings are their
 makers'.  No test reaches the network (conftest.py blocks it); `requests.get` and `fetch` are replaced.
@@ -55,33 +55,11 @@ def darko_page(players=PLAYERS, season=2027, through="2026-11-04", missing=()) -
     return json.dumps({"type": "data", "nodes": [None, {"type": "data", "data": flat}]})
 
 
-def loki_page(players=PLAYERS, season=2027, key_season=2027, asof="2026-11-01") -> str:
-    """lumahoops.org/loki: the board inside Next.js's pushed strings, here cut in two in the middle of the board."""
-    board = {"season": season, "release": "weekly", "asof": asof, "cols": ["pid", "name", "team", "net", "O", "D"],
-             "rows": [[player, f"Player {player}", "TM", round(offense + defense, 2), offense,
-                       "$-0" if defense == 0 else defense] for player, offense, defense in players]}
-    payload = f'{{"files":{{"loki/{key_season}/current.json":{json.dumps(board)}}}}}'
-    half = len(payload) // 2
-    pushed = "".join(f"<script>self.__next_f.push([1,{json.dumps(piece)}])</script>"
-                     for piece in (payload[:half], payload[half:]))
-    return f"<html><body>{pushed}</body></html>"
-
-
-def pulse_page(players=PLAYERS, season=2027) -> str:
-    """courtsignal.net's season file: one list of players per date, each [id, total, offense, defense, ...]."""
-    def rows(shift):
-        return [[player, round(offense + defense + shift, 2), offense + shift, defense, 1, "TM"]
-                for player, offense, defense in players]
-    return json.dumps({"season": season, "model": "dynamic prior filter (daily)", "dates": ["2026-11-02", "2026-11-04"],
-                       "rows": {"2026-11-02": rows(1.0), "2026-11-04": rows(0.0)}})
-
-
-PAGES = {"xrapm": xrapm_page, "rapm_3y": lambda: xrapm_page(styled=True, date=None), "loki": loki_page,
-         "darko": darko_page, "pulse": pulse_page}
+PAGES = {"xrapm": xrapm_page, "rapm_3y": lambda: xrapm_page(styled=True, date=None), "darko": darko_page}
 EXPECTED = pd.DataFrame(PLAYERS, columns=["player_id", "offense", "defense"])
 
 
-# ------------------------------------------------------------------------------------ the four parsers
+# ------------------------------------------------------------------------------------ the two parsers
 def test_xrapm_defense_is_flipped_to_positive_good_and_the_date_read():
     ratings = public_ratings.parse_xrapm(xrapm_page(), 2027)
     pd.testing.assert_frame_equal(ratings.table, EXPECTED)
@@ -109,33 +87,12 @@ def test_darko_reads_its_columns_through_the_flat_list_and_leaves_out_a_player_w
         900001, 900002, 900003]
 
 
-def test_loki_is_read_across_two_pushed_strings_and_a_negative_zero_is_zero():
-    players = [*PLAYERS, (900004, 1.5, 0.0)]
-    ratings = public_ratings.parse_loki(loki_page(players), 2027)
-    assert ratings.as_of == "2026-11-01"
-    assert ratings.table.set_index("player_id").defense[900004] == 0.0
-    pd.testing.assert_frame_equal(ratings.table.iloc[:3], EXPECTED)
-
-
-def test_pulse_reads_its_latest_date():
-    ratings = public_ratings.parse_pulse(pulse_page(), 2027)
-    pd.testing.assert_frame_equal(ratings.table, EXPECTED)
-    assert ratings.as_of == "2026-11-04"
-
-
-@pytest.mark.parametrize("parse, page", [
-    (public_ratings.parse_darko, darko_page(season=2026)),
-    (public_ratings.parse_loki, loki_page(season=2026)),
-    (public_ratings.parse_loki, loki_page(key_season=2026)),
-    (public_ratings.parse_pulse, pulse_page(season=2026)),
-])
-def test_another_seasons_table_is_refused(parse, page):
+def test_another_seasons_table_is_refused():
     with pytest.raises(FormatChanged):
-        parse(page, 2027)
+        public_ratings.parse_darko(darko_page(season=2026), 2027)
 
 
-@pytest.mark.parametrize("parse", [public_ratings.parse_xrapm, public_ratings.parse_darko, public_ratings.parse_loki,
-                                   public_ratings.parse_pulse])
+@pytest.mark.parametrize("parse", [public_ratings.parse_xrapm, public_ratings.parse_darko])
 @pytest.mark.parametrize("page", ["", "<html>Service unavailable</html>", '{"nodes": [], "rows": 3}'])
 def test_a_page_that_is_not_the_table_is_a_changed_format_and_nothing_else(parse, page):
     with pytest.raises(FormatChanged):
@@ -146,14 +103,14 @@ def test_a_page_that_is_not_the_table_is_a_changed_format_and_nothing_else(parse
 def test_the_real_minimum_is_300_players(monkeypatch):
     monkeypatch.setattr(public_ratings, "MIN_ROWS", 300)
     with pytest.raises(FormatChanged, match="3 rated players read, under the 300"):
-        public_ratings.parse_pulse(pulse_page(), 2027)
+        public_ratings.parse_darko(darko_page(), 2027)
 
 
 def test_a_player_listed_twice_or_a_rating_beyond_25_is_refused():
     with pytest.raises(FormatChanged, match="900001 is listed twice"):
-        public_ratings.parse_pulse(pulse_page([*PLAYERS, PLAYERS[0]]), 2027)
+        public_ratings.parse_darko(darko_page([*PLAYERS, PLAYERS[0]]), 2027)
     with pytest.raises(FormatChanged, match="beyond 25"):
-        public_ratings.parse_pulse(pulse_page([*PLAYERS, (900004, 40.0, 1.0)]), 2027)
+        public_ratings.parse_darko(darko_page([*PLAYERS, (900004, 40.0, 1.0)]), 2027)
 
 
 # ------------------------------------------------------------------------------------ fetch, pull, latest
@@ -173,10 +130,9 @@ def test_fetch_makes_one_request_that_names_openrapm_and_reads_gzip(monkeypatch,
         return Response(gzip.compress("Dončić".encode()))
 
     monkeypatch.setattr(requests, "get", get)
-    text = public_ratings.fetch(public_ratings.SYSTEMS["pulse"], 2027, tmp_path)
+    text = public_ratings.fetch(public_ratings.SYSTEMS["darko"], 2027, tmp_path)
     assert text == "Dončić"
-    assert seen == [("https://courtsignal.net/data/model-boards/current/season-2027.json",
-                     public_ratings.USER_AGENT, public_ratings.TIMEOUT)]
+    assert seen == [("https://www.darko.app/__data.json", public_ratings.USER_AGENT, public_ratings.TIMEOUT)]
     assert "OpenRAPM" in public_ratings.USER_AGENT and "openrapm.com" in public_ratings.USER_AGENT
 
 
@@ -191,26 +147,26 @@ def test_a_pull_stores_every_system_and_a_system_that_fails_keeps_its_last_pull(
     assert [(record["key"], record["status"], record["rows"]) for record in first] == [
         (key, "pulled", 3) for key in public_ratings.SYSTEMS]
     assert {record["key"]: record["as_of"] for record in first} == {
-        "xrapm": "2026-11-04", "rapm_3y": None, "loki": "2026-11-01", "darko": "2026-11-04", "pulse": "2026-11-04"}
+        "xrapm": "2026-11-04", "rapm_3y": None, "darko": "2026-11-04"}
 
     def second_day(system, season, folder):
-        if system.key == "loki":
+        if system.key == "darko":
             raise requests.ConnectionError("no answer")
-        return "<html>a new design</html>" if system.key == "darko" else PAGES[system.key]()
+        return "<html>a new design</html>" if system.key == "rapm_3y" else PAGES[system.key]()
 
     monkeypatch.setattr(public_ratings, "fetch", second_day)
     second = {record["key"]: record for record in public_ratings.pull(cfg, 2027, "2026-11-06", pause=0)}
-    assert second["loki"]["status"] == "failed" and "ConnectionError" in second["loki"]["error"]
-    assert second["darko"]["status"] == "failed" and second["pulse"]["status"] == "pulled"
+    assert second["darko"]["status"] == "failed" and "ConnectionError" in second["darko"]["error"]
+    assert second["rapm_3y"]["status"] == "failed" and second["xrapm"]["status"] == "pulled"
     folder = tmp_path / "data" / "public_ratings" / "2027"
-    assert sorted(path.name for path in (folder / "darko").iterdir()) == ["2026-11-05.parquet", "2026-11-06.unparsed"]
-    assert sorted(path.name for path in (folder / "loki").iterdir()) == ["2026-11-05.parquet"]
+    assert sorted(path.name for path in (folder / "rapm_3y").iterdir()) == ["2026-11-05.parquet",
+                                                                           "2026-11-06.unparsed"]
+    assert sorted(path.name for path in (folder / "darko").iterdir()) == ["2026-11-05.parquet"]
 
     stored = public_ratings.latest(cfg, 2027)
     assert {key: ratings.pulled for key, ratings in stored.items()} == {
-        "xrapm": "2026-11-06", "rapm_3y": "2026-11-06", "loki": "2026-11-05", "darko": "2026-11-05",
-        "pulse": "2026-11-06"}
-    assert stored["rapm_3y"].as_of is None and stored["loki"].as_of == "2026-11-01"
+        "xrapm": "2026-11-06", "rapm_3y": "2026-11-05", "darko": "2026-11-05"}
+    assert stored["rapm_3y"].as_of is None and stored["darko"].as_of == "2026-11-04"
     pd.testing.assert_frame_equal(stored["darko"].table, EXPECTED)
     assert public_ratings.latest(cfg, 2028) == {}                    # another season's pulls are another folder
 
@@ -223,11 +179,10 @@ def test_offline_nothing_is_asked_and_nothing_written(monkeypatch, tmp_path):
     assert not any(tmp_path.rglob("*.parquet"))
 
 
-def test_the_five_systems_are_the_owners_and_each_names_its_maker():
-    assert list(public_ratings.SYSTEMS) == ["xrapm", "rapm_3y", "loki", "darko", "pulse"]
+def test_the_three_systems_are_the_owners_and_each_names_its_maker():
+    """The owner, 2026-11-24: LOKI and Pulse dropped; LEBRON wanted, but no 2026-27 LEBRON is published."""
+    assert list(public_ratings.SYSTEMS) == ["xrapm", "rapm_3y", "darko"]
     assert all(system.by and system.link.startswith("https://") for system in public_ratings.SYSTEMS.values())
-    # LUMA's notice asks for both names beside its outputs
-    assert public_ratings.SYSTEMS["loki"].by == "LUMA Basketball Research and CourtShare"
 
 
 # ------------------------------------------------------------------------------------ the command
@@ -238,23 +193,24 @@ def test_the_command_prints_a_line_per_system_and_ends_1_when_one_failed(monkeyp
         asked.update(season=season, keys=keys)
         return [dict(key="xrapm", status="pulled", rows=582, as_of="2026-11-04"),
                 dict(key="rapm_3y", status="pulled", rows=737, as_of=None),
-                dict(key="loki", status="failed", error="ConnectionError: no answer")]
+                dict(key="darko", status="failed", error="ConnectionError: no answer")]
 
     kept = PublicRatings(EXPECTED, "2026-11-01", "2026-11-03")
     monkeypatch.setattr(public_ratings, "pull", pull)
-    monkeypatch.setattr(public_ratings, "latest", lambda cfg, season: {"loki": kept})
-    assert cli.main(["data", "public-ratings", "--season", "2027", "--systems", "xrapm,rapm_3y,loki"]) == 1
-    assert asked == dict(season=2027, keys=["xrapm", "rapm_3y", "loki"])
+    monkeypatch.setattr(public_ratings, "latest", lambda cfg, season: {"darko": kept})
+    assert cli.main(["data", "public-ratings", "--season", "2027", "--systems", "xrapm,rapm_3y,darko"]) == 1
+    assert asked == dict(season=2027, keys=["xrapm", "rapm_3y", "darko"])
     out = capsys.readouterr().out
     assert "xRAPM         582 players, as of 2026-11-04" in out
     assert "3-year RAPM   737 players, as of no date on its page" in out
-    assert "LOKI         FAILED: ConnectionError: no answer; its pull of 2026-11-03 stays" in out
+    assert "DARKO        FAILED: ConnectionError: no answer; its pull of 2026-11-03 stays" in out
 
     monkeypatch.setattr(public_ratings, "pull", lambda cfg, season, day, keys: [
-        dict(key="pulse", status="pulled", rows=660, as_of="2026-11-04")])
+        dict(key="darko", status="pulled", rows=660, as_of="2026-11-04")])
     assert cli.main(["data", "public-ratings"]) == 0
 
 
-def test_the_command_refuses_a_system_it_does_not_know():
-    with pytest.raises(SystemExit, match="no system named epm"):
-        cli.main(["data", "public-ratings", "--systems", "epm"])
+@pytest.mark.parametrize("name", ["epm", "loki", "pulse"])
+def test_the_command_refuses_a_system_it_does_not_know(name):
+    with pytest.raises(SystemExit, match=f"no system named {name}"):
+        cli.main(["data", "public-ratings", "--systems", name])

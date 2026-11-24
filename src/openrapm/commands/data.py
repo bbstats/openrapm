@@ -26,7 +26,7 @@
                                                   2026-10-11 (done once, on 2026-10-11)
     openrapm data panel --so-far 0.25,0.5,0.75    each season so far at those shares of its regular season
                                                   (paths.panel_so_far), the box-score prior's part-season rows
-    openrapm data public-ratings                  the five outside rating systems the Bias page compares OpenRAPM
+    openrapm data public-ratings                  the three outside rating systems the Bias page compares OpenRAPM
                                                   with (data/public_ratings.py), one request each, stored by day
 
 Example, from nothing: `openrapm data ingest 1997 2026 RS,PO` (days, resumable: every file is cached), then
@@ -555,16 +555,16 @@ def _add_panel(steps) -> None:
 
 def _add_public_ratings(steps) -> None:
     public = steps.add_parser(
-        "public-ratings", help="the five outside rating systems the Bias page compares OpenRAPM with",
-        description="Asks xrapm.com (xRAPM and its 3-year RAPM), lumahoops.org (LOKI), darko.app (DARKO) and "
-                    "courtsignal.net (Pulse) for their current tables, one request each, checks each "
+        "public-ratings", help="the three outside rating systems the Bias page compares OpenRAPM with",
+        description="Asks xrapm.com (xRAPM and its 3-year RAPM) and darko.app (DARKO) for their current tables, "
+                    "one request each, checks each "
                     "(src/openrapm/data/public_ratings.py) and stores it in "
                     "paths.public_ratings/<season>/<system>/<today>.parquet, out of git.  A system that fails keeps "
                     "its earlier files and the command ends 1.  With OPENRAPM_OFFLINE=1 nothing is asked.")
     public.add_argument("--season", type=int, default=None, metavar="SEASON",
                         help="the season the tables are stored under (default config.yaml's last_season)")
     public.add_argument("--systems", default="", metavar="KEYS",
-                        help="only these systems, comma-separated: xrapm, rapm_3y, loki, darko, pulse (default all)")
+                        help="only these systems, comma-separated: xrapm, rapm_3y, darko (default all)")
     public.set_defaults(run=run_public_ratings)
 
 
