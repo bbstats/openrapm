@@ -14317,3 +14317,5 @@ defense end beside `noage142_line`: -0.047, z -2.36, 19 of 30, by era -0.091, -0
 every era", and after the two adopted inputs no candidate passed.  The direct screen scores any prior that moves in
 straight proportion to the input, so a box-score prior reading it in a straight line would meet the same 2017-2026
 loss; only the LightGBM's bends could differ.  Not re-read on `rd143_line`.
+
+**The owner, 2026-11-24, offered the off-court lead, a box-score prior screen for transition attempts, or stopping: "Stop here".**  The bias question is closed; both leads stay in the record.

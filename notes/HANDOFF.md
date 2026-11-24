@@ -45,8 +45,9 @@ each word means, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's st
   it).  `game_results.py` and its test were removed, nothing running them.  The morning job's bias step now reads no
   designs.  GitHub's tests and the Pages build passed; the live file checked.
 - **Transition attempts on defense**: the Box Adj read the owner okayed was already run, experiment 143's read 1:
-  -0.047, z -2.36, worse in 2017-2026 (+0.020), failed.  DECISIONS.md, "Where a new input goes".  The owner chooses
-  between the off-court lead, a box-score prior screen for transition attempts, or stopping.
+  -0.047, z -2.36, worse in 2017-2026 (+0.020), failed.  DECISIONS.md, "Where a new input goes".
+- **The owner, 2026-11-24, offered the off-court lead, a box-score prior screen for transition attempts, or stopping:
+  "Stop here".**  Both leads stay in the record; neither is open work.
 - Scripts: `scratch/2026-11-24_bias_heldback/` (`heldback_lean.py` the read, `show.py` the tables,
   `write_params.py` the page's file).  The owner's full table: the Google Sheet "Bias page leans on held-back games
   (Nov 24, 2026)", https://docs.google.com/spreadsheets/d/1NJnxw5em78PolGnXu7FSRXqF564OBtwMcb4mRVrGcfU
