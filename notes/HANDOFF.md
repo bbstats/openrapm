@@ -31,7 +31,7 @@ each word means, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's st
 - Before asking for a verdict, compare every season's top-rated player and WOSA leader in both tables, not 2026's
   alone: on 2026-11-19 two old seasons' WOSA leaders changed and the owner had answered on 2026.
 
-## Start here (updated 2026-11-24, afternoon): the bias question answered; one publish and one read wait
+## Start here (updated 2026-11-24, afternoon): the bias question answered and the page published
 
 - **The answer to the owner's bias question** (DECISIONS.md, "The Bias page's leans on held-back games" and the two
   entries after it): on games the ratings never saw, no box stat on the page leans the same way in all three eras;
@@ -39,10 +39,11 @@ each word means, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's st
   sit on their own games; they found no credit error, toward players or teams.  Off-court plus-minus does lean,
   -0.34 per standard deviation, every era, both widths: OpenRAPM marks down players whose team did well with them on
   the bench more than new games bear out.  A lead, kin to check 145; not yet raised as work.
-- **Waiting on the owner's word to publish**: side branch `bias-held-back-2026-11-24` (f737d42), the owner's ruling
-  "Held-back, drop ’27".  It must not sit in this working tree unpublished: the morning job writes the Bias file with
-  this tree's code onto main's page.  To publish: `git merge --no-ff bias-held-back-2026-11-24` here, then
-  "Publishing" below.  Checked: 203 targeted tests, the page at 1,280 and 390 pixels, no console errors.
+- **PUBLISHED 2026-11-24, main 919b06d** (the owner: "Held-back, drop ’27", then "Publish as is"): the Bias page's
+  "vs game results ’27" column is off; "vs game results, last 10 seasons" reads `params/bias_held_back.json`, the
+  held-back read's 2017-2026, fixed until a new build is adopted (PIPELINE.md, the Bias section, says how to refresh
+  it).  `game_results.py` and its test were removed, nothing running them.  The morning job's bias step now reads no
+  designs.  GitHub's tests and the Pages build passed; the live file checked.
 - **Transition attempts on defense**: the Box Adj read the owner okayed was already run, experiment 143's read 1:
   -0.047, z -2.36, worse in 2017-2026 (+0.020), failed.  DECISIONS.md, "Where a new input goes".  The owner chooses
   between the off-court lead, a box-score prior screen for transition attempts, or stopping.
