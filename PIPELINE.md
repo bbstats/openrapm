@@ -424,33 +424,30 @@ them that a peak season comes back down the year after, so the misses come from 
 ## The Bias page (`bias.py`)
 
 - **For:** for the season the pages open on, where OpenRAPM rates players higher or lower than a consensus of three
-  outside rating systems does, stat by stat, "vs consensus" (the owner's design, 2026-11-05), than the season's
-  team-game results do, "vs game results" (the owner, 2026-11-24), and than the team-game results of the last 10
-  seasons, the season's included, do, "vs game results, last 10 seasons" (the owner, 2026-11-24).
+  outside rating systems does, stat by stat, "vs consensus" (the owner's design, 2026-11-05), and than games the
+  ratings never saw do over the last 10 finished seasons, "vs game results, last 10 seasons" (the owner,
+  2026-11-24: "Held-back, drop ’27", once the in-sample game-results columns were found to locate no error).
 - **Reads:** the ratings table; the season panel's rows of those seasons, `data.panel.panel_of_season`; each system's
-  newest stored table, `data.public_ratings.latest`; the seasons' stored design pieces, for the team-games, about a
-  second a season.
+  newest stored table, `data.public_ratings.latest`; `params/bias_held_back.json`, the held-back column.
 - **Writes:** `docs/data/bias.json`: the season, the players compared, the two width multipliers, the three systems
-  with their weights and dates, the team-games read and the games' multipliers, the seasons' first, last and
-  team-games, and one row per stat with offense, defense, total, the two leans against the game results and their
-  standard errors.
+  with their weights and dates, the held-back column's first and last season and build, and one row per stat with
+  offense, defense, total, the lean against the held-back games and the standard errors.
 - **How:** the players are those with 60 or more offensive possessions whom all three systems list. The consensus
   is 50% xRAPM, 30% xrapm.com's 3-year RAPM and 20% DARKO, per side, the owner's of 2026-11-24, when LOKI and
   Pulse were dropped and no 2026-27 LEBRON was published. Each side of OpenRAPM is multiplied once to the
   consensus's standard deviation, the consensus subtracted, and that gap regressed on each standardized stat alone,
   weighted by offensive possessions: the slope per one standard deviation is the page's number, with a
   heteroskedasticity-robust standard error. The 15 stats are the 13 box rates and on-court and off-court plus-minus.
-- **vs game results** (`game_results.py`): no ridge. Each team-game's points minus OpenRAPM's prediction for it is
-  fitted by weighted least squares on the stat of the players on the court, the attackers' and the defenders'
-  shares times their z summed, with the prediction itself free per side (the width match's part) and the season's
-  level and home court. The defenders' coefficient minus the attackers' is OpenRAPM minus the games, per player
-  and per standard deviation, the same step as the consensus column. Its standard error is how far that number
-  moves when each team's games are left out in turn: a player's miss repeats in all his games, so leaving a team out
-  resamples its players as well as its games.
-- **vs game results, last 10 seasons:** the same fit on the team-games of the season and the 9 before it together,
-  each season against its own published ratings, with its own width match, level and home court, and each season's
-  stat in standard deviations of its own shown players; one lean per stat for all ten.  A team is left out of every
-  season at once for the standard error.
+- **vs game results, last 10 seasons:** the incumbent build's within-season test, its held-back stints of 2017 to
+  2026.  Each stint's points minus the ten players' ratings, built without its games, is fitted by weighted least
+  squares on the offense five's and the defense five's summed z, the stat from the fold's own fit games in standard
+  deviations of the fold's players with 60 or more offensive possessions, with team levels per fold, garbage time,
+  the margin, the fives' playing time and the ratings' sums, squares and spreads free.  The defense five's
+  coefficient minus the offense five's is OpenRAPM minus the games, per player and per standard deviation.  Its
+  standard error is the larger of the ten seasons' spread and that of the same lean on another player's stat handed
+  along his career, 200 times.  Fixed until a new build is adopted: then `scratch/2026-11-23_synergy/extract.py`,
+  `scratch/2026-11-24_bias_heldback/heldback_lean.py` and `write_params.py` (notes/DECISIONS.md, "The Bias page's
+  leans on held-back games").
 - **The systems' tables:** `python -m openrapm data public-ratings` asks each system's public page once, checks the
   table, and stores it in `data/public_ratings/<season>/<system>/<day>.parquet`, out of git: the ratings are their
   makers'. EPM, nbarapm.com's time-decay RAPM and xPM are not pulled: their terms of use or robots file forbid it
