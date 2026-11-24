@@ -105,15 +105,14 @@
   // the columns, [key in the file, header, hover], the header and hover read from the file's meta; a row in the file is
   // a list in meta.fields order.  The owner, 2026-11-05: "i dont want off/def, just do total"; 2026-11-24: "the first
   // one should say 'vs consensus' and the 2nd one should now say 'vs game results'", then "Add in 'last 10 years' just
-  // OpenRAPM vs game results. Clarify the other 2 columns as just being '27 ... last 10 seasons (inclusive of current)"
+  // OpenRAPM vs game results. Clarify the other 2 columns as just being '27 ... last 10 seasons (inclusive of current)",
+  // then, once the in-sample leans were found not to hold on games the ratings never saw: "Held-back, drop ’27"
   const short = season => "’" + String(season).slice(-2);
   const COLUMNS = [
     ["t", m => `vs consensus ${short(m.season)}`,
      () => "OpenRAPM minus the consensus, per 1 standard deviation of the stat, points per 100"],
-    ["g", m => `vs game results ${short(m.season)}`,
-     m => `OpenRAPM minus the ${m.season} team-game results, per 1 standard deviation of the stat, points per 100`],
     ["gs", () => "vs game results, last 10 seasons",
-     m => m.games_seasons ? `OpenRAPM minus the team-game results of ${m.games_seasons.first} to ${m.games_seasons.last}, each season against its own ratings, per 1 standard deviation of the stat, points per 100` : ""]];
+     m => m.games_seasons ? `OpenRAPM minus the game results of ${m.games_seasons.first} to ${m.games_seasons.last}, per 1 standard deviation of the stat, points per 100` : ""]];
   const state = { sort: null };      // null: the file's order, the box score's; else { k, dir }
   const table = $("table"), thead = table.querySelector("thead"), tbody = table.querySelector("tbody"),
         tfoot = table.querySelector("tfoot");
@@ -161,9 +160,9 @@
     e.preventDefault();
     if (!data) return;
     const q = v => v == null ? "" : /[",\r\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
-    const head = ["stat", "label", "vs_consensus", "vs_consensus_se", "vs_game_results", "vs_game_results_se",
-                  "vs_game_results_last_10_seasons", "vs_game_results_last_10_seasons_se", "stat_sd"];
-    const lines = [head, ...rows.map(r => [r.stat, r.label, r.t, r.t_se, r.g, r.g_se, r.gs, r.gs_se, r.sd])];
+    const head = ["stat", "label", "vs_consensus", "vs_consensus_se", "vs_game_results_last_10_seasons",
+                  "vs_game_results_last_10_seasons_se", "stat_sd"];
+    const lines = [head, ...rows.map(r => [r.stat, r.label, r.t, r.t_se, r.gs, r.gs_se, r.sd])];
     const text = "﻿" + lines.map(line => line.map(q).join(",")).join("\r\n") + "\r\n";
     const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
     const a = Object.assign(document.createElement("a"), { href: url, download: `openrapm_bias_${data.meta.season}.csv` });

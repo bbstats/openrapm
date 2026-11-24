@@ -46,25 +46,23 @@ def test_every_row_adds_up_at_the_two_decimals_the_page_shows(document):
         assert all(stat[key] > 0 for key in ("o_se", "d_se", "t_se", "sd")), stat["label"]
 
 
-def test_every_row_has_its_leans_against_the_game_results_and_the_file_says_what_they_were_read_on(document):
-    meta = document["meta"]
-    games, seasons = meta["games"], meta["games_seasons"]
-    assert games["team_games"] > 0 and games["multipliers"]["o"] > 0 and games["multipliers"]["d"] > 0
-    assert seasons["last"] == meta["season"] and seasons["last"] - seasons["first"] == 9
-    assert seasons["team_games"] > 8 * games["team_games"]
+def test_every_row_has_its_lean_against_the_held_back_games_and_the_file_says_what_they_were_read_on(document):
+    """Ten finished seasons, before the one the page opens on, and the build whose held-back games they are."""
+    seasons = document["meta"]["games_seasons"]
+    assert seasons["last"] < document["meta"]["season"] and seasons["last"] - seasons["first"] == 9
+    assert seasons["build"]
     for row in document["rows"]:
         stat = dict(zip(BIAS_FIELDS, row))
-        for key in ("g", "gs"):
-            assert stat[key] is not None and stat[key + "_se"] > 0, (key, stat["label"])
-            assert round(stat[key], 2) == stat[key], (key, stat["label"])
+        assert stat["gs"] is not None and stat["gs_se"] > 0, stat["label"]
+        assert round(stat["gs"], 2) == stat["gs"], stat["label"]
 
 
 def test_the_page_names_its_columns_for_the_season_and_the_last_10_seasons():
-    """The owner, 2026-11-24: "the first one should say 'vs consensus' and the 2nd one should now say 'vs game
-    results'", then "Clarify the other 2 columns as just being '27" and "last 10 seasons (inclusive of current)"."""
+    """The owner, 2026-11-24: "the first one should say 'vs consensus'", "Clarify the other 2 columns as just being
+    '27", then "Held-back, drop ’27": the season's game-results column is gone."""
     page = (DOCS / "bias.html").read_text(encoding="utf-8")
     assert '["t", m => `vs consensus ${short(m.season)}`' in page
-    assert '["g", m => `vs game results ${short(m.season)}`' in page
+    assert '["g", ' not in page
     assert '["gs", () => "vs game results, last 10 seasons"' in page
 
 

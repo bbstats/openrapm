@@ -1,0 +1,68 @@
+{
+ "first": 2017,
+ "last": 2026,
+ "build": "rd143",
+ "source": "scratch/2026-11-24_bias_heldback/heldback_lean.py, notes/DECISIONS.md, \"The Bias page's leans on held-back games\"",
+ "rows": {
+  "threes_made_per100": [
+   0.106,
+   0.0964
+  ],
+  "threes_missed_per100": [
+   0.1475,
+   0.0841
+  ],
+  "twos_made_per100": [
+   -0.0751,
+   0.0768
+  ],
+  "twos_missed_per100": [
+   0.0306,
+   0.0742
+  ],
+  "free_throws_made_per100": [
+   -0.0264,
+   0.0801
+  ],
+  "free_throws_missed_per100": [
+   0.0381,
+   0.0813
+  ],
+  "off_rebounds_per100": [
+   -0.2761,
+   0.1254
+  ],
+  "def_rebounds_per100": [
+   -0.1537,
+   0.1109
+  ],
+  "assists_per100": [
+   0.0009,
+   0.0907
+  ],
+  "turnovers_per100": [
+   0.0585,
+   0.0734
+  ],
+  "steals_per100": [
+   0.0653,
+   0.0954
+  ],
+  "blocks_per100": [
+   -0.083,
+   0.0841
+  ],
+  "fouls_per100": [
+   -0.0253,
+   0.0687
+  ],
+  "on_court_plus_minus_per100": [
+   0.1116,
+   0.1068
+  ],
+  "off_court_plus_minus_per100": [
+   -0.316,
+   0.1001
+  ]
+ }
+}
