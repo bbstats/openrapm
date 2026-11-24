@@ -31,20 +31,16 @@ each word means, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's st
 - Before asking for a verdict, compare every season's top-rated player and WOSA leader in both tables, not 2026's
   alone: on 2026-11-19 two old seasons' WOSA leaders changed and the owner had answered on 2026.
 
-## Built 2026-11-24, waiting on the owner's word: the Bias page's residual RAPM column and three systems
+## Done 2026-11-24: the Bias page's residual RAPM column and three systems, PUBLISHED (fda1753)
 
 - The owner: "add in the 'residual rapm' ... as a column in addition to 'total'" and "get rid of Loki and Pulse.
   replace with LEBRON if you can find it. if not, just do xRAPM, 3yr RAPM and Darko DPM".  No 2026-27 LEBRON is
-  published, so the consensus is xRAPM 6/13, 3-year RAPM 4/13, DARKO 3/13.
-- On the side branch `bias-residual-2026-11-24` (ab116ba) in the worktree `A:/code/spmm_bias`, NOT merged: the 6 AM job
-  runs this working tree and would publish it.  `DECISIONS.md`, "The Bias page, three systems and a residual RAPM
-  column", on that branch, has every number.  Every residual slope is under 0.03 this early.
-- To publish on the owner's word: merge the branch into this one (code and tests), then put `docs/bias.html` and a
-  fresh `docs/data/bias.json` on main together from the site worktree, `python -m openrapm site --bias --out-dir
-  A:/code/spmm_site/docs`, and push.  Run `PUBLISH=0 bash scripts/daily_update.sh` first.  The worktree has no
-  data junctions; it ran on real data through a config copy with absolute paths (`OPENRAPM_CONFIG`).
-- Open for the owner: the residual column's sign (now the residual's own: positive, the games rate those players
-  higher than OpenRAPM), the weights, and the header's hover line, which is mine.
+  published, so the consensus is xRAPM 50%, 3-year RAPM 30%, DARKO 20%, the owner's weights.
+- The residual RAPM (`residual_rapm.py`): the season's team-games ridged on what the published rating misses, at
+  13,037, one free multiplier per side, no team levels; the column keeps the residual's own sign (the owner's choice).
+  Every slope is under 0.03 this early.  `DECISIONS.md`, "The Bias page, three systems and a residual RAPM column".
+- The morning job writes it from this working tree from tomorrow; the fit adds about two seconds to `site --bias`.
+- Open: no Changelog row was added (wording is the owner's); the Residual RAPM header's hover line is mine.
 
 ## Done 2026-11-23: lineup synergies, read-only
 
