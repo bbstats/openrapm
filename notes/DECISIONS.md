@@ -14046,3 +14046,56 @@ games do, the way "vs consensus" reads.
 
 No game-results lean reaches two errors this early; the largest is made free throws at 1.8.  The residual RAPM
 (`residual_rapm.py`) is removed.  Built on the side branch bias-game-results-2026-11-24.
+
+## The Bias page's third column: vs game results, last 10 seasons (the owner, 2026-11-24: "Add in 'last 10 years' just OpenRAPM vs game results. Clarify the other 2 columns as just being '27" and "Sorry, last 10 seasons (inclusive of current)")
+
+**The method.**  The "vs game results" fit (`game_results.py`) on the team-games of 2018 to 2027 together, 23,520 of
+them, each season against its own published ratings.  Each season keeps its own width match, level and home court,
+and each season's stat is in standard deviations of its own shown players (60 or more offensive possessions, weighted
+by possessions); the lean per stat is one number for all ten seasons.  Its standard error leaves one team out of every
+season at once (a franchise keeps its NBA id).  The other two columns now read "vs consensus '27" and "vs game results
+'27", the year from the file.  The ten seasons' designs take about a second each, so the morning job's bias step runs
+in about 14 seconds.
+
+**The seasons' widths,** what each season's published ratings are multiplied by to fit its own team-games, no stat in
+the fit:
+
+| season | team-games | offense | defense |
+|---|---|---|---|
+| 2018 | 2,624 | 1.069 | 1.118 |
+| 2019 | 2,624 | 1.062 | 1.175 |
+| 2020 | 2,284 | 1.087 | 1.223 |
+| 2021 | 2,330 | 1.146 | 1.249 |
+| 2022 | 2,634 | 1.096 | 1.361 |
+| 2023 | 2,628 | 0.998 | 1.091 |
+| 2024 | 2,624 | 1.159 | 1.195 |
+| 2025 | 2,628 | 1.134 | 1.203 |
+| 2026 | 2,630 | 1.052 | 1.261 |
+| 2027 | 514 | 1.782 | 2.358 |
+
+**The page, 2027 through 2026-11-23,** points per 100 per one standard deviation, OpenRAPM minus the other source:
+
+| stat | vs consensus '27 | vs game results '27 | its error | last 10 seasons | its error |
+|---|---|---|---|---|---|
+| made threes | -0.33 | -0.17 | 0.64 | +0.02 | 0.10 |
+| missed threes | -0.33 | +0.06 | 0.61 | +0.14 | 0.08 |
+| made twos | +0.23 | +1.00 | 0.70 | +0.36 | 0.12 |
+| missed twos | +0.11 | +0.58 | 0.69 | +0.27 | 0.09 |
+| made free throws | +0.12 | +1.46 | 0.81 | +0.69 | 0.13 |
+| missed free throws | +0.27 | +0.42 | 0.52 | +0.29 | 0.11 |
+| offensive rebounds | +0.44 | -0.66 | 0.71 | +0.08 | 0.11 |
+| defensive rebounds | +0.37 | +0.09 | 0.92 | +0.44 | 0.16 |
+| assists | +0.02 | +1.10 | 0.89 | +0.36 | 0.13 |
+| turnovers | +0.26 | +0.36 | 0.46 | +0.34 | 0.12 |
+| steals | +0.13 | +0.65 | 0.42 | +0.14 | 0.07 |
+| blocks | +0.27 | +0.47 | 0.77 | +0.17 | 0.08 |
+| personal fouls | +0.22 | -0.68 | 0.55 | -0.16 | 0.07 |
+| on-court plus-minus | -0.42 | +0.21 | 0.24 | +0.01 | 0.04 |
+| off-court plus-minus | -0.31 | -0.23 | 0.16 | -0.16 | 0.04 |
+
+Over ten seasons OpenRAPM rates players with more of the box score's volume higher than their games bear out: made
+free throws +0.69 (5.3 errors), made twos +0.36 (3.0), missed twos +0.27 (3.0), assists +0.36 (2.8), turnovers +0.34
+(2.8), defensive rebounds +0.44 (2.8), missed free throws +0.29 (2.6); personal fouls -0.16 (2.3) and off-court
+plus-minus -0.16 (4.0) run the other way.  On-court plus-minus is level, +0.01.  These are in-sample: each season's
+rating was fitted on the same games, with its prior.  Read only, no rating moved; whether the box-score prior
+over-credits volume is a lead for a research session, the owner's to open.

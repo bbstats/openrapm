@@ -46,20 +46,26 @@ def test_every_row_adds_up_at_the_two_decimals_the_page_shows(document):
         assert all(stat[key] > 0 for key in ("o_se", "d_se", "t_se", "sd")), stat["label"]
 
 
-def test_every_row_has_a_lean_against_the_game_results_and_the_file_says_what_it_was_read_on(document):
-    games = document["meta"]["games"]
+def test_every_row_has_its_leans_against_the_game_results_and_the_file_says_what_they_were_read_on(document):
+    meta = document["meta"]
+    games, seasons = meta["games"], meta["games_seasons"]
     assert games["team_games"] > 0 and games["multipliers"]["o"] > 0 and games["multipliers"]["d"] > 0
+    assert seasons["last"] == meta["season"] and seasons["last"] - seasons["first"] == 9
+    assert seasons["team_games"] > 8 * games["team_games"]
     for row in document["rows"]:
         stat = dict(zip(BIAS_FIELDS, row))
-        assert stat["g"] is not None and stat["g_se"] > 0, stat["label"]
-        assert round(stat["g"], 2) == stat["g"], stat["label"]
+        for key in ("g", "gs"):
+            assert stat[key] is not None and stat[key + "_se"] > 0, (key, stat["label"])
+            assert round(stat[key], 2) == stat[key], (key, stat["label"])
 
 
-def test_the_page_names_its_columns_vs_consensus_and_vs_game_results():
+def test_the_page_names_its_columns_for_the_season_and_the_last_10_seasons():
     """The owner, 2026-11-24: "the first one should say 'vs consensus' and the 2nd one should now say 'vs game
-    results'"."""
+    results'", then "Clarify the other 2 columns as just being '27" and "last 10 seasons (inclusive of current)"."""
     page = (DOCS / "bias.html").read_text(encoding="utf-8")
-    assert '["t", "vs consensus",' in page and '["g", "vs game results",' in page
+    assert '["t", m => `vs consensus ${short(m.season)}`' in page
+    assert '["g", m => `vs game results ${short(m.season)}`' in page
+    assert '["gs", () => "vs game results, last 10 seasons"' in page
 
 
 def test_the_three_systems_carry_the_owners_weights_and_their_makers_names(document):

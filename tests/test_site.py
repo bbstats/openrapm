@@ -112,29 +112,43 @@ def _bias_world(seed=2):
 
 @pytest.fixture
 def fake_games(monkeypatch):
-    """The season's team-games stood in for: 514 of them, the games' multipliers 1.4 and 2.1, and every stat's lean
-    +0.25 with a standard error of 0.5.  Returns the stand-in for `bias_document`'s games and the z the leans were
-    asked of."""
-    seen = {}
+    """Every season's team-games stood in for: 514 a season, the games' multipliers 1.4 and 2.1, and every stat's
+    lean +0.25, standard error 0.5, for the season alone, and +0.10, standard error 0.05, for the seasons together.
+    Returns the stand-in for one season's games and the calls the lean table got: (how many seasons, their z)."""
+    calls = []
 
-    def lean_table(games, z, stats):
-        seen["z"] = z
-        return pd.DataFrame({"stat": list(stats), "games": 0.25, "games_se": 0.5})
+    def lean_table(seasons, zs, stats):
+        calls.append((len(seasons), zs))
+        value, error = (0.25, 0.5) if len(calls) % 2 == 1 else (0.10, 0.05)
+        return pd.DataFrame({"stat": list(stats), "games": value, "games_se": error})
 
     monkeypatch.setattr(site, "lean_table", lean_table)
     monkeypatch.setattr(site, "game_multipliers", lambda games: {"offense": 1.4, "defense": 2.1})
-    return SimpleNamespace(team_games=514), seen
+    return SimpleNamespace(team_games=514), calls
+
+
+def _document(fake_games, table=None, panel=None, pulls=None, extra=()):
+    """`bias_document` of the made-up 2027, the seasons' column on 2027 and `extra` seasons (each the made-up 2027's
+    table and panel rows under that season)."""
+    world = _bias_world()
+    table, panel, pulls = (world[0] if table is None else table, world[1] if panel is None else panel,
+                           world[2] if pulls is None else pulls)
+    seasons = {2027: (fake_games[0], panel)}
+    for season in extra:
+        seasons[season] = (fake_games[0], panel.assign(season=season))
+        table = pd.concat([table, table[table.season == 2027].assign(season=season)], ignore_index=True)
+    return site.bias_document(table, pulls, 2027, "2026-11-05", "2026-11-04", seasons), table
 
 
 def test_the_bias_document_counts_its_players_and_names_its_three_systems(fake_games):
-    table, panel, pulls = _bias_world()
-    document = site.bias_document(table, panel, pulls, 2027, "2026-11-05", "2026-11-04", fake_games[0])
+    document, _ = _document(fake_games)
     meta = document["meta"]
     assert {key: meta[key] for key in ("season", "through", "built", "min_possessions", "players_shown", "players")} \
         == dict(season=2027, through="2026-11-04", built="2026-11-05", min_possessions=60, players_shown=41,
                 players=40)
     assert meta["fields"] == site.BIAS_FIELDS and meta["multipliers"]["o"] > 0 and meta["multipliers"]["d"] > 0
     assert meta["games"] == {"team_games": 514, "multipliers": {"o": 1.4, "d": 2.1}}
+    assert meta["games_seasons"] == {"first": 2027, "last": 2027, "team_games": 514}
     assert [(system["key"], system["weight"]) for system in document["systems"]] == [
         ("xrapm", 0.5), ("rapm_3y", 0.3), ("darko", 0.2)]
     assert [system["players"] for system in document["systems"]] == [40, 41, 41]
@@ -144,26 +158,29 @@ def test_the_bias_document_counts_its_players_and_names_its_three_systems(fake_g
     assert set(document["systems"][0]) == {"key", "name", "by", "link", "weight", "as_of", "players"}
 
 
-def test_the_game_results_column_reads_every_panel_player_on_the_compared_players_scale(fake_games):
-    """The lean is asked of every player of the panel, the 59-possession one and the one xRAPM lacks included, each
-    in standard deviations of the 40 compared players, weighted by possessions: over those 40 each z has mean 0 and
-    spread 1.  The file carries each lean and its error as the lean table gives them."""
+def test_the_seasons_game_results_column_is_the_seasons_alone_and_together(fake_games):
+    """The season's column is asked of the season alone, its z in standard deviations of the 40 compared players; the
+    seasons' column of every season together, each season's z in standard deviations of its own shown players (41
+    here: the one xRAPM lacks counts).  Weighted by possessions, each z has mean 0 and spread 1 over those players."""
     from openrapm import bias
-    table, panel, pulls = _bias_world()
-    games, seen = fake_games
-    document = site.bias_document(table, panel, pulls, 2027, "2026-11-05", "2026-11-04", games)
-    z = seen["z"].set_index("player_id")
-    assert sorted(z.index) == list(range(1, 43))
-    compared = table[table.player_id <= 40].set_index("player_id")
-    for stat in bias.STATS:
-        assert bias.weighted_mean(z.loc[compared.index, stat], compared.poss_season) == pytest.approx(0.0, abs=1e-9)
-        assert bias.weighted_sd(z.loc[compared.index, stat], compared.poss_season) == pytest.approx(1.0)
+    document, table = _document(fake_games, extra=(2018, 2026))
+    calls = fake_games[1]
+    assert [count for count, _ in calls] == [1, 3]
+    compared = table[(table.season == 2027) & (table.player_id <= 40)].set_index("player_id")
+    shown = table[(table.season == 2027) & (table.poss_season >= 60)].set_index("player_id")
+    for z, players in ((calls[0][1][0], compared), *((z, shown) for z in calls[1][1])):
+        z = z.set_index("player_id")
+        assert sorted(z.index) == list(range(1, 43))
+        for stat in bias.STATS:
+            assert bias.weighted_mean(z.loc[players.index, stat], players.poss_season) == pytest.approx(0, abs=1e-9)
+            assert bias.weighted_sd(z.loc[players.index, stat], players.poss_season) == pytest.approx(1.0)
+    assert document["meta"]["games_seasons"] == {"first": 2018, "last": 2027, "team_games": 3 * 514}
     for row in [dict(zip(site.BIAS_FIELDS, row)) for row in document["rows"]]:
-        assert row["g"] == 0.25 and row["g_se"] == 0.5, row["label"]
+        assert (row["g"], row["g_se"], row["gs"], row["gs_se"]) == (0.25, 0.5, 0.1, 0.05), row["label"]
 
 
 def test_the_bias_rows_are_the_fifteen_stats_and_every_row_adds_up_at_two_decimals(fake_games):
-    document = site.bias_document(*_bias_world(), 2027, "2026-11-05", "2026-11-04", fake_games[0])
+    document, _ = _document(fake_games)
     rows = [dict(zip(site.BIAS_FIELDS, row)) for row in document["rows"]]
     assert [row["label"] for row in rows] == [
         "Made threes", "Missed threes", "Made twos", "Missed twos", "Made free throws", "Missed free throws",
@@ -183,29 +200,35 @@ def test_a_system_that_runs_against_openrapm_stops_the_document(fake_games):
     flipped = pulls["darko"].table.assign(defense=-pulls["darko"].table.defense)
     pulls["darko"] = PublicRatings(flipped, "2026-11-01", "2026-11-05")
     with pytest.raises(SystemExit, match="DARKO defense runs against OpenRAPM's"):
-        site.bias_document(table, panel, pulls, 2027, "2026-11-05", "2026-11-04", fake_games[0])
+        _document(fake_games, table, panel, pulls)
 
 
 @pytest.fixture
 def bias_site(tmp_path, monkeypatch, fake_games):
-    """`run_site(bias=True)` on the made-up 2027: the stored pulls, the panel and the game dates handed in."""
+    """`run_site(bias=True)` on the made-up 2027, with the same players rated in 2016 and 2018 too: the stored pulls,
+    the panel and the game dates handed in, and the seasons whose team-games were asked for recorded."""
     table, panel, pulls = _bias_world()
+    table = pd.concat([table, *(table.assign(season=season) for season in (2016, 2018))], ignore_index=True)
     ratings = tmp_path / "outputs" / "season_ratings_product.parquet"
     ratings.parent.mkdir()
     table.to_parquet(ratings)
     stints = pd.DataFrame({"game_date": ["2026-10-20", "2026-11-04"]})
+    asked = []
     monkeypatch.setattr(site.public_ratings, "latest", lambda cfg, season: dict(pulls) if season == 2027 else {})
-    monkeypatch.setattr(site, "panel_of_season", lambda cfg, season: panel[panel.season == season])
+    monkeypatch.setattr(site, "panel_of_season", lambda cfg, season: panel.assign(season=season))
     monkeypatch.setattr(site, "season_stints", lambda season, cfg: stints)
     monkeypatch.setattr(site, "season_designs", lambda cfg, season: None)
-    monkeypatch.setattr(site, "season_games", lambda designs, table, season, teams_of: fake_games[0])
+    monkeypatch.setattr(site, "season_games",
+                        lambda designs, table, season, teams_of: asked.append(season) or fake_games[0])
     cfg = {"_root": str(tmp_path), "paths": {"outputs": str(tmp_path / "outputs")}}
-    return cfg, tmp_path / "site", pulls
+    return cfg, tmp_path / "site", pulls, asked
 
 
 def test_the_bias_file_is_written_whole_and_the_same_bytes_twice(bias_site, capsys):
-    cfg, out_dir, _ = bias_site
+    """The seasons' column reads the season and the 9 before it that are rated: 2018 here, not 2016."""
+    cfg, out_dir, _, asked = bias_site
     assert site.run_site(cfg, out_dir=out_dir, built="2026-11-05", bias=True) == 0
+    assert asked == [2018, 2027]
     path = out_dir / "data" / "bias.json"
     first = path.read_bytes()
     document = json.loads(first)
@@ -214,6 +237,7 @@ def test_the_bias_file_is_written_whole_and_the_same_bytes_twice(bias_site, caps
     out = capsys.readouterr().out
     assert "40 of the 41 players shown for 2027 are in all 3 systems" in out
     assert "game results on 514 team-games, OpenRAPM multiplied by 1.400 on offense and 2.100 on defense" in out
+    assert "game results of 2018 to 2027 on 1028 team-games" in out
     site.run_site(cfg, out_dir=out_dir, built="2026-11-05", bias=True)
     assert path.read_bytes() == first and sorted(p.name for p in path.parent.iterdir()) == ["bias.json",
                                                                                              "ratings.json"]
@@ -221,7 +245,7 @@ def test_the_bias_file_is_written_whole_and_the_same_bytes_twice(bias_site, caps
 
 def test_a_system_never_pulled_or_dated_before_the_season_leaves_the_bias_file_as_it_was(bias_site):
     from openrapm.data.public_ratings import PublicRatings
-    cfg, out_dir, pulls = bias_site
+    cfg, out_dir, pulls, _ = bias_site
     site.run_site(cfg, out_dir=out_dir, built="2026-11-05", bias=True)
     path = out_dir / "data" / "bias.json"
     before = path.read_bytes()
