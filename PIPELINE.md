@@ -424,25 +424,26 @@ them that a peak season comes back down the year after, so the misses come from 
 ## The Bias page (`bias.py`)
 
 - **For:** for the season the pages open on, where OpenRAPM rates players higher or lower than a consensus of three
-  outside rating systems does, stat by stat (the owner's design, 2026-11-05), and where the season's own games
-  would move it: the residual RAPM column (the owner, 2026-11-24).
+  outside rating systems does, stat by stat, "vs consensus" (the owner's design, 2026-11-05), and than the season's
+  team-game results do, "vs game results" (the owner, 2026-11-24).
 - **Reads:** the ratings table; the season panel's rows of that season, `data.panel.panel_of_season`; each system's
-  newest stored table, `data.public_ratings.latest`; the season's stored design pieces, for the residual RAPM.
+  newest stored table, `data.public_ratings.latest`; the season's stored design pieces, for the team-games.
 - **Writes:** `docs/data/bias.json`: the season, the players compared, the two width multipliers, the three systems
-  with their weights and dates, the residual RAPM's penalty and multipliers, and one row per stat with offense,
-  defense, total, the residual RAPM's slope and their standard errors.
+  with their weights and dates, the team-games read and the games' multipliers, and one row per stat with offense,
+  defense, total, the lean against the game results and their standard errors.
 - **How:** the players are those with 60 or more offensive possessions whom all three systems list. The consensus
   is 50% xRAPM, 30% xrapm.com's 3-year RAPM and 20% DARKO, per side, the owner's of 2026-11-24, when LOKI and
-  Pulse were dropped and no 2026-27 LEBRON was published. Each side of OpenRAPM is multiplied once to the consensus's standard deviation, the consensus
-  subtracted, and that gap regressed on each standardized stat alone, weighted by offensive possessions: the slope per one standard deviation is the page's
-  number, with a heteroskedasticity-robust standard error. The 15 stats are the 13 box rates and on-court and
-  off-court plus-minus.
-- **Residual RAPM** (`residual_rapm.py`): the published rating is the prediction for every team-game of the
-  season, and a ridge at the build's own penalty, 13,037, is fitted to what is left, with one free multiplier per
-  side and the season's level, home court and playoff columns. A player's coefficient, offense plus defense, is
-  his residual RAPM; the column is its slope on each standardized stat, read like the gap above but with no
-  width match (positive: the games rate those players higher than OpenRAPM does). No free level per team: on
-  2027's first 514 team-games, held out by game, team levels made every penalty worse.
+  Pulse were dropped and no 2026-27 LEBRON was published. Each side of OpenRAPM is multiplied once to the
+  consensus's standard deviation, the consensus subtracted, and that gap regressed on each standardized stat alone,
+  weighted by offensive possessions: the slope per one standard deviation is the page's number, with a
+  heteroskedasticity-robust standard error. The 15 stats are the 13 box rates and on-court and off-court plus-minus.
+- **vs game results** (`game_results.py`): no ridge. Each team-game's points minus OpenRAPM's prediction for it is
+  fitted by weighted least squares on the stat of the players on the court, the attackers' and the defenders'
+  shares times their z summed, with the prediction itself free per side (the width match's part) and the season's
+  level and home court. The defenders' coefficient minus the attackers' is OpenRAPM minus the games, per player
+  and per standard deviation, the same step as the consensus column. Its standard error is how far that number
+  moves when each team's games are left out in turn: a player's miss repeats in all his games, so leaving a team out
+  resamples its players as well as its games.
 - **The systems' tables:** `python -m openrapm data public-ratings` asks each system's public page once, checks the
   table, and stores it in `data/public_ratings/<season>/<system>/<day>.parquet`, out of git: the ratings are their
   makers'. EPM, nbarapm.com's time-decay RAPM and xPM are not pulled: their terms of use or robots file forbid it

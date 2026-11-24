@@ -59,7 +59,7 @@ MODEL_LAYER = [
     "swap_adjust.py",   # step 5: the swap type model, the give-back, team totals held, the spread held
     "swap_test.py",     # the swap test: same-four lineup pairs, scored against a neighboring season's ranking
     "trade_set.py",     # the team-game with-and-without-you ridge and its losses
-    "residual_rapm.py",  # the Bias page's residual RAPM: the season's team-games ridged on the rating's miss
+    "game_results.py",  # the Bias page's game results: the season's team-games against the rating, stat by stat
     "consensus.py",     # the consensus check: the name join, the pooling, rank agreement and spreads
     "settings.py",      # the shipped settings, each with the experiment that set it
     "features.py",      # the prior's input catalog, the derived columns, the shipped lists

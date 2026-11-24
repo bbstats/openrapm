@@ -13990,3 +13990,59 @@ branch bias-residual-2026-11-24; the owner, shown a private preview: "Publish no
 | personal fouls | +0.22 | 0.07 | +0.01 |
 | on-court plus-minus | -0.42 | 0.07 | -0.03 |
 | off-court plus-minus | -0.31 | 0.08 | +0.01 |
+
+## The Bias page's second column: vs game results, no ridge (the owner, 2026-11-24, on the published residual RAPM column: "instead of residual rapm i think i just want like game level results or something. the ridge penalization just makes it a bit too hard to interpret" and "the first one should say 'vs consensus' and the 2nd one should now say 'vs game results'")
+
+**The method (`src/openrapm/game_results.py`).**  Each of the season's team-games: its points on the build's target
+for that side, minus OpenRAPM's prediction (the attackers' offense plus the defenders' defense, each times his share of
+the possessions).  That miss is fitted by weighted least squares, no penalty, on the stat of the players on the court:
+the attackers' shares times their z, summed, and the defenders' the same, with each side's prediction free (the width
+match's part: OpenRAPM stretched to the games' spread, as the consensus column stretches it to the consensus's) and
+the season's level and home court.  The defenders' coefficient minus the attackers' is OpenRAPM minus the games, per
+player and per standard deviation of the stat, z standardized on the consensus column's compared players
+(`bias.stat_z`) and read on every player of the panel.  Sign: positive, OpenRAPM rates those players higher than the
+games do, the way "vs consensus" reads.
+
+**The standard error: leave one team out.**  Three were tried on the same fit:
+
+| stat | lean | by game | 200 shuffles of the stat | leave one team out |
+|---|---|---|---|---|
+| made twos | +1.00 | 0.51 | 0.22 | 0.70 |
+| made free throws | +1.46 | 0.46 | 0.23 | 0.81 |
+| assists | +1.10 | 0.74 | 0.24 | 0.89 |
+| steals | +0.65 | 0.30 | 0.26 | 0.42 |
+| on-court plus-minus | +0.21 | 0.19 | 0.21 | 0.24 |
+| off-court plus-minus | -0.23 | 0.18 | 0.21 | 0.16 |
+
+- By game alone is too small: a player's miss repeats in every game he plays.  On a simulated season the true ratings
+  handed in read +0.20 against 0.05 by game, and 0.17 left-one-team-out.
+- The shuffles are too small on the real season: a shuffled stat loses its overlap with the ratings themselves, which
+  is what widens the error of made twos or assists.  They would have called made free throws, made twos, assists and
+  steals real at 3 to 6 errors.
+- Leaving one team's games out resamples its players along with its games.  On the simulated season it reads planted
+  leans back at the games' width: the true ratings fit there at 0.865 on offense and 0.700 on defense, and a 3.0 plant
+  read 2.81 on offense, error 0.19, and 2.30 on defense, error 0.32.
+
+**2027 through 2026-11-23,** 514 team-games, OpenRAPM multiplied by 1.782 on offense and 2.358 on defense to fit them
+(the games' spread is far wider than the published ratings' this early):
+
+| stat | vs consensus | its standard error | vs game results | its standard error |
+|---|---|---|---|---|
+| made threes | -0.33 | 0.07 | -0.17 | 0.64 |
+| missed threes | -0.33 | 0.07 | +0.06 | 0.61 |
+| made twos | +0.23 | 0.09 | +1.00 | 0.70 |
+| missed twos | +0.11 | 0.09 | +0.58 | 0.69 |
+| made free throws | +0.12 | 0.09 | +1.46 | 0.81 |
+| missed free throws | +0.27 | 0.07 | +0.42 | 0.52 |
+| offensive rebounds | +0.44 | 0.06 | -0.66 | 0.71 |
+| defensive rebounds | +0.37 | 0.08 | +0.09 | 0.92 |
+| assists | +0.02 | 0.07 | +1.10 | 0.89 |
+| turnovers | +0.26 | 0.08 | +0.36 | 0.46 |
+| steals | +0.13 | 0.07 | +0.65 | 0.42 |
+| blocks | +0.27 | 0.10 | +0.47 | 0.77 |
+| personal fouls | +0.22 | 0.07 | -0.68 | 0.55 |
+| on-court plus-minus | -0.42 | 0.07 | +0.21 | 0.24 |
+| off-court plus-minus | -0.31 | 0.08 | -0.23 | 0.16 |
+
+No game-results lean reaches two errors this early; the largest is made free throws at 1.8.  The residual RAPM
+(`residual_rapm.py`) is removed.  Built on the side branch bias-game-results-2026-11-24.

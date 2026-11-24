@@ -101,11 +101,11 @@
 
   const FULL = 0.5;      // a number this far from 0, in points per 100, takes the full color
   // the columns, [key in the file, header, hover]; a row in the file is a list in meta.fields order.  The owner,
-  // 2026-11-05: "i dont want off/def, just do total"; 2026-11-24: "add in the 'residual rapm' ... as a column in
-  // addition to 'total'"
+  // 2026-11-05: "i dont want off/def, just do total"; 2026-11-24: "the first one should say 'vs consensus' and the 2nd
+  // one should now say 'vs game results'"
   const COLUMNS = [
-    ["t", "Total", "OpenRAPM minus the consensus, per 1 standard deviation of the stat, points per 100"],
-    ["r", "Residual RAPM", "What this season's games add to OpenRAPM, per 1 standard deviation of the stat, points per 100"]];
+    ["t", "vs consensus", "OpenRAPM minus the consensus, per 1 standard deviation of the stat, points per 100"],
+    ["g", "vs game results", "OpenRAPM minus this season's team-game results, per 1 standard deviation of the stat, points per 100"]];
   const state = { sort: null };      // null: the file's order, the box score's; else { k, dir }
   const table = $("table"), thead = table.querySelector("thead"), tbody = table.querySelector("tbody"),
         tfoot = table.querySelector("tfoot");
@@ -152,8 +152,8 @@
     e.preventDefault();
     if (!data) return;
     const q = v => v === null ? "" : /[",\r\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
-    const head = ["stat", "label", "total", "total_se", "residual_rapm", "residual_rapm_se", "stat_sd"];
-    const lines = [head, ...rows.map(r => [r.stat, r.label, r.t, r.t_se, r.r, r.r_se, r.sd])];
+    const head = ["stat", "label", "vs_consensus", "vs_consensus_se", "vs_game_results", "vs_game_results_se", "stat_sd"];
+    const lines = [head, ...rows.map(r => [r.stat, r.label, r.t, r.t_se, r.g, r.g_se, r.sd])];
     const text = "﻿" + lines.map(line => line.map(q).join(",")).join("\r\n") + "\r\n";
     const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
     const a = Object.assign(document.createElement("a"), { href: url, download: `openrapm_bias_${data.meta.season}.csv` });

@@ -1,6 +1,7 @@
 """The Bias page's committed file (docs/data/bias.json, written by `openrapm site --bias`) and the page that draws
-it (docs/bias.html): the file has the published fields, its fifteen rows add up, each has a residual RAPM slope, its
-three systems carry the owner's weights and their makers' names, and nothing in it is a system's own rating.
+it (docs/bias.html): the file has the published fields, its fifteen rows add up, each has a lean against the game
+results, its three systems carry the owner's weights and their makers' names, and nothing in it is a system's own
+rating.
 
 The command builds the file from the outside systems' stored tables, which are not in git; this checks what was
 actually committed.  The page reads the file by name, so a page committed without its file fails here.
@@ -45,18 +46,20 @@ def test_every_row_adds_up_at_the_two_decimals_the_page_shows(document):
         assert all(stat[key] > 0 for key in ("o_se", "d_se", "t_se", "sd")), stat["label"]
 
 
-def test_every_row_has_a_residual_rapm_slope_and_the_file_says_how_it_was_fitted(document):
-    residual = document["meta"]["residual"]
-    assert residual["penalty"] > 0 and residual["multipliers"]["o"] > 0 and residual["multipliers"]["d"] > 0
+def test_every_row_has_a_lean_against_the_game_results_and_the_file_says_what_it_was_read_on(document):
+    games = document["meta"]["games"]
+    assert games["team_games"] > 0 and games["multipliers"]["o"] > 0 and games["multipliers"]["d"] > 0
     for row in document["rows"]:
         stat = dict(zip(BIAS_FIELDS, row))
-        assert stat["r"] is not None and stat["r_se"] > 0, stat["label"]
-        assert round(stat["r"], 3) == stat["r"], stat["label"]
+        assert stat["g"] is not None and stat["g_se"] > 0, stat["label"]
+        assert round(stat["g"], 2) == stat["g"], stat["label"]
 
 
-def test_the_page_shows_the_residual_rapm_beside_the_total():
+def test_the_page_names_its_columns_vs_consensus_and_vs_game_results():
+    """The owner, 2026-11-24: "the first one should say 'vs consensus' and the 2nd one should now say 'vs game
+    results'"."""
     page = (DOCS / "bias.html").read_text(encoding="utf-8")
-    assert '["t", "Total",' in page and '["r", "Residual RAPM",' in page
+    assert '["t", "vs consensus",' in page and '["g", "vs game results",' in page
 
 
 def test_the_three_systems_carry_the_owners_weights_and_their_makers_names(document):
