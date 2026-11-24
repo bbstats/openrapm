@@ -14310,3 +14310,10 @@ The evidence on the record, the within-season test after step 4, below 0 better:
 The box-score prior learns each player's label, his RAPM over every other season; Box Adj's line is fitted on the
 within-season test, where the transition lean was found.  A prior input's gain has been smaller than the prior's own
 noise control; the screen for one took 8 hours, against 8 minutes for the direct screen.
+
+**Found after the evidence above: the Box Adj read is already on the record.**  Experiment 143's read 1 (2026-11-19,
+`outputs/csv/reads143_add_one.csv`, `outputs/direct/reads143/logs/read2.log`) offered transition attempts on the
+defense end beside `noage142_line`: -0.047, z -2.36, 19 of 30, by era -0.091, -0.070, +0.020; it fails "better in
+every era", and after the two adopted inputs no candidate passed.  The direct screen scores any prior that moves in
+straight proportion to the input, so a box-score prior reading it in a straight line would meet the same 2017-2026
+loss; only the LightGBM's bends could differ.  Not re-read on `rd143_line`.

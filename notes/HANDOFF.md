@@ -43,9 +43,9 @@ each word means, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's st
   "Held-back, drop ’27".  It must not sit in this working tree unpublished: the morning job writes the Bias file with
   this tree's code onto main's page.  To publish: `git merge --no-ff bias-held-back-2026-11-24` here, then
   "Publishing" below.  Checked: 203 targeted tests, the page at 1,280 and 390 pixels, no console errors.
-- **Next read, the owner's go given** ("we can do it next"): transition attempts on defense as a Box Adj input, read on
-  the within-season test with the direct screen, rule registered first; report and stop.  The owner asked whether the
-  prior should come first; the record's answer is in DECISIONS.md, "Where a new input goes".
+- **Transition attempts on defense**: the Box Adj read the owner okayed was already run, experiment 143's read 1:
+  -0.047, z -2.36, worse in 2017-2026 (+0.020), failed.  DECISIONS.md, "Where a new input goes".  The owner chooses
+  between the off-court lead, a box-score prior screen for transition attempts, or stopping.
 - Scripts: `scratch/2026-11-24_bias_heldback/` (`heldback_lean.py` the read, `show.py` the tables,
   `write_params.py` the page's file).  The owner's full table: the Google Sheet "Bias page leans on held-back games
   (Nov 24, 2026)", https://docs.google.com/spreadsheets/d/1NJnxw5em78PolGnXu7FSRXqF564OBtwMcb4mRVrGcfU
