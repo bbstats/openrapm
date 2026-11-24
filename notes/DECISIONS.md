@@ -14185,3 +14185,41 @@ ratings, `season_ratings_product_step3`.  Own width: no free multiplier, each se
 
 **What stands.**  The in-sample game-results columns on the Bias page mix three things: width, game state and credit.
 They describe; they do not locate an error.  Whether any usage lean exists is a question for held-back games.
+
+## The Bias page's leans on held-back games (the owner, 2026-11-24: "What lessons can we take from the biases we see?  Credit error to players?  Or is this team/coach level credit we can't confidently give (or can't confidently deduct)", then "Alright handoff, let's figure out this bias"; read-only, `scratch/2026-11-24_bias_heldback/heldback_lean.py`; registered before any result)
+
+**The question.**  Whether any of the page's 13 box stats marks players OpenRAPM over- or under-credits, read on games
+the ratings never saw, since every in-sample read above mixed width, game state and credit.
+
+**The games.**  Every held-back stint of the incumbent's within-season test, `outputs/synergy/rd143/stints_<season>.parquet`,
+1997 to 2026, both fives.  The miss: points per 100 minus the ten players' ratings after the shipped shrink.
+
+**The stat.**  From each fold's own fit games only (`outputs/within/rd143_early`, `rd143_within`,
+`players_<season>_r<repeat>_f<fold>.parquet`, never `_all`): a player's rate the mean of his offense and defense rows,
+as `bias.player_stats` takes it, in standard deviations of the fold's players with 60 or more offensive possessions,
+weighted by them, as the page standardizes.  A player the fold has no row for counts at 0, the mean, as on the page.
+A five's value is the sum of its five players'.
+
+**The fit.**  Per season, one stat at a time, weighted least squares on possessions of the miss on the offense five's
+sum and the defense five's sum, with team levels per fold fitted out of every column first, and check 154's free terms:
+- **width free**: garbage time, margin, margin times time left, both fives' playing time, stand-ins, both rating sums,
+  their squares and product, and each five's spread of ratings, as `scratch/2026-11-23_synergy/scan.py` has them;
+- **own width**: the same with every column built from the ratings out (the sums, squares, product and spreads), so
+  the prediction is OpenRAPM's own;
+- reported beside them, not deciding: width free with the fives' playing time out.
+Then across seasons, the mean of the 30 seasons' numbers and its standard error, and each era's mean.  Sign as the
+page's: OpenRAPM minus the games, positive when OpenRAPM rates those players higher.  Offense is minus the offense
+five's coefficient, defense the defense five's, total their sum.
+
+**The shuffled copy.**  Check 154's career null, as `null.py` builds it: every player handed another player's standing
+in the stat, season by season along that player's career, 200 draws, both runs.  It gives the spread a 30-season mean
+of an unrelated player number reaches, which keeps a player's misfit carrying over from season to season.
+
+**The rule.**  A stat's lean counts as a credit error, on offense, on defense or in total, when all hold:
+1. the same sign in all three eras, 1997-2006, 2007-2016 and 2017-2026;
+2. the 30-season mean is beyond 2 errors both by its across-season standard error and against the career null's spread;
+3. both hold in the width-free and the own-width runs, with the same sign;
+4. the career null's draws centre on nothing: their mean within half their spread of 0.
+39 readings are tested, so about two would pass condition 2 alone by chance; condition 1 and 3 together are the guard.
+The whole table is reported, every stat and each era.  A lean that passes is a candidate for a Box Adj read, not a
+change; nothing is built on it without the owner's word.
