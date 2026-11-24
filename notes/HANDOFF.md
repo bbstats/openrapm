@@ -31,7 +31,26 @@ each word means, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's st
 - Before asking for a verdict, compare every season's top-rated player and WOSA leader in both tables, not 2026's
   alone: on 2026-11-19 two old seasons' WOSA leaders changed and the owner had answered on 2026.
 
-## Start here: the next session (written 2026-11-24)
+## Start here (updated 2026-11-24, afternoon): the bias question answered; one publish and one read wait
+
+- **The answer to the owner's bias question** (DECISIONS.md, "The Bias page's leans on held-back games" and the two
+  entries after it): on games the ratings never saw, no box stat on the page leans the same way in all three eras;
+  made free throws +0.006 against the in-sample +0.69.  The page's in-sample columns described how a season's ratings
+  sit on their own games; they found no credit error, toward players or teams.  Off-court plus-minus does lean,
+  -0.34 per standard deviation, every era, both widths: OpenRAPM marks down players whose team did well with them on
+  the bench more than new games bear out.  A lead, kin to check 145; not yet raised as work.
+- **Waiting on the owner's word to publish**: side branch `bias-held-back-2026-11-24` (f737d42), the owner's ruling
+  "Held-back, drop ’27".  It must not sit in this working tree unpublished: the morning job writes the Bias file with
+  this tree's code onto main's page.  To publish: `git merge --no-ff bias-held-back-2026-11-24` here, then
+  "Publishing" below.  Checked: 203 targeted tests, the page at 1,280 and 390 pixels, no console errors.
+- **Next read, the owner's go given** ("we can do it next"): transition attempts on defense as a Box Adj input, read on
+  the within-season test with the direct screen, rule registered first; report and stop.  The owner asked whether the
+  prior should come first; the record's answer is in DECISIONS.md, "Where a new input goes".
+- Scripts: `scratch/2026-11-24_bias_heldback/` (`heldback_lean.py` the read, `show.py` the tables,
+  `write_params.py` the page's file).  The owner's full table: the Google Sheet "Bias page leans on held-back games
+  (Nov 24, 2026)", https://docs.google.com/spreadsheets/d/1NJnxw5em78PolGnXu7FSRXqF564OBtwMcb4mRVrGcfU
+
+## The session before: the bias question as handed over (written 2026-11-24 morning)
 
 **The question.**  The owner, 2026-11-24, on the Bias page: "What lessons can we take from the biases we see?  Credit
 error to players?  Or is this team/coach level credit we can't confidently give (or can't confidently deduct)".  Today's
