@@ -46,7 +46,7 @@ def _lean(season_world, offense_lean: float, defense_lean: float) -> tuple[float
                           "rating_def": -truth.impact_D + defense_lean * stat, "poss_off": 1000.0})
     season = _season(season_world, table)
     z = pd.DataFrame({"player_id": truth.player_id, "made_up": stat})
-    row = game_results.lean_table(season, z, ["made_up"]).iloc[0]
+    row = game_results.lean_table([season], [z], ["made_up"]).iloc[0]
     return row.games, row.games_se
 
 
@@ -84,6 +84,56 @@ def test_a_stat_no_player_on_the_court_has_reads_as_no_lean(season_world):
     table = pd.DataFrame({"season": truth.season, "player_id": truth.player_id, "rating_off": truth.impact_O,
                           "rating_def": -truth.impact_D, "poss_off": 1000.0})
     season = _season(season_world, table)
-    flat = game_results.lean_table(season, pd.DataFrame({"player_id": [-1], "nobody": [3.0]}), ["nobody"])
+    flat = game_results.lean_table([season], [pd.DataFrame({"player_id": [-1], "nobody": [3.0]})], ["nobody"])
     assert flat.games.isna().all() and flat.games_se.isna().all()
     assert set(game_results.multipliers(season)) == {"offense", "defense"}
+
+
+@pytest.fixture(scope="module")
+def two_seasons(synthetic_league, synthetic_design, small_cfg):
+    """Two simulated seasons, each with its own team-games, its own made-up stat and its true ratings plus a lean of
+    +3.0 on offense per standard deviation of that stat."""
+    sim = synthetic_league(n_seasons=2, n_teams=10, players_per_team=12, games_per_season=400, seed=31)
+    truth = sim["truth"]["ps"].groupby(["player_id", "season"])[["impact_O", "impact_D"]].mean().reset_index()
+    rng = np.random.default_rng(12)
+    seasons, zs, widths = [], [], []
+    for season in sorted(truth.season.unique()):
+        design = synthetic_design(sim, [season], cfg=small_cfg(player_unit="player"))
+        rows = truth[truth.season == season]
+        stat = rng.normal(0, 1, len(rows))
+        teams = _teams(sim, trade_set.team_game_design(design))
+        both = {"offense": design, "defense": design}
+        true_table = pd.DataFrame({"season": season, "player_id": rows.player_id, "rating_off": rows.impact_O,
+                                   "rating_def": -rows.impact_D, "poss_off": 1000.0})
+        widths.append(game_results.multipliers(game_results.season_games(both, true_table, season,
+                                                                         lambda keys, teams=teams: teams)))
+        table = true_table.assign(rating_off=rows.impact_O.to_numpy() + 3.0 * stat)
+        seasons.append(game_results.season_games(both, table, season, lambda keys, teams=teams: teams))
+        zs.append(pd.DataFrame({"player_id": rows.player_id, "made_up": stat}))
+    return seasons, zs, widths
+
+
+def test_seasons_together_read_one_lean_between_the_seasons_own(two_seasons):
+    """Each season keeps its own width, level and home court; the lean is one number for both, so it sits between
+    the two seasons' own reads.  It is not always surer than either alone: the planted 3.0 reads at each season's
+    own width, so the seasons disagree a little, and leaving a team out moves the weight between them."""
+    seasons, zs, _ = two_seasons
+    alone = [game_results.lean_table([season], [z], ["made_up"]).iloc[0] for season, z in zip(seasons, zs)]
+    together = game_results.lean_table(seasons, zs, ["made_up"]).iloc[0]
+    low, high = sorted(row.games for row in alone)
+    assert low - together.games_se <= together.games <= high + together.games_se
+    assert together.games > 3 * together.games_se
+
+
+def test_a_season_alone_reads_the_same_through_the_seasons_code(season_world):
+    """One season in a list of one is the season's own column: the same lean and error to the last digit."""
+    _, truth, stat, _ = season_world
+    table = pd.DataFrame({"season": truth.season, "player_id": truth.player_id,
+                          "rating_off": truth.impact_O + 1.5 * stat, "rating_def": -truth.impact_D,
+                          "poss_off": 1000.0})
+    season = _season(season_world, table)
+    z = pd.DataFrame({"player_id": truth.player_id, "made_up": stat})
+    once = game_results.lean_table([season], [z], ["made_up"])
+    twice_listed = game_results.lean(
+        [season], [pd.DataFrame({"player_id": season.player_ids}).merge(z, how="left").fillna(0.0).made_up.to_numpy()])
+    assert (once.games[0], once.games_se[0]) == pytest.approx(twice_listed)

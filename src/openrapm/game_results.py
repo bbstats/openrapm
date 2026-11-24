@@ -1,35 +1,37 @@
-"""The Bias page's second column: where the season's team-game results rate players higher or lower than OpenRAPM,
-stat by stat, with no ridge.
+"""The Bias page's game-results columns: where the team-game results rate players higher or lower than OpenRAPM, stat by
+stat, with no ridge, for the season the page opens on and for the last 10 seasons together.
 
-The question is the consensus column's, asked of the games instead: among the season's players, do those with more of
-a stat get more from OpenRAPM than the games give them, or less?
+The question is the consensus column's, asked of the games instead: among the players, do those with more of a stat
+get more from OpenRAPM than the games give them, or less?
 
 Words used below
     team-game     one team's offense in one game: its points per 100 possessions on the build's target for that side
                   (settings.Targets), weighted by its possessions
     share         a player's share of his team's possessions in that game; the five on the court sum to 5
-    prediction    the attackers' published offense plus the defenders' published defense, each times his share
+    prediction    the attackers' published offense plus the defenders' published defense of that season, each times
+                  his share
     miss          the team-game's points minus the prediction
-    z             a player's stat in standard deviations of the page's compared players (bias.stat_z); 0, the mean,
-                  for a player the season panel does not hold
-    width         one free multiplier per side on the prediction, so OpenRAPM's spread being too narrow or too wide for
-                  the games is taken out first, as the consensus column's width match takes it out
+    z             a player's stat in standard deviations of his season's players (bias.stat_z); 0, the mean, for a
+                  player the season panel does not hold
+    width         one free multiplier per side and season on the prediction, so OpenRAPM's spread being too narrow or
+                  too wide for a season's games is taken out first, as the consensus column's width match takes it out
 
-The fit, per stat, is ordinary weighted least squares, no penalty, on the season's team-games:
+The fit, per stat, is ordinary weighted least squares, no penalty, on the team-games of every season asked for:
 
     miss = b_O (the attackers' share x z, summed) + b_D (the defenders' share x z, summed)
-           + m_O (the attackers' prediction) + m_D (the defenders' prediction) + the season's level, home court and
-           the playoff columns
+           + per season: m_O (the attackers' prediction) + m_D (the defenders' prediction) + its level, home court and
+             the playoff columns
 
-b_O is read off the fit on the offense target and b_D off the fit on the defense target, the same team-games and
-columns both times.  If the games rate every player c z points per 100 higher on offense than OpenRAPM does, b_O is c.
-On defense a better defender allows fewer points, so the games' lean there is -b_D.  The column is OpenRAPM minus the
-games, per player and per standard deviation, as the consensus column is OpenRAPM minus the consensus:
+b_O and b_D are one number each for all the seasons; everything after them is the season's own.  b_O is read off the
+fit on the offense target and b_D off the fit on the defense target, the same team-games and columns both times.  If
+the games rate every player c z points per 100 higher on offense than OpenRAPM does, b_O is c.  On defense a better
+defender allows fewer points, so the games' lean there is -b_D.  The column is OpenRAPM minus the games, per player
+and per standard deviation, as the consensus column is OpenRAPM minus the consensus:
 
     vs game results = -(b_O - b_D) = b_D - b_O
 
-Its standard error is how far the number moves when each team's games are left out in turn (the leave-one-team-out
-jackknife, K the teams):
+Its standard error is how far the number moves when each team's games are left out in turn, in every season at once
+(the leave-one-team-out jackknife, K the teams; a franchise keeps its NBA id when it moves):
     se^2 = (K - 1) / K x sum over teams of (the number without that team's games - their mean)^2
 A player's miss repeats in every game he plays, nearly all for one team, so leaving a team out resamples its players
 along with its games.  Two narrower errors were tried first and are too small (2026-11-24):
@@ -45,10 +47,11 @@ games do.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from scipy.linalg import block_diag
 
 from . import trade_set
 
@@ -85,9 +88,9 @@ def raw_ratings(table: pd.DataFrame, season: int) -> pd.DataFrame:
 
 def season_games(designs: dict, table: pd.DataFrame, season: int, teams_of: Callable) -> SeasonGames:
     """The season's team-games from `designs`, {"offense": design on the offense target, "defense": on the defense
-    target} (the command loads them), the published rating of every player column, and the teams of each row,
-    `teams_of(keys)` (data.tables.team_of_rows in the command).  A player the ratings table has no row for is filled
-    at a quarter of its under-500-possession players' mean (trade_set.replacement_fill)."""
+    target} (the command loads them), the season's published rating of every player column, and the teams of each
+    row, `teams_of(keys)` (data.tables.team_of_rows in the command).  A player the ratings table has no row for is
+    filled at a quarter of its under-500-possession players' mean (trade_set.replacement_fill)."""
     games = {side: trade_set.team_game_design(designs[side]) for side in SIDES}
     if not np.array_equal(games["offense"].player_ids, games["defense"].player_ids):
         raise ValueError("the two targets built different player columns")
@@ -102,63 +105,77 @@ def season_games(designs: dict, table: pd.DataFrame, season: int, teams_of: Call
     return SeasonGames(games, offset, teams)
 
 
-def _columns(ts, offset: np.ndarray, z: np.ndarray | None) -> np.ndarray:
-    """The fit's columns: [attackers' z, defenders' z] when `z` is given, then the two predictions, then the fixed
-    columns that are not all zero (a regular season has no playoff rows)."""
-    n = ts.n_players
-    blocks = [] if z is None else [np.column_stack([ts.Z[:, :n] @ z, ts.Z[:, n:] @ z])]
-    fixed = ts.F[:, np.any(ts.F != 0.0, axis=0)]
-    return np.column_stack([*blocks, trade_set.rating_columns(ts, offset), fixed])
+@dataclass
+class Rows:
+    """Every asked season's team-games on one side's target, stacked: the fit's columns (the two stat columns when a
+    stat is asked, then each season's own columns, block by block), the miss, the weights and each row's two teams."""
+    columns: np.ndarray
+    miss: np.ndarray
+    w: np.ndarray
+    team_off: np.ndarray
+    team_def: np.ndarray
+
+    def without(self, team) -> Rows:
+        keep = (self.team_off != team) & (self.team_def != team)
+        return Rows(self.columns[keep], self.miss[keep], self.w[keep], self.team_off[keep], self.team_def[keep])
+
+    def fit(self) -> np.ndarray:
+        """The coefficients of the weighted least squares of the miss on the columns."""
+        weighted = self.columns * self.w[:, None]
+        return np.linalg.solve(self.columns.T @ weighted, weighted.T @ self.miss)
 
 
-def _fit(ts, offset: np.ndarray, z: np.ndarray | None) -> np.ndarray:
-    """The coefficients of the weighted least squares of the miss on `_columns`."""
-    columns = _columns(ts, offset, z)
-    weighted = columns * ts.w[:, None]
-    return np.linalg.solve(columns.T @ weighted, weighted.T @ (ts.y - ts.Z @ offset))
+def rows(seasons: list, side: str, zs: list | None = None) -> Rows:
+    """`Rows` of `seasons` (SeasonGames) on `side`'s target; with `zs`, one z vector per season in its player-column
+    order, the attackers' and the defenders' share x z, summed, come first.  A season's own columns are its two
+    predictions and its fixed columns that are not all zero (a regular season so far has no playoff rows)."""
+    shared, own, miss, w, team_off, team_def = [], [], [], [], [], []
+    for position, season in enumerate(seasons):
+        ts = season.games[side]
+        n = ts.n_players
+        if zs is not None:
+            shared.append(np.column_stack([ts.Z[:, :n] @ zs[position], ts.Z[:, n:] @ zs[position]]))
+        own.append(np.column_stack([trade_set.rating_columns(ts, season.offset), ts.F[:, np.any(ts.F != 0.0, axis=0)]]))
+        miss.append(ts.y - ts.Z @ season.offset)
+        w.append(ts.w)
+        team_off.append(season.teams.team_off.to_numpy())
+        team_def.append(season.teams.team_def.to_numpy())
+    columns = block_diag(*own)
+    if zs is not None:
+        columns = np.column_stack([np.vstack(shared), columns])
+    return Rows(columns, np.concatenate(miss), np.concatenate(w), np.concatenate(team_off), np.concatenate(team_def))
 
 
 def multipliers(season: SeasonGames) -> dict:
-    """{"offense": m, "defense": m}: what each side's prediction is multiplied by to fit the games, no stat in the
-    fit.  Above 1, OpenRAPM's spread is narrower than the games'."""
-    fits = {side: _fit(season.games[side], season.offset, None) for side in SIDES}
-    return {"offense": 1.0 + float(fits["offense"][0]), "defense": 1.0 + float(fits["defense"][1])}
+    """{"offense": m, "defense": m}: what each side's prediction is multiplied by to fit the season's games, no stat
+    in the fit.  Above 1, OpenRAPM's spread is narrower than the games'."""
+    return {"offense": 1.0 + float(rows([season], "offense").fit()[0]),
+            "defense": 1.0 + float(rows([season], "defense").fit()[1])}
 
 
-def _point(games: dict, offset: np.ndarray, z: np.ndarray) -> float:
-    """b_D - b_O for one stat: OpenRAPM minus the games, per standard deviation."""
-    defense = _fit(games["defense"], offset, z)[1]
-    return float(defense - _fit(games["offense"], offset, z)[0])
-
-
-def _without(ts, keep: np.ndarray):
-    """The TradeSet's rows where `keep` is true."""
-    return replace(ts, Z=ts.Z[keep], F=ts.F[keep], y=ts.y[keep], w=ts.w[keep],
-                   keys=ts.keys[keep].reset_index(drop=True))
-
-
-def lean(season: SeasonGames, z: np.ndarray) -> tuple[float, float]:
-    """(OpenRAPM minus the games per standard deviation of one stat, its leave-one-team-out standard error).  `z` is
-    the stat in standard deviations for every player column, in `season.player_ids` order.  A stat the fit cannot
-    tell from the other columns (no spread on the court) has no lean: (nan, nan)."""
-    team_off, team_def = season.teams.team_off.to_numpy(), season.teams.team_def.to_numpy()
+def lean(seasons: list, zs: list) -> tuple[float, float]:
+    """(OpenRAPM minus the games per standard deviation of one stat over `seasons`, its leave-one-team-out standard
+    error).  `zs` holds the stat in standard deviations for every player column of each season, in its
+    `player_ids` order.  A stat the fit cannot tell from the other columns (no spread on the court) has no lean:
+    (nan, nan)."""
+    offense, defense = rows(seasons, "offense", zs), rows(seasons, "defense", zs)
     try:
-        value = _point(season.games, season.offset, z)
-        left_out = np.array([_point({side: _without(season.games[side], (team_off != team) & (team_def != team))
-                                     for side in SIDES}, season.offset, z)
-                             for team in np.unique(np.concatenate([team_off, team_def]))])
+        value = float(defense.fit()[1] - offense.fit()[0])
+        left_out = np.array([defense.without(team).fit()[1] - offense.without(team).fit()[0]
+                             for team in np.unique(np.concatenate([offense.team_off, offense.team_def]))])
     except np.linalg.LinAlgError:
         return float("nan"), float("nan")
     k = len(left_out)
     return value, float(np.sqrt((k - 1) / k * np.sum((left_out - left_out.mean()) ** 2)))
 
 
-def lean_table(season: SeasonGames, z: pd.DataFrame, stats) -> pd.DataFrame:
-    """stat, games, games_se: `lean` for each of `stats`, from `z` (player_id and one column per stat, bias.stat_z).
-    A player column `z` does not hold counts at 0, the mean."""
-    aligned = pd.DataFrame({"player_id": season.player_ids}).merge(z, on="player_id", how="left").fillna(0.0)
-    rows = []
+def lean_table(seasons: list, zs: list, stats) -> pd.DataFrame:
+    """stat, games, games_se: `lean` over `seasons` for each of `stats`, from `zs`, one table per season (player_id
+    and one column per stat, bias.stat_z).  A player column a season's table does not hold counts at 0, the mean."""
+    aligned = [pd.DataFrame({"player_id": season.player_ids}).merge(z, on="player_id", how="left").fillna(0.0)
+               for season, z in zip(seasons, zs)]
+    out = []
     for stat in stats:
-        value, error = lean(season, aligned[stat].to_numpy(float))
-        rows.append({"stat": stat, "games": value, "games_se": error})
-    return pd.DataFrame(rows)
+        value, error = lean(seasons, [table[stat].to_numpy(float) for table in aligned])
+        out.append({"stat": stat, "games": value, "games_se": error})
+    return pd.DataFrame(out)

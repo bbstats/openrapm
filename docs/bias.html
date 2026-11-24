@@ -34,8 +34,10 @@
   th { color: var(--muted); font-weight: 600; font-size: 13px; vertical-align: bottom; }
   th.name, td.name { text-align: left; }
   /* the numbers keep one width, so a colored cell is a small block and the stat's name takes the rest of the row */
-  #table { max-width: 680px; }
+  #table { max-width: 760px; }
   #table th:not(.name), #table td:not(.name) { width: 116px; }
+  /* a header longer than its column takes two lines rather than widening it */
+  #table thead th { white-space: normal; }
   #systems th:not(.name), #systems td:not(.name) { width: 104px; }
   #table th { cursor: pointer; user-select: none; }
   #table th:hover { color: var(--ink); }
@@ -100,12 +102,18 @@
   const median = values => { const s = [...values].sort((a, b) => a - b), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 
   const FULL = 0.5;      // a number this far from 0, in points per 100, takes the full color
-  // the columns, [key in the file, header, hover]; a row in the file is a list in meta.fields order.  The owner,
-  // 2026-11-05: "i dont want off/def, just do total"; 2026-11-24: "the first one should say 'vs consensus' and the 2nd
-  // one should now say 'vs game results'"
+  // the columns, [key in the file, header, hover], the header and hover read from the file's meta; a row in the file is
+  // a list in meta.fields order.  The owner, 2026-11-05: "i dont want off/def, just do total"; 2026-11-24: "the first
+  // one should say 'vs consensus' and the 2nd one should now say 'vs game results'", then "Add in 'last 10 years' just
+  // OpenRAPM vs game results. Clarify the other 2 columns as just being '27 ... last 10 seasons (inclusive of current)"
+  const short = season => "’" + String(season).slice(-2);
   const COLUMNS = [
-    ["t", "vs consensus", "OpenRAPM minus the consensus, per 1 standard deviation of the stat, points per 100"],
-    ["g", "vs game results", "OpenRAPM minus this season's team-game results, per 1 standard deviation of the stat, points per 100"]];
+    ["t", m => `vs consensus ${short(m.season)}`,
+     () => "OpenRAPM minus the consensus, per 1 standard deviation of the stat, points per 100"],
+    ["g", m => `vs game results ${short(m.season)}`,
+     m => `OpenRAPM minus the ${m.season} team-game results, per 1 standard deviation of the stat, points per 100`],
+    ["gs", () => "vs game results, last 10 seasons",
+     m => m.games_seasons ? `OpenRAPM minus the team-game results of ${m.games_seasons.first} to ${m.games_seasons.last}, each season against its own ratings, per 1 standard deviation of the stat, points per 100` : ""]];
   const state = { sort: null };      // null: the file's order, the box score's; else { k, dir }
   const table = $("table"), thead = table.querySelector("thead"), tbody = table.querySelector("tbody"),
         tfoot = table.querySelector("tfoot");
@@ -115,7 +123,7 @@
     if (value === null || value === undefined) return `<td>—</td>`;      // undefined: a file written before the column
     const pole = value > 0 ? "over" : value < 0 ? "under" : "";
     const depth = Math.min(Math.abs(value) / FULL, 1).toFixed(3);
-    const title = error === null ? "" : ` title="±${plain(error)}"`;
+    const title = error == null ? "" : ` title="±${plain(error)}"`;
     return `<td${pole ? ` class="${pole}" style="--depth: ${depth}"` : ""}${title}>${fmt(value)}</td>`;
   }
 
@@ -123,10 +131,11 @@
     const sorted = state.sort ? [...rows].sort((a, b) => state.sort.dir * (a[state.sort.k] - b[state.sort.k])) : rows;
     const th = (key, name, hover) => `<th data-k="${key}"${state.sort && state.sort.k === key
       ? ` aria-sort="${state.sort.dir < 0 ? "descending" : "ascending"}"` : ""} title="${hover}">${name}</th>`;
-    thead.innerHTML = `<tr><th class="name" data-reset>Stat</th>` + COLUMNS.map(column => th(...column)).join("") + `</tr>`;
+    thead.innerHTML = `<tr><th class="name" data-reset>Stat</th>` +
+      COLUMNS.map(([key, name, hover]) => th(key, esc(name(data.meta)), esc(hover(data.meta)))).join("") + `</tr>`;
     tbody.innerHTML = sorted.map(row => `<tr><td class="name">${esc(row.label)}</td>` +
       COLUMNS.map(([key]) => cell(row[key], row[key + "_se"])).join("") + `</tr>`).join("");
-    const errors = COLUMNS.map(([key]) => rows.map(row => row[key + "_se"]).filter(v => v !== null));
+    const errors = COLUMNS.map(([key]) => rows.map(row => row[key + "_se"]).filter(v => v != null));
     tfoot.innerHTML = `<tr><td class="name">Median standard error</td>` +
       errors.map(values => `<td>${values.length ? plain(median(values)) : "—"}</td>`).join("") + `</tr>`;
   }
@@ -151,9 +160,10 @@
   $("csv").addEventListener("click", e => {
     e.preventDefault();
     if (!data) return;
-    const q = v => v === null ? "" : /[",\r\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
-    const head = ["stat", "label", "vs_consensus", "vs_consensus_se", "vs_game_results", "vs_game_results_se", "stat_sd"];
-    const lines = [head, ...rows.map(r => [r.stat, r.label, r.t, r.t_se, r.g, r.g_se, r.sd])];
+    const q = v => v == null ? "" : /[",\r\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
+    const head = ["stat", "label", "vs_consensus", "vs_consensus_se", "vs_game_results", "vs_game_results_se",
+                  "vs_game_results_last_10_seasons", "vs_game_results_last_10_seasons_se", "stat_sd"];
+    const lines = [head, ...rows.map(r => [r.stat, r.label, r.t, r.t_se, r.g, r.g_se, r.gs, r.gs_se, r.sd])];
     const text = "﻿" + lines.map(line => line.map(q).join(",")).join("\r\n") + "\r\n";
     const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
     const a = Object.assign(document.createElement("a"), { href: url, download: `openrapm_bias_${data.meta.season}.csv` });

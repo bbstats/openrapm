@@ -676,7 +676,7 @@ def _add_site(commands) -> None:
                     "the pages open on, how much higher or lower OpenRAPM rates players one standard deviation "
                     "higher in each box score stat, on-court and off-court plus-minus than a consensus of three "
                     "outside systems does, their tables from `openrapm data public-ratings`, and than the season's "
-                    "team-game results do); "
+                    "and the last 10 seasons' team-game results do); "
                     "--openrapm-decomposition also "
                     "writes docs/data/decompose_openrapm.json and ratings_list.json (every published rating split "
                     "into box score, Box Adj, on court, off court and team SOS, which solves step 3 again for every "
