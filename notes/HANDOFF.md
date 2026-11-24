@@ -1,8 +1,8 @@
 # Handoff
 
 **What this file is.**  Where the work stands, the next piece of work in full, what waits on the owner, and the
-commands a session runs.  Its top was rewritten on 2026-11-19 for the next research path; the file before it is in git
-at a77b019.  `DECISIONS.md` is the permanent record and carries every number quoted here; read its measurement traps
+commands a session runs.  Its top was rewritten on 2026-11-24 for the next session, the Bias page's game results; the
+file before it is in git at 2147bcb, and before the 2026-11-19 rewrite at a77b019.  `DECISIONS.md` is the permanent record and carries every number quoted here; read its measurement traps
 before trusting a number.  `README.md` says what OpenRAPM is, `PIPELINE.md` how each part works, `GLOSSARY.md` what
 each word means, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's standing rules.
 
@@ -31,24 +31,100 @@ each word means, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's st
 - Before asking for a verdict, compare every season's top-rated player and WOSA leader in both tables, not 2026's
   alone: on 2026-11-19 two old seasons' WOSA leaders changed and the owner had answered on 2026.
 
-## Done 2026-11-24: the Bias page reads "vs consensus '27", "vs game results '27" and "vs game results, last 10 seasons", PUBLISHED (5fed7e0)
+## Start here: the next session (written 2026-11-24)
 
-- The third column pools 2018-2027's 23,520 team-games, each season against its own ratings and width; a team is left
-  out of every season at once for its error.  Over ten seasons OpenRAPM rates box-score volume above what the games
-  bear out: made free throws +0.69 at 5.3 errors, made twos +0.36 at 3.0.  In-sample; a lead for a research session,
-  the owner's to open.  `DECISIONS.md`, "The Bias page's third column".  The morning bias step takes about 14 seconds.
+**The question.**  The owner, 2026-11-24, on the Bias page: "What lessons can we take from the biases we see?  Credit
+error to players?  Or is this team/coach level credit we can't confidently give (or can't confidently deduct)".  Today's
+in-sample reads could not answer it; the held-back games can.  The session has two parts: one decision for the owner,
+then one read, no rating built.
 
-Earlier the same day:
+### Where it stands
 
-- The consensus is xRAPM 50%, 3-year RAPM 30%, DARKO 20%, the owner's: LOKI and Pulse dropped, and no 2026-27
-  LEBRON is published (fda1753).
-- "vs game results" (`game_results.py`) replaced the residual RAPM the same day (the owner: "the ridge penalization
-  just makes it a bit too hard to interpret"): each team-game's miss against OpenRAPM's prediction, least squares on
-  the stat of the players on the court, no penalty; OpenRAPM minus the games, the owner's sign.  Its standard error
-  leaves one team out at a time.  No row reaches two errors this early.  `DECISIONS.md`, "The Bias page's second
-  column: vs game results, no ridge".
-- The morning job writes it from this working tree from tomorrow; the fit adds about three seconds to `site --bias`.
-- Open: no Changelog row was added (wording is the owner's); the "vs game results" header's hover line is mine.
+- **Live since 2026-11-24, main 5fed7e0**: the Bias page's three columns, "vs consensus ’27" (OpenRAPM minus a consensus
+  of xRAPM 50%, xrapm.com's 3-year RAPM 30%, DARKO 20%, the owner's; LOKI and Pulse dropped, no 2026-27 LEBRON exists),
+  "vs game results ’27" and "vs game results, last 10 seasons".  The morning job refreshes all three; its bias step
+  takes about 14 seconds.  Code: `src/openrapm/bias.py`, `game_results.py`, `commands/site.py` (`write_bias`),
+  `docs/bias.html`.  Unpushed on this branch since: notes and two scratch scripts only.
+- **The game-results columns are in-sample.**  Each season's team-games against that season's own published ratings,
+  which were fitted on those games: least squares of each team-game's miss on the share-weighted stat of the ten on
+  the court, each season's width free, no ridge; OpenRAPM minus the games, per player per standard deviation.
+- **Today's in-sample reads, all withdrawn as evidence of a credit error** (`DECISIONS.md`, "The Bias page's ten-season
+  lean: player credit or team credit?" and the adversarial checks after it; scripts in `scratch/2026-11-24_bias_split/`):
+  the ten-season column reads box-score volume over-credited, made free throws +0.69 at 5.3 errors.  A free level per
+  team-season doubled it, +1.11, which first read as player credit.  Then the checks: keeping only stints that start
+  with the score within 5 cuts the leans by a third to two thirds; a level per eighth of each team's season takes the
+  rebound and block leans away; and at OpenRAPM's own width on close-score stints every volume lean turns negative,
+  made free throws -0.40, error 0.25.  Rest, the season's end and the shrink change little.
+- **The held-back games already disagree with the in-sample reads.**  The synergy scan of 2026-11-23
+  (`outputs/synergy/rd143/scan_summary.csv`, analysis "single", term "lean per player"; its sign is positive when the
+  games rate the players higher, the opposite of the page's) reads nothing on offense: free-throw attempts -0.019,
+  z -0.4; used possessions +0.023, z 0.4; turnovers -0.019, z -0.5.  On defense: transition attempts -0.289, z -6.0;
+  weight +0.128, z +4.0; used possessions -0.075, z -2.0.  It did not read the page's own 13 stats.
+
+### Part 1: one decision for the owner, first, through the question tool
+
+What the page's game-results columns should measure, now that the in-sample version is known to mix width, score
+state and credit.  The options, each with today's numbers in the question:
+1. Keep them as they are: a description of where OpenRAPM stands from a season's own games.
+2. Replace "last 10 seasons" with the held-back version Part 2 builds: the within-season test's own games, out of
+   sample, the margin and garbage time free.  It can cover finished seasons only, 2017 to 2026, until 2027 has
+   within-season folds after its Finals; "vs game results ’27" stays in-sample or goes.
+3. Take both game-results columns off and keep "vs consensus ’27" alone.
+The page change is the owner's to word and to publish; a column change goes through a side checkout, as all three of
+today's did (the morning job runs this working tree).
+
+### Part 2: the read, held back, no build (about 2 hours)
+
+**Register in DECISIONS.md before any result.**  The rule proposed here: a lean of one of the page's 13 box stats
+counts as a credit error when, on held-back games, it has the same sign in all three eras, 1997-2006, 2007-2016 and
+2017-2026, is beyond 2 errors over the 30 seasons, holds both with each fold's width free and at OpenRAPM's own width,
+and its shuffled copy reads nothing.  Report the whole table, every stat, each era, never a prose list.
+
+**What to build.**  The page's lean, read on the held-back stints of the incumbent's within-season test:
+- The stints: `outputs/synergy/rd143/stints_<season>.parquet`, every held-back stint of `rd143`, 30 seasons, both
+  fives (`o1..o5`, `d1..d5`), `y`, `w`, `rating_sum_off`, `rating_sum_def`, the miss's free terms (`is_gt`, `margin`,
+  `margin_frem`, playing time, stand-ins), `repeat`, `fold`, `team_off`, `team_def`.  The miss is points per 100
+  minus the ten players' ratings after the shipped shrink (`scratch/2026-11-23_synergy/extract.py` says how).
+- The stats, from each fold's own fit games only: `outputs/within/rd143_early/` (1997-2016) and `rd143_within/`
+  (2017-2026), `players_<season>_r<repeat>_f<fold>.parquet`, 241 columns, among them the page's 13 rates
+  (`free_throws_made_per100`, `twos_made_per100`, ...), one row per player and side (`side`, `possessions`), a
+  player's rate the mean of his two rows as `bias.player_stats` takes it.  Standardize each within its fold on
+  players with 60 or more offensive possessions, weighted by them, as `commands/site.shown_z` does for the page.  Never a season-total column:
+  those leak the held-back games (DECISIONS.md, measurement traps).
+- The fit: `scratch/2026-11-23_synergy/scan.py`'s "lean" term, the sum of the five's values, read per season with its
+  free terms (team levels per fold, home, playoffs, garbage time, margin, margin times time left, the five's playing
+  time), then across seasons as check 154 reads it.  Two runs: as scan.py has it, with the rating sums, their squares
+  and product free (width free), and with them out (own width).  Turn the sign to the page's: OpenRAPM minus the games.
+  Simplest route: give `extract.py`'s `TRAITS` the 13 rates and write a new folder, or a short script that joins the
+  saved stints to the fold players' files directly.
+- Beside it, each stat's shuffled copy, shuffled among the fold's players, as scan.py's null does.
+
+**If a lean passes**, it is a candidate, not a change: a Box Adj read through the saved sums or the direct screen
+(`scratch/2026-11-03_direct/direct_screen.py`; "The next research path" below has how to point each tool at today's
+files).  Box Adj already holds the 13 rates as inputs, so a straight-line usage lean would already be in its weights;
+a candidate has to be something the line cannot draw, such as the box-score prior times his share of team possessions,
+read 3 of 2026-11-18.  Report and stop: a full build needs the owner's word.  **If nothing passes**, the answer to the
+owner is "no credit error the held-back games can see on offense"; the defense leads the scan already has, transition
+attempts and weight, are the next candidates, and whether they are already among Box Adj's inputs is the first thing
+to check (`second_prior.INPUT_SETS`).
+
+### Traps learned 2026-11-24
+
+- **An in-sample lean is not an error.**  The ratings were fitted on the same games.  Read leans on held-back games.
+- **Minutes follow the score.**  A star's share of a game is lower in comfortable wins and higher when chasing, so a
+  share-weighted stat is partly an outcome.  Team-games pool that away; hold the margin, or keep close-score stints.
+- **A team-season level is a constant.**  It takes away nothing that changes inside a season: coaching changes,
+  trades, other players' injuries, form.
+- **Width and usage are tangled.**  Good players have more of every volume stat, so a free width and a stat lean
+  trade off; read both with the width free and at OpenRAPM's own width, and believe only what both say.
+- **Signs.**  The page reads OpenRAPM minus the other source, positive when OpenRAPM rates those players higher; the
+  scan reads the games' lean, positive when the games rate them higher.
+- **The Bias page's errors leave one team out.**  By game alone was too small: the true ratings of a simulated season
+  read +0.20 against 0.05.  Shuffling the stat among players was too small on 2027 (0.21 to 0.26 against 0.16 to 0.92):
+  a shuffled stat loses its overlap with the ratings.
+- **A side checkout has no data.**  Run its code with `PYTHONPATH=<checkout>/src` and `OPENRAPM_CONFIG` at a copy of
+  `config.yaml` whose `paths` are absolute into `A:/code/spmm` (trap 6 below); it needs no junction.  Check it for
+  reparse points before `git worktree remove`, which needs no `--force`.
 
 ## Done 2026-11-23: lineup synergies, read-only
 
@@ -219,7 +295,7 @@ DECISIONS.md holds every number, from "The data deleted and rebuilt" to "The mor
   "skip the game for now but we should keep checking for it"): the season is rated without it, every morning asks the
   league again, and the day a morning's log says it has stints, take it off the list.  Basketball Reference's page for
   the game was not used: Sports Reference's terms bar feeding its pages to a model.
-- **Main holds everything**, c29342d, GitHub's tests green.
+- **Main holds everything but notes**, 5fed7e0 since 2026-11-24, GitHub's tests green.
 
 ## Waiting on the owner
 
@@ -245,6 +321,8 @@ DECISIONS.md holds every number, from "The data deleted and rebuilt" to "The mor
    self-creation with estimated passes; the play-by-play and matchup input screens; the team rates without the direct
    plus-minus.  The three removed priors' rows read not adopted.
 10. **Sheet "OpenRAPM experiments", row 66**: a stray copy of the early-season padding row; one click.
+11. **The Bias page, 2026-11-24**: what its game-results columns should measure (Part 1 above); a Changelog row for
+    the three-system consensus and the new columns; the hover lines of the two game-results headers, which are mine.
 
 ## What ships
 
