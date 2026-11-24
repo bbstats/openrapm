@@ -14138,3 +14138,50 @@ fit is circular for them (within team, -0.31 and -2.25).
   volume.  In-sample: each season's rating was fitted on these games, so a lean that survives is the box-score prior's
   pull that the games did not overcome.  The within-season held-back test is where a change to it would be judged.
   Nothing adopted; no rating moved.
+
+### The within-team lean, adversarial checks: it does not hold up (the owner, 2026-11-24: "I want you to adversarially validate this assumption 'That level absorbs coach, system, schedule, team luck and anything else the whole roster shares.'"; read-only, `scratch/2026-11-24_bias_split/adversarial.py`, outputs `outputs/bias_split_adversarial*.csv`)
+
+**The entry above concluded "player credit, not team credit".  That conclusion is withdrawn.**  A team-season level is
+one constant per team and side, so it takes away only what is constant over a team's season.  Each check below takes
+away one thing it leaves.  The fit is solved by partialling each season's own columns out (exact; it reproduces the
+entry above within 0.03).  OpenRAPM minus the games, points per 100 per standard deviation, left-one-team-out errors:
+
+| stat | as reported | close score only | quarter levels | eighth levels | no back-to-backs | no final quarter | before the shrink | own width | own width, close score |
+|---|---|---|---|---|---|---|---|---|---|
+| made free throws | +1.11 | +0.75 | +0.94 | +0.94 | +1.13 | +1.15 | +0.92 | +0.60 | -0.40 |
+| missed free throws | +0.75 | +0.36 | +0.79 | +0.72 | +0.65 | +0.89 | +0.71 | +0.60 | -0.17 |
+| made twos | +0.60 | +0.28 | +0.52 | +0.43 | +0.50 | +0.69 | +0.45 | +0.36 | -0.47 |
+| missed twos | +0.60 | +0.42 | +0.57 | +0.49 | +0.47 | +0.61 | +0.54 | +0.45 | -0.14 |
+| turnovers | +0.67 | +0.61 | +0.64 | +0.59 | +0.57 | +0.72 | +0.62 | +0.52 | -0.03 |
+| assists | +0.43 | +0.46 | +0.34 | +0.31 | +0.35 | +0.57 | +0.26 | +0.30 | -0.40 |
+| defensive rebounds | +0.50 | +0.18 | +0.29 | +0.07 | +0.26 | +0.63 | +0.41 | +0.17 | -0.66 |
+| blocks | +0.42 | +0.12 | +0.20 | +0.22 | +0.32 | +0.58 | +0.38 | +0.11 | -0.52 |
+| personal fouls | -0.33 | +0.01 | -0.38 | -0.35 | -0.19 | -0.36 | -0.23 | -0.24 | +0.48 |
+
+Errors: 0.16 to 0.22 as reported, 0.19 to 0.36 with close score only, 0.20 to 0.35 with eighth levels.  Close score: only
+stints that start with the margin within 5.  Quarter and eighth levels: a level per team and side for each quarter or
+eighth of its regular season in date order, the playoffs one more.  No back-to-backs: 16,892 of 23,520 team-games.  No
+final quarter: each team's last quarter of its regular season and the playoffs out, 16,446.  Before the shrink: step 3's
+ratings, `season_ratings_product_step3`.  Own width: no free multiplier, each season's prediction at OpenRAPM's width.
+
+- **Minutes follow the score**, and the level does not take that away: keeping only close-score stints cuts the leans
+  by a third to two thirds (made twos +0.60 to +0.28, defensive rebounds +0.50 to +0.18, fouls -0.33 to +0.01).
+- **Change inside a season** carries the rebound and block leans: levels per eighth of a season take defensive
+  rebounds from +0.50 to +0.07.  It barely touches free throws or turnovers.
+- **Rest and the season's end** change nothing.
+- **The shrink is not the cause**: step 3's ratings read about the same.
+- **The width match decides the sign.**  The games want each season's ratings stretched 1.00 to 1.36 times, and how
+  much of a high-usage player's rating is "width" and how much is "lean" is not well separated: usage goes with being
+  good.  At OpenRAPM's own width on close-score stints every volume lean turns negative.  A number that flips with two
+  reasonable choices is not a credit error.
+- **Held back, the project's own test sees no offensive volume lean.**  The synergy scan of 2026-11-23
+  (`outputs/synergy/rd143/scan_summary.csv`, analysis single, term "lean per player", positive meaning the games rate
+  them higher, the opposite of the page's sign) reads, on offense, free-throw attempts -0.019 (z -0.4), used
+  possessions +0.023 (z 0.4), turnovers -0.019 (z -0.5), points +0.057 (z 0.9): held-back stints, team levels per fold,
+  margin, garbage time and the five's playing time free.  On defense it reads transition attempts -0.289 (z -6.0),
+  weight +0.128 (z 4.0), used possessions -0.075 (z -2.0).
+- **A wrong turn, recorded:** that a ridge's in-sample misses line up with each player's games part (On adj) by its
+  normal equations was offered as the reason; On adj's slope on made free throws is +0.012, z 1.5, so it is not.
+
+**What stands.**  The in-sample game-results columns on the Bias page mix three things: width, game state and credit.
+They describe; they do not locate an error.  Whether any usage lean exists is a question for held-back games.
