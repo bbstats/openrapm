@@ -31,6 +31,13 @@ each word means, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's st
 - Before asking for a verdict, compare every season's top-rated player and WOSA leader in both tables, not 2026's
   alone: on 2026-11-19 two old seasons' WOSA leaders changed and the owner had answered on 2026.
 
+## Done 2026-11-23: lineup synergies, read-only
+
+DECISIONS.md, "Lineup synergies, 23 statistics on both ends".  Every held-back stint of `rd143` saved with both fives in
+`outputs/synergy/rd143/`; `scratch/2026-11-23_synergy/scan.py` scores any lineup statistic in 2 minutes, `null.py`
+gives check 154's career null.  Every synergy found is an overlap: on offense the ball, one creator best; on defense
+size, two players 6'9" and up best.  No complement past z 2.  Reported to the owner; nothing proposed yet.
+
 ## Done 2026-11-20: experiment 145, the ridge penalty on the within-season test: 13,037 stays
 
 DECISIONS.md, "Experiment 145".  Four full builds at step-3 penalties 6,500, 4,400, 9,000 and 18,000, Box Adj's line
