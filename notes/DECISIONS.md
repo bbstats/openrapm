@@ -14099,3 +14099,42 @@ free throws +0.69 (5.3 errors), made twos +0.36 (3.0), missed twos +0.27 (3.0), 
 plus-minus -0.16 (4.0) run the other way.  On-court plus-minus is level, +0.01.  These are in-sample: each season's
 rating was fitted on the same games, with its prior.  Read only, no rating moved; whether the box-score prior
 over-credits volume is a lead for a research session, the owner's to open.
+
+## The Bias page's ten-season lean: player credit or team credit? (the owner, 2026-11-24: "What lessons can we take from the biases we see? Credit error to players? Or is this team/coach level credit we can't confidently give (or can't confidently deduct)"; read-only, `scratch/2026-11-24_bias_split/team_vs_player.py`)
+
+**The test.**  The page's "vs game results, last 10 seasons" fit, 2018-2027, 23,520 team-games, run three ways: as
+published; with a free level for every team-season on each side, which takes away coach, system, schedule, team luck
+and anything else the whole roster shares, so a lean is identified only by who was on the court within his team's
+season; and the same with garbage-time stints left out of the team-games, since a star's share of a game is lowest in
+blowouts.  OpenRAPM minus the games, points per 100 per standard deviation; the error leaves one team out:
+
+| stat | as published | its error | within team | its error | within team, no garbage time | its error |
+|---|---|---|---|---|---|---|
+| made free throws | +0.69 | 0.13 | +1.12 | 0.18 | +1.18 | 0.20 |
+| missed free throws | +0.29 | 0.11 | +0.76 | 0.16 | +0.75 | 0.17 |
+| made twos | +0.36 | 0.12 | +0.63 | 0.18 | +0.62 | 0.20 |
+| missed twos | +0.27 | 0.09 | +0.63 | 0.14 | +0.68 | 0.16 |
+| turnovers | +0.34 | 0.12 | +0.69 | 0.17 | +0.78 | 0.18 |
+| assists | +0.36 | 0.13 | +0.46 | 0.20 | +0.60 | 0.20 |
+| defensive rebounds | +0.44 | 0.16 | +0.50 | 0.20 | +0.45 | 0.20 |
+| steals | +0.14 | 0.07 | +0.43 | 0.17 | +0.44 | 0.15 |
+| blocks | +0.17 | 0.08 | +0.42 | 0.16 | +0.30 | 0.15 |
+| personal fouls | -0.16 | 0.07 | -0.32 | 0.17 | -0.33 | 0.18 |
+| made threes | +0.02 | 0.10 | -0.20 | 0.20 | -0.12 | 0.22 |
+| offensive rebounds | +0.08 | 0.11 | +0.05 | 0.18 | +0.01 | 0.20 |
+
+Within team, most of it is on offense: made free throws +0.86 of the +1.12, turnovers +0.51 of +0.69, missed twos
++0.55 of +0.63.  On-court and off-court plus-minus are left out: they are counted from the same games' scoring, so the
+fit is circular for them (within team, -0.31 and -2.25).
+
+**What it says.**
+- The lean is player credit, not team credit: with every team-season's level free it does not shrink, it doubles,
+  and garbage time does not carry it.  Inside a team's season, lineups with the high-usage player fall short of
+  OpenRAPM's prediction against lineups without him.
+- Across teams it runs the other way: as published, +0.69 is about half the within-team +1.12, so rosters with
+  high-usage players do better than the within-team splits imply.  Two readings the games cannot tell apart: such a
+  player adds value that stays when he sits (the team built around him), or his teammates are rated too low.
+- So OpenRAPM's team totals are close (the shrink is fitted on team-games), and its split inside a team leans toward
+  volume.  In-sample: each season's rating was fitted on these games, so a lean that survives is the box-score prior's
+  pull that the games did not overcome.  The within-season held-back test is where a change to it would be judged.
+  Nothing adopted; no rating moved.
