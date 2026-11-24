@@ -3,8 +3,8 @@
 The question: among a season's players, do those with more of a stat (blocks, made threes, a high on-court
 plus-minus) get more from OpenRAPM than from the consensus, or less?  One number per stat and side answers it, in
 points per 100 possessions per one standard deviation of the stat.  Positive: OpenRAPM rates those players higher.
-Two more columns ask the same of the team-game results (game_results.py), the season's on the same z (`stat_z`),
-and the last 10 seasons' together.
+A second column asks the same of games the ratings never saw, over the last 10 finished seasons
+(params/bias_held_back.json, commands/site.py).
 
 Words used below
     consensus     the weighted mean of three outside systems' ratings, per side, at the owner's weights
