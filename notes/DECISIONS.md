@@ -14319,3 +14319,32 @@ straight proportion to the input, so a box-score prior reading it in a straight 
 loss; only the LightGBM's bends could differ.  Not re-read on `rd143_line`.
 
 **The owner, 2026-11-24, offered the off-court lead, a box-score prior screen for transition attempts, or stopping: "Stop here".**  The bias question is closed; both leads stay in the record.
+
+## A standard error for each player's rating: the preview (the owner, 2026-11-26: "Can we add standard errors to this?", then "Player ratings")
+
+**The estimate** (`scratch/2026-11-26_rating_se/jackknife.py`, tables in `outputs/rating_se/`).  The question it
+answers: had the season's games come out as another draw of the same schedule, how far would a player's published
+rating typically land from the one shown?  The delete-a-group jackknife over games, on the sets `rd143_k10` already
+on disk: each season rated 30 times with a tenth of its games held back, every input rebuilt from the games kept,
+each rebuilt table shrunk with the season's published multipliers (`prior_shrink.shrink_fold`);
+se^2 = 9/10 x the sum of squares of a repeat's ten ratings about their mean, the three repeats averaged.  Nothing
+was rebuilt; 30 seasons took 104 seconds.
+
+**What it holds and what it leaves out.**  It holds the games' noise in everything a rating reads from them: the box
+score, Box Adj and the ridge.  It leaves out how far the box-score prior can miss a player whatever games are
+played, so it is not the distance from his true value.
+
+**The size.**  Players with 1,500 or more offensive possessions, root mean square: offense 0.54, 0.56, 0.56 by era,
+defense 0.58, 0.55, 0.54, total 0.83, 0.81, 0.79; their ratings' own spread is about 2.0.  More of it comes from the
+prior's part than from the games' part: offense 0.47 against 0.40, defense 0.49 against 0.30.  Under 250 possessions
+the total is 1.49, nearly all of it the prior's part.
+
+**The check: the two holdout sizes agree.**  The same jackknife on the quarter-held-back sets, `rd143_early` and
+`rd143_within`, four ratings a repeat, reads 6 to 8% smaller in every era (total 0.77, 0.76, 0.74): a rating from
+three quarters of the games leans more on its prior, and its games' part is smaller.  Player by player the two agree
+at a correlation of 0.44 to 0.51 among 1,500 or more possessions; the covariance of the two says 60 to 87% of the
+spread of the tenth set's per-player variances is real, so a regular's standard error of 0.55 is itself uncertain by
+about 0.07.  Among regulars the real range is about 0.44 to 0.65 on offense.
+
+**Not done.**  The season in progress has no held-back sets: the morning job would have to keep 2027's boosters and
+rate it 30 more times.  Nothing is in the package, the published table or the site.  Waits on the owner.

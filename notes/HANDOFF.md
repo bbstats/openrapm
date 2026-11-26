@@ -31,6 +31,15 @@ each word means, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's st
 - Before asking for a verdict, compare every season's top-rated player and WOSA leader in both tables, not 2026's
   alone: on 2026-11-19 two old seasons' WOSA leaders changed and the owner had answered on 2026.
 
+## Waiting on the owner, 2026-11-26: standard errors on the player ratings
+
+- The owner asked for a standard error on each player's rating.  A preview exists for 1997-2026 from the held-back
+  sets already on disk, nothing rebuilt: `scratch/2026-11-26_rating_se/jackknife.py`, DECISIONS.md, "A standard error
+  for each player's rating: the preview".  A regular's total reads about 0.8; the two holdout sizes agree within 8%.
+- It measures the games' noise, not the distance from a player's true value.  Asked of the owner: whether that is the
+  number wanted, where the site shows it, and whether the morning job may rate 2027 thirty more times a day for it.
+  Nothing is in the package, the table or the site until the answer.
+
 ## Start here (updated 2026-11-24, afternoon): the bias question answered and the page published
 
 - **The answer to the owner's bias question** (DECISIONS.md, "The Bias page's leans on held-back games" and the two
