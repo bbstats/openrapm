@@ -31,14 +31,26 @@ each word means, `CONTRIBUTING.md` the writing rules, `CLAUDE.md` the owner's st
 - Before asking for a verdict, compare every season's top-rated player and WOSA leader in both tables, not 2026's
   alone: on 2026-11-19 two old seasons' WOSA leaders changed and the owner had answered on 2026.
 
-## Waiting on the owner, 2026-11-26: standard errors on the player ratings
+## Waiting on the owner, 2026-11-26: the word to publish the ratings' standard errors
 
-- The owner asked for a standard error on each player's rating.  A preview exists for 1997-2026 from the held-back
-  sets already on disk, nothing rebuilt: `scratch/2026-11-26_rating_se/jackknife.py`, DECISIONS.md, "A standard error
-  for each player's rating: the preview".  A regular's total reads about 0.8; the two holdout sizes agree within 8%.
-- It measures the games' noise, not the distance from a player's true value.  Asked of the owner: whether that is the
-  number wanted, where the site shows it, and whether the morning job may rate 2027 thirty more times a day for it.
-  Nothing is in the package, the table or the site until the answer.
+- **Built and committed on this branch, 423afa0, not published.**  The owner asked for a standard error on each
+  player's rating, then chose "Yes, every season" and "One column".  DECISIONS.md, "A standard error for each player's
+  rating: the preview" and "The standard errors built"; PIPELINE.md, "The ratings' standard errors".
+- **What it is.**  How far a rating would land had the season's games come out as another draw: the season rated 30
+  more times, each without a tenth of its games.  A regular reads about 0.8 on his total.  It leaves out how far the
+  box-score prior can miss a player whatever games are played.
+- **Nothing published changes until two things happen**, both waiting on the owner's word:
+  1. the errors file is put in place.  It is ready, made and then moved aside after the dry run of the morning job:
+     `mv outputs/rating_se/rating_errors_product_ready.parquet outputs/rating_errors_product.parquet`, or made again
+     with `OPENRAPM_WRITE_PUBLISHED=1 .venv/Scripts/python -m openrapm errors`.  From the next morning the 6 AM job
+     then rates 2027 thirty more times, about 2 minutes, and writes its rows.
+  2. main gets the page: `docs/index.html` of this branch, with the code.  Until then the data files would carry the
+     field and the published page would not show it.
+- **Wording that is the owner's:** the column header ± and its hover lines "Standard error of Total" and "Standard
+  error of OpenRAPM"; a Changelog row; an About line.  None drafted.
+- **Side files of the session, safe to delete:** `outputs/season_ratings_se2027*`, `outputs/prior_models_se2027.pkl`,
+  `outputs/within/se2027_k10`, `outputs/season_ratings_sepreview*`, `outputs/rating_errors_se_try.parquet`,
+  `outputs/rating_errors_sepreview.parquet`, `outputs/csv/season_ratings_se_try_step4_multipliers.csv`.
 
 ## Start here (updated 2026-11-24, afternoon): the bias question answered and the page published
 

@@ -14348,3 +14348,41 @@ about 0.07.  Among regulars the real range is about 0.44 to 0.65 on offense.
 
 **Not done.**  The season in progress has no held-back sets: the morning job would have to keep 2027's boosters and
 rate it 30 more times.  Nothing is in the package, the published table or the site.  Waits on the owner.
+
+## The standard errors built: every season, one column (the owner, 2026-11-26: "Yes, every season", "One column")
+
+**Asked of the owner with the preview's numbers:** whether the games' noise is the number wanted, against the larger
+distance from a player's true value, and where the Ratings page shows it.  The answers: every season, the season in
+progress included; one column beside Total holding the total's, the offense's and the defense's in Detail.
+
+**What was built** (commit 423afa0; PIPELINE.md, "The ratings' standard errors").
+- `src/openrapm/rating_error.py`, the jackknife, and `openrapm errors`, which writes
+  `outputs/rating_errors_<name>.parquet`.  On `rd143_k10` it gives the preview's numbers to 1e-15: 1997-2026 in 22
+  seconds.
+- `openrapm folds --in-progress`: a season in progress rated 30 more times as its build rates it, by that build's own
+  boosters, the boosters told the share of the season played, the prior scales held and blended by it.  2027's 30
+  ratings took 119 seconds, every leak check passed.
+- The site: the Detail file's rows end with [offense, defense, total] and the list file's with the total's, only when
+  the errors file is beside the ratings table.  The Ratings page: a column headed ± beside Total, one decimal, and
+  beside OpenRAPM in Detail, two decimals; the downloads carry them.  Without the field in the data the page is as it
+  was.
+- The morning job: the build keeps its boosters, then the 30 ratings and `openrapm errors --seasons 2027`.  Neither
+  call is a step; a morning they fail keeps yesterday's standard errors.  All of it waits for
+  `outputs/rating_errors_product.parquet` to exist.
+
+**The season in progress does not rebuild to the last digit.**  The season so far rebuilt game by game sits up to 0.16
+from the published 2027 rows, median 0.007 on offense and 0.010 on defense.  The cause: the build reads 2027's hustle
+counts from the league's season-to-date dashboards, because a game's hustle box score fills in over the days after it,
+and a fold can only sum the games it keeps; the game still waited on, 0022600265, adds two teams' shots.  The 30 ratings
+are all rebuilt the same way, so their spread, which is the standard error, is not moved by it.  The command stops
+past 0.5.
+
+**2027 on 2026-11-26, 21.9% of the season:** 468 of 482 players have a standard error; medians 0.71 offense, 0.52
+defense, 0.88 total.  Wembanyama +10.13 with 1.64, Doncic +6.85 with 1.16, Gilgeous-Alexander +4.51 with 0.53.  Of the
+14,345 player-seasons the site shows, 5 have none: every game of theirs fell in one fold.
+
+**Left as they are.**  The header ± and its two hover lines, "Standard error of Total" and "Standard error of
+OpenRAPM", are placeholders: wording on the site is the owner's.  On a phone the Ratings table already scrolled
+sideways; the new column sits where WOSA began.
+
+**Not published.**  Nothing on the site changes until the errors file is made and main has the page.
